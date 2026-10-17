@@ -17,13 +17,18 @@ const referenceRoles = new Set(["identity", "face", "body", "outfit", "pose", "c
 const assetKinds = new Set(["video", "image", "audio", "script", "other"]);
 const layerKinds = new Set(["video", "image", "audio", "text", "script", "composition"]);
 const trackKinds = new Set(["video", "audio", "text", "effects"]);
+const timelineClipKinds = new Set(["video", "audio"]);
 const shotStatuses = new Set(["planned", "in-progress", "ready"]);
 const entityTypes = new Set(["character", "environment", "prop", "style", "other"]);
 
 function isReferenceItem(value: unknown): boolean {
   return isRecord(value) && isString(value.id) && isString(value.assetId) &&
     isString(value.role) && referenceRoles.has(value.role) &&
-    (value.notes === undefined || isString(value.notes));
+    (value.notes === undefined || isString(value.notes)) &&
+    (value.prompt === undefined || isString(value.prompt)) &&
+    (value.modelName === undefined || isString(value.modelName)) &&
+    (value.modelVersion === undefined || isString(value.modelVersion)) &&
+    (value.thumbnailPath === undefined || isString(value.thumbnailPath));
 }
 function isReferenceOverride(value: unknown): boolean {
   if (!isRecord(value) || !isString(value.referenceId) ||
@@ -46,7 +51,13 @@ function isLayer(value: unknown): boolean {
     isFiniteNumber(value.duration) && value.duration > 0 &&
     (value.assetId === undefined || isString(value.assetId)) &&
     (value.scriptVersionId === undefined || isString(value.scriptVersionId)) &&
-    (value.childCompositionId === undefined || isString(value.childCompositionId));
+    (value.childCompositionId === undefined || isString(value.childCompositionId)) &&
+    (value.sourceIn === undefined || (isFiniteNumber(value.sourceIn) && value.sourceIn >= 0)) &&
+    (value.sourceOut === undefined || (isFiniteNumber(value.sourceOut) && value.sourceOut >= 0)) &&
+    (value.sourceIn === undefined || value.sourceOut === undefined || value.sourceOut > value.sourceIn) &&
+    (value.prompt === undefined || isString(value.prompt)) &&
+    (value.modelName === undefined || isString(value.modelName)) &&
+    (value.thumbnailPath === undefined || isString(value.thumbnailPath));
 }
 function isVersion(value: unknown): boolean {
   return isRecord(value) && isString(value.id) && isString(value.name) &&
@@ -83,6 +94,21 @@ function isProfile(value: unknown): boolean {
     isString(value.entityType) && entityTypes.has(value.entityType) &&
     Array.isArray(value.references) && value.references.every(isReferenceItem);
 }
+function isTimelineClip(value: unknown): boolean {
+  return isRecord(value) && isString(value.id) && value.id.trim().length > 0 && isString(value.name) &&
+    isString(value.kind) && timelineClipKinds.has(value.kind) &&
+    isString(value.trackId) && isFiniteNumber(value.start) && value.start >= 0 &&
+    isFiniteNumber(value.duration) && value.duration > 0 &&
+    (value.assetId === undefined || isString(value.assetId)) &&
+    (value.linkedVideoClipId === undefined || (value.kind === "audio" && isString(value.linkedVideoClipId))) &&
+    (value.sourceIn === undefined || (isFiniteNumber(value.sourceIn) && value.sourceIn >= 0)) &&
+    (value.sourceOut === undefined || (isFiniteNumber(value.sourceOut) && value.sourceOut >= 0)) &&
+    (value.sourceIn === undefined || value.sourceOut === undefined || value.sourceOut > value.sourceIn) &&
+    (value.prompt === undefined || isString(value.prompt)) &&
+    (value.modelName === undefined || isString(value.modelName)) &&
+    (value.modelVersion === undefined || isString(value.modelVersion)) &&
+    (value.thumbnailPath === undefined || isString(value.thumbnailPath));
+}
 function isTrack(value: unknown): boolean {
   return isRecord(value) && isString(value.id) && isString(value.name) &&
     isString(value.kind) && trackKinds.has(value.kind);
@@ -98,15 +124,33 @@ export function validateProject(value: unknown): value is DionysusProject {
       !isFiniteNumber(value.height) || value.height <= 0 ||
       !Array.isArray(value.shots) || !value.shots.every(isShot) ||
       !Array.isArray(value.tracks) || !value.tracks.every(isTrack) ||
+      (value.timelineClips !== undefined && (!Array.isArray(value.timelineClips) || !value.timelineClips.every(isTimelineClip))) ||
       !Array.isArray(value.assets) || !value.assets.every(isAsset) ||
       !Array.isArray(value.referenceProfiles) || !value.referenceProfiles.every(isProfile)) return false;
 
+  const tracks = value.tracks as UnknownRecord[];
+  const timelineClips = (value.timelineClips ?? []) as UnknownRecord[];
   const assets = value.assets as UnknownRecord[];
   const profiles = value.referenceProfiles as UnknownRecord[];
   const shots = value.shots as UnknownRecord[];
   const assetIds = new Set(assets.map(asset => asset.id as string));
   const profileIds = new Set(profiles.map(profile => profile.id as string));
 
+  const trackIds = new Set(tracks.map(track => track.id as string));
+  if (trackIds.size !== tracks.length) return false;
+  const clipIds = new Set(timelineClips.map(clip => clip.id as string));
+  if (clipIds.size !== timelineClips.length) return false;
+  for (const clip of timelineClips) {
+    if (!trackIds.has(clip.trackId as string)) return false;
+    const track = tracks.find(item => item.id === clip.trackId);
+    if (!track || track.kind !== clip.kind) return false;
+    if (clip.assetId !== undefined && !assetIds.has(clip.assetId as string)) return false;
+    if (clip.linkedVideoClipId !== undefined) {
+      if (clip.kind !== "audio" || !clipIds.has(clip.linkedVideoClipId as string)) return false;
+      const source = timelineClips.find(item => item.id === clip.linkedVideoClipId);
+      if (!source || source.kind !== "video" || source.start !== clip.start || source.duration !== clip.duration) return false;
+    }
+  }
   for (const profile of profiles) {
     for (const reference of profile.references as UnknownRecord[]) {
       if (!assetIds.has(reference.assetId as string)) return false;

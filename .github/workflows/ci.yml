@@ -14,13 +14,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 20
       - name: Install dependencies
         run: npm install
+      - name: Audit dependencies (non-blocking)
+        run: |
+          npm audit --json > npm-audit.json || true
+          node --input-type=commonjs -e 'const a=require("./npm-audit.json"); const items=Object.values(a.vulnerabilities||{}); console.log("npm audit summary:", JSON.stringify(a.metadata?.vulnerabilities||{})); for (const v of items) { console.log(JSON.stringify({name:v.name,severity:v.severity,isDirect:v.isDirect,range:v.range,fixAvailable:v.fixAvailable,via:(v.via||[]).filter(x=>typeof x==="object").map(x=>({title:x.title,url:x.url,range:x.range,severity:x.severity}))})); }'
       - name: Run tests
         run: npm test
       - name: Type-check and build

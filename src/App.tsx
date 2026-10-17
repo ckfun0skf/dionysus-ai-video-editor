@@ -4,6 +4,8 @@ import { sampleProject } from "./sampleProject";
 import type { Asset, AssetKind, DionysusProject, ReferenceProfile, ReferenceRole, Shot } from "./types";
 import { validateProject } from "./projectValidation";
 import { t } from "./i18n";
+import { addVideoClip, moveTimelineClip, trimTimelineClip, unlinkTimelineAudio, deleteTimelineClip } from "./timelineOperations";
+import { recordProjectChange, undoProjectChange as undoHistory, redoProjectChange as redoHistory } from "./projectHistory";
 type View = "storyboard" | "timeline" | "assets" | "references";
 const STORAGE_KEY = "dionysus.project.v1";
 const id = (prefix: string) => prefix + "-" + crypto.randomUUID();
@@ -21,6 +23,12 @@ export default function App() {
   });
   const [undoStack, setUndoStack] = useState<DionysusProject[]>([]);
   const [redoStack, setRedoStack] = useState<DionysusProject[]>([]);
+  const projectRef = useRef(project);
+  const undoStackRef = useRef(undoStack);
+  const redoStackRef = useRef(redoStack);
+  projectRef.current = project;
+  undoStackRef.current = undoStack;
+  redoStackRef.current = redoStack;
   const lastHistoryGroup = useRef("");
   const lastHistoryAt = useRef(0);
   const [view, setView] = useState<View>("storyboard");
@@ -51,6 +59,7 @@ export default function App() {
   const [referenceAssetId, setReferenceAssetId] = useState("");
   const [referenceRole, setReferenceRole] = useState<ReferenceRole>("identity");
   const [selectedSlotId, setSelectedSlotId] = useState<string>("");
+  const [selectedTimelineClipId, setSelectedTimelineClipId] = useState<string>("");
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...project, updatedAt: new Date().toISOString() })); }
     catch { setNotice(t("notice.storageFull")); }
@@ -85,27 +94,44 @@ export default function App() {
   const slotCount = project.shots.reduce((n, s) => n + s.slots.length, 0);
   function change(fn: (p: DionysusProject) => DionysusProject, historyGroup = "") {
     const now = Date.now();
+    const current = projectRef.current;
+    const currentUndo = undoStackRef.current;
     const coalesce = Boolean(historyGroup) && historyGroup === lastHistoryGroup.current && now - lastHistoryAt.current < 800;
-    if (!coalesce) setUndoStack(stack => [...stack.slice(-49), copy(project)]);
+    if (!coalesce) {
+      const history = recordProjectChange({ current: copy(current), undo: currentUndo, redo: redoStackRef.current }, copy(current));
+      undoStackRef.current = history.undo.map(copy);
+      setUndoStack(undoStackRef.current);
+    }
     lastHistoryGroup.current = historyGroup;
     lastHistoryAt.current = now;
+    redoStackRef.current = [];
     setRedoStack([]);
-    setProject(p => ({ ...fn(p), updatedAt: new Date().toISOString() }));
+    const next = { ...fn(copy(current)), updatedAt: new Date().toISOString() };
+    projectRef.current = next;
+    setProject(next);
   }
   function undoProjectChange() {
-    if (!undoStack.length) return;
+    if (!undoStackRef.current.length) return;
     lastHistoryGroup.current = "";
-    setRedoStack(stack => [...stack, copy(project)]);
-    setProject({ ...copy(undoStack[undoStack.length - 1]), updatedAt: new Date().toISOString() });
-    setUndoStack(stack => stack.slice(0, -1));
+    const history = undoHistory({ current: copy(projectRef.current), undo: undoStackRef.current, redo: redoStackRef.current });
+    projectRef.current = { ...copy(history.current), updatedAt: new Date().toISOString() };
+    undoStackRef.current = history.undo.map(copy);
+    redoStackRef.current = history.redo.map(copy);
+    setProject(projectRef.current);
+    setUndoStack(undoStackRef.current);
+    setRedoStack(redoStackRef.current);
     setNotice("Last project change undone.");
   }
   function redoProjectChange() {
-    if (!redoStack.length) return;
+    if (!redoStackRef.current.length) return;
     lastHistoryGroup.current = "";
-    setUndoStack(stack => [...stack, copy(project)]);
-    setProject({ ...copy(redoStack[redoStack.length - 1]), updatedAt: new Date().toISOString() });
-    setRedoStack(stack => stack.slice(0, -1));
+    const history = redoHistory({ current: copy(projectRef.current), undo: undoStackRef.current, redo: redoStackRef.current });
+    projectRef.current = { ...copy(history.current), updatedAt: new Date().toISOString() };
+    undoStackRef.current = history.undo.map(copy);
+    redoStackRef.current = history.redo.map(copy);
+    setProject(projectRef.current);
+    setUndoStack(undoStackRef.current);
+    setRedoStack(redoStackRef.current);
     setNotice("Project change restored.");
   }
   function addShot() {
@@ -462,6 +488,69 @@ export default function App() {
           <section className="editor-timeline"><div className="editor-playback"><div><button title="Undo" aria-label="Undo" disabled={undoStack.length === 0} onClick={undoProjectChange}><Undo2 size={15}/></button><button title="Redo" aria-label="Redo" disabled={redoStack.length === 0} onClick={redoProjectChange}><Redo2 size={15}/></button></div><div><button className="play-button" disabled><Play size={14}/></button><strong>{editorTimeLabel(editorTime)}</strong><span>/ {editorTimeLabel(runtime)}</span></div><button title="Timeline settings" onClick={()=>setView("timeline")}><Settings2 size={16}/></button></div><div className="editor-ruler"><div className="editor-track-spacer"/><div className="editor-ruler-marks" onPointerDown={e=>{e.currentTarget.setPointerCapture(e.pointerId);seekEditorTime(e);}} onPointerMove={e=>{if(e.buttons===1)seekEditorTime(e);}} role="slider" aria-label="Seek timeline" aria-valuemin={0} aria-valuemax={runtime} aria-valuenow={editorTime} tabIndex={0} onKeyDown={e=>{if(e.key==="ArrowRight")setEditorTime(t=>Math.min(runtime,t+0.5));if(e.key==="ArrowLeft")setEditorTime(t=>Math.max(0,t-0.5));}}><div className="editor-playhead-ruler" style={{left:(editorTime/Math.max(runtime,1)*100)+"%"}}/>{Array.from({length:Math.floor(runtime/5)+1},(_,i)=>i*5).concat(runtime%5===0?[]:[runtime]).map(s=><span key={s} style={{left:(s/Math.max(runtime,1)*100)+"%"}}>{time(s)}</span>)}</div></div>
           <div className="editor-track-row"><div className="editor-track-name">Text</div><div className="editor-track-lane"><div className="editor-playhead" style={{left:(editorTime/Math.max(runtime,1)*100)+"%"}}/>{project.shots.map((s,i)=><button key={s.id} draggable onDragStart={e=>e.dataTransfer.setData("text/shot-id",s.id)} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();reorderShots(e.dataTransfer.getData("text/shot-id"),s.id);}} title="Drag to reorder shot" className={"editor-text-clip "+(s.id===selectedId?"selected":"")} style={{left:(project.shots.slice(0,i).reduce((n,x)=>n+x.duration,0)/Math.max(runtime,1)*100)+"%",width:(s.duration/Math.max(runtime,1)*100)+"%"}} onClick={()=>{setSelectedId(s.id);setEditorTime(project.shots.slice(0,i).reduce((n,x)=>n+x.duration,0));}}>{s.title}</button>)}</div></div>
           {project.tracks.map((track)=><div className="editor-track-row" key={track.id}><div className="editor-track-name">{track.kind}</div><div className="editor-track-lane"><div className="editor-playhead" style={{left:(editorTime/Math.max(runtime,1)*100)+"%"}}/>{project.shots.map((s,i)=><button key={s.id} draggable onDragStart={e=>e.dataTransfer.setData("text/shot-id",s.id)} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();reorderShots(e.dataTransfer.getData("text/shot-id"),s.id);}} title="Drag to reorder shot" className={"editor-video-clip "+(s.id===selectedId?"selected":"")} style={{left:(project.shots.slice(0,i).reduce((n,x)=>n+x.duration,0)/Math.max(runtime,1)*100)+"%",width:(s.duration/Math.max(runtime,1)*100)+"%"}} onClick={()=>{setSelectedId(s.id);setEditorTime(project.shots.slice(0,i).reduce((n,x)=>n+x.duration,0));}}><span>{s.title}</span><small>{s.duration}s</small></button>)}</div></div>)}
+          <section className="editor-linked-timeline visual-timeline" aria-label="Linked media timeline">
+            <div className="editor-linked-heading"><div><strong>Media tracks</strong><span>{project.timelineClips?.length ?? 0} clips · select a block to edit</span></div>
+              <button onClick={() => {
+                const videoTrack = project.tracks.find(track => track.kind === "video");
+                const audioTrack = project.tracks.find(track => track.kind === "audio");
+                if (!videoTrack || !audioTrack) { setNotice("Add both a video track and an audio track first."); return; }
+                const clipId = id("timeline-video");
+                try {
+                  change(p => {
+                    const result = addVideoClip({ tracks: p.tracks, timelineClips: p.timelineClips ?? [] }, {
+                      id: clipId, name: "Video clip " + ((p.timelineClips?.filter(clip => clip.kind === "video").length ?? 0) + 1),
+                      trackId: videoTrack.id, start: editorTime, duration: Math.max(1, Math.min(5, runtime - editorTime || 5)),
+                      sourceHasAudio: true, audioTrackId: audioTrack.id, audioClipId: id("timeline-audio")
+                    });
+                    return { ...p, timelineClips: result.timelineClips };
+                  });
+                  setSelectedTimelineClipId(clipId);
+                  setNotice("Added a linked video/audio pair to the visible tracks. Source playback is not implemented yet.");
+                } catch (error) { setNotice(error instanceof Error ? error.message : "Could not add timeline clip."); }
+              }}><Plus size={14}/> Add linked video/audio</button>
+            </div>
+            <div className="visual-track-list">
+              {project.tracks.filter(track => track.kind === "video" || track.kind === "audio").map(track => {
+                const clips = (project.timelineClips ?? []).filter(clip => clip.trackId === track.id);
+                const visibleDuration = Math.max(runtime, ...clips.map(clip => clip.start + clip.duration), 10);
+                return <div className="visual-track-row" key={track.id}>
+                  <div className="visual-track-label"><span className={track.kind === "audio" ? "track-kind-audio" : "track-kind-video"}>{track.kind === "audio" ? <AudioLines size={15}/> : <Film size={15}/>}</span><div><strong>{track.name || (track.kind === "audio" ? "Audio" : "Video")}</strong><small>{track.kind === "audio" ? "Audio lane" : "Video lane"}</small></div></div>
+                  <div className="visual-track-lane" style={{ backgroundSize: (5 / visibleDuration * 100) + "% 100%" }}>
+                    <div className="visual-playhead" style={{left:(editorTime/visibleDuration*100)+"%"}}/>
+                    {clips.map(clip => <button key={clip.id} className={"visual-media-clip " + (clip.kind === "audio" ? "audio-clip" : "video-clip") + (clip.id === selectedTimelineClipId ? " selected" : "")} style={{left:(clip.start/visibleDuration*100)+"%",width:Math.max(2,clip.duration/visibleDuration*100)+"%"}} onClick={()=>setSelectedTimelineClipId(clip.id)} title={clip.name + " · " + clip.start.toFixed(1) + "–" + (clip.start+clip.duration).toFixed(1) + "s"}>
+                      <span className="visual-clip-icon">{clip.kind === "audio" ? <AudioLines size={13}/> : <Film size={13}/>}</span><span className="visual-clip-copy"><strong>{clip.name}</strong><small>{clip.duration.toFixed(1)}s{clip.linkedVideoClipId ? " · linked" : clip.kind === "audio" ? " · independent" : ""}</small></span>
+                    </button>)}
+                    {!clips.length && <span className="visual-track-empty">Drop or add a clip to this lane</span>}
+                  </div>
+                </div>;
+              })}
+            </div>
+            {(() => {
+              const clip = (project.timelineClips ?? []).find(item => item.id === selectedTimelineClipId);
+              if (!clip) return <div className="visual-timeline-empty">Select a clip block to inspect timing and link state.</div>;
+              return <div className="visual-clip-inspector">
+                <div className="visual-clip-inspector-title"><div><strong>{clip.name}</strong><span>{clip.kind} · {clip.linkedVideoClipId ? "linked source audio" : clip.kind === "audio" ? "independent audio" : "video source"}</span></div><button className="button button-quiet button-small" onClick={()=>setSelectedTimelineClipId("")}>Close</button></div>
+                <div className="visual-clip-actions">
+                  <button onClick={() => { try { change(p => ({ ...p, timelineClips: moveTimelineClip({ tracks: p.tracks, timelineClips: p.timelineClips ?? [] }, clip.id, Math.max(0, clip.start - 0.5)).timelineClips })); } catch (error) { setNotice(error instanceof Error ? error.message : "Move failed."); } }}>−0.5s</button>
+                  <button onClick={() => { try { change(p => ({ ...p, timelineClips: moveTimelineClip({ tracks: p.tracks, timelineClips: p.timelineClips ?? [] }, clip.id, clip.start + 0.5).timelineClips })); } catch (error) { setNotice(error instanceof Error ? error.message : "Move failed."); } }}>+0.5s</button>
+                  <button onClick={() => { try { change(p => ({ ...p, timelineClips: trimTimelineClip({ tracks: p.tracks, timelineClips: p.timelineClips ?? [] }, clip.id, Math.max(0.1, clip.duration - 0.5)).timelineClips })); } catch (error) { setNotice(error instanceof Error ? error.message : "Trim failed."); } }}>Trim −0.5s</button>
+                  {clip.kind === "audio" && clip.linkedVideoClipId ? <button onClick={() => { try { change(p => ({ ...p, timelineClips: unlinkTimelineAudio({ tracks: p.tracks, timelineClips: p.timelineClips ?? [] }, clip.id).timelineClips })); setNotice("Audio unlinked; it can now be edited independently."); } catch (error) { setNotice(error instanceof Error ? error.message : "Unlink failed."); } }}>Unlink audio</button> : null}
+                  <button className="danger-action" onClick={() => { change(p => ({ ...p, timelineClips: deleteTimelineClip({ tracks: p.tracks, timelineClips: p.timelineClips ?? [] }, clip.id).timelineClips })); setSelectedTimelineClipId(""); }}>Delete clip</button>
+                </div>
+                <div className="visual-clip-timing"><span>Start <strong>{clip.start.toFixed(1)}s</strong></span><span>End <strong>{(clip.start+clip.duration).toFixed(1)}s</strong></span><span>Duration <strong>{clip.duration.toFixed(1)}s</strong></span></div>
+                <div className="visual-provenance-grid">
+                  <label>Source in (s)<input className="text-field" type="number" min="0" step="0.1" value={clip.sourceIn ?? 0} onChange={e => { const value=Math.max(0,Number(e.target.value)||0); change(p=>({...p,timelineClips:(p.timelineClips??[]).map(item=>item.id!==clip.id?item:{...item,sourceIn:value,sourceOut:Math.max(value+0.1,item.sourceOut??value+item.duration)})})); }}/></label>
+                  <label>Source out (s)<input className="text-field" type="number" min={(clip.sourceIn??0)+0.1} step="0.1" value={clip.sourceOut ?? ((clip.sourceIn??0)+clip.duration)} onChange={e => { const value=Math.max((clip.sourceIn??0)+0.1,Number(e.target.value)||0.1); change(p=>({...p,timelineClips:(p.timelineClips??[]).map(item=>item.id!==clip.id?item:{...item,sourceOut:value,duration:value-(item.sourceIn??0)})})); }}/></label>
+                </div>
+                <div className="visual-provenance-grid">
+                  <label>Generation model<input className="text-field" value={clip.modelName ?? ""} placeholder="e.g. provider/model" onChange={e=>change(p=>({...p,timelineClips:(p.timelineClips??[]).map(item=>item.id!==clip.id?item:{...item,modelName:e.target.value})}))}/></label>
+                  <label>Model version<input className="text-field" value={clip.modelVersion ?? ""} placeholder="Optional version" onChange={e=>change(p=>({...p,timelineClips:(p.timelineClips??[]).map(item=>item.id!==clip.id?item:{...item,modelVersion:e.target.value})}))}/></label>
+                </div>
+                <label className="visual-prompt-field">Generation prompt<textarea className="text-area" rows={3} value={clip.prompt ?? ""} placeholder="Store the prompt used to generate this source clip" onChange={e=>change(p=>({...p,timelineClips:(p.timelineClips??[]).map(item=>item.id!==clip.id?item:{...item,prompt:e.target.value})}))}/></label>
+                <p className="inline-note">Metadata only. In-app generation and source playback are not connected yet.</p>
+              </div>;
+            })()}
+          </section>
           <div className="editor-timeline-footer">Timeline · {project.shots.length} shots · {slotCount} clip slots <button onClick={()=>setEditorWorkspace(false)}>Open full project controls</button></div></section>
         </div>
       </section> : null}
@@ -476,7 +565,27 @@ export default function App() {
   <p>Timeline position: {activeSlot.start.toFixed(1)}s–{(activeSlot.start + activeSlot.duration).toFixed(1)}s. Timing changes apply to this Clip Slot only.</p>
   {activeSlot.start + activeSlot.duration > selected.duration && <p className="timing-warning" role="status">This Clip Slot extends {((activeSlot.start + activeSlot.duration) - selected.duration).toFixed(1)}s beyond the selected shot duration ({selected.duration}s).</p>}
   {selected.slots.some(slot => slot.id !== activeSlot.id && activeSlot.start < slot.start + slot.duration && slot.start < activeSlot.start + activeSlot.duration) && <p className="timing-warning timing-warning-overlap" role="status">This Clip Slot overlaps another slot in the selected shot. Overlap is allowed, but should be reviewed.</p>}
-</div><div className="version-list">{activeSlot.versions.map((version, index) => <button key={version.id} className={"version-card " + (version.id === activeSlot.selectedVersionId ? "active" : "")} onClick={() => chooseSlotVersion(selected.id, activeSlot.id, version.id)}><div className="version-thumb"><Film size={20}/><span>V{index + 1}</span></div><div className="version-card-copy"><strong>{version.name}</strong><p>{version.description || "No description yet."}</p><small>{version.duration}s · {version.layers.length} layers · {version.generationRecords.length} generations</small></div><span className="version-current">{version.id === activeSlot.selectedVersionId ? "CURRENT" : "SELECT"}</span></button>)}</div><button className="button button-primary" onClick={() => createSlotVersion(selected.id, activeSlot.id)}><Plus size={14}/> Create new version</button><p className="version-hint">A new version is created from the selected version's settings and layers. Existing versions remain unchanged.</p>{activeVersion && <div className="version-description"><label className="field-label">Selected version description</label><textarea className="text-area" value={activeVersion.description} onChange={e => change(p => ({ ...p, shots: p.shots.map(shot => shot.id !== selected.id ? shot : { ...shot, slots: shot.slots.map(slot => slot.id !== activeSlot.id ? slot : { ...slot, versions: slot.versions.map(version => version.id === activeVersion.id ? { ...version, description: e.target.value } : version) }) }) }))} placeholder="Describe this version..." /></div>}</section>; })()}<div className="timeline-note"><CircleHelp size={15}/><span>{t("timeline.planningNote")}</span></div></>}
+</div><div className="version-list">{activeSlot.versions.map((version, index) => <button key={version.id} className={"version-card " + (version.id === activeSlot.selectedVersionId ? "active" : "")} onClick={() => chooseSlotVersion(selected.id, activeSlot.id, version.id)}><div className="version-thumb"><Film size={20}/><span>V{index + 1}</span></div><div className="version-card-copy"><strong>{version.name}</strong><p>{version.description || "No description yet."}</p><small>{version.duration}s · {version.layers.length} layers · {version.generationRecords.length} generations</small></div><span className="version-current">{version.id === activeSlot.selectedVersionId ? "CURRENT" : "SELECT"}</span></button>)}</div><button className="button button-primary" onClick={() => createSlotVersion(selected.id, activeSlot.id)}><Plus size={14}/> Create new version</button><p className="version-hint">A new version is created from the selected version's settings and layers. Existing versions remain unchanged.</p>{activeVersion && <div className="version-description"><label className="field-label">Selected version description</label><textarea className="text-area" value={activeVersion.description} onChange={e => change(p => ({ ...p, shots: p.shots.map(shot => shot.id !== selected.id ? shot : { ...shot, slots: shot.slots.map(slot => slot.id !== activeSlot.id ? slot : { ...slot, versions: slot.versions.map(version => version.id === activeVersion.id ? { ...version, description: e.target.value } : version) }) }) }))} placeholder="Describe this version..." /></div>}
+                {activeVersion && <section className="nested-module-editor">
+                  <div className="inspector-subheading"><span>Shot submodules</span><span className="small-count">{activeVersion.layers.length}</span></div>
+                  <p className="version-hint">This nested timeline belongs to the selected shot version. Changes here do not automatically extend the master shot.</p>
+                  <div className="nested-module-lane">
+                    {activeVersion.layers.map(layer => <article className="nested-module-card" key={layer.id}>
+                      <div className="nested-module-title"><strong>{layer.name}</strong><span>{layer.kind}</span></div>
+                      <div className="visual-provenance-grid">
+                        <label>Start (s)<input className="text-field" type="number" min="0" step="0.1" value={layer.start} onChange={e=>{const value=Math.max(0,Number(e.target.value)||0);change(p=>({...p,shots:p.shots.map(shot=>shot.id!==selected.id?shot:{...shot,slots:shot.slots.map(slot=>slot.id!==activeSlot.id?slot:{...slot,versions:slot.versions.map(version=>version.id!==activeVersion.id?version:{...version,layers:version.layers.map(item=>item.id!==layer.id?item:{...item,start:value})})})})}));}}/></label>
+                        <label>Duration (s)<input className="text-field" type="number" min="0.1" step="0.1" value={layer.duration} onChange={e=>{const value=Math.max(0.1,Number(e.target.value)||0.1);change(p=>({...p,shots:p.shots.map(shot=>shot.id!==selected.id?shot:{...shot,slots:shot.slots.map(slot=>slot.id!==activeSlot.id?slot:{...slot,versions:slot.versions.map(version=>version.id!==activeVersion.id?version:{...version,layers:version.layers.map(item=>item.id!==layer.id?item:{...item,duration:value})})})})}));}}/></label>
+                        <label>Source in (s)<input className="text-field" type="number" min="0" step="0.1" value={layer.sourceIn??0} onChange={e=>{const value=Math.max(0,Number(e.target.value)||0);change(p=>({...p,shots:p.shots.map(shot=>shot.id!==selected.id?shot:{...shot,slots:shot.slots.map(slot=>slot.id!==activeSlot.id?slot:{...slot,versions:slot.versions.map(version=>version.id!==activeVersion.id?version:{...version,layers:version.layers.map(item=>item.id!==layer.id?item:{...item,sourceIn:value,sourceOut:Math.max(value+0.1,item.sourceOut??value+item.duration)})})})})}));}}/></label>
+                        <label>Source out (s)<input className="text-field" type="number" min={(layer.sourceIn??0)+0.1} step="0.1" value={layer.sourceOut??((layer.sourceIn??0)+layer.duration)} onChange={e=>{const value=Math.max((layer.sourceIn??0)+0.1,Number(e.target.value)||0.1);change(p=>({...p,shots:p.shots.map(shot=>shot.id!==selected.id?shot:{...shot,slots:shot.slots.map(slot=>slot.id!==activeSlot.id?slot:{...slot,versions:slot.versions.map(version=>version.id!==activeVersion.id?version:{...version,layers:version.layers.map(item=>item.id!==layer.id?item:{...item,sourceOut:value,duration:value-(item.sourceIn??0)})})})})}));}}/></label>
+                      </div>
+                      <label className="visual-prompt-field">Prompt<textarea className="text-area" rows={2} value={layer.prompt??""} placeholder="Optional submodule prompt" onChange={e=>change(p=>({...p,shots:p.shots.map(shot=>shot.id!==selected.id?shot:{...shot,slots:shot.slots.map(slot=>slot.id!==activeSlot.id?slot:{...slot,versions:slot.versions.map(version=>version.id!==activeVersion.id?version:{...version,layers:version.layers.map(item=>item.id!==layer.id?item:{...item,prompt:e.target.value})})})})}))}/></label>
+                      <button className="button button-quiet button-small" onClick={()=>change(p=>({...p,shots:p.shots.map(shot=>shot.id!==selected.id?shot:{...shot,slots:shot.slots.map(slot=>slot.id!==activeSlot.id?slot:{...slot,versions:slot.versions.map(version=>version.id!==activeVersion.id?version:{...version,layers:version.layers.filter(item=>item.id!==layer.id)})})})}))}>Remove submodule</button>
+                    </article>)}
+                    {!activeVersion.layers.length && <p className="muted-inline">No submodules yet. Add a placeholder module to begin building this shot internally.</p>}
+                  </div>
+                  <button className="button button-primary button-small" onClick={()=>change(p=>({...p,shots:p.shots.map(shot=>shot.id!==selected.id?shot:{...shot,slots:shot.slots.map(slot=>slot.id!==activeSlot.id?slot:{...slot,versions:slot.versions.map(version=>version.id!==activeVersion.id?version:{...version,layers:[...version.layers,{id:id("submodule"),name:"Submodule "+(version.layers.length+1),kind:"video" as const,start:0,duration:Math.max(0.1,version.duration)}]})})})}))}><Plus size={14}/> Add submodule</button>
+                </section>}
+              </section>; })()}<div className="timeline-note"><CircleHelp size={15}/><span>{t("timeline.planningNote")}</span></div></>}
           {view === "assets" && <><div className="section-toolbar"><div><h2>{t("assets.title")}</h2><p>{t("assets.description")}</p></div><div className="inline-actions"><button className="button button-quiet button-small" onClick={() => assetFileInput.current?.click()}><Upload size={14}/> {t("asset.actionImport")}</button><button className="button button-primary button-small" onClick={() => setShowAssetForm(v => !v)}><Plus size={15}/> {t("asset.actionAdd")}</button></div><input ref={assetFileInput} type="file" accept="video/*,image/*,audio/*,.js,.mjs,.ts,.html" hidden onChange={e => importAssetFile(e.target.files?.[0])}/></div>{showAssetForm && <form className="editor-form" onSubmit={e => { e.preventDefault(); addAsset(assetDraftName, assetDraftKind, assetDraftNotes); }}><label className="field-label">{t("asset.nameLabel")}<input className="text-field" value={assetDraftName} onChange={e => setAssetDraftName(e.target.value)} placeholder={t("asset.namePlaceholder")} required/></label><label className="field-label">{t("asset.kindLabel")}<select className="text-field" value={assetDraftKind} onChange={e => setAssetDraftKind(e.target.value as AssetKind)}>{(["video","image","audio","script","other"] as AssetKind[]).map(kind => <option key={kind} value={kind}>{t(("media."+kind) as "media.video" | "media.image" | "media.audio" | "media.script" | "media.other")}</option>)}</select></label><label className="field-label">{t("asset.notesLabel")}<input className="text-field" value={assetDraftNotes} onChange={e => setAssetDraftNotes(e.target.value)} placeholder={t("asset.notesPlaceholder")}/></label><div className="inline-actions"><button type="submit" className="button button-primary button-small">{t("action.save")}</button><button type="button" className="button button-quiet button-small" onClick={() => setShowAssetForm(false)}>{t("action.cancel")}</button></div></form>}{project.assets.length === 0 ? <div className="empty-state"><div className="empty-icon"><Film size={23}/></div><h3>{t("assets.emptyTitle")}</h3><p>{t("assets.emptyDescription")}</p></div> : <div className="asset-grid">{project.assets.map(a => <article className="asset-card" key={a.id}><div className="asset-card-head"><Film size={19}/><button className="mini-menu danger-action" title={t("action.delete")} onClick={() => removeAsset(a.id)}>×</button></div><input className="text-field asset-name-field" aria-label={t("asset.nameLabel")} value={a.name} onChange={e => updateAsset(a.id, { name: e.target.value })}/><span>{t(("media." + a.kind) as "media.video" | "media.image" | "media.audio" | "media.script" | "media.other")}</span>{a.kind === "image" && a.path?.startsWith("data:image/") && <button type="button" className="button button-quiet button-small" aria-pressed={previewAssetId === a.id} onClick={() => { setPreviewAssetId(a.id); setEditorWorkspace(true); setNotice("Preview image selected: " + a.name); }}>Preview in editor</button>}{a.path && <small className="asset-path">{a.path.startsWith("data:image/") ? "Image stored locally for preview" : a.path}</small>}<input className="text-field asset-notes-field" aria-label={t("asset.notesLabel")} value={a.notes ?? ""} placeholder={t("asset.notesPlaceholder")} onChange={e => updateAsset(a.id, { notes: e.target.value })}/></article>)}</div>}<p className="inline-note"><CircleHelp size={13}/>{t("assets.importMetadataOnly")}</p></>}
           {view === "references" && <><div className="section-toolbar"><div><h2>{t("references.title")}</h2><p>{t("references.description")}</p></div><button className="button button-primary button-small" onClick={() => setShowProfileForm(v => !v)}><Plus size={15}/> {t("references.actionNewProfile")}</button></div>{showProfileForm && <form className="editor-form" onSubmit={e => { e.preventDefault(); addReferenceProfile(); }}><label className="field-label">{t("profile.nameLabel")}<input className="text-field" value={profileDraftName} onChange={e => setProfileDraftName(e.target.value)} placeholder={t("profile.namePlaceholder")} required/></label><label className="field-label">{t("profile.typeLabel")}<select className="text-field" value={profileDraftType} onChange={e => setProfileDraftType(e.target.value as ReferenceProfile["entityType"])}>{(["character","environment","prop","style","other"] as ReferenceProfile["entityType"][]).map(kind => <option key={kind} value={kind}>{t(("entityType."+kind) as "entityType.character" | "entityType.environment" | "entityType.prop" | "entityType.style" | "entityType.other")}</option>)}</select></label><div className="inline-actions"><button type="submit" className="button button-primary button-small">{t("action.createProfile")}</button><button type="button" className="button button-quiet button-small" onClick={() => setShowProfileForm(false)}>{t("action.cancel")}</button></div></form>}{project.referenceProfiles.length === 0 ? <div className="empty-state"><div className="empty-icon"><Sparkles size={23}/></div><h3>{t("references.emptyTitle")}</h3><p>{t("references.emptyDescription")}</p><div className="reference-example"><span className="ref-chip">{t("reference.identity")}</span><span className="ref-chip">{t("reference.face")}</span><span className="ref-chip">{t("reference.outfit")}</span><span className="ref-chip">{t("reference.lighting")}</span></div></div> : <div className="profile-list">{project.referenceProfiles.map(profile => <article className="profile-card profile-card-expanded" key={profile.id}><div className="profile-heading"><Sparkles size={18}/><input className="text-field profile-name-field" aria-label={t("profile.nameLabel")} value={profile.name} onChange={e => updateReferenceProfile(profile.id, { name: e.target.value })}/><select className="text-field profile-type-field" aria-label={t("profile.typeLabel")} value={profile.entityType} onChange={e => updateReferenceProfile(profile.id, { entityType: e.target.value as ReferenceProfile["entityType"] })}>{(["character","environment","prop","style","other"] as ReferenceProfile["entityType"][]).map(kind => <option key={kind} value={kind}>{t(("entityType."+kind) as "entityType.character" | "entityType.environment" | "entityType.prop" | "entityType.style" | "entityType.other")}</option>)}</select><button className="mini-menu danger-action" title={t("action.delete")} onClick={() => removeReferenceProfile(profile.id)}>×</button></div><div className="profile-reference-list">{profile.references.length ? profile.references.map(reference => { const asset = project.assets.find(a => a.id === reference.assetId); return <div className="profile-reference-row" key={reference.id}><span className="profile-reference-name">{asset?.name ?? t("references.missingAsset")}</span><select className="text-field role-select" aria-label={t("reference.roleLabel")} value={reference.role} onChange={e => updateProfileReferenceRole(profile.id, reference.id, e.target.value as ReferenceRole)}>{(["identity","face","body","outfit","pose","composition","lighting","environment","style","other"] as ReferenceRole[]).map(role => <option key={role} value={role}>{t(("referenceRole."+role) as "referenceRole.identity" | "referenceRole.face" | "referenceRole.body" | "referenceRole.outfit" | "referenceRole.pose" | "referenceRole.composition" | "referenceRole.lighting" | "referenceRole.environment" | "referenceRole.style" | "referenceRole.other")}</option>)}</select><button className="mini-menu danger-action" title={t("action.remove")} onClick={() => removeProfileReference(profile.id, reference.id)}>×</button></div>; }) : <p className="muted-inline">{t("references.noReferences")}</p>}</div><form className="profile-add-reference" onSubmit={e => { e.preventDefault(); addProfileReference(profile.id); }}><select className="text-field" aria-label={t("references.chooseAsset")} value={referenceAssetId} onChange={e => setReferenceAssetId(e.target.value)}><option value="">{t("references.chooseAsset")}</option>{project.assets.map(asset => <option key={asset.id} value={asset.id}>{asset.name}</option>)}</select><select className="text-field role-select" aria-label={t("reference.roleLabel")} value={referenceRole} onChange={e => setReferenceRole(e.target.value as ReferenceRole)}>{(["identity","face","body","outfit","pose","composition","lighting","environment","style","other"] as ReferenceRole[]).map(role => <option key={role} value={role}>{t(("referenceRole."+role) as "referenceRole.identity" | "referenceRole.face" | "referenceRole.body" | "referenceRole.outfit" | "referenceRole.pose" | "referenceRole.composition" | "referenceRole.lighting" | "referenceRole.environment" | "referenceRole.style" | "referenceRole.other")}</option>)}</select><button type="submit" className="button button-quiet button-small" disabled={project.assets.length===0}>{t("references.actionAddReference")}</button></form></article>)}</div>}</>}
         </section>

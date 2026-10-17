@@ -1,0 +1,65 @@
+name: Deploy DYS-011 PR preview
+
+on:
+  push:
+    branches: [feat/dys-011-multitrack-linked-audio]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out current production source
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          path: main-source
+      - name: Check out DYS-011 feature branch
+        uses: actions/checkout@v7
+        with:
+          ref: feat/dys-011-multitrack-linked-audio
+          path: pr-source
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 20
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+      - name: Build production root from main
+        working-directory: main-source
+        run: |
+          npm install
+          npm run build
+      - name: Build isolated DYS-011 preview
+        working-directory: pr-source
+        run: |
+          npm install
+          npm run build -- --base=/dionysus-ai-video-editor/pr-35/
+      - name: Assemble site without replacing the production app
+        run: |
+          mkdir -p site/pr-35
+          cp -a main-source/dist/. site/
+          cp -a pr-source/dist/. site/pr-35/
+          touch site/.nojekyll
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    environment:
+      name: github-pages-preview
+      url: https://ckfun0skf.github.io/dionysus-ai-video-editor/pr-35/
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy DYS-011 preview alongside the main site
+        uses: actions/deploy-pages@v4
