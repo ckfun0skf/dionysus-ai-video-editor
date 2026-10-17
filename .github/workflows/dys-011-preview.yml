@@ -56,7 +56,7 @@ jobs:
 
   deploy:
     environment:
-      name: github-pages
+      name: github-pages-preview
       url: https://ckfun0skf.github.io/dionysus-ai-video-editor/pr-35/
     runs-on: ubuntu-latest
     needs: build
