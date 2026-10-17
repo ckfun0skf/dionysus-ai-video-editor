@@ -28,7 +28,7 @@ The foundation PR introduces a React + TypeScript + Vite static web app, a start
 
 The current Timeline is a visualization, not yet a frame-accurate drag-and-drop editor. Assets and References are not full CRUD workspaces. Video compositing/playback, media import, ZIP packaging, persistent Undo/Redo, advanced audio processing, and MP4 rendering are not implemented.
 
-The initial source files were added through GitHub APIs. A local install, TypeScript build, and browser smoke test had not been run at the time this guide was created. Check CI and run the app before treating the foundation as validated.
+The initial source files were added through GitHub APIs. Project JSON validation now checks required project collections and nested shot/slot/version/layer shapes before import and when loading from local storage. Vitest tests cover the sample project, missing tracks, invalid selected-version references, invalid durations/canvas values, and malformed layers. CI is configured to run tests and a production build. The tests/build have not been executed in a local runtime by the authoring agent; verify the GitHub Actions results and run a browser smoke test before treating the foundation as validated.
 
 ## Safe local validation
 
@@ -50,6 +50,7 @@ Because this is a client-side app, treat all data in the browser as user-control
 
 - [ ] Read the PRD and architecture notes.
 - [ ] Check the open PR, branch head, and CI status.
+- [ ] Confirm GitHub Actions test and build results.
 - [ ] Build and smoke-test the current code.
 - [ ] Reproduce issues before changing behavior.
 - [ ] Keep changes scoped and add/update tests where practical.
