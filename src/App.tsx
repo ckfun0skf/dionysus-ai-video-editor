@@ -538,6 +538,16 @@ export default function App() {
                   <button className="danger-action" onClick={() => { change(p => ({ ...p, timelineClips: deleteTimelineClip({ tracks: p.tracks, timelineClips: p.timelineClips ?? [] }, clip.id).timelineClips })); setSelectedTimelineClipId(""); }}>Delete clip</button>
                 </div>
                 <div className="visual-clip-timing"><span>Start <strong>{clip.start.toFixed(1)}s</strong></span><span>End <strong>{(clip.start+clip.duration).toFixed(1)}s</strong></span><span>Duration <strong>{clip.duration.toFixed(1)}s</strong></span></div>
+                <div className="visual-provenance-grid">
+                  <label>Source in (s)<input className="text-field" type="number" min="0" step="0.1" value={clip.sourceIn ?? 0} onChange={e => { const value=Math.max(0,Number(e.target.value)||0); change(p=>({...p,timelineClips:(p.timelineClips??[]).map(item=>item.id!==clip.id?item:{...item,sourceIn:value,sourceOut:Math.max(value+0.1,item.sourceOut??value+item.duration)})})); }}/></label>
+                  <label>Source out (s)<input className="text-field" type="number" min={(clip.sourceIn??0)+0.1} step="0.1" value={clip.sourceOut ?? ((clip.sourceIn??0)+clip.duration)} onChange={e => { const value=Math.max((clip.sourceIn??0)+0.1,Number(e.target.value)||0.1); change(p=>({...p,timelineClips:(p.timelineClips??[]).map(item=>item.id!==clip.id?item:{...item,sourceOut:value,duration:value-(item.sourceIn??0)})})); }}/></label>
+                </div>
+                <div className="visual-provenance-grid">
+                  <label>Generation model<input className="text-field" value={clip.modelName ?? ""} placeholder="e.g. provider/model" onChange={e=>change(p=>({...p,timelineClips:(p.timelineClips??[]).map(item=>item.id!==clip.id?item:{...item,modelName:e.target.value})}))}/></label>
+                  <label>Model version<input className="text-field" value={clip.modelVersion ?? ""} placeholder="Optional version" onChange={e=>change(p=>({...p,timelineClips:(p.timelineClips??[]).map(item=>item.id!==clip.id?item:{...item,modelVersion:e.target.value})}))}/></label>
+                </div>
+                <label className="visual-prompt-field">Generation prompt<textarea className="text-area" rows={3} value={clip.prompt ?? ""} placeholder="Store the prompt used to generate this source clip" onChange={e=>change(p=>({...p,timelineClips:(p.timelineClips??[]).map(item=>item.id!==clip.id?item:{...item,prompt:e.target.value})}))}/></label>
+                <p className="inline-note">Metadata only. In-app generation and source playback are not connected yet.</p>
               </div>;
             })()}
           </section>
