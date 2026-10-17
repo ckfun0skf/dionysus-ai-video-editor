@@ -123,7 +123,7 @@ export default function App() {
     if (!source) return;
     const versionIdMap = new Map<string, string>();
     const duplicate: Shot = {
-      ...copy(source),
+      ...JSON.parse(JSON.stringify(source)) as Shot,
       id: id("shot"),
       title: source.title + " copy",
       slots: source.slots.map(slot => {
