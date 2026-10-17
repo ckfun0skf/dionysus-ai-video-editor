@@ -127,7 +127,8 @@ export const messages = {
     "footer.projectSchema": "Project schema 1.0",
     "shot.defaultTitle": "New shot",
     "slot.defaultName": "New clip",
-    "slot.defaultPrefix": "Clip "
+    "slot.defaultPrefix": "Clip ",
+    "version.defaultName": "Version A"
 
   }
 } as const;
