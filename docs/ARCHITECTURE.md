@@ -9,6 +9,7 @@
 6. Never silently overwrite manual edits or historical records.
 
 ## Initial application structure
+- UI localization: all static user-facing interface copy lives in `src/i18n.ts`; components use typed translation keys and parameter interpolation. Add locale catalogs with the same keys and expose a language selector in a later milestone.
 - Project domain model: versioned serializable types for project, shots, clip slots, versions, layers, assets, reference profiles, overrides, and generation records.
 - Storyboard workspace: shot ordering, intent, duration, status, and placeholders.
 - Timeline workspace: master tracks and nested version timeline views.
