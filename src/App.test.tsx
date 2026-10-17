@@ -377,7 +377,8 @@ describe("App history integration", () => {
     const audio = initial.find(clip => clip.kind === "audio")!;
     expect(audio.linkedVideoClipId).toBe(video.id);
 
-    click(Array.from(videoRow().querySelectorAll("button")).find(button => button.textContent?.trim() === "Delete") as HTMLButtonElement);
+    selectClip("Video clip 1");
+    click(actionNamed("Delete clip"));
     await flushEffects();
     expect(clips()).toEqual([]);
 
@@ -403,7 +404,8 @@ describe("App history integration", () => {
     const audio = initial.find(clip => clip.kind === "audio")!;
     expect(audio.linkedVideoClipId).toBe(video.id);
 
-    click(Array.from(audioRow().querySelectorAll("button")).find(button => button.textContent?.trim() === "Delete") as HTMLButtonElement);
+    selectClip("Video clip 1 audio");
+    click(actionNamed("Delete clip"));
     await flushEffects();
     expect(clips()).toHaveLength(1);
     expect(clips()[0]).toMatchObject({ id: video.id, kind: "video" });
@@ -438,7 +440,7 @@ describe("App history integration", () => {
     expect(video()).toMatchObject({ start: 0.5, duration: 5 });
     expect(audio()).toMatchObject({ start: 0.5, duration: 5, linkedVideoClipId: video().id });
 
-    click(Array.from(audioRow().querySelectorAll("button")).find(button => button.textContent?.includes("Trim")) as HTMLButtonElement);
+    click(actionNamed("Trim −0.5s"));
     await flushEffects();
     expect(video()).toMatchObject({ start: 0.5, duration: 4.5 });
     expect(audio()).toMatchObject({ start: 0.5, duration: 4.5, linkedVideoClipId: video().id });
