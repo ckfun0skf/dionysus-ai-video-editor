@@ -120,6 +120,7 @@ export function validateProject(value: unknown): value is DionysusProject {
   const profileIds = new Set(profiles.map(profile => profile.id as string));
 
   const trackIds = new Set(tracks.map(track => track.id as string));
+  if (trackIds.size !== tracks.length) return false;
   const clipIds = new Set(timelineClips.map(clip => clip.id as string));
   if (clipIds.size !== timelineClips.length) return false;
   for (const clip of timelineClips) {
@@ -130,7 +131,7 @@ export function validateProject(value: unknown): value is DionysusProject {
     if (clip.linkedVideoClipId !== undefined) {
       if (clip.kind !== "audio" || !clipIds.has(clip.linkedVideoClipId as string)) return false;
       const source = timelineClips.find(item => item.id === clip.linkedVideoClipId);
-      if (!source || source.kind !== "video") return false;
+      if (!source || source.kind !== "video" || source.start !== clip.start || source.duration !== clip.duration) return false;
     }
   }
   for (const profile of profiles) {
