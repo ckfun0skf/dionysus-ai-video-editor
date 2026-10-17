@@ -13,3 +13,5 @@
 .slot-timing-controls{display:grid;grid-template-columns:repeat(2,minmax(130px,1fr));gap:10px;margin:0 0 14px;padding:12px;border:1px solid #303038;border-radius:8px;background:#19191f}.slot-timing-controls .field-label{display:flex;flex-direction:column;gap:6px;font-size:10px;color:#a1a1aa}.slot-timing-controls .text-field{width:100%;min-width:0}.slot-timing-controls p{grid-column:1/-1;margin:0;color:#858590;font-size:10px}@media(max-width:520px){.slot-timing-controls{grid-template-columns:1fr}}
 
 .timing-warning{grid-column:1/-1;margin:0;padding:8px 10px;border:1px solid #8f672d;border-radius:8px;background:rgba(143,103,45,.12);color:#e6bd7b;font-size:11px;line-height:1.45}.timing-warning-overlap{border-color:#7358a5;background:rgba(115,88,165,.12);color:#c5b3ee}
+
+.timing-field{min-width:0}.timing-nudges{display:flex;gap:6px;margin-top:7px}.timing-nudges button{flex:1;min-height:28px;border:1px solid #3b3b45;border-radius:6px;background:#222229;color:#c9c9d2;font:10px 'DM Mono',monospace;cursor:pointer}.timing-nudges button:hover{border-color:#a9c66a;color:#d6f28e}.timing-nudges button:focus-visible{outline:2px solid #a9c66a;outline-offset:2px}
