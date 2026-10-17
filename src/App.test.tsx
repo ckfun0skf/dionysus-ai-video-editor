@@ -6,7 +6,12 @@ import App from "./App";
 import { sampleProject } from "./sampleProject";
 
 let container: HTMLDivElement;
-let root: Root;\nlet createObjectURLMock: ReturnType<typeof vi.fn>;\nlet revokeObjectURLMock: ReturnType<typeof vi.fn>;\nlet originalCreateObjectURL: PropertyDescriptor | undefined;\nlet originalRevokeObjectURL: PropertyDescriptor | undefined;\nlet anchorClickSpy: ReturnType<typeof vi.spyOn>;
+let root: Root;
+let createObjectURLMock: ReturnType<typeof vi.fn>;
+let revokeObjectURLMock: ReturnType<typeof vi.fn>;
+let originalCreateObjectURL: PropertyDescriptor | undefined;
+let originalRevokeObjectURL: PropertyDescriptor | undefined;
+let anchorClickSpy: ReturnType<typeof vi.spyOn>;
 
 function click(button: HTMLButtonElement) {
   act(() => button.dispatchEvent(new MouseEvent("click", { bubbles: true })));
