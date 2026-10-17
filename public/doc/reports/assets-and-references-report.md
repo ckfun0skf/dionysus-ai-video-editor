@@ -1,6 +1,6 @@
 # Completion Report — DYS-004: Asset library and reference profiles
 
-**Report status:** Partial implementation; latest CI validation pending  
+**Report status:** Partial implementation; CI passed, browser QA pending  
 **Report date:** 2026-10-17
 
 ## Outcome
@@ -20,11 +20,11 @@ Implemented metadata-level asset management and reference-profile management on 
 ## Outstanding items
 - Store/relink actual binary media and provide previews.
 - Capture and review the exact reference snapshot used by each generation.
-- Run CI for the latest revision and perform browser smoke testing.
+- Perform browser smoke testing and verify deployed behavior.
 
 ## Validation evidence
 - Current code is in [PR #1](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/1).
-- Latest CI run must be checked before treating this revision as validated.
+- GitHub Actions CI run [39015882423](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39015882423) passed all 11 tests and the production build.
 
 ## Related files
 - Task specification: [assets-and-references.md](../tasks/assets-and-references.md)
