@@ -173,6 +173,39 @@ export default function App() {
     setNotice(t("notice.referenceRemoved"));
   }
 
+  function download(name: string, data: unknown) {
+    const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
+    const a = document.createElement("a"); a.href = url; a.download = name; a.click(); URL.revokeObjectURL(url);
+  }
+  function exportProject() {
+    download((project.name.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "dionysus-project") + ".dionysus.json", project);
+    setNotice(t("notice.projectExported"));
+  }
+  function exportPlan() {
+    download("dionysus-execution-plan.json", {
+      format: "dionysus-ai-execution-plan", schemaVersion: "1.0",
+      project: { id: project.id, name: project.name, frameRate: project.frameRate, width: project.width, height: project.height },
+      shots: project.shots.map((shot, index) => ({
+        order: index + 1, id: shot.id, title: shot.title, intent: shot.intent,
+        targetDurationSeconds: shot.duration, referenceProfileIds: shot.referenceProfileIds,
+        referenceOverrides: shot.referenceOverrides, slots: shot.slots
+      })),
+      assets: project.assets, referenceProfiles: project.referenceProfiles, tracks: project.tracks
+    });
+    setNotice(t("notice.planExported"));
+  }
+  async function importProject(file?: File) {
+    if (!file) return;
+    try {
+      const data = JSON.parse(await file.text()) as DionysusProject;
+      if (!validateProject(data)) throw new Error(t("error.invalidProject"));
+      setProject(data); setSelectedId(data.shots[0]?.id ?? ""); setNotice(t("notice.projectImported"));
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : t("error.importFailed"));
+    } finally {
+      if (fileInput.current) fileInput.current.value = "";
+    }
+  }
   const nav: { id: View; label: string; icon: typeof Film }[] = [{ id: "storyboard", label: t("nav.storyboard"), icon: Clapperboard }, { id: "timeline", label: t("nav.timeline"), icon: Layers3 }, { id: "assets", label: t("nav.assets"), icon: Film }, { id: "references", label: t("nav.references"), icon: Sparkles }];
   return <div className="app-shell">
     <aside className="sidebar">
