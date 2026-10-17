@@ -61,6 +61,28 @@ describe("project history", () => {
     expect(redoDelete.current).toEqual(afterDelete.current);
   });
 
+  it("clears redo after undo when a new timeline operation branches history", () => {
+    const tracks: TimelineTrack[] = [
+      { id: "video-track", name: "Video", kind: "video" },
+      { id: "audio-track", name: "Audio", kind: "audio" },
+    ];
+    const initial = { id: "project", tracks, timelineClips: [] as ReturnType<typeof addVideoClip>["timelineClips"] };
+    const first = addVideoClip(initial, { id: "video-1", name: "First", trackId: "video-track", start: 0, duration: 4, sourceHasAudio: true, audioTrackId: "audio-track", audioClipId: "audio-1" });
+    const historyAfterAdd = recordProjectChange({ current: initial, undo: [], redo: [] }, first);
+    const moved = moveTimelineClip(historyAfterAdd.current, "video-1", 2);
+    const historyAfterMove = recordProjectChange(historyAfterAdd, moved);
+    const undone = undoProjectChange(historyAfterMove);
+    expect(undone.current.timelineClips.find(clip => clip.id === "video-1")?.start).toBe(0);
+    expect(undone.redo).toHaveLength(1);
+
+    const branched = addVideoClip(undone.current, { id: "video-2", name: "Second", trackId: "video-track", start: 8, duration: 3, sourceHasAudio: true, audioTrackId: "audio-track", audioClipId: "audio-2" });
+    const afterBranch = recordProjectChange(undone, branched);
+    expect(afterBranch.redo).toEqual([]);
+    expect(redoProjectChange(afterBranch).current).toEqual(afterBranch.current);
+    expect(afterBranch.current.timelineClips.find(clip => clip.id === "video-1")?.start).toBe(0);
+    expect(afterBranch.current.timelineClips.some(clip => clip.id === "video-2")).toBe(true);
+  });
+
   it("clears redo on a new edit, bounds history, and no-ops on empty stacks", () => {
     const start = { current: 0, undo: [] as number[], redo: [] as number[] };
     const first = recordProjectChange(start, 1);
