@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { sampleProject } from "./sampleProject";
 
 let container: HTMLDivElement;
-let root: Root;
+let root: Root;\nlet createObjectURLMock: ReturnType<typeof vi.fn>;\nlet revokeObjectURLMock: ReturnType<typeof vi.fn>;\nlet originalCreateObjectURL: PropertyDescriptor | undefined;\nlet originalRevokeObjectURL: PropertyDescriptor | undefined;\nlet anchorClickSpy: ReturnType<typeof vi.spyOn>;
 
 function click(button: HTMLButtonElement) {
   act(() => button.dispatchEvent(new MouseEvent("click", { bubbles: true })));
