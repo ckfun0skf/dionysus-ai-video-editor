@@ -4,6 +4,7 @@ export const sampleProject: DionysusProject = {
   schemaVersion: "1.0", id: "project-dionysus-demo", name: "Untitled film",
   createdAt: "2026-10-16T00:00:00.000Z", updatedAt: "2026-10-16T00:00:00.000Z",
   frameRate: 24, width: 3840, height: 2160, assets: [], referenceProfiles: [],
+  timelineClips: [],
   tracks: [
     { id: "track-video-1", name: "Video 1", kind: "video" },
     { id: "track-video-2", name: "Video 2", kind: "video" },
