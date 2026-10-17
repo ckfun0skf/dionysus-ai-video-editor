@@ -1,25 +1,30 @@
 # Completion Report — DYS-004: Asset library and reference profiles
 
-**Report status:** Not completed  
+**Report status:** Partial implementation; CI and browser QA pending  
 **Report date:** 2026-10-17
 
 ## Outcome
-Not completed. This report is a tracking placeholder; no implementation completion is claimed.
+Implemented metadata-level asset management and reference-profile management on the feature branch. This is not full media ingestion: selecting a file records its name/type metadata only, and does not copy its bytes into project storage.
 
 ## Work recorded
-- No completed implementation has been verified for this task.
+- Add and edit asset name, type, notes, and source filename.
+- Recognize common media types from file MIME type or extension.
+- Prevent deleting assets currently referenced by profiles, layers, or generation snapshots.
+- Create, rename, reclassify, and delete reference profiles.
+- Add/remove profile references and edit reference roles.
+- Assign reference profiles to individual shots.
+- Centralized all new UI strings in `src/i18n.ts`.
 
 ## Outstanding items
-- No full asset/reference CRUD workspace is implemented yet.
+- Store/relink actual binary media and provide previews.
+- Implement per-shot exclusions/replacements for individual references and generation snapshot capture.
+- Add focused automated tests and perform browser smoke testing.
 
 ## Validation evidence
-- No task-specific automated test or release evidence recorded yet.
-- Release candidate is tracked in [PR #1](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/1).
+- Current code is in [PR #1](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/1).
+- CI will be rechecked after this change; no test pass is claimed for this specific revision yet.
 
 ## Related files
 - Task specification: [assets-and-references.md](../tasks/assets-and-references.md)
 - Detail page: [assets-and-references.html](../tasks/assets-and-references.html)
 - Dashboard: [task.html](../task.html)
-
----
-This report must be updated with concrete implementation and test evidence before the task is marked complete. Planned tasks intentionally have a report stub so every task has a stable report link without implying completion.
