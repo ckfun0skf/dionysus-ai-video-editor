@@ -24,6 +24,7 @@ Requirements: Node.js 20 or newer.
 ```bash
 npm install
 npm run dev
+npm test
 npm run build
 ```
 
