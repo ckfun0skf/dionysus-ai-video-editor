@@ -1,0 +1,135 @@
+// @vitest-environment jsdom
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import App from "./App";
+import { sampleProject } from "./sampleProject";
+
+let container: HTMLDivElement;
+let root: Root;
+
+function click(button: HTMLButtonElement) {
+  act(() => button.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+}
+
+function buttonsNamed(name: string): HTMLButtonElement[] {
+  return Array.from(container.querySelectorAll<HTMLButtonElement>("button")).filter(
+    button => button.getAttribute("aria-label") === name
+  );
+}
+
+function timelineRows(): HTMLElement[] {
+  return Array.from(container.querySelectorAll<HTMLElement>(".editor-linked-timeline .editor-timeline-footer")).slice(1);
+}
+
+function persistedProject(): typeof sampleProject {
+  const raw = localStorage.getItem("dionysus.project.v1");
+  if (!raw) throw new Error("Expected project to be persisted");
+  return JSON.parse(raw) as typeof sampleProject;
+}
+
+async function flushEffects() {
+  await act(async () => { await Promise.resolve(); });
+}
+
+beforeEach(() => {
+  localStorage.clear();
+  container = document.createElement("div");
+  document.body.appendChild(container);
+  root = createRoot(container);
+  act(() => root.render(<App />));
+});
+
+afterEach(() => {
+  act(() => root.unmount());
+  container.remove();
+  localStorage.clear();
+});
+
+describe("App history integration", () => {
+  it("handles rapid timeline edits atomically and keeps linked audio in persisted state", async () => {
+    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Video with linked audio"));
+    expect(add).toBeTruthy();
+    click(add as HTMLButtonElement);
+    await flushEffects();
+
+    let videoRow = timelineRows().find(row => row.textContent?.includes("Video clip 1"));
+    expect(videoRow).toBeTruthy();
+    click(Array.from(videoRow!.querySelectorAll("button")).find(button => button.textContent?.includes("+0.5s")) as HTMLButtonElement);
+    videoRow = timelineRows().find(row => row.textContent?.includes("Video clip 1"));
+    click(Array.from(videoRow!.querySelectorAll("button")).find(button => button.textContent?.includes("Trim")) as HTMLButtonElement);
+    await flushEffects();
+
+    const clips = persistedProject().timelineClips ?? [];
+    const video = clips.find(clip => clip.kind === "video");
+    const audio = clips.find(clip => clip.kind === "audio");
+    expect(video).toBeTruthy();
+    expect(audio).toMatchObject({ start: video!.start, duration: video!.duration, linkedVideoClipId: video!.id });
+    expect(video).toMatchObject({ start: 0.5, duration: expect.any(Number) });
+  });
+
+  it("supports Undo/Redo buttons and Ctrl/Cmd+Z keyboard shortcuts", async () => {
+    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Video with linked audio")) as HTMLButtonElement;
+    click(add);
+    await flushEffects();
+    expect(persistedProject().timelineClips).toHaveLength(2);
+
+    const undoButtons = buttonsNamed("Undo");
+    expect(undoButtons.length).toBeGreaterThan(0);
+    click(undoButtons[0]);
+    await flushEffects();
+    expect(persistedProject().timelineClips ?? []).toHaveLength(0);
+
+    const redoButtons = buttonsNamed("Redo");
+    expect(redoButtons.some(button => !button.disabled)).toBe(true);
+    click(redoButtons.find(button => !button.disabled)!);
+    await flushEffects();
+    expect(persistedProject().timelineClips).toHaveLength(2);
+
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true }));
+    await flushEffects();
+    expect(persistedProject().timelineClips ?? []).toHaveLength(0);
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "z", metaKey: true, shiftKey: true, bubbles: true }));
+    await flushEffects();
+    expect(persistedProject().timelineClips).toHaveLength(2);
+  });
+
+  it("clears Undo/Redo history after importing a valid project", async () => {
+    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Video with linked audio")) as HTMLButtonElement;
+    click(add);
+    await flushEffects();
+    expect(buttonsNamed("Undo")[0].disabled).toBe(false);
+
+    const input = container.querySelector<HTMLInputElement>('input[type="file"][accept*="application/json"]');
+    expect(input).toBeTruthy();
+    const file = { text: async () => JSON.stringify(sampleProject) } as File;
+    await act(async () => {
+      Object.defineProperty(input!, "files", { configurable: true, value: [file] });
+      input!.dispatchEvent(new Event("change", { bubbles: true }));
+      await new Promise(resolve => setTimeout(resolve, 0));
+    });
+    await flushEffects();
+
+    expect(buttonsNamed("Undo").every(button => button.disabled)).toBe(true);
+    expect(buttonsNamed("Redo").every(button => button.disabled)).toBe(true);
+    expect(persistedProject().id).toBe(sampleProject.id);
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true }));
+    await flushEffects();
+    expect(persistedProject().id).toBe(sampleProject.id);
+    expect(persistedProject().timelineClips ?? []).toEqual(sampleProject.timelineClips ?? []);
+  });
+
+  it("clears redo when a new timeline operation follows Undo", async () => {
+    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Video with linked audio")) as HTMLButtonElement;
+    click(add);
+    await flushEffects();
+    click(buttonsNamed("Undo")[0]);
+    await flushEffects();
+    expect(buttonsNamed("Redo").every(button => button.disabled)).toBe(false);
+
+    click(add);
+    await flushEffects();
+    expect(buttonsNamed("Redo").every(button => button.disabled)).toBe(true);
+    expect(persistedProject().timelineClips).toHaveLength(2);
+  });
+});
