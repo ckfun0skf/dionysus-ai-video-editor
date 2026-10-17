@@ -244,9 +244,9 @@
           "status": "planned",
           "progress": 0,
           "summary": "Introduce independent video/audio tracks and a safe linked/unlinked audio workflow.",
-          "doc": "tasks/timeline-and-versions.md",
-          "detail": "tasks/timeline-and-versions.html",
-          "report": "reports/timeline-and-versions-report.md",
+          "doc": "tasks/multitrack-timeline-linked-audio.md",
+          "detail": "tasks/multitrack-timeline-linked-audio.html",
+          "report": "reports/multitrack-timeline-linked-audio-report.md",
           "subtasks": [
             {
               "title": "Track ordering, visibility, lock, and type rules",
@@ -366,9 +366,9 @@
           "status": "planned",
           "progress": 0,
           "summary": "Create a mobile-specific CapCut-inspired editing layout while preserving Storyboard, References, and Assets.",
-          "doc": "tasks/preview-and-compositing.md",
-          "detail": "tasks/preview-and-compositing.html",
-          "report": "reports/preview-and-compositing-report.md",
+          "doc": "tasks/responsive-mobile-editing.md",
+          "detail": "tasks/responsive-mobile-editing.html",
+          "report": "reports/responsive-mobile-editing-report.md",
           "subtasks": [
             {
               "title": "Responsive preview and compact editing controls",
