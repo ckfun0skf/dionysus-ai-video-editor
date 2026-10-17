@@ -114,7 +114,8 @@ export default function App() {
       version.layers.some(layer => layer.assetId === assetId) ||
       version.generationRecords.some(record => record.outputAssetId === assetId || record.referenceSnapshot.some(ref => ref.assetId === assetId))
     )));
-    if (usedByProfile || usedByLayer) { setNotice(t("notice.assetInUse")); return; }
+    const usedByOverride = project.shots.some(shot => shot.referenceOverrides.some(override => override.replacementAssetId === assetId));
+    if (usedByProfile || usedByLayer || usedByOverride) { setNotice(t("notice.assetInUse")); return; }
     change(p => ({ ...p, assets: p.assets.filter(a => a.id !== assetId) }));
     setNotice(t("notice.assetRemoved"));
   }
