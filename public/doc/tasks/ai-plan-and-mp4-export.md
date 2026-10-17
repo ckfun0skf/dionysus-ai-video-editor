@@ -8,7 +8,7 @@
 Strengthen the structured AI plan interchange workflow and evaluate browser-based final MP4 rendering.
 
 ## Scope
-- [ ] Export a versioned plan with shots, slots, timings, versions, layers, prompts, references, dependencies, and placeholders.
+- [x] Export a versioned plan with shots, slots, timings, versions, layers, prompts, references, dependencies, and placeholders.
 - [ ] Validate and reconcile plans edited by external AI tools without silently overwriting manual edits.
 - [ ] Define export fidelity, codec, frame-rate, progress, cancellation, recovery, and memory behavior.
 - [ ] Decide whether any final MP4 export belongs in the first release.
