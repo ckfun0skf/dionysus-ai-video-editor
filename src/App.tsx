@@ -53,6 +53,18 @@ export default function App() {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...project, updatedAt: new Date().toISOString() })); }
     catch { setNotice(t("notice.storageFull")); }
   }, [project]);
+  useEffect(() => {
+    function handleHistoryShortcut(event: KeyboardEvent) {
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "z") return;
+      const target = event.target;
+      if (target instanceof HTMLElement && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))) return;
+      event.preventDefault();
+      if (event.shiftKey) redoProjectChange();
+      else undoProjectChange();
+    }
+    window.addEventListener("keydown", handleHistoryShortcut);
+    return () => window.removeEventListener("keydown", handleHistoryShortcut);
+  }, [undoStack, redoStack, project]);
   const selected = project.shots.find(s => s.id === selectedId) ?? project.shots[0];
   const runtime = useMemo(() => project.shots.reduce((n, s) => n + s.duration, 0), [project.shots]);
   const selectedStart = useMemo(() => { const index = project.shots.findIndex(s => s.id === selectedId); return project.shots.slice(0, Math.max(index, 0)).reduce((n, s) => n + s.duration, 0); }, [project.shots, selectedId]);
