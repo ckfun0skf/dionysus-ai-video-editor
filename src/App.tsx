@@ -471,15 +471,14 @@ export default function App() {
                 if (!videoTrack || !audioTrack) { setNotice("Add both a video track and an audio track first."); return; }
                 const clipId = id("timeline-video");
                 try {
-                  change(p => addVideoClip({ tracks: p.tracks, timelineClips: p.timelineClips ?? [] }, {
-                    id: clipId, name: "Video clip " + ((p.timelineClips?.filter(clip => clip.kind === "video").length ?? 0) + 1),
-                    trackId: videoTrack.id, start: editorTime, duration: Math.max(1, Math.min(5, runtime - editorTime || 5)),
-                    sourceHasAudio: true, audioTrackId: audioTrack.id, audioClipId: id("timeline-audio")
-                  }).timelineClips ? { ...p, timelineClips: addVideoClip({ tracks: p.tracks, timelineClips: p.timelineClips ?? [] }, {
-                    id: clipId, name: "Video clip " + ((p.timelineClips?.filter(clip => clip.kind === "video").length ?? 0) + 1),
-                    trackId: videoTrack.id, start: editorTime, duration: Math.max(1, Math.min(5, runtime - editorTime || 5)),
-                    sourceHasAudio: true, audioTrackId: audioTrack.id, audioClipId: id("unused-audio")
-                  }).timelineClips } : p);
+                  change(p => {
+                    const result = addVideoClip({ tracks: p.tracks, timelineClips: p.timelineClips ?? [] }, {
+                      id: clipId, name: "Video clip " + ((p.timelineClips?.filter(clip => clip.kind === "video").length ?? 0) + 1),
+                      trackId: videoTrack.id, start: editorTime, duration: Math.max(1, Math.min(5, runtime - editorTime || 5)),
+                      sourceHasAudio: true, audioTrackId: audioTrack.id, audioClipId: id("timeline-audio")
+                    });
+                    return { ...p, timelineClips: result.timelineClips };
+                  });
                   setNotice("Added a video clip with linked source audio. This is timeline metadata, not media playback.");
                 } catch (error) { setNotice(error instanceof Error ? error.message : "Could not add timeline clip."); }
               }}>+ Video with linked audio</button>
