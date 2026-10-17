@@ -110,3 +110,49 @@
   .editor-linked-clip-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%}
   .editor-linked-clip-actions button{width:100%;white-space:normal;line-height:1.2}
 }
+
+
+/* DYS-011 visual track lanes — timeline clips are rendered as time-proportional blocks. */
+.visual-timeline { display: flex; flex-direction: column; gap: 12px; }
+.visual-timeline .editor-linked-heading { align-items: center; }
+.visual-timeline .editor-linked-heading button { display: inline-flex; align-items: center; gap: 6px; }
+.visual-track-list { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.visual-track-row { display: grid; grid-template-columns: 132px minmax(320px, 1fr); min-height: 76px; border: 1px solid var(--border, #30313a); border-radius: 10px; overflow: hidden; background: var(--surface, #15161b); }
+.visual-track-label { display: flex; align-items: center; gap: 9px; padding: 10px; border-right: 1px solid var(--border, #30313a); background: rgba(255,255,255,.025); }
+.visual-track-label > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.visual-track-label strong { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.visual-track-label small { color: var(--muted, #92939f); font-size: 10px; }
+.track-kind-video, .track-kind-audio { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 7px; flex: 0 0 auto; }
+.track-kind-video { color: #b6a0ff; background: rgba(143,105,255,.15); }
+.track-kind-audio { color: #75d7c1; background: rgba(45,185,151,.15); }
+.visual-track-lane { position: relative; min-height: 76px; overflow: hidden; background-image: linear-gradient(to right, rgba(255,255,255,.07) 1px, transparent 1px); background-repeat: repeat; background-color: rgba(0,0,0,.12); }
+.visual-playhead { position: absolute; z-index: 3; top: 0; bottom: 0; width: 1px; background: #ffb85c; pointer-events: none; }
+.visual-media-clip { position: absolute; top: 10px; bottom: 10px; min-width: 36px; display: flex; align-items: center; gap: 7px; padding: 7px 9px; border: 1px solid transparent; border-radius: 7px; color: #f7f5ff; text-align: left; overflow: hidden; cursor: pointer; }
+.visual-media-clip.video-clip { background: linear-gradient(135deg, rgba(119,88,226,.88), rgba(75,61,142,.88)); border-color: rgba(193,177,255,.35); }
+.visual-media-clip.audio-clip { background: linear-gradient(135deg, rgba(27,133,111,.88), rgba(24,91,81,.88)); border-color: rgba(117,215,193,.35); }
+.visual-media-clip.selected { outline: 2px solid #fff; outline-offset: -2px; box-shadow: 0 0 0 2px rgba(255,255,255,.16); }
+.visual-clip-icon { display: grid; place-items: center; flex: 0 0 auto; }
+.visual-clip-copy { display: flex; flex-direction: column; gap: 3px; overflow: hidden; min-width: 0; }
+.visual-clip-copy strong { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.visual-clip-copy small { font-size: 10px; opacity: .8; white-space: nowrap; }
+.visual-track-empty { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--muted, #92939f); font-size: 11px; pointer-events: none; }
+.visual-timeline-empty { padding: 12px; border: 1px dashed var(--border, #30313a); border-radius: 8px; color: var(--muted, #92939f); font-size: 12px; }
+.visual-clip-inspector { border: 1px solid var(--border, #30313a); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+.visual-clip-inspector-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.visual-clip-inspector-title > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.visual-clip-inspector-title strong { font-size: 13px; }
+.visual-clip-inspector-title span { font-size: 11px; color: var(--muted, #92939f); }
+.visual-clip-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.visual-clip-actions button { border: 1px solid var(--border, #393a45); background: rgba(255,255,255,.035); color: inherit; border-radius: 6px; padding: 7px 10px; font-size: 11px; cursor: pointer; }
+.visual-clip-actions button:disabled { opacity: .45; cursor: not-allowed; }
+.visual-clip-timing { display: flex; flex-wrap: wrap; gap: 18px; color: var(--muted, #92939f); font-size: 11px; }
+.visual-clip-timing strong { color: var(--text, #f4f3f9); margin-left: 4px; }
+@media (max-width: 700px) {
+  .visual-track-row { grid-template-columns: 92px minmax(320px, 1fr); }
+  .visual-track-label { padding: 7px; gap: 6px; }
+  .visual-track-label strong { font-size: 10px; }
+  .visual-track-label small { font-size: 9px; }
+  .visual-media-clip { padding: 6px; gap: 4px; }
+  .visual-clip-copy strong { font-size: 10px; }
+  .visual-clip-actions button { flex: 1 1 30%; }
+}
