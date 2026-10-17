@@ -55,6 +55,17 @@ describe("validateProject", () => {
     expect(validateProject(project)).toBe(false);
   });
 
+  it("rejects overrides for references not assigned to the shot", () => {
+    const project = structuredClone(sampleProject);
+    project.assets.push({ id: "asset-test", name: "Reference", kind: "image" });
+    project.referenceProfiles.push({
+      id: "profile-test", name: "Test character", entityType: "character",
+      references: [{ id: "ref-test", assetId: "asset-test", role: "identity" }],
+    });
+    project.shots[0].referenceOverrides.push({ referenceId: "ref-test", action: "exclude" });
+    expect(validateProject(project)).toBe(false);
+  });
+
   it("rejects reference overrides with missing references or replacement assets", () => {
     const missingReference = structuredClone(sampleProject);
     missingReference.shots[0].referenceOverrides.push({ referenceId: "missing-reference", action: "exclude" });
