@@ -182,6 +182,15 @@ export const messages = {
     "referenceRole.environment": "Environment",
     "referenceRole.style": "Style",
     "referenceRole.other": "Other",
+    "shot.referenceOverride": "Reference override",
+    "referenceOverride.inherit": "Use profile",
+    "referenceOverride.exclude": "Exclude",
+    "referenceOverride.replace": "Replace",
+    "referenceOverride.replacementAsset": "Replacement asset",
+    "notice.referenceOverrideReset": "Shot now uses the profile reference.",
+    "notice.referenceReplacementNeedsAsset": "Add a different asset before replacing this reference.",
+    "notice.referenceExcluded": "Reference excluded for this shot only.",
+    "notice.referenceReplaced": "Reference replacement saved for this shot only.",
 
   }
 } as const;
