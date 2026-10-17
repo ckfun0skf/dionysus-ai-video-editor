@@ -48,6 +48,31 @@ describe("linked multi-track timeline operations", () => {
     expect(result.timelineClips.map(c => c.id)).toEqual(["a"]);
   });
 
+  it("rejects duplicate video and generated audio IDs before adding any clips", () => {
+    const existing = { ...empty, timelineClips: [{ id: "v", name: "Existing", kind: "video" as const, trackId: "v1", start: 0, duration: 2 }] };
+    expect(() => addVideoClip(existing, { id: "v", name: "Duplicate", trackId: "v1", start: 3, duration: 2 })).toThrow(/unique/);
+    expect(() => addVideoClip(empty, { id: "same", name: "Collision", trackId: "v1", start: 0, duration: 2, sourceHasAudio: true, audioTrackId: "a1", audioClipId: "same" })).toThrow(/unique/);
+    expect(empty.timelineClips).toHaveLength(0);
+  });
+
+  it("rejects negative, non-finite, and zero-length linked edits without changing the input", () => {
+    const state = addVideoClip(empty, { id: "v", name: "Video", trackId: "v1", start: 1, duration: 5, sourceHasAudio: true, audioTrackId: "a1", audioClipId: "a" });
+    expect(() => moveTimelineClip(state, "v", -0.1)).toThrow();
+    expect(() => moveTimelineClip(state, "v", Number.NaN)).toThrow();
+    expect(() => trimTimelineClip(state, "v", 0)).toThrow();
+    expect(() => trimTimelineClip(state, "a", Number.POSITIVE_INFINITY)).toThrow();
+    expect(state.timelineClips.find(c => c.id === "v")).toMatchObject({ start: 1, duration: 5 });
+    expect(state.timelineClips.find(c => c.id === "a")).toMatchObject({ start: 1, duration: 5 });
+  });
+
+  it("moves a linked audio clip and its source as one group, and deletes linked audio without dangling links", () => {
+    const state = addVideoClip(empty, { id: "v", name: "Video", trackId: "v1", start: 2, duration: 5, sourceHasAudio: true, audioTrackId: "a1", audioClipId: "a" });
+    const moved = moveTimelineClip(state, "a", 7);
+    expect(moved.timelineClips.find(c => c.id === "v")?.start).toBe(7);
+    expect(moved.timelineClips.find(c => c.id === "a")?.start).toBe(7);
+    expect(deleteTimelineClip(moved, "v").timelineClips).toEqual([]);
+  });
+
   it("rejects invalid ranges and wrong track kinds", () => {
     expect(() => addVideoClip(empty, { id: "bad", name: "Bad", trackId: "a1", start: 0, duration: 2 })).toThrow();
     expect(() => moveTimelineClip(empty, "missing", -1)).toThrow();
