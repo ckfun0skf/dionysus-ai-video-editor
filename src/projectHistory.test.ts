@@ -39,7 +39,7 @@ describe("project history", () => {
     expect(afterDelete.current.timelineClips.find(clip => clip.id === "audio-copy")).not.toHaveProperty("linkedVideoClipId");
     const undoDelete = undoProjectChange(afterDelete);
     expect(undoDelete.current.timelineClips.some(clip => clip.id === "video-copy" && clip.kind === "video")).toBe(true);
-    expect(undoDelete.current.timelineClips.find(clip => clip.id === "audio-copy")?.linkedVideoClipId).toBe("video-copy");
+    expect(undoDelete.current.timelineClips.find(clip => clip.id === "audio-copy")).not.toHaveProperty("linkedVideoClipId");
     const undoUnlink = undoProjectChange(undoDelete);
     expect(undoUnlink.current.timelineClips.find(clip => clip.id === "audio-copy")?.linkedVideoClipId).toBe("video-copy");
     const undoDuplicate = undoProjectChange(undoUnlink);
