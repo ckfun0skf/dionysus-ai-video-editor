@@ -20,7 +20,7 @@ Create a website task index at /doc/task.html, with per-task HTML pages, task Ma
 - CI run [39013909461](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39013909461) passed tests and production build.
 
 ## Remaining work
-- Verify dashboard and relative links in a deployed browser after a release merge.
+- Verify dashboard rendering and relative links in a deployed browser after a release merge. Static link inventory check has passed for all 10 task pages and their local links.
 - Keep task status and report content synchronized as implementation changes.
 
 ## Evidence and links
