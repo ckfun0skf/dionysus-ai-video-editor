@@ -61,7 +61,12 @@ export default function App() {
       if (target instanceof HTMLElement && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))) return;
       if (!(event.ctrlKey || event.metaKey)) return;
       const key = event.key.toLowerCase();
-      if (key === "d" && selectedId) {
+      if (key === "d" && event.shiftKey && selectedId && selectedSlotId) {
+        event.preventDefault();
+        duplicateSlot(selectedId, selectedSlotId);
+        return;
+      }
+      if (key === "d" && !event.shiftKey && selectedId) {
         event.preventDefault();
         duplicateShot(selectedId);
         return;
