@@ -86,7 +86,7 @@ describe("validateProject", () => {
 
 
   it("accepts legacy schema 1.0 projects that omit timelineClips", () => {
-    const legacy = structuredClone(sampleProject) as Record<string, unknown>;
+    const legacy = structuredClone(sampleProject) as unknown as Record<string, unknown>;
     delete legacy.timelineClips;
     expect(validateProject(legacy)).toBe(true);
   });
