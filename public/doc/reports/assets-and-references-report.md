@@ -1,10 +1,10 @@
 # Completion Report — DYS-004: Asset library and reference profiles
 
-**Report status:** Partial implementation; CI and browser QA pending  
+**Report status:** Partial implementation; latest CI validation pending  
 **Report date:** 2026-10-17
 
 ## Outcome
-Implemented metadata-level asset management and reference-profile management on the feature branch. This is not full media ingestion: selecting a file records its name/type metadata only, and does not copy its bytes into project storage.
+Implemented metadata-level asset management and reference-profile management on the feature branch, including per-shot reference overrides. This is not full media ingestion: selecting a file records its name/type metadata only, and does not copy its bytes into project storage.
 
 ## Work recorded
 - Add and edit asset name, type, notes, and source filename.
@@ -13,16 +13,18 @@ Implemented metadata-level asset management and reference-profile management on 
 - Create, rename, reclassify, and delete reference profiles.
 - Add/remove profile references and edit reference roles.
 - Assign reference profiles to individual shots.
-- Centralized all new UI strings in `src/i18n.ts`.
+- Exclude or replace a specific profile reference on a shot without mutating the global profile.
+- Project validation checks asset/profile/shot/override references for integrity, with additional automated tests.
+- Centralized new UI strings in `src/i18n.ts`.
 
 ## Outstanding items
 - Store/relink actual binary media and provide previews.
-- Implement per-shot exclusions/replacements for individual references and generation snapshot capture.
-- Add focused automated tests and perform browser smoke testing.
+- Capture and review the exact reference snapshot used by each generation.
+- Run CI for the latest revision and perform browser smoke testing.
 
 ## Validation evidence
 - Current code is in [PR #1](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/1).
-- CI will be rechecked after this change; no test pass is claimed for this specific revision yet.
+- Latest CI run must be checked before treating this revision as validated.
 
 ## Related files
 - Task specification: [assets-and-references.md](../tasks/assets-and-references.md)
