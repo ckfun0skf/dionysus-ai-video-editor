@@ -1,0 +1,524 @@
+{
+  "schemaVersion": 1,
+  "project": "Dionysus",
+  "updatedAt": "2026-10-17",
+  "sourceOfTruth": "public/doc/tasks.json",
+  "statusDefinitions": {
+    "done": "Implementation exists and has evidence; release/browser validation may still be pending.",
+    "in_progress": "Work has started but implementation or verification remains.",
+    "planned": "Not implemented yet, or no evidence is recorded."
+  },
+  "milestones": [
+    {
+      "id": "M1",
+      "title": "Foundation & project integrity",
+      "phase": 1,
+      "goal": "Keep the existing editor stable and its project data safe.",
+      "tasks": [
+        {
+          "id": "DYS-001",
+          "title": "Editor foundation and project workflow",
+          "status": "done",
+          "progress": 80,
+          "summary": "React/TypeScript/Vite editor shell, Storyboard editing, basic Timeline visualization, local persistence, project JSON import/export, and AI execution-plan export.",
+          "doc": "tasks/foundation-shell.md",
+          "detail": "tasks/foundation-shell.html",
+          "report": "reports/foundation-shell-report.md",
+          "subtasks": [
+            {
+              "title": "Editor shell and Storyboard editing",
+              "status": "done"
+            },
+            {
+              "title": "Browser-local persistence and project JSON import/export",
+              "status": "done"
+            },
+            {
+              "title": "AI execution-plan export",
+              "status": "done"
+            },
+            {
+              "title": "Release-level browser smoke test",
+              "status": "planned"
+            }
+          ],
+          "acceptance": [
+            "npm test passes",
+            "npm run build passes",
+            "Export then re-import a project without losing shots or slot versions",
+            "Storyboard remains available from the main navigation"
+          ],
+          "evidence": [
+            "README.md documents the current foundation and limitations",
+            "CI evidence is linked from the task specification"
+          ],
+          "notes": "Progress is an estimate, not a release-readiness score."
+        },
+        {
+          "id": "DYS-002",
+          "title": "Centralized UI localization and project validation",
+          "status": "done",
+          "progress": 90,
+          "summary": "Centralize user-facing UI copy in src/i18n.ts and reject malformed project data before it is loaded or imported.",
+          "doc": "tasks/localization-and-validation.md",
+          "detail": "tasks/localization-and-validation.html",
+          "report": "reports/localization-and-validation-report.md",
+          "subtasks": [
+            {
+              "title": "Centralized typed UI message catalog",
+              "status": "done"
+            },
+            {
+              "title": "Validate project structure and nested references",
+              "status": "done"
+            },
+            {
+              "title": "Test malformed imports and invalid durations",
+              "status": "done"
+            },
+            {
+              "title": "Validate migration paths for future schema versions",
+              "status": "planned"
+            }
+          ],
+          "acceptance": [
+            "Vitest covers valid sample projects and malformed structures",
+            "Invalid selected-version references are rejected",
+            "Invalid durations and canvas values are rejected",
+            "Unknown schema versions fail safely"
+          ],
+          "evidence": [
+            "Task report and CI run are linked from the task Markdown"
+          ],
+          "notes": "Schema migration becomes a priority before the new composite model is implemented."
+        }
+      ]
+    },
+    {
+      "id": "M2",
+      "title": "Assets, references & project tracking",
+      "phase": 2,
+      "goal": "Keep the original creative-planning workflow intact and make project progress auditable.",
+      "tasks": [
+        {
+          "id": "DYS-003",
+          "title": "Task dashboard and per-task records",
+          "status": "in_progress",
+          "progress": 60,
+          "summary": "Replace the hard-coded task-card list with a JSON-driven project management dashboard, phase timeline, subtasks, acceptance criteria, and evidence links.",
+          "doc": "tasks/task-tracker.md",
+          "detail": "tasks/task-tracker.html",
+          "report": "reports/task-tracker-report.md",
+          "subtasks": [
+            {
+              "title": "Single JSON source for milestones, tasks, subtasks, and status",
+              "status": "in_progress"
+            },
+            {
+              "title": "Milestone timeline and phase/task drill-down UI",
+              "status": "in_progress"
+            },
+            {
+              "title": "Link task specification Markdown and completion report",
+              "status": "planned"
+            },
+            {
+              "title": "Verify dashboard JSON loading and relative links",
+              "status": "planned"
+            }
+          ],
+          "acceptance": [
+            "Dashboard reads task data from public/doc/tasks.json rather than hard-coded task cards",
+            "Milestones are displayed in timeline order",
+            "Tasks can expand to show subtasks and acceptance criteria",
+            "Each task links to its Markdown specification and report",
+            "Missing or invalid JSON produces a visible error rather than a blank dashboard"
+          ],
+          "evidence": [
+            "Dashboard source is public/doc/task.html",
+            "Task data source is public/doc/tasks.json"
+          ],
+          "notes": "Progress reflects this dashboard redesign and still requires CI/browser validation."
+        },
+        {
+          "id": "DYS-004",
+          "title": "Asset library and reference profiles",
+          "status": "in_progress",
+          "progress": 65,
+          "summary": "Manage asset metadata and reusable reference profiles, assign profiles to shots, and maintain reference roles.",
+          "doc": "tasks/assets-and-references.md",
+          "detail": "tasks/assets-and-references.html",
+          "report": "reports/assets-and-references-report.md",
+          "subtasks": [
+            {
+              "title": "Asset metadata CRUD and reference-use protection",
+              "status": "done"
+            },
+            {
+              "title": "Reference profile CRUD and shot assignment",
+              "status": "done"
+            },
+            {
+              "title": "Durable media import, relinking, and preview generation",
+              "status": "planned"
+            },
+            {
+              "title": "Preserve original Assets and References navigation",
+              "status": "in_progress"
+            }
+          ],
+          "acceptance": [
+            "Assets can be added, edited, and deleted subject to reference constraints",
+            "Reference profiles and roles remain editable",
+            "Profiles can be assigned to shots",
+            "Timeline redesign does not remove or replace Assets or References views"
+          ],
+          "evidence": [
+            "Task Markdown and report describe implemented scope and limitations"
+          ],
+          "notes": "File selection currently records metadata/source filename; do not imply media bytes are durably imported."
+        }
+      ]
+    },
+    {
+      "id": "M3",
+      "title": "Timeline model & version workflow",
+      "phase": 3,
+      "goal": "Build a stable editing data model before expanding the visual editing workspace.",
+      "tasks": [
+        {
+          "id": "DYS-005",
+          "title": "Timeline editing and Version management",
+          "status": "in_progress",
+          "progress": 35,
+          "summary": "Separate timeline placement from Version internals; support both single-clip and composite Versions, per-clip version selection, and safe editing operations.",
+          "doc": "tasks/timeline-and-versions.md",
+          "detail": "tasks/timeline-and-versions.html",
+          "report": "reports/timeline-and-versions-report.md",
+          "subtasks": [
+            {
+              "title": "Select Clip Slot and switch existing versions",
+              "status": "done"
+            },
+            {
+              "title": "Create/duplicate versions with unique IDs",
+              "status": "done"
+            },
+            {
+              "title": "Separate Timeline Clip placement/duration from Version internals",
+              "status": "planned"
+            },
+            {
+              "title": "Single Clip and Composite Version schema",
+              "status": "planned"
+            },
+            {
+              "title": "Version dropdown with thumbnail, description, and add-version action",
+              "status": "planned"
+            },
+            {
+              "title": "Define version-duration mismatch behavior",
+              "status": "planned"
+            },
+            {
+              "title": "Undo/Redo and selection consistency for Version changes",
+              "status": "in_progress"
+            }
+          ],
+          "acceptance": [
+            "Each slot retains an independent selectedVersionId",
+            "Single and composite Version forms validate correctly",
+            "Switching Version does not silently move unrelated clips",
+            "New versions use unique IDs for nested layers and records",
+            "Legacy project JSON loads through an explicit migration",
+            "Unit tests cover valid/invalid composite structures and duration policies"
+          ],
+          "evidence": [
+            "Existing picker work merged in PR #3; newer editing work is documented in repository history"
+          ],
+          "notes": "Confirmed product decision: Version model C supports both single video and multi-clip/audio composites."
+        },
+        {
+          "id": "DYS-011",
+          "title": "Multi-track Timeline and linked audio",
+          "status": "planned",
+          "progress": 0,
+          "summary": "Introduce independent video/audio tracks and a safe linked/unlinked audio workflow.",
+          "doc": "tasks/timeline-and-versions.md",
+          "detail": "tasks/timeline-and-versions.html",
+          "report": "reports/timeline-and-versions-report.md",
+          "subtasks": [
+            {
+              "title": "Track ordering, visibility, lock, and type rules",
+              "status": "planned"
+            },
+            {
+              "title": "Represent linked source audio and independent audio clips",
+              "status": "planned"
+            },
+            {
+              "title": "Unlink, move/trim independently, and relink when compatible",
+              "status": "planned"
+            },
+            {
+              "title": "Waveform/clip rendering with honest unavailable states",
+              "status": "planned"
+            }
+          ],
+          "acceptance": [
+            "Linked video and audio move/trim together",
+            "Unlinked audio can move independently",
+            "Deleting or duplicating clips does not leave dangling references",
+            "Undo/Redo restores linked state and track placement"
+          ],
+          "evidence": [
+            "Acceptance tests and PR CI will be recorded when implementation begins"
+          ],
+          "notes": "Confirmed product decision: video audio defaults to linked but can be unlinked and edited independently."
+        }
+      ]
+    },
+    {
+      "id": "M4",
+      "title": "Preview, compositing & mobile editing",
+      "phase": 4,
+      "goal": "Connect the editing model to a real preview rather than decorative controls.",
+      "tasks": [
+        {
+          "id": "DYS-006",
+          "title": "Preview, playback, and media compositing",
+          "status": "planned",
+          "progress": 0,
+          "summary": "Implement media playback and composition for Shot, Version, and master Timeline previews, including multi-layer picture-in-picture.",
+          "doc": "tasks/preview-and-compositing.md",
+          "detail": "tasks/preview-and-compositing.html",
+          "report": "reports/preview-and-compositing-report.md",
+          "subtasks": [
+            {
+              "title": "Preview single imported media source",
+              "status": "planned"
+            },
+            {
+              "title": "Composite multiple video/image layers in z-order",
+              "status": "planned"
+            },
+            {
+              "title": "Canvas drag transform and Inspector synchronization",
+              "status": "planned"
+            },
+            {
+              "title": "Contain/Cover/Stretch and background fill settings",
+              "status": "planned"
+            },
+            {
+              "title": "Real first/last-frame thumbnails or explicit placeholders",
+              "status": "planned"
+            }
+          ],
+          "acceptance": [
+            "Two video/image layers visibly composite in the preview",
+            "Dragging a layer updates persisted transform values",
+            "Reloading the project restores visual layout",
+            "Thumbnail failure has a clear placeholder state",
+            "No UI implies playback/rendering works when it does not"
+          ],
+          "evidence": [
+            "Browser media fixtures and repeatable manual QA steps will be linked from the report"
+          ],
+          "notes": "Current preview is limited and is not a full video compositor."
+        },
+        {
+          "id": "DYS-008",
+          "title": "Advanced audio and procedural layers",
+          "status": "planned",
+          "progress": 0,
+          "summary": "Add multitrack audio mixing, effects, timed text, and user-authorized procedural modules.",
+          "doc": "tasks/audio-and-procedural-modules.md",
+          "detail": "tasks/audio-and-procedural-modules.html",
+          "report": "reports/audio-and-procedural-modules-report.md",
+          "subtasks": [
+            {
+              "title": "Audio level, mute, and basic mixing",
+              "status": "planned"
+            },
+            {
+              "title": "Timed text and basic effects",
+              "status": "planned"
+            },
+            {
+              "title": "Sandbox and permission model for procedural modules",
+              "status": "planned"
+            }
+          ],
+          "acceptance": [
+            "Audio levels and mute state are persisted",
+            "Timing is deterministic and tested",
+            "Procedural code is not executed without explicit authorization and isolation"
+          ],
+          "evidence": [
+            "Automated tests and documented safety boundaries required before marking done"
+          ],
+          "notes": "Depends on the multi-track audio model."
+        },
+        {
+          "id": "DYS-012",
+          "title": "Responsive mobile editing workspace",
+          "status": "planned",
+          "progress": 0,
+          "summary": "Create a mobile-specific CapCut-inspired editing layout while preserving Storyboard, References, and Assets.",
+          "doc": "tasks/preview-and-compositing.md",
+          "detail": "tasks/preview-and-compositing.html",
+          "report": "reports/preview-and-compositing-report.md",
+          "subtasks": [
+            {
+              "title": "Responsive preview and compact editing controls",
+              "status": "planned"
+            },
+            {
+              "title": "Touch-friendly timeline scrubbing and clip selection",
+              "status": "planned"
+            },
+            {
+              "title": "Mobile Inspector and Version picker",
+              "status": "planned"
+            },
+            {
+              "title": "Regression check for existing main navigation",
+              "status": "planned"
+            }
+          ],
+          "acceptance": [
+            "No horizontal overflow at agreed phone viewport sizes",
+            "Core timeline selection, scrubbing, and version switching work by touch",
+            "Storyboard, References, and Assets remain reachable"
+          ],
+          "evidence": [
+            "Viewport-specific browser QA report required"
+          ],
+          "notes": "The screenshot guides only the editing workspace, not a replacement for the overall app."
+        }
+      ]
+    },
+    {
+      "id": "M5",
+      "title": "History, portability & release quality",
+      "phase": 5,
+      "goal": "Make editing recoverable, portable, and honestly verifiable.",
+      "tasks": [
+        {
+          "id": "DYS-007",
+          "title": "Undo/Redo, recovery, and portable project bundles",
+          "status": "in_progress",
+          "progress": 45,
+          "summary": "Provide dependable edit history and reliable project portability across browser sessions and machines.",
+          "doc": "tasks/history-and-portability.md",
+          "detail": "tasks/history-and-portability.html",
+          "report": "reports/history-and-portability-report.md",
+          "subtasks": [
+            {
+              "title": "Project-data Undo/Redo history",
+              "status": "done"
+            },
+            {
+              "title": "Group rapid edits into sensible undo steps",
+              "status": "done"
+            },
+            {
+              "title": "History coverage for view state and complex media operations",
+              "status": "planned"
+            },
+            {
+              "title": "Portable project/media bundle and recovery strategy",
+              "status": "planned"
+            }
+          ],
+          "acceptance": [
+            "Undo/Redo restores project data exactly for supported operations",
+            "History boundaries are tested for import and grouped edits",
+            "Portable bundle round-trip preserves references and media policy",
+            "Storage quota/error states are surfaced to the user"
+          ],
+          "evidence": [
+            "PR history documents current project-data Undo/Redo; task report tracks remaining scope"
+          ],
+          "notes": "Current history does not cover every view/playhead/preview state."
+        },
+        {
+          "id": "DYS-009",
+          "title": "AI execution-plan reconciliation and MP4 export",
+          "status": "planned",
+          "progress": 0,
+          "summary": "Strengthen structured AI plan interchange and evaluate browser-based final MP4 rendering.",
+          "doc": "tasks/ai-plan-and-mp4-export.md",
+          "detail": "tasks/ai-plan-and-mp4-export.html",
+          "report": "reports/ai-plan-and-mp4-export-report.md",
+          "subtasks": [
+            {
+              "title": "Versioned execution-plan schema and validation",
+              "status": "planned"
+            },
+            {
+              "title": "Reconcile generated plans with project state",
+              "status": "planned"
+            },
+            {
+              "title": "Evaluate browser render/export architecture",
+              "status": "planned"
+            },
+            {
+              "title": "Render validation and downloadable output",
+              "status": "planned"
+            }
+          ],
+          "acceptance": [
+            "Execution plans validate against a documented schema",
+            "Conflicts are reported without silently overwriting user work",
+            "Export is not marked complete until a playable output is verified"
+          ],
+          "evidence": [
+            "A real media fixture and playback validation report are required"
+          ],
+          "notes": "MP4 rendering remains future work."
+        },
+        {
+          "id": "DYS-010",
+          "title": "Release quality, browser QA, and deployment",
+          "status": "in_progress",
+          "progress": 60,
+          "summary": "Verify CI, run browser smoke tests, deploy review candidates through PR workflow, and document release limitations.",
+          "doc": "tasks/release-quality-and-deployment.md",
+          "detail": "tasks/release-quality-and-deployment.html",
+          "report": "reports/release-quality-and-deployment-report.md",
+          "subtasks": [
+            {
+              "title": "PR CI test, type-check, and build",
+              "status": "done"
+            },
+            {
+              "title": "Browser smoke test for critical flows",
+              "status": "planned"
+            },
+            {
+              "title": "Verify GitHub Pages deployment after merge",
+              "status": "planned"
+            },
+            {
+              "title": "Record release limitations and evidence",
+              "status": "in_progress"
+            }
+          ],
+          "acceptance": [
+            "Required CI checks pass on the exact PR head",
+            "Browser smoke-test steps and outcomes are recorded",
+            "Pages deployment is independently confirmed",
+            "Known limitations are listed in the release report"
+          ],
+          "evidence": [
+            "PR checks and deployment run URLs must be linked from the task report"
+          ],
+          "notes": "A green CI run alone does not prove Pages deployment or browser behavior."
+        }
+      ]
+    }
+  ]
+}
