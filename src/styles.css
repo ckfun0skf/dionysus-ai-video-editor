@@ -75,3 +75,5 @@
 .editor-hidden-project{display:none}
 @media(max-width:800px){.editor-workspace{grid-template-columns:42px 220px minmax(0,1fr)}.editor-options{grid-template-columns:repeat(2,minmax(0,1fr))}.editor-top-actions .editor-exit{display:none}}
 @media(max-width:580px){.editor-workspace{grid-template-columns:40px 180px minmax(0,1fr)}.editor-inspector{padding:10px 6px}.editor-preview-stage{padding:8px}.editor-main{grid-template-rows:44px minmax(180px,1fr) minmax(200px,42%)}.editor-top-actions button:not(.editor-render){display:none}}
+
+.editor-preview-image{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0}.editor-preview-art{z-index:1;background:linear-gradient(120deg,#0c172488,#163b3588 50%,#121d2b77)}.editor-selection-box{z-index:2}
