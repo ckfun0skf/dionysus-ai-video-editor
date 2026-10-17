@@ -10,4 +10,5 @@ export interface ClipVersion { id: string; name: string; description: string; du
 export interface ClipSlot { id: string; name: string; start: number; duration: number; selectedVersionId: string; versions: ClipVersion[] }
 export interface Shot { id: string; title: string; intent: string; duration: number; status: "planned" | "in-progress" | "ready"; referenceProfileIds: string[]; referenceOverrides: ReferenceOverride[]; slots: ClipSlot[] }
 export interface TimelineTrack { id: string; name: string; kind: "video" | "audio" | "text" | "effects" }
-export interface DionysusProject { schemaVersion: "1.0"; id: string; name: string; createdAt: string; updatedAt: string; frameRate: number; width: number; height: number; shots: Shot[]; tracks: TimelineTrack[]; assets: Asset[]; referenceProfiles: ReferenceProfile[] }
+export interface TimelineClip { id: string; name: string; kind: "video" | "audio"; trackId: string; start: number; duration: number; assetId?: string; linkedVideoClipId?: string }
+export interface DionysusProject { schemaVersion: "1.0"; id: string; name: string; createdAt: string; updatedAt: string; frameRate: number; width: number; height: number; shots: Shot[]; tracks: TimelineTrack[]; timelineClips?: TimelineClip[]; assets: Asset[]; referenceProfiles: ReferenceProfile[] }
