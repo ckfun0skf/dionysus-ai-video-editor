@@ -30,6 +30,13 @@ The current Timeline is a visualization, not yet a frame-accurate drag-and-drop 
 
 The initial source files were added through GitHub APIs. User-facing UI copy is centralized in `src/i18n.ts`; components should use translation keys rather than inline English strings. The current catalog defaults to English and provides typed interpolation; new locales should mirror the existing keys, and any new UI text must be added to the catalog. Project JSON validation now checks required project collections and nested shot/slot/version/layer shapes before import and when loading from local storage. Vitest tests cover the sample project, missing tracks, invalid selected-version references, invalid durations/canvas values, and malformed layers. CI is configured to run tests and a production build. The tests/build have not been executed in a local runtime by the authoring agent; verify the GitHub Actions results and run a browser smoke test before treating the foundation as validated.
 
+## Task tracking
+
+- Dashboard source: `public/doc/task.html` (deployed path: `/dionysus-ai-video-editor/doc/task.html`).
+- Each task has a detail page under `public/doc/tasks/*.html`, a matching Markdown specification, and a report under `public/doc/reports/*-report.md`.
+- Update the dashboard, task Markdown, detail page, and report together when status or evidence changes. A report stub is not proof of completion.
+- Current task list includes foundation, localization/validation, task tracking, asset/reference management, Timeline/Versions, preview/compositing, history/portability, audio/procedural modules, AI plan/MP4 export, and release QA/deployment.
+
 ## Safe local validation
 
 ```bash
