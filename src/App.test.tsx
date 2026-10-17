@@ -328,7 +328,6 @@ describe("App history integration", () => {
     click(add);
     await flushEffects();
 
-    const rowFor = (name: string) => timelineRows().find(row => row.textContent?.includes(name))!;
     const clips = () => persistedProject().timelineClips ?? [];
     const video = () => clips().find(clip => clip.kind === "video")!;
     const audio = () => clips().find(clip => clip.kind === "audio")!;
@@ -370,7 +369,6 @@ describe("App history integration", () => {
     click(add);
     await flushEffects();
 
-    const videoRow = () => timelineRows().find(row => row.textContent?.includes("Video clip 1") && !row.textContent?.includes("audio"))!;
     const clips = () => persistedProject().timelineClips ?? [];
     const initial = clips();
     const video = initial.find(clip => clip.kind === "video")!;
@@ -397,7 +395,6 @@ describe("App history integration", () => {
     click(add);
     await flushEffects();
 
-    const audioRow = () => timelineRows().find(row => row.textContent?.includes("Video clip 1 audio"))!;
     const clips = () => persistedProject().timelineClips ?? [];
     const initial = clips();
     const video = initial.find(clip => clip.kind === "video")!;
