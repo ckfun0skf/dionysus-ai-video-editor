@@ -17,7 +17,7 @@ Central localization and project validation are implemented; CI passed. A final 
 - A language selector and additional locale catalogs are not implemented.
 
 ## Validation evidence
-- GitHub Actions CI run [39013558873](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39013558873): tests and production build succeeded.
+- GitHub Actions CI run [39015882423](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39015882423): all 11 tests and production build succeeded, including cross-record asset/reference integrity tests.
 - Release candidate is tracked in [PR #1](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/1).
 
 ## Related files
