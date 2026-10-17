@@ -38,6 +38,13 @@ async function flushEffects() {
 }
 
 beforeEach(() => {
+  originalCreateObjectURL = Object.getOwnPropertyDescriptor(URL, "createObjectURL");
+  originalRevokeObjectURL = Object.getOwnPropertyDescriptor(URL, "revokeObjectURL");
+  createObjectURLMock = vi.fn(() => "blob:mock-project-export");
+  revokeObjectURLMock = vi.fn();
+  Object.defineProperty(URL, "createObjectURL", { configurable: true, writable: true, value: createObjectURLMock });
+  Object.defineProperty(URL, "revokeObjectURL", { configurable: true, writable: true, value: revokeObjectURLMock });
+  anchorClickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
   localStorage.clear();
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -46,6 +53,9 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  anchorClickSpy.mockRestore();
+  if (originalCreateObjectURL) Object.defineProperty(URL, "createObjectURL", originalCreateObjectURL); else Reflect.deleteProperty(URL, "createObjectURL");
+  if (originalRevokeObjectURL) Object.defineProperty(URL, "revokeObjectURL", originalRevokeObjectURL); else Reflect.deleteProperty(URL, "revokeObjectURL");
   act(() => root.unmount());
   container.remove();
   localStorage.clear();
