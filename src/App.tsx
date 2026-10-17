@@ -59,6 +59,7 @@ export default function App() {
   const [referenceAssetId, setReferenceAssetId] = useState("");
   const [referenceRole, setReferenceRole] = useState<ReferenceRole>("identity");
   const [selectedSlotId, setSelectedSlotId] = useState<string>("");
+  const [selectedTimelineClipId, setSelectedTimelineClipId] = useState<string>("");
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...project, updatedAt: new Date().toISOString() })); }
     catch { setNotice(t("notice.storageFull")); }
@@ -487,8 +488,8 @@ export default function App() {
           <section className="editor-timeline"><div className="editor-playback"><div><button title="Undo" aria-label="Undo" disabled={undoStack.length === 0} onClick={undoProjectChange}><Undo2 size={15}/></button><button title="Redo" aria-label="Redo" disabled={redoStack.length === 0} onClick={redoProjectChange}><Redo2 size={15}/></button></div><div><button className="play-button" disabled><Play size={14}/></button><strong>{editorTimeLabel(editorTime)}</strong><span>/ {editorTimeLabel(runtime)}</span></div><button title="Timeline settings" onClick={()=>setView("timeline")}><Settings2 size={16}/></button></div><div className="editor-ruler"><div className="editor-track-spacer"/><div className="editor-ruler-marks" onPointerDown={e=>{e.currentTarget.setPointerCapture(e.pointerId);seekEditorTime(e);}} onPointerMove={e=>{if(e.buttons===1)seekEditorTime(e);}} role="slider" aria-label="Seek timeline" aria-valuemin={0} aria-valuemax={runtime} aria-valuenow={editorTime} tabIndex={0} onKeyDown={e=>{if(e.key==="ArrowRight")setEditorTime(t=>Math.min(runtime,t+0.5));if(e.key==="ArrowLeft")setEditorTime(t=>Math.max(0,t-0.5));}}><div className="editor-playhead-ruler" style={{left:(editorTime/Math.max(runtime,1)*100)+"%"}}/>{Array.from({length:Math.floor(runtime/5)+1},(_,i)=>i*5).concat(runtime%5===0?[]:[runtime]).map(s=><span key={s} style={{left:(s/Math.max(runtime,1)*100)+"%"}}>{time(s)}</span>)}</div></div>
           <div className="editor-track-row"><div className="editor-track-name">Text</div><div className="editor-track-lane"><div className="editor-playhead" style={{left:(editorTime/Math.max(runtime,1)*100)+"%"}}/>{project.shots.map((s,i)=><button key={s.id} draggable onDragStart={e=>e.dataTransfer.setData("text/shot-id",s.id)} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();reorderShots(e.dataTransfer.getData("text/shot-id"),s.id);}} title="Drag to reorder shot" className={"editor-text-clip "+(s.id===selectedId?"selected":"")} style={{left:(project.shots.slice(0,i).reduce((n,x)=>n+x.duration,0)/Math.max(runtime,1)*100)+"%",width:(s.duration/Math.max(runtime,1)*100)+"%"}} onClick={()=>{setSelectedId(s.id);setEditorTime(project.shots.slice(0,i).reduce((n,x)=>n+x.duration,0));}}>{s.title}</button>)}</div></div>
           {project.tracks.map((track)=><div className="editor-track-row" key={track.id}><div className="editor-track-name">{track.kind}</div><div className="editor-track-lane"><div className="editor-playhead" style={{left:(editorTime/Math.max(runtime,1)*100)+"%"}}/>{project.shots.map((s,i)=><button key={s.id} draggable onDragStart={e=>e.dataTransfer.setData("text/shot-id",s.id)} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();reorderShots(e.dataTransfer.getData("text/shot-id"),s.id);}} title="Drag to reorder shot" className={"editor-video-clip "+(s.id===selectedId?"selected":"")} style={{left:(project.shots.slice(0,i).reduce((n,x)=>n+x.duration,0)/Math.max(runtime,1)*100)+"%",width:(s.duration/Math.max(runtime,1)*100)+"%"}} onClick={()=>{setSelectedId(s.id);setEditorTime(project.shots.slice(0,i).reduce((n,x)=>n+x.duration,0));}}><span>{s.title}</span><small>{s.duration}s</small></button>)}</div></div>)}
-          <section className="editor-linked-timeline" aria-label="Source audio link controls">
-            <div className="editor-linked-heading"><div><strong>Source audio links</strong><span>{project.timelineClips?.length ?? 0} clips · metadata only</span></div>
+          <section className="editor-linked-timeline visual-timeline" aria-label="Linked media timeline">
+            <div className="editor-linked-heading"><div><strong>Media tracks</strong><span>{project.timelineClips?.length ?? 0} clips · select a block to edit</span></div>
               <button onClick={() => {
                 const videoTrack = project.tracks.find(track => track.kind === "video");
                 const audioTrack = project.tracks.find(track => track.kind === "audio");
@@ -503,20 +504,42 @@ export default function App() {
                     });
                     return { ...p, timelineClips: result.timelineClips };
                   });
-                  setNotice("Added a video clip with linked source audio. This is timeline metadata, not media playback.");
+                  setSelectedTimelineClipId(clipId);
+                  setNotice("Added a linked video/audio pair to the visible tracks. Source playback is not implemented yet.");
                 } catch (error) { setNotice(error instanceof Error ? error.message : "Could not add timeline clip."); }
-              }}>+ Add linked video/audio</button>
+              }}><Plus size={14}/> Add linked video/audio</button>
             </div>
-            {(project.timelineClips ?? []).map(clip => <div className="editor-linked-clip" key={clip.id}>
-              <div className="editor-linked-clip-summary"><strong>{clip.name}</strong><span>{clip.kind} · {clip.start.toFixed(1)}–{(clip.start + clip.duration).toFixed(1)}s · {clip.linkedVideoClipId ? "linked" : clip.kind === "audio" ? "independent" : "video source"}</span></div>
-              <div className="editor-linked-clip-actions">
-              <button onClick={() => { try { change(p => ({ ...p, timelineClips: moveTimelineClip({ tracks: p.tracks, timelineClips: p.timelineClips ?? [] }, clip.id, Math.max(0, clip.start - 0.5)).timelineClips })); } catch (error) { setNotice(error instanceof Error ? error.message : "Move failed."); } }}>−0.5s</button>
-              <button onClick={() => { try { change(p => ({ ...p, timelineClips: moveTimelineClip({ tracks: p.tracks, timelineClips: p.timelineClips ?? [] }, clip.id, clip.start + 0.5).timelineClips })); } catch (error) { setNotice(error instanceof Error ? error.message : "Move failed."); } }}>+0.5s</button>
-              <button onClick={() => { try { change(p => ({ ...p, timelineClips: trimTimelineClip({ tracks: p.tracks, timelineClips: p.timelineClips ?? [] }, clip.id, Math.max(0.1, clip.duration - 0.5)).timelineClips })); } catch (error) { setNotice(error instanceof Error ? error.message : "Trim failed."); } }}>Trim −0.5s</button>
-              {clip.kind === "audio" && clip.linkedVideoClipId ? <button onClick={() => { try { change(p => ({ ...p, timelineClips: unlinkTimelineAudio({ tracks: p.tracks, timelineClips: p.timelineClips ?? [] }, clip.id).timelineClips })); setNotice("Audio unlinked; future edits can move it independently."); } catch (error) { setNotice(error instanceof Error ? error.message : "Unlink failed."); } }}>Unlink audio</button> : null}
-              <button onClick={() => change(p => ({ ...p, timelineClips: deleteTimelineClip({ tracks: p.tracks, timelineClips: p.timelineClips ?? [] }, clip.id).timelineClips }))}>Delete</button>
-              </div>
-            </div>)}
+            <div className="visual-track-list">
+              {project.tracks.filter(track => track.kind === "video" || track.kind === "audio").map(track => {
+                const clips = (project.timelineClips ?? []).filter(clip => clip.trackId === track.id);
+                const visibleDuration = Math.max(runtime, ...clips.map(clip => clip.start + clip.duration), 10);
+                return <div className="visual-track-row" key={track.id}>
+                  <div className="visual-track-label"><span className={track.kind === "audio" ? "track-kind-audio" : "track-kind-video"}>{track.kind === "audio" ? <AudioLines size={15}/> : <Film size={15}/>}</span><div><strong>{track.name || (track.kind === "audio" ? "Audio" : "Video")}</strong><small>{track.kind === "audio" ? "Audio lane" : "Video lane"}</small></div></div>
+                  <div className="visual-track-lane" style={{ backgroundSize: (5 / visibleDuration * 100) + "% 100%" }}>
+                    <div className="visual-playhead" style={{left:(editorTime/visibleDuration*100)+"%"}}/>
+                    {clips.map(clip => <button key={clip.id} className={"visual-media-clip " + (clip.kind === "audio" ? "audio-clip" : "video-clip") + (clip.id === selectedTimelineClipId ? " selected" : "")} style={{left:(clip.start/visibleDuration*100)+"%",width:Math.max(2,clip.duration/visibleDuration*100)+"%"}} onClick={()=>setSelectedTimelineClipId(clip.id)} title={clip.name + " · " + clip.start.toFixed(1) + "–" + (clip.start+clip.duration).toFixed(1) + "s"}>
+                      <span className="visual-clip-icon">{clip.kind === "audio" ? <AudioLines size={13}/> : <Film size={13}/>}</span><span className="visual-clip-copy"><strong>{clip.name}</strong><small>{clip.duration.toFixed(1)}s{clip.linkedVideoClipId ? " · linked" : clip.kind === "audio" ? " · independent" : ""}</small></span>
+                    </button>)}
+                    {!clips.length && <span className="visual-track-empty">Drop or add a clip to this lane</span>}
+                  </div>
+                </div>;
+              })}
+            </div>
+            {(() => {
+              const clip = (project.timelineClips ?? []).find(item => item.id === selectedTimelineClipId);
+              if (!clip) return <div className="visual-timeline-empty">Select a clip block to inspect timing and link state.</div>;
+              return <div className="visual-clip-inspector">
+                <div className="visual-clip-inspector-title"><div><strong>{clip.name}</strong><span>{clip.kind} · {clip.linkedVideoClipId ? "linked source audio" : clip.kind === "audio" ? "independent audio" : "video source"}</span></div><button className="button button-quiet button-small" onClick={()=>setSelectedTimelineClipId("")}>Close</button></div>
+                <div className="visual-clip-actions">
+                  <button onClick={() => { try { change(p => ({ ...p, timelineClips: moveTimelineClip({ tracks: p.tracks, timelineClips: p.timelineClips ?? [] }, clip.id, Math.max(0, clip.start - 0.5)).timelineClips })); } catch (error) { setNotice(error instanceof Error ? error.message : "Move failed."); } }}>−0.5s</button>
+                  <button onClick={() => { try { change(p => ({ ...p, timelineClips: moveTimelineClip({ tracks: p.tracks, timelineClips: p.timelineClips ?? [] }, clip.id, clip.start + 0.5).timelineClips })); } catch (error) { setNotice(error instanceof Error ? error.message : "Move failed."); } }}>+0.5s</button>
+                  <button onClick={() => { try { change(p => ({ ...p, timelineClips: trimTimelineClip({ tracks: p.tracks, timelineClips: p.timelineClips ?? [] }, clip.id, Math.max(0.1, clip.duration - 0.5)).timelineClips })); } catch (error) { setNotice(error instanceof Error ? error.message : "Trim failed."); } }}>Trim −0.5s</button>
+                  {clip.kind === "audio" && clip.linkedVideoClipId ? <button onClick={() => { try { change(p => ({ ...p, timelineClips: unlinkTimelineAudio({ tracks: p.tracks, timelineClips: p.timelineClips ?? [] }, clip.id).timelineClips })); setNotice("Audio unlinked; it can now be edited independently."); } catch (error) { setNotice(error instanceof Error ? error.message : "Unlink failed."); } }}>Unlink audio</button> : null}
+                  <button className="danger-action" onClick={() => { change(p => ({ ...p, timelineClips: deleteTimelineClip({ tracks: p.tracks, timelineClips: p.timelineClips ?? [] }, clip.id).timelineClips })); setSelectedTimelineClipId(""); }}>Delete clip</button>
+                </div>
+                <div className="visual-clip-timing"><span>Start <strong>{clip.start.toFixed(1)}s</strong></span><span>End <strong>{(clip.start+clip.duration).toFixed(1)}s</strong></span><span>Duration <strong>{clip.duration.toFixed(1)}s</strong></span></div>
+              </div>;
+            })()}
           </section>
           <div className="editor-timeline-footer">Timeline · {project.shots.length} shots · {slotCount} clip slots <button onClick={()=>setEditorWorkspace(false)}>Open full project controls</button></div></section>
         </div>
