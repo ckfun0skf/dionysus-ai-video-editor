@@ -57,7 +57,18 @@ function isLayer(value: unknown): boolean {
     (value.sourceIn === undefined || value.sourceOut === undefined || value.sourceOut > value.sourceIn) &&
     (value.prompt === undefined || isString(value.prompt)) &&
     (value.modelName === undefined || isString(value.modelName)) &&
-    (value.thumbnailPath === undefined || isString(value.thumbnailPath));
+    (value.thumbnailPath === undefined || isString(value.thumbnailPath)) &&
+    (value.fitMode === undefined || ["contain", "cover", "fill"].includes(String(value.fitMode))) &&
+    (value.x === undefined || isFiniteNumber(value.x)) && (value.y === undefined || isFiniteNumber(value.y)) &&
+    (value.width === undefined || (isFiniteNumber(value.width) && value.width > 0)) &&
+    (value.height === undefined || (isFiniteNumber(value.height) && value.height > 0)) &&
+    (value.backgroundColor === undefined || isString(value.backgroundColor)) &&
+    (value.borderColor === undefined || isString(value.borderColor)) &&
+    (value.borderWidth === undefined || (isFiniteNumber(value.borderWidth) && value.borderWidth >= 0)) &&
+    (value.shape === undefined || ["rectangle", "circle", "rounded"].includes(String(value.shape))) &&
+    (value.cornerRadius === undefined || (isFiniteNumber(value.cornerRadius) && value.cornerRadius >= 0)) &&
+    (value.scale === undefined || (isFiniteNumber(value.scale) && value.scale > 0)) &&
+    (value.opacity === undefined || (isFiniteNumber(value.opacity) && value.opacity >= 0 && value.opacity <= 1));
 }
 function isVersion(value: unknown): boolean {
   return isRecord(value) && isString(value.id) && isString(value.name) &&
