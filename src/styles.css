@@ -161,3 +161,9 @@
 .visual-provenance-grid label, .visual-prompt-field { display: flex; flex-direction: column; gap: 6px; font-size: 11px; color: var(--muted, #92939f); min-width: 0; }
 .visual-prompt-field textarea { width: 100%; resize: vertical; box-sizing: border-box; }
 @media (max-width: 520px) { .visual-provenance-grid { grid-template-columns: minmax(0,1fr); } }
+
+.nested-module-editor { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border, #30313a); }
+.nested-module-lane { display: flex; flex-direction: column; gap: 8px; }
+.nested-module-card { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid var(--border, #30313a); border-radius: 9px; background: rgba(255,255,255,.025); }
+.nested-module-title { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; }
+.nested-module-title span { color: var(--muted, #92939f); text-transform: uppercase; font-size: 10px; }
