@@ -259,4 +259,49 @@ describe("App history integration", () => {
     expect(input!.value).toBe("");
   });
 
+
+  it("moves and trims linked audio through the App and restores both clips with Undo/Redo", async () => {
+    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Video with linked audio")) as HTMLButtonElement;
+    click(add);
+    await flushEffects();
+
+    const videoRow = () => timelineRows().find(row => row.textContent?.includes("Video clip 1"))!;
+    const audioRow = () => timelineRows().find(row => row.textContent?.includes("Video clip 1 audio"))!;
+    const clips = () => persistedProject().timelineClips ?? [];
+    const video = () => clips().find(clip => clip.kind === "video")!;
+    const audio = () => clips().find(clip => clip.kind === "audio")!;
+
+    expect(video()).toMatchObject({ start: 0, duration: 5 });
+    expect(audio()).toMatchObject({ start: 0, duration: 5, linkedVideoClipId: video().id });
+
+    click(Array.from(audioRow().querySelectorAll("button")).find(button => button.textContent?.includes("+0.5s")) as HTMLButtonElement);
+    await flushEffects();
+    expect(video()).toMatchObject({ start: 0.5, duration: 5 });
+    expect(audio()).toMatchObject({ start: 0.5, duration: 5, linkedVideoClipId: video().id });
+
+    click(Array.from(audioRow().querySelectorAll("button")).find(button => button.textContent?.includes("Trim")) as HTMLButtonElement);
+    await flushEffects();
+    expect(video()).toMatchObject({ start: 0.5, duration: 4.5 });
+    expect(audio()).toMatchObject({ start: 0.5, duration: 4.5, linkedVideoClipId: video().id });
+
+    click(buttonsNamed("Undo")[0]);
+    await flushEffects();
+    expect(video()).toMatchObject({ start: 0.5, duration: 5 });
+    expect(audio()).toMatchObject({ start: 0.5, duration: 5, linkedVideoClipId: video().id });
+
+    click(buttonsNamed("Undo")[0]);
+    await flushEffects();
+    expect(video()).toMatchObject({ start: 0, duration: 5 });
+    expect(audio()).toMatchObject({ start: 0, duration: 5, linkedVideoClipId: video().id });
+
+    click(buttonsNamed("Redo").find(button => !button.disabled)!);
+    await flushEffects();
+    expect(video()).toMatchObject({ start: 0.5, duration: 5 });
+    expect(audio()).toMatchObject({ start: 0.5, duration: 5, linkedVideoClipId: video().id });
+
+    click(buttonsNamed("Redo").find(button => !button.disabled)!);
+    await flushEffects();
+    expect(video()).toMatchObject({ start: 0.5, duration: 4.5 });
+    expect(audio()).toMatchObject({ start: 0.5, duration: 4.5, linkedVideoClipId: video().id });
+  });
 });
