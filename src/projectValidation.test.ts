@@ -8,7 +8,7 @@ describe("validateProject", () => {
   });
 
   it("rejects a project with missing tracks", () => {
-    const project: Record<string, unknown> = structuredClone(sampleProject);
+    const project = structuredClone(sampleProject) as unknown as Record<string, unknown>;
     delete project.tracks;
     expect(validateProject(project)).toBe(false);
   });
