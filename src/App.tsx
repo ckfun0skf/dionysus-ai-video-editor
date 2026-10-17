@@ -29,7 +29,7 @@ export default function App() {
     const fraction = Math.max(0, Math.min(1, (event.clientX - rect.left) / Math.max(rect.width, 1)));
     setEditorTime(fraction * runtime);
   };
-  const previewImage = project.assets.find(asset => asset.id === previewAssetId && asset.kind === "image" && asset.path?.startsWith("data:image/")) ?? project.assets.find(asset => asset.kind === "image" && asset.path?.startsWith("data:image/"));
+  const previewImage = previewAssetId === "__none__" ? undefined : project.assets.find(asset => asset.id === previewAssetId && asset.kind === "image" && asset.path?.startsWith("data:image/")) ?? project.assets.find(asset => asset.kind === "image" && asset.path?.startsWith("data:image/"));
   const editorTimeLabel = (seconds: number) => `${time(seconds)}.${String(Math.floor((seconds % 1) * 100)).padStart(2, "0")}`;
   const [selectedId, setSelectedId] = useState(project.shots[0]?.id ?? "");
   const [notice, setNotice] = useState(t("status.localOnlyNotice"));
