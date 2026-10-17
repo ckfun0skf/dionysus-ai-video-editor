@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { TimelineTrack } from "./types";
-import { addVideoClip, deleteTimelineClip, moveTimelineClip, trimTimelineClip, unlinkTimelineAudio } from "./timelineOperations";
+import { addVideoClip, deleteTimelineClip, duplicateTimelineClip, moveTimelineClip, trimTimelineClip, unlinkTimelineAudio } from "./timelineOperations";
 
 const tracks: TimelineTrack[] = [
   { id: "v1", name: "Video 1", kind: "video" },
