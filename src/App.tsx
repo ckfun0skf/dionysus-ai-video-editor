@@ -88,7 +88,7 @@ export default function App() {
   function change(fn: (p: DionysusProject) => DionysusProject, historyGroup = "") {
     const now = Date.now();
     const coalesce = Boolean(historyGroup) && historyGroup === lastHistoryGroup.current && now - lastHistoryAt.current < 800;
-    if (!coalesce) setUndoStack(recordProjectChange({ current: copy(project), undo: undoStack, redo: redoStack }, copy(fn(project))).undo);
+    if (!coalesce) setUndoStack(recordProjectChange({ current: copy(project), undo: undoStack, redo: redoStack }, copy(project)).undo);
     lastHistoryGroup.current = historyGroup;
     lastHistoryAt.current = now;
     setRedoStack([]);
