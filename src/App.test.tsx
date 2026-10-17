@@ -196,4 +196,46 @@ describe("App history integration", () => {
     expect(buttonsNamed("Redo").every(button => button.disabled)).toBe(true);
   });
 
+
+  it("exports the current project as JSON including linked timeline metadata", async () => {
+    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Video with linked audio")) as HTMLButtonElement;
+    click(add);
+    await flushEffects();
+
+    const exportButton = Array.from(container.querySelectorAll<HTMLButtonElement>("button"))
+      .find(button => button.textContent?.includes("Export Project"));
+    expect(exportButton).toBeTruthy();
+    click(exportButton!);
+
+    expect(createObjectURLMock).toHaveBeenCalledTimes(1);
+    expect(anchorClickSpy).toHaveBeenCalledTimes(1);
+    const blob = createObjectURLMock.mock.calls[0][0] as Blob;
+    const exported = JSON.parse(await blob.text()) as typeof sampleProject;
+    const video = exported.timelineClips?.find(clip => clip.kind === "video");
+    const audio = exported.timelineClips?.find(clip => clip.kind === "audio");
+    expect(video).toBeTruthy();
+    expect(audio).toMatchObject({ start: video!.start, duration: video!.duration, linkedVideoClipId: video!.id });
+  });
+
+  it("does not overwrite the current project when import JSON is invalid", async () => {
+    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Video with linked audio")) as HTMLButtonElement;
+    click(add);
+    await flushEffects();
+    const before = persistedProject();
+
+    const input = container.querySelector<HTMLInputElement>('input[type="file"][accept*="application/json"]');
+    expect(input).toBeTruthy();
+    const file = { text: async () => "{ invalid json" } as File;
+    await act(async () => {
+      Object.defineProperty(input!, "files", { configurable: true, value: [file] });
+      input!.dispatchEvent(new Event("change", { bubbles: true }));
+      await new Promise(resolve => setTimeout(resolve, 0));
+    });
+    await flushEffects();
+
+    expect(persistedProject().timelineClips).toEqual(before.timelineClips);
+    expect(persistedProject().id).toBe(before.id);
+    expect(input!.value).toBe("");
+  });
+
 });
