@@ -21,6 +21,8 @@ export default function App() {
   });
   const [undoStack, setUndoStack] = useState<DionysusProject[]>([]);
   const [redoStack, setRedoStack] = useState<DionysusProject[]>([]);
+  const lastHistoryGroup = useRef("");
+  const lastHistoryAt = useRef(0);
   const [view, setView] = useState<View>("storyboard");
   const [editorWorkspace, setEditorWorkspace] = useState(true);
   const [editorTool, setEditorTool] = useState<"video" | "text" | "audio" | "caption" | "image">("text");
@@ -69,8 +71,12 @@ export default function App() {
   const runtime = useMemo(() => project.shots.reduce((n, s) => n + s.duration, 0), [project.shots]);
   const selectedStart = useMemo(() => { const index = project.shots.findIndex(s => s.id === selectedId); return project.shots.slice(0, Math.max(index, 0)).reduce((n, s) => n + s.duration, 0); }, [project.shots, selectedId]);
   const slotCount = project.shots.reduce((n, s) => n + s.slots.length, 0);
-  function change(fn: (p: DionysusProject) => DionysusProject) {
-    setUndoStack(stack => [...stack.slice(-49), copy(project)]);
+  function change(fn: (p: DionysusProject) => DionysusProject, historyGroup = "") {
+    const now = Date.now();
+    const coalesce = Boolean(historyGroup) && historyGroup === lastHistoryGroup.current && now - lastHistoryAt.current < 800;
+    if (!coalesce) setUndoStack(stack => [...stack.slice(-49), copy(project)]);
+    lastHistoryGroup.current = historyGroup;
+    lastHistoryAt.current = now;
     setRedoStack([]);
     setProject(p => ({ ...fn(p), updatedAt: new Date().toISOString() }));
   }
@@ -98,7 +104,7 @@ export default function App() {
     change(p => ({ ...p, shots: p.shots.map(s => s.id !== shotId ? s : { ...s, slots: [...s.slots, { id: slotId, name: t("slot.defaultPrefix") + (s.slots.length + 1), start: s.slots.reduce((n, c) => Math.max(n, c.start + c.duration), 0), duration: 3, selectedVersionId: versionId, versions: [{ id: versionId, name: t("version.defaultName"), description: "", duration: 3, layers: [], scriptVersionIds: [], generationRecords: [] }] }] }) }));
     setNotice(t("notice.clipSlotAdded"));
   }
-  function updateShot(shotId: string, patch: Partial<Shot>) { change(p => ({ ...p, shots: p.shots.map(s => s.id === shotId ? { ...s, ...patch } : s) })); }
+  function updateShot(shotId: string, patch: Partial<Shot>) { const textField = "title" in patch ? "shot-title:" + shotId : "intent" in patch ? "shot-intent:" + shotId : ""; change(p => ({ ...p, shots: p.shots.map(s => s.id === shotId ? { ...s, ...patch } : s) }), textField); }
   function reorderShots(draggedId: string, targetId: string) { if (draggedId === targetId) return; change(p => { const shots = [...p.shots]; const from = shots.findIndex(s => s.id === draggedId); const to = shots.findIndex(s => s.id === targetId); if (from < 0 || to < 0) return p; const [moved] = shots.splice(from, 1); shots.splice(to, 0, moved); const selectedStart = shots.slice(0, Math.max(0, shots.findIndex(s => s.id === selectedId))).reduce((sum, shot) => sum + shot.duration, 0); setEditorTime(selectedStart); return { ...p, shots }; }); }
   function selectClipSlot(slotId: string) { setSelectedSlotId(slotId); }
   function updateSlotTiming(shotId: string, slotId: string, field: "start" | "duration", value: number) {
@@ -319,7 +325,7 @@ export default function App() {
         </aside>
         <aside className="editor-inspector">
           <div className="editor-inspector-title">{editorTool==="text"?"Text":editorTool==="video"?"Video":editorTool==="audio"?"Audio":editorTool==="caption"?"Caption":"Image"}</div>
-          {editorTool==="text" ? <><div className="editor-text-preview">{selected?.title ?? "Your text"}</div><label>Text<textarea value={selected?.title ?? ""} onChange={e=>selected&&change(p=>({...p,shots:p.shots.map(s=>s.id===selected.id?{...s,title:e.target.value}:s)}))}/></label><div className="editor-tabs"><button className="active">⚙ Settings</button><button>◈ Style</button></div><div className="editor-settings"><strong>Animations</strong><span>Enter Animation</span><div className="editor-options"><button>None</button><button>Fade</button><button className="active">Slide</button><button>Scale</button></div><span>Exit Animation</span><div className="editor-options"><button>None</button><button className="active">Fade</button><button>Slide</button><button>Scale</button></div><p>Animation preview controls are coming next.</p></div></> : <div className="editor-settings"><strong>{editorTool[0].toUpperCase()+editorTool.slice(1)} settings</strong><p>Select a {editorTool} clip on the timeline to edit its properties.</p></div>}
+          {editorTool==="text" ? <><div className="editor-text-preview">{selected?.title ?? "Your text"}</div><label>Text<textarea value={selected?.title ?? ""} onChange={e=>selected&&change(p=>({...p,shots:p.shots.map(s=>s.id===selected.id?{...s,title:e.target.value}:s)}), "shot-title:"+selected.id)}/></label><div className="editor-tabs"><button className="active">⚙ Settings</button><button>◈ Style</button></div><div className="editor-settings"><strong>Animations</strong><span>Enter Animation</span><div className="editor-options"><button>None</button><button>Fade</button><button className="active">Slide</button><button>Scale</button></div><span>Exit Animation</span><div className="editor-options"><button>None</button><button className="active">Fade</button><button>Slide</button><button>Scale</button></div><p>Animation preview controls are coming next.</p></div></> : <div className="editor-settings"><strong>{editorTool[0].toUpperCase()+editorTool.slice(1)} settings</strong><p>Select a {editorTool} clip on the timeline to edit its properties.</p></div>}
         </aside>
         <div className="editor-main">
           <header className="editor-topbar"><div className="editor-project-name">{project.name}<span> / Editor</span></div><div className="editor-top-actions"><button title="Undo (Ctrl/Cmd+Z)" aria-label="Undo" disabled={undoStack.length === 0} onClick={undoProjectChange}><Undo2 size={16}/></button><button title="Redo (Ctrl/Cmd+Shift+Z)" aria-label="Redo" disabled={redoStack.length === 0} onClick={redoProjectChange}><Redo2 size={16}/></button><button title="Notifications"><Bell size={16}/></button><button className="editor-render" onClick={()=>setNotice("Video rendering is not implemented yet.")}>Render Video</button><button className="editor-exit" onClick={()=>setEditorWorkspace(false)}>Project view</button></div></header>
