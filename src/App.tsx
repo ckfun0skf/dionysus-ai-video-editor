@@ -5,6 +5,7 @@ import type { Asset, AssetKind, DionysusProject, ReferenceProfile, ReferenceRole
 import { validateProject } from "./projectValidation";
 import { t } from "./i18n";
 import { addVideoClip, moveTimelineClip, trimTimelineClip, unlinkTimelineAudio, deleteTimelineClip } from "./timelineOperations";
+import { recordProjectChange, undoProjectChange as undoHistory, redoProjectChange as redoHistory } from "./projectHistory";
 type View = "storyboard" | "timeline" | "assets" | "references";
 const STORAGE_KEY = "dionysus.project.v1";
 const id = (prefix: string) => prefix + "-" + crypto.randomUUID();
@@ -87,7 +88,7 @@ export default function App() {
   function change(fn: (p: DionysusProject) => DionysusProject, historyGroup = "") {
     const now = Date.now();
     const coalesce = Boolean(historyGroup) && historyGroup === lastHistoryGroup.current && now - lastHistoryAt.current < 800;
-    if (!coalesce) setUndoStack(stack => [...stack.slice(-49), copy(project)]);
+    if (!coalesce) setUndoStack(recordProjectChange({ current: copy(project), undo: undoStack, redo: redoStack }, copy(fn(project))).undo);
     lastHistoryGroup.current = historyGroup;
     lastHistoryAt.current = now;
     setRedoStack([]);
@@ -96,17 +97,19 @@ export default function App() {
   function undoProjectChange() {
     if (!undoStack.length) return;
     lastHistoryGroup.current = "";
-    setRedoStack(stack => [...stack, copy(project)]);
-    setProject({ ...copy(undoStack[undoStack.length - 1]), updatedAt: new Date().toISOString() });
-    setUndoStack(stack => stack.slice(0, -1));
+    const history = undoHistory({ current: copy(project), undo: undoStack, redo: redoStack });
+    setRedoStack(history.redo.map(copy));
+    setProject({ ...copy(history.current), updatedAt: new Date().toISOString() });
+    setUndoStack(history.undo.map(copy));
     setNotice("Last project change undone.");
   }
   function redoProjectChange() {
     if (!redoStack.length) return;
     lastHistoryGroup.current = "";
-    setUndoStack(stack => [...stack, copy(project)]);
-    setProject({ ...copy(redoStack[redoStack.length - 1]), updatedAt: new Date().toISOString() });
-    setRedoStack(stack => stack.slice(0, -1));
+    const history = redoHistory({ current: copy(project), undo: undoStack, redo: redoStack });
+    setUndoStack(history.undo.map(copy));
+    setProject({ ...copy(history.current), updatedAt: new Date().toISOString() });
+    setRedoStack(history.redo.map(copy));
     setNotice("Project change restored.");
   }
   function addShot() {
