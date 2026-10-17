@@ -92,7 +92,7 @@ describe("App history integration", () => {
   });
 
   it("handles rapid timeline edits atomically and keeps linked audio in persisted state", async () => {
-    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Video with linked audio"));
+    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Add linked video/audio"));
     expect(add).toBeTruthy();
     click(add as HTMLButtonElement);
     await flushEffects();
@@ -113,7 +113,7 @@ describe("App history integration", () => {
   });
 
   it("supports Undo/Redo buttons and Ctrl/Cmd+Z keyboard shortcuts", async () => {
-    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Video with linked audio")) as HTMLButtonElement;
+    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Add linked video/audio")) as HTMLButtonElement;
     click(add);
     await flushEffects();
     expect(persistedProject().timelineClips).toHaveLength(2);
@@ -139,7 +139,7 @@ describe("App history integration", () => {
   });
 
   it("clears Undo/Redo history after importing a valid project", async () => {
-    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Video with linked audio")) as HTMLButtonElement;
+    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Add linked video/audio")) as HTMLButtonElement;
     click(add);
     await flushEffects();
     expect(buttonsNamed("Undo")[0].disabled).toBe(false);
@@ -164,14 +164,14 @@ describe("App history integration", () => {
   });
 
   it("clears redo when a new timeline operation follows Undo", async () => {
-    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Video with linked audio")) as HTMLButtonElement;
+    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Add linked video/audio")) as HTMLButtonElement;
     click(add);
     await flushEffects();
     click(buttonsNamed("Undo")[0]);
     await flushEffects();
     expect(buttonsNamed("Redo").every(button => button.disabled)).toBe(false);
 
-    const addAgain = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Video with linked audio")) as HTMLButtonElement;
+    const addAgain = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Add linked video/audio")) as HTMLButtonElement;
     click(addAgain);
     await flushEffects();
     expect(buttonsNamed("Redo").every(button => button.disabled)).toBe(true);
@@ -179,7 +179,7 @@ describe("App history integration", () => {
   });
 
   it("restores linked timeline state after an App unmount/remount from localStorage", async () => {
-    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Video with linked audio")) as HTMLButtonElement;
+    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Add linked video/audio")) as HTMLButtonElement;
     click(add);
     await flushEffects();
     const beforeReload = persistedProject();
@@ -200,10 +200,10 @@ describe("App history integration", () => {
   });
 
   it("round-trips linked timeline metadata through actual project export and import", async () => {
-    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Video with linked audio")) as HTMLButtonElement;
+    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Add linked video/audio")) as HTMLButtonElement;
     click(add);
     await flushEffects();
-    click(Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Video with linked audio")) as HTMLButtonElement);
+    click(Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Add linked video/audio")) as HTMLButtonElement);
     await flushEffects();
 
     const secondAudioRow = timelineRows().find(row => row.textContent?.includes("Video clip 2 audio"));
@@ -260,7 +260,7 @@ describe("App history integration", () => {
   });
 
   it("exports the current project as JSON including linked timeline metadata", async () => {
-    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Video with linked audio")) as HTMLButtonElement;
+    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Add linked video/audio")) as HTMLButtonElement;
     click(add);
     await flushEffects();
 
@@ -286,7 +286,7 @@ describe("App history integration", () => {
   });
 
   it("does not overwrite the current project when import JSON is invalid", async () => {
-    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Video with linked audio")) as HTMLButtonElement;
+    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Add linked video/audio")) as HTMLButtonElement;
     click(add);
     await flushEffects();
     const before = persistedProject();
@@ -308,7 +308,7 @@ describe("App history integration", () => {
 
 
   it("unlinks audio in the App, edits it independently, and restores the link through Undo/Redo", async () => {
-    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Video with linked audio")) as HTMLButtonElement;
+    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Add linked video/audio")) as HTMLButtonElement;
     click(add);
     await flushEffects();
 
@@ -348,7 +348,7 @@ describe("App history integration", () => {
   });
 
   it("deletes linked video and audio together and restores both through Undo/Redo", async () => {
-    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Video with linked audio")) as HTMLButtonElement;
+    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Add linked video/audio")) as HTMLButtonElement;
     click(add);
     await flushEffects();
 
@@ -374,7 +374,7 @@ describe("App history integration", () => {
   });
 
   it("deletes only a linked audio clip from the App and restores it through Undo/Redo", async () => {
-    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Video with linked audio")) as HTMLButtonElement;
+    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Add linked video/audio")) as HTMLButtonElement;
     click(add);
     await flushEffects();
 
@@ -402,7 +402,7 @@ describe("App history integration", () => {
   });
 
   it("moves and trims linked audio through the App and restores both clips with Undo/Redo", async () => {
-    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Video with linked audio")) as HTMLButtonElement;
+    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Add linked video/audio")) as HTMLButtonElement;
     click(add);
     await flushEffects();
 
