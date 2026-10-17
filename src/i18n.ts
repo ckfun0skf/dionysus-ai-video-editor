@@ -128,7 +128,19 @@ export const messages = {
     "shot.defaultTitle": "New shot",
     "slot.defaultName": "New clip",
     "slot.defaultPrefix": "Clip ",
-    "version.defaultName": "Version A"
+    "version.defaultName": "Version A",
+    "media.video": "Video",
+    "media.image": "Image",
+    "media.audio": "Audio",
+    "media.text": "Text",
+    "media.script": "Script",
+    "media.effects": "Effects",
+    "media.other": "Other",
+    "entityType.character": "Character",
+    "entityType.environment": "Environment",
+    "entityType.prop": "Prop",
+    "entityType.style": "Style",
+    "entityType.other": "Other"
 
   }
 } as const;
