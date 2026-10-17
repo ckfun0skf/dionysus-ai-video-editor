@@ -241,8 +241,8 @@
         {
           "id": "DYS-011",
           "title": "Multi-track Timeline and linked audio",
-          "status": "planned",
-          "progress": 0,
+          "status": "in_progress",
+          "progress": 15,
           "summary": "Introduce independent video/audio tracks and a safe linked/unlinked audio workflow.",
           "doc": "tasks/multitrack-timeline-linked-audio.md",
           "detail": "tasks/multitrack-timeline-linked-audio.html",
@@ -250,7 +250,7 @@
           "subtasks": [
             {
               "title": "Track ordering, visibility, lock, and type rules",
-              "status": "planned"
+              "status": "in_progress"
             },
             {
               "title": "Represent linked source audio and independent audio clips",
@@ -262,7 +262,7 @@
             },
             {
               "title": "Waveform/clip rendering with honest unavailable states",
-              "status": "planned"
+              "status": "in_progress"
             }
           ],
           "acceptance": [
@@ -274,7 +274,7 @@
           "evidence": [
             "Acceptance tests and PR CI will be recorded when implementation begins"
           ],
-          "notes": "Confirmed product decision: video audio defaults to linked but can be unlinked and edited independently."
+          "notes": "Implementation has started on PR #35. Current work adds a validated metadata model and linked-audio operations; UI/browser validation and remaining acceptance criteria are pending."
         }
       ]
     },
