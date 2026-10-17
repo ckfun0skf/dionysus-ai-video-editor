@@ -26,10 +26,13 @@ export function moveTimelineClip(state: TimelineState, clipId: string, start: nu
   if (!Number.isFinite(start) || start < 0) throw new Error("Clip start must be finite and non-negative.");
   const clip = state.timelineClips.find(item => item.id === clipId);
   if (!clip) throw new Error("Timeline clip not found.");
+  const linkedSourceId = clip.kind === "audio" ? clip.linkedVideoClipId : undefined;
+  const sourceId = linkedSourceId ?? (clip.kind === "video" ? clip.id : undefined);
+  const source = sourceId ? state.timelineClips.find(item => item.id === sourceId) : undefined;
   const delta = start - clip.start;
   return { ...state, timelineClips: state.timelineClips.map(item => {
-    if (item.id === clipId) return { ...item, start };
-    if (clip.kind === "video" && item.kind === "audio" && item.linkedVideoClipId === clipId) return { ...item, start: item.start + delta };
+    if (item.id === clipId || (source && item.id === source.id)) return { ...item, start: item.id === clipId ? start : item.start + delta };
+    if (sourceId && item.kind === "audio" && item.linkedVideoClipId === sourceId) return { ...item, start: item.start + delta };
     return item;
   }) };
 }
@@ -38,9 +41,10 @@ export function trimTimelineClip(state: TimelineState, clipId: string, duration:
   if (!Number.isFinite(duration) || duration <= 0) throw new Error("Clip duration must be finite and positive.");
   const clip = state.timelineClips.find(item => item.id === clipId);
   if (!clip) throw new Error("Timeline clip not found.");
+  const sourceId = clip.kind === "audio" ? clip.linkedVideoClipId : clip.id;
   return { ...state, timelineClips: state.timelineClips.map(item => {
-    if (item.id === clipId) return { ...item, duration };
-    if (clip.kind === "video" && item.kind === "audio" && item.linkedVideoClipId === clipId) return { ...item, duration };
+    if (item.id === clipId || (sourceId && item.id === sourceId)) return { ...item, duration };
+    if (sourceId && item.kind === "audio" && item.linkedVideoClipId === sourceId) return { ...item, duration };
     return item;
   }) };
 }
