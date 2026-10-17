@@ -24,7 +24,7 @@ const entityTypes = new Set(["character", "environment", "prop", "style", "other
 function isReferenceItem(value: unknown): boolean {
   return isRecord(value) && isString(value.id) && isString(value.assetId) &&
     isString(value.role) && referenceRoles.has(value.role) &&
-    (value.notes === undefined || isString(value.notes));
+    (value.notes === undefined || isString(value.notes)) &&\n    (value.prompt === undefined || isString(value.prompt)) &&\n    (value.modelName === undefined || isString(value.modelName)) &&\n    (value.modelVersion === undefined || isString(value.modelVersion)) &&\n    (value.thumbnailPath === undefined || isString(value.thumbnailPath));
 }
 function isReferenceOverride(value: unknown): boolean {
   if (!isRecord(value) || !isString(value.referenceId) ||
@@ -47,7 +47,7 @@ function isLayer(value: unknown): boolean {
     isFiniteNumber(value.duration) && value.duration > 0 &&
     (value.assetId === undefined || isString(value.assetId)) &&
     (value.scriptVersionId === undefined || isString(value.scriptVersionId)) &&
-    (value.childCompositionId === undefined || isString(value.childCompositionId));
+    (value.childCompositionId === undefined || isString(value.childCompositionId)) &&\n    (value.sourceIn === undefined || (isFiniteNumber(value.sourceIn) && value.sourceIn >= 0)) &&\n    (value.sourceOut === undefined || (isFiniteNumber(value.sourceOut) && value.sourceOut >= 0)) &&\n    (value.sourceIn === undefined || value.sourceOut === undefined || value.sourceOut > value.sourceIn) &&\n    (value.prompt === undefined || isString(value.prompt)) &&\n    (value.modelName === undefined || isString(value.modelName)) &&\n    (value.thumbnailPath === undefined || isString(value.thumbnailPath));
 }
 function isVersion(value: unknown): boolean {
   return isRecord(value) && isString(value.id) && isString(value.name) &&
@@ -90,7 +90,7 @@ function isTimelineClip(value: unknown): boolean {
     isString(value.trackId) && isFiniteNumber(value.start) && value.start >= 0 &&
     isFiniteNumber(value.duration) && value.duration > 0 &&
     (value.assetId === undefined || isString(value.assetId)) &&
-    (value.linkedVideoClipId === undefined || (value.kind === "audio" && isString(value.linkedVideoClipId)));
+    (value.linkedVideoClipId === undefined || (value.kind === "audio" && isString(value.linkedVideoClipId))) &&\n    (value.sourceIn === undefined || (isFiniteNumber(value.sourceIn) && value.sourceIn >= 0)) &&\n    (value.sourceOut === undefined || (isFiniteNumber(value.sourceOut) && value.sourceOut >= 0)) &&\n    (value.sourceIn === undefined || value.sourceOut === undefined || value.sourceOut > value.sourceIn) &&\n    (value.prompt === undefined || isString(value.prompt)) &&\n    (value.modelName === undefined || isString(value.modelName)) &&\n    (value.modelVersion === undefined || isString(value.modelVersion)) &&\n    (value.thumbnailPath === undefined || isString(value.thumbnailPath));
 }
 function isTrack(value: unknown): boolean {
   return isRecord(value) && isString(value.id) && isString(value.name) &&
