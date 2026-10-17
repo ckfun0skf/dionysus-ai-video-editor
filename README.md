@@ -17,6 +17,10 @@ Dionysus is a local-first AI video planning and composition editor. It is design
 - [Product Requirements Document](docs/PRD.md)
 - [Architecture Notes](docs/ARCHITECTURE.md)
 
+## Task tracking
+
+The task dashboard is published with the static site at `doc/task.html` (GitHub Pages path: `/dionysus-ai-video-editor/doc/task.html`). Each task has a detail HTML page, a Markdown specification, and a completion report under `public/doc/`. Keep these files synchronized as task status changes.
+
 ## Localization
 
 All static UI copy is centralized in `src/i18n.ts`. Components use typed message keys and interpolation instead of embedding interface text, so additional locale catalogs can be added consistently. The current UI defaults to English; a language selector is a later milestone.
