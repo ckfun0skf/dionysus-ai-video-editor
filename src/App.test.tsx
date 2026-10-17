@@ -127,7 +127,8 @@ describe("App history integration", () => {
     await flushEffects();
     expect(buttonsNamed("Redo").every(button => button.disabled)).toBe(false);
 
-    click(add);
+    const addAgain = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Video with linked audio")) as HTMLButtonElement;
+    click(addAgain);
     await flushEffects();
     expect(buttonsNamed("Redo").every(button => button.disabled)).toBe(true);
     expect(persistedProject().timelineClips).toHaveLength(2);
