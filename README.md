@@ -17,6 +17,10 @@ Dionysus is a local-first AI video planning and composition editor. It is design
 - [Product Requirements Document](docs/PRD.md)
 - [Architecture Notes](docs/ARCHITECTURE.md)
 
+## Localization
+
+All static UI copy is centralized in `src/i18n.ts`. Components use typed message keys and interpolation instead of embedding interface text, so additional locale catalogs can be added consistently. The current UI defaults to English; a language selector is a later milestone.
+
 ## Development
 
 Requirements: Node.js 20 or newer.
