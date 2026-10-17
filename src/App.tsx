@@ -64,7 +64,7 @@ export default function App() {
     setNotice(t("notice.clipSlotAdded"));
   }
   function updateShot(shotId: string, patch: Partial<Shot>) { change(p => ({ ...p, shots: p.shots.map(s => s.id === shotId ? { ...s, ...patch } : s) })); }
-  function reorderShots(draggedId: string, targetId: string) { if (draggedId === targetId) return; change(p => { const shots = [...p.shots]; const from = shots.findIndex(s => s.id === draggedId); const to = shots.findIndex(s => s.id === targetId); if (from < 0 || to < 0) return p; const [moved] = shots.splice(from, 1); shots.splice(to, 0, moved); return { ...p, shots }; }); }
+  function reorderShots(draggedId: string, targetId: string) { if (draggedId === targetId) return; change(p => { const shots = [...p.shots]; const from = shots.findIndex(s => s.id === draggedId); const to = shots.findIndex(s => s.id === targetId); if (from < 0 || to < 0) return p; const [moved] = shots.splice(from, 1); shots.splice(to, 0, moved); const selectedStart = shots.slice(0, Math.max(0, shots.findIndex(s => s.id === selectedId))).reduce((sum, shot) => sum + shot.duration, 0); setEditorTime(selectedStart); return { ...p, shots }; }); }
   function selectClipSlot(slotId: string) { setSelectedSlotId(slotId); }
   function updateSlotTiming(shotId: string, slotId: string, field: "start" | "duration", value: number) {
     if (!Number.isFinite(value)) return;
