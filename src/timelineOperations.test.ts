@@ -86,7 +86,7 @@ describe("linked multi-track timeline operations", () => {
     expect(duplicated.timelineClips.find(c => c.id === "v-copy")).toMatchObject({ start: 8, duration: 5, kind: "video" });
     expect(duplicated.timelineClips.find(c => c.id === "a-copy")).toMatchObject({ start: 8, duration: 5, kind: "audio", linkedVideoClipId: "v-copy" });
     expect(duplicated.timelineClips.filter(c => c.kind === "audio").every(c => duplicated.timelineClips.some(v => v.id === c.linkedVideoClipId && v.kind === "video" && v.start === c.start && v.duration === c.duration))).toBe(true);
-    expect(() => duplicateTimelineClip(state, "v", { newClipId: "v-copy", newAudioClipId: "a-copy" })).toThrow(/unique/);
+    expect(() => duplicateTimelineClip(state, "v", { newClipId: "v", newAudioClipId: "a-copy" })).toThrow(/unique/);
     expect(() => duplicateTimelineClip(state, "v", { newClipId: "v-copy" })).toThrow(/newAudioClipId/);
   });
 
