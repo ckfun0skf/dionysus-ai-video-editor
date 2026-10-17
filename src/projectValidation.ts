@@ -90,14 +90,49 @@ function isTrack(value: unknown): boolean {
 
 /** Validate imported JSON before it reaches React rendering or local persistence. */
 export function validateProject(value: unknown): value is DionysusProject {
-  return isRecord(value) && value.schemaVersion === "1.0" &&
-    isString(value.id) && isString(value.name) &&
-    isString(value.createdAt) && isString(value.updatedAt) &&
-    isFiniteNumber(value.frameRate) && value.frameRate > 0 &&
-    isFiniteNumber(value.width) && value.width > 0 &&
-    isFiniteNumber(value.height) && value.height > 0 &&
-    Array.isArray(value.shots) && value.shots.every(isShot) &&
-    Array.isArray(value.tracks) && value.tracks.every(isTrack) &&
-    Array.isArray(value.assets) && value.assets.every(isAsset) &&
-    Array.isArray(value.referenceProfiles) && value.referenceProfiles.every(isProfile);
+  if (!isRecord(value) || value.schemaVersion !== "1.0" ||
+      !isString(value.id) || !isString(value.name) ||
+      !isString(value.createdAt) || !isString(value.updatedAt) ||
+      !isFiniteNumber(value.frameRate) || value.frameRate <= 0 ||
+      !isFiniteNumber(value.width) || value.width <= 0 ||
+      !isFiniteNumber(value.height) || value.height <= 0 ||
+      !Array.isArray(value.shots) || !value.shots.every(isShot) ||
+      !Array.isArray(value.tracks) || !value.tracks.every(isTrack) ||
+      !Array.isArray(value.assets) || !value.assets.every(isAsset) ||
+      !Array.isArray(value.referenceProfiles) || !value.referenceProfiles.every(isProfile)) return false;
+
+  const assets = value.assets as UnknownRecord[];
+  const profiles = value.referenceProfiles as UnknownRecord[];
+  const shots = value.shots as UnknownRecord[];
+  const assetIds = new Set(assets.map(asset => asset.id as string));
+  const profileIds = new Set(profiles.map(profile => profile.id as string));
+  const referenceIds = new Set<string>();
+
+  for (const profile of profiles) {
+    for (const reference of profile.references as UnknownRecord[]) {
+      if (!assetIds.has(reference.assetId as string)) return false;
+      referenceIds.add(reference.id as string);
+    }
+  }
+  for (const shot of shots) {
+    if (!(shot.referenceProfileIds as string[]).every(profileId => profileIds.has(profileId))) return false;
+    for (const override of shot.referenceOverrides as UnknownRecord[]) {
+      if (!referenceIds.has(override.referenceId as string)) return false;
+      if (override.replacementAssetId !== undefined && !assetIds.has(override.replacementAssetId as string)) return false;
+    }
+    for (const slot of shot.slots as UnknownRecord[]) {
+      for (const version of slot.versions as UnknownRecord[]) {
+        for (const layer of version.layers as UnknownRecord[]) {
+          if (layer.assetId !== undefined && !assetIds.has(layer.assetId as string)) return false;
+        }
+        for (const record of version.generationRecords as UnknownRecord[]) {
+          if (record.outputAssetId !== undefined && !assetIds.has(record.outputAssetId as string)) return false;
+          for (const reference of record.referenceSnapshot as UnknownRecord[]) {
+            if (!assetIds.has(reference.assetId as string)) return false;
+          }
+        }
+      }
+    }
+  }
+  return true;
 }
