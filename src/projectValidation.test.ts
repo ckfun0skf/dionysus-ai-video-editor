@@ -66,6 +66,7 @@ describe("validateProject", () => {
       references: [{ id: "ref-test", assetId: "asset-test", role: "identity" }],
     });
     missingReplacement.assets.push({ id: "asset-test", name: "Reference", kind: "image" });
+    missingReplacement.shots[0].referenceProfileIds.push("profile-test");
     missingReplacement.shots[0].referenceOverrides.push({
       referenceId: "ref-test", action: "replace", replacementAssetId: "missing-asset",
     });
