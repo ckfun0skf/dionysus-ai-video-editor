@@ -19,12 +19,13 @@ Build a practical Timeline editor with clip selection and per-Clip Slot version 
 - [ ] Explicit fixed-duration, auto-extend, and ripple operations.
 
 ## Implemented / verified
-Version picker UI and state update functions are included in the feature branch. Automated CI and browser interaction checks are pending until the PR workflow runs.
+Version picker UI and state update functions were merged through PR #3. GitHub Actions CI run #39017609414 completed successfully: automated tests and TypeScript/production build passed. Browser interaction checks remain unverified.
 
 ## Remaining work
 Timeline remains a planning UI: clip drag/drop, actual thumbnail extraction, media playback, and compositing are not implemented in this milestone.
 
 ## Evidence and links
+- [PR #3 — Timeline Version Picker](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/3) — merged as `bb72498427851a3a3f3c421a2a529137a933f3cc`; CI passed.
 - [Task detail page](./timeline-and-versions.html)
 - [Completion report](../reports/timeline-and-versions-report.md)
 - [Task dashboard](../task.html)
