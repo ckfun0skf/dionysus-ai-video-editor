@@ -154,8 +154,10 @@ export default function App() {
       return { ...p, shots };
     });
     setSelectedId(duplicate.id);
-    setSelectedSlotId("");
-    setNotice("Shot duplicated with independent clip slots and versions.");
+    setSelectedSlotId(duplicate.slots[0]?.id ?? "");
+    const sourceStart = project.shots.slice(0, Math.max(0, project.shots.findIndex(item => item.id === shotId))).reduce((sum, item) => sum + item.duration, 0);
+    setEditorTime(Math.min(runtime, sourceStart + source.duration));
+    setNotice("Shot duplicated and focused. Use Undo to reverse.");
   }
 
   function addSlot(shotId: string) {
