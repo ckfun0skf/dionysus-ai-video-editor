@@ -65,7 +65,7 @@ export default function App() {
     if (!shot || !slot) return;
     const current = slot.versions.find(version => version.id === slot.selectedVersionId) ?? slot.versions[0];
     const nextId = id("version");
-    const nextVersion = current ? { ...copy({ ...current }), id: nextId, name: "Version " + String.fromCharCode(65 + slot.versions.length), description: current.description ? "Copy of " + current.name + ": " + current.description : "New version based on " + current.name, layers: current.layers.map(layer => ({ ...layer, id: id("layer") })), scriptVersionIds: [...current.scriptVersionIds], generationRecords: [] } : { id: nextId, name: "Version A", description: "", duration: slot.duration, layers: [], scriptVersionIds: [], generationRecords: [] };
+    const nextVersion = current ? { ...JSON.parse(JSON.stringify(current)), id: nextId, name: "Version " + String.fromCharCode(65 + slot.versions.length), description: current.description ? "Copy of " + current.name + ": " + current.description : "New version based on " + current.name, layers: current.layers.map(layer => ({ ...layer, id: id("layer") })), scriptVersionIds: [...current.scriptVersionIds], generationRecords: [] } : { id: nextId, name: "Version A", description: "", duration: slot.duration, layers: [], scriptVersionIds: [], generationRecords: [] };
     change(p => ({ ...p, shots: p.shots.map(item => item.id !== shotId ? item : { ...item, slots: item.slots.map(s => s.id !== slotId ? s : { ...s, versions: [...s.versions, nextVersion], selectedVersionId: nextId }) }) }));
     setNotice("New version created; the previous versions are preserved.");
   }
