@@ -90,6 +90,17 @@ describe("linked multi-track timeline operations", () => {
     expect(() => duplicateTimelineClip(state, "v", { newClipId: "v-copy" })).toThrow(/newAudioClipId/);
   });
 
+  it("duplicates every linked audio clip with deterministic unique IDs and rejects generated-ID collisions", () => {
+    const one = addVideoClip(empty, { id: "v", name: "Video", trackId: "v1", start: 2, duration: 4, sourceHasAudio: true, audioTrackId: "a1", audioClipId: "a1-src" });
+    const twoAudio = { ...one, timelineClips: [...one.timelineClips, { ...one.timelineClips[1], id: "a2-src", name: "Alternate source audio" }] };
+    const duplicated = duplicateTimelineClip(twoAudio, "v", { newClipId: "v-copy", newAudioClipId: "audio-copy", start: 10 });
+    expect(duplicated.timelineClips.filter(c => c.linkedVideoClipId === "v-copy").map(c => c.id)).toEqual(["audio-copy", "audio-copy-2"]);
+    expect(duplicated.timelineClips.filter(c => c.linkedVideoClipId === "v-copy").every(c => c.start === 10 && c.duration === 4)).toBe(true);
+    const occupied = { ...twoAudio, timelineClips: [...twoAudio.timelineClips, { id: "audio-copy-2", name: "Existing", kind: "audio" as const, trackId: "a1", start: 0, duration: 1 }] };
+    expect(() => duplicateTimelineClip(occupied, "v", { newClipId: "v-copy", newAudioClipId: "audio-copy", start: 10 })).toThrow(/unique/);
+    expect(twoAudio.timelineClips).toHaveLength(3);
+  });
+
   it("rejects malformed duplicate IDs and dangling or out-of-sync links before editing", () => {
     const duplicateIds = { ...empty, timelineClips: [
       { id: "same", name: "Video", kind: "video" as const, trackId: "v1", start: 0, duration: 2 },
