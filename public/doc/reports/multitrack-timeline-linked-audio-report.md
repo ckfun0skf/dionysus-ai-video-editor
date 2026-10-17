@@ -12,10 +12,23 @@
 
 ## Verification status
 - [x] Latest PR commit passes CI: 5 test files, 45 tests, TypeScript check, and production build.
-- [ ] Browser walkthrough covers linked and unlinked examples. **Blocked:** the connected browser context is unavailable, so real-browser UI smoke testing has not been completed.
+- [ ] Human real-browser walkthrough covers linked and unlinked examples. The ChatGPT-connected browser context is unavailable in this session, so the assistant could not perform the interactive browser smoke test. A deployed PR preview is available at [DYS-011 preview](https://ckfun0skf.github.io/dionysus-ai-video-editor/pr-35/); final visual/interaction acceptance is pending the user's manual check.
 - [x] Project JSON export/import round-trip preserves both linked and unlinked audio relationships; covered by an App-level integration test.
 - [ ] Visual track-lane representation is integrated and responsive; the current UI remains a metadata control surface, not a full visual lane editor.
 
+## Manual acceptance checklist
+
+Use the [DYS-011 preview site](https://ckfun0skf.github.io/dionysus-ai-video-editor/pr-35/) in a normal browser. The preview workflow rebuilds the current `main` site at the root and places DYS-011 under `/pr-35/`, leaving the production app's root route on the `main` build.
+
+1. Confirm the editor loads and the timeline controls are visible.
+2. Add **Video with linked audio**. Verify both video and source-audio clips appear, with an **Unlink audio** control on the audio row.
+3. Move the linked audio with `+0.5s` and then use **Trim**. The video and still-linked audio should keep matching start/duration values. Use Undo/Redo to verify both clips move/trim together.
+4. Click **Unlink audio**, move the audio by `+0.5s`, and confirm the video remains unchanged.
+5. Delete the audio row only. Verify the video remains; Undo should restore the audio link and Redo should remove just the audio again.
+6. Export the project JSON, then import that file. Verify linked audio still points to its video and unlinked audio remains unlinked.
+
+This feature is timeline metadata only; real media playback, waveforms, drag handles, and MP4 rendering are outside this DYS-011 foundation.
+ 
 ## Additional regression coverage
 - App-level deletion of linked audio leaves the video intact and supports Undo/Redo.
 - The history coalescing test now verifies that the intermediate title edit is persisted before the final edit, then checks that one Undo returns to the original title.
