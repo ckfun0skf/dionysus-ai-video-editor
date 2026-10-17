@@ -121,8 +121,6 @@ export default function App() {
   function duplicateShot(shotId: string) {
     const source = project.shots.find(item => item.id === shotId);
     if (!source) return;
-    const shotIdMap = new Map<string, string>();
-    const slotIdMap = new Map<string, string>();
     const versionIdMap = new Map<string, string>();
     const duplicate: Shot = {
       ...copy(source),
@@ -130,7 +128,6 @@ export default function App() {
       title: source.title + " copy",
       slots: source.slots.map(slot => {
         const newSlotId = id("slot");
-        slotIdMap.set(slot.id, newSlotId);
         const versions = slot.versions.map(version => {
           const newVersionId = id("version");
           versionIdMap.set(version.id, newVersionId);
@@ -149,7 +146,6 @@ export default function App() {
         };
       }),
     };
-    shotIdMap.set(source.id, duplicate.id);
     change(p => {
       const index = p.shots.findIndex(item => item.id === shotId);
       if (index < 0) return p;
