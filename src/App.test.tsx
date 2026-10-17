@@ -75,6 +75,9 @@ describe("App history integration", () => {
     };
 
     setInputValue("Intermediate title");
+    await flushEffects();
+    expect(persistedProject().shots[0].title).toBe("Intermediate title");
+
     setInputValue("Final coalesced title");
     await flushEffects();
     expect(persistedProject().shots[0].title).toBe("Final coalesced title");
@@ -200,6 +203,13 @@ describe("App history integration", () => {
     const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Video with linked audio")) as HTMLButtonElement;
     click(add);
     await flushEffects();
+    click(Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Video with linked audio")) as HTMLButtonElement);
+    await flushEffects();
+
+    const secondAudioRow = timelineRows().find(row => row.textContent?.includes("Video clip 2 audio"));
+    expect(secondAudioRow).toBeTruthy();
+    click(Array.from(secondAudioRow!.querySelectorAll("button")).find(button => button.textContent?.includes("Unlink audio")) as HTMLButtonElement);
+    await flushEffects();
 
     const exportButton = Array.from(container.querySelectorAll<HTMLButtonElement>("button"))
       .find(button => button.textContent?.toLowerCase().includes("export project"));
@@ -215,7 +225,9 @@ describe("App history integration", () => {
       reader.readAsText(blob);
     });
     const expected = JSON.parse(exportedJson) as typeof sampleProject;
-    expect(expected.timelineClips).toHaveLength(2);
+    expect(expected.timelineClips).toHaveLength(4);
+    expect(expected.timelineClips?.filter(clip => clip.kind === "audio" && clip.linkedVideoClipId)).toHaveLength(1);
+    expect(expected.timelineClips?.filter(clip => clip.kind === "audio" && !clip.linkedVideoClipId)).toHaveLength(1);
 
     const input = container.querySelector<HTMLInputElement>('input[type="file"][accept*="application/json"]');
     expect(input).toBeTruthy();
@@ -230,10 +242,19 @@ describe("App history integration", () => {
     const imported = persistedProject();
     expect(imported.id).toBe(expected.id);
     expect(imported.timelineClips).toEqual(expected.timelineClips);
-    const video = imported.timelineClips?.find(clip => clip.kind === "video");
-    const audio = imported.timelineClips?.find(clip => clip.kind === "audio");
-    expect(video).toBeTruthy();
-    expect(audio).toMatchObject({ start: video!.start, duration: video!.duration, linkedVideoClipId: video!.id });
+    const videos = imported.timelineClips?.filter(clip => clip.kind === "video") ?? [];
+    const audios = imported.timelineClips?.filter(clip => clip.kind === "audio") ?? [];
+    expect(videos).toHaveLength(2);
+    expect(audios).toHaveLength(2);
+    const linkedAudio = audios.find(clip => clip.linkedVideoClipId);
+    const unlinkedAudio = audios.find(clip => !clip.linkedVideoClipId);
+    expect(linkedAudio).toBeTruthy();
+    expect(unlinkedAudio).toBeTruthy();
+    expect(linkedAudio).toMatchObject({
+      start: videos.find(clip => clip.id === linkedAudio!.linkedVideoClipId)!.start,
+      duration: videos.find(clip => clip.id === linkedAudio!.linkedVideoClipId)!.duration,
+    });
+    expect(unlinkedAudio).not.toHaveProperty("linkedVideoClipId");
     expect(buttonsNamed("Undo").every(button => button.disabled)).toBe(true);
     expect(buttonsNamed("Redo").every(button => button.disabled)).toBe(true);
   });
@@ -350,6 +371,34 @@ describe("App history integration", () => {
     click(buttonsNamed("Redo").find(button => !button.disabled)!);
     await flushEffects();
     expect(clips()).toEqual([]);
+  });
+
+  it("deletes only a linked audio clip from the App and restores it through Undo/Redo", async () => {
+    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Video with linked audio")) as HTMLButtonElement;
+    click(add);
+    await flushEffects();
+
+    const audioRow = () => timelineRows().find(row => row.textContent?.includes("Video clip 1 audio"))!;
+    const clips = () => persistedProject().timelineClips ?? [];
+    const initial = clips();
+    const video = initial.find(clip => clip.kind === "video")!;
+    const audio = initial.find(clip => clip.kind === "audio")!;
+    expect(audio.linkedVideoClipId).toBe(video.id);
+
+    click(Array.from(audioRow().querySelectorAll("button")).find(button => button.textContent?.trim() === "Delete") as HTMLButtonElement);
+    await flushEffects();
+    expect(clips()).toHaveLength(1);
+    expect(clips()[0]).toMatchObject({ id: video.id, kind: "video" });
+
+    click(buttonsNamed("Undo")[0]);
+    await flushEffects();
+    expect(clips()).toEqual(initial);
+    expect(clips().find(clip => clip.id === audio.id)?.linkedVideoClipId).toBe(video.id);
+
+    click(buttonsNamed("Redo").find(button => !button.disabled)!);
+    await flushEffects();
+    expect(clips()).toHaveLength(1);
+    expect(clips()[0]).toMatchObject({ id: video.id, kind: "video" });
   });
 
   it("moves and trims linked audio through the App and restores both clips with Undo/Redo", async () => {
