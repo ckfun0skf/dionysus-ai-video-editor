@@ -199,12 +199,18 @@ export default function App() {
       selectedVersionId: versionIdMap.get(source.selectedVersionId) ?? versions[0]?.id ?? "",
       versions,
     };
-    change(p => ({ ...p, shots: p.shots.map(item => item.id !== shotId ? item : {
-      ...item,
-      slots: [...item.slots, duplicate],
+    const shotStart = project.shots.slice(0, Math.max(0, project.shots.findIndex(item => item.id === shotId))).reduce((sum, item) => sum + item.duration, 0);
+    change(p => ({ ...p, shots: p.shots.map(item => {
+      if (item.id !== shotId) return item;
+      const sourceIndex = item.slots.findIndex(slot => slot.id === slotId);
+      const slots = [...item.slots];
+      slots.splice(sourceIndex + 1, 0, duplicate);
+      return { ...item, slots };
     }) }));
+    setSelectedId(shotId);
     setSelectedSlotId(duplicate.id);
-    setNotice("Clip slot duplicated with independent versions. Use Undo to reverse.");
+    setEditorTime(Math.min(runtime, shotStart + duplicate.start));
+    setNotice("Clip slot duplicated and focused. Use Undo to reverse.");
   }
 
   function updateShot(shotId: string, patch: Partial<Shot>) { const textField = "title" in patch ? "shot-title:" + shotId : "intent" in patch ? "shot-intent:" + shotId : ""; change(p => ({ ...p, shots: p.shots.map(s => s.id === shotId ? { ...s, ...patch } : s) }), textField); }
