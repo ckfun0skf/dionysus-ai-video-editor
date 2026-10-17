@@ -106,18 +106,19 @@ export function validateProject(value: unknown): value is DionysusProject {
   const shots = value.shots as UnknownRecord[];
   const assetIds = new Set(assets.map(asset => asset.id as string));
   const profileIds = new Set(profiles.map(profile => profile.id as string));
-  const referenceIds = new Set<string>();
 
   for (const profile of profiles) {
     for (const reference of profile.references as UnknownRecord[]) {
       if (!assetIds.has(reference.assetId as string)) return false;
-      referenceIds.add(reference.id as string);
     }
   }
   for (const shot of shots) {
     if (!(shot.referenceProfileIds as string[]).every(profileId => profileIds.has(profileId))) return false;
+    const assignedReferenceIds = new Set(profiles
+      .filter(profile => (shot.referenceProfileIds as string[]).includes(profile.id as string))
+      .flatMap(profile => (profile.references as UnknownRecord[]).map(reference => reference.id as string)));
     for (const override of shot.referenceOverrides as UnknownRecord[]) {
-      if (!referenceIds.has(override.referenceId as string)) return false;
+      if (!assignedReferenceIds.has(override.referenceId as string)) return false;
       if (override.replacementAssetId !== undefined && !assetIds.has(override.replacementAssetId as string)) return false;
     }
     for (const slot of shot.slots as UnknownRecord[]) {
