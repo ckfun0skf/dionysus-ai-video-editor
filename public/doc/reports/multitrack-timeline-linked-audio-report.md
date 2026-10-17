@@ -7,14 +7,14 @@
 - Added optional `timelineClips` to schema 1.0 projects, retaining compatibility with projects that omit the collection.
 - Added validation for clip timing, track-kind matching, asset references, and linked audio source references.
 - Added operations to create video clips with linked source-audio metadata, move/trim linked clips together, unlink audio, and delete clips.
-- Added a small editor control surface to exercise clip metadata operations.
+- Added a compact source-audio metadata control surface, with responsive clip summaries and touch-friendly action buttons.
 - Added tests for default linking, linked movement/trimming, independent edits after unlinking, deletion, invalid ranges, and malformed link references.
 
 ## Verification status
 - [x] Latest PR commit passes CI: 5 test files, 45 tests, TypeScript check, and production build.
 - [ ] Human real-browser walkthrough covers linked and unlinked examples. The ChatGPT-connected browser context is unavailable in this session, so the assistant could not perform the interactive browser smoke test. A deployed PR preview is available at [DYS-011 preview](https://ckfun0skf.github.io/dionysus-ai-video-editor/pr-35/); final visual/interaction acceptance is pending the user's manual check.
 - [x] Project JSON export/import round-trip preserves both linked and unlinked audio relationships; covered by an App-level integration test.
-- [ ] Visual track-lane representation is integrated and responsive; the current UI remains a metadata control surface, not a full visual lane editor.
+- [ ] Full visual track-lane representation is not yet integrated; the metadata control surface has been reorganized for mobile readability, but the user must re-check the updated preview on a phone.
 
 ## Manual acceptance checklist
 
@@ -36,10 +36,17 @@ This feature is timeline metadata only; real media playback, waveforms, drag han
 
 ## Remaining acceptance gaps
 - Splitting independent audio clips is in the task scope but is not implemented yet.
-- The responsive visual track-lane representation and real-browser walkthrough remain outstanding.
+- A full visual track-lane representation and real-browser walkthrough remain outstanding. The current change improves the existing metadata control surface only; it does not claim to implement a full lane editor.
 
 ## Limitations
 This is timeline metadata only. It does not play source media, extract audio, display waveforms, provide drag handles, composite video, or render MP4. The UI's sample add action creates a demo clip record rather than importing actual media.
 
 ## Related specification
 - [../tasks/multitrack-timeline-linked-audio.md](../tasks/multitrack-timeline-linked-audio.md)
+
+
+## UI feedback follow-up — 2026-10-17
+- Replaced the ambiguous “Multi-track clips” heading with “Source audio links” and clarified that these are metadata controls, not another visual track.
+- Reworked each clip into a compact summary plus a separate action area; on narrow screens the actions use a two-column touch-friendly grid.
+- Adjusted editor vertical proportions so the timeline has more space and the preview stage is less dominant on mobile.
+- Automated tests and preview deployment must pass before this UI revision is considered ready for manual acceptance. The user should re-open the PR preview after the deployment completes.
