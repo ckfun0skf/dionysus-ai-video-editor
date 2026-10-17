@@ -4,17 +4,17 @@
 **Report date:** 2026-10-17
 
 ## Outcome
-CI run [39015882423](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39015882423) passed all 11 tests and the production build. Browser smoke testing and a successful Pages deployment remain outstanding, so this task is still in progress.
+CI run [39015991332](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39015991332) passed all 12 tests and the production build. PR #1 was merged to main; browser smoke testing and independent confirmation of the Pages deployment remain outstanding.
 
 ## Work recorded
-- CI run 39015882423 passed all 11 tests and the production build.
+- CI run 39015991332 passed all 12 tests and the production build.
 
 ## Outstanding items
 - Browser smoke test has not been confirmed.
-- PR #1 is still a draft and unmerged; Pages deployment is not confirmed.
+- PR #1 is merged; GitHub Pages deployment has not yet been independently confirmed.
 
 ## Validation evidence
-- GitHub Actions CI run [39013558873](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39013558873): tests and production build succeeded.
+- GitHub Actions CI run [39015991332](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39015991332): all 12 tests and production build succeeded.
 - Current release candidate: [PR #1](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/1).
 
 ## Related files
