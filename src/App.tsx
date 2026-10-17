@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AudioLines, Check, ChevronDown, CircleHelp, Clapperboard, Clock3, Download, FileJson, Film, FolderOpen, Layers3, Plus, Save, Settings2, ShieldCheck, Sparkles, SquarePlay, Upload, WandSparkles } from "lucide-react";
 import { sampleProject } from "./sampleProject";
 import type { DionysusProject, Shot } from "./types";
+import { validateProject } from "./projectValidation";
 type View = "storyboard" | "timeline" | "assets" | "references";
 const STORAGE_KEY = "dionysus.project.v1";
 const id = (prefix: string) => prefix + "-" + crypto.randomUUID();
@@ -10,8 +11,12 @@ const copy = (p: DionysusProject) => JSON.parse(JSON.stringify(p)) as DionysusPr
 
 export default function App() {
   const [project, setProject] = useState<DionysusProject>(() => {
-    try { const raw = localStorage.getItem(STORAGE_KEY); return raw ? JSON.parse(raw) as DionysusProject : copy(sampleProject); }
-    catch { return copy(sampleProject); }
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return copy(sampleProject);
+      const parsed: unknown = JSON.parse(raw);
+      return validateProject(parsed) ? parsed : copy(sampleProject);
+    } catch { return copy(sampleProject); }
   });
   const [view, setView] = useState<View>("storyboard");
   const [selectedId, setSelectedId] = useState(project.shots[0]?.id ?? "");
@@ -49,7 +54,7 @@ export default function App() {
     if (!file) return;
     try {
       const data = JSON.parse(await file.text()) as DionysusProject;
-      if (data.schemaVersion !== "1.0" || !Array.isArray(data.shots) || !Array.isArray(data.assets) || !Array.isArray(data.referenceProfiles)) throw new Error("Unsupported or invalid project format.");
+      if (!validateProject(data)) throw new Error("Unsupported or invalid project format. Check that the file is a complete Dionysus schema 1.0 project.");
       setProject(data); setSelectedId(data.shots[0]?.id ?? ""); setNotice("Project imported successfully.");
     } catch (e) { setNotice(e instanceof Error ? e.message : "Could not import this project."); }
     finally { if (fileInput.current) fileInput.current.value = ""; }
