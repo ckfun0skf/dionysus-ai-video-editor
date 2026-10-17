@@ -24,7 +24,21 @@ function buttonsNamed(name: string): HTMLButtonElement[] {
 }
 
 function timelineRows(): HTMLElement[] {
-  return Array.from(container.querySelectorAll<HTMLElement>(".editor-linked-timeline .editor-linked-clip"));
+  return Array.from(container.querySelectorAll<HTMLElement>(".visual-media-clip"));
+}
+
+
+function selectClip(name: string): HTMLButtonElement {
+  const clip = timelineRows().find(row => row.textContent?.includes(name));
+  if (!clip) throw new Error("Could not find timeline clip: " + name);
+  click(clip as HTMLButtonElement);
+  return clip as HTMLButtonElement;
+}
+function actionNamed(name: string): HTMLButtonElement {
+  const button = Array.from(container.querySelectorAll<HTMLButtonElement>(".visual-clip-actions button"))
+    .find(candidate => candidate.textContent?.includes(name));
+  if (!button) throw new Error("Could not find clip action: " + name);
+  return button;
 }
 
 function persistedProject(): typeof sampleProject {
@@ -99,9 +113,10 @@ describe("App history integration", () => {
 
     let videoRow = timelineRows().find(row => row.textContent?.includes("Video clip 1"));
     expect(videoRow).toBeTruthy();
-    click(Array.from(videoRow!.querySelectorAll("button")).find(button => button.textContent?.includes("+0.5s")) as HTMLButtonElement);
+    selectClip("Video clip 1");
+    click(actionNamed("+0.5s"));
     videoRow = timelineRows().find(row => row.textContent?.includes("Video clip 1"));
-    click(Array.from(videoRow!.querySelectorAll("button")).find(button => button.textContent?.includes("Trim")) as HTMLButtonElement);
+    click(actionNamed("Trim"));
     await flushEffects();
 
     const clips = persistedProject().timelineClips ?? [];
@@ -208,7 +223,8 @@ describe("App history integration", () => {
 
     const secondAudioRow = timelineRows().find(row => row.textContent?.includes("Video clip 2 audio"));
     expect(secondAudioRow).toBeTruthy();
-    click(Array.from(secondAudioRow!.querySelectorAll("button")).find(button => button.textContent?.includes("Unlink audio")) as HTMLButtonElement);
+    selectClip("Video clip 2 audio");
+    click(actionNamed("Unlink audio"));
     await flushEffects();
 
     const exportButton = Array.from(container.querySelectorAll<HTMLButtonElement>("button"))
@@ -317,11 +333,13 @@ describe("App history integration", () => {
     const video = () => clips().find(clip => clip.kind === "video")!;
     const audio = () => clips().find(clip => clip.kind === "audio")!;
 
-    click(Array.from(rowFor("Video clip 1 audio").querySelectorAll("button")).find(button => button.textContent?.includes("Unlink audio")) as HTMLButtonElement);
+    selectClip("Video clip 1 audio");
+    click(actionNamed("Unlink audio"));
     await flushEffects();
     expect(audio()).not.toHaveProperty("linkedVideoClipId");
 
-    click(Array.from(rowFor("Video clip 1 audio").querySelectorAll("button")).find(button => button.textContent?.includes("+0.5s")) as HTMLButtonElement);
+    selectClip("Video clip 1 audio");
+    click(actionNamed("+0.5s"));
     await flushEffects();
     expect(video()).toMatchObject({ start: 0, duration: 5 });
     expect(audio()).toMatchObject({ start: 0.5, duration: 5 });
@@ -414,7 +432,8 @@ describe("App history integration", () => {
     expect(video()).toMatchObject({ start: 0, duration: 5 });
     expect(audio()).toMatchObject({ start: 0, duration: 5, linkedVideoClipId: video().id });
 
-    click(Array.from(audioRow().querySelectorAll("button")).find(button => button.textContent?.includes("+0.5s")) as HTMLButtonElement);
+    selectClip("Video clip 1 audio");
+    click(actionNamed("+0.5s"));
     await flushEffects();
     expect(video()).toMatchObject({ start: 0.5, duration: 5 });
     expect(audio()).toMatchObject({ start: 0.5, duration: 5, linkedVideoClipId: video().id });
