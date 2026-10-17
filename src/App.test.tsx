@@ -265,7 +265,6 @@ describe("App history integration", () => {
     click(add);
     await flushEffects();
 
-    const videoRow = () => timelineRows().find(row => row.textContent?.includes("Video clip 1"))!;
     const audioRow = () => timelineRows().find(row => row.textContent?.includes("Video clip 1 audio"))!;
     const clips = () => persistedProject().timelineClips ?? [];
     const video = () => clips().find(clip => clip.kind === "video")!;
