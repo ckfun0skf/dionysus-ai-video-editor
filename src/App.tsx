@@ -135,6 +135,24 @@ export default function App() {
       : mime.startsWith("image/") || ["png","jpg","jpeg","webp","gif","avif"].includes(ext) ? "image"
       : mime.startsWith("audio/") || ["mp3","wav","m4a","aac","ogg","flac"].includes(ext) ? "audio"
       : ["js","mjs","ts","html"].includes(ext) ? "script" : "other";
+    if (kind === "image") {
+      if (file.size > 4 * 1024 * 1024) {
+        setNotice("Image is too large for browser storage. Please use an image under 4 MB.");
+        if (assetFileInput.current) assetFileInput.current.value = "";
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === "string") addAsset(file.name, kind, "Imported image available for local preview.", reader.result);
+        if (assetFileInput.current) assetFileInput.current.value = "";
+      };
+      reader.onerror = () => {
+        setNotice("Could not read this image file.");
+        if (assetFileInput.current) assetFileInput.current.value = "";
+      };
+      reader.readAsDataURL(file);
+      return;
+    }
     addAsset(file.name, kind, t("assets.importMetadataOnly"), file.name);
     if (assetFileInput.current) assetFileInput.current.value = "";
   }
@@ -262,7 +280,7 @@ export default function App() {
         </aside>
         <div className="editor-main">
           <header className="editor-topbar"><div className="editor-project-name">{project.name}<span> / Editor</span></div><div className="editor-top-actions"><button title="Undo" disabled><Undo2 size={16}/></button><button title="Redo" disabled><Redo2 size={16}/></button><button title="Notifications"><Bell size={16}/></button><button className="editor-render" onClick={()=>setNotice("Video rendering is not implemented yet.")}>Render Video</button><button className="editor-exit" onClick={()=>setEditorWorkspace(false)}>Project view</button></div></header>
-          <section className="editor-preview-stage"><div className="editor-preview-frame"><div className="editor-preview-art"><div className="editor-preview-kicker">SHOT {String(Math.max(1,project.shots.findIndex(s=>s.id===selectedId)+1)).padStart(2,"0")}</div><div className="editor-preview-title">{selected?.title ?? project.name}</div><div className="editor-preview-subtitle">{selected?.intent || "Select a shot and build your scene"}</div></div><div className="editor-selection-box"><span/></div></div></section>
+          <section className="editor-preview-stage"><div className="editor-preview-frame">{project.assets.find(asset=>asset.kind==="image" && asset.path?.startsWith("data:image/")) ? <img className="editor-preview-image" src={project.assets.find(asset=>asset.kind==="image" && asset.path?.startsWith("data:image/"))?.path} alt="Imported preview asset"/> : null}<div className="editor-preview-art"><div className="editor-preview-kicker">SHOT {String(Math.max(1,project.shots.findIndex(s=>s.id===selectedId)+1)).padStart(2,"0")}</div><div className="editor-preview-title">{selected?.title ?? project.name}</div><div className="editor-preview-subtitle">{selected?.intent || "Import an image to preview it behind your title"}</div></div><div className="editor-selection-box"><span/></div></div></section>
           <section className="editor-timeline"><div className="editor-playback"><div><button disabled><Undo2 size={15}/></button><button disabled><Redo2 size={15}/></button></div><div><button className="play-button" disabled><Play size={14}/></button><strong>00:00.00</strong><span>/ {time(runtime)}</span></div><button title="Timeline settings" onClick={()=>setView("timeline")}><Settings2 size={16}/></button></div><div className="editor-ruler"><div className="editor-track-spacer"/><div className="editor-ruler-marks">{Array.from({length:Math.floor(runtime/5)+1},(_,i)=>i*5).concat(runtime%5===0?[]:[runtime]).map(s=><span key={s} style={{left:(s/Math.max(runtime,1)*100)+"%"}}>{time(s)}</span>)}</div></div>
           <div className="editor-track-row"><div className="editor-track-name">Text</div><div className="editor-track-lane">{project.shots.map((s,i)=><button key={s.id} className={"editor-text-clip "+(s.id===selectedId?"selected":"")} style={{left:(project.shots.slice(0,i).reduce((n,x)=>n+x.duration,0)/Math.max(runtime,1)*100)+"%",width:(s.duration/Math.max(runtime,1)*100)+"%"}} onClick={()=>setSelectedId(s.id)}>{s.title}</button>)}</div></div>
           {project.tracks.map((track)=><div className="editor-track-row" key={track.id}><div className="editor-track-name">{track.kind}</div><div className="editor-track-lane">{project.shots.map((s,i)=><button key={s.id} className={"editor-video-clip "+(s.id===selectedId?"selected":"")} style={{left:(project.shots.slice(0,i).reduce((n,x)=>n+x.duration,0)/Math.max(runtime,1)*100)+"%",width:(s.duration/Math.max(runtime,1)*100)+"%"}} onClick={()=>setSelectedId(s.id)}><span>{s.title}</span><small>{s.duration}s</small></button>)}</div></div>)}
