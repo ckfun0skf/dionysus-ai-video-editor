@@ -130,4 +130,26 @@ describe("validateProject", () => {
     expect(validateProject(invalidLink)).toBe(false);
   });
 
+  it("accepts and round-trips composition frame settings", () => {
+    const project = structuredClone(sampleProject);
+    project.shots[0].slots[0].versions[0].layers.push({
+      id: "frame-layer", name: "Picture in picture", kind: "video", start: 0, duration: 3,
+      fitMode: "cover", x: 10, y: 15, width: 45, height: 50, backgroundColor: "#121212",
+      borderColor: "#ffffff", borderWidth: 2, shape: "rounded", cornerRadius: 12, scale: 1.2, opacity: 0.8,
+    });
+    const imported: unknown = JSON.parse(JSON.stringify(project));
+    expect(validateProject(imported)).toBe(true);
+    if (!validateProject(imported)) throw new Error("Frame settings did not survive JSON round-trip");
+    expect(imported.shots[0].slots[0].versions[0].layers[0]).toMatchObject({fitMode:"cover",x:10,y:15,width:45,height:50,shape:"rounded",cornerRadius:12,scale:1.2,opacity:0.8});
+  });
+
+  it("rejects invalid composition frame geometry and opacity", () => {
+    const badWidth = structuredClone(sampleProject);
+    badWidth.shots[0].slots[0].versions[0].layers.push({id:"bad-width",name:"Bad width",kind:"video",start:0,duration:1,width:0});
+    expect(validateProject(badWidth)).toBe(false);
+    const badOpacity = structuredClone(sampleProject);
+    badOpacity.shots[0].slots[0].versions[0].layers.push({id:"bad-opacity",name:"Bad opacity",kind:"video",start:0,duration:1,opacity:1.5});
+    expect(validateProject(badOpacity)).toBe(false);
+  });
+
 });
