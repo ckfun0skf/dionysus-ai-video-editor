@@ -78,4 +78,34 @@ describe("linked multi-track timeline operations", () => {
     expect(() => moveTimelineClip(empty, "missing", -1)).toThrow();
     expect(() => trimTimelineClip(empty, "missing", 0)).toThrow();
   });
+
+  it("duplicates a video and its linked audio with fresh IDs and no dangling references", () => {
+    const state = addVideoClip(empty, { id: "v", name: "Video", trackId: "v1", start: 1, duration: 5, sourceHasAudio: true, audioTrackId: "a1", audioClipId: "a" });
+    const duplicated = duplicateTimelineClip(state, "v", { newClipId: "v-copy", newAudioClipId: "a-copy", start: 8 });
+    expect(duplicated.timelineClips).toHaveLength(4);
+    expect(duplicated.timelineClips.find(c => c.id === "v-copy")).toMatchObject({ start: 8, duration: 5, kind: "video" });
+    expect(duplicated.timelineClips.find(c => c.id === "a-copy")).toMatchObject({ start: 8, duration: 5, kind: "audio", linkedVideoClipId: "v-copy" });
+    expect(duplicated.timelineClips.filter(c => c.kind === "audio").every(c => duplicated.timelineClips.some(v => v.id === c.linkedVideoClipId && v.kind === "video" && v.start === c.start && v.duration === c.duration))).toBe(true);
+    expect(() => duplicateTimelineClip(state, "v", { newClipId: "v-copy", newAudioClipId: "a-copy" })).toThrow(/unique/);
+    expect(() => duplicateTimelineClip(state, "v", { newClipId: "v-copy" })).toThrow(/newAudioClipId/);
+  });
+
+  it("rejects malformed duplicate IDs and dangling or out-of-sync links before editing", () => {
+    const duplicateIds = { ...empty, timelineClips: [
+      { id: "same", name: "Video", kind: "video" as const, trackId: "v1", start: 0, duration: 2 },
+      { id: "same", name: "Audio", kind: "audio" as const, trackId: "a1", start: 0, duration: 2 },
+    ] };
+    expect(() => trimTimelineClip(duplicateIds, "same", 1)).toThrow(/unique/);
+    const dangling = { ...empty, timelineClips: [
+      { id: "audio", name: "Audio", kind: "audio" as const, trackId: "a1", start: 0, duration: 2, linkedVideoClipId: "missing-video" },
+    ] };
+    expect(() => moveTimelineClip(dangling, "audio", 1)).toThrow(/existing video/);
+    expect(() => deleteTimelineClip(dangling, "audio")).toThrow(/existing video/);
+    const outOfSync = { ...empty, timelineClips: [
+      { id: "video", name: "Video", kind: "video" as const, trackId: "v1", start: 0, duration: 2 },
+      { id: "audio", name: "Audio", kind: "audio" as const, trackId: "a1", start: 1, duration: 2, linkedVideoClipId: "video" },
+    ] };
+    expect(() => trimTimelineClip(outOfSync, "video", 3)).toThrow(/timing must match/);
+  });
+
 });
