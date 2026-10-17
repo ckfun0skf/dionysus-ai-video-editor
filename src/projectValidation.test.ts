@@ -106,6 +106,14 @@ describe("validateProject", () => {
     expect(imported.timelineClips?.[2]).not.toHaveProperty("linkedVideoClipId");
   });
 
+  it("rejects blank timeline clip IDs", () => {
+    const project = structuredClone(sampleProject);
+    project.timelineClips = [
+      { id: "   ", name: "Video", kind: "video", trackId: "track-video-1", start: 0, duration: 2 },
+    ];
+    expect(validateProject(project)).toBe(false);
+  });
+
   it("rejects duplicate timeline clip IDs and linked audio pointing to a non-video clip", () => {
     const duplicate = structuredClone(sampleProject);
     duplicate.timelineClips = [
