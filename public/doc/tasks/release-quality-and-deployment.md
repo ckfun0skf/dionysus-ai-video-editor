@@ -15,7 +15,7 @@ Verify the application in a browser, ensure CI is green, deploy review candidate
 - [ ] Record known limitations and validation evidence for each review release.
 
 ## Implemented / verified
-- CI run 39013558873 completed successfully, including tests and production build.
+- CI run [39015882423](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39015882423) passed all 11 tests and the production build.
 
 ## Remaining work
 - Browser smoke test has not been confirmed.
