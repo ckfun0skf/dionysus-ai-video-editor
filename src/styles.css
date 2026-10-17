@@ -156,3 +156,8 @@
   .visual-clip-copy strong { font-size: 10px; }
   .visual-clip-actions button { flex: 1 1 30%; }
 }
+
+.visual-provenance-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.visual-provenance-grid label, .visual-prompt-field { display: flex; flex-direction: column; gap: 6px; font-size: 11px; color: var(--muted, #92939f); min-width: 0; }
+.visual-prompt-field textarea { width: 100%; resize: vertical; box-sizing: border-box; }
+@media (max-width: 520px) { .visual-provenance-grid { grid-template-columns: minmax(0,1fr); } }
