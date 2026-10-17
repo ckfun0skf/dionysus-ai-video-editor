@@ -8,10 +8,10 @@
 Centralize user-facing UI copy in src/i18n.ts and reject malformed project data before it is loaded or imported.
 
 ## Scope
-- [ ] Use typed translation keys and interpolation for interface text.
-- [ ] Keep the default locale in one catalog and make future locales mirror its keys.
-- [ ] Validate project structure, nested layers, durations, canvas values, and selected-version references.
-- [ ] Add automated tests for localization and project validation.
+- [x] Use typed translation keys and interpolation for interface text.
+- [x] Keep the default locale in one catalog and make future locales mirror its keys.
+- [x] Validate project structure, nested layers, durations, canvas values, and cross-record asset/reference links.
+- [x] Add automated tests for localization and project validation.
 
 ## Implemented / verified
 - src/i18n.ts centralizes most interface copy and currently defaults to English.
