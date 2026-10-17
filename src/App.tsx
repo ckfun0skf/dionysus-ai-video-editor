@@ -160,29 +160,19 @@ export default function App() {
     }) }));
   }
   function removeProfileReference(profileId: string, referenceId: string) {
-    change(p => ({ ...p, referenceProfiles: p.referenceProfiles.map(profile => profile.id !== profileId ? profile : {
-      ...profile, references: profile.references.filter(reference => reference.id !== referenceId)
-    }) }));
+    change(p => ({
+      ...p,
+      referenceProfiles: p.referenceProfiles.map(profile => profile.id !== profileId ? profile : {
+        ...profile, references: profile.references.filter(reference => reference.id !== referenceId)
+      }),
+      shots: p.shots.map(shot => ({
+        ...shot,
+        referenceOverrides: shot.referenceOverrides.filter(override => override.referenceId !== referenceId),
+      }))
+    }));
     setNotice(t("notice.referenceRemoved"));
   }
-  function download(name: string, data: unknown) {
-    const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
-    const a = document.createElement("a"); a.href = url; a.download = name; a.click(); URL.revokeObjectURL(url);
-  }
-  function exportProject() { download((project.name.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "dionysus-project") + ".dionysus.json", project); setNotice(t("notice.projectExported")); }
-  function exportPlan() {
-    download("dionysus-execution-plan.json", { format: "dionysus-ai-execution-plan", schemaVersion: "1.0", project: { id: project.id, name: project.name, frameRate: project.frameRate, width: project.width, height: project.height }, shots: project.shots.map((s, i) => ({ order: i + 1, id: s.id, title: s.title, intent: s.intent, targetDurationSeconds: s.duration, referenceProfileIds: s.referenceProfileIds, referenceOverrides: s.referenceOverrides, slots: s.slots })), assets: project.assets, referenceProfiles: project.referenceProfiles, tracks: project.tracks });
-    setNotice(t("notice.planExported"));
-  }
-  async function importProject(file?: File) {
-    if (!file) return;
-    try {
-      const data = JSON.parse(await file.text()) as DionysusProject;
-      if (!validateProject(data)) throw new Error(t("error.invalidProject"));
-      setProject(data); setSelectedId(data.shots[0]?.id ?? ""); setNotice(t("notice.projectImported"));
-    } catch (e) { setNotice(e instanceof Error ? e.message : t("error.importFailed")); }
-    finally { if (fileInput.current) fileInput.current.value = ""; }
-  }
+
   const nav: { id: View; label: string; icon: typeof Film }[] = [{ id: "storyboard", label: t("nav.storyboard"), icon: Clapperboard }, { id: "timeline", label: t("nav.timeline"), icon: Layers3 }, { id: "assets", label: t("nav.assets"), icon: Film }, { id: "references", label: t("nav.references"), icon: Sparkles }];
   return <div className="app-shell">
     <aside className="sidebar">
