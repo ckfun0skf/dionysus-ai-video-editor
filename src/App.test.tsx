@@ -203,7 +203,7 @@ describe("App history integration", () => {
     await flushEffects();
 
     const exportButton = Array.from(container.querySelectorAll<HTMLButtonElement>("button"))
-      .find(button => button.textContent?.includes("Export Project"));
+      .find(button => button.textContent?.toLowerCase().includes("export project"));
     expect(exportButton).toBeTruthy();
     click(exportButton!);
 
