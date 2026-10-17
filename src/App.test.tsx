@@ -260,6 +260,72 @@ describe("App history integration", () => {
   });
 
 
+  it("unlinks audio in the App, edits it independently, and restores the link through Undo/Redo", async () => {
+    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Video with linked audio")) as HTMLButtonElement;
+    click(add);
+    await flushEffects();
+
+    const rowFor = (name: string) => timelineRows().find(row => row.textContent?.includes(name))!;
+    const clips = () => persistedProject().timelineClips ?? [];
+    const video = () => clips().find(clip => clip.kind === "video")!;
+    const audio = () => clips().find(clip => clip.kind === "audio")!;
+
+    click(Array.from(rowFor("Video clip 1 audio").querySelectorAll("button")).find(button => button.textContent?.includes("Unlink audio")) as HTMLButtonElement);
+    await flushEffects();
+    expect(audio()).not.toHaveProperty("linkedVideoClipId");
+
+    click(Array.from(rowFor("Video clip 1 audio").querySelectorAll("button")).find(button => button.textContent?.includes("+0.5s")) as HTMLButtonElement);
+    await flushEffects();
+    expect(video()).toMatchObject({ start: 0, duration: 5 });
+    expect(audio()).toMatchObject({ start: 0.5, duration: 5 });
+    expect(audio()).not.toHaveProperty("linkedVideoClipId");
+
+    click(buttonsNamed("Undo")[0]);
+    await flushEffects();
+    expect(audio()).toMatchObject({ start: 0, duration: 5 });
+    expect(audio()).not.toHaveProperty("linkedVideoClipId");
+
+    click(buttonsNamed("Undo")[0]);
+    await flushEffects();
+    expect(audio()).toMatchObject({ start: 0, duration: 5, linkedVideoClipId: video().id });
+
+    click(buttonsNamed("Redo").find(button => !button.disabled)!);
+    await flushEffects();
+    expect(audio()).not.toHaveProperty("linkedVideoClipId");
+
+    click(buttonsNamed("Redo").find(button => !button.disabled)!);
+    await flushEffects();
+    expect(video()).toMatchObject({ start: 0, duration: 5 });
+    expect(audio()).toMatchObject({ start: 0.5, duration: 5 });
+    expect(audio()).not.toHaveProperty("linkedVideoClipId");
+  });
+
+  it("deletes linked video and audio together and restores both through Undo/Redo", async () => {
+    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Video with linked audio")) as HTMLButtonElement;
+    click(add);
+    await flushEffects();
+
+    const videoRow = () => timelineRows().find(row => row.textContent?.includes("Video clip 1") && !row.textContent?.includes("audio"))!;
+    const clips = () => persistedProject().timelineClips ?? [];
+    const initial = clips();
+    const video = initial.find(clip => clip.kind === "video")!;
+    const audio = initial.find(clip => clip.kind === "audio")!;
+    expect(audio.linkedVideoClipId).toBe(video.id);
+
+    click(Array.from(videoRow().querySelectorAll("button")).find(button => button.textContent?.trim() === "Delete") as HTMLButtonElement);
+    await flushEffects();
+    expect(clips()).toEqual([]);
+
+    click(buttonsNamed("Undo")[0]);
+    await flushEffects();
+    expect(clips()).toEqual(initial);
+    expect(clips().find(clip => clip.kind === "audio")?.linkedVideoClipId).toBe(video.id);
+
+    click(buttonsNamed("Redo").find(button => !button.disabled)!);
+    await flushEffects();
+    expect(clips()).toEqual([]);
+  });
+
   it("moves and trims linked audio through the App and restores both clips with Undo/Redo", async () => {
     const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Video with linked audio")) as HTMLButtonElement;
     click(add);
