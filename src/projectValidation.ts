@@ -85,7 +85,7 @@ function isProfile(value: unknown): boolean {
     Array.isArray(value.references) && value.references.every(isReferenceItem);
 }
 function isTimelineClip(value: unknown): boolean {
-  return isRecord(value) && isString(value.id) && isString(value.name) &&
+  return isRecord(value) && isString(value.id) && value.id.trim().length > 0 && isString(value.name) &&
     isString(value.kind) && timelineClipKinds.has(value.kind) &&
     isString(value.trackId) && isFiniteNumber(value.start) && value.start >= 0 &&
     isFiniteNumber(value.duration) && value.duration > 0 &&
