@@ -8,11 +8,11 @@
 React/TypeScript/Vite editor shell, Storyboard editing, basic Timeline visualization, local persistence, project JSON import/export, and AI execution-plan export.
 
 ## Scope
-- [ ] Create the initial project schema and sample project.
-- [ ] Provide Storyboard and Shot inspector editing.
-- [ ] Provide a basic Timeline visualization and create Shot/Clip Slot actions.
-- [ ] Persist project state in browser local storage.
-- [ ] Import/export project JSON and export an AI execution plan.
+- [x] Create the initial project schema and sample project.
+- [x] Provide Storyboard and Shot inspector editing.
+- [x] Provide a basic Timeline visualization and create Shot/Clip Slot actions.
+- [x] Persist project state in browser local storage.
+- [x] Import/export project JSON and export an AI execution plan.
 
 ## Implemented / verified
 - Foundation UI and sample project are present on the feature branch.
