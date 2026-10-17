@@ -17,7 +17,7 @@ Implementation exists; CI tests and build passed. Browser smoke test and release
 - Full media import, playback, and compositing are out of scope for this task.
 
 ## Validation evidence
-- GitHub Actions CI run [39013558873](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39013558873): tests and production build succeeded.
+- GitHub Actions CI run [39015882423](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39015882423): all 11 tests and production build succeeded.
 - Release candidate is tracked in [PR #1](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/1).
 
 ## Related files
