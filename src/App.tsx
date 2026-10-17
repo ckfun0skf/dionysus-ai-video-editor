@@ -131,14 +131,21 @@ export default function App() {
     change(p => ({ ...p, referenceProfiles: p.referenceProfiles.map(profile => profile.id === profileId ? { ...profile, ...patch } : profile) }));
   }
   function removeReferenceProfile(profileId: string) {
+    const profile = project.referenceProfiles.find(item => item.id === profileId);
+    const referenceIds = new Set((profile?.references ?? []).map(reference => reference.id));
     change(p => ({
       ...p,
-      referenceProfiles: p.referenceProfiles.filter(profile => profile.id !== profileId),
-      shots: p.shots.map(shot => ({ ...shot, referenceProfileIds: shot.referenceProfileIds.filter(id => id !== profileId) }))
+      referenceProfiles: p.referenceProfiles.filter(item => item.id !== profileId),
+      shots: p.shots.map(shot => ({
+        ...shot,
+        referenceProfileIds: shot.referenceProfileIds.filter(id => id !== profileId),
+        referenceOverrides: shot.referenceOverrides.filter(override => !referenceIds.has(override.referenceId)),
+      }))
     }));
     if (selectedProfileId === profileId) setSelectedProfileId("");
     setNotice(t("notice.profileRemoved"));
   }
+
   function addProfileReference(profileId: string) {
     if (!referenceAssetId) { setNotice(t("error.referenceAssetRequired")); return; }
     const reference = { id: id("reference"), assetId: referenceAssetId, role: referenceRole };
