@@ -210,7 +210,13 @@ describe("App history integration", () => {
     expect(createObjectURLMock).toHaveBeenCalledTimes(1);
     expect(anchorClickSpy).toHaveBeenCalledTimes(1);
     const blob = createObjectURLMock.mock.calls[0][0] as Blob;
-    const exported = JSON.parse(await blob.text()) as typeof sampleProject;
+    const blobText = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(reader.error);
+      reader.readAsText(blob);
+    });
+    const exported = JSON.parse(blobText) as typeof sampleProject;
     const video = exported.timelineClips?.find(clip => clip.kind === "video");
     const audio = exported.timelineClips?.find(clip => clip.kind === "audio");
     expect(video).toBeTruthy();
