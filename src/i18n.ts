@@ -109,7 +109,33 @@ export const messages = {
     "timeline.addLayer": "Add {kind} layer",
     "shot.durationTarget": "{duration}s target",
     "slot.versionCount": "{duration}s · {count} version(s)",
-    "references.count": "{count} references"
+    "references.count": "{count} references",
+    "brand.name": "DIONYSUS",
+    "status.localBadge": "LOCAL",
+    "project.versionFoundation": "v0.1 foundation",
+    "action.openProject": "Open project",
+    "action.exportProject": "Export project",
+    "action.exportPlan": "Export AI plan",
+    "project.runtimeSummary": "{duration} planned runtime",
+    "project.shotCount": "{count} shots",
+    "project.clipSlotCount": "{count} clip slots",
+    "storyboard.shotCount": "{count} shots · independent timeline editing",
+    "shot.emptyIntent": "Add a short description of what happens in this shot.",
+    "shot.durationTarget": "{duration}s target",
+    "shot.clipSlotCount": "{count} clip slots",
+    "slot.versionCount": "{duration}s · {count} version(s)",
+    "timeline.trackAddLayer": "Add {kind} layer",
+    "inspector.secondsShort": "sec",
+    "asset.actionAdd": "Add asset",
+    "asset.actionImport": "Import assets",
+    "references.actionNewProfile": "New profile",
+    "profile.referencesCount": "{count} references",
+    "footer.projectSchema": "Project schema 1.0",
+    "footer.localFirst": "Local-first",
+    "shot.defaultTitle": "New shot",
+    "slot.defaultName": "New clip",
+    "slot.defaultPrefix": "Clip "
+
   }
 } as const;
 
