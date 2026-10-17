@@ -170,12 +170,26 @@ describe("App history integration", () => {
     expect(buttonsNamed("Redo").every(button => button.disabled)).toBe(true);
   });
 
-  it("round-trips persisted linked timeline JSON through the import path", async () => {
+  it("round-trips linked timeline metadata through actual project export and import", async () => {
     const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Video with linked audio")) as HTMLButtonElement;
     click(add);
     await flushEffects();
-    const exportedJson = JSON.stringify(persistedProject());
-    const expected = JSON.parse(exportedJson);
+
+    const exportButton = Array.from(container.querySelectorAll<HTMLButtonElement>("button"))
+      .find(button => button.textContent?.toLowerCase().includes("export project"));
+    expect(exportButton).toBeTruthy();
+    click(exportButton!);
+
+    expect(createObjectURLMock).toHaveBeenCalledTimes(1);
+    const blob = createObjectURLMock.mock.calls[0][0] as Blob;
+    const exportedJson = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(reader.error);
+      reader.readAsText(blob);
+    });
+    const expected = JSON.parse(exportedJson) as typeof sampleProject;
+    expect(expected.timelineClips).toHaveLength(2);
 
     const input = container.querySelector<HTMLInputElement>('input[type="file"][accept*="application/json"]');
     expect(input).toBeTruthy();
@@ -188,14 +202,15 @@ describe("App history integration", () => {
     await flushEffects();
 
     const imported = persistedProject();
+    expect(imported.id).toBe(expected.id);
     expect(imported.timelineClips).toEqual(expected.timelineClips);
     const video = imported.timelineClips?.find(clip => clip.kind === "video");
     const audio = imported.timelineClips?.find(clip => clip.kind === "audio");
+    expect(video).toBeTruthy();
     expect(audio).toMatchObject({ start: video!.start, duration: video!.duration, linkedVideoClipId: video!.id });
     expect(buttonsNamed("Undo").every(button => button.disabled)).toBe(true);
     expect(buttonsNamed("Redo").every(button => button.disabled)).toBe(true);
   });
-
 
   it("exports the current project as JSON including linked timeline metadata", async () => {
     const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Video with linked audio")) as HTMLButtonElement;
