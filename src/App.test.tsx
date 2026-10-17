@@ -24,7 +24,7 @@ function buttonsNamed(name: string): HTMLButtonElement[] {
 }
 
 function timelineRows(): HTMLElement[] {
-  return Array.from(container.querySelectorAll<HTMLElement>(".editor-linked-timeline .editor-timeline-footer")).slice(1);
+  return Array.from(container.querySelectorAll<HTMLElement>(".editor-linked-timeline .editor-linked-clip"));
 }
 
 function persistedProject(): typeof sampleProject {
