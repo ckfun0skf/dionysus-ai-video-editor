@@ -62,6 +62,32 @@ afterEach(() => {
 });
 
 describe("App history integration", () => {
+  it("coalesces rapid edits to the same shot title into one Undo step", async () => {
+    const titleInput = container.querySelector<HTMLInputElement>(".inspector .inspector-content input.text-field");
+    expect(titleInput).toBeTruthy();
+    const originalTitle = persistedProject().shots[0].title;
+    const setInputValue = (value: string) => {
+      act(() => {
+        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+        setter?.call(titleInput!, value);
+        titleInput!.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    };
+
+    setInputValue("Intermediate title");
+    setInputValue("Final coalesced title");
+    await flushEffects();
+    expect(persistedProject().shots[0].title).toBe("Final coalesced title");
+
+    click(buttonsNamed("Undo")[0]);
+    await flushEffects();
+    expect(persistedProject().shots[0].title).toBe(originalTitle);
+
+    click(buttonsNamed("Redo").find(button => !button.disabled)!);
+    await flushEffects();
+    expect(persistedProject().shots[0].title).toBe("Final coalesced title");
+  });
+
   it("handles rapid timeline edits atomically and keeps linked audio in persisted state", async () => {
     const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Video with linked audio"));
     expect(add).toBeTruthy();
