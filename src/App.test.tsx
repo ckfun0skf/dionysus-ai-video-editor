@@ -133,4 +133,52 @@ describe("App history integration", () => {
     expect(buttonsNamed("Redo").every(button => button.disabled)).toBe(true);
     expect(persistedProject().timelineClips).toHaveLength(2);
   });
+
+  it("restores linked timeline state after an App unmount/remount from localStorage", async () => {
+    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Video with linked audio")) as HTMLButtonElement;
+    click(add);
+    await flushEffects();
+    const beforeReload = persistedProject();
+    expect(beforeReload.timelineClips).toHaveLength(2);
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    act(() => root.render(<App />));
+    await flushEffects();
+
+    const afterReload = persistedProject();
+    expect(afterReload.timelineClips).toEqual(beforeReload.timelineClips);
+    const video = afterReload.timelineClips?.find(clip => clip.kind === "video");
+    const audio = afterReload.timelineClips?.find(clip => clip.kind === "audio");
+    expect(audio).toMatchObject({ start: video!.start, duration: video!.duration, linkedVideoClipId: video!.id });
+    expect(buttonsNamed("Undo").every(button => button.disabled)).toBe(true);
+    expect(buttonsNamed("Redo").every(button => button.disabled)).toBe(true);
+  });
+
+  it("round-trips persisted linked timeline JSON through the import path", async () => {
+    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Video with linked audio")) as HTMLButtonElement;
+    click(add);
+    await flushEffects();
+    const exportedJson = JSON.stringify(persistedProject());
+    const expected = JSON.parse(exportedJson);
+
+    const input = container.querySelector<HTMLInputElement>('input[type="file"][accept*="application/json"]');
+    expect(input).toBeTruthy();
+    const file = { text: async () => exportedJson } as File;
+    await act(async () => {
+      Object.defineProperty(input!, "files", { configurable: true, value: [file] });
+      input!.dispatchEvent(new Event("change", { bubbles: true }));
+      await new Promise(resolve => setTimeout(resolve, 0));
+    });
+    await flushEffects();
+
+    const imported = persistedProject();
+    expect(imported.timelineClips).toEqual(expected.timelineClips);
+    const video = imported.timelineClips?.find(clip => clip.kind === "video");
+    const audio = imported.timelineClips?.find(clip => clip.kind === "audio");
+    expect(audio).toMatchObject({ start: video!.start, duration: video!.duration, linkedVideoClipId: video!.id });
+    expect(buttonsNamed("Undo").every(button => button.disabled)).toBe(true);
+    expect(buttonsNamed("Redo").every(button => button.disabled)).toBe(true);
+  });
+
 });
