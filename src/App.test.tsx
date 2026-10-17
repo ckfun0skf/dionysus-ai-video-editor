@@ -29,7 +29,7 @@ function timelineRows(): HTMLElement[] {
 
 
 function selectClip(name: string): HTMLButtonElement {
-  const clip = timelineRows().find(row => row.textContent?.includes(name));
+  const clip = timelineRows().find(row => row.textContent?.includes(name) && (name.includes(" audio") || !row.textContent?.includes(" audio")));
   if (!clip) throw new Error("Could not find timeline clip: " + name);
   click(clip as HTMLButtonElement);
   return clip as HTMLButtonElement;
