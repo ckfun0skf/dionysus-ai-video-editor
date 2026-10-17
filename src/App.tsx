@@ -82,6 +82,7 @@ export default function App() {
   }
   function undoProjectChange() {
     if (!undoStack.length) return;
+    lastHistoryGroup.current = "";
     setRedoStack(stack => [...stack, copy(project)]);
     setProject({ ...copy(undoStack[undoStack.length - 1]), updatedAt: new Date().toISOString() });
     setUndoStack(stack => stack.slice(0, -1));
@@ -89,6 +90,7 @@ export default function App() {
   }
   function redoProjectChange() {
     if (!redoStack.length) return;
+    lastHistoryGroup.current = "";
     setUndoStack(stack => [...stack, copy(project)]);
     setProject({ ...copy(redoStack[redoStack.length - 1]), updatedAt: new Date().toISOString() });
     setRedoStack(stack => stack.slice(0, -1));
@@ -299,7 +301,7 @@ export default function App() {
     try {
       const data = JSON.parse(await file.text()) as DionysusProject;
       if (!validateProject(data)) throw new Error(t("error.invalidProject"));
-      setProject(data); setUndoStack([]); setRedoStack([]); setSelectedId(data.shots[0]?.id ?? ""); setNotice(t("notice.projectImported"));
+      setProject(data); setUndoStack([]); setRedoStack([]); lastHistoryGroup.current = ""; setSelectedId(data.shots[0]?.id ?? ""); setNotice(t("notice.projectImported"));
     } catch (e) {
       setNotice(e instanceof Error ? e.message : t("error.importFailed"));
     } finally {
