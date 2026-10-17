@@ -40,4 +40,36 @@ describe("validateProject", () => {
     });
     expect(validateProject(project)).toBe(false);
   });
+  it("rejects profile references to missing assets", () => {
+    const project = structuredClone(sampleProject);
+    project.referenceProfiles.push({
+      id: "profile-test", name: "Test character", entityType: "character",
+      references: [{ id: "ref-test", assetId: "missing-asset", role: "identity" }],
+    });
+    expect(validateProject(project)).toBe(false);
+  });
+
+  it("rejects shots assigned to missing reference profiles", () => {
+    const project = structuredClone(sampleProject);
+    project.shots[0].referenceProfileIds.push("missing-profile");
+    expect(validateProject(project)).toBe(false);
+  });
+
+  it("rejects reference overrides with missing references or replacement assets", () => {
+    const missingReference = structuredClone(sampleProject);
+    missingReference.shots[0].referenceOverrides.push({ referenceId: "missing-reference", action: "exclude" });
+    expect(validateProject(missingReference)).toBe(false);
+
+    const missingReplacement = structuredClone(sampleProject);
+    missingReplacement.referenceProfiles.push({
+      id: "profile-test", name: "Test character", entityType: "character",
+      references: [{ id: "ref-test", assetId: "asset-test", role: "identity" }],
+    });
+    missingReplacement.assets.push({ id: "asset-test", name: "Reference", kind: "image" });
+    missingReplacement.shots[0].referenceOverrides.push({
+      referenceId: "ref-test", action: "replace", replacementAssetId: "missing-asset",
+    });
+    expect(validateProject(missingReplacement)).toBe(false);
+  });
+
 });
