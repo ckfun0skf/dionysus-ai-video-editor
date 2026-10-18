@@ -15,10 +15,20 @@ export function collectCompositionLayers(project: DionysusProject): CompositionL
     return layers;
   });
   const timeline = (project.timelineClips ?? []).filter(clip => !clip.id.startsWith("storyboard-")).flatMap(clip => {
+    const common = {
+      id: clip.id, name: clip.name, kind: clip.kind, start: clip.start, duration: clip.duration,
+      ...(clip.scriptVersionId ? { scriptVersionId: clip.scriptVersionId } : {}),
+      ...(clip.prompt ? { prompt: clip.prompt } : {}),
+      ...(clip.modelName ? { modelName: clip.modelName } : {}),
+      ...(clip.modelVersion ? { modelVersion: clip.modelVersion } : {}),
+      ...(clip.muted !== undefined ? { muted: clip.muted } : {})
+    };
+    if (clip.kind === "text" || clip.kind === "procedural") {
+      return [{ ...common, fitMode: "contain" as const, x: 0, y: clip.kind === "text" ? 75 : 0, width: 100, height: clip.kind === "text" ? 18 : 100 }];
+    }
     if (!clip.assetId || !project.assets.some(asset => asset.id === clip.assetId)) return [];
     return [{
-      id: clip.id, name: clip.name, kind: clip.kind, start: clip.start, duration: clip.duration,
-      assetId: clip.assetId, sourceIn: clip.sourceIn, sourceOut: clip.sourceOut, muted: clip.muted,
+      ...common, assetId: clip.assetId, sourceIn: clip.sourceIn, sourceOut: clip.sourceOut,
       fitMode: "contain" as const, x: 0, y: 0, width: 100, height: 100
     }];
   });
