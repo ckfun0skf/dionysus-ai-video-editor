@@ -17,13 +17,15 @@
 - Composition layer collection now preserves the saved Version layer order so reordering is reflected in final composition traversal.
 - Version duration has its own control; changing it does not change Master Shot or Clip Slot duration.
 - Each nested module has Inspector controls for internal start and duration, direct drag-to-move with frame snapping, and header buttons to move the layer earlier/later.
+- Nested Video/Audio modules expose source in/out trim controls independently from Version/Slot/Master timing.
+- Master Timeline clip Inspector can split a clip at the frame-snapped midpoint. Video and linked source audio split together, source ranges stay contiguous, fade-in stays on the first segment, and fade-out stays on the last.
 
 ## Validation
-- CI run [#39119716811](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39119716811) passed: 75 tests across 9 files, TypeScript check, production build, and npm audit with 0 vulnerabilities.
-- Regression tests cover legacy layout fallback, independent Master placement and duration, preservation of Version-internal duration, module start/duration editing, nested drag movement, layer reordering, composition offsets, and thumbnail extraction/URL fallback.
+- CI run [#39122166170](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39122166170) passed: 87 tests across 10 files, TypeScript check, production build, and npm audit with 0 vulnerabilities.
+- Regression tests cover legacy layout fallback, independent Master placement and duration, preservation of Version-internal duration, module start/duration editing, nested drag movement, layer reordering, composition offsets, thumbnail extraction/URL fallback, midpoint splitting, source trim alignment, and linked-audio fade-boundary preservation.
 - Automated browser smoke testing was not performed.
 
 ## Remaining limitations
-- The Master Timeline permits absolute repositioning but does not yet provide a dedicated reorder/ripple mode or collision policy for overlapping Shot placements.
-- Real frame extraction, fully featured nested clip source/trim controls, and comprehensive JSON/Undo-Redo round-trip verification remain outstanding.
+- The Master Timeline uses explicit free-placement and Ripple Reorder modes. A richer insertion preview and full JSON/Undo-Redo round-trip coverage for all nested relationships remain outstanding.
+- Video thumbnails depend on browser media decoding; unsupported codecs retain a placeholder. Rich source relinking and comprehensive JSON/Undo-Redo round-trip verification remain outstanding.
 - The first nested timeline offers lane/block structure and basic creation/deletion, not yet a complete professional clip editor.
