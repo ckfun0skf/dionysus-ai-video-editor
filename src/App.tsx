@@ -39,7 +39,7 @@ export default function App() {
   const lastHistoryGroup = useRef("");
   const lastHistoryAt = useRef(0);
   const [view, setView] = useState<View>("storyboard");
-  const [editorWorkspace, setEditorWorkspace] = useState(false);
+  const editorWorkspace = false;
   const [editorTool, setEditorTool] = useState<"video" | "text" | "audio" | "caption" | "image">("text");
   const [editorTime, setEditorTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -117,20 +117,22 @@ export default function App() {
     if (!isPlaying) return;
     let frame = 0;
     let previous = 0;
+    let playbackTime = editorTime;
     const tick = (now: number) => {
       if (!previous) previous = now;
-      const elapsed = (now - previous) / 1000;
+      playbackTime += (now - previous) / 1000;
       previous = now;
-      setEditorTime(current => {
-        const next = current + elapsed;
-        if (next >= runtime) { setIsPlaying(false); return 0; }
-        return next;
-      });
+      if (playbackTime >= runtime) {
+        setEditorTime(0);
+        setIsPlaying(false);
+        return;
+      }
+      setEditorTime(playbackTime);
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [isPlaying, runtime]);
+  }, [isPlaying, runtime, editorTime]);
   useEffect(() => {
     const canvas = previewCanvasRef.current;
     if (!canvas || typeof CanvasRenderingContext2D === "undefined") return;
