@@ -11,9 +11,10 @@ describe("generateImage",()=>{
   it("sends prompt/model and returns provider image URL",async()=>{
     const fetchMock=vi.fn().mockResolvedValue(new Response(JSON.stringify({model:"image-v1",data:[{url:"https://cdn.test/generated.png"}]}),{status:200,headers:{"Content-Type":"application/json"}}));
     vi.stubGlobal("fetch",fetchMock);
-    const result=await generateImage({endpoint:"https://provider.test/v1/images/generations",apiKey:"test-key",model:"image-v1",prompt:"cinematic skyline"});
+    const reference="data:image/png;base64,dGVzdA==";
+    const result=await generateImage({endpoint:"https://provider.test/v1/images/generations",apiKey:"test-key",model:"image-v1",prompt:"cinematic skyline",referenceImages:[reference]});
     expect(fetchMock).toHaveBeenCalledWith("https://provider.test/v1/images/generations",expect.objectContaining({method:"POST",headers:expect.objectContaining({Authorization:"Bearer test-key"})}));
-    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({model:"image-v1",prompt:"cinematic skyline"});
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({model:"image-v1",prompt:"cinematic skyline",reference_images:[reference]});
     expect(result.outputUrl).toBe("https://cdn.test/generated.png");
   });
   it("surfaces HTTP and malformed provider responses",async()=>{
