@@ -619,6 +619,41 @@ describe("App history integration", () => {
     expect(persistedProject().shots.map(shot => shot.masterStart)).toEqual(afterRipple.shots.map(shot => shot.masterStart));
   });
 
+  it("splits the selected Master video clip and keeps linked audio aligned in the Inspector workflow", async () => {
+    await openTimelineView();
+    const addLinked = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Add linked video/audio"));
+    expect(addLinked).toBeTruthy();
+    click(addLinked!);
+    await flushEffects();
+    const before = persistedProject();
+    const video = before.timelineClips?.find(clip => clip.kind === "video" && !clip.id.startsWith("storyboard-"));
+    const audio = before.timelineClips?.find(clip => clip.kind === "audio" && clip.linkedVideoClipId === video?.id);
+    expect(video).toBeTruthy();
+    expect(audio).toBeTruthy();
+
+    const split = Array.from(container.querySelectorAll<HTMLButtonElement>(".visual-clip-actions button")).find(button => button.textContent?.includes("Split at midpoint"));
+    expect(split).toBeTruthy();
+    expect(split!.disabled).toBe(false);
+    click(split!);
+    await flushEffects();
+
+    const after = persistedProject();
+    const videoParts = after.timelineClips?.filter(clip => clip.kind === "video" && !clip.id.startsWith("storyboard-")) ?? [];
+    expect(videoParts).toHaveLength(2);
+    const left = videoParts.find(clip => clip.id === video!.id)!;
+    const right = videoParts.find(clip => clip.id !== video!.id)!;
+    expect(left.start).toBe(video!.start);
+    expect(left.duration).toBeCloseTo(video!.duration / 2, 6);
+    expect(right.start).toBeCloseTo(left.start + left.duration, 6);
+    expect(right.duration).toBeCloseTo(video!.duration - left.duration, 6);
+
+    const linkedAfter = after.timelineClips?.filter(clip => clip.kind === "audio" && (clip.linkedVideoClipId === left.id || clip.linkedVideoClipId === right.id)) ?? [];
+    expect(linkedAfter).toHaveLength(2);
+    expect(linkedAfter.find(clip => clip.linkedVideoClipId === left.id)).toMatchObject({ start: left.start, duration: left.duration });
+    expect(linkedAfter.find(clip => clip.linkedVideoClipId === right.id)).toMatchObject({ start: right.start, duration: right.duration });
+    expect(container.querySelector(".visual-clip-inspector")?.textContent).toContain(right.name);
+  });
+
   it("opens nested Version tabs, adds a procedural layer, and keeps linked-audio mute/unlink independent", async () => {
     await openTimelineView();
     expect(container.querySelector(".master-shot-clip")).toBeTruthy();
