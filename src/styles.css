@@ -1823,3 +1823,133 @@
   flex: 0 0 50%;
   width: 50%;
 }
+
+
+/* Timeline layout: a stable label column keeps all clip lanes aligned. */
+.visual-track-row {
+  grid-template-columns: minmax(210px, 238px) minmax(320px, 1fr);
+}
+.visual-track-label {
+  gap: 7px;
+  padding: 8px 9px;
+}
+.visual-track-label > div { flex: 1 1 auto; }
+.visual-track-label strong { max-width: 100%; }
+.track-add-clip, .track-remove-button {
+  display: grid;
+  place-items: center;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--border, #30313a);
+  border-radius: 6px;
+  background: rgba(255,255,255,.035);
+  color: var(--muted, #a5a6b2);
+  cursor: pointer;
+}
+.track-add-clip { color: var(--accent, #d5f36a); }
+.track-remove-button { color: #f28c98; }
+.track-add-clip:hover, .track-remove-button:hover { background: rgba(255,255,255,.1); }
+.layer-add-menu-wrap { position: relative; }
+.layer-add-menu {
+  position: absolute;
+  z-index: 90;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 180px;
+  padding: 5px;
+  border: 1px solid var(--border, #383842);
+  border-radius: 8px;
+  background: #19191f;
+  box-shadow: 0 12px 32px rgba(0,0,0,.45);
+}
+.layer-add-menu button {
+  display: block;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text, #f1f1f5);
+  text-align: left;
+  cursor: pointer;
+}
+.layer-add-menu button:hover { background: rgba(213,243,106,.1); color: var(--accent, #d5f36a); }
+.visual-clip-inspector { display: none !important; }
+
+/* A source-backed audio clip has a waveform-like strip; an empty clip is a flat line. */
+.visual-media-clip.audio-clip { isolation: isolate; }
+.visual-media-clip.audio-clip::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 8px 5px;
+  opacity: .28;
+  pointer-events: none;
+}
+.visual-media-clip.audio-placeholder::after {
+  top: 50%;
+  bottom: auto;
+  height: 1px;
+  background: rgba(213,255,241,.8);
+}
+.visual-media-clip.audio-has-source::after {
+  background: repeating-linear-gradient(90deg,
+    transparent 0 2px,
+    rgba(213,255,241,.9) 2px 3px,
+    transparent 3px 5px,
+    rgba(213,255,241,.45) 5px 7px,
+    transparent 7px 10px);
+}
+
+/* Lightweight syntax highlighting while retaining native textarea editing. */
+.code-editor-shell {
+  position: relative;
+  overflow: hidden;
+  min-height: 160px;
+  border: 1px solid var(--border, #383842);
+  border-radius: 7px;
+  background: #101014;
+}
+.code-highlight-layer, .code-editor-input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 160px;
+  margin: 0;
+  padding: 12px;
+  border: 0;
+  font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  tab-size: 2;
+  white-space: pre;
+  overflow: auto;
+}
+.code-highlight-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  color: #d6d7e4;
+}
+.code-editor-input {
+  position: relative;
+  display: block;
+  resize: vertical;
+  background: transparent !important;
+  color: transparent !important;
+  caret-color: #f1f1f5;
+  -webkit-text-fill-color: transparent;
+}
+.code-editor-input::selection { background: rgba(125,160,255,.3); }
+.syntax-keyword { color: #c6a0f6; }
+.syntax-string { color: #a6da95; }
+.syntax-number { color: #f5a97f; }
+.syntax-comment { color: #7f849c; font-style: italic; }
+.clip-settings-dialog { width: min(640px, 100%); }
+.clip-settings-dialog .code-editor-shell { margin-top: 7px; }
+.clip-settings-dialog .code-source-textarea { min-height: 220px; }
+@media (max-width: 760px) {
+  .visual-track-row { grid-template-columns: minmax(160px, 180px) minmax(280px, 1fr); }
+  .visual-track-label { gap: 5px; padding: 6px; }
+  .track-kind-video, .track-kind-audio { width: 24px; height: 24px; }
+  .track-add-clip, .track-remove-button { width: 20px; height: 20px; flex-basis: 20px; }
+}
