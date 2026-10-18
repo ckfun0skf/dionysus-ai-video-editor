@@ -1205,7 +1205,11 @@ describe("Timeline layer and Shot settings UX", () => {
     await flushEffects();
     const codeLayer = persistedProject().shots.flatMap(shot => shot.slots.flatMap(slot => slot.versions.flatMap(version => version.layers))).find(layer => layer.kind === "procedural");
     expect(codeLayer?.code).toBe("scene.background = null;");
-    expect(container.querySelector(".nested-timeline-tab .version-thumbnail-code")).toBeTruthy();
+    const masterTab = Array.from(container.querySelectorAll<HTMLButtonElement>(".timeline-workspace-tabs [role=\"tab\"]")).find(button => button.textContent?.includes("Master Timeline"));
+    expect(masterTab).toBeTruthy();
+    click(masterTab!);
+    await flushEffects();
+    expect(container.querySelector(".master-shot-clip .version-thumbnail-code")).toBeTruthy();
   });
 
   it("shows a thumbnail for every version and uses a code glyph for procedural-only versions", async () => {
