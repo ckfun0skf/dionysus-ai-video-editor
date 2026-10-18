@@ -186,7 +186,7 @@
           "id": "DYS-005",
           "title": "Timeline editing and Version management",
           "status": "in_progress",
-          "progress": 82,
+          "progress": 85,
           "summary": "Master Timeline with visible typed layers, per-Shot active-Version dropdown (+ Add Version/Edit), nested Version timeline tabs, and separate master placement vs Version-internal timing.",
           "doc": "tasks/timeline-and-versions.md",
           "detail": "tasks/timeline-and-versions.html",
@@ -231,12 +231,12 @@
           ],
           "evidence": [
             "Master Shot uses optional absolute masterStart; legacy projects keep sequential positions until edited.",
-            "Shot start is editable numerically and through drag-and-drop snapped to the project's frame rate; Shot, Slot, Version, and module timing are independent.",
-            "Nested Version duration, per-module start/duration, drag-to-move, and layer ordering are editable; compositor collection preserves stored layer order.",
-            "Local image/video imports and generated images attempt to create compact browser-local thumbnails; unsupported decode keeps the truthful placeholder.",
+            "Free placement supports frame-snapped drag; overlap warnings explain the explicit free-position policy.",
+            "Ripple Reorder explicitly packs Shots back-to-back in the chosen chronological order, closes gaps, and preserves Shot durations and Version internals.",
+            "Nested Version duration, module timing, frame-snapped movement, layer order, real source thumbnails, and compositor ordering are covered by tests.",
             "CI run 39119716811: 75 tests pass across 9 files; TypeScript/production build pass; npm audit reports 0 vulnerabilities."
           ],
-          "notes": "The prototype-aligned editing foundation and thumbnail capture are implemented. Remaining work includes a defined Master ripple/reorder and overlap policy, fuller source in/out editing, and robust JSON/Undo-Redo coverage. Draft PR #39 is not merged; browser smoke tests were not run."
+          "notes": "Master/Version/module timing, source thumbnails, explicit ripple reorder, overlap warnings, and layer ordering are implemented. Remaining work includes richer nested source/trim controls and complete JSON/Undo-Redo coverage. Draft PR #39 is not merged; no browser smoke tests were run."
         },
         {
           "id": "DYS-011",
