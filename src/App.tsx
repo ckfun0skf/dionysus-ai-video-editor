@@ -1573,6 +1573,17 @@ export default function App() {
  </div><button className={"button button-quiet button-small ripple-reorder-toggle"+(rippleReorderMode?" active":"")} aria-pressed={rippleReorderMode} onClick={()=>setRippleReorderMode(enabled=>!enabled)}>{rippleReorderMode?"Ripple Reorder: ON":"Ripple Reorder"}</button>
 </div></div>
 {rippleReorderMode&&<p className="ripple-mode-note" role="status">Ripple Reorder is ON. Dropping a Shot changes chronological order and packs the full Master sequence back-to-back, closing gaps. Master durations and Version internals stay unchanged.</p>}
+<div className="visual-timeline-ruler">
+  <div className="visual-ruler-caption">TIME</div>
+  <div className="visual-timeline-ruler-lane" role="slider" aria-label="Timeline playhead" aria-valuemin={0} aria-valuemax={mediaTimelineDuration} aria-valuenow={editorTime} tabIndex={0}
+    style={{backgroundSize:(5/Math.max(mediaTimelineDuration,1)*100)+"% 100%"}}
+    onPointerDown={event=>{const rect=event.currentTarget.getBoundingClientRect();const next=Math.max(0,Math.min(mediaTimelineDuration,((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration));setIsPlaying(false);playbackTimeRef.current=next;setEditorTime(next);}}
+    onPointerMove={event=>{if(event.buttons!==1)return;const rect=event.currentTarget.getBoundingClientRect();const next=Math.max(0,Math.min(mediaTimelineDuration,((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration));setIsPlaying(false);playbackTimeRef.current=next;setEditorTime(next);}}
+    onKeyDown={event=>{if(event.key==="ArrowRight"){const next=Math.min(mediaTimelineDuration,editorTime+.5);setIsPlaying(false);playbackTimeRef.current=next;setEditorTime(next);}if(event.key==="ArrowLeft"){const next=Math.max(0,editorTime-.5);setIsPlaying(false);playbackTimeRef.current=next;setEditorTime(next);}}}>
+    {Array.from({length:Math.floor(mediaTimelineDuration/5)+1},(_,i)=>i*5).concat(mediaTimelineDuration%5===0?[]:[mediaTimelineDuration]).map(seconds=><span key={seconds} style={{left:(seconds/Math.max(mediaTimelineDuration,1)*100)+"%"}}>{time(seconds)}</span>)}
+    <div className="visual-timeline-ruler-playhead" style={{left:(Math.min(editorTime,mediaTimelineDuration)/Math.max(mediaTimelineDuration,1)*100)+"%"}}/>
+  </div>
+</div>
 <div className="visual-track-list">
 {project.tracks.filter(track=>track.kind==="video"||track.kind==="audio"||track.kind==="text").map(track=>{
  const clips=(project.timelineClips??[]).filter(clip=>clip.trackId===track.id && !(track.kind==="audio" && clip.linkedVideoClipId));
