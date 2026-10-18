@@ -95,6 +95,15 @@ describe("validateProject", () => {
     expect(validateProject(project)).toBe(false);
   });
 
+  it("round-trips explicit Master Shot starts through project JSON", () => {
+    const project = structuredClone(sampleProject);
+    project.shots[0].masterStart = 18.25;
+    project.shots[1].masterStart = 3.5;
+    const restored = JSON.parse(JSON.stringify(project)) as typeof sampleProject;
+    expect(validateProject(restored)).toBe(true);
+    expect(restored.shots.map(shot => shot.masterStart)).toEqual([18.25, 3.5, undefined]);
+  });
+
   it("rejects shots assigned to missing reference profiles", () => {
     const project = structuredClone(sampleProject);
     project.shots[0].referenceProfileIds.push("missing-profile");
