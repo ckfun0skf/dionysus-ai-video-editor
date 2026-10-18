@@ -314,4 +314,16 @@ describe("validateProject", () => {
     expect(validateProject(project)).toBe(false);
   });
 
+  it("rejects unresolved or non-image references from Code modules", () => {
+    const project = structuredClone(sampleProject);
+    const codeLayer = project.shots[0].slots[0].versions[0].layers[0];
+    codeLayer.kind = "procedural";
+    codeLayer.referencedImageAssetIds = ["missing-image"];
+    expect(validateProject(project)).toBe(false);
+
+    project.assets.push({ id: "reference-image", name: "Reference image", kind: "image", path: "data:image/png;base64,AA==" });
+    codeLayer.referencedImageAssetIds = ["reference-image"];
+    expect(validateProject(project)).toBe(true);
+  });
+
 });
