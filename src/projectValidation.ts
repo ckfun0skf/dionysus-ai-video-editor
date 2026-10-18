@@ -216,8 +216,9 @@ export function validateProject(value: unknown): value is DionysusProject {
     if (clip.kind === "clip") {
       const clipAsset = assets.find(asset => asset.id === clip.assetId && asset.kind === "clip");
       if (!clipAsset) return false;
+      const clipVersions = Array.isArray(clipAsset.clipVersions) ? clipAsset.clipVersions as UnknownRecord[] : [];
       if (clip.clipVersionId !== undefined &&
-          !(clipAsset.clipVersions ?? []).some(version => version.id === clip.clipVersionId)) return false;
+          !clipVersions.some((version: UnknownRecord) => version.id === clip.clipVersionId)) return false;
     } else if (clip.clipVersionId !== undefined) {
       return false;
     }
@@ -275,8 +276,9 @@ export function validateProject(value: unknown): value is DionysusProject {
           if (layer.kind !== "composition") return false;
           const child = assets.find(candidate => candidate.id === layer.childCompositionId);
           if (!child || child.kind !== "clip") return false;
+          const childVersions = Array.isArray(child.clipVersions) ? child.clipVersions as UnknownRecord[] : [];
           if (layer.clipVersionId !== undefined &&
-              !(child.clipVersions ?? []).some(version => version.id === layer.clipVersionId)) return false;
+              !childVersions.some((version: UnknownRecord) => version.id === layer.clipVersionId)) return false;
         }
       }
     }
