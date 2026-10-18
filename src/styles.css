@@ -118,7 +118,7 @@
 .visual-timeline .editor-linked-heading { align-items: center; }
 .visual-timeline .editor-linked-heading button { display: inline-flex; align-items: center; gap: 6px; }
 .visual-track-list { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.visual-track-row { display: grid; grid-template-columns: 132px minmax(320px, 1fr); min-height: 76px; border: 1px solid var(--border, #30313a); border-radius: 10px; overflow: hidden; background: var(--surface, #15161b); }
+.visual-track-row { display: grid; grid-template-columns: 220px minmax(320px, 1fr); min-height: 76px; border: 1px solid var(--border, #30313a); border-radius: 10px; overflow: hidden; background: var(--surface, #15161b); }
 .visual-track-label { display: flex; align-items: center; gap: 9px; padding: 10px; border-right: 1px solid var(--border, #30313a); background: rgba(255,255,255,.025); }
 .visual-track-label > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .visual-track-label strong { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -149,7 +149,7 @@
 .visual-clip-timing { display: flex; flex-wrap: wrap; gap: 18px; color: var(--muted, #92939f); font-size: 11px; }
 .visual-clip-timing strong { color: var(--text, #f4f3f9); margin-left: 4px; }
 @media (max-width: 700px) {
-  .visual-track-row { grid-template-columns: 92px minmax(320px, 1fr); }
+  .visual-track-row { grid-template-columns: 164px minmax(320px, 1fr); }
   .visual-track-label { padding: 7px; gap: 6px; }
   .visual-track-label strong { font-size: 10px; }
   .visual-track-label small { font-size: 9px; }
@@ -1876,7 +1876,7 @@
   cursor: pointer;
 }
 .layer-add-menu button:hover { background: rgba(213,243,106,.1); color: var(--accent, #d5f36a); }
-.visual-clip-inspector { display: none !important; }
+/* Dialog visibility is controlled by React state; never hide the dialog component globally. */
 
 /* A source-backed audio clip has a waveform-like strip; an empty clip is a flat line. */
 .visual-media-clip.audio-clip { isolation: isolate; }
@@ -1923,12 +1923,16 @@
   tab-size: 2;
   white-space: pre;
   overflow: auto;
+  letter-spacing: 0 !important;
+  font-kerning: none;
+  font-variant-ligatures: none;
 }
 .code-highlight-layer {
   position: absolute;
   inset: 0;
   pointer-events: none;
   color: #d6d7e4;
+  overflow: hidden;
 }
 .code-editor-input {
   position: relative;
@@ -1938,6 +1942,9 @@
   color: transparent !important;
   caret-color: #f1f1f5;
   -webkit-text-fill-color: transparent;
+  letter-spacing: 0 !important;
+  font-kerning: none;
+  font-variant-ligatures: none;
 }
 .code-editor-input::selection { background: rgba(125,160,255,.3); }
 .syntax-keyword { color: #c6a0f6; }
@@ -2081,3 +2088,13 @@
   background: #c8fff0;
 }
 .audio-waveform.loading { opacity: .2; }
+
+/* Empty video clips are placeholders, not black source footage. */
+.visual-media-clip.video-placeholder { background: var(--clip-placeholder-bg, #20232a); border-color: rgba(255,255,255,.2); }
+.visual-media-clip.video-placeholder .visual-clip-thumbnail-placeholder { background: transparent; }
+.visual-media-clip.video-placeholder .visual-clip-copy { color: rgba(255,255,255,.92); }
+.visual-track-label { min-width: 0; }
+.visual-track-label > div { flex: 1 1 auto; }
+.visual-track-label strong { overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; line-height: 1.25; }
+.visual-track-label small { line-height: 1.25; overflow-wrap: anywhere; }
+.visual-track-label .track-add-clip, .visual-track-label .track-remove-button, .visual-track-label .track-settings-button { flex: 0 0 auto; }
