@@ -49,3 +49,21 @@ export function setMasterShotDuration(shots: Shot[], shotId: string, duration: n
     duration: shot.id === shotId ? safeDuration : shot.duration,
   }));
 }
+
+/** Return the Shot at the playhead, or the nearest earlier Shot when the timeline has a gap. */
+export function getMasterShotIndexAtTime(shots: Shot[], seconds: number): number {
+  if (!shots.length) return -1;
+  const starts = getMasterShotStarts(shots);
+  const containing = shots.findIndex((shot, index) => seconds >= starts[index] && seconds < starts[index] + shot.duration);
+  if (containing >= 0) return containing;
+
+  let earliestIndex = 0;
+  for (let index = 1; index < starts.length; index += 1) {
+    if (starts[index] < starts[earliestIndex]) earliestIndex = index;
+  }
+  let nearestIndex = earliestIndex;
+  for (let index = 0; index < starts.length; index += 1) {
+    if (starts[index] <= seconds && starts[index] >= starts[nearestIndex]) nearestIndex = index;
+  }
+  return nearestIndex;
+}
