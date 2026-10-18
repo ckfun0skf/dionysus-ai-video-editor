@@ -9,6 +9,7 @@ import { recordProjectChange, undoProjectChange as undoHistory, redoProjectChang
 import { collectCompositionLayers, renderCompositionFrame, exportCompositionWebM, downloadExport } from "./compositionRenderer";
 import AIGenerationPanel from "./AIGenerationPanel";
 import CodePlayground from "./CodePlayground";
+import SandboxedCodePreview from "./SandboxedCodePreview";
 import { deleteStoredMediaAsset, isStoredMediaPath, loadMediaBlobFromPath, resolveMediaSource, storeMediaAsset } from "./mediaAssetStore";
 import { createImageThumbnail, createVideoThumbnail, getAssetThumbnail } from "./mediaThumbnail";
 import { getAudioEnvelope, withDurationAndClampedFades } from "./audioEnvelope";
@@ -305,6 +306,15 @@ export default function App() {
     return () => { cancelled = true; cancelAnimationFrame(frame); players.forEach(player => { player.element.pause(); player.element.removeAttribute("src"); player.release?.(); }); players.clear(); };
   }, [isPlaying, project, activeVersionTimeline]);
 
+  const previewCodeLayers = useMemo(() => {
+    const layers = activeVersionTimeline ? activeVersionTimeline.layers : collectCompositionLayers(project);
+    return layers.filter(layer =>
+      (layer.kind === "procedural" || layer.kind === "script") &&
+      editorTime >= layer.start && editorTime < layer.start + layer.duration &&
+      (layer.html !== undefined || layer.css !== undefined || layer.code !== undefined)
+    );
+  }, [activeVersionTimeline, project, editorTime]);
+
   const renderTimelinePreview = (
     tabKey: string,
     title: string,
@@ -328,6 +338,14 @@ export default function App() {
           className="editor-preview-canvas"
           aria-label={title + " at " + editorTimeLabel(editorTime)}
         />
+        {previewCodeLayers.map(layer => <SandboxedCodePreview
+          key={layer.id}
+          title={layer.name}
+          html={layer.html}
+          css={layer.css}
+          js={layer.code}
+          style={{left:(layer.x??0)+"%",top:(layer.y??0)+"%",width:(layer.width??100)+"%",height:(layer.height??100)+"%",zIndex:1}}
+        />)}
         {(selectedTimelineTrackId||selectedCompositionLayerId) && view === "timeline" && (()=>{const track=project.tracks.find(item=>item.id===selectedTimelineTrackId);const layer=activeVersionTimeline?.layers.find(item=>item.id===selectedCompositionLayerId);const target=layer??track;return target?<div className="selected-layer-frame" style={{left:(target.x??(layer?0:10))+"%",top:(target.y??(layer?0:10))+"%",width:(target.width??(layer?100:80))+"%",height:(target.height??(layer?100:80))+"%"}}><span>{target.name}</span><i className="layer-frame-handle top-left"/><i className="layer-frame-handle top-right"/><i className="layer-frame-handle bottom-left"/><i className="layer-frame-handle bottom-right"/></div>:null;})()}
         {showPreviewOverlay && <div className="integrated-preview-overlay">
           <span>PREVIEW OVERLAY</span><strong>{overlayTitle}</strong><small>{overlaySubtitle || "No shot description"}</small>
