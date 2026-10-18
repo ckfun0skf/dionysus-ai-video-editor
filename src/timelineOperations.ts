@@ -1,4 +1,5 @@
 import type { TimelineClip, TimelineTrack } from "./types";
+import { withDurationAndClampedFades } from "./audioEnvelope";
 
 export interface TimelineState {
   tracks: TimelineTrack[];
@@ -70,9 +71,21 @@ export function trimTimelineClip(state: TimelineState, clipId: string, duration:
   const clip = state.timelineClips.find(item => item.id === clipId);
   if (!clip) throw new Error("Timeline clip not found.");
   const sourceId = clip.kind === "audio" ? clip.linkedVideoClipId : clip.id;
+  const sourceClip = sourceId ? state.timelineClips.find(item => item.id === sourceId) : clip;
+  const linkedAudio = sourceId ? state.timelineClips.filter(item => item.kind === "audio" && item.linkedVideoClipId === sourceId) : [];
+  const rangeMembers = [clip, ...(sourceClip ? [sourceClip] : []), ...linkedAudio];
+  const sourceIn = sourceClip?.sourceIn ?? rangeMembers.find(item => item.sourceIn !== undefined)?.sourceIn ?? 0;
+  const hasSourceRange = rangeMembers.some(item => item.sourceIn !== undefined || item.sourceOut !== undefined);
+  const updateDuration = (item: TimelineClip): TimelineClip => {
+    const withDuration = withDurationAndClampedFades(item, duration);
+    if (hasSourceRange && (item.kind === "video" || item.kind === "audio")) {
+      return { ...withDuration, sourceIn, sourceOut: sourceIn + duration };
+    }
+    return withDuration;
+  };
   return { ...state, timelineClips: state.timelineClips.map(item => {
-    if (item.id === clipId || (sourceId && item.id === sourceId)) return { ...item, duration };
-    if (sourceId && item.kind === "audio" && item.linkedVideoClipId === sourceId) return { ...item, duration };
+    if (item.id === clipId || (sourceId && item.id === sourceId)) return updateDuration(item);
+    if (sourceId && item.kind === "audio" && item.linkedVideoClipId === sourceId) return updateDuration(item);
     return item;
   }) };
 }
