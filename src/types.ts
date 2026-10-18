@@ -1,6 +1,6 @@
-export type AssetKind = "video" | "image" | "audio" | "script" | "other";
+export type AssetKind = "video" | "image" | "audio" | "script" | "clip" | "other";
 export type ReferenceRole = "identity" | "face" | "body" | "outfit" | "pose" | "composition" | "lighting" | "environment" | "style" | "other";
-export interface Asset { id: string; name: string; kind: AssetKind; path?: string; notes?: string; prompt?: string; modelName?: string; modelVersion?: string; generationParameters?: Record<string, unknown>; thumbnailPath?: string; html?: string; css?: string; js?: string; createdAt?: string; updatedAt?: string }
+export interface Asset { id: string; name: string; kind: AssetKind; path?: string; notes?: string; prompt?: string; modelName?: string; modelVersion?: string; generationParameters?: Record<string, unknown>; thumbnailPath?: string; html?: string; css?: string; js?: string; clipVersions?: ClipVersion[]; selectedClipVersionId?: string; createdAt?: string; updatedAt?: string }
 export interface ReferenceItem { id: string; assetId: string; role: ReferenceRole; notes?: string }
 export interface ReferenceProfile { id: string; name: string; entityType: "character" | "environment" | "prop" | "style" | "other"; references: ReferenceItem[] }
 export interface ReferenceOverride { referenceId: string; action: "exclude" | "replace"; replacementAssetId?: string; role?: ReferenceRole }
@@ -29,7 +29,7 @@ export interface Shot {
   previewAssetId?: string;
 }
 export interface TimelineTrack { id: string; name: string; kind: "video" | "audio" | "text" | "effects" | "procedural"; muted?: boolean; backgroundColor?: string; backgroundTransparent?: boolean; opacity?: number; x?: number; y?: number; width?: number; height?: number }
-export interface TimelineClip { id: string; name: string; kind: "video" | "audio" | "text" | "procedural"; trackId: string; start: number; duration: number; assetId?: string; scriptVersionId?: string; shotId?: string; slotId?: string; muted?: boolean; linkedVideoClipId?: string; sourceIn?: number; sourceOut?: number; shortSourceBehavior?: "once" | "loop"; fitMode?: "contain" | "cover" | "fill"; prompt?: string; code?: string; html?: string; css?: string; modelName?: string; modelVersion?: string; thumbnailPath?: string; volume?: number; fadeIn?: number; fadeOut?: number }
+export interface TimelineClip { id: string; name: string; kind: "video" | "audio" | "text" | "procedural" | "clip"; trackId: string; start: number; duration: number; assetId?: string; scriptVersionId?: string; shotId?: string; slotId?: string; muted?: boolean; linkedVideoClipId?: string; sourceIn?: number; sourceOut?: number; shortSourceBehavior?: "once" | "loop"; fitMode?: "contain" | "cover" | "fill"; prompt?: string; code?: string; html?: string; css?: string; modelName?: string; modelVersion?: string; thumbnailPath?: string; volume?: number; fadeIn?: number; fadeOut?: number }
 export interface DionysusProject {
   schemaVersion: "1.0";
   id: string;
