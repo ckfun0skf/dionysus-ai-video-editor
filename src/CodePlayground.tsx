@@ -33,7 +33,7 @@ function highlight(source: string, mode: Mode) {
 }
 
 export default function CodePlayground({ html, css, js, onChange, title = "Code asset" }: Props) {
-  const [active, setActive] = useState<Mode>("html");
+  const [active, setActive] = useState<Mode>("js");
   const [runKey, setRunKey] = useState(0);
   const source = { html, css, js };
   const srcDoc = useMemo(() => `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' https:; style-src 'unsafe-inline' https:; img-src data: blob: https:; font-src data: https:; connect-src 'none'; object-src 'none'; frame-src 'none'; form-action 'none'"><style>html,body{margin:0;min-height:100%;background:#080a12;color:#f4f4fa;font-family:system-ui,sans-serif}body{overflow:auto}${css}</style></head><body>${html}<script>try{\n${js}\n}catch(e){document.body.insertAdjacentHTML('beforeend','<pre style="color:#ff8d8d;white-space:pre-wrap;padding:12px"></pre>');document.querySelector('pre').textContent=String(e.stack||e)}<\/script></body></html>`, [html, css, js, runKey]);
