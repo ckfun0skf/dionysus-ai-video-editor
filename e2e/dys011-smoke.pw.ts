@@ -18,6 +18,32 @@ function toneWavDataUri(durationSeconds = 1): string {
   return "data:audio/wav;base64," + Buffer.concat([header, pcm]).toString("base64");
 }
 
+test("editor navigation stays accessible and adding linked clips keeps the media timeline visible", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator(".editor-view-nav")).toBeVisible();
+  await expect(page.locator(".editor-view-nav").getByRole("button", { name: "Storyboard", exact: true })).toBeVisible();
+  await expect(page.locator(".editor-view-nav").getByRole("button", { name: "Timeline", exact: true })).toBeVisible();
+  await expect(page.locator(".editor-view-nav").getByRole("button", { name: "Assets", exact: true })).toBeVisible();
+  await expect(page.locator(".editor-view-nav").getByRole("button", { name: "References", exact: true })).toBeVisible();
+
+  const mediaClips = page.locator(".visual-media-clip");
+  const before = await mediaClips.count();
+  await page.getByRole("button", { name: "Add linked video/audio" }).click();
+  await expect(mediaClips).toHaveCount(before + 2);
+  await expect(page.locator(".visual-track-list")).toBeVisible();
+  await expect(page.locator(".visual-clip-inspector")).toHaveCount(0);
+  await expect(page.locator(".editor-track-row")).toHaveCount(0);
+
+  await page.locator(".editor-view-nav").getByRole("button", { name: "Assets", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Open Editor" })).toBeVisible();
+  await expect(page.locator(".editor-workspace")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: /Assets/i }).first()).toBeVisible();
+  await page.getByRole("button", { name: "Open Editor" }).click();
+  await expect(page.locator(".editor-workspace")).toBeVisible();
+  await page.locator(".editor-view-nav").getByRole("button", { name: "References", exact: true }).click();
+  await expect(page.getByRole("heading", { name: /References/i }).first()).toBeVisible();
+});
+
 test("browser smoke: compose video and audio, generate an image, export a playable WebM", async ({ page }) => {
   const pageErrors: string[] = [];
   page.on("pageerror", error => pageErrors.push(error.message));

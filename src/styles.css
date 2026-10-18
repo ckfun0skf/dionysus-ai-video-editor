@@ -177,3 +177,14 @@
 @keyframes dys-pulse { from { scale: 1; } to { scale: 1.06; } }
 @keyframes dys-rotate { from { rotate: -4deg; } to { rotate: 4deg; } }
 @media (prefers-reduced-motion: reduce) { .composition-preview-layer { animation: none !important; } }
+
+
+/* Core editor navigation: keep Storyboard, Timeline, Assets and References one click away. */
+.editor-view-nav{display:flex;align-items:center;gap:4px;min-width:0;max-width:min(46vw,560px);overflow-x:auto;scrollbar-width:thin}
+.editor-view-nav button{display:inline-flex;align-items:center;justify-content:center;gap:5px;border:1px solid transparent;border-radius:5px;padding:7px 8px;background:transparent;color:#9eacc2;font:500 10px Arial,sans-serif;white-space:nowrap;cursor:pointer}
+.editor-view-nav button:hover{background:#1a2940;color:#e0e9f8}
+.editor-view-nav button.active{border-color:#344b70;background:#1c2e4d;color:#e6efff}
+.editor-view-nav button:focus-visible{outline:2px solid #5795ff;outline-offset:1px}
+.heading-meta .button{font-size:10px;padding:7px 9px}
+@media(max-width:900px){.editor-view-nav{max-width:35vw}.editor-view-nav button{padding:6px 5px}.editor-view-nav button span{display:none}}
+@media(max-width:580px){.editor-view-nav{max-width:42vw}.editor-project-name{max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
