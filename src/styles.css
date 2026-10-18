@@ -2156,3 +2156,12 @@
 .asset-thumb-video{background:#101014}.asset-thumb-code{background:#17151f;color:#c5adff}
 .asset-thumb-video img{width:100%;height:100%;object-fit:cover}
 .asset-thumb-splitter{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:grid;place-items:center;width:23px;height:23px;border:1px solid rgba(255,255,255,.45);border-radius:50%;background:#101014;color:#f1f1f5;font-size:14px;line-height:1}
+
+.clip-asset-version-bar{display:flex;align-items:flex-end;gap:10px;margin:10px 0}
+.clip-asset-version-bar .field-label{flex:1;margin:0}
+.clip-asset-saved-versions{display:flex;flex-direction:column;gap:6px;padding:10px 12px;margin:10px 0;border:1px solid var(--border,#30313a);border-radius:8px}
+.clip-asset-saved-versions>strong{font-size:11px;color:var(--muted,#92939f);text-transform:uppercase;letter-spacing:.08em}
+.clip-asset-saved-versions>div{display:flex;align-items:center;gap:10px;padding-top:6px;border-top:1px solid var(--border,#30313a)}
+.clip-asset-saved-versions>div span{flex:1;font-size:12px}
+.clip-asset-saved-versions>div small{font-size:10px;color:var(--muted,#92939f)}
+@media(max-width:600px){.clip-asset-version-bar{align-items:stretch;flex-direction:column}}
