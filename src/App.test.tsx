@@ -610,6 +610,13 @@ describe("App history integration", () => {
     });
     expect(afterRipple.shots.map(shot => shot.slots.map(slot => slot.versions.map(version => version.duration)))).toEqual(versionDurationsBeforeRipple);
     expect(container.querySelector(".master-shot-overlap-warning")).toBeNull();
+
+    click(buttonsNamed("Undo").find(button => !button.disabled)!);
+    await flushEffects();
+    expect(persistedProject().shots.map(shot => shot.masterStart)).toEqual(beforeRipple.shots.map(shot => shot.masterStart));
+    click(buttonsNamed("Redo").find(button => !button.disabled)!);
+    await flushEffects();
+    expect(persistedProject().shots.map(shot => shot.masterStart)).toEqual(afterRipple.shots.map(shot => shot.masterStart));
   });
 
   it("opens nested Version tabs, adds a procedural layer, and keeps linked-audio mute/unlink independent", async () => {
