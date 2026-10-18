@@ -125,8 +125,16 @@ export function splitTimelineClip(state: TimelineState, clipId: string, splitTim
       }
     }
     return {
-      left: { ...source, duration: leftDuration, ...leftSource },
-      right: { ...source, id: newId, name: source.name + " (2)", start: splitTime, duration: rightDuration, ...rightSource }
+      left: {
+        ...source, duration: leftDuration, ...leftSource,
+        ...(source.fadeIn !== undefined ? { fadeIn: Math.min(source.fadeIn, leftDuration) } : {}),
+        fadeOut: undefined
+      },
+      right: {
+        ...source, id: newId, name: source.name + " (2)", start: splitTime, duration: rightDuration, ...rightSource,
+        fadeIn: undefined,
+        ...(source.fadeOut !== undefined ? { fadeOut: Math.min(source.fadeOut, rightDuration) } : {})
+      }
     };
   };
 
