@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { generateImage } from "./aiGenerationProvider";
-interface Props { prompt: string; defaultModel?: string; onGenerated: (imageUrl: string, model: string, prompt: string) => void }
+interface Props { prompt: string; defaultModel?: string; onGenerated: (imageUrl: string, model: string, prompt: string) => void | Promise<void> }
 export default function AIGenerationPanel({prompt,defaultModel,onGenerated}:Props) {
   const [endpoint,setEndpoint]=useState("");
   const [apiKey,setApiKey]=useState("");
@@ -9,7 +9,7 @@ export default function AIGenerationPanel({prompt,defaultModel,onGenerated}:Prop
   const [error,setError]=useState("");
   async function run() {
     setBusy(true);setError("");
-    try { const result=await generateImage({endpoint,apiKey,model,prompt}); onGenerated(result.outputUrl,result.model??model,prompt); }
+    try { const result=await generateImage({endpoint,apiKey,model,prompt}); await onGenerated(result.outputUrl,result.model??model,prompt); }
     catch(e) { setError(e instanceof Error?e.message:"Image generation failed."); }
     finally { setBusy(false); }
   }
