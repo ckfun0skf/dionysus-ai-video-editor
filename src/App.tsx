@@ -280,7 +280,9 @@ export default function App() {
         const compositionPath = activeVersionTimelineTab?.id === activeTimelineTabId && activeVersionTimelineTab.assetId
           ? new Set([activeVersionTimelineTab.assetId])
           : new Set<string>();
-        await renderCompositionFrame(frame, project, layers, editorTime, { width: 1280, height: 720 }, previewImagesRef.current, previewVideosRef.current, releases, compositionPath);
+        const previewScale = Math.min(1280 / Math.max(1, project.width), 720 / Math.max(1, project.height));
+        const previewDimensions = { width: Math.max(1, Math.round(project.width * previewScale)), height: Math.max(1, Math.round(project.height * previewScale)) };
+        await renderCompositionFrame(frame, project, layers, editorTime, previewDimensions, previewImagesRef.current, previewVideosRef.current, releases, compositionPath);
         if (renderId !== previewRenderId.current) return;
         const context = canvas.getContext("2d");
         if (context) {
@@ -362,7 +364,7 @@ export default function App() {
         <div><strong>{title}</strong><small>{subtitle}</small></div>
         <span className="integrated-timecode">{editorTimeLabel(editorTime)} / {editorTimeLabel(duration)}</span>
       </div>
-      <div className="integrated-preview-frame">
+      <div className="integrated-preview-frame" style={{aspectRatio: Math.max(1,project.width) + " / " + Math.max(1,project.height)}}>
         <canvas
           ref={element => {
             if (element) previewCanvasRefs.current.set(tabKey, element);
