@@ -54,6 +54,7 @@ function isLayer(value: unknown): boolean {
     (value.scriptVersionId === undefined || isString(value.scriptVersionId)) &&
     (value.childCompositionId === undefined || isString(value.childCompositionId)) &&
     (value.clipVersionId === undefined || isString(value.clipVersionId)) &&
+    (value.referencedImageAssetIds === undefined || isStringArray(value.referencedImageAssetIds)) &&
     (value.sourceIn === undefined || (isFiniteNumber(value.sourceIn) && value.sourceIn >= 0)) &&
     (value.sourceOut === undefined || (isFiniteNumber(value.sourceOut) && value.sourceOut >= 0)) &&
     (value.sourceIn === undefined || value.sourceOut === undefined || value.sourceOut > value.sourceIn) &&
@@ -237,6 +238,11 @@ export function validateProject(value: unknown): value is DionysusProject {
     for (const version of versions) {
       for (const layer of version.layers as UnknownRecord[]) {
         if (layer.assetId !== undefined && !assetIds.has(layer.assetId as string)) return false;
+        if (layer.referencedImageAssetIds !== undefined) {
+          for (const referencedId of layer.referencedImageAssetIds as string[]) {
+            if (!assets.some(candidate => candidate.id === referencedId && candidate.kind === "image")) return false;
+          }
+        }
         if (layer.childCompositionId !== undefined) {
           const child = assets.find(candidate => candidate.id === layer.childCompositionId);
           if (!child || child.kind !== "clip") return false;
