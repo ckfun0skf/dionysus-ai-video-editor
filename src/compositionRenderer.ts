@@ -161,13 +161,85 @@ function drawLayer(ctx: CanvasRenderingContext2D, layer: CompositionLayer, asset
   ctx.restore();
 }
 
-export async function renderCompositionFrame(canvas: HTMLCanvasElement, project: DionysusProject, layers: CompositionLayer[], seconds: number, options: RenderOptions = {}, images = new Map<string, HTMLImageElement>(), videos = new Map<string, HTMLVideoElement>(), mediaReleases = new Map<string, () => void>()): Promise<void> {
+function drawNestedCompositionFrame(
+  ctx: CanvasRenderingContext2D,
+  layer: CompositionLayer,
+  frame: HTMLCanvasElement,
+  seconds: number,
+  width: number,
+  height: number
+) {
+  if (seconds < layer.start || seconds >= layer.start + layer.duration) return;
+  const x = ((layer.x ?? 0) / 100) * width, y = ((layer.y ?? 0) / 100) * height;
+  const w = ((layer.width ?? 100) / 100) * width, h = ((layer.height ?? 100) / 100) * height;
+  const opacity = Math.max(0, Math.min(1, layer.opacity ?? 1));
+  const local = seconds - layer.start;
+  ctx.save();
+  ctx.globalAlpha *= opacity;
+  if (layer.animation === "float") ctx.translate(0, Math.sin(local * 2 * Math.PI / Math.max(.1, layer.animationDuration ?? 2)) * height * .015);
+  if (layer.animation === "pulse") {
+    const pulse = 1 + .04 * Math.sin(local * 2 * Math.PI / Math.max(.1, layer.animationDuration ?? 2));
+    ctx.translate(x + w / 2, y + h / 2); ctx.scale(pulse, pulse); ctx.translate(-(x + w / 2), -(y + h / 2));
+  }
+  if (layer.animation === "rotate") {
+    ctx.translate(x + w / 2, y + h / 2); ctx.rotate(local * 2 * Math.PI / Math.max(.1, layer.animationDuration ?? 3)); ctx.translate(-(x + w / 2), -(y + h / 2));
+  }
+  const scale = layer.scale ?? 1;
+  ctx.translate(x + w / 2, y + h / 2); ctx.scale(scale, scale); ctx.translate(-(x + w / 2), -(y + h / 2));
+  const makeFramePath = (inset = 0) => {
+    ctx.beginPath();
+    if (layer.shape === "circle") ctx.ellipse(x + w / 2, y + h / 2, Math.max(0, Math.min(w, h) / 2 - inset), Math.max(0, Math.min(w, h) / 2 - inset), 0, 0, Math.PI * 2);
+    else if (layer.shape === "rounded") ctx.roundRect(x + inset, y + inset, Math.max(0, w - inset * 2), Math.max(0, h - inset * 2), Math.max(0, (layer.cornerRadius ?? 12) - inset));
+    else ctx.rect(x + inset, y + inset, Math.max(0, w - inset * 2), Math.max(0, h - inset * 2));
+  };
+  if (layer.backgroundColor) {
+    ctx.fillStyle = layer.backgroundColor;
+    makeFramePath();
+    ctx.fill();
+  }
+  makeFramePath();
+  ctx.clip();
+  drawFit(ctx, frame, frame.width, frame.height, x, y, w, h, layer.fitMode);
+  if (layer.borderColor && (layer.borderWidth ?? 0) > 0) {
+    ctx.strokeStyle = layer.borderColor;
+    ctx.lineWidth = layer.borderWidth!;
+    makeFramePath(layer.borderWidth! / 2);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+export async function renderCompositionFrame(canvas: HTMLCanvasElement, project: DionysusProject, layers: CompositionLayer[], seconds: number, options: RenderOptions = {}, images = new Map<string, HTMLImageElement>(), videos = new Map<string, HTMLVideoElement>(), mediaReleases = new Map<string, () => void>(), compositionPath: Set<string> = new Set()): Promise<void> {
   const width = options.width ?? project.width, height = options.height ?? project.height;
   canvas.width = width; canvas.height = height;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Canvas 2D rendering is unavailable");
   ctx.fillStyle = "#000"; ctx.fillRect(0, 0, width, height);
   for (const layer of layers) {
+    const referencedCompositionId = layer.kind === "composition"
+      ? layer.childCompositionId ?? (project.assets.some(item => item.id === layer.assetId && item.kind === "clip") ? layer.assetId : undefined)
+      : undefined;
+    if (referencedCompositionId && !compositionPath.has(referencedCompositionId)) {
+      const childAsset = project.assets.find(item => item.id === referencedCompositionId && item.kind === "clip");
+      const childVersion = childAsset?.clipVersions?.find(item => item.id === layer.clipVersionId)
+        ?? (layer.clipVersionId ? undefined : childAsset?.clipVersions?.find(item => item.id === childAsset.selectedClipVersionId) ?? childAsset?.clipVersions?.[0]);
+      if (childAsset?.kind === "clip" && childVersion && seconds >= layer.start && seconds < layer.start + layer.duration) {
+        const childCanvas = document.createElement("canvas");
+        await renderCompositionFrame(
+          childCanvas,
+          project,
+          childVersion.layers,
+          seconds - layer.start,
+          options,
+          images,
+          videos,
+          mediaReleases,
+          new Set([...compositionPath, referencedCompositionId])
+        );
+        drawNestedCompositionFrame(ctx, layer, childCanvas, seconds, width, height);
+        continue;
+      }
+    }
     const asset = project.assets.find(item => item.id === layer.assetId);
     if (!asset?.path) { drawLayer(ctx, layer, asset, seconds, width, height, images, videos); continue; }
     if (asset.kind === "image" && !images.has(asset.id)) {
