@@ -2052,3 +2052,32 @@
 .master-shot-resize-handle:hover { opacity: 1; background: rgba(255,255,255,.7); }
 .master-shot-resize-handle.left { left: 0; }
 .master-shot-resize-handle.right { right: 0; }
+
+.visual-media-clip.audio-clip::after { display: none; }
+.audio-waveform {
+  position: absolute;
+  z-index: 0;
+  inset: 8px 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2px;
+  overflow: hidden;
+  opacity: .48;
+  pointer-events: none;
+}
+.audio-waveform i {
+  display: block;
+  flex: 1 1 0;
+  min-width: 1px;
+  max-width: 3px;
+  border-radius: 2px;
+  background: #c8fff0;
+}
+.audio-waveform.placeholder span, .audio-waveform.loading span {
+  display: block;
+  width: 100%;
+  height: 1px;
+  background: #c8fff0;
+}
+.audio-waveform.loading { opacity: .2; }
