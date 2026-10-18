@@ -13,6 +13,7 @@
 - Nested Version layers are collected at the Shot's absolute Master Timeline offset.
 - Nested Version lanes support video, image, audio, text, and procedural/Three.js modules, with clear placeholder thumbnails where real thumbnails are absent.
 - Imported image/video sources and AI-generated image outputs attempt to produce a compact local JPEG thumbnail. Video decode failures keep the placeholder instead of failing import.
+- Master Timeline defaults to free placement; users can explicitly enable Ripple Reorder, which reorders a Shot by drop target and packs the sequence without gaps. Free placement overlap warnings appear in the Shot Inspector.
 - Composition layer collection now preserves the saved Version layer order so reordering is reflected in final composition traversal.
 - Version duration has its own control; changing it does not change Master Shot or Clip Slot duration.
 - Each nested module has Inspector controls for internal start and duration, direct drag-to-move with frame snapping, and header buttons to move the layer earlier/later.
