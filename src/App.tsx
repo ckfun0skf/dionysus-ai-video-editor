@@ -988,6 +988,17 @@ export default function App() {
     setView("timeline");
   }
 
+  function chooseClipAssetVersion(assetId: string, versionId: string) {
+    change(p => ({
+      ...p,
+      assets: p.assets.map(asset => asset.id === assetId && asset.kind === "clip"
+        ? { ...asset, selectedClipVersionId: versionId, updatedAt: new Date().toISOString() }
+        : asset)
+    }));
+    openClipAssetTimeline(assetId, versionId);
+    setNotice("Selected Clip Version for new references. Existing references remain pinned.");
+  }
+
   function openClipAssetTimeline(assetId: string, versionId: string) {
     const asset = projectRef.current.assets.find(item => item.id === assetId && item.kind === "clip");
     const version = asset?.kind === "clip" ? asset.clipVersions?.find(item => item.id === versionId) : undefined;
@@ -1559,7 +1570,7 @@ export default function App() {
     </div>
     <div className="inline-actions">
       {activeVersionTimelineClipAsset && <>
-        <label className="nested-version-duration">Clip Version <span><select aria-label="Clip Asset version" className="text-field" value={activeVersionTimeline.id} onChange={event => openClipAssetTimeline(activeVersionTimelineClipAsset.id, event.target.value)}>{(activeVersionTimelineClipAsset.clipVersions ?? []).map((version, index) => <option key={version.id} value={version.id}>{version.name || "Version " + (index + 1)}</option>)}</select></span></label>
+        <label className="nested-version-duration">Clip Version <span><select aria-label="Clip Asset version" className="text-field" value={activeVersionTimeline.id} onChange={event => chooseClipAssetVersion(activeVersionTimelineClipAsset.id, event.target.value)}>{(activeVersionTimelineClipAsset.clipVersions ?? []).map((version, index) => <option key={version.id} value={version.id}>{version.name || "Version " + (index + 1)}</option>)}</select></span></label>
         <button className="button button-quiet button-small" onClick={() => duplicateClipAssetVersion(activeVersionTimelineClipAsset.id, activeVersionTimeline.id)}><Plus size={13}/> Duplicate Version</button>
       </>}
       <button className="button button-quiet button-small" onClick={() => addTimelineVersionLayer(activeVersionTimelineTab, "video")}><Plus size={13}/> Video</button>
