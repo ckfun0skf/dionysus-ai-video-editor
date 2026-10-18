@@ -50,7 +50,12 @@ test("browser smoke: generate a layer image and export a playable WebM", async (
   await page.getByLabel("API key (kept in memory only)").fill("playwright-test-key");
   await page.locator(".ai-generation-panel input").nth(2).fill("smoke-image-model");
   await page.getByRole("button", { name: "Generate / regenerate image" }).click();
-  await page.waitForFunction(() => {\n    const project = JSON.parse(localStorage.getItem("dionysus.project.v1") || "null");\n    const layer = project?.shots?.[0]?.slots?.[0]?.versions?.[0]?.layers?.[0];\n    const asset = project?.assets?.find((candidate: { id: string }) => candidate.id === layer?.assetId);\n    return asset?.prompt === "cinematic cyan shape on black" && asset?.modelName === "smoke-image-model";\n  });
+  await page.waitForFunction(() => {
+    const project = JSON.parse(localStorage.getItem("dionysus.project.v1") || "null");
+    const layer = project?.shots?.[0]?.slots?.[0]?.versions?.[0]?.layers?.[0];
+    const asset = project?.assets?.find((candidate: { id: string }) => candidate.id === layer?.assetId);
+    return asset?.prompt === "cinematic cyan shape on black" && asset?.modelName === "smoke-image-model";
+  });
 
   const downloadPromise = page.waitForEvent("download", { timeout: 45_000 });
   await page.getByRole("button", { name: "Export WebM" }).click();
