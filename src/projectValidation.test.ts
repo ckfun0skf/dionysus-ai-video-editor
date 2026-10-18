@@ -53,6 +53,29 @@ describe("validateProject", () => {
     expect(validateProject(project)).toBe(true);
   });
 
+  it("validates audio volume and fade ranges on nested modules and Master clips", () => {
+    const project = structuredClone(sampleProject);
+    project.shots[0].slots[0].versions[0].layers.push({
+      id: "faded-nested-audio", name: "Music", kind: "audio", start: 0, duration: 3,
+      volume: 0.4, fadeIn: 0.5, fadeOut: 1,
+    });
+    project.timelineClips = [{
+      id: "faded-audio", name: "Music bed", kind: "audio", trackId: "track-audio-1",
+      start: 0, duration: 4, volume: 0.35, fadeIn: 0.75, fadeOut: 1.25,
+    }];
+    expect(validateProject(project)).toBe(true);
+
+    const badVolume = structuredClone(project);
+    badVolume.timelineClips![0].volume = 1.1;
+    expect(validateProject(badVolume)).toBe(false);
+    const badNestedFade = structuredClone(project);
+    badNestedFade.shots[0].slots[0].versions[0].layers[0].fadeOut = 4;
+    expect(validateProject(badNestedFade)).toBe(false);
+    const badMasterFade = structuredClone(project);
+    badMasterFade.timelineClips![0].fadeIn = -0.1;
+    expect(validateProject(badMasterFade)).toBe(false);
+  });
+
   it("accepts text and procedural Master Timeline blocks on their typed tracks", () => {
     const project = structuredClone(sampleProject);
     project.tracks.push({ id: "track-procedural-test", name: "Three.js", kind: "procedural" });
