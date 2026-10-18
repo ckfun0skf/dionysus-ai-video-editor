@@ -37,7 +37,7 @@ describe("ClipAssetEditor", () => {
 
     const save = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Create empty Clip"));
     expect(save).toBeDefined();
-    expect(save).not.toBeDisabled();
+    expect((save as HTMLButtonElement).disabled).toBe(false);
     act(() => save!.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 
     expect(onSave).toHaveBeenCalledWith({
@@ -56,7 +56,7 @@ describe("ClipAssetEditor", () => {
     act(() => root.render(<ClipAssetEditor onSave={onSave} onClose={vi.fn()} />));
     setValue(container.querySelector<HTMLInputElement>('[aria-label="Clip duration"]')!, "0");
     const save = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Create empty Clip"));
-    expect(save).toBeDisabled();
+    expect((save as HTMLButtonElement).disabled).toBe(true);
     expect(onSave).not.toHaveBeenCalled();
   });
 });
