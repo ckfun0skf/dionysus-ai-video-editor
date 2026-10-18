@@ -1,4 +1,5 @@
 import type { Asset, CompositionLayer, DionysusProject } from "./types";
+import { getAudioEnvelope } from "./audioEnvelope";
 import { getMasterShotStarts, getMasterTimelineDuration } from "./masterTimeline";
 import { loadMediaBlobFromPath, resolveMediaSource } from "./mediaAssetStore";
 
@@ -22,7 +23,7 @@ export function collectCompositionLayers(project: DionysusProject): CompositionL
       ...(clip.prompt ? { prompt: clip.prompt } : {}),
       ...(clip.modelName ? { modelName: clip.modelName } : {}),
       ...(clip.modelVersion ? { modelVersion: clip.modelVersion } : {}),
-      muted: Boolean(clip.muted || project.tracks.find(track => track.id === clip.trackId)?.muted)
+      muted: Boolean(clip.muted || project.tracks.find(track => track.id === clip.trackId)?.muted),\n      volume: clip.volume, fadeIn: clip.fadeIn, fadeOut: clip.fadeOut
     };
     if (clip.kind === "text" || clip.kind === "procedural") {
       return [{ ...common, fitMode: "contain" as const, x: 0, y: clip.kind === "text" ? 75 : 0, width: 100, height: clip.kind === "text" ? 18 : 100 }];
@@ -175,7 +176,7 @@ export async function exportCompositionWebM(project: DionysusProject, options: R
   let audioContext: AudioContext | undefined;
   let audioDestination: MediaStreamAudioDestinationNode | undefined;
   let audioResume: Promise<void> | undefined;
-  const scheduledAudio: { layer: CompositionLayer; source: AudioBufferSourceNode; buffer: AudioBuffer }[] = [];
+  const scheduledAudio: { layer: CompositionLayer; source: AudioBufferSourceNode; buffer: AudioBuffer; gain: GainNode }[] = [];
   if (audioLayers.length) {
     if (!window.AudioContext) throw new Error("Audio export requires Web Audio API support");
     audioContext = new window.AudioContext();
@@ -187,9 +188,11 @@ export async function exportCompositionWebM(project: DionysusProject, options: R
       const sourceBlob = await loadMediaBlobFromPath(asset.path!);
       const buffer = await audioContext.decodeAudioData(await sourceBlob.arrayBuffer());
       const source = audioContext.createBufferSource();
+      const gain = audioContext.createGain();
       source.buffer = buffer;
-      source.connect(audioDestination);
-      scheduledAudio.push({ layer, source, buffer });
+      source.connect(gain);
+      gain.connect(audioDestination);
+      scheduledAudio.push({ layer, source, buffer, gain });
     }
     for (const track of audioDestination.stream.getAudioTracks()) stream.addTrack(track);
   }
@@ -210,7 +213,17 @@ export async function exportCompositionWebM(project: DionysusProject, options: R
       const offset = Math.max(0, item.layer.sourceIn ?? 0);
       const sourceLimit = item.layer.sourceOut === undefined ? item.layer.duration : Math.max(0, item.layer.sourceOut - offset);
       const playbackDuration = Math.min(item.layer.duration, sourceLimit, Math.max(0, item.buffer.duration - offset));
-      if (playbackDuration > 0) item.source.start(audioStartAt + item.layer.start, offset, playbackDuration);
+      if (playbackDuration > 0) {
+        const clipStartsAt = audioStartAt + item.layer.start;
+        const pointCount = 64;
+        const curve = new Float32Array(pointCount);
+        for (let point = 0; point < pointCount; point += 1) {
+          const elapsed = playbackDuration * point / (pointCount - 1);
+          curve[point] = getAudioEnvelope(item.layer.volume, item.layer.fadeIn, item.layer.fadeOut, elapsed, playbackDuration);
+        }
+        item.gain.gain.setValueCurveAtTime(curve, clipStartsAt, playbackDuration);
+        item.source.start(clipStartsAt, offset, playbackDuration);
+      }
     }
     const frames = Math.ceil(duration * fps);
     const started = performance.now();
