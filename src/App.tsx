@@ -988,7 +988,7 @@ export default function App() {
      const previewAsset=shot.previewAssetId?project.assets.find(asset=>asset.id===shot.previewAssetId):undefined;
      const thumb=version?.layers.find(layer=>layer.kind==="video"||layer.kind==="image")?.thumbnailPath??previewAsset?.thumbnailPath??(previewAsset?.kind==="image"?previewAsset.path:undefined);
      return <div className="master-shot-clip-wrap" key={"master-shot-"+shot.id} style={{left:(shotStart/mediaTimelineDuration*100)+"%",width:Math.max(2,shot.duration/mediaTimelineDuration*100)+"%"}}>
-       <button draggable className={"master-shot-clip"+(selected?.id===shot.id?" selected":"")} onDragStart={event=>{event.dataTransfer.setData("text/dionysus-master-shot",shot.id);event.dataTransfer.effectAllowed="move";}} onClick={()=>{setSelectedId(shot.id);if(slot)setSelectedSlotId(slot.id);setIsPlaying(false);setEditorTime(shotStart);playbackTimeRef.current=shotStart;}} title={shot.title+" · "+shot.duration.toFixed(1)+"s">
+       <button draggable className={"master-shot-clip"+(selected?.id===shot.id?" selected":"")} onDragStart={event=>{event.dataTransfer.setData("text/dionysus-master-shot",shot.id);event.dataTransfer.effectAllowed="move";}} onClick={()=>{setSelectedId(shot.id);if(slot)setSelectedSlotId(slot.id);setIsPlaying(false);setEditorTime(shotStart);playbackTimeRef.current=shotStart;}} title={shot.title+" · "+shot.duration.toFixed(1)+"s"}>
          {thumb?<img className="master-shot-thumbnail" src={thumb} alt=""/>:<span className="master-shot-placeholder"><Film size={13}/></span>}
          <span className="master-shot-copy"><strong>{shot.title}</strong><small>{version?.name??"No version"} · {shot.duration.toFixed(1)}s</small></span>
        </button>
