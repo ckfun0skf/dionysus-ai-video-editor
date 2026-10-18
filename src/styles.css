@@ -2098,3 +2098,20 @@
 .visual-track-label strong { overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; line-height: 1.25; }
 .visual-track-label small { line-height: 1.25; overflow-wrap: anywhere; }
 .visual-track-label .track-add-clip, .visual-track-label .track-remove-button, .visual-track-label .track-settings-button { flex: 0 0 auto; }
+
+/* Code asset playground: compact editor panes with a separately sandboxed preview. */
+.code-asset-dialog { width: min(1120px, 96vw); }
+.code-playground { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.code-playground-toolbar, .code-playground-preview-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.code-playground-tabs { display: flex; gap: 5px; }
+.code-playground-tabs button { padding: 7px 12px; border: 1px solid var(--border,#30313a); border-radius: 6px; background: #101014; color: var(--muted,#92939f); font: 600 11px ui-monospace,monospace; cursor: pointer; }
+.code-playground-tabs button.active { border-color: var(--accent,#d5f36a); color: var(--accent,#d5f36a); background: rgba(213,243,106,.08); }
+.code-playground-editor { position: relative; display: block; min-height: 220px; overflow: hidden; border: 1px solid var(--border,#30313a); border-radius: 8px; background: #101014; }
+.code-playground-editor .code-highlight-layer, .code-playground-editor .code-editor-input { min-height: 220px; max-height: 38vh; }
+.code-playground-editor .code-highlight-layer { overflow: hidden; }
+.code-playground-preview-heading { margin-top: 4px; color: var(--muted,#92939f); font-size: 11px; }
+.code-playground-preview-heading strong { color: var(--text,#eeeef4); font-size: 12px; }
+.code-playground-preview { width: 100%; height: 280px; border: 1px solid var(--border,#30313a); border-radius: 8px; background: #080a12; }
+.syntax-tag { color: #8bd5ca; }
+.syntax-selector { color: #c6a0f6; }
+@media (min-width: 900px) { .code-playground-editor { min-height: 240px; } }
