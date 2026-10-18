@@ -32,7 +32,7 @@ describe("linked multi-track timeline operations", () => {
     });
     const trimmed = {
       ...state,
-      timelineClips: state.timelineClips.map(clip => ({ ...clip, sourceIn: 5, sourceOut: 13 }))
+      timelineClips: state.timelineClips.map(clip => ({ ...clip, sourceIn: 5, sourceOut: 13, volume: 0.8, fadeIn: 0.5, fadeOut: 0.75 }))
     };
     const split = splitTimelineClip(trimmed, "v", 6, {
       newClipId: "v-right", newLinkedAudioClipIds: ["a-right"]
@@ -41,6 +41,12 @@ describe("linked multi-track timeline operations", () => {
     expect(split.timelineClips.find(clip => clip.id === "v-right")).toMatchObject({ start: 6, duration: 4, sourceIn: 9, sourceOut: 13 });
     expect(split.timelineClips.find(clip => clip.id === "a")).toMatchObject({ start: 2, duration: 4, sourceIn: 5, sourceOut: 9, linkedVideoClipId: "v" });
     expect(split.timelineClips.find(clip => clip.id === "a-right")).toMatchObject({ start: 6, duration: 4, sourceIn: 9, sourceOut: 13, linkedVideoClipId: "v-right" });
+    expect(split.timelineClips.find(clip => clip.id === "v")).toMatchObject({ volume: 0.8, fadeIn: 0.5 });
+    expect(split.timelineClips.find(clip => clip.id === "v")?.fadeOut).toBeUndefined();
+    expect(split.timelineClips.find(clip => clip.id === "v-right")?.fadeIn).toBeUndefined();
+    expect(split.timelineClips.find(clip => clip.id === "v-right")).toMatchObject({ volume: 0.8, fadeOut: 0.75 });
+    expect(split.timelineClips.find(clip => clip.id === "a")?.fadeOut).toBeUndefined();
+    expect(split.timelineClips.find(clip => clip.id === "a-right")?.fadeIn).toBeUndefined();
     expect(() => moveTimelineClip(split, "v-right", 10)).not.toThrow();
   });
 
