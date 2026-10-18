@@ -816,7 +816,6 @@ describe("App history integration", () => {
     const after = persistedProject();
     const moved = after.timelineClips?.find(clip => clip.id === video.id)!;
     const movedAudio = after.timelineClips?.find(clip => clip.id === audio.id)!;
-    const timelineDuration = Math.max(10, getMasterTimelineDuration(before.shots), ...(before.timelineClips ?? []).map(clip => clip.start + clip.duration));
     const fps = before.frameRate;
     expect(moved.start * fps).toBeCloseTo(Math.round(moved.start * fps), 7);
     const sameTrackOverlaps = (after.timelineClips ?? []).filter(clip => clip.trackId === moved.trackId && clip.id !== moved.id && moved.start < clip.start + clip.duration - 1e-7 && moved.start + moved.duration > clip.start + 1e-7);
