@@ -569,6 +569,45 @@ describe("App history integration", () => {
     const expectedStart = Math.round(rawStart * dragProject.frameRate) / dragProject.frameRate;
     expect(afterDrop.shots[0].masterStart).toBeCloseTo(expectedStart, 7);
     expect(afterDrop.shots[0].slots[0].versions[0].duration).toBe(firstVersionDuration);
+
+    const beforeRipple = persistedProject();
+    const versionDurationsBeforeRipple = beforeRipple.shots.map(shot => shot.slots.map(slot => slot.versions.map(version => version.duration)));
+    const rippleToggle = container.querySelector<HTMLButtonElement>(".ripple-reorder-toggle");
+    expect(rippleToggle).toBeTruthy();
+    click(rippleToggle!);
+    await flushEffects();
+    expect(container.querySelector<HTMLButtonElement>(".ripple-reorder-toggle")?.getAttribute("aria-pressed")).toBe("true");
+    expect(container.querySelector(".ripple-mode-note")).toBeTruthy();
+
+    const rippleBlock = container.querySelector<HTMLButtonElement>(".master-shot-clip.selected");
+    const rippleLane = rippleBlock?.closest(".visual-track-lane") as HTMLDivElement | null;
+    expect(rippleBlock?.draggable).toBe(true);
+    expect(rippleLane).toBeTruthy();
+    Object.defineProperty(rippleLane!, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({ left: 0, top: 0, right: 100, bottom: 60, width: 100, height: 60, x: 0, y: 0, toJSON: () => ({}) })
+    });
+    const rippleValues = new Map<string, string>();
+    const rippleDataTransfer = {
+      setData: (type: string, value: string) => rippleValues.set(type, value),
+      getData: (type: string) => rippleValues.get(type) ?? "",
+      effectAllowed: "move"
+    };
+    const rippleDragStart = new Event("dragstart", { bubbles: true, cancelable: true });
+    Object.defineProperty(rippleDragStart, "dataTransfer", { value: rippleDataTransfer });
+    act(() => rippleBlock!.dispatchEvent(rippleDragStart));
+    const rippleDrop = new MouseEvent("drop", { bubbles: true, cancelable: true, clientX: 95 });
+    Object.defineProperty(rippleDrop, "dataTransfer", { value: rippleDataTransfer });
+    act(() => rippleLane!.dispatchEvent(rippleDrop));
+    await flushEffects();
+
+    const afterRipple = persistedProject();
+    const chronological = [...afterRipple.shots].sort((a, b) => (a.masterStart ?? 0) - (b.masterStart ?? 0));
+    expect(chronological.every(shot => typeof shot.masterStart === "number")).toBe(true);
+    chronological.slice(1).forEach((shot, index) => {
+      expect(shot.masterStart).toBeCloseTo((chronological[index].masterStart ?? 0) + chronological[index].duration, 7);
+    });
+    expect(afterRipple.shots.map(shot => shot.slots.map(slot => slot.versions.map(version => version.duration)))).toEqual(versionDurationsBeforeRipple);
   });
 
   it("opens nested Version tabs, adds a procedural layer, and keeps linked-audio mute/unlink independent", async () => {
