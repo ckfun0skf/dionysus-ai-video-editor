@@ -1,40 +1,30 @@
 # DYS-005 — Master and nested Timeline editing with Version management
 
 **Status:** In progress  
-**Progress estimate:** Reassess after implementation  
+**Progress estimate:** 55%  
 **Last updated:** 2026-10-18
 
 ## Goal
-Build one coherent Timeline workspace with a Master Timeline tab, editable Shot-Version timeline tabs, and a Version selector on each Master Shot.
+Provide the prototype-style Master Timeline with Shot Version selection and an in-workspace nested timeline for editing each Version.
 
-## Required interaction model
-- The preview stays above visible multi-layer lanes.
-- The default tab is Master Timeline. Editing a specific Shot Version opens a new tab for that Version and keeps Master Timeline available.
-- Each Master Shot block shows its active-Version thumbnail/placeholder, Shot label, and a dropdown/chevron.
-- The dropdown shows versions, offers + Add Version, and has an Edit action for every Version. Selecting a version changes the active output; Edit opens that Version's internal timeline.
-- No generic Media track. Media is an asset library/source concept, not a timeline layer.
-- Version internals contain ordered video/image, text, audio, and procedural Three.js modules. The Master Shot's placement/duration stays independent from internal Version timing.
-- Timeline edits are non-destructive and integrated with Undo/Redo.
+## Implemented
+- [x] Preserve multiple Versions and switch the active Version independently for each Slot.
+- [x] Show Master Shot blocks by default, including a thumbnail when available and an explicit placeholder otherwise.
+- [x] Version dropdown supports active Version selection, **+ Add Version**, and **Edit** on each Version.
+- [x] Master Timeline and nested Shot-Version timelines live in separate tabs within the Timeline workspace.
+- [x] Nested Version Timeline displays typed layer rows for video, image, audio, text, and procedural/Three.js modules.
+- [x] Replace the ambiguous visible “Media track” heading with “Timeline layers.”
+- [ ] Fully separate master Shot placement/persistence from the media clip-placement model and add frame-accurate timing/trim.
+- [ ] Complete nested module Inspector editing, source binding, ordering/reordering, and media thumbnail extraction.
+- [ ] Expand project JSON round-trip and Undo/Redo coverage for all nested relationships.
 
-## Scope
-- [x] Select a Clip Slot / timeline item and switch the active Version.
-- [x] Preserve existing Versions when creating a new Version.
-- [ ] Separate Master Shot placement/duration from Version-internal timing in the model and UI.
-- [ ] Add Master Timeline + nested Version timeline tabs.
-- [ ] Add per-Shot thumbnail/version dropdown with + Add Version and per-Version Edit.
-- [ ] Make visible track/layer lanes authoritative; remove generic Media-track presentation.
-- [ ] Support nested composition depth/cycle protection and explicit fixed-duration, auto-extend, and ripple operations.
-- [ ] Preserve Version selection, layer order, and nested data through project JSON round-trip and Undo/Redo.
+## Validation
+- CI run [#39117698570](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39117698570): 64 tests passed across 7 files, TypeScript check and production build passed, and npm audit reported 0 vulnerabilities.
+- App integration tests cover opening/closing the nested Version tab, active Version operations, adding a procedural module, and returning to Master Timeline.
+- Automated browser smoke tests were not run or added.
 
-## Acceptance criteria
-- Master Timeline remains open while any Shot-Version timeline is open in another tab.
-- Adding a Version never overwrites existing Versions; choosing a Version updates only that Shot's active Version.
-- The Shot block shows an actual thumbnail when one exists and a neutral placeholder otherwise.
-- Project JSON preserves active-Version selection and nested Version data.
-- Unit/integration tests cover the model and project-state behavior; CI test and build pass.
-- Do not add automated browser smoke tests unless explicitly requested by the user.
-
-## Related specs
-- [Creative Editing Workflow](../creative-editing-workflow-spec.md)
+## Related files
+- [Creative Editing Workflow Specification](../creative-editing-workflow-spec.md)
+- [Task detail page](./timeline-and-versions.html)
 - [Completion report](../reports/timeline-and-versions-report.md)
 - [Task dashboard](../task.html)
