@@ -4,7 +4,7 @@ import { sampleProject } from "./sampleProject";
 import type { Asset, AssetKind, ClipVersion, CompositionLayer, DionysusProject, ReferenceProfile, ReferenceRole, Shot, TimelineClip } from "./types";
 import { validateProject } from "./projectValidation";
 import { t } from "./i18n";
-import { addVideoClip, duplicateTimelineClip, moveTimelineClip, splitTimelineClip, trimTimelineClip, unlinkTimelineAudio, deleteTimelineClip } from "./timelineOperations";
+import { duplicateTimelineClip, moveTimelineClip, splitTimelineClip, trimTimelineClip, unlinkTimelineAudio, deleteTimelineClip } from "./timelineOperations";
 import { recordProjectChange, undoProjectChange as undoHistory, redoProjectChange as redoHistory } from "./projectHistory";
 import { collectCompositionLayers, renderCompositionFrame, exportCompositionWebM, downloadExport } from "./compositionRenderer";
 import AIGenerationPanel from "./AIGenerationPanel";
@@ -155,7 +155,6 @@ export default function App() {
   const selected = project.shots.find(s => s.id === selectedId) ?? project.shots[0];
   const runtime = useMemo(() => Math.max(getMasterTimelineDuration(project.shots), ...(project.timelineClips ?? []).map(clip => clip.start + clip.duration)), [project.shots, project.timelineClips]);
   const mediaTimelineDuration = useMemo(() => Math.max(runtime, 10, ...(project.timelineClips ?? []).map(clip => clip.start + clip.duration)), [runtime, project.timelineClips]);
-  const selectedTimelineClip = (project.timelineClips ?? []).find(clip => clip.id === selectedTimelineClipId);
   const activeVersionTimelineTab = timelineTabs.find(tab => tab.id === activeTimelineTabId);
   const activeVersionTimelineShot = activeVersionTimelineTab ? project.shots.find(shot => shot.id === activeVersionTimelineTab.shotId) : undefined;
   const activeVersionTimelineSlot = activeVersionTimelineTab ? activeVersionTimelineShot?.slots.find(slot => slot.id === activeVersionTimelineTab.slotId) : undefined;
@@ -794,29 +793,6 @@ export default function App() {
     }));
   }
 
-  function addMasterLayerClip(kind: "text" | "procedural") {
-    const track = project.tracks.find(item => item.kind === kind);
-    const trackId = track?.id ?? id("track-" + kind);
-    const newTrack = track ?? { id: trackId, name: kind === "text" ? "Titles" : "Code", kind };
-    const start = Math.max(0, Math.min(editorTime, Math.max(0, mediaTimelineDuration - 0.1)));
-    const clip: TimelineClip = {
-      id: id("timeline-" + kind),
-      name: kind === "text" ? "Text clip" : "Code clip",
-      kind, trackId, start,
-      duration: Math.max(0.1, Math.min(3, mediaTimelineDuration - start))
-    };
-    change(p => ({
-      ...p,
-      tracks: p.tracks.some(item => item.id === trackId) ? p.tracks : [...p.tracks, newTrack],
-      timelineClips: [...(p.timelineClips ?? []), clip]
-    }));
-    setSelectedTimelineClipId(clip.id);
-    setIsPlaying(false);
-    setNotice(kind === "text"
-      ? "Text clip added. Right-click it and choose Settings to edit."
-      : "Code clip block added. Assign a script asset and pinned script-version ID; procedural output is not rendered by the current compositor.");
-  }
-
   function toggleShotReferenceProfile(shotId: string, profileId: string, checked: boolean) {
     const shot = project.shots.find(item => item.id === shotId);
     if (!shot) return;
@@ -1141,7 +1117,6 @@ export default function App() {
      const pointerTime=((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration;
      const rawStart=Math.max(0,pointerTime-moving.duration/2);
      const snappedStart=Math.round(rawStart*fps)/fps;
-     const maxStart=Math.max(0,Math.floor((mediaTimelineDuration-moving.duration)*fps)/fps);
      const next=clipDropPreview?.trackId===track.id?clipDropPreview.start:findNonOverlappingClipStart(project.timelineClips??[],moving.id,track.id,snappedStart,moving.duration,mediaTimelineDuration,fps);
      try{change(p=>{const result=moveTimelineClip({tracks:p.tracks,timelineClips:p.timelineClips??[]},moving.id,next);return {...p,timelineClips:result.timelineClips.map(clip=>clip.id===moving.id?{...clip,trackId:track.id}:clip)};});setSelectedTimelineClipId(moving.id);setSelectedTimelineTrackId(track.id);setIsPlaying(false);setNotice("Clip snapped into a non-overlapping position.");}catch(error){setNotice(error instanceof Error?error.message:"Could not move the clip.");}finally{clipDragSourceRef.current=null;setClipDropPreview(null);}
    }}>
@@ -1340,7 +1315,7 @@ export default function App() {
       <button onClick={()=>{try{change(p=>({...p,timelineClips:moveTimelineClip({tracks:p.tracks,timelineClips:p.timelineClips??[]},clip.id,clip.start+.5).timelineClips}));}catch(error){setNotice(error instanceof Error?error.message:"Move failed.");}}}>+0.5s</button>
       <button onClick={()=>{try{change(p=>({...p,timelineClips:trimTimelineClip({tracks:p.tracks,timelineClips:p.timelineClips??[]},clip.id,Math.max(.1,clip.duration-.5)).timelineClips}));}catch(error){setNotice(error instanceof Error?error.message:"Trim failed.");}}}>Trim −0.5s</button>
       <button onClick={()=>{const fps=Math.max(1,project.frameRate||24),frame=1/fps,splitAt=Math.round((clip.start+clip.duration/2)*fps)/fps;if(clip.duration<frame*2)return;const newClipId=id("timeline-clip");const linked=(project.timelineClips??[]).filter(item=>item.kind==="audio"&&item.linkedVideoClipId===clip.id);try{change(p=>({...p,timelineClips:splitTimelineClip({tracks:p.tracks,timelineClips:p.timelineClips??[]},clip.id,Math.min(clip.start+clip.duration-frame,Math.max(clip.start+frame,splitAt)),{newClipId,...(linked.length?{newLinkedAudioClipIds:linked.map(()=>id("timeline-audio"))}:{})}).timelineClips}));setSelectedTimelineClipId(newClipId);setTimelineClipSettingsId(newClipId);}catch(error){setNotice(error instanceof Error?error.message:"Split failed.");}}}>Split at midpoint</button>
-      <button disabled={Math.round(editorTime*Math.max(1,project.frameRate||24))/Math.max(1,project.frameRate||24)<=clip.start||Math.round(editorTime*Math.max(1,project.frameRate||24))/Math.max(1,project.frameRate||24)>=clip.start+clip.duration} onClick={()=>{const fps=Math.max(1,project.frameRate||24),frame=1/fps,splitAt=Math.round(editorTime*fps)/fps;if(splitAt<=clip.start||splitAt>=clip.start+clip.duration)return;const newClipId=id("timeline-clip");const linked=(project.timelineClips??[]).filter(item=>item.kind==="audio"&&item.linkedVideoClipId===clip.id);try{change(p=>({...p,timelineClips:splitTimelineClip({tracks:p.tracks,timelineClips:p.timelineClips??[]},clip.id,splitAt,{newClipId,...(linked.length?{newLinkedAudioClipIds:linked.map(()=>id("timeline-audio"))}:{})}).timelineClips}));setSelectedTimelineClipId(newClipId);setTimelineClipSettingsId(newClipId);}catch(error){setNotice(error instanceof Error?error.message:"Split failed.");}}}>Split at playhead</button>
+      <button disabled={Math.round(editorTime*Math.max(1,project.frameRate||24))/Math.max(1,project.frameRate||24)<=clip.start||Math.round(editorTime*Math.max(1,project.frameRate||24))/Math.max(1,project.frameRate||24)>=clip.start+clip.duration} onClick={()=>{const fps=Math.max(1,project.frameRate||24),splitAt=Math.round(editorTime*fps)/fps;if(splitAt<=clip.start||splitAt>=clip.start+clip.duration)return;const newClipId=id("timeline-clip");const linked=(project.timelineClips??[]).filter(item=>item.kind==="audio"&&item.linkedVideoClipId===clip.id);try{change(p=>({...p,timelineClips:splitTimelineClip({tracks:p.tracks,timelineClips:p.timelineClips??[]},clip.id,splitAt,{newClipId,...(linked.length?{newLinkedAudioClipIds:linked.map(()=>id("timeline-audio"))}:{})}).timelineClips}));setSelectedTimelineClipId(newClipId);setTimelineClipSettingsId(newClipId);}catch(error){setNotice(error instanceof Error?error.message:"Split failed.");}}}>Split at playhead</button>
 
       <button onClick={()=>{const newClipId=id("timeline-clip");try{change(p=>({...p,timelineClips:duplicateTimelineClip({tracks:p.tracks,timelineClips:p.timelineClips??[]},clip.id,{newClipId,start:clip.start+clip.duration,...(clip.kind==="video"&&(p.timelineClips??[]).some(item=>item.kind==="audio"&&item.linkedVideoClipId===clip.id)?{newAudioClipId:id("timeline-audio")}:{})}).timelineClips}));setSelectedTimelineClipId(newClipId);setTimelineClipSettingsId(newClipId);}catch(error){setNotice(error instanceof Error?error.message:"Duplicate failed.");}}}>Duplicate clip</button>
       {clip.kind==="audio"&&clip.linkedVideoClipId&&<button onClick={()=>{try{change(p=>({...p,timelineClips:unlinkTimelineAudio({tracks:p.tracks,timelineClips:p.timelineClips??[]},clip.id).timelineClips}));}catch(error){setNotice(error instanceof Error?error.message:"Unlink failed.");}}}>Unlink audio</button>}
