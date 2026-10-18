@@ -42,7 +42,7 @@ describe("compositionRenderer", () => {
       start: 0, duration: 4, assetId: "video-asset", sourceIn: 1.5, sourceOut: 6, shortSourceBehavior: "loop"
     }];
     const layers = collectCompositionLayers(project);
-    expect(layers).toHaveLength(1);
+    expect(layers).toHaveLength(2);
     expect(layers[0]).toMatchObject({ id: "audio-clip", kind: "audio", start: 2, duration: 4, assetId: "audio-asset", muted: true, volume: 0.4, fadeIn: 0.5, fadeOut: 1 });
     expect(layers.find(layer => layer.id === "master-video-clip")).toMatchObject({ sourceIn: 1.5, sourceOut: 6, shortSourceBehavior: "loop" });
   });
