@@ -1158,7 +1158,9 @@ describe("Integrated timeline editor", () => {
     const over=new Event("dragover",{bubbles:true,cancelable:true});Object.defineProperties(over,{dataTransfer:{value:dt},clientX:{value:1200*2.5/15}});act(()=>lane!.dispatchEvent(over));await flushEffects();
     expect(container.querySelector(".clip-drop-preview")).toBeTruthy();expect(container.querySelector(".timeline-snap-guide")).toBeTruthy();
     const drop=new Event("drop",{bubbles:true,cancelable:true});Object.defineProperties(drop,{dataTransfer:{value:dt},clientX:{value:1200*2.5/15}});act(()=>lane!.dispatchEvent(drop));await flushEffects();
-    const current=persistedProject(),moved=current.timelineClips!.find(clip=>clip.id===video.id)!;expect(moved.trackId).toBe(targetTrack.id);expect(moved.start).toBe(0);
+    const previewText=container.querySelector(".clip-drop-preview")?.textContent??"";expect(previewText).toContain("Video clip 1");
+    const current=persistedProject(),moved=current.timelineClips!.find(clip=>clip.id===video.id)!;expect(moved.trackId).toBe(targetTrack.id);expect(moved.start*current.frameRate).toBeCloseTo(Math.round(moved.start*current.frameRate),7);
+    const overlaps=current.timelineClips!.filter(clip=>clip.id!==moved.id&&clip.trackId===moved.trackId&&moved.start<clip.start+clip.duration-1e-7&&moved.start+moved.duration>clip.start+1e-7);expect(overlaps).toHaveLength(0);
     const audio=current.timelineClips!.find(clip=>clip.linkedVideoClipId===moved.id)!;expect(audio.start).toBe(moved.start);expect(audio.duration).toBe(moved.duration);
   });
   it("previews resize overlap, trims the adjacent clip on release, and restores both with one Undo", async () => {
