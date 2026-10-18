@@ -54,7 +54,7 @@ describe("Clip Asset reference graph", () => {
   });
 
   it("filters the current Clip and descendants that would create a loop", () => {
-    const assets = [clipAsset("A", ["B"]), clipAsset("B"), clipAsset("C")];
+    const assets = [clipAsset("A"), clipAsset("B", ["A"]), clipAsset("C")];
     expect(getAllowedChildClipAssets(assets, "A").map(asset => asset.id).sort()).toEqual(["C"]);
   });
 
