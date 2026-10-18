@@ -186,7 +186,7 @@
           "id": "DYS-005",
           "title": "Timeline editing and Version management",
           "status": "in_progress",
-          "progress": 90,
+          "progress": 92,
           "summary": "Master Timeline with visible typed layers, per-Shot active-Version dropdown (+ Add Version/Edit), nested Version timeline tabs, and separate master placement vs Version-internal timing.",
           "doc": "tasks/timeline-and-versions.md",
           "detail": "tasks/timeline-and-versions.html",
@@ -230,14 +230,14 @@
             "Unit/integration tests and production build pass; no automated browser smoke test is added unless explicitly requested"
           ],
           "evidence": [
-            "Master Shot uses optional absolute masterStart with legacy sequential fallback; free placement snaps to frames and warns about overlaps.",
-            "Explicit Ripple Reorder packs Shots chronologically without gaps and preserves all Shot and Version durations.",
-            "Nested Version duration, module timing, source in/out, drag placement, layer ordering, and composition z-order have regression coverage.",
-            "Master Timeline clips support midpoint split; video and linked audio split as aligned pairs preserving source ranges and keeping fade-in/fade-out boundaries on the correct segment.",
-            "Compact local thumbnails are attempted for imported image/video and AI-generated images; decode failures leave placeholders.",
-            "CI run 39122166170: 87 tests pass across 10 files; TypeScript/production build pass; npm audit reports 0 vulnerabilities."
+            "Master Shot uses optional absolute masterStart with legacy sequential fallback; free placement snaps to frames, warns on overlaps, and Ripple Reorder packs the sequence without changing durations.",
+            "Nested Version duration, module timing/source in/out, frame-snapped movement, explicit layer order, and compositor stacking order have regression coverage.",
+            "Master clips support midpoint split; video and linked audio split as aligned pairs, including legacy clips with implicit source ranges. Source offsets stay contiguous and fade-in/out stay on the correct side of the split.",
+            "Trim operations synchronize explicit sourceOut to the new duration and clamp fade values to prevent invalid project data.",
+            "Compact local thumbnails are attempted for imported image/video and AI-generated images; decode failure leaves a placeholder.",
+            "CI run 39122750551: 90 tests pass across 10 files; TypeScript/production build pass; npm audit reports 0 vulnerabilities."
           ],
-          "notes": "Implemented the prototype-aligned timing/editing foundation, source trim and midpoint split, and local thumbnail extraction. Remaining work is richer preview/source relinking and full JSON/Undo-Redo coverage of every nested relationship. Draft PR #39 is not merged; browser smoke tests were not run."
+          "notes": "The prototype-aligned timeline now covers absolute placement, free and ripple modes, nested source trim, frame-snapped split, local thumbnails, and per-layer audio mix. Remaining work is full JSON/Undo-Redo coverage of every relationship and richer source relinking/preview. Draft PR #39 remains unmerged; no browser smoke tests were run."
         },
         {
           "id": "DYS-011",
@@ -343,7 +343,7 @@
           "id": "DYS-008",
           "title": "Advanced audio and procedural layers",
           "status": "in_progress",
-          "progress": 55,
+          "progress": 60,
           "summary": "Support per-Audio-Layer mute/mixing, timed text, and first-class Three.js/procedural timeline layers with pinned script versions and explicit execution permission.",
           "doc": "tasks/audio-and-procedural-modules.md",
           "detail": "tasks/audio-and-procedural-modules.html",
@@ -382,12 +382,12 @@
             "UI states clearly distinguish layer data, preview capability, and final render support"
           ],
           "evidence": [
-            "Independent track/clip mute and per-audio-layer volume, fade-in, and fade-out controls are persisted in Master and nested Version timelines.",
-            "Live playback and WebM export share the same normalized gain/fade envelope; export schedules per-layer Web Audio gain curves.",
-            "Source in/out is editable on nested video/audio modules; splitting a video keeps its linked audio aligned and carries source/fade boundaries to the correct split segments.",
-            "CI run 39122166170: 87 tests pass across 10 files; TypeScript/production build pass; npm audit reports 0 vulnerabilities."
+            "Independent track/clip mute and per-Audio-Layer volume, fade-in, and fade-out controls persist in Master and nested Version timelines.",
+            "Live playback and WebM export share the same normalized gain/fade envelope; WebM export schedules per-layer Web Audio gain curves.",
+            "Source in/out trim and split operations keep A/V relationships and source offsets consistent, clamp fade boundaries when durations change, and preserve JSON round-trips.",
+            "CI run 39122750551: 90 tests pass across 10 files; TypeScript/production build pass; npm audit reports 0 vulnerabilities."
           ],
-          "notes": "Per-layer mute, volume/fades, source trim, and linked A/V split are implemented. Audio automation/ducking/effects, rich timed text, and safe/authorized procedural execution/rendering remain outstanding."
+          "notes": "Per-layer mute, volume/fades, source trim, linked A/V split, source-range preservation, and fade clamping are implemented. Audio automation/ducking/effects, richer timed text, and safe/authorized procedural execution/rendering remain outstanding."
         },
         {
           "id": "DYS-012",
