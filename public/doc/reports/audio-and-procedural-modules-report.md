@@ -19,7 +19,7 @@
 - Composition data collection includes procedural blocks as typed layers but intentionally does not execute or render their code.
 
 ## Validation
-- CI run [#39122750551](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39122750551): 90 tests across 10 files, TypeScript and production build all passed; npm audit reported 0 vulnerabilities.
+- CI run [#39124022295](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39124022295): 93 tests across 10 files, TypeScript and production build all passed; npm audit reported 0 vulnerabilities.
 - Automated browser smoke tests were not run or added.
 
 ## Remaining limitations
