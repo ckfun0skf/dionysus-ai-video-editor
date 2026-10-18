@@ -53,6 +53,16 @@ describe("validateProject", () => {
     expect(validateProject(project)).toBe(true);
   });
 
+  it("accepts text and procedural Master Timeline blocks on their typed tracks", () => {
+    const project = structuredClone(sampleProject);
+    project.tracks.push({ id: "track-procedural-test", name: "Three.js", kind: "procedural" });
+    project.timelineClips = [
+      { id: "text-block", name: "Subtitle Block", kind: "text", trackId: "track-text-1", start: 1, duration: 2 },
+      { id: "procedural-block", name: "Three.js Module", kind: "procedural", trackId: "track-procedural-test", start: 0, duration: 3, scriptVersionId: "script-version-1" }
+    ];
+    expect(validateProject(project)).toBe(true);
+  });
+
   it("rejects Master Timeline clips with stale Shot or Slot links", () => {
     const project = structuredClone(sampleProject);
     project.timelineClips = [{
