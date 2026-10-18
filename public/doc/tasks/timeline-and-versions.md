@@ -1,7 +1,7 @@
 # DYS-005 — Master and nested Timeline editing with Version management
 
 **Status:** In progress  
-**Progress estimate:** 92%  
+**Progress estimate:** 93%  
 **Last updated:** 2026-10-18
 
 ## Goal
@@ -26,13 +26,14 @@ Provide the prototype-style Master Timeline with Shot Version selection, an in-w
 - [x] Show an Inspector warning when free-positioned Master Shots overlap.
 - [x] Expose source in/out controls for nested Video/Audio modules; source range changes update that module duration only.
 - [x] Split Master Timeline clips at the midpoint with frame snapping. A video split creates matching linked-audio segments, materializes default source ranges, preserves contiguous source in/out, and keeps fade-in on the first segment and fade-out on the second.
+- [x] Duplicate a clip after the original. Duplicating a video copies its linked source audio into a new aligned pair and preserves audio volume/fades.
 - [x] Keep `sourceOut` synchronized when trimming and clamp fade values when a clip becomes shorter.
 - [x] Round-trip Master placement, nested layer order/source ranges/audio mix settings, linked audio, mute state, and saved thumbnail references through project JSON validation.
 - [ ] Expand source media preview/relink controls and comprehensive JSON/Undo-Redo round-trip coverage for every nested relationship.
 - [ ] Expand project JSON round-trip and Undo/Redo coverage for all nested relationships and placement edits.
 
 ## Validation
-- CI run [#39122750551](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39122750551): 90 tests passed across 10 files, TypeScript check and production build passed, and npm audit reported 0 vulnerabilities.
+- CI run [#39123087834](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39123087834): 91 tests passed across 10 files, TypeScript check and production build passed, and npm audit reported 0 vulnerabilities.
 - Regression coverage checks legacy sequential fallback, independent Shot movement/duration, independent Version duration, module start/duration, frame-snapped drag placement, layer reordering, absolute offsets in composition collection, thumbnail extraction/URL fallbacks, and split source/fade-boundary integrity, source-range materialization for untrimmed inputs, duration/fade clamping, and composite JSON round-trip state.
 - Automated browser smoke tests were not run or added.
 
