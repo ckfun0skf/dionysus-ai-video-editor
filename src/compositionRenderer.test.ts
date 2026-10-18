@@ -58,6 +58,31 @@ describe("compositionRenderer", () => {
     expect(layers).toContainEqual(expect.objectContaining({ id: "threejs-block", kind: "procedural", scriptVersionId: "script-version-1", html: "<canvas></canvas>", css: "canvas{width:100%}", code: "console.log(1)" }));
   });
 
+  it("expands reusable clip assets into multiple timed layers and repeats them when requested", () => {
+    const project = structuredClone(sampleProject);
+    project.assets.push({
+      id: "reusable-clip", name: "Code and audio bumper", kind: "clip", selectedClipVersionId: "clip-v1",
+      clipVersions: [{
+        id: "clip-v1", name: "Version A", description: "", duration: 3,
+        layers: [
+          { id: "code-layer", name: "Particle animation", kind: "procedural", start: 0, duration: 3, html: "<canvas></canvas>", css: "", code: "render()" },
+          { id: "audio-layer", name: "Sound bed", kind: "audio", start: 0.5, duration: 2.5, assetId: "audio-inside-clip", volume: 0.7 }
+        ],
+        scriptVersionIds: [], generationRecords: []
+      }]
+    });
+    project.assets.push({ id: "audio-inside-clip", name: "Sound bed", kind: "audio", path: "data:audio/wav;base64,AA==" });
+    project.timelineClips = [{
+      id: "clip-instance", name: "Bumper", kind: "clip", trackId: "track-video-1",
+      start: 4, duration: 6, assetId: "reusable-clip", shortSourceBehavior: "loop"
+    }];
+    const layers = collectCompositionLayers(project);
+    expect(layers).toHaveLength(4);
+    expect(layers.map(layer => layer.start).sort((a, b) => a - b)).toEqual([4, 4.5, 7, 7.5]);
+    expect(layers.filter(layer => layer.kind === "procedural")).toHaveLength(2);
+    expect(layers.filter(layer => layer.kind === "audio").every(layer => layer.assetId === "audio-inside-clip")).toBe(true);
+  });
+
   it("calculates output duration from the last visible layer end", () => {
     expect(getCompositionDuration([
       { id: "a", name: "a", kind: "image", start: 0, duration: 3 },
