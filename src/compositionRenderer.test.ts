@@ -38,13 +38,13 @@ describe("compositionRenderer", () => {
       id: "audio-clip", name: "Music bed", kind: "audio", trackId: "track-audio-1",
       start: 2, duration: 4, assetId: "audio-asset", sourceIn: 0, sourceOut: 4, muted: true, volume: 0.4, fadeIn: 0.5, fadeOut: 1
     }, {
-      id: "storyboard-shot-slot-layer", name: "Synced storyboard copy", kind: "video", trackId: "track-video-1",
+      id: "master-video-clip", name: "Master video clip", kind: "video", trackId: "track-video-1",
       start: 0, duration: 4, assetId: "video-asset", sourceIn: 1.5, sourceOut: 6, shortSourceBehavior: "loop"
     }];
     const layers = collectCompositionLayers(project);
     expect(layers).toHaveLength(1);
     expect(layers[0]).toMatchObject({ id: "audio-clip", kind: "audio", start: 2, duration: 4, assetId: "audio-asset", muted: true, volume: 0.4, fadeIn: 0.5, fadeOut: 1 });
-    expect(layers.find(layer => layer.id === "storyboard-shot-slot-layer")).toMatchObject({ sourceIn: 1.5, sourceOut: 6, shortSourceBehavior: "loop" });
+    expect(layers.find(layer => layer.id === "master-video-clip")).toMatchObject({ sourceIn: 1.5, sourceOut: 6, shortSourceBehavior: "loop" });
   });
 
   it("includes source-free Text blocks and procedural blocks, without pretending to render procedural code", () => {
