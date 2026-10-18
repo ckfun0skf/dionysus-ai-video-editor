@@ -51,6 +51,13 @@ async function flushEffects() {
   await act(async () => { await Promise.resolve(); });
 }
 
+async function openTimelineView() {
+  const nav = Array.from(container.querySelectorAll<HTMLButtonElement>(".nav-item")).find(button => button.textContent?.includes("Timeline"));
+  if (!nav) throw new Error("Timeline navigation is missing");
+  if (!nav.classList.contains("active")) click(nav);
+  await flushEffects();
+}
+
 beforeEach(() => {
   originalCreateObjectURL = Object.getOwnPropertyDescriptor(URL, "createObjectURL");
   originalRevokeObjectURL = Object.getOwnPropertyDescriptor(URL, "revokeObjectURL");
@@ -106,6 +113,7 @@ describe("App history integration", () => {
   });
 
   it("handles rapid timeline edits atomically and keeps linked audio in persisted state", async () => {
+    await openTimelineView();
     const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Add linked video/audio"));
     expect(add).toBeTruthy();
     click(add as HTMLButtonElement);
@@ -128,6 +136,7 @@ describe("App history integration", () => {
   });
 
   it("supports Undo/Redo buttons and Ctrl/Cmd+Z keyboard shortcuts", async () => {
+    await openTimelineView();
     const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Add linked video/audio")) as HTMLButtonElement;
     click(add);
     await flushEffects();
@@ -154,6 +163,7 @@ describe("App history integration", () => {
   });
 
   it("clears Undo/Redo history after importing a valid project", async () => {
+    await openTimelineView();
     const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Add linked video/audio")) as HTMLButtonElement;
     click(add);
     await flushEffects();
@@ -179,6 +189,7 @@ describe("App history integration", () => {
   });
 
   it("clears redo when a new timeline operation follows Undo", async () => {
+    await openTimelineView();
     const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Add linked video/audio")) as HTMLButtonElement;
     click(add);
     await flushEffects();
@@ -194,6 +205,7 @@ describe("App history integration", () => {
   });
 
   it("restores linked timeline state after an App unmount/remount from localStorage", async () => {
+    await openTimelineView();
     const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Add linked video/audio")) as HTMLButtonElement;
     click(add);
     await flushEffects();
@@ -215,6 +227,7 @@ describe("App history integration", () => {
   });
 
   it("round-trips linked timeline metadata through actual project export and import", async () => {
+    await openTimelineView();
     const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Add linked video/audio")) as HTMLButtonElement;
     click(add);
     await flushEffects();
@@ -276,6 +289,7 @@ describe("App history integration", () => {
   });
 
   it("exports the current project as JSON including linked timeline metadata", async () => {
+    await openTimelineView();
     const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Add linked video/audio")) as HTMLButtonElement;
     click(add);
     await flushEffects();
@@ -302,6 +316,7 @@ describe("App history integration", () => {
   });
 
   it("does not overwrite the current project when import JSON is invalid", async () => {
+    await openTimelineView();
     const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Add linked video/audio")) as HTMLButtonElement;
     click(add);
     await flushEffects();
@@ -324,6 +339,7 @@ describe("App history integration", () => {
 
 
   it("unlinks audio in the App, edits it independently, and restores the link through Undo/Redo", async () => {
+    await openTimelineView();
     const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Add linked video/audio")) as HTMLButtonElement;
     click(add);
     await flushEffects();
@@ -365,6 +381,7 @@ describe("App history integration", () => {
   });
 
   it("deletes linked video and audio together and restores both through Undo/Redo", async () => {
+    await openTimelineView();
     const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Add linked video/audio")) as HTMLButtonElement;
     click(add);
     await flushEffects();
@@ -391,6 +408,7 @@ describe("App history integration", () => {
   });
 
   it("deletes only a linked audio clip from the App and restores it through Undo/Redo", async () => {
+    await openTimelineView();
     const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Add linked video/audio")) as HTMLButtonElement;
     click(add);
     await flushEffects();
@@ -419,6 +437,7 @@ describe("App history integration", () => {
   });
 
   it("moves and trims linked audio through the App and restores both clips with Undo/Redo", async () => {
+    await openTimelineView();
     const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Add linked video/audio")) as HTMLButtonElement;
     click(add);
     await flushEffects();
@@ -474,8 +493,13 @@ describe("App history integration", () => {
   });
 
   it("generates timeline clips from storyboard slots without deleting manual clips", async () => {
+    await openTimelineView();
     const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Add linked video/audio")) as HTMLButtonElement;
     click(add);
+    await flushEffects();
+    const storyboardNav = Array.from(container.querySelectorAll<HTMLButtonElement>(".nav-item")).find(button => button.textContent?.includes("Storyboard"));
+    expect(storyboardNav).toBeTruthy();
+    click(storyboardNav!);
     await flushEffects();
     const sync = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Generate / update timeline"));
     expect(sync).toBeTruthy();
@@ -521,12 +545,31 @@ describe("App history integration", () => {
 
 
 describe("Timeline preview", () => {
-  it("tracks the current playhead time in the preview", () => {
-    const canvas = container.querySelector<HTMLCanvasElement>(".editor-preview-canvas");
-    const ruler = container.querySelector<HTMLElement>('.editor-ruler-marks[role="slider"]');
+  it("tracks the current playhead time in the preview", async () => {
+    await openTimelineView();
+    const canvas = container.querySelector<HTMLCanvasElement>(".integrated-preview-frame canvas");
+    const playhead = container.querySelector<HTMLInputElement>('input[aria-label="Timeline playhead time"]');
     expect(canvas?.getAttribute("aria-label")).toBe("Timeline preview at 00:00.00");
-    expect(ruler).toBeTruthy();
-    act(() => ruler!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })));
+    expect(playhead).toBeTruthy();
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      setter?.call(playhead!, "0.5");
+      playhead!.dispatchEvent(new Event("input", { bubbles: true }));
+      playhead!.dispatchEvent(new Event("change", { bubbles: true }));
+    });
     expect(canvas?.getAttribute("aria-label")).toBe("Timeline preview at 00:00.50");
+  });
+});
+
+
+describe("Integrated timeline editor", () => {
+  it("shows preview in the timeline workspace and provides playback controls", async () => {
+    const timelineNav = Array.from(container.querySelectorAll<HTMLButtonElement>(".nav-item")).find(button => button.textContent?.includes("Timeline"));
+    expect(timelineNav).toBeTruthy();
+    click(timelineNav!);
+    await flushEffects();
+    expect(container.querySelector(".integrated-preview-panel")).toBeTruthy();
+    expect(container.querySelector(".integrated-preview-frame canvas")).toBeTruthy();
+    expect(buttonsNamed("Play preview").length).toBeGreaterThan(0);
   });
 });
