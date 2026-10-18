@@ -256,12 +256,16 @@ export function validateProject(value: unknown): value is DionysusProject {
     for (const version of versions) {
       for (const layer of version.layers as UnknownRecord[]) {
         if (layer.assetId !== undefined && !assetIds.has(layer.assetId as string)) return false;
+        const sourceAsset = layer.assetId === undefined ? undefined : assets.find(candidate => candidate.id === layer.assetId);
+        if (sourceAsset?.kind === "clip" && layer.kind !== "composition") return false;
         if (layer.referencedImageAssetIds !== undefined) {
+          if (layer.kind !== "procedural" && layer.kind !== "script") return false;
           for (const referencedId of layer.referencedImageAssetIds as string[]) {
             if (!assets.some(candidate => candidate.id === referencedId && candidate.kind === "image")) return false;
           }
         }
         if (layer.childCompositionId !== undefined) {
+          if (layer.kind !== "composition") return false;
           const child = assets.find(candidate => candidate.id === layer.childCompositionId);
           if (!child || child.kind !== "clip") return false;
           if (layer.clipVersionId !== undefined &&
