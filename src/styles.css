@@ -1370,3 +1370,12 @@
 .track-layer-mute{flex:0 0 auto;padding:4px 6px;border:1px solid #41404c;border-radius:4px;background:#29252f;color:#e6d4ff;font-size:9px;cursor:pointer}
 .track-layer-mute[aria-pressed=true]{border-color:#b36370;background:#4b252d;color:#ffe0e4}
 .track-layer-mute:hover{filter:brightness(1.18)}
+
+.nested-version-duration{display:flex;align-items:center;gap:7px;margin-left:8px;padding:5px 8px;border:1px solid var(--border,#30313a);border-radius:6px;color:var(--muted,#a4a5b1);font-size:10px;white-space:nowrap}
+.nested-version-duration span{display:inline-flex;align-items:center;gap:4px}
+.nested-version-duration input{width:64px;padding:4px 5px;border:1px solid var(--border,#30313a);border-radius:4px;background:#0f1117;color:#f1f4fa;font:inherit}
+.nested-layer-timing{margin:8px 0}
+.nested-timeline-clip{cursor:grab;user-select:none}
+.nested-timeline-clip:active{cursor:grabbing}
+.nested-timeline-warning{padding:8px 10px;border:1px solid #725b32;border-radius:6px;background:rgba(92,67,21,.17);color:#e6cb91;font-size:10px}
+@media(max-width:760px){.nested-version-duration{margin-left:0}}
