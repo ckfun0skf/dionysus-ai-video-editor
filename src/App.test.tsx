@@ -522,6 +522,15 @@ describe("App history integration", () => {
     expect(moved.shots[0].slots[0].versions[0].duration).toBe(firstVersionDuration);
     expect(container.querySelector<HTMLInputElement>('input[aria-label="Master Shot start time"]')?.value).toBe("16.25");
 
+    click(buttonsNamed("Undo").find(button => !button.disabled)!);
+    await flushEffects();
+    expect(persistedProject().shots[0].masterStart).toBeUndefined();
+    expect(persistedProject().shots[1].masterStart).toBeUndefined();
+    click(buttonsNamed("Redo").find(button => !button.disabled)!);
+    await flushEffects();
+    expect(persistedProject().shots[0].masterStart).toBe(16.25);
+    expect(persistedProject().shots[1].masterStart).toBe(secondStartBefore);
+
     const slotDurationInput = Array.from(container.querySelectorAll<HTMLInputElement>(".version-panel input[type=number]"))
       .find(input => input.parentElement?.parentElement?.textContent?.includes("Slot duration"));
     expect(slotDurationInput).toBeTruthy();
@@ -697,6 +706,14 @@ describe("App history integration", () => {
     const reorderedLayers = persistedProject().shots[0].slots[0].versions.find(version => version.id === addedVersionId)!.layers;
     expect(reorderedLayers[0].id).toBe(textLayer.id);
     expect(reorderedLayers[1].id).toBe(proceduralLayerId);
+    click(buttonsNamed("Undo").find(button => !button.disabled)!);
+    await flushEffects();
+    let historyLayers = persistedProject().shots[0].slots[0].versions.find(version => version.id === addedVersionId)!.layers;
+    expect(historyLayers[0].id).toBe(proceduralLayerId);
+    click(buttonsNamed("Redo").find(button => !button.disabled)!);
+    await flushEffects();
+    historyLayers = persistedProject().shots[0].slots[0].versions.find(version => version.id === addedVersionId)!.layers;
+    expect(historyLayers[0].id).toBe(textLayer.id);
 
     click(Array.from(container.querySelectorAll<HTMLButtonElement>(".timeline-workspace-tabs button")).find(button => button.textContent?.includes("Master Timeline"))!);
     await flushEffects();
