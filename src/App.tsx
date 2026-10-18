@@ -1125,6 +1125,19 @@ export default function App() {
    setNotice("Split at "+splitAt.toFixed(3)+"s. Source ranges and linked audio were preserved.");
  }catch(error){setNotice(error instanceof Error?error.message:"Could not split this clip.");}
  }}>Split at midpoint</button>
+<button disabled={selectedTimelineClip.kind==="audio"&&Boolean(selectedTimelineClip.linkedVideoClipId)||Math.round(editorTime*Math.max(1,project.frameRate||24))/Math.max(1,project.frameRate||24)<=selectedTimelineClip.start||Math.round(editorTime*Math.max(1,project.frameRate||24))/Math.max(1,project.frameRate||24)>=selectedTimelineClip.start+selectedTimelineClip.duration} title={selectedTimelineClip.kind==="audio"&&selectedTimelineClip.linkedVideoClipId?"Split its source video to split linked audio":"Split at the current timeline playhead"} onClick={()=>{
+ const fps=Math.max(1,project.frameRate||24);
+ const splitAt=Math.round(editorTime*fps)/fps;
+ if(splitAt<=selectedTimelineClip.start||splitAt>=selectedTimelineClip.start+selectedTimelineClip.duration)return;
+ const newClipId=id("timeline-clip");
+ const linkedAudioIds=selectedTimelineClip.kind==="video"?(project.timelineClips??[]).filter(clip=>clip.kind==="audio"&&clip.linkedVideoClipId===selectedTimelineClip.id).map(()=>id("timeline-audio")):[];
+ try{
+   change(p=>({...p,timelineClips:splitTimelineClip({tracks:p.tracks,timelineClips:p.timelineClips??[]},selectedTimelineClip.id,splitAt,{newClipId,...(linkedAudioIds.length?{newLinkedAudioClipIds:linkedAudioIds}:{})}).timelineClips}));
+   setSelectedTimelineClipId(newClipId);
+   setIsPlaying(false);
+   setNotice("Split at playhead "+splitAt.toFixed(3)+"s. Linked audio and source ranges were preserved.");
+ }catch(error){setNotice(error instanceof Error?error.message:"Could not split this clip at the playhead.");}
+ }}>Split at playhead</button>
 <button disabled={selectedTimelineClip.kind==="audio"&&Boolean(selectedTimelineClip.linkedVideoClipId)} title={selectedTimelineClip.kind==="audio"&&selectedTimelineClip.linkedVideoClipId?"Duplicate the source video to copy this linked audio":"Duplicate this clip after the original"} onClick={()=>{
  const source=selectedTimelineClip;
  const newClipId=id("timeline-clip");
