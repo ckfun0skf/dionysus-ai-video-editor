@@ -855,6 +855,30 @@ describe("App history integration", () => {
     expect(persistedProject().shots[0].duration).toBe(masterShotDurationBefore);
     expect(persistedProject().shots[0].slots[0].duration).toBe(slotDurationBefore);
 
+    const addNestedAudio = Array.from(container.querySelectorAll<HTMLButtonElement>(".nested-timeline-tab .inline-actions button")).find(button => button.textContent?.trim() === "Audio");
+    expect(addNestedAudio).toBeTruthy();
+    click(addNestedAudio!);
+    await flushEffects();
+    let audioVersion = persistedProject().shots[0].slots[0].versions.find(version => version.id === addedVersionId)!;
+    const audioLayer = audioVersion.layers.find(layer => layer.kind === "audio")!;
+    const audioVolumeInput = container.querySelector<HTMLInputElement>('input[aria-label="Version layer ' + audioLayer.id + ' volume"]');
+    const audioFadeInInput = container.querySelector<HTMLInputElement>('input[aria-label="Version layer ' + audioLayer.id + ' fade in"]');
+    const audioFadeOutInput = container.querySelector<HTMLInputElement>('input[aria-label="Version layer ' + audioLayer.id + ' fade out"]');
+    expect(audioVolumeInput).toBeTruthy();
+    expect(audioFadeInInput).toBeTruthy();
+    expect(audioFadeOutInput).toBeTruthy();
+    setInputValue(audioVolumeInput!, "0.45");
+    await flushEffects();
+    setInputValue(audioFadeInInput!, "0.5");
+    await flushEffects();
+    setInputValue(audioFadeOutInput!, "0.75");
+    await flushEffects();
+    audioVersion = persistedProject().shots[0].slots[0].versions.find(version => version.id === addedVersionId)!;
+    expect(audioVersion.layers.find(layer => layer.id === audioLayer.id)).toMatchObject({ volume: 0.45, fadeIn: 0.5, fadeOut: 0.75 });
+    expect(audioVersion.duration).toBe(versionDurationBeforeSourceTrim);
+    expect(persistedProject().shots[0].duration).toBe(masterShotDurationBefore);
+    expect(persistedProject().shots[0].slots[0].duration).toBe(slotDurationBefore);
+
     click(Array.from(container.querySelectorAll<HTMLButtonElement>(".timeline-workspace-tabs button")).find(button => button.textContent?.includes("Master Timeline"))!);
     await flushEffects();
     expect(container.querySelector(".nested-timeline-tab")).toBeNull();
