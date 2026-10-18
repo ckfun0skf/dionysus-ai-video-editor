@@ -28,7 +28,8 @@ export function collectCompositionLayers(project: DionysusProject): CompositionL
     };
     if (clip.kind === "clip") {
       const asset = project.assets.find(item => item.id === clip.assetId && item.kind === "clip");
-      const version = asset?.clipVersions?.find(item => item.id === asset.selectedClipVersionId) ?? asset?.clipVersions?.[0];
+      const version = asset?.clipVersions?.find(item => item.id === clip.clipVersionId)
+        ?? (clip.clipVersionId ? undefined : asset?.clipVersions?.find(item => item.id === asset.selectedClipVersionId) ?? asset?.clipVersions?.[0]);
       if (!version || version.duration <= 0) return [];
       const result: CompositionLayer[] = [];
       const repeats = clip.shortSourceBehavior === "loop" ? Math.max(1, Math.ceil(clip.duration / version.duration)) : 1;
