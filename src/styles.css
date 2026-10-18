@@ -1379,3 +1379,7 @@
 .nested-timeline-clip:active{cursor:grabbing}
 .nested-timeline-warning{padding:8px 10px;border:1px solid #725b32;border-radius:6px;background:rgba(92,67,21,.17);color:#e6cb91;font-size:10px}
 @media(max-width:760px){.nested-version-duration{margin-left:0}}
+
+.layer-order-button{width:20px;min-width:20px;padding:3px 0!important;text-align:center;font-size:10px!important;color:#d7d3e4}
+.layer-order-button:disabled{opacity:.25;cursor:default}
+.layer-order-button:not(:disabled):hover{border-color:#9a79d5;background:#352c43}
