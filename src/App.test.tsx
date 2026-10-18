@@ -823,31 +823,25 @@ describe("App history integration", () => {
     expect(movedAudio).toMatchObject({ start: moved.start, duration: moved.duration, linkedVideoClipId: moved.id });
   });
 
-  it("uses the layer menu and Settings dialogs for Code clips while keeping linked audio independent", async () => {
+  it("removes Code and Effects as Timeline layers while keeping linked audio independent", async () => {
     await openTimelineView();
     const addLayer = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Add layer"));
     expect(addLayer).toBeTruthy();
     click(addLayer!);
-    const codeOption = Array.from(container.querySelectorAll<HTMLButtonElement>(".layer-add-menu button")).find(button => button.textContent?.includes("Code layer"));
-    expect(codeOption).toBeTruthy();
-    click(codeOption!);
+    const layerOptions = Array.from(container.querySelectorAll<HTMLButtonElement>(".layer-add-menu button")).map(button => button.textContent ?? "");
+    expect(layerOptions.some(label => label.includes("Code layer"))).toBe(false);
+    expect(layerOptions.some(label => label.includes("Effects layer"))).toBe(false);
+    expect(layerOptions.some(label => label.trim() === "Video layer")).toBe(true);
+    expect(layerOptions.some(label => label.trim() === "Audio layer")).toBe(true);
+    expect(layerOptions.some(label => label.trim() === "Text layer")).toBe(true);
+    click(addLayer!);
     await flushEffects();
 
-    const codeTrack = Array.from(container.querySelectorAll<HTMLElement>(".visual-track-group")).find(group => group.querySelector(".visual-track-label strong")?.textContent?.includes("Code"));
-    expect(codeTrack).toBeTruthy();
-    click(codeTrack!.querySelector<HTMLButtonElement>(".track-add-clip")!);
-    await flushEffects();
-    const codeSource = container.querySelector<HTMLTextAreaElement>(".clip-settings-dialog textarea");
-    expect(codeSource).toBeTruthy();
-    act(() => {
-      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
-      setter?.call(codeSource!, "const scene = new Scene();");
-      codeSource!.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    await flushEffects();
-    expect(persistedProject().timelineClips?.some(clip => clip.kind === "procedural" && clip.code === "const scene = new Scene();")).toBe(true);
-    click(Array.from(container.querySelectorAll<HTMLButtonElement>(".clip-settings-dialog button")).find(button => button.textContent?.includes("Done"))!);
-    await flushEffects();
+    const visibleTrackKinds = Array.from(container.querySelectorAll<HTMLElement>(".visual-track-group")).map(group =>
+      group.querySelector(".visual-track-label")?.textContent ?? ""
+    );
+    expect(visibleTrackKinds.some(label => label.includes("Code"))).toBe(false);
+    expect(visibleTrackKinds.some(label => label.includes("Effects"))).toBe(false);
 
     click(addLayer!);
     const linkedOption = Array.from(container.querySelectorAll<HTMLButtonElement>(".layer-add-menu button")).find(button => button.textContent?.includes("Add linked video/audio"));
