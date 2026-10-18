@@ -3,6 +3,7 @@ import { AudioLines, Check, CheckCircle2, ChevronDown, CircleHelp, Clapperboard,
 import { sampleProject } from "./sampleProject";
 import type { Asset, AssetKind, ClipVersion, CompositionLayer, DionysusProject, ReferenceProfile, ReferenceRole, Shot, TimelineClip } from "./types";
 import { validateProject } from "./projectValidation";
+import { moveNormalizedFrame, resizeNormalizedFrame } from "./previewTransform";
 import { getAllowedChildClipAssets, wouldCreateClipAssetCycle } from "./clipAssetGraph";
 import { t } from "./i18n";
 import { duplicateTimelineClip, moveTimelineClip, splitTimelineClip, trimTimelineClip, unlinkTimelineAudio, deleteTimelineClip } from "./timelineOperations";
@@ -514,19 +515,10 @@ export default function App() {
     if (!active || active.pointerId !== event.pointerId) return;
     const dx = (event.clientX - active.startX) / active.frameWidth * 100;
     const dy = (event.clientY - active.startY) / active.frameHeight * 100;
-    let left = active.x, top = active.y, right = active.x + active.width, bottom = active.y + active.height;
-    if (active.mode === "move") {
-      left = Math.max(0, Math.min(100 - active.width, active.x + dx));
-      top = Math.max(0, Math.min(100 - active.height, active.y + dy));
-      right = left + active.width;
-      bottom = top + active.height;
-    } else {
-      if (active.handle.includes("w")) left = Math.max(0, Math.min(right - 2, active.x + dx));
-      if (active.handle.includes("e")) right = Math.max(left + 2, Math.min(100, active.x + active.width + dx));
-      if (active.handle.includes("n")) top = Math.max(0, Math.min(bottom - 2, active.y + dy));
-      if (active.handle.includes("s")) bottom = Math.max(top + 2, Math.min(100, active.y + active.height + dy));
-    }
-    setPreviewTransformDraft({ key: active.key, x: Math.round(left * 100) / 100, y: Math.round(top * 100) / 100, width: Math.round((right-left) * 100) / 100, height: Math.round((bottom-top) * 100) / 100 });
+    const frame = active.mode === "move"
+      ? moveNormalizedFrame(active, dx, dy)
+      : resizeNormalizedFrame(active, active.handle, dx, dy);
+    setPreviewTransformDraft({ key: active.key, ...frame });
   }
 
   function finishPreviewTransform(event: React.PointerEvent<HTMLDivElement>) {
