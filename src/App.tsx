@@ -850,7 +850,7 @@ export default function App() {
     if (!asset || asset.kind !== "clip" || !current) return;
     const nextId = id("clip-version");
     const nextVersion: ClipVersion = {
-      ...copy({ ...current }),
+      ...(JSON.parse(JSON.stringify(current)) as ClipVersion),
       id: nextId,
       name: "Version " + ((asset.clipVersions?.length ?? 0) + 1),
       description: current.description ? "Copy of " + current.name + ": " + current.description : "New version based on " + current.name,
