@@ -110,6 +110,8 @@ export default function App() {
   const [nestedLayerContextMenuPosition, setNestedLayerContextMenuPosition] = useState({ x: 0, y: 0 });
   const clipResizeRef = useRef<{ id: string; edge: "left" | "right"; pointerId: number; x: number; start: number; duration: number; laneWidth: number } | null>(null);
   const [clipResizePreview, setClipResizePreview] = useState<{ id: string; start: number; duration: number } | null>(null);
+  const shotResizeRef = useRef<{ id: string; edge: "left" | "right"; pointerId: number; x: number; start: number; duration: number; laneWidth: number } | null>(null);
+  const [shotResizePreview, setShotResizePreview] = useState<{ id: string; start: number; duration: number } | null>(null);
   const clipDragSourceRef = useRef<TimelineClip | null>(null);
   const [clipDropPreview, setClipDropPreview] = useState<{ trackId: string; start: number; duration: number; name: string } | null>(null);
   const [timelineClipSettingsId, setTimelineClipSettingsId] = useState<string>("");
@@ -793,6 +795,39 @@ export default function App() {
     }));
   }
 
+  function beginMasterShotResize(event: React.PointerEvent<HTMLElement>, shot: Shot, start: number, edge: "left" | "right") {
+    event.preventDefault();
+    event.stopPropagation();
+    const lane = event.currentTarget.closest(".visual-track-lane") as HTMLElement | null;
+    shotResizeRef.current = { id: shot.id, edge, pointerId: event.pointerId, x: event.clientX, start, duration: shot.duration, laneWidth: lane?.getBoundingClientRect().width ?? 1 };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+  function moveMasterShotResize(event: React.PointerEvent<HTMLElement>, shot: Shot) {
+    const active = shotResizeRef.current;
+    if (!active || active.id !== shot.id || active.pointerId !== event.pointerId) return;
+    const fps = Math.max(1, project.frameRate || 24), frame = 1 / fps;
+    const delta = Math.round(((event.clientX - active.x) / Math.max(active.laneWidth, 1)) * mediaTimelineDuration * fps) / fps;
+    const others = project.shots.filter(item => item.id !== shot.id).map(item => ({ start: getMasterShotStart(project.shots, item.id), duration: item.duration })).sort((a,b)=>a.start-b.start);
+    if (active.edge === "left") {
+      const previous = others.filter(item => item.start + item.duration <= active.start + 0.0001).at(-1);
+      const end = active.start + active.duration;
+      const start = Math.max(previous ? previous.start + previous.duration : 0, Math.min(end - frame, active.start + delta));
+      setShotResizePreview({ id: shot.id, start, duration: end - start });
+    } else {
+      const next = others.find(item => item.start >= active.start + active.duration - 0.0001);
+      const maxDuration = next ? next.start - active.start : mediaTimelineDuration - active.start;
+      setShotResizePreview({ id: shot.id, start: active.start, duration: Math.max(frame, Math.min(maxDuration, active.duration + delta)) });
+    }
+  }
+  function endMasterShotResize(event: React.PointerEvent<HTMLElement>, shot: Shot) {
+    const active = shotResizeRef.current;
+    if (!active || active.id !== shot.id || active.pointerId !== event.pointerId) return;
+    const preview = shotResizePreview;
+    if (preview && preview.id === shot.id) change(p => ({ ...p, shots: p.shots.map(item => item.id === shot.id ? { ...item, masterStart: preview.start, duration: preview.duration } : item) }));
+    shotResizeRef.current = null;
+    setShotResizePreview(null);
+  }
+
   function toggleShotReferenceProfile(shotId: string, profileId: string, checked: boolean) {
     const shot = project.shots.find(item => item.id === shotId);
     if (!shot) return;
@@ -1148,7 +1183,7 @@ export default function App() {
      const slot=shot.slots.find(item=>item.id===selectedSlotId)??shot.slots[0];
      const version=slot?.versions.find(item=>item.id===slot.selectedVersionId)??slot?.versions[0];
      const thumb=version ? renderVersionThumbnail(version, track.backgroundTransparent ? "transparent" : track.backgroundColor ?? "#111113") : <div className="version-thumbnail-preview" style={{backgroundColor:track.backgroundTransparent?"transparent":track.backgroundColor??"#111113"}}/>;
-     return <div className="master-shot-clip-wrap" key={"master-shot-"+shot.id} style={{left:(shotStart/mediaTimelineDuration*100)+"%",width:Math.max(2,shot.duration/mediaTimelineDuration*100)+"%",opacity:track.opacity??1}}>
+     return <div className="master-shot-clip-wrap" key={"master-shot-"+shot.id} style={{left:((shotResizePreview?.id===shot.id?shotResizePreview.start:shotStart)/mediaTimelineDuration*100)+"%",width:Math.max(2,(shotResizePreview?.id===shot.id?shotResizePreview.duration:shot.duration)/mediaTimelineDuration*100)+"%",opacity:track.opacity??1}}>
        <button draggable className={"master-shot-clip"+(selected?.id===shot.id?" selected":"")} onContextMenu={event=>{event.preventDefault();setSelectedId(shot.id);if(slot)setSelectedSlotId(slot.id);setShotContextMenuPosition({x:Math.min(event.clientX,window.innerWidth-180),y:Math.min(event.clientY,window.innerHeight-170)});setShotContextMenuId(shot.id);}} onDragStart={event=>{event.dataTransfer.setData("text/dionysus-master-shot",shot.id);event.dataTransfer.effectAllowed="move";}} onClick={()=>{setShotContextMenuId("");setSelectedId(shot.id);if(slot)setSelectedSlotId(slot.id);setIsPlaying(false);setEditorTime(shotStart);playbackTimeRef.current=shotStart;}} title={shot.title+" · "+shot.duration.toFixed(1)+"s"}>
          {thumb}
          <span className="master-shot-copy"><strong>{shot.title}</strong><small>{version?.name??"No version"} · {shot.duration.toFixed(1)}s</small></span>
