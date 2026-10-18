@@ -106,4 +106,4 @@ Future target. Must define fidelity, codecs, progress, cancellation, error recov
 - Autosave/recovery behavior and timeline editing shortcuts.
 
 ## Initial milestone
-The initial milestone is a usable local-first shell with project schema, Storyboard editing, Shot inspector, basic Timeline visualization, local persistence, project JSON import/export, and AI plan export. Full media compositing, advanced audio, recursive editing UI, and MP4 rendering are later milestones unless reprioritized.
+The initial milestone established the local-first shell, Storyboard editing, local persistence, project JSON import/export, and AI plan export. The supplied Timeline prototype now reprioritizes visible typed layers, Master/Version timeline tabs, per-Shot Version dropdown actions, hierarchical linked audio, per-layer mute, and a first-class Three.js layer as core editor requirements. Advanced audio effects, portable media bundles, and reliable final MP4 rendering remain staged follow-up work.
