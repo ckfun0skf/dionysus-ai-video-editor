@@ -2037,3 +2037,18 @@
 .version-panel-disclosure { display: none !important; }
 
 .code-editor-input::placeholder { color: #5e6275; -webkit-text-fill-color: #5e6275; }
+
+.master-shot-clip { position: relative; }
+.master-shot-resize-handle {
+  position: absolute;
+  z-index: 9;
+  top: 0;
+  bottom: 0;
+  width: 7px;
+  opacity: .25;
+  cursor: ew-resize;
+  touch-action: none;
+}
+.master-shot-resize-handle:hover { opacity: 1; background: rgba(255,255,255,.7); }
+.master-shot-resize-handle.left { left: 0; }
+.master-shot-resize-handle.right { right: 0; }
