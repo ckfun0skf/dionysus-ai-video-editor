@@ -186,7 +186,7 @@
           "id": "DYS-005",
           "title": "Timeline editing and Version management",
           "status": "in_progress",
-          "progress": 85,
+          "progress": 90,
           "summary": "Master Timeline with visible typed layers, per-Shot active-Version dropdown (+ Add Version/Edit), nested Version timeline tabs, and separate master placement vs Version-internal timing.",
           "doc": "tasks/timeline-and-versions.md",
           "detail": "tasks/timeline-and-versions.html",
@@ -230,13 +230,14 @@
             "Unit/integration tests and production build pass; no automated browser smoke test is added unless explicitly requested"
           ],
           "evidence": [
-            "Master Shot uses optional absolute masterStart; legacy projects keep sequential positions until edited.",
-            "Free placement supports frame-snapped drag; overlap warnings explain the explicit free-position policy.",
-            "Ripple Reorder explicitly packs Shots back-to-back in the chosen chronological order, closes gaps, and preserves Shot durations and Version internals.",
-            "Nested Version duration, module timing, frame-snapped movement, layer order, real source thumbnails, and compositor ordering are covered by tests.",
-            "CI run 39119716811: 75 tests pass across 9 files; TypeScript/production build pass; npm audit reports 0 vulnerabilities."
+            "Master Shot uses optional absolute masterStart with legacy sequential fallback; free placement snaps to frames and warns about overlaps.",
+            "Explicit Ripple Reorder packs Shots chronologically without gaps and preserves all Shot and Version durations.",
+            "Nested Version duration, module timing, source in/out, drag placement, layer ordering, and composition z-order have regression coverage.",
+            "Master Timeline clips support midpoint split; video and linked audio split as aligned pairs preserving source ranges and keeping fade-in/fade-out boundaries on the correct segment.",
+            "Compact local thumbnails are attempted for imported image/video and AI-generated images; decode failures leave placeholders.",
+            "CI run 39122166170: 87 tests pass across 10 files; TypeScript/production build pass; npm audit reports 0 vulnerabilities."
           ],
-          "notes": "Master/Version/module timing, source thumbnails, explicit ripple reorder, overlap warnings, and layer ordering are implemented. Remaining work includes richer nested source/trim controls and complete JSON/Undo-Redo coverage. Draft PR #39 is not merged; no browser smoke tests were run."
+          "notes": "Implemented the prototype-aligned timing/editing foundation, source trim and midpoint split, and local thumbnail extraction. Remaining work is richer preview/source relinking and full JSON/Undo-Redo coverage of every nested relationship. Draft PR #39 is not merged; browser smoke tests were not run."
         },
         {
           "id": "DYS-011",
@@ -342,7 +343,7 @@
           "id": "DYS-008",
           "title": "Advanced audio and procedural layers",
           "status": "in_progress",
-          "progress": 45,
+          "progress": 55,
           "summary": "Support per-Audio-Layer mute/mixing, timed text, and first-class Three.js/procedural timeline layers with pinned script versions and explicit execution permission.",
           "doc": "tasks/audio-and-procedural-modules.md",
           "detail": "tasks/audio-and-procedural-modules.html",
@@ -354,7 +355,7 @@
             },
             {
               "title": "Multitrack audio level, trim, fades, and mixing",
-              "status": "planned"
+              "status": "in_progress"
             },
             {
               "title": "Timed text/title lane behavior",
@@ -381,12 +382,12 @@
             "UI states clearly distinguish layer data, preview capability, and final render support"
           ],
           "evidence": [
-            "Master Text and typed procedural/Three.js blocks can be added and persisted; nested Version duration and module timing/order controls are available.",
-            "Audio track mute and per-clip mute remain independent and persisted.",
-            "AI-generated images and imported image/video files now attempt compact local thumbnail generation.",
-            "CI run 39119716811: 75 tests pass across 9 files; TypeScript/production build pass; npm audit reports 0 vulnerabilities."
+            "Independent track/clip mute and per-audio-layer volume, fade-in, and fade-out controls are persisted in Master and nested Version timelines.",
+            "Live playback and WebM export share the same normalized gain/fade envelope; export schedules per-layer Web Audio gain curves.",
+            "Source in/out is editable on nested video/audio modules; splitting a video keeps its linked audio aligned and carries source/fade boundaries to the correct split segments.",
+            "CI run 39122166170: 87 tests pass across 10 files; TypeScript/production build pass; npm audit reports 0 vulnerabilities."
           ],
-          "notes": "Typed representation, timing/order controls, mute, and media thumbnail helpers are implemented. Script sandboxing, explicit execution authorization, isolated runtime errors, and actual Three.js preview/export remain outstanding."
+          "notes": "Per-layer mute, volume/fades, source trim, and linked A/V split are implemented. Audio automation/ducking/effects, rich timed text, and safe/authorized procedural execution/rendering remain outstanding."
         },
         {
           "id": "DYS-012",
