@@ -1383,3 +1383,8 @@
 .layer-order-button{width:20px;min-width:20px;padding:3px 0!important;text-align:center;font-size:10px!important;color:#d7d3e4}
 .layer-order-button:disabled{opacity:.25;cursor:default}
 .layer-order-button:not(:disabled):hover{border-color:#9a79d5;background:#352c43}
+
+.ripple-reorder-toggle{border-color:#7254a2!important;color:#cdb1ff!important}
+.ripple-reorder-toggle[aria-pressed=true]{border-color:#a57ce6!important;background:#302140!important;color:#f4eaff!important;box-shadow:inset 0 0 0 1px rgba(197,155,255,.2)}
+.ripple-mode-note{margin:8px 0;padding:8px 10px;border:1px solid #7b5aad;border-radius:6px;background:rgba(83,48,121,.2);color:#e4d1ff;font-size:10px;line-height:1.45}
+.master-shot-overlap-warning{margin-top:8px}
