@@ -1,7 +1,7 @@
 # DYS-005 — Master and nested Timeline editing with Version management
 
 **Status:** In progress  
-**Progress estimate:** 85%  
+**Progress estimate:** 90%  
 **Last updated:** 2026-10-18
 
 ## Goal
@@ -24,12 +24,14 @@ Provide the prototype-style Master Timeline with Shot Version selection, an in-w
 - [x] Generate compact local thumbnails for imported image/video sources and generated image outputs when the browser can decode them.
 - [x] Add explicit Ripple Reorder mode: dropping a Shot reorders the chronological sequence and packs Shot blocks back-to-back, while free placement remains the default.
 - [x] Show an Inspector warning when free-positioned Master Shots overlap.
-- [ ] Complete real media thumbnail extraction, richer source assignment/preview, and a dedicated ripple/reorder mode with an explicit overlap policy.
+- [x] Expose source in/out controls for nested Video/Audio modules; source range changes update that module duration only.
+- [x] Split Master Timeline clips at the midpoint with frame snapping. A video split creates matching linked-audio segments, preserving source in/out and keeping fade-in on the first segment and fade-out on the second.
+- [ ] Expand source media preview/relink controls and comprehensive JSON/Undo-Redo round-trip coverage for every nested relationship.
 - [ ] Expand project JSON round-trip and Undo/Redo coverage for all nested relationships and placement edits.
 
 ## Validation
-- CI run [#39119716811](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39119716811): 75 tests passed across 9 files, TypeScript check and production build passed, and npm audit reported 0 vulnerabilities.
-- Regression coverage checks legacy sequential fallback, independent Shot movement/duration, independent Version duration, module start/duration, frame-snapped drag placement, layer reordering, absolute offsets in composition collection, and thumbnail extraction/URL fallbacks.
+- CI run [#39122166170](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39122166170): 87 tests passed across 10 files, TypeScript check and production build passed, and npm audit reported 0 vulnerabilities.
+- Regression coverage checks legacy sequential fallback, independent Shot movement/duration, independent Version duration, module start/duration, frame-snapped drag placement, layer reordering, absolute offsets in composition collection, thumbnail extraction/URL fallbacks, and split source/fade-boundary integrity.
 - Automated browser smoke tests were not run or added.
 
 ## Related files
