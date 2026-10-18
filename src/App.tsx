@@ -10,6 +10,7 @@ import ProceduralAnimationPreview from "./ProceduralAnimationPreview";
 import { collectCompositionLayers, renderCompositionFrame, exportCompositionWebM, downloadExport } from "./compositionRenderer";
 import AIGenerationPanel from "./AIGenerationPanel";
 import { deleteStoredMediaAsset, isStoredMediaPath, resolveMediaSource, storeMediaAsset } from "./mediaAssetStore";
+import { createImageThumbnail, createVideoThumbnail, getAssetThumbnail } from "./mediaThumbnail";
 import { getMasterShotIndexAtTime, getMasterShotStart, getMasterShotStarts, getMasterTimelineDuration, setMasterShotDuration, setMasterShotStart } from "./masterTimeline";
 import StoryboardFlowCanvas from "./StoryboardFlowCanvas";
 import AgentStoryboardModal from "./AgentStoryboardModal";
@@ -478,8 +479,8 @@ export default function App() {
       reader.readAsDataURL(file);
     } else {
       const assetId = id("asset");
-      void storeMediaAsset(assetId, file).then(path => {
-        const asset: Asset = { id: assetId, name: file.name, kind: "video", path, notes: "Attached to shot" };
+      void Promise.all([storeMediaAsset(assetId, file), createVideoThumbnail(file)]).then(([path, thumbnailPath]) => {
+        const asset: Asset = { id: assetId, name: file.name, kind: "video", path, notes: "Attached to shot", ...(thumbnailPath ? { thumbnailPath } : {}) };
         change(p => ({
           ...p,
           assets: [...p.assets, asset],
@@ -717,10 +718,10 @@ export default function App() {
     updateShot(shotId, { referenceOverrides: [...shot.referenceOverrides.filter(override => override.referenceId !== referenceId), next] });
     setNotice(action === "exclude" ? t("notice.referenceExcluded") : t("notice.referenceReplaced"));
   }
-  function addAsset(name: string, kind: AssetKind, notes = "", path?: string) {
+  function addAsset(name: string, kind: AssetKind, notes = "", path?: string, thumbnailPath?: string) {
     const cleanName = name.trim();
     if (!cleanName) { setNotice(t("error.assetNameRequired")); return; }
-    const asset: Asset = { id: id("asset"), name: cleanName, kind, notes: notes.trim(), ...(path ? { path } : {}) };
+    const asset: Asset = { id: id("asset"), name: cleanName, kind, notes: notes.trim(), ...(path ? { path } : {}), ...(thumbnailPath ? { thumbnailPath } : {}) };
     change(p => ({ ...p, assets: [...p.assets, asset] }));
     setAssetDraftName(""); setAssetDraftNotes(""); setShowAssetForm(false);
     setNotice(t("notice.assetAdded", { name: cleanName }));
@@ -739,9 +740,17 @@ export default function App() {
         if (assetFileInput.current) assetFileInput.current.value = "";
         return;
       }
+      const thumbnail = createImageThumbnail(file);
       const reader = new FileReader();
       reader.onload = () => {
-        if (typeof reader.result === "string") addAsset(file.name, kind, "Imported image available for local preview.", reader.result);
+        if (typeof reader.result === "string") {
+          void thumbnail.then(thumbnailPath => {
+            const assetId = id("asset");
+            const asset: Asset = { id: assetId, name: file.name, kind: "image", path: reader.result as string, notes: "Imported image available for local preview.", ...(thumbnailPath ? { thumbnailPath } : {}) };
+            change(p => ({ ...p, assets: [...p.assets, asset] }));
+            setNotice(file.name + " imported with a preview thumbnail.");
+          });
+        }
         if (assetFileInput.current) assetFileInput.current.value = "";
       };
       reader.onerror = () => {
@@ -753,10 +762,11 @@ export default function App() {
     }
     if (kind === "video" || kind === "audio") {
       const assetId = id("asset");
-      void storeMediaAsset(assetId, file).then(path => {
-        const asset: Asset = { id: assetId, name: file.name, kind, notes: "Imported media stored locally in IndexedDB.", path };
+      const thumbnail = kind === "video" ? createVideoThumbnail(file) : Promise.resolve(undefined);
+      void Promise.all([storeMediaAsset(assetId, file), thumbnail]).then(([path, thumbnailPath]) => {
+        const asset: Asset = { id: assetId, name: file.name, kind, notes: "Imported media stored locally in IndexedDB.", path, ...(thumbnailPath ? { thumbnailPath } : {}) };
         change(p => ({ ...p, assets: [...p.assets, asset] }));
-        setNotice(file.name + " imported and ready for composition.");
+        setNotice(thumbnailPath ? file.name + " imported with a preview thumbnail." : file.name + " imported and ready for composition.");
       }).catch(error => {
         setNotice(error instanceof Error ? error.message : "Could not store the imported media file.");
       });
@@ -999,7 +1009,9 @@ export default function App() {
      const versionSlot=versionShot?(clip.slotId?versionShot.slots.find(slot=>slot.id===clip.slotId):versionShot.slots.find(slot=>slot.id===selectedSlotId)??versionShot.slots[0]):undefined;
      const activeVersion=versionSlot?.versions.find(version=>version.id===versionSlot.selectedVersionId);
      const activeVisualLayer=activeVersion?.layers.find(layer=>layer.kind==="video"||layer.kind==="image");
-     const thumbnailPath=clip.thumbnailPath??activeVisualLayer?.thumbnailPath??project.assets.find(asset=>asset.id===activeVisualLayer?.assetId)?.thumbnailPath;
+     const clipAsset=clip.assetId?project.assets.find(asset=>asset.id===clip.assetId):undefined;
+     const activeVisualAsset=activeVisualLayer?.assetId?project.assets.find(asset=>asset.id===activeVisualLayer.assetId):undefined;
+     const thumbnailPath=clip.thumbnailPath??getAssetThumbnail(clipAsset)??activeVisualLayer?.thumbnailPath??getAssetThumbnail(activeVisualAsset);
      return <div className="visual-media-clip-wrap" key={clip.id} style={{left:(clip.start/mediaTimelineDuration*100)+"%",width:Math.max(2,clip.duration/mediaTimelineDuration*100)+"%"}}>
        <button draggable className={"visual-media-clip "+(clip.kind==="audio"?"audio-clip":clip.kind==="text"?"text-clip":clip.kind==="procedural"?"procedural-clip":"video-clip")+(clip.id===selectedTimelineClipId?" selected":"")} onDragStart={event=>{event.dataTransfer.setData("text/dionysus-timeline-clip",clip.id);event.dataTransfer.effectAllowed="move";}} onClick={()=>{setSelectedTimelineClipId(clip.id);const next=Math.min(activeTimelineDuration,clip.start);playbackTimeRef.current=next;setIsPlaying(false);setEditorTime(next);}} title={clip.name+" · "+clip.start.toFixed(1)+"–"+(clip.start+clip.duration).toFixed(1)+"s"}><span className="visual-clip-icon">{clip.kind==="audio"?<AudioLines size={13}/>:clip.kind==="text"?<Sparkles size={13}/>:clip.kind==="procedural"?<Layers3 size={13}/>:thumbnailPath?<img className="visual-clip-thumbnail" src={thumbnailPath} alt=""/>:<span className="visual-clip-thumbnail-placeholder"><Film size={13}/></span>}</span><span className="visual-clip-copy"><strong>{clip.name}</strong><small>{clip.duration.toFixed(1)}s{clip.linkedVideoClipId?" · linked":clip.kind==="audio"?" · independent":""}{clip.assetId?"":" · no source"}</small></span></button>
        {clip.kind==="audio" && <button className="timeline-clip-mute" aria-label={(clip.muted?"Unmute ":"Mute ")+clip.name} aria-pressed={Boolean(clip.muted)} onClick={()=>change(p=>({...p,timelineClips:(p.timelineClips??[]).map(item=>item.id===clip.id?{...item,muted:!item.muted}:item)}))}>{clip.muted?"🔇":"♪"}</button>}
@@ -1017,8 +1029,10 @@ export default function App() {
      const shotStart=getMasterShotStarts(project.shots)[shotIndex];
      const slot=shot.slots.find(item=>item.id===selectedSlotId)??shot.slots[0];
      const version=slot?.versions.find(item=>item.id===slot.selectedVersionId)??slot?.versions[0];
+     const visualLayer=version?.layers.find(layer=>layer.kind==="video"||layer.kind==="image");
+     const visualAsset=visualLayer?.assetId?project.assets.find(asset=>asset.id===visualLayer.assetId):undefined;
      const previewAsset=shot.previewAssetId?project.assets.find(asset=>asset.id===shot.previewAssetId):undefined;
-     const thumb=version?.layers.find(layer=>layer.kind==="video"||layer.kind==="image")?.thumbnailPath??previewAsset?.thumbnailPath??(previewAsset?.kind==="image"?previewAsset.path:undefined);
+     const thumb=visualLayer?.thumbnailPath??getAssetThumbnail(visualAsset)??getAssetThumbnail(previewAsset);
      return <div className="master-shot-clip-wrap" key={"master-shot-"+shot.id} style={{left:(shotStart/mediaTimelineDuration*100)+"%",width:Math.max(2,shot.duration/mediaTimelineDuration*100)+"%"}}>
        <button draggable className={"master-shot-clip"+(selected?.id===shot.id?" selected":"")} onDragStart={event=>{event.dataTransfer.setData("text/dionysus-master-shot",shot.id);event.dataTransfer.effectAllowed="move";}} onClick={()=>{setSelectedId(shot.id);if(slot)setSelectedSlotId(slot.id);setIsPlaying(false);setEditorTime(shotStart);playbackTimeRef.current=shotStart;}} title={shot.title+" · "+shot.duration.toFixed(1)+"s"}>
          {thumb?<img className="master-shot-thumbnail" src={thumb} alt=""/>:<span className="master-shot-placeholder"><Film size={13}/></span>}
