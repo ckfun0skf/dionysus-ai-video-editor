@@ -72,7 +72,10 @@ function isLayer(value: unknown): boolean {
     (value.opacity === undefined || (isFiniteNumber(value.opacity) && value.opacity >= 0 && value.opacity <= 1)) &&
     (value.animation === undefined || ["none", "float", "pulse", "rotate"].includes(String(value.animation))) &&
     (value.animationDuration === undefined || (isFiniteNumber(value.animationDuration) && value.animationDuration >= 0.1 && value.animationDuration <= 60)) &&
-    (value.muted === undefined || typeof value.muted === "boolean");
+    (value.muted === undefined || typeof value.muted === "boolean") &&
+    (value.volume === undefined || (isFiniteNumber(value.volume) && value.volume >= 0 && value.volume <= 1)) &&
+    (value.fadeIn === undefined || (isFiniteNumber(value.fadeIn) && value.fadeIn >= 0 && value.fadeIn <= value.duration)) &&
+    (value.fadeOut === undefined || (isFiniteNumber(value.fadeOut) && value.fadeOut >= 0 && value.fadeOut <= value.duration);
 }
 function isVersion(value: unknown): boolean {
   return isRecord(value) && isString(value.id) && isString(value.name) &&
@@ -125,6 +128,9 @@ function isTimelineClip(value: unknown): boolean {
     (value.linkedVideoClipId === undefined || (value.kind === "audio" && isString(value.linkedVideoClipId))) &&
     (value.shotId === undefined || isString(value.shotId)) && (value.slotId === undefined || isString(value.slotId)) &&
     (value.muted === undefined || typeof value.muted === "boolean") &&
+    (value.volume === undefined || (isFiniteNumber(value.volume) && value.volume >= 0 && value.volume <= 1)) &&
+    (value.fadeIn === undefined || (isFiniteNumber(value.fadeIn) && value.fadeIn >= 0 && value.fadeIn <= value.duration)) &&
+    (value.fadeOut === undefined || (isFiniteNumber(value.fadeOut) && value.fadeOut >= 0 && value.fadeOut <= value.duration)) &&
     (value.sourceIn === undefined || (isFiniteNumber(value.sourceIn) && value.sourceIn >= 0)) &&
     (value.sourceOut === undefined || (isFiniteNumber(value.sourceOut) && value.sourceOut >= 0)) &&
     (value.sourceIn === undefined || value.sourceOut === undefined || value.sourceOut > value.sourceIn) &&
