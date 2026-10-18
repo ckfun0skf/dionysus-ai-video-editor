@@ -18,7 +18,7 @@ The Master Timeline arranges Shots in the final sequence. Each Shot may carry an
 - The Master Timeline supports multiple ordered layers, including video/compositing layers, text/title layers, audio layers, and a procedural Three.js layer. Each supported layer appears as a distinct lane/group under the preview.
 - Each video layer is a visual compositing frame/container; its clip displays a real thumbnail when available. A clear placeholder is used if there is no thumbnail. Do not claim a black/blank placeholder is a rendered frame.
 - Track/layer creation, ordering, visibility/mute state, and editing controls must belong to the relevant track header, not to a generic media bucket.
-- Direct manipulation should support selection, moving, and trimming where implemented. Numeric timing/source controls remain available as an accessible alternative.
+- Direct manipulation supports selection, frame-snapped moving, and midpoint splitting for Master Timeline clips; numeric timing and source in/out controls remain available as an accessible alternative. Unsupported media decoding keeps an honest placeholder and does not block source import.
 
 ## 2. Master Timeline and nested timeline tabs
 
@@ -27,7 +27,7 @@ The Master Timeline arranges Shots in the final sequence. Each Shot may carry an
 - Tabs are identified by Shot and Version, for example “Shot 03 · Version 2”. Users can switch between the Master Timeline and any open nested Version timeline without losing their place.
 - Opening another Version may open another tab. Tabs have a close action; closing a tab must not delete its Version. Unsaved project edits must not be discarded silently.
 - A nested timeline edits only its selected Version's internal modules/layers. Its own time ruler and playhead use that Version's internal timebase. The Version duration is editable independently from Master Shot duration and Clip Slot duration; each module has its own start/duration controls, and layer ordering is explicit. Dragging a module moves its internal start with project-frame-rate snapping. This must not resize the Master Shot or any other Version.
-- The Master Timeline uses the Shot's declared duration and absolute master position, not raw source-media duration. Master Shot placement/duration, Clip Slot duration, Version duration, and source in/out are distinct concepts. Internal trims or module arrangements do not silently ripple or resize the master Shot; changing a Shot's duration does not automatically resize its Versions. Drag placement snaps to the project frame rate. The current model allows direct repositioning; a dedicated ripple/reorder mode and overlap policy remain to be designed.
+- The Master Timeline uses the Shot's declared duration and absolute master position, not raw source-media duration. Master Shot placement/duration, Clip Slot duration, Version duration, and source in/out are distinct concepts. Internal trims or module arrangements do not silently ripple or resize the master Shot; changing a Shot's duration does not automatically resize its Versions. Drag placement snaps to the project frame rate. The Master Timeline defaults to free placement, including intentional overlap. Inspector warnings identify overlapping Shots. An explicit Ripple Reorder mode reorders the chronological sequence and packs Shots back-to-back, closing gaps without resizing Shot durations or Version internals.
 - Nested compositions are recursive in the data model but the UI enforces a reasonable maximum depth and prevents cycles.
 
 ## 3. Shot thumbnail and Version dropdown
@@ -48,7 +48,7 @@ The Master Timeline arranges Shots in the final sequence. Each Shot may carry an
 - Deleting independent audio must not delete its source video. Deleting a video may remove its still-linked child audio after clearly defined group semantics; it must not remove already-unlinked audio.
 - Every Audio Layer has its own persistent **Mute/Unmute** control in the track header. Muting one layer must not mute other audio layers. Mute state applies to preview/playback and, when available, final composition output.
 - Unlink state, audio placement, mute state, and source relationships must survive Undo/Redo and project JSON round-trips.
-- Later audio features may add volume, fades, gain automation, and effects, but per-layer mute and reliable linked/unlinked behavior are baseline requirements.
+- Per-Audio-Layer volume, Fade In, and Fade Out are supported in both Master and nested Version timelines and apply to live playback and WebM export using a shared gain envelope. More advanced gain automation, ducking, and effects remain future work; per-layer mute and reliable linked/unlinked behavior are baseline requirements.
 
 ## 5. Three.js / procedural layer
 
