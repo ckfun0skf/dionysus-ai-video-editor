@@ -232,6 +232,19 @@ export function validateProject(value: unknown): value is DionysusProject {
       if (!assetIds.has(reference.assetId as string)) return false;
     }
   }
+  for (const shot of shots as UnknownRecord[]) {
+    for (const slot of shot.slots as UnknownRecord[]) {
+      for (const version of slot.versions as UnknownRecord[]) {
+        for (const layer of version.layers as UnknownRecord[]) {
+          if (layer.referencedImageAssetIds !== undefined) {
+            for (const referencedId of layer.referencedImageAssetIds as string[]) {
+              if (!assets.some(candidate => candidate.id === referencedId && candidate.kind === "image")) return false;
+            }
+          }
+        }
+      }
+    }
+  }
   for (const asset of assets) {
     if (asset.kind !== "clip") continue;
     const versions = asset.clipVersions as UnknownRecord[];
