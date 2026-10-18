@@ -25,7 +25,7 @@ function drawFit(ctx: CanvasRenderingContext2D, image: CanvasImageSource, sw: nu
   const dw = sw * scale, dh = sh * scale;
   ctx.drawImage(image, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
 }
-function drawLayer(ctx: CanvasRenderingContext2D, layer: CompositionLayer, asset: Asset | undefined, time: number, width: number, height: number, images: Map<string, HTMLImageElement>) {
+function drawLayer(ctx: CanvasRenderingContext2D, layer: CompositionLayer, asset: Asset | undefined, time: number, width: number, height: number, images: Map<string, HTMLImageElement>, videos: Map<string, HTMLVideoElement>) {
   if (time < layer.start || time >= layer.start + layer.duration || layer.kind === "audio" || layer.kind === "script") return;
   const x = (layer.x ?? 0) * width, y = (layer.y ?? 0) * height;
   const w = (layer.width ?? 1) * width, h = (layer.height ?? 1) * height;
@@ -54,7 +54,7 @@ function drawLayer(ctx: CanvasRenderingContext2D, layer: CompositionLayer, asset
   if (layer.borderColor && (layer.borderWidth ?? 0) > 0) { ctx.strokeStyle=layer.borderColor; ctx.lineWidth=layer.borderWidth!; ctx.strokeRect(x,y,w,h); }
   ctx.restore();
 }
-export async function renderCompositionFrame(canvas: HTMLCanvasElement, project: DionysusProject, layers: CompositionLayer[], seconds: number, options: RenderOptions = {}, images = new Map<string, HTMLImageElement>()): Promise<void> {
+export async function renderCompositionFrame(canvas: HTMLCanvasElement, project: DionysusProject, layers: CompositionLayer[], seconds: number, options: RenderOptions = {}, images = new Map<string, HTMLImageElement>(), videos = new Map<string, HTMLVideoElement>()): Promise<void> {
   const width=options.width ?? project.width, height=options.height ?? project.height;
   canvas.width=width; canvas.height=height;
   const ctx=canvas.getContext("2d");
@@ -63,7 +63,7 @@ export async function renderCompositionFrame(canvas: HTMLCanvasElement, project:
   for (const layer of layers) {
     const asset=project.assets.find(item=>item.id===layer.assetId);
     if (asset?.kind==="image" && asset.path && !images.has(asset.id)) images.set(asset.id,await loadImage(asset.path));
-    drawLayer(ctx,layer,asset,seconds,width,height,images);
+    if (asset?.kind === "video" && asset.path && !videos.has(asset.id)) {\n      const video=document.createElement("video"); video.src=asset.path; video.muted=true; video.playsInline=true; video.preload="auto"; video.crossOrigin="anonymous";\n      await new Promise<void>((resolve,reject)=>{ video.onloadedmetadata=()=>resolve(); video.onerror=()=>reject(new Error("Unable to load video layer source")); }); videos.set(asset.id,video);\n    }\n    const video=asset?.kind==="video" ? videos.get(asset.id) : undefined;\n    if (video && video.readyState>=1) { const target=Math.max(0,(layer.sourceIn??0)+seconds-layer.start); if (Math.abs(video.currentTime-target)>0.04) { video.currentTime=Math.min(target,Math.max(0,video.duration||target)); await new Promise<void>(resolve=>{ video.onseeked=()=>resolve(); setTimeout(resolve,250); }); } }\n    drawLayer(ctx,layer,asset,seconds,width,height,images,videos);
   }
 }
 export async function exportCompositionWebM(project: DionysusProject, options: RenderOptions = {}): Promise<ExportResult> {
@@ -76,12 +76,12 @@ export async function exportCompositionWebM(project: DionysusProject, options: R
   if (!mimeType) { stream.getTracks().forEach(track=>track.stop()); throw new Error("This browser does not support a compatible WebM encoder"); }
   const recorder=new MediaRecorder(stream,{mimeType}), chunks:BlobPart[]=[];
   const finished=new Promise<Blob>((resolve,reject)=>{ recorder.ondataavailable=event=>{if(event.data.size)chunks.push(event.data)}; recorder.onerror=()=>reject(new Error("WebM recording failed")); recorder.onstop=()=>resolve(new Blob(chunks,{type:mimeType})); });
-  const images=new Map<string,HTMLImageElement>();
+  const images=new Map<string,HTMLImageElement>(), videos=new Map<string,HTMLVideoElement>();
   try {
     recorder.start();
     const frames=Math.ceil(duration*fps);
     for(let frame=0;frame<frames;frame++){
-      await renderCompositionFrame(canvas,project,layers,frame/fps,options,images);
+      await renderCompositionFrame(canvas,project,layers,frame/fps,options,images,videos);
       await new Promise<void>(resolve=>requestAnimationFrame(()=>resolve()));
     }
     recorder.stop();
@@ -89,7 +89,7 @@ export async function exportCompositionWebM(project: DionysusProject, options: R
   } catch(error) {
     if(recorder.state!=="inactive")recorder.stop();
     throw error;
-  } finally { stream.getTracks().forEach(track=>track.stop()); }
+  } finally { stream.getTracks().forEach(track=>track.stop()); videos.forEach(video=>{video.pause();video.removeAttribute("src");video.load();}); }
 }
 export function downloadExport(result: ExportResult): void {
   const url=URL.createObjectURL(result.blob), anchor=document.createElement("a");
