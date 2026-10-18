@@ -40,6 +40,32 @@ describe("validateProject", () => {
     });
     expect(validateProject(project)).toBe(false);
   });
+  it("accepts procedural layers and persistent audio mute state", () => {
+    const project = structuredClone(sampleProject);
+    project.shots[0].slots[0].versions[0].layers.push({
+      id: "procedural-layer", name: "Three.js Layer", kind: "procedural",
+      start: 0, duration: 2, muted: false,
+    });
+    project.timelineClips = [{
+      id: "muted-audio", name: "Muted audio", kind: "audio", trackId: "track-audio-1",
+      start: 0, duration: 2, muted: true,
+    }];
+    expect(validateProject(project)).toBe(true);
+  });
+
+  it("rejects Master Timeline clips with stale Shot or Slot links", () => {
+    const project = structuredClone(sampleProject);
+    project.timelineClips = [{
+      id: "shot-link", name: "Shot clip", kind: "video", trackId: "track-video-1",
+      start: 0, duration: 2, shotId: project.shots[0].id, slotId: "missing-slot",
+    }];
+    expect(validateProject(project)).toBe(false);
+    project.timelineClips[0].slotId = project.shots[0].slots[0].id;
+    expect(validateProject(project)).toBe(true);
+    project.timelineClips[0].shotId = "missing-shot";
+    expect(validateProject(project)).toBe(false);
+  });
+
   it("rejects profile references to missing assets", () => {
     const project = structuredClone(sampleProject);
     project.referenceProfiles.push({
