@@ -186,7 +186,7 @@
           "id": "DYS-005",
           "title": "Timeline editing and Version management",
           "status": "in_progress",
-          "progress": 70,
+          "progress": 78,
           "summary": "Master Timeline with visible typed layers, per-Shot active-Version dropdown (+ Add Version/Edit), nested Version timeline tabs, and separate master placement vs Version-internal timing.",
           "doc": "tasks/timeline-and-versions.md",
           "detail": "tasks/timeline-and-versions.html",
@@ -230,13 +230,14 @@
             "Unit/integration tests and production build pass; no automated browser smoke test is added unless explicitly requested"
           ],
           "evidence": [
-            "Master Shot has an optional absolute masterStart; legacy projects keep sequential positions until their layout is edited.",
-            "Inspector start-time editing and drag/drop placement snap to the project frame rate.",
-            "Shot target duration and Clip Slot duration no longer resize Version-internal durations.",
-            "Composition collection and storyboard-to-timeline sync use absolute Master Shot offsets.",
-            "CI run 39118555157: 70 tests pass across 8 files; TypeScript/production build pass; npm audit reports 0 vulnerabilities."
+            "Master Shot uses optional absolute masterStart; legacy projects keep sequential positions until edited.",
+            "Shot start is editable numerically and through drag-and-drop snapped to the project's frame rate.",
+            "Shot duration, Clip Slot duration, Version duration, and module start/duration are independent.",
+            "Nested Version has its own duration control, per-module start/duration controls, drag-to-move, and layer ordering controls.",
+            "Composition collection uses absolute Master Shot offsets.",
+            "CI run 39118949549: 70 tests pass across 8 files; TypeScript/production build pass; npm audit reports 0 vulnerabilities."
           ],
-          "notes": "Master placement and Version-internal timing are now separate. Remaining work includes richer trim/editing, durable thumbnails, and exhaustive project JSON/Undo-Redo round-trip coverage. Branch is under review in Draft PR #39; no browser smoke test was run."
+          "notes": "Master/Version/module timing controls are implemented. Remaining work includes richer media preview/thumbnail extraction, reorder/ripple policy on Master Shots, and exhaustive JSON/Undo-Redo coverage. Draft PR #39 is not merged; browser smoke tests were not run."
         },
         {
           "id": "DYS-011",
@@ -342,7 +343,7 @@
           "id": "DYS-008",
           "title": "Advanced audio and procedural layers",
           "status": "in_progress",
-          "progress": 30,
+          "progress": 40,
           "summary": "Support per-Audio-Layer mute/mixing, timed text, and first-class Three.js/procedural timeline layers with pinned script versions and explicit execution permission.",
           "doc": "tasks/audio-and-procedural-modules.md",
           "detail": "tasks/audio-and-procedural-modules.html",
@@ -381,11 +382,12 @@
             "UI states clearly distinguish layer data, preview capability, and final render support"
           ],
           "evidence": [
-            "Master Timeline supports persisted Text and procedural/Three.js blocks with Inspector fields",
-            "Composition-layer collection carries audio mute state; the current renderer intentionally does not execute procedural code",
-            "CI run 39117698570: 64 tests pass; TypeScript/production build pass"
+            "Master Text blocks and procedural/Three.js blocks are typed and persist in project state.",
+            "Nested Version duration, module start/duration, frame-snapped module dragging, and layer ordering are editable without changing Master Shot duration.",
+            "Track-level and per-clip audio mute are persisted independently.",
+            "CI run 39118949549: 70 tests pass across 8 files; TypeScript/production build pass; npm audit reports 0 vulnerabilities."
           ],
-          "notes": "First-class layer representation and script-version identity are implemented; execution authorization/sandbox, runtime error isolation, procedural rendering, and advanced audio effects are not yet implemented."
+          "notes": "Editing/timing controls exist for typed Text and procedural placeholders, but this is not execution or rendering support. Script sandboxing, explicit authorization, isolated runtime errors, and actual Three.js preview/export remain outstanding."
         },
         {
           "id": "DYS-012",
