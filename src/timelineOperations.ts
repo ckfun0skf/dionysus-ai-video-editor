@@ -118,11 +118,11 @@ export function splitTimelineClip(state: TimelineState, clipId: string, splitTim
       if (Math.abs((sourceOut - sourceIn) - source.duration) > 0.001) {
         throw new Error("Source range length must match clip duration before splitting.");
       }
-      if (source.sourceIn !== undefined || source.sourceOut !== undefined) {
-        const middleSource = sourceIn + leftDuration;
-        leftSource = { sourceIn, sourceOut: middleSource };
-        rightSource = { sourceIn: middleSource, sourceOut };
-      }
+      const middleSource = sourceIn + leftDuration;
+      // Materialize implicit source ranges at split time so the right segment resumes
+      // from the split point instead of silently replaying from source time zero.
+      leftSource = { sourceIn, sourceOut: middleSource };
+      rightSource = { sourceIn: middleSource, sourceOut };
     }
     return {
       left: {
