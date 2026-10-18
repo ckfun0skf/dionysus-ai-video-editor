@@ -14,6 +14,7 @@ import StoryboardFlowCanvas from "./StoryboardFlowCanvas";
 import AgentStoryboardModal from "./AgentStoryboardModal";
 import ProductionChecklistDrawer from "./ProductionChecklistDrawer";
 type View = "storyboard" | "timeline" | "assets" | "references";
+type VersionTimelineTab = { id: string; shotId: string; slotId: string; versionId: string; label: string };
 const STORAGE_KEY = "dionysus.project.v1";
 const id = (prefix: string) => prefix + "-" + crypto.randomUUID();
 const time = (s: number) => String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(Math.floor(s % 60)).padStart(2, "0");
@@ -68,6 +69,9 @@ export default function App() {
   const [selectedSlotId, setSelectedSlotId] = useState<string>("");
   const [expandedVersionShotId, setExpandedVersionShotId] = useState<string>("");
   const [selectedTimelineClipId, setSelectedTimelineClipId] = useState<string>("");
+  const [timelineTabs, setTimelineTabs] = useState<VersionTimelineTab[]>([]);
+  const [activeTimelineTabId, setActiveTimelineTabId] = useState("master");
+  const [collapsedVideoTrackIds, setCollapsedVideoTrackIds] = useState<string[]>([]);
   const [storyboardMode, setStoryboardMode] = useState<"flow" | "list">("flow");
   const [isAgentModalOpen, setIsAgentModalOpen] = useState(false);
   const [isChecklistOpen, setIsChecklistOpen] = useState(false);
@@ -103,6 +107,11 @@ export default function App() {
   const runtime = useMemo(() => Math.max(project.shots.reduce((n, s) => n + s.duration, 0), ...(project.timelineClips ?? []).map(clip => clip.start + clip.duration)), [project.shots, project.timelineClips]);
   const mediaTimelineDuration = useMemo(() => Math.max(runtime, 10, ...(project.timelineClips ?? []).map(clip => clip.start + clip.duration)), [runtime, project.timelineClips]);
   const selectedTimelineClip = (project.timelineClips ?? []).find(clip => clip.id === selectedTimelineClipId);
+  const activeVersionTimelineTab = timelineTabs.find(tab => tab.id === activeTimelineTabId);
+  const activeVersionTimelineShot = activeVersionTimelineTab ? project.shots.find(shot => shot.id === activeVersionTimelineTab.shotId) : undefined;
+  const activeVersionTimelineSlot = activeVersionTimelineTab ? activeVersionTimelineShot?.slots.find(slot => slot.id === activeVersionTimelineTab.slotId) : undefined;
+  const activeVersionTimeline = activeVersionTimelineTab ? activeVersionTimelineSlot?.versions.find(version => version.id === activeVersionTimelineTab.versionId) : undefined;
+  const activeTimelineDuration = activeVersionTimeline ? activeVersionTimeline.duration : runtime;
   const activeShotInfo = useMemo(() => {
     let offset = 0;
     for (let index = 0; index < project.shots.length; index += 1) {
@@ -123,9 +132,9 @@ export default function App() {
       if (!previous) previous = now;
       playbackTimeRef.current += (now - previous) / 1000;
       previous = now;
-      if (playbackTimeRef.current >= runtime) {
-        playbackTimeRef.current = runtime;
-        setEditorTime(runtime);
+      if (playbackTimeRef.current >= activeTimelineDuration) {
+        playbackTimeRef.current = activeTimelineDuration;
+        setEditorTime(activeTimelineDuration);
         setIsPlaying(false);
         return;
       }
@@ -134,15 +143,15 @@ export default function App() {
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [isPlaying, runtime, project.frameRate]);
+  }, [isPlaying, activeTimelineDuration, project.frameRate]);
   useEffect(() => {
     const canvas = previewCanvasRef.current;
     if (!canvas || typeof CanvasRenderingContext2D === "undefined") return;
     const renderId = ++previewRenderId.current;
-    const allLayers = collectCompositionLayers(project);
+    const allLayers = activeVersionTimeline ? activeVersionTimeline.layers : collectCompositionLayers(project);
     const layers = allLayers.length
       ? allLayers.filter(layer => editorTime >= layer.start && editorTime < layer.start + layer.duration)
-      : previewImage ? [{ id: "editor-image-fallback", name: previewImage.name, kind: "image" as const, start: 0, duration: Math.max(runtime, 0.1), assetId: previewImage.id, fitMode: "contain" as const, x: 0, y: 0, width: 100, height: 100 }]
+      : !activeVersionTimeline && previewImage ? [{ id: "editor-image-fallback", name: previewImage.name, kind: "image" as const, start: 0, duration: Math.max(runtime, 0.1), assetId: previewImage.id, fitMode: "contain" as const, x: 0, y: 0, width: 100, height: 100 }]
       : [];
     const render = async () => {
       const frame = document.createElement("canvas");
@@ -165,7 +174,7 @@ export default function App() {
     };
     void render();
     return () => { if (previewRenderId.current === renderId) previewRenderId.current += 1; };
-  }, [project, editorTime, previewImage, runtime, view]);
+  }, [project, editorTime, previewImage, runtime, view, activeVersionTimeline]);
   useEffect(() => () => {
     previewMediaReleasesRef.current.forEach(release => release());
     previewMediaReleasesRef.current.clear();
@@ -541,15 +550,64 @@ export default function App() {
     change(p => ({ ...p, shots: p.shots.map(shot => shot.id !== shotId ? shot : { ...shot, slots: shot.slots.map(slot => slot.id !== slotId ? slot : { ...slot, selectedVersionId: versionId }) }) }));
     setNotice("Timeline clip version selected.");
   }
-  function createSlotVersion(shotId: string, slotId: string) {
+  function createSlotVersion(shotId: string, slotId: string): string | undefined {
     const shot = project.shots.find(item => item.id === shotId);
     const slot = shot?.slots.find(item => item.id === slotId);
     if (!shot || !slot) return;
     const current = slot.versions.find(version => version.id === slot.selectedVersionId) ?? slot.versions[0];
     const nextId = id("version");
-    const nextVersion = current ? { ...JSON.parse(JSON.stringify(current)), id: nextId, name: "Version " + String.fromCharCode(65 + slot.versions.length), description: current.description ? "Copy of " + current.name + ": " + current.description : "New version based on " + current.name, layers: current.layers.map(layer => ({ ...layer, id: id("layer") })), scriptVersionIds: [...current.scriptVersionIds], generationRecords: [] } : { id: nextId, name: "Version A", description: "", duration: slot.duration, layers: [], scriptVersionIds: [], generationRecords: [] };
+    const nextVersion = current ? { ...JSON.parse(JSON.stringify(current)), id: nextId, name: "Version " + (slot.versions.length + 1), description: current.description ? "Copy of " + current.name + ": " + current.description : "New version based on " + current.name, layers: current.layers.map(layer => ({ ...layer, id: id("layer") })), scriptVersionIds: [...current.scriptVersionIds], generationRecords: [] } : { id: nextId, name: "Version 1", description: "", duration: slot.duration, layers: [], scriptVersionIds: [], generationRecords: [] };
     change(p => ({ ...p, shots: p.shots.map(item => item.id !== shotId ? item : { ...item, slots: item.slots.map(s => s.id !== slotId ? s : { ...s, versions: [...s.versions, nextVersion], selectedVersionId: nextId }) }) }));
     setNotice("New version created; the previous versions are preserved.");
+    return nextId;
+  }
+
+  function openVersionTimeline(shotId: string, slotId: string, versionId: string) {
+    const shot = project.shots.find(item => item.id === shotId);
+    const slot = shot?.slots.find(item => item.id === slotId);
+    const version = slot?.versions.find(item => item.id === versionId);
+    if (!shot || !slot || !version) return;
+    const tabId = "version:" + slotId + ":" + versionId;
+    setTimelineTabs(existing => existing.some(tab => tab.id === tabId) ? existing : [...existing, { id: tabId, shotId, slotId, versionId, label: shot.title + " · " + version.name }]);
+    setActiveTimelineTabId(tabId);
+    setSelectedId(shotId);
+    setSelectedSlotId(slotId);
+    setEditorTime(0);
+    playbackTimeRef.current = 0;
+    setSelectedTimelineClipId("");
+    setIsPlaying(false);
+    setView("timeline");
+  }
+
+  function closeTimelineTab(tabId: string) {
+    setTimelineTabs(existing => existing.filter(tab => tab.id !== tabId));
+    if (activeTimelineTabId === tabId) {
+      setActiveTimelineTabId("master");
+      setEditorTime(0);
+      playbackTimeRef.current = 0;
+      setIsPlaying(false);
+    }
+  }
+
+  function addVersionLayer(shotId: string, slotId: string, versionId: string, kind: CompositionLayer["kind"]) {
+    const shot = project.shots.find(item => item.id === shotId);
+    const slot = shot?.slots.find(item => item.id === slotId);
+    const version = slot?.versions.find(item => item.id === versionId);
+    if (!shot || !slot || !version) return;
+    const start = Math.max(0, Math.min(editorTime, Math.max(0, version.duration - 0.1)));
+    const layer: CompositionLayer = {
+      id: id("layer"),
+      name: kind === "procedural" ? "Three.js module" : kind === "text" ? "Text layer" : kind === "audio" ? "Audio layer" : kind === "image" ? "Image layer" : kind === "composition" ? "Nested composition" : "Video layer",
+      kind,
+      start,
+      duration: Math.max(0.1, Math.min(3, version.duration - start))
+    };
+    change(p => ({ ...p, shots: p.shots.map(item => item.id !== shotId ? item : { ...item, slots: item.slots.map(s => s.id !== slotId ? s : { ...s, versions: s.versions.map(v => v.id !== versionId ? v : { ...v, layers: [...v.layers, layer] }) }) }) }));
+    setNotice(kind === "procedural" ? "Three.js layer added as a procedural module. Assign/authorize a script before expecting rendered output." : "Layer added to the selected Version.");
+  }
+
+  function removeVersionLayer(shotId: string, slotId: string, versionId: string, layerId: string) {
+    change(p => ({ ...p, shots: p.shots.map(item => item.id !== shotId ? item : { ...item, slots: item.slots.map(s => s.id !== slotId ? s : { ...s, versions: s.versions.map(v => v.id !== versionId ? v : { ...v, layers: v.layers.filter(layer => layer.id !== layerId) }) }) }) }));
   }
 
   function toggleShotReferenceProfile(shotId: string, profileId: string, checked: boolean) {
