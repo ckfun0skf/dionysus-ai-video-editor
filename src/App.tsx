@@ -22,6 +22,13 @@ import AgentStoryboardModal from "./AgentStoryboardModal";
 import ProductionChecklistDrawer from "./ProductionChecklistDrawer";
 type View = "storyboard" | "timeline" | "assets" | "references";
 type VersionTimelineTab = { id: string; shotId: string; slotId: string; versionId: string; label: string; assetId?: string };
+type PreviewTransformKind = "track" | "clip" | "layer";
+type PreviewTransformDraft = { key: string; x: number; y: number; width: number; height: number };
+type PreviewTransformStart = PreviewTransformDraft & {
+  id: string; kind: PreviewTransformKind; mode: "move" | "resize"; handle: string;
+  pointerId: number; startX: number; startY: number; frameWidth: number; frameHeight: number;
+  tab?: VersionTimelineTab;
+};
 const STORAGE_KEY = "dionysus.project.v1";
 const id = (prefix: string) => prefix + "-" + crypto.randomUUID();
 const time = (s: number) => String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(Math.floor(s % 60)).padStart(2, "0");
@@ -134,6 +141,8 @@ export default function App() {
   const previewMediaReleasesRef = useRef(new Map<string, () => void>());
   const [previewAssetId, setPreviewAssetId] = useState("");
   const [showPreviewOverlay, setShowPreviewOverlay] = useState(false);
+  const previewTransformRef = useRef<PreviewTransformStart | null>(null);
+  const [previewTransformDraft, setPreviewTransformDraft] = useState<PreviewTransformDraft | null>(null);
   const previewCanvasRefs = useRef(new Map<string, HTMLCanvasElement>());
   const previewRenderId = useRef(0);
   const previewImage = previewAssetId === "__none__" ? undefined : project.assets.find(asset => asset.id === previewAssetId && asset.kind === "image" && Boolean(asset.path)) ?? project.assets.find(asset => asset.kind === "image" && Boolean(asset.path));
@@ -381,7 +390,7 @@ export default function App() {
           js={layer.code}
           style={{left:(layer.x??0)+"%",top:(layer.y??0)+"%",width:(layer.width??100)+"%",height:(layer.height??100)+"%",zIndex:1}}
         />)}
-        {(selectedTimelineTrackId||selectedCompositionLayerId) && view === "timeline" && (()=>{const track=project.tracks.find(item=>item.id===selectedTimelineTrackId);const layer=activeVersionTimeline?.layers.find(item=>item.id===selectedCompositionLayerId);const target=layer??track;return target?<div className="selected-layer-frame" style={{left:(target.x??(layer?0:10))+"%",top:(target.y??(layer?0:10))+"%",width:(target.width??(layer?100:80))+"%",height:(target.height??(layer?100:80))+"%"}}><span>{target.name}</span><i className="layer-frame-handle top-left"/><i className="layer-frame-handle top-right"/><i className="layer-frame-handle bottom-left"/><i className="layer-frame-handle bottom-right"/></div>:null;})()}
+        {view === "timeline" && (()=>{const layer=activeVersionTimeline?.layers.find(item=>item.id===selectedCompositionLayerId);const clip=(project.timelineClips??[]).find(item=>item.id===selectedTimelineClipId&&item.kind!=="audio");const track=project.tracks.find(item=>item.id===selectedTimelineTrackId);const target=layer??clip??track;const kind:PreviewTransformKind=layer?"layer":clip?"clip":"track";if(!target||(!layer&&!clip&&!selectedTimelineTrackId))return null;const key=kind+":"+target.id;const tab=kind==="layer"?activeVersionTimelineTab:undefined;const fallbackTrack=clip?project.tracks.find(item=>item.id===clip.trackId):undefined;const x=target.x??fallbackTrack?.x??0;const y=target.y??fallbackTrack?.y??0;const width=target.width??fallbackTrack?.width??100;const height=target.height??fallbackTrack?.height??100;const geometry=previewTransformDraft?.key===key?previewTransformDraft:{key,x,y,width,height};return <div className="selected-layer-frame" role="group" aria-label={target.name+" preview transform"} style={{left:geometry.x+"%",top:geometry.y+"%",width:geometry.width+"%",height:geometry.height+"%",touchAction:"none"}} onPointerDown={event=>startPreviewTransform(event,{id:target.id,kind,x,y,width,height,key,tab})} onPointerMove={movePreviewTransform} onPointerUp={finishPreviewTransform} onPointerCancel={finishPreviewTransform}><span>{target.name}</span><i data-handle="nw" aria-label="Resize top left" className="layer-frame-handle top-left"/><i data-handle="ne" aria-label="Resize top right" className="layer-frame-handle top-right"/><i data-handle="sw" aria-label="Resize bottom left" className="layer-frame-handle bottom-left"/><i data-handle="se" aria-label="Resize bottom right" className="layer-frame-handle bottom-right"/></div>;})()}
         {showPreviewOverlay && <div className="integrated-preview-overlay">
           <span>PREVIEW OVERLAY</span><strong>{overlayTitle}</strong><small>{overlaySubtitle || "No shot description"}</small>
         </div>}
@@ -482,6 +491,60 @@ export default function App() {
     change(p => ({ ...p, width, height, frameRate }));
     setProjectSettingsOpen(false);
     setNotice("Project canvas and frame rate settings saved.");
+  }
+
+  function startPreviewTransform(event: React.PointerEvent<HTMLDivElement>, target: { id: string; kind: PreviewTransformKind; x: number; y: number; width: number; height: number; tab?: VersionTimelineTab; key: string }) {
+    event.preventDefault();
+    event.stopPropagation();
+    const frame = event.currentTarget.closest(".integrated-preview-frame") as HTMLElement | null;
+    const rect = frame?.getBoundingClientRect();
+    if (!rect || rect.width <= 0 || rect.height <= 0) return;
+    const handle = (event.target as HTMLElement).dataset.handle ?? "";
+    const start: PreviewTransformStart = {
+      ...target, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY,
+      frameWidth: rect.width, frameHeight: rect.height, mode: handle ? "resize" : "move", handle
+    };
+    previewTransformRef.current = start;
+    setPreviewTransformDraft({ key: target.key, x: target.x, y: target.y, width: target.width, height: target.height });
+    try { event.currentTarget.setPointerCapture(event.pointerId); } catch { /* Pointer capture may be unavailable in a test DOM. */ }
+  }
+
+  function movePreviewTransform(event: React.PointerEvent<HTMLDivElement>) {
+    const active = previewTransformRef.current;
+    if (!active || active.pointerId !== event.pointerId) return;
+    const dx = (event.clientX - active.startX) / active.frameWidth * 100;
+    const dy = (event.clientY - active.startY) / active.frameHeight * 100;
+    let left = active.x, top = active.y, right = active.x + active.width, bottom = active.y + active.height;
+    if (active.mode === "move") {
+      left = Math.max(0, Math.min(100 - active.width, active.x + dx));
+      top = Math.max(0, Math.min(100 - active.height, active.y + dy));
+      right = left + active.width;
+      bottom = top + active.height;
+    } else {
+      if (active.handle.includes("w")) left = Math.max(0, Math.min(right - 2, active.x + dx));
+      if (active.handle.includes("e")) right = Math.max(left + 2, Math.min(100, active.x + active.width + dx));
+      if (active.handle.includes("n")) top = Math.max(0, Math.min(bottom - 2, active.y + dy));
+      if (active.handle.includes("s")) bottom = Math.max(top + 2, Math.min(100, active.y + active.height + dy));
+    }
+    setPreviewTransformDraft({ key: active.key, x: Math.round(left * 100) / 100, y: Math.round(top * 100) / 100, width: Math.round((right-left) * 100) / 100, height: Math.round((bottom-top) * 100) / 100 });
+  }
+
+  function finishPreviewTransform(event: React.PointerEvent<HTMLDivElement>) {
+    const active = previewTransformRef.current;
+    if (!active || active.pointerId !== event.pointerId) return;
+    previewTransformRef.current = null;
+    const draft = previewTransformDraft;
+    setPreviewTransformDraft(null);
+    if (!draft || draft.key !== active.key) return;
+    const patch = { x: draft.x, y: draft.y, width: draft.width, height: draft.height };
+    if (active.kind === "layer" && active.tab) {
+      updateTimelineVersionLayer(active.tab, active.id, patch);
+    } else if (active.kind === "clip") {
+      change(p => ({ ...p, timelineClips: (p.timelineClips ?? []).map(clip => clip.id === active.id ? { ...clip, ...patch } : clip) }));
+    } else {
+      change(p => ({ ...p, tracks: p.tracks.map(track => track.id === active.id ? { ...track, ...patch } : track) }));
+    }
+    setNotice("Preview frame transform saved.");
   }
 
   function undoProjectChange() {
