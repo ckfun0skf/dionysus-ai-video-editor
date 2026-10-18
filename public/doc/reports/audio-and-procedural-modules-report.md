@@ -6,6 +6,8 @@
 
 ## Delivered in this slice
 - Persistent track-level mute and independent clip-level mute for audio.
+- Per-Audio-Layer volume, Fade In, and Fade Out controls in Master Timeline and nested Version inspectors; the same gain envelope is used by live playback and WebM export.
+- Source trim controls for nested Video/Audio modules. Midpoint splitting keeps linked source audio aligned, source in/out ranges contiguous, and fade-in/out on the appropriate first/last segment.
 - Timeline Text block creation and editable displayed text.
 - Timeline Three.js/procedural block creation, plus typed procedural lane support inside a Shot Version.
 - Optional pinned script/scene version ID on a procedural block, with source-script selection where a script asset exists.
@@ -15,9 +17,9 @@
 - Composition data collection includes procedural blocks as typed layers but intentionally does not execute or render their code.
 
 ## Validation
-- CI run [#39119716811](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39119716811): 75 tests, TypeScript and production build all passed; npm audit reported 0 vulnerabilities.
+- CI run [#39122166170](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39122166170): 87 tests across 10 files, TypeScript and production build all passed; npm audit reported 0 vulnerabilities.
 - Automated browser smoke tests were not run or added.
 
 ## Remaining limitations
 - Script sandboxing, explicit execution grants, runtime error isolation, procedural rendering, rich parameters, and final export integration are not implemented.
-- Advanced audio processing and rich text styling remain future work.
+- Audio automation/ducking/effects and rich text styling remain future work.
