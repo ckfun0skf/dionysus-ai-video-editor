@@ -16,7 +16,7 @@ export function collectCompositionLayers(project: DionysusProject): CompositionL
     });
     return layers;
   });
-  const timeline = (project.timelineClips ?? []).filter(clip => !clip.id.startsWith("storyboard-")).flatMap(clip => {
+  const timeline: CompositionLayer[] = (project.timelineClips ?? []).filter(clip => !clip.id.startsWith("storyboard-")).flatMap((clip): CompositionLayer[] => {
     const common = {
       id: clip.id, name: clip.name, kind: clip.kind, start: clip.start, duration: clip.duration,
       ...(clip.scriptVersionId ? { scriptVersionId: clip.scriptVersionId } : {}),
