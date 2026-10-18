@@ -106,7 +106,7 @@ test("browser smoke: compose video and audio, generate an image, export a playab
   });
 
   await expect(page).toHaveTitle(/Dionysus/);
-  await expect(page.getByText("DYS-011 Browser Smoke")).toBeVisible();
+  await expect(page.getByText("DYS-011 Browser Smoke").first()).toBeVisible();
   await page.getByRole("button", { name: "Project view" }).click();
   await page.getByRole("button", { name: "Timeline", exact: true }).click();
   await page.locator(".timeline-slot").first().click();
