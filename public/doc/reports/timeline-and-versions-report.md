@@ -12,10 +12,12 @@
 - Master Shot duration, Clip Slot duration, and each Version's internal duration are now independent; changing one no longer automatically resizes the others.
 - Nested Version layers are collected at the Shot's absolute Master Timeline offset.
 - Nested Version lanes support video, image, audio, text, and procedural/Three.js modules, with clear placeholder thumbnails where real thumbnails are absent.
+- Version duration has its own control; changing it does not change Master Shot or Clip Slot duration.
+- Each nested module has Inspector controls for internal start and duration, direct drag-to-move with frame snapping, and header buttons to move the layer earlier/later.
 
 ## Validation
-- CI run [#39118555157](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39118555157) passed: 70 tests across 8 files, TypeScript check, production build, and npm audit with 0 vulnerabilities.
-- Regression tests cover legacy layout fallback, independent Master placement and duration, preservation of Version-internal duration, drag placement, and rendering offsets.
+- CI run [#39118949549](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39118949549) passed: 70 tests across 8 files, TypeScript check, production build, and npm audit with 0 vulnerabilities.
+- Regression tests cover legacy layout fallback, independent Master placement and duration, preservation of Version-internal duration, module start/duration editing, nested drag movement, layer reordering, and composition offsets.
 - Automated browser smoke testing was not performed.
 
 ## Remaining limitations
