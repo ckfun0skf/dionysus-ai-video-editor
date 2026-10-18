@@ -1178,6 +1178,36 @@ describe("Timeline layer and Shot settings UX", () => {
     expect(track?.opacity).toBe(0.5);
   });
 
+  it("stores editable Three.js source on a Code clip and shows its code thumbnail", async () => {
+    await openTimelineView();
+    const menu = container.querySelector<HTMLDetailsElement>(".master-shot-version-menu");
+    expect(menu).toBeTruthy();
+    click(menu!.querySelector("summary") as HTMLElement);
+    const edit = menu!.querySelector<HTMLButtonElement>(".timeline-version-edit");
+    expect(edit).toBeTruthy();
+    click(edit!);
+    await flushEffects();
+
+    const addCode = Array.from(container.querySelectorAll<HTMLButtonElement>(".nested-timeline-tab button")).find(button => button.textContent?.includes("Code (Three.js)"));
+    expect(addCode).toBeTruthy();
+    click(addCode!);
+    await flushEffects();
+    const sourceDetails = container.querySelector<HTMLDetailsElement>(".code-source-editor");
+    expect(sourceDetails).toBeTruthy();
+    click(sourceDetails!.querySelector("summary") as HTMLElement);
+    const source = sourceDetails!.querySelector<HTMLTextAreaElement>("textarea");
+    expect(source).toBeTruthy();
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+      setter?.call(source!, "scene.background = null;");
+      source!.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await flushEffects();
+    const codeLayer = persistedProject().shots.flatMap(shot => shot.slots.flatMap(slot => slot.versions.flatMap(version => version.layers))).find(layer => layer.kind === "procedural");
+    expect(codeLayer?.code).toBe("scene.background = null;");
+    expect(container.querySelector(".nested-timeline-tab .version-thumbnail-code")).toBeTruthy();
+  });
+
   it("shows a thumbnail for every version and uses a code glyph for procedural-only versions", async () => {
     await openTimelineView();
     expect(container.querySelector(".master-shot-clip .version-thumbnail-preview")).toBeTruthy();
