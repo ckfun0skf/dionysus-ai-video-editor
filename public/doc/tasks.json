@@ -186,7 +186,7 @@
           "id": "DYS-005",
           "title": "Timeline editing and Version management",
           "status": "in_progress",
-          "progress": 92,
+          "progress": 93,
           "summary": "Master Timeline with visible typed layers, per-Shot active-Version dropdown (+ Add Version/Edit), nested Version timeline tabs, and separate master placement vs Version-internal timing.",
           "doc": "tasks/timeline-and-versions.md",
           "detail": "tasks/timeline-and-versions.html",
@@ -232,12 +232,11 @@
           "evidence": [
             "Master Shot uses optional absolute masterStart with legacy sequential fallback; free placement snaps to frames, warns on overlaps, and Ripple Reorder packs the sequence without changing durations.",
             "Nested Version duration, module timing/source in/out, frame-snapped movement, explicit layer order, and compositor stacking order have regression coverage.",
-            "Master clips support midpoint split; video and linked audio split as aligned pairs, including legacy clips with implicit source ranges. Source offsets stay contiguous and fade-in/out stay on the correct side of the split.",
-            "Trim operations synchronize explicit sourceOut to the new duration and clamp fade values to prevent invalid project data.",
-            "Compact local thumbnails are attempted for imported image/video and AI-generated images; decode failure leaves a placeholder.",
-            "CI run 39122750551: 90 tests pass across 10 files; TypeScript/production build pass; npm audit reports 0 vulnerabilities."
+            "Master clips support frame-snapped midpoint split and Duplicate clip. Video split/duplicate preserves linked audio, contiguous source offsets and fade boundaries; duplicated video receives a new linked-audio pair and preserves mix metadata.",
+            "Trim operations synchronize explicit sourceOut to the new duration and clamp fade values; JSON round-trip covers Master placement, nested layers, source ranges, linked audio, mute/mix settings, and saved thumbnail references.",
+            "CI run 39123087834: 91 tests pass across 10 files; TypeScript/production build pass; npm audit reports 0 vulnerabilities."
           ],
-          "notes": "The prototype-aligned timeline now covers absolute placement, free and ripple modes, nested source trim, frame-snapped split, local thumbnails, and per-layer audio mix. Remaining work is full JSON/Undo-Redo coverage of every relationship and richer source relinking/preview. Draft PR #39 remains unmerged; no browser smoke tests were run."
+          "notes": "The prototype-aligned Timeline now covers placement modes, nested source trim, split/duplicate workflows, local thumbnails, per-layer audio mix, and core project JSON round-trip. Remaining work is broad Undo/Redo and nested relationship coverage plus richer source relinking/preview. Draft PR #39 remains unmerged; no browser smoke tests were run."
         },
         {
           "id": "DYS-011",
