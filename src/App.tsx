@@ -25,6 +25,29 @@ const STORAGE_KEY = "dionysus.project.v1";
 const id = (prefix: string) => prefix + "-" + crypto.randomUUID();
 const time = (s: number) => String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(Math.floor(s % 60)).padStart(2, "0");
 const copy = (p: DionysusProject) => JSON.parse(JSON.stringify(p)) as DionysusProject;
+
+function normalizeLegacyTimelineTracks(project: DionysusProject): DionysusProject {
+  const legacyTracks = project.tracks.filter(track => track.kind === "procedural" || track.kind === "effects");
+  if (legacyTracks.length === 0) return project;
+
+  const tracks = project.tracks.filter(track => track.kind !== "procedural" && track.kind !== "effects");
+  let videoTrack = tracks.find(track => track.kind === "video");
+  if (!videoTrack) {
+    const legacyVideoTrack = legacyTracks.find(track => track.kind === "procedural");
+    if (legacyVideoTrack) {
+      videoTrack = { ...legacyVideoTrack, kind: "video", name: "Video 1" };
+      tracks.push(videoTrack);
+    }
+  }
+
+  const legacyTrackIds = new Set(legacyTracks.map(track => track.id));
+  const timelineClips = (project.timelineClips ?? []).map(clip =>
+    legacyTrackIds.has(clip.trackId) && videoTrack
+      ? { ...clip, trackId: videoTrack.id }
+      : clip
+  );
+  return { ...project, tracks, timelineClips };
+}
 function findNonOverlappingClipStart(clips: TimelineClip[], movingId: string, trackId: string, desiredStart: number, duration: number, timelineDuration: number, fps: number) {
   const maxStart = Math.max(0, timelineDuration - duration);
   const snapped = Math.max(0, Math.min(maxStart, Math.round(desiredStart * fps) / fps));
@@ -80,9 +103,9 @@ export default function App() {
   const [project, setProject] = useState<DionysusProject>(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return copy(sampleProject);
+      if (!raw) return normalizeLegacyTimelineTracks(copy(sampleProject));
       const parsed: unknown = JSON.parse(raw);
-      return validateProject(parsed) ? parsed : copy(sampleProject);
+      return validateProject(parsed) ? normalizeLegacyTimelineTracks(parsed) : normalizeLegacyTimelineTracks(copy(sampleProject));
     } catch { return copy(sampleProject); }
   });
   const [undoStack, setUndoStack] = useState<DionysusProject[]>([]);
@@ -1157,13 +1180,11 @@ export default function App() {
   <button role="menuitem" onClick={()=>{change(p=>({...p,tracks:[...p.tracks,{id:id("track-video"),name:"Video "+(p.tracks.filter(track=>track.kind==="video").length+1),kind:"video"}]}));setShowAddLayerMenu(false);}}>Video layer</button>
   <button role="menuitem" onClick={()=>{change(p=>({...p,tracks:[...p.tracks,{id:id("track-audio"),name:"Audio "+(p.tracks.filter(track=>track.kind==="audio").length+1),kind:"audio"}]}));setShowAddLayerMenu(false);}}>Audio layer</button>
   <button role="menuitem" onClick={()=>{change(p=>({...p,tracks:[...p.tracks,{id:id("track-text"),name:"Text "+(p.tracks.filter(track=>track.kind==="text").length+1),kind:"text"}]}));setShowAddLayerMenu(false);}}>Text layer</button>
-  <button role="menuitem" onClick={()=>{change(p=>({...p,tracks:[...p.tracks,{id:id("track-code"),name:"Code "+(p.tracks.filter(track=>track.kind==="procedural").length+1),kind:"procedural"}]}));setShowAddLayerMenu(false);}}>Code layer</button>
-  <button role="menuitem" onClick={()=>{change(p=>({...p,tracks:[...p.tracks,{id:id("track-effects"),name:"Effects "+(p.tracks.filter(track=>track.kind==="effects").length+1),kind:"effects"}]}));setShowAddLayerMenu(false);}}>Effects layer</button>
  </div><button className={"button button-quiet button-small ripple-reorder-toggle"+(rippleReorderMode?" active":"")} aria-pressed={rippleReorderMode} onClick={()=>setRippleReorderMode(enabled=>!enabled)}>{rippleReorderMode?"Ripple Reorder: ON":"Ripple Reorder"}</button>
 </div></div>
 {rippleReorderMode&&<p className="ripple-mode-note" role="status">Ripple Reorder is ON. Dropping a Shot changes chronological order and packs the full Master sequence back-to-back, closing gaps. Master durations and Version internals stay unchanged.</p>}
 <div className="visual-track-list">
-{project.tracks.filter(track=>track.kind==="video"||track.kind==="audio"||track.kind==="procedural"||track.kind==="text"||track.kind==="effects").map(track=>{
+{project.tracks.filter(track=>track.kind==="video"||track.kind==="audio"||track.kind==="text").map(track=>{
  const clips=(project.timelineClips??[]).filter(clip=>clip.trackId===track.id && !(track.kind==="audio" && clip.linkedVideoClipId));
  return <div className="visual-track-group" key={track.id}>
  <div className="visual-track-row">
