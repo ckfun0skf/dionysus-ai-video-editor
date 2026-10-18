@@ -50,6 +50,20 @@ describe("linked multi-track timeline operations", () => {
     expect(() => moveTimelineClip(split, "v-right", 10)).not.toThrow();
   });
 
+  it("materializes source offsets when splitting clips that had no explicit Source In/Out", () => {
+    const state = addVideoClip(empty, {
+      id: "v", name: "Untrimmed source", trackId: "v1", start: 2, duration: 8,
+      assetId: "video-1", sourceHasAudio: true, audioTrackId: "a1", audioClipId: "a"
+    });
+    const split = splitTimelineClip(state, "v", 6, {
+      newClipId: "v-right", newLinkedAudioClipIds: ["a-right"]
+    });
+    expect(split.timelineClips.find(clip => clip.id === "v")).toMatchObject({ start: 2, duration: 4, sourceIn: 0, sourceOut: 4 });
+    expect(split.timelineClips.find(clip => clip.id === "v-right")).toMatchObject({ start: 6, duration: 4, sourceIn: 4, sourceOut: 8 });
+    expect(split.timelineClips.find(clip => clip.id === "a")).toMatchObject({ start: 2, duration: 4, sourceIn: 0, sourceOut: 4, linkedVideoClipId: "v" });
+    expect(split.timelineClips.find(clip => clip.id === "a-right")).toMatchObject({ start: 6, duration: 4, sourceIn: 4, sourceOut: 8, linkedVideoClipId: "v-right" });
+  });
+
   it("splits independent audio without changing its source relationship and blocks splitting linked audio alone", () => {
     const state = addVideoClip(empty, {
       id: "v", name: "Video", trackId: "v1", start: 2, duration: 8,
