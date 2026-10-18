@@ -916,7 +916,28 @@ export default function App() {
        </div></details>}
      </div>;
    })}
-   {!clips.length&&<span className="visual-track-empty">{track.kind==="procedural"?"Procedural modules are available inside a Shot Version tab.":track.kind==="text"?"Timed text lane — text modules are edited in a Shot Version tab.":track.kind==="effects"?"No effects assigned to this lane.":"Drop or add a clip to this lane"}</span>}
+   {track.kind==="video" && project.tracks.find(item=>item.kind==="video")?.id===track.id && project.shots.filter(shot=>!(project.timelineClips??[]).some(clip=>clip.kind==="video"&&clip.shotId===shot.id)).map((shot,shotIndex)=>{
+     const shotStart=project.shots.slice(0,shotIndex).reduce((sum,item)=>sum+item.duration,0);
+     const slot=shot.slots.find(item=>item.id===selectedSlotId)??shot.slots[0];
+     const version=slot?.versions.find(item=>item.id===slot.selectedVersionId)??slot?.versions[0];
+     const previewAsset=shot.previewAssetId?project.assets.find(asset=>asset.id===shot.previewAssetId):undefined;
+     const thumb=version?.layers.find(layer=>layer.kind==="video"||layer.kind==="image")?.thumbnailPath??previewAsset?.thumbnailPath??(previewAsset?.kind==="image"?previewAsset.path:undefined);
+     return <div className="master-shot-clip-wrap" key={"master-shot-"+shot.id} style={{left:(shotStart/mediaTimelineDuration*100)+"%",width:Math.max(2,shot.duration/mediaTimelineDuration*100)+"%"}}>
+       <button className={"master-shot-clip"+(selected?.id===shot.id?" selected":"")} onClick={()=>{setSelectedId(shot.id);if(slot)setSelectedSlotId(slot.id);setIsPlaying(false);setEditorTime(shotStart);playbackTimeRef.current=shotStart;}} title={shot.title+" · "+shot.duration.toFixed(1)+"s"}>
+         {thumb?<img className="master-shot-thumbnail" src={thumb} alt=""/>:<span className="master-shot-placeholder"><Film size={13}/></span>}
+         <span className="master-shot-copy"><strong>{shot.title}</strong><small>{version?.name??"No version"} · {shot.duration.toFixed(1)}s</small></span>
+       </button>
+       {slot && <details className="timeline-version-menu master-shot-version-menu"><summary aria-label={"Show versions for "+shot.title}>▾</summary><div className="timeline-version-menu-panel">
+         <strong>{shot.title}</strong>
+         {slot.versions.map((item,vi)=><div className="timeline-version-menu-row" key={item.id}>
+           <button className={item.id===slot.selectedVersionId?"chosen":""} onClick={()=>{setSelectedId(shot.id);setSelectedSlotId(slot.id);chooseSlotVersion(shot.id,slot.id,item.id);}}><span>{item.name||"Version "+(vi+1)}</span><small>{item.layers.some(layer=>layer.kind==="procedural")?"Three.js / mix":item.layers.some(layer=>layer.kind==="video")?"Video":item.layers.some(layer=>layer.kind==="image")?"Image":"Composition"} · {item.duration}s</small></button>
+           <button className="timeline-version-edit" onClick={()=>openVersionTimeline(shot.id,slot.id,item.id)}>Edit</button>
+         </div>)}
+         <button className="timeline-version-add" onClick={()=>{setSelectedId(shot.id);setSelectedSlotId(slot.id);createSlotVersion(shot.id,slot.id);}}>＋ Add Version</button>
+       </div></details>}
+     </div>;
+   })}
+   {!clips.length && !(track.kind==="video" && project.tracks.find(item=>item.kind==="video")?.id===track.id && project.shots.length>0) && <span className="visual-track-empty">{track.kind==="procedural"?"Procedural modules are available inside a Shot Version tab.":track.kind==="text"?"Timed text lane — text modules are edited in a Shot Version tab.":track.kind==="effects"?"No effects assigned to this lane.":"Drop or add a clip to this lane"}</span>}
   </div>
  </div>
  {track.kind==="video" && !collapsedVideoTrackIds.includes(track.id) && clips.filter(clip=>clip.kind==="video").map(videoClip=>{
