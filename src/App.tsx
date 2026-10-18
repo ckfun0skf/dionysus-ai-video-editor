@@ -306,6 +306,21 @@ export default function App() {
     change(p => ({ ...p, shots: p.shots.map(item => item.id !== shotId ? item : { ...item, slots: item.slots.map(candidate => candidate.id !== slotId ? candidate : { ...candidate, versions: candidate.versions.map(v => v.id !== versionId ? v : { ...v, generationRecords: [...v.generationRecords, { id: id("generation"), createdAt: new Date().toISOString(), prompt, referenceSnapshot: references, modelName: version.layers.find(layer => layer.modelName)?.modelName, modelVersion: version.layers.find(layer => layer.modelVersion)?.modelVersion }] }) }) }) }));
     setNotice("Generation provenance snapshot recorded. No AI provider was called.");
   }
+  function getGenerationReferencePaths(shotId: string): string[] {
+    const current = projectRef.current;
+    const shot = current.shots.find(item => item.id === shotId);
+    if (!shot) return [];
+    return current.referenceProfiles
+      .filter(profile => shot.referenceProfileIds.includes(profile.id))
+      .flatMap(profile => profile.references)
+      .filter(reference => !shot.referenceOverrides.some(override => override.referenceId === reference.id && override.action === "exclude"))
+      .map(reference => {
+        const override = shot.referenceOverrides.find(item => item.referenceId === reference.id && item.action === "replace");
+        const asset = current.assets.find(item => item.id === (override?.replacementAssetId ?? reference.assetId) && item.kind === "image");
+        return asset?.path;
+      })
+      .filter((path): path is string => Boolean(path));
+  }
   function updateCompositionLayer(shotId: string, slotId: string, versionId: string, layerId: string, patch: Partial<CompositionLayer>) {
     change(p => ({ ...p, shots: p.shots.map(shot => shot.id !== shotId ? shot : { ...shot, slots: shot.slots.map(slot => slot.id !== slotId ? slot : { ...slot, versions: slot.versions.map(version => version.id !== versionId ? version : { ...version, layers: version.layers.map(layer => layer.id !== layerId ? layer : { ...layer, ...patch }) }) }) }) }));
   }
@@ -689,7 +704,7 @@ Shot intent: establish a clear visual beat; refine the prompt before sending it 
                         <label>Source in (s)<input className="text-field" type="number" min="0" step="0.1" value={layer.sourceIn??0} onChange={e=>{const value=Math.max(0,Number(e.target.value)||0);change(p=>({...p,shots:p.shots.map(shot=>shot.id!==selected.id?shot:{...shot,slots:shot.slots.map(slot=>slot.id!==activeSlot.id?slot:{...slot,versions:slot.versions.map(version=>version.id!==activeVersion.id?version:{...version,layers:version.layers.map(item=>item.id!==layer.id?item:{...item,sourceIn:value,sourceOut:Math.max(value+0.1,item.sourceOut??value+item.duration)})})})})}));}}/></label>
                         <label>Source out (s)<input className="text-field" type="number" min={(layer.sourceIn??0)+0.1} step="0.1" value={layer.sourceOut??((layer.sourceIn??0)+layer.duration)} onChange={e=>{const value=Math.max((layer.sourceIn??0)+0.1,Number(e.target.value)||0.1);change(p=>({...p,shots:p.shots.map(shot=>shot.id!==selected.id?shot:{...shot,slots:shot.slots.map(slot=>slot.id!==activeSlot.id?slot:{...slot,versions:slot.versions.map(version=>version.id!==activeVersion.id?version:{...version,layers:version.layers.map(item=>item.id!==layer.id?item:{...item,sourceOut:value,duration:value-(item.sourceIn??0)})})})})}));}}/></label>
                       </div>
-                      <label className="visual-prompt-field">Prompt<textarea className="text-area" rows={2} value={layer.prompt??""} placeholder="Optional submodule prompt" onChange={e=>change(p=>({...p,shots:p.shots.map(shot=>shot.id!==selected.id?shot:{...shot,slots:shot.slots.map(slot=>slot.id!==activeSlot.id?slot:{...slot,versions:slot.versions.map(version=>version.id!==activeVersion.id?version:{...version,layers:version.layers.map(item=>item.id!==layer.id?item:{...item,prompt:e.target.value})})})})}))}/></label>{layer.kind!=="audio"&&layer.kind!=="script"&&<AIGenerationPanel prompt={layer.prompt??""} defaultModel={layer.modelName} onGenerated={async (imageUrl,model,prompt)=>{
+                      <label className="visual-prompt-field">Prompt<textarea className="text-area" rows={2} value={layer.prompt??""} placeholder="Optional submodule prompt" onChange={e=>change(p=>({...p,shots:p.shots.map(shot=>shot.id!==selected.id?shot:{...shot,slots:shot.slots.map(slot=>slot.id!==activeSlot.id?slot:{...slot,versions:slot.versions.map(version=>version.id!==activeVersion.id?version:{...version,layers:version.layers.map(item=>item.id!==layer.id?item:{...item,prompt:e.target.value})})})})}))}/></label>{layer.kind!=="audio"&&layer.kind!=="script"&&<AIGenerationPanel prompt={layer.prompt??""} defaultModel={layer.modelName} referenceImages={getGenerationReferencePaths(selected.id)} onGenerated={async (imageUrl,model,prompt)=>{
                         const assetId=id("asset");
                         const response=await fetch(imageUrl);
                         if(!response.ok) throw new Error("Generated image could not be retrieved from the provider response.");
