@@ -1391,3 +1391,11 @@
 
 .nested-source-range{margin:8px 0}
 .nested-source-range label{min-width:0}
+
+.audio-mix-controls{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:10px;margin:10px 0;padding:10px;border:1px solid var(--border,#30313a);border-radius:7px;background:rgba(255,255,255,.025)}
+.audio-mix-controls>label{display:flex;flex-direction:column;gap:5px;min-width:0;color:var(--muted,#a4a5b1);font-size:10px}
+.audio-mix-controls label>span{color:#dfd4fa;font-weight:700}
+.audio-mix-controls .text-field{min-width:0}
+.audio-volume-slider{width:100%;accent-color:#a76be4}
+.nested-audio-mix-controls{margin:8px 0}
+@media(max-width:760px){.audio-mix-controls{grid-template-columns:1fr 1fr}.audio-mix-controls>label:first-child{grid-column:1/-1}}
