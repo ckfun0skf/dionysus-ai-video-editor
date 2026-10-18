@@ -63,7 +63,13 @@ export async function renderCompositionFrame(canvas: HTMLCanvasElement, project:
   for (const layer of layers) {
     const asset=project.assets.find(item=>item.id===layer.assetId);
     if (asset?.kind==="image" && asset.path && !images.has(asset.id)) images.set(asset.id,await loadImage(asset.path));
-    if (asset?.kind === "video" && asset.path && !videos.has(asset.id)) {\n      const video=document.createElement("video"); video.src=asset.path; video.muted=true; video.playsInline=true; video.preload="auto"; video.crossOrigin="anonymous";\n      await new Promise<void>((resolve,reject)=>{ video.onloadedmetadata=()=>resolve(); video.onerror=()=>reject(new Error("Unable to load video layer source")); }); videos.set(asset.id,video);\n    }\n    const video=asset?.kind==="video" ? videos.get(asset.id) : undefined;\n    if (video && video.readyState>=1) { const target=Math.max(0,(layer.sourceIn??0)+seconds-layer.start); if (Math.abs(video.currentTime-target)>0.04) { video.currentTime=Math.min(target,Math.max(0,video.duration||target)); await new Promise<void>(resolve=>{ video.onseeked=()=>resolve(); setTimeout(resolve,250); }); } }\n    drawLayer(ctx,layer,asset,seconds,width,height,images,videos);
+    if (asset?.kind === "video" && asset.path && !videos.has(asset.id)) {
+      const video=document.createElement("video"); video.src=asset.path; video.muted=true; video.playsInline=true; video.preload="auto"; video.crossOrigin="anonymous";
+      await new Promise<void>((resolve,reject)=>{ video.onloadedmetadata=()=>resolve(); video.onerror=()=>reject(new Error("Unable to load video layer source")); }); videos.set(asset.id,video);
+    }
+    const video=asset?.kind==="video" ? videos.get(asset.id) : undefined;
+    if (video && video.readyState>=1) { const target=Math.max(0,(layer.sourceIn??0)+seconds-layer.start); if (Math.abs(video.currentTime-target)>0.04) { video.currentTime=Math.min(target,Math.max(0,video.duration||target)); await new Promise<void>(resolve=>{ video.onseeked=()=>resolve(); setTimeout(resolve,250); }); } }
+    drawLayer(ctx,layer,asset,seconds,width,height,images,videos);
   }
 }
 export async function exportCompositionWebM(project: DionysusProject, options: RenderOptions = {}): Promise<ExportResult> {
