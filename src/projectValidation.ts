@@ -155,7 +155,11 @@ function isTimelineClip(value: unknown): boolean {
     (value.prompt === undefined || isString(value.prompt)) &&
     (value.modelName === undefined || isString(value.modelName)) &&
     (value.modelVersion === undefined || isString(value.modelVersion)) &&
-    (value.thumbnailPath === undefined || isString(value.thumbnailPath));
+    (value.thumbnailPath === undefined || isString(value.thumbnailPath)) &&
+    (value.x === undefined || (isFiniteNumber(value.x) && value.x >= 0 && value.x <= 100)) &&
+    (value.y === undefined || (isFiniteNumber(value.y) && value.y >= 0 && value.y <= 100)) &&
+    (value.width === undefined || (isFiniteNumber(value.width) && value.width > 0 && value.width <= 100)) &&
+    (value.height === undefined || (isFiniteNumber(value.height) && value.height > 0 && value.height <= 100));
 }
 function isTrack(value: unknown): boolean {
   return isRecord(value) && isString(value.id) && isString(value.name) &&
