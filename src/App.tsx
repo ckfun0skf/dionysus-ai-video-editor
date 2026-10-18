@@ -306,15 +306,6 @@ export default function App() {
     return () => { cancelled = true; cancelAnimationFrame(frame); players.forEach(player => { player.element.pause(); player.element.removeAttribute("src"); player.release?.(); }); players.clear(); };
   }, [isPlaying, project, activeVersionTimeline]);
 
-  const previewCodeLayers = useMemo(() => {
-    const layers = activeVersionTimeline ? activeVersionTimeline.layers : collectCompositionLayers(project);
-    return layers.filter(layer =>
-      (layer.kind === "procedural" || layer.kind === "script") &&
-      editorTime >= layer.start && editorTime < layer.start + layer.duration &&
-      (layer.html !== undefined || layer.css !== undefined || layer.code !== undefined)
-    );
-  }, [activeVersionTimeline, project, editorTime]);
-
   const renderTimelinePreview = (
     tabKey: string,
     title: string,
@@ -338,7 +329,7 @@ export default function App() {
           className="editor-preview-canvas"
           aria-label={title + " at " + editorTimeLabel(editorTime)}
         />
-        {previewCodeLayers.map(layer => <SandboxedCodePreview
+        {(tabKey === "master" ? collectCompositionLayers(project) : activeVersionTimelineTab?.id === tabKey ? activeVersionTimeline?.layers ?? [] : []).filter(layer => (layer.kind === "procedural" || layer.kind === "script") && editorTime >= layer.start && editorTime < layer.start + layer.duration && (layer.html !== undefined || layer.css !== undefined || layer.code !== undefined)).map(layer => <SandboxedCodePreview
           key={layer.id}
           title={layer.name}
           html={layer.html}
