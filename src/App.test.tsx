@@ -530,3 +530,16 @@ describe("Timeline preview", () => {
     expect(canvas?.getAttribute("aria-label")).toBe("Timeline preview at 00:00.50");
   });
 });
+
+
+describe("Integrated timeline editor", () => {
+  it("shows preview in the timeline workspace and provides playback controls", async () => {
+    const timelineNav = Array.from(container.querySelectorAll<HTMLButtonElement>(".nav-item")).find(button => button.textContent?.includes("Timeline"));
+    expect(timelineNav).toBeTruthy();
+    click(timelineNav!);
+    await flushEffects();
+    expect(container.querySelector(".integrated-preview-panel")).toBeTruthy();
+    expect(container.querySelector(".integrated-preview-frame canvas")).toBeTruthy();
+    expect(buttonsNamed("Play preview").length).toBeGreaterThan(0);
+  });
+});
