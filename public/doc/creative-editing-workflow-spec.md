@@ -7,7 +7,7 @@
 
 Dionysus is a shot-based creative editor for AI-assisted video. The core unit on the **Master Timeline** is a Shot, not an arbitrary imported media file. A Shot is a compositional module: its active Version may be a single video, a still image, or a nested composition containing multiple video/image/audio/text/Three.js modules.
 
-The Master Timeline arranges Shots in the final sequence. Opening a Shot Version in its own timeline tab edits the internals of that Version without silently changing the Shot's master start time or duration. Storyboard/References remain a separate planning workspace, never a media track.
+The Master Timeline arranges Shots in the final sequence. Each Shot may carry an explicit absolute `masterStart`; legacy projects without it retain a sequential-layout fallback. Opening a Shot Version in its own timeline tab edits that Version's internals without silently changing the Shot's master start time or duration. Storyboard/References remain a separate planning workspace, never a media track.
 
 ## 1. Timeline workspace layout and tracks
 
@@ -27,7 +27,7 @@ The Master Timeline arranges Shots in the final sequence. Opening a Shot Version
 - Tabs are identified by Shot and Version, for example “Shot 03 · Version 2”. Users can switch between the Master Timeline and any open nested Version timeline without losing their place.
 - Opening another Version may open another tab. Tabs have a close action; closing a tab must not delete its Version. Unsaved project edits must not be discarded silently.
 - A nested timeline edits only its selected Version's internal modules/layers. Its own time ruler and playhead use that Version's internal timebase.
-- The Master Timeline uses the Shot's declared duration, not the raw source-media duration. Internal trims or module arrangements do not silently ripple or resize the master Shot. Extending/reducing a Shot's duration is an explicit operation that previews the impact on the Master Timeline.
+- The Master Timeline uses the Shot's declared duration and absolute master position, not raw source-media duration. Master Shot placement/duration, Clip Slot duration, Version duration, and source in/out are distinct concepts. Internal trims or module arrangements do not silently ripple or resize the master Shot; changing a Shot's duration does not automatically resize its Versions. Drag placement snaps to the project frame rate. The current model allows direct repositioning; a dedicated ripple/reorder mode and overlap policy remain to be designed.
 - Nested compositions are recursive in the data model but the UI enforces a reasonable maximum depth and prevents cycles.
 
 ## 3. Shot thumbnail and Version dropdown
@@ -87,7 +87,7 @@ The Master Timeline arranges Shots in the final sequence. Opening a Shot Version
 
 - Keep asset identity, timeline placement, track/layer identity, Shot identity, Version identity, and Version-internal module placement distinct.
 - The model must express: Master Timeline Shot placement; Version-owned nested layers/modules; ordered layer/z-order; video parent + linked source audio relationship; independent audio layer mute state; active Version per Shot; and script/module version pinning.
-- Every Shot, Version, Asset, Track/Layer, Clip/Module, and Script Version has a stable ID.
+- Every Shot, Version, Asset, Track/Layer, Clip/Module, and Script Version has a stable ID. Optional `Shot.masterStart` is validated as a non-negative finite number; when absent, existing projects retain legacy sequential placement.
 - A Slot/Shot's selected Version ID must reference one of its own Versions. Child composition references must resolve and must not form cycles.
 - Source duration, source in/out, module duration, Version duration, Shot duration, and Master Timeline position are distinct concepts.
 - Project JSON round-trips must preserve Version alternatives, active-version selection, nested modules, layer ordering, links/mute states, procedural module identity, and asset references. Open tabs/playhead/selection may be UI state but must not corrupt project data.
