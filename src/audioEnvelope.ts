@@ -17,3 +17,16 @@ export function getAudioEnvelope(
   const outGain = fadeOutSeconds > 0 ? Math.min(1, remaining / fadeOutSeconds) : 1;
   return base * inGain * outGain;
 }
+
+/** Update a clip duration without leaving persisted fade values outside the new range. */
+export function withDurationAndClampedFades<T extends { duration: number; fadeIn?: number; fadeOut?: number }>(
+  clip: T,
+  duration: number
+): T {
+  return {
+    ...clip,
+    duration,
+    ...(clip.fadeIn !== undefined ? { fadeIn: Math.max(0, Math.min(clip.fadeIn, duration)) } : {}),
+    ...(clip.fadeOut !== undefined ? { fadeOut: Math.max(0, Math.min(clip.fadeOut, duration)) } : {})
+  };
+}
