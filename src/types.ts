@@ -27,7 +27,7 @@ export interface Shot {
   previewAssetId?: string;
 }
 export interface TimelineTrack { id: string; name: string; kind: "video" | "audio" | "text" | "effects" | "procedural"; muted?: boolean }
-export interface TimelineClip { id: string; name: string; kind: "video" | "audio"; trackId: string; start: number; duration: number; assetId?: string; shotId?: string; slotId?: string; muted?: boolean; linkedVideoClipId?: string; sourceIn?: number; sourceOut?: number; prompt?: string; modelName?: string; modelVersion?: string; thumbnailPath?: string }
+export interface TimelineClip { id: string; name: string; kind: "video" | "audio" | "text" | "procedural"; trackId: string; start: number; duration: number; assetId?: string; scriptVersionId?: string; shotId?: string; slotId?: string; muted?: boolean; linkedVideoClipId?: string; sourceIn?: number; sourceOut?: number; prompt?: string; modelName?: string; modelVersion?: string; thumbnailPath?: string }
 export interface DionysusProject {
   schemaVersion: "1.0";
   id: string;
