@@ -19,6 +19,8 @@ function toneWavDataUri(durationSeconds = 1): string {
 }
 
 test("browser smoke: compose video and audio, generate an image, export a playable WebM", async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on("pageerror", error => pageErrors.push(error.message));
   await page.goto("/");
   const sourceVideo = await page.evaluate(async () => {
     const canvas = document.createElement("canvas");
@@ -82,8 +84,6 @@ test("browser smoke: compose video and audio, generate an image, export a playab
   await page.evaluate(value => localStorage.setItem("dionysus.project.v1", JSON.stringify(value)), project);
   await page.reload();
 
-  const pageErrors: string[] = [];
-  page.on("pageerror", error => pageErrors.push(error.message));
   await page.route("https://provider.example/v1/images/generations", async route => {
     const corsHeaders = {
       "access-control-allow-origin": "http://127.0.0.1:4173",
