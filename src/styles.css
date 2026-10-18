@@ -2115,3 +2115,22 @@
 .syntax-tag { color: #8bd5ca; }
 .syntax-selector { color: #c6a0f6; }
 @media (min-width: 900px) { .code-playground-editor { min-height: 240px; } }
+
+.asset-picker-dialog { width: min(900px, 96vw); }
+.asset-picker-dialog > header { align-items: flex-start; }
+.asset-picker-dialog .settings-dialog-description { margin: 6px 0 0; }
+.asset-picker-controls { display: grid; grid-template-columns: minmax(0,1fr) 180px; gap: 10px; margin: 12px 0; }
+.asset-picker-filters { display: flex; gap: 6px; margin-bottom: 12px; }
+.asset-picker-filters button { padding: 7px 11px; border: 1px solid var(--border,#30313a); border-radius: 7px; background: transparent; color: var(--muted,#92939f); cursor: pointer; }
+.asset-picker-filters button.active { color: var(--accent,#d5f36a); border-color: var(--accent,#d5f36a); background: rgba(213,243,106,.07); }
+.asset-picker-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(140px,1fr)); gap: 10px; max-height: min(46vh,460px); overflow: auto; padding: 2px; }
+.asset-picker-card { display: flex; flex-direction: column; align-items: stretch; gap: 6px; min-width: 0; padding: 8px; border: 1px solid var(--border,#30313a); border-radius: 9px; background: rgba(255,255,255,.025); color: var(--text,#eeeef4); text-align: left; cursor: pointer; }
+.asset-picker-card:hover, .asset-picker-card:focus-visible { border-color: var(--accent,#d5f36a); background: rgba(213,243,106,.06); outline: none; }
+.asset-picker-thumb { display: grid; place-items: center; aspect-ratio: 16/9; overflow: hidden; border-radius: 6px; background: #101014; color: #bca7ff; }
+.asset-picker-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.asset-picker-card strong { overflow-wrap: anywhere; font-size: 12px; line-height: 1.3; }
+.asset-picker-card small { color: var(--muted,#92939f); font-size: 10px; }
+.asset-picker-empty { grid-column: 1/-1; padding: 32px 10px; border: 1px dashed var(--border,#30313a); border-radius: 8px; color: var(--muted,#92939f); text-align: center; font-size: 12px; }
+.asset-picker-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border,#30313a); }
+.asset-picker-footer label { display: inline-flex; align-items: center; gap: 6px; }
+@media(max-width:600px) { .asset-picker-controls { grid-template-columns: 1fr; } .asset-picker-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
