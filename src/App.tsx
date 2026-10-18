@@ -4,7 +4,7 @@ import { sampleProject } from "./sampleProject";
 import type { Asset, AssetKind, CompositionLayer, DionysusProject, ReferenceProfile, ReferenceRole, Shot, TimelineClip } from "./types";
 import { validateProject } from "./projectValidation";
 import { t } from "./i18n";
-import { addVideoClip, moveTimelineClip, trimTimelineClip, unlinkTimelineAudio, deleteTimelineClip } from "./timelineOperations";
+import { addVideoClip, moveTimelineClip, splitTimelineClip, trimTimelineClip, unlinkTimelineAudio, deleteTimelineClip } from "./timelineOperations";
 import { recordProjectChange, undoProjectChange as undoHistory, redoProjectChange as redoHistory } from "./projectHistory";
 import ProceduralAnimationPreview from "./ProceduralAnimationPreview";
 import { collectCompositionLayers, renderCompositionFrame, exportCompositionWebM, downloadExport } from "./compositionRenderer";
@@ -1089,6 +1089,22 @@ export default function App() {
 <button onClick={()=>{try{change(p=>({...p,timelineClips:moveTimelineClip({tracks:p.tracks,timelineClips:p.timelineClips??[]},selectedTimelineClip.id,Math.max(0,selectedTimelineClip.start-.5)).timelineClips}));setIsPlaying(false);}catch(error){setNotice(error instanceof Error?error.message:"Move failed.");}}}>−0.5s</button>
 <button onClick={()=>{try{change(p=>({...p,timelineClips:moveTimelineClip({tracks:p.tracks,timelineClips:p.timelineClips??[]},selectedTimelineClip.id,selectedTimelineClip.start+.5).timelineClips}));setIsPlaying(false);}catch(error){setNotice(error instanceof Error?error.message:"Move failed.");}}}>+0.5s</button>
 <button onClick={()=>{try{change(p=>({...p,timelineClips:trimTimelineClip({tracks:p.tracks,timelineClips:p.timelineClips??[]},selectedTimelineClip.id,Math.max(.1,selectedTimelineClip.duration-.5)).timelineClips}));setIsPlaying(false);}catch(error){setNotice(error instanceof Error?error.message:"Trim failed.");}}}>Trim −0.5s</button>
+<button disabled={selectedTimelineClip.kind==="audio"&&Boolean(selectedTimelineClip.linkedVideoClipId)||selectedTimelineClip.duration<2/Math.max(1,project.frameRate)} title={selectedTimelineClip.kind==="audio"&&selectedTimelineClip.linkedVideoClipId?"Split its source video to split linked audio":"Split into two clips at the midpoint"} onClick={()=>{
+ const fps=Math.max(1,project.frameRate||24);
+ const frame=1/fps;
+ const minimum=selectedTimelineClip.start+frame;
+ const maximum=selectedTimelineClip.start+selectedTimelineClip.duration-frame;
+ const middle=(selectedTimelineClip.start+selectedTimelineClip.duration/2);
+ const splitAt=Math.min(maximum,Math.max(minimum,Math.round(middle*fps)/fps));
+ const newClipId=id("timeline-clip");
+ const linkedAudioIds=selectedTimelineClip.kind==="video"?(project.timelineClips??[]).filter(clip=>clip.kind==="audio"&&clip.linkedVideoClipId===selectedTimelineClip.id).map(()=>id("timeline-audio")):[];
+ try{
+   change(p=>({...p,timelineClips:splitTimelineClip({tracks:p.tracks,timelineClips:p.timelineClips??[]},selectedTimelineClip.id,splitAt,{newClipId,...(linkedAudioIds.length?{newLinkedAudioClipIds:linkedAudioIds}:{})}).timelineClips}));
+   setSelectedTimelineClipId(newClipId);
+   setIsPlaying(false);
+   setNotice("Split at "+splitAt.toFixed(3)+"s. Source ranges and linked audio were preserved.");
+ }catch(error){setNotice(error instanceof Error?error.message:"Could not split this clip.");}
+ }}>Split at midpoint</button>
 {selectedTimelineClip.kind==="audio"&&selectedTimelineClip.linkedVideoClipId&&<button onClick={()=>{try{change(p=>({...p,timelineClips:unlinkTimelineAudio({tracks:p.tracks,timelineClips:p.timelineClips??[]},selectedTimelineClip.id).timelineClips}));setNotice("Audio unlinked; it can now be edited independently.");}catch(error){setNotice(error instanceof Error?error.message:"Unlink failed.");}}}>Unlink audio</button>}
 <button className="danger-action" onClick={()=>{change(p=>({...p,timelineClips:deleteTimelineClip({tracks:p.tracks,timelineClips:p.timelineClips??[]},selectedTimelineClip.id).timelineClips}));setSelectedTimelineClipId("");}}>Delete clip</button>
 </div>
