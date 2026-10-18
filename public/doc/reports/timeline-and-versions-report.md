@@ -21,7 +21,7 @@
 - Master Timeline clip Inspector can split a clip at the frame-snapped midpoint. Video and linked source audio split together, source ranges stay contiguous, fade-in stays on the first segment, and fade-out stays on the last.
 
 ## Validation
-- CI run [#39123309371](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39123309371) passed: 92 tests across 10 files, TypeScript check, production build, and npm audit with 0 vulnerabilities.
+- CI run [#39123516541](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39123516541) passed: 93 tests across 10 files, TypeScript check, production build, and npm audit with 0 vulnerabilities.
 - Regression tests cover legacy layout fallback, independent Master placement and duration, preservation of Version-internal duration, module start/duration editing, nested drag movement, layer reordering, composition offsets, thumbnail extraction/URL fallback, midpoint splitting, source trim alignment, and linked-audio fade-boundary preservation.
 - Automated browser smoke testing was not performed.
 
