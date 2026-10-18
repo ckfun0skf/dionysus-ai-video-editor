@@ -990,8 +990,8 @@ describe("Timeline layer and Shot settings UX", () => {
     const shot = container.querySelector<HTMLButtonElement>(".master-shot-clip");
     expect(shot).toBeTruthy();
     act(() => shot!.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 120, clientY: 90 })));
-    expect(container.querySelector('[role="menu"]')).toBeTruthy();
-    const settings = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')).find(button => button.textContent?.includes("Settings"));
+    expect(container.querySelector('.shot-context-menu[role="menu"]')).toBeTruthy();
+    const settings = Array.from(container.querySelectorAll<HTMLButtonElement>('.shot-context-menu [role="menuitem"]')).find(button => button.textContent?.includes("Settings"));
     expect(settings).toBeTruthy();
     click(settings!);
     await flushEffects();
