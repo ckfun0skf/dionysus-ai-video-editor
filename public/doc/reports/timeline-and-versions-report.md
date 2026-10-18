@@ -18,10 +18,10 @@
 - Version duration has its own control; changing it does not change Master Shot or Clip Slot duration.
 - Each nested module has Inspector controls for internal start and duration, direct drag-to-move with frame snapping, and header buttons to move the layer earlier/later.
 - Nested Video/Audio modules expose source in/out trim controls independently from Version/Slot/Master timing.
-- Master Timeline clip Inspector can split a clip at the frame-snapped midpoint. Video and linked source audio split together, source ranges stay contiguous, fade-in stays on the first segment, and fade-out stays on the last.
+- Master Timeline clip Inspector can split a clip at the frame-snapped midpoint or current playhead, and duplicate it after the original. Video split/duplicate preserves linked-audio relationships, source ranges, and audio mix metadata. Video and linked source audio split together, source ranges stay contiguous, fade-in stays on the first segment, and fade-out stays on the last.
 
 ## Validation
-- CI run [#39123516541](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39123516541) passed: 93 tests across 10 files, TypeScript check, production build, and npm audit with 0 vulnerabilities.
+- CI run [#39124022295](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39124022295) passed: 93 tests across 10 files, TypeScript check, production build, and npm audit with 0 vulnerabilities.
 - Regression tests cover legacy layout fallback, independent Master placement and duration, preservation of Version-internal duration, module start/duration editing, nested drag movement, layer reordering, composition offsets, thumbnail extraction/URL fallback, midpoint splitting, source trim alignment, and linked-audio fade-boundary preservation.
 - Automated browser smoke testing was not performed.
 
