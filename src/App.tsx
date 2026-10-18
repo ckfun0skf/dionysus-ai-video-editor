@@ -844,6 +844,46 @@ export default function App() {
     }
     setNotice("Version-internal duration updated; Master Shot and Clip Slot timing remain unchanged.");
   }
+  function duplicateClipAssetVersion(assetId: string, versionId: string) {
+    const asset = projectRef.current.assets.find(item => item.id === assetId && item.kind === "clip");
+    const current = asset?.kind === "clip" ? asset.clipVersions?.find(item => item.id === versionId) : undefined;
+    if (!asset || asset.kind !== "clip" || !current) return;
+    const nextId = id("clip-version");
+    const nextVersion: ClipVersion = {
+      ...copy({ ...current }),
+      id: nextId,
+      name: "Version " + ((asset.clipVersions?.length ?? 0) + 1),
+      description: current.description ? "Copy of " + current.name + ": " + current.description : "New version based on " + current.name,
+      layers: current.layers.map(layer => ({ ...layer, id: id("layer") })),
+      scriptVersionIds: [...current.scriptVersionIds],
+      generationRecords: []
+    };
+    change(p => ({
+      ...p,
+      assets: p.assets.map(item => item.id !== assetId || item.kind !== "clip" ? item : {
+        ...item,
+        updatedAt: new Date().toISOString(),
+        selectedClipVersionId: nextId,
+        clipVersions: [...(item.clipVersions ?? []), nextVersion]
+      })
+    }));
+    const tabId = "clip-asset:" + assetId + ":" + nextId;
+    setTimelineTabs(existing => existing.some(tab => tab.id === tabId) ? existing : [
+      ...existing, { id: tabId, shotId: "", slotId: "", assetId, versionId: nextId, label: asset.name + " · " + nextVersion.name }
+    ]);
+    setTimelineTabTimes(times => ({ ...times, [activeTimelineTabId]: editorTime, [tabId]: 0 }));
+    setActiveTimelineTabId(tabId);
+    setSelectedId("");
+    setSelectedSlotId("");
+    setSelectedTimelineClipId("");
+    setSelectedCompositionLayerId("");
+    setEditorTime(0);
+    playbackTimeRef.current = 0;
+    setIsPlaying(false);
+    setView("timeline");
+    setNotice("Duplicated Clip Version. Previous versions remain unchanged.");
+  }
+
   function updateSlotName(shotId: string, slotId: string, name: string) {
     change(p => ({ ...p, shots: p.shots.map(shot => shot.id !== shotId ? shot : {
       ...shot,
@@ -1577,7 +1617,10 @@ export default function App() {
                   <div className="asset-card-head">{asset.kind==="script"?<Code2 size={19}/>:asset.kind==="audio"?<AudioLines size={19}/>:asset.kind==="clip"?<Layers3 size={19}/>:<Film size={19}/>}<button className="mini-menu danger-action" title={t("action.delete")} onClick={() => removeAsset(asset.id)}>×</button></div>
                   <input className="text-field asset-name-field" aria-label={t("asset.nameLabel")} value={asset.name} onChange={event => updateAsset(asset.id, { name: event.target.value })}/>
                   <span>{asset.kind==="clip"?"Clip":asset.kind==="script"?"Code":t(("media."+asset.kind) as "media.video" | "media.image" | "media.audio" | "media.script" | "media.other")}</span>
-                  {asset.kind==="clip" && <small>{asset.canvasWidth??project.width} × {asset.canvasHeight??project.height} px · {asset.clipVersions?.length??0} version(s)</small>}
+                  {asset.kind==="clip" && <>
+                    <small>{asset.canvasWidth??project.width} × {asset.canvasHeight??project.height} px · {asset.clipVersions?.length??0} version(s)</small>
+                    <button className="button button-quiet button-small" disabled={!asset.clipVersions?.length} onClick={() => { const versionId = asset.selectedClipVersionId ?? asset.clipVersions?.[0]?.id; if (versionId) openClipAssetTimeline(asset.id, versionId); }}>Edit Timeline</button>
+                  </>}
                   {asset.path && <small className="asset-path">{asset.path.startsWith("data:image/") ? "Image stored locally for preview" : asset.path}</small>}
                   <input className="text-field asset-notes-field" aria-label={t("asset.notesLabel")} value={asset.notes ?? ""} placeholder={t("asset.notesPlaceholder")} onChange={event => updateAsset(asset.id, { notes: event.target.value })}/>
                   <input className="text-field" aria-label="Asset generation prompt" value={asset.prompt??""} placeholder="Generation prompt" onChange={event=>updateAsset(asset.id,{prompt:event.target.value})}/>
