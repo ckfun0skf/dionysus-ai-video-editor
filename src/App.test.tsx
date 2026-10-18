@@ -13,7 +13,7 @@ let originalCreateObjectURL: PropertyDescriptor | undefined;
 let originalRevokeObjectURL: PropertyDescriptor | undefined;
 let anchorClickSpy: ReturnType<typeof vi.spyOn>;
 
-function click(button: HTMLButtonElement) {
+function click(button: HTMLElement) {
   act(() => button.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 }
 
