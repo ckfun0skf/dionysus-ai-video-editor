@@ -161,6 +161,7 @@ export default function App() {
           const context = canvas.getContext("2d");
           if (context) { context.fillStyle = "#000"; context.fillRect(0, 0, canvas.width, canvas.height); }
         }
+      }
     };
     void render();
     return () => { if (previewRenderId.current === renderId) previewRenderId.current += 1; };
