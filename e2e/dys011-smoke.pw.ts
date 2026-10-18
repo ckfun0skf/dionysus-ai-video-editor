@@ -31,8 +31,15 @@ test("editor navigation stays accessible and adding linked clips keeps the media
   await page.getByRole("button", { name: "Add linked video/audio" }).click();
   await expect(mediaClips).toHaveCount(before + 2);
   await expect(page.locator(".visual-track-list")).toBeVisible();
-  await expect(page.locator(".visual-clip-inspector")).toHaveCount(0);
+  await expect(page.locator(".visual-timeline-help")).toBeVisible();
   await expect(page.locator(".editor-track-row")).toHaveCount(0);
+  await page.locator(".visual-media-clip.video-clip").last().click();
+  await expect(page.getByLabel("Source asset")).toBeVisible();
+  const seek = page.getByRole("slider", { name: "Seek timeline" });
+  const beforePlay = Number(await seek.getAttribute("aria-valuenow"));
+  await page.getByRole("button", { name: "Play preview" }).click();
+  await expect.poll(async () => Number(await seek.getAttribute("aria-valuenow"))).toBeGreaterThan(beforePlay);
+  await page.getByRole("button", { name: "Pause preview" }).click();
 
   await page.locator(".editor-view-nav").getByRole("button", { name: "Assets", exact: true }).click();
   await expect(page.getByRole("button", { name: "Open Editor" })).toBeVisible();

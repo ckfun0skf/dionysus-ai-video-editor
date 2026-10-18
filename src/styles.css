@@ -188,3 +188,16 @@
 .heading-meta .button{font-size:10px;padding:7px 9px}
 @media(max-width:900px){.editor-view-nav{max-width:35vw}.editor-view-nav button{padding:6px 5px}.editor-view-nav button span{display:none}}
 @media(max-width:580px){.editor-view-nav{max-width:42vw}.editor-project-name{max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+
+
+/* Keep actual media lanes in view; selected-clip controls live in the side inspector. */
+.editor-tool-hint{margin:2px 0 8px;font-size:10px;line-height:1.5;color:#91a1b8}
+.editor-inspector .text-field,.editor-inspector .text-area{width:100%;min-width:0;background:#101a2c;color:#e5edf9;border:1px solid #2b3b54;border-radius:5px;padding:8px;font:11px Arial,sans-serif}
+.editor-inspector .text-area{min-height:62px;resize:vertical}
+.editor-clip-fields{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.editor-clip-fields label,.editor-inspector>label{display:grid;gap:6px;margin:10px 0;font-size:10px;color:#b9c7dc}
+.editor-clip-actions{display:flex;gap:5px;flex-wrap:wrap;margin:8px 0}
+.editor-clip-actions button{border:1px solid #344863;background:#1a2a41;color:#d7e5fa;padding:7px 8px;border-radius:5px;font-size:10px;cursor:pointer}
+.editor-clip-actions button:hover{background:#273b58}
+.visual-timeline-help{font-size:10px;line-height:1.45;color:#8294af;padding:3px 0 5px}
+@media(max-width:900px){.editor-clip-fields{grid-template-columns:1fr}.editor-inspector{overflow-y:auto}}
