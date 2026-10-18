@@ -736,6 +736,55 @@ describe("App history integration", () => {
     expect((persistedProject().timelineClips ?? []).filter(clip => clip.kind === "video" && !clip.id.startsWith("storyboard-"))).toHaveLength(2);
   });
 
+  it("frame-snaps ordinary Master Timeline clip drag moves and keeps linked audio in sync", async () => {
+    await openTimelineView();
+    const addLinked = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Add linked video/audio"));
+    expect(addLinked).toBeTruthy();
+    click(addLinked!);
+    await flushEffects();
+
+    const before = persistedProject();
+    const video = before.timelineClips?.find(clip => clip.kind === "video" && !clip.id.startsWith("storyboard-"))!;
+    const audio = before.timelineClips?.find(clip => clip.kind === "audio" && clip.linkedVideoClipId === video.id)!;
+    const videoBlock = Array.from(container.querySelectorAll<HTMLButtonElement>(".visual-media-clip"))
+      .find(button => button.textContent?.includes(video.name) && !button.textContent?.includes(" audio"));
+    expect(videoBlock).toBeTruthy();
+    expect(videoBlock!.draggable).toBe(true);
+    const lane = videoBlock!.closest(".visual-track-lane") as HTMLDivElement | null;
+    expect(lane).toBeTruthy();
+    Object.defineProperty(lane!, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({ left: 0, top: 0, right: 100, bottom: 64, width: 100, height: 64, x: 0, y: 0, toJSON: () => ({}) })
+    });
+    const transferValues = new Map<string, string>();
+    const dataTransfer = {
+      setData: (type: string, value: string) => transferValues.set(type, value),
+      getData: (type: string) => transferValues.get(type) ?? "",
+      effectAllowed: "move"
+    };
+    const dragStart = new Event("dragstart", { bubbles: true, cancelable: true });
+    Object.defineProperty(dragStart, "dataTransfer", { value: dataTransfer });
+    act(() => videoBlock!.dispatchEvent(dragStart));
+    const clientX = 54;
+    const drop = new MouseEvent("drop", { bubbles: true, cancelable: true, clientX });
+    Object.defineProperty(drop, "dataTransfer", { value: dataTransfer });
+    act(() => lane!.dispatchEvent(drop));
+    await flushEffects();
+
+    const after = persistedProject();
+    const moved = after.timelineClips?.find(clip => clip.id === video.id)!;
+    const movedAudio = after.timelineClips?.find(clip => clip.id === audio.id)!;
+    const timelineDuration = Math.max(10, getMasterTimelineDuration(before.shots), ...(before.timelineClips ?? []).map(clip => clip.start + clip.duration));
+    const fps = before.frameRate;
+    const rawStart = Math.max(0, (clientX / 100) * timelineDuration - video.duration / 2);
+    const snapped = Math.round(rawStart * fps) / fps;
+    const maxStart = Math.max(0, Math.floor((timelineDuration - video.duration) * fps) / fps);
+    const expected = Math.min(maxStart, snapped);
+    expect(moved.start).toBeCloseTo(expected, 7);
+    expect(moved.start * fps).toBeCloseTo(Math.round(moved.start * fps), 7);
+    expect(movedAudio).toMatchObject({ start: moved.start, duration: moved.duration, linkedVideoClipId: moved.id });
+  });
+
   it("opens nested Version tabs, adds a procedural layer, and keeps linked-audio mute/unlink independent", async () => {
     await openTimelineView();
     expect(container.querySelector(".master-shot-clip")).toBeTruthy();
