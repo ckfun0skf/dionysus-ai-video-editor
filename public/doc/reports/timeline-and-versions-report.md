@@ -1,21 +1,22 @@
-# Completion Report — DYS-005: Precise Timeline editing and Version management
+# Implementation Report — DYS-005: Master and nested Timeline editing
 
-**Status:** In progress; first Version-picker milestone merged.  
-**Scope of this report:** First milestone only.
+**Status:** In progress  
+**Last updated:** 2026-10-18  
+**Implementation PR:** [#39 — prototype-aligned Timeline tabs, versions, and layers](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/39)
 
-## Changes in this milestone
-- Clicking a clip slot opens a version panel with version cards, descriptive text, duration, layer/generation counts, and a thumbnail placeholder.
-- Selecting a card updates only that Clip Slot's `selectedVersionId`.
-- Creating a version keeps the existing versions, clones the selected version's layer configuration with new layer IDs, and starts a fresh generation-record list.
-- The selected version's description can be edited.
+## Delivered in this slice
+- Master Timeline and nested Shot-Version timeline tabs inside the Timeline workspace.
+- Master Shot blocks with an active-Version dropdown, active Version selection, **+ Add Version**, and per-Version **Edit** actions.
+- Nested Version lanes for video/image/audio/text/procedural layers, with basic add/delete operations and an Inspector route for Version-owned layer properties.
+- Explicit placeholder thumbnails when no real thumbnail is available; no fabricated frame is shown.
+- Typed visual layers replace the confusing “Media track” heading.
 
 ## Validation
-- GitHub Actions CI run [#39017609414](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39017609414) passed, including automated tests and TypeScript/production build.
-- Browser smoke testing was not performed; UI interaction has not been independently verified in a browser.
-- Real thumbnails are not claimed; cards use a visual placeholder.
+- CI run [#39117698570](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39117698570) passed: 64 tests, TypeScript check, production build, npm audit with 0 vulnerabilities.
+- Regression tests exercise Version menu, nested tab navigation, and procedural layer creation.
+- No automated browser smoke test was run.
 
-## Merge evidence
-- PR [#3](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/3) merged to `main` as `bb72498427851a3a3f3c421a2a529137a933f3cc`.
-
-## Known limitations
-Drag/drop editing, frame-accurate timing, media playback, thumbnail extraction, and nested composition editing remain future work.
+## Remaining limitations
+- Master Shot placement is not yet a complete independent drag/reorder model; the project schema needs a stronger distinction between Shot placement and source clip placement.
+- Real frame extraction, frame-accurate drag/trim, and complete media assignment controls are still outstanding.
+- The first nested timeline offers lane/block structure and creation/deletion, but not yet a fully featured professional clip editor.
