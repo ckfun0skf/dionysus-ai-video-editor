@@ -2264,3 +2264,29 @@
   .nested-timeline-ruler { margin-left: 180px; }
   .nested-timeline-row { grid-template-columns: 180px minmax(280px,1fr); }
 }
+
+
+/* Nested Clip Version timelines share the same ruler, track headers, grid, and clip styling as Master Timeline. */
+.nested-timeline-tab.editor-linked-timeline.visual-timeline { margin:12px 0; padding:12px; border:1px solid var(--border,#30313a); border-radius:10px; background:var(--surface,#15161b); }
+.nested-timeline-tab .nested-visual-timeline-ruler { grid-template-columns:220px minmax(320px,1fr); }
+.nested-timeline-tab .nested-timeline-row.visual-track-row { grid-template-columns:220px minmax(320px,1fr); min-height:64px; border:1px solid var(--border,#30313a); background:rgba(255,255,255,.02); }
+.nested-timeline-tab .nested-timeline-row-label.visual-track-label { gap:7px; padding:8px 9px; }
+.nested-timeline-tab .nested-timeline-row-track.visual-track-lane { min-height:64px; background-size:10% 100%; }
+.nested-timeline-tab .nested-timeline-clip.visual-media-clip {
+  position:absolute; top:8px; bottom:8px; display:flex; flex-direction:column; align-items:flex-start; justify-content:center;
+  gap:3px; min-width:36px; padding:6px 9px; border:1px solid rgba(193,177,255,.35); border-radius:7px;
+  background:linear-gradient(135deg,rgba(119,88,226,.88),rgba(75,61,142,.88)); color:#f7f5ff; cursor:grab; overflow:hidden; text-align:left;
+}
+.nested-timeline-tab .nested-timeline-clip.visual-media-clip:active { cursor:grabbing; }
+.nested-timeline-tab .nested-timeline-clip.visual-media-clip.kind-audio { background:linear-gradient(135deg,rgba(27,133,111,.88),rgba(24,91,81,.88)); border-color:rgba(117,215,193,.35); }
+.nested-timeline-tab .nested-timeline-clip.visual-media-clip.kind-image { background:linear-gradient(135deg,rgba(51,125,91,.9),rgba(32,89,63,.9)); }
+.nested-timeline-tab .nested-timeline-clip.visual-media-clip.kind-text { background:linear-gradient(135deg,rgba(139,37,207,.9),rgba(94,28,146,.9)); }
+.nested-timeline-tab .nested-timeline-clip.visual-media-clip.kind-procedural,.nested-timeline-tab .nested-timeline-clip.visual-media-clip.kind-script { background:linear-gradient(135deg,rgba(35,76,125,.9),rgba(25,55,95,.9)); }
+.nested-timeline-tab .nested-timeline-clip.visual-media-clip strong { font-size:10px; max-width:100%; }
+.nested-timeline-tab .nested-timeline-clip.visual-media-clip small { font-size:9px; opacity:.8; }
+.nested-timeline-tab .nested-timeline-clip.visual-media-clip.selected { outline:2px solid #fff; outline-offset:-2px; }
+.clip-overlap-preview { position:absolute; z-index:8; top:4px; bottom:4px; border:1px dashed #a8a8af; background:repeating-linear-gradient(135deg,rgba(165,165,175,.24) 0 5px,rgba(165,165,175,.08) 5px 10px); pointer-events:none; }
+.timeline-snap-guide { position:absolute; z-index:9; top:0; bottom:0; width:0; border-left:1px solid #d5f36a; pointer-events:none; }
+.timeline-snap-guide::before { content:""; position:absolute; top:0; left:-4px; width:9px; height:7px; background:#d5f36a; clip-path:polygon(0 0,100% 0,50% 100%); }
+.timeline-snap-guide span { position:absolute; top:9px; left:3px; padding:2px 4px; border-radius:3px; background:#d5f36a; color:#151515; font:700 8px/1.2 ui-monospace,monospace; }
+@media(max-width:760px) { .nested-timeline-tab .nested-visual-timeline-ruler,.nested-timeline-tab .nested-timeline-row.visual-track-row { grid-template-columns:180px minmax(280px,1fr); } }
