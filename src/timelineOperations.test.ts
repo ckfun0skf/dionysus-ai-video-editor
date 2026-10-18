@@ -113,10 +113,15 @@ describe("linked multi-track timeline operations", () => {
     expect(trimmed.timelineClips.find(c => c.id === "a")).not.toHaveProperty("linkedVideoClipId");
   });
 
-  it("trims linked audio with its video", () => {
-    const state = addVideoClip(empty, { id: "v", name: "Video", trackId: "v1", start: 1, duration: 5, sourceHasAudio: true, audioTrackId: "a1", audioClipId: "a" });
+  it("trims linked audio with its video, adjusts source out, and clamps fades", () => {
+    const base = addVideoClip(empty, { id: "v", name: "Video", trackId: "v1", start: 1, duration: 5, sourceHasAudio: true, audioTrackId: "a1", audioClipId: "a" });
+    const state = {
+      ...base,
+      timelineClips: base.timelineClips.map(clip => ({ ...clip, sourceIn: 2, sourceOut: 7, volume: 0.8, fadeIn: 1, fadeOut: 4 }))
+    };
     const trimmed = trimTimelineClip(state, "v", 3);
-    expect(trimmed.timelineClips.find(c => c.id === "a")?.duration).toBe(3);
+    expect(trimmed.timelineClips.find(c => c.id === "v")).toMatchObject({ duration: 3, sourceIn: 2, sourceOut: 5, volume: 0.8, fadeIn: 1, fadeOut: 3 });
+    expect(trimmed.timelineClips.find(c => c.id === "a")).toMatchObject({ duration: 3, sourceIn: 2, sourceOut: 5, volume: 0.8, fadeIn: 1, fadeOut: 3, linkedVideoClipId: "v" });
   });
 
   it("deletes linked source audio together with its video but preserves detached audio", () => {
