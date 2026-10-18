@@ -1115,7 +1115,10 @@ describe("Timeline preview", () => {
     await flushEffects();
 
     expect(container.querySelector(".nested-timeline-tab .integrated-preview-panel")).toBeTruthy();
-    expect(container.querySelector(".nested-version-inspector")).toBeNull();
+    const versionDetails = container.querySelector<HTMLDetailsElement>(".nested-version-inspector-disclosure");
+    expect(versionDetails).toBeTruthy();
+    expect(versionDetails!.open).toBe(false);
+    expect(versionDetails!.querySelector<HTMLInputElement>('input[aria-label^="Version layer "]')).toBeTruthy();
     const versionPreview = container.querySelector<HTMLInputElement>(".nested-timeline-tab input[aria-label=\"Timeline playhead time\"]");
     expect(versionPreview).toBeTruthy();
     expect(versionPreview!.value).toBe("0");
