@@ -1552,3 +1552,16 @@
     max-height: 220px;
   }
 }
+
+
+/* Allow version menus to escape their clip row; the previous overflow-x
+   rule implicitly created a vertical scrollbar on each timeline lane. */
+.workbench.timeline-workbench .editor-linked-timeline .visual-track-lane {
+  overflow: visible;
+}
+.workbench.timeline-workbench .visual-track-row {
+  overflow: visible;
+}
+.integrated-preview-frame .editor-preview-canvas {
+  object-fit: contain;
+}
