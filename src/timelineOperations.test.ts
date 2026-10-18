@@ -53,7 +53,8 @@ describe("linked multi-track timeline operations", () => {
     const independent = unlinkTimelineAudio(state, "a");
     const split = splitTimelineClip(independent, "a", 6, { newClipId: "a-right" });
     expect(split.timelineClips.find(clip => clip.id === "a")).toMatchObject({ start: 2, duration: 4 });
-    expect(split.timelineClips.find(clip => clip.id === "a-right")).toMatchObject({ start: 6, duration: 4, linkedVideoClipId: undefined });
+    expect(split.timelineClips.find(clip => clip.id === "a-right")).toMatchObject({ start: 6, duration: 4 });
+    expect(split.timelineClips.find(clip => clip.id === "a-right")).not.toHaveProperty("linkedVideoClipId");
     expect(split.timelineClips.find(clip => clip.id === "v")).toMatchObject({ start: 2, duration: 8 });
   });
 
