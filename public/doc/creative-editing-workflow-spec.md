@@ -89,7 +89,7 @@ The Master Timeline arranges Shots in the final sequence. Each Shot may carry an
 - The model must express: Master Timeline Shot placement; Version-owned nested layers/modules; ordered layer/z-order; video parent + linked source audio relationship; independent audio layer mute state; active Version per Shot; and script/module version pinning.
 - Every Shot, Version, Asset, Track/Layer, Clip/Module, and Script Version has a stable ID. Optional `Shot.masterStart` is validated as a non-negative finite number; when absent, existing projects retain legacy sequential placement.
 - A Slot/Shot's selected Version ID must reference one of its own Versions. Child composition references must resolve and must not form cycles.
-- Source duration, source in/out, module duration, Version duration, Shot duration, and Master Timeline position are distinct concepts.
+- Source duration, source in/out, module duration, Version duration, Shot duration, and Master Timeline position are distinct concepts. Trimming a clip synchronizes sourceOut with the resulting duration when a source range is explicit, and fade-in/out values are clamped to valid clip bounds. Splitting a clip materializes implicit source ranges, preserves contiguous source offsets, keeps linked source audio aligned, and assigns fade-in to the first segment and fade-out to the last.
 - Project JSON round-trips must preserve Version alternatives, active-version selection, nested modules, layer ordering, links/mute states, procedural module identity, and asset references. Open tabs/playhead/selection may be UI state but must not corrupt project data.
 - Missing media, missing thumbnails, and missing script versions are explicit recoverable states.
 
