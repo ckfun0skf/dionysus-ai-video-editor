@@ -1814,3 +1814,12 @@
   tab-size: 2;
 }
 .visual-clip-inspector .code-source-textarea { min-height: 150px; }
+
+.version-thumbnail-preview.has-video-and-code {
+  flex-wrap: nowrap;
+}
+.version-thumbnail-preview.has-video-and-code .version-thumbnail-video,
+.version-thumbnail-preview.has-video-and-code .version-thumbnail-code {
+  flex: 0 0 50%;
+  width: 50%;
+}
