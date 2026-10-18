@@ -935,7 +935,6 @@ export default function App() {
    </div>;
  })}
  </div>
-</div>
 {selectedTimelineClip&&<div className="visual-clip-inspector">
 <div className="visual-clip-inspector-title"><div><strong>{selectedTimelineClip.name}</strong><span>{selectedTimelineClip.kind} · {selectedTimelineClip.linkedVideoClipId?"linked source audio":selectedTimelineClip.kind==="audio"?"independent audio":"video source"}</span></div><button className="button button-quiet button-small" onClick={()=>setSelectedTimelineClipId("")}>Close</button></div>
 <div className="visual-clip-actions">
