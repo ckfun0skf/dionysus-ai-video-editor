@@ -492,6 +492,65 @@ describe("App history integration", () => {
     expect(container.querySelector<HTMLInputElement>('.version-panel input[aria-label="Clip slot name"]')?.value).toBe("Opening image");
   });
 
+  it("opens nested Version tabs, adds a procedural layer, and keeps linked-audio mute/unlink independent", async () => {
+    await openTimelineView();
+    const add = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Add linked video/audio"));
+    expect(add).toBeTruthy();
+    click(add!);
+    await flushEffects();
+
+    const initial = persistedProject();
+    const video = initial.timelineClips?.find(clip => clip.kind === "video");
+    const audio = initial.timelineClips?.find(clip => clip.kind === "audio");
+    expect(video?.slotId).toBe(initial.shots[0].slots[0].id);
+    expect(audio?.linkedVideoClipId).toBe(video?.id);
+    expect(container.querySelector(".linked-audio-child")).toBeTruthy();
+
+    const mute = container.querySelector<HTMLButtonElement>(".linked-audio-child .timeline-clip-mute");
+    expect(mute).toBeTruthy();
+    click(mute!);
+    await flushEffects();
+    expect(persistedProject().timelineClips?.find(clip => clip.id === audio?.id)?.muted).toBe(true);
+
+    const unlink = container.querySelector<HTMLButtonElement>(".linked-audio-child .timeline-clip-unlink");
+    expect(unlink).toBeTruthy();
+    click(unlink!);
+    await flushEffects();
+    expect(persistedProject().timelineClips?.find(clip => clip.id === audio?.id)).not.toHaveProperty("linkedVideoClipId");
+    expect(persistedProject().timelineClips?.find(clip => clip.id === video?.id)?.start).toBe(video?.start);
+
+    const menu = container.querySelector<HTMLDetailsElement>(".timeline-version-menu");
+    expect(menu).toBeTruthy();
+    click(menu!.querySelector("summary") as HTMLElement);
+    const slotBefore = persistedProject().shots[0].slots[0];
+    const countBefore = slotBefore.versions.length;
+    const addVersion = Array.from(menu!.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Add Version"));
+    expect(addVersion).toBeTruthy();
+    click(addVersion!);
+    await flushEffects();
+    const updatedSlot = persistedProject().shots[0].slots[0];
+    expect(updatedSlot.versions).toHaveLength(countBefore + 1);
+    const addedVersionId = updatedSlot.selectedVersionId;
+    const editButtons = Array.from(container.querySelectorAll<HTMLButtonElement>(".timeline-version-edit"));
+    expect(editButtons.length).toBeGreaterThan(0);
+    click(editButtons[editButtons.length - 1]);
+    await flushEffects();
+    expect(container.querySelector(".nested-timeline-tab")?.textContent).toContain("Version");
+    expect(container.querySelector(".timeline-workspace-tabs")?.textContent).toContain("Master Timeline");
+
+    const addThree = Array.from(container.querySelectorAll<HTMLButtonElement>(".nested-timeline-tab button")).find(button => button.textContent?.includes("Three.js layer"));
+    expect(addThree).toBeTruthy();
+    click(addThree!);
+    await flushEffects();
+    const editedVersion = persistedProject().shots[0].slots[0].versions.find(version => version.id === addedVersionId);
+    expect(editedVersion?.layers.some(layer => layer.kind === "procedural")).toBe(true);
+
+    click(Array.from(container.querySelectorAll<HTMLButtonElement>(".timeline-workspace-tabs button")).find(button => button.textContent?.includes("Master Timeline"))!);
+    await flushEffects();
+    expect(container.querySelector(".nested-timeline-tab")).toBeNull();
+    expect(container.querySelector(".master-timeline-content")).toBeTruthy();
+  });
+
   it("generates timeline clips from storyboard slots without deleting manual clips", async () => {
     await openTimelineView();
     const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Add linked video/audio")) as HTMLButtonElement;
