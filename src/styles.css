@@ -1956,7 +1956,8 @@
 
 
 /* Keep the playhead and clip geometry visually coherent across the whole timeline. */
-.timeline-ruler, .timeline-time-ruler, .editor-time-ruler { padding-left: 238px; }
+.timeline-ruler { margin-left: 238px; padding-left: 0; }
+.timeline-time-ruler, .editor-time-ruler { padding-left: 238px; }
 .selected-track-label { background: rgba(213,243,106,.09); box-shadow: inset 3px 0 #d5f36a; }
 .selected-layer-frame {
   position: absolute;
@@ -2007,5 +2008,6 @@
 .visual-media-clip-wrap > .visual-media-clip > .visual-clip-copy { position: relative; z-index: 1; }
 .visual-media-clip.audio-clip::after { z-index: 0; }
 @media (max-width: 760px) {
-  .timeline-ruler, .timeline-time-ruler, .editor-time-ruler { padding-left: 180px; }
+  .timeline-ruler { margin-left: 180px; padding-left: 0; }
+  .timeline-time-ruler, .editor-time-ruler { padding-left: 180px; }
 }
