@@ -1191,14 +1191,18 @@ describe("Timeline layer and Shot settings UX", () => {
     click(edit!);
     await flushEffects();
 
-    const addCode = Array.from(container.querySelectorAll<HTMLButtonElement>(".nested-timeline-tab button")).find(button => button.textContent?.includes("Code (Three.js)"));
+    const addCode = Array.from(container.querySelectorAll<HTMLButtonElement>(".nested-timeline-tab button")).find(button => button.textContent?.includes("Code"));
     expect(addCode).toBeTruthy();
     click(addCode!);
     await flushEffects();
-    const sourceDetails = container.querySelector<HTMLDetailsElement>(".code-source-editor");
-    expect(sourceDetails).toBeTruthy();
-    click(sourceDetails!.querySelector("summary") as HTMLElement);
-    const source = sourceDetails!.querySelector<HTMLTextAreaElement>("textarea");
+    const codeClip = container.querySelector<HTMLButtonElement>(".nested-timeline-clip.kind-procedural");
+    expect(codeClip).toBeTruthy();
+    act(() => codeClip!.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 100, clientY: 100 })));
+    const settings = Array.from(container.querySelectorAll<HTMLButtonElement>(".shot-context-menu button")).find(button => button.textContent?.includes("Settings"));
+    expect(settings).toBeTruthy();
+    click(settings!);
+    await flushEffects();
+    const source = container.querySelector<HTMLTextAreaElement>(".clip-settings-dialog textarea");
     expect(source).toBeTruthy();
     act(() => {
       const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
