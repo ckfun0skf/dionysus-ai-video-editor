@@ -59,7 +59,7 @@ describe("Clip Asset reference graph", () => {
   });
 
   it("collects direct nested Clip Asset references from each saved version", () => {
-    const assets = [clipAsset("A", ["B", "C"]), clipAsset("B"), clipAsset("C"), { id: "video", name: "video", kind: "video" }];
+    const assets = [clipAsset("A", ["B", "C"]), clipAsset("B"), clipAsset("C"), { id: "video", name: "video", kind: "video" as const }];
     expect(getReferencedClipAssetIds(assets[0], assets).sort()).toEqual(["B", "C"]);
   });
 
