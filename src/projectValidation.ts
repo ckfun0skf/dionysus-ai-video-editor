@@ -18,7 +18,7 @@ const referenceRoles = new Set(["identity", "face", "body", "outfit", "pose", "c
 const assetKinds = new Set(["video", "image", "audio", "script", "clip", "other"]);
 const layerKinds = new Set(["video", "image", "audio", "text", "script", "procedural", "composition"]);
 const trackKinds = new Set(["video", "audio", "text", "effects", "procedural"]);
-const timelineClipKinds = new Set(["video", "audio", "text", "procedural"]);
+const timelineClipKinds = new Set(["video", "audio", "text", "procedural", "clip"]);
 const shotStatuses = new Set(["planned", "in-progress", "ready"]);
 const entityTypes = new Set(["character", "environment", "prop", "style", "other"]);
 
@@ -199,7 +199,7 @@ export function validateProject(value: unknown): value is DionysusProject {
   for (const clip of timelineClips) {
     if (!trackIds.has(clip.trackId as string)) return false;
     const track = tracks.find(item => item.id === clip.trackId);
-    if (!track || track.kind !== clip.kind) return false;
+    if (!track || (track.kind !== clip.kind && !(clip.kind === "clip" && track.kind === "video"))) return false;
     if (clip.assetId !== undefined && !assetIds.has(clip.assetId as string)) return false;
     if (clip.shotId !== undefined && !shotIds.has(clip.shotId as string)) return false;
     if (clip.slotId !== undefined) {
