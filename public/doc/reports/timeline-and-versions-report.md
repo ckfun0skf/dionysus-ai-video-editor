@@ -7,16 +7,18 @@
 ## Delivered in this slice
 - Master Timeline and nested Shot-Version timeline tabs inside the Timeline workspace.
 - Master Shot blocks with an active-Version dropdown, active Version selection, **+ Add Version**, and per-Version **Edit** actions.
-- Nested Version lanes for video/image/audio/text/procedural layers, with basic add/delete operations and an Inspector route for Version-owned layer properties.
-- Explicit placeholder thumbnails when no real thumbnail is available; no fabricated frame is shown.
-- Typed visual layers replace the confusing “Media track” heading.
+- A migration-compatible optional `Shot.masterStart` property. Legacy projects without it retain sequential positioning until the layout is edited.
+- Master Shot start can be edited numerically in the Inspector or moved by dragging its block on the timeline lane. Drag placement snaps to project frame rate.
+- Master Shot duration, Clip Slot duration, and each Version's internal duration are now independent; changing one no longer automatically resizes the others.
+- Nested Version layers are collected at the Shot's absolute Master Timeline offset.
+- Nested Version lanes support video, image, audio, text, and procedural/Three.js modules, with clear placeholder thumbnails where real thumbnails are absent.
 
 ## Validation
-- CI run [#39117698570](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39117698570) passed: 64 tests, TypeScript check, production build, npm audit with 0 vulnerabilities.
-- Regression tests exercise Version menu, nested tab navigation, and procedural layer creation.
-- No automated browser smoke test was run.
+- CI run [#39118555157](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39118555157) passed: 70 tests across 8 files, TypeScript check, production build, and npm audit with 0 vulnerabilities.
+- Regression tests cover legacy layout fallback, independent Master placement and duration, preservation of Version-internal duration, drag placement, and rendering offsets.
+- Automated browser smoke testing was not performed.
 
 ## Remaining limitations
-- Master Shot placement is not yet a complete independent drag/reorder model; the project schema needs a stronger distinction between Shot placement and source clip placement.
-- Real frame extraction, frame-accurate drag/trim, and complete media assignment controls are still outstanding.
-- The first nested timeline offers lane/block structure and creation/deletion, but not yet a fully featured professional clip editor.
+- The Master Timeline permits absolute repositioning but does not yet provide a dedicated reorder/ripple mode or collision policy for overlapping Shot placements.
+- Real frame extraction, fully featured nested clip source/trim controls, and comprehensive JSON/Undo-Redo round-trip verification remain outstanding.
+- The first nested timeline offers lane/block structure and basic creation/deletion, not yet a complete professional clip editor.
