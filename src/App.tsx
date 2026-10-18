@@ -798,8 +798,8 @@ export default function App() {
     setSelectedTimelineClipId(clip.id);
     setIsPlaying(false);
     setNotice(kind === "text"
-      ? "Text block added. Edit its displayed text in the clip Inspector."
-      : "Three.js module block added. Assign a script asset and pinned script-version ID; procedural output is not rendered by the current compositor.");
+      ? "Text clip added. Right-click it and choose Settings to edit."
+      : "Code clip block added. Assign a script asset and pinned script-version ID; procedural output is not rendered by the current compositor.");
   }
 
   function toggleShotReferenceProfile(shotId: string, profileId: string, checked: boolean) {
@@ -1202,7 +1202,7 @@ export default function App() {
       <button className="button button-quiet button-small" onClick={()=>addVersionLayer(activeVersionTimelineShot.id,activeVersionTimelineSlot.id,activeVersionTimeline.id,"image")}><Plus size={13}/> Image</button>
       <button className="button button-quiet button-small" onClick={()=>addVersionLayer(activeVersionTimelineShot.id,activeVersionTimelineSlot.id,activeVersionTimeline.id,"audio")}><Plus size={13}/> Audio</button>
       <button className="button button-quiet button-small" onClick={()=>addVersionLayer(activeVersionTimelineShot.id,activeVersionTimelineSlot.id,activeVersionTimeline.id,"text")}><Plus size={13}/> Text</button>
-      <button className="button button-quiet button-small" onClick={()=>addVersionLayer(activeVersionTimelineShot.id,activeVersionTimelineSlot.id,activeVersionTimeline.id,"procedural")}><Plus size={13}/> Code (Three.js)</button>
+      <button className="button button-quiet button-small" onClick={()=>addVersionLayer(activeVersionTimelineShot.id,activeVersionTimelineSlot.id,activeVersionTimeline.id,"procedural")}><Plus size={13}/> Code</button>
       <label className="nested-version-duration">Version duration <span><input aria-label="Version duration" type="number" min="0.1" step={1/Math.max(1,project.frameRate)} value={activeVersionTimeline.duration} onChange={event=>updateVersionDuration(activeVersionTimelineShot.id,activeVersionTimelineSlot.id,activeVersionTimeline.id,Number(event.target.value))}/>s</span></label>
     </div>
   </div>
@@ -1229,7 +1229,7 @@ export default function App() {
         {layer.kind==="procedural" && <details className="code-source-editor"><summary>Three.js source</summary><div className="code-editor-shell"><pre aria-hidden="true" className="code-highlight-layer">{highlightCode(layer.code??"")}{"\\n"}</pre><textarea className="text-area code-source-textarea code-editor-input" aria-label={layer.name + " JavaScript source"} rows={7} spellCheck={false} value={layer.code??""} onChange={event=>updateCompositionLayer(activeVersionTimelineShot.id,activeVersionTimelineSlot.id,activeVersionTimeline.id,layer.id,{code:event.target.value})} onScroll={event=>{const pre=event.currentTarget.previousElementSibling as HTMLElement|null;if(pre)pre.scrollTop=event.currentTarget.scrollTop;}} placeholder="// JavaScript source for this code clip…"/></div></details>}
       </div>
     </div>)}
-    {!activeVersionTimeline.layers.length && <div className="nested-timeline-empty">This Version has no internal layers yet. Add a video, image, audio, text, or Three.js layer above.</div>}
+    {!activeVersionTimeline.layers.length && <div className="nested-timeline-empty">This Version has no internal layers yet. Add a video, image, audio, text, or Code layer above.</div>}
     {activeVersionTimeline.layers.some(layer=>layer.start+layer.duration>activeVersionTimeline.duration) && <div className="nested-timeline-warning" role="status">One or more modules extend past this Version's duration and may be cut off in preview/export. Their timing has not been changed automatically.</div>}
   </div>
 </section>}
