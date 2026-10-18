@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { sampleProject } from "./sampleProject";
-import { getMasterShotIndexAtTime, getMasterShotStart, getMasterShotStarts, getMasterTimelineDuration, setMasterShotDuration, setMasterShotStart } from "./masterTimeline";
+import { getMasterShotIndexAtTime, getMasterShotStart, getMasterShotStarts, getMasterTimelineDuration, rippleReorderMasterShots, setMasterShotDuration, setMasterShotStart } from "./masterTimeline";
 
 describe("Master Timeline Shot placement", () => {
   it("keeps legacy projects in their original sequential layout", () => {
@@ -27,6 +27,29 @@ describe("Master Timeline Shot placement", () => {
     expect(updated.slice(1).map(shot => shot.duration)).toEqual(shots.slice(1).map(shot => shot.duration));
     expect(updated.map(shot => shot.slots.map(slot => slot.versions.map(version => version.duration)))).toEqual(versionsBefore);
     expect(getMasterTimelineDuration(updated)).toBe(Math.max(9, ...getMasterShotStarts(updated).slice(1).map((start, index) => start + updated[index+1].duration)));
+  });
+
+  it("ripple-reorders the Master Shot sequence without changing Shot or Version duration", () => {
+    const shots = structuredClone(sampleProject.shots);
+    shots[0].masterStart = 0;
+    shots[1].masterStart = 20;
+    shots[2].masterStart = 40;
+    const durations = shots.map(shot => shot.duration);
+    const versionDurations = shots.map(shot => shot.slots.map(slot => slot.versions.map(version => version.duration)));
+
+    const reordered = rippleReorderMasterShots(shots, shots[1].id, 100);
+    expect(getMasterShotStart(reordered, shots[0].id)).toBe(0);
+    expect(getMasterShotStart(reordered, shots[2].id)).toBe(shots[0].duration);
+    expect(getMasterShotStart(reordered, shots[1].id)).toBe(shots[0].duration + shots[2].duration);
+    expect(reordered.map(shot => shot.duration)).toEqual(durations);
+    expect(reordered.map(shot => shot.slots.map(slot => slot.versions.map(version => version.duration)))).toEqual(versionDurations);
+    expect(getMasterTimelineDuration(reordered)).toBe(durations.reduce((sum, duration) => sum + duration, 0));
+  });
+
+  it("does not ripple on invalid input", () => {
+    const shots = structuredClone(sampleProject.shots);
+    expect(rippleReorderMasterShots(shots, "missing-shot", 10)).toBe(shots);
+    expect(rippleReorderMasterShots(shots, shots[0].id, Number.NaN)).toBe(shots);
   });
 
   it("finds the active Shot by its absolute placement, including gaps and array order changes", () => {
