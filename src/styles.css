@@ -2011,3 +2011,24 @@
   .timeline-ruler { margin-left: 180px; padding-left: 0; }
   .timeline-time-ruler, .editor-time-ruler { padding-left: 180px; }
 }
+
+.clip-drop-preview {
+  position: absolute;
+  z-index: 7;
+  top: 7px;
+  bottom: 7px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px;
+  overflow: hidden;
+  border: 1px dashed #d5f36a;
+  border-radius: 7px;
+  background: rgba(213,243,106,.16);
+  color: #f1f3d9;
+  box-shadow: 0 0 0 1px rgba(0,0,0,.3);
+  pointer-events: none;
+}
+.clip-drop-preview strong { font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.clip-drop-preview small { font-size: 9px; color: #d5f36a; white-space: nowrap; }
