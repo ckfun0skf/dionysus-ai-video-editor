@@ -89,4 +89,65 @@ describe("compositionRenderer", () => {
       { id: "b", name: "b", kind: "text", start: 2.5, duration: 4 }
     ])).toBe(6.5);
   });
+  it("uses the pinned Clip Version when a Clip Asset is placed on the Master Timeline", () => {
+    const project = structuredClone(sampleProject);
+    project.assets.push({
+      id: "multi-version-clip", name: "Multi-version clip", kind: "clip",
+      selectedClipVersionId: "clip-version-b",
+      clipVersions: [
+        { id: "clip-version-a", name: "Version A", description: "", duration: 3,
+          layers: [{ id: "clip-layer-a", name: "A layer", kind: "text", start: 0, duration: 3 }],
+          scriptVersionIds: [], generationRecords: [] },
+        { id: "clip-version-b", name: "Version B", description: "", duration: 4,
+          layers: [{ id: "clip-layer-b", name: "B layer", kind: "image", start: 0, duration: 4, assetId: "image-b" }],
+          scriptVersionIds: [], generationRecords: [] }
+      ]
+    });
+    project.assets.push({ id: "image-b", name: "Image B", kind: "image", path: "data:image/png;base64,AA==" });
+    project.timelineClips = [{
+      id: "master-clip-a", name: "Pinned Version A", kind: "clip", trackId: "track-video-1",
+      start: 2, duration: 3, assetId: "multi-version-clip", clipVersionId: "clip-version-a"
+    }];
+    const layers = collectCompositionLayers(project);
+    expect(layers).toContainEqual(expect.objectContaining({
+      id: "master-clip-a:clip-layer-a:0", name: "A layer", kind: "text", start: 2, duration: 3
+    }));
+    expect(layers.some(layer => layer.id.includes("clip-layer-b"))).toBe(false);
+  });
+
+  it("keeps a nested Clip reference pinned to its selected child Version", () => {
+    const project = structuredClone(sampleProject);
+    project.assets.push({
+      id: "parent-clip", name: "Parent", kind: "clip",
+      selectedClipVersionId: "parent-v1",
+      clipVersions: [{
+        id: "parent-v1", name: "Version A", description: "", duration: 5,
+        layers: [{
+          id: "nested-module", name: "Child Clip", kind: "composition", start: 1, duration: 3,
+          assetId: "child-clip", childCompositionId: "child-clip", clipVersionId: "child-v1"
+        }],
+        scriptVersionIds: [], generationRecords: []
+      }]
+    });
+    project.assets.push({
+      id: "child-clip", name: "Child", kind: "clip", selectedClipVersionId: "child-v2",
+      clipVersions: [
+        { id: "child-v1", name: "Version A", description: "", duration: 2,
+          layers: [{ id: "child-a", name: "Pinned child", kind: "text", start: 0, duration: 2 }],
+          scriptVersionIds: [], generationRecords: [] },
+        { id: "child-v2", name: "Version B", description: "", duration: 4,
+          layers: [{ id: "child-b", name: "Unpinned child", kind: "text", start: 0, duration: 4 }],
+          scriptVersionIds: [], generationRecords: [] }
+      ]
+    });
+    project.timelineClips = [{
+      id: "master-parent", name: "Parent instance", kind: "clip", trackId: "track-video-1",
+      start: 0, duration: 5, assetId: "parent-clip", clipVersionId: "parent-v1"
+    }];
+    const layers = collectCompositionLayers(project);
+    const nested = layers.find(layer => layer.id === "master-parent:nested-module:0");
+    expect(nested).toMatchObject({ kind: "composition", childCompositionId: "child-clip", clipVersionId: "child-v1" });
+    expect(layers.some(layer => layer.id.includes("child-b"))).toBe(false);
+  });
+
 });
