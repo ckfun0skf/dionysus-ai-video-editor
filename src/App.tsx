@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AudioLines, Check, CheckCircle2, ChevronDown, CircleHelp, Clapperboard, Clock3, Download, FileJson, Film, FolderOpen, Layers3, Maximize2, Plus, Save, Settings2, ShieldCheck, Sparkles, SquarePlay, Upload, WandSparkles, Undo2, Redo2 } from "lucide-react";
 import { sampleProject } from "./sampleProject";
-import type { Asset, AssetKind, CompositionLayer, DionysusProject, ReferenceProfile, ReferenceRole, Shot } from "./types";
+import type { Asset, AssetKind, CompositionLayer, DionysusProject, ReferenceProfile, ReferenceRole, Shot, TimelineClip } from "./types";
 import { validateProject } from "./projectValidation";
 import { t } from "./i18n";
 import { addVideoClip, moveTimelineClip, trimTimelineClip, unlinkTimelineAudio, deleteTimelineClip } from "./timelineOperations";
@@ -613,6 +613,29 @@ export default function App() {
     change(p => ({ ...p, shots: p.shots.map(item => item.id !== shotId ? item : { ...item, slots: item.slots.map(s => s.id !== slotId ? s : { ...s, versions: s.versions.map(v => v.id !== versionId ? v : { ...v, layers: v.layers.filter(layer => layer.id !== layerId) }) }) }) }));
   }
 
+  function addMasterLayerClip(kind: "text" | "procedural") {
+    const track = project.tracks.find(item => item.kind === kind);
+    const trackId = track?.id ?? id("track-" + kind);
+    const newTrack = track ?? { id: trackId, name: kind === "text" ? "Titles" : "Three.js", kind };
+    const start = Math.max(0, Math.min(editorTime, Math.max(0, mediaTimelineDuration - 0.1)));
+    const clip: TimelineClip = {
+      id: id("timeline-" + kind),
+      name: kind === "text" ? "Subtitle Block" : "Three.js Module",
+      kind, trackId, start,
+      duration: Math.max(0.1, Math.min(3, mediaTimelineDuration - start))
+    };
+    change(p => ({
+      ...p,
+      tracks: p.tracks.some(item => item.id === trackId) ? p.tracks : [...p.tracks, newTrack],
+      timelineClips: [...(p.timelineClips ?? []), clip]
+    }));
+    setSelectedTimelineClipId(clip.id);
+    setIsPlaying(false);
+    setNotice(kind === "text"
+      ? "Text block added. Edit its displayed text in the clip Inspector."
+      : "Three.js module block added. Assign a script asset and pinned script-version ID; procedural output is not rendered by the current compositor.");
+  }
+
   function toggleShotReferenceProfile(shotId: string, profileId: string, checked: boolean) {
     const shot = project.shots.find(item => item.id === shotId);
     if (!shot) return;
@@ -879,6 +902,8 @@ export default function App() {
  const audioTrack=project.tracks.find(track=>track.kind==="audio");if(!audioTrack){setNotice("Add an audio track first.");return;}
  const clipId=id("timeline-audio");change(p=>({...p,timelineClips:[...(p.timelineClips??[]),{id:clipId,name:"Audio clip "+((p.timelineClips??[]).filter(clip=>clip.kind==="audio"&&!clip.id.startsWith("storyboard-")).length+1),kind:"audio",trackId:audioTrack.id,start:editorTime,duration:Math.max(.5,Math.min(5,mediaTimelineDuration-editorTime||5))}]}));setSelectedTimelineClipId(clipId);setIsPlaying(false);setNotice("Added an audio clip. Assign an imported audio source in the Inspector.");
 }}><Plus size={14}/> Add audio clip</button>
+<button className="button button-quiet button-small" onClick={()=>addMasterLayerClip("text")}><Plus size={14}/> Text block</button>
+<button className="button button-quiet button-small" onClick={()=>addMasterLayerClip("procedural")}><Plus size={14}/> Three.js module</button>
 <button className="button button-quiet button-small" onClick={()=>change(p=>({...p,tracks:[...p.tracks,{id:id("track-video"),name:"Video "+(p.tracks.filter(track=>track.kind==="video").length+1),kind:"video"}]}))}><Plus size={14}/> Video track</button>
 <button className="button button-quiet button-small" onClick={()=>change(p=>({...p,tracks:[...p.tracks,{id:id("track-audio"),name:"Audio "+(p.tracks.filter(track=>track.kind==="audio").length+1),kind:"audio"}]}))}><Plus size={14}/> Audio track</button>
 <button className="button button-quiet button-small" onClick={()=>change(p=>({...p,tracks:[...p.tracks,{id:id("track-procedural"),name:"Three.js Layer "+(p.tracks.filter(track=>track.kind==="procedural").length+1),kind:"procedural"}]}))}><Plus size={14}/> Three.js layer</button>
@@ -895,7 +920,7 @@ export default function App() {
   <div className="visual-track-lane" style={{backgroundSize:(5/mediaTimelineDuration*100)+"% 100%"}}
    onPointerDown={event=>{if(event.target!==event.currentTarget)return;const rect=event.currentTarget.getBoundingClientRect();const next=Math.max(0,Math.min(activeTimelineDuration,((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration));playbackTimeRef.current=next;setIsPlaying(false);setEditorTime(next);}}
    onDragOver={event=>event.preventDefault()}
-   onDrop={event=>{event.preventDefault();const clipId=event.dataTransfer.getData("text/dionysus-timeline-clip");const moving=(project.timelineClips??[]).find(clip=>clip.id===clipId);if(!moving||moving.kind!==track.kind||!(track.kind==="video"||track.kind==="audio"))return;const rect=event.currentTarget.getBoundingClientRect();const next=Math.max(0,((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration-moving.duration/2);try{change(p=>{const result=moveTimelineClip({tracks:p.tracks,timelineClips:p.timelineClips??[]},moving.id,next);return {...p,timelineClips:result.timelineClips.map(clip=>clip.id===moving.id?{...clip,trackId:track.id}:clip)};});setSelectedTimelineClipId(moving.id);setIsPlaying(false);}catch(error){setNotice(error instanceof Error?error.message:"Could not move the clip.");}}}>
+   onDrop={event=>{event.preventDefault();const clipId=event.dataTransfer.getData("text/dionysus-timeline-clip");const moving=(project.timelineClips??[]).find(clip=>clip.id===clipId);if(!moving||moving.kind!==track.kind||!(track.kind==="video"||track.kind==="audio"||track.kind==="text"||track.kind==="procedural"))return;const rect=event.currentTarget.getBoundingClientRect();const next=Math.max(0,((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration-moving.duration/2);try{change(p=>{const result=moveTimelineClip({tracks:p.tracks,timelineClips:p.timelineClips??[]},moving.id,next);return {...p,timelineClips:result.timelineClips.map(clip=>clip.id===moving.id?{...clip,trackId:track.id}:clip)};});setSelectedTimelineClipId(moving.id);setIsPlaying(false);}catch(error){setNotice(error instanceof Error?error.message:"Could not move the clip.");}}}>
    <div className="visual-playhead" style={{left:(editorTime/mediaTimelineDuration*100)+"%"}}/>
    {clips.map(clip=>{
      const versionShot=clip.shotId?project.shots.find(shot=>shot.id===clip.shotId):selected;
@@ -904,7 +929,7 @@ export default function App() {
      const activeVisualLayer=activeVersion?.layers.find(layer=>layer.kind==="video"||layer.kind==="image");
      const thumbnailPath=clip.thumbnailPath??activeVisualLayer?.thumbnailPath??project.assets.find(asset=>asset.id===activeVisualLayer?.assetId)?.thumbnailPath;
      return <div className="visual-media-clip-wrap" key={clip.id} style={{left:(clip.start/mediaTimelineDuration*100)+"%",width:Math.max(2,clip.duration/mediaTimelineDuration*100)+"%"}}>
-       <button draggable className={"visual-media-clip "+(clip.kind==="audio"?"audio-clip":"video-clip")+(clip.id===selectedTimelineClipId?" selected":"")} onDragStart={event=>{event.dataTransfer.setData("text/dionysus-timeline-clip",clip.id);event.dataTransfer.effectAllowed="move";}} onClick={()=>{setSelectedTimelineClipId(clip.id);const next=Math.min(activeTimelineDuration,clip.start);playbackTimeRef.current=next;setIsPlaying(false);setEditorTime(next);}} title={clip.name+" · "+clip.start.toFixed(1)+"–"+(clip.start+clip.duration).toFixed(1)+"s"}><span className="visual-clip-icon">{clip.kind==="audio"?<AudioLines size={13}/>:thumbnailPath?<img className="visual-clip-thumbnail" src={thumbnailPath} alt=""/>:<span className="visual-clip-thumbnail-placeholder"><Film size={13}/></span>}</span><span className="visual-clip-copy"><strong>{clip.name}</strong><small>{clip.duration.toFixed(1)}s{clip.linkedVideoClipId?" · linked":clip.kind==="audio"?" · independent":""}{clip.assetId?"":" · no source"}</small></span></button>
+       <button draggable className={"visual-media-clip "+(clip.kind==="audio"?"audio-clip":clip.kind==="text"?"text-clip":clip.kind==="procedural"?"procedural-clip":"video-clip")+(clip.id===selectedTimelineClipId?" selected":"")} onDragStart={event=>{event.dataTransfer.setData("text/dionysus-timeline-clip",clip.id);event.dataTransfer.effectAllowed="move";}} onClick={()=>{setSelectedTimelineClipId(clip.id);const next=Math.min(activeTimelineDuration,clip.start);playbackTimeRef.current=next;setIsPlaying(false);setEditorTime(next);}} title={clip.name+" · "+clip.start.toFixed(1)+"–"+(clip.start+clip.duration).toFixed(1)+"s"}><span className="visual-clip-icon">{clip.kind==="audio"?<AudioLines size={13}/>:clip.kind==="text"?<Sparkles size={13}/>:clip.kind==="procedural"?<Layers3 size={13}/>:thumbnailPath?<img className="visual-clip-thumbnail" src={thumbnailPath} alt=""/>:<span className="visual-clip-thumbnail-placeholder"><Film size={13}/></span>}</span><span className="visual-clip-copy"><strong>{clip.name}</strong><small>{clip.duration.toFixed(1)}s{clip.linkedVideoClipId?" · linked":clip.kind==="audio"?" · independent":""}{clip.assetId?"":" · no source"}</small></span></button>
        {clip.kind==="audio" && <button className="timeline-clip-mute" aria-label={(clip.muted?"Unmute ":"Mute ")+clip.name} aria-pressed={Boolean(clip.muted)} onClick={()=>change(p=>({...p,timelineClips:(p.timelineClips??[]).map(item=>item.id===clip.id?{...item,muted:!item.muted}:item)}))}>{clip.muted?"🔇":"♪"}</button>}
        {clip.kind==="video" && versionShot && versionSlot && <details className="timeline-version-menu"><summary aria-label={"Show versions for "+versionShot.title}>▾</summary><div className="timeline-version-menu-panel">
          <strong>{versionShot.title}</strong>
@@ -969,8 +994,10 @@ export default function App() {
 </div>
 <div className="visual-clip-timing"><span>Start <strong>{selectedTimelineClip.start.toFixed(1)}s</strong></span><span>End <strong>{(selectedTimelineClip.start+selectedTimelineClip.duration).toFixed(1)}s</strong></span><span>Duration <strong>{selectedTimelineClip.duration.toFixed(1)}s</strong></span></div>
 <label className="field-label">Source asset<select className="text-field" aria-label={selectedTimelineClip.name+" timeline source asset"} value={selectedTimelineClip.assetId??""} onChange={event=>{const assetId=event.target.value||undefined;change(p=>({...p,timelineClips:(p.timelineClips??[]).map(clip=>{const linked=clip.id===selectedTimelineClip.id||clip.id===selectedTimelineClip.linkedVideoClipId||(selectedTimelineClip.kind==="video"&&clip.kind==="audio"&&clip.linkedVideoClipId===selectedTimelineClip.id);return linked?{...clip,assetId}:clip;})}));}}>
-<option value="">No source assigned</option>{project.assets.filter(asset=>asset.kind===selectedTimelineClip.kind||(selectedTimelineClip.kind==="audio"&&Boolean(selectedTimelineClip.linkedVideoClipId)&&asset.kind==="video")).map(asset=><option key={asset.id} value={asset.id}>{asset.name}</option>)}
+<option value="">No source assigned</option>{project.assets.filter(asset=>selectedTimelineClip.kind==="video"?asset.kind==="video":selectedTimelineClip.kind==="audio"?asset.kind==="audio"||(Boolean(selectedTimelineClip.linkedVideoClipId)&&asset.kind==="video"):selectedTimelineClip.kind==="procedural"?asset.kind==="script":false).map(asset=><option key={asset.id} value={asset.id}>{asset.name}</option>)}
 </select></label>
+{selectedTimelineClip.kind==="text" && <label className="field-label">Displayed text<input className="text-field" aria-label="Text block content" value={selectedTimelineClip.name} onChange={event=>change(p=>({...p,timelineClips:(p.timelineClips??[]).map(clip=>clip.id===selectedTimelineClip.id?{...clip,name:event.target.value}:clip)}))}/></label>}
+{selectedTimelineClip.kind==="procedural" && <label className="field-label">Pinned script / scene version ID<input className="text-field" aria-label="Three.js script version ID" value={selectedTimelineClip.scriptVersionId??""} onChange={event=>change(p=>({...p,timelineClips:(p.timelineClips??[]).map(clip=>clip.id===selectedTimelineClip.id?{...clip,scriptVersionId:event.target.value||undefined}:clip)}))} placeholder="Saved, authorized script version ID"/></label>}
 <div className="visual-provenance-grid">
 <label>Source in (s)<input className="text-field" type="number" min="0" step="0.1" value={selectedTimelineClip.sourceIn??0} disabled={selectedTimelineClip.kind==="audio"&&Boolean(selectedTimelineClip.linkedVideoClipId)} onChange={event=>{const sourceIn=Math.max(0,Number(event.target.value)||0);const sourceOut=Math.max(sourceIn+.1,selectedTimelineClip.sourceOut??sourceIn+selectedTimelineClip.duration);const duration=sourceOut-sourceIn;change(p=>({...p,timelineClips:(p.timelineClips??[]).map(clip=>clip.id===selectedTimelineClip.id?{...clip,sourceIn,sourceOut,duration}:selectedTimelineClip.kind==="video"&&clip.kind==="audio"&&clip.linkedVideoClipId===selectedTimelineClip.id?{...clip,sourceIn,sourceOut,duration}:clip)}));}}/></label>
 <label>Source out (s)<input className="text-field" type="number" min={(selectedTimelineClip.sourceIn??0)+.1} step="0.1" value={selectedTimelineClip.sourceOut??((selectedTimelineClip.sourceIn??0)+selectedTimelineClip.duration)} disabled={selectedTimelineClip.kind==="audio"&&Boolean(selectedTimelineClip.linkedVideoClipId)} onChange={event=>{const sourceOut=Math.max((selectedTimelineClip.sourceIn??0)+.1,Number(event.target.value)||.1);const duration=sourceOut-(selectedTimelineClip.sourceIn??0);change(p=>({...p,timelineClips:(p.timelineClips??[]).map(clip=>clip.id===selectedTimelineClip.id?{...clip,sourceOut,duration}:selectedTimelineClip.kind==="video"&&clip.kind==="audio"&&clip.linkedVideoClipId===selectedTimelineClip.id?{...clip,sourceOut,duration}:clip)}));}}/></label>
