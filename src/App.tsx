@@ -187,7 +187,9 @@ export default function App() {
     if (!isPlaying) return;
     let cancelled = false, frame = 0, warned = false;
     const players = new Map<string, { element: HTMLMediaElement; release?: () => void }>();
-    const clips = (project.timelineClips ?? []).filter(clip => clip.kind === "audio" && Boolean(clip.assetId));
+    const clips = activeVersionTimeline
+      ? activeVersionTimeline.layers.filter(layer => layer.kind === "audio" && Boolean(layer.assetId)).map(layer => ({ id: layer.id, name: layer.name, kind: "audio" as const, assetId: layer.assetId, start: layer.start, duration: layer.duration, sourceIn: layer.sourceIn, sourceOut: layer.sourceOut, muted: layer.muted, linkedVideoClipId: undefined }))
+      : (project.timelineClips ?? []).filter(clip => clip.kind === "audio" && Boolean(clip.assetId));
     const prepare = async () => {
       for (const clip of clips) {
         const asset = project.assets.find(item => item.id === clip.assetId);
@@ -220,7 +222,7 @@ export default function App() {
     };
     void prepare().then(() => { if (!cancelled) frame = requestAnimationFrame(sync); });
     return () => { cancelled = true; cancelAnimationFrame(frame); players.forEach(player => { player.element.pause(); player.element.removeAttribute("src"); player.release?.(); }); players.clear(); };
-  }, [isPlaying, project]);
+  }, [isPlaying, project, activeVersionTimeline]);
 
   const selectedStart = useMemo(() => { const index = project.shots.findIndex(s => s.id === selectedId); return project.shots.slice(0, Math.max(index, 0)).reduce((n, s) => n + s.duration, 0); }, [project.shots, selectedId]);
   const slotCount = project.shots.reduce((n, s) => n + s.slots.length, 0);
@@ -984,7 +986,7 @@ export default function App() {
     {!activeVersionTimeline.layers.length && <div className="nested-timeline-empty">This Version has no internal layers yet. Add a video, image, audio, text, or Three.js layer above.</div>}
   </div>
 </section>}
-{selected && activeTimelineTabId === "master" && (() => { const activeSlot = selected.slots.find(slot => slot.id === selectedSlotId); if (!activeSlot) return null; const activeVersion = activeSlot.versions.find(version => version.id === activeSlot.selectedVersionId); return <section className="version-panel"><div className="version-panel-heading"><div><span className="inspector-kicker">CLIP SLOT</span><label className="field-label">Clip slot name<input className="text-field" aria-label="Clip slot name" value={activeSlot.name} onChange={e => updateSlotName(selected.id, activeSlot.id, e.target.value)} /></label><p>{activeSlot.duration}s · {activeSlot.versions.length} version{activeSlot.versions.length === 1 ? "" : "s"}</p></div><button className="button button-quiet button-small" onClick={() => setSelectedSlotId("")}>Close</button></div><div className="slot-timing-controls">
+{selected && activeTimelineTabId === "master" && (() => { const activeSlot = selected.slots.find(slot => slot.id === selectedSlotId); if (!activeSlot) return null; const activeVersion = activeSlot.versions.find(version => version.id === (activeVersionTimelineTab?.slotId === activeSlot.id ? activeVersionTimelineTab.versionId : activeSlot.selectedVersionId)); return <section className={"version-panel " + (activeTimelineTabId !== "master" ? "nested-version-inspector" : "")}><div className="version-panel-heading"><div><span className="inspector-kicker">{activeTimelineTabId === "master" ? "CLIP SLOT" : "VERSION INSPECTOR"}</span><label className="field-label">Clip slot name<input className="text-field" aria-label="Clip slot name" value={activeSlot.name} onChange={e => updateSlotName(selected.id, activeSlot.id, e.target.value)} /></label><p>{activeSlot.duration}s · {activeSlot.versions.length} version{activeSlot.versions.length === 1 ? "" : "s"}</p></div><button className="button button-quiet button-small" onClick={() => setSelectedSlotId("")}>Close</button></div><div className="slot-timing-controls">
   <div className="timing-field"><label className="field-label">Start time (seconds)<input className="text-field" type="number" min="0" step="0.1" value={activeSlot.start} onChange={e => updateSlotTiming(selected.id, activeSlot.id, "start", Number(e.target.value))}/></label><div className="timing-nudges"><button type="button" aria-label="Move start earlier by 0.5 seconds" onClick={() => updateSlotTiming(selected.id, activeSlot.id, "start", activeSlot.start - 0.5)}>−0.5s</button><button type="button" aria-label="Move start later by 0.5 seconds" onClick={() => updateSlotTiming(selected.id, activeSlot.id, "start", activeSlot.start + 0.5)}>+0.5s</button></div></div>
   <div className="timing-field"><label className="field-label">Slot duration (seconds)<input className="text-field" type="number" min="0.1" step="0.1" value={activeSlot.duration} onChange={e => updateSlotTiming(selected.id, activeSlot.id, "duration", Number(e.target.value))}/></label><div className="timing-nudges"><button type="button" aria-label="Shorten slot by 0.5 seconds" onClick={() => updateSlotTiming(selected.id, activeSlot.id, "duration", activeSlot.duration - 0.5)}>−0.5s</button><button type="button" aria-label="Lengthen slot by 0.5 seconds" onClick={() => updateSlotTiming(selected.id, activeSlot.id, "duration", activeSlot.duration + 0.5)}>+0.5s</button></div></div>
   <p>Timeline position: {activeSlot.start.toFixed(1)}s–{(activeSlot.start + activeSlot.duration).toFixed(1)}s. Timing changes apply to this Clip Slot only.</p>
