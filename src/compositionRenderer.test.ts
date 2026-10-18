@@ -51,11 +51,11 @@ describe("compositionRenderer", () => {
     const project = structuredClone(sampleProject);
     project.timelineClips = [
       { id: "title-block", name: "A title", kind: "text", trackId: "track-text-1", start: 1, duration: 2 },
-      { id: "threejs-block", name: "Three.js", kind: "procedural", trackId: "track-procedural-1", start: 0, duration: 4, scriptVersionId: "script-version-1" }
+      { id: "threejs-block", name: "Code clip", kind: "procedural", trackId: "track-procedural-1", start: 0, duration: 4, scriptVersionId: "script-version-1", html: "<canvas></canvas>", css: "canvas{width:100%}", code: "console.log(1)" }
     ];
     const layers = collectCompositionLayers(project);
     expect(layers).toContainEqual(expect.objectContaining({ id: "title-block", name: "A title", kind: "text", start: 1, duration: 2 }));
-    expect(layers).toContainEqual(expect.objectContaining({ id: "threejs-block", kind: "procedural", scriptVersionId: "script-version-1" }));
+    expect(layers).toContainEqual(expect.objectContaining({ id: "threejs-block", kind: "procedural", scriptVersionId: "script-version-1", html: "<canvas></canvas>", css: "canvas{width:100%}", code: "console.log(1)" }));
   });
 
   it("calculates output duration from the last visible layer end", () => {
