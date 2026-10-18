@@ -1,7 +1,7 @@
 # DYS-005 — Master and nested Timeline editing with Version management
 
 **Status:** In progress  
-**Progress estimate:** 70%  
+**Progress estimate:** 78%  
 **Last updated:** 2026-10-18
 
 ## Goal
@@ -18,12 +18,15 @@ Provide the prototype-style Master Timeline with Shot Version selection, an in-w
 - [x] Move Master Shot blocks by drag-and-drop with project-frame-rate snapping.
 - [x] Keep Master Shot target duration, Clip Slot duration, and Version-internal duration separate.
 - [x] Render nested Version layers using the Master Shot's absolute offset.
-- [ ] Complete nested module Inspector editing, source binding, ordering/reordering, and media thumbnail extraction.
+- [x] Edit a Version's internal duration without changing the Master Shot or Clip Slot duration.
+- [x] Edit each nested module's start/duration in the Inspector and move module blocks with frame-rate snapping.
+- [x] Reorder nested modules using layer-header controls.
+- [ ] Complete real media thumbnail extraction, richer source assignment/preview, and a dedicated ripple/reorder mode with an explicit overlap policy.
 - [ ] Expand project JSON round-trip and Undo/Redo coverage for all nested relationships and placement edits.
 
 ## Validation
-- CI run [#39118555157](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39118555157): 70 tests passed across 8 files, TypeScript check and production build passed, and npm audit reported 0 vulnerabilities.
-- Regression coverage checks legacy sequential fallback, independent Shot movement/duration, Version-duration preservation, drag placement, and absolute offsets in composition collection.
+- CI run [#39118949549](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39118949549): 70 tests passed across 8 files, TypeScript check and production build passed, and npm audit reported 0 vulnerabilities.
+- Regression coverage checks legacy sequential fallback, independent Shot movement/duration, independent Version duration, module start/duration, frame-snapped drag placement, layer reordering, and absolute offsets in composition collection.
 - Automated browser smoke tests were not run or added.
 
 ## Related files
