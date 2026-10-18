@@ -112,7 +112,7 @@ test("browser smoke: compose video and audio, generate an image, export a playab
   await page.locator(".timeline-slot").first().click();
   const generationPanel = page.locator(".ai-generation-panel").first();
   await expect(generationPanel).toBeVisible();
-  await generationPanel.getByPlaceholder("Optional submodule prompt").fill("cinematic cyan shape on black");
+  await page.getByPlaceholder("Optional submodule prompt").first().fill("cinematic cyan shape on black");
   await generationPanel.locator("input").nth(0).fill("https://provider.example/v1/images/generations");
   await generationPanel.locator("input").nth(1).fill("playwright-test-key");
   await generationPanel.locator("input").nth(2).fill("smoke-image-model");
