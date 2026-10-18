@@ -600,6 +600,10 @@ export default function App() {
   function attachAssetToShot(shotId: string, file: File) {
     const mime = file.type.toLowerCase();
     const kind: AssetKind = mime.startsWith("video/") ? "video" : "image";
+    if (assetUploadKind !== "all" && kind !== assetUploadKind) {
+      setNotice(assetUploadKind === "audio" ? "Choose an audio file to create an Audio Asset." : "Choose an image file to create an Image Asset.");
+      return;
+    }
     if (kind === "image") {
       const reader = new FileReader();
       reader.onload = () => {
