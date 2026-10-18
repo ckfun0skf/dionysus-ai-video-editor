@@ -1029,7 +1029,12 @@ export default function App() {
      const clipId=event.dataTransfer.getData("text/dionysus-timeline-clip");
      const moving=(project.timelineClips??[]).find(clip=>clip.id===clipId);
      if(!moving||moving.kind!==track.kind||!(track.kind==="video"||track.kind==="audio"||track.kind==="text"||track.kind==="procedural"))return;
-     const next=Math.max(0,((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration-moving.duration/2);
+     const fps=Math.max(1,project.frameRate||24);
+     const pointerTime=((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration;
+     const rawStart=Math.max(0,pointerTime-moving.duration/2);
+     const snappedStart=Math.round(rawStart*fps)/fps;
+     const maxStart=Math.max(0,Math.floor((mediaTimelineDuration-moving.duration)*fps)/fps);
+     const next=Math.min(maxStart,snappedStart);
      try{change(p=>{const result=moveTimelineClip({tracks:p.tracks,timelineClips:p.timelineClips??[]},moving.id,next);return {...p,timelineClips:result.timelineClips.map(clip=>clip.id===moving.id?{...clip,trackId:track.id}:clip)};});setSelectedTimelineClipId(moving.id);setIsPlaying(false);}catch(error){setNotice(error instanceof Error?error.message:"Could not move the clip.");}
    }}>
    <div className="visual-playhead" style={{left:(editorTime/mediaTimelineDuration*100)+"%"}}/>
