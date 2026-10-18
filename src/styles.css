@@ -2252,3 +2252,15 @@
   .editor-linked-timeline .visual-track-row,
   .editor-linked-timeline .visual-timeline-ruler { grid-template-columns: 180px minmax(320px, 1fr); }
 }
+
+
+.code-image-references { border:1px solid var(--line,#2b2b32); border-radius:7px; padding:10px; margin:4px 0 16px; }
+.code-image-reference-list { display:flex; flex-direction:column; gap:7px; max-height:150px; overflow:auto; }
+.code-image-reference-list label { display:flex; align-items:center; gap:8px; min-width:0; color:var(--text,#e9e8ec); font-size:11px; }
+.code-image-reference-list input { accent-color:var(--accent); }
+.code-image-reference-list span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.code-image-references .version-hint { color:var(--muted,#8d8d99); font-size:10px; line-height:1.5; }
+@media (max-width: 760px) {
+  .nested-timeline-ruler { margin-left: 180px; }
+  .nested-timeline-row { grid-template-columns: 180px minmax(280px,1fr); }
+}
