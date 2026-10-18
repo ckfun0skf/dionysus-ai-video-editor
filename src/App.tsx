@@ -911,15 +911,49 @@ export default function App() {
     setView("timeline");
   }
 
+  function openClipAssetTimeline(assetId: string, versionId: string) {
+    const asset = projectRef.current.assets.find(item => item.id === assetId && item.kind === "clip");
+    const version = asset?.kind === "clip" ? asset.clipVersions?.find(item => item.id === versionId) : undefined;
+    if (!asset || asset.kind !== "clip" || !version) return;
+    const tabId = "clip-asset:" + assetId + ":" + versionId;
+    setTimelineTabs(existing => existing.some(tab => tab.id === tabId) ? existing : [
+      ...existing,
+      { id: tabId, shotId: "", slotId: "", assetId, versionId, label: asset.name + " · " + version.name }
+    ]);
+    setTimelineTabTimes(times => ({ ...times, [activeTimelineTabId]: editorTime, [tabId]: times[tabId] ?? 0 }));
+    setActiveTimelineTabId(tabId);
+    setSelectedId("");
+    setSelectedSlotId("");
+    setSelectedTimelineClipId("");
+    setSelectedCompositionLayerId("");
+    const nextTime = Math.min(timelineTabTimes[tabId] ?? 0, version.duration);
+    setEditorTime(nextTime);
+    playbackTimeRef.current = nextTime;
+    setIsPlaying(false);
+    setView("timeline");
+    setNotice("Opened Clip Asset timeline: " + asset.name + " · " + version.name);
+  }
+
   function activateTimelineTab(tabId: string) {
     setTimelineTabTimes(times => ({ ...times, [activeTimelineTabId]: editorTime }));
     const nextTab = timelineTabs.find(tab => tab.id === tabId);
-    const nextVersion = nextTab
-      ? project.shots.find(shot => shot.id === nextTab.shotId)?.slots.find(slot => slot.id === nextTab.slotId)?.versions.find(version => version.id === nextTab.versionId)
-      : undefined;
+    const nextVersion = nextTab?.assetId
+      ? project.assets.find(asset => asset.id === nextTab.assetId && asset.kind === "clip")?.clipVersions?.find(version => version.id === nextTab.versionId)
+      : nextTab
+        ? project.shots.find(shot => shot.id === nextTab.shotId)?.slots.find(slot => slot.id === nextTab.slotId)?.versions.find(version => version.id === nextTab.versionId)
+        : undefined;
     const duration = tabId === "master" ? runtime : nextVersion?.duration ?? runtime;
     const nextTime = Math.min(timelineTabTimes[tabId] ?? 0, duration);
     setActiveTimelineTabId(tabId);
+    if (tabId !== "master" && nextTab?.assetId) {
+      setSelectedId("");
+      setSelectedSlotId("");
+      setSelectedTimelineClipId("");
+      setSelectedCompositionLayerId("");
+    } else if (nextTab) {
+      setSelectedId(nextTab.shotId);
+      setSelectedSlotId(nextTab.slotId);
+    }
     setEditorTime(nextTime);
     playbackTimeRef.current = nextTime;
     setIsPlaying(false);
