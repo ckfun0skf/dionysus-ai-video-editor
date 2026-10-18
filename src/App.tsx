@@ -78,6 +78,11 @@ export default function App() {
   const [shotContextMenuPosition, setShotContextMenuPosition] = useState({ x: 0, y: 0 });
   const [shotSettingsId, setShotSettingsId] = useState<string>("");
   const [videoTrackSettingsId, setVideoTrackSettingsId] = useState<string>("");
+  const [timelineClipSettingsId, setTimelineClipSettingsId] = useState<string>("");
+  const [trackContextMenuId, setTrackContextMenuId] = useState<string>("");
+  const [trackContextMenuPosition, setTrackContextMenuPosition] = useState({ x: 0, y: 0 });
+  const [showAddLayerMenu, setShowAddLayerMenu] = useState(false);
+  const [selectedTimelineTrackId, setSelectedTimelineTrackId] = useState<string>("");
   const [collapsedVideoTrackIds, setCollapsedVideoTrackIds] = useState<string[]>([]);
   const [rippleReorderMode, setRippleReorderMode] = useState(false);
   const [storyboardMode, setStoryboardMode] = useState<"flow" | "list">("flow");
@@ -1038,23 +1043,15 @@ export default function App() {
             <div className="integrated-ruler-playhead" style={{ left: (editorTime / Math.max(runtime, 1) * 100) + "%" }}/>
             {Array.from({ length: Math.floor(runtime / 5) + 1 }, (_, i) => i * 5).concat(runtime % 5 === 0 ? [] : [runtime]).map(seconds => <span key={seconds} style={{ left: (seconds / Math.max(runtime, 1) * 100) + "%" }}>{time(seconds)}</span>)}
           </div><div className="timeline-scroll">{project.tracks.map((track, i) => <div className="timeline-track" key={track.id}><div className="track-label">{track.kind === "audio" ? <AudioLines size={14}/> : track.kind === "text" ? <Sparkles size={14}/> : <Film size={14}/>}<span>{t(("media." + track.kind) as "media.video" | "media.audio" | "media.text" | "media.effects")}</span></div><div className="track-lane" style={{ backgroundSize: (5 / Math.max(runtime, 1) * 100) + "% 100%" }}>{i === 0 && project.shots.map((shot, si) => <button key={shot.id} className={"timeline-shot " + (selected?.id === shot.id ? "chosen" : "")} style={{ left: (getMasterShotStarts(project.shots)[si] / Math.max(runtime, 1) * 100) + "%", width: (shot.duration / Math.max(runtime, 1) * 100) + "%" }} onClick={() => setSelectedId(shot.id)}><span>{shot.title}</span><small>{shot.duration}s</small></button>)}{i === 1 && selected?.slots.map(slot => <button key={slot.id} className="timeline-slot" style={{ left: ((selectedStart + slot.start) / Math.max(runtime, 1) * 100) + "%", width: (slot.duration / Math.max(runtime, 1) * 100) + "%" }} onClick={() => selectClipSlot(slot.id)}><span>{slot.name}</span><small>{slot.versions.find(v => v.id === slot.selectedVersionId)?.name ?? "No version"}</small></button>)}{i > 1 && <div className="track-empty"><span>+</span> {t("timeline.trackAddLayer", { kind: t(("media." + track.kind) as "media.video" | "media.audio" | "media.text" | "media.effects") })}</div>}</div></div>)}</div><section className="editor-linked-timeline visual-timeline" aria-label="Media timeline">
-<div className="editor-linked-heading"><div><strong>Timeline layers</strong><span>{(project.timelineClips ?? []).length} clips · drag blocks to move · select a block to edit</span></div><div className="inline-actions">
-<button className="button button-quiet button-small" onClick={() => {
- const videoTrack=project.tracks.find(track=>track.kind==="video"), audioTrack=project.tracks.find(track=>track.kind==="audio");
- if(!videoTrack||!audioTrack){setNotice("Add a video track and an audio track first.");return;}
- const clipId=id("timeline-video");
- try{change(p=>{const result=addVideoClip({tracks:p.tracks,timelineClips:p.timelineClips??[]},{id:clipId,name:"Video clip "+((p.timelineClips??[]).filter(clip=>clip.kind==="video"&&!clip.id.startsWith("storyboard-")).length+1),trackId:videoTrack.id,start:editorTime,duration:Math.max(.5,Math.min(5,mediaTimelineDuration-editorTime||5)),shotId:selected?.id,slotId:selected?.slots.find(slot=>slot.id===selectedSlotId)?.id??selected?.slots[0]?.id,sourceHasAudio:true,audioTrackId:audioTrack.id,audioClipId:id("timeline-audio")});return {...p,timelineClips:result.timelineClips};});setSelectedTimelineClipId(clipId);setIsPlaying(false);setNotice("Added linked video/audio placeholders. Assign an imported video source in the Inspector.");}catch(error){setNotice(error instanceof Error?error.message:"Could not add timeline clips.");}
-}}><Plus size={14}/> Add linked video/audio</button>
-<button className="button button-quiet button-small" onClick={() => {
- const audioTrack=project.tracks.find(track=>track.kind==="audio");if(!audioTrack){setNotice("Add an audio track first.");return;}
- const clipId=id("timeline-audio");change(p=>({...p,timelineClips:[...(p.timelineClips??[]),{id:clipId,name:"Audio clip "+((p.timelineClips??[]).filter(clip=>clip.kind==="audio"&&!clip.id.startsWith("storyboard-")).length+1),kind:"audio",trackId:audioTrack.id,start:editorTime,duration:Math.max(.5,Math.min(5,mediaTimelineDuration-editorTime||5))}]}));setSelectedTimelineClipId(clipId);setIsPlaying(false);setNotice("Added an audio clip. Assign an imported audio source in the Inspector.");
-}}><Plus size={14}/> Add audio clip</button>
-<button className="button button-quiet button-small" onClick={()=>addMasterLayerClip("text")}><Plus size={14}/> Text block</button>
-<button className="button button-quiet button-small" onClick={()=>addMasterLayerClip("procedural")}><Plus size={14}/> Three.js module</button>
-<button className={"button button-quiet button-small ripple-reorder-toggle"+(rippleReorderMode?" active":"")} aria-pressed={rippleReorderMode} onClick={()=>setRippleReorderMode(enabled=>!enabled)}>{rippleReorderMode?"Ripple Reorder: ON":"Enable Ripple Reorder"}</button>
-<button className="button button-quiet button-small" onClick={()=>change(p=>({...p,tracks:[...p.tracks,{id:id("track-video"),name:"Video "+(p.tracks.filter(track=>track.kind==="video").length+1),kind:"video"}]}))}><Plus size={14}/> Video track</button>
-<button className="button button-quiet button-small" onClick={()=>change(p=>({...p,tracks:[...p.tracks,{id:id("track-audio"),name:"Audio "+(p.tracks.filter(track=>track.kind==="audio").length+1),kind:"audio"}]}))}><Plus size={14}/> Audio track</button>
-<button className="button button-quiet button-small" onClick={()=>change(p=>({...p,tracks:[...p.tracks,{id:id("track-procedural"),name:"Three.js Layer "+(p.tracks.filter(track=>track.kind==="procedural").length+1),kind:"procedural"}]}))}><Plus size={14}/> Three.js layer</button>
+<div className="editor-linked-heading"><div><strong>Timeline layers</strong><span>{(project.timelineClips ?? []).length} clips · right-click a layer or clip for settings</span></div><div className="inline-actions layer-add-menu-wrap">
+ <button className="button button-primary button-small" aria-haspopup="menu" aria-expanded={showAddLayerMenu} onClick={()=>setShowAddLayerMenu(value=>!value)}><Plus size={14}/> Add layer <ChevronDown size={13}/></button>
+ {showAddLayerMenu && <div className="layer-add-menu" role="menu">
+  <button role="menuitem" onClick={()=>{change(p=>({...p,tracks:[...p.tracks,{id:id("track-video"),name:"Video "+(p.tracks.filter(track=>track.kind==="video").length+1),kind:"video"}]}));setShowAddLayerMenu(false);}}>Video layer</button>
+  <button role="menuitem" onClick={()=>{change(p=>({...p,tracks:[...p.tracks,{id:id("track-audio"),name:"Audio "+(p.tracks.filter(track=>track.kind==="audio").length+1),kind:"audio"}]}));setShowAddLayerMenu(false);}}>Audio layer</button>
+  <button role="menuitem" onClick={()=>{change(p=>({...p,tracks:[...p.tracks,{id:id("track-text"),name:"Text "+(p.tracks.filter(track=>track.kind==="text").length+1),kind:"text"}]}));setShowAddLayerMenu(false);}}>Text layer</button>
+  <button role="menuitem" onClick={()=>{change(p=>({...p,tracks:[...p.tracks,{id:id("track-code"),name:"Code "+(p.tracks.filter(track=>track.kind==="procedural").length+1),kind:"procedural"}]}));setShowAddLayerMenu(false);}}>Code layer</button>
+  <button role="menuitem" onClick={()=>{change(p=>({...p,tracks:[...p.tracks,{id:id("track-effects"),name:"Effects "+(p.tracks.filter(track=>track.kind==="effects").length+1),kind:"effects"}]}));setShowAddLayerMenu(false);}}>Effects layer</button>
+ </div>}
 </div></div>
 {rippleReorderMode&&<p className="ripple-mode-note" role="status">Ripple Reorder is ON. Dropping a Shot changes chronological order and packs the full Master sequence back-to-back, closing gaps. Master durations and Version internals stay unchanged.</p>}
 <div className="visual-track-list">
