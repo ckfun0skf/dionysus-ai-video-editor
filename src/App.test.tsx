@@ -41,11 +41,7 @@ function timelineRows(): HTMLElement[] {
 async function selectClip(name: string): Promise<HTMLButtonElement> {
   const clip = timelineRows().find(row => row.textContent?.includes(name));
   if (!clip) throw new Error("Could not find timeline clip: " + name);
-  act(() => clip.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 100, clientY: 100 })));
-  await flushEffects();
-  const settings = Array.from(container.querySelectorAll<HTMLButtonElement>(".shot-context-menu button")).find(button => button.textContent?.includes("Settings"));
-  if (!settings) throw new Error("Could not find Settings in clip context menu");
-  click(settings);
+  act(() => clip.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true })));
   await flushEffects();
   return clip as HTMLButtonElement;
 }
