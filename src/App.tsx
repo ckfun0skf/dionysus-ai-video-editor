@@ -1007,23 +1007,6 @@ export default function App() {
     updateTimelineVersion(tab, version => ({ ...version, description }));
   }
 
-  function updateVersionDuration(shotId: string, slotId: string, versionId: string, value: number) {
-    if (!Number.isFinite(value) || value < 0.1) return;
-    const duration = Math.max(0.1, value);
-    change(p => ({ ...p, shots: p.shots.map(shot => shot.id !== shotId ? shot : {
-      ...shot,
-      slots: shot.slots.map(slot => slot.id !== slotId ? slot : {
-        ...slot,
-        versions: slot.versions.map(version => version.id === versionId ? { ...version, duration } : version)
-      })
-    }) }), "version-duration:" + versionId);
-    if (editorTime > duration) {
-      playbackTimeRef.current = duration;
-      setEditorTime(duration);
-      setIsPlaying(false);
-    }
-    setNotice("Version-internal duration updated; Master Shot and Clip Slot timing remain unchanged.");
-  }
   function duplicateClipAssetVersion(assetId: string, versionId: string) {
     const asset = projectRef.current.assets.find(item => item.id === assetId && item.kind === "clip");
     const current = asset?.kind === "clip" ? asset.clipVersions?.find(item => item.id === versionId) : undefined;
@@ -1201,48 +1184,6 @@ export default function App() {
         return next;
       });
     }
-  }
-
-  function addVersionLayer(shotId: string, slotId: string, versionId: string, kind: CompositionLayer["kind"]) {
-    const shot = project.shots.find(item => item.id === shotId);
-    const slot = shot?.slots.find(item => item.id === slotId);
-    const version = slot?.versions.find(item => item.id === versionId);
-    if (!shot || !slot || !version) return;
-    const start = Math.max(0, Math.min(editorTime, Math.max(0, version.duration - 0.1)));
-    const layer: CompositionLayer = {
-      id: id("layer"),
-      name: kind === "procedural" ? "Code clip" : kind === "text" ? "Text layer" : kind === "audio" ? "Audio layer" : kind === "image" ? "Image layer" : kind === "composition" ? "Nested composition" : "Video layer",
-      kind,
-      start,
-      duration: Math.max(0.1, Math.min(3, version.duration - start))
-    };
-    change(p => ({ ...p, shots: p.shots.map(item => item.id !== shotId ? item : { ...item, slots: item.slots.map(s => s.id !== slotId ? s : { ...s, versions: s.versions.map(v => v.id !== versionId ? v : { ...v, layers: [...v.layers, layer] }) }) }) }));
-    setNotice(kind === "procedural" ? "Code clip added. Edit its JavaScript source in Settings." : "Layer added to the selected Version.");
-  }
-
-  function removeVersionLayer(shotId: string, slotId: string, versionId: string, layerId: string) {
-    change(p => ({ ...p, shots: p.shots.map(item => item.id !== shotId ? item : { ...item, slots: item.slots.map(s => s.id !== slotId ? s : { ...s, versions: s.versions.map(v => v.id !== versionId ? v : { ...v, layers: v.layers.filter(layer => layer.id !== layerId) }) }) }) }));
-  }
-
-  function moveVersionLayer(shotId: string, slotId: string, versionId: string, layerId: string, direction: -1 | 1) {
-    change(p => ({
-      ...p,
-      shots: p.shots.map(shot => shot.id !== shotId ? shot : {
-        ...shot,
-        slots: shot.slots.map(slot => slot.id !== slotId ? slot : {
-          ...slot,
-          versions: slot.versions.map(version => {
-            if (version.id !== versionId) return version;
-            const index = version.layers.findIndex(layer => layer.id === layerId);
-            const target = index + direction;
-            if (index < 0 || target < 0 || target >= version.layers.length) return version;
-            const layers = [...version.layers];
-            [layers[index], layers[target]] = [layers[target], layers[index]];
-            return { ...version, layers };
-          })
-        })
-      })
-    }));
   }
 
   function beginMasterShotResize(event: React.PointerEvent<HTMLElement>, shot: Shot, start: number, edge: "left" | "right") {
