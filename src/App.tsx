@@ -881,20 +881,53 @@ export default function App() {
 <button className="button button-quiet button-small" onClick={()=>change(p=>({...p,tracks:[...p.tracks,{id:id("track-audio"),name:"Audio "+(p.tracks.filter(track=>track.kind==="audio").length+1),kind:"audio"}]}))}><Plus size={14}/> Audio track</button>
 </div></div>
 <div className="visual-track-list">
-{project.tracks.filter(track=>track.kind==="video"||track.kind==="audio").map(track=>{
- const clips=(project.timelineClips??[]).filter(clip=>clip.trackId===track.id);
- return <div className="visual-track-row" key={track.id}>
-  <div className="visual-track-label"><span className={track.kind==="audio"?"track-kind-audio":"track-kind-video"}>{track.kind==="audio"?<AudioLines size={15}/>:<Film size={15}/>}</span><div><strong>{track.name||track.kind}</strong><small>{track.kind==="audio"?"Audio lane":"Video lane"}</small></div></div>
-  <div className="visual-track-lane" style={{backgroundSize:(5/mediaTimelineDuration*100)+"% 100%"}}
-   onPointerDown={event=>{if(event.target!==event.currentTarget)return;const rect=event.currentTarget.getBoundingClientRect();const next=Math.max(0,Math.min(runtime,((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration));playbackTimeRef.current=next;setIsPlaying(false);setEditorTime(next);}}
-   onDragOver={event=>event.preventDefault()}
-   onDrop={event=>{event.preventDefault();const clipId=event.dataTransfer.getData("text/dionysus-timeline-clip");const moving=(project.timelineClips??[]).find(clip=>clip.id===clipId);if(!moving||moving.kind!==track.kind)return;const rect=event.currentTarget.getBoundingClientRect();const next=Math.max(0,((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration-moving.duration/2);try{change(p=>{const result=moveTimelineClip({tracks:p.tracks,timelineClips:p.timelineClips??[]},moving.id,next);return {...p,timelineClips:result.timelineClips.map(clip=>clip.id===moving.id?{...clip,trackId:track.id}:clip)};});setSelectedTimelineClipId(moving.id);setIsPlaying(false);}catch(error){setNotice(error instanceof Error?error.message:"Could not move the clip.");}}}>
-   <div className="visual-playhead" style={{left:(editorTime/mediaTimelineDuration*100)+"%"}}/>
-   {clips.map(clip=><button key={clip.id} draggable className={"visual-media-clip "+(clip.kind==="audio"?"audio-clip":"video-clip")+(clip.id===selectedTimelineClipId?" selected":"")} style={{left:(clip.start/mediaTimelineDuration*100)+"%",width:Math.max(2,clip.duration/mediaTimelineDuration*100)+"%"}} onDragStart={event=>{event.dataTransfer.setData("text/dionysus-timeline-clip",clip.id);event.dataTransfer.effectAllowed="move";}} onClick={()=>{setSelectedTimelineClipId(clip.id);const next=Math.min(runtime,clip.start);playbackTimeRef.current=next;setIsPlaying(false);setEditorTime(next);}} title={clip.name+" · "+clip.start.toFixed(1)+"–"+(clip.start+clip.duration).toFixed(1)+"s"}><span className="visual-clip-icon">{clip.kind==="audio"?<AudioLines size={13}/>:<Film size={13}/>}</span><span className="visual-clip-copy"><strong>{clip.name}</strong><small>{clip.duration.toFixed(1)}s{clip.linkedVideoClipId?" · linked":clip.kind==="audio"?" · independent":""}{clip.assetId?"":" · no source"}</small></span></button>)}
-   {!clips.length&&<span className="visual-track-empty">Drop or add a clip to this lane</span>}
+{project.tracks.filter(track=>track.kind==="video"||track.kind==="audio"||track.kind==="procedural"||track.kind==="text"||track.kind==="effects").map(track=>{
+ const clips=(project.timelineClips??[]).filter(clip=>clip.trackId===track.id && !(track.kind==="audio" && clip.linkedVideoClipId));
+ return <div className="visual-track-group" key={track.id}>
+ <div className="visual-track-row">
+  <div className="visual-track-label">
+   {track.kind==="video" && <button className="track-expand-toggle" aria-label={(collapsedVideoTrackIds.includes(track.id)?"Expand ":"Collapse ")+track.name} aria-expanded={!collapsedVideoTrackIds.includes(track.id)} onClick={()=>setCollapsedVideoTrackIds(current=>current.includes(track.id)?current.filter(id=>id!==track.id):[...current,track.id])}>{collapsedVideoTrackIds.includes(track.id)?"▸":"▾"}</button>}
+   <span className={track.kind==="audio"?"track-kind-audio":"track-kind-video"}>{track.kind==="audio"?<AudioLines size={15}/>:track.kind==="procedural"?<Layers3 size={15}/>:track.kind==="text"?<Sparkles size={15}/>:<Film size={15}/>}</span><div><strong>{track.name||track.kind}</strong><small>{track.kind==="audio"?"Audio layer":track.kind==="procedural"?"Three.js layer":track.kind==="text"?"Text layer":track.kind==="effects"?"Effects layer":"Video layer"}</small></div>
   </div>
- </div>;
-})}
+  <div className="visual-track-lane" style={{backgroundSize:(5/mediaTimelineDuration*100)+"% 100%"}}
+   onPointerDown={event=>{if(event.target!==event.currentTarget)return;const rect=event.currentTarget.getBoundingClientRect();const next=Math.max(0,Math.min(activeTimelineDuration,((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration));playbackTimeRef.current=next;setIsPlaying(false);setEditorTime(next);}}
+   onDragOver={event=>event.preventDefault()}
+   onDrop={event=>{event.preventDefault();const clipId=event.dataTransfer.getData("text/dionysus-timeline-clip");const moving=(project.timelineClips??[]).find(clip=>clip.id===clipId);if(!moving||moving.kind!==track.kind||!(track.kind==="video"||track.kind==="audio"))return;const rect=event.currentTarget.getBoundingClientRect();const next=Math.max(0,((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration-moving.duration/2);try{change(p=>{const result=moveTimelineClip({tracks:p.tracks,timelineClips:p.timelineClips??[]},moving.id,next);return {...p,timelineClips:result.timelineClips.map(clip=>clip.id===moving.id?{...clip,trackId:track.id}:clip)};});setSelectedTimelineClipId(moving.id);setIsPlaying(false);}catch(error){setNotice(error instanceof Error?error.message:"Could not move the clip.");}}}>
+   <div className="visual-playhead" style={{left:(editorTime/mediaTimelineDuration*100)+"%"}}/>
+   {clips.map(clip=>{
+     const versionShot=clip.shotId?project.shots.find(shot=>shot.id===clip.shotId):selected;
+     const versionSlot=versionShot?(clip.slotId?versionShot.slots.find(slot=>slot.id===clip.slotId):versionShot.slots.find(slot=>slot.id===selectedSlotId)??versionShot.slots[0]):undefined;
+     return <div className="visual-media-clip-wrap" key={clip.id} style={{left:(clip.start/mediaTimelineDuration*100)+"%",width:Math.max(2,clip.duration/mediaTimelineDuration*100)+"%"}}>
+       <button draggable className={"visual-media-clip "+(clip.kind==="audio"?"audio-clip":"video-clip")+(clip.id===selectedTimelineClipId?" selected":"")} onDragStart={event=>{event.dataTransfer.setData("text/dionysus-timeline-clip",clip.id);event.dataTransfer.effectAllowed="move";}} onClick={()=>{setSelectedTimelineClipId(clip.id);const next=Math.min(activeTimelineDuration,clip.start);playbackTimeRef.current=next;setIsPlaying(false);setEditorTime(next);}} title={clip.name+" · "+clip.start.toFixed(1)+"–"+(clip.start+clip.duration).toFixed(1)+"s"}><span className="visual-clip-icon">{clip.kind==="audio"?<AudioLines size={13}/>:<Film size={13}/>}</span><span className="visual-clip-copy"><strong>{clip.name}</strong><small>{clip.duration.toFixed(1)}s{clip.linkedVideoClipId?" · linked":clip.kind==="audio"?" · independent":""}{clip.assetId?"":" · no source"}</small></span></button>
+       {clip.kind==="audio" && <button className="timeline-clip-mute" aria-label={(clip.muted?"Unmute ":"Mute ")+clip.name} aria-pressed={Boolean(clip.muted)} onClick={()=>change(p=>({...p,timelineClips:(p.timelineClips??[]).map(item=>item.id===clip.id?{...item,muted:!item.muted}:item)}))}>{clip.muted?"🔇":"♪"}</button>}
+       {clip.kind==="video" && versionShot && versionSlot && <details className="timeline-version-menu"><summary aria-label={"Show versions for "+versionShot.title}>▾</summary><div className="timeline-version-menu-panel">
+         <strong>{versionShot.title}</strong>
+         {versionSlot.versions.map((version,vi)=><div className="timeline-version-menu-row" key={version.id}>
+           <button className={version.id===versionSlot.selectedVersionId?"chosen":""} onClick={()=>{setSelectedId(versionShot.id);setSelectedSlotId(versionSlot.id);chooseSlotVersion(versionShot.id,versionSlot.id,version.id);}}><span>{version.name||"Version "+(vi+1)}</span><small>{version.layers.some(layer=>layer.kind==="procedural")?"Three.js / mix":version.layers.some(layer=>layer.kind==="video")?"Video":version.layers.some(layer=>layer.kind==="image")?"Image":"Composition"} · {version.duration}s</small></button>
+           <button className="timeline-version-edit" onClick={()=>openVersionTimeline(versionShot.id,versionSlot.id,version.id)}>Edit</button>
+         </div>)}
+         <button className="timeline-version-add" onClick={()=>{setSelectedId(versionShot.id);setSelectedSlotId(versionSlot.id);createSlotVersion(versionShot.id,versionSlot.id);}}>＋ Add Version</button>
+       </div></details>}
+     </div>;
+   })}
+   {!clips.length&&<span className="visual-track-empty">{track.kind==="procedural"?"Procedural modules are available inside a Shot Version tab.":track.kind==="text"?"Timed text lane — text modules are edited in a Shot Version tab.":track.kind==="effects"?"No effects assigned to this lane.":"Drop or add a clip to this lane"}</span>}
+  </div>
+ </div>
+ {track.kind==="video" && !collapsedVideoTrackIds.includes(track.id) && clips.filter(clip=>clip.kind==="video").map(videoClip=>{
+   const linkedAudio=(project.timelineClips??[]).filter(clip=>clip.kind==="audio"&&clip.linkedVideoClipId===videoClip.id);
+   if(!linkedAudio.length)return null;
+   return <div className="visual-track-row linked-audio-child" key={"linked-"+videoClip.id}>
+    <div className="visual-track-label"><span className="track-kind-audio"><AudioLines size={14}/></span><div><strong>Linked audio</strong><small>{videoClip.name}</small></div></div>
+    <div className="visual-track-lane" style={{backgroundSize:(5/mediaTimelineDuration*100)+"% 100%"}}>
+      <div className="visual-playhead" style={{left:(editorTime/mediaTimelineDuration*100)+"%"}}/>
+      {linkedAudio.map(audio=><div className="visual-media-clip-wrap" key={audio.id} style={{left:(audio.start/mediaTimelineDuration*100)+"%",width:Math.max(2,audio.duration/mediaTimelineDuration*100)+"%"}}>
+        <button className={"visual-media-clip audio-clip"+(audio.id===selectedTimelineClipId?" selected":"")} onClick={()=>{setSelectedTimelineClipId(audio.id);setEditorTime(audio.start);setIsPlaying(false);playbackTimeRef.current=audio.start;}} title={audio.name+" · "+audio.duration.toFixed(1)+"s"}><span className="visual-clip-icon"><AudioLines size={13}/></span><span className="visual-clip-copy"><strong>{audio.name}</strong><small>{audio.duration.toFixed(1)}s · linked</small></span></button>
+        <button className="timeline-clip-mute" aria-label={(audio.muted?"Unmute ":"Mute ")+audio.name} aria-pressed={Boolean(audio.muted)} onClick={()=>change(p=>({...p,timelineClips:(p.timelineClips??[]).map(item=>item.id===audio.id?{...item,muted:!item.muted}:item)}))}>{audio.muted?"🔇":"♪"}</button>
+      </div>)}
+    </div>
+   </div>;
+ })}
+ </div>
 </div>
 {selectedTimelineClip&&<div className="visual-clip-inspector">
 <div className="visual-clip-inspector-title"><div><strong>{selectedTimelineClip.name}</strong><span>{selectedTimelineClip.kind} · {selectedTimelineClip.linkedVideoClipId?"linked source audio":selectedTimelineClip.kind==="audio"?"independent audio":"video source"}</span></div><button className="button button-quiet button-small" onClick={()=>setSelectedTimelineClipId("")}>Close</button></div>
