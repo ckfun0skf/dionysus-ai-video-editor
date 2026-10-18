@@ -1,32 +1,19 @@
-# Completion Report — DYS-004: Asset library and reference profiles
+# Implementation Report — DYS-004: Asset library and reference profiles
 
-**Report status:** Partial implementation; CI passed, browser QA pending  
-**Report date:** 2026-10-17
+**Status:** In progress · **Updated:** 2026-10-18
 
-## Outcome
-Implemented metadata-level asset management and reference-profile management on the feature branch, including per-shot reference overrides. This is not full media ingestion: selecting a file records its name/type metadata only, and does not copy its bytes into project storage.
+## Delivered
+- Asset metadata CRUD and reference-use protection.
+- Reference profile CRUD, role editing, Shot assignment, and Shot-specific exclude/replace overrides.
+- Validation of profile assets, Shot profile IDs, layer assets, generation snapshot assets, and reference overrides.
 
-## Work recorded
-- Add and edit asset name, type, notes, and source filename.
-- Recognize common media types from file MIME type or extension.
-- Prevent deleting assets currently referenced by profiles, layers, or generation snapshots.
-- Create, rename, reclassify, and delete reference profiles.
-- Add/remove profile references and edit reference roles.
-- Assign reference profiles to individual shots.
-- Exclude or replace a specific profile reference on a shot without mutating the global profile.
-- Project validation checks asset/profile/shot/override references for integrity, with additional automated tests.
-- Centralized new UI strings in `src/i18n.ts`.
+## Planned work clarified by Issue #56
+Issue [#56 — Asset Management is not user friendly](https://github.com/ckfun0skf/dionysus-ai-video-editor/issues/56) belongs to the active DYS-004 workstream. The asset-picker-style library, context-menu Settings/Edit Timeline/Delete, dependency-impact warning, reverse reference-usage view, and per-asset frame size are recorded in `public/doc/tasks.json`. This is planning only, **not a claim these UX changes are implemented**.
 
-## Outstanding items
-- Store/relink actual binary media and provide previews.
-- Capture and review the exact reference snapshot used by each generation.
-- Perform browser smoke testing and verify deployed behavior.
+## Known limitations
+File selection currently records metadata/source filename; durable media-byte import, relinking, preview regeneration, and exact generation-reference snapshot review remain outstanding.
 
-## Validation evidence
-- Current code is in [PR #1](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/1).
-- GitHub Actions CI run [39015882423](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39015882423) passed all 11 tests and the production build.
-
-## Related files
-- Task specification: [assets-and-references.md](../tasks/assets-and-references.md)
-- Detail page: [assets-and-references.html](../tasks/assets-and-references.html)
-- Dashboard: [task.html](../task.html)
+## Related
+- [Task specification](../tasks/assets-and-references.md)
+- [Task detail](../tasks/assets-and-references.html)
+- [Dashboard](../task.html)

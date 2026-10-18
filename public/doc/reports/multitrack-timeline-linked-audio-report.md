@@ -1,23 +1,21 @@
-# Implementation Report — DYS-011: Hierarchical audio lanes and mute
+# Implementation Report — DYS-011: Hierarchical audio lanes and linked audio
 
-**Status:** In progress  
-**Last reviewed:** 2026-10-18  
-**Implementation PR:** [#39 — prototype-aligned Timeline tabs, versions, and layers](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/39)
+**Status:** Done · **Updated:** 2026-10-18 · **Regression coverage:** [PR #57](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/57)
 
-## Delivered in this slice
-- Linked source audio is rendered as an indented child lane under its video parent and can be expanded/collapsed with that parent group.
-- The child audio lane provides **Unlink**; unlinking detaches the clip without changing its current start or duration, after which it appears as an independent audio clip.
-- Audio clips have an independent mute flag. Each Audio Layer track also has a separate persistent mute control.
-- Preview audio synchronization respects clip and track mute.
-- Composition collection propagates mute from the owning Audio Layer track to the layer consumed by the renderer.
-- Schema validation accepts and validates the optional track/clip mute values.
+## Delivered
+- Linked source audio appears in an indented child lane. Unlink detaches it without shifting timing.
+- Audio clips and Audio Layer tracks have separate mute controls.
+- Linked movement/trim, split, and duplicate preserve source ranges, fades, and parent/child links.
+- Deleting linked video removes linked child audio; deleting audio alone preserves video.
+- Removing a video layer removes still-linked audio while preserving detached audio.
+- Undo/Redo restores grouped edits; JSON preserves links, mute/mix settings, and timing.
 
 ## Validation
-- CI run [#39117698570](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39117698570) passed: 64 tests, TypeScript check, production build, and npm audit with 0 vulnerabilities.
-- App integration coverage exercises linked audio, track/clip mute isolation, unlink, and timing preservation.
-- Automated browser smoke tests were not run.
+PR #57 CI [#39165133176](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39165133176): 137 tests across 16 files, TypeScript and production build passed at test SHA `794e3ff024c26d55d76583160d96238df8d84a12`. No browser smoke tests were run.
 
 ## Remaining limitations
-- Split-audio editing and richer independent audio editing remain outstanding.
-- Additional project JSON round-trip and Undo/Redo cases are still needed before marking this task done.
-- Final composition/export fidelity is not inferred from these model and UI tests.
+Advanced automation/ducking/effects are tracked under DYS-008; WebM support does not imply production-grade MP4 export.
+
+
+## Latest validation
+[CI #39165133176](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39165133176) passed 137 tests across 16 files at code/test head `794e3ff024c26d55d76583160d96238df8d84a12`; TypeScript/Vite build passed and npm audit reported 0 vulnerabilities. The App integration suite covers linked-audio alignment after cross-layer moves and adjacent trimming, group-delete behavior, detached-audio preservation, and Undo/Redo. No browser smoke tests were run.
