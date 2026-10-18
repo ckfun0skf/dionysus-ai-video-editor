@@ -655,7 +655,7 @@ export default function App() {
     const version = slot?.versions.find(item => item.id === versionId);
     if (!shot || !slot || !version) return;
     const tabId = "version:" + slotId + ":" + versionId;
-    setTimelineTabs(existing => existing.some(tab => tab.id === tabId) ? existing : [...existing, { id: tabId, shotId, slotId, versionId, label: shot.title + " · " + version.name }]);
+    setTimelineTabs(existing => existing.some(tab => tab.id === tabId) ? existing : [...existing, { id: tabId, shotId, slotId, versionId, label: slot.name + " · " + version.name }]);
     setTimelineTabTimes(times => ({ ...times, [activeTimelineTabId]: editorTime, [tabId]: times[tabId] ?? 0 }));
     setActiveTimelineTabId(tabId);
     setSelectedId(shotId);
@@ -1246,6 +1246,12 @@ export default function App() {
       <label className="nested-version-duration">Version duration <span><input aria-label="Version duration" type="number" min="0.1" step={1/Math.max(1,project.frameRate)} value={activeVersionTimeline.duration} onChange={event=>updateVersionDuration(activeVersionTimelineShot.id,activeVersionTimelineSlot.id,activeVersionTimeline.id,Number(event.target.value))}/>s</span></label>
     </div>
   </div>
+  <details className="nested-version-details">
+    <summary>Version details</summary>
+    <label className="field-label">Description
+      <textarea className="text-area" rows={2} aria-label="Version description" value={activeVersionTimeline.description} onChange={event => change(p => ({ ...p, shots: p.shots.map(shot => shot.id !== activeVersionTimelineShot.id ? shot : { ...shot, slots: shot.slots.map(slot => slot.id !== activeVersionTimelineSlot.id ? slot : { ...slot, versions: slot.versions.map(version => version.id !== activeVersionTimeline.id ? version : { ...version, description: event.target.value }) }) }) }))} />
+    </label>
+  </details>
   <div className="nested-timeline-ruler" aria-label="Version timeline ruler">
     {Array.from({length:Math.floor(activeVersionTimeline.duration/2)+1},(_,i)=>i*2).concat(activeVersionTimeline.duration%2===0?[]:[activeVersionTimeline.duration]).map(sec=><span key={sec} style={{left:(sec/Math.max(activeVersionTimeline.duration,0.1)*100)+"%"}}>{time(sec)}</span>)}
     <div className="nested-timeline-playhead" style={{left:(Math.min(editorTime,activeVersionTimeline.duration)/Math.max(activeVersionTimeline.duration,0.1)*100)+"%"}}/>
