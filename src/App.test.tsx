@@ -69,6 +69,29 @@ async function openTimelineView() {
   await flushEffects();
 }
 
+/** Seed valid linked source-audio pairs for tests of editing behavior; the Add Layer menu intentionally creates tracks only. */
+async function seedLinkedVideoAudioPairs(count = 1) {
+  const project = persistedProject();
+  const videoTrack = project.tracks.find(track => track.kind === "video");
+  const audioTrack = project.tracks.find(track => track.kind === "audio");
+  if (!videoTrack || !audioTrack) throw new Error("Sample project needs Video and Audio tracks");
+  const clips = [...(project.timelineClips ?? [])];
+  for (let index = 0; index < count; index += 1) {
+    const number = index + 1;
+    const videoId = "test-video-" + number;
+    const start = index * 5;
+    const duration = 5;
+    clips.push({ id: videoId, name: "Video clip " + number, kind: "video", trackId: videoTrack.id, start, duration });
+    clips.push({ id: "test-audio-" + number, name: "Video clip " + number + " audio", kind: "audio", trackId: audioTrack.id, start, duration, linkedVideoClipId: videoId });
+  }
+  project.timelineClips = clips;
+  localStorage.setItem("dionysus.project.v1", JSON.stringify(project));
+  act(() => root.unmount());
+  root = createRoot(container);
+  act(() => root.render(<App />));
+  await flushEffects();
+}
+
 beforeEach(() => {
   originalCreateObjectURL = Object.getOwnPropertyDescriptor(URL, "createObjectURL");
   originalRevokeObjectURL = Object.getOwnPropertyDescriptor(URL, "revokeObjectURL");
@@ -128,10 +151,7 @@ describe("App history integration", () => {
 
   it("handles rapid timeline edits atomically and keeps linked audio in persisted state", async () => {
     await openTimelineView();
-    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Add linked video/audio"));
-    expect(add).toBeTruthy();
-    click(add as HTMLButtonElement);
-    await flushEffects();
+    await seedLinkedVideoAudioPairs();
 
     let videoRow = timelineRows().find(row => row.textContent?.includes("Video clip 1"));
     expect(videoRow).toBeTruthy();
@@ -151,11 +171,7 @@ describe("App history integration", () => {
 
   it("persists Audio Layer volume, fade-in, and fade-out controls", async () => {
     await openTimelineView();
-    const add = Array.from(container.querySelectorAll<HTMLButtonElement>("button"))
-      .find(button => button.textContent?.includes("Add linked video/audio"));
-    expect(add).toBeTruthy();
-    click(add!);
-    await flushEffects();
+    await seedLinkedVideoAudioPairs();
 
     await selectClip("Video clip 1 audio");
     await flushEffects();
@@ -655,10 +671,7 @@ describe("App history integration", () => {
 
   it("splits the selected Master video clip and keeps linked audio aligned in the Inspector workflow", async () => {
     await openTimelineView();
-    const addLinked = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Add linked video/audio"));
-    expect(addLinked).toBeTruthy();
-    click(addLinked!);
-    await flushEffects();
+    await seedLinkedVideoAudioPairs();
     const before = persistedProject();
     const video = before.timelineClips?.find(clip => clip.kind === "video" && !clip.id.startsWith("storyboard-"));
     const audio = before.timelineClips?.find(clip => clip.kind === "audio" && clip.linkedVideoClipId === video?.id);
@@ -692,10 +705,7 @@ describe("App history integration", () => {
 
   it("splits a selected Master clip at the current playhead and preserves linked source ranges", async () => {
     await openTimelineView();
-    const addLinked = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Add linked video/audio"));
-    expect(addLinked).toBeTruthy();
-    click(addLinked!);
-    await flushEffects();
+    await seedLinkedVideoAudioPairs();
 
     const before = persistedProject();
     const video = before.timelineClips?.find(clip => clip.kind === "video" && !clip.id.startsWith("storyboard-"))!;
@@ -727,10 +737,7 @@ describe("App history integration", () => {
 
   it("duplicates a Master video clip with a new linked-audio pair and preserves mix metadata", async () => {
     await openTimelineView();
-    const addLinked = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Add linked video/audio"));
-    expect(addLinked).toBeTruthy();
-    click(addLinked!);
-    await flushEffects();
+    await seedLinkedVideoAudioPairs();
 
     let clips = persistedProject().timelineClips ?? [];
     const originalVideo = clips.find(clip => clip.kind === "video" && !clip.id.startsWith("storyboard-"))!;
@@ -780,10 +787,7 @@ describe("App history integration", () => {
 
   it("frame-snaps ordinary Master Timeline clip drag moves and keeps linked audio in sync", async () => {
     await openTimelineView();
-    const addLinked = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Add linked video/audio"));
-    expect(addLinked).toBeTruthy();
-    click(addLinked!);
-    await flushEffects();
+    await seedLinkedVideoAudioPairs();
 
     const before = persistedProject();
     const video = before.timelineClips?.find(clip => clip.kind === "video" && !clip.id.startsWith("storyboard-"))!;
