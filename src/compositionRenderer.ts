@@ -115,7 +115,7 @@ export async function renderCompositionFrame(canvas: HTMLCanvasElement, project:
     if (asset.kind === "image" && !images.has(asset.id)) images.set(asset.id, await loadImage(asset.path));
     if (asset.kind === "video" && !videos.has(asset.id)) {
       const video = document.createElement("video");
-      video.src = asset.path; video.muted = true; video.playsInline = true; video.preload = "auto"; video.crossOrigin = "anonymous";
+      video.crossOrigin = "anonymous"; video.src = asset.path; video.muted = true; video.playsInline = true; video.preload = "auto";
       await loadMediaMetadata(video, "Unable to load video layer source");
       videos.set(asset.id, video);
     }
@@ -143,21 +143,23 @@ export async function exportCompositionWebM(project: DionysusProject, options: R
   const audioLayers = layers.filter(layer => layer.kind === "audio" && project.assets.some(asset => asset.id === layer.assetId && asset.path));
   let audioContext: AudioContext | undefined;
   let audioDestination: MediaStreamAudioDestinationNode | undefined;
-  const audioElements = new Map<string, HTMLAudioElement>();
-  const audioNodes: MediaElementAudioSourceNode[] = [];
+  let audioResume: Promise<void> | undefined;
+  const scheduledAudio: { layer: CompositionLayer; source: AudioBufferSourceNode; buffer: AudioBuffer }[] = [];
   if (audioLayers.length) {
-    const AudioContextConstructor = window.AudioContext;
-    if (!AudioContextConstructor) throw new Error("Audio export requires Web Audio API support");
-    audioContext = new AudioContextConstructor();
+    if (!window.AudioContext) throw new Error("Audio export requires Web Audio API support");
+    audioContext = new window.AudioContext();
+    // Invoke resume synchronously from the export click path, before awaiting file decoding.
+    audioResume = audioContext.resume();
     audioDestination = audioContext.createMediaStreamDestination();
     for (const layer of audioLayers) {
       const asset = project.assets.find(item => item.id === layer.assetId)!;
-      const audio = document.createElement("audio");
-      audio.src = asset.path!; audio.preload = "auto"; audio.crossOrigin = "anonymous";
-      await loadMediaMetadata(audio, "Unable to load audio layer source: " + asset.name);
-      audioElements.set(layer.id, audio);
-      const source = audioContext.createMediaElementSource(audio);
-      source.connect(audioDestination); audioNodes.push(source);
+      const response = await fetch(asset.path!);
+      if (!response.ok) throw new Error("Unable to read audio layer source: " + asset.name);
+      const buffer = await audioContext.decodeAudioData(await response.arrayBuffer());
+      const source = audioContext.createBufferSource();
+      source.buffer = buffer;
+      source.connect(audioDestination);
+      scheduledAudio.push({ layer, source, buffer });
     }
     for (const track of audioDestination.stream.getAudioTracks()) stream.addTrack(track);
   }
@@ -171,26 +173,23 @@ export async function exportCompositionWebM(project: DionysusProject, options: R
   });
   const images = new Map<string, HTMLImageElement>(), videos = new Map<string, HTMLVideoElement>();
   try {
-    if (audioContext) await audioContext.resume();
+    if (audioContext && audioResume) await audioResume;
     recorder.start(250);
+    const audioStartAt = audioContext ? audioContext.currentTime + 0.05 : 0;
+    for (const item of scheduledAudio) {
+      const offset = Math.max(0, item.layer.sourceIn ?? 0);
+      const sourceLimit = item.layer.sourceOut === undefined ? item.layer.duration : Math.max(0, item.layer.sourceOut - offset);
+      const playbackDuration = Math.min(item.layer.duration, sourceLimit, Math.max(0, item.buffer.duration - offset));
+      if (playbackDuration > 0) item.source.start(audioStartAt + item.layer.start, offset, playbackDuration);
+    }
     const frames = Math.ceil(duration * fps);
     const started = performance.now();
     for (let frame = 0; frame < frames; frame++) {
       const seconds = frame / fps;
       await renderCompositionFrame(canvas, project, layers, seconds, options, images, videos);
-      for (const layer of audioLayers) {
-        const audio = audioElements.get(layer.id);
-        if (!audio) continue;
-        const isActive = seconds >= layer.start && seconds < layer.start + layer.duration;
-        if (isActive && audio.paused) {
-          await seekMedia(audio, (layer.sourceIn ?? 0) + seconds - layer.start);
-          await audio.play();
-        } else if (!isActive && !audio.paused) audio.pause();
-      }
       const remaining = ((frame + 1) * 1000 / fps) - (performance.now() - started);
       if (remaining > 0) await new Promise<void>(resolve => window.setTimeout(resolve, remaining));
     }
-    for (const audio of audioElements.values()) audio.pause();
     recorder.stop();
     const blob = await finished;
     if (!blob.size) throw new Error("The browser produced an empty WebM file");
@@ -205,8 +204,7 @@ export async function exportCompositionWebM(project: DionysusProject, options: R
   } finally {
     stream.getTracks().forEach(track => track.stop());
     videos.forEach(video => { video.pause(); video.removeAttribute("src"); video.load(); });
-    audioElements.forEach(audio => { audio.pause(); audio.removeAttribute("src"); audio.load(); });
-    audioNodes.forEach(node => node.disconnect());
+    scheduledAudio.forEach(item => { try { item.source.stop(); } catch { /* already finished */ } item.source.disconnect(); });
     if (audioContext) await audioContext.close().catch(() => undefined);
   }
 }
