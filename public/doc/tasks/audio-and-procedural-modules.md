@@ -1,7 +1,7 @@
 # DYS-008 — Audio layers, timed text, and procedural Three.js modules
 
 **Status:** In progress  
-**Progress estimate:** 30%  
+**Progress estimate:** 40%  
 **Last updated:** 2026-10-18
 
 ## Implemented in the current slice
@@ -9,6 +9,8 @@
 - [x] Add Master Timeline Text blocks and typed text track lanes.
 - [x] Add a typed procedural/Three.js Master Timeline block and Version-internal procedural layer.
 - [x] Store a procedural block's optional pinned script/scene Version ID in the project.
+- [x] Edit nested Version duration and each Text/procedural module's internal start/duration independently.
+- [x] Move nested modules by frame-snapped drag and reorder them through layer headers.
 - [x] Distinguish procedural layer representation from actual final rendering; current renderer does not execute Three.js code.
 
 ## Remaining scope
@@ -27,5 +29,5 @@
 - The UI clearly distinguishes represented modules from rendered output.
 
 ## Validation
-- CI run [#39117698570](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39117698570): 64 tests passed, TypeScript check and production build passed, npm audit reported 0 vulnerabilities.
+- CI run [#39118949549](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39118949549): 70 tests passed, TypeScript check and production build passed, npm audit reported 0 vulnerabilities.
 - Automated browser smoke testing was not run.
