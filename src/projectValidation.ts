@@ -53,6 +53,7 @@ function isLayer(value: unknown): boolean {
     (value.assetId === undefined || isString(value.assetId)) &&
     (value.scriptVersionId === undefined || isString(value.scriptVersionId)) &&
     (value.childCompositionId === undefined || isString(value.childCompositionId)) &&
+    (value.clipVersionId === undefined || isString(value.clipVersionId)) &&
     (value.sourceIn === undefined || (isFiniteNumber(value.sourceIn) && value.sourceIn >= 0)) &&
     (value.sourceOut === undefined || (isFiniteNumber(value.sourceOut) && value.sourceOut >= 0)) &&
     (value.sourceIn === undefined || value.sourceOut === undefined || value.sourceOut > value.sourceIn) &&
@@ -227,6 +228,8 @@ export function validateProject(value: unknown): value is DionysusProject {
         if (layer.childCompositionId !== undefined) {
           const child = assets.find(candidate => candidate.id === layer.childCompositionId);
           if (!child || child.kind !== "clip") return false;
+          if (layer.clipVersionId !== undefined &&
+              !(child.clipVersions ?? []).some(version => version.id === layer.clipVersionId)) return false;
         }
       }
     }
