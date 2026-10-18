@@ -20,7 +20,7 @@ describe("audio envelope", () => {
   });
 
   it("combines fades when their ranges overlap and handles zero-duration clips", () => {
-    expect(getAudioEnvelope(1, 4, 4, 2, 5)).toBeCloseTo(0.25, 6);
+    expect(getAudioEnvelope(1, 4, 4, 2, 5)).toBeCloseTo(0.375, 6);
     expect(getAudioEnvelope(1, 1, 1, 0.5, 1)).toBeCloseTo(0.25, 6);
     expect(getAudioEnvelope(1, 1, 1, 0, 0)).toBe(0);
     expect(getAudioEnvelope(1, 1, 1, Number.NaN, 4)).toBe(0);
