@@ -26,6 +26,33 @@ export function collectCompositionLayers(project: DionysusProject): CompositionL
       muted: Boolean(clip.muted || project.tracks.find(track => track.id === clip.trackId)?.muted),
       volume: clip.volume, fadeIn: clip.fadeIn, fadeOut: clip.fadeOut, shortSourceBehavior: clip.shortSourceBehavior
     };
+    if (clip.kind === "clip") {
+      const asset = project.assets.find(item => item.id === clip.assetId && item.kind === "clip");
+      const version = asset?.clipVersions?.find(item => item.id === asset.selectedClipVersionId) ?? asset?.clipVersions?.[0];
+      if (!version || version.duration <= 0) return [];
+      const result: CompositionLayer[] = [];
+      const repeats = clip.shortSourceBehavior === "loop" ? Math.max(1, Math.ceil(clip.duration / version.duration)) : 1;
+      for (let repeat = 0; repeat < repeats; repeat += 1) {
+        const repeatOffset = repeat * version.duration;
+        if (repeatOffset >= clip.duration) break;
+        for (const layer of version.layers) {
+          const startOffset = repeatOffset + layer.start;
+          if (startOffset >= clip.duration) continue;
+          const visibleDuration = Math.min(layer.duration, version.duration - layer.start, clip.duration - startOffset);
+          if (visibleDuration <= 0) continue;
+          result.push({
+            ...layer,
+            id: clip.id + ":" + layer.id + ":" + repeat,
+            name: layer.name,
+            start: clip.start + startOffset,
+            duration: visibleDuration,
+            muted: Boolean(layer.muted || clip.muted || project.tracks.find(track => track.id === clip.trackId)?.muted),
+            volume: layer.volume === undefined ? clip.volume : layer.volume * (clip.volume ?? 1)
+          });
+        }
+      }
+      return result;
+    }
     if (clip.kind === "text" || clip.kind === "procedural") {
       return [{
         ...common, fitMode: "contain" as const, x: 0, y: clip.kind === "text" ? 75 : 0,
