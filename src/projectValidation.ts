@@ -202,6 +202,14 @@ export function validateProject(value: unknown): value is DionysusProject {
     const track = tracks.find(item => item.id === clip.trackId);
     if (!track || (track.kind !== clip.kind && !(clip.kind === "clip" && track.kind === "video"))) return false;
     if (clip.assetId !== undefined && !assetIds.has(clip.assetId as string)) return false;
+    if (clip.kind === "clip") {
+      const clipAsset = assets.find(asset => asset.id === clip.assetId && asset.kind === "clip");
+      if (!clipAsset) return false;
+      if (clip.clipVersionId !== undefined &&
+          !(clipAsset.clipVersions ?? []).some(version => version.id === clip.clipVersionId)) return false;
+    } else if (clip.clipVersionId !== undefined) {
+      return false;
+    }
     if (clip.shotId !== undefined && !shotIds.has(clip.shotId as string)) return false;
     if (clip.slotId !== undefined) {
       if (clip.shotId === undefined) return false;
