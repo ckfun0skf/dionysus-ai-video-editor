@@ -1136,7 +1136,7 @@ export default function App() {
     try {
       const data = JSON.parse(await file.text()) as DionysusProject;
       if (!validateProject(data)) throw new Error(t("error.invalidProject"));
-      setProject(data); setUndoStack([]); setRedoStack([]); lastHistoryGroup.current = ""; setSelectedId(data.shots[0]?.id ?? ""); setNotice(t("notice.projectImported"));
+      const normalized = normalizeLegacyTimelineTracks(data); setProject(normalized); setUndoStack([]); setRedoStack([]); lastHistoryGroup.current = ""; setSelectedId(normalized.shots[0]?.id ?? ""); setNotice(t("notice.projectImported"));
     } catch (e) {
       setNotice(e instanceof Error ? e.message : t("error.importFailed"));
     } finally {
