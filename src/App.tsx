@@ -51,7 +51,7 @@ export default function App() {
   const previewMediaReleasesRef = useRef(new Map<string, () => void>());
   const [previewAssetId, setPreviewAssetId] = useState("");
   const [showPreviewOverlay, setShowPreviewOverlay] = useState(false);
-  const previewCanvasRef = useRef<HTMLCanvasElement>(null);
+  const previewCanvasRefs = useRef(new Map<string, HTMLCanvasElement>());
   const previewRenderId = useRef(0);
   const previewImage = previewAssetId === "__none__" ? undefined : project.assets.find(asset => asset.id === previewAssetId && asset.kind === "image" && Boolean(asset.path)) ?? project.assets.find(asset => asset.kind === "image" && Boolean(asset.path));
   const editorTimeLabel = (seconds: number) => `${time(seconds)}.${String(Math.floor((seconds % 1) * 100)).padStart(2, "0")}`;
@@ -74,6 +74,8 @@ export default function App() {
   const [selectedTimelineClipId, setSelectedTimelineClipId] = useState<string>("");
   const [timelineTabs, setTimelineTabs] = useState<VersionTimelineTab[]>([]);
   const [activeTimelineTabId, setActiveTimelineTabId] = useState("master");
+  const [timelineTabTimes, setTimelineTabTimes] = useState<Record<string, number>>({ master: 0 });
+  const [showTimelineInspector, setShowTimelineInspector] = useState(false);
   const [collapsedVideoTrackIds, setCollapsedVideoTrackIds] = useState<string[]>([]);
   const [rippleReorderMode, setRippleReorderMode] = useState(false);
   const [storyboardMode, setStoryboardMode] = useState<"flow" | "list">("flow");
@@ -144,7 +146,7 @@ export default function App() {
     return () => cancelAnimationFrame(frame);
   }, [isPlaying, activeTimelineDuration, project.frameRate]);
   useEffect(() => {
-    const canvas = previewCanvasRef.current;
+    const canvas = previewCanvasRefs.current.get(activeTimelineTabId);
     if (!canvas || typeof CanvasRenderingContext2D === "undefined") return;
     const renderId = ++previewRenderId.current;
     const allLayers = activeVersionTimeline ? activeVersionTimeline.layers : collectCompositionLayers(project);
@@ -173,7 +175,7 @@ export default function App() {
     };
     void render();
     return () => { if (previewRenderId.current === renderId) previewRenderId.current += 1; };
-  }, [project, editorTime, previewImage, runtime, view, activeVersionTimeline]);
+  }, [project, editorTime, previewImage, runtime, view, activeVersionTimeline, activeTimelineTabId]);
   useEffect(() => () => {
     previewMediaReleasesRef.current.forEach(release => release());
     previewMediaReleasesRef.current.clear();
@@ -226,6 +228,44 @@ export default function App() {
     void prepare().then(() => { if (!cancelled) frame = requestAnimationFrame(sync); });
     return () => { cancelled = true; cancelAnimationFrame(frame); players.forEach(player => { player.element.pause(); player.element.removeAttribute("src"); player.release?.(); }); players.clear(); };
   }, [isPlaying, project, activeVersionTimeline]);
+
+  const renderTimelinePreview = (
+    tabKey: string,
+    title: string,
+    subtitle: string,
+    duration: number,
+    overlayTitle: string,
+    overlaySubtitle: string,
+    allowClearImage = false
+  ) => (
+    <section className="integrated-preview-panel" aria-label={title}>
+      <div className="integrated-preview-heading">
+        <div><strong>{title}</strong><small>{subtitle}</small></div>
+        <span className="integrated-timecode">{editorTimeLabel(editorTime)} / {editorTimeLabel(duration)}</span>
+      </div>
+      <div className="integrated-preview-frame">
+        <canvas
+          ref={element => {
+            if (element) previewCanvasRefs.current.set(tabKey, element);
+            else previewCanvasRefs.current.delete(tabKey);
+          }}
+          className="editor-preview-canvas"
+          aria-label={title + " at " + editorTimeLabel(editorTime)}
+        />
+        {showPreviewOverlay && <div className="integrated-preview-overlay">
+          <span>PREVIEW OVERLAY</span><strong>{overlayTitle}</strong><small>{overlaySubtitle || "No shot description"}</small>
+        </div>}
+      </div>
+      <div className="integrated-preview-controls">
+        <button className="button button-quiet button-small" onClick={() => { setIsPlaying(false); setEditorTime(0); playbackTimeRef.current = 0; }} title="Go to start">|◀</button>
+        <button className="button button-primary button-small" aria-label={isPlaying ? "Pause preview" : "Play preview"} onClick={() => { if (!isPlaying && editorTime >= duration) { playbackTimeRef.current = 0; setEditorTime(0); } setIsPlaying(value => !value); }}>{isPlaying ? "Pause" : "Play"}</button>
+        <button className="button button-quiet button-small" onClick={() => { setIsPlaying(false); const next = Math.min(duration, editorTime + 0.5); setEditorTime(next); playbackTimeRef.current = next; }}>+0.5s</button>
+        <label>Playhead <input aria-label="Timeline playhead time" type="range" min="0" max={Math.max(duration, 0.1)} step="0.05" value={Math.min(editorTime, duration)} onChange={event => { setIsPlaying(false); const next = Number(event.target.value); setEditorTime(next); playbackTimeRef.current = next; }} /></label>
+        <button className="button button-quiet button-small" aria-pressed={showPreviewOverlay} onClick={() => setShowPreviewOverlay(value => !value)}>{showPreviewOverlay ? "Hide overlay" : "Overlay"}</button>
+        {allowClearImage && previewImage && <button className="button button-quiet button-small" onClick={() => setPreviewAssetId("__none__")}>Clear image</button>}
+      </div>
+    </section>
+  );
 
   const selectedStart = useMemo(() => getMasterShotStart(project.shots, selectedId), [project.shots, selectedId]);
   const slotCount = project.shots.reduce((n, s) => n + s.slots.length, 0);
@@ -616,23 +656,42 @@ export default function App() {
     if (!shot || !slot || !version) return;
     const tabId = "version:" + slotId + ":" + versionId;
     setTimelineTabs(existing => existing.some(tab => tab.id === tabId) ? existing : [...existing, { id: tabId, shotId, slotId, versionId, label: shot.title + " · " + version.name }]);
+    setTimelineTabTimes(times => ({ ...times, [activeTimelineTabId]: editorTime, [tabId]: times[tabId] ?? 0 }));
     setActiveTimelineTabId(tabId);
     setSelectedId(shotId);
     setSelectedSlotId(slotId);
-    setEditorTime(0);
-    playbackTimeRef.current = 0;
+    const nextTime = Math.min(timelineTabTimes[tabId] ?? 0, version.duration);
+    setEditorTime(nextTime);
+    playbackTimeRef.current = nextTime;
     setSelectedTimelineClipId("");
     setIsPlaying(false);
     setView("timeline");
   }
 
+  function activateTimelineTab(tabId: string) {
+    setTimelineTabTimes(times => ({ ...times, [activeTimelineTabId]: editorTime }));
+    const nextTab = timelineTabs.find(tab => tab.id === tabId);
+    const nextVersion = nextTab
+      ? project.shots.find(shot => shot.id === nextTab.shotId)?.slots.find(slot => slot.id === nextTab.slotId)?.versions.find(version => version.id === nextTab.versionId)
+      : undefined;
+    const duration = tabId === "master" ? runtime : nextVersion?.duration ?? runtime;
+    const nextTime = Math.min(timelineTabTimes[tabId] ?? 0, duration);
+    setActiveTimelineTabId(tabId);
+    setEditorTime(nextTime);
+    playbackTimeRef.current = nextTime;
+    setIsPlaying(false);
+  }
+
   function closeTimelineTab(tabId: string) {
     setTimelineTabs(existing => existing.filter(tab => tab.id !== tabId));
     if (activeTimelineTabId === tabId) {
-      setActiveTimelineTabId("master");
-      setEditorTime(0);
-      playbackTimeRef.current = 0;
-      setIsPlaying(false);
+      activateTimelineTab("master");
+    } else {
+      setTimelineTabTimes(times => {
+        const next = { ...times };
+        delete next[tabId];
+        return next;
+      });
     }
   }
 
@@ -946,19 +1005,18 @@ export default function App() {
     <main className="main-area">
       <header className="topbar"><div className="breadcrumbs"><span>{t("breadcrumb.projects")}</span><span className="crumb-sep">/</span><strong>{project.name}</strong><span className="local-pill"><span/> {t("status.localBadge")}</span></div><div className="top-actions"><button className="button button-quiet" onClick={() => fileInput.current?.click()}><FolderOpen size={15}/> {t("action.openProject")}</button><button className="button button-quiet" onClick={exportProject}><Save size={15}/> {t("action.exportProject")}</button><button className="button button-quiet button-small" aria-label="Undo" title="Undo" disabled={undoStack.length === 0} onClick={undoProjectChange}><Undo2 size={14}/> Undo</button><button className="button button-quiet button-small" aria-label="Redo" title="Redo" disabled={redoStack.length === 0} onClick={redoProjectChange}><Redo2 size={14}/> Redo</button><button className="button button-quiet" onClick={() => void exportVideo()}><Film size={15}/> Export WebM</button><button className="button button-primary" onClick={exportPlan}><Download size={15}/> {t("action.exportPlan")}</button><input ref={fileInput} type="file" accept=".json,.dionysus.json,application/json" hidden onChange={e => void importProject(e.target.files?.[0])}/></div></header>
       <div className="page-content">
-        <section className="page-heading"><div><div className="eyebrow"><span className="eyebrow-line"/> {t("heading.eyebrow")}</div><h1>{view === "storyboard" ? t("heading.storyboard.title") : view === "timeline" ? t("heading.timeline.title") : view === "assets" ? t("heading.assets.title") : t("heading.references.title")}</h1><p>{view === "storyboard" ? t("heading.storyboard.description") : view === "timeline" ? t("heading.timeline.description") : view === "assets" ? t("heading.assets.description") : t("heading.references.description")}</p></div><div className="heading-meta"><span className="status-dot"/> {t("status.autosaved")} <span className="meta-divider"/> <span>{t("project.versionFoundation")}</span></div></section>
-        <section className="project-overview"><div className="overview-main"><div className="overview-icon"><Clapperboard size={19}/></div><div className="overview-copy"><div className="overview-kicker">{t("project.current")}</div><input className="project-name-input" aria-label={t("project.name")} value={project.name} onChange={e => change(p => ({ ...p, name: e.target.value }))}/><div className="project-subline"><span><Clock3 size={13}/> {t("project.runtimeSummary", { duration: time(runtime) })}</span><span><Film size={13}/> {t("project.shotCount", { count: project.shots.length })}</span><span><Layers3 size={13}/> {t("project.clipSlotCount", { count: slotCount })}</span></div></div></div><div className="project-specs"><div><span>{t("project.canvas")}</span><strong>{project.width} × {project.height}</strong></div><div><span>{t("project.frameRate")}</span><strong>{project.frameRate} FPS</strong></div><button className="icon-button" title={t("project.canvasSettingsPlanned")} onClick={() => setNotice(t("notice.canvasSettingsUnavailable"))}><Settings2 size={17}/></button></div></section>
-        <div className="workbench"><section className="workbench-main">
+        <section className={"page-heading" + (view === "timeline" ? " timeline-page-heading" : "")}><div><div className="eyebrow"><span className="eyebrow-line"/> {t("heading.eyebrow")}</div><h1>{view === "storyboard" ? t("heading.storyboard.title") : view === "timeline" ? t("heading.timeline.title") : view === "assets" ? t("heading.assets.title") : t("heading.references.title")}</h1><p>{view === "storyboard" ? t("heading.storyboard.description") : view === "timeline" ? t("heading.timeline.description") : view === "assets" ? t("heading.assets.description") : t("heading.references.description")}</p></div><div className="heading-meta"><span className="status-dot"/> {t("status.autosaved")} <span className="meta-divider"/> <span>{t("project.versionFoundation")}</span></div></section>
+        {view !== "timeline" && <section className="project-overview"><div className="overview-main"><div className="overview-icon"><Clapperboard size={19}/></div><div className="overview-copy"><div className="overview-kicker">{t("project.current")}</div><input className="project-name-input" aria-label={t("project.name")} value={project.name} onChange={e => change(p => ({ ...p, name: e.target.value }))}/><div className="project-subline"><span><Clock3 size={13}/> {t("project.runtimeSummary", { duration: time(runtime) })}</span><span><Film size={13}/> {t("project.shotCount", { count: project.shots.length })}</span><span><Layers3 size={13}/> {t("project.clipSlotCount", { count: slotCount })}</span></div></div></div><div className="project-specs"><div><span>{t("project.canvas")}</span><strong>{project.width} × {project.height}</strong></div><div><span>{t("project.frameRate")}</span><strong>{project.frameRate} FPS</strong></div><button className="icon-button" title={t("project.canvasSettingsPlanned")} onClick={() => setNotice(t("notice.canvasSettingsUnavailable"))}><Settings2 size={17}/></button></div></section>}
+        <div className={"workbench" + (view === "timeline" ? " timeline-workbench" + (showTimelineInspector ? " timeline-inspector-open" : "") : "")}><section className="workbench-main">
           {view === "storyboard" && <><div className="section-toolbar"><div><h2>{t("storyboard.title")}</h2><p>{t("storyboard.shotCount", { count: project.shots.length })} · SeeDance node flow canvas</p></div><div className="inline-actions"><button className="button button-quiet button-small" onClick={()=>setIsAgentModalOpen(true)}><Sparkles size={14} color="#d5f36a"/> AI Storyboard Plan</button><button className="button button-quiet button-small" onClick={()=>setIsChecklistOpen(true)}><CheckCircle2 size={14} color="#75d7c1"/> Production Guide</button><button className="button button-quiet button-small" onClick={()=>setStoryboardMode(m => m === "flow" ? "list" : "flow")}>{storyboardMode === "flow" ? <Layers3 size={14}/> : <Maximize2 size={14}/>} {storyboardMode === "flow" ? "Grid Cards" : "Node Flow Canvas"}</button><button className="button button-quiet button-small" onClick={syncStoryboardToTimeline}><Film size={14}/> Generate / update timeline</button><button className="button button-primary button-small" onClick={addShot}><Plus size={15}/> {t("action.addShot")}</button></div></div>{storyboardMode === "flow" ? <StoryboardFlowCanvas project={project} selectedShotId={selectedId} onSelectShot={setSelectedId} onUpdateShot={updateShot} onAddShot={addShot} onDeleteShot={removeShot} onDuplicateShot={duplicateShot} onAddConnection={addStoryboardConnection} onRemoveConnection={removeStoryboardConnection} onOpenAgentModal={()=>setIsAgentModalOpen(true)} onOpenChecklist={()=>setIsChecklistOpen(true)} onSyncTimeline={syncStoryboardToTimeline} onAttachAssetToShot={attachAssetToShot} onSelectVersion={(sId, slotId, vId) => { chooseSlotVersion(sId, slotId, vId); setSelectedSlotId(slotId); setView("timeline"); }}/> : <div className="shot-list">{project.shots.map((shot, i) => <article key={shot.id} role="button" tabIndex={0} className={"shot-card " + (selected?.id === shot.id ? "selected" : "")} onClick={() => setSelectedId(shot.id)} onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedId(shot.id); } }}><div className="shot-number">{String(i + 1).padStart(2, "0")}</div><div className="shot-thumb"><div className="thumb-grid"/><div className="thumb-center"><Film size={21}/></div><span>{time(shot.duration)}</span></div><div className="shot-card-body"><div className="shot-title-row"><h3>{shot.title}</h3><span className={"shot-status status-" + shot.status}>{t(("status." + shot.status) as "status.planned" | "status.in-progress" | "status.ready")}</span></div><p>{shot.intent || t("shot.emptyIntent")}</p><div className="shot-card-meta"><span><Layers3 size={13}/> {t("shot.clipSlotCount", { count: shot.slots.length })}</span><span><Clock3 size={13}/> {t("shot.durationTarget", { duration: shot.duration })}</span></div></div><div className="shot-arrow">↗</div><button type="button" className="shot-version-toggle" aria-expanded={expandedVersionShotId === shot.id} onClick={e => { e.stopPropagation(); setExpandedVersionShotId(expandedVersionShotId === shot.id ? "" : shot.id); }}><ChevronDown size={13}/><span>{shot.slots.reduce((n, slot) => n + slot.versions.length, 0)} versions</span></button>{expandedVersionShotId === shot.id && <div className="shot-version-dropdown" onClick={e => e.stopPropagation()}>{shot.slots.flatMap(slot => slot.versions.map((version, vi) => ({slot, version, vi}))).map(({slot,version,vi}) => <button type="button" key={version.id} className={"shot-version-option" + (version.id === slot.selectedVersionId ? " active" : "")} onClick={() => { setSelectedId(shot.id); setSelectedSlotId(slot.id); chooseSlotVersion(shot.id,slot.id,version.id); setView("timeline"); }}><span>{slot.name} · {version.name || "Version " + (vi+1)}</span><small>{version.duration}s · {version.layers.length} layers</small></button>)}</div>}</article>)}<button className="add-shot-card" onClick={addShot}><span><Plus size={17}/></span><strong>{t("shot.addAnother")}</strong><small>{t("shot.addAnotherHint")}</small></button></div>}</>}
-          {view === "timeline" && <><section className="integrated-preview-panel" aria-label="Timeline preview"><div className="integrated-preview-heading"><div><span className="inspector-kicker">LIVE PREVIEW</span><strong>{activeVersionTimeline ? activeVersionTimelineShot?.title + " · " + activeVersionTimeline.name : activeShotInfo.shot?.title ?? project.name}</strong><small>{activeVersionTimeline ? "Version-internal preview. Master Shot duration remains unchanged." : activeShotInfo.shot?.intent || "Preview follows the master timeline playhead."}</small></div><span className="integrated-timecode">{editorTimeLabel(editorTime)} / {editorTimeLabel(activeTimelineDuration)}</span></div><div className="integrated-preview-frame"><canvas ref={previewCanvasRef} className="editor-preview-canvas" aria-label={"Timeline preview at " + editorTimeLabel(editorTime)} />{showPreviewOverlay && <div className="integrated-preview-overlay"><span>SHOT {String((activeShotInfo.index ?? 0)+1).padStart(2,"0")}</span><strong>{activeShotInfo.shot?.title ?? project.name}</strong><small>{activeShotInfo.shot?.intent || "No shot description"}</small></div>}</div><div className="integrated-preview-controls"><button className="button button-quiet button-small" onClick={()=>{setIsPlaying(false);setEditorTime(0);}} title="Go to start">|◀</button><button className="button button-primary button-small" aria-label={isPlaying ? "Pause preview" : "Play preview"} onClick={()=>{if(!isPlaying&&editorTime>=activeTimelineDuration){playbackTimeRef.current=0;setEditorTime(0);}setIsPlaying(value=>!value);}}>{isPlaying?"Pause":"Play"}</button><button className="button button-quiet button-small" onClick={()=>{setIsPlaying(false);setEditorTime(Math.min(activeTimelineDuration,editorTime+0.5));}}>+0.5s</button><label>Playhead <input aria-label="Timeline playhead time" type="range" min="0" max={Math.max(activeTimelineDuration,0.1)} step="0.05" value={Math.min(editorTime,activeTimelineDuration)} onChange={e=>{setIsPlaying(false);setEditorTime(Number(e.target.value));}} /></label><button className="button button-quiet button-small" aria-pressed={showPreviewOverlay} onClick={()=>setShowPreviewOverlay(value=>!value)}>{showPreviewOverlay ? "Hide overlay" : "Show overlay"}</button>{previewImage && <button className="button button-quiet button-small" onClick={()=>setPreviewAssetId("__none__")}>Clear preview image</button>}</div></section>
-<div className="timeline-workspace-tabs" role="tablist" aria-label="Timeline tabs">
-  <button role="tab" aria-selected={activeTimelineTabId === "master"} className={activeTimelineTabId === "master" ? "active" : ""} onClick={() => { setActiveTimelineTabId("master"); setEditorTime(0); playbackTimeRef.current=0; setIsPlaying(false); }}>Master Timeline</button>
+          {view === "timeline" && <><div className="timeline-workspace-bar"><div className="timeline-workspace-tabs" role="tablist" aria-label="Timeline tabs">
+  <button role="tab" aria-selected={activeTimelineTabId === "master"} className={activeTimelineTabId === "master" ? "active" : ""} onClick={() => activateTimelineTab("master")}>Master Timeline</button>
   {timelineTabs.map(tab => <div className={"timeline-workspace-tab " + (activeTimelineTabId === tab.id ? "active" : "")} key={tab.id}>
-    <button role="tab" aria-selected={activeTimelineTabId === tab.id} onClick={() => { setActiveTimelineTabId(tab.id); setSelectedId(tab.shotId); setSelectedSlotId(tab.slotId); setEditorTime(0); playbackTimeRef.current=0; setIsPlaying(false); }}>{tab.label}</button>
+    <button role="tab" aria-selected={activeTimelineTabId === tab.id} onClick={() => { setSelectedId(tab.shotId); setSelectedSlotId(tab.slotId); activateTimelineTab(tab.id); }}>{tab.label}</button>
     <button className="timeline-tab-close" aria-label={"Close " + tab.label} onClick={() => closeTimelineTab(tab.id)}>×</button>
   </div>)}
-</div>
-<div className="timeline-tab-content master-timeline-content" style={{display:activeTimelineTabId === "master" ? "block" : "none"}}><div className="section-toolbar"><div><h2>{t("timeline.title")}</h2><p>{t("timeline.description")}</p></div><button className="button button-primary button-small" disabled={!selected} onClick={() => selected && addSlot(selected.id)}><Plus size={15}/> {t("action.addClipSlot")}</button></div><div className="timeline-ruler" role="slider" aria-label="Master timeline playhead" aria-valuemin={0} aria-valuemax={runtime} aria-valuenow={editorTime} tabIndex={0}
+</div><button className="button button-quiet button-small timeline-inspector-toggle" aria-pressed={showTimelineInspector} onClick={() => setShowTimelineInspector(value => !value)}><Settings2 size={13}/>{showTimelineInspector ? "Hide inspector" : "Inspector"}</button></div>
+<div className="timeline-tab-content master-timeline-content" style={{display:activeTimelineTabId === "master" ? "block" : "none"}}>{renderTimelinePreview("master", "Master preview", activeShotInfo.shot?.title ?? project.name, runtime, activeShotInfo.shot?.title ?? project.name, activeShotInfo.shot?.intent ?? "", true)}<div className="section-toolbar timeline-master-actions"><span className="timeline-summary">{project.shots.length} shots · {(project.timelineClips ?? []).length} clips</span><button className="button button-primary button-small" disabled={!selected} onClick={() => selected && addSlot(selected.id)}><Plus size={15}/> {t("action.addClipSlot")}</button></div><div className="timeline-ruler" role="slider" aria-label="Master timeline playhead" aria-valuemin={0} aria-valuemax={runtime} aria-valuenow={editorTime} tabIndex={0}
             onPointerDown={event => { const rect = event.currentTarget.getBoundingClientRect(); const next = Math.max(0, Math.min(runtime, ((event.clientX - rect.left) / Math.max(rect.width, 1)) * runtime)); playbackTimeRef.current = next; setIsPlaying(false); setEditorTime(next); }}
             onPointerMove={event => { if (event.buttons !== 1) return; const rect = event.currentTarget.getBoundingClientRect(); const next = Math.max(0, Math.min(runtime, ((event.clientX - rect.left) / Math.max(rect.width, 1)) * runtime)); playbackTimeRef.current = next; setIsPlaying(false); setEditorTime(next); }}
             onKeyDown={event => { if (event.key === "ArrowRight") { const next = Math.min(runtime, editorTime + 0.5); playbackTimeRef.current = next; setIsPlaying(false); setEditorTime(next); } if (event.key === "ArrowLeft") { const next = Math.max(0, editorTime - 0.5); playbackTimeRef.current = next; setIsPlaying(false); setEditorTime(next); } }}>
@@ -1177,6 +1235,7 @@ export default function App() {
 </div>}
 </section></div>
 {activeTimelineTabId !== "master" && activeVersionTimelineTab && activeVersionTimeline && activeVersionTimelineSlot && activeVersionTimelineShot && <section className="nested-timeline-tab">
+  {renderTimelinePreview(activeVersionTimelineTab.id, "Version preview", activeVersionTimelineShot.title + " · " + activeVersionTimeline.name, activeVersionTimeline.duration, activeVersionTimeline.name, activeVersionTimelineShot.intent)}
   <div className="editor-linked-heading"><div><strong>{activeVersionTimelineShot.title} · {activeVersionTimeline.name}</strong><span>Version timeline · edits here do not change the Master Shot duration</span></div>
     <div className="inline-actions">
       <button className="button button-quiet button-small" onClick={()=>addVersionLayer(activeVersionTimelineShot.id,activeVersionTimelineSlot.id,activeVersionTimeline.id,"video")}><Plus size={13}/> Video</button>
@@ -1208,7 +1267,7 @@ export default function App() {
     {activeVersionTimeline.layers.some(layer=>layer.start+layer.duration>activeVersionTimeline.duration) && <div className="nested-timeline-warning" role="status">One or more modules extend past this Version's duration and may be cut off in preview/export. Their timing has not been changed automatically.</div>}
   </div>
 </section>}
-{selected && (() => { const activeSlot = selected.slots.find(slot => slot.id === selectedSlotId); if (!activeSlot) return null; const activeVersion = activeSlot.versions.find(version => version.id === (activeVersionTimelineTab?.slotId === activeSlot.id ? activeVersionTimelineTab.versionId : activeSlot.selectedVersionId)); return <section className={"version-panel " + (activeTimelineTabId !== "master" ? "nested-version-inspector" : "")}><div className="version-panel-heading"><div><span className="inspector-kicker">{activeTimelineTabId === "master" ? "CLIP SLOT" : "VERSION INSPECTOR"}</span><label className="field-label">Clip slot name<input className="text-field" aria-label="Clip slot name" value={activeSlot.name} onChange={e => updateSlotName(selected.id, activeSlot.id, e.target.value)} /></label><p>{activeSlot.duration}s · {activeSlot.versions.length} version{activeSlot.versions.length === 1 ? "" : "s"}</p></div><button className="button button-quiet button-small" onClick={() => setSelectedSlotId("")}>Close</button></div><div className="slot-timing-controls">
+{activeTimelineTabId === "master" && selected && (() => { const activeSlot = selected.slots.find(slot => slot.id === selectedSlotId); if (!activeSlot) return null; const activeVersion = activeSlot.versions.find(version => version.id === (activeVersionTimelineTab?.slotId === activeSlot.id ? activeVersionTimelineTab.versionId : activeSlot.selectedVersionId)); return <section className={"version-panel " + (activeTimelineTabId !== "master" ? "nested-version-inspector" : "")}><div className="version-panel-heading"><div><span className="inspector-kicker">{activeTimelineTabId === "master" ? "CLIP SLOT" : "VERSION INSPECTOR"}</span><label className="field-label">Clip slot name<input className="text-field" aria-label="Clip slot name" value={activeSlot.name} onChange={e => updateSlotName(selected.id, activeSlot.id, e.target.value)} /></label><p>{activeSlot.duration}s · {activeSlot.versions.length} version{activeSlot.versions.length === 1 ? "" : "s"}</p></div><button className="button button-quiet button-small" onClick={() => setSelectedSlotId("")}>Close</button></div><div className="slot-timing-controls">
   <div className="timing-field"><label className="field-label">Start time (seconds)<input className="text-field" type="number" min="0" step="0.1" value={activeSlot.start} onChange={e => updateSlotTiming(selected.id, activeSlot.id, "start", Number(e.target.value))}/></label><div className="timing-nudges"><button type="button" aria-label="Move start earlier by 0.5 seconds" onClick={() => updateSlotTiming(selected.id, activeSlot.id, "start", activeSlot.start - 0.5)}>−0.5s</button><button type="button" aria-label="Move start later by 0.5 seconds" onClick={() => updateSlotTiming(selected.id, activeSlot.id, "start", activeSlot.start + 0.5)}>+0.5s</button></div></div>
   <div className="timing-field"><label className="field-label">Slot duration (seconds)<input className="text-field" type="number" min="0.1" step="0.1" value={activeSlot.duration} onChange={e => updateSlotTiming(selected.id, activeSlot.id, "duration", Number(e.target.value))}/></label><div className="timing-nudges"><button type="button" aria-label="Shorten slot by 0.5 seconds" onClick={() => updateSlotTiming(selected.id, activeSlot.id, "duration", activeSlot.duration - 0.5)}>−0.5s</button><button type="button" aria-label="Lengthen slot by 0.5 seconds" onClick={() => updateSlotTiming(selected.id, activeSlot.id, "duration", activeSlot.duration + 0.5)}>+0.5s</button></div></div>
   <p>Timeline position: {activeSlot.start.toFixed(1)}s–{(activeSlot.start + activeSlot.duration).toFixed(1)}s. Timing changes apply to this Clip Slot only.</p>
