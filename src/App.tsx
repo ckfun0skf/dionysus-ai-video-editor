@@ -106,7 +106,7 @@ export default function App() {
       if (!raw) return normalizeLegacyTimelineTracks(copy(sampleProject));
       const parsed: unknown = JSON.parse(raw);
       return validateProject(parsed) ? normalizeLegacyTimelineTracks(parsed) : normalizeLegacyTimelineTracks(copy(sampleProject));
-    } catch { return copy(sampleProject); }
+    } catch { return normalizeLegacyTimelineTracks(copy(sampleProject)); }
   });
   const [undoStack, setUndoStack] = useState<DionysusProject[]>([]);
   const [redoStack, setRedoStack] = useState<DionysusProject[]>([]);
