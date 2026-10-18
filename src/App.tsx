@@ -189,7 +189,10 @@ export default function App() {
     const players = new Map<string, { element: HTMLMediaElement; release?: () => void }>();
     const clips = activeVersionTimeline
       ? activeVersionTimeline.layers.filter(layer => layer.kind === "audio" && Boolean(layer.assetId)).map(layer => ({ id: layer.id, name: layer.name, kind: "audio" as const, assetId: layer.assetId, start: layer.start, duration: layer.duration, sourceIn: layer.sourceIn, sourceOut: layer.sourceOut, muted: layer.muted, linkedVideoClipId: undefined }))
-      : (project.timelineClips ?? []).filter(clip => clip.kind === "audio" && Boolean(clip.assetId));
+      : (project.timelineClips ?? []).filter(clip => clip.kind === "audio" && Boolean(clip.assetId)).map(clip => ({
+        ...clip,
+        muted: Boolean(clip.muted || project.tracks.find(track => track.id === clip.trackId)?.muted)
+      }));
     const prepare = async () => {
       for (const clip of clips) {
         const asset = project.assets.find(item => item.id === clip.assetId);
@@ -915,7 +918,7 @@ export default function App() {
  <div className="visual-track-row">
   <div className="visual-track-label">
    {track.kind==="video" && <button className="track-expand-toggle" aria-label={(collapsedVideoTrackIds.includes(track.id)?"Expand ":"Collapse ")+track.name} aria-expanded={!collapsedVideoTrackIds.includes(track.id)} onClick={()=>setCollapsedVideoTrackIds(current=>current.includes(track.id)?current.filter(id=>id!==track.id):[...current,track.id])}>{collapsedVideoTrackIds.includes(track.id)?"▸":"▾"}</button>}
-   <span className={track.kind==="audio"?"track-kind-audio":"track-kind-video"}>{track.kind==="audio"?<AudioLines size={15}/>:track.kind==="procedural"?<Layers3 size={15}/>:track.kind==="text"?<Sparkles size={15}/>:<Film size={15}/>}</span><div><strong>{track.name||track.kind}</strong><small>{track.kind==="audio"?"Audio layer":track.kind==="procedural"?"Three.js layer":track.kind==="text"?"Text layer":track.kind==="effects"?"Effects layer":"Video layer"}</small></div>
+   <span className={track.kind==="audio"?"track-kind-audio":"track-kind-video"}>{track.kind==="audio"?<AudioLines size={15}/>:track.kind==="procedural"?<Layers3 size={15}/>:track.kind==="text"?<Sparkles size={15}/>:<Film size={15}/>}</span><div><strong>{track.name||track.kind}</strong><small>{track.kind==="audio"?"Audio layer":track.kind==="procedural"?"Three.js layer":track.kind==="text"?"Text layer":track.kind==="effects"?"Effects layer":"Video layer"}</small></div>{track.kind==="audio" && <button className={"track-layer-mute"+(track.muted?" muted":"")} aria-label={(track.muted?"Unmute ":"Mute ")+track.name+" layer"} aria-pressed={Boolean(track.muted)} title={track.muted?"Unmute audio layer":"Mute audio layer"} onClick={event=>{event.stopPropagation();change(p=>({...p,tracks:p.tracks.map(item=>item.id===track.id?{...item,muted:!item.muted}:item)}));}}>{track.muted?"Unmute":"Mute"}</button>}
   </div>
   <div className="visual-track-lane" style={{backgroundSize:(5/mediaTimelineDuration*100)+"% 100%"}}
    onPointerDown={event=>{if(event.target!==event.currentTarget)return;const rect=event.currentTarget.getBoundingClientRect();const next=Math.max(0,Math.min(activeTimelineDuration,((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration));playbackTimeRef.current=next;setIsPlaying(false);setEditorTime(next);}}
