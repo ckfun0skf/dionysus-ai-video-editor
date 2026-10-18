@@ -18,6 +18,10 @@
 - [ ] Production-grade MP4 export remains in DYS-009; current WebM export is experimental.
 
 ## Validation
-- PR #57 CI [#39160785330](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39160785330) previously passed 129 tests across 15 files, TypeScript, and production build before the added UI transform persistence test.
+- PR #57 CI [#39165133176](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39165133176) previously passed 137 tests across 16 files, TypeScript, and production build before the added UI transform persistence test.
 - Existing test coverage includes preview per-tab playhead, controls/canvas settings, composition ordering/nested Clip version selection, and normalized preview transforms.
 - Automated browser smoke tests were not run.
+
+
+## Latest validation
+[CI #39165133176](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39165133176) passed 137 tests across 16 files, TypeScript check and Vite production build at code/test head `794e3ff024c26d55d76583160d96238df8d84a12`; npm audit found 0 vulnerabilities. UI coverage includes nested clip visual parity and preview-transform persistence. Browser smoke tests were not run.
