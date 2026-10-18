@@ -125,7 +125,8 @@ export async function renderCompositionFrame(canvas: HTMLCanvasElement, project:
     if (asset.kind === "image" && !images.has(asset.id)) images.set(asset.id, await loadImage(asset.path));
     if (asset.kind === "video" && !videos.has(asset.id)) {
       const video = document.createElement("video");
-      video.crossOrigin = "anonymous"; video.src = asset.path; video.muted = true; video.playsInline = true; video.preload = "auto";
+      if (/^https?:/i.test(asset.path)) video.crossOrigin = "anonymous";
+      video.src = asset.path; video.muted = true; video.playsInline = true; video.preload = "auto";
       await loadMediaMetadata(video, "Unable to load video layer source");
       videos.set(asset.id, video);
     }
