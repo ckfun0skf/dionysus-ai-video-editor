@@ -683,6 +683,41 @@ describe("App history integration", () => {
     expect(container.querySelector(".visual-clip-inspector")?.textContent).toContain(right.name);
   });
 
+  it("splits a selected Master clip at the current playhead and preserves linked source ranges", async () => {
+    await openTimelineView();
+    const addLinked = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Add linked video/audio"));
+    expect(addLinked).toBeTruthy();
+    click(addLinked!);
+    await flushEffects();
+
+    const before = persistedProject();
+    const video = before.timelineClips?.find(clip => clip.kind === "video" && !clip.id.startsWith("storyboard-"))!;
+    const audio = before.timelineClips?.find(clip => clip.kind === "audio" && clip.linkedVideoClipId === video.id)!;
+    selectClip(video.name);
+    await flushEffects();
+    const playhead = container.querySelector<HTMLInputElement>('input[aria-label="Timeline playhead time"]');
+    expect(playhead).toBeTruthy();
+    setInputValue(playhead!, "2.5");
+    await flushEffects();
+
+    const split = Array.from(container.querySelectorAll<HTMLButtonElement>(".visual-clip-actions button")).find(button => button.textContent?.trim() === "Split at playhead");
+    expect(split).toBeTruthy();
+    expect(split!.disabled).toBe(false);
+    click(split!);
+    await flushEffects();
+
+    const after = persistedProject();
+    const videoParts = (after.timelineClips ?? []).filter(clip => clip.kind === "video" && !clip.id.startsWith("storyboard-")).sort((a, b) => a.start - b.start);
+    expect(videoParts).toHaveLength(2);
+    expect(videoParts[0]).toMatchObject({ id: video.id, start: 0, duration: 2.5, sourceIn: 0, sourceOut: 2.5 });
+    expect(videoParts[1]).toMatchObject({ start: 2.5, duration: 2.5, sourceIn: 2.5, sourceOut: 5 });
+
+    const audioParts = (after.timelineClips ?? []).filter(clip => clip.kind === "audio" && (clip.linkedVideoClipId === video.id || videoParts.some(part => part.id !== video.id && part.id === clip.linkedVideoClipId))).sort((a, b) => a.start - b.start);
+    expect(audioParts).toHaveLength(2);
+    expect(audioParts[0]).toMatchObject({ id: audio.id, start: 0, duration: 2.5, sourceIn: 0, sourceOut: 2.5, linkedVideoClipId: videoParts[0].id });
+    expect(audioParts[1]).toMatchObject({ start: 2.5, duration: 2.5, sourceIn: 2.5, sourceOut: 5, linkedVideoClipId: videoParts[1].id });
+  });
+
   it("duplicates a Master video clip with a new linked-audio pair and preserves mix metadata", async () => {
     await openTimelineView();
     const addLinked = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Add linked video/audio"));
