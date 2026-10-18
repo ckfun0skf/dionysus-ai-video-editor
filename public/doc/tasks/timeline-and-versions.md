@@ -1,7 +1,7 @@
 # DYS-005 — Master and nested Timeline editing with Version management
 
 **Status:** In progress  
-**Progress estimate:** 82%  
+**Progress estimate:** 85%  
 **Last updated:** 2026-10-18
 
 ## Goal
@@ -22,6 +22,8 @@ Provide the prototype-style Master Timeline with Shot Version selection, an in-w
 - [x] Edit each nested module's start/duration in the Inspector and move module blocks with frame-rate snapping.
 - [x] Reorder nested modules using layer-header controls; compositor collection preserves the stored Version layer order.
 - [x] Generate compact local thumbnails for imported image/video sources and generated image outputs when the browser can decode them.
+- [x] Add explicit Ripple Reorder mode: dropping a Shot reorders the chronological sequence and packs Shot blocks back-to-back, while free placement remains the default.
+- [x] Show an Inspector warning when free-positioned Master Shots overlap.
 - [ ] Complete real media thumbnail extraction, richer source assignment/preview, and a dedicated ripple/reorder mode with an explicit overlap policy.
 - [ ] Expand project JSON round-trip and Undo/Redo coverage for all nested relationships and placement edits.
 
