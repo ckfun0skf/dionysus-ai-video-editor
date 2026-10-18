@@ -494,6 +494,7 @@ describe("App history integration", () => {
 
   it("opens nested Version tabs, adds a procedural layer, and keeps linked-audio mute/unlink independent", async () => {
     await openTimelineView();
+    expect(container.querySelector(".master-shot-clip")).toBeTruthy();
     const add = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Add linked video/audio"));
     expect(add).toBeTruthy();
     click(add!);
@@ -531,7 +532,7 @@ describe("App history integration", () => {
     const updatedSlot = persistedProject().shots[0].slots[0];
     expect(updatedSlot.versions).toHaveLength(countBefore + 1);
     const addedVersionId = updatedSlot.selectedVersionId;
-    const editButtons = Array.from(container.querySelectorAll<HTMLButtonElement>(".timeline-version-edit"));
+    const editButtons = Array.from(menu!.querySelectorAll<HTMLButtonElement>(".timeline-version-edit"));
     expect(editButtons.length).toBeGreaterThan(0);
     click(editButtons[editButtons.length - 1]);
     await flushEffects();
