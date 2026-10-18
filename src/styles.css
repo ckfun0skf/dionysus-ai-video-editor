@@ -2032,3 +2032,6 @@
 }
 .clip-drop-preview strong { font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .clip-drop-preview small { font-size: 9px; color: #d5f36a; white-space: nowrap; }
+
+/* Detailed layer properties live in context-menu dialogs, not in a long inspector below the timeline. */
+.version-panel-disclosure { display: none !important; }
