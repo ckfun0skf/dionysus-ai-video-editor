@@ -23,14 +23,14 @@ const time = (s: number) => String(Math.floor(s / 60)).padStart(2, "0") + ":" + 
 const copy = (p: DionysusProject) => JSON.parse(JSON.stringify(p)) as DionysusProject;
 
 function highlightCode(source: string) {
-  const tokenPattern = /(\/\/[^\\n]*|\/\*[\\s\\S]*?\*\/|"(?:\\\\.|[^"\\\\])*"|'(?:\\\\.|[^'\\\\])*'|`(?:\\\\.|[^`\\\\])*`|\\b(?:const|let|var|function|return|if|else|new|class|extends|import|from|export|default|async|await|true|false|null|undefined|throw|try|catch|for|while|this)\\b|\\b\\d+(?:\\.\\d+)?\\b)/g;
+  const tokenPattern = /(\/\/[^\n]*|\/\*[\s\S]*?\*\/|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|\b(?:const|let|var|function|return|if|else|new|class|extends|import|from|export|default|async|await|true|false|null|undefined|throw|try|catch|for|while|this)\b|\b\d+(?:\.\d+)?\b)/g;
   const parts: React.ReactNode[] = [];
   let last = 0;
   for (const match of source.matchAll(tokenPattern)) {
     const index = match.index ?? 0;
     if (index > last) parts.push(source.slice(last, index));
     const token = match[0];
-    const type = token.startsWith("//") || token.startsWith("/*") ? "comment" : /^[\"'`]/.test(token) ? "string" : /^\\d/.test(token) ? "number" : "keyword";
+    const type = token.startsWith("//") || token.startsWith("/*") ? "comment" : /^["'\`]/.test(token) ? "string" : /^\d/.test(token) ? "number" : "keyword";
     parts.push(<span className={"syntax-" + type} key={index}>{token}</span>);
     last = index + token.length;
   }
