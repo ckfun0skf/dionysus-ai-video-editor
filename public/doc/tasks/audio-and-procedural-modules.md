@@ -1,29 +1,31 @@
 # DYS-008 — Audio layers, timed text, and procedural Three.js modules
 
-**Status:** Planned  
+**Status:** In progress  
+**Progress estimate:** 30%  
 **Last updated:** 2026-10-18
 
-## Summary
-Provide independent track-level audio mute and mixing controls, timed text, and first-class user-authorized JavaScript/Three.js timeline modules.
+## Implemented in the current slice
+- [x] Persist independent mute state on every Audio Layer track and individual audio clips.
+- [x] Add Master Timeline Text blocks and typed text track lanes.
+- [x] Add a typed procedural/Three.js Master Timeline block and Version-internal procedural layer.
+- [x] Store a procedural block's optional pinned script/scene Version ID in the project.
+- [x] Distinguish procedural layer representation from actual final rendering; current renderer does not execute Three.js code.
 
-## Scope
-- [ ] Persist an independent mute/unmute state on every Audio Layer; mute one layer without affecting other audio layers.
-- [ ] Support multitrack audio, trim, volume, fades, sync, automation, and ducking.
-- [ ] Define and implement an initial effects/transitions set.
-- [ ] Support timed text and distinct title/text lanes.
-- [ ] Treat Three.js/procedural content as a first-class timeline layer with duration, script/scene identity, parameters, and Inspector support.
-- [ ] Pin script/module versions in saved Shot Versions and isolate runtime errors.
-- [ ] Require explicit user authorization and an appropriate security boundary before custom code executes.
-- [ ] Distinguish timeline representation, preview support, and final composition support; never imply Three.js output is rendered when it is not.
+## Remaining scope
+- [ ] Multitrack audio gain, fades, automation, ducking, and effects.
+- [ ] Rich timed text styling, typography, transitions, and keyframes.
+- [ ] A full procedural parameter UI and safe runtime/sandbox model.
+- [ ] Explicit user authorization before executing custom or imported code.
+- [ ] Pinned script-version validation, runtime error isolation, and actual preview/render integration.
+- [ ] Final composition/export support for procedural output.
 
 ## Acceptance criteria
-- Each Audio Layer has independent persistent mute state and its own preview/playback behavior.
-- A Three.js layer can be represented and edited as a typed module; saved Versions pin the exact script/module version.
-- Unauthorized imported/custom code does not execute.
-- Runtime errors are isolated to the procedural layer and are surfaced clearly.
-- Automated model/operation tests and production build pass before task status is updated.
+- Muting one Audio Layer does not mute another; track/clip mute state persists and is honored by preview/composition audio.
+- Text and procedural blocks are typed project items, not disguised media files.
+- Saved Shot Versions can identify the specific procedural script/module version they depend on.
+- Custom code is never executed automatically when imported or selected.
+- The UI clearly distinguishes represented modules from rendered output.
 
-## Related files
-- [Task detail page](./audio-and-procedural-modules.html)
-- [Completion report](../reports/audio-and-procedural-modules-report.md)
-- [Task dashboard](../task.html)
+## Validation
+- CI run [#39117698570](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39117698570): 64 tests passed, TypeScript check and production build passed, npm audit reported 0 vulnerabilities.
+- Automated browser smoke testing was not run.
