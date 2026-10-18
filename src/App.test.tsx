@@ -530,6 +530,18 @@ describe("App history integration", () => {
     await flushEffects();
     expect(persistedProject().timelineClips?.find(clip => clip.id === audio?.id)?.muted).toBe(true);
 
+    const trackMute = container.querySelector<HTMLButtonElement>('button[aria-label="Mute Soundtrack layer"]');
+    expect(trackMute).toBeTruthy();
+    click(trackMute!);
+    await flushEffects();
+    expect(persistedProject().tracks.find(track => track.id === "track-audio-1")?.muted).toBe(true);
+    expect(persistedProject().timelineClips?.find(clip => clip.id === audio?.id)?.muted).toBe(true);
+    const unmuteTrack = container.querySelector<HTMLButtonElement>('button[aria-label="Unmute Soundtrack layer"]');
+    expect(unmuteTrack).toBeTruthy();
+    click(unmuteTrack!);
+    await flushEffects();
+    expect(persistedProject().tracks.find(track => track.id === "track-audio-1")?.muted).toBe(false);
+
     const unlink = container.querySelector<HTMLButtonElement>(".linked-audio-child .timeline-clip-unlink");
     expect(unlink).toBeTruthy();
     click(unlink!);
