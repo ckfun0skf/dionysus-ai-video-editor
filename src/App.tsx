@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AudioLines, Check, ChevronDown, CircleHelp, Clapperboard, Clock3, Download, FileJson, Film, FolderOpen, Layers3, Plus, Save, Settings2, ShieldCheck, Sparkles, SquarePlay, Upload, WandSparkles, Type, Music2, Captions, Image, Play, Bell, Undo2, Redo2 } from "lucide-react";
+import { AudioLines, Check, CheckCircle2, ChevronDown, CircleHelp, Clapperboard, Clock3, Download, FileJson, Film, FolderOpen, Layers3, Maximize2, Plus, Save, Settings2, ShieldCheck, Sparkles, SquarePlay, Upload, WandSparkles, Type, Music2, Captions, Image, Play, Bell, Undo2, Redo2 } from "lucide-react";
 import { sampleProject } from "./sampleProject";
 import type { Asset, AssetKind, CompositionLayer, DionysusProject, ReferenceProfile, ReferenceRole, Shot } from "./types";
 import { validateProject } from "./projectValidation";
@@ -10,6 +10,9 @@ import ProceduralAnimationPreview from "./ProceduralAnimationPreview";
 import { exportCompositionWebM, downloadExport } from "./compositionRenderer";
 import AIGenerationPanel from "./AIGenerationPanel";
 import { deleteStoredMediaAsset, isStoredMediaPath, storeMediaAsset } from "./mediaAssetStore";
+import StoryboardFlowCanvas from "./StoryboardFlowCanvas";
+import AgentStoryboardModal from "./AgentStoryboardModal";
+import ProductionChecklistDrawer from "./ProductionChecklistDrawer";
 type View = "storyboard" | "timeline" | "assets" | "references";
 const STORAGE_KEY = "dionysus.project.v1";
 const id = (prefix: string) => prefix + "-" + crypto.randomUUID();
@@ -36,7 +39,7 @@ export default function App() {
   const lastHistoryGroup = useRef("");
   const lastHistoryAt = useRef(0);
   const [view, setView] = useState<View>("storyboard");
-  const [editorWorkspace, setEditorWorkspace] = useState(true);
+  const [editorWorkspace, setEditorWorkspace] = useState(false);
   const [editorTool, setEditorTool] = useState<"video" | "text" | "audio" | "caption" | "image">("text");
   const [editorTime, setEditorTime] = useState(0);
   const [previewAssetId, setPreviewAssetId] = useState("");
@@ -65,6 +68,9 @@ export default function App() {
   const [selectedSlotId, setSelectedSlotId] = useState<string>("");
   const [expandedVersionShotId, setExpandedVersionShotId] = useState<string>("");
   const [selectedTimelineClipId, setSelectedTimelineClipId] = useState<string>("");
+  const [storyboardMode, setStoryboardMode] = useState<"flow" | "list">("flow");
+  const [isAgentModalOpen, setIsAgentModalOpen] = useState(false);
+  const [isChecklistOpen, setIsChecklistOpen] = useState(false);
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...project, updatedAt: new Date().toISOString() })); }
     catch { setNotice(t("notice.storageFull")); }
@@ -288,6 +294,84 @@ export default function App() {
     setView("timeline");
   }
 
+  function addStoryboardConnection(fromShotId: string, toShotId: string, label = "Cut") {
+    change(p => {
+      const existing = p.storyboardConnections ?? [];
+      if (existing.some(c => c.fromShotId === fromShotId && c.toShotId === toShotId)) return p;
+      return {
+        ...p,
+        storyboardConnections: [...existing, { fromShotId, toShotId, label }]
+      };
+    });
+    setNotice("Connected shots in storyboard flow.");
+  }
+
+  function removeStoryboardConnection(fromShotId: string, toShotId: string) {
+    change(p => ({
+      ...p,
+      storyboardConnections: (p.storyboardConnections ?? []).filter(c => !(c.fromShotId === fromShotId && c.toShotId === toShotId))
+    }));
+    setNotice("Removed transition link.");
+  }
+
+  function attachAssetToShot(shotId: string, file: File) {
+    const mime = file.type.toLowerCase();
+    const kind: AssetKind = mime.startsWith("video/") ? "video" : "image";
+    if (kind === "image") {
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === "string") {
+          const assetId = id("asset");
+          const asset: Asset = { id: assetId, name: file.name, kind: "image", path: reader.result, notes: "Attached to shot" };
+          change(p => ({
+            ...p,
+            assets: [...p.assets, asset],
+            shots: p.shots.map(s => s.id === shotId ? {
+              ...s,
+              previewAssetId: assetId,
+              status: "ready" as const,
+              slots: s.slots.map(slot => ({
+                ...slot,
+                versions: slot.versions.map(v => ({
+                  ...v,
+                  layers: v.layers.length
+                    ? v.layers.map((l, li) => li === 0 ? { ...l, assetId, kind: "image" as const } : l)
+                    : [{ id: id("layer"), name: "Attached visual", kind: "image" as const, start: 0, duration: v.duration, assetId }]
+                }))
+              }))
+            } : s)
+          }));
+          setNotice("Attached image to shot.");
+        }
+      };
+      reader.readAsDataURL(file);
+    } else {
+      const assetId = id("asset");
+      void storeMediaAsset(assetId, file).then(path => {
+        const asset: Asset = { id: assetId, name: file.name, kind: "video", path, notes: "Attached to shot" };
+        change(p => ({
+          ...p,
+          assets: [...p.assets, asset],
+          shots: p.shots.map(s => s.id === shotId ? {
+            ...s,
+            previewAssetId: assetId,
+            status: "ready" as const,
+            slots: s.slots.map(slot => ({
+              ...slot,
+              versions: slot.versions.map(v => ({
+                ...v,
+                layers: v.layers.length
+                  ? v.layers.map((l, li) => li === 0 ? { ...l, assetId, kind: "video" as const } : l)
+                  : [{ id: id("layer"), name: "Attached video", kind: "video" as const, start: 0, duration: v.duration, assetId }]
+              }))
+            }))
+          } : s)
+        }));
+        setNotice("Attached video to shot.");
+      });
+    }
+  }
+
   function recordVersionGeneration(shotId: string, slotId: string, versionId: string) {
     const shot = project.shots.find(item => item.id === shotId);
     const slot = shot?.slots.find(item => item.id === slotId);
@@ -466,20 +550,18 @@ export default function App() {
     setNotice(t("notice.profileAdded", { name }));
   }
   function createStoryboardFromReference(profileId: string) {
-    const profile = project.referenceProfiles.find(item => item.id === profileId);
+    const current = projectRef.current;
+    const profile = current.referenceProfiles.find(item => item.id === profileId);
     if (!profile) return;
-    const profileReferences = profile.references.filter(reference => project.assets.some(asset => asset.id === reference.assetId));
+    const profileReferences = profile.references.filter(reference => current.assets.some(asset => asset.id === reference.assetId));
     const referenceSummary = profileReferences.map(reference => {
-      const asset = project.assets.find(item => item.id === reference.assetId);
+      const asset = current.assets.find(item => item.id === reference.assetId);
       return (reference.role + ": " + (asset?.name ?? "missing asset") + (reference.notes ? " (" + reference.notes + ")" : ""));
-    }).join("\
-");
+    }).join("\n");
     const shotId = id("shot");
     const slotId = id("slot");
     const versionId = id("version");
-    const prompt = "Create a storyboard shot based on reference profile '" + profile.name + "' (" + profile.entityType + "). Preserve the referenced visual identity and apply the selected roles.\
-" + (referenceSummary || "No reference assets attached yet.") + "\
-Shot intent: establish a clear visual beat; refine the prompt before sending it to an AI provider.";
+    const prompt = "Create a storyboard shot based on reference profile '" + profile.name + "' (" + profile.entityType + "). Preserve the referenced visual identity and apply the selected roles.\n" + (referenceSummary || "No reference assets attached yet.") + "\nShot intent: establish a clear visual beat; refine the prompt before sending it to an AI provider.";
     const version = {
       id: versionId, name: "Reference-led draft", description: "Draft scaffold generated locally from reference profile metadata; no image/video model was called.", duration: 5,
       layers: [{ id: id("layer"), name: "Reference-led visual", kind: "image" as const, start: 0, duration: 5, prompt, modelName: "Not generated", modelVersion: "metadata-only", fitMode: "contain" as const, x: 0, y: 0, width: 100, height: 100, opacity: 1 }],
@@ -487,7 +569,7 @@ Shot intent: establish a clear visual beat; refine the prompt before sending it 
       generationRecords: [{ id: id("generation"), createdAt: new Date().toISOString(), prompt, referenceSnapshot: profileReferences.map(reference => ({ ...reference })), modelName: "Not generated", modelVersion: "metadata-only" }]
     };
     const shot: Shot = {
-      id: shotId, title: String(project.shots.length + 1).padStart(2, "0") + " · " + profile.name + " reference shot",
+      id: shotId, title: String(current.shots.length + 1).padStart(2, "0") + " · " + profile.name + " reference shot",
       intent: "Reference-led storyboard draft. " + (referenceSummary || "Attach reference assets and refine this shot before generation."),
       duration: 5, status: "planned", referenceProfileIds: [profileId], referenceOverrides: [],
       slots: [{ id: slotId, name: "Reference-led storyboard", start: 0, duration: 5, selectedVersionId: versionId, versions: [version] }]
@@ -594,8 +676,8 @@ Shot intent: establish a clear visual beat; refine the prompt before sending it 
       <div className="sidebar-bottom"><div className="storage-card"><ShieldCheck size={16}/><div><strong>{t("storage.title")}</strong><span>{t("storage.description")}</span></div></div><button className="nav-item" onClick={() => setNotice(t("notice.projectSettingsPlanned"))}><Settings2 size={17}/><span>{t("nav.settings")}</span></button><button className="nav-item" onClick={() => setNotice(t("notice.helpDocs"))}><CircleHelp size={17}/><span>{t("nav.help")}</span></button><div className="user-chip"><div className="user-avatar">D</div><div><strong>{t("brand.name")}</strong><span>{t("user.workspace")}</span></div><span className="online-dot"/></div></div>
     </aside>
     <main className="main-area">
-      <header className="topbar"><div className="breadcrumbs"><span>{t("breadcrumb.projects")}</span><span className="crumb-sep">/</span><strong>{project.name}</strong><span className="local-pill"><span/> {t("status.localBadge")}</span></div><div className="top-actions"><button className="button button-quiet" onClick={() => fileInput.current?.click()}><FolderOpen size={15}/> {t("action.openProject")}</button><button className="button button-quiet" onClick={exportProject}><Save size={15}/> {t("action.exportProject")}</button><button className="button button-quiet" onClick={() => void exportVideo()}><Film size={15}/> Export WebM</button><button className="button button-primary" onClick={exportPlan}><Download size={15}/> {t("action.exportPlan")}</button><input ref={fileInput} type="file" accept=".json,.dionysus.json,application/json" hidden onChange={e => void importProject(e.target.files?.[0])}/></div></header>
-      {editorWorkspace ? <section className="editor-workspace">
+      <header className="topbar"><div className="breadcrumbs"><span>{t("breadcrumb.projects")}</span><span className="crumb-sep">/</span><strong>{project.name}</strong><span className="local-pill"><span/> {t("status.localBadge")}</span></div><div className="top-actions"><button className="button button-quiet" onClick={() => fileInput.current?.click()}><FolderOpen size={15}/> {t("action.openProject")}</button><button className="button button-quiet" onClick={exportProject}><Save size={15}/> {t("action.exportProject")}</button><button className="button button-quiet" onClick={() => setEditorWorkspace(true)}><Film size={15}/> Studio Editor</button><button className="button button-quiet" onClick={() => void exportVideo()}><Film size={15}/> Export WebM</button><button className="button button-primary" onClick={exportPlan}><Download size={15}/> {t("action.exportPlan")}</button><input ref={fileInput} type="file" accept=".json,.dionysus.json,application/json" hidden onChange={e => void importProject(e.target.files?.[0])}/></div></header>
+      <section className={editorWorkspace ? "editor-workspace" : "editor-workspace editor-workspace-hidden"}>
         <aside className="editor-tool-rail">
           <div className="editor-mark"><WandSparkles size={20}/></div>
           {[{id:"video",label:"Video",Icon:Film},{id:"text",label:"Text",Icon:Type},{id:"audio",label:"Audio",Icon:Music2},{id:"caption",label:"Caption",Icon:Captions},{id:"image",label:"Image",Icon:Image}].map(({id,label,Icon})=><button key={id} className={editorTool===id?"active":""} onClick={()=>setEditorTool(id as typeof editorTool)}><Icon size={18}/><span>{label}</span></button>)}
@@ -676,12 +758,12 @@ Shot intent: establish a clear visual beat; refine the prompt before sending it 
           </section>
           <div className="editor-timeline-footer">Timeline · {project.shots.length} shots · {slotCount} clip slots <button onClick={()=>setEditorWorkspace(false)}>Open full project controls</button></div></section>
         </div>
-      </section> : null}
+      </section>
       <div className={editorWorkspace ? "editor-hidden-project" : "page-content"}>
         <section className="page-heading"><div><div className="eyebrow"><span className="eyebrow-line"/> {t("heading.eyebrow")}</div><h1>{view === "storyboard" ? t("heading.storyboard.title") : view === "timeline" ? t("heading.timeline.title") : view === "assets" ? t("heading.assets.title") : t("heading.references.title")}</h1><p>{view === "storyboard" ? t("heading.storyboard.description") : view === "timeline" ? t("heading.timeline.description") : view === "assets" ? t("heading.assets.description") : t("heading.references.description")}</p></div><div className="heading-meta"><span className="status-dot"/> {t("status.autosaved")} <span className="meta-divider"/> <span>{t("project.versionFoundation")}</span></div></section>
         <section className="project-overview"><div className="overview-main"><div className="overview-icon"><Clapperboard size={19}/></div><div className="overview-copy"><div className="overview-kicker">{t("project.current")}</div><input className="project-name-input" aria-label={t("project.name")} value={project.name} onChange={e => change(p => ({ ...p, name: e.target.value }))}/><div className="project-subline"><span><Clock3 size={13}/> {t("project.runtimeSummary", { duration: time(runtime) })}</span><span><Film size={13}/> {t("project.shotCount", { count: project.shots.length })}</span><span><Layers3 size={13}/> {t("project.clipSlotCount", { count: slotCount })}</span></div></div></div><div className="project-specs"><div><span>{t("project.canvas")}</span><strong>{project.width} × {project.height}</strong></div><div><span>{t("project.frameRate")}</span><strong>{project.frameRate} FPS</strong></div><button className="icon-button" title={t("project.canvasSettingsPlanned")} onClick={() => setNotice(t("notice.canvasSettingsUnavailable"))}><Settings2 size={17}/></button></div></section>
         <div className="workbench"><section className="workbench-main">
-          {view === "storyboard" && <><div className="section-toolbar"><div><h2>{t("storyboard.title")}</h2><p>{t("storyboard.shotCount", { count: project.shots.length })}</p></div><div className="inline-actions"><button className="button button-quiet button-small" onClick={syncStoryboardToTimeline}><Layers3 size={14}/> Generate / update timeline</button><button className="button button-primary button-small" onClick={addShot}><Plus size={15}/> {t("action.addShot")}</button></div></div><div className="shot-list">{project.shots.map((shot, i) => <article key={shot.id} role="button" tabIndex={0} className={"shot-card " + (selected?.id === shot.id ? "selected" : "")} onClick={() => setSelectedId(shot.id)} onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedId(shot.id); } }}><div className="shot-number">{String(i + 1).padStart(2, "0")}</div><div className="shot-thumb"><div className="thumb-grid"/><div className="thumb-center"><Film size={21}/></div><span>{time(shot.duration)}</span></div><div className="shot-card-body"><div className="shot-title-row"><h3>{shot.title}</h3><span className={"shot-status status-" + shot.status}>{t(("status." + shot.status) as "status.planned" | "status.in-progress" | "status.ready")}</span></div><p>{shot.intent || t("shot.emptyIntent")}</p><div className="shot-card-meta"><span><Layers3 size={13}/> {t("shot.clipSlotCount", { count: shot.slots.length })}</span><span><Clock3 size={13}/> {t("shot.durationTarget", { duration: shot.duration })}</span></div></div><div className="shot-arrow">↗</div><button type="button" className="shot-version-toggle" aria-expanded={expandedVersionShotId === shot.id} onClick={e => { e.stopPropagation(); setExpandedVersionShotId(expandedVersionShotId === shot.id ? "" : shot.id); }}><ChevronDown size={13}/><span>{shot.slots.reduce((n, slot) => n + slot.versions.length, 0)} versions</span></button>{expandedVersionShotId === shot.id && <div className="shot-version-dropdown" onClick={e => e.stopPropagation()}>{shot.slots.flatMap(slot => slot.versions.map((version, vi) => ({slot, version, vi}))).map(({slot,version,vi}) => <button type="button" key={version.id} className={"shot-version-option" + (version.id === slot.selectedVersionId ? " active" : "")} onClick={() => { setSelectedId(shot.id); setSelectedSlotId(slot.id); chooseSlotVersion(shot.id,slot.id,version.id); setView("timeline"); }}><span>{slot.name} · {version.name || "Version " + (vi+1)}</span><small>{version.duration}s · {version.layers.length} layers</small></button>)}</div>}</article>)}<button className="add-shot-card" onClick={addShot}><span><Plus size={17}/></span><strong>{t("shot.addAnother")}</strong><small>{t("shot.addAnotherHint")}</small></button></div></>}
+          {view === "storyboard" && <><div className="section-toolbar"><div><h2>{t("storyboard.title")}</h2><p>{t("storyboard.shotCount", { count: project.shots.length })} · SeeDance node flow canvas</p></div><div className="inline-actions"><button className="button button-quiet button-small" onClick={()=>setIsAgentModalOpen(true)}><Sparkles size={14} color="#d5f36a"/> AI Storyboard Plan</button><button className="button button-quiet button-small" onClick={()=>setIsChecklistOpen(true)}><CheckCircle2 size={14} color="#75d7c1"/> Production Guide</button><button className="button button-quiet button-small" onClick={()=>setStoryboardMode(m => m === "flow" ? "list" : "flow")}>{storyboardMode === "flow" ? <Layers3 size={14}/> : <Maximize2 size={14}/>} {storyboardMode === "flow" ? "Grid Cards" : "Node Flow Canvas"}</button><button className="button button-quiet button-small" onClick={syncStoryboardToTimeline}><Film size={14}/> Generate / update timeline</button><button className="button button-primary button-small" onClick={addShot}><Plus size={15}/> {t("action.addShot")}</button></div></div>{storyboardMode === "flow" ? <StoryboardFlowCanvas project={project} selectedShotId={selectedId} onSelectShot={setSelectedId} onUpdateShot={updateShot} onAddShot={addShot} onDeleteShot={removeShot} onDuplicateShot={duplicateShot} onAddConnection={addStoryboardConnection} onRemoveConnection={removeStoryboardConnection} onOpenAgentModal={()=>setIsAgentModalOpen(true)} onOpenChecklist={()=>setIsChecklistOpen(true)} onSyncTimeline={syncStoryboardToTimeline} onAttachAssetToShot={attachAssetToShot} onSelectVersion={(sId, slotId, vId) => { chooseSlotVersion(sId, slotId, vId); setSelectedSlotId(slotId); setView("timeline"); }}/> : <div className="shot-list">{project.shots.map((shot, i) => <article key={shot.id} role="button" tabIndex={0} className={"shot-card " + (selected?.id === shot.id ? "selected" : "")} onClick={() => setSelectedId(shot.id)} onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedId(shot.id); } }}><div className="shot-number">{String(i + 1).padStart(2, "0")}</div><div className="shot-thumb"><div className="thumb-grid"/><div className="thumb-center"><Film size={21}/></div><span>{time(shot.duration)}</span></div><div className="shot-card-body"><div className="shot-title-row"><h3>{shot.title}</h3><span className={"shot-status status-" + shot.status}>{t(("status." + shot.status) as "status.planned" | "status.in-progress" | "status.ready")}</span></div><p>{shot.intent || t("shot.emptyIntent")}</p><div className="shot-card-meta"><span><Layers3 size={13}/> {t("shot.clipSlotCount", { count: shot.slots.length })}</span><span><Clock3 size={13}/> {t("shot.durationTarget", { duration: shot.duration })}</span></div></div><div className="shot-arrow">↗</div><button type="button" className="shot-version-toggle" aria-expanded={expandedVersionShotId === shot.id} onClick={e => { e.stopPropagation(); setExpandedVersionShotId(expandedVersionShotId === shot.id ? "" : shot.id); }}><ChevronDown size={13}/><span>{shot.slots.reduce((n, slot) => n + slot.versions.length, 0)} versions</span></button>{expandedVersionShotId === shot.id && <div className="shot-version-dropdown" onClick={e => e.stopPropagation()}>{shot.slots.flatMap(slot => slot.versions.map((version, vi) => ({slot, version, vi}))).map(({slot,version,vi}) => <button type="button" key={version.id} className={"shot-version-option" + (version.id === slot.selectedVersionId ? " active" : "")} onClick={() => { setSelectedId(shot.id); setSelectedSlotId(slot.id); chooseSlotVersion(shot.id,slot.id,version.id); setView("timeline"); }}><span>{slot.name} · {version.name || "Version " + (vi+1)}</span><small>{version.duration}s · {version.layers.length} layers</small></button>)}</div>}</article>)}<button className="add-shot-card" onClick={addShot}><span><Plus size={17}/></span><strong>{t("shot.addAnother")}</strong><small>{t("shot.addAnotherHint")}</small></button></div>}</>}
           {view === "timeline" && <><div className="section-toolbar"><div><h2>{t("timeline.title")}</h2><p>{t("timeline.description")}</p></div><button className="button button-primary button-small" disabled={!selected} onClick={() => selected && addSlot(selected.id)}><Plus size={15}/> {t("action.addClipSlot")}</button></div><div className="timeline-ruler">{Array.from({ length: Math.floor(runtime / 5) + 1 }, (_, i) => i * 5).concat(runtime % 5 === 0 ? [] : [runtime]).map(seconds => <span key={seconds} style={{ left: (seconds / Math.max(runtime, 1) * 100) + "%" }}>{time(seconds)}</span>)}</div><div className="timeline-scroll">{project.tracks.map((track, i) => <div className="timeline-track" key={track.id}><div className="track-label">{track.kind === "audio" ? <AudioLines size={14}/> : track.kind === "text" ? <Sparkles size={14}/> : <Film size={14}/>}<span>{t(("media." + track.kind) as "media.video" | "media.audio" | "media.text" | "media.effects")}</span></div><div className="track-lane" style={{ backgroundSize: (5 / Math.max(runtime, 1) * 100) + "% 100%" }}>{i === 0 && project.shots.map((shot, si) => <button key={shot.id} className={"timeline-shot " + (selected?.id === shot.id ? "chosen" : "")} style={{ left: (project.shots.slice(0, si).reduce((n, s) => n + s.duration, 0) / Math.max(runtime, 1) * 100) + "%", width: (shot.duration / Math.max(runtime, 1) * 100) + "%" }} onClick={() => setSelectedId(shot.id)}><span>{shot.title}</span><small>{shot.duration}s</small></button>)}{i === 1 && selected?.slots.map(slot => <button key={slot.id} className="timeline-slot" style={{ left: ((selectedStart + slot.start) / Math.max(runtime, 1) * 100) + "%", width: (slot.duration / Math.max(runtime, 1) * 100) + "%" }} onClick={() => selectClipSlot(slot.id)}><span>{slot.name}</span><small>{slot.versions.find(v => v.id === slot.selectedVersionId)?.name ?? "No version"}</small></button>)}{i > 1 && <div className="track-empty"><span>+</span> {t("timeline.trackAddLayer", { kind: t(("media." + track.kind) as "media.video" | "media.audio" | "media.text" | "media.effects") })}</div>}</div></div>)}</div>{selected && (() => { const activeSlot = selected.slots.find(slot => slot.id === selectedSlotId); if (!activeSlot) return null; const activeVersion = activeSlot.versions.find(version => version.id === activeSlot.selectedVersionId); return <section className="version-panel"><div className="version-panel-heading"><div><span className="inspector-kicker">CLIP SLOT</span><label className="field-label">Clip slot name<input className="text-field" aria-label="Clip slot name" value={activeSlot.name} onChange={e => updateSlotName(selected.id, activeSlot.id, e.target.value)} /></label><p>{activeSlot.duration}s · {activeSlot.versions.length} version{activeSlot.versions.length === 1 ? "" : "s"}</p></div><button className="button button-quiet button-small" onClick={() => setSelectedSlotId("")}>Close</button></div><div className="slot-timing-controls">
   <div className="timing-field"><label className="field-label">Start time (seconds)<input className="text-field" type="number" min="0" step="0.1" value={activeSlot.start} onChange={e => updateSlotTiming(selected.id, activeSlot.id, "start", Number(e.target.value))}/></label><div className="timing-nudges"><button type="button" aria-label="Move start earlier by 0.5 seconds" onClick={() => updateSlotTiming(selected.id, activeSlot.id, "start", activeSlot.start - 0.5)}>−0.5s</button><button type="button" aria-label="Move start later by 0.5 seconds" onClick={() => updateSlotTiming(selected.id, activeSlot.id, "start", activeSlot.start + 0.5)}>+0.5s</button></div></div>
   <div className="timing-field"><label className="field-label">Slot duration (seconds)<input className="text-field" type="number" min="0.1" step="0.1" value={activeSlot.duration} onChange={e => updateSlotTiming(selected.id, activeSlot.id, "duration", Number(e.target.value))}/></label><div className="timing-nudges"><button type="button" aria-label="Shorten slot by 0.5 seconds" onClick={() => updateSlotTiming(selected.id, activeSlot.id, "duration", activeSlot.duration - 0.5)}>−0.5s</button><button type="button" aria-label="Lengthen slot by 0.5 seconds" onClick={() => updateSlotTiming(selected.id, activeSlot.id, "duration", activeSlot.duration + 0.5)}>+0.5s</button></div></div>
@@ -733,5 +815,33 @@ Shot intent: establish a clear visual beat; refine the prompt before sending it 
         <footer className="statusbar"><div><span className="status-check"><Check size={11}/></span><span>{notice}</span></div><div><span><FileJson size={13}/> {t("footer.projectSchema")}</span><span className="statusbar-separator">·</span><span><ShieldCheck size={13}/> {t("footer.localFirst")}</span><span className="statusbar-separator">·</span><span><WandSparkles size={13}/> <span className="future-label">{t("footer.aiReady")}</span></span></div></footer>
       </div>
     </main>
+
+    <AgentStoryboardModal
+      project={project}
+      isOpen={isAgentModalOpen}
+      onClose={() => setIsAgentModalOpen(false)}
+      onApplyProject={updated => {
+        change(() => updated);
+        setSelectedId(updated.shots[0]?.id ?? "");
+        setNotice("Imported agent storyboard successfully! " + updated.shots.length + " shots in flow.");
+      }}
+      onExportPlan={exportPlan}
+    />
+
+    <ProductionChecklistDrawer
+      project={project}
+      isOpen={isChecklistOpen}
+      onClose={() => setIsChecklistOpen(false)}
+      onSelectShot={sId => {
+        setSelectedId(sId);
+        setIsChecklistOpen(false);
+      }}
+      onUpdateShotStatus={(sId, status) => updateShot(sId, { status })}
+      onOpenTimeline={() => {
+        setIsChecklistOpen(false);
+        setView("timeline");
+        setEditorWorkspace(true);
+      }}
+    />
   </div>;
 }

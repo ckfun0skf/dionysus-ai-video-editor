@@ -1,0 +1,8 @@
+{
+  "name": "Dionysus — AI Video Composer",
+  "description": "A local-first AI video planning and composition editor.",
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ],
+  "permissions": []
+}

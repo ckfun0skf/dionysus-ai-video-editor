@@ -133,6 +133,12 @@ function isTrack(value: unknown): boolean {
     isString(value.kind) && trackKinds.has(value.kind);
 }
 
+function isStoryboardConnection(value: unknown): boolean {
+  return isRecord(value) && isString(value.fromShotId) && isString(value.toShotId) &&
+    (value.id === undefined || isString(value.id)) &&
+    (value.label === undefined || isString(value.label));
+}
+
 /** Validate imported JSON before it reaches React rendering or local persistence. */
 export function validateProject(value: unknown): value is DionysusProject {
   if (!isRecord(value) || value.schemaVersion !== "1.0" ||
@@ -144,6 +150,7 @@ export function validateProject(value: unknown): value is DionysusProject {
       !Array.isArray(value.shots) || !value.shots.every(isShot) ||
       !Array.isArray(value.tracks) || !value.tracks.every(isTrack) ||
       (value.timelineClips !== undefined && (!Array.isArray(value.timelineClips) || !value.timelineClips.every(isTimelineClip))) ||
+      (value.storyboardConnections !== undefined && (!Array.isArray(value.storyboardConnections) || !value.storyboardConnections.every(isStoryboardConnection))) ||
       !Array.isArray(value.assets) || !value.assets.every(isAsset) ||
       !Array.isArray(value.referenceProfiles) || !value.referenceProfiles.every(isProfile)) return false;
 

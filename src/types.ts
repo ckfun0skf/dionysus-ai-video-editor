@@ -8,7 +8,39 @@ export interface GenerationRecord { id: string; createdAt: string; prompt: strin
 export interface CompositionLayer { id: string; name: string; kind: "video" | "image" | "audio" | "text" | "script" | "composition"; start: number; duration: number; assetId?: string; scriptVersionId?: string; childCompositionId?: string; sourceIn?: number; sourceOut?: number; prompt?: string; modelName?: string; modelVersion?: string; thumbnailPath?: string; fitMode?: "contain" | "cover" | "fill"; x?: number; y?: number; width?: number; height?: number; backgroundColor?: string; borderColor?: string; borderWidth?: number; shape?: "rectangle" | "circle" | "rounded"; cornerRadius?: number; scale?: number; opacity?: number; animation?: "none" | "float" | "pulse" | "rotate"; animationDuration?: number }
 export interface ClipVersion { id: string; name: string; description: string; duration: number; layers: CompositionLayer[]; scriptVersionIds: string[]; generationRecords: GenerationRecord[] }
 export interface ClipSlot { id: string; name: string; start: number; duration: number; selectedVersionId: string; versions: ClipVersion[] }
-export interface Shot { id: string; title: string; intent: string; duration: number; status: "planned" | "in-progress" | "ready"; referenceProfileIds: string[]; referenceOverrides: ReferenceOverride[]; slots: ClipSlot[] }
+export interface StoryboardConnection { id?: string; fromShotId: string; toShotId: string; label?: string }
+export interface Shot {
+  id: string;
+  title: string;
+  intent: string;
+  duration: number;
+  status: "planned" | "in-progress" | "ready";
+  referenceProfileIds: string[];
+  referenceOverrides: ReferenceOverride[];
+  slots: ClipSlot[];
+  // SeeDance node canvas & AI prompt extensions
+  canvasX?: number;
+  canvasY?: number;
+  generationPrompt?: string;
+  cameraMovement?: string;
+  shotType?: "establishing" | "wide" | "medium" | "close-up" | "extreme-close-up" | "aerial" | "point-of-view";
+  previewAssetId?: string;
+}
 export interface TimelineTrack { id: string; name: string; kind: "video" | "audio" | "text" | "effects" }
 export interface TimelineClip { id: string; name: string; kind: "video" | "audio"; trackId: string; start: number; duration: number; assetId?: string; linkedVideoClipId?: string; sourceIn?: number; sourceOut?: number; prompt?: string; modelName?: string; modelVersion?: string; thumbnailPath?: string }
-export interface DionysusProject { schemaVersion: "1.0"; id: string; name: string; createdAt: string; updatedAt: string; frameRate: number; width: number; height: number; shots: Shot[]; tracks: TimelineTrack[]; timelineClips?: TimelineClip[]; assets: Asset[]; referenceProfiles: ReferenceProfile[] }
+export interface DionysusProject {
+  schemaVersion: "1.0";
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+  frameRate: number;
+  width: number;
+  height: number;
+  shots: Shot[];
+  tracks: TimelineTrack[];
+  timelineClips?: TimelineClip[];
+  assets: Asset[];
+  referenceProfiles: ReferenceProfile[];
+  storyboardConnections?: StoryboardConnection[];
+}
