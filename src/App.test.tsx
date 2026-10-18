@@ -17,6 +17,14 @@ function click(button: HTMLElement) {
   act(() => button.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 }
 
+function setInputValue(input: HTMLInputElement, value: string) {
+  act(() => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    setter?.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
 function buttonsNamed(name: string): HTMLButtonElement[] {
   return Array.from(container.querySelectorAll<HTMLButtonElement>("button")).filter(
     button => button.getAttribute("aria-label") === name
@@ -490,6 +498,38 @@ describe("App history integration", () => {
     click(option!);
     await flushEffects();
     expect(container.querySelector<HTMLInputElement>('.version-panel input[aria-label="Clip slot name"]')?.value).toBe("Opening image");
+  });
+
+  it("edits Master Shot placement independently from Version and Slot internal duration", async () => {
+    await openTimelineView();
+    const firstShotBlock = container.querySelector<HTMLButtonElement>(".master-shot-clip");
+    expect(firstShotBlock).toBeTruthy();
+    click(firstShotBlock!);
+    await flushEffects();
+
+    const initial = persistedProject();
+    const firstVersionDuration = initial.shots[0].slots[0].versions[0].duration;
+    const secondStartBefore = initial.shots[0].duration;
+    const startInput = container.querySelector<HTMLInputElement>('input[aria-label="Master Shot start time"]');
+    expect(startInput).toBeTruthy();
+    setInputValue(startInput!, "16.25");
+    await flushEffects();
+
+    const moved = persistedProject();
+    expect(moved.shots[0].masterStart).toBe(16.25);
+    expect(moved.shots[1].masterStart).toBe(secondStartBefore);
+    expect(moved.shots[0].slots[0].versions[0].duration).toBe(firstVersionDuration);
+    expect(container.querySelector<HTMLInputElement>('input[aria-label="Master Shot start time"]')?.value).toBe("16.25");
+
+    const slotDurationInput = Array.from(container.querySelectorAll<HTMLInputElement>(".version-panel input[type=number]"))
+      .find(input => input.parentElement?.parentElement?.textContent?.includes("Slot duration"));
+    expect(slotDurationInput).toBeTruthy();
+    setInputValue(slotDurationInput!, "8");
+    await flushEffects();
+    const resizedSlot = persistedProject().shots[0].slots[0];
+    expect(resizedSlot.duration).toBe(8);
+    expect(resizedSlot.versions[0].duration).toBe(firstVersionDuration);
+    expect(persistedProject().shots[1].masterStart).toBe(secondStartBefore);
   });
 
   it("opens nested Version tabs, adds a procedural layer, and keeps linked-audio mute/unlink independent", async () => {
