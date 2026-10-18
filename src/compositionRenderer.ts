@@ -21,7 +21,7 @@ export function collectCompositionLayers(project: DionysusProject): CompositionL
       ...(clip.prompt ? { prompt: clip.prompt } : {}),
       ...(clip.modelName ? { modelName: clip.modelName } : {}),
       ...(clip.modelVersion ? { modelVersion: clip.modelVersion } : {}),
-      ...(clip.muted !== undefined ? { muted: clip.muted } : {})
+      muted: Boolean(clip.muted || project.tracks.find(track => track.id === clip.trackId)?.muted)
     };
     if (clip.kind === "text" || clip.kind === "procedural") {
       return [{ ...common, fitMode: "contain" as const, x: 0, y: clip.kind === "text" ? 75 : 0, width: 100, height: clip.kind === "text" ? 18 : 100 }];
