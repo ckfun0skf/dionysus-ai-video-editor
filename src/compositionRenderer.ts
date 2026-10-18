@@ -33,7 +33,8 @@ export function collectCompositionLayers(project: DionysusProject): CompositionL
       fitMode: "contain" as const, x: 0, y: 0, width: 100, height: 100
     }];
   });
-  return [...nested, ...timeline].sort((a, b) => a.start - b.start);
+  // Preserve Version layer order as the composition stacking order. Timing is checked per layer during rendering/export.
+  return [...nested, ...timeline];
 }
 
 export function getCompositionDuration(layers: CompositionLayer[]): number {
