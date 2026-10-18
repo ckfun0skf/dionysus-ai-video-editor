@@ -518,3 +518,15 @@ describe("App history integration", () => {
   });
 
 });
+
+
+describe("Timeline preview", () => {
+  it("tracks the current playhead time in the preview", () => {
+    const canvas = container.querySelector<HTMLCanvasElement>(".editor-preview-canvas");
+    const ruler = container.querySelector<HTMLElement>('.editor-ruler-marks[role="slider"]');
+    expect(canvas?.getAttribute("aria-label")).toBe("Timeline preview at 00:00.00");
+    expect(ruler).toBeTruthy();
+    act(() => ruler!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })));
+    expect(canvas?.getAttribute("aria-label")).toBe("Timeline preview at 00:00.50");
+  });
+});
