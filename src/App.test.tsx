@@ -461,4 +461,60 @@ describe("App history integration", () => {
     expect(video()).toMatchObject({ start: 0.5, duration: 4.5 });
     expect(audio()).toMatchObject({ start: 0.5, duration: 4.5, linkedVideoClipId: video().id });
   });
+  it("expands storyboard shot versions and opens the selected version in the timeline", async () => {
+    const toggle = container.querySelector<HTMLButtonElement>(".shot-version-toggle");
+    expect(toggle).toBeTruthy();
+    click(toggle!);
+    expect(container.querySelector(".shot-version-dropdown")?.textContent).toContain("Opening image");
+    const option = Array.from(container.querySelectorAll<HTMLButtonElement>(".shot-version-option")).find(button => button.textContent?.includes("Opening image"));
+    expect(option).toBeTruthy();
+    click(option!);
+    await flushEffects();
+    expect(container.querySelector<HTMLInputElement>('.version-panel input[aria-label="Clip slot name"]')?.value).toBe("Opening image");
+  });
+
+  it("generates timeline clips from storyboard slots without deleting manual clips", async () => {
+    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Add linked video/audio")) as HTMLButtonElement;
+    click(add);
+    await flushEffects();
+    const sync = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Generate / update timeline"));
+    expect(sync).toBeTruthy();
+    click(sync!);
+    await flushEffects();
+    const clips = persistedProject().timelineClips ?? [];
+    expect(clips.filter(clip => clip.id.startsWith("storyboard-"))).toHaveLength(3);
+    expect(clips.some(clip => clip.name === "Video clip 1")).toBe(true);
+  });
+
+  it("creates a storyboard draft from a reference profile and stores its reference provenance", async () => {
+    const nav = Array.from(container.querySelectorAll<HTMLButtonElement>(".nav-item")).find(button => button.textContent?.includes("References"));
+    expect(nav).toBeTruthy();
+    click(nav!);
+    const newProfile = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("New profile"));
+    expect(newProfile).toBeTruthy();
+    click(newProfile!);
+    const nameInput = container.querySelector<HTMLInputElement>('form.editor-form input');
+    expect(nameInput).toBeTruthy();
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      setter?.call(nameInput!, "Hero reference");
+      nameInput!.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await flushEffects();
+    const createProfile = Array.from(container.querySelectorAll<HTMLButtonElement>("form.editor-form button[type=submit]"))[0];
+    expect(createProfile).toBeTruthy();
+    click(createProfile);
+    await flushEffects();
+    const createDraft = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Create storyboard draft from references"));
+    expect(createDraft).toBeTruthy();
+    click(createDraft!);
+    await flushEffects();
+    const project = persistedProject();
+    const shot = project.shots.find(item => item.title.includes("Hero reference reference shot"));
+    expect(shot).toBeTruthy();
+    expect(shot!.referenceProfileIds).toHaveLength(1);
+    expect(shot!.slots[0].versions[0].generationRecords[0].modelVersion).toBe("metadata-only");
+    expect(shot!.slots[0].versions[0].layers[0].prompt).toContain("Hero reference");
+  });
+
 });
