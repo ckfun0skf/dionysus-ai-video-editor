@@ -252,9 +252,10 @@
             "Trim operations synchronize sourceOut to the new duration and clamp fade values; JSON round-trip covers Master placement, nested layers, source ranges, linked audio, mute/mix settings, and saved thumbnail references.",
             "CI run 39124022295: 93 tests pass across 10 files; TypeScript/production build pass; npm audit reports 0 vulnerabilities.",
             "PR #55 delivered frame-aligned clip-resize preview, grey overlap feedback, atomic adjacent-clip trimming with linked-audio/source-range updates, and cross-layer snap guides; CI passed 123 tests and TypeScript/Vite build.",
-            "PR #57 covers App-level resize/adjacent trim/Undo/Redo, cross-layer snapping, overlap prevention, nested Version history/export, and audio deletion/group-delete behavior. CI run 39160785330 passed 129 tests across 15 files plus TypeScript and production build at code/test SHA e9b4246ce551adff5816f91487e33958277e0e8e."
+            "PR #57 covers App-level resize/adjacent trim/Undo/Redo, cross-layer snapping, overlap prevention, nested Version history/export, and audio deletion/group-delete behavior. CI run 39165133176 passed 137 tests across 16 files plus TypeScript and production build at code/test SHA 794e3ff024c26d55d76583160d96238df8d84a12.",
+            "Follow-up correction for #53/#54: PR #55 did deploy, but user acceptance showed the nested clip UI still differed and drag snapping, cross-layer movement, and pointer-resize behavior were not fixed end to end. PR #57 replaces the drop placement logic, tracks resize via global pointer events, restores Master-style icon/thumbnail and two-line clip markup in nested timelines, and covers the interaction in App tests."
           ],
-          "notes": "Master and nested Version workflows, typed layers, Shot/Clip Version selection, separate Master vs internal timing, frame-snapped movement, split/duplicate, resize preview, adjacent-trim-on-release, linked-audio propagation, and shared ruler/track visuals are implemented. Remaining DYS-005 scope is richer media preview/relink and broader missing-media recovery; production MP4 export remains separately tracked. No browser smoke tests were run."
+          "notes": "Master and nested Version workflows, typed layers, Shot/Clip Version selection, separate Master vs internal timing, frame-snapped movement, split/duplicate, interactive resize preview, adjacent-trim-on-release, linked-audio/source-range propagation, and matching ruler/track/clip visuals are covered. PR #55’s first implementation deployed but missed acceptance for #53/#54; PR #57 corrects those gaps. Richer media preview/relink and missing-source recovery remain tracked under DYS-004/DYS-006; production MP4 export remains DYS-009."
         },
         {
           "id": "DYS-011",
@@ -305,7 +306,7 @@
             "Audio track mute, clip mute, volume and fade settings are applied in playback/export and preserved by project JSON validation.",
             "CI run 39124022295: 93 tests pass across 10 files; TypeScript/production build pass; npm audit reports 0 vulnerabilities.",
             "App integration coverage verifies independent audio edits after unlink, Undo/Redo for unlink/move/trim/delete, linked parent/child deletion, and preserving detached audio when a video layer is removed.",
-            "PR #57 CI run 39160785330 passed 129 tests across 15 files, TypeScript check, and Vite production build at code/test SHA e9b4246ce551adff5816f91487e33958277e0e8e."
+            "PR #57 CI run 39165133176 passed 137 tests across 16 files, TypeScript check, and Vite production build at code/test SHA 794e3ff024c26d55d76583160d96238df8d84a12."
           ],
           "notes": "Linked-child lanes, unlink, independent audio move/trim/delete, track/clip mute, split/duplicate propagation, source-range/fade integrity, video-layer group-delete semantics, Undo/Redo, and project JSON coverage are implemented. Advanced automation/ducking/effects remain tracked under DYS-008 and are not part of this task."
         },
@@ -416,7 +417,7 @@
             "src/App.tsx renders an integrated Master and per-Version canvas preview from the active composition at the current playhead; each Version tab retains its own playhead position.",
             "src/compositionRenderer.ts resolves image/video sources, composites active layers in stored z-order, handles nested Clip assets, source in/out, contain/cover/fill, canvas geometry, backgrounds, border/opacity/animation, and supported audio volume/fades. Preview playback synchronizes source audio and updates video frames.",
             "Existing tests cover per-tab preview/playhead, preview controls/project canvas settings, composition layer order and nested Clip version selection, plus normalized frame movement/resizing.",
-            "PR #57 adds a UI regression test proving a selected Video Layer's preview transform commits back to the layer model; test CI run 39160785330 previously passed 129 tests before this added case."
+            "PR #57 adds a UI regression test proving a selected Video Layer's preview transform commits back to the layer model; test CI run 39165133176 previously passed 137 tests before this added case."
           ],
           "notes": "The preview/compositor is implemented but still in progress: interactive preview scales to at most 1280×720, not a guaranteed 4K preview; browser codec/CORS/source availability still limits some media; durable media import/relinking is tracked under DYS-004; first/last-frame coverage is not uniform for every source. WebM export remains experimental and MP4 is tracked under DYS-009."
         },

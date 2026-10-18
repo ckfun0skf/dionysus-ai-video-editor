@@ -119,3 +119,12 @@ npm run dev
 - [x] Keep `public/doc/tasks.json` in sync for the user's progress monitoring dashboard.
 - [x] Do not create redundant PRs or unneeded markdown sprawl; prioritize real features in the applet.
 
+
+
+## Current Timeline Follow-up Status — 2026-10-18
+
+- A successful deployment is not proof that a requested UI interaction works. PR #55 deployed but user acceptance showed #53/#54 still failed: nested clips lacked Master-style icon/copy markup, the snap guide did not control the actual drop position, compatible cross-layer drops were blocked, and resize was not covered by App-level interaction testing.
+- PR #57 fixes those paths and adds App-level regression tests for destination preview and snapping, compatible cross-video-layer movement, same-layer overlap prevention, grey resize-overlap feedback, adjacent clip trimming, linked-audio timing, and one-step Undo/Redo.
+- Verified code/test head before docs update: `794e3ff024c26d55d76583160d96238df8d84a12`. CI [#39165133176](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39165133176) passed 137 tests across 16 files, TypeScript/Vite build passed, npm audit found 0 vulnerabilities. No browser smoke test was run.
+- Issue #56 remains planned DYS-004 scope and is not implemented merely because its requirements were recorded in docs.
+- Rich preview/compositing, source media relinking, advanced audio/procedural runtime, and production MP4 export remain tracked under DYS-006/DYS-004/DYS-008/DYS-009; do not claim a production-grade NLE is complete.

@@ -13,8 +13,16 @@
 
 ## Validation
 - PR #55 CI [#39159781393](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39159781393): 123 tests, TypeScript and production build passed.
-- PR #57 CI [#39160785330](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39160785330): 129 tests, TypeScript and production build passed at test SHA `e9b4246ce551adff5816f91487e33958277e0e8e`.
+- PR #57 CI [#39165133176](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39165133176): 137 tests, TypeScript and production build passed at test SHA `794e3ff024c26d55d76583160d96238df8d84a12`.
 - Main CI [#39159896542](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39159896542) and Pages deployment [#39159896506](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39159896506) passed on the prior merge commit. No browser smoke tests were run.
 
 ## Remaining
 Durable media relinking/recovery remains in DYS-004. Preview fidelity, richer compositing, and production MP4 output remain tracked under DYS-006/DYS-009.
+
+
+## Follow-up correction for Issues #53 and #54
+The initial PR #55 deployment succeeded but did not satisfy user acceptance. PR #57 corrects the underlying drop placement and pointer-resize event paths, permits compatible layer-to-layer moves, and gives nested Version clips matching Master Timeline clip contents and row metrics. Resize commits the primary and adjacent clip changes together, including linked audio, so one Undo restores the original state.
+
+## Latest validation
+- [CI #39165133176](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39165133176) at code/test head `794e3ff024c26d55d76583160d96238df8d84a12`: 137 tests across 16 files passed, TypeScript and Vite production build passed, npm audit 0 vulnerabilities.
+- No browser smoke tests were run.
