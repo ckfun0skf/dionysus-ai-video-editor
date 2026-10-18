@@ -26,6 +26,10 @@ test("browser smoke: generate a layer image and export a playable WebM", async (
   const pageErrors: string[] = [];
   page.on("pageerror", error => pageErrors.push(error.message));
   await page.route("https://provider.example/v1/images/generations", async route => {
+    if (route.request().method() === "OPTIONS") {
+      await route.fulfill({ status: 204, headers: { "access-control-allow-origin": "http://127.0.0.1:4173", "access-control-allow-headers": "authorization, content-type", "access-control-allow-methods": "POST, OPTIONS" } });
+      return;
+    }
     const request = route.request().postDataJSON();
     expect(request.prompt).toContain("cinematic cyan shape");
     expect(request.model).toBe("smoke-image-model");
