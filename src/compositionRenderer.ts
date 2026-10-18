@@ -123,7 +123,11 @@ export async function renderCompositionFrame(canvas: HTMLCanvasElement, project:
   for (const layer of layers) {
     const asset = project.assets.find(item => item.id === layer.assetId);
     if (!asset?.path) { drawLayer(ctx, layer, asset, seconds, width, height, images, videos); continue; }
-    if (asset.kind === "image" && !images.has(asset.id)) images.set(asset.id, await loadImage(asset.path));
+    if (asset.kind === "image" && !images.has(asset.id)) {
+      const resolved = await resolveMediaSource(asset.path);
+      if (resolved.release) mediaReleases.set(asset.id, resolved.release);
+      images.set(asset.id, await loadImage(resolved.src));
+    }
     if (asset.kind === "video" && !videos.has(asset.id)) {
       const video = document.createElement("video");
       const resolved = await resolveMediaSource(asset.path);
@@ -226,6 +230,6 @@ export async function exportCompositionWebM(project: DionysusProject, options: R
 
 export function downloadExport(result: ExportResult): void {
   const url = URL.createObjectURL(result.blob), anchor = document.createElement("a");
-  anchor.href = url; anchor.download = result.filename; anchor.click();
+  anchor.href = url; anchor.download = result.filename; document.body.appendChild(anchor); anchor.click(); anchor.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
