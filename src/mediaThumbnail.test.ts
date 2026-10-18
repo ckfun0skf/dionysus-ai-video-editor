@@ -68,9 +68,7 @@ describe("media thumbnails", () => {
     video.pause = vi.fn();
     video.removeAttribute = vi.fn();
     video.load = () => queueMicrotask(() => video.dispatchEvent(new Event("loadedmetadata")));
-    vi.stubGlobal("document", { createElement: vi.fn(() => video) });
-    const originalCreateElement = (globalThis as { document?: { createElement: (tag: string) => unknown } }).document!.createElement;
-    (globalThis.document as unknown as { createElement: (tag: string) => unknown }).createElement = (tag: string) => tag === "video" ? video : canvas;
+    vi.stubGlobal("document", { createElement: vi.fn((tag: string) => tag === "video" ? video : canvas) });
 
     const thumb = await createVideoThumbnail(new Blob(["video"], { type: "video/mp4" }));
     expect(thumb).toBe("data:image/jpeg;base64,dGh1bWI=");
@@ -79,7 +77,6 @@ describe("media thumbnails", () => {
     expect(canvas.height).toBe(180);
     expect(context.drawImage).toHaveBeenCalledOnce();
     expect(url.revokeObjectURL).toHaveBeenCalledWith("blob:thumbnail-test");
-    expect(originalCreateElement).toBeDefined();
   });
 
   it("uses saved thumbnails first, falls back to image paths, and leaves unsupported video without a fake thumbnail", () => {
