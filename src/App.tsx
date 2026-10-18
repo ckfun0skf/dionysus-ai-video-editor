@@ -10,7 +10,7 @@ import ProceduralAnimationPreview from "./ProceduralAnimationPreview";
 import { collectCompositionLayers, renderCompositionFrame, exportCompositionWebM, downloadExport } from "./compositionRenderer";
 import AIGenerationPanel from "./AIGenerationPanel";
 import { deleteStoredMediaAsset, isStoredMediaPath, resolveMediaSource, storeMediaAsset } from "./mediaAssetStore";
-import { getMasterShotStart, getMasterShotStarts, getMasterTimelineDuration, setMasterShotDuration, setMasterShotStart } from "./masterTimeline";
+import { getMasterShotIndexAtTime, getMasterShotStart, getMasterShotStarts, getMasterTimelineDuration, setMasterShotDuration, setMasterShotStart } from "./masterTimeline";
 import StoryboardFlowCanvas from "./StoryboardFlowCanvas";
 import AgentStoryboardModal from "./AgentStoryboardModal";
 import ProductionChecklistDrawer from "./ProductionChecklistDrawer";
@@ -114,15 +114,8 @@ export default function App() {
   const activeVersionTimeline = activeVersionTimelineTab ? activeVersionTimelineSlot?.versions.find(version => version.id === activeVersionTimelineTab.versionId) : undefined;
   const activeTimelineDuration = activeVersionTimeline ? activeVersionTimeline.duration : runtime;
   const activeShotInfo = useMemo(() => {
-    const starts = getMasterShotStarts(project.shots);
-    const containingIndex = project.shots.findIndex((shot, index) => editorTime >= starts[index] && editorTime < starts[index] + shot.duration);
-    if (containingIndex >= 0) return { shot: project.shots[containingIndex], index: containingIndex };
-    let nearestIndex = 0;
-    for (let index = 0; index < starts.length; index += 1) {
-      if (starts[index] <= editorTime) nearestIndex = index;
-      else break;
-    }
-    return { shot: project.shots[nearestIndex], index: nearestIndex };
+    const index = getMasterShotIndexAtTime(project.shots, editorTime);
+    return { shot: project.shots[index] ?? project.shots[0], index: Math.max(0, index) };
   }, [project.shots, editorTime]);
   useEffect(() => {
     if (!isPlaying) { playbackTimeRef.current = editorTime; return; }
