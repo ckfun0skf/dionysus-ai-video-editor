@@ -173,7 +173,7 @@ test("browser smoke: importing audio persists media bytes in IndexedDB", async (
   await page.getByRole("button", { name: "Assets", exact: true }).click();
   const wav = Buffer.from(toneWavDataUri().split(",")[1], "base64");
   await page.locator('input[type="file"][accept^="video/*"]').setInputFiles({ name: "smoke-import.wav", mimeType: "audio/wav", buffer: wav });
-  await expect(page.getByText("smoke-import.wav", { exact: true })).toBeVisible();
+  await expect(page.locator(".asset-card .asset-name-field").last()).toHaveValue("smoke-import.wav");
   await page.waitForFunction(() => {
     const saved = JSON.parse(localStorage.getItem("dionysus.project.v1") || "null");
     const asset = saved?.assets?.find((candidate: { name: string }) => candidate.name === "smoke-import.wav");
