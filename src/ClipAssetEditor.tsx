@@ -5,7 +5,7 @@ import CodePlayground, { type CodePlaygroundSource } from "./CodePlayground";
 
 type Props = {
   assets: Asset[];
-  onSave: (clip: { name: string; duration: number; layers: CompositionLayer[] }) => void;
+  onSave: (clip: { name: string; versions: Array<{ name: string; duration: number; layers: CompositionLayer[] }> }) => void;
   onClose: () => void;
 };
 
@@ -14,6 +14,8 @@ const makeId = () => "clip-layer-" + Math.random().toString(36).slice(2, 10);
 export default function ClipAssetEditor({ assets, onSave, onClose }: Props) {
   const [name, setName] = useState("New clip asset");
   const [duration, setDuration] = useState(5);
+  const [versionName, setVersionName] = useState("Version A");
+  const [savedVersions, setSavedVersions] = useState<Array<{ name: string; duration: number; layers: CompositionLayer[] }>>([]);
   const [layerType, setLayerType] = useState<"video" | "audio" | "code">("video");
   const [assetId, setAssetId] = useState("");
   const [layers, setLayers] = useState<CompositionLayer[]>([]);
@@ -52,6 +54,13 @@ export default function ClipAssetEditor({ assets, onSave, onClose }: Props) {
     }]);
   };
   const updateLayer = (layerId: string, patch: Partial<CompositionLayer>) => setLayers(current => current.map(layer => layer.id === layerId ? { ...layer, ...patch } : layer));
+  const addVersion = () => {
+    if (!layers.length) return;
+    setSavedVersions(current => [...current, { name: versionName.trim() || "Version " + String(current.length + 1), duration, layers: layers.map(layer => ({ ...layer })) }]);
+    setLayers([]);
+    setDuration(5);
+    setVersionName("Version " + String(savedVersions.length + 2));
+  };
 
   return <div className="settings-dialog-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}>
     <section className="settings-dialog clip-asset-editor" role="dialog" aria-modal="true" aria-labelledby="clip-asset-title">
@@ -60,6 +69,8 @@ export default function ClipAssetEditor({ assets, onSave, onClose }: Props) {
         <label className="field-label">Clip name<input className="text-field" value={name} onChange={event => setName(event.target.value)} /></label>
         <label className="field-label">Clip duration (seconds)<input className="text-field" type="number" min="0.1" max="600" step="0.1" value={duration} onChange={event => setDuration(Math.max(0.1, Number(event.target.value) || 0.1))} /></label>
       </div>
+      <div className="clip-asset-version-bar"><label className="field-label">Current version<input className="text-field" value={versionName} onChange={event => setVersionName(event.target.value)} /></label><button className="button button-quiet button-small" disabled={!layers.length} onClick={addVersion}><Plus size={14}/> Save version & start another</button></div>
+      {savedVersions.length > 0 && <div className="clip-asset-saved-versions"><strong>Saved versions</strong>{savedVersions.map((version, index) => <div key={version.name + index}><span>{version.name}</span><small>{version.duration.toFixed(1)}s · {version.layers.length} layers</small><button className="button button-quiet button-small danger-action" onClick={() => setSavedVersions(current => current.filter((_, itemIndex) => itemIndex !== index))}>Remove</button></div>)}</div>}
       <div className="clip-asset-add-row">
         <select className="text-field" aria-label="New clip layer type" value={layerType} onChange={event => { setLayerType(event.target.value as "video"|"audio"|"code"); setAssetId(""); }}>
           <option value="video">Video / image asset</option><option value="audio">Audio asset</option><option value="code">Code asset</option>
@@ -80,7 +91,7 @@ export default function ClipAssetEditor({ assets, onSave, onClose }: Props) {
           <button className="icon-button danger-action" aria-label={"Remove " + layer.name} onClick={() => setLayers(current => current.filter(item => item.id !== layer.id))}><Trash2 size={14}/></button>
         </div>)}
       </div>
-      <footer><button className="button button-quiet button-small" onClick={onClose}>Cancel</button><button className="button button-primary button-small" disabled={!name.trim() || layers.length === 0} onClick={() => onSave({ name: name.trim(), duration, layers: layers.map(layer => ({ ...layer, duration: Math.min(layer.duration, Math.max(0.1, duration - layer.start)) })).filter(layer => layer.start < duration) })}>Save clip to Assets</button></footer>
+      <footer><button className="button button-quiet button-small" onClick={onClose}>Cancel</button><button className="button button-primary button-small" disabled={!name.trim() || (!layers.length && !savedVersions.length)} onClick={() => { const clean = (version: { name: string; duration: number; layers: CompositionLayer[] }) => ({ ...version, layers: version.layers.map(layer => ({ ...layer, duration: Math.min(layer.duration, Math.max(0.1, version.duration - layer.start)) })).filter(layer => layer.start < version.duration) }); onSave({ name: name.trim(), versions: [...savedVersions, ...(layers.length ? [{ name: versionName.trim() || "Version " + String(savedVersions.length + 1), duration, layers }] : [])].map(clean) }); }}>Save clip to Assets</button></footer>
     </section>
   </div>;
 }
