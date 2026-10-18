@@ -2165,3 +2165,24 @@
 .clip-asset-saved-versions>div span{flex:1;font-size:12px}
 .clip-asset-saved-versions>div small{font-size:10px;color:var(--muted,#92939f)}
 @media(max-width:600px){.clip-asset-version-bar{align-items:stretch;flex-direction:column}}
+
+
+/* Interactive preview transforms: the frame and corner grips are the drag targets. */
+.selected-layer-frame {
+  pointer-events: auto;
+  cursor: move;
+  touch-action: none;
+  user-select: none;
+}
+.layer-frame-handle { width: 10px; height: 10px; pointer-events: auto; }
+.layer-frame-handle.top-left,
+.layer-frame-handle.bottom-right { cursor: nwse-resize; }
+.layer-frame-handle.top-right,
+.layer-frame-handle.bottom-left { cursor: nesw-resize; }
+.project-settings-dialog { max-width: 520px; }
+.settings-preview-spec { display:flex; align-items:center; justify-content:space-between; gap:12px; border:1px solid var(--line); background:#111114; padding:12px; border-radius:7px; margin-top:4px; }
+.settings-preview-spec strong { font-size:13px; }
+.settings-preview-spec span { color:var(--muted); font-size:10px; }
+.asset-create-menu-wrap { position:relative; }
+.asset-empty-clip-note { display:flex; align-items:center; gap:8px; padding:10px; border:1px dashed var(--line); border-radius:7px; color:var(--muted); font-size:11px; line-height:1.5; }
+.asset-empty-clip-note svg { flex:0 0 auto; color:var(--accent); }
