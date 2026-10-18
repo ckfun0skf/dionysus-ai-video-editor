@@ -1143,6 +1143,40 @@ describe("Integrated timeline editor", () => {
     expect(persistedProject().frameRate).toBe(24);
   });
 
+
+  it("shows a snapped destination preview and moves a clip between compatible video layers", async () => {
+    await openTimelineView();await seedLinkedVideoAudioPairs();
+    let project=persistedProject();const video=project.timelineClips!.find(clip=>clip.kind==="video"&&clip.id==="test-video-1")!;
+    const targetTrack=project.tracks.find(track=>track.kind==="video"&&track.id!==video.trackId)!;
+    project.timelineClips!.push({id:"test-anchor",name:"Drop alignment anchor",kind:"video",trackId:targetTrack.id,start:5,duration:2});
+    localStorage.setItem("dionysus.project.v1",JSON.stringify(project));act(()=>root.unmount());root=createRoot(container);act(()=>root.render(<App/>));await flushEffects();await openTimelineView();
+    const source=timelineRows().find(row=>row.textContent?.includes("Video clip 1")) as HTMLButtonElement;
+    const group=Array.from(container.querySelectorAll<HTMLElement>(".visual-track-group")).find(g=>g.querySelector(".visual-track-label strong")?.textContent===targetTrack.name);
+    const lane=group?.querySelector<HTMLElement>(".visual-track-lane");expect(lane).toBeTruthy();vi.spyOn(lane!,"getBoundingClientRect").mockReturnValue(new DOMRect(0,0,1200,76));
+    const store=new Map<string,string>(),dt={setData:(k:string,v:string)=>store.set(k,v),getData:(k:string)=>store.get(k)??"",effectAllowed:"",dropEffect:""};
+    const start=new Event("dragstart",{bubbles:true,cancelable:true});Object.defineProperty(start,"dataTransfer",{value:dt});act(()=>source.dispatchEvent(start));
+    const over=new Event("dragover",{bubbles:true,cancelable:true});Object.defineProperties(over,{dataTransfer:{value:dt},clientX:{value:1200*2.5/15}});act(()=>lane!.dispatchEvent(over));await flushEffects();
+    expect(container.querySelector(".clip-drop-preview")).toBeTruthy();expect(container.querySelector(".timeline-snap-guide")).toBeTruthy();
+    const drop=new Event("drop",{bubbles:true,cancelable:true});Object.defineProperties(drop,{dataTransfer:{value:dt},clientX:{value:1200*2.5/15}});act(()=>lane!.dispatchEvent(drop));await flushEffects();
+    const current=persistedProject(),moved=current.timelineClips!.find(clip=>clip.id===video.id)!;expect(moved.trackId).toBe(targetTrack.id);expect(moved.start).toBe(0);
+    const audio=current.timelineClips!.find(clip=>clip.linkedVideoClipId===moved.id)!;expect(audio.start).toBe(moved.start);expect(audio.duration).toBe(moved.duration);
+  });
+  it("previews resize overlap, trims the adjacent clip on release, and restores both with one Undo", async () => {
+    await openTimelineView();await seedLinkedVideoAudioPairs(2);
+    const videos=()=> (persistedProject().timelineClips??[]).filter(clip=>clip.kind==="video"&&clip.id.startsWith("test-video-")).sort((a,b)=>a.start-b.start);
+    const original=videos().map(clip=>({id:clip.id,start:clip.start,duration:clip.duration}));
+    const first=timelineRows().find(row=>row.textContent?.includes("Video clip 1")) as HTMLButtonElement,right=first.querySelector<HTMLElement>(".clip-resize-right");expect(right).toBeTruthy();
+    const lane=first.closest(".visual-track-lane") as HTMLElement;vi.spyOn(lane,"getBoundingClientRect").mockReturnValue(new DOMRect(0,0,1200,76));
+    const down=new Event("pointerdown",{bubbles:true,cancelable:true});Object.defineProperties(down,{pointerId:{value:7},clientX:{value:500}});act(()=>right!.dispatchEvent(down));
+    const move=new Event("pointermove",{bubbles:true,cancelable:true});Object.defineProperties(move,{pointerId:{value:7},clientX:{value:740},buttons:{value:1}});act(()=>window.dispatchEvent(move));await flushEffects();
+    const overlap=container.querySelector<HTMLElement>(".clip-overlap-preview");expect(overlap).toBeTruthy();expect(Number.parseFloat(overlap!.style.width)).toBeGreaterThan(0);
+    const up=new Event("pointerup",{bubbles:true,cancelable:true});Object.defineProperties(up,{pointerId:{value:7},clientX:{value:740},buttons:{value:0}});act(()=>window.dispatchEvent(up));await flushEffects();
+    const after=videos();expect(after[0].duration).toBeGreaterThan(original[0].duration);expect(after[1].start).toBeCloseTo(after[0].start+after[0].duration,6);expect(after[1].duration).toBeLessThan(original[1].duration);
+    expect((persistedProject().timelineClips??[]).find(clip=>clip.linkedVideoClipId===after[1].id)).toMatchObject({start:after[1].start,duration:after[1].duration});
+    click(buttonsNamed("Undo").find(button=>!button.disabled)!);await flushEffects();expect(videos().map(clip=>({id:clip.id,start:clip.start,duration:clip.duration}))).toEqual(original);
+    click(buttonsNamed("Redo").find(button=>!button.disabled)!);await flushEffects();expect(videos()[0].duration).toBeGreaterThan(original[0].duration);expect(videos()[1].duration).toBeLessThan(original[1].duration);
+  });
+
   it("creates an empty Clip Asset from the single Asset menu and opens its Timeline", async () => {
     const nav = Array.from(container.querySelectorAll<HTMLButtonElement>(".nav-item")).find(button => button.textContent?.includes("Assets"));
     click(nav!);
@@ -1174,6 +1208,12 @@ describe("Integrated timeline editor", () => {
     expect(container.querySelector(".nested-timeline-tab.editor-linked-timeline.visual-timeline")).toBeTruthy();
     expect(container.querySelector(".nested-visual-timeline-ruler .visual-ruler-caption")?.textContent).toBe("TIME");
     expect(container.querySelector(".nested-visual-timeline-ruler .visual-timeline-ruler-lane")).toBeTruthy();
+    const addVideo=Array.from(container.querySelectorAll<HTMLButtonElement>(".nested-timeline-tab .inline-actions button")).find(button=>button.textContent?.includes("Video"));
+    expect(addVideo).toBeTruthy();click(addVideo!);await flushEffects();
+    const nestedClip=container.querySelector<HTMLButtonElement>(".nested-timeline-tab .nested-timeline-clip.visual-media-clip");
+    expect(nestedClip).toBeTruthy();expect(nestedClip!.querySelector(".visual-clip-icon")).toBeTruthy();
+    expect(nestedClip!.querySelector(".visual-clip-copy strong")?.textContent).toContain("Video");
+    expect(nestedClip!.querySelector(".visual-clip-copy small")?.textContent).toContain("s");
   });
 
 
