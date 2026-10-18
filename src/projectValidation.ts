@@ -57,6 +57,7 @@ function isLayer(value: unknown): boolean {
     (value.sourceIn === undefined || value.sourceOut === undefined || value.sourceOut > value.sourceIn) &&
     (value.prompt === undefined || isString(value.prompt)) &&
     (value.modelName === undefined || isString(value.modelName)) &&
+    (value.modelVersion === undefined || isString(value.modelVersion)) &&
     (value.thumbnailPath === undefined || isString(value.thumbnailPath)) &&
     (value.fitMode === undefined || ["contain", "cover", "fill"].includes(String(value.fitMode))) &&
     (value.x === undefined || isFiniteNumber(value.x)) && (value.y === undefined || isFiniteNumber(value.y)) &&
