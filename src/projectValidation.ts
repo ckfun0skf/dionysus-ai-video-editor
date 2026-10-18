@@ -1,4 +1,5 @@
-import type { DionysusProject } from "./types";
+import type { Asset, DionysusProject } from "./types";
+import { findClipAssetCycle } from "./clipAssetGraph";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -14,10 +15,10 @@ function isStringArray(value: unknown): value is string[] {
 }
 
 const referenceRoles = new Set(["identity", "face", "body", "outfit", "pose", "composition", "lighting", "environment", "style", "other"]);
-const assetKinds = new Set(["video", "image", "audio", "script", "other"]);
+const assetKinds = new Set(["video", "image", "audio", "script", "clip", "other"]);
 const layerKinds = new Set(["video", "image", "audio", "text", "script", "procedural", "composition"]);
 const trackKinds = new Set(["video", "audio", "text", "effects", "procedural"]);
-const timelineClipKinds = new Set(["video", "audio", "text", "procedural"]);
+const timelineClipKinds = new Set(["video", "audio", "text", "procedural", "clip"]);
 const shotStatuses = new Set(["planned", "in-progress", "ready"]);
 const entityTypes = new Set(["character", "environment", "prop", "style", "other"]);
 
@@ -52,6 +53,9 @@ function isLayer(value: unknown): boolean {
     (value.assetId === undefined || isString(value.assetId)) &&
     (value.scriptVersionId === undefined || isString(value.scriptVersionId)) &&
     (value.childCompositionId === undefined || isString(value.childCompositionId)) &&
+    (value.clipVersionId === undefined || isString(value.clipVersionId)) &&
+    (value.referencedImageAssetIds === undefined || isStringArray(value.referencedImageAssetIds)) &&
+    (value.referencedImageAssetIds === undefined || isStringArray(value.referencedImageAssetIds)) &&
     (value.sourceIn === undefined || (isFiniteNumber(value.sourceIn) && value.sourceIn >= 0)) &&
     (value.sourceOut === undefined || (isFiniteNumber(value.sourceOut) && value.sourceOut >= 0)) &&
     (value.sourceIn === undefined || value.sourceOut === undefined || value.sourceOut > value.sourceIn) &&
@@ -103,15 +107,31 @@ function isShot(value: unknown): boolean {
     Array.isArray(value.slots) && value.slots.every(isSlot);
 }
 function isAsset(value: unknown): boolean {
-  return isRecord(value) && isString(value.id) && isString(value.name) &&
-    isString(value.kind) && assetKinds.has(value.kind) &&
-    (value.path === undefined || isString(value.path)) &&
-    (value.notes === undefined || isString(value.notes)) &&
-    (value.prompt === undefined || isString(value.prompt)) &&
-    (value.modelName === undefined || isString(value.modelName)) &&
-    (value.modelVersion === undefined || isString(value.modelVersion)) &&
-    (value.thumbnailPath === undefined || isString(value.thumbnailPath)) &&
-    (value.generationParameters === undefined || isRecord(value.generationParameters));
+  if (!isRecord(value) || !isString(value.id) || !isString(value.name) ||
+      !isString(value.kind) || !assetKinds.has(value.kind) ||
+      (value.path !== undefined && !isString(value.path)) ||
+      (value.notes !== undefined && !isString(value.notes)) ||
+      (value.prompt !== undefined && !isString(value.prompt)) ||
+      (value.modelName !== undefined && !isString(value.modelName)) ||
+      (value.modelVersion !== undefined && !isString(value.modelVersion)) ||
+      (value.thumbnailPath !== undefined && !isString(value.thumbnailPath)) ||
+      (value.html !== undefined && !isString(value.html)) ||
+      (value.css !== undefined && !isString(value.css)) ||
+      (value.js !== undefined && !isString(value.js)) ||
+      (value.canvasWidth !== undefined && (!isFiniteNumber(value.canvasWidth) || value.canvasWidth <= 0)) ||
+      (value.canvasHeight !== undefined && (!isFiniteNumber(value.canvasHeight) || value.canvasHeight <= 0)) ||
+      (value.createdAt !== undefined && !isString(value.createdAt)) ||
+      (value.updatedAt !== undefined && !isString(value.updatedAt)) ||
+      (value.generationParameters !== undefined && !isRecord(value.generationParameters)) ||
+      (value.clipVersions !== undefined && (!Array.isArray(value.clipVersions) || value.clipVersions.length === 0 || !value.clipVersions.every(isVersion))) ||
+      (value.selectedClipVersionId !== undefined && !isString(value.selectedClipVersionId))) return false;
+
+  if (value.kind === "clip") {
+    return Array.isArray(value.clipVersions) && value.clipVersions.length > 0 &&
+      isString(value.selectedClipVersionId) &&
+      value.clipVersions.some(version => isRecord(version) && version.id === value.selectedClipVersionId);
+  }
+  return value.clipVersions === undefined && value.selectedClipVersionId === undefined;
 }
 function isProfile(value: unknown): boolean {
   return isRecord(value) && isString(value.id) && isString(value.name) &&
@@ -137,11 +157,20 @@ function isTimelineClip(value: unknown): boolean {
     (value.prompt === undefined || isString(value.prompt)) &&
     (value.modelName === undefined || isString(value.modelName)) &&
     (value.modelVersion === undefined || isString(value.modelVersion)) &&
-    (value.thumbnailPath === undefined || isString(value.thumbnailPath));
+    (value.thumbnailPath === undefined || isString(value.thumbnailPath)) &&
+    (value.x === undefined || (isFiniteNumber(value.x) && value.x >= 0 && value.x <= 100)) &&
+    (value.y === undefined || (isFiniteNumber(value.y) && value.y >= 0 && value.y <= 100)) &&
+    (value.width === undefined || (isFiniteNumber(value.width) && value.width > 0 && value.width <= 100)) &&
+    (value.height === undefined || (isFiniteNumber(value.height) && value.height > 0 && value.height <= 100));
 }
 function isTrack(value: unknown): boolean {
   return isRecord(value) && isString(value.id) && isString(value.name) &&
-    isString(value.kind) && trackKinds.has(value.kind) && (value.muted === undefined || typeof value.muted === "boolean");
+    isString(value.kind) && trackKinds.has(value.kind) &&
+    (value.muted === undefined || typeof value.muted === "boolean") &&
+    (value.x === undefined || (isFiniteNumber(value.x) && value.x >= 0 && value.x <= 100)) &&
+    (value.y === undefined || (isFiniteNumber(value.y) && value.y >= 0 && value.y <= 100)) &&
+    (value.width === undefined || (isFiniteNumber(value.width) && value.width > 0 && value.width <= 100)) &&
+    (value.height === undefined || (isFiniteNumber(value.height) && value.height > 0 && value.height <= 100));
 }
 
 function isStoryboardConnection(value: unknown): boolean {
@@ -173,6 +202,7 @@ export function validateProject(value: unknown): value is DionysusProject {
   const shotIds = new Set(shots.map(shot => shot.id as string));
   const assetIds = new Set(assets.map(asset => asset.id as string));
   const profileIds = new Set(profiles.map(profile => profile.id as string));
+  if (assetIds.size !== assets.length) return false;
 
   const trackIds = new Set(tracks.map(track => track.id as string));
   if (trackIds.size !== tracks.length) return false;
@@ -181,8 +211,23 @@ export function validateProject(value: unknown): value is DionysusProject {
   for (const clip of timelineClips) {
     if (!trackIds.has(clip.trackId as string)) return false;
     const track = tracks.find(item => item.id === clip.trackId);
-    if (!track || track.kind !== clip.kind) return false;
+    if (!track || (track.kind !== clip.kind && !(clip.kind === "clip" && track.kind === "video"))) return false;
     if (clip.assetId !== undefined && !assetIds.has(clip.assetId as string)) return false;
+    if (clip.kind === "clip") {
+      const clipAsset = assets.find(asset => asset.id === clip.assetId && asset.kind === "clip");
+      if (!clipAsset) return false;
+      const clipVersions = Array.isArray(clipAsset.clipVersions) ? clipAsset.clipVersions as UnknownRecord[] : [];
+      if (clip.clipVersionId !== undefined &&
+          !clipVersions.some((version: UnknownRecord) => version.id === clip.clipVersionId)) return false;
+    } else if (clip.clipVersionId !== undefined) {
+      return false;
+    }
+    if (clip.referencedImageAssetIds !== undefined) {
+      if (clip.kind !== "procedural") return false;
+      for (const referencedId of clip.referencedImageAssetIds as string[]) {
+        if (!assets.some(asset => asset.id === referencedId && asset.kind === "image")) return false;
+      }
+    }
     if (clip.shotId !== undefined && !shotIds.has(clip.shotId as string)) return false;
     if (clip.slotId !== undefined) {
       if (clip.shotId === undefined) return false;
@@ -200,6 +245,46 @@ export function validateProject(value: unknown): value is DionysusProject {
       if (!assetIds.has(reference.assetId as string)) return false;
     }
   }
+  for (const shot of shots as UnknownRecord[]) {
+    for (const slot of shot.slots as UnknownRecord[]) {
+      for (const version of slot.versions as UnknownRecord[]) {
+        for (const layer of version.layers as UnknownRecord[]) {
+          if (layer.referencedImageAssetIds !== undefined) {
+            for (const referencedId of layer.referencedImageAssetIds as string[]) {
+              if (!assets.some(candidate => candidate.id === referencedId && candidate.kind === "image")) return false;
+            }
+          }
+        }
+      }
+    }
+  }
+  for (const asset of assets) {
+    if (asset.kind !== "clip") continue;
+    const versions = asset.clipVersions as UnknownRecord[];
+    for (const version of versions) {
+      for (const layer of version.layers as UnknownRecord[]) {
+        if (layer.assetId !== undefined && !assetIds.has(layer.assetId as string)) return false;
+        const sourceAsset = layer.assetId === undefined ? undefined : assets.find(candidate => candidate.id === layer.assetId);
+        if (sourceAsset?.kind === "clip" && layer.kind !== "composition") return false;
+        if (layer.referencedImageAssetIds !== undefined) {
+          if (layer.kind !== "procedural" && layer.kind !== "script") return false;
+          for (const referencedId of layer.referencedImageAssetIds as string[]) {
+            if (!assets.some(candidate => candidate.id === referencedId && candidate.kind === "image")) return false;
+          }
+        }
+        if (layer.childCompositionId !== undefined) {
+          if (layer.kind !== "composition") return false;
+          const child = assets.find(candidate => candidate.id === layer.childCompositionId);
+          if (!child || child.kind !== "clip") return false;
+          const childVersions = Array.isArray(child.clipVersions) ? child.clipVersions as UnknownRecord[] : [];
+          if (layer.clipVersionId !== undefined &&
+              !childVersions.some((version: UnknownRecord) => version.id === layer.clipVersionId)) return false;
+        }
+      }
+    }
+  }
+  if (findClipAssetCycle(assets as unknown as Asset[])) return false;
+
   for (const shot of shots) {
     if (!(shot.referenceProfileIds as string[]).every(profileId => profileIds.has(profileId))) return false;
     const assignedReferenceIds = new Set(profiles
