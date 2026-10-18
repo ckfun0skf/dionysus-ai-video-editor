@@ -12,7 +12,10 @@ Dionysus is a local-first planning and composition editor for AI-assisted video 
 - Slot duration is fixed by default; users may explicitly choose auto-extend or ripple behavior.
 - Slots have multiple Versions; regeneration creates a new Version by default.
 - Data supports recursive nested compositions; first-version UI limits nesting depth.
-- Master Timeline and each Version support layers.
+- Master Timeline is the default Timeline tab; each Shot Version can open in its own additional internal-timeline tab without closing or replacing Master Timeline.
+- Master Timeline shows multiple visible, ordered layers below the preview: video/compositing, text/title, audio, and procedural Three.js. A generic “Media track” is not part of the user-facing Timeline; Media is an asset-library concept.
+- A Shot is one block on the Master Timeline and uses its selected Version's thumbnail/output. Its Version menu can select an existing Version, add a new Version, or open a Version's nested timeline for editing.
+- Video layers can expand to show attached source audio as a child lane. Unlinking turns that audio into an independent Audio Layer, and each Audio Layer has independent persistent mute state.
 - Prompts have Shot intent, Version description, and per-asset generation prompt levels.
 - Script versions are pinned by saved Versions.
 - Reference groups and Character/Entity Profiles provide reusable defaults; each Shot can inherit, exclude, replace, or add references.
@@ -32,10 +35,10 @@ Create, open, save, import, and export projects. Preserve structure, relative as
 Create, order, and edit Shots. Store title, intent, target duration, status, profile references, and placeholder state. Storyboard can generate an initial Timeline; subsequent edits are independent. Re-generation must not silently overwrite manual Timeline changes.
 
 ### Master Timeline and Clip Slots
-Support tracks, timing, overlapping layers, clip slots, source trim, and fixed-duration defaults. Auto-extend/ripple must be explicit operations with visible impact. Slot selection determines the active Version.
+The Master Timeline arranges Shot blocks with explicit master start and duration. Each block shows a thumbnail or honest placeholder, a Shot label, and a Version dropdown. The dropdown lists available Versions, includes + Add Version, and provides an Edit action per Version. Selecting a Version changes only the active output; editing opens that Version's nested timeline in another tab. Support tracks, timing, overlapping layers, clip slots, and source trim. Fixed-duration is the default; auto-extend/ripple must be explicit operations with a preview of impact. Editing Version internals must not silently change the Master Shot duration or downstream positions. Do not show a generic Media track.
 
 ### Versions and nested composition
-Each Slot has multiple Versions. A Version owns internal timing, layers, child compositions, scripts, prompts, and generation records. The data model supports recursion, while the first UI enforces a reasonable depth and prevents cycles. Regeneration creates a new Version by default. Saved Versions pin their Script versions.
+Each Shot/Slot can have multiple Versions. A Version may be a single video, a still image, or a nested composition. A Version owns internal timing, ordered layers/modules, child compositions, scripts, prompts, and generation records. Its Edit action opens an internal timeline tab while preserving the Master Timeline tab. The data model supports recursion, while the UI enforces a reasonable depth and prevents cycles. Regeneration/Add Version creates a new Version by default. Saved Versions pin their Script versions.
 
 ### Assets and Reference Provenance
 Assets are reusable and distinct from their usage configuration. Reference Groups are reusable collections. Character/Entity Profiles provide default references by role. Shot-level overrides support inherit, exclude, replace, and add without mutating Profiles. A Generation Record preserves the actual references and prompt used at generation time; later profile changes cannot rewrite old records. Record model/version/parameters only when available. Missing assets must be detectable and relinkable.
@@ -46,7 +49,7 @@ Reference roles include identity, face, body, outfit, pose, composition, lightin
 Maintain Shot intent, Version description, and individual generation prompts. Prompt edits do not alter old generation records. Execution plans preserve all prompt levels.
 
 ### Layers, audio, text, effects
-Master and Version timelines support media layers, picture-in-picture, timed text, audio tracks, and procedural JavaScript/Three.js modules. Audio direction includes multitrack mixing, trim, volume, fades, sync, automation, ducking, and advanced effects; exact first-release effect list is TBD.
+Master and Version timelines support ordered video/compositing frames, image/video content, timed text, audio layers, and procedural JavaScript/Three.js modules. Video source audio is shown as an expandable child lane while linked; Unlink detaches it as an independent Audio Layer without changing current timing. Each Audio Layer has independent persistent mute/unmute. Linked/unlinked relationships and mute state must survive Undo/Redo and project JSON round-trips. Audio direction includes multitrack mixing, trim, volume, fades, sync, automation, ducking, and advanced effects; exact first-release effect list is TBD. Three.js is a first-class procedural layer with script identity/version pinning, explicit execution authorization, and isolated errors.
 
 ### Preview
 Provide Master Timeline, Shot, Slot, and Version preview. Aim for final-composite fidelity, audio synchronization, placeholders for missing assets, and 4K capability where hardware/browser permit. Adaptive quality is acceptable and limitations should be visible.
@@ -98,9 +101,9 @@ Future target. Must define fidelity, codecs, progress, cancellation, error recov
 - Reference weights and model-specific limitations.
 - Fonts, external resources, and dependency packaging.
 - AI plan format and merge semantics.
-- Script permissions and sandbox boundaries.
+- Exact script permissions and sandbox implementation boundaries.
 - Performance acceptance criteria and target project scale.
 - Autosave/recovery behavior and timeline editing shortcuts.
 
 ## Initial milestone
-The initial milestone is a usable local-first shell with project schema, Storyboard editing, Shot inspector, basic Timeline visualization, local persistence, project JSON import/export, and AI plan export. Full media compositing, advanced audio, recursive editing UI, and MP4 rendering are later milestones unless reprioritized.
+The initial milestone established the local-first shell, Storyboard editing, local persistence, project JSON import/export, and AI plan export. The supplied Timeline prototype now reprioritizes visible typed layers, Master/Version timeline tabs, per-Shot Version dropdown actions, hierarchical linked audio, per-layer mute, and a first-class Three.js layer as core editor requirements. Advanced audio effects, portable media bundles, and reliable final MP4 rendering remain staged follow-up work.

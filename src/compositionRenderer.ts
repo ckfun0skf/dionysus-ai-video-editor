@@ -1,28 +1,42 @@
 import type { Asset, CompositionLayer, DionysusProject } from "./types";
+import { getAudioEnvelope } from "./audioEnvelope";
+import { getMasterShotStarts, getMasterTimelineDuration } from "./masterTimeline";
 import { loadMediaBlobFromPath, resolveMediaSource } from "./mediaAssetStore";
 
 export interface RenderOptions { fps?: number; width?: number; height?: number; duration?: number }
 export interface ExportResult { blob: Blob; filename: string; mimeType: string }
 
 export function collectCompositionLayers(project: DionysusProject): CompositionLayer[] {
-  let shotOffset = 0;
-  const nested = project.shots.flatMap(shot => {
+  const shotStarts = getMasterShotStarts(project.shots);
+  const nested = project.shots.flatMap((shot, shotIndex) => {
+    const shotOffset = shotStarts[shotIndex];
     const layers = shot.slots.flatMap(slot => {
       const version = slot.versions.find(item => item.id === slot.selectedVersionId);
       return version ? version.layers.map(layer => ({ ...layer, start: layer.start + slot.start + shotOffset })) : [];
     });
-    shotOffset += shot.duration;
     return layers;
   });
   const timeline = (project.timelineClips ?? []).filter(clip => !clip.id.startsWith("storyboard-")).flatMap(clip => {
+    const common = {
+      id: clip.id, name: clip.name, kind: clip.kind, start: clip.start, duration: clip.duration,
+      ...(clip.scriptVersionId ? { scriptVersionId: clip.scriptVersionId } : {}),
+      ...(clip.prompt ? { prompt: clip.prompt } : {}),
+      ...(clip.modelName ? { modelName: clip.modelName } : {}),
+      ...(clip.modelVersion ? { modelVersion: clip.modelVersion } : {}),
+      muted: Boolean(clip.muted || project.tracks.find(track => track.id === clip.trackId)?.muted),
+      volume: clip.volume, fadeIn: clip.fadeIn, fadeOut: clip.fadeOut
+    };
+    if (clip.kind === "text" || clip.kind === "procedural") {
+      return [{ ...common, fitMode: "contain" as const, x: 0, y: clip.kind === "text" ? 75 : 0, width: 100, height: clip.kind === "text" ? 18 : 100 }];
+    }
     if (!clip.assetId || !project.assets.some(asset => asset.id === clip.assetId)) return [];
     return [{
-      id: clip.id, name: clip.name, kind: clip.kind, start: clip.start, duration: clip.duration,
-      assetId: clip.assetId, sourceIn: clip.sourceIn, sourceOut: clip.sourceOut,
+      ...common, assetId: clip.assetId, sourceIn: clip.sourceIn, sourceOut: clip.sourceOut,
       fitMode: "contain" as const, x: 0, y: 0, width: 100, height: 100
     }];
   });
-  return [...nested, ...timeline].sort((a, b) => a.start - b.start);
+  // Preserve Version layer order as the composition stacking order. Timing is checked per layer during rendering/export.
+  return [...nested, ...timeline];
 }
 
 export function getCompositionDuration(layers: CompositionLayer[]): number {
@@ -72,7 +86,7 @@ function drawFit(ctx: CanvasRenderingContext2D, image: CanvasImageSource, sw: nu
 }
 
 function drawLayer(ctx: CanvasRenderingContext2D, layer: CompositionLayer, asset: Asset | undefined, seconds: number, width: number, height: number, images: Map<string, HTMLImageElement>, videos: Map<string, HTMLVideoElement>) {
-  if (seconds < layer.start || seconds >= layer.start + layer.duration || layer.kind === "audio" || layer.kind === "script") return;
+  if (seconds < layer.start || seconds >= layer.start + layer.duration || layer.kind === "audio" || layer.kind === "script" || layer.kind === "procedural") return;
   const x = ((layer.x ?? 0) / 100) * width, y = ((layer.y ?? 0) / 100) * height;
   const w = ((layer.width ?? 100) / 100) * width, h = ((layer.height ?? 100) / 100) * height;
   const scale = layer.scale ?? 1, opacity = Math.max(0, Math.min(1, layer.opacity ?? 1));
@@ -150,7 +164,7 @@ export async function exportCompositionWebM(project: DionysusProject, options: R
     throw new Error("WebM export requires a browser with MediaRecorder and canvas captureStream support");
   }
   const layers = collectCompositionLayers(project), fps = options.fps ?? project.frameRate ?? 30;
-  const projectDuration = project.shots.reduce((total, shot) => total + shot.duration, 0);
+  const projectDuration = getMasterTimelineDuration(project.shots);
   const duration = options.duration ?? Math.max(getCompositionDuration(layers), projectDuration);
   if (!layers.length || duration <= 0) throw new Error("Add at least one visible composition layer before exporting");
   if (!Number.isFinite(fps) || fps < 1 || fps > 60) throw new Error("Export frame rate must be between 1 and 60 FPS");
@@ -159,11 +173,11 @@ export async function exportCompositionWebM(project: DionysusProject, options: R
   const mimeType = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"].find(type => MediaRecorder.isTypeSupported(type));
   if (!mimeType) { stream.getTracks().forEach(track => track.stop()); throw new Error("This browser does not support a compatible WebM encoder"); }
 
-  const audioLayers = layers.filter(layer => layer.kind === "audio" && project.assets.some(asset => asset.id === layer.assetId && asset.path));
+  const audioLayers = layers.filter(layer => layer.kind === "audio" && !layer.muted && project.assets.some(asset => asset.id === layer.assetId && asset.path));
   let audioContext: AudioContext | undefined;
   let audioDestination: MediaStreamAudioDestinationNode | undefined;
   let audioResume: Promise<void> | undefined;
-  const scheduledAudio: { layer: CompositionLayer; source: AudioBufferSourceNode; buffer: AudioBuffer }[] = [];
+  const scheduledAudio: { layer: CompositionLayer; source: AudioBufferSourceNode; buffer: AudioBuffer; gain: GainNode }[] = [];
   if (audioLayers.length) {
     if (!window.AudioContext) throw new Error("Audio export requires Web Audio API support");
     audioContext = new window.AudioContext();
@@ -175,9 +189,11 @@ export async function exportCompositionWebM(project: DionysusProject, options: R
       const sourceBlob = await loadMediaBlobFromPath(asset.path!);
       const buffer = await audioContext.decodeAudioData(await sourceBlob.arrayBuffer());
       const source = audioContext.createBufferSource();
+      const gain = audioContext.createGain();
       source.buffer = buffer;
-      source.connect(audioDestination);
-      scheduledAudio.push({ layer, source, buffer });
+      source.connect(gain);
+      gain.connect(audioDestination);
+      scheduledAudio.push({ layer, source, buffer, gain });
     }
     for (const track of audioDestination.stream.getAudioTracks()) stream.addTrack(track);
   }
@@ -198,7 +214,17 @@ export async function exportCompositionWebM(project: DionysusProject, options: R
       const offset = Math.max(0, item.layer.sourceIn ?? 0);
       const sourceLimit = item.layer.sourceOut === undefined ? item.layer.duration : Math.max(0, item.layer.sourceOut - offset);
       const playbackDuration = Math.min(item.layer.duration, sourceLimit, Math.max(0, item.buffer.duration - offset));
-      if (playbackDuration > 0) item.source.start(audioStartAt + item.layer.start, offset, playbackDuration);
+      if (playbackDuration > 0) {
+        const clipStartsAt = audioStartAt + item.layer.start;
+        const pointCount = 64;
+        const curve = new Float32Array(pointCount);
+        for (let point = 0; point < pointCount; point += 1) {
+          const elapsed = playbackDuration * point / (pointCount - 1);
+          curve[point] = getAudioEnvelope(item.layer.volume, item.layer.fadeIn, item.layer.fadeOut, elapsed, playbackDuration);
+        }
+        item.gain.gain.setValueCurveAtTime(curve, clipStartsAt, playbackDuration);
+        item.source.start(clipStartsAt, offset, playbackDuration);
+      }
     }
     const frames = Math.ceil(duration * fps);
     const started = performance.now();

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { TimelineTrack } from "./types";
-import { addVideoClip, deleteTimelineClip, duplicateTimelineClip, moveTimelineClip, trimTimelineClip, unlinkTimelineAudio } from "./timelineOperations";
+import { addVideoClip, deleteTimelineClip, duplicateTimelineClip, moveTimelineClip, splitTimelineClip, trimTimelineClip, unlinkTimelineAudio } from "./timelineOperations";
 
 const tracks: TimelineTrack[] = [
   { id: "v1", name: "Video 1", kind: "video" },
@@ -25,6 +25,84 @@ describe("linked multi-track timeline operations", () => {
     expect(moved.timelineClips.find(c => c.id === "a")?.start).toBe(4);
   });
 
+  it("splits a video and its linked source audio into aligned, source-trimmed pairs", () => {
+    const state = addVideoClip(empty, {
+      id: "v", name: "Interview", trackId: "v1", start: 2, duration: 8,
+      assetId: "video-1", sourceHasAudio: true, audioTrackId: "a1", audioClipId: "a"
+    });
+    const trimmed = {
+      ...state,
+      timelineClips: state.timelineClips.map(clip => ({ ...clip, sourceIn: 5, sourceOut: 13, volume: 0.8, fadeIn: 0.5, fadeOut: 0.75 }))
+    };
+    const split = splitTimelineClip(trimmed, "v", 6, {
+      newClipId: "v-right", newLinkedAudioClipIds: ["a-right"]
+    });
+    expect(split.timelineClips.find(clip => clip.id === "v")).toMatchObject({ start: 2, duration: 4, sourceIn: 5, sourceOut: 9 });
+    expect(split.timelineClips.find(clip => clip.id === "v-right")).toMatchObject({ start: 6, duration: 4, sourceIn: 9, sourceOut: 13 });
+    expect(split.timelineClips.find(clip => clip.id === "a")).toMatchObject({ start: 2, duration: 4, sourceIn: 5, sourceOut: 9, linkedVideoClipId: "v" });
+    expect(split.timelineClips.find(clip => clip.id === "a-right")).toMatchObject({ start: 6, duration: 4, sourceIn: 9, sourceOut: 13, linkedVideoClipId: "v-right" });
+    expect(split.timelineClips.find(clip => clip.id === "v")).toMatchObject({ volume: 0.8, fadeIn: 0.5 });
+    expect(split.timelineClips.find(clip => clip.id === "v")?.fadeOut).toBeUndefined();
+    expect(split.timelineClips.find(clip => clip.id === "v-right")?.fadeIn).toBeUndefined();
+    expect(split.timelineClips.find(clip => clip.id === "v-right")).toMatchObject({ volume: 0.8, fadeOut: 0.75 });
+    expect(split.timelineClips.find(clip => clip.id === "a")?.fadeOut).toBeUndefined();
+    expect(split.timelineClips.find(clip => clip.id === "a-right")?.fadeIn).toBeUndefined();
+    expect(() => moveTimelineClip(split, "v-right", 10)).not.toThrow();
+  });
+
+  it("materializes source offsets when splitting clips that had no explicit Source In/Out", () => {
+    const state = addVideoClip(empty, {
+      id: "v", name: "Untrimmed source", trackId: "v1", start: 2, duration: 8,
+      assetId: "video-1", sourceHasAudio: true, audioTrackId: "a1", audioClipId: "a"
+    });
+    const split = splitTimelineClip(state, "v", 6, {
+      newClipId: "v-right", newLinkedAudioClipIds: ["a-right"]
+    });
+    expect(split.timelineClips.find(clip => clip.id === "v")).toMatchObject({ start: 2, duration: 4, sourceIn: 0, sourceOut: 4 });
+    expect(split.timelineClips.find(clip => clip.id === "v-right")).toMatchObject({ start: 6, duration: 4, sourceIn: 4, sourceOut: 8 });
+    expect(split.timelineClips.find(clip => clip.id === "a")).toMatchObject({ start: 2, duration: 4, sourceIn: 0, sourceOut: 4, linkedVideoClipId: "v" });
+    expect(split.timelineClips.find(clip => clip.id === "a-right")).toMatchObject({ start: 6, duration: 4, sourceIn: 4, sourceOut: 8, linkedVideoClipId: "v-right" });
+  });
+
+  it("inherits the video source range when legacy linked audio has no explicit trim metadata", () => {
+    const state = addVideoClip(empty, {
+      id: "v", name: "Trimmed video", trackId: "v1", start: 2, duration: 8,
+      assetId: "video-1", sourceHasAudio: true, audioTrackId: "a1", audioClipId: "a"
+    });
+    const legacyRange = {
+      ...state,
+      timelineClips: state.timelineClips.map(clip => clip.id === "v" ? { ...clip, sourceIn: 5, sourceOut: 13 } : clip)
+    };
+    const split = splitTimelineClip(legacyRange, "v", 6, {
+      newClipId: "v-right", newLinkedAudioClipIds: ["a-right"]
+    });
+    expect(split.timelineClips.find(clip => clip.id === "a")).toMatchObject({ sourceIn: 5, sourceOut: 9, start: 2, duration: 4 });
+    expect(split.timelineClips.find(clip => clip.id === "a-right")).toMatchObject({ sourceIn: 9, sourceOut: 13, start: 6, duration: 4, linkedVideoClipId: "v-right" });
+  });
+
+  it("splits independent audio without changing its source relationship and blocks splitting linked audio alone", () => {
+    const state = addVideoClip(empty, {
+      id: "v", name: "Video", trackId: "v1", start: 2, duration: 8,
+      sourceHasAudio: true, audioTrackId: "a1", audioClipId: "a"
+    });
+    expect(() => splitTimelineClip(state, "a", 6, { newClipId: "a-right" })).toThrow(/source video/);
+    const independent = unlinkTimelineAudio(state, "a");
+    const split = splitTimelineClip(independent, "a", 6, { newClipId: "a-right" });
+    expect(split.timelineClips.find(clip => clip.id === "a")).toMatchObject({ start: 2, duration: 4 });
+    expect(split.timelineClips.find(clip => clip.id === "a-right")).toMatchObject({ start: 6, duration: 4 });
+    expect(split.timelineClips.find(clip => clip.id === "a-right")).not.toHaveProperty("linkedVideoClipId");
+    expect(split.timelineClips.find(clip => clip.id === "v")).toMatchObject({ start: 2, duration: 8 });
+  });
+
+  it("rejects split points outside a clip, duplicate IDs, and inconsistent source ranges", () => {
+    const state = addVideoClip(empty, { id: "v", name: "Video", trackId: "v1", start: 2, duration: 8 });
+    expect(() => splitTimelineClip(state, "v", 2, { newClipId: "v-right" })).toThrow(/strictly inside/);
+    expect(() => splitTimelineClip(state, "v", 10, { newClipId: "v-right" })).toThrow(/strictly inside/);
+    expect(() => splitTimelineClip(state, "v", 6, { newClipId: "v" })).toThrow(/unique/);
+    const inconsistent = { ...state, timelineClips: state.timelineClips.map(clip => ({ ...clip, sourceIn: 0, sourceOut: 3 })) };
+    expect(() => splitTimelineClip(inconsistent, "v", 6, { newClipId: "v-right" })).toThrow(/Source range length/);
+  });
+
   it("allows unlinked audio to move and trim independently", () => {
     const state = addVideoClip(empty, { id: "v", name: "Video", trackId: "v1", start: 1, duration: 5, sourceHasAudio: true, audioTrackId: "a1", audioClipId: "a" });
     const unlinked = unlinkTimelineAudio(state, "a");
@@ -35,10 +113,15 @@ describe("linked multi-track timeline operations", () => {
     expect(trimmed.timelineClips.find(c => c.id === "a")).not.toHaveProperty("linkedVideoClipId");
   });
 
-  it("trims linked audio with its video", () => {
-    const state = addVideoClip(empty, { id: "v", name: "Video", trackId: "v1", start: 1, duration: 5, sourceHasAudio: true, audioTrackId: "a1", audioClipId: "a" });
+  it("trims linked audio with its video, adjusts source out, and clamps fades", () => {
+    const base = addVideoClip(empty, { id: "v", name: "Video", trackId: "v1", start: 1, duration: 5, sourceHasAudio: true, audioTrackId: "a1", audioClipId: "a" });
+    const state = {
+      ...base,
+      timelineClips: base.timelineClips.map(clip => ({ ...clip, sourceIn: 2, sourceOut: 7, volume: 0.8, fadeIn: 1, fadeOut: 4 }))
+    };
     const trimmed = trimTimelineClip(state, "v", 3);
-    expect(trimmed.timelineClips.find(c => c.id === "a")?.duration).toBe(3);
+    expect(trimmed.timelineClips.find(c => c.id === "v")).toMatchObject({ duration: 3, sourceIn: 2, sourceOut: 5, volume: 0.8, fadeIn: 1, fadeOut: 3 });
+    expect(trimmed.timelineClips.find(c => c.id === "a")).toMatchObject({ duration: 3, sourceIn: 2, sourceOut: 5, volume: 0.8, fadeIn: 1, fadeOut: 3, linkedVideoClipId: "v" });
   });
 
   it("deletes linked source audio together with its video but preserves detached audio", () => {

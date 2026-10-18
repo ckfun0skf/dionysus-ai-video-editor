@@ -1,32 +1,36 @@
-# DYS-011 — Multi-track Timeline and linked audio
+# DYS-011 — Hierarchical audio lanes, linked source audio, and mute
 
-**Status:** Planned  
-**Milestone:** M3 — Timeline model and Version workflow
+**Status:** In progress  
+**Progress estimate:** 65%  
+**Milestone:** M3 — Timeline model and Version workflow  
+**Last updated:** 2026-10-18
 
-## Goal
-Support multiple video tracks and audio that follows its source video by default, while allowing audio to be unlinked and edited independently.
+## Required interaction model
+- Video track headers expand/collapse their linked source-audio child lanes.
+- The child lane has a visible linked indicator and an **Unlink** action.
+- Unlink preserves current start and duration. The detached audio moves into the normal independent Audio Layer lane.
+- Each Audio Layer track has its own persistent **Mute/Unmute**; individual audio clips also have a separate mute flag.
+- Muting a track or clip affects preview playback and compositor audio output without muting other tracks.
+- The user-facing Timeline has typed layers and no generic **Media track**.
 
 ## Scope
-- Represent video and audio clips as explicit timeline items with track, start, duration, and source references.
-- Link a video's audio to its source clip by default when source audio exists.
-- Allow unlinking audio without changing the video's timing or media.
-- Support moving, trimming, splitting, and deleting independent audio clips.
-- Define overlap and track validation rules and preserve links through project import/export and undo/redo.
-
-## Out of scope
-- Full multitrack audio mixing and effects (tracked in DYS-008).
-- Actual MP4 rendering (tracked in DYS-009).
+- [x] Represent video/audio timeline clips and source-audio links.
+- [x] Move/trim linked clips together and unlink without changing current timing.
+- [x] Render linked source audio as an indented child lane beneath the parent video clip.
+- [x] Add **Unlink**, per-clip mute, and per-Audio-Layer track mute controls.
+- [x] Apply mute state during preview playback and propagate track mute to collected composition layers.
+- [ ] Finish independent move/trim/split/delete behaviors, especially splitting.
+- [ ] Add exhaustive round-trip and Undo/Redo tests for links, track mute, and clip mute.
+- [ ] Verify group deletion semantics for every parent/child arrangement.
 
 ## Acceptance criteria
-- [ ] Project schema distinguishes video tracks, audio tracks, and clip relationships.
-- [ ] Source audio is linked by default when applicable.
-- [ ] Unlinking audio enables independent edits and does not move the video.
-- [ ] Timeline edits preserve valid references and reject invalid ranges.
-- [ ] Undo/redo and project JSON round-trip preserve track and link state.
-- [ ] Tests cover linked movement, unlinking, independent trim/move, deletion, and malformed data.
+- Expanding/collapsing a video layer shows/hides its child audio lane.
+- Unlink converts linked audio to an independent Audio Layer without shifting either source at unlink time.
+- Muting one Audio Layer does not mute other Audio Layers; clip mute remains independently controlled.
+- Deleting unlinked audio never deletes its video source.
+- Tests cover linking, movement, trim, unlink, mute isolation, deletion, invalid references, Undo/Redo, and project JSON round-trip.
 
-## Verification evidence
-Record the test names/results, a project JSON fixture showing linked and unlinked audio, and a browser walkthrough before changing status to complete.
-
-## Dependencies
-DYS-005 timeline/version model; DYS-007 history and project portability.
+## Validation
+- CI run [#39117698570](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39117698570): 64 tests passed across 7 files, TypeScript check and production build passed, npm audit found 0 vulnerabilities.
+- App integration test checks linked child-lane visibility, clip mute, track mute, independent mute state, unlink, and unchanged video timing.
+- No automated browser smoke test was run or added.

@@ -34,8 +34,6 @@ npm install
 npm run dev
 npm test
 npm run build
-npx playwright install chromium
-npm run test:e2e
 ```
 
 The app is a static Vite web application. The CI workflow builds pull requests and feature branches. The GitHub Pages workflow deploys the site when changes reach `main`.
@@ -50,6 +48,6 @@ A public deployment makes the app code available to anyone with the site URL. Pr
 
 The editor now has an experimental browser-side compositor that renders selected nested shot-version layers and assigned timeline media onto a canvas, mixes assigned audio through Web Audio, and records the result as WebM using MediaRecorder. Export requires a browser that supports canvas capture, Web Audio, and WebM encoding. The export is not MP4, does not bundle source media into project JSON, and is not a frame-accurate professional NLE. Cross-origin media must allow CORS.
 
-Imported video/audio binary data is stored in IndexedDB on the current browser/device; project JSON stores local asset references, not the binary files, so it is not a portable media archive by itself. Imported images remain browser-local data URLs (limited to 4 MB each by the UI). AI image generation uses a user-configured OpenAI-compatible endpoint from the browser; the endpoint must allow CORS. API keys are held in component memory, not persisted to the project. Generated images are saved to IndexedDB, and prompt/model/reference provenance is recorded. The automated browser smoke test mocks the provider and proves the local export path; it does not validate a real commercial provider account or arbitrary endpoint compatibility.
+Imported video/audio binary data is stored in IndexedDB on the current browser/device; project JSON stores local asset references, not the binary files, so it is not a portable media archive by itself. Imported images remain browser-local data URLs (limited to 4 MB each by the UI). AI image generation uses a user-configured OpenAI-compatible endpoint from the browser; the endpoint must allow CORS. API keys are held in component memory, not persisted to the project. Generated images are saved to IndexedDB, and prompt/model/reference provenance is recorded. AI provider integration is not verified by unit tests alone. Automated browser smoke tests are intentionally not part of the required validation workflow; deterministic automated tests and production builds are the baseline.
 
-The Timeline still lacks frame-accurate drag-and-drop trimming, ZIP packaging, and full professional editing behavior. The Three.js procedural animation widget is a preview, while final rendered output currently uses the Canvas 2D compositor. See the PRD for confirmed decisions and unresolved questions.
+The Timeline workspace is being evolved toward the prototype workflow documented in public/doc/creative-editing-workflow-spec.md: visible typed lanes, Master and nested Version tabs, per-Shot Version dropdown/actions, expandable linked-audio lanes with per-layer mute, and a first-class Three.js layer. Not all of these behaviors are implemented yet. The Three.js procedural animation widget is currently a preview, while final output support must be checked separately from timeline representation. See the PRD and workflow spec for confirmed requirements and staged work.

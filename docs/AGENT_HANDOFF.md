@@ -20,6 +20,7 @@ This file is the starting point for any agent continuing Dionysus. Keep project 
 - Update this guide and the relevant docs when implementation status or decisions change.
 - Do not claim tests or builds passed unless they were actually run and the result is known.
 - Preserve user-approved decisions. Record new decisions in the PRD and explain material trade-offs.
+- Do not add or run automated browser smoke tests unless the user explicitly requests them. Use unit/integration tests, type-checking, production build, and deployment status as the default validation path.
 - Keep all durable project knowledge in version control. Avoid instructions that exist only in chat.
 - Preferred user communication language is Hong Kong Cantonese (`zh_hk`), while all code, docs, and git commits remain in professional English.
 
@@ -43,12 +44,12 @@ Dionysus solves this by providing a **unified visual AI video workstation**:
 4. **Storyboard-to-Timeline Synchronization**:
    - `syncStoryboardToTimeline()` transforms the narrative storyboard into multi-track video and audio timeline clips (`TimelineClip[]`) with linked audio handling and non-destructive manual clip preservation.
 5. **Timeline & Nested Shot Submodules**:
-   - Full timeline with multi-layer compositing, picture-in-picture, and Three.js procedural animation preview (`ProceduralAnimationPreview.tsx`).
-   - WebM client-side export with audio via `compositionRenderer.ts`.
+   - Current direction is the prototype-based workflow in `public/doc/creative-editing-workflow-spec.md`: a Master Timeline tab, per-Shot Version dropdown (+ Add Version/Edit), nested Version timeline tabs, expandable linked audio under video layers, independent audio-layer mute, and a first-class Three.js lane.
+   - Treat this as the target specification, not a claim that every item is implemented. The Three.js preview component and WebM compositor do not by themselves prove final timeline compositing fidelity.
 
 ## Current Status (2026-10-18)
 
-- **Test Suite**: 57/57 tests passing across 7 Vitest test suites (`App.test.tsx`, `aiGenerationProvider.test.ts`, `timelineOperations.test.ts`, `projectValidation.test.ts`, `projectHistory.test.ts`, `compositionRenderer.test.ts`, `i18n.test.ts`).
+- **Test Suite**: Latest merged timeline workspace CI reported 59 tests passing; check the exact CI run for the current branch before repeating a count.
 - **Build**: `tsc -b && vite build` succeeds with zero TypeScript or compilation errors.
 - **Port / Dev Server**: Vite dev server configured to `0.0.0.0:3000` with `allowedHosts: true`.
 - **UI Modes**:

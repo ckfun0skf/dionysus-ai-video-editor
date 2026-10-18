@@ -1,4 +1,5 @@
 import type { TimelineClip, TimelineTrack } from "./types";
+import { withDurationAndClampedFades } from "./audioEnvelope";
 
 export interface TimelineState {
   tracks: TimelineTrack[];
@@ -29,14 +30,14 @@ function assertValidLinks(clips: TimelineClip[]): void {
 
 export function addVideoClip(state: TimelineState, input: {
   id: string; name: string; trackId: string; start: number; duration: number;
-  assetId?: string; sourceHasAudio?: boolean; audioTrackId?: string; audioClipId?: string;
+  assetId?: string; shotId?: string; slotId?: string; sourceHasAudio?: boolean; audioTrackId?: string; audioClipId?: string;
 }): TimelineState {
   assertUniqueClipIds(state.timelineClips);
   if (!input.id.trim() || state.timelineClips.some(clip => clip.id === input.id) || (input.sourceHasAudio && input.audioTrackId && input.audioClipId && (!input.audioClipId.trim() || input.audioClipId === input.id || state.timelineClips.some(clip => clip.id === input.audioClipId)))) throw new Error("Timeline clip IDs must be non-empty and unique.");
   const track = state.tracks.find(item => item.id === input.trackId);
   if (!track || track.kind !== "video") throw new Error("A video clip must use a video track.");
   if (!Number.isFinite(input.start) || input.start < 0 || !Number.isFinite(input.duration) || input.duration <= 0) throw new Error("Clip timing must be finite, with a non-negative start and positive duration.");
-  const video: TimelineClip = { id: input.id, name: input.name, kind: "video", trackId: input.trackId, start: input.start, duration: input.duration, ...(input.assetId ? { assetId: input.assetId } : {}) };
+  const video: TimelineClip = { id: input.id, name: input.name, kind: "video", trackId: input.trackId, start: input.start, duration: input.duration, ...(input.assetId ? { assetId: input.assetId } : {}), ...(input.shotId ? { shotId: input.shotId } : {}), ...(input.slotId ? { slotId: input.slotId } : {}) };
   const clips = [...state.timelineClips, video];
   if (input.sourceHasAudio && input.audioTrackId && input.audioClipId) {
     const audioTrack = state.tracks.find(item => item.id === input.audioTrackId);
@@ -70,11 +71,108 @@ export function trimTimelineClip(state: TimelineState, clipId: string, duration:
   const clip = state.timelineClips.find(item => item.id === clipId);
   if (!clip) throw new Error("Timeline clip not found.");
   const sourceId = clip.kind === "audio" ? clip.linkedVideoClipId : clip.id;
+  const sourceClip = sourceId ? state.timelineClips.find(item => item.id === sourceId) : clip;
+  const linkedAudio = sourceId ? state.timelineClips.filter(item => item.kind === "audio" && item.linkedVideoClipId === sourceId) : [];
+  const rangeMembers = [clip, ...(sourceClip ? [sourceClip] : []), ...linkedAudio];
+  const sourceIn = sourceClip?.sourceIn ?? rangeMembers.find(item => item.sourceIn !== undefined)?.sourceIn ?? 0;
+  const hasSourceRange = rangeMembers.some(item => item.sourceIn !== undefined || item.sourceOut !== undefined);
+  const updateDuration = (item: TimelineClip): TimelineClip => {
+    const withDuration = withDurationAndClampedFades(item, duration);
+    if (hasSourceRange && (item.kind === "video" || item.kind === "audio")) {
+      return { ...withDuration, sourceIn, sourceOut: sourceIn + duration };
+    }
+    return withDuration;
+  };
   return { ...state, timelineClips: state.timelineClips.map(item => {
-    if (item.id === clipId || (sourceId && item.id === sourceId)) return { ...item, duration };
-    if (sourceId && item.kind === "audio" && item.linkedVideoClipId === sourceId) return { ...item, duration };
+    if (item.id === clipId || (sourceId && item.id === sourceId)) return updateDuration(item);
+    if (sourceId && item.kind === "audio" && item.linkedVideoClipId === sourceId) return updateDuration(item);
     return item;
   }) };
+}
+
+export function splitTimelineClip(state: TimelineState, clipId: string, splitTime: number, input: {
+  newClipId: string;
+  newLinkedAudioClipIds?: string[];
+}): TimelineState {
+  assertUniqueClipIds(state.timelineClips);
+  assertValidLinks(state.timelineClips);
+  const clip = state.timelineClips.find(item => item.id === clipId);
+  if (!clip) throw new Error("Timeline clip not found.");
+  if (clip.kind === "audio" && clip.linkedVideoClipId) {
+    throw new Error("Split the source video to split linked source audio.");
+  }
+  const end = clip.start + clip.duration;
+  if (!Number.isFinite(splitTime) || splitTime <= clip.start || splitTime >= end) {
+    throw new Error("Split point must fall strictly inside the clip.");
+  }
+  if (!input.newClipId.trim() || input.newClipId === clip.id || state.timelineClips.some(item => item.id === input.newClipId)) {
+    throw new Error("Split clip ID must be non-empty, unique, and different from the source ID.");
+  }
+
+  const linkedAudio = clip.kind === "video"
+    ? state.timelineClips.filter(item => item.kind === "audio" && item.linkedVideoClipId === clip.id)
+    : [];
+  const newAudioIds = input.newLinkedAudioClipIds ?? [];
+  if (newAudioIds.length !== linkedAudio.length ||
+      newAudioIds.some(id => !id.trim() || id === input.newClipId || id === clip.id || state.timelineClips.some(item => item.id === id)) ||
+      new Set(newAudioIds).size !== newAudioIds.length) {
+    if (linkedAudio.length) throw new Error("Provide one unique new audio ID for each linked source-audio child.");
+    if (newAudioIds.length) throw new Error("Audio IDs were supplied for a clip with no linked source audio.");
+  }
+
+  const splitPair = (source: TimelineClip, newId: string) => {
+    const leftDuration = splitTime - source.start;
+    const rightDuration = source.duration - leftDuration;
+    let leftSource: Partial<TimelineClip> = {};
+    let rightSource: Partial<TimelineClip> = {};
+    if (source.kind === "video" || source.kind === "audio") {
+      const sourceIn = source.sourceIn ?? 0;
+      const sourceOut = source.sourceOut ?? sourceIn + source.duration;
+      if (Math.abs((sourceOut - sourceIn) - source.duration) > 0.001) {
+        throw new Error("Source range length must match clip duration before splitting.");
+      }
+      const middleSource = sourceIn + leftDuration;
+      // Materialize implicit source ranges at split time so the right segment resumes
+      // from the split point instead of silently replaying from source time zero.
+      leftSource = { sourceIn, sourceOut: middleSource };
+      rightSource = { sourceIn: middleSource, sourceOut };
+    }
+    return {
+      left: {
+        ...source, duration: leftDuration, ...leftSource,
+        ...(source.fadeIn !== undefined ? { fadeIn: Math.min(source.fadeIn, leftDuration) } : {}),
+        fadeOut: undefined
+      },
+      right: {
+        ...source, id: newId, name: source.name + " (2)", start: splitTime, duration: rightDuration, ...rightSource,
+        fadeIn: undefined,
+        ...(source.fadeOut !== undefined ? { fadeOut: Math.min(source.fadeOut, rightDuration) } : {})
+      }
+    };
+  };
+
+  const videoPair = splitPair(clip, input.newClipId);
+  const audioSourceIn = clip.sourceIn ?? 0;
+  const audioSourceOut = clip.sourceOut ?? audioSourceIn + clip.duration;
+  const audioPairs = linkedAudio.map((audio, index) => ({
+    originalId: audio.id,
+    ...splitPair({ ...audio, sourceIn: audioSourceIn, sourceOut: audioSourceOut }, newAudioIds[index]),
+    rightLinkedVideoClipId: input.newClipId
+  }));
+  const leftAudioById = new Map(audioPairs.map(pair => [pair.originalId, pair.left]));
+  const nextClips = state.timelineClips.map(item => {
+    if (item.id === clip.id) return videoPair.left;
+    const leftAudio = leftAudioById.get(item.id);
+    return leftAudio ?? item;
+  });
+  const rightAudioClips = audioPairs.map(pair => ({
+    ...pair.right,
+    linkedVideoClipId: pair.rightLinkedVideoClipId
+  }));
+  return {
+    ...state,
+    timelineClips: [...nextClips, videoPair.right, ...rightAudioClips]
+  };
 }
 
 export function unlinkTimelineAudio(state: TimelineState, audioClipId: string): TimelineState {
