@@ -29,14 +29,14 @@ function assertValidLinks(clips: TimelineClip[]): void {
 
 export function addVideoClip(state: TimelineState, input: {
   id: string; name: string; trackId: string; start: number; duration: number;
-  assetId?: string; sourceHasAudio?: boolean; audioTrackId?: string; audioClipId?: string;
+  assetId?: string; shotId?: string; slotId?: string; sourceHasAudio?: boolean; audioTrackId?: string; audioClipId?: string;
 }): TimelineState {
   assertUniqueClipIds(state.timelineClips);
   if (!input.id.trim() || state.timelineClips.some(clip => clip.id === input.id) || (input.sourceHasAudio && input.audioTrackId && input.audioClipId && (!input.audioClipId.trim() || input.audioClipId === input.id || state.timelineClips.some(clip => clip.id === input.audioClipId)))) throw new Error("Timeline clip IDs must be non-empty and unique.");
   const track = state.tracks.find(item => item.id === input.trackId);
   if (!track || track.kind !== "video") throw new Error("A video clip must use a video track.");
   if (!Number.isFinite(input.start) || input.start < 0 || !Number.isFinite(input.duration) || input.duration <= 0) throw new Error("Clip timing must be finite, with a non-negative start and positive duration.");
-  const video: TimelineClip = { id: input.id, name: input.name, kind: "video", trackId: input.trackId, start: input.start, duration: input.duration, ...(input.assetId ? { assetId: input.assetId } : {}) };
+  const video: TimelineClip = { id: input.id, name: input.name, kind: "video", trackId: input.trackId, start: input.start, duration: input.duration, ...(input.assetId ? { assetId: input.assetId } : {}), ...(input.shotId ? { shotId: input.shotId } : {}), ...(input.slotId ? { slotId: input.slotId } : {}) };
   const clips = [...state.timelineClips, video];
   if (input.sourceHasAudio && input.audioTrackId && input.audioClipId) {
     const audioTrack = state.tracks.find(item => item.id === input.audioTrackId);
