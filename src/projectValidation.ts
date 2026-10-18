@@ -120,7 +120,9 @@ function isTimelineClip(value: unknown): boolean {
     isString(value.trackId) && isFiniteNumber(value.start) && value.start >= 0 &&
     isFiniteNumber(value.duration) && value.duration > 0 &&
     (value.assetId === undefined || isString(value.assetId)) &&
-    (value.linkedVideoClipId === undefined || (value.kind === "audio" && isString(value.linkedVideoClipId))) &&\n    (value.shotId === undefined || isString(value.shotId)) && (value.slotId === undefined || isString(value.slotId)) &&\n    (value.muted === undefined || typeof value.muted === "boolean") &&
+    (value.linkedVideoClipId === undefined || (value.kind === "audio" && isString(value.linkedVideoClipId))) &&
+    (value.shotId === undefined || isString(value.shotId)) && (value.slotId === undefined || isString(value.slotId)) &&
+    (value.muted === undefined || typeof value.muted === "boolean") &&
     (value.sourceIn === undefined || (isFiniteNumber(value.sourceIn) && value.sourceIn >= 0)) &&
     (value.sourceOut === undefined || (isFiniteNumber(value.sourceOut) && value.sourceOut >= 0)) &&
     (value.sourceIn === undefined || value.sourceOut === undefined || value.sourceOut > value.sourceIn) &&
