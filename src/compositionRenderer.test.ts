@@ -19,6 +19,17 @@ describe("compositionRenderer", () => {
     expect(layers.find(layer => layer.id === "layer-later-shot")?.start).toBe(21);
   });
 
+  it("preserves stored Version layer order instead of sorting by start time", () => {
+    const project = structuredClone(sampleProject);
+    project.shots[0].slots[0].versions[0].layers = [
+      { id: "top-layer", name: "Top layer", kind: "image", start: 4, duration: 2 },
+      { id: "bottom-layer", name: "Bottom layer", kind: "image", start: 0, duration: 6 }
+    ];
+    const layers = collectCompositionLayers(project);
+    expect(layers.slice(0, 2).map(layer => layer.id)).toEqual(["top-layer", "bottom-layer"]);
+    expect(layers.map(layer => layer.start)).toEqual([4, 0]);
+  });
+
   it("includes referenced master timeline clips and their media type", () => {
     const project = structuredClone(sampleProject);
     project.assets.push({ id: "audio-asset", name: "Bed", kind: "audio", path: "data:audio/wav;base64,AA==" });
