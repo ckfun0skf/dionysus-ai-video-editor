@@ -24,7 +24,7 @@ export function collectCompositionLayers(project: DionysusProject): CompositionL
       ...(clip.modelName ? { modelName: clip.modelName } : {}),
       ...(clip.modelVersion ? { modelVersion: clip.modelVersion } : {}),
       muted: Boolean(clip.muted || project.tracks.find(track => track.id === clip.trackId)?.muted),
-      volume: clip.volume, fadeIn: clip.fadeIn, fadeOut: clip.fadeOut
+      volume: clip.volume, fadeIn: clip.fadeIn, fadeOut: clip.fadeOut, shortSourceBehavior: clip.shortSourceBehavior
     };
     if (clip.kind === "text" || clip.kind === "procedural") {
       return [{ ...common, fitMode: "contain" as const, x: 0, y: clip.kind === "text" ? 75 : 0, width: 100, height: clip.kind === "text" ? 18 : 100 }];
@@ -153,7 +153,13 @@ export async function renderCompositionFrame(canvas: HTMLCanvasElement, project:
     }
     const video = asset.kind === "video" ? videos.get(asset.id) : undefined;
     if (video && video.readyState >= 1 && seconds >= layer.start && seconds < layer.start + layer.duration) {
-      await seekMedia(video, (layer.sourceIn ?? 0) + seconds - layer.start);
+      const sourceIn = Math.max(0, layer.sourceIn ?? 0);
+      const sourceEnd = Math.min(video.duration, layer.sourceOut ?? video.duration);
+      const sourceSpan = Math.max(0, sourceEnd - sourceIn);
+      const localTime = seconds - layer.start;
+      if (sourceSpan <= 0 || (layer.shortSourceBehavior !== "loop" && localTime >= sourceSpan)) continue;
+      const sourceOffset = layer.shortSourceBehavior === "loop" ? localTime % sourceSpan : localTime;
+      await seekMedia(video, sourceIn + sourceOffset);
     }
     drawLayer(ctx, layer, asset, seconds, width, height, images, videos);
   }
