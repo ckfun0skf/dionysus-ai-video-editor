@@ -27,7 +27,13 @@ export function collectCompositionLayers(project: DionysusProject): CompositionL
       volume: clip.volume, fadeIn: clip.fadeIn, fadeOut: clip.fadeOut, shortSourceBehavior: clip.shortSourceBehavior
     };
     if (clip.kind === "text" || clip.kind === "procedural") {
-      return [{ ...common, fitMode: "contain" as const, x: 0, y: clip.kind === "text" ? 75 : 0, width: 100, height: clip.kind === "text" ? 18 : 100 }];
+      return [{
+        ...common, fitMode: "contain" as const, x: 0, y: clip.kind === "text" ? 75 : 0,
+        width: 100, height: clip.kind === "text" ? 18 : 100,
+        ...(clip.code !== undefined ? { code: clip.code } : {}),
+        ...(clip.html !== undefined ? { html: clip.html } : {}),
+        ...(clip.css !== undefined ? { css: clip.css } : {})
+      }];
     }
     if (!clip.assetId || !project.assets.some(asset => asset.id === clip.assetId)) return [];
     return [{
