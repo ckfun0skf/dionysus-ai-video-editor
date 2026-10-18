@@ -861,7 +861,7 @@ export default function App() {
     <button className="timeline-tab-close" aria-label={"Close " + tab.label} onClick={() => closeTimelineTab(tab.id)}>×</button>
   </div>)}
 </div>
-{activeTimelineTabId === "master" && <div className="timeline-tab-content master-timeline-content"><div className="section-toolbar"><div><h2>{t("timeline.title")}</h2><p>{t("timeline.description")}</p></div><button className="button button-primary button-small" disabled={!selected} onClick={() => selected && addSlot(selected.id)}><Plus size={15}/> {t("action.addClipSlot")}</button></div><div className="timeline-ruler" role="slider" aria-label="Master timeline playhead" aria-valuemin={0} aria-valuemax={runtime} aria-valuenow={editorTime} tabIndex={0}
+<div className="timeline-tab-content master-timeline-content" style={{display:activeTimelineTabId === "master" ? "block" : "none"}}><div className="section-toolbar"><div><h2>{t("timeline.title")}</h2><p>{t("timeline.description")}</p></div><button className="button button-primary button-small" disabled={!selected} onClick={() => selected && addSlot(selected.id)}><Plus size={15}/> {t("action.addClipSlot")}</button></div><div className="timeline-ruler" role="slider" aria-label="Master timeline playhead" aria-valuemin={0} aria-valuemax={runtime} aria-valuenow={editorTime} tabIndex={0}
             onPointerDown={event => { const rect = event.currentTarget.getBoundingClientRect(); const next = Math.max(0, Math.min(runtime, ((event.clientX - rect.left) / Math.max(rect.width, 1)) * runtime)); playbackTimeRef.current = next; setIsPlaying(false); setEditorTime(next); }}
             onPointerMove={event => { if (event.buttons !== 1) return; const rect = event.currentTarget.getBoundingClientRect(); const next = Math.max(0, Math.min(runtime, ((event.clientX - rect.left) / Math.max(rect.width, 1)) * runtime)); playbackTimeRef.current = next; setIsPlaying(false); setEditorTime(next); }}
             onKeyDown={event => { if (event.key === "ArrowRight") { const next = Math.min(runtime, editorTime + 0.5); playbackTimeRef.current = next; setIsPlaying(false); setEditorTime(next); } if (event.key === "ArrowLeft") { const next = Math.max(0, editorTime - 0.5); playbackTimeRef.current = next; setIsPlaying(false); setEditorTime(next); } }}>
@@ -956,7 +956,7 @@ export default function App() {
 <label className="visual-prompt-field">Generation prompt<textarea className="text-area" rows={3} value={selectedTimelineClip.prompt??""} placeholder="Store the prompt used to generate this source clip" onChange={event=>change(p=>({...p,timelineClips:(p.timelineClips??[]).map(clip=>clip.id===selectedTimelineClip.id?{...clip,prompt:event.target.value}:clip)}))}/></label>
 <p className="inline-note">Assign a source asset to preview it. Audio clips play from their source range while the master playhead runs.</p>
 </div>}
-</section></div>}
+</section></div>
 {activeTimelineTabId !== "master" && activeVersionTimelineTab && activeVersionTimeline && activeVersionTimelineSlot && activeVersionTimelineShot && <section className="nested-timeline-tab">
   <div className="editor-linked-heading"><div><strong>{activeVersionTimelineShot.title} · {activeVersionTimeline.name}</strong><span>Version timeline · edits here do not change the Master Shot duration</span></div>
     <div className="inline-actions">
