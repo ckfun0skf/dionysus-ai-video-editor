@@ -36,5 +36,5 @@
 - The UI clearly distinguishes represented modules from rendered output.
 
 ## Validation
-- CI run [#39122750551](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39122750551): 90 tests passed across 10 files, TypeScript check and production build passed, npm audit reported 0 vulnerabilities.
+- CI run [#39124022295](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39124022295): 93 tests passed across 10 files, TypeScript check and production build passed, npm audit reported 0 vulnerabilities.
 - Automated browser smoke testing was not run.
