@@ -2186,3 +2186,69 @@
 .asset-create-menu-wrap { position:relative; }
 .asset-empty-clip-note { display:flex; align-items:center; gap:8px; padding:10px; border:1px dashed var(--line); border-radius:7px; color:var(--muted); font-size:11px; line-height:1.5; }
 .asset-empty-clip-note svg { flex:0 0 auto; color:var(--accent); }
+
+
+/* Timeline ruler and lane geometry use the same header width and project time scale. */
+.editor-linked-timeline .visual-track-row,
+.editor-linked-timeline .visual-timeline-ruler {
+  grid-template-columns: 220px minmax(320px, 1fr);
+}
+.visual-timeline-ruler {
+  display: grid;
+  grid-template-columns: 220px minmax(320px, 1fr);
+  min-width: 0;
+  border-bottom: 1px solid var(--line, #2b2b32);
+  background: #141418;
+}
+.visual-ruler-caption {
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  color: var(--muted, #8d8d99);
+  font: 9px "DM Mono", monospace;
+  letter-spacing: 1px;
+  border-right: 1px solid var(--line, #2b2b32);
+}
+.visual-timeline-ruler-lane {
+  position: relative;
+  height: 29px;
+  min-width: 320px;
+  cursor: crosshair;
+  touch-action: pan-y;
+  background-image: linear-gradient(90deg, #34343d 1px, transparent 1px);
+  background-repeat: repeat-x;
+}
+.visual-timeline-ruler-lane span {
+  position: absolute;
+  bottom: 7px;
+  transform: translateX(-50%);
+  color: var(--muted, #8d8d99);
+  font: 9px "DM Mono", monospace;
+  white-space: nowrap;
+}
+.visual-timeline-ruler-lane span:first-of-type { transform: none; }
+.visual-timeline-ruler-lane span:last-of-type { transform: translateX(-100%); }
+.visual-timeline-ruler-playhead {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--accent);
+  pointer-events: none;
+}
+.visual-timeline-ruler-playhead::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -4px;
+  width: 9px;
+  height: 7px;
+  background: var(--accent);
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+}
+.master-timeline-content > .timeline-ruler { display: none !important; }
+@media (max-width: 760px) {
+  .editor-linked-timeline .visual-track-row,
+  .editor-linked-timeline .visual-timeline-ruler { grid-template-columns: 180px minmax(320px, 1fr); }
+}
