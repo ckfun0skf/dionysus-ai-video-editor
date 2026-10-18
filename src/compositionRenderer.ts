@@ -18,7 +18,7 @@ export function collectCompositionLayers(project: DionysusProject): CompositionL
     if (!clip.assetId || !project.assets.some(asset => asset.id === clip.assetId)) return [];
     return [{
       id: clip.id, name: clip.name, kind: clip.kind, start: clip.start, duration: clip.duration,
-      assetId: clip.assetId, sourceIn: clip.sourceIn, sourceOut: clip.sourceOut,
+      assetId: clip.assetId, sourceIn: clip.sourceIn, sourceOut: clip.sourceOut, muted: clip.muted,
       fitMode: "contain" as const, x: 0, y: 0, width: 100, height: 100
     }];
   });
@@ -72,7 +72,7 @@ function drawFit(ctx: CanvasRenderingContext2D, image: CanvasImageSource, sw: nu
 }
 
 function drawLayer(ctx: CanvasRenderingContext2D, layer: CompositionLayer, asset: Asset | undefined, seconds: number, width: number, height: number, images: Map<string, HTMLImageElement>, videos: Map<string, HTMLVideoElement>) {
-  if (seconds < layer.start || seconds >= layer.start + layer.duration || layer.kind === "audio" || layer.kind === "script") return;
+  if (seconds < layer.start || seconds >= layer.start + layer.duration || layer.kind === "audio" || layer.kind === "script" || layer.kind === "procedural") return;
   const x = ((layer.x ?? 0) / 100) * width, y = ((layer.y ?? 0) / 100) * height;
   const w = ((layer.width ?? 100) / 100) * width, h = ((layer.height ?? 100) / 100) * height;
   const scale = layer.scale ?? 1, opacity = Math.max(0, Math.min(1, layer.opacity ?? 1));
@@ -159,7 +159,7 @@ export async function exportCompositionWebM(project: DionysusProject, options: R
   const mimeType = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"].find(type => MediaRecorder.isTypeSupported(type));
   if (!mimeType) { stream.getTracks().forEach(track => track.stop()); throw new Error("This browser does not support a compatible WebM encoder"); }
 
-  const audioLayers = layers.filter(layer => layer.kind === "audio" && project.assets.some(asset => asset.id === layer.assetId && asset.path));
+  const audioLayers = layers.filter(layer => layer.kind === "audio" && !layer.muted && project.assets.some(asset => asset.id === layer.assetId && asset.path));
   let audioContext: AudioContext | undefined;
   let audioDestination: MediaStreamAudioDestinationNode | undefined;
   let audioResume: Promise<void> | undefined;
