@@ -38,13 +38,15 @@ function timelineRows(): HTMLElement[] {
 }
 
 
-function selectClip(name: string): HTMLButtonElement {
+async function selectClip(name: string): Promise<HTMLButtonElement> {
   const clip = timelineRows().find(row => row.textContent?.includes(name));
   if (!clip) throw new Error("Could not find timeline clip: " + name);
   act(() => clip.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 100, clientY: 100 })));
+  await flushEffects();
   const settings = Array.from(container.querySelectorAll<HTMLButtonElement>(".shot-context-menu button")).find(button => button.textContent?.includes("Settings"));
   if (!settings) throw new Error("Could not find Settings in clip context menu");
   click(settings);
+  await flushEffects();
   return clip as HTMLButtonElement;
 }
 function actionNamed(name: string): HTMLButtonElement {
@@ -137,7 +139,7 @@ describe("App history integration", () => {
 
     let videoRow = timelineRows().find(row => row.textContent?.includes("Video clip 1"));
     expect(videoRow).toBeTruthy();
-    selectClip("Video clip 1");
+    await selectClip("Video clip 1");
     click(actionNamed("+0.5s"));
     videoRow = timelineRows().find(row => row.textContent?.includes("Video clip 1"));
     click(actionNamed("Trim"));
@@ -159,7 +161,7 @@ describe("App history integration", () => {
     click(add!);
     await flushEffects();
 
-    selectClip("Video clip 1 audio");
+    await selectClip("Video clip 1 audio");
     await flushEffects();
     const volume = container.querySelector<HTMLInputElement>('input[aria-label="Timeline audio volume"]');
     const fadeIn = container.querySelector<HTMLInputElement>('input[aria-label="Timeline audio fade in"]');
@@ -281,7 +283,7 @@ describe("App history integration", () => {
 
     const secondAudioRow = timelineRows().find(row => row.textContent?.includes("Video clip 2 audio"));
     expect(secondAudioRow).toBeTruthy();
-    selectClip("Video clip 2 audio");
+    await selectClip("Video clip 2 audio");
     click(actionNamed("Unlink audio"));
     await flushEffects();
 
@@ -393,12 +395,12 @@ describe("App history integration", () => {
     const video = () => clips().find(clip => clip.kind === "video")!;
     const audio = () => clips().find(clip => clip.kind === "audio")!;
 
-    selectClip("Video clip 1 audio");
+    await selectClip("Video clip 1 audio");
     click(actionNamed("Unlink audio"));
     await flushEffects();
     expect(audio()).not.toHaveProperty("linkedVideoClipId");
 
-    selectClip("Video clip 1 audio");
+    await selectClip("Video clip 1 audio");
     click(actionNamed("+0.5s"));
     await flushEffects();
     expect(video()).toMatchObject({ start: 0, duration: 5 });
@@ -437,7 +439,7 @@ describe("App history integration", () => {
     const audio = initial.find(clip => clip.kind === "audio")!;
     expect(audio.linkedVideoClipId).toBe(video.id);
 
-    selectClip("Video clip 1");
+    await selectClip("Video clip 1");
     click(actionNamed("Delete clip"));
     await flushEffects();
     expect(clips()).toEqual([]);
@@ -464,7 +466,7 @@ describe("App history integration", () => {
     const audio = initial.find(clip => clip.kind === "audio")!;
     expect(audio.linkedVideoClipId).toBe(video.id);
 
-    selectClip("Video clip 1 audio");
+    await selectClip("Video clip 1 audio");
     click(actionNamed("Delete clip"));
     await flushEffects();
     expect(clips()).toHaveLength(1);
@@ -494,7 +496,7 @@ describe("App history integration", () => {
     expect(video()).toMatchObject({ start: 0, duration: 5 });
     expect(audio()).toMatchObject({ start: 0, duration: 5, linkedVideoClipId: video().id });
 
-    selectClip("Video clip 1 audio");
+    await selectClip("Video clip 1 audio");
     click(actionNamed("+0.5s"));
     await flushEffects();
     expect(video()).toMatchObject({ start: 0.5, duration: 5 });
@@ -667,7 +669,7 @@ describe("App history integration", () => {
     expect(video).toBeTruthy();
     expect(audio).toBeTruthy();
 
-    selectClip(video!.name);
+    await selectClip(video!.name);
     await flushEffects();
     const split = Array.from(container.querySelectorAll<HTMLButtonElement>(".visual-clip-actions button")).find(button => button.textContent?.includes("Split at midpoint"));
     expect(split).toBeTruthy();
@@ -702,7 +704,7 @@ describe("App history integration", () => {
     const before = persistedProject();
     const video = before.timelineClips?.find(clip => clip.kind === "video" && !clip.id.startsWith("storyboard-"))!;
     const audio = before.timelineClips?.find(clip => clip.kind === "audio" && clip.linkedVideoClipId === video.id)!;
-    selectClip(video.name);
+    await selectClip(video.name);
     await flushEffects();
     const playhead = container.querySelector<HTMLInputElement>('input[aria-label="Timeline playhead time"]');
     expect(playhead).toBeTruthy();
@@ -737,7 +739,7 @@ describe("App history integration", () => {
     let clips = persistedProject().timelineClips ?? [];
     const originalVideo = clips.find(clip => clip.kind === "video" && !clip.id.startsWith("storyboard-"))!;
     const originalAudio = clips.find(clip => clip.kind === "audio" && clip.linkedVideoClipId === originalVideo.id)!;
-    selectClip(originalAudio.name);
+    await selectClip(originalAudio.name);
     await flushEffects();
     setInputValue(container.querySelector<HTMLInputElement>('input[aria-label="Timeline audio volume"]')!, "0.4");
     await flushEffects();
@@ -746,7 +748,7 @@ describe("App history integration", () => {
     setInputValue(container.querySelector<HTMLInputElement>('input[aria-label="Timeline audio fade out"]')!, "1");
     await flushEffects();
 
-    selectClip(originalVideo.name);
+    await selectClip(originalVideo.name);
     await flushEffects();
     const duplicate = Array.from(container.querySelectorAll<HTMLButtonElement>(".visual-clip-actions button"))
       .find(button => button.textContent?.trim() === "Duplicate clip");
