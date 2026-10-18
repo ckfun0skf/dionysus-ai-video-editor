@@ -55,6 +55,7 @@ function isLayer(value: unknown): boolean {
     (value.childCompositionId === undefined || isString(value.childCompositionId)) &&
     (value.clipVersionId === undefined || isString(value.clipVersionId)) &&
     (value.referencedImageAssetIds === undefined || isStringArray(value.referencedImageAssetIds)) &&
+    (value.referencedImageAssetIds === undefined || isStringArray(value.referencedImageAssetIds)) &&
     (value.sourceIn === undefined || (isFiniteNumber(value.sourceIn) && value.sourceIn >= 0)) &&
     (value.sourceOut === undefined || (isFiniteNumber(value.sourceOut) && value.sourceOut >= 0)) &&
     (value.sourceIn === undefined || value.sourceOut === undefined || value.sourceOut > value.sourceIn) &&
@@ -219,6 +220,12 @@ export function validateProject(value: unknown): value is DionysusProject {
           !(clipAsset.clipVersions ?? []).some(version => version.id === clip.clipVersionId)) return false;
     } else if (clip.clipVersionId !== undefined) {
       return false;
+    }
+    if (clip.referencedImageAssetIds !== undefined) {
+      if (clip.kind !== "procedural") return false;
+      for (const referencedId of clip.referencedImageAssetIds as string[]) {
+        if (!assets.some(asset => asset.id === referencedId && asset.kind === "image")) return false;
+      }
     }
     if (clip.shotId !== undefined && !shotIds.has(clip.shotId as string)) return false;
     if (clip.slotId !== undefined) {
