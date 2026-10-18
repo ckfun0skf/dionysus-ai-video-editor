@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import type { Asset } from "./types";
 import { resolveMediaSource } from "./mediaAssetStore";
 
+const EMPTY_ASSETS: Asset[] = [];
+const EMPTY_IMAGE_REFERENCES: string[] = [];
+
 type Props = {
   title: string;
   html?: string;
@@ -15,7 +18,7 @@ type Props = {
 /** Renders user-authored clip code in an opaque-origin sandbox, isolated from the editor UI.
  * Only image assets explicitly referenced by this layer are exposed as window.DIONYSUS_IMAGES[id].
  */
-export default function SandboxedCodePreview({ title, html = "", css = "", js = "", style, assets = [], referencedImageAssetIds = [] }: Props) {
+export default function SandboxedCodePreview({ title, html = "", css = "", js = "", style, assets = EMPTY_ASSETS, referencedImageAssetIds = EMPTY_IMAGE_REFERENCES }: Props) {
   const [resolvedImages, setResolvedImages] = useState<Record<string, string>>({});
 
   useEffect(() => {
