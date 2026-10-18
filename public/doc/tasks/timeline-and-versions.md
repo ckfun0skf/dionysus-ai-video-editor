@@ -1,11 +1,11 @@
 # DYS-005 — Master and nested Timeline editing with Version management
 
 **Status:** In progress  
-**Progress estimate:** 55%  
+**Progress estimate:** 70%  
 **Last updated:** 2026-10-18
 
 ## Goal
-Provide the prototype-style Master Timeline with Shot Version selection and an in-workspace nested timeline for editing each Version.
+Provide the prototype-style Master Timeline with Shot Version selection, an in-workspace nested timeline for editing each Version, and an independent Master placement model.
 
 ## Implemented
 - [x] Preserve multiple Versions and switch the active Version independently for each Slot.
@@ -14,13 +14,16 @@ Provide the prototype-style Master Timeline with Shot Version selection and an i
 - [x] Master Timeline and nested Shot-Version timelines live in separate tabs within the Timeline workspace.
 - [x] Nested Version Timeline displays typed layer rows for video, image, audio, text, and procedural/Three.js modules.
 - [x] Replace the ambiguous visible “Media track” heading with “Timeline layers.”
-- [ ] Fully separate master Shot placement/persistence from the media clip-placement model and add frame-accurate timing/trim.
+- [x] Persist optional absolute Master Shot positions while legacy projects fall back to their original sequential layout.
+- [x] Move Master Shot blocks by drag-and-drop with project-frame-rate snapping.
+- [x] Keep Master Shot target duration, Clip Slot duration, and Version-internal duration separate.
+- [x] Render nested Version layers using the Master Shot's absolute offset.
 - [ ] Complete nested module Inspector editing, source binding, ordering/reordering, and media thumbnail extraction.
-- [ ] Expand project JSON round-trip and Undo/Redo coverage for all nested relationships.
+- [ ] Expand project JSON round-trip and Undo/Redo coverage for all nested relationships and placement edits.
 
 ## Validation
-- CI run [#39117698570](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39117698570): 64 tests passed across 7 files, TypeScript check and production build passed, and npm audit reported 0 vulnerabilities.
-- App integration tests cover opening/closing the nested Version tab, active Version operations, adding a procedural module, and returning to Master Timeline.
+- CI run [#39118555157](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39118555157): 70 tests passed across 8 files, TypeScript check and production build passed, and npm audit reported 0 vulnerabilities.
+- Regression coverage checks legacy sequential fallback, independent Shot movement/duration, Version-duration preservation, drag placement, and absolute offsets in composition collection.
 - Automated browser smoke tests were not run or added.
 
 ## Related files
