@@ -17,13 +17,18 @@ export function collectCompositionLayers(project: DionysusProject): CompositionL
     return layers;
   });
   const timeline: CompositionLayer[] = (project.timelineClips ?? []).filter(clip => !clip.id.startsWith("storyboard-")).flatMap((clip): CompositionLayer[] => {
+    const track = project.tracks.find(item => item.id === clip.trackId);
+    const frameX = clip.x ?? track?.x ?? 0;
+    const frameY = clip.y ?? track?.y ?? 0;
+    const frameWidth = clip.width ?? track?.width ?? 100;
+    const frameHeight = clip.height ?? track?.height ?? 100;
     const common = {
       id: clip.id, name: clip.name, kind: clip.kind === "clip" ? "composition" as const : clip.kind, start: clip.start, duration: clip.duration,
       ...(clip.scriptVersionId ? { scriptVersionId: clip.scriptVersionId } : {}),
       ...(clip.prompt ? { prompt: clip.prompt } : {}),
       ...(clip.modelName ? { modelName: clip.modelName } : {}),
       ...(clip.modelVersion ? { modelVersion: clip.modelVersion } : {}),
-      muted: Boolean(clip.muted || project.tracks.find(track => track.id === clip.trackId)?.muted),
+      muted: Boolean(clip.muted || track?.muted),
       volume: clip.volume, fadeIn: clip.fadeIn, fadeOut: clip.fadeOut, shortSourceBehavior: clip.shortSourceBehavior
     };
     if (clip.kind === "clip") {
@@ -47,8 +52,12 @@ export function collectCompositionLayers(project: DionysusProject): CompositionL
             name: layer.name,
             start: clip.start + startOffset,
             duration: visibleDuration,
-            muted: Boolean(layer.muted || clip.muted || project.tracks.find(track => track.id === clip.trackId)?.muted),
-            volume: layer.volume === undefined ? clip.volume : layer.volume * (clip.volume ?? 1)
+            muted: Boolean(layer.muted || clip.muted || track?.muted),
+            volume: layer.volume === undefined ? clip.volume : layer.volume * (clip.volume ?? 1),
+            x: frameX + frameWidth * (layer.x ?? 0) / 100,
+            y: frameY + frameHeight * (layer.y ?? 0) / 100,
+            width: frameWidth * (layer.width ?? 100) / 100,
+            height: frameHeight * (layer.height ?? 100) / 100
           });
         }
       }
@@ -56,8 +65,8 @@ export function collectCompositionLayers(project: DionysusProject): CompositionL
     }
     if (clip.kind === "text" || clip.kind === "procedural") {
       return [{
-        ...common, fitMode: "contain" as const, x: 0, y: clip.kind === "text" ? 75 : 0,
-        width: 100, height: clip.kind === "text" ? 18 : 100,
+        ...common, fitMode: "contain" as const, x: clip.x ?? (clip.kind === "text" ? 0 : frameX), y: clip.y ?? (clip.kind === "text" ? 75 : frameY),
+        width: clip.width ?? frameWidth, height: clip.height ?? (clip.kind === "text" ? 18 : frameHeight),
         ...(clip.code !== undefined ? { code: clip.code } : {}),
         ...(clip.html !== undefined ? { html: clip.html } : {}),
         ...(clip.css !== undefined ? { css: clip.css } : {})
@@ -66,7 +75,7 @@ export function collectCompositionLayers(project: DionysusProject): CompositionL
     if (!clip.assetId || !project.assets.some(asset => asset.id === clip.assetId)) return [];
     return [{
       ...common, assetId: clip.assetId, sourceIn: clip.sourceIn, sourceOut: clip.sourceOut,
-      fitMode: clip.fitMode ?? "contain", x: 0, y: 0, width: 100, height: 100
+      fitMode: clip.fitMode ?? "contain", x: frameX, y: frameY, width: frameWidth, height: frameHeight
     }];
   });
   // Preserve Version layer order as the composition stacking order. Timing is checked per layer during rendering/export.
