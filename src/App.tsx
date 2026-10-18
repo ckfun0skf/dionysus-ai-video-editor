@@ -186,7 +186,7 @@ export default function App() {
     let cancelled = false, frame = 0, warned = false;
     const players = new Map<string, { element: HTMLMediaElement; release?: () => void }>();
     const clips = activeVersionTimeline
-      ? activeVersionTimeline.layers.filter(layer => layer.kind === "audio" && Boolean(layer.assetId)).map(layer => ({ id: layer.id, name: layer.name, kind: "audio" as const, assetId: layer.assetId, start: layer.start, duration: layer.duration, sourceIn: layer.sourceIn, sourceOut: layer.sourceOut, muted: layer.muted, linkedVideoClipId: undefined }))
+      ? activeVersionTimeline.layers.filter(layer => layer.kind === "audio" && Boolean(layer.assetId)).map(layer => ({ id: layer.id, name: layer.name, kind: "audio" as const, assetId: layer.assetId, start: layer.start, duration: layer.duration, sourceIn: layer.sourceIn, sourceOut: layer.sourceOut, volume: layer.volume, fadeIn: layer.fadeIn, fadeOut: layer.fadeOut, muted: layer.muted, linkedVideoClipId: undefined }))
       : (project.timelineClips ?? []).filter(clip => clip.kind === "audio" && Boolean(clip.assetId)).map(clip => ({
         ...clip,
         muted: Boolean(clip.muted || project.tracks.find(track => track.id === clip.trackId)?.muted)
@@ -216,6 +216,12 @@ export default function App() {
         if (seconds >= clip.start && seconds < clip.start + clip.duration) {
           const sourceTime = (clip.sourceIn ?? 0) + seconds - clip.start;
           if (media.readyState >= 1 && Math.abs(media.currentTime - sourceTime) > 0.35) { try { media.currentTime = Math.max(0, sourceTime); } catch { /* wait for media metadata */ } }
+          const elapsed = seconds - clip.start;
+          const remaining = clip.start + clip.duration - seconds;
+          let gain = Math.max(0, Math.min(1, clip.volume ?? 1));
+          if ((clip.fadeIn ?? 0) > 0) gain *= Math.min(1, elapsed / clip.fadeIn!);
+          if ((clip.fadeOut ?? 0) > 0) gain *= Math.min(1, remaining / clip.fadeOut!);
+          media.volume = Math.max(0, Math.min(1, gain));
           if (media.paused) void media.play().catch(() => { if (!cancelled && !warned) { warned = true; setNotice("Audio playback was blocked by the browser. Press Play again to retry."); } });
         } else if (!media.paused) media.pause();
       }
