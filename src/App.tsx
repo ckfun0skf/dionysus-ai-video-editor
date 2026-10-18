@@ -7,7 +7,7 @@ import { t } from "./i18n";
 import { addVideoClip, moveTimelineClip, trimTimelineClip, unlinkTimelineAudio, deleteTimelineClip } from "./timelineOperations";
 import { recordProjectChange, undoProjectChange as undoHistory, redoProjectChange as redoHistory } from "./projectHistory";
 import ProceduralAnimationPreview from "./ProceduralAnimationPreview";
-import { exportCompositionWebM, downloadExport } from "./compositionRenderer";
+import { collectCompositionLayers, renderCompositionFrame, exportCompositionWebM, downloadExport } from "./compositionRenderer";
 import AIGenerationPanel from "./AIGenerationPanel";
 import { deleteStoredMediaAsset, isStoredMediaPath, storeMediaAsset } from "./mediaAssetStore";
 import StoryboardFlowCanvas from "./StoryboardFlowCanvas";
@@ -44,6 +44,8 @@ export default function App() {
   const [editorTime, setEditorTime] = useState(0);
   const [previewAssetId, setPreviewAssetId] = useState("");
   const [showPreviewOverlay, setShowPreviewOverlay] = useState(true);
+  const previewCanvasRef = useRef<HTMLCanvasElement>(null);
+  const previewRenderId = useRef(0);
   const seekEditorTime = (event: React.PointerEvent<HTMLElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
     const fraction = Math.max(0, Math.min(1, (event.clientX - rect.left) / Math.max(rect.width, 1)));
@@ -101,6 +103,48 @@ export default function App() {
   }, [undoStack, redoStack, project, selectedId]);
   const selected = project.shots.find(s => s.id === selectedId) ?? project.shots[0];
   const runtime = useMemo(() => project.shots.reduce((n, s) => n + s.duration, 0), [project.shots]);
+  const activeShotInfo = useMemo(() => {
+    let offset = 0;
+    for (let index = 0; index < project.shots.length; index += 1) {
+      const shot = project.shots[index];
+      if (editorTime < offset + shot.duration || index === project.shots.length - 1) return { shot, index };
+      offset += shot.duration;
+    }
+    return { shot: project.shots[0], index: 0 };
+  }, [project.shots, editorTime]);
+  useEffect(() => {
+    const canvas = previewCanvasRef.current;
+    if (!canvas || typeof CanvasRenderingContext2D === "undefined") return;
+    const renderId = ++previewRenderId.current;
+    const allLayers = collectCompositionLayers(project);
+    const layers = allLayers.length
+      ? allLayers.filter(layer => editorTime >= layer.start && editorTime < layer.start + layer.duration)
+      : previewImage ? [{ id: "editor-image-fallback", name: previewImage.name, kind: "image" as const, start: 0, duration: Math.max(runtime, 0.1), assetId: previewImage.id, fitMode: "contain" as const, x: 0, y: 0, width: 100, height: 100 }]
+      : [];
+    const render = async () => {
+      const frame = document.createElement("canvas");
+      const releases = new Map<string, () => void>();
+      try {
+        await renderCompositionFrame(frame, project, layers, editorTime, { width: 1280, height: 720 }, new Map(), new Map(), releases);
+        if (renderId !== previewRenderId.current) return;
+        const context = canvas.getContext("2d");
+        if (context) {
+          canvas.width = frame.width;
+          canvas.height = frame.height;
+          context.drawImage(frame, 0, 0);
+        }
+      } catch {
+        if (renderId === previewRenderId.current) {
+          const context = canvas.getContext("2d");
+          if (context) { context.fillStyle = "#000"; context.fillRect(0, 0, canvas.width, canvas.height); }
+        }
+      } finally {
+        releases.forEach(release => release());
+      }
+    };
+    void render();
+    return () => { if (previewRenderId.current === renderId) previewRenderId.current += 1; };
+  }, [project, editorTime, previewImage, runtime]);
   const selectedStart = useMemo(() => { const index = project.shots.findIndex(s => s.id === selectedId); return project.shots.slice(0, Math.max(index, 0)).reduce((n, s) => n + s.duration, 0); }, [project.shots, selectedId]);
   const slotCount = project.shots.reduce((n, s) => n + s.slots.length, 0);
   function change(fn: (p: DionysusProject) => DionysusProject, historyGroup = "") {
@@ -689,7 +733,7 @@ export default function App() {
         </aside>
         <div className="editor-main">
           <header className="editor-topbar"><div className="editor-project-name">{project.name}<span> / Editor</span></div><div className="editor-top-actions"><button title="Undo (Ctrl/Cmd+Z)" aria-label="Undo" disabled={undoStack.length === 0} onClick={undoProjectChange}><Undo2 size={16}/></button><button title="Redo (Ctrl/Cmd+Shift+Z)" aria-label="Redo" disabled={redoStack.length === 0} onClick={redoProjectChange}><Redo2 size={16}/></button><button title="Notifications"><Bell size={16}/></button><button className="editor-render" onClick={()=>void exportVideo()}>Render Video</button><button className="editor-exit" onClick={()=>setEditorWorkspace(false)}>Project view</button></div></header>
-          <section className="editor-preview-stage">{previewImage && <div className="editor-preview-toolbar"><span title={previewImage.name}><Image size={13}/>{previewImage.name}</span><button type="button" className="button button-quiet button-small" aria-pressed={showPreviewOverlay} onClick={() => setShowPreviewOverlay(value => !value)}>{showPreviewOverlay ? "Hide title" : "Show title"}</button><button type="button" className="button button-quiet button-small" onClick={() => { setPreviewAssetId("__none__"); setNotice("Preview image cleared."); }}>Clear image</button></div>}<div className="editor-preview-frame">{previewImage ? <img className="editor-preview-image" src={previewImage.path} alt={previewImage.name}/> : null}{showPreviewOverlay && <div className="editor-preview-art"><div className="editor-preview-kicker">SHOT {String(Math.max(1,project.shots.findIndex(s=>s.id===selectedId)+1)).padStart(2,"0")}</div><div className="editor-preview-title">{selected?.title ?? project.name}</div><div className="editor-preview-subtitle">{selected?.intent || "Import an image to preview it behind your title"}</div></div>}<div className="editor-selection-box"><span/></div></div></section>
+          <section className="editor-preview-stage"><div className="editor-preview-toolbar"><span><Film size={13}/>Timeline preview · {editorTimeLabel(editorTime)}</span><button type="button" className="button button-quiet button-small" aria-pressed={showPreviewOverlay} onClick={() => setShowPreviewOverlay(value => !value)}>{showPreviewOverlay ? "Hide title" : "Show title"}</button>{previewImage && <button type="button" className="button button-quiet button-small" onClick={() => { setPreviewAssetId("__none__"); setNotice("Preview image cleared."); }}>Clear image</button>}</div><div className="editor-preview-frame"><canvas ref={previewCanvasRef} className="editor-preview-canvas" aria-label={"Timeline preview at " + editorTimeLabel(editorTime)} />{showPreviewOverlay && <div className="editor-preview-art"><div className="editor-preview-kicker">SHOT {String(Math.max(1,(activeShotInfo.index ?? 0)+1)).padStart(2,"0")}</div><div className="editor-preview-title">{activeShotInfo.shot?.title ?? project.name}</div><div className="editor-preview-subtitle">{activeShotInfo.shot?.intent || "No visual layer at this time. Import media and add it to a clip slot to preview it here."}</div></div>}<div className="editor-selection-box"><span/></div></div></section>
           <section className="editor-timeline"><div className="editor-playback"><div><button title="Undo" aria-label="Undo" disabled={undoStack.length === 0} onClick={undoProjectChange}><Undo2 size={15}/></button><button title="Redo" aria-label="Redo" disabled={redoStack.length === 0} onClick={redoProjectChange}><Redo2 size={15}/></button></div><div><button className="play-button" disabled><Play size={14}/></button><strong>{editorTimeLabel(editorTime)}</strong><span>/ {editorTimeLabel(runtime)}</span></div><button title="Timeline settings" onClick={()=>setView("timeline")}><Settings2 size={16}/></button></div><div className="editor-ruler"><div className="editor-track-spacer"/><div className="editor-ruler-marks" onPointerDown={e=>{e.currentTarget.setPointerCapture(e.pointerId);seekEditorTime(e);}} onPointerMove={e=>{if(e.buttons===1)seekEditorTime(e);}} role="slider" aria-label="Seek timeline" aria-valuemin={0} aria-valuemax={runtime} aria-valuenow={editorTime} tabIndex={0} onKeyDown={e=>{if(e.key==="ArrowRight")setEditorTime(t=>Math.min(runtime,t+0.5));if(e.key==="ArrowLeft")setEditorTime(t=>Math.max(0,t-0.5));}}><div className="editor-playhead-ruler" style={{left:(editorTime/Math.max(runtime,1)*100)+"%"}}/>{Array.from({length:Math.floor(runtime/5)+1},(_,i)=>i*5).concat(runtime%5===0?[]:[runtime]).map(s=><span key={s} style={{left:(s/Math.max(runtime,1)*100)+"%"}}>{time(s)}</span>)}</div></div>
           <div className="editor-track-row"><div className="editor-track-name">Text</div><div className="editor-track-lane"><div className="editor-playhead" style={{left:(editorTime/Math.max(runtime,1)*100)+"%"}}/>{project.shots.map((s,i)=><button key={s.id} draggable onDragStart={e=>e.dataTransfer.setData("text/shot-id",s.id)} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();reorderShots(e.dataTransfer.getData("text/shot-id"),s.id);}} title="Drag to reorder shot" className={"editor-text-clip "+(s.id===selectedId?"selected":"")} style={{left:(project.shots.slice(0,i).reduce((n,x)=>n+x.duration,0)/Math.max(runtime,1)*100)+"%",width:(s.duration/Math.max(runtime,1)*100)+"%"}} onClick={()=>{setSelectedId(s.id);setEditorTime(project.shots.slice(0,i).reduce((n,x)=>n+x.duration,0));}}>{s.title}</button>)}</div></div>
           {project.tracks.map((track)=><div className="editor-track-row" key={track.id}><div className="editor-track-name">{track.kind}</div><div className="editor-track-lane"><div className="editor-playhead" style={{left:(editorTime/Math.max(runtime,1)*100)+"%"}}/>{project.shots.map((s,i)=><button key={s.id} draggable onDragStart={e=>e.dataTransfer.setData("text/shot-id",s.id)} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();reorderShots(e.dataTransfer.getData("text/shot-id"),s.id);}} title="Drag to reorder shot" className={"editor-video-clip "+(s.id===selectedId?"selected":"")} style={{left:(project.shots.slice(0,i).reduce((n,x)=>n+x.duration,0)/Math.max(runtime,1)*100)+"%",width:(s.duration/Math.max(runtime,1)*100)+"%"}} onClick={()=>{setSelectedId(s.id);setEditorTime(project.shots.slice(0,i).reduce((n,x)=>n+x.duration,0));}}><span>{s.title}</span><small>{s.duration}s</small></button>)}</div></div>)}
