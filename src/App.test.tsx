@@ -644,6 +644,45 @@ describe("App history integration", () => {
     await flushEffects();
     const editedVersion = persistedProject().shots[0].slots[0].versions.find(version => version.id === addedVersionId);
     expect(editedVersion?.layers.some(layer => layer.kind === "procedural")).toBe(true);
+    const proceduralLayerId = editedVersion!.layers.find(layer => layer.kind === "procedural")!.id;
+    const masterShotDurationBefore = persistedProject().shots[0].duration;
+    const slotDurationBefore = persistedProject().shots[0].slots[0].duration;
+    const versionDurationInput = container.querySelector<HTMLInputElement>('input[aria-label="Version duration"]');
+    expect(versionDurationInput).toBeTruthy();
+    setInputValue(versionDurationInput!, String(editedVersion!.duration + 3));
+    await flushEffects();
+    expect(persistedProject().shots[0].slots[0].versions.find(version => version.id === addedVersionId)?.duration).toBe(editedVersion!.duration + 3);
+    expect(persistedProject().shots[0].duration).toBe(masterShotDurationBefore);
+    expect(persistedProject().shots[0].slots[0].duration).toBe(slotDurationBefore);
+
+    const layerStartInput = container.querySelector<HTMLInputElement>('input[aria-label="Version layer ' + proceduralLayerId + ' start"]');
+    const layerDurationInput = container.querySelector<HTMLInputElement>('input[aria-label="Version layer ' + proceduralLayerId + ' duration"]');
+    expect(layerStartInput).toBeTruthy();
+    expect(layerDurationInput).toBeTruthy();
+    setInputValue(layerStartInput!, "1.5");
+    await flushEffects();
+    setInputValue(layerDurationInput!, "2.25");
+    await flushEffects();
+    let timedLayer = persistedProject().shots[0].slots[0].versions.find(version => version.id === addedVersionId)!.layers.find(layer => layer.id === proceduralLayerId)!;
+    expect(timedLayer).toMatchObject({ start: 1.5, duration: 2.25 });
+    expect(persistedProject().shots[0].duration).toBe(masterShotDurationBefore);
+    expect(persistedProject().shots[0].slots[0].duration).toBe(slotDurationBefore);
+
+    const nestedClip = container.querySelector<HTMLButtonElement>(".nested-timeline-clip.kind-procedural");
+    const nestedLane = nestedClip?.parentElement as HTMLDivElement | null;
+    expect(nestedClip?.draggable).toBe(true);
+    expect(nestedLane).toBeTruthy();
+    Object.defineProperty(nestedLane!, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({ left: 0, top: 0, right: 100, bottom: 54, width: 100, height: 54, x: 0, y: 0, toJSON: () => ({}) })
+    });
+    const nestedDragEnd = new MouseEvent("dragend", { bubbles: true, cancelable: true, clientX: 70 });
+    act(() => nestedClip!.dispatchEvent(nestedDragEnd));
+    await flushEffects();
+    timedLayer = persistedProject().shots[0].slots[0].versions.find(version => version.id === addedVersionId)!.layers.find(layer => layer.id === proceduralLayerId)!;
+    const versionDurationAfter = persistedProject().shots[0].slots[0].versions.find(version => version.id === addedVersionId)!.duration;
+    const expectedLayerStart = Math.round(Math.max(0, Math.min(versionDurationAfter - timedLayer.duration, 0.7 * versionDurationAfter - timedLayer.duration / 2)) * persistedProject().frameRate) / persistedProject().frameRate;
+    expect(timedLayer.start).toBeCloseTo(expectedLayerStart, 7);
 
     click(Array.from(container.querySelectorAll<HTMLButtonElement>(".timeline-workspace-tabs button")).find(button => button.textContent?.includes("Master Timeline"))!);
     await flushEffects();
