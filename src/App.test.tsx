@@ -1085,7 +1085,7 @@ describe("Timeline preview", () => {
     await openTimelineView();
     const canvas = container.querySelector<HTMLCanvasElement>(".integrated-preview-frame canvas");
     const playhead = container.querySelector<HTMLInputElement>('input[aria-label="Timeline playhead time"]');
-    expect(canvas?.getAttribute("aria-label")).toBe("Timeline preview at 00:00.00");
+    expect(canvas?.getAttribute("aria-label")).toBe("Master preview at 00:00.00");
     expect(playhead).toBeTruthy();
     act(() => {
       const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
@@ -1093,7 +1093,49 @@ describe("Timeline preview", () => {
       playhead!.dispatchEvent(new Event("input", { bubbles: true }));
       playhead!.dispatchEvent(new Event("change", { bubbles: true }));
     });
-    expect(canvas?.getAttribute("aria-label")).toBe("Timeline preview at 00:00.50");
+    expect(canvas?.getAttribute("aria-label")).toBe("Master preview at 00:00.50");
+  });
+
+  it("keeps a separate preview and playhead position for each Timeline tab", async () => {
+    await openTimelineView();
+
+    const masterPreview = container.querySelector(".master-timeline-content .integrated-preview-panel");
+    expect(masterPreview).toBeTruthy();
+    const masterPlayhead = container.querySelector<HTMLInputElement>(".master-timeline-content input[aria-label=\"Timeline playhead time\"]");
+    expect(masterPlayhead).toBeTruthy();
+    setInputValue(masterPlayhead!, "0.5");
+    await flushEffects();
+
+    const versionMenu = container.querySelector<HTMLDetailsElement>(".master-shot-version-menu");
+    expect(versionMenu).toBeTruthy();
+    click(versionMenu!.querySelector("summary") as HTMLElement);
+    const editButton = versionMenu!.querySelector<HTMLButtonElement>(".timeline-version-edit");
+    expect(editButton).toBeTruthy();
+    click(editButton!);
+    await flushEffects();
+
+    expect(container.querySelector(".nested-timeline-tab .integrated-preview-panel")).toBeTruthy();
+    const versionDetails = container.querySelector<HTMLDetailsElement>(".nested-version-inspector-disclosure");
+    expect(versionDetails).toBeTruthy();
+    expect(versionDetails!.open).toBe(false);
+    const versionPreview = container.querySelector<HTMLInputElement>(".nested-timeline-tab input[aria-label=\"Timeline playhead time\"]");
+    expect(versionPreview).toBeTruthy();
+    expect(versionPreview!.value).toBe("0");
+
+    setInputValue(versionPreview!, "1.25");
+    await flushEffects();
+    const masterTab = Array.from(container.querySelectorAll<HTMLButtonElement>(".timeline-workspace-tabs [role=\"tab\"]")).find(button => button.textContent?.includes("Master Timeline"));
+    expect(masterTab).toBeTruthy();
+    click(masterTab!);
+    await flushEffects();
+    expect(masterPlayhead!.value).toBe("0.5");
+
+    const versionTab = container.querySelector<HTMLButtonElement>(".timeline-workspace-tab [role=\"tab\"]");
+    expect(versionTab).toBeTruthy();
+    click(versionTab!);
+    await flushEffects();
+    const restoredVersionPlayhead = container.querySelector<HTMLInputElement>(".nested-timeline-tab input[aria-label=\"Timeline playhead time\"]");
+    expect(restoredVersionPlayhead?.value).toBe("1.25");
   });
 });
 
