@@ -271,7 +271,10 @@ export default function App() {
       const frame = document.createElement("canvas");
       const releases = previewMediaReleasesRef.current;
       try {
-        await renderCompositionFrame(frame, project, layers, editorTime, { width: 1280, height: 720 }, previewImagesRef.current, previewVideosRef.current, releases);
+        const compositionPath = activeVersionTimelineTab?.id === activeTimelineTabId && activeVersionTimelineTab.assetId
+          ? new Set([activeVersionTimelineTab.assetId])
+          : new Set<string>();
+        await renderCompositionFrame(frame, project, layers, editorTime, { width: 1280, height: 720 }, previewImagesRef.current, previewVideosRef.current, releases, compositionPath);
         if (renderId !== previewRenderId.current) return;
         const context = canvas.getContext("2d");
         if (context) {
