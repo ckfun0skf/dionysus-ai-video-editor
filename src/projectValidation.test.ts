@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { sampleProject } from "./sampleProject";
+import type { CompositionLayer } from "./types";
 import { validateProject } from "./projectValidation";
 
 describe("validateProject", () => {
@@ -316,9 +317,16 @@ describe("validateProject", () => {
 
   it("rejects unresolved or non-image references from Code modules", () => {
     const project = structuredClone(sampleProject);
-    const codeLayer = project.shots[0].slots[0].versions[0].layers[0];
-    codeLayer.kind = "procedural";
-    codeLayer.referencedImageAssetIds = ["missing-image"];
+    const version = project.shots[0].slots[0].versions[0];
+    const codeLayer: CompositionLayer = {
+      id: "test-code-image-reference",
+      name: "Code module",
+      kind: "procedural",
+      start: 0,
+      duration: Math.min(1, version.duration),
+      referencedImageAssetIds: ["missing-image"],
+    };
+    version.layers.push(codeLayer);
     expect(validateProject(project)).toBe(false);
 
     project.assets.push({ id: "reference-image", name: "Reference image", kind: "image", path: "data:image/png;base64,AA==" });
