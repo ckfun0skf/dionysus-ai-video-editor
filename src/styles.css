@@ -177,3 +177,27 @@
 @keyframes dys-pulse { from { scale: 1; } to { scale: 1.06; } }
 @keyframes dys-rotate { from { rotate: -4deg; } to { rotate: 4deg; } }
 @media (prefers-reduced-motion: reduce) { .composition-preview-layer { animation: none !important; } }
+
+
+/* Core editor navigation: keep Storyboard, Timeline, Assets and References one click away. */
+.editor-view-nav{display:flex;align-items:center;gap:4px;min-width:0;max-width:min(46vw,560px);overflow-x:auto;scrollbar-width:thin}
+.editor-view-nav button{display:inline-flex;align-items:center;justify-content:center;gap:5px;border:1px solid transparent;border-radius:5px;padding:7px 8px;background:transparent;color:#9eacc2;font:500 10px Arial,sans-serif;white-space:nowrap;cursor:pointer}
+.editor-view-nav button:hover{background:#1a2940;color:#e0e9f8}
+.editor-view-nav button.active{border-color:#344b70;background:#1c2e4d;color:#e6efff}
+.editor-view-nav button:focus-visible{outline:2px solid #5795ff;outline-offset:1px}
+.heading-meta .button{font-size:10px;padding:7px 9px}
+@media(max-width:900px){.editor-view-nav{max-width:35vw}.editor-view-nav button{padding:6px 5px}.editor-view-nav button span{display:none}}
+@media(max-width:580px){.editor-view-nav{max-width:42vw}.editor-project-name{max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+
+
+/* Keep actual media lanes in view; selected-clip controls live in the side inspector. */
+.editor-tool-hint{margin:2px 0 8px;font-size:10px;line-height:1.5;color:#91a1b8}
+.editor-inspector .text-field,.editor-inspector .text-area{width:100%;min-width:0;background:#101a2c;color:#e5edf9;border:1px solid #2b3b54;border-radius:5px;padding:8px;font:11px Arial,sans-serif}
+.editor-inspector .text-area{min-height:62px;resize:vertical}
+.editor-clip-fields{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.editor-clip-fields label,.editor-inspector>label{display:grid;gap:6px;margin:10px 0;font-size:10px;color:#b9c7dc}
+.visual-clip-actions{display:flex;gap:5px;flex-wrap:wrap;margin:8px 0}
+.visual-clip-actions button{border:1px solid #344863;background:#1a2a41;color:#d7e5fa;padding:7px 8px;border-radius:5px;font-size:10px;cursor:pointer}
+.visual-clip-actions button:hover{background:#273b58}
+.visual-timeline-help{font-size:10px;line-height:1.45;color:#8294af;padding:3px 0 5px}
+@media(max-width:900px){.editor-clip-fields{grid-template-columns:1fr}.editor-inspector{overflow-y:auto}}
