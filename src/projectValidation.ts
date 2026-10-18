@@ -99,7 +99,12 @@ function isAsset(value: unknown): boolean {
   return isRecord(value) && isString(value.id) && isString(value.name) &&
     isString(value.kind) && assetKinds.has(value.kind) &&
     (value.path === undefined || isString(value.path)) &&
-    (value.notes === undefined || isString(value.notes));
+    (value.notes === undefined || isString(value.notes)) &&
+    (value.prompt === undefined || isString(value.prompt)) &&
+    (value.modelName === undefined || isString(value.modelName)) &&
+    (value.modelVersion === undefined || isString(value.modelVersion)) &&
+    (value.thumbnailPath === undefined || isString(value.thumbnailPath)) &&
+    (value.generationParameters === undefined || isRecord(value.generationParameters));
 }
 function isProfile(value: unknown): boolean {
   return isRecord(value) && isString(value.id) && isString(value.name) &&
