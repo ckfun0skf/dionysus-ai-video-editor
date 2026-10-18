@@ -520,6 +520,7 @@ describe("App history integration", () => {
     expect(moved.shots[0].masterStart).toBe(16.25);
     expect(moved.shots[1].masterStart).toBe(secondStartBefore);
     expect(moved.shots[0].slots[0].versions[0].duration).toBe(firstVersionDuration);
+    expect(container.querySelector(".master-shot-overlap-warning")).toBeTruthy();
     expect(container.querySelector<HTMLInputElement>('input[aria-label="Master Shot start time"]')?.value).toBe("16.25");
 
     click(buttonsNamed("Undo").find(button => !button.disabled)!);
@@ -608,6 +609,7 @@ describe("App history integration", () => {
       expect(shot.masterStart).toBeCloseTo((chronological[index].masterStart ?? 0) + chronological[index].duration, 7);
     });
     expect(afterRipple.shots.map(shot => shot.slots.map(slot => slot.versions.map(version => version.duration)))).toEqual(versionDurationsBeforeRipple);
+    expect(container.querySelector(".master-shot-overlap-warning")).toBeNull();
   });
 
   it("opens nested Version tabs, adds a procedural layer, and keeps linked-audio mute/unlink independent", async () => {
