@@ -16,23 +16,56 @@ export function collectCompositionLayers(project: DionysusProject): CompositionL
     });
     return layers;
   });
-  const timeline = (project.timelineClips ?? []).filter(clip => !clip.id.startsWith("storyboard-")).flatMap(clip => {
+  const timeline: CompositionLayer[] = (project.timelineClips ?? []).filter(clip => !clip.id.startsWith("storyboard-")).flatMap((clip): CompositionLayer[] => {
     const common = {
-      id: clip.id, name: clip.name, kind: clip.kind, start: clip.start, duration: clip.duration,
+      id: clip.id, name: clip.name, kind: clip.kind === "clip" ? "composition" as const : clip.kind, start: clip.start, duration: clip.duration,
       ...(clip.scriptVersionId ? { scriptVersionId: clip.scriptVersionId } : {}),
       ...(clip.prompt ? { prompt: clip.prompt } : {}),
       ...(clip.modelName ? { modelName: clip.modelName } : {}),
       ...(clip.modelVersion ? { modelVersion: clip.modelVersion } : {}),
       muted: Boolean(clip.muted || project.tracks.find(track => track.id === clip.trackId)?.muted),
-      volume: clip.volume, fadeIn: clip.fadeIn, fadeOut: clip.fadeOut
+      volume: clip.volume, fadeIn: clip.fadeIn, fadeOut: clip.fadeOut, shortSourceBehavior: clip.shortSourceBehavior
     };
+    if (clip.kind === "clip") {
+      const asset = project.assets.find(item => item.id === clip.assetId && item.kind === "clip");
+      const version = asset?.clipVersions?.find(item => item.id === asset.selectedClipVersionId) ?? asset?.clipVersions?.[0];
+      if (!version || version.duration <= 0) return [];
+      const result: CompositionLayer[] = [];
+      const repeats = clip.shortSourceBehavior === "loop" ? Math.max(1, Math.ceil(clip.duration / version.duration)) : 1;
+      for (let repeat = 0; repeat < repeats; repeat += 1) {
+        const repeatOffset = repeat * version.duration;
+        if (repeatOffset >= clip.duration) break;
+        for (const layer of version.layers) {
+          const startOffset = repeatOffset + layer.start;
+          if (startOffset >= clip.duration) continue;
+          const visibleDuration = Math.min(layer.duration, version.duration - layer.start, clip.duration - startOffset);
+          if (visibleDuration <= 0) continue;
+          result.push({
+            ...layer,
+            id: clip.id + ":" + layer.id + ":" + repeat,
+            name: layer.name,
+            start: clip.start + startOffset,
+            duration: visibleDuration,
+            muted: Boolean(layer.muted || clip.muted || project.tracks.find(track => track.id === clip.trackId)?.muted),
+            volume: layer.volume === undefined ? clip.volume : layer.volume * (clip.volume ?? 1)
+          });
+        }
+      }
+      return result;
+    }
     if (clip.kind === "text" || clip.kind === "procedural") {
-      return [{ ...common, fitMode: "contain" as const, x: 0, y: clip.kind === "text" ? 75 : 0, width: 100, height: clip.kind === "text" ? 18 : 100 }];
+      return [{
+        ...common, fitMode: "contain" as const, x: 0, y: clip.kind === "text" ? 75 : 0,
+        width: 100, height: clip.kind === "text" ? 18 : 100,
+        ...(clip.code !== undefined ? { code: clip.code } : {}),
+        ...(clip.html !== undefined ? { html: clip.html } : {}),
+        ...(clip.css !== undefined ? { css: clip.css } : {})
+      }];
     }
     if (!clip.assetId || !project.assets.some(asset => asset.id === clip.assetId)) return [];
     return [{
       ...common, assetId: clip.assetId, sourceIn: clip.sourceIn, sourceOut: clip.sourceOut,
-      fitMode: "contain" as const, x: 0, y: 0, width: 100, height: 100
+      fitMode: clip.fitMode ?? "contain", x: 0, y: 0, width: 100, height: 100
     }];
   });
   // Preserve Version layer order as the composition stacking order. Timing is checked per layer during rendering/export.
@@ -153,7 +186,13 @@ export async function renderCompositionFrame(canvas: HTMLCanvasElement, project:
     }
     const video = asset.kind === "video" ? videos.get(asset.id) : undefined;
     if (video && video.readyState >= 1 && seconds >= layer.start && seconds < layer.start + layer.duration) {
-      await seekMedia(video, (layer.sourceIn ?? 0) + seconds - layer.start);
+      const sourceIn = Math.max(0, layer.sourceIn ?? 0);
+      const sourceEnd = Math.min(video.duration, layer.sourceOut ?? video.duration);
+      const sourceSpan = Math.max(0, sourceEnd - sourceIn);
+      const localTime = seconds - layer.start;
+      if (sourceSpan <= 0 || (layer.shortSourceBehavior !== "loop" && localTime >= sourceSpan)) continue;
+      const sourceOffset = layer.shortSourceBehavior === "loop" ? localTime % sourceSpan : localTime;
+      await seekMedia(video, sourceIn + sourceOffset);
     }
     drawLayer(ctx, layer, asset, seconds, width, height, images, videos);
   }

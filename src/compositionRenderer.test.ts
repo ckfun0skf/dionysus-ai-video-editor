@@ -38,23 +38,49 @@ describe("compositionRenderer", () => {
       id: "audio-clip", name: "Music bed", kind: "audio", trackId: "track-audio-1",
       start: 2, duration: 4, assetId: "audio-asset", sourceIn: 0, sourceOut: 4, muted: true, volume: 0.4, fadeIn: 0.5, fadeOut: 1
     }, {
-      id: "storyboard-shot-slot-layer", name: "Synced storyboard copy", kind: "video", trackId: "track-video-1",
-      start: 0, duration: 4, assetId: "video-asset"
+      id: "master-video-clip", name: "Master video clip", kind: "video", trackId: "track-video-1",
+      start: 0, duration: 4, assetId: "video-asset", sourceIn: 1.5, sourceOut: 6, shortSourceBehavior: "loop", fitMode: "cover"
     }];
     const layers = collectCompositionLayers(project);
-    expect(layers).toHaveLength(1);
+    expect(layers).toHaveLength(2);
     expect(layers[0]).toMatchObject({ id: "audio-clip", kind: "audio", start: 2, duration: 4, assetId: "audio-asset", muted: true, volume: 0.4, fadeIn: 0.5, fadeOut: 1 });
+    expect(layers.find(layer => layer.id === "master-video-clip")).toMatchObject({ sourceIn: 1.5, sourceOut: 6, shortSourceBehavior: "loop", fitMode: "cover" });
   });
 
   it("includes source-free Text blocks and procedural blocks, without pretending to render procedural code", () => {
     const project = structuredClone(sampleProject);
     project.timelineClips = [
       { id: "title-block", name: "A title", kind: "text", trackId: "track-text-1", start: 1, duration: 2 },
-      { id: "threejs-block", name: "Three.js", kind: "procedural", trackId: "track-procedural-1", start: 0, duration: 4, scriptVersionId: "script-version-1" }
+      { id: "threejs-block", name: "Code clip", kind: "procedural", trackId: "track-procedural-1", start: 0, duration: 4, scriptVersionId: "script-version-1", html: "<canvas></canvas>", css: "canvas{width:100%}", code: "console.log(1)" }
     ];
     const layers = collectCompositionLayers(project);
     expect(layers).toContainEqual(expect.objectContaining({ id: "title-block", name: "A title", kind: "text", start: 1, duration: 2 }));
-    expect(layers).toContainEqual(expect.objectContaining({ id: "threejs-block", kind: "procedural", scriptVersionId: "script-version-1" }));
+    expect(layers).toContainEqual(expect.objectContaining({ id: "threejs-block", kind: "procedural", scriptVersionId: "script-version-1", html: "<canvas></canvas>", css: "canvas{width:100%}", code: "console.log(1)" }));
+  });
+
+  it("expands reusable clip assets into multiple timed layers and repeats them when requested", () => {
+    const project = structuredClone(sampleProject);
+    project.assets.push({
+      id: "reusable-clip", name: "Code and audio bumper", kind: "clip", selectedClipVersionId: "clip-v1",
+      clipVersions: [{
+        id: "clip-v1", name: "Version A", description: "", duration: 3,
+        layers: [
+          { id: "code-layer", name: "Particle animation", kind: "procedural", start: 0, duration: 3, html: "<canvas></canvas>", css: "", code: "render()" },
+          { id: "audio-layer", name: "Sound bed", kind: "audio", start: 0.5, duration: 2.5, assetId: "audio-inside-clip", volume: 0.7 }
+        ],
+        scriptVersionIds: [], generationRecords: []
+      }]
+    });
+    project.assets.push({ id: "audio-inside-clip", name: "Sound bed", kind: "audio", path: "data:audio/wav;base64,AA==" });
+    project.timelineClips = [{
+      id: "clip-instance", name: "Bumper", kind: "clip", trackId: "track-video-1",
+      start: 4, duration: 6, assetId: "reusable-clip", shortSourceBehavior: "loop"
+    }];
+    const layers = collectCompositionLayers(project);
+    expect(layers).toHaveLength(4);
+    expect(layers.map(layer => layer.start).sort((a, b) => a - b)).toEqual([4, 4.5, 7, 7.5]);
+    expect(layers.filter(layer => layer.kind === "procedural")).toHaveLength(2);
+    expect(layers.filter(layer => layer.kind === "audio").every(layer => layer.assetId === "audio-inside-clip")).toBe(true);
   });
 
   it("calculates output duration from the last visible layer end", () => {
