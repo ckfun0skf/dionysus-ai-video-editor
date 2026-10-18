@@ -194,37 +194,43 @@ describe("App history integration", () => {
     expect(persistedProject().timelineClips?.find(clip => clip.kind === "video")?.duration).toBe(audio?.duration);
   });
 
-  it("supports Undo/Redo buttons and Ctrl/Cmd+Z keyboard shortcuts", async () => {
+  it("supports Undo/Redo for adding actual timeline Layers", async () => {
     await openTimelineView();
-    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Add linked video/audio")) as HTMLButtonElement;
-    click(add);
+    const baseCount = persistedProject().tracks.length;
+    const addLayer = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Add layer"));
+    expect(addLayer).toBeTruthy();
+    click(addLayer!);
+    const videoOption = Array.from(container.querySelectorAll<HTMLButtonElement>(".layer-add-menu button")).find(button => button.textContent?.trim() === "Video layer");
+    expect(videoOption).toBeTruthy();
+    click(videoOption!);
     await flushEffects();
-    expect(persistedProject().timelineClips).toHaveLength(2);
+    expect(persistedProject().tracks).toHaveLength(baseCount + 1);
 
-    const undoButtons = buttonsNamed("Undo");
-    expect(undoButtons.length).toBeGreaterThan(0);
-    click(undoButtons[0]);
+    click(buttonsNamed("Undo")[0]);
     await flushEffects();
-    expect(persistedProject().timelineClips ?? []).toHaveLength(0);
+    expect(persistedProject().tracks).toHaveLength(baseCount);
+    expect(buttonsNamed("Redo").some(button => !button.disabled)).toBe(true);
 
-    const redoButtons = buttonsNamed("Redo");
-    expect(redoButtons.some(button => !button.disabled)).toBe(true);
-    click(redoButtons.find(button => !button.disabled)!);
+    click(buttonsNamed("Redo").find(button => !button.disabled)!);
     await flushEffects();
-    expect(persistedProject().timelineClips).toHaveLength(2);
+    expect(persistedProject().tracks).toHaveLength(baseCount + 1);
 
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true }));
     await flushEffects();
-    expect(persistedProject().timelineClips ?? []).toHaveLength(0);
+    expect(persistedProject().tracks).toHaveLength(baseCount);
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "z", metaKey: true, shiftKey: true, bubbles: true }));
     await flushEffects();
-    expect(persistedProject().timelineClips).toHaveLength(2);
+    expect(persistedProject().tracks).toHaveLength(baseCount + 1);
   });
+
+  
 
   it("clears Undo/Redo history after importing a valid project", async () => {
     await openTimelineView();
-    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Add linked video/audio")) as HTMLButtonElement;
-    click(add);
+    const addLayer = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Add layer"));
+    click(addLayer!);
+    const videoOption = Array.from(container.querySelectorAll<HTMLButtonElement>(".layer-add-menu button")).find(button => button.textContent?.trim() === "Video layer");
+    click(videoOption!);
     await flushEffects();
     expect(buttonsNamed("Undo")[0].disabled).toBe(false);
 
@@ -247,27 +253,32 @@ describe("App history integration", () => {
     expect(persistedProject().timelineClips ?? []).toEqual(sampleProject.timelineClips ?? []);
   });
 
-  it("clears redo when a new timeline operation follows Undo", async () => {
+  
+
+  it("clears redo when a new timeline Layer follows Undo", async () => {
     await openTimelineView();
-    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Add linked video/audio")) as HTMLButtonElement;
-    click(add);
+    const baseCount = persistedProject().tracks.length;
+    const addLayer = () => Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Add layer"));
+    click(addLayer()!);
+    click(Array.from(container.querySelectorAll<HTMLButtonElement>(".layer-add-menu button")).find(button => button.textContent?.trim() === "Video layer")!);
     await flushEffects();
     click(buttonsNamed("Undo")[0]);
     await flushEffects();
     expect(buttonsNamed("Redo").every(button => button.disabled)).toBe(false);
 
-    const addAgain = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Add linked video/audio")) as HTMLButtonElement;
-    click(addAgain);
+    click(addLayer()!);
+    click(Array.from(container.querySelectorAll<HTMLButtonElement>(".layer-add-menu button")).find(button => button.textContent?.trim() === "Audio layer")!);
     await flushEffects();
     expect(buttonsNamed("Redo").every(button => button.disabled)).toBe(true);
-    expect(persistedProject().timelineClips).toHaveLength(2);
+    expect(persistedProject().tracks).toHaveLength(baseCount + 1);
+    expect(persistedProject().tracks.at(-1)?.kind).toBe("audio");
   });
+
+  
 
   it("restores linked timeline state after an App unmount/remount from localStorage", async () => {
     await openTimelineView();
-    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Add linked video/audio")) as HTMLButtonElement;
-    click(add);
-    await flushEffects();
+    await seedLinkedVideoAudioPairs();
     const beforeReload = persistedProject();
     expect(beforeReload.timelineClips).toHaveLength(2);
 
@@ -287,11 +298,8 @@ describe("App history integration", () => {
 
   it("round-trips linked timeline metadata through actual project export and import", async () => {
     await openTimelineView();
-    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Add linked video/audio")) as HTMLButtonElement;
-    click(add);
-    await flushEffects();
-    click(Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Add linked video/audio")) as HTMLButtonElement);
-    await flushEffects();
+    await seedLinkedVideoAudioPairs();
+    await seedLinkedVideoAudioPairs(2);
 
     const secondAudioRow = timelineRows().find(row => row.textContent?.includes("Video clip 2 audio"));
     expect(secondAudioRow).toBeTruthy();
@@ -349,9 +357,7 @@ describe("App history integration", () => {
 
   it("exports the current project as JSON including linked timeline metadata", async () => {
     await openTimelineView();
-    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Add linked video/audio")) as HTMLButtonElement;
-    click(add);
-    await flushEffects();
+    await seedLinkedVideoAudioPairs();
 
     const exportButton = Array.from(container.querySelectorAll<HTMLButtonElement>("button"))
       .find(button => button.textContent?.toLowerCase().includes("export project"));
@@ -376,9 +382,7 @@ describe("App history integration", () => {
 
   it("does not overwrite the current project when import JSON is invalid", async () => {
     await openTimelineView();
-    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Add linked video/audio")) as HTMLButtonElement;
-    click(add);
-    await flushEffects();
+    await seedLinkedVideoAudioPairs();
     const before = persistedProject();
 
     const input = container.querySelector<HTMLInputElement>('input[type="file"][accept*="application/json"]');
@@ -399,9 +403,7 @@ describe("App history integration", () => {
 
   it("unlinks audio in the App, edits it independently, and restores the link through Undo/Redo", async () => {
     await openTimelineView();
-    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Add linked video/audio")) as HTMLButtonElement;
-    click(add);
-    await flushEffects();
+    await seedLinkedVideoAudioPairs();
 
     const clips = () => persistedProject().timelineClips ?? [];
     const video = () => clips().find(clip => clip.kind === "video")!;
@@ -441,9 +443,7 @@ describe("App history integration", () => {
 
   it("deletes linked video and audio together and restores both through Undo/Redo", async () => {
     await openTimelineView();
-    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Add linked video/audio")) as HTMLButtonElement;
-    click(add);
-    await flushEffects();
+    await seedLinkedVideoAudioPairs();
 
     const clips = () => persistedProject().timelineClips ?? [];
     const initial = clips();
@@ -468,9 +468,7 @@ describe("App history integration", () => {
 
   it("deletes only a linked audio clip from the App and restores it through Undo/Redo", async () => {
     await openTimelineView();
-    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Add linked video/audio")) as HTMLButtonElement;
-    click(add);
-    await flushEffects();
+    await seedLinkedVideoAudioPairs();
 
     const clips = () => persistedProject().timelineClips ?? [];
     const initial = clips();
@@ -497,9 +495,7 @@ describe("App history integration", () => {
 
   it("moves and trims linked audio through the App and restores both clips with Undo/Redo", async () => {
     await openTimelineView();
-    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Add linked video/audio")) as HTMLButtonElement;
-    click(add);
-    await flushEffects();
+    await seedLinkedVideoAudioPairs();
 
     const clips = () => persistedProject().timelineClips ?? [];
     const video = () => clips().find(clip => clip.kind === "video")!;
@@ -838,6 +834,7 @@ describe("App history integration", () => {
     expect(layerOptions.some(label => label.trim() === "Video layer")).toBe(true);
     expect(layerOptions.some(label => label.trim() === "Audio layer")).toBe(true);
     expect(layerOptions.some(label => label.trim() === "Text layer")).toBe(true);
+    expect(layerOptions.some(label => label.includes("Add linked video/audio"))).toBe(false);
     click(addLayer!);
     await flushEffects();
 
@@ -847,16 +844,12 @@ describe("App history integration", () => {
     expect(visibleTrackKinds.some(label => label.includes("Code"))).toBe(false);
     expect(visibleTrackKinds.some(label => label.includes("Effects"))).toBe(false);
 
-    click(addLayer!);
-    const linkedOption = Array.from(container.querySelectorAll<HTMLButtonElement>(".layer-add-menu button")).find(button => button.textContent?.includes("Add linked video/audio"));
-    expect(linkedOption).toBeTruthy();
-    click(linkedOption!);
-    await flushEffects();
+    await seedLinkedVideoAudioPairs();
     const video = persistedProject().timelineClips?.find(clip => clip.kind === "video" && !clip.id.startsWith("storyboard-"));
     const audio = persistedProject().timelineClips?.find(clip => clip.kind === "audio" && clip.linkedVideoClipId === video?.id);
     expect(video).toBeTruthy();
     expect(audio).toBeTruthy();
-    const mute = buttonsNamed("Mute Audio 1 layer")[0] ?? container.querySelector<HTMLButtonElement>(".track-layer-mute");
+    const mute = container.querySelector<HTMLButtonElement>(".track-layer-mute");
     expect(mute).toBeTruthy();
     click(mute!);
     await flushEffects();
@@ -868,11 +861,11 @@ describe("App history integration", () => {
     expect(persistedProject().timelineClips?.find(clip => clip.id === audio!.id)?.linkedVideoClipId).toBeUndefined();
   });
 
+  
+
   it("generates timeline clips from storyboard slots without deleting manual clips", async () => {
     await openTimelineView();
-    const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Add linked video/audio")) as HTMLButtonElement;
-    click(add);
-    await flushEffects();
+    await seedLinkedVideoAudioPairs();
     const storyboardNav = Array.from(container.querySelectorAll<HTMLButtonElement>(".nav-item")).find(button => button.textContent?.includes("Storyboard"));
     expect(storyboardNav).toBeTruthy();
     click(storyboardNav!);
