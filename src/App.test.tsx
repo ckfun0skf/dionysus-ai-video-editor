@@ -1217,6 +1217,26 @@ describe("Integrated timeline editor", () => {
   });
 
 
+
+  it("keeps Clip Asset timeline ruler and track columns aligned", async () => {
+    const nav = Array.from(container.querySelectorAll<HTMLButtonElement>(".nav-item")).find(button => button.textContent?.includes("Assets"));
+    click(nav!); await flushEffects();
+    click(Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Create asset"))!);
+    click(Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menu"] button')).find(button => button.textContent?.trim() === "Clip")!);
+    setInputValue(container.querySelector<HTMLInputElement>('[aria-label="Clip title"]')!, "Shared Geometry Clip");
+    setInputValue(container.querySelector<HTMLInputElement>('[aria-label="Clip canvas width"]')!, "1920");
+    setInputValue(container.querySelector<HTMLInputElement>('[aria-label="Clip canvas height"]')!, "1080");
+    setInputValue(container.querySelector<HTMLInputElement>('[aria-label="Clip duration"]')!, "8");
+    click(Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Create empty Clip"))!);
+    await flushEffects();
+    click(Array.from(container.querySelectorAll<HTMLButtonElement>(".asset-card button")).find(button => button.textContent?.includes("Edit Timeline"))!);
+    await flushEffects();
+    const nested = container.querySelector<HTMLElement>(".nested-timeline-tab.visual-timeline");
+    expect(nested).toBeTruthy();
+    expect(nested!.querySelector(".nested-visual-timeline-ruler .visual-ruler-caption")?.textContent).toBe("TIME");
+    expect(nested!.querySelector(".nested-timeline-row.visual-track-row .nested-timeline-row-track.visual-track-lane")).toBeTruthy();
+  });
+
   it("resizes a Master Timeline clip into its neighbor with preview and one-step Undo/Redo", async () => {
     await openTimelineView();
     await seedLinkedVideoAudioPairs(2);
