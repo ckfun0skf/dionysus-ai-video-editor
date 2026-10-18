@@ -76,7 +76,8 @@
 @media(max-width:800px){.editor-workspace{grid-template-columns:42px 220px minmax(0,1fr)}.editor-options{grid-template-columns:repeat(2,minmax(0,1fr))}.editor-top-actions .editor-exit{display:none}}
 @media(max-width:580px){.editor-workspace{grid-template-columns:40px 180px minmax(0,1fr)}.editor-inspector{padding:10px 6px}.editor-preview-stage{padding:8px}.editor-main{grid-template-rows:44px minmax(180px,1fr) minmax(200px,42%)}.editor-top-actions button:not(.editor-render){display:none}}
 
-.editor-preview-image{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0}.editor-preview-art{z-index:1;background:linear-gradient(120deg,#0c172488,#163b3588 50%,#121d2b77)}.editor-selection-box{z-index:2}
+.editor-preview-image{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0}
+.editor-preview-canvas{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:0}.editor-preview-art{z-index:1;background:linear-gradient(120deg,#0c172488,#163b3588 50%,#121d2b77)}.editor-selection-box{z-index:2}
 
 .editor-ruler-marks{cursor:crosshair;outline:none}.editor-ruler-marks:focus-visible{box-shadow:inset 0 0 0 1px #6da4ff}.editor-playhead,.editor-playhead-ruler{position:absolute;top:0;bottom:0;width:2px;background:#ff5e6c;z-index:5;pointer-events:none;box-shadow:0 0 0 1px #ff5e6c22}.editor-playhead-ruler{bottom:-1px}.editor-playhead-ruler:before{content:"";position:absolute;top:0;left:-4px;border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid #ff5e6c}
 
