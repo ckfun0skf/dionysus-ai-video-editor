@@ -1140,6 +1140,54 @@ describe("Timeline preview", () => {
 });
 
 
+describe("Timeline layer and Shot settings UX", () => {
+  it("opens Shot Settings from a right-click context menu", async () => {
+    await openTimelineView();
+    const shot = container.querySelector<HTMLButtonElement>(".master-shot-clip");
+    expect(shot).toBeTruthy();
+    act(() => shot!.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 120, clientY: 90 })));
+    expect(container.querySelector('[role="menu"]')).toBeTruthy();
+    const settings = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')).find(button => button.textContent?.includes("Settings"));
+    expect(settings).toBeTruthy();
+    click(settings!);
+    const dialog = container.querySelector('[role="dialog"][aria-labelledby="shot-settings-title"]');
+    expect(dialog).toBeTruthy();
+    const title = dialog!.querySelector<HTMLInputElement>('input[aria-label="Shot title"]');
+    expect(title).toBeTruthy();
+    setInputValue(title!, "Edited from Shot Settings");
+    await flushEffects();
+    expect(persistedProject().shots[0].title).toBe("Edited from Shot Settings");
+  });
+
+  it("edits video layer background transparency and opacity from the layer settings dialog", async () => {
+    await openTimelineView();
+    const settings = container.querySelector<HTMLButtonElement>(".visual-track-label .track-settings-button");
+    expect(settings).toBeTruthy();
+    click(settings!);
+    const dialog = container.querySelector('[role="dialog"][aria-labelledby="video-layer-settings-title"]');
+    expect(dialog).toBeTruthy();
+    const transparent = dialog!.querySelector<HTMLInputElement>('input[type="checkbox"]');
+    expect(transparent).toBeTruthy();
+    click(transparent!);
+    const opacity = dialog!.querySelector<HTMLInputElement>('input[aria-label="Video layer opacity"]');
+    expect(opacity).toBeTruthy();
+    setInputValue(opacity!, "0.5");
+    await flushEffects();
+    const track = persistedProject().tracks.find(item => item.kind === "video");
+    expect(track?.backgroundTransparent).toBe(true);
+    expect(track?.opacity).toBe(0.5);
+  });
+
+  it("shows a thumbnail for every version and uses a code glyph for procedural-only versions", async () => {
+    await openTimelineView();
+    expect(container.querySelector(".master-shot-clip .version-thumbnail-preview")).toBeTruthy();
+    const menu = container.querySelector<HTMLDetailsElement>(".master-shot-version-menu");
+    expect(menu).toBeTruthy();
+    click(menu!.querySelector("summary") as HTMLElement);
+    expect(menu!.querySelectorAll(".timeline-version-menu-thumb .version-thumbnail-preview").length).toBeGreaterThan(0);
+  });
+});
+
 describe("Integrated timeline editor", () => {
   it("shows preview in the timeline workspace and provides playback controls", async () => {
     const timelineNav = Array.from(container.querySelectorAll<HTMLButtonElement>(".nav-item")).find(button => button.textContent?.includes("Timeline"));
