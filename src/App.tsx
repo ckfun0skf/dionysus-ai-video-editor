@@ -1504,22 +1504,40 @@ export default function App() {
  </div>
 
 </section></div>
-{activeTimelineTabId !== "master" && activeVersionTimelineTab && activeVersionTimeline && activeVersionTimelineSlot && activeVersionTimelineShot && <section className="nested-timeline-tab">
-  {renderTimelinePreview(activeVersionTimelineTab.id, "Version preview", activeVersionTimelineShot.title + " · " + activeVersionTimeline.name, activeVersionTimeline.duration, activeVersionTimeline.name, activeVersionTimelineShot.intent)}
-  <div className="editor-linked-heading"><div><strong>{activeVersionTimelineShot.title} · {activeVersionTimeline.name}</strong><span>Version timeline · edits here do not change the Master Shot duration</span></div>
+{activeTimelineTabId !== "master" && activeVersionTimelineTab && activeVersionTimeline && (activeVersionTimelineClipAsset || (activeVersionTimelineSlot && activeVersionTimelineShot)) && <section className="nested-timeline-tab">
+  {renderTimelinePreview(
+    activeVersionTimelineTab.id,
+    activeVersionTimelineClipAsset ? "Clip Asset preview" : "Version preview",
+    activeVersionTimelineClipAsset
+      ? activeVersionTimelineClipAsset.name + " · " + activeVersionTimeline.name
+      : activeVersionTimelineShot!.title + " · " + activeVersionTimeline.name,
+    activeVersionTimeline.duration,
+    activeVersionTimeline.name,
+    activeVersionTimelineClipAsset ? "Reusable Clip Asset" : activeVersionTimelineShot!.intent
+  )}
+  <div className="editor-linked-heading">
+    <div>
+      <strong>{activeVersionTimelineClipAsset ? activeVersionTimelineClipAsset.name + " · " + activeVersionTimeline.name : activeVersionTimelineShot!.title + " · " + activeVersionTimeline.name}</strong>
+      <span>{activeVersionTimelineClipAsset ? "Clip Asset timeline · edits affect this Clip Version only" : "Version timeline · edits here do not change the Master Shot duration"}</span>
+    </div>
     <div className="inline-actions">
-      <button className="button button-quiet button-small" onClick={()=>addVersionLayer(activeVersionTimelineShot.id,activeVersionTimelineSlot.id,activeVersionTimeline.id,"video")}><Plus size={13}/> Video</button>
-      <button className="button button-quiet button-small" onClick={()=>addVersionLayer(activeVersionTimelineShot.id,activeVersionTimelineSlot.id,activeVersionTimeline.id,"image")}><Plus size={13}/> Image</button>
-      <button className="button button-quiet button-small" onClick={()=>addVersionLayer(activeVersionTimelineShot.id,activeVersionTimelineSlot.id,activeVersionTimeline.id,"audio")}><Plus size={13}/> Audio</button>
-      <button className="button button-quiet button-small" onClick={()=>addVersionLayer(activeVersionTimelineShot.id,activeVersionTimelineSlot.id,activeVersionTimeline.id,"text")}><Plus size={13}/> Text</button>
-      <button className="button button-quiet button-small" onClick={()=>addVersionLayer(activeVersionTimelineShot.id,activeVersionTimelineSlot.id,activeVersionTimeline.id,"procedural")}><Plus size={13}/> Code</button>
-      <label className="nested-version-duration">Version duration <span><input aria-label="Version duration" type="number" min="0.1" step={1/Math.max(1,project.frameRate)} value={activeVersionTimeline.duration} onChange={event=>updateVersionDuration(activeVersionTimelineShot.id,activeVersionTimelineSlot.id,activeVersionTimeline.id,Number(event.target.value))}/>s</span></label>
+      {activeVersionTimelineClipAsset && <>
+        <label className="nested-version-duration">Clip Version <span><select aria-label="Clip Asset version" className="text-field" value={activeVersionTimeline.id} onChange={event => openClipAssetTimeline(activeVersionTimelineClipAsset.id, event.target.value)}>{(activeVersionTimelineClipAsset.clipVersions ?? []).map((version, index) => <option key={version.id} value={version.id}>{version.name || "Version " + (index + 1)}</option>)}</select></span></label>
+        <button className="button button-quiet button-small" onClick={() => duplicateClipAssetVersion(activeVersionTimelineClipAsset.id, activeVersionTimeline.id)}><Plus size={13}/> Duplicate Version</button>
+      </>}
+      <button className="button button-quiet button-small" onClick={() => addTimelineVersionLayer(activeVersionTimelineTab, "video")}><Plus size={13}/> Video</button>
+      <button className="button button-quiet button-small" onClick={() => addTimelineVersionLayer(activeVersionTimelineTab, "image")}><Plus size={13}/> Image</button>
+      <button className="button button-quiet button-small" onClick={() => addTimelineVersionLayer(activeVersionTimelineTab, "audio")}><Plus size={13}/> Audio</button>
+      <button className="button button-quiet button-small" onClick={() => addTimelineVersionLayer(activeVersionTimelineTab, "text")}><Plus size={13}/> Text</button>
+      <button className="button button-quiet button-small" onClick={() => addTimelineVersionLayer(activeVersionTimelineTab, "procedural")}><Plus size={13}/> Code</button>
+      <button className="button button-quiet button-small" onClick={() => addTimelineVersionLayer(activeVersionTimelineTab, "composition")}><Plus size={13}/> Clip</button>
+      <label className="nested-version-duration">Duration <span><input aria-label="Version duration" type="number" min="0.1" step={1/Math.max(1,project.frameRate)} value={activeVersionTimeline.duration} onChange={event=>updateTimelineVersionDuration(activeVersionTimelineTab,Number(event.target.value))}/>s</span></label>
     </div>
   </div>
   <details className="nested-version-details">
     <summary>Version details</summary>
     <label className="field-label">Description
-      <textarea className="text-area" rows={2} aria-label="Version description" value={activeVersionTimeline.description} onChange={event => change(p => ({ ...p, shots: p.shots.map(shot => shot.id !== activeVersionTimelineShot.id ? shot : { ...shot, slots: shot.slots.map(slot => slot.id !== activeVersionTimelineSlot.id ? slot : { ...slot, versions: slot.versions.map(version => version.id !== activeVersionTimeline.id ? version : { ...version, description: event.target.value }) }) }) }))} />
+      <textarea className="text-area" rows={2} aria-label="Version description" value={activeVersionTimeline.description} onChange={event => updateTimelineVersionDescription(activeVersionTimelineTab, event.target.value)} />
     </label>
   </details>
   <div className="nested-timeline-ruler" aria-label="Version timeline ruler">
@@ -1528,18 +1546,18 @@ export default function App() {
   </div>
   <div className="nested-timeline-lanes">
     {activeVersionTimeline.layers.map(layer=><div className="nested-timeline-row" key={layer.id}>
-      <div className="nested-timeline-row-label"><span>{layer.kind==="procedural"?"◇":layer.kind==="audio"?"♫":layer.kind==="text"?"T":layer.kind==="image"?"▧":layer.kind==="script"?"&lt;/&gt;":"▣"}</span><div><strong>{layer.name}</strong><small>{layer.kind==="procedural"?"Code":layer.kind}</small></div>
-        <button className="layer-order-button" aria-label={"Move " + layer.name + " earlier"} title="Move layer earlier" disabled={activeVersionTimeline.layers.findIndex(item=>item.id===layer.id)===0} onClick={()=>moveVersionLayer(activeVersionTimelineShot.id,activeVersionTimelineSlot.id,activeVersionTimeline.id,layer.id,-1)}>↑</button>
-        <button className="layer-order-button" aria-label={"Move " + layer.name + " later"} title="Move layer later" disabled={activeVersionTimeline.layers.findIndex(item=>item.id===layer.id)===activeVersionTimeline.layers.length-1} onClick={()=>moveVersionLayer(activeVersionTimelineShot.id,activeVersionTimelineSlot.id,activeVersionTimeline.id,layer.id,1)}>↓</button>
-        {layer.kind==="audio" && <button className="layer-mute-toggle" aria-pressed={Boolean(layer.muted)} onClick={()=>updateCompositionLayer(activeVersionTimelineShot.id,activeVersionTimelineSlot.id,activeVersionTimeline.id,layer.id,{muted:!layer.muted})}>{layer.muted?"Unmute":"Mute"}</button>}
-        <button className="layer-remove" aria-label={"Delete " + layer.name} onClick={()=>removeVersionLayer(activeVersionTimelineShot.id,activeVersionTimelineSlot.id,activeVersionTimeline.id,layer.id)}>×</button>
+      <div className="nested-timeline-row-label"><span>{layer.kind==="procedural"?"◇":layer.kind==="audio"?"♫":layer.kind==="text"?"T":layer.kind==="image"?"▧":layer.kind==="composition"?"▧":layer.kind==="script"?"&lt;/&gt;":"▣"}</span><div><strong>{layer.name}</strong><small>{layer.kind==="procedural"?"Code":layer.kind==="composition"?"Clip":layer.kind}</small></div>
+        <button className="layer-order-button" aria-label={"Move " + layer.name + " earlier"} title="Move layer earlier" disabled={activeVersionTimeline.layers.findIndex(item=>item.id===layer.id)===0} onClick={()=>moveTimelineVersionLayer(activeVersionTimelineTab,layer.id,-1)}>↑</button>
+        <button className="layer-order-button" aria-label={"Move " + layer.name + " later"} title="Move layer later" disabled={activeVersionTimeline.layers.findIndex(item=>item.id===layer.id)===activeVersionTimeline.layers.length-1} onClick={()=>moveTimelineVersionLayer(activeVersionTimelineTab,layer.id,1)}>↓</button>
+        {layer.kind==="audio" && <button className="layer-mute-toggle" aria-pressed={Boolean(layer.muted)} onClick={()=>updateTimelineVersionLayer(activeVersionTimelineTab,layer.id,{muted:!layer.muted})}>{layer.muted?"Unmute":"Mute"}</button>}
+        <button className="layer-remove" aria-label={"Delete " + layer.name} onClick={()=>removeTimelineVersionLayer(activeVersionTimelineTab,layer.id)}>×</button>
       </div>
       <div className="nested-timeline-row-track">
-        <button draggable className={"nested-timeline-clip kind-" + layer.kind} style={{left:(layer.start/Math.max(activeVersionTimeline.duration,0.1)*100)+"%",width:Math.max(1.5,layer.duration/Math.max(activeVersionTimeline.duration,0.1)*100)+"%"}} onDragStart={event=>{event.dataTransfer.setData("text/dionysus-version-layer",layer.id);event.dataTransfer.effectAllowed="move";}} onDragEnd={event=>{const lane=event.currentTarget.parentElement;const rect=lane?.getBoundingClientRect();if(!rect)return;const fps=Math.max(1,project.frameRate||24);const pointer=((event.clientX-rect.left)/Math.max(rect.width,1))*activeVersionTimeline.duration;const maxStart=Math.max(0,activeVersionTimeline.duration-layer.duration);const rawStart=Math.max(0,Math.min(maxStart,pointer-layer.duration/2));const next=Math.round(rawStart*fps)/fps;updateCompositionLayer(activeVersionTimelineShot.id,activeVersionTimelineSlot.id,activeVersionTimeline.id,layer.id,{start:next});playbackTimeRef.current=next;setEditorTime(next);setIsPlaying(false);}} onContextMenu={event=>{event.preventDefault();event.stopPropagation();setNestedLayerContextMenuId(layer.id);setNestedLayerContextMenuPosition({x:Math.min(event.clientX,window.innerWidth-190),y:Math.min(event.clientY,window.innerHeight-180)});}} onClick={()=>{setSelectedCompositionLayerId(layer.id);setEditorTime(layer.start)}} title={layer.name+" · "+layer.start.toFixed(1)+"–"+(layer.start+layer.duration).toFixed(1)+"s"}><strong>{layer.name}</strong><small>{layer.duration.toFixed(1)}s</small></button>
+        <button draggable className={"nested-timeline-clip kind-" + layer.kind} style={{left:(layer.start/Math.max(activeVersionTimeline.duration,0.1)*100)+"%",width:Math.max(1.5,layer.duration/Math.max(activeVersionTimeline.duration,0.1)*100)+"%"}} onDragStart={event=>{event.dataTransfer.setData("text/dionysus-version-layer",layer.id);event.dataTransfer.effectAllowed="move";}} onDragEnd={event=>{const lane=event.currentTarget.parentElement;const rect=lane?.getBoundingClientRect();if(!rect)return;const fps=Math.max(1,project.frameRate||24);const pointer=((event.clientX-rect.left)/Math.max(rect.width,1))*activeVersionTimeline.duration;const maxStart=Math.max(0,activeVersionTimeline.duration-layer.duration);const rawStart=Math.max(0,Math.min(maxStart,pointer-layer.duration/2));const next=Math.round(rawStart*fps)/fps;updateTimelineVersionLayer(activeVersionTimelineTab,layer.id,{start:next});playbackTimeRef.current=next;setEditorTime(next);setIsPlaying(false);}} onContextMenu={event=>{event.preventDefault();event.stopPropagation();setNestedLayerContextMenuId(layer.id);setNestedLayerContextMenuPosition({x:Math.min(event.clientX,window.innerWidth-190),y:Math.min(event.clientY,window.innerHeight-180)});}} onClick={()=>{setSelectedCompositionLayerId(layer.id);setEditorTime(layer.start)}} title={layer.name+" · "+layer.start.toFixed(1)+"–"+(layer.start+layer.duration).toFixed(1)+"s"}><strong>{layer.name}</strong><small>{layer.duration.toFixed(1)}s</small></button>
       </div>
     </div>)}
-    {!activeVersionTimeline.layers.length && <div className="nested-timeline-empty">This Version has no internal layers yet. Add a video, image, audio, text, or Code layer above.</div>}
-    {activeVersionTimeline.layers.some(layer=>layer.start+layer.duration>activeVersionTimeline.duration) && <div className="nested-timeline-warning" role="status">One or more modules extend past this Version's duration and may be cut off in preview/export. Their timing has not been changed automatically.</div>}
+    {!activeVersionTimeline.layers.length && <div className="nested-timeline-empty">This timeline is empty. Add a video, image, audio, text, Code, or another Clip above.</div>}
+    {activeVersionTimeline.layers.some(layer=>layer.start+layer.duration>activeVersionTimeline.duration) && <div className="nested-timeline-warning" role="status">One or more modules extend past this timeline's duration and may be cut off in preview/export. Their timing has not been changed automatically.</div>}
   </div>
 </section>}
 {selected && (() => { const activeSlot = selected.slots.find(slot => slot.id === selectedSlotId); if (!activeSlot) return null; const activeVersion = activeSlot.versions.find(version => version.id === (activeVersionTimelineTab?.slotId === activeSlot.id ? activeVersionTimelineTab.versionId : activeSlot.selectedVersionId)); return <details className={"version-panel-disclosure" + (activeTimelineTabId !== "master" ? " nested-version-inspector-disclosure" : "")} open={activeTimelineTabId === "master"}>{activeTimelineTabId !== "master" && <summary>Version &amp; module details</summary>}<section className={"version-panel " + (activeTimelineTabId !== "master" ? "nested-version-inspector" : "")}><div className="version-panel-heading"><div><span className="inspector-kicker">{activeTimelineTabId === "master" ? "CLIP SLOT" : "VERSION INSPECTOR"}</span><label className="field-label">Clip slot name<input className="text-field" aria-label="Clip slot name" value={activeSlot.name} onChange={e => updateSlotName(selected.id, activeSlot.id, e.target.value)} /></label><p>{activeSlot.duration}s · {activeSlot.versions.length} version{activeSlot.versions.length === 1 ? "" : "s"}</p></div><button className="button button-quiet button-small" onClick={() => setSelectedSlotId("")}>Close</button></div><div className="slot-timing-controls">
