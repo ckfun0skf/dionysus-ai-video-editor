@@ -18,7 +18,7 @@ export function collectCompositionLayers(project: DionysusProject): CompositionL
   });
   const timeline: CompositionLayer[] = (project.timelineClips ?? []).filter(clip => !clip.id.startsWith("storyboard-")).flatMap((clip): CompositionLayer[] => {
     const common = {
-      id: clip.id, name: clip.name, kind: clip.kind, start: clip.start, duration: clip.duration,
+      id: clip.id, name: clip.name, kind: clip.kind === "clip" ? "composition" as const : clip.kind, start: clip.start, duration: clip.duration,
       ...(clip.scriptVersionId ? { scriptVersionId: clip.scriptVersionId } : {}),
       ...(clip.prompt ? { prompt: clip.prompt } : {}),
       ...(clip.modelName ? { modelName: clip.modelName } : {}),
