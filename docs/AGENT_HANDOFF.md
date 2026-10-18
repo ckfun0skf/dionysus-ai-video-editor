@@ -81,3 +81,22 @@ npm run dev
 - [x] Keep `public/doc/tasks.json` in sync for the user's progress monitoring dashboard.
 - [x] Do not create redundant PRs or unneeded markdown sprawl; prioritize real features in the applet.
 
+
+
+## Canonical Shot / Clip / Version rules (2026-10-18)
+
+Use these definitions as the source of truth; older descriptions elsewhere in this guide that imply a Shot contains Clip Slots are superseded by the following model:
+
+- **Shot** identifies a video shot; each Shot has multiple **Shot Versions**, typically concrete video files.
+- **Clip** is an independently editable composition that may be empty and can contain Shot Version references, Code, other Clip Versions, and supported audio/image/text content.
+- **Clip Version** is a saved composition state with its own internal timeline and explicit pinned references.
+- **Layer** is a track containing multiple Clips. Code is content inside a Clip, not a standalone top-level Code Layer. Effects are Clip/Layer settings.
+- Shot Versions and Clip Versions are independent histories. Adding a Shot Version does not auto-create or modify Clip Versions. A Clip Version pins the exact Shot Version it uses.
+- The Shot asset detail must eventually list referencing Clip Versions and support individual or batch reference changes. Users can explicitly create new Clip Versions for selected references to compare a new Shot Version.
+- Clip nesting must be cycle-safe in the UI and in domain/import validation. Filter invalid choices, then validate every attempted reference mutation. No direct or indirect self-containment.
+- Assets page: one `+` menu for Clip, Code, Audio, Image. Empty Clip creation is valid; Code uses the existing playground; Audio requires upload. Images must be reusable by Code/Clip and later by Reference/Storyboard.
+- Master and Clip timelines share the same editor. Master Timeline can be saved as a Clip Asset. Project settings expose aspect ratio, pixel resolution, and frame rate. Preview transforms must support move/resize. Timeline headers/ruler/lanes must align and labels remain readable.
+- Do not add “Add linked video/audio clips” to the Add Layer menu. Linked source audio is a video-Clip operation, not a layer type.
+- Keep Storyboard Reference auto-use out of the current initial implementation slice; preserve the architecture so it can be added later.
+
+Before implementation, inspect existing schema and migrations rather than blindly replacing legacy fields. Deliver code and tests alongside docs; documentation-only changes do not count as implementing a feature. Do not add browser smoke tests unless explicitly requested.
