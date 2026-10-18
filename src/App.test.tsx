@@ -495,6 +495,23 @@ describe("App history integration", () => {
   it("opens nested Version tabs, adds a procedural layer, and keeps linked-audio mute/unlink independent", async () => {
     await openTimelineView();
     expect(container.querySelector(".master-shot-clip")).toBeTruthy();
+
+    const addText = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Text block"));
+    expect(addText).toBeTruthy();
+    click(addText!);
+    await flushEffects();
+    expect(persistedProject().timelineClips?.some(clip => clip.kind === "text" && clip.name === "Subtitle Block")).toBe(true);
+    expect(container.querySelector('input[aria-label="Text block content"]')).toBeTruthy();
+
+    const addProcedural = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Three.js module"));
+    expect(addProcedural).toBeTruthy();
+    click(addProcedural!);
+    await flushEffects();
+    const proceduralClip = persistedProject().timelineClips?.find(clip => clip.kind === "procedural");
+    expect(proceduralClip?.scriptVersionId).toBeUndefined();
+    expect(container.querySelector('input[aria-label="Three.js script version ID"]')).toBeTruthy();
+    expect(persistedProject().tracks.some(track => track.kind === "procedural" && track.id === proceduralClip?.trackId)).toBe(true);
+
     const add = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Add linked video/audio"));
     expect(add).toBeTruthy();
     click(add!);
