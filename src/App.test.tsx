@@ -684,6 +684,20 @@ describe("App history integration", () => {
     const expectedLayerStart = Math.round(Math.max(0, Math.min(versionDurationAfter - timedLayer.duration, 0.7 * versionDurationAfter - timedLayer.duration / 2)) * persistedProject().frameRate) / persistedProject().frameRate;
     expect(timedLayer.start).toBeCloseTo(expectedLayerStart, 7);
 
+    const addVersionText = Array.from(container.querySelectorAll<HTMLButtonElement>(".nested-timeline-tab .inline-actions button")).find(button => button.textContent?.trim() === "Text");
+    expect(addVersionText).toBeTruthy();
+    click(addVersionText!);
+    await flushEffects();
+    const textLayer = persistedProject().shots[0].slots[0].versions.find(version => version.id === addedVersionId)!.layers.find(layer => layer.kind === "text")!;
+    const moveTextEarlier = container.querySelector<HTMLButtonElement>('button[aria-label="Move Text layer earlier"]');
+    expect(moveTextEarlier).toBeTruthy();
+    expect(moveTextEarlier!.disabled).toBe(false);
+    click(moveTextEarlier!);
+    await flushEffects();
+    const reorderedLayers = persistedProject().shots[0].slots[0].versions.find(version => version.id === addedVersionId)!.layers;
+    expect(reorderedLayers[0].id).toBe(textLayer.id);
+    expect(reorderedLayers[1].id).toBe(proceduralLayerId);
+
     click(Array.from(container.querySelectorAll<HTMLButtonElement>(".timeline-workspace-tabs button")).find(button => button.textContent?.includes("Master Timeline"))!);
     await flushEffects();
     expect(container.querySelector(".nested-timeline-tab")).toBeNull();
