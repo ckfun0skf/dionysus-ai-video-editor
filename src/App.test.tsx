@@ -756,6 +756,34 @@ describe("App history integration", () => {
     historyLayers = persistedProject().shots[0].slots[0].versions.find(version => version.id === addedVersionId)!.layers;
     expect(historyLayers[0].id).toBe(textLayer.id);
 
+    const addNestedVideo = Array.from(container.querySelectorAll<HTMLButtonElement>(".nested-timeline-tab .inline-actions button")).find(button => button.textContent?.trim() === "Video");
+    expect(addNestedVideo).toBeTruthy();
+    click(addNestedVideo!);
+    await flushEffects();
+    let sourceVersion = persistedProject().shots[0].slots[0].versions.find(version => version.id === addedVersionId)!;
+    const videoLayer = sourceVersion.layers.find(layer => layer.kind === "video")!;
+    const sourceInInput = container.querySelector<HTMLInputElement>('input[aria-label="Version layer ' + videoLayer.id + ' source in"]');
+    const sourceOutInput = container.querySelector<HTMLInputElement>('input[aria-label="Version layer ' + videoLayer.id + ' source out"]');
+    expect(sourceInInput).toBeTruthy();
+    expect(sourceOutInput).toBeTruthy();
+    const versionDurationBeforeSourceTrim = sourceVersion.duration;
+    setInputValue(sourceInInput!, "1.25");
+    await flushEffects();
+    sourceVersion = persistedProject().shots[0].slots[0].versions.find(version => version.id === addedVersionId)!;
+    const sourceInAdjusted = sourceVersion.layers.find(layer => layer.id === videoLayer.id)!;
+    expect(sourceInAdjusted.sourceIn).toBe(1.25);
+    expect(sourceInAdjusted.duration).toBe(videoLayer.duration);
+    expect(sourceInAdjusted.sourceOut).toBeCloseTo(1.25 + videoLayer.duration, 7);
+
+    setInputValue(sourceOutInput!, "3");
+    await flushEffects();
+    sourceVersion = persistedProject().shots[0].slots[0].versions.find(version => version.id === addedVersionId)!;
+    const sourceTrimmed = sourceVersion.layers.find(layer => layer.id === videoLayer.id)!;
+    expect(sourceTrimmed).toMatchObject({ sourceIn: 1.25, sourceOut: 3, duration: 1.75 });
+    expect(sourceVersion.duration).toBe(versionDurationBeforeSourceTrim);
+    expect(persistedProject().shots[0].duration).toBe(masterShotDurationBefore);
+    expect(persistedProject().shots[0].slots[0].duration).toBe(slotDurationBefore);
+
     click(Array.from(container.querySelectorAll<HTMLButtonElement>(".timeline-workspace-tabs button")).find(button => button.textContent?.includes("Master Timeline"))!);
     await flushEffects();
     expect(container.querySelector(".nested-timeline-tab")).toBeNull();
