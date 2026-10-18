@@ -164,7 +164,12 @@ function isTimelineClip(value: unknown): boolean {
 }
 function isTrack(value: unknown): boolean {
   return isRecord(value) && isString(value.id) && isString(value.name) &&
-    isString(value.kind) && trackKinds.has(value.kind) && (value.muted === undefined || typeof value.muted === "boolean");
+    isString(value.kind) && trackKinds.has(value.kind) &&
+    (value.muted === undefined || typeof value.muted === "boolean") &&
+    (value.x === undefined || (isFiniteNumber(value.x) && value.x >= 0 && value.x <= 100)) &&
+    (value.y === undefined || (isFiniteNumber(value.y) && value.y >= 0 && value.y <= 100)) &&
+    (value.width === undefined || (isFiniteNumber(value.width) && value.width > 0 && value.width <= 100)) &&
+    (value.height === undefined || (isFiniteNumber(value.height) && value.height > 0 && value.height <= 100));
 }
 
 function isStoryboardConnection(value: unknown): boolean {
