@@ -11,7 +11,7 @@ import { collectCompositionLayers, renderCompositionFrame, exportCompositionWebM
 import AIGenerationPanel from "./AIGenerationPanel";
 import { deleteStoredMediaAsset, isStoredMediaPath, resolveMediaSource, storeMediaAsset } from "./mediaAssetStore";
 import { createImageThumbnail, createVideoThumbnail, getAssetThumbnail } from "./mediaThumbnail";
-import { getAudioEnvelope } from "./audioEnvelope";
+import { getAudioEnvelope, withDurationAndClampedFades } from "./audioEnvelope";
 import { getMasterShotIndexAtTime, getMasterShotStart, getMasterShotStarts, getMasterTimelineDuration, rippleReorderMasterShots, setMasterShotDuration, setMasterShotStart } from "./masterTimeline";
 import StoryboardFlowCanvas from "./StoryboardFlowCanvas";
 import AgentStoryboardModal from "./AgentStoryboardModal";
@@ -541,7 +541,20 @@ export default function App() {
       .filter((path): path is string => Boolean(path));
   }
   function updateCompositionLayer(shotId: string, slotId: string, versionId: string, layerId: string, patch: Partial<CompositionLayer>) {
-    change(p => ({ ...p, shots: p.shots.map(shot => shot.id !== shotId ? shot : { ...shot, slots: shot.slots.map(slot => slot.id !== slotId ? slot : { ...slot, versions: slot.versions.map(version => version.id !== versionId ? version : { ...version, layers: version.layers.map(layer => layer.id !== layerId ? layer : { ...layer, ...patch }) }) }) }) }));
+    change(p => ({ ...p, shots: p.shots.map(shot => shot.id !== shotId ? shot : {
+      ...shot,
+      slots: shot.slots.map(slot => slot.id !== slotId ? slot : {
+        ...slot,
+        versions: slot.versions.map(version => version.id !== versionId ? version : {
+          ...version,
+          layers: version.layers.map(layer => {
+            if (layer.id !== layerId) return layer;
+            const updated = { ...layer, ...patch };
+            return typeof patch.duration === "number" ? withDurationAndClampedFades(updated, patch.duration) : updated;
+          })
+        })
+      })
+    }) }));
   }
 
   function updateVersionDuration(shotId: string, slotId: string, versionId: string, value: number) {
@@ -1117,8 +1130,8 @@ export default function App() {
 {selectedTimelineClip.kind==="text" && <label className="field-label">Displayed text<input className="text-field" aria-label="Text block content" value={selectedTimelineClip.name} onChange={event=>change(p=>({...p,timelineClips:(p.timelineClips??[]).map(clip=>clip.id===selectedTimelineClip.id?{...clip,name:event.target.value}:clip)}))}/></label>}
 {selectedTimelineClip.kind==="procedural" && <label className="field-label">Pinned script / scene version ID<input className="text-field" aria-label="Three.js script version ID" value={selectedTimelineClip.scriptVersionId??""} onChange={event=>change(p=>({...p,timelineClips:(p.timelineClips??[]).map(clip=>clip.id===selectedTimelineClip.id?{...clip,scriptVersionId:event.target.value||undefined}:clip)}))} placeholder="Saved, authorized script version ID"/></label>}
 {(selectedTimelineClip.kind==="video"||selectedTimelineClip.kind==="audio") && <div className="visual-provenance-grid">
-<label>Source in (s)<input className="text-field" type="number" min="0" step="0.1" value={selectedTimelineClip.sourceIn??0} disabled={selectedTimelineClip.kind==="audio"&&Boolean(selectedTimelineClip.linkedVideoClipId)} onChange={event=>{const sourceIn=Math.max(0,Number(event.target.value)||0);const sourceOut=Math.max(sourceIn+.1,selectedTimelineClip.sourceOut??sourceIn+selectedTimelineClip.duration);const duration=sourceOut-sourceIn;change(p=>({...p,timelineClips:(p.timelineClips??[]).map(clip=>clip.id===selectedTimelineClip.id?{...clip,sourceIn,sourceOut,duration}:selectedTimelineClip.kind==="video"&&clip.kind==="audio"&&clip.linkedVideoClipId===selectedTimelineClip.id?{...clip,sourceIn,sourceOut,duration}:clip)}));}}/></label>
-<label>Source out (s)<input className="text-field" type="number" min={(selectedTimelineClip.sourceIn??0)+.1} step="0.1" value={selectedTimelineClip.sourceOut??((selectedTimelineClip.sourceIn??0)+selectedTimelineClip.duration)} disabled={selectedTimelineClip.kind==="audio"&&Boolean(selectedTimelineClip.linkedVideoClipId)} onChange={event=>{const sourceOut=Math.max((selectedTimelineClip.sourceIn??0)+.1,Number(event.target.value)||.1);const duration=sourceOut-(selectedTimelineClip.sourceIn??0);change(p=>({...p,timelineClips:(p.timelineClips??[]).map(clip=>clip.id===selectedTimelineClip.id?{...clip,sourceOut,duration}:selectedTimelineClip.kind==="video"&&clip.kind==="audio"&&clip.linkedVideoClipId===selectedTimelineClip.id?{...clip,sourceOut,duration}:clip)}));}}/></label>
+<label>Source in (s)<input className="text-field" type="number" min="0" step="0.1" value={selectedTimelineClip.sourceIn??0} disabled={selectedTimelineClip.kind==="audio"&&Boolean(selectedTimelineClip.linkedVideoClipId)} onChange={event=>{const sourceIn=Math.max(0,Number(event.target.value)||0);const sourceOut=Math.max(sourceIn+.1,selectedTimelineClip.sourceOut??sourceIn+selectedTimelineClip.duration);const duration=sourceOut-sourceIn;change(p=>({...p,timelineClips:(p.timelineClips??[]).map(clip=>clip.id===selectedTimelineClip.id||(selectedTimelineClip.kind==="video"&&clip.kind==="audio"&&clip.linkedVideoClipId===selectedTimelineClip.id)?withDurationAndClampedFades({...clip,sourceIn,sourceOut},duration):clip)}));}}/></label>
+<label>Source out (s)<input className="text-field" type="number" min={(selectedTimelineClip.sourceIn??0)+.1} step="0.1" value={selectedTimelineClip.sourceOut??((selectedTimelineClip.sourceIn??0)+selectedTimelineClip.duration)} disabled={selectedTimelineClip.kind==="audio"&&Boolean(selectedTimelineClip.linkedVideoClipId)} onChange={event=>{const sourceOut=Math.max((selectedTimelineClip.sourceIn??0)+.1,Number(event.target.value)||.1);const duration=sourceOut-(selectedTimelineClip.sourceIn??0);change(p=>({...p,timelineClips:(p.timelineClips??[]).map(clip=>clip.id===selectedTimelineClip.id||(selectedTimelineClip.kind==="video"&&clip.kind==="audio"&&clip.linkedVideoClipId===selectedTimelineClip.id)?withDurationAndClampedFades({...clip,sourceIn:selectedTimelineClip.sourceIn??0,sourceOut},duration):clip)}));}}/></label>
 </div>}
 {selectedTimelineClip.kind==="audio" && <div className="audio-mix-controls">
   <label>Volume <span>{Math.round((selectedTimelineClip.volume??1)*100)}%</span><input aria-label="Timeline audio volume" className="audio-volume-slider" type="range" min="0" max="1" step="0.05" value={selectedTimelineClip.volume??1} onChange={event=>change(p=>({...p,timelineClips:(p.timelineClips??[]).map(clip=>clip.id===selectedTimelineClip.id?{...clip,volume:Number(event.target.value)}:clip)}))}/></label>
