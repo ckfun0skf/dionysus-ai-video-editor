@@ -64,6 +64,22 @@ describe("linked multi-track timeline operations", () => {
     expect(split.timelineClips.find(clip => clip.id === "a-right")).toMatchObject({ start: 6, duration: 4, sourceIn: 4, sourceOut: 8, linkedVideoClipId: "v-right" });
   });
 
+  it("inherits the video source range when legacy linked audio has no explicit trim metadata", () => {
+    const state = addVideoClip(empty, {
+      id: "v", name: "Trimmed video", trackId: "v1", start: 2, duration: 8,
+      assetId: "video-1", sourceHasAudio: true, audioTrackId: "a1", audioClipId: "a"
+    });
+    const legacyRange = {
+      ...state,
+      timelineClips: state.timelineClips.map(clip => clip.id === "v" ? { ...clip, sourceIn: 5, sourceOut: 13 } : clip)
+    };
+    const split = splitTimelineClip(legacyRange, "v", 6, {
+      newClipId: "v-right", newLinkedAudioClipIds: ["a-right"]
+    });
+    expect(split.timelineClips.find(clip => clip.id === "a")).toMatchObject({ sourceIn: 5, sourceOut: 9, start: 2, duration: 4 });
+    expect(split.timelineClips.find(clip => clip.id === "a-right")).toMatchObject({ sourceIn: 9, sourceOut: 13, start: 6, duration: 4, linkedVideoClipId: "v-right" });
+  });
+
   it("splits independent audio without changing its source relationship and blocks splitting linked audio alone", () => {
     const state = addVideoClip(empty, {
       id: "v", name: "Video", trackId: "v1", start: 2, duration: 8,
