@@ -1247,3 +1247,21 @@
   color: #c4c4d5;
 }
 
+
+/* Integrated timeline preview: same workspace as tracks and inspector */
+.integrated-preview-panel{background:var(--panel,#17171f);border:1px solid var(--border,#30303c);border-radius:10px;padding:12px;margin-bottom:18px;display:flex;flex-direction:column;gap:10px}
+.integrated-preview-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.integrated-preview-heading>div{display:flex;flex-direction:column;gap:4px;min-width:0}
+.integrated-preview-heading strong{font-size:14px;color:var(--text,#f3f3f8)}
+.integrated-preview-heading small{font-size:11px;color:var(--muted,#9898a8);overflow:hidden;text-overflow:ellipsis}
+.integrated-timecode{font:12px 'DM Mono',monospace;color:var(--accent,#d5f36a);white-space:nowrap}
+.integrated-preview-frame{position:relative;width:100%;max-height:420px;aspect-ratio:16/9;overflow:hidden;background:#08080b;border:1px solid #30303a;border-radius:6px}
+.integrated-preview-frame .editor-preview-canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.integrated-preview-overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:24px;text-align:center;background:linear-gradient(0deg,rgba(0,0,0,.42),transparent 75%);pointer-events:none}
+.integrated-preview-overlay span{font:10px 'DM Mono',monospace;letter-spacing:2px;color:#d5f36a}
+.integrated-preview-overlay strong{font-size:clamp(16px,2.5vw,28px);color:#fff}
+.integrated-preview-overlay small{font-size:12px;color:#e1e1e8;max-width:70%}
+.integrated-preview-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.integrated-preview-controls label{display:flex;align-items:center;gap:8px;flex:1;min-width:180px;font-size:11px;color:var(--muted,#9898a8)}
+.integrated-preview-controls input[type=range]{flex:1;min-width:100px;accent-color:var(--accent,#d5f36a)}
+@media(max-width:600px){.integrated-preview-panel{padding:8px}.integrated-preview-controls{gap:5px}.integrated-preview-controls label{order:2;flex-basis:100%}.integrated-preview-heading strong{font-size:12px}}
