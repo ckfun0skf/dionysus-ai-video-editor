@@ -1124,6 +1124,9 @@ describe("Integrated timeline editor", () => {
     await flushEffects();
     expect(Array.from(container.querySelectorAll<HTMLButtonElement>('[role="tab"]')).some(tab => tab.textContent?.includes("Empty Test Clip"))) .toBe(true);
     expect(container.querySelector(".nested-timeline-empty")?.textContent).toContain("This timeline is empty");
+    expect(container.querySelector(".nested-timeline-tab.editor-linked-timeline.visual-timeline")).toBeTruthy();
+    expect(container.querySelector(".nested-visual-timeline-ruler .visual-ruler-caption")?.textContent).toBe("TIME");
+    expect(container.querySelector(".nested-visual-timeline-ruler .visual-timeline-ruler-lane")).toBeTruthy();
   });
 
 
