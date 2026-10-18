@@ -9,6 +9,7 @@ import { recordProjectChange, undoProjectChange as undoHistory, redoProjectChang
 import ProceduralAnimationPreview from "./ProceduralAnimationPreview";
 import { exportCompositionWebM, downloadExport } from "./compositionRenderer";
 import AIGenerationPanel from "./AIGenerationPanel";
+import { deleteStoredMediaAsset, isStoredMediaPath, storeMediaAsset } from "./mediaAssetStore";
 type View = "storyboard" | "timeline" | "assets" | "references";
 const STORAGE_KEY = "dionysus.project.v1";
 const id = (prefix: string) => prefix + "-" + crypto.randomUUID();
@@ -409,6 +410,18 @@ export default function App() {
       reader.readAsDataURL(file);
       return;
     }
+    if (kind === "video" || kind === "audio") {
+      const assetId = id("asset");
+      void storeMediaAsset(assetId, file).then(path => {
+        const asset: Asset = { id: assetId, name: file.name, kind, notes: "Imported media stored locally in IndexedDB.", path };
+        change(p => ({ ...p, assets: [...p.assets, asset] }));
+        setNotice(file.name + " imported and ready for composition.");
+      }).catch(error => {
+        setNotice(error instanceof Error ? error.message : "Could not store the imported media file.");
+      });
+      if (assetFileInput.current) assetFileInput.current.value = "";
+      return;
+    }
     addAsset(file.name, kind, t("assets.importMetadataOnly"), file.name);
     if (assetFileInput.current) assetFileInput.current.value = "";
   }
@@ -423,7 +436,9 @@ export default function App() {
     )));
     const usedByOverride = project.shots.some(shot => shot.referenceOverrides.some(override => override.replacementAssetId === assetId));
     if (usedByProfile || usedByLayer || usedByOverride) { setNotice(t("notice.assetInUse")); return; }
+    const removed = project.assets.find(asset => asset.id === assetId);
     change(p => ({ ...p, assets: p.assets.filter(a => a.id !== assetId) }));
+    if (removed?.path && isStoredMediaPath(removed.path)) void deleteStoredMediaAsset(assetId).catch(error => setNotice(error instanceof Error ? error.message : "Could not delete the stored media file."));
     setNotice(t("notice.assetRemoved"));
   }
   function addReferenceProfile() {
