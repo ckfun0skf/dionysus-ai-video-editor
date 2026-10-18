@@ -82,6 +82,7 @@ describe("media thumbnails", () => {
   it("uses saved thumbnails first, falls back to image paths, and leaves unsupported video without a fake thumbnail", () => {
     expect(getAssetThumbnail(undefined)).toBeUndefined();
     expect(getAssetThumbnail({ kind: "video", path: "idb://media/clip" })).toBeUndefined();
+    expect(getAssetThumbnail({ kind: "image", path: "idb://media/image" })).toBeUndefined();
     expect(getAssetThumbnail({ kind: "video", path: "idb://media/clip", thumbnailPath: "data:image/jpeg;base64,real" }))
       .toBe("data:image/jpeg;base64,real");
     expect(getAssetThumbnail({ kind: "image", path: "data:image/png;base64,full" }))
