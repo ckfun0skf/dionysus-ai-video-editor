@@ -40,7 +40,10 @@ function timelineRows(): HTMLElement[] {
 function selectClip(name: string): HTMLButtonElement {
   const clip = timelineRows().find(row => row.textContent?.includes(name) && (name.includes(" audio") || !row.textContent?.includes(" audio")));
   if (!clip) throw new Error("Could not find timeline clip: " + name);
-  click(clip as HTMLButtonElement);
+  act(() => clip.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 100, clientY: 100 })));
+  const settings = Array.from(container.querySelectorAll<HTMLButtonElement>(".shot-context-menu button")).find(button => button.textContent?.includes("Settings"));
+  if (!settings) throw new Error("Could not find Settings in clip context menu");
+  click(settings);
   return clip as HTMLButtonElement;
 }
 function actionNamed(name: string): HTMLButtonElement {
