@@ -119,7 +119,7 @@ test("browser smoke: compose video and audio, generate an image, export a playab
     expect(request.prompt).toContain("cinematic cyan shape");
     expect(request.model).toBe("smoke-image-model");
     expect(request.reference_images).toHaveLength(1);
-    expect(request.reference_images[0]).toMatch(/^data:image\\/png;base64,/);
+    expect(request.reference_images[0].startsWith("data:image/png;base64,")).toBe(true);
     await route.fulfill({
       status: 200,
       contentType: "application/json",
