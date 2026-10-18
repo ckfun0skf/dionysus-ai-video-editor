@@ -1070,4 +1070,61 @@ describe("Integrated timeline editor", () => {
     expect(container.querySelector(".integrated-preview-frame canvas")).toBeTruthy();
     expect(buttonsNamed("Play preview").length).toBeGreaterThan(0);
   });
+  it("updates project aspect ratio, resolution and frame rate from Project Settings", async () => {
+    const settingsButton = buttonsNamed("Project canvas settings")[0];
+    expect(settingsButton).toBeTruthy();
+    click(settingsButton);
+    expect(container.querySelector('[aria-label="Project aspect ratio"]')).toBeTruthy();
+
+    const setSelect = (select: HTMLSelectElement, value: string) => {
+      act(() => {
+        const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set;
+        setter?.call(select, value);
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+    };
+    setSelect(container.querySelector<HTMLSelectElement>('[aria-label="Project aspect ratio"]')!, "9:16");
+    setSelect(container.querySelector<HTMLSelectElement>('[aria-label="Project resolution preset"]')!, "1080x1920");
+    setSelect(container.querySelector<HTMLSelectElement>('[aria-label="Project frame rate"]')!, "24");
+    const save = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.trim() === "Save settings");
+    expect(save).toBeTruthy();
+    click(save!);
+    await flushEffects();
+
+    expect(persistedProject().width).toBe(1080);
+    expect(persistedProject().height).toBe(1920);
+    expect(persistedProject().frameRate).toBe(24);
+  });
+
+  it("creates an empty Clip Asset from the single Asset menu and opens its Timeline", async () => {
+    const nav = Array.from(container.querySelectorAll<HTMLButtonElement>(".nav-item")).find(button => button.textContent?.includes("Assets"));
+    click(nav!);
+    await flushEffects();
+    const create = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Create asset"));
+    expect(create).toBeTruthy();
+    click(create!);
+    const options = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menu"] button')).map(button => button.textContent?.trim());
+    expect(options).toEqual(["Clip", "Code", "Audio · Upload file", "Image · Upload file"]);
+    click(Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menu"] button')).find(button => button.textContent?.trim() === "Clip")!);
+    setInputValue(container.querySelector<HTMLInputElement>('[aria-label="Clip title"]')!, "Empty Test Clip");
+    setInputValue(container.querySelector<HTMLInputElement>('[aria-label="Clip canvas width"]')!, "1920");
+    setInputValue(container.querySelector<HTMLInputElement>('[aria-label="Clip canvas height"]')!, "1080");
+    setInputValue(container.querySelector<HTMLInputElement>('[aria-label="Clip duration"]')!, "4");
+    click(Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Create empty Clip"))!);
+    await flushEffects();
+
+    const clip = persistedProject().assets.find(asset => asset.name === "Empty Test Clip" && asset.kind === "clip");
+    expect(clip).toBeTruthy();
+    expect(clip?.canvasWidth).toBe(1920);
+    expect(clip?.canvasHeight).toBe(1080);
+    expect(clip?.clipVersions?.[0].layers).toEqual([]);
+    const edit = Array.from(container.querySelectorAll<HTMLButtonElement>(".asset-card button")).find(button => button.textContent?.includes("Edit Timeline"));
+    expect(edit).toBeTruthy();
+    click(edit!);
+    await flushEffects();
+    expect(Array.from(container.querySelectorAll<HTMLButtonElement>('[role="tab"]')).some(tab => tab.textContent?.includes("Empty Test Clip"))) .toBe(true);
+    expect(container.querySelector(".nested-timeline-empty")?.textContent).toContain("This timeline is empty");
+  });
+
+
 });
