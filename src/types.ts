@@ -14,6 +14,8 @@ export interface Shot {
   title: string;
   intent: string;
   duration: number;
+  /** Absolute start on the Master Timeline; omitted in legacy projects for sequential fallback. */
+  masterStart?: number;
   status: "planned" | "in-progress" | "ready";
   referenceProfileIds: string[];
   referenceOverrides: ReferenceOverride[];
