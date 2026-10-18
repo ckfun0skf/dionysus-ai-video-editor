@@ -137,7 +137,6 @@ export function splitTimelineClip(state: TimelineState, clipId: string, splitTim
     rightLinkedVideoClipId: input.newClipId
   }));
   const leftAudioById = new Map(audioPairs.map(pair => [pair.originalId, pair.left]));
-  const originalVideoId = clip.kind === "video" ? clip.id : undefined;
   const nextClips = state.timelineClips.map(item => {
     if (item.id === clip.id) return videoPair.left;
     const leftAudio = leftAudioById.get(item.id);
