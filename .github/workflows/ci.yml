@@ -2,9 +2,15 @@ name: CI
 
 on:
   pull_request:
+    branches: [main]
   push:
-    branches: [main, "feat/**"]
+    branches: [main]
   workflow_dispatch:
+
+# Cancel stale checks when a newer commit arrives for the same PR or ref.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
