@@ -1,4 +1,5 @@
 import type { Asset, CompositionLayer, DionysusProject } from "./types";
+import { loadMediaBlobFromPath, resolveMediaSource } from "./mediaAssetStore";
 
 export interface RenderOptions { fps?: number; width?: number; height?: number; duration?: number }
 export interface ExportResult { blob: Blob; filename: string; mimeType: string }
@@ -113,7 +114,7 @@ function drawLayer(ctx: CanvasRenderingContext2D, layer: CompositionLayer, asset
   ctx.restore();
 }
 
-export async function renderCompositionFrame(canvas: HTMLCanvasElement, project: DionysusProject, layers: CompositionLayer[], seconds: number, options: RenderOptions = {}, images = new Map<string, HTMLImageElement>(), videos = new Map<string, HTMLVideoElement>()): Promise<void> {
+export async function renderCompositionFrame(canvas: HTMLCanvasElement, project: DionysusProject, layers: CompositionLayer[], seconds: number, options: RenderOptions = {}, images = new Map<string, HTMLImageElement>(), videos = new Map<string, HTMLVideoElement>(), mediaReleases = new Map<string, () => void>()): Promise<void> {
   const width = options.width ?? project.width, height = options.height ?? project.height;
   canvas.width = width; canvas.height = height;
   const ctx = canvas.getContext("2d");
@@ -125,8 +126,10 @@ export async function renderCompositionFrame(canvas: HTMLCanvasElement, project:
     if (asset.kind === "image" && !images.has(asset.id)) images.set(asset.id, await loadImage(asset.path));
     if (asset.kind === "video" && !videos.has(asset.id)) {
       const video = document.createElement("video");
-      if (/^https?:/i.test(asset.path)) video.crossOrigin = "anonymous";
-      video.src = asset.path; video.muted = true; video.playsInline = true; video.preload = "auto";
+      const resolved = await resolveMediaSource(asset.path);
+      if (resolved.release) mediaReleases.set(asset.id, resolved.release);
+      if (resolved.remote) video.crossOrigin = "anonymous";
+      video.src = resolved.src; video.muted = true; video.playsInline = true; video.preload = "auto";
       await loadMediaMetadata(video, "Unable to load video layer source");
       videos.set(asset.id, video);
     }
@@ -165,9 +168,8 @@ export async function exportCompositionWebM(project: DionysusProject, options: R
     audioDestination = audioContext.createMediaStreamDestination();
     for (const layer of audioLayers) {
       const asset = project.assets.find(item => item.id === layer.assetId)!;
-      const response = await fetch(asset.path!);
-      if (!response.ok) throw new Error("Unable to read audio layer source: " + asset.name);
-      const buffer = await audioContext.decodeAudioData(await response.arrayBuffer());
+      const sourceBlob = await loadMediaBlobFromPath(asset.path!);
+      const buffer = await audioContext.decodeAudioData(await sourceBlob.arrayBuffer());
       const source = audioContext.createBufferSource();
       source.buffer = buffer;
       source.connect(audioDestination);
@@ -183,7 +185,7 @@ export async function exportCompositionWebM(project: DionysusProject, options: R
     recorder.onerror = () => reject(new Error("WebM recording failed"));
     recorder.onstop = () => resolve(new Blob(chunks, { type: mimeType }));
   });
-  const images = new Map<string, HTMLImageElement>(), videos = new Map<string, HTMLVideoElement>();
+  const images = new Map<string, HTMLImageElement>(), videos = new Map<string, HTMLVideoElement>(), mediaReleases = new Map<string, () => void>();
   try {
     if (audioContext && audioResume) await audioResume;
     recorder.start(250);
@@ -198,7 +200,7 @@ export async function exportCompositionWebM(project: DionysusProject, options: R
     const started = performance.now();
     for (let frame = 0; frame < frames; frame++) {
       const seconds = frame / fps;
-      await renderCompositionFrame(canvas, project, layers, seconds, options, images, videos);
+      await renderCompositionFrame(canvas, project, layers, seconds, options, images, videos, mediaReleases);
       const remaining = ((frame + 1) * 1000 / fps) - (performance.now() - started);
       if (remaining > 0) await new Promise<void>(resolve => window.setTimeout(resolve, remaining));
     }
@@ -216,6 +218,7 @@ export async function exportCompositionWebM(project: DionysusProject, options: R
   } finally {
     stream.getTracks().forEach(track => track.stop());
     videos.forEach(video => { video.pause(); video.removeAttribute("src"); video.load(); });
+    mediaReleases.forEach(release => release());
     scheduledAudio.forEach(item => { try { item.source.stop(); } catch { /* already finished */ } item.source.disconnect(); });
     if (audioContext) await audioContext.close().catch(() => undefined);
   }
