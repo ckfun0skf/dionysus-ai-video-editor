@@ -1,31 +1,20 @@
 # Implementation Report — DYS-005: Master and nested Timeline editing
 
-**Status:** In progress  
-**Last updated:** 2026-10-18  
-**Implementation PR:** [#39 — prototype-aligned Timeline tabs, versions, and layers](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/39)
+**Status:** In progress · **Updated:** 2026-10-18  
+**Interaction fix:** [PR #55](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/55) · **Regression coverage:** [PR #57](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/57)
 
-## Delivered in this slice
-- Master Timeline and nested Shot-Version timeline tabs inside the Timeline workspace.
-- Master Shot blocks with an active-Version dropdown, active Version selection, **+ Add Version**, and per-Version **Edit** actions.
-- A migration-compatible optional `Shot.masterStart` property. Legacy projects without it retain sequential positioning until the layout is edited.
-- Master Shot start can be edited numerically in the Inspector or moved by dragging its block on the timeline lane. Drag placement snaps to project frame rate.
-- Master Shot duration, Clip Slot duration, and each Version's internal duration are now independent; changing one no longer automatically resizes the others.
-- Nested Version layers are collected at the Shot's absolute Master Timeline offset.
-- Nested Version lanes support video, image, audio, text, and procedural/Three.js modules, with clear placeholder thumbnails where real thumbnails are absent.
-- Imported image/video sources and AI-generated image outputs attempt to produce a compact local JPEG thumbnail. Video decode failures keep the placeholder instead of failing import.
-- Master Timeline defaults to free placement; users can explicitly enable Ripple Reorder, which reorders a Shot by drop target and packs the sequence without gaps. Free placement overlap warnings appear in the Shot Inspector.
-- Composition layer collection now preserves the saved Version layer order so reordering is reflected in final composition traversal.
-- Version duration has its own control; changing it does not change Master Shot or Clip Slot duration.
-- Each nested module has Inspector controls for internal start and duration, direct drag-to-move with frame snapping, and header buttons to move the layer earlier/later.
-- Nested Video/Audio modules expose source in/out trim controls independently from Version/Slot/Master timing.
-- Master Timeline clip Inspector can split a clip at the frame-snapped midpoint or current playhead, and duplicate it after the original. Video split/duplicate preserves linked-audio relationships, source ranges, and audio mix metadata. Video and linked source audio split together, source ranges stay contiguous, fade-in stays on the first segment, and fade-out stays on the last.
+## Delivered
+- Master and nested Shot-/Clip-Version tabs, typed track lanes, Version selection, and independent Master/Slot/Version timing.
+- Frame-snapped movement, split/duplicate, linked-audio propagation, and source-range/fade preservation.
+- Shared Master/nested ruler and track visuals.
+- Resize shows a grey dashed overlap region, trims the adjacent clip on release, and groups both changes into one Undo step.
+- Drag/drop previews the destination and edge snapping; normal same-layer dragging prevents overlaps.
+- Nested Version module edits support Undo/Redo and survive JSON export.
 
 ## Validation
-- CI run [#39124022295](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39124022295) passed: 93 tests across 10 files, TypeScript check, production build, and npm audit with 0 vulnerabilities.
-- Regression tests cover legacy layout fallback, independent Master placement and duration, preservation of Version-internal duration, module start/duration editing, nested drag movement, layer reordering, composition offsets, thumbnail extraction/URL fallback, midpoint splitting, source trim alignment, and linked-audio fade-boundary preservation.
-- Automated browser smoke testing was not performed.
+- PR #55 CI [#39159781393](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39159781393): 123 tests, TypeScript and production build passed.
+- PR #57 CI [#39160785330](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39160785330): 129 tests, TypeScript and production build passed at test SHA `e9b4246ce551adff5816f91487e33958277e0e8e`.
+- Main CI [#39159896542](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39159896542) and Pages deployment [#39159896506](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39159896506) passed on the prior merge commit. No browser smoke tests were run.
 
-## Remaining limitations
-- The Master Timeline uses explicit free-placement and Ripple Reorder modes. A richer insertion preview and full JSON/Undo-Redo round-trip coverage for all nested relationships remain outstanding.
-- Video thumbnails depend on browser media decoding; unsupported codecs retain a placeholder. Rich source relinking and comprehensive JSON/Undo-Redo round-trip verification remain outstanding.
-- The first nested timeline offers lane/block structure and basic creation/deletion, not yet a complete professional clip editor.
+## Remaining
+Durable media relinking/recovery remains in DYS-004. Preview fidelity, richer compositing, and production MP4 output remain tracked under DYS-006/DYS-009.

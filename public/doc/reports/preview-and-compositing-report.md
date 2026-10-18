@@ -1,25 +1,21 @@
-# Completion Report — DYS-006: Preview, playback, and media compositing
+# Implementation Report — DYS-006: Preview, playback, and media compositing
 
-**Report status:** Not completed  
-**Report date:** 2026-10-17
+**Status:** In progress · **Updated:** 2026-10-18
 
-## Outcome
-Not completed. This report is a tracking placeholder; no implementation completion is claimed.
-
-## Work recorded
-- No completed implementation has been verified for this task.
-
-## Outstanding items
-- No full media playback or final-composite renderer is implemented.
+## Delivered
+- The Timeline now has integrated Master and nested-Version canvas previews with independent playheads, playback controls, seeking, stepping, and optional overlay.
+- The compositor renders available image/video/text/nested Clip layers in stored z-order and honors their time windows, source ranges, layout geometry, fit mode, background, opacity, border, and supported animation settings.
+- Preview transform handles move/resize the selected track, clip, or Version layer and commit the normalized geometry to project state.
+- Supported audio playback follows the playhead and honors implemented mute, volume, and fade settings.
+- Timeline blocks and version thumbnails use explicit placeholders where media cannot be decoded or thumbnails are unavailable.
 
 ## Validation evidence
-- No task-specific automated test or release evidence recorded yet.
-- Release candidate is tracked in [PR #1](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/1).
+- PR #57 CI [#39160785330](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39160785330) passed 129 tests across 15 files, TypeScript and production build before the additional UI transform persistence test.
+- Existing tests cover separate per-tab preview/playhead, preview controls and project canvas settings, composition ordering/nested Clip versions, and normalized transform constraints.
+- PR #57 adds a regression test for a selected Video Layer's preview transform persisting to project state; its latest CI run will be recorded after the new head passes.
+- Browser smoke tests are intentionally not run.
 
-## Related files
-- Task specification: [preview-and-compositing.md](../tasks/preview-and-compositing.md)
-- Detail page: [preview-and-compositing.html](../tasks/preview-and-compositing.html)
-- Dashboard: [task.html](../task.html)
-
----
-This report must be updated with concrete implementation and test evidence before the task is marked complete. Planned tasks intentionally have a report stub so every task has a stable report link without implying completion.
+## Remaining limitations
+- Interactive preview is adaptively downscaled to at most 1280×720, so a dependable 4K preview is not implemented.
+- Browser codecs/CORS and media-source availability limit some playback cases. Binary media storage/relinking and uniform thumbnail regeneration remain with DYS-004.
+- MP4 rendering is tracked separately in DYS-009; WebM output is experimental.

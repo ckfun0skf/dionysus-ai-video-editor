@@ -970,6 +970,53 @@ describe("Timeline preview", () => {
     const restoredVersionPlayhead = container.querySelector<HTMLInputElement>(".nested-timeline-tab input[aria-label=\"Timeline playhead time\"]");
     expect(restoredVersionPlayhead?.value).toBe("1.25");
   });
+
+  it("persists selected Video-layer preview transforms back to the timeline layer", async () => {
+    await flushEffects();
+    const seeded = persistedProject();
+    const targetTrack = seeded.tracks.find(track => track.kind === "video")!;
+    targetTrack.x = 10;
+    targetTrack.y = 15;
+    targetTrack.width = 40;
+    targetTrack.height = 30;
+    localStorage.setItem("dionysus.project.v1", JSON.stringify(seeded));
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    act(() => root.render(<App />));
+    await flushEffects();
+    await openTimelineView();
+
+    const label = Array.from(container.querySelectorAll<HTMLElement>(".visual-track-label"))
+      .find(element => element.querySelector("strong")?.textContent === targetTrack.name);
+    expect(label).toBeTruthy();
+    click(label!);
+    const frame = container.querySelector<HTMLElement>(".selected-layer-frame");
+    expect(frame).toBeTruthy();
+    expect(frame!.style.left).toBe("10%");
+    expect(frame!.style.top).toBe("15%");
+
+    const previewFrame = frame!.closest(".integrated-preview-frame") as HTMLElement;
+    Object.defineProperty(previewFrame, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({ left: 0, top: 0, right: 200, bottom: 100, width: 200, height: 100, x: 0, y: 0, toJSON: () => ({}) })
+    });
+    const pointer = (type: string, clientX: number, clientY: number) => {
+      const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientX, clientY });
+      Object.defineProperty(event, "pointerId", { configurable: true, value: 42 });
+      act(() => frame!.dispatchEvent(event));
+    };
+    pointer("pointerdown", 20, 20);
+    pointer("pointermove", 40, 30);
+    expect(frame!.style.left).toBe("20%");
+    expect(frame!.style.top).toBe("25%");
+    pointer("pointerup", 40, 30);
+    await flushEffects();
+
+    expect(persistedProject().tracks.find(track => track.id === targetTrack.id))
+      .toMatchObject({ x: 20, y: 25, width: 40, height: 30 });
+  });
+
 });
 
 
@@ -1127,6 +1174,252 @@ describe("Integrated timeline editor", () => {
     expect(container.querySelector(".nested-timeline-tab.editor-linked-timeline.visual-timeline")).toBeTruthy();
     expect(container.querySelector(".nested-visual-timeline-ruler .visual-ruler-caption")?.textContent).toBe("TIME");
     expect(container.querySelector(".nested-visual-timeline-ruler .visual-timeline-ruler-lane")).toBeTruthy();
+  });
+
+
+  it("resizes a Master Timeline clip into its neighbor with preview and one-step Undo/Redo", async () => {
+    await openTimelineView();
+    await seedLinkedVideoAudioPairs(2);
+    const before = persistedProject();
+    const clips = before.timelineClips ?? [];
+    const left = clips.find(clip => clip.id === "test-video-1")!;
+    const right = clips.find(clip => clip.id === "test-video-2")!;
+    const leftAudio = clips.find(clip => clip.linkedVideoClipId === left.id)!;
+    const rightAudio = clips.find(clip => clip.linkedVideoClipId === right.id)!;
+    const duration = Math.max(10, getMasterTimelineDuration(before.shots), ...clips.map(clip => clip.start + clip.duration));
+    const resize = container.querySelector<HTMLElement>('[aria-label="Resize end of Video clip 1"]');
+    expect(resize).toBeTruthy();
+    const lane = resize!.closest(".visual-track-lane") as HTMLElement;
+    Object.defineProperty(lane, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({ left: 0, top: 0, right: 100, bottom: 64, width: 100, height: 64, x: 0, y: 0, toJSON: () => ({}) })
+    });
+    Object.defineProperty(resize!, "setPointerCapture", { configurable: true, value: vi.fn() });
+    const startX = 20;
+    const endX = startX + 100 * 3 / duration;
+    const pointer = (type: string, clientX: number) => {
+      const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientX });
+      Object.defineProperty(event, "pointerId", { configurable: true, value: 17 });
+      act(() => resize!.dispatchEvent(event));
+    };
+    pointer("pointerdown", startX);
+    pointer("pointermove", endX);
+    expect(container.querySelector(".clip-overlap-preview")).toBeTruthy();
+    pointer("pointerup", endX);
+    await flushEffects();
+
+    const resized = persistedProject().timelineClips ?? [];
+    expect(resized.find(clip => clip.id === left.id)).toMatchObject({ start: 0, duration: 8 });
+    expect(resized.find(clip => clip.id === right.id)).toMatchObject({ start: 8, duration: 2 });
+    expect(resized.find(clip => clip.id === leftAudio.id)).toMatchObject({ start: 0, duration: 8, linkedVideoClipId: left.id });
+    expect(resized.find(clip => clip.id === rightAudio.id)).toMatchObject({ start: 8, duration: 2, linkedVideoClipId: right.id });
+
+    click(buttonsNamed("Undo")[0]);
+    await flushEffects();
+    const undone = persistedProject().timelineClips ?? [];
+    expect(undone.find(clip => clip.id === left.id)).toMatchObject({ start: 0, duration: 5 });
+    expect(undone.find(clip => clip.id === right.id)).toMatchObject({ start: 5, duration: 5 });
+    expect(undone.find(clip => clip.id === leftAudio.id)).toMatchObject({ start: 0, duration: 5, linkedVideoClipId: left.id });
+    expect(undone.find(clip => clip.id === rightAudio.id)).toMatchObject({ start: 5, duration: 5, linkedVideoClipId: right.id });
+
+    click(buttonsNamed("Redo").find(button => !button.disabled)!);
+    await flushEffects();
+    expect((persistedProject().timelineClips ?? []).find(clip => clip.id === right.id)).toMatchObject({ start: 8, duration: 2 });
+  });
+
+  it("snaps clips to edges on adjacent layers and permits cross-layer drag/drop", async () => {
+    await openTimelineView();
+    const addLayer = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Add layer"));
+    expect(addLayer).toBeTruthy();
+    click(addLayer!);
+    const videoOption = Array.from(container.querySelectorAll<HTMLButtonElement>(".layer-add-menu button")).find(button => button.textContent?.trim() === "Video layer");
+    expect(videoOption).toBeTruthy();
+    click(videoOption!);
+    await flushEffects();
+    await seedLinkedVideoAudioPairs(2);
+
+    const before = persistedProject();
+    const source = (before.timelineClips ?? []).find(clip => clip.id === "test-video-1")!;
+    const sourceAudio = (before.timelineClips ?? []).find(clip => clip.linkedVideoClipId === source.id)!;
+    const targetTrack = before.tracks.filter(track => track.kind === "video")[1];
+    expect(targetTrack).toBeTruthy();
+    const sourceBlock = Array.from(container.querySelectorAll<HTMLButtonElement>(".visual-media-clip"))
+      .find(button => button.textContent?.includes("Video clip 1") && !button.textContent?.includes(" audio"));
+    expect(sourceBlock).toBeTruthy();
+
+    const targetGroup = Array.from(container.querySelectorAll<HTMLElement>(".visual-track-group"))
+      .find(group => group.querySelector(".visual-track-label strong")?.textContent === targetTrack.name);
+    const targetLane = targetGroup?.querySelector<HTMLElement>(".visual-track-lane");
+    expect(targetLane).toBeTruthy();
+    Object.defineProperty(targetLane!, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({ left: 0, top: 0, right: 100, bottom: 64, width: 100, height: 64, x: 0, y: 0, toJSON: () => ({}) })
+    });
+    const transferValues = new Map<string, string>();
+    const dataTransfer = {
+      setData: (type: string, value: string) => transferValues.set(type, value),
+      getData: (type: string) => transferValues.get(type) ?? "",
+      effectAllowed: "move"
+    };
+    const dragStart = new Event("dragstart", { bubbles: true, cancelable: true });
+    Object.defineProperty(dragStart, "dataTransfer", { value: dataTransfer });
+    act(() => sourceBlock!.dispatchEvent(dragStart));
+    const duration = Math.max(10, getMasterTimelineDuration(before.shots), ...(before.timelineClips ?? []).map(clip => clip.start + clip.duration));
+    const clientX = 7.5 / duration * 100;
+    const dragOver = new MouseEvent("dragover", { bubbles: true, cancelable: true, clientX });
+    Object.defineProperty(dragOver, "dataTransfer", { value: dataTransfer });
+    act(() => targetLane!.dispatchEvent(dragOver));
+    expect(container.querySelector(".timeline-snap-guide")).toBeTruthy();
+
+    const drop = new MouseEvent("drop", { bubbles: true, cancelable: true, clientX });
+    Object.defineProperty(drop, "dataTransfer", { value: dataTransfer });
+    act(() => targetLane!.dispatchEvent(drop));
+    await flushEffects();
+
+    const after = persistedProject().timelineClips ?? [];
+    expect(after.find(clip => clip.id === source.id)).toMatchObject({ trackId: targetTrack.id, start: 5, duration: 5 });
+    expect(after.find(clip => clip.id === sourceAudio.id)).toMatchObject({ start: 5, duration: 5, linkedVideoClipId: source.id });
+    expect(after.filter(clip => clip.trackId === targetTrack.id)).toHaveLength(1);
+  });
+
+  it("rejects same-layer overlap during drag and keeps clips in non-overlapping positions", async () => {
+    await openTimelineView();
+    await seedLinkedVideoAudioPairs(2);
+    const before = persistedProject();
+    const left = before.timelineClips?.find(clip => clip.id === "test-video-1")!;
+    const right = before.timelineClips?.find(clip => clip.id === "test-video-2")!;
+    const leftBlock = Array.from(container.querySelectorAll<HTMLButtonElement>(".visual-media-clip"))
+      .find(button => button.textContent?.includes("Video clip 1") && !button.textContent?.includes(" audio"))!;
+    const lane = leftBlock.closest(".visual-track-lane") as HTMLElement;
+    Object.defineProperty(lane, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({ left: 0, top: 0, right: 100, bottom: 64, width: 100, height: 64, x: 0, y: 0, toJSON: () => ({}) })
+    });
+    const transferValues = new Map<string, string>();
+    const dataTransfer = {
+      setData: (type: string, value: string) => transferValues.set(type, value),
+      getData: (type: string) => transferValues.get(type) ?? "",
+      effectAllowed: "move"
+    };
+    const dragStart = new Event("dragstart", { bubbles: true, cancelable: true });
+    Object.defineProperty(dragStart, "dataTransfer", { value: dataTransfer });
+    act(() => leftBlock.dispatchEvent(dragStart));
+    const duration = Math.max(10, getMasterTimelineDuration(before.shots), ...(before.timelineClips ?? []).map(clip => clip.start + clip.duration));
+    const clientX = 7.5 / duration * 100;
+    const dragOver = new MouseEvent("dragover", { bubbles: true, cancelable: true, clientX });
+    Object.defineProperty(dragOver, "dataTransfer", { value: dataTransfer });
+    act(() => lane.dispatchEvent(dragOver));
+    const preview = container.querySelector<HTMLElement>(".clip-drop-preview");
+    expect(preview).toBeTruthy();
+    const previewStart = Number.parseFloat(preview!.style.left) / 100 * duration;
+    expect(previewStart + left.duration <= right.start + 1e-4 || previewStart >= right.start + right.duration - 1e-4).toBe(true);
+
+    const drop = new MouseEvent("drop", { bubbles: true, cancelable: true, clientX });
+    Object.defineProperty(drop, "dataTransfer", { value: dataTransfer });
+    act(() => lane.dispatchEvent(drop));
+    await flushEffects();
+    const after = (persistedProject().timelineClips ?? []).filter(clip => clip.trackId === left.trackId && clip.id.startsWith("test-video-"));
+    expect(after).toHaveLength(2);
+    for (const clip of after) {
+      for (const other of after.filter(candidate => candidate.id !== clip.id)) {
+        expect(clip.start + clip.duration <= other.start + 1e-4 || clip.start >= other.start + other.duration - 1e-4).toBe(true);
+      }
+    }
+  });
+
+  it("restores nested Version module edits through Undo/Redo and project JSON export", async () => {
+    await openTimelineView();
+    const versionMenu = container.querySelector<HTMLDetailsElement>(".master-shot-version-menu");
+    expect(versionMenu).toBeTruthy();
+    click(versionMenu!.querySelector("summary") as HTMLElement);
+    const edit = versionMenu!.querySelector<HTMLButtonElement>(".timeline-version-edit");
+    expect(edit).toBeTruthy();
+    click(edit!);
+    await flushEffects();
+
+    const addCode = Array.from(container.querySelectorAll<HTMLButtonElement>(".nested-timeline-tab button")).find(button => button.textContent?.includes("Code"));
+    expect(addCode).toBeTruthy();
+    click(addCode!);
+    await flushEffects();
+    const getProceduralLayers = (project: typeof sampleProject) => project.shots.flatMap(shot => shot.slots.flatMap(slot => slot.versions.flatMap(version => version.layers.filter(layer => layer.kind === "procedural"))));
+    const afterEdit = persistedProject();
+    const added = getProceduralLayers(afterEdit).at(-1);
+    expect(added).toBeTruthy();
+
+    click(buttonsNamed("Undo")[0]);
+    await flushEffects();
+    expect(getProceduralLayers(persistedProject()).some(layer => layer.id === added!.id)).toBe(false);
+    click(buttonsNamed("Redo").find(button => !button.disabled)!);
+    await flushEffects();
+    expect(getProceduralLayers(persistedProject()).find(layer => layer.id === added!.id)).toMatchObject({ id: added!.id, kind: "procedural" });
+
+    const exportButton = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.toLowerCase().includes("export project"));
+    expect(exportButton).toBeTruthy();
+    click(exportButton!);
+    const blob = createObjectURLMock.mock.calls.at(-1)?.[0] as Blob;
+    expect(blob).toBeTruthy();
+    const exportedJson = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(reader.error);
+      reader.readAsText(blob);
+    });
+    const exported = JSON.parse(exportedJson) as typeof sampleProject;
+    expect(getProceduralLayers(exported).find(layer => layer.id === added!.id)).toMatchObject({ id: added!.id, kind: "procedural" });
+  });
+
+  it("deletes an unlinked audio clip independently and restores that deletion through Undo/Redo", async () => {
+    await openTimelineView();
+    await seedLinkedVideoAudioPairs();
+    await selectClip("Video clip 1 audio");
+    click(actionNamed("Unlink audio"));
+    await flushEffects();
+    const beforeDelete = persistedProject();
+    const video = beforeDelete.timelineClips?.find(clip => clip.kind === "video")!;
+    const audio = beforeDelete.timelineClips?.find(clip => clip.kind === "audio")!;
+    expect(audio).not.toHaveProperty("linkedVideoClipId");
+
+    await selectClip(audio.name);
+    click(actionNamed("Delete clip"));
+    await flushEffects();
+    expect((persistedProject().timelineClips ?? []).some(clip => clip.id === video.id)).toBe(true);
+    expect((persistedProject().timelineClips ?? []).some(clip => clip.id === audio.id)).toBe(false);
+    click(buttonsNamed("Undo")[0]);
+    await flushEffects();
+    expect((persistedProject().timelineClips ?? []).find(clip => clip.id === audio.id)).not.toHaveProperty("linkedVideoClipId");
+    click(buttonsNamed("Redo").find(button => !button.disabled)!);
+    await flushEffects();
+    expect((persistedProject().timelineClips ?? []).some(clip => clip.id === video.id)).toBe(true);
+    expect((persistedProject().timelineClips ?? []).some(clip => clip.id === audio.id)).toBe(false);
+  });
+
+  it("removing a video layer deletes linked child audio but preserves detached audio through Undo/Redo", async () => {
+    await openTimelineView();
+    await seedLinkedVideoAudioPairs(2);
+    await selectClip("Video clip 1 audio");
+    click(actionNamed("Unlink audio"));
+    await flushEffects();
+    const initial = persistedProject();
+    const videoTrack = initial.tracks.find(track => track.kind === "video")!;
+    const detachedAudio = initial.timelineClips?.find(clip => clip.kind === "audio" && !clip.linkedVideoClipId)!;
+    expect(detachedAudio).toBeTruthy();
+
+    click(buttonsNamed("Remove " + videoTrack.name + " layer")[0]);
+    await flushEffects();
+    const removed = persistedProject();
+    expect(removed.tracks.some(track => track.id === videoTrack.id)).toBe(false);
+    expect(removed.timelineClips?.filter(clip => clip.kind === "video")).toHaveLength(0);
+    expect(removed.timelineClips?.filter(clip => clip.kind === "audio")).toEqual([detachedAudio]);
+
+    click(buttonsNamed("Undo")[0]);
+    await flushEffects();
+    expect(persistedProject().tracks).toEqual(initial.tracks);
+    expect(persistedProject().timelineClips).toEqual(initial.timelineClips);
+
+    click(buttonsNamed("Redo").find(button => !button.disabled)!);
+    await flushEffects();
+    expect(persistedProject().tracks.some(track => track.id === videoTrack.id)).toBe(false);
+    expect(persistedProject().timelineClips).toEqual([detachedAudio]);
   });
 
 
