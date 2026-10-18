@@ -821,8 +821,6 @@ describe("App history integration", () => {
     const timelineDuration = Math.max(10, getMasterTimelineDuration(before.shots), ...(before.timelineClips ?? []).map(clip => clip.start + clip.duration));
     const fps = before.frameRate;
     const rawStart = Math.max(0, (clientX / 100) * timelineDuration - video.duration / 2);
-    const snapped = Math.round(rawStart * fps) / fps;
-    const maxStart = Math.max(0, Math.floor((timelineDuration - video.duration) * fps) / fps);
     expect(moved.start * fps).toBeCloseTo(Math.round(moved.start * fps), 7);
     const sameTrackOverlaps = (after.timelineClips ?? []).filter(clip => clip.trackId === moved.trackId && clip.id !== moved.id && moved.start < clip.start + clip.duration - 1e-7 && moved.start + moved.duration > clip.start + 1e-7);
     expect(sameTrackOverlaps).toHaveLength(0);
