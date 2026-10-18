@@ -683,6 +683,59 @@ describe("App history integration", () => {
     expect(container.querySelector(".visual-clip-inspector")?.textContent).toContain(right.name);
   });
 
+  it("duplicates a Master video clip with a new linked-audio pair and preserves mix metadata", async () => {
+    await openTimelineView();
+    const addLinked = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Add linked video/audio"));
+    expect(addLinked).toBeTruthy();
+    click(addLinked!);
+    await flushEffects();
+
+    let clips = persistedProject().timelineClips ?? [];
+    const originalVideo = clips.find(clip => clip.kind === "video" && !clip.id.startsWith("storyboard-"))!;
+    const originalAudio = clips.find(clip => clip.kind === "audio" && clip.linkedVideoClipId === originalVideo.id)!;
+    selectClip(originalAudio.name);
+    await flushEffects();
+    setInputValue(container.querySelector<HTMLInputElement>('input[aria-label="Timeline audio volume"]')!, "0.4");
+    await flushEffects();
+    setInputValue(container.querySelector<HTMLInputElement>('input[aria-label="Timeline audio fade in"]')!, "0.5");
+    await flushEffects();
+    setInputValue(container.querySelector<HTMLInputElement>('input[aria-label="Timeline audio fade out"]')!, "1");
+    await flushEffects();
+
+    selectClip(originalVideo.name);
+    await flushEffects();
+    const duplicate = Array.from(container.querySelectorAll<HTMLButtonElement>(".visual-clip-actions button"))
+      .find(button => button.textContent?.trim() === "Duplicate clip");
+    expect(duplicate).toBeTruthy();
+    click(duplicate!);
+    await flushEffects();
+
+    clips = persistedProject().timelineClips ?? [];
+    const videos = clips.filter(clip => clip.kind === "video" && !clip.id.startsWith("storyboard-"));
+    expect(videos).toHaveLength(2);
+    const copyVideo = videos.find(clip => clip.id !== originalVideo.id)!;
+    expect(copyVideo.start).toBe(originalVideo.start + originalVideo.duration);
+    const copiedAudio = clips.find(clip => clip.kind === "audio" && clip.linkedVideoClipId === copyVideo.id);
+    expect(copiedAudio).toMatchObject({
+      start: copyVideo.start,
+      duration: copyVideo.duration,
+      volume: 0.4,
+      fadeIn: 0.5,
+      fadeOut: 1
+    });
+    expect(clips.find(clip => clip.kind === "audio" && clip.linkedVideoClipId === originalVideo.id)).toMatchObject({
+      volume: 0.4, fadeIn: 0.5, fadeOut: 1
+    });
+    expect(container.querySelector(".visual-clip-inspector")?.textContent).toContain(copyVideo.name);
+
+    click(buttonsNamed("Undo").find(button => !button.disabled)!);
+    await flushEffects();
+    expect((persistedProject().timelineClips ?? []).filter(clip => clip.kind === "video" && !clip.id.startsWith("storyboard-"))).toHaveLength(1);
+    click(buttonsNamed("Redo").find(button => !button.disabled)!);
+    await flushEffects();
+    expect((persistedProject().timelineClips ?? []).filter(clip => clip.kind === "video" && !clip.id.startsWith("storyboard-"))).toHaveLength(2);
+  });
+
   it("opens nested Version tabs, adds a procedural layer, and keeps linked-audio mute/unlink independent", async () => {
     await openTimelineView();
     expect(container.querySelector(".master-shot-clip")).toBeTruthy();
