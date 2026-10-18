@@ -24,6 +24,7 @@ export default function SandboxedCodePreview({ title, html = "", css = "", js = 
   useEffect(() => {
     let live = true;
     const releases: Array<() => void> = [];
+    setResolvedImages({});
     const resolveImages = async () => {
       const entries = await Promise.all(referencedImageAssetIds.map(async assetId => {
         const asset = assets.find(item => item.id === assetId && item.kind === "image");
