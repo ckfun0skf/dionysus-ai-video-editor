@@ -247,6 +247,8 @@ export default function App() {
       ?? activeVersionTimelineSlot?.versions.find(version => version.id === activeVersionTimelineTab.versionId)
     : undefined;
   const activeTimelineDuration = activeVersionTimeline ? activeVersionTimeline.duration : runtime;
+  const previewCanvasWidth = activeVersionTimelineClipAsset?.canvasWidth ?? project.width;
+  const previewCanvasHeight = activeVersionTimelineClipAsset?.canvasHeight ?? project.height;
   const activeShotInfo = useMemo(() => {
     const index = getMasterShotIndexAtTime(project.shots, editorTime);
     return { shot: project.shots[index] ?? project.shots[0], index: Math.max(0, index) };
@@ -290,8 +292,8 @@ export default function App() {
         const compositionPath = activeVersionTimelineTab?.id === activeTimelineTabId && activeVersionTimelineTab.assetId
           ? new Set([activeVersionTimelineTab.assetId])
           : new Set<string>();
-        const previewScale = Math.min(1280 / Math.max(1, project.width), 720 / Math.max(1, project.height));
-        const previewDimensions = { width: Math.max(1, Math.round(project.width * previewScale)), height: Math.max(1, Math.round(project.height * previewScale)) };
+        const previewScale = Math.min(1280 / Math.max(1, previewCanvasWidth), 720 / Math.max(1, previewCanvasHeight));
+        const previewDimensions = { width: Math.max(1, Math.round(previewCanvasWidth * previewScale)), height: Math.max(1, Math.round(previewCanvasHeight * previewScale)) };
         await renderCompositionFrame(frame, project, layers, editorTime, previewDimensions, previewImagesRef.current, previewVideosRef.current, releases, compositionPath);
         if (renderId !== previewRenderId.current) return;
         const context = canvas.getContext("2d");
@@ -374,7 +376,7 @@ export default function App() {
         <div><strong>{title}</strong><small>{subtitle}</small></div>
         <span className="integrated-timecode">{editorTimeLabel(editorTime)} / {editorTimeLabel(duration)}</span>
       </div>
-      <div className="integrated-preview-frame" style={{aspectRatio: Math.max(1,project.width) + " / " + Math.max(1,project.height)}}>
+      <div className="integrated-preview-frame" style={{aspectRatio: Math.max(1,previewCanvasWidth) + " / " + Math.max(1,previewCanvasHeight)}}>
         <canvas
           ref={element => {
             if (element) previewCanvasRefs.current.set(tabKey, element);
