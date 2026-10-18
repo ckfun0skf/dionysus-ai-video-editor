@@ -280,4 +280,38 @@ describe("validateProject", () => {
     expect(validateProject(badOpacity)).toBe(false);
   });
 
+  it("accepts an empty Clip Asset and a Clip placed on a Video track", () => {
+    const project = structuredClone(sampleProject);
+    project.assets.push({
+      id: "empty-clip-asset",
+      name: "Empty clip",
+      kind: "clip",
+      canvasWidth: 1920,
+      canvasHeight: 1080,
+      selectedClipVersionId: "empty-clip-version-a",
+      clipVersions: [{
+        id: "empty-clip-version-a",
+        name: "Version A",
+        description: "",
+        duration: 5,
+        layers: [],
+        scriptVersionIds: [],
+        generationRecords: [],
+      }],
+    });
+    project.timelineClips = [{
+      id: "master-clip-asset",
+      name: "Empty clip",
+      kind: "clip",
+      trackId: "track-video-1",
+      start: 0,
+      duration: 5,
+      assetId: "empty-clip-asset",
+    }];
+    expect(validateProject(project)).toBe(true);
+
+    project.assets[0].selectedClipVersionId = "missing-version";
+    expect(validateProject(project)).toBe(false);
+  });
+
 });
