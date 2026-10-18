@@ -150,4 +150,35 @@ describe("compositionRenderer", () => {
     expect(layers.some(layer => layer.id.includes("child-b"))).toBe(false);
   });
 
+  it("uses clip frame transforms or parent Video Layer geometry for master clips", () => {
+    const project = structuredClone(sampleProject);
+    project.assets.push({ id: "frame-image", name: "Frame image", kind: "image", path: "data:image/png;base64,AA==" });
+    const videoTrack = project.tracks.find(track => track.kind === "video")!;
+    videoTrack.x = 10;
+    videoTrack.y = 15;
+    videoTrack.width = 55;
+    videoTrack.height = 60;
+    project.timelineClips = [{
+      id: "transformed-image-clip",
+      name: "Transformed image",
+      kind: "video",
+      trackId: videoTrack.id,
+      start: 0,
+      duration: 2,
+      assetId: "frame-image",
+      x: 20,
+      y: 25,
+      width: 30,
+      height: 35
+    }];
+    expect(collectCompositionLayers(project).find(layer => layer.id === "transformed-image-clip"))
+      .toMatchObject({ x: 20, y: 25, width: 30, height: 35 });
+    delete project.timelineClips![0].x;
+    delete project.timelineClips![0].y;
+    delete project.timelineClips![0].width;
+    delete project.timelineClips![0].height;
+    expect(collectCompositionLayers(project).find(layer => layer.id === "transformed-image-clip"))
+      .toMatchObject({ x: 10, y: 15, width: 55, height: 60 });
+  });
+
 });
