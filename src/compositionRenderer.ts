@@ -32,7 +32,7 @@ export function collectCompositionLayers(project: DionysusProject): CompositionL
     if (!clip.assetId || !project.assets.some(asset => asset.id === clip.assetId)) return [];
     return [{
       ...common, assetId: clip.assetId, sourceIn: clip.sourceIn, sourceOut: clip.sourceOut,
-      fitMode: "contain" as const, x: 0, y: 0, width: 100, height: 100
+      fitMode: clip.fitMode ?? "contain", x: 0, y: 0, width: 100, height: 100
     }];
   });
   // Preserve Version layer order as the composition stacking order. Timing is checked per layer during rendering/export.
