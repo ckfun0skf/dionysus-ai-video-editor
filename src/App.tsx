@@ -4,7 +4,7 @@ import { sampleProject } from "./sampleProject";
 import type { Asset, AssetKind, CompositionLayer, DionysusProject, ReferenceProfile, ReferenceRole, Shot, TimelineClip } from "./types";
 import { validateProject } from "./projectValidation";
 import { t } from "./i18n";
-import { addVideoClip, moveTimelineClip, splitTimelineClip, trimTimelineClip, unlinkTimelineAudio, deleteTimelineClip } from "./timelineOperations";
+import { addVideoClip, duplicateTimelineClip, moveTimelineClip, splitTimelineClip, trimTimelineClip, unlinkTimelineAudio, deleteTimelineClip } from "./timelineOperations";
 import { recordProjectChange, undoProjectChange as undoHistory, redoProjectChange as redoHistory } from "./projectHistory";
 import ProceduralAnimationPreview from "./ProceduralAnimationPreview";
 import { collectCompositionLayers, renderCompositionFrame, exportCompositionWebM, downloadExport } from "./compositionRenderer";
@@ -1120,6 +1120,21 @@ export default function App() {
    setNotice("Split at "+splitAt.toFixed(3)+"s. Source ranges and linked audio were preserved.");
  }catch(error){setNotice(error instanceof Error?error.message:"Could not split this clip.");}
  }}>Split at midpoint</button>
+<button disabled={selectedTimelineClip.kind==="audio"&&Boolean(selectedTimelineClip.linkedVideoClipId)} title={selectedTimelineClip.kind==="audio"&&selectedTimelineClip.linkedVideoClipId?"Duplicate the source video to copy this linked audio":"Duplicate this clip after the original"} onClick={()=>{
+ const source=selectedTimelineClip;
+ const newClipId=id("timeline-clip");
+ const linkedChildren=(project.timelineClips??[]).filter(clip=>clip.kind==="audio"&&clip.linkedVideoClipId===source.id);
+ try{
+   change(p=>({...p,timelineClips:duplicateTimelineClip({tracks:p.tracks,timelineClips:p.timelineClips??[]},source.id,{
+     newClipId,
+     start:source.start+source.duration,
+     ...(source.kind==="video"&&linkedChildren.length?{newAudioClipId:id("timeline-audio")}:{})
+   }).timelineClips}));
+   setSelectedTimelineClipId(newClipId);
+   setIsPlaying(false);
+   setNotice("Clip duplicated after the original"+(linkedChildren.length?" with its linked source audio.":"."));
+ }catch(error){setNotice(error instanceof Error?error.message:"Could not duplicate this clip.");}
+ }}>Duplicate clip</button>
 {selectedTimelineClip.kind==="audio"&&selectedTimelineClip.linkedVideoClipId&&<button onClick={()=>{try{change(p=>({...p,timelineClips:unlinkTimelineAudio({tracks:p.tracks,timelineClips:p.timelineClips??[]},selectedTimelineClip.id).timelineClips}));setNotice("Audio unlinked; it can now be edited independently.");}catch(error){setNotice(error instanceof Error?error.message:"Unlink failed.");}}}>Unlink audio</button>}
 <button className="danger-action" onClick={()=>{change(p=>({...p,timelineClips:deleteTimelineClip({tracks:p.tracks,timelineClips:p.timelineClips??[]},selectedTimelineClip.id).timelineClips}));setSelectedTimelineClipId("");}}>Delete clip</button>
 </div>
