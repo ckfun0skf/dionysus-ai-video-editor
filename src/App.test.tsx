@@ -47,7 +47,7 @@ function selectClip(name: string): HTMLButtonElement {
   return clip as HTMLButtonElement;
 }
 function actionNamed(name: string): HTMLButtonElement {
-  const button = Array.from(container.querySelectorAll<HTMLButtonElement>(".visual-clip-actions button"))
+  const button = Array.from(container.querySelectorAll<HTMLButtonElement>(".visual-clip-inspector button"))
     .find(candidate => candidate.textContent?.includes(name));
   if (!button) throw new Error("Could not find clip action: " + name);
   return button;
