@@ -647,6 +647,27 @@ export default function App() {
     change(p => ({ ...p, shots: p.shots.map(item => item.id !== shotId ? item : { ...item, slots: item.slots.map(s => s.id !== slotId ? s : { ...s, versions: s.versions.map(v => v.id !== versionId ? v : { ...v, layers: v.layers.filter(layer => layer.id !== layerId) }) }) }) }));
   }
 
+  function moveVersionLayer(shotId: string, slotId: string, versionId: string, layerId: string, direction: -1 | 1) {
+    change(p => ({
+      ...p,
+      shots: p.shots.map(shot => shot.id !== shotId ? shot : {
+        ...shot,
+        slots: shot.slots.map(slot => slot.id !== slotId ? slot : {
+          ...slot,
+          versions: slot.versions.map(version => {
+            if (version.id !== versionId) return version;
+            const index = version.layers.findIndex(layer => layer.id === layerId);
+            const target = index + direction;
+            if (index < 0 || target < 0 || target >= version.layers.length) return version;
+            const layers = [...version.layers];
+            [layers[index], layers[target]] = [layers[target], layers[index]];
+            return { ...version, layers };
+          })
+        })
+      })
+    }));
+  }
+
   function addMasterLayerClip(kind: "text" | "procedural") {
     const track = project.tracks.find(item => item.kind === kind);
     const trackId = track?.id ?? id("track-" + kind);
@@ -1083,6 +1104,8 @@ export default function App() {
   <div className="nested-timeline-lanes">
     {activeVersionTimeline.layers.map(layer=><div className="nested-timeline-row" key={layer.id}>
       <div className="nested-timeline-row-label"><span>{layer.kind==="procedural"?"◇":layer.kind==="audio"?"♫":layer.kind==="text"?"T":layer.kind==="image"?"▧":layer.kind==="script"?"&lt;/&gt;":"▣"}</span><div><strong>{layer.name}</strong><small>{layer.kind==="procedural"?"Three.js / procedural":layer.kind}</small></div>
+        <button className="layer-order-button" aria-label={"Move " + layer.name + " earlier"} title="Move layer earlier" disabled={activeVersionTimeline.layers.findIndex(item=>item.id===layer.id)===0} onClick={()=>moveVersionLayer(activeVersionTimelineShot.id,activeVersionTimelineSlot.id,activeVersionTimeline.id,layer.id,-1)}>↑</button>
+        <button className="layer-order-button" aria-label={"Move " + layer.name + " later"} title="Move layer later" disabled={activeVersionTimeline.layers.findIndex(item=>item.id===layer.id)===activeVersionTimeline.layers.length-1} onClick={()=>moveVersionLayer(activeVersionTimelineShot.id,activeVersionTimelineSlot.id,activeVersionTimeline.id,layer.id,1)}>↓</button>
         {layer.kind==="audio" && <button className="layer-mute-toggle" aria-pressed={Boolean(layer.muted)} onClick={()=>updateCompositionLayer(activeVersionTimelineShot.id,activeVersionTimelineSlot.id,activeVersionTimeline.id,layer.id,{muted:!layer.muted})}>{layer.muted?"Unmute":"Mute"}</button>}
         <button className="layer-remove" aria-label={"Delete " + layer.name} onClick={()=>removeVersionLayer(activeVersionTimelineShot.id,activeVersionTimelineSlot.id,activeVersionTimeline.id,layer.id)}>×</button>
       </div>
