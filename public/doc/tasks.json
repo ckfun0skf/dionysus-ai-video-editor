@@ -289,6 +289,62 @@
             "CI run 39124022295: 93 tests pass across 10 files; TypeScript/production build pass; npm audit reports 0 vulnerabilities."
           ],
           "notes": "Linked-child lanes, unlink, independent audio layer controls, split/duplicate propagation, mix settings, and core JSON validation are implemented. More exhaustive group-delete behavior and Undo/Redo coverage for all parent/child arrangements remain outstanding."
+        },
+        {
+          "id": "DYS-013",
+          "title": "Reusable Clip Assets and nested composition timeline",
+          "status": "done",
+          "progress": 100,
+          "summary": "Create reusable Clip Assets with editable, versioned nested timelines; pin versions in placements, prevent cyclic references, validate graph integrity, and render nested Clip compositions.",
+          "doc": "tasks/reusable-clip-assets.md",
+          "detail": "tasks/reusable-clip-assets.html",
+          "report": "reports/reusable-clip-assets-report.md",
+          "subtasks": [
+            {
+              "title": "Create Clip Assets with canvas dimensions and an initial empty Version",
+              "status": "done"
+            },
+            {
+              "title": "Open a Clip Version in its own Timeline tab and edit internal modules",
+              "status": "done"
+            },
+            {
+              "title": "Duplicate Clip Versions without mutating previous Versions",
+              "status": "done"
+            },
+            {
+              "title": "Pin Clip Version references and block direct or indirect cycles",
+              "status": "done"
+            },
+            {
+              "title": "Validate nested IDs, media references, frame geometry, and Code image references",
+              "status": "done"
+            },
+            {
+              "title": "Render nested Clip compositions and looped placements in the browser compositor",
+              "status": "done"
+            },
+            {
+              "title": "Add unit/integration coverage and production-build verification",
+              "status": "done"
+            }
+          ],
+          "acceptance": [
+            "A Clip Asset can be created with a name, canvas width/height, and positive duration.",
+            "Each Clip Asset has one or more editable, independently versioned compositions.",
+            "A Clip Version can contain video, image, audio, text, Code/procedural, and nested Clip modules.",
+            "Nested Clip references pin a concrete Version and reject cycles.",
+            "Invalid or stale Clip, Version, Asset, and referenced-image IDs are rejected during project validation.",
+            "The compositor expands Clip placements recursively with the selected pinned Version and placement transforms.",
+            "Automated unit/integration tests pass and the production build succeeds."
+          ],
+          "evidence": [
+            "Implementation and tests: PR #51",
+            "Workflow validation: https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39153686513",
+            "Creative editing contract: public/doc/creative-editing-workflow-spec.md",
+            "Implementation details and known limits: public/doc/reports/reusable-clip-assets-report.md"
+          ],
+          "notes": "This status applies only to the reusable Clip Asset graph/nested-timeline slice. It does not claim production-grade frame-accurate MP4 export, complete Shot identity/version migration, or completion of the broader reference-management roadmap. Release/deployment remains tracked separately."
         }
       ]
     },

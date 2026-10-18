@@ -24,6 +24,44 @@ This file is the starting point for any agent continuing Dionysus. Keep project 
 - Keep all durable project knowledge in version control. Avoid instructions that exist only in chat.
 - Preferred user communication language is Hong Kong Cantonese (`zh_hk`), while all code, docs, and git commits remain in professional English.
 
+## Efficient Agent Workflow: Batch Work, Commits, and CI
+
+This section is mandatory for every agent and every new chat. Optimize for validated, coherent feature slices—not the number of messages, commits, or CI runs.
+
+### Before editing
+1. Read this guide, the relevant PRD/architecture/spec, current task dashboard data, and the active PR/branch.
+2. Confirm the current `main` SHA, feature branch head, PR state, and newest CI result. Do not assume a previous chat's status is still current.
+3. Turn the request into a small, complete vertical slice with explicit acceptance checks. Inspect existing implementation before changing it; do not make speculative edits across unrelated files.
+
+### Implementation and commit policy
+- Work on a feature branch; never push directly to `main`.
+- Make related code, tests, translations, task status, and documentation changes together in a coherent batch.
+- **Do not create one commit per file or per tiny edit.** Avoid GitHub Contents API file-by-file updates when each update creates its own commit. Prefer a local working tree and one normal Git commit, or create a single Git tree/commit for a multi-file batch when using GitHub APIs.
+- Default to one meaningful commit for a completed feature slice; use a small number of commits only when they represent genuinely separate, reviewable milestones (for example, foundational model/tests followed by the UI workflow). Do not rewrite shared branches; only rewrite your own feature branch when necessary and use a lease/expected-head check.
+- Commit messages should describe the change, not the activity (for example, `feat: add reusable clip timeline workflow`).
+- Before pushing, inspect the diff and run the cheapest relevant local checks available. If no local checkout/runtime is available, say so plainly and use CI as the verification source; never claim a local test was run when it was not.
+- Do not create redundant PRs. Keep one active PR per coherent feature unless a clear dependency or release boundary requires otherwise.
+
+### CI and deployment policy
+The current CI workflow is intentionally configured to run for:
+- `pull_request` targeting `main`
+- `push` to `main`
+- manual `workflow_dispatch`
+
+Feature-branch pushes should not independently trigger a second full CI run. A PR may receive a PR validation run, and merging to `main` intentionally triggers post-merge validation. The workflow's concurrency group cancels stale runs for the same PR/ref when a newer run supersedes them.
+
+- Do not manually rerun a still-running or already-passing check without a specific reason.
+- After pushing, inspect the latest run for the **current exact head SHA**; verify test, type-check/build, and audit output. An older green run does not validate a newer commit.
+- Wait for the latest required PR checks before merging. After merge, verify the main push CI and GitHub Pages deployment separately when the task includes release/deployment.
+- Do not add automated browser smoke tests or browser automation unless the user explicitly asks; this project uses deterministic tests, type-checking, build, and deployment status as the default verification path.
+- Keep CI changes narrow. Do not add redundant workflows or triggers to compensate for a stale or misunderstood run.
+
+### Handoff and reporting
+- Record durable decisions, changed files, commit/PR links, exact validated SHA, test/build/audit results, and any remaining risks in Git. Update `public/doc/tasks.json` and its task/spec/report artifacts for major feature blocks.
+- Clearly distinguish automated checks, actual UI/browser verification, and deployed behavior. Never describe a PR branch as deployed before merge and a successful deployment.
+- Report concise evidence and the next concrete action. If a tool/API limitation prevented a check, state that limitation instead of guessing.
+- If a chat is getting long, update the Git handoff/status documents before switching chats. The next agent should be able to continue from Git alone without relying on the previous conversation.
+
 ## Product Mission & User Core Requirements
 
 **Why Dionysus exists:**

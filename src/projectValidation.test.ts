@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { sampleProject } from "./sampleProject";
+import type { CompositionLayer } from "./types";
 import { validateProject } from "./projectValidation";
 
 describe("validateProject", () => {
@@ -278,6 +279,59 @@ describe("validateProject", () => {
     const badOpacity = structuredClone(sampleProject);
     badOpacity.shots[0].slots[0].versions[0].layers.push({id:"bad-opacity",name:"Bad opacity",kind:"video",start:0,duration:1,opacity:1.5});
     expect(validateProject(badOpacity)).toBe(false);
+  });
+
+  it("accepts an empty Clip Asset and a Clip placed on a Video track", () => {
+    const project = structuredClone(sampleProject);
+    project.assets.push({
+      id: "empty-clip-asset",
+      name: "Empty clip",
+      kind: "clip",
+      canvasWidth: 1920,
+      canvasHeight: 1080,
+      selectedClipVersionId: "empty-clip-version-a",
+      clipVersions: [{
+        id: "empty-clip-version-a",
+        name: "Version A",
+        description: "",
+        duration: 5,
+        layers: [],
+        scriptVersionIds: [],
+        generationRecords: [],
+      }],
+    });
+    project.timelineClips = [{
+      id: "master-clip-asset",
+      name: "Empty clip",
+      kind: "clip",
+      trackId: "track-video-1",
+      start: 0,
+      duration: 5,
+      assetId: "empty-clip-asset",
+    }];
+    expect(validateProject(project)).toBe(true);
+
+    project.assets[0].selectedClipVersionId = "missing-version";
+    expect(validateProject(project)).toBe(false);
+  });
+
+  it("rejects unresolved or non-image references from Code modules", () => {
+    const project = structuredClone(sampleProject);
+    const version = project.shots[0].slots[0].versions[0];
+    const codeLayer: CompositionLayer = {
+      id: "test-code-image-reference",
+      name: "Code module",
+      kind: "procedural",
+      start: 0,
+      duration: Math.min(1, version.duration),
+      referencedImageAssetIds: ["missing-image"],
+    };
+    version.layers.push(codeLayer);
+    expect(validateProject(project)).toBe(false);
+
+    project.assets.push({ id: "reference-image", name: "Reference image", kind: "image", path: "data:image/png;base64,AA==" });
+    codeLayer.referencedImageAssetIds = ["reference-image"];
+    expect(validateProject(project)).toBe(true);
   });
 
 });

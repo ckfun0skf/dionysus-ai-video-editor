@@ -36,7 +36,7 @@ npm test
 npm run build
 ```
 
-The app is a static Vite web application. The CI workflow builds pull requests and feature branches. The GitHub Pages workflow deploys the site when changes reach `main`.
+The app is a static Vite web application. CI runs for pull requests targeting `main`, pushes to `main`, and manual dispatches; feature-branch pushes do not trigger a separate full CI run. Stale runs for the same pull request/ref are cancelled when newer commits arrive. The GitHub Pages workflow deploys the site when changes reach `main`.
 
 ## Public preview and data safety
 

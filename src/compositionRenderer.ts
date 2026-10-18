@@ -17,18 +17,25 @@ export function collectCompositionLayers(project: DionysusProject): CompositionL
     return layers;
   });
   const timeline: CompositionLayer[] = (project.timelineClips ?? []).filter(clip => !clip.id.startsWith("storyboard-")).flatMap((clip): CompositionLayer[] => {
+    const track = project.tracks.find(item => item.id === clip.trackId);
+    const frameX = clip.x ?? track?.x ?? 0;
+    const frameY = clip.y ?? track?.y ?? 0;
+    const frameWidth = clip.width ?? track?.width ?? 100;
+    const frameHeight = clip.height ?? track?.height ?? 100;
     const common = {
       id: clip.id, name: clip.name, kind: clip.kind === "clip" ? "composition" as const : clip.kind, start: clip.start, duration: clip.duration,
+      ...(clip.referencedImageAssetIds ? { referencedImageAssetIds: [...clip.referencedImageAssetIds] } : {}),
       ...(clip.scriptVersionId ? { scriptVersionId: clip.scriptVersionId } : {}),
       ...(clip.prompt ? { prompt: clip.prompt } : {}),
       ...(clip.modelName ? { modelName: clip.modelName } : {}),
       ...(clip.modelVersion ? { modelVersion: clip.modelVersion } : {}),
-      muted: Boolean(clip.muted || project.tracks.find(track => track.id === clip.trackId)?.muted),
+      muted: Boolean(clip.muted || track?.muted),
       volume: clip.volume, fadeIn: clip.fadeIn, fadeOut: clip.fadeOut, shortSourceBehavior: clip.shortSourceBehavior
     };
     if (clip.kind === "clip") {
       const asset = project.assets.find(item => item.id === clip.assetId && item.kind === "clip");
-      const version = asset?.clipVersions?.find(item => item.id === asset.selectedClipVersionId) ?? asset?.clipVersions?.[0];
+      const version = asset?.clipVersions?.find(item => item.id === clip.clipVersionId)
+        ?? (clip.clipVersionId ? undefined : asset?.clipVersions?.find(item => item.id === asset.selectedClipVersionId) ?? asset?.clipVersions?.[0]);
       if (!version || version.duration <= 0) return [];
       const result: CompositionLayer[] = [];
       const repeats = clip.shortSourceBehavior === "loop" ? Math.max(1, Math.ceil(clip.duration / version.duration)) : 1;
@@ -46,8 +53,12 @@ export function collectCompositionLayers(project: DionysusProject): CompositionL
             name: layer.name,
             start: clip.start + startOffset,
             duration: visibleDuration,
-            muted: Boolean(layer.muted || clip.muted || project.tracks.find(track => track.id === clip.trackId)?.muted),
-            volume: layer.volume === undefined ? clip.volume : layer.volume * (clip.volume ?? 1)
+            muted: Boolean(layer.muted || clip.muted || track?.muted),
+            volume: layer.volume === undefined ? clip.volume : layer.volume * (clip.volume ?? 1),
+            x: frameX + frameWidth * (layer.x ?? 0) / 100,
+            y: frameY + frameHeight * (layer.y ?? 0) / 100,
+            width: frameWidth * (layer.width ?? 100) / 100,
+            height: frameHeight * (layer.height ?? 100) / 100
           });
         }
       }
@@ -55,8 +66,8 @@ export function collectCompositionLayers(project: DionysusProject): CompositionL
     }
     if (clip.kind === "text" || clip.kind === "procedural") {
       return [{
-        ...common, fitMode: "contain" as const, x: 0, y: clip.kind === "text" ? 75 : 0,
-        width: 100, height: clip.kind === "text" ? 18 : 100,
+        ...common, fitMode: "contain" as const, x: clip.x ?? (clip.kind === "text" ? 0 : frameX), y: clip.y ?? (clip.kind === "text" ? 75 : frameY),
+        width: clip.width ?? frameWidth, height: clip.height ?? (clip.kind === "text" ? 18 : frameHeight),
         ...(clip.code !== undefined ? { code: clip.code } : {}),
         ...(clip.html !== undefined ? { html: clip.html } : {}),
         ...(clip.css !== undefined ? { css: clip.css } : {})
@@ -65,7 +76,7 @@ export function collectCompositionLayers(project: DionysusProject): CompositionL
     if (!clip.assetId || !project.assets.some(asset => asset.id === clip.assetId)) return [];
     return [{
       ...common, assetId: clip.assetId, sourceIn: clip.sourceIn, sourceOut: clip.sourceOut,
-      fitMode: clip.fitMode ?? "contain", x: 0, y: 0, width: 100, height: 100
+      fitMode: clip.fitMode ?? "contain", x: frameX, y: frameY, width: frameWidth, height: frameHeight
     }];
   });
   // Preserve Version layer order as the composition stacking order. Timing is checked per layer during rendering/export.
@@ -161,13 +172,85 @@ function drawLayer(ctx: CanvasRenderingContext2D, layer: CompositionLayer, asset
   ctx.restore();
 }
 
-export async function renderCompositionFrame(canvas: HTMLCanvasElement, project: DionysusProject, layers: CompositionLayer[], seconds: number, options: RenderOptions = {}, images = new Map<string, HTMLImageElement>(), videos = new Map<string, HTMLVideoElement>(), mediaReleases = new Map<string, () => void>()): Promise<void> {
+function drawNestedCompositionFrame(
+  ctx: CanvasRenderingContext2D,
+  layer: CompositionLayer,
+  frame: HTMLCanvasElement,
+  seconds: number,
+  width: number,
+  height: number
+) {
+  if (seconds < layer.start || seconds >= layer.start + layer.duration) return;
+  const x = ((layer.x ?? 0) / 100) * width, y = ((layer.y ?? 0) / 100) * height;
+  const w = ((layer.width ?? 100) / 100) * width, h = ((layer.height ?? 100) / 100) * height;
+  const opacity = Math.max(0, Math.min(1, layer.opacity ?? 1));
+  const local = seconds - layer.start;
+  ctx.save();
+  ctx.globalAlpha *= opacity;
+  if (layer.animation === "float") ctx.translate(0, Math.sin(local * 2 * Math.PI / Math.max(.1, layer.animationDuration ?? 2)) * height * .015);
+  if (layer.animation === "pulse") {
+    const pulse = 1 + .04 * Math.sin(local * 2 * Math.PI / Math.max(.1, layer.animationDuration ?? 2));
+    ctx.translate(x + w / 2, y + h / 2); ctx.scale(pulse, pulse); ctx.translate(-(x + w / 2), -(y + h / 2));
+  }
+  if (layer.animation === "rotate") {
+    ctx.translate(x + w / 2, y + h / 2); ctx.rotate(local * 2 * Math.PI / Math.max(.1, layer.animationDuration ?? 3)); ctx.translate(-(x + w / 2), -(y + h / 2));
+  }
+  const scale = layer.scale ?? 1;
+  ctx.translate(x + w / 2, y + h / 2); ctx.scale(scale, scale); ctx.translate(-(x + w / 2), -(y + h / 2));
+  const makeFramePath = (inset = 0) => {
+    ctx.beginPath();
+    if (layer.shape === "circle") ctx.ellipse(x + w / 2, y + h / 2, Math.max(0, Math.min(w, h) / 2 - inset), Math.max(0, Math.min(w, h) / 2 - inset), 0, 0, Math.PI * 2);
+    else if (layer.shape === "rounded") ctx.roundRect(x + inset, y + inset, Math.max(0, w - inset * 2), Math.max(0, h - inset * 2), Math.max(0, (layer.cornerRadius ?? 12) - inset));
+    else ctx.rect(x + inset, y + inset, Math.max(0, w - inset * 2), Math.max(0, h - inset * 2));
+  };
+  if (layer.backgroundColor) {
+    ctx.fillStyle = layer.backgroundColor;
+    makeFramePath();
+    ctx.fill();
+  }
+  makeFramePath();
+  ctx.clip();
+  drawFit(ctx, frame, frame.width, frame.height, x, y, w, h, layer.fitMode);
+  if (layer.borderColor && (layer.borderWidth ?? 0) > 0) {
+    ctx.strokeStyle = layer.borderColor;
+    ctx.lineWidth = layer.borderWidth!;
+    makeFramePath(layer.borderWidth! / 2);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+export async function renderCompositionFrame(canvas: HTMLCanvasElement, project: DionysusProject, layers: CompositionLayer[], seconds: number, options: RenderOptions = {}, images = new Map<string, HTMLImageElement>(), videos = new Map<string, HTMLVideoElement>(), mediaReleases = new Map<string, () => void>(), compositionPath: Set<string> = new Set()): Promise<void> {
   const width = options.width ?? project.width, height = options.height ?? project.height;
   canvas.width = width; canvas.height = height;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Canvas 2D rendering is unavailable");
   ctx.fillStyle = "#000"; ctx.fillRect(0, 0, width, height);
   for (const layer of layers) {
+    const referencedCompositionId = layer.kind === "composition"
+      ? layer.childCompositionId ?? (project.assets.some(item => item.id === layer.assetId && item.kind === "clip") ? layer.assetId : undefined)
+      : undefined;
+    if (referencedCompositionId && !compositionPath.has(referencedCompositionId)) {
+      const childAsset = project.assets.find(item => item.id === referencedCompositionId && item.kind === "clip");
+      const childVersion = childAsset?.clipVersions?.find(item => item.id === layer.clipVersionId)
+        ?? (layer.clipVersionId ? undefined : childAsset?.clipVersions?.find(item => item.id === childAsset.selectedClipVersionId) ?? childAsset?.clipVersions?.[0]);
+      if (childAsset?.kind === "clip" && childVersion && seconds >= layer.start && seconds < layer.start + layer.duration) {
+        const childCanvas = document.createElement("canvas");
+        await renderCompositionFrame(
+          childCanvas,
+          project,
+          childVersion.layers,
+          seconds - layer.start,
+          options,
+          images,
+          videos,
+          mediaReleases,
+          new Set([...compositionPath, referencedCompositionId])
+        );
+        drawNestedCompositionFrame(ctx, layer, childCanvas, seconds, width, height);
+        continue;
+      }
+    }
     const asset = project.assets.find(item => item.id === layer.assetId);
     if (!asset?.path) { drawLayer(ctx, layer, asset, seconds, width, height, images, videos); continue; }
     if (asset.kind === "image" && !images.has(asset.id)) {
