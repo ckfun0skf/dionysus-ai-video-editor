@@ -875,6 +875,12 @@ describe("App history integration", () => {
     await flushEffects();
     audioVersion = persistedProject().shots[0].slots[0].versions.find(version => version.id === addedVersionId)!;
     expect(audioVersion.layers.find(layer => layer.id === audioLayer.id)).toMatchObject({ volume: 0.45, fadeIn: 0.5, fadeOut: 0.75 });
+    const nestedAudioSourceOut = container.querySelector<HTMLInputElement>('input[aria-label="Version layer ' + audioLayer.id + ' source out"]');
+    expect(nestedAudioSourceOut).toBeTruthy();
+    setInputValue(nestedAudioSourceOut!, "0.4");
+    await flushEffects();
+    audioVersion = persistedProject().shots[0].slots[0].versions.find(version => version.id === addedVersionId)!;
+    expect(audioVersion.layers.find(layer => layer.id === audioLayer.id)).toMatchObject({ duration: 0.4, sourceOut: 0.4, fadeIn: 0.4, fadeOut: 0.4 });
     expect(audioVersion.duration).toBe(versionDurationBeforeSourceTrim);
     expect(persistedProject().shots[0].duration).toBe(masterShotDurationBefore);
     expect(persistedProject().shots[0].slots[0].duration).toBe(slotDurationBefore);
