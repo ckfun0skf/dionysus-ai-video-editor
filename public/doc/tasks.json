@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "project": "Dionysus",
-  "updatedAt": "2026-10-17",
+  "updatedAt": "2026-10-18",
   "sourceOfTruth": "public/doc/tasks.json",
   "statusDefinitions": {
     "done": "Implementation exists and has evidence; release/browser validation may still be pending.",
@@ -36,10 +36,6 @@
             {
               "title": "AI execution-plan export",
               "status": "done"
-            },
-            {
-              "title": "Release-level browser smoke test",
-              "status": "planned"
             }
           ],
           "acceptance": [
@@ -191,90 +187,100 @@
           "title": "Timeline editing and Version management",
           "status": "in_progress",
           "progress": 35,
-          "summary": "Separate timeline placement from Version internals; support both single-clip and composite Versions, per-clip version selection, and safe editing operations.",
+          "summary": "Master Timeline with visible typed layers, per-Shot active-Version dropdown (+ Add Version/Edit), nested Version timeline tabs, and separate master placement vs Version-internal timing.",
           "doc": "tasks/timeline-and-versions.md",
           "detail": "tasks/timeline-and-versions.html",
           "report": "reports/timeline-and-versions-report.md",
           "subtasks": [
             {
-              "title": "Select Clip Slot and switch existing versions",
+              "title": "Switch a Shot/Slot active Version without changing other Slots",
               "status": "done"
             },
             {
-              "title": "Create/duplicate versions with unique IDs",
+              "title": "Create a new Version while preserving existing alternatives",
               "status": "done"
             },
             {
-              "title": "Separate Timeline Clip placement/duration from Version internals",
+              "title": "Separate Master Shot placement/duration from Version internal timeline",
               "status": "planned"
             },
             {
-              "title": "Single Clip and Composite Version schema",
+              "title": "Keep Master Timeline open and open nested Version timelines in tabs",
               "status": "planned"
             },
             {
-              "title": "Version dropdown with thumbnail, description, and add-version action",
+              "title": "Shot thumbnail dropdown with + Add Version and per-Version Edit action",
               "status": "planned"
             },
             {
-              "title": "Define version-duration mismatch behavior",
+              "title": "Show typed layer lanes; remove generic Media track",
               "status": "planned"
             },
             {
-              "title": "Undo/Redo and selection consistency for Version changes",
-              "status": "in_progress"
+              "title": "Preserve nested versions/layers through Undo/Redo and project JSON",
+              "status": "planned"
             }
           ],
           "acceptance": [
-            "Each slot retains an independent selectedVersionId",
-            "Single and composite Version forms validate correctly",
-            "Switching Version does not silently move unrelated clips",
-            "New versions use unique IDs for nested layers and records",
-            "Legacy project JSON loads through an explicit migration",
-            "Unit tests cover valid/invalid composite structures and duration policies"
+            "Master Timeline remains accessible while Shot-Version timelines are open in separate tabs",
+            "Shot blocks display active-Version thumbnail or a clear placeholder and readable name",
+            "Version menu supports selecting an alternative, creating a new Version, and editing each Version",
+            "Master Shot placement/duration remains separate from its Version-internal timing",
+            "Project JSON preserves active Versions and nested layer/module relationships",
+            "Unit/integration tests and production build pass; no automated browser smoke test is added unless explicitly requested"
           ],
           "evidence": [
             "Existing picker work merged in PR #3; newer editing work is documented in repository history"
           ],
-          "notes": "Confirmed product decision: Version model C supports both single video and multi-clip/audio composites."
+          "notes": "Scope is now based on the supplied prototype. Current implementation provides timeline foundations but does not yet satisfy nested tabs, the full version dropdown workflow, or the final hierarchy of typed layers."
         },
         {
           "id": "DYS-011",
           "title": "Multi-track Timeline and linked audio",
           "status": "in_progress",
           "progress": 15,
-          "summary": "Introduce independent video/audio tracks and a safe linked/unlinked audio workflow.",
+          "summary": "Render video tracks as expandable groups with linked source-audio child lanes; unlink into independent Audio Layers with their own persistent mute controls.",
           "doc": "tasks/multitrack-timeline-linked-audio.md",
           "detail": "tasks/multitrack-timeline-linked-audio.html",
           "report": "reports/multitrack-timeline-linked-audio-report.md",
           "subtasks": [
             {
-              "title": "Track ordering, visibility, lock, and type rules",
+              "title": "Validated video/audio clip model and source-audio links",
+              "status": "done"
+            },
+            {
+              "title": "Render linked audio as an indented child lane below its video layer",
+              "status": "planned"
+            },
+            {
+              "title": "Unlink without changing current audio/video timing",
+              "status": "done"
+            },
+            {
+              "title": "Independent Audio Layer move/trim/delete after unlinking",
               "status": "in_progress"
             },
             {
-              "title": "Represent linked source audio and independent audio clips",
+              "title": "Persistent per-audio-layer mute isolated from other layers",
               "status": "planned"
             },
             {
-              "title": "Unlink, move/trim independently, and relink when compatible",
-              "status": "planned"
-            },
-            {
-              "title": "Waveform/clip rendering with honest unavailable states",
+              "title": "Undo/Redo and project JSON round-trip preserve links, mute, and track placement",
               "status": "in_progress"
             }
           ],
           "acceptance": [
-            "Linked video and audio move/trim together",
-            "Unlinked audio can move independently",
-            "Deleting or duplicating clips does not leave dangling references",
-            "Undo/Redo restores linked state and track placement"
+            "Expanding a video layer reveals linked source audio below it",
+            "Unlink converts the audio to an independent Audio Layer without moving or trimming either clip",
+            "Each audio layer has independent mute/unmute state",
+            "Deleting unlinked audio does not delete its video source",
+            "History and project JSON round-trip preserve link and mute state",
+            "Automated model/integration tests and build cover core behaviors; no automated browser smoke test unless explicitly requested"
           ],
           "evidence": [
             "Acceptance tests and PR CI will be recorded when implementation begins"
           ],
-          "notes": "Implementation has started on PR #35. Current work adds a validated metadata model and linked-audio operations; UI/browser validation and remaining acceptance criteria are pending."
+          "notes": "Existing model operations cover linked move/trim, unlink, and deletion; prototype-style nested lane UI and per-layer mute remain outstanding."
         }
       ]
     },
@@ -332,33 +338,47 @@
           "title": "Advanced audio and procedural layers",
           "status": "planned",
           "progress": 0,
-          "summary": "Add multitrack audio mixing, effects, timed text, and user-authorized procedural modules.",
+          "summary": "Support per-Audio-Layer mute/mixing, timed text, and first-class Three.js/procedural timeline layers with pinned script versions and explicit execution permission.",
           "doc": "tasks/audio-and-procedural-modules.md",
           "detail": "tasks/audio-and-procedural-modules.html",
           "report": "reports/audio-and-procedural-modules-report.md",
           "subtasks": [
             {
-              "title": "Audio level, mute, and basic mixing",
+              "title": "Persist independent mute state for each Audio Layer",
               "status": "planned"
             },
             {
-              "title": "Timed text and basic effects",
+              "title": "Multitrack audio level, trim, fades, and mixing",
               "status": "planned"
             },
             {
-              "title": "Sandbox and permission model for procedural modules",
+              "title": "Timed text/title lane behavior",
+              "status": "planned"
+            },
+            {
+              "title": "Three.js procedural layer with duration and Inspector parameters",
+              "status": "planned"
+            },
+            {
+              "title": "Pin script/module versions and isolate runtime errors",
+              "status": "planned"
+            },
+            {
+              "title": "Explicit authorization and security boundary for custom code",
               "status": "planned"
             }
           ],
           "acceptance": [
-            "Audio levels and mute state are persisted",
-            "Timing is deterministic and tested",
-            "Procedural code is not executed without explicit authorization and isolation"
+            "Muting one audio layer does not mute any other layer and state persists",
+            "Three.js is represented as a typed procedural layer rather than a fake video asset",
+            "Saved Shot Versions pin exact script/module versions",
+            "Custom code executes only after explicit authorization in the defined security boundary",
+            "UI states clearly distinguish layer data, preview capability, and final render support"
           ],
           "evidence": [
             "Automated tests and documented safety boundaries required before marking done"
           ],
-          "notes": "Depends on the multi-track audio model."
+          "notes": "Per-layer mute and a first-class procedural layer are baseline requirements; advanced effect design and final renderer integration can follow in staged work."
         },
         {
           "id": "DYS-012",
@@ -482,21 +502,17 @@
         },
         {
           "id": "DYS-010",
-          "title": "Release quality, browser QA, and deployment",
+          "title": "CI validation, release notes, and deployment",
           "status": "in_progress",
           "progress": 60,
-          "summary": "Verify CI, run browser smoke tests, deploy review candidates through PR workflow, and document release limitations.",
+          "summary": "Run deterministic automated tests, type-checking, production build, and deployment verification; record real limitations without requiring browser smoke tests.",
           "doc": "tasks/release-quality-and-deployment.md",
           "detail": "tasks/release-quality-and-deployment.html",
           "report": "reports/release-quality-and-deployment-report.md",
           "subtasks": [
             {
-              "title": "PR CI test, type-check, and build",
+              "title": "PR CI unit/integration tests, type-check, and build",
               "status": "done"
-            },
-            {
-              "title": "Browser smoke test for critical flows",
-              "status": "planned"
             },
             {
               "title": "Verify GitHub Pages deployment after merge",
@@ -509,14 +525,14 @@
           ],
           "acceptance": [
             "Required CI checks pass on the exact PR head",
-            "Browser smoke-test steps and outcomes are recorded",
-            "Pages deployment is independently confirmed",
-            "Known limitations are listed in the release report"
+            "Pages deployment is confirmed separately from CI",
+            "Known limitations and verification evidence are documented",
+            "No automated browser smoke test is added unless explicitly requested"
           ],
           "evidence": [
             "PR checks and deployment run URLs must be linked from the task report"
           ],
-          "notes": "A green CI run alone does not prove Pages deployment or browser behavior."
+          "notes": "Prioritize deterministic tests/build and deployment checks. Browser smoke testing is not part of the required workflow."
         }
       ]
     }
