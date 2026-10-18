@@ -186,7 +186,7 @@
           "id": "DYS-005",
           "title": "Timeline editing and Version management",
           "status": "in_progress",
-          "progress": 55,
+          "progress": 70,
           "summary": "Master Timeline with visible typed layers, per-Shot active-Version dropdown (+ Add Version/Edit), nested Version timeline tabs, and separate master placement vs Version-internal timing.",
           "doc": "tasks/timeline-and-versions.md",
           "detail": "tasks/timeline-and-versions.html",
@@ -202,7 +202,7 @@
             },
             {
               "title": "Separate Master Shot placement/duration from Version internal timeline",
-              "status": "in_progress"
+              "status": "done"
             },
             {
               "title": "Keep Master Timeline open and open nested Version timelines in tabs",
@@ -230,11 +230,13 @@
             "Unit/integration tests and production build pass; no automated browser smoke test is added unless explicitly requested"
           ],
           "evidence": [
-            "Prototype-aligned Master/Version tabs and Shot Version menu covered by App integration tests",
-            "CI run 39117698570: 64 tests pass; TypeScript/production build pass; npm audit reports 0 vulnerabilities",
-            "Nested Version tab has typed internal lanes; source media and frame-accurate editing remain staged work"
+            "Master Shot has an optional absolute masterStart; legacy projects keep sequential positions until their layout is edited.",
+            "Inspector start-time editing and drag/drop placement snap to the project frame rate.",
+            "Shot target duration and Clip Slot duration no longer resize Version-internal durations.",
+            "Composition collection and storyboard-to-timeline sync use absolute Master Shot offsets.",
+            "CI run 39118555157: 70 tests pass across 8 files; TypeScript/production build pass; npm audit reports 0 vulnerabilities."
           ],
-          "notes": "First visible interaction slice is implemented in draft PR #39. Exact master placement/persistence model and deeper clip editing remain in progress; no browser smoke test was run."
+          "notes": "Master placement and Version-internal timing are now separate. Remaining work includes richer trim/editing, durable thumbnails, and exhaustive project JSON/Undo-Redo round-trip coverage. Branch is under review in Draft PR #39; no browser smoke test was run."
         },
         {
           "id": "DYS-011",
@@ -281,7 +283,7 @@
           ],
           "evidence": [
             "App integration test covers linked audio display, independent clip mute, track-level mute, unlink, and timing preservation",
-            "CI run 39117698570: 64 tests pass; TypeScript/production build pass; npm audit reports 0 vulnerabilities"
+            "CI run 39118555157: 70 tests pass across 8 files; TypeScript/production build pass; npm audit reports 0 vulnerabilities."
           ],
           "notes": "The prototype-style linked audio child lane, Unlink action, independent audio lane, clip mute, and Audio Layer track mute are implemented. Split-audio editing and broader round-trip/persistence coverage remain outstanding."
         }
