@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AudioLines, Check, CheckCircle2, ChevronDown, CircleHelp, Clapperboard, Clock3, Download, FileJson, Film, FolderOpen, Layers3, Maximize2, Plus, Save, Settings2, ShieldCheck, Sparkles, SquarePlay, Upload, WandSparkles, Undo2, Redo2 } from "lucide-react";
+import { AudioLines, Check, CheckCircle2, ChevronDown, CircleHelp, Clapperboard, Clock3, Code2, Download, FileJson, Film, FolderOpen, Layers3, Maximize2, Plus, Save, Settings2, ShieldCheck, Sparkles, SquarePlay, Upload, WandSparkles, Undo2, Redo2 } from "lucide-react";
 import { sampleProject } from "./sampleProject";
-import type { Asset, AssetKind, CompositionLayer, DionysusProject, ReferenceProfile, ReferenceRole, Shot, TimelineClip } from "./types";
+import type { Asset, AssetKind, ClipVersion, CompositionLayer, DionysusProject, ReferenceProfile, ReferenceRole, Shot, TimelineClip } from "./types";
 import { validateProject } from "./projectValidation";
 import { t } from "./i18n";
 import { addVideoClip, duplicateTimelineClip, moveTimelineClip, splitTimelineClip, trimTimelineClip, unlinkTimelineAudio, deleteTimelineClip } from "./timelineOperations";
 import { recordProjectChange, undoProjectChange as undoHistory, redoProjectChange as redoHistory } from "./projectHistory";
-import ProceduralAnimationPreview from "./ProceduralAnimationPreview";
 import { collectCompositionLayers, renderCompositionFrame, exportCompositionWebM, downloadExport } from "./compositionRenderer";
 import AIGenerationPanel from "./AIGenerationPanel";
 import { deleteStoredMediaAsset, isStoredMediaPath, resolveMediaSource, storeMediaAsset } from "./mediaAssetStore";
@@ -75,7 +74,9 @@ export default function App() {
   const [timelineTabs, setTimelineTabs] = useState<VersionTimelineTab[]>([]);
   const [activeTimelineTabId, setActiveTimelineTabId] = useState("master");
   const [timelineTabTimes, setTimelineTabTimes] = useState<Record<string, number>>({ master: 0 });
-  const [showTimelineInspector, setShowTimelineInspector] = useState(false);
+  const [shotContextMenuId, setShotContextMenuId] = useState<string>("");
+  const [shotSettingsId, setShotSettingsId] = useState<string>("");
+  const [videoTrackSettingsId, setVideoTrackSettingsId] = useState<string>("");
   const [collapsedVideoTrackIds, setCollapsedVideoTrackIds] = useState<string[]>([]);
   const [rippleReorderMode, setRippleReorderMode] = useState(false);
   const [storyboardMode, setStoryboardMode] = useState<"flow" | "list">("flow");
@@ -632,6 +633,19 @@ export default function App() {
       })
     }) }));
     setNotice(field === "start" ? "Clip slot start time updated." : "Clip Slot duration updated; Version-internal durations remain unchanged.");
+  }
+  function renderVersionThumbnail(version: ClipVersion, fallbackColor = "#111113") {
+    const videoLayer = version.layers.find(layer => layer.kind === "video" || layer.kind === "image");
+    const codeLayer = version.layers.find(layer => layer.kind === "procedural" || layer.kind === "script");
+    const videoAsset = videoLayer?.assetId ? project.assets.find(asset => asset.id === videoLayer.assetId) : undefined;
+    const videoThumb = videoLayer?.thumbnailPath ?? getAssetThumbnail(videoAsset);
+    const codeBackground = codeLayer?.backgroundColor ?? version.layers.find(layer => layer.backgroundColor)?.backgroundColor ?? fallbackColor;
+    return <div className={"version-thumbnail-preview" + (videoLayer && codeLayer ? " has-video-and-code" : "")} aria-label={videoLayer && codeLayer ? "Video and code thumbnail" : codeLayer ? "Code thumbnail" : videoLayer ? "Video thumbnail" : "Placeholder thumbnail"} style={{ backgroundColor: codeLayer || !videoLayer ? codeBackground : fallbackColor }}>
+      {videoLayer && <div className="version-thumbnail-video">{videoThumb ? <img src={videoThumb} alt="" /> : <Film size={15}/>}</div>}
+      {codeLayer && <div className="version-thumbnail-code" style={{ backgroundColor: codeBackground }}><Code2 size={17}/></div>}
+      {!videoLayer && !codeLayer && <span className="version-thumbnail-placeholder" style={{ backgroundColor: fallbackColor }} />}
+      {videoLayer && codeLayer && <span className="version-thumbnail-divider"><span>↔</span></span>}
+    </div>;
   }
   function chooseSlotVersion(shotId: string, slotId: string, versionId: string) {
     change(p => ({ ...p, shots: p.shots.map(shot => shot.id !== shotId ? shot : { ...shot, slots: shot.slots.map(slot => slot.id !== slotId ? slot : { ...slot, selectedVersionId: versionId }) }) }));
