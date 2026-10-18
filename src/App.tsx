@@ -20,7 +20,7 @@ import StoryboardFlowCanvas from "./StoryboardFlowCanvas";
 import AgentStoryboardModal from "./AgentStoryboardModal";
 import ProductionChecklistDrawer from "./ProductionChecklistDrawer";
 type View = "storyboard" | "timeline" | "assets" | "references";
-type VersionTimelineTab = { id: string; shotId: string; slotId: string; versionId: string; label: string };
+type VersionTimelineTab = { id: string; shotId: string; slotId: string; versionId: string; label: string; assetId?: string };
 const STORAGE_KEY = "dionysus.project.v1";
 const id = (prefix: string) => prefix + "-" + crypto.randomUUID();
 const time = (s: number) => String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(Math.floor(s % 60)).padStart(2, "0");
@@ -216,9 +216,19 @@ export default function App() {
   const runtime = useMemo(() => Math.max(getMasterTimelineDuration(project.shots), ...(project.timelineClips ?? []).map(clip => clip.start + clip.duration)), [project.shots, project.timelineClips]);
   const mediaTimelineDuration = useMemo(() => Math.max(runtime, 10, ...(project.timelineClips ?? []).map(clip => clip.start + clip.duration)), [runtime, project.timelineClips]);
   const activeVersionTimelineTab = timelineTabs.find(tab => tab.id === activeTimelineTabId);
-  const activeVersionTimelineShot = activeVersionTimelineTab ? project.shots.find(shot => shot.id === activeVersionTimelineTab.shotId) : undefined;
-  const activeVersionTimelineSlot = activeVersionTimelineTab ? activeVersionTimelineShot?.slots.find(slot => slot.id === activeVersionTimelineTab.slotId) : undefined;
-  const activeVersionTimeline = activeVersionTimelineTab ? activeVersionTimelineSlot?.versions.find(version => version.id === activeVersionTimelineTab.versionId) : undefined;
+  const activeVersionTimelineClipAsset = activeVersionTimelineTab?.assetId
+    ? project.assets.find(asset => asset.id === activeVersionTimelineTab.assetId && asset.kind === "clip")
+    : undefined;
+  const activeVersionTimelineShot = activeVersionTimelineTab && !activeVersionTimelineTab.assetId
+    ? project.shots.find(shot => shot.id === activeVersionTimelineTab.shotId)
+    : undefined;
+  const activeVersionTimelineSlot = activeVersionTimelineTab && !activeVersionTimelineTab.assetId
+    ? activeVersionTimelineShot?.slots.find(slot => slot.id === activeVersionTimelineTab.slotId)
+    : undefined;
+  const activeVersionTimeline = activeVersionTimelineTab
+    ? activeVersionTimelineClipAsset?.clipVersions?.find(version => version.id === activeVersionTimelineTab.versionId)
+      ?? activeVersionTimelineSlot?.versions.find(version => version.id === activeVersionTimelineTab.versionId)
+    : undefined;
   const activeTimelineDuration = activeVersionTimeline ? activeVersionTimeline.duration : runtime;
   const activeShotInfo = useMemo(() => {
     const index = getMasterShotIndexAtTime(project.shots, editorTime);
