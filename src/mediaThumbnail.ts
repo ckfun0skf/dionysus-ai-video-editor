@@ -109,5 +109,5 @@ export async function createVideoThumbnail(blob: Blob): Promise<string | undefin
 export function getAssetThumbnail(asset: { kind: string; path?: string; thumbnailPath?: string } | undefined): string | undefined {
   if (!asset) return undefined;
   if (asset.thumbnailPath) return asset.thumbnailPath;
-  return asset.kind === "image" ? asset.path : undefined;
+  return asset.kind === "image" && asset.path && !asset.path.startsWith("idb://media/") ? asset.path : undefined;
 }
