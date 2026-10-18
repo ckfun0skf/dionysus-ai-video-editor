@@ -588,6 +588,40 @@ export default function App() {
     setView("timeline");
   }
 
+  function saveMasterTimelineAsClipAsset() {
+    const current = projectRef.current;
+    const flattenedLayers = collectCompositionLayers(current).map(layer => ({ ...layer, id: id("layer") }));
+    const duration = Math.max(
+      0.1,
+      getMasterTimelineDuration(current.shots),
+      ...flattenedLayers.map(layer => layer.start + layer.duration)
+    );
+    const now = new Date().toISOString();
+    const version: ClipVersion = {
+      id: id("clip-version"),
+      name: "Version A",
+      description: "Snapshot saved from Master Timeline",
+      duration,
+      layers: flattenedLayers,
+      scriptVersionIds: [],
+      generationRecords: []
+    };
+    const asset: Asset = {
+      id: id("asset"),
+      name: current.name + " · Timeline Clip",
+      kind: "clip",
+      canvasWidth: current.width,
+      canvasHeight: current.height,
+      notes: "Snapshot saved from the Master Timeline. Edits to this Clip Asset are independent.",
+      createdAt: now,
+      updatedAt: now,
+      selectedClipVersionId: version.id,
+      clipVersions: [version]
+    };
+    change(p => ({ ...p, assets: [...p.assets, asset] }));
+    setNotice("Master Timeline saved as a reusable Clip Asset. The original Master Timeline is unchanged.");
+  }
+
   function addStoryboardConnection(fromShotId: string, toShotId: string, label = "Cut") {
     change(p => {
       const existing = p.storyboardConnections ?? [];
@@ -1367,7 +1401,7 @@ export default function App() {
     <button className="timeline-tab-close" aria-label={"Close " + tab.label} onClick={() => closeTimelineTab(tab.id)}>×</button>
   </div>)}
 </div></div>
-<div className="timeline-tab-content master-timeline-content" style={{display:activeTimelineTabId === "master" ? "block" : "none"}}>{renderTimelinePreview("master", "Master preview", activeShotInfo.shot?.title ?? project.name, runtime, activeShotInfo.shot?.title ?? project.name, activeShotInfo.shot?.intent ?? "", true)}<div className="section-toolbar timeline-master-actions"><span className="timeline-summary">{project.shots.length} shots · {(project.timelineClips ?? []).length} clips</span><button className="button button-primary button-small" disabled={!selected} onClick={() => selected && addSlot(selected.id)}><Plus size={15}/> {t("action.addClipSlot")}</button></div><div className="timeline-ruler" role="slider" aria-label="Master timeline playhead" aria-valuemin={0} aria-valuemax={runtime} aria-valuenow={editorTime} tabIndex={0}
+<div className="timeline-tab-content master-timeline-content" style={{display:activeTimelineTabId === "master" ? "block" : "none"}}>{renderTimelinePreview("master", "Master preview", activeShotInfo.shot?.title ?? project.name, runtime, activeShotInfo.shot?.title ?? project.name, activeShotInfo.shot?.intent ?? "", true)}<div className="section-toolbar timeline-master-actions"><span className="timeline-summary">{project.shots.length} shots · {(project.timelineClips ?? []).length} clips</span><div className="inline-actions"><button className="button button-quiet button-small" onClick={saveMasterTimelineAsClipAsset}><Save size={14}/> Save as Clip Asset</button><button className="button button-primary button-small" disabled={!selected} onClick={() => selected && addSlot(selected.id)}><Plus size={15}/> {t("action.addClipSlot")}</button></div></div><div className="timeline-ruler" role="slider" aria-label="Master timeline playhead" aria-valuemin={0} aria-valuemax={runtime} aria-valuenow={editorTime} tabIndex={0}
             onPointerDown={event => { const rect = event.currentTarget.getBoundingClientRect(); const next = Math.max(0, Math.min(runtime, ((event.clientX - rect.left) / Math.max(rect.width, 1)) * runtime)); playbackTimeRef.current = next; setIsPlaying(false); setEditorTime(next); }}
             onPointerMove={event => { if (event.buttons !== 1) return; const rect = event.currentTarget.getBoundingClientRect(); const next = Math.max(0, Math.min(runtime, ((event.clientX - rect.left) / Math.max(rect.width, 1)) * runtime)); playbackTimeRef.current = next; setIsPlaying(false); setEditorTime(next); }}
             onKeyDown={event => { if (event.key === "ArrowRight") { const next = Math.min(runtime, editorTime + 0.5); playbackTimeRef.current = next; setIsPlaying(false); setEditorTime(next); } if (event.key === "ArrowLeft") { const next = Math.max(0, editorTime - 0.5); playbackTimeRef.current = next; setIsPlaying(false); setEditorTime(next); } }}>
