@@ -91,6 +91,8 @@ test("browser smoke: compose video and audio, generate an image, export a playab
     });
     db.close();
   }, { videoData: sourceVideo, audioData: audioSource });
+  project.referenceProfiles = [{ id: "smoke-profile", name: "Smoke reference", entityType: "character", references: [{ id: "smoke-reference-item", assetId: "smoke-asset", role: "identity" }] }];
+  project.shots[0].referenceProfileIds = ["smoke-profile"];
   project.assets = [
     { id: "smoke-asset", name: "Smoke source", kind: "image", path: tinyPng },
     { id: "smoke-video-asset", name: "Motion source", kind: "video", path: "idb://media/smoke-video-asset" },
@@ -116,6 +118,8 @@ test("browser smoke: compose video and audio, generate an image, export a playab
     const request = route.request().postDataJSON();
     expect(request.prompt).toContain("cinematic cyan shape");
     expect(request.model).toBe("smoke-image-model");
+    expect(request.reference_images).toHaveLength(1);
+    expect(request.reference_images[0]).toMatch(/^data:image\\/png;base64,/);
     await route.fulfill({
       status: 200,
       contentType: "application/json",
