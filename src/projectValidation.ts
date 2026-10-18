@@ -159,6 +159,7 @@ export function validateProject(value: unknown): value is DionysusProject {
   const assets = value.assets as UnknownRecord[];
   const profiles = value.referenceProfiles as UnknownRecord[];
   const shots = value.shots as UnknownRecord[];
+  const shotIds = new Set(shots.map(shot => shot.id as string));
   const assetIds = new Set(assets.map(asset => asset.id as string));
   const profileIds = new Set(profiles.map(profile => profile.id as string));
 
@@ -171,6 +172,12 @@ export function validateProject(value: unknown): value is DionysusProject {
     const track = tracks.find(item => item.id === clip.trackId);
     if (!track || track.kind !== clip.kind) return false;
     if (clip.assetId !== undefined && !assetIds.has(clip.assetId as string)) return false;
+    if (clip.shotId !== undefined && !shotIds.has(clip.shotId as string)) return false;
+    if (clip.slotId !== undefined) {
+      if (clip.shotId === undefined) return false;
+      const shot = shots.find(item => item.id === clip.shotId);
+      if (!shot || !(shot.slots as UnknownRecord[]).some(slot => slot.id === clip.slotId)) return false;
+    }
     if (clip.linkedVideoClipId !== undefined) {
       if (clip.kind !== "audio" || !clipIds.has(clip.linkedVideoClipId as string)) return false;
       const source = timelineClips.find(item => item.id === clip.linkedVideoClipId);
