@@ -2035,3 +2035,5 @@
 
 /* Detailed layer properties live in context-menu dialogs, not in a long inspector below the timeline. */
 .version-panel-disclosure { display: none !important; }
+
+.code-editor-input::placeholder { color: #5e6275; -webkit-text-fill-color: #5e6275; }
