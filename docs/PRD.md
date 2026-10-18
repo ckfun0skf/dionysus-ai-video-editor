@@ -107,3 +107,48 @@ Future target. Must define fidelity, codecs, progress, cancellation, error recov
 
 ## Initial milestone
 The initial milestone established the local-first shell, Storyboard editing, local persistence, project JSON import/export, and AI plan export. The supplied Timeline prototype now reprioritizes visible typed layers, Master/Version timeline tabs, per-Shot Version dropdown actions, hierarchical linked audio, per-layer mute, and a first-class Three.js layer as core editor requirements. Advanced audio effects, portable media bundles, and reliable final MP4 rendering remain staged follow-up work.
+
+
+## Clarified domain model: Shots, Clips, and Versions (2026-10-18)
+
+These definitions supersede any older wording that treats a Shot as a container of Clip Slots or conflates a Shot with a Clip.
+
+- **Shot:** A named video-shot identity. A Shot has multiple **Shot Versions**, each of which identifies a specific video file/output (for example, `video_version1.mp4` and `video_version2.mp4`). A Shot itself is not a container made of Clips.
+- **Shot Version:** One concrete alternative for a Shot, normally a video asset. A Shot Version may be referenced by many Clip Versions. Adding a Shot Version never silently changes existing references.
+- **Clip:** An independently editable composition managed by the Timeline Editor. A Clip can be empty when created and may contain references to Shots/Shot Versions, Code assets/modules, other Clips/Clip Versions, and supported audio/image/text content.
+- **Clip Version:** A saved alternative of a Clip's composition. It owns its internal timeline, module placement/timing, and explicit referenced Shot Versions and child Clip Versions. Duplicating a Clip Version is the explicit way to preserve an existing arrangement before experimenting.
+- **Layer:** An ordered track in a Timeline. A Layer contains multiple Clips. A Video Layer contains video/composition Clips; Code is content within a Clip and is not a standalone top-level track type. Effects are configured on the relevant Clip/Layer, not represented as a generic Effects Layer.
+- **Asset:** A reusable library entry. Assets include video/Shot source files, image, audio, Code, and Clip compositions. A Master Timeline may be saved as a reusable Clip Asset.
+
+### Version and reference rules
+
+1. Shot Versions and Clip Versions are separate version histories.
+2. A Clip Version explicitly pins the Shot Version and child Clip Version it references; it must not silently follow a later “current version” change.
+3. Creating a new Shot Version does not automatically create new versions of every referencing Clip. Existing Clip Versions remain unchanged.
+4. From a Shot's Asset detail, users can inspect all Clip Versions that reference it, see the selected Shot Version for each reference, change references individually, or batch-change selected/all references to a chosen Shot Version.
+5. Users may explicitly create new Clip Versions for selected references when they want to compare a new Shot Version in context. This operation duplicates the chosen Clip Version and changes only the new copy's Shot Version reference.
+6. Changing a Shot Version reference in one Clip Version must not mutate other Clip Versions.
+7. Empty Clips are valid. Creating a Clip does not require a video or Code module.
+8. Recursive Clip composition is supported, but a Clip must never contain itself directly or indirectly. Before presenting a child-Clip choice, filter out any Clip that would create a cycle; validate again on every add/change/import operation. For example, if A contains B and B contains C, C cannot contain A.
+9. Shared asset identity is distinct from version-specific usage. Referencing a Shot/Clip does not duplicate its media bytes.
+10. Preserve compatibility with existing project data through explicit schema migrations; do not silently discard legacy content.
+
+### Asset creation and timeline UX
+
+- The Assets page has one primary `+` menu with **Clip**, **Code**, **Audio**, and **Image** choices.
+- Creating a Clip asks for basic metadata (title/name, canvas size, duration) and may save it empty. Its contents are managed in the Timeline Editor.
+- Creating Code opens the existing Code Playground workflow.
+- Creating Audio requires uploading an audio file.
+- Images are reusable assets that Clips and Code can reference. The asset model must provide a stable ID and a supported way for Code to resolve/use an image; image assets should later be available to Reference profiles and Storyboard generation. Storyboard integration is intentionally staged for later.
+- Adding a timeline Layer must not offer “Add linked video/audio clips” as a Layer type/action. Linked source audio is an operation associated with a video Clip, not a Layer-creation choice.
+- Master Timeline and Clip Timeline use the same editor UI and core interactions. The Master Timeline can be saved as a reusable Clip Asset.
+- Project settings expose aspect ratio, pixel dimensions/resolution, and frame rate with sensible presets and custom values.
+- Preview transform controls for a selected visual Clip/Layer must be movable and resizable, and their bounds must correspond to the composition frame and actual content geometry.
+- Timeline track headers must be wide enough for readable labels; the ruler, tick labels, playhead, and clip lanes must share aligned horizontal coordinates.
+
+### Version UI acceptance
+
+- Shot detail exposes all Shot Versions and a “Used by”/references view listing referencing Clip Versions and their pinned Shot Version.
+- Provide individual reference changes and a batch change operation with a clear affected-reference count/confirmation.
+- Provide an explicit action to create new Clip Versions from selected references; do not silently multiply versions.
+- The Clip editor exposes Clip Versions, permits duplicate/edit/select, and keeps each version's internal timeline independent.
