@@ -1,7 +1,7 @@
 # DYS-008 — Audio layers, timed text, and procedural Three.js modules
 
 **Status:** In progress  
-**Progress estimate:** 55%  
+**Progress estimate:** 60%  
 **Last updated:** 2026-10-18
 
 ## Implemented in the current slice
@@ -15,6 +15,8 @@
 - [x] Expose per-Audio-Layer volume, Fade In, and Fade Out in both Master and nested Version inspectors.
 - [x] Apply a shared normalized audio envelope to live playback and WebM export using per-layer Web Audio gain automation.
 - [x] Keep source trim controls independent from nested Version duration; splitting a video splits linked audio in sync and preserves source/fade boundaries.
+- [x] Clamp Fade In/Out values when trim/source range edits shorten an audio module or clip.
+- [x] Round-trip per-layer audio mix, source ranges, linked audio, and mute state through project JSON validation.
 - [x] Distinguish procedural layer representation from actual final rendering; current renderer does not execute Three.js code.
 
 ## Remaining scope
@@ -34,5 +36,5 @@
 - The UI clearly distinguishes represented modules from rendered output.
 
 ## Validation
-- CI run [#39122166170](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39122166170): 87 tests passed across 10 files, TypeScript check and production build passed, npm audit reported 0 vulnerabilities.
+- CI run [#39122750551](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39122750551): 90 tests passed across 10 files, TypeScript check and production build passed, npm audit reported 0 vulnerabilities.
 - Automated browser smoke testing was not run.
