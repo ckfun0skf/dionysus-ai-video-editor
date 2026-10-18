@@ -896,7 +896,7 @@ describe("App history integration", () => {
     expect(container.querySelector(".nested-timeline-tab")?.textContent).toContain("Version");
     expect(container.querySelector(".timeline-workspace-tabs")?.textContent).toContain("Master Timeline");
 
-    const addThree = Array.from(container.querySelectorAll<HTMLButtonElement>(".nested-timeline-tab button")).find(button => button.textContent?.includes("Three.js layer"));
+    const addThree = Array.from(container.querySelectorAll<HTMLButtonElement>(".nested-timeline-tab button")).find(button => button.textContent?.includes("Code (Three.js)"));
     expect(addThree).toBeTruthy();
     click(addThree!);
     await flushEffects();
