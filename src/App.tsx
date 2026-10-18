@@ -300,7 +300,8 @@ export default function App() {
         const override = shot.referenceOverrides.find(item => item.referenceId === reference.id && item.action === "replace");
         return override?.replacementAssetId ? { ...reference, assetId: override.replacementAssetId } : { ...reference };
       });
-    const prompt = version.layers.map(layer => layer.prompt).filter(Boolean).join("\\n") || version.description || shot.intent;
+    const prompt = version.layers.map(layer => layer.prompt).filter(Boolean).join("\
+") || version.description || shot.intent;
     change(p => ({ ...p, shots: p.shots.map(item => item.id !== shotId ? item : { ...item, slots: item.slots.map(candidate => candidate.id !== slotId ? candidate : { ...candidate, versions: candidate.versions.map(v => v.id !== versionId ? v : { ...v, generationRecords: [...v.generationRecords, { id: id("generation"), createdAt: new Date().toISOString(), prompt, referenceSnapshot: references, modelName: version.layers.find(layer => layer.modelName)?.modelName, modelVersion: version.layers.find(layer => layer.modelVersion)?.modelVersion }] }) }) }) }));
     setNotice("Generation provenance snapshot recorded. No AI provider was called.");
   }
@@ -440,11 +441,14 @@ export default function App() {
     const referenceSummary = profileReferences.map(reference => {
       const asset = project.assets.find(item => item.id === reference.assetId);
       return (reference.role + ": " + (asset?.name ?? "missing asset") + (reference.notes ? " (" + reference.notes + ")" : ""));
-    }).join("\\n");
+    }).join("\
+");
     const shotId = id("shot");
     const slotId = id("slot");
     const versionId = id("version");
-    const prompt = "Create a storyboard shot based on reference profile '" + profile.name + "' (" + profile.entityType + "). Preserve the referenced visual identity and apply the selected roles.\\n" + (referenceSummary || "No reference assets attached yet.") + "\\nShot intent: establish a clear visual beat; refine the prompt before sending it to an AI provider.";
+    const prompt = "Create a storyboard shot based on reference profile '" + profile.name + "' (" + profile.entityType + "). Preserve the referenced visual identity and apply the selected roles.\
+" + (referenceSummary || "No reference assets attached yet.") + "\
+Shot intent: establish a clear visual beat; refine the prompt before sending it to an AI provider.";
     const version = {
       id: versionId, name: "Reference-led draft", description: "Draft scaffold generated locally from reference profile metadata; no image/video model was called.", duration: 5,
       layers: [{ id: id("layer"), name: "Reference-led visual", kind: "image" as const, start: 0, duration: 5, prompt, modelName: "Not generated", modelVersion: "metadata-only", fitMode: "contain" as const, x: 0, y: 0, width: 100, height: 100, opacity: 1 }],
@@ -515,7 +519,12 @@ export default function App() {
     const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
     const a = document.createElement("a"); a.href = url; a.download = name; a.click(); URL.revokeObjectURL(url);
   }
-  async function exportVideo() {\n    setNotice("Rendering composition…");\n    try { const result = await exportCompositionWebM(project); downloadExport(result); setNotice("Video export complete: " + result.filename); }\n    catch (error) { setNotice(error instanceof Error ? error.message : "Video export failed."); }\n  }\n  function exportProject() {
+  async function exportVideo() {
+    setNotice("Rendering composition…");
+    try { const result = await exportCompositionWebM(project); downloadExport(result); setNotice("Video export complete: " + result.filename); }
+    catch (error) { setNotice(error instanceof Error ? error.message : "Video export failed."); }
+  }
+  function exportProject() {
     download((project.name.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "dionysus-project") + ".dionysus.json", project);
     setNotice(t("notice.projectExported"));
   }
