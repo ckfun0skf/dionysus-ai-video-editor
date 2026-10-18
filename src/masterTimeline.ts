@@ -67,3 +67,31 @@ export function getMasterShotIndexAtTime(shots: Shot[], seconds: number): number
   }
   return nearestIndex;
 }
+
+/**
+ * Explicit ripple operation: move a Shot to a chronological insertion point,
+ * close all gaps, and place the existing Shot durations back-to-back. The
+ * storyboard array order is not changed; only masterStart is updated.
+ */
+export function rippleReorderMasterShots(shots: Shot[], shotId: string, targetCenter: number): Shot[] {
+  if (!Number.isFinite(targetCenter) || !shots.some(shot => shot.id === shotId)) return shots;
+  const starts = getMasterShotStarts(shots);
+  const ordered = shots
+    .map((shot, index) => ({ shot, start: starts[index], index }))
+    .sort((a, b) => a.start - b.start || a.index - b.index);
+  const moving = ordered.find(item => item.shot.id === shotId)!;
+  const remaining = ordered.filter(item => item.shot.id !== shotId);
+  const insertionIndex = remaining.findIndex(item => targetCenter < item.start + item.shot.duration / 2);
+  remaining.splice(insertionIndex < 0 ? remaining.length : insertionIndex, 0, moving);
+
+  let cursor = Math.max(0, Math.min(...starts));
+  const nextStarts = new Map<string, number>();
+  for (const item of remaining) {
+    nextStarts.set(item.shot.id, cursor);
+    cursor += item.shot.duration;
+  }
+  return shots.map(shot => ({
+    ...shot,
+    masterStart: nextStarts.get(shot.id) ?? getMasterShotStart(shots, shot.id)
+  }));
+}
