@@ -21,9 +21,13 @@ describe("compositionRenderer", () => {
   it("includes referenced master timeline clips and their media type", () => {
     const project = structuredClone(sampleProject);
     project.assets.push({ id: "audio-asset", name: "Bed", kind: "audio", path: "data:audio/wav;base64,AA==" });
+    project.assets.push({ id: "video-asset", name: "Storyboard video", kind: "video", path: "data:video/webm;base64,AA==" });
     project.timelineClips = [{
       id: "audio-clip", name: "Music bed", kind: "audio", trackId: "track-audio-1",
       start: 2, duration: 4, assetId: "audio-asset", sourceIn: 0, sourceOut: 4
+    }, {
+      id: "storyboard-shot-slot-layer", name: "Synced storyboard copy", kind: "video", trackId: "track-video-1",
+      start: 0, duration: 4, assetId: "video-asset"
     }];
     const layers = collectCompositionLayers(project);
     expect(layers).toHaveLength(1);
