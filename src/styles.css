@@ -1565,3 +1565,45 @@
 .integrated-preview-frame .editor-preview-canvas {
   object-fit: contain;
 }
+
+
+/* Version-specific inspector controls stay available without competing with
+   the nested timeline for screen space. */
+.version-panel-disclosure {
+  min-width: 0;
+}
+.nested-version-inspector-disclosure {
+  margin-top: 10px;
+  border: 1px solid var(--border, #30313a);
+  border-radius: 8px;
+  background: var(--surface, #15161b);
+}
+.nested-version-inspector-disclosure > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 9px 11px;
+  color: var(--muted, #a4a5b1);
+  font-size: 11px;
+}
+.nested-version-inspector-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+.nested-version-inspector-disclosure > summary::before {
+  content: "＋";
+  display: inline-block;
+  margin-right: 8px;
+  color: var(--accent, #d5f36a);
+}
+.nested-version-inspector-disclosure[open] > summary::before {
+  content: "−";
+}
+.nested-version-inspector-disclosure[open] > summary {
+  border-bottom: 1px solid var(--border, #30313a);
+}
+.nested-version-inspector-disclosure > .version-panel {
+  margin-top: 0;
+  border: 0;
+  border-radius: 0 0 8px 8px;
+  background: transparent;
+  padding: 12px;
+}
