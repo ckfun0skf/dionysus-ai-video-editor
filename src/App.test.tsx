@@ -144,6 +144,35 @@ describe("App history integration", () => {
     expect(video).toMatchObject({ start: 0.5, duration: expect.any(Number) });
   });
 
+  it("persists Audio Layer volume, fade-in, and fade-out controls", async () => {
+    await openTimelineView();
+    const add = Array.from(container.querySelectorAll<HTMLButtonElement>("button"))
+      .find(button => button.textContent?.includes("Add linked video/audio"));
+    expect(add).toBeTruthy();
+    click(add!);
+    await flushEffects();
+
+    selectClip("Video clip 1 audio");
+    await flushEffects();
+    const volume = container.querySelector<HTMLInputElement>('input[aria-label="Timeline audio volume"]');
+    const fadeIn = container.querySelector<HTMLInputElement>('input[aria-label="Timeline audio fade in"]');
+    const fadeOut = container.querySelector<HTMLInputElement>('input[aria-label="Timeline audio fade out"]');
+    expect(volume).toBeTruthy();
+    expect(fadeIn).toBeTruthy();
+    expect(fadeOut).toBeTruthy();
+
+    setInputValue(volume!, "0.4");
+    await flushEffects();
+    setInputValue(fadeIn!, "0.75");
+    await flushEffects();
+    setInputValue(fadeOut!, "1.25");
+    await flushEffects();
+
+    const audio = persistedProject().timelineClips?.find(clip => clip.kind === "audio");
+    expect(audio).toMatchObject({ volume: 0.4, fadeIn: 0.75, fadeOut: 1.25 });
+    expect(persistedProject().timelineClips?.find(clip => clip.kind === "video")?.duration).toBe(audio?.duration);
+  });
+
   it("supports Undo/Redo buttons and Ctrl/Cmd+Z keyboard shortcuts", async () => {
     await openTimelineView();
     const add = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Add linked video/audio")) as HTMLButtonElement;
