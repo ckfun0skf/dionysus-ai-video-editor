@@ -186,7 +186,7 @@
           "id": "DYS-005",
           "title": "Timeline editing and Version management",
           "status": "in_progress",
-          "progress": 35,
+          "progress": 55,
           "summary": "Master Timeline with visible typed layers, per-Shot active-Version dropdown (+ Add Version/Edit), nested Version timeline tabs, and separate master placement vs Version-internal timing.",
           "doc": "tasks/timeline-and-versions.md",
           "detail": "tasks/timeline-and-versions.html",
@@ -202,23 +202,23 @@
             },
             {
               "title": "Separate Master Shot placement/duration from Version internal timeline",
-              "status": "planned"
+              "status": "in_progress"
             },
             {
               "title": "Keep Master Timeline open and open nested Version timelines in tabs",
-              "status": "planned"
+              "status": "done"
             },
             {
               "title": "Shot thumbnail dropdown with + Add Version and per-Version Edit action",
-              "status": "planned"
+              "status": "done"
             },
             {
               "title": "Show typed layer lanes; remove generic Media track",
-              "status": "planned"
+              "status": "done"
             },
             {
               "title": "Preserve nested versions/layers through Undo/Redo and project JSON",
-              "status": "planned"
+              "status": "in_progress"
             }
           ],
           "acceptance": [
@@ -230,15 +230,17 @@
             "Unit/integration tests and production build pass; no automated browser smoke test is added unless explicitly requested"
           ],
           "evidence": [
-            "Existing picker work merged in PR #3; newer editing work is documented in repository history"
+            "Prototype-aligned Master/Version tabs and Shot Version menu covered by App integration tests",
+            "CI run 39117698570: 64 tests pass; TypeScript/production build pass; npm audit reports 0 vulnerabilities",
+            "Nested Version tab has typed internal lanes; source media and frame-accurate editing remain staged work"
           ],
-          "notes": "Scope is now based on the supplied prototype. Current implementation provides timeline foundations but does not yet satisfy nested tabs, the full version dropdown workflow, or the final hierarchy of typed layers."
+          "notes": "First visible interaction slice is implemented in draft PR #39. Exact master placement/persistence model and deeper clip editing remain in progress; no browser smoke test was run."
         },
         {
           "id": "DYS-011",
           "title": "Multi-track Timeline and linked audio",
           "status": "in_progress",
-          "progress": 15,
+          "progress": 65,
           "summary": "Render video tracks as expandable groups with linked source-audio child lanes; unlink into independent Audio Layers with their own persistent mute controls.",
           "doc": "tasks/multitrack-timeline-linked-audio.md",
           "detail": "tasks/multitrack-timeline-linked-audio.html",
@@ -250,7 +252,7 @@
             },
             {
               "title": "Render linked audio as an indented child lane below its video layer",
-              "status": "planned"
+              "status": "done"
             },
             {
               "title": "Unlink without changing current audio/video timing",
@@ -262,7 +264,7 @@
             },
             {
               "title": "Persistent per-audio-layer mute isolated from other layers",
-              "status": "planned"
+              "status": "done"
             },
             {
               "title": "Undo/Redo and project JSON round-trip preserve links, mute, and track placement",
@@ -278,9 +280,10 @@
             "Automated model/integration tests and build cover core behaviors; no automated browser smoke test unless explicitly requested"
           ],
           "evidence": [
-            "Acceptance tests and PR CI will be recorded when implementation begins"
+            "App integration test covers linked audio display, independent clip mute, track-level mute, unlink, and timing preservation",
+            "CI run 39117698570: 64 tests pass; TypeScript/production build pass; npm audit reports 0 vulnerabilities"
           ],
-          "notes": "Existing model operations cover linked move/trim, unlink, and deletion; prototype-style nested lane UI and per-layer mute remain outstanding."
+          "notes": "The prototype-style linked audio child lane, Unlink action, independent audio lane, clip mute, and Audio Layer track mute are implemented. Split-audio editing and broader round-trip/persistence coverage remain outstanding."
         }
       ]
     },
@@ -336,8 +339,8 @@
         {
           "id": "DYS-008",
           "title": "Advanced audio and procedural layers",
-          "status": "planned",
-          "progress": 0,
+          "status": "in_progress",
+          "progress": 30,
           "summary": "Support per-Audio-Layer mute/mixing, timed text, and first-class Three.js/procedural timeline layers with pinned script versions and explicit execution permission.",
           "doc": "tasks/audio-and-procedural-modules.md",
           "detail": "tasks/audio-and-procedural-modules.html",
@@ -345,7 +348,7 @@
           "subtasks": [
             {
               "title": "Persist independent mute state for each Audio Layer",
-              "status": "planned"
+              "status": "done"
             },
             {
               "title": "Multitrack audio level, trim, fades, and mixing",
@@ -353,15 +356,15 @@
             },
             {
               "title": "Timed text/title lane behavior",
-              "status": "planned"
+              "status": "in_progress"
             },
             {
               "title": "Three.js procedural layer with duration and Inspector parameters",
-              "status": "planned"
+              "status": "in_progress"
             },
             {
               "title": "Pin script/module versions and isolate runtime errors",
-              "status": "planned"
+              "status": "in_progress"
             },
             {
               "title": "Explicit authorization and security boundary for custom code",
@@ -376,9 +379,11 @@
             "UI states clearly distinguish layer data, preview capability, and final render support"
           ],
           "evidence": [
-            "Automated tests and documented safety boundaries required before marking done"
+            "Master Timeline supports persisted Text and procedural/Three.js blocks with Inspector fields",
+            "Composition-layer collection carries audio mute state; the current renderer intentionally does not execute procedural code",
+            "CI run 39117698570: 64 tests pass; TypeScript/production build pass"
           ],
-          "notes": "Per-layer mute and a first-class procedural layer are baseline requirements; advanced effect design and final renderer integration can follow in staged work."
+          "notes": "First-class layer representation and script-version identity are implemented; execution authorization/sandbox, runtime error isolation, procedural rendering, and advanced audio effects are not yet implemented."
         },
         {
           "id": "DYS-012",
