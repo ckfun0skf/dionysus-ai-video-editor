@@ -186,7 +186,7 @@
           "id": "DYS-005",
           "title": "Timeline editing and Version management",
           "status": "in_progress",
-          "progress": 78,
+          "progress": 82,
           "summary": "Master Timeline with visible typed layers, per-Shot active-Version dropdown (+ Add Version/Edit), nested Version timeline tabs, and separate master placement vs Version-internal timing.",
           "doc": "tasks/timeline-and-versions.md",
           "detail": "tasks/timeline-and-versions.html",
@@ -231,13 +231,12 @@
           ],
           "evidence": [
             "Master Shot uses optional absolute masterStart; legacy projects keep sequential positions until edited.",
-            "Shot start is editable numerically and through drag-and-drop snapped to the project's frame rate.",
-            "Shot duration, Clip Slot duration, Version duration, and module start/duration are independent.",
-            "Nested Version has its own duration control, per-module start/duration controls, drag-to-move, and layer ordering controls.",
-            "Composition collection uses absolute Master Shot offsets.",
-            "CI run 39118949549: 70 tests pass across 8 files; TypeScript/production build pass; npm audit reports 0 vulnerabilities."
+            "Shot start is editable numerically and through drag-and-drop snapped to the project's frame rate; Shot, Slot, Version, and module timing are independent.",
+            "Nested Version duration, per-module start/duration, drag-to-move, and layer ordering are editable; compositor collection preserves stored layer order.",
+            "Local image/video imports and generated images attempt to create compact browser-local thumbnails; unsupported decode keeps the truthful placeholder.",
+            "CI run 39119716811: 75 tests pass across 9 files; TypeScript/production build pass; npm audit reports 0 vulnerabilities."
           ],
-          "notes": "Master/Version/module timing controls are implemented. Remaining work includes richer media preview/thumbnail extraction, reorder/ripple policy on Master Shots, and exhaustive JSON/Undo-Redo coverage. Draft PR #39 is not merged; browser smoke tests were not run."
+          "notes": "The prototype-aligned editing foundation and thumbnail capture are implemented. Remaining work includes a defined Master ripple/reorder and overlap policy, fuller source in/out editing, and robust JSON/Undo-Redo coverage. Draft PR #39 is not merged; browser smoke tests were not run."
         },
         {
           "id": "DYS-011",
@@ -343,7 +342,7 @@
           "id": "DYS-008",
           "title": "Advanced audio and procedural layers",
           "status": "in_progress",
-          "progress": 40,
+          "progress": 45,
           "summary": "Support per-Audio-Layer mute/mixing, timed text, and first-class Three.js/procedural timeline layers with pinned script versions and explicit execution permission.",
           "doc": "tasks/audio-and-procedural-modules.md",
           "detail": "tasks/audio-and-procedural-modules.html",
@@ -382,12 +381,12 @@
             "UI states clearly distinguish layer data, preview capability, and final render support"
           ],
           "evidence": [
-            "Master Text blocks and procedural/Three.js blocks are typed and persist in project state.",
-            "Nested Version duration, module start/duration, frame-snapped module dragging, and layer ordering are editable without changing Master Shot duration.",
-            "Track-level and per-clip audio mute are persisted independently.",
-            "CI run 39118949549: 70 tests pass across 8 files; TypeScript/production build pass; npm audit reports 0 vulnerabilities."
+            "Master Text and typed procedural/Three.js blocks can be added and persisted; nested Version duration and module timing/order controls are available.",
+            "Audio track mute and per-clip mute remain independent and persisted.",
+            "AI-generated images and imported image/video files now attempt compact local thumbnail generation.",
+            "CI run 39119716811: 75 tests pass across 9 files; TypeScript/production build pass; npm audit reports 0 vulnerabilities."
           ],
-          "notes": "Editing/timing controls exist for typed Text and procedural placeholders, but this is not execution or rendering support. Script sandboxing, explicit authorization, isolated runtime errors, and actual Three.js preview/export remain outstanding."
+          "notes": "Typed representation, timing/order controls, mute, and media thumbnail helpers are implemented. Script sandboxing, explicit execution authorization, isolated runtime errors, and actual Three.js preview/export remain outstanding."
         },
         {
           "id": "DYS-012",
