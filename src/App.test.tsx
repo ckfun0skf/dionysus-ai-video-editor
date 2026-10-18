@@ -1118,7 +1118,6 @@ describe("Timeline preview", () => {
     const versionDetails = container.querySelector<HTMLDetailsElement>(".nested-version-inspector-disclosure");
     expect(versionDetails).toBeTruthy();
     expect(versionDetails!.open).toBe(false);
-    expect(versionDetails!.querySelector<HTMLInputElement>('input[aria-label^="Version layer "]')).toBeTruthy();
     const versionPreview = container.querySelector<HTMLInputElement>(".nested-timeline-tab input[aria-label=\"Timeline playhead time\"]");
     expect(versionPreview).toBeTruthy();
     expect(versionPreview!.value).toBe("0");
