@@ -18,7 +18,7 @@ The Master Timeline arranges Shots in the final sequence. Each Shot may carry an
 - The Master Timeline supports multiple ordered layers, including video/compositing layers, text/title layers, audio layers, and a procedural Three.js layer. Each supported layer appears as a distinct lane/group under the preview.
 - Each video layer is a visual compositing frame/container; its clip displays a real thumbnail when available. A clear placeholder is used if there is no thumbnail. Do not claim a black/blank placeholder is a rendered frame.
 - Track/layer creation, ordering, visibility/mute state, and editing controls must belong to the relevant track header, not to a generic media bucket.
-- Direct manipulation supports selection, frame-snapped moving of Master Shots, ordinary Master Timeline clips, and nested Version modules; midpoint splitting is available for Master Timeline clips. Numeric timing and source in/out controls remain available as an accessible alternative. Moving a video clip must preserve its linked source-audio timing. Unsupported media decoding keeps an honest placeholder and does not block source import.
+- Direct manipulation supports selection, frame-snapped moving of Master Shots, ordinary Master Timeline clips, and nested Version modules; splitting is available at the midpoint or current playhead for Master Timeline clips. Numeric timing and source in/out controls remain available as an accessible alternative. Moving a video clip must preserve its linked source-audio timing. Unsupported media decoding keeps an honest placeholder and does not block source import.
 
 ## 2. Master Timeline and nested timeline tabs
 
