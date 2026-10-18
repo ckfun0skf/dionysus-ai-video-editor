@@ -17,7 +17,7 @@ const referenceRoles = new Set(["identity", "face", "body", "outfit", "pose", "c
 const assetKinds = new Set(["video", "image", "audio", "script", "other"]);
 const layerKinds = new Set(["video", "image", "audio", "text", "script", "procedural", "composition"]);
 const trackKinds = new Set(["video", "audio", "text", "effects", "procedural"]);
-const timelineClipKinds = new Set(["video", "audio"]);
+const timelineClipKinds = new Set(["video", "audio", "text", "procedural"]);
 const shotStatuses = new Set(["planned", "in-progress", "ready"]);
 const entityTypes = new Set(["character", "environment", "prop", "style", "other"]);
 
@@ -120,6 +120,7 @@ function isTimelineClip(value: unknown): boolean {
     isString(value.trackId) && isFiniteNumber(value.start) && value.start >= 0 &&
     isFiniteNumber(value.duration) && value.duration > 0 &&
     (value.assetId === undefined || isString(value.assetId)) &&
+    (value.scriptVersionId === undefined || isString(value.scriptVersionId)) &&
     (value.linkedVideoClipId === undefined || (value.kind === "audio" && isString(value.linkedVideoClipId))) &&
     (value.shotId === undefined || isString(value.shotId)) && (value.slotId === undefined || isString(value.slotId)) &&
     (value.muted === undefined || typeof value.muted === "boolean") &&
