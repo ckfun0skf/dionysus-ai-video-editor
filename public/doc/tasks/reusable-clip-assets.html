@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DYS-013 — Reusable Clip Assets</title>
+<style>
+:root{color-scheme:dark;--bg:#0b0d12;--panel:#141821;--line:#293141;--text:#edf1f7;--muted:#a5afbf;--accent:#a9bdff}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at top,#171d2a 0,#0b0d12 58%);color:var(--text);font:15px/1.65 Inter,ui-sans-serif,system-ui,sans-serif}
+main{max-width:980px;margin:0 auto;padding:36px 22px 72px}a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.eyebrow{font-size:12px;font-weight:800;letter-spacing:.15em;text-transform:uppercase;color:var(--accent)}
+h1{font-size:clamp(30px,5vw,44px);line-height:1.12;letter-spacing:-.035em;margin:10px 0 14px}h2{font-size:19px;margin:24px 0 8px}p{color:#c5ccda}
+.panel{background:rgba(20,24,33,.92);border:1px solid var(--line);border-radius:14px;padding:20px;margin:16px 0}
+.meta{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0}.pill{border:1px solid var(--line);border-radius:999px;padding:5px 10px;color:var(--muted);font-size:12px}
+li{margin:7px 0;color:#d1d7e2}.muted{color:var(--muted)}code{background:#202636;border-radius:5px;padding:2px 5px}
+footer{border-top:1px solid var(--line);margin-top:26px;padding-top:16px;color:var(--muted);font-size:13px}
+</style>
+</head>
+<body><main>
+<header><div class="eyebrow">Dionysus · M3 Timeline model &amp; Version workflow</div><h1>Reusable Clip Assets and nested composition timeline</h1><p>A reusable Clip is a versioned composition Asset that can be edited independently and nested inside another Clip or Master Timeline placement.</p><div class="meta"><span class="pill">DYS-013</span><span class="pill">Implementation complete for this slice</span><span class="pill">Last updated · 2026-10-18</span></div></header>
+<section class="panel"><h2>Goal</h2><p>Build a reusable, cycle-safe Clip Asset graph with independent Versions, an in-workspace nested timeline, explicit version pinning, and deterministic project validation.</p></section>
+<section class="panel"><h2>Delivered behavior</h2><ul>
+<li>Create empty Clip Assets with canvas dimensions and a positive duration.</li>
+<li>Open a Clip Version in a separate Timeline tab; add and edit video, image, audio, text, Code/procedural, and nested Clip modules.</li>
+<li>Duplicate a Version while retaining the original and generating new module IDs.</li>
+<li>Pin nested Clip Version IDs; prevent direct and indirect composition cycles.</li>
+<li>Validate asset, version, layer, and referenced-image IDs before loading or importing project data.</li>
+<li>Expand placed Clip Assets into timed layers and render nested composition frames recursively where supported.</li>
+<li>Expose only explicitly selected image references to sandboxed Code previews.</li>
+</ul></section>
+<section class="panel"><h2>Validation</h2><p>Implementation commit <code>9a2f7b0</code> passed <a href="https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39153686513">GitHub Actions run #39153686513</a>: 14 test files, 118 tests, and a successful Vite production build. This predates the task-tracking/readme-only batch, so verify the latest PR head again before merging. Browser smoke tests were not run.</p></section>
+<section class="panel"><h2>Known scope boundaries</h2><ul>
+<li>WebM export is experimental and browser-capability dependent; this is not a frame-accurate professional NLE or MP4 exporter.</li>
+<li>Media decode, CORS, missing source media, and browser codecs must be reported honestly.</li>
+<li>Full Shot identity/Version migration and broader reference-management improvements remain separate follow-up work.</li>
+</ul></section>
+<section class="panel"><h2>Source links</h2><ul>
+<li><a href="https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/51">PR #51</a></li>
+<li><a href="../creative-editing-workflow-spec.md">Creative editing workflow specification</a></li>
+<li><a href="../reports/reusable-clip-assets-report.md">Implementation report</a></li>
+<li><a href="../task.html">Task dashboard</a></li>
+</ul></section>
+<footer>Project records are maintained in Git. Release/deployment status is tracked separately from feature implementation.</footer>
+</main></body></html>
