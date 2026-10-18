@@ -940,6 +940,15 @@ export default function App() {
         clipVersionId: requestedAsset.selectedClipVersionId ?? requestedAsset.clipVersions?.[0]?.id,
       };
     }
+    if (requestedAsset?.kind === "script" && (layer.kind === "procedural" || layer.kind === "script" || patch.kind === "procedural")) {
+      safePatch = {
+        ...safePatch,
+        kind: "procedural",
+        html: requestedAsset.html ?? "",
+        css: requestedAsset.css ?? "",
+        code: requestedAsset.js ?? "",
+      };
+    }
     updateTimelineVersion(tab, currentVersion => ({
       ...currentVersion,
       layers: currentVersion.layers.map(item => {
@@ -1844,8 +1853,15 @@ export default function App() {
       <label className="field-label">Asset<select className="text-field" value={layer.assetId??""} onChange={event=>{const assetId=event.target.value||undefined;const asset=project.assets.find(item=>item.id===assetId);update({assetId,childCompositionId:asset?.kind==="clip"?asset.id:undefined,clipVersionId:asset?.kind==="clip"?(asset.selectedClipVersionId??asset.clipVersions?.[0]?.id):undefined});}}><option value="">Placeholder / no source</option>{assets.map(asset=><option key={asset.id} value={asset.id}>{asset.name}</option>)}</select></label>
       <div className="settings-dialog-grid"><label className="field-label">Start (s)<input className="text-field" type="number" min="0" step={1/Math.max(1,project.frameRate)} value={layer.start} onChange={event=>update({start:Math.max(0,Number(event.target.value)||0)})}/></label><label className="field-label">Duration (s)<input className="text-field" type="number" min={1/Math.max(1,project.frameRate)} step={1/Math.max(1,project.frameRate)} value={layer.duration} onChange={event=>update({duration:Math.max(1/Math.max(1,project.frameRate),Number(event.target.value)||.1)})}/></label><label className="field-label">X (%)<input className="text-field" type="number" min="0" max="100" value={layer.x??0} onChange={event=>update({x:Math.max(0,Math.min(100,Number(event.target.value)||0))})}/></label><label className="field-label">Y (%)<input className="text-field" type="number" min="0" max="100" value={layer.y??0} onChange={event=>update({y:Math.max(0,Math.min(100,Number(event.target.value)||0))})}/></label><label className="field-label">Width (%)<input className="text-field" type="number" min="1" max="100" value={layer.width??100} onChange={event=>update({width:Math.max(1,Math.min(100,Number(event.target.value)||1))})}/></label><label className="field-label">Height (%)<input className="text-field" type="number" min="1" max="100" value={layer.height??100} onChange={event=>update({height:Math.max(1,Math.min(100,Number(event.target.value)||1))})}/></label><label className="field-label">Opacity <strong>{Math.round((layer.opacity??1)*100)}%</strong><input className="text-field" type="range" min="0" max="1" step=".05" value={layer.opacity??1} onChange={event=>update({opacity:Number(event.target.value)})}/></label></div>
       {layer.kind==="procedural"&&<CodePlayground title={layer.name} html={layer.html??""} css={layer.css??""} js={layer.code??""} onChange={patch=>update({...((patch.html!==undefined)?{html:patch.html}:{}),...((patch.css!==undefined)?{css:patch.css}:{}),...((patch.js!==undefined)?{code:patch.js}:{})})}/>}
+      {(layer.kind==="procedural"||layer.kind==="script") && <section className="code-image-references" aria-label="Code image references">
+        <div className="inspector-subheading"><span>Referenced Images</span><span className="small-count">{layer.referencedImageAssetIds?.length ?? 0}</span></div>
+        <p className="version-hint">Select the images this code may access. In code, read an image URL from <code>window.DIONYSUS_IMAGES["asset-id"]</code>.</p>
+        {project.assets.filter(asset=>asset.kind==="image").length === 0
+          ? <p className="empty-state-copy">Import an Image Asset first.</p>
+          : <div className="code-image-reference-list">{project.assets.filter(asset=>asset.kind==="image").map(asset=><label key={asset.id}><input type="checkbox" checked={(layer.referencedImageAssetIds??[]).includes(asset.id)} onChange={event=>{const current=layer.referencedImageAssetIds??[];const next=event.target.checked?[...new Set([...current,asset.id])]:current.filter(id=>id!==asset.id);update({referencedImageAssetIds:next});}}/><span>{asset.name}</span></label>)}</div>}
+      </section>}
       <label className="field-label">Prompt / notes<textarea className="text-area" rows={3} value={layer.prompt??""} onChange={event=>update({prompt:event.target.value})}/></label>
-      <footer><button className="button button-quiet button-small danger-action" onClick={()=>{if(window.confirm("Remove layer “"+layer.name+"”?")){removeVersionLayer(activeVersionTimelineShot.id,activeVersionTimelineSlot.id,activeVersionTimeline.id,layer.id);setCompositionLayerSettingsId("");}}}>Remove layer…</button><button className="button button-primary button-small" onClick={()=>setCompositionLayerSettingsId("")}>Done</button></footer>
+      <footer><button className="button button-quiet button-small danger-action" onClick={()=>{if(window.confirm("Remove layer “"+layer.name+"”?")){removeTimelineVersionLayer(activeVersionTimelineTab,layer.id);setCompositionLayerSettingsId("");}}}>Remove layer…</button><button className="button button-primary button-small" onClick={()=>setCompositionLayerSettingsId("")}>Done</button></footer>
     </section></div>;})()}
     {trackContextMenuId && view === "timeline" && <div className="shot-context-dismiss" onClick={()=>setTrackContextMenuId("")}><span className="shot-context-menu" role="menu" style={{left:trackContextMenuPosition.x,top:trackContextMenuPosition.y}} onClick={event=>event.stopPropagation()}>
       <button role="menuitem" onClick={()=>{const track=project.tracks.find(item=>item.id===trackContextMenuId);if(track?.kind==="video")setVideoTrackSettingsId(track.id);else if(track)setGenericTrackSettingsId(track.id);setTrackContextMenuId("");}}>Settings…</button>
