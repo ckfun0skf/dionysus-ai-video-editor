@@ -3,6 +3,7 @@ import { AudioLines, Check, CheckCircle2, ChevronDown, CircleHelp, Clapperboard,
 import { sampleProject } from "./sampleProject";
 import type { Asset, AssetKind, ClipVersion, CompositionLayer, DionysusProject, ReferenceProfile, ReferenceRole, Shot, TimelineClip } from "./types";
 import { validateProject } from "./projectValidation";
+import { getAllowedChildClipAssets, wouldCreateClipAssetCycle } from "./clipAssetGraph";
 import { t } from "./i18n";
 import { duplicateTimelineClip, moveTimelineClip, splitTimelineClip, trimTimelineClip, unlinkTimelineAudio, deleteTimelineClip } from "./timelineOperations";
 import { recordProjectChange, undoProjectChange as undoHistory, redoProjectChange as redoHistory } from "./projectHistory";
@@ -717,6 +718,113 @@ export default function App() {
         })
       })
     }) }));
+  }
+
+  function updateTimelineVersion(tab: VersionTimelineTab, update: (version: ClipVersion) => ClipVersion) {
+    if (tab.assetId) {
+      change(p => ({
+        ...p,
+        assets: p.assets.map(asset => asset.id !== tab.assetId || asset.kind !== "clip" ? asset : {
+          ...asset,
+          updatedAt: new Date().toISOString(),
+          clipVersions: (asset.clipVersions ?? []).map(version => version.id === tab.versionId ? update(version) : version)
+        })
+      }));
+      return;
+    }
+    change(p => ({
+      ...p,
+      shots: p.shots.map(shot => shot.id !== tab.shotId ? shot : {
+        ...shot,
+        slots: shot.slots.map(slot => slot.id !== tab.slotId ? slot : {
+          ...slot,
+          versions: slot.versions.map(version => version.id === tab.versionId ? update(version) : version)
+        })
+      })
+    }));
+  }
+
+  function updateTimelineVersionLayer(tab: VersionTimelineTab, layerId: string, patch: Partial<CompositionLayer>) {
+    const current = projectRef.current;
+    const version = tab.assetId
+      ? current.assets.find(asset => asset.id === tab.assetId && asset.kind === "clip")?.clipVersions?.find(item => item.id === tab.versionId)
+      : current.shots.find(shot => shot.id === tab.shotId)?.slots.find(slot => slot.id === tab.slotId)?.versions.find(item => item.id === tab.versionId);
+    const layer = version?.layers.find(item => item.id === layerId);
+    if (!layer) return;
+
+    const requestedAssetId = patch.assetId;
+    const requestedAsset = requestedAssetId ? current.assets.find(asset => asset.id === requestedAssetId) : undefined;
+    if (tab.assetId && requestedAsset?.kind === "clip" && wouldCreateClipAssetCycle(current.assets, tab.assetId, requestedAsset.id)) {
+      setNotice("That Clip cannot be added because it would create a circular Clip reference.");
+      return;
+    }
+
+    let safePatch = { ...patch };
+    if (patch.kind !== undefined && patch.kind !== "composition") {
+      safePatch = { ...safePatch, childCompositionId: undefined, clipVersionId: undefined };
+    }
+    if (requestedAsset?.kind === "clip" && (patch.kind === "composition" || layer.kind === "composition")) {
+      safePatch = {
+        ...safePatch,
+        kind: "composition",
+        childCompositionId: requestedAsset.id,
+        clipVersionId: requestedAsset.selectedClipVersionId ?? requestedAsset.clipVersions?.[0]?.id,
+      };
+    }
+    updateTimelineVersion(tab, currentVersion => ({
+      ...currentVersion,
+      layers: currentVersion.layers.map(item => {
+        if (item.id !== layerId) return item;
+        const updated = { ...item, ...safePatch };
+        return typeof safePatch.duration === "number" ? withDurationAndClampedFades(updated, safePatch.duration) : updated;
+      })
+    }));
+  }
+
+  function addTimelineVersionLayer(tab: VersionTimelineTab, kind: CompositionLayer["kind"]) {
+    const current = projectRef.current;
+    const version = tab.assetId
+      ? current.assets.find(asset => asset.id === tab.assetId && asset.kind === "clip")?.clipVersions?.find(item => item.id === tab.versionId)
+      : current.shots.find(shot => shot.id === tab.shotId)?.slots.find(slot => slot.id === tab.slotId)?.versions.find(item => item.id === tab.versionId);
+    if (!version) return;
+    const start = Math.max(0, Math.min(editorTime, Math.max(0, version.duration - 0.1)));
+    const name = kind === "procedural" ? "Code clip" : kind === "text" ? "Text layer" : kind === "audio" ? "Audio layer" : kind === "image" ? "Image layer" : kind === "composition" ? "Nested Clip" : "Video layer";
+    const layer: CompositionLayer = { id: id("layer"), name, kind, start, duration: Math.max(0.1, Math.min(3, version.duration - start)) };
+    updateTimelineVersion(tab, currentVersion => ({ ...currentVersion, layers: [...currentVersion.layers, layer] }));
+    setSelectedCompositionLayerId(layer.id);
+    setNotice(kind === "composition" ? "Empty nested Clip module added. Choose a Clip Asset in its Source asset setting." : "Layer added to the selected timeline.");
+  }
+
+  function removeTimelineVersionLayer(tab: VersionTimelineTab, layerId: string) {
+    updateTimelineVersion(tab, version => ({ ...version, layers: version.layers.filter(layer => layer.id !== layerId) }));
+    setSelectedCompositionLayerId(current => current === layerId ? "" : current);
+  }
+
+  function moveTimelineVersionLayer(tab: VersionTimelineTab, layerId: string, direction: -1 | 1) {
+    updateTimelineVersion(tab, version => {
+      const index = version.layers.findIndex(layer => layer.id === layerId);
+      const target = index + direction;
+      if (index < 0 || target < 0 || target >= version.layers.length) return version;
+      const layers = [...version.layers];
+      [layers[index], layers[target]] = [layers[target], layers[index]];
+      return { ...version, layers };
+    });
+  }
+
+  function updateTimelineVersionDuration(tab: VersionTimelineTab, value: number) {
+    if (!Number.isFinite(value) || value < 0.1) return;
+    const duration = Math.max(0.1, value);
+    updateTimelineVersion(tab, version => ({ ...version, duration }));
+    if (editorTime > duration) {
+      playbackTimeRef.current = duration;
+      setEditorTime(duration);
+      setIsPlaying(false);
+    }
+    setNotice("Timeline duration updated; parent Shot or Master Timeline timing remains unchanged.");
+  }
+
+  function updateTimelineVersionDescription(tab: VersionTimelineTab, description: string) {
+    updateTimelineVersion(tab, version => ({ ...version, description }));
   }
 
   function updateVersionDuration(shotId: string, slotId: string, versionId: string, value: number) {
