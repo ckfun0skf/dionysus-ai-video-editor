@@ -24,6 +24,7 @@ export function collectCompositionLayers(project: DionysusProject): CompositionL
     const frameHeight = clip.height ?? track?.height ?? 100;
     const common = {
       id: clip.id, name: clip.name, kind: clip.kind === "clip" ? "composition" as const : clip.kind, start: clip.start, duration: clip.duration,
+      ...(clip.referencedImageAssetIds ? { referencedImageAssetIds: [...clip.referencedImageAssetIds] } : {}),
       ...(clip.scriptVersionId ? { scriptVersionId: clip.scriptVersionId } : {}),
       ...(clip.prompt ? { prompt: clip.prompt } : {}),
       ...(clip.modelName ? { modelName: clip.modelName } : {}),
