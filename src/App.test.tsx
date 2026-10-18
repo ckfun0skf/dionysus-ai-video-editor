@@ -38,7 +38,7 @@ function timelineRows(): HTMLElement[] {
 
 
 function selectClip(name: string): HTMLButtonElement {
-  const clip = timelineRows().find(row => row.textContent?.includes(name) && (name.includes(" audio") || !row.textContent?.includes(" audio")));
+  const clip = timelineRows().find(row => row.textContent?.includes(name));
   if (!clip) throw new Error("Could not find timeline clip: " + name);
   act(() => clip.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 100, clientY: 100 })));
   const settings = Array.from(container.querySelectorAll<HTMLButtonElement>(".shot-context-menu button")).find(button => button.textContent?.includes("Settings"));
@@ -899,7 +899,7 @@ describe("App history integration", () => {
     expect(container.querySelector(".nested-timeline-tab")?.textContent).toContain("Version");
     expect(container.querySelector(".timeline-workspace-tabs")?.textContent).toContain("Master Timeline");
 
-    const addThree = Array.from(container.querySelectorAll<HTMLButtonElement>(".nested-timeline-tab button")).find(button => button.textContent?.includes("Code (Three.js)"));
+    const addThree = Array.from(container.querySelectorAll<HTMLButtonElement>(".nested-timeline-tab button")).find(button => button.textContent?.includes("Code"));
     expect(addThree).toBeTruthy();
     click(addThree!);
     await flushEffects();
