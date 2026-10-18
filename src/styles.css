@@ -1366,3 +1366,7 @@
 .visual-media-clip.procedural-clip{background:#254d80;border-color:#5189ce;color:#f3f8ff}
 .visual-media-clip.text-clip .visual-clip-icon{color:#e8d1ff}
 .visual-media-clip.procedural-clip .visual-clip-icon{color:#bfdcff}
+
+.track-layer-mute{flex:0 0 auto;padding:4px 6px;border:1px solid #41404c;border-radius:4px;background:#29252f;color:#e6d4ff;font-size:9px;cursor:pointer}
+.track-layer-mute[aria-pressed=true]{border-color:#b36370;background:#4b252d;color:#ffe0e4}
+.track-layer-mute:hover{filter:brightness(1.18)}
