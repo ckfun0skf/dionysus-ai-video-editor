@@ -1089,7 +1089,7 @@ export default function App() {
   <button role="menuitem" onClick={()=>{change(p=>({...p,tracks:[...p.tracks,{id:id("track-text"),name:"Text "+(p.tracks.filter(track=>track.kind==="text").length+1),kind:"text"}]}));setShowAddLayerMenu(false);}}>Text layer</button>
   <button role="menuitem" onClick={()=>{change(p=>({...p,tracks:[...p.tracks,{id:id("track-code"),name:"Code "+(p.tracks.filter(track=>track.kind==="procedural").length+1),kind:"procedural"}]}));setShowAddLayerMenu(false);}}>Code layer</button>
   <button role="menuitem" onClick={()=>{change(p=>({...p,tracks:[...p.tracks,{id:id("track-effects"),name:"Effects "+(p.tracks.filter(track=>track.kind==="effects").length+1),kind:"effects"}]}));setShowAddLayerMenu(false);}}>Effects layer</button>
- </div>
+ </div><button className={"button button-quiet button-small ripple-reorder-toggle"+(rippleReorderMode?" active":"")} aria-pressed={rippleReorderMode} onClick={()=>setRippleReorderMode(enabled=>!enabled)}>{rippleReorderMode?"Ripple Reorder: ON":"Ripple Reorder"}</button>
 </div></div>
 {rippleReorderMode&&<p className="ripple-mode-note" role="status">Ripple Reorder is ON. Dropping a Shot changes chronological order and packs the full Master sequence back-to-back, closing gaps. Master durations and Version internals stay unchanged.</p>}
 <div className="visual-track-list">
