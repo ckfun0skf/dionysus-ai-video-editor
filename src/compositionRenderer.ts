@@ -27,8 +27,8 @@ function drawFit(ctx: CanvasRenderingContext2D, image: CanvasImageSource, sw: nu
 }
 function drawLayer(ctx: CanvasRenderingContext2D, layer: CompositionLayer, asset: Asset | undefined, time: number, width: number, height: number, images: Map<string, HTMLImageElement>, videos: Map<string, HTMLVideoElement>) {
   if (time < layer.start || time >= layer.start + layer.duration || layer.kind === "audio" || layer.kind === "script") return;
-  const x = (layer.x ?? 0) * width, y = (layer.y ?? 0) * height;
-  const w = (layer.width ?? 1) * width, h = (layer.height ?? 1) * height;
+  const x = ((layer.x ?? 0) / 100) * width, y = ((layer.y ?? 0) / 100) * height;
+  const w = ((layer.width ?? 100) / 100) * width, h = ((layer.height ?? 100) / 100) * height;
   const scale = layer.scale ?? 1, opacity = Math.max(0, Math.min(1, layer.opacity ?? 1));
   const local = time - layer.start;
   ctx.save(); ctx.globalAlpha *= opacity;
