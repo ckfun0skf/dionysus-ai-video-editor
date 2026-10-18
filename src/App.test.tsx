@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { sampleProject } from "./sampleProject";
+import { getMasterTimelineDuration } from "./masterTimeline";
 
 let container: HTMLDivElement;
 let root: Root;
@@ -530,6 +531,35 @@ describe("App history integration", () => {
     expect(resizedSlot.duration).toBe(8);
     expect(resizedSlot.versions[0].duration).toBe(firstVersionDuration);
     expect(persistedProject().shots[1].masterStart).toBe(secondStartBefore);
+
+    const dragProject = persistedProject();
+    const shotBlock = container.querySelector<HTMLButtonElement>(".master-shot-clip");
+    const lane = shotBlock?.closest(".visual-track-lane") as HTMLDivElement | null;
+    expect(shotBlock?.draggable).toBe(true);
+    expect(lane).toBeTruthy();
+    Object.defineProperty(lane!, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({ left: 0, top: 0, right: 100, bottom: 60, width: 100, height: 60, x: 0, y: 0, toJSON: () => ({}) })
+    });
+    const values = new Map<string, string>();
+    const dataTransfer = {
+      setData: (type: string, value: string) => values.set(type, value),
+      getData: (type: string) => values.get(type) ?? "",
+      effectAllowed: "move"
+    };
+    const dragStart = new Event("dragstart", { bubbles: true, cancelable: true });
+    Object.defineProperty(dragStart, "dataTransfer", { value: dataTransfer });
+    act(() => shotBlock!.dispatchEvent(dragStart));
+    const drop = new MouseEvent("drop", { bubbles: true, cancelable: true, clientX: 75 });
+    Object.defineProperty(drop, "dataTransfer", { value: dataTransfer });
+    act(() => lane!.dispatchEvent(drop));
+    await flushEffects();
+    const afterDrop = persistedProject();
+    const masterDuration = Math.max(10, getMasterTimelineDuration(dragProject.shots), ...(dragProject.timelineClips ?? []).map(clip => clip.start + clip.duration));
+    const rawStart = Math.max(0, Math.min(masterDuration - dragProject.shots[0].duration, 0.75 * masterDuration - dragProject.shots[0].duration / 2));
+    const expectedStart = Math.round(rawStart * dragProject.frameRate) / dragProject.frameRate;
+    expect(afterDrop.shots[0].masterStart).toBeCloseTo(expectedStart, 7);
+    expect(afterDrop.shots[0].slots[0].versions[0].duration).toBe(firstVersionDuration);
   });
 
   it("opens nested Version tabs, adds a procedural layer, and keeps linked-audio mute/unlink independent", async () => {
