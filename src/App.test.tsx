@@ -90,6 +90,7 @@ async function seedLinkedVideoAudioPairs(count = 1) {
   root = createRoot(container);
   act(() => root.render(<App />));
   await flushEffects();
+  await openTimelineView();
 }
 
 beforeEach(() => {
@@ -298,7 +299,6 @@ describe("App history integration", () => {
 
   it("round-trips linked timeline metadata through actual project export and import", async () => {
     await openTimelineView();
-    await seedLinkedVideoAudioPairs();
     await seedLinkedVideoAudioPairs(2);
 
     const secondAudioRow = timelineRows().find(row => row.textContent?.includes("Video clip 2 audio"));
