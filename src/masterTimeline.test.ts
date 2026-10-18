@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { sampleProject } from "./sampleProject";
-import { getMasterShotStart, getMasterShotStarts, getMasterTimelineDuration, setMasterShotDuration, setMasterShotStart } from "./masterTimeline";
+import { getMasterShotIndexAtTime, getMasterShotStart, getMasterShotStarts, getMasterTimelineDuration, setMasterShotDuration, setMasterShotStart } from "./masterTimeline";
 
 describe("Master Timeline Shot placement", () => {
   it("keeps legacy projects in their original sequential layout", () => {
@@ -27,6 +27,23 @@ describe("Master Timeline Shot placement", () => {
     expect(updated.slice(1).map(shot => shot.duration)).toEqual(shots.slice(1).map(shot => shot.duration));
     expect(updated.map(shot => shot.slots.map(slot => slot.versions.map(version => version.duration)))).toEqual(versionsBefore);
     expect(getMasterTimelineDuration(updated)).toBe(Math.max(9, ...getMasterShotStarts(updated).slice(1).map((start, index) => start + updated[index+1].duration)));
+  });
+
+  it("finds the active Shot by its absolute placement, including gaps and array order changes", () => {
+    const shots = structuredClone(sampleProject.shots);
+    const secondStart = 6;
+    const thirdStart = 11;
+    const gapTime = thirdStart + shots[2].duration + 0.1;
+    shots[0].masterStart = gapTime + 5;
+    shots[1].masterStart = secondStart;
+    shots[2].masterStart = thirdStart;
+
+    expect(getMasterShotIndexAtTime(shots, 7)).toBe(1);
+    expect(getMasterShotIndexAtTime(shots, 12)).toBe(2);
+    expect(getMasterShotIndexAtTime(shots, gapTime)).toBe(2);
+    expect(getMasterShotIndexAtTime(shots, gapTime + 6)).toBe(0);
+    expect(getMasterShotIndexAtTime(shots, 1)).toBe(1);
+    expect(getMasterShotIndexAtTime([], 0)).toBe(-1);
   });
 
   it("clamps negative Master start and short Shot duration to valid minima", () => {
