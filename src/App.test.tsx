@@ -998,6 +998,7 @@ describe("Timeline layer and Shot settings UX", () => {
     const settings = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')).find(button => button.textContent?.includes("Settings"));
     expect(settings).toBeTruthy();
     click(settings!);
+    await flushEffects();
     const dialog = container.querySelector('[role="dialog"][aria-labelledby="shot-settings-title"]');
     expect(dialog).toBeTruthy();
     const title = dialog!.querySelector<HTMLInputElement>('input[aria-label="Shot title"]');
