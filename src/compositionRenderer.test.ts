@@ -12,10 +12,11 @@ describe("compositionRenderer", () => {
       scriptVersionIds: [], generationRecords: []
     });
     project.shots[1].slots[0].versions[0].layers = [{ id: "layer-later-shot", name: "Later shot layer", kind: "text", start: 1, duration: 1 }];
+    project.shots[1].masterStart = 20;
     const layers = collectCompositionLayers(project);
     expect(layers.map(layer => layer.id)).toEqual(["layer-selected", "layer-later-shot"]);
     expect(layers.find(layer => layer.id === "layer-selected")?.start).toBe(1);
-    expect(layers.find(layer => layer.id === "layer-later-shot")?.start).toBe(project.shots[0].duration + 1);
+    expect(layers.find(layer => layer.id === "layer-later-shot")?.start).toBe(21);
   });
 
   it("includes referenced master timeline clips and their media type", () => {
