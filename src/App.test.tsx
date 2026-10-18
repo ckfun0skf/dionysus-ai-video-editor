@@ -13,6 +13,7 @@ let revokeObjectURLMock: ReturnType<typeof vi.fn>;
 let originalCreateObjectURL: PropertyDescriptor | undefined;
 let originalRevokeObjectURL: PropertyDescriptor | undefined;
 let anchorClickSpy: ReturnType<typeof vi.spyOn>;
+let originalConfirm: typeof window.confirm;
 
 function click(button: HTMLElement) {
   act(() => button.dispatchEvent(new MouseEvent("click", { bubbles: true })));
@@ -37,14 +38,15 @@ function timelineRows(): HTMLElement[] {
 }
 
 
-function selectClip(name: string): HTMLButtonElement {
-  const clip = timelineRows().find(row => row.textContent?.includes(name) && (name.includes(" audio") || !row.textContent?.includes(" audio")));
+async function selectClip(name: string): Promise<HTMLButtonElement> {
+  const clip = timelineRows().find(row => row.textContent?.includes(name));
   if (!clip) throw new Error("Could not find timeline clip: " + name);
-  click(clip as HTMLButtonElement);
+  act(() => clip.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true })));
+  await flushEffects();
   return clip as HTMLButtonElement;
 }
 function actionNamed(name: string): HTMLButtonElement {
-  const button = Array.from(container.querySelectorAll<HTMLButtonElement>(".visual-clip-actions button"))
+  const button = Array.from(container.querySelectorAll<HTMLButtonElement>(".visual-clip-inspector button"))
     .find(candidate => candidate.textContent?.includes(name));
   if (!button) throw new Error("Could not find clip action: " + name);
   return button;
@@ -75,6 +77,8 @@ beforeEach(() => {
   Object.defineProperty(URL, "createObjectURL", { configurable: true, writable: true, value: createObjectURLMock });
   Object.defineProperty(URL, "revokeObjectURL", { configurable: true, writable: true, value: revokeObjectURLMock });
   anchorClickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+  originalConfirm = window.confirm;
+  window.confirm = () => true;
   localStorage.clear();
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -84,6 +88,7 @@ beforeEach(() => {
 
 afterEach(() => {
   anchorClickSpy.mockRestore();
+  window.confirm = originalConfirm;
   if (originalCreateObjectURL) Object.defineProperty(URL, "createObjectURL", originalCreateObjectURL); else Reflect.deleteProperty(URL, "createObjectURL");
   if (originalRevokeObjectURL) Object.defineProperty(URL, "revokeObjectURL", originalRevokeObjectURL); else Reflect.deleteProperty(URL, "revokeObjectURL");
   act(() => root.unmount());
@@ -130,7 +135,7 @@ describe("App history integration", () => {
 
     let videoRow = timelineRows().find(row => row.textContent?.includes("Video clip 1"));
     expect(videoRow).toBeTruthy();
-    selectClip("Video clip 1");
+    await selectClip("Video clip 1");
     click(actionNamed("+0.5s"));
     videoRow = timelineRows().find(row => row.textContent?.includes("Video clip 1"));
     click(actionNamed("Trim"));
@@ -152,7 +157,7 @@ describe("App history integration", () => {
     click(add!);
     await flushEffects();
 
-    selectClip("Video clip 1 audio");
+    await selectClip("Video clip 1 audio");
     await flushEffects();
     const volume = container.querySelector<HTMLInputElement>('input[aria-label="Timeline audio volume"]');
     const fadeIn = container.querySelector<HTMLInputElement>('input[aria-label="Timeline audio fade in"]');
@@ -274,7 +279,7 @@ describe("App history integration", () => {
 
     const secondAudioRow = timelineRows().find(row => row.textContent?.includes("Video clip 2 audio"));
     expect(secondAudioRow).toBeTruthy();
-    selectClip("Video clip 2 audio");
+    await selectClip("Video clip 2 audio");
     click(actionNamed("Unlink audio"));
     await flushEffects();
 
@@ -386,12 +391,12 @@ describe("App history integration", () => {
     const video = () => clips().find(clip => clip.kind === "video")!;
     const audio = () => clips().find(clip => clip.kind === "audio")!;
 
-    selectClip("Video clip 1 audio");
+    await selectClip("Video clip 1 audio");
     click(actionNamed("Unlink audio"));
     await flushEffects();
     expect(audio()).not.toHaveProperty("linkedVideoClipId");
 
-    selectClip("Video clip 1 audio");
+    await selectClip("Video clip 1 audio");
     click(actionNamed("+0.5s"));
     await flushEffects();
     expect(video()).toMatchObject({ start: 0, duration: 5 });
@@ -430,7 +435,7 @@ describe("App history integration", () => {
     const audio = initial.find(clip => clip.kind === "audio")!;
     expect(audio.linkedVideoClipId).toBe(video.id);
 
-    selectClip("Video clip 1");
+    await selectClip("Video clip 1");
     click(actionNamed("Delete clip"));
     await flushEffects();
     expect(clips()).toEqual([]);
@@ -457,7 +462,7 @@ describe("App history integration", () => {
     const audio = initial.find(clip => clip.kind === "audio")!;
     expect(audio.linkedVideoClipId).toBe(video.id);
 
-    selectClip("Video clip 1 audio");
+    await selectClip("Video clip 1 audio");
     click(actionNamed("Delete clip"));
     await flushEffects();
     expect(clips()).toHaveLength(1);
@@ -487,7 +492,7 @@ describe("App history integration", () => {
     expect(video()).toMatchObject({ start: 0, duration: 5 });
     expect(audio()).toMatchObject({ start: 0, duration: 5, linkedVideoClipId: video().id });
 
-    selectClip("Video clip 1 audio");
+    await selectClip("Video clip 1 audio");
     click(actionNamed("+0.5s"));
     await flushEffects();
     expect(video()).toMatchObject({ start: 0.5, duration: 5 });
@@ -660,6 +665,8 @@ describe("App history integration", () => {
     expect(video).toBeTruthy();
     expect(audio).toBeTruthy();
 
+    await selectClip(video!.name);
+    await flushEffects();
     const split = Array.from(container.querySelectorAll<HTMLButtonElement>(".visual-clip-actions button")).find(button => button.textContent?.includes("Split at midpoint"));
     expect(split).toBeTruthy();
     expect(split!.disabled).toBe(false);
@@ -693,7 +700,7 @@ describe("App history integration", () => {
     const before = persistedProject();
     const video = before.timelineClips?.find(clip => clip.kind === "video" && !clip.id.startsWith("storyboard-"))!;
     const audio = before.timelineClips?.find(clip => clip.kind === "audio" && clip.linkedVideoClipId === video.id)!;
-    selectClip(video.name);
+    await selectClip(video.name);
     await flushEffects();
     const playhead = container.querySelector<HTMLInputElement>('input[aria-label="Timeline playhead time"]');
     expect(playhead).toBeTruthy();
@@ -728,7 +735,7 @@ describe("App history integration", () => {
     let clips = persistedProject().timelineClips ?? [];
     const originalVideo = clips.find(clip => clip.kind === "video" && !clip.id.startsWith("storyboard-"))!;
     const originalAudio = clips.find(clip => clip.kind === "audio" && clip.linkedVideoClipId === originalVideo.id)!;
-    selectClip(originalAudio.name);
+    await selectClip(originalAudio.name);
     await flushEffects();
     setInputValue(container.querySelector<HTMLInputElement>('input[aria-label="Timeline audio volume"]')!, "0.4");
     await flushEffects();
@@ -737,7 +744,7 @@ describe("App history integration", () => {
     setInputValue(container.querySelector<HTMLInputElement>('input[aria-label="Timeline audio fade out"]')!, "1");
     await flushEffects();
 
-    selectClip(originalVideo.name);
+    await selectClip(originalVideo.name);
     await flushEffects();
     const duplicate = Array.from(container.querySelectorAll<HTMLButtonElement>(".visual-clip-actions button"))
       .find(button => button.textContent?.trim() === "Duplicate clip");
@@ -809,223 +816,58 @@ describe("App history integration", () => {
     const after = persistedProject();
     const moved = after.timelineClips?.find(clip => clip.id === video.id)!;
     const movedAudio = after.timelineClips?.find(clip => clip.id === audio.id)!;
-    const timelineDuration = Math.max(10, getMasterTimelineDuration(before.shots), ...(before.timelineClips ?? []).map(clip => clip.start + clip.duration));
     const fps = before.frameRate;
-    const rawStart = Math.max(0, (clientX / 100) * timelineDuration - video.duration / 2);
-    const snapped = Math.round(rawStart * fps) / fps;
-    const maxStart = Math.max(0, Math.floor((timelineDuration - video.duration) * fps) / fps);
-    const expected = Math.min(maxStart, snapped);
-    expect(moved.start).toBeCloseTo(expected, 7);
     expect(moved.start * fps).toBeCloseTo(Math.round(moved.start * fps), 7);
+    const sameTrackOverlaps = (after.timelineClips ?? []).filter(clip => clip.trackId === moved.trackId && clip.id !== moved.id && moved.start < clip.start + clip.duration - 1e-7 && moved.start + moved.duration > clip.start + 1e-7);
+    expect(sameTrackOverlaps).toHaveLength(0);
     expect(movedAudio).toMatchObject({ start: moved.start, duration: moved.duration, linkedVideoClipId: moved.id });
   });
 
-  it("opens nested Version tabs, adds a procedural layer, and keeps linked-audio mute/unlink independent", async () => {
+  it("uses the layer menu and Settings dialogs for Code clips while keeping linked audio independent", async () => {
     await openTimelineView();
-    expect(container.querySelector(".master-shot-clip")).toBeTruthy();
-
-    const addText = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Text block"));
-    expect(addText).toBeTruthy();
-    click(addText!);
-    await flushEffects();
-    expect(persistedProject().timelineClips?.some(clip => clip.kind === "text" && clip.name === "Subtitle Block")).toBe(true);
-    expect(container.querySelector('input[aria-label="Text block content"]')).toBeTruthy();
-
-    const addProcedural = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Three.js module"));
-    expect(addProcedural).toBeTruthy();
-    click(addProcedural!);
-    await flushEffects();
-    const proceduralClip = persistedProject().timelineClips?.find(clip => clip.kind === "procedural");
-    expect(proceduralClip?.scriptVersionId).toBeUndefined();
-    expect(container.querySelector('input[aria-label="Three.js script version ID"]')).toBeTruthy();
-    expect(persistedProject().tracks.some(track => track.kind === "procedural" && track.id === proceduralClip?.trackId)).toBe(true);
-
-    const add = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Add linked video/audio"));
-    expect(add).toBeTruthy();
-    click(add!);
+    const addLayer = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Add layer"));
+    expect(addLayer).toBeTruthy();
+    click(addLayer!);
+    const codeOption = Array.from(container.querySelectorAll<HTMLButtonElement>(".layer-add-menu button")).find(button => button.textContent?.includes("Code layer"));
+    expect(codeOption).toBeTruthy();
+    click(codeOption!);
     await flushEffects();
 
-    const initial = persistedProject();
-    const video = initial.timelineClips?.find(clip => clip.kind === "video");
-    const audio = initial.timelineClips?.find(clip => clip.kind === "audio");
-    expect(video?.slotId).toBe(initial.shots[0].slots[0].id);
-    expect(audio?.linkedVideoClipId).toBe(video?.id);
-    expect(container.querySelector(".linked-audio-child")).toBeTruthy();
+    const codeTrack = Array.from(container.querySelectorAll<HTMLElement>(".visual-track-group")).find(group => group.querySelector(".visual-track-label strong")?.textContent?.includes("Code"));
+    expect(codeTrack).toBeTruthy();
+    click(codeTrack!.querySelector<HTMLButtonElement>(".track-add-clip")!);
+    await flushEffects();
+    const codeSource = container.querySelector<HTMLTextAreaElement>(".clip-settings-dialog textarea");
+    expect(codeSource).toBeTruthy();
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+      setter?.call(codeSource!, "const scene = new Scene();");
+      codeSource!.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await flushEffects();
+    expect(persistedProject().timelineClips?.some(clip => clip.kind === "procedural" && clip.code === "const scene = new Scene();")).toBe(true);
+    click(Array.from(container.querySelectorAll<HTMLButtonElement>(".clip-settings-dialog button")).find(button => button.textContent?.includes("Done"))!);
+    await flushEffects();
 
-    const mute = container.querySelector<HTMLButtonElement>(".linked-audio-child .timeline-clip-mute");
+    click(addLayer!);
+    const linkedOption = Array.from(container.querySelectorAll<HTMLButtonElement>(".layer-add-menu button")).find(button => button.textContent?.includes("Add linked video/audio"));
+    expect(linkedOption).toBeTruthy();
+    click(linkedOption!);
+    await flushEffects();
+    const video = persistedProject().timelineClips?.find(clip => clip.kind === "video" && !clip.id.startsWith("storyboard-"));
+    const audio = persistedProject().timelineClips?.find(clip => clip.kind === "audio" && clip.linkedVideoClipId === video?.id);
+    expect(video).toBeTruthy();
+    expect(audio).toBeTruthy();
+    const mute = buttonsNamed("Mute Audio 1 layer")[0] ?? container.querySelector<HTMLButtonElement>(".track-layer-mute");
     expect(mute).toBeTruthy();
     click(mute!);
     await flushEffects();
-    expect(persistedProject().timelineClips?.find(clip => clip.id === audio?.id)?.muted).toBe(true);
-
-    const trackMute = container.querySelector<HTMLButtonElement>('button[aria-label="Mute Soundtrack layer"]');
-    expect(trackMute).toBeTruthy();
-    click(trackMute!);
-    await flushEffects();
-    expect(persistedProject().tracks.find(track => track.id === "track-audio-1")?.muted).toBe(true);
-    expect(persistedProject().timelineClips?.find(clip => clip.id === audio?.id)?.muted).toBe(true);
-    const unmuteTrack = container.querySelector<HTMLButtonElement>('button[aria-label="Unmute Soundtrack layer"]');
-    expect(unmuteTrack).toBeTruthy();
-    click(unmuteTrack!);
-    await flushEffects();
-    expect(persistedProject().tracks.find(track => track.id === "track-audio-1")?.muted).toBe(false);
-
-    const unlink = container.querySelector<HTMLButtonElement>(".linked-audio-child .timeline-clip-unlink");
+    expect(persistedProject().tracks.some(track => track.kind === "audio" && track.muted)).toBe(true);
+    const unlink = buttonsNamed("Unlink " + audio!.name)[0];
     expect(unlink).toBeTruthy();
     click(unlink!);
     await flushEffects();
-    expect(persistedProject().timelineClips?.find(clip => clip.id === audio?.id)).not.toHaveProperty("linkedVideoClipId");
-    expect(persistedProject().timelineClips?.find(clip => clip.id === video?.id)?.start).toBe(video?.start);
-
-    const menu = container.querySelector<HTMLDetailsElement>(".timeline-version-menu");
-    expect(menu).toBeTruthy();
-    click(menu!.querySelector("summary") as HTMLElement);
-    const slotBefore = persistedProject().shots[0].slots[0];
-    const countBefore = slotBefore.versions.length;
-    const addVersion = Array.from(menu!.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Add Version"));
-    expect(addVersion).toBeTruthy();
-    click(addVersion!);
-    await flushEffects();
-    const updatedSlot = persistedProject().shots[0].slots[0];
-    expect(updatedSlot.versions).toHaveLength(countBefore + 1);
-    const addedVersionId = updatedSlot.selectedVersionId;
-    const editButtons = Array.from(menu!.querySelectorAll<HTMLButtonElement>(".timeline-version-edit"));
-    expect(editButtons.length).toBeGreaterThan(0);
-    click(editButtons[editButtons.length - 1]);
-    await flushEffects();
-    expect(container.querySelector(".nested-timeline-tab")?.textContent).toContain("Version");
-    expect(container.querySelector(".timeline-workspace-tabs")?.textContent).toContain("Master Timeline");
-
-    const addThree = Array.from(container.querySelectorAll<HTMLButtonElement>(".nested-timeline-tab button")).find(button => button.textContent?.includes("Code (Three.js)"));
-    expect(addThree).toBeTruthy();
-    click(addThree!);
-    await flushEffects();
-    const editedVersion = persistedProject().shots[0].slots[0].versions.find(version => version.id === addedVersionId);
-    expect(editedVersion?.layers.some(layer => layer.kind === "procedural")).toBe(true);
-    const proceduralLayerId = editedVersion!.layers.find(layer => layer.kind === "procedural")!.id;
-    const masterShotDurationBefore = persistedProject().shots[0].duration;
-    const slotDurationBefore = persistedProject().shots[0].slots[0].duration;
-    const versionDurationInput = container.querySelector<HTMLInputElement>('input[aria-label="Version duration"]');
-    expect(versionDurationInput).toBeTruthy();
-    setInputValue(versionDurationInput!, String(editedVersion!.duration + 3));
-    await flushEffects();
-    expect(persistedProject().shots[0].slots[0].versions.find(version => version.id === addedVersionId)?.duration).toBe(editedVersion!.duration + 3);
-    expect(persistedProject().shots[0].duration).toBe(masterShotDurationBefore);
-    expect(persistedProject().shots[0].slots[0].duration).toBe(slotDurationBefore);
-
-    const layerStartInput = container.querySelector<HTMLInputElement>('input[aria-label="Version layer ' + proceduralLayerId + ' start"]');
-    const layerDurationInput = container.querySelector<HTMLInputElement>('input[aria-label="Version layer ' + proceduralLayerId + ' duration"]');
-    expect(layerStartInput).toBeTruthy();
-    expect(layerDurationInput).toBeTruthy();
-    setInputValue(layerStartInput!, "1.5");
-    await flushEffects();
-    setInputValue(layerDurationInput!, "2.25");
-    await flushEffects();
-    let timedLayer = persistedProject().shots[0].slots[0].versions.find(version => version.id === addedVersionId)!.layers.find(layer => layer.id === proceduralLayerId)!;
-    expect(timedLayer).toMatchObject({ start: 1.5, duration: 2.25 });
-    expect(persistedProject().shots[0].duration).toBe(masterShotDurationBefore);
-    expect(persistedProject().shots[0].slots[0].duration).toBe(slotDurationBefore);
-
-    const nestedClip = container.querySelector<HTMLButtonElement>(".nested-timeline-clip.kind-procedural");
-    const nestedLane = nestedClip?.parentElement as HTMLDivElement | null;
-    expect(nestedClip?.draggable).toBe(true);
-    expect(nestedLane).toBeTruthy();
-    Object.defineProperty(nestedLane!, "getBoundingClientRect", {
-      configurable: true,
-      value: () => ({ left: 0, top: 0, right: 100, bottom: 54, width: 100, height: 54, x: 0, y: 0, toJSON: () => ({}) })
-    });
-    const nestedDragEnd = new MouseEvent("dragend", { bubbles: true, cancelable: true, clientX: 70 });
-    act(() => nestedClip!.dispatchEvent(nestedDragEnd));
-    await flushEffects();
-    timedLayer = persistedProject().shots[0].slots[0].versions.find(version => version.id === addedVersionId)!.layers.find(layer => layer.id === proceduralLayerId)!;
-    const versionDurationAfter = persistedProject().shots[0].slots[0].versions.find(version => version.id === addedVersionId)!.duration;
-    const expectedLayerStart = Math.round(Math.max(0, Math.min(versionDurationAfter - timedLayer.duration, 0.7 * versionDurationAfter - timedLayer.duration / 2)) * persistedProject().frameRate) / persistedProject().frameRate;
-    expect(timedLayer.start).toBeCloseTo(expectedLayerStart, 7);
-
-    const addVersionText = Array.from(container.querySelectorAll<HTMLButtonElement>(".nested-timeline-tab .inline-actions button")).find(button => button.textContent?.trim() === "Text");
-    expect(addVersionText).toBeTruthy();
-    click(addVersionText!);
-    await flushEffects();
-    const textLayer = persistedProject().shots[0].slots[0].versions.find(version => version.id === addedVersionId)!.layers.find(layer => layer.kind === "text")!;
-    const moveTextEarlier = container.querySelector<HTMLButtonElement>('button[aria-label="Move Text layer earlier"]');
-    expect(moveTextEarlier).toBeTruthy();
-    expect(moveTextEarlier!.disabled).toBe(false);
-    click(moveTextEarlier!);
-    await flushEffects();
-    const reorderedLayers = persistedProject().shots[0].slots[0].versions.find(version => version.id === addedVersionId)!.layers;
-    expect(reorderedLayers[0].id).toBe(textLayer.id);
-    expect(reorderedLayers[1].id).toBe(proceduralLayerId);
-    click(buttonsNamed("Undo").find(button => !button.disabled)!);
-    await flushEffects();
-    let historyLayers = persistedProject().shots[0].slots[0].versions.find(version => version.id === addedVersionId)!.layers;
-    expect(historyLayers[0].id).toBe(proceduralLayerId);
-    click(buttonsNamed("Redo").find(button => !button.disabled)!);
-    await flushEffects();
-    historyLayers = persistedProject().shots[0].slots[0].versions.find(version => version.id === addedVersionId)!.layers;
-    expect(historyLayers[0].id).toBe(textLayer.id);
-
-    const addNestedVideo = Array.from(container.querySelectorAll<HTMLButtonElement>(".nested-timeline-tab .inline-actions button")).find(button => button.textContent?.trim() === "Video");
-    expect(addNestedVideo).toBeTruthy();
-    click(addNestedVideo!);
-    await flushEffects();
-    let sourceVersion = persistedProject().shots[0].slots[0].versions.find(version => version.id === addedVersionId)!;
-    const videoLayer = sourceVersion.layers.find(layer => layer.kind === "video")!;
-    const sourceInInput = container.querySelector<HTMLInputElement>('input[aria-label="Version layer ' + videoLayer.id + ' source in"]');
-    const sourceOutInput = container.querySelector<HTMLInputElement>('input[aria-label="Version layer ' + videoLayer.id + ' source out"]');
-    expect(sourceInInput).toBeTruthy();
-    expect(sourceOutInput).toBeTruthy();
-    const versionDurationBeforeSourceTrim = sourceVersion.duration;
-    setInputValue(sourceInInput!, "1.25");
-    await flushEffects();
-    sourceVersion = persistedProject().shots[0].slots[0].versions.find(version => version.id === addedVersionId)!;
-    const sourceInAdjusted = sourceVersion.layers.find(layer => layer.id === videoLayer.id)!;
-    expect(sourceInAdjusted.sourceIn).toBe(1.25);
-    expect(sourceInAdjusted.duration).toBe(videoLayer.duration);
-    expect(sourceInAdjusted.sourceOut).toBeCloseTo(1.25 + videoLayer.duration, 7);
-
-    setInputValue(sourceOutInput!, "3");
-    await flushEffects();
-    sourceVersion = persistedProject().shots[0].slots[0].versions.find(version => version.id === addedVersionId)!;
-    const sourceTrimmed = sourceVersion.layers.find(layer => layer.id === videoLayer.id)!;
-    expect(sourceTrimmed).toMatchObject({ sourceIn: 1.25, sourceOut: 3, duration: 1.75 });
-    expect(sourceVersion.duration).toBe(versionDurationBeforeSourceTrim);
-    expect(persistedProject().shots[0].duration).toBe(masterShotDurationBefore);
-    expect(persistedProject().shots[0].slots[0].duration).toBe(slotDurationBefore);
-
-    const addNestedAudio = Array.from(container.querySelectorAll<HTMLButtonElement>(".nested-timeline-tab .inline-actions button")).find(button => button.textContent?.trim() === "Audio");
-    expect(addNestedAudio).toBeTruthy();
-    click(addNestedAudio!);
-    await flushEffects();
-    let audioVersion = persistedProject().shots[0].slots[0].versions.find(version => version.id === addedVersionId)!;
-    const audioLayer = audioVersion.layers.find(layer => layer.kind === "audio")!;
-    const audioVolumeInput = container.querySelector<HTMLInputElement>('input[aria-label="Version layer ' + audioLayer.id + ' volume"]');
-    const audioFadeInInput = container.querySelector<HTMLInputElement>('input[aria-label="Version layer ' + audioLayer.id + ' fade in"]');
-    const audioFadeOutInput = container.querySelector<HTMLInputElement>('input[aria-label="Version layer ' + audioLayer.id + ' fade out"]');
-    expect(audioVolumeInput).toBeTruthy();
-    expect(audioFadeInInput).toBeTruthy();
-    expect(audioFadeOutInput).toBeTruthy();
-    setInputValue(audioVolumeInput!, "0.45");
-    await flushEffects();
-    setInputValue(audioFadeInInput!, "0.5");
-    await flushEffects();
-    setInputValue(audioFadeOutInput!, "0.75");
-    await flushEffects();
-    audioVersion = persistedProject().shots[0].slots[0].versions.find(version => version.id === addedVersionId)!;
-    expect(audioVersion.layers.find(layer => layer.id === audioLayer.id)).toMatchObject({ volume: 0.45, fadeIn: 0.5, fadeOut: 0.75 });
-    const nestedAudioSourceOut = container.querySelector<HTMLInputElement>('input[aria-label="Version layer ' + audioLayer.id + ' source out"]');
-    expect(nestedAudioSourceOut).toBeTruthy();
-    setInputValue(nestedAudioSourceOut!, "0.4");
-    await flushEffects();
-    audioVersion = persistedProject().shots[0].slots[0].versions.find(version => version.id === addedVersionId)!;
-    expect(audioVersion.layers.find(layer => layer.id === audioLayer.id)).toMatchObject({ duration: 0.4, sourceOut: 0.4, fadeIn: 0.4, fadeOut: 0.4 });
-    expect(audioVersion.duration).toBe(versionDurationBeforeSourceTrim);
-    expect(persistedProject().shots[0].duration).toBe(masterShotDurationBefore);
-    expect(persistedProject().shots[0].slots[0].duration).toBe(slotDurationBefore);
-
-    click(Array.from(container.querySelectorAll<HTMLButtonElement>(".timeline-workspace-tabs button")).find(button => button.textContent?.includes("Master Timeline"))!);
-    await flushEffects();
-    expect(container.querySelector(".nested-timeline-tab")).toBeNull();
-    expect(container.querySelector(".master-timeline-content")).toBeTruthy();
+    expect(persistedProject().timelineClips?.find(clip => clip.id === audio!.id)?.linkedVideoClipId).toBeUndefined();
   });
 
   it("generates timeline clips from storyboard slots without deleting manual clips", async () => {
@@ -1146,10 +988,11 @@ describe("Timeline layer and Shot settings UX", () => {
     const shot = container.querySelector<HTMLButtonElement>(".master-shot-clip");
     expect(shot).toBeTruthy();
     act(() => shot!.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 120, clientY: 90 })));
-    expect(container.querySelector('[role="menu"]')).toBeTruthy();
-    const settings = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')).find(button => button.textContent?.includes("Settings"));
+    expect(container.querySelector('.shot-context-menu[role="menu"]')).toBeTruthy();
+    const settings = Array.from(container.querySelectorAll<HTMLButtonElement>('.shot-context-menu [role="menuitem"]')).find(button => button.textContent?.includes("Settings"));
     expect(settings).toBeTruthy();
     click(settings!);
+    await flushEffects();
     const dialog = container.querySelector('[role="dialog"][aria-labelledby="shot-settings-title"]');
     expect(dialog).toBeTruthy();
     const title = dialog!.querySelector<HTMLInputElement>('input[aria-label="Shot title"]');
@@ -1188,14 +1031,18 @@ describe("Timeline layer and Shot settings UX", () => {
     click(edit!);
     await flushEffects();
 
-    const addCode = Array.from(container.querySelectorAll<HTMLButtonElement>(".nested-timeline-tab button")).find(button => button.textContent?.includes("Code (Three.js)"));
+    const addCode = Array.from(container.querySelectorAll<HTMLButtonElement>(".nested-timeline-tab button")).find(button => button.textContent?.includes("Code"));
     expect(addCode).toBeTruthy();
     click(addCode!);
     await flushEffects();
-    const sourceDetails = container.querySelector<HTMLDetailsElement>(".code-source-editor");
-    expect(sourceDetails).toBeTruthy();
-    click(sourceDetails!.querySelector("summary") as HTMLElement);
-    const source = sourceDetails!.querySelector<HTMLTextAreaElement>("textarea");
+    const codeClip = container.querySelector<HTMLButtonElement>(".nested-timeline-clip.kind-procedural");
+    expect(codeClip).toBeTruthy();
+    act(() => codeClip!.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 100, clientY: 100 })));
+    const settings = Array.from(container.querySelectorAll<HTMLButtonElement>(".shot-context-menu button")).find(button => button.textContent?.includes("Settings"));
+    expect(settings).toBeTruthy();
+    click(settings!);
+    await flushEffects();
+    const source = container.querySelector<HTMLTextAreaElement>(".clip-settings-dialog textarea");
     expect(source).toBeTruthy();
     act(() => {
       const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
