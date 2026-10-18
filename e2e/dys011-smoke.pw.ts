@@ -72,10 +72,29 @@ test("browser smoke: compose video and audio, generate an image, export a playab
       scriptVersionIds: [], generationRecords: []
     }]
   }];
+  const audioSource = toneWavDataUri();
+  await page.evaluate(async ({ videoData, audioData }) => {
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open("dionysus-media-assets", 1);
+      request.onupgradeneeded = () => { if (!request.result.objectStoreNames.contains("media")) request.result.createObjectStore("media"); };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const [videoBlob, audioBlob] = await Promise.all([fetch(videoData).then(response => response.blob()), fetch(audioData).then(response => response.blob())]);
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction("media", "readwrite");
+      tx.objectStore("media").put(videoBlob, "smoke-video-asset");
+      tx.objectStore("media").put(audioBlob, "smoke-audio-asset");
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+    db.close();
+  }, { videoData: sourceVideo, audioData: audioSource });
   project.assets = [
     { id: "smoke-asset", name: "Smoke source", kind: "image", path: tinyPng },
-    { id: "smoke-video-asset", name: "Motion source", kind: "video", path: sourceVideo },
-    { id: "smoke-audio-asset", name: "Tone source", kind: "audio", path: toneWavDataUri() }
+    { id: "smoke-video-asset", name: "Motion source", kind: "video", path: "idb://media/smoke-video-asset" },
+    { id: "smoke-audio-asset", name: "Tone source", kind: "audio", path: "idb://media/smoke-audio-asset" }
   ];
   project.timelineClips = [{
     id: "smoke-audio-clip", name: "Tone bed", kind: "audio", trackId: "track-audio-1",
@@ -145,4 +164,19 @@ test("browser smoke: compose video and audio, generate an image, export a playab
   expect(media.width).toBe(320);
   expect(media.height).toBe(180);
   expect(pageErrors).toEqual([]);
+});
+
+
+test("browser smoke: importing audio persists media bytes in IndexedDB", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Project view" }).click();
+  await page.getByRole("button", { name: "Assets", exact: true }).click();
+  const wav = Buffer.from(toneWavDataUri().split(",")[1], "base64");
+  await page.locator('input[type="file"][accept^="video/*"]').setInputFiles({ name: "smoke-import.wav", mimeType: "audio/wav", buffer: wav });
+  await expect(page.getByText("smoke-import.wav", { exact: true })).toBeVisible();
+  await page.waitForFunction(() => {
+    const saved = JSON.parse(localStorage.getItem("dionysus.project.v1") || "null");
+    const asset = saved?.assets?.find((candidate: { name: string }) => candidate.name === "smoke-import.wav");
+    return asset?.kind === "audio" && asset.path === "idb://media/" + encodeURIComponent(asset.id);
+  });
 });
