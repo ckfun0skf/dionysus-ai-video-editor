@@ -85,6 +85,16 @@ describe("validateProject", () => {
     expect(validateProject(project)).toBe(false);
   });
 
+  it("accepts optional absolute Master Shot start and rejects invalid values", () => {
+    const project = structuredClone(sampleProject);
+    project.shots[1].masterStart = 12.5;
+    expect(validateProject(project)).toBe(true);
+    project.shots[1].masterStart = -1;
+    expect(validateProject(project)).toBe(false);
+    project.shots[1].masterStart = Number.NaN;
+    expect(validateProject(project)).toBe(false);
+  });
+
   it("rejects shots assigned to missing reference profiles", () => {
     const project = structuredClone(sampleProject);
     project.shots[0].referenceProfileIds.push("missing-profile");
