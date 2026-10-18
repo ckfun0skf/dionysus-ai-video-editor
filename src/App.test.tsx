@@ -896,7 +896,7 @@ describe("App history integration", () => {
     expect(container.querySelector(".nested-timeline-tab")?.textContent).toContain("Version");
     expect(container.querySelector(".timeline-workspace-tabs")?.textContent).toContain("Master Timeline");
 
-    const addThree = Array.from(container.querySelectorAll<HTMLButtonElement>(".nested-timeline-tab button")).find(button => button.textContent?.includes("Three.js layer"));
+    const addThree = Array.from(container.querySelectorAll<HTMLButtonElement>(".nested-timeline-tab button")).find(button => button.textContent?.includes("Code (Three.js)"));
     expect(addThree).toBeTruthy();
     click(addThree!);
     await flushEffects();
@@ -1139,6 +1139,88 @@ describe("Timeline preview", () => {
   });
 });
 
+
+describe("Timeline layer and Shot settings UX", () => {
+  it("opens Shot Settings from a right-click context menu", async () => {
+    await openTimelineView();
+    const shot = container.querySelector<HTMLButtonElement>(".master-shot-clip");
+    expect(shot).toBeTruthy();
+    act(() => shot!.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 120, clientY: 90 })));
+    expect(container.querySelector('[role="menu"]')).toBeTruthy();
+    const settings = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')).find(button => button.textContent?.includes("Settings"));
+    expect(settings).toBeTruthy();
+    click(settings!);
+    const dialog = container.querySelector('[role="dialog"][aria-labelledby="shot-settings-title"]');
+    expect(dialog).toBeTruthy();
+    const title = dialog!.querySelector<HTMLInputElement>('input[aria-label="Shot title"]');
+    expect(title).toBeTruthy();
+    setInputValue(title!, "Edited from Shot Settings");
+    await flushEffects();
+    expect(persistedProject().shots[0].title).toBe("Edited from Shot Settings");
+  });
+
+  it("edits video layer background transparency and opacity from the layer settings dialog", async () => {
+    await openTimelineView();
+    const settings = container.querySelector<HTMLButtonElement>(".visual-track-label .track-settings-button");
+    expect(settings).toBeTruthy();
+    click(settings!);
+    const dialog = container.querySelector('[role="dialog"][aria-labelledby="video-layer-settings-title"]');
+    expect(dialog).toBeTruthy();
+    const transparent = dialog!.querySelector<HTMLInputElement>('input[type="checkbox"]');
+    expect(transparent).toBeTruthy();
+    click(transparent!);
+    const opacity = dialog!.querySelector<HTMLInputElement>('input[aria-label="Video layer opacity"]');
+    expect(opacity).toBeTruthy();
+    setInputValue(opacity!, "0.5");
+    await flushEffects();
+    const track = persistedProject().tracks.find(item => item.kind === "video");
+    expect(track?.backgroundTransparent).toBe(true);
+    expect(track?.opacity).toBe(0.5);
+  });
+
+  it("stores editable Three.js source on a Code clip and shows its code thumbnail", async () => {
+    await openTimelineView();
+    const menu = container.querySelector<HTMLDetailsElement>(".master-shot-version-menu");
+    expect(menu).toBeTruthy();
+    click(menu!.querySelector("summary") as HTMLElement);
+    const edit = menu!.querySelector<HTMLButtonElement>(".timeline-version-edit");
+    expect(edit).toBeTruthy();
+    click(edit!);
+    await flushEffects();
+
+    const addCode = Array.from(container.querySelectorAll<HTMLButtonElement>(".nested-timeline-tab button")).find(button => button.textContent?.includes("Code (Three.js)"));
+    expect(addCode).toBeTruthy();
+    click(addCode!);
+    await flushEffects();
+    const sourceDetails = container.querySelector<HTMLDetailsElement>(".code-source-editor");
+    expect(sourceDetails).toBeTruthy();
+    click(sourceDetails!.querySelector("summary") as HTMLElement);
+    const source = sourceDetails!.querySelector<HTMLTextAreaElement>("textarea");
+    expect(source).toBeTruthy();
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+      setter?.call(source!, "scene.background = null;");
+      source!.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await flushEffects();
+    const codeLayer = persistedProject().shots.flatMap(shot => shot.slots.flatMap(slot => slot.versions.flatMap(version => version.layers))).find(layer => layer.kind === "procedural");
+    expect(codeLayer?.code).toBe("scene.background = null;");
+    const masterTab = Array.from(container.querySelectorAll<HTMLButtonElement>(".timeline-workspace-tabs [role=\"tab\"]")).find(button => button.textContent?.includes("Master Timeline"));
+    expect(masterTab).toBeTruthy();
+    click(masterTab!);
+    await flushEffects();
+    expect(container.querySelector(".master-shot-clip .version-thumbnail-code")).toBeTruthy();
+  });
+
+  it("shows a thumbnail for every version and uses a code glyph for procedural-only versions", async () => {
+    await openTimelineView();
+    expect(container.querySelector(".master-shot-clip .version-thumbnail-preview")).toBeTruthy();
+    const menu = container.querySelector<HTMLDetailsElement>(".master-shot-version-menu");
+    expect(menu).toBeTruthy();
+    click(menu!.querySelector("summary") as HTMLElement);
+    expect(menu!.querySelectorAll(".timeline-version-menu-thumb .version-thumbnail-preview").length).toBeGreaterThan(0);
+  });
+});
 
 describe("Integrated timeline editor", () => {
   it("shows preview in the timeline workspace and provides playback controls", async () => {
