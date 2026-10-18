@@ -77,6 +77,82 @@ export function trimTimelineClip(state: TimelineState, clipId: string, duration:
   }) };
 }
 
+export function splitTimelineClip(state: TimelineState, clipId: string, splitTime: number, input: {
+  newClipId: string;
+  newLinkedAudioClipIds?: string[];
+}): TimelineState {
+  assertUniqueClipIds(state.timelineClips);
+  assertValidLinks(state.timelineClips);
+  const clip = state.timelineClips.find(item => item.id === clipId);
+  if (!clip) throw new Error("Timeline clip not found.");
+  if (clip.kind === "audio" && clip.linkedVideoClipId) {
+    throw new Error("Split the source video to split linked source audio.");
+  }
+  const end = clip.start + clip.duration;
+  if (!Number.isFinite(splitTime) || splitTime <= clip.start || splitTime >= end) {
+    throw new Error("Split point must fall strictly inside the clip.");
+  }
+  if (!input.newClipId.trim() || input.newClipId === clip.id || state.timelineClips.some(item => item.id === input.newClipId)) {
+    throw new Error("Split clip ID must be non-empty, unique, and different from the source ID.");
+  }
+
+  const linkedAudio = clip.kind === "video"
+    ? state.timelineClips.filter(item => item.kind === "audio" && item.linkedVideoClipId === clip.id)
+    : [];
+  const newAudioIds = input.newLinkedAudioClipIds ?? [];
+  if (newAudioIds.length !== linkedAudio.length ||
+      newAudioIds.some(id => !id.trim() || id === input.newClipId || id === clip.id || state.timelineClips.some(item => item.id === id)) ||
+      new Set(newAudioIds).size !== newAudioIds.length) {
+    if (linkedAudio.length) throw new Error("Provide one unique new audio ID for each linked source-audio child.");
+    if (newAudioIds.length) throw new Error("Audio IDs were supplied for a clip with no linked source audio.");
+  }
+
+  const splitPair = (source: TimelineClip, newId: string) => {
+    const leftDuration = splitTime - source.start;
+    const rightDuration = source.duration - leftDuration;
+    let leftSource: Partial<TimelineClip> = {};
+    let rightSource: Partial<TimelineClip> = {};
+    if (source.kind === "video" || source.kind === "audio") {
+      const sourceIn = source.sourceIn ?? 0;
+      const sourceOut = source.sourceOut ?? sourceIn + source.duration;
+      if (Math.abs((sourceOut - sourceIn) - source.duration) > 0.001) {
+        throw new Error("Source range length must match clip duration before splitting.");
+      }
+      if (source.sourceIn !== undefined || source.sourceOut !== undefined) {
+        const middleSource = sourceIn + leftDuration;
+        leftSource = { sourceIn, sourceOut: middleSource };
+        rightSource = { sourceIn: middleSource, sourceOut };
+      }
+    }
+    return {
+      left: { ...source, duration: leftDuration, ...leftSource },
+      right: { ...source, id: newId, name: source.name + " (2)", start: splitTime, duration: rightDuration, ...rightSource }
+    };
+  };
+
+  const videoPair = splitPair(clip, input.newClipId);
+  const audioPairs = linkedAudio.map((audio, index) => ({
+    originalId: audio.id,
+    ...splitPair(audio, newAudioIds[index]),
+    rightLinkedVideoClipId: input.newClipId
+  }));
+  const leftAudioById = new Map(audioPairs.map(pair => [pair.originalId, pair.left]));
+  const originalVideoId = clip.kind === "video" ? clip.id : undefined;
+  const nextClips = state.timelineClips.map(item => {
+    if (item.id === clip.id) return videoPair.left;
+    const leftAudio = leftAudioById.get(item.id);
+    return leftAudio ?? item;
+  });
+  const rightAudioClips = audioPairs.map(pair => ({
+    ...pair.right,
+    linkedVideoClipId: pair.rightLinkedVideoClipId
+  }));
+  return {
+    ...state,
+    timelineClips: [...nextClips, videoPair.right, ...rightAudioClips]
+  };
+}
+
 export function unlinkTimelineAudio(state: TimelineState, audioClipId: string): TimelineState {
   assertUniqueClipIds(state.timelineClips);
   assertValidLinks(state.timelineClips);
