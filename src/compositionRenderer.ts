@@ -1,17 +1,18 @@
 import type { Asset, CompositionLayer, DionysusProject } from "./types";
+import { getMasterShotStarts, getMasterTimelineDuration } from "./masterTimeline";
 import { loadMediaBlobFromPath, resolveMediaSource } from "./mediaAssetStore";
 
 export interface RenderOptions { fps?: number; width?: number; height?: number; duration?: number }
 export interface ExportResult { blob: Blob; filename: string; mimeType: string }
 
 export function collectCompositionLayers(project: DionysusProject): CompositionLayer[] {
-  let shotOffset = 0;
-  const nested = project.shots.flatMap(shot => {
+  const shotStarts = getMasterShotStarts(project.shots);
+  const nested = project.shots.flatMap((shot, shotIndex) => {
+    const shotOffset = shotStarts[shotIndex];
     const layers = shot.slots.flatMap(slot => {
       const version = slot.versions.find(item => item.id === slot.selectedVersionId);
       return version ? version.layers.map(layer => ({ ...layer, start: layer.start + slot.start + shotOffset })) : [];
     });
-    shotOffset += shot.duration;
     return layers;
   });
   const timeline = (project.timelineClips ?? []).filter(clip => !clip.id.startsWith("storyboard-")).flatMap(clip => {
@@ -160,7 +161,7 @@ export async function exportCompositionWebM(project: DionysusProject, options: R
     throw new Error("WebM export requires a browser with MediaRecorder and canvas captureStream support");
   }
   const layers = collectCompositionLayers(project), fps = options.fps ?? project.frameRate ?? 30;
-  const projectDuration = project.shots.reduce((total, shot) => total + shot.duration, 0);
+  const projectDuration = getMasterTimelineDuration(project.shots);
   const duration = options.duration ?? Math.max(getCompositionDuration(layers), projectDuration);
   if (!layers.length || duration <= 0) throw new Error("Add at least one visible composition layer before exporting");
   if (!Number.isFinite(fps) || fps < 1 || fps > 60) throw new Error("Export frame rate must be between 1 and 60 FPS");
