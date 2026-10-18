@@ -75,7 +75,7 @@ function isLayer(value: unknown): boolean {
     (value.muted === undefined || typeof value.muted === "boolean") &&
     (value.volume === undefined || (isFiniteNumber(value.volume) && value.volume >= 0 && value.volume <= 1)) &&
     (value.fadeIn === undefined || (isFiniteNumber(value.fadeIn) && value.fadeIn >= 0 && value.fadeIn <= value.duration)) &&
-    (value.fadeOut === undefined || (isFiniteNumber(value.fadeOut) && value.fadeOut >= 0 && value.fadeOut <= value.duration);
+    (value.fadeOut === undefined || (isFiniteNumber(value.fadeOut) && value.fadeOut >= 0 && value.fadeOut <= value.duration));
 }
 function isVersion(value: unknown): boolean {
   return isRecord(value) && isString(value.id) && isString(value.name) &&
