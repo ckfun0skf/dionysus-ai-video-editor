@@ -267,12 +267,9 @@ export default function App() {
     if (!isPlaying) return;
     let cancelled = false, frame = 0, warned = false;
     const players = new Map<string, { element: HTMLMediaElement; release?: () => void }>();
-    const clips = activeVersionTimeline
-      ? activeVersionTimeline.layers.filter(layer => layer.kind === "audio" && Boolean(layer.assetId)).map(layer => ({ id: layer.id, name: layer.name, kind: "audio" as const, assetId: layer.assetId, start: layer.start, duration: layer.duration, sourceIn: layer.sourceIn, sourceOut: layer.sourceOut, volume: layer.volume, fadeIn: layer.fadeIn, fadeOut: layer.fadeOut, muted: layer.muted, linkedVideoClipId: undefined }))
-      : (project.timelineClips ?? []).filter(clip => clip.kind === "audio" && Boolean(clip.assetId)).map(clip => ({
-        ...clip,
-        muted: Boolean(clip.muted || project.tracks.find(track => track.id === clip.trackId)?.muted)
-      }));
+    const clips = (activeVersionTimeline ? activeVersionTimeline.layers : collectCompositionLayers(project))
+      .filter(layer => layer.kind === "audio" && Boolean(layer.assetId))
+      .map(layer => ({ ...layer, kind: "audio" as const, linkedVideoClipId: undefined }));
     const prepare = async () => {
       for (const clip of clips) {
         const asset = project.assets.find(item => item.id === clip.assetId);
