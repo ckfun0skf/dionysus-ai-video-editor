@@ -4,10 +4,15 @@ export interface RenderOptions { fps?: number; width?: number; height?: number; 
 export interface ExportResult { blob: Blob; filename: string; mimeType: string }
 
 export function collectCompositionLayers(project: DionysusProject): CompositionLayer[] {
-  const nested = project.shots.flatMap(shot => shot.slots.flatMap(slot => {
-    const version = slot.versions.find(item => item.id === slot.selectedVersionId);
-    return version ? version.layers.map(layer => ({ ...layer, start: layer.start + slot.start })) : [];
-  }));
+  let shotOffset = 0;
+  const nested = project.shots.flatMap(shot => {
+    const layers = shot.slots.flatMap(slot => {
+      const version = slot.versions.find(item => item.id === slot.selectedVersionId);
+      return version ? version.layers.map(layer => ({ ...layer, start: layer.start + slot.start + shotOffset })) : [];
+    });
+    shotOffset += shot.duration;
+    return layers;
+  });
   const timeline = (project.timelineClips ?? []).flatMap(clip => {
     if (!clip.assetId || !project.assets.some(asset => asset.id === clip.assetId)) return [];
     return [{
@@ -28,6 +33,7 @@ function loadImage(src: string): Promise<HTMLImageElement> {
     const image = new Image();
     image.onload = () => resolve(image);
     image.onerror = () => reject(new Error("Unable to load image layer source"));
+    if (/^https?:/i.test(src)) image.crossOrigin = "anonymous";
     image.src = src;
   });
 }
@@ -76,13 +82,15 @@ function drawLayer(ctx: CanvasRenderingContext2D, layer: CompositionLayer, asset
   if (layer.animation === "pulse") { const pulse = 1 + .04 * Math.sin(local * 2 * Math.PI / Math.max(.1, layer.animationDuration ?? 2)); ctx.translate(x + w / 2, y + h / 2); ctx.scale(pulse, pulse); ctx.translate(-(x + w / 2), -(y + h / 2)); }
   if (layer.animation === "rotate") { ctx.translate(x + w / 2, y + h / 2); ctx.rotate(local * 2 * Math.PI / Math.max(.1, layer.animationDuration ?? 3)); ctx.translate(-(x + w / 2), -(y + h / 2)); }
   ctx.translate(x + w / 2, y + h / 2); ctx.scale(scale, scale); ctx.translate(-(x + w / 2), -(y + h / 2));
-  if (layer.backgroundColor) { ctx.fillStyle = layer.backgroundColor; ctx.fillRect(x, y, w, h); }
-  if (layer.shape === "circle" || layer.shape === "rounded") {
+  const makeFramePath = (inset = 0) => {
     ctx.beginPath();
-    if (layer.shape === "circle") ctx.ellipse(x + w / 2, y + h / 2, Math.min(w, h) / 2, Math.min(w, h) / 2, 0, 0, Math.PI * 2);
-    else ctx.roundRect(x, y, w, h, layer.cornerRadius ?? 12);
-    ctx.clip();
-  }
+    if (layer.shape === "circle") ctx.ellipse(x + w / 2, y + h / 2, Math.max(0, Math.min(w, h) / 2 - inset), Math.max(0, Math.min(w, h) / 2 - inset), 0, 0, Math.PI * 2);
+    else if (layer.shape === "rounded") ctx.roundRect(x + inset, y + inset, Math.max(0, w - inset * 2), Math.max(0, h - inset * 2), Math.max(0, (layer.cornerRadius ?? 12) - inset));
+    else ctx.rect(x + inset, y + inset, Math.max(0, w - inset * 2), Math.max(0, h - inset * 2));
+  };
+  makeFramePath();
+  ctx.clip();
+  if (layer.backgroundColor) { ctx.fillStyle = layer.backgroundColor; ctx.fillRect(x, y, w, h); }
   if (asset?.path && asset.kind === "image") {
     const image = images.get(asset.id);
     if (image) drawFit(ctx, image, image.naturalWidth, image.naturalHeight, x, y, w, h, layer.fitMode);
@@ -98,7 +106,9 @@ function drawLayer(ctx: CanvasRenderingContext2D, layer: CompositionLayer, asset
     ctx.fillText(layer.name, x + w / 2, y + h / 2, Math.max(0, w - 24));
   }
   if (layer.borderColor && (layer.borderWidth ?? 0) > 0) {
-    ctx.strokeStyle = layer.borderColor; ctx.lineWidth = layer.borderWidth!; ctx.strokeRect(x, y, w, h);
+    ctx.strokeStyle = layer.borderColor; ctx.lineWidth = layer.borderWidth!;
+    makeFramePath(layer.borderWidth! / 2);
+    ctx.stroke();
   }
   ctx.restore();
 }
