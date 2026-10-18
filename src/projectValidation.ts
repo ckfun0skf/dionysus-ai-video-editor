@@ -69,7 +69,9 @@ function isLayer(value: unknown): boolean {
     (value.shape === undefined || ["rectangle", "circle", "rounded"].includes(String(value.shape))) &&
     (value.cornerRadius === undefined || (isFiniteNumber(value.cornerRadius) && value.cornerRadius >= 0)) &&
     (value.scale === undefined || (isFiniteNumber(value.scale) && value.scale > 0)) &&
-    (value.opacity === undefined || (isFiniteNumber(value.opacity) && value.opacity >= 0 && value.opacity <= 1));
+    (value.opacity === undefined || (isFiniteNumber(value.opacity) && value.opacity >= 0 && value.opacity <= 1)) &&
+    (value.animation === undefined || ["none", "float", "pulse", "rotate"].includes(String(value.animation))) &&
+    (value.animationDuration === undefined || (isFiniteNumber(value.animationDuration) && value.animationDuration >= 0.1 && value.animationDuration <= 60));
 }
 function isVersion(value: unknown): boolean {
   return isRecord(value) && isString(value.id) && isString(value.name) &&
