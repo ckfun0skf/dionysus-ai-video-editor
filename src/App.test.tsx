@@ -470,7 +470,7 @@ describe("App history integration", () => {
     expect(option).toBeTruthy();
     click(option!);
     await flushEffects();
-    expect(container.querySelector(".version-panel")?.textContent).toContain("Opening image");
+    expect(container.querySelector<HTMLInputElement>('.version-panel input[aria-label="Clip slot name"]')?.value).toBe("Opening image");
   });
 
   it("generates timeline clips from storyboard slots without deleting manual clips", async () => {
