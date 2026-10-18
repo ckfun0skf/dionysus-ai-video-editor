@@ -936,7 +936,31 @@ export default function App() {
   <div className="visual-track-lane" style={{backgroundSize:(5/mediaTimelineDuration*100)+"% 100%"}}
    onPointerDown={event=>{if(event.target!==event.currentTarget)return;const rect=event.currentTarget.getBoundingClientRect();const next=Math.max(0,Math.min(activeTimelineDuration,((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration));playbackTimeRef.current=next;setIsPlaying(false);setEditorTime(next);}}
    onDragOver={event=>event.preventDefault()}
-   onDrop={event=>{event.preventDefault();const clipId=event.dataTransfer.getData("text/dionysus-timeline-clip");const moving=(project.timelineClips??[]).find(clip=>clip.id===clipId);if(!moving||moving.kind!==track.kind||!(track.kind==="video"||track.kind==="audio"||track.kind==="text"||track.kind==="procedural"))return;const rect=event.currentTarget.getBoundingClientRect();const next=Math.max(0,((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration-moving.duration/2);try{change(p=>{const result=moveTimelineClip({tracks:p.tracks,timelineClips:p.timelineClips??[]},moving.id,next);return {...p,timelineClips:result.timelineClips.map(clip=>clip.id===moving.id?{...clip,trackId:track.id}:clip)};});setSelectedTimelineClipId(moving.id);setIsPlaying(false);}catch(error){setNotice(error instanceof Error?error.message:"Could not move the clip.");}}}>
+   onDrop={event=>{
+     event.preventDefault();
+     const rect=event.currentTarget.getBoundingClientRect();
+     const masterShotId=event.dataTransfer.getData("text/dionysus-master-shot");
+     if(masterShotId){
+       const movingShot=project.shots.find(shot=>shot.id===masterShotId);
+       if(!movingShot||track.kind!=="video")return;
+       const fps=Math.max(1,project.frameRate||24);
+       const pointerTime=((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration;
+       const maxStart=Math.max(0,mediaTimelineDuration-movingShot.duration);
+       const rawStart=Math.max(0,Math.min(maxStart,pointerTime-movingShot.duration/2));
+       const next=Math.round(rawStart*fps)/fps;
+       updateMasterShotStart(movingShot.id,next);
+       setSelectedId(movingShot.id);
+       setIsPlaying(false);
+       playbackTimeRef.current=next;
+       setEditorTime(next);
+       return;
+     }
+     const clipId=event.dataTransfer.getData("text/dionysus-timeline-clip");
+     const moving=(project.timelineClips??[]).find(clip=>clip.id===clipId);
+     if(!moving||moving.kind!==track.kind||!(track.kind==="video"||track.kind==="audio"||track.kind==="text"||track.kind==="procedural"))return;
+     const next=Math.max(0,((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration-moving.duration/2);
+     try{change(p=>{const result=moveTimelineClip({tracks:p.tracks,timelineClips:p.timelineClips??[]},moving.id,next);return {...p,timelineClips:result.timelineClips.map(clip=>clip.id===moving.id?{...clip,trackId:track.id}:clip)};});setSelectedTimelineClipId(moving.id);setIsPlaying(false);}catch(error){setNotice(error instanceof Error?error.message:"Could not move the clip.");}
+   }}>
    <div className="visual-playhead" style={{left:(editorTime/mediaTimelineDuration*100)+"%"}}/>
    {clips.map(clip=>{
      const versionShot=clip.shotId?project.shots.find(shot=>shot.id===clip.shotId):selected;
@@ -964,7 +988,7 @@ export default function App() {
      const previewAsset=shot.previewAssetId?project.assets.find(asset=>asset.id===shot.previewAssetId):undefined;
      const thumb=version?.layers.find(layer=>layer.kind==="video"||layer.kind==="image")?.thumbnailPath??previewAsset?.thumbnailPath??(previewAsset?.kind==="image"?previewAsset.path:undefined);
      return <div className="master-shot-clip-wrap" key={"master-shot-"+shot.id} style={{left:(shotStart/mediaTimelineDuration*100)+"%",width:Math.max(2,shot.duration/mediaTimelineDuration*100)+"%"}}>
-       <button className={"master-shot-clip"+(selected?.id===shot.id?" selected":"")} onClick={()=>{setSelectedId(shot.id);if(slot)setSelectedSlotId(slot.id);setIsPlaying(false);setEditorTime(shotStart);playbackTimeRef.current=shotStart;}} title={shot.title+" · "+shot.duration.toFixed(1)+"s"}>
+       <button draggable className={"master-shot-clip"+(selected?.id===shot.id?" selected":"")} onDragStart={event=>{event.dataTransfer.setData("text/dionysus-master-shot",shot.id);event.dataTransfer.effectAllowed="move";}} onClick={()=>{setSelectedId(shot.id);if(slot)setSelectedSlotId(slot.id);setIsPlaying(false);setEditorTime(shotStart);playbackTimeRef.current=shotStart;}} title={shot.title+" · "+shot.duration.toFixed(1)+"s">
          {thumb?<img className="master-shot-thumbnail" src={thumb} alt=""/>:<span className="master-shot-placeholder"><Film size={13}/></span>}
          <span className="master-shot-copy"><strong>{shot.title}</strong><small>{version?.name??"No version"} · {shot.duration.toFixed(1)}s</small></span>
        </button>
