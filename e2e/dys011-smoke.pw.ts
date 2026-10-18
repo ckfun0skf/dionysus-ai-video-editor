@@ -48,7 +48,7 @@ test("editor navigation stays accessible and adding linked clips keeps the media
   await page.getByRole("button", { name: "Open Editor" }).click();
   await expect(page.locator(".editor-workspace")).toBeVisible();
   await page.locator(".editor-view-nav").getByRole("button", { name: "References", exact: true }).click();
-  await expect(page.getByRole("heading", { name: /References/i }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: /New profile/i })).toBeVisible();
 });
 
 test("browser smoke: compose video and audio, generate an image, export a playable WebM", async ({ page }) => {
