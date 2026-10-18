@@ -236,6 +236,41 @@ describe("validateProject", () => {
     expect(validateProject(invalid)).toBe(false);
   });
 
+  it("round-trips Master placement, ordered nested media, source ranges, links, and audio mix settings through JSON", () => {
+    const project = structuredClone(sampleProject);
+    project.shots[0].masterStart = 12.5;
+    project.shots[1].masterStart = 30;
+    project.assets.push(
+      { id: "json-video", name: "Video source", kind: "video", path: "idb://media/json-video", thumbnailPath: "data:image/jpeg;base64,dGh1bWI=" },
+      { id: "json-audio", name: "Audio source", kind: "audio", path: "idb://media/json-audio" }
+    );
+    const version = project.shots[0].slots[0].versions.find(item => item.id === project.shots[0].slots[0].selectedVersionId)!;
+    version.layers = [
+      { id: "json-nested-audio", name: "Music", kind: "audio", assetId: "json-audio", start: 1, duration: 2, sourceIn: 4, sourceOut: 6, volume: 0.35, fadeIn: 0.5, fadeOut: 0.75, muted: false },
+      { id: "json-nested-title", name: "Title", kind: "text", start: 0, duration: 1 }
+    ];
+    project.tracks.find(track => track.id === "track-audio-1")!.muted = true;
+    project.timelineClips = [
+      { id: "json-master-video", name: "Video", kind: "video", trackId: "track-video-1", start: 2, duration: 4, assetId: "json-video", shotId: project.shots[0].id, slotId: project.shots[0].slots[0].id, sourceIn: 5, sourceOut: 9 },
+      { id: "json-linked-audio", name: "Video source audio", kind: "audio", trackId: "track-audio-1", start: 2, duration: 4, assetId: "json-video", linkedVideoClipId: "json-master-video", sourceIn: 5, sourceOut: 9, volume: 0.45, fadeIn: 0.25, fadeOut: 1, muted: true }
+    ];
+    expect(validateProject(project)).toBe(true);
+
+    const restored: unknown = JSON.parse(JSON.stringify(project));
+    expect(validateProject(restored)).toBe(true);
+    if (!validateProject(restored)) throw new Error("A valid media/timing project failed JSON round-trip validation");
+    expect(restored.shots.map(shot => shot.masterStart)).toEqual([12.5, 30, undefined]);
+    expect(restored.shots[0].slots[0].versions[0].layers.map(layer => layer.id)).toEqual(["json-nested-audio", "json-nested-title"]);
+    expect(restored.shots[0].slots[0].versions[0].layers[0]).toMatchObject({
+      sourceIn: 4, sourceOut: 6, volume: 0.35, fadeIn: 0.5, fadeOut: 0.75, muted: false
+    });
+    expect(restored.timelineClips?.find(clip => clip.id === "json-linked-audio")).toMatchObject({
+      linkedVideoClipId: "json-master-video", sourceIn: 5, sourceOut: 9, volume: 0.45, fadeIn: 0.25, fadeOut: 1, muted: true
+    });
+    expect(restored.tracks.find(track => track.id === "track-audio-1")?.muted).toBe(true);
+    expect(restored.assets.find(asset => asset.id === "json-video")?.thumbnailPath).toBe("data:image/jpeg;base64,dGh1bWI=");
+  });
+
   it("rejects invalid composition frame geometry and opacity", () => {
     const badWidth = structuredClone(sampleProject);
     badWidth.shots[0].slots[0].versions[0].layers.push({id:"bad-width",name:"Bad width",kind:"video",start:0,duration:1,width:0});
