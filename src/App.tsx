@@ -11,6 +11,7 @@ import { collectCompositionLayers, renderCompositionFrame, exportCompositionWebM
 import AIGenerationPanel from "./AIGenerationPanel";
 import { deleteStoredMediaAsset, isStoredMediaPath, resolveMediaSource, storeMediaAsset } from "./mediaAssetStore";
 import { createImageThumbnail, createVideoThumbnail, getAssetThumbnail } from "./mediaThumbnail";
+import { getAudioEnvelope } from "./audioEnvelope";
 import { getMasterShotIndexAtTime, getMasterShotStart, getMasterShotStarts, getMasterTimelineDuration, rippleReorderMasterShots, setMasterShotDuration, setMasterShotStart } from "./masterTimeline";
 import StoryboardFlowCanvas from "./StoryboardFlowCanvas";
 import AgentStoryboardModal from "./AgentStoryboardModal";
@@ -216,12 +217,7 @@ export default function App() {
         if (seconds >= clip.start && seconds < clip.start + clip.duration) {
           const sourceTime = (clip.sourceIn ?? 0) + seconds - clip.start;
           if (media.readyState >= 1 && Math.abs(media.currentTime - sourceTime) > 0.35) { try { media.currentTime = Math.max(0, sourceTime); } catch { /* wait for media metadata */ } }
-          const elapsed = seconds - clip.start;
-          const remaining = clip.start + clip.duration - seconds;
-          let gain = Math.max(0, Math.min(1, clip.volume ?? 1));
-          if ((clip.fadeIn ?? 0) > 0) gain *= Math.min(1, elapsed / clip.fadeIn!);
-          if ((clip.fadeOut ?? 0) > 0) gain *= Math.min(1, remaining / clip.fadeOut!);
-          media.volume = Math.max(0, Math.min(1, gain));
+          media.volume = getAudioEnvelope(clip.volume, clip.fadeIn, clip.fadeOut, seconds - clip.start, clip.duration);
           if (media.paused) void media.play().catch(() => { if (!cancelled && !warned) { warned = true; setNotice("Audio playback was blocked by the browser. Press Play again to retry."); } });
         } else if (!media.paused) media.pause();
       }
