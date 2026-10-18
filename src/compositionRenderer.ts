@@ -13,7 +13,7 @@ export function collectCompositionLayers(project: DionysusProject): CompositionL
     shotOffset += shot.duration;
     return layers;
   });
-  const timeline = (project.timelineClips ?? []).flatMap(clip => {
+  const timeline = (project.timelineClips ?? []).filter(clip => !clip.id.startsWith("storyboard-")).flatMap(clip => {
     if (!clip.assetId || !project.assets.some(asset => asset.id === clip.assetId)) return [];
     return [{
       id: clip.id, name: clip.name, kind: clip.kind, start: clip.start, duration: clip.duration,
@@ -143,7 +143,8 @@ export async function exportCompositionWebM(project: DionysusProject, options: R
     throw new Error("WebM export requires a browser with MediaRecorder and canvas captureStream support");
   }
   const layers = collectCompositionLayers(project), fps = options.fps ?? project.frameRate ?? 30;
-  const duration = options.duration ?? getCompositionDuration(layers);
+  const projectDuration = project.shots.reduce((total, shot) => total + shot.duration, 0);
+  const duration = options.duration ?? Math.max(getCompositionDuration(layers), projectDuration);
   if (!layers.length || duration <= 0) throw new Error("Add at least one visible composition layer before exporting");
   if (!Number.isFinite(fps) || fps < 1 || fps > 60) throw new Error("Export frame rate must be between 1 and 60 FPS");
   const canvas = document.createElement("canvas");
