@@ -36,14 +36,14 @@ describe("compositionRenderer", () => {
     project.assets.push({ id: "video-asset", name: "Storyboard video", kind: "video", path: "data:video/webm;base64,AA==" });
     project.timelineClips = [{
       id: "audio-clip", name: "Music bed", kind: "audio", trackId: "track-audio-1",
-      start: 2, duration: 4, assetId: "audio-asset", sourceIn: 0, sourceOut: 4, muted: true
+      start: 2, duration: 4, assetId: "audio-asset", sourceIn: 0, sourceOut: 4, muted: true, volume: 0.4, fadeIn: 0.5, fadeOut: 1
     }, {
       id: "storyboard-shot-slot-layer", name: "Synced storyboard copy", kind: "video", trackId: "track-video-1",
       start: 0, duration: 4, assetId: "video-asset"
     }];
     const layers = collectCompositionLayers(project);
     expect(layers).toHaveLength(1);
-    expect(layers[0]).toMatchObject({ id: "audio-clip", kind: "audio", start: 2, duration: 4, assetId: "audio-asset", muted: true });
+    expect(layers[0]).toMatchObject({ id: "audio-clip", kind: "audio", start: 2, duration: 4, assetId: "audio-asset", muted: true, volume: 0.4, fadeIn: 0.5, fadeOut: 1 });
   });
 
   it("includes source-free Text blocks and procedural blocks, without pretending to render procedural code", () => {
