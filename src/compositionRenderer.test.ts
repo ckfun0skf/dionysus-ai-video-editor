@@ -24,14 +24,14 @@ describe("compositionRenderer", () => {
     project.assets.push({ id: "video-asset", name: "Storyboard video", kind: "video", path: "data:video/webm;base64,AA==" });
     project.timelineClips = [{
       id: "audio-clip", name: "Music bed", kind: "audio", trackId: "track-audio-1",
-      start: 2, duration: 4, assetId: "audio-asset", sourceIn: 0, sourceOut: 4
+      start: 2, duration: 4, assetId: "audio-asset", sourceIn: 0, sourceOut: 4, muted: true
     }, {
       id: "storyboard-shot-slot-layer", name: "Synced storyboard copy", kind: "video", trackId: "track-video-1",
       start: 0, duration: 4, assetId: "video-asset"
     }];
     const layers = collectCompositionLayers(project);
     expect(layers).toHaveLength(1);
-    expect(layers[0]).toMatchObject({ id: "audio-clip", kind: "audio", start: 2, duration: 4, assetId: "audio-asset" });
+    expect(layers[0]).toMatchObject({ id: "audio-clip", kind: "audio", start: 2, duration: 4, assetId: "audio-asset", muted: true });
   });
 
   it("calculates output duration from the last visible layer end", () => {
