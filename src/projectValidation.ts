@@ -15,8 +15,8 @@ function isStringArray(value: unknown): value is string[] {
 
 const referenceRoles = new Set(["identity", "face", "body", "outfit", "pose", "composition", "lighting", "environment", "style", "other"]);
 const assetKinds = new Set(["video", "image", "audio", "script", "other"]);
-const layerKinds = new Set(["video", "image", "audio", "text", "script", "composition"]);
-const trackKinds = new Set(["video", "audio", "text", "effects"]);
+const layerKinds = new Set(["video", "image", "audio", "text", "script", "procedural", "composition"]);
+const trackKinds = new Set(["video", "audio", "text", "effects", "procedural"]);
 const timelineClipKinds = new Set(["video", "audio"]);
 const shotStatuses = new Set(["planned", "in-progress", "ready"]);
 const entityTypes = new Set(["character", "environment", "prop", "style", "other"]);
@@ -71,7 +71,7 @@ function isLayer(value: unknown): boolean {
     (value.scale === undefined || (isFiniteNumber(value.scale) && value.scale > 0)) &&
     (value.opacity === undefined || (isFiniteNumber(value.opacity) && value.opacity >= 0 && value.opacity <= 1)) &&
     (value.animation === undefined || ["none", "float", "pulse", "rotate"].includes(String(value.animation))) &&
-    (value.animationDuration === undefined || (isFiniteNumber(value.animationDuration) && value.animationDuration >= 0.1 && value.animationDuration <= 60));
+    (value.animationDuration === undefined || (isFiniteNumber(value.animationDuration) && value.animationDuration >= 0.1 && value.animationDuration <= 60)) &&\n    (value.muted === undefined || typeof value.muted === "boolean");
 }
 function isVersion(value: unknown): boolean {
   return isRecord(value) && isString(value.id) && isString(value.name) &&
@@ -119,7 +119,7 @@ function isTimelineClip(value: unknown): boolean {
     isString(value.trackId) && isFiniteNumber(value.start) && value.start >= 0 &&
     isFiniteNumber(value.duration) && value.duration > 0 &&
     (value.assetId === undefined || isString(value.assetId)) &&
-    (value.linkedVideoClipId === undefined || (value.kind === "audio" && isString(value.linkedVideoClipId))) &&
+    (value.linkedVideoClipId === undefined || (value.kind === "audio" && isString(value.linkedVideoClipId))) &&\n    (value.shotId === undefined || isString(value.shotId)) && (value.slotId === undefined || isString(value.slotId)) &&\n    (value.muted === undefined || typeof value.muted === "boolean") &&
     (value.sourceIn === undefined || (isFiniteNumber(value.sourceIn) && value.sourceIn >= 0)) &&
     (value.sourceOut === undefined || (isFiniteNumber(value.sourceOut) && value.sourceOut >= 0)) &&
     (value.sourceIn === undefined || value.sourceOut === undefined || value.sourceOut > value.sourceIn) &&
@@ -130,7 +130,7 @@ function isTimelineClip(value: unknown): boolean {
 }
 function isTrack(value: unknown): boolean {
   return isRecord(value) && isString(value.id) && isString(value.name) &&
-    isString(value.kind) && trackKinds.has(value.kind);
+    isString(value.kind) && trackKinds.has(value.kind) && (value.muted === undefined || typeof value.muted === "boolean");
 }
 
 function isStoryboardConnection(value: unknown): boolean {
