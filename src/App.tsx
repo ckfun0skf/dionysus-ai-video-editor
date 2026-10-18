@@ -1193,6 +1193,7 @@ export default function App() {
  })}
  </div>
 
+</section></div>
 {activeTimelineTabId !== "master" && activeVersionTimelineTab && activeVersionTimeline && activeVersionTimelineSlot && activeVersionTimelineShot && <section className="nested-timeline-tab">
   {renderTimelinePreview(activeVersionTimelineTab.id, "Version preview", activeVersionTimelineShot.title + " · " + activeVersionTimeline.name, activeVersionTimeline.duration, activeVersionTimeline.name, activeVersionTimelineShot.intent)}
   <div className="editor-linked-heading"><div><strong>{activeVersionTimelineShot.title} · {activeVersionTimeline.name}</strong><span>Version timeline · edits here do not change the Master Shot duration</span></div>
