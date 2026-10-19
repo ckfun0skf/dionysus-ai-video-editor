@@ -2159,6 +2159,10 @@ export default function App() {
   const canSplit = splitAt > mobileClip.start + frame && splitAt < mobileClip.start + mobileClip.duration - frame;
   return <div className="mobile-clip-toolbar" aria-label="Selected clip tools">
     <span className="mobile-clip-toolbar-title">{mobileClip.name}</span>
+    {mobileClip.kind === "audio" && <button type="button" aria-label={mobileClip.muted ? "Unmute selected audio" : "Mute selected audio"} aria-pressed={Boolean(mobileClip.muted)} onClick={() => {
+      change(p => ({ ...p, timelineClips: (p.timelineClips ?? []).map(item => item.id === mobileClip.id ? { ...item, muted: !item.muted } : item) }));
+      setNotice(mobileClip.muted ? "Audio clip unmuted." : "Audio clip muted.");
+    }}>{mobileClip.muted ? "Unmute" : "Mute"}</button>}
     <button type="button" aria-label="Split selected clip" disabled={!canSplit} onClick={() => {
       const newClipId = id("timeline-clip");
       try {

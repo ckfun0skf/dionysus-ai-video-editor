@@ -239,3 +239,10 @@ The owner wants a future phone version with a CapCut-inspired interface. Treat t
 - Main includes PR #79 frame-accurate keyboard scrubbing at `0a5ace89e28fff5d1f46bc0e4330d56e91f9035e`.
 - Active branch: `feat/mobile-preview-undo-redo`. It exposes Undo/Redo beside the mobile preview controls and adds an App test for duplicate → Undo → Redo.
 - Keep DYS-012 in progress. Do not claim device/viewport acceptance, and do not add/run browser smoke tests. After PR CI passes, merge through PR, verify main CI and GitHub Pages deployment, then update this checkpoint with exact run IDs.
+
+
+## Mobile editing checkpoint — audio mute (2026-10-19)
+
+- PR #80 merged mobile preview Undo/Redo at `85646e4a70cdde113bee728b4ed1cd781a022f0a`; exact-head CI run `39248435319` passed.
+- Active branch: `feat/mobile-audio-clip-mute`. It adds a Mute/Unmute action for selected audio clips on the phone toolbar and an App integration test for persisted state.
+- Keep DYS-012 in progress. After exact-head CI passes, merge through PR and verify main CI/Pages deployment. No browser smoke tests; do not claim viewport acceptance without evidence.

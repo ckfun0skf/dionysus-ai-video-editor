@@ -206,3 +206,8 @@ Active branch `feat/mobile-touch-trim-handles` expands trim hit targets to 20 px
 ## Mobile editing follow-up — 2026-10-19 (preview history)
 
 PR #79 has merged frame-accurate keyboard scrubbing as main commit `0a5ace89e28fff5d1f46bc0e4330d56e91f9035e`. The active branch `feat/mobile-preview-undo-redo` adds touch-sized Undo/Redo controls beside the preview and an App integration test covering duplicate → Undo → Redo. Keep DYS-012 in progress until exact-head CI, main push CI, Pages deployment, and viewport acceptance are independently recorded. Do not add or run browser smoke tests.
+
+
+## Mobile editing follow-up — audio mute (2026-10-19)
+
+PR #80 merged phone-accessible preview Undo/Redo as main commit `85646e4a70cdde113bee728b4ed1cd781a022f0a`; exact-head CI run [39248435319](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39248435319) passed. The active branch `feat/mobile-audio-clip-mute` adds selected-audio Mute/Unmute and integration coverage. Keep DYS-012 in progress until exact-head CI, main push CI, Pages deployment, and viewport acceptance are independently recorded. Do not add or run browser smoke tests.
