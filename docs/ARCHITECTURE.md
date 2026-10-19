@@ -1,41 +1,52 @@
-# Dionysus Architecture Notes
+# Dionysus Architecture
+
+**Target contract:** [Unified Composition Model](./architecture/UNIFIED_COMPOSITION_MODEL.md). The current source model is not yet fully migrated.
 
 ## Principles
-1. Local-first and static-hostable.
-2. Separate project data from UI state and AI execution-plan serialization.
-3. Keep asset identity separate from version-specific usage.
-4. Preserve immutable generation snapshots and pin script versions.
-5. Treat browser capabilities as variable; degrade gracefully.
-6. Never silently overwrite manual edits or historical records.
 
-## Initial application structure
-- UI localization: all static user-facing interface copy lives in `src/i18n.ts`; components use typed translation keys and parameter interpolation. Add locale catalogs with the same keys and expose a language selector in a later milestone.
-- Project domain model: versioned serializable types for project, shots, clip slots, versions, layers, assets, reference profiles, overrides, and generation records.
-- Storyboard workspace: shot ordering, intent, duration, status, and placeholders.
-- Timeline workspace: persistent Master Timeline tab plus nested Shot-Version timeline tabs, each with its own ruler/playhead and clip/module selection.
-- Timeline presentation: preview above actual track lanes. Asset library entries do not become a generic “Media track”; assets are sources assigned to typed timeline modules.
-- Track hierarchy: ordered layer groups for video/compositing, text/title, audio, and procedural Three.js. Video source audio may be a child audio lane while linked; unlinking converts it into an independent audio layer.
-- Track controls: mute is layer-level for every audio layer and is persisted independently. Layer order, mute, child relationships, active Version, and nested Version internals are domain data; open tabs and playhead are UI state.
-- Inspector: selected object details and editing controls.
-- Asset/reference library: reusable files, reference groups, character/entity profiles, and provenance.
-- Persistence adapter: browser local storage for the first foundation; migrate to IndexedDB when project/media size requires it.
-- Project interchange: versioned project JSON.
-- AI execution-plan serializer: stable external plan independent of UI components.
-- Preview/compositor: later milestone; isolated rendering layer for video, audio, text, and procedural modules.
-- History service: later milestone; edit commands/diffs separate from version and generation histories.
+1. Local-first and static-hostable; no custom backend required for core authoring.
+2. Separate narrative planning, generated media, editable Compositions, Timeline Placements and generation provenance.
+3. One Composition contract and one Editor for Project root and nested Clip Asset versions.
+4. Pin concrete source versions; never silently replace a pinned source.
+5. Preserve structure in save-as-Clip; do not flatten tracks, placements or nested references.
+6. Migrate schemas explicitly and non-destructively.
+7. Keep AI-provider logic behind adapters; manual copy-prompt/import remains useful before API integration.
+8. Never silently overwrite manual edits, historical versions or generation records.
 
-## Data model invariants
-- Every Shot, Slot, Version, Asset, Profile, and Layer has a stable ID.
-- A Slot's selected Version ID must reference one of its Versions.
-- A Version owns its ordered internal layers/modules and pinned Script version IDs; Master Timeline placement and Version-internal timing are separate.
-- A Shot's selected Version determines its active Master Timeline output. Version menu selection is distinct from Edit: selection changes active output, while Edit opens a new nested timeline tab without closing Master Timeline.
-- Linked source audio references a valid video clip, follows its timing while linked, and becomes independently editable after unlinking. Every audio layer owns an independent mute flag.
-- Procedural modules have stable IDs and pinned script/scene versions; imported code requires explicit authorization and isolated execution.
-- Nested compositions must not form cycles.
-- Profile references are defaults; Shot overrides do not mutate Profiles.
-- Generation records snapshot references and prompts used at generation time.
-- Timeline time is stored in seconds initially; frame-accurate timebase remains open.
-- Schema migrations are explicit and versioned.
+## Domain boundaries
 
-## Current foundation
-The current UI provides Storyboard, a Master Timeline editing workspace, local browser persistence, project JSON import/export, and AI execution-plan export. The desired timeline contract further separates Master Shot placement from nested Version internals and requires timeline tabs, version dropdown actions, hierarchical linked audio with independent mute, and a first-class Three.js layer. The existing schema still needs to evolve to persist these relationships and any migrations. Do not assume a visible lane or preview component proves end-to-end rendering/export support.
+- **Project:** settings, Storyboard, Media Assets, Clip Assets, Reference Sets, Production Tasks, Generation Runs and root Master Composition.
+- **Storyboard Shot:** narrative/production identity and generated video alternatives, not a nested editing timeline.
+- **Shot Version:** concrete generated video result or visible pending/failed state with run provenance.
+- **Media Asset:** identity/metadata for imported or generated source files.
+- **Reference Set:** reusable role-labelled sources with per-use overrides and immutable generation snapshots.
+- **Composition:** ordered Tracks and Timeline Placements.
+- **Clip Asset:** reusable versioned Composition.
+- **Placement:** source/version use in a parent Composition with track, time, trim, transform and mix state.
+- **Production Task/Generation Run:** intended generation work and an auditable attempt.
+
+## Shared Editor
+
+Master and nested Compositions share preview, ruler/playhead, track headers, lanes, source picker, Inspector, drag/drop, snapping, overlap, resize/trim and Undo/Redo. Editor context changes actions/settings, not mechanics.
+
+Add Track at every level is Video, Audio or Text. Image, video, Shot, Code/procedural and Clip are source/content kinds. Track background/transparency must affect rendered output where applicable.
+
+## Structure-preserving snapshot
+
+Saving the root Composition as a Clip Asset creates an independent editable Version preserving tracks, placements, order, timing/source ranges, transforms, pinned Shot/Clip versions, nested relationships and canvas settings. It is not an MP4 render, flattened layer list or live link. Media bytes may be shared inside a Project; portable packages must include or report dependencies.
+
+## Production graph
+
+Production Tasks specify output, prompt/template, inputs, dependencies and status. Generation Runs store effective prompt, provider settings, input snapshots, result and error details. Dependencies form a validated DAG. The manual-first workflow must work without APIs.
+
+## Persistence and migration
+
+Current code remains on schema `1.0` with `Shot.slots[]`, nested `ClipVersion.layers[]`, root `timelineClips[]`, and materialized `storyboard-*` placements. Migration must preserve IDs, versions, provenance, source ranges, audio state and nested references, avoid duplicated Storyboard placements, and report ambiguity. Do not default to the new schema until migration/round-trip tests pass.
+
+## Current implementation boundary
+
+Storyboard, Assets/References, project JSON import/export, nested Clip Assets, browser composition rendering and timeline features exist. Unified root/nested schema, dependency-aware Production Tasks and structure-preserving Project-to-Clip snapshots remain target work.
+
+## Validation
+
+Use unit/integration tests for placement, pinning, dependencies, provenance, migration and snapshots; run `npm test` and `npm run build`. No automated browser smoke tests unless explicitly requested. Verify CI on exact PR head and Pages separately when in scope.

@@ -7,8 +7,9 @@ This file is the starting point for any agent continuing Dionysus. Keep project 
 1. `README.md` — project purpose and development commands.
 2. `docs/PRD.md` — confirmed requirements, unresolved decisions, and product scope.
 3. `docs/ARCHITECTURE.md` — architecture principles and current structure.
-4. This file — workflow, current implementation status, and handoff expectations.
-5. The open pull request and latest commit history for work in progress.
+4. `docs/architecture/UNIFIED_COMPOSITION_MODEL.md` — target model, shared editor and migration contract.
+5. This file — workflow and handoff expectations.
+6. The current PR and latest commit history for work in progress.
 
 ## Repository workflow
 
@@ -64,37 +65,24 @@ Feature-branch pushes should not independently trigger a second full CI run. A P
 
 ## Product Mission & User Core Requirements
 
-**Why Dionysus exists:**
-When brainstorming film and video ideas with AI agents (ChatGPT, Claude, Gemini), agents typically generate numerous Markdown files, prompt lists, and fragmented instructions on what assets to create and how to prompt video models. As files multiply, project management becomes chaotic and difficult to track.
+Dionysus supports the full AI-video production cycle: story planning, references/media preparation, generation, version selection, composition editing and reuse.
 
-Dionysus solves this by providing a **unified visual AI video workstation**:
-1. **Interactive Node & Flow Storyboard (SeeDance-style)**:
-   - 2D canvas with draggable shot cards (`canvasX`, `canvasY`).
-   - Visual Bezier curve transitions between shots with customizable transition labels.
-   - Dedicated prompt placeholders in each shot (`generationPrompt`, `cameraMovement`, `shotType`) with 1-click prompt copy for Midjourney, Flux, Runway, Kling, Seedance, etc.
-   - Direct image/video attachment into shot cards with IndexedDB binary persistence (`mediaAssetStore.ts`).
-2. **AI Storyboard Schema & 1-Click Interchange**:
-   - `src/agentInterchange.ts` provides a structured JSON specification and system prompt template.
-   - Users can copy the prompt into any external LLM, obtain a clean JSON plan, and import it into Dionysus with one click to generate the connected visual flow.
-3. **Step-by-Step Asset Generation Checklist (`ProductionChecklistDrawer.tsx`)**:
-   - Step 1: Anchor visual reference profiles (Characters, Environments, Props) to guarantee visual continuity.
-   - Step 2: Progressively prompt and generate shot assets, marking them Planned -> In Progress -> Ready.
-4. **Storyboard-to-Timeline Synchronization**:
-   - `syncStoryboardToTimeline()` transforms the narrative storyboard into multi-track video and audio timeline clips (`TimelineClip[]`) with linked audio handling and non-destructive manual clip preservation.
-5. **Timeline & Nested Shot Submodules**:
-   - Current direction is the prototype-based workflow in `public/doc/creative-editing-workflow-spec.md`: a Master Timeline tab, per-Shot Version dropdown (+ Add Version/Edit), nested Version timeline tabs, expandable linked audio under video layers, independent audio-layer mute, and a first-class Three.js lane.
-   - Treat this as the target specification, not a claim that every item is implemented. The Three.js preview component and WebM compositor do not by themselves prove final timeline compositing fidelity.
+### Target model (supersedes earlier Shot-Slot assumptions)
 
-## Current Status (2026-10-18)
+- Storyboard Shot: narrative/production identity, target duration, generation instructions, required inputs/references and alternatives for concrete generated shot-video outputs; not a nested timeline.
+- Shot Version: one generated shot-video output (or visible pending/failed state) with provenance.
+- Media Asset: identity of imported/generated source media.
+- Composition: ordered Tracks and Timeline Placements. Project Master Timeline is the root Composition; a Clip Asset is a reusable, versioned Composition.
+- Placement: use of a typed source with a pinned version where applicable; owns track/time/source-range/transform/mix state only.
+- One shared Editor/placement engine serves root and nested Compositions. Context-specific actions/settings may differ; mechanics must not.
+- Add Track at every level offers Video, Audio and Text. Image, video, Shot, Code/procedural and Clip are content/source types.
+- Save-as-Clip preserves tracks, placements, ordering, timing/source ranges, nested relationships and pinned versions. It is not a render, flat layer list or live link.
+- Storyboard order is narrative planning, not timeline time. Build/update is explicit, previews a diff, and never silently rewrites manual edits.
+- Production Tasks are dependency-aware requests; Generation Runs preserve each attempt's effective prompt/settings/reference snapshot. Copy-prompt/manual-import works before API integration.
 
-- **Test Suite**: Latest merged timeline workspace CI reported 59 tests passing; check the exact CI run for the current branch before repeating a count.
-- **Build**: `tsc -b && vite build` succeeds with zero TypeScript or compilation errors.
-- **Port / Dev Server**: Vite dev server configured to `0.0.0.0:3000` with `allowedHosts: true`.
-- **UI Modes**:
-  - Storyboard view supports both SeeDance Node Flow Canvas and Grid Cards (`storyboardMode: "flow" | "list"`).
-  - Quick action modal for AI Storyboard generation and JSON import.
-  - Side drawer for the production checklist guide.
-  - Full Undo/Redo stack with keyboard shortcuts (`Ctrl/Cmd+Z`, `Ctrl/Cmd+Shift+Z`).
+### Current architecture transition
+
+Main still uses legacy `schemaVersion: "1.0"` (`Shot.slots[]`, nested `ClipVersion.layers[]`, root `timelineClips[]` and materialized `storyboard-*` placements). The target is documented but not migrated. Do not claim current save-as-Clip preserves the whole Project structure until code and regression tests prove it.
 
 ## Task Tracking & Progress Monitoring
 
@@ -121,10 +109,12 @@ npm run dev
 
 
 
-## Current Timeline Follow-up Status — 2026-10-18
+## Current Architecture Transition — 2026-10-18
 
-- A successful deployment is not proof that a requested UI interaction works. PR #55 deployed but user acceptance showed #53/#54 still failed: nested clips lacked Master-style icon/copy markup, the snap guide did not control the actual drop position, compatible cross-layer drops were blocked, and resize was not covered by App-level interaction testing.
-- PR #57 fixes those paths and adds App-level regression tests for destination preview and snapping, compatible cross-video-layer movement, same-layer overlap prevention, grey resize-overlap feedback, adjacent clip trimming, linked-audio timing, and one-step Undo/Redo.
-- Verified code/test head before docs update: `794e3ff024c26d55d76583160d96238df8d84a12`. CI [#39165133176](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39165133176) passed 137 tests across 16 files, TypeScript/Vite build passed, npm audit found 0 vulnerabilities. No browser smoke test was run.
-- Issue #56 remains planned DYS-004 scope and is not implemented merely because its requirements were recorded in docs.
-- Rich preview/compositing, source media relinking, advanced audio/procedural runtime, and production MP4 export remain tracked under DYS-006/DYS-004/DYS-008/DYS-009; do not claim a production-grade NLE is complete.
+- Baseline at redesign start: `288b5f349080c470a119c33174dfaa93c0e8c9f0`. PR #61 CI and Pages deployment passed, but #53/#54 remain open following the user's latest acceptance feedback.
+- Treat root/nested parity as a data/operation model issue, not CSS-only: Master Shots and ordinary placements still use different data paths.
+- Target contract: `docs/architecture/UNIFIED_COMPOSITION_MODEL.md`; implementation has not yet migrated.
+- DYS-014 owns unified Composition and structure-preserving Project-to-Clip snapshots. DYS-015 owns Production Tasks and Generation Run provenance.
+- Coordinate DYS-002, DYS-004, DYS-005 and the DYS-013 existing Clip Asset slice. Avoid expanding parallel Shot/Clip version models.
+- #56 remains planned asset-management scope. #58 remains independent. #59 settings need Project/Composition/Track/Placement scopes.
+- Do not add or run browser smoke tests unless explicitly requested.

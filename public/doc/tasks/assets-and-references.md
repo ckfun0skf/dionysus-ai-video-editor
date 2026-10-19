@@ -19,6 +19,10 @@ Issue [#56 — Asset Management is not user friendly](https://github.com/ckfun0s
 - [ ] Expose per-asset frame/canvas dimensions.
 - [ ] Add tests for context actions, dependency-aware deletion, reverse usage, and frame settings.
 
+## Architecture transition
+
+The target Asset/Reference model must show reverse usage across Media Assets, Shot Versions, Production Tasks, References, Compositions and Timeline Placements. DYS-004 owns asset/reference management; task readiness and Generation Run lifecycle belong to DYS-015. See the [unified model](https://github.com/ckfun0skf/dionysus-ai-video-editor/blob/main/docs/architecture/UNIFIED_COMPOSITION_MODEL.md).
+
 ## Other remaining work
 - Persist imported media bytes, relink missing files, and generate durable previews/thumbnails.
 - Capture and review the exact reference snapshot used by each generation.

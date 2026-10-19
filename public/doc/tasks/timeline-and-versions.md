@@ -1,6 +1,6 @@
 # DYS-005 — Master and nested Timeline editing with Version management
 
-**Status:** In progress · **Progress:** 98% · **Updated:** 2026-10-18
+**Status:** In progress · **Progress estimate:** 70% toward the revised target · **Updated:** 2026-10-18
 
 ## Implemented
 - [x] Master and nested Shot-/Clip-Version tabs, active Version selection, **+ Add Version**, and **Edit**.
@@ -12,6 +12,10 @@
 - [x] Resize and adjacent trim share one Undo/Redo step; linked audio and source ranges update together.
 - [x] Project JSON covers placement, nested layer order/source ranges, links, mute/mix, and thumbnails.
 - [x] Nested Version module edits survive Undo/Redo and JSON export.
+
+## Architecture transition (DYS-014)
+
+User acceptance for #53/#54 remains open. This is not only a visual mismatch: Master Shots live in project.shots and use special handlers, while ordinary placements live in project.timelineClips. The target is one root/nested Composition schema and one shared Editor/Placement engine. Current behavior is the migration baseline, not proof the revised target is complete. See [Unified Composition Model](https://github.com/ckfun0skf/dionysus-ai-video-editor/blob/main/docs/architecture/UNIFIED_COMPOSITION_MODEL.md) and [DYS-014](./unified-composition-model.md).
 
 ## Remaining work
 - [ ] Improve durable media import/relinking and missing-source recovery (DYS-004).

@@ -73,20 +73,21 @@
               "status": "done"
             },
             {
-              "title": "Validate migration paths for future schema versions",
-              "status": "planned"
+              "title": "Define and test migration from current Shot/Slot schema to unified Composition",
+              "status": "in_progress"
             }
           ],
           "acceptance": [
             "Vitest covers valid sample projects and malformed structures",
             "Invalid selected-version references are rejected",
             "Invalid durations and canvas values are rejected",
-            "Unknown schema versions fail safely"
+            "Unknown schema versions fail safely",
+            "A deterministic, non-destructive migration preserves legacy Shot Slots, versions, source ranges, reference snapshots, placements, and linked audio."
           ],
           "evidence": [
             "Task report and CI run are linked from the task Markdown"
           ],
-          "notes": "Schema migration becomes a priority before the new composite model is implemented."
+          "notes": "Schema migration is a prerequisite for DYS-014: current Shot.slots[], ClipVersion.layers[] and root timelineClips[] must be migrated explicitly, not renamed or flattened. Target contract: docs/architecture/UNIFIED_COMPOSITION_MODEL.md."
         }
       ]
     },
@@ -141,7 +142,7 @@
           "title": "Asset library and reference profiles",
           "status": "in_progress",
           "progress": 65,
-          "summary": "Manage asset metadata and reusable reference profiles, assign profiles to shots, and maintain reference roles.",
+          "summary": "Manage media assets and Reference Sets, including reverse usage, provenance, and dependency-aware replacement/deletion.",
           "doc": "tasks/assets-and-references.md",
           "detail": "tasks/assets-and-references.html",
           "report": "reports/assets-and-references-report.md",
@@ -173,6 +174,10 @@
             {
               "title": "Per-asset frame/canvas size controls and dependency-aware deletion warning",
               "status": "planned"
+            },
+            {
+              "title": "Show dependency/reverse-use links across Shots, Production Tasks, References, and Compositions",
+              "status": "planned"
             }
           ],
           "acceptance": [
@@ -187,7 +192,7 @@
           "evidence": [
             "Task Markdown and report describe implemented scope and limitations"
           ],
-          "notes": "Issue #56 (2026-10-18) is a planned extension of DYS-004: asset-picker-style browsing, context-menu Settings/Edit Timeline/Delete, dependency-aware deletion, reference-usage visibility, and per-asset frame size. Durable media import/relinking and exact generation-reference snapshots remain separate work. Do not imply media bytes are durably imported."
+          "notes": "Issue #56 remains in scope. The unified model also requires reverse usage across Composition placements, Shot Versions, Production Tasks and References. DYS-004 owns Asset/Reference management; task readiness and Generation Run lifecycle belong to DYS-015. Durable media-byte import/relinking remain unimplemented until tested."
         }
       ]
     },
@@ -201,8 +206,8 @@
           "id": "DYS-005",
           "title": "Timeline editing and Version management",
           "status": "in_progress",
-          "progress": 98,
-          "summary": "Master Timeline with visible typed layers, per-Shot active-Version dropdown (+ Add Version/Edit), nested Version timeline tabs, and separate master placement vs Version-internal timing.",
+          "progress": 70,
+          "summary": "Unify Master Timeline and nested Composition editing on one document model, shared Editor/Placement engine, pinned versions, and coherent Undo/Redo.",
           "doc": "tasks/timeline-and-versions.md",
           "detail": "tasks/timeline-and-versions.html",
           "report": "reports/timeline-and-versions-report.md",
@@ -242,7 +247,9 @@
             "Version menu supports selecting an alternative, creating a new Version, and editing each Version",
             "Master Shot placement/duration remains separate from its Version-internal timing",
             "Project JSON preserves active Versions and nested layer/module relationships",
-            "Unit/integration tests and production build pass; no automated browser smoke test is added unless explicitly requested"
+            "Unit/integration tests and production build pass; no automated browser smoke test is added unless explicitly requested",
+            "Master and nested Composition timelines use the same placement engine for destination preview, snapping, cross-layer movement, overlap policy, resize/trim and Undo/Redo.",
+            "The editor uses an explicit Project-root or Clip-Version composition context rather than a special Master-Shot interaction path."
           ],
           "evidence": [
             "Master Shot uses optional absolute masterStart with legacy sequential fallback; free placement snaps to frames, warns on overlaps, and Ripple Reorder packs the sequence without changing durations.",
@@ -255,7 +262,7 @@
             "PR #57 covers App-level resize/adjacent trim/Undo/Redo, cross-layer snapping, overlap prevention, nested Version history/export, and audio deletion/group-delete behavior. CI run 39165133176 passed 137 tests across 16 files plus TypeScript and production build at code/test SHA 794e3ff024c26d55d76583160d96238df8d84a12.",
             "Follow-up correction for #53/#54: PR #55 did deploy, but user acceptance showed the nested clip UI still differed and drag snapping, cross-layer movement, and pointer-resize behavior were not fixed end to end. PR #57 replaces the drop placement logic, tracks resize via global pointer events, restores Master-style icon/thumbnail and two-line clip markup in nested timelines, and covers the interaction in App tests."
           ],
-          "notes": "Master and nested Version workflows, typed layers, Shot/Clip Version selection, separate Master vs internal timing, frame-snapped movement, split/duplicate, interactive resize preview, adjacent-trim-on-release, linked-audio/source-range propagation, and matching ruler/track/clip visuals are covered. PR #55’s first implementation deployed but missed acceptance for #53/#54; PR #57 corrects those gaps. Richer media preview/relink and missing-source recovery remain tracked under DYS-004/DYS-006; production MP4 export remains DYS-009."
+          "notes": "Latest user acceptance keeps #53/#54 open. This is not just a visual mismatch: Master Shots and ordinary placements still use different data paths. DYS-014 defines the root/nested Composition contract and shared editing engine. Existing features are a migration baseline, not proof the revised target is complete. See docs/architecture/UNIFIED_COMPOSITION_MODEL.md."
         },
         {
           "id": "DYS-011",
@@ -364,7 +371,103 @@
             "Creative editing contract: public/doc/creative-editing-workflow-spec.md",
             "Implementation details and known limits: public/doc/reports/reusable-clip-assets-report.md"
           ],
-          "notes": "This status applies only to the reusable Clip Asset graph/nested-timeline slice. It does not claim production-grade frame-accurate MP4 export, complete Shot identity/version migration, or completion of the broader reference-management roadmap. Release/deployment remains tracked separately."
+          "notes": "This status applies only to the reusable Clip Asset graph/nested-timeline slice. It does not claim production-grade frame-accurate MP4 export, complete Shot identity/version migration, or completion of the broader reference-management roadmap. Release/deployment remains tracked separately. This completed slice covers the existing nested Clip Asset implementation only; it does not meet the new structure-preserving Project snapshot or shared root/nested Editor contract. DYS-014 owns that follow-up; avoid expanding a parallel model."
+        },
+        {
+          "id": "DYS-014",
+          "title": "Unified Composition model and structure-preserving snapshots",
+          "status": "in_progress",
+          "progress": 10,
+          "summary": "Replace parallel Master-Shot and nested Clip editing models with one Composition schema, shared Editor/Placement engine, and independently editable Project-to-Clip snapshots.",
+          "doc": "tasks/unified-composition-model.md",
+          "detail": "tasks/unified-composition-model.html",
+          "report": "reports/unified-composition-model-report.md",
+          "subtasks": [
+            {
+              "title": "Document target ownership, editor parity, snapshot semantics and migration safeguards",
+              "status": "done"
+            },
+            {
+              "title": "Define typed Composition documents, source references, placements and version pins",
+              "status": "planned"
+            },
+            {
+              "title": "Add deterministic non-destructive migration from schema 1.0",
+              "status": "planned"
+            },
+            {
+              "title": "Migrate root and nested editors to shared composition context and placement operations",
+              "status": "planned"
+            },
+            {
+              "title": "Save/open/edit Project compositions as structure-preserving Clip Asset Versions",
+              "status": "planned"
+            },
+            {
+              "title": "Prove snapshot independence, nested rendering, JSON round-trip and Undo/Redo",
+              "status": "planned"
+            }
+          ],
+          "acceptance": [
+            "Project root and nested Clip Asset Versions use the same track/placement schema and editing mechanics",
+            "Save-as-Clip preserves editable tracks, placements, order, source ranges, version pins and nested composition relationships",
+            "A saved Clip can be placed elsewhere, opened in the same Editor, expanded, edited as a new Version and reused without mutating its source Project or older pinned placements",
+            "Migration preserves legacy IDs, alternatives, generation/reference snapshots, source ranges, track ordering and linked audio; ambiguous data is reported without silent loss",
+            "Migration, round-trip, snapshot independence, nested rendering and interaction tests plus TypeScript/build pass"
+          ],
+          "evidence": [
+            "Target contract: docs/architecture/UNIFIED_COMPOSITION_MODEL.md",
+            "UI contract: public/doc/creative-editing-workflow-spec.md"
+          ],
+          "notes": "Architecture baseline documented; runtime model has not yet been migrated. Dependencies: DYS-002 migration/validation, DYS-005 shared timeline editing, and DYS-013 existing Clip Asset feature slice."
+        },
+        {
+          "id": "DYS-015",
+          "title": "Production Task graph and Generation Runs",
+          "status": "planned",
+          "progress": 0,
+          "summary": "Replace the Shot-only checklist with dependency-aware production tasks specifying prompts, required inputs, outputs and auditable generation attempts.",
+          "doc": "tasks/production-task-graph.md",
+          "detail": "tasks/production-task-graph.html",
+          "report": "reports/production-task-graph-report.md",
+          "subtasks": [
+            {
+              "title": "Define validated Production Task and Generation Run types",
+              "status": "planned"
+            },
+            {
+              "title": "Calculate task readiness, blockers and dependency DAG integrity",
+              "status": "planned"
+            },
+            {
+              "title": "Capture effective prompt and immutable input-reference snapshots per run",
+              "status": "planned"
+            },
+            {
+              "title": "Extend AI plan export/import reconciliation for tasks and dependencies",
+              "status": "planned"
+            },
+            {
+              "title": "Replace Shot-only checklist with a task-driven manual-first Production Guide",
+              "status": "planned"
+            },
+            {
+              "title": "Add tests for dependency cycles, retries and JSON round-trip",
+              "status": "planned"
+            }
+          ],
+          "acceptance": [
+            "Tasks specify output, prompt, explicit input assets/references, dependencies and target Shot/Composition",
+            "Production Guide explains ready/blocked/completed/failed/manual-import-required states",
+            "Every attempt preserves effective prompt, settings and reference snapshot; retries do not overwrite prior runs",
+            "Copy-prompt/manual-import works without a configured API provider",
+            "Task/run data survive JSON round-trip and schema migration"
+          ],
+          "evidence": [
+            "Target contract: docs/architecture/UNIFIED_COMPOSITION_MODEL.md",
+            "UI contract: public/doc/creative-editing-workflow-spec.md"
+          ],
+          "notes": "Planning only; current ProductionChecklistDrawer is Shot-centric and has no task DAG/run history. Dependencies: DYS-004 and DYS-014; coordinate AI plan reconciliation with DYS-009."
         }
       ]
     },
@@ -419,7 +522,7 @@
             "Existing tests cover per-tab preview/playhead, preview controls/project canvas settings, composition layer order and nested Clip version selection, plus normalized frame movement/resizing.",
             "PR #57 adds a UI regression test proving a selected Video Layer's preview transform commits back to the layer model; test CI run 39165133176 previously passed 137 tests before this added case."
           ],
-          "notes": "The preview/compositor is implemented but still in progress: interactive preview scales to at most 1280×720, not a guaranteed 4K preview; browser codec/CORS/source availability still limits some media; durable media import/relinking is tracked under DYS-004; first/last-frame coverage is not uniform for every source. WebM export remains experimental and MP4 is tracked under DYS-009."
+          "notes": "The preview/compositor is implemented but still in progress: interactive preview scales to at most 1280×720, not a guaranteed 4K preview; browser codec/CORS/source availability still limits some media; durable media import/relinking is tracked under DYS-004; first/last-frame coverage is not uniform for every source. WebM export remains experimental and MP4 is tracked under DYS-009. The target model uses one Composition document/render contract for the Project root and nested Clip versions; preserve pinned sources and nested structure during renderer migration (DYS-014)."
         },
         {
           "id": "DYS-008",
@@ -469,7 +572,7 @@
             "Source in/out trim and split operations keep A/V relationships and source offsets consistent, clamp fade boundaries when durations change, and preserve JSON round-trips.",
             "CI run 39124022295: 93 tests pass across 10 files; TypeScript/production build pass; npm audit reports 0 vulnerabilities."
           ],
-          "notes": "Per-layer mute, volume/fades, source trim, linked A/V split, source-range preservation, fade clamping, and core JSON validation are implemented. Audio automation/ducking/effects, richer timed text, and safe/authorized procedural execution/rendering remain outstanding."
+          "notes": "Per-layer mute, volume/fades, source trim, linked A/V split, source-range preservation, fade clamping, and core JSON validation are implemented. Audio automation/ducking/effects, richer timed text, and safe/authorized procedural execution/rendering remain outstanding. In the target model, procedural visuals are content placed on Video Tracks, not a separate top-level Add Track choice; safe code execution remains explicit."
         },
         {
           "id": "DYS-012",
@@ -552,7 +655,7 @@
           "evidence": [
             "PR history documents current project-data Undo/Redo; task report tracks remaining scope"
           ],
-          "notes": "Current history does not cover every view/playhead/preview state."
+          "notes": "Current history does not cover every view/playhead/preview state. Migration/snapshots must preserve Composition trees, concrete pins, Production Tasks and Generation Run provenance without duplicating media unnecessarily; coordinate with DYS-014/DYS-015."
         },
         {
           "id": "DYS-009",
@@ -589,7 +692,7 @@
           "evidence": [
             "A real media fixture and playback validation report are required"
           ],
-          "notes": "MP4 rendering remains future work."
+          "notes": "MP4 rendering remains future work. AI plan export/import should include the DYS-015 task DAG and generation provenance, with diff-based reconciliation that never silently overwrites manual changes."
         },
         {
           "id": "DYS-010",
