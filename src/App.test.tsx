@@ -2119,6 +2119,8 @@ describe("mobile frame-step preview controls", () => {
     const playhead = container.querySelector<HTMLInputElement>('input[aria-label="Timeline playhead time"]');
     const nextFrame = container.querySelector<HTMLButtonElement>('button[aria-label="Next frame"]');
     const previousFrame = container.querySelector<HTMLButtonElement>('button[aria-label="Previous frame"]');
+    const frameCounter = container.querySelector<HTMLElement>(".mobile-frame-counter");
+    expect(frameCounter).toBeTruthy();
     expect(playhead).toBeTruthy();
     expect(nextFrame).toBeTruthy();
     expect(previousFrame).toBeTruthy();
@@ -2126,8 +2128,10 @@ describe("mobile frame-step preview controls", () => {
     click(nextFrame!);
     await flushEffects();
     expect(Number(playhead!.value)).toBeCloseTo(frameDuration, 5);
+    expect(frameCounter!.textContent).toBe("1f");
     click(previousFrame!);
     await flushEffects();
     expect(Number(playhead!.value)).toBeCloseTo(0, 5);
+    expect(frameCounter!.textContent).toBe("0f");
   });
 });

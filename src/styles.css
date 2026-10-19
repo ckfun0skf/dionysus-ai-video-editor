@@ -2908,3 +2908,23 @@
     touch-action: manipulation;
   }
 }
+
+
+.mobile-frame-counter { display: none; }
+@media (max-width: 640px) {
+  .integrated-preview-heading { flex-wrap: wrap; }
+  .mobile-frame-counter {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 38px;
+    min-height: 28px;
+    padding: 4px 7px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    color: var(--accent, #d5f36a);
+    background: rgba(0, 0, 0, .18);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+  }
+}

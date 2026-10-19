@@ -1,6 +1,6 @@
 # DYS-012 Progress Report — Responsive mobile editing
 
-**Status:** In progress; layout, touch movement, contextual tools and zoom merged; trim hit targets and pointer-captured scrubbing merged; mobile version picker and frame-aligned scrubbing merged; frame-step controls active  
+**Status:** In progress; layout, touch movement, contextual tools and zoom merged; trim hit targets and pointer-captured scrubbing merged; mobile version picker and frame-aligned scrubbing and frame-step controls merged; frame counter refinement active  
 **Last reviewed:** 2026-10-19
 
 ## Shipped
@@ -25,11 +25,14 @@ PR #75 merged the safe-area-aware bottom-sheet version picker as `72b2debcf586e2
 ## Latest frame-aligned scrubbing release
 PR #76 snapped pointer-captured scrubbing to project frame boundaries as `c04d9562747352225b83de90cc48a55355c06494`; exact-head CI passed at [39243270619](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39243270619).
 
-## Current frame-step control slice
-Adds phone-only Previous frame / Next frame controls and aligns the range control's step to the project frame rate. Automated CI is pending; this does not substitute for device-level acceptance.
+## Latest frame-step control release
+PR #77 merged phone-only Previous frame / Next frame controls and frame-rate-aligned range steps as `ef1fb36d4e512825b2baec0d3103c5d86ab4ce49`; exact-head CI passed at [39243556120](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39243556120).
+
+## Current frame-counter slice
+Adds a phone-only current-frame counter beside the preview timecode, tied to project frame rate, with regression coverage. Automated CI is pending; this does not substitute for device-level acceptance.
 
 ## Remaining work
-- Verify exact-head CI for mobile frame-step controls, then merge through PR.
+- Verify exact-head CI for the mobile frame counter, then merge through PR.
 - Independently verify main push CI and GitHub Pages deployment after merge.
 - Refine scrubbing/trim, Inspector/Version picker and mobile viewport behavior.
 - Record viewport/device evidence only when available; do not mark DYS-012 done on CSS and gestures alone.
