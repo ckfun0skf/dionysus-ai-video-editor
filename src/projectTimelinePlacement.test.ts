@@ -5,6 +5,7 @@ import {
   calculateProjectTimelineClipResizePreview,
   calculateProjectTimelineDropPosition,
   getProjectTimelinePlacementItems,
+  moveProjectTimelinePlacement,
 } from "./projectTimelinePlacement";
 
 describe("shared project timeline placement engine", () => {
