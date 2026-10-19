@@ -1,10 +1,17 @@
 # DYS-014 — Unified Composition Model and structure-preserving snapshots
 
-**Status:** In progress · **Progress estimate:** 10% · **Updated:** 2026-10-18
+**Status:** In progress · **Progress estimate:** 25% · **Updated:** 2026-10-19
 
 ## Goal
 
 Use one Composition document contract and one Editor for the Project Master Timeline and nested Clip Asset Versions. Saving a completed Project timeline as a Clip Asset must preserve its editable structure.
+
+## Implemented slice (not yet integrated)
+
+- Added typed canonical Composition, Track, Placement and source-reference definitions in `src/compositionModel.ts`.
+- Added `migrateLegacyProjectToComposition()` in `src/compositionMigration.ts`. It projects the root timeline and each Clip Asset Version, keeps the original schema-1.0 project as a defensive copy, preserves legacy placement fields, and reports duplicate materialized Storyboard placements, missing sources and unsupported track kinds.
+- Added `src/compositionMigration.test.ts` for stable IDs/order, source ranges, linked audio, Shot Slot and Clip Version pins, nested layer conversion, duplicate detection, missing-source warnings, deterministic output and source immutability.
+- Not complete: app persistence/import/export and the live Master/Clip editors still use schema 1.0. CI must be checked on the exact PR head before accepting the code slice.
 
 ## Target contract
 

@@ -1,0 +1,112 @@
+import { describe, expect, it } from "vitest";
+import { sampleProject } from "./sampleProject";
+import { migrateLegacyProjectToComposition } from "./compositionMigration";
+
+describe("migrateLegacyProjectToComposition", () => {
+  it("preserves root track order, placement IDs, timing, source ranges and linked audio", () => {
+    const project = structuredClone(sampleProject);
+    project.assets.push(
+      { id: "migration-video", name: "Source", kind: "video", path: "idb://video" },
+      { id: "migration-audio", name: "Music", kind: "audio", path: "idb://audio" },
+    );
+    project.timelineClips = [
+      { id: "master-video", name: "Source shot", kind: "video", trackId: "track-video-1", start: 4, duration: 6, assetId: "migration-video", sourceIn: 2, sourceOut: 8, x: 10, y: 5, width: 80, height: 90 },
+      { id: "master-audio", name: "Linked audio", kind: "audio", trackId: "track-audio-1", start: 4, duration: 6, assetId: "migration-audio", linkedVideoClipId: "master-video", sourceIn: 1, sourceOut: 7, volume: 0.4, fadeIn: 0.5, fadeOut: 1 },
+    ];
+    const result = migrateLegacyProjectToComposition(project);
+    expect(result.schemaVersion).toBe("2.0");
+    expect(result.rootComposition.tracks.map((track) => track.id)).toEqual(project.tracks.map((track) => track.id));
+    expect(result.rootComposition.placements.map((placement) => placement.id)).toEqual(["master-video", "master-audio"]);
+    expect(result.rootComposition.placements[0]).toMatchObject({
+      start: 4, duration: 6, sourceIn: 2, sourceOut: 8,
+      source: { type: "asset", assetId: "migration-video" },
+      legacyData: { x: 10, y: 5, width: 80, height: 90 },
+    });
+    expect(result.rootComposition.placements[1]).toMatchObject({
+      linkedToPlacementId: "master-video",
+      sourceIn: 1, sourceOut: 7,
+      legacyData: { volume: 0.4, fadeIn: 0.5, fadeOut: 1 },
+    });
+  });
+
+  it("pins Shot Slot and Clip Asset versions instead of resolving to a mutable latest version", () => {
+    const project = structuredClone(sampleProject);
+    project.assets.push({
+      id: "migration-clip",
+      name: "Reusable scene",
+      kind: "clip",
+      selectedClipVersionId: "clip-v2",
+      clipVersions: [
+        { id: "clip-v1", name: "Version 1", description: "older", duration: 3, layers: [], scriptVersionIds: [], generationRecords: [] },
+        { id: "clip-v2", name: "Version 2", description: "selected", duration: 4, layers: [], scriptVersionIds: [], generationRecords: [] },
+      ],
+    });
+    const shot = project.shots[0];
+    const slot = shot.slots[0];
+    project.timelineClips = [
+      { id: "shot-placement", name: "Shot", kind: "video", trackId: "track-video-1", start: 0, duration: 2, shotId: shot.id, slotId: slot.id },
+      { id: "clip-placement", name: "Clip", kind: "clip", trackId: "track-video-2", start: 3, duration: 4, assetId: "migration-clip", clipVersionId: "clip-v1" },
+    ];
+    const result = migrateLegacyProjectToComposition(project);
+    expect(result.rootComposition.placements[0].source).toMatchObject({ type: "shot", shotId: shot.id, slotId: slot.id, versionId: slot.selectedVersionId });
+    expect(result.rootComposition.placements[1].source).toEqual({ type: "clip", assetId: "migration-clip", versionId: "clip-v1" });
+  });
+
+  it("creates a composition per Clip Asset Version and preserves nested layer order and source timing", () => {
+    const project = structuredClone(sampleProject);
+    project.assets.push(
+      { id: "nested-image", name: "Background", kind: "image", path: "idb://image" },
+      {
+        id: "nested-clip", name: "Reusable", kind: "clip", canvasWidth: 1280, canvasHeight: 720,
+        clipVersions: [{
+          id: "nested-v1", name: "V1", description: "desc", duration: 12,
+          layers: [
+            { id: "layer-audio", name: "Music", kind: "audio", start: 2, duration: 5, sourceIn: 7, sourceOut: 12, volume: 0.3 },
+            { id: "layer-image", name: "Image", kind: "image", start: 0, duration: 4, assetId: "nested-image", x: 10, y: 20, width: 50, height: 60 },
+            { id: "layer-title", name: "Title", kind: "text", start: 1, duration: 3 },
+          ],
+          scriptVersionIds: ["script-v1"], generationRecords: [],
+        }],
+      },
+    );
+    const result = migrateLegacyProjectToComposition(project);
+    expect(result.clipCompositions).toHaveLength(1);
+    const composition = result.clipCompositions[0];
+    expect(composition).toMatchObject({ duration: 12, width: 1280, height: 720 });
+    expect(composition.placements.map((placement) => placement.id)).toEqual(["layer-audio", "layer-image", "layer-title"]);
+    expect(composition.tracks.map((track) => track.kind)).toEqual(["audio", "video", "text"]);
+    expect(composition.placements[0]).toMatchObject({ start: 2, sourceIn: 7, sourceOut: 12 });
+    expect(composition.placements[1].source).toEqual({ type: "asset", assetId: "nested-image" });
+    expect(composition.placements[1].legacyData).toMatchObject({ x: 10, y: 20, width: 50, height: 60 });
+  });
+
+  it("deduplicates a materialized Storyboard placement and reports dangling source references", () => {
+    const project = structuredClone(sampleProject);
+    const shot = project.shots[0];
+    const slot = shot.slots[0];
+    project.timelineClips = [
+      { id: "manual-placement", name: "Manual", kind: "video", trackId: "track-video-1", start: 1, duration: 2, shotId: shot.id, slotId: slot.id },
+      { id: "storyboard-shot-slot", name: "Generated duplicate", kind: "video", trackId: "track-video-1", start: 8, duration: 2, shotId: shot.id, slotId: slot.id },
+      { id: "missing-source-placement", name: "Missing", kind: "video", trackId: "track-video-1", start: 12, duration: 2, assetId: "missing-asset" },
+    ];
+    const result = migrateLegacyProjectToComposition(project);
+    expect(result.rootComposition.placements.map((placement) => placement.id)).toEqual(["manual-placement", "missing-source-placement"]);
+    expect(result.warnings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "duplicate-storyboard-placement", entityId: "storyboard-shot-slot" }),
+      expect.objectContaining({ code: "missing-source", entityId: "missing-source-placement" }),
+    ]));
+    expect(project.timelineClips).toHaveLength(3);
+    expect(result.sourceProject.timelineClips).toHaveLength(3);
+  });
+
+  it("does not mutate the legacy project and is deterministic across repeated migration", () => {
+    const project = structuredClone(sampleProject);
+    project.timelineClips = [{ id: "stable", name: "Stable", kind: "video", trackId: "track-video-1", start: 0, duration: 2 }];
+    const before = JSON.stringify(project);
+    const first = migrateLegacyProjectToComposition(project);
+    const second = migrateLegacyProjectToComposition(project);
+    expect(JSON.stringify(project)).toBe(before);
+    expect(first.rootComposition).toEqual(second.rootComposition);
+    expect(first.clipCompositions).toEqual(second.clipCompositions);
+  });
+});

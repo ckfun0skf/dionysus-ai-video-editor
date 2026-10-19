@@ -377,7 +377,7 @@
           "id": "DYS-014",
           "title": "Unified Composition model and structure-preserving snapshots",
           "status": "in_progress",
-          "progress": 10,
+          "progress": 25,
           "summary": "Replace parallel Master-Shot and nested Clip editing models with one Composition schema, shared Editor/Placement engine, and independently editable Project-to-Clip snapshots.",
           "doc": "tasks/unified-composition-model.md",
           "detail": "tasks/unified-composition-model.html",
@@ -389,11 +389,11 @@
             },
             {
               "title": "Define typed Composition documents, source references, placements and version pins",
-              "status": "planned"
+              "status": "done"
             },
             {
               "title": "Add deterministic non-destructive migration from schema 1.0",
-              "status": "planned"
+              "status": "in_progress"
             },
             {
               "title": "Migrate root and nested editors to shared composition context and placement operations",
@@ -417,13 +417,15 @@
           ],
           "evidence": [
             "Target contract: docs/architecture/UNIFIED_COMPOSITION_MODEL.md",
+            "Canonical types: src/compositionModel.ts",
+            "Non-mutating legacy projection: src/compositionMigration.ts",
+            "Migration regression tests: src/compositionMigration.test.ts",
             "UI contract: public/doc/creative-editing-workflow-spec.md",
             "docs/PROJECT_ROADMAP.md",
             "docs/AGENT_PICKUP_PROMPT.md",
-            "PR #63: https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/63",
-            "CI checkpoint: https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39207371506"
+            "PR #63: https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/63"
           ],
-          "notes": "Architecture contract documented in Draft PR #63. Current recorded branch checkpoint 406d898ad5176cc2ed55441b3ed502c67db5f7a5 passed CI run 39207371506; re-check exact head after handoff updates. Runtime schema is not migrated. Next step: inspect src/types.ts, projectValidation.ts, import/export and root/nested editor; design Composition/Track/Placement/source-reference types plus schema-1.0 migration fixtures/tests before migrating UI. Roadmap: docs/PROJECT_ROADMAP.md. Pickup prompt: docs/AGENT_PICKUP_PROMPT.md."
+          "notes": "Initial runtime slice added to PR #63: typed Composition/Track/Placement/source-reference contracts and a non-mutating projection of schema-1.0 root timeline plus each Clip Asset Version. Tests cover IDs/order, source ranges, linked audio, Shot Slot/Clip Version pins, nested layers, duplicate storyboard placements, missing-source warnings, determinism and source immutability. This is not yet wired into import/export or live editor state. Next: run exact-head CI, extend legacy import/export fixtures, then integrate a versioned migration boundary. Roadmap: docs/PROJECT_ROADMAP.md."
         },
         {
           "id": "DYS-015",

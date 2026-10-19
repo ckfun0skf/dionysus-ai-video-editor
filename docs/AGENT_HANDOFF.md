@@ -117,10 +117,16 @@ npm run dev
 - Last verified main baseline: `288b5f349080c470a119c33174dfaa93c0e8c9f0`.
 - Active Draft PR: [#63](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/63), branch `feat/unified-composition-model`; checkpoint head before this handoff update: `406d898ad5176cc2ed55441b3ed502c67db5f7a5`.
 - Last verified CI for that checkpoint: [39207371506](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39207371506), success. Re-check CI after any newer commit.
-- PR #63 is architecture/task documentation only; no runtime migration or deployment is claimed.
-- Immediate next implementation step: DYS-014 typed Composition/Track/Placement/source-reference model and schema-1.0 migration fixtures/tests. See `docs/PROJECT_ROADMAP.md`.
+- PR #63 now contains the first DYS-014 runtime slice as well as the architecture contract. The new adapter is not wired into project import/export or the live editor yet; no deployment or end-to-end migration is claimed.
+- Current implementation slice: `src/compositionModel.ts`, `src/compositionMigration.ts`, and `src/compositionMigration.test.ts` define the canonical projection and initial regression fixtures. Check exact-head CI before relying on the slice. Next: integrate the projection into import/export behind a deterministic migration boundary, then unify editor operations.
 - User acceptance of #53/#54 remains pending. No browser smoke tests.
 - Open issues last checked: #53, #54, #56, #58 and #59. Re-query GitHub before starting work; never treat this list as live status.
+
+## Current Architecture Transition — 2026-10-19
+
+- DYS-014 implementation slice added to PR #63: typed canonical Composition/Track/Placement/source references plus a non-mutating schema-1.0 projection for root timeline and every Clip Asset Version.
+- Initial migration tests cover track/placement IDs and order, source ranges, linked audio, Shot Slot and Clip Version pins, nested layer mapping, duplicate materialized Storyboard placement detection, missing-source warnings, determinism and source immutability.
+- This is a projection adapter, not yet a replacement persistence schema; project import/export and live editors still use schema 1.0. CI status must be checked for the exact latest PR head.
 
 ## Current Architecture Transition — 2026-10-18
 

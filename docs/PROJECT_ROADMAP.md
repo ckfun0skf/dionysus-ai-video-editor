@@ -1,6 +1,6 @@
 # Dionysus Project Roadmap and Agent Pickup State
 
-**Last reconciled:** 2026-10-18  
+**Last reconciled:** 2026-10-19  
 **Repository:** `ckfun0skf/dionysus-ai-video-editor`  
 **Source of truth:** Git history, open PR/Issues, `docs/PRD.md`, `docs/ARCHITECTURE.md`, `docs/architecture/UNIFIED_COMPOSITION_MODEL.md`, and `public/doc/tasks.json`.
 
@@ -13,7 +13,7 @@ This document is a durable pickup ledger, not a claim that planned behavior alre
 - Feature branch: `feat/unified-composition-model`.
 - Last verified checkpoint commit before this handoff update: `406d898ad5176cc2ed55441b3ed502c67db5f7a5`.
 - PR #63 is intentionally Draft. CI [39207371506](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39207371506) passed tests and type-check/build for that checkpoint.
-- PR #63 currently changes architecture/product/task documentation only. No runtime code was migrated; no production deployment is implied.
+- PR #63 now includes an initial DYS-014 runtime slice: canonical typed Composition documents and a non-mutating schema-1.0 projection adapter with migration tests. It is not wired into import/export or live editor state yet; no production deployment is implied.
 - The latest user feedback says #53/#54 still have issues. They must remain open until implementation is corrected and user acceptance is obtained.
 - Do not add or run browser smoke tests unless the user explicitly requests them.
 
@@ -42,6 +42,7 @@ Core architecture:
 
 ### Phase 1 — Typed Composition model and safe migration
 **Tasks:** DYS-014, DYS-002  
+**Current progress:** The first projection slice is implemented in `src/compositionModel.ts` and `src/compositionMigration.ts`; regression fixtures are in `src/compositionMigration.test.ts`. This is an adapter only; schema-1.0 persistence and editor integration remain unchanged.  
 **Deliverables:**
 - Define typed Composition, Track, Placement, source reference, source-range, transform/mix settings and version pins.
 - Define migration from current `schemaVersion: "1.0"`: `timelineClips[]`, `Shot.slots[]`, `ClipVersion.layers[]`, linked audio and `storyboard-*` materialized clips.
