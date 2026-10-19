@@ -551,6 +551,8 @@ export default function App() {
         </div>}
       </div>
       <div className="integrated-preview-controls">
+        <button className="button button-quiet button-small mobile-history-control" aria-label="Undo edit" title="Undo edit" disabled={undoStack.length === 0} onClick={undoProjectChange}><Undo2 size={15}/></button>
+        <button className="button button-quiet button-small mobile-history-control" aria-label="Redo edit" title="Redo edit" disabled={redoStack.length === 0} onClick={redoProjectChange}><Redo2 size={15}/></button>
         <button className="button button-quiet button-small" onClick={() => { setIsPlaying(false); setEditorTime(0); playbackTimeRef.current = 0; }} title="Go to start">|◀</button>
         <button className="button button-primary button-small" aria-label={isPlaying ? "Pause preview" : "Play preview"} onClick={() => { if (!isPlaying && editorTime >= duration) { playbackTimeRef.current = 0; setEditorTime(0); } setIsPlaying(value => !value); }}>{isPlaying ? "Pause" : "Play"}</button>
         <button className="button button-quiet button-small mobile-frame-step" aria-label="Previous frame" title="Previous frame" onClick={() => { setIsPlaying(false); const next = Math.max(0, editorTime - 1 / Math.max(1, project.frameRate)); setEditorTime(next); playbackTimeRef.current = next; }}>−1f</button>

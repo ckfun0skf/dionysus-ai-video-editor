@@ -2928,3 +2928,18 @@
     font-variant-numeric: tabular-nums;
   }
 }
+
+
+/* DYS-012: expose history actions near the preview on phone screens. */
+.mobile-history-control { display: none; }
+@media (max-width: 640px) {
+  .integrated-preview-controls .mobile-history-control {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 42px;
+    min-height: 42px;
+    padding: 8px;
+    touch-action: manipulation;
+  }
+}
