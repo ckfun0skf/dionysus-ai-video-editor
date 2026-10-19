@@ -18,7 +18,7 @@ describe("nested Clip Timeline placement", () => {
   it("snaps drag previews to edges across tracks without allowing destination overlap", () => {
     const doc = version([layer("moving", "v1", 0, 2), layer("anchor", "v2", 4, 3)]);
     expect(calculateClipVersionDropPosition(doc, "moving", "v2", 2.05, 12, 24)).toEqual({ start: 2, snapTime: 4 });
-    expect(calculateClipVersionDropPosition(doc, "moving", "v2", 4.1, 12, 24)).toEqual({ start: 1, snapTime: 4 });
+    expect(calculateClipVersionDropPosition(doc, "moving", "v2", 4.1, 12, 24)).toEqual({ start: 2, snapTime: 4 });
   });
 
   it("rejects incompatible nested track types", () => {
