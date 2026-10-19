@@ -54,6 +54,27 @@ function createEmptyProject(): DionysusProject {
   };
 }
 
+function clearDemoSeedData(project: DionysusProject): DionysusProject {
+  if (project.id !== "project-dionysus-demo" || project.name !== "Cyberpunk Awakening") return project;
+  const seedIds = new Set(["shot-01", "shot-02", "shot-03"]);
+  if (project.shots.length !== seedIds.size || !project.shots.every(shot => seedIds.has(shot.id))) return project;
+  const defaultTrackIds = new Set(["track-video-1", "track-video-2", "track-audio-1", "track-text-1"]);
+  const hasOnlyDefaultTracks = project.tracks.length === defaultTrackIds.size && project.tracks.every(track => defaultTrackIds.has(track.id));
+  const tracks = (project.timelineClips ?? []).length === 0 && hasOnlyDefaultTracks
+    ? [{ id: "track-video-1", name: "Video 1", kind: "video" as const }]
+    : project.tracks.map(track => ({
+        ...track,
+        name: track.name === "Main Video" ? "Video 1" : track.name === "Overlay / PiP" ? "Video 2" : track.name === "Soundtrack" ? "Audio 1" : track.name === "Dialogue & Subtitles" ? "Text 1" : track.name,
+      }));
+  return {
+    ...project,
+    name: "Untitled Project",
+    shots: [],
+    storyboardConnections: [],
+    tracks,
+  };
+}
+
 function normalizeLegacyTimelineTracks(project: DionysusProject): DionysusProject {
   const legacyTracks = project.tracks.filter(track => track.kind === "procedural" || track.kind === "effects");
   if (legacyTracks.length === 0) return project;
@@ -124,7 +145,7 @@ export default function App() {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return createEmptyProject();
       const parsed: unknown = JSON.parse(raw);
-      return validateProject(parsed) ? normalizeLegacyTimelineTracks(parsed) : createEmptyProject();
+      return validateProject(parsed) ? normalizeLegacyTimelineTracks(clearDemoSeedData(parsed)) : createEmptyProject();
     } catch { return createEmptyProject(); }
   });
   const [undoStack, setUndoStack] = useState<DionysusProject[]>([]);

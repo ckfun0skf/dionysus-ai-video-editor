@@ -105,7 +105,7 @@ beforeEach(() => {
   window.confirm = () => true;
   localStorage.clear();
   // App integration tests use the populated fixture; production first-run state is intentionally empty.
-  localStorage.setItem("dionysus.project.v1", JSON.stringify(sampleProject));
+  localStorage.setItem("dionysus.project.v1", JSON.stringify({ ...sampleProject, id: "test-project", name: "Test Project" }));
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -123,6 +123,20 @@ afterEach(() => {
 });
 
 describe("App history integration", () => {
+  it("clears persisted demo seed shots and tracks from the existing demo project", async () => {
+    localStorage.setItem("dionysus.project.v1", JSON.stringify(sampleProject));
+    act(() => root.unmount());
+    root = createRoot(container);
+    act(() => root.render(<App />));
+    await flushEffects();
+    const project = persistedProject();
+    expect(project.name).toBe("Untitled Project");
+    expect(project.shots).toEqual([]);
+    expect(project.storyboardConnections).toEqual([]);
+    expect(project.timelineClips).toEqual([]);
+    expect(project.tracks).toEqual([{ id: "track-video-1", name: "Video 1", kind: "video" }]);
+  });
+
   it("starts with an empty project instead of demo seed shots", async () => {
     localStorage.clear();
     act(() => root.unmount());
