@@ -25,6 +25,8 @@ import {
 } from "./projectTimelinePlacement";
 import { recordProjectChange, undoProjectChange as undoHistory, redoProjectChange as redoHistory } from "./projectHistory";
 import { collectCompositionLayers, renderCompositionFrame, exportCompositionWebM, downloadExport } from "./compositionRenderer";
+import { createCompositionSnapshot } from "./compositionSnapshot";
+import { compositionSnapshotToClipVersion } from "./compositionSnapshotToClipVersion";
 import AIGenerationPanel from "./AIGenerationPanel";
 import CodePlayground from "./CodePlayground";
 import ClipAssetEditor from "./ClipAssetEditor";
@@ -958,36 +960,33 @@ export default function App() {
 
   function saveMasterTimelineAsClipAsset() {
     const current = projectRef.current;
-    const flattenedLayers = collectCompositionLayers(current).map(layer => ({ ...layer, id: id("layer") }));
-    const duration = Math.max(
-      0.1,
-      getMasterTimelineDuration(current.shots),
-      ...flattenedLayers.map(layer => layer.start + layer.duration)
-    );
+    const snapshot = createCompositionSnapshot(current, {
+      snapshotId: id("composition-snapshot"),
+      name: `${current.name} — Master Timeline Snapshot`,
+    });
     const now = new Date().toISOString();
-    const version: ClipVersion = {
-      id: id("clip-version"),
+    const version = compositionSnapshotToClipVersion(snapshot, current, {
+      versionId: id("clip-version"),
       name: "Version A",
-      description: "Snapshot saved from Master Timeline",
-      duration,
-      layers: flattenedLayers,
-      scriptVersionIds: [],
-      generationRecords: []
-    };
+      description: "Structure-preserving snapshot saved from Master Timeline",
+    });
     const asset: Asset = {
       id: id("asset"),
       name: current.name + " · Timeline Clip",
       kind: "clip",
       canvasWidth: current.width,
       canvasHeight: current.height,
-      notes: "Snapshot saved from the Master Timeline. Edits to this Clip Asset are independent.",
+      notes: "Snapshot saved from the Master Timeline. Canonical tracks, placements, source ranges and pins are preserved independently.",
       createdAt: now,
       updatedAt: now,
       selectedClipVersionId: version.id,
       clipVersions: [version]
     };
     change(p => ({ ...p, assets: [...p.assets, asset] }));
-    setNotice("Master Timeline saved as a reusable Clip Asset. The original Master Timeline is unchanged.");
+    const warningCount = snapshot.warnings.length;
+    setNotice(warningCount
+      ? `Timeline snapshot saved with ${warningCount} source warning(s). Review missing or unpinned sources before relying on this Clip.`
+      : "Master Timeline saved as a reusable Clip Asset with its Composition structure preserved. The original Master Timeline is unchanged.");
   }
 
   function addStoryboardConnection(fromShotId: string, toShotId: string, label = "Cut") {

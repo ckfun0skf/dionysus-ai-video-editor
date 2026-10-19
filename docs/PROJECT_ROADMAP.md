@@ -237,3 +237,8 @@ The next agent should read `docs/MOBILE_AGENT_PICKUP_PROMPT.md` and `docs/MOBILE
 - DYS-012 remains in progress pending owner evidence for phone portrait, landscape, tablet, touch interactions and page-level overflow.
 - Next implementation branch: `feat/dys014-alternative-provenance-roundtrip`. The current slice adds migration tests for all Shot Slot alternatives and generation/reference/model/output provenance, plus JSON round-trip tests for schema-1.0 and the versioned 2.0 envelope. Exact-head CI is required before calling that test slice validated.
 - After these checks, resume canonical-only Composition persistence and structure-preserving Project-to-Clip snapshots. Do not auto-create duplicate Clip Assets per Shot without an explicit owner decision.
+
+
+## DYS-014 implementation update — 2026-10-19
+
+The Master Timeline Save-as-Clip action now creates a structure-preserving canonical Composition snapshot and stores it with the ClipVersion, alongside compatibility layer/track arrays. This is an integration bridge only: canonical Composition is not yet authoritative during edits. Next implement bidirectional reconciliation, JSON persistence and Undo/Redo parity; do not mark DYS-014 complete.
