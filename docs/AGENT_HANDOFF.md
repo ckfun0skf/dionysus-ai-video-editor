@@ -4,17 +4,19 @@ This file is the starting point for any agent continuing Dionysus. Keep project 
 
 ## Read first
 
-1. `README.md` — project purpose and development commands.
-2. `docs/PRD.md` — confirmed requirements, unresolved decisions, and product scope.
-3. `docs/ARCHITECTURE.md` — architecture principles and current structure.
-4. `docs/architecture/UNIFIED_COMPOSITION_MODEL.md` — target model, shared editor and migration contract.
-5. This file — workflow and handoff expectations.
-6. The current PR and latest commit history for work in progress.
+1. `docs/AGENT_PICKUP_PROMPT.md` — copyable instructions for a fresh ChatGPT chat/agent.
+2. `docs/PROJECT_ROADMAP.md` — complete phased roadmap, dependencies, acceptance and current pickup checkpoint.
+3. `docs/AGENT_HANDOFF.md` — mandatory workflow and handoff rules.
+4. `README.md` — project purpose and development commands.
+5. `docs/PRD.md` — confirmed requirements, unresolved decisions, and product scope.
+6. `docs/ARCHITECTURE.md` and `docs/architecture/UNIFIED_COMPOSITION_MODEL.md` — current principles and target model.
+7. `public/doc/tasks.json` and linked task Markdown/HTML/report artifacts — task-dashboard source of truth.
+8. Current main HEAD, open issues/PRs/branches and exact-head CI. GitHub state outranks stale checkpoint notes.
 
 ## Repository workflow
 
 - Repository: `ckfun0skf/dionysus-ai-video-editor`
-- Working branch for the foundation: `feat/dionysus-foundation`
+- Active redesign PR at last checkpoint: [#63](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/63), branch `feat/unified-composition-model`. Verify its current head/state before use; do not assume this is still the active branch.
 - Never push directly to `main`; work on a feature branch and use a pull request.
 - Keep pull requests draft until the implementation has been validated.
 - Use English for source code, comments, docs, issues, PRs, and commit messages.
@@ -108,6 +110,17 @@ npm run dev
 - [x] Do not create redundant PRs or unneeded markdown sprawl; prioritize real features in the applet.
 
 
+
+## Current Pickup Checkpoint — 2026-10-18
+
+- Roadmap and copyable prompt: `docs/PROJECT_ROADMAP.md` and `docs/AGENT_PICKUP_PROMPT.md`.
+- Last verified main baseline: `288b5f349080c470a119c33174dfaa93c0e8c9f0`.
+- Active Draft PR: [#63](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/63), branch `feat/unified-composition-model`; checkpoint head before this handoff update: `406d898ad5176cc2ed55441b3ed502c67db5f7a5`.
+- Last verified CI for that checkpoint: [39207371506](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39207371506), success. Re-check CI after any newer commit.
+- PR #63 is architecture/task documentation only; no runtime migration or deployment is claimed.
+- Immediate next implementation step: DYS-014 typed Composition/Track/Placement/source-reference model and schema-1.0 migration fixtures/tests. See `docs/PROJECT_ROADMAP.md`.
+- User acceptance of #53/#54 remains pending. No browser smoke tests.
+- Open issues last checked: #53, #54, #56, #58 and #59. Re-query GitHub before starting work; never treat this list as live status.
 
 ## Current Architecture Transition — 2026-10-18
 

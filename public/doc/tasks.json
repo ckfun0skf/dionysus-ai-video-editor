@@ -417,9 +417,13 @@
           ],
           "evidence": [
             "Target contract: docs/architecture/UNIFIED_COMPOSITION_MODEL.md",
-            "UI contract: public/doc/creative-editing-workflow-spec.md"
+            "UI contract: public/doc/creative-editing-workflow-spec.md",
+            "docs/PROJECT_ROADMAP.md",
+            "docs/AGENT_PICKUP_PROMPT.md",
+            "PR #63: https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/63",
+            "CI checkpoint: https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39207371506"
           ],
-          "notes": "Architecture baseline documented; runtime model has not yet been migrated. Dependencies: DYS-002 migration/validation, DYS-005 shared timeline editing, and DYS-013 existing Clip Asset feature slice."
+          "notes": "Architecture contract documented in Draft PR #63. Current recorded branch checkpoint 406d898ad5176cc2ed55441b3ed502c67db5f7a5 passed CI run 39207371506; re-check exact head after handoff updates. Runtime schema is not migrated. Next step: inspect src/types.ts, projectValidation.ts, import/export and root/nested editor; design Composition/Track/Placement/source-reference types plus schema-1.0 migration fixtures/tests before migrating UI. Roadmap: docs/PROJECT_ROADMAP.md. Pickup prompt: docs/AGENT_PICKUP_PROMPT.md."
         },
         {
           "id": "DYS-015",
@@ -467,7 +471,7 @@
             "Target contract: docs/architecture/UNIFIED_COMPOSITION_MODEL.md",
             "UI contract: public/doc/creative-editing-workflow-spec.md"
           ],
-          "notes": "Planning only; current ProductionChecklistDrawer is Shot-centric and has no task DAG/run history. Dependencies: DYS-004 and DYS-014; coordinate AI plan reconciliation with DYS-009."
+          "notes": "Planned. Use docs/PROJECT_ROADMAP.md for sequencing and docs/architecture/UNIFIED_COMPOSITION_MODEL.md for the contract. Do not implement a parallel task/run model before coordinating with DYS-014 and DYS-004."
         }
       ]
     },
