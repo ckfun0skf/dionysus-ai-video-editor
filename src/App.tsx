@@ -290,7 +290,9 @@ export default function App() {
   }, []);
   function updateTimelineScrub(event: React.PointerEvent<HTMLElement>, duration: number) {
     const rect = event.currentTarget.getBoundingClientRect();
-    const next = Math.max(0, Math.min(duration, ((event.clientX - rect.left) / Math.max(rect.width, 1)) * duration));
+    const rawTime = Math.max(0, Math.min(duration, ((event.clientX - rect.left) / Math.max(rect.width, 1)) * duration));
+    const frameRate = Math.max(1, projectRef.current.frameRate || 24);
+    const next = Math.min(duration, Math.round(rawTime * frameRate) / frameRate);
     playbackTimeRef.current = next; setIsPlaying(false); setEditorTime(next);
   }
   function beginTimelineScrub(event: React.PointerEvent<HTMLElement>, duration: number) {

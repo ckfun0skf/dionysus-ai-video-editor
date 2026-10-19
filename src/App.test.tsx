@@ -2090,7 +2090,9 @@ describe("mobile timeline playhead scrubbing", () => {
     };
     act(() => ruler!.dispatchEvent(pointer("pointerdown", 20))); await flushEffects();
     act(() => ruler!.dispatchEvent(pointer("pointermove", 80))); await flushEffects();
-    expect(Number(ruler!.getAttribute("aria-valuenow"))).toBeGreaterThan(Number(ruler!.getAttribute("aria-valuemax")) * 0.7);
+    const valueAfterMove = Number(ruler!.getAttribute("aria-valuenow"));
+    expect(valueAfterMove).toBeGreaterThan(Number(ruler!.getAttribute("aria-valuemax")) * 0.7);
+    expect(valueAfterMove * 24).toBeCloseTo(Math.round(valueAfterMove * 24), 5);
     act(() => ruler!.dispatchEvent(pointer("pointerup", 80)));
   });
 });
