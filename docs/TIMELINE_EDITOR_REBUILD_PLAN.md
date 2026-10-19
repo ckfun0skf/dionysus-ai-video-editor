@@ -105,7 +105,7 @@ Do not promote a transitional envelope/projection to authoritative persistence u
 
 ## Design gate — wireframes, prototype and UML
 
-Before production UI implementation, review DYS-020: [responsive wireframe prototype](../public/doc/design/timeline-editor-wireframes.html), [UML/state-flow diagrams](architecture/TIMELINE_EDITOR_UML.md), and [design pack checklist](architecture/TIMELINE_EDITOR_UX_DESIGN_PACK.md). These artifacts define component boundaries, canonical Composition ownership, command/Undo flow and mobile contextual controls. The prototype is low-fidelity, not production code. Resolve major layout/interaction questions before DYS-017; safe model/test work may continue in parallel.
+Before production UI implementation, review DYS-020: [responsive wireframe prototype](../public/doc/design/timeline-editor-wireframes.html), [UML overview](architecture/TIMELINE_EDITOR_UML.md) and standalone [PlantUML sources](architecture/plantuml/), and [design pack checklist](architecture/TIMELINE_EDITOR_UX_DESIGN_PACK.md). These artifacts define component boundaries, canonical Composition ownership, command/Undo flow and mobile contextual controls. The prototype is low-fidelity, not production code. Resolve major layout/interaction questions before DYS-017; safe model/test work may continue in parallel.
 
 ## 4. Execution milestones
 

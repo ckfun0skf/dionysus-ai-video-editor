@@ -1,0 +1,33 @@
+@startuml TimelineEditorMobileState
+title Dionysus Timeline Editor - Mobile Selection and Contextual Actions
+hide empty description
+[*] --> NoSelection
+
+NoSelection --> ClipSelected : tap clip
+NoSelection --> TrackSelected : tap track header
+ClipSelected --> ClipActions : resolve clip capabilities
+TrackSelected --> TrackActions : resolve track capabilities
+
+ClipActions --> ClipSelected : trim / split / duplicate / delete / properties
+TrackActions --> TrackSelected : mute / rename / reorder / add track
+ClipSelected --> NoSelection : clear selection
+TrackSelected --> NoSelection : clear selection
+
+state ClipSelected {
+  [*] --> ClipToolbar
+  state "Contextual clip actions" as ClipToolbar
+}
+state TrackSelected {
+  [*] --> TrackToolbar
+  state "Contextual track actions" as TrackToolbar
+}
+
+note right of NoSelection
+Bottom action bar shows timeline-level actions.
+Module navigation is separate and does not become
+Storyboard / Timeline / Asset / Reference edit controls.
+end note
+note right of ClipActions
+Action bar is derived from selected entity capabilities.
+end note
+@enduml

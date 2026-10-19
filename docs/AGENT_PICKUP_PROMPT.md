@@ -68,7 +68,7 @@ The accepted target direction is in `docs/architecture/UNIFIED_COMPOSITION_MODEL
 
 ## Timeline Editor design artifacts (2026-10-19)
 
-Before production UI implementation, read docs/architecture/TIMELINE_EDITOR_UX_DESIGN_PACK.md and docs/architecture/TIMELINE_EDITOR_UML.md, then open public/doc/design/timeline-editor-wireframes.html. DYS-020 is the design review gate ahead of DYS-017. Treat the HTML as a low-fidelity prototype only. Update diagrams with any owner-approved architecture/interaction change.
+Before production UI implementation, read docs/architecture/TIMELINE_EDITOR_UX_DESIGN_PACK.md and docs/architecture/TIMELINE_EDITOR_UML.md plus the `.puml` files in docs/architecture/plantuml/ (use PlantUML Playground), then open public/doc/design/timeline-editor-wireframes.html. DYS-020 is the design review gate ahead of DYS-017. Treat the HTML as a low-fidelity prototype only. Update diagrams with any owner-approved architecture/interaction change.
 
 ## What to do next
 

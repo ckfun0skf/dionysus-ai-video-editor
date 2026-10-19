@@ -12,7 +12,7 @@ The latest verified main HEAD at the start of this planning slice was `a54526fc8
 
 ## Read first
 
-- Before DYS-017 production UI work, read [the UX design pack](architecture/TIMELINE_EDITOR_UX_DESIGN_PACK.md), inspect [the HTML wireframe](../public/doc/design/timeline-editor-wireframes.html), and follow [the UML diagrams](architecture/TIMELINE_EDITOR_UML.md). The prototype is illustrative, not implemented behavior.
+- Before DYS-017 production UI work, read [the UX design pack](architecture/TIMELINE_EDITOR_UX_DESIGN_PACK.md), inspect [the HTML wireframe](../public/doc/design/timeline-editor-wireframes.html), and follow [the UML overview](architecture/TIMELINE_EDITOR_UML.md) and the standalone PlantUML sources in `docs/architecture/plantuml/` (open or paste `.puml` files in PlantUML Playground). The prototype is illustrative, not implemented behavior.
 
 1. `docs/AGENT_PICKUP_PROMPT.md` — copyable instructions for a fresh ChatGPT chat/agent.
 2. `docs/PROJECT_ROADMAP.md` — complete phased roadmap, dependencies, acceptance and current pickup checkpoint.

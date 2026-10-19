@@ -7,7 +7,8 @@ Create a durable visual and architectural reference for new agents. The HTML pro
 
 ## Artifacts
 - [Responsive wireframe prototype](../../public/doc/design/timeline-editor-wireframes.html)
-- [UML and state flows](TIMELINE_EDITOR_UML.md)
+- [UML overview](TIMELINE_EDITOR_UML.md)
+- PlantUML sources: [workspace](plantuml/timeline-editor-workspace.puml) · [domain model](plantuml/timeline-editor-domain-model.puml) · [edit sequence](plantuml/timeline-editor-edit-sequence.puml) · [mobile state](plantuml/timeline-editor-mobile-state.puml)
 - [Workspace contract](TIMELINE_EDITOR_WORKSPACE.md)
 - [Rebuild plan](../TIMELINE_EDITOR_REBUILD_PLAN.md)
 

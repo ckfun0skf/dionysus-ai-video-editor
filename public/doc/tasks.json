@@ -103,7 +103,7 @@
           "title": "Timeline Editor wireframes, UI prototype and UML",
           "status": "in_progress",
           "progress": 65,
-          "summary": "Create a reviewable desktop/mobile wireframe, interactive HTML prototype, UML component/domain/command/state diagrams and a stable design handoff before production Editor UI implementation.",
+          "summary": "Create a reviewable desktop/mobile wireframe, interactive HTML prototype, and standalone PlantUML component/domain/command/state diagrams as a stable design handoff before production Editor UI implementation.",
           "doc": "tasks/timeline-editor-ux-design-pack.md",
           "detail": "tasks/timeline-editor-rebuild.html#DYS-020",
           "subtasks": [
@@ -135,7 +135,7 @@
           "acceptance": [
             "Desktop wireframe shows source browser upper-left, Preview/Canvas upper-right and multitrack Timeline below",
             "Mobile controls are contextual to selection and module navigation is separate",
-            "UML defines component boundaries, canonical Composition, commands/history and mobile selection state",
+            "Standalone .puml files open in PlantUML Playground and cover workspace, domain model, command/history and mobile selection state",
             "Prototype and diagrams are editable files in Git and linked from handoff prompts",
             "Owner reviews major layout/interaction decisions before DYS-017",
             "No production behavior is claimed from prototype and no browser smoke tests are required"
@@ -143,7 +143,11 @@
           "evidence": [
             "docs/architecture/TIMELINE_EDITOR_UX_DESIGN_PACK.md",
             "docs/architecture/TIMELINE_EDITOR_UML.md",
-            "public/doc/design/timeline-editor-wireframes.html"
+            "public/doc/design/timeline-editor-wireframes.html",
+            "docs/architecture/plantuml/timeline-editor-workspace.puml",
+            "docs/architecture/plantuml/timeline-editor-domain-model.puml",
+            "docs/architecture/plantuml/timeline-editor-edit-sequence.puml",
+            "docs/architecture/plantuml/timeline-editor-mobile-state.puml"
           ],
           "notes": "The prototype is low-fidelity, not production React UI. Keep safe Composition model/test work moving in parallel; do not implement unsettled major layout decisions before owner review."
         },

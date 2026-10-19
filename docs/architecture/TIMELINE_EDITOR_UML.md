@@ -1,169 +1,21 @@
-# Timeline Editor UML and State Flows
+# Timeline Editor UML — PlantUML Sources
 
-These diagrams define architectural boundaries and data flow, not mandatory React component names.
+These are the normative, editable PlantUML diagrams for the Timeline Editor architecture. Each `.puml` file can be opened directly or copied into the [PlantUML Playground](https://www.plantuml.com/plantuml/uml/).
 
-## Workspace boundary
+## Diagrams
 
-~~~mermaid
-flowchart TB
-  Shell[Project Shell / Module Navigation] --> EditorRoute[Timeline Editor]
-  Shell --> Planning[Storyboard and References - later]
-  subgraph Editor[Timeline Editor Workspace]
-    Source[Source Browser: Media / Audio / Text / Effects / Transitions]
-    Preview[Preview / Canvas]
-    Timeline[Multitrack Timeline]
-    Inspector[Selection Inspector]
-    Context[Contextual Action Bar]
-    Transport[Transport]
-    Source -->|insert source command| Timeline
-    Timeline -->|selection and playhead| Preview
-    Timeline -->|selected entity| Inspector
-    Timeline -->|capabilities| Context
-    Transport <--> Timeline
-    Preview -->|transform command| Timeline
-  end
-  EditorRoute --> Editor
-  Planning -->|explicit source / assembly action| EditorRoute
-  Timeline <--> Commands[Typed Edit Commands and Validation]
-  Inspector <--> Commands
-  Commands <--> Store[Canonical Composition Document]
-  Store --> Renderer[Composition Renderer]
-  Renderer --> Preview
-~~~
+1. [Workspace boundaries and component relationships](plantuml/timeline-editor-workspace.puml) — source browser, preview/canvas, timeline, contextual inspector, command core and planning modules.
+2. [Canonical domain model](plantuml/timeline-editor-domain-model.puml) — Project, CompositionDocument, Track, CompositionPlacement, pinned SourceRef, Clip/Shot versions and EditCommand.
+3. [Edit / validation / render / Undo sequence](plantuml/timeline-editor-edit-sequence.puml) — typed command flow, validation, atomic updates, history and rendering.
+4. [Mobile selection state](plantuml/timeline-editor-mobile-state.puml) — contextual action states for clip, track and empty selection.
 
-## Canonical domain model
+## Invariants
 
-~~~mermaid
-classDiagram
-  class Project {
-    +id
-    +schemaVersion
-    +rootCompositionId
-    +assets[]
-    +shots[]
-  }
-  class CompositionDocument {
-    +id
-    +kind
-    +canvasSettings
-    +tracks[]
-    +placements[]
-  }
-  class Track {
-    +id
-    +kind
-    +order
-    +muted
-  }
-  class CompositionPlacement {
-    +id
-    +trackId
-    +start
-    +duration
-    +sourceIn
-    +sourceOut
-    +sourceRef
-    +transform
-  }
-  class SourceRef {
-    +kind
-    +assetId
-    +versionId
-    +compositionId
-  }
-  class ClipAsset {
-    +id
-    +versions[]
-  }
-  class ClipVersion {
-    +id
-    +compositionDocument
-  }
-  class Shot {
-    +id
-    +versions[]
-  }
-  class ShotVersion {
-    +id
-    +mediaAssetId
-    +provenance
-  }
-  class EditCommand {
-    +type
-    +targetIds[]
-    +payload
-    +validate()
-    +apply()
-    +invert()
-  }
-  Project "1" --> "1" CompositionDocument : root
-  Project "1" --> "*" ClipAsset : owns
-  ClipAsset "1" --> "*" ClipVersion : versions
-  Project "1" --> "*" Shot : owns
-  Shot "1" --> "*" ShotVersion : alternatives
-  CompositionDocument "1" --> "*" Track
-  CompositionDocument "1" --> "*" CompositionPlacement
-  CompositionPlacement "*" --> "1" Track
-  CompositionPlacement "*" --> "1" SourceRef : pinned source
-  EditCommand ..> CompositionDocument : validated transaction
-~~~
+- A versioned placement pins a concrete source/version; creating a new Shot Version must not silently repoint existing placements.
+- Master Timeline and nested Clip compositions use the same Composition and edit-command contract.
+- Canonical Composition state is the single writable source of truth. Legacy arrays are temporary compatibility projections during migration.
+- Persistent composition data is separate from transient editor view state (selection, active source category, zoom and inspector visibility).
+- Storyboard and References are planning modules, not contextual mobile edit actions.
+- UI gestures dispatch typed commands; commands validate and apply transactions atomically. Undo/Redo uses inverse commands.
 
-Invariant: each versioned placement pins a concrete source/version. Creating a new Shot Version does not silently repoint existing placements. Legacy arrays are projections during migration, not a second writable truth.
-
-## Edit and Undo sequence
-
-~~~mermaid
-sequenceDiagram
-  actor User
-  participant UI as Timeline UI
-  participant Cmd as Command Dispatcher
-  participant Doc as Composition Store
-  participant History as Undo/Redo
-  participant Render as Renderer
-  User->>UI: Drag / trim / split / insert / transform
-  UI->>Cmd: Typed command and target IDs
-  Cmd->>Doc: Validate target, ranges and track constraints
-  alt Valid
-    Cmd->>History: Capture inverse and history boundary
-    Cmd->>Doc: Apply transaction atomically
-    Doc-->>Render: Revision changed
-    Render-->>UI: Render current playhead
-  else Invalid
-    Cmd-->>UI: Rejection and actionable reason
-    UI-->>User: Preserve prior state
-  end
-  User->>UI: Undo
-  UI->>History: Request inverse command
-  History->>Cmd: Apply inverse
-  Cmd->>Doc: Validate and apply inverse transaction
-~~~
-
-## Mobile contextual state
-
-~~~mermaid
-stateDiagram-v2
-  [*] --> NoSelection
-  NoSelection --> ClipSelected: tap clip
-  NoSelection --> TrackSelected: tap track header
-  ClipSelected --> ClipActions: resolve clip capabilities
-  TrackSelected --> TrackActions: resolve track capabilities
-  ClipActions --> ClipSelected: trim / split / duplicate / delete / properties
-  TrackActions --> TrackSelected: mute / rename / reorder / add track
-  ClipSelected --> NoSelection: clear selection
-  TrackSelected --> NoSelection: clear selection
-~~~
-
-Mobile bottom controls derive from selection and capabilities; they are not fixed Storyboard / Timeline / Assets / References navigation.
-
-## State ownership
-
-| State | Owner | Persisted? |
-|---|---|---|
-| Tracks, placements, timing, source pins, transforms, canvas | Canonical Composition | Yes |
-| Durable source identity and metadata | Project asset registry | Yes |
-| Selection, active source category, inspector, zoom | Editor view state | Usually no |
-| Undo/Redo stack and inverses | Command/history service | Not by default |
-| Storyboard and Reference Profiles | Planning modules | Yes, never as alternate live timeline |
-| Prompt/settings/input snapshots and attempts | Production Task / Generation Run | Yes, immutable per run |
-
-If implementation cannot satisfy a diagram, update the diagram and workspace contract in the same PR as the architectural decision. Do not silently create a parallel model.
+If implementation cannot satisfy a diagram, update the relevant `.puml` source and workspace contract in the same PR as the approved architectural change.
