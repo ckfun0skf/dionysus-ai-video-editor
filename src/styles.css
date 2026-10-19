@@ -2716,4 +2716,10 @@
     -webkit-user-select: none;
   }
 
+  .workbench.timeline-workbench .nested-timeline-scroll .nested-timeline-clip {
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
 }
