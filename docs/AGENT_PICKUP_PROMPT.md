@@ -1,5 +1,7 @@
 # Reusable New-Chat Pickup Prompt — Dionysus
 
+> **Fresh-chat/mobile continuation note (2026-10-19):** The mobile-focused handoff has moved to [`docs/MOBILE_AGENT_PICKUP_PROMPT.md`](MOBILE_AGENT_PICKUP_PROMPT.md) and [`docs/MOBILE_AGENT_HANDOFF.md`](MOBILE_AGENT_HANDOFF.md). Start there for the current CapCut-inspired mobile UX work, then verify live GitHub/CI/Pages state. The main pickup checkpoint elsewhere in this file is historical and must not override the mobile handoff.
+
 Copy the prompt below into a new ChatGPT conversation whenever the current chat is long, interrupted, or another agent must take over.
 
 ---

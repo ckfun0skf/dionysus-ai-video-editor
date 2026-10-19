@@ -63,3 +63,10 @@ The active branch `feat/mobile-audio-mute-state` makes the pressed/muted state v
 
 ## Issue #83 — mobile UI/UX correction
 The owner reports unstyled buttons, overflowing layer actions, and excessive visual density compared with CapCut. The corrective patch consolidates Master Timeline layer actions into a safe-area-aware menu, gives touch controls consistent styling, and reduces vertical clutter by making preview/master action strips horizontally scrollable. A component integration test covers opening and using the layer action menu. Keep DYS-012 in progress until CI, deployment and viewport acceptance are confirmed.
+
+
+## Issue #83 correction merged — 2026-10-19
+
+PR #84 [fix: simplify mobile timeline layer controls](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/84) merged as main SHA `a83f4a6836d7c4ee683b17a1ccdb5897e17364e2`. Its exact-head CI run [39252298875](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39252298875) passed. The patch consolidates Master Timeline layer actions into a compact overflow menu, styles mobile controls consistently, adds safe-area spacing above bottom navigation and reduces vertical toolbar density.
+
+Issue #83 is closed by that merge, but owner acceptance is not implied. The main push CI and Pages deployment for this SHA were not independently confirmed when this report was updated. Verify deployment before asking the owner to test. Keep DYS-012 in progress until the viewport acceptance criteria are evidenced. No browser smoke tests were added or run.
