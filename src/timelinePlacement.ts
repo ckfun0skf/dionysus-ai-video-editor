@@ -1,7 +1,7 @@
 import type { TimelineClip, TimelineTrack } from "./types";
 export interface TimelineDropPosition {start:number;snapTime?:number}
 const epsilon=1e-6,snapFrame=(time:number,fps:number)=>Math.round(time*fps)/fps;
-export function canPlaceTimelineClipOnTrack(clip:TimelineClip,track:TimelineTrack):boolean{return clip.kind==="clip"?track.kind==="video":clip.kind===track.kind}
+export function canPlaceTimelineClipOnTrack(clip:TimelineClip,track:TimelineTrack):boolean{if(clip.kind==="clip")return track.kind==="video";if(clip.kind==="procedural")return track.kind==="video"||track.kind==="procedural";return clip.kind===track.kind}
 export function calculateTimelineDropPosition(clips:TimelineClip[],movingId:string,targetTrackId:string,desiredStart:number,duration:number,timelineDuration:number,fps:number,snapTolerance=0.18):TimelineDropPosition|null{
  if(!Number.isFinite(desiredStart)||!Number.isFinite(duration)||duration<=0||!Number.isFinite(timelineDuration)||timelineDuration<=0)return null;
  const rate=Math.max(1,Number.isFinite(fps)?fps:24);if(duration>timelineDuration+epsilon)return null;

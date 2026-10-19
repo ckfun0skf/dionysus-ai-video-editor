@@ -71,3 +71,10 @@ Start by inspecting GitHub and then continue the work. Do not merely summarize t
 
 - PR #63 was merged to `main` as `9da2f2bfbf7e80abb73f5552a0d1447cff471c0b`; main CI [39227655141](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39227655141) and GitHub Pages deploy [39227655137](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39227655137) passed for the deployed SHA. Public preview: https://ckfun0skf.github.io/dionysus-ai-video-editor/.
 - `src/nestedTimelinePlacement.ts` wires nested Clip/Version Timeline drag previews, snap guides, overlap protection and left/right resize with adjacent-layer trimming into one Undo transaction. #53/#54 remain open pending owner acceptance. Underlying canonical Composition persistence and structure-preserving Save-as-Clip remain unfinished.
+
+
+## Latest requirements and active bug — 2026-10-19
+
+- Issues #53/#54 have been closed as fixed at the owner’s direction. Do not reopen them for minor Add Clip overlap; that is a separate current follow-up.
+- Add Clip bug: current baseline can append a picked clip directly at the playhead with no empty-position check. Active branch: `feat/click-to-place-timeline-clips`. Expected flow: pick asset, click target time on compatible empty track area, if the gap is insufficient show two explicit choices: push subsequent items back (ripple) or trim the new clip to fit. Keep linked audio / Master Shots / Storyboard materialization in sync; timeline end is derived and must expand when required. No silent overwrite. No browser smoke tests.
+- Shot/Clip relationship remains unresolved in implementation: Storyboard creates a Shot with an empty Slot Version, not a separate reusable Asset Clip; Clip Asset version controls support duplicate-current-version, not a new blank version command. DYS-014 remains in progress for canonical Composition persistence and structure-preserving snapshots. Do not add duplicate Clip Assets per Shot without an owner decision.

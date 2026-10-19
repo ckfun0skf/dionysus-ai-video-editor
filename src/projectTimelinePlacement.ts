@@ -104,6 +104,170 @@ export function applyProjectTimelineClipResize(
   };
 }
 
+
+export type ProjectTimelineInsertionStatus = "ready" | "start-occupied" | "needs-resolution" | "invalid-track";
+export type ProjectTimelineInsertResolution = "ripple" | "trim";
+
+export interface ProjectTimelineInsertionPlan {
+  status: ProjectTimelineInsertionStatus;
+  clip: TimelineClip;
+  trackId: string;
+  start: number;
+  duration: number;
+  /** Free time before the next item on this track. Infinity means no later item. */
+  availableDuration: number;
+  /** The first following placement that the new clip would collide with. */
+  conflictStart?: number;
+  conflictId?: string;
+  conflictName?: string;
+  /** Frame-aligned shift required to insert without overlap. */
+  shiftBy?: number;
+}
+
+const insertionEpsilon = 1e-7;
+const snapInsertionFrame = (seconds: number, fps: number) => Math.round(seconds * fps) / fps;
+
+function materializedShotId(clip: TimelineClip, project: DionysusProject): string | undefined {
+  if (!clip.id.startsWith("storyboard-")) return undefined;
+  return clip.shotId ?? project.shots.find(shot => clip.id.startsWith("storyboard-" + shot.id + "-"))?.id;
+}
+
+function isCanonicalShotMaterialization(clip: TimelineClip, project: DionysusProject): boolean {
+  if (clip.kind !== "video") return false;
+  const shotId = materializedShotId(clip, project);
+  if (!shotId) return false;
+  const shot = project.shots.find(item => item.id === shotId);
+  return Boolean(shot && asShotPlacement(project, shot).trackId === clip.trackId);
+}
+
+/** Include generated Storyboard audio/text placements on their own tracks without double-counting
+ * the Master Shot video placement. Orphaned legacy storyboard placements remain visible to occupancy. */
+function getInsertionOccupancyItems(
+  project: DionysusProject,
+  movingClip: TimelineClip,
+  targetTrackId: string,
+): TimelineClip[] {
+  const items = getProjectTimelinePlacementItems(project, movingClip);
+  const ids = new Set(items.map(item => item.id));
+  for (const clip of project.timelineClips ?? []) {
+    if (!clip.id.startsWith("storyboard-") || clip.trackId !== targetTrackId || ids.has(clip.id)) continue;
+    if (isCanonicalShotMaterialization(clip, project)) continue;
+    items.push(clip);
+    ids.add(clip.id);
+  }
+  return items;
+}
+
+/** Calculate a click-to-place plan without silently overwriting or moving existing placements. */
+export function calculateProjectTimelineInsertionPlan(
+  project: DionysusProject,
+  draft: TimelineClip,
+  targetTrackId: string,
+  desiredStart: number,
+): ProjectTimelineInsertionPlan {
+  const fps = Math.max(1, Number.isFinite(project.frameRate) ? project.frameRate : 24);
+  const frame = 1 / fps;
+  const start = snapInsertionFrame(Math.max(0, Number.isFinite(desiredStart) ? desiredStart : 0), fps);
+  const validDuration = Number.isFinite(draft.duration) && draft.duration > 0;
+  const duration = validDuration ? Math.max(frame, snapInsertionFrame(draft.duration, fps)) : frame;
+  const clip: TimelineClip = { ...draft, trackId: targetTrackId, start, duration };
+  const track = project.tracks.find(item => item.id === targetTrackId);
+  if (!validDuration || !track || !canPlaceTimelineClipOnTrack(clip, track)) {
+    return { status: "invalid-track", clip, trackId: targetTrackId, start, duration, availableDuration: 0 };
+  }
+
+  const occupancy = getInsertionOccupancyItems(project, clip, targetTrackId)
+    .filter(item => item.trackId === targetTrackId)
+    .sort((a, b) => a.start - b.start || a.id.localeCompare(b.id));
+  const covering = occupancy.find(item =>
+    start >= item.start - insertionEpsilon && start < item.start + item.duration - insertionEpsilon
+  );
+  if (covering) {
+    return {
+      status: "start-occupied", clip, trackId: targetTrackId, start, duration,
+      availableDuration: 0, conflictStart: covering.start, conflictId: covering.id, conflictName: covering.name,
+    };
+  }
+
+  const next = occupancy.find(item => item.start >= start - insertionEpsilon);
+  const availableDuration = next ? Math.max(0, next.start - start) : Number.POSITIVE_INFINITY;
+  if (!next || duration <= availableDuration + insertionEpsilon) {
+    return { status: "ready", clip, trackId: targetTrackId, start, duration, availableDuration };
+  }
+
+  const shiftBy = Math.ceil(((start + duration - next.start) * fps) - insertionEpsilon) / fps;
+  return {
+    status: "needs-resolution", clip, trackId: targetTrackId, start, duration,
+    availableDuration, conflictStart: next.start, conflictId: next.id, conflictName: next.name,
+    shiftBy: Math.max(frame, shiftBy),
+  };
+}
+
+/** Commit the insertion and optional ripple/trim resolution as a single immutable project update. */
+export function applyProjectTimelineInsertion(
+  project: DionysusProject,
+  plan: ProjectTimelineInsertionPlan,
+  resolution?: ProjectTimelineInsertResolution,
+): DionysusProject {
+  if (plan.status === "invalid-track") throw new Error("This clip cannot be placed on the selected layer.");
+  if (plan.status === "start-occupied") throw new Error("Choose an empty point on the timeline layer.");
+  if (plan.status === "needs-resolution" && !resolution) throw new Error("Choose how to resolve the timeline overlap.");
+
+  const fps = Math.max(1, Number.isFinite(project.frameRate) ? project.frameRate : 24);
+  const frame = 1 / fps;
+  let inserted = { ...plan.clip };
+  let nextProject = project;
+
+  if (plan.status === "needs-resolution" && resolution === "trim") {
+    const trimDuration = Math.floor((plan.availableDuration + insertionEpsilon) * fps) / fps;
+    if (trimDuration < frame - insertionEpsilon) {
+      throw new Error("There is not enough room to keep even one frame. Choose Ripple later clips or another position.");
+    }
+    inserted = {
+      ...inserted,
+      duration: trimDuration,
+      ...((inserted.sourceIn !== undefined || inserted.sourceOut !== undefined)
+        ? { sourceOut: (inserted.sourceIn ?? 0) + trimDuration }
+        : {}),
+    };
+  } else if (plan.status === "needs-resolution" && resolution === "ripple") {
+    const boundary = plan.conflictStart;
+    const delta = plan.shiftBy;
+    if (boundary === undefined || delta === undefined || delta <= 0) {
+      throw new Error("The ripple insertion plan is incomplete.");
+    }
+    const occupancy = getInsertionOccupancyItems(project, plan.clip, plan.trackId)
+      .filter(item => item.trackId === plan.trackId && item.start >= boundary - insertionEpsilon);
+    const occupiedIds = new Set(occupancy.map(item => item.id));
+    const shotIds = new Set(project.shots.map(shot => shot.id));
+    const shiftedShotIds = new Set(occupancy.filter(item => shotIds.has(item.id)).map(item => item.id));
+    const shiftedTimelineIds = new Set(occupancy.filter(item => (project.timelineClips ?? []).some(clip => clip.id === item.id)).map(item => item.id));
+
+    const shots = shiftedShotIds.size
+      ? project.shots.map(shot => ({
+          ...shot,
+          // Materialize legacy sequential placements before moving any Shot so other start times remain stable.
+          masterStart: getMasterShotStart(project.shots, shot.id) + (shiftedShotIds.has(shot.id) ? delta : 0),
+        }))
+      : project.shots;
+
+    const timelineClips = (project.timelineClips ?? []).map(clip => {
+      const ownerShotId = materializedShotId(clip, project);
+      const shift = occupiedIds.has(clip.id)
+        || Boolean(clip.linkedVideoClipId && shiftedTimelineIds.has(clip.linkedVideoClipId))
+        || Boolean(ownerShotId && shiftedShotIds.has(ownerShotId));
+      return shift ? { ...clip, start: snapInsertionFrame(clip.start + delta, fps) } : clip;
+    });
+    nextProject = { ...project, shots, timelineClips };
+  }
+
+  return {
+    ...nextProject,
+    timelineClips: [...(nextProject.timelineClips ?? []), inserted],
+  };
+}
+
+
 export type ProjectTimelineMoveTarget =
   | { type: "shot"; shotId: string }
   | { type: "clip"; clipId: string };

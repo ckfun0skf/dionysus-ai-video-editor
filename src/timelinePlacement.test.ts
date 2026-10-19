@@ -9,4 +9,5 @@ describe("timeline drop placement",()=>{
  it("never returns an overlapping target-track position",()=>{const r=calculateTimelineDropPosition([clip("moving","v1",0,3),clip("first","v2",4,3),clip("second","v2",7,2)],"moving","v2",4.2,3,12,24);expect(r).toEqual({start:1,snapTime:4});expect(r!.start+3).toBeLessThanOrEqual(4+1e-6);expect(r!.start>=9||r!.start+3<=4).toBe(true)});
  it("rejects a full target track and preserves frame alignment",()=>{expect(calculateTimelineDropPosition([clip("moving","v1",0,4),clip("full","v2",0,10)],"moving","v2",2,4,10,24)).toBeNull();const r=calculateTimelineDropPosition([clip("moving","v1",0,1)],"moving","v2",1.013,1,10,24);expect(r).toBeTruthy();expect(r!.start*24).toBeCloseTo(Math.round(r!.start*24),7)});
  it("accepts Clip Assets on video layers but rejects media-kind mismatches",()=>{expect(canPlaceTimelineClipOnTrack(clip("clip","v1",0,1,"clip"),tracks[0])).toBe(true);expect(canPlaceTimelineClipOnTrack(clip("audio","a1",0,1,"audio"),tracks[0])).toBe(false)});
+ it("allows procedural/code placements on Video layers",()=>expect(canPlaceTimelineClipOnTrack(clip("code","v1",0,1,"procedural"),tracks[0])).toBe(true));
 });

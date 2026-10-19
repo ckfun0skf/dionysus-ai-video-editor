@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { sampleProject } from "./sampleProject";
 import {
   applyProjectTimelineClipResize,
+  applyProjectTimelineInsertion,
+  calculateProjectTimelineInsertionPlan,
   calculateProjectTimelineClipResizePreview,
   calculateProjectTimelineDropPosition,
   getProjectTimelinePlacementItems,
@@ -107,4 +109,108 @@ describe("shared project timeline placement engine", () => {
     expect(updated.timelineClips![0].start).toBeGreaterThanOrEqual(updated.shots[0].duration);
     expect(updated.timelineClips![0].duration).toBeLessThan(5);
   });
+
+  it("places a new clip into an empty gap without creating overlap", () => {
+    const project = structuredClone(sampleProject);
+    project.shots = [];
+    const videoTrack = project.tracks.find(track => track.kind === "video")!;
+    const left = { id: "left", name: "Left", kind: "video" as const, trackId: videoTrack.id, start: 0, duration: 2 };
+    const right = { id: "right", name: "Right", kind: "video" as const, trackId: videoTrack.id, start: 5, duration: 2 };
+    project.timelineClips = [left, right];
+    const draft = { id: "new", name: "New asset", kind: "video" as const, trackId: videoTrack.id, start: 0, duration: 2 };
+    const plan = calculateProjectTimelineInsertionPlan(project, draft, videoTrack.id, 2);
+    expect(plan.status).toBe("ready");
+    const updated = applyProjectTimelineInsertion(project, plan);
+    expect(updated.timelineClips).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "left", start: 0, duration: 2 }),
+      expect.objectContaining({ id: "new", start: 2, duration: 2 }),
+      expect.objectContaining({ id: "right", start: 5, duration: 2 }),
+    ]));
+  });
+
+  it("asks for resolution when a new clip is longer than the remaining gap", () => {
+    const project = structuredClone(sampleProject);
+    project.shots = [];
+    const track = project.tracks.find(item => item.kind === "video")!;
+    project.timelineClips = [
+      { id: "left", name: "Left", kind: "video", trackId: track.id, start: 0, duration: 3 },
+      { id: "right", name: "Right", kind: "video", trackId: track.id, start: 4, duration: 2 },
+    ];
+    const draft = { id: "new", name: "New", kind: "video" as const, trackId: track.id, start: 0, duration: 3 };
+    const plan = calculateProjectTimelineInsertionPlan(project, draft, track.id, 3);
+    expect(plan).toMatchObject({ status: "needs-resolution", start: 3, duration: 3, availableDuration: 1, conflictStart: 4, shiftBy: 2 });
+  });
+
+  it("ripples later clips, linked audio, and extends the resulting timeline in one update", () => {
+    const project = structuredClone(sampleProject);
+    project.shots = [];
+    const videoTrack = project.tracks.find(item => item.kind === "video")!;
+    const audioTrack = project.tracks.find(item => item.kind === "audio")!;
+    project.timelineClips = [
+      { id: "left", name: "Left", kind: "video", trackId: videoTrack.id, start: 0, duration: 3 },
+      { id: "next", name: "Next", kind: "video", trackId: videoTrack.id, start: 4, duration: 2 },
+      { id: "after", name: "After", kind: "video", trackId: videoTrack.id, start: 7, duration: 2 },
+      { id: "next-audio", name: "Next audio", kind: "audio", trackId: audioTrack.id, start: 4, duration: 2, linkedVideoClipId: "next" },
+    ];
+    const draft = { id: "new", name: "New", kind: "video" as const, trackId: videoTrack.id, start: 0, duration: 3 };
+    const plan = calculateProjectTimelineInsertionPlan(project, draft, videoTrack.id, 3);
+    const updated = applyProjectTimelineInsertion(project, plan, "ripple");
+    expect(updated.timelineClips).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "new", start: 3, duration: 3 }),
+      expect.objectContaining({ id: "next", start: 6, duration: 2 }),
+      expect.objectContaining({ id: "next-audio", start: 6, duration: 2 }),
+      expect.objectContaining({ id: "after", start: 9, duration: 2 }),
+    ]));
+    expect(Math.max(...updated.timelineClips!.map(clip => clip.start + clip.duration))).toBe(11);
+  });
+
+  it("trims the newly inserted clip to the available gap and leaves existing clips unchanged", () => {
+    const project = structuredClone(sampleProject);
+    project.shots = [];
+    const track = project.tracks.find(item => item.kind === "video")!;
+    project.timelineClips = [
+      { id: "next", name: "Next", kind: "video", trackId: track.id, start: 4, duration: 2 },
+    ];
+    const draft = { id: "new", name: "New", kind: "video" as const, trackId: track.id, start: 0, duration: 3 };
+    const plan = calculateProjectTimelineInsertionPlan(project, draft, track.id, 2);
+    expect(plan.status).toBe("needs-resolution");
+    const updated = applyProjectTimelineInsertion(project, plan, "trim");
+    expect(updated.timelineClips).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "new", start: 2, duration: 2 }),
+      expect.objectContaining({ id: "next", start: 4, duration: 2 }),
+    ]));
+  });
+
+  it("rejects a placement click inside an occupied interval", () => {
+    const project = structuredClone(sampleProject);
+    project.shots = [];
+    const track = project.tracks.find(item => item.kind === "video")!;
+    const occupied = { id: "occupied", name: "Occupied", kind: "video" as const, trackId: track.id, start: 2, duration: 3 };
+    project.timelineClips = [occupied];
+    const draft = { id: "new", name: "New", kind: "video" as const, trackId: track.id, start: 0, duration: 1 };
+    expect(calculateProjectTimelineInsertionPlan(project, draft, track.id, 3).status).toBe("start-occupied");
+  });
+
+  it("ripples a Master Shot and its materialized Storyboard media together", () => {
+    const project = structuredClone(sampleProject);
+    const videoTrack = project.tracks.find(item => item.kind === "video")!;
+    const audioTrack = project.tracks.find(item => item.kind === "audio")!;
+    const shot = { ...project.shots[0], masterStart: 4, masterTrackId: videoTrack.id, duration: 3 };
+    project.shots = [shot];
+    project.timelineClips = [
+      { id: "storyboard-" + shot.id + "-slot-a", name: "Generated video", kind: "video", trackId: videoTrack.id, start: 4, duration: 3, shotId: shot.id },
+      { id: "storyboard-" + shot.id + "-slot-a-audio", name: "Generated audio", kind: "audio", trackId: audioTrack.id, start: 4, duration: 3, shotId: shot.id },
+    ];
+    const draft = { id: "new", name: "New", kind: "video" as const, trackId: videoTrack.id, start: 0, duration: 2 };
+    const plan = calculateProjectTimelineInsertionPlan(project, draft, videoTrack.id, 3);
+    expect(plan.status).toBe("needs-resolution");
+    const updated = applyProjectTimelineInsertion(project, plan, "ripple");
+    expect(updated.shots[0].masterStart).toBe(5);
+    expect(updated.timelineClips).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "storyboard-" + shot.id + "-slot-a", start: 5 }),
+      expect.objectContaining({ id: "storyboard-" + shot.id + "-slot-a-audio", start: 5 }),
+    ]));
+  });
+
+
 });
