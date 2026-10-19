@@ -103,6 +103,10 @@ The current schema-1.0 project shape includes root `timelineClips[]`, `Shot.slot
 
 Do not promote a transitional envelope/projection to authoritative persistence until migration and round-trip tests pass. Save-as-Clip must be a deep, independently editable structural snapshot—not a rendered MP4, flattened layers, or a live alias. Opening/editing a nested Clip creates a new version and cannot rewrite the source Project or older pinned references.
 
+## Design gate — wireframes, prototype and UML
+
+Before production UI implementation, review DYS-020: [responsive wireframe prototype](../public/doc/design/timeline-editor-wireframes.html), [UML/state-flow diagrams](architecture/TIMELINE_EDITOR_UML.md), and [design pack checklist](architecture/TIMELINE_EDITOR_UX_DESIGN_PACK.md). These artifacts define component boundaries, canonical Composition ownership, command/Undo flow and mobile contextual controls. The prototype is low-fidelity, not production code. Resolve major layout/interaction questions before DYS-017; safe model/test work may continue in parallel.
+
 ## 4. Execution milestones
 
 The task dashboard keeps existing task IDs for continuity. These milestones define the recommended execution sequence and map to DYS-005 / DYS-012 / DYS-014 / DYS-016–DYS-019 and current task records.
