@@ -1839,3 +1839,60 @@ describe("click-to-place timeline insertion", () => {
     }
   });
 });
+
+
+describe("mobile touch timeline gestures", () => {
+  it("moves a clip after a long press and release on a compatible track", async () => {
+    const project = structuredClone(persistedProject());
+    project.shots = [];
+    const videoTrack = project.tracks.find(track => track.kind === "video")!;
+    project.timelineClips = [
+      { id: "touch-moving-clip", name: "Touch moving clip", kind: "video", trackId: videoTrack.id, start: 0, duration: 2 },
+      { id: "touch-existing-clip", name: "Touch existing clip", kind: "video", trackId: videoTrack.id, start: 3, duration: 2 },
+    ];
+    act(() => root.unmount());
+    localStorage.setItem("dionysus.project.v1", JSON.stringify(project));
+    root = createRoot(container);
+    act(() => root.render(<App />));
+    await flushEffects();
+    await openTimelineView();
+
+    const moving = Array.from(container.querySelectorAll<HTMLButtonElement>(".visual-media-clip"))
+      .find(button => button.textContent?.includes("Touch moving clip"));
+    const lane = Array.from(container.querySelectorAll<HTMLElement>(".visual-track-lane"))
+      .find(element => element.dataset.trackId === videoTrack.id);
+    expect(moving).toBeTruthy();
+    expect(lane).toBeTruthy();
+    Object.defineProperty(lane!, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({ left: 0, top: 0, right: 100, bottom: 76, width: 100, height: 76, x: 0, y: 0, toJSON: () => ({}) }),
+    });
+    Object.defineProperty(moving!, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({ left: 0, top: 0, right: 20, bottom: 56, width: 20, height: 56, x: 0, y: 0, toJSON: () => ({}) }),
+    });
+    const previousElementFromPoint = Object.getOwnPropertyDescriptor(document, "elementFromPoint");
+    Object.defineProperty(document, "elementFromPoint", { configurable: true, value: () => lane });
+    const pointer = (type: string, x: number, y: number) => {
+      const event = new Event(type, { bubbles: true, cancelable: true }) as PointerEvent;
+      Object.defineProperties(event, {
+        pointerId: { value: 71 }, pointerType: { value: "touch" }, button: { value: 0 },
+        clientX: { value: x }, clientY: { value: y },
+      });
+      return event;
+    };
+    try {
+      act(() => moving!.dispatchEvent(pointer("pointerdown", 10, 20)));
+      await act(async () => { await new Promise(resolve => window.setTimeout(resolve, 300)); });
+      act(() => window.dispatchEvent(pointer("pointermove", 90, 20)));
+      act(() => window.dispatchEvent(pointer("pointerup", 90, 20)));
+      await flushEffects();
+      const moved = (persistedProject().timelineClips ?? []).find(clip => clip.id === "touch-moving-clip");
+      expect(moved?.start).toBeGreaterThan(5);
+      expect(moved?.trackId).toBe(videoTrack.id);
+    } finally {
+      if (previousElementFromPoint) Object.defineProperty(document, "elementFromPoint", previousElementFromPoint);
+      else delete (document as Document & { elementFromPoint?: (x: number, y: number) => Element | null }).elementFromPoint;
+    }
+  });
+});

@@ -252,6 +252,23 @@ export default function App() {
   const shotResizeRef = useRef<{ id: string; edge: "left" | "right"; pointerId: number; x: number; start: number; duration: number; trackId: string; laneWidth: number } | null>(null);
   const [shotResizePreview, setShotResizePreview] = useState<ClipResizePreview | null>(null);
   const clipDragSourceRef = useRef<TimelineClip | null>(null);
+  const touchClipMoveRef = useRef<{
+    clip: TimelineClip;
+    pointerId: number;
+    startX: number;
+    startY: number;
+    lastX: number;
+    lastY: number;
+    grabOffset: number;
+    activated: boolean;
+    movedBeforeActivation: boolean;
+    scrollSurface: HTMLElement | null;
+    timer?: number;
+    moveListener?: (event: PointerEvent) => void;
+    upListener?: (event: PointerEvent) => void;
+    cancelListener?: (event: PointerEvent) => void;
+  } | null>(null);
+  const suppressTouchClipClickRef = useRef(false);
   const masterShotDragSourceRef = useRef<string>("");
   const [clipDropPreview, setClipDropPreview] = useState<{ trackId: string; start: number; duration: number; name: string; snapTime?: number } | null>(null);
   const nestedLayerDragSourceRef = useRef("");
@@ -1452,6 +1469,141 @@ export default function App() {
     const delta = Math.round(((clientX - active.x) / Math.max(active.laneWidth, 1)) * active.version.duration * fps) / fps;
     return calculateClipVersionResizePreview(active.version, active.id, active.edge, delta, active.version.duration, fps);
   }
+  function cancelTouchClipMove() {
+    const active = touchClipMoveRef.current;
+    if (!active) return;
+    if (active.timer !== undefined) window.clearTimeout(active.timer);
+    if (active.moveListener) window.removeEventListener("pointermove", active.moveListener);
+    if (active.upListener) window.removeEventListener("pointerup", active.upListener);
+    if (active.cancelListener) window.removeEventListener("pointercancel", active.cancelListener);
+    touchClipMoveRef.current = null;
+  }
+
+  function beginTouchClipMove(event: React.PointerEvent<HTMLButtonElement>, clip: TimelineClip) {
+    if (event.pointerType === "mouse" || event.button !== 0 || (event.target as HTMLElement).closest(".clip-resize-handle")) return;
+    cancelTouchClipMove();
+    const buttonRect = event.currentTarget.getBoundingClientRect();
+    const grabOffset = buttonRect.width > 0
+      ? Math.max(0, Math.min(clip.duration, ((event.clientX - buttonRect.left) / buttonRect.width) * clip.duration))
+      : clip.duration / 2;
+    const active: NonNullable<typeof touchClipMoveRef.current> = {
+      clip, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY,
+      lastX: event.clientX, lastY: event.clientY, grabOffset, activated: false,
+      movedBeforeActivation: false,
+      scrollSurface: event.currentTarget.closest<HTMLElement>(".timeline-horizontal-scroll"),
+    };
+    const getDrop = (clientX: number, clientY: number) => {
+      const target = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
+      const lane = target?.closest<HTMLElement>(".visual-track-lane[data-track-id]");
+      const currentProject = projectRef.current;
+      const track = currentProject.tracks.find(item => item.id === lane?.dataset.trackId);
+      const moving = (currentProject.timelineClips ?? []).find(item => item.id === clip.id) ?? clip;
+      if (!lane || !track || !canPlaceTimelineClipOnTrack(moving, track)) return null;
+      const rect = lane.getBoundingClientRect();
+      const pointerTime = ((clientX - rect.left) / Math.max(rect.width, 1)) * mediaTimelineDuration;
+      const rawStart = Math.max(0, pointerTime - active.grabOffset);
+      const pos = calculateProjectTimelineDropPosition(currentProject, moving, track.id, rawStart, mediaTimelineDuration);
+      return pos ? { project: currentProject, moving, track, pos } : null;
+    };
+    const onMove = (nativeEvent: PointerEvent) => {
+      if (touchClipMoveRef.current !== active || nativeEvent.pointerId !== active.pointerId) return;
+      const deltaX = nativeEvent.clientX - active.lastX;
+      const deltaY = nativeEvent.clientY - active.lastY;
+      active.lastX = nativeEvent.clientX;
+      active.lastY = nativeEvent.clientY;
+      if (!active.activated) {
+        if (Math.hypot(nativeEvent.clientX - active.startX, nativeEvent.clientY - active.startY) > 8) {
+          active.movedBeforeActivation = true;
+          if (active.timer !== undefined) {
+            window.clearTimeout(active.timer);
+            active.timer = undefined;
+          }
+          nativeEvent.preventDefault();
+          if (Math.abs(deltaX) >= Math.abs(deltaY) && active.scrollSurface) {
+            active.scrollSurface.scrollLeft -= deltaX;
+          } else if (Math.abs(deltaY) > 0) {
+            window.scrollBy(0, -deltaY);
+          }
+        }
+        return;
+      }
+      nativeEvent.preventDefault();
+      const drop = getDrop(nativeEvent.clientX, nativeEvent.clientY);
+      if (!drop) {
+        setClipDropPreview(null);
+        return;
+      }
+      setClipDropPreview({
+        trackId: drop.track.id, start: drop.pos.start, duration: drop.moving.duration, name: drop.moving.name,
+        ...(drop.pos.snapTime !== undefined ? { snapTime: drop.pos.snapTime } : {}),
+      });
+    };
+    const suppressClickBriefly = () => {
+      suppressTouchClipClickRef.current = true;
+      window.setTimeout(() => { suppressTouchClipClickRef.current = false; }, 0);
+    };
+    const onUp = (nativeEvent: PointerEvent) => {
+      if (touchClipMoveRef.current !== active || nativeEvent.pointerId !== active.pointerId) return;
+      if (!active.activated) {
+        if (active.movedBeforeActivation) suppressClickBriefly();
+        cancelTouchClipMove();
+        return;
+      }
+      nativeEvent.preventDefault();
+      suppressClickBriefly();
+      const drop = getDrop(nativeEvent.clientX, nativeEvent.clientY);
+      if (!drop) {
+        setNotice("Clip move cancelled. Release on a compatible timeline track.");
+        setClipDropPreview(null);
+        cancelTouchClipMove();
+        return;
+      }
+      const destinationConflict = getTimelinePlacementItems(drop.project, drop.moving).some(item =>
+        item.id !== drop.moving.id && item.trackId === drop.track.id &&
+        drop.pos.start < item.start + item.duration - 1e-7 &&
+        drop.pos.start + drop.moving.duration > item.start + 1e-7
+      );
+      if (destinationConflict) {
+        setNotice("Clip move cancelled: this position overlaps existing content.");
+      } else if (drop.track.id !== drop.moving.trackId || Math.abs(drop.pos.start - drop.moving.start) > 1e-6) {
+        try {
+          change(p => moveProjectTimelinePlacement(p, { type: "clip", clipId: drop.moving.id }, drop.track.id, drop.pos.start));
+          setSelectedTimelineClipId(drop.moving.id);
+          setSelectedTimelineTrackId(drop.track.id);
+          setIsPlaying(false);
+          setNotice(drop.pos.snapTime !== undefined ? "Clip snapped to an aligned, non-overlapping position." : "Clip moved to a non-overlapping position.");
+        } catch (error) {
+          setNotice(error instanceof Error ? error.message : "Could not move the clip.");
+        }
+      } else {
+        setNotice("Clip kept in place.");
+      }
+      setClipDropPreview(null);
+      cancelTouchClipMove();
+    };
+    const onCancel = (nativeEvent: PointerEvent) => {
+      if (touchClipMoveRef.current !== active || nativeEvent.pointerId !== active.pointerId) return;
+      setClipDropPreview(null);
+      cancelTouchClipMove();
+    };
+    active.moveListener = onMove;
+    active.upListener = onUp;
+    active.cancelListener = onCancel;
+    touchClipMoveRef.current = active;
+    window.addEventListener("pointermove", onMove, { passive: false });
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onCancel);
+    active.timer = window.setTimeout(() => {
+      if (touchClipMoveRef.current !== active) return;
+      active.activated = true;
+      clipDragSourceRef.current = clip;
+      setSelectedTimelineClipId(clip.id);
+      setSelectedTimelineTrackId(clip.trackId);
+      setClipDropPreview({ trackId: clip.trackId, start: clip.start, duration: clip.duration, name: clip.name });
+      setNotice("Clip selected for moving. Drag to a track position and release.");
+    }, 260);
+  }
+
   function cancelNestedLayerResize() {
     const active = nestedResizeRef.current;
     if (active?.moveListener) window.removeEventListener("pointermove", active.moveListener);
@@ -1825,7 +1977,7 @@ export default function App() {
    {track.kind==="video" && <button className="track-expand-toggle" aria-label={(collapsedVideoTrackIds.includes(track.id)?"Expand ":"Collapse ")+track.name} aria-expanded={!collapsedVideoTrackIds.includes(track.id)} onClick={()=>setCollapsedVideoTrackIds(current=>current.includes(track.id)?current.filter(id=>id!==track.id):[...current,track.id])}>{collapsedVideoTrackIds.includes(track.id)?"▸":"▾"}</button>}
    <span className={track.kind==="audio"?"track-kind-audio":"track-kind-video"}>{track.kind==="audio"?<AudioLines size={15}/>:track.kind==="procedural"?<Code2 size={15}/>:track.kind==="text"?<Sparkles size={15}/>:<Film size={15}/>}</span><div><strong>{track.name||track.kind}</strong><small>{track.kind==="audio"?"Audio layer":track.kind==="procedural"?"Code layer":track.kind==="text"?"Text layer":track.kind==="effects"?"Effects layer":"Video layer"}</small></div>{track.kind==="video" && <button type="button" className="track-settings-button" title="Video layer settings" aria-label={"Settings for "+track.name} onClick={event=>{event.stopPropagation();setVideoTrackSettingsId(track.id);}}><Settings2 size={14}/></button>}{track.kind==="audio" && <button className={"track-layer-mute"+(track.muted?" muted":"")} aria-label={(track.muted?"Unmute ":"Mute ")+track.name+" layer"} aria-pressed={Boolean(track.muted)} title={track.muted?"Unmute audio layer":"Mute audio layer"} onClick={event=>{event.stopPropagation();change(p=>({...p,tracks:p.tracks.map(item=>item.id===track.id?{...item,muted:!item.muted}:item)}));}}>{track.muted?"Unmute":"Mute"}</button>}<button className="track-add-clip" aria-label={"Add clip to "+track.name} title={"Add clip to "+track.name} onClick={event=>{event.stopPropagation();if(track.kind==="effects"){setNotice("Effects layer clips are not yet supported.");return;}if(track.kind==="video"||track.kind==="audio"){setAssetPickerTrackId(track.id);setAssetPickerSearch("");setAssetPickerFilter(track.kind==="audio"?"audio":"all");return;}const kind=track.kind==="text"?"text":"procedural";const clipId=id("timeline-clip");const duration=Math.max(.5,Math.min(3,mediaTimelineDuration-editorTime||3));const name=(kind==="procedural"?"Code":"Text")+" clip "+((project.timelineClips??[]).filter(clip=>clip.trackId===track.id).length+1);beginTimelineClipPlacement({id:clipId,name,kind,trackId:track.id,start:0,duration});}}><Plus size={13}/></button><button className="track-remove-button" aria-label={"Remove "+track.name+" layer"} title={"Remove "+track.name+" layer"} onClick={event=>{event.stopPropagation();if(window.confirm("Remove layer “"+track.name+"” and all clips on it?")){change(p=>{const tracks=p.tracks.filter(item=>item.id!==track.id);const fallbackVideoTrackId=tracks.find(item=>item.kind==="video")?.id;return {...p,tracks,shots:p.shots.map(shot=>shot.masterTrackId===track.id?{...shot,masterTrackId:fallbackVideoTrackId}:shot),timelineClips:(p.timelineClips??[]).filter(clip=>clip.trackId!==track.id&&!(clip.linkedVideoClipId&&(p.timelineClips??[]).some(source=>source.id===clip.linkedVideoClipId&&source.trackId===track.id)))};});setSelectedTimelineClipId("");setTimelineClipSettingsId("");}}}><span aria-hidden="true">×</span></button>
   </div>
-  <div className="visual-track-lane" style={{backgroundSize:(5/mediaTimelineDuration*100)+"% 100%",backgroundColor:track.kind==="video"?(track.backgroundTransparent?"transparent":track.backgroundColor??"#111113"):undefined,backgroundImage:track.kind==="video"&&track.backgroundTransparent?"none":undefined}}
+  <div className="visual-track-lane" data-track-id={track.id} style={{backgroundSize:(5/mediaTimelineDuration*100)+"% 100%",backgroundColor:track.kind==="video"?(track.backgroundTransparent?"transparent":track.backgroundColor??"#111113"):undefined,backgroundImage:track.kind==="video"&&track.backgroundTransparent?"none":undefined}}
    onContextMenu={event=>{event.preventDefault();setTrackContextMenuId(track.id);setTrackContextMenuPosition({x:Math.min(event.clientX,window.innerWidth-190),y:Math.min(event.clientY,window.innerHeight-180)});setSelectedTimelineTrackId(track.id);}} onPointerDown={event=>{if(event.target!==event.currentTarget)return;setSelectedTimelineTrackId(track.id);const rect=event.currentTarget.getBoundingClientRect();const next=Math.max(0,Math.min(mediaTimelineDuration,((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration));if(pendingTimelineClip){placePendingTimelineClip(track,next);return;}playbackTimeRef.current=next;setIsPlaying(false);setEditorTime(next);}}
    onDragOver={event=>{event.preventDefault();event.dataTransfer.dropEffect="move";const masterShotId=event.dataTransfer.getData("text/dionysus-master-shot") || masterShotDragSourceRef.current;if(masterShotId){const shot=project.shots.find(item=>item.id===masterShotId);if(!shot||track.kind!=="video"){setClipDropPreview(null);return;}const moving=asMasterShotTimelineClip(project,shot),rect=event.currentTarget.getBoundingClientRect(),pointerTime=((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration,rawStart=Math.max(0,pointerTime-moving.duration/2),pos=calculateProjectTimelineDropPosition(project,moving,track.id,rawStart,mediaTimelineDuration);if(!pos){setClipDropPreview(null);return;}setClipDropPreview({trackId:track.id,start:pos.start,duration:moving.duration,name:moving.name,...(pos.snapTime!==undefined?{snapTime:pos.snapTime}:{})});return;}const dragId=event.dataTransfer.getData("text/dionysus-timeline-clip");const moving=clipDragSourceRef.current??(project.timelineClips??[]).find(clip=>clip.id===dragId);if(!moving||!canPlaceTimelineClipOnTrack(moving,track)){setClipDropPreview(null);return;}const rect=event.currentTarget.getBoundingClientRect();const pointerTime=((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration;const rawStart=Math.max(0,pointerTime-moving.duration/2);const pos=calculateProjectTimelineDropPosition(project,moving,track.id,rawStart,mediaTimelineDuration);if(!pos){setClipDropPreview(null);return;}setClipDropPreview({trackId:track.id,start:pos.start,duration:moving.duration,name:moving.name,...(pos.snapTime!==undefined?{snapTime:pos.snapTime}: {})});}}
    onDrop={event=>{
@@ -1876,7 +2028,7 @@ export default function App() {
      const thumbnailPath=clip.thumbnailPath??getAssetThumbnail(clipAsset)??activeVisualLayer?.thumbnailPath??getAssetThumbnail(activeVisualAsset);
      const resizedClip = clipResizePreview?.id === clip.id ? clipResizePreview : clipResizePreview?.trims.find(trim => trim.id === clip.id);
      return <div className="visual-media-clip-wrap" key={clip.id} style={{left:((resizedClip?.start??clip.start)/mediaTimelineDuration*100)+"%",width:Math.max(2,(resizedClip?.duration??clip.duration)/mediaTimelineDuration*100)+"%",opacity:track.kind==="video"?(track.opacity??1):1}}>
-       <button draggable className={"visual-media-clip "+(clip.kind==="audio"?"audio-clip "+(clip.assetId?"audio-has-source":"audio-placeholder"):clip.kind==="text"?"text-clip":clip.kind==="procedural"?"procedural-clip":"video-clip "+(clip.assetId?"video-has-source":"video-placeholder"))+(clip.id===selectedTimelineClipId?" selected":"")} onDragStart={event=>{event.dataTransfer.setData("text/dionysus-timeline-clip",clip.id);event.dataTransfer.setData("text/plain",clip.name);event.dataTransfer.effectAllowed="move";clipDragSourceRef.current=clip;setClipDropPreview({trackId:clip.trackId,start:clip.start,duration:clip.duration,name:clip.name});}} onDragEnd={()=>{clipDragSourceRef.current=null;setClipDropPreview(null);}} onContextMenu={event=>{event.preventDefault();event.stopPropagation();setSelectedTimelineClipId(clip.id);setClipContextMenuId(clip.id);setClipContextMenuPosition({x:Math.min(event.clientX,window.innerWidth-190),y:Math.min(event.clientY,window.innerHeight-180)});}} onDoubleClick={()=>setTimelineClipSettingsId(clip.id)} onClick={()=>{setSelectedTimelineClipId(clip.id);setSelectedTimelineTrackId(track.id);const next=Math.min(activeTimelineDuration,clip.start);playbackTimeRef.current=next;setIsPlaying(false);setEditorTime(next);}} style={{backgroundColor:clip.kind==="video"&&!clip.assetId?(track.backgroundTransparent?"transparent":track.backgroundColor??"#20232a"):undefined}} title={clip.name+" · "+clip.start.toFixed(1)+"–"+(clip.start+clip.duration).toFixed(1)+"s"}><span className="visual-clip-icon">{clip.kind==="audio"?<AudioLines size={13}/>:clip.kind==="text"?<Sparkles size={13}/>:clip.kind==="procedural"?<Layers3 size={13}/>:thumbnailPath?<img className="visual-clip-thumbnail" src={thumbnailPath} alt=""/>:<span className="visual-clip-thumbnail-placeholder"><Film size={13}/></span>}</span><span className="visual-clip-copy"><strong>{clip.name}</strong><small>{clip.duration.toFixed(1)}s{clip.linkedVideoClipId?" · linked":clip.kind==="audio"?" · independent":""}{clip.assetId?"":" · no source"}</small></span>{clip.kind==="audio"&&<AudioWaveform path={project.assets.find(asset=>asset.id===clip.assetId)?.path}/>}<span className="clip-resize-handle clip-resize-left" role="separator" aria-label={"Resize start of "+clip.name} onPointerDown={event=>beginTimelineClipResize(event,clip,"left")} onPointerCancel={cancelTimelineClipResize}/><span className="clip-resize-handle clip-resize-right" role="separator" aria-label={"Resize end of "+clip.name} onPointerDown={event=>beginTimelineClipResize(event,clip,"right")} onPointerCancel={cancelTimelineClipResize}/></button>
+       <button draggable className={"visual-media-clip "+(clip.kind==="audio"?"audio-clip "+(clip.assetId?"audio-has-source":"audio-placeholder"):clip.kind==="text"?"text-clip":clip.kind==="procedural"?"procedural-clip":"video-clip "+(clip.assetId?"video-has-source":"video-placeholder"))+(clip.id===selectedTimelineClipId?" selected":"")} onPointerDown={event=>beginTouchClipMove(event,clip)} onDragStart={event=>{event.dataTransfer.setData("text/dionysus-timeline-clip",clip.id);event.dataTransfer.setData("text/plain",clip.name);event.dataTransfer.effectAllowed="move";clipDragSourceRef.current=clip;setClipDropPreview({trackId:clip.trackId,start:clip.start,duration:clip.duration,name:clip.name});}} onDragEnd={()=>{clipDragSourceRef.current=null;setClipDropPreview(null);}} onContextMenu={event=>{event.preventDefault();event.stopPropagation();setSelectedTimelineClipId(clip.id);setClipContextMenuId(clip.id);setClipContextMenuPosition({x:Math.min(event.clientX,window.innerWidth-190),y:Math.min(event.clientY,window.innerHeight-180)});}} onDoubleClick={()=>setTimelineClipSettingsId(clip.id)} onClick={()=>{if(suppressTouchClipClickRef.current){suppressTouchClipClickRef.current=false;return;}setSelectedTimelineClipId(clip.id);setSelectedTimelineTrackId(track.id);const next=Math.min(activeTimelineDuration,clip.start);playbackTimeRef.current=next;setIsPlaying(false);setEditorTime(next);}} style={{backgroundColor:clip.kind==="video"&&!clip.assetId?(track.backgroundTransparent?"transparent":track.backgroundColor??"#20232a"):undefined}} title={clip.name+" · "+clip.start.toFixed(1)+"–"+(clip.start+clip.duration).toFixed(1)+"s"}><span className="visual-clip-icon">{clip.kind==="audio"?<AudioLines size={13}/>:clip.kind==="text"?<Sparkles size={13}/>:clip.kind==="procedural"?<Layers3 size={13}/>:thumbnailPath?<img className="visual-clip-thumbnail" src={thumbnailPath} alt=""/>:<span className="visual-clip-thumbnail-placeholder"><Film size={13}/></span>}</span><span className="visual-clip-copy"><strong>{clip.name}</strong><small>{clip.duration.toFixed(1)}s{clip.linkedVideoClipId?" · linked":clip.kind==="audio"?" · independent":""}{clip.assetId?"":" · no source"}</small></span>{clip.kind==="audio"&&<AudioWaveform path={project.assets.find(asset=>asset.id===clip.assetId)?.path}/>}<span className="clip-resize-handle clip-resize-left" role="separator" aria-label={"Resize start of "+clip.name} onPointerDown={event=>beginTimelineClipResize(event,clip,"left")} onPointerCancel={cancelTimelineClipResize}/><span className="clip-resize-handle clip-resize-right" role="separator" aria-label={"Resize end of "+clip.name} onPointerDown={event=>beginTimelineClipResize(event,clip,"right")} onPointerCancel={cancelTimelineClipResize}/></button>
        {clip.kind==="audio" && <button className="timeline-clip-mute" aria-label={(clip.muted?"Unmute ":"Mute ")+clip.name} aria-pressed={Boolean(clip.muted)} onClick={()=>change(p=>({...p,timelineClips:(p.timelineClips??[]).map(item=>item.id===clip.id?{...item,muted:!item.muted}:item)}))}>{clip.muted?"🔇":"♪"}</button>}
        {clip.kind==="video" && versionShot && versionSlot && <details className="timeline-version-menu"><summary aria-label={"Show versions for "+versionShot.title}>▾</summary><div className="timeline-version-menu-panel">
          <strong>{versionShot.title}</strong>
