@@ -201,3 +201,8 @@ Active branch `feat/mobile-timeline-zoom-controls` adds phone-only Zoom In / Zoo
 PR #72 merged timeline Zoom In / Zoom Out / Fit controls as main commit `f57b5ad3ffe5b80bd586b513fc2fc1e201898cf8`; exact-head CI run [39238940480](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39238940480) passed at `2ce2e57f9a4360c6f438a56d721625cb54081947`.
 
 Active branch `feat/mobile-touch-trim-handles` expands trim hit targets to 20 px on mobile, adds visible grab markers, and tests touch-pointer trimming. DYS-012 remains in progress; deployment and portrait/landscape viewport acceptance remain unconfirmed. Do not add browser smoke tests or ask the owner to test before deployment is verified.
+
+
+## Mobile editing follow-up — 2026-10-19 (preview history)
+
+PR #79 has merged frame-accurate keyboard scrubbing as main commit `0a5ace89e28fff5d1f46bc0e4330d56e91f9035e`. The active branch `feat/mobile-preview-undo-redo` adds touch-sized Undo/Redo controls beside the preview and an App integration test covering duplicate → Undo → Redo. Keep DYS-012 in progress until exact-head CI, main push CI, Pages deployment, and viewport acceptance are independently recorded. Do not add or run browser smoke tests.

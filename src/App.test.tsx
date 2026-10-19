@@ -2151,3 +2151,45 @@ describe("frame-accurate timeline keyboard scrubbing", () => {
     expect(Number(ruler!.getAttribute("aria-valuenow"))).toBeCloseTo(0, 5);
   });
 });
+
+
+describe("mobile preview history controls", () => {
+  it("exposes Undo and Redo beside the preview and restores clip duplication", async () => {
+    const project = structuredClone(persistedProject());
+    const videoTrack = project.tracks.find(track => track.kind === "video")!;
+    project.timelineClips = [
+      { id: "mobile-history-clip", name: "Mobile history clip", kind: "video", trackId: videoTrack.id, start: 0, duration: 2 },
+    ];
+    act(() => root.unmount());
+    localStorage.setItem("dionysus.project.v1", JSON.stringify(project));
+    root = createRoot(container);
+    act(() => root.render(<App />));
+    await flushEffects();
+    await openTimelineView();
+
+    const historyButtons = () => Array.from(container.querySelectorAll<HTMLButtonElement>(".integrated-preview-controls .mobile-history-control"));
+    expect(historyButtons().map(button => button.getAttribute("aria-label"))).toEqual(["Undo edit", "Redo edit"]);
+    expect(historyButtons()[0].disabled).toBe(true);
+    expect(historyButtons()[1].disabled).toBe(true);
+
+    const clip = Array.from(container.querySelectorAll<HTMLButtonElement>(".visual-media-clip"))
+      .find(button => button.textContent?.includes("Mobile history clip"))!;
+    click(clip);
+    await flushEffects();
+    const duplicate = Array.from(container.querySelectorAll<HTMLButtonElement>(".mobile-clip-toolbar button"))
+      .find(button => button.getAttribute("aria-label") === "Duplicate selected clip")!;
+    click(duplicate);
+    await flushEffects();
+    expect((persistedProject().timelineClips ?? []).filter(item => item.name === "Mobile history clip")).toHaveLength(2);
+    expect(historyButtons()[0].disabled).toBe(false);
+
+    click(historyButtons()[0]);
+    await flushEffects();
+    expect((persistedProject().timelineClips ?? []).filter(item => item.name === "Mobile history clip")).toHaveLength(1);
+    expect(historyButtons()[1].disabled).toBe(false);
+
+    click(historyButtons()[1]);
+    await flushEffects();
+    expect((persistedProject().timelineClips ?? []).filter(item => item.name === "Mobile history clip")).toHaveLength(2);
+  });
+});

@@ -232,3 +232,10 @@ The owner wants a future phone version with a CapCut-inspired interface. Treat t
 - PR #72 merged phone-only Zoom In / Zoom Out / Fit controls as main commit `f57b5ad3ffe5b80bd586b513fc2fc1e201898cf8`; exact-head CI run [39238940480](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39238940480) passed at `2ce2e57f9a4360c6f438a56d721625cb54081947`.
 - Active branch `feat/mobile-touch-trim-handles` expands mobile clip/Shot trim hit targets and adds a component test that resizes a Master Timeline clip with a touch pointer. Exact-head CI is pending.
 - Main push CI and Pages deployment remain independently unconfirmed. Do not ask the owner to test until deployment is confirmed; no browser smoke tests.
+
+
+## Mobile editing checkpoint — preview history controls (2026-10-19)
+
+- Main includes PR #79 frame-accurate keyboard scrubbing at `0a5ace89e28fff5d1f46bc0e4330d56e91f9035e`.
+- Active branch: `feat/mobile-preview-undo-redo`. It exposes Undo/Redo beside the mobile preview controls and adds an App test for duplicate → Undo → Redo.
+- Keep DYS-012 in progress. Do not claim device/viewport acceptance, and do not add/run browser smoke tests. After PR CI passes, merge through PR, verify main CI and GitHub Pages deployment, then update this checkpoint with exact run IDs.
