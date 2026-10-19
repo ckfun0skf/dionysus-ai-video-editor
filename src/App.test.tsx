@@ -2135,3 +2135,19 @@ describe("mobile frame-step preview controls", () => {
     expect(frameCounter!.textContent).toBe("0f");
   });
 });
+
+
+describe("frame-accurate timeline keyboard scrubbing", () => {
+  it("moves the focused visual ruler by one frame per arrow key", async () => {
+    await openTimelineView();
+    const ruler = container.querySelector<HTMLElement>('.visual-timeline-ruler-lane[aria-label="Timeline playhead"]');
+    expect(ruler).toBeTruthy();
+    act(() => ruler!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })));
+    await flushEffects();
+    const value = Number(ruler!.getAttribute("aria-valuenow"));
+    expect(value).toBeCloseTo(1 / sampleProject.frameRate, 5);
+    act(() => ruler!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true })));
+    await flushEffects();
+    expect(Number(ruler!.getAttribute("aria-valuenow"))).toBeCloseTo(0, 5);
+  });
+});
