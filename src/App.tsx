@@ -37,6 +37,44 @@ const id = (prefix: string) => prefix + "-" + crypto.randomUUID();
 const time = (s: number) => String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(Math.floor(s % 60)).padStart(2, "0");
 const copy = (p: DionysusProject) => JSON.parse(JSON.stringify(p)) as DionysusProject;
 
+function createEmptyProject(): DionysusProject {
+  const now = new Date().toISOString();
+  return {
+    ...copy(sampleProject),
+    id: id("project"),
+    name: "Untitled Project",
+    createdAt: now,
+    updatedAt: now,
+    assets: [],
+    referenceProfiles: [],
+    timelineClips: [],
+    storyboardConnections: [],
+    tracks: [{ id: id("track-video"), name: "Video 1", kind: "video" }],
+    shots: [],
+  };
+}
+
+function clearDemoSeedData(project: DionysusProject): DionysusProject {
+  if (project.id !== "project-dionysus-demo" || project.name !== "Cyberpunk Awakening") return project;
+  const seedIds = new Set(["shot-01", "shot-02", "shot-03"]);
+  if (project.shots.length !== seedIds.size || !project.shots.every(shot => seedIds.has(shot.id))) return project;
+  const defaultTrackIds = new Set(["track-video-1", "track-video-2", "track-audio-1", "track-text-1"]);
+  const hasOnlyDefaultTracks = project.tracks.length === defaultTrackIds.size && project.tracks.every(track => defaultTrackIds.has(track.id));
+  const tracks = (project.timelineClips ?? []).length === 0 && hasOnlyDefaultTracks
+    ? [{ id: "track-video-1", name: "Video 1", kind: "video" as const }]
+    : project.tracks.map(track => ({
+        ...track,
+        name: track.name === "Main Video" ? "Video 1" : track.name === "Overlay / PiP" ? "Video 2" : track.name === "Soundtrack" ? "Audio 1" : track.name === "Dialogue & Subtitles" ? "Text 1" : track.name,
+      }));
+  return {
+    ...project,
+    name: "Untitled Project",
+    shots: [],
+    storyboardConnections: [],
+    tracks,
+  };
+}
+
 function normalizeLegacyTimelineTracks(project: DionysusProject): DionysusProject {
   const legacyTracks = project.tracks.filter(track => track.kind === "procedural" || track.kind === "effects");
   if (legacyTracks.length === 0) return project;
@@ -105,10 +143,10 @@ export default function App() {
   const [project, setProject] = useState<DionysusProject>(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return normalizeLegacyTimelineTracks(copy(sampleProject));
+      if (!raw) return createEmptyProject();
       const parsed: unknown = JSON.parse(raw);
-      return validateProject(parsed) ? normalizeLegacyTimelineTracks(parsed) : normalizeLegacyTimelineTracks(copy(sampleProject));
-    } catch { return normalizeLegacyTimelineTracks(copy(sampleProject)); }
+      return validateProject(parsed) ? normalizeLegacyTimelineTracks(clearDemoSeedData(parsed)) : createEmptyProject();
+    } catch { return createEmptyProject(); }
   });
   const [undoStack, setUndoStack] = useState<DionysusProject[]>([]);
   const [redoStack, setRedoStack] = useState<DionysusProject[]>([]);
@@ -1563,7 +1601,7 @@ export default function App() {
   </div>
   <div className="visual-track-lane" style={{backgroundSize:(5/mediaTimelineDuration*100)+"% 100%",backgroundColor:track.kind==="video"?(track.backgroundTransparent?"transparent":track.backgroundColor??"#111113"):undefined,backgroundImage:track.kind==="video"&&track.backgroundTransparent?"none":undefined}}
    onContextMenu={event=>{event.preventDefault();setTrackContextMenuId(track.id);setTrackContextMenuPosition({x:Math.min(event.clientX,window.innerWidth-190),y:Math.min(event.clientY,window.innerHeight-180)});setSelectedTimelineTrackId(track.id);}} onPointerDown={event=>{if(event.target!==event.currentTarget)return;setSelectedTimelineTrackId(track.id);const rect=event.currentTarget.getBoundingClientRect();const next=Math.max(0,Math.min(activeTimelineDuration,((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration));playbackTimeRef.current=next;setIsPlaying(false);setEditorTime(next);}}
-   onDragOver={event=>{event.preventDefault();event.dataTransfer.dropEffect="move";const moving=clipDragSourceRef.current;if(!moving||!canPlaceTimelineClipOnTrack(moving,track)){setClipDropPreview(null);return;}const rect=event.currentTarget.getBoundingClientRect();const pointerTime=((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration;const rawStart=Math.max(0,pointerTime-moving.duration/2);const pos=calculateTimelineDropPosition(project.timelineClips??[],moving.id,track.id,rawStart,moving.duration,mediaTimelineDuration,Math.max(1,project.frameRate||24));if(!pos){setClipDropPreview(null);return;}setClipDropPreview({trackId:track.id,start:pos.start,duration:moving.duration,name:moving.name,...(pos.snapTime!==undefined?{snapTime:pos.snapTime}: {})});}}
+   onDragOver={event=>{event.preventDefault();event.dataTransfer.dropEffect="move";const dragId=event.dataTransfer.getData("text/dionysus-timeline-clip");const moving=clipDragSourceRef.current??(project.timelineClips??[]).find(clip=>clip.id===dragId);if(!moving||!canPlaceTimelineClipOnTrack(moving,track)){setClipDropPreview(null);return;}const rect=event.currentTarget.getBoundingClientRect();const pointerTime=((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration;const rawStart=Math.max(0,pointerTime-moving.duration/2);const pos=calculateTimelineDropPosition(project.timelineClips??[],moving.id,track.id,rawStart,moving.duration,mediaTimelineDuration,Math.max(1,project.frameRate||24));if(!pos){setClipDropPreview(null);return;}setClipDropPreview({trackId:track.id,start:pos.start,duration:moving.duration,name:moving.name,...(pos.snapTime!==undefined?{snapTime:pos.snapTime}: {})});}}
    onDrop={event=>{
      event.preventDefault();
      const rect=event.currentTarget.getBoundingClientRect();
@@ -1599,7 +1637,9 @@ export default function App() {
      const pointerTime=((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration,rawStart=Math.max(0,pointerTime-moving.duration/2);
      const pos=clipDropPreview?.trackId===track.id?{start:clipDropPreview.start,...(clipDropPreview.snapTime!==undefined?{snapTime:clipDropPreview.snapTime}:{})}:calculateTimelineDropPosition(project.timelineClips??[],moving.id,track.id,rawStart,moving.duration,mediaTimelineDuration,Math.max(1,project.frameRate||24));
      if(!pos){setNotice("No non-overlapping position is available on this layer.");clipDragSourceRef.current=null;setClipDropPreview(null);return;}
-     try{change(p=>{const moved=moveTimelineClip({tracks:p.tracks,timelineClips:p.timelineClips??[]},moving.id,pos.start);return {...p,timelineClips:moved.timelineClips.map(clip=>clip.id===moving.id?{...clip,trackId:track.id}:clip)};});setSelectedTimelineClipId(moving.id);setSelectedTimelineTrackId(track.id);setIsPlaying(false);setNotice(pos.snapTime!==undefined?"Clip snapped to an aligned, non-overlapping position.":"Clip moved to a non-overlapping position.");}catch(error){setNotice(error instanceof Error?error.message:"Could not move the clip.");}finally{clipDragSourceRef.current=null;setClipDropPreview(null);}
+     const destinationConflict=(project.timelineClips??[]).some(clip=>clip.id!==moving.id&&clip.trackId===track.id&&pos.start<clip.start+clip.duration-1e-7&&pos.start+moving.duration>clip.start+1e-7);
+     if(destinationConflict){setNotice("Drop cancelled: this position overlaps another clip on the destination layer.");clipDragSourceRef.current=null;setClipDropPreview(null);return;}
+     try{change(p=>{const targetClips=(p.timelineClips??[]).map(clip=>clip.id===moving.id?{...clip,trackId:track.id}:clip);const moved=moveTimelineClip({tracks:p.tracks,timelineClips:targetClips},moving.id,pos.start);return {...p,timelineClips:moved.timelineClips};});setSelectedTimelineClipId(moving.id);setSelectedTimelineTrackId(track.id);setIsPlaying(false);setNotice(pos.snapTime!==undefined?"Clip snapped to an aligned, non-overlapping position.":"Clip moved to a non-overlapping position.");}catch(error){setNotice(error instanceof Error?error.message:"Could not move the clip.");}finally{clipDragSourceRef.current=null;setClipDropPreview(null);}
    }}>
    <div className="visual-playhead" style={{left:(editorTime/mediaTimelineDuration*100)+"%"}}/>
    {clipResizePreview?.trackId===track.id && clipResizePreview.overlap && <div className="clip-overlap-preview" style={{left:(clipResizePreview.overlap.start/mediaTimelineDuration*100)+"%",width:Math.max(0.25,clipResizePreview.overlap.duration/mediaTimelineDuration*100)+"%"}} aria-hidden="true"/>}

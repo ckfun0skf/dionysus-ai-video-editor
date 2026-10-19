@@ -104,6 +104,8 @@ beforeEach(() => {
   originalConfirm = window.confirm;
   window.confirm = () => true;
   localStorage.clear();
+  // App integration tests use the populated fixture; production first-run state is intentionally empty.
+  localStorage.setItem("dionysus.project.v1", JSON.stringify({ ...sampleProject, id: "test-project", name: "Test Project" }));
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -121,6 +123,34 @@ afterEach(() => {
 });
 
 describe("App history integration", () => {
+  it("clears persisted demo seed shots and tracks from the existing demo project", async () => {
+    localStorage.setItem("dionysus.project.v1", JSON.stringify(sampleProject));
+    act(() => root.unmount());
+    root = createRoot(container);
+    act(() => root.render(<App />));
+    await flushEffects();
+    const project = persistedProject();
+    expect(project.name).toBe("Untitled Project");
+    expect(project.shots).toEqual([]);
+    expect(project.storyboardConnections).toEqual([]);
+    expect(project.timelineClips).toEqual([]);
+    expect(project.tracks).toEqual([{ id: "track-video-1", name: "Video 1", kind: "video" }]);
+  });
+
+  it("starts with an empty project instead of demo seed shots", async () => {
+    localStorage.clear();
+    act(() => root.unmount());
+    root = createRoot(container);
+    act(() => root.render(<App />));
+    await flushEffects();
+    const project = persistedProject();
+    expect(project.name).toBe("Untitled Project");
+    expect(project.shots).toEqual([]);
+    expect(project.timelineClips).toEqual([]);
+    expect(project.tracks).toHaveLength(1);
+    expect(project.tracks[0]).toMatchObject({ name: "Video 1", kind: "video" });
+  });
+
   it("coalesces rapid edits to the same shot title into one Undo step", async () => {
     const titleInput = container.querySelector<HTMLInputElement>(".inspector .inspector-content input.text-field");
     expect(titleInput).toBeTruthy();
@@ -1158,7 +1188,8 @@ describe("Integrated timeline editor", () => {
     const over=new Event("dragover",{bubbles:true,cancelable:true});Object.defineProperties(over,{dataTransfer:{value:dt},clientX:{value:1200*2.5/15}});act(()=>lane!.dispatchEvent(over));await flushEffects();
     expect(container.querySelector(".clip-drop-preview")).toBeTruthy();expect(container.querySelector(".timeline-snap-guide")).toBeTruthy();
     const drop=new Event("drop",{bubbles:true,cancelable:true});Object.defineProperties(drop,{dataTransfer:{value:dt},clientX:{value:1200*2.5/15}});act(()=>lane!.dispatchEvent(drop));await flushEffects();
-    const current=persistedProject(),moved=current.timelineClips!.find(clip=>clip.id===video.id)!;expect(moved.trackId).toBe(targetTrack.id);expect(moved.start).toBe(0);
+    const current=persistedProject(),moved=current.timelineClips!.find(clip=>clip.id===video.id)!;expect(moved.trackId).toBe(targetTrack.id);expect(moved.start*current.frameRate).toBeCloseTo(Math.round(moved.start*current.frameRate),7);
+    const overlaps=current.timelineClips!.filter(clip=>clip.id!==moved.id&&clip.trackId===moved.trackId&&moved.start<clip.start+clip.duration-1e-7&&moved.start+moved.duration>clip.start+1e-7);expect(overlaps).toHaveLength(0);
     const audio=current.timelineClips!.find(clip=>clip.linkedVideoClipId===moved.id)!;expect(audio.start).toBe(moved.start);expect(audio.duration).toBe(moved.duration);
   });
   it("previews resize overlap, trims the adjacent clip on release, and restores both with one Undo", async () => {
@@ -1216,6 +1247,29 @@ describe("Integrated timeline editor", () => {
     expect(nestedClip!.querySelector(".visual-clip-copy small")?.textContent).toContain("s");
   });
 
+
+
+  it("keeps Clip Asset timeline ruler and track columns aligned", async () => {
+    const nav = Array.from(container.querySelectorAll<HTMLButtonElement>(".nav-item")).find(button => button.textContent?.includes("Assets"));
+    click(nav!); await flushEffects();
+    click(Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Create asset"))!);
+    click(Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menu"] button')).find(button => button.textContent?.trim() === "Clip")!);
+    setInputValue(container.querySelector<HTMLInputElement>('[aria-label="Clip title"]')!, "Shared Geometry Clip");
+    setInputValue(container.querySelector<HTMLInputElement>('[aria-label="Clip canvas width"]')!, "1920");
+    setInputValue(container.querySelector<HTMLInputElement>('[aria-label="Clip canvas height"]')!, "1080");
+    setInputValue(container.querySelector<HTMLInputElement>('[aria-label="Clip duration"]')!, "8");
+    click(Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Create empty Clip"))!);
+    await flushEffects();
+    click(Array.from(container.querySelectorAll<HTMLButtonElement>(".asset-card button")).find(button => button.textContent?.includes("Edit Timeline"))!);
+    await flushEffects();
+    const nested = container.querySelector<HTMLElement>(".nested-timeline-tab.visual-timeline");
+    expect(nested).toBeTruthy();
+    // An empty Clip starts with no layers; add one so the test checks actual ruler-to-lane alignment.
+    click(Array.from(nested!.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.trim() === "Video")!);
+    await flushEffects();
+    expect(nested!.querySelector(".nested-visual-timeline-ruler .visual-ruler-caption")?.textContent).toBe("TIME");
+    expect(nested!.querySelector(".nested-timeline-row.visual-track-row .nested-timeline-row-track.visual-track-lane")).toBeTruthy();
+  });
 
   it("resizes a Master Timeline clip into its neighbor with preview and one-step Undo/Redo", async () => {
     await openTimelineView();
