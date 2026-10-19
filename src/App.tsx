@@ -249,6 +249,7 @@ export default function App() {
   const [trackContextMenuId, setTrackContextMenuId] = useState<string>("");
   const [trackContextMenuPosition, setTrackContextMenuPosition] = useState({ x: 0, y: 0 });
   const [showAddLayerMenu, setShowAddLayerMenu] = useState(false);
+  const [showAddContentMenu, setShowAddContentMenu] = useState(false);
   const [selectedTimelineTrackId, setSelectedTimelineTrackId] = useState<string>("");
   const [selectedCompositionLayerId, setSelectedCompositionLayerId] = useState<string>("");
   const [collapsedVideoTrackIds, setCollapsedVideoTrackIds] = useState<string[]>([]);
@@ -1781,11 +1782,16 @@ export default function App() {
         <button className="button button-primary button-small" aria-haspopup="menu" aria-expanded={showAddLayerMenu} onClick={()=>setShowAddLayerMenu(value=>!value)}><Plus size={14}/> Add layer <ChevronDown size={13}/></button>
         <div className="layer-add-menu" role="menu" hidden={!showAddLayerMenu}>
           <button role="menuitem" onClick={()=>{addTimelineVersionLayer(activeVersionTimelineTab,"video");setShowAddLayerMenu(false);}}>Video layer</button>
-          <button role="menuitem" onClick={()=>{addTimelineVersionLayer(activeVersionTimelineTab,"image");setShowAddLayerMenu(false);}}>Image layer</button>
           <button role="menuitem" onClick={()=>{addTimelineVersionLayer(activeVersionTimelineTab,"audio");setShowAddLayerMenu(false);}}>Audio layer</button>
           <button role="menuitem" onClick={()=>{addTimelineVersionLayer(activeVersionTimelineTab,"text");setShowAddLayerMenu(false);}}>Text layer</button>
-          <button role="menuitem" onClick={()=>{addTimelineVersionLayer(activeVersionTimelineTab,"procedural");setShowAddLayerMenu(false);}}>Code layer</button>
-          <button role="menuitem" onClick={()=>{addTimelineVersionLayer(activeVersionTimelineTab,"composition");setShowAddLayerMenu(false);}}>Clip layer</button>
+        </div>
+      </div>
+      <div className="layer-add-menu-wrap">
+        <button className="button button-quiet button-small" aria-haspopup="menu" aria-expanded={showAddContentMenu} onClick={()=>setShowAddContentMenu(value=>!value)}><Plus size={13}/> Add content <ChevronDown size={12}/></button>
+        <div className="layer-add-menu" role="menu" hidden={!showAddContentMenu}>
+          <button role="menuitem" onClick={()=>{addTimelineVersionLayer(activeVersionTimelineTab,"image");setShowAddContentMenu(false);}}>Image source</button>
+          <button role="menuitem" onClick={()=>{addTimelineVersionLayer(activeVersionTimelineTab,"procedural");setShowAddContentMenu(false);}}>Code source</button>
+          <button role="menuitem" onClick={()=>{addTimelineVersionLayer(activeVersionTimelineTab,"composition");setShowAddContentMenu(false);}}>Clip layer</button>
         </div>
       </div>
       <label className="nested-version-duration">Duration <span><input aria-label="Version duration" type="number" min="0.1" step={1/Math.max(1,project.frameRate)} value={activeVersionTimeline.duration} onChange={event=>updateTimelineVersionDuration(activeVersionTimelineTab,Number(event.target.value))}/>s</span></label>

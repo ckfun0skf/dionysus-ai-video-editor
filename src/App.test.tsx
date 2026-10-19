@@ -1138,6 +1138,24 @@ describe("Timeline layer and Shot settings UX", () => {
 });
 
 describe("Integrated timeline editor", () => {
+  it("keeps nested Add layer track types aligned and exposes content choices separately", async () => {
+    await openTimelineView();
+    const versionMenu = container.querySelector<HTMLDetailsElement>(".master-shot-version-menu");
+    expect(versionMenu).toBeTruthy();
+    click(versionMenu!.querySelector("summary") as HTMLElement);
+    const edit = versionMenu!.querySelector<HTMLButtonElement>(".timeline-version-edit");
+    expect(edit).toBeTruthy();
+    click(edit!); await flushEffects();
+    const nestedHeading = container.querySelector<HTMLElement>(".nested-timeline-tab .editor-linked-heading");
+    expect(nestedHeading).toBeTruthy();
+    const wraps = nestedHeading!.querySelectorAll<HTMLElement>(".layer-add-menu-wrap");
+    const trackOptions = Array.from(wraps[0].querySelectorAll<HTMLButtonElement>(".layer-add-menu button")).map(button => (button.textContent ?? "").trim()).sort();
+    expect(trackOptions).toEqual(["Audio layer", "Text layer", "Video layer"]);
+    const contentOptions = Array.from(wraps[1].querySelectorAll<HTMLButtonElement>(".layer-add-menu button")).map(button => (button.textContent ?? "").trim()).sort();
+    expect(contentOptions).toEqual(["Clip layer", "Code source", "Image source"]);
+  });
+
+
   it("shows a destination preview and prevents ordinary clips from overlapping Master Shots", async () => {
     await openTimelineView();
     const project = persistedProject();
