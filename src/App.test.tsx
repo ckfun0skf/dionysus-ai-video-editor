@@ -2075,3 +2075,22 @@ describe("mobile touch trim handles", () => {
     expect((persistedProject().timelineClips ?? []).find(item => item.id === "touch-trim-clip")?.duration).toBeGreaterThan(3);
   });
 });
+
+
+describe("mobile timeline playhead scrubbing", () => {
+  it("continues scrubbing during a touch-pointer drag outside the initial point", async () => {
+    await openTimelineView();
+    const ruler = container.querySelector<HTMLElement>('.visual-timeline-ruler-lane[aria-label="Timeline playhead"]');
+    expect(ruler).toBeTruthy();
+    Object.defineProperty(ruler!, "getBoundingClientRect", { configurable: true, value: () => ({ left: 0, top: 0, right: 100, bottom: 32, width: 100, height: 32, x: 0, y: 0, toJSON: () => ({}) }) });
+    const pointer = (type: string, x: number) => {
+      const event = new Event(type, { bubbles: true, cancelable: true }) as PointerEvent;
+      Object.defineProperties(event, { pointerId: { value: 93 }, pointerType: { value: "touch" }, button: { value: 0 }, clientX: { value: x }, clientY: { value: 10 } });
+      return event;
+    };
+    act(() => ruler!.dispatchEvent(pointer("pointerdown", 20))); await flushEffects();
+    act(() => ruler!.dispatchEvent(pointer("pointermove", 80))); await flushEffects();
+    expect(Number(ruler!.getAttribute("aria-valuenow"))).toBeGreaterThan(Number(ruler!.getAttribute("aria-valuemax")) * 0.7);
+    act(() => ruler!.dispatchEvent(pointer("pointerup", 80)));
+  });
+});

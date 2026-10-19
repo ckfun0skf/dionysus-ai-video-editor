@@ -271,6 +271,7 @@ export default function App() {
     cancelListener?: (event: PointerEvent) => void;
   } | null>(null);
   const suppressTouchClipClickRef = useRef(false);
+  const timelineScrubRef = useRef<{ pointerId: number; duration: number; element: HTMLElement } | null>(null);
   useEffect(() => () => {
     const active = touchClipMoveRef.current;
     if (active) {
@@ -287,6 +288,28 @@ export default function App() {
       if (nested.cancelListener) window.removeEventListener("pointercancel", nested.cancelListener);
     }
   }, []);
+  function updateTimelineScrub(event: React.PointerEvent<HTMLElement>, duration: number) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const next = Math.max(0, Math.min(duration, ((event.clientX - rect.left) / Math.max(rect.width, 1)) * duration));
+    playbackTimeRef.current = next; setIsPlaying(false); setEditorTime(next);
+  }
+  function beginTimelineScrub(event: React.PointerEvent<HTMLElement>, duration: number) {
+    if (event.button !== 0 && event.pointerType === "mouse") return;
+    timelineScrubRef.current = { pointerId: event.pointerId, duration, element: event.currentTarget };
+    try { event.currentTarget.setPointerCapture(event.pointerId); } catch { /* unavailable in test environments */ }
+    updateTimelineScrub(event, duration);
+  }
+  function continueTimelineScrub(event: React.PointerEvent<HTMLElement>) {
+    const active = timelineScrubRef.current;
+    if (!active || active.pointerId !== event.pointerId) return;
+    event.preventDefault(); updateTimelineScrub(event, active.duration);
+  }
+  function endTimelineScrub(event: React.PointerEvent<HTMLElement>) {
+    const active = timelineScrubRef.current;
+    if (!active || active.pointerId !== event.pointerId) return;
+    timelineScrubRef.current = null;
+    try { if (active.element.hasPointerCapture(event.pointerId)) active.element.releasePointerCapture(event.pointerId); } catch { /* already released */ }
+  }
   const masterShotDragSourceRef = useRef<string>("");
   const [clipDropPreview, setClipDropPreview] = useState<{ trackId: string; start: number; duration: number; name: string; snapTime?: number } | null>(null);
   const nestedLayerDragSourceRef = useRef("");
@@ -2117,8 +2140,7 @@ export default function App() {
   <button type="button" aria-label="Fit timeline" onClick={() => setTimelineZoom(1)}>Fit</button>
 </div>
 <div className="timeline-tab-content master-timeline-content" style={{display:activeTimelineTabId === "master" ? "block" : "none"}}>{renderTimelinePreview("master", "Master preview", activeShotInfo.shot?.title ?? project.name, runtime, activeShotInfo.shot?.title ?? project.name, activeShotInfo.shot?.intent ?? "", true)}<div className="section-toolbar timeline-master-actions"><span className="timeline-summary">{project.shots.length} shots · {(project.timelineClips ?? []).length} clips</span><div className="inline-actions"><button className="button button-quiet button-small" onClick={saveMasterTimelineAsClipAsset}><Save size={14}/> Save as Clip Asset</button><button className="button button-primary button-small" disabled={!selected} onClick={() => selected && addSlot(selected.id)}><Plus size={15}/> {t("action.addClipSlot")}</button></div></div><div className="timeline-ruler" role="slider" aria-label="Master timeline playhead" aria-valuemin={0} aria-valuemax={runtime} aria-valuenow={editorTime} tabIndex={0}
-            onPointerDown={event => { const rect = event.currentTarget.getBoundingClientRect(); const next = Math.max(0, Math.min(runtime, ((event.clientX - rect.left) / Math.max(rect.width, 1)) * runtime)); playbackTimeRef.current = next; setIsPlaying(false); setEditorTime(next); }}
-            onPointerMove={event => { if (event.buttons !== 1) return; const rect = event.currentTarget.getBoundingClientRect(); const next = Math.max(0, Math.min(runtime, ((event.clientX - rect.left) / Math.max(rect.width, 1)) * runtime)); playbackTimeRef.current = next; setIsPlaying(false); setEditorTime(next); }}
+            onPointerDown={event => beginTimelineScrub(event, runtime)} onPointerMove={continueTimelineScrub} onPointerUp={endTimelineScrub} onPointerCancel={endTimelineScrub}
             onKeyDown={event => { if (event.key === "ArrowRight") { const next = Math.min(runtime, editorTime + 0.5); playbackTimeRef.current = next; setIsPlaying(false); setEditorTime(next); } if (event.key === "ArrowLeft") { const next = Math.max(0, editorTime - 0.5); playbackTimeRef.current = next; setIsPlaying(false); setEditorTime(next); } }}>
             <div className="integrated-ruler-playhead" style={{ left: (editorTime / Math.max(runtime, 1) * 100) + "%" }}/>
             {Array.from({ length: Math.floor(runtime / 5) + 1 }, (_, i) => i * 5).concat(runtime % 5 === 0 ? [] : [runtime]).map(seconds => <span key={seconds} style={{ left: (seconds / Math.max(runtime, 1) * 100) + "%" }}>{time(seconds)}</span>)}
@@ -2181,8 +2203,7 @@ export default function App() {
   <div className="visual-ruler-caption">TIME</div>
   <div className="visual-timeline-ruler-lane" role="slider" aria-label="Timeline playhead" aria-valuemin={0} aria-valuemax={mediaTimelineDuration} aria-valuenow={editorTime} tabIndex={0}
     style={{backgroundSize:(5/Math.max(mediaTimelineDuration,1)*100)+"% 100%"}}
-    onPointerDown={event=>{const rect=event.currentTarget.getBoundingClientRect();const next=Math.max(0,Math.min(mediaTimelineDuration,((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration));setIsPlaying(false);playbackTimeRef.current=next;setEditorTime(next);}}
-    onPointerMove={event=>{if(event.buttons!==1)return;const rect=event.currentTarget.getBoundingClientRect();const next=Math.max(0,Math.min(mediaTimelineDuration,((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration));setIsPlaying(false);playbackTimeRef.current=next;setEditorTime(next);}}
+    onPointerDown={event=>beginTimelineScrub(event, mediaTimelineDuration)} onPointerMove={continueTimelineScrub} onPointerUp={endTimelineScrub} onPointerCancel={endTimelineScrub}
     onKeyDown={event=>{if(event.key==="ArrowRight"){const next=Math.min(mediaTimelineDuration,editorTime+.5);setIsPlaying(false);playbackTimeRef.current=next;setEditorTime(next);}if(event.key==="ArrowLeft"){const next=Math.max(0,editorTime-.5);setIsPlaying(false);playbackTimeRef.current=next;setEditorTime(next);}}}>
     {Array.from({length:Math.floor(mediaTimelineDuration/5)+1},(_,i)=>i*5).concat(mediaTimelineDuration%5===0?[]:[mediaTimelineDuration]).map(seconds=><span key={seconds} style={{left:(seconds/Math.max(mediaTimelineDuration,1)*100)+"%"}}>{time(seconds)}</span>)}
     <div className="visual-timeline-ruler-playhead" style={{left:(Math.min(editorTime,mediaTimelineDuration)/Math.max(mediaTimelineDuration,1)*100)+"%"}}/>
@@ -2358,8 +2379,7 @@ export default function App() {
     <div className="visual-ruler-caption">TIME</div>
     <div className="visual-timeline-ruler-lane" role="slider" aria-label="Version timeline playhead" aria-valuemin={0} aria-valuemax={activeVersionTimeline.duration} aria-valuenow={editorTime} tabIndex={0}
       style={{backgroundSize:(2/Math.max(activeVersionTimeline.duration,0.1)*100)+"% 100%"}}
-      onPointerDown={event=>{const rect=event.currentTarget.getBoundingClientRect();const next=Math.max(0,Math.min(activeVersionTimeline.duration,((event.clientX-rect.left)/Math.max(rect.width,1))*activeVersionTimeline.duration));playbackTimeRef.current=next;setIsPlaying(false);setEditorTime(next);}}
-      onPointerMove={event=>{if(event.buttons!==1)return;const rect=event.currentTarget.getBoundingClientRect();const next=Math.max(0,Math.min(activeVersionTimeline.duration,((event.clientX-rect.left)/Math.max(rect.width,1))*activeVersionTimeline.duration));playbackTimeRef.current=next;setIsPlaying(false);setEditorTime(next);}}
+      onPointerDown={event=>beginTimelineScrub(event, activeVersionTimeline.duration)} onPointerMove={continueTimelineScrub} onPointerUp={endTimelineScrub} onPointerCancel={endTimelineScrub}
       onKeyDown={event=>{if(event.key==="ArrowRight"){const next=Math.min(activeVersionTimeline.duration,editorTime+.5);playbackTimeRef.current=next;setIsPlaying(false);setEditorTime(next);}if(event.key==="ArrowLeft"){const next=Math.max(0,editorTime-.5);playbackTimeRef.current=next;setIsPlaying(false);setEditorTime(next);}}}>
       {Array.from({length:Math.floor(activeVersionTimeline.duration/2)+1},(_,i)=>i*2).concat(activeVersionTimeline.duration%2===0?[]:[activeVersionTimeline.duration]).map(sec=><span key={sec} style={{left:(sec/Math.max(activeVersionTimeline.duration,0.1)*100)+"%"}}>{time(sec)}</span>)}
       <div className="visual-timeline-ruler-playhead" style={{left:(Math.min(editorTime,activeVersionTimeline.duration)/Math.max(activeVersionTimeline.duration,0.1)*100)+"%"}}/>

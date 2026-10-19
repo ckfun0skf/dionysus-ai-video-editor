@@ -1,6 +1,6 @@
 # DYS-012 — Responsive mobile editing
 
-**Status:** In progress — layout, touch movement, contextual tools and zoom shipped; trim ergonomics in progress  
+**Status:** In progress — layout, touch movement, contextual tools, zoom and trim hit targets merged; precision touch scrubbing is next  
 **Milestone:** M4 — Preview, compositing, and mobile editing  
 **Owner requirement:** A future phone version with a CapCut-inspired editing experience.
 
@@ -26,12 +26,10 @@ Make Dionysus usable on phone and tablet screens without removing Storyboard, Re
 - PR #72 merged Zoom In / Zoom Out / Fit controls as main commit `f57b5ad3ffe5b80bd586b513fc2fc1e201898cf8`; exact-head CI run [39238940480](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39238940480) passed.
 - Main push CI and Pages deployment have not yet been independently confirmed.
 
-## Active trim ergonomics slice
-Branch `feat/mobile-touch-trim-handles` adds:
-- Wider mobile trim hit areas with visible grab markers for clip and Shot edges.
-- An App integration test verifying a Master Timeline clip can be trimmed with a touch pointer.
-
-This branch is not yet merged; exact-head CI is pending.
+## Latest merged interaction improvements
+- PR #73 merged mobile trim hit targets and visible grab markers as `98f1637f1cc36a069578edb2337bcfdb578b4612`; exact-head CI run [39239397529](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39239397529) passed.
+- Current slice adds pointer-captured playhead scrubbing to the integrated Master ruler, main visual timeline ruler, and nested Clip Version ruler.
+- Main push CI and Pages deployment for PR #73 have not yet been independently confirmed. Do not ask the owner to test until deployment is verified.
 
 ## Not complete
 - Precise scrub/trim UX and complete touch validation across timeline surfaces.
