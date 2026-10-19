@@ -861,8 +861,9 @@ describe("App history integration", () => {
     const addLayer = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Add layer"));
     expect(addLayer).toBeTruthy();
     click(addLayer!);
-    const layerOptions = Array.from(container.querySelectorAll<HTMLButtonElement>(".layer-add-menu button")).map(button => (button.textContent ?? "").trim());
-    expect([...new Set(layerOptions)].sort()).toEqual(["Audio layer", "Text layer", "Video layer"]);
+    const masterLayersHeading = Array.from(container.querySelectorAll<HTMLElement>(".editor-linked-heading")).find(heading => heading.textContent?.includes("Timeline layers"));
+    const layerOptions = Array.from(masterLayersHeading?.querySelectorAll<HTMLButtonElement>(".layer-add-menu button") ?? []).map(button => (button.textContent ?? "").trim());
+    expect(layerOptions.sort()).toEqual(["Audio layer", "Text layer", "Video layer"]);
     expect(layerOptions.some(label => label.includes("Add linked video/audio"))).toBe(false);
     click(addLayer!);
     await flushEffects();
@@ -1477,6 +1478,11 @@ describe("Integrated timeline editor", () => {
   it("rejects same-layer overlap during drag and keeps clips in non-overlapping positions", async () => {
     await openTimelineView();
     await seedLinkedVideoAudioPairs(2);
+    const clipOnlyProject = persistedProject();
+    clipOnlyProject.shots = [];
+    clipOnlyProject.storyboardConnections = [];
+    localStorage.setItem("dionysus.project.v1", JSON.stringify(clipOnlyProject));
+    act(() => root.unmount()); root = createRoot(container); act(() => root.render(<App />)); await flushEffects(); await openTimelineView();
     const before = persistedProject();
     const left = before.timelineClips?.find(clip => clip.id === "test-video-1")!;
     const right = before.timelineClips?.find(clip => clip.id === "test-video-2")!;

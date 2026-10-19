@@ -1625,7 +1625,6 @@ export default function App() {
   <button role="menuitem" onClick={()=>addMasterTimelineTrack("video")}>Video layer</button>
   <button role="menuitem" onClick={()=>addMasterTimelineTrack("audio")}>Audio layer</button>
   <button role="menuitem" onClick={()=>addMasterTimelineTrack("text")}>Text layer</button>
-  <button role="menuitem" onClick={()=>addMasterTimelineTrack("video","Clip")}>Clip layer</button>
  </div><button className={"button button-quiet button-small ripple-reorder-toggle"+(rippleReorderMode?" active":"")} aria-pressed={rippleReorderMode} onClick={()=>setRippleReorderMode(enabled=>!enabled)}>{rippleReorderMode?"Ripple Reorder: ON":"Ripple Reorder"}</button>
 </div></div>
 {rippleReorderMode&&<p className="ripple-mode-note" role="status">Ripple Reorder is ON. Dropping a Shot changes chronological order and packs the full Master sequence back-to-back, closing gaps. Master durations and Version internals stay unchanged.</p>}
@@ -1782,8 +1781,10 @@ export default function App() {
         <button className="button button-primary button-small" aria-haspopup="menu" aria-expanded={showAddLayerMenu} onClick={()=>setShowAddLayerMenu(value=>!value)}><Plus size={14}/> Add layer <ChevronDown size={13}/></button>
         <div className="layer-add-menu" role="menu" hidden={!showAddLayerMenu}>
           <button role="menuitem" onClick={()=>{addTimelineVersionLayer(activeVersionTimelineTab,"video");setShowAddLayerMenu(false);}}>Video layer</button>
+          <button role="menuitem" onClick={()=>{addTimelineVersionLayer(activeVersionTimelineTab,"image");setShowAddLayerMenu(false);}}>Image layer</button>
           <button role="menuitem" onClick={()=>{addTimelineVersionLayer(activeVersionTimelineTab,"audio");setShowAddLayerMenu(false);}}>Audio layer</button>
           <button role="menuitem" onClick={()=>{addTimelineVersionLayer(activeVersionTimelineTab,"text");setShowAddLayerMenu(false);}}>Text layer</button>
+          <button role="menuitem" onClick={()=>{addTimelineVersionLayer(activeVersionTimelineTab,"procedural");setShowAddLayerMenu(false);}}>Code layer</button>
           <button role="menuitem" onClick={()=>{addTimelineVersionLayer(activeVersionTimelineTab,"composition");setShowAddLayerMenu(false);}}>Clip layer</button>
         </div>
       </div>
