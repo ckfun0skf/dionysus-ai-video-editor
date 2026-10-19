@@ -101,6 +101,7 @@ function isShot(value: unknown): boolean {
   return isRecord(value) && isString(value.id) && isString(value.title) &&
     isString(value.intent) && isFiniteNumber(value.duration) && value.duration > 0 &&
     (value.masterStart === undefined || (isFiniteNumber(value.masterStart) && value.masterStart >= 0)) &&
+    (value.masterTrackId === undefined || isString(value.masterTrackId)) &&
     isString(value.status) && shotStatuses.has(value.status) &&
     isStringArray(value.referenceProfileIds) &&
     Array.isArray(value.referenceOverrides) && value.referenceOverrides.every(isReferenceOverride) &&

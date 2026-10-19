@@ -2317,3 +2317,8 @@
   .nested-timeline-tab .nested-visual-timeline-ruler,
   .nested-timeline-tab .nested-timeline-row.visual-track-row { grid-template-columns:180px minmax(320px,1fr); }
 }
+
+/* Shared Add layer menu: keep Master and Clip/Version timeline controls consistent. */
+.nested-timeline-tab .layer-add-menu-wrap { position: relative; }
+.nested-timeline-tab .layer-add-menu-wrap > .layer-add-menu { right: 0; left: auto; }
+.nested-timeline-tab .editor-linked-heading .inline-actions { flex-wrap: wrap; }

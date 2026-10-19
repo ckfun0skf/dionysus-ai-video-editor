@@ -620,7 +620,9 @@ describe("App history integration", () => {
 
     const dragProject = persistedProject();
     const shotBlock = container.querySelector<HTMLButtonElement>(".master-shot-clip");
-    const lane = shotBlock?.closest(".visual-track-lane") as HTMLDivElement | null;
+    const targetTrack = dragProject.tracks.find(track => track.kind === "video" && track.id !== dragProject.tracks.find(item => item.kind === "video")?.id)!;
+    const targetGroup = Array.from(container.querySelectorAll<HTMLElement>(".visual-track-group")).find(group => group.querySelector(".visual-track-label strong")?.textContent === targetTrack.name);
+    const lane = targetGroup?.querySelector<HTMLElement>(".visual-track-lane") as HTMLDivElement | null;
     expect(shotBlock?.draggable).toBe(true);
     expect(lane).toBeTruthy();
     Object.defineProperty(lane!, "getBoundingClientRect", {
@@ -645,6 +647,7 @@ describe("App history integration", () => {
     const rawStart = Math.max(0, Math.min(masterDuration - dragProject.shots[0].duration, 0.75 * masterDuration - dragProject.shots[0].duration / 2));
     const expectedStart = Math.round(rawStart * dragProject.frameRate) / dragProject.frameRate;
     expect(afterDrop.shots[0].masterStart).toBeCloseTo(expectedStart, 7);
+    expect(afterDrop.shots[0].masterTrackId).toBe(targetTrack.id);
     expect(afterDrop.shots[0].slots[0].versions[0].duration).toBe(firstVersionDuration);
 
     const beforeRipple = persistedProject();
@@ -859,7 +862,7 @@ describe("App history integration", () => {
     expect(addLayer).toBeTruthy();
     click(addLayer!);
     const layerOptions = Array.from(container.querySelectorAll<HTMLButtonElement>(".layer-add-menu button")).map(button => button.textContent ?? "");
-    expect(layerOptions.some(label => label.includes("Code layer"))).toBe(false);
+    expect(layerOptions.some(label => label.includes("Code layer"))).toBe(true);
     expect(layerOptions.some(label => label.includes("Effects layer"))).toBe(false);
     expect(layerOptions.some(label => label.trim() === "Video layer")).toBe(true);
     expect(layerOptions.some(label => label.trim() === "Audio layer")).toBe(true);
@@ -1138,6 +1141,46 @@ describe("Timeline layer and Shot settings UX", () => {
 });
 
 describe("Integrated timeline editor", () => {
+  it("shows snap guidance and moves a Master Shot to another video layer without overlap", async () => {
+    await openTimelineView();
+    const project = persistedProject(), sourceShot = project.shots[0];
+    const targetTrack = project.tracks.find(track => track.kind === "video" && track.id !== project.tracks.find(item => item.kind === "video")?.id)!;
+    project.timelineClips = [...(project.timelineClips ?? []), { id: "manual-drop-anchor", name: "Drop anchor", kind: "video", trackId: targetTrack.id, start: 4, duration: 2 }];
+    localStorage.setItem("dionysus.project.v1", JSON.stringify(project));
+    act(() => root.unmount()); root = createRoot(container); act(() => root.render(<App />)); await flushEffects(); await openTimelineView();
+    const shotBlock = container.querySelector<HTMLButtonElement>(".master-shot-clip");
+    const targetGroup = Array.from(container.querySelectorAll<HTMLElement>(".visual-track-group")).find(group => group.querySelector(".visual-track-label strong")?.textContent === targetTrack.name);
+    const lane = targetGroup?.querySelector<HTMLElement>(".visual-track-lane");
+    expect(shotBlock).toBeTruthy(); expect(lane).toBeTruthy();
+    vi.spyOn(lane!, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 1200, 76));
+    const values = new Map<string, string>();
+    const dataTransfer = { setData: (key: string, value: string) => values.set(key, value), getData: (key: string) => values.get(key) ?? "", effectAllowed: "", dropEffect: "" };
+    const start = new Event("dragstart", { bubbles: true, cancelable: true }); Object.defineProperty(start, "dataTransfer", { value: dataTransfer }); act(() => shotBlock!.dispatchEvent(start));
+    const over = new Event("dragover", { bubbles: true, cancelable: true }); Object.defineProperties(over, { dataTransfer: { value: dataTransfer }, clientX: { value: 1200 * 9 / 18 } }); act(() => lane!.dispatchEvent(over)); await flushEffects();
+    expect(container.querySelector(".clip-drop-preview")).toBeTruthy(); expect(container.querySelector(".timeline-snap-guide")).toBeTruthy();
+    const drop = new Event("drop", { bubbles: true, cancelable: true }); Object.defineProperties(drop, { dataTransfer: { value: dataTransfer }, clientX: { value: 1200 * 9 / 18 } }); act(() => lane!.dispatchEvent(drop)); await flushEffects();
+    const moved = persistedProject().shots.find(shot => shot.id === sourceShot.id)!;
+    expect(moved.masterTrackId).toBe(targetTrack.id); expect(moved.masterStart).toBe(6);
+  });
+
+  it("previews Master Shot overlap and trims the adjacent Shot on release", async () => {
+    await openTimelineView();
+    const first = container.querySelector<HTMLButtonElement>(".master-shot-clip"); expect(first).toBeTruthy();
+    const right = first!.querySelector<HTMLElement>(".master-shot-resize-handle.right"); expect(right).toBeTruthy();
+    const lane = first!.closest(".visual-track-lane") as HTMLElement;
+    vi.spyOn(lane, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 100, 64));
+    Object.defineProperty(right!, "setPointerCapture", { configurable: true, value: vi.fn() });
+    const fire = (type: string, clientX: number) => { const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientX }); Object.defineProperties(event, { pointerId: { configurable: true, value: 27 }, buttons: { configurable: true, value: type === "pointerup" ? 0 : 1 } }); act(() => right!.dispatchEvent(event)); };
+    fire("pointerdown", 0); fire("pointermove", 100 * 2 / 18); await flushEffects();
+    expect(container.querySelector(".clip-overlap-preview")).toBeTruthy();
+    fire("pointerup", 100 * 2 / 18); await flushEffects();
+    let shots = persistedProject().shots;
+    expect(shots[0].duration).toBe(8); expect(shots[1].masterStart).toBe(8); expect(shots[1].duration).toBe(3);
+    click(buttonsNamed("Undo").find(button => !button.disabled)!); await flushEffects();
+    shots = persistedProject().shots;
+    expect(shots[0].duration).toBe(6); expect(shots[1].duration).toBe(5); expect(shots[1].masterStart).toBeUndefined();
+  });
+
   it("shows preview in the timeline workspace and provides playback controls", async () => {
     const timelineNav = Array.from(container.querySelectorAll<HTMLButtonElement>(".nav-item")).find(button => button.textContent?.includes("Timeline"));
     expect(timelineNav).toBeTruthy();
@@ -1265,7 +1308,8 @@ describe("Integrated timeline editor", () => {
     const nested = container.querySelector<HTMLElement>(".nested-timeline-tab.visual-timeline");
     expect(nested).toBeTruthy();
     // An empty Clip starts with no layers; add one so the test checks actual ruler-to-lane alignment.
-    click(Array.from(nested!.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.trim() === "Video")!);
+    click(Array.from(nested!.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Add layer"))!);
+    click(Array.from(nested!.querySelectorAll<HTMLButtonElement>(".layer-add-menu button")).find(button => button.textContent?.trim() === "Video layer")!);
     await flushEffects();
     expect(nested!.querySelector(".nested-visual-timeline-ruler .visual-ruler-caption")?.textContent).toBe("TIME");
     expect(nested!.querySelector(".nested-timeline-row.visual-track-row .nested-timeline-row-track.visual-track-lane")).toBeTruthy();
