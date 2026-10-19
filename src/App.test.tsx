@@ -104,6 +104,8 @@ beforeEach(() => {
   originalConfirm = window.confirm;
   window.confirm = () => true;
   localStorage.clear();
+  // App integration tests use the populated fixture; production first-run state is intentionally empty.
+  localStorage.setItem("dionysus.project.v1", JSON.stringify(sampleProject));
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -121,6 +123,20 @@ afterEach(() => {
 });
 
 describe("App history integration", () => {
+  it("starts with an empty project instead of demo seed shots", async () => {
+    localStorage.clear();
+    act(() => root.unmount());
+    root = createRoot(container);
+    act(() => root.render(<App />));
+    await flushEffects();
+    const project = persistedProject();
+    expect(project.name).toBe("Untitled Project");
+    expect(project.shots).toEqual([]);
+    expect(project.timelineClips).toEqual([]);
+    expect(project.tracks).toHaveLength(1);
+    expect(project.tracks[0]).toMatchObject({ name: "Video 1", kind: "video" });
+  });
+
   it("coalesces rapid edits to the same shot title into one Undo step", async () => {
     const titleInput = container.querySelector<HTMLInputElement>(".inspector .inspector-content input.text-field");
     expect(titleInput).toBeTruthy();

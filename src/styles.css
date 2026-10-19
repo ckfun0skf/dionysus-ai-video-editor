@@ -2293,7 +2293,7 @@
 /* Issue #53: align Clip/Version timelines with the Master Timeline track grid. */
 .nested-timeline-tab.visual-timeline { width:100%; box-sizing:border-box; }
 .nested-timeline-tab .nested-visual-timeline-ruler {
-  display:grid; grid-template-columns:220px minmax(0,1fr); gap:0;
+  display:grid; grid-template-columns:220px minmax(320px,1fr); gap:0;
   height:28px; margin:0; padding:0; border-bottom:1px solid var(--border,#30313a); background:none;
 }
 .nested-timeline-tab .nested-visual-timeline-ruler .visual-ruler-caption {
@@ -2305,7 +2305,7 @@
 }
 .nested-timeline-tab .nested-timeline-lanes { display:flex; flex-direction:column; gap:1px; }
 .nested-timeline-tab .nested-timeline-row.visual-track-row {
-  display:grid; grid-template-columns:220px minmax(0,1fr); min-height:54px; margin:0; border-radius:0;
+  display:grid; grid-template-columns:220px minmax(320px,1fr); min-height:54px; margin:0; border-radius:0;
 }
 .nested-timeline-tab .nested-timeline-row-track.visual-track-lane {
   position:relative; min-width:0; min-height:54px; margin:0; overflow:hidden; background-size:10% 100%;
@@ -2315,5 +2315,5 @@
 }
 @media (max-width:760px) {
   .nested-timeline-tab .nested-visual-timeline-ruler,
-  .nested-timeline-tab .nested-timeline-row.visual-track-row { grid-template-columns:180px minmax(0,1fr); }
+  .nested-timeline-tab .nested-timeline-row.visual-track-row { grid-template-columns:180px minmax(320px,1fr); }
 }

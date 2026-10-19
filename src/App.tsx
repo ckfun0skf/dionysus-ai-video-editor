@@ -37,6 +37,23 @@ const id = (prefix: string) => prefix + "-" + crypto.randomUUID();
 const time = (s: number) => String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(Math.floor(s % 60)).padStart(2, "0");
 const copy = (p: DionysusProject) => JSON.parse(JSON.stringify(p)) as DionysusProject;
 
+function createEmptyProject(): DionysusProject {
+  const now = new Date().toISOString();
+  return {
+    ...copy(sampleProject),
+    id: id("project"),
+    name: "Untitled Project",
+    createdAt: now,
+    updatedAt: now,
+    assets: [],
+    referenceProfiles: [],
+    timelineClips: [],
+    storyboardConnections: [],
+    tracks: [{ id: id("track-video"), name: "Video 1", kind: "video" }],
+    shots: [],
+  };
+}
+
 function normalizeLegacyTimelineTracks(project: DionysusProject): DionysusProject {
   const legacyTracks = project.tracks.filter(track => track.kind === "procedural" || track.kind === "effects");
   if (legacyTracks.length === 0) return project;
@@ -105,10 +122,10 @@ export default function App() {
   const [project, setProject] = useState<DionysusProject>(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return normalizeLegacyTimelineTracks(copy(sampleProject));
+      if (!raw) return createEmptyProject();
       const parsed: unknown = JSON.parse(raw);
-      return validateProject(parsed) ? normalizeLegacyTimelineTracks(parsed) : normalizeLegacyTimelineTracks(copy(sampleProject));
-    } catch { return normalizeLegacyTimelineTracks(copy(sampleProject)); }
+      return validateProject(parsed) ? normalizeLegacyTimelineTracks(parsed) : createEmptyProject();
+    } catch { return createEmptyProject(); }
   });
   const [undoStack, setUndoStack] = useState<DionysusProject[]>([]);
   const [redoStack, setRedoStack] = useState<DionysusProject[]>([]);
