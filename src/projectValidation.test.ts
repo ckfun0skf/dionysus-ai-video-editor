@@ -41,6 +41,17 @@ describe("validateProject", () => {
     });
     expect(validateProject(project)).toBe(false);
   });
+  it("accepts additive nested track IDs and rejects layers pointing to missing nested tracks", () => {
+    const project = structuredClone(sampleProject);
+    const version = project.shots[0].slots[0].versions[0];
+    version.tracks = [{ id: "nested-video-track", name: "Video", kind: "video" }];
+    version.layers.push({ id: "nested-video", name: "Video", kind: "video", trackId: "nested-video-track", start: 0, duration: 2 });
+    expect(validateProject(project)).toBe(true);
+    const invalid = structuredClone(project);
+    invalid.shots[0].slots[0].versions[0].layers[0].trackId = "missing-track";
+    expect(validateProject(invalid)).toBe(false);
+  });
+
   it("accepts procedural layers and persistent audio mute state", () => {
     const project = structuredClone(sampleProject);
     project.shots[0].slots[0].versions[0].layers.push({

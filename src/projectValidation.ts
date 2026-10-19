@@ -50,6 +50,7 @@ function isLayer(value: unknown): boolean {
     isString(value.kind) && layerKinds.has(value.kind) &&
     isFiniteNumber(value.start) && value.start >= 0 &&
     isFiniteNumber(value.duration) && value.duration > 0 &&
+    (value.trackId === undefined || isString(value.trackId)) &&
     (value.assetId === undefined || isString(value.assetId)) &&
     (value.scriptVersionId === undefined || isString(value.scriptVersionId)) &&
     (value.childCompositionId === undefined || isString(value.childCompositionId)) &&
@@ -85,6 +86,7 @@ function isVersion(value: unknown): boolean {
   return isRecord(value) && isString(value.id) && isString(value.name) &&
     isString(value.description) && isFiniteNumber(value.duration) && value.duration > 0 &&
     Array.isArray(value.layers) && value.layers.every(isLayer) &&
+    (value.tracks === undefined || (Array.isArray(value.tracks) && value.tracks.every(isTrack) && value.layers.every(layer => !isRecord(layer) || layer.trackId === undefined || value.tracks.some(track => isRecord(track) && track.id === layer.trackId)))) &&
     isStringArray(value.scriptVersionIds) &&
     Array.isArray(value.generationRecords) && value.generationRecords.every(isGenerationRecord);
 }

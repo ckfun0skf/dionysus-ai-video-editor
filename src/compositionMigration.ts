@@ -194,13 +194,16 @@ function versionComposition(
     const kind = nestedTrackKind(layer);
     if (!encounteredKinds.includes(kind)) encounteredKinds.push(kind);
   }
-  const tracks: CompositionTrack[] = encounteredKinds.map((kind, order) => ({
-    id: `${id}:track:${kind}`,
-    name: kind === "video" ? "Video" : kind === "audio" ? "Audio" : "Text",
-    kind,
-    order,
-  }));
-  const trackByKind = new Map(tracks.map(track => [track.kind, track.id]));
+  const tracks: CompositionTrack[] = version.tracks?.length
+    ? rootTracks(version.tracks, warnings)
+    : encounteredKinds.map((kind, order) => ({
+        id: `${id}:track:${kind}`,
+        name: kind === "video" ? "Video" : kind === "audio" ? "Audio" : "Text",
+        kind,
+        order,
+      }));
+  const trackByKind = new Map<string, string>();
+  for (const track of tracks) if (!trackByKind.has(track.kind)) trackByKind.set(track.kind, track.id);
   const placements = version.layers.map((layer, order) => {
     const source = sourceForLayer(project, layer);
     if (source.type === "missing") warnings.push({
@@ -211,7 +214,7 @@ function versionComposition(
     return {
       id: layer.id,
       name: layer.name,
-      trackId: trackByKind.get(nestedTrackKind(layer))!,
+      trackId: layer.trackId && tracks.some(track => track.id === layer.trackId) ? layer.trackId : trackByKind.get(nestedTrackKind(layer))!,
       start: layer.start,
       duration: layer.duration,
       order,

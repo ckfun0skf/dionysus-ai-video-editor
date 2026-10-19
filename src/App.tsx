@@ -3,6 +3,7 @@ import { AudioLines, Check, CheckCircle2, ChevronDown, CircleHelp, Clapperboard,
 import { sampleProject } from "./sampleProject";
 import type { Asset, AssetKind, ClipVersion, CompositionLayer, DionysusProject, ReferenceProfile, ReferenceRole, Shot, TimelineClip } from "./types";
 import { validateProject } from "./projectValidation";
+import { normalizeClipVersionTracks } from "./clipVersionTracks";
 import { moveNormalizedFrame, resizeNormalizedFrame } from "./previewTransform";
 import { getAllowedChildClipAssets, wouldCreateClipAssetCycle } from "./clipAssetGraph";
 import { t } from "./i18n";
@@ -99,8 +100,6 @@ function clearDemoSeedData(project: DionysusProject): DionysusProject {
 
 function normalizeLegacyTimelineTracks(project: DionysusProject): DionysusProject {
   const legacyTracks = project.tracks.filter(track => track.kind === "procedural" || track.kind === "effects");
-  if (legacyTracks.length === 0) return project;
-
   const tracks = project.tracks.filter(track => track.kind !== "procedural" && track.kind !== "effects");
   let videoTrack = tracks.find(track => track.kind === "video");
   if (!videoTrack) {
@@ -110,14 +109,19 @@ function normalizeLegacyTimelineTracks(project: DionysusProject): DionysusProjec
       tracks.push(videoTrack);
     }
   }
-
   const legacyTrackIds = new Set(legacyTracks.map(track => track.id));
   const timelineClips = (project.timelineClips ?? []).map(clip =>
-    legacyTrackIds.has(clip.trackId) && videoTrack
-      ? { ...clip, trackId: videoTrack.id }
-      : clip
+    legacyTrackIds.has(clip.trackId) && videoTrack ? { ...clip, trackId: videoTrack.id } : clip
   );
-  return { ...project, tracks, timelineClips };
+  const normalizeVersion = normalizeClipVersionTracks;
+  const assets = project.assets.map(asset => asset.clipVersions
+    ? { ...asset, clipVersions: asset.clipVersions.map(normalizeVersion) }
+    : asset);
+  const shots = project.shots.map(shot => ({
+    ...shot,
+    slots: shot.slots.map(slot => ({ ...slot, versions: slot.versions.map(normalizeVersion) })),
+  }));
+  return { ...project, tracks, timelineClips, assets, shots };
 }
 
 
