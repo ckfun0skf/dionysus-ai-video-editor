@@ -8,15 +8,15 @@ This document is a durable pickup ledger, not a claim that planned behavior alre
 
 ## Current checkpoint
 
-- Main HEAD / deployed SHA: `990158fc70cf0e6fe17a994237c1b0d65b7d60fb`; main CI [39233639480](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39233639480) and Pages deploy [39233639536](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39233639536) both passed.
-- Public preview: https://ckfun0skf.github.io/dionysus-ai-video-editor/. Issues #53/#54 were closed as fixed at the owner’s direction. Active follow-up `feat/click-to-place-timeline-clips` addresses Add Clip insertion overlap; it is not deployed yet.
-- Current limitations remain: Clip Asset can duplicate a current version but cannot add an explicitly blank new version from its version controls; creating a Storyboard Shot makes a Slot/Version but no separate reusable Clip Asset; canonical Shot/Clip/Composition relation remains a DYS-014 item.
+- Latest functional code release SHA: `ee1f90c3304ce0f2be5cef294c387192d2aa8969`; main CI [39234313896](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39234313896) and Pages deployment [39234313840](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39234313840) passed. A docs-only checkpoint may advance `main` without changing the app code; re-query live Git before editing.
+- Public preview: https://ckfun0skf.github.io/dionysus-ai-video-editor/. Issues #53/#54 were closed as fixed at the owner’s direction. PR #65 shipped safe click-to-place insertion; PR #66 shipped New Blank Version for Clip Assets.
+- Current limitations remain: creating a Storyboard Shot makes a Slot/Version but no separate reusable Clip Asset; canonical Shot/Clip/Composition relation remains a DYS-014 item. Clip Assets now support both Duplicate Version and New Blank Version.
 - Versioned project-document reads now reject mismatched project identity/name/root Composition identity; legacy schema-1.0 data remains authoritative.
 - #53/#54 remain open pending acceptance. Save-as-Clip still flattens legacy layers; structure-preserving snapshots remain unfinished. No browser smoke tests or PR-branch deployment are claimed.
 
 ### Follow-up — Safe Add Clip insertion (2026-10-19)
 
-PR #65 merged safe click-to-place insertion as `990158fc70cf0e6fe17a994237c1b0d65b7d60fb`; exact main CI [39233639480](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39233639480) and Pages [39233639536](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39233639536) passed. The next branch `feat/blank-clip-asset-version` adds creation of an empty new Clip Asset Version; wait for exact-head CI and deployment before claiming release. The target UX is consistent with the standard distinction between Insert/ripple and trim-to-fit; do not silently overwrite existing content.
+PR #65 merged safe click-to-place insertion as `990158fc70cf0e6fe17a994237c1b0d65b7d60fb`; exact main CI [39233639480](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39233639480) and Pages [39233639536](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39233639536) passed. PR #66 shipped New Blank Version for Clip Assets on feature code SHA `ee1f90c3304ce0f2be5cef294c387192d2aa8969`; main CI 39234313896 and Pages deployment 39234313840 passed. The target UX is consistent with the standard distinction between Insert/ripple and trim-to-fit; do not silently overwrite existing content.
 
 ## Product destination
 
