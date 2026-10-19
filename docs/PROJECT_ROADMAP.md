@@ -8,8 +8,9 @@ This document is a durable pickup ledger, not a claim that planned behavior alre
 
 ## Current checkpoint
 
-- Main HEAD: `288b5f349080c470a119c33174dfaa93c0e8c9f0`; main CI and Pages deployment succeeded (runs 39199996042 and 39199996049).
-- Active Draft PR #63 code/test checkpoint: `a98655c9263bfa033575d6d6c01109bc5dfba94b`; exact-head CI [39227084457](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39227084457) passed tests and TypeScript/Vite build. Re-check exact-head CI after the handoff/style refresh.
+- Main HEAD / deployed SHA: `9da2f2bfbf7e80abb73f5552a0d1447cff471c0b`; PR #63 was merged and both main CI [39227655141](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39227655141) and GitHub Pages deployment [39227655137](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39227655137) succeeded.
+- Code/test PR head before squash merge: `5e671fd4230df470a30031bf57691b1a6602b068`; its exact-head CI [39227490454](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39227490454) passed tests and TypeScript/Vite build.
+- Public preview: https://ckfun0skf.github.io/dionysus-ai-video-editor/. #53/#54 remain open pending owner acceptance.
 - Versioned project-document reads now reject mismatched project identity/name/root Composition identity; legacy schema-1.0 data remains authoritative.
 - #53/#54 remain open pending acceptance. Save-as-Clip still flattens legacy layers; structure-preserving snapshots remain unfinished. No browser smoke tests or PR-branch deployment are claimed.
 
