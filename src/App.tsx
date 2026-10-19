@@ -524,7 +524,7 @@ export default function App() {
     <section className="integrated-preview-panel" aria-label={title}>
       <div className="integrated-preview-heading">
         <div><strong>{title}</strong><small>{subtitle}</small></div>
-        <span className="integrated-timecode">{editorTimeLabel(editorTime)} / {editorTimeLabel(duration)}</span>
+        <span className="integrated-timecode">{editorTimeLabel(editorTime)} / {editorTimeLabel(duration)}</span><span className="mobile-frame-counter" aria-label={"Current frame " + Math.round(editorTime * project.frameRate)}>{Math.round(editorTime * project.frameRate)}f</span>
       </div>
       <div className="integrated-preview-frame" style={{aspectRatio: Math.max(1,previewCanvasWidth) + " / " + Math.max(1,previewCanvasHeight)}}>
         <canvas
