@@ -2358,6 +2358,8 @@
   display: none;
 }
 
+.mobile-timeline-zoom { display: none; }
+
 /* DYS-012 mobile workspace foundation: CapCut-inspired hierarchy, not a shrunken desktop. */
 @media (max-width: 640px) {
   html, body, #root {
@@ -2604,8 +2606,8 @@
   .workbench.timeline-workbench .editor-linked-timeline .visual-track-row,
   .workbench.timeline-workbench .nested-timeline-scroll .nested-visual-timeline-ruler,
   .workbench.timeline-workbench .nested-timeline-scroll .nested-timeline-row.visual-track-row {
-    grid-template-columns: 112px minmax(240px, 1fr);
-    min-width: 352px;
+    grid-template-columns: 112px minmax(var(--timeline-track-min-width, 240px), 1fr);
+    min-width: calc(112px + var(--timeline-track-min-width, 240px));
   }
   .workbench.timeline-workbench .visual-ruler-caption {
     position: sticky;
@@ -2809,5 +2811,28 @@
   .nested-timeline-tab .editor-linked-heading .button {
     min-height: 42px;
   }
+
+  .mobile-timeline-zoom {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    margin: 0 0 8px;
+    padding: 0 2px;
+  }
+  .mobile-timeline-zoom span {
+    min-width: 34px;
+    color: var(--muted);
+    font-size: 11px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+  .mobile-timeline-zoom button {
+    min-width: 40px;
+    min-height: 40px;
+    padding: 7px 10px;
+    touch-action: manipulation;
+  }
+  .mobile-timeline-zoom button:disabled { opacity: .35; }
 
 }

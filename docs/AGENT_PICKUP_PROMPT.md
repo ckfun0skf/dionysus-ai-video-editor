@@ -110,3 +110,10 @@ Start by inspecting GitHub and then continue the work. Do not merely summarize t
 - PR #70 merged nested Clip Version touch movement as main commit `fd51602f92640cf18ad426a418bb7c8d8cb39207`; exact-head CI run [39237693258](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39237693258) passed at `1b1da31e6cec749f3888385ea5c201183c4facba`.
 - Active branch `feat/mobile-contextual-editor-tools` adds selected-clip actions, an Inspector toggle/close action and touch-sized version selector controls.
 - Keep DYS-012 in progress. Verify exact-head CI, merge through PR, then independently confirm main push CI and Pages deployment. No browser smoke tests and do not ask the owner to test before deployment confirmation.
+
+
+## Latest mobile zoom checkpoint — 2026-10-19
+
+- PR #71 merged contextual clip tools and mobile Inspector toggle as main commit `3ab7defb1a882ebc8eefcbfb1ccaa37ffcc69351`; exact-head CI run [39238524459](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39238524459) passed at `19eda997ad20a8a38d6b1e63345f03bccf9eb09e`.
+- Active branch `feat/mobile-timeline-zoom-controls` adds Zoom In / Zoom Out / Fit controls to root and nested timelines. Confirm CI and merge via PR.
+- Keep DYS-012 in progress. Main push CI and Pages deployment are not independently confirmed; no browser smoke tests and do not ask the owner to test before deployment confirmation.

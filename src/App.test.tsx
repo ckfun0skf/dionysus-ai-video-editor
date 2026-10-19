@@ -2009,3 +2009,30 @@ describe("mobile contextual timeline tools", () => {
     expect(container.querySelector(".workbench.timeline-workbench")?.classList.contains("timeline-inspector-open")).toBe(false);
   });
 });
+
+
+describe("mobile timeline zoom controls", () => {
+  it("zooms the timeline scroll surface without changing clip timing and can fit back to view", async () => {
+    const project = structuredClone(persistedProject());
+    const videoTrack = project.tracks.find(track => track.kind === "video")!;
+    project.timelineClips = [
+      { id: "zoom-test-clip", name: "Zoom test clip", kind: "video", trackId: videoTrack.id, start: 1, duration: 3 },
+    ];
+    act(() => root.unmount());
+    localStorage.setItem("dionysus.project.v1", JSON.stringify(project));
+    root = createRoot(container);
+    act(() => root.render(<App />));
+    await flushEffects();
+    await openTimelineView();
+
+    const scrollSurface = container.querySelector<HTMLElement>(".timeline-horizontal-scroll")!;
+    expect(scrollSurface.style.getPropertyValue("--timeline-track-min-width")).toBe("240px");
+    click(container.querySelector<HTMLButtonElement>('[aria-label="Zoom in timeline"]')!);
+    await flushEffects();
+    expect(scrollSurface.style.getPropertyValue("--timeline-track-min-width")).toBe("360px");
+    expect((persistedProject().timelineClips ?? []).find(clip => clip.id === "zoom-test-clip")?.duration).toBe(3);
+    click(container.querySelector<HTMLButtonElement>('[aria-label="Fit timeline"]')!);
+    await flushEffects();
+    expect(scrollSurface.style.getPropertyValue("--timeline-track-min-width")).toBe("240px");
+  });
+});

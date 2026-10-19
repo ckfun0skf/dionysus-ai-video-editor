@@ -624,8 +624,8 @@
           "id": "DYS-012",
           "title": "Responsive mobile editing workspace",
           "status": "in_progress",
-          "progress": 65,
-          "summary": "Responsive layout and touch drag for both Master and nested Clip Version timelines are merged. Active follow-up adds a selected-clip mobile toolbar, Inspector toggle, and touch-sized version selector controls. Viewport acceptance and deployment confirmation remain outstanding.",
+          "progress": 75,
+          "summary": "Responsive layout, Master/nested touch drag, contextual clip actions and mobile Inspector controls are merged. Active branch adds touch-friendly timeline zoom and Fit controls. Deployment and viewport acceptance remain outstanding.",
           "doc": "tasks/responsive-mobile-editing.md",
           "detail": "tasks/responsive-mobile-editing.html",
           "report": "reports/responsive-mobile-editing-report.md",
@@ -647,6 +647,10 @@
               "status": "in_progress"
             },
             {
+              "title": "Timeline zoom and Fit controls",
+              "status": "in_progress"
+            },
+            {
               "title": "Regression check for existing main navigation",
               "status": "in_progress"
             }
@@ -659,13 +663,14 @@
             "Exact-head CI/build and post-merge deployment evidence recorded; do not add browser smoke tests"
           ],
           "evidence": [
-            "PR #68 merged as main commit 3513d51f9a52599e0231d8cb4db884cc59e5d611; exact-head PR CI run 39236495588 passed.",
-            "PR #69 merged as main commit 01ca4653a23c70273c74d3ada37883b66dabb3e3; exact-head CI run 39237331052 passed.",
-            "PR #70 merged as main commit fd51602f92640cf18ad426a418bb7c8d8cb39207; exact-head CI run 39237693258 passed.",
-            "Active branch feat/mobile-contextual-editor-tools adds contextual selected-clip actions and mobile Inspector/version controls; exact-head CI pending.",
+            "PR #68 merged responsive layout; exact-head PR CI run 39236495588 passed.",
+            "PR #69 merged Master Timeline touch movement; exact-head CI run 39237331052 passed.",
+            "PR #70 merged nested Clip Version touch movement; exact-head CI run 39237693258 passed.",
+            "PR #71 merged contextual clip tools and Inspector toggle as main commit 3ab7defb1a882ebc8eefcbfb1ccaa37ffcc69351; exact-head CI run 39238524459 passed.",
+            "Active branch feat/mobile-timeline-zoom-controls adds Zoom In / Zoom Out / Fit controls and a regression test; exact-head CI pending.",
             "Main push CI and Pages deployment have not yet been independently confirmed. Do not ask the owner to test before deployment is verified."
           ],
-          "notes": "Owner requested a CapCut-inspired phone interface. Responsive mobile web shares the desktop project model. Layout and touch drag for both Master and nested timelines are merged; contextual controls are in progress. Mobile viewport acceptance and deployment verification remain. See docs/PRD.md and docs/PROJECT_ROADMAP.md."
+          "notes": "Owner requested a CapCut-inspired phone interface. Responsive mobile web shares the desktop project model. Layout, touch movement, contextual tools and Inspector access are merged; timeline zoom is in progress. Mobile viewport acceptance and deployment verification remain. See docs/PRD.md and docs/PROJECT_ROADMAP.md."
         }
       ]
     },

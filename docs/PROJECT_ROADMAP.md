@@ -187,3 +187,10 @@ The active branch `feat/mobile-nested-timeline-touch` extends touch move to nest
 PR #70 merged nested Clip Version long-press movement as main commit `fd51602f92640cf18ad426a418bb7c8d8cb39207`; exact-head CI run [39237693258](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39237693258) passed at `1b1da31e6cec749f3888385ea5c201183c4facba`.
 
 Active branch `feat/mobile-contextual-editor-tools` adds contextual mobile actions for the selected Master Timeline clip, a functional mobile Inspector open/close control, and touch-sized nested Clip Asset version selection. It has an App integration test and is pending exact-head CI. DYS-012 remains in progress; mobile viewport acceptance, version UX polish and deployment confirmation remain. Do not add browser smoke tests or ask the owner to test before deployment is confirmed.
+
+
+## Mobile timeline zoom — 2026-10-19
+
+PR #71 merged contextual selected-clip tools and the mobile Inspector toggle as main commit `3ab7defb1a882ebc8eefcbfb1ccaa37ffcc69351`; exact-head CI run [39238524459](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39238524459) passed at `19eda997ad20a8a38d6b1e63345f03bccf9eb09e`.
+
+Active branch `feat/mobile-timeline-zoom-controls` adds phone-only Zoom In / Zoom Out / Fit controls, scaling root and nested track surfaces without mutating clip timing. An integration test checks zoom width and Fit behavior. DYS-012 remains in progress; deployment and portrait/landscape viewport acceptance are not confirmed. Do not add browser smoke tests or ask the owner to test before deployment is verified.
