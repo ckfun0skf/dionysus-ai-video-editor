@@ -1759,7 +1759,7 @@ describe("Integrated timeline editor", () => {
     expect(menuItems).toContain("Add clip");
     expect(menuItems).toContain("Remove layer…");
     click(Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')).find(button => button.textContent?.trim()==="Settings…")!);
-    expect(container.querySelector('[role="menu"]')).toBeNull();
+    expect(container.querySelector(".shot-context-menu")).toBeNull();
   });
 
   it("removing a video layer deletes linked child audio but preserves detached audio through Undo/Redo", async () => {
