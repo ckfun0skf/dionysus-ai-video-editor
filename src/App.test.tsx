@@ -620,7 +620,9 @@ describe("App history integration", () => {
 
     const dragProject = persistedProject();
     const shotBlock = container.querySelector<HTMLButtonElement>(".master-shot-clip");
-    const lane = shotBlock?.closest(".visual-track-lane") as HTMLDivElement | null;
+    const targetTrack = dragProject.tracks.find(track => track.kind === "video" && track.id !== dragProject.tracks.find(item => item.kind === "video")?.id)!;
+    const targetGroup = Array.from(container.querySelectorAll<HTMLElement>(".visual-track-group")).find(group => group.querySelector(".visual-track-label strong")?.textContent === targetTrack.name);
+    const lane = targetGroup?.querySelector<HTMLElement>(".visual-track-lane") as HTMLDivElement | null;
     expect(shotBlock?.draggable).toBe(true);
     expect(lane).toBeTruthy();
     Object.defineProperty(lane!, "getBoundingClientRect", {
@@ -645,6 +647,7 @@ describe("App history integration", () => {
     const rawStart = Math.max(0, Math.min(masterDuration - dragProject.shots[0].duration, 0.75 * masterDuration - dragProject.shots[0].duration / 2));
     const expectedStart = Math.round(rawStart * dragProject.frameRate) / dragProject.frameRate;
     expect(afterDrop.shots[0].masterStart).toBeCloseTo(expectedStart, 7);
+    expect(afterDrop.shots[0].masterTrackId).toBe(targetTrack.id);
     expect(afterDrop.shots[0].slots[0].versions[0].duration).toBe(firstVersionDuration);
 
     const beforeRipple = persistedProject();
