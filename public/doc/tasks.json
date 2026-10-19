@@ -624,8 +624,8 @@
           "id": "DYS-012",
           "title": "Responsive mobile editing workspace",
           "status": "in_progress",
-          "progress": 89,
-          "summary": "Responsive layout, touch movement, contextual tools, Inspector toggle, zoom, trim hit targets, pointer-captured scrubbing and the mobile version picker are merged. Current slice adds frame-aligned scrubbing. Deployment and viewport acceptance remain outstanding.",
+          "progress": 91,
+          "summary": "Responsive layout, touch movement, contextual tools, Inspector toggle, zoom, trim hit targets, pointer-captured frame-aligned scrubbing and the mobile version picker are merged. Current slice adds one-frame stepping. Deployment and viewport acceptance remain outstanding.",
           "doc": "tasks/responsive-mobile-editing.md",
           "detail": "tasks/responsive-mobile-editing.html",
           "report": "reports/responsive-mobile-editing-report.md",
@@ -676,9 +676,10 @@
             "PR #73 merged mobile trim hit targets and visible grab markers as main commit 98f1637f1cc36a069578edb2337bcfdb578b4612; exact-head CI run 39239397529 passed.",
             "PR #74 merged pointer-captured scrubbing as main commit 605edf9af5922f3f6c054997d50f648ecae067ad; exact-head CI run 39242564926 passed.",
             "PR #75 merged the mobile version picker as main commit 72b2debcf586e2a0663a03119e7f688b79394f8f; exact-head CI run 39242992878 passed.",
-            "Current branch feat/frame-accurate-mobile-scrubbing snaps touch scrubbing to project frame boundaries and adds a regression assertion; exact-head CI pending."
+            "PR #76 merged frame-aligned scrubbing as main commit c04d9562747352225b83de90cc48a55355c06494; exact-head CI run 39243270619 passed.",
+            "Current branch feat/mobile-frame-step-controls adds phone-only one-frame stepping and a regression test; exact-head CI pending."
           ],
-          "notes": "Owner requested a CapCut-inspired phone interface. Layout, touch movement, contextual tools, Inspector access, zoom, trim ergonomics, pointer-captured scrubbing and mobile version picker are merged. Frame-aligned scrubbing is current; viewport/device acceptance and deployment verification remain."
+          "notes": "Owner requested a CapCut-inspired phone interface. Layout, touch movement, contextual tools, Inspector access, zoom, trim ergonomics, frame-aligned scrubbing and mobile version picker are merged. Frame-step controls are current; viewport/device acceptance and deployment verification remain."
         }
       ]
     },

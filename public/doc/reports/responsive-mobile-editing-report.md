@@ -1,6 +1,6 @@
 # DYS-012 Progress Report — Responsive mobile editing
 
-**Status:** In progress; layout, touch movement, contextual tools and zoom merged; trim hit targets and pointer-captured scrubbing merged; mobile version picker merged; frame-accurate scrubbing refinement active  
+**Status:** In progress; layout, touch movement, contextual tools and zoom merged; trim hit targets and pointer-captured scrubbing merged; mobile version picker and frame-aligned scrubbing merged; frame-step controls active  
 **Last reviewed:** 2026-10-19
 
 ## Shipped
@@ -22,11 +22,14 @@ PR #74 merged pointer-captured playhead scrubbing to Master, main visual and nes
 ## Latest mobile version picker release
 PR #75 merged the safe-area-aware bottom-sheet version picker as `72b2debcf586e2a0663a03119e7f688b79394f8f`; exact-head CI passed at [39242992878](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39242992878).
 
-## Current frame-accurate scrubbing slice
-Snaps pointer-captured scrubbing to project frame boundaries and adds a regression assertion for frame alignment. Automated CI is pending; this does not substitute for device-level acceptance.
+## Latest frame-aligned scrubbing release
+PR #76 snapped pointer-captured scrubbing to project frame boundaries as `c04d9562747352225b83de90cc48a55355c06494`; exact-head CI passed at [39243270619](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39243270619).
+
+## Current frame-step control slice
+Adds phone-only Previous frame / Next frame controls and aligns the range control's step to the project frame rate. Automated CI is pending; this does not substitute for device-level acceptance.
 
 ## Remaining work
-- Verify exact-head CI for frame-accurate scrubbing, then merge through PR.
+- Verify exact-head CI for mobile frame-step controls, then merge through PR.
 - Independently verify main push CI and GitHub Pages deployment after merge.
 - Refine scrubbing/trim, Inspector/Version picker and mobile viewport behavior.
 - Record viewport/device evidence only when available; do not mark DYS-012 done on CSS and gestures alone.
