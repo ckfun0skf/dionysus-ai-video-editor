@@ -624,8 +624,8 @@
           "id": "DYS-012",
           "title": "Responsive mobile editing workspace",
           "status": "in_progress",
-          "progress": 75,
-          "summary": "Responsive layout, Master/nested touch drag, contextual clip actions and mobile Inspector controls are merged. Active branch adds touch-friendly timeline zoom and Fit controls. Deployment and viewport acceptance remain outstanding.",
+          "progress": 80,
+          "summary": "Responsive layout, Master/nested touch drag, contextual clip tools, Inspector toggle and timeline zoom are merged. Active branch improves touch trim hit targets and regression coverage. Deployment and viewport acceptance remain outstanding.",
           "doc": "tasks/responsive-mobile-editing.md",
           "detail": "tasks/responsive-mobile-editing.html",
           "report": "reports/responsive-mobile-editing-report.md",
@@ -648,6 +648,10 @@
             },
             {
               "title": "Timeline zoom and Fit controls",
+              "status": "done"
+            },
+            {
+              "title": "Touch trim handle ergonomics",
               "status": "in_progress"
             },
             {
@@ -666,11 +670,12 @@
             "PR #68 merged responsive layout; exact-head PR CI run 39236495588 passed.",
             "PR #69 merged Master Timeline touch movement; exact-head CI run 39237331052 passed.",
             "PR #70 merged nested Clip Version touch movement; exact-head CI run 39237693258 passed.",
-            "PR #71 merged contextual clip tools and Inspector toggle as main commit 3ab7defb1a882ebc8eefcbfb1ccaa37ffcc69351; exact-head CI run 39238524459 passed.",
-            "Active branch feat/mobile-timeline-zoom-controls adds Zoom In / Zoom Out / Fit controls and a regression test; exact-head CI pending.",
+            "PR #71 merged contextual clip tools and Inspector toggle; exact-head CI run 39238524459 passed.",
+            "PR #72 merged timeline zoom and Fit controls as main commit f57b5ad3ffe5b80bd586b513fc2fc1e201898cf8; exact-head CI run 39238940480 passed.",
+            "Active branch feat/mobile-touch-trim-handles adds larger touch trim targets and a regression test; exact-head CI pending.",
             "Main push CI and Pages deployment have not yet been independently confirmed. Do not ask the owner to test before deployment is verified."
           ],
-          "notes": "Owner requested a CapCut-inspired phone interface. Responsive mobile web shares the desktop project model. Layout, touch movement, contextual tools and Inspector access are merged; timeline zoom is in progress. Mobile viewport acceptance and deployment verification remain. See docs/PRD.md and docs/PROJECT_ROADMAP.md."
+          "notes": "Owner requested a CapCut-inspired phone interface. Responsive mobile web shares the desktop project model. Layout, touch movement, contextual tools, Inspector access and timeline zoom are merged; trim ergonomics are in progress. Mobile viewport acceptance and deployment verification remain. See docs/PRD.md and docs/PROJECT_ROADMAP.md."
         }
       ]
     },
