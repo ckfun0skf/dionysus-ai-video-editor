@@ -75,6 +75,19 @@ export function readProjectDocument(value: unknown): ReadProjectDocumentResult {
       throw new Error("The project document contains inconsistent Composition metadata.");
     }
 
+    // Verify the persisted projection against the authoritative legacy payload. Otherwise a
+    // hand-edited/stale envelope could carry Composition placements that do not correspond to
+    // the project the editor will actually load.
+    const expected = migrateLegacyProjectToComposition(project);
+    if (
+      JSON.stringify(compositionModel.rootComposition) !== JSON.stringify(expected.rootComposition) ||
+      JSON.stringify(compositionModel.clipCompositions) !== JSON.stringify(expected.clipCompositions) ||
+      JSON.stringify(compositionModel.legacyShotSlotCompositions) !== JSON.stringify(expected.legacyShotSlotCompositions) ||
+      JSON.stringify(compositionModel.warnings) !== JSON.stringify(expected.warnings)
+    ) {
+      throw new Error("The project document contains a stale or inconsistent Composition projection.");
+    }
+
     return { project, sourceDocumentVersion: "2.0" };
   }
   if (value.schemaVersion === "1.0") {

@@ -36,6 +36,29 @@ describe("versioned project document boundary", () => {
     expect(() => readProjectDocument(document)).toThrow(/inconsistent Composition metadata/);
   });
 
+  it("rejects a Composition projection whose placements no longer match the legacy project", () => {
+    const document = createProjectDocument(structuredClone(sampleProject));
+    document.compositionModel.rootComposition.placements.push({
+      id: "tampered-placement",
+      name: "Tampered",
+      trackId: document.compositionModel.rootComposition.tracks[0].id,
+      start: 0,
+      duration: 1,
+      order: 999,
+      source: { type: "none" },
+      legacyData: {},
+    });
+    expect(() => readProjectDocument(document)).toThrow(/stale or inconsistent Composition projection/);
+  });
+
+  it("accepts a fresh versioned document and preserves the authoritative project payload", () => {
+    const project = structuredClone(sampleProject);
+    const document = createProjectDocument(project);
+    const result = readProjectDocument(document);
+    expect(result.sourceDocumentVersion).toBe("2.0");
+    expect(result.project).toEqual(project);
+  });
+
   it("rejects unknown versions rather than guessing a migration", () => {
     expect(() => readProjectDocument({ format: "dionysus-project-document", documentVersion: "3.0", project: {}, compositionModel: {} })).toThrow(/Unsupported/);
     expect(() => readProjectDocument({ schemaVersion: "3.0" })).toThrow(/Unsupported/);
