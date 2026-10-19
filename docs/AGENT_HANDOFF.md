@@ -218,3 +218,10 @@ The owner wants a future phone version with a CapCut-inspired interface. Treat t
 - PR #70 merged nested Clip Version touch movement as main commit `fd51602f92640cf18ad426a418bb7c8d8cb39207`; exact-head CI run [39237693258](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39237693258) passed at `1b1da31e6cec749f3888385ea5c201183c4facba`.
 - Active branch `feat/mobile-contextual-editor-tools` adds a phone-only selected-clip toolbar (Split, Duplicate, Trim, Settings, Delete), a working Inspector toggle/close action, and larger nested Clip Asset version selector controls. Exact-head CI is pending.
 - Main push CI and Pages deployment remain independently unconfirmed. Do not ask the owner to test until the latest Pages deployment is confirmed. No browser smoke tests.
+
+
+## Mobile timeline zoom — 2026-10-19
+
+- PR #71 merged contextual clip tools and mobile Inspector toggle as main commit `3ab7defb1a882ebc8eefcbfb1ccaa37ffcc69351`; exact-head CI run [39238524459](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39238524459) passed at `19eda997ad20a8a38d6b1e63345f03bccf9eb09e`.
+- Active branch `feat/mobile-timeline-zoom-controls` adds phone-only Zoom In / Zoom Out / Fit controls. The root and nested timeline scroll surfaces scale their track width together; zoom changes presentation only, not clip timing or project data. Includes an integration test.
+- Main push CI and Pages deployment remain independently unconfirmed; do not ask the owner to test until deployment is confirmed. No browser smoke tests.

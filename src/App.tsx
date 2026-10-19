@@ -237,6 +237,7 @@ export default function App() {
   const [expandedVersionShotId, setExpandedVersionShotId] = useState<string>("");
   const [selectedTimelineClipId, setSelectedTimelineClipId] = useState<string>("");
   const [mobileInspectorOpen, setMobileInspectorOpen] = useState(false);
+  const [timelineZoom, setTimelineZoom] = useState(1);
   const [timelineTabs, setTimelineTabs] = useState<VersionTimelineTab[]>([]);
   const [activeTimelineTabId, setActiveTimelineTabId] = useState("master");
   const [timelineTabTimes, setTimelineTabTimes] = useState<Record<string, number>>({ master: 0 });
@@ -2109,6 +2110,12 @@ export default function App() {
     <button className="timeline-tab-close" aria-label={"Close " + tab.label} onClick={() => closeTimelineTab(tab.id)}>×</button>
   </div>)}
 </div><button className="timeline-inspector-toggle button button-quiet button-small" aria-expanded={mobileInspectorOpen} onClick={() => setMobileInspectorOpen(open => !open)}>{mobileInspectorOpen ? "Close Inspector" : "Inspector"}</button></div>
+<div className="mobile-timeline-zoom" aria-label="Timeline zoom controls">
+  <button type="button" aria-label="Zoom out timeline" disabled={timelineZoom <= 1} onClick={() => setTimelineZoom(value => Math.max(1, value - 0.5))}>−</button>
+  <span>{timelineZoom.toFixed(1)}×</span>
+  <button type="button" aria-label="Zoom in timeline" disabled={timelineZoom >= 4} onClick={() => setTimelineZoom(value => Math.min(4, value + 0.5))}>+</button>
+  <button type="button" aria-label="Fit timeline" onClick={() => setTimelineZoom(1)}>Fit</button>
+</div>
 <div className="timeline-tab-content master-timeline-content" style={{display:activeTimelineTabId === "master" ? "block" : "none"}}>{renderTimelinePreview("master", "Master preview", activeShotInfo.shot?.title ?? project.name, runtime, activeShotInfo.shot?.title ?? project.name, activeShotInfo.shot?.intent ?? "", true)}<div className="section-toolbar timeline-master-actions"><span className="timeline-summary">{project.shots.length} shots · {(project.timelineClips ?? []).length} clips</span><div className="inline-actions"><button className="button button-quiet button-small" onClick={saveMasterTimelineAsClipAsset}><Save size={14}/> Save as Clip Asset</button><button className="button button-primary button-small" disabled={!selected} onClick={() => selected && addSlot(selected.id)}><Plus size={15}/> {t("action.addClipSlot")}</button></div></div><div className="timeline-ruler" role="slider" aria-label="Master timeline playhead" aria-valuemin={0} aria-valuemax={runtime} aria-valuenow={editorTime} tabIndex={0}
             onPointerDown={event => { const rect = event.currentTarget.getBoundingClientRect(); const next = Math.max(0, Math.min(runtime, ((event.clientX - rect.left) / Math.max(rect.width, 1)) * runtime)); playbackTimeRef.current = next; setIsPlaying(false); setEditorTime(next); }}
             onPointerMove={event => { if (event.buttons !== 1) return; const rect = event.currentTarget.getBoundingClientRect(); const next = Math.max(0, Math.min(runtime, ((event.clientX - rect.left) / Math.max(rect.width, 1)) * runtime)); playbackTimeRef.current = next; setIsPlaying(false); setEditorTime(next); }}
@@ -2169,7 +2176,7 @@ export default function App() {
   <span><strong>Place “{pendingTimelineClip.name}”</strong><small>Click an empty position on a compatible timeline layer · {pendingTimelineClip.duration.toFixed(2)}s. Existing clips will not be silently overwritten.</small></span>
   <button className="button button-quiet button-small" onClick={cancelTimelineClipPlacement}>Cancel placement</button>
 </div>}
-<div className="timeline-horizontal-scroll">
+<div className="timeline-horizontal-scroll" style={{ "--timeline-track-min-width": `${240 * timelineZoom}px` } as React.CSSProperties}>
   <div className="visual-timeline-ruler">
   <div className="visual-ruler-caption">TIME</div>
   <div className="visual-timeline-ruler-lane" role="slider" aria-label="Timeline playhead" aria-valuemin={0} aria-valuemax={mediaTimelineDuration} aria-valuenow={editorTime} tabIndex={0}
@@ -2346,7 +2353,7 @@ export default function App() {
       <textarea className="text-area" rows={2} aria-label="Version description" value={activeVersionTimeline.description} onChange={event => updateTimelineVersionDescription(activeVersionTimelineTab, event.target.value)} />
     </label>
   </details>
-  <div className="nested-timeline-scroll">
+  <div className="nested-timeline-scroll" style={{ "--timeline-track-min-width": `${240 * timelineZoom}px` } as React.CSSProperties}>
   <div className="visual-timeline-ruler nested-visual-timeline-ruler">
     <div className="visual-ruler-caption">TIME</div>
     <div className="visual-timeline-ruler-lane" role="slider" aria-label="Version timeline playhead" aria-valuemin={0} aria-valuemax={activeVersionTimeline.duration} aria-valuenow={editorTime} tabIndex={0}
