@@ -30,7 +30,7 @@ export interface Shot {
   shotType?: "establishing" | "wide" | "medium" | "close-up" | "extreme-close-up" | "aerial" | "point-of-view";
   previewAssetId?: string;
 }
-export interface TimelineTrack { id: string; name: string; kind: "video" | "audio" | "text" | "effects" | "procedural"; muted?: boolean; backgroundColor?: string; backgroundTransparent?: boolean; opacity?: number; x?: number; y?: number; width?: number; height?: number }
+export interface TimelineTrack { id: string; name: string; kind: "video" | "audio" | "text" | "effects" | "procedural"; /** Original pre-normalization lane kind, if migrated. */ originalKind?: string; muted?: boolean; backgroundColor?: string; backgroundTransparent?: boolean; opacity?: number; x?: number; y?: number; width?: number; height?: number }
 export interface TimelineClip { id: string; name: string; kind: "video" | "audio" | "text" | "procedural" | "clip"; trackId: string; start: number; duration: number; assetId?: string; scriptVersionId?: string; clipVersionId?: string; referencedImageAssetIds?: string[]; shotId?: string; slotId?: string; muted?: boolean; linkedVideoClipId?: string; sourceIn?: number; sourceOut?: number; shortSourceBehavior?: "once" | "loop"; fitMode?: "contain" | "cover" | "fill"; x?: number; y?: number; width?: number; height?: number; prompt?: string; code?: string; html?: string; css?: string; modelName?: string; modelVersion?: string; thumbnailPath?: string; volume?: number; fadeIn?: number; fadeOut?: number }
 export interface DionysusProject {
   schemaVersion: "1.0";

@@ -25,6 +25,7 @@ describe("normalizeClipVersionTracks", () => {
     expect(normalized.layers[1]).toMatchObject({ kind: "image", assetId: "image-id", trackId: normalized.layers[0].trackId });
     expect(normalized.layers[4]).toMatchObject({ kind: "procedural", code: "return 1;" });
     const project = structuredClone(sampleProject);
+    project.assets.push({ id: "image-id", name: "Image", kind: "image" });
     project.shots[0].slots[0].versions[0] = normalized;
     expect(validateProject(project)).toBe(true);
   });

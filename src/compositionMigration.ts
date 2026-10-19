@@ -75,7 +75,7 @@ function rootTracks(projectTracks: TimelineTrack[], warnings: CompositionMigrati
       ...(track.backgroundColor !== undefined ? { backgroundColor: track.backgroundColor } : {}),
       ...(track.backgroundTransparent !== undefined ? { backgroundTransparent: track.backgroundTransparent } : {}),
       ...(track.opacity !== undefined ? { opacity: track.opacity } : {}),
-      ...(track.kind !== kind ? { originalKind: track.kind } : {}),
+      ...(track.originalKind !== undefined ? { originalKind: track.originalKind } : track.kind !== kind ? { originalKind: track.kind } : {}),
       legacyData: record(track),
     };
   });

@@ -169,6 +169,7 @@ function isTimelineClip(value: unknown): boolean {
 function isTrack(value: unknown): boolean {
   return isRecord(value) && isString(value.id) && isString(value.name) &&
     isString(value.kind) && trackKinds.has(value.kind) &&
+    (value.originalKind === undefined || isString(value.originalKind)) &&
     (value.muted === undefined || typeof value.muted === "boolean") &&
     (value.x === undefined || (isFiniteNumber(value.x) && value.x >= 0 && value.x <= 100)) &&
     (value.y === undefined || (isFiniteNumber(value.y) && value.y >= 0 && value.y <= 100)) &&

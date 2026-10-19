@@ -17,10 +17,14 @@ function canonicalTrackKind(kind: TimelineTrack["kind"]): CanonicalNestedTrackKi
 /** Additive, deterministic schema-1.0 migration: nested Clip Versions gain explicit tracks and
  * every layer gets a trackId. Existing valid track IDs and ordering are preserved. */
 export function normalizeClipVersionTracks(version: ClipVersion): ClipVersion {
-  const tracks: TimelineTrack[] = (version.tracks ?? []).map(track => ({
-    ...track,
-    kind: canonicalTrackKind(track.kind),
-  }));
+  const tracks: TimelineTrack[] = (version.tracks ?? []).map(track => {
+    const kind = canonicalTrackKind(track.kind);
+    return {
+      ...track,
+      kind,
+      ...(track.originalKind !== undefined ? { originalKind: track.originalKind } : track.kind !== kind ? { originalKind: track.kind } : {}),
+    };
+  });
   const ensureTrack = (kind: CanonicalNestedTrackKind): TimelineTrack => {
     const existing = tracks.find(track => track.kind === kind);
     if (existing) return existing;
