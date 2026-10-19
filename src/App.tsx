@@ -271,15 +271,42 @@ export default function App() {
   const suppressTouchClipClickRef = useRef(false);
   useEffect(() => () => {
     const active = touchClipMoveRef.current;
-    if (!active) return;
-    if (active.timer !== undefined) window.clearTimeout(active.timer);
-    if (active.moveListener) window.removeEventListener("pointermove", active.moveListener);
-    if (active.upListener) window.removeEventListener("pointerup", active.upListener);
-    if (active.cancelListener) window.removeEventListener("pointercancel", active.cancelListener);
+    if (active) {
+      if (active.timer !== undefined) window.clearTimeout(active.timer);
+      if (active.moveListener) window.removeEventListener("pointermove", active.moveListener);
+      if (active.upListener) window.removeEventListener("pointerup", active.upListener);
+      if (active.cancelListener) window.removeEventListener("pointercancel", active.cancelListener);
+    }
+    const nested = touchNestedMoveRef.current;
+    if (nested) {
+      if (nested.timer !== undefined) window.clearTimeout(nested.timer);
+      if (nested.moveListener) window.removeEventListener("pointermove", nested.moveListener);
+      if (nested.upListener) window.removeEventListener("pointerup", nested.upListener);
+      if (nested.cancelListener) window.removeEventListener("pointercancel", nested.cancelListener);
+    }
   }, []);
   const masterShotDragSourceRef = useRef<string>("");
   const [clipDropPreview, setClipDropPreview] = useState<{ trackId: string; start: number; duration: number; name: string; snapTime?: number } | null>(null);
   const nestedLayerDragSourceRef = useRef("");
+  const touchNestedMoveRef = useRef<{
+    layer: CompositionLayer;
+    tab: VersionTimelineTab;
+    version: ClipVersion;
+    originalTrackId: string;
+    pointerId: number;
+    startX: number;
+    startY: number;
+    lastX: number;
+    lastY: number;
+    grabOffset: number;
+    activated: boolean;
+    movedBeforeActivation: boolean;
+    scrollSurface: HTMLElement | null;
+    timer?: number;
+    moveListener?: (event: PointerEvent) => void;
+    upListener?: (event: PointerEvent) => void;
+    cancelListener?: (event: PointerEvent) => void;
+  } | null>(null);
   const [nestedDropPreview, setNestedDropPreview] = useState<{ trackId: string; start: number; duration: number; name: string; snapTime?: number } | null>(null);
   const nestedResizeRef = useRef<{ id: string; edge: "left" | "right"; pointerId: number; x: number; laneWidth: number; version: ClipVersion; tab: VersionTimelineTab; moveListener?: (event: PointerEvent) => void; upListener?: (event: PointerEvent) => void; cancelListener?: (event: PointerEvent) => void } | null>(null);
   const [nestedResizePreview, setNestedResizePreview] = useState<ClipResizePreview | null>(null);
@@ -1612,6 +1639,144 @@ export default function App() {
     }, 260);
   }
 
+  function cancelTouchNestedMove() {
+    const active = touchNestedMoveRef.current;
+    if (!active) return;
+    if (active.timer !== undefined) window.clearTimeout(active.timer);
+    if (active.moveListener) window.removeEventListener("pointermove", active.moveListener);
+    if (active.upListener) window.removeEventListener("pointerup", active.upListener);
+    if (active.cancelListener) window.removeEventListener("pointercancel", active.cancelListener);
+    touchNestedMoveRef.current = null;
+  }
+
+  function beginTouchNestedLayerMove(event: React.PointerEvent<HTMLButtonElement>, layer: CompositionLayer) {
+    if (event.pointerType === "mouse" || event.button !== 0 || (event.target as HTMLElement).closest(".clip-resize-handle")) return;
+    const tab = activeVersionTimelineTab;
+    const version = activeVersionTimeline;
+    if (!tab || !version) return;
+    cancelTouchNestedMove();
+    const normalizedVersion = normalizeClipVersionTracks(version);
+    const normalizedLayer = normalizedVersion.layers.find(item => item.id === layer.id) ?? layer;
+    const originalTrackId = normalizedLayer.trackId ?? normalizedVersion.tracks?.[0]?.id;
+    if (!originalTrackId) return;
+    const movingLayer = { ...normalizedLayer, trackId: originalTrackId };
+    const buttonRect = event.currentTarget.getBoundingClientRect();
+    const grabOffset = buttonRect.width > 0
+      ? Math.max(0, Math.min(movingLayer.duration, ((event.clientX - buttonRect.left) / buttonRect.width) * movingLayer.duration))
+      : movingLayer.duration / 2;
+    const active: NonNullable<typeof touchNestedMoveRef.current> = {
+      layer: movingLayer, tab: { ...tab }, version: normalizedVersion, originalTrackId, pointerId: event.pointerId,
+      startX: event.clientX, startY: event.clientY, lastX: event.clientX, lastY: event.clientY,
+      grabOffset, activated: false, movedBeforeActivation: false,
+      scrollSurface: event.currentTarget.closest<HTMLElement>(".nested-timeline-scroll"),
+    };
+    const getDrop = (clientX: number, clientY: number) => {
+      const target = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
+      const lane = target?.closest<HTMLElement>(".nested-timeline-row-track[data-track-id]");
+      const trackId = lane?.dataset.trackId;
+      const track = active.version.tracks?.find(item => item.id === trackId);
+      const moving = active.version.layers.find(item => item.id === layer.id);
+      if (!lane || !track || !moving) return null;
+      const rect = lane.getBoundingClientRect();
+      const pointerTime = ((clientX - rect.left) / Math.max(rect.width, 1)) * active.version.duration;
+      const rawStart = Math.max(0, pointerTime - active.grabOffset);
+      const position = calculateClipVersionDropPosition(
+        active.version, layer.id, track.id, rawStart, active.version.duration, Math.max(1, projectRef.current.frameRate || 24)
+      );
+      return position ? { track, moving, position } : null;
+    };
+    const onMove = (nativeEvent: PointerEvent) => {
+      if (touchNestedMoveRef.current !== active || nativeEvent.pointerId !== active.pointerId) return;
+      const deltaX = nativeEvent.clientX - active.lastX;
+      const deltaY = nativeEvent.clientY - active.lastY;
+      active.lastX = nativeEvent.clientX;
+      active.lastY = nativeEvent.clientY;
+      if (!active.activated) {
+        if (Math.hypot(nativeEvent.clientX - active.startX, nativeEvent.clientY - active.startY) > 8) {
+          active.movedBeforeActivation = true;
+          if (active.timer !== undefined) {
+            window.clearTimeout(active.timer);
+            active.timer = undefined;
+          }
+          nativeEvent.preventDefault();
+          if (Math.abs(deltaX) >= Math.abs(deltaY) && active.scrollSurface) {
+            active.scrollSurface.scrollLeft -= deltaX;
+          } else if (Math.abs(deltaY) > 0) {
+            window.scrollBy(0, -deltaY);
+          }
+        }
+        return;
+      }
+      nativeEvent.preventDefault();
+      const drop = getDrop(nativeEvent.clientX, nativeEvent.clientY);
+      if (!drop) {
+        setNestedDropPreview(null);
+        return;
+      }
+      setNestedDropPreview({
+        trackId: drop.track.id, start: drop.position.start, duration: drop.moving.duration, name: drop.moving.name,
+        ...(drop.position.snapTime !== undefined ? { snapTime: drop.position.snapTime } : {}),
+      });
+    };
+    const suppressClickBriefly = () => {
+      suppressTouchClipClickRef.current = true;
+      window.setTimeout(() => { suppressTouchClipClickRef.current = false; }, 0);
+    };
+    const onUp = (nativeEvent: PointerEvent) => {
+      if (touchNestedMoveRef.current !== active || nativeEvent.pointerId !== active.pointerId) return;
+      if (!active.activated) {
+        if (active.movedBeforeActivation) suppressClickBriefly();
+        cancelTouchNestedMove();
+        return;
+      }
+      nativeEvent.preventDefault();
+      suppressClickBriefly();
+      const drop = getDrop(nativeEvent.clientX, nativeEvent.clientY);
+      if (!drop) {
+        setNotice("Clip layer move cancelled. Release on a valid track.");
+        setNestedDropPreview(null);
+        cancelTouchNestedMove();
+        return;
+      }
+      if (drop.track.id !== active.originalTrackId || Math.abs(drop.position.start - active.layer.start) > 1e-6) {
+        try {
+          updateTimelineVersion(active.tab, current => moveNestedLayer(current, active.layer.id, drop.track.id, drop.position.start));
+          setSelectedCompositionLayerId(active.layer.id);
+          playbackTimeRef.current = drop.position.start;
+          setIsPlaying(false);
+          setEditorTime(drop.position.start);
+          setNotice(drop.position.snapTime !== undefined ? "Clip layer snapped to an aligned, non-overlapping position." : "Clip layer moved to a non-overlapping position.");
+        } catch (error) {
+          setNotice(error instanceof Error ? error.message : "Could not move the Clip Version layer.");
+        }
+      } else {
+        setNotice("Clip layer kept in place.");
+      }
+      setNestedDropPreview(null);
+      cancelTouchNestedMove();
+    };
+    const onCancel = (nativeEvent: PointerEvent) => {
+      if (touchNestedMoveRef.current !== active || nativeEvent.pointerId !== active.pointerId) return;
+      setNestedDropPreview(null);
+      cancelTouchNestedMove();
+    };
+    active.moveListener = onMove;
+    active.upListener = onUp;
+    active.cancelListener = onCancel;
+    touchNestedMoveRef.current = active;
+    window.addEventListener("pointermove", onMove, { passive: false });
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onCancel);
+    active.timer = window.setTimeout(() => {
+      if (touchNestedMoveRef.current !== active) return;
+      active.activated = true;
+      nestedLayerDragSourceRef.current = layer.id;
+      setSelectedCompositionLayerId(layer.id);
+      setNestedDropPreview({ trackId: active.originalTrackId, start: active.layer.start, duration: active.layer.duration, name: active.layer.name });
+      setNotice("Clip Version layer selected for moving. Drag to another track position and release.");
+    }, 260);
+  }
+
   function cancelNestedLayerResize() {
     const active = nestedResizeRef.current;
     if (active?.moveListener) window.removeEventListener("pointermove", active.moveListener);
@@ -2163,7 +2328,7 @@ export default function App() {
           {track.kind === "audio" && <button className="track-layer-mute" aria-label={(track.muted ? "Unmute " : "Mute ") + track.name} aria-pressed={Boolean(track.muted)} onClick={() => updateTimelineVersion(activeVersionTimelineTab, version => ({ ...normalizeClipVersionTracks(version), tracks: normalizeClipVersionTracks(version).tracks?.map(item => item.id === track.id ? { ...item, muted: !item.muted } : item) }))}>{track.muted ? "Unmute" : "Mute"}</button>}
           <button className="track-add-clip" aria-label={"Add content to " + track.name} title={"Add content to " + track.name} onClick={() => { addTimelineVersionLayer(activeVersionTimelineTab, track.kind === "audio" ? "audio" : track.kind === "text" ? "text" : "video", track.id); }}><Plus size={13}/></button>
         </div>
-        <div className="nested-timeline-row-track visual-track-lane" style={{backgroundSize:(5/Math.max(activeVersionTimeline.duration,0.1)*100)+"% 100%"}} onDragOver={event=>{
+        <div className="nested-timeline-row-track visual-track-lane" data-track-id={track.id} style={{backgroundSize:(5/Math.max(activeVersionTimeline.duration,0.1)*100)+"% 100%"}} onDragOver={event=>{
           const layerId=event.dataTransfer.getData("text/dionysus-version-layer")||nestedLayerDragSourceRef.current;
           if(!layerId)return;
           event.preventDefault();event.dataTransfer.dropEffect="move";
@@ -2204,7 +2369,7 @@ export default function App() {
             const displayStart=resizeDraft?.start??layer.start;
             const displayDuration=resizeDraft?.duration??layer.duration;
             const visualClass=layer.kind==="audio"?"audio-clip":layer.kind==="text"?"text-clip":layer.kind==="procedural"||layer.kind==="script"?"procedural-clip":"video-clip";
-            return <button key={layer.id} draggable className={"nested-timeline-clip visual-media-clip kind-"+layer.kind+" "+visualClass+(layer.id===selectedCompositionLayerId?" selected":"")} style={{left:(displayStart/Math.max(activeVersionTimeline.duration,0.1)*100)+"%",width:Math.max(2,displayDuration/Math.max(activeVersionTimeline.duration,0.1)*100)+"%"}} onDragStart={event=>{nestedLayerDragSourceRef.current=layer.id;setNestedDropPreview(null);event.dataTransfer.setData("text/dionysus-version-layer",layer.id);event.dataTransfer.effectAllowed="move";}} onDragEnd={()=>{nestedLayerDragSourceRef.current="";setNestedDropPreview(null);}} onContextMenu={event=>{event.preventDefault();event.stopPropagation();setSelectedCompositionLayerId(layer.id);setNestedLayerContextMenuId(layer.id);setNestedLayerContextMenuPosition({x:Math.min(event.clientX,window.innerWidth-190),y:Math.min(event.clientY,window.innerHeight-180)});}} onClick={()=>{setSelectedCompositionLayerId(layer.id);setEditorTime(layer.start);}} onDoubleClick={()=>setCompositionLayerSettingsId(layer.id)} title={layer.name+" · "+layer.start.toFixed(1)+"–"+(layer.start+layer.duration).toFixed(1)+"s"}><span className="visual-clip-icon">{layerThumbnail?<img className="visual-clip-thumbnail" src={layerThumbnail} alt=""/>:layer.kind==="audio"?<AudioLines size={13}/>:layer.kind==="text"?<Sparkles size={13}/>:(layer.kind==="procedural"||layer.kind==="script")?<Code2 size={13}/>:layer.kind==="composition"?<Layers3 size={13}/>:<Film size={13}/>}</span><span className="visual-clip-copy"><strong>{layer.name}</strong><small>{displayDuration.toFixed(1)}s · {displayStart.toFixed(2)}s</small></span><span className="clip-resize-handle clip-resize-left" role="separator" aria-label={"Trim start of "+layer.name} onPointerDown={event=>beginNestedLayerResize(event,layer,"left")}/><span className="clip-resize-handle clip-resize-right" role="separator" aria-label={"Trim end of "+layer.name} onPointerDown={event=>beginNestedLayerResize(event,layer,"right")}/></button>;
+            return <button key={layer.id} draggable className={"nested-timeline-clip visual-media-clip kind-"+layer.kind+" "+visualClass+(layer.id===selectedCompositionLayerId?" selected":"")} onPointerDown={event=>beginTouchNestedLayerMove(event,layer)} style={{left:(displayStart/Math.max(activeVersionTimeline.duration,0.1)*100)+"%",width:Math.max(2,displayDuration/Math.max(activeVersionTimeline.duration,0.1)*100)+"%"}} onDragStart={event=>{nestedLayerDragSourceRef.current=layer.id;setNestedDropPreview(null);event.dataTransfer.setData("text/dionysus-version-layer",layer.id);event.dataTransfer.effectAllowed="move";}} onDragEnd={()=>{nestedLayerDragSourceRef.current="";setNestedDropPreview(null);}} onContextMenu={event=>{event.preventDefault();event.stopPropagation();setSelectedCompositionLayerId(layer.id);setNestedLayerContextMenuId(layer.id);setNestedLayerContextMenuPosition({x:Math.min(event.clientX,window.innerWidth-190),y:Math.min(event.clientY,window.innerHeight-180)});}} onClick={()=>{if(suppressTouchClipClickRef.current){suppressTouchClipClickRef.current=false;return;}setSelectedCompositionLayerId(layer.id);setEditorTime(layer.start);}} onDoubleClick={()=>setCompositionLayerSettingsId(layer.id)} title={layer.name+" · "+layer.start.toFixed(1)+"–"+(layer.start+layer.duration).toFixed(1)+"s"}><span className="visual-clip-icon">{layerThumbnail?<img className="visual-clip-thumbnail" src={layerThumbnail} alt=""/>:layer.kind==="audio"?<AudioLines size={13}/>:layer.kind==="text"?<Sparkles size={13}/>:(layer.kind==="procedural"||layer.kind==="script")?<Code2 size={13}/>:layer.kind==="composition"?<Layers3 size={13}/>:<Film size={13}/>}</span><span className="visual-clip-copy"><strong>{layer.name}</strong><small>{displayDuration.toFixed(1)}s · {displayStart.toFixed(2)}s</small></span><span className="clip-resize-handle clip-resize-left" role="separator" aria-label={"Trim start of "+layer.name} onPointerDown={event=>beginNestedLayerResize(event,layer,"left")}/><span className="clip-resize-handle clip-resize-right" role="separator" aria-label={"Trim end of "+layer.name} onPointerDown={event=>beginNestedLayerResize(event,layer,"right")}/></button>;
           })}
           {layers.length===0 && <button className="nested-track-empty" onClick={()=>addTimelineVersionLayer(activeVersionTimelineTab,track.kind==="audio"?"audio":track.kind==="text"?"text":"video",track.id)}>＋ Add content</button>}
         </div>

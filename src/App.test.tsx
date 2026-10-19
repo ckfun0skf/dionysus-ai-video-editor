@@ -1896,3 +1896,78 @@ describe("mobile touch timeline gestures", () => {
     }
   });
 });
+
+
+describe("mobile nested timeline touch gestures", () => {
+  it("moves a Clip Version layer after a long press and release on another track", async () => {
+    const nav = Array.from(container.querySelectorAll<HTMLButtonElement>(".nav-item")).find(button => button.textContent?.includes("Assets"));
+    click(nav!); await flushEffects();
+    click(Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Create asset"))!);
+    click(Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menu"] button')).find(button => button.textContent?.trim() === "Clip")!);
+    setInputValue(container.querySelector<HTMLInputElement>('[aria-label="Clip title"]')!, "Touch Nested Clip");
+    setInputValue(container.querySelector<HTMLInputElement>('[aria-label="Clip canvas width"]')!, "1920");
+    setInputValue(container.querySelector<HTMLInputElement>('[aria-label="Clip canvas height"]')!, "1080");
+    setInputValue(container.querySelector<HTMLInputElement>('[aria-label="Clip duration"]')!, "6");
+    click(Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Create empty Clip"))!);
+    await flushEffects();
+    click(Array.from(container.querySelectorAll<HTMLButtonElement>(".asset-card button")).find(button => button.textContent?.includes("Edit Timeline"))!);
+    await flushEffects();
+    const nested = container.querySelector<HTMLElement>(".nested-timeline-tab.visual-timeline")!;
+    const addLayer = () => Array.from(nested.querySelectorAll<HTMLButtonElement>(".inline-actions button")).find(button => button.textContent?.includes("Add layer"))!;
+    const addVideoTrack = () => {
+      click(addLayer());
+      click(Array.from(nested.querySelectorAll<HTMLButtonElement>('[role="menu"] button')).find(button => button.textContent?.trim() === "Video track")!);
+    };
+    addVideoTrack(); await flushEffects();
+    addVideoTrack(); await flushEffects();
+    click(nested.querySelector<HTMLButtonElement>(".nested-timeline-row-label .track-add-clip")!);
+    await flushEffects();
+
+    const saved = persistedProject();
+    const asset = saved.assets.find(item => item.name === "Touch Nested Clip" && item.kind === "clip")!;
+    const version = asset.clipVersions![0];
+    const layer = version.layers[0];
+    const moving = Array.from(nested.querySelectorAll<HTMLButtonElement>(".nested-timeline-clip"))
+      .find(button => button.textContent?.includes(layer.name))!;
+    const lanes = Array.from(nested.querySelectorAll<HTMLElement>(".nested-timeline-row-track[data-track-id]"));
+    const sourceLane = lanes.find(lane => lane.dataset.trackId === layer.trackId)!;
+    const targetLane = lanes.find(lane => lane.dataset.trackId !== layer.trackId)!;
+    expect(moving).toBeTruthy();
+    expect(targetLane).toBeTruthy();
+    Object.defineProperty(sourceLane, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({ left: 0, top: 0, right: 100, bottom: 76, width: 100, height: 76, x: 0, y: 0, toJSON: () => ({}) }),
+    });
+    Object.defineProperty(targetLane, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({ left: 0, top: 76, right: 100, bottom: 152, width: 100, height: 76, x: 0, y: 76, toJSON: () => ({}) }),
+    });
+    Object.defineProperty(moving, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({ left: 0, top: 0, right: 50, bottom: 56, width: 50, height: 56, x: 0, y: 0, toJSON: () => ({}) }),
+    });
+    const previousElementFromPoint = Object.getOwnPropertyDescriptor(document, "elementFromPoint");
+    Object.defineProperty(document, "elementFromPoint", { configurable: true, value: () => targetLane });
+    const pointer = (type: string, x: number, y: number) => {
+      const event = new Event(type, { bubbles: true, cancelable: true }) as PointerEvent;
+      Object.defineProperties(event, {
+        pointerId: { value: 72 }, pointerType: { value: "touch" }, button: { value: 0 },
+        clientX: { value: x }, clientY: { value: y },
+      });
+      return event;
+    };
+    try {
+      act(() => moving.dispatchEvent(pointer("pointerdown", 25, 20)));
+      await act(async () => { await new Promise(resolve => window.setTimeout(resolve, 300)); });
+      act(() => window.dispatchEvent(pointer("pointermove", 90, 100)));
+      act(() => window.dispatchEvent(pointer("pointerup", 90, 100)));
+      await flushEffects();
+      const movedAsset = persistedProject().assets.find(item => item.id === asset.id && item.kind === "clip")!;
+      const movedLayer = movedAsset.clipVersions![0].layers.find(item => item.id === layer.id)!;
+      expect(movedLayer.trackId).toBe(targetLane.dataset.trackId);
+    } finally {
+      if (previousElementFromPoint) Object.defineProperty(document, "elementFromPoint", previousElementFromPoint);
+      else Reflect.deleteProperty(document, "elementFromPoint");
+    }
+  });
+});

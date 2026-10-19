@@ -173,3 +173,10 @@ The owner explicitly wants a future phone version with a CapCut-inspired interfa
 - Not complete: nested Clip Version touch drag, robust touch scrubbing/trim validation, mobile Inspector/Version picker behavior, portrait/landscape/tablet viewport acceptance and no-overflow evidence. Keep DYS-012 in progress.
 - No automated browser smoke tests are to be added or run. Do not ask the owner to test until code is merged and Pages deployment is confirmed.
 - Continue DYS-014 canonical Composition persistence and structure-preserving Save-as-Clip after the touch workflow; mobile UI does not resolve the Shot/Clip model.
+
+
+## Nested mobile editing follow-up — 2026-10-19
+
+PR #69 merged as main commit `01ca4653a23c70273c74d3ada37883b66dabb3e3`; its exact-head CI run [39237331052](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39237331052) passed at `31ed8795ef883e556285eecd6ab7073bee094a87`. The Master Timeline supports long-press touch move with short-swipe panning.
+
+The active branch `feat/mobile-nested-timeline-touch` extends touch move to nested Clip Version layers, preserving the existing version-specific placement and overlap checks. It includes a component test and remains pending CI. DYS-012 is still in progress: mobile Inspector/Version picker behavior, robust scrubbing/trimming, viewport acceptance and independently verified Pages deployment remain outstanding. Do not add browser smoke tests or ask the owner to test before deployment is confirmed.

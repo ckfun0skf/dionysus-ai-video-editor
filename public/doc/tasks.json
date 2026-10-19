@@ -624,8 +624,8 @@
           "id": "DYS-012",
           "title": "Responsive mobile editing workspace",
           "status": "in_progress",
-          "progress": 35,
-          "summary": "Responsive mobile layout foundation merged in PR #68. Follow-up branch adds long-press touch movement for Master Timeline clips and regression coverage. Nested touch gestures, mobile Inspector/Version picker and viewport acceptance remain outstanding.",
+          "progress": 50,
+          "summary": "Responsive layout foundation and Master Timeline long-press touch drag are merged. Active follow-up extends the same touch workflow to nested Clip Version layers. Mobile Inspector/Version picker and viewport acceptance remain outstanding.",
           "doc": "tasks/responsive-mobile-editing.md",
           "detail": "tasks/responsive-mobile-editing.html",
           "report": "reports/responsive-mobile-editing-report.md",
@@ -636,6 +636,10 @@
             },
             {
               "title": "Touch-friendly timeline scrubbing and clip selection",
+              "status": "in_progress"
+            },
+            {
+              "title": "Nested Clip Version touch movement",
               "status": "in_progress"
             },
             {
@@ -655,11 +659,12 @@
             "Exact-head CI/build and post-merge deployment evidence recorded; do not add browser smoke tests"
           ],
           "evidence": [
-            "PR #68 merged as main commit 3513d51f9a52599e0231d8cb4db884cc59e5d611; PR CI run 39236495588 passed at head aca468fb345b523361467ae8da66b42d1207904a.",
-            "Main push CI and Pages deployment have not yet been independently confirmed; do not ask the owner to test until deployment is verified.",
-            "Active feature branch feat/mobile-timeline-touch-drag adds long-press touch movement for Master Timeline clips and an App regression test; exact-head CI pending."
+            "PR #68 merged as main commit 3513d51f9a52599e0231d8cb4db884cc59e5d611; exact-head PR CI run 39236495588 passed.",
+            "PR #69 merged as main commit 01ca4653a23c70273c74d3ada37883b66dabb3e3; exact-head CI run 39237331052 passed.",
+            "Active branch feat/mobile-nested-timeline-touch adds nested Clip Version long-press movement and a component regression test; exact-head CI pending.",
+            "Main push CI and Pages deployment have not yet been independently confirmed. Do not ask the owner to test before deployment is verified."
           ],
-          "notes": "Owner requested a CapCut-inspired phone interface. Responsive mobile web is the first target and must share the desktop project model. This remains a partial implementation; nested touch gestures, mobile Inspector/Version picker and viewport acceptance are outstanding. See docs/PRD.md and docs/PROJECT_ROADMAP.md."
+          "notes": "Owner requested a CapCut-inspired phone interface. Responsive mobile web is the first target and must share the desktop project model. This is a partial implementation; nested gestures are in progress and mobile Inspector/Version picker, robust trim/scrub and viewport acceptance remain. See docs/PRD.md and docs/PROJECT_ROADMAP.md."
         }
       ]
     },

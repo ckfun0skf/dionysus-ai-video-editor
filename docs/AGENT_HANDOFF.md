@@ -204,3 +204,10 @@ The owner wants a future phone version with a CapCut-inspired interface. Treat t
 - PR #68 merged the responsive mobile layout foundation as main commit `3513d51f9a52599e0231d8cb4db884cc59e5d611`. Its exact-head PR CI passed at `aca468fb345b523361467ae8da66b42d1207904a` in run [39236495588](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39236495588). Main push CI and Pages deployment still require independent confirmation before the owner is asked to test.
 - Active follow-up branch: `feat/mobile-timeline-touch-drag`. It adds a 260 ms long-press gesture for moving Master Timeline clips by touch, while short swipes pan the timeline horizontally or the page vertically. Desktop HTML drag-and-drop remains intact. A component regression test covers touch move placement.
 - DYS-012 remains in progress. Nested Clip Version touch dragging, mobile Inspector/Version picker ergonomics and viewport acceptance remain outstanding. Do not claim the whole phone editor is complete; do not add or run browser smoke tests.
+
+
+## Nested mobile timeline gestures — 2026-10-19
+
+- PR #69 merged touch long-press movement for Master Timeline clips as main commit `01ca4653a23c70273c74d3ada37883b66dabb3e3`; exact-head CI run [39237331052](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39237331052) passed at `31ed8795ef883e556285eecd6ab7073bee094a87`.
+- Active branch `feat/mobile-nested-timeline-touch` extends the same 260 ms long-press / short-swipe behavior to nested Clip Version layers. It uses the existing version placement engine and has a component regression test; exact-head CI is pending.
+- Main push CI and Pages deployment have not yet been independently confirmed. Do not ask the owner to test until the latest Pages deployment is confirmed.
