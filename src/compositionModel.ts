@@ -64,6 +64,8 @@ export interface CompositionMigrationResult {
   name: string;
   rootComposition: CompositionDocument;
   clipCompositions: CompositionDocument[];
+  /** Legacy Shot Slot timelines are projected separately so their alternatives are not discarded or mistaken for Clip Assets. */
+  legacyShotSlotCompositions: CompositionDocument[];
   /** Original project is retained as a defensive copy for a non-destructive transition. */
   sourceProject: DionysusProject;
   warnings: CompositionMigrationWarning[];

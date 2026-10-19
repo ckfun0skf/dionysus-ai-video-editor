@@ -49,7 +49,7 @@ The accepted target direction is in `docs/architecture/UNIFIED_COMPOSITION_MODEL
 
 1. Verify the current GitHub state and correct stale checkpoint information in docs.
 2. Review PR #63 for internal consistency. Keep the target model as the baseline unless code inspection reveals a concrete contradiction; document changes and rationale.
-3. Review the initial DYS-014 adapter and exact-head CI. It defines typed Composition/Track/Placement/source references and projects schema-1.0 root and nested Clip Asset timelines without mutating the source project.
+3. Review the DYS-014 adapter and exact-head CI. It defines typed Composition/Track/Placement/source references, represents Master Shots as root placements, preserves every legacy Shot Slot Version as a separate projection, and does not mutate the source project.
 4. Extend migration tests for alternative/provenance retention and legacy JSON import/export; then integrate the adapter into a versioned, deterministic migration boundary without breaking schema-1.0 projects.
 5. Verify the #54 shared-occupancy patch and its App regression tests in exact-head CI. Then migrate root and nested editor state/operations to the same Composition contract; keep #53/#54 open until the user accepts the deployed behavior.
 6. Implement structure-preserving Save-as-Clip and prove snapshot independence before calling DYS-014 complete.

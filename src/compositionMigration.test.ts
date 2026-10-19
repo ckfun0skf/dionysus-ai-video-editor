@@ -16,13 +16,15 @@ describe("migrateLegacyProjectToComposition", () => {
     const result = migrateLegacyProjectToComposition(project);
     expect(result.schemaVersion).toBe("2.0");
     expect(result.rootComposition.tracks.map((track) => track.id)).toEqual(project.tracks.map((track) => track.id));
-    expect(result.rootComposition.placements.map((placement) => placement.id)).toEqual(["master-video", "master-audio"]);
-    expect(result.rootComposition.placements[0]).toMatchObject({
+    const videoPlacement = result.rootComposition.placements.find((placement) => placement.id === "master-video")!;
+    const audioPlacement = result.rootComposition.placements.find((placement) => placement.id === "master-audio")!;
+    expect(result.rootComposition.placements.some((placement) => placement.source.type === "shot")).toBe(true);
+    expect(videoPlacement).toMatchObject({
       start: 4, duration: 6, sourceIn: 2, sourceOut: 8,
       source: { type: "asset", assetId: "migration-video" },
       legacyData: { x: 10, y: 5, width: 80, height: 90 },
     });
-    expect(result.rootComposition.placements[1]).toMatchObject({
+    expect(audioPlacement).toMatchObject({
       linkedToPlacementId: "master-video",
       sourceIn: 1, sourceOut: 7,
       legacyData: { volume: 0.4, fadeIn: 0.5, fadeOut: 1 },
@@ -48,8 +50,8 @@ describe("migrateLegacyProjectToComposition", () => {
       { id: "clip-placement", name: "Clip", kind: "clip", trackId: "track-video-2", start: 3, duration: 4, assetId: "migration-clip", clipVersionId: "clip-v1" },
     ];
     const result = migrateLegacyProjectToComposition(project);
-    expect(result.rootComposition.placements[0].source).toMatchObject({ type: "shot", shotId: shot.id, slotId: slot.id, versionId: slot.selectedVersionId });
-    expect(result.rootComposition.placements[1].source).toEqual({ type: "clip", assetId: "migration-clip", versionId: "clip-v1" });
+    expect(result.rootComposition.placements.find(placement => placement.id === "shot-placement")!.source).toMatchObject({ type: "shot", shotId: shot.id, slotId: slot.id, versionId: slot.selectedVersionId });
+    expect(result.rootComposition.placements.find(placement => placement.id === "clip-placement")!.source).toEqual({ type: "clip", assetId: "migration-clip", versionId: "clip-v1" });
   });
 
   it("creates a composition per Clip Asset Version and preserves nested layer order and source timing", () => {
@@ -90,13 +92,37 @@ describe("migrateLegacyProjectToComposition", () => {
       { id: "missing-source-placement", name: "Missing", kind: "video", trackId: "track-video-1", start: 12, duration: 2, assetId: "missing-asset" },
     ];
     const result = migrateLegacyProjectToComposition(project);
-    expect(result.rootComposition.placements.map((placement) => placement.id)).toEqual(["manual-placement", "missing-source-placement"]);
+    expect(result.rootComposition.placements.some((placement) => placement.id === shot.id && placement.source.type === "shot")).toBe(true);
+    expect(result.rootComposition.placements.some((placement) => placement.id === "manual-placement")).toBe(true);
+    expect(result.rootComposition.placements.some((placement) => placement.id === "missing-source-placement")).toBe(true);
+    expect(result.rootComposition.placements.some((placement) => placement.id === "storyboard-shot-slot")).toBe(false);
     expect(result.warnings).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: "duplicate-storyboard-placement", entityId: "storyboard-shot-slot" }),
       expect.objectContaining({ code: "missing-source", entityId: "missing-source-placement" }),
     ]));
     expect(project.timelineClips).toHaveLength(3);
     expect(result.sourceProject.timelineClips).toHaveLength(3);
+  });
+
+  it("projects Master Shots into the root timeline and preserves every legacy Shot Slot Version separately", () => {
+    const project = structuredClone(sampleProject);
+    const result = migrateLegacyProjectToComposition(project);
+    const shot = project.shots[0];
+    const shotPlacement = result.rootComposition.placements.find(placement => placement.id === shot.id);
+    expect(shotPlacement).toMatchObject({
+      name: shot.title,
+      source: { type: "shot", shotId: shot.id },
+      duration: shot.duration,
+      legacyData: { entityType: "master-shot" },
+    });
+    const expectedLegacyVersions = project.shots.reduce((sum, item) => sum + item.slots.reduce((slotSum, slot) => slotSum + slot.versions.length, 0), 0);
+    expect(result.legacyShotSlotCompositions).toHaveLength(expectedLegacyVersions);
+    expect(result.legacyShotSlotCompositions.some(composition =>
+      composition.id.includes(shot.id) &&
+      composition.legacyData?.legacyEntityType === "shot-slot-version" &&
+      composition.legacyData?.selected === true
+    )).toBe(true);
+    expect(result.sourceProject).toEqual(project);
   });
 
   it("does not mutate the legacy project and is deterministic across repeated migration", () => {
