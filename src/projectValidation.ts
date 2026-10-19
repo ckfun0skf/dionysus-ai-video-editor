@@ -50,6 +50,7 @@ function isLayer(value: unknown): boolean {
     isString(value.kind) && layerKinds.has(value.kind) &&
     isFiniteNumber(value.start) && value.start >= 0 &&
     isFiniteNumber(value.duration) && value.duration > 0 &&
+    (value.trackId === undefined || isString(value.trackId)) &&
     (value.assetId === undefined || isString(value.assetId)) &&
     (value.scriptVersionId === undefined || isString(value.scriptVersionId)) &&
     (value.childCompositionId === undefined || isString(value.childCompositionId)) &&
@@ -81,10 +82,23 @@ function isLayer(value: unknown): boolean {
     (value.fadeIn === undefined || (isFiniteNumber(value.fadeIn) && value.fadeIn >= 0 && value.fadeIn <= value.duration)) &&
     (value.fadeOut === undefined || (isFiniteNumber(value.fadeOut) && value.fadeOut >= 0 && value.fadeOut <= value.duration));
 }
+function hasValidVersionTracks(value: UnknownRecord): boolean {
+  if (value.tracks === undefined) return true;
+  if (!Array.isArray(value.tracks) || !value.tracks.every(isTrack) || !Array.isArray(value.layers)) return false;
+  const tracks: unknown[] = value.tracks;
+  const layers: unknown[] = value.layers;
+  return layers.every(layer =>
+    !isRecord(layer) ||
+    layer.trackId === undefined ||
+    tracks.some((track: unknown) => isRecord(track) && track.id === layer.trackId)
+  );
+}
+
 function isVersion(value: unknown): boolean {
   return isRecord(value) && isString(value.id) && isString(value.name) &&
     isString(value.description) && isFiniteNumber(value.duration) && value.duration > 0 &&
     Array.isArray(value.layers) && value.layers.every(isLayer) &&
+    hasValidVersionTracks(value) &&
     isStringArray(value.scriptVersionIds) &&
     Array.isArray(value.generationRecords) && value.generationRecords.every(isGenerationRecord);
 }
@@ -167,6 +181,7 @@ function isTimelineClip(value: unknown): boolean {
 function isTrack(value: unknown): boolean {
   return isRecord(value) && isString(value.id) && isString(value.name) &&
     isString(value.kind) && trackKinds.has(value.kind) &&
+    (value.originalKind === undefined || isString(value.originalKind)) &&
     (value.muted === undefined || typeof value.muted === "boolean") &&
     (value.x === undefined || (isFiniteNumber(value.x) && value.x >= 0 && value.x <= 100)) &&
     (value.y === undefined || (isFiniteNumber(value.y) && value.y >= 0 && value.y <= 100)) &&

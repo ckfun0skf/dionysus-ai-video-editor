@@ -26,3 +26,10 @@ The initial PR #55 deployment succeeded but did not satisfy user acceptance. PR 
 ## Latest validation
 - [CI #39165133176](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39165133176) at code/test head `794e3ff024c26d55d76583160d96238df8d84a12`: 137 tests across 16 files passed, TypeScript and Vite production build passed, npm audit 0 vulnerabilities.
 - No browser smoke tests were run.
+
+
+## Unified Composition follow-up — 2026-10-19
+
+Nested Clip Timelines now render explicit Video/Audio/Text track rows containing multiple placements. Add layer creates a track; Add content creates a placement; compatible track-to-track moves use tested pure operations. Project export now uses a versioned compatibility envelope containing both the schema-1.0 project and canonical Composition projection, and import still accepts legacy schema-1.0 files.
+
+CI [#39218891285](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39218891285) passed tests, TypeScript and Vite production build. Issues #53/#54 remain open because the root and nested editors do not yet share authoritative Composition state, the code is not deployed, and owner acceptance is pending. No browser smoke tests were run.

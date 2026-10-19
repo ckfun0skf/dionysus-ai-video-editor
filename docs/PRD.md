@@ -1,22 +1,24 @@
 # Dionysus Product Requirements Document
 
 **Version:** 0.2  
-**Status:** Requirements baseline; implementation in progress
+**Status:** Target requirements for the unified Composition / production workflow update
+
+Architecture contract: [Unified Composition Model](./architecture/UNIFIED_COMPOSITION_MODEL.md)
 
 ## Product vision
 Dionysus is a local-first planning and composition editor for AI-assisted video projects. It organizes story intent, timeline clips, nested versions, assets, reference provenance, and AI-executable plans. Built-in generative models are not required.
 
 ## Confirmed decisions
-- Storyboard can generate an initial Timeline; both can then be edited independently.
-- A Shot can contain multiple Clip Slots; Assets can be reused across Shots.
+- Storyboard order is narrative planning, not timeline time. Building/updating Timeline is explicit; Storyboard and existing placements can then be edited independently.
+- A Shot is a narrative production unit whose versions are concrete generated shot-video outputs. The current Slot-based Shot composition is legacy schema to migrate, not the target.
 - Slot duration is fixed by default; users may explicitly choose auto-extend or ripple behavior.
 - Slots have multiple Versions; regeneration creates a new Version by default.
 - Data supports recursive nested compositions; first-version UI limits nesting depth.
-- Master Timeline is the default Timeline tab; each Shot Version can open in its own additional internal-timeline tab without closing or replacing Master Timeline.
+- Master Timeline is the Project root Composition. Root and nested Clip Asset Versions use one Editor; a Shot Version is a generated video output, not a nested editing timeline.
 - Master Timeline shows multiple visible, ordered layers below the preview: video/compositing, text/title, audio, and procedural Three.js. A generic “Media track” is not part of the user-facing Timeline; Media is an asset-library concept.
-- A Shot is one block on the Master Timeline and uses its selected Version's thumbnail/output. Its Version menu can select an existing Version, add a new Version, or open a Version's nested timeline for editing.
+- A Timeline Placement may reference a concrete Shot Version or pinned Clip Asset Version. New Shot output versions do not silently replace versions already pinned in placements.
 - Video layers can expand to show attached source audio as a child lane. Unlinking turns that audio into an independent Audio Layer, and each Audio Layer has independent persistent mute state.
-- Prompts have Shot intent, Version description, and per-asset generation prompt levels.
+- Prompts belong to Shot/story intent, Production Tasks/templates, and individual Generation Runs; each run preserves the effective prompt and input-reference snapshot.
 - Script versions are pinned by saved Versions.
 - Reference groups and Character/Entity Profiles provide reusable defaults; each Shot can inherit, exclude, replace, or add references.
 - Each generation stores a snapshot of its actual prompt and references when available.
@@ -34,11 +36,13 @@ Create, open, save, import, and export projects. Preserve structure, relative as
 ### Storyboard
 Create, order, and edit Shots. Store title, intent, target duration, status, profile references, and placeholder state. Storyboard can generate an initial Timeline; subsequent edits are independent. Re-generation must not silently overwrite manual Timeline changes.
 
-### Master Timeline and Clip Slots
-The Master Timeline arranges Shot blocks with explicit master start and duration. Each block shows a thumbnail or honest placeholder, a Shot label, and a Version dropdown. The dropdown lists available Versions, includes + Add Version, and provides an Edit action per Version. Selecting a Version changes only the active output; editing opens that Version's nested timeline in another tab. Support tracks, timing, overlapping layers, clip slots, and source trim. Fixed-duration is the default; auto-extend/ripple must be explicit operations with a preview of impact. Editing Version internals must not silently change the Master Shot duration or downstream positions. Do not show a generic Media track.
+### Master Composition, Timeline Placements, and Versions
 
-### Versions and nested composition
-Each Shot/Slot can have multiple Versions. A Version may be a single video, a still image, or a nested composition. A Version owns internal timing, ordered layers/modules, child compositions, scripts, prompts, and generation records. Its Edit action opens an internal timeline tab while preserving the Master Timeline tab. The data model supports recursion, while the UI enforces a reasonable depth and prevents cycles. Regeneration/Add Version creates a new Version by default. Saved Versions pin their Script versions.
+The Project Master Timeline is the root Composition: ordered tracks and placements referencing concrete Shot Versions, Media Assets, text/procedural content or pinned Clip Asset Versions. A placement owns timeline start/duration, source in/out, transform and placement-level audio state; it does not mutate its source. Root and nested Compositions use the same editing mechanics. Add Track offers Video, Audio and Text only.
+
+Saving the Master Composition as a Clip Asset creates an independent, structure-preserving snapshot with tracks, placements, ordering, source ranges, canvas settings and pinned versions. It is not an MP4 render or flattened layer list. Existing placements stay pinned when source versions change.
+
+A Shot Version identifies a concrete generated video result or an explicit pending/failed state and preserves prompt/run provenance. It is not an arbitrary nested editing timeline. A Clip Asset Version contains a Composition: ordered tracks and placements that may reference Shot Versions, Media Assets, text, authorized procedural content and pinned nested Clip Asset Versions. Cycles are prohibited. Editing/saving creates a new Clip Version; it must not mutate the source Project or historical versions.
 
 ### Assets and Reference Provenance
 Assets are reusable and distinct from their usage configuration. Reference Groups are reusable collections. Character/Entity Profiles provide default references by role. Shot-level overrides support inherit, exclude, replace, and add without mutating Profiles. A Generation Record preserves the actual references and prompt used at generation time; later profile changes cannot rewrite old records. Record model/version/parameters only when available. Missing assets must be detectable and relinkable.
@@ -107,3 +111,14 @@ Future target. Must define fidelity, codecs, progress, cancellation, error recov
 
 ## Initial milestone
 The initial milestone established the local-first shell, Storyboard editing, local persistence, project JSON import/export, and AI plan export. The supplied Timeline prototype now reprioritizes visible typed layers, Master/Version timeline tabs, per-Shot Version dropdown actions, hierarchical linked audio, per-layer mute, and a first-class Three.js layer as core editor requirements. Advanced audio effects, portable media bundles, and reliable final MP4 rendering remain staged follow-up work.
+
+
+## Architecture transition addendum (2026-10-18)
+
+The target contract supersedes incompatible earlier Shot-Slot-centric requirements. The current schema remains legacy and must be migrated safely, not changed with a blind field rename.
+
+- Production Tasks are first-class dependency-aware records; Generation Runs are immutable per-attempt provenance.
+- Storyboard order is separate from timeline positions. Build/update previews a diff and preserves manual edits by default.
+- Settings scopes are distinct: Project output, Composition canvas, Track, Placement and Shot generation target.
+- Migration preserves IDs, alternatives, generation/reference history, source ranges, linked audio and storyboard-generated placements; ambiguous cases are surfaced.
+- Requirements in #53/#54, #56, #58 and #59 remain valid. See [Unified Composition Model](./architecture/UNIFIED_COMPOSITION_MODEL.md).

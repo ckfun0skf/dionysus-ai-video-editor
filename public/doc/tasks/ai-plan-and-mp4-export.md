@@ -16,6 +16,10 @@ Strengthen the structured AI plan interchange workflow and evaluate browser-base
 ## Implemented / verified
 - Basic AI execution-plan JSON export exists in the foundation.
 
+## Architecture dependency
+
+AI plan import/export should eventually include validated Production Tasks, dependencies, Generation Run provenance, concrete Shot Version references and root/nested Composition structure. Coordinate task reconciliation with [DYS-015](./production-task-graph.md) and schema migration with [DYS-014](./unified-composition-model.md). Do not silently overwrite manual changes when importing a revised plan.
+
 ## Remaining work
 - Plan import/reconciliation and final MP4 export are not implemented; first-release MP4 scope remains undecided.
 

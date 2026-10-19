@@ -1,0 +1,66 @@
+import { describe, expect, it } from "vitest";
+import { sampleProject } from "./sampleProject";
+import { createProjectDocument, readProjectDocument } from "./projectDocument";
+
+describe("versioned project document boundary", () => {
+  it("exports a versioned Composition projection alongside a lossless legacy project", () => {
+    const project = structuredClone(sampleProject);
+    const before = JSON.stringify(project);
+    const document = createProjectDocument(project);
+    expect(document).toMatchObject({
+      format: "dionysus-project-document",
+      documentVersion: "2.0",
+      project: { schemaVersion: "1.0", id: project.id },
+      compositionModel: { schemaVersion: "2.0", projectId: project.id },
+    });
+    expect(document.compositionModel.rootComposition.tracks.length).toBeGreaterThan(0);
+    expect(readProjectDocument(document)).toMatchObject({ project, sourceDocumentVersion: "2.0" });
+    expect(JSON.stringify(project)).toBe(before);
+  });
+
+  it("continues to read existing schema-1.0 project files", () => {
+    const project = structuredClone(sampleProject);
+    expect(readProjectDocument(project)).toEqual({ project, sourceDocumentVersion: "1.0" });
+  });
+
+  it("rejects a versioned envelope whose Composition metadata belongs to another project", () => {
+    const project = structuredClone(sampleProject);
+    const document = createProjectDocument(project);
+    document.compositionModel.projectId = "different-project";
+    expect(() => readProjectDocument(document)).toThrow(/inconsistent Composition metadata/);
+  });
+
+  it("rejects a mismatched root Composition identity", () => {
+    const document = createProjectDocument(structuredClone(sampleProject));
+    document.compositionModel.rootComposition.id = "composition:project:wrong:master";
+    expect(() => readProjectDocument(document)).toThrow(/inconsistent Composition metadata/);
+  });
+
+  it("rejects a Composition projection whose placements no longer match the legacy project", () => {
+    const document = createProjectDocument(structuredClone(sampleProject));
+    document.compositionModel.rootComposition.placements.push({
+      id: "tampered-placement",
+      name: "Tampered",
+      trackId: document.compositionModel.rootComposition.tracks[0].id,
+      start: 0,
+      duration: 1,
+      order: 999,
+      source: { type: "none" },
+      legacyData: {},
+    });
+    expect(() => readProjectDocument(document)).toThrow(/stale or inconsistent Composition projection/);
+  });
+
+  it("accepts a fresh versioned document and preserves the authoritative project payload", () => {
+    const project = structuredClone(sampleProject);
+    const document = createProjectDocument(project);
+    const result = readProjectDocument(document);
+    expect(result.sourceDocumentVersion).toBe("2.0");
+    expect(result.project).toEqual(project);
+  });
+
+  it("rejects unknown versions rather than guessing a migration", () => {
+    expect(() => readProjectDocument({ format: "dionysus-project-document", documentVersion: "3.0", project: {}, compositionModel: {} })).toThrow(/Unsupported/);
+    expect(() => readProjectDocument({ schemaVersion: "3.0" })).toThrow(/Unsupported/);
+  });
+});

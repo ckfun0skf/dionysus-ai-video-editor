@@ -23,6 +23,10 @@ Treat a reusable Clip as a first-class project Asset whose selected Version is a
 - [x] Keep Code preview sandboxed and pass only explicitly selected image references.
 - [x] Test core graph, validation, rendering, preview transforms, and App creation/opening workflow.
 
+## Architecture transition
+
+This completed slice covers the existing nested Clip Asset feature, not the new requirement to preserve the complete Project timeline structure. Current save-master logic collects composition layers but does not fully preserve the root track/placement tree. DYS-014 owns the structure-preserving snapshot and shared-editor migration. Do not mark that target complete until track/placement structure, concrete version pins, nested expansion, snapshot independence, migration and round-trip tests are verified.
+
 ## Scope boundaries
 
 DYS-013 covers the reusable Clip Asset graph and its nested timeline workflow. It does **not** certify frame-accurate professional NLE behavior or final MP4 export, and it does not complete the separate Shot identity/Version migration or all reference-management improvements. The browser compositor currently exports WebM under supported browser capabilities. Missing media/unsupported codecs must remain explicit rather than being presented as rendered footage.

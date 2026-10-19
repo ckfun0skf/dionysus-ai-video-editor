@@ -47,13 +47,22 @@ export function calculateTimelineClipResizePreview(
     const next = sameTrack.filter(item => item.start >= oldEnd - epsilon).sort((a, b) => a.start - b.start)[0];
     if (next && end > next.start + epsilon) {
       const nextEnd = next.start + next.duration;
-      end = Math.min(end, nextEnd - frame);
-      end = Math.max(oldEnd + frame, end);
-      end = snapFrame(Math.min(timelineDuration, end), rate);
-      const trimStart = Math.max(next.start + frame, end);
-      if (trimStart > next.start + epsilon) {
-        trims.push({ id: next.id, start: trimStart, duration: Math.max(frame, snapFrame(nextEnd - trimStart, rate)), edge: "left" });
-        overlap = { start: next.start, duration: Math.max(0, Math.min(end, nextEnd) - next.start) };
+      // The adjacent item must retain at least one complete frame. If it cannot,
+      // keep the current edge where it was rather than creating a new overlap.
+      const latestSafeEnd = snapFrame(nextEnd - frame, rate);
+      const boundedEnd = snapFrame(Math.min(end, latestSafeEnd), rate);
+      if (boundedEnd >= oldEnd + frame - epsilon && boundedEnd <= nextEnd - frame + epsilon) {
+        end = boundedEnd;
+        const trimStart = end;
+        const trimmedDuration = snapFrame(nextEnd - trimStart, rate);
+        if (trimmedDuration >= frame - epsilon) {
+          trims.push({ id: next.id, start: trimStart, duration: trimmedDuration, edge: "left" });
+          overlap = { start: next.start, duration: Math.max(0, Math.min(end, nextEnd) - next.start) };
+        } else {
+          end = oldEnd;
+        }
+      } else {
+        end = oldEnd;
       }
     }
   } else {
@@ -62,12 +71,16 @@ export function calculateTimelineClipResizePreview(
     if (clip.sourceIn !== undefined) start = Math.max(start, snapFrame(oldStart - clip.sourceIn, rate));
     const previous = sameTrack.filter(item => item.start + item.duration <= oldStart + epsilon).sort((a, b) => b.start - a.start)[0];
     if (previous && start < previous.start + previous.duration - epsilon) {
-      start = Math.max(start, previous.start + frame);
-      start = snapFrame(start, rate);
-      const previousEnd = previous.start + previous.duration;
-      if (start < oldStart - epsilon) {
-        trims.push({ id: previous.id, start: previous.start, duration: Math.max(frame, snapFrame(start - previous.start, rate)), edge: "right" });
+      const boundedStart = snapFrame(Math.max(start, previous.start + frame), rate);
+      const remainingPreviousDuration = snapFrame(boundedStart - previous.start, rate);
+      if (boundedStart < oldStart - epsilon && remainingPreviousDuration >= frame - epsilon) {
+        start = boundedStart;
+        const previousEnd = previous.start + previous.duration;
+        trims.push({ id: previous.id, start: previous.start, duration: remainingPreviousDuration, edge: "right" });
         overlap = { start, duration: Math.max(0, Math.min(oldStart, previousEnd) - start) };
+      } else {
+        // No valid whole-frame trim can be made without consuming the previous clip.
+        start = oldStart;
       }
     }
   }
