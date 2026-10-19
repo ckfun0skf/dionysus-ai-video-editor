@@ -2,6 +2,10 @@
 
 **Status:** In progress · **Progress estimate:** 60% · **Updated:** 2026-10-19
 
+## Strategic UI direction (2026-10-19)
+
+The owner selected a Timeline-first Editor workspace rebuild. The Composition model remains the shared state/operation contract; UI design is specified in [Timeline Editor Workspace Architecture](../../../docs/architecture/TIMELINE_EDITOR_WORKSPACE.md), with execution order in [Timeline-First Editor Rebuild Plan](../../../docs/TIMELINE_EDITOR_REBUILD_PLAN.md). Rebuild the workspace without making the canonical projection and legacy arrays competing sources of truth. PR #89 is a draft candidate whose observed exact-head TypeScript/build check failed; recheck before integrating it.
+
 ## Goal
 
 Use one Composition document contract and one Editor for the Project Master Timeline and nested Clip Asset Versions. Saving a completed Project timeline as a Clip Asset must preserve its editable structure.

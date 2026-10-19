@@ -2,6 +2,14 @@
 
 This file is the starting point for any agent continuing Dionysus. Keep project knowledge in Git; do not rely on chat history as the source of truth.
 
+## Current strategic direction — Timeline-first Editor rebuild (2026-10-19)
+
+The owner confirmed that the product should rebuild the **Timeline Editor workspace first**. It includes an Editor-local source browser for Media/Audio/Text/Effects/Transitions, Preview/Canvas in the upper-right, and the multitrack Timeline below. Storyboard and References are later planning modules that connect to a usable Editor. On mobile, the bottom toolbar is contextual to the selected element; global module navigation belongs in the project/workspace header or menu. This supersedes older mobile notes that put Storyboard / Timeline / Assets / References in the Editor's permanent bottom bar.
+
+Read [`docs/TIMELINE_EDITOR_REBUILD_PLAN.md`](TIMELINE_EDITOR_REBUILD_PLAN.md) and [`docs/architecture/TIMELINE_EDITOR_WORKSPACE.md`](architecture/TIMELINE_EDITOR_WORKSPACE.md) before modifying Timeline UI. Rebuild the workspace and state boundary, not all project code from zero. Keep schema-1.0 compatibility and only reuse existing code after checking its tests. The current plan and live exact-head checks outrank historical continuation notes below.
+
+The latest verified main HEAD at the start of this planning slice was `a54526fc82345c8813a6f0b770056dfe6e25a526`. PR #88 and #89 were open Draft PRs; PR #89 run [39269841800](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39269841800) failed TypeScript/build after tests passed. Recheck all live PRs, issues and CI before acting; do not merge that PR as-is. No browser smoke tests.
+
 ## Read first
 
 1. `docs/AGENT_PICKUP_PROMPT.md` — copyable instructions for a fresh ChatGPT chat/agent.

@@ -6,6 +6,12 @@
 
 This document is a durable pickup ledger, not a claim that planned behavior already exists. Re-check GitHub before acting: issue/PR/CI state may change after this file is updated.
 
+## Current strategic plan — Timeline-first Editor workspace
+
+The owner confirmed a new execution order: complete the Timeline Editor workspace first, with an embedded Media/Audio/Text/Effects/Transitions source browser, Preview/Canvas, multitrack Timeline and selection-driven tools; then integrate Storyboard and References as planning modules. This is a workspace/state-boundary rebuild, not a wipe of project data or tested utilities. Current detailed plan: [`docs/TIMELINE_EDITOR_REBUILD_PLAN.md`](TIMELINE_EDITOR_REBUILD_PLAN.md). UI contract: [`docs/architecture/TIMELINE_EDITOR_WORKSPACE.md`](architecture/TIMELINE_EDITOR_WORKSPACE.md).
+
+**Live baseline observed 2026-10-19:** main was `a54526fc82345c8813a6f0b770056dfe6e25a526`. Draft PR #88 and #89 are not on main. PR #89 exact-head CI [39269841800](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39269841800) passed 206 tests but failed TypeScript/build due to an unused import and unsafe union-field access. Do not merge as-is; inspect current head/checks first. Existing mobile spec's persistent four-module bottom navigation inside the Editor is superseded by contextual editing controls at the bottom; app/module navigation must be separate. No browser smoke tests.
+
 ## Current checkpoint
 
 - Latest functional code release SHA: `ee1f90c3304ce0f2be5cef294c387192d2aa8969`; main CI [39234313896](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39234313896) and Pages deployment [39234313840](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39234313840) passed. A docs-only checkpoint may advance `main` without changing the app code; re-query live Git before editing.
@@ -34,7 +40,9 @@ Core architecture:
 9. Root and nested compositions use the same editor and placement mechanics. Context-specific save/settings actions may differ; drag/drop/snap/overlap/resize/trim/undo must not.
 10. Save-as-Clip preserves structure and pinned versions; it is not an MP4 render, flat list of layers or live link to the source project.
 
-## Sequenced roadmap
+## Historical roadmap ledger (scope retained; execution order superseded)
+
+The following phase breakdown retains existing implementation scope and historical evidence, but its original sequencing predates the Timeline-first workspace decision. Use `docs/TIMELINE_EDITOR_REBUILD_PLAN.md` and the `executionSequence` field in `public/doc/tasks.json` for current priority/order. Do not resume full Asset/Reference or Production work ahead of the Timeline Editor vertical slice merely because those historical phases appear earlier below.
 
 ### Phase 0 — Architecture contract and review
 **Task:** DYS-014 planning baseline, PR #63  
