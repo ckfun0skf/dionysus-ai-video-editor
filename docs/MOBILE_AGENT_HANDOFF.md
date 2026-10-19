@@ -1,3 +1,5 @@
+> **Workspace architecture supersedes the old mobile navigation layout (2026-10-19):** Timeline Editor is now planned as the first complete workspace with embedded Media/Audio/Text/Effects/Transitions, Preview/Canvas, and multitrack Timeline. Its mobile bottom toolbar must be contextual to the selected element/workspace. Do not build the permanent Storyboard / Timeline / Assets / References bottom navigation inside the Editor. App/module navigation belongs in the header or workspace menu. Read `docs/TIMELINE_EDITOR_REBUILD_PLAN.md` and `docs/architecture/TIMELINE_EDITOR_WORKSPACE.md` before further mobile UI work. Keep DYS-012's proven touch behaviors but adapt them to the new workspace. This is a planning direction, not proof that the new UI is implemented.
+
 # Dionysus Mobile UX Handoff — 2026-10-19
 
 ## Purpose
@@ -25,7 +27,7 @@ This is the focused continuation record for the next agent. The owner said the c
 ## What is already implemented — do not redo
 
 PRs #68–#84 form the first mobile interaction foundation:
-- Responsive mobile layout, preview-first hierarchy, safe-area spacing and persistent bottom navigation.
+- Responsive mobile layout, preview-first hierarchy, safe-area spacing and a persistent four-item bottom navigation in the current legacy UI. **This shipped implementation is to be reorganized during DYS-018; it is not the target interaction model for the rebuilt Editor.**
 - Isolated horizontal scroll surfaces for root and nested timelines.
 - Long-press touch movement for Master Timeline and nested Clip Version clips, with short-swipe panning and overlap protection.
 - Contextual selected-clip tools and mobile Inspector toggle.

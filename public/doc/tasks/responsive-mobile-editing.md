@@ -9,14 +9,17 @@ Make Dionysus usable on phone and tablet screens without removing Storyboard, Re
 
 ## UX contract
 - Preview first, timeline immediately below it, with the timeline able to use its own horizontal scroll surface.
-- Persistent bottom navigation for Storyboard, Timeline, Assets and References; respect device safe-area insets.
+- Keep application-module navigation reachable from the project/workspace header or menu; do not place permanent Storyboard / Timeline / Assets / References tabs in the Editor's bottom action strip.
 - Touch-sized playback, insertion, track, trim and version controls with visible focus/selected states.
 - Keep track labels identifiable while panning the timeline. Prevent page-level horizontal overflow rather than squeezing every track into an unusably narrow lane.
 - Short swipes pan the timeline/page; holding a clip for about 260 ms activates drag-to-move on both Master and nested Clip Version timelines.
-- Selecting a Master Timeline clip reveals a compact action row; a separate Inspector toggle opens shot/project properties without permanently consuming preview width.
+- Selecting a Master Timeline clip reveals a compact contextual action row; on the redesigned workspace the bottom action strip is selection-driven. A separate Inspector toggle/sheet opens shot/project properties without permanently consuming preview width.
 - Zoom In / Zoom Out / Fit scales root and nested timeline surfaces together without changing clip timing.
 - Trim handles should have generous hit areas and visible grab markers without obscuring short clips.
 - Preserve the same project data, pinned versions, linked audio and composition semantics as desktop.
+
+## Workspace redesign note (2026-10-19)
+The owner's latest direction supersedes the earlier persistent four-module bottom-navigation layout. The Editor-local Media/Audio/Text/Effects/Transitions browser and selected-element bottom toolbar belong to the Timeline workspace; global module navigation belongs in the header/menu. See `docs/architecture/TIMELINE_EDITOR_WORKSPACE.md`. Existing DYS-012 touch primitives should be reused where tested, then adapted to the new layout.
 
 ## Issue #83 — mobile UI/UX correction in progress
 - Owner report: some controls lack clear button styling, layer actions overflow the phone viewport, and the overall screen feels too busy compared with CapCut.

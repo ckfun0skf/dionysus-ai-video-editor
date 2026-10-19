@@ -8,6 +8,10 @@ Dionysus should use one Composition model for the Project Master Timeline and ne
 
 Storyboard is the narrative/production plan. Production Tasks describe dependent generation work. Media Assets store outputs. Compositions arrange content. Timeline Placements locate sources in time.
 
+## Editor workspace integration
+
+The canonical Composition model is consumed by the new Timeline-first Editor workspace. UI layout and navigation are specified separately in [Timeline Editor Workspace Architecture](./TIMELINE_EDITOR_WORKSPACE.md). The UI must dispatch all edits through the shared command/state boundary: the workspace is not allowed to maintain parallel authoritative timeline arrays. Desktop places the Media/Audio/Text/Effects/Transitions browser upper-left, Preview/Canvas upper-right and multitrack timeline below. Mobile puts contextual element operations at the bottom and keeps global module navigation in the project/workspace menu.
+
 ## Product decisions
 
 - **Shot:** narrative production identity with versions representing concrete generated shot-video outputs. A Shot is not a nested editing timeline.

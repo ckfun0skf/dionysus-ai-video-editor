@@ -8,6 +8,14 @@ Architecture contract: [Unified Composition Model](./architecture/UNIFIED_COMPOS
 ## Product vision
 Dionysus is a local-first planning and composition editor for AI-assisted video projects. It organizes story intent, timeline clips, nested versions, assets, reference provenance, and AI-executable plans. Built-in generative models are not required.
 
+## Confirmed 2026-10-19 — Timeline-first product and workspace
+
+Timeline Editor is the first complete authoring workspace. The Editor itself includes an upper-left source/tool browser for Media, Audio, Text, Effects and Transitions; an upper-right preview/canvas; and a multitrack timeline below. Users must be able to open and edit a timeline without first creating a Storyboard or configuring References.
+
+On mobile, the Editor's bottom action strip is contextual: it exposes operations for the selected clip/layer or for the timeline when nothing is selected. Global module switching (Storyboard, Timeline Editor, full Assets management, References and future Production workflows) stays in the project/workspace header or menu. Do not use the mobile Editor's bottom action strip as permanent four-module navigation.
+
+The rebuild is a workspace/state-boundary redesign, not a data wipe. Preserve schema-1.0 project import, tested domain logic and version/provenance data through a canonical Editor command boundary. Storyboard and Reference planning tools are integrated after the core Editor/source contract is stable. The detailed layout contract is in [Timeline Editor Workspace Architecture](./architecture/TIMELINE_EDITOR_WORKSPACE.md); execution order is in [Timeline-First Editor Rebuild Plan](./TIMELINE_EDITOR_REBUILD_PLAN.md).
+
 ## Confirmed decisions
 - Storyboard order is narrative planning, not timeline time. Building/updating Timeline is explicit; Storyboard and existing placements can then be edited independently.
 - A Shot is a narrative production unit whose versions are concrete generated shot-video outputs. The current Slot-based Shot composition is legacy schema to migrate, not the target.
@@ -129,7 +137,7 @@ The target contract supersedes incompatible earlier Shot-Slot-centric requiremen
 Dionysus must support a responsive phone workflow, not merely scale down the desktop editor. Use CapCut as a usability reference for information hierarchy and touch ergonomics, while retaining Dionysus's multi-track, reusable-composition and AI-production capabilities.
 
 - On phones, keep the preview above the timeline and make playback/selection controls touch-friendly.
-- Use a persistent bottom navigation for Storyboard, Timeline, Assets and References; respect device safe-area insets.
+- Keep application-module navigation reachable from the project/workspace header or menu; do not use the Editor's bottom action strip as persistent Storyboard / Timeline / Assets / References navigation. Respect device safe-area insets.
 - Keep horizontal timeline scrolling inside the timeline surface rather than allowing the whole page to overflow. Track labels should remain identifiable while the timeline is panned.
 - Reveal context-specific editing controls when content is selected; dense property editing should use a focused panel or sheet instead of permanently consuming preview width.
 - Desktop and mobile edit the same project and version data. Responsive presentation must not fork the project schema or silently change edit semantics.

@@ -25,6 +25,12 @@
 - **Placement:** source/version use in a parent Composition with track, time, trim, transform and mix state.
 - **Production Task/Generation Run:** intended generation work and an auditable attempt.
 
+## Timeline-first Editor Workspace
+
+The Timeline Editor is the first complete workspace, with a source/tool browser (Media, Audio, Text, Effects and Transitions) in the upper-left, preview/canvas in the upper-right, and multitrack timeline across the lower area. Its mobile bottom toolbar is driven by selection and edit context; global app/module navigation belongs in the project/workspace header or menu. The source browser is Editor-local; full Asset administration, Storyboard and References are later-integrated product areas.
+
+See [Timeline Editor Workspace Architecture](./architecture/TIMELINE_EDITOR_WORKSPACE.md) for the UI contract and [Timeline-First Editor Rebuild Plan](./TIMELINE_EDITOR_REBUILD_PLAN.md) for milestones, dependencies, PR triage and handoff rules. Rebuild the workspace, not the whole data foundation: preserve legacy project compatibility and selectively reuse tested logic. The canonical Composition/command boundary remains the only editing source of truth.
+
 ## Shared Editor
 
 Master and nested Compositions share preview, ruler/playhead, track headers, lanes, source picker, Inspector, drag/drop, snapping, overlap, resize/trim and Undo/Redo. Editor context changes actions/settings, not mechanics.
