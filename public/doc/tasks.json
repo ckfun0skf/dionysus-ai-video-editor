@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "project": "Dionysus",
   "updatedAt": "2026-10-19",
-  "sourceOfTruth": "public/doc/tasks.json",
+  "sourceOfTruth": "public/doc/tasks.json and docs/TIMELINE_FIRST_EXECUTION_BACKLOG.md",
   "statusDefinitions": {
     "done": "Implementation exists and has evidence; release/browser validation may still be pending.",
     "in_progress": "Work has started but implementation or verification remains.",
@@ -11,16 +11,16 @@
   "milestones": [
     {
       "id": "M1",
-      "title": "Foundation & project integrity",
+      "title": "Foundation, decisions & project integrity",
       "phase": 1,
-      "goal": "Keep the existing editor stable and its project data safe.",
+      "goal": "Preserve app/project integrity while establishing the Timeline-first contract and handoff.",
       "tasks": [
         {
           "id": "DYS-001",
           "title": "Editor foundation and project workflow",
           "status": "done",
           "progress": 80,
-          "summary": "React/TypeScript/Vite editor shell, Storyboard editing, basic Timeline visualization, local persistence, project JSON import/export, and AI execution-plan export.",
+          "summary": "Preserve the current React/TypeScript/Vite baseline, project import/export and regression fixtures while rebuilding the workspace.",
           "doc": "tasks/foundation-shell.md",
           "detail": "tasks/foundation-shell.html",
           "report": "reports/foundation-shell-report.md",
@@ -39,23 +39,37 @@
             }
           ],
           "acceptance": [
-            "npm test passes",
-            "npm run build passes",
-            "Export then re-import a project without losing shots or slot versions",
-            "Storyboard remains available from the main navigation"
+            "App remains buildable",
+            "Project IO regression passes"
           ],
           "evidence": [
             "README.md documents the current foundation and limitations",
             "CI evidence is linked from the task specification"
           ],
-          "notes": "Progress is an estimate, not a release-readiness score."
+          "notes": "Progress is an estimate, not a release-readiness score.",
+          "description": "Preserve the current React/TypeScript/Vite baseline, project import/export and regression fixtures while rebuilding the workspace.",
+          "executionStage": "E0-E4",
+          "priority": "P1",
+          "dependsOn": [],
+          "deliverables": [
+            "Keep the app buildable",
+            "preserve project IO and fixtures."
+          ],
+          "outOfScope": [
+            "A buildable shell is not a functional Timeline."
+          ],
+          "testStrategy": [
+            "Project JSON round-trip, tests and production build."
+          ],
+          "nextAction": "Inventory current app before replacing code.",
+          "handoffNotes": "Read docs/TIMELINE_FIRST_EXECUTION_BACKLOG.md for milestone gates and pickup rules. Re-query live GitHub before acting."
         },
         {
           "id": "DYS-002",
           "title": "Centralized UI localization and project validation",
           "status": "done",
           "progress": 90,
-          "summary": "Centralize user-facing UI copy in src/i18n.ts and reject malformed project data before it is loaded or imported.",
+          "summary": "Validate and migrate schemaVersion 1.0 deterministically, preserving alternatives, selection, provenance, source ranges, linked audio, pins and nesting.",
           "doc": "tasks/localization-and-validation.md",
           "detail": "tasks/localization-and-validation.html",
           "report": "reports/localization-and-validation-report.md",
@@ -78,32 +92,149 @@
             }
           ],
           "acceptance": [
-            "Vitest covers valid sample projects and malformed structures",
-            "Invalid selected-version references are rejected",
-            "Invalid durations and canvas values are rejected",
-            "Unknown schema versions fail safely",
-            "A deterministic, non-destructive migration preserves legacy Shot Slots, versions, source ranges, reference snapshots, placements, and linked audio."
+            "Deterministic migration does not mutate input",
+            "Alternatives/provenance/pins/ranges/links/nesting survive",
+            "Invalid refs fail safely"
           ],
           "evidence": [
             "Task report and CI run are linked from the task Markdown",
             "Versioned project boundary: src/projectDocument.ts and src/projectDocument.test.ts"
           ],
-          "notes": "Schema migration is a prerequisite for DYS-014: current Shot.slots[], ClipVersion.layers[] and root timelineClips[] must be migrated explicitly, not renamed or flattened. Target contract: docs/architecture/UNIFIED_COMPOSITION_MODEL.md. A versioned project import/export boundary now reads legacy schema-1.0 files and exports a `dionysus-project-document` 2.0 envelope with both the authoritative legacy project and a canonical Composition projection. This is transitional compatibility, not yet schema-2.0-only persistence."
-        }
-      ]
-    },
-    {
-      "id": "M3",
-      "title": "Timeline model, Editor workspace & version workflow",
-      "phase": 2,
-      "goal": "Establish the canonical editing contract and ship the Timeline-first Editor workspace with shared root/nested editing behavior.",
-      "tasks": [
+          "notes": "Schema migration is a prerequisite for DYS-014: current Shot.slots[], ClipVersion.layers[] and root timelineClips[] must be migrated explicitly, not renamed or flattened. Target contract: docs/architecture/UNIFIED_COMPOSITION_MODEL.md. A versioned project import/export boundary now reads legacy schema-1.0 files and exports a `dionysus-project-document` 2.0 envelope with both the authoritative legacy project and a canonical Composition projection. This is transitional compatibility, not yet schema-2.0-only persistence.",
+          "description": "Validate and migrate schemaVersion 1.0 deterministically, preserving alternatives, selection, provenance, source ranges, linked audio, pins and nesting.",
+          "executionStage": "E2",
+          "priority": "P0",
+          "dependsOn": [
+            "DYS-014"
+          ],
+          "deliverables": [
+            "Typed validation, stable migration, diagnostics and round-trip fixtures."
+          ],
+          "outOfScope": [
+            "Never silently discard unknown/user data."
+          ],
+          "testStrategy": [
+            "Legacy matrix, malformed input, dangling/cyclic refs, input immutability."
+          ],
+          "nextAction": "Add migration fixtures before changing consumers.",
+          "handoffNotes": "Read docs/TIMELINE_FIRST_EXECUTION_BACKLOG.md for milestone gates and pickup rules. Re-query live GitHub before acting."
+        },
+        {
+          "id": "DYS-003",
+          "title": "Task dashboard and per-task records",
+          "status": "in_progress",
+          "progress": 60,
+          "summary": "Keep task JSON, milestones, detailed task pages, dependencies, acceptance, evidence and handoff instructions synchronized.",
+          "doc": "tasks/task-tracker.md",
+          "detail": "tasks/task-tracker.html",
+          "report": "reports/task-tracker-report.md",
+          "subtasks": [
+            {
+              "title": "Single JSON source for milestones, tasks, subtasks, and status",
+              "status": "in_progress"
+            },
+            {
+              "title": "Milestone timeline and phase/task drill-down UI",
+              "status": "in_progress"
+            },
+            {
+              "title": "Link task specification Markdown and completion report",
+              "status": "planned"
+            },
+            {
+              "title": "Verify dashboard JSON loading and relative links",
+              "status": "planned"
+            }
+          ],
+          "acceptance": [
+            "Valid JSON and unique IDs",
+            "All detail links resolve",
+            "Milestones match E0-E7"
+          ],
+          "evidence": [
+            "Dashboard source is public/doc/task.html",
+            "Task data source is public/doc/tasks.json"
+          ],
+          "notes": "Progress reflects this dashboard redesign and still requires CI/browser validation.",
+          "description": "Keep task JSON, milestones, detailed task pages, dependencies, acceptance, evidence and handoff instructions synchronized.",
+          "executionStage": "Continuous",
+          "priority": "P1",
+          "dependsOn": [
+            "DYS-016"
+          ],
+          "deliverables": [
+            "Unique IDs, valid JSON, resolvable links and aligned milestone order."
+          ],
+          "outOfScope": [
+            "Docs status is not implementation evidence."
+          ],
+          "testStrategy": [
+            "JSON/link/cross-file checks."
+          ],
+          "nextAction": "Update registry and detail page in the same coherent PR.",
+          "handoffNotes": "Read docs/TIMELINE_FIRST_EXECUTION_BACKLOG.md for milestone gates and pickup rules. Re-query live GitHub before acting."
+        },
+        {
+          "id": "DYS-016",
+          "title": "Timeline-first Editor rebuild plan and workspace architecture",
+          "status": "in_progress",
+          "progress": 90,
+          "summary": "Maintain current-state checkpoint, workspace decisions, milestone gates, task details and reusable agent pickup prompt.",
+          "doc": "tasks/timeline-editor-rebuild-plan.md",
+          "detail": "tasks/timeline-editor-rebuild.html#DYS-016",
+          "subtasks": [
+            {
+              "title": "Confirm Editor-owned Media/Effects panel, preview/canvas, multitrack Timeline and contextual mobile controls",
+              "status": "done"
+            },
+            {
+              "title": "Document canonical state boundary, legacy migration safeguards and root/nested Editor parity",
+              "status": "done"
+            },
+            {
+              "title": "Create phased execution plan, task specs, dependency order and acceptance gates",
+              "status": "done"
+            },
+            {
+              "title": "Verify task JSON/detail paths and exact-head CI for the documentation PR",
+              "status": "in_progress"
+            }
+          ],
+          "acceptance": [
+            "Docs and task registry agree",
+            "Checkpoint evidence-based"
+          ],
+          "evidence": [
+            "docs/TIMELINE_EDITOR_REBUILD_PLAN.md",
+            "docs/architecture/TIMELINE_EDITOR_WORKSPACE.md",
+            "docs/AGENT_PICKUP_PROMPT.md and docs/AGENT_HANDOFF.md",
+            "public/doc/tasks.json and public/doc/tasks/timeline-editor-rebuild.html"
+          ],
+          "notes": "In progress until task JSON, detailed pages, roadmap and handoff prompt are reconciled. Design artifacts merged in PR #91.",
+          "description": "Maintain current-state checkpoint, workspace decisions, milestone gates, task details and reusable agent pickup prompt.",
+          "executionStage": "E0-E1",
+          "priority": "P0",
+          "dependsOn": [
+            "DYS-020"
+          ],
+          "deliverables": [
+            "Live Git/CI/Pages checkpoint and consistent docs."
+          ],
+          "outOfScope": [
+            "Plan is not implementation evidence."
+          ],
+          "testStrategy": [
+            "JSON/link/cross-file checks and exact-head CI."
+          ],
+          "nextAction": "Reconcile task JSON, roadmap, detail page and handoff.",
+          "handoffNotes": "Read docs/TIMELINE_FIRST_EXECUTION_BACKLOG.md for milestone gates and pickup rules. Re-query live GitHub before acting."
+        },
         {
           "id": "DYS-020",
           "title": "Timeline Editor wireframes, UI prototype and UML",
           "status": "in_progress",
-          "progress": 65,
-          "summary": "Create a reviewable desktop/mobile wireframe, interactive HTML prototype, and standalone PlantUML component/domain/command/state diagrams as a stable design handoff before production Editor UI implementation.",
+          "progress": 85,
+          "summary": "Maintain low-fi HTML wireframe and UML sources for workspace, domain, edit sequence and mobile states.",
           "doc": "tasks/timeline-editor-ux-design-pack.md",
           "detail": "tasks/timeline-editor-rebuild.html#DYS-020",
           "subtasks": [
@@ -133,12 +264,9 @@
             }
           ],
           "acceptance": [
-            "Desktop wireframe shows source browser upper-left, Preview/Canvas upper-right and multitrack Timeline below",
-            "Mobile controls are contextual to selection and module navigation is separate",
-            "Standalone .puml files open in PlantUML Playground and cover workspace, domain model, command/history and mobile selection state",
-            "Prototype and diagrams are editable files in Git and linked from handoff prompts",
-            "Owner reviews major layout/interaction decisions before DYS-017",
-            "No production behavior is claimed from prototype and no browser smoke tests are required"
+            "Wireframe/UML/docs agree",
+            "Links resolve",
+            "Rendering claims evidence-based"
           ],
           "evidence": [
             "docs/architecture/TIMELINE_EDITOR_UX_DESIGN_PACK.md",
@@ -149,55 +277,48 @@
             "docs/architecture/plantuml/timeline-editor-edit-sequence.puml",
             "docs/architecture/plantuml/timeline-editor-mobile-state.puml"
           ],
-          "notes": "The prototype is low-fidelity, not production React UI. Keep safe Composition model/test work moving in parallel; do not implement unsettled major layout decisions before owner review."
-        },
-        {
-          "id": "DYS-016",
-          "title": "Timeline-first Editor rebuild plan and workspace architecture",
-          "status": "in_progress",
-          "progress": 80,
-          "summary": "Record the owner-confirmed Timeline-first direction, desktop/mobile workspace contract, rebuild sequence, dependencies, PR disposition and agent handoff rules.",
-          "doc": "tasks/timeline-editor-rebuild-plan.md",
-          "detail": "tasks/timeline-editor-rebuild.html#DYS-016",
-          "subtasks": [
-            {
-              "title": "Confirm Editor-owned Media/Effects panel, preview/canvas, multitrack Timeline and contextual mobile controls",
-              "status": "done"
-            },
-            {
-              "title": "Document canonical state boundary, legacy migration safeguards and root/nested Editor parity",
-              "status": "done"
-            },
-            {
-              "title": "Create phased execution plan, task specs, dependency order and acceptance gates",
-              "status": "done"
-            },
-            {
-              "title": "Verify task JSON/detail paths and exact-head CI for the documentation PR",
-              "status": "in_progress"
-            }
+          "notes": "PR #91 merged the low-fi wireframe/UML source. Not production UI; PlantUML rendering and final owner approval are not claimed.",
+          "description": "Maintain low-fi HTML wireframe and UML sources for workspace, domain, edit sequence and mobile states.",
+          "executionStage": "E1",
+          "priority": "P0 design gate",
+          "dependsOn": [
+            "DYS-016"
           ],
-          "acceptance": [
-            "Workspace layout and navigation decisions agree across PRD, architecture, task specs and handoff prompts",
-            "Milestones define entry conditions, concrete deliverables, dependencies and exit tests",
-            "DYS-016 through DYS-019 are linked from public/doc/tasks.json and the task dashboard detail page",
-            "Open PR status and observed exact-head CI failures are recorded without claiming draft code is shipped",
-            "Documentation JSON is valid and exact-head CI passes"
+          "deliverables": [
+            "Prototype, four diagram sources, links and open decisions."
           ],
-          "evidence": [
-            "docs/TIMELINE_EDITOR_REBUILD_PLAN.md",
-            "docs/architecture/TIMELINE_EDITOR_WORKSPACE.md",
-            "docs/AGENT_PICKUP_PROMPT.md and docs/AGENT_HANDOFF.md",
-            "public/doc/tasks.json and public/doc/tasks/timeline-editor-rebuild.html"
+          "outOfScope": [
+            "Not production UI",
+            "PlantUML rendering unverified."
           ],
-          "notes": "Planning/documentation slice only; this is not evidence that a new Editor UI or any UI behavior has been implemented. PR #89 exact-head CI 39269841800 passed 206 tests but failed TypeScript/build; re-check live status before implementing or merging candidate snapshot code."
-        },
+          "testStrategy": [
+            "Link/JSON checks and source review."
+          ],
+          "nextAction": "PR #91 merged; verify live links after deployment.",
+          "handoffNotes": "Read docs/TIMELINE_FIRST_EXECUTION_BACKLOG.md for milestone gates and pickup rules. Re-query live GitHub before acting."
+        }
+      ],
+      "executionStage": "E0-E1",
+      "ids": [
+        "DYS-001",
+        "DYS-002",
+        "DYS-003",
+        "DYS-016",
+        "DYS-020"
+      ]
+    },
+    {
+      "id": "M3",
+      "title": "Canonical Composition, editing engine & versions",
+      "phase": 2,
+      "goal": "Safe migration and consistent root/nested editing while preserving multitrack/Clip behavior.",
+      "tasks": [
         {
           "id": "DYS-005",
           "title": "Timeline editing and Version management",
           "status": "in_progress",
           "progress": 84,
-          "summary": "Unify Master Timeline and nested Composition editing on one document model, shared Editor/Placement engine, pinned versions, and coherent Undo/Redo.",
+          "summary": "Implement shared root/nested commands for insert, move/snap, conflicts, trim, split, duplicate, delete, linked audio, pins and Undo/Redo.",
           "doc": "tasks/timeline-and-versions.md",
           "detail": "tasks/timeline-and-versions.html",
           "report": "reports/timeline-and-versions-report.md",
@@ -232,14 +353,9 @@
             }
           ],
           "acceptance": [
-            "Master Timeline remains accessible while Shot-Version timelines are open in separate tabs",
-            "Shot blocks display active-Version thumbnail or a clear placeholder and readable name",
-            "Version menu supports selecting an alternative, creating a new Version, and editing each Version",
-            "Master Shot placement/duration remains separate from its Version-internal timing",
-            "Project JSON preserves active Versions and nested layer/module relationships",
-            "Unit/integration tests and production build pass; no automated browser smoke test is added unless explicitly requested",
-            "Master and nested Composition timelines use the same placement engine for destination preview, snapping, cross-layer movement, overlap policy, resize/trim and Undo/Redo.",
-            "The editor uses an explicit Project-root or Clip-Version composition context rather than a special Master-Shot interaction path."
+            "Source-time and conflict tests pass",
+            "Root/nested history and audio parity pass",
+            "Pins survive reopen"
           ],
           "evidence": [
             "Master Shot uses optional absolute masterStart with legacy sequential fallback; free placement snaps to frames, warns on overlaps, and Ripple Reorder packs the sequence without changing durations.",
@@ -275,14 +391,32 @@
             "Blank-version independence integration test: src/App.test.tsx",
             "Functional code SHA ee1f90c3304ce0f2be5cef294c387192d2aa8969; main CI 39234313896 and Pages deployment 39234313840 passed"
           ],
-          "notes": "The user has not accepted issues #53/#54. A follow-up in Draft PR #63 now checks ordinary clip drag/drop and resize against Master Shot occupancy, trims a Master Shot when an ordinary clip resize reaches it, and retains Master Shot drag identity during protected dragover. Master and nested Clip Timeline Add layer menus now offer only Video, Audio and Text. Nested Image/Code/Clip choices are in a separate Add content menu; shared editor data/operations remain outstanding for #53. Verify exact-head CI and continue toward one shared Composition Editor; do not close either issue before user acceptance. Shared mixed-model drop/resize calculation and atomic application are now extracted to `src/projectTimelinePlacement.ts`, with pure unit tests in `src/projectTimelinePlacement.test.ts`. Shared-engine regression tests now also verify that linked source audio stays aligned when cross-model resize trims the video. Both Master Shot and ordinary clip moves now use `moveProjectTimelinePlacement()` in the shared project-level engine; tests cover generated Storyboard placement shifts and linked-audio group moves. Nested Clip Timelines now render explicit Video/Audio/Text tracks with multiple placements per track. Add layer creates a track; Add content creates a placement on a compatible track. Drag/drop between compatible nested tracks and audio-track mute are supported. Nested track-based editing is now covered by App integration tests for track menu choices, adding a placement to an empty track, and ruler/track alignment. Exact-head CI run 39217800522 passed. Project export now uses the versioned compatibility envelope and import accepts both that format and legacy schema-1.0 files. Linked timeline and nested module export/import regressions are covered by App tests. Nested Clip/Version Timeline now includes destination drag preview, visible snap guide, compatible cross-track moves, same-track overlap prevention, left/right resize handles, grey overlap preview, and atomic adjacent-layer trimming through one history update. Covered by src/nestedTimelinePlacement.ts, src/nestedTimelinePlacement.test.ts and src/timelineResize.test.ts. Merged and deployed in PR #63, merge/deployed SHA `9da2f2bfbf7e80abb73f5552a0d1447cff471c0b`; main CI 39227655141 and Pages deploy 39227655137 both passed. #53/#54 were closed as fixed at the owner's direction. Latest follow-up branch `feat/click-to-place-timeline-clips` changes root Add Clip to click-to-place, checks empty intervals against Master Shots and ordinary placements, prompts to ripple later clips or trim the new clip when the selected gap is too short, preserves linked audio/materialized Shot timing, extends runtime naturally, and commits the full edit as one Undo unit. Merged/deployed on main SHA `990158fc70cf0e6fe17a994237c1b0d65b7d60fb`; CI 39233639480 and Pages deployment 39233639536 passed. Track implementations/tests are in `src/projectTimelinePlacement.ts`, `src/projectTimelinePlacement.test.ts`, `src/App.tsx`, `src/App.test.tsx`, and `src/timelinePlacement.ts`. PR #66 shipped New Blank Version beside Duplicate Version for Clip Assets. It inherits duration/track setup, resets layers to empty with fresh track IDs, selects the new version, and leaves old versions untouched. Functional code SHA `ee1f90c3304ce0f2be5cef294c387192d2aa8969`; main CI 39234313896 and Pages deployment 39234313840 passed."
+          "notes": "The user has not accepted issues #53/#54. A follow-up in Draft PR #63 now checks ordinary clip drag/drop and resize against Master Shot occupancy, trims a Master Shot when an ordinary clip resize reaches it, and retains Master Shot drag identity during protected dragover. Master and nested Clip Timeline Add layer menus now offer only Video, Audio and Text. Nested Image/Code/Clip choices are in a separate Add content menu; shared editor data/operations remain outstanding for #53. Verify exact-head CI and continue toward one shared Composition Editor; do not close either issue before user acceptance. Shared mixed-model drop/resize calculation and atomic application are now extracted to `src/projectTimelinePlacement.ts`, with pure unit tests in `src/projectTimelinePlacement.test.ts`. Shared-engine regression tests now also verify that linked source audio stays aligned when cross-model resize trims the video. Both Master Shot and ordinary clip moves now use `moveProjectTimelinePlacement()` in the shared project-level engine; tests cover generated Storyboard placement shifts and linked-audio group moves. Nested Clip Timelines now render explicit Video/Audio/Text tracks with multiple placements per track. Add layer creates a track; Add content creates a placement on a compatible track. Drag/drop between compatible nested tracks and audio-track mute are supported. Nested track-based editing is now covered by App integration tests for track menu choices, adding a placement to an empty track, and ruler/track alignment. Exact-head CI run 39217800522 passed. Project export now uses the versioned compatibility envelope and import accepts both that format and legacy schema-1.0 files. Linked timeline and nested module export/import regressions are covered by App tests. Nested Clip/Version Timeline now includes destination drag preview, visible snap guide, compatible cross-track moves, same-track overlap prevention, left/right resize handles, grey overlap preview, and atomic adjacent-layer trimming through one history update. Covered by src/nestedTimelinePlacement.ts, src/nestedTimelinePlacement.test.ts and src/timelineResize.test.ts. Merged and deployed in PR #63, merge/deployed SHA `9da2f2bfbf7e80abb73f5552a0d1447cff471c0b`; main CI 39227655141 and Pages deploy 39227655137 both passed. #53/#54 were closed as fixed at the owner's direction. Latest follow-up branch `feat/click-to-place-timeline-clips` changes root Add Clip to click-to-place, checks empty intervals against Master Shots and ordinary placements, prompts to ripple later clips or trim the new clip when the selected gap is too short, preserves linked audio/materialized Shot timing, extends runtime naturally, and commits the full edit as one Undo unit. Merged/deployed on main SHA `990158fc70cf0e6fe17a994237c1b0d65b7d60fb`; CI 39233639480 and Pages deployment 39233639536 passed. Track implementations/tests are in `src/projectTimelinePlacement.ts`, `src/projectTimelinePlacement.test.ts`, `src/App.tsx`, `src/App.test.tsx`, and `src/timelinePlacement.ts`. PR #66 shipped New Blank Version beside Duplicate Version for Clip Assets. It inherits duration/track setup, resets layers to empty with fresh track IDs, selects the new version, and leaves old versions untouched. Functional code SHA `ee1f90c3304ce0f2be5cef294c387192d2aa8969`; main CI 39234313896 and Pages deployment 39234313840 passed.",
+          "description": "Implement shared root/nested commands for insert, move/snap, conflicts, trim, split, duplicate, delete, linked audio, pins and Undo/Redo.",
+          "executionStage": "E2-E4",
+          "priority": "P0",
+          "dependsOn": [
+            "DYS-002",
+            "DYS-014"
+          ],
+          "deliverables": [
+            "One command boundary, root/nested parity, safe history and persistence."
+          ],
+          "outOfScope": [
+            "Storyboard and production MP4 are not prerequisites."
+          ],
+          "testStrategy": [
+            "Source-time invariants, conflicts, linked audio, nested history and pins."
+          ],
+          "nextAction": "Move each remaining edit path to shared commands.",
+          "handoffNotes": "Read docs/TIMELINE_FIRST_EXECUTION_BACKLOG.md for milestone gates and pickup rules. Re-query live GitHub before acting."
         },
         {
           "id": "DYS-011",
           "title": "Multi-track Timeline and linked audio",
           "status": "done",
           "progress": 100,
-          "summary": "Render video tracks as expandable groups with linked source-audio child lanes; unlink into independent Audio Layers with their own persistent mute controls.",
+          "summary": "Protect linked/unlinked audio, independent edit/mute, source ranges/fades, grouped operations and persistence.",
           "doc": "tasks/multitrack-timeline-linked-audio.md",
           "detail": "tasks/multitrack-timeline-linked-audio.html",
           "report": "reports/multitrack-timeline-linked-audio-report.md",
@@ -313,12 +447,8 @@
             }
           ],
           "acceptance": [
-            "Expanding a video layer reveals linked source audio below it",
-            "Unlink converts the audio to an independent Audio Layer without moving or trimming either clip",
-            "Each audio layer has independent mute/unmute state",
-            "Deleting unlinked audio does not delete its video source",
-            "History and project JSON round-trip preserve link and mute state",
-            "Automated model/integration tests and build cover core behaviors; no automated browser smoke test unless explicitly requested"
+            "Linked/unlinked audio cases pass",
+            "Undo/Redo and JSON preserve relationships"
           ],
           "evidence": [
             "App integration tests cover linked child audio, per-clip mute, track-level mute, unlink and timing preservation.",
@@ -328,14 +458,32 @@
             "App integration coverage verifies independent audio edits after unlink, Undo/Redo for unlink/move/trim/delete, linked parent/child deletion, and preserving detached audio when a video layer is removed.",
             "PR #57 CI run 39165133176 passed 137 tests across 16 files, TypeScript check, and Vite production build at code/test SHA 794e3ff024c26d55d76583160d96238df8d84a12."
           ],
-          "notes": "Linked-child lanes, unlink, independent audio move/trim/delete, track/clip mute, split/duplicate propagation, source-range/fade integrity, video-layer group-delete semantics, Undo/Redo, and project JSON coverage are implemented. Advanced automation/ducking/effects remain tracked under DYS-008 and are not part of this task."
+          "notes": "Linked-child lanes, unlink, independent audio move/trim/delete, track/clip mute, split/duplicate propagation, source-range/fade integrity, video-layer group-delete semantics, Undo/Redo, and project JSON coverage are implemented. Advanced automation/ducking/effects remain tracked under DYS-008 and are not part of this task.",
+          "description": "Protect linked/unlinked audio, independent edit/mute, source ranges/fades, grouped operations and persistence.",
+          "executionStage": "E2-E4 regression gate",
+          "priority": "P0 preserve",
+          "dependsOn": [
+            "DYS-005",
+            "DYS-014"
+          ],
+          "deliverables": [
+            "Link/unlink, independent edits, mute/fade, Undo/Redo and round-trip."
+          ],
+          "outOfScope": [
+            "Advanced automation belongs to DYS-008."
+          ],
+          "testStrategy": [
+            "Linked move/trim/split, unlink, history and JSON tests."
+          ],
+          "nextAction": "Retain baseline tests through refactor.",
+          "handoffNotes": "Read docs/TIMELINE_FIRST_EXECUTION_BACKLOG.md for milestone gates and pickup rules. Re-query live GitHub before acting."
         },
         {
           "id": "DYS-013",
           "title": "Reusable Clip Assets and nested composition timeline",
           "status": "done",
           "progress": 100,
-          "summary": "Create reusable Clip Assets with editable, versioned nested timelines; pin versions in placements, prevent cyclic references, validate graph integrity, and render nested Clip compositions.",
+          "summary": "Preserve versioned Clip Assets, nested timelines, pinned versions, rendering and cycle prevention during Composition convergence.",
           "doc": "tasks/reusable-clip-assets.md",
           "detail": "tasks/reusable-clip-assets.html",
           "report": "reports/reusable-clip-assets-report.md",
@@ -370,13 +518,8 @@
             }
           ],
           "acceptance": [
-            "A Clip Asset can be created with a name, canvas width/height, and positive duration.",
-            "Each Clip Asset has one or more editable, independently versioned compositions.",
-            "A Clip Version can contain video, image, audio, text, Code/procedural, and nested Clip modules.",
-            "Nested Clip references pin a concrete Version and reject cycles.",
-            "Invalid or stale Clip, Version, Asset, and referenced-image IDs are rejected during project validation.",
-            "The compositor expands Clip placements recursively with the selected pinned Version and placement transforms.",
-            "Automated unit/integration tests pass and the production build succeeds."
+            "Pins/cycles/render/round-trip tested",
+            "Structural snapshots separately verified"
           ],
           "evidence": [
             "Implementation and tests: PR #51",
@@ -384,14 +527,32 @@
             "Creative editing contract: public/doc/creative-editing-workflow-spec.md",
             "Implementation details and known limits: public/doc/reports/reusable-clip-assets-report.md"
           ],
-          "notes": "This status applies only to the reusable Clip Asset graph/nested-timeline slice. It does not claim production-grade frame-accurate MP4 export, complete Shot identity/version migration, or completion of the broader reference-management roadmap. Release/deployment remains tracked separately. This completed slice covers the existing nested Clip Asset implementation only; it does not meet the new structure-preserving Project snapshot or shared root/nested Editor contract. DYS-014 owns that follow-up; avoid expanding a parallel model."
+          "notes": "This status applies only to the reusable Clip Asset graph/nested-timeline slice. It does not claim production-grade frame-accurate MP4 export, complete Shot identity/version migration, or completion of the broader reference-management roadmap. Release/deployment remains tracked separately. This completed slice covers the existing nested Clip Asset implementation only; it does not meet the new structure-preserving Project snapshot or shared root/nested Editor contract. DYS-014 owns that follow-up; avoid expanding a parallel model.",
+          "description": "Preserve versioned Clip Assets, nested timelines, pinned versions, rendering and cycle prevention during Composition convergence.",
+          "executionStage": "E2-E4 regression gate",
+          "priority": "P0 preserve",
+          "dependsOn": [
+            "DYS-005",
+            "DYS-014"
+          ],
+          "deliverables": [
+            "Nested editor/pins, independent versions, cycle checks and round-trip."
+          ],
+          "outOfScope": [
+            "Existing tests do not prove structural Save-as-Clip."
+          ],
+          "testStrategy": [
+            "Pin/cycle/render/round-trip tests."
+          ],
+          "nextAction": "Add root-vs-nested parity cases.",
+          "handoffNotes": "Read docs/TIMELINE_FIRST_EXECUTION_BACKLOG.md for milestone gates and pickup rules. Re-query live GitHub before acting."
         },
         {
           "id": "DYS-014",
           "title": "Unified Composition model and structure-preserving snapshots",
           "status": "in_progress",
           "progress": 65,
-          "summary": "Replace parallel Master-Shot and nested Clip editing models with one Composition schema, shared Editor/Placement engine, and independently editable Project-to-Clip snapshots.",
+          "summary": "Establish canonical Composition for root/nested timelines, shared commands and independent structure-preserving Project-to-Clip snapshots.",
           "doc": "tasks/unified-composition-model.md",
           "detail": "tasks/unified-composition-model.html",
           "report": "reports/unified-composition-model-report.md",
@@ -422,11 +583,9 @@
             }
           ],
           "acceptance": [
-            "Project root and nested Clip Asset Versions use the same track/placement schema and editing mechanics",
-            "Save-as-Clip preserves editable tracks, placements, order, source ranges, version pins and nested composition relationships",
-            "A saved Clip can be placed elsewhere, opened in the same Editor, expanded, edited as a new Version and reused without mutating its source Project or older pinned placements",
-            "Migration preserves legacy IDs, alternatives, generation/reference snapshots, source ranges, track ordering and linked audio; ambiguous data is reported without silent loss",
-            "Migration, round-trip, snapshot independence, nested rendering and interaction tests plus TypeScript/build pass"
+            "Migration preserves all key relationships",
+            "Root/nested semantics align",
+            "Snapshots are independent editable trees"
           ],
           "evidence": [
             "Target contract: docs/architecture/UNIFIED_COMPOSITION_MODEL.md",
@@ -454,72 +613,48 @@
             "Exact-head code CI 39227084457: tests, TypeScript and Vite build passed",
             "Merge/deploy checkpoint: main SHA 9da2f2bfbf7e80abb73f5552a0d1447cff471c0b; CI 39227655141 and Pages deploy 39227655137 both passed."
           ],
-          "notes": "Canonical Composition projection is implemented and tested. Follow-up timeline patch also addresses the immediate #54 cross-model occupancy defect: ordinary clip drop/resize now considers Master Shots, resize trims update both Shots and Timeline Clips in one history transaction, and Master Shot drag identity survives protected dragover. This is an interim compatibility fix, not the final shared editor engine. Import/export migration and full root/nested editor unification remain outstanding. See docs/PROJECT_ROADMAP.md. The shared project-level placement/resize adapter is now extracted from App into `src/projectTimelinePlacement.ts`; it is the compatibility seam for the later canonical Composition editor. Schema-1.0 persistence/import/export are still unchanged. The compatibility engine now centralizes project-level placement move, drop calculation and resize preview/application in `src/projectTimelinePlacement.ts`; Master and ordinary clip move commits both use `moveProjectTimelinePlacement()`. Canonical schema persistence/import/export remains the next integration boundary. The canonical projection now represents each Master Shot as a root Composition placement and preserves every legacy Shot Slot Version as a separate legacy composition projection. Materialized `storyboard-*` placements are deduplicated against Master Shots; linked audio targets are remapped to the canonical Shot placement when necessary. Nested Clip Versions now receive additive `tracks[]` and `layers[].trackId` fields during load/import normalization. Legacy versions get deterministic Video/Audio/Text tracks while retaining layer kinds and source fields; existing valid track IDs/order are preserved. The migration projection now reuses these persisted track IDs. This is a backward-compatible schema-1.0 bridge, not the final schema-2.0 persistence format. Nested track normalization also retains pre-normalization effects/procedural lane kinds in `originalKind`, so the canonical projection does not erase that legacy information. Nested Clip Versions now use explicit track rows in the timeline UI, with multiple placements per track and track-aware add/move operations. This is still an additive schema-1.0 bridge, not the final persisted Composition schema. The nested editor now displays canonical Video/Audio/Text track rows with multiple placements per track, adds tracks separately from content placements, and supports compatible track-to-track placement moves. Exact-head CI run 39217800522 passed; the persisted project schema remains 1.0. The first versioned import/export boundary is integrated. New exports contain a canonical Composition projection alongside the legacy project payload; imports accept old schema-1.0 files and the new envelope without loss. The editor still runs on the legacy payload, so schema-2.0 is not yet authoritative persistence. Latest code CI run 39218695102 passed tests, TypeScript and Vite build. The versioned document reader now rejects schema-2.0 envelopes whose project ID/name or root Composition ID conflicts with the embedded schema-1.0 project; regression tests cover mismatched project identity and root identity. Exact-head CI run 39221701720 passed tests and TypeScript/Vite build at 3826f84cd529ad2461a07f26ab83adf7a5a5b526. This is an envelope integrity guard only; it does not make the projection authoritative or implement structure-preserving Save-as-Clip. Latest slice: readProjectDocument now recomputes the canonical migration projection and rejects stale/tampered root placements, nested Clip compositions, Shot Slot compositions, or migration warnings instead of silently loading an inconsistent envelope. Regression tests cover tampered placements and a fresh versioned round-trip. Pending exact-head CI; this remains a transitional guard, not canonical schema-2 persistence or structure-preserving Save-as-Clip. Latest interaction slice adds a tested nested timeline adapter over the shared placement/resize calculation contract, including snap/drop previews, overlap prevention and atomic adjacent-layer trims. This improves #53/#54 behavior but does not promote schema-2 Composition to authoritative persistence; canonical editor state and structure-preserving Save-as-Clip remain planned. PR #63 was merged and deployed as `9da2f2bfbf7e80abb73f5552a0d1447cff471c0b`; main CI 39227655141 and Pages deployment 39227655137 succeeded. This improves the nested editor interaction slice but does not make schema-2 Composition authoritative or finish structure-preserving Save-as-Clip; keep DYS-014 in progress. Product clarification requested by owner (2026-10-19): current Storyboard add creates a Shot Slot plus empty Slot Version, not a separate reusable Asset Clip. Existing Clip Assets can duplicate an existing version; PR #66 shipped a New Blank Version command for reusable Clip Assets (functional code SHA `ee1f90c3304ce0f2be5cef294c387192d2aa8969`; CI 39234313896 and Pages 39234313840 passed). This does not unify Shot Slot Versions with reusable Clip Asset Versions or finish structure-preserving Save-as-Clip. Keep Shot Slot Version vs reusable Clip Asset Version as distinct legacy entities for now; the unified Composition relationship and structure-preserving snapshots remain unfinished. Do not auto-create duplicate linked Asset Clips for every Shot until this is an explicit product decision. Current published main checkpoint for safe Add Clip insertion is `990158fc70cf0e6fe17a994237c1b0d65b7d60fb`, with CI 39233639480 and Pages deploy 39233639536 passed. Shot/Slot Version vs reusable Clip Asset Version remains separate legacy persistence; don't auto-create linked duplicate Asset Clips for every new Shot without an explicit owner decision.\n\nMigration alternative/provenance round-trip test slice started after the mobile release. Branch `feat/dys014-alternative-provenance-roundtrip` adds regression coverage that every legacy Shot Slot Version and its generation prompt/reference/model/output metadata survive Composition projection, plus JSON serialization round-trips for schema-1.0 legacy projects and the versioned 2.0 envelope. Exact-head CI pending; this does not make Composition authoritative persistence or implement structure-preserving Save-as-Clip."
-        },
-        {
-          "id": "DYS-017",
-          "title": "Timeline Editor workspace rebuild",
-          "status": "planned",
-          "progress": 0,
-          "summary": "Implement the functional Desktop-first workspace with an Editor-local Media/Audio/Text/Effects/Transitions browser, upper-right Preview/Canvas, lower multitrack Timeline and contextual Inspector.",
-          "doc": "tasks/timeline-editor-workspace.md",
-          "detail": "tasks/timeline-editor-rebuild.html#DYS-017",
-          "subtasks": [
-            {
-              "title": "Audit current UI and classify code as reuse, adapter, replacement or defer",
-              "status": "planned"
-            },
-            {
-              "title": "Implement modular workspace shell and desktop panel layout",
-              "status": "planned"
-            },
-            {
-              "title": "Connect source browsing and explicit add/insert to the shared Editor command boundary",
-              "status": "planned"
-            },
-            {
-              "title": "Connect Preview, Timeline and contextual Inspector to one composition state",
-              "status": "planned"
-            },
-            {
-              "title": "Cover move/trim/selection/history/reopen with deterministic tests",
-              "status": "planned"
-            },
-            {
-              "title": "Replace old presentation only after parity gates pass",
-              "status": "planned"
-            }
+          "notes": "Re-query current PR #88/#89 heads, bases and checks; prior reports indicated stale-base Draft work. Do not assume shipped.",
+          "description": "Establish canonical Composition for root/nested timelines, shared commands and independent structure-preserving Project-to-Clip snapshots.",
+          "executionStage": "E2 and E4",
+          "priority": "P0",
+          "dependsOn": [
+            "DYS-002",
+            "DYS-005",
+            "DYS-013"
           ],
-          "acceptance": [
-            "Preview/Canvas and multitrack Timeline are present in one Editor workspace",
-            "Media, Audio and Text sources can be browsed and inserted; unsupported effects/transitions cannot masquerade as working controls",
-            "No generic user-facing Media track; tracks are Video/Audio/Text and content kinds are separate",
-            "Root and nested compositions share edit operations and version-pin semantics",
-            "Undo/Redo, save/reopen, linked audio and source ranges are regression-tested",
-            "No page-level horizontal overflow; track headers align to the ruler",
-            "Exact-head tests, TypeScript check and production build pass"
+          "deliverables": [
+            "Typed model, deterministic migration, shared commands and editable snapshots."
           ],
-          "evidence": [
-            "docs/architecture/TIMELINE_EDITOR_WORKSPACE.md",
-            "docs/architecture/UNIFIED_COMPOSITION_MODEL.md",
-            "Existing editing/migration tests must be audited before changes; proposed component boundaries are documented in the workspace spec"
+          "outOfScope": [
+            "Schema envelope/projection helper/flattened MP4 alone is not completion."
           ],
-          "notes": "Depends on DYS-016 and the canonical edit boundary in DYS-014/DYS-005. A visual shell may be prototyped in parallel only if it has no second mutable source of truth. Do not copy App.tsx into a second monolith."
+          "testStrategy": [
+            "Migration matrix, parity, snapshot independence and round-trip."
+          ],
+          "nextAction": "Re-query PR #88/#89 and rebase or supersede stale work.",
+          "handoffNotes": "Read docs/TIMELINE_FIRST_EXECUTION_BACKLOG.md for milestone gates and pickup rules. Re-query live GitHub before acting."
         }
+      ],
+      "executionStage": "E2",
+      "ids": [
+        "DYS-005",
+        "DYS-011",
+        "DYS-013",
+        "DYS-014"
       ]
     },
     {
       "id": "M4",
-      "title": "Preview, compositing & responsive Editor UX",
+      "title": "Functional Timeline workspace, Preview & responsive Editor",
       "phase": 3,
-      "goal": "Complete integrated preview/compositing and make the same Timeline Editor usable through touch-first mobile presentation.",
+      "goal": "Ship a real same-page Desktop Editor, editing parity and then mobile adaptation.",
       "tasks": [
         {
           "id": "DYS-006",
           "title": "Preview, playback, and media compositing",
           "status": "in_progress",
           "progress": 80,
-          "summary": "Implement media playback and composition for Shot, Version, and master Timeline previews, including multi-layer picture-in-picture.",
+          "summary": "Embed same-page Preview/Canvas and synchronize playhead, selection, transforms, ranges, audio and nested Clip preview.",
           "doc": "tasks/preview-and-compositing.md",
           "detail": "tasks/preview-and-compositing.html",
           "report": "reports/preview-and-compositing-report.md",
@@ -546,12 +681,9 @@
             }
           ],
           "acceptance": [
-            "Master and nested Version tabs display a playhead-synchronized canvas preview with independent playhead state",
-            "Available image/video/text/nested composition layers render in stored z-order using their timing and supported transforms",
-            "Preview transform changes update the selected layer/clip/track geometry and persist with the project",
-            "Media fit and background settings are reflected in composition rendering",
-            "Missing/unreadable sources fail safely with visible fallbacks and clear recovery guidance",
-            "Automated tests and production build validate supported preview/composition behavior; no browser smoke test is required"
+            "Preview/playhead/selection agree",
+            "Settings and transforms persist",
+            "Missing media is visible"
           ],
           "evidence": [
             "src/App.tsx renders an integrated Master and per-Version canvas preview from the active composition at the current playhead; each Version tab retains its own playhead position.",
@@ -559,14 +691,33 @@
             "Existing tests cover per-tab preview/playhead, preview controls/project canvas settings, composition layer order and nested Clip version selection, plus normalized frame movement/resizing.",
             "PR #57 adds a UI regression test proving a selected Video Layer's preview transform commits back to the layer model; test CI run 39165133176 previously passed 137 tests before this added case."
           ],
-          "notes": "The preview/compositor is implemented but still in progress: interactive preview scales to at most 1280×720, not a guaranteed 4K preview; browser codec/CORS/source availability still limits some media; durable media import/relinking is tracked under DYS-004; first/last-frame coverage is not uniform for every source. WebM export remains experimental and MP4 is tracked under DYS-009. The target model uses one Composition document/render contract for the Project root and nested Clip versions; preserve pinned sources and nested structure during renderer migration (DYS-014)."
+          "notes": "The preview/compositor is implemented but still in progress: interactive preview scales to at most 1280×720, not a guaranteed 4K preview; browser codec/CORS/source availability still limits some media; durable media import/relinking is tracked under DYS-004; first/last-frame coverage is not uniform for every source. WebM export remains experimental and MP4 is tracked under DYS-009. The target model uses one Composition document/render contract for the Project root and nested Clip versions; preserve pinned sources and nested structure during renderer migration (DYS-014).",
+          "description": "Embed same-page Preview/Canvas and synchronize playhead, selection, transforms, ranges, audio and nested Clip preview.",
+          "executionStage": "E3-E4",
+          "priority": "P0",
+          "dependsOn": [
+            "DYS-014",
+            "DYS-005",
+            "DYS-017"
+          ],
+          "deliverables": [
+            "Preview/playhead/selection sync, persisted canvas settings/transforms, missing-source feedback."
+          ],
+          "outOfScope": [
+            "Do not claim unsupported codec/export support."
+          ],
+          "testStrategy": [
+            "Timing, geometry, nested preview, persistence and missing-media tests."
+          ],
+          "nextAction": "Use canonical Composition state across panels.",
+          "handoffNotes": "Read docs/TIMELINE_FIRST_EXECUTION_BACKLOG.md for milestone gates and pickup rules. Re-query live GitHub before acting."
         },
         {
           "id": "DYS-008",
           "title": "Advanced audio and procedural layers",
           "status": "in_progress",
           "progress": 60,
-          "summary": "Support per-Audio-Layer mute/mixing, timed text, and first-class Three.js/procedural timeline layers with pinned script versions and explicit execution permission.",
+          "summary": "Preserve basic audio and Three.js/procedural placements, execution permission, pinned script identity and mix state.",
           "doc": "tasks/audio-and-procedural-modules.md",
           "detail": "tasks/audio-and-procedural-modules.html",
           "report": "reports/audio-and-procedural-modules-report.md",
@@ -597,11 +748,9 @@
             }
           ],
           "acceptance": [
-            "Muting one audio layer does not mute any other layer and state persists",
-            "Three.js is represented as a typed procedural layer rather than a fake video asset",
-            "Saved Shot Versions pin exact script/module versions",
-            "Custom code executes only after explicit authorization in the defined security boundary",
-            "UI states clearly distinguish layer data, preview capability, and final render support"
+            "Procedural permissions/pins survive",
+            "Basic audio survives round-trip",
+            "No false Effect Layer completion"
           ],
           "evidence": [
             "Independent track/clip mute and per-Audio-Layer volume, fade-in, and fade-out controls persist in Master and nested Version timelines.",
@@ -609,14 +758,102 @@
             "Source in/out trim and split operations keep A/V relationships and source offsets consistent, clamp fade boundaries when durations change, and preserve JSON round-trips.",
             "CI run 39124022295: 93 tests pass across 10 files; TypeScript/production build pass; npm audit reports 0 vulnerabilities."
           ],
-          "notes": "Per-layer mute, volume/fades, source trim, linked A/V split, source-range preservation, fade clamping, and core JSON validation are implemented. Audio automation/ducking/effects, richer timed text, and safe/authorized procedural execution/rendering remain outstanding. In the target model, procedural visuals are content placed on Video Tracks, not a separate top-level Add Track choice; safe code execution remains explicit."
+          "notes": "Minimum E4 audio/procedural preservation only; advanced ducking and dedicated Effect Layer deferred. Effects may attach to Clips initially.",
+          "description": "Preserve basic audio and Three.js/procedural placements, execution permission, pinned script identity and mix state.",
+          "executionStage": "E4 core; advanced later",
+          "priority": "P1/P2",
+          "dependsOn": [
+            "DYS-005",
+            "DYS-006",
+            "DYS-014"
+          ],
+          "deliverables": [
+            "Procedural identity/pins",
+            "basic mute/volume/fade",
+            "snapshot preservation."
+          ],
+          "outOfScope": [
+            "Advanced ducking and Effect Layer deferred",
+            "effects may attach to Clips."
+          ],
+          "testStrategy": [
+            "Audio sync/mute/fade and procedural pin tests."
+          ],
+          "nextAction": "Do not add a default empty Effect Layer.",
+          "handoffNotes": "Read docs/TIMELINE_FIRST_EXECUTION_BACKLOG.md for milestone gates and pickup rules. Re-query live GitHub before acting."
+        },
+        {
+          "id": "DYS-017",
+          "title": "Timeline Editor workspace rebuild",
+          "status": "planned",
+          "progress": 0,
+          "summary": "Build the real Desktop workspace: source browser, same-page Preview/Canvas, multitrack Timeline and contextual Inspector on shared commands.",
+          "doc": "tasks/timeline-editor-workspace.md",
+          "detail": "tasks/timeline-editor-rebuild.html#DYS-017",
+          "subtasks": [
+            {
+              "title": "Audit current UI and classify code as reuse, adapter, replacement or defer",
+              "status": "planned"
+            },
+            {
+              "title": "Implement modular workspace shell and desktop panel layout",
+              "status": "planned"
+            },
+            {
+              "title": "Connect source browsing and explicit add/insert to the shared Editor command boundary",
+              "status": "planned"
+            },
+            {
+              "title": "Connect Preview, Timeline and contextual Inspector to one composition state",
+              "status": "planned"
+            },
+            {
+              "title": "Cover move/trim/selection/history/reopen with deterministic tests",
+              "status": "planned"
+            },
+            {
+              "title": "Replace old presentation only after parity gates pass",
+              "status": "planned"
+            }
+          ],
+          "acceptance": [
+            "Full vertical slice works on one page",
+            "Ruler/labels align and scroll isolated",
+            "Exact-head CI passes"
+          ],
+          "evidence": [
+            "docs/architecture/TIMELINE_EDITOR_WORKSPACE.md",
+            "docs/architecture/UNIFIED_COMPOSITION_MODEL.md",
+            "Existing editing/migration tests must be audited before changes; proposed component boundaries are documented in the workspace spec"
+          ],
+          "notes": "The HTML prototype is not production workspace. First gate: browse, insert, select, preview, edit, Undo/Redo and save/reopen on one page.",
+          "description": "Build the real Desktop workspace: source browser, same-page Preview/Canvas, multitrack Timeline and contextual Inspector on shared commands.",
+          "executionStage": "E3",
+          "priority": "P0",
+          "dependsOn": [
+            "DYS-016",
+            "DYS-020",
+            "DYS-014",
+            "DYS-005"
+          ],
+          "deliverables": [
+            "Browse/insert/select/preview/move/trim/history/save-reopen on one page."
+          ],
+          "outOfScope": [
+            "No mock-only shell or Storyboard prerequisite."
+          ],
+          "testStrategy": [
+            "Integration tests, conflict/no-overwrite, persistence and exact-head CI."
+          ],
+          "nextAction": "First slice: browse → insert → select → preview → edit → undo/redo → reopen.",
+          "handoffNotes": "Read docs/TIMELINE_FIRST_EXECUTION_BACKLOG.md for milestone gates and pickup rules. Re-query live GitHub before acting."
         },
         {
           "id": "DYS-018",
           "title": "Contextual controls and touch-first Timeline Editor",
           "status": "planned",
           "progress": 0,
-          "summary": "Adapt the new Timeline workspace for phone/tablet touch interaction while making the mobile bottom bar selection-driven and separating product navigation.",
+          "summary": "Adapt shared commands to mobile with selection-driven bottom actions, source/property sheets and safe-area-aware layout.",
           "doc": "tasks/editor-mobile-contextual-ux.md",
           "detail": "tasks/timeline-editor-rebuild.html#DYS-018",
           "subtasks": [
@@ -642,25 +879,41 @@
             }
           ],
           "acceptance": [
-            "Mobile bottom controls change with the selected placement/workspace action",
-            "Global Storyboard/Timeline/Assets/References navigation is not permanently shown in the Editor bottom bar",
-            "Timeline scrolling is isolated; no page-level horizontal overflow at target viewports",
-            "Touch selection, move, trim, scrubbing, zoom, version selection, Undo/Redo and audio mute remain covered",
-            "No state loss when opening/closing browser or Inspector sheets",
-            "Exact-head CI, main CI and Pages deployment are recorded separately before manual acceptance"
+            "Actions follow selection",
+            "No overflow and state retained",
+            "Manual acceptance after verified deploy"
           ],
           "evidence": [
             "docs/architecture/TIMELINE_EDITOR_WORKSPACE.md",
             "public/doc/tasks/responsive-mobile-editing.md (DYS-012 foundations)"
           ],
-          "notes": "Depends on DYS-017 workspace boundaries. Reuse shipped DYS-012 interactions; do not treat existing mobile CSS or the old persistent navigation row as the final design. No browser smoke tests."
+          "notes": "Depends on DYS-017 workspace boundaries. Reuse shipped DYS-012 interactions; do not treat existing mobile CSS or the old persistent navigation row as the final design. No browser smoke tests.",
+          "description": "Adapt shared commands to mobile with selection-driven bottom actions, source/property sheets and safe-area-aware layout.",
+          "executionStage": "E5",
+          "priority": "P1",
+          "dependsOn": [
+            "DYS-017",
+            "DYS-012",
+            "DYS-005"
+          ],
+          "deliverables": [
+            "Contextual actions, separate navigation, no overflow and preserved state."
+          ],
+          "outOfScope": [
+            "No parallel data model or desktop shrink-only design."
+          ],
+          "testStrategy": [
+            "Shared command tests, responsive checks, manual acceptance after deploy."
+          ],
+          "nextAction": "Start after Desktop core is stable.",
+          "handoffNotes": "Read docs/TIMELINE_FIRST_EXECUTION_BACKLOG.md for milestone gates and pickup rules. Re-query live GitHub before acting."
         },
         {
           "id": "DYS-012",
           "title": "Responsive mobile editing workspace",
           "status": "in_progress",
           "progress": 97,
-          "summary": "Responsive mobile editing includes touch movement, contextual tools, zoom, trim targets, frame-aligned scrubbing, version selection, frame stepping, preview Undo/Redo, audio mute, compact layer actions and a progressive-disclosure preview toolbar. PR #86 merged as app code SHA 6e130e3; its exact-head CI, main push CI and Pages deployment passed. Real viewport acceptance remains pending.",
+          "summary": "Maintain touch/pan/trim primitives, isolated Timeline scrolling, aligned ruler/labels and safe touch targets.",
           "doc": "tasks/responsive-mobile-editing.md",
           "detail": "tasks/responsive-mobile-editing.html",
           "report": "reports/responsive-mobile-editing-report.md",
@@ -711,11 +964,9 @@
             }
           ],
           "acceptance": [
-            "No page-level horizontal overflow at supported phone portrait/landscape and tablet viewport sizes",
-            "Preview and timeline remain accessible without losing current selection",
-            "Core timeline selection, scrubbing, drag/trim and version switching work by touch",
-            "Storyboard, References and Assets remain reachable from mobile navigation",
-            "Exact-head CI/build and post-merge deployment evidence recorded; do not add browser smoke tests"
+            "Touch primitives tested",
+            "Timeline scroll isolated",
+            "Manual acceptance after deploy"
           ],
           "evidence": [
             "PR #68 merged responsive layout; exact-head PR CI run 39236495588 passed.",
@@ -736,62 +987,48 @@
             "Active branch feat/mobile-audio-mute-state styles the selected audio Mute button when aria-pressed=true and asserts the pressed state in the App integration test. Exact-head CI pending; no browser smoke tests.",
             "PR #86 progressively discloses secondary mobile preview controls; merged app SHA 6e130e33a4236fff97f468f6d76fef933677bb58; exact-head CI 39259760793, main CI 39259981315 and Pages deploy 39259981194 passed."
           ],
-          "notes": "Owner requested a CapCut-inspired phone interface. Core touch editing, history controls and audio mute/unmute are merged. Current slice makes mute state visually distinguishable and asserts the accessibility state. Keep DYS-012 in progress until exact-head CI, post-merge deployment and portrait/landscape/tablet acceptance are separately recorded. PR #84 addresses Issue #83 with a compact Master Timeline layer action menu, consistent mobile control styling, safe-area-aware positioning and less vertical clutter. Exact-head PR CI 39252298875 passed at main merge SHA a83f4a6836d7c4ee683b17a1ccdb5897e17364e2. Main push CI/Pages deployment and owner viewport acceptance are not yet confirmed; do not mark DYS-012 complete.\n\nCurrent mobile checkpoint (2026-10-19): main HEAD `89f92a3168413151dd8acb58d4b3c034cf59ead3` passed push CI [39254646559](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39254646559) and Pages deployment [39254646733](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39254646733). Feature branch `feat/mobile-preview-progressive-disclosure` keeps Undo/Redo, playback and frame stepping in the primary row and moves +0.5s, playhead slider, Overlay and optional Clear image into a secondary row on narrow viewports. Exact-head PR CI is pending. Keep DYS-012 in progress; real portrait/landscape/tablet acceptance is not established. No browser smoke tests.\n\nMobile preview control density release (2026-10-19): PR #86 merged as app commit `6e130e33a4236fff97f468f6d76fef933677bb58`. Exact-head feature CI [39259760793](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39259760793), main push CI [39259981315](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39259981315) and Pages deployment [39259981194](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39259981194) passed. Core preview actions stay visible on narrow screens; +0.5s, playhead slider, overlay and optional clear-image action move into More controls. Keep DYS-012 in progress until phone portrait/landscape/tablet viewport acceptance is evidenced. No browser smoke tests."
+          "notes": "Owner requested a CapCut-inspired phone interface. Core touch editing, history controls and audio mute/unmute are merged. Current slice makes mute state visually distinguishable and asserts the accessibility state. Keep DYS-012 in progress until exact-head CI, post-merge deployment and portrait/landscape/tablet acceptance are separately recorded. PR #84 addresses Issue #83 with a compact Master Timeline layer action menu, consistent mobile control styling, safe-area-aware positioning and less vertical clutter. Exact-head PR CI 39252298875 passed at main merge SHA a83f4a6836d7c4ee683b17a1ccdb5897e17364e2. Main push CI/Pages deployment and owner viewport acceptance are not yet confirmed; do not mark DYS-012 complete.\n\nCurrent mobile checkpoint (2026-10-19): main HEAD `89f92a3168413151dd8acb58d4b3c034cf59ead3` passed push CI [39254646559](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39254646559) and Pages deployment [39254646733](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39254646733). Feature branch `feat/mobile-preview-progressive-disclosure` keeps Undo/Redo, playback and frame stepping in the primary row and moves +0.5s, playhead slider, Overlay and optional Clear image into a secondary row on narrow viewports. Exact-head PR CI is pending. Keep DYS-012 in progress; real portrait/landscape/tablet acceptance is not established. No browser smoke tests.\n\nMobile preview control density release (2026-10-19): PR #86 merged as app commit `6e130e33a4236fff97f468f6d76fef933677bb58`. Exact-head feature CI [39259760793](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39259760793), main push CI [39259981315](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39259981315) and Pages deployment [39259981194](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39259981194) passed. Core preview actions stay visible on narrow screens; +0.5s, playhead slider, overlay and optional clear-image action move into More controls. Keep DYS-012 in progress until phone portrait/landscape/tablet viewport acceptance is evidenced. No browser smoke tests.",
+          "description": "Maintain touch/pan/trim primitives, isolated Timeline scrolling, aligned ruler/labels and safe touch targets.",
+          "executionStage": "E5 foundation",
+          "priority": "P1",
+          "dependsOn": [
+            "DYS-017",
+            "DYS-005"
+          ],
+          "deliverables": [
+            "Independent Timeline viewport, touch controls and alignment."
+          ],
+          "outOfScope": [
+            "No permanent four-module Editor bottom bar."
+          ],
+          "testStrategy": [
+            "Touch/scrub/trim/zoom/history tests."
+          ],
+          "nextAction": "DYS-018 owns contextual mobile UI.",
+          "handoffNotes": "Read docs/TIMELINE_FIRST_EXECUTION_BACKLOG.md for milestone gates and pickup rules. Re-query live GitHub before acting."
         }
+      ],
+      "executionStage": "E3-E5",
+      "ids": [
+        "DYS-006",
+        "DYS-008",
+        "DYS-017",
+        "DYS-018",
+        "DYS-012"
       ]
     },
     {
       "id": "M2",
-      "title": "Assets, References & project tracking",
+      "title": "Storyboard, References & full Asset administration (deferred)",
       "phase": 4,
-      "goal": "Add full Asset administration, references and planning workflows around the already usable Timeline Editor.",
+      "goal": "After Timeline and mobile gates pass, build planning modules and full Asset administration.",
       "tasks": [
-        {
-          "id": "DYS-003",
-          "title": "Task dashboard and per-task records",
-          "status": "in_progress",
-          "progress": 60,
-          "summary": "Replace the hard-coded task-card list with a JSON-driven project management dashboard, phase timeline, subtasks, acceptance criteria, and evidence links.",
-          "doc": "tasks/task-tracker.md",
-          "detail": "tasks/task-tracker.html",
-          "report": "reports/task-tracker-report.md",
-          "subtasks": [
-            {
-              "title": "Single JSON source for milestones, tasks, subtasks, and status",
-              "status": "in_progress"
-            },
-            {
-              "title": "Milestone timeline and phase/task drill-down UI",
-              "status": "in_progress"
-            },
-            {
-              "title": "Link task specification Markdown and completion report",
-              "status": "planned"
-            },
-            {
-              "title": "Verify dashboard JSON loading and relative links",
-              "status": "planned"
-            }
-          ],
-          "acceptance": [
-            "Dashboard reads task data from public/doc/tasks.json rather than hard-coded task cards",
-            "Milestones are displayed in timeline order",
-            "Tasks can expand to show subtasks and acceptance criteria",
-            "Each task links to its Markdown specification and report",
-            "Missing or invalid JSON produces a visible error rather than a blank dashboard"
-          ],
-          "evidence": [
-            "Dashboard source is public/doc/task.html",
-            "Task data source is public/doc/tasks.json"
-          ],
-          "notes": "Progress reflects this dashboard redesign and still requires CI/browser validation."
-        },
         {
           "id": "DYS-004",
           "title": "Asset library and reference profiles",
           "status": "in_progress",
           "progress": 65,
-          "summary": "Manage media assets and Reference Sets, including reverse usage, provenance, and dependency-aware replacement/deletion.",
+          "summary": "Build full Asset Library and Reference Profile administration: import/relink, metadata, reverse-use, safe replace/delete and Edit Timeline.",
           "doc": "tasks/assets-and-references.md",
           "detail": "tasks/assets-and-references.html",
           "report": "reports/assets-and-references-report.md",
@@ -830,25 +1067,39 @@
             }
           ],
           "acceptance": [
-            "Assets can be added, edited, and deleted subject to reference constraints",
-            "Reference profiles and roles remain editable",
-            "Profiles can be assigned to shots",
-            "Timeline redesign does not remove or replace Assets or References views",
-            "Asset library presents searchable/filterable cards aligned with the Timeline asset picker",
-            "Asset context menus expose Settings, Clip Timeline for Clip assets, and confirmed Delete with dependent-use impact",
-            "Manage Reference shows asset-to-shot/clip usage, and assets expose configurable frame/canvas dimensions"
+            "Reverse-use matches dependants",
+            "Delete/relink is safe",
+            "Pins survive round-trip"
           ],
           "evidence": [
             "Task Markdown and report describe implemented scope and limitations"
           ],
-          "notes": "Issue #56 remains in scope. The unified model also requires reverse usage across Composition placements, Shot Versions, Production Tasks and References. DYS-004 owns Asset/Reference management; task readiness and Generation Run lifecycle belong to DYS-015. Durable media-byte import/relinking remain unimplemented until tested."
+          "notes": "Full Asset administration and References are E6; source browsing/insertion belongs to E3/DYS-017. Refresh Issue #56 before acting.",
+          "description": "Build full Asset Library and Reference Profile administration: import/relink, metadata, reverse-use, safe replace/delete and Edit Timeline.",
+          "executionStage": "E6 deferred",
+          "priority": "P2",
+          "dependsOn": [
+            "DYS-017",
+            "DYS-014"
+          ],
+          "deliverables": [
+            "Search/filter, dependency view, safe delete/relink and reference round-trip."
+          ],
+          "outOfScope": [
+            "Editor-local browse/insert belongs to E3, not this task."
+          ],
+          "testStrategy": [
+            "Missing media, reverse dependencies, pin round-trip."
+          ],
+          "nextAction": "Defer full admin until Timeline/mobile gates pass.",
+          "handoffNotes": "Read docs/TIMELINE_FIRST_EXECUTION_BACKLOG.md for milestone gates and pickup rules. Re-query live GitHub before acting."
         },
         {
           "id": "DYS-019",
           "title": "Storyboard and References integration around Timeline-first editing",
           "status": "planned",
           "progress": 0,
-          "summary": "Integrate narrative planning, Reference Profiles and full Asset Management around an independently usable Timeline Editor without overwriting manual edits or pinned versions.",
+          "summary": "Integrate Storyboard planning, explicit Timeline assembly, Reference Profiles and dependency-safe workflows after core Timeline.",
           "doc": "tasks/planning-module-integration.md",
           "detail": "tasks/timeline-editor-rebuild.html#DYS-019",
           "subtasks": [
@@ -874,12 +1125,9 @@
             }
           ],
           "acceptance": [
-            "Timeline Editor works on blank projects and existing assets without Storyboard/References setup",
-            "Storyboard assembly is explicit and does not silently replace manual Timeline edits",
-            "New Shot Versions do not silently change existing pinned placements",
-            "Reference changes do not rewrite historical generation records",
-            "Missing assets and reverse dependencies are visible and safely repairable",
-            "Project import/export retains Shot alternatives, reference provenance and Timeline pins"
+            "Timeline independent of planning setup",
+            "Assembly preserves manual timing",
+            "References round-trip"
           ],
           "evidence": [
             "docs/PRD.md",
@@ -887,14 +1135,46 @@
             "DYS-004 Asset library and Reference Profiles",
             "DYS-015 Production Task graph and Generation Runs"
           ],
-          "notes": "Start after the Editor/source contract is stable. DYS-004's broad Asset administration and DYS-015's Production Task graph are sequenced after the first Editor workspace; basic source browsing remains in DYS-017."
-        },
+          "notes": "Start after the Editor/source contract is stable. DYS-004's broad Asset administration and DYS-015's Production Task graph are sequenced after the first Editor workspace; basic source browsing remains in DYS-017.",
+          "description": "Integrate Storyboard planning, explicit Timeline assembly, Reference Profiles and dependency-safe workflows after core Timeline.",
+          "executionStage": "E6 deferred",
+          "priority": "P2",
+          "dependsOn": [
+            "DYS-017",
+            "DYS-014",
+            "DYS-004"
+          ],
+          "deliverables": [
+            "Non-destructive assembly, scoped reference overrides and safe reverse-use."
+          ],
+          "outOfScope": [
+            "Timeline must work without Storyboard/References."
+          ],
+          "testStrategy": [
+            "Manual timing, pin/reference round-trip and dependency tests."
+          ],
+          "nextAction": "Do not start full UI before E5.",
+          "handoffNotes": "Read docs/TIMELINE_FIRST_EXECUTION_BACKLOG.md for milestone gates and pickup rules. Re-query live GitHub before acting."
+        }
+      ],
+      "executionStage": "E6",
+      "ids": [
+        "DYS-004",
+        "DYS-019"
+      ]
+    },
+    {
+      "id": "M5",
+      "title": "Production, recovery, portability & release quality",
+      "phase": 5,
+      "goal": "Add production runs, recovery/bundles, tested output and exact-SHA release evidence.",
+      "tasks": [
         {
           "id": "DYS-015",
           "title": "Production Task graph and Generation Runs",
           "status": "planned",
           "progress": 0,
-          "summary": "Replace the Shot-only checklist with dependency-aware production tasks specifying prompts, required inputs, outputs and auditable generation attempts.",
+          "summary": "Add dependency-aware Production Task DAG and immutable Generation Runs after source and Composition identities stabilize.",
           "doc": "tasks/production-task-graph.md",
           "detail": "tasks/production-task-graph.html",
           "report": "reports/production-task-graph-report.md",
@@ -925,32 +1205,41 @@
             }
           ],
           "acceptance": [
-            "Tasks specify output, prompt, explicit input assets/references, dependencies and target Shot/Composition",
-            "Production Guide explains ready/blocked/completed/failed/manual-import-required states",
-            "Every attempt preserves effective prompt, settings and reference snapshot; retries do not overwrite prior runs",
-            "Copy-prompt/manual-import works without a configured API provider",
-            "Task/run data survive JSON round-trip and schema migration"
+            "DAG errors surfaced",
+            "Retries preserve prior snapshots",
+            "Manual prompt/import works without APIs"
           ],
           "evidence": [
             "Target contract: docs/architecture/UNIFIED_COMPOSITION_MODEL.md",
             "UI contract: public/doc/creative-editing-workflow-spec.md"
           ],
-          "notes": "Planned. Use docs/PROJECT_ROADMAP.md for sequencing and docs/architecture/UNIFIED_COMPOSITION_MODEL.md for the contract. Do not implement a parallel task/run model before coordinating with DYS-014 and DYS-004."
-        }
-      ]
-    },
-    {
-      "id": "M5",
-      "title": "History, portability & release quality",
-      "phase": 5,
-      "goal": "Make editing recoverable, portable, and honestly verifiable.",
-      "tasks": [
+          "notes": "Planned. Use docs/PROJECT_ROADMAP.md for sequencing and docs/architecture/UNIFIED_COMPOSITION_MODEL.md for the contract. Do not implement a parallel task/run model before coordinating with DYS-014 and DYS-004.",
+          "description": "Add dependency-aware Production Task DAG and immutable Generation Runs after source and Composition identities stabilize.",
+          "executionStage": "E7",
+          "priority": "P2 deferred",
+          "dependsOn": [
+            "DYS-004",
+            "DYS-014",
+            "DYS-009"
+          ],
+          "deliverables": [
+            "DAG/blockers, effective input/prompt snapshots, retry history and manual import."
+          ],
+          "outOfScope": [
+            "Provider APIs do not block Timeline."
+          ],
+          "testStrategy": [
+            "Cycle/dangling input, immutability, retry tests."
+          ],
+          "nextAction": "Defer full UI until E6 identity contracts stabilize.",
+          "handoffNotes": "Read docs/TIMELINE_FIRST_EXECUTION_BACKLOG.md for milestone gates and pickup rules. Re-query live GitHub before acting."
+        },
         {
           "id": "DYS-007",
           "title": "Undo/Redo, recovery, and portable project bundles",
           "status": "in_progress",
           "progress": 45,
-          "summary": "Provide dependable edit history and reliable project portability across browser sessions and machines.",
+          "summary": "Add autosave/recovery and portable project/media bundles after canonical serialization and edit history stabilize.",
           "doc": "tasks/history-and-portability.md",
           "detail": "tasks/history-and-portability.html",
           "report": "reports/history-and-portability-report.md",
@@ -973,22 +1262,39 @@
             }
           ],
           "acceptance": [
-            "Undo/Redo restores project data exactly for supported operations",
-            "History boundaries are tested for import and grouped edits",
-            "Portable bundle round-trip preserves references and media policy",
-            "Storage quota/error states are surfaced to the user"
+            "Grouped edits recover atomically",
+            "Bundle round-trip works",
+            "Missing media is recoverable"
           ],
           "evidence": [
             "PR history documents current project-data Undo/Redo; task report tracks remaining scope"
           ],
-          "notes": "Current history does not cover every view/playhead/preview state. Migration/snapshots must preserve Composition trees, concrete pins, Production Tasks and Generation Run provenance without duplicating media unnecessarily; coordinate with DYS-014/DYS-015."
+          "notes": "Current history does not cover every view/playhead/preview state. Migration/snapshots must preserve Composition trees, concrete pins, Production Tasks and Generation Run provenance without duplicating media unnecessarily; coordinate with DYS-014/DYS-015.",
+          "description": "Add autosave/recovery and portable project/media bundles after canonical serialization and edit history stabilize.",
+          "executionStage": "E7",
+          "priority": "P1",
+          "dependsOn": [
+            "DYS-014",
+            "DYS-005"
+          ],
+          "deliverables": [
+            "Atomic recovery, bundle manifest and missing-dependency repair."
+          ],
+          "outOfScope": [
+            "Not a first-Timeline blocker."
+          ],
+          "testStrategy": [
+            "Grouped-edit recovery, corrupt input, bundle round-trip."
+          ],
+          "nextAction": "Define bundle after schema/history stabilize.",
+          "handoffNotes": "Read docs/TIMELINE_FIRST_EXECUTION_BACKLOG.md for milestone gates and pickup rules. Re-query live GitHub before acting."
         },
         {
           "id": "DYS-009",
           "title": "AI execution-plan reconciliation and MP4 export",
           "status": "planned",
           "progress": 0,
-          "summary": "Strengthen structured AI plan interchange and evaluate browser-based final MP4 rendering.",
+          "summary": "Implement safe AI plan import/export, preserve manual edits during reconciliation and advertise only tested output formats.",
           "doc": "tasks/ai-plan-and-mp4-export.md",
           "detail": "tasks/ai-plan-and-mp4-export.html",
           "report": "reports/ai-plan-and-mp4-export-report.md",
@@ -1011,21 +1317,40 @@
             }
           ],
           "acceptance": [
-            "Execution plans validate against a documented schema",
-            "Conflicts are reported without silently overwriting user work",
-            "Export is not marked complete until a playable output is verified"
+            "Plan import preserves manual edits",
+            "Output formats have tests",
+            "WebM/MP4 claims are distinct"
           ],
           "evidence": [
             "A real media fixture and playback validation report are required"
           ],
-          "notes": "MP4 rendering remains future work. AI plan export/import should include the DYS-015 task DAG and generation provenance, with diff-based reconciliation that never silently overwrites manual changes."
+          "notes": "MP4 rendering remains future work. AI plan export/import should include the DYS-015 task DAG and generation provenance, with diff-based reconciliation that never silently overwrites manual changes.",
+          "description": "Implement safe AI plan import/export, preserve manual edits during reconciliation and advertise only tested output formats.",
+          "executionStage": "E7",
+          "priority": "P2 deferred",
+          "dependsOn": [
+            "DYS-014",
+            "DYS-015",
+            "DYS-006"
+          ],
+          "deliverables": [
+            "Round-trip, conflict-aware reconciliation and supported-output matrix."
+          ],
+          "outOfScope": [
+            "Experimental WebM is not production MP4."
+          ],
+          "testStrategy": [
+            "Plan round-trip, conflict and codec tests."
+          ],
+          "nextAction": "Wait for stable Production Task schema.",
+          "handoffNotes": "Read docs/TIMELINE_FIRST_EXECUTION_BACKLOG.md for milestone gates and pickup rules. Re-query live GitHub before acting."
         },
         {
           "id": "DYS-010",
           "title": "CI validation, release notes, and deployment",
           "status": "in_progress",
           "progress": 60,
-          "summary": "Run deterministic automated tests, type-checking, production build, and deployment verification; record real limitations without requiring browser smoke tests.",
+          "summary": "Track exact-head CI, main CI and Pages deployment as separate evidence; keep browser smoke tests out.",
           "doc": "tasks/release-quality-and-deployment.md",
           "detail": "tasks/release-quality-and-deployment.html",
           "report": "reports/release-quality-and-deployment-report.md",
@@ -1044,29 +1369,167 @@
             }
           ],
           "acceptance": [
-            "Required CI checks pass on the exact PR head",
-            "Pages deployment is confirmed separately from CI",
-            "Known limitations and verification evidence are documented",
-            "No automated browser smoke test is added unless explicitly requested"
+            "Exact-head SHA is verified",
+            "Main CI and Pages checked separately",
+            "No browser smoke tests"
           ],
           "evidence": [
             "PR checks and deployment run URLs must be linked from the task report"
           ],
-          "notes": "Prioritize deterministic tests/build and deployment checks. Browser smoke testing is not part of the required workflow."
+          "notes": "Prioritize deterministic tests/build and deployment checks. Browser smoke testing is not part of the required workflow.",
+          "description": "Track exact-head CI, main CI and Pages deployment as separate evidence; keep browser smoke tests out.",
+          "executionStage": "Continuous; E7 gate",
+          "priority": "P0",
+          "dependsOn": [],
+          "deliverables": [
+            "Exact SHA/checks, main CI and Pages status recorded separately."
+          ],
+          "outOfScope": [
+            "No browser smoke tests",
+            "no stale-run claims."
+          ],
+          "testStrategy": [
+            "Tests, TypeScript/build and exact-SHA logs."
+          ],
+          "nextAction": "After merge verify main CI and Pages independently.",
+          "handoffNotes": "Read docs/TIMELINE_FIRST_EXECUTION_BACKLOG.md for milestone gates and pickup rules. Re-query live GitHub before acting."
         }
+      ],
+      "executionStage": "E7",
+      "ids": [
+        "DYS-015",
+        "DYS-007",
+        "DYS-009",
+        "DYS-010"
       ]
     }
   ],
-  "currentDirection": "Timeline-first Editor workspace rebuild: implement the Timeline Editor with an embedded Media/Audio/Text/Effects/Transitions source browser, Preview/Canvas, and multitrack Timeline before integrating Storyboard and References. Mobile Editor bottom controls are contextual; app/module navigation is separate.",
+  "currentDirection": "Timeline-first: canonical Composition/migration/edit commands; functional Desktop source browser + same-page Preview/Canvas + multitrack Timeline; editing parity and structure-preserving Save-as-Clip; then mobile. Defer full Storyboard, References, Asset administration and Production Task graph until Timeline gates pass.",
   "executionSequence": [
-    "E0: Re-query live Git state, open PRs/issues, exact-head CI and Pages state; inventory reusable code.",
-    "E1: Finalize workspace interaction contract and handoff plan (DYS-016).",
-    "E1a: Review wireframe, HTML prototype and UML; resolve major layout/interaction decisions (DYS-020).",
-    "E2: Make Composition/edit commands and schema-1.0 migration safe and testable (DYS-014/DYS-005).",
-    "E3: Implement functional Desktop Timeline Editor workspace with embedded source/effects browser (DYS-017).",
-    "E4: Finish core editing parity and save-as-Clip snapshots (DYS-005/DYS-011/DYS-013/DYS-014).",
-    "E5: Adapt the same workspace to mobile contextual controls (DYS-018/DYS-012).",
-    "E6: Integrate Storyboard, References and full Asset Management as planning tools (DYS-019/DYS-004).",
-    "E7: Complete production task runs, recovery, portability and release validation (DYS-015/DYS-007/DYS-009/DYS-010)."
+    "E0: Refresh live main/PR/Issue/exact-head CI/Pages and inventory code; triage stale-base work.",
+    "E1: Finalize workspace contract, wireframe/UML, source/track semantics and handoff.",
+    "E2: Deterministic schema-1 migration and shared Composition/edit commands; preserve linked audio/nested Clip behavior.",
+    "E3: Functional Desktop flow: browse, insert, select, preview, move/trim, Undo/Redo, save/reopen.",
+    "E4: Editing parity, canvas settings/transforms, linked audio and structure-preserving Save-as-Clip.",
+    "E5: Mobile contextual adaptation and post-deploy viewport acceptance.",
+    "E6: Explicit non-destructive Storyboard assembly, References and full Asset administration.",
+    "E7: Production Tasks/Generation Runs, recovery/portability, plan reconciliation and verified output/release evidence."
+  ],
+  "milestoneOrder": [
+    "M1",
+    "M3",
+    "M4",
+    "M2",
+    "M5"
+  ],
+  "milestoneSequence": [
+    {
+      "id": "E0",
+      "title": "Live-state audit & code inventory",
+      "tasks": [
+        "DYS-016",
+        "DYS-003",
+        "DYS-010"
+      ],
+      "exitCriteria": [
+        "Current Git/PR/Issue/CI/Pages state recorded",
+        "Code inventory cites actual paths/tests",
+        "One bounded next slice selected"
+      ]
+    },
+    {
+      "id": "E1",
+      "title": "Workspace contract & design review",
+      "tasks": [
+        "DYS-016",
+        "DYS-020"
+      ],
+      "exitCriteria": [
+        "Wireframe/UML/architecture agree",
+        "Task JSON and detail links validate",
+        "Unresolved owner decisions documented"
+      ]
+    },
+    {
+      "id": "E2",
+      "title": "Composition migration & shared commands",
+      "tasks": [
+        "DYS-014",
+        "DYS-002",
+        "DYS-005",
+        "DYS-011",
+        "DYS-013"
+      ],
+      "exitCriteria": [
+        "Safe schema-1 migration",
+        "Root/nested commands align",
+        "Alternatives, provenance, pins, ranges, audio links and nesting round-trip"
+      ]
+    },
+    {
+      "id": "E3",
+      "title": "Functional Desktop Editor",
+      "tasks": [
+        "DYS-017",
+        "DYS-006"
+      ],
+      "exitCriteria": [
+        "Browse/insert/select/preview/edit/history/save-reopen work in one workspace"
+      ]
+    },
+    {
+      "id": "E4",
+      "title": "Editing parity & structural snapshots",
+      "tasks": [
+        "DYS-005",
+        "DYS-014",
+        "DYS-006",
+        "DYS-008"
+      ],
+      "exitCriteria": [
+        "Settings/transforms persist",
+        "Root/nested parity",
+        "Independent structure-preserving Clip snapshot"
+      ]
+    },
+    {
+      "id": "E5",
+      "title": "Mobile contextual Editor",
+      "tasks": [
+        "DYS-018",
+        "DYS-012"
+      ],
+      "exitCriteria": [
+        "Contextual actions and isolated scroll work",
+        "Manual acceptance after verified deployment"
+      ]
+    },
+    {
+      "id": "E6",
+      "title": "Storyboard, References & full Asset administration",
+      "tasks": [
+        "DYS-019",
+        "DYS-004"
+      ],
+      "exitCriteria": [
+        "Explicit assembly preserves manual edits",
+        "Media/reference dependencies safe"
+      ]
+    },
+    {
+      "id": "E7",
+      "title": "Production, recovery, portability & release",
+      "tasks": [
+        "DYS-015",
+        "DYS-007",
+        "DYS-009",
+        "DYS-010"
+      ],
+      "exitCriteria": [
+        "DAG/retry/recovery tests pass",
+        "Bundle round-trip works",
+        "Output claims and release SHA evidence are truthful"
+      ]
+    }
   ]
 }
