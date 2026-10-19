@@ -197,3 +197,10 @@ The owner wants a future phone version with a CapCut-inspired interface. Treat t
 - Preserve advanced multi-track, linked audio, procedural layers, nested Clip Versions, and version pinning. Simplify presentation, not the underlying project capability.
 - DYS-012 is the tracking task. The current responsive CSS slice is only a foundation; do not claim full mobile editing until selection, scrubbing, version switching, portrait/landscape layout and viewport checks are covered.
 - Do not add or run browser smoke tests. CI tests/build and Pages deployment are required; manual acceptance remains separate and must not be claimed without evidence.
+
+
+## Mobile editing progress — 2026-10-19
+
+- PR #68 merged the responsive mobile layout foundation as main commit `3513d51f9a52599e0231d8cb4db884cc59e5d611`. Its exact-head PR CI passed at `aca468fb345b523361467ae8da66b42d1207904a` in run [39236495588](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39236495588). Main push CI and Pages deployment still require independent confirmation before the owner is asked to test.
+- Active follow-up branch: `feat/mobile-timeline-touch-drag`. It adds a 260 ms long-press gesture for moving Master Timeline clips by touch, while short swipes pan the timeline horizontally or the page vertically. Desktop HTML drag-and-drop remains intact. A component regression test covers touch move placement.
+- DYS-012 remains in progress. Nested Clip Version touch dragging, mobile Inspector/Version picker ergonomics and viewport acceptance remain outstanding. Do not claim the whole phone editor is complete; do not add or run browser smoke tests.

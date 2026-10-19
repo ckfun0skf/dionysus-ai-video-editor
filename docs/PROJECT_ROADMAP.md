@@ -164,12 +164,12 @@ At the end of every substantial work slice, update this file or the dedicated ha
 Never mark a task done because its documentation exists. Mark done only when its acceptance tests pass and user acceptance is recorded where requested.
 
 
-## Mobile editing foundation — 2026-10-19
+## Mobile editing progress — 2026-10-19
 
-The owner explicitly wants a future phone version with a CapCut-inspired interface. DYS-012 is now the next active UX slice, beginning with responsive layout rather than claiming full mobile functionality.
+The owner explicitly wants a future phone version with a CapCut-inspired interface. DYS-012 is active; responsive mobile web shares the desktop project model and does not imply a separate native app.
 
-- Implemented in this PR branch: persistent four-destination bottom navigation on phone widths, safe-area padding, compact top bar, preview-first timeline layout, larger touch targets for key controls, compact track labels, and horizontally pannable timeline surfaces that keep the page itself from needing to scroll sideways.
-- Not complete: touch-first clip dragging/reordering, precise scrubbing, version-picker ergonomics, focused Inspector sheet open/close wiring, landscape/tablet QA and no-overflow evidence. Existing mouse-oriented handlers may still limit mobile editing.
-- Reference UX: CapCut's preview/timeline/tool hierarchy and mobile editing guides; keep Dionysus's multi-track composition model and project format intact.
-- Verification must be exact-head CI and build, then main CI + Pages deployment after merge. No automated browser smoke tests are to be added or run. Do not mark DYS-012 done based on CSS alone.
-- After this vertical slice, continue DYS-014 canonical Composition persistence and structure-preserving Save-as-Clip; the mobile layout does not resolve the Shot/Clip model.
+- PR #68 merged the first responsive layout foundation as main commit `3513d51f9a52599e0231d8cb4db884cc59e5d611`: four-item bottom navigation, safe-area spacing, compact top bar, preview-first timeline layout, larger controls and isolated horizontal scrolling for root/nested timeline ruler + lanes. Exact-head PR CI [39236495588](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39236495588) passed on `aca468fb345b523361467ae8da66b42d1207904a`. Main push CI and Pages deployment still require independent confirmation.
+- Active follow-up branch `feat/mobile-timeline-touch-drag` implements long-press touch movement for Master Timeline clips, with short swipes routed to timeline/page scrolling and a regression test. This is not yet merged.
+- Not complete: nested Clip Version touch drag, robust touch scrubbing/trim validation, mobile Inspector/Version picker behavior, portrait/landscape/tablet viewport acceptance and no-overflow evidence. Keep DYS-012 in progress.
+- No automated browser smoke tests are to be added or run. Do not ask the owner to test until code is merged and Pages deployment is confirmed.
+- Continue DYS-014 canonical Composition persistence and structure-preserving Save-as-Clip after the touch workflow; mobile UI does not resolve the Shot/Clip model.

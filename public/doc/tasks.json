@@ -624,19 +624,19 @@
           "id": "DYS-012",
           "title": "Responsive mobile editing workspace",
           "status": "in_progress",
-          "progress": 20,
-          "summary": "First responsive mobile workspace foundation implemented in a feature branch: bottom navigation, compact top bar, preview-first timeline, touch-sized controls and pannable timeline surfaces. Core touch interactions and viewport validation remain outstanding.",
+          "progress": 35,
+          "summary": "Responsive mobile layout foundation merged in PR #68. Follow-up branch adds long-press touch movement for Master Timeline clips and regression coverage. Nested touch gestures, mobile Inspector/Version picker and viewport acceptance remain outstanding.",
           "doc": "tasks/responsive-mobile-editing.md",
           "detail": "tasks/responsive-mobile-editing.html",
           "report": "reports/responsive-mobile-editing-report.md",
           "subtasks": [
             {
               "title": "Responsive preview and compact editing controls",
-              "status": "in_progress"
+              "status": "done"
             },
             {
               "title": "Touch-friendly timeline scrubbing and clip selection",
-              "status": "planned"
+              "status": "in_progress"
             },
             {
               "title": "Mobile Inspector and Version picker",
@@ -644,7 +644,7 @@
             },
             {
               "title": "Regression check for existing main navigation",
-              "status": "planned"
+              "status": "in_progress"
             }
           ],
           "acceptance": [
@@ -655,10 +655,11 @@
             "Exact-head CI/build and post-merge deployment evidence recorded; do not add browser smoke tests"
           ],
           "evidence": [
-            "Responsive CSS implementation is on feature branch feat/mobile-capcut-responsive-workspace; not yet merged/deployed.",
-            "Automated CI/build and deployed viewport/manual acceptance are still required; no browser smoke tests have been run or added."
+            "PR #68 merged as main commit 3513d51f9a52599e0231d8cb4db884cc59e5d611; PR CI run 39236495588 passed at head aca468fb345b523361467ae8da66b42d1207904a.",
+            "Main push CI and Pages deployment have not yet been independently confirmed; do not ask the owner to test until deployment is verified.",
+            "Active feature branch feat/mobile-timeline-touch-drag adds long-press touch movement for Master Timeline clips and an App regression test; exact-head CI pending."
           ],
-          "notes": "Owner requested a future mobile version with a CapCut-inspired interface. Responsive mobile web is the first target; use the same project model as desktop. This is a foundation, not completion. See docs/PRD.md and docs/PROJECT_ROADMAP.md."
+          "notes": "Owner requested a CapCut-inspired phone interface. Responsive mobile web is the first target and must share the desktop project model. This remains a partial implementation; nested touch gestures, mobile Inspector/Version picker and viewport acceptance are outstanding. See docs/PRD.md and docs/PROJECT_ROADMAP.md."
         }
       ]
     },
