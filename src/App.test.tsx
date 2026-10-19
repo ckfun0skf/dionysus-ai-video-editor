@@ -1234,6 +1234,9 @@ describe("Integrated timeline editor", () => {
     await flushEffects();
     const nested = container.querySelector<HTMLElement>(".nested-timeline-tab.visual-timeline");
     expect(nested).toBeTruthy();
+    // An empty Clip starts with no layers; add one so the test checks actual ruler-to-lane alignment.
+    click(Array.from(nested!.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.trim() === "Video")!);
+    await flushEffects();
     expect(nested!.querySelector(".nested-visual-timeline-ruler .visual-ruler-caption")?.textContent).toBe("TIME");
     expect(nested!.querySelector(".nested-timeline-row.visual-track-row .nested-timeline-row-track.visual-track-lane")).toBeTruthy();
   });
