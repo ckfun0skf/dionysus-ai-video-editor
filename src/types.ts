@@ -16,6 +16,8 @@ export interface Shot {
   duration: number;
   /** Absolute start on the Master Timeline; omitted in legacy projects for sequential fallback. */
   masterStart?: number;
+  /** Video track that owns this Shot on the Master Timeline. */
+  masterTrackId?: string;
   status: "planned" | "in-progress" | "ready";
   referenceProfileIds: string[];
   referenceOverrides: ReferenceOverride[];

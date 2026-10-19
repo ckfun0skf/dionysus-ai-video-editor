@@ -37,6 +37,18 @@ const id = (prefix: string) => prefix + "-" + crypto.randomUUID();
 const time = (s: number) => String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(Math.floor(s % 60)).padStart(2, "0");
 const copy = (p: DionysusProject) => JSON.parse(JSON.stringify(p)) as DionysusProject;
 
+function getMasterShotTrackId(shot: Shot, tracks: DionysusProject["tracks"]): string {
+  if (shot.masterTrackId && tracks.some(track => track.id === shot.masterTrackId && track.kind === "video")) return shot.masterTrackId;
+  return tracks.find(track => track.kind === "video")?.id ?? "";
+}
+function asMasterShotTimelineClip(project: DionysusProject, shot: Shot): TimelineClip {
+  return { id: shot.id, name: shot.title, kind: "video", trackId: getMasterShotTrackId(shot, project.tracks), start: getMasterShotStart(project.shots, shot.id), duration: shot.duration };
+}
+function getMasterShotPlacementItems(project: DionysusProject, excludeShotId?: string): TimelineClip[] {
+  const ordinaryClips = (project.timelineClips ?? []).filter(clip => !clip.id.startsWith("storyboard-"));
+  return [...ordinaryClips, ...project.shots.filter(shot => shot.id !== excludeShotId).map(shot => asMasterShotTimelineClip(project, shot))];
+}
+
 function createEmptyProject(): DionysusProject {
   const now = new Date().toISOString();
   return {
@@ -215,8 +227,8 @@ export default function App() {
   const [nestedLayerContextMenuPosition, setNestedLayerContextMenuPosition] = useState({ x: 0, y: 0 });
   const clipResizeRef = useRef<{ id: string; edge: "left" | "right"; pointerId: number; x: number; start: number; duration: number; laneWidth: number; moveListener?: (event: PointerEvent) => void; upListener?: (event: PointerEvent) => void; cancelListener?: (event: PointerEvent) => void } | null>(null);
   const [clipResizePreview, setClipResizePreview] = useState<ClipResizePreview | null>(null);
-  const shotResizeRef = useRef<{ id: string; edge: "left" | "right"; pointerId: number; x: number; start: number; duration: number; laneWidth: number } | null>(null);
-  const [shotResizePreview, setShotResizePreview] = useState<{ id: string; start: number; duration: number } | null>(null);
+  const shotResizeRef = useRef<{ id: string; edge: "left" | "right"; pointerId: number; x: number; start: number; duration: number; trackId: string; laneWidth: number } | null>(null);
+  const [shotResizePreview, setShotResizePreview] = useState<ClipResizePreview | null>(null);
   const clipDragSourceRef = useRef<TimelineClip | null>(null);
   const [clipDropPreview, setClipDropPreview] = useState<{ trackId: string; start: number; duration: number; name: string; snapTime?: number } | null>(null);
   const [timelineClipSettingsId, setTimelineClipSettingsId] = useState<string>("");
@@ -729,6 +741,12 @@ export default function App() {
     change(p => ({ ...p, shots: setMasterShotStart(p.shots, shotId, value) }), "shot-start:" + shotId);
   }
   function selectClipSlot(slotId: string) { setSelectedSlotId(slotId); }
+  function addMasterTimelineTrack(kind: "video" | "audio" | "text" | "procedural", displayRole?: string) {
+    const role = displayRole ?? (kind === "procedural" ? "Code" : kind === "audio" ? "Audio" : kind === "text" ? "Text" : "Video");
+    change(p => ({ ...p, tracks: [...p.tracks, { id: id("track-" + kind), name: role + " " + (p.tracks.filter(track => track.name.startsWith(role + " ")).length + 1), kind }] }));
+    setShowAddLayerMenu(false);
+  }
+
   function syncStoryboardToTimeline() {
     const videoTrack = project.tracks.find(track => track.kind === "video");
     const audioTrack = project.tracks.find(track => track.kind === "audio");
@@ -742,7 +760,7 @@ export default function App() {
         const sourceLayers = layers.length ? layers : [{ id: "base", name: slot.name, kind: "video" as const, start: 0, duration: slot.duration }];
         return sourceLayers.map(layer => {
           const kind = layer.kind === "audio" ? "audio" as const : "video" as const;
-          const track = kind === "audio" ? audioTrack : videoTrack;
+          const track = kind === "audio" ? audioTrack : project.tracks.find(item => item.id === getMasterShotTrackId(shot, project.tracks)) ?? videoTrack;
           const assetId = layer.assetId && project.assets.some(asset => asset.id === layer.assetId) ? layer.assetId : undefined;
           const clipId = "storyboard-" + shot.id + "-" + slot.id + "-" + layer.id;
           const duration = Math.max(0.1, Math.min(layer.duration, Math.max(0.1, shot.duration - slot.start - layer.start)));
@@ -1217,35 +1235,45 @@ export default function App() {
     }
   }
 
-  function beginMasterShotResize(event: React.PointerEvent<HTMLElement>, shot: Shot, start: number, edge: "left" | "right") {
-    event.preventDefault();
-    event.stopPropagation();
+  function getMasterShotResizePreview(active: NonNullable<typeof shotResizeRef.current>, clientX: number): ClipResizePreview | null {
+    const current = projectRef.current, shot = current.shots.find(item => item.id === active.id);
+    if (!shot) return null;
+    const fps = Math.max(1, current.frameRate || 24);
+    const duration = Math.max(getMasterTimelineDuration(current.shots), ...(current.timelineClips ?? []).map(clip => clip.start + clip.duration), 10);
+    const delta = Math.round(((clientX - active.x) / Math.max(active.laneWidth, 1)) * duration * fps) / fps;
+    return calculateTimelineClipResizePreview([...getMasterShotPlacementItems(current, shot.id), asMasterShotTimelineClip(current, shot)], shot.id, active.edge, delta, duration, fps);
+  }
+  function beginMasterShotResize(event: React.PointerEvent<HTMLElement>, shot: Shot, start: number, edge: "left" | "right", trackId: string) {
+    event.preventDefault(); event.stopPropagation();
     const lane = event.currentTarget.closest(".visual-track-lane") as HTMLElement | null;
-    shotResizeRef.current = { id: shot.id, edge, pointerId: event.pointerId, x: event.clientX, start, duration: shot.duration, laneWidth: lane?.getBoundingClientRect().width ?? 1 };
-    event.currentTarget.setPointerCapture(event.pointerId);
+    shotResizeRef.current = { id: shot.id, edge, pointerId: event.pointerId, x: event.clientX, start, duration: shot.duration, trackId, laneWidth: lane?.getBoundingClientRect().width ?? 1 };
+    if (typeof event.currentTarget.setPointerCapture === "function") { try { event.currentTarget.setPointerCapture(event.pointerId); } catch { /* best effort */ } }
   }
   function moveMasterShotResize(event: React.PointerEvent<HTMLElement>, shot: Shot) {
     const active = shotResizeRef.current;
     if (!active || active.id !== shot.id || active.pointerId !== event.pointerId) return;
-    const fps = Math.max(1, project.frameRate || 24), frame = 1 / fps;
-    const delta = Math.round(((event.clientX - active.x) / Math.max(active.laneWidth, 1)) * mediaTimelineDuration * fps) / fps;
-    const others = project.shots.filter(item => item.id !== shot.id).map(item => ({ start: getMasterShotStart(project.shots, item.id), duration: item.duration })).sort((a,b)=>a.start-b.start);
-    if (active.edge === "left") {
-      const previous = others.filter(item => item.start + item.duration <= active.start + 0.0001).at(-1);
-      const end = active.start + active.duration;
-      const start = Math.max(previous ? previous.start + previous.duration : 0, Math.min(end - frame, active.start + delta));
-      setShotResizePreview({ id: shot.id, start, duration: end - start });
-    } else {
-      const next = others.find(item => item.start >= active.start + active.duration - 0.0001);
-      const maxDuration = next ? next.start - active.start : mediaTimelineDuration - active.start;
-      setShotResizePreview({ id: shot.id, start: active.start, duration: Math.max(frame, Math.min(maxDuration, active.duration + delta)) });
-    }
+    setShotResizePreview(getMasterShotResizePreview(active, event.clientX));
   }
   function endMasterShotResize(event: React.PointerEvent<HTMLElement>, shot: Shot) {
     const active = shotResizeRef.current;
     if (!active || active.id !== shot.id || active.pointerId !== event.pointerId) return;
-    const preview = shotResizePreview;
-    if (preview && preview.id === shot.id) change(p => ({ ...p, shots: p.shots.map(item => item.id === shot.id ? { ...item, masterStart: preview.start, duration: preview.duration } : item) }));
+    const preview = getMasterShotResizePreview(active, event.clientX) ?? shotResizePreview;
+    if (preview && preview.id === shot.id) {
+      const shotIds = new Set(projectRef.current.shots.map(item => item.id));
+      const shotTrims = preview.trims.filter(trim => shotIds.has(trim.id));
+      const clipTrims = preview.trims.filter(trim => !shotIds.has(trim.id));
+      const clipPreview: ClipResizePreview = { ...preview, id: "__master-shot-resize__", trims: clipTrims };
+      const fps = Math.max(1, projectRef.current.frameRate || 24);
+      change(p => ({ ...p,
+        shots: p.shots.map(item => {
+          if (item.id === shot.id) return { ...item, masterStart: preview.start, duration: preview.duration };
+          const trim = shotTrims.find(candidate => candidate.id === item.id);
+          return trim ? { ...item, masterStart: trim.start, duration: trim.duration } : item;
+        }),
+        timelineClips: applyTimelineClipResize(p.timelineClips ?? [], clipPreview, fps),
+      }));
+      setNotice(preview.trims.length ? "Shot resized and adjacent timeline item trimmed. Use Undo to restore both." : "Shot resized.");
+    }
     shotResizeRef.current = null;
     setShotResizePreview(null);
   }
@@ -1573,9 +1601,12 @@ export default function App() {
  <button className="button button-primary button-small" aria-haspopup="menu" aria-expanded={showAddLayerMenu} onClick={()=>setShowAddLayerMenu(value=>!value)}><Plus size={14}/> Add layer <ChevronDown size={13}/></button>
  <div className="layer-add-menu" role="menu" hidden={!showAddLayerMenu}>
 
-  <button role="menuitem" onClick={()=>{change(p=>({...p,tracks:[...p.tracks,{id:id("track-video"),name:"Video "+(p.tracks.filter(track=>track.kind==="video").length+1),kind:"video"}]}));setShowAddLayerMenu(false);}}>Video layer</button>
-  <button role="menuitem" onClick={()=>{change(p=>({...p,tracks:[...p.tracks,{id:id("track-audio"),name:"Audio "+(p.tracks.filter(track=>track.kind==="audio").length+1),kind:"audio"}]}));setShowAddLayerMenu(false);}}>Audio layer</button>
-  <button role="menuitem" onClick={()=>{change(p=>({...p,tracks:[...p.tracks,{id:id("track-text"),name:"Text "+(p.tracks.filter(track=>track.kind==="text").length+1),kind:"text"}]}));setShowAddLayerMenu(false);}}>Text layer</button>
+  <button role="menuitem" onClick={()=>addMasterTimelineTrack("video")}>Video layer</button>
+  <button role="menuitem" onClick={()=>addMasterTimelineTrack("video","Image")}>Image layer</button>
+  <button role="menuitem" onClick={()=>addMasterTimelineTrack("audio")}>Audio layer</button>
+  <button role="menuitem" onClick={()=>addMasterTimelineTrack("text")}>Text layer</button>
+  <button role="menuitem" onClick={()=>addMasterTimelineTrack("procedural","Code")}>Code layer</button>
+  <button role="menuitem" onClick={()=>addMasterTimelineTrack("video","Clip")}>Clip layer</button>
  </div><button className={"button button-quiet button-small ripple-reorder-toggle"+(rippleReorderMode?" active":"")} aria-pressed={rippleReorderMode} onClick={()=>setRippleReorderMode(enabled=>!enabled)}>{rippleReorderMode?"Ripple Reorder: ON":"Ripple Reorder"}</button>
 </div></div>
 {rippleReorderMode&&<p className="ripple-mode-note" role="status">Ripple Reorder is ON. Dropping a Shot changes chronological order and packs the full Master sequence back-to-back, closing gaps. Master durations and Version internals stay unchanged.</p>}
@@ -1591,48 +1622,43 @@ export default function App() {
   </div>
 </div>
 <div className="visual-track-list">
-{project.tracks.filter(track=>track.kind==="video"||track.kind==="audio"||track.kind==="text").map(track=>{
+{project.tracks.filter(track=>track.kind==="video"||track.kind==="audio"||track.kind==="text"||track.kind==="procedural").map(track=>{
  const clips=(project.timelineClips??[]).filter(clip=>clip.trackId===track.id && !(track.kind==="audio" && clip.linkedVideoClipId));
  return <div className="visual-track-group" key={track.id}>
  <div className="visual-track-row">
   <div className={"visual-track-label"+(selectedTimelineTrackId===track.id?" selected-track-label":"")} onClick={()=>setSelectedTimelineTrackId(track.id)} onContextMenu={event=>{event.preventDefault();setTrackContextMenuId(track.id);setTrackContextMenuPosition({x:Math.min(event.clientX,window.innerWidth-190),y:Math.min(event.clientY,window.innerHeight-180)});setSelectedTimelineTrackId(track.id);}}>
    {track.kind==="video" && <button className="track-expand-toggle" aria-label={(collapsedVideoTrackIds.includes(track.id)?"Expand ":"Collapse ")+track.name} aria-expanded={!collapsedVideoTrackIds.includes(track.id)} onClick={()=>setCollapsedVideoTrackIds(current=>current.includes(track.id)?current.filter(id=>id!==track.id):[...current,track.id])}>{collapsedVideoTrackIds.includes(track.id)?"▸":"▾"}</button>}
-   <span className={track.kind==="audio"?"track-kind-audio":"track-kind-video"}>{track.kind==="audio"?<AudioLines size={15}/>:track.kind==="procedural"?<Code2 size={15}/>:track.kind==="text"?<Sparkles size={15}/>:<Film size={15}/>}</span><div><strong>{track.name||track.kind}</strong><small>{track.kind==="audio"?"Audio layer":track.kind==="procedural"?"Code layer":track.kind==="text"?"Text layer":track.kind==="effects"?"Effects layer":"Video layer"}</small></div>{track.kind==="video" && <button type="button" className="track-settings-button" title="Video layer settings" aria-label={"Settings for "+track.name} onClick={event=>{event.stopPropagation();setVideoTrackSettingsId(track.id);}}><Settings2 size={14}/></button>}{track.kind==="audio" && <button className={"track-layer-mute"+(track.muted?" muted":"")} aria-label={(track.muted?"Unmute ":"Mute ")+track.name+" layer"} aria-pressed={Boolean(track.muted)} title={track.muted?"Unmute audio layer":"Mute audio layer"} onClick={event=>{event.stopPropagation();change(p=>({...p,tracks:p.tracks.map(item=>item.id===track.id?{...item,muted:!item.muted}:item)}));}}>{track.muted?"Unmute":"Mute"}</button>}<button className="track-add-clip" aria-label={"Add clip to "+track.name} title={"Add clip to "+track.name} onClick={event=>{event.stopPropagation();if(track.kind==="effects"){setNotice("Effects layer clips are not yet supported.");return;}if(track.kind==="video"||track.kind==="audio"){setAssetPickerTrackId(track.id);setAssetPickerSearch("");setAssetPickerFilter(track.kind==="audio"?"audio":"all");return;}const kind=track.kind==="text"?"text":"procedural";const clipId=id("timeline-clip");const duration=Math.max(.5,Math.min(3,mediaTimelineDuration-editorTime||3));change(p=>({...p,timelineClips:[...(p.timelineClips??[]),{id:clipId,name:(kind==="procedural"?"Code":kind==="text"?"Text":kind==="audio"?"Audio":"Video")+" clip "+((p.timelineClips??[]).filter(clip=>clip.trackId===track.id).length+1),kind,trackId:track.id,start:Math.round(editorTime*Math.max(1,p.frameRate||24))/Math.max(1,p.frameRate||24),duration}]}));setSelectedTimelineClipId(clipId);setTimelineClipSettingsId(clipId);}}><Plus size={13}/></button><button className="track-remove-button" aria-label={"Remove "+track.name+" layer"} title={"Remove "+track.name+" layer"} onClick={event=>{event.stopPropagation();if(window.confirm("Remove layer “"+track.name+"” and all clips on it?")){change(p=>({...p,tracks:p.tracks.filter(item=>item.id!==track.id),timelineClips:(p.timelineClips??[]).filter(clip=>clip.trackId!==track.id&&!(clip.linkedVideoClipId&&(p.timelineClips??[]).some(source=>source.id===clip.linkedVideoClipId&&source.trackId===track.id)))}));setSelectedTimelineClipId("");setTimelineClipSettingsId("");}}}><span aria-hidden="true">×</span></button>
+   <span className={track.kind==="audio"?"track-kind-audio":"track-kind-video"}>{track.kind==="audio"?<AudioLines size={15}/>:track.kind==="procedural"?<Code2 size={15}/>:track.kind==="text"?<Sparkles size={15}/>:<Film size={15}/>}</span><div><strong>{track.name||track.kind}</strong><small>{track.kind==="audio"?"Audio layer":track.kind==="procedural"?"Code layer":track.kind==="text"?"Text layer":track.kind==="effects"?"Effects layer":"Video layer"}</small></div>{track.kind==="video" && <button type="button" className="track-settings-button" title="Video layer settings" aria-label={"Settings for "+track.name} onClick={event=>{event.stopPropagation();setVideoTrackSettingsId(track.id);}}><Settings2 size={14}/></button>}{track.kind==="audio" && <button className={"track-layer-mute"+(track.muted?" muted":"")} aria-label={(track.muted?"Unmute ":"Mute ")+track.name+" layer"} aria-pressed={Boolean(track.muted)} title={track.muted?"Unmute audio layer":"Mute audio layer"} onClick={event=>{event.stopPropagation();change(p=>({...p,tracks:p.tracks.map(item=>item.id===track.id?{...item,muted:!item.muted}:item)}));}}>{track.muted?"Unmute":"Mute"}</button>}<button className="track-add-clip" aria-label={"Add clip to "+track.name} title={"Add clip to "+track.name} onClick={event=>{event.stopPropagation();if(track.kind==="effects"){setNotice("Effects layer clips are not yet supported.");return;}if(track.kind==="video"||track.kind==="audio"){setAssetPickerTrackId(track.id);setAssetPickerSearch("");setAssetPickerFilter(track.kind==="audio"?"audio":"all");return;}const kind=track.kind==="text"?"text":"procedural";const clipId=id("timeline-clip");const duration=Math.max(.5,Math.min(3,mediaTimelineDuration-editorTime||3));change(p=>({...p,timelineClips:[...(p.timelineClips??[]),{id:clipId,name:(kind==="procedural"?"Code":kind==="text"?"Text":kind==="audio"?"Audio":"Video")+" clip "+((p.timelineClips??[]).filter(clip=>clip.trackId===track.id).length+1),kind,trackId:track.id,start:Math.round(editorTime*Math.max(1,p.frameRate||24))/Math.max(1,p.frameRate||24),duration}]}));setSelectedTimelineClipId(clipId);setTimelineClipSettingsId(clipId);}}><Plus size={13}/></button><button className="track-remove-button" aria-label={"Remove "+track.name+" layer"} title={"Remove "+track.name+" layer"} onClick={event=>{event.stopPropagation();if(window.confirm("Remove layer “"+track.name+"” and all clips on it?")){change(p=>{const tracks=p.tracks.filter(item=>item.id!==track.id);const fallbackVideoTrackId=tracks.find(item=>item.kind==="video")?.id;return {...p,tracks,shots:p.shots.map(shot=>shot.masterTrackId===track.id?{...shot,masterTrackId:fallbackVideoTrackId}:shot),timelineClips:(p.timelineClips??[]).filter(clip=>clip.trackId!==track.id&&!(clip.linkedVideoClipId&&(p.timelineClips??[]).some(source=>source.id===clip.linkedVideoClipId&&source.trackId===track.id)))};});setSelectedTimelineClipId("");setTimelineClipSettingsId("");}}}><span aria-hidden="true">×</span></button>
   </div>
   <div className="visual-track-lane" style={{backgroundSize:(5/mediaTimelineDuration*100)+"% 100%",backgroundColor:track.kind==="video"?(track.backgroundTransparent?"transparent":track.backgroundColor??"#111113"):undefined,backgroundImage:track.kind==="video"&&track.backgroundTransparent?"none":undefined}}
    onContextMenu={event=>{event.preventDefault();setTrackContextMenuId(track.id);setTrackContextMenuPosition({x:Math.min(event.clientX,window.innerWidth-190),y:Math.min(event.clientY,window.innerHeight-180)});setSelectedTimelineTrackId(track.id);}} onPointerDown={event=>{if(event.target!==event.currentTarget)return;setSelectedTimelineTrackId(track.id);const rect=event.currentTarget.getBoundingClientRect();const next=Math.max(0,Math.min(activeTimelineDuration,((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration));playbackTimeRef.current=next;setIsPlaying(false);setEditorTime(next);}}
-   onDragOver={event=>{event.preventDefault();event.dataTransfer.dropEffect="move";const dragId=event.dataTransfer.getData("text/dionysus-timeline-clip");const moving=clipDragSourceRef.current??(project.timelineClips??[]).find(clip=>clip.id===dragId);if(!moving||!canPlaceTimelineClipOnTrack(moving,track)){setClipDropPreview(null);return;}const rect=event.currentTarget.getBoundingClientRect();const pointerTime=((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration;const rawStart=Math.max(0,pointerTime-moving.duration/2);const pos=calculateTimelineDropPosition(project.timelineClips??[],moving.id,track.id,rawStart,moving.duration,mediaTimelineDuration,Math.max(1,project.frameRate||24));if(!pos){setClipDropPreview(null);return;}setClipDropPreview({trackId:track.id,start:pos.start,duration:moving.duration,name:moving.name,...(pos.snapTime!==undefined?{snapTime:pos.snapTime}: {})});}}
+   onDragOver={event=>{event.preventDefault();event.dataTransfer.dropEffect="move";const masterShotId=event.dataTransfer.getData("text/dionysus-master-shot");if(masterShotId){const shot=project.shots.find(item=>item.id===masterShotId);if(!shot||track.kind!=="video"){setClipDropPreview(null);return;}const moving=asMasterShotTimelineClip(project,shot),rect=event.currentTarget.getBoundingClientRect(),pointerTime=((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration,rawStart=Math.max(0,pointerTime-moving.duration/2),pos=calculateTimelineDropPosition(getMasterShotPlacementItems(project,shot.id),shot.id,track.id,rawStart,moving.duration,mediaTimelineDuration,Math.max(1,project.frameRate||24));if(!pos){setClipDropPreview(null);return;}setClipDropPreview({trackId:track.id,start:pos.start,duration:moving.duration,name:moving.name,...(pos.snapTime!==undefined?{snapTime:pos.snapTime}:{})});return;}const dragId=event.dataTransfer.getData("text/dionysus-timeline-clip");const moving=clipDragSourceRef.current??(project.timelineClips??[]).find(clip=>clip.id===dragId);if(!moving||!canPlaceTimelineClipOnTrack(moving,track)){setClipDropPreview(null);return;}const rect=event.currentTarget.getBoundingClientRect();const pointerTime=((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration;const rawStart=Math.max(0,pointerTime-moving.duration/2);const pos=calculateTimelineDropPosition(project.timelineClips??[],moving.id,track.id,rawStart,moving.duration,mediaTimelineDuration,Math.max(1,project.frameRate||24));if(!pos){setClipDropPreview(null);return;}setClipDropPreview({trackId:track.id,start:pos.start,duration:moving.duration,name:moving.name,...(pos.snapTime!==undefined?{snapTime:pos.snapTime}: {})});}}
    onDrop={event=>{
      event.preventDefault();
      const rect=event.currentTarget.getBoundingClientRect();
      const masterShotId=event.dataTransfer.getData("text/dionysus-master-shot");
-     if(masterShotId){
-       const movingShot=project.shots.find(shot=>shot.id===masterShotId);
-       if(!movingShot||track.kind!=="video")return;
-       const fps=Math.max(1,project.frameRate||24);
-       const pointerTime=((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration;
-       let next:number;
-       if(rippleReorderMode){
-         const targetCenter=Math.round(pointerTime*fps)/fps;
-         const reordered=rippleReorderMasterShots(project.shots,movingShot.id,targetCenter);
-         next=getMasterShotStart(reordered,movingShot.id);
-         change(p=>({...p,shots:rippleReorderMasterShots(p.shots,movingShot.id,targetCenter)}),"shot-ripple-reorder");
-         setNotice("Ripple Reorder applied: Shots were packed into the new order and gaps closed. Version internals were preserved.");
-       }else{
-         const maxStart=Math.max(0,mediaTimelineDuration-movingShot.duration);
-         const rawStart=Math.max(0,Math.min(maxStart,pointerTime-movingShot.duration/2));
-         const snapped=Math.round(rawStart*fps)/fps;
-         const maxFrameStart=Math.max(0,Math.floor(maxStart*fps)/fps);
-         next=Math.min(maxFrameStart,snapped);
-         updateMasterShotStart(movingShot.id,next);
-       }
-       setSelectedId(movingShot.id);
-       setIsPlaying(false);
-       playbackTimeRef.current=next;
-       setEditorTime(next);
-       return;
-     }
-     const clipId=event.dataTransfer.getData("text/dionysus-timeline-clip"),moving=(project.timelineClips??[]).find(clip=>clip.id===clipId)??clipDragSourceRef.current;
+      if(masterShotId){
+        const movingShot=project.shots.find(shot=>shot.id===masterShotId);
+        if(!movingShot||track.kind!=="video"){setClipDropPreview(null);return;}
+        const fps=Math.max(1,project.frameRate||24),pointerTime=((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration,rawStart=Math.max(0,pointerTime-movingShot.duration/2);
+        const pos=rippleReorderMode?null:(clipDropPreview?.trackId===track.id?{start:clipDropPreview.start,...(clipDropPreview.snapTime!==undefined?{snapTime:clipDropPreview.snapTime}:{})}:calculateTimelineDropPosition(getMasterShotPlacementItems(project,movingShot.id),movingShot.id,track.id,rawStart,movingShot.duration,mediaTimelineDuration,fps));
+        let next:number;
+        if(rippleReorderMode){
+          const targetCenter=Math.round(pointerTime*fps)/fps,reordered=rippleReorderMasterShots(project.shots,movingShot.id,targetCenter);
+          next=getMasterShotStart(reordered,movingShot.id);const oldStart=getMasterShotStart(project.shots,movingShot.id),delta=next-oldStart;
+          change(p=>({...p,shots:rippleReorderMasterShots(p.shots,movingShot.id,targetCenter).map(shot=>shot.id===movingShot.id?{...shot,masterTrackId:track.id}:shot),timelineClips:(p.timelineClips??[]).map(clip=>clip.id.startsWith("storyboard-"+movingShot.id+"-")?{...clip,start:Math.max(0,clip.start+delta),...(clip.kind==="video"?{trackId:track.id}:{})}:clip)}),"shot-ripple-reorder");
+          setNotice("Ripple Reorder applied and Shot moved to the selected video layer.");
+        }else{
+          if(!pos){setNotice("No non-overlapping position is available on this video layer.");setClipDropPreview(null);return;}
+          const conflict=getMasterShotPlacementItems(project,movingShot.id).some(clip=>clip.trackId===track.id&&pos.start<clip.start+clip.duration-1e-7&&pos.start+movingShot.duration>clip.start+1e-7);
+          if(conflict){setNotice("Drop cancelled: this position overlaps another item on the destination layer.");setClipDropPreview(null);return;}
+          next=pos.start;const oldStart=getMasterShotStart(project.shots,movingShot.id),delta=next-oldStart;
+          change(p=>({...p,shots:setMasterShotStart(p.shots,movingShot.id,next).map(shot=>shot.id===movingShot.id?{...shot,masterTrackId:track.id}:shot),timelineClips:(p.timelineClips??[]).map(clip=>clip.id.startsWith("storyboard-"+movingShot.id+"-")?{...clip,start:Math.max(0,clip.start+delta),...(clip.kind==="video"?{trackId:track.id}:{})}:clip)}));
+          setNotice(pos.snapTime!==undefined?"Shot snapped to an aligned, non-overlapping position.":"Shot moved to a non-overlapping position.");
+        }
+        setSelectedId(movingShot.id);setIsPlaying(false);playbackTimeRef.current=next;setEditorTime(next);setClipDropPreview(null);return;
+      }
+      const clipId=event.dataTransfer.getData("text/dionysus-timeline-clip"),moving=(project.timelineClips??[]).find(clip=>clip.id===clipId)??clipDragSourceRef.current;
      if(!moving||!canPlaceTimelineClipOnTrack(moving,track))return;
      const pointerTime=((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration,rawStart=Math.max(0,pointerTime-moving.duration/2);
      const pos=clipDropPreview?.trackId===track.id?{start:clipDropPreview.start,...(clipDropPreview.snapTime!==undefined?{snapTime:clipDropPreview.snapTime}:{})}:calculateTimelineDropPosition(project.timelineClips??[],moving.id,track.id,rawStart,moving.duration,mediaTimelineDuration,Math.max(1,project.frameRate||24));
@@ -1642,7 +1668,7 @@ export default function App() {
      try{change(p=>{const targetClips=(p.timelineClips??[]).map(clip=>clip.id===moving.id?{...clip,trackId:track.id}:clip);const moved=moveTimelineClip({tracks:p.tracks,timelineClips:targetClips},moving.id,pos.start);return {...p,timelineClips:moved.timelineClips};});setSelectedTimelineClipId(moving.id);setSelectedTimelineTrackId(track.id);setIsPlaying(false);setNotice(pos.snapTime!==undefined?"Clip snapped to an aligned, non-overlapping position.":"Clip moved to a non-overlapping position.");}catch(error){setNotice(error instanceof Error?error.message:"Could not move the clip.");}finally{clipDragSourceRef.current=null;setClipDropPreview(null);}
    }}>
    <div className="visual-playhead" style={{left:(editorTime/mediaTimelineDuration*100)+"%"}}/>
-   {clipResizePreview?.trackId===track.id && clipResizePreview.overlap && <div className="clip-overlap-preview" style={{left:(clipResizePreview.overlap.start/mediaTimelineDuration*100)+"%",width:Math.max(0.25,clipResizePreview.overlap.duration/mediaTimelineDuration*100)+"%"}} aria-hidden="true"/>}
+    {(clipResizePreview?.trackId===track.id && clipResizePreview.overlap || shotResizePreview?.trackId===track.id && shotResizePreview.overlap) && <div className="clip-overlap-preview" style={{left:(((shotResizePreview?.trackId===track.id&&shotResizePreview.overlap)?shotResizePreview.overlap!.start:clipResizePreview!.overlap!.start)/mediaTimelineDuration*100)+"%",width:Math.max(0.25,(((shotResizePreview?.trackId===track.id&&shotResizePreview.overlap)?shotResizePreview.overlap!.duration:clipResizePreview!.overlap!.duration)/mediaTimelineDuration*100))+"%"}} aria-hidden="true"/>}
    {clipDropPreview?.trackId===track.id && <div className="clip-drop-preview" style={{left:(clipDropPreview.start/mediaTimelineDuration*100)+"%",width:Math.max(2,clipDropPreview.duration/mediaTimelineDuration*100)+"%"}}><strong>{clipDropPreview.name}</strong><small>{clipDropPreview.start.toFixed(2)}s · {clipDropPreview.duration.toFixed(2)}s</small></div>}
    {clipDropPreview?.trackId===track.id && clipDropPreview.snapTime!==undefined && <div className="timeline-snap-guide" style={{left:(clipDropPreview.snapTime/mediaTimelineDuration*100)+"%"}} aria-hidden="true"><span>SNAP</span></div>}
    {clips.map(clip=>{
@@ -1667,17 +1693,17 @@ export default function App() {
        </div></details>}
      </div>;
    })}
-   {track.kind==="video" && project.tracks.find(item=>item.kind==="video")?.id===track.id && project.shots.map((shot,shotIndex)=>{
-     const shotStart=getMasterShotStarts(project.shots)[shotIndex];
+   {track.kind==="video" && project.shots.filter(shot=>getMasterShotTrackId(shot,project.tracks)===track.id).map(shot=>{
+     const shotStart=getMasterShotStart(project.shots,shot.id);
      const slot=shot.slots.find(item=>item.id===selectedSlotId)??shot.slots[0];
      const version=slot?.versions.find(item=>item.id===slot.selectedVersionId)??slot?.versions[0];
      const thumb=version ? renderVersionThumbnail(version, track.backgroundTransparent ? "transparent" : track.backgroundColor ?? "#111113") : <div className="version-thumbnail-preview" style={{backgroundColor:track.backgroundTransparent?"transparent":track.backgroundColor??"#111113"}}/>;
      return <div className="master-shot-clip-wrap" key={"master-shot-"+shot.id} style={{left:((shotResizePreview?.id===shot.id?shotResizePreview.start:shotStart)/mediaTimelineDuration*100)+"%",width:Math.max(2,(shotResizePreview?.id===shot.id?shotResizePreview.duration:shot.duration)/mediaTimelineDuration*100)+"%",opacity:track.opacity??1}}>
-       <button draggable className={"master-shot-clip"+(selected?.id===shot.id?" selected":"")} onContextMenu={event=>{event.preventDefault();event.stopPropagation();setSelectedId(shot.id);if(slot)setSelectedSlotId(slot.id);setShotContextMenuPosition({x:Math.min(event.clientX,window.innerWidth-180),y:Math.min(event.clientY,window.innerHeight-170)});setShotContextMenuId(shot.id);}} onDragStart={event=>{event.dataTransfer.setData("text/dionysus-master-shot",shot.id);event.dataTransfer.effectAllowed="move";}} onClick={()=>{setShotContextMenuId("");setSelectedId(shot.id);if(slot)setSelectedSlotId(slot.id);setIsPlaying(false);setEditorTime(shotStart);playbackTimeRef.current=shotStart;}} title={shot.title+" · "+shot.duration.toFixed(1)+"s"}>
+       <button draggable className={"master-shot-clip"+(selected?.id===shot.id?" selected":"")} onContextMenu={event=>{event.preventDefault();event.stopPropagation();setSelectedId(shot.id);if(slot)setSelectedSlotId(slot.id);setShotContextMenuPosition({x:Math.min(event.clientX,window.innerWidth-180),y:Math.min(event.clientY,window.innerHeight-170)});setShotContextMenuId(shot.id);}} onDragStart={event=>{event.dataTransfer.setData("text/dionysus-master-shot",shot.id);event.dataTransfer.effectAllowed="move";setClipDropPreview({trackId:track.id,start:shotStart,duration:shot.duration,name:shot.title});}} onDragEnd={()=>setClipDropPreview(null)} onClick={()=>{setShotContextMenuId("");setSelectedId(shot.id);if(slot)setSelectedSlotId(slot.id);setIsPlaying(false);setEditorTime(shotStart);playbackTimeRef.current=shotStart;}} title={shot.title+" · "+shot.duration.toFixed(1)+"s"}>
          {thumb}
          <span className="master-shot-copy"><strong>{shot.title}</strong><small>{version?.name??"No version"} · {(shotResizePreview?.id===shot.id?shotResizePreview.duration:shot.duration).toFixed(1)}s</small></span>
-         <span className="master-shot-resize-handle left" role="separator" aria-label={"Resize start of "+shot.title} onPointerDown={event=>beginMasterShotResize(event,shot,shotStart,"left")} onPointerMove={event=>moveMasterShotResize(event,shot)} onPointerUp={event=>endMasterShotResize(event,shot)}/>
-         <span className="master-shot-resize-handle right" role="separator" aria-label={"Resize end of "+shot.title} onPointerDown={event=>beginMasterShotResize(event,shot,shotStart,"right")} onPointerMove={event=>moveMasterShotResize(event,shot)} onPointerUp={event=>endMasterShotResize(event,shot)}/>
+         <span className="master-shot-resize-handle left" role="separator" aria-label={"Resize start of "+shot.title} onPointerDown={event=>beginMasterShotResize(event,shot,shotStart,"left",track.id)} onPointerMove={event=>moveMasterShotResize(event,shot)} onPointerUp={event=>endMasterShotResize(event,shot)}/>
+         <span className="master-shot-resize-handle right" role="separator" aria-label={"Resize end of "+shot.title} onPointerDown={event=>beginMasterShotResize(event,shot,shotStart,"right",track.id)} onPointerMove={event=>moveMasterShotResize(event,shot)} onPointerUp={event=>endMasterShotResize(event,shot)}/>
        </button>
        {slot && <details className="timeline-version-menu master-shot-version-menu"><summary aria-label={"Show versions for "+shot.title}>▾</summary><div className="timeline-version-menu-panel">
          <strong>{shot.title}</strong>
@@ -1689,7 +1715,7 @@ export default function App() {
        </div></details>}
      </div>;
    })}
-   {!clips.length && !(track.kind==="video" && project.tracks.find(item=>item.kind==="video")?.id===track.id && project.shots.length>0) && <span className="visual-track-empty">{track.kind==="procedural"?"Drop or add a Code clip to this lane":track.kind==="text"?"Drop or add a text clip to this lane":track.kind==="effects"?"No effects assigned to this lane.":"Drop or add a clip to this lane"}</span>}
+   {!clips.length && !(track.kind==="video" && project.shots.some(shot=>getMasterShotTrackId(shot,project.tracks)===track.id)) && <span className="visual-track-empty">{track.kind==="procedural"?"Drop or add a Code clip to this lane":track.kind==="text"?"Drop or add a text clip to this lane":track.kind==="effects"?"No effects assigned to this lane.":"Drop or add a clip to this lane"}</span>}
   </div>
  </div>
  {track.kind==="video" && !collapsedVideoTrackIds.includes(track.id) && clips.filter(clip=>clip.kind==="video").map(videoClip=>{
@@ -1733,12 +1759,17 @@ export default function App() {
         <label className="nested-version-duration">Clip Version <span><select aria-label="Clip Asset version" className="text-field" value={activeVersionTimeline.id} onChange={event => chooseClipAssetVersion(activeVersionTimelineClipAsset.id, event.target.value)}>{(activeVersionTimelineClipAsset.clipVersions ?? []).map((version, index) => <option key={version.id} value={version.id}>{version.name || "Version " + (index + 1)}</option>)}</select></span></label>
         <button className="button button-quiet button-small" onClick={() => duplicateClipAssetVersion(activeVersionTimelineClipAsset.id, activeVersionTimeline.id)}><Plus size={13}/> Duplicate Version</button>
       </>}
-      <button className="button button-quiet button-small" onClick={() => addTimelineVersionLayer(activeVersionTimelineTab, "video")}><Plus size={13}/> Video</button>
-      <button className="button button-quiet button-small" onClick={() => addTimelineVersionLayer(activeVersionTimelineTab, "image")}><Plus size={13}/> Image</button>
-      <button className="button button-quiet button-small" onClick={() => addTimelineVersionLayer(activeVersionTimelineTab, "audio")}><Plus size={13}/> Audio</button>
-      <button className="button button-quiet button-small" onClick={() => addTimelineVersionLayer(activeVersionTimelineTab, "text")}><Plus size={13}/> Text</button>
-      <button className="button button-quiet button-small" onClick={() => addTimelineVersionLayer(activeVersionTimelineTab, "procedural")}><Plus size={13}/> Code</button>
-      <button className="button button-quiet button-small" onClick={() => addTimelineVersionLayer(activeVersionTimelineTab, "composition")}><Plus size={13}/> Clip</button>
+      <div className="layer-add-menu-wrap">
+        <button className="button button-primary button-small" aria-haspopup="menu" aria-expanded={showAddLayerMenu} onClick={()=>setShowAddLayerMenu(value=>!value)}><Plus size={14}/> Add layer <ChevronDown size={13}/></button>
+        <div className="layer-add-menu" role="menu" hidden={!showAddLayerMenu}>
+          <button role="menuitem" onClick={()=>{addTimelineVersionLayer(activeVersionTimelineTab,"video");setShowAddLayerMenu(false);}}>Video layer</button>
+          <button role="menuitem" onClick={()=>{addTimelineVersionLayer(activeVersionTimelineTab,"image");setShowAddLayerMenu(false);}}>Image layer</button>
+          <button role="menuitem" onClick={()=>{addTimelineVersionLayer(activeVersionTimelineTab,"audio");setShowAddLayerMenu(false);}}>Audio layer</button>
+          <button role="menuitem" onClick={()=>{addTimelineVersionLayer(activeVersionTimelineTab,"text");setShowAddLayerMenu(false);}}>Text layer</button>
+          <button role="menuitem" onClick={()=>{addTimelineVersionLayer(activeVersionTimelineTab,"procedural");setShowAddLayerMenu(false);}}>Code layer</button>
+          <button role="menuitem" onClick={()=>{addTimelineVersionLayer(activeVersionTimelineTab,"composition");setShowAddLayerMenu(false);}}>Clip layer</button>
+        </div>
+      </div>
       <label className="nested-version-duration">Duration <span><input aria-label="Version duration" type="number" min="0.1" step={1/Math.max(1,project.frameRate)} value={activeVersionTimeline.duration} onChange={event=>updateTimelineVersionDuration(activeVersionTimelineTab,Number(event.target.value))}/>s</span></label>
     </div>
   </div>
