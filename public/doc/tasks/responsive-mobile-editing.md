@@ -73,8 +73,8 @@ PR #84 merged as `a83f4a6836d7c4ee683b17a1ccdb5897e17364e2`; exact-head CI [3925
 Issue #83 is closed by the code merge, but this does not prove deployment or owner acceptance. First verify main push CI and Pages deployment, then continue the mobile viewport/usability pass. Keep DYS-012 in progress; no browser smoke tests.
 
 
-## Mobile preview control density — 2026-10-19
+## Mobile preview control density release — 2026-10-19
 
-The current slice adds a phone-only **More controls / Less controls** disclosure to the integrated preview. Undo/Redo, start, Play/Pause and frame-step remain in the primary row. The less-frequently used +0.5s step, playhead slider, overlay toggle and optional image-clear action move into a secondary row on narrow screens; desktop continues to display the full control set. The App regression test checks the disclosure state, ARIA relationship and return to the compact state.
+PR #86 merged the progressive-disclosure preview control slice as app commit `6e130e33a4236fff97f468f6d76fef933677bb58`. Exact-head feature CI [39259760793](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39259760793), main push CI [39259981315](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39259981315) and GitHub Pages deployment [39259981194](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39259981194) all passed.
 
-Main release verification: `89f92a3168413151dd8acb58d4b3c034cf59ead3` passed push CI [39254646559](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39254646559) and Pages deployment [39254646733](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39254646733). Feature-branch CI remains the gate for this change. No automated browser smoke tests were added or run. DYS-012 remains in progress until portrait, landscape and tablet viewport acceptance is evidenced.
+Undo/Redo, start, Play/Pause and frame stepping remain in the primary preview row on narrow screens. +0.5s, the playhead slider, overlay and optional image-clear action are available behind More controls / Less controls; desktop retains the complete set. The App regression test validates the accessible toggle and compact/expanded state. No browser smoke tests were added or run. DYS-012 remains in progress pending actual portrait, landscape and tablet viewport acceptance.

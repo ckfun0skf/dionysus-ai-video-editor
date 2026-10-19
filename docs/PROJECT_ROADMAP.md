@@ -228,11 +228,12 @@ PR #84 merged the Issue #83 correction at `a83f4a6836d7c4ee683b17a1ccdb5897e1736
 
 The next agent should read `docs/MOBILE_AGENT_PICKUP_PROMPT.md` and `docs/MOBILE_AGENT_HANDOFF.md`, verify live GitHub state and deployment, then continue the mobile usability/viewport pass. DYS-012 remains in progress; no browser smoke tests. Once the mobile pass is stable, return to DYS-014 canonical Composition persistence and structure-preserving Save-as-Clip.
 
-## Live mobile checkpoint — 2026-10-19 (supersedes earlier stale status)
 
-- Current main HEAD: `89f92a3168413151dd8acb58d4b3c034cf59ead3`.
-- Exact main push CI [39254646559](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39254646559) and GitHub Pages deployment [39254646733](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39254646733) both passed for that SHA. PR #84’s mobile correction is published by the Pages workflow, but real device/viewport acceptance is not implied.
-- Open PRs at this checkpoint: #45, #37 and #33; no current mobile follow-up PR was open when work started. Open non-PR issues: #56, #58 and #59.
-- Active feature branch: `feat/mobile-preview-progressive-disclosure`. This slice keeps history, playback and frame stepping in the primary preview-control row on narrow viewports, and progressively discloses the +0.5s control, playhead slider, overlay and optional image-clear control. A deterministic App regression test covers the toggle and its accessible expanded/collapsed state.
-- Exact-head feature PR CI/build must pass before this slice can be called validated. No local test/build result is claimed because no local checkout/runtime was available; no browser smoke tests are added or run.
-- Keep DYS-012 in progress until phone portrait, landscape and tablet acceptance is evidenced. Continue DYS-014 afterwards: canonical Composition persistence and independent structure-preserving Save-as-Clip snapshots remain unfinished.
+## Mobile preview control release and DYS-014 pickup — 2026-10-19
+
+- PR #86 merged the progressive-disclosure preview-control slice as app commit `6e130e33a4236fff97f468f6d76fef933677bb58`.
+- Exact-head feature CI [39259760793](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39259760793), main push CI [39259981315](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39259981315), and GitHub Pages deployment [39259981194](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39259981194) all passed. This proves automated build/deployment, not device-level UX acceptance.
+- On phones, history/playback/start/frame-step stay prominent; +0.5s, the playhead slider, overlay and optional image clear are progressively disclosed. No browser smoke tests were added or run.
+- DYS-012 remains in progress pending owner evidence for phone portrait, landscape, tablet, touch interactions and page-level overflow.
+- Next implementation branch: `feat/dys014-alternative-provenance-roundtrip`. The current slice adds migration tests for all Shot Slot alternatives and generation/reference/model/output provenance, plus JSON round-trip tests for schema-1.0 and the versioned 2.0 envelope. Exact-head CI is required before calling that test slice validated.
+- After these checks, resume canonical-only Composition persistence and structure-preserving Project-to-Clip snapshots. Do not auto-create duplicate Clip Assets per Shot without an explicit owner decision.

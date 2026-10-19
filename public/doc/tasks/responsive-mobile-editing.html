@@ -1,39 +1,25 @@
 <!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>DYS-012 · Responsive mobile editing</title>
 <style>
-:root{color-scheme:dark}body{margin:0;background:#0b0d12;color:#edf1f7;font:15px/1.65 system-ui,sans-serif}
-main{max-width:850px;margin:auto;padding:28px 20px}a{color:#a9bdff}section{background:#141821;border:1px solid #293141;border-radius:14px;padding:18px;margin:14px 0}
-h1{line-height:1.2}h2{font-size:18px}li{margin:8px 0}.status{color:#f4bd61}code{overflow-wrap:anywhere}
-</style>
-</head>
-<body><main>
-<p><a href="../task.html">← Project dashboard</a></p>
-<p>DYS-012 · M4 — Preview, compositing, and mobile editing</p>
-<h1>Responsive mobile editing</h1>
-<p class="status">In progress · mobile usability and viewport acceptance remain</p>
-<section><h2>Implemented interaction foundation</h2>
-<ul>
-<li>Persistent bottom navigation, preview-first mobile layout and independent horizontal timeline scrolling.</li>
+:root{color-scheme:dark}body{margin:0;background:#0b0d12;color:#edf1f7;font:15px/1.65 system-ui,sans-serif}main{max-width:850px;margin:auto;padding:28px 20px}a{color:#a9bdff}section{background:#141821;border:1px solid #293141;border-radius:14px;padding:18px;margin:14px 0}h1{line-height:1.2}h2{font-size:18px}li{margin:8px 0}.status{color:#f4bd61}code{overflow-wrap:anywhere}
+</style></head><body><main>
+<p><a href="../task.html">← Project dashboard</a></p><p>DYS-012 · M4 — Preview, compositing, and mobile editing</p>
+<h1>Responsive mobile editing</h1><p class="status">In progress · viewport acceptance remains</p>
+<section><h2>Implemented interaction foundation</h2><ul>
+<li>Persistent bottom navigation, preview-first layout and independent horizontal timeline scrolling.</li>
 <li>Long-press movement on Master and nested timelines, contextual clip tools, Inspector toggle and Zoom In / Zoom Out / Fit.</li>
 <li>Touch trim affordances, pointer-captured frame-aligned scrubbing, frame stepping/counter, keyboard frame stepping and mobile version picker.</li>
 <li>Preview Undo/Redo; selected-audio Mute/Unmute with visible pressed state.</li>
 <li>PR #84 compact Master Timeline layer action menu with touch-sized controls and reduced toolbar density.</li>
-<li>Current feature slice: phone-width More controls / Less controls disclosure keeps history, playback and frame stepping prominent while grouping the playhead slider, +0.5s step, overlay and optional image-clear action.</li>
+<li>PR #86 progressive disclosure: primary preview actions stay visible while +0.5s, the playhead slider, Overlay and optional image clear are grouped under More controls on phone-width screens.</li>
 </ul></section>
 <section><h2>Release verification</h2>
-<p>Main HEAD <code>89f92a3168413151dd8acb58d4b3c034cf59ead3</code> passed <a href="https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39254646559">push CI</a> and <a href="https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39254646733">GitHub Pages deployment</a>. Feature-branch exact-head CI is required for the current progressive-disclosure patch.</p>
-<p>Automated regression tests are separate from real-device acceptance. No browser smoke tests were added or run.</p></section>
-<section><h2>Acceptance still required</h2>
-<ul>
-<li>No page-level horizontal overflow on supported phone portrait, phone landscape and tablet sizes.</li>
-<li>Layer actions remain reachable above bottom navigation and safe-area insets.</li>
+<p>PR #86 merged as app commit <code>6e130e33a4236fff97f468f6d76fef933677bb58</code>. <a href="https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39259760793">Exact-head feature CI</a>, <a href="https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39259981315">main push CI</a> and <a href="https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39259981194">GitHub Pages deployment</a> passed.</p><p>No automated browser smoke tests were added or run. CI/deployment are not evidence of real-device acceptance.</p></section>
+<section><h2>Acceptance still required</h2><ul>
+<li>No page-level horizontal overflow on phone portrait, phone landscape and tablet sizes.</li><li>Layer actions remain reachable above bottom navigation and safe-area insets.</li>
 <li>Touch selection, scrubbing, moving, trimming, version switching, Undo/Redo and audio mute work reliably.</li>
-<li>Storyboard, Timeline, Assets and References remain reachable.</li>
-<li>Exact-head feature CI, main CI and Pages deployment are recorded; owner acceptance is requested only after a deployed build is confirmed.</li>
+<li>Storyboard, Timeline, Assets and References remain reachable.</li><li>Record owner viewport acceptance after deployed build is confirmed.</li>
 </ul></section>
 <section><h2>Related artifacts</h2><p><a href="responsive-mobile-editing.md">Full task specification</a> · <a href="../reports/responsive-mobile-editing-report.md">Progress report</a></p></section>
 </main></body></html>
