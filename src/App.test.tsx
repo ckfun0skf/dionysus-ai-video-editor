@@ -859,7 +859,7 @@ describe("App history integration", () => {
     expect(addLayer).toBeTruthy();
     click(addLayer!);
     const layerOptions = Array.from(container.querySelectorAll<HTMLButtonElement>(".layer-add-menu button")).map(button => button.textContent ?? "");
-    expect(layerOptions.some(label => label.includes("Code layer"))).toBe(false);
+    expect(layerOptions.some(label => label.includes("Code layer"))).toBe(true);
     expect(layerOptions.some(label => label.includes("Effects layer"))).toBe(false);
     expect(layerOptions.some(label => label.trim() === "Video layer")).toBe(true);
     expect(layerOptions.some(label => label.trim() === "Audio layer")).toBe(true);
@@ -1305,7 +1305,8 @@ describe("Integrated timeline editor", () => {
     const nested = container.querySelector<HTMLElement>(".nested-timeline-tab.visual-timeline");
     expect(nested).toBeTruthy();
     // An empty Clip starts with no layers; add one so the test checks actual ruler-to-lane alignment.
-    click(Array.from(nested!.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.trim() === "Video")!);
+    click(Array.from(nested!.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Add layer"))!);
+    click(Array.from(nested!.querySelectorAll<HTMLButtonElement>(".layer-add-menu button")).find(button => button.textContent?.trim() === "Video layer")!);
     await flushEffects();
     expect(nested!.querySelector(".nested-visual-timeline-ruler .visual-ruler-caption")?.textContent).toBe("TIME");
     expect(nested!.querySelector(".nested-timeline-row.visual-track-row .nested-timeline-row-track.visual-track-lane")).toBeTruthy();
