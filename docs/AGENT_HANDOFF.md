@@ -211,3 +211,10 @@ The owner wants a future phone version with a CapCut-inspired interface. Treat t
 - PR #69 merged touch long-press movement for Master Timeline clips as main commit `01ca4653a23c70273c74d3ada37883b66dabb3e3`; exact-head CI run [39237331052](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39237331052) passed at `31ed8795ef883e556285eecd6ab7073bee094a87`.
 - Active branch `feat/mobile-nested-timeline-touch` extends the same 260 ms long-press / short-swipe behavior to nested Clip Version layers. It uses the existing version placement engine and has a component regression test; exact-head CI is pending.
 - Main push CI and Pages deployment have not yet been independently confirmed. Do not ask the owner to test until the latest Pages deployment is confirmed.
+
+
+## Mobile contextual tools — 2026-10-19
+
+- PR #70 merged nested Clip Version touch movement as main commit `fd51602f92640cf18ad426a418bb7c8d8cb39207`; exact-head CI run [39237693258](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39237693258) passed at `1b1da31e6cec749f3888385ea5c201183c4facba`.
+- Active branch `feat/mobile-contextual-editor-tools` adds a phone-only selected-clip toolbar (Split, Duplicate, Trim, Settings, Delete), a working Inspector toggle/close action, and larger nested Clip Asset version selector controls. Exact-head CI is pending.
+- Main push CI and Pages deployment remain independently unconfirmed. Do not ask the owner to test until the latest Pages deployment is confirmed. No browser smoke tests.

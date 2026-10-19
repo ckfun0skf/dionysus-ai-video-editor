@@ -180,3 +180,10 @@ The owner explicitly wants a future phone version with a CapCut-inspired interfa
 PR #69 merged as main commit `01ca4653a23c70273c74d3ada37883b66dabb3e3`; its exact-head CI run [39237331052](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39237331052) passed at `31ed8795ef883e556285eecd6ab7073bee094a87`. The Master Timeline supports long-press touch move with short-swipe panning.
 
 The active branch `feat/mobile-nested-timeline-touch` extends touch move to nested Clip Version layers, preserving the existing version-specific placement and overlap checks. It includes a component test and remains pending CI. DYS-012 is still in progress: mobile Inspector/Version picker behavior, robust scrubbing/trimming, viewport acceptance and independently verified Pages deployment remain outstanding. Do not add browser smoke tests or ask the owner to test before deployment is confirmed.
+
+
+## Mobile contextual editing — 2026-10-19
+
+PR #70 merged nested Clip Version long-press movement as main commit `fd51602f92640cf18ad426a418bb7c8d8cb39207`; exact-head CI run [39237693258](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39237693258) passed at `1b1da31e6cec749f3888385ea5c201183c4facba`.
+
+Active branch `feat/mobile-contextual-editor-tools` adds contextual mobile actions for the selected Master Timeline clip, a functional mobile Inspector open/close control, and touch-sized nested Clip Asset version selection. It has an App integration test and is pending exact-head CI. DYS-012 remains in progress; mobile viewport acceptance, version UX polish and deployment confirmation remain. Do not add browser smoke tests or ask the owner to test before deployment is confirmed.
