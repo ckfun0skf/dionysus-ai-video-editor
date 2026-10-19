@@ -1,6 +1,6 @@
 # DYS-012 Progress Report — Responsive mobile editing
 
-**Status:** In progress; layout, touch movement, contextual tools and zoom merged; trim hit targets and pointer-captured scrubbing merged; mobile version picker and frame-aligned scrubbing and frame-step controls merged; frame counter and keyboard frame-step refinement merged; mobile preview Undo/Redo merged; selected-audio mute control active  
+**Status:** In progress; layout, touch movement, contextual tools and zoom merged; trim hit targets and pointer-captured scrubbing merged; mobile version picker and frame-aligned scrubbing and frame-step controls merged; frame counter and keyboard frame-step refinement merged; mobile preview Undo/Redo merged; selected-audio mute control merged; visible mute-state refinement active  
 **Last reviewed:** 2026-10-19
 
 ## Shipped
@@ -52,3 +52,10 @@ PR #80 merged phone-sized Undo/Redo controls beside the preview as main commit `
 
 ## Current mobile audio control
 The active branch `feat/mobile-audio-clip-mute` adds a Mute/Unmute action to the selected audio clip toolbar and an App test for toggling persisted mute state. Exact-head CI is pending; no browser smoke tests are added or run.
+
+
+## Selected-audio mute control merged
+PR #81 merged Mute/Unmute for selected audio clips as main commit `7ba96ec0eae8d6e3fb2196d7b9f492e293ff10e2`; exact-head CI run [39249271916](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39249271916) passed.
+
+## Current mute-state accessibility refinement
+The active branch `feat/mobile-audio-mute-state` makes the pressed/muted state visually distinct and checks the button's `aria-pressed` value in the App integration test. Exact-head CI is pending; no browser smoke tests are added or run.

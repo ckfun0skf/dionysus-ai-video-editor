@@ -35,7 +35,8 @@ Make Dionysus usable on phone and tablet screens without removing Storyboard, Re
 - PR #78 merged the phone-only current-frame counter as `8d36a4e018395fd13d60110ba9c5f4d2aeeffbbc`; exact-head CI run [39243808054](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39243808054) passed.
 - PR #79 merged frame-accurate Left/Right keyboard scrubbing as main commit `0a5ace89e28fff5d1f46bc0e4330d56e91f9035e`.
 - PR #80 merged mobile-sized Undo/Redo buttons beside preview controls as main commit `85646e4a70cdde113bee728b4ed1cd781a022f0a`; exact-head CI run [39248435319](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39248435319) passed.
-- Current branch adds Mute/Unmute to the selected audio clip toolbar with an App integration test verifying persisted mute state.
+- PR #81 merged selected-audio Mute/Unmute as main commit `7ba96ec0eae8d6e3fb2196d7b9f492e293ff10e2`; exact-head CI run [39249271916](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39249271916) passed.
+- Current branch styles the active muted state and asserts `aria-pressed` in the App integration test.
 - Main push CI and Pages deployment for the latest main head have not yet been independently confirmed. Do not ask the owner to test until deployment is verified.
 
 ## Not complete

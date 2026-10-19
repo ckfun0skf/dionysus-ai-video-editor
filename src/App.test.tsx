@@ -2215,10 +2215,12 @@ describe("mobile audio clip controls", () => {
     await flushEffects();
     const muteButton = () => container.querySelector<HTMLButtonElement>('[aria-label="Mute selected audio"], [aria-label="Unmute selected audio"]');
     expect(muteButton()?.getAttribute("aria-label")).toBe("Mute selected audio");
+    expect(muteButton()?.getAttribute("aria-pressed")).toBe("false");
     click(muteButton()!);
     await flushEffects();
     expect((persistedProject().timelineClips ?? []).find(item => item.id === "mobile-audio-mute-clip")?.muted).toBe(true);
     expect(muteButton()?.getAttribute("aria-label")).toBe("Unmute selected audio");
+    expect(muteButton()?.getAttribute("aria-pressed")).toBe("true");
     click(muteButton()!);
     await flushEffects();
     expect((persistedProject().timelineClips ?? []).find(item => item.id === "mobile-audio-mute-clip")?.muted).toBe(false);
