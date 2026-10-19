@@ -69,5 +69,5 @@ Start by inspecting GitHub and then continue the work. Do not merely summarize t
 
 ## Latest pickup note — 2026-10-19
 
-- The newest timeline interaction code checkpoint is commit `a98655c9263bfa033575d6d6c01109bc5dfba94b`, with exact-head CI run [39227084457](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39227084457) passing tests and TypeScript/Vite build.
-- `src/nestedTimelinePlacement.ts` now wires nested Clip/Version Timeline drag previews, snap guides, overlap protection and left/right resize with adjacent-layer trimming into one Undo transaction. Do not call #53/#54 done: merge and verify Pages deployment first; owner acceptance is still required. Underlying canonical Composition persistence and structure-preserving Save-as-Clip remain unfinished.
+- PR #63 was merged to `main` as `9da2f2bfbf7e80abb73f5552a0d1447cff471c0b`; main CI [39227655141](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39227655141) and GitHub Pages deploy [39227655137](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39227655137) passed for the deployed SHA. Public preview: https://ckfun0skf.github.io/dionysus-ai-video-editor/.
+- `src/nestedTimelinePlacement.ts` wires nested Clip/Version Timeline drag previews, snap guides, overlap protection and left/right resize with adjacent-layer trimming into one Undo transaction. #53/#54 remain open pending owner acceptance. Underlying canonical Composition persistence and structure-preserving Save-as-Clip remain unfinished.
