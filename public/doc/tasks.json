@@ -624,8 +624,8 @@
           "id": "DYS-012",
           "title": "Responsive mobile editing workspace",
           "status": "in_progress",
-          "progress": 84,
-          "summary": "Responsive layout, Master/nested touch drag, contextual tools, Inspector toggle, timeline zoom and trim hit targets are merged. Current slice improves pointer-captured touch scrubbing. Deployment and viewport acceptance remain outstanding.",
+          "progress": 87,
+          "summary": "Responsive layout, touch movement, contextual tools, Inspector toggle, zoom, trim hit targets and pointer-captured scrubbing are merged. Current slice refines the phone version picker. Deployment and viewport acceptance remain outstanding.",
           "doc": "tasks/responsive-mobile-editing.md",
           "detail": "tasks/responsive-mobile-editing.html",
           "report": "reports/responsive-mobile-editing-report.md",
@@ -636,7 +636,7 @@
             },
             {
               "title": "Touch-friendly timeline scrubbing and clip selection",
-              "status": "in_progress"
+              "status": "done"
             },
             {
               "title": "Nested Clip Version touch movement",
@@ -674,9 +674,10 @@
             "PR #72 merged timeline zoom and Fit controls as main commit f57b5ad3ffe5b80bd586b513fc2fc1e201898cf8; exact-head CI run 39238940480 passed.",
             "Main push CI and Pages deployment have not yet been independently confirmed. Do not ask the owner to test before deployment is verified.",
             "PR #73 merged mobile trim hit targets and visible grab markers as main commit 98f1637f1cc36a069578edb2337bcfdb578b4612; exact-head CI run 39239397529 passed.",
-            "Current branch feat/mobile-precision-scrubbing adds pointer-captured touch scrubbing for integrated Master, main visual, and nested Clip Version timeline rulers with an App regression test; exact-head CI pending."
+            "PR #74 merged pointer-captured scrubbing as main commit 605edf9af5922f3f6c054997d50f648ecae067ad; exact-head CI run 39242564926 passed.",
+            "Current branch feat/mobile-version-picker-bottom-sheet improves phone version-picker positioning and touch targets; exact-head CI pending."
           ],
-          "notes": "Owner requested a CapCut-inspired phone interface. Layout, touch movement, contextual tools, Inspector access, zoom and trim ergonomics are merged. Pointer-captured scrubbing is current; viewport/device acceptance and deployment verification remain."
+          "notes": "Owner requested a CapCut-inspired phone interface. Layout, touch movement, contextual tools, Inspector access, zoom, trim ergonomics and pointer-captured scrubbing are merged. Mobile version picker refinement is current; viewport/device acceptance and deployment verification remain."
         }
       ]
     },

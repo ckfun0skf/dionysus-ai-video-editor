@@ -1,6 +1,6 @@
 # DYS-012 Progress Report — Responsive mobile editing
 
-**Status:** In progress; layout, touch movement, contextual tools and zoom merged; trim hit targets merged; precision scrubbing active  
+**Status:** In progress; layout, touch movement, contextual tools and zoom merged; trim hit targets and pointer-captured scrubbing merged; version picker refinement active  
 **Last reviewed:** 2026-10-19
 
 ## Shipped
@@ -16,11 +16,14 @@ Main push CI and Pages deployment have not yet been independently confirmed. Do 
 ## Latest merged trim ergonomics
 PR #73 merged trim hit targets and visible grab markers as `98f1637f1cc36a069578edb2337bcfdb578b4612`; exact-head CI run [39239397529](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39239397529) passed.
 
-## Current precision-scrubbing slice
-Adds pointer-captured playhead scrubbing to Master, main visual and nested Version rulers, with App regression coverage. This is not a device-level acceptance claim.
+## Latest precision-scrubbing release
+PR #74 merged pointer-captured playhead scrubbing to Master, main visual and nested Version rulers as `605edf9af5922f3f6c054997d50f648ecae067ad`; exact-head CI passed at [39242564926](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39242564926).
+
+## Current mobile version picker slice
+Makes the Master Shot version picker a safe-area-aware bottom sheet on phones, with 44–48 px touch targets. Desktop popover behavior remains unchanged. Automated CI is pending; this does not substitute for device-level acceptance.
 
 ## Remaining work
-- Verify exact-head CI for precision scrubbing, then merge through PR.
+- Verify exact-head CI for mobile version picker refinement, then merge through PR.
 - Independently verify main push CI and GitHub Pages deployment after merge.
 - Refine scrubbing/trim, Inspector/Version picker and mobile viewport behavior.
 - Record viewport/device evidence only when available; do not mark DYS-012 done on CSS and gestures alone.

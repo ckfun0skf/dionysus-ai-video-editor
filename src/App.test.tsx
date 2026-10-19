@@ -2094,3 +2094,18 @@ describe("mobile timeline playhead scrubbing", () => {
     act(() => ruler!.dispatchEvent(pointer("pointerup", 80)));
   });
 });
+
+
+describe("mobile version picker affordances", () => {
+  it("opens the Master Shot version picker with version and add-version actions", async () => {
+    await openTimelineView();
+    const menu = container.querySelector<HTMLDetailsElement>(".master-shot-version-menu");
+    expect(menu).toBeTruthy();
+    const summary = menu!.querySelector<HTMLElement>("summary");
+    expect(summary?.getAttribute("aria-label")).toContain("Show versions for");
+    click(summary!);
+    expect(menu!.open).toBe(true);
+    expect(menu!.querySelector(".timeline-version-menu-row button:first-child")).toBeTruthy();
+    expect(Array.from(menu!.querySelectorAll("button")).some(button => button.textContent?.includes("Add Version"))).toBe(true);
+  });
+});
