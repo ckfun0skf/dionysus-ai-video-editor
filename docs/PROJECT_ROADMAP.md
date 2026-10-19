@@ -194,3 +194,10 @@ Active branch `feat/mobile-contextual-editor-tools` adds contextual mobile actio
 PR #71 merged contextual selected-clip tools and the mobile Inspector toggle as main commit `3ab7defb1a882ebc8eefcbfb1ccaa37ffcc69351`; exact-head CI run [39238524459](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39238524459) passed at `19eda997ad20a8a38d6b1e63345f03bccf9eb09e`.
 
 Active branch `feat/mobile-timeline-zoom-controls` adds phone-only Zoom In / Zoom Out / Fit controls, scaling root and nested track surfaces without mutating clip timing. An integration test checks zoom width and Fit behavior. DYS-012 remains in progress; deployment and portrait/landscape viewport acceptance are not confirmed. Do not add browser smoke tests or ask the owner to test before deployment is verified.
+
+
+## Mobile trim ergonomics — 2026-10-19
+
+PR #72 merged timeline Zoom In / Zoom Out / Fit controls as main commit `f57b5ad3ffe5b80bd586b513fc2fc1e201898cf8`; exact-head CI run [39238940480](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39238940480) passed at `2ce2e57f9a4360c6f438a56d721625cb54081947`.
+
+Active branch `feat/mobile-touch-trim-handles` expands trim hit targets to 20 px on mobile, adds visible grab markers, and tests touch-pointer trimming. DYS-012 remains in progress; deployment and portrait/landscape viewport acceptance remain unconfirmed. Do not add browser smoke tests or ask the owner to test before deployment is verified.

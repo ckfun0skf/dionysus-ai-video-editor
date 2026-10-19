@@ -2036,3 +2036,42 @@ describe("mobile timeline zoom controls", () => {
     expect(scrollSurface.style.getPropertyValue("--timeline-track-min-width")).toBe("240px");
   });
 });
+
+
+describe("mobile touch trim handles", () => {
+  it("can trim a Master Timeline clip with a touch pointer", async () => {
+    const project = structuredClone(persistedProject());
+    const videoTrack = project.tracks.find(track => track.kind === "video")!;
+    project.timelineClips = [
+      { id: "touch-trim-clip", name: "Touch trim clip", kind: "video", trackId: videoTrack.id, start: 0, duration: 3 },
+    ];
+    act(() => root.unmount());
+    localStorage.setItem("dionysus.project.v1", JSON.stringify(project));
+    root = createRoot(container);
+    act(() => root.render(<App />));
+    await flushEffects();
+    await openTimelineView();
+
+    const clip = Array.from(container.querySelectorAll<HTMLButtonElement>(".visual-media-clip"))
+      .find(button => button.textContent?.includes("Touch trim clip"))!;
+    const right = clip.querySelector<HTMLElement>(".clip-resize-right")!;
+    const lane = clip.closest(".visual-track-lane") as HTMLElement;
+    expect(right).toBeTruthy();
+    Object.defineProperty(lane, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({ left: 0, top: 0, right: 100, bottom: 76, width: 100, height: 76, x: 0, y: 0, toJSON: () => ({}) }),
+    });
+    const pointer = (type: string, x: number) => {
+      const event = new Event(type, { bubbles: true, cancelable: true }) as PointerEvent;
+      Object.defineProperties(event, {
+        pointerId: { value: 73 }, pointerType: { value: "touch" }, button: { value: 0 }, clientX: { value: x },
+      });
+      return event;
+    };
+    act(() => right.dispatchEvent(pointer("pointerdown", 20)));
+    act(() => window.dispatchEvent(pointer("pointermove", 30)));
+    act(() => window.dispatchEvent(pointer("pointerup", 30)));
+    await flushEffects();
+    expect((persistedProject().timelineClips ?? []).find(item => item.id === "touch-trim-clip")?.duration).toBeGreaterThan(3);
+  });
+});

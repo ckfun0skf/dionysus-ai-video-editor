@@ -117,3 +117,10 @@ Start by inspecting GitHub and then continue the work. Do not merely summarize t
 - PR #71 merged contextual clip tools and mobile Inspector toggle as main commit `3ab7defb1a882ebc8eefcbfb1ccaa37ffcc69351`; exact-head CI run [39238524459](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39238524459) passed at `19eda997ad20a8a38d6b1e63345f03bccf9eb09e`.
 - Active branch `feat/mobile-timeline-zoom-controls` adds Zoom In / Zoom Out / Fit controls to root and nested timelines. Confirm CI and merge via PR.
 - Keep DYS-012 in progress. Main push CI and Pages deployment are not independently confirmed; no browser smoke tests and do not ask the owner to test before deployment confirmation.
+
+
+## Latest mobile trim checkpoint — 2026-10-19
+
+- PR #72 merged mobile timeline zoom as main commit `f57b5ad3ffe5b80bd586b513fc2fc1e201898cf8`; exact-head CI run [39238940480](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39238940480) passed at `2ce2e57f9a4360c6f438a56d721625cb54081947`.
+- Active branch `feat/mobile-touch-trim-handles` expands trim hit areas and adds touch-pointer regression coverage.
+- Keep DYS-012 in progress. Main push CI and Pages deployment are not independently confirmed; no browser smoke tests and do not ask the owner to test before deployment confirmation.
