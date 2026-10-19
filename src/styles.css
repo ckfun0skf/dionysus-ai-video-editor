@@ -1479,7 +1479,7 @@
 .integrated-preview-heading small {
   max-width: 75ch;
 }
-.workbench.timeline-workbench .visual-timeline {
+.workbench.timeline-workbench .visual-timeline:not(.nested-timeline-tab) {
   gap: 8px;
 }
 .workbench.timeline-workbench .visual-track-list {
@@ -2349,4 +2349,365 @@
 @media(max-width:760px) {
   .timeline-placement-banner { align-items:flex-start; flex-direction:column; }
   .timeline-insert-dialog footer .button { flex:1; }
+}
+
+
+/* DYS-012 mobile workspace foundation: CapCut-inspired hierarchy, not a shrunken desktop. */
+@media (max-width: 640px) {
+  html, body, #root {
+    width: 100%;
+    min-width: 320px;
+    overflow-x: clip;
+  }
+  .app-shell {
+    display: block;
+    min-height: 100dvh;
+  }
+  .main-area {
+    width: 100%;
+    min-width: 0;
+    padding-bottom: calc(76px + env(safe-area-inset-bottom));
+  }
+
+  /* Keep Storyboard, Timeline, Assets and References one thumb-tap away. */
+  .sidebar {
+    position: fixed;
+    z-index: 100;
+    inset: auto 0 0;
+    width: 100%;
+    height: calc(66px + env(safe-area-inset-bottom));
+    min-height: 0;
+    padding: 5px 8px calc(5px + env(safe-area-inset-bottom));
+    display: flex;
+    flex-direction: row;
+    border: 0;
+    border-top: 1px solid var(--line);
+    background: rgba(20, 20, 22, .96);
+    backdrop-filter: blur(16px);
+  }
+  .sidebar > :not(.side-nav) {
+    display: none !important;
+  }
+  .sidebar .side-nav {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    align-items: stretch;
+    gap: 4px;
+    width: 100%;
+  }
+  .sidebar .side-nav .nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    min-width: 0;
+    min-height: 48px;
+    padding: 5px 2px;
+    border-radius: 8px;
+    font-size: 10px;
+    line-height: 1.1;
+    text-align: center;
+    touch-action: manipulation;
+  }
+  .sidebar .side-nav .nav-item span:not(.nav-count) {
+    display: block !important;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .sidebar .side-nav .nav-item .nav-count {
+    display: none !important;
+  }
+
+  .topbar {
+    min-height: 48px;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+  }
+  .breadcrumbs {
+    flex: 1 1 auto;
+    min-width: 0;
+    flex-wrap: nowrap;
+    overflow: hidden;
+    font-size: 10px;
+  }
+  .breadcrumbs > span:first-child,
+  .breadcrumbs .crumb-sep,
+  .breadcrumbs .local-pill {
+    display: none;
+  }
+  .breadcrumbs > strong {
+    max-width: 45vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .top-actions {
+    flex: 0 1 auto;
+    width: auto;
+    max-width: 58vw;
+    min-width: 0;
+    flex-wrap: nowrap;
+    gap: 4px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+  .top-actions::-webkit-scrollbar { display: none; }
+  .top-actions .button {
+    flex: 0 0 auto;
+    min-height: 36px;
+    padding: 7px 9px;
+    font-size: 10px;
+    touch-action: manipulation;
+  }
+
+  .page-content {
+    padding: 12px 8px 8px;
+  }
+  .page-heading {
+    margin-bottom: 8px;
+  }
+  .page-heading .eyebrow,
+  .page-heading p,
+  .page-heading .heading-meta {
+    display: none;
+  }
+  .page-heading h1 {
+    margin: 0;
+    font-size: 18px;
+  }
+  .timeline-page-heading {
+    display: none;
+  }
+
+  /* Preview first, then the timeline; avoid desktop inspector columns on phones. */
+  .workbench.timeline-workbench {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    min-width: 0;
+  }
+  .workbench.timeline-workbench .workbench-main {
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+  .master-timeline-content .integrated-preview-panel,
+  .nested-timeline-tab .integrated-preview-panel {
+    gap: 7px;
+    margin: 0 0 8px;
+    padding: 8px;
+    border-radius: 9px;
+  }
+  .integrated-preview-heading {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+  }
+  .integrated-preview-heading strong { font-size: 12px; }
+  .integrated-preview-heading small { font-size: 10px; }
+  .integrated-timecode {
+    flex: 0 0 auto;
+    font-size: 10px;
+  }
+  .integrated-preview-frame {
+    width: 100%;
+    max-height: 34dvh;
+    min-height: 150px;
+  }
+  .integrated-preview-controls {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .integrated-preview-controls .button {
+    min-width: 40px;
+    min-height: 40px;
+    touch-action: manipulation;
+  }
+
+  .timeline-workspace-bar {
+    max-width: 100%;
+    margin-bottom: 8px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+  }
+  .timeline-workspace-tabs {
+    flex: 0 0 auto;
+    width: max-content;
+    max-width: none;
+    gap: 6px;
+  }
+  .timeline-workspace-tab > button:first-child {
+    max-width: 140px;
+    min-height: 40px;
+  }
+  .timeline-tab-close {
+    min-width: 36px;
+    min-height: 36px;
+  }
+  .timeline-master-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .timeline-master-actions .inline-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .timeline-master-actions .button {
+    min-width: 0;
+    min-height: 40px;
+    padding: 8px;
+    white-space: normal;
+  }
+
+  /* The timeline may scroll horizontally, but the page itself stays within the phone. */
+  .workbench.timeline-workbench .visual-timeline:not(.nested-timeline-tab) {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+  .workbench.timeline-workbench .timeline-horizontal-scroll,
+  .workbench.timeline-workbench .nested-timeline-scroll {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .workbench.timeline-workbench .nested-timeline-scroll {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .workbench.timeline-workbench .visual-timeline-ruler,
+  .workbench.timeline-workbench .visual-track-row,
+  .workbench.timeline-workbench .editor-linked-timeline .visual-track-row,
+  .workbench.timeline-workbench .nested-timeline-scroll .nested-visual-timeline-ruler,
+  .workbench.timeline-workbench .nested-timeline-scroll .nested-timeline-row.visual-track-row {
+    grid-template-columns: 112px minmax(240px, 1fr);
+    min-width: 352px;
+  }
+  .workbench.timeline-workbench .visual-ruler-caption {
+    position: sticky;
+    left: 0;
+    z-index: 5;
+    padding: 0 6px;
+    font-size: 8px;
+    background: #141418;
+  }
+  .workbench.timeline-workbench .visual-track-label,
+  .workbench.timeline-workbench .nested-timeline-tab .nested-timeline-row-label.visual-track-label {
+    position: sticky;
+    left: 0;
+    z-index: 4;
+    gap: 5px;
+    padding: 7px 5px;
+    background: #17171b;
+  }
+  .workbench.timeline-workbench .visual-track-label strong {
+    max-width: 60px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 10px;
+  }
+  .workbench.timeline-workbench .visual-track-label small {
+    display: none;
+  }
+  .workbench.timeline-workbench .track-settings-button {
+    min-width: 30px;
+    min-height: 30px;
+  }
+  .workbench.timeline-workbench .track-layer-mute,
+  .workbench.timeline-workbench .track-add-clip {
+    min-width: 32px;
+    min-height: 32px;
+  }
+  .workbench.timeline-workbench .visual-track-lane,
+  .workbench.timeline-workbench .nested-timeline-tab .nested-timeline-row-track.visual-track-lane {
+    min-height: 58px;
+  }
+  .workbench.timeline-workbench .visual-track-row {
+    min-height: 58px;
+  }
+  .workbench.timeline-workbench .visual-media-clip-wrap {
+    top: 7px;
+    bottom: 7px;
+  }
+  .workbench.timeline-workbench .visual-media-clip-wrap > .visual-media-clip {
+    padding: 4px 20px 4px 5px;
+  }
+  .workbench.timeline-workbench .visual-clip-copy strong,
+  .workbench.timeline-workbench .nested-timeline-clip .visual-clip-copy strong {
+    font-size: 10px;
+  }
+  .workbench.timeline-workbench .clip-resize-handle {
+    width: 12px !important;
+    opacity: .65;
+    touch-action: none;
+  }
+
+  .timeline-placement-banner {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+    padding: 9px;
+  }
+  .timeline-placement-banner .button {
+    min-height: 40px;
+    width: 100%;
+  }
+  .timeline-insert-option {
+    min-height: 56px;
+    padding: 12px;
+    touch-action: manipulation;
+  }
+  .workbench.timeline-workbench .inspector {
+    display: none;
+  }
+  .workbench.timeline-workbench.timeline-inspector-open .inspector {
+    display: block;
+    position: fixed;
+    z-index: 120;
+    inset: auto 8px calc(74px + env(safe-area-inset-bottom));
+    max-height: 56dvh;
+    overflow: auto;
+    box-shadow: 0 18px 55px rgba(0, 0, 0, .55);
+  }
+
+  /* The other pages remain usable without the desktop two-column shell. */
+  .workbench:not(.timeline-workbench) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .workbench:not(.timeline-workbench) .inspector {
+    display: block;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .workbench:not(.timeline-workbench) .inspector-header {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .workbench:not(.timeline-workbench) .inspector-content {
+    display: block;
+  }
+  .section-toolbar,
+  .timeline-master-actions .section-toolbar {
+    flex-wrap: wrap;
+  }
+  button, input, select, textarea {
+    max-width: 100%;
+  }
 }

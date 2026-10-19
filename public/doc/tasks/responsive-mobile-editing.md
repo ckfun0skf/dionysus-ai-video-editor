@@ -1,31 +1,44 @@
 # DYS-012 — Responsive mobile editing
 
-**Status:** Planned  
-**Milestone:** M4 — Preview, compositing, and mobile editing
+**Status:** In progress — responsive layout foundation only  
+**Milestone:** M4 — Preview, compositing, and mobile editing  
+**Owner requirement:** A future phone version with a CapCut-inspired editing experience.
 
 ## Goal
-Make the editing workspace usable on phone and tablet screens without removing the existing Storyboard, References, or Assets workflows.
+Make Dionysus usable on phone and tablet screens without removing Storyboard, References, Assets, advanced multi-track editing, or reusable Clip Version workflows. The first delivery target is responsive mobile web sharing the desktop project model; this does not commit the project to a separate native application.
 
-## Scope
-- Reflow the editing workspace into a mobile-first, touch-friendly layout.
-- Keep preview, timeline, clip selection, and Inspector access discoverable on small screens.
-- Provide touch targets and gestures for selecting clips, moving the playhead, and opening version controls.
-- Preserve desktop layout behavior and keyboard shortcuts.
-- Test narrow portrait, landscape, and tablet breakpoints.
+## UX contract
+- Preview first, timeline immediately below it, with the timeline able to use its own horizontal scroll surface.
+- Persistent bottom navigation for Storyboard, Timeline, Assets and References; respect device safe-area insets.
+- Touch-sized playback, insertion, track and version controls with visible focus/selected states.
+- Keep track labels identifiable while panning the timeline. Prevent page-level horizontal overflow rather than squeezing every track into an unusably narrow lane.
+- Show context-relevant editing tools when content is selected; use a focused panel/sheet for dense properties instead of permanently taking preview width.
+- Preserve the same project data, pinned versions, linked audio and composition semantics as desktop.
 
-## Out of scope
-- Replacing the app's navigation or redesigning non-editing views.
-- Implementing media playback/compositing itself (DYS-006).
+## Current slice
+- Adds a four-destination mobile bottom navigation.
+- Compresses the top bar and page heading on narrow screens.
+- Prioritizes the integrated preview above the timeline.
+- Increases hit areas for playback, insertion, timeline tabs and key track controls.
+- Keeps timeline panning inside timeline surfaces and makes track labels sticky while scrolling.
+- Retains access to Storyboard, Assets and References.
+
+## Not complete
+- Touch-first clip drag/reorder, precise playhead scrubbing and reliable edge trimming.
+- Mobile Inspector open/close behavior and a contextual Version picker.
+- Portrait, landscape and tablet viewport validation, including page overflow.
+- Confirmation that every timeline interaction works on real touch input.
 
 ## Acceptance criteria
-- [ ] No horizontal page overflow at supported mobile widths.
-- [ ] Preview and timeline can both be accessed without losing the current selection.
-- [ ] Core controls have practical touch targets and visible focus states.
-- [ ] Storyboard, References, and Assets remain available.
-- [ ] Automated responsive checks and manual device/browser smoke tests are documented.
+- [ ] No page-level horizontal overflow at supported phone portrait/landscape and tablet sizes.
+- [ ] Preview and timeline are both accessible without losing selection.
+- [ ] Touch selection, scrubbing, drag/trim and version switching work reliably.
+- [ ] Storyboard, References and Assets remain reachable.
+- [ ] Exact-head CI/build and deployment evidence are recorded.
+- [ ] Any manual acceptance report is clearly separated from automated checks.
 
-## Verification evidence
-Record viewport sizes, browser/device, screenshots, overflow checks, and the tested editing flows before changing status to complete.
+## Verification policy
+Do not add or run automated browser smoke tests. Use the existing unit/component suite, TypeScript/Vite build and GitHub Pages deployment status. Do not mark DYS-012 complete based on responsive CSS alone; device/browser acceptance is separate and must not be claimed without evidence.
 
 ## Dependencies
-DYS-005 timeline workflow; DYS-006 preview/compositing.
+DYS-005 timeline workflow; DYS-006 preview/compositing; DYS-014 shared Composition model.

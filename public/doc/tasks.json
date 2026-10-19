@@ -623,16 +623,16 @@
         {
           "id": "DYS-012",
           "title": "Responsive mobile editing workspace",
-          "status": "planned",
-          "progress": 0,
-          "summary": "Create a mobile-specific CapCut-inspired editing layout while preserving Storyboard, References, and Assets.",
+          "status": "in_progress",
+          "progress": 20,
+          "summary": "First responsive mobile workspace foundation implemented in a feature branch: bottom navigation, compact top bar, preview-first timeline, touch-sized controls and pannable timeline surfaces. Core touch interactions and viewport validation remain outstanding.",
           "doc": "tasks/responsive-mobile-editing.md",
           "detail": "tasks/responsive-mobile-editing.html",
           "report": "reports/responsive-mobile-editing-report.md",
           "subtasks": [
             {
               "title": "Responsive preview and compact editing controls",
-              "status": "planned"
+              "status": "in_progress"
             },
             {
               "title": "Touch-friendly timeline scrubbing and clip selection",
@@ -648,14 +648,17 @@
             }
           ],
           "acceptance": [
-            "No horizontal overflow at agreed phone viewport sizes",
-            "Core timeline selection, scrubbing, and version switching work by touch",
-            "Storyboard, References, and Assets remain reachable"
+            "No page-level horizontal overflow at supported phone portrait/landscape and tablet viewport sizes",
+            "Preview and timeline remain accessible without losing current selection",
+            "Core timeline selection, scrubbing, drag/trim and version switching work by touch",
+            "Storyboard, References and Assets remain reachable from mobile navigation",
+            "Exact-head CI/build and post-merge deployment evidence recorded; do not add browser smoke tests"
           ],
           "evidence": [
-            "Viewport-specific browser QA report required"
+            "Responsive CSS implementation is on feature branch feat/mobile-capcut-responsive-workspace; not yet merged/deployed.",
+            "Automated CI/build and deployed viewport/manual acceptance are still required; no browser smoke tests have been run or added."
           ],
-          "notes": "The screenshot guides only the editing workspace, not a replacement for the overall app."
+          "notes": "Owner requested a future mobile version with a CapCut-inspired interface. Responsive mobile web is the first target; use the same project model as desktop. This is a foundation, not completion. See docs/PRD.md and docs/PROJECT_ROADMAP.md."
         }
       ]
     },
