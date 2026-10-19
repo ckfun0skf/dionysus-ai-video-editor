@@ -92,7 +92,7 @@ Start by inspecting GitHub and then continue the work. Do not merely summarize t
 
 ## Latest mobile-workspace pickup — 2026-10-19
 
-- Active branch: `feat/mobile-capcut-responsive-workspace` (PR to be created after the batch is committed).
+- PR #68 merged the responsive layout foundation to main as `3513d51f9a52599e0231d8cb4db884cc59e5d611`; exact-head PR CI run [39236495588](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39236495588) passed at `aca468fb345b523361467ae8da66b42d1207904a`. Main push CI and Pages deployment still require independent confirmation.
 - This slice adds responsive mobile CSS for a four-item bottom navigation, compact top bar, preview-first timeline workspace, touch-sized playback/insert controls and horizontally scrollable track surfaces with sticky track labels.
 - It does not yet implement robust touch drag/scrub gestures, a working contextual mobile Inspector sheet, or verified portrait/landscape no-overflow behavior. Keep DYS-012 in progress and report these as limitations.
 - Continue next with tests and interaction support for touch scrubbing/selection/version switching, then return to DYS-014 canonical Composition persistence and structure-preserving snapshots.

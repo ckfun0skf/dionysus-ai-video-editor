@@ -269,6 +269,14 @@ export default function App() {
     cancelListener?: (event: PointerEvent) => void;
   } | null>(null);
   const suppressTouchClipClickRef = useRef(false);
+  useEffect(() => () => {
+    const active = touchClipMoveRef.current;
+    if (!active) return;
+    if (active.timer !== undefined) window.clearTimeout(active.timer);
+    if (active.moveListener) window.removeEventListener("pointermove", active.moveListener);
+    if (active.upListener) window.removeEventListener("pointerup", active.upListener);
+    if (active.cancelListener) window.removeEventListener("pointercancel", active.cancelListener);
+  }, []);
   const masterShotDragSourceRef = useRef<string>("");
   const [clipDropPreview, setClipDropPreview] = useState<{ trackId: string; start: number; duration: number; name: string; snapTime?: number } | null>(null);
   const nestedLayerDragSourceRef = useRef("");

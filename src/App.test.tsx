@@ -1892,7 +1892,7 @@ describe("mobile touch timeline gestures", () => {
       expect(moved?.trackId).toBe(videoTrack.id);
     } finally {
       if (previousElementFromPoint) Object.defineProperty(document, "elementFromPoint", previousElementFromPoint);
-      else delete (document as Document & { elementFromPoint?: (x: number, y: number) => Element | null }).elementFromPoint;
+      else Reflect.deleteProperty(document, "elementFromPoint");
     }
   });
 });
