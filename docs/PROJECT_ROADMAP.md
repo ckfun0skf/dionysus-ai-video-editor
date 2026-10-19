@@ -52,7 +52,7 @@ Core architecture:
 
 ### Phase 2 — One shared Composition Editor / Placement engine
 **Tasks:** DYS-005, DYS-014; issues #53 and #54  
-**Current progress:** Project-level mixed-model placement and resize operations are now extracted to `src/projectTimelinePlacement.ts`; App uses the same occupancy/resize engine for ordinary clips and Master Shots, and cross-model neighbor trims apply atomically. Regression tests cover both resize directions. Separate editor state/data paths still exist.  
+**Current progress:** Project-level mixed-model placement, move and resize operations are extracted to `src/projectTimelinePlacement.ts`; App uses the same occupancy/resize engine for ordinary clips and Master Shots, and both move paths delegate to the same project-level move operation. Cross-model neighbor trims apply atomically. Separate editor state/data paths still exist.  
 **Deliverables:**
 - Root and nested editors share the same Composition document contract, components and placement operations.
 - Remove the special Master Shot drag/resize path after migration; don't patch parity with CSS or duplicate handlers.

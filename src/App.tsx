@@ -14,6 +14,7 @@ import {
   calculateProjectTimelineClipResizePreview,
   calculateProjectTimelineDropPosition,
   getProjectTimelinePlacementItems,
+  moveProjectTimelinePlacement,
 } from "./projectTimelinePlacement";
 import { recordProjectChange, undoProjectChange as undoHistory, redoProjectChange as redoHistory } from "./projectHistory";
 import { collectCompositionLayers, renderCompositionFrame, exportCompositionWebM, downloadExport } from "./compositionRenderer";
@@ -1650,8 +1651,8 @@ export default function App() {
           if(!pos){setNotice("No non-overlapping position is available on this video layer.");setClipDropPreview(null);return;}
           const conflict=getMasterShotPlacementItems(project,movingShot.id).some(clip=>clip.trackId===track.id&&pos.start<clip.start+clip.duration-1e-7&&pos.start+movingShot.duration>clip.start+1e-7);
           if(conflict){setNotice("Drop cancelled: this position overlaps another item on the destination layer.");setClipDropPreview(null);return;}
-          next=pos.start;const oldStart=getMasterShotStart(project.shots,movingShot.id),delta=next-oldStart;
-          change(p=>({...p,shots:setMasterShotStart(p.shots,movingShot.id,next).map(shot=>shot.id===movingShot.id?{...shot,masterTrackId:track.id}:shot),timelineClips:(p.timelineClips??[]).map(clip=>clip.id.startsWith("storyboard-"+movingShot.id+"-")?{...clip,start:Math.max(0,clip.start+delta),...(clip.kind==="video"?{trackId:track.id}:{})}:clip)}));
+          next=pos.start;
+          change(p=>moveProjectTimelinePlacement(p,{type:"shot",shotId:movingShot.id},track.id,next));
           setNotice(pos.snapTime!==undefined?"Shot snapped to an aligned, non-overlapping position.":"Shot moved to a non-overlapping position.");
         }
         setSelectedId(movingShot.id);setIsPlaying(false);playbackTimeRef.current=next;setEditorTime(next);setClipDropPreview(null);return;
@@ -1663,7 +1664,7 @@ export default function App() {
      if(!pos){setNotice("No non-overlapping position is available on this layer.");clipDragSourceRef.current=null;setClipDropPreview(null);return;}
      const destinationConflict=getTimelinePlacementItems(project,moving).some(clip=>clip.id!==moving.id&&clip.trackId===track.id&&pos.start<clip.start+clip.duration-1e-7&&pos.start+moving.duration>clip.start+1e-7);
      if(destinationConflict){setNotice("Drop cancelled: this position overlaps another clip on the destination layer.");clipDragSourceRef.current=null;setClipDropPreview(null);return;}
-     try{change(p=>{const targetClips=(p.timelineClips??[]).map(clip=>clip.id===moving.id?{...clip,trackId:track.id}:clip);const moved=moveTimelineClip({tracks:p.tracks,timelineClips:targetClips},moving.id,pos.start);return {...p,timelineClips:moved.timelineClips};});setSelectedTimelineClipId(moving.id);setSelectedTimelineTrackId(track.id);setIsPlaying(false);setNotice(pos.snapTime!==undefined?"Clip snapped to an aligned, non-overlapping position.":"Clip moved to a non-overlapping position.");}catch(error){setNotice(error instanceof Error?error.message:"Could not move the clip.");}finally{clipDragSourceRef.current=null;setClipDropPreview(null);}
+     try{change(p=>moveProjectTimelinePlacement(p,{type:"clip",clipId:moving.id},track.id,pos.start));setSelectedTimelineClipId(moving.id);setSelectedTimelineTrackId(track.id);setIsPlaying(false);setNotice(pos.snapTime!==undefined?"Clip snapped to an aligned, non-overlapping position.":"Clip moved to a non-overlapping position.");}catch(error){setNotice(error instanceof Error?error.message:"Could not move the clip.");}finally{clipDragSourceRef.current=null;setClipDropPreview(null);}
    }}>
    <div className="visual-playhead" style={{left:(editorTime/mediaTimelineDuration*100)+"%"}}/>
     {(clipResizePreview?.trackId===track.id && clipResizePreview.overlap || shotResizePreview?.trackId===track.id && shotResizePreview.overlap) && <div className="clip-overlap-preview" style={{left:(((shotResizePreview?.trackId===track.id&&shotResizePreview.overlap)?shotResizePreview.overlap!.start:clipResizePreview!.overlap!.start)/mediaTimelineDuration*100)+"%",width:Math.max(0.25,(((shotResizePreview?.trackId===track.id&&shotResizePreview.overlap)?shotResizePreview.overlap!.duration:clipResizePreview!.overlap!.duration)/mediaTimelineDuration*100))+"%"}} aria-hidden="true"/>}

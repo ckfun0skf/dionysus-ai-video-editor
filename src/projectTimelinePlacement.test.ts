@@ -44,6 +44,38 @@ describe("shared project timeline placement engine", () => {
     expect(updated.shots[0].duration).toBeLessThan(6);
   });
 
+
+  it("moves a Master Shot and its materialized Storyboard placements together", () => {
+    const project = structuredClone(sampleProject);
+    const videoTracks = project.tracks.filter(track => track.kind === "video");
+    const audioTrack = project.tracks.find(track => track.kind === "audio")!;
+    const shot = { ...project.shots[0], masterStart: 2, masterTrackId: videoTracks[0].id, duration: 6 };
+    project.shots = [shot];
+    const storyboardVideo = { id: "storyboard-" + shot.id + "-slot-a", name: "Generated video", kind: "video" as const, trackId: videoTracks[0].id, start: 2, duration: 3, shotId: shot.id };
+    const storyboardAudio = { id: "storyboard-" + shot.id + "-slot-a-audio", name: "Generated audio", kind: "audio" as const, trackId: audioTrack.id, start: 2, duration: 3 };
+    project.timelineClips = [storyboardVideo, storyboardAudio];
+    const updated = moveProjectTimelinePlacement(project, { type: "shot", shotId: shot.id }, videoTracks[1].id, 5);
+    expect(updated.shots[0]).toMatchObject({ masterStart: 5, masterTrackId: videoTracks[1].id });
+    expect(updated.timelineClips).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: storyboardVideo.id, start: 5, trackId: videoTracks[1].id }),
+      expect.objectContaining({ id: storyboardAudio.id, start: 5, trackId: audioTrack.id }),
+    ]));
+  });
+
+  it("moves a normal video clip and its linked audio as one placement group", () => {
+    const project = structuredClone(sampleProject);
+    const videoTracks = project.tracks.filter(track => track.kind === "video");
+    const audioTrack = project.tracks.find(track => track.kind === "audio")!;
+    const video = { id: "move-video", name: "Video", kind: "video" as const, trackId: videoTracks[0].id, start: 1, duration: 4 };
+    const audio = { id: "move-audio", name: "Audio", kind: "audio" as const, trackId: audioTrack.id, start: 1, duration: 4, linkedVideoClipId: video.id };
+    project.timelineClips = [video, audio];
+    const updated = moveProjectTimelinePlacement(project, { type: "clip", clipId: video.id }, videoTracks[1].id, 8);
+    expect(updated.timelineClips).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: video.id, trackId: videoTracks[1].id, start: 8 }),
+      expect.objectContaining({ id: audio.id, trackId: audioTrack.id, start: 8, duration: 4, linkedVideoClipId: video.id }),
+    ]));
+  });
+
   it("keeps linked source audio aligned when a cross-model resize trims the video", () => {
     const project = structuredClone(sampleProject);
     const track = project.tracks.find(item => item.kind === "video")!;

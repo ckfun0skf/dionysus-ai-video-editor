@@ -3,6 +3,9 @@ import { getMasterShotStart } from "./masterTimeline";
 import { calculateTimelineDropPosition } from "./timelinePlacement";
 import { applyTimelineClipResize, calculateTimelineClipResizePreview, type ClipResizePreview } from "./timelineResize";
 import { withDurationAndClampedFades } from "./audioEnvelope";
+import { canPlaceTimelineClipOnTrack } from "./timelinePlacement";
+import { moveTimelineClip } from "./timelineOperations";
+import { setMasterShotStart } from "./masterTimeline";
 
 function asShotPlacement(project: DionysusProject, shot: Shot): TimelineClip {
   const trackId = shot.masterTrackId && project.tracks.some(track => track.id === shot.masterTrackId && track.kind === "video")
@@ -99,4 +102,44 @@ export function applyProjectTimelineClipResize(
     }),
     timelineClips,
   };
+}
+
+export type ProjectTimelineMoveTarget =
+  | { type: "shot"; shotId: string }
+  | { type: "clip"; clipId: string };
+
+/** Commit a valid placement move for either a Master Shot or an ordinary timeline clip. */
+export function moveProjectTimelinePlacement(
+  project: DionysusProject,
+  target: ProjectTimelineMoveTarget,
+  targetTrackId: string,
+  start: number,
+): DionysusProject {
+  if (!Number.isFinite(start) || start < 0) throw new Error("Placement start must be finite and non-negative.");
+  const targetTrack = project.tracks.find(track => track.id === targetTrackId);
+  if (!targetTrack) throw new Error("Destination track not found.");
+
+  if (target.type === "shot") {
+    const shot = project.shots.find(item => item.id === target.shotId);
+    if (!shot) throw new Error("Master Shot not found.");
+    if (targetTrack.kind !== "video") throw new Error("A Master Shot must use a video track.");
+    const delta = start - getMasterShotStart(project.shots, shot.id);
+    return {
+      ...project,
+      shots: setMasterShotStart(project.shots, shot.id, start)
+        .map(item => item.id === shot.id ? { ...item, masterTrackId: targetTrackId } : item),
+      timelineClips: (project.timelineClips ?? []).map(clip =>
+        clip.id.startsWith("storyboard-" + shot.id + "-")
+          ? { ...clip, start: Math.max(0, clip.start + delta), ...(clip.kind === "video" ? { trackId: targetTrackId } : {}) }
+          : clip
+      ),
+    };
+  }
+
+  const moving = (project.timelineClips ?? []).find(item => item.id === target.clipId);
+  if (!moving) throw new Error("Timeline clip not found.");
+  if (!canPlaceTimelineClipOnTrack(moving, targetTrack)) throw new Error("This clip type cannot be placed on the destination track.");
+  const targetClips = (project.timelineClips ?? []).map(clip => clip.id === moving.id ? { ...clip, trackId: targetTrackId } : clip);
+  const moved = moveTimelineClip({ tracks: project.tracks, timelineClips: targetClips }, moving.id, start);
+  return { ...project, timelineClips: moved.timelineClips };
 }
