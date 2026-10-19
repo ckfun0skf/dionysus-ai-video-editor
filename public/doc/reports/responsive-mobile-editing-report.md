@@ -1,6 +1,6 @@
 # DYS-012 Progress Report — Responsive mobile editing
 
-**Status:** In progress; layout, touch movement, contextual tools and zoom merged; trim hit targets and pointer-captured scrubbing merged; mobile version picker and frame-aligned scrubbing and frame-step controls merged; frame counter refinement active  
+**Status:** In progress; layout, touch movement, contextual tools and zoom merged; trim hit targets and pointer-captured scrubbing merged; mobile version picker and frame-aligned scrubbing and frame-step controls merged; frame counter and keyboard frame-step refinement merged; mobile preview Undo/Redo active  
 **Last reviewed:** 2026-10-19
 
 ## Shipped
@@ -31,8 +31,11 @@ PR #77 merged phone-only Previous frame / Next frame controls and frame-rate-ali
 ## Latest mobile frame-counter release
 PR #78 merged a phone-only current-frame counter beside the preview timecode as `8d36a4e018395fd13d60110ba9c5f4d2aeeffbbc`; exact-head CI passed at [39243808054](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39243808054).
 
-## Current keyboard frame-step slice
-Left/Right on the focused visual timeline ruler steps by one project frame instead of half a second, with an App regression test. Automated CI is pending; this does not substitute for device-level acceptance.
+## Frame-accurate keyboard scrubbing
+PR #79 merged Left/Right one-frame stepping on the focused visual timeline ruler as main commit `0a5ace89e28fff5d1f46bc0e4330d56e91f9035e`.
+
+## Current mobile history controls
+The active slice adds phone-sized Undo/Redo controls beside the preview. The App integration test verifies a clip duplicate can be undone and redone from these controls. Exact-head CI and post-merge deployment are pending; no browser smoke tests are added.
 
 ## Remaining work
 - Verify exact-head CI for keyboard frame stepping, then merge through PR.

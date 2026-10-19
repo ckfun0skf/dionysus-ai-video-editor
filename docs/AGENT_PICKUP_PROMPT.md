@@ -124,3 +124,8 @@ Start by inspecting GitHub and then continue the work. Do not merely summarize t
 - PR #72 merged mobile timeline zoom as main commit `f57b5ad3ffe5b80bd586b513fc2fc1e201898cf8`; exact-head CI run [39238940480](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39238940480) passed at `2ce2e57f9a4360c6f438a56d721625cb54081947`.
 - Active branch `feat/mobile-touch-trim-handles` expands trim hit areas and adds touch-pointer regression coverage.
 - Keep DYS-012 in progress. Main push CI and Pages deployment are not independently confirmed; no browser smoke tests and do not ask the owner to test before deployment confirmation.
+
+
+### Current DYS-012 mobile follow-up (2026-10-19)
+
+Continue from branch `feat/mobile-preview-undo-redo` (if already merged, inspect the PR and main head first). This slice adds phone-sized Undo/Redo beside the preview and an App regression test for duplicate → Undo → Redo. Run exact-head CI/build, keep the work in a PR, verify main CI and Pages deployment after merge, and update the task dashboard/report/handoff. No browser smoke tests; do not ask the owner to test until deployment is verified. DYS-012 remains in progress until phone portrait/landscape/tablet acceptance is evidenced.

@@ -33,7 +33,8 @@ Make Dionysus usable on phone and tablet screens without removing Storyboard, Re
 - PR #76 merged frame-aligned pointer scrubbing as `c04d9562747352225b83de90cc48a55355c06494`; exact-head CI run [39243270619](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39243270619) passed.
 - PR #77 merged phone-only Previous frame / Next frame controls and frame-rate-aligned range steps as `ef1fb36d4e512825b2baec0d3103c5d86ab4ce49`; exact-head CI run [39243556120](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39243556120) passed.
 - PR #78 merged the phone-only current-frame counter as `8d36a4e018395fd13d60110ba9c5f4d2aeeffbbc`; exact-head CI run [39243808054](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39243808054) passed.
-- Current slice makes Left/Right on the focused visual timeline ruler step one frame at a time, matching mobile frame-step buttons.
+- PR #79 merged frame-accurate Left/Right keyboard scrubbing as main commit `0a5ace89e28fff5d1f46bc0e4330d56e91f9035e`.
+- Current branch adds mobile-sized Undo/Redo buttons beside preview controls. Regression coverage verifies duplicate → Undo → Redo restores the expected clip count.
 - Main push CI and Pages deployment for the latest main head have not yet been independently confirmed. Do not ask the owner to test until deployment is verified.
 
 ## Not complete
