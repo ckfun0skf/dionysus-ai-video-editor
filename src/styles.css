@@ -2891,3 +2891,20 @@
   .timeline-version-menu-row > button.timeline-version-edit,
   .timeline-version-add { min-height: 44px; padding: 10px 12px; font-size: 12px; touch-action: manipulation; }
 }
+
+
+@media (min-width: 641px) {
+  .mobile-frame-step { display: none !important; }
+}
+@media (max-width: 640px) {
+  .integrated-preview-controls .mobile-frame-step {
+    display: inline-flex;
+    min-width: 42px;
+    min-height: 42px;
+    align-items: center;
+    justify-content: center;
+    padding: 8px;
+    font-variant-numeric: tabular-nums;
+    touch-action: manipulation;
+  }
+}

@@ -2111,3 +2111,23 @@ describe("mobile version picker affordances", () => {
     expect(Array.from(menu!.querySelectorAll("button")).some(button => button.textContent?.includes("Add Version"))).toBe(true);
   });
 });
+
+
+describe("mobile frame-step preview controls", () => {
+  it("moves the playhead by exactly one project frame in either direction", async () => {
+    await openTimelineView();
+    const playhead = container.querySelector<HTMLInputElement>('input[aria-label="Timeline playhead time"]');
+    const nextFrame = container.querySelector<HTMLButtonElement>('button[aria-label="Next frame"]');
+    const previousFrame = container.querySelector<HTMLButtonElement>('button[aria-label="Previous frame"]');
+    expect(playhead).toBeTruthy();
+    expect(nextFrame).toBeTruthy();
+    expect(previousFrame).toBeTruthy();
+    const frameDuration = 1 / sampleProject.frameRate;
+    click(nextFrame!);
+    await flushEffects();
+    expect(Number(playhead!.value)).toBeCloseTo(frameDuration, 5);
+    click(previousFrame!);
+    await flushEffects();
+    expect(Number(playhead!.value)).toBeCloseTo(0, 5);
+  });
+});

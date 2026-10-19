@@ -30,7 +30,8 @@ Make Dionysus usable on phone and tablet screens without removing Storyboard, Re
 - PR #73 merged mobile trim hit targets and visible grab markers as `98f1637f1cc36a069578edb2337bcfdb578b4612`; exact-head CI run [39239397529](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39239397529) passed.
 - PR #74 merged pointer-captured scrubbing as `605edf9af5922f3f6c054997d50f648ecae067ad`; exact-head CI run [39242564926](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39242564926) passed.
 - PR #75 merged the safe-area-aware mobile bottom-sheet version picker as `72b2debcf586e2a0663a03119e7f688b79394f8f`; exact-head CI run [39242992878](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39242992878) passed.
-- Current slice snaps touch scrubbing to the project's frame rate while preserving pointer capture and clamping at the timeline end.
+- PR #76 merged frame-aligned pointer scrubbing as `c04d9562747352225b83de90cc48a55355c06494`; exact-head CI run [39243270619](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39243270619) passed.
+- Current slice adds phone-only Previous frame / Next frame controls and makes the playhead range step match the project's frame rate.
 - Main push CI and Pages deployment for the latest main head have not yet been independently confirmed. Do not ask the owner to test until deployment is verified.
 
 ## Not complete
