@@ -129,3 +129,8 @@ Start by inspecting GitHub and then continue the work. Do not merely summarize t
 ### Current DYS-012 mobile follow-up (2026-10-19)
 
 Continue from branch `feat/mobile-preview-undo-redo` (if already merged, inspect the PR and main head first). This slice adds phone-sized Undo/Redo beside the preview and an App regression test for duplicate → Undo → Redo. Run exact-head CI/build, keep the work in a PR, verify main CI and Pages deployment after merge, and update the task dashboard/report/handoff. No browser smoke tests; do not ask the owner to test until deployment is verified. DYS-012 remains in progress until phone portrait/landscape/tablet acceptance is evidenced.
+
+
+### Current DYS-012 mobile follow-up — audio mute (2026-10-19)
+
+Continue from `feat/mobile-audio-clip-mute` (if already merged, inspect PR/main first). This slice adds selected-audio Mute/Unmute on the mobile clip toolbar and an App regression test. Run exact-head CI/build, merge through PR, verify main CI and Pages deployment, then update task dashboard/report/handoff. No browser smoke tests. Keep DYS-012 in progress until phone portrait/landscape/tablet acceptance is evidenced.

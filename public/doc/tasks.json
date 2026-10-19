@@ -624,8 +624,8 @@
           "id": "DYS-012",
           "title": "Responsive mobile editing workspace",
           "status": "in_progress",
-          "progress": 95,
-          "summary": "Responsive layout, Master/nested touch movement, contextual tools, Inspector toggle, zoom, trim hit targets, frame-aligned scrubbing, mobile version picker, one-frame stepping, frame counter and frame-accurate keyboard stepping are merged. Current slice adds phone-accessible Undo/Redo beside preview controls. Deployment and viewport acceptance remain outstanding.",
+          "progress": 96,
+          "summary": "Responsive layout, Master/nested touch movement, contextual tools, Inspector toggle, zoom, trim hit targets, frame-aligned scrubbing, mobile version picker, frame stepping/counter, keyboard frame stepping and phone-accessible Undo/Redo are merged. Current slice adds a selected-audio-clip Mute/Unmute control. Main deployment and viewport acceptance remain outstanding.",
           "doc": "tasks/responsive-mobile-editing.md",
           "detail": "tasks/responsive-mobile-editing.html",
           "report": "reports/responsive-mobile-editing-report.md",
@@ -660,6 +660,10 @@
             },
             {
               "title": "Phone-accessible Undo and Redo beside preview",
+              "status": "done"
+            },
+            {
+              "title": "Selected audio clip mute control on mobile",
               "status": "in_progress"
             }
           ],
@@ -684,9 +688,10 @@
             "PR #77 merged mobile one-frame stepping and frame-rate-aligned playhead control as main commit ef1fb36d4e512825b2baec0d3103c5d86ab4ce49; exact-head CI run 39243556120 passed.",
             "PR #78 merged the mobile frame counter as main commit 8d36a4e018395fd13d60110ba9c5f4d2aeeffbbc; exact-head CI run 39243808054 passed.",
             "PR #79 merged frame-accurate Left/Right keyboard scrubbing as main commit 0a5ace89e28fff5d1f46bc0e4330d56e91f9035e; post-merge deployment still needs independent confirmation.",
-            "Active branch feat/mobile-preview-undo-redo adds mobile-sized Undo/Redo controls beside preview and an App integration test covering duplicate → Undo → Redo. Exact-head CI pending; no browser smoke tests."
+            "PR #80 merged phone-accessible Undo/Redo beside preview controls as main commit 85646e4a70cdde113bee728b4ed1cd781a022f0a; exact-head CI run 39248435319 passed. Main push CI and Pages deployment remain unverified.",
+            "Active branch feat/mobile-audio-clip-mute adds Mute/Unmute for a selected audio clip and an App integration test for persisted toggle state. Exact-head CI pending; no browser smoke tests."
           ],
-          "notes": "Owner requested a CapCut-inspired phone interface. Mobile layout and core touch/frame controls are merged; current slice makes Undo/Redo available beside the preview for one-handed editing. DYS-012 remains in progress until automated checks, deployment, and viewport/device acceptance are separately recorded."
+          "notes": "Owner requested a CapCut-inspired phone interface. Touch editing and history controls are merged; current slice adds direct selected-audio mute/unmute. Keep DYS-012 in progress until exact-head CI, post-merge deployment and portrait/landscape/tablet acceptance are separately recorded."
         }
       ]
     },

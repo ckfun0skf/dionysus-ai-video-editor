@@ -1,6 +1,6 @@
 # DYS-012 Progress Report — Responsive mobile editing
 
-**Status:** In progress; layout, touch movement, contextual tools and zoom merged; trim hit targets and pointer-captured scrubbing merged; mobile version picker and frame-aligned scrubbing and frame-step controls merged; frame counter and keyboard frame-step refinement merged; mobile preview Undo/Redo active  
+**Status:** In progress; layout, touch movement, contextual tools and zoom merged; trim hit targets and pointer-captured scrubbing merged; mobile version picker and frame-aligned scrubbing and frame-step controls merged; frame counter and keyboard frame-step refinement merged; mobile preview Undo/Redo merged; selected-audio mute control active  
 **Last reviewed:** 2026-10-19
 
 ## Shipped
@@ -45,3 +45,10 @@ The active slice adds phone-sized Undo/Redo controls beside the preview. The App
 
 ## Related specification
 - [DYS-012 task](../tasks/responsive-mobile-editing.md)
+
+
+## Mobile history controls merged
+PR #80 merged phone-sized Undo/Redo controls beside the preview as main commit `85646e4a70cdde113bee728b4ed1cd781a022f0a`; exact-head CI run [39248435319](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39248435319) passed. Main push CI and Pages deployment have not yet been independently confirmed.
+
+## Current mobile audio control
+The active branch `feat/mobile-audio-clip-mute` adds a Mute/Unmute action to the selected audio clip toolbar and an App test for toggling persisted mute state. Exact-head CI is pending; no browser smoke tests are added or run.
