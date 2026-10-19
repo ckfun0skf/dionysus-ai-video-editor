@@ -1518,6 +1518,12 @@ describe("Integrated timeline editor", () => {
     await flushEffects();
     expect(nested!.querySelector(".nested-visual-timeline-ruler .visual-ruler-caption")?.textContent).toBe("TIME");
     expect(nested!.querySelector(".nested-timeline-row.visual-track-row .nested-timeline-row-track.visual-track-lane")).toBeTruthy();
+    expect(container.querySelector(".timeline-horizontal-scroll .visual-timeline-ruler")).toBeTruthy();
+    expect(container.querySelector(".timeline-horizontal-scroll .visual-track-list")).toBeTruthy();
+    const mobileScrollSurface = nested!.querySelector<HTMLElement>(".nested-timeline-scroll");
+    expect(mobileScrollSurface).toBeTruthy();
+    expect(mobileScrollSurface!.querySelector(".nested-visual-timeline-ruler")).toBeTruthy();
+    expect(mobileScrollSurface!.querySelector(".nested-timeline-lanes")).toBeTruthy();
   });
 
   it("resizes a Master Timeline clip into its neighbor with preview and one-step Undo/Redo", async () => {

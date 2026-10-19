@@ -1479,7 +1479,7 @@
 .integrated-preview-heading small {
   max-width: 75ch;
 }
-.workbench.timeline-workbench .visual-timeline {
+.workbench.timeline-workbench .visual-timeline:not(.nested-timeline-tab) {
   gap: 8px;
 }
 .workbench.timeline-workbench .visual-track-list {
@@ -2571,8 +2571,21 @@
   }
 
   /* The timeline may scroll horizontally, but the page itself stays within the phone. */
-  .workbench.timeline-workbench .visual-timeline,
-  .workbench.timeline-workbench .nested-timeline-tab {
+  .workbench.timeline-workbench .visual-timeline:not(.nested-timeline-tab) {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+  .workbench.timeline-workbench .timeline-horizontal-scroll,
+  .workbench.timeline-workbench .nested-timeline-scroll {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .workbench.timeline-workbench .nested-timeline-scroll {
     width: 100%;
     max-width: 100%;
     min-width: 0;
@@ -2583,8 +2596,8 @@
   .workbench.timeline-workbench .visual-timeline-ruler,
   .workbench.timeline-workbench .visual-track-row,
   .workbench.timeline-workbench .editor-linked-timeline .visual-track-row,
-  .workbench.timeline-workbench .nested-timeline-tab .nested-visual-timeline-ruler,
-  .workbench.timeline-workbench .nested-timeline-tab .nested-timeline-row.visual-track-row {
+  .workbench.timeline-workbench .nested-timeline-scroll .nested-visual-timeline-ruler,
+  .workbench.timeline-workbench .nested-timeline-scroll .nested-timeline-row.visual-track-row {
     grid-template-columns: 112px minmax(240px, 1fr);
     min-width: 352px;
   }

@@ -1804,7 +1804,8 @@ export default function App() {
   <span><strong>Place “{pendingTimelineClip.name}”</strong><small>Click an empty position on a compatible timeline layer · {pendingTimelineClip.duration.toFixed(2)}s. Existing clips will not be silently overwritten.</small></span>
   <button className="button button-quiet button-small" onClick={cancelTimelineClipPlacement}>Cancel placement</button>
 </div>}
-<div className="visual-timeline-ruler">
+<div className="timeline-horizontal-scroll">
+  <div className="visual-timeline-ruler">
   <div className="visual-ruler-caption">TIME</div>
   <div className="visual-timeline-ruler-lane" role="slider" aria-label="Timeline playhead" aria-valuemin={0} aria-valuemax={mediaTimelineDuration} aria-valuenow={editorTime} tabIndex={0}
     style={{backgroundSize:(5/Math.max(mediaTimelineDuration,1)*100)+"% 100%"}}
@@ -1931,6 +1932,7 @@ export default function App() {
  })}
  </div>
 
+</div>
 </section></div>
 {activeTimelineTabId !== "master" && activeVersionTimelineTab && activeVersionTimeline && (activeVersionTimelineClipAsset || (activeVersionTimelineSlot && activeVersionTimelineShot)) && <section className="nested-timeline-tab editor-linked-timeline visual-timeline">
   {renderTimelinePreview(
@@ -1979,6 +1981,7 @@ export default function App() {
       <textarea className="text-area" rows={2} aria-label="Version description" value={activeVersionTimeline.description} onChange={event => updateTimelineVersionDescription(activeVersionTimelineTab, event.target.value)} />
     </label>
   </details>
+  <div className="nested-timeline-scroll">
   <div className="visual-timeline-ruler nested-visual-timeline-ruler">
     <div className="visual-ruler-caption">TIME</div>
     <div className="visual-timeline-ruler-lane" role="slider" aria-label="Version timeline playhead" aria-valuemin={0} aria-valuemax={activeVersionTimeline.duration} aria-valuenow={editorTime} tabIndex={0}
@@ -2049,6 +2052,7 @@ export default function App() {
     })}
     {!activeVersionTimeline.layers.length && <div className="nested-timeline-empty">This timeline is empty. Add a track, then add content to that track.</div>}
     {activeVersionTimeline.layers.some(layer=>layer.start+layer.duration>activeVersionTimeline.duration) && <div className="nested-timeline-warning" role="status">One or more modules extend past this timeline's duration and may be cut off in preview/export. Their timing has not been changed automatically.</div>}
+  </div>
   </div>
 </section>}
 {selected && (() => { const activeSlot = selected.slots.find(slot => slot.id === selectedSlotId); if (!activeSlot) return null; const activeVersion = activeSlot.versions.find(version => version.id === (activeVersionTimelineTab?.slotId === activeSlot.id ? activeVersionTimelineTab.versionId : activeSlot.selectedVersionId)); return <details className={"version-panel-disclosure" + (activeTimelineTabId !== "master" ? " nested-version-inspector-disclosure" : "")} open={activeTimelineTabId === "master"}>{activeTimelineTabId !== "master" && <summary>Version &amp; module details</summary>}<section className={"version-panel " + (activeTimelineTabId !== "master" ? "nested-version-inspector" : "")}><div className="version-panel-heading"><div><span className="inspector-kicker">{activeTimelineTabId === "master" ? "CLIP SLOT" : "VERSION INSPECTOR"}</span><label className="field-label">Clip slot name<input className="text-field" aria-label="Clip slot name" value={activeSlot.name} onChange={e => updateSlotName(selected.id, activeSlot.id, e.target.value)} /></label><p>{activeSlot.duration}s · {activeSlot.versions.length} version{activeSlot.versions.length === 1 ? "" : "s"}</p></div><button className="button button-quiet button-small" onClick={() => setSelectedSlotId("")}>Close</button></div><div className="slot-timing-controls">
