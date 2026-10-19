@@ -262,9 +262,10 @@
             "PR #57 covers App-level resize/adjacent trim/Undo/Redo, cross-layer snapping, overlap prevention, nested Version history/export, and audio deletion/group-delete behavior. CI run 39165133176 passed 137 tests across 16 files plus TypeScript and production build at code/test SHA 794e3ff024c26d55d76583160d96238df8d84a12.",
             "Follow-up correction for #53/#54: PR #55 did deploy, but user acceptance showed the nested clip UI still differed and drag snapping, cross-layer movement, and pointer-resize behavior were not fixed end to end. PR #57 replaces the drop placement logic, tracks resize via global pointer events, restores Master-style icon/thumbnail and two-line clip markup in nested timelines, and covers the interaction in App tests.",
             "PR #63: https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/63",
-            "Regression coverage: src/App.test.tsx (Integrated timeline editor)"
+            "Regression coverage: src/App.test.tsx (Integrated timeline editor)",
+            "Shared placement engine: src/projectTimelinePlacement.ts and src/projectTimelinePlacement.test.ts"
           ],
-          "notes": "The user has not accepted issues #53/#54. A follow-up in Draft PR #63 now checks ordinary clip drag/drop and resize against Master Shot occupancy, trims a Master Shot when an ordinary clip resize reaches it, and retains Master Shot drag identity during protected dragover. Master and nested Clip Timeline Add layer menus now offer only Video, Audio and Text. Nested Image/Code/Clip choices are in a separate Add content menu; shared editor data/operations remain outstanding for #53. Verify exact-head CI and continue toward one shared Composition Editor; do not close either issue before user acceptance."
+          "notes": "The user has not accepted issues #53/#54. A follow-up in Draft PR #63 now checks ordinary clip drag/drop and resize against Master Shot occupancy, trims a Master Shot when an ordinary clip resize reaches it, and retains Master Shot drag identity during protected dragover. Master and nested Clip Timeline Add layer menus now offer only Video, Audio and Text. Nested Image/Code/Clip choices are in a separate Add content menu; shared editor data/operations remain outstanding for #53. Verify exact-head CI and continue toward one shared Composition Editor; do not close either issue before user acceptance. Shared mixed-model drop/resize calculation and atomic application are now extracted to `src/projectTimelinePlacement.ts`, with pure unit tests in `src/projectTimelinePlacement.test.ts`."
         },
         {
           "id": "DYS-011",
@@ -379,7 +380,7 @@
           "id": "DYS-014",
           "title": "Unified Composition model and structure-preserving snapshots",
           "status": "in_progress",
-          "progress": 30,
+          "progress": 35,
           "summary": "Replace parallel Master-Shot and nested Clip editing models with one Composition schema, shared Editor/Placement engine, and independently editable Project-to-Clip snapshots.",
           "doc": "tasks/unified-composition-model.md",
           "detail": "tasks/unified-composition-model.html",
@@ -426,9 +427,10 @@
             "docs/PROJECT_ROADMAP.md",
             "docs/AGENT_PICKUP_PROMPT.md",
             "PR #63: https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/63",
-            "Shared occupancy follow-up: src/App.tsx and src/App.test.tsx"
+            "Shared occupancy follow-up: src/App.tsx and src/App.test.tsx",
+            "Shared project timeline placement engine: src/projectTimelinePlacement.ts and src/projectTimelinePlacement.test.ts"
           ],
-          "notes": "Canonical Composition projection is implemented and tested. Follow-up timeline patch also addresses the immediate #54 cross-model occupancy defect: ordinary clip drop/resize now considers Master Shots, resize trims update both Shots and Timeline Clips in one history transaction, and Master Shot drag identity survives protected dragover. This is an interim compatibility fix, not the final shared editor engine. Import/export migration and full root/nested editor unification remain outstanding. See docs/PROJECT_ROADMAP.md."
+          "notes": "Canonical Composition projection is implemented and tested. Follow-up timeline patch also addresses the immediate #54 cross-model occupancy defect: ordinary clip drop/resize now considers Master Shots, resize trims update both Shots and Timeline Clips in one history transaction, and Master Shot drag identity survives protected dragover. This is an interim compatibility fix, not the final shared editor engine. Import/export migration and full root/nested editor unification remain outstanding. See docs/PROJECT_ROADMAP.md. The shared project-level placement/resize adapter is now extracted from App into `src/projectTimelinePlacement.ts`; it is the compatibility seam for the later canonical Composition editor. Schema-1.0 persistence/import/export are still unchanged."
         },
         {
           "id": "DYS-015",
