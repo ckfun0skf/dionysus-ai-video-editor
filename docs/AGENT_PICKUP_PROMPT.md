@@ -41,7 +41,7 @@ The accepted target direction is in `docs/architecture/UNIFIED_COMPOSITION_MODEL
 - Branch: `feat/unified-composition-model`
 - Last recorded checkpoint commit: `406d898ad5176cc2ed55441b3ed502c67db5f7a5`
 - Last recorded CI: https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39207371506 (passed tests and TypeScript/build at that commit).
-- PR #63 remains Draft and now includes an initial DYS-014 code slice: `src/compositionModel.ts`, `src/compositionMigration.ts`, and `src/compositionMigration.test.ts`. It is a non-mutating projection adapter only; import/export and live editor integration are not complete, and no deployment is implied.
+- PR #63 remains Draft and includes DYS-014 migration projection code plus a follow-up for #54: ordinary clip drag/drop and resize occupancy includes Master Shots, cross-model resize trims update both records atomically, and Master Shot drag identity survives protected dragover. Root/nested Add layer menus expose only Video/Audio/Text. Import/export and full shared-editor integration remain incomplete; no deployment is implied.
 - User reports residual problems in #53 and #54. Do not close them without code-level regression coverage and explicit user acceptance.
 - New tasks: DYS-014 (unified Composition + structure-preserving snapshots) and DYS-015 (Production Task graph + Generation Runs).
 
@@ -51,7 +51,7 @@ The accepted target direction is in `docs/architecture/UNIFIED_COMPOSITION_MODEL
 2. Review PR #63 for internal consistency. Keep the target model as the baseline unless code inspection reveals a concrete contradiction; document changes and rationale.
 3. Review the initial DYS-014 adapter and exact-head CI. It defines typed Composition/Track/Placement/source references and projects schema-1.0 root and nested Clip Asset timelines without mutating the source project.
 4. Extend migration tests for alternative/provenance retention and legacy JSON import/export; then integrate the adapter into a versioned, deterministic migration boundary without breaking schema-1.0 projects.
-5. Migrate root and nested editor state/operations to the same Composition contract; target #53/#54 rather than patching only visual differences.
+5. Verify the #54 shared-occupancy patch and its App regression tests in exact-head CI. Then migrate root and nested editor state/operations to the same Composition contract; keep #53/#54 open until the user accepts the deployed behavior.
 6. Implement structure-preserving Save-as-Clip and prove snapshot independence before calling DYS-014 complete.
 7. Keep `public/doc/tasks.json`, task Markdown/HTML/report files, PR description and handoff checkpoint updated in the same coherent PR batch.
 8. Run `npm test` and `npm run build` when runtime code changes; inspect exact-head GitHub CI. Do not run browser smoke tests.

@@ -13,7 +13,7 @@ This document is a durable pickup ledger, not a claim that planned behavior alre
 - Feature branch: `feat/unified-composition-model`.
 - Last verified checkpoint commit before this handoff update: `406d898ad5176cc2ed55441b3ed502c67db5f7a5`.
 - PR #63 is intentionally Draft. CI [39207371506](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39207371506) passed tests and type-check/build for that checkpoint.
-- PR #63 now includes an initial DYS-014 runtime slice: canonical typed Composition documents and a non-mutating schema-1.0 projection adapter with migration tests. It is not wired into import/export or live editor state yet; no production deployment is implied.
+- PR #63 now includes the DYS-014 projection adapter and an interim #54 fix: ordinary clip drop/resize checks Master Shot occupancy, cross-model resize trims update both records, and Master Shot drag identity survives protected dragover. Import/export and full shared-editor integration remain outstanding; no production deployment is implied.
 - The latest user feedback says #53/#54 still have issues. They must remain open until implementation is corrected and user acceptance is obtained.
 - Do not add or run browser smoke tests unless the user explicitly requests them.
 
@@ -52,6 +52,7 @@ Core architecture:
 
 ### Phase 2 — One shared Composition Editor / Placement engine
 **Tasks:** DYS-005, DYS-014; issues #53 and #54  
+**Current progress:** An interim App-level patch checks Master Shots when ordinary clips are dropped/resized, applies cross-model neighbor trims atomically, and retains Master Shot drag identity during protected dragover. Regression tests are added, but separate editor paths still exist.  
 **Deliverables:**
 - Root and nested editors share the same Composition document contract, components and placement operations.
 - Remove the special Master Shot drag/resize path after migration; don't patch parity with CSS or duplicate handlers.

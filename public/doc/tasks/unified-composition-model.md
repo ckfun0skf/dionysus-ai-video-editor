@@ -1,6 +1,6 @@
 # DYS-014 — Unified Composition Model and structure-preserving snapshots
 
-**Status:** In progress · **Progress estimate:** 25% · **Updated:** 2026-10-19
+**Status:** In progress · **Progress estimate:** 30% · **Updated:** 2026-10-19
 
 ## Goal
 

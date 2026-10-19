@@ -124,6 +124,11 @@ npm run dev
 
 ## Current Architecture Transition — 2026-10-19
 
+- Follow-up for #54: ordinary timeline clip drop/resize calculations now use the same occupancy set as Master Shots. Resizing an ordinary clip can trim an adjacent Master Shot in the same history transaction. Master Shot drag source is retained in a ref so preview/drop still work when the browser protects DataTransfer contents during dragover.
+- Both root and nested Add layer menus now expose only Video, Audio and Text; image/video/code/clip remain source/content choices, not track kinds.
+- Added App-level regression coverage for protected Master Shot drag data, normal-clip-vs-Master-Shot drop collision, cross-model resize trimming/Undo, and the three allowed track types. Check exact-head CI before relying on this patch.
+
+
 - DYS-014 implementation slice added to PR #63: typed canonical Composition/Track/Placement/source references plus a non-mutating schema-1.0 projection for root timeline and every Clip Asset Version.
 - Initial migration tests cover track/placement IDs and order, source ranges, linked audio, Shot Slot and Clip Version pins, nested layer mapping, duplicate materialized Storyboard placement detection, missing-source warnings, determinism and source immutability.
 - This is a projection adapter, not yet a replacement persistence schema; project import/export and live editors still use schema 1.0. CI status must be checked for the exact latest PR head.

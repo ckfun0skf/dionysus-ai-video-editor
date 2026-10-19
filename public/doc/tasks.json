@@ -260,9 +260,11 @@
             "CI run 39124022295: 93 tests pass across 10 files; TypeScript/production build pass; npm audit reports 0 vulnerabilities.",
             "PR #55 delivered frame-aligned clip-resize preview, grey overlap feedback, atomic adjacent-clip trimming with linked-audio/source-range updates, and cross-layer snap guides; CI passed 123 tests and TypeScript/Vite build.",
             "PR #57 covers App-level resize/adjacent trim/Undo/Redo, cross-layer snapping, overlap prevention, nested Version history/export, and audio deletion/group-delete behavior. CI run 39165133176 passed 137 tests across 16 files plus TypeScript and production build at code/test SHA 794e3ff024c26d55d76583160d96238df8d84a12.",
-            "Follow-up correction for #53/#54: PR #55 did deploy, but user acceptance showed the nested clip UI still differed and drag snapping, cross-layer movement, and pointer-resize behavior were not fixed end to end. PR #57 replaces the drop placement logic, tracks resize via global pointer events, restores Master-style icon/thumbnail and two-line clip markup in nested timelines, and covers the interaction in App tests."
+            "Follow-up correction for #53/#54: PR #55 did deploy, but user acceptance showed the nested clip UI still differed and drag snapping, cross-layer movement, and pointer-resize behavior were not fixed end to end. PR #57 replaces the drop placement logic, tracks resize via global pointer events, restores Master-style icon/thumbnail and two-line clip markup in nested timelines, and covers the interaction in App tests.",
+            "PR #63: https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/63",
+            "Regression coverage: src/App.test.tsx (Integrated timeline editor)"
           ],
-          "notes": "Latest user acceptance keeps #53/#54 open. This is not just a visual mismatch: Master Shots and ordinary placements still use different data paths. DYS-014 defines the root/nested Composition contract and shared editing engine. Existing features are a migration baseline, not proof the revised target is complete. See docs/architecture/UNIFIED_COMPOSITION_MODEL.md."
+          "notes": "The user has not accepted issues #53/#54. A follow-up in Draft PR #63 now checks ordinary clip drag/drop and resize against Master Shot occupancy, trims a Master Shot when an ordinary clip resize reaches it, and retains Master Shot drag identity during protected dragover. Add layer menus are limited to Video, Audio and Text. Verify exact-head CI and continue toward one shared Composition Editor; do not close either issue before user acceptance."
         },
         {
           "id": "DYS-011",
@@ -377,7 +379,7 @@
           "id": "DYS-014",
           "title": "Unified Composition model and structure-preserving snapshots",
           "status": "in_progress",
-          "progress": 25,
+          "progress": 30,
           "summary": "Replace parallel Master-Shot and nested Clip editing models with one Composition schema, shared Editor/Placement engine, and independently editable Project-to-Clip snapshots.",
           "doc": "tasks/unified-composition-model.md",
           "detail": "tasks/unified-composition-model.html",
@@ -423,9 +425,10 @@
             "UI contract: public/doc/creative-editing-workflow-spec.md",
             "docs/PROJECT_ROADMAP.md",
             "docs/AGENT_PICKUP_PROMPT.md",
-            "PR #63: https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/63"
+            "PR #63: https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/63",
+            "Shared occupancy follow-up: src/App.tsx and src/App.test.tsx"
           ],
-          "notes": "Initial runtime slice added to PR #63: typed Composition/Track/Placement/source-reference contracts and a non-mutating projection of schema-1.0 root timeline plus each Clip Asset Version. Tests cover IDs/order, source ranges, linked audio, Shot Slot/Clip Version pins, nested layers, duplicate storyboard placements, missing-source warnings, determinism and source immutability. This is not yet wired into import/export or live editor state. Next: run exact-head CI, extend legacy import/export fixtures, then integrate a versioned migration boundary. Roadmap: docs/PROJECT_ROADMAP.md."
+          "notes": "Canonical Composition projection is implemented and tested. Follow-up timeline patch also addresses the immediate #54 cross-model occupancy defect: ordinary clip drop/resize now considers Master Shots, resize trims update both Shots and Timeline Clips in one history transaction, and Master Shot drag identity survives protected dragover. This is an interim compatibility fix, not the final shared editor engine. Import/export migration and full root/nested editor unification remain outstanding. See docs/PROJECT_ROADMAP.md."
         },
         {
           "id": "DYS-015",
