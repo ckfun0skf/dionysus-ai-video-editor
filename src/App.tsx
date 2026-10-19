@@ -3,7 +3,8 @@ import { AudioLines, Check, CheckCircle2, ChevronDown, CircleHelp, Clapperboard,
 import { sampleProject } from "./sampleProject";
 import type { Asset, AssetKind, ClipVersion, CompositionLayer, DionysusProject, ReferenceProfile, ReferenceRole, Shot, TimelineClip } from "./types";
 import { validateProject } from "./projectValidation";
-import { normalizeClipVersionTracks } from "./clipVersionTracks";
+import { addClipVersionLayer as addNestedLayer, addClipVersionTrack as addNestedTrack, moveClipVersionLayer as moveNestedLayer, normalizeClipVersionTracks } from "./clipVersionTracks";
+import { createProjectDocument, readProjectDocument } from "./projectDocument";
 import { moveNormalizedFrame, resizeNormalizedFrame } from "./previewTransform";
 import { getAllowedChildClipAssets, wouldCreateClipAssetCycle } from "./clipAssetGraph";
 import { t } from "./i18n";
@@ -1026,34 +1027,37 @@ export default function App() {
     }));
   }
 
-  function addTimelineVersionLayer(tab: VersionTimelineTab, kind: CompositionLayer["kind"]) {
+  function addTimelineVersionTrack(tab: VersionTimelineTab, kind: "video" | "audio" | "text") {
     const current = projectRef.current;
     const version = tab.assetId
       ? current.assets.find(asset => asset.id === tab.assetId && asset.kind === "clip")?.clipVersions?.find(item => item.id === tab.versionId)
       : current.shots.find(shot => shot.id === tab.shotId)?.slots.find(slot => slot.id === tab.slotId)?.versions.find(item => item.id === tab.versionId);
     if (!version) return;
-    const start = Math.max(0, Math.min(editorTime, Math.max(0, version.duration - 0.1)));
+    const normalized = normalizeClipVersionTracks(version);
+    const count = (normalized.tracks ?? []).filter(track => track.kind === kind).length + 1;
+    const track = { id: id("clip-track"), name: (kind === "video" ? "Video " : kind === "audio" ? "Audio " : "Text ") + count, kind };
+    updateTimelineVersion(tab, currentVersion => addNestedTrack(currentVersion, track));
+    setNotice(track.name + " track added.");
+  }
+
+  function addTimelineVersionLayer(tab: VersionTimelineTab, kind: CompositionLayer["kind"], targetTrackId?: string) {
+    const current = projectRef.current;
+    const version = tab.assetId
+      ? current.assets.find(asset => asset.id === tab.assetId && asset.kind === "clip")?.clipVersions?.find(item => item.id === tab.versionId)
+      : current.shots.find(shot => shot.id === tab.shotId)?.slots.find(slot => slot.id === tab.slotId)?.versions.find(item => item.id === tab.versionId);
+    if (!version) return;
+    const normalized = normalizeClipVersionTracks(version);
+    const start = Math.max(0, Math.min(editorTime, Math.max(0, normalized.duration - 0.1)));
     const name = kind === "procedural" ? "Code clip" : kind === "text" ? "Text layer" : kind === "audio" ? "Audio layer" : kind === "image" ? "Image layer" : kind === "composition" ? "Nested Clip" : "Video layer";
-    const layer: CompositionLayer = { id: id("layer"), name, kind, start, duration: Math.max(0.1, Math.min(3, version.duration - start)) };
-    updateTimelineVersion(tab, currentVersion => ({ ...currentVersion, layers: [...currentVersion.layers, layer] }));
+    const layer: CompositionLayer = { id: id("layer"), name, kind, start, duration: Math.max(0.1, Math.min(3, normalized.duration - start)) };
+    updateTimelineVersion(tab, currentVersion => addNestedLayer(currentVersion, layer, targetTrackId));
     setSelectedCompositionLayerId(layer.id);
-    setNotice(kind === "composition" ? "Empty nested Clip module added. Choose a Clip Asset in its Source asset setting." : "Layer added to the selected timeline.");
+    setNotice(kind === "composition" ? "Empty nested Clip module added. Choose a Clip Asset in its Source asset setting." : "Content placement added to the selected track.");
   }
 
   function removeTimelineVersionLayer(tab: VersionTimelineTab, layerId: string) {
     updateTimelineVersion(tab, version => ({ ...version, layers: version.layers.filter(layer => layer.id !== layerId) }));
     setSelectedCompositionLayerId(current => current === layerId ? "" : current);
-  }
-
-  function moveTimelineVersionLayer(tab: VersionTimelineTab, layerId: string, direction: -1 | 1) {
-    updateTimelineVersion(tab, version => {
-      const index = version.layers.findIndex(layer => layer.id === layerId);
-      const target = index + direction;
-      if (index < 0 || target < 0 || target >= version.layers.length) return version;
-      const layers = [...version.layers];
-      [layers[index], layers[target]] = [layers[target], layers[index]];
-      return { ...version, layers };
-    });
   }
 
   function updateTimelineVersionDuration(tab: VersionTimelineTab, value: number) {
@@ -1545,7 +1549,7 @@ export default function App() {
     catch (error) { setNotice(error instanceof Error ? error.message : "Video export failed."); }
   }
   function exportProject() {
-    download((project.name.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "dionysus-project") + ".dionysus.json", project);
+    download((project.name.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "dionysus-project") + ".dionysus.json", createProjectDocument(project));
     setNotice(t("notice.projectExported"));
   }
   function exportPlan() {
@@ -1564,7 +1568,8 @@ export default function App() {
   async function importProject(file?: File) {
     if (!file) return;
     try {
-      const data = JSON.parse(await file.text()) as DionysusProject;
+      const parsed = JSON.parse(await file.text()) as unknown;
+      const { project: data } = readProjectDocument(parsed);
       if (!validateProject(data)) throw new Error(t("error.invalidProject"));
       const normalized = normalizeLegacyTimelineTracks(data); setProject(normalized); setUndoStack([]); setRedoStack([]); lastHistoryGroup.current = ""; setSelectedId(normalized.shots[0]?.id ?? ""); setNotice(t("notice.projectImported"));
     } catch (e) {
@@ -1765,9 +1770,9 @@ export default function App() {
       <div className="layer-add-menu-wrap">
         <button className="button button-primary button-small" aria-haspopup="menu" aria-expanded={showAddLayerMenu} onClick={()=>setShowAddLayerMenu(value=>!value)}><Plus size={14}/> Add layer <ChevronDown size={13}/></button>
         <div className="layer-add-menu" role="menu" hidden={!showAddLayerMenu}>
-          <button role="menuitem" onClick={()=>{addTimelineVersionLayer(activeVersionTimelineTab,"video");setShowAddLayerMenu(false);}}>Video layer</button>
-          <button role="menuitem" onClick={()=>{addTimelineVersionLayer(activeVersionTimelineTab,"audio");setShowAddLayerMenu(false);}}>Audio layer</button>
-          <button role="menuitem" onClick={()=>{addTimelineVersionLayer(activeVersionTimelineTab,"text");setShowAddLayerMenu(false);}}>Text layer</button>
+          <button role="menuitem" onClick={()=>{addTimelineVersionTrack(activeVersionTimelineTab,"video");setShowAddLayerMenu(false);}}>Video track</button>
+          <button role="menuitem" onClick={()=>{addTimelineVersionTrack(activeVersionTimelineTab,"audio");setShowAddLayerMenu(false);}}>Audio track</button>
+          <button role="menuitem" onClick={()=>{addTimelineVersionTrack(activeVersionTimelineTab,"text");setShowAddLayerMenu(false);}}>Text track</button>
         </div>
       </div>
       <div className="layer-add-menu-wrap">
@@ -1799,24 +1804,28 @@ export default function App() {
     </div>
   </div>
   <div className="nested-timeline-lanes">
-    {activeVersionTimeline.layers.map(layer=>{
-       const layerAsset=layer.assetId?project.assets.find(asset=>asset.id===layer.assetId):undefined;
-       const layerThumbnail=layer.thumbnailPath??getAssetThumbnail(layerAsset);
-       const visualClass=layer.kind==="audio"?"audio-clip":layer.kind==="text"?"text-clip":layer.kind==="procedural"||layer.kind==="script"?"procedural-clip":"video-clip";
-       return <div className="nested-timeline-row visual-track-row" key={layer.id}>
-      <div className="nested-timeline-row-label visual-track-label"><span>{layer.kind==="procedural"?"◇":layer.kind==="audio"?"♫":layer.kind==="text"?"T":layer.kind==="image"?"▧":layer.kind==="composition"?"▧":layer.kind==="script"?"&lt;/&gt;":"▣"}</span><div><strong>{layer.name}</strong><small>{layer.kind==="procedural"?"Code":layer.kind==="composition"?"Clip":layer.kind}</small></div>
-        <button className="layer-order-button" aria-label={"Move " + layer.name + " earlier"} title="Move layer earlier" disabled={activeVersionTimeline.layers.findIndex(item=>item.id===layer.id)===0} onClick={()=>moveTimelineVersionLayer(activeVersionTimelineTab,layer.id,-1)}>↑</button>
-        <button className="layer-order-button" aria-label={"Move " + layer.name + " later"} title="Move layer later" disabled={activeVersionTimeline.layers.findIndex(item=>item.id===layer.id)===activeVersionTimeline.layers.length-1} onClick={()=>moveTimelineVersionLayer(activeVersionTimelineTab,layer.id,1)}>↓</button>
-        {activeVersionTimelineClipAsset && <button className="layer-order-button" aria-label={"Settings for " + layer.name} title="Edit clip details" onClick={()=>setCompositionLayerSettingsId(layer.id)}><Settings2 size={12}/></button>}
-        {layer.kind==="audio" && <button className="layer-mute-toggle" aria-pressed={Boolean(layer.muted)} onClick={()=>updateTimelineVersionLayer(activeVersionTimelineTab,layer.id,{muted:!layer.muted})}>{layer.muted?"Unmute":"Mute"}</button>}
-        <button className="layer-remove" aria-label={"Delete " + layer.name} onClick={()=>removeTimelineVersionLayer(activeVersionTimelineTab,layer.id)}>×</button>
-      </div>
-      <div className="nested-timeline-row-track visual-track-lane" style={{backgroundSize:(2/Math.max(activeVersionTimeline.duration,0.1)*100)+"% 100%"}}><div className="visual-playhead" style={{left:(Math.min(editorTime,activeVersionTimeline.duration)/Math.max(activeVersionTimeline.duration,0.1)*100)+"%"}}/>
-        <button draggable className={"nested-timeline-clip visual-media-clip kind-"+layer.kind+" "+visualClass+(layer.id===selectedCompositionLayerId?" selected":"")} style={{left:(layer.start/Math.max(activeVersionTimeline.duration,0.1)*100)+"%",width:Math.max(2,layer.duration/Math.max(activeVersionTimeline.duration,0.1)*100)+"%"}} onDragStart={event=>{event.dataTransfer.setData("text/dionysus-version-layer",layer.id);event.dataTransfer.setData("text/plain",layer.name);event.dataTransfer.effectAllowed="move";}} onDragEnd={event=>{const lane=event.currentTarget.parentElement;const rect=lane?.getBoundingClientRect();if(!rect)return;const fps=Math.max(1,project.frameRate||24);const pointer=((event.clientX-rect.left)/Math.max(rect.width,1))*activeVersionTimeline.duration;const maxStart=Math.max(0,activeVersionTimeline.duration-layer.duration);const rawStart=Math.max(0,Math.min(maxStart,pointer-layer.duration/2));const next=Math.round(rawStart*fps)/fps;updateTimelineVersionLayer(activeVersionTimelineTab,layer.id,{start:next});playbackTimeRef.current=next;setEditorTime(next);setIsPlaying(false);}} onContextMenu={event=>{event.preventDefault();event.stopPropagation();setSelectedCompositionLayerId(layer.id);setNestedLayerContextMenuId(layer.id);setNestedLayerContextMenuPosition({x:Math.min(event.clientX,window.innerWidth-190),y:Math.min(event.clientY,window.innerHeight-180)});}} onClick={()=>{setSelectedCompositionLayerId(layer.id);setEditorTime(layer.start)}} onDoubleClick={()=>setCompositionLayerSettingsId(layer.id)} title={layer.name+" · "+layer.start.toFixed(1)+"–"+(layer.start+layer.duration).toFixed(1)+"s"}><span className="visual-clip-icon">{layerThumbnail?<img className="visual-clip-thumbnail" src={layerThumbnail} alt=""/>:layer.kind==="audio"?<AudioLines size={13}/>:layer.kind==="text"?<Sparkles size={13}/>:(layer.kind==="procedural"||layer.kind==="script")?<Code2 size={13}/>:layer.kind==="composition"?<Layers3 size={13}/>:<Film size={13}/>}</span><span className="visual-clip-copy"><strong>{layer.name}</strong><small>{layer.duration.toFixed(1)}s · {layer.start.toFixed(2)}s</small></span></button>
-      </div>
-    </div>;
+    {normalizeClipVersionTracks(activeVersionTimeline).tracks?.map(track => {
+      const layers = activeVersionTimeline.layers.filter(layer => layer.trackId === track.id);
+      return <div className="nested-timeline-row visual-track-row" key={track.id}>
+        <div className="nested-timeline-row-label visual-track-label">
+          <span>{track.kind === "audio" ? <AudioLines size={14}/> : track.kind === "text" ? <Sparkles size={14}/> : <Film size={14}/>}</span>
+          <div><strong>{track.name}</strong><small>{track.kind === "audio" ? "Audio track" : track.kind === "text" ? "Text track" : "Video track"} · {layers.length} item{layers.length === 1 ? "" : "s"}</small></div>
+          {track.kind === "audio" && <button className="track-layer-mute" aria-label={(track.muted ? "Unmute " : "Mute ") + track.name} aria-pressed={Boolean(track.muted)} onClick={() => updateTimelineVersion(activeVersionTimelineTab, version => ({ ...normalizeClipVersionTracks(version), tracks: normalizeClipVersionTracks(version).tracks?.map(item => item.id === track.id ? { ...item, muted: !item.muted } : item) }))}>{track.muted ? "Unmute" : "Mute"}</button>}
+          <button className="track-add-clip" aria-label={"Add content to " + track.name} title={"Add content to " + track.name} onClick={() => { addTimelineVersionLayer(activeVersionTimelineTab, track.kind === "audio" ? "audio" : track.kind === "text" ? "text" : "video", track.id); }}><Plus size={13}/></button>
+        </div>
+        <div className="nested-timeline-row-track visual-track-lane" style={{backgroundSize:(2/Math.max(activeVersionTimeline.duration,0.1)*100)+"% 100%"}} onDragOver={event=>{if(event.dataTransfer.types.includes("text/dionysus-version-layer")){event.preventDefault();event.dataTransfer.dropEffect="move";}}} onDrop={event=>{event.preventDefault();const layerId=event.dataTransfer.getData("text/dionysus-version-layer");if(!layerId)return;const rect=event.currentTarget.getBoundingClientRect();const pointer=((event.clientX-rect.left)/Math.max(rect.width,1))*activeVersionTimeline.duration;const moving=activeVersionTimeline.layers.find(layer=>layer.id===layerId);if(!moving)return;const next=Math.max(0,Math.min(activeVersionTimeline.duration-moving.duration,pointer-moving.duration/2));try{updateTimelineVersion(activeVersionTimelineTab,version=>moveNestedLayer(version,layerId,track.id,Math.round(next*Math.max(1,project.frameRate||24))/Math.max(1,project.frameRate||24)));setSelectedCompositionLayerId(layerId);}catch(error){setNotice(error instanceof Error?error.message:"Could not move this content.");}}}>
+          <div className="visual-playhead" style={{left:(Math.min(editorTime,activeVersionTimeline.duration)/Math.max(activeVersionTimeline.duration,0.1)*100)+"%"}}/>
+          {layers.map(layer => {
+            const layerAsset=layer.assetId?project.assets.find(asset=>asset.id===layer.assetId):undefined;
+            const layerThumbnail=layer.thumbnailPath??getAssetThumbnail(layerAsset);
+            const visualClass=layer.kind==="audio"?"audio-clip":layer.kind==="text"?"text-clip":layer.kind==="procedural"||layer.kind==="script"?"procedural-clip":"video-clip";
+            return <button key={layer.id} draggable className={"nested-timeline-clip visual-media-clip kind-"+layer.kind+" "+visualClass+(layer.id===selectedCompositionLayerId?" selected":"")} style={{left:(layer.start/Math.max(activeVersionTimeline.duration,0.1)*100)+"%",width:Math.max(2,layer.duration/Math.max(activeVersionTimeline.duration,0.1)*100)+"%"}} onDragStart={event=>{event.dataTransfer.setData("text/dionysus-version-layer",layer.id);event.dataTransfer.effectAllowed="move";}} onContextMenu={event=>{event.preventDefault();event.stopPropagation();setSelectedCompositionLayerId(layer.id);setNestedLayerContextMenuId(layer.id);setNestedLayerContextMenuPosition({x:Math.min(event.clientX,window.innerWidth-190),y:Math.min(event.clientY,window.innerHeight-180)});}} onClick={()=>{setSelectedCompositionLayerId(layer.id);setEditorTime(layer.start);}} onDoubleClick={()=>setCompositionLayerSettingsId(layer.id)} title={layer.name+" · "+layer.start.toFixed(1)+"–"+(layer.start+layer.duration).toFixed(1)+"s"}><span className="visual-clip-icon">{layerThumbnail?<img className="visual-clip-thumbnail" src={layerThumbnail} alt=""/>:layer.kind==="audio"?<AudioLines size={13}/>:layer.kind==="text"?<Sparkles size={13}/>:(layer.kind==="procedural"||layer.kind==="script")?<Code2 size={13}/>:layer.kind==="composition"?<Layers3 size={13}/>:<Film size={13}/>}</span><span className="visual-clip-copy"><strong>{layer.name}</strong><small>{layer.duration.toFixed(1)}s · {layer.start.toFixed(2)}s</small></span></button>;
+          })}
+          {layers.length===0 && <button className="nested-track-empty" onClick={()=>addTimelineVersionLayer(activeVersionTimelineTab,track.kind==="audio"?"audio":track.kind==="text"?"text":"video",track.id)}>＋ Add content</button>}
+        </div>
+      </div>;
     })}
-    {!activeVersionTimeline.layers.length && <div className="nested-timeline-empty">This timeline is empty. Add a video, image, audio, text, Code, or another Clip above.</div>}
+    {!activeVersionTimeline.layers.length && <div className="nested-timeline-empty">This timeline is empty. Add a track, then add content to that track.</div>}
     {activeVersionTimeline.layers.some(layer=>layer.start+layer.duration>activeVersionTimeline.duration) && <div className="nested-timeline-warning" role="status">One or more modules extend past this timeline's duration and may be cut off in preview/export. Their timing has not been changed automatically.</div>}
   </div>
 </section>}

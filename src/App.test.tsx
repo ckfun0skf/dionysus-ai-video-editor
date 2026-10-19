@@ -351,7 +351,9 @@ describe("App history integration", () => {
       reader.onerror = () => reject(reader.error);
       reader.readAsText(blob);
     });
-    const expected = JSON.parse(exportedJson) as typeof sampleProject;
+    const document = JSON.parse(exportedJson) as { format: string; documentVersion: string; project: typeof sampleProject; compositionModel: { schemaVersion: string } };
+    expect(document).toMatchObject({ format: "dionysus-project-document", documentVersion: "2.0", compositionModel: { schemaVersion: "2.0" } });
+    const expected = document.project;
     expect(expected.timelineClips).toHaveLength(4);
     expect(expected.timelineClips?.filter(clip => clip.kind === "audio" && clip.linkedVideoClipId)).toHaveLength(1);
     expect(expected.timelineClips?.filter(clip => clip.kind === "audio" && !clip.linkedVideoClipId)).toHaveLength(1);
@@ -404,7 +406,7 @@ describe("App history integration", () => {
       reader.onerror = () => reject(reader.error);
       reader.readAsText(blob);
     });
-    const exported = JSON.parse(blobText) as typeof sampleProject;
+    const exported = (JSON.parse(blobText) as { project: typeof sampleProject }).project;
     const video = exported.timelineClips?.find(clip => clip.kind === "video");
     const audio = exported.timelineClips?.find(clip => clip.kind === "audio");
     expect(video).toBeTruthy();
@@ -1204,7 +1206,7 @@ describe("Integrated timeline editor", () => {
     expect(nestedHeading).toBeTruthy();
     const wraps = nestedHeading!.querySelectorAll<HTMLElement>(".layer-add-menu-wrap");
     const trackOptions = Array.from(wraps[0].querySelectorAll<HTMLButtonElement>(".layer-add-menu button")).map(button => (button.textContent ?? "").trim()).sort();
-    expect(trackOptions).toEqual(["Audio layer", "Text layer", "Video layer"]);
+    expect(trackOptions).toEqual(["Audio track", "Text track", "Video track"]);
     const contentOptions = Array.from(wraps[1].querySelectorAll<HTMLButtonElement>(".layer-add-menu button")).map(button => (button.textContent ?? "").trim()).sort();
     expect(contentOptions).toEqual(["Clip layer", "Code source", "Image source"]);
   });
@@ -1411,6 +1413,8 @@ describe("Integrated timeline editor", () => {
     expect(container.querySelector(".nested-visual-timeline-ruler .visual-timeline-ruler-lane")).toBeTruthy();
     const addVideo=Array.from(container.querySelectorAll<HTMLButtonElement>(".nested-timeline-tab .inline-actions button")).find(button=>button.textContent?.includes("Video"));
     expect(addVideo).toBeTruthy();click(addVideo!);await flushEffects();
+    const addContent = container.querySelector<HTMLButtonElement>(".nested-timeline-tab .nested-timeline-row-label .track-add-clip");
+    expect(addContent).toBeTruthy(); click(addContent!); await flushEffects();
     const nestedClip=container.querySelector<HTMLButtonElement>(".nested-timeline-tab .nested-timeline-clip.visual-media-clip");
     expect(nestedClip).toBeTruthy();expect(nestedClip!.querySelector(".visual-clip-icon")).toBeTruthy();
     expect(nestedClip!.querySelector(".visual-clip-copy strong")?.textContent).toContain("Video");
@@ -1436,7 +1440,7 @@ describe("Integrated timeline editor", () => {
     expect(nested).toBeTruthy();
     // An empty Clip starts with no layers; add one so the test checks actual ruler-to-lane alignment.
     click(Array.from(nested!.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Add layer"))!);
-    click(Array.from(nested!.querySelectorAll<HTMLButtonElement>(".layer-add-menu button")).find(button => button.textContent?.trim() === "Video layer")!);
+    click(Array.from(nested!.querySelectorAll<HTMLButtonElement>(".layer-add-menu button")).find(button => button.textContent?.trim() === "Video track")!);
     await flushEffects();
     expect(nested!.querySelector(".nested-visual-timeline-ruler .visual-ruler-caption")?.textContent).toBe("TIME");
     expect(nested!.querySelector(".nested-timeline-row.visual-track-row .nested-timeline-row-track.visual-track-lane")).toBeTruthy();
@@ -1634,7 +1638,7 @@ describe("Integrated timeline editor", () => {
       reader.onerror = () => reject(reader.error);
       reader.readAsText(blob);
     });
-    const exported = JSON.parse(exportedJson) as typeof sampleProject;
+    const exported = (JSON.parse(exportedJson) as { project: typeof sampleProject }).project;
     expect(getProceduralLayers(exported).find(layer => layer.id === added!.id)).toMatchObject({ id: added!.id, kind: "procedural" });
   });
 

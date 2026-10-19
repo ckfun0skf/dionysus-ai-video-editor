@@ -1,24 +1,24 @@
-# DYS-014 Report — Unified Composition Model
+# DYS-014 Report — Unified Composition Model and structure-preserving snapshots
 
-**Status:** Initial typed Composition and non-mutating legacy projection implemented; import/export and live editor integration remain outstanding.
+**Status:** In progress; transition slices implemented, canonical-only persistence and structural snapshots outstanding.  
+**Updated:** 2026-10-19  
+**Validated consolidated code head:** `2763f3b0a98823ef5d59a3760486adb302cc31d2`
 
-This planning slice records target ownership for Shot output versions, Media Assets, Compositions, Clip Asset Versions, Timeline Placements, Production Tasks and Generation Runs.
+## Implemented
 
-## Decisions recorded
+- Typed Composition, Track, Placement and source-reference contracts plus a non-mutating projection of the legacy schema-1.0 project.
+- Regression coverage for deterministic projection, ordering, source ranges, linked audio, pinned Shot/Clip versions, duplicate materialized Storyboard placements, missing sources and source immutability.
+- Project-level shared placement operations for Master Shots and ordinary clips, including mixed-model drop occupancy and atomic cross-model resize trims.
+- Nested Clip Timelines render Video/Audio/Text track rows with multiple placements per track; track-aware add and compatible move operations are tested.
+- Versioned project import/export envelope (document version 2.0) stores the authoritative schema-1.0 project alongside the canonical Composition projection and continues to accept legacy schema-1.0 files.
 
-- Master and nested Clip Asset timelines use one Editor and placement engine.
-- Add Track is Video, Audio or Text at all composition depths.
-- Saving a Project composition as a Clip Asset preserves track/placement structure and concrete version pins rather than flattening layers.
-- Saved snapshots are independently editable; existing placements remain pinned.
-- The current schema requires explicit non-destructive migration. Runtime behavior is not claimed to be migrated.
+## Validation
 
-## Runtime slice
+CI [#39218891285](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39218891285) passed tests, TypeScript check and Vite production build. No browser smoke tests were added or run.
 
-- Added `src/compositionModel.ts` for canonical track, placement, source-reference and composition contracts.
-- Added `src/compositionMigration.ts` to project schema-1.0 root timeline and Clip Asset Versions while retaining the original project as a defensive copy.
-- Added `src/compositionMigration.test.ts` for IDs/order, source ranges, linked audio, version pins, nested layers, duplicate Storyboard placement handling, missing sources, deterministic output and immutability.
-- The adapter is not yet the persisted schema and is not wired into the live editors.
+## Remaining
 
-## Verification
-
-Automated test/build status is pending the exact latest PR-head CI run. Do not treat the projection adapter as production migration until CI passes and import/export/editor integration is complete. Implementation acceptance requires migration, round-trip, snapshot independence, nested rendering, interaction, Undo/Redo, type-check and production-build coverage.
+- The canonical projection is not yet the authoritative editor/persistence model.
+- Root and nested editors still use legacy project state paths; issues #53/#54 remain open until full parity and user acceptance.
+- Project-to-Clip Save-as-Clip structural snapshots, cycle/dependency portability checks, and source/snapshot independence are not implemented.
+- Next: design and test canonical-to-editable round trips; migrate editor state without silently rewriting user edits or pinned versions; then implement structure-preserving snapshots.

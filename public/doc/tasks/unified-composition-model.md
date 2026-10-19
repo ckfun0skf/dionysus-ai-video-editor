@@ -1,17 +1,21 @@
 # DYS-014 — Unified Composition Model and structure-preserving snapshots
 
-**Status:** In progress · **Progress estimate:** 30% · **Updated:** 2026-10-19
+**Status:** In progress · **Progress estimate:** 60% · **Updated:** 2026-10-19
 
 ## Goal
 
 Use one Composition document contract and one Editor for the Project Master Timeline and nested Clip Asset Versions. Saving a completed Project timeline as a Clip Asset must preserve its editable structure.
 
-## Implemented slice (not yet integrated)
+## Implemented transition slices
 
 - Added typed canonical Composition, Track, Placement and source-reference definitions in `src/compositionModel.ts`.
 - Added `migrateLegacyProjectToComposition()` in `src/compositionMigration.ts`. It projects the root timeline and each Clip Asset Version, keeps the original schema-1.0 project as a defensive copy, preserves legacy placement fields, and reports duplicate materialized Storyboard placements, missing sources and unsupported track kinds.
 - Added `src/compositionMigration.test.ts` for stable IDs/order, source ranges, linked audio, Shot Slot and Clip Version pins, nested layer conversion, duplicate detection, missing-source warnings, deterministic output and source immutability.
-- Not complete: app persistence/import/export and the live Master/Clip editors still use schema 1.0. CI must be checked on the exact PR head before accepting the code slice.
+- Added nested track normalization and track-aware add/move operations in `src/clipVersionTracks.ts`; nested timeline UI renders Video/Audio/Text track rows with multiple placements per track. Add layer creates a track; Add content adds a placement.
+- Added `src/projectDocument.ts` versioned import/export boundary. New project files use the `dionysus-project-document` 2.0 envelope containing the authoritative schema-1.0 project and canonical Composition projection. Existing schema-1.0 files remain importable.
+- Shared Master Shot/ordinary placement move, drop and resize logic is in `src/projectTimelinePlacement.ts`; cross-model resize trims are atomic.
+- Consolidated head `2763f3b0a98823ef5d59a3760486adb302cc31d` passed CI [39218891285](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39218891285): tests, TypeScript and Vite build.
+- Important limit: the envelope is a compatibility bridge, not canonical-only persistence. The live editor still treats the schema-1.0 payload as authoritative; Project-to-Clip structural snapshots remain unimplemented.
 
 ## Target contract
 
@@ -27,12 +31,12 @@ Use one Composition document contract and one Editor for the Project Master Time
 ## Implementation slices
 
 - [x] Document target ownership, editor parity, snapshot semantics and migration safeguards.
-- [ ] Define typed Composition documents, source references, placements and version pinning.
-- [ ] Add deterministic migration from schema 1.0 Shot Slots, nested layers and `storyboard-*` placements.
+- [x] Define typed Composition documents, source references, placements and version pinning.
+- [x] Add deterministic non-mutating projection from schema 1.0 Shot Slots, nested layers and `storyboard-*` placements.
 - [ ] Move root and nested editors to shared composition context and placement operations.
 - [ ] Implement structure-preserving save/open/edit of Project-to-Clip snapshots.
 - [ ] Prove source/snapshot independence and new-Version editing.
-- [ ] Test migration, JSON round-trip, nested render, editing parity and Undo/Redo.
+- [ ] Complete canonical-only JSON round-trip, nested render, editing parity and Undo/Redo.
 
 ## Acceptance
 

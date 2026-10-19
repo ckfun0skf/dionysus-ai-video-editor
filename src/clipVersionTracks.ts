@@ -44,3 +44,67 @@ export function normalizeClipVersionTracks(version: ClipVersion): ClipVersion {
   });
   return { ...version, tracks, layers };
 }
+
+export function addClipVersionTrack(
+  version: ClipVersion,
+  track: TimelineTrack,
+): ClipVersion {
+  const normalized = normalizeClipVersionTracks(version);
+  const kind = canonicalTrackKind(track.kind);
+  if (normalized.tracks?.some(item => item.id === track.id)) {
+    throw new Error("Track ID already exists in this Clip Version.");
+  }
+  return {
+    ...normalized,
+    tracks: [...(normalized.tracks ?? []), { ...track, kind }],
+  };
+}
+
+/** Add a source placement to a compatible track, creating a deterministic default if needed. */
+export function addClipVersionLayer(
+  version: ClipVersion,
+  layer: CompositionLayer,
+  targetTrackId?: string,
+): ClipVersion {
+  const normalized = normalizeClipVersionTracks(version);
+  const kind = nestedTrackKind(layer);
+  const target = targetTrackId
+    ? normalized.tracks?.find(track => track.id === targetTrackId && track.kind === kind)
+    : normalized.tracks?.find(track => track.kind === kind);
+  let next = normalized;
+  let track = target;
+  if (!track) {
+    if (targetTrackId) throw new Error("The selected track cannot contain this source type.");
+    track = {
+      id: `clip-track:${version.id}:${kind}:${(normalized.tracks?.length ?? 0) + 1}`,
+      name: kind === "video" ? "Video " + ((normalized.tracks ?? []).filter(item => item.kind === "video").length + 1)
+        : kind === "audio" ? "Audio " + ((normalized.tracks ?? []).filter(item => item.kind === "audio").length + 1)
+        : "Text " + ((normalized.tracks ?? []).filter(item => item.kind === "text").length + 1),
+      kind,
+    };
+    next = { ...normalized, tracks: [...(normalized.tracks ?? []), track] };
+  }
+  return {
+    ...next,
+    layers: [...next.layers, { ...layer, trackId: track.id }],
+  };
+}
+
+/** Move a layer within or between compatible nested tracks. */
+export function moveClipVersionLayer(
+  version: ClipVersion,
+  layerId: string,
+  targetTrackId: string,
+  start: number,
+): ClipVersion {
+  if (!Number.isFinite(start) || start < 0) throw new Error("Layer start must be finite and non-negative.");
+  const normalized = normalizeClipVersionTracks(version);
+  const layer = normalized.layers.find(item => item.id === layerId);
+  const target = normalized.tracks?.find(item => item.id === targetTrackId);
+  if (!layer || !target) throw new Error("Layer or destination track was not found.");
+  if (nestedTrackKind(layer) !== target.kind) throw new Error("This source type cannot be moved to the selected track.");
+  return {
+    ...normalized,
+    layers: normalized.layers.map(item => item.id === layerId ? { ...item, trackId: targetTrackId, start: Math.min(start, Math.max(0, normalized.duration - item.duration)) } : item),
+  };
+}

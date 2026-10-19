@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { sampleProject } from "./sampleProject";
-import { normalizeClipVersionTracks } from "./clipVersionTracks";
+import { addClipVersionLayer, addClipVersionTrack, moveClipVersionLayer, normalizeClipVersionTracks } from "./clipVersionTracks";
 import { validateProject } from "./projectValidation";
 
 describe("normalizeClipVersionTracks", () => {
@@ -43,5 +43,28 @@ describe("normalizeClipVersionTracks", () => {
     const normalized = normalizeClipVersionTracks(version);
     expect(normalized.tracks?.map(track => track.id)).toEqual(["track-video-custom", "track-audio-custom"]);
     expect(normalized.layers.map(layer => layer.trackId)).toEqual(["track-video-custom", "track-audio-custom"]);
+  });
+});
+
+describe("nested Clip Version track operations", () => {
+  it("adds separate tracks and places multiple layers on a chosen track", () => {
+    const version = structuredClone(sampleProject.shots[0].slots[0].versions[0]);
+    const withTrack = addClipVersionTrack(version, { id: "video-2", name: "Video 2", kind: "video" });
+    const withLayers = addClipVersionLayer(withTrack, { id: "image-1", name: "Image", kind: "image", start: 0, duration: 2 }, "video-2");
+    const withSecondLayer = addClipVersionLayer(withLayers, { id: "code-1", name: "Code", kind: "procedural", start: 1, duration: 2 }, "video-2");
+    expect(withSecondLayer.tracks?.map(track => track.id)).toContain("video-2");
+    expect(withSecondLayer.layers.filter(layer => layer.trackId === "video-2").map(layer => layer.id)).toEqual(["image-1", "code-1"]);
+  });
+
+  it("moves a layer to a compatible track and rejects incompatible track kinds", () => {
+    const version = structuredClone(sampleProject.shots[0].slots[0].versions[0]);
+    const baseTrack = addClipVersionTrack(version, { id: "video-1", name: "Video 1", kind: "video" });
+    const tracked = addClipVersionTrack(baseTrack, { id: "video-2", name: "Video 2", kind: "video" });
+    const populated = addClipVersionLayer(tracked, { id: "layer-a", name: "Image", kind: "image", start: 0, duration: 2 }, "video-2");
+    const defaultVideoTrackId = "video-1";
+    const moved = moveClipVersionLayer(populated, "layer-a", defaultVideoTrackId, 3);
+    expect(moved.layers.find(layer => layer.id === "layer-a")).toMatchObject({ trackId: defaultVideoTrackId, start: 3 });
+    const audio = addClipVersionTrack(moved, { id: "audio-1", name: "Audio", kind: "audio" });
+    expect(() => moveClipVersionLayer(audio, "layer-a", "audio-1", 0)).toThrow(/cannot be moved/);
   });
 });
