@@ -125,7 +125,7 @@ npm run dev
 ## Current Architecture Transition — 2026-10-19
 
 - Follow-up for #54: ordinary timeline clip drop/resize calculations now use the same occupancy set as Master Shots. Resizing an ordinary clip can trim an adjacent Master Shot in the same history transaction. Master Shot drag source is retained in a ref so preview/drop still work when the browser protects DataTransfer contents during dragover.
-- Both root and nested Add layer menus now expose only Video, Audio and Text; image/video/code/clip remain source/content choices, not track kinds.
+- The Master Timeline Add layer menu now exposes only Video, Audio and Text. The nested legacy editor still has image/code/Clip content actions; consolidating that surface requires the planned shared Composition Editor/content-picker refactor and remains part of #53.
 - Added App-level regression coverage for protected Master Shot drag data, normal-clip-vs-Master-Shot drop collision, cross-model resize trimming/Undo, and the three allowed track types. Check exact-head CI before relying on this patch.
 
 

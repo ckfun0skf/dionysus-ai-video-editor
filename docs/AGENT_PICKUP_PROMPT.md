@@ -41,7 +41,7 @@ The accepted target direction is in `docs/architecture/UNIFIED_COMPOSITION_MODEL
 - Branch: `feat/unified-composition-model`
 - Last recorded checkpoint commit: `406d898ad5176cc2ed55441b3ed502c67db5f7a5`
 - Last recorded CI: https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39207371506 (passed tests and TypeScript/build at that commit).
-- PR #63 remains Draft and includes DYS-014 migration projection code plus a follow-up for #54: ordinary clip drag/drop and resize occupancy includes Master Shots, cross-model resize trims update both records atomically, and Master Shot drag identity survives protected dragover. Root/nested Add layer menus expose only Video/Audio/Text. Import/export and full shared-editor integration remain incomplete; no deployment is implied.
+- PR #63 remains Draft and includes DYS-014 migration projection code plus a follow-up for #54: ordinary clip drag/drop and resize occupancy includes Master Shots, cross-model resize trims update both records atomically, and Master Shot drag identity survives protected dragover. The Master Timeline Add layer menu exposes only Video/Audio/Text; nested legacy content actions remain and must be consolidated during shared-editor work. Import/export and full shared-editor integration remain incomplete; no deployment is implied.
 - User reports residual problems in #53 and #54. Do not close them without code-level regression coverage and explicit user acceptance.
 - New tasks: DYS-014 (unified Composition + structure-preserving snapshots) and DYS-015 (Production Task graph + Generation Runs).
 
