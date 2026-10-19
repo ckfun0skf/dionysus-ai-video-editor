@@ -64,3 +64,10 @@ Do not add or run automated browser smoke tests. Use the existing unit/component
 
 ## Dependencies
 DYS-005 timeline workflow; DYS-006 preview/compositing; DYS-014 shared Composition model.
+
+
+## Issue #83 correction merged — follow-up acceptance still required
+
+PR #84 merged as `a83f4a6836d7c4ee683b17a1ccdb5897e17364e2`; exact-head CI [39252298875](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39252298875) passed. It consolidates Master Timeline layer actions, improves button styling and selected-state affordances, accounts for bottom navigation safe areas, and reduces vertical toolbar clutter.
+
+Issue #83 is closed by the code merge, but this does not prove deployment or owner acceptance. First verify main push CI and Pages deployment, then continue the mobile viewport/usability pass. Keep DYS-012 in progress; no browser smoke tests.

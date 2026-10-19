@@ -220,3 +220,10 @@ PR #81 merged selected-audio Mute/Unmute as main commit `7ba96ec0eae8d6e3fb2196d
 
 ## DYS-012 follow-up — Issue #83
 The mobile UI needs another usability pass: consolidate layer actions into a safe-area-aware menu, improve touch button affordances, and reduce the amount of vertically stacked controls. Do not mark complete until CI/deployment evidence and viewport acceptance are recorded.
+
+
+## Mobile UX handoff checkpoint — 2026-10-19
+
+PR #84 merged the Issue #83 correction at `a83f4a6836d7c4ee683b17a1ccdb5897e17364e2`; exact-head PR CI [39252298875](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39252298875) passed. It consolidates Master Timeline layer controls into a compact menu, improves touch button affordances and selected states, respects bottom-navigation safe areas and reduces vertical clutter. Issue #83 is closed by the merge, but main push CI/Pages deployment and owner acceptance were not confirmed in the handoff session. Do not ask the owner to test until deployment is verified.
+
+The next agent should read `docs/MOBILE_AGENT_PICKUP_PROMPT.md` and `docs/MOBILE_AGENT_HANDOFF.md`, verify live GitHub state and deployment, then continue the mobile usability/viewport pass. DYS-012 remains in progress; no browser smoke tests. Once the mobile pass is stable, return to DYS-014 canonical Composition persistence and structure-preserving Save-as-Clip.

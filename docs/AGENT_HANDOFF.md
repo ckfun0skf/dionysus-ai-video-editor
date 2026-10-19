@@ -258,3 +258,13 @@ The owner wants a future phone version with a CapCut-inspired interface. Treat t
 
 ## Current owner feedback — Issue #83
 The owner reports the mobile timeline UI is broken: some buttons look unstyled, layer controls overflow, and the screen is too busy compared with CapCut. Current follow-up branch `fix/mobile-timeline-layer-actions-v2` consolidates Master Timeline layer actions, styles touch controls, and reduces toolbar density. Keep this work on a PR, do not add/run browser smoke tests, and do not ask the owner to test until main CI and Pages deployment are confirmed.
+
+
+## Fresh mobile pickup — 2026-10-19
+
+Use [`docs/MOBILE_AGENT_PICKUP_PROMPT.md`](MOBILE_AGENT_PICKUP_PROMPT.md) and [`docs/MOBILE_AGENT_HANDOFF.md`](MOBILE_AGENT_HANDOFF.md) as the focused next-chat entry point. They supersede the stale mobile-specific branch notes earlier in this file; always verify live GitHub state before acting.
+
+- Main baseline at this checkpoint: `a83f4a6836d7c4ee683b17a1ccdb5897e17364e2`.
+- PR #84 merged the Issue #83 mobile layer action/style correction; exact-head CI [39252298875](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39252298875) passed.
+- Issue #83 is closed by PR #84, but deployment and owner acceptance are not implied. Independently verify main push CI and GitHub Pages deployment before asking the owner to test.
+- DYS-012 remains in progress. Do not add/run browser smoke tests. Next work is a coherent CapCut-inspired mobile usability/viewport pass, then resume DYS-014 canonical Composition persistence and structure-preserving Save-as-Clip.
