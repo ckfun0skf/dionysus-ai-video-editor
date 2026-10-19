@@ -268,3 +268,12 @@ Use [`docs/MOBILE_AGENT_PICKUP_PROMPT.md`](MOBILE_AGENT_PICKUP_PROMPT.md) and [`
 - PR #84 merged the Issue #83 mobile layer action/style correction; exact-head CI [39252298875](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39252298875) passed.
 - Issue #83 is closed by PR #84, but deployment and owner acceptance are not implied. Independently verify main push CI and GitHub Pages deployment before asking the owner to test.
 - DYS-012 remains in progress. Do not add/run browser smoke tests. Next work is a coherent CapCut-inspired mobile usability/viewport pass, then resume DYS-014 canonical Composition persistence and structure-preserving Save-as-Clip.
+
+## Live mobile checkpoint — 2026-10-19 (supersedes earlier stale status)
+
+- Current main HEAD: `89f92a3168413151dd8acb58d4b3c034cf59ead3`.
+- Exact main push CI [39254646559](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39254646559) and GitHub Pages deployment [39254646733](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39254646733) both passed for that SHA. PR #84’s mobile correction is published by the Pages workflow, but real device/viewport acceptance is not implied.
+- Open PRs at this checkpoint: #45, #37 and #33; no current mobile follow-up PR was open when work started. Open non-PR issues: #56, #58 and #59.
+- Active feature branch: `feat/mobile-preview-progressive-disclosure`. This slice keeps history, playback and frame stepping in the primary preview-control row on narrow viewports, and progressively discloses the +0.5s control, playhead slider, overlay and optional image-clear control. A deterministic App regression test covers the toggle and its accessible expanded/collapsed state.
+- Exact-head feature PR CI/build must pass before this slice can be called validated. No local test/build result is claimed because no local checkout/runtime was available; no browser smoke tests are added or run.
+- Keep DYS-012 in progress until phone portrait, landscape and tablet acceptance is evidenced. Continue DYS-014 afterwards: canonical Composition persistence and independent structure-preserving Save-as-Clip snapshots remain unfinished.
