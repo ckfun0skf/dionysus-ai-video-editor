@@ -134,3 +134,8 @@ Continue from branch `feat/mobile-preview-undo-redo` (if already merged, inspect
 ### Current DYS-012 mobile follow-up — audio mute (2026-10-19)
 
 Continue from `feat/mobile-audio-clip-mute` (if already merged, inspect PR/main first). This slice adds selected-audio Mute/Unmute on the mobile clip toolbar and an App regression test. Run exact-head CI/build, merge through PR, verify main CI and Pages deployment, then update task dashboard/report/handoff. No browser smoke tests. Keep DYS-012 in progress until phone portrait/landscape/tablet acceptance is evidenced.
+
+
+### Current DYS-012 mobile follow-up — mute-state accessibility (2026-10-19)
+
+Continue from `feat/mobile-audio-mute-state` (if already merged, inspect PR/main first). This slice adds a visible active state to the selected-audio Mute/Unmute button and asserts its `aria-pressed` value. Run exact-head CI/build, merge through PR, verify main CI and Pages deployment, then update task dashboard/report/handoff. No browser smoke tests. Keep DYS-012 in progress until phone portrait/landscape/tablet acceptance is evidenced.
