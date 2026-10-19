@@ -2943,3 +2943,11 @@
     touch-action: manipulation;
   }
 }
+
+
+/* DYS-012: make the active mute state legible on touch screens. */
+.mobile-clip-toolbar .mobile-audio-mute-toggle[aria-pressed="true"] {
+  border-color: var(--accent, #d5f36a);
+  color: var(--accent, #d5f36a);
+  background: rgba(213, 243, 106, 0.1);
+}
