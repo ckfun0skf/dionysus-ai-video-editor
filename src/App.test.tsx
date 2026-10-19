@@ -1971,3 +1971,41 @@ describe("mobile nested timeline touch gestures", () => {
     }
   });
 });
+
+
+describe("mobile contextual timeline tools", () => {
+  it("shows selected clip actions and opens/closes the mobile Inspector", async () => {
+    const project = structuredClone(persistedProject());
+    const videoTrack = project.tracks.find(track => track.kind === "video")!;
+    project.timelineClips = [
+      { id: "mobile-tools-clip", name: "Mobile tools clip", kind: "video", trackId: videoTrack.id, start: 0, duration: 3 },
+    ];
+    act(() => root.unmount());
+    localStorage.setItem("dionysus.project.v1", JSON.stringify(project));
+    root = createRoot(container);
+    act(() => root.render(<App />));
+    await flushEffects();
+    await openTimelineView();
+
+    const clip = Array.from(container.querySelectorAll<HTMLButtonElement>(".visual-media-clip"))
+      .find(button => button.textContent?.includes("Mobile tools clip"))!;
+    click(clip);
+    await flushEffects();
+    expect(container.querySelector(".mobile-clip-toolbar")).toBeTruthy();
+
+    click(Array.from(container.querySelectorAll<HTMLButtonElement>(".mobile-clip-toolbar button"))
+      .find(button => button.textContent?.includes("Settings"))!);
+    await flushEffects();
+    expect(container.querySelector('[role="dialog"] #timeline-clip-settings-title')?.textContent).toContain("Mobile tools clip");
+    click(Array.from(container.querySelectorAll<HTMLButtonElement>(".visual-clip-inspector button"))
+      .find(button => button.textContent?.trim() === "Close")!);
+    await flushEffects();
+
+    click(container.querySelector<HTMLButtonElement>(".timeline-inspector-toggle")!);
+    await flushEffects();
+    expect(container.querySelector(".workbench.timeline-workbench")?.classList.contains("timeline-inspector-open")).toBe(true);
+    click(container.querySelector<HTMLButtonElement>(".mobile-inspector-close")!);
+    await flushEffects();
+    expect(container.querySelector(".workbench.timeline-workbench")?.classList.contains("timeline-inspector-open")).toBe(false);
+  });
+});

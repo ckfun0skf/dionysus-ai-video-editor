@@ -103,3 +103,10 @@ Start by inspecting GitHub and then continue the work. Do not merely summarize t
 - PR #69 merged the Master Timeline long-press touch drag as main commit `01ca4653a23c70273c74d3ada37883b66dabb3e3`; CI run [39237331052](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39237331052) passed at `31ed8795ef883e556285eecd6ab7073bee094a87`.
 - Active branch `feat/mobile-nested-timeline-touch` implements the same touch gesture for nested Clip Version layers. Check exact-head CI before merging.
 - Keep DYS-012 in progress; Inspector/Version picker, robust trim/scrub and viewport acceptance remain. Main push CI and Pages deployment have not yet been independently confirmed; do not ask the owner to test until deployment is verified. No browser smoke tests.
+
+
+## Latest mobile contextual tools checkpoint — 2026-10-19
+
+- PR #70 merged nested Clip Version touch movement as main commit `fd51602f92640cf18ad426a418bb7c8d8cb39207`; exact-head CI run [39237693258](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39237693258) passed at `1b1da31e6cec749f3888385ea5c201183c4facba`.
+- Active branch `feat/mobile-contextual-editor-tools` adds selected-clip actions, an Inspector toggle/close action and touch-sized version selector controls.
+- Keep DYS-012 in progress. Verify exact-head CI, merge through PR, then independently confirm main push CI and Pages deployment. No browser smoke tests and do not ask the owner to test before deployment confirmation.

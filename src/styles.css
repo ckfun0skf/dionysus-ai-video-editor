@@ -2352,6 +2352,12 @@
 }
 
 
+.timeline-inspector-toggle,
+.mobile-inspector-close,
+.mobile-clip-toolbar {
+  display: none;
+}
+
 /* DYS-012 mobile workspace foundation: CapCut-inspired hierarchy, not a shrunken desktop. */
 @media (max-width: 640px) {
   html, body, #root {
@@ -2720,6 +2726,88 @@
     touch-action: none;
     user-select: none;
     -webkit-user-select: none;
+  }
+
+  .timeline-inspector-toggle {
+    display: inline-flex;
+    flex: 0 0 auto;
+    min-height: 40px;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+  }
+  .workbench.timeline-workbench .mobile-inspector-close {
+    display: inline-flex;
+    min-height: 36px;
+  }
+  .workbench:not(.timeline-workbench) .mobile-inspector-close {
+    display: none;
+  }
+  .mobile-inspector-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .mobile-clip-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    margin: 0 0 8px;
+    padding: 7px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    background: var(--panel, #18181d);
+    scrollbar-width: none;
+  }
+  .mobile-clip-toolbar::-webkit-scrollbar { display: none; }
+  .mobile-clip-toolbar-title {
+    flex: 0 0 auto;
+    max-width: 22vw;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 10px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .mobile-clip-toolbar button {
+    flex: 0 0 auto;
+    min-height: 42px;
+    padding: 8px 11px;
+    touch-action: manipulation;
+  }
+  .mobile-clip-toolbar button:disabled {
+    opacity: .35;
+  }
+  .nested-timeline-tab .editor-linked-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .nested-timeline-tab .editor-linked-heading .inline-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    width: 100%;
+  }
+  .nested-timeline-tab .nested-version-duration {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    min-width: 0;
+    gap: 4px;
+    margin: 0;
+  }
+  .nested-timeline-tab .nested-version-duration span,
+  .nested-timeline-tab .nested-version-duration select {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+  .nested-timeline-tab .nested-version-duration select,
+  .nested-timeline-tab .editor-linked-heading .button {
+    min-height: 42px;
   }
 
 }
