@@ -2193,3 +2193,34 @@ describe("mobile preview history controls", () => {
     expect((persistedProject().timelineClips ?? []).filter(item => item.name === "Mobile history clip")).toHaveLength(2);
   });
 });
+
+
+describe("mobile audio clip controls", () => {
+  it("toggles mute for a selected audio clip and persists the state", async () => {
+    const project = structuredClone(persistedProject());
+    const audioTrack = project.tracks.find(track => track.kind === "audio")!;
+    project.timelineClips = [
+      { id: "mobile-audio-mute-clip", name: "Mobile audio mute clip", kind: "audio", trackId: audioTrack.id, start: 0, duration: 3, muted: false },
+    ];
+    act(() => root.unmount());
+    localStorage.setItem("dionysus.project.v1", JSON.stringify(project));
+    root = createRoot(container);
+    act(() => root.render(<App />));
+    await flushEffects();
+    await openTimelineView();
+
+    const clip = Array.from(container.querySelectorAll<HTMLButtonElement>(".visual-media-clip"))
+      .find(button => button.textContent?.includes("Mobile audio mute clip"))!;
+    click(clip);
+    await flushEffects();
+    const muteButton = () => container.querySelector<HTMLButtonElement>('[aria-label="Mute selected audio"], [aria-label="Unmute selected audio"]');
+    expect(muteButton()?.getAttribute("aria-label")).toBe("Mute selected audio");
+    click(muteButton()!);
+    await flushEffects();
+    expect((persistedProject().timelineClips ?? []).find(item => item.id === "mobile-audio-mute-clip")?.muted).toBe(true);
+    expect(muteButton()?.getAttribute("aria-label")).toBe("Unmute selected audio");
+    click(muteButton()!);
+    await flushEffects();
+    expect((persistedProject().timelineClips ?? []).find(item => item.id === "mobile-audio-mute-clip")?.muted).toBe(false);
+  });
+});
