@@ -216,3 +216,7 @@ PR #80 merged phone-accessible preview Undo/Redo as main commit `85646e4a70cdde1
 ## Mobile editing follow-up — visible audio mute state (2026-10-19)
 
 PR #81 merged selected-audio Mute/Unmute as main commit `7ba96ec0eae8d6e3fb2196d7b9f492e293ff10e2`; exact-head CI run `39249271916` passed. The active branch `feat/mobile-audio-mute-state` adds a visible active state for muted audio and checks the accessible pressed state. Keep DYS-012 in progress until exact-head CI, main push CI, Pages deployment, and viewport acceptance are independently recorded. Do not add or run browser smoke tests.
+
+
+## DYS-012 follow-up — Issue #83
+The mobile UI needs another usability pass: consolidate layer actions into a safe-area-aware menu, improve touch button affordances, and reduce the amount of vertically stacked controls. Do not mark complete until CI/deployment evidence and viewport acceptance are recorded.

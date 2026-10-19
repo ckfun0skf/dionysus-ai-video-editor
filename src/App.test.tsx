@@ -1747,6 +1747,21 @@ describe("Integrated timeline editor", () => {
     expect((persistedProject().timelineClips ?? []).some(clip => clip.id === audio.id)).toBe(false);
   });
 
+  it("opens a compact, accessible layer action menu on the mobile timeline", async () => {
+    await openTimelineView();
+    const videoTrack = persistedProject().tracks.find(track => track.kind === "video")!;
+    const menuButton = buttonsNamed("Layer actions for " + videoTrack.name)[0];
+    expect(menuButton).toBeTruthy();
+    click(menuButton);
+    expect(container.querySelector('[role="menu"]')).toBeTruthy();
+    const menuItems = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')).map(button => button.textContent?.trim());
+    expect(menuItems).toContain("Settings…");
+    expect(menuItems).toContain("Add clip");
+    expect(menuItems).toContain("Remove layer…");
+    click(Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')).find(button => button.textContent?.trim()==="Settings…")!);
+    expect(container.querySelector('[role="menu"]')).toBeNull();
+  });
+
   it("removing a video layer deletes linked child audio but preserves detached audio through Undo/Redo", async () => {
     await openTimelineView();
     await seedLinkedVideoAudioPairs(2);

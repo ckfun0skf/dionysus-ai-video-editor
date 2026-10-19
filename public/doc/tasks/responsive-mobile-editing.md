@@ -18,6 +18,11 @@ Make Dionysus usable on phone and tablet screens without removing Storyboard, Re
 - Trim handles should have generous hit areas and visible grab markers without obscuring short clips.
 - Preserve the same project data, pinned versions, linked audio and composition semantics as desktop.
 
+## Issue #83 — mobile UI/UX correction in progress
+- Owner report: some controls lack clear button styling, layer actions overflow the phone viewport, and the overall screen feels too busy compared with CapCut.
+- Current corrective patch consolidates Master Timeline layer actions into a safe-area-aware overflow menu, standardizes touch control styling, and converts preview/master action rows to horizontal strips.
+- Automated component coverage is included. This is not yet full CapCut parity or device acceptance.
+
 ## Shipped foundation
 - PR #68 merged responsive layout as main commit `3513d51f9a52599e0231d8cb4db884cc59e5d611`.
 - PR #69 merged Master Timeline touch movement as main commit `01ca4653a23c70273c74d3ada37883b66dabb3e3`; exact-head CI run [39237331052](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39237331052) passed.
