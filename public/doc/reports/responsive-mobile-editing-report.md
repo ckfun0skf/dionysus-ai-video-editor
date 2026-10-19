@@ -70,3 +70,10 @@ The owner reports unstyled buttons, overflowing layer actions, and excessive vis
 PR #84 [fix: simplify mobile timeline layer controls](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/84) merged as main SHA `a83f4a6836d7c4ee683b17a1ccdb5897e17364e2`. Its exact-head CI run [39252298875](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39252298875) passed. The patch consolidates Master Timeline layer actions into a compact overflow menu, styles mobile controls consistently, adds safe-area spacing above bottom navigation and reduces vertical toolbar density.
 
 Issue #83 is closed by that merge, but owner acceptance is not implied. The main push CI and Pages deployment for this SHA were not independently confirmed when this report was updated. Verify deployment before asking the owner to test. Keep DYS-012 in progress until the viewport acceptance criteria are evidenced. No browser smoke tests were added or run.
+
+
+## Mobile preview control density — 2026-10-19
+
+The current slice adds a phone-only **More controls / Less controls** disclosure to the integrated preview. Undo/Redo, start, Play/Pause and frame-step remain in the primary row. The less-frequently used +0.5s step, playhead slider, overlay toggle and optional image-clear action move into a secondary row on narrow screens; desktop continues to display the full control set. The App regression test checks the disclosure state, ARIA relationship and return to the compact state.
+
+Main release verification: `89f92a3168413151dd8acb58d4b3c034cf59ead3` passed push CI [39254646559](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39254646559) and Pages deployment [39254646733](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39254646733). Feature-branch CI remains the gate for this change. No automated browser smoke tests were added or run. DYS-012 remains in progress until portrait, landscape and tablet viewport acceptance is evidenced.

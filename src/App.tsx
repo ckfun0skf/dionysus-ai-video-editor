@@ -205,6 +205,7 @@ export default function App() {
   const previewMediaReleasesRef = useRef(new Map<string, () => void>());
   const [previewAssetId, setPreviewAssetId] = useState("");
   const [showPreviewOverlay, setShowPreviewOverlay] = useState(false);
+  const [mobilePreviewToolsOpenByTab, setMobilePreviewToolsOpenByTab] = useState<Record<string, boolean>>({});
   const previewTransformRef = useRef<PreviewTransformStart | null>(null);
   const [previewTransformDraft, setPreviewTransformDraft] = useState<PreviewTransformDraft | null>(null);
   const previewCanvasRefs = useRef(new Map<string, HTMLCanvasElement>());
@@ -550,17 +551,20 @@ export default function App() {
           <span>PREVIEW OVERLAY</span><strong>{overlayTitle}</strong><small>{overlaySubtitle || "No shot description"}</small>
         </div>}
       </div>
-      <div className="integrated-preview-controls">
+      <div className={"integrated-preview-controls" + (mobilePreviewToolsOpenByTab[tabKey] ? " mobile-preview-tools-open" : "")}>
         <button className="button button-quiet button-small mobile-history-control" aria-label="Undo edit" title="Undo edit" disabled={undoStack.length === 0} onClick={undoProjectChange}><Undo2 size={15}/></button>
         <button className="button button-quiet button-small mobile-history-control" aria-label="Redo edit" title="Redo edit" disabled={redoStack.length === 0} onClick={redoProjectChange}><Redo2 size={15}/></button>
         <button className="button button-quiet button-small" onClick={() => { setIsPlaying(false); setEditorTime(0); playbackTimeRef.current = 0; }} title="Go to start">|◀</button>
         <button className="button button-primary button-small" aria-label={isPlaying ? "Pause preview" : "Play preview"} onClick={() => { if (!isPlaying && editorTime >= duration) { playbackTimeRef.current = 0; setEditorTime(0); } setIsPlaying(value => !value); }}>{isPlaying ? "Pause" : "Play"}</button>
         <button className="button button-quiet button-small mobile-frame-step" aria-label="Previous frame" title="Previous frame" onClick={() => { setIsPlaying(false); const next = Math.max(0, editorTime - 1 / Math.max(1, project.frameRate)); setEditorTime(next); playbackTimeRef.current = next; }}>−1f</button>
-        <button className="button button-quiet button-small" onClick={() => { setIsPlaying(false); const next = Math.min(duration, editorTime + 0.5); setEditorTime(next); playbackTimeRef.current = next; }}>+0.5s</button>
-        <label>Playhead <input aria-label="Timeline playhead time" type="range" min="0" max={Math.max(duration, 0.1)} step={1 / Math.max(1, project.frameRate)} value={Math.min(editorTime, duration)} onChange={event => { setIsPlaying(false); const next = Number(event.target.value); setEditorTime(next); playbackTimeRef.current = next; }} /></label>
         <button className="button button-quiet button-small mobile-frame-step" aria-label="Next frame" title="Next frame" onClick={() => { setIsPlaying(false); const next = Math.min(duration, editorTime + 1 / Math.max(1, project.frameRate)); setEditorTime(next); playbackTimeRef.current = next; }}>+1f</button>
-        <button className="button button-quiet button-small" aria-pressed={showPreviewOverlay} onClick={() => setShowPreviewOverlay(value => !value)}>{showPreviewOverlay ? "Hide overlay" : "Overlay"}</button>
-        {allowClearImage && previewImage && <button className="button button-quiet button-small" onClick={() => setPreviewAssetId("__none__")}>Clear image</button>}
+        <button type="button" className="button button-quiet button-small mobile-preview-more-toggle" aria-expanded={Boolean(mobilePreviewToolsOpenByTab[tabKey])} aria-controls={"preview-secondary-controls-" + tabKey} onClick={() => setMobilePreviewToolsOpenByTab(open => ({ ...open, [tabKey]: !open[tabKey] }))}>{mobilePreviewToolsOpenByTab[tabKey] ? "Less controls" : "More controls"}</button>
+        <div className="mobile-preview-secondary-controls" id={"preview-secondary-controls-" + tabKey}>
+          <button className="button button-quiet button-small" onClick={() => { setIsPlaying(false); const next = Math.min(duration, editorTime + 0.5); setEditorTime(next); playbackTimeRef.current = next; }}>+0.5s</button>
+          <label>Playhead <input aria-label="Timeline playhead time" type="range" min="0" max={Math.max(duration, 0.1)} step={1 / Math.max(1, project.frameRate)} value={Math.min(editorTime, duration)} onChange={event => { setIsPlaying(false); const next = Number(event.target.value); setEditorTime(next); playbackTimeRef.current = next; }} /></label>
+          <button className="button button-quiet button-small" aria-pressed={showPreviewOverlay} onClick={() => setShowPreviewOverlay(value => !value)}>{showPreviewOverlay ? "Hide overlay" : "Overlay"}</button>
+          {allowClearImage && previewImage && <button className="button button-quiet button-small" onClick={() => setPreviewAssetId("__none__")}>Clear image</button>}
+        </div>
       </div>
     </section>
   );

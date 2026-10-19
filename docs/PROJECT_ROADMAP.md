@@ -227,3 +227,12 @@ The mobile UI needs another usability pass: consolidate layer actions into a saf
 PR #84 merged the Issue #83 correction at `a83f4a6836d7c4ee683b17a1ccdb5897e17364e2`; exact-head PR CI [39252298875](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39252298875) passed. It consolidates Master Timeline layer controls into a compact menu, improves touch button affordances and selected states, respects bottom-navigation safe areas and reduces vertical clutter. Issue #83 is closed by the merge, but main push CI/Pages deployment and owner acceptance were not confirmed in the handoff session. Do not ask the owner to test until deployment is verified.
 
 The next agent should read `docs/MOBILE_AGENT_PICKUP_PROMPT.md` and `docs/MOBILE_AGENT_HANDOFF.md`, verify live GitHub state and deployment, then continue the mobile usability/viewport pass. DYS-012 remains in progress; no browser smoke tests. Once the mobile pass is stable, return to DYS-014 canonical Composition persistence and structure-preserving Save-as-Clip.
+
+## Live mobile checkpoint — 2026-10-19 (supersedes earlier stale status)
+
+- Current main HEAD: `89f92a3168413151dd8acb58d4b3c034cf59ead3`.
+- Exact main push CI [39254646559](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39254646559) and GitHub Pages deployment [39254646733](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39254646733) both passed for that SHA. PR #84’s mobile correction is published by the Pages workflow, but real device/viewport acceptance is not implied.
+- Open PRs at this checkpoint: #45, #37 and #33; no current mobile follow-up PR was open when work started. Open non-PR issues: #56, #58 and #59.
+- Active feature branch: `feat/mobile-preview-progressive-disclosure`. This slice keeps history, playback and frame stepping in the primary preview-control row on narrow viewports, and progressively discloses the +0.5s control, playhead slider, overlay and optional image-clear control. A deterministic App regression test covers the toggle and its accessible expanded/collapsed state.
+- Exact-head feature PR CI/build must pass before this slice can be called validated. No local test/build result is claimed because no local checkout/runtime was available; no browser smoke tests are added or run.
+- Keep DYS-012 in progress until phone portrait, landscape and tablet acceptance is evidenced. Continue DYS-014 afterwards: canonical Composition persistence and independent structure-preserving Save-as-Clip snapshots remain unfinished.

@@ -1747,6 +1747,30 @@ describe("Integrated timeline editor", () => {
     expect((persistedProject().timelineClips ?? []).some(clip => clip.id === audio.id)).toBe(false);
   });
 
+  it("progressively discloses secondary preview controls", async () => {
+    await openTimelineView();
+    const panel = container.querySelector<HTMLElement>(".integrated-preview-panel");
+    expect(panel).toBeTruthy();
+    const toggle = Array.from(panel!.querySelectorAll<HTMLButtonElement>("button"))
+      .find(button => button.textContent?.trim() === "More controls");
+    expect(toggle).toBeTruthy();
+    expect(toggle!.getAttribute("aria-expanded")).toBe("false");
+    const secondary = panel!.querySelector<HTMLElement>(".mobile-preview-secondary-controls");
+    expect(secondary).toBeTruthy();
+    expect(toggle!.getAttribute("aria-controls")).toBe(secondary!.id);
+    expect(secondary!.querySelector('[aria-label="Timeline playhead time"]')).toBeTruthy();
+
+    click(toggle!);
+    expect(toggle!.getAttribute("aria-expanded")).toBe("true");
+    expect(toggle!.textContent?.trim()).toBe("Less controls");
+    expect(panel!.querySelector(".integrated-preview-controls")?.classList.contains("mobile-preview-tools-open")).toBe(true);
+
+    click(toggle!);
+    expect(toggle!.getAttribute("aria-expanded")).toBe("false");
+    expect(toggle!.textContent?.trim()).toBe("More controls");
+    expect(panel!.querySelector(".integrated-preview-controls")?.classList.contains("mobile-preview-tools-open")).toBe(false);
+  });
+
   it("opens a compact, accessible layer action menu on the mobile timeline", async () => {
     await openTimelineView();
     const videoTrack = persistedProject().tracks.find(track => track.kind === "video")!;

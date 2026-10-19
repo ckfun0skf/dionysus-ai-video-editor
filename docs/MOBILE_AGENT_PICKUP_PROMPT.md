@@ -1,5 +1,7 @@
 # Dionysus Mobile UX — Fresh Chat Pickup Prompt
 
+> **Live checkpoint update (2026-10-19):** Main is `89f92a3168413151dd8acb58d4b3c034cf59ead3`; exact main push CI [39254646559](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39254646559) and Pages deployment [39254646733](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39254646733) passed. Current follow-up branch `feat/mobile-preview-progressive-disclosure` reduces preview control density on phones with a regression-tested More controls disclosure. Re-query live GitHub before continuing; DYS-012 stays in progress pending real viewport acceptance.
+
 You are continuing active development of Dionysus AI Video Editor. The owner specifically wants a future phone version with a **CapCut-inspired editing interface**. This is an active product requirement, not an optional styling idea.
 
 ## Read this first
