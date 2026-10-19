@@ -135,4 +135,113 @@ describe("migrateLegacyProjectToComposition", () => {
     expect(first.rootComposition).toEqual(second.rootComposition);
     expect(first.clipCompositions).toEqual(second.clipCompositions);
   });
+
+  it("preserves every Shot Slot alternative and each version's generation provenance", () => {
+    const project = structuredClone(sampleProject);
+    const shot = project.shots[0];
+    const slot = shot.slots[0];
+    const referenceSnapshot = [
+      { id: "migration-reference-1", assetId: "migration-character", role: "identity" as const, notes: "Pinned character identity" },
+    ];
+    slot.versions = [
+      {
+        id: "migration-version-original",
+        name: "Original take",
+        description: "First generation attempt",
+        duration: 4,
+        layers: [{
+          id: "migration-layer-original",
+          name: "Original video",
+          kind: "video",
+          start: 0,
+          duration: 4,
+          prompt: "A slow push-in on the original subject.",
+          modelName: "Video Model",
+          modelVersion: "v1",
+        }],
+        scriptVersionIds: ["script-original"],
+        generationRecords: [{
+          id: "migration-run-original",
+          createdAt: "2026-10-10T12:00:00.000Z",
+          prompt: "Original take prompt",
+          referenceSnapshot: structuredClone(referenceSnapshot),
+          modelName: "Video Model",
+          modelVersion: "v1",
+          outputAssetId: "asset-original-output",
+        }],
+      },
+      {
+        id: "migration-version-alternative",
+        name: "Alternative take",
+        description: "Second generation attempt",
+        duration: 5,
+        layers: [{
+          id: "migration-layer-alternative",
+          name: "Alternative video",
+          kind: "video",
+          start: 0,
+          duration: 5,
+          prompt: "A handheld reveal from the opposite angle.",
+          modelName: "Video Model",
+          modelVersion: "v2",
+        }],
+        scriptVersionIds: ["script-alternative"],
+        generationRecords: [{
+          id: "migration-run-alternative",
+          createdAt: "2026-10-11T13:30:00.000Z",
+          prompt: "Alternative take prompt",
+          referenceSnapshot: structuredClone(referenceSnapshot),
+          modelName: "Video Model",
+          modelVersion: "v2",
+          outputAssetId: "asset-alternative-output",
+        }],
+      },
+    ];
+    slot.selectedVersionId = "migration-version-alternative";
+    const before = structuredClone(project);
+
+    const result = migrateLegacyProjectToComposition(project);
+    const alternatives = result.legacyShotSlotCompositions.filter(composition =>
+      composition.legacyData?.shotId === shot.id && composition.legacyData?.slotId === slot.id
+    );
+
+    expect(alternatives).toHaveLength(2);
+    expect(alternatives.map(composition => composition.legacyData?.versionId)).toEqual([
+      "migration-version-original",
+      "migration-version-alternative",
+    ]);
+    expect(alternatives.map(composition => composition.legacyData?.selected)).toEqual([false, true]);
+    expect(alternatives[0].legacyData).toMatchObject({
+      description: "First generation attempt",
+      scriptVersionIds: ["script-original"],
+      generationRecords: [{
+        id: "migration-run-original",
+        prompt: "Original take prompt",
+        referenceSnapshot,
+        modelName: "Video Model",
+        modelVersion: "v1",
+        outputAssetId: "asset-original-output",
+      }],
+    });
+    expect(alternatives[1].legacyData).toMatchObject({
+      description: "Second generation attempt",
+      scriptVersionIds: ["script-alternative"],
+      generationRecords: [{
+        id: "migration-run-alternative",
+        prompt: "Alternative take prompt",
+        referenceSnapshot,
+        modelName: "Video Model",
+        modelVersion: "v2",
+        outputAssetId: "asset-alternative-output",
+      }],
+    });
+    expect(alternatives[1].placements[0].legacyData).toMatchObject({
+      prompt: "A handheld reveal from the opposite angle.",
+      modelName: "Video Model",
+      modelVersion: "v2",
+    });
+    expect(project).toEqual(before);
+    expect(result.sourceProject).toEqual(before);
+  });
+
 });

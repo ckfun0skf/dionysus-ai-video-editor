@@ -2,6 +2,8 @@
 
 > **Fresh-chat/mobile continuation note (2026-10-19):** The mobile-focused handoff has moved to [`docs/MOBILE_AGENT_PICKUP_PROMPT.md`](MOBILE_AGENT_PICKUP_PROMPT.md) and [`docs/MOBILE_AGENT_HANDOFF.md`](MOBILE_AGENT_HANDOFF.md). Start there for the current CapCut-inspired mobile UX work, then verify live GitHub/CI/Pages state. The main pickup checkpoint elsewhere in this file is historical and must not override the mobile handoff.
 >
+> **Verified release and next branch:** PR #86 shipped the mobile preview control-density fix as app commit `6e130e33a4236fff97f468f6d76fef933677bb58`; exact-head CI 39259760793, main CI 39259981315 and Pages deployment 39259981194 passed. Current development continues DYS-014 migration alternatives/provenance and JSON round-trip coverage on `feat/dys014-alternative-provenance-roundtrip`. Re-check live GitHub before relying on this checkpoint.
+>
 > **Live main verification:** `89f92a3168413151dd8acb58d4b3c034cf59ead3` passed main CI [39254646559](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39254646559) and Pages deployment [39254646733](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39254646733). Current mobile usability follow-up is `feat/mobile-preview-progressive-disclosure`; verify live PR/CI status before relying on this checkpoint.
 
 Copy the prompt below into a new ChatGPT conversation whenever the current chat is long, interrupted, or another agent must take over.

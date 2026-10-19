@@ -51,3 +51,15 @@ Use one Composition document contract and one Editor for the Project Master Time
 DYS-002 migration/validation; DYS-005 shared timeline editing; DYS-013 existing Clip Asset slice.
 
 See [Unified Composition Model](https://github.com/ckfun0skf/dionysus-ai-video-editor/blob/main/docs/architecture/UNIFIED_COMPOSITION_MODEL.md), [Issue #53](https://github.com/ckfun0skf/dionysus-ai-video-editor/issues/53), [Issue #54](https://github.com/ckfun0skf/dionysus-ai-video-editor/issues/54), and [Issue #59](https://github.com/ckfun0skf/dionysus-ai-video-editor/issues/59).
+
+
+## Migration alternatives, provenance and JSON round-trip — 2026-10-19
+
+Current feature branch `feat/dys014-alternative-provenance-roundtrip` adds two focused regression tests:
+
+- Migration projects every legacy Shot Slot Version as a distinct Composition projection, keeps the selected alternative marker, and preserves the generation prompt, reference snapshot, model/version, output asset, script version IDs and layer-level prompt/model metadata. It also asserts that projection does not mutate the source project.
+- The document-boundary test serializes and imports a legacy schema-1.0 project and a versioned 2.0 compatibility envelope, asserting that alternate versions, selection and generation provenance survive both JSON round-trips.
+
+The previous mobile feature is shipped as app commit `6e130e33a4236fff97f468f6d76fef933677bb58`; exact-head CI [39259760793](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39259760793), main CI [39259981315](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39259981315) and Pages deployment [39259981194](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39259981194) passed.
+
+The migration test branch still requires exact-head CI. These tests strengthen the non-destructive transition boundary; they do **not** make Composition authoritative persistence or implement structure-preserving Save-as-Clip.

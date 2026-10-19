@@ -1,5 +1,7 @@
 # Dionysus Mobile UX — Fresh Chat Pickup Prompt
 
+> **Verified mobile release (2026-10-19):** PR #86 shipped the preview-control progressive-disclosure slice as app commit `6e130e33a4236fff97f468f6d76fef933677bb58`. Exact-head feature CI [39259760793](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39259760793), main CI [39259981315](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39259981315) and Pages deployment [39259981194](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39259981194) passed. DYS-012 remains in progress pending actual viewport acceptance. Current code follow-up is DYS-014 alternative/provenance migration and JSON round-trip regression coverage on `feat/dys014-alternative-provenance-roundtrip`; re-query live GitHub before continuing.
+
 > **Live checkpoint update (2026-10-19):** Main is `89f92a3168413151dd8acb58d4b3c034cf59ead3`; exact main push CI [39254646559](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39254646559) and Pages deployment [39254646733](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39254646733) passed. Current follow-up branch `feat/mobile-preview-progressive-disclosure` reduces preview control density on phones with a regression-tested More controls disclosure. Re-query live GitHub before continuing; DYS-012 stays in progress pending real viewport acceptance.
 
 You are continuing active development of Dionysus AI Video Editor. The owner specifically wants a future phone version with a **CapCut-inspired editing interface**. This is an active product requirement, not an optional styling idea.
@@ -13,9 +15,9 @@ You are continuing active development of Dionysus AI Video Editor. The owner spe
 ## Start from live GitHub state
 - Repo: https://github.com/ckfun0skf/dionysus-ai-video-editor
 - Main site: https://ckfun0skf.github.io/dionysus-ai-video-editor/
-- Dated handoff baseline: main `a83f4a6836d7c4ee683b17a1ccdb5897e17364e2`, PR #84 merged, exact-head PR CI [39252298875](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39252298875) passed.
+- Latest mobile app release: PR #86 merged as `6e130e33a4236fff97f468f6d76fef933677bb58`; exact-head CI [39259760793](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39259760793), main push CI [39259981315](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39259981315) and Pages deployment [39259981194](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39259981194) passed. Real viewport acceptance remains unverified.
 - Issue #83 ([Mobile Timeline Editor Broken](https://github.com/ckfun0skf/dionysus-ai-video-editor/issues/83)) was closed by PR #84, which simplified mobile layer actions and styling. Do not assume the owner has accepted it.
-- **First action:** verify current main HEAD, open PRs/issues, exact-head main CI and GitHub Pages deployment. Deployment for the recorded SHA was not independently confirmed at handoff.
+- **First action:** re-query current main HEAD, open PRs/issues, exact-head feature/main CI and Pages deployment. The listed mobile release evidence is a fixed historical checkpoint, not a substitute for live state.
 - Then continue from the current code, not from stale branches or assumptions. Do not recreate PRs #68–#84; inspect what is already merged.
 
 ## User requirements and guardrails
