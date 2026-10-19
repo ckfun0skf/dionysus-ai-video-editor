@@ -82,11 +82,23 @@ function isLayer(value: unknown): boolean {
     (value.fadeIn === undefined || (isFiniteNumber(value.fadeIn) && value.fadeIn >= 0 && value.fadeIn <= value.duration)) &&
     (value.fadeOut === undefined || (isFiniteNumber(value.fadeOut) && value.fadeOut >= 0 && value.fadeOut <= value.duration));
 }
+function hasValidVersionTracks(value: UnknownRecord): boolean {
+  if (value.tracks === undefined) return true;
+  if (!Array.isArray(value.tracks) || !value.tracks.every(isTrack) || !Array.isArray(value.layers)) return false;
+  const tracks: unknown[] = value.tracks;
+  const layers: unknown[] = value.layers;
+  return layers.every(layer =>
+    !isRecord(layer) ||
+    layer.trackId === undefined ||
+    tracks.some((track: unknown) => isRecord(track) && track.id === layer.trackId)
+  );
+}
+
 function isVersion(value: unknown): boolean {
   return isRecord(value) && isString(value.id) && isString(value.name) &&
     isString(value.description) && isFiniteNumber(value.duration) && value.duration > 0 &&
     Array.isArray(value.layers) && value.layers.every(isLayer) &&
-    (value.tracks === undefined || (Array.isArray(value.tracks) && value.tracks.every(isTrack) && value.layers.every(layer => !isRecord(layer) || layer.trackId === undefined || value.tracks.some(track => isRecord(track) && track.id === layer.trackId)))) &&
+    hasValidVersionTracks(value) &&
     isStringArray(value.scriptVersionIds) &&
     Array.isArray(value.generationRecords) && value.generationRecords.every(isGenerationRecord);
 }
