@@ -5,6 +5,8 @@
 
 ## Purpose
 
+See the [responsive wireframe prototype](../../public/doc/design/timeline-editor-wireframes.html), [UML/state-flow diagrams](TIMELINE_EDITOR_UML.md), and [design pack checklist](TIMELINE_EDITOR_UX_DESIGN_PACK.md). DYS-020 is the design gate before production UI work; this remains the normative workspace contract.
+
 Define the workspace layout and interaction model for rebuilding Dionysus's Timeline Editor as the first complete creative workspace. It describes the UI architecture and its boundary with the canonical Composition/editing engine; it does not replace the domain model in [Unified Composition Model](./UNIFIED_COMPOSITION_MODEL.md).
 
 ## 1. Information architecture

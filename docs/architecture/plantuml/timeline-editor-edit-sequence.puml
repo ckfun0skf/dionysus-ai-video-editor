@@ -1,0 +1,36 @@
+@startuml TimelineEditorEditSequence
+title Dionysus Timeline Editor - Edit, Validate, Render and Undo
+autonumber
+actor User
+participant "Timeline UI" as UI
+participant "Command Dispatcher" as Cmd
+participant "Command Validator" as Validator
+participant "Composition Store" as Store
+participant "Undo / Redo History" as History
+participant Renderer
+participant "Preview / Canvas" as Preview
+
+User -> UI : Drag / trim / split / insert / transform
+UI -> Cmd : typed command + target IDs
+Cmd -> Validator : validate(command, current state)
+alt Valid command
+  Validator --> Cmd : accepted
+  Cmd -> History : record inverse + history boundary
+  Cmd -> Store : apply transaction atomically
+  Store -> Renderer : composition revision changed
+  Renderer -> Preview : render current playhead
+  Preview --> User : updated visual result
+else Invalid command
+  Validator --> Cmd : rejection + reason
+  Cmd --> UI : rejected command
+  UI --> User : preserve prior state and explain
+end
+
+User -> UI : Undo
+UI -> History : request inverse command
+History -> Cmd : dispatch inverse
+Cmd -> Validator : validate(inverse, current state)
+Validator --> Cmd : accepted / rejected
+Cmd -> Store : apply inverse if accepted
+Store -> Renderer : render restored revision
+@enduml

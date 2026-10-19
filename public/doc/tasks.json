@@ -99,6 +99,59 @@
       "goal": "Establish the canonical editing contract and ship the Timeline-first Editor workspace with shared root/nested editing behavior.",
       "tasks": [
         {
+          "id": "DYS-020",
+          "title": "Timeline Editor wireframes, UI prototype and UML",
+          "status": "in_progress",
+          "progress": 65,
+          "summary": "Create a reviewable desktop/mobile wireframe, interactive HTML prototype, and standalone PlantUML component/domain/command/state diagrams as a stable design handoff before production Editor UI implementation.",
+          "doc": "tasks/timeline-editor-ux-design-pack.md",
+          "detail": "tasks/timeline-editor-rebuild.html#DYS-020",
+          "subtasks": [
+            {
+              "title": "Build responsive desktop/mobile wireframe prototype",
+              "status": "done"
+            },
+            {
+              "title": "Document component boundaries and canonical Composition model",
+              "status": "done"
+            },
+            {
+              "title": "Document edit-command, validation, rendering and Undo/Redo sequence",
+              "status": "done"
+            },
+            {
+              "title": "Document mobile selection and contextual-toolbar state flow",
+              "status": "done"
+            },
+            {
+              "title": "Cross-check handoff, architecture and task dashboard links",
+              "status": "in_progress"
+            },
+            {
+              "title": "Owner review of layout and interaction decisions before DYS-017",
+              "status": "planned"
+            }
+          ],
+          "acceptance": [
+            "Desktop wireframe shows source browser upper-left, Preview/Canvas upper-right and multitrack Timeline below",
+            "Mobile controls are contextual to selection and module navigation is separate",
+            "Standalone .puml files open in PlantUML Playground and cover workspace, domain model, command/history and mobile selection state",
+            "Prototype and diagrams are editable files in Git and linked from handoff prompts",
+            "Owner reviews major layout/interaction decisions before DYS-017",
+            "No production behavior is claimed from prototype and no browser smoke tests are required"
+          ],
+          "evidence": [
+            "docs/architecture/TIMELINE_EDITOR_UX_DESIGN_PACK.md",
+            "docs/architecture/TIMELINE_EDITOR_UML.md",
+            "public/doc/design/timeline-editor-wireframes.html",
+            "docs/architecture/plantuml/timeline-editor-workspace.puml",
+            "docs/architecture/plantuml/timeline-editor-domain-model.puml",
+            "docs/architecture/plantuml/timeline-editor-edit-sequence.puml",
+            "docs/architecture/plantuml/timeline-editor-mobile-state.puml"
+          ],
+          "notes": "The prototype is low-fidelity, not production React UI. Keep safe Composition model/test work moving in parallel; do not implement unsettled major layout decisions before owner review."
+        },
+        {
           "id": "DYS-016",
           "title": "Timeline-first Editor rebuild plan and workspace architecture",
           "status": "in_progress",
@@ -1008,6 +1061,7 @@
   "executionSequence": [
     "E0: Re-query live Git state, open PRs/issues, exact-head CI and Pages state; inventory reusable code.",
     "E1: Finalize workspace interaction contract and handoff plan (DYS-016).",
+    "E1a: Review wireframe, HTML prototype and UML; resolve major layout/interaction decisions (DYS-020).",
     "E2: Make Composition/edit commands and schema-1.0 migration safe and testable (DYS-014/DYS-005).",
     "E3: Implement functional Desktop Timeline Editor workspace with embedded source/effects browser (DYS-017).",
     "E4: Finish core editing parity and save-as-Clip snapshots (DYS-005/DYS-011/DYS-013/DYS-014).",
