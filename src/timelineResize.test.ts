@@ -45,6 +45,29 @@ describe("timeline clip resize and adjacent trimming", () => {
     expect(preview.trims[0].duration).toBeCloseTo(1 / 24, 7);
   });
 
+  it("does not create an overlap if the adjacent clip cannot retain a full frame", () => {
+    const frame = 1 / 24;
+    const clips = [video("left", 0, 5), video("tiny-right", 5, frame)];
+    const preview = calculateTimelineClipResizePreview(clips, "left", "right", 1, 12, 24)!;
+    expect(preview.start).toBe(0);
+    expect(preview.duration).toBe(5);
+    expect(preview.trims).toEqual([]);
+    const updated = applyTimelineClipResize(clips, preview, 24);
+    const left = updated.find(item => item.id === "left")!;
+    const right = updated.find(item => item.id === "tiny-right")!;
+    expect(left.start + left.duration).toBeLessThanOrEqual(right.start + 1e-7);
+    expect(right.duration).toBeCloseTo(frame, 7);
+  });
+
+  it("does not extend a left trim into a previous clip that cannot keep a full frame", () => {
+    const frame = 1 / 24;
+    const clips = [video("tiny-left", 0, frame), video("right", frame, 3)];
+    const preview = calculateTimelineClipResizePreview(clips, "right", "left", -1, 8, 24)!;
+    expect(preview.start).toBeCloseTo(frame, 7);
+    expect(preview.trims).toEqual([]);
+    expect(preview.overlap).toBeUndefined();
+  });
+
   it("does not touch an adjacent clip when the resize stops before it", () => {
     const clips = [video("left", 0, 3), video("right", 5, 4)];
     const preview = calculateTimelineClipResizePreview(clips, "left", "right", 1, 12, 24)!;

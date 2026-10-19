@@ -11,6 +11,7 @@ import { t } from "./i18n";
 import { duplicateTimelineClip, moveTimelineClip, splitTimelineClip, trimTimelineClip, unlinkTimelineAudio, deleteTimelineClip } from "./timelineOperations";
 import { type ClipResizePreview } from "./timelineResize";
 import { canPlaceTimelineClipOnTrack } from "./timelinePlacement";
+import { applyClipVersionResizePreview, calculateClipVersionDropPosition, calculateClipVersionResizePreview } from "./nestedTimelinePlacement";
 import {
   applyProjectTimelineClipResize,
   calculateProjectTimelineClipResizePreview,
@@ -247,6 +248,10 @@ export default function App() {
   const clipDragSourceRef = useRef<TimelineClip | null>(null);
   const masterShotDragSourceRef = useRef<string>("");
   const [clipDropPreview, setClipDropPreview] = useState<{ trackId: string; start: number; duration: number; name: string; snapTime?: number } | null>(null);
+  const nestedLayerDragSourceRef = useRef("");
+  const [nestedDropPreview, setNestedDropPreview] = useState<{ trackId: string; start: number; duration: number; name: string; snapTime?: number } | null>(null);
+  const nestedResizeRef = useRef<{ id: string; edge: "left" | "right"; pointerId: number; x: number; laneWidth: number; version: ClipVersion; tab: VersionTimelineTab; moveListener?: (event: PointerEvent) => void; upListener?: (event: PointerEvent) => void; cancelListener?: (event: PointerEvent) => void } | null>(null);
+  const [nestedResizePreview, setNestedResizePreview] = useState<ClipResizePreview | null>(null);
   const [timelineClipSettingsId, setTimelineClipSettingsId] = useState<string>("");
   const [clipContextMenuId, setClipContextMenuId] = useState<string>("");
   const [clipContextMenuPosition, setClipContextMenuPosition] = useState({ x: 0, y: 0 });
@@ -1320,6 +1325,62 @@ export default function App() {
     if(typeof event.currentTarget.setPointerCapture==="function"){try{event.currentTarget.setPointerCapture(event.pointerId);}catch{/* Global listeners remain fallback. */}}
   }
 
+
+  function getNestedLayerResizePreview(active: NonNullable<typeof nestedResizeRef.current>, clientX: number) {
+    const fps = Math.max(1, projectRef.current.frameRate || 24);
+    const delta = Math.round(((clientX - active.x) / Math.max(active.laneWidth, 1)) * active.version.duration * fps) / fps;
+    return calculateClipVersionResizePreview(active.version, active.id, active.edge, delta, active.version.duration, fps);
+  }
+  function cancelNestedLayerResize() {
+    const active = nestedResizeRef.current;
+    if (active?.moveListener) window.removeEventListener("pointermove", active.moveListener);
+    if (active?.upListener) window.removeEventListener("pointerup", active.upListener);
+    if (active?.cancelListener) window.removeEventListener("pointercancel", active.cancelListener);
+    nestedResizeRef.current = null;
+    setNestedResizePreview(null);
+  }
+  function beginNestedLayerResize(event: React.PointerEvent<HTMLElement>, layer: CompositionLayer, edge: "left" | "right") {
+    event.preventDefault();
+    event.stopPropagation();
+    cancelNestedLayerResize();
+    const tab = activeVersionTimelineTab;
+    const version = activeVersionTimeline;
+    if (!tab || !version) return;
+    const lane = event.currentTarget.closest(".nested-timeline-row-track") as HTMLElement | null;
+    const active: NonNullable<typeof nestedResizeRef.current> = {
+      id: layer.id, edge, pointerId: event.pointerId, x: event.clientX,
+      laneWidth: lane?.getBoundingClientRect().width ?? 1,
+      version: normalizeClipVersionTracks(version), tab: { ...tab },
+    };
+    const onMove = (e: PointerEvent) => {
+      const current = nestedResizeRef.current;
+      if (!current || current.id !== layer.id || current.pointerId !== e.pointerId) return;
+      setNestedResizePreview(getNestedLayerResizePreview(current, e.clientX));
+    };
+    const onUp = (e: PointerEvent) => {
+      const current = nestedResizeRef.current;
+      if (!current || current.id !== layer.id || current.pointerId !== e.pointerId) return;
+      const preview = getNestedLayerResizePreview(current, e.clientX);
+      const original = current.version.layers.find(item => item.id === layer.id);
+      if (preview && original && (Math.abs(preview.start - original.start) > 1e-6 || Math.abs(preview.duration - original.duration) > 1e-6 || preview.trims.length > 0)) {
+        const fps = Math.max(1, projectRef.current.frameRate || 24);
+        updateTimelineVersion(current.tab, latest => applyClipVersionResizePreview(latest, preview, fps));
+        setNotice(preview.trims.length ? "Clip layer resized and adjacent layer trimmed. Use Undo to restore both." : "Clip layer resized.");
+      }
+      cancelNestedLayerResize();
+    };
+    const onCancel = (e: PointerEvent) => {
+      if (e.pointerId === nestedResizeRef.current?.pointerId) cancelNestedLayerResize();
+    };
+    active.moveListener = onMove;
+    active.upListener = onUp;
+    active.cancelListener = onCancel;
+    nestedResizeRef.current = active;
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onCancel);
+  }
+
   function toggleShotReferenceProfile(shotId: string, profileId: string, checked: boolean) {
     const shot = project.shots.find(item => item.id === shotId);
     if (!shot) return;
@@ -1813,13 +1874,48 @@ export default function App() {
           {track.kind === "audio" && <button className="track-layer-mute" aria-label={(track.muted ? "Unmute " : "Mute ") + track.name} aria-pressed={Boolean(track.muted)} onClick={() => updateTimelineVersion(activeVersionTimelineTab, version => ({ ...normalizeClipVersionTracks(version), tracks: normalizeClipVersionTracks(version).tracks?.map(item => item.id === track.id ? { ...item, muted: !item.muted } : item) }))}>{track.muted ? "Unmute" : "Mute"}</button>}
           <button className="track-add-clip" aria-label={"Add content to " + track.name} title={"Add content to " + track.name} onClick={() => { addTimelineVersionLayer(activeVersionTimelineTab, track.kind === "audio" ? "audio" : track.kind === "text" ? "text" : "video", track.id); }}><Plus size={13}/></button>
         </div>
-        <div className="nested-timeline-row-track visual-track-lane" style={{backgroundSize:(2/Math.max(activeVersionTimeline.duration,0.1)*100)+"% 100%"}} onDragOver={event=>{if(event.dataTransfer.types.includes("text/dionysus-version-layer")){event.preventDefault();event.dataTransfer.dropEffect="move";}}} onDrop={event=>{event.preventDefault();const layerId=event.dataTransfer.getData("text/dionysus-version-layer");if(!layerId)return;const rect=event.currentTarget.getBoundingClientRect();const pointer=((event.clientX-rect.left)/Math.max(rect.width,1))*activeVersionTimeline.duration;const moving=activeVersionTimeline.layers.find(layer=>layer.id===layerId);if(!moving)return;const next=Math.max(0,Math.min(activeVersionTimeline.duration-moving.duration,pointer-moving.duration/2));try{updateTimelineVersion(activeVersionTimelineTab,version=>moveNestedLayer(version,layerId,track.id,Math.round(next*Math.max(1,project.frameRate||24))/Math.max(1,project.frameRate||24)));setSelectedCompositionLayerId(layerId);}catch(error){setNotice(error instanceof Error?error.message:"Could not move this content.");}}}>
+        <div className="nested-timeline-row-track visual-track-lane" style={{backgroundSize:(5/Math.max(activeVersionTimeline.duration,0.1)*100)+"% 100%"}} onDragOver={event=>{
+          const layerId=event.dataTransfer.getData("text/dionysus-version-layer")||nestedLayerDragSourceRef.current;
+          if(!layerId)return;
+          event.preventDefault();event.dataTransfer.dropEffect="move";
+          const moving=activeVersionTimeline.layers.find(layer=>layer.id===layerId);
+          if(!moving){setNestedDropPreview(null);return;}
+          const rect=event.currentTarget.getBoundingClientRect();
+          const pointer=((event.clientX-rect.left)/Math.max(rect.width,1))*activeVersionTimeline.duration;
+          const rawStart=Math.max(0,pointer-moving.duration/2);
+          const position=calculateClipVersionDropPosition(activeVersionTimeline,layerId,track.id,rawStart,activeVersionTimeline.duration,Math.max(1,project.frameRate||24));
+          if(!position){setNestedDropPreview(null);return;}
+          setNestedDropPreview({trackId:track.id,start:position.start,duration:moving.duration,name:moving.name,...(position.snapTime!==undefined?{snapTime:position.snapTime}:{})});
+        }} onDrop={event=>{
+          event.preventDefault();
+          const layerId=event.dataTransfer.getData("text/dionysus-version-layer")||nestedLayerDragSourceRef.current;
+          const moving=activeVersionTimeline.layers.find(layer=>layer.id===layerId);
+          if(!moving){setNestedDropPreview(null);nestedLayerDragSourceRef.current="";return;}
+          const rect=event.currentTarget.getBoundingClientRect();
+          const pointer=((event.clientX-rect.left)/Math.max(rect.width,1))*activeVersionTimeline.duration;
+          const rawStart=Math.max(0,pointer-moving.duration/2);
+          const preview=nestedDropPreview?.trackId===track.id?nestedDropPreview:undefined;
+          const position=preview?{start:preview.start,...(preview.snapTime!==undefined?{snapTime:preview.snapTime}:{})}:calculateClipVersionDropPosition(activeVersionTimeline,layerId,track.id,rawStart,activeVersionTimeline.duration,Math.max(1,project.frameRate||24));
+          if(!position){setNotice("No non-overlapping position is available on this layer.");setNestedDropPreview(null);nestedLayerDragSourceRef.current="";return;}
+          try{
+            updateTimelineVersion(activeVersionTimelineTab,version=>moveNestedLayer(version,layerId,track.id,position.start));
+            setSelectedCompositionLayerId(layerId);
+            setNotice(position.snapTime!==undefined?"Clip layer snapped to an aligned, non-overlapping position.":"Clip layer moved to a non-overlapping position.");
+          }catch(error){setNotice(error instanceof Error?error.message:"Could not move this content.");}
+          nestedLayerDragSourceRef.current="";setNestedDropPreview(null);
+        }}>
           <div className="visual-playhead" style={{left:(Math.min(editorTime,activeVersionTimeline.duration)/Math.max(activeVersionTimeline.duration,0.1)*100)+"%"}}/>
+          {nestedResizePreview?.trackId===track.id&&nestedResizePreview.overlap&&<div className="clip-overlap-preview" style={{left:(nestedResizePreview.overlap.start/Math.max(activeVersionTimeline.duration,0.1)*100)+"%",width:Math.max(0.25,nestedResizePreview.overlap.duration/Math.max(activeVersionTimeline.duration,0.1)*100)+"%"}} aria-hidden="true"/>}
+          {nestedDropPreview?.trackId===track.id&&<div className="clip-drop-preview" style={{left:(nestedDropPreview.start/Math.max(activeVersionTimeline.duration,0.1)*100)+"%",width:Math.max(2,nestedDropPreview.duration/Math.max(activeVersionTimeline.duration,0.1)*100)+"%"}}><strong>{nestedDropPreview.name}</strong><small>{nestedDropPreview.start.toFixed(2)}s · {nestedDropPreview.duration.toFixed(2)}s</small></div>}
+          {nestedDropPreview?.trackId===track.id&&nestedDropPreview.snapTime!==undefined&&<div className="timeline-snap-guide" style={{left:(nestedDropPreview.snapTime/Math.max(activeVersionTimeline.duration,0.1)*100)+"%"}} aria-hidden="true"><span>SNAP</span></div>}
           {layers.map(layer => {
             const layerAsset=layer.assetId?project.assets.find(asset=>asset.id===layer.assetId):undefined;
             const layerThumbnail=layer.thumbnailPath??getAssetThumbnail(layerAsset);
+            const resizeDraft=nestedResizePreview?.id===layer.id?nestedResizePreview:null;
+            const displayStart=resizeDraft?.start??layer.start;
+            const displayDuration=resizeDraft?.duration??layer.duration;
             const visualClass=layer.kind==="audio"?"audio-clip":layer.kind==="text"?"text-clip":layer.kind==="procedural"||layer.kind==="script"?"procedural-clip":"video-clip";
-            return <button key={layer.id} draggable className={"nested-timeline-clip visual-media-clip kind-"+layer.kind+" "+visualClass+(layer.id===selectedCompositionLayerId?" selected":"")} style={{left:(layer.start/Math.max(activeVersionTimeline.duration,0.1)*100)+"%",width:Math.max(2,layer.duration/Math.max(activeVersionTimeline.duration,0.1)*100)+"%"}} onDragStart={event=>{event.dataTransfer.setData("text/dionysus-version-layer",layer.id);event.dataTransfer.effectAllowed="move";}} onContextMenu={event=>{event.preventDefault();event.stopPropagation();setSelectedCompositionLayerId(layer.id);setNestedLayerContextMenuId(layer.id);setNestedLayerContextMenuPosition({x:Math.min(event.clientX,window.innerWidth-190),y:Math.min(event.clientY,window.innerHeight-180)});}} onClick={()=>{setSelectedCompositionLayerId(layer.id);setEditorTime(layer.start);}} onDoubleClick={()=>setCompositionLayerSettingsId(layer.id)} title={layer.name+" · "+layer.start.toFixed(1)+"–"+(layer.start+layer.duration).toFixed(1)+"s"}><span className="visual-clip-icon">{layerThumbnail?<img className="visual-clip-thumbnail" src={layerThumbnail} alt=""/>:layer.kind==="audio"?<AudioLines size={13}/>:layer.kind==="text"?<Sparkles size={13}/>:(layer.kind==="procedural"||layer.kind==="script")?<Code2 size={13}/>:layer.kind==="composition"?<Layers3 size={13}/>:<Film size={13}/>}</span><span className="visual-clip-copy"><strong>{layer.name}</strong><small>{layer.duration.toFixed(1)}s · {layer.start.toFixed(2)}s</small></span></button>;
+            return <button key={layer.id} draggable className={"nested-timeline-clip visual-media-clip kind-"+layer.kind+" "+visualClass+(layer.id===selectedCompositionLayerId?" selected":"")} style={{left:(displayStart/Math.max(activeVersionTimeline.duration,0.1)*100)+"%",width:Math.max(2,displayDuration/Math.max(activeVersionTimeline.duration,0.1)*100)+"%"}} onDragStart={event=>{nestedLayerDragSourceRef.current=layer.id;setNestedDropPreview(null);event.dataTransfer.setData("text/dionysus-version-layer",layer.id);event.dataTransfer.effectAllowed="move";}} onDragEnd={()=>{nestedLayerDragSourceRef.current="";setNestedDropPreview(null);}} onContextMenu={event=>{event.preventDefault();event.stopPropagation();setSelectedCompositionLayerId(layer.id);setNestedLayerContextMenuId(layer.id);setNestedLayerContextMenuPosition({x:Math.min(event.clientX,window.innerWidth-190),y:Math.min(event.clientY,window.innerHeight-180)});}} onClick={()=>{setSelectedCompositionLayerId(layer.id);setEditorTime(layer.start);}} onDoubleClick={()=>setCompositionLayerSettingsId(layer.id)} title={layer.name+" · "+layer.start.toFixed(1)+"–"+(layer.start+layer.duration).toFixed(1)+"s"}><span className="visual-clip-icon">{layerThumbnail?<img className="visual-clip-thumbnail" src={layerThumbnail} alt=""/>:layer.kind==="audio"?<AudioLines size={13}/>:layer.kind==="text"?<Sparkles size={13}/>:(layer.kind==="procedural"||layer.kind==="script")?<Code2 size={13}/>:layer.kind==="composition"?<Layers3 size={13}/>:<Film size={13}/>}</span><span className="visual-clip-copy"><strong>{layer.name}</strong><small>{displayDuration.toFixed(1)}s · {displayStart.toFixed(2)}s</small></span><span className="clip-resize-handle clip-resize-left" role="separator" aria-label={"Trim start of "+layer.name} onPointerDown={event=>beginNestedLayerResize(event,layer,"left")}/><span className="clip-resize-handle clip-resize-right" role="separator" aria-label={"Trim end of "+layer.name} onPointerDown={event=>beginNestedLayerResize(event,layer,"right")}/></button>;
           })}
           {layers.length===0 && <button className="nested-track-empty" onClick={()=>addTimelineVersionLayer(activeVersionTimelineTab,track.kind==="audio"?"audio":track.kind==="text"?"text":"video",track.id)}>＋ Add content</button>}
         </div>
