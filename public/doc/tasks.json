@@ -104,9 +104,7 @@
           "description": "Validate and migrate schemaVersion 1.0 deterministically, preserving alternatives, selection, provenance, source ranges, linked audio, pins and nesting.",
           "executionStage": "E2",
           "priority": "P0",
-          "dependsOn": [
-            "DYS-014"
-          ],
+          "dependsOn": [],
           "deliverables": [
             "Typed validation, stable migration, diagnostics and round-trip fixtures."
           ],
@@ -214,9 +212,7 @@
           "description": "Maintain current-state checkpoint, workspace decisions, milestone gates, task details and reusable agent pickup prompt.",
           "executionStage": "E0-E1",
           "priority": "P0",
-          "dependsOn": [
-            "DYS-020"
-          ],
+          "dependsOn": [],
           "deliverables": [
             "Live Git/CI/Pages checkpoint and consistent docs."
           ],
@@ -396,7 +392,6 @@
           "executionStage": "E2-E4",
           "priority": "P0",
           "dependsOn": [
-            "DYS-002",
             "DYS-014"
           ],
           "deliverables": [
@@ -618,9 +613,7 @@
           "executionStage": "E2 and E4",
           "priority": "P0",
           "dependsOn": [
-            "DYS-002",
-            "DYS-005",
-            "DYS-013"
+            "DYS-002"
           ],
           "deliverables": [
             "Typed model, deterministic migration, shared commands and editable snapshots."
@@ -1219,8 +1212,7 @@
           "priority": "P2 deferred",
           "dependsOn": [
             "DYS-004",
-            "DYS-014",
-            "DYS-009"
+            "DYS-014"
           ],
           "deliverables": [
             "DAG/blockers, effective input/prompt snapshots, retry history and manual import."
