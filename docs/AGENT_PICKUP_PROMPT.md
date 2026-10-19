@@ -45,6 +45,13 @@ The accepted target direction is in `docs/architecture/UNIFIED_COMPOSITION_MODEL
 - User reports residual problems in #53 and #54. Do not close them without code-level regression coverage and explicit user acceptance.
 - New tasks: DYS-014 (unified Composition + structure-preserving snapshots) and DYS-015 (Production Task graph + Generation Runs).
 
+## Current checkpoint (verified 2026-10-19)
+
+- Main HEAD `288b5f349080c470a119c33174dfaa93c0e8c9f0`; main CI/Pages passed.
+- PR #63 head `3826f84cd529ad2461a07f26ab83adf7a5a5b526`; exact-head CI 39221701720 passed tests and build.
+- The project-document boundary now rejects mismatched Composition metadata. Schema-1.0 remains authoritative; canonical persistence and structure-preserving snapshots are still incomplete.
+- #53/#54 remain open pending user acceptance. No browser smoke tests or PR deployment.
+
 ## What to do next
 
 1. Verify the current GitHub state and correct stale checkpoint information in docs.

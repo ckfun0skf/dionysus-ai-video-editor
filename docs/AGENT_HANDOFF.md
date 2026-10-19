@@ -111,6 +111,17 @@ npm run dev
 
 
 
+
+
+## Verified checkpoint — 2026-10-19
+
+- Main HEAD: `288b5f349080c470a119c33174dfaa93c0e8c9f0`; main CI [39199996042](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39199996042) and Pages deployment check [39199996049](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39199996049) succeeded.
+- Draft PR #63 branch head: `3826f84cd529ad2461a07f26ab83adf7a5a5b526`; exact-head CI [39221701720](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39221701720) passed tests and TypeScript/Vite build. No browser smoke tests were added or run.
+- Latest code change hardens `readProjectDocument()`: schema-2.0 compatibility envelopes must identify the same project and expected root Composition, with regression tests for cross-project and root-ID mismatch. Schema-1.0 remains the authoritative editable payload.
+- #53 and #54 remain open pending user acceptance. Save-as-Clip still flattens legacy composition layers; structure-preserving snapshots are not complete. The PR is not deployed.
+- Next implementation slice: migrate root/nested editor state to canonical Composition documents, then replace flattened Save-as-Clip with an independent structure-preserving snapshot. Keep DYS-014 in progress until regression tests prove round-trip and snapshot independence.
+
+
 ## Current Pickup Checkpoint — 2026-10-18
 
 - Roadmap and copyable prompt: `docs/PROJECT_ROADMAP.md` and `docs/AGENT_PICKUP_PROMPT.md`.

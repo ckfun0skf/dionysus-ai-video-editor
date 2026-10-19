@@ -60,7 +60,22 @@ export function readProjectDocument(value: unknown): ReadProjectDocumentResult {
     if (value.project.schemaVersion !== "1.0" || value.compositionModel.schemaVersion !== "2.0") {
       throw new Error("The project document contains an unsupported schema version.");
     }
-    return { project: value.project as unknown as DionysusProject, sourceDocumentVersion: "2.0" };
+
+    // The legacy project remains authoritative during the transition, but the stored projection
+    // must identify that same project. Reject mismatched envelopes instead of silently pairing
+    // one project's editable data with another project's Composition metadata.
+    const project = value.project as unknown as DionysusProject;
+    const compositionModel = value.compositionModel;
+    if (
+      compositionModel.projectId !== project.id ||
+      compositionModel.name !== project.name ||
+      !isRecord(compositionModel.rootComposition) ||
+      compositionModel.rootComposition.id !== `composition:project:${project.id}:master`
+    ) {
+      throw new Error("The project document contains inconsistent Composition metadata.");
+    }
+
+    return { project, sourceDocumentVersion: "2.0" };
   }
   if (value.schemaVersion === "1.0") {
     return { project: value as unknown as DionysusProject, sourceDocumentVersion: "1.0" };

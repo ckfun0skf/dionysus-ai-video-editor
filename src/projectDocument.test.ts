@@ -23,6 +23,19 @@ describe("versioned project document boundary", () => {
     expect(readProjectDocument(project)).toEqual({ project, sourceDocumentVersion: "1.0" });
   });
 
+  it("rejects a versioned envelope whose Composition metadata belongs to another project", () => {
+    const project = structuredClone(sampleProject);
+    const document = createProjectDocument(project);
+    document.compositionModel.projectId = "different-project";
+    expect(() => readProjectDocument(document)).toThrow(/inconsistent Composition metadata/);
+  });
+
+  it("rejects a mismatched root Composition identity", () => {
+    const document = createProjectDocument(structuredClone(sampleProject));
+    document.compositionModel.rootComposition.id = "composition:project:wrong:master";
+    expect(() => readProjectDocument(document)).toThrow(/inconsistent Composition metadata/);
+  });
+
   it("rejects unknown versions rather than guessing a migration", () => {
     expect(() => readProjectDocument({ format: "dionysus-project-document", documentVersion: "3.0", project: {}, compositionModel: {} })).toThrow(/Unsupported/);
     expect(() => readProjectDocument({ schemaVersion: "3.0" })).toThrow(/Unsupported/);

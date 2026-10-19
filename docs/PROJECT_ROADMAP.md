@@ -8,14 +8,10 @@ This document is a durable pickup ledger, not a claim that planned behavior alre
 
 ## Current checkpoint
 
-- Main baseline at redesign start: `288b5f349080c470a119c33174dfaa93c0e8c9f0`.
-- Active architecture PR: [#63](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/63).
-- Feature branch: `feat/unified-composition-model`.
-- Last verified checkpoint commit before this handoff update: `406d898ad5176cc2ed55441b3ed502c67db5f7a5`.
-- PR #63 is intentionally Draft. CI [39207371506](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39207371506) passed tests and type-check/build for that checkpoint.
-- PR #63 now includes the DYS-014 projection adapter and an interim #54 fix: ordinary clip drop/resize checks Master Shot occupancy, cross-model resize trims update both records, and Master Shot drag identity survives protected dragover. Import/export and full shared-editor integration remain outstanding; no production deployment is implied.
-- The latest user feedback says #53/#54 still have issues. They must remain open until implementation is corrected and user acceptance is obtained.
-- Do not add or run browser smoke tests unless the user explicitly requests them.
+- Main HEAD: `288b5f349080c470a119c33174dfaa93c0e8c9f0`; main CI and Pages deployment succeeded (runs 39199996042 and 39199996049).
+- Active Draft PR #63 head: `3826f84cd529ad2461a07f26ab83adf7a5a5b526`; exact-head CI 39221701720 passed tests and TypeScript/Vite build.
+- Versioned project-document reads now reject mismatched project identity/name/root Composition identity; legacy schema-1.0 data remains authoritative.
+- #53/#54 remain open pending acceptance. Save-as-Clip still flattens legacy layers; structure-preserving snapshots remain unfinished. No browser smoke tests or PR-branch deployment are claimed.
 
 ## Product destination
 
