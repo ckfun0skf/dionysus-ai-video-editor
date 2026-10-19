@@ -1449,6 +1449,54 @@ describe("Integrated timeline editor", () => {
 
 
 
+  it("creates a blank Clip Asset version without mutating the current version", async () => {
+    const nav = Array.from(container.querySelectorAll<HTMLButtonElement>(".nav-item")).find(button => button.textContent?.includes("Assets"));
+    click(nav!); await flushEffects();
+    click(Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Create asset"))!);
+    click(Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menu"] button')).find(button => button.textContent?.trim() === "Clip")!);
+    setInputValue(container.querySelector<HTMLInputElement>('[aria-label="Clip title"]')!, "Versioned Blank Clip");
+    setInputValue(container.querySelector<HTMLInputElement>('[aria-label="Clip canvas width"]')!, "1920");
+    setInputValue(container.querySelector<HTMLInputElement>('[aria-label="Clip canvas height"]')!, "1080");
+    setInputValue(container.querySelector<HTMLInputElement>('[aria-label="Clip duration"]')!, "6");
+    click(Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Create empty Clip"))!);
+    await flushEffects();
+
+    click(Array.from(container.querySelectorAll<HTMLButtonElement>(".asset-card button")).find(button => button.textContent?.includes("Edit Timeline"))!);
+    await flushEffects();
+    const nested = container.querySelector<HTMLElement>(".nested-timeline-tab.visual-timeline");
+    expect(nested).toBeTruthy();
+    const addVideo = Array.from(nested!.querySelectorAll<HTMLButtonElement>(".inline-actions button")).find(button => button.textContent?.includes("Video"));
+    expect(addVideo).toBeTruthy();
+    click(addVideo!);
+    await flushEffects();
+    click(nested!.querySelector<HTMLButtonElement>(".nested-timeline-row-label .track-add-clip")!);
+    await flushEffects();
+
+    const before = persistedProject();
+    const assetBefore = before.assets.find(asset => asset.name === "Versioned Blank Clip" && asset.kind === "clip")!;
+    const originalVersion = assetBefore.clipVersions![0];
+    expect(originalVersion.layers).toHaveLength(1);
+    const originalLayerIds = originalVersion.layers.map(layer => layer.id);
+
+    const createBlank = Array.from(container.querySelectorAll<HTMLButtonElement>(".nested-timeline-tab .inline-actions button"))
+      .find(button => button.textContent?.includes("New Blank Version"));
+    expect(createBlank).toBeTruthy();
+    click(createBlank!);
+    await flushEffects();
+
+    const after = persistedProject();
+    const assetAfter = after.assets.find(asset => asset.id === assetBefore.id && asset.kind === "clip")!;
+    expect(assetAfter.clipVersions).toHaveLength(2);
+    expect(assetAfter.selectedClipVersionId).toBe(assetAfter.clipVersions![1].id);
+    expect(assetAfter.clipVersions![0].layers.map(layer => layer.id)).toEqual(originalLayerIds);
+    expect(assetAfter.clipVersions![0].layers).toHaveLength(1);
+    expect(assetAfter.clipVersions![1]).toMatchObject({ duration: 6, layers: [], name: "Version 2" });
+    expect(assetAfter.clipVersions![1].tracks?.map(track => track.id)).not.toContain(assetAfter.clipVersions![0].tracks?.[0]?.id);
+    expect(container.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toContain("Version 2");
+    expect(container.querySelector(".nested-timeline-empty")).toBeTruthy();
+  });
+
+
   it("keeps Clip Asset timeline ruler and track columns aligned", async () => {
     const nav = Array.from(container.querySelectorAll<HTMLButtonElement>(".nav-item")).find(button => button.textContent?.includes("Assets"));
     click(nav!); await flushEffects();

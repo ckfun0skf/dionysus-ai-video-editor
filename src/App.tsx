@@ -1154,6 +1154,54 @@ export default function App() {
     updateTimelineVersion(tab, version => ({ ...version, description }));
   }
 
+
+  function createBlankClipAssetVersion(assetId: string, sourceVersionId: string) {
+    const asset = projectRef.current.assets.find(item => item.id === assetId && item.kind === "clip");
+    const current = asset?.kind === "clip" ? asset.clipVersions?.find(item => item.id === sourceVersionId) : undefined;
+    if (!asset || asset.kind !== "clip" || !current) return;
+    const nextId = id("clip-version");
+    const tracks = (normalizeClipVersionTracks(current).tracks ?? []).map(track => ({
+      ...track,
+      id: id("clip-track"),
+    }));
+    const nextVersion: ClipVersion = {
+      id: nextId,
+      name: "Version " + ((asset.clipVersions?.length ?? 0) + 1),
+      description: "Blank version based on " + current.name,
+      duration: current.duration,
+      layers: [],
+      tracks,
+      scriptVersionIds: [],
+      generationRecords: [],
+    };
+    change(p => ({
+      ...p,
+      assets: p.assets.map(item => item.id !== assetId || item.kind !== "clip" ? item : {
+        ...item,
+        updatedAt: new Date().toISOString(),
+        selectedClipVersionId: nextId,
+        clipVersions: [...(item.clipVersions ?? []), nextVersion],
+      }),
+    }));
+    const tabId = "clip-asset:" + assetId + ":" + nextId;
+    setTimelineTabs(existing => existing.some(tab => tab.id === tabId) ? existing : [
+      ...existing, { id: tabId, shotId: "", slotId: "", assetId, versionId: nextId, label: asset.name + " · " + nextVersion.name }
+    ]);
+    setTimelineTabTimes(times => ({ ...times, [activeTimelineTabId]: editorTime, [tabId]: 0 }));
+    setActiveTimelineTabId(tabId);
+    setSelectedId("");
+    setSelectedSlotId("");
+    setSelectedTimelineClipId("");
+    setSelectedCompositionLayerId("");
+    setEditorTime(0);
+    playbackTimeRef.current = 0;
+    setIsPlaying(false);
+    setShowAddLayerMenu(false);
+    setShowAddContentMenu(false);
+    setView("timeline");
+    setNotice("Created a blank Clip Version. Older versions and pinned placements remain unchanged.");
+  }
+
   function duplicateClipAssetVersion(assetId: string, versionId: string) {
     const asset = projectRef.current.assets.find(item => item.id === assetId && item.kind === "clip");
     const current = asset?.kind === "clip" ? asset.clipVersions?.find(item => item.id === versionId) : undefined;
@@ -1904,6 +1952,7 @@ export default function App() {
       {activeVersionTimelineClipAsset && <>
         <label className="nested-version-duration">Clip Version <span><select aria-label="Clip Asset version" className="text-field" value={activeVersionTimeline.id} onChange={event => chooseClipAssetVersion(activeVersionTimelineClipAsset.id, event.target.value)}>{(activeVersionTimelineClipAsset.clipVersions ?? []).map((version, index) => <option key={version.id} value={version.id}>{version.name || "Version " + (index + 1)}</option>)}</select></span></label>
         <button className="button button-quiet button-small" onClick={() => duplicateClipAssetVersion(activeVersionTimelineClipAsset.id, activeVersionTimeline.id)}><Plus size={13}/> Duplicate Version</button>
+        <button className="button button-quiet button-small" onClick={() => createBlankClipAssetVersion(activeVersionTimelineClipAsset.id, activeVersionTimeline.id)}><Plus size={13}/> New Blank Version</button>
       </>}
       <div className="layer-add-menu-wrap">
         <button className="button button-primary button-small" aria-haspopup="menu" aria-expanded={showAddLayerMenu} onClick={()=>setShowAddLayerMenu(value=>!value)}><Plus size={14}/> Add layer <ChevronDown size={13}/></button>
