@@ -21,6 +21,10 @@ You are taking over active development of **Dionysus AI Video Editor**. Treat th
 - Do not stop at documentation-only updates if implementation is actionable. Documentation is required, but real code and regression tests are the goal.
 - Do not ask the user to repeat requirements already documented. If no essential product decision is missing, proceed.
 
+## Mobile product requirement
+
+The owner wants a future mobile version with a CapCut-inspired editing interface. Target responsive mobile web first, sharing the desktop project schema and editing operations; do not assume a native app. On phones prioritize preview above timeline, touch-sized controls, contextual clip tools, horizontal scrolling inside the timeline, safe-area-aware persistent bottom navigation (Storyboard / Timeline / Assets / References), and no page-level horizontal overflow. DYS-012 is in progress; a CSS layout foundation is not full mobile editing. Do not add or run browser smoke tests.
+
 ## Product architecture direction
 
 The accepted target direction is in `docs/architecture/UNIFIED_COMPOSITION_MODEL.md`:
@@ -84,3 +88,11 @@ Start by inspecting GitHub and then continue the work. Do not merely summarize t
 
 - PR #66 shipped the reusable Clip Asset **New Blank Version** action alongside **Duplicate Version**. The blank version inherits duration and track setup (fresh track IDs), has no content layers, and activates without mutating earlier versions. Feature SHA `ee1f90c3304ce0f2be5cef294c387192d2aa8969` passed CI [39234313896](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39234313896) and Pages deployment [39234313840](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39234313840). Re-query live main before edits; documentation checkpoints can advance Git HEAD without changing app code.
 - Storyboard Shot creation still creates an empty Slot Version, not a separate reusable Asset Clip. Shot Slot Version vs Clip Asset Version is not yet one canonical Composition model; don't auto-create a linked duplicate Clip Asset per Shot before an explicit design decision.
+
+
+## Latest mobile-workspace pickup — 2026-10-19
+
+- Active branch: `feat/mobile-capcut-responsive-workspace` (PR to be created after the batch is committed).
+- This slice adds responsive mobile CSS for a four-item bottom navigation, compact top bar, preview-first timeline workspace, touch-sized playback/insert controls and horizontally scrollable track surfaces with sticky track labels.
+- It does not yet implement robust touch drag/scrub gestures, a working contextual mobile Inspector sheet, or verified portrait/landscape no-overflow behavior. Keep DYS-012 in progress and report these as limitations.
+- Continue next with tests and interaction support for touch scrubbing/selection/version switching, then return to DYS-014 canonical Composition persistence and structure-preserving snapshots.

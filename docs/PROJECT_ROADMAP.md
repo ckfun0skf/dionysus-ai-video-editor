@@ -162,3 +162,14 @@ At the end of every substantial work slice, update this file or the dedicated ha
 - tasks changed in `public/doc/tasks.json`.
 
 Never mark a task done because its documentation exists. Mark done only when its acceptance tests pass and user acceptance is recorded where requested.
+
+
+## Mobile editing foundation — 2026-10-19
+
+The owner explicitly wants a future phone version with a CapCut-inspired interface. DYS-012 is now the next active UX slice, beginning with responsive layout rather than claiming full mobile functionality.
+
+- Implemented in this PR branch: persistent four-destination bottom navigation on phone widths, safe-area padding, compact top bar, preview-first timeline layout, larger touch targets for key controls, compact track labels, and horizontally pannable timeline surfaces that keep the page itself from needing to scroll sideways.
+- Not complete: touch-first clip dragging/reordering, precise scrubbing, version-picker ergonomics, focused Inspector sheet open/close wiring, landscape/tablet QA and no-overflow evidence. Existing mouse-oriented handlers may still limit mobile editing.
+- Reference UX: CapCut's preview/timeline/tool hierarchy and mobile editing guides; keep Dionysus's multi-track composition model and project format intact.
+- Verification must be exact-head CI and build, then main CI + Pages deployment after merge. No automated browser smoke tests are to be added or run. Do not mark DYS-012 done based on CSS alone.
+- After this vertical slice, continue DYS-014 canonical Composition persistence and structure-preserving Save-as-Clip; the mobile layout does not resolve the Shot/Clip model.

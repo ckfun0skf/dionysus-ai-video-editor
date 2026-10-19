@@ -122,3 +122,16 @@ The target contract supersedes incompatible earlier Shot-Slot-centric requiremen
 - Settings scopes are distinct: Project output, Composition canvas, Track, Placement and Shot generation target.
 - Migration preserves IDs, alternatives, generation/reference history, source ranges, linked audio and storyboard-generated placements; ambiguous cases are surfaced.
 - Requirements in #53/#54, #56, #58 and #59 remain valid. See [Unified Composition Model](./architecture/UNIFIED_COMPOSITION_MODEL.md).
+
+
+## Mobile editing experience
+
+Dionysus must support a responsive phone workflow, not merely scale down the desktop editor. Use CapCut as a usability reference for information hierarchy and touch ergonomics, while retaining Dionysus's multi-track, reusable-composition and AI-production capabilities.
+
+- On phones, keep the preview above the timeline and make playback/selection controls touch-friendly.
+- Use a persistent bottom navigation for Storyboard, Timeline, Assets and References; respect device safe-area insets.
+- Keep horizontal timeline scrolling inside the timeline surface rather than allowing the whole page to overflow. Track labels should remain identifiable while the timeline is panned.
+- Reveal context-specific editing controls when content is selected; dense property editing should use a focused panel or sheet instead of permanently consuming preview width.
+- Desktop and mobile edit the same project and version data. Responsive presentation must not fork the project schema or silently change edit semantics.
+- Treat mobile browser support as the first delivery target. A separate native application is not implied by this requirement.
+- DYS-012 remains in progress until touch selection/scrubbing/version controls, narrow portrait/landscape layouts, and no-page-overflow behavior are validated. Automated browser smoke tests are not part of this project workflow; do not add or run them unless the owner explicitly asks.

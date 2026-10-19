@@ -185,3 +185,15 @@ npm run dev
 - PR #66 shipped **New Blank Version** beside **Duplicate Version** for reusable Clip Assets. It retains the Clip Asset's duration and track layout (with fresh track IDs), starts with no layers, activates the new version, and leaves prior versions untouched. Feature code SHA `ee1f90c3304ce0f2be5cef294c387192d2aa8969` passed main CI [39234313896](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39234313896) and Pages deployment [39234313840](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39234313840).
 - Data-model status remains explicit: a new Storyboard Shot creates a Slot/Version but does not create a separate `Asset.kind === "clip"`; Clip Asset Versions and Shot Slot Versions are still different legacy entities. DYS-014 still owns canonical Composition persistence and structure-preserving Save-as-Clip. Don't create one duplicate reusable Clip Asset for every Shot without a specific owner decision.
 - No browser smoke tests are added or run.
+
+
+## Mobile-first product requirement — 2026-10-19
+
+The owner wants a future phone version with a CapCut-inspired interface. Treat this as a product requirement, not a one-off CSS tweak.
+
+- First target: responsive mobile web, sharing the same project schema and editing operations as desktop; do not assume a separate native app.
+- Phone hierarchy: preview first, timeline immediately below, large touch controls, contextual clip tools, and a persistent bottom navigation for Storyboard / Timeline / Assets / References.
+- Horizontal timeline panning belongs inside the timeline viewport; avoid whole-page horizontal overflow. Respect safe-area insets and leave room for bottom navigation.
+- Preserve advanced multi-track, linked audio, procedural layers, nested Clip Versions, and version pinning. Simplify presentation, not the underlying project capability.
+- DYS-012 is the tracking task. The current responsive CSS slice is only a foundation; do not claim full mobile editing until selection, scrubbing, version switching, portrait/landscape layout and viewport checks are covered.
+- Do not add or run browser smoke tests. CI tests/build and Pages deployment are required; manual acceptance remains separate and must not be claimed without evidence.
