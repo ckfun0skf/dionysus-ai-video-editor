@@ -78,3 +78,9 @@ Start by inspecting GitHub and then continue the work. Do not merely summarize t
 - Issues #53/#54 have been closed as fixed at the owner’s direction. Do not reopen them for minor Add Clip overlap; that is a separate current follow-up.
 - Add Clip bug: current baseline can append a picked clip directly at the playhead with no empty-position check. Active branch: `feat/click-to-place-timeline-clips`. Expected flow: pick asset, click target time on compatible empty track area, if the gap is insufficient show two explicit choices: push subsequent items back (ripple) or trim the new clip to fit. Keep linked audio / Master Shots / Storyboard materialization in sync; timeline end is derived and must expand when required. No silent overwrite. No browser smoke tests.
 - Shot/Clip relationship remains unresolved in implementation: Storyboard creates a Shot with an empty Slot Version, not a separate reusable Asset Clip; Clip Asset version controls support duplicate-current-version, not a new blank version command. DYS-014 remains in progress for canonical Composition persistence and structure-preserving snapshots. Do not add duplicate Clip Assets per Shot without an owner decision.
+
+
+## New Clip Asset Version workflow — 2026-10-19
+
+- Reusable Clip Asset version control now has a separate **New Blank Version** action alongside **Duplicate Version**. The blank version inherits duration and track setup (fresh track IDs), has no content layers, and activates without mutating earlier versions. Track branch/PR/CI status must be checked before claiming release.
+- Storyboard Shot creation still creates an empty Slot Version, not a separate reusable Asset Clip. Shot Slot Version vs Clip Asset Version is not yet one canonical Composition model; don't auto-create a linked duplicate Clip Asset per Shot before an explicit design decision.

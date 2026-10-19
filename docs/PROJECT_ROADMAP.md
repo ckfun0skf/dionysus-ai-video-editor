@@ -8,7 +8,7 @@ This document is a durable pickup ledger, not a claim that planned behavior alre
 
 ## Current checkpoint
 
-- Main HEAD / deployed SHA: `32627ff1b9ee14622012ddbc9738597e1ffe76ad`; main CI [39228253526](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39228253526) and Pages deploy [39228253519](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39228253519) both passed.
+- Main HEAD / deployed SHA: `990158fc70cf0e6fe17a994237c1b0d65b7d60fb`; main CI [39233639480](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39233639480) and Pages deploy [39233639536](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39233639536) both passed.
 - Public preview: https://ckfun0skf.github.io/dionysus-ai-video-editor/. Issues #53/#54 were closed as fixed at the owner’s direction. Active follow-up `feat/click-to-place-timeline-clips` addresses Add Clip insertion overlap; it is not deployed yet.
 - Current limitations remain: Clip Asset can duplicate a current version but cannot add an explicitly blank new version from its version controls; creating a Storyboard Shot makes a Slot/Version but no separate reusable Clip Asset; canonical Shot/Clip/Composition relation remains a DYS-014 item.
 - Versioned project-document reads now reject mismatched project identity/name/root Composition identity; legacy schema-1.0 data remains authoritative.
@@ -16,7 +16,7 @@ This document is a durable pickup ledger, not a claim that planned behavior alre
 
 ### Follow-up — Safe Add Clip insertion (2026-10-19)
 
-The active branch `feat/click-to-place-timeline-clips` replaces silent Add Clip-at-playhead insertion with click-to-place, frame-snapped occupancy validation, a two-choice conflict resolution (ripple later placements or trim the new clip), atomic history changes and automatic runtime extension. Keep this code unpublished until exact-head CI passes and Pages deployment is confirmed. The target UX is consistent with the standard distinction between Insert/ripple and trim-to-fit; do not silently overwrite existing content.
+PR #65 merged safe click-to-place insertion as `990158fc70cf0e6fe17a994237c1b0d65b7d60fb`; exact main CI [39233639480](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39233639480) and Pages [39233639536](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39233639536) passed. The next branch `feat/blank-clip-asset-version` adds creation of an empty new Clip Asset Version; wait for exact-head CI and deployment before claiming release. The target UX is consistent with the standard distinction between Insert/ripple and trim-to-fit; do not silently overwrite existing content.
 
 ## Product destination
 
@@ -119,17 +119,17 @@ Core architecture:
 - Release notes, task dashboard and deployment evidence reflect the actual shipped SHA.
 **Exit tests:** recovery/round-trip/portable bundle; mobile layout tests where feasible; exact-head CI and post-merge Pages deployment checks.
 
-## Open GitHub issues to preserve
+## Known GitHub issues to preserve
 
 Re-query GitHub before every major slice. At the last recorded check, these were open:
 
-- [#53 Master Timeline and Clip Timeline have different UI](https://github.com/ckfun0skf/dionysus-ai-video-editor/issues/53) — target fix is one shared editor/data model, not superficial button styling.
-- [#54 Clip drag/drop and resizing](https://github.com/ckfun0skf/dionysus-ai-video-editor/issues/54) — destination preview, snap, cross-track move, overlap/trim and Undo; user says residual problems persist.
+- [#53 Master Timeline and Clip Timeline have different UI](https://github.com/ckfun0skf/dionysus-ai-video-editor/issues/53) — closed at the owner’s direction after the deployed UI/interactions were accepted as fixed; canonical Composition convergence remains DYS-014 work.
+- [#54 Clip drag/drop and resizing](https://github.com/ckfun0skf/dionysus-ai-video-editor/issues/54) — closed at the owner’s direction. Add Clip insertion-overlap was treated as a separate bug and fixed in PR #65.
 - [#56 Asset Management UX](https://github.com/ckfun0skf/dionysus-ai-video-editor/issues/56) — asset picker, context menu, dependency-aware deletion/reverse usage, references and dimensions.
 - [#58 Collapsible left navigation](https://github.com/ckfun0skf/dionysus-ai-video-editor/issues/58).
 - [#59 Timeline settings/zoom/background behavior](https://github.com/ckfun0skf/dionysus-ai-video-editor/issues/59).
 
-The issue search last returned these five open issues; this is not a promise that no new issue has since been opened. Review every open issue before marking architecture work complete.
+The issue search last returned #56, #58 and #59 as the remaining listed open issues; #53/#54 are closed. This is not a promise that no new issue has since been opened. Review every open issue before marking architecture work complete.
 
 ## Task ownership and dependencies
 
