@@ -1419,6 +1419,32 @@ describe("Integrated timeline editor", () => {
     expect(nestedClip).toBeTruthy();expect(nestedClip!.querySelector(".visual-clip-icon")).toBeTruthy();
     expect(nestedClip!.querySelector(".visual-clip-copy strong")?.textContent).toContain("Video");
     expect(nestedClip!.querySelector(".visual-clip-copy small")?.textContent).toContain("s");
+    expect(nestedClip!.querySelector('[aria-label^="Trim start of "]')).toBeTruthy();
+    expect(nestedClip!.querySelector('[aria-label^="Trim end of "]')).toBeTruthy();
+    const lane = nestedClip!.closest(".nested-timeline-row-track") as HTMLElement;
+    Object.defineProperty(lane, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({ left: 0, top: 0, right: 100, bottom: 76, width: 100, height: 76, x: 0, y: 0, toJSON: () => ({}) })
+    });
+    let draggedLayerId = "";
+    const dataTransfer = {
+      setData: (_type: string, value: string) => { draggedLayerId = value; },
+      getData: (_type: string) => draggedLayerId,
+      effectAllowed: "move",
+      dropEffect: "move",
+      types: ["text/dionysus-version-layer"],
+    };
+    const dragStart = new Event("dragstart", { bubbles: true, cancelable: true });
+    Object.defineProperty(dragStart, "dataTransfer", { configurable: true, value: dataTransfer });
+    act(() => nestedClip!.dispatchEvent(dragStart));
+    const dragOver = new MouseEvent("dragover", { bubbles: true, cancelable: true, clientX: 50 });
+    Object.defineProperty(dragOver, "dataTransfer", { configurable: true, value: dataTransfer });
+    act(() => lane.dispatchEvent(dragOver));
+    await flushEffects();
+    expect(lane.querySelector(".clip-drop-preview strong")?.textContent).toContain("Video");
+    act(() => nestedClip!.dispatchEvent(new Event("dragend", { bubbles: true })));
+    await flushEffects();
+
   });
 
 

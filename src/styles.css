@@ -2319,7 +2319,7 @@
 .nested-timeline-tab .nested-timeline-clip .clip-resize-right { right:0; }
 @media (max-width:760px) {
   .nested-timeline-tab .nested-visual-timeline-ruler,
-  .nested-timeline-tab .nested-timeline-row.visual-track-row { grid-template-columns:180px minmax(320px,1fr); }
+  .nested-timeline-tab .nested-timeline-row.visual-track-row { grid-template-columns:minmax(160px,180px) minmax(280px,1fr); }
 }
 
 /* Shared Add layer menu: keep Master and Clip/Version timeline controls consistent. */

@@ -153,3 +153,13 @@ npm run dev
 - Coordinate DYS-002, DYS-004, DYS-005 and the DYS-013 existing Clip Asset slice. Avoid expanding parallel Shot/Clip version models.
 - #56 remains planned asset-management scope. #58 remains independent. #59 settings need Project/Composition/Track/Placement scopes.
 - Do not add or run browser smoke tests unless explicitly requested.
+
+
+## Latest Timeline Interaction Slice — 2026-10-19
+
+- Code/test checkpoint: commit `a98655c9263bfa033575d6d6c01109bc5dfba94b`; exact-head CI [39227084457](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39227084457) passed tests, TypeScript and Vite build.
+- Nested Clip/Version Timeline now uses `src/nestedTimelinePlacement.ts` and the same frame-aligned drop/resize calculations as the existing Master Timeline placement engine. Dragging shows a destination preview and snap guide, compatible cross-track moves are allowed, and same-track overlaps are rejected.
+- Both nested clip edges now have resize handles. Resizing shows the grey dashed affected-overlap region, trims the adjacent nested layer when a valid one-frame remainder is possible, and commits the target/neighbor change in one project-history transaction. `src/nestedTimelinePlacement.test.ts` and `src/timelineResize.test.ts` cover placement/resize and short-neighbor edge cases.
+- Nested track/ruler columns now follow the Master Timeline's responsive grid. This closes a visible/interaction parity gap, but it does **not** yet make schema-2 Composition the live authoritative editor state; the root and nested persistence models remain legacy schema 1.0, and Save-as-Clip still needs structure-preserving snapshots.
+- PR #63 remains Draft / not deployed until exact-head CI has been rechecked after handoff/style updates. Issues #53 and #54 remain open until the merged GitHub Pages deployment is confirmed and the owner manually accepts the behavior. Do not add or run browser smoke tests.
+

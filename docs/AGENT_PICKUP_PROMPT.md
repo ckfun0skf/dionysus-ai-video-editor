@@ -65,3 +65,9 @@ The accepted target direction is in `docs/architecture/UNIFIED_COMPOSITION_MODEL
 9. Keep PR in Draft until code/tests/acceptance scope is reviewable. Report the exact next step and evidence in concise Cantonese.
 
 Start by inspecting GitHub and then continue the work. Do not merely summarize this prompt back to the user.
+
+
+## Latest pickup note — 2026-10-19
+
+- The newest timeline interaction code checkpoint is commit `a98655c9263bfa033575d6d6c01109bc5dfba94b`, with exact-head CI run [39227084457](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39227084457) passing tests and TypeScript/Vite build.
+- `src/nestedTimelinePlacement.ts` now wires nested Clip/Version Timeline drag previews, snap guides, overlap protection and left/right resize with adjacent-layer trimming into one Undo transaction. Do not call #53/#54 done: merge and verify Pages deployment first; owner acceptance is still required. Underlying canonical Composition persistence and structure-preserving Save-as-Clip remain unfinished.

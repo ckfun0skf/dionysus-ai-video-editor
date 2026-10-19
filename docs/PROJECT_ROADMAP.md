@@ -9,7 +9,7 @@ This document is a durable pickup ledger, not a claim that planned behavior alre
 ## Current checkpoint
 
 - Main HEAD: `288b5f349080c470a119c33174dfaa93c0e8c9f0`; main CI and Pages deployment succeeded (runs 39199996042 and 39199996049).
-- Active Draft PR #63 head: `3826f84cd529ad2461a07f26ab83adf7a5a5b526`; exact-head CI 39221701720 passed tests and TypeScript/Vite build.
+- Active Draft PR #63 code/test checkpoint: `a98655c9263bfa033575d6d6c01109bc5dfba94b`; exact-head CI [39227084457](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39227084457) passed tests and TypeScript/Vite build. Re-check exact-head CI after the handoff/style refresh.
 - Versioned project-document reads now reject mismatched project identity/name/root Composition identity; legacy schema-1.0 data remains authoritative.
 - #53/#54 remain open pending acceptance. Save-as-Clip still flattens legacy layers; structure-preserving snapshots remain unfinished. No browser smoke tests or PR-branch deployment are claimed.
 
