@@ -1,6 +1,6 @@
 # DYS-014 — Unified Composition Model and structure-preserving snapshots
 
-**Status:** In progress · **Progress estimate:** 60% · **Updated:** 2026-10-19
+**Status:** In progress · **Progress estimate:** 68% · **Updated:** 2026-10-19
 
 ## Goal
 
@@ -63,3 +63,11 @@ Current feature branch `feat/dys014-alternative-provenance-roundtrip` adds two f
 The previous mobile feature is shipped as app commit `6e130e33a4236fff97f468f6d76fef933677bb58`; exact-head CI [39259760793](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39259760793), main CI [39259981315](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39259981315) and Pages deployment [39259981194](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39259981194) passed.
 
 The migration test branch still requires exact-head CI. These tests strengthen the non-destructive transition boundary; they do **not** make Composition authoritative persistence or implement structure-preserving Save-as-Clip.
+
+
+## Save-as-Clip integration — 2026-10-19
+
+- The Master Timeline Save as Clip Asset action now calls `createCompositionSnapshot()` rather than flattening render layers.
+- `ClipVersion.compositionDocument` stores the canonical Composition snapshot; compatibility tracks/layers are projected for the existing editor.
+- Regression tests cover canonical track/placement structure, linked audio, source ranges, nested Clip version pins and snapshot independence.
+- **Still incomplete:** edits in the legacy layer/track editor do not reconcile back into `compositionDocument`. Canonical-authoritative editing, persistence round-trip and Undo/Redo parity remain required.
