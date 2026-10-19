@@ -24,7 +24,7 @@ import AssetThumbnail from "./AssetThumbnail";
 import SandboxedCodePreview from "./SandboxedCodePreview";
 import { deleteStoredMediaAsset, isStoredMediaPath, loadMediaBlobFromPath, resolveMediaSource, storeMediaAsset } from "./mediaAssetStore";
 import { createImageThumbnail, createVideoThumbnail, getAssetThumbnail } from "./mediaThumbnail";
-import { getAudioEnvelope } from "./audioEnvelope";
+import { getAudioEnvelope, withDurationAndClampedFades } from "./audioEnvelope";
 import { getMasterShotIndexAtTime, getMasterShotStart, getMasterShotStarts, getMasterTimelineDuration, rippleReorderMasterShots, setMasterShotDuration, setMasterShotStart } from "./masterTimeline";
 import StoryboardFlowCanvas from "./StoryboardFlowCanvas";
 import AgentStoryboardModal from "./AgentStoryboardModal";

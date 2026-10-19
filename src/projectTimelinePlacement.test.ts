@@ -44,6 +44,22 @@ describe("shared project timeline placement engine", () => {
     expect(updated.shots[0].duration).toBeLessThan(6);
   });
 
+  it("keeps linked source audio aligned when a cross-model resize trims the video", () => {
+    const project = structuredClone(sampleProject);
+    const track = project.tracks.find(item => item.kind === "video")!;
+    const audioTrack = project.tracks.find(item => item.kind === "audio")!;
+    project.shots = [{ ...project.shots[0], masterStart: 3, masterTrackId: track.id, duration: 6 }];
+    const clip = { id: "video-with-audio", name: "Video", kind: "video" as const, trackId: track.id, start: 0, duration: 3, sourceIn: 0, sourceOut: 3 };
+    const audio = { id: "linked-audio", name: "Audio", kind: "audio" as const, trackId: audioTrack.id, start: 0, duration: 3, linkedVideoClipId: clip.id, sourceIn: 0, sourceOut: 3, fadeOut: 1 };
+    project.timelineClips = [clip, audio];
+    const preview = calculateProjectTimelineClipResizePreview(project, clip, "right", 5, 10);
+    const updated = applyProjectTimelineClipResize(project, preview!);
+    const updatedVideo = updated.timelineClips!.find(item => item.id === clip.id)!;
+    const updatedAudio = updated.timelineClips!.find(item => item.id === audio.id)!;
+    expect(updatedAudio).toMatchObject({ start: updatedVideo.start, duration: updatedVideo.duration, linkedVideoClipId: clip.id });
+    expect(updatedAudio.fadeOut).toBeLessThanOrEqual(updatedAudio.duration);
+  });
+
   it("resizes a Master Shot and trims an adjacent ordinary clip in the same operation", () => {
     const project = structuredClone(sampleProject);
     const track = project.tracks.find(item => item.kind === "video")!;
