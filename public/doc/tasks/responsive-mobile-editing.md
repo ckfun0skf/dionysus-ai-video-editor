@@ -1,6 +1,6 @@
 # DYS-012 — Responsive mobile editing
 
-**Status:** In progress — layout, touch movement, contextual tools, zoom and trim hit targets merged; precision touch scrubbing is next  
+**Status:** In progress — layout, touch movement, contextual tools, zoom, trim hit targets and pointer-captured scrubbing merged; mobile version picker refinement in progress  
 **Milestone:** M4 — Preview, compositing, and mobile editing  
 **Owner requirement:** A future phone version with a CapCut-inspired editing experience.
 
@@ -28,8 +28,9 @@ Make Dionysus usable on phone and tablet screens without removing Storyboard, Re
 
 ## Latest merged interaction improvements
 - PR #73 merged mobile trim hit targets and visible grab markers as `98f1637f1cc36a069578edb2337bcfdb578b4612`; exact-head CI run [39239397529](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39239397529) passed.
-- Current slice adds pointer-captured playhead scrubbing to the integrated Master ruler, main visual timeline ruler, and nested Clip Version ruler.
-- Main push CI and Pages deployment for PR #73 have not yet been independently confirmed. Do not ask the owner to test until deployment is verified.
+- PR #74 merged pointer-captured scrubbing as `605edf9af5922f3f6c054997d50f648ecae067ad`; exact-head CI run [39242564926](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39242564926) passed.
+- Current slice makes the Master Shot version picker a safe-area-aware mobile bottom sheet with larger touch targets; desktop popover behavior remains unchanged.
+- Main push CI and Pages deployment for the latest main head have not yet been independently confirmed. Do not ask the owner to test until deployment is verified.
 
 ## Not complete
 - Precise scrub/trim UX and complete touch validation across timeline surfaces.

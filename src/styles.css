@@ -2867,3 +2867,27 @@
   .workbench.timeline-workbench .timeline-ruler { touch-action: none; user-select: none; -webkit-user-select: none; }
 
 }
+
+
+/* Mobile version picker: thumb-friendly bottom sheet instead of a clipped popover. */
+@media (max-width: 640px) {
+  .timeline-version-menu summary { width: 44px; height: 44px; font-size: 17px; touch-action: manipulation; }
+  .timeline-version-menu-panel,
+  .master-shot-version-menu .timeline-version-menu-panel {
+    position: fixed; z-index: 240; top: auto;
+    left: max(10px, env(safe-area-inset-left));
+    right: max(10px, env(safe-area-inset-right));
+    bottom: calc(72px + env(safe-area-inset-bottom));
+    width: auto; max-height: min(52vh, 420px);
+    overflow-y: auto; overscroll-behavior: contain;
+    padding: 12px; border-radius: 14px;
+    box-shadow: 0 18px 48px rgba(0, 0, 0, .72);
+  }
+  .timeline-version-menu-panel > strong { padding: 8px 6px 10px; font-size: 13px; }
+  .timeline-version-menu-row { gap: 8px; }
+  .timeline-version-menu-row > button:first-child { min-height: 48px; padding: 10px; }
+  .timeline-version-menu-row > button span,
+  .timeline-version-menu-row > button small { font-size: 12px; }
+  .timeline-version-menu-row > button.timeline-version-edit,
+  .timeline-version-add { min-height: 44px; padding: 10px 12px; font-size: 12px; touch-action: manipulation; }
+}
