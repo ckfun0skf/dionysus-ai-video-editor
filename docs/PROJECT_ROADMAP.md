@@ -8,11 +8,15 @@ This document is a durable pickup ledger, not a claim that planned behavior alre
 
 ## Current checkpoint
 
-- Main HEAD / deployed SHA: `9da2f2bfbf7e80abb73f5552a0d1447cff471c0b`; PR #63 was merged and both main CI [39227655141](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39227655141) and GitHub Pages deployment [39227655137](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39227655137) succeeded.
-- Code/test PR head before squash merge: `5e671fd4230df470a30031bf57691b1a6602b068`; its exact-head CI [39227490454](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39227490454) passed tests and TypeScript/Vite build.
-- Public preview: https://ckfun0skf.github.io/dionysus-ai-video-editor/. #53/#54 remain open pending owner acceptance.
+- Main HEAD / deployed SHA: `32627ff1b9ee14622012ddbc9738597e1ffe76ad`; main CI [39228253526](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39228253526) and Pages deploy [39228253519](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39228253519) both passed.
+- Public preview: https://ckfun0skf.github.io/dionysus-ai-video-editor/. Issues #53/#54 were closed as fixed at the owner’s direction. Active follow-up `feat/click-to-place-timeline-clips` addresses Add Clip insertion overlap; it is not deployed yet.
+- Current limitations remain: Clip Asset can duplicate a current version but cannot add an explicitly blank new version from its version controls; creating a Storyboard Shot makes a Slot/Version but no separate reusable Clip Asset; canonical Shot/Clip/Composition relation remains a DYS-014 item.
 - Versioned project-document reads now reject mismatched project identity/name/root Composition identity; legacy schema-1.0 data remains authoritative.
 - #53/#54 remain open pending acceptance. Save-as-Clip still flattens legacy layers; structure-preserving snapshots remain unfinished. No browser smoke tests or PR-branch deployment are claimed.
+
+### Follow-up — Safe Add Clip insertion (2026-10-19)
+
+The active branch `feat/click-to-place-timeline-clips` replaces silent Add Clip-at-playhead insertion with click-to-place, frame-snapped occupancy validation, a two-choice conflict resolution (ripple later placements or trim the new clip), atomic history changes and automatic runtime extension. Keep this code unpublished until exact-head CI passes and Pages deployment is confirmed. The target UX is consistent with the standard distinction between Insert/ripple and trim-to-fit; do not silently overwrite existing content.
 
 ## Product destination
 
