@@ -145,3 +145,8 @@ Continue from `feat/mobile-audio-clip-mute` (if already merged, inspect PR/main 
 ### Current DYS-012 mobile follow-up — mute-state accessibility (2026-10-19)
 
 Continue from `feat/mobile-audio-mute-state` (if already merged, inspect PR/main first). This slice adds a visible active state to the selected-audio Mute/Unmute button and asserts its `aria-pressed` value. Run exact-head CI/build, merge through PR, verify main CI and Pages deployment, then update task dashboard/report/handoff. No browser smoke tests. Keep DYS-012 in progress until phone portrait/landscape/tablet acceptance is evidenced.
+
+
+### DYS-014 Save-as-Clip integration — 2026-10-19
+
+Check branch `feat/dys014-save-clip-snapshot-integration` and exact-head CI first. The Save-as-Clip action stores a canonical CompositionDocument on ClipVersion and projects compatibility layers/tracks. Legacy editor edits do not yet synchronize back into that document. Next implement deterministic canonical/editor reconciliation and test nested source pins, linked audio, persistence and Undo/Redo. Update dashboard/report/handoff in one coherent batch. No browser smoke tests.

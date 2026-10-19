@@ -34,3 +34,10 @@ Current feature branch `feat/dys014-alternative-provenance-roundtrip` adds two f
 The previous mobile feature is shipped as app commit `6e130e33a4236fff97f468f6d76fef933677bb58`; exact-head CI [39259760793](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39259760793), main CI [39259981315](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39259981315) and Pages deployment [39259981194](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39259981194) passed.
 
 The migration test branch still requires exact-head CI. These tests strengthen the non-destructive transition boundary; they do **not** make Composition authoritative persistence or implement structure-preserving Save-as-Clip.
+
+
+## Save-as-Clip integration — 2026-10-19
+
+The Master Timeline Save as Clip Asset action now calls `createCompositionSnapshot()` and stores the canonical CompositionDocument on the new ClipVersion. `compositionSnapshotToClipVersion()` projects tracks/layers for the legacy editor while preserving canonical placements, source ranges, links, and pinned source references. New tests cover linked placement relationships, nested Clip version pins, and source/snapshot independence.
+
+**Limitation:** current legacy layer/track edits do not reconcile back into `compositionDocument`. This is a transition bridge, not canonical-authoritative editing. Exact-head CI/build is required before merge. No browser smoke tests were run.
