@@ -28,11 +28,14 @@ PR #76 snapped pointer-captured scrubbing to project frame boundaries as `c04d95
 ## Latest frame-step control release
 PR #77 merged phone-only Previous frame / Next frame controls and frame-rate-aligned range steps as `ef1fb36d4e512825b2baec0d3103c5d86ab4ce49`; exact-head CI passed at [39243556120](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39243556120).
 
-## Current frame-counter slice
-Adds a phone-only current-frame counter beside the preview timecode, tied to project frame rate, with regression coverage. Automated CI is pending; this does not substitute for device-level acceptance.
+## Latest mobile frame-counter release
+PR #78 merged a phone-only current-frame counter beside the preview timecode as `8d36a4e018395fd13d60110ba9c5f4d2aeeffbbc`; exact-head CI passed at [39243808054](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39243808054).
+
+## Current keyboard frame-step slice
+Left/Right on the focused visual timeline ruler steps by one project frame instead of half a second, with an App regression test. Automated CI is pending; this does not substitute for device-level acceptance.
 
 ## Remaining work
-- Verify exact-head CI for the mobile frame counter, then merge through PR.
+- Verify exact-head CI for keyboard frame stepping, then merge through PR.
 - Independently verify main push CI and GitHub Pages deployment after merge.
 - Refine scrubbing/trim, Inspector/Version picker and mobile viewport behavior.
 - Record viewport/device evidence only when available; do not mark DYS-012 done on CSS and gestures alone.

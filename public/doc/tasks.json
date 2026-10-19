@@ -624,8 +624,8 @@
           "id": "DYS-012",
           "title": "Responsive mobile editing workspace",
           "status": "in_progress",
-          "progress": 93,
-          "summary": "Responsive layout, touch movement, contextual tools, Inspector toggle, zoom, trim hit targets, frame-aligned scrubbing, mobile version picker and one-frame stepping are merged. Current slice adds a live frame counter. Deployment and viewport acceptance remain outstanding.",
+          "progress": 94,
+          "summary": "Responsive layout, touch movement, contextual tools, Inspector toggle, zoom, trim hit targets, frame-aligned scrubbing, mobile version picker, one-frame stepping and live frame counter are merged. Current slice aligns keyboard scrubbing to frame boundaries. Deployment and viewport acceptance remain outstanding.",
           "doc": "tasks/responsive-mobile-editing.md",
           "detail": "tasks/responsive-mobile-editing.html",
           "report": "reports/responsive-mobile-editing-report.md",
@@ -678,9 +678,10 @@
             "PR #75 merged the mobile version picker as main commit 72b2debcf586e2a0663a03119e7f688b79394f8f; exact-head CI run 39242992878 passed.",
             "PR #76 merged frame-aligned scrubbing as main commit c04d9562747352225b83de90cc48a55355c06494; exact-head CI run 39243270619 passed.",
             "PR #77 merged mobile one-frame stepping and frame-rate-aligned playhead control as main commit ef1fb36d4e512825b2baec0d3103c5d86ab4ce49; exact-head CI run 39243556120 passed.",
-            "Current branch feat/mobile-frame-counter adds a phone-only live frame counter and regression assertions; exact-head CI pending."
+            "PR #78 merged the mobile frame counter as main commit 8d36a4e018395fd13d60110ba9c5f4d2aeeffbbc; exact-head CI run 39243808054 passed.",
+            "Current branch feat/frame-accurate-keyboard-scrubbing changes visual ruler Left/Right navigation to one project frame per keypress and adds an App regression test; exact-head CI pending."
           ],
-          "notes": "Owner requested a CapCut-inspired phone interface. Layout, touch movement, contextual tools, Inspector access, zoom, trim ergonomics, frame-aligned scrubbing, mobile version picker and one-frame stepping are merged. A live frame counter is current; viewport/device acceptance and deployment verification remain."
+          "notes": "Owner requested a CapCut-inspired phone interface. Layout, touch movement, contextual tools, Inspector access, zoom, trim ergonomics, frame-aligned touch scrubbing, mobile version picker, one-frame stepping and live frame counter are merged. Keyboard frame stepping is current; viewport/device acceptance and deployment verification remain."
         }
       ]
     },
