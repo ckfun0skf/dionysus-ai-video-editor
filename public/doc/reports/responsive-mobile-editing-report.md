@@ -59,3 +59,7 @@ PR #81 merged Mute/Unmute for selected audio clips as main commit `7ba96ec0eae8d
 
 ## Current mute-state accessibility refinement
 The active branch `feat/mobile-audio-mute-state` makes the pressed/muted state visually distinct and checks the button's `aria-pressed` value in the App integration test. Exact-head CI is pending; no browser smoke tests are added or run.
+
+
+## Issue #83 — mobile UI/UX correction
+The owner reports unstyled buttons, overflowing layer actions, and excessive visual density compared with CapCut. The corrective patch consolidates Master Timeline layer actions into a safe-area-aware menu, gives touch controls consistent styling, and reduces vertical clutter by making preview/master action strips horizontally scrollable. A component integration test covers opening and using the layer action menu. Keep DYS-012 in progress until CI, deployment and viewport acceptance are confirmed.

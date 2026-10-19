@@ -254,3 +254,7 @@ The owner wants a future phone version with a CapCut-inspired interface. Treat t
 - PR #81 merged selected-audio Mute/Unmute at `7ba96ec0eae8d6e3fb2196d7b9f492e293ff10e2`; exact-head CI `39249271916` passed.
 - Active branch: `feat/mobile-audio-mute-state`. It makes muted audio visibly selected and tests `aria-pressed` state.
 - Main push CI and Pages deployment remain unverified by the available Actions listing. Do not claim viewport/device acceptance; no browser smoke tests.
+
+
+## Current owner feedback — Issue #83
+The owner reports the mobile timeline UI is broken: some buttons look unstyled, layer controls overflow, and the screen is too busy compared with CapCut. Current follow-up branch `fix/mobile-timeline-layer-actions-v2` consolidates Master Timeline layer actions, styles touch controls, and reduces toolbar density. Keep this work on a PR, do not add/run browser smoke tests, and do not ask the owner to test until main CI and Pages deployment are confirmed.

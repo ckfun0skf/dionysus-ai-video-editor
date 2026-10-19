@@ -625,7 +625,7 @@
           "title": "Responsive mobile editing workspace",
           "status": "in_progress",
           "progress": 97,
-          "summary": "Responsive layout, touch movement, contextual tools, zoom, trim hit targets, frame-aligned scrubbing, mobile version picker, frame stepping/counter, keyboard frame stepping, preview Undo/Redo and selected-audio Mute/Unmute are merged. Current slice adds a clear visible active state for muted audio. Main deployment and viewport acceptance remain outstanding.",
+          "summary": "Responsive layout, touch movement, contextual tools, zoom, trim hit targets, frame-aligned scrubbing, mobile version picker, frame stepping/counter, keyboard frame stepping, preview Undo/Redo and selected-audio Mute/Unmute are merged. Issue #83 reports overflowing layer controls, inconsistent button affordances and excessive visual density; corrective UI polish is in progress.",
           "doc": "tasks/responsive-mobile-editing.md",
           "detail": "tasks/responsive-mobile-editing.html",
           "report": "reports/responsive-mobile-editing-report.md",
