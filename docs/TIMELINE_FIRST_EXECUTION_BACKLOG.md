@@ -189,3 +189,13 @@ Exact-head CI [39431744433](https://github.com/ckfun0skf/dionysus-ai-video-edito
 At code/test head `920ad9e5f3d0d290182b82e5e772ecbc1abe4694`, `compositionMigration.ts` preserves existing canonical Clip/Shot Slot Version documents rather than rebuilding from legacy layers, and `clipVersionSnapshot.ts` preserves already embedded child subtrees. Exact-head CI [39445108693](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39445108693) passed 223 tests/23 files, TypeScript/build and audit 0 vulnerabilities. Regression covers canonical migration, embedded child subtree retention, source ranges, transform/mix, pins and provenance.
 
 **Do not overstate completion:** the live `DionysusProject` remains schema 1.0; V2 export's root Composition is a validated projection, not the authoritative editor state. Next major architecture slice is canonical root Composition-backed commands with a deterministic compatibility projection and edit/save/reopen plus Undo/Redo tests. Also audit legacy Storyboard/Shot Slot direct `layers` mutations. DYS-005/DYS-014 remain in progress; no browser smoke tests or merge without review/current exact-head CI.
+
+
+## PR #96 follow-up — canonical duplication and inspector routing (2026-10-20)
+
+- `duplicateClipAssetVersion()`, duplicate Shot, and duplicate Slot now share canonical-aware duplication: regenerate local track/placement IDs, remap track IDs and linked placement/audio references, regenerate `layers`/track compatibility projections, and preserve source ranges, nested pinned snapshots and provenance.
+- Legacy Shot Slot Inspector changes now call the nested canonical edit adapter instead of directly mapping over `version.layers`.
+- Regression coverage was added for canonical and legacy-only duplication, linked audio, source ranges, pinned child composition/provenance, and non-mutation of the source.
+- Latest code SHA before docs refresh: `c9c4ed4dd91dcb3bf233258515bd664f9d854589`; CI [39453725792](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39453725792) was queued, not yet confirmed green. Re-check CI on the final docs-updated branch head.
+- Continue code-first audit of any remaining direct Shot/Slot layer mutation paths. Root Composition persistence and broader nested Undo/Redo remain unfinished. No browser smoke tests; do not merge.
+
