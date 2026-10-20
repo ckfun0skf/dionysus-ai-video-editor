@@ -395,6 +395,37 @@ export function moveProjectTimelinePlacement(
     const shot = project.shots.find(item => item.id === target.shotId);
     if (!shot) throw new Error("Master Shot not found.");
     if (targetTrack.kind !== "video") throw new Error("A Master Shot must use a video track.");
+
+    // Master Shots are canonical root Composition placements too. Apply the shared immutable
+    // Composition command first, then project its committed fields back into the schema-1.0 Shot.
+    let rootComposition: ReturnType<typeof migrateLegacyProjectToComposition>["rootComposition"] | undefined;
+    try {
+      rootComposition = migrateLegacyProjectToComposition(project).rootComposition;
+      assertValidCompositionDocument(rootComposition);
+    } catch {
+      rootComposition = undefined;
+    }
+    const canonicalShot = rootComposition?.placements.find(placement => placement.id === shot.id);
+    if (rootComposition && canonicalShot) {
+      const movedComposition = moveCompositionPlacementToTrack(rootComposition, shot.id, targetTrackId, start);
+      const committed = movedComposition.placements.find(placement => placement.id === shot.id);
+      if (!committed) throw new Error("Composition move did not return the moved Master Shot.");
+      const delta = committed.start - canonicalShot.start;
+      return {
+        ...project,
+        shots: project.shots.map(item => item.id === shot.id
+          ? { ...item, masterStart: committed.start, duration: committed.duration, masterTrackId: committed.trackId }
+          : item),
+        timelineClips: (project.timelineClips ?? []).map(clip =>
+          clip.id.startsWith("storyboard-" + shot.id + "-")
+            ? { ...clip, start: Math.max(0, clip.start + delta), ...(clip.kind === "video" ? { trackId: committed.trackId } : {}) }
+            : clip
+        ),
+      };
+    }
+
+    // Compatibility fallback for malformed/legacy projects that cannot be represented as a
+    // valid root Composition. Keep the old edit behavior rather than blocking recovery.
     const delta = start - getMasterShotStart(project.shots, shot.id);
     return {
       ...project,
