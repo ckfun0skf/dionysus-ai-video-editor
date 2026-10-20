@@ -128,21 +128,24 @@ describe("versioned project document boundary", () => {
     };
     const afterEdit = recordProjectChange({ current: original, undo: [], redo: [] }, edited);
 
-    const reopenedEdit = readProjectDocument(JSON.parse(JSON.stringify(createProjectDocument(afterEdit.current))));
+    const editDocument = JSON.parse(JSON.stringify(createProjectDocument(afterEdit.current))) as ReturnType<typeof createProjectDocument>;
+    const reopenedEdit = readProjectDocument(editDocument);
     expect(reopenedEdit.project.shots[0].masterStart).toBe(23);
+    expect(editDocument.compositionModel.rootComposition.placements.find(placement => placement.id === original.shots[0].id)?.start).toBe(23);
     expect(reopenedEdit.sourceDocumentVersion).toBe("2.0");
     expect(reopenedEdit.project.id).toBe(original.id);
 
     const undone = undoProjectChange(afterEdit);
-    const reopenedUndo = readProjectDocument(JSON.parse(JSON.stringify(createProjectDocument(undone.current))));
+    const undoDocument = JSON.parse(JSON.stringify(createProjectDocument(undone.current))) as ReturnType<typeof createProjectDocument>;
+    const reopenedUndo = readProjectDocument(undoDocument);
     expect(getMasterShotStart(reopenedUndo.project.shots, original.shots[0].id)).toBe(originalStart);
+    expect(undoDocument.compositionModel.rootComposition.placements.find(placement => placement.id === original.shots[0].id)?.start).toBe(originalStart);
 
     const redone = redoProjectChange(undone);
-    const reopenedRedo = readProjectDocument(JSON.parse(JSON.stringify(createProjectDocument(redone.current))));
+    const redoDocument = JSON.parse(JSON.stringify(createProjectDocument(redone.current))) as ReturnType<typeof createProjectDocument>;
+    const reopenedRedo = readProjectDocument(redoDocument);
     expect(getMasterShotStart(reopenedRedo.project.shots, original.shots[0].id)).toBe(23);
-    expect(reopenedRedo.project.shots[0].slots[0].versions[0].composition).toEqual(
-      redone.current.shots[0].slots[0].versions[0].composition,
-    );
+    expect(redoDocument.compositionModel.rootComposition.placements.find(placement => placement.id === original.shots[0].id)?.start).toBe(23);
   });
 
 });
