@@ -103,6 +103,13 @@ export function readProjectDocument(value: unknown): ReadProjectDocumentResult {
         throw new Error("The project document contains root Composition clips that do not match the compatibility project.");
       }
     }
+    const projectClipIds = new Set((project.timelineClips ?? []).filter(clip => !clip.id.startsWith("storyboard-")).map(clip => clip.id));
+    for (const placement of root.placements) {
+      if (placement.legacyData.entityType === "master-shot") continue;
+      if (!projectClipIds.has(placement.id)) {
+        throw new Error("The project document contains stale or inconsistent Composition placements.");
+      }
+    }
     const expected = migrateLegacyProjectToComposition(project);
     if (
       JSON.stringify(compositionModel.clipCompositions) !== JSON.stringify(expected.clipCompositions) ||
