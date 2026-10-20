@@ -18,6 +18,7 @@ import { applyClipVersionResizePreview, calculateClipVersionDropPosition, calcul
 import {
   applyProjectTimelineClipResize,
   applyCanonicalCompositionInsertion,
+  calculateCanonicalCompositionDropPosition,
   calculateCanonicalCompositionInsertionPlan,
   calculateProjectTimelineClipResizePreview,
   calculateProjectTimelineDropPosition,
@@ -1180,6 +1181,12 @@ export default function App() {
       return;
     }
     change(project => ({ ...project, timelineClips: unlinkTimelineAudio({ tracks: project.tracks, timelineClips: project.timelineClips ?? [] }, clipId).timelineClips }));
+  }
+
+  function calculateRootTimelineDropPosition(movingClip: TimelineClip, trackId: string, desiredStart: number, duration: number) {
+    return rootCompositionRef.current.placements.some(item => item.id === movingClip.id)
+      ? calculateCanonicalCompositionDropPosition(rootCompositionRef.current, movingClip, trackId, desiredStart, duration)
+      : calculateProjectTimelineDropPosition(projectRef.current, movingClip, trackId, desiredStart, duration);
   }
 
   function moveRootTimelineClip(clipId: string, start: number) {
@@ -2571,7 +2578,7 @@ export default function App() {
   </div>
   <div className="visual-track-lane" data-track-id={track.id} style={{backgroundSize:(5/mediaTimelineDuration*100)+"% 100%",backgroundColor:track.kind==="video"?(track.backgroundTransparent?"transparent":track.backgroundColor??"#111113"):undefined,backgroundImage:track.kind==="video"&&track.backgroundTransparent?"none":undefined}}
    onContextMenu={event=>{event.preventDefault();setTrackContextMenuId(track.id);setTrackContextMenuPosition({x:Math.min(event.clientX,window.innerWidth-190),y:Math.min(event.clientY,window.innerHeight-180)});setSelectedTimelineTrackId(track.id);}} onPointerDown={event=>{if(event.target!==event.currentTarget)return;setSelectedTimelineTrackId(track.id);const rect=event.currentTarget.getBoundingClientRect();const next=Math.max(0,Math.min(mediaTimelineDuration,((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration));if(pendingTimelineClip){placePendingTimelineClip(track,next);return;}playbackTimeRef.current=next;setIsPlaying(false);setEditorTime(next);}}
-   onDragOver={event=>{event.preventDefault();event.dataTransfer.dropEffect="move";const masterShotId=event.dataTransfer.getData("text/dionysus-master-shot") || masterShotDragSourceRef.current;if(masterShotId){const shot=project.shots.find(item=>item.id===masterShotId);if(!shot||track.kind!=="video"){setClipDropPreview(null);return;}const moving=asMasterShotTimelineClip(project,shot),rect=event.currentTarget.getBoundingClientRect(),pointerTime=((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration,rawStart=Math.max(0,pointerTime-moving.duration/2),pos=calculateProjectTimelineDropPosition(project,moving,track.id,rawStart,mediaTimelineDuration);if(!pos){setClipDropPreview(null);return;}setClipDropPreview({trackId:track.id,start:pos.start,duration:moving.duration,name:moving.name,...(pos.snapTime!==undefined?{snapTime:pos.snapTime}:{})});return;}const dragId=event.dataTransfer.getData("text/dionysus-timeline-clip");const moving=clipDragSourceRef.current??(project.timelineClips??[]).find(clip=>clip.id===dragId);if(!moving||!canPlaceTimelineClipOnTrack(moving,track)){setClipDropPreview(null);return;}const rect=event.currentTarget.getBoundingClientRect();const pointerTime=((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration;const rawStart=Math.max(0,pointerTime-moving.duration/2);const pos=calculateProjectTimelineDropPosition(project,moving,track.id,rawStart,mediaTimelineDuration);if(!pos){setClipDropPreview(null);return;}setClipDropPreview({trackId:track.id,start:pos.start,duration:moving.duration,name:moving.name,...(pos.snapTime!==undefined?{snapTime:pos.snapTime}: {})});}}
+   onDragOver={event=>{event.preventDefault();event.dataTransfer.dropEffect="move";const masterShotId=event.dataTransfer.getData("text/dionysus-master-shot") || masterShotDragSourceRef.current;if(masterShotId){const shot=project.shots.find(item=>item.id===masterShotId);if(!shot||track.kind!=="video"){setClipDropPreview(null);return;}const moving=asMasterShotTimelineClip(project,shot),rect=event.currentTarget.getBoundingClientRect(),pointerTime=((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration,rawStart=Math.max(0,pointerTime-moving.duration/2),pos=calculateRootTimelineDropPosition(moving,track.id,rawStart,mediaTimelineDuration);if(!pos){setClipDropPreview(null);return;}setClipDropPreview({trackId:track.id,start:pos.start,duration:moving.duration,name:moving.name,...(pos.snapTime!==undefined?{snapTime:pos.snapTime}:{})});return;}const dragId=event.dataTransfer.getData("text/dionysus-timeline-clip");const moving=clipDragSourceRef.current??(project.timelineClips??[]).find(clip=>clip.id===dragId);if(!moving||!canPlaceTimelineClipOnTrack(moving,track)){setClipDropPreview(null);return;}const rect=event.currentTarget.getBoundingClientRect();const pointerTime=((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration;const rawStart=Math.max(0,pointerTime-moving.duration/2);const pos=calculateProjectTimelineDropPosition(project,moving,track.id,rawStart,mediaTimelineDuration);if(!pos){setClipDropPreview(null);return;}setClipDropPreview({trackId:track.id,start:pos.start,duration:moving.duration,name:moving.name,...(pos.snapTime!==undefined?{snapTime:pos.snapTime}: {})});}}
    onDrop={event=>{
      event.preventDefault();
      const rect=event.currentTarget.getBoundingClientRect();
@@ -2580,7 +2587,7 @@ export default function App() {
         const movingShot=project.shots.find(shot=>shot.id===masterShotId);
         if(!movingShot||track.kind!=="video"){setClipDropPreview(null);return;}
         const fps=Math.max(1,project.frameRate||24),pointerTime=((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration,rawStart=Math.max(0,pointerTime-movingShot.duration/2);
-        const pos=rippleReorderMode?null:(clipDropPreview?.trackId===track.id?{start:clipDropPreview.start,...(clipDropPreview.snapTime!==undefined?{snapTime:clipDropPreview.snapTime}:{})}:calculateProjectTimelineDropPosition(project,asMasterShotTimelineClip(project,movingShot),track.id,rawStart,mediaTimelineDuration));
+        const pos=rippleReorderMode?null:(clipDropPreview?.trackId===track.id?{start:clipDropPreview.start,...(clipDropPreview.snapTime!==undefined?{snapTime:clipDropPreview.snapTime}:{})}:calculateRootTimelineDropPosition(asMasterShotTimelineClip(project,movingShot),track.id,rawStart,mediaTimelineDuration));
         let next:number;
         if(rippleReorderMode){
           const targetCenter=Math.round(pointerTime*fps)/fps;
