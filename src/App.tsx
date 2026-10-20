@@ -17,6 +17,7 @@ import { canPlaceTimelineClipOnTrack } from "./timelinePlacement";
 import { applyClipVersionResizePreview, calculateClipVersionDropPosition, calculateClipVersionResizePreview } from "./nestedTimelinePlacement";
 import {
   applyProjectTimelineClipResize,
+  calculateCanonicalCompositionResizePreview,
   applyCanonicalCompositionInsertion,
   calculateCanonicalCompositionDropPosition,
   calculateCanonicalCompositionInsertionPlan,
@@ -1822,13 +1823,21 @@ export default function App() {
   }
 
   function getMasterShotResizePreview(active: NonNullable<typeof shotResizeRef.current>, clientX: number): ClipResizePreview | null {
-    const current = projectRef.current, shot = current.shots.find(item => item.id === active.id);
+    const current = projectRef.current;
+    const root = rootCompositionRef.current;
+    const canonicalShot = root.placements.find(item => item.id === active.id && item.legacyData.entityType === "master-shot");
+    const extent = canonicalShot
+      ? Math.max(10, root.duration, ...root.placements.map(item => item.start + item.duration))
+      : Math.max(getMasterShotStart(current.shots, active.id) + (current.shots.find(item => item.id === active.id)?.duration ?? 0),
+          ...(current.timelineClips ?? []).map(clip => clip.start + clip.duration), 10);
+    const fps = Math.max(1, canonicalShot ? root.frameRate || 24 : current.frameRate || 24);
+    const delta = Math.round(((clientX - active.x) / Math.max(active.laneWidth, 1)) * extent * fps) / fps;
+    if (canonicalShot) return calculateCanonicalCompositionResizePreview(root, canonicalShot.id, active.edge, delta, extent);
+    const shot = current.shots.find(item => item.id === active.id);
     if (!shot) return null;
-    const fps = Math.max(1, current.frameRate || 24);
-    const duration = Math.max(getMasterTimelineDuration(current.shots), ...(current.timelineClips ?? []).map(clip => clip.start + clip.duration), 10);
-    const delta = Math.round(((clientX - active.x) / Math.max(active.laneWidth, 1)) * duration * fps) / fps;
-    return calculateProjectTimelineClipResizePreview(current, asMasterShotTimelineClip(current, shot), active.edge, delta, duration);
+    return calculateProjectTimelineClipResizePreview(current, asMasterShotTimelineClip(current, shot), active.edge, delta, extent);
   }
+
   function beginMasterShotResize(event: React.PointerEvent<HTMLElement>, shot: Shot, start: number, edge: "left" | "right", trackId: string) {
     event.preventDefault(); event.stopPropagation();
     const lane = event.currentTarget.closest(".visual-track-lane") as HTMLElement | null;
@@ -1853,12 +1862,18 @@ export default function App() {
   }
 
   function getTimelineClipResizePreview(active: NonNullable<typeof clipResizeRef.current>, clientX: number) {
-    const current=projectRef.current,fps=Math.max(1,current.frameRate||24);
-    const duration=Math.max(getMasterTimelineDuration(current.shots),...(current.timelineClips??[]).map(clip=>clip.start+clip.duration),10);
-    const delta=Math.round(((clientX-active.x)/Math.max(active.laneWidth,1))*duration*fps)/fps;
-    const moving=(current.timelineClips??[]).find(clip=>clip.id===active.id);
-    if(!moving)return null;
-    return calculateProjectTimelineClipResizePreview(current,moving,active.edge,delta,duration);
+    const current = projectRef.current;
+    const root = rootCompositionRef.current;
+    const canonical = root.placements.some(item => item.id === active.id);
+    const extent = canonical
+      ? Math.max(10, root.duration, ...root.placements.map(item => item.start + item.duration))
+      : Math.max(getMasterTimelineDuration(current.shots), ...(current.timelineClips ?? []).map(clip => clip.start + clip.duration), 10);
+    const fps = Math.max(1, canonical ? root.frameRate || 24 : current.frameRate || 24);
+    const delta = Math.round(((clientX - active.x) / Math.max(active.laneWidth, 1)) * extent * fps) / fps;
+    if (canonical) return calculateCanonicalCompositionResizePreview(root, active.id, active.edge, delta, extent);
+    const moving = (current.timelineClips ?? []).find(clip => clip.id === active.id);
+    if (!moving) return null;
+    return calculateProjectTimelineClipResizePreview(current, moving, active.edge, delta, extent);
   }
   function removeClipResizeListeners(active: NonNullable<typeof clipResizeRef.current>) {
     if(active.moveListener)window.removeEventListener("pointermove",active.moveListener);

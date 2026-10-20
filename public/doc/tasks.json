@@ -313,8 +313,8 @@
           "id": "DYS-005",
           "title": "Timeline editing and Version management",
           "status": "in_progress",
-          "progress": 92,
-          "summary": "Implement shared root/nested commands for insert, move/snap, conflicts, trim, split, duplicate, delete, linked audio, pins and Undo/Redo.",
+          "progress": 80,
+          "summary": "Continue shared root/nested editing commands and regression coverage. Canonical resize/drop planning and typed-source projection are now guarded against stale schema-1.0 timing, while Storyboard/domain compatibility paths remain open.",
           "doc": "tasks/timeline-and-versions.md",
           "detail": "tasks/timeline-and-versions.html",
           "report": "reports/timeline-and-versions-report.md",
@@ -351,7 +351,9 @@
           "acceptance": [
             "Source-time and conflict tests pass",
             "Root/nested history and audio parity pass",
-            "Pins survive reopen"
+            "Pins survive reopen",
+            "Resize and drag/drop planning use live canonical placement duration, source ranges, adjacency, and root extent when a canonical placement exists.",
+            "Changing a canonical typed source cannot leave stale clip-version or script-version selectors in the schema-1.0 projection."
           ],
           "evidence": [
             "Master Shot uses optional absolute masterStart with legacy sequential fallback; free placement snaps to frames, warns on overlaps, and Ripple Reorder packs the sequence without changing durations.",
@@ -402,7 +404,8 @@
             "Follow-up code on PR #96 head c9c4ed4dd91dcb3bf233258515bd664f9d854589 remaps canonical placement IDs, track IDs, linked audio/placement references, and compatibility projections when duplicating Clip Versions; Shot and Slot duplication now call the same helper. Shot Slot Inspector edits are routed through updateClipVersionLayer so canonical placements and legacy projections stay synchronized. Regression tests were added for canonical and legacy-only duplication, source ranges, track/placement links, pinned nested children and provenance. Exact-head CI 39453725792 was queued at c9c4ed4dd91dcb3bf233258515bd664f9d854589; final validation must be refreshed after documentation commits.",
             "Canonical-first root mutation audit: src/App.tsx routes insert/ripple/trim/move/resize/split/duplicate/delete/unlink/source metadata/mute/preview transform/media import and Master Shot ripple reorder through Composition commands; src/projectTimelinePlacement.ts plans insertion/drop from live root placements.",
             "Regression coverage: src/projectTimelinePlacement.test.ts verifies canonical-first insertion despite stale legacy positions, linked ripple/source-range preservation and trim source-in preservation; src/compositionCommands.test.ts covers Master Shot ripple reorder, linked child-track removal, final video track guard and source/link metadata updates.",
-            "Persistence/import/history regression: src/projectDocument.test.ts verifies validated canonical root import and round-trip; src/App.test.tsx checks canonical insertion save envelope plus Undo/Redo."
+            "Persistence/import/history regression: src/projectDocument.test.ts verifies validated canonical root import and round-trip; src/App.test.tsx checks canonical insertion save envelope plus Undo/Redo.",
+            "PR #96 follow-up: calculateCanonicalCompositionResizePreview and calculateCanonicalCompositionDropPosition use live Composition placement state; projectRootCompositionToLegacy clears obsolete clipVersionId/scriptVersionId selector fields. Added stale-legacy timing/duration regressions and an App-level resize → linked audio → Undo/Redo → save/reopen regression. Exact-head CI is pending; previous run 39481008190 belongs to d6a60062056a920846d62ae03e9f520845ed8d11, not this follow-up."
           ],
           "notes": "App holds the root CompositionDocument as live state/history; existing root geometry/source/link data is no longer overwritten by legacy migration during unrelated domain edits. Root insert/click-to-place ripple/trim, move/drop, resize/adjacent trims, split, duplicate, delete, unlink, mute, clip metadata/source-range edits, track add/update/remove and Master Shot ripple reorder now execute canonical commands first. Root occupancy drives drag/drop and insertion planning, with a guarded compatibility snap fallback. Track removal preserves a video parent when only its linked audio child track is removed and refuses removing the final video track. Validated v2 imports/recovery restore the stored root; schema-1.0 imports still migrate. Focused tests cover canonical insertion/ripple/trim, source ranges/links, track removal, Master Shot reorder, canonical import and App save/Undo/Redo. Exact-final-head CI passed on 37ae7063f1e92018b75cb469ec198f9ba826cfee: 240 tests across 23 files, TypeScript/production build passed, audit 0 vulnerabilities. Keep this task in progress while reviewing compatibility-only paths and follow-up architecture.",
           "description": "Implement shared root/nested commands for insert, move/snap, conflicts, trim, split, duplicate, delete, linked audio, pins and Undo/Redo.",
@@ -564,7 +567,7 @@
           "title": "Unified Composition model and structure-preserving snapshots",
           "status": "in_progress",
           "progress": 82,
-          "summary": "Establish canonical Composition for root/nested timelines, shared commands and independent structure-preserving Project-to-Clip snapshots.",
+          "summary": "Make root and nested Composition documents authoritative for timeline edits, history and persistence; derive deterministic schema-1.0 compatibility projections without stale timing, source-selector, track or link fields overriding canonical data.",
           "doc": "tasks/unified-composition-model.md",
           "detail": "tasks/unified-composition-model.html",
           "report": "reports/unified-composition-model-report.md",
@@ -597,7 +600,9 @@
           "acceptance": [
             "Migration preserves all key relationships",
             "Root/nested semantics align",
-            "Snapshots are independent editable trees"
+            "Snapshots are independent editable trees",
+            "Root resize/drop calculations source timing and duration from live canonical placements.",
+            "Canonical typed-source changes remove obsolete compatibility source-selector IDs; save/reopen and Undo/Redo retain the edited root snapshot."
           ],
           "evidence": [
             "Target contract: docs/architecture/UNIFIED_COMPOSITION_MODEL.md",
@@ -631,7 +636,8 @@
             "Canonical nested Timeline editor follow-up: existing ClipVersion.composition is authoritative for add/delete/move/resize/track-add/inspector updates; legacy layers/tracks are derived projections. Tests include stale projection rejection, source range/transform/mix preservation, typed Shot Slot/script source references, track/placement sync and snapshot edit/reload/reopen isolation. Exact-head CI 39431744433 passed 223 tests/23 files, TypeScript/build and audit 0 vulnerabilities at bbbf18743a66de4ba66c14b9cde98bd9d490238.",
             "Migration hardening: preserve existing canonical Composition documents for Clip and Shot Slot Versions; snapshotter retains pre-embedded nested subtrees. Exact-head CI 39445108693 passed 223 tests/23 files, TypeScript/build and audit 0 vulnerabilities at 920ad9e5f3d0d290182b82e5e772ecbc1abe4694.",
             "Canonical root audit follow-up: src/compositionCommands.ts includes root metadata updates, Master Shot ripple reorder and safe linked-child track removal; src/compositionMigration.ts derives compatibility placement/track metadata from canonical legacyData while preserving canonical timing/source/link state.",
-            "Import boundary: src/projectDocument.ts can return validated canonical root snapshots on request while keeping the legacy read result stable for schema-1.0 callers; App skips legacy track normalization when a validated Composition envelope is available."
+            "Import boundary: src/projectDocument.ts can return validated canonical root snapshots on request while keeping the legacy read result stable for schema-1.0 callers; App skips legacy track normalization when a validated Composition envelope is available.",
+            "Canonical resize/drop planning no longer uses stale legacy duration/source constraints for placements represented in the root. App regression now inspects the saved Composition envelope after resize/Undo/Redo and validates that the state survives reopen. Storyboard materializations and remaining legacy-first domain editors are still open; exact-head CI remains required."
           ],
           "notes": "Root Composition is the live root timeline state with paired history snapshots; schema-1.0 DionysusProject is derived compatibility data. Validated v2 project imports/recovery restore the canonical root rather than re-migrating it, while schema-1.0 files still use deterministic migration. Root mutation paths now include canonical-first insertion/ripple/trim, Master Shot ripple reorder, drag/drop, move/resize/split/duplicate/delete, source/link edits, track add/update/removal, preview transforms and media import. Existing nested Clip Version/Shot Slot snapshots and pinned subtrees remain protected by migration. Exact-final-head CI passed on 37ae7063f1e92018b75cb469ec198f9ba826cfee: 240 tests across 23 files, TypeScript/production build passed, audit 0 vulnerabilities. Keep this checkpoint in progress until remaining compatibility-only paths are reviewed.",
           "description": "Establish canonical Composition for root/nested timelines, shared commands and independent structure-preserving Project-to-Clip snapshots.",

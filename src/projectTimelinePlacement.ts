@@ -61,6 +61,43 @@ export function calculateProjectTimelineDropPosition(
   );
 }
 
+/** Calculate resize previews from the live canonical root, not stale compatibility clips. */
+export function calculateCanonicalCompositionResizePreview(
+  root: CompositionDocument,
+  placementId: string,
+  edge: "left" | "right",
+  deltaSeconds: number,
+  timelineDuration: number,
+): ClipResizePreview | null {
+  if (!root.placements.some(placement => placement.id === placementId)) return null;
+  const tracks = new Map(root.tracks.map(track => [track.id, track]));
+  const clips: TimelineClip[] = root.placements.map(placement => {
+    const track = tracks.get(placement.trackId);
+    const kind: TimelineClip["kind"] = track?.kind === "audio"
+      ? "audio"
+      : track?.kind === "text" ? "text" : "video";
+    return {
+      id: placement.id,
+      name: placement.name,
+      kind,
+      trackId: placement.trackId,
+      start: placement.start,
+      duration: placement.duration,
+      ...(placement.sourceIn !== undefined ? { sourceIn: placement.sourceIn } : {}),
+      ...(placement.sourceOut !== undefined ? { sourceOut: placement.sourceOut } : {}),
+    };
+  });
+  const rootEnd = Math.max(0, ...root.placements.map(placement => placement.start + placement.duration));
+  const extent = Math.max(
+    10,
+    Number.isFinite(timelineDuration) ? timelineDuration : 0,
+    Number.isFinite(root.duration) ? root.duration : 0,
+    rootEnd,
+  );
+  const fps = Math.max(1, Number.isFinite(root.frameRate) ? root.frameRate : 24);
+  return calculateTimelineClipResizePreview(clips, placementId, edge, deltaSeconds, extent, fps);
+}
+
 export function calculateProjectTimelineClipResizePreview(
   project: DionysusProject,
   movingClip: TimelineClip,
@@ -331,22 +368,39 @@ export function calculateCanonicalCompositionDropPosition(
   desiredStart: number,
   timelineDuration: number,
 ): ReturnType<typeof calculateTimelineDropPosition> {
-  const occupancy: TimelineClip[] = root.placements.map(placement => ({
-    id: placement.id,
-    name: placement.name,
-    kind: (placement.legacyData.kind as TimelineClip["kind"] | undefined) ?? "video",
-    trackId: placement.trackId,
-    start: placement.start,
-    duration: placement.duration,
-  }));
+  const movingPlacement = root.placements.find(placement => placement.id === movingClip.id);
+  const duration = movingPlacement?.duration ?? movingClip.duration;
+  const occupancy: TimelineClip[] = root.placements.map(placement => {
+    const track = root.tracks.find(item => item.id === placement.trackId);
+    const kind: TimelineClip["kind"] = track?.kind === "audio"
+      ? "audio"
+      : track?.kind === "text" ? "text" : "video";
+    return {
+      id: placement.id,
+      name: placement.name,
+      kind,
+      trackId: placement.trackId,
+      start: placement.start,
+      duration: placement.duration,
+      ...(placement.sourceIn !== undefined ? { sourceIn: placement.sourceIn } : {}),
+      ...(placement.sourceOut !== undefined ? { sourceOut: placement.sourceOut } : {}),
+    };
+  });
+  const rootEnd = Math.max(0, ...root.placements.map(placement => placement.start + placement.duration));
+  const extent = Math.max(
+    10,
+    Number.isFinite(timelineDuration) ? timelineDuration : 0,
+    Number.isFinite(root.duration) ? root.duration : 0,
+    rootEnd,
+  );
   return calculateTimelineDropPosition(
     occupancy,
     movingClip.id,
     targetTrackId,
     desiredStart,
-    movingClip.duration,
-    timelineDuration,
-    Math.max(1, root.frameRate || 24),
+    duration,
+    extent,
+    Math.max(1, Number.isFinite(root.frameRate) ? root.frameRate : 24),
   );
 }
 

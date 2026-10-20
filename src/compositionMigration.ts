@@ -416,6 +416,7 @@ export function projectRootCompositionToLegacy(
       const sourceRef = placement.source;
       const {
         assetId: _oldAssetId, shotId: _oldShotId, slotId: _oldSlotId,
+        clipVersionId: _oldClipVersionId, scriptVersionId: _oldScriptVersionId,
         sourceIn: _oldSourceIn, sourceOut: _oldSourceOut,
         linkedVideoClipId: _oldLinkedVideoClipId, ...baseFields
       } = base;
@@ -424,6 +425,7 @@ export function projectRootCompositionToLegacy(
       const shotId = sourceRef.type === "shot" ? sourceRef.shotId : undefined;
       const slotId = sourceRef.type === "shot" ? sourceRef.slotId : undefined;
       const clipVersionId = sourceRef.type === "clip" ? sourceRef.versionId : undefined;
+      const scriptVersionId = sourceRef.type === "script" ? sourceRef.scriptVersionId : undefined;
       return {
         ...baseFields,
         id: placement.id,
@@ -435,6 +437,7 @@ export function projectRootCompositionToLegacy(
         ...(shotId ? { shotId } : {}),
         ...(slotId ? { slotId } : {}),
         ...(clipVersionId ? { clipVersionId } : {}),
+        ...(scriptVersionId ? { scriptVersionId } : {}),
         ...(placement.sourceIn !== undefined ? { sourceIn: placement.sourceIn } : {}),
         ...(placement.sourceOut !== undefined ? { sourceOut: placement.sourceOut } : {}),
         ...(placement.linkedToPlacementId ? { linkedVideoClipId: placement.linkedToPlacementId } : {}),

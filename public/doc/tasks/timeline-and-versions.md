@@ -164,3 +164,12 @@ Exact-head CI #1404 passed on `90949d515d30827502e61fd4e9b1de5235037382`: 230 te
 - Validated v2 import/recovery restores the stored root when the deterministic compatibility projection matches; schema-1.0 import still uses migration. Regression coverage also includes canonical save/reopen and App Undo/Redo.
 - Exact-head CI [#39470992130](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39470992130) passed on `37ae7063f1e92018b75cb469ec198f9ba826cfee`: 240 tests across 23 files, TypeScript/production build passed, dependency audit 0 vulnerabilities. Docs are being refreshed in a single commit, so rerun CI on the resulting final SHA.
 - DYS-005/DYS-014 remain in progress while compatibility-only Storyboard materializations and remaining domain-editor boundaries are reviewed. PR #96 remains Draft/unmerged. No browser smoke tests.
+
+
+## Canonical resize/drop planner follow-up — 2026-10-20
+
+- Root clip resize previews now derive the moving placement, source in-point, adjacent-placement timing and trim candidates from the live root `CompositionDocument`. Canonical drag/drop also uses the root placement's duration and root extent rather than stale legacy duration/timeline bounds.
+- Compatibility projection now clears legacy `clipVersionId` and `scriptVersionId` values when the canonical typed source no longer carries them, and re-emits only the selector appropriate to a canonical Clip or Script source.
+- Added stale-projection regressions for resize/adjacent trim planning and drag/drop duration, a source-selector projection regression, and an App-level resize → linked audio → Undo/Redo → saved Composition envelope → reopen regression.
+- Previous-head CI [#39481008190](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39481008190) passed on `d6a60062056a920846d62ae03e9f520845ed8d11`; it is **not** evidence for this follow-up commit. Run the repository's regular CI on the exact resulting head before treating this checkpoint as verified.
+- Remaining gaps: some Storyboard materializations are compatibility-only and are not canonical placements; Shot/Slot and other domain editors still mutate schema-1.0 project data before reconciliation; broader root track-reorder and malformed-snapshot recovery behavior need explicit end-to-end coverage. Keep DYS-005/DYS-014 `in_progress`. No browser smoke tests; PR #96 stays Draft and unmerged.

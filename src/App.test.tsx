@@ -1378,6 +1378,27 @@ describe("Integrated timeline editor", () => {
     expect((persistedProject().timelineClips??[]).find(clip=>clip.linkedVideoClipId===after[1].id)).toMatchObject({start:after[1].start,duration:after[1].duration});
     click(buttonsNamed("Undo").find(button=>!button.disabled)!);await flushEffects();expect(videos().map(clip=>({id:clip.id,start:clip.start,duration:clip.duration}))).toEqual(original);
     click(buttonsNamed("Redo").find(button=>!button.disabled)!);await flushEffects();expect(videos()[0].duration).toBeGreaterThan(original[0].duration);expect(videos()[1].duration).toBeLessThan(original[1].duration);
+    const afterRedo = videos();
+    const saved = JSON.parse(localStorage.getItem("dionysus.composition.v2") ?? "null") as {
+      compositionModel?: { rootComposition?: { placements?: Array<{ id: string; start: number; duration: number; linkedToPlacementId?: string }> } };
+    };
+    const savedPlacements = saved.compositionModel?.rootComposition?.placements ?? [];
+    expect(savedPlacements.find(item => item.id === afterRedo[0].id)).toMatchObject({ start: afterRedo[0].start, duration: afterRedo[0].duration });
+    expect(savedPlacements.find(item => item.id === afterRedo[1].id)).toMatchObject({ start: afterRedo[1].start, duration: afterRedo[1].duration });
+    const afterRedoAudio = (persistedProject().timelineClips ?? []).find(clip => clip.linkedVideoClipId === afterRedo[1].id)!;
+    expect(savedPlacements.find(item => item.id === afterRedoAudio.id)).toMatchObject({
+      start: afterRedoAudio.start, duration: afterRedoAudio.duration, linkedToPlacementId: afterRedo[1].id,
+    });
+
+    act(() => root.unmount()); root = createRoot(container); act(() => root.render(<App />)); await flushEffects();
+    const reopened = persistedProject();
+    const reopenedVideos = (reopened.timelineClips ?? []).filter(clip => clip.kind === "video" && clip.id.startsWith("test-video-")).sort((a, b) => a.start - b.start);
+    expect(reopenedVideos.map(clip => ({ id: clip.id, start: clip.start, duration: clip.duration }))).toEqual(
+      afterRedo.map(clip => ({ id: clip.id, start: clip.start, duration: clip.duration })),
+    );
+    const reopenedEnvelope = JSON.parse(localStorage.getItem("dionysus.composition.v2") ?? "null") as typeof saved;
+    expect(reopenedEnvelope.compositionModel?.rootComposition?.placements?.find(item => item.id === afterRedo[1].id))
+      .toMatchObject({ start: afterRedo[1].start, duration: afterRedo[1].duration });
   });
 
   it("creates an empty Clip Asset from the single Asset menu and opens its Timeline", async () => {

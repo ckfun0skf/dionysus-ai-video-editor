@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { sampleProject } from "./sampleProject";
-import { migrateLegacyProjectToComposition } from "./compositionMigration";
+import { migrateLegacyProjectToComposition, projectRootCompositionToLegacy } from "./compositionMigration";
+import { updateCompositionPlacement } from "./compositionCommands";
 
 describe("migrateLegacyProjectToComposition", () => {
   it("preserves root track order, placement IDs, timing, source ranges and linked audio", () => {
@@ -29,6 +30,37 @@ describe("migrateLegacyProjectToComposition", () => {
       sourceIn: 1, sourceOut: 7,
       legacyData: { volume: 0.4, fadeIn: 0.5, fadeOut: 1 },
     });
+  });
+
+  it("clears stale legacy source-selector IDs when projecting a changed canonical typed source", () => {
+    const project = structuredClone(sampleProject);
+    project.shots = [];
+    project.assets.push(
+      { id: "legacy-source", name: "Legacy source", kind: "video", path: "idb://legacy" },
+      { id: "canonical-source", name: "Canonical source", kind: "video", path: "idb://canonical" },
+    );
+    const track = project.tracks.find(item => item.kind === "video")!;
+    project.timelineClips = [{
+      id: "source-placement", name: "Source placement", kind: "video", trackId: track.id,
+      start: 0, duration: 4, assetId: "legacy-source",
+      clipVersionId: "stale-clip-version", scriptVersionId: "stale-script-version",
+    }];
+    const root = migrateLegacyProjectToComposition(project).rootComposition;
+    const assetChanged = updateCompositionPlacement(root, "source-placement", {
+      source: { type: "asset", assetId: "canonical-source" },
+    });
+    const assetProjection = projectRootCompositionToLegacy(project, assetChanged).timelineClips!.find(clip => clip.id === "source-placement")!;
+    expect(assetProjection).toMatchObject({ assetId: "canonical-source" });
+    expect(assetProjection).not.toHaveProperty("clipVersionId");
+    expect(assetProjection).not.toHaveProperty("scriptVersionId");
+
+    const scriptChanged = updateCompositionPlacement(root, "source-placement", {
+      source: { type: "script", scriptVersionId: "canonical-script-version" },
+    });
+    const scriptProjection = projectRootCompositionToLegacy(project, scriptChanged).timelineClips!.find(clip => clip.id === "source-placement")!;
+    expect(scriptProjection).not.toHaveProperty("assetId");
+    expect(scriptProjection).not.toHaveProperty("clipVersionId");
+    expect(scriptProjection).toMatchObject({ scriptVersionId: "canonical-script-version" });
   });
 
   it("pins Shot Slot and Clip Asset versions instead of resolving to a mutable latest version", () => {
