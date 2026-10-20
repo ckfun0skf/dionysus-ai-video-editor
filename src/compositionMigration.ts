@@ -39,6 +39,35 @@ function sourceForTimelineClip(project: DionysusProject, clip: TimelineClip): Co
   return { type: "none" };
 }
 
+/** Build one new canonical placement from domain metadata without re-migrating existing root placements. */
+export function createRootCompositionPlacementForTimelineClip(
+  project: DionysusProject,
+  root: CompositionDocument,
+  clip: TimelineClip,
+): CompositionPlacement {
+  const track = root.tracks.find(item => item.id === clip.trackId);
+  if (!track) throw new Error("Cannot insert a placement on a missing Composition track.");
+  const expectedKind = clip.kind === "audio" ? "audio" : clip.kind === "text" ? "text" : "video";
+  if (track.kind !== expectedKind) throw new Error("This clip type cannot be placed on the selected Composition track.");
+  const linkedId = clip.linkedVideoClipId;
+  if (linkedId && !root.placements.some(item => item.id === linkedId)) {
+    throw new Error("The linked video placement must exist in the canonical Composition before its audio can be inserted.");
+  }
+  return {
+    id: clip.id,
+    name: clip.name,
+    trackId: clip.trackId,
+    start: clip.start,
+    duration: clip.duration,
+    order: root.placements.filter(item => item.trackId === clip.trackId).reduce((max, item) => Math.max(max, item.order), -1) + 1,
+    source: sourceForTimelineClip(project, clip),
+    ...(clip.sourceIn !== undefined ? { sourceIn: clip.sourceIn } : {}),
+    ...(clip.sourceOut !== undefined ? { sourceOut: clip.sourceOut } : {}),
+    ...(linkedId ? { linkedToPlacementId: linkedId } : {}),
+    legacyData: record(clip),
+  };
+}
+
 function sourceForLayer(project: DionysusProject, layer: CompositionLayer): CompositionSourceReference {
   if (layer.kind === "composition" && layer.childCompositionId) {
     const asset = findAsset(project, layer.childCompositionId);
