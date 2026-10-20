@@ -1,3 +1,11 @@
+## Follow-up checkpoint — 2026-10-20 (PR #96 root Composition mutation audit)
+
+- Starting code head: `63d52bf93461ed88ce30f9612f1a44386504fcda`. Root live-state remains a known architecture gap; this checkpoint does not claim it is complete.
+- `src/projectTimelinePlacement.ts`: Master Shot move now runs the shared immutable `moveCompositionPlacementToTrack` command against a migrated root Composition, then projects the committed start/duration/track back to the schema-1.0 Shot and keeps materialized Storyboard placements aligned. A guarded legacy fallback remains for malformed/unrepresentable projects.
+- Exact code-head CI `39459846610` passed on `ef702113c32d11b693794c6de2b7661ad5c91fca`; full validation must be rechecked on the final docs head.
+- Critical remaining work: `App.tsx` still owns `DionysusProject` as live state and root helpers still re-migrate it into Composition for each command. The root Composition is not yet the canonical live/history state, and V2 persistence still verifies a projection generated from the legacy project. Next refactor must move root edits/history/persistence to a live `CompositionDocument` and derive deterministic schema-1.0 compatibility projections from it. Add stale-projection rejection/repair, migration, nested pins and true App save/reopen/Undo/Redo regressions.
+- PR #96 stays Draft and unmerged; do not push to `main`; no browser smoke tests.
+
 # Agent Handoff Guide
 
 This file is the starting point for any agent continuing Dionysus. Keep project knowledge in Git; do not rely on chat history as the source of truth.
