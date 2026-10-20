@@ -154,3 +154,13 @@ Exact-head CI #1404 passed on `90949d515d30827502e61fd4e9b1de5235037382`: 230 te
 - Validated v2 import/recovery restores the saved canonical root when its compatibility projection matches; v2 tracks are not normalized a second time through the legacy migration path. Schema-1.0 imports remain supported.
 - Tests cover stale legacy timing vs canonical occupancy, insertion/ripple/trim source-range preservation, Master Shot ripple reorder, track removal edge cases, canonical import, and App persistence/Undo/Redo.
 - Exact-head CI must be checked on the final docs/code SHA. DYS-005/DYS-014 remain in progress pending green CI and remaining compatibility-only path review. No browser smoke tests; PR #96 remains Draft/unmerged.
+
+
+## Canonical-first mutation audit — verified 2026-10-20
+
+- Canonical root Composition drives pending insertion planning, conflict ripple/trim, drag/drop occupancy and Master Shot ripple reorder. Ripple updates linked placement groups through shared commands and preserves source ranges.
+- Root clip metadata/source edits, mute/unlink, move, resize/trim, split, duplicate, delete, media import and track add/update/removal now route through canonical commands first. Compatibility reconciliation does not overwrite existing canonical timing, track, source or link state from a stale migration.
+- Track-removal regression coverage includes final-video-track protection, Master Shot fallback requirements and deleting a linked audio child without deleting its parent video.
+- Validated v2 import/recovery restores the stored root when the deterministic compatibility projection matches; schema-1.0 import still uses migration. Regression coverage also includes canonical save/reopen and App Undo/Redo.
+- Exact-head CI [#39470992130](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39470992130) passed on `37ae7063f1e92018b75cb469ec198f9ba826cfee`: 240 tests across 23 files, TypeScript/production build passed, dependency audit 0 vulnerabilities. Docs are being refreshed in a single commit, so rerun CI on the resulting final SHA.
+- DYS-005/DYS-014 remain in progress while compatibility-only Storyboard materializations and remaining domain-editor boundaries are reviewed. PR #96 remains Draft/unmerged. No browser smoke tests.
