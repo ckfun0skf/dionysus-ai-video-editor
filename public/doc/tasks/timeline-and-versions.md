@@ -57,7 +57,12 @@ Follow-up branch `feat/nested-composition-command-integration` routes nested `ad
 ### Remaining acceptance gates
 
 - Project-aware Master Timeline insertion/conflict resolution must dispatch through the shared Composition boundary while preserving snap, overlap, ripple/trim and auto-extend behavior.
-- Nested resize/source-range/adjacent-trim operations need a shared command adapter plus regression tests for linked audio and frame rounding.
-- Verify atomic Undo/Redo for root and nested interactions and persistence after export/reopen.
+- Verify atomic Undo/Redo parity for root and nested interactions and persistence after export/reopen.
 - DYS-014 stays in progress until the Save-as-Clip UI produces an independent, structurally editable snapshot from the active authoritative state. PR #88 is helper-only; Draft PR #89 has a failed exact-head TypeScript/build and must not be merged as-is.
 - Ask the owner for visual acceptance only after merge and a verified GitHub Pages deployment. No browser smoke tests.
+
+## Nested resize command follow-up — 2026-10-20
+
+Branch `feat/dys005-nested-resize-composition-command` adds `applyCompositionResizePreview()` to the immutable Composition command layer. The nested resize adapter now commits its already frame-snapped primary resize and any adjacent trim through that command, instead of directly transforming legacy layer arrays. Linked descendants receive the root timing and source range in the same immutable transaction, and legacy fields remain synchronized.
+
+Focused local validation passed 18 tests in `src/compositionCommands.test.ts`, `src/nestedTimelinePlacement.test.ts`, and `src/clipVersionTracks.test.ts`; full local validation passed 214 tests across 22 files, TypeScript, and the Vite production build. `npm audit` is unavailable because this repository has no lockfile. This is not a PR CI or deployment result. DYS-005 remains in progress: Master insertion/conflict dispatch, root/nested history parity, canonical persistence, and structure-preserving Save-as-Clip are still open. No browser smoke tests were run.
