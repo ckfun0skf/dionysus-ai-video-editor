@@ -1238,13 +1238,12 @@ export default function App() {
     return selectedNewId;
   }
 
-  function duplicateRootTimelineClip(clip: TimelineClip) {
+  function duplicateRootTimelineClip(clip: TimelineClip, selectedNewId = id("timeline-clip")): string {
     const root = rootCompositionRef.current;
     if (!root.placements.some(item => item.id === clip.id)) {
-      const newId = id("timeline-clip");
-      change(project => ({ ...project, timelineClips: duplicateTimelineClip({ tracks: project.tracks, timelineClips: project.timelineClips ?? [] }, clip.id, { newClipId: newId, start: clip.start + clip.duration }).timelineClips }));
-      setSelectedTimelineClipId(newId);
-      return;
+      change(project => ({ ...project, timelineClips: duplicateTimelineClip({ tracks: project.tracks, timelineClips: project.timelineClips ?? [] }, clip.id, { newClipId: selectedNewId, start: clip.start + clip.duration }).timelineClips }));
+      setSelectedTimelineClipId(selectedNewId);
+      return selectedNewId;
     }
     const byId = new Map(root.placements.map(item => [item.id, item]));
     let groupRoot = byId.get(clip.id)!;
@@ -1264,10 +1263,11 @@ export default function App() {
         }
       }
     }
-    const newPlacementIds = Object.fromEntries([...groupIds].map(oldId => [oldId, id("timeline-clip")]));
+    const newPlacementIds = Object.fromEntries([...groupIds].map(oldId => [oldId, oldId === clip.id ? selectedNewId : id("timeline-clip")]));
     const next = duplicateCompositionPlacement(root, clip.id, { newPlacementIds, start: clip.start + clip.duration });
     changeRootComposition(() => next);
     setSelectedTimelineClipId(newPlacementIds[clip.id]);
+    return newPlacementIds[clip.id];
   }
   function syncStoryboardToTimeline() {
     const videoTrack = project.tracks.find(track => track.kind === "video");
@@ -2526,7 +2526,7 @@ export default function App() {
     <button type="button" aria-label="Duplicate selected clip" onClick={() => {
       const newClipId = id("timeline-clip");
       try {
-        duplicateRootTimelineClip(mobileClip);
+        duplicateRootTimelineClip(mobileClip,newClipId);
         setSelectedTimelineClipId(newClipId);
         setNotice("Clip duplicated. Use Undo to restore.");
       } catch (error) { setNotice(error instanceof Error ? error.message : "Could not duplicate the clip at this position."); }
@@ -2943,7 +2943,7 @@ export default function App() {
       <button onClick={()=>{const fps=Math.max(1,project.frameRate||24),frame=1/fps,splitAt=Math.round((clip.start+clip.duration/2)*fps)/fps;if(clip.duration<frame*2)return;const newClipId=id("timeline-clip");try{splitRootTimelineClip(clip.id,Math.min(clip.start+clip.duration-frame,Math.max(clip.start+frame,splitAt)),newClipId);setSelectedTimelineClipId(newClipId);setTimelineClipSettingsId(newClipId);}catch(error){setNotice(error instanceof Error?error.message:"Split failed.");}}}>Split at midpoint</button>
       <button disabled={Math.round(editorTime*Math.max(1,project.frameRate||24))/Math.max(1,project.frameRate||24)<=clip.start||Math.round(editorTime*Math.max(1,project.frameRate||24))/Math.max(1,project.frameRate||24)>=clip.start+clip.duration} onClick={()=>{const fps=Math.max(1,project.frameRate||24),splitAt=Math.round(editorTime*fps)/fps;if(splitAt<=clip.start||splitAt>=clip.start+clip.duration)return;const newClipId=id("timeline-clip");const linked=(project.timelineClips??[]).filter(item=>item.kind==="audio"&&item.linkedVideoClipId===clip.id);try{splitRootTimelineClip(clip.id,splitAt,newClipId);setSelectedTimelineClipId(newClipId);setTimelineClipSettingsId(newClipId);}catch(error){setNotice(error instanceof Error?error.message:"Split failed.");}}}>Split at playhead</button>
 
-      <button onClick={()=>{const newClipId=id("timeline-clip");try{duplicateRootTimelineClip(clip);setSelectedTimelineClipId(newClipId);setTimelineClipSettingsId(newClipId);}catch(error){setNotice(error instanceof Error?error.message:"Duplicate failed.");}}}>Duplicate clip</button>
+      <button onClick={()=>{const newClipId=id("timeline-clip");try{duplicateRootTimelineClip(clip,newClipId);setSelectedTimelineClipId(newClipId);setTimelineClipSettingsId(newClipId);}catch(error){setNotice(error instanceof Error?error.message:"Duplicate failed.");}}}>Duplicate clip</button>
       {clip.kind==="audio"&&clip.linkedVideoClipId&&<button onClick={()=>{try{unlinkRootTimelineAudio(clip.id);}catch(error){setNotice(error instanceof Error?error.message:"Unlink failed.");}}}>Unlink audio</button>}
     </div>
     
