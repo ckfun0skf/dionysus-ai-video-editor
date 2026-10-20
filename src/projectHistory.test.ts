@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { recordProjectChange, redoProjectChange, undoProjectChange } from "./projectHistory";
-import { addVideoClip, deleteTimelineClip, duplicateTimelineClip, moveTimelineClip, trimTimelineClip, unlinkTimelineAudio } from "./timelineOperations";
-import type { TimelineTrack } from "./types";
+import { addVideoClip, deleteTimelineClip, duplicateTimelineClip, moveTimelineClip, splitTimelineClip, trimTimelineClip, unlinkTimelineAudio } from "./timelineOperations";
+import { addClipVersionLayer, updateClipVersionLayer } from "./clipVersionTracks";
+import { sampleProject } from "./sampleProject";
+import type { TimelineClip, TimelineTrack } from "./types";
 
 describe("project history", () => {
   it("undoes and redoes timeline snapshots including linked audio state", () => {
@@ -61,6 +63,45 @@ describe("project history", () => {
     expect(redoDelete.current).toEqual(afterDelete.current);
   });
 
+  it("undoes and redoes canonical nested Clip Version edits as full project snapshots", () => {
+    const version = addClipVersionLayer(
+      structuredClone(sampleProject.shots[0].slots[0].versions[0]),
+      {
+        id: "history-nested-layer",
+        name: "Nested layer",
+        kind: "video",
+        start: 1,
+        duration: 3,
+        assetId: "source-asset",
+        sourceIn: 2,
+        sourceOut: 5,
+        x: 10,
+        volume: 0.4,
+      },
+    );
+    const original = { id: "project-history", clipVersion: version };
+    const editedVersion = updateClipVersionLayer(version, "history-nested-layer", {
+      start: 4,
+      sourceIn: 5,
+      sourceOut: 8,
+      x: 35,
+      volume: 0.8,
+    });
+    const afterEdit = { ...original, clipVersion: editedVersion };
+    const history = recordProjectChange({ current: original, undo: [], redo: [] }, afterEdit);
+
+    const undone = undoProjectChange(history);
+    expect(undone.current).toEqual(original);
+    const redone = redoProjectChange(undone);
+    expect(redone.current).toEqual(afterEdit);
+    expect(redone.current.clipVersion.composition?.placements.find(item => item.id === "history-nested-layer")).toMatchObject({
+      start: 4,
+      sourceIn: 5,
+      sourceOut: 8,
+      legacyData: { x: 35, volume: 0.8 },
+    });
+  });
+
   it("clears redo after undo when a new timeline operation branches history", () => {
     const tracks: TimelineTrack[] = [
       { id: "video-track", name: "Video", kind: "video" },
@@ -96,4 +137,40 @@ describe("project history", () => {
     expect(undoProjectChange(start)).toBe(start);
     expect(redoProjectChange(start)).toBe(start);
   });
+  it("undoes and redoes a linked video split as one atomic project-history entry", () => {
+    const tracks: TimelineTrack[] = [
+      { id: "video-track", name: "Video", kind: "video" },
+      { id: "audio-track", name: "Audio", kind: "audio" },
+    ];
+    const initial: { id: string; tracks: TimelineTrack[]; timelineClips: TimelineClip[] } = {
+      id: "project",
+      tracks,
+      timelineClips: [
+        { id: "video", name: "Interview", kind: "video" as const, trackId: "video-track", start: 2, duration: 8, sourceIn: 4, sourceOut: 12 },
+        { id: "audio", name: "Interview audio", kind: "audio" as const, trackId: "audio-track", start: 2, duration: 8, sourceIn: 4, sourceOut: 12, linkedVideoClipId: "video" },
+      ],
+    };
+    const split = splitTimelineClip(initial, "video", 6, {
+      newClipId: "video-right",
+      newLinkedAudioClipIds: ["audio-right"],
+    });
+    const afterSplit = recordProjectChange({ current: initial, undo: [], redo: [] }, split);
+
+    expect(afterSplit.undo).toHaveLength(1);
+    expect(afterSplit.current.timelineClips).toHaveLength(4);
+    expect(afterSplit.current.timelineClips).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "video", start: 2, duration: 4, sourceIn: 4, sourceOut: 8 }),
+      expect.objectContaining({ id: "video-right", start: 6, duration: 4, sourceIn: 8, sourceOut: 12 }),
+      expect.objectContaining({ id: "audio", start: 2, duration: 4, sourceIn: 4, sourceOut: 8, linkedVideoClipId: "video" }),
+      expect.objectContaining({ id: "audio-right", start: 6, duration: 4, sourceIn: 8, sourceOut: 12, linkedVideoClipId: "video-right" }),
+    ]));
+
+    const undone = undoProjectChange(afterSplit);
+    expect(undone.current).toEqual(initial);
+    expect(undone.redo).toHaveLength(1);
+    const redone = redoProjectChange(undone);
+    expect(redone.current).toEqual(afterSplit.current);
+    expect(redone.undo).toHaveLength(1);
+  });
+
 });

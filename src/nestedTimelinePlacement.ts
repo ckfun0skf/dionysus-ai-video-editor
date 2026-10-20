@@ -1,6 +1,6 @@
 import type { ClipVersion, CompositionLayer, TimelineClip } from "./types";
-import { normalizeClipVersionTracks } from "./clipVersionTracks";
-import { applyTimelineClipResize, calculateTimelineClipResizePreview, type ClipResizePreview, type ResizeEdge } from "./timelineResize";
+import { applyClipVersionResizePreview as applyCompositionResizePreview, normalizeClipVersionTracks } from "./clipVersionTracks";
+import { calculateTimelineClipResizePreview, type ClipResizePreview, type ResizeEdge } from "./timelineResize";
 import { calculateTimelineDropPosition, canPlaceTimelineClipOnTrack, type TimelineDropPosition } from "./timelinePlacement";
 
 /** Convert nested Composition layers into the same occupancy contract used by the Master Timeline. */
@@ -61,22 +61,6 @@ export function calculateClipVersionResizePreview(
 export function applyClipVersionResizePreview(
   version: ClipVersion,
   preview: ClipResizePreview,
-  fps = 24,
 ): ClipVersion {
-  const resized = applyTimelineClipResize(clipVersionLayersAsTimelineClips(version), preview, fps);
-  const byId = new Map(resized.map(clip => [clip.id, clip]));
-  return {
-    ...version,
-    layers: version.layers.map(layer => {
-      const clip = byId.get(layer.id);
-      if (!clip) return layer;
-      return {
-        ...layer,
-        start: clip.start,
-        duration: clip.duration,
-        ...(clip.sourceIn !== undefined ? { sourceIn: clip.sourceIn } : {}),
-        ...(clip.sourceOut !== undefined ? { sourceOut: clip.sourceOut } : {}),
-      };
-    }),
-  };
+  return applyCompositionResizePreview(version, preview);
 }

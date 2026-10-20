@@ -32,9 +32,21 @@ describe("nested Clip Timeline placement", () => {
     const doc = version([source, neighbor]);
     const preview = calculateClipVersionResizePreview(doc, "left", "right", 3, 12, 24)!;
     expect(preview.trims).toEqual([{ id: "right", start: 8, duration: 1, edge: "left" }]);
-    const updated = applyClipVersionResizePreview(doc, preview, 24);
+    const updated = applyClipVersionResizePreview(doc, preview);
     expect(updated.layers.find(item => item.id === "left")).toMatchObject({ start: 0, duration: 8, assetId: "asset-left", sourceOut: 8 });
     expect(updated.layers.find(item => item.id === "right")).toMatchObject({ start: 8, duration: 1, assetId: "asset-right", sourceIn: 13, sourceOut: 14 });
     expect(doc.layers).toEqual([source, neighbor]);
+  });
+
+  it("keeps linked audio aligned when a nested resize trims its video neighbor", () => {
+    const doc = version([
+      { ...layer("left", "v1", 0, 5), sourceIn: 0, sourceOut: 5 },
+      { ...layer("right", "v1", 5, 4), sourceIn: 10, sourceOut: 14 },
+      { ...layer("right-audio", "a1", 5, 4, "audio"), sourceIn: 10, sourceOut: 14, linkedVideoClipId: "right" } as CompositionLayer,
+    ]);
+    const preview = calculateClipVersionResizePreview(doc, "left", "right", 3, 12, 24)!;
+    const updated = applyClipVersionResizePreview(doc, preview);
+    expect(updated.layers.find(item => item.id === "right")).toMatchObject({ start: 8, duration: 1, sourceIn: 13, sourceOut: 14 });
+    expect(updated.layers.find(item => item.id === "right-audio")).toMatchObject({ start: 8, duration: 1, sourceIn: 13, sourceOut: 14, linkedVideoClipId: "right" });
   });
 });

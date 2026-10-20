@@ -18,6 +18,19 @@ export interface DuplicateCompositionPlacementInput {
   start: number;
 }
 
+export type CompositionResizeEdge = "left" | "right";
+
+export interface CompositionPlacementResize {
+  id: string;
+  start: number;
+  duration: number;
+  edge: CompositionResizeEdge;
+}
+
+export interface CompositionResizePreview extends CompositionPlacementResize {
+  trims: CompositionPlacementResize[];
+}
+
 function clone<T>(value: T): T {
   return structuredClone(value);
 }
@@ -53,6 +66,18 @@ function syncLegacyPlacement(placement: CompositionPlacement): CompositionPlacem
 
 /** Validate invariants shared by the root and every nested Composition before applying an edit. */
 export function assertValidCompositionDocument(document: CompositionDocument): void {
+  assertValidCompositionDocumentTree(document, new Set<CompositionDocument>());
+}
+
+function assertValidCompositionDocumentTree(document: CompositionDocument, ancestors: Set<CompositionDocument>): void {
+  if (!document || typeof document !== "object" || Array.isArray(document)) {
+    throw new Error("Composition snapshots must be valid document objects.");
+  }
+  if (ancestors.has(document)) throw new Error("Nested Composition snapshots must not contain cycles.");
+  ancestors.add(document);
+  if (!Array.isArray(document.tracks) || !Array.isArray(document.placements)) {
+    throw new Error("Composition tracks and placements must be arrays.");
+  }
   const trackIds = new Set<string>();
   for (const track of document.tracks) {
     if (!track.id.trim() || trackIds.has(track.id)) {
@@ -106,6 +131,34 @@ export function assertValidCompositionDocument(document: CompositionDocument): v
       throw new Error("Composition placement links must not contain cycles.");
     }
   }
+
+  if (document.provenance !== undefined) {
+    const provenance = document.provenance as unknown as Record<string, unknown>;
+    if (!provenance || typeof provenance !== "object" ||
+        (provenance.kind !== "master-timeline-snapshot" && provenance.kind !== "derived-clip-version") ||
+        typeof provenance.createdAt !== "string" || !provenance.createdAt.trim()) {
+      throw new Error("Composition provenance is malformed.");
+    }
+    const pinnedVersions = provenance.pinnedVersions;
+    if (!Array.isArray(pinnedVersions)) throw new Error("Composition provenance pinned versions are malformed.");
+    for (const pinned of pinnedVersions as unknown[]) {
+      if (!pinned || typeof pinned !== "object" || Array.isArray(pinned)) {
+        throw new Error("Composition provenance contains an invalid pinned version reference.");
+      }
+      const pinnedRecord = pinned as Record<string, unknown>;
+      if (typeof pinnedRecord.versionId !== "string" || !pinnedRecord.versionId.trim() ||
+          ["assetId", "shotId", "slotId"].some(key =>
+            pinnedRecord[key] !== undefined && typeof pinnedRecord[key] !== "string")) {
+        throw new Error("Composition provenance contains an invalid pinned version reference.");
+      }
+    }
+  }
+
+  if (document.nestedCompositions !== undefined) {
+    if (!Array.isArray(document.nestedCompositions)) throw new Error("Nested Composition snapshots must be an array.");
+    for (const nested of document.nestedCompositions) assertValidCompositionDocumentTree(nested, ancestors);
+  }
+  ancestors.delete(document);
 }
 
 function getLinkedRoot(document: CompositionDocument, placement: CompositionPlacement): CompositionPlacement {
@@ -209,6 +262,22 @@ export function insertCompositionPlacement(
   return next;
 }
 
+/** Update placement metadata without rebuilding the root document from a legacy projection. */
+export function updateCompositionPlacement(
+  document: CompositionDocument,
+  placementId: string,
+  patch: Partial<Omit<CompositionPlacement, "id" | "order">>,
+): CompositionDocument {
+  assertValidCompositionDocument(document);
+  const current = requirePlacement(document, placementId);
+  const next = clone(document);
+  const updated = syncLegacyPlacement({ ...current, ...clone(patch), id: current.id, order: current.order });
+  next.placements = next.placements.map(placement => placement.id === placementId ? updated : placement);
+  extendCompositionDuration(next);
+  assertValidCompositionDocument(next);
+  return next;
+}
+
 /** Moves the selected placement and its linked group as one atomic edit. */
 export function moveCompositionPlacement(
   document: CompositionDocument,
@@ -271,18 +340,89 @@ export function trimCompositionPlacement(
   const selected = requirePlacement(document, placementId);
   const root = getLinkedRoot(document, selected);
   const group = [root, ...getDescendants(document, root.id)];
-  const hasSourceRange = group.some(item => item.sourceIn !== undefined || item.sourceOut !== undefined);
-  const fallbackSourceIn = root.sourceIn ?? group.find(item => item.sourceIn !== undefined)?.sourceIn ?? 0;
   const groupIds = new Set(group.map(item => item.id));
   const next = clone(document);
   next.placements = next.placements.map(placement => {
     if (!groupIds.has(placement.id)) return placement;
-    if (!hasSourceRange) return syncLegacyPlacement({ ...placement, duration });
+    // Explicit child ranges take priority. Legacy linked audio with no trim metadata inherits
+    // the root source range, preserving pre-canonical split/trim behavior.
+    const sourcePlacement = placement.sourceIn === undefined && placement.sourceOut === undefined && placement.linkedToPlacementId
+      ? root
+      : placement;
+    const source = resizedSourceRange(sourcePlacement, {
+      id: placement.id, start: placement.start, duration, edge: "right",
+    });
+    return syncLegacyPlacement({ ...placement, duration, ...source });
+  });
+  extendCompositionDuration(next);
+  assertValidCompositionDocument(next);
+  return next;
+}
+
+function resizedSourceRange(
+  placement: CompositionPlacement,
+  resize: CompositionPlacementResize,
+): Pick<CompositionPlacement, "sourceIn" | "sourceOut"> {
+  if (placement.sourceIn === undefined && placement.sourceOut === undefined) return {};
+  const sourceIn = resize.edge === "left"
+    ? Math.max(0, (placement.sourceIn ?? 0) + (resize.start - placement.start))
+    : placement.sourceIn ?? 0;
+  const sourceOut = resize.edge === "right"
+    ? sourceIn + resize.duration
+    : placement.sourceOut ?? sourceIn + placement.duration;
+  return { sourceIn, sourceOut };
+}
+
+/**
+ * Applies a frame-snapped resize preview and its adjacent trims as one immutable command.
+ * Linked placements receive the same timeline start/duration, while each retains and adjusts
+ * its own source range; independently sourced linked audio must not inherit the video's in-point.
+ */
+export function applyCompositionResizePreview(
+  document: CompositionDocument,
+  preview: CompositionResizePreview,
+): CompositionDocument {
+  assertValidCompositionDocument(document);
+  const requested = [preview, ...preview.trims];
+  const rootUpdates = new Map<string, CompositionPlacementResize>();
+
+  for (const resize of requested) {
+    if (!Number.isFinite(resize.start) || resize.start < 0 ||
+        !Number.isFinite(resize.duration) || resize.duration <= 0) {
+      throw new Error("Composition resize timing must use a non-negative start and positive finite duration.");
+    }
+    const placement = requirePlacement(document, resize.id);
+    const root = getLinkedRoot(document, placement);
+    const existing = rootUpdates.get(root.id);
+    if (existing && (existing.start !== resize.start || existing.duration !== resize.duration || existing.edge !== resize.edge)) {
+      throw new Error("A linked Composition group cannot receive conflicting resize updates.");
+    }
+    rootUpdates.set(root.id, { ...resize, id: root.id });
+  }
+
+  const updates = new Map<string, CompositionPlacementResize>();
+  for (const [rootId, resize] of rootUpdates) {
+    const root = requirePlacement(document, rootId);
+    for (const placement of getLinkedGroup(document, root)) {
+      updates.set(placement.id, resize);
+    }
+  }
+
+  const next = clone(document);
+  next.placements = next.placements.map(placement => {
+    const resize = updates.get(placement.id);
+    if (!resize) return placement;
+    // A child with an explicit range keeps its own source offset; an untrimmed legacy linked
+    // child inherits the root range instead of resetting to zero.
+    const sourcePlacement = placement.sourceIn === undefined && placement.sourceOut === undefined && placement.linkedToPlacementId
+      ? getLinkedRoot(document, placement)
+      : placement;
+    const source = resizedSourceRange(sourcePlacement, resize);
     return syncLegacyPlacement({
       ...placement,
-      duration,
-      sourceIn: fallbackSourceIn,
-      sourceOut: fallbackSourceIn + duration,
+      start: resize.start,
+      duration: resize.duration,
+      ...source,
     });
   });
   extendCompositionDuration(next);
@@ -317,8 +457,11 @@ export function splitCompositionPlacement(
   for (const placement of group) {
     const leftDuration = splitTime - placement.start;
     const rightDuration = placement.duration - leftDuration;
-    // Linked source audio follows the same source range as its video.
-    const range = placement.id === selected.id ? rootRange : placement.linkedToPlacementId ? rootRange : sourceRangeForSplit(placement);
+    // Explicit linked-member ranges are independent; untrimmed legacy children inherit the root range.
+    const range = placement.linkedToPlacementId &&
+      placement.sourceIn === undefined && placement.sourceOut === undefined
+      ? rootRange
+      : sourceRangeForSplit(placement);
     const { linkedToPlacementId: _link, ...base } = placement;
     const left = syncLegacyPlacement({
       ...base,
@@ -422,6 +565,136 @@ export function unlinkCompositionPlacement(
     const { linkedToPlacementId: _linkedToPlacementId, ...independent } = placement;
     return syncLegacyPlacement(independent);
   });
+  assertValidCompositionDocument(next);
+  return next;
+}
+
+
+/** Add a canonical root track while retaining the original legacy track kind as metadata. */
+export function addCompositionTrack(
+  document: CompositionDocument,
+  track: CompositionDocument["tracks"][number],
+): CompositionDocument {
+  assertValidCompositionDocument(document);
+  if (!track.id.trim() || document.tracks.some(item => item.id === track.id)) {
+    throw new Error("Composition track IDs must be non-empty and unique.");
+  }
+  const next = clone(document);
+  next.tracks.push({ ...clone(track), order: next.tracks.length });
+  assertValidCompositionDocument(next);
+  return next;
+}
+
+/** Update canonical track properties without changing placement identity or source references. */
+export function updateCompositionTrack(
+  document: CompositionDocument,
+  trackId: string,
+  patch: Partial<CompositionDocument["tracks"][number]>,
+): CompositionDocument {
+  assertValidCompositionDocument(document);
+  if (!document.tracks.some(track => track.id === trackId)) throw new Error("Composition track not found.");
+  const next = clone(document);
+  next.tracks = next.tracks.map(track => track.id === trackId ? { ...track, ...clone(patch), id: track.id } : track);
+  assertValidCompositionDocument(next);
+  return next;
+}
+
+/** Remove a canonical track, moving Master Shots to a compatible fallback video track and deleting
+ * ordinary placements (plus their linked descendants) from the removed lane. */
+export function removeCompositionTrack(
+  document: CompositionDocument,
+  trackId: string,
+  fallbackVideoTrackId?: string,
+): CompositionDocument {
+  assertValidCompositionDocument(document);
+  const removingTrack = document.tracks.find(track => track.id === trackId);
+  if (!removingTrack) throw new Error("Composition track not found.");
+  if (removingTrack.kind === "video" && document.tracks.filter(track => track.kind === "video").length <= 1) {
+    throw new Error("Cannot remove the last video track.");
+  }
+  if (fallbackVideoTrackId && !document.tracks.some(track => track.id === fallbackVideoTrackId && track.kind === "video")) {
+    throw new Error("Fallback video track was not found.");
+  }
+  let next = clone(document);
+  const masterShots = next.placements.filter(placement =>
+    placement.trackId === trackId && placement.legacyData.entityType === "master-shot"
+  );
+  for (const placement of masterShots) {
+    if (!fallbackVideoTrackId) throw new Error("Cannot remove a track containing Master Shots without a fallback video track.");
+    next = moveCompositionPlacementToTrack(next, placement.id, fallbackVideoTrackId, placement.start);
+  }
+  const ordinary = next.placements.filter(placement =>
+    placement.trackId === trackId && placement.legacyData.entityType !== "master-shot"
+  );
+  for (const placement of ordinary) {
+    const current = next.placements.find(item => item.id === placement.id);
+    if (!current) continue;
+    // Removing a child track must remove its linked child, not accidentally delete the parent
+    // video on a different track. Removing a parent still deletes its complete linked group.
+    const parent = current.linkedToPlacementId
+      ? next.placements.find(item => item.id === current.linkedToPlacementId)
+      : undefined;
+    if (parent && parent.trackId !== trackId) {
+      next = unlinkCompositionPlacement(next, current.id);
+    }
+    if (next.placements.some(item => item.id === placement.id)) next = deleteCompositionPlacement(next, placement.id);
+  }
+  next.tracks = next.tracks.filter(track => track.id !== trackId).map((track, order) => ({ ...track, order }));
+  assertValidCompositionDocument(next);
+  return next;
+}
+
+/** Reorder Master Shot placements chronologically, compacting the Shot sequence in one canonical command. */
+export function rippleReorderCompositionMasterShots(
+  document: CompositionDocument,
+  shotId: string,
+  targetCenter: number,
+  targetTrackId: string,
+): CompositionDocument {
+  assertValidCompositionDocument(document);
+  if (!Number.isFinite(targetCenter)) throw new Error("Ripple reorder target must be finite.");
+  const ordered = document.placements
+    .filter(placement => placement.legacyData.entityType === "master-shot")
+    .sort((a, b) => a.start - b.start || a.order - b.order);
+  const moving = ordered.find(placement => placement.id === shotId);
+  if (!moving) throw new Error("Master Shot not found in the canonical Composition.");
+  if (!document.tracks.some(track => track.id === targetTrackId && track.kind === "video")) {
+    throw new Error("A Master Shot must use a video track.");
+  }
+  const remaining = ordered.filter(placement => placement.id !== shotId);
+  const insertionIndex = remaining.findIndex(placement => targetCenter < placement.start + placement.duration / 2);
+  remaining.splice(insertionIndex < 0 ? remaining.length : insertionIndex, 0, moving);
+  let next = clone(document);
+  let cursor = Math.max(0, Math.min(...ordered.map(placement => placement.start)));
+  const fps = Math.max(1, document.frameRate || 24);
+  for (const placement of remaining) {
+    const current = next.placements.find(item => item.id === placement.id);
+    if (!current) throw new Error("Master Shot disappeared during canonical ripple reorder.");
+    const start = Math.round(cursor * fps) / fps;
+    if (current.id === shotId) next = moveCompositionPlacementToTrack(next, current.id, targetTrackId, start);
+    else if (current.start !== start) next = moveCompositionPlacement(next, current.id, start);
+    cursor = start + current.duration;
+  }
+  assertValidCompositionDocument(next);
+  return next;
+}
+
+/** Reorder canonical tracks and keep stable placement IDs/track references. */
+export function reorderCompositionTrack(
+  document: CompositionDocument,
+  trackId: string,
+  targetIndex: number,
+): CompositionDocument {
+  assertValidCompositionDocument(document);
+  const ordered = [...document.tracks].sort((a, b) => a.order - b.order);
+  const sourceIndex = ordered.findIndex(track => track.id === trackId);
+  if (sourceIndex < 0) throw new Error("Composition track not found.");
+  const destination = Math.max(0, Math.min(ordered.length - 1, Math.trunc(targetIndex)));
+  const [moving] = ordered.splice(sourceIndex, 1);
+  ordered.splice(destination, 0, moving);
+  const next = clone(document);
+  const byId = new Map(ordered.map((track, order) => [track.id, { ...track, order }]));
+  next.tracks = next.tracks.map(track => byId.get(track.id)!);
   assertValidCompositionDocument(next);
   return next;
 }

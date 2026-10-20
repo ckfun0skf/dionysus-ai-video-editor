@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "project": "Dionysus",
-  "updatedAt": "2026-10-19",
+  "updatedAt": "2026-10-20",
   "sourceOfTruth": "public/doc/tasks.json and docs/TIMELINE_FIRST_EXECUTION_BACKLOG.md",
   "statusDefinitions": {
     "done": "Implementation exists and has evidence; release/browser validation may still be pending.",
@@ -313,8 +313,8 @@
           "id": "DYS-005",
           "title": "Timeline editing and Version management",
           "status": "in_progress",
-          "progress": 87,
-          "summary": "Implement shared root/nested commands for insert, move/snap, conflicts, trim, split, duplicate, delete, linked audio, pins and Undo/Redo.",
+          "progress": 80,
+          "summary": "Continue canonical root/nested edit command coverage. Root resize/drop, persistence, source ranges, and track settings are now routed through canonical data where implemented, while Storyboard/Shot/Slot compatibility-first paths remain open.",
           "doc": "tasks/timeline-and-versions.md",
           "detail": "tasks/timeline-and-versions.html",
           "report": "reports/timeline-and-versions-report.md",
@@ -351,7 +351,17 @@
           "acceptance": [
             "Source-time and conflict tests pass",
             "Root/nested history and audio parity pass",
-            "Pins survive reopen"
+            "Pins survive reopen",
+            "Resize and drag/drop planning use live canonical placement duration, source ranges, adjacency, and root extent when a canonical placement exists.",
+            "Changing a canonical typed source cannot leave stale clip-version or script-version selectors in the schema-1.0 projection.",
+            "Linked placements share timeline timing but preserve their own source in/out ranges through trim, resize and split.",
+            "Untrimmed linked audio inherits the root source range for legacy compatibility, while explicitly trimmed/source-selected audio preserves its own in/out values.",
+            "A valid root Composition remains authoritative when the stored schema-1.0 projection is stale; invalid root/nested snapshots are rejected safely.",
+            "Save/export derives the schema-1.0 compatibility projection from the canonical root and preserves valid nested/pinned snapshots.",
+            "Video/generic layer settings update the root Composition directly; canonical track properties and transform metadata survive save/reopen.",
+            "Embedded nested Composition documents are recursively validated for local placement/link invariants and pinned-version provenance; cyclic nested graphs are rejected.",
+            "A canonical root containing a nested, version-pinned Composition survives versioned save/reopen with its nested tree intact.",
+            "On-canvas track transforms update the canonical root track for root-owned tracks; save/reopen preserves the transform metadata."
           ],
           "evidence": [
             "Master Shot uses optional absolute masterStart with legacy sequential fallback; free placement snaps to frames, warns on overlaps, and Ripple Reorder packs the sequence without changing durations.",
@@ -387,9 +397,39 @@
             "Blank-version independence integration test: src/App.test.tsx",
             "Functional code SHA ee1f90c3304ce0f2be5cef294c387192d2aa8969; main CI 39234313896 and Pages deployment 39234313840 passed",
             "PR #93 merged main SHA 5f8dbea57cc72a8b4a909db3b082ea0c54894529; main CI 39400972426 and Pages deployment 39400972424 passed.",
-            "PR #94 code/test SHA 5c3d3aedda2316e5ac2adf2b46740d857d04e56a; CI 39402243280 passed 212 tests/22 files, TypeScript and production build; audit summary reported 0 vulnerabilities. Documentation refresh requires current exact-head CI before merge."
+            "PR #94 code/test SHA 5c3d3aedda2316e5ac2adf2b46740d857d04e56a; CI 39402243280 passed 212 tests/22 files, TypeScript and production build; audit summary reported 0 vulnerabilities. Documentation refresh requires current exact-head CI before merge.",
+            "Feature branch feat/dys005-nested-resize-composition-command routes nested resize/source-range/adjacent-trim commits through applyCompositionResizePreview(); focused local command/adapter/track validation passed 18 tests and full local validation passed 214 tests/22 files, TypeScript and the production build. npm audit is unavailable without a lockfile; exact-head PR CI is still required.",
+            "Draft PR #96 code/test SHA 8f9b88f42665038b905a6eec1bf682cde2d7ea3f routes valid root resize through applyCompositionResizePreview(); exact-head CI 39417366266 passed tests, TypeScript/build and the non-blocking audit step. Regression covers linked-audio timing/source ranges and input immutability.",
+            "Draft PR #96 code/test SHA a177d5c5e8109bb5481d9025b237cebbc6f0d1db routes valid root resize through applyCompositionResizePreview() and ordinary root insertion through insertCompositionPlacement(); duplicate placement IDs are rejected. Exact-head CI 39418281655 passed tests, TypeScript/build and the workflow's non-blocking audit step.",
+            "Draft PR #96 code/test SHA 5cb79b8c5a2debd11008567630d0460bd5858737 routes valid root move operations through moveCompositionPlacementToTrack(); linked descendants move together and source ranges remain intact. Exact-head CI 39419176885 passed tests, TypeScript/build and the workflow's non-blocking audit step.",
+            "Draft PR #96 code/test SHA b3ef901c8eaa3a193d4cbc47ac39a5d6274dbfe3 passed exact-head CI 39421375204: 217 tests, TypeScript and production build. Added a project-history regression proving splitting a linked video/audio group is one Undo entry and restores/reapplies source ranges and links.",
+            "Shared Save-as-Clip foundation: src/clipVersionSnapshot.ts captures the Composition structure and pinned nested versions rather than relying only on flattened renderer layers. Code/test SHA 30afa93ea6ff9f6086229b4fd7bd9daba6a02796 passed exact-head CI 39425783751 (219 tests/23 files, TypeScript and production build). Canonical-authoritative editing remains DYS-014 work.",
+            "Canonical nested editing adapter: src/clipVersionTracks.ts now treats ClipVersion.composition as authoritative, updates canonical placements/tracks for insert/move/resize/delete/inspector edits, and refreshes legacy projections. Exact-head CI 39428872953 passed at SHA c82f305726afaacb424d9bf8e39c0fac37de5fc4: 222 tests/23 files, TypeScript/build, dependency audit 0 vulnerabilities.",
+            "Added snapshot → canonical nested edit → JSON save/reload → reopen regression proving placement timing/transform/mix, source ranges, pinned child Composition/provenance, and source Clip Asset Version isolation. Code/test SHA 7098229556fd466283a2e815de2ab44778089483 passed exact-head CI 39429740312 (223 tests/23 files, TypeScript/build, audit 0 vulnerabilities).",
+            "Follow-up: inspector passes only changed fields into updateClipVersionLayer, preserving exact typed source references during transform-only edits. Code SHA 47b700ea44937dbb8bfb6c35fbcf9efe690d4416 passed exact-head CI 39430375517 (223 tests/23 files, TypeScript/build, audit 0 vulnerabilities).",
+            "Canonical nested edit follow-up: src/clipVersionTracks.ts treats existing composition documents as authoritative; add/delete/move/resize, track-add and inspector edits update canonical state and regenerate legacy projections. Tests cover stale projection rejection, typed Shot Slot/script source refs, transform/mix/source ranges and track/placement synchronization. Exact-head CI 39431744433 passed 223 tests/23 files, TypeScript/build and audit 0 vulnerabilities at bbbf18743a66de4ba66c14b9cde98bd9d490238.",
+            "Canonical migration/subtree preservation: migration retains existing Clip/Shot Slot Composition documents, and Save-as-Clip retains pre-embedded nested subtrees. Earlier exact-head CI 39445108693 passed 223 tests/23 files, TypeScript/build and dependency audit 0 vulnerabilities at 920ad9e5f3d0d290182b82e5e772ecbc1abe4694.",
+            "Follow-up code on PR #96 head c9c4ed4dd91dcb3bf233258515bd664f9d854589 remaps canonical placement IDs, track IDs, linked audio/placement references, and compatibility projections when duplicating Clip Versions; Shot and Slot duplication now call the same helper. Shot Slot Inspector edits are routed through updateClipVersionLayer so canonical placements and legacy projections stay synchronized. Regression tests were added for canonical and legacy-only duplication, source ranges, track/placement links, pinned nested children and provenance. Exact-head CI 39453725792 was queued at c9c4ed4dd91dcb3bf233258515bd664f9d854589; final validation must be refreshed after documentation commits.",
+            "Canonical-first root mutation audit: src/App.tsx routes insert/ripple/trim/move/resize/split/duplicate/delete/unlink/source metadata/mute/preview transform/media import and Master Shot ripple reorder through Composition commands; src/projectTimelinePlacement.ts plans insertion/drop from live root placements.",
+            "Regression coverage: src/projectTimelinePlacement.test.ts verifies canonical-first insertion despite stale legacy positions, linked ripple/source-range preservation and trim source-in preservation; src/compositionCommands.test.ts covers Master Shot ripple reorder, linked child-track removal, final video track guard and source/link metadata updates.",
+            "Persistence/import/history regression: src/projectDocument.test.ts verifies validated canonical root import and round-trip; src/App.test.tsx checks canonical insertion save envelope plus Undo/Redo.",
+            "PR #96 follow-up: calculateCanonicalCompositionResizePreview and calculateCanonicalCompositionDropPosition use live Composition placement state; projectRootCompositionToLegacy clears obsolete clipVersionId/scriptVersionId selector fields. Added stale-legacy timing/duration regressions and an App-level resize → linked audio → Undo/Redo → save/reopen regression. Exact-head CI is pending; previous run 39481008190 belongs to d6a60062056a920846d62ae03e9f520845ed8d11, not this follow-up.",
+            "- Exact-head CI [#39483256604](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39483256604) passed on `004302b6e0c4baca91681d9f6da0b200e1e45ad7`: 243 tests across 23 files, TypeScript and production build passed, npm audit reported 0 vulnerabilities.",
+            "Current follow-up fixes independent linked audio source ranges through trim/resize/split; command and App regressions are included but require CI on the new head.",
+            "Still open: compatibility-only Storyboard materializations, legacy-first Shot/Slot/domain editors, full track reorder integration, and malformed/nested/pinned snapshot recovery coverage.",
+            "Exact-head CI 39484081761 failed 1 regression: legacy linked audio without explicit source trim metadata expected the video's source range but was reset to 0. This patch restores conditional inheritance and adds a focused command regression. It also normalizes App drag/drop previews and collision checks from the canonical root. CI for this fix is pending.",
+            "Remaining: compatibility-only Storyboard materializations, legacy-first Shot/Slot/domain editors, full track reorder integration, and malformed/nested/pinned snapshot recovery.",
+            "CI on 165708d2f5e5a1f7954d6ed370d4a9e625fa430e passed all 246 tests but failed TypeScript on an unused helper, now removed. Current patch adds canonical root re-projection, freshness-aware local recovery, nested snapshot validation/retention and focused persistence tests; exact-head CI pending.",
+            "Remaining: compatibility-only Storyboard materializations, legacy-first Shot/Slot/domain editors, full track settings/reorder integration, and deeper invalid/nested/pinned history tests.",
+            "CI 39485463504 produced 32 App test failures because legacy-only fixtures replaced schema-1.0 storage while leaving a same-revision old v2 envelope; those fixtures now remove the v2 key explicitly. Versioned export tests now compare against the emitted canonical projection. Exact-head CI for this correction is pending.",
+            "Track settings patch routes both settings dialogs through updateCompositionTrack, keeping name/mute/background/transparency/opacity canonical and retaining unpromoted transform metadata in legacyData. App tests inspect saved root track values as well as projected values. CI for this patch is pending; prior verified head 8bdafe463fea6b1bdb0ec082aab92c87b9bc7aba passed 249 tests/23 files, TS/build and npm audit 0 vulnerabilities.",
+            "Still open: legacy-first Shot/Slot/domain edits, compatibility-only Storyboard placements, broader track ordering and invalid/nested/pinned snapshot history coverage.",
+            "Recursive validation now visits root.nestedCompositions, checks provenance/pinned reference shape and rejects cycles. New project-document tests serialize/reopen an embedded pinned Composition and reject invalid nested duration, empty pinned version ID, and a cyclic tree. Prior head 85cf6043070a711c469f2ec5baa588ad538d1ce5 passed run 39486652985 (249 tests/23 files, build/audit); current exact-head CI pending.",
+            "CI 39487372239 on 1243fc047cbb7ede69b9bb476e5b653bf87f02f1: 250/251 tests passed; one new negative test incorrectly assumed document.duration must be positive. Test now corrupts nested placement duration instead, asserting the already-defined placement invariant; exact-head CI pending.",
+            "CI run 39487705640 (head 1cb834f5b309e97f37f1f65c52bf4eb0e82f5bb2) failed before reaching recursive validation because its new negative test used an empty legacy Shot/Slot snapshot with no tracks. Test now embeds a valid root Composition containing tracks and adds a zero-duration nested placement. Fresh exact-head CI is required.",
+            "Track preview pointer transforms previously still wrote to schema-1.0 tracks before reconciliation. They now call updateRootTrackFromProjectPatch via changeRootComposition for canonical root tracks; the existing App test verifies root legacyData X/Y/width/height. Prior head 88992a63a56f14a44ec5e77e4d580cf8d36db781 passed 251 tests/23 files, build/type-check, npm audit 0; this commit's exact-head CI pending."
           ],
-          "notes": "PR #93 is merged on main as 5f8dbea57cc72a8b4a909db3b082ea0c54894529; main CI run 39400972426 and GitHub Pages deployment run 39400972424 both completed successfully for that SHA. PR #93 exact-head CI run 39398098386 passed 210 tests across 22 files plus TypeScript/production build. The Composition command boundary backs root Timeline operation adapters and nested move. In follow-up PR #94, nested insertion/deletion now use immutable Composition commands, and the nested Editor Remove layer action dispatches through deleteClipVersionLayer(). Implementation/test head 5c3d3aedda2316e5ac2adf2b46740d857d04e56a passed exact-head CI run 39402243280: 212 tests across 22 files, TypeScript/build passed, npm audit summary 0 vulnerabilities. The documentation checkpoint at SHA 56afcc51dd6819a91bcbeba752bdb1f0e244d0a3 passed exact-head CI run 39402541055 (212 tests across 22 files, TypeScript/build, npm audit 0 vulnerabilities). Always verify the actual current PR head and matching CI before merge; a prior SHA's green run does not validate later changes. The follow-up is not deployed. Remaining gaps: project-aware click-to-place/conflict dispatch, nested resize/source-range/adjacent-trim integration, snap/overlap parity, root/nested Undo parity, and canonical-only persistence/structure-preserving Save-as-Clip. Keep DYS-005 in progress; do not infer UI acceptance or deployment from command tests.",
+          "notes": "App holds the root CompositionDocument as live state/history; existing root geometry/source/link data is no longer overwritten by legacy migration during unrelated domain edits. Root insert/click-to-place ripple/trim, move/drop, resize/adjacent trims, split, duplicate, delete, unlink, mute, clip metadata/source-range edits, track add/update/remove and Master Shot ripple reorder now execute canonical commands first. Root occupancy drives drag/drop and insertion planning, with a guarded compatibility snap fallback. Track removal preserves a video parent when only its linked audio child track is removed and refuses removing the final video track. Validated v2 imports/recovery restore the stored root; schema-1.0 imports still migrate. Focused tests cover canonical insertion/ripple/trim, source ranges/links, track removal, Master Shot reorder, canonical import and App save/Undo/Redo. Exact-final-head CI passed on 37ae7063f1e92018b75cb469ec198f9ba826cfee: 240 tests across 23 files, TypeScript/production build passed, audit 0 vulnerabilities. Keep this task in progress while reviewing compatibility-only paths and follow-up architecture.",
           "description": "Implement shared root/nested commands for insert, move/snap, conflicts, trim, split, duplicate, delete, linked audio, pins and Undo/Redo.",
           "executionStage": "E2-E4",
           "priority": "P0",
@@ -405,8 +445,8 @@
           "testStrategy": [
             "Source-time invariants, conflicts, linked audio, nested history and pins."
           ],
-          "nextAction": "Validate the final exact PR #94 head after its handoff/task docs refresh; then route nested resize/source-range/adjacent-trim and project-aware insertion/conflict dispatch through the Composition boundary while preserving snap/overlap guards. Add root/nested parity and Undo tests.",
-          "handoffNotes": "Start from current main SHA and latest DYS-005 feature PR. PR #93 merged as 5f8dbea57cc72a8b4a909db3b082ea0c54894529 with main CI 39400972426 and Pages deploy 39400972424 successful. PR #94 code/test head 5c3d3aedda2316e5ac2adf2b46740d857d04e56a passed CI run 39402243280; documentation checkpoint SHA 56afcc51dd6819a91bcbeba752bdb1f0e244d0a3 passed CI 39402541055; verify the actual current PR head before merge. Do not merge failing Snapshot PR #89; no browser smoke tests; owner visual acceptance only after merge and verified Pages deployment."
+          "nextAction": "Continue auditing compatibility-only Storyboard materializations and domain edits that refresh Composition metadata. Preserve canonical source/link/timing/pinned nested snapshots. Rerun CI on the final code/docs SHA. No browser smoke tests; PR #96 remains Draft and unmerged.",
+          "handoffNotes": "PR #96 remains Draft on feat/dys005-root-resize-composition-command; latest code checkpoint before this doc refresh is 7c8943960cebf5adecc149e83f80024b9351117c, followed by canonical-first mutation-path fixes and tests. Root insert/ripple/trim/move/resize/split/duplicate/delete/unlink/source metadata/mute, Master Shot ripple reorder, track removal, preview transform, media import and v2 import now route through canonical root commands or validated restore. Tests include canonical insert/ripple/trim source-range preservation, track-removal guards, Master Shot ripple reorder, canonical import and UI persistence Undo/Redo. Run CI on the final docs SHA. No browser smoke tests, no main push, no merge."
         },
         {
           "id": "DYS-011",
@@ -548,8 +588,8 @@
           "id": "DYS-014",
           "title": "Unified Composition model and structure-preserving snapshots",
           "status": "in_progress",
-          "progress": 65,
-          "summary": "Establish canonical Composition for root/nested timelines, shared commands and independent structure-preserving Project-to-Clip snapshots.",
+          "progress": 82,
+          "summary": "Make root and nested Composition documents authoritative for timeline edits, history and persistence; derive deterministic schema-1.0 compatibility projections without stale fields overwriting root state.",
           "doc": "tasks/unified-composition-model.md",
           "detail": "tasks/unified-composition-model.html",
           "report": "reports/unified-composition-model-report.md",
@@ -572,17 +612,23 @@
             },
             {
               "title": "Save/open/edit Project compositions as structure-preserving Clip Asset Versions",
-              "status": "planned"
+              "status": "in_progress"
             },
             {
               "title": "Prove snapshot independence, nested rendering, JSON round-trip and Undo/Redo",
-              "status": "planned"
+              "status": "in_progress"
             }
           ],
           "acceptance": [
             "Migration preserves all key relationships",
             "Root/nested semantics align",
-            "Snapshots are independent editable trees"
+            "Snapshots are independent editable trees",
+            "Root resize/drop calculations source timing and duration from live canonical placements.",
+            "Canonical typed-source changes remove obsolete compatibility source-selector IDs; save/reopen and Undo/Redo retain the edited root snapshot.",
+            "Linked source audio with an independent non-zero source in-point remains correct through trim, resize and split and after persistence.",
+            "Read/write v2 envelopes preserve valid root timing/source/track/link fields even when the stored compatibility projection is stale.",
+            "Validated nested and pinned snapshots survive persistence without being silently regenerated from legacy fields.",
+            "Save/reopen validates nested/pinned Composition trees recursively and fails safely on malformed descendants or cycles."
           ],
           "evidence": [
             "Target contract: docs/architecture/UNIFIED_COMPOSITION_MODEL.md",
@@ -608,9 +654,28 @@
             "Nested timeline preview/resize integration: src/App.tsx",
             "Resize edge-case coverage: src/timelineResize.test.ts",
             "Exact-head code CI 39227084457: tests, TypeScript and Vite build passed",
-            "Merge/deploy checkpoint: main SHA 9da2f2bfbf7e80abb73f5552a0d1447cff471c0b; CI 39227655141 and Pages deploy 39227655137 both passed."
+            "Merge/deploy checkpoint: main SHA 9da2f2bfbf7e80abb73f5552a0d1447cff471c0b; CI 39227655141 and Pages deploy 39227655137 both passed.",
+            "Draft PR #96 code/test SHA 30afa93ea6ff9f6086229b4fd7bd9daba6a02796 adds src/clipVersionSnapshot.ts and CompositionDocument.provenance/nestedCompositions. Save-as-Clip preserves the root placement tree, nested Clip Asset Version and selected Shot Slot Version documents, track/order/source range/transform/mix metadata, version pins, script IDs and generation provenance; legacy layers remain a render projection. Regression covers JSON round-trip and isolation from subsequent source nested-layer mutation. Exact-head CI 39425783751 passed 219 tests/23 files, TypeScript and production build.",
+            "Canonical nested editing adapter at code SHA c82f305726afaacb424d9bf8e39c0fac37de5fc4 makes ClipVersion.composition authoritative when present. Nested insert/move/resize/delete, track creation, duration and inspector edits synchronize canonical placements/tracks and legacy projections; transform-only edits preserve source references. Exact-head CI 39428872953 passed 222 tests/23 files, TypeScript/build and audit 0 vulnerabilities.",
+            "Added end-to-end regression for Save-as-Clip snapshot → canonical nested edit → project JSON save/reload → reopen. Asserts timing/transform/mix, source ranges, nested pinned child Composition/provenance and source-version isolation. Exact-head CI 39429740312 passed at code SHA 7098229556fd466283a2e815de2ab44778089483: 223 tests/23 files, TypeScript/build and dependency audit 0 vulnerabilities.",
+            "Source-reference preservation follow-up: inspector passes only changed fields into canonical adapter, preserving typed source references for transform-only edits. Code SHA 47b700ea44937dbb8bfb6c35fbcf9efe690d4416 passed exact-head CI 39430375517 (223 tests/23 files, TypeScript/build, audit 0 vulnerabilities).",
+            "Canonical nested Timeline editor follow-up: existing ClipVersion.composition is authoritative for add/delete/move/resize/track-add/inspector updates; legacy layers/tracks are derived projections. Tests include stale projection rejection, source range/transform/mix preservation, typed Shot Slot/script source references, track/placement sync and snapshot edit/reload/reopen isolation. Exact-head CI 39431744433 passed 223 tests/23 files, TypeScript/build and audit 0 vulnerabilities at bbbf18743a66de4ba66c14b9cde98bd9d490238.",
+            "Migration hardening: preserve existing canonical Composition documents for Clip and Shot Slot Versions; snapshotter retains pre-embedded nested subtrees. Exact-head CI 39445108693 passed 223 tests/23 files, TypeScript/build and audit 0 vulnerabilities at 920ad9e5f3d0d290182b82e5e772ecbc1abe4694.",
+            "Canonical root audit follow-up: src/compositionCommands.ts includes root metadata updates, Master Shot ripple reorder and safe linked-child track removal; src/compositionMigration.ts derives compatibility placement/track metadata from canonical legacyData while preserving canonical timing/source/link state.",
+            "Import boundary: src/projectDocument.ts can return validated canonical root snapshots on request while keeping the legacy read result stable for schema-1.0 callers; App skips legacy track normalization when a validated Composition envelope is available.",
+            "Canonical resize/drop planning no longer uses stale legacy duration/source constraints for placements represented in the root. App regression now inspects the saved Composition envelope after resize/Undo/Redo and validates that the state survives reopen. Storyboard materializations and remaining legacy-first domain editors are still open; exact-head CI remains required.",
+            "Previous root resize/drop checkpoint CI 39483256604 passed at 004302b6e0c4baca91681d9f6da0b200e1e45ad7: 243 tests/23 files, TypeScript/build, npm audit 0 vulnerabilities.",
+            "Follow-up fixes ensure linked group timeline alignment does not copy the parent video's source in/out onto child audio. Tests cover independent ranges through trim/resize/split and App split integration. This commit's exact-head CI is still required.",
+            "Run 39484081761 exposed legacy linked-audio fallback behavior; explicit per-placement source offsets are still preserved. The new correction restores fallback only when a child has no source range, and canonicalizes root drag/drop geometry. New exact-head CI is required.",
+            "Fixes read/write canonical precedence and freshness-aware recovery, plus validates/retains stored nested and pinned Composition arrays. Exact-head CI for this fix is still required. Legacy-first editors, Storyboard projections and broad track-order integration remain open.",
+            "Test fixtures now distinguish legacy-only recovery from v2 canonical restore; schema-1.0 direct imports remain separate from canonical envelope precedence. The exact-head workflow must pass before the persistence change can be treated as verified.",
+            "Generic and Video layer settings now update root Composition using updateCompositionTrack; unpromoted transform values remain carried in track legacyData to maintain compatibility. Canonical root field assertions were added at App level; exact-head CI for this patch is pending.",
+            "Root and nested snapshot validation now include provenance and pinned version reference shape and prevent cyclic embedded snapshots. Focused save/reopen and invalid-snapshot tests added; UI-level nested edit/Undo/Redo history is still a separate uncovered gap.",
+            "Nested validation follow-up CI had 250/251 pass; corrected a negative test to target zero-duration nested placement rather than document-level duration. Recursive code, pinned metadata and cycle protection remain under exact-head verification.",
+            "The nested invalid-duration test fixture now starts from a valid root snapshot with tracks so it tests recursive placement validation rather than an empty compatibility snapshot; exact-head CI pending.",
+            "Canonical track settings dialogs and preview-frame transforms now share the root track command for fields promoted to the Composition schema and compatibility metadata. New source/test/docs head needs exact CI."
           ],
-          "notes": "Live audit 2026-10-20: Draft PR #88 head 6b74e057132e1db238667cc6576b74e9b2202471 passed exact-head CI but only adds the pure snapshot helper; Draft PR #89 head 6044273c2528de1c4f4b6437114884f79f774377 has a failing TypeScript/build check and is not mergeable. Both need review against current main; do not assume either shipped.",
+          "notes": "Root Composition is the live root timeline state with paired history snapshots; schema-1.0 DionysusProject is derived compatibility data. Validated v2 project imports/recovery restore the canonical root rather than re-migrating it, while schema-1.0 files still use deterministic migration. Root mutation paths now include canonical-first insertion/ripple/trim, Master Shot ripple reorder, drag/drop, move/resize/split/duplicate/delete, source/link edits, track add/update/removal, preview transforms and media import. Existing nested Clip Version/Shot Slot snapshots and pinned subtrees remain protected by migration. Exact-final-head CI passed on 37ae7063f1e92018b75cb469ec198f9ba826cfee: 240 tests across 23 files, TypeScript/production build passed, audit 0 vulnerabilities. Keep this checkpoint in progress until remaining compatibility-only paths are reviewed.",
           "description": "Establish canonical Composition for root/nested timelines, shared commands and independent structure-preserving Project-to-Clip snapshots.",
           "executionStage": "E2 and E4",
           "priority": "P0",
@@ -626,8 +691,8 @@
           "testStrategy": [
             "Migration matrix, parity, snapshot independence and round-trip."
           ],
-          "nextAction": "Re-query PR #88/#89 and rebase or supersede stale work.",
-          "handoffNotes": "Read docs/TIMELINE_FIRST_EXECUTION_BACKLOG.md for milestone gates and pickup rules. Re-query live GitHub before acting."
+          "nextAction": "Continue auditing compatibility-only Storyboard materializations and domain edits that refresh Composition metadata. Preserve canonical source/link/timing/pinned nested snapshots. Rerun CI on the final code/docs SHA. No browser smoke tests; PR #96 remains Draft and unmerged.",
+          "handoffNotes": "PR #96 remains Draft/unmerged. Root Composition now owns live root timeline mutations/history and validated v2 import/recovery; schema-1.0 data is a compatibility projection. Canonical-first insertion/ripple, Master Shot ripple reorder, source-range/link edits, split/duplicate/delete, track removal guards, preview transforms and media import have focused regression coverage. Nested canonical documents/pins are retained. Exact final SHA CI and remaining compatibility-path review are still required. No browser smoke tests; no main push or merge."
         }
       ],
       "executionStage": "E2",

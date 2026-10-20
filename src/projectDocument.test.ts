@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { sampleProject } from "./sampleProject";
 import { createProjectDocument, readProjectDocument } from "./projectDocument";
+import { recordProjectChange, redoProjectChange, undoProjectChange } from "./projectHistory";
+import { moveCompositionPlacement } from "./compositionCommands";
+import { migrateLegacyProjectToComposition, projectRootCompositionToLegacy } from "./compositionMigration";
+import { getMasterShotStart } from "./masterTimeline";
 
 describe("versioned project document boundary", () => {
-  it("exports a versioned Composition projection alongside a lossless legacy project", () => {
+  it("exports a versioned canonical projection without mutating the input legacy project", () => {
     const project = structuredClone(sampleProject);
     const before = JSON.stringify(project);
     const document = createProjectDocument(project);
@@ -14,7 +18,7 @@ describe("versioned project document boundary", () => {
       compositionModel: { schemaVersion: "2.0", projectId: project.id },
     });
     expect(document.compositionModel.rootComposition.tracks.length).toBeGreaterThan(0);
-    expect(readProjectDocument(document)).toMatchObject({ project, sourceDocumentVersion: "2.0" });
+    expect(readProjectDocument(document)).toMatchObject({ project: document.project, sourceDocumentVersion: "2.0" });
     expect(JSON.stringify(project)).toBe(before);
   });
 
@@ -36,19 +40,77 @@ describe("versioned project document boundary", () => {
     expect(() => readProjectDocument(document)).toThrow(/inconsistent Composition metadata/);
   });
 
-  it("rejects a Composition projection whose placements no longer match the legacy project", () => {
+  it("rebuilds stale schema-1.0 placement geometry from a valid canonical root", () => {
+    const project = structuredClone(sampleProject);
+    project.shots = [];
+    const track = project.tracks.find(item => item.kind === "video")!;
+    project.timelineClips = [{
+      id: "canonical-import-clip", name: "Canonical import", kind: "video", trackId: track.id,
+      start: 2, duration: 4, sourceIn: 10, sourceOut: 14,
+    }];
+    const initialRoot = migrateLegacyProjectToComposition(project).rootComposition;
+    const movedRoot = moveCompositionPlacement(initialRoot, "canonical-import-clip", 18);
+    const document = createProjectDocument(project, movedRoot);
+    expect(document.project.timelineClips?.[0]).toMatchObject({ start: 18, sourceIn: 10, sourceOut: 14 });
+    document.project.timelineClips![0] = { ...document.project.timelineClips![0], start: 99, duration: 1, sourceIn: 0, sourceOut: 1 };
+    const reopened = readProjectDocument(JSON.parse(JSON.stringify(document)), true);
+    expect(reopened.project.timelineClips?.[0]).toMatchObject({ start: 18, duration: 4, sourceIn: 10, sourceOut: 14 });
+    expect(reopened.compositionModel?.rootComposition.placements.find(item => item.id === "canonical-import-clip"))
+      .toMatchObject({ start: 18, duration: 4, sourceIn: 10, sourceOut: 14 });
+  });
+
+  it("rejects a canonical root placement that cannot produce a compatible legacy clip", () => {
     const document = createProjectDocument(structuredClone(sampleProject));
     document.compositionModel.rootComposition.placements.push({
-      id: "tampered-placement",
-      name: "Tampered",
-      trackId: document.compositionModel.rootComposition.tracks[0].id,
-      start: 0,
-      duration: 1,
-      order: 999,
-      source: { type: "none" },
-      legacyData: {},
+      id: "invalid-placement", name: "Invalid", trackId: document.compositionModel.rootComposition.tracks[0].id,
+      start: 0, duration: 1, order: 999, source: { type: "none" }, legacyData: {},
     });
-    expect(() => readProjectDocument(document)).toThrow(/stale or inconsistent Composition projection/);
+    expect(() => readProjectDocument(document)).toThrow(/no compatible legacy clip metadata/);
+  });
+
+  it("persists embedded nested Composition snapshots and pinned-version provenance through save/reopen", () => {
+    const projectDocument = createProjectDocument(structuredClone(sampleProject));
+    const root = structuredClone(projectDocument.compositionModel.rootComposition);
+    const nested = structuredClone(projectDocument.compositionModel.legacyShotSlotCompositions[0]);
+    nested.duration += 3;
+    nested.provenance = {
+      kind: "derived-clip-version",
+      createdAt: "2026-10-20T12:00:00.000Z",
+      pinnedVersions: [{ assetId: "asset-pinned", versionId: "version-pinned", shotId: "shot-pinned", slotId: "slot-pinned" }],
+    };
+    root.nestedCompositions = [nested];
+    const saved = createProjectDocument(projectDocument.project, root);
+    const reopened = readProjectDocument(JSON.parse(JSON.stringify(saved)), true);
+    const restoredNested = reopened.compositionModel?.rootComposition.nestedCompositions?.[0];
+    expect(restoredNested?.duration).toBe(nested.duration);
+    expect(restoredNested?.provenance?.pinnedVersions).toEqual(nested.provenance.pinnedVersions);
+  });
+
+  it("rejects invalid nested Composition timing and malformed pinned-version references", () => {
+    const invalidNestedEnvelope = createProjectDocument(structuredClone(sampleProject));
+    const nested = structuredClone(invalidNestedEnvelope.compositionModel.rootComposition);
+    expect(nested.tracks.length).toBeGreaterThan(0);
+    nested.placements.push({
+      id: "invalid-nested-placement", name: "Invalid nested placement",
+      trackId: nested.tracks[0].id, start: 0, duration: 0, order: 999,
+      source: { type: "none" }, legacyData: {},
+    });
+    invalidNestedEnvelope.compositionModel.rootComposition.nestedCompositions = [nested];
+    expect(() => readProjectDocument(invalidNestedEnvelope, true)).toThrow(/Composition timing/);
+
+    const invalidPinnedEnvelope = createProjectDocument(structuredClone(sampleProject));
+    invalidPinnedEnvelope.compositionModel.rootComposition.provenance = {
+      kind: "master-timeline-snapshot",
+      createdAt: "2026-10-20T12:00:00.000Z",
+      pinnedVersions: [{ versionId: "" }],
+    };
+    expect(() => readProjectDocument(invalidPinnedEnvelope, true)).toThrow(/invalid pinned version reference/);
+  });
+
+  it("rejects cyclic embedded Composition snapshots rather than recursing indefinitely", () => {
+    const document = createProjectDocument(structuredClone(sampleProject));
+    document.compositionModel.rootComposition.nestedCompositions = [document.compositionModel.rootComposition];
+    expect(() => readProjectDocument(document, true)).toThrow(/must not contain cycles/);
   });
 
   it("accepts a fresh versioned document and preserves the authoritative project payload", () => {
@@ -56,7 +118,7 @@ describe("versioned project document boundary", () => {
     const document = createProjectDocument(project);
     const result = readProjectDocument(document);
     expect(result.sourceDocumentVersion).toBe("2.0");
-    expect(result.project).toEqual(project);
+    expect(result.project).toEqual(document.project);
   });
 
   it("rejects unknown versions rather than guessing a migration", () => {
@@ -101,7 +163,7 @@ describe("versioned project document boundary", () => {
 
     const versionedExport = JSON.parse(JSON.stringify(createProjectDocument(project))) as ReturnType<typeof createProjectDocument>;
     const imported = readProjectDocument(versionedExport);
-    expect(imported).toEqual({ project, sourceDocumentVersion: "2.0" });
+    expect(imported).toEqual({ project: versionedExport.project, sourceDocumentVersion: "2.0" });
 
     const alternatives = versionedExport.compositionModel.legacyShotSlotCompositions.filter(composition =>
       composition.legacyData?.shotId === shot.id && composition.legacyData?.slotId === slot.id
@@ -114,6 +176,85 @@ describe("versioned project document boundary", () => {
     expect(alternatives.map(composition => composition.legacyData?.selected)).toEqual([false, true]);
     expect(alternatives[0].legacyData).toMatchObject({ generationRecords: slot.versions[0].generationRecords });
     expect(alternatives[1].legacyData).toMatchObject({ generationRecords: alternative.generationRecords });
+  });
+
+
+  it("persists root Composition through save/reopen and restores it across project Undo/Redo", () => {
+    const original = structuredClone(sampleProject);
+    const originalStart = getMasterShotStart(original.shots, original.shots[0].id);
+    const edited = {
+      ...structuredClone(original),
+      shots: original.shots.map((shot, index) => index === 0 ? { ...shot, masterStart: 23 } : shot),
+    };
+    const afterEdit = recordProjectChange({ current: original, undo: [], redo: [] }, edited);
+
+    const editDocument = JSON.parse(JSON.stringify(createProjectDocument(afterEdit.current))) as ReturnType<typeof createProjectDocument>;
+    const reopenedEdit = readProjectDocument(editDocument);
+    expect(reopenedEdit.project.shots[0].masterStart).toBe(23);
+    expect(editDocument.compositionModel.rootComposition.placements.find(placement => placement.id === original.shots[0].id)?.start).toBe(23);
+    expect(reopenedEdit.sourceDocumentVersion).toBe("2.0");
+    expect(reopenedEdit.project.id).toBe(original.id);
+
+    const undone = undoProjectChange(afterEdit);
+    const undoDocument = JSON.parse(JSON.stringify(createProjectDocument(undone.current))) as ReturnType<typeof createProjectDocument>;
+    const reopenedUndo = readProjectDocument(undoDocument);
+    expect(getMasterShotStart(reopenedUndo.project.shots, original.shots[0].id)).toBe(originalStart);
+    expect(undoDocument.compositionModel.rootComposition.placements.find(placement => placement.id === original.shots[0].id)?.start).toBe(originalStart);
+
+    const redone = redoProjectChange(undone);
+    const redoDocument = JSON.parse(JSON.stringify(createProjectDocument(redone.current))) as ReturnType<typeof createProjectDocument>;
+    const reopenedRedo = readProjectDocument(redoDocument);
+    expect(getMasterShotStart(reopenedRedo.project.shots, original.shots[0].id)).toBe(23);
+    expect(redoDocument.compositionModel.rootComposition.placements.find(placement => placement.id === original.shots[0].id)?.start).toBe(23);
+  });
+
+
+  it("imports the validated canonical root instead of re-migrating stale legacy placement timing", () => {
+    const original = structuredClone(sampleProject);
+    original.shots = [];
+    const track = original.tracks.find(item => item.kind === "video")!;
+    original.timelineClips = [{
+      id: "canonical-import-clip", name: "Canonical import", kind: "video", trackId: track.id,
+      start: 2, duration: 4, sourceIn: 10, sourceOut: 14,
+    }];
+    const initialRoot = migrateLegacyProjectToComposition(original).rootComposition;
+    const movedRoot = moveCompositionPlacement(initialRoot, "canonical-import-clip", 18);
+    const projected = projectRootCompositionToLegacy(original, movedRoot);
+    const document = createProjectDocument(projected, movedRoot);
+    const reopened = readProjectDocument(JSON.parse(JSON.stringify(document)), true);
+    expect(reopened.project.timelineClips?.[0]).toMatchObject({ start: 18, sourceIn: 10, sourceOut: 14 });
+    expect(reopened.compositionModel?.rootComposition.placements.find(item => item.id === "canonical-import-clip"))
+      .toMatchObject({ start: 18, sourceIn: 10, sourceOut: 14 });
+  });
+
+  it("persists canonical root Composition edits and restores their exact snapshots through Undo/Redo", () => {
+    const original = structuredClone(sampleProject);
+    const initialRoot = migrateLegacyProjectToComposition(original).rootComposition;
+    const shotId = original.shots[0].id;
+    const originalPlacement = initialRoot.placements.find(placement => placement.id === shotId)!;
+    const movedRoot = moveCompositionPlacement(initialRoot, shotId, 23);
+    const editedProject = projectRootCompositionToLegacy(original, movedRoot);
+    const editHistory = recordProjectChange({ current: initialRoot, undo: [], redo: [] }, movedRoot);
+
+    const editDocument = createProjectDocument(editedProject, editHistory.current);
+    const reopenedEdit = readProjectDocument(JSON.parse(JSON.stringify(editDocument)));
+    expect(reopenedEdit.project.shots.find(shot => shot.id === shotId)?.masterStart).toBe(23);
+    expect(editDocument.compositionModel.rootComposition.placements.find(placement => placement.id === shotId)?.start).toBe(23);
+
+    const undoHistory = undoProjectChange(editHistory);
+    const undoneProject = projectRootCompositionToLegacy(editedProject, undoHistory.current);
+    const undoDocument = createProjectDocument(undoneProject, undoHistory.current);
+    expect(readProjectDocument(JSON.parse(JSON.stringify(undoDocument))).project.shots.find(shot => shot.id === shotId)?.masterStart)
+      .toBe(originalPlacement.start);
+    expect(undoDocument.compositionModel.rootComposition.placements.find(placement => placement.id === shotId)?.start)
+      .toBe(originalPlacement.start);
+
+    const redoHistory = redoProjectChange(undoHistory);
+    const redoneProject = projectRootCompositionToLegacy(editedProject, redoHistory.current);
+    const redoDocument = createProjectDocument(redoneProject, redoHistory.current);
+    expect(readProjectDocument(JSON.parse(JSON.stringify(redoDocument))).project.shots.find(shot => shot.id === shotId)?.masterStart)
+      .toBe(23);
+    expect(redoDocument.compositionModel.rootComposition.placements.find(placement => placement.id === shotId)?.start).toBe(23);
   });
 
 });

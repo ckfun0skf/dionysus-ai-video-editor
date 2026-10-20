@@ -2,9 +2,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AudioLines, Check, CheckCircle2, ChevronDown, CircleHelp, Clapperboard, Clock3, Code2, Download, FileJson, Film, FolderOpen, Layers3, Maximize2, Plus, Save, Settings2, ShieldCheck, MoreHorizontal, Sparkles, SquarePlay, Upload, WandSparkles, Undo2, Redo2 } from "lucide-react";
 import { sampleProject } from "./sampleProject";
 import type { Asset, AssetKind, ClipVersion, CompositionLayer, DionysusProject, ReferenceProfile, ReferenceRole, Shot, TimelineClip } from "./types";
+import type { CompositionDocument } from "./compositionModel";
 import { validateProject } from "./projectValidation";
-import { addClipVersionLayer as addNestedLayer, addClipVersionTrack as addNestedTrack, deleteClipVersionLayer as deleteNestedLayer, moveClipVersionLayer as moveNestedLayer, normalizeClipVersionTracks } from "./clipVersionTracks";
+import { addClipVersionLayer as addNestedLayer, addClipVersionTrack as addNestedTrack, deleteClipVersionLayer as deleteNestedLayer, duplicateClipVersionComposition, moveClipVersionLayer as moveNestedLayer, normalizeClipVersionTracks, updateClipVersionLayer as updateNestedLayer } from "./clipVersionTracks";
 import { createProjectDocument, readProjectDocument } from "./projectDocument";
+import { createRootCompositionPlacementForTimelineClip, migrateLegacyProjectToComposition, projectRootCompositionToLegacy } from "./compositionMigration";
+import { addCompositionTrack, applyCompositionResizePreview, assertValidCompositionDocument, deleteCompositionPlacement, duplicateCompositionPlacement, insertCompositionPlacement, moveCompositionPlacement, moveCompositionPlacementToTrack, removeCompositionTrack, reorderCompositionTrack, rippleReorderCompositionMasterShots, splitCompositionPlacement, trimCompositionPlacement, unlinkCompositionPlacement, updateCompositionPlacement, updateCompositionTrack } from "./compositionCommands";
 import { moveNormalizedFrame, resizeNormalizedFrame } from "./previewTransform";
 import { getAllowedChildClipAssets, wouldCreateClipAssetCycle } from "./clipAssetGraph";
 import { t } from "./i18n";
@@ -14,8 +17,10 @@ import { canPlaceTimelineClipOnTrack } from "./timelinePlacement";
 import { applyClipVersionResizePreview, calculateClipVersionDropPosition, calculateClipVersionResizePreview } from "./nestedTimelinePlacement";
 import {
   applyProjectTimelineClipResize,
-  applyProjectTimelineInsertion,
-  calculateProjectTimelineInsertionPlan,
+  calculateCanonicalCompositionResizePreview,
+  applyCanonicalCompositionInsertion,
+  calculateCanonicalCompositionDropPosition,
+  calculateCanonicalCompositionInsertionPlan,
   calculateProjectTimelineClipResizePreview,
   calculateProjectTimelineDropPosition,
   getProjectTimelinePlacementItems,
@@ -25,6 +30,7 @@ import {
 } from "./projectTimelinePlacement";
 import { recordProjectChange, undoProjectChange as undoHistory, redoProjectChange as redoHistory } from "./projectHistory";
 import { collectCompositionLayers, renderCompositionFrame, exportCompositionWebM, downloadExport } from "./compositionRenderer";
+import { createClipVersionSnapshot } from "./clipVersionSnapshot";
 import AIGenerationPanel from "./AIGenerationPanel";
 import CodePlayground from "./CodePlayground";
 import ClipAssetEditor from "./ClipAssetEditor";
@@ -33,7 +39,7 @@ import SandboxedCodePreview from "./SandboxedCodePreview";
 import { deleteStoredMediaAsset, isStoredMediaPath, loadMediaBlobFromPath, resolveMediaSource, storeMediaAsset } from "./mediaAssetStore";
 import { createImageThumbnail, createVideoThumbnail, getAssetThumbnail } from "./mediaThumbnail";
 import { getAudioEnvelope, withDurationAndClampedFades } from "./audioEnvelope";
-import { getMasterShotIndexAtTime, getMasterShotStart, getMasterShotStarts, getMasterTimelineDuration, rippleReorderMasterShots, setMasterShotDuration, setMasterShotStart } from "./masterTimeline";
+import { getMasterShotIndexAtTime, getMasterShotStart, getMasterShotStarts, getMasterTimelineDuration, setMasterShotDuration, setMasterShotStart } from "./masterTimeline";
 import StoryboardFlowCanvas from "./StoryboardFlowCanvas";
 import AgentStoryboardModal from "./AgentStoryboardModal";
 import ProductionChecklistDrawer from "./ProductionChecklistDrawer";
@@ -47,6 +53,7 @@ type PreviewTransformStart = PreviewTransformDraft & {
   tab?: VersionTimelineTab;
 };
 const STORAGE_KEY = "dionysus.project.v1";
+const COMPOSITION_STORAGE_KEY = "dionysus.composition.v2";
 const id = (prefix: string) => prefix + "-" + crypto.randomUUID();
 const time = (s: number) => String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(Math.floor(s % 60)).padStart(2, "0");
 const copy = (p: DionysusProject) => JSON.parse(JSON.stringify(p)) as DionysusProject;
@@ -58,10 +65,6 @@ function getMasterShotTrackId(shot: Shot, tracks: DionysusProject["tracks"]): st
 function asMasterShotTimelineClip(project: DionysusProject, shot: Shot): TimelineClip {
   return { id: shot.id, name: shot.title, kind: "video", trackId: getMasterShotTrackId(shot, project.tracks), start: getMasterShotStart(project.shots, shot.id), duration: shot.duration };
 }
-function getMasterShotPlacementItems(project: DionysusProject, excludeShotId?: string): TimelineClip[] {
-  return getProjectTimelinePlacementItems(project, undefined, excludeShotId);
-}
-
 function getTimelinePlacementItems(project: DionysusProject, movingClip?: TimelineClip): TimelineClip[] {
   return getProjectTimelinePlacementItems(project, movingClip);
 }
@@ -171,23 +174,90 @@ function AudioWaveform({ path }: { path?: string }) {
   </div>;
 }
 
+function shouldPreferCompositionRecovery(
+  legacyRead: ReturnType<typeof readProjectDocument> | undefined,
+  compositionRead: ReturnType<typeof readProjectDocument> | undefined,
+): boolean {
+  if (!compositionRead) return false;
+  if (!legacyRead) return true;
+  if (legacyRead.project.id !== compositionRead.project.id || legacyRead.project.name !== compositionRead.project.name) return false;
+  const legacyRevision = Date.parse(legacyRead.project.updatedAt);
+  const compositionRevision = Date.parse(compositionRead.project.updatedAt);
+  // Unknown timestamps are not enough evidence to override a valid legacy recovery.
+  return Number.isFinite(legacyRevision) && Number.isFinite(compositionRevision) && compositionRevision >= legacyRevision;
+}
+
 export default function App() {
   const [project, setProject] = useState<DionysusProject>(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return createEmptyProject();
-      const parsed: unknown = JSON.parse(raw);
-      return validateProject(parsed) ? normalizeLegacyTimelineTracks(clearDemoSeedData(parsed)) : createEmptyProject();
+      const compositionRaw = localStorage.getItem(COMPOSITION_STORAGE_KEY);
+      if (!raw && !compositionRaw) return createEmptyProject();
+      // Keep the original storage key/schema-1.0 payload stable for compatibility. Prefer the
+      // versioned Composition envelope only when it matches the legacy project's identity and
+      // updatedAt; a stale envelope must never override a newer legacy recovery snapshot.
+      let legacyRead: ReturnType<typeof readProjectDocument> | undefined;
+      let compositionRead: ReturnType<typeof readProjectDocument> | undefined;
+      if (raw) {
+        try { legacyRead = readProjectDocument(JSON.parse(raw) as unknown); }
+        catch { legacyRead = undefined; }
+      }
+      if (compositionRaw) {
+        try { compositionRead = readProjectDocument(JSON.parse(compositionRaw) as unknown); }
+        catch { compositionRead = undefined; } // A corrupt envelope must not hide valid legacy recovery.
+      }
+      const preferComposition = shouldPreferCompositionRecovery(legacyRead, compositionRead);
+      const restored = preferComposition
+        ? compositionRead?.project
+        : legacyRead?.project ?? compositionRead?.project;
+      if (!restored || !validateProject(restored)) return createEmptyProject();
+      // A validated v2 root is authoritative; its projection was rebuilt during read.
+      return preferComposition
+        ? clearDemoSeedData(restored)
+        : normalizeLegacyTimelineTracks(clearDemoSeedData(restored));
     } catch { return createEmptyProject(); }
+  });
+  // Root Composition is the live authority for Master Timeline placement/track commands.
+  // DionysusProject remains a deterministic schema-1.0 compatibility projection for the wider UI.
+  const [rootComposition, setRootComposition] = useState<CompositionDocument>(() => {
+    try {
+      const raw = localStorage.getItem(COMPOSITION_STORAGE_KEY);
+      if (raw) {
+        const legacyRaw = localStorage.getItem(STORAGE_KEY);
+        let legacyRead: ReturnType<typeof readProjectDocument> | undefined;
+        if (legacyRaw) {
+          try { legacyRead = readProjectDocument(JSON.parse(legacyRaw) as unknown); }
+          catch { legacyRead = undefined; }
+        }
+        const parsed = JSON.parse(raw) as { compositionModel?: { rootComposition?: CompositionDocument }; project?: DionysusProject };
+        const restored = readProjectDocument(parsed, true);
+        if (restored.project.id === project.id && shouldPreferCompositionRecovery(legacyRead, restored) && parsed.compositionModel?.rootComposition) {
+          const candidateRoot = parsed.compositionModel.rootComposition;
+          // Keep demo-seed cleanup; otherwise trust the validated root snapshot.
+          if (JSON.stringify(projectRootCompositionToLegacy(project, candidateRoot)) === JSON.stringify(project)) {
+            return structuredClone(candidateRoot);
+          }
+        }
+      }
+    } catch { /* Fall back to deterministic migration for old or corrupt recovery data. */ }
+    return migrateLegacyProjectToComposition(project).rootComposition;
   });
   const [undoStack, setUndoStack] = useState<DionysusProject[]>([]);
   const [redoStack, setRedoStack] = useState<DionysusProject[]>([]);
+  const [compositionUndoStack, setCompositionUndoStack] = useState<CompositionDocument[]>([]);
+  const [compositionRedoStack, setCompositionRedoStack] = useState<CompositionDocument[]>([]);
   const projectRef = useRef(project);
+  const rootCompositionRef = useRef(rootComposition);
   const undoStackRef = useRef(undoStack);
   const redoStackRef = useRef(redoStack);
+  const compositionUndoStackRef = useRef(compositionUndoStack);
+  const compositionRedoStackRef = useRef(compositionRedoStack);
   projectRef.current = project;
+  rootCompositionRef.current = rootComposition;
   undoStackRef.current = undoStack;
   redoStackRef.current = redoStack;
+  compositionUndoStackRef.current = compositionUndoStack;
+  compositionRedoStackRef.current = compositionRedoStack;
   const lastHistoryGroup = useRef("");
   const lastHistoryAt = useRef(0);
   const [projectSettingsOpen, setProjectSettingsOpen] = useState(false);
@@ -353,9 +423,16 @@ export default function App() {
   const [isAgentModalOpen, setIsAgentModalOpen] = useState(false);
   const [isChecklistOpen, setIsChecklistOpen] = useState(false);
   useEffect(() => {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...project, updatedAt: new Date().toISOString() })); }
+    try {
+      const snapshot = { ...project, updatedAt: new Date().toISOString() };
+      // Keep the established schema-1.0 recovery key intact for existing consumers/tests and
+      // store the versioned Composition snapshot beside it. Reopen prefers the envelope only
+      // when both snapshots describe the same project revision.
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+      localStorage.setItem(COMPOSITION_STORAGE_KEY, JSON.stringify(createProjectDocument(snapshot, rootComposition)));
+    }
     catch { setNotice(t("notice.storageFull")); }
-  }, [project]);
+  }, [project, rootComposition]);
   useEffect(() => {
     function handleHistoryShortcut(event: KeyboardEvent) {
       const target = event.target;
@@ -571,23 +648,131 @@ export default function App() {
 
   const selectedStart = useMemo(() => getMasterShotStart(project.shots, selectedId), [project.shots, selectedId]);
   const slotCount = project.shots.reduce((n, s) => n + s.slots.length, 0);
-  function change(fn: (p: DionysusProject) => DionysusProject, historyGroup = "") {
+  function reconcileRootComposition(current: CompositionDocument, target: CompositionDocument): CompositionDocument {
+    let next = structuredClone(current);
+    const targetTrackIds = new Set(target.tracks.map(track => track.id));
+    for (const track of target.tracks) {
+      if (!next.tracks.some(item => item.id === track.id)) next = addCompositionTrack(next, track);
+      else next = updateCompositionTrack(next, track.id, track);
+    }
+
+    const targetPlacementIds = new Set(target.placements.map(placement => placement.id));
+    for (const placement of [...next.placements]) {
+      if (!targetPlacementIds.has(placement.id) && next.placements.some(item => item.id === placement.id)) {
+        next = deleteCompositionPlacement(next, placement.id);
+      }
+    }
+
+    // Existing canonical placements are edited with the shared immutable commands; newly inserted
+    // legacy-domain items enter through the Composition insertion invariant checks.
+    for (const desired of target.placements) {
+      const existing = next.placements.find(placement => placement.id === desired.id);
+      if (!existing) {
+        next = insertCompositionPlacement(next, structuredClone(desired));
+        continue;
+      }
+      const current = next.placements.find(placement => placement.id === desired.id)!;
+      // Legacy project edits may refresh domain metadata, but must never overwrite canonical
+      // timing, track, source range, typed source or linked-group state for an existing placement.
+      next = updateCompositionPlacement(next, desired.id, {
+        name: desired.name,
+        legacyData: { ...current.legacyData, ...structuredClone(desired.legacyData) },
+      });
+    }
+
+    const targetTrackOrder = [...target.tracks].sort((a, b) => a.order - b.order);
+    targetTrackOrder.forEach((track, index) => {
+      const ordered = [...next.tracks].sort((a, b) => a.order - b.order);
+      const currentIndex = ordered.findIndex(item => item.id === track.id);
+      if (currentIndex >= 0 && currentIndex !== index) next = reorderCompositionTrack(next, track.id, index);
+    });
+    for (const track of [...next.tracks]) {
+      if (targetTrackIds.has(track.id)) continue;
+      const fallback = targetTrackOrder.find(item => item.kind === "video")?.id;
+      next = removeCompositionTrack(next, track.id, fallback);
+    }
+    next = {
+      ...next,
+      id: target.id,
+      name: target.name,
+      duration: target.duration,
+      frameRate: target.frameRate,
+      width: target.width,
+      height: target.height,
+      provenance: target.provenance,
+      nestedCompositions: structuredClone(target.nestedCompositions),
+      legacyData: structuredClone(target.legacyData),
+      tracks: [...target.tracks].sort((a, b) => a.order - b.order).map((track, order) => ({ ...structuredClone(track), order })),
+    };
+    assertValidCompositionDocument(next);
+    return next;
+  }
+
+  function change(fn: (p: DionysusProject) => DionysusProject, historyGroup = "", canonicalRoot?: CompositionDocument) {
     const now = Date.now();
     const current = projectRef.current;
     const currentUndo = undoStackRef.current;
+    const currentRoot = rootCompositionRef.current;
     const coalesce = Boolean(historyGroup) && historyGroup === lastHistoryGroup.current && now - lastHistoryAt.current < 800;
     if (!coalesce) {
       const history = recordProjectChange({ current: copy(current), undo: currentUndo, redo: redoStackRef.current }, copy(current));
       undoStackRef.current = history.undo.map(copy);
       setUndoStack(undoStackRef.current);
+      compositionUndoStackRef.current = [...compositionUndoStackRef.current.slice(-49), structuredClone(currentRoot)];
+      setCompositionUndoStack(compositionUndoStackRef.current);
     }
     lastHistoryGroup.current = historyGroup;
     lastHistoryAt.current = now;
     redoStackRef.current = [];
     setRedoStack([]);
+    compositionRedoStackRef.current = [];
+    setCompositionRedoStack([]);
     const next = { ...fn(copy(current)), updatedAt: new Date().toISOString() };
-    projectRef.current = next;
-    setProject(next);
+    // Explicit root commands supply the canonical document first. Non-root domain edits refresh
+    // the root snapshot through the legacy migration until those domain editors are promoted.
+    const nextRoot = canonicalRoot ? structuredClone(canonicalRoot) : reconcileRootComposition(currentRoot, migrateLegacyProjectToComposition(next).rootComposition);
+    const projected = projectRootCompositionToLegacy(next, nextRoot);
+    projectRef.current = projected;
+    rootCompositionRef.current = nextRoot;
+    setProject(projected);
+    setRootComposition(nextRoot);
+  }
+
+  function changeRootComposition(update: (document: CompositionDocument) => CompositionDocument, historyGroup = "") {
+    const nextRoot = update(structuredClone(rootCompositionRef.current));
+    const nextProject = projectRootCompositionToLegacy(projectRef.current, nextRoot);
+    change(() => nextProject, historyGroup, nextRoot);
+  }
+
+  function updateRootTrackFromProjectPatch(root: CompositionDocument, trackId: string, patch: Partial<DionysusProject["tracks"][number]>): CompositionDocument {
+    const track = root.tracks.find(item => item.id === trackId);
+    if (!track) throw new Error("Composition track not found.");
+    return updateCompositionTrack(root, trackId, {
+      ...(patch.name !== undefined ? { name: patch.name } : {}),
+      ...(patch.muted !== undefined ? { muted: patch.muted } : {}),
+      ...(patch.backgroundColor !== undefined ? { backgroundColor: patch.backgroundColor } : {}),
+      ...(patch.backgroundTransparent !== undefined ? { backgroundTransparent: patch.backgroundTransparent } : {}),
+      ...(patch.opacity !== undefined ? { opacity: patch.opacity } : {}),
+      legacyData: { ...(track.legacyData ?? {}), ...structuredClone(patch) },
+    });
+  }
+
+  function moveRootPlacementOrLegacy(target: { type: "shot"; shotId: string } | { type: "clip"; clipId: string }, trackId: string, start: number) {
+    const placementId = target.type === "shot" ? target.shotId : target.clipId;
+    if (rootCompositionRef.current.placements.some(placement => placement.id === placementId)) {
+      changeRootComposition(root => moveCompositionPlacementToTrack(root, placementId, trackId, start));
+    } else {
+      change(project => moveProjectTimelinePlacement(project, target, trackId, start));
+    }
+  }
+
+  function commitRootResizeOrLegacy(preview: ClipResizePreview) {
+    const affectedIds = [preview.id, ...preview.trims.map(trim => trim.id)];
+    if (affectedIds.every(placementId => rootCompositionRef.current.placements.some(placement => placement.id === placementId))) {
+      changeRootComposition(root => applyCompositionResizePreview(root, preview));
+    } else {
+      change(project => applyProjectTimelineClipResize(project, preview));
+    }
   }
 
   function beginTimelineClipPlacement(clip: TimelineClip) {
@@ -610,7 +795,7 @@ export default function App() {
       setNotice("Choose a compatible layer for this clip. Audio belongs on an Audio layer; visual assets belong on a Video layer.");
       return;
     }
-    const plan = calculateProjectTimelineInsertionPlan(projectRef.current, draft, targetTrack.id, desiredStart);
+    const plan = calculateCanonicalCompositionInsertionPlan(rootCompositionRef.current, draft, targetTrack.id, desiredStart);
     if (plan.status === "invalid-track") {
       setNotice("This clip cannot be placed on the selected layer.");
       return;
@@ -628,7 +813,7 @@ export default function App() {
       return;
     }
     try {
-      change(project => applyProjectTimelineInsertion(project, plan));
+      changeRootComposition(root => applyCanonicalCompositionInsertion(root, projectRef.current, plan));
       setSelectedTimelineClipId(plan.clip.id);
       setTimelineClipSettingsId(plan.clip.id);
       setPendingTimelineClip(null);
@@ -642,7 +827,7 @@ export default function App() {
     const plan = timelineInsertConflict;
     if (!plan) return;
     try {
-      change(project => applyProjectTimelineInsertion(project, plan, resolution));
+      changeRootComposition(root => applyCanonicalCompositionInsertion(root, projectRef.current, plan, resolution));
       setSelectedTimelineClipId(plan.clip.id);
       setSelectedTimelineTrackId(plan.trackId);
       setTimelineClipSettingsId(plan.clip.id);
@@ -761,7 +946,9 @@ export default function App() {
     if (active.kind === "layer" && active.tab) {
       updateTimelineVersionLayer(active.tab, active.id, patch);
     } else if (active.kind === "clip") {
-      change(p => ({ ...p, timelineClips: (p.timelineClips ?? []).map(clip => clip.id === active.id ? { ...clip, ...patch } : clip) }));
+      updateRootTimelineClip(active.id,patch);
+    } else if (rootCompositionRef.current.tracks.some(track => track.id === active.id)) {
+      changeRootComposition(root => updateRootTrackFromProjectPatch(root, active.id, patch));
     } else {
       change(p => ({ ...p, tracks: p.tracks.map(track => track.id === active.id ? { ...track, ...patch } : track) }));
     }
@@ -775,6 +962,17 @@ export default function App() {
     projectRef.current = { ...copy(history.current), updatedAt: new Date().toISOString() };
     undoStackRef.current = history.undo.map(copy);
     redoStackRef.current = history.redo.map(copy);
+    const priorComposition = compositionUndoStackRef.current[compositionUndoStackRef.current.length - 1];
+    if (priorComposition) {
+      compositionUndoStackRef.current = compositionUndoStackRef.current.slice(0, -1);
+      compositionRedoStackRef.current = [...compositionRedoStackRef.current, structuredClone(rootCompositionRef.current)];
+      rootCompositionRef.current = structuredClone(priorComposition);
+      setRootComposition(rootCompositionRef.current);
+      setCompositionUndoStack(compositionUndoStackRef.current);
+      setCompositionRedoStack(compositionRedoStackRef.current);
+      // Root placement fields are re-projected from the history snapshot, never re-migrated.
+      projectRef.current = { ...projectRootCompositionToLegacy(projectRef.current, rootCompositionRef.current), updatedAt: new Date().toISOString() };
+    }
     setProject(projectRef.current);
     setUndoStack(undoStackRef.current);
     setRedoStack(redoStackRef.current);
@@ -787,6 +985,16 @@ export default function App() {
     projectRef.current = { ...copy(history.current), updatedAt: new Date().toISOString() };
     undoStackRef.current = history.undo.map(copy);
     redoStackRef.current = history.redo.map(copy);
+    const nextComposition = compositionRedoStackRef.current[compositionRedoStackRef.current.length - 1];
+    if (nextComposition) {
+      compositionRedoStackRef.current = compositionRedoStackRef.current.slice(0, -1);
+      compositionUndoStackRef.current = [...compositionUndoStackRef.current, structuredClone(rootCompositionRef.current)];
+      rootCompositionRef.current = structuredClone(nextComposition);
+      setRootComposition(rootCompositionRef.current);
+      setCompositionUndoStack(compositionUndoStackRef.current);
+      setCompositionRedoStack(compositionRedoStackRef.current);
+      projectRef.current = { ...projectRootCompositionToLegacy(projectRef.current, rootCompositionRef.current), updatedAt: new Date().toISOString() };
+    }
     setProject(projectRef.current);
     setUndoStack(undoStackRef.current);
     setRedoStack(redoStackRef.current);
@@ -827,10 +1035,10 @@ export default function App() {
         const versions = slot.versions.map(version => {
           const newVersionId = id("version");
           versionIdMap.set(version.id, newVersionId);
+          const duplicatedVersion = duplicateClipVersionComposition(version, kind => id(kind));
           return {
-            ...version,
+            ...duplicatedVersion,
             id: newVersionId,
-            layers: version.layers.map(layer => ({ ...layer, id: id("layer") })),
             generationRecords: version.generationRecords.map(record => ({ ...record, id: id("generation") })),
           };
         });
@@ -882,10 +1090,10 @@ export default function App() {
     const versions = source.versions.map(version => {
       const newVersionId = id("version");
       versionIdMap.set(version.id, newVersionId);
+      const duplicatedVersion = duplicateClipVersionComposition(version, kind => id(kind));
       return {
-        ...JSON.parse(JSON.stringify(version)),
+        ...duplicatedVersion,
         id: newVersionId,
-        layers: version.layers.map(layer => ({ ...layer, id: id("layer") })),
         generationRecords: version.generationRecords.map(record => ({ ...record, id: id("generation") })),
       };
     });
@@ -913,22 +1121,215 @@ export default function App() {
 
   function updateShot(shotId: string, patch: Partial<Shot>) {
     const textField = "title" in patch ? "shot-title:" + shotId : "intent" in patch ? "shot-intent:" + shotId : "";
+    const { duration, ...domainPatch } = patch;
+    if (typeof duration === "number" && rootCompositionRef.current.placements.some(placement => placement.id === shotId)) {
+      const currentPlacement = rootCompositionRef.current.placements.find(placement => placement.id === shotId)!;
+      changeRootComposition(root => applyCompositionResizePreview(root, {
+        id: shotId, start: currentPlacement.start, duration, edge: "right", trims: [],
+      }), textField);
+      if (Object.keys(domainPatch).length) {
+        change(p => ({ ...p, shots: p.shots.map(shot => shot.id === shotId ? { ...shot, ...domainPatch } : shot) }), textField);
+      }
+      return;
+    }
     change(p => {
-      const shots = typeof patch.duration === "number" ? setMasterShotDuration(p.shots, shotId, patch.duration) : p.shots;
+      const shots = typeof duration === "number" ? setMasterShotDuration(p.shots, shotId, duration) : p.shots;
       return { ...p, shots: shots.map(s => s.id === shotId ? { ...s, ...patch } : s) };
     }, textField);
   }
   function updateMasterShotStart(shotId: string, value: number) {
     if (!Number.isFinite(value)) return;
+    if (rootCompositionRef.current.placements.some(placement => placement.id === shotId)) {
+      changeRootComposition(root => moveCompositionPlacement(root, shotId, value), "shot-start:" + shotId);
+      return;
+    }
     change(p => ({ ...p, shots: setMasterShotStart(p.shots, shotId, value) }), "shot-start:" + shotId);
   }
   function selectClipSlot(slotId: string) { setSelectedSlotId(slotId); }
   function addMasterTimelineTrack(kind: "video" | "audio" | "text" | "procedural", displayRole?: string) {
     const role = displayRole ?? (kind === "procedural" ? "Code" : kind === "audio" ? "Audio" : kind === "text" ? "Text" : "Video");
-    change(p => ({ ...p, tracks: [...p.tracks, { id: id("track-" + kind), name: role + " " + (p.tracks.filter(track => track.name.startsWith(role + " ")).length + 1), kind }] }));
+    const trackId = id("track-" + kind);
+    const name = role + " " + (project.tracks.filter(track => track.name.startsWith(role + " ")).length + 1);
+    const legacyTrack = { id: trackId, name, kind };
+    changeRootComposition(root => addCompositionTrack(root, {
+      ...legacyTrack,
+      kind: kind === "audio" ? "audio" : kind === "text" ? "text" : "video",
+      order: root.tracks.length,
+      ...(kind === "procedural" ? { originalKind: "procedural" } : {}),
+      legacyData: legacyTrack,
+    }));
     setShowAddLayerMenu(false);
   }
 
+  function insertTimelineClipCanonical(clip: TimelineClip) {
+    const placement = createRootCompositionPlacementForTimelineClip(projectRef.current, rootCompositionRef.current, clip);
+    changeRootComposition(root => insertCompositionPlacement(root, placement));
+  }
+
+  function deleteTimelineClipCanonical(clip: TimelineClip) {
+    if (rootCompositionRef.current.placements.some(placement => placement.id === clip.id)) {
+      changeRootComposition(root => deleteCompositionPlacement(root, clip.id));
+      return;
+    }
+    change(project => ({ ...project, timelineClips: deleteTimelineClip({ tracks: project.tracks, timelineClips: project.timelineClips ?? [] }, clip.id).timelineClips }));
+  }
+
+  function updateRootTimelineClip(clipId: string, patch: Partial<TimelineClip>) {
+    const current = projectRef.current.timelineClips?.find(item => item.id === clipId);
+    const canonical = rootCompositionRef.current.placements.find(item => item.id === clipId);
+    if (!current || !canonical) {
+      change(project => ({ ...project, timelineClips: (project.timelineClips ?? []).map(item => item.id === clipId ? { ...item, ...patch } : item) }));
+      return;
+    }
+    const updated = { ...current, ...patch };
+    if (patch.duration !== undefined && patch.duration !== current.duration &&
+        patch.sourceOut === undefined && (current.sourceIn !== undefined || current.sourceOut !== undefined)) {
+      updated.sourceOut = (updated.sourceIn ?? 0) + updated.duration;
+    }
+    const sourceTemplate = createRootCompositionPlacementForTimelineClip(projectRef.current, rootCompositionRef.current, updated);
+    changeRootComposition(root => {
+      let next = root;
+      if (patch.start !== undefined && patch.start !== current.start) {
+        next = moveCompositionPlacement(next, clipId, updated.start);
+      }
+      if (patch.duration !== undefined && patch.duration !== current.duration) {
+        next = applyCompositionResizePreview(next, {
+          id: clipId, start: updated.start, duration: updated.duration, edge: "right", trims: [],
+        });
+      }
+      return updateCompositionPlacement(next, clipId, {
+        name: updated.name,
+        trackId: updated.trackId,
+        start: updated.start,
+        duration: updated.duration,
+        source: sourceTemplate.source,
+        sourceIn: updated.sourceIn,
+        sourceOut: updated.sourceOut,
+        linkedToPlacementId: sourceTemplate.linkedToPlacementId,
+        legacyData: { ...canonical.legacyData, ...updated },
+      });
+    });
+  }
+
+  function unlinkRootTimelineAudio(clipId: string) {
+    if (rootCompositionRef.current.placements.some(item => item.id === clipId)) {
+      changeRootComposition(root => unlinkCompositionPlacement(root, clipId));
+      return;
+    }
+    change(project => ({ ...project, timelineClips: unlinkTimelineAudio({ tracks: project.tracks, timelineClips: project.timelineClips ?? [] }, clipId).timelineClips }));
+  }
+
+  function getCanonicalTimelineClipForDrop(clip: TimelineClip): TimelineClip {
+    const placement = rootCompositionRef.current.placements.find(item => item.id === clip.id);
+    if (!placement) return clip;
+    return {
+      ...clip,
+      name: placement.name,
+      trackId: placement.trackId,
+      start: placement.start,
+      duration: placement.duration,
+      sourceIn: placement.sourceIn,
+      sourceOut: placement.sourceOut,
+      linkedVideoClipId: placement.linkedToPlacementId,
+    };
+  }
+
+  function getCanonicalMasterShotTimelineClip(shot: Shot): TimelineClip {
+    const clip = asMasterShotTimelineClip(projectRef.current, shot);
+    const placement = rootCompositionRef.current.placements.find(item =>
+      item.id === shot.id && item.legacyData.entityType === "master-shot"
+    );
+    return placement
+      ? { ...clip, trackId: placement.trackId, start: placement.start, duration: placement.duration }
+      : clip;
+  }
+
+  function calculateRootTimelineDropPosition(movingClip: TimelineClip, trackId: string, desiredStart: number, duration: number) {
+    if (rootCompositionRef.current.placements.some(item => item.id === movingClip.id)) {
+      const canonicalPosition = calculateCanonicalCompositionDropPosition(rootCompositionRef.current, movingClip, trackId, desiredStart, duration);
+      if (canonicalPosition) return canonicalPosition;
+    }
+    // Compatibility fallback for placements omitted from the root (e.g. legacy Storyboard
+    // materializations) or when the canonical candidate set cannot produce a visual snap.
+    return calculateProjectTimelineDropPosition(projectRef.current, movingClip, trackId, desiredStart, duration);
+  }
+
+  function moveRootTimelineClip(clipId: string, start: number) {
+    if (rootCompositionRef.current.placements.some(item => item.id === clipId)) {
+      changeRootComposition(root => moveCompositionPlacement(root, clipId, start));
+      return;
+    }
+    change(project => ({ ...project, timelineClips: moveTimelineClip({ tracks: project.tracks, timelineClips: project.timelineClips ?? [] }, clipId, start).timelineClips }));
+  }
+
+  function trimRootTimelineClip(clipId: string, duration: number) {
+    if (rootCompositionRef.current.placements.some(item => item.id === clipId)) {
+      changeRootComposition(root => trimCompositionPlacement(root, clipId, duration));
+      return;
+    }
+    change(project => ({ ...project, timelineClips: trimTimelineClip({ tracks: project.tracks, timelineClips: project.timelineClips ?? [] }, clipId, duration).timelineClips }));
+  }
+
+  function splitRootTimelineClip(clipId: string, splitAt: number, selectedNewId = id("timeline-clip")) {
+    const root = rootCompositionRef.current;
+    if (!root.placements.some(item => item.id === clipId)) {
+      change(project => ({ ...project, timelineClips: splitTimelineClip({ tracks: project.tracks, timelineClips: project.timelineClips ?? [] }, clipId, splitAt, { newClipId: selectedNewId }).timelineClips }));
+      return selectedNewId;
+    }
+    const byId = new Map(root.placements.map(item => [item.id, item]));
+    let groupRoot = byId.get(clipId)!;
+    while (groupRoot.linkedToPlacementId) {
+      const parent = byId.get(groupRoot.linkedToPlacementId);
+      if (!parent) throw new Error("Linked placement parent is missing.");
+      groupRoot = parent;
+    }
+    const groupIds = new Set<string>([groupRoot.id]);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const placement of root.placements) {
+        if (placement.linkedToPlacementId && groupIds.has(placement.linkedToPlacementId) && !groupIds.has(placement.id)) {
+          groupIds.add(placement.id);
+          changed = true;
+        }
+      }
+    }
+    const newPlacementIds = Object.fromEntries([...groupIds].map(oldId => [oldId, oldId === clipId ? selectedNewId : id("timeline-clip")]));
+    changeRootComposition(document => splitCompositionPlacement(document, clipId, splitAt, { newPlacementIds }));
+    return selectedNewId;
+  }
+
+  function duplicateRootTimelineClip(clip: TimelineClip, selectedNewId = id("timeline-clip")): string {
+    const root = rootCompositionRef.current;
+    if (!root.placements.some(item => item.id === clip.id)) {
+      change(project => ({ ...project, timelineClips: duplicateTimelineClip({ tracks: project.tracks, timelineClips: project.timelineClips ?? [] }, clip.id, { newClipId: selectedNewId, start: clip.start + clip.duration }).timelineClips }));
+      setSelectedTimelineClipId(selectedNewId);
+      return selectedNewId;
+    }
+    const byId = new Map(root.placements.map(item => [item.id, item]));
+    let groupRoot = byId.get(clip.id)!;
+    while (groupRoot.linkedToPlacementId) {
+      const parent = byId.get(groupRoot.linkedToPlacementId);
+      if (!parent) throw new Error("Linked placement parent is missing.");
+      groupRoot = parent;
+    }
+    const groupIds = new Set<string>([groupRoot.id]);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const placement of root.placements) {
+        if (placement.linkedToPlacementId && groupIds.has(placement.linkedToPlacementId) && !groupIds.has(placement.id)) {
+          groupIds.add(placement.id);
+          changed = true;
+        }
+      }
+    }
+    const newPlacementIds = Object.fromEntries([...groupIds].map(oldId => [oldId, oldId === clip.id ? selectedNewId : id("timeline-clip")]));
+    const next = duplicateCompositionPlacement(root, clip.id, { newPlacementIds, start: clip.start + clip.duration });
+    changeRootComposition(() => next);
+    setSelectedTimelineClipId(newPlacementIds[clip.id]);
+    return newPlacementIds[clip.id];
+  }
   function syncStoryboardToTimeline() {
     const videoTrack = project.tracks.find(track => track.kind === "video");
     const audioTrack = project.tracks.find(track => track.kind === "audio");
@@ -958,36 +1359,30 @@ export default function App() {
 
   function saveMasterTimelineAsClipAsset() {
     const current = projectRef.current;
-    const flattenedLayers = collectCompositionLayers(current).map(layer => ({ ...layer, id: id("layer") }));
-    const duration = Math.max(
-      0.1,
-      getMasterTimelineDuration(current.shots),
-      ...flattenedLayers.map(layer => layer.start + layer.duration)
-    );
     const now = new Date().toISOString();
-    const version: ClipVersion = {
-      id: id("clip-version"),
-      name: "Version A",
-      description: "Snapshot saved from Master Timeline",
-      duration,
-      layers: flattenedLayers,
-      scriptVersionIds: [],
-      generationRecords: []
-    };
+    const assetId = id("asset");
+    const versionId = id("clip-version");
+    const versionName = "Version A";
+    const version = createClipVersionSnapshot(current, {
+      assetId,
+      versionId,
+      versionName,
+      createdAt: now,
+    });
     const asset: Asset = {
-      id: id("asset"),
+      id: assetId,
       name: current.name + " · Timeline Clip",
       kind: "clip",
       canvasWidth: current.width,
       canvasHeight: current.height,
-      notes: "Snapshot saved from the Master Timeline. Edits to this Clip Asset are independent.",
+      notes: "Structurally preserved Master Timeline snapshot. Source assets and pinned versions remain referenced; subsequent edits are independent.",
       createdAt: now,
       updatedAt: now,
       selectedClipVersionId: version.id,
       clipVersions: [version]
     };
     change(p => ({ ...p, assets: [...p.assets, asset] }));
-    setNotice("Master Timeline saved as a reusable Clip Asset. The original Master Timeline is unchanged.");
+    setNotice("Master Timeline saved as a structurally preserved Clip Asset. The original Master Timeline is unchanged.");
   }
 
   function addStoryboardConnection(fromShotId: string, toShotId: string, label = "Cut") {
@@ -1110,19 +1505,24 @@ export default function App() {
       ...shot,
       slots: shot.slots.map(slot => slot.id !== slotId ? slot : {
         ...slot,
-        versions: slot.versions.map(version => version.id !== versionId ? version : {
-          ...version,
-          layers: version.layers.map(layer => {
-            if (layer.id !== layerId) return layer;
-            const updated = { ...layer, ...patch };
-            return typeof patch.duration === "number" ? withDurationAndClampedFades(updated, patch.duration) : updated;
-          })
+        versions: slot.versions.map(version => {
+          if (version.id !== versionId) return version;
+          const currentLayer = version.layers.find(layer => layer.id === layerId);
+          if (!currentLayer) return version;
+          const updated = { ...currentLayer, ...patch };
+          const clamped = typeof patch.duration === "number"
+            ? withDurationAndClampedFades(updated, patch.duration)
+            : updated;
+          const canonicalPatch = typeof patch.duration === "number"
+            ? { ...patch, fadeIn: clamped.fadeIn, fadeOut: clamped.fadeOut }
+            : patch;
+          return updateNestedLayer(version, layerId, canonicalPatch);
         })
       })
     }) }));
   }
 
-  function updateTimelineVersion(tab: VersionTimelineTab, update: (version: ClipVersion) => ClipVersion) {
+  function updateTimelineVersion(tab: VersionTimelineTab, update: (version: ClipVersion) => ClipVersion, historyGroup = "") {
     if (tab.assetId) {
       change(p => ({
         ...p,
@@ -1131,7 +1531,7 @@ export default function App() {
           updatedAt: new Date().toISOString(),
           clipVersions: (asset.clipVersions ?? []).map(version => version.id === tab.versionId ? update(version) : version)
         })
-      }));
+      }), historyGroup);
       return;
     }
     change(p => ({
@@ -1143,7 +1543,7 @@ export default function App() {
           versions: slot.versions.map(version => version.id === tab.versionId ? update(version) : version)
         })
       })
-    }));
+    }), historyGroup);
   }
 
   function updateTimelineVersionLayer(tab: VersionTimelineTab, layerId: string, patch: Partial<CompositionLayer>) {
@@ -1182,14 +1582,18 @@ export default function App() {
         code: requestedAsset.js ?? "",
       };
     }
-    updateTimelineVersion(tab, currentVersion => ({
-      ...currentVersion,
-      layers: currentVersion.layers.map(item => {
-        if (item.id !== layerId) return item;
-        const updated = { ...item, ...safePatch };
-        return typeof safePatch.duration === "number" ? withDurationAndClampedFades(updated, safePatch.duration) : updated;
-      })
-    }));
+    updateTimelineVersion(tab, currentVersion => {
+      const currentLayer = currentVersion.layers.find(item => item.id === layerId);
+      if (!currentLayer) return currentVersion;
+      const updated = { ...currentLayer, ...safePatch };
+      const clamped = typeof safePatch.duration === "number"
+        ? withDurationAndClampedFades(updated, safePatch.duration)
+        : updated;
+      const canonicalPatch = typeof safePatch.duration === "number"
+        ? { ...safePatch, fadeIn: clamped.fadeIn, fadeOut: clamped.fadeOut }
+        : safePatch;
+      return updateNestedLayer(currentVersion, layerId, canonicalPatch);
+    }, "nested-layer:" + tab.id + ":" + layerId);
   }
 
   function addTimelineVersionTrack(tab: VersionTimelineTab, kind: "video" | "audio" | "text") {
@@ -1228,7 +1632,13 @@ export default function App() {
   function updateTimelineVersionDuration(tab: VersionTimelineTab, value: number) {
     if (!Number.isFinite(value) || value < 0.1) return;
     const duration = Math.max(0.1, value);
-    updateTimelineVersion(tab, version => ({ ...version, duration }));
+    updateTimelineVersion(tab, version => ({
+      ...version,
+      duration,
+      ...(version.composition ? {
+        composition: { ...structuredClone(version.composition), duration },
+      } : {}),
+    }), "nested-duration:" + tab.id);
     if (editorTime > duration) {
       playbackTimeRef.current = duration;
       setEditorTime(duration);
@@ -1294,12 +1704,12 @@ export default function App() {
     const current = asset?.kind === "clip" ? asset.clipVersions?.find(item => item.id === versionId) : undefined;
     if (!asset || asset.kind !== "clip" || !current) return;
     const nextId = id("clip-version");
+    const duplicated = duplicateClipVersionComposition(current, kind => id(kind));
     const nextVersion: ClipVersion = {
-      ...(JSON.parse(JSON.stringify(current)) as ClipVersion),
+      ...duplicated,
       id: nextId,
       name: "Version " + ((asset.clipVersions?.length ?? 0) + 1),
       description: current.description ? "Copy of " + current.name + ": " + current.description : "New version based on " + current.name,
-      layers: current.layers.map(layer => ({ ...layer, id: id("layer") })),
       scriptVersionIds: [...current.scriptVersionIds],
       generationRecords: []
     };
@@ -1371,7 +1781,7 @@ export default function App() {
     if (!shot || !slot) return;
     const current = slot.versions.find(version => version.id === slot.selectedVersionId) ?? slot.versions[0];
     const nextId = id("version");
-    const nextVersion = current ? { ...JSON.parse(JSON.stringify(current)), id: nextId, name: "Version " + (slot.versions.length + 1), description: current.description ? "Copy of " + current.name + ": " + current.description : "New version based on " + current.name, layers: current.layers.map(layer => ({ ...layer, id: id("layer") })), scriptVersionIds: [...current.scriptVersionIds], generationRecords: [] } : { id: nextId, name: "Version 1", description: "", duration: slot.duration, layers: [], scriptVersionIds: [], generationRecords: [] };
+    const nextVersion = current ? { ...duplicateClipVersionComposition(current, kind => id(kind)), id: nextId, name: "Version " + (slot.versions.length + 1), description: current.description ? "Copy of " + current.name + ": " + current.description : "New version based on " + current.name, scriptVersionIds: [...current.scriptVersionIds], generationRecords: [] } : { id: nextId, name: "Version 1", description: "", duration: slot.duration, layers: [], scriptVersionIds: [], generationRecords: [] };
     change(p => ({ ...p, shots: p.shots.map(item => item.id !== shotId ? item : { ...item, slots: item.slots.map(s => s.id !== slotId ? s : { ...s, versions: [...s.versions, nextVersion], selectedVersionId: nextId }) }) }));
     setNotice("New version created; the previous versions are preserved.");
     return nextId;
@@ -1469,13 +1879,21 @@ export default function App() {
   }
 
   function getMasterShotResizePreview(active: NonNullable<typeof shotResizeRef.current>, clientX: number): ClipResizePreview | null {
-    const current = projectRef.current, shot = current.shots.find(item => item.id === active.id);
+    const current = projectRef.current;
+    const root = rootCompositionRef.current;
+    const canonicalShot = root.placements.find(item => item.id === active.id && item.legacyData.entityType === "master-shot");
+    const extent = canonicalShot
+      ? Math.max(10, root.duration, ...root.placements.map(item => item.start + item.duration))
+      : Math.max(getMasterShotStart(current.shots, active.id) + (current.shots.find(item => item.id === active.id)?.duration ?? 0),
+          ...(current.timelineClips ?? []).map(clip => clip.start + clip.duration), 10);
+    const fps = Math.max(1, canonicalShot ? root.frameRate || 24 : current.frameRate || 24);
+    const delta = Math.round(((clientX - active.x) / Math.max(active.laneWidth, 1)) * extent * fps) / fps;
+    if (canonicalShot) return calculateCanonicalCompositionResizePreview(root, canonicalShot.id, active.edge, delta, extent);
+    const shot = current.shots.find(item => item.id === active.id);
     if (!shot) return null;
-    const fps = Math.max(1, current.frameRate || 24);
-    const duration = Math.max(getMasterTimelineDuration(current.shots), ...(current.timelineClips ?? []).map(clip => clip.start + clip.duration), 10);
-    const delta = Math.round(((clientX - active.x) / Math.max(active.laneWidth, 1)) * duration * fps) / fps;
-    return calculateProjectTimelineClipResizePreview(current, asMasterShotTimelineClip(current, shot), active.edge, delta, duration);
+    return calculateProjectTimelineClipResizePreview(current, asMasterShotTimelineClip(current, shot), active.edge, delta, extent);
   }
+
   function beginMasterShotResize(event: React.PointerEvent<HTMLElement>, shot: Shot, start: number, edge: "left" | "right", trackId: string) {
     event.preventDefault(); event.stopPropagation();
     const lane = event.currentTarget.closest(".visual-track-lane") as HTMLElement | null;
@@ -1492,7 +1910,7 @@ export default function App() {
     if (!active || active.id !== shot.id || active.pointerId !== event.pointerId) return;
     const preview = getMasterShotResizePreview(active, event.clientX) ?? shotResizePreview;
     if (preview && preview.id === shot.id) {
-      change(p => applyProjectTimelineClipResize(p, preview));
+      commitRootResizeOrLegacy(preview);
       setNotice(preview.trims.length ? "Shot resized and adjacent timeline item trimmed. Use Undo to restore both." : "Shot resized.");
     }
     shotResizeRef.current = null;
@@ -1500,12 +1918,18 @@ export default function App() {
   }
 
   function getTimelineClipResizePreview(active: NonNullable<typeof clipResizeRef.current>, clientX: number) {
-    const current=projectRef.current,fps=Math.max(1,current.frameRate||24);
-    const duration=Math.max(getMasterTimelineDuration(current.shots),...(current.timelineClips??[]).map(clip=>clip.start+clip.duration),10);
-    const delta=Math.round(((clientX-active.x)/Math.max(active.laneWidth,1))*duration*fps)/fps;
-    const moving=(current.timelineClips??[]).find(clip=>clip.id===active.id);
-    if(!moving)return null;
-    return calculateProjectTimelineClipResizePreview(current,moving,active.edge,delta,duration);
+    const current = projectRef.current;
+    const root = rootCompositionRef.current;
+    const canonical = root.placements.some(item => item.id === active.id);
+    const extent = canonical
+      ? Math.max(10, root.duration, ...root.placements.map(item => item.start + item.duration))
+      : Math.max(getMasterTimelineDuration(current.shots), ...(current.timelineClips ?? []).map(clip => clip.start + clip.duration), 10);
+    const fps = Math.max(1, canonical ? root.frameRate || 24 : current.frameRate || 24);
+    const delta = Math.round(((clientX - active.x) / Math.max(active.laneWidth, 1)) * extent * fps) / fps;
+    if (canonical) return calculateCanonicalCompositionResizePreview(root, active.id, active.edge, delta, extent);
+    const moving = (current.timelineClips ?? []).find(clip => clip.id === active.id);
+    if (!moving) return null;
+    return calculateProjectTimelineClipResizePreview(current, moving, active.edge, delta, extent);
   }
   function removeClipResizeListeners(active: NonNullable<typeof clipResizeRef.current>) {
     if(active.moveListener)window.removeEventListener("pointermove",active.moveListener);
@@ -1522,7 +1946,7 @@ export default function App() {
       const a=clipResizeRef.current;if(!a||a.id!==clip.id||a.pointerId!==e.pointerId)return;
       const preview=getTimelineClipResizePreview(a,e.clientX),currentClip=projectRef.current.timelineClips?.find(item=>item.id===clip.id);
       if(preview&&currentClip&&(Math.abs(preview.start-currentClip.start)>1e-6||Math.abs(preview.duration-currentClip.duration)>1e-6||preview.trims.length>0)){
-        change(p=>applyProjectTimelineClipResize(p,preview));
+        commitRootResizeOrLegacy(preview);
         setNotice(preview.trims.length?"Clip resized and adjacent timeline item trimmed. Use Undo to restore both.":"Clip resized.");
       }
       cancelTimelineClipResize();
@@ -1572,7 +1996,7 @@ export default function App() {
       const rect = lane.getBoundingClientRect();
       const pointerTime = ((clientX - rect.left) / Math.max(rect.width, 1)) * mediaTimelineDuration;
       const rawStart = Math.max(0, pointerTime - active.grabOffset);
-      const pos = calculateProjectTimelineDropPosition(currentProject, moving, track.id, rawStart, mediaTimelineDuration);
+      const pos = calculateRootTimelineDropPosition(moving, track.id, rawStart, mediaTimelineDuration);
       return pos ? { project: currentProject, moving, track, pos } : null;
     };
     const onMove = (nativeEvent: PointerEvent) => {
@@ -1637,7 +2061,7 @@ export default function App() {
         setNotice("Clip move cancelled: this position overlaps existing content.");
       } else if (drop.track.id !== drop.moving.trackId || Math.abs(drop.pos.start - drop.moving.start) > 1e-6) {
         try {
-          change(p => moveProjectTimelinePlacement(p, { type: "clip", clipId: drop.moving.id }, drop.track.id, drop.pos.start));
+          moveRootPlacementOrLegacy({ type: "clip", clipId: drop.moving.id }, drop.track.id, drop.pos.start);
           setSelectedTimelineClipId(drop.moving.id);
           setSelectedTimelineTrackId(drop.track.id);
           setIsPlaying(false);
@@ -1844,8 +2268,7 @@ export default function App() {
       const preview = getNestedLayerResizePreview(current, e.clientX);
       const original = current.version.layers.find(item => item.id === layer.id);
       if (preview && original && (Math.abs(preview.start - original.start) > 1e-6 || Math.abs(preview.duration - original.duration) > 1e-6 || preview.trims.length > 0)) {
-        const fps = Math.max(1, projectRef.current.frameRate || 24);
-        updateTimelineVersion(current.tab, latest => applyClipVersionResizePreview(latest, preview, fps));
+        updateTimelineVersion(current.tab, latest => applyClipVersionResizePreview(latest, preview));
         setNotice(preview.trims.length ? "Clip layer resized and adjacent layer trimmed. Use Undo to restore both." : "Clip layer resized.");
       }
       cancelNestedLayerResize();
@@ -1975,7 +2398,7 @@ export default function App() {
       const asset: Asset = { id: assetId, name: file.name, kind, path, createdAt: now, updatedAt: now, notes: "Imported from Timeline; stored locally.", ...(thumbnailPath ? { thumbnailPath } : {}) };
       const duration = Math.max(.5, Math.min(3, mediaTimelineDuration - editorTime || 3));
       const clip: TimelineClip = { id: clipId, name: file.name.replace(/\\.[^.]+$/, ""), kind, trackId: track.id, start: Math.round(editorTime * Math.max(1, projectRef.current.frameRate || 24)) / Math.max(1, projectRef.current.frameRate || 24), duration, assetId, sourceIn: 0 };
-      change(p => ({ ...p, assets: [...p.assets, asset], timelineClips: [...(p.timelineClips ?? []), clip] }));
+      const current = projectRef.current; const nextProject = { ...current, assets: [...current.assets, asset], timelineClips: [...(current.timelineClips ?? []), clip] }; const placement = createRootCompositionPlacementForTimelineClip(nextProject, rootCompositionRef.current, clip); const nextRoot = insertCompositionPlacement(rootCompositionRef.current, placement); change(() => nextProject, "", nextRoot);
       setSelectedTimelineClipId(clipId); setSelectedTimelineTrackId(track.id); setTimelineClipSettingsId(clipId); setAssetPickerTrackId("");
       setNotice(file.name + " imported to Assets and added to the Timeline.");
     } catch (error) { setNotice(error instanceof Error ? error.message : "Could not import this media file."); }
@@ -2091,7 +2514,7 @@ export default function App() {
     catch (error) { setNotice(error instanceof Error ? error.message : "Video export failed."); }
   }
   function exportProject() {
-    download((project.name.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "dionysus-project") + ".dionysus.json", createProjectDocument(project));
+    download((project.name.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "dionysus-project") + ".dionysus.json", createProjectDocument(project, rootCompositionRef.current));
     setNotice(t("notice.projectExported"));
   }
   function exportPlan() {
@@ -2111,9 +2534,9 @@ export default function App() {
     if (!file) return;
     try {
       const parsed = JSON.parse(await file.text()) as unknown;
-      const { project: data } = readProjectDocument(parsed);
+      const { project: data, compositionModel } = readProjectDocument(parsed, true);
       if (!validateProject(data)) throw new Error(t("error.invalidProject"));
-      const normalized = normalizeLegacyTimelineTracks(data); setProject(normalized); setUndoStack([]); setRedoStack([]); lastHistoryGroup.current = ""; setSelectedId(normalized.shots[0]?.id ?? ""); setNotice(t("notice.projectImported"));
+      const normalized = compositionModel?.rootComposition ? data : normalizeLegacyTimelineTracks(data); const migratedRoot = migrateLegacyProjectToComposition(normalized).rootComposition; const importedRoot = compositionModel?.rootComposition && JSON.stringify(projectRootCompositionToLegacy(normalized, compositionModel.rootComposition)) === JSON.stringify(normalized) ? structuredClone(compositionModel.rootComposition) : migratedRoot; projectRef.current = normalized; rootCompositionRef.current = importedRoot; setProject(normalized); setRootComposition(importedRoot); setUndoStack([]); setRedoStack([]); compositionUndoStackRef.current = []; compositionRedoStackRef.current = []; setCompositionUndoStack([]); setCompositionRedoStack([]); undoStackRef.current = []; redoStackRef.current = []; lastHistoryGroup.current = ""; setSelectedId(normalized.shots[0]?.id ?? ""); setNotice(t("notice.projectImported"));
     } catch (e) {
       setNotice(e instanceof Error ? e.message : t("error.importFailed"));
     } finally {
@@ -2164,13 +2587,13 @@ export default function App() {
   return <div className="mobile-clip-toolbar" aria-label="Selected clip tools">
     <span className="mobile-clip-toolbar-title">{mobileClip.name}</span>
     {mobileClip.kind === "audio" && <button type="button" className="mobile-audio-mute-toggle" aria-label={mobileClip.muted ? "Unmute selected audio" : "Mute selected audio"} aria-pressed={Boolean(mobileClip.muted)} onClick={() => {
-      change(p => ({ ...p, timelineClips: (p.timelineClips ?? []).map(item => item.id === mobileClip.id ? { ...item, muted: !item.muted } : item) }));
+      updateRootTimelineClip(mobileClip.id,{muted:!mobileClip.muted});
       setNotice(mobileClip.muted ? "Audio clip unmuted." : "Audio clip muted.");
     }}>{mobileClip.muted ? "Unmute" : "Mute"}</button>}
     <button type="button" aria-label="Split selected clip" disabled={!canSplit} onClick={() => {
       const newClipId = id("timeline-clip");
       try {
-        change(p => ({ ...p, timelineClips: splitTimelineClip({ tracks: p.tracks, timelineClips: p.timelineClips ?? [] }, mobileClip.id, splitAt, { newClipId }).timelineClips }));
+        splitRootTimelineClip(mobileClip.id,splitAt,newClipId);
         setSelectedTimelineClipId(newClipId);
         setNotice("Clip split at the playhead.");
       } catch (error) { setNotice(error instanceof Error ? error.message : "Could not split the clip."); }
@@ -2178,20 +2601,20 @@ export default function App() {
     <button type="button" aria-label="Duplicate selected clip" onClick={() => {
       const newClipId = id("timeline-clip");
       try {
-        change(p => ({ ...p, timelineClips: duplicateTimelineClip({ tracks: p.tracks, timelineClips: p.timelineClips ?? [] }, mobileClip.id, { newClipId, start: mobileClip.start + mobileClip.duration }).timelineClips }));
+        duplicateRootTimelineClip(mobileClip,newClipId);
         setSelectedTimelineClipId(newClipId);
         setNotice("Clip duplicated. Use Undo to restore.");
       } catch (error) { setNotice(error instanceof Error ? error.message : "Could not duplicate the clip at this position."); }
     }}>Duplicate</button>
     <button type="button" aria-label="Shorten selected clip" disabled={mobileClip.duration <= frame + 0.01} onClick={() => {
       try {
-        change(p => ({ ...p, timelineClips: trimTimelineClip({ tracks: p.tracks, timelineClips: p.timelineClips ?? [] }, mobileClip.id, Math.max(frame, mobileClip.duration - 0.5)).timelineClips }));
+        trimRootTimelineClip(mobileClip.id,Math.max(frame,mobileClip.duration-0.5));
         setNotice("Clip shortened. Use Undo to restore.");
       } catch (error) { setNotice(error instanceof Error ? error.message : "Could not trim the clip."); }
     }}>Trim −0.5s</button>
     <button type="button" aria-label="Open selected clip settings" onClick={() => setTimelineClipSettingsId(mobileClip.id)}>Settings</button>
     <button type="button" className="danger-action" aria-label="Delete selected clip" onClick={() => {
-      change(p => ({ ...p, timelineClips: deleteTimelineClip({ tracks: p.tracks, timelineClips: p.timelineClips ?? [] }, mobileClip.id).timelineClips }));
+      deleteTimelineClipCanonical(mobileClip);
       setSelectedTimelineClipId("");
       setNotice("Clip deleted. Use Undo to restore.");
     }}>Delete</button>
@@ -2230,11 +2653,11 @@ export default function App() {
  <div className="visual-track-row">
   <div className={"visual-track-label"+(selectedTimelineTrackId===track.id?" selected-track-label":"")} onClick={()=>setSelectedTimelineTrackId(track.id)} onContextMenu={event=>{event.preventDefault();setTrackContextMenuId(track.id);setTrackContextMenuPosition({x:Math.min(event.clientX,window.innerWidth-190),y:Math.min(event.clientY,window.innerHeight-180)});setSelectedTimelineTrackId(track.id);}}>
    {track.kind==="video" && <button className="track-expand-toggle" aria-label={(collapsedVideoTrackIds.includes(track.id)?"Expand ":"Collapse ")+track.name} aria-expanded={!collapsedVideoTrackIds.includes(track.id)} onClick={()=>setCollapsedVideoTrackIds(current=>current.includes(track.id)?current.filter(id=>id!==track.id):[...current,track.id])}>{collapsedVideoTrackIds.includes(track.id)?"▸":"▾"}</button>}
-   <span className={track.kind==="audio"?"track-kind-audio":"track-kind-video"}>{track.kind==="audio"?<AudioLines size={15}/>:track.kind==="procedural"?<Code2 size={15}/>:track.kind==="text"?<Sparkles size={15}/>:<Film size={15}/>}</span><div><strong>{track.name||track.kind}</strong><small>{track.kind==="audio"?"Audio layer":track.kind==="procedural"?"Code layer":track.kind==="text"?"Text layer":track.kind==="effects"?"Effects layer":"Video layer"}</small></div>{track.kind==="video" && <button type="button" className="track-settings-button" title="Video layer settings" aria-label={"Settings for "+track.name} onClick={event=>{event.stopPropagation();setVideoTrackSettingsId(track.id);}}><Settings2 size={14}/></button>}{track.kind==="audio" && <button className={"track-layer-mute"+(track.muted?" muted":"")} aria-label={(track.muted?"Unmute ":"Mute ")+track.name+" layer"} aria-pressed={Boolean(track.muted)} title={track.muted?"Unmute audio layer":"Mute audio layer"} onClick={event=>{event.stopPropagation();change(p=>({...p,tracks:p.tracks.map(item=>item.id===track.id?{...item,muted:!item.muted}:item)}));}}>{track.muted?"Unmute":"Mute"}</button>}<button className="track-add-clip" aria-label={"Add clip to "+track.name} title={"Add clip to "+track.name} onClick={event=>{event.stopPropagation();if(track.kind==="effects"){setNotice("Effects layer clips are not yet supported.");return;}if(track.kind==="video"||track.kind==="audio"){setAssetPickerTrackId(track.id);setAssetPickerSearch("");setAssetPickerFilter(track.kind==="audio"?"audio":"all");return;}const kind=track.kind==="text"?"text":"procedural";const clipId=id("timeline-clip");const duration=Math.max(.5,Math.min(3,mediaTimelineDuration-editorTime||3));const name=(kind==="procedural"?"Code":"Text")+" clip "+((project.timelineClips??[]).filter(clip=>clip.trackId===track.id).length+1);beginTimelineClipPlacement({id:clipId,name,kind,trackId:track.id,start:0,duration});}}><Plus size={13}/></button><button className="track-remove-button" aria-label={"Remove "+track.name+" layer"} title={"Remove "+track.name+" layer"} onClick={event=>{event.stopPropagation();if(window.confirm("Remove layer “"+track.name+"” and all clips on it?")){change(p=>{const tracks=p.tracks.filter(item=>item.id!==track.id);const fallbackVideoTrackId=tracks.find(item=>item.kind==="video")?.id;return {...p,tracks,shots:p.shots.map(shot=>shot.masterTrackId===track.id?{...shot,masterTrackId:fallbackVideoTrackId}:shot),timelineClips:(p.timelineClips??[]).filter(clip=>clip.trackId!==track.id&&!(clip.linkedVideoClipId&&(p.timelineClips??[]).some(source=>source.id===clip.linkedVideoClipId&&source.trackId===track.id)))};});setSelectedTimelineClipId("");setTimelineClipSettingsId("");}}}><span aria-hidden="true">×</span></button><button type="button" className="track-mobile-menu-button" aria-label={"Layer actions for "+track.name} title={"Layer actions for "+track.name} onClick={event=>{event.stopPropagation();setSelectedTimelineTrackId(track.id);setTrackContextMenuId(track.id);const rect=event.currentTarget.getBoundingClientRect();setTrackContextMenuPosition(window.innerWidth<=640?{x:12,y:Math.max(12,window.innerHeight-270)}:{x:Math.min(event.clientX||rect.left,window.innerWidth-190),y:Math.min(event.clientY||rect.bottom,window.innerHeight-180)});}}><MoreHorizontal size={17}/></button>
+   <span className={track.kind==="audio"?"track-kind-audio":"track-kind-video"}>{track.kind==="audio"?<AudioLines size={15}/>:track.kind==="procedural"?<Code2 size={15}/>:track.kind==="text"?<Sparkles size={15}/>:<Film size={15}/>}</span><div><strong>{track.name||track.kind}</strong><small>{track.kind==="audio"?"Audio layer":track.kind==="procedural"?"Code layer":track.kind==="text"?"Text layer":track.kind==="effects"?"Effects layer":"Video layer"}</small></div>{track.kind==="video" && <button type="button" className="track-settings-button" title="Video layer settings" aria-label={"Settings for "+track.name} onClick={event=>{event.stopPropagation();setVideoTrackSettingsId(track.id);}}><Settings2 size={14}/></button>}{track.kind==="audio" && <button className={"track-layer-mute"+(track.muted?" muted":"")} aria-label={(track.muted?"Unmute ":"Mute ")+track.name+" layer"} aria-pressed={Boolean(track.muted)} title={track.muted?"Unmute audio layer":"Mute audio layer"} onClick={event=>{event.stopPropagation();changeRootComposition(root=>updateCompositionTrack(root,track.id,{muted:!track.muted}));}}>{track.muted?"Unmute":"Mute"}</button>}<button className="track-add-clip" aria-label={"Add clip to "+track.name} title={"Add clip to "+track.name} onClick={event=>{event.stopPropagation();if(track.kind==="effects"){setNotice("Effects layer clips are not yet supported.");return;}if(track.kind==="video"||track.kind==="audio"){setAssetPickerTrackId(track.id);setAssetPickerSearch("");setAssetPickerFilter(track.kind==="audio"?"audio":"all");return;}const kind=track.kind==="text"?"text":"procedural";const clipId=id("timeline-clip");const duration=Math.max(.5,Math.min(3,mediaTimelineDuration-editorTime||3));const name=(kind==="procedural"?"Code":"Text")+" clip "+((project.timelineClips??[]).filter(clip=>clip.trackId===track.id).length+1);beginTimelineClipPlacement({id:clipId,name,kind,trackId:track.id,start:0,duration});}}><Plus size={13}/></button><button className="track-remove-button" aria-label={"Remove "+track.name+" layer"} title={"Remove "+track.name+" layer"} onClick={event=>{event.stopPropagation();if(window.confirm("Remove layer “"+track.name+"” and all clips on it?")){try{changeRootComposition(root=>removeCompositionTrack(root,track.id,project.tracks.filter(item=>item.id!==track.id).find(item=>item.kind==="video")?.id));setSelectedTimelineClipId("");setTimelineClipSettingsId("");}catch(error){setNotice(error instanceof Error?error.message:"Could not remove this layer.");}}}}><span aria-hidden="true">×</span></button><button type="button" className="track-mobile-menu-button" aria-label={"Layer actions for "+track.name} title={"Layer actions for "+track.name} onClick={event=>{event.stopPropagation();setSelectedTimelineTrackId(track.id);setTrackContextMenuId(track.id);const rect=event.currentTarget.getBoundingClientRect();setTrackContextMenuPosition(window.innerWidth<=640?{x:12,y:Math.max(12,window.innerHeight-270)}:{x:Math.min(event.clientX||rect.left,window.innerWidth-190),y:Math.min(event.clientY||rect.bottom,window.innerHeight-180)});}}><MoreHorizontal size={17}/></button>
   </div>
   <div className="visual-track-lane" data-track-id={track.id} style={{backgroundSize:(5/mediaTimelineDuration*100)+"% 100%",backgroundColor:track.kind==="video"?(track.backgroundTransparent?"transparent":track.backgroundColor??"#111113"):undefined,backgroundImage:track.kind==="video"&&track.backgroundTransparent?"none":undefined}}
    onContextMenu={event=>{event.preventDefault();setTrackContextMenuId(track.id);setTrackContextMenuPosition({x:Math.min(event.clientX,window.innerWidth-190),y:Math.min(event.clientY,window.innerHeight-180)});setSelectedTimelineTrackId(track.id);}} onPointerDown={event=>{if(event.target!==event.currentTarget)return;setSelectedTimelineTrackId(track.id);const rect=event.currentTarget.getBoundingClientRect();const next=Math.max(0,Math.min(mediaTimelineDuration,((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration));if(pendingTimelineClip){placePendingTimelineClip(track,next);return;}playbackTimeRef.current=next;setIsPlaying(false);setEditorTime(next);}}
-   onDragOver={event=>{event.preventDefault();event.dataTransfer.dropEffect="move";const masterShotId=event.dataTransfer.getData("text/dionysus-master-shot") || masterShotDragSourceRef.current;if(masterShotId){const shot=project.shots.find(item=>item.id===masterShotId);if(!shot||track.kind!=="video"){setClipDropPreview(null);return;}const moving=asMasterShotTimelineClip(project,shot),rect=event.currentTarget.getBoundingClientRect(),pointerTime=((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration,rawStart=Math.max(0,pointerTime-moving.duration/2),pos=calculateProjectTimelineDropPosition(project,moving,track.id,rawStart,mediaTimelineDuration);if(!pos){setClipDropPreview(null);return;}setClipDropPreview({trackId:track.id,start:pos.start,duration:moving.duration,name:moving.name,...(pos.snapTime!==undefined?{snapTime:pos.snapTime}:{})});return;}const dragId=event.dataTransfer.getData("text/dionysus-timeline-clip");const moving=clipDragSourceRef.current??(project.timelineClips??[]).find(clip=>clip.id===dragId);if(!moving||!canPlaceTimelineClipOnTrack(moving,track)){setClipDropPreview(null);return;}const rect=event.currentTarget.getBoundingClientRect();const pointerTime=((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration;const rawStart=Math.max(0,pointerTime-moving.duration/2);const pos=calculateProjectTimelineDropPosition(project,moving,track.id,rawStart,mediaTimelineDuration);if(!pos){setClipDropPreview(null);return;}setClipDropPreview({trackId:track.id,start:pos.start,duration:moving.duration,name:moving.name,...(pos.snapTime!==undefined?{snapTime:pos.snapTime}: {})});}}
+   onDragOver={event=>{event.preventDefault();event.dataTransfer.dropEffect="move";const masterShotId=event.dataTransfer.getData("text/dionysus-master-shot") || masterShotDragSourceRef.current;if(masterShotId){const shot=project.shots.find(item=>item.id===masterShotId);if(!shot||track.kind!=="video"){setClipDropPreview(null);return;}const moving=getCanonicalMasterShotTimelineClip(shot),rect=event.currentTarget.getBoundingClientRect(),pointerTime=((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration,rawStart=Math.max(0,pointerTime-moving.duration/2),pos=calculateRootTimelineDropPosition(moving,track.id,rawStart,mediaTimelineDuration);if(!pos){setClipDropPreview(null);return;}setClipDropPreview({trackId:track.id,start:pos.start,duration:moving.duration,name:moving.name,...(pos.snapTime!==undefined?{snapTime:pos.snapTime}:{})});return;}const dragId=event.dataTransfer.getData("text/dionysus-timeline-clip");const candidate=clipDragSourceRef.current??(project.timelineClips??[]).find(clip=>clip.id===dragId),moving=candidate?getCanonicalTimelineClipForDrop(candidate):undefined;if(!moving||!canPlaceTimelineClipOnTrack(moving,track)){setClipDropPreview(null);return;}const rect=event.currentTarget.getBoundingClientRect();const pointerTime=((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration;const rawStart=Math.max(0,pointerTime-moving.duration/2);const pos=calculateRootTimelineDropPosition(moving,track.id,rawStart,mediaTimelineDuration);if(!pos){setClipDropPreview(null);return;}setClipDropPreview({trackId:track.id,start:pos.start,duration:moving.duration,name:moving.name,...(pos.snapTime!==undefined?{snapTime:pos.snapTime}: {})});}}
    onDrop={event=>{
      event.preventDefault();
      const rect=event.currentTarget.getBoundingClientRect();
@@ -2242,32 +2665,35 @@ export default function App() {
       if(masterShotId){
         const movingShot=project.shots.find(shot=>shot.id===masterShotId);
         if(!movingShot||track.kind!=="video"){setClipDropPreview(null);return;}
-        const fps=Math.max(1,project.frameRate||24),pointerTime=((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration,rawStart=Math.max(0,pointerTime-movingShot.duration/2);
-        const pos=rippleReorderMode?null:(clipDropPreview?.trackId===track.id?{start:clipDropPreview.start,...(clipDropPreview.snapTime!==undefined?{snapTime:clipDropPreview.snapTime}:{})}:calculateProjectTimelineDropPosition(project,asMasterShotTimelineClip(project,movingShot),track.id,rawStart,mediaTimelineDuration));
+        const moving=getCanonicalMasterShotTimelineClip(movingShot);
+        const fps=Math.max(1,rootCompositionRef.current.frameRate||project.frameRate||24),pointerTime=((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration,rawStart=Math.max(0,pointerTime-moving.duration/2);
+        const pos=rippleReorderMode?null:(clipDropPreview?.trackId===track.id?{start:clipDropPreview.start,...(clipDropPreview.snapTime!==undefined?{snapTime:clipDropPreview.snapTime}:{})}:calculateRootTimelineDropPosition(moving,track.id,rawStart,mediaTimelineDuration));
         let next:number;
         if(rippleReorderMode){
-          const targetCenter=Math.round(pointerTime*fps)/fps,reordered=rippleReorderMasterShots(project.shots,movingShot.id,targetCenter);
-          next=getMasterShotStart(reordered,movingShot.id);const oldStart=getMasterShotStart(project.shots,movingShot.id),delta=next-oldStart;
-          change(p=>({...p,shots:rippleReorderMasterShots(p.shots,movingShot.id,targetCenter).map(shot=>shot.id===movingShot.id?{...shot,masterTrackId:track.id}:shot),timelineClips:(p.timelineClips??[]).map(clip=>clip.id.startsWith("storyboard-"+movingShot.id+"-")?{...clip,start:Math.max(0,clip.start+delta),...(clip.kind==="video"?{trackId:track.id}:{})}:clip)}),"shot-ripple-reorder");
+          const targetCenter=Math.round(pointerTime*fps)/fps;
+          const shotPlacement=rootCompositionRef.current.placements.find(item=>item.id===movingShot.id&&item.legacyData.entityType==="master-shot");
+          if(!shotPlacement){setNotice("This Shot is not represented in the canonical root Composition.");setClipDropPreview(null);return;}
+          changeRootComposition(root=>rippleReorderCompositionMasterShots(root,movingShot.id,targetCenter,track.id),"shot-ripple-reorder");
+          next=rootCompositionRef.current.placements.find(item=>item.id===movingShot.id)?.start??shotPlacement.start;
           setNotice("Ripple Reorder applied and Shot moved to the selected video layer.");
         }else{
           if(!pos){setNotice("No non-overlapping position is available on this video layer.");setClipDropPreview(null);return;}
-          const conflict=getMasterShotPlacementItems(project,movingShot.id).some(clip=>clip.trackId===track.id&&pos.start<clip.start+clip.duration-1e-7&&pos.start+movingShot.duration>clip.start+1e-7);
+          const conflict=rootCompositionRef.current.placements.some(placement=>placement.id!==movingShot.id&&placement.trackId===track.id&&pos.start<placement.start+placement.duration-1e-7&&pos.start+moving.duration>placement.start+1e-7);
           if(conflict){setNotice("Drop cancelled: this position overlaps another item on the destination layer.");setClipDropPreview(null);return;}
           next=pos.start;
-          change(p=>moveProjectTimelinePlacement(p,{type:"shot",shotId:movingShot.id},track.id,next));
+          moveRootPlacementOrLegacy({ type: "shot", shotId: movingShot.id }, track.id, next);
           setNotice(pos.snapTime!==undefined?"Shot snapped to an aligned, non-overlapping position.":"Shot moved to a non-overlapping position.");
         }
         setSelectedId(movingShot.id);setIsPlaying(false);playbackTimeRef.current=next;setEditorTime(next);setClipDropPreview(null);return;
       }
-      const clipId=event.dataTransfer.getData("text/dionysus-timeline-clip"),moving=(project.timelineClips??[]).find(clip=>clip.id===clipId)??clipDragSourceRef.current;
+      const clipId=event.dataTransfer.getData("text/dionysus-timeline-clip"),candidate=(project.timelineClips??[]).find(clip=>clip.id===clipId)??clipDragSourceRef.current,moving=candidate?getCanonicalTimelineClipForDrop(candidate):undefined;
      if(!moving||!canPlaceTimelineClipOnTrack(moving,track))return;
      const pointerTime=((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration,rawStart=Math.max(0,pointerTime-moving.duration/2);
-     const pos=clipDropPreview?.trackId===track.id?{start:clipDropPreview.start,...(clipDropPreview.snapTime!==undefined?{snapTime:clipDropPreview.snapTime}:{})}:calculateProjectTimelineDropPosition(project,moving,track.id,rawStart,mediaTimelineDuration);
+     const pos=clipDropPreview?.trackId===track.id?{start:clipDropPreview.start,...(clipDropPreview.snapTime!==undefined?{snapTime:clipDropPreview.snapTime}:{})}:calculateRootTimelineDropPosition(moving,track.id,rawStart,mediaTimelineDuration);
      if(!pos){setNotice("No non-overlapping position is available on this layer.");clipDragSourceRef.current=null;setClipDropPreview(null);return;}
-     const destinationConflict=getTimelinePlacementItems(project,moving).some(clip=>clip.id!==moving.id&&clip.trackId===track.id&&pos.start<clip.start+clip.duration-1e-7&&pos.start+moving.duration>clip.start+1e-7);
+     const destinationConflict=rootCompositionRef.current.placements.some(placement=>placement.id!==moving.id&&placement.trackId===track.id&&pos.start<placement.start+placement.duration-1e-7&&pos.start+moving.duration>placement.start+1e-7);
      if(destinationConflict){setNotice("Drop cancelled: this position overlaps another clip on the destination layer.");clipDragSourceRef.current=null;setClipDropPreview(null);return;}
-     try{change(p=>moveProjectTimelinePlacement(p,{type:"clip",clipId:moving.id},track.id,pos.start));setSelectedTimelineClipId(moving.id);setSelectedTimelineTrackId(track.id);setIsPlaying(false);setNotice(pos.snapTime!==undefined?"Clip snapped to an aligned, non-overlapping position.":"Clip moved to a non-overlapping position.");}catch(error){setNotice(error instanceof Error?error.message:"Could not move the clip.");}finally{clipDragSourceRef.current=null;setClipDropPreview(null);}
+     try{moveRootPlacementOrLegacy({ type: "clip", clipId: moving.id }, track.id, pos.start);setSelectedTimelineClipId(moving.id);setSelectedTimelineTrackId(track.id);setIsPlaying(false);setNotice(pos.snapTime!==undefined?"Clip snapped to an aligned, non-overlapping position.":"Clip moved to a non-overlapping position.");}catch(error){setNotice(error instanceof Error?error.message:"Could not move the clip.");}finally{clipDragSourceRef.current=null;setClipDropPreview(null);}
    }}>
    <div className="visual-playhead" style={{left:(editorTime/mediaTimelineDuration*100)+"%"}}/>
     {(clipResizePreview?.trackId===track.id && clipResizePreview.overlap || shotResizePreview?.trackId===track.id && shotResizePreview.overlap) && <div className="clip-overlap-preview" style={{left:(((shotResizePreview?.trackId===track.id&&shotResizePreview.overlap)?shotResizePreview.overlap!.start:clipResizePreview!.overlap!.start)/mediaTimelineDuration*100)+"%",width:Math.max(0.25,(((shotResizePreview?.trackId===track.id&&shotResizePreview.overlap)?shotResizePreview.overlap!.duration:clipResizePreview!.overlap!.duration)/mediaTimelineDuration*100))+"%"}} aria-hidden="true"/>}
@@ -2284,7 +2710,7 @@ export default function App() {
      const resizedClip = clipResizePreview?.id === clip.id ? clipResizePreview : clipResizePreview?.trims.find(trim => trim.id === clip.id);
      return <div className="visual-media-clip-wrap" key={clip.id} style={{left:((resizedClip?.start??clip.start)/mediaTimelineDuration*100)+"%",width:Math.max(2,(resizedClip?.duration??clip.duration)/mediaTimelineDuration*100)+"%",opacity:track.kind==="video"?(track.opacity??1):1}}>
        <button draggable className={"visual-media-clip "+(clip.kind==="audio"?"audio-clip "+(clip.assetId?"audio-has-source":"audio-placeholder"):clip.kind==="text"?"text-clip":clip.kind==="procedural"?"procedural-clip":"video-clip "+(clip.assetId?"video-has-source":"video-placeholder"))+(clip.id===selectedTimelineClipId?" selected":"")} onPointerDown={event=>beginTouchClipMove(event,clip)} onDragStart={event=>{event.dataTransfer.setData("text/dionysus-timeline-clip",clip.id);event.dataTransfer.setData("text/plain",clip.name);event.dataTransfer.effectAllowed="move";clipDragSourceRef.current=clip;setClipDropPreview({trackId:clip.trackId,start:clip.start,duration:clip.duration,name:clip.name});}} onDragEnd={()=>{clipDragSourceRef.current=null;setClipDropPreview(null);}} onContextMenu={event=>{event.preventDefault();event.stopPropagation();setSelectedTimelineClipId(clip.id);setClipContextMenuId(clip.id);setClipContextMenuPosition({x:Math.min(event.clientX,window.innerWidth-190),y:Math.min(event.clientY,window.innerHeight-180)});}} onDoubleClick={()=>setTimelineClipSettingsId(clip.id)} onClick={()=>{if(suppressTouchClipClickRef.current){suppressTouchClipClickRef.current=false;return;}setSelectedTimelineClipId(clip.id);setSelectedTimelineTrackId(track.id);const next=Math.min(activeTimelineDuration,clip.start);playbackTimeRef.current=next;setIsPlaying(false);setEditorTime(next);}} style={{backgroundColor:clip.kind==="video"&&!clip.assetId?(track.backgroundTransparent?"transparent":track.backgroundColor??"#20232a"):undefined}} title={clip.name+" · "+clip.start.toFixed(1)+"–"+(clip.start+clip.duration).toFixed(1)+"s"}><span className="visual-clip-icon">{clip.kind==="audio"?<AudioLines size={13}/>:clip.kind==="text"?<Sparkles size={13}/>:clip.kind==="procedural"?<Layers3 size={13}/>:thumbnailPath?<img className="visual-clip-thumbnail" src={thumbnailPath} alt=""/>:<span className="visual-clip-thumbnail-placeholder"><Film size={13}/></span>}</span><span className="visual-clip-copy"><strong>{clip.name}</strong><small>{clip.duration.toFixed(1)}s{clip.linkedVideoClipId?" · linked":clip.kind==="audio"?" · independent":""}{clip.assetId?"":" · no source"}</small></span>{clip.kind==="audio"&&<AudioWaveform path={project.assets.find(asset=>asset.id===clip.assetId)?.path}/>}<span className="clip-resize-handle clip-resize-left" role="separator" aria-label={"Resize start of "+clip.name} onPointerDown={event=>beginTimelineClipResize(event,clip,"left")} onPointerCancel={cancelTimelineClipResize}/><span className="clip-resize-handle clip-resize-right" role="separator" aria-label={"Resize end of "+clip.name} onPointerDown={event=>beginTimelineClipResize(event,clip,"right")} onPointerCancel={cancelTimelineClipResize}/></button>
-       {clip.kind==="audio" && <button className="timeline-clip-mute" aria-label={(clip.muted?"Unmute ":"Mute ")+clip.name} aria-pressed={Boolean(clip.muted)} onClick={()=>change(p=>({...p,timelineClips:(p.timelineClips??[]).map(item=>item.id===clip.id?{...item,muted:!item.muted}:item)}))}>{clip.muted?"🔇":"♪"}</button>}
+       {clip.kind==="audio" && <button className="timeline-clip-mute" aria-label={(clip.muted?"Unmute ":"Mute ")+clip.name} aria-pressed={Boolean(clip.muted)} onClick={()=>updateRootTimelineClip(clip.id,{muted:!clip.muted})}>{clip.muted?"🔇":"♪"}</button>}
        {clip.kind==="video" && versionShot && versionSlot && <details className="timeline-version-menu"><summary aria-label={"Show versions for "+versionShot.title}>▾</summary><div className="timeline-version-menu-panel">
          <strong>{versionShot.title}</strong>
          {versionSlot.versions.map((version,vi)=><div className="timeline-version-menu-row" key={version.id}>
@@ -2329,8 +2755,8 @@ export default function App() {
       <div className="visual-playhead" style={{left:(editorTime/mediaTimelineDuration*100)+"%"}}/>
       {linkedAudio.map(audio=><div className="visual-media-clip-wrap" key={audio.id} style={{left:(audio.start/mediaTimelineDuration*100)+"%",width:Math.max(2,audio.duration/mediaTimelineDuration*100)+"%"}}>
         <button className={"visual-media-clip audio-clip "+(audio.assetId?"audio-has-source":"audio-placeholder")+(audio.id===selectedTimelineClipId?" selected":"")} onContextMenu={event=>{event.preventDefault();event.stopPropagation();setSelectedTimelineClipId(audio.id);setClipContextMenuId(audio.id);setClipContextMenuPosition({x:Math.min(event.clientX,window.innerWidth-190),y:Math.min(event.clientY,window.innerHeight-180)});}} onDoubleClick={()=>setTimelineClipSettingsId(audio.id)} onClick={()=>{setSelectedTimelineClipId(audio.id);setSelectedTimelineTrackId(track.id);setEditorTime(audio.start);setIsPlaying(false);playbackTimeRef.current=audio.start;}} title={audio.name+" · "+audio.duration.toFixed(1)+"s"}><span className="visual-clip-icon"><AudioLines size={13}/></span><span className="visual-clip-copy"><strong>{audio.name}</strong><small>{audio.duration.toFixed(1)}s · linked</small></span><AudioWaveform path={project.assets.find(asset=>asset.id===audio.assetId)?.path}/></button>
-        <button className="timeline-clip-mute" aria-label={(audio.muted?"Unmute ":"Mute ")+audio.name} aria-pressed={Boolean(audio.muted)} onClick={()=>change(p=>({...p,timelineClips:(p.timelineClips??[]).map(item=>item.id===audio.id?{...item,muted:!item.muted}:item)}))}>{audio.muted?"🔇":"♪"}</button>
-        <button className="timeline-clip-unlink" title="Unlink source audio" aria-label={"Unlink "+audio.name} onClick={()=>{try{change(p=>({...p,timelineClips:unlinkTimelineAudio({tracks:p.tracks,timelineClips:p.timelineClips??[]},audio.id).timelineClips}));setNotice("Audio unlinked and moved into the independent audio lane.");}catch(error){setNotice(error instanceof Error?error.message:"Unlink failed.");}}}>Unlink</button>
+        <button className="timeline-clip-mute" aria-label={(audio.muted?"Unmute ":"Mute ")+audio.name} aria-pressed={Boolean(audio.muted)} onClick={()=>updateRootTimelineClip(audio.id,{muted:!audio.muted})}>{audio.muted?"🔇":"♪"}</button>
+        <button className="timeline-clip-unlink" title="Unlink source audio" aria-label={"Unlink "+audio.name} onClick={()=>{try{unlinkRootTimelineAudio(audio.id);setNotice("Audio unlinked and moved into the independent audio lane.");}catch(error){setNotice(error instanceof Error?error.message:"Unlink failed.");}}}>Unlink</button>
       </div>)}
     </div>
    </div>;
@@ -2489,12 +2915,12 @@ export default function App() {
                         <label>Fade Out (s)<input className="text-field" aria-label={"Version layer " + layer.id + " fade out"} type="number" min="0" max={layer.duration} step={1/Math.max(1,project.frameRate)} value={layer.fadeOut??0} onChange={event=>updateCompositionLayer(selected.id,activeSlot.id,activeVersion.id,layer.id,{fadeOut:Math.max(0,Math.min(layer.duration,Number(event.target.value)||0))})}/></label>
                       </div>}{layer.kind==="procedural" && <label className="field-label">Pinned script / scene version ID<input className="text-field" aria-label={layer.name + " script version ID"} value={layer.scriptVersionId ?? ""} onChange={e=>updateCompositionLayer(selected.id,activeSlot.id,activeVersion.id,layer.id,{scriptVersionId:e.target.value||undefined})} placeholder="Use a saved, authorized script version ID"/></label>}<div className="composition-frame-controls"><label>Fit mode<select className="text-field" aria-label={layer.name + " fit mode"} value={layer.fitMode ?? "contain"} onChange={e=>updateCompositionLayer(selected.id,activeSlot.id,activeVersion.id,layer.id,{fitMode:e.target.value as CompositionLayer["fitMode"]})}><option value="contain">Contain</option><option value="cover">Cover</option><option value="fill">Fill</option></select></label><label>X (%)<input className="text-field" type="number" value={layer.x ?? 0} onChange={e=>updateCompositionLayer(selected.id,activeSlot.id,activeVersion.id,layer.id,{x:Number(e.target.value)||0})}/></label><label>Y (%)<input className="text-field" type="number" value={layer.y ?? 0} onChange={e=>updateCompositionLayer(selected.id,activeSlot.id,activeVersion.id,layer.id,{y:Number(e.target.value)||0})}/></label><label>Width (%)<input className="text-field" type="number" min="1" max="100" value={layer.width ?? 100} onChange={e=>updateCompositionLayer(selected.id,activeSlot.id,activeVersion.id,layer.id,{width:Math.max(1,Math.min(100,Number(e.target.value)||1))})}/></label><label>Height (%)<input className="text-field" type="number" min="1" max="100" value={layer.height ?? 100} onChange={e=>updateCompositionLayer(selected.id,activeSlot.id,activeVersion.id,layer.id,{height:Math.max(1,Math.min(100,Number(e.target.value)||1))})}/></label><label>Frame shape<select className="text-field" value={layer.shape ?? "rectangle"} onChange={e=>updateCompositionLayer(selected.id,activeSlot.id,activeVersion.id,layer.id,{shape:e.target.value as CompositionLayer["shape"]})}><option value="rectangle">Rectangle</option><option value="rounded">Rounded</option><option value="circle">Circle</option></select></label><label>Background<input className="text-field" type="color" value={layer.backgroundColor ?? "#111113"} onChange={e=>updateCompositionLayer(selected.id,activeSlot.id,activeVersion.id,layer.id,{backgroundColor:e.target.value})}/></label><label>Border color<input className="text-field" type="color" value={layer.borderColor ?? "#000000"} onChange={e=>updateCompositionLayer(selected.id,activeSlot.id,activeVersion.id,layer.id,{borderColor:e.target.value})}/></label><label>Border width (px)<input className="text-field" type="number" min="0" value={layer.borderWidth ?? 0} onChange={e=>updateCompositionLayer(selected.id,activeSlot.id,activeVersion.id,layer.id,{borderWidth:Math.max(0,Number(e.target.value)||0)})}/></label><label>Corner radius (px)<input className="text-field" type="number" min="0" value={layer.cornerRadius ?? 0} onChange={e=>updateCompositionLayer(selected.id,activeSlot.id,activeVersion.id,layer.id,{cornerRadius:Math.max(0,Number(e.target.value)||0)})}/></label><label>Scale<input className="text-field" type="number" min="0.01" step="0.1" value={layer.scale ?? 1} onChange={e=>updateCompositionLayer(selected.id,activeSlot.id,activeVersion.id,layer.id,{scale:Math.max(0.01,Number(e.target.value)||0.01)})}/></label><label>Opacity<input className="text-field" type="number" min="0" max="1" step="0.05" value={layer.opacity ?? 1} onChange={e=>updateCompositionLayer(selected.id,activeSlot.id,activeVersion.id,layer.id,{opacity:Math.max(0,Math.min(1,Number(e.target.value)||0))})}/></label><label>Animation<select className="text-field" aria-label={layer.name + " animation"} value={layer.animation ?? "none"} onChange={e=>updateCompositionLayer(selected.id,activeSlot.id,activeVersion.id,layer.id,{animation:e.target.value as CompositionLayer["animation"]})}><option value="none">None</option><option value="float">Float</option><option value="pulse">Pulse</option><option value="rotate">Rotate</option></select></label><label>Animation duration (s)<input className="text-field" type="number" min="0.1" max="60" step="0.1" value={layer.animationDuration ?? 3} onChange={e=>updateCompositionLayer(selected.id,activeSlot.id,activeVersion.id,layer.id,{animationDuration:Math.max(0.1,Math.min(60,Number(e.target.value)||3))})}/></label></div>
                       <div className="visual-provenance-grid">
-                        <label>Start (s)<input className="text-field" type="number" min="0" step="0.1" value={layer.start} onChange={e=>{const value=Math.max(0,Number(e.target.value)||0);change(p=>({...p,shots:p.shots.map(shot=>shot.id!==selected.id?shot:{...shot,slots:shot.slots.map(slot=>slot.id!==activeSlot.id?slot:{...slot,versions:slot.versions.map(version=>version.id!==activeVersion.id?version:{...version,layers:version.layers.map(item=>item.id!==layer.id?item:{...item,start:value})})})})}));}}/></label>
-                        <label>Duration (s)<input className="text-field" type="number" min="0.1" step="0.1" value={layer.duration} onChange={e=>{const value=Math.max(0.1,Number(e.target.value)||0.1);change(p=>({...p,shots:p.shots.map(shot=>shot.id!==selected.id?shot:{...shot,slots:shot.slots.map(slot=>slot.id!==activeSlot.id?slot:{...slot,versions:slot.versions.map(version=>version.id!==activeVersion.id?version:{...version,layers:version.layers.map(item=>item.id!==layer.id?item:{...item,duration:value})})})})}));}}/></label>
-                        <label>Source in (s)<input className="text-field" type="number" min="0" step="0.1" value={layer.sourceIn??0} onChange={e=>{const value=Math.max(0,Number(e.target.value)||0);change(p=>({...p,shots:p.shots.map(shot=>shot.id!==selected.id?shot:{...shot,slots:shot.slots.map(slot=>slot.id!==activeSlot.id?slot:{...slot,versions:slot.versions.map(version=>version.id!==activeVersion.id?version:{...version,layers:version.layers.map(item=>item.id!==layer.id?item:{...item,sourceIn:value,sourceOut:Math.max(value+0.1,item.sourceOut??value+item.duration)})})})})}));}}/></label>
-                        <label>Source out (s)<input className="text-field" type="number" min={(layer.sourceIn??0)+0.1} step="0.1" value={layer.sourceOut??((layer.sourceIn??0)+layer.duration)} onChange={e=>{const value=Math.max((layer.sourceIn??0)+0.1,Number(e.target.value)||0.1);change(p=>({...p,shots:p.shots.map(shot=>shot.id!==selected.id?shot:{...shot,slots:shot.slots.map(slot=>slot.id!==activeSlot.id?slot:{...slot,versions:slot.versions.map(version=>version.id!==activeVersion.id?version:{...version,layers:version.layers.map(item=>item.id!==layer.id?item:{...item,sourceOut:value,duration:value-(item.sourceIn??0)})})})})}));}}/></label>
+                        <label>Start (s)<input className="text-field" type="number" min="0" step="0.1" value={layer.start} onChange={e=>{const value=Math.max(0,Number(e.target.value)||0);updateCompositionLayer(selected.id,activeSlot.id,activeVersion.id,layer.id,{start:value});}}/></label>
+                        <label>Duration (s)<input className="text-field" type="number" min="0.1" step="0.1" value={layer.duration} onChange={e=>{const value=Math.max(0.1,Number(e.target.value)||0.1);updateCompositionLayer(selected.id,activeSlot.id,activeVersion.id,layer.id,{duration:value});}}/></label>
+                        <label>Source in (s)<input className="text-field" type="number" min="0" step="0.1" value={layer.sourceIn??0} onChange={e=>{const value=Math.max(0,Number(e.target.value)||0);updateCompositionLayer(selected.id,activeSlot.id,activeVersion.id,layer.id,{sourceIn:value,sourceOut:Math.max(value+0.1,layer.sourceOut??value+layer.duration)});}}/></label>
+                        <label>Source out (s)<input className="text-field" type="number" min={(layer.sourceIn??0)+0.1} step="0.1" value={layer.sourceOut??((layer.sourceIn??0)+layer.duration)} onChange={e=>{const value=Math.max((layer.sourceIn??0)+0.1,Number(e.target.value)||0.1);updateCompositionLayer(selected.id,activeSlot.id,activeVersion.id,layer.id,{sourceOut:value,duration:value-(layer.sourceIn??0)});}}/></label>
                       </div>
-                      <label className="visual-prompt-field">Prompt<textarea className="text-area" rows={2} value={layer.prompt??""} placeholder="Optional submodule prompt" onChange={e=>change(p=>({...p,shots:p.shots.map(shot=>shot.id!==selected.id?shot:{...shot,slots:shot.slots.map(slot=>slot.id!==activeSlot.id?slot:{...slot,versions:slot.versions.map(version=>version.id!==activeVersion.id?version:{...version,layers:version.layers.map(item=>item.id!==layer.id?item:{...item,prompt:e.target.value})})})})}))}/></label>{layer.kind!=="audio"&&layer.kind!=="script"&&<AIGenerationPanel prompt={layer.prompt??""} defaultModel={layer.modelName} referenceImages={getGenerationReferencePaths(selected.id)} onGenerated={async (imageUrl,model,prompt)=>{
+                      <label className="visual-prompt-field">Prompt<textarea className="text-area" rows={2} value={layer.prompt??""} placeholder="Optional submodule prompt" onChange={e=>updateCompositionLayer(selected.id,activeSlot.id,activeVersion.id,layer.id,{prompt:e.target.value})}/></label>{layer.kind!=="audio"&&layer.kind!=="script"&&<AIGenerationPanel prompt={layer.prompt??""} defaultModel={layer.modelName} referenceImages={getGenerationReferencePaths(selected.id)} onGenerated={async (imageUrl,model,prompt)=>{
                         const assetId=id("asset");
                         const response=await fetch(imageUrl);
                         if(!response.ok) throw new Error("Generated image could not be retrieved from the provider response.");
@@ -2505,15 +2931,15 @@ export default function App() {
                         const shot=current.shots.find(item=>item.id===selected.id);
                         const references=shot?current.referenceProfiles.filter(profile=>shot.referenceProfileIds.includes(profile.id)).flatMap(profile=>profile.references).filter(reference=>!shot.referenceOverrides.some(override=>override.referenceId===reference.id&&override.action==="exclude")).map(reference=>{const override=shot.referenceOverrides.find(item=>item.referenceId===reference.id&&item.action==="replace");return override?.replacementAssetId?{...reference,assetId:override.replacementAssetId}:{...reference};}):[];
                         const record={id:id("generation"),createdAt:new Date().toISOString(),prompt,referenceSnapshot:references,modelName:model,outputAssetId:assetId};
-                        change(p=>({...p,assets:[...p.assets,{id:assetId,name:layer.name+" generated",kind:"image",path,prompt,modelName:model,...(thumbnailPath?{thumbnailPath}:{})}],shots:p.shots.map(item=>item.id!==selected.id?item:{...item,slots:item.slots.map(slot=>slot.id!==activeSlot.id?slot:{...slot,versions:slot.versions.map(version=>version.id!==activeVersion.id?version:{...version,layers:version.layers.map(item=>item.id!==layer.id?item:{...item,kind:"image",assetId,prompt,modelName:model}),generationRecords:[...version.generationRecords,record]})})})}));
+                        change(p=>({...p,assets:[...p.assets,{id:assetId,name:layer.name+" generated",kind:"image",path,prompt,modelName:model,...(thumbnailPath?{thumbnailPath}:{})}],shots:p.shots.map(item=>item.id!==selected.id?item:{...item,slots:item.slots.map(slot=>slot.id!==activeSlot.id?slot:{...slot,versions:slot.versions.map(version=>version.id!==activeVersion.id?version:(()=>{const edited=updateNestedLayer(version,layer.id,{kind:"image",assetId,prompt,modelName:model});return {...edited,generationRecords:[...version.generationRecords,record]};})())})})}));
                         setNotice("Generated image stored locally and attached; prompt/model/reference provenance recorded.");
                       }}/>}<div className="visual-provenance-grid"><label>Generation model<input className="text-field" value={layer.modelName??""} placeholder="e.g. provider/model" onChange={e=>updateCompositionLayer(selected.id,activeSlot.id,activeVersion.id,layer.id,{modelName:e.target.value})}/></label><label>Model version<input className="text-field" value={layer.modelVersion??""} placeholder="Optional model version" onChange={e=>updateCompositionLayer(selected.id,activeSlot.id,activeVersion.id,layer.id,{modelVersion:e.target.value})}/></label></div>
-                      <button className="button button-quiet button-small" onClick={()=>change(p=>({...p,shots:p.shots.map(shot=>shot.id!==selected.id?shot:{...shot,slots:shot.slots.map(slot=>slot.id!==activeSlot.id?slot:{...slot,versions:slot.versions.map(version=>version.id!==activeVersion.id?version:{...version,layers:version.layers.filter(item=>item.id!==layer.id)})})})}))}>Remove submodule</button>
+                      <button className="button button-quiet button-small" onClick={()=>change(p=>({...p,shots:p.shots.map(shot=>shot.id!==selected.id?shot:{...shot,slots:shot.slots.map(slot=>slot.id!==activeSlot.id?slot:{...slot,versions:slot.versions.map(version=>version.id!==activeVersion.id?version:deleteNestedLayer(version,layer.id))})})}))}>Remove submodule</button>
                     </article>)}
                     {!activeVersion.layers.length && <p className="muted-inline">No submodules yet. Add a placeholder module to begin building this shot internally.</p>}
                   </div>
                   <div className="composition-preview" aria-label="Composition frame preview"><div className="composition-preview-canvas" style={{aspectRatio: project.width + "/" + project.height, background: activeVersion.layers.find(layer=>layer.backgroundColor)?.backgroundColor ?? "#111113"}}>{activeVersion.layers.filter(layer=>["video","image","text","composition"].includes(layer.kind)).map(layer=>{const asset=project.assets.find(item=>item.id===layer.assetId); return <div key={layer.id} className="composition-preview-layer" style={{left:(layer.x??0)+"%",top:(layer.y??0)+"%",width:(layer.width??100)+"%",height:(layer.height??100)+"%",background:layer.backgroundColor??"#24242b",border:`${layer.borderWidth??0}px solid ${layer.borderColor??"#000000"}`,borderRadius:layer.shape==="circle"?"50%":layer.shape==="rounded"?(layer.cornerRadius??12)+"px":"0",opacity:layer.opacity??1,transform:`scale(${layer.scale??1})`,transformOrigin:"center",animation:layer.animation&&layer.animation!=="none"?`dys-${layer.animation} ${layer.animationDuration??3}s ease-in-out infinite alternate`:undefined}}>{asset?.path?.startsWith("data:image/")?<img src={asset.path} alt={asset.name} style={{width:"100%",height:"100%",objectFit:layer.fitMode??"contain"}}/>:<span>{layer.name}{layer.prompt?" · prompt saved":""}</span>}</div>})}</div><small>Live composition frame preview · export renders selected shot versions to WebM.</small></div>
-                  <div className="inline-actions"><button className="button button-primary button-small" onClick={()=>change(p=>({...p,shots:p.shots.map(shot=>shot.id!==selected.id?shot:{...shot,slots:shot.slots.map(slot=>slot.id!==activeSlot.id?slot:{...slot,versions:slot.versions.map(version=>version.id!==activeVersion.id?version:{...version,layers:[...version.layers,{id:id("submodule"),name:"Submodule "+(version.layers.length+1),kind:"video" as const,start:0,duration:Math.max(0.1,version.duration)}]})})})}))}><Plus size={14}/> Add submodule</button><button className="button button-quiet button-small" onClick={()=>recordVersionGeneration(selected.id,activeSlot.id,activeVersion.id)}>Record generation source</button></div>
+                  <div className="inline-actions"><button className="button button-primary button-small" onClick={()=>change(p=>({...p,shots:p.shots.map(shot=>shot.id!==selected.id?shot:{...shot,slots:shot.slots.map(slot=>slot.id!==activeSlot.id?slot:{...slot,versions:slot.versions.map(version=>version.id!==activeVersion.id?version:addNestedLayer(version,{id:id("submodule"),name:"Submodule "+(version.layers.length+1),kind:"video",start:0,duration:Math.max(0.1,version.duration)}))})})}))}><Plus size={14}/> Add submodule</button><button className="button button-quiet button-small" onClick={()=>recordVersionGeneration(selected.id,activeSlot.id,activeVersion.id)}>Record generation source</button></div>
                 </section>}
               </section></details>; })()}<div className="timeline-note"><CircleHelp size={15}/><span>{t("timeline.planningNote")}</span></div></>}
           {view === "assets" && <>
@@ -2576,28 +3002,28 @@ export default function App() {
     </section></div>;})()}
     {trackContextMenuId && view === "timeline" && <div className="shot-context-dismiss" onClick={()=>setTrackContextMenuId("")}><span className="shot-context-menu" role="menu" style={{left:trackContextMenuPosition.x,top:trackContextMenuPosition.y}} onClick={event=>event.stopPropagation()}>
       <button role="menuitem" onClick={()=>{const track=project.tracks.find(item=>item.id===trackContextMenuId);if(track?.kind==="video")setVideoTrackSettingsId(track.id);else if(track)setGenericTrackSettingsId(track.id);setTrackContextMenuId("");}}>Settings…</button>
-      {project.tracks.find(item=>item.id===trackContextMenuId)?.kind==="audio" && <button role="menuitem" onClick={()=>{change(p=>({...p,tracks:p.tracks.map(item=>item.id===trackContextMenuId?{...item,muted:!item.muted}:item)}));setTrackContextMenuId("");}}>{project.tracks.find(item=>item.id===trackContextMenuId)?.muted?"Unmute audio":"Mute audio"}</button>}
-      <button role="menuitem" onClick={()=>{const track=project.tracks.find(item=>item.id===trackContextMenuId);if(track){const kind=track.kind==="video"?"video":track.kind==="audio"?"audio":track.kind==="text"?"text":"procedural";const clipId=id("timeline-clip");change(p=>({...p,timelineClips:[...(p.timelineClips??[]),{id:clipId,name:(kind==="procedural"?"Code":kind==="text"?"Text":kind==="audio"?"Audio":"Video")+" clip",kind,trackId:track.id,start:editorTime,duration:Math.max(.5,Math.min(3,mediaTimelineDuration-editorTime||3))}]}));setSelectedTimelineClipId(clipId);setTimelineClipSettingsId(clipId);}setTrackContextMenuId("");}}>Add clip</button>
-      <button role="menuitem" className="danger-action" onClick={()=>{const track=project.tracks.find(item=>item.id===trackContextMenuId);if(track&&window.confirm("Remove layer “"+track.name+"” and all clips on it?")){change(p=>({...p,tracks:p.tracks.filter(item=>item.id!==track.id),timelineClips:(p.timelineClips??[]).filter(clip=>clip.trackId!==track.id&&!(clip.linkedVideoClipId&&(p.timelineClips??[]).some(source=>source.id===clip.linkedVideoClipId&&source.trackId===track.id)))}));setSelectedTimelineClipId("");setTimelineClipSettingsId("");}setTrackContextMenuId("");}}>Remove layer…</button>
+      {project.tracks.find(item=>item.id===trackContextMenuId)?.kind==="audio" && <button role="menuitem" onClick={()=>{changeRootComposition(root=>updateCompositionTrack(root,trackContextMenuId,{muted:!projectRef.current.tracks.find(item=>item.id===trackContextMenuId)?.muted}));setTrackContextMenuId("");}}>{project.tracks.find(item=>item.id===trackContextMenuId)?.muted?"Unmute audio":"Mute audio"}</button>}
+      <button role="menuitem" onClick={()=>{const track=project.tracks.find(item=>item.id===trackContextMenuId);if(track){const kind=track.kind==="video"?"video":track.kind==="audio"?"audio":track.kind==="text"?"text":"procedural";const clipId=id("timeline-clip");insertTimelineClipCanonical({id:clipId,name:(kind==="procedural"?"Code":kind==="text"?"Text":kind==="audio"?"Audio":"Video")+" clip",kind,trackId:track.id,start:editorTime,duration:Math.max(.5,Math.min(3,mediaTimelineDuration-editorTime||3))});setSelectedTimelineClipId(clipId);setTimelineClipSettingsId(clipId);}setTrackContextMenuId("");}}>Add clip</button>
+      <button role="menuitem" className="danger-action" onClick={()=>{const track=project.tracks.find(item=>item.id===trackContextMenuId);if(track&&window.confirm("Remove layer “"+track.name+"” and all clips on it?")){try{changeRootComposition(root=>removeCompositionTrack(root,track.id,project.tracks.filter(item=>item.id!==track.id).find(item=>item.kind==="video")?.id));setSelectedTimelineClipId("");setTimelineClipSettingsId("");}catch(error){setNotice(error instanceof Error?error.message:"Could not remove this layer.");}}setTrackContextMenuId("");}}>Remove layer…</button>
     </span></div>}
     {clipContextMenuId && view === "timeline" && <div className="shot-context-dismiss" onClick={()=>setClipContextMenuId("")}><span className="shot-context-menu" role="menu" style={{left:clipContextMenuPosition.x,top:clipContextMenuPosition.y}} onClick={event=>event.stopPropagation()}>
       <button role="menuitem" onClick={event=>{event.stopPropagation();setTimelineClipSettingsId(clipContextMenuId);setClipContextMenuId("");}}>Settings…</button>
-      <button role="menuitem" onClick={()=>{const clip=project.timelineClips?.find(item=>item.id===clipContextMenuId);if(clip){const newId=id("timeline-clip");change(p=>({...p,timelineClips:duplicateTimelineClip({tracks:p.tracks,timelineClips:p.timelineClips??[]},clip.id,{newClipId:newId,start:clip.start+clip.duration}).timelineClips}));setSelectedTimelineClipId(newId);}setClipContextMenuId("");}}>Duplicate clip</button>
-      <button role="menuitem" className="danger-action" onClick={()=>{const clip=project.timelineClips?.find(item=>item.id===clipContextMenuId);if(clip&&window.confirm("Delete clip “"+clip.name+"”?")){change(p=>({...p,timelineClips:deleteTimelineClip({tracks:p.tracks,timelineClips:p.timelineClips??[]},clip.id).timelineClips}));setSelectedTimelineClipId("");}setClipContextMenuId("");}}>Delete clip…</button>
+      <button role="menuitem" onClick={()=>{const clip=project.timelineClips?.find(item=>item.id===clipContextMenuId);if(clip){duplicateRootTimelineClip(clip);}setClipContextMenuId("");}}>Duplicate clip</button>
+      <button role="menuitem" className="danger-action" onClick={()=>{const clip=project.timelineClips?.find(item=>item.id===clipContextMenuId);if(clip&&window.confirm("Delete clip “"+clip.name+"”?")){deleteTimelineClipCanonical(clip);setSelectedTimelineClipId("");}setClipContextMenuId("");}}>Delete clip…</button>
     </span></div>}
-    {timelineClipSettingsId && project.timelineClips?.find(clip=>clip.id===timelineClipSettingsId) && (()=>{const clip=project.timelineClips!.find(item=>item.id===timelineClipSettingsId)!;const updateClip=(patch:Partial<TimelineClip>)=>change(p=>({...p,timelineClips:(p.timelineClips??[]).map(item=>item.id===clip.id?{...item,...patch}:item)}));const audioAssets=project.assets.filter(asset=>asset.kind==="audio");const videoAssets=project.assets.filter(asset=>asset.kind==="video"||asset.kind==="image");const clipAssets=project.assets.filter(asset=>asset.kind==="clip");const codeAssets=project.assets.filter(asset=>asset.kind==="script");const options=clip.kind==="audio"?audioAssets:clip.kind==="video"?videoAssets:clip.kind==="clip"?clipAssets:clip.kind==="procedural"?codeAssets:[];return <div className="settings-dialog-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setTimelineClipSettingsId("");}}><section className="settings-dialog clip-settings-dialog visual-clip-inspector" role="dialog" aria-modal="true" aria-labelledby="timeline-clip-settings-title"><header><div><span className="inspector-kicker">{clip.kind.toUpperCase()} CLIP SETTINGS</span><h2 id="timeline-clip-settings-title">{clip.name}</h2></div><button className="button button-quiet button-small" onClick={()=>setTimelineClipSettingsId("")}>Close</button></header>
+    {timelineClipSettingsId && project.timelineClips?.find(clip=>clip.id===timelineClipSettingsId) && (()=>{const clip=project.timelineClips!.find(item=>item.id===timelineClipSettingsId)!;const updateClip=(patch:Partial<TimelineClip>)=>updateRootTimelineClip(clip.id,patch);const audioAssets=project.assets.filter(asset=>asset.kind==="audio");const videoAssets=project.assets.filter(asset=>asset.kind==="video"||asset.kind==="image");const clipAssets=project.assets.filter(asset=>asset.kind==="clip");const codeAssets=project.assets.filter(asset=>asset.kind==="script");const options=clip.kind==="audio"?audioAssets:clip.kind==="video"?videoAssets:clip.kind==="clip"?clipAssets:clip.kind==="procedural"?codeAssets:[];return <div className="settings-dialog-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setTimelineClipSettingsId("");}}><section className="settings-dialog clip-settings-dialog visual-clip-inspector" role="dialog" aria-modal="true" aria-labelledby="timeline-clip-settings-title"><header><div><span className="inspector-kicker">{clip.kind.toUpperCase()} CLIP SETTINGS</span><h2 id="timeline-clip-settings-title">{clip.name}</h2></div><button className="button button-quiet button-small" onClick={()=>setTimelineClipSettingsId("")}>Close</button></header>
       <label className="field-label">Clip name<input className="text-field" value={clip.name} onChange={event=>updateClip({name:event.target.value})}/></label><div className="visual-clip-actions">
-      <button onClick={()=>{try{change(p=>({...p,timelineClips:moveTimelineClip({tracks:p.tracks,timelineClips:p.timelineClips??[]},clip.id,Math.max(0,clip.start-.5)).timelineClips}));}catch(error){setNotice(error instanceof Error?error.message:"Move failed.");}}}>−0.5s</button>
-      <button onClick={()=>{try{change(p=>({...p,timelineClips:moveTimelineClip({tracks:p.tracks,timelineClips:p.timelineClips??[]},clip.id,clip.start+.5).timelineClips}));}catch(error){setNotice(error instanceof Error?error.message:"Move failed.");}}}>+0.5s</button>
-      <button onClick={()=>{try{change(p=>({...p,timelineClips:trimTimelineClip({tracks:p.tracks,timelineClips:p.timelineClips??[]},clip.id,Math.max(.1,clip.duration-.5)).timelineClips}));}catch(error){setNotice(error instanceof Error?error.message:"Trim failed.");}}}>Trim −0.5s</button>
-      <button onClick={()=>{const fps=Math.max(1,project.frameRate||24),frame=1/fps,splitAt=Math.round((clip.start+clip.duration/2)*fps)/fps;if(clip.duration<frame*2)return;const newClipId=id("timeline-clip");const linked=(project.timelineClips??[]).filter(item=>item.kind==="audio"&&item.linkedVideoClipId===clip.id);try{change(p=>({...p,timelineClips:splitTimelineClip({tracks:p.tracks,timelineClips:p.timelineClips??[]},clip.id,Math.min(clip.start+clip.duration-frame,Math.max(clip.start+frame,splitAt)),{newClipId,...(linked.length?{newLinkedAudioClipIds:linked.map(()=>id("timeline-audio"))}:{})}).timelineClips}));setSelectedTimelineClipId(newClipId);setTimelineClipSettingsId(newClipId);}catch(error){setNotice(error instanceof Error?error.message:"Split failed.");}}}>Split at midpoint</button>
-      <button disabled={Math.round(editorTime*Math.max(1,project.frameRate||24))/Math.max(1,project.frameRate||24)<=clip.start||Math.round(editorTime*Math.max(1,project.frameRate||24))/Math.max(1,project.frameRate||24)>=clip.start+clip.duration} onClick={()=>{const fps=Math.max(1,project.frameRate||24),splitAt=Math.round(editorTime*fps)/fps;if(splitAt<=clip.start||splitAt>=clip.start+clip.duration)return;const newClipId=id("timeline-clip");const linked=(project.timelineClips??[]).filter(item=>item.kind==="audio"&&item.linkedVideoClipId===clip.id);try{change(p=>({...p,timelineClips:splitTimelineClip({tracks:p.tracks,timelineClips:p.timelineClips??[]},clip.id,splitAt,{newClipId,...(linked.length?{newLinkedAudioClipIds:linked.map(()=>id("timeline-audio"))}:{})}).timelineClips}));setSelectedTimelineClipId(newClipId);setTimelineClipSettingsId(newClipId);}catch(error){setNotice(error instanceof Error?error.message:"Split failed.");}}}>Split at playhead</button>
+      <button onClick={()=>{try{moveRootTimelineClip(clip.id,Math.max(0,clip.start-.5));}catch(error){setNotice(error instanceof Error?error.message:"Move failed.");}}}>−0.5s</button>
+      <button onClick={()=>{try{moveRootTimelineClip(clip.id,clip.start+.5);}catch(error){setNotice(error instanceof Error?error.message:"Move failed.");}}}>+0.5s</button>
+      <button onClick={()=>{try{trimRootTimelineClip(clip.id,Math.max(.1,clip.duration-.5));}catch(error){setNotice(error instanceof Error?error.message:"Trim failed.");}}}>Trim −0.5s</button>
+      <button onClick={()=>{const fps=Math.max(1,project.frameRate||24),frame=1/fps,splitAt=Math.round((clip.start+clip.duration/2)*fps)/fps;if(clip.duration<frame*2)return;const newClipId=id("timeline-clip");try{splitRootTimelineClip(clip.id,Math.min(clip.start+clip.duration-frame,Math.max(clip.start+frame,splitAt)),newClipId);setSelectedTimelineClipId(newClipId);setTimelineClipSettingsId(newClipId);}catch(error){setNotice(error instanceof Error?error.message:"Split failed.");}}}>Split at midpoint</button>
+      <button disabled={Math.round(editorTime*Math.max(1,project.frameRate||24))/Math.max(1,project.frameRate||24)<=clip.start||Math.round(editorTime*Math.max(1,project.frameRate||24))/Math.max(1,project.frameRate||24)>=clip.start+clip.duration} onClick={()=>{const fps=Math.max(1,project.frameRate||24),splitAt=Math.round(editorTime*fps)/fps;if(splitAt<=clip.start||splitAt>=clip.start+clip.duration)return;const newClipId=id("timeline-clip");try{splitRootTimelineClip(clip.id,splitAt,newClipId);setSelectedTimelineClipId(newClipId);setTimelineClipSettingsId(newClipId);}catch(error){setNotice(error instanceof Error?error.message:"Split failed.");}}}>Split at playhead</button>
 
-      <button onClick={()=>{const newClipId=id("timeline-clip");try{change(p=>({...p,timelineClips:duplicateTimelineClip({tracks:p.tracks,timelineClips:p.timelineClips??[]},clip.id,{newClipId,start:clip.start+clip.duration,...(clip.kind==="video"&&(p.timelineClips??[]).some(item=>item.kind==="audio"&&item.linkedVideoClipId===clip.id)?{newAudioClipId:id("timeline-audio")}:{})}).timelineClips}));setSelectedTimelineClipId(newClipId);setTimelineClipSettingsId(newClipId);}catch(error){setNotice(error instanceof Error?error.message:"Duplicate failed.");}}}>Duplicate clip</button>
-      {clip.kind==="audio"&&clip.linkedVideoClipId&&<button onClick={()=>{try{change(p=>({...p,timelineClips:unlinkTimelineAudio({tracks:p.tracks,timelineClips:p.timelineClips??[]},clip.id).timelineClips}));}catch(error){setNotice(error instanceof Error?error.message:"Unlink failed.");}}}>Unlink audio</button>}
+      <button onClick={()=>{const newClipId=id("timeline-clip");try{duplicateRootTimelineClip(clip,newClipId);setSelectedTimelineClipId(newClipId);setTimelineClipSettingsId(newClipId);}catch(error){setNotice(error instanceof Error?error.message:"Duplicate failed.");}}}>Duplicate clip</button>
+      {clip.kind==="audio"&&clip.linkedVideoClipId&&<button onClick={()=>{try{unlinkRootTimelineAudio(clip.id);}catch(error){setNotice(error instanceof Error?error.message:"Unlink failed.");}}}>Unlink audio</button>}
     </div>
     
-      <div className="settings-dialog-grid"><label className="field-label">Start (seconds)<input className="text-field" type="number" min="0" step={1/Math.max(1,project.frameRate)} value={clip.start} onChange={event=>{const value=Math.max(0,Number(event.target.value)||0);try{change(p=>({...p,timelineClips:moveTimelineClip({tracks:p.tracks,timelineClips:p.timelineClips??[]},clip.id,value).timelineClips}));}catch(error){setNotice(error instanceof Error?error.message:"Could not move clip.");}}}/></label><label className="field-label">Duration (seconds)<input className="text-field" type="number" min={1/Math.max(1,project.frameRate)} step={1/Math.max(1,project.frameRate)} value={clip.duration} onChange={event=>{const duration=Math.max(1/Math.max(1,project.frameRate),Number(event.target.value)||.1);try{change(p=>({...p,timelineClips:trimTimelineClip({tracks:p.tracks,timelineClips:p.timelineClips??[]},clip.id,duration).timelineClips}));}catch(error){setNotice(error instanceof Error?error.message:"Could not resize clip.");}}}/></label></div>
+      <div className="settings-dialog-grid"><label className="field-label">Start (seconds)<input className="text-field" type="number" min="0" step={1/Math.max(1,project.frameRate)} value={clip.start} onChange={event=>{const value=Math.max(0,Number(event.target.value)||0);try{moveRootTimelineClip(clip.id,value);}catch(error){setNotice(error instanceof Error?error.message:"Could not move clip.");}}}/></label><label className="field-label">Duration (seconds)<input className="text-field" type="number" min={1/Math.max(1,project.frameRate)} step={1/Math.max(1,project.frameRate)} value={clip.duration} onChange={event=>{const duration=Math.max(1/Math.max(1,project.frameRate),Number(event.target.value)||.1);try{trimRootTimelineClip(clip.id,duration);}catch(error){setNotice(error instanceof Error?error.message:"Could not resize clip.");}}}/></label></div>
       {clip.kind==="video"&&clip.assetId&&["video","image"].includes(project.assets.find(asset=>asset.id===clip.assetId)?.kind??"")&&<label className="field-label">Media fit<select className="text-field" value={clip.fitMode??"contain"} onChange={event=>updateClip({fitMode:event.target.value as "contain"|"cover"|"fill"})}><option value="contain">Contain · show full frame</option><option value="cover">Cover · fill frame, crop edges</option><option value="fill">Stretch · fill frame</option></select></label>}
       {clip.kind==="video"&&clip.assetId&&project.assets.find(asset=>asset.id===clip.assetId)?.kind==="video"&&<><div className="settings-dialog-grid"><label className="field-label">Source in (seconds)<input className="text-field" type="number" min="0" step="0.1" value={clip.sourceIn??0} onChange={event=>updateClip({sourceIn:Math.max(0,Number(event.target.value)||0)})}/></label><label className="field-label">Source out (seconds)<input className="text-field" type="number" min="0" step="0.1" placeholder="End of source" value={clip.sourceOut??""} onChange={event=>updateClip({sourceOut:event.target.value===""?undefined:Math.max((clip.sourceIn??0)+0.1,Number(event.target.value)||0)})}/></label></div><label className="field-label">If the source is shorter than this clip<select className="text-field" value={clip.shortSourceBehavior??"once"} onChange={event=>updateClip({shortSourceBehavior:event.target.value as "once"|"loop"})}><option value="once">Play once, then stop</option><option value="loop">Repeat source until clip ends</option></select></label><p className="settings-dialog-description">Use Source in/out to choose the portion of the asset used by this timeline clip.</p></>}
       {clip.kind==="clip"&&clip.assetId&&project.assets.find(asset=>asset.id===clip.assetId)?.kind==="clip"&&<label className="field-label">If the source clip is shorter than this timeline clip<select className="text-field" value={clip.shortSourceBehavior??"once"} onChange={event=>updateClip({shortSourceBehavior:event.target.value as "once"|"loop"})}><option value="once">Play once, then stop</option><option value="loop">Repeat source clip until the end</option></select></label>}
@@ -2612,12 +3038,12 @@ export default function App() {
           : <div className="code-image-reference-list">{project.assets.filter(asset=>asset.kind==="image").map(asset=><label key={asset.id}><input type="checkbox" checked={(clip.referencedImageAssetIds??[]).includes(asset.id)} onChange={event=>{const current=clip.referencedImageAssetIds??[];const next=event.target.checked?[...new Set([...current,asset.id])]:current.filter(id=>id!==asset.id);updateClip({referencedImageAssetIds:next});}}/><span>{asset.name}</span></label>)}</div>}
       </section>}
       <label className="field-label">Prompt / notes<textarea className="text-area" rows={3} value={clip.prompt??""} onChange={event=>updateClip({prompt:event.target.value})} placeholder="Optional source prompt or notes"/></label>
-      <footer><button className="button button-quiet button-small danger-action" onClick={()=>{if(window.confirm("Delete clip “"+clip.name+"”?")){change(p=>({...p,timelineClips:deleteTimelineClip({tracks:p.tracks,timelineClips:p.timelineClips??[]},clip.id).timelineClips}));setSelectedTimelineClipId("");setTimelineClipSettingsId("");}}}>Delete clip…</button><button className="button button-primary button-small" onClick={()=>setTimelineClipSettingsId("")}>Done</button></footer>
+      <footer><button className="button button-quiet button-small danger-action" onClick={()=>{if(window.confirm("Delete clip “"+clip.name+"”?")){deleteTimelineClipCanonical(clip);setSelectedTimelineClipId("");setTimelineClipSettingsId("");}}}>Delete clip…</button><button className="button button-primary button-small" onClick={()=>setTimelineClipSettingsId("")}>Done</button></footer>
     </section></div>;})()}
     {shotContextMenuId && view === "timeline" && <div className="shot-context-dismiss" onClick={()=>setShotContextMenuId("")}><span className="shot-context-menu" role="menu" style={{left:shotContextMenuPosition.x,top:shotContextMenuPosition.y}} onClick={event=>event.stopPropagation()}><button role="menuitem" onClick={event=>{event.stopPropagation();setShotSettingsId(shotContextMenuId);setShotContextMenuId("");}}>Settings…</button><button role="menuitem" onClick={()=>{duplicateShot(shotContextMenuId);setShotContextMenuId("");}}>Duplicate shot</button><button role="menuitem" className="danger-action" disabled={project.shots.length<=1} onClick={()=>{removeShot(shotContextMenuId);setShotContextMenuId("");}}>Delete shot</button></span></div>}
     {shotSettingsId && project.shots.find(shot=>shot.id===shotSettingsId) && (()=>{const shot=project.shots.find(item=>item.id===shotSettingsId)!;return <div className="settings-dialog-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setShotSettingsId("");}}><section className="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="shot-settings-title"><header><div><span className="inspector-kicker">SHOT SETTINGS</span><h2 id="shot-settings-title">{shot.title}</h2></div><button className="button button-quiet button-small" onClick={()=>setShotSettingsId("")}>Close</button></header><label className="field-label">Shot title<input className="text-field" aria-label="Shot title" value={shot.title} onChange={event=>updateShot(shot.id,{title:event.target.value})}/></label><label className="field-label">Story intent<textarea className="text-area" rows={3} aria-label="Story intent" value={shot.intent} onChange={event=>updateShot(shot.id,{intent:event.target.value})}/></label><div className="settings-dialog-grid"><label className="field-label">Master start (seconds)<input className="text-field" type="number" min="0" step="0.1" value={getMasterShotStart(project.shots,shot.id)} onChange={event=>updateMasterShotStart(shot.id,Number(event.target.value))}/></label><label className="field-label">Duration (seconds)<input className="text-field" type="number" min="1" max="600" value={shot.duration} onChange={event=>updateShot(shot.id,{duration:Math.max(1,Number(event.target.value)||1)})}/></label><label className="field-label">Status<select className="text-field" value={shot.status} onChange={event=>updateShot(shot.id,{status:event.target.value as Shot["status"]})}><option value="planned">Planned</option><option value="in-progress">In progress</option><option value="ready">Ready</option></select></label></div><footer><button className="button button-quiet button-small" onClick={()=>{duplicateShot(shot.id);setShotSettingsId("");}}>Duplicate</button><button className="button button-quiet button-small danger-action" disabled={project.shots.length<=1} onClick={()=>{removeShot(shot.id);setShotSettingsId("");}}>Delete shot</button><button className="button button-primary button-small" onClick={()=>setShotSettingsId("")}>Done</button></footer></section></div>;})()}
-    {genericTrackSettingsId && project.tracks.find(track=>track.id===genericTrackSettingsId) && (()=>{const track=project.tracks.find(item=>item.id===genericTrackSettingsId)!;const updateTrack=(patch:Partial<typeof track>)=>change(p=>({...p,tracks:p.tracks.map(item=>item.id===track.id?{...item,...patch}:item)}));return <div className="settings-dialog-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setGenericTrackSettingsId("");}}><section className="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="generic-layer-settings-title"><header><div><span className="inspector-kicker">LAYER SETTINGS</span><h2 id="generic-layer-settings-title">{track.name}</h2></div><button className="button button-quiet button-small" onClick={()=>setGenericTrackSettingsId("")}>Close</button></header><label className="field-label">Layer name<input className="text-field" value={track.name} onChange={event=>updateTrack({name:event.target.value})}/></label><div className="settings-dialog-grid"><label className="field-label">X (%)<input className="text-field" type="number" min="0" max="100" value={track.x??10} onChange={event=>updateTrack({x:Math.max(0,Math.min(100,Number(event.target.value)||0))})}/></label><label className="field-label">Y (%)<input className="text-field" type="number" min="0" max="100" value={track.y??10} onChange={event=>updateTrack({y:Math.max(0,Math.min(100,Number(event.target.value)||0))})}/></label><label className="field-label">Width (%)<input className="text-field" type="number" min="1" max="100" value={track.width??80} onChange={event=>updateTrack({width:Math.max(1,Math.min(100,Number(event.target.value)||1))})}/></label><label className="field-label">Height (%)<input className="text-field" type="number" min="1" max="100" value={track.height??80} onChange={event=>updateTrack({height:Math.max(1,Math.min(100,Number(event.target.value)||1))})}/></label></div>{track.kind==="audio"&&<label className="settings-check-row"><input type="checkbox" checked={Boolean(track.muted)} onChange={event=>updateTrack({muted:event.target.checked})}/> Mute entire audio layer</label>}<footer><button className="button button-primary button-small" onClick={()=>setGenericTrackSettingsId("")}>Done</button></footer></section></div>;})()}
-    {videoTrackSettingsId && project.tracks.find(track=>track.id===videoTrackSettingsId) && (()=>{const track=project.tracks.find(item=>item.id===videoTrackSettingsId)!;const updateTrack=(patch:Partial<typeof track>)=>change(p=>({...p,tracks:p.tracks.map(item=>item.id===track.id?{...item,...patch}:item)}));return <div className="settings-dialog-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setVideoTrackSettingsId("");}}><section className="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="video-layer-settings-title"><header><div><span className="inspector-kicker">LAYER SETTINGS</span><h2 id="video-layer-settings-title">{track.name} · Video</h2></div><button className="button button-quiet button-small" onClick={()=>setVideoTrackSettingsId("")}>Close</button></header><p className="settings-dialog-description">These settings affect every Shot on this Video layer.</p><label className="field-label">Background color<div className="settings-color-row"><input aria-label="Video layer background color" type="color" value={track.backgroundColor??"#111113"} disabled={Boolean(track.backgroundTransparent)} onChange={event=>updateTrack({backgroundColor:event.target.value})}/><span>{track.backgroundTransparent?"Transparent":track.backgroundColor??"#111113"}</span></div></label><div className="settings-dialog-grid"><label className="field-label">X (%)<input className="text-field" type="number" min="0" max="100" value={track.x??10} onChange={event=>updateTrack({x:Math.max(0,Math.min(100,Number(event.target.value)||0))})}/></label><label className="field-label">Y (%)<input className="text-field" type="number" min="0" max="100" value={track.y??10} onChange={event=>updateTrack({y:Math.max(0,Math.min(100,Number(event.target.value)||0))})}/></label><label className="field-label">Width (%)<input className="text-field" type="number" min="1" max="100" value={track.width??80} onChange={event=>updateTrack({width:Math.max(1,Math.min(100,Number(event.target.value)||1))})}/></label><label className="field-label">Height (%)<input className="text-field" type="number" min="1" max="100" value={track.height??80} onChange={event=>updateTrack({height:Math.max(1,Math.min(100,Number(event.target.value)||1))})}/></label></div><label className="settings-check-row"><input type="checkbox" checked={Boolean(track.backgroundTransparent)} onChange={event=>updateTrack({backgroundTransparent:event.target.checked})}/> Transparent background</label><label className="field-label settings-range-field">Video layer opacity <strong>{Math.round((track.opacity??1)*100)}%</strong><input aria-label="Video layer opacity" type="range" min="0" max="1" step="0.05" value={track.opacity??1} onChange={event=>updateTrack({opacity:Number(event.target.value)})}/></label><footer><button className="button button-quiet button-small" onClick={()=>{updateTrack({backgroundColor:"#111113",backgroundTransparent:false,opacity:1});}}>Reset</button><button className="button button-primary button-small" onClick={()=>setVideoTrackSettingsId("")}>Done</button></footer></section></div>;})()}
+    {genericTrackSettingsId && project.tracks.find(track=>track.id===genericTrackSettingsId) && (()=>{const track=project.tracks.find(item=>item.id===genericTrackSettingsId)!;const updateTrack=(patch:Partial<typeof track>)=>changeRootComposition(root=>updateRootTrackFromProjectPatch(root,track.id,patch));return <div className="settings-dialog-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setGenericTrackSettingsId("");}}><section className="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="generic-layer-settings-title"><header><div><span className="inspector-kicker">LAYER SETTINGS</span><h2 id="generic-layer-settings-title">{track.name}</h2></div><button className="button button-quiet button-small" onClick={()=>setGenericTrackSettingsId("")}>Close</button></header><label className="field-label">Layer name<input className="text-field" value={track.name} onChange={event=>updateTrack({name:event.target.value})}/></label><div className="settings-dialog-grid"><label className="field-label">X (%)<input className="text-field" type="number" min="0" max="100" value={track.x??10} onChange={event=>updateTrack({x:Math.max(0,Math.min(100,Number(event.target.value)||0))})}/></label><label className="field-label">Y (%)<input className="text-field" type="number" min="0" max="100" value={track.y??10} onChange={event=>updateTrack({y:Math.max(0,Math.min(100,Number(event.target.value)||0))})}/></label><label className="field-label">Width (%)<input className="text-field" type="number" min="1" max="100" value={track.width??80} onChange={event=>updateTrack({width:Math.max(1,Math.min(100,Number(event.target.value)||1))})}/></label><label className="field-label">Height (%)<input className="text-field" type="number" min="1" max="100" value={track.height??80} onChange={event=>updateTrack({height:Math.max(1,Math.min(100,Number(event.target.value)||1))})}/></label></div>{track.kind==="audio"&&<label className="settings-check-row"><input type="checkbox" checked={Boolean(track.muted)} onChange={event=>updateTrack({muted:event.target.checked})}/> Mute entire audio layer</label>}<footer><button className="button button-primary button-small" onClick={()=>setGenericTrackSettingsId("")}>Done</button></footer></section></div>;})()}
+    {videoTrackSettingsId && project.tracks.find(track=>track.id===videoTrackSettingsId) && (()=>{const track=project.tracks.find(item=>item.id===videoTrackSettingsId)!;const updateTrack=(patch:Partial<typeof track>)=>changeRootComposition(root=>updateRootTrackFromProjectPatch(root,track.id,patch));return <div className="settings-dialog-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setVideoTrackSettingsId("");}}><section className="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="video-layer-settings-title"><header><div><span className="inspector-kicker">LAYER SETTINGS</span><h2 id="video-layer-settings-title">{track.name} · Video</h2></div><button className="button button-quiet button-small" onClick={()=>setVideoTrackSettingsId("")}>Close</button></header><p className="settings-dialog-description">These settings affect every Shot on this Video layer.</p><label className="field-label">Background color<div className="settings-color-row"><input aria-label="Video layer background color" type="color" value={track.backgroundColor??"#111113"} disabled={Boolean(track.backgroundTransparent)} onChange={event=>updateTrack({backgroundColor:event.target.value})}/><span>{track.backgroundTransparent?"Transparent":track.backgroundColor??"#111113"}</span></div></label><div className="settings-dialog-grid"><label className="field-label">X (%)<input className="text-field" type="number" min="0" max="100" value={track.x??10} onChange={event=>updateTrack({x:Math.max(0,Math.min(100,Number(event.target.value)||0))})}/></label><label className="field-label">Y (%)<input className="text-field" type="number" min="0" max="100" value={track.y??10} onChange={event=>updateTrack({y:Math.max(0,Math.min(100,Number(event.target.value)||0))})}/></label><label className="field-label">Width (%)<input className="text-field" type="number" min="1" max="100" value={track.width??80} onChange={event=>updateTrack({width:Math.max(1,Math.min(100,Number(event.target.value)||1))})}/></label><label className="field-label">Height (%)<input className="text-field" type="number" min="1" max="100" value={track.height??80} onChange={event=>updateTrack({height:Math.max(1,Math.min(100,Number(event.target.value)||1))})}/></label></div><label className="settings-check-row"><input type="checkbox" checked={Boolean(track.backgroundTransparent)} onChange={event=>updateTrack({backgroundTransparent:event.target.checked})}/> Transparent background</label><label className="field-label settings-range-field">Video layer opacity <strong>{Math.round((track.opacity??1)*100)}%</strong><input aria-label="Video layer opacity" type="range" min="0" max="1" step="0.05" value={track.opacity??1} onChange={event=>updateTrack({opacity:Number(event.target.value)})}/></label><footer><button className="button button-quiet button-small" onClick={()=>{updateTrack({backgroundColor:"#111113",backgroundTransparent:false,opacity:1});}}>Reset</button><button className="button button-primary button-small" onClick={()=>setVideoTrackSettingsId("")}>Done</button></footer></section></div>;})()}
     {timelineInsertConflict&&<div className="settings-dialog-backdrop timeline-insert-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setTimelineInsertConflict(null);}}>
       <section className="settings-dialog timeline-insert-dialog" role="dialog" aria-modal="true" aria-labelledby="timeline-insert-title">
         <header><div><span className="inspector-kicker">TIMELINE INSERT</span><h2 id="timeline-insert-title">Not enough empty space</h2><p className="settings-dialog-description">“{timelineInsertConflict.clip.name}” needs {timelineInsertConflict.duration.toFixed(2)}s, but only {Math.max(0,timelineInsertConflict.availableDuration).toFixed(2)}s is free before “{timelineInsertConflict.conflictName??"the next clip"}”. Choose how to resolve this without overwriting existing footage.</p></div><button className="button button-quiet button-small" onClick={()=>setTimelineInsertConflict(null)}>Close</button></header>

@@ -87,6 +87,7 @@ async function seedLinkedVideoAudioPairs(count = 1) {
   }
   project.timelineClips = clips;
   localStorage.setItem("dionysus.project.v1", JSON.stringify(project));
+    localStorage.removeItem("dionysus.composition.v2");
   act(() => root.unmount());
   root = createRoot(container);
   act(() => root.render(<App />));
@@ -126,6 +127,7 @@ afterEach(() => {
 describe("App history integration", () => {
   it("clears persisted demo seed shots and tracks from the existing demo project", async () => {
     localStorage.setItem("dionysus.project.v1", JSON.stringify(sampleProject));
+    localStorage.removeItem("dionysus.composition.v2");
     act(() => root.unmount());
     root = createRoot(container);
     act(() => root.render(<App />));
@@ -739,9 +741,25 @@ describe("App history integration", () => {
     await openTimelineView();
     await seedLinkedVideoAudioPairs();
 
+    // Linked audio can originate from a separate source file with its own non-zero in-point.
+    const seeded = persistedProject();
+    const seededVideo = seeded.timelineClips?.find(clip => clip.kind === "video" && clip.id.startsWith("test-video-"))!;
+    const seededAudio = seeded.timelineClips?.find(clip => clip.kind === "audio" && clip.linkedVideoClipId === seededVideo.id)!;
+    const distinctSourceProject = {
+      ...seeded,
+      timelineClips: (seeded.timelineClips ?? []).map(clip =>
+        clip.id === seededAudio.id ? { ...clip, sourceIn: 7, sourceOut: 12 } : clip
+      ),
+    };
+    localStorage.setItem("dionysus.project.v1", JSON.stringify(distinctSourceProject));
+    localStorage.removeItem("dionysus.composition.v2");
+    act(() => root.unmount()); root = createRoot(container); act(() => root.render(<App />));
+    await flushEffects(); await openTimelineView();
+
     const before = persistedProject();
     const video = before.timelineClips?.find(clip => clip.kind === "video" && !clip.id.startsWith("storyboard-"))!;
     const audio = before.timelineClips?.find(clip => clip.kind === "audio" && clip.linkedVideoClipId === video.id)!;
+    expect(audio).toMatchObject({ sourceIn: 7, sourceOut: 12 });
     await selectClip(video.name);
     await flushEffects();
     const playhead = container.querySelector<HTMLInputElement>('input[aria-label="Timeline playhead time"]');
@@ -763,8 +781,8 @@ describe("App history integration", () => {
 
     const audioParts = (after.timelineClips ?? []).filter(clip => clip.kind === "audio" && (clip.linkedVideoClipId === video.id || videoParts.some(part => part.id !== video.id && part.id === clip.linkedVideoClipId))).sort((a, b) => a.start - b.start);
     expect(audioParts).toHaveLength(2);
-    expect(audioParts[0]).toMatchObject({ id: audio.id, start: 0, duration: 2.5, sourceIn: 0, sourceOut: 2.5, linkedVideoClipId: videoParts[0].id });
-    expect(audioParts[1]).toMatchObject({ start: 2.5, duration: 2.5, sourceIn: 2.5, sourceOut: 5, linkedVideoClipId: videoParts[1].id });
+    expect(audioParts[0]).toMatchObject({ id: audio.id, start: 0, duration: 2.5, sourceIn: 7, sourceOut: 9.5, linkedVideoClipId: videoParts[0].id });
+    expect(audioParts[1]).toMatchObject({ start: 2.5, duration: 2.5, sourceIn: 9.5, sourceOut: 12, linkedVideoClipId: videoParts[1].id });
   });
 
   it("duplicates a Master video clip with a new linked-audio pair and preserves mix metadata", async () => {
@@ -1013,6 +1031,7 @@ describe("Timeline preview", () => {
     targetTrack.width = 40;
     targetTrack.height = 30;
     localStorage.setItem("dionysus.project.v1", JSON.stringify(seeded));
+    localStorage.removeItem("dionysus.composition.v2");
 
     act(() => root.unmount());
     root = createRoot(container);
@@ -1048,6 +1067,8 @@ describe("Timeline preview", () => {
 
     expect(persistedProject().tracks.find(track => track.id === targetTrack.id))
       .toMatchObject({ x: 20, y: 25, width: 40, height: 30 });
+    const transformEnvelope = JSON.parse(localStorage.getItem("dionysus.composition.v2") ?? "null") as { compositionModel?: { rootComposition?: { tracks?: Array<{ id: string; legacyData?: Record<string, unknown> }> } } };
+    expect(transformEnvelope.compositionModel?.rootComposition?.tracks?.find(track => track.id === targetTrack.id)?.legacyData).toMatchObject({ x: 20, y: 25, width: 40, height: 30 });
   });
 
 });
@@ -1090,6 +1111,8 @@ describe("Timeline layer and Shot settings UX", () => {
     const track = persistedProject().tracks.find(item => item.kind === "video");
     expect(track?.backgroundTransparent).toBe(true);
     expect(track?.opacity).toBe(0.5);
+    const settingsEnvelope = JSON.parse(localStorage.getItem("dionysus.composition.v2") ?? "null") as { compositionModel?: { rootComposition?: { tracks?: Array<{ id: string; backgroundTransparent?: boolean; opacity?: number }> } } };
+    expect(settingsEnvelope.compositionModel?.rootComposition?.tracks?.find(item => item.id === track?.id)).toMatchObject({ backgroundTransparent: true, opacity: 0.5 });
   });
 
   it("stores editable Three.js source on a Code clip and shows its code thumbnail", async () => {
@@ -1221,6 +1244,7 @@ describe("Integrated timeline editor", () => {
     project.storyboardConnections = [];
     project.timelineClips = [{ id: "mixed-source", name: "Movable clip", kind: "video", trackId: videoTrack.id, start: 12, duration: 2 }];
     localStorage.setItem("dionysus.project.v1", JSON.stringify(project));
+    localStorage.removeItem("dionysus.composition.v2");
     act(() => root.unmount()); root = createRoot(container); act(() => root.render(<App />)); await flushEffects(); await openTimelineView();
     const source = timelineRows().find(row => row.textContent?.includes("Movable clip")) as HTMLButtonElement;
     const targetGroup = Array.from(container.querySelectorAll<HTMLElement>(".visual-track-group")).find(group => group.querySelector(".visual-track-label strong")?.textContent === targetTrack.name);
@@ -1246,6 +1270,7 @@ describe("Integrated timeline editor", () => {
     project.storyboardConnections = [];
     project.timelineClips = [{ id: "clip-before-shot", name: "Clip before Shot", kind: "video", trackId: videoTrack.id, start: 0, duration: 3 }];
     localStorage.setItem("dionysus.project.v1", JSON.stringify(project));
+    localStorage.removeItem("dionysus.composition.v2");
     act(() => root.unmount()); root = createRoot(container); act(() => root.render(<App />)); await flushEffects(); await openTimelineView();
     const clip = timelineRows().find(row => row.textContent?.includes("Clip before Shot")) as HTMLButtonElement;
     const right = clip.querySelector<HTMLElement>(".clip-resize-right"), lane = clip.closest(".visual-track-lane") as HTMLElement;
@@ -1277,6 +1302,7 @@ describe("Integrated timeline editor", () => {
     const targetTrack = project.tracks.find(track => track.kind === "video" && track.id !== project.tracks.find(item => item.kind === "video")?.id)!;
     project.timelineClips = [...(project.timelineClips ?? []), { id: "manual-drop-anchor", name: "Drop anchor", kind: "video", trackId: targetTrack.id, start: 4, duration: 2 }];
     localStorage.setItem("dionysus.project.v1", JSON.stringify(project));
+    localStorage.removeItem("dionysus.composition.v2");
     act(() => root.unmount()); root = createRoot(container); act(() => root.render(<App />)); await flushEffects(); await openTimelineView();
     const shotBlock = container.querySelector<HTMLButtonElement>(".master-shot-clip");
     const targetGroup = Array.from(container.querySelectorAll<HTMLElement>(".visual-track-group")).find(group => group.querySelector(".visual-track-label strong")?.textContent === targetTrack.name);
@@ -1351,7 +1377,8 @@ describe("Integrated timeline editor", () => {
     let project=persistedProject();const video=project.timelineClips!.find(clip=>clip.kind==="video"&&clip.id==="test-video-1")!;
     const targetTrack=project.tracks.find(track=>track.kind==="video"&&track.id!==video.trackId)!;
     project.timelineClips!.push({id:"test-anchor",name:"Drop alignment anchor",kind:"video",trackId:targetTrack.id,start:5,duration:2});
-    localStorage.setItem("dionysus.project.v1",JSON.stringify(project));act(()=>root.unmount());root=createRoot(container);act(()=>root.render(<App/>));await flushEffects();await openTimelineView();
+    localStorage.setItem("dionysus.project.v1",JSON.stringify(project));
+    localStorage.removeItem("dionysus.composition.v2");act(()=>root.unmount());root=createRoot(container);act(()=>root.render(<App/>));await flushEffects();await openTimelineView();
     const source=timelineRows().find(row=>row.textContent?.includes("Video clip 1")) as HTMLButtonElement;
     const group=Array.from(container.querySelectorAll<HTMLElement>(".visual-track-group")).find(g=>g.querySelector(".visual-track-label strong")?.textContent===targetTrack.name);
     const lane=group?.querySelector<HTMLElement>(".visual-track-lane");expect(lane).toBeTruthy();vi.spyOn(lane!,"getBoundingClientRect").mockReturnValue(new DOMRect(0,0,1200,76));
@@ -1378,6 +1405,27 @@ describe("Integrated timeline editor", () => {
     expect((persistedProject().timelineClips??[]).find(clip=>clip.linkedVideoClipId===after[1].id)).toMatchObject({start:after[1].start,duration:after[1].duration});
     click(buttonsNamed("Undo").find(button=>!button.disabled)!);await flushEffects();expect(videos().map(clip=>({id:clip.id,start:clip.start,duration:clip.duration}))).toEqual(original);
     click(buttonsNamed("Redo").find(button=>!button.disabled)!);await flushEffects();expect(videos()[0].duration).toBeGreaterThan(original[0].duration);expect(videos()[1].duration).toBeLessThan(original[1].duration);
+    const afterRedo = videos();
+    const saved = JSON.parse(localStorage.getItem("dionysus.composition.v2") ?? "null") as {
+      compositionModel?: { rootComposition?: { placements?: Array<{ id: string; start: number; duration: number; linkedToPlacementId?: string }> } };
+    };
+    const savedPlacements = saved.compositionModel?.rootComposition?.placements ?? [];
+    expect(savedPlacements.find(item => item.id === afterRedo[0].id)).toMatchObject({ start: afterRedo[0].start, duration: afterRedo[0].duration });
+    expect(savedPlacements.find(item => item.id === afterRedo[1].id)).toMatchObject({ start: afterRedo[1].start, duration: afterRedo[1].duration });
+    const afterRedoAudio = (persistedProject().timelineClips ?? []).find(clip => clip.linkedVideoClipId === afterRedo[1].id)!;
+    expect(savedPlacements.find(item => item.id === afterRedoAudio.id)).toMatchObject({
+      start: afterRedoAudio.start, duration: afterRedoAudio.duration, linkedToPlacementId: afterRedo[1].id,
+    });
+
+    act(() => root.unmount()); root = createRoot(container); act(() => root.render(<App />)); await flushEffects();
+    const reopened = persistedProject();
+    const reopenedVideos = (reopened.timelineClips ?? []).filter(clip => clip.kind === "video" && clip.id.startsWith("test-video-")).sort((a, b) => a.start - b.start);
+    expect(reopenedVideos.map(clip => ({ id: clip.id, start: clip.start, duration: clip.duration }))).toEqual(
+      afterRedo.map(clip => ({ id: clip.id, start: clip.start, duration: clip.duration })),
+    );
+    const reopenedEnvelope = JSON.parse(localStorage.getItem("dionysus.composition.v2") ?? "null") as typeof saved;
+    expect(reopenedEnvelope.compositionModel?.rootComposition?.placements?.find(item => item.id === afterRedo[1].id))
+      .toMatchObject({ start: afterRedo[1].start, duration: afterRedo[1].duration });
   });
 
   it("creates an empty Clip Asset from the single Asset menu and opens its Timeline", async () => {
@@ -1638,6 +1686,7 @@ describe("Integrated timeline editor", () => {
     clipOnlyProject.shots = [];
     clipOnlyProject.storyboardConnections = [];
     localStorage.setItem("dionysus.project.v1", JSON.stringify(clipOnlyProject));
+    localStorage.removeItem("dionysus.composition.v2");
     act(() => root.unmount()); root = createRoot(container); act(() => root.render(<App />)); await flushEffects(); await openTimelineView();
     const before = persistedProject();
     const left = before.timelineClips?.find(clip => clip.id === "test-video-1")!;
@@ -1832,6 +1881,7 @@ describe("click-to-place timeline insertion", () => {
 
     act(() => root.unmount());
     localStorage.setItem("dionysus.project.v1", JSON.stringify(project));
+    localStorage.removeItem("dionysus.composition.v2");
     root = createRoot(container);
     act(() => root.render(<App />));
     await flushEffects();
@@ -1876,6 +1926,31 @@ describe("click-to-place timeline insertion", () => {
     for (let index = 1; index < sorted.length; index += 1) {
       expect(sorted[index - 1].start + sorted[index - 1].duration).toBeLessThanOrEqual(sorted[index].start + 1e-7);
     }
+    const savedEnvelope = JSON.parse(localStorage.getItem("dionysus.composition.v2")!) as {
+      compositionModel: { rootComposition: { placements: Array<{ id: string; start: number; duration: number }> } };
+    };
+    expect(savedEnvelope.compositionModel.rootComposition.placements).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "existing-first", start: 6, duration: 2 }),
+      expect.objectContaining({ id: "existing-later", start: 9, duration: 2 }),
+      expect.objectContaining({ start: 3, duration: 3 }),
+    ]));
+
+    click(buttonsNamed("Undo edit")[0]);
+    await flushEffects();
+    const afterUndo = JSON.parse(localStorage.getItem("dionysus.composition.v2")!) as typeof savedEnvelope;
+    expect(afterUndo.compositionModel.rootComposition.placements.some(placement => placement.start === 3 && placement.duration === 3)).toBe(false);
+    expect(afterUndo.compositionModel.rootComposition.placements).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "existing-first", start: 4, duration: 2 }),
+      expect.objectContaining({ id: "existing-later", start: 7, duration: 2 }),
+    ]));
+
+    click(buttonsNamed("Redo edit")[0]);
+    await flushEffects();
+    const afterRedo = JSON.parse(localStorage.getItem("dionysus.composition.v2")!) as typeof savedEnvelope;
+    expect(afterRedo.compositionModel.rootComposition.placements).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "existing-first", start: 6, duration: 2 }),
+      expect.objectContaining({ id: "existing-later", start: 9, duration: 2 }),
+    ]));
   });
 });
 
@@ -1891,6 +1966,7 @@ describe("mobile touch timeline gestures", () => {
     ];
     act(() => root.unmount());
     localStorage.setItem("dionysus.project.v1", JSON.stringify(project));
+    localStorage.removeItem("dionysus.composition.v2");
     root = createRoot(container);
     act(() => root.render(<App />));
     await flushEffects();
@@ -2021,6 +2097,7 @@ describe("mobile contextual timeline tools", () => {
     ];
     act(() => root.unmount());
     localStorage.setItem("dionysus.project.v1", JSON.stringify(project));
+    localStorage.removeItem("dionysus.composition.v2");
     root = createRoot(container);
     act(() => root.render(<App />));
     await flushEffects();
@@ -2059,6 +2136,7 @@ describe("mobile timeline zoom controls", () => {
     ];
     act(() => root.unmount());
     localStorage.setItem("dionysus.project.v1", JSON.stringify(project));
+    localStorage.removeItem("dionysus.composition.v2");
     root = createRoot(container);
     act(() => root.render(<App />));
     await flushEffects();
@@ -2086,6 +2164,7 @@ describe("mobile touch trim handles", () => {
     ];
     act(() => root.unmount());
     localStorage.setItem("dionysus.project.v1", JSON.stringify(project));
+    localStorage.removeItem("dionysus.composition.v2");
     root = createRoot(container);
     act(() => root.render(<App />));
     await flushEffects();
@@ -2201,6 +2280,7 @@ describe("mobile preview history controls", () => {
     ];
     act(() => root.unmount());
     localStorage.setItem("dionysus.project.v1", JSON.stringify(project));
+    localStorage.removeItem("dionysus.composition.v2");
     root = createRoot(container);
     act(() => root.render(<App />));
     await flushEffects();
@@ -2243,6 +2323,7 @@ describe("mobile audio clip controls", () => {
     ];
     act(() => root.unmount());
     localStorage.setItem("dionysus.project.v1", JSON.stringify(project));
+    localStorage.removeItem("dionysus.composition.v2");
     root = createRoot(container);
     act(() => root.render(<App />));
     await flushEffects();

@@ -1,14 +1,20 @@
 import { describe, expect, it } from "vitest";
 import type { CompositionDocument, CompositionPlacement } from "./compositionModel";
 import {
+  addCompositionTrack,
+  applyCompositionResizePreview,
   assertValidCompositionDocument,
   deleteCompositionPlacement,
   duplicateCompositionPlacement,
   insertCompositionPlacement,
   moveCompositionPlacement,
+  removeCompositionTrack,
+  reorderCompositionTrack,
+  rippleReorderCompositionMasterShots,
   splitCompositionPlacement,
   trimCompositionPlacement,
   unlinkCompositionPlacement,
+  updateCompositionPlacement,
 } from "./compositionCommands";
 
 function fixture(): CompositionDocument {
@@ -60,6 +66,83 @@ function placement(document: CompositionDocument, id: string): CompositionPlacem
 }
 
 describe("shared Composition editing commands", () => {
+  it("adds, reorders and removes root tracks through immutable Composition commands", () => {
+    const source = fixture();
+    const before = JSON.stringify(source);
+    const added = addCompositionTrack(source, {
+      id: "v2", name: "Video 2", kind: "video", order: 3, legacyData: { kind: "video" },
+    });
+    const reordered = reorderCompositionTrack(added, "t1", 0);
+    expect([...reordered.tracks].sort((a, b) => a.order - b.order).map(track => track.id)).toEqual(["t1", "v1", "a1", "v2"]);
+    const removed = removeCompositionTrack(reordered, "v2", "v1");
+    expect(removed.tracks.some(track => track.id === "v2")).toBe(false);
+    expect(removed.placements.map(item => item.id)).toEqual(["video", "audio"]);
+    expect(JSON.stringify(source)).toBe(before);
+  });
+
+
+  it("removes a video track with a linked group atomically and rejects removing a Master Shot track without fallback", () => {
+    const source = fixture();
+    const withShotTrack = addCompositionTrack(source, {
+      id: "v2", name: "Video 2", kind: "video", order: 3, legacyData: { kind: "video" },
+    });
+    withShotTrack.placements.push({
+      id: "shot", name: "Master Shot", trackId: "v2", start: 8, duration: 3, order: 0,
+      source: { type: "shot", shotId: "shot" },
+      legacyData: { entityType: "master-shot", kind: "video", start: 8, duration: 3 },
+    });
+    expect(() => removeCompositionTrack(withShotTrack, "v2")).toThrow(/fallback video track/);
+    const moved = removeCompositionTrack(withShotTrack, "v2", "v1");
+    expect(moved.placements.find(item => item.id === "shot")).toMatchObject({ trackId: "v1", start: 8, duration: 3 });
+    expect(moved.tracks.some(track => track.id === "v2")).toBe(false);
+    expect(withShotTrack.placements.find(item => item.id === "shot")?.trackId).toBe("v2");
+  });
+
+  it("refuses to remove the final video track", () => {
+    const source = fixture();
+    expect(() => removeCompositionTrack(source, "v1")).toThrow(/last video track/);
+    expect(source.tracks.some(track => track.id === "v1")).toBe(true);
+  });
+
+  it("removes a linked audio track without deleting its video parent on another track", () => {
+    const source = fixture();
+    const next = removeCompositionTrack(source, "a1");
+    expect(next.tracks.some(track => track.id === "a1")).toBe(false);
+    expect(next.placements.map(item => item.id)).toContain("video");
+    expect(next.placements.map(item => item.id)).not.toContain("audio");
+    expect(placement(source, "audio").linkedToPlacementId).toBe("video");
+  });
+
+  it("updates canonical source/link metadata without changing unrelated source ranges", () => {
+    const source = fixture();
+    const unlinked = updateCompositionPlacement(source, "audio", {
+      linkedToPlacementId: undefined,
+      source: { type: "asset", assetId: "different-audio" },
+      legacyData: { ...placement(source, "audio").legacyData, linkedVideoClipId: undefined },
+    });
+    expect(placement(unlinked, "audio")).toMatchObject({
+      source: { type: "asset", assetId: "different-audio" }, sourceIn: 2, sourceOut: 8,
+    });
+    expect(placement(unlinked, "audio").linkedToPlacementId).toBeUndefined();
+    expect(placement(unlinked, "audio").legacyData.linkedVideoClipId).toBeUndefined();
+    expect(placement(source, "audio").linkedToPlacementId).toBe("video");
+  });
+
+  it("ripple-reorders Master Shots from canonical placements and preserves source ranges", () => {
+    const source = fixture();
+    source.placements.push(
+      { id: "shot-a", name: "A", trackId: "v1", start: 0, duration: 3, order: 2, source: { type: "shot", shotId: "shot-a" }, legacyData: { entityType: "master-shot", kind: "video" } },
+      { id: "shot-b", name: "B", trackId: "v1", start: 3, duration: 4, order: 3, source: { type: "shot", shotId: "shot-b" }, legacyData: { entityType: "master-shot", kind: "video" } },
+    );
+    const before = JSON.stringify(source);
+    const next = rippleReorderCompositionMasterShots(source, "shot-b", 0, "v1");
+    expect(placement(next, "shot-b")).toMatchObject({ start: 0, duration: 4 });
+    expect(placement(next, "shot-a")).toMatchObject({ start: 4, duration: 3 });
+    expect(placement(next, "video")).toMatchObject({ start: 1, sourceIn: 2, sourceOut: 8 });
+    expect(placement(next, "audio")).toMatchObject({ start: 1, sourceIn: 2, sourceOut: 8, linkedToPlacementId: "video" });
+    expect(JSON.stringify(source)).toBe(before);
+  });
+
   it("inserts a placement on an existing track without mutating the original document", () => {
     const source = fixture();
     const before = JSON.stringify(source);
@@ -93,6 +176,95 @@ describe("shared Composition editing commands", () => {
     expect(placement(next, "video")).toMatchObject({ start: 1, duration: 4, sourceIn: 2, sourceOut: 6 });
     expect(placement(next, "audio")).toMatchObject({ start: 1, duration: 4, sourceIn: 2, sourceOut: 6 });
     expect(placement(next, "audio").legacyData).toMatchObject({ duration: 4, sourceOut: 6 });
+  });
+
+  it("trims linked video and audio together while preserving different source in-points", () => {
+    const source = updateCompositionPlacement(fixture(), "audio", { sourceIn: 5, sourceOut: 11 });
+    const before = JSON.stringify(source);
+
+    const next = trimCompositionPlacement(source, "video", 4);
+
+    expect(placement(next, "video")).toMatchObject({ start: 1, duration: 4, sourceIn: 2, sourceOut: 6 });
+    expect(placement(next, "audio")).toMatchObject({ start: 1, duration: 4, sourceIn: 5, sourceOut: 9, linkedToPlacementId: "video" });
+    expect(JSON.stringify(source)).toBe(before);
+  });
+
+  it("resizes linked video and audio on shared timeline while preserving member source offsets", () => {
+    const source = updateCompositionPlacement(fixture(), "audio", { sourceIn: 5, sourceOut: 11 });
+    const before = JSON.stringify(source);
+
+    const next = applyCompositionResizePreview(source, {
+      id: "video", start: 1, duration: 8, edge: "right", trims: [],
+    });
+
+    expect(placement(next, "video")).toMatchObject({ start: 1, duration: 8, sourceIn: 2, sourceOut: 10 });
+    expect(placement(next, "audio")).toMatchObject({ start: 1, duration: 8, sourceIn: 5, sourceOut: 13, linkedToPlacementId: "video" });
+    expect(JSON.stringify(source)).toBe(before);
+  });
+
+  it("splits linked video and audio at one timeline point but keeps distinct source offsets", () => {
+    const source = updateCompositionPlacement(fixture(), "audio", { sourceIn: 5, sourceOut: 11 });
+    const before = JSON.stringify(source);
+
+    const next = splitCompositionPlacement(source, "video", 4, {
+      newPlacementIds: { video: "video-right", audio: "audio-right" },
+    });
+
+    expect(placement(next, "video")).toMatchObject({ start: 1, duration: 3, sourceIn: 2, sourceOut: 5 });
+    expect(placement(next, "video-right")).toMatchObject({ start: 4, duration: 3, sourceIn: 5, sourceOut: 8 });
+    expect(placement(next, "audio")).toMatchObject({ start: 1, duration: 3, sourceIn: 5, sourceOut: 8, linkedToPlacementId: "video" });
+    expect(placement(next, "audio-right")).toMatchObject({ start: 4, duration: 3, sourceIn: 8, sourceOut: 11, linkedToPlacementId: "video-right" });
+    expect(JSON.stringify(source)).toBe(before);
+  });
+
+  it("inherits root source ranges only for linked members without explicit trim metadata", () => {
+    const source = updateCompositionPlacement(fixture(), "audio", {
+      sourceIn: undefined, sourceOut: undefined,
+    });
+    const before = JSON.stringify(source);
+
+    const trimmed = trimCompositionPlacement(source, "video", 4);
+    expect(placement(trimmed, "audio")).toMatchObject({ start: 1, duration: 4, sourceIn: 2, sourceOut: 6 });
+
+    const resized = applyCompositionResizePreview(source, {
+      id: "video", start: 1, duration: 8, edge: "right", trims: [],
+    });
+    expect(placement(resized, "audio")).toMatchObject({ start: 1, duration: 8, sourceIn: 2, sourceOut: 10 });
+
+    const split = splitCompositionPlacement(source, "video", 4, {
+      newPlacementIds: { video: "video-right", audio: "audio-right" },
+    });
+    expect(placement(split, "audio")).toMatchObject({ sourceIn: 2, sourceOut: 5 });
+    expect(placement(split, "audio-right")).toMatchObject({ sourceIn: 5, sourceOut: 8, linkedToPlacementId: "video-right" });
+    expect(JSON.stringify(source)).toBe(before);
+  });
+
+  it("commits resize and adjacent trim atomically while preserving linked timing and source ranges", () => {
+    const source = fixture();
+    source.placements.push(
+      {
+        id: "next-video", name: "Next", trackId: "v1", start: 7, duration: 4, order: 1,
+        source: { type: "asset", assetId: "next-video-asset" }, sourceIn: 10, sourceOut: 14,
+        legacyData: { id: "next-video", kind: "video", start: 7, duration: 4 },
+      },
+      {
+        id: "next-audio", name: "Next audio", trackId: "a1", start: 7, duration: 4, order: 1,
+        source: { type: "asset", assetId: "next-audio-asset" }, sourceIn: 10, sourceOut: 14,
+        linkedToPlacementId: "next-video",
+        legacyData: { id: "next-audio", kind: "audio", start: 7, duration: 4, linkedVideoClipId: "next-video" },
+      },
+    );
+    const before = JSON.stringify(source);
+    const next = applyCompositionResizePreview(source, {
+      id: "video", start: 1, duration: 8, edge: "right",
+      trims: [{ id: "next-video", start: 9, duration: 2, edge: "left" }],
+    });
+    expect(placement(next, "video")).toMatchObject({ start: 1, duration: 8, sourceIn: 2, sourceOut: 10 });
+    expect(placement(next, "audio")).toMatchObject({ start: 1, duration: 8, sourceIn: 2, sourceOut: 10 });
+    expect(placement(next, "next-video")).toMatchObject({ start: 9, duration: 2, sourceIn: 12, sourceOut: 14 });
+    expect(placement(next, "next-audio")).toMatchObject({ start: 9, duration: 2, sourceIn: 12, sourceOut: 14 });
+    expect(placement(next, "next-audio").legacyData).toMatchObject({ start: 9, duration: 2, sourceIn: 12, sourceOut: 14 });
+    expect(JSON.stringify(source)).toBe(before);
   });
 
   it("splits video and linked audio into aligned, source-trimmed pairs", () => {

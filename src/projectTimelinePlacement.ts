@@ -1,4 +1,7 @@
 import type { DionysusProject, Shot, TimelineClip } from "./types";
+import type { CompositionDocument, CompositionPlacement } from "./compositionModel";
+import { assertValidCompositionDocument, applyCompositionResizePreview, insertCompositionPlacement, moveCompositionPlacement, moveCompositionPlacementToTrack } from "./compositionCommands";
+import { createRootCompositionPlacementForTimelineClip, migrateLegacyProjectToComposition } from "./compositionMigration";
 import { getMasterShotStart } from "./masterTimeline";
 import { calculateTimelineDropPosition } from "./timelinePlacement";
 import { applyTimelineClipResize, calculateTimelineClipResizePreview, type ClipResizePreview } from "./timelineResize";
@@ -58,6 +61,43 @@ export function calculateProjectTimelineDropPosition(
   );
 }
 
+/** Calculate resize previews from the live canonical root, not stale compatibility clips. */
+export function calculateCanonicalCompositionResizePreview(
+  root: CompositionDocument,
+  placementId: string,
+  edge: "left" | "right",
+  deltaSeconds: number,
+  timelineDuration: number,
+): ClipResizePreview | null {
+  if (!root.placements.some(placement => placement.id === placementId)) return null;
+  const tracks = new Map(root.tracks.map(track => [track.id, track]));
+  const clips: TimelineClip[] = root.placements.map(placement => {
+    const track = tracks.get(placement.trackId);
+    const kind: TimelineClip["kind"] = track?.kind === "audio"
+      ? "audio"
+      : track?.kind === "text" ? "text" : "video";
+    return {
+      id: placement.id,
+      name: placement.name,
+      kind,
+      trackId: placement.trackId,
+      start: placement.start,
+      duration: placement.duration,
+      ...(placement.sourceIn !== undefined ? { sourceIn: placement.sourceIn } : {}),
+      ...(placement.sourceOut !== undefined ? { sourceOut: placement.sourceOut } : {}),
+    };
+  });
+  const rootEnd = Math.max(0, ...root.placements.map(placement => placement.start + placement.duration));
+  const extent = Math.max(
+    10,
+    Number.isFinite(timelineDuration) ? timelineDuration : 0,
+    Number.isFinite(root.duration) ? root.duration : 0,
+    rootEnd,
+  );
+  const fps = Math.max(1, Number.isFinite(root.frameRate) ? root.frameRate : 24);
+  return calculateTimelineClipResizePreview(clips, placementId, edge, deltaSeconds, extent, fps);
+}
+
 export function calculateProjectTimelineClipResizePreview(
   project: DionysusProject,
   movingClip: TimelineClip,
@@ -75,11 +115,75 @@ export function calculateProjectTimelineClipResizePreview(
   );
 }
 
-/** Apply a resize across both Shot placements and ordinary clips as one project change. */
+/** Apply a resize through the shared Composition command when the legacy project can be
+ * represented without losing any of the affected placements. Materialized Storyboard clips and
+ * malformed legacy link groups remain on the compatibility path until their migration is resolved. */
 export function applyProjectTimelineClipResize(
   project: DionysusProject,
   preview: ClipResizePreview,
 ): DionysusProject {
+  let rootComposition: ReturnType<typeof migrateLegacyProjectToComposition>["rootComposition"] | undefined;
+  try {
+    rootComposition = migrateLegacyProjectToComposition(project).rootComposition;
+    assertValidCompositionDocument(rootComposition);
+  } catch {
+    rootComposition = undefined;
+  }
+
+  const requestedIds = [preview.id, ...preview.trims.map(trim => trim.id)];
+  if (rootComposition && requestedIds.every(id => rootComposition!.placements.some(item => item.id === id))) {
+    const resized = applyCompositionResizePreview(rootComposition, preview);
+    const originalById = new Map(rootComposition.placements.map(placement => [placement.id, placement]));
+    const updatedById = new Map(resized.placements.map(placement => [placement.id, placement]));
+    // Include linked descendants changed by the shared command, not only the explicit resize
+    // and trim IDs. Otherwise the canonical document is correct but the compatibility projection
+    // leaves linked audio at its previous timing/source range.
+    const touchedIds = new Set(resized.placements.filter(placement => {
+      const original = originalById.get(placement.id);
+      return original && (
+        original.start !== placement.start ||
+        original.duration !== placement.duration ||
+        original.sourceIn !== placement.sourceIn ||
+        original.sourceOut !== placement.sourceOut ||
+        original.trackId !== placement.trackId
+      );
+    }).map(placement => placement.id));
+    const shots = project.shots.map(shot => {
+      if (!touchedIds.has(shot.id)) return shot;
+      const placement = updatedById.get(shot.id);
+      if (!placement) return shot;
+      return {
+        ...shot,
+        masterStart: placement.start,
+        duration: placement.duration,
+        masterTrackId: placement.trackId,
+      };
+    });
+    const timelineClips = (project.timelineClips ?? []).map(clip => {
+      if (!touchedIds.has(clip.id)) return clip;
+      const placement = updatedById.get(clip.id);
+      if (!placement) return clip;
+      const {
+        sourceIn: _sourceIn,
+        sourceOut: _sourceOut,
+        linkedVideoClipId: _linkedVideoClipId,
+        ...rest
+      } = clip;
+      return {
+        ...rest,
+        trackId: placement.trackId,
+        start: placement.start,
+        duration: placement.duration,
+        ...(placement.sourceIn !== undefined ? { sourceIn: placement.sourceIn } : {}),
+        ...(placement.sourceOut !== undefined ? { sourceOut: placement.sourceOut } : {}),
+        ...(placement.linkedToPlacementId ? { linkedVideoClipId: placement.linkedToPlacementId } : {}),
+      };
+    }).map(clip => clip.kind === "audio" ? withDurationAndClampedFades(clip, clip.duration) : clip);
+    return { ...project, shots, timelineClips };
+  }
+
+  // Transitional fallback: legacy Storyboard materializations are intentionally omitted from the
+  // canonical root projection, so retain the existing behavior for operations that include them.
   const fps = Math.max(1, project.frameRate || 24);
   const shotIds = new Set(project.shots.map(shot => shot.id));
   const shotTrims = preview.trims.filter(trim => shotIds.has(trim.id));
@@ -127,6 +231,104 @@ export interface ProjectTimelineInsertionPlan {
 const insertionEpsilon = 1e-7;
 const snapInsertionFrame = (seconds: number, fps: number) => Math.round(seconds * fps) / fps;
 
+/** Calculate insert/ripple/trim intent from the live root Composition, not a migrated project projection. */
+export function calculateCanonicalCompositionInsertionPlan(
+  root: CompositionDocument,
+  draft: TimelineClip,
+  targetTrackId: string,
+  desiredStart: number,
+): ProjectTimelineInsertionPlan {
+  const fps = Math.max(1, Number.isFinite(root.frameRate) ? root.frameRate : 24);
+  const frame = 1 / fps;
+  const start = snapInsertionFrame(Math.max(0, Number.isFinite(desiredStart) ? desiredStart : 0), fps);
+  const validDuration = Number.isFinite(draft.duration) && draft.duration > 0;
+  const duration = validDuration ? Math.max(frame, snapInsertionFrame(draft.duration, fps)) : frame;
+  const clip = { ...draft, trackId: targetTrackId, start, duration };
+  const track = root.tracks.find(item => item.id === targetTrackId);
+  const expectedKind = clip.kind === "audio" ? "audio" : clip.kind === "text" ? "text" : "video";
+  if (!validDuration || !track || track.kind !== expectedKind) {
+    return { status: "invalid-track", clip, trackId: targetTrackId, start, duration, availableDuration: 0 };
+  }
+  const occupancy = root.placements
+    .filter(item => item.trackId === targetTrackId)
+    .map(item => ({
+      id: item.id, name: item.name, kind: (item.legacyData.kind as TimelineClip["kind"] | undefined) ?? "video",
+      trackId: item.trackId, start: item.start, duration: item.duration,
+    }))
+    .sort((a, b) => a.start - b.start || a.id.localeCompare(b.id));
+  const covering = occupancy.find(item => start >= item.start - insertionEpsilon && start < item.start + item.duration - insertionEpsilon);
+  if (covering) return {
+    status: "start-occupied", clip, trackId: targetTrackId, start, duration, availableDuration: 0,
+    conflictStart: covering.start, conflictId: covering.id, conflictName: covering.name,
+  };
+  const next = occupancy.find(item => item.start >= start - insertionEpsilon);
+  const availableDuration = next ? Math.max(0, next.start - start) : Number.POSITIVE_INFINITY;
+  if (!next || duration <= availableDuration + insertionEpsilon) {
+    return { status: "ready", clip, trackId: targetTrackId, start, duration, availableDuration };
+  }
+  const shiftBy = Math.ceil(((start + duration - next.start) * fps) - insertionEpsilon) / fps;
+  return {
+    status: "needs-resolution", clip, trackId: targetTrackId, start, duration, availableDuration,
+    conflictStart: next.start, conflictId: next.id, conflictName: next.name,
+    shiftBy: Math.max(frame, shiftBy),
+  };
+}
+
+/** Apply insertion and any ripple/trim as one immutable canonical root transaction. */
+export function applyCanonicalCompositionInsertion(
+  root: CompositionDocument,
+  project: DionysusProject,
+  plan: ProjectTimelineInsertionPlan,
+  resolution?: ProjectTimelineInsertResolution,
+): CompositionDocument {
+  if (plan.status === "invalid-track") throw new Error("This clip cannot be placed on the selected layer.");
+  if (plan.status === "start-occupied") throw new Error("Choose an empty point on the timeline layer.");
+  if (plan.status === "needs-resolution" && !resolution) throw new Error("Choose how to resolve the timeline overlap.");
+  if (root.placements.some(item => item.id === plan.clip.id)) throw new Error("Timeline placement IDs must be unique.");
+
+  const fps = Math.max(1, Number.isFinite(root.frameRate) ? root.frameRate : 24);
+  const frame = 1 / fps;
+  let next = structuredClone(root);
+  let inserted: TimelineClip = { ...plan.clip };
+  if (plan.status === "needs-resolution" && resolution === "trim") {
+    const trimDuration = Math.floor((plan.availableDuration + insertionEpsilon) * fps) / fps;
+    if (trimDuration < frame - insertionEpsilon) throw new Error("There is not enough room to keep even one frame. Choose Ripple later clips or another position.");
+    inserted = {
+      ...inserted, duration: trimDuration,
+      ...((inserted.sourceIn !== undefined || inserted.sourceOut !== undefined)
+        ? { sourceOut: (inserted.sourceIn ?? 0) + trimDuration } : {}),
+    };
+  } else if (plan.status === "needs-resolution" && resolution === "ripple") {
+    const boundary = plan.conflictStart;
+    const delta = plan.shiftBy;
+    if (boundary === undefined || delta === undefined || delta <= 0) throw new Error("The ripple insertion plan is incomplete.");
+    const affected = next.placements.filter(item => item.trackId === plan.trackId && item.start >= boundary - insertionEpsilon);
+    const roots = new Set<string>();
+    const byId = new Map(next.placements.map(item => [item.id, item]));
+    for (const placement of affected) {
+      let current = placement;
+      const visited = new Set<string>();
+      while (current.linkedToPlacementId) {
+        if (visited.has(current.id)) throw new Error("Composition placement links must not contain cycles.");
+        visited.add(current.id);
+        const parent = byId.get(current.linkedToPlacementId);
+        if (!parent) throw new Error("Linked Composition placement was not found.");
+        current = parent;
+      }
+      roots.add(current.id);
+    }
+    for (const rootId of roots) {
+      const placement = next.placements.find(item => item.id === rootId);
+      if (placement) next = moveCompositionPlacement(next, rootId, snapInsertionFrame(placement.start + delta, fps));
+    }
+  }
+  const canonical = createRootCompositionPlacementForTimelineClip(project, next, inserted);
+  next = insertCompositionPlacement(next, canonical);
+  next.duration = Math.max(next.duration, ...next.placements.map(item => item.start + item.duration));
+  assertValidCompositionDocument(next);
+  return next;
+}
+
 function materializedShotId(clip: TimelineClip, project: DionysusProject): string | undefined {
   if (!clip.id.startsWith("storyboard-")) return undefined;
   return clip.shotId ?? project.shots.find(shot => clip.id.startsWith("storyboard-" + shot.id + "-"))?.id;
@@ -156,6 +358,50 @@ function getInsertionOccupancyItems(
     ids.add(clip.id);
   }
   return items;
+}
+
+/** Calculate a drag/drop position from the live root Composition's occupancy set. */
+export function calculateCanonicalCompositionDropPosition(
+  root: CompositionDocument,
+  movingClip: TimelineClip,
+  targetTrackId: string,
+  desiredStart: number,
+  timelineDuration: number,
+): ReturnType<typeof calculateTimelineDropPosition> {
+  const movingPlacement = root.placements.find(placement => placement.id === movingClip.id);
+  const duration = movingPlacement?.duration ?? movingClip.duration;
+  const occupancy: TimelineClip[] = root.placements.map(placement => {
+    const track = root.tracks.find(item => item.id === placement.trackId);
+    const kind: TimelineClip["kind"] = track?.kind === "audio"
+      ? "audio"
+      : track?.kind === "text" ? "text" : "video";
+    return {
+      id: placement.id,
+      name: placement.name,
+      kind,
+      trackId: placement.trackId,
+      start: placement.start,
+      duration: placement.duration,
+      ...(placement.sourceIn !== undefined ? { sourceIn: placement.sourceIn } : {}),
+      ...(placement.sourceOut !== undefined ? { sourceOut: placement.sourceOut } : {}),
+    };
+  });
+  const rootEnd = Math.max(0, ...root.placements.map(placement => placement.start + placement.duration));
+  const extent = Math.max(
+    10,
+    Number.isFinite(timelineDuration) ? timelineDuration : 0,
+    Number.isFinite(root.duration) ? root.duration : 0,
+    rootEnd,
+  );
+  return calculateTimelineDropPosition(
+    occupancy,
+    movingClip.id,
+    targetTrackId,
+    desiredStart,
+    duration,
+    extent,
+    Math.max(1, Number.isFinite(root.frameRate) ? root.frameRate : 24),
+  );
 }
 
 /** Calculate a click-to-place plan without silently overwriting or moving existing placements. */
@@ -261,6 +507,47 @@ export function applyProjectTimelineInsertion(
     nextProject = { ...project, shots, timelineClips };
   }
 
+  const existingIds = new Set([
+    ...nextProject.shots.map(shot => shot.id),
+    ...(nextProject.timelineClips ?? []).map(clip => clip.id),
+  ]);
+  if (existingIds.has(inserted.id)) {
+    throw new Error("Timeline placement IDs must be unique.");
+  }
+
+  // Route ordinary placements through the shared immutable Composition insertion command
+  // whenever the transitional project can be represented without losing source relationships.
+  // Materialized Storyboard items are still excluded from the canonical projection and retain
+  // the compatibility path until their migration is completed.
+  let rootComposition: ReturnType<typeof migrateLegacyProjectToComposition>["rootComposition"] | undefined;
+  let canonicalInserted: CompositionPlacement | undefined;
+  try {
+    rootComposition = migrateLegacyProjectToComposition(nextProject).rootComposition;
+    assertValidCompositionDocument(rootComposition);
+    const candidateProject = {
+      ...nextProject,
+      timelineClips: [...(nextProject.timelineClips ?? []), inserted],
+    };
+    const candidateRoot = migrateLegacyProjectToComposition(candidateProject).rootComposition;
+    assertValidCompositionDocument(candidateRoot);
+    canonicalInserted = candidateRoot.placements.find(placement => placement.id === inserted.id);
+  } catch {
+    rootComposition = undefined;
+  }
+
+  if (rootComposition && canonicalInserted) {
+    const committed = insertCompositionPlacement(rootComposition, canonicalInserted);
+    const insertedPlacement = committed.placements.find(placement => placement.id === inserted.id);
+    if (!insertedPlacement) throw new Error("Composition insertion did not return the inserted placement.");
+    return {
+      ...nextProject,
+      timelineClips: [
+        ...(nextProject.timelineClips ?? []),
+        structuredClone(insertedPlacement.legacyData) as unknown as TimelineClip,
+      ],
+    };
+  }
+
   return {
     ...nextProject,
     timelineClips: [...(nextProject.timelineClips ?? []), inserted],
@@ -287,6 +574,37 @@ export function moveProjectTimelinePlacement(
     const shot = project.shots.find(item => item.id === target.shotId);
     if (!shot) throw new Error("Master Shot not found.");
     if (targetTrack.kind !== "video") throw new Error("A Master Shot must use a video track.");
+
+    // Master Shots are canonical root Composition placements too. Apply the shared immutable
+    // Composition command first, then project its committed fields back into the schema-1.0 Shot.
+    let rootComposition: ReturnType<typeof migrateLegacyProjectToComposition>["rootComposition"] | undefined;
+    try {
+      rootComposition = migrateLegacyProjectToComposition(project).rootComposition;
+      assertValidCompositionDocument(rootComposition);
+    } catch {
+      rootComposition = undefined;
+    }
+    const canonicalShot = rootComposition?.placements.find(placement => placement.id === shot.id);
+    if (rootComposition && canonicalShot) {
+      const movedComposition = moveCompositionPlacementToTrack(rootComposition, shot.id, targetTrackId, start);
+      const committed = movedComposition.placements.find(placement => placement.id === shot.id);
+      if (!committed) throw new Error("Composition move did not return the moved Master Shot.");
+      const delta = committed.start - canonicalShot.start;
+      return {
+        ...project,
+        shots: project.shots.map(item => item.id === shot.id
+          ? { ...item, masterStart: committed.start, duration: committed.duration, masterTrackId: committed.trackId }
+          : item),
+        timelineClips: (project.timelineClips ?? []).map(clip =>
+          clip.id.startsWith("storyboard-" + shot.id + "-")
+            ? { ...clip, start: Math.max(0, clip.start + delta), ...(clip.kind === "video" ? { trackId: committed.trackId } : {}) }
+            : clip
+        ),
+      };
+    }
+
+    // Compatibility fallback for malformed/legacy projects that cannot be represented as a
+    // valid root Composition. Keep the old edit behavior rather than blocking recovery.
     const delta = start - getMasterShotStart(project.shots, shot.id);
     return {
       ...project,
@@ -303,6 +621,45 @@ export function moveProjectTimelinePlacement(
   const moving = (project.timelineClips ?? []).find(item => item.id === target.clipId);
   if (!moving) throw new Error("Timeline clip not found.");
   if (!canPlaceTimelineClipOnTrack(moving, targetTrack)) throw new Error("This clip type cannot be placed on the destination track.");
+
+  let rootComposition: ReturnType<typeof migrateLegacyProjectToComposition>["rootComposition"] | undefined;
+  try {
+    rootComposition = migrateLegacyProjectToComposition(project).rootComposition;
+    assertValidCompositionDocument(rootComposition);
+  } catch {
+    rootComposition = undefined;
+  }
+  if (rootComposition?.placements.some(placement => placement.id === moving.id)) {
+    const movedComposition = moveCompositionPlacementToTrack(rootComposition, moving.id, targetTrackId, start);
+    const originalById = new Map(rootComposition.placements.map(placement => [placement.id, placement]));
+    const movedById = new Map(movedComposition.placements.map(placement => [placement.id, placement]));
+    const touchedIds = new Set(movedComposition.placements.filter(placement => {
+      const original = originalById.get(placement.id);
+      return original && (
+        original.start !== placement.start ||
+        original.duration !== placement.duration ||
+        original.trackId !== placement.trackId ||
+        original.sourceIn !== placement.sourceIn ||
+        original.sourceOut !== placement.sourceOut
+      );
+    }).map(placement => placement.id));
+    const timelineClips = (project.timelineClips ?? []).map(clip => {
+      if (!touchedIds.has(clip.id)) return clip;
+      const placement = movedById.get(clip.id);
+      if (!placement) return clip;
+      return {
+        ...clip,
+        trackId: placement.trackId,
+        start: placement.start,
+        duration: placement.duration,
+        ...(placement.sourceIn !== undefined ? { sourceIn: placement.sourceIn } : {}),
+        ...(placement.sourceOut !== undefined ? { sourceOut: placement.sourceOut } : {}),
+      };
+    });
+    return { ...project, timelineClips };
+  }
+
+  // Compatibility path for materialized Storyboard placements omitted from the root projection.
   const targetClips = (project.timelineClips ?? []).map(clip => clip.id === moving.id ? { ...clip, trackId: targetTrackId } : clip);
   const moved = moveTimelineClip({ tracks: project.tracks, timelineClips: targetClips }, moving.id, start);
   return { ...project, timelineClips: moved.timelineClips };
