@@ -7,7 +7,7 @@ import { validateProject } from "./projectValidation";
 import { addClipVersionLayer as addNestedLayer, addClipVersionTrack as addNestedTrack, deleteClipVersionLayer as deleteNestedLayer, duplicateClipVersionComposition, moveClipVersionLayer as moveNestedLayer, normalizeClipVersionTracks, updateClipVersionLayer as updateNestedLayer } from "./clipVersionTracks";
 import { createProjectDocument, readProjectDocument } from "./projectDocument";
 import { createRootCompositionPlacementForTimelineClip, migrateLegacyProjectToComposition, projectRootCompositionToLegacy } from "./compositionMigration";
-import { addCompositionTrack, applyCompositionResizePreview, assertValidCompositionDocument, deleteCompositionPlacement, duplicateCompositionPlacement, insertCompositionPlacement, moveCompositionPlacement, moveCompositionPlacementToTrack, removeCompositionTrack, reorderCompositionTrack, rippleReorderCompositionMasterShots, unlinkCompositionPlacement, updateCompositionPlacement, updateCompositionTrack } from "./compositionCommands";
+import { addCompositionTrack, applyCompositionResizePreview, assertValidCompositionDocument, deleteCompositionPlacement, duplicateCompositionPlacement, insertCompositionPlacement, moveCompositionPlacement, moveCompositionPlacementToTrack, removeCompositionTrack, reorderCompositionTrack, rippleReorderCompositionMasterShots, splitCompositionPlacement, trimCompositionPlacement, unlinkCompositionPlacement, updateCompositionPlacement, updateCompositionTrack } from "./compositionCommands";
 import { moveNormalizedFrame, resizeNormalizedFrame } from "./previewTransform";
 import { getAllowedChildClipAssets, wouldCreateClipAssetCycle } from "./clipAssetGraph";
 import { t } from "./i18n";
@@ -1190,6 +1190,51 @@ export default function App() {
     change(project => ({ ...project, timelineClips: unlinkTimelineAudio({ tracks: project.tracks, timelineClips: project.timelineClips ?? [] }, clipId).timelineClips }));
   }
 
+  function moveRootTimelineClip(clipId: string, start: number) {
+    if (rootCompositionRef.current.placements.some(item => item.id === clipId)) {
+      changeRootComposition(root => moveCompositionPlacement(root, clipId, start));
+      return;
+    }
+    change(project => ({ ...project, timelineClips: moveTimelineClip({ tracks: project.tracks, timelineClips: project.timelineClips ?? [] }, clipId, start).timelineClips }));
+  }
+
+  function trimRootTimelineClip(clipId: string, duration: number) {
+    if (rootCompositionRef.current.placements.some(item => item.id === clipId)) {
+      changeRootComposition(root => trimCompositionPlacement(root, clipId, duration));
+      return;
+    }
+    change(project => ({ ...project, timelineClips: trimTimelineClip({ tracks: project.tracks, timelineClips: project.timelineClips ?? [] }, clipId, duration).timelineClips }));
+  }
+
+  function splitRootTimelineClip(clipId: string, splitAt: number, selectedNewId = id("timeline-clip")) {
+    const root = rootCompositionRef.current;
+    if (!root.placements.some(item => item.id === clipId)) {
+      change(project => ({ ...project, timelineClips: splitTimelineClip({ tracks: project.tracks, timelineClips: project.timelineClips ?? [] }, clipId, splitAt, { newClipId: selectedNewId }).timelineClips }));
+      return selectedNewId;
+    }
+    const byId = new Map(root.placements.map(item => [item.id, item]));
+    let groupRoot = byId.get(clipId)!;
+    while (groupRoot.linkedToPlacementId) {
+      const parent = byId.get(groupRoot.linkedToPlacementId);
+      if (!parent) throw new Error("Linked placement parent is missing.");
+      groupRoot = parent;
+    }
+    const groupIds = new Set<string>([groupRoot.id]);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const placement of root.placements) {
+        if (placement.linkedToPlacementId && groupIds.has(placement.linkedToPlacementId) && !groupIds.has(placement.id)) {
+          groupIds.add(placement.id);
+          changed = true;
+        }
+      }
+    }
+    const newPlacementIds = Object.fromEntries([...groupIds].map(oldId => [oldId, oldId === clipId ? selectedNewId : id("timeline-clip")]));
+    changeRootComposition(document => splitCompositionPlacement(document, clipId, splitAt, { newPlacementIds }));
+    return selectedNewId;
+  }
+
   function duplicateRootTimelineClip(clip: TimelineClip) {
     const root = rootCompositionRef.current;
     if (!root.placements.some(item => item.id === clip.id)) {
@@ -1221,7 +1266,6 @@ export default function App() {
     changeRootComposition(() => next);
     setSelectedTimelineClipId(newPlacementIds[clip.id]);
   }
-
   function syncStoryboardToTimeline() {
     const videoTrack = project.tracks.find(track => track.kind === "video");
     const audioTrack = project.tracks.find(track => track.kind === "audio");
