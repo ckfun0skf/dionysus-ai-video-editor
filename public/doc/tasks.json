@@ -385,9 +385,11 @@
             "Clip Asset blank-version workflow under review: src/App.tsx and src/App.test.tsx on feat/blank-clip-asset-version",
             "Clip Asset New Blank Version UI: src/App.tsx",
             "Blank-version independence integration test: src/App.test.tsx",
-            "Functional code SHA ee1f90c3304ce0f2be5cef294c387192d2aa8969; main CI 39234313896 and Pages deployment 39234313840 passed"
+            "Functional code SHA ee1f90c3304ce0f2be5cef294c387192d2aa8969; main CI 39234313896 and Pages deployment 39234313840 passed",
+            "PR #93 merged main SHA 5f8dbea57cc72a8b4a909db3b082ea0c54894529; main CI 39400972426 and Pages deployment 39400972424 passed.",
+            "PR #94 code/test SHA 5c3d3aedda2316e5ac2adf2b46740d857d04e56a; CI 39402243280 passed 212 tests/22 files, TypeScript and production build; audit summary reported 0 vulnerabilities. Documentation refresh requires current exact-head CI before merge."
           ],
-          "notes": "PR #93 is merged on main as 5f8dbea57cc72a8b4a909db3b082ea0c54894529; its exact-head CI run 39398098386 passed 210 tests across 22 files plus TypeScript and production build. The Composition command boundary now backs root Timeline operation adapters and nested move. Follow-up branch feat/nested-composition-command-integration routes nested layer insertion/deletion through the same immutable Composition commands and routes the nested Editor Remove layer action through deleteClipVersionLayer(). This follow-up is awaiting PR CI. Remaining gaps include project-aware click-to-place/conflict dispatch, nested resize/source-range/adjacent-trim integration, snap/overlap parity, root/nested Undo parity, and canonical-only persistence/structure-preserving Save-as-Clip. Keep DYS-005 in progress; do not infer UI acceptance or deployment from command tests.",
+          "notes": "PR #93 is merged on main as 5f8dbea57cc72a8b4a909db3b082ea0c54894529; main CI run 39400972426 and GitHub Pages deployment run 39400972424 both completed successfully for that SHA. PR #93 exact-head CI run 39398098386 passed 210 tests across 22 files plus TypeScript/production build. The Composition command boundary backs root Timeline operation adapters and nested move. In follow-up PR #94, nested insertion/deletion now use immutable Composition commands, and the nested Editor Remove layer action dispatches through deleteClipVersionLayer(). Implementation/test head 5c3d3aedda2316e5ac2adf2b46740d857d04e56a passed exact-head CI run 39402243280: 212 tests across 22 files, TypeScript/build passed, npm audit summary 0 vulnerabilities. A subsequent docs-only refresh still needs exact-head CI before PR #94 merges. The follow-up is not deployed. Remaining gaps: project-aware click-to-place/conflict dispatch, nested resize/source-range/adjacent-trim integration, snap/overlap parity, root/nested Undo parity, and canonical-only persistence/structure-preserving Save-as-Clip. Keep DYS-005 in progress; do not infer UI acceptance or deployment from command tests.",
           "description": "Implement shared root/nested commands for insert, move/snap, conflicts, trim, split, duplicate, delete, linked audio, pins and Undo/Redo.",
           "executionStage": "E2-E4",
           "priority": "P0",
@@ -403,8 +405,8 @@
           "testStrategy": [
             "Source-time invariants, conflicts, linked audio, nested history and pins."
           ],
-          "nextAction": "Verify exact-head PR CI for nested insert/delete, then route nested resize/source-range/adjacent-trim and project-aware insertion/conflict dispatch through the Composition boundary while preserving snap/overlap guards; add root/nested parity and Undo tests.",
-          "handoffNotes": "Start from the current main SHA and the latest DYS-005 feature PR. Inspect docs/TIMELINE_FIRST_EXECUTION_BACKLOG.md for the exact slice and remaining gates. Do not merge failing Snapshot PR #89; do not add browser smoke tests; only ask the owner for visual acceptance after merge and verified Pages deployment."
+          "nextAction": "Validate the final exact PR #94 head after its handoff/task docs refresh; then route nested resize/source-range/adjacent-trim and project-aware insertion/conflict dispatch through the Composition boundary while preserving snap/overlap guards. Add root/nested parity and Undo tests.",
+          "handoffNotes": "Start from current main SHA and latest DYS-005 feature PR. PR #93 merged as 5f8dbea57cc72a8b4a909db3b082ea0c54894529 with main CI 39400972426 and Pages deploy 39400972424 successful. PR #94 code/test head 5c3d3aedda2316e5ac2adf2b46740d857d04e56a passed CI run 39402243280; after documentation refresh, recheck exact head before merge. Do not merge failing Snapshot PR #89; no browser smoke tests; owner visual acceptance only after merge and verified Pages deployment."
         },
         {
           "id": "DYS-011",

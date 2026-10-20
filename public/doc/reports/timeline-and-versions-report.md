@@ -42,5 +42,5 @@ CI [#39218891285](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/
 - Root Timeline operation adapters now use shared immutable Composition commands; nested Clip Version movement uses the same track-aware command.
 - Current follow-up branch `feat/nested-composition-command-integration` routes nested insertion/deletion and the nested Editor's Remove layer action through the same command layer. Added unit coverage for preserving metadata, original-state immutability, duplicate IDs and linked-descendant deletion.
 - The follow-up branch remains pending exact-head PR CI. Do not treat the feature-branch work as deployed, visually accepted, or complete.
-- Main push CI and GitHub Pages deployment for `5f8dbea...` were not independently confirmed with the available connector at this checkpoint.
+- Post-merge main CI [39400972426](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39400972426) and Pages deployment [39400972424](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39400972424) both completed successfully for main SHA `5f8dbea57cc72a8b4a909db3b082ea0c54894529`.
 - Remaining work: shared nested resize/source-range/adjacent-trim path, Master insertion/conflict dispatch, snap/overlap parity, root/nested Undo grouping, and authoritative Composition persistence / structural Save-as-Clip.
