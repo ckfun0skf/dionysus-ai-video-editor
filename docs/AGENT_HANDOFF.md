@@ -323,3 +323,12 @@ Use [`docs/MOBILE_AGENT_PICKUP_PROMPT.md`](MOBILE_AGENT_PICKUP_PROMPT.md) and [`
 - Code/test SHA `5cb79b8c5a2debd11008567630d0460bd5858737` passed exact-head CI [39419176885](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39419176885): tests, TypeScript/production build and the workflow's non-blocking dependency-audit step succeeded. Documentation changes require another exact-head CI check before merge.
 - Remaining: root/nested split and duplicate parity, atomic Undo/Redo grouping, canonical-only persistence and DYS-014 structure-preserving Save-as-Clip. Compatibility fallback remains for materialized Storyboard placements and invalid legacy projections.
 - Next: route root/nested split and duplicate through shared commands, add parity/history tests, then proceed to canonical persistence. No browser smoke tests, no direct main pushes, no merge without latest green CI.
+
+
+## Current checkpoint — 2026-10-20 (atomic linked split history)
+
+- Draft PR [#96](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/96), branch `feat/dys005-root-resize-composition-command`.
+- Added a project-history regression for splitting a linked video/audio group. It asserts one undo snapshot contains the complete split, Undo restores the original pair, and Redo restores the complete four-placement result with source ranges and links intact.
+- Exact-head CI [39421375204](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39421375204) passed at code/test SHA `b3ef901c8eaa3a193d4cbc47ac39a5d6274dbfe3`: 217 tests, TypeScript and production build passed. The workflow dependency audit is non-blocking and does not establish a standalone audit pass.
+- Next code work: audit Timeline UI handlers for atomic history grouping, define a canonical Composition persistence boundary, and implement structure-preserving Save-as-Clip without flattening nested compositions. DYS-005/DYS-014 remain in progress.
+- No browser smoke tests, no direct push to `main`, no merge without current exact-head CI and review. Owner wants one consolidated visual acceptance after a coherent Timeline milestone is deployed.
