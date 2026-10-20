@@ -151,6 +151,24 @@ describe("versioned project document boundary", () => {
   });
 
 
+  it("imports the validated canonical root instead of re-migrating stale legacy placement timing", () => {
+    const original = structuredClone(sampleProject);
+    original.shots = [];
+    const track = original.tracks.find(item => item.kind === "video")!;
+    original.timelineClips = [{
+      id: "canonical-import-clip", name: "Canonical import", kind: "video", trackId: track.id,
+      start: 2, duration: 4, sourceIn: 10, sourceOut: 14,
+    }];
+    const initialRoot = migrateLegacyProjectToComposition(original).rootComposition;
+    const movedRoot = moveCompositionPlacement(initialRoot, "canonical-import-clip", 18);
+    const projected = projectRootCompositionToLegacy(original, movedRoot);
+    const document = createProjectDocument(projected, movedRoot);
+    const reopened = readProjectDocument(JSON.parse(JSON.stringify(document)));
+    expect(reopened.project.timelineClips?.[0]).toMatchObject({ start: 18, sourceIn: 10, sourceOut: 14 });
+    expect(reopened.compositionModel?.rootComposition.placements.find(item => item.id === "canonical-import-clip"))
+      .toMatchObject({ start: 18, sourceIn: 10, sourceOut: 14 });
+  });
+
   it("persists canonical root Composition edits and restores their exact snapshots through Undo/Redo", () => {
     const original = structuredClone(sampleProject);
     const initialRoot = migrateLegacyProjectToComposition(original).rootComposition;
