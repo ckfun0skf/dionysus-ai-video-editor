@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { sampleProject } from "./sampleProject";
-import { migrateLegacyProjectToComposition } from "./compositionMigration";
+import { migrateLegacyProjectToComposition, projectRootCompositionToLegacy } from "./compositionMigration";
+import { moveCompositionPlacement } from "./compositionCommands";
 import {
   applyProjectTimelineClipResize,
   applyProjectTimelineInsertion,
+  applyCanonicalCompositionInsertion,
+  calculateCanonicalCompositionInsertionPlan,
   calculateProjectTimelineInsertionPlan,
   calculateProjectTimelineClipResizePreview,
   calculateProjectTimelineDropPosition,
@@ -12,6 +15,67 @@ import {
 } from "./projectTimelinePlacement";
 
 describe("shared project timeline placement engine", () => {
+  it("plans insertion from canonical root occupancy even when the legacy projection is stale", () => {
+    const project = structuredClone(sampleProject);
+    project.shots = [];
+    const track = project.tracks.find(item => item.kind === "video")!;
+    const existing = { id: "existing", name: "Existing", kind: "video" as const, trackId: track.id, start: 2, duration: 2, sourceIn: 4, sourceOut: 6 };
+    project.timelineClips = [existing];
+    const migrated = migrateLegacyProjectToComposition(project).rootComposition;
+    const canonical = moveCompositionPlacement(migrated, existing.id, 8);
+    const draft = { id: "inserted", name: "Inserted", kind: "video" as const, trackId: track.id, start: 0, duration: 2 };
+    const plan = calculateCanonicalCompositionInsertionPlan(canonical, draft, track.id, 2);
+    expect(plan.status).toBe("ready");
+    const committed = applyCanonicalCompositionInsertion(canonical, project, plan);
+    expect(committed.placements.find(item => item.id === existing.id)).toMatchObject({ start: 8, sourceIn: 4, sourceOut: 6 });
+    expect(committed.placements.find(item => item.id === draft.id)).toMatchObject({ start: 2, duration: 2 });
+    expect(project.timelineClips?.[0].start).toBe(2);
+  });
+
+  it("ripples canonical placements and linked source ranges as one insertion transaction", () => {
+    const project = structuredClone(sampleProject);
+    project.shots = [];
+    const videoTrack = project.tracks.find(item => item.kind === "video")!;
+    const audioTrack = project.tracks.find(item => item.kind === "audio")!;
+    project.timelineClips = [
+      { id: "before", name: "Before", kind: "video", trackId: videoTrack.id, start: 0, duration: 3 },
+      { id: "linked-video", name: "Video", kind: "video", trackId: videoTrack.id, start: 4, duration: 2, sourceIn: 10, sourceOut: 12 },
+      { id: "linked-audio", name: "Audio", kind: "audio", trackId: audioTrack.id, start: 4, duration: 2, sourceIn: 5, sourceOut: 7, linkedVideoClipId: "linked-video" },
+      { id: "after", name: "After", kind: "video", trackId: videoTrack.id, start: 7, duration: 2 },
+    ];
+    const root = migrateLegacyProjectToComposition(project).rootComposition;
+    const draft = { id: "new", name: "New", kind: "video" as const, trackId: videoTrack.id, start: 0, duration: 3 };
+    const plan = calculateCanonicalCompositionInsertionPlan(root, draft, videoTrack.id, 3);
+    expect(plan).toMatchObject({ status: "needs-resolution", conflictStart: 4, shiftBy: 2 });
+    const committed = applyCanonicalCompositionInsertion(root, project, plan, "ripple");
+    expect(committed.placements).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "new", start: 3, duration: 3 }),
+      expect.objectContaining({ id: "linked-video", start: 6, sourceIn: 10, sourceOut: 12 }),
+      expect.objectContaining({ id: "linked-audio", start: 6, sourceIn: 5, sourceOut: 7, linkedToPlacementId: "linked-video" }),
+      expect.objectContaining({ id: "after", start: 9 }),
+    ]));
+    const projected = projectRootCompositionToLegacy(project, committed);
+    expect(projected.timelineClips).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "linked-video", start: 6, sourceIn: 10, sourceOut: 12 }),
+      expect.objectContaining({ id: "linked-audio", start: 6, sourceIn: 5, sourceOut: 7, linkedVideoClipId: "linked-video" }),
+    ]));
+    expect(root.placements.find(item => item.id === "linked-video")?.start).toBe(4);
+  });
+
+  it("trims a canonical inserted clip to the free gap while retaining source in-point", () => {
+    const project = structuredClone(sampleProject);
+    project.shots = [];
+    const track = project.tracks.find(item => item.kind === "video")!;
+    project.timelineClips = [{ id: "next", name: "Next", kind: "video", trackId: track.id, start: 4, duration: 2 }];
+    const root = migrateLegacyProjectToComposition(project).rootComposition;
+    const draft = { id: "trimmed", name: "Trimmed", kind: "video" as const, trackId: track.id, start: 0, duration: 3, sourceIn: 7, sourceOut: 10 };
+    const plan = calculateCanonicalCompositionInsertionPlan(root, draft, track.id, 2);
+    const committed = applyCanonicalCompositionInsertion(root, project, plan, "trim");
+    expect(committed.placements.find(item => item.id === "trimmed")).toMatchObject({ start: 2, duration: 2, sourceIn: 7, sourceOut: 9 });
+    expect(committed.placements.find(item => item.id === "next")?.start).toBe(4);
+  });
+
+
   it("uses Master Shots as occupancy when dropping an ordinary clip", () => {
     const project = structuredClone(sampleProject);
     const videoTracks = project.tracks.filter(track => track.kind === "video");
