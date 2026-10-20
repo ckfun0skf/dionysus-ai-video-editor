@@ -1105,13 +1105,18 @@ export default function App() {
       ...shot,
       slots: shot.slots.map(slot => slot.id !== slotId ? slot : {
         ...slot,
-        versions: slot.versions.map(version => version.id !== versionId ? version : {
-          ...version,
-          layers: version.layers.map(layer => {
-            if (layer.id !== layerId) return layer;
-            const updated = { ...layer, ...patch };
-            return typeof patch.duration === "number" ? withDurationAndClampedFades(updated, patch.duration) : updated;
-          })
+        versions: slot.versions.map(version => {
+          if (version.id !== versionId) return version;
+          const currentLayer = version.layers.find(layer => layer.id === layerId);
+          if (!currentLayer) return version;
+          const updated = { ...currentLayer, ...patch };
+          const clamped = typeof patch.duration === "number"
+            ? withDurationAndClampedFades(updated, patch.duration)
+            : updated;
+          const canonicalPatch = typeof patch.duration === "number"
+            ? { ...patch, fadeIn: clamped.fadeIn, fadeOut: clamped.fadeOut }
+            : patch;
+          return updateNestedLayer(version, layerId, canonicalPatch);
         })
       })
     }) }));
