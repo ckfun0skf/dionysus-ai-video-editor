@@ -316,7 +316,10 @@ export function updateClipVersionLayer(
     trackId: updatedLayer.trackId ?? placement.trackId,
     start: updatedLayer.start,
     duration: updatedLayer.duration,
-    source: sourceReferenceForLayer(updatedLayer),
+    source: ["assetId", "childCompositionId", "clipVersionId", "scriptVersionId", "shotId", "slotId", "shotVersionId", "kind"]
+      .some(key => Object.prototype.hasOwnProperty.call(patch, key))
+      ? sourceReferenceForLayer(updatedLayer)
+      : placement.source,
     ...(updatedLayer.sourceIn !== undefined ? { sourceIn: updatedLayer.sourceIn } : {}),
     ...(updatedLayer.sourceIn === undefined ? { sourceIn: undefined } : {}),
     ...(updatedLayer.sourceOut !== undefined ? { sourceOut: updatedLayer.sourceOut } : {}),
