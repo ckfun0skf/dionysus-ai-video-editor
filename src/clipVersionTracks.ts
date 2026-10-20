@@ -165,11 +165,26 @@ export function deleteClipVersionLayer(version: ClipVersion, layerId: string): C
 
 /** Move a layer within or between compatible nested tracks. */
 function sourceReferenceForLayer(layer: CompositionLayer): CompositionSourceReference {
+  const metadata = layer as unknown as Record<string, unknown>;
+  if (typeof metadata.shotId === "string") {
+    return {
+      type: "shot",
+      shotId: metadata.shotId,
+      ...(typeof metadata.slotId === "string" ? { slotId: metadata.slotId } : {}),
+      ...(typeof metadata.shotVersionId === "string" ? { versionId: metadata.shotVersionId } : {}),
+    };
+  }
   if (layer.kind === "composition" && layer.childCompositionId) {
     return { type: "clip", assetId: layer.childCompositionId, ...(layer.clipVersionId ? { versionId: layer.clipVersionId } : {}) };
   }
+  if (layer.scriptVersionId || layer.kind === "script" || layer.kind === "procedural") {
+    return {
+      type: "script",
+      ...(layer.assetId ? { assetId: layer.assetId } : {}),
+      ...(layer.scriptVersionId ? { scriptVersionId: layer.scriptVersionId } : {}),
+    };
+  }
   if (layer.assetId) return { type: "asset", assetId: layer.assetId };
-  if (layer.scriptVersionId) return { type: "script", scriptVersionId: layer.scriptVersionId };
   return { type: "none" };
 }
 
