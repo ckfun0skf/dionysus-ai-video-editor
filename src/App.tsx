@@ -714,7 +714,7 @@ export default function App() {
     // Explicit root commands supply the canonical document first. Non-root domain edits refresh
     // the root snapshot through the legacy migration until those domain editors are promoted.
     const nextRoot = canonicalRoot ? structuredClone(canonicalRoot) : reconcileRootComposition(currentRoot, migrateLegacyProjectToComposition(next).rootComposition);
-    const projected = canonicalRoot ? projectRootCompositionToLegacy(next, nextRoot) : next;
+    const projected = projectRootCompositionToLegacy(next, nextRoot);
     projectRef.current = projected;
     rootCompositionRef.current = nextRoot;
     setProject(projected);
