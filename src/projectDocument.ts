@@ -29,6 +29,7 @@ export interface DionysusProjectDocumentV2 {
 export type ReadProjectDocumentResult = {
   project: DionysusProject;
   sourceDocumentVersion: "1.0" | "2.0";
+  compositionModel?: DionysusProjectDocumentV2["compositionModel"];
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -119,7 +120,7 @@ export function readProjectDocument(value: unknown): ReadProjectDocumentResult {
       throw new Error("The project document contains stale or inconsistent nested Composition snapshots.");
     }
 
-    return { project, sourceDocumentVersion: "2.0" };
+    return { project, sourceDocumentVersion: "2.0", compositionModel: compositionModel as unknown as DionysusProjectDocumentV2["compositionModel"] };
   }
   if (value.schemaVersion === "1.0") {
     return { project: value as unknown as DionysusProject, sourceDocumentVersion: "1.0" };
