@@ -6,8 +6,8 @@ import type { CompositionDocument } from "./compositionModel";
 import { validateProject } from "./projectValidation";
 import { addClipVersionLayer as addNestedLayer, addClipVersionTrack as addNestedTrack, deleteClipVersionLayer as deleteNestedLayer, duplicateClipVersionComposition, moveClipVersionLayer as moveNestedLayer, normalizeClipVersionTracks, updateClipVersionLayer as updateNestedLayer } from "./clipVersionTracks";
 import { createProjectDocument, readProjectDocument } from "./projectDocument";
-import { migrateLegacyProjectToComposition, projectRootCompositionToLegacy } from "./compositionMigration";
-import { addCompositionTrack, applyCompositionResizePreview, assertValidCompositionDocument, deleteCompositionPlacement, insertCompositionPlacement, moveCompositionPlacement, moveCompositionPlacementToTrack, removeCompositionTrack, reorderCompositionTrack, updateCompositionTrack } from "./compositionCommands";
+import { createRootCompositionPlacementForTimelineClip, migrateLegacyProjectToComposition, projectRootCompositionToLegacy } from "./compositionMigration";
+import { addCompositionTrack, applyCompositionResizePreview, assertValidCompositionDocument, deleteCompositionPlacement, duplicateCompositionPlacement, insertCompositionPlacement, moveCompositionPlacement, moveCompositionPlacementToTrack, removeCompositionTrack, reorderCompositionTrack, unlinkCompositionPlacement, updateCompositionPlacement, updateCompositionTrack } from "./compositionCommands";
 import { moveNormalizedFrame, resizeNormalizedFrame } from "./previewTransform";
 import { getAllowedChildClipAssets, wouldCreateClipAssetCycle } from "./clipAssetGraph";
 import { t } from "./i18n";
@@ -1177,6 +1177,72 @@ export default function App() {
       return;
     }
     change(project => ({ ...project, timelineClips: deleteTimelineClip({ tracks: project.tracks, timelineClips: project.timelineClips ?? [] }, clip.id).timelineClips }));
+  }
+
+  function updateRootTimelineClip(clipId: string, patch: Partial<TimelineClip>) {
+    const current = projectRef.current.timelineClips?.find(item => item.id === clipId);
+    const canonical = rootCompositionRef.current.placements.find(item => item.id === clipId);
+    if (!current || !canonical) {
+      change(project => ({ ...project, timelineClips: (project.timelineClips ?? []).map(item => item.id === clipId ? { ...item, ...patch } : item) }));
+      return;
+    }
+    const updated = { ...current, ...patch };
+    if (patch.duration !== undefined && patch.duration !== current.duration &&
+        patch.sourceOut === undefined && (current.sourceIn !== undefined || current.sourceOut !== undefined)) {
+      updated.sourceOut = (updated.sourceIn ?? 0) + updated.duration;
+    }
+    const sourceTemplate = createRootCompositionPlacementForTimelineClip(projectRef.current, rootCompositionRef.current, updated);
+    changeRootComposition(root => updateCompositionPlacement(root, clipId, {
+      name: updated.name,
+      trackId: updated.trackId,
+      start: updated.start,
+      duration: updated.duration,
+      source: sourceTemplate.source,
+      sourceIn: updated.sourceIn,
+      sourceOut: updated.sourceOut,
+      linkedToPlacementId: sourceTemplate.linkedToPlacementId,
+      legacyData: { ...canonical.legacyData, ...updated },
+    }));
+  }
+
+  function unlinkRootTimelineAudio(clipId: string) {
+    if (rootCompositionRef.current.placements.some(item => item.id === clipId)) {
+      changeRootComposition(root => unlinkCompositionPlacement(root, clipId));
+      return;
+    }
+    change(project => ({ ...project, timelineClips: unlinkTimelineAudio({ tracks: project.tracks, timelineClips: project.timelineClips ?? [] }, clipId).timelineClips }));
+  }
+
+  function duplicateRootTimelineClip(clip: TimelineClip) {
+    const root = rootCompositionRef.current;
+    if (!root.placements.some(item => item.id === clip.id)) {
+      const newId = id("timeline-clip");
+      change(project => ({ ...project, timelineClips: duplicateTimelineClip({ tracks: project.tracks, timelineClips: project.timelineClips ?? [] }, clip.id, { newClipId: newId, start: clip.start + clip.duration }).timelineClips }));
+      setSelectedTimelineClipId(newId);
+      return;
+    }
+    const byId = new Map(root.placements.map(item => [item.id, item]));
+    let groupRoot = byId.get(clip.id)!;
+    while (groupRoot.linkedToPlacementId) {
+      const parent = byId.get(groupRoot.linkedToPlacementId);
+      if (!parent) throw new Error("Linked placement parent is missing.");
+      groupRoot = parent;
+    }
+    const groupIds = new Set<string>([groupRoot.id]);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const placement of root.placements) {
+        if (placement.linkedToPlacementId && groupIds.has(placement.linkedToPlacementId) && !groupIds.has(placement.id)) {
+          groupIds.add(placement.id);
+          changed = true;
+        }
+      }
+    }
+    const newPlacementIds = Object.fromEntries([...groupIds].map(oldId => [oldId, id("timeline-clip")]));
+    const next = duplicateCompositionPlacement(root, clip.id, { newPlacementIds, start: clip.start + clip.duration });
+    changeRootComposition(() => next);
+    setSelectedTimelineClipId(newPlacementIds[clip.id]);
   }
 
   function syncStoryboardToTimeline() {
@@ -2544,7 +2610,7 @@ export default function App() {
      const resizedClip = clipResizePreview?.id === clip.id ? clipResizePreview : clipResizePreview?.trims.find(trim => trim.id === clip.id);
      return <div className="visual-media-clip-wrap" key={clip.id} style={{left:((resizedClip?.start??clip.start)/mediaTimelineDuration*100)+"%",width:Math.max(2,(resizedClip?.duration??clip.duration)/mediaTimelineDuration*100)+"%",opacity:track.kind==="video"?(track.opacity??1):1}}>
        <button draggable className={"visual-media-clip "+(clip.kind==="audio"?"audio-clip "+(clip.assetId?"audio-has-source":"audio-placeholder"):clip.kind==="text"?"text-clip":clip.kind==="procedural"?"procedural-clip":"video-clip "+(clip.assetId?"video-has-source":"video-placeholder"))+(clip.id===selectedTimelineClipId?" selected":"")} onPointerDown={event=>beginTouchClipMove(event,clip)} onDragStart={event=>{event.dataTransfer.setData("text/dionysus-timeline-clip",clip.id);event.dataTransfer.setData("text/plain",clip.name);event.dataTransfer.effectAllowed="move";clipDragSourceRef.current=clip;setClipDropPreview({trackId:clip.trackId,start:clip.start,duration:clip.duration,name:clip.name});}} onDragEnd={()=>{clipDragSourceRef.current=null;setClipDropPreview(null);}} onContextMenu={event=>{event.preventDefault();event.stopPropagation();setSelectedTimelineClipId(clip.id);setClipContextMenuId(clip.id);setClipContextMenuPosition({x:Math.min(event.clientX,window.innerWidth-190),y:Math.min(event.clientY,window.innerHeight-180)});}} onDoubleClick={()=>setTimelineClipSettingsId(clip.id)} onClick={()=>{if(suppressTouchClipClickRef.current){suppressTouchClipClickRef.current=false;return;}setSelectedTimelineClipId(clip.id);setSelectedTimelineTrackId(track.id);const next=Math.min(activeTimelineDuration,clip.start);playbackTimeRef.current=next;setIsPlaying(false);setEditorTime(next);}} style={{backgroundColor:clip.kind==="video"&&!clip.assetId?(track.backgroundTransparent?"transparent":track.backgroundColor??"#20232a"):undefined}} title={clip.name+" · "+clip.start.toFixed(1)+"–"+(clip.start+clip.duration).toFixed(1)+"s"}><span className="visual-clip-icon">{clip.kind==="audio"?<AudioLines size={13}/>:clip.kind==="text"?<Sparkles size={13}/>:clip.kind==="procedural"?<Layers3 size={13}/>:thumbnailPath?<img className="visual-clip-thumbnail" src={thumbnailPath} alt=""/>:<span className="visual-clip-thumbnail-placeholder"><Film size={13}/></span>}</span><span className="visual-clip-copy"><strong>{clip.name}</strong><small>{clip.duration.toFixed(1)}s{clip.linkedVideoClipId?" · linked":clip.kind==="audio"?" · independent":""}{clip.assetId?"":" · no source"}</small></span>{clip.kind==="audio"&&<AudioWaveform path={project.assets.find(asset=>asset.id===clip.assetId)?.path}/>}<span className="clip-resize-handle clip-resize-left" role="separator" aria-label={"Resize start of "+clip.name} onPointerDown={event=>beginTimelineClipResize(event,clip,"left")} onPointerCancel={cancelTimelineClipResize}/><span className="clip-resize-handle clip-resize-right" role="separator" aria-label={"Resize end of "+clip.name} onPointerDown={event=>beginTimelineClipResize(event,clip,"right")} onPointerCancel={cancelTimelineClipResize}/></button>
-       {clip.kind==="audio" && <button className="timeline-clip-mute" aria-label={(clip.muted?"Unmute ":"Mute ")+clip.name} aria-pressed={Boolean(clip.muted)} onClick={()=>change(p=>({...p,timelineClips:(p.timelineClips??[]).map(item=>item.id===clip.id?{...item,muted:!item.muted}:item)}))}>{clip.muted?"🔇":"♪"}</button>}
+       {clip.kind==="audio" && <button className="timeline-clip-mute" aria-label={(clip.muted?"Unmute ":"Mute ")+clip.name} aria-pressed={Boolean(clip.muted)} onClick={()=>updateRootTimelineClip(clip.id,{muted:!clip.muted})}>{clip.muted?"🔇":"♪"}</button>}
        {clip.kind==="video" && versionShot && versionSlot && <details className="timeline-version-menu"><summary aria-label={"Show versions for "+versionShot.title}>▾</summary><div className="timeline-version-menu-panel">
          <strong>{versionShot.title}</strong>
          {versionSlot.versions.map((version,vi)=><div className="timeline-version-menu-row" key={version.id}>
@@ -2589,8 +2655,8 @@ export default function App() {
       <div className="visual-playhead" style={{left:(editorTime/mediaTimelineDuration*100)+"%"}}/>
       {linkedAudio.map(audio=><div className="visual-media-clip-wrap" key={audio.id} style={{left:(audio.start/mediaTimelineDuration*100)+"%",width:Math.max(2,audio.duration/mediaTimelineDuration*100)+"%"}}>
         <button className={"visual-media-clip audio-clip "+(audio.assetId?"audio-has-source":"audio-placeholder")+(audio.id===selectedTimelineClipId?" selected":"")} onContextMenu={event=>{event.preventDefault();event.stopPropagation();setSelectedTimelineClipId(audio.id);setClipContextMenuId(audio.id);setClipContextMenuPosition({x:Math.min(event.clientX,window.innerWidth-190),y:Math.min(event.clientY,window.innerHeight-180)});}} onDoubleClick={()=>setTimelineClipSettingsId(audio.id)} onClick={()=>{setSelectedTimelineClipId(audio.id);setSelectedTimelineTrackId(track.id);setEditorTime(audio.start);setIsPlaying(false);playbackTimeRef.current=audio.start;}} title={audio.name+" · "+audio.duration.toFixed(1)+"s"}><span className="visual-clip-icon"><AudioLines size={13}/></span><span className="visual-clip-copy"><strong>{audio.name}</strong><small>{audio.duration.toFixed(1)}s · linked</small></span><AudioWaveform path={project.assets.find(asset=>asset.id===audio.assetId)?.path}/></button>
-        <button className="timeline-clip-mute" aria-label={(audio.muted?"Unmute ":"Mute ")+audio.name} aria-pressed={Boolean(audio.muted)} onClick={()=>change(p=>({...p,timelineClips:(p.timelineClips??[]).map(item=>item.id===audio.id?{...item,muted:!item.muted}:item)}))}>{audio.muted?"🔇":"♪"}</button>
-        <button className="timeline-clip-unlink" title="Unlink source audio" aria-label={"Unlink "+audio.name} onClick={()=>{try{change(p=>({...p,timelineClips:unlinkTimelineAudio({tracks:p.tracks,timelineClips:p.timelineClips??[]},audio.id).timelineClips}));setNotice("Audio unlinked and moved into the independent audio lane.");}catch(error){setNotice(error instanceof Error?error.message:"Unlink failed.");}}}>Unlink</button>
+        <button className="timeline-clip-mute" aria-label={(audio.muted?"Unmute ":"Mute ")+audio.name} aria-pressed={Boolean(audio.muted)} onClick={()=>updateRootTimelineClip(audio.id,{muted:!audio.muted})}>{audio.muted?"🔇":"♪"}</button>
+        <button className="timeline-clip-unlink" title="Unlink source audio" aria-label={"Unlink "+audio.name} onClick={()=>{try{unlinkRootTimelineAudio(audio.id);setNotice("Audio unlinked and moved into the independent audio lane.");}catch(error){setNotice(error instanceof Error?error.message:"Unlink failed.");}}}>Unlink</button>
       </div>)}
     </div>
    </div>;
@@ -2842,10 +2908,10 @@ export default function App() {
     </span></div>}
     {clipContextMenuId && view === "timeline" && <div className="shot-context-dismiss" onClick={()=>setClipContextMenuId("")}><span className="shot-context-menu" role="menu" style={{left:clipContextMenuPosition.x,top:clipContextMenuPosition.y}} onClick={event=>event.stopPropagation()}>
       <button role="menuitem" onClick={event=>{event.stopPropagation();setTimelineClipSettingsId(clipContextMenuId);setClipContextMenuId("");}}>Settings…</button>
-      <button role="menuitem" onClick={()=>{const clip=project.timelineClips?.find(item=>item.id===clipContextMenuId);if(clip){const newId=id("timeline-clip");change(p=>({...p,timelineClips:duplicateTimelineClip({tracks:p.tracks,timelineClips:p.timelineClips??[]},clip.id,{newClipId:newId,start:clip.start+clip.duration}).timelineClips}));setSelectedTimelineClipId(newId);}setClipContextMenuId("");}}>Duplicate clip</button>
+      <button role="menuitem" onClick={()=>{const clip=project.timelineClips?.find(item=>item.id===clipContextMenuId);if(clip){const newId=id("timeline-clip");duplicateRootTimelineClip(clip);}setClipContextMenuId("");}}>Duplicate clip</button>
       <button role="menuitem" className="danger-action" onClick={()=>{const clip=project.timelineClips?.find(item=>item.id===clipContextMenuId);if(clip&&window.confirm("Delete clip “"+clip.name+"”?")){deleteTimelineClipCanonical(clip);setSelectedTimelineClipId("");}setClipContextMenuId("");}}>Delete clip…</button>
     </span></div>}
-    {timelineClipSettingsId && project.timelineClips?.find(clip=>clip.id===timelineClipSettingsId) && (()=>{const clip=project.timelineClips!.find(item=>item.id===timelineClipSettingsId)!;const updateClip=(patch:Partial<TimelineClip>)=>change(p=>({...p,timelineClips:(p.timelineClips??[]).map(item=>item.id===clip.id?{...item,...patch}:item)}));const audioAssets=project.assets.filter(asset=>asset.kind==="audio");const videoAssets=project.assets.filter(asset=>asset.kind==="video"||asset.kind==="image");const clipAssets=project.assets.filter(asset=>asset.kind==="clip");const codeAssets=project.assets.filter(asset=>asset.kind==="script");const options=clip.kind==="audio"?audioAssets:clip.kind==="video"?videoAssets:clip.kind==="clip"?clipAssets:clip.kind==="procedural"?codeAssets:[];return <div className="settings-dialog-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setTimelineClipSettingsId("");}}><section className="settings-dialog clip-settings-dialog visual-clip-inspector" role="dialog" aria-modal="true" aria-labelledby="timeline-clip-settings-title"><header><div><span className="inspector-kicker">{clip.kind.toUpperCase()} CLIP SETTINGS</span><h2 id="timeline-clip-settings-title">{clip.name}</h2></div><button className="button button-quiet button-small" onClick={()=>setTimelineClipSettingsId("")}>Close</button></header>
+    {timelineClipSettingsId && project.timelineClips?.find(clip=>clip.id===timelineClipSettingsId) && (()=>{const clip=project.timelineClips!.find(item=>item.id===timelineClipSettingsId)!;const updateClip=(patch:Partial<TimelineClip>)=>updateRootTimelineClip(clip.id,patch);const audioAssets=project.assets.filter(asset=>asset.kind==="audio");const videoAssets=project.assets.filter(asset=>asset.kind==="video"||asset.kind==="image");const clipAssets=project.assets.filter(asset=>asset.kind==="clip");const codeAssets=project.assets.filter(asset=>asset.kind==="script");const options=clip.kind==="audio"?audioAssets:clip.kind==="video"?videoAssets:clip.kind==="clip"?clipAssets:clip.kind==="procedural"?codeAssets:[];return <div className="settings-dialog-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setTimelineClipSettingsId("");}}><section className="settings-dialog clip-settings-dialog visual-clip-inspector" role="dialog" aria-modal="true" aria-labelledby="timeline-clip-settings-title"><header><div><span className="inspector-kicker">{clip.kind.toUpperCase()} CLIP SETTINGS</span><h2 id="timeline-clip-settings-title">{clip.name}</h2></div><button className="button button-quiet button-small" onClick={()=>setTimelineClipSettingsId("")}>Close</button></header>
       <label className="field-label">Clip name<input className="text-field" value={clip.name} onChange={event=>updateClip({name:event.target.value})}/></label><div className="visual-clip-actions">
       <button onClick={()=>{try{change(p=>({...p,timelineClips:moveTimelineClip({tracks:p.tracks,timelineClips:p.timelineClips??[]},clip.id,Math.max(0,clip.start-.5)).timelineClips}));}catch(error){setNotice(error instanceof Error?error.message:"Move failed.");}}}>−0.5s</button>
       <button onClick={()=>{try{change(p=>({...p,timelineClips:moveTimelineClip({tracks:p.tracks,timelineClips:p.timelineClips??[]},clip.id,clip.start+.5).timelineClips}));}catch(error){setNotice(error instanceof Error?error.message:"Move failed.");}}}>+0.5s</button>
