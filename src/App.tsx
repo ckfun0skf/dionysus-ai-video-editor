@@ -916,7 +916,7 @@ export default function App() {
     if (active.kind === "layer" && active.tab) {
       updateTimelineVersionLayer(active.tab, active.id, patch);
     } else if (active.kind === "clip") {
-      change(p => ({ ...p, timelineClips: (p.timelineClips ?? []).map(clip => clip.id === active.id ? { ...clip, ...patch } : clip) }));
+      updateRootTimelineClip(active.id,patch);
     } else {
       change(p => ({ ...p, tracks: p.tracks.map(track => track.id === active.id ? { ...track, ...patch } : track) }));
     }
@@ -2323,7 +2323,7 @@ export default function App() {
       const asset: Asset = { id: assetId, name: file.name, kind, path, createdAt: now, updatedAt: now, notes: "Imported from Timeline; stored locally.", ...(thumbnailPath ? { thumbnailPath } : {}) };
       const duration = Math.max(.5, Math.min(3, mediaTimelineDuration - editorTime || 3));
       const clip: TimelineClip = { id: clipId, name: file.name.replace(/\\.[^.]+$/, ""), kind, trackId: track.id, start: Math.round(editorTime * Math.max(1, projectRef.current.frameRate || 24)) / Math.max(1, projectRef.current.frameRate || 24), duration, assetId, sourceIn: 0 };
-      change(p => ({ ...p, assets: [...p.assets, asset], timelineClips: [...(p.timelineClips ?? []), clip] }));
+      const current = projectRef.current; const nextProject = { ...current, assets: [...current.assets, asset], timelineClips: [...(current.timelineClips ?? []), clip] }; const placement = createRootCompositionPlacementForTimelineClip(nextProject, rootCompositionRef.current, clip); const nextRoot = insertCompositionPlacement(rootCompositionRef.current, placement); change(() => nextProject, "", nextRoot);
       setSelectedTimelineClipId(clipId); setSelectedTimelineTrackId(track.id); setTimelineClipSettingsId(clipId); setAssetPickerTrackId("");
       setNotice(file.name + " imported to Assets and added to the Timeline.");
     } catch (error) { setNotice(error instanceof Error ? error.message : "Could not import this media file."); }
