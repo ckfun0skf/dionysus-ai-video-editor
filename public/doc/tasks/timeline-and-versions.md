@@ -107,3 +107,12 @@ Exact-head CI [39431744433](https://github.com/ckfun0skf/dionysus-ai-video-edito
 Migration now preserves already-canonical Clip/Shot Slot Version documents instead of reconstructing them from compatibility layers, and Save-as-Clip keeps existing embedded nested subtrees. Exact-head CI [39445108693](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39445108693) passed 223 tests/23 files, TypeScript/build and dependency audit 0 vulnerabilities.
 
 **Remaining architectural boundary:** root Composition in the V2 export remains a projection regenerated from the live schema-1.0 project. Canonical root Composition is not yet the live editor source of truth. Keep DYS-005 in progress; next root-persistence work must include canonical command state, deterministic legacy projection, edit/save/reopen and Undo/Redo coverage.
+
+
+## Canonical duplication and nested mutation follow-up — 2026-10-20
+
+- Clip Version, Shot, and Slot duplication now use `duplicateClipVersionComposition()`. The helper creates fresh local track/placement IDs, remaps track and linked video/audio references, refreshes compatibility projections, and retains pinned child Composition snapshots, source ranges, and provenance.
+- The legacy Shot Slot inspector now routes edits for timing, source in/out, prompt, generation output, layer properties, insertion and deletion through the canonical nested Composition adapter. Direct `version.layers` mutations were removed from these nested edit handlers.
+- Added regression cases for canonical and legacy-only duplication, linked references, track/placement identity, source ranges, provenance, pinned child retention and source immutability.
+- Validation is pending on the final documentation-updated branch head. Do not treat previously passed CI as evidence for these latest changes. PR #96 remains Draft; no browser smoke tests or merge.
+- Remaining architecture gap: root Composition is still a projection, not the live editor source of truth. Continue with root persistence, save/reopen and Undo/Redo after exact-head CI, and investigate any non-inspector legacy workflows still intentionally writing Shot Slot layers.
