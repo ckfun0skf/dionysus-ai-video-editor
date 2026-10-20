@@ -578,6 +578,16 @@ export function removeCompositionTrack(
     placement.trackId === trackId && placement.legacyData.entityType !== "master-shot"
   );
   for (const placement of ordinary) {
+    const current = next.placements.find(item => item.id === placement.id);
+    if (!current) continue;
+    // Removing a child track must remove its linked child, not accidentally delete the parent
+    // video on a different track. Removing a parent still deletes its complete linked group.
+    const parent = current.linkedToPlacementId
+      ? next.placements.find(item => item.id === current.linkedToPlacementId)
+      : undefined;
+    if (parent && parent.trackId !== trackId) {
+      next = unlinkCompositionPlacement(next, current.id);
+    }
     if (next.placements.some(item => item.id === placement.id)) next = deleteCompositionPlacement(next, placement.id);
   }
   next.tracks = next.tracks.filter(track => track.id !== trackId).map((track, order) => ({ ...track, order }));
