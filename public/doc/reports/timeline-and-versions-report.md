@@ -44,3 +44,10 @@ CI [#39218891285](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/
 - The follow-up branch remains pending exact-head PR CI. Do not treat the feature-branch work as deployed, visually accepted, or complete.
 - Post-merge main CI [39400972426](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39400972426) and Pages deployment [39400972424](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39400972424) both completed successfully for main SHA `5f8dbea57cc72a8b4a909db3b082ea0c54894529`.
 - Remaining work: shared nested resize/source-range/adjacent-trim path, Master insertion/conflict dispatch, snap/overlap parity, root/nested Undo grouping, and authoritative Composition persistence / structural Save-as-Clip.
+
+## Nested resize command follow-up — 2026-10-20
+
+- Branch `feat/dys005-nested-resize-composition-command` routes nested resize and adjacent trim commits through `applyCompositionResizePreview()` in `src/compositionCommands.ts`.
+- The command applies a primary resize and its neighboring trim atomically, preserves source in/out behavior, synchronizes linked audio timing/source ranges with the root placement, and maintains compatibility fields without mutating the input.
+- `src/nestedTimelinePlacement.ts` is now a planning adapter only; `src/clipVersionTracks.ts` bridges the resulting command document back to the transitional nested Version representation.
+- Local focused validation passed 18 tests across `src/compositionCommands.test.ts`, `src/nestedTimelinePlacement.test.ts`, and `src/clipVersionTracks.test.ts`; full local validation passed 214 tests across 22 files, TypeScript, and the Vite production build. `npm audit` cannot run without a repository lockfile. Exact-head PR CI remains required; this branch is neither merged nor deployed. No browser smoke tests were run.
