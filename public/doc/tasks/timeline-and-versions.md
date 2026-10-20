@@ -1,6 +1,6 @@
 # DYS-005 — Master and nested Timeline editing with Version management
 
-**Status:** In progress · **Progress estimate:** 75% toward the revised target · **Updated:** 2026-10-19
+**Status:** In progress · **Progress estimate:** 87% toward the revised target · **Updated:** 2026-10-20
 
 ## Implemented
 - [x] Master and nested Shot-/Clip-Version tabs, active Version selection, **+ Add Version**, and **Edit**.
@@ -46,3 +46,18 @@ PR #55 was merged and the Pages deployment succeeded, but user acceptance later 
 ## Previous validation checkpoint
 - [CI #39165133176](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39165133176) at code/test head `794e3ff024c26d55d76583160d96238df8d84a12`: 137 tests across 16 files passed; TypeScript, Vite production build, and npm audit (0 vulnerabilities) passed.
 - Browser smoke tests were not run, per project instructions.
+
+
+## Shared Composition command integration — 2026-10-20
+
+PR [#93](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/93) merged to main as `5f8dbea57cc72a8b4a909db3b082ea0c54894529`. Exact-head CI [39398098386](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39398098386) passed 210 tests across 22 test files; TypeScript and Vite production build also passed. The dependency audit step is non-blocking. This established the immutable Composition command boundary for root Timeline operation adapters and nested Clip Version movement, but it did not complete root/nested parity or canonical persistence.
+
+Follow-up branch `feat/nested-composition-command-integration` routes nested `addClipVersionLayer()` through `insertCompositionPlacement()`, adds `deleteClipVersionLayer()` through `deleteCompositionPlacement()`, and uses that adapter from the nested Editor's Remove layer action. Unit tests were added for preserved layer metadata, non-mutation, duplicate IDs, root-with-linked-child deletion and child-only deletion. This branch is pending exact-head PR CI and is not deployed.
+
+### Remaining acceptance gates
+
+- Project-aware Master Timeline insertion/conflict resolution must dispatch through the shared Composition boundary while preserving snap, overlap, ripple/trim and auto-extend behavior.
+- Nested resize/source-range/adjacent-trim operations need a shared command adapter plus regression tests for linked audio and frame rounding.
+- Verify atomic Undo/Redo for root and nested interactions and persistence after export/reopen.
+- DYS-014 stays in progress until the Save-as-Clip UI produces an independent, structurally editable snapshot from the active authoritative state. PR #88 is helper-only; Draft PR #89 has a failed exact-head TypeScript/build and must not be merged as-is.
+- Ask the owner for visual acceptance only after merge and a verified GitHub Pages deployment. No browser smoke tests.
