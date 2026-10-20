@@ -413,7 +413,7 @@ export function projectRootCompositionToLegacy(
     });
   // Storyboard materializations are compatibility-only duplicates of Master Shots. Preserve them,
   // translating their start by the canonical shot delta so old consumers remain aligned.
-  const storyboardClips = (source.timelineClips ?? []).filter(clip => clip.id.startsWith("storyboard-")).map(clip => {
+  const storyboardClips = (source.timelineClips ?? []).filter(clip => clip.id.startsWith("storyboard-") && rootComposition.tracks.some(track => track.id === clip.trackId)).map(clip => {
     const shotId = clip.shotId ?? source.shots.find(shot => clip.id.startsWith("storyboard-" + shot.id + "-"))?.id;
     if (!shotId) return clip;
     const oldShot = source.shots.find(shot => shot.id === shotId);
