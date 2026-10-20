@@ -287,7 +287,7 @@ describe("nested Clip Version track operations", () => {
     const linked = addClipVersionLayer(base, {
       id: "source-audio", name: "Audio", kind: "audio", start: 0, duration: 3,
       assetId: "audio-asset", sourceIn: 2, sourceOut: 5, linkedVideoClipId: "source-video", volume: 0.6,
-    });
+    } as unknown as import("./types").CompositionLayer);
     const composition = structuredClone(linked.composition!);
     composition.provenance = {
       kind: "derived-clip-version", sourceProjectId: "project-pin", sourceCompositionId: "source-comp",
@@ -308,7 +308,7 @@ describe("nested Clip Version track operations", () => {
     const duplicatedVideo = duplicate.layers.find(layer => layer.name === "Video")!;
     const duplicatedAudio = duplicate.layers.find(layer => layer.name === "Audio")!;
     expect(duplicatedAudio.id).not.toBe("source-audio");
-    expect(duplicatedAudio.linkedVideoClipId).toBe(duplicatedVideo.id);
+    expect((duplicatedAudio as unknown as Record<string, unknown>).linkedVideoClipId).toBe(duplicatedVideo.id);
     const audioPlacement = duplicatedDoc.placements.find(item => item.id === duplicatedAudio.id)!;
     expect(audioPlacement.linkedToPlacementId).toBe(duplicatedVideo.id);
     expect(audioPlacement.legacyData).toMatchObject({ linkedVideoClipId: duplicatedVideo.id, volume: 0.6 });
@@ -330,7 +330,7 @@ describe("nested Clip Version track operations", () => {
     let n = 0;
     const duplicate = duplicateClipVersionComposition(version, kind => kind + "-legacy-copy-" + (++n));
     expect(duplicate.layers[0].id).not.toBe("legacy-video");
-    expect(duplicate.layers[1].linkedVideoClipId).toBe(duplicate.layers[0].id);
+    expect((duplicate.layers[1] as unknown as Record<string, unknown>).linkedVideoClipId).toBe(duplicate.layers[0].id);
     expect(duplicate.layers[0].trackId).not.toBe("legacy-video-track");
     expect(duplicate.layers[1].trackId).not.toBe("legacy-audio-track");
     expect(duplicate.composition).toBeUndefined();
