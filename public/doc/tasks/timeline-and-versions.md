@@ -139,3 +139,8 @@ This is a partial root-command audit, **not** completion of canonical root live 
 - General root edits reconcile inserts, deletes, moves, resizes and track add/update/reorder/removal through Composition command invariants. The project model continues to carry assets, scripts, references, shot metadata and nested versions as compatibility/domain data.
 - Save/export serializes the current canonical root. Startup restores a persisted root only when the envelope validates and the full schema-1.0 project payload matches; otherwise it safely migrates the legacy project. The compatibility projection preserves linked IDs/source ranges and materializes sequential Shot starts only when a root edit requires it.
 - Regression coverage includes canonical root move → compatibility projection → save/reopen → Undo/Redo. Exact final-head CI is required before calling this checkpoint verified; do not claim complete until CI passes and remaining mutation-path edge cases are audited.
+
+
+## Validation checkpoint
+
+Exact-head CI #1404 passed on `90949d515d30827502e61fd4e9b1de5235037382`: 230 tests across 23 files, TypeScript/production build passed, dependency audit reported 0 vulnerabilities. The task registry and handoff were subsequently refreshed, so CI must be rerun on the final documentation head before this checkpoint is called fully verified.
