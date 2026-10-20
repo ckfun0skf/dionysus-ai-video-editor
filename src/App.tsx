@@ -199,9 +199,12 @@ export default function App() {
       const restored = compositionRead && (!legacyRead || envelopeMatchesLegacy)
         ? compositionRead.project
         : legacyRead?.project ?? compositionRead?.project;
-      return restored && validateProject(restored)
-        ? normalizeLegacyTimelineTracks(clearDemoSeedData(restored))
-        : createEmptyProject();
+      if (!restored || !validateProject(restored)) return createEmptyProject();
+      // A matching versioned envelope already contains a validated canonical root. Do not
+      // normalize its compatibility tracks again and thereby invalidate that root snapshot.
+      return compositionRead && (!legacyRead || envelopeMatchesLegacy)
+        ? clearDemoSeedData(restored)
+        : normalizeLegacyTimelineTracks(clearDemoSeedData(restored));
     } catch { return createEmptyProject(); }
   });
   // Root Composition is the live authority for Master Timeline placement/track commands.
@@ -212,10 +215,11 @@ export default function App() {
       if (raw) {
         const parsed = JSON.parse(raw) as { compositionModel?: { rootComposition?: CompositionDocument }; project?: DionysusProject };
         const restored = readProjectDocument(parsed);
-        if (restored.project.id === project.id &&
-            JSON.stringify(parsed.project) === JSON.stringify(project) &&
-            parsed.compositionModel?.rootComposition) {
-          return structuredClone(parsed.compositionModel.rootComposition);
+        if (restored.project.id === project.id && parsed.compositionModel?.rootComposition) {
+          const candidateRoot = parsed.compositionModel.rootComposition;
+          if (JSON.stringify(projectRootCompositionToLegacy(project, candidateRoot)) === JSON.stringify(project)) {
+            return structuredClone(candidateRoot);
+          }
         }
       }
     } catch { /* Fall back to deterministic migration for old or corrupt recovery data. */ }
