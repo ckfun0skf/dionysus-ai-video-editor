@@ -116,3 +116,11 @@ Migration now preserves already-canonical Clip/Shot Slot Version documents inste
 - Added regression cases for canonical and legacy-only duplication, linked references, track/placement identity, source ranges, provenance, pinned child retention and source immutability.
 - Validation is pending on the final documentation-updated branch head. Do not treat previously passed CI as evidence for these latest changes. PR #96 remains Draft; no browser smoke tests or merge.
 - Remaining architecture gap: root Composition is still a projection, not the live editor source of truth. Continue with root persistence, save/reopen and Undo/Redo after exact-head CI, and investigate any non-inspector legacy workflows still intentionally writing Shot Slot layers.
+
+
+## Root Composition persistence follow-up — 2026-10-20
+
+- Local recovery in `src/App.tsx` now writes the versioned project-document envelope, preserving the generated root Composition snapshot alongside the schema-1.0 compatibility project. Startup accepts both this envelope and existing schema-1.0 localStorage projects.
+- Added `src/projectDocument.test.ts` coverage for root placement timing across save/reopen and project Undo/Redo.
+- This does **not** complete canonical root authority: project edit commands still mutate schema-1.0 `DionysusProject`, and the root Composition is regenerated from that state. Remaining gate: root Composition-backed live commands plus deterministic compatibility projection, migration/pin/nesting coverage, and exact-head CI.
+- No browser smoke tests were added or run. PR #96 remains Draft and unmerged.
