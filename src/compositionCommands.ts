@@ -43,6 +43,11 @@ function syncLegacyPlacement(placement: CompositionPlacement): CompositionPlacem
   else legacyData.sourceOut = placement.sourceOut;
   if (placement.linkedToPlacementId === undefined) delete legacyData.linkedVideoClipId;
   else legacyData.linkedVideoClipId = placement.linkedToPlacementId;
+  for (const key of ["fadeIn", "fadeOut"] as const) {
+    if (typeof legacyData[key] === "number") {
+      legacyData[key] = Math.min(Math.max(0, legacyData[key] as number), placement.duration);
+    }
+  }
   return { ...placement, legacyData };
 }
 
@@ -228,6 +233,31 @@ export function moveCompositionPlacement(
   return next;
 }
 
+/** Moves a placement across compatible tracks while sharing the same timing/linked-group command. */
+export function moveCompositionPlacementToTrack(
+  document: CompositionDocument,
+  placementId: string,
+  trackId: string,
+  start: number,
+): CompositionDocument {
+  assertValidCompositionDocument(document);
+  const selected = requirePlacement(document, placementId);
+  const track = document.tracks.find(item => item.id === trackId);
+  if (!track) throw new Error("Composition destination track was not found.");
+  const legacyKind = selected.legacyData?.kind;
+  const requiredKind = legacyKind === "audio" ? "audio" : legacyKind === "text" ? "text" : "video";
+  if (track.kind !== requiredKind) {
+    throw new Error("This source type cannot be moved to the selected track.");
+  }
+  const moved = moveCompositionPlacement(document, placementId, start);
+  const next = clone(moved);
+  next.placements = next.placements.map(placement =>
+    placement.id === placementId ? syncLegacyPlacement({ ...placement, trackId }) : placement
+  );
+  assertValidCompositionDocument(next);
+  return next;
+}
+
 /** Trims the selected placement and linked group at the right edge, keeping source starts stable. */
 export function trimCompositionPlacement(
   document: CompositionDocument,
@@ -248,12 +278,11 @@ export function trimCompositionPlacement(
   next.placements = next.placements.map(placement => {
     if (!groupIds.has(placement.id)) return placement;
     if (!hasSourceRange) return syncLegacyPlacement({ ...placement, duration });
-    const sourceIn = placement.sourceIn ?? fallbackSourceIn;
     return syncLegacyPlacement({
       ...placement,
       duration,
-      sourceIn,
-      sourceOut: sourceIn + duration,
+      sourceIn: fallbackSourceIn,
+      sourceOut: fallbackSourceIn + duration,
     });
   });
   extendCompositionDuration(next);
@@ -284,13 +313,16 @@ export function splitCompositionPlacement(
   const splitPairs = new Map<string, { left: CompositionPlacement; right: CompositionPlacement }>();
   const orderOffsets = new Map<string, number>();
 
+  const rootRange = sourceRangeForSplit(selected);
   for (const placement of group) {
     const leftDuration = splitTime - placement.start;
     const rightDuration = placement.duration - leftDuration;
-    const range = sourceRangeForSplit(placement);
+    // Linked source audio follows the same source range as its video.
+    const range = placement.id === selected.id ? rootRange : placement.linkedToPlacementId ? rootRange : sourceRangeForSplit(placement);
     const { linkedToPlacementId: _link, ...base } = placement;
     const left = syncLegacyPlacement({
       ...base,
+      legacyData: { ...base.legacyData, fadeOut: undefined },
       ...(placement.linkedToPlacementId ? { linkedToPlacementId: placement.linkedToPlacementId } : {}),
       duration: leftDuration,
       ...(range ? { sourceIn: range.sourceIn, sourceOut: range.sourceIn + leftDuration } : {}),
@@ -308,6 +340,7 @@ export function splitCompositionPlacement(
       start: splitTime,
       duration: rightDuration,
       order,
+      legacyData: { ...base.legacyData, fadeIn: undefined },
       ...(rightLink ? { linkedToPlacementId: rightLink } : {}),
       ...(range ? { sourceIn: range.sourceIn + leftDuration, sourceOut: range.sourceOut } : {}),
     });
