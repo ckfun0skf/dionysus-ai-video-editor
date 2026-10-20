@@ -1224,7 +1224,13 @@ export default function App() {
   function updateTimelineVersionDuration(tab: VersionTimelineTab, value: number) {
     if (!Number.isFinite(value) || value < 0.1) return;
     const duration = Math.max(0.1, value);
-    updateTimelineVersion(tab, version => ({ ...version, duration }));
+    updateTimelineVersion(tab, version => ({
+      ...version,
+      duration,
+      ...(version.composition ? {
+        composition: { ...structuredClone(version.composition), duration },
+      } : {}),
+    }));
     if (editorTime > duration) {
       playbackTimeRef.current = duration;
       setEditorTime(duration);
