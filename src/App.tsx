@@ -48,6 +48,7 @@ type PreviewTransformStart = PreviewTransformDraft & {
   tab?: VersionTimelineTab;
 };
 const STORAGE_KEY = "dionysus.project.v1";
+const COMPOSITION_STORAGE_KEY = "dionysus.composition.v2";
 const id = (prefix: string) => prefix + "-" + crypto.randomUUID();
 const time = (s: number) => String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(Math.floor(s % 60)).padStart(2, "0");
 const copy = (p: DionysusProject) => JSON.parse(JSON.stringify(p)) as DionysusProject;
@@ -176,12 +177,24 @@ export default function App() {
   const [project, setProject] = useState<DionysusProject>(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return createEmptyProject();
-      const parsed: unknown = JSON.parse(raw);
-      // Restore both the compatibility project and its versioned Composition snapshot.
-      // Existing schema-1.0 localStorage projects are migrated by readProjectDocument.
-      const { project: restored } = readProjectDocument(parsed);
-      return validateProject(restored) ? normalizeLegacyTimelineTracks(clearDemoSeedData(restored)) : createEmptyProject();
+      const compositionRaw = localStorage.getItem(COMPOSITION_STORAGE_KEY);
+      if (!raw && !compositionRaw) return createEmptyProject();
+      // Keep the original storage key/schema-1.0 payload stable for compatibility. Prefer the
+      // versioned Composition envelope only when it matches the legacy project's identity and
+      // updatedAt; a stale envelope must never override a newer legacy recovery snapshot.
+      const legacyRead = raw ? readProjectDocument(JSON.parse(raw) as unknown) : undefined;
+      const compositionRead = compositionRaw ? readProjectDocument(JSON.parse(compositionRaw) as unknown) : undefined;
+      const envelopeMatchesLegacy = Boolean(
+        legacyRead && compositionRead &&
+        legacyRead.project.id === compositionRead.project.id &&
+        legacyRead.project.updatedAt === compositionRead.project.updatedAt
+      );
+      const restored = compositionRead && (!legacyRead || envelopeMatchesLegacy)
+        ? compositionRead.project
+        : legacyRead?.project ?? compositionRead?.project;
+      return restored && validateProject(restored)
+        ? normalizeLegacyTimelineTracks(clearDemoSeedData(restored))
+        : createEmptyProject();
     } catch { return createEmptyProject(); }
   });
   const [undoStack, setUndoStack] = useState<DionysusProject[]>([]);
@@ -359,9 +372,11 @@ export default function App() {
   useEffect(() => {
     try {
       const snapshot = { ...project, updatedAt: new Date().toISOString() };
-      // Persist the versioned Composition envelope on every project-data change while keeping
-      // the schema-1.0 project payload for compatibility and deterministic migration.
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(createProjectDocument(snapshot)));
+      // Keep the established schema-1.0 recovery key intact for existing consumers/tests and
+      // store the versioned Composition snapshot beside it. Reopen prefers the envelope only
+      // when both snapshots describe the same project revision.
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+      localStorage.setItem(COMPOSITION_STORAGE_KEY, JSON.stringify(createProjectDocument(snapshot)));
     }
     catch { setNotice(t("notice.storageFull")); }
   }, [project]);
