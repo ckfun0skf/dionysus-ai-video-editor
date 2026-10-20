@@ -1,3 +1,14 @@
+## Follow-up checkpoint — 2026-10-20 (PR #96 canonical root Composition live state)
+
+- Starting point: PR #96 head `ab79b17b175afe8611e7cadc582223944177d505`. PR remains Draft and unmerged; no main push or browser smoke tests.
+- `src/App.tsx` now initializes a live `CompositionDocument` root state and paired Composition Undo/Redo snapshots alongside project-domain history. A persisted root envelope is restored only if it validates and its complete compatibility project matches the loaded recovery payload; stale/corrupt envelopes fall back to schema-1.0 migration.
+- Root Master Timeline move and resize handlers call `moveCompositionPlacementToTrack` / `applyCompositionResizePreview` directly against the live root Composition, then project committed timing, source ranges and links back to schema-1.0 project fields.
+- General domain edits reconcile current root Composition to the deterministic legacy target through Composition insert/delete/move/resize and track add/update/reorder/remove commands. This covers root insertion/deletion, linked groups and track mutations without replacing the live root snapshot wholesale. `projectRootCompositionToLegacy` preserves non-timeline domain data and keeps implicit sequential Shot starts stable by materializing positions when necessary.
+- Versioned save/export accepts the canonical root snapshot. Read validation checks root placement timing, duration, track, source ranges and links against the schema-1.0 compatibility projection; nested Clip Version and legacy Shot Slot snapshots remain migrated and validated separately.
+- Added a regression that performs a canonical Composition move, projects to schema-1.0, saves/reopens, and verifies exact root state across Undo/Redo. Existing App integration tests cover linked audio, resize/move, deletion and project import/export.
+- Validation caveat: an earlier CI run failed on stale-envelope initialization and missing compatibility validation; fixes have been committed. The latest code/docs SHA must have a completed passing CI run before reporting success.
+- Remaining audit: confirm all direct root mutations route through canonical commands, test root track removal/reorder and source-range/link edge cases, verify exact final SHA CI. No browser smoke tests. Keep PR Draft; do not merge or push to `main`.
+
 ## Follow-up checkpoint — 2026-10-20 (PR #96 root Composition mutation audit)
 
 - Starting code head: `63d52bf93461ed88ce30f9612f1a44386504fcda`. Root live-state remains a known architecture gap; this checkpoint does not claim it is complete.
