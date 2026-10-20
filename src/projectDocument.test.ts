@@ -68,13 +68,44 @@ describe("versioned project document boundary", () => {
     expect(() => readProjectDocument(document)).toThrow(/no compatible legacy clip metadata/);
   });
 
-  it("preserves validated nested and pinned Composition snapshots without re-deriving them from legacy fields", () => {
-    const document = createProjectDocument(structuredClone(sampleProject));
-    const nested = document.compositionModel.legacyShotSlotCompositions[0];
-    const originalDuration = nested.duration;
+  it("persists embedded nested Composition snapshots and pinned-version provenance through save/reopen", () => {
+    const projectDocument = createProjectDocument(structuredClone(sampleProject));
+    const root = structuredClone(projectDocument.compositionModel.rootComposition);
+    const nested = structuredClone(projectDocument.compositionModel.legacyShotSlotCompositions[0]);
     nested.duration += 3;
-    const restored = readProjectDocument(JSON.parse(JSON.stringify(document)), true);
-    expect(restored.compositionModel?.legacyShotSlotCompositions[0].duration).toBe(originalDuration + 3);
+    nested.provenance = {
+      kind: "derived-clip-version",
+      createdAt: "2026-10-20T12:00:00.000Z",
+      pinnedVersions: [{ assetId: "asset-pinned", versionId: "version-pinned", shotId: "shot-pinned", slotId: "slot-pinned" }],
+    };
+    root.nestedCompositions = [nested];
+    const saved = createProjectDocument(projectDocument.project, root);
+    const reopened = readProjectDocument(JSON.parse(JSON.stringify(saved)), true);
+    const restoredNested = reopened.compositionModel?.rootComposition.nestedCompositions?.[0];
+    expect(restoredNested?.duration).toBe(nested.duration);
+    expect(restoredNested?.provenance?.pinnedVersions).toEqual(nested.provenance.pinnedVersions);
+  });
+
+  it("rejects invalid nested Composition timing and malformed pinned-version references", () => {
+    const invalidNestedEnvelope = createProjectDocument(structuredClone(sampleProject));
+    const nested = structuredClone(invalidNestedEnvelope.compositionModel.legacyShotSlotCompositions[0]);
+    nested.duration = 0;
+    invalidNestedEnvelope.compositionModel.rootComposition.nestedCompositions = [nested];
+    expect(() => readProjectDocument(invalidNestedEnvelope, true)).toThrow(/Composition timing/);
+
+    const invalidPinnedEnvelope = createProjectDocument(structuredClone(sampleProject));
+    invalidPinnedEnvelope.compositionModel.rootComposition.provenance = {
+      kind: "master-timeline-snapshot",
+      createdAt: "2026-10-20T12:00:00.000Z",
+      pinnedVersions: [{ versionId: "" }],
+    };
+    expect(() => readProjectDocument(invalidPinnedEnvelope, true)).toThrow(/invalid pinned version reference/);
+  });
+
+  it("rejects cyclic embedded Composition snapshots rather than recursing indefinitely", () => {
+    const document = createProjectDocument(structuredClone(sampleProject));
+    document.compositionModel.rootComposition.nestedCompositions = [document.compositionModel.rootComposition];
+    expect(() => readProjectDocument(document, true)).toThrow(/must not contain cycles/);
   });
 
   it("accepts a fresh versioned document and preserves the authoritative project payload", () => {

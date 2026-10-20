@@ -510,3 +510,10 @@ Verify the current branch head and its CI first. If it passes, continue the root
 - App regressions now check not only the schema-1.0 track object but the stored root Composition track for background transparency/opacity and X/Y/width/height transform values.
 - The preceding exact-head CI run 39486016683 passed on 8bdafe463fea6b1bdb0ec082aab92c87b9bc7aba (249 tests/23 files, TS/build successful, npm audit found 0 vulnerabilities). This track-settings patch requires its own exact-head CI run.
 - Remains in progress: Shot/Slot and other storyboard/domain editors still perform legacy-first mutations; Storyboard materializations remain compatibility-only, and wider root track reorder plus invalid/nested/pinned history cases require additional coverage. DYS-005/DYS-014 stay in_progress. Keep PR #96 Draft/unmerged; no browser smoke tests.
+
+## Recursive nested/pinned snapshot validation — 2026-10-20
+
+- Composition validation now recursively checks embedded nestedCompositions, rejects cyclic embedded document graphs, validates provenance kind/createdAt and pinned-version reference shape, and continues to check each nested document's local track/placement/link invariants.
+- Replaced the prior top-level migration-snapshot check with tests that serialize and reopen an actual root containing a nested Composition with pinned-version provenance. Added rejection coverage for invalid nested timing, empty pinned version IDs and cyclic embedded snapshots.
+- The immediately preceding head 85cf6043070a711c469f2ec5baa588ad538d1ce5 passed exact-head CI run 39486652985: 249 tests across 23 files, TypeScript/build passed, npm audit reported 0 vulnerabilities. The recursive-validation batch still requires CI on its own exact head.
+- Still incomplete: full App-level editing/history transitions for nested/pinned compositions, legacy-first Shot/Slot and other domain editors, compatibility-only Storyboard materializations, track reorder/settings end-to-end coverage beyond the new track settings tests, and malformed import/recovery cases beyond the focused validation suite. Keep DYS-005/DYS-014 in_progress and PR #96 Draft/unmerged. No browser smoke tests.

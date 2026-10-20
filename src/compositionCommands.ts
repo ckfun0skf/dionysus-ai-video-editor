@@ -66,6 +66,18 @@ function syncLegacyPlacement(placement: CompositionPlacement): CompositionPlacem
 
 /** Validate invariants shared by the root and every nested Composition before applying an edit. */
 export function assertValidCompositionDocument(document: CompositionDocument): void {
+  assertValidCompositionDocumentTree(document, new Set<CompositionDocument>());
+}
+
+function assertValidCompositionDocumentTree(document: CompositionDocument, ancestors: Set<CompositionDocument>): void {
+  if (!document || typeof document !== "object" || Array.isArray(document)) {
+    throw new Error("Composition snapshots must be valid document objects.");
+  }
+  if (ancestors.has(document)) throw new Error("Nested Composition snapshots must not contain cycles.");
+  ancestors.add(document);
+  if (!Array.isArray(document.tracks) || !Array.isArray(document.placements)) {
+    throw new Error("Composition tracks and placements must be arrays.");
+  }
   const trackIds = new Set<string>();
   for (const track of document.tracks) {
     if (!track.id.trim() || trackIds.has(track.id)) {
@@ -119,6 +131,34 @@ export function assertValidCompositionDocument(document: CompositionDocument): v
       throw new Error("Composition placement links must not contain cycles.");
     }
   }
+
+  if (document.provenance !== undefined) {
+    const provenance = document.provenance as unknown as Record<string, unknown>;
+    if (!provenance || typeof provenance !== "object" ||
+        (provenance.kind !== "master-timeline-snapshot" && provenance.kind !== "derived-clip-version") ||
+        typeof provenance.createdAt !== "string" || !provenance.createdAt.trim()) {
+      throw new Error("Composition provenance is malformed.");
+    }
+    const pinnedVersions = provenance.pinnedVersions;
+    if (!Array.isArray(pinnedVersions)) throw new Error("Composition provenance pinned versions are malformed.");
+    for (const pinned of pinnedVersions as unknown[]) {
+      if (!pinned || typeof pinned !== "object" || Array.isArray(pinned)) {
+        throw new Error("Composition provenance contains an invalid pinned version reference.");
+      }
+      const pinnedRecord = pinned as Record<string, unknown>;
+      if (typeof pinnedRecord.versionId !== "string" || !pinnedRecord.versionId.trim() ||
+          ["assetId", "shotId", "slotId"].some(key =>
+            pinnedRecord[key] !== undefined && typeof pinnedRecord[key] !== "string")) {
+        throw new Error("Composition provenance contains an invalid pinned version reference.");
+      }
+    }
+  }
+
+  if (document.nestedCompositions !== undefined) {
+    if (!Array.isArray(document.nestedCompositions)) throw new Error("Nested Composition snapshots must be an array.");
+    for (const nested of document.nestedCompositions) assertValidCompositionDocumentTree(nested, ancestors);
+  }
+  ancestors.delete(document);
 }
 
 function getLinkedRoot(document: CompositionDocument, placement: CompositionPlacement): CompositionPlacement {
