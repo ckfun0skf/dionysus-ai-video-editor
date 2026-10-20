@@ -649,18 +649,13 @@ export default function App() {
         next = insertCompositionPlacement(next, structuredClone(desired));
         continue;
       }
-      if (existing.trackId !== desired.trackId || existing.start !== desired.start) {
-        next = existing.trackId !== desired.trackId
-          ? moveCompositionPlacementToTrack(next, existing.id, desired.trackId, desired.start)
-          : moveCompositionPlacement(next, existing.id, desired.start);
-      }
-      const moved = next.placements.find(placement => placement.id === desired.id)!;
-      if (moved.duration !== desired.duration) {
-        next = applyCompositionResizePreview(next, { id: desired.id, start: desired.start, duration: desired.duration, edge: "right", trims: [] });
-      }
-      next.placements = next.placements.map(placement => placement.id === desired.id
-        ? structuredClone(desired)
-        : placement);
+      const current = next.placements.find(placement => placement.id === desired.id)!;
+      // Legacy project edits may refresh domain metadata, but must never overwrite canonical
+      // timing, track, source range, typed source or linked-group state for an existing placement.
+      next = updateCompositionPlacement(next, desired.id, {
+        name: desired.name,
+        legacyData: { ...current.legacyData, ...structuredClone(desired.legacyData) },
+      });
     }
 
     const targetTrackOrder = [...target.tracks].sort((a, b) => a.order - b.order);
@@ -1130,10 +1125,7 @@ export default function App() {
   }
 
   function insertTimelineClipCanonical(clip: TimelineClip) {
-    const current = projectRef.current;
-    const candidate = { ...current, timelineClips: [...(current.timelineClips ?? []), clip] };
-    const placement = migrateLegacyProjectToComposition(candidate).rootComposition.placements.find(item => item.id === clip.id);
-    if (!placement) throw new Error("The clip could not be represented as a root Composition placement.");
+    const placement = createRootCompositionPlacementForTimelineClip(projectRef.current, rootCompositionRef.current, clip);
     changeRootComposition(root => insertCompositionPlacement(root, placement));
   }
 
