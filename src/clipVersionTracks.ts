@@ -19,6 +19,22 @@ function canonicalTrackKind(kind: TimelineTrack["kind"]): CanonicalNestedTrackKi
 /** Additive, deterministic schema-1.0 migration: nested Clip Versions gain explicit tracks and
  * every layer gets a trackId. Existing valid track IDs and ordering are preserved. */
 export function normalizeClipVersionTracks(version: ClipVersion): ClipVersion {
+  if (version.composition) {
+    const composition = structuredClone(version.composition);
+    const tracks: TimelineTrack[] = composition.tracks.map(track => ({
+      ...structuredClone(track.legacyData ?? {}),
+      id: track.id,
+      name: track.name,
+      kind: track.kind,
+      ...(track.muted !== undefined ? { muted: track.muted } : {}),
+      ...(track.backgroundColor !== undefined ? { backgroundColor: track.backgroundColor } : {}),
+      ...(track.backgroundTransparent !== undefined ? { backgroundTransparent: track.backgroundTransparent } : {}),
+      ...(track.opacity !== undefined ? { opacity: track.opacity } : {}),
+      ...(track.originalKind !== undefined ? { originalKind: track.originalKind } : {}),
+    } as TimelineTrack));
+    const layers = compositionLayersFromCompositionDocument(composition);
+    return { ...version, duration: Math.max(version.duration, composition.duration), tracks, layers };
+  }
   const tracks: TimelineTrack[] = (version.tracks ?? []).map(track => {
     const kind = canonicalTrackKind(track.kind);
     return {
@@ -56,10 +72,19 @@ export function addClipVersionTrack(
   if (normalized.tracks?.some(item => item.id === track.id)) {
     throw new Error("Track ID already exists in this Clip Version.");
   }
-  return {
-    ...normalized,
-    tracks: [...(normalized.tracks ?? []), { ...track, kind }],
+  const nextTrack = { ...track, kind };
+  const composition = compositionDocumentFromClipVersion(normalized);
+  const compositionTrack: CompositionTrack = {
+    id: nextTrack.id, name: nextTrack.name, kind, order: composition.tracks.length,
+    ...(nextTrack.muted !== undefined ? { muted: nextTrack.muted } : {}),
+    ...(nextTrack.backgroundColor !== undefined ? { backgroundColor: nextTrack.backgroundColor } : {}),
+    ...(nextTrack.backgroundTransparent !== undefined ? { backgroundTransparent: nextTrack.backgroundTransparent } : {}),
+    ...(nextTrack.opacity !== undefined ? { opacity: nextTrack.opacity } : {}),
+    ...(nextTrack.originalKind !== undefined ? { originalKind: nextTrack.originalKind } : {}),
+    legacyData: structuredClone(nextTrack) as unknown as Record<string, unknown>,
   };
+  const updatedComposition = { ...composition, tracks: [...composition.tracks, compositionTrack] };
+  return { ...normalized, tracks: [...(normalized.tracks ?? []), nextTrack], composition: updatedComposition };
 }
 
 /** Add a source placement to a compatible track, creating a deterministic default if needed. */
@@ -105,7 +130,7 @@ export function addClipVersionLayer(
     ...(linkedToPlacementId ? { linkedToPlacementId } : {}),
     legacyData,
   });
-  return { ...next, layers: compositionLayersFromCompositionDocument(inserted) };
+  return versionWithComposition(next, inserted);
 }
 
 /** Delete a nested placement through the same command used by the root Timeline. */
@@ -114,7 +139,7 @@ export function deleteClipVersionLayer(version: ClipVersion, layerId: string): C
   const document = compositionDocumentFromClipVersion(normalized);
   if (!document.placements.some(placement => placement.id === layerId)) return normalized;
   const deleted = deleteCompositionPlacement(document, layerId);
-  return { ...normalized, layers: compositionLayersFromCompositionDocument(deleted) };
+  return versionWithComposition(normalized, deleted);
 }
 
 /** Move a layer within or between compatible nested tracks. */
@@ -128,6 +153,7 @@ function sourceReferenceForLayer(layer: CompositionLayer): CompositionSourceRefe
 }
 
 function compositionDocumentFromClipVersion(version: ClipVersion): CompositionDocument {
+  if (version.composition) return structuredClone(version.composition);
   const normalized = normalizeClipVersionTracks(version);
   const tracks: CompositionTrack[] = (normalized.tracks ?? []).map((track, order) => ({
     id: track.id,
@@ -139,6 +165,7 @@ function compositionDocumentFromClipVersion(version: ClipVersion): CompositionDo
     ...(track.backgroundTransparent !== undefined ? { backgroundTransparent: track.backgroundTransparent } : {}),
     ...(track.opacity !== undefined ? { opacity: track.opacity } : {}),
     ...(track.originalKind !== undefined ? { originalKind: track.originalKind } : {}),
+    legacyData: structuredClone(track) as unknown as Record<string, unknown>,
   }));
   const placements: CompositionPlacement[] = normalized.layers.map((layer, order) => {
     const legacy = structuredClone(layer) as unknown as Record<string, unknown>;
@@ -187,12 +214,47 @@ function compositionLayersFromCompositionDocument(document: CompositionDocument)
     else output.sourceIn = placement.sourceIn;
     if (placement.sourceOut === undefined) delete output.sourceOut;
     else output.sourceOut = placement.sourceOut;
+    if (placement.source.type === "asset") output.assetId = placement.source.assetId;
+    else if (placement.source.type === "clip") {
+      output.childCompositionId = placement.source.assetId;
+      output.assetId = placement.source.assetId;
+      if (placement.source.versionId !== undefined) output.clipVersionId = placement.source.versionId;
+    } else if (placement.source.type === "shot") {
+      output.shotId = placement.source.shotId;
+      if (placement.source.slotId !== undefined) output.slotId = placement.source.slotId;
+      if (placement.source.versionId !== undefined) output.shotVersionId = placement.source.versionId;
+    } else if (placement.source.type === "script") {
+      if (placement.source.assetId !== undefined) output.assetId = placement.source.assetId;
+      if (placement.source.scriptVersionId !== undefined) output.scriptVersionId = placement.source.scriptVersionId;
+    }
     const rawOutput = output as unknown as Record<string, unknown>;
     delete rawOutput.linkedToPlacementId;
     if (placement.linkedToPlacementId === undefined) delete rawOutput.linkedVideoClipId;
     else rawOutput.linkedVideoClipId = placement.linkedToPlacementId;
     return output;
   });
+}
+
+/** Keep canonical Composition authoritative; legacy layers/tracks are derived projections for rendering and older UI. */
+function versionWithComposition(version: ClipVersion, composition: CompositionDocument): ClipVersion {
+  const projectedTracks: TimelineTrack[] = composition.tracks.map(track => ({
+    ...structuredClone(track.legacyData ?? {}),
+    id: track.id,
+    name: track.name,
+    kind: track.kind,
+    ...(track.muted !== undefined ? { muted: track.muted } : {}),
+    ...(track.backgroundColor !== undefined ? { backgroundColor: track.backgroundColor } : {}),
+    ...(track.backgroundTransparent !== undefined ? { backgroundTransparent: track.backgroundTransparent } : {}),
+    ...(track.opacity !== undefined ? { opacity: track.opacity } : {}),
+    ...(track.originalKind !== undefined ? { originalKind: track.originalKind } : {}),
+  } as TimelineTrack));
+  return {
+    ...version,
+    duration: Math.max(version.duration, composition.duration),
+    composition: structuredClone(composition),
+    tracks: projectedTracks,
+    layers: compositionLayersFromCompositionDocument(composition),
+  };
 }
 
 /** Move a nested layer through the same Composition command used by the Master Timeline adapter. */
@@ -215,7 +277,7 @@ export function moveClipVersionLayer(
     targetTrackId,
     nextStart,
   );
-  return { ...normalized, layers: compositionLayersFromCompositionDocument(moved) };
+  return versionWithComposition(normalized, moved);
 }
 
 /** Commit nested resize and adjacent-trim previews through the shared Composition command. */
@@ -225,5 +287,5 @@ export function applyClipVersionResizePreview(
 ): ClipVersion {
   const normalized = normalizeClipVersionTracks(version);
   const resized = applyCompositionResizePreview(compositionDocumentFromClipVersion(normalized), preview);
-  return { ...normalized, layers: compositionLayersFromCompositionDocument(resized) };
+  return versionWithComposition(normalized, resized);
 }
