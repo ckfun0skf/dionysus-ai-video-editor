@@ -41,8 +41,10 @@ export function createClipVersionSnapshot(
     ancestry: Set<string>,
     includeSelectedShotSlots = false,
   ): CompositionDocument => {
-    const children: CompositionDocument[] = [];
-    const childIds = new Set<string>();
+    // A saved canonical child may already contain a deliberately pinned subtree. Preserve that
+    // subtree verbatim; only append referenced children that are not already embedded.
+    const children: CompositionDocument[] = structuredClone(document.nestedCompositions ?? []);
+    const childIds = new Set(children.map(child => child.id));
     for (const placement of document.placements) {
       if (placement.source.type !== "clip" || !placement.source.versionId) continue;
       const key = placement.source.assetId + "@" + placement.source.versionId;
