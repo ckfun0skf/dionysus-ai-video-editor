@@ -70,3 +70,8 @@ CI [#39218891285](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/
 - Added regression coverage for stale projection resistance, inspector synchronization, child Composition/provenance preservation, Shot Slot/Script source references and new-track synchronization.
 - Exact-head CI [39428872953](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39428872953) passed at code SHA `c82f305726afaacb424d9bf8e39c0fac37de5fc4`: 222 tests/23 files, TypeScript, production build and dependency audit (0 vulnerabilities).
 - Still not complete: full Save-as-Clip edit/save/reload/reopen parity, canonical nested Undo/Redo, pin immutability and legacy migration review. No browser smoke tests; no merge.
+
+
+## Save-as-Clip edit/reopen integration regression — 2026-10-20
+
+Added snapshot → canonical nested edit → project JSON save/reload → reopen coverage. The test verifies edited timing/transform/mix, source ranges, pinned nested Composition/provenance and that the source Clip Asset Version remains unchanged. Exact-head CI [39429740312](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39429740312) passed at code/test SHA `7098229556fd466283a2e815de2ab44778089483`: 223 tests/23 files, TypeScript/build and dependency audit (0 vulnerabilities). Canonical nested Undo/Redo and broader pin/migration audit remain open.

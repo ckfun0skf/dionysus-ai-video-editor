@@ -1,6 +1,6 @@
 # DYS-014 — Unified Composition Model and structure-preserving snapshots
 
-**Status:** In progress · **Progress estimate:** 72% · **Updated:** 2026-10-20
+**Status:** In progress · **Progress estimate:** 76% · **Updated:** 2026-10-20
 
 ## Strategic UI direction (2026-10-19)
 
@@ -91,3 +91,12 @@ When a Clip Version already has a canonical Composition document, `normalizeClip
 Exact-head CI [39428872953](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39428872953) passed at code SHA `c82f305726afaacb424d9bf8e39c0fac37de5fc4`: 222 tests across 23 files, TypeScript, production build and dependency audit with 0 reported vulnerabilities.
 
 **Still open:** a full Save-as-Clip → nested edit → JSON save/reload → reopen test; canonical Undo/Redo parity; immutable source-version pin behavior; and schema-1.0/legacy Shot Slot migration review. This adapter reduces the dual-write gap but does not by itself prove all app persistence/history paths are canonical-authoritative. Keep DYS-014 in progress.
+
+
+## Save-as-Clip edit/reopen round-trip regression — 2026-10-20
+
+A regression now exercises the path: create a structure-preserving Master Timeline snapshot, edit a nested placement through the canonical adapter, serialize/reload project JSON, then reopen the Clip Version from its canonical Composition document. It asserts the edited placement timing/transform/mix, source ranges, nested child Composition and version provenance remain intact, and the source Clip Asset Version is not mutated.
+
+Exact-head CI [39429740312](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39429740312) passed at code/test SHA `7098229556fd466283a2e815de2ab44778089483`: 223 tests/23 files, TypeScript/build and dependency audit (0 vulnerabilities).
+
+Still open: canonical nested Undo/Redo, broader pin immutability across every edit route, and deterministic migration/legacy Shot Slot compatibility review. Keep DYS-014 in progress.

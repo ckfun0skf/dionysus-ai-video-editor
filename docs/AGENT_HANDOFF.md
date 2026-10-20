@@ -357,3 +357,12 @@ Use [`docs/MOBILE_AGENT_PICKUP_PROMPT.md`](MOBILE_AGENT_PICKUP_PROMPT.md) and [`
 - Exact-head CI at code SHA `c82f305726afaacb424d9bf8e39c0fac37de5fc4` passed [workflow 39428872953](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39428872953): 222 tests across 23 files, TypeScript, production build and the configured dependency audit (0 reported vulnerabilities).
 - Remaining: verify the complete Save-as-Clip → edit nested content → JSON save/reload → reopen workflow, explicit Undo/Redo for canonical nested edits, and immutable pin semantics across source-version changes. Also review the canonical migration/legacy shot-slot behavior before declaring DYS-014 complete. DYS-005 and DYS-014 remain in progress.
 - No browser smoke tests were run or added. Do not push to `main`; do not merge without review and current exact-head CI. Visual acceptance remains a later consolidated owner review after a coherent Timeline milestone.
+
+
+## Current checkpoint — 2026-10-20 (Save-as-Clip edit/reopen regression)
+
+- Added an integration regression for the end-to-end data contract: create a structure-preserving Master Timeline snapshot, edit a nested placement through the canonical adapter, serialize/reload the project JSON, reopen/normalize the saved Clip Version from its Composition document, and assert placement timing/transform/mix, source ranges, pinned child Composition and provenance remain intact.
+- The regression also verifies the source Clip Asset Version remains unchanged after editing the snapshot.
+- Exact-head CI at code/test SHA `7098229556fd466283a2e815de2ab44778089483` passed [workflow 39429740312](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39429740312): 223 tests across 23 files, TypeScript, production build and dependency audit (0 vulnerabilities).
+- This proves the tested JSON round-trip for the covered snapshot/edit path, not every UI/history path. Canonical nested Undo/Redo, complete source pin immutability under all edit routes, and legacy migration/Shot Slot compatibility still require review. DYS-005/DYS-014 remain in progress.
+- PR #96 remains a Draft and is not merged. The docs/task registry must be refreshed at the final tested head and its exact-head CI must pass before the PR is considered ready. No browser smoke tests.
