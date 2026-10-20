@@ -178,7 +178,10 @@ export default function App() {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return createEmptyProject();
       const parsed: unknown = JSON.parse(raw);
-      return validateProject(parsed) ? normalizeLegacyTimelineTracks(clearDemoSeedData(parsed)) : createEmptyProject();
+      // Restore both the compatibility project and its versioned Composition snapshot.
+      // Existing schema-1.0 localStorage projects are migrated by readProjectDocument.
+      const { project: restored } = readProjectDocument(parsed);
+      return validateProject(restored) ? normalizeLegacyTimelineTracks(clearDemoSeedData(restored)) : createEmptyProject();
     } catch { return createEmptyProject(); }
   });
   const [undoStack, setUndoStack] = useState<DionysusProject[]>([]);
@@ -354,7 +357,12 @@ export default function App() {
   const [isAgentModalOpen, setIsAgentModalOpen] = useState(false);
   const [isChecklistOpen, setIsChecklistOpen] = useState(false);
   useEffect(() => {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...project, updatedAt: new Date().toISOString() })); }
+    try {
+      const snapshot = { ...project, updatedAt: new Date().toISOString() };
+      // Persist the versioned Composition envelope on every project-data change while keeping
+      // the schema-1.0 project payload for compatibility and deterministic migration.
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(createProjectDocument(snapshot)));
+    }
     catch { setNotice(t("notice.storageFull")); }
   }, [project]);
   useEffect(() => {
