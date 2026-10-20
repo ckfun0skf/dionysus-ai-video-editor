@@ -1,12 +1,14 @@
 import type { DionysusProject } from "./types";
 import { migrateLegacyProjectToComposition } from "./compositionMigration";
+import type { CompositionDocument } from "./compositionModel";
+import { assertValidCompositionDocument } from "./compositionCommands";
 
 export const PROJECT_DOCUMENT_FORMAT = "dionysus-project-document" as const;
 export const PROJECT_DOCUMENT_VERSION = "2.0" as const;
 
 /**
- * Transitional versioned envelope. The schema-1.0 project remains authoritative for compatibility;
- * the canonical Composition projection is stored alongside it so imports can migrate safely later.
+ * Versioned envelope: root Composition is the canonical root timeline snapshot, while the
+ * schema-1.0 project remains a deterministic compatibility projection for existing UI consumers.
  */
 export interface DionysusProjectDocumentV2 {
   format: typeof PROJECT_DOCUMENT_FORMAT;
@@ -42,7 +44,7 @@ export function createProjectDocument(project: DionysusProject): DionysusProject
       schemaVersion: migrated.schemaVersion,
       projectId: migrated.projectId,
       name: migrated.name,
-      rootComposition: migrated.rootComposition,
+      rootComposition,
       clipCompositions: migrated.clipCompositions,
       legacyShotSlotCompositions: migrated.legacyShotSlotCompositions,
       warnings: migrated.warnings,
@@ -75,17 +77,36 @@ export function readProjectDocument(value: unknown): ReadProjectDocumentResult {
       throw new Error("The project document contains inconsistent Composition metadata.");
     }
 
-    // Verify the persisted projection against the authoritative legacy payload. Otherwise a
-    // hand-edited/stale envelope could carry Composition placements that do not correspond to
-    // the project the editor will actually load.
+    // Validate the canonical root snapshot independently from nested version snapshots. Root
+    // placements may legitimately contain edits that are not recreated by legacy migration.
+    const root = compositionModel.rootComposition as unknown as CompositionDocument;
+    assertValidCompositionDocument(root);
+    const rootById = new Map(root.placements.map(placement => [placement.id, placement]));
+    for (const shot of project.shots) {
+      const placement = rootById.get(shot.id);
+      if (!placement || placement.legacyData.entityType !== "master-shot" ||
+          placement.start !== (shot.masterStart ?? 0) ||
+          placement.duration !== shot.duration ||
+          (shot.masterTrackId && placement.trackId !== shot.masterTrackId)) {
+        throw new Error("The project document contains root Composition placements that do not match the compatibility project.");
+      }
+    }
+    for (const clip of (project.timelineClips ?? []).filter(item => !item.id.startsWith("storyboard-"))) {
+      const placement = rootById.get(clip.id);
+      if (!placement || placement.start !== clip.start || placement.duration !== clip.duration ||
+          placement.trackId !== clip.trackId ||
+          placement.sourceIn !== clip.sourceIn || placement.sourceOut !== clip.sourceOut ||
+          placement.linkedToPlacementId !== clip.linkedVideoClipId) {
+        throw new Error("The project document contains root Composition clips that do not match the compatibility project.");
+      }
+    }
     const expected = migrateLegacyProjectToComposition(project);
     if (
-      JSON.stringify(compositionModel.rootComposition) !== JSON.stringify(expected.rootComposition) ||
       JSON.stringify(compositionModel.clipCompositions) !== JSON.stringify(expected.clipCompositions) ||
       JSON.stringify(compositionModel.legacyShotSlotCompositions) !== JSON.stringify(expected.legacyShotSlotCompositions) ||
       JSON.stringify(compositionModel.warnings) !== JSON.stringify(expected.warnings)
     ) {
-      throw new Error("The project document contains a stale or inconsistent Composition projection.");
+      throw new Error("The project document contains stale or inconsistent nested Composition snapshots.");
     }
 
     return { project, sourceDocumentVersion: "2.0" };
