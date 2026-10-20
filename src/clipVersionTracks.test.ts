@@ -240,6 +240,34 @@ describe("nested Clip Version track operations", () => {
     expect(version.composition?.placements.find(item => item.id === "inspector-placement")?.start).toBe(1);
   });
 
+  it("preserves canonical Shot Slot and script source references during inspector edits", () => {
+    const base = addClipVersionLayer(
+      structuredClone(sampleProject.shots[0].slots[0].versions[0]),
+      { id: "source-ref-layer", name: "Shot source", kind: "video", start: 0, duration: 2 },
+    );
+    const shotDocument = structuredClone(base.composition!);
+    shotDocument.placements = shotDocument.placements.map(placement => placement.id !== "source-ref-layer" ? placement : ({
+      ...placement,
+      source: { type: "shot", shotId: "shot-source", slotId: "slot-source", versionId: "shot-version-7" },
+      legacyData: { ...placement.legacyData, shotId: "shot-source", slotId: "slot-source", shotVersionId: "shot-version-7" },
+    }));
+    const shotEdited = updateClipVersionLayer({ ...base, composition: shotDocument }, "source-ref-layer", { x: 44 });
+    expect(shotEdited.composition?.placements.find(item => item.id === "source-ref-layer")?.source).toEqual({
+      type: "shot", shotId: "shot-source", slotId: "slot-source", versionId: "shot-version-7",
+    });
+
+    const scriptDocument = structuredClone(base.composition!);
+    scriptDocument.placements = scriptDocument.placements.map(placement => placement.id !== "source-ref-layer" ? placement : ({
+      ...placement,
+      source: { type: "script", assetId: "script-asset", scriptVersionId: "script-v4" },
+      legacyData: { ...placement.legacyData, kind: "procedural", assetId: "script-asset", scriptVersionId: "script-v4" },
+    }));
+    const scriptEdited = updateClipVersionLayer({ ...base, composition: scriptDocument }, "source-ref-layer", { x: 55 });
+    expect(scriptEdited.composition?.placements.find(item => item.id === "source-ref-layer")?.source).toEqual({
+      type: "script", assetId: "script-asset", scriptVersionId: "script-v4",
+    });
+  });
+
   it("moves a layer to a compatible track and rejects incompatible track kinds", () => {
     const version = structuredClone(sampleProject.shots[0].slots[0].versions[0]);
     const baseTrack = addClipVersionTrack(version, { id: "video-1", name: "Video 1", kind: "video" });
