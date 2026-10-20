@@ -50,7 +50,7 @@ Keep JSON, roadmap, task pages, dependencies, acceptance, evidence and handoff a
 After Timeline/mobile gates, implement search/filter, import/relink, metadata, reverse-use, safe replace/delete, Reference Profiles and Edit Timeline. Editor-local source browsing/insertion is E3 and must not wait for this.
 
 ### DYS-005 — Shared edit commands
-One command boundary for insert, move/snap, conflict handling, trim, split, duplicate, delete, linked audio, version pins and Undo/Redo. Root and nested compositions must share behavior. Test source-time invariants, conflicts, linked audio, history, pins and save/reopen.
+One command boundary for insert, move/snap, conflict handling, trim, split, duplicate, delete, linked audio, version pins and Undo/Redo. Root and nested compositions must share behavior. Nested resize/source-range/adjacent-trim now commits through the Composition command adapter; next route project-aware insertion/conflict dispatch through that boundary and prove root/nested history parity. Test source-time invariants, conflicts, linked audio, history, pins and save/reopen.
 
 ### DYS-006 — Preview/Canvas
 Embed beside source browser and above Timeline. Synchronize playhead, selection, transforms, source ranges, audio and nested Clip preview. Persist canvas settings/layer geometry and visibly report missing/unsupported media. Do not claim unsupported codec/export support.
