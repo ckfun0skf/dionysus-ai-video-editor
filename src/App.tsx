@@ -65,10 +65,6 @@ function getMasterShotTrackId(shot: Shot, tracks: DionysusProject["tracks"]): st
 function asMasterShotTimelineClip(project: DionysusProject, shot: Shot): TimelineClip {
   return { id: shot.id, name: shot.title, kind: "video", trackId: getMasterShotTrackId(shot, project.tracks), start: getMasterShotStart(project.shots, shot.id), duration: shot.duration };
 }
-function getMasterShotPlacementItems(project: DionysusProject, excludeShotId?: string): TimelineClip[] {
-  return getProjectTimelinePlacementItems(project, undefined, excludeShotId);
-}
-
 function getTimelinePlacementItems(project: DionysusProject, movingClip?: TimelineClip): TimelineClip[] {
   return getProjectTimelinePlacementItems(project, movingClip);
 }
@@ -178,6 +174,19 @@ function AudioWaveform({ path }: { path?: string }) {
   </div>;
 }
 
+function shouldPreferCompositionRecovery(
+  legacyRead: ReturnType<typeof readProjectDocument> | undefined,
+  compositionRead: ReturnType<typeof readProjectDocument> | undefined,
+): boolean {
+  if (!compositionRead) return false;
+  if (!legacyRead) return true;
+  if (legacyRead.project.id !== compositionRead.project.id || legacyRead.project.name !== compositionRead.project.name) return false;
+  const legacyRevision = Date.parse(legacyRead.project.updatedAt);
+  const compositionRevision = Date.parse(compositionRead.project.updatedAt);
+  // Unknown timestamps are not enough evidence to override a valid legacy recovery.
+  return Number.isFinite(legacyRevision) && Number.isFinite(compositionRevision) && compositionRevision >= legacyRevision;
+}
+
 export default function App() {
   const [project, setProject] = useState<DionysusProject>(() => {
     try {
@@ -187,23 +196,23 @@ export default function App() {
       // Keep the original storage key/schema-1.0 payload stable for compatibility. Prefer the
       // versioned Composition envelope only when it matches the legacy project's identity and
       // updatedAt; a stale envelope must never override a newer legacy recovery snapshot.
-      const legacyRead = raw ? readProjectDocument(JSON.parse(raw) as unknown) : undefined;
+      let legacyRead: ReturnType<typeof readProjectDocument> | undefined;
       let compositionRead: ReturnType<typeof readProjectDocument> | undefined;
+      if (raw) {
+        try { legacyRead = readProjectDocument(JSON.parse(raw) as unknown); }
+        catch { legacyRead = undefined; }
+      }
       if (compositionRaw) {
         try { compositionRead = readProjectDocument(JSON.parse(compositionRaw) as unknown); }
-        catch { compositionRead = undefined; } // A stale/corrupt envelope must not hide a valid legacy recovery.
+        catch { compositionRead = undefined; } // A corrupt envelope must not hide valid legacy recovery.
       }
-      const envelopeMatchesLegacy = Boolean(
-        legacyRead && compositionRead &&
-        JSON.stringify(legacyRead.project) === JSON.stringify(compositionRead.project)
-      );
-      const restored = compositionRead && (!legacyRead || envelopeMatchesLegacy)
-        ? compositionRead.project
+      const preferComposition = shouldPreferCompositionRecovery(legacyRead, compositionRead);
+      const restored = preferComposition
+        ? compositionRead?.project
         : legacyRead?.project ?? compositionRead?.project;
       if (!restored || !validateProject(restored)) return createEmptyProject();
-      // A matching versioned envelope already contains a validated canonical root. Do not
-      // normalize its compatibility tracks again and thereby invalidate that root snapshot.
-      return compositionRead && (!legacyRead || envelopeMatchesLegacy)
+      // A validated v2 root is authoritative; its projection was rebuilt during read.
+      return preferComposition
         ? clearDemoSeedData(restored)
         : normalizeLegacyTimelineTracks(clearDemoSeedData(restored));
     } catch { return createEmptyProject(); }
@@ -214,10 +223,17 @@ export default function App() {
     try {
       const raw = localStorage.getItem(COMPOSITION_STORAGE_KEY);
       if (raw) {
+        const legacyRaw = localStorage.getItem(STORAGE_KEY);
+        let legacyRead: ReturnType<typeof readProjectDocument> | undefined;
+        if (legacyRaw) {
+          try { legacyRead = readProjectDocument(JSON.parse(legacyRaw) as unknown); }
+          catch { legacyRead = undefined; }
+        }
         const parsed = JSON.parse(raw) as { compositionModel?: { rootComposition?: CompositionDocument }; project?: DionysusProject };
-        const restored = readProjectDocument(parsed);
-        if (restored.project.id === project.id && parsed.compositionModel?.rootComposition) {
+        const restored = readProjectDocument(parsed, true);
+        if (restored.project.id === project.id && shouldPreferCompositionRecovery(legacyRead, restored) && parsed.compositionModel?.rootComposition) {
           const candidateRoot = parsed.compositionModel.rootComposition;
+          // Keep demo-seed cleanup; otherwise trust the validated root snapshot.
           if (JSON.stringify(projectRootCompositionToLegacy(project, candidateRoot)) === JSON.stringify(project)) {
             return structuredClone(candidateRoot);
           }

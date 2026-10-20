@@ -40,19 +40,41 @@ describe("versioned project document boundary", () => {
     expect(() => readProjectDocument(document)).toThrow(/inconsistent Composition metadata/);
   });
 
-  it("rejects a Composition projection whose placements no longer match the legacy project", () => {
+  it("rebuilds stale schema-1.0 placement geometry from a valid canonical root", () => {
+    const project = structuredClone(sampleProject);
+    project.shots = [];
+    const track = project.tracks.find(item => item.kind === "video")!;
+    project.timelineClips = [{
+      id: "canonical-import-clip", name: "Canonical import", kind: "video", trackId: track.id,
+      start: 2, duration: 4, sourceIn: 10, sourceOut: 14,
+    }];
+    const initialRoot = migrateLegacyProjectToComposition(project).rootComposition;
+    const movedRoot = moveCompositionPlacement(initialRoot, "canonical-import-clip", 18);
+    const document = createProjectDocument(project, movedRoot);
+    expect(document.project.timelineClips?.[0]).toMatchObject({ start: 18, sourceIn: 10, sourceOut: 14 });
+    document.project.timelineClips![0] = { ...document.project.timelineClips![0], start: 99, duration: 1, sourceIn: 0, sourceOut: 1 };
+    const reopened = readProjectDocument(JSON.parse(JSON.stringify(document)), true);
+    expect(reopened.project.timelineClips?.[0]).toMatchObject({ start: 18, duration: 4, sourceIn: 10, sourceOut: 14 });
+    expect(reopened.compositionModel?.rootComposition.placements.find(item => item.id === "canonical-import-clip"))
+      .toMatchObject({ start: 18, duration: 4, sourceIn: 10, sourceOut: 14 });
+  });
+
+  it("rejects a canonical root placement that cannot produce a compatible legacy clip", () => {
     const document = createProjectDocument(structuredClone(sampleProject));
     document.compositionModel.rootComposition.placements.push({
-      id: "tampered-placement",
-      name: "Tampered",
-      trackId: document.compositionModel.rootComposition.tracks[0].id,
-      start: 0,
-      duration: 1,
-      order: 999,
-      source: { type: "none" },
-      legacyData: {},
+      id: "invalid-placement", name: "Invalid", trackId: document.compositionModel.rootComposition.tracks[0].id,
+      start: 0, duration: 1, order: 999, source: { type: "none" }, legacyData: {},
     });
-    expect(() => readProjectDocument(document)).toThrow(/stale or inconsistent Composition projection/);
+    expect(() => readProjectDocument(document)).toThrow(/no compatible legacy clip metadata/);
+  });
+
+  it("preserves validated nested and pinned Composition snapshots without re-deriving them from legacy fields", () => {
+    const document = createProjectDocument(structuredClone(sampleProject));
+    const nested = document.compositionModel.legacyShotSlotCompositions[0];
+    const originalDuration = nested.duration;
+    nested.duration += 3;
+    const restored = readProjectDocument(JSON.parse(JSON.stringify(document)), true);
+    expect(restored.compositionModel?.legacyShotSlotCompositions[0].duration).toBe(originalDuration + 3);
   });
 
   it("accepts a fresh versioned document and preserves the authoritative project payload", () => {
