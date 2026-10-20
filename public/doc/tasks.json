@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "project": "Dionysus",
-  "updatedAt": "2026-10-19",
+  "updatedAt": "2026-10-20",
   "sourceOfTruth": "public/doc/tasks.json and docs/TIMELINE_FIRST_EXECUTION_BACKLOG.md",
   "statusDefinitions": {
     "done": "Implementation exists and has evidence; release/browser validation may still be pending.",
@@ -313,7 +313,7 @@
           "id": "DYS-005",
           "title": "Timeline editing and Version management",
           "status": "in_progress",
-          "progress": 88,
+          "progress": 89,
           "summary": "Implement shared root/nested commands for insert, move/snap, conflicts, trim, split, duplicate, delete, linked audio, pins and Undo/Redo.",
           "doc": "tasks/timeline-and-versions.md",
           "detail": "tasks/timeline-and-versions.html",
@@ -388,9 +388,10 @@
             "Functional code SHA ee1f90c3304ce0f2be5cef294c387192d2aa8969; main CI 39234313896 and Pages deployment 39234313840 passed",
             "PR #93 merged main SHA 5f8dbea57cc72a8b4a909db3b082ea0c54894529; main CI 39400972426 and Pages deployment 39400972424 passed.",
             "PR #94 code/test SHA 5c3d3aedda2316e5ac2adf2b46740d857d04e56a; CI 39402243280 passed 212 tests/22 files, TypeScript and production build; audit summary reported 0 vulnerabilities. Documentation refresh requires current exact-head CI before merge.",
-            "Feature branch feat/dys005-nested-resize-composition-command routes nested resize/source-range/adjacent-trim commits through applyCompositionResizePreview(); focused local command/adapter/track validation passed 18 tests and full local validation passed 214 tests/22 files, TypeScript and the production build. npm audit is unavailable without a lockfile; exact-head PR CI is still required."
+            "Feature branch feat/dys005-nested-resize-composition-command routes nested resize/source-range/adjacent-trim commits through applyCompositionResizePreview(); focused local command/adapter/track validation passed 18 tests and full local validation passed 214 tests/22 files, TypeScript and the production build. npm audit is unavailable without a lockfile; exact-head PR CI is still required.",
+            "Draft PR #96 code/test SHA 8f9b88f42665038b905a6eec1bf682cde2d7ea3f routes valid root resize through applyCompositionResizePreview(); exact-head CI 39417366266 passed tests, TypeScript/build and the non-blocking audit step. Regression covers linked-audio timing/source ranges and input immutability."
           ],
-          "notes": "PR #93 is merged on main as 5f8dbea57cc72a8b4a909db3b082ea0c54894529; main CI run 39400972426 and GitHub Pages deployment run 39400972424 both completed successfully for that SHA. PR #93 exact-head CI run 39398098386 passed 210 tests across 22 files plus TypeScript/production build. The Composition command boundary backs root Timeline operation adapters and nested move. In follow-up PR #94, nested insertion/deletion now use immutable Composition commands, and the nested Editor Remove layer action dispatches through deleteClipVersionLayer(). Implementation/test head 5c3d3aedda2316e5ac2adf2b46740d857d04e56a passed exact-head CI run 39402243280: 212 tests across 22 files, TypeScript/build passed, npm audit summary 0 vulnerabilities. The documentation checkpoint at SHA 56afcc51dd6819a91bcbeba752bdb1f0e244d0a3 passed exact-head CI run 39402541055 (212 tests across 22 files, TypeScript/build, npm audit 0 vulnerabilities). Always verify the actual current PR head and matching CI before merge; a prior SHA's green run does not validate later changes. The follow-up is not deployed. Remaining gaps: project-aware click-to-place/conflict dispatch, nested resize/source-range/adjacent-trim integration, snap/overlap parity, root/nested Undo parity, and canonical-only persistence/structure-preserving Save-as-Clip. Keep DYS-005 in progress; do not infer UI acceptance or deployment from command tests.",
+          "notes": "PR #93 is merged on main as 5f8dbea57cc72a8b4a909db3b082ea0c54894529; PR #94 nested insertion/deletion command integration was validated separately. PR #96 continues the clean DYS-005 branch with shared root resize command integration; exact-head code/test CI 39417366266 passed at 8f9b88f42665038b905a6eec1bf682cde2d7ea3f. The adapter synchronizes linked descendants changed by the shared command and retains a compatibility fallback for materialized Storyboard placements or invalid legacy link groups. This is not merged or deployed. Remaining gaps: project-aware insertion/conflict dispatch through shared commands, root/nested move/split/duplicate parity, atomic Undo/Redo, and canonical-only persistence/structure-preserving Save-as-Clip. Keep DYS-005 in progress; do not infer UI acceptance or deployment from command tests.",
           "description": "Implement shared root/nested commands for insert, move/snap, conflicts, trim, split, duplicate, delete, linked audio, pins and Undo/Redo.",
           "executionStage": "E2-E4",
           "priority": "P0",
@@ -406,8 +407,8 @@
           "testStrategy": [
             "Source-time invariants, conflicts, linked audio, nested history and pins."
           ],
-          "nextAction": "Run full exact-head validation, open a Draft PR, then route project-aware insertion/conflict dispatch through the Composition boundary while preserving snap/overlap guards. Add root/nested parity and Undo tests.",
-          "handoffNotes": "Start from main SHA 8df0348d75965dd78cafe02bc1db9063bf9d323a and branch feat/dys005-nested-resize-composition-command. Nested resize/source-range/adjacent-trim now dispatches through applyCompositionResizePreview() and focused local validation passed 18 tests; run full exact-head CI before merge. PR #94 remains separate; do not merge failing Snapshot PR #89. No browser smoke tests; owner visual acceptance only after a coherent Timeline milestone is merged and a Pages deployment is verified."
+          "nextAction": "Continue with project-aware insertion/conflict dispatch through the shared Composition boundary; add root/nested parity and Undo/Redo tests. Verify the latest exact-head CI before any merge. Do not add browser smoke tests.",
+          "handoffNotes": "Continue from Draft PR #96 branch feat/dys005-root-resize-composition-command. Root resize now uses applyCompositionResizePreview() for valid canonical projections, and linked audio timing/source ranges are projected back; exact-head CI 39417366266 passed at code/test SHA 8f9b88f42665038b905a6eec1bf682cde2d7ea3f. Re-query latest branch/PR head and CI before acting because documentation commits trigger a new CI run. DYS-005 remains in progress; no browser smoke tests, no direct main pushes, no merge without exact-head green CI and review."
         },
         {
           "id": "DYS-011",
