@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { sampleProject } from "./sampleProject";
 import { createProjectDocument, readProjectDocument } from "./projectDocument";
 import { recordProjectChange, redoProjectChange, undoProjectChange } from "./projectHistory";
+import { moveCompositionPlacement } from "./compositionCommands";
+import { migrateLegacyProjectToComposition, projectRootCompositionToLegacy } from "./compositionMigration";
 import { getMasterShotStart } from "./masterTimeline";
 
 describe("versioned project document boundary", () => {
@@ -146,6 +148,37 @@ describe("versioned project document boundary", () => {
     const reopenedRedo = readProjectDocument(redoDocument);
     expect(getMasterShotStart(reopenedRedo.project.shots, original.shots[0].id)).toBe(23);
     expect(redoDocument.compositionModel.rootComposition.placements.find(placement => placement.id === original.shots[0].id)?.start).toBe(23);
+  });
+
+
+  it("persists canonical root Composition edits and restores their exact snapshots through Undo/Redo", () => {
+    const original = structuredClone(sampleProject);
+    const initialRoot = migrateLegacyProjectToComposition(original).rootComposition;
+    const shotId = original.shots[0].id;
+    const originalPlacement = initialRoot.placements.find(placement => placement.id === shotId)!;
+    const movedRoot = moveCompositionPlacement(initialRoot, shotId, 23);
+    const editedProject = projectRootCompositionToLegacy(original, movedRoot);
+    const editHistory = recordProjectChange({ current: initialRoot, undo: [], redo: [] }, movedRoot);
+
+    const editDocument = createProjectDocument(editedProject, editHistory.current);
+    const reopenedEdit = readProjectDocument(JSON.parse(JSON.stringify(editDocument)));
+    expect(reopenedEdit.project.shots.find(shot => shot.id === shotId)?.masterStart).toBe(23);
+    expect(editDocument.compositionModel.rootComposition.placements.find(placement => placement.id === shotId)?.start).toBe(23);
+
+    const undoHistory = undoProjectChange(editHistory);
+    const undoneProject = projectRootCompositionToLegacy(editedProject, undoHistory.current);
+    const undoDocument = createProjectDocument(undoneProject, undoHistory.current);
+    expect(readProjectDocument(JSON.parse(JSON.stringify(undoDocument))).project.shots.find(shot => shot.id === shotId)?.masterStart)
+      .toBe(originalPlacement.start);
+    expect(undoDocument.compositionModel.rootComposition.placements.find(placement => placement.id === shotId)?.start)
+      .toBe(originalPlacement.start);
+
+    const redoHistory = redoProjectChange(undoHistory);
+    const redoneProject = projectRootCompositionToLegacy(editedProject, redoHistory.current);
+    const redoDocument = createProjectDocument(redoneProject, redoHistory.current);
+    expect(readProjectDocument(JSON.parse(JSON.stringify(redoDocument))).project.shots.find(shot => shot.id === shotId)?.masterStart)
+      .toBe(23);
+    expect(redoDocument.compositionModel.rootComposition.placements.find(placement => placement.id === shotId)?.start).toBe(23);
   });
 
 });
