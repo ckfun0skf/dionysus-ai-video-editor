@@ -57,7 +57,7 @@ export function createProjectDocument(project: DionysusProject, canonicalRoot?: 
 }
 
 /** Read both legacy schema-1.0 files and the versioned compatibility envelope without data loss. */
-export function readProjectDocument(value: unknown): ReadProjectDocumentResult {
+export function readProjectDocument(value: unknown, includeCompositionModel = false): ReadProjectDocumentResult {
   if (!isRecord(value)) throw new Error("Invalid Dionysus project document.");
   if (value.format === PROJECT_DOCUMENT_FORMAT) {
     if (value.documentVersion !== PROJECT_DOCUMENT_VERSION || !isRecord(value.project) || !isRecord(value.compositionModel)) {
@@ -120,7 +120,9 @@ export function readProjectDocument(value: unknown): ReadProjectDocumentResult {
       throw new Error("The project document contains stale or inconsistent nested Composition snapshots.");
     }
 
-    return { project, sourceDocumentVersion: "2.0", compositionModel: compositionModel as unknown as DionysusProjectDocumentV2["compositionModel"] };
+    return includeCompositionModel
+      ? { project, sourceDocumentVersion: "2.0", compositionModel: compositionModel as unknown as DionysusProjectDocumentV2["compositionModel"] }
+      : { project, sourceDocumentVersion: "2.0" };
   }
   if (value.schemaVersion === "1.0") {
     return { project: value as unknown as DionysusProject, sourceDocumentVersion: "1.0" };
