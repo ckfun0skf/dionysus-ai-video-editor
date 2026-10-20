@@ -98,6 +98,15 @@ describe("shared Composition editing commands", () => {
     expect(withShotTrack.placements.find(item => item.id === "shot")?.trackId).toBe("v2");
   });
 
+  it("removes a linked audio track without deleting its video parent on another track", () => {
+    const source = fixture();
+    const next = removeCompositionTrack(source, "a1");
+    expect(next.tracks.some(track => track.id === "a1")).toBe(false);
+    expect(next.placements.map(item => item.id)).toContain("video");
+    expect(next.placements.map(item => item.id)).not.toContain("audio");
+    expect(placement(source, "audio").linkedToPlacementId).toBe("video");
+  });
+
   it("updates canonical source/link metadata without changing unrelated source ranges", () => {
     const source = fixture();
     const unlinked = updateCompositionPlacement(source, "audio", {
@@ -123,8 +132,8 @@ describe("shared Composition editing commands", () => {
     const next = rippleReorderCompositionMasterShots(source, "shot-b", 0, "v1");
     expect(placement(next, "shot-b")).toMatchObject({ start: 0, duration: 4 });
     expect(placement(next, "shot-a")).toMatchObject({ start: 4, duration: 3 });
-    expect(placement(next, "video")).toMatchObject({ start: 7, sourceIn: 2, sourceOut: 8 });
-    expect(placement(next, "audio")).toMatchObject({ start: 7, sourceIn: 2, sourceOut: 8, linkedToPlacementId: "video" });
+    expect(placement(next, "video")).toMatchObject({ start: 1, sourceIn: 2, sourceOut: 8 });
+    expect(placement(next, "audio")).toMatchObject({ start: 1, sourceIn: 2, sourceOut: 8, linkedToPlacementId: "video" });
     expect(JSON.stringify(source)).toBe(before);
   });
 
