@@ -7,7 +7,7 @@ import { validateProject } from "./projectValidation";
 import { addClipVersionLayer as addNestedLayer, addClipVersionTrack as addNestedTrack, deleteClipVersionLayer as deleteNestedLayer, duplicateClipVersionComposition, moveClipVersionLayer as moveNestedLayer, normalizeClipVersionTracks, updateClipVersionLayer as updateNestedLayer } from "./clipVersionTracks";
 import { createProjectDocument, readProjectDocument } from "./projectDocument";
 import { migrateLegacyProjectToComposition, projectRootCompositionToLegacy } from "./compositionMigration";
-import { applyCompositionResizePreview, deleteCompositionPlacement, insertCompositionPlacement, moveCompositionPlacementToTrack } from "./compositionCommands";
+import { addCompositionTrack, applyCompositionResizePreview, deleteCompositionPlacement, insertCompositionPlacement, moveCompositionPlacement, moveCompositionPlacementToTrack, removeCompositionTrack, updateCompositionTrack } from "./compositionCommands";
 import { moveNormalizedFrame, resizeNormalizedFrame } from "./previewTransform";
 import { getAllowedChildClipAssets, wouldCreateClipAssetCycle } from "./clipAssetGraph";
 import { t } from "./i18n";
@@ -201,7 +201,19 @@ export default function App() {
   });
   // Root Composition is the live authority for Master Timeline placement/track commands.
   // DionysusProject remains a deterministic schema-1.0 compatibility projection for the wider UI.
-  const [rootComposition, setRootComposition] = useState<CompositionDocument>(() => migrateLegacyProjectToComposition(project).rootComposition);
+  const [rootComposition, setRootComposition] = useState<CompositionDocument>(() => {
+    try {
+      const raw = localStorage.getItem(COMPOSITION_STORAGE_KEY);
+      if (raw) {
+        const document = JSON.parse(raw) as { compositionModel?: { rootComposition?: CompositionDocument }; project?: DionysusProject };
+        if (document.project?.id === project.id && document.compositionModel?.rootComposition) {
+          // readProjectDocument validated the same envelope in the project initializer above.
+          return structuredClone(document.compositionModel.rootComposition);
+        }
+      }
+    } catch { /* Fall back to deterministic migration for old or corrupt recovery data. */ }
+    return migrateLegacyProjectToComposition(project).rootComposition;
+  });
   const [undoStack, setUndoStack] = useState<DionysusProject[]>([]);
   const [redoStack, setRedoStack] = useState<DionysusProject[]>([]);
   const [compositionUndoStack, setCompositionUndoStack] = useState<CompositionDocument[]>([]);
@@ -642,6 +654,24 @@ export default function App() {
     const nextRoot = update(structuredClone(rootCompositionRef.current));
     const nextProject = projectRootCompositionToLegacy(projectRef.current, nextRoot);
     change(() => nextProject, historyGroup, nextRoot);
+  }
+
+  function moveRootPlacementOrLegacy(target: { type: "shot"; shotId: string } | { type: "clip"; clipId: string }, trackId: string, start: number) {
+    const placementId = target.type === "shot" ? target.shotId : target.clipId;
+    if (rootCompositionRef.current.placements.some(placement => placement.id === placementId)) {
+      changeRootComposition(root => moveCompositionPlacementToTrack(root, placementId, trackId, start));
+    } else {
+      change(project => moveProjectTimelinePlacement(project, target, trackId, start));
+    }
+  }
+
+  function commitRootResizeOrLegacy(preview: ClipResizePreview) {
+    const affectedIds = [preview.id, ...preview.trims.map(trim => trim.id)];
+    if (affectedIds.every(placementId => rootCompositionRef.current.placements.some(placement => placement.id === placementId))) {
+      changeRootComposition(root => applyCompositionResizePreview(root, preview));
+    } else {
+      change(project => applyProjectTimelineClipResize(project, preview));
+    }
   }
 
   function beginTimelineClipPlacement(clip: TimelineClip) {
@@ -1576,7 +1606,7 @@ export default function App() {
     if (!active || active.id !== shot.id || active.pointerId !== event.pointerId) return;
     const preview = getMasterShotResizePreview(active, event.clientX) ?? shotResizePreview;
     if (preview && preview.id === shot.id) {
-      change(p => applyProjectTimelineClipResize(p, preview));
+      commitRootResizeOrLegacy(preview);
       setNotice(preview.trims.length ? "Shot resized and adjacent timeline item trimmed. Use Undo to restore both." : "Shot resized.");
     }
     shotResizeRef.current = null;
@@ -1721,7 +1751,7 @@ export default function App() {
         setNotice("Clip move cancelled: this position overlaps existing content.");
       } else if (drop.track.id !== drop.moving.trackId || Math.abs(drop.pos.start - drop.moving.start) > 1e-6) {
         try {
-          change(p => moveProjectTimelinePlacement(p, { type: "clip", clipId: drop.moving.id }, drop.track.id, drop.pos.start));
+          moveRootPlacementOrLegacy({ type: "clip", clipId: drop.moving.id }, drop.track.id, drop.pos.start);
           setSelectedTimelineClipId(drop.moving.id);
           setSelectedTimelineTrackId(drop.track.id);
           setIsPlaying(false);
@@ -2338,7 +2368,7 @@ export default function App() {
           const conflict=getMasterShotPlacementItems(project,movingShot.id).some(clip=>clip.trackId===track.id&&pos.start<clip.start+clip.duration-1e-7&&pos.start+movingShot.duration>clip.start+1e-7);
           if(conflict){setNotice("Drop cancelled: this position overlaps another item on the destination layer.");setClipDropPreview(null);return;}
           next=pos.start;
-          change(p=>moveProjectTimelinePlacement(p,{type:"shot",shotId:movingShot.id},track.id,next));
+          moveRootPlacementOrLegacy({ type: "shot", shotId: movingShot.id }, track.id, next);
           setNotice(pos.snapTime!==undefined?"Shot snapped to an aligned, non-overlapping position.":"Shot moved to a non-overlapping position.");
         }
         setSelectedId(movingShot.id);setIsPlaying(false);playbackTimeRef.current=next;setEditorTime(next);setClipDropPreview(null);return;
@@ -2350,7 +2380,7 @@ export default function App() {
      if(!pos){setNotice("No non-overlapping position is available on this layer.");clipDragSourceRef.current=null;setClipDropPreview(null);return;}
      const destinationConflict=getTimelinePlacementItems(project,moving).some(clip=>clip.id!==moving.id&&clip.trackId===track.id&&pos.start<clip.start+clip.duration-1e-7&&pos.start+moving.duration>clip.start+1e-7);
      if(destinationConflict){setNotice("Drop cancelled: this position overlaps another clip on the destination layer.");clipDragSourceRef.current=null;setClipDropPreview(null);return;}
-     try{change(p=>moveProjectTimelinePlacement(p,{type:"clip",clipId:moving.id},track.id,pos.start));setSelectedTimelineClipId(moving.id);setSelectedTimelineTrackId(track.id);setIsPlaying(false);setNotice(pos.snapTime!==undefined?"Clip snapped to an aligned, non-overlapping position.":"Clip moved to a non-overlapping position.");}catch(error){setNotice(error instanceof Error?error.message:"Could not move the clip.");}finally{clipDragSourceRef.current=null;setClipDropPreview(null);}
+     try{moveRootPlacementOrLegacy({ type: "clip", clipId: moving.id }, track.id, pos.start);setSelectedTimelineClipId(moving.id);setSelectedTimelineTrackId(track.id);setIsPlaying(false);setNotice(pos.snapTime!==undefined?"Clip snapped to an aligned, non-overlapping position.":"Clip moved to a non-overlapping position.");}catch(error){setNotice(error instanceof Error?error.message:"Could not move the clip.");}finally{clipDragSourceRef.current=null;setClipDropPreview(null);}
    }}>
    <div className="visual-playhead" style={{left:(editorTime/mediaTimelineDuration*100)+"%"}}/>
     {(clipResizePreview?.trackId===track.id && clipResizePreview.overlap || shotResizePreview?.trackId===track.id && shotResizePreview.overlap) && <div className="clip-overlap-preview" style={{left:(((shotResizePreview?.trackId===track.id&&shotResizePreview.overlap)?shotResizePreview.overlap!.start:clipResizePreview!.overlap!.start)/mediaTimelineDuration*100)+"%",width:Math.max(0.25,(((shotResizePreview?.trackId===track.id&&shotResizePreview.overlap)?shotResizePreview.overlap!.duration:clipResizePreview!.overlap!.duration)/mediaTimelineDuration*100))+"%"}} aria-hidden="true"/>}
