@@ -120,6 +120,54 @@ describe("nested Clip Version track operations", () => {
     expect(deletedChildOnly.layers.map(layer => layer.id)).toEqual(["nested-source", "keep"]);
   });
 
+  it("treats a saved canonical Composition as authoritative and preserves nested snapshot metadata", () => {
+    const version = structuredClone(sampleProject.shots[0].slots[0].versions[0]);
+    const withPlacement = addClipVersionLayer(version, {
+      id: "canonical-placement",
+      name: "Canonical placement",
+      kind: "video",
+      start: 1,
+      duration: 2,
+      assetId: "source-asset",
+      sourceIn: 3,
+      sourceOut: 5,
+      x: 12,
+      volume: 0.4,
+    });
+    const canonical = structuredClone(withPlacement.composition!);
+    canonical.provenance = {
+      kind: "derived-clip-version",
+      sourceProjectId: "project-source",
+      sourceCompositionId: "root-composition",
+      sourceUpdatedAt: "2026-10-20T10:00:00.000Z",
+      createdAt: "2026-10-20T11:00:00.000Z",
+      pinnedVersions: [{ assetId: "nested-asset", versionId: "nested-v3" }],
+    };
+    canonical.nestedCompositions = [{
+      ...structuredClone(canonical),
+      id: "embedded-child",
+      placements: [],
+      nestedCompositions: [],
+    }];
+    const saved = {
+      ...withPlacement,
+      composition: canonical,
+      // Deliberately stale compatibility projection: canonical document must win.
+      layers: withPlacement.layers.map(layer => ({ ...layer, start: 99, sourceIn: 99 })),
+    };
+
+    const moved = moveClipVersionLayer(saved, "canonical-placement", withPlacement.layers[0]?.trackId ?? saved.tracks![0].id, 4);
+    const placement = moved.composition?.placements.find(item => item.id === "canonical-placement");
+    const layer = moved.layers.find(item => item.id === "canonical-placement");
+
+    expect(placement).toMatchObject({ start: 4, sourceIn: 3, sourceOut: 5 });
+    expect(placement?.legacyData).toMatchObject({ x: 12, volume: 0.4 });
+    expect(layer).toMatchObject({ start: 4, sourceIn: 3, sourceOut: 5, x: 12, volume: 0.4 });
+    expect(moved.composition?.provenance).toEqual(canonical.provenance);
+    expect(moved.composition?.nestedCompositions?.[0]?.id).toBe("embedded-child");
+    expect(moved.composition?.nestedCompositions?.[0]?.placements).toEqual([]);
+  });
+
   it("moves a layer to a compatible track and rejects incompatible track kinds", () => {
     const version = structuredClone(sampleProject.shots[0].slots[0].versions[0]);
     const baseTrack = addClipVersionTrack(version, { id: "video-1", name: "Video 1", kind: "video" });
