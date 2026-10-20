@@ -1,6 +1,6 @@
 # DYS-014 — Unified Composition Model and structure-preserving snapshots
 
-**Status:** In progress · **Progress estimate:** 68% · **Updated:** 2026-10-20
+**Status:** In progress · **Progress estimate:** 72% · **Updated:** 2026-10-20
 
 ## Strategic UI direction (2026-10-19)
 
@@ -82,3 +82,12 @@ The Master Timeline Save-as-Clip action now delegates to `src/clipVersionSnapsho
 Regression tests cover source immutability, track/order/source-range/transform/mix preservation, nested composition structure, pinned versions, provenance, JSON serialization/reload and isolation from subsequent mutation of the source nested version. Code/test SHA `30afa93ea6ff9f6086229b4fd7bd9daba6a02796` passed exact-head CI [39425783751](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39425783751): 219 tests across 23 files, TypeScript and production build.
 
 **Not complete:** the current nested editor still primarily edits the compatibility `layers` list. The canonical tree is persisted in the snapshot but is not yet the sole editable source of truth across every nested edit path. Next work must add canonical placement/editor adapters, synchronize the render projection, and prove edit → save → reopen parity plus source-version pin immutability. Keep DYS-014 in progress; do not merge on the strength of snapshot serialization tests alone.
+
+
+## Canonical nested editor synchronization — 2026-10-20
+
+When a Clip Version already has a canonical Composition document, `normalizeClipVersionTracks()` now derives the compatibility layer and track lists from that document. Nested insert, move, resize/adjacent trim, delete, track creation, duration changes and inspector edits update the canonical document first and refresh the legacy projections. Transform-only edits preserve typed source references; intentional source changes update them. Nested composition children and provenance survive immutable placement updates.
+
+Exact-head CI [39428872953](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39428872953) passed at code SHA `c82f305726afaacb424d9bf8e39c0fac37de5fc4`: 222 tests across 23 files, TypeScript, production build and dependency audit with 0 reported vulnerabilities.
+
+**Still open:** a full Save-as-Clip → nested edit → JSON save/reload → reopen test; canonical Undo/Redo parity; immutable source-version pin behavior; and schema-1.0/legacy Shot Slot migration review. This adapter reduces the dual-write gap but does not by itself prove all app persistence/history paths are canonical-authoritative. Keep DYS-014 in progress.

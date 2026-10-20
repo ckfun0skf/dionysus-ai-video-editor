@@ -344,3 +344,16 @@ Use [`docs/MOBILE_AGENT_PICKUP_PROMPT.md`](MOBILE_AGENT_PICKUP_PROMPT.md) and [`
 - Important remaining limitation: the current nested editor still primarily edits the compatibility `layers` projection. The canonical tree is now persisted in snapshots, but full canonical-authoritative edit/open/save synchronization and UI round-trip parity are **not complete**. Do not mark DYS-014 complete or merge without reviewing this boundary.
 - Next: define canonical placement-to-editor adapters that edit nested Composition documents without flattening shot/slot hierarchy; synchronize all edits back into the tree; add edit/save/reopen tests and prove source-version pin immutability. DYS-005/DYS-014 remain in progress.
 - No browser smoke tests, no direct push to `main`, no merge without current exact-head CI and review. Owner wants one consolidated visual acceptance after a coherent Timeline milestone is deployed.
+
+
+## Current checkpoint — 2026-10-20 (canonical nested editing adapter)
+
+- Active Draft PR: [#96](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/96), branch `feat/dys005-root-resize-composition-command`; no merge.
+- `src/clipVersionTracks.ts` now treats `ClipVersion.composition` as the authoritative document when present. `normalizeClipVersionTracks()` derives the compatibility `layers` and `tracks` projections from that canonical document instead of allowing stale legacy arrays to overwrite it.
+- Nested insert, move, resize/adjacent trim and delete operations now operate on the canonical Composition document and write both the updated document and derived legacy projections. Newly created tracks are inserted into both the canonical track list and the projection.
+- Added `updateClipVersionLayer()`; inspector changes to placement name, source, timing, transform and mix are written into canonical placements and legacy metadata together. Source references remain unchanged for transform-only edits, and Shot Slot, Clip Asset and Script source references are preserved when edited.
+- Nested Clip Version duration controls now update the stored Composition duration too. Composition child documents and provenance are retained by immutable updates.
+- Regression coverage includes canonical-over-stale-projection behavior, inspector-to-placement synchronization, nested snapshot/provenance preservation, source reference preservation, newly added canonical tracks, and the existing insert/move/resize/delete tests.
+- Exact-head CI at code SHA `c82f305726afaacb424d9bf8e39c0fac37de5fc4` passed [workflow 39428872953](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39428872953): 222 tests across 23 files, TypeScript, production build and the configured dependency audit (0 reported vulnerabilities).
+- Remaining: verify the complete Save-as-Clip → edit nested content → JSON save/reload → reopen workflow, explicit Undo/Redo for canonical nested edits, and immutable pin semantics across source-version changes. Also review the canonical migration/legacy shot-slot behavior before declaring DYS-014 complete. DYS-005 and DYS-014 remain in progress.
+- No browser smoke tests were run or added. Do not push to `main`; do not merge without review and current exact-head CI. Visual acceptance remains a later consolidated owner review after a coherent Timeline milestone.

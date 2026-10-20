@@ -78,3 +78,8 @@ Exact-head CI [39425783751](https://github.com/ckfun0skf/dionysus-ai-video-edito
 ## Save-as-Clip follow-up — 2026-10-20
 
 The Master Timeline Save-as-Clip path now calls `createClipVersionSnapshot()` instead of only flattening renderer layers and regenerating their IDs. This is shared DYS-014 foundation work: DYS-005 remains in progress and canonical-only editing is not complete. See [DYS-014](./unified-composition-model.md) for the snapshot contract and remaining editor-adapter gap.
+
+
+## Canonical nested editing adapter — 2026-10-20
+
+The nested Clip Version editor now treats `ClipVersion.composition` as authoritative when present. Insert/move/resize/delete and inspector edits update canonical placements/tracks, while legacy `layers` and `tracks` are derived projections. Transform-only edits preserve source references; explicit source changes update typed references. Exact-head CI [39428872953](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39428872953) passed at code SHA `c82f305726afaacb424d9bf8e39c0fac37de5fc4`: 222 tests/23 files, TypeScript, production build and dependency audit (0 vulnerabilities). Remaining: full edit/save/reload/reopen parity, canonical nested Undo/Redo, pinned-version immutability, and migration/Shot Slot compatibility. DYS-005 remains in progress; no browser smoke tests.

@@ -154,3 +154,12 @@ Draft PR [#96](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/96) no
 Regression tests verify source immutability, source ranges, transform/mix preservation, nested child composition structure, pinning, generation/script provenance, JSON save/reload, and that mutating a source nested version after snapshot creation does not mutate the embedded snapshot. Code/test SHA `30afa93ea6ff9f6086229b4fd7bd9daba6a02796` passed exact-head CI [39425783751](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39425783751): 219 tests/23 files, TypeScript and production build. The audit workflow is non-blocking.
 
 **Remaining architecture gap:** the nested editor still edits compatibility `layers`; it must be migrated to edit the stored Composition tree and keep legacy render projection synchronized before claiming canonical-authoritative persistence or full Save-as-Clip acceptance. Next step is placement-to-editor adapters and edit/save/reopen/pin-immutability tests. No browser smoke tests; no direct main pushes; no merge without current exact-head CI and review.
+
+
+## Canonical nested editing adapter checkpoint — 2026-10-20
+
+Draft PR [#96](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/96) now makes `ClipVersion.composition` authoritative whenever present. Nested edit commands and inspector updates write to canonical placements/tracks; the old `layers` and `tracks` arrays are refreshed as compatibility projections. Transform-only edits retain source references; edits that intentionally change a source update the typed reference. Nested child Composition documents and provenance are carried forward.
+
+Exact-head CI [39428872953](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39428872953) passed at code SHA `c82f305726afaacb424d9bf8e39c0fac37de5fc4`: 222 tests/23 files, TypeScript and production build, dependency audit reported 0 vulnerabilities. Regression coverage includes stale projection resistance, inspector synchronization, source-reference preservation, track creation and child/provenance retention.
+
+**Remaining before completion:** edit/save/reload/reopen parity for the complete Save-as-Clip workflow; canonical nested Undo/Redo; pin immutability after a source version changes; migration and legacy Shot Slot compatibility audit. Keep DYS-005/DYS-014 in progress. No browser smoke tests, no direct main push, no merge without review and exact-head CI.

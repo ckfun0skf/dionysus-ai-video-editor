@@ -313,7 +313,7 @@
           "id": "DYS-005",
           "title": "Timeline editing and Version management",
           "status": "in_progress",
-          "progress": 89,
+          "progress": 90,
           "summary": "Implement shared root/nested commands for insert, move/snap, conflicts, trim, split, duplicate, delete, linked audio, pins and Undo/Redo.",
           "doc": "tasks/timeline-and-versions.md",
           "detail": "tasks/timeline-and-versions.html",
@@ -393,9 +393,10 @@
             "Draft PR #96 code/test SHA a177d5c5e8109bb5481d9025b237cebbc6f0d1db routes valid root resize through applyCompositionResizePreview() and ordinary root insertion through insertCompositionPlacement(); duplicate placement IDs are rejected. Exact-head CI 39418281655 passed tests, TypeScript/build and the workflow's non-blocking audit step.",
             "Draft PR #96 code/test SHA 5cb79b8c5a2debd11008567630d0460bd5858737 routes valid root move operations through moveCompositionPlacementToTrack(); linked descendants move together and source ranges remain intact. Exact-head CI 39419176885 passed tests, TypeScript/build and the workflow's non-blocking audit step.",
             "Draft PR #96 code/test SHA b3ef901c8eaa3a193d4cbc47ac39a5d6274dbfe3 passed exact-head CI 39421375204: 217 tests, TypeScript and production build. Added a project-history regression proving splitting a linked video/audio group is one Undo entry and restores/reapplies source ranges and links.",
-            "Shared Save-as-Clip foundation: src/clipVersionSnapshot.ts captures the Composition structure and pinned nested versions rather than relying only on flattened renderer layers. Code/test SHA 30afa93ea6ff9f6086229b4fd7bd9daba6a02796 passed exact-head CI 39425783751 (219 tests/23 files, TypeScript and production build). Canonical-authoritative editing remains DYS-014 work."
+            "Shared Save-as-Clip foundation: src/clipVersionSnapshot.ts captures the Composition structure and pinned nested versions rather than relying only on flattened renderer layers. Code/test SHA 30afa93ea6ff9f6086229b4fd7bd9daba6a02796 passed exact-head CI 39425783751 (219 tests/23 files, TypeScript and production build). Canonical-authoritative editing remains DYS-014 work.",
+            "Canonical nested editing adapter: src/clipVersionTracks.ts now treats ClipVersion.composition as authoritative, updates canonical placements/tracks for insert/move/resize/delete/inspector edits, and refreshes legacy projections. Exact-head CI 39428872953 passed at SHA c82f305726afaacb424d9bf8e39c0fac37de5fc4: 222 tests/23 files, TypeScript/build, dependency audit 0 vulnerabilities."
           ],
-          "notes": "PR #96 remains a Draft on feat/dys005-root-resize-composition-command. Root resize/insert/move shared commands and atomic linked split history are covered. Save-as-Clip snapshot support is now shared with DYS-014. Code/test SHA 30afa93ea6ff9f6086229b4fd7bd9daba6a02796 passed exact-head CI 39425783751 (219 tests/23 files, TypeScript/build). Root/nested edit parity, canonical-only persistence and complete history grouping remain open; keep this task in progress.",
+          "notes": "PR #96 remains a Draft on feat/dys005-root-resize-composition-command. Shared root/nested commands, atomic linked split history and structure-preserving Save-as-Clip are implemented. Canonical nested editing now updates the Composition tree and refreshes compatibility projections. Exact-head CI 39428872953 passed at code SHA c82f305726afaacb424d9bf8e39c0fac37de5fc4 (222 tests/23 files, TypeScript/build, audit 0 vulnerabilities). Remaining: full canonical history/Undo parity, save/reopen round-trip and review.",
           "description": "Implement shared root/nested commands for insert, move/snap, conflicts, trim, split, duplicate, delete, linked audio, pins and Undo/Redo.",
           "executionStage": "E2-E4",
           "priority": "P0",
@@ -411,8 +412,8 @@
           "testStrategy": [
             "Source-time invariants, conflicts, linked audio, nested history and pins."
           ],
-          "nextAction": "Continue root/nested edit command parity and history audit. Coordinate with DYS-014's canonical placement/editor adapter so compatibility projections cannot overwrite the stored composition tree. Verify exact-head CI before review; no browser smoke tests.",
-          "handoffNotes": "PR #96 branch feat/dys005-root-resize-composition-command; code/test SHA 30afa93ea6ff9f6086229b4fd7bd9daba6a02796 passed exact-head CI 39425783751 (219 tests/23 files, TypeScript/build). Save-as-Clip structural snapshot work is foundational only; the legacy nested editor still edits layers. Do not mark canonical persistence complete or merge without review/current exact-head CI."
+          "nextAction": "Add canonical nested edit Undo/Redo and edit-save-reload-reopen integration tests; audit linked placements and history grouping. Keep DYS-005 in progress until root/nested parity and persistence/history are demonstrated.",
+          "handoffNotes": "Continue on Draft PR #96, branch feat/dys005-root-resize-composition-command. Code SHA c82f305726afaacb424d9bf8e39c0fac37de5fc4 passed exact-head CI 39428872953 (222 tests/23 files, TypeScript/build, audit 0 vulnerabilities). Canonical Composition is now the source of truth for nested edit adapters; legacy layers/tracks are derived projections. Remaining: Undo/Redo parity, full save/reload/reopen, pin immutability and migration audit. No browser smoke tests; no direct main push; no merge without review/current exact-head CI."
         },
         {
           "id": "DYS-011",
@@ -554,7 +555,7 @@
           "id": "DYS-014",
           "title": "Unified Composition model and structure-preserving snapshots",
           "status": "in_progress",
-          "progress": 68,
+          "progress": 72,
           "summary": "Establish canonical Composition for root/nested timelines, shared commands and independent structure-preserving Project-to-Clip snapshots.",
           "doc": "tasks/unified-composition-model.md",
           "detail": "tasks/unified-composition-model.html",
@@ -615,9 +616,10 @@
             "Resize edge-case coverage: src/timelineResize.test.ts",
             "Exact-head code CI 39227084457: tests, TypeScript and Vite build passed",
             "Merge/deploy checkpoint: main SHA 9da2f2bfbf7e80abb73f5552a0d1447cff471c0b; CI 39227655141 and Pages deploy 39227655137 both passed.",
-            "Draft PR #96 code/test SHA 30afa93ea6ff9f6086229b4fd7bd9daba6a02796 adds src/clipVersionSnapshot.ts and CompositionDocument.provenance/nestedCompositions. Save-as-Clip preserves the root placement tree, nested Clip Asset Version and selected Shot Slot Version documents, track/order/source range/transform/mix metadata, version pins, script IDs and generation provenance; legacy layers remain a render projection. Regression covers JSON round-trip and isolation from subsequent source nested-layer mutation. Exact-head CI 39425783751 passed 219 tests/23 files, TypeScript and production build."
+            "Draft PR #96 code/test SHA 30afa93ea6ff9f6086229b4fd7bd9daba6a02796 adds src/clipVersionSnapshot.ts and CompositionDocument.provenance/nestedCompositions. Save-as-Clip preserves the root placement tree, nested Clip Asset Version and selected Shot Slot Version documents, track/order/source range/transform/mix metadata, version pins, script IDs and generation provenance; legacy layers remain a render projection. Regression covers JSON round-trip and isolation from subsequent source nested-layer mutation. Exact-head CI 39425783751 passed 219 tests/23 files, TypeScript and production build.",
+            "Canonical nested editing adapter at code SHA c82f305726afaacb424d9bf8e39c0fac37de5fc4 makes ClipVersion.composition authoritative when present. Nested insert/move/resize/delete, track creation, duration and inspector edits synchronize canonical placements/tracks and legacy projections; transform-only edits preserve source references. Exact-head CI 39428872953 passed 222 tests/23 files, TypeScript/build and audit 0 vulnerabilities."
           ],
-          "notes": "Canonical Composition types and non-destructive migration exist, but the editor is not yet canonical-authoritative. PR #96 adds structure-preserving snapshot data: nestedCompositions embeds selected Clip Asset versions and Shot Slot versions, provenance records source identity/time and pinned version IDs, and the old layers list remains a compatibility/render projection. Code/test SHA 30afa93ea6ff9f6086229b4fd7bd9daba6a02796 passed exact-head CI 39425783751 (219 tests/23 files, TypeScript/build). Remaining: canonical placement/editor adapters; synchronize all edit paths without flattening; edit-save-reopen parity; pinned source immutability and Undo/Redo across reopen. Keep DYS-014 in progress.",
+          "notes": "Save-as-Clip now embeds root/nested Composition documents, pinned versions and provenance. The nested editor adapter now reads/writes canonical Composition and refreshes legacy projections for insert/move/resize/delete/track/inspector/duration changes. Exact-head CI 39428872953 passed 222 tests/23 files, TypeScript/build, audit 0 vulnerabilities at SHA c82f305726afaacb424d9bf8e39c0fac37de5fc4. Still required: full edit/save/reload/reopen parity, canonical Undo/Redo, source-version pin immutability and schema-1.0/legacy Shot Slot migration audit. Keep in progress.",
           "description": "Establish canonical Composition for root/nested timelines, shared commands and independent structure-preserving Project-to-Clip snapshots.",
           "executionStage": "E2 and E4",
           "priority": "P0",
@@ -633,8 +635,8 @@
           "testStrategy": [
             "Migration matrix, parity, snapshot independence and round-trip."
           ],
-          "nextAction": "Implement canonical placement-to-editor adapters and ensure editing a saved Clip Version updates its Composition tree without flattening shot/slot hierarchy. Add edit-save-reopen, nested rendering, pinned-version immutability and Undo/Redo tests. Keep compatibility layers as a derived projection; do not mark DYS-014 complete yet.",
-          "handoffNotes": "Continue on Draft PR #96 branch feat/dys005-root-resize-composition-command. At code/test SHA 30afa93ea6ff9f6086229b4fd7bd9daba6a02796, Save-as-Clip embeds root/nested Composition documents, track/order/source ranges, transform/mix metadata, version pins and provenance; exact-head CI 39425783751 passed 219 tests/23 files, TypeScript/build. Critical gap: current nested editor still mutates compatibility layers; migrate editor operations to canonical placements before claiming canonical-authoritative persistence. No browser smoke tests, no direct main push, no merge without review and current exact-head CI."
+          "nextAction": "Add full Save-as-Clip → edit nested placements/track properties → JSON save/reload → reopen parity tests, canonical nested Undo/Redo, and source-version pin immutability tests. Review deterministic migration and legacy Shot Slot handling before considering complete.",
+          "handoffNotes": "Draft PR #96 branch feat/dys005-root-resize-composition-command. Code SHA c82f305726afaacb424d9bf8e39c0fac37de5fc4 passed exact-head CI 39428872953 (222 tests/23 files, TypeScript/build, audit 0 vulnerabilities). Composition is authoritative for nested editor adapters when present; layers/tracks are derived projections. Remaining: full edit/save/reload/reopen parity, canonical Undo/Redo, pin immutability and migration/Shot Slot compatibility. No browser smoke tests; no direct main push; no merge without review and exact-head CI."
         }
       ],
       "executionStage": "E2",

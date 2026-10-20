@@ -60,3 +60,13 @@ CI [#39218891285](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/
 - The flattened `layers` array remains a compatibility/render projection. The nested editor has not yet migrated all edit operations to canonical Composition placements, so this is a structural snapshot milestone, not completion of canonical-authoritative editing.
 - Tests verify source immutability, source ranges, transforms/mix, nested child composition, pin/provenance retention, JSON round-trip and source nested-version mutation isolation.
 - Exact-head CI [39425783751](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39425783751) passed 219 tests across 23 files, TypeScript and production build at code/test SHA `30afa93ea6ff9f6086229b4fd7bd9daba6a02796`. The branch is not merged/deployed; no browser smoke tests were run.
+
+
+## Canonical nested editor synchronization — 2026-10-20
+
+- Made the stored Composition document authoritative when present; legacy layer/track arrays are derived projections.
+- Routed nested insert/move/resize/delete, track creation, duration changes and inspector edits through canonical placement/track state.
+- Preserved typed source references for transform-only edits and correctly updated source references for intentional source changes.
+- Added regression coverage for stale projection resistance, inspector synchronization, child Composition/provenance preservation, Shot Slot/Script source references and new-track synchronization.
+- Exact-head CI [39428872953](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39428872953) passed at code SHA `c82f305726afaacb424d9bf8e39c0fac37de5fc4`: 222 tests/23 files, TypeScript, production build and dependency audit (0 vulnerabilities).
+- Still not complete: full Save-as-Clip edit/save/reload/reopen parity, canonical nested Undo/Redo, pin immutability and legacy migration review. No browser smoke tests; no merge.
