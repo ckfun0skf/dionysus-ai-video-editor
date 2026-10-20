@@ -407,7 +407,7 @@ export function duplicateClipVersionComposition(
     placements: source.placements.map(placement => {
       const nextId = placementIds.get(placement.id)!;
       const linked = placement.linkedToPlacementId ? placementIds.get(placement.linkedToPlacementId) ?? placement.linkedToPlacementId : undefined;
-      const legacyData = { ...placement.legacyData, id: nextId, trackId: trackIds.get(placement.trackId) ?? placement.trackId };
+      const legacyData: Record<string, unknown> = { ...placement.legacyData, id: nextId, trackId: trackIds.get(placement.trackId) ?? placement.trackId };
       if (typeof legacyData.linkedVideoClipId === "string") legacyData.linkedVideoClipId = placementIds.get(legacyData.linkedVideoClipId) ?? legacyData.linkedVideoClipId;
       if (typeof legacyData.linkedToPlacementId === "string") legacyData.linkedToPlacementId = placementIds.get(legacyData.linkedToPlacementId) ?? legacyData.linkedToPlacementId;
       return {
