@@ -123,3 +123,13 @@ Remaining: explicit nested Undo/Redo coverage, broader pinned-version/migration 
 Existing canonical Composition documents on Clip/Shot Slot Versions are now retained by migration rather than rebuilt from compatibility `layers`. Save-as-Clip also preserves already embedded child subtrees. Regression coverage checks placement order, source ranges, transform/mix, pins and provenance. Exact-head CI [39445108693](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39445108693) passed 223 tests/23 files, TypeScript/build and audit 0 vulnerabilities at `920ad9e5f3d0d290182b82e5e772ecbc1abe4694`.
 
 **Root state is still transitional:** the V2 export includes a canonical root Composition projection, but `DionysusProject` schema 1.0 remains the live editor state and import validates/rebuilds the projection from it. Full canonical root persistence/editing requires a separate root command/state migration. Keep DYS-014 in progress.
+
+
+## Canonical-first root mutation audit — 2026-10-20
+
+- Root timeline insertion, conflict ripple/trim, move/drop and Master Shot Ripple Reorder now use live Composition placements as the source of timing and occupancy. Ripple moves linked groups together and preserves source ranges.
+- Root clip metadata/source edits, preview transforms, mute/unlink, split/duplicate/delete, media import and track add/update/remove route through Composition commands first. The schema-1.0 project is derived compatibility data; domain reconciliation no longer overwrites existing canonical geometry/source/link fields from a stale migration.
+- Track removal guards the last video track, requires a fallback for Master Shots, preserves video when removing only a linked audio child track, and catches invalid operations in the UI.
+- Validated v2 import/recovery restores the saved canonical root when its compatibility projection matches; v2 tracks are not normalized a second time through the legacy migration path. Schema-1.0 imports remain supported.
+- Tests cover stale legacy timing vs canonical occupancy, insertion/ripple/trim source-range preservation, Master Shot ripple reorder, track removal edge cases, canonical import, and App persistence/Undo/Redo.
+- Exact-head CI must be checked on the final docs/code SHA. DYS-005/DYS-014 remain in progress pending green CI and remaining compatibility-only path review. No browser smoke tests; PR #96 remains Draft/unmerged.
