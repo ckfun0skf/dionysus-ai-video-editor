@@ -1844,8 +1844,7 @@ export default function App() {
       const preview = getNestedLayerResizePreview(current, e.clientX);
       const original = current.version.layers.find(item => item.id === layer.id);
       if (preview && original && (Math.abs(preview.start - original.start) > 1e-6 || Math.abs(preview.duration - original.duration) > 1e-6 || preview.trims.length > 0)) {
-        const fps = Math.max(1, projectRef.current.frameRate || 24);
-        updateTimelineVersion(current.tab, latest => applyClipVersionResizePreview(latest, preview, fps));
+        updateTimelineVersion(current.tab, latest => applyClipVersionResizePreview(latest, preview));
         setNotice(preview.trims.length ? "Clip layer resized and adjacent layer trimmed. Use Undo to restore both." : "Clip layer resized.");
       }
       cancelNestedLayerResize();
