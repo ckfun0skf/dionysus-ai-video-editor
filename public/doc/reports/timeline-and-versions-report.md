@@ -131,3 +131,8 @@ Master Shot movement now passes through `moveCompositionPlacementToTrack` before
 ## Canonical root Composition live state — 2026-10-20
 
 The App now holds a live root `CompositionDocument` and paired Composition history snapshots. Master Timeline move/resize run Composition commands against the live root. Other domain changes reconcile through Composition insertion/deletion/move/resize and track commands, then keep schema-1.0 fields as a compatibility projection. Versioned save/export serializes the canonical root; startup rejects stale envelopes and migrates schema-1.0 projects. Added save/reopen/Undo/Redo regression coverage for a canonical root move. An earlier CI run found stale-envelope and validation failures; the fixes are in the current branch and the exact final docs/code SHA still requires completed passing CI. PR #96 stays Draft; no main push or browser smoke tests.
+
+
+## Validation checkpoint
+
+Exact-head CI #1404 passed on `90949d515d30827502e61fd4e9b1de5235037382`: 230 tests across 23 files, TypeScript/production build passed, dependency audit reported 0 vulnerabilities. The task registry and handoff were subsequently refreshed, so CI must be rerun on the final documentation head before this checkpoint is called fully verified.
