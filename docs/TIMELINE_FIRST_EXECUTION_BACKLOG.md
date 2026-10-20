@@ -133,11 +133,15 @@ PR #93 adds immutable `CompositionDocument` commands and a compatibility adapter
 
 Remaining gates:
 - Route project-aware click-to-place/insertion/conflict resolution into the shared command boundary without weakening ripple/trim/auto-extend, snap or overlap protections.
-- Route nested resize plus source-range and adjacent-trim updates through the canonical command contract; preserve frame rounding and linked audio.
+- Extend the shared Composition command boundary to root/nested move, split, duplicate and insertion; nested and valid root resize now use the shared resize command.
 - Add root/nested parity tests covering interaction, linked audio, history and Undo/Redo atomicity. Existing React state/history wrappers still govern grouped edits.
-- DYS-014 canonical-authoritative persistence and structure-preserving Save-as-Clip remain unfinished. PR #88 is helper-only; PR #89 is a Draft with failed TypeScript/build and must not be merged as-is.
+- DYS-014 canonical-authoritative persistence and structure-preserving Save-as-Clip remain unfinished. PR #88 is helper-only; Draft PR #89 has failed TypeScript/build and must not be merged as-is.
 - Keep Storyboard, References and full Asset administration deferred until Timeline/mobile acceptance gates pass.
+
+## Current implementation checkpoint
+
+Draft PR [#96](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/96) includes the accidental generated-file cleanup, the retained nested resize command work, and the follow-up routing valid root resize through `applyCompositionResizePreview()`. Linked descendants changed by the command are synchronized back to the transitional project model. Exact-head CI [39417366266](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39417366266) passed tests, TypeScript/build, and the workflow's non-blocking dependency-audit step at code/test SHA `8f9b88f42665038b905a6eec1bf682cde2d7ea3f`. Documentation commits after that code SHA require checking the new exact-head CI before merge. The work is not merged or deployed; no browser smoke tests were run.
 
 ## Recommended next step
 
-PR #94 is open as a Draft. Verify CI against PR #94's actual current head (tests, TypeScript, production build, and audit output) before marking ready; historical green runs do not validate later commits. If green, merge as one coherent PR and verify the main push CI and Pages deployment against the resulting main SHA. Then ask the owner to visually verify the deployed site. Next implementation slice: nested resize/source-range/adjacent-trim and project-aware insertion/conflict dispatch. No browser smoke tests.
+Continue with project-aware click-to-place/insertion/conflict dispatch through the shared Composition boundary, then root/nested move/split/duplicate parity and atomic Undo/Redo tests. Verify the latest exact-head CI before any merge. Keep DYS-005 and DYS-014 in progress until the functional acceptance gates pass. After a coherent Timeline milestone is merged and Pages deployment is verified, ask the owner for one consolidated visual acceptance pass. No browser smoke tests.
