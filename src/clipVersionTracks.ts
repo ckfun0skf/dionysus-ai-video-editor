@@ -110,6 +110,27 @@ export function addClipVersionLayer(
       kind,
     };
     next = { ...normalized, tracks: [...(normalized.tracks ?? []), track] };
+    if (normalized.composition) {
+      const canonicalTrack: CompositionTrack = {
+        id: track.id,
+        name: track.name,
+        kind,
+        order: normalized.composition.tracks.length,
+        ...(track.muted !== undefined ? { muted: track.muted } : {}),
+        ...(track.backgroundColor !== undefined ? { backgroundColor: track.backgroundColor } : {}),
+        ...(track.backgroundTransparent !== undefined ? { backgroundTransparent: track.backgroundTransparent } : {}),
+        ...(track.opacity !== undefined ? { opacity: track.opacity } : {}),
+        ...(track.originalKind !== undefined ? { originalKind: track.originalKind } : {}),
+        legacyData: structuredClone(track) as unknown as Record<string, unknown>,
+      };
+      next = {
+        ...next,
+        composition: {
+          ...structuredClone(normalized.composition),
+          tracks: [...normalized.composition.tracks, canonicalTrack],
+        },
+      };
+    }
   }
 
   const document = compositionDocumentFromClipVersion(next);
