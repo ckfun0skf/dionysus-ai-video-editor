@@ -61,6 +61,45 @@ describe("project history", () => {
     expect(redoDelete.current).toEqual(afterDelete.current);
   });
 
+  it("undoes and redoes canonical nested Clip Version edits as full project snapshots", () => {
+    const version = addClipVersionLayer(
+      structuredClone(sampleProject.shots[0].slots[0].versions[0]),
+      {
+        id: "history-nested-layer",
+        name: "Nested layer",
+        kind: "video",
+        start: 1,
+        duration: 3,
+        assetId: "source-asset",
+        sourceIn: 2,
+        sourceOut: 5,
+        x: 10,
+        volume: 0.4,
+      },
+    );
+    const original = { id: "project-history", clipVersion: version };
+    const editedVersion = updateClipVersionLayer(version, "history-nested-layer", {
+      start: 4,
+      sourceIn: 5,
+      sourceOut: 8,
+      x: 35,
+      volume: 0.8,
+    });
+    const afterEdit = { ...original, clipVersion: editedVersion };
+    const history = recordProjectChange({ current: original, undo: [], redo: [] }, afterEdit);
+
+    const undone = undoProjectChange(history);
+    expect(undone.current).toEqual(original);
+    const redone = redoProjectChange(undone);
+    expect(redone.current).toEqual(afterEdit);
+    expect(redone.current.clipVersion.composition?.placements.find(item => item.id === "history-nested-layer")).toMatchObject({
+      start: 4,
+      sourceIn: 5,
+      sourceOut: 8,
+      legacyData: { x: 35, volume: 0.8 },
+    });
+  });
+
   it("clears redo after undo when a new timeline operation branches history", () => {
     const tracks: TimelineTrack[] = [
       { id: "video-track", name: "Video", kind: "video" },
