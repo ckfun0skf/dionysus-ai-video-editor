@@ -171,7 +171,7 @@ function sourceRangeForSplit(placement: CompositionPlacement): { sourceIn: numbe
   const sourceIn = placement.sourceIn ?? 0;
   const sourceOut = placement.sourceOut ?? sourceIn + placement.duration;
   if (Math.abs((sourceOut - sourceIn) - placement.duration) > EPSILON) {
-    throw new Error("Composition source range length must match placement duration before splitting.");
+    throw new Error("Source range length must match placement duration before splitting.");
   }
   return { sourceIn, sourceOut };
 }
