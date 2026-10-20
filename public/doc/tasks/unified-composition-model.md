@@ -107,3 +107,12 @@ Still open: canonical nested Undo/Redo, broader pin immutability across every ed
 The UI inspector now passes only the actual changed fields to the canonical nested adapter, not a fully reconstructed layer object. This prevents unrelated transform/mix/timing edits from accidentally reclassifying the canonical source reference. Source-related fields intentionally trigger source-reference reconstruction; duration edits also preserve fade clamping.
 
 Exact-head CI [39430375517](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39430375517) passed at code SHA `47b700ea44937dbb8bfb6c35fbcf9efe690d4416`: 223 tests/23 files, TypeScript/build and dependency audit (0 vulnerabilities). Re-run exact-head CI after the final task-doc update.
+
+
+## Canonical nested Timeline editing — 2026-10-20
+
+`src/clipVersionTracks.ts` now treats an existing `ClipVersion.composition` as the editing source of truth. Normalization derives compatibility tracks/layers from the canonical document; nested add/delete/move/resize, track creation and inspector patches update canonical placements/tracks and refresh the projections. Inspector patches preserve typed Shot Slot/script source references on unrelated edits, and synchronize source ranges, transforms, mix/fades and legacy metadata.
+
+Regression coverage includes stale compatibility projections, nested Composition/provenance preservation, source-reference preservation, track/placement synchronization, Save-as-Clip → edit → JSON save/reload → reopen, and source-version mutation isolation. Exact-head CI [39431744433](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39431744433) passed at `bbbbf18743a66de4ba66c14b9cde98bd9d490238`: 223 tests across 23 files, TypeScript/build and dependency audit 0 vulnerabilities.
+
+Remaining: explicit nested Undo/Redo coverage, broader pinned-version/migration checks, and audit older Storyboard/Shot Slot handlers that directly mutate legacy `layers`. DYS-014 stays in progress. No browser smoke tests; documentation update requires a new exact-head CI run.

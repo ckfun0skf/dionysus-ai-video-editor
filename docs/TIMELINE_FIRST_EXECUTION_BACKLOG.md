@@ -175,3 +175,10 @@ This validates the covered JSON round-trip but does not finish canonical nested 
 ## Source-reference preservation follow-up — 2026-10-20
 
 The inspector now sends only changed fields to the canonical adapter. Transform-only edits retain the exact existing typed source reference, including source kinds not yet fully represented in the legacy layer schema; source references are reconstructed only for deliberate source-related edits. Exact-head CI [39430375517](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39430375517) passed at code SHA `47b700ea44937dbb8bfb6c35fbcf9efe690d4416`: 223 tests/23 files, TypeScript/build, dependency audit 0 vulnerabilities.
+
+
+## Canonical nested Timeline editor follow-up — 2026-10-20
+
+At branch head `bbbbf18743a66de4ba66c14b9cde98bd9d490238`, nested Timeline editing has advanced beyond snapshot-only persistence. `src/clipVersionTracks.ts` now uses an existing canonical `ClipVersion.composition` as the source of truth for nested edit commands. Add/delete/move/resize, track creation and inspector patches update canonical Composition tracks/placements and then regenerate legacy `layers`/`tracks` projections. Tests cover stale projection rejection, source ranges, transform/mix, nested documents/provenance, typed shot/script source-reference preservation, and adding tracks/placements.
+
+Exact-head CI [39431744433](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39431744433) passed 223 tests/23 files, TypeScript/build and dependency audit 0 vulnerabilities. Save-as-Clip edit → JSON round-trip → reopen coverage is also present in the branch. Remaining: nested Undo/Redo, broader pin/migration tests, and audit legacy Storyboard/Shot Slot code that still directly mutates `layers`. DYS-005/DYS-014 stay in progress; no browser smoke tests and no merge without a fresh exact-head CI after this doc update plus review.
