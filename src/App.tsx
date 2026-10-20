@@ -947,6 +947,8 @@ export default function App() {
       updateTimelineVersionLayer(active.tab, active.id, patch);
     } else if (active.kind === "clip") {
       updateRootTimelineClip(active.id,patch);
+    } else if (rootCompositionRef.current.tracks.some(track => track.id === active.id)) {
+      changeRootComposition(root => updateRootTrackFromProjectPatch(root, active.id, patch));
     } else {
       change(p => ({ ...p, tracks: p.tracks.map(track => track.id === active.id ? { ...track, ...patch } : track) }));
     }

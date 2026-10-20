@@ -232,3 +232,10 @@ Exact-head CI #1404 passed on `90949d515d30827502e61fd4e9b1de5235037382`: 230 te
 - Exact-head CI run 39487705640 on 1cb834f5b309e97f37f1f65c52bf4eb0e82f5bb2 failed in the new negative test before reaching the validator: the selected legacy Shot/Slot snapshot had zero tracks. This is a fixture-construction issue, not a validator result.
 - Updated the test to start from the valid root Composition (which has tracks), embed it as a nested snapshot, and add a zero-duration nested placement. The assertion now specifically exercises recursive placement-duration validation. Current head needs a fresh exact-head CI run.
 - DYS-005/DYS-014 remain in_progress. PR #96 remains Draft and unmerged. No browser smoke tests.
+
+## Canonical on-canvas track transform — 2026-10-20
+
+- Closed a remaining root mutation gap: the timeline preview's pointer-driven X/Y/width/height transform now calls the canonical track update command for root tracks. The legacy-only fallback is retained only for track IDs genuinely absent from the root.
+- The existing App test for moving the selected track transform asserts both projected schema-1.0 values and saved root track legacyData, so it now exercises the true canonical path rather than allowing reconciliation to make the test pass afterwards.
+- Previous exact-head CI run 39488133593 passed on 88992a63a56f14a44ec5e77e4d580cf8d36db781: 251 tests / 23 files, TypeScript and production build passed, and npm audit reported 0 vulnerabilities. This source/test/docs commit requires a fresh exact-head CI run.
+- Remaining: Shot/Slot and Storyboard/domain editors are still legacy-first in several flows; some Storyboard materializations remain compatibility-only; complete track reorder/add/remove and UI-level nested/pinned edit history coverage are not yet proven. DYS-005/DYS-014 remain in_progress. PR #96 remains Draft and unmerged; no browser smoke tests.
