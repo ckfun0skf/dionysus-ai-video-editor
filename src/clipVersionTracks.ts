@@ -214,20 +214,20 @@ function compositionLayersFromCompositionDocument(document: CompositionDocument)
     else output.sourceIn = placement.sourceIn;
     if (placement.sourceOut === undefined) delete output.sourceOut;
     else output.sourceOut = placement.sourceOut;
-    if (placement.source.type === "asset") output.assetId = placement.source.assetId;
-    else if (placement.source.type === "clip") {
-      output.childCompositionId = placement.source.assetId;
-      output.assetId = placement.source.assetId;
-      if (placement.source.versionId !== undefined) output.clipVersionId = placement.source.versionId;
-    } else if (placement.source.type === "shot") {
-      output.shotId = placement.source.shotId;
-      if (placement.source.slotId !== undefined) output.slotId = placement.source.slotId;
-      if (placement.source.versionId !== undefined) output.shotVersionId = placement.source.versionId;
-    } else if (placement.source.type === "script") {
-      if (placement.source.assetId !== undefined) output.assetId = placement.source.assetId;
-      if (placement.source.scriptVersionId !== undefined) output.scriptVersionId = placement.source.scriptVersionId;
-    }
     const rawOutput = output as unknown as Record<string, unknown>;
+    if (placement.source.type === "asset") rawOutput.assetId = placement.source.assetId;
+    else if (placement.source.type === "clip") {
+      rawOutput.childCompositionId = placement.source.assetId;
+      rawOutput.assetId = placement.source.assetId;
+      if (placement.source.versionId !== undefined) rawOutput.clipVersionId = placement.source.versionId;
+    } else if (placement.source.type === "shot") {
+      rawOutput.shotId = placement.source.shotId;
+      if (placement.source.slotId !== undefined) rawOutput.slotId = placement.source.slotId;
+      if (placement.source.versionId !== undefined) rawOutput.shotVersionId = placement.source.versionId;
+    } else if (placement.source.type === "script") {
+      if (placement.source.assetId !== undefined) rawOutput.assetId = placement.source.assetId;
+      if (placement.source.scriptVersionId !== undefined) rawOutput.scriptVersionId = placement.source.scriptVersionId;
+    }
     delete rawOutput.linkedToPlacementId;
     if (placement.linkedToPlacementId === undefined) delete rawOutput.linkedVideoClipId;
     else rawOutput.linkedVideoClipId = placement.linkedToPlacementId;
