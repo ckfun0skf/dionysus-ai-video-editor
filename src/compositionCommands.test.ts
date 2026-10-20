@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { CompositionDocument, CompositionPlacement } from "./compositionModel";
 import {
+  applyCompositionResizePreview,
   assertValidCompositionDocument,
   deleteCompositionPlacement,
   duplicateCompositionPlacement,
@@ -93,6 +94,34 @@ describe("shared Composition editing commands", () => {
     expect(placement(next, "video")).toMatchObject({ start: 1, duration: 4, sourceIn: 2, sourceOut: 6 });
     expect(placement(next, "audio")).toMatchObject({ start: 1, duration: 4, sourceIn: 2, sourceOut: 6 });
     expect(placement(next, "audio").legacyData).toMatchObject({ duration: 4, sourceOut: 6 });
+  });
+
+  it("commits resize and adjacent trim atomically while preserving linked timing and source ranges", () => {
+    const source = fixture();
+    source.placements.push(
+      {
+        id: "next-video", name: "Next", trackId: "v1", start: 7, duration: 4, order: 1,
+        source: { type: "asset", assetId: "next-video-asset" }, sourceIn: 10, sourceOut: 14,
+        legacyData: { id: "next-video", kind: "video", start: 7, duration: 4 },
+      },
+      {
+        id: "next-audio", name: "Next audio", trackId: "a1", start: 7, duration: 4, order: 1,
+        source: { type: "asset", assetId: "next-audio-asset" }, sourceIn: 10, sourceOut: 14,
+        linkedToPlacementId: "next-video",
+        legacyData: { id: "next-audio", kind: "audio", start: 7, duration: 4, linkedVideoClipId: "next-video" },
+      },
+    );
+    const before = JSON.stringify(source);
+    const next = applyCompositionResizePreview(source, {
+      id: "video", start: 1, duration: 8, edge: "right",
+      trims: [{ id: "next-video", start: 9, duration: 2, edge: "left" }],
+    });
+    expect(placement(next, "video")).toMatchObject({ start: 1, duration: 8, sourceIn: 2, sourceOut: 10 });
+    expect(placement(next, "audio")).toMatchObject({ start: 1, duration: 8, sourceIn: 2, sourceOut: 10 });
+    expect(placement(next, "next-video")).toMatchObject({ start: 9, duration: 2, sourceIn: 12, sourceOut: 14 });
+    expect(placement(next, "next-audio")).toMatchObject({ start: 9, duration: 2, sourceIn: 12, sourceOut: 14 });
+    expect(placement(next, "next-audio").legacyData).toMatchObject({ start: 9, duration: 2, sourceIn: 12, sourceOut: 14 });
+    expect(JSON.stringify(source)).toBe(before);
   });
 
   it("splits video and linked audio into aligned, source-trimmed pairs", () => {
