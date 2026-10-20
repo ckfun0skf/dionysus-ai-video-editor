@@ -478,3 +478,11 @@ Start by fetching the live PR and verifying its branch head/CI; do not reuse the
 ## Next-agent priority
 
 Verify the current branch head and its CI first. If it passes, continue the root mutation audit from the remaining compatibility-only Storyboard and legacy-first domain handlers, track reorder, and malformed/nested/pinned snapshot persistence. Do not mark DYS-005 or DYS-014 complete or recommend merging until those paths have meaningful tests and the final exact head passes regular CI.
+
+
+## Linked source fallback and canonical drag/drop audit — 2026-10-20
+
+- Follow-up CI run [39484081761](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39484081761) exposed one compatibility regression: legacy linked audio with no explicit source range must inherit the video range instead of defaulting to 0. The command now inherits the root range only when the child has no explicit in/out; an explicitly sourced child retains its own offset through trim, resize and split.
+- Root drag/drop and Master Shot drag/drop now normalize preview duration/start/track from the canonical root placement where present. The Master Shot overlap check uses canonical root occupancy and frame rate, not the potentially stale legacy project duration.
+- Regression coverage retains distinct linked audio source offsets (including the App split from source range 7–12 seconds) and adds an explicit test that untrimmed legacy children inherit their root source range. The failed CI is preserved as a diagnostic record; this next source/test/docs head must run CI again.
+- Known remaining gaps: canonical Composition is not yet authoritative across every Shot/Slot and Storyboard domain editor, Storyboard materializations remain compatibility-only, root track reorder needs end-to-end coverage, and malformed/nested/pinned root persistence/history requires further audit. DYS-005/DYS-014 remain in progress; keep PR #96 Draft and unmerged; no browser smoke tests.

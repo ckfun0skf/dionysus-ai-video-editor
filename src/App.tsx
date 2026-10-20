@@ -1188,6 +1188,31 @@ export default function App() {
     change(project => ({ ...project, timelineClips: unlinkTimelineAudio({ tracks: project.tracks, timelineClips: project.timelineClips ?? [] }, clipId).timelineClips }));
   }
 
+  function getCanonicalTimelineClipForDrop(clip: TimelineClip): TimelineClip {
+    const placement = rootCompositionRef.current.placements.find(item => item.id === clip.id);
+    if (!placement) return clip;
+    return {
+      ...clip,
+      name: placement.name,
+      trackId: placement.trackId,
+      start: placement.start,
+      duration: placement.duration,
+      sourceIn: placement.sourceIn,
+      sourceOut: placement.sourceOut,
+      linkedVideoClipId: placement.linkedToPlacementId,
+    };
+  }
+
+  function getCanonicalMasterShotTimelineClip(shot: Shot): TimelineClip {
+    const clip = asMasterShotTimelineClip(projectRef.current, shot);
+    const placement = rootCompositionRef.current.placements.find(item =>
+      item.id === shot.id && item.legacyData.entityType === "master-shot"
+    );
+    return placement
+      ? { ...clip, trackId: placement.trackId, start: placement.start, duration: placement.duration }
+      : clip;
+  }
+
   function calculateRootTimelineDropPosition(movingClip: TimelineClip, trackId: string, desiredStart: number, duration: number) {
     if (rootCompositionRef.current.placements.some(item => item.id === movingClip.id)) {
       const canonicalPosition = calculateCanonicalCompositionDropPosition(rootCompositionRef.current, movingClip, trackId, desiredStart, duration);
@@ -2601,7 +2626,7 @@ export default function App() {
   </div>
   <div className="visual-track-lane" data-track-id={track.id} style={{backgroundSize:(5/mediaTimelineDuration*100)+"% 100%",backgroundColor:track.kind==="video"?(track.backgroundTransparent?"transparent":track.backgroundColor??"#111113"):undefined,backgroundImage:track.kind==="video"&&track.backgroundTransparent?"none":undefined}}
    onContextMenu={event=>{event.preventDefault();setTrackContextMenuId(track.id);setTrackContextMenuPosition({x:Math.min(event.clientX,window.innerWidth-190),y:Math.min(event.clientY,window.innerHeight-180)});setSelectedTimelineTrackId(track.id);}} onPointerDown={event=>{if(event.target!==event.currentTarget)return;setSelectedTimelineTrackId(track.id);const rect=event.currentTarget.getBoundingClientRect();const next=Math.max(0,Math.min(mediaTimelineDuration,((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration));if(pendingTimelineClip){placePendingTimelineClip(track,next);return;}playbackTimeRef.current=next;setIsPlaying(false);setEditorTime(next);}}
-   onDragOver={event=>{event.preventDefault();event.dataTransfer.dropEffect="move";const masterShotId=event.dataTransfer.getData("text/dionysus-master-shot") || masterShotDragSourceRef.current;if(masterShotId){const shot=project.shots.find(item=>item.id===masterShotId);if(!shot||track.kind!=="video"){setClipDropPreview(null);return;}const moving=asMasterShotTimelineClip(project,shot),rect=event.currentTarget.getBoundingClientRect(),pointerTime=((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration,rawStart=Math.max(0,pointerTime-moving.duration/2),pos=calculateRootTimelineDropPosition(moving,track.id,rawStart,mediaTimelineDuration);if(!pos){setClipDropPreview(null);return;}setClipDropPreview({trackId:track.id,start:pos.start,duration:moving.duration,name:moving.name,...(pos.snapTime!==undefined?{snapTime:pos.snapTime}:{})});return;}const dragId=event.dataTransfer.getData("text/dionysus-timeline-clip");const moving=clipDragSourceRef.current??(project.timelineClips??[]).find(clip=>clip.id===dragId);if(!moving||!canPlaceTimelineClipOnTrack(moving,track)){setClipDropPreview(null);return;}const rect=event.currentTarget.getBoundingClientRect();const pointerTime=((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration;const rawStart=Math.max(0,pointerTime-moving.duration/2);const pos=calculateRootTimelineDropPosition(moving,track.id,rawStart,mediaTimelineDuration);if(!pos){setClipDropPreview(null);return;}setClipDropPreview({trackId:track.id,start:pos.start,duration:moving.duration,name:moving.name,...(pos.snapTime!==undefined?{snapTime:pos.snapTime}: {})});}}
+   onDragOver={event=>{event.preventDefault();event.dataTransfer.dropEffect="move";const masterShotId=event.dataTransfer.getData("text/dionysus-master-shot") || masterShotDragSourceRef.current;if(masterShotId){const shot=project.shots.find(item=>item.id===masterShotId);if(!shot||track.kind!=="video"){setClipDropPreview(null);return;}const moving=getCanonicalMasterShotTimelineClip(shot),rect=event.currentTarget.getBoundingClientRect(),pointerTime=((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration,rawStart=Math.max(0,pointerTime-moving.duration/2),pos=calculateRootTimelineDropPosition(moving,track.id,rawStart,mediaTimelineDuration);if(!pos){setClipDropPreview(null);return;}setClipDropPreview({trackId:track.id,start:pos.start,duration:moving.duration,name:moving.name,...(pos.snapTime!==undefined?{snapTime:pos.snapTime}:{})});return;}const dragId=event.dataTransfer.getData("text/dionysus-timeline-clip");const candidate=clipDragSourceRef.current??(project.timelineClips??[]).find(clip=>clip.id===dragId),moving=candidate?getCanonicalTimelineClipForDrop(candidate):undefined;if(!moving||!canPlaceTimelineClipOnTrack(moving,track)){setClipDropPreview(null);return;}const rect=event.currentTarget.getBoundingClientRect();const pointerTime=((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration;const rawStart=Math.max(0,pointerTime-moving.duration/2);const pos=calculateRootTimelineDropPosition(moving,track.id,rawStart,mediaTimelineDuration);if(!pos){setClipDropPreview(null);return;}setClipDropPreview({trackId:track.id,start:pos.start,duration:moving.duration,name:moving.name,...(pos.snapTime!==undefined?{snapTime:pos.snapTime}: {})});}}
    onDrop={event=>{
      event.preventDefault();
      const rect=event.currentTarget.getBoundingClientRect();
@@ -2609,8 +2634,9 @@ export default function App() {
       if(masterShotId){
         const movingShot=project.shots.find(shot=>shot.id===masterShotId);
         if(!movingShot||track.kind!=="video"){setClipDropPreview(null);return;}
-        const fps=Math.max(1,project.frameRate||24),pointerTime=((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration,rawStart=Math.max(0,pointerTime-movingShot.duration/2);
-        const pos=rippleReorderMode?null:(clipDropPreview?.trackId===track.id?{start:clipDropPreview.start,...(clipDropPreview.snapTime!==undefined?{snapTime:clipDropPreview.snapTime}:{})}:calculateRootTimelineDropPosition(asMasterShotTimelineClip(project,movingShot),track.id,rawStart,mediaTimelineDuration));
+        const moving=getCanonicalMasterShotTimelineClip(movingShot);
+        const fps=Math.max(1,rootCompositionRef.current.frameRate||project.frameRate||24),pointerTime=((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration,rawStart=Math.max(0,pointerTime-moving.duration/2);
+        const pos=rippleReorderMode?null:(clipDropPreview?.trackId===track.id?{start:clipDropPreview.start,...(clipDropPreview.snapTime!==undefined?{snapTime:clipDropPreview.snapTime}:{})}:calculateRootTimelineDropPosition(moving,track.id,rawStart,mediaTimelineDuration));
         let next:number;
         if(rippleReorderMode){
           const targetCenter=Math.round(pointerTime*fps)/fps;
@@ -2621,7 +2647,7 @@ export default function App() {
           setNotice("Ripple Reorder applied and Shot moved to the selected video layer.");
         }else{
           if(!pos){setNotice("No non-overlapping position is available on this video layer.");setClipDropPreview(null);return;}
-          const conflict=getMasterShotPlacementItems(project,movingShot.id).some(clip=>clip.trackId===track.id&&pos.start<clip.start+clip.duration-1e-7&&pos.start+movingShot.duration>clip.start+1e-7);
+          const conflict=rootCompositionRef.current.placements.some(placement=>placement.id!==movingShot.id&&placement.trackId===track.id&&pos.start<placement.start+placement.duration-1e-7&&pos.start+moving.duration>placement.start+1e-7);
           if(conflict){setNotice("Drop cancelled: this position overlaps another item on the destination layer.");setClipDropPreview(null);return;}
           next=pos.start;
           moveRootPlacementOrLegacy({ type: "shot", shotId: movingShot.id }, track.id, next);
@@ -2629,7 +2655,7 @@ export default function App() {
         }
         setSelectedId(movingShot.id);setIsPlaying(false);playbackTimeRef.current=next;setEditorTime(next);setClipDropPreview(null);return;
       }
-      const clipId=event.dataTransfer.getData("text/dionysus-timeline-clip"),moving=(project.timelineClips??[]).find(clip=>clip.id===clipId)??clipDragSourceRef.current;
+      const clipId=event.dataTransfer.getData("text/dionysus-timeline-clip"),candidate=(project.timelineClips??[]).find(clip=>clip.id===clipId)??clipDragSourceRef.current,moving=candidate?getCanonicalTimelineClipForDrop(candidate):undefined;
      if(!moving||!canPlaceTimelineClipOnTrack(moving,track))return;
      const pointerTime=((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration,rawStart=Math.max(0,pointerTime-moving.duration/2);
      const pos=clipDropPreview?.trackId===track.id?{start:clipDropPreview.start,...(clipDropPreview.snapTime!==undefined?{snapTime:clipDropPreview.snapTime}:{})}:calculateRootTimelineDropPosition(moving,track.id,rawStart,mediaTimelineDuration);

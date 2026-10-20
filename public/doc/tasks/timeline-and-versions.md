@@ -181,3 +181,11 @@ Exact-head CI #1404 passed on `90949d515d30827502e61fd4e9b1de5235037382`: 230 te
 - Regression tests cover independent non-zero source offsets through trim, resize and split, including input immutability. The App-level split test now seeds linked audio with source range 7–12 seconds and asserts it becomes 7–9.5 and 9.5–12 seconds while video splits at 0–2.5 and 2.5–5 seconds.
 - This follow-up still requires exact-head CI after the code/test/docs commit; the preceding CI above does not validate these new changes.
 - Remaining architecture gaps are unchanged: compatibility-only Storyboard materializations, legacy-first Shot/Slot/domain editors, full track reorder/edit integration, and malformed root-snapshot recovery still need audit and regression coverage. DYS-005/DYS-014 remain in_progress; PR #96 remains Draft and unmerged. No browser smoke tests.
+
+
+## Linked source fallback and canonical drag/drop audit — 2026-10-20
+
+- Follow-up CI run [39484081761](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39484081761) exposed one compatibility regression: legacy linked audio with no explicit source range must inherit the video range instead of defaulting to 0. The command now inherits the root range only when the child has no explicit in/out; an explicitly sourced child retains its own offset through trim, resize and split.
+- Root drag/drop and Master Shot drag/drop now normalize preview duration/start/track from the canonical root placement where present. The Master Shot overlap check uses canonical root occupancy and frame rate, not the potentially stale legacy project duration.
+- Regression coverage retains distinct linked audio source offsets (including the App split from source range 7–12 seconds) and adds an explicit test that untrimmed legacy children inherit their root source range. The failed CI is preserved as a diagnostic record; this next source/test/docs head must run CI again.
+- Known remaining gaps: canonical Composition is not yet authoritative across every Shot/Slot and Storyboard domain editor, Storyboard materializations remain compatibility-only, root track reorder needs end-to-end coverage, and malformed/nested/pinned root persistence/history requires further audit. DYS-005/DYS-014 remain in progress; keep PR #96 Draft and unmerged; no browser smoke tests.

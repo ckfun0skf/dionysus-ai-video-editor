@@ -217,6 +217,28 @@ describe("shared Composition editing commands", () => {
     expect(JSON.stringify(source)).toBe(before);
   });
 
+  it("inherits root source ranges only for linked members without explicit trim metadata", () => {
+    const source = updateCompositionPlacement(fixture(), "audio", {
+      sourceIn: undefined, sourceOut: undefined,
+    });
+    const before = JSON.stringify(source);
+
+    const trimmed = trimCompositionPlacement(source, "video", 4);
+    expect(placement(trimmed, "audio")).toMatchObject({ start: 1, duration: 4, sourceIn: 2, sourceOut: 6 });
+
+    const resized = applyCompositionResizePreview(source, {
+      id: "video", start: 1, duration: 8, edge: "right", trims: [],
+    });
+    expect(placement(resized, "audio")).toMatchObject({ start: 1, duration: 8, sourceIn: 2, sourceOut: 10 });
+
+    const split = splitCompositionPlacement(source, "video", 4, {
+      newPlacementIds: { video: "video-right", audio: "audio-right" },
+    });
+    expect(placement(split, "audio")).toMatchObject({ sourceIn: 2, sourceOut: 5 });
+    expect(placement(split, "audio-right")).toMatchObject({ sourceIn: 5, sourceOut: 8, linkedToPlacementId: "video-right" });
+    expect(JSON.stringify(source)).toBe(before);
+  });
+
   it("commits resize and adjacent trim atomically while preserving linked timing and source ranges", () => {
     const source = fixture();
     source.placements.push(

@@ -304,9 +304,12 @@ export function trimCompositionPlacement(
   const next = clone(document);
   next.placements = next.placements.map(placement => {
     if (!groupIds.has(placement.id)) return placement;
-    // Linked placements share timeline duration, but may use different source media and in-points.
-    // Resize each member against its own source range instead of copying the video range to audio.
-    const source = resizedSourceRange(placement, {
+    // Explicit child ranges take priority. Legacy linked audio with no trim metadata inherits
+    // the root source range, preserving pre-canonical split/trim behavior.
+    const sourcePlacement = placement.sourceIn === undefined && placement.sourceOut === undefined && placement.linkedToPlacementId
+      ? root
+      : placement;
+    const source = resizedSourceRange(sourcePlacement, {
       id: placement.id, start: placement.start, duration, edge: "right",
     });
     return syncLegacyPlacement({ ...placement, duration, ...source });
@@ -369,7 +372,12 @@ export function applyCompositionResizePreview(
   next.placements = next.placements.map(placement => {
     const resize = updates.get(placement.id);
     if (!resize) return placement;
-    const source = resizedSourceRange(placement, resize);
+    // A child with an explicit range keeps its own source offset; an untrimmed legacy linked
+    // child inherits the root range instead of resetting to zero.
+    const sourcePlacement = placement.sourceIn === undefined && placement.sourceOut === undefined && placement.linkedToPlacementId
+      ? getLinkedRoot(document, placement)
+      : placement;
+    const source = resizedSourceRange(sourcePlacement, resize);
     return syncLegacyPlacement({
       ...placement,
       start: resize.start,
@@ -405,11 +413,15 @@ export function splitCompositionPlacement(
   const splitPairs = new Map<string, { left: CompositionPlacement; right: CompositionPlacement }>();
   const orderOffsets = new Map<string, number>();
 
+  const rootRange = sourceRangeForSplit(selected);
   for (const placement of group) {
     const leftDuration = splitTime - placement.start;
     const rightDuration = placement.duration - leftDuration;
-    // Split every linked member at the same timeline point but preserve that member's source offset.
-    const range = sourceRangeForSplit(placement);
+    // Explicit linked-member ranges are independent; untrimmed legacy children inherit the root range.
+    const range = placement.linkedToPlacementId &&
+      placement.sourceIn === undefined && placement.sourceOut === undefined
+      ? rootRange
+      : sourceRangeForSplit(placement);
     const { linkedToPlacementId: _link, ...base } = placement;
     const left = syncLegacyPlacement({
       ...base,
