@@ -131,3 +131,11 @@ Migration now preserves already-canonical Clip/Shot Slot Version documents inste
 The Master Shot move path now invokes the shared immutable Composition move command and projects the committed start/duration/track fields back into the schema-1.0 Shot, keeping materialized Storyboard placements aligned. A guarded compatibility fallback remains for malformed legacy projects.
 
 This is a partial root-command audit, **not** completion of canonical root live state. `App.tsx` still owns schema-1.0 `DionysusProject`; root Composition is regenerated from that project. The next architectural gate is to make `CompositionDocument` the root timeline state/history authority and derive deterministic compatibility projections from it. Save/reopen/Undo/Redo must prove stale legacy fields cannot override canonical placements.
+
+
+## Canonical root Composition live state — 2026-10-20
+
+- App owns a live root `CompositionDocument` with paired Composition Undo/Redo snapshots. Root move and resize handlers execute Composition commands against this state before updating schema-1.0 compatibility fields.
+- General root edits reconcile inserts, deletes, moves, resizes and track add/update/reorder/removal through Composition command invariants. The project model continues to carry assets, scripts, references, shot metadata and nested versions as compatibility/domain data.
+- Save/export serializes the current canonical root. Startup restores a persisted root only when the envelope validates and the full schema-1.0 project payload matches; otherwise it safely migrates the legacy project. The compatibility projection preserves linked IDs/source ranges and materializes sequential Shot starts only when a root edit requires it.
+- Regression coverage includes canonical root move → compatibility projection → save/reopen → Undo/Redo. Exact final-head CI is required before calling this checkpoint verified; do not claim complete until CI passes and remaining mutation-path edge cases are audited.
