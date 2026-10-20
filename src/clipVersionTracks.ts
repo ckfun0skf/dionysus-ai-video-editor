@@ -1,6 +1,6 @@
 import type { ClipVersion, CompositionLayer, TimelineTrack } from "./types";
 import type { CompositionDocument, CompositionPlacement, CompositionSourceReference, CompositionTrack } from "./compositionModel";
-import { deleteCompositionPlacement, insertCompositionPlacement, moveCompositionPlacementToTrack } from "./compositionCommands";
+import { applyCompositionResizePreview, deleteCompositionPlacement, insertCompositionPlacement, moveCompositionPlacementToTrack, type CompositionResizePreview } from "./compositionCommands";
 
 export type CanonicalNestedTrackKind = "video" | "audio" | "text";
 
@@ -216,4 +216,14 @@ export function moveClipVersionLayer(
     nextStart,
   );
   return { ...normalized, layers: compositionLayersFromCompositionDocument(moved) };
+}
+
+/** Commit nested resize and adjacent-trim previews through the shared Composition command. */
+export function applyClipVersionResizePreview(
+  version: ClipVersion,
+  preview: CompositionResizePreview,
+): ClipVersion {
+  const normalized = normalizeClipVersionTracks(version);
+  const resized = applyCompositionResizePreview(compositionDocumentFromClipVersion(normalized), preview);
+  return { ...normalized, layers: compositionLayersFromCompositionDocument(resized) };
 }
