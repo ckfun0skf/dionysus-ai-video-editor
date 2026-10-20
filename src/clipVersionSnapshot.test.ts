@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { DionysusProject, GenerationRecord } from "./types";
 import { createClipVersionSnapshot } from "./clipVersionSnapshot";
+import { normalizeClipVersionTracks, updateClipVersionLayer } from "./clipVersionTracks";
 
 function fixture(): DionysusProject {
   const generation: GenerationRecord = {
@@ -149,6 +150,53 @@ describe("structure-preserving Clip Version snapshots", () => {
     ]));
     expect(version.scriptVersionIds).toContain("script-version-1");
     expect(version.generationRecords).toHaveLength(1);
+  });
+
+  it("round-trips Save-as-Clip edits through project JSON and reopens from canonical Composition", () => {
+    const project = fixture();
+    const originalNestedLayer = structuredClone(project.assets.find(asset => asset.id === "nested-asset")!.clipVersions![0].layers[0]);
+    const snapshot = createClipVersionSnapshot(project, {
+      assetId: "roundtrip-asset",
+      versionId: "roundtrip-version",
+      versionName: "Round-trip",
+      createdAt: "2026-10-20T11:00:00.000Z",
+    });
+    const edited = updateClipVersionLayer(snapshot, "nested-placement", {
+      start: 6,
+      x: 21,
+      volume: 0.9,
+    });
+    project.assets.push({
+      id: "roundtrip-asset",
+      name: "Round-trip",
+      kind: "clip",
+      selectedClipVersionId: "roundtrip-version",
+      clipVersions: [edited],
+    });
+
+    const reloaded = JSON.parse(JSON.stringify(project)) as DionysusProject;
+    const savedVersion = reloaded.assets.find(asset => asset.id === "roundtrip-asset")?.clipVersions?.[0];
+    expect(savedVersion?.composition?.placements.find(item => item.id === "nested-placement")).toMatchObject({
+      start: 6,
+      source: { type: "clip", assetId: "nested-asset", versionId: "nested-v2" },
+      legacyData: { x: 21, volume: 0.9 },
+    });
+    const reopened = normalizeClipVersionTracks(savedVersion!);
+    expect(reopened.layers.find(layer => layer.id === "nested-placement")).toMatchObject({
+      start: 6,
+      x: 21,
+      volume: 0.9,
+      sourceIn: 1,
+      sourceOut: 4,
+    });
+    expect(reopened.composition?.nestedCompositions?.find(child => child.id === "composition:nested-asset:nested-v2")?.placements).toEqual(
+      edited.composition?.nestedCompositions?.find(child => child.id === "composition:nested-asset:nested-v2")?.placements,
+    );
+    expect(reopened.composition?.provenance?.pinnedVersions).toContainEqual({
+      assetId: "nested-asset",
+      versionId: "nested-v2",
+    });
+    expect(project.assets.find(asset => asset.id === "nested-asset")!.clipVersions![0].layers[0]).toEqual(originalNestedLayer);
   });
 
   it("persists the full editable snapshot through the same JSON serialization used by local project storage", () => {
