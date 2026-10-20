@@ -120,12 +120,24 @@ Maintain low-fi HTML prototype and UML sources for workspace, domain, edit seque
 - Draft PR #89 head `6044273c2528de1c4f4b6437114884f79f774377` passed 206 tests but failed `tsc -b && vite build` in [39269841800](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39269841800). The mapper imports an unused type and incorrectly narrows the discriminated `CompositionSourceReference` union. Do not merge it as-is; keep both PRs in review until a clean, tested integration is ready.
 - The public Pages reader could not independently fetch the live HTML in this audit, so a successful deploy workflow is deployment evidence, not a claim that the rendered UI was visually accepted.
 
-## E2 implementation checkpoint — Composition command boundary
+## E2 implementation checkpoint — Shared Composition commands
 
-Branch `feat/dys005-composition-commands` starts from current main and adds `src/compositionCommands.ts` plus `src/compositionCommands.test.ts`. The pure command functions operate on `CompositionDocument`, so the same semantics can be used at root and nested depth: insert, move a linked group, right-edge trim, split linked groups with source-range preservation, duplicate linked groups, delete descendants and unlink a dependent placement. Edits return new documents; IDs/tracks/timing/link cycles are checked, and compatibility fields in `legacyData` are synchronized for placement IDs, timing, source ranges and audio links.
+**Merged baseline (`main`):** `5f8dbea57cc72a8b4a909db3b082ea0c54894529`, PR [#93](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/93). Exact-head CI [39398098386](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39398098386) passed 210 tests across 22 test files and passed TypeScript/production build. The CI's dependency audit step is non-blocking, so this is not a claim that the audit was vulnerability-free. Post-merge `main` CI and GitHub Pages deployment were not independently verified by the available GitHub connector; do not treat the merge as proof that the live site is updated.
 
-**Integration progress (Draft PR #93):** root Timeline operation adapters now route add/move/trim/split/duplicate/delete/unlink through the Composition command boundary, while nested Clip Version layer movement uses the same track-aware move command. Existing React callbacks and history wrapper still own user interaction/Undo grouping. Remaining gates: route the UI insertion/conflict flow and nested add/delete/resize through the shared command boundary, add root/nested parity integration tests, and verify snapping/overlap behavior remains unchanged. This is partial engine integration, not a claim that the full Timeline is complete.
+PR #93 adds immutable `CompositionDocument` commands and a compatibility adapter:
+- Root Timeline add/move/trim/split/duplicate/delete/unlink operations in `src/timelineOperations.ts` use shared commands.
+- Nested Clip Version movement in `src/clipVersionTracks.ts` uses `moveCompositionPlacementToTrack()`.
+- The command layer validates IDs, tracks, timing, source ranges, linked-placement references/cycles, and preserves legacy placement metadata. The tests exercise immutability, linked audio/source ranges, splitting, duplication, deletion, unlinking and invalid references.
+
+**Current follow-up branch:** `feat/nested-composition-command-integration`. This branch routes nested layer insertion through `insertCompositionPlacement()`, adds `deleteClipVersionLayer()` through `deleteCompositionPlacement()`, and dispatches the nested Editor's Remove layer action through that shared adapter. Unit tests cover insertion metadata/immutability/duplicate IDs and deletion of a root plus linked descendants while preserving independent placements. **This follow-up is not yet validated by PR CI or deployed.** Do not mark DYS-005 complete from these unit tests alone.
+
+Remaining gates:
+- Route project-aware click-to-place/insertion/conflict resolution into the shared command boundary without weakening ripple/trim/auto-extend, snap or overlap protections.
+- Route nested resize plus source-range and adjacent-trim updates through the canonical command contract; preserve frame rounding and linked audio.
+- Add root/nested parity tests covering interaction, linked audio, history and Undo/Redo atomicity. Existing React state/history wrappers still govern grouped edits.
+- DYS-014 canonical-authoritative persistence and structure-preserving Save-as-Clip remain unfinished. PR #88 is helper-only; PR #89 is a Draft with failed TypeScript/build and must not be merged as-is.
+- Keep Storyboard, References and full Asset administration deferred until Timeline/mobile acceptance gates pass.
 
 ## Recommended next step
 
-E0 is recorded above. Continue E2 by wiring the Composition command boundary into existing root and nested editor actions, preserving the existing click-to-place, overlap protection, linked audio, resize and Undo behavior. Inspect PR #88/#89 again before reuse; do not merge stale or failing code. Keep Storyboard, References and full Asset administration deferred until the Timeline/mobile gates pass.
+Open a Draft PR for `feat/nested-composition-command-integration`; validate the exact PR head with the repository CI (tests, TypeScript, production build, and inspect the non-blocking audit output). Fix any failures before marking ready. Then continue with nested resize/source-range/adjacent-trim integration or project-aware insertion/conflict dispatch as the next bounded slice. Do not ask the owner to inspect the app until changes are merged and GitHub Pages deployment for the matching main SHA is verified. No browser smoke tests.
