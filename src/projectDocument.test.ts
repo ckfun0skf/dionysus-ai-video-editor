@@ -163,7 +163,7 @@ describe("versioned project document boundary", () => {
     const movedRoot = moveCompositionPlacement(initialRoot, "canonical-import-clip", 18);
     const projected = projectRootCompositionToLegacy(original, movedRoot);
     const document = createProjectDocument(projected, movedRoot);
-    const reopened = readProjectDocument(JSON.parse(JSON.stringify(document)));
+    const reopened = readProjectDocument(JSON.parse(JSON.stringify(document)), true);
     expect(reopened.project.timelineClips?.[0]).toMatchObject({ start: 18, sourceIn: 10, sourceOut: 14 });
     expect(reopened.compositionModel?.rootComposition.placements.find(item => item.id === "canonical-import-clip"))
       .toMatchObject({ start: 18, sourceIn: 10, sourceOut: 14 });
