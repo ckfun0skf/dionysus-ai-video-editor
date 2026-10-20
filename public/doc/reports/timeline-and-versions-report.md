@@ -136,3 +136,13 @@ The App now holds a live root `CompositionDocument` and paired Composition histo
 ## Validation checkpoint
 
 Exact-head CI #1404 passed on `90949d515d30827502e61fd4e9b1de5235037382`: 230 tests across 23 files, TypeScript/production build passed, dependency audit reported 0 vulnerabilities. The task registry and handoff were subsequently refreshed, so CI must be rerun on the final documentation head before this checkpoint is called fully verified.
+
+
+## Canonical-first root mutation audit — 2026-10-20
+
+- Root timeline insertion, conflict ripple/trim, move/drop and Master Shot Ripple Reorder now use live Composition placements as the source of timing and occupancy. Ripple moves linked groups together and preserves source ranges.
+- Root clip metadata/source edits, preview transforms, mute/unlink, split/duplicate/delete, media import and track add/update/remove route through Composition commands first. The schema-1.0 project is derived compatibility data; domain reconciliation no longer overwrites existing canonical geometry/source/link fields from a stale migration.
+- Track removal guards the last video track, requires a fallback for Master Shots, preserves video when removing only a linked audio child track, and catches invalid operations in the UI.
+- Validated v2 import/recovery restores the saved canonical root when its compatibility projection matches; v2 tracks are not normalized a second time through the legacy migration path. Schema-1.0 imports remain supported.
+- Tests cover stale legacy timing vs canonical occupancy, insertion/ripple/trim source-range preservation, Master Shot ripple reorder, track removal edge cases, canonical import, and App persistence/Undo/Redo.
+- Exact-head CI must be checked on the final docs/code SHA. DYS-005/DYS-014 remain in progress pending green CI and remaining compatibility-only path review. No browser smoke tests; PR #96 remains Draft/unmerged.
