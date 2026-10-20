@@ -278,6 +278,45 @@ function versionWithComposition(version: ClipVersion, composition: CompositionDo
   };
 }
 
+/** Update inspector-controlled layer fields in the canonical placement and refresh the legacy render projection. */
+export function updateClipVersionLayer(
+  version: ClipVersion,
+  layerId: string,
+  patch: Partial<CompositionLayer>,
+): ClipVersion {
+  const normalized = normalizeClipVersionTracks(version);
+  const existingLayer = normalized.layers.find(layer => layer.id === layerId);
+  if (!existingLayer) return normalized;
+  const updatedLayer = { ...existingLayer, ...structuredClone(patch) };
+  const document = compositionDocumentFromClipVersion(normalized);
+  const placement = document.placements.find(item => item.id === layerId);
+  if (!placement) return normalized;
+  const legacy = structuredClone(updatedLayer) as unknown as Record<string, unknown>;
+  const linkedToPlacementId = typeof legacy.linkedToPlacementId === "string"
+    ? legacy.linkedToPlacementId
+    : typeof legacy.linkedVideoClipId === "string" ? legacy.linkedVideoClipId : undefined;
+  const updatedPlacement: CompositionPlacement = {
+    ...placement,
+    name: updatedLayer.name,
+    trackId: updatedLayer.trackId ?? placement.trackId,
+    start: updatedLayer.start,
+    duration: updatedLayer.duration,
+    source: sourceReferenceForLayer(updatedLayer),
+    ...(updatedLayer.sourceIn !== undefined ? { sourceIn: updatedLayer.sourceIn } : {}),
+    ...(updatedLayer.sourceIn === undefined ? { sourceIn: undefined } : {}),
+    ...(updatedLayer.sourceOut !== undefined ? { sourceOut: updatedLayer.sourceOut } : {}),
+    ...(updatedLayer.sourceOut === undefined ? { sourceOut: undefined } : {}),
+    ...(linkedToPlacementId ? { linkedToPlacementId } : { linkedToPlacementId: undefined }),
+    legacyData: { ...placement.legacyData, ...legacy },
+  };
+  const nextDocument = {
+    ...document,
+    duration: Math.max(document.duration, updatedLayer.start + updatedLayer.duration),
+    placements: document.placements.map(item => item.id === layerId ? updatedPlacement : item),
+  };
+  return versionWithComposition(normalized, nextDocument);
+}
+
 /** Move a nested layer through the same Composition command used by the Master Timeline adapter. */
 export function moveClipVersionLayer(
   version: ClipVersion,
