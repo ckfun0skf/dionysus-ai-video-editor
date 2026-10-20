@@ -1184,7 +1184,10 @@ export default function App() {
       const clamped = typeof safePatch.duration === "number"
         ? withDurationAndClampedFades(updated, safePatch.duration)
         : updated;
-      return updateNestedLayer(currentVersion, layerId, clamped);
+      const canonicalPatch = typeof safePatch.duration === "number"
+        ? { ...safePatch, fadeIn: clamped.fadeIn, fadeOut: clamped.fadeOut }
+        : safePatch;
+      return updateNestedLayer(currentVersion, layerId, canonicalPatch);
     });
   }
 
