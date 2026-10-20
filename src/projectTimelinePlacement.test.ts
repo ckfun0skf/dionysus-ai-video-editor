@@ -239,4 +239,18 @@ describe("shared project timeline placement engine", () => {
     expect(project.timelineClips).toEqual([video, audio]);
   });
 
+  it("rejects duplicate placement IDs before inserting into the canonical root", () => {
+    const project = structuredClone(sampleProject);
+    project.shots = [];
+    const track = project.tracks.find(item => item.kind === "video")!;
+    project.timelineClips = [
+      { id: "duplicate", name: "Existing", kind: "video", trackId: track.id, start: 0, duration: 1 },
+    ];
+    const draft = { id: "duplicate", name: "New", kind: "video" as const, trackId: track.id, start: 2, duration: 1 };
+    const plan = calculateProjectTimelineInsertionPlan(project, draft, track.id, 2);
+    expect(plan.status).toBe("ready");
+    expect(() => applyProjectTimelineInsertion(project, plan)).toThrow(/IDs must be unique/);
+    expect(project.timelineClips).toHaveLength(1);
+  });
+
 });
