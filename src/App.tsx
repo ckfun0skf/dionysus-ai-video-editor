@@ -1083,13 +1083,28 @@ export default function App() {
 
   function updateShot(shotId: string, patch: Partial<Shot>) {
     const textField = "title" in patch ? "shot-title:" + shotId : "intent" in patch ? "shot-intent:" + shotId : "";
+    const { duration, ...domainPatch } = patch;
+    if (typeof duration === "number" && rootCompositionRef.current.placements.some(placement => placement.id === shotId)) {
+      const currentPlacement = rootCompositionRef.current.placements.find(placement => placement.id === shotId)!;
+      changeRootComposition(root => applyCompositionResizePreview(root, {
+        id: shotId, start: currentPlacement.start, duration, edge: "right", trims: [],
+      }), textField);
+      if (Object.keys(domainPatch).length) {
+        change(p => ({ ...p, shots: p.shots.map(shot => shot.id === shotId ? { ...shot, ...domainPatch } : shot) }), textField);
+      }
+      return;
+    }
     change(p => {
-      const shots = typeof patch.duration === "number" ? setMasterShotDuration(p.shots, shotId, patch.duration) : p.shots;
+      const shots = typeof duration === "number" ? setMasterShotDuration(p.shots, shotId, duration) : p.shots;
       return { ...p, shots: shots.map(s => s.id === shotId ? { ...s, ...patch } : s) };
     }, textField);
   }
   function updateMasterShotStart(shotId: string, value: number) {
     if (!Number.isFinite(value)) return;
+    if (rootCompositionRef.current.placements.some(placement => placement.id === shotId)) {
+      changeRootComposition(root => moveCompositionPlacement(root, shotId, value), "shot-start:" + shotId);
+      return;
+    }
     change(p => ({ ...p, shots: setMasterShotStart(p.shots, shotId, value) }), "shot-start:" + shotId);
   }
   function selectClipSlot(slotId: string) { setSelectedSlotId(slotId); }
