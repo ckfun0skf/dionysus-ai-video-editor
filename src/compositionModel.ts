@@ -39,6 +39,22 @@ export interface CompositionPlacement {
   legacyData: Record<string, unknown>;
 }
 
+export interface CompositionPinnedVersion {
+  assetId?: string;
+  versionId: string;
+  shotId?: string;
+  slotId?: string;
+}
+
+export interface CompositionProvenance {
+  kind: "master-timeline-snapshot" | "derived-clip-version";
+  sourceProjectId?: string;
+  sourceCompositionId?: string;
+  sourceUpdatedAt?: string;
+  createdAt: string;
+  pinnedVersions: CompositionPinnedVersion[];
+}
+
 export interface CompositionDocument {
   id: string;
   name: string;
@@ -48,6 +64,10 @@ export interface CompositionDocument {
   height: number;
   tracks: CompositionTrack[];
   placements: CompositionPlacement[];
+  /** Immutable source/version provenance for a saved composition snapshot. */
+  provenance?: CompositionProvenance;
+  /** Embedded, version-pinned children make saved snapshots independent of later source-version edits. */
+  nestedCompositions?: CompositionDocument[];
   /** Preserves fields not yet migrated to the canonical document. */
   legacyData?: Record<string, unknown>;
 }
