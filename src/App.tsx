@@ -1117,7 +1117,7 @@ export default function App() {
     }) }));
   }
 
-  function updateTimelineVersion(tab: VersionTimelineTab, update: (version: ClipVersion) => ClipVersion) {
+  function updateTimelineVersion(tab: VersionTimelineTab, update: (version: ClipVersion) => ClipVersion, historyGroup = "") {
     if (tab.assetId) {
       change(p => ({
         ...p,
@@ -1126,7 +1126,7 @@ export default function App() {
           updatedAt: new Date().toISOString(),
           clipVersions: (asset.clipVersions ?? []).map(version => version.id === tab.versionId ? update(version) : version)
         })
-      }));
+      }), historyGroup);
       return;
     }
     change(p => ({
@@ -1138,7 +1138,7 @@ export default function App() {
           versions: slot.versions.map(version => version.id === tab.versionId ? update(version) : version)
         })
       })
-    }));
+    }), historyGroup);
   }
 
   function updateTimelineVersionLayer(tab: VersionTimelineTab, layerId: string, patch: Partial<CompositionLayer>) {
@@ -1188,7 +1188,7 @@ export default function App() {
         ? { ...safePatch, fadeIn: clamped.fadeIn, fadeOut: clamped.fadeOut }
         : safePatch;
       return updateNestedLayer(currentVersion, layerId, canonicalPatch);
-    });
+    }, "nested-layer:" + tab.id + ":" + layerId);
   }
 
   function addTimelineVersionTrack(tab: VersionTimelineTab, kind: "video" | "audio" | "text") {
@@ -1233,7 +1233,7 @@ export default function App() {
       ...(version.composition ? {
         composition: { ...structuredClone(version.composition), duration },
       } : {}),
-    }));
+    }), "nested-duration:" + tab.id);
     if (editorTime > duration) {
       playbackTimeRef.current = duration;
       setEditorTime(duration);
