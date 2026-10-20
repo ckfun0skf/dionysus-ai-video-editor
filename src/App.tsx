@@ -2572,7 +2572,30 @@ export default function App() {
   <button type="button" aria-label="Zoom in timeline" disabled={timelineZoom >= 4} onClick={() => setTimelineZoom(value => Math.min(4, value + 0.5))}>+</button>
   <button type="button" aria-label="Fit timeline" onClick={() => setTimelineZoom(1)}>Fit</button>
 </div>
-<div className="timeline-tab-content master-timeline-content" style={{display:activeTimelineTabId === "master" ? "block" : "none"}}>{renderTimelinePreview("master", "Master preview", activeShotInfo.shot?.title ?? project.name, runtime, activeShotInfo.shot?.title ?? project.name, activeShotInfo.shot?.intent ?? "", true)}<div className="section-toolbar timeline-master-actions"><span className="timeline-summary">{project.shots.length} shots · {(project.timelineClips ?? []).length} clips</span><div className="inline-actions"><button className="button button-quiet button-small" onClick={saveMasterTimelineAsClipAsset}><Save size={14}/> Save as Clip Asset</button><button className="button button-primary button-small" disabled={!selected} onClick={() => selected && addSlot(selected.id)}><Plus size={15}/> {t("action.addClipSlot")}</button></div></div><div className="timeline-ruler" role="slider" aria-label="Master timeline playhead" aria-valuemin={0} aria-valuemax={runtime} aria-valuenow={editorTime} tabIndex={0}
+<div className="timeline-tab-content master-timeline-content" style={{display:activeTimelineTabId === "master" ? "block" : "none"}}><div className="timeline-top-workspace">
+  <section className="timeline-source-browser" aria-label="Timeline source browser">
+    <div className="timeline-source-heading"><div><span className="timeline-source-kicker">PROJECT MEDIA</span><strong>Sources</strong><small>{project.assets.length} assets available</small></div><button className="button button-quiet button-small" onClick={() => setView("assets")}>Manage</button></div>
+    <div className="timeline-source-list">
+      {project.assets.filter(asset => ["video","image","audio","clip","script"].includes(asset.kind)).slice(0,8).map(asset => {
+        const audio = asset.kind === "audio";
+        const track = project.tracks.find(item => item.kind === (audio ? "audio" : "video"));
+        return <button type="button" className="timeline-source-item" key={asset.id} onClick={() => {
+          if (!track) { setNotice("Add a matching video or audio layer before placing this source."); return; }
+          setAssetPickerTrackId(track.id);
+          setAssetPickerSearch(asset.name);
+          setAssetPickerFilter("all");
+        }} title={"Choose " + asset.name + " for the timeline"}>
+          <span className="timeline-source-thumb"><AssetThumbnail asset={asset} assets={project.assets}/></span>
+          <span className="timeline-source-copy"><strong>{asset.name}</strong><small>{asset.kind === "clip" ? "Clip asset" : asset.kind === "script" ? "Code" : asset.kind}</small></span>
+          <Plus size={14}/>
+        </button>;
+      })}
+      {project.assets.length === 0 && <div className="timeline-source-empty"><Film size={20}/><strong>No sources yet</strong><span>Import video, images or audio to start editing.</span><button className="button button-primary button-small" onClick={() => setView("assets")}>Open Assets</button></div>}
+    </div>
+    <div className="timeline-source-footer"><button className="button button-quiet button-small" onClick={() => { const track = project.tracks.find(item => item.kind === "video"); if (track) setAssetPickerTrackId(track.id); else setNotice("Add a video layer before importing a source."); }}><Plus size={13}/> Add video / image</button><button className="button button-quiet button-small" onClick={() => { const track = project.tracks.find(item => item.kind === "audio"); if (track) setAssetPickerTrackId(track.id); else setNotice("Add an audio layer before importing audio."); }}><AudioLines size={13}/> Add audio</button></div>
+  </section>
+  <div className="timeline-preview-area">{renderTimelinePreview("master", "Master preview", activeShotInfo.shot?.title ?? project.name, runtime, activeShotInfo.shot?.title ?? project.name, activeShotInfo.shot?.intent ?? "", true)}</div>
+</div><div className="section-toolbar timeline-master-actions"><span className="timeline-summary">{project.shots.length} shots · {(project.timelineClips ?? []).length} clips</span><div className="inline-actions"><button className="button button-quiet button-small" onClick={saveMasterTimelineAsClipAsset}><Save size={14}/> Save as Clip Asset</button><button className="button button-primary button-small" disabled={!selected} onClick={() => selected && addSlot(selected.id)}><Plus size={15}/> {t("action.addClipSlot")}</button></div></div><div className="timeline-ruler" role="slider" aria-label="Master timeline playhead" aria-valuemin={0} aria-valuemax={runtime} aria-valuenow={editorTime} tabIndex={0}
             onPointerDown={event => beginTimelineScrub(event, runtime)} onPointerMove={continueTimelineScrub} onPointerUp={endTimelineScrub} onPointerCancel={endTimelineScrub}
             onKeyDown={event => { if (event.key === "ArrowRight") { const next = Math.min(runtime, editorTime + 1 / Math.max(1, project.frameRate)); playbackTimeRef.current = next; setIsPlaying(false); setEditorTime(next); } if (event.key === "ArrowLeft") { const next = Math.max(0, editorTime - 1 / Math.max(1, project.frameRate)); playbackTimeRef.current = next; setIsPlaying(false); setEditorTime(next); } }}>
             <div className="integrated-ruler-playhead" style={{ left: (editorTime / Math.max(runtime, 1) * 100) + "%" }}/>

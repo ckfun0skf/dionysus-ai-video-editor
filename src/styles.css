@@ -3051,3 +3051,78 @@
   color: var(--accent, #d5f36a);
   background: rgba(213, 243, 106, 0.1);
 }
+
+
+/* DYS-017: make Timeline a real editing workspace instead of a preview stacked
+   above two competing timeline representations. */
+.timeline-top-workspace {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.72fr) minmax(0, 1.7fr);
+  gap: 12px;
+  align-items: stretch;
+  margin-bottom: 12px;
+}
+.timeline-source-browser {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border, #30313a);
+  border-radius: 10px;
+  background: var(--surface, #15161b);
+  overflow: hidden;
+}
+.timeline-source-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px;
+  border-bottom: 1px solid var(--border, #30313a);
+}
+.timeline-source-heading > div { display:flex; flex-direction:column; gap:3px; min-width:0; }
+.timeline-source-kicker { color:var(--accent,#d5f36a); font-size:9px; font-weight:800; letter-spacing:.12em; }
+.timeline-source-heading strong { color:var(--text,#f0f0f4); font-size:13px; }
+.timeline-source-heading small { color:var(--muted,#92939f); font-size:10px; }
+.timeline-source-list { display:flex; flex-direction:column; gap:5px; padding:8px; min-height:0; }
+.timeline-source-item {
+  display:flex; align-items:center; gap:9px; width:100%; min-width:0;
+  padding:7px; border:1px solid transparent; border-radius:7px;
+  background:transparent; color:var(--text,#f0f0f4); text-align:left; cursor:pointer;
+}
+.timeline-source-item:hover, .timeline-source-item:focus-visible {
+  border-color:var(--border,#30313a); background:rgba(255,255,255,.045); outline:none;
+}
+.timeline-source-thumb { display:grid; place-items:center; flex:0 0 58px; width:58px; height:38px; overflow:hidden; border-radius:4px; background:#24252d; }
+.timeline-source-thumb > * { width:100%; height:100%; }
+.timeline-source-copy { display:flex; flex-direction:column; gap:4px; min-width:0; flex:1; }
+.timeline-source-copy strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10px; }
+.timeline-source-copy small { color:var(--muted,#92939f); font-size:9px; text-transform:capitalize; }
+.timeline-source-item > svg { flex:0 0 auto; color:var(--accent,#d5f36a); }
+.timeline-source-empty { display:flex; flex-direction:column; align-items:center; gap:8px; padding:22px 10px; text-align:center; color:var(--muted,#92939f); font-size:10px; }
+.timeline-source-empty > svg { color:var(--accent,#d5f36a); }
+.timeline-source-empty strong { color:var(--text,#f0f0f4); font-size:12px; }
+.timeline-source-footer { display:flex; flex-wrap:wrap; gap:6px; margin-top:auto; padding:9px; border-top:1px solid var(--border,#30313a); }
+.timeline-source-footer .button { flex:1 1 auto; justify-content:center; }
+.timeline-preview-area { min-width:0; }
+.timeline-preview-area .integrated-preview-panel { height:100%; box-sizing:border-box; margin:0 0 0; }
+.timeline-preview-area .integrated-preview-frame { max-height:360px; }
+.master-timeline-content > .timeline-ruler,
+.master-timeline-content > .timeline-scroll { display:none !important; }
+.master-timeline-content > .timeline-master-actions { margin-top:2px; }
+.master-timeline-content > .visual-timeline { margin-top:0; }
+@media (max-width: 900px) {
+  .timeline-top-workspace { grid-template-columns:minmax(0, 0.9fr) minmax(0, 1.35fr); }
+  .timeline-source-thumb { flex-basis:46px; width:46px; height:32px; }
+}
+@media (max-width: 640px) {
+  .timeline-top-workspace { grid-template-columns:minmax(0,1fr); gap:8px; }
+  .timeline-source-browser { order:2; }
+  .timeline-preview-area { order:1; }
+  .timeline-source-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:5px; }
+  .timeline-source-item { align-items:flex-start; flex-wrap:wrap; gap:5px; border-color:var(--border,#30313a); background:rgba(255,255,255,.02); }
+  .timeline-source-thumb { flex:0 0 100%; width:100%; height:58px; }
+  .timeline-source-copy { flex:1 1 calc(100% - 20px); }
+  .timeline-source-item > svg { margin-top:2px; }
+  .timeline-source-footer { display:grid; grid-template-columns:1fr 1fr; }
+  .timeline-preview-area .integrated-preview-frame { max-height:220px; }
+}
