@@ -1,5 +1,5 @@
 import type { DionysusProject, Shot, TimelineClip } from "./types";
-import { assertValidCompositionDocument, applyCompositionResizePreview } from "./compositionCommands";
+import { assertValidCompositionDocument, applyCompositionResizePreview, insertCompositionPlacement } from "./compositionCommands";
 import { migrateLegacyProjectToComposition } from "./compositionMigration";
 import { getMasterShotStart } from "./masterTimeline";
 import { calculateTimelineDropPosition } from "./timelinePlacement";
@@ -325,6 +325,47 @@ export function applyProjectTimelineInsertion(
       return shift ? { ...clip, start: snapInsertionFrame(clip.start + delta, fps) } : clip;
     });
     nextProject = { ...project, shots, timelineClips };
+  }
+
+  const existingIds = new Set([
+    ...nextProject.shots.map(shot => shot.id),
+    ...(nextProject.timelineClips ?? []).map(clip => clip.id),
+  ]);
+  if (existingIds.has(inserted.id)) {
+    throw new Error("Timeline placement IDs must be unique.");
+  }
+
+  // Route ordinary placements through the shared immutable Composition insertion command
+  // whenever the transitional project can be represented without losing source relationships.
+  // Materialized Storyboard items are still excluded from the canonical projection and retain
+  // the compatibility path until their migration is completed.
+  let rootComposition: ReturnType<typeof migrateLegacyProjectToComposition>["rootComposition"] | undefined;
+  let canonicalInserted;
+  try {
+    rootComposition = migrateLegacyProjectToComposition(nextProject).rootComposition;
+    assertValidCompositionDocument(rootComposition);
+    const candidateProject = {
+      ...nextProject,
+      timelineClips: [...(nextProject.timelineClips ?? []), inserted],
+    };
+    const candidateRoot = migrateLegacyProjectToComposition(candidateProject).rootComposition;
+    assertValidCompositionDocument(candidateRoot);
+    canonicalInserted = candidateRoot.placements.find(placement => placement.id === inserted.id);
+  } catch {
+    rootComposition = undefined;
+  }
+
+  if (rootComposition && canonicalInserted) {
+    const committed = insertCompositionPlacement(rootComposition, canonicalInserted);
+    const insertedPlacement = committed.placements.find(placement => placement.id === inserted.id);
+    if (!insertedPlacement) throw new Error("Composition insertion did not return the inserted placement.");
+    return {
+      ...nextProject,
+      timelineClips: [
+        ...(nextProject.timelineClips ?? []),
+        structuredClone(insertedPlacement.legacyData) as unknown as TimelineClip,
+      ],
+    };
   }
 
   return {
