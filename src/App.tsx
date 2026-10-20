@@ -628,6 +628,38 @@ export default function App() {
 
   const selectedStart = useMemo(() => getMasterShotStart(project.shots, selectedId), [project.shots, selectedId]);
   const slotCount = project.shots.reduce((n, s) => n + s.slots.length, 0);
+  function rippleReorderCanonicalMasterShots(
+    root: CompositionDocument,
+    shotId: string,
+    targetCenter: number,
+    targetTrackId: string,
+  ): CompositionDocument {
+    if (!Number.isFinite(targetCenter)) return root;
+    const ordered = root.placements
+      .filter(placement => placement.legacyData.entityType === "master-shot")
+      .sort((a, b) => a.start - b.start || a.order - b.order);
+    const moving = ordered.find(placement => placement.id === shotId);
+    if (!moving) throw new Error("Master Shot not found in the canonical Composition.");
+    if (!root.tracks.some(track => track.id === targetTrackId && track.kind === "video")) {
+      throw new Error("A Master Shot must use a video track.");
+    }
+    const remaining = ordered.filter(placement => placement.id !== shotId);
+    const insertionIndex = remaining.findIndex(placement => targetCenter < placement.start + placement.duration / 2);
+    remaining.splice(insertionIndex < 0 ? remaining.length : insertionIndex, 0, moving);
+    let next = structuredClone(root);
+    let cursor = Math.max(0, Math.min(...ordered.map(placement => placement.start)));
+    const fps = Math.max(1, root.frameRate || 24);
+    for (const placement of remaining) {
+      const current = next.placements.find(item => item.id === placement.id);
+      if (!current) throw new Error("Master Shot disappeared during canonical ripple reorder.");
+      const start = Math.round(cursor * fps) / fps;
+      if (current.id === shotId) next = moveCompositionPlacementToTrack(next, current.id, targetTrackId, start);
+      else if (current.start !== start) next = moveCompositionPlacement(next, current.id, start);
+      cursor = start + current.duration;
+    }
+    return next;
+  }
+
   function reconcileRootComposition(current: CompositionDocument, target: CompositionDocument): CompositionDocument {
     let next = structuredClone(current);
     const targetTrackIds = new Set(target.tracks.map(track => track.id));
