@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { sampleProject } from "./sampleProject";
-import { addClipVersionLayer, addClipVersionTrack, deleteClipVersionLayer, moveClipVersionLayer, normalizeClipVersionTracks } from "./clipVersionTracks";
+import { addClipVersionLayer, addClipVersionTrack, deleteClipVersionLayer, moveClipVersionLayer, normalizeClipVersionTracks, updateClipVersionLayer } from "./clipVersionTracks";
 import { validateProject } from "./projectValidation";
 
 describe("normalizeClipVersionTracks", () => {
@@ -179,6 +179,65 @@ describe("nested Clip Version track operations", () => {
     expect(audioTrack).toBeTruthy();
     expect(withAudio.composition?.tracks.map(track => track.id)).toContain(audioTrack?.id);
     expect(withAudio.composition?.placements.find(item => item.id === "new-audio-placement")?.trackId).toBe(audioTrack?.id);
+  });
+
+  it("synchronizes inspector property edits into canonical placement metadata", () => {
+    const version = addClipVersionLayer(
+      structuredClone(sampleProject.shots[0].slots[0].versions[0]),
+      {
+        id: "inspector-placement",
+        name: "Before",
+        kind: "video",
+        start: 1,
+        duration: 3,
+        assetId: "source-before",
+        sourceIn: 2,
+        sourceOut: 5,
+        x: 10,
+        y: 20,
+        width: 70,
+        height: 80,
+        volume: 0.35,
+        fadeIn: 0.5,
+      },
+    );
+    const edited = updateClipVersionLayer(version, "inspector-placement", {
+      name: "After",
+      assetId: "source-after",
+      start: 2,
+      duration: 2,
+      sourceIn: 4,
+      sourceOut: 6,
+      x: 30,
+      width: 50,
+      volume: 0.8,
+      fadeIn: 0.25,
+    });
+    const placement = edited.composition?.placements.find(item => item.id === "inspector-placement");
+    expect(placement).toMatchObject({
+      name: "After",
+      start: 2,
+      duration: 2,
+      source: { type: "asset", assetId: "source-after" },
+      sourceIn: 4,
+      sourceOut: 6,
+      legacyData: { x: 30, y: 20, width: 50, height: 80, volume: 0.8, fadeIn: 0.25 },
+    });
+    expect(edited.layers.find(layer => layer.id === "inspector-placement")).toMatchObject({
+      name: "After",
+      assetId: "source-after",
+      start: 2,
+      duration: 2,
+      sourceIn: 4,
+      sourceOut: 6,
+      x: 30,
+      y: 20,
+      width: 50,
+      height: 80,
+      volume: 0.8,
+      fadeIn: 0.25,
+    });
+    expect(version.composition?.placements.find(item => item.id === "inspector-placement")?.start).toBe(1);
   });
 
   it("moves a layer to a compatible track and rejects incompatible track kinds", () => {
