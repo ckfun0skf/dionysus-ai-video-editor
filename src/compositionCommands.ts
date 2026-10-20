@@ -222,6 +222,22 @@ export function insertCompositionPlacement(
   return next;
 }
 
+/** Update placement metadata without rebuilding the root document from a legacy projection. */
+export function updateCompositionPlacement(
+  document: CompositionDocument,
+  placementId: string,
+  patch: Partial<Omit<CompositionPlacement, "id" | "order">>,
+): CompositionDocument {
+  assertValidCompositionDocument(document);
+  const current = requirePlacement(document, placementId);
+  const next = clone(document);
+  const updated = syncLegacyPlacement({ ...current, ...clone(patch), id: current.id, order: current.order });
+  next.placements = next.placements.map(placement => placement.id === placementId ? updated : placement);
+  extendCompositionDuration(next);
+  assertValidCompositionDocument(next);
+  return next;
+}
+
 /** Moves the selected placement and its linked group as one atomic edit. */
 export function moveCompositionPlacement(
   document: CompositionDocument,
