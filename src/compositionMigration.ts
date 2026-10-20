@@ -353,17 +353,21 @@ export function projectRootCompositionToLegacy(
       } as TimelineTrack;
     });
   const placementsById = new Map(rootComposition.placements.map(placement => [placement.id, placement]));
+  const sourceStarts = new Map(source.shots.map(shot => [shot.id, getMasterShotStart(source.shots, shot.id)]));
+  const materializeShotStarts = source.shots.some(shot => {
+    const placement = placementsById.get(shot.id);
+    return Boolean(placement && (shot.masterStart !== undefined || placement.start !== sourceStarts.get(shot.id)));
+  });
   const shots = source.shots
     .filter(shot => placementsById.has(shot.id))
     .map(shot => {
       const placement = placementsById.get(shot.id)!;
       if (placement.legacyData.entityType !== "master-shot") return shot;
       const legacyTrack = tracks.find(track => track.id === placement.trackId && track.kind === "video");
-      const implicitStart = getMasterShotStart(source.shots, shot.id);
       const defaultVideoTrackId = source.tracks.find(track => track.kind === "video")?.id;
       return {
         ...shot,
-        ...(shot.masterStart === undefined && placement.start === implicitStart ? {} : { masterStart: placement.start }),
+        ...(materializeShotStarts || shot.masterStart !== undefined ? { masterStart: placement.start } : {}),
         duration: placement.duration,
         ...(legacyTrack && (shot.masterTrackId !== undefined || legacyTrack.id !== defaultVideoTrackId)
           ? { masterTrackId: legacyTrack.id }
