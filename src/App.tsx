@@ -186,8 +186,7 @@ export default function App() {
       const compositionRead = compositionRaw ? readProjectDocument(JSON.parse(compositionRaw) as unknown) : undefined;
       const envelopeMatchesLegacy = Boolean(
         legacyRead && compositionRead &&
-        legacyRead.project.id === compositionRead.project.id &&
-        legacyRead.project.updatedAt === compositionRead.project.updatedAt
+        JSON.stringify(legacyRead.project) === JSON.stringify(compositionRead.project)
       );
       const restored = compositionRead && (!legacyRead || envelopeMatchesLegacy)
         ? compositionRead.project
