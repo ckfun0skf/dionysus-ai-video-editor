@@ -323,6 +323,33 @@ function getInsertionOccupancyItems(
   return items;
 }
 
+/** Calculate a drag/drop position from the live root Composition's occupancy set. */
+export function calculateCanonicalCompositionDropPosition(
+  root: CompositionDocument,
+  movingClip: TimelineClip,
+  targetTrackId: string,
+  desiredStart: number,
+  timelineDuration: number,
+): ReturnType<typeof calculateTimelineDropPosition> {
+  const occupancy: TimelineClip[] = root.placements.map(placement => ({
+    id: placement.id,
+    name: placement.name,
+    kind: (placement.legacyData.kind as TimelineClip["kind"] | undefined) ?? "video",
+    trackId: placement.trackId,
+    start: placement.start,
+    duration: placement.duration,
+  }));
+  return calculateTimelineDropPosition(
+    occupancy,
+    movingClip.id,
+    targetTrackId,
+    desiredStart,
+    movingClip.duration,
+    timelineDuration,
+    Math.max(1, root.frameRate || 24),
+  );
+}
+
 /** Calculate a click-to-place plan without silently overwriting or moving existing placements. */
 export function calculateProjectTimelineInsertionPlan(
   project: DionysusProject,
