@@ -211,7 +211,9 @@ export default function App() {
       if (raw) {
         const parsed = JSON.parse(raw) as { compositionModel?: { rootComposition?: CompositionDocument }; project?: DionysusProject };
         const restored = readProjectDocument(parsed);
-        if (restored.project.id === project.id && parsed.compositionModel?.rootComposition) {
+        if (restored.project.id === project.id &&
+            JSON.stringify(parsed.project) === JSON.stringify(project) &&
+            parsed.compositionModel?.rootComposition) {
           return structuredClone(parsed.compositionModel.rootComposition);
         }
       }
