@@ -166,6 +166,19 @@ describe("nested Clip Version track operations", () => {
     expect(moved.composition?.provenance).toEqual(canonical.provenance);
     expect(moved.composition?.nestedCompositions?.[0]?.id).toBe("embedded-child");
     expect(moved.composition?.nestedCompositions?.[0]?.placements).toEqual([]);
+
+    const withAudio = addClipVersionLayer(moved, {
+      id: "new-audio-placement",
+      name: "New audio",
+      kind: "audio",
+      start: 0,
+      duration: 1,
+      volume: 0.7,
+    });
+    const audioTrack = withAudio.tracks?.find(track => track.kind === "audio");
+    expect(audioTrack).toBeTruthy();
+    expect(withAudio.composition?.tracks.map(track => track.id)).toContain(audioTrack?.id);
+    expect(withAudio.composition?.placements.find(item => item.id === "new-audio-placement")?.trackId).toBe(audioTrack?.id);
   });
 
   it("moves a layer to a compatible track and rejects incompatible track kinds", () => {
