@@ -323,3 +323,98 @@ export function migrateLegacyProjectToComposition(project: DionysusProject): Com
     warnings,
   };
 }
+
+
+/**
+ * Deterministically projects canonical root tracks/placements into the schema-1.0 compatibility
+ * shape. Domain data not represented by root Composition (assets, references, scripts, nested
+ * version snapshots, etc.) is retained from the supplied project.
+ */
+export function projectRootCompositionToLegacy(
+  project: DionysusProject,
+  rootComposition: CompositionDocument,
+): DionysusProject {
+  const source = structuredClone(project);
+  const tracks = [...rootComposition.tracks]
+    .sort((a, b) => a.order - b.order)
+    .map(track => {
+      const legacy = track.legacyData as unknown as TimelineTrack | undefined;
+      const existing = source.tracks.find(item => item.id === track.id);
+      const legacyKind = legacy?.kind ?? track.originalKind ?? track.kind;
+      return {
+        ...(existing ?? legacy ?? { id: track.id, name: track.name, kind: legacyKind }),
+        id: track.id,
+        name: track.name,
+        kind: legacyKind,
+        ...(track.muted !== undefined ? { muted: track.muted } : {}),
+        ...(track.backgroundColor !== undefined ? { backgroundColor: track.backgroundColor } : {}),
+        ...(track.backgroundTransparent !== undefined ? { backgroundTransparent: track.backgroundTransparent } : {}),
+        ...(track.opacity !== undefined ? { opacity: track.opacity } : {}),
+      } as TimelineTrack;
+    });
+  const placementsById = new Map(rootComposition.placements.map(placement => [placement.id, placement]));
+  const shots = source.shots
+    .filter(shot => placementsById.has(shot.id))
+    .map(shot => {
+      const placement = placementsById.get(shot.id)!;
+      if (placement.legacyData.entityType !== "master-shot") return shot;
+      const legacyTrack = tracks.find(track => track.id === placement.trackId && track.kind === "video");
+      return {
+        ...shot,
+        masterStart: placement.start,
+        duration: placement.duration,
+        ...(legacyTrack ? { masterTrackId: legacyTrack.id } : {}),
+      };
+    });
+  const existingClips = new Map((source.timelineClips ?? []).map(clip => [clip.id, clip]));
+  const placedClips = rootComposition.placements
+    .filter(placement => placement.legacyData.entityType !== "master-shot")
+    .map(placement => {
+      const legacy = placement.legacyData as unknown as TimelineClip;
+      const existing = existingClips.get(placement.id);
+      const base = existing ?? legacy;
+      if (!base || typeof base.kind !== "string") {
+        throw new Error(`Root Composition placement "${placement.id}" has no compatible legacy clip metadata.`);
+      }
+      const sourceRef = placement.source;
+      const assetId = sourceRef.type === "asset" || sourceRef.type === "clip" ? sourceRef.assetId
+        : sourceRef.type === "missing" ? sourceRef.originalId : base.assetId;
+      const shotId = sourceRef.type === "shot" ? sourceRef.shotId : base.shotId;
+      const slotId = sourceRef.type === "shot" ? sourceRef.slotId : base.slotId;
+      return {
+        ...base,
+        id: placement.id,
+        name: placement.name,
+        trackId: placement.trackId,
+        start: placement.start,
+        duration: placement.duration,
+        ...(assetId ? { assetId } : {}),
+        ...(shotId ? { shotId } : {}),
+        ...(slotId ? { slotId } : {}),
+        ...(placement.sourceIn !== undefined ? { sourceIn: placement.sourceIn } : {}),
+        ...(placement.sourceOut !== undefined ? { sourceOut: placement.sourceOut } : {}),
+        ...(placement.linkedToPlacementId ? { linkedVideoClipId: placement.linkedToPlacementId } : { linkedVideoClipId: undefined }),
+      } as TimelineClip;
+    });
+  // Storyboard materializations are compatibility-only duplicates of Master Shots. Preserve them,
+  // translating their start by the canonical shot delta so old consumers remain aligned.
+  const storyboardClips = (source.timelineClips ?? []).filter(clip => clip.id.startsWith("storyboard-")).map(clip => {
+    const shotId = clip.shotId ?? source.shots.find(shot => clip.id.startsWith("storyboard-" + shot.id + "-"))?.id;
+    if (!shotId) return clip;
+    const oldShot = source.shots.find(shot => shot.id === shotId);
+    const newShot = shots.find(shot => shot.id === shotId);
+    if (!oldShot || !newShot) return clip;
+    const oldStart = getMasterShotStart(source.shots, shotId);
+    const newStart = getMasterShotStart(shots, shotId);
+    const delta = newStart - oldStart;
+    const newTrack = newShot.masterTrackId;
+    return { ...clip, start: Math.max(0, clip.start + delta), ...(clip.kind === "video" && newTrack ? { trackId: newTrack } : {}) };
+  });
+  const nonStoryboardClips = placedClips.filter(clip => !clip.id.startsWith("storyboard-"));
+  return {
+    ...source,
+    tracks,
+    shots,
+    timelineClips: [...nonStoryboardClips, ...storyboardClips],
+  };
+}
