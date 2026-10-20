@@ -107,7 +107,7 @@ export function readProjectDocument(value: unknown): ReadProjectDocumentResult {
     for (const placement of root.placements) {
       if (placement.legacyData.entityType === "master-shot") continue;
       if (!projectClipIds.has(placement.id)) {
-        throw new Error("The project document contains stale or inconsistent Composition placements.");
+        throw new Error("The project document contains a stale or inconsistent Composition projection: root placement has no compatibility clip.");
       }
     }
     const expected = migrateLegacyProjectToComposition(project);
