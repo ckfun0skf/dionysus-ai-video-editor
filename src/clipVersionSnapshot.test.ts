@@ -128,6 +128,15 @@ describe("structure-preserving Clip Version snapshots", () => {
         })]),
       }),
     ]));
+    expect(version.composition?.nestedCompositions).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: "composition:legacy-shot-slot:shot-1:slot-1:shot-version-1",
+        legacyData: expect.objectContaining({ shotId: "shot-1", slotId: "slot-1", versionId: "shot-version-1" }),
+        placements: expect.arrayContaining([expect.objectContaining({ id: "shot-layer" })]),
+      }),
+    ]));
+    project.assets.find(asset => asset.id === "nested-asset")!.clipVersions![0].layers[0].x = 99;
+    expect(version.composition?.nestedCompositions?.find(item => item.id === "composition:nested-asset:nested-v2")?.placements[0].legacyData).toMatchObject({ x: 3 });
     expect(version.composition?.provenance).toMatchObject({
       kind: "master-timeline-snapshot",
       sourceProjectId: "project-1",
