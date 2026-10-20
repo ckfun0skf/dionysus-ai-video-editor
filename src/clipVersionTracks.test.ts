@@ -77,7 +77,7 @@ describe("nested Clip Version track operations", () => {
       duration: 2,
       x: 12,
       prompt: "Preserve the original framing",
-      trackId: "clip-track:" + version.id + ":video",
+      trackId: normalizeClipVersionTracks(version).tracks?.find(track => track.kind === "video")?.id,
     });
     expect(JSON.stringify(version)).toBe(before);
     expect(() => addClipVersionLayer(added, {
