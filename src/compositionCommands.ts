@@ -18,6 +18,19 @@ export interface DuplicateCompositionPlacementInput {
   start: number;
 }
 
+export type CompositionResizeEdge = "left" | "right";
+
+export interface CompositionPlacementResize {
+  id: string;
+  start: number;
+  duration: number;
+  edge: CompositionResizeEdge;
+}
+
+export interface CompositionResizePreview extends CompositionPlacementResize {
+  trims: CompositionPlacementResize[];
+}
+
 function clone<T>(value: T): T {
   return structuredClone(value);
 }
@@ -283,6 +296,75 @@ export function trimCompositionPlacement(
       duration,
       sourceIn: fallbackSourceIn,
       sourceOut: fallbackSourceIn + duration,
+    });
+  });
+  extendCompositionDuration(next);
+  assertValidCompositionDocument(next);
+  return next;
+}
+
+function resizedSourceRange(
+  placement: CompositionPlacement,
+  resize: CompositionPlacementResize,
+): Pick<CompositionPlacement, "sourceIn" | "sourceOut"> {
+  if (placement.sourceIn === undefined && placement.sourceOut === undefined) return {};
+  const sourceIn = resize.edge === "left"
+    ? Math.max(0, (placement.sourceIn ?? 0) + (resize.start - placement.start))
+    : placement.sourceIn ?? 0;
+  const sourceOut = resize.edge === "right"
+    ? sourceIn + resize.duration
+    : placement.sourceOut ?? sourceIn + placement.duration;
+  return { sourceIn, sourceOut };
+}
+
+/**
+ * Applies a frame-snapped resize preview and its adjacent trims as one immutable command.
+ * A linked group always receives the root placement's timing and source range, so resizing
+ * either member cannot leave linked audio out of sync with its video placement.
+ */
+export function applyCompositionResizePreview(
+  document: CompositionDocument,
+  preview: CompositionResizePreview,
+): CompositionDocument {
+  assertValidCompositionDocument(document);
+  const requested = [preview, ...preview.trims];
+  const rootUpdates = new Map<string, CompositionPlacementResize>();
+
+  for (const resize of requested) {
+    if (!Number.isFinite(resize.start) || resize.start < 0 ||
+        !Number.isFinite(resize.duration) || resize.duration <= 0) {
+      throw new Error("Composition resize timing must use a non-negative start and positive finite duration.");
+    }
+    const placement = requirePlacement(document, resize.id);
+    const root = getLinkedRoot(document, placement);
+    const existing = rootUpdates.get(root.id);
+    if (existing && (existing.start !== resize.start || existing.duration !== resize.duration || existing.edge !== resize.edge)) {
+      throw new Error("A linked Composition group cannot receive conflicting resize updates.");
+    }
+    rootUpdates.set(root.id, { ...resize, id: root.id });
+  }
+
+  const updates = new Map<string, { resize: CompositionPlacementResize; source: Pick<CompositionPlacement, "sourceIn" | "sourceOut"> }>();
+  for (const [rootId, resize] of rootUpdates) {
+    const root = requirePlacement(document, rootId);
+    const source = resizedSourceRange(root, resize);
+    for (const placement of getLinkedGroup(document, root)) {
+      updates.set(placement.id, { resize, source });
+    }
+  }
+
+  const next = clone(document);
+  next.placements = next.placements.map(placement => {
+    const update = updates.get(placement.id);
+    if (!update) return placement;
+    const source = Object.keys(update.source).length
+      ? update.source
+      : resizedSourceRange(placement, update.resize);
+    return syncLegacyPlacement({
+      ...placement,
+      start: update.resize.start,
+      duration: update.resize.duration,
+      ...source,
     });
   });
   extendCompositionDuration(next);
