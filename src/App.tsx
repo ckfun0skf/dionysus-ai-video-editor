@@ -1158,17 +1158,28 @@ export default function App() {
       updated.sourceOut = (updated.sourceIn ?? 0) + updated.duration;
     }
     const sourceTemplate = createRootCompositionPlacementForTimelineClip(projectRef.current, rootCompositionRef.current, updated);
-    changeRootComposition(root => updateCompositionPlacement(root, clipId, {
-      name: updated.name,
-      trackId: updated.trackId,
-      start: updated.start,
-      duration: updated.duration,
-      source: sourceTemplate.source,
-      sourceIn: updated.sourceIn,
-      sourceOut: updated.sourceOut,
-      linkedToPlacementId: sourceTemplate.linkedToPlacementId,
-      legacyData: { ...canonical.legacyData, ...updated },
-    }));
+    changeRootComposition(root => {
+      let next = root;
+      if (patch.start !== undefined && patch.start !== current.start) {
+        next = moveCompositionPlacement(next, clipId, updated.start);
+      }
+      if (patch.duration !== undefined && patch.duration !== current.duration) {
+        next = applyCompositionResizePreview(next, {
+          id: clipId, start: updated.start, duration: updated.duration, edge: "right", trims: [],
+        });
+      }
+      return updateCompositionPlacement(next, clipId, {
+        name: updated.name,
+        trackId: updated.trackId,
+        start: updated.start,
+        duration: updated.duration,
+        source: sourceTemplate.source,
+        sourceIn: updated.sourceIn,
+        sourceOut: updated.sourceOut,
+        linkedToPlacementId: sourceTemplate.linkedToPlacementId,
+        legacyData: { ...canonical.legacyData, ...updated },
+      });
+    });
   }
 
   function unlinkRootTimelineAudio(clipId: string) {
