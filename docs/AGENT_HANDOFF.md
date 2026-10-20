@@ -2,6 +2,14 @@
 
 This file is the starting point for any agent continuing Dionysus. Keep project knowledge in Git; do not rely on chat history as the source of truth.
 
+## Follow-up checkpoint — 2026-10-20 (PR #96 root recovery persistence)
+
+- Starting point was PR head `58dcec116d20bfae703b42a3fa5dc80281a2af5c`; PR #96 remains open, Draft, and unmerged.
+- `src/App.tsx` local recovery now serializes `createProjectDocument(snapshot)`, so localStorage carries the versioned 2.0 envelope (root Composition projection plus the schema-1.0 compatibility project) rather than only the legacy project. Startup uses `readProjectDocument()`; existing schema-1.0 localStorage values remain accepted and normalized through the existing migration path.
+- Added `src/projectDocument.test.ts` regression coverage for root placement timing across save/reopen and project Undo/Redo. The tests inspect the serialized root Composition placement as well as the reopened legacy project value.
+- Important limitation: this is a transitional persistence improvement, **not** canonical root live-state completion. `change()` still edits `DionysusProject`; the root Composition envelope is regenerated from schema-1.0 state. Next work must make root Composition the live editable state and update the schema-1.0 payload as a deterministic compatibility projection, then cover root command mutations, migration, pins/nesting and history.
+- Exact-head CI must be checked after the final code and documentation commits. Do not claim success until that SHA's CI is complete. No browser smoke tests; keep PR #96 Draft; do not merge or push to main.
+
 ## Follow-up checkpoint — 2026-10-20 (PR #96 canonical duplication audit)
 
 - PR #96 is still open and Draft. CI run [39453725792](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39453725792) ran on merge SHA `dd2fcd4fda2d50524aa0aab59c27b2190536915b`: all 228 tests across 23 files passed and audit found zero vulnerabilities, but TypeScript/build failed on linked-reference assertion/helper metadata types. Those type issues were corrected on code SHA `9a956d582df2f98c3615e478493eae1ab8ed4005`. Exact-head CI [39454630282](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39454630282) passed on PR head `eb5ea66cbfaec51b3cf306e66efd7f3db7a1a6b2`: 228 tests / 23 files, TypeScript and production build passed, dependency audit zero vulnerabilities. The documentation-only commits after that run require a final head/CI check.
