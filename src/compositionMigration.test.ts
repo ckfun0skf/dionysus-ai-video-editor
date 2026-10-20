@@ -154,6 +154,9 @@ describe("migrateLegacyProjectToComposition", () => {
     project.assets.push(asset);
 
     const shotVersion = project.shots[0].slots[0].versions[0];
+    shotVersion.description = "Version description";
+    shotVersion.scriptVersionIds = ["script-v3"];
+    shotVersion.generationRecords = [];
     shotVersion.composition = structuredClone(canonical);
     const result = migrateLegacyProjectToComposition(project);
     const clipComposition = result.clipCompositions.find(item => item.id === canonical.id);
