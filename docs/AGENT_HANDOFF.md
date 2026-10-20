@@ -2,6 +2,15 @@
 
 This file is the starting point for any agent continuing Dionysus. Keep project knowledge in Git; do not rely on chat history as the source of truth.
 
+## Follow-up checkpoint — 2026-10-20 (PR #96 canonical duplication audit)
+
+- PR #96 is still open and Draft. Exact PR head before this documentation refresh was `c9c4ed4dd91dcb3bf233258515bd664f9d854589`; the associated CI run was queued as [39453725792](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39453725792). Do not call that head green until the run finishes. Documentation commits will advance the head and require checking CI for the final SHA.
+- Fixed `duplicateClipAssetVersion()` to call `duplicateClipVersionComposition()`. The helper remaps canonical placement and track IDs, track references, linked placement/audio references, and legacy compatibility projections without mutating the source version. Embedded child compositions, pinned versions and provenance remain copied as snapshots.
+- Shot duplication and Slot duplication now use the same helper rather than regenerating only `layers[].id`.
+- `updateCompositionLayer()` (legacy Shot Slot inspector) now routes through `updateClipVersionLayer()`, updating canonical placements and regenerating the compatibility projection instead of writing only `layers`.
+- Added unit coverage for canonical duplication, linked video/audio references, source ranges, pinned nested child/provenance preservation, source immutability, and legacy-only versions. These tests are not yet reported as passing; exact-head CI is the required validation.
+- Known limitation remains: root Composition is still a projection rather than the live editor source of truth. Continue auditing every remaining direct Shot/Slot `layers` mutation, then prioritize canonical root persistence, save/reopen, and Undo/Redo coverage. No browser smoke tests; do not merge.
+
 ## Live checkpoint — 2026-10-20
 
 - Latest confirmed `main` commit: `5f8dbea57cc72a8b4a909db3b082ea0c54894529` (`feat: add shared Composition editing commands`), squashed from PR #93. PR #93 exact-head CI [39398098386](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39398098386) passed 210 tests across 22 test files plus TypeScript and Vite production build. Post-merge main CI [39400972426](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39400972426) and Pages deployment [39400972424](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39400972424) also both completed successfully for `5f8dbea...`.
