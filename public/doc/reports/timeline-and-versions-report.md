@@ -121,3 +121,8 @@ The inspector now passes only changed fields to the canonical nested adapter, pr
 ## Root Composition recovery persistence — 2026-10-20
 
 The local recovery boundary now stores the versioned Composition envelope alongside the schema-1.0 compatibility payload, and startup continues to accept old schema-1.0 local recovery values. Regression coverage checks root placement timing after save/reopen and after Undo/Redo. This is a persistence improvement only: root Composition remains a regenerated projection because App edit commands still mutate schema-1.0 `DionysusProject`. Canonical root live-state ownership, deterministic compatibility projection and broader root-command/history tests remain open. Exact-head CI must be verified after the final documentation commit; no browser smoke tests were added or run. PR #96 remains Draft and unmerged.
+
+
+## Root Composition mutation audit — 2026-10-20
+
+Master Shot movement now passes through `moveCompositionPlacementToTrack` before updating the legacy Shot projection, with a guarded fallback for malformed legacy projects. Code-head CI passed for this change. Root Composition is still not the App live/history authority: `DionysusProject` remains live state and the Composition is regenerated from it. This remains an incremental mutation-path improvement; canonical root state ownership, deterministic compatibility projection, and true App-level save/reopen/Undo/Redo tests are still open.
