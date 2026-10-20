@@ -1,4 +1,6 @@
 import type { DionysusProject, Shot, TimelineClip } from "./types";
+import { assertValidCompositionDocument, applyCompositionResizePreview } from "./compositionCommands";
+import { migrateLegacyProjectToComposition } from "./compositionMigration";
 import { getMasterShotStart } from "./masterTimeline";
 import { calculateTimelineDropPosition } from "./timelinePlacement";
 import { applyTimelineClipResize, calculateTimelineClipResizePreview, type ClipResizePreview } from "./timelineResize";
@@ -75,11 +77,75 @@ export function calculateProjectTimelineClipResizePreview(
   );
 }
 
-/** Apply a resize across both Shot placements and ordinary clips as one project change. */
+/** Apply a resize through the shared Composition command when the legacy project can be
+ * represented without losing any of the affected placements. Materialized Storyboard clips and
+ * malformed legacy link groups remain on the compatibility path until their migration is resolved. */
 export function applyProjectTimelineClipResize(
   project: DionysusProject,
   preview: ClipResizePreview,
 ): DionysusProject {
+  let rootComposition: ReturnType<typeof migrateLegacyProjectToComposition>["rootComposition"] | undefined;
+  try {
+    rootComposition = migrateLegacyProjectToComposition(project).rootComposition;
+    assertValidCompositionDocument(rootComposition);
+  } catch {
+    rootComposition = undefined;
+  }
+
+  const requestedIds = [preview.id, ...preview.trims.map(trim => trim.id)];
+  if (rootComposition && requestedIds.every(id => rootComposition!.placements.some(item => item.id === id))) {
+    const resized = applyCompositionResizePreview(rootComposition, preview);
+    const originalById = new Map(rootComposition.placements.map(placement => [placement.id, placement]));
+    const updatedById = new Map(resized.placements.map(placement => [placement.id, placement]));
+    // Include linked descendants changed by the shared command, not only the explicit resize
+    // and trim IDs. Otherwise the canonical document is correct but the compatibility projection
+    // leaves linked audio at its previous timing/source range.
+    const touchedIds = new Set(resized.placements.filter(placement => {
+      const original = originalById.get(placement.id);
+      return original && (
+        original.start !== placement.start ||
+        original.duration !== placement.duration ||
+        original.sourceIn !== placement.sourceIn ||
+        original.sourceOut !== placement.sourceOut ||
+        original.trackId !== placement.trackId
+      );
+    }).map(placement => placement.id));
+    const shots = project.shots.map(shot => {
+      if (!touchedIds.has(shot.id)) return shot;
+      const placement = updatedById.get(shot.id);
+      if (!placement) return shot;
+      return {
+        ...shot,
+        masterStart: placement.start,
+        duration: placement.duration,
+        masterTrackId: placement.trackId,
+      };
+    });
+    const timelineClips = (project.timelineClips ?? []).map(clip => {
+      if (!touchedIds.has(clip.id)) return clip;
+      const placement = updatedById.get(clip.id);
+      if (!placement) return clip;
+      const {
+        sourceIn: _sourceIn,
+        sourceOut: _sourceOut,
+        linkedVideoClipId: _linkedVideoClipId,
+        ...rest
+      } = clip;
+      return {
+        ...rest,
+        trackId: placement.trackId,
+        start: placement.start,
+        duration: placement.duration,
+        ...(placement.sourceIn !== undefined ? { sourceIn: placement.sourceIn } : {}),
+        ...(placement.sourceOut !== undefined ? { sourceOut: placement.sourceOut } : {}),
+        ...(placement.linkedToPlacementId ? { linkedVideoClipId: placement.linkedToPlacementId } : {}),
+      };
+    }).map(clip => clip.kind === "audio" ? withDurationAndClampedFades(clip, clip.duration) : clip);
+    return { ...project, shots, timelineClips };
+  }
+
+  // Transitional fallback: legacy Storyboard materializations are intentionally omitted from the
+  // canonical root projection, so retain the existing behavior for operations that include them.
   const fps = Math.max(1, project.frameRate || 24);
   const shotIds = new Set(project.shots.map(shot => shot.id));
   const shotTrims = preview.trims.filter(trim => shotIds.has(trim.id));
