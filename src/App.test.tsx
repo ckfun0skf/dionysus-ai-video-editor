@@ -1876,6 +1876,31 @@ describe("click-to-place timeline insertion", () => {
     for (let index = 1; index < sorted.length; index += 1) {
       expect(sorted[index - 1].start + sorted[index - 1].duration).toBeLessThanOrEqual(sorted[index].start + 1e-7);
     }
+    const savedEnvelope = JSON.parse(localStorage.getItem("dionysus.composition.v2")!) as {
+      compositionModel: { rootComposition: { placements: Array<{ id: string; start: number; duration: number }> } };
+    };
+    expect(savedEnvelope.compositionModel.rootComposition.placements).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "existing-first", start: 6, duration: 2 }),
+      expect.objectContaining({ id: "existing-later", start: 9, duration: 2 }),
+      expect.objectContaining({ start: 3, duration: 3 }),
+    ]));
+
+    click(buttonsNamed("Undo edit")[0]);
+    await flushEffects();
+    const afterUndo = JSON.parse(localStorage.getItem("dionysus.composition.v2")!) as typeof savedEnvelope;
+    expect(afterUndo.compositionModel.rootComposition.placements.some(placement => placement.start === 3 && placement.duration === 3)).toBe(false);
+    expect(afterUndo.compositionModel.rootComposition.placements).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "existing-first", start: 4, duration: 2 }),
+      expect.objectContaining({ id: "existing-later", start: 7, duration: 2 }),
+    ]));
+
+    click(buttonsNamed("Redo edit")[0]);
+    await flushEffects();
+    const afterRedo = JSON.parse(localStorage.getItem("dionysus.composition.v2")!) as typeof savedEnvelope;
+    expect(afterRedo.compositionModel.rootComposition.placements).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "existing-first", start: 6, duration: 2 }),
+      expect.objectContaining({ id: "existing-later", start: 9, duration: 2 }),
+    ]));
   });
 });
 
