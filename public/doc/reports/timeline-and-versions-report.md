@@ -126,3 +126,8 @@ The local recovery boundary now stores the versioned Composition envelope alongs
 ## Root Composition mutation audit — 2026-10-20
 
 Master Shot movement now passes through `moveCompositionPlacementToTrack` before updating the legacy Shot projection, with a guarded fallback for malformed legacy projects. Code-head CI passed for this change. Root Composition is still not the App live/history authority: `DionysusProject` remains live state and the Composition is regenerated from it. This remains an incremental mutation-path improvement; canonical root state ownership, deterministic compatibility projection, and true App-level save/reopen/Undo/Redo tests are still open.
+
+
+## Canonical root Composition live state — 2026-10-20
+
+The App now holds a live root `CompositionDocument` and paired Composition history snapshots. Master Timeline move/resize run Composition commands against the live root. Other domain changes reconcile through Composition insertion/deletion/move/resize and track commands, then keep schema-1.0 fields as a compatibility projection. Versioned save/export serializes the canonical root; startup rejects stale envelopes and migrates schema-1.0 projects. Added save/reopen/Undo/Redo regression coverage for a canonical root move. An earlier CI run found stale-envelope and validation failures; the fixes are in the current branch and the exact final docs/code SHA still requires completed passing CI. PR #96 stays Draft; no main push or browser smoke tests.
