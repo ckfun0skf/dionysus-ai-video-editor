@@ -1142,7 +1142,7 @@ export default function App() {
       changeRootComposition(root => deleteCompositionPlacement(root, clip.id));
       return;
     }
-    deleteTimelineClipCanonical(clip);
+    change(project => ({ ...project, timelineClips: deleteTimelineClip({ tracks: project.tracks, timelineClips: project.timelineClips ?? [] }, clip.id).timelineClips }));
   }
 
   function syncStoryboardToTimeline() {
