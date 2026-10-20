@@ -585,6 +585,41 @@ export function removeCompositionTrack(
   return next;
 }
 
+/** Reorder Master Shot placements chronologically, compacting the Shot sequence in one canonical command. */
+export function rippleReorderCompositionMasterShots(
+  document: CompositionDocument,
+  shotId: string,
+  targetCenter: number,
+  targetTrackId: string,
+): CompositionDocument {
+  assertValidCompositionDocument(document);
+  if (!Number.isFinite(targetCenter)) throw new Error("Ripple reorder target must be finite.");
+  const ordered = document.placements
+    .filter(placement => placement.legacyData.entityType === "master-shot")
+    .sort((a, b) => a.start - b.start || a.order - b.order);
+  const moving = ordered.find(placement => placement.id === shotId);
+  if (!moving) throw new Error("Master Shot not found in the canonical Composition.");
+  if (!document.tracks.some(track => track.id === targetTrackId && track.kind === "video")) {
+    throw new Error("A Master Shot must use a video track.");
+  }
+  const remaining = ordered.filter(placement => placement.id !== shotId);
+  const insertionIndex = remaining.findIndex(placement => targetCenter < placement.start + placement.duration / 2);
+  remaining.splice(insertionIndex < 0 ? remaining.length : insertionIndex, 0, moving);
+  let next = clone(document);
+  let cursor = Math.max(0, Math.min(...ordered.map(placement => placement.start)));
+  const fps = Math.max(1, document.frameRate || 24);
+  for (const placement of remaining) {
+    const current = next.placements.find(item => item.id === placement.id);
+    if (!current) throw new Error("Master Shot disappeared during canonical ripple reorder.");
+    const start = Math.round(cursor * fps) / fps;
+    if (current.id === shotId) next = moveCompositionPlacementToTrack(next, current.id, targetTrackId, start);
+    else if (current.start !== start) next = moveCompositionPlacement(next, current.id, start);
+    cursor = start + current.duration;
+  }
+  assertValidCompositionDocument(next);
+  return next;
+}
+
 /** Reorder canonical tracks and keep stable placement IDs/track references. */
 export function reorderCompositionTrack(
   document: CompositionDocument,
