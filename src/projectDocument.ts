@@ -35,8 +35,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-export function createProjectDocument(project: DionysusProject): DionysusProjectDocumentV2 {
+export function createProjectDocument(project: DionysusProject, canonicalRoot?: CompositionDocument): DionysusProjectDocumentV2 {
   const migrated = migrateLegacyProjectToComposition(project);
+  const rootComposition = canonicalRoot ? structuredClone(canonicalRoot) : migrated.rootComposition;
+  assertValidCompositionDocument(rootComposition);
   return {
     format: PROJECT_DOCUMENT_FORMAT,
     documentVersion: PROJECT_DOCUMENT_VERSION,
