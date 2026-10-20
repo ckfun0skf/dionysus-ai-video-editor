@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { sampleProject } from "./sampleProject";
 import { createProjectDocument, readProjectDocument } from "./projectDocument";
+import { recordProjectChange, redoProjectChange, undoProjectChange } from "./projectHistory";
+import { getMasterShotStart } from "./masterTimeline";
 
 describe("versioned project document boundary", () => {
   it("exports a versioned Composition projection alongside a lossless legacy project", () => {
@@ -114,6 +116,33 @@ describe("versioned project document boundary", () => {
     expect(alternatives.map(composition => composition.legacyData?.selected)).toEqual([false, true]);
     expect(alternatives[0].legacyData).toMatchObject({ generationRecords: slot.versions[0].generationRecords });
     expect(alternatives[1].legacyData).toMatchObject({ generationRecords: alternative.generationRecords });
+  });
+
+
+  it("persists root Composition through save/reopen and restores it across project Undo/Redo", () => {
+    const original = structuredClone(sampleProject);
+    const originalStart = getMasterShotStart(original.shots, original.shots[0].id);
+    const edited = {
+      ...structuredClone(original),
+      shots: original.shots.map((shot, index) => index === 0 ? { ...shot, masterStart: 23 } : shot),
+    };
+    const afterEdit = recordProjectChange({ current: original, undo: [], redo: [] }, edited);
+
+    const reopenedEdit = readProjectDocument(JSON.parse(JSON.stringify(createProjectDocument(afterEdit.current))));
+    expect(reopenedEdit.project.shots[0].masterStart).toBe(23);
+    expect(reopenedEdit.sourceDocumentVersion).toBe("2.0");
+    expect(reopenedEdit.project.id).toBe(original.id);
+
+    const undone = undoProjectChange(afterEdit);
+    const reopenedUndo = readProjectDocument(JSON.parse(JSON.stringify(createProjectDocument(undone.current))));
+    expect(getMasterShotStart(reopenedUndo.project.shots, original.shots[0].id)).toBe(originalStart);
+
+    const redone = redoProjectChange(undone);
+    const reopenedRedo = readProjectDocument(JSON.parse(JSON.stringify(createProjectDocument(redone.current))));
+    expect(getMasterShotStart(reopenedRedo.project.shots, original.shots[0].id)).toBe(23);
+    expect(reopenedRedo.project.shots[0].slots[0].versions[0].composition).toEqual(
+      redone.current.shots[0].slots[0].versions[0].composition,
+    );
   });
 
 });
