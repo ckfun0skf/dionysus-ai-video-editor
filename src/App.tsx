@@ -828,10 +828,10 @@ export default function App() {
         const versions = slot.versions.map(version => {
           const newVersionId = id("version");
           versionIdMap.set(version.id, newVersionId);
+          const duplicatedVersion = duplicateClipVersionComposition(version, kind => id(kind));
           return {
-            ...version,
+            ...duplicatedVersion,
             id: newVersionId,
-            layers: version.layers.map(layer => ({ ...layer, id: id("layer") })),
             generationRecords: version.generationRecords.map(record => ({ ...record, id: id("generation") })),
           };
         });
@@ -883,10 +883,10 @@ export default function App() {
     const versions = source.versions.map(version => {
       const newVersionId = id("version");
       versionIdMap.set(version.id, newVersionId);
+      const duplicatedVersion = duplicateClipVersionComposition(version, kind => id(kind));
       return {
-        ...JSON.parse(JSON.stringify(version)),
+        ...duplicatedVersion,
         id: newVersionId,
-        layers: version.layers.map(layer => ({ ...layer, id: id("layer") })),
         generationRecords: version.generationRecords.map(record => ({ ...record, id: id("generation") })),
       };
     });
