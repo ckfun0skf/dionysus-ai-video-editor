@@ -213,4 +213,30 @@ describe("shared project timeline placement engine", () => {
   });
 
 
+  it("routes root resize through shared Composition commands and synchronizes linked audio ranges", () => {
+    const project = structuredClone(sampleProject);
+    project.shots = [];
+    const videoTrack = project.tracks.find(item => item.kind === "video")!;
+    const audioTrack = project.tracks.find(item => item.kind === "audio")!;
+    const video = {
+      id: "root-video", name: "Root video", kind: "video" as const, trackId: videoTrack.id,
+      start: 1, duration: 6, sourceIn: 2, sourceOut: 8,
+    };
+    const audio = {
+      id: "root-audio", name: "Linked audio", kind: "audio" as const, trackId: audioTrack.id,
+      start: 1, duration: 6, sourceIn: 2, sourceOut: 8, linkedVideoClipId: video.id,
+    };
+    project.timelineClips = [video, audio];
+
+    const preview = calculateProjectTimelineClipResizePreview(project, video, "right", 2, 12);
+    expect(preview).toMatchObject({ id: video.id, start: 1, duration: 8, edge: "right" });
+    const updated = applyProjectTimelineClipResize(project, preview!);
+
+    expect(updated.timelineClips).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: video.id, start: 1, duration: 8, sourceIn: 2, sourceOut: 10 }),
+      expect.objectContaining({ id: audio.id, start: 1, duration: 8, sourceIn: 2, sourceOut: 10, linkedVideoClipId: video.id }),
+    ]));
+    expect(project.timelineClips).toEqual([video, audio]);
+  });
+
 });
