@@ -2509,13 +2509,13 @@ export default function App() {
   return <div className="mobile-clip-toolbar" aria-label="Selected clip tools">
     <span className="mobile-clip-toolbar-title">{mobileClip.name}</span>
     {mobileClip.kind === "audio" && <button type="button" className="mobile-audio-mute-toggle" aria-label={mobileClip.muted ? "Unmute selected audio" : "Mute selected audio"} aria-pressed={Boolean(mobileClip.muted)} onClick={() => {
-      change(p => ({ ...p, timelineClips: (p.timelineClips ?? []).map(item => item.id === mobileClip.id ? { ...item, muted: !item.muted } : item) }));
+      updateRootTimelineClip(mobileClip.id,{muted:!mobileClip.muted});
       setNotice(mobileClip.muted ? "Audio clip unmuted." : "Audio clip muted.");
     }}>{mobileClip.muted ? "Unmute" : "Mute"}</button>}
     <button type="button" aria-label="Split selected clip" disabled={!canSplit} onClick={() => {
       const newClipId = id("timeline-clip");
       try {
-        change(p => ({ ...p, timelineClips: splitTimelineClip({ tracks: p.tracks, timelineClips: p.timelineClips ?? [] }, mobileClip.id, splitAt, { newClipId }).timelineClips }));
+        splitRootTimelineClip(mobileClip.id,splitAt,newClipId);
         setSelectedTimelineClipId(newClipId);
         setNotice("Clip split at the playhead.");
       } catch (error) { setNotice(error instanceof Error ? error.message : "Could not split the clip."); }
@@ -2523,14 +2523,14 @@ export default function App() {
     <button type="button" aria-label="Duplicate selected clip" onClick={() => {
       const newClipId = id("timeline-clip");
       try {
-        change(p => ({ ...p, timelineClips: duplicateTimelineClip({ tracks: p.tracks, timelineClips: p.timelineClips ?? [] }, mobileClip.id, { newClipId, start: mobileClip.start + mobileClip.duration }).timelineClips }));
+        duplicateRootTimelineClip(mobileClip);
         setSelectedTimelineClipId(newClipId);
         setNotice("Clip duplicated. Use Undo to restore.");
       } catch (error) { setNotice(error instanceof Error ? error.message : "Could not duplicate the clip at this position."); }
     }}>Duplicate</button>
     <button type="button" aria-label="Shorten selected clip" disabled={mobileClip.duration <= frame + 0.01} onClick={() => {
       try {
-        change(p => ({ ...p, timelineClips: trimTimelineClip({ tracks: p.tracks, timelineClips: p.timelineClips ?? [] }, mobileClip.id, Math.max(frame, mobileClip.duration - 0.5)).timelineClips }));
+        trimRootTimelineClip(mobileClip.id,Math.max(frame,mobileClip.duration-0.5));
         setNotice("Clip shortened. Use Undo to restore.");
       } catch (error) { setNotice(error instanceof Error ? error.message : "Could not trim the clip."); }
     }}>Trim −0.5s</button>
@@ -2934,14 +2934,14 @@ export default function App() {
     </span></div>}
     {timelineClipSettingsId && project.timelineClips?.find(clip=>clip.id===timelineClipSettingsId) && (()=>{const clip=project.timelineClips!.find(item=>item.id===timelineClipSettingsId)!;const updateClip=(patch:Partial<TimelineClip>)=>updateRootTimelineClip(clip.id,patch);const audioAssets=project.assets.filter(asset=>asset.kind==="audio");const videoAssets=project.assets.filter(asset=>asset.kind==="video"||asset.kind==="image");const clipAssets=project.assets.filter(asset=>asset.kind==="clip");const codeAssets=project.assets.filter(asset=>asset.kind==="script");const options=clip.kind==="audio"?audioAssets:clip.kind==="video"?videoAssets:clip.kind==="clip"?clipAssets:clip.kind==="procedural"?codeAssets:[];return <div className="settings-dialog-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setTimelineClipSettingsId("");}}><section className="settings-dialog clip-settings-dialog visual-clip-inspector" role="dialog" aria-modal="true" aria-labelledby="timeline-clip-settings-title"><header><div><span className="inspector-kicker">{clip.kind.toUpperCase()} CLIP SETTINGS</span><h2 id="timeline-clip-settings-title">{clip.name}</h2></div><button className="button button-quiet button-small" onClick={()=>setTimelineClipSettingsId("")}>Close</button></header>
       <label className="field-label">Clip name<input className="text-field" value={clip.name} onChange={event=>updateClip({name:event.target.value})}/></label><div className="visual-clip-actions">
-      <button onClick={()=>{try{change(p=>({...p,timelineClips:moveTimelineClip({tracks:p.tracks,timelineClips:p.timelineClips??[]},clip.id,Math.max(0,clip.start-.5)).timelineClips}));}catch(error){setNotice(error instanceof Error?error.message:"Move failed.");}}}>−0.5s</button>
-      <button onClick={()=>{try{change(p=>({...p,timelineClips:moveTimelineClip({tracks:p.tracks,timelineClips:p.timelineClips??[]},clip.id,clip.start+.5).timelineClips}));}catch(error){setNotice(error instanceof Error?error.message:"Move failed.");}}}>+0.5s</button>
-      <button onClick={()=>{try{change(p=>({...p,timelineClips:trimTimelineClip({tracks:p.tracks,timelineClips:p.timelineClips??[]},clip.id,Math.max(.1,clip.duration-.5)).timelineClips}));}catch(error){setNotice(error instanceof Error?error.message:"Trim failed.");}}}>Trim −0.5s</button>
+      <button onClick={()=>{try{moveRootTimelineClip(clip.id,Math.max(0,clip.start-.5));}catch(error){setNotice(error instanceof Error?error.message:"Move failed.");}}}>−0.5s</button>
+      <button onClick={()=>{try{moveRootTimelineClip(clip.id,clip.start+.5);}catch(error){setNotice(error instanceof Error?error.message:"Move failed.");}}}>+0.5s</button>
+      <button onClick={()=>{try{trimRootTimelineClip(clip.id,Math.max(.1,clip.duration-.5));}catch(error){setNotice(error instanceof Error?error.message:"Trim failed.");}}}>Trim −0.5s</button>
       <button onClick={()=>{const fps=Math.max(1,project.frameRate||24),frame=1/fps,splitAt=Math.round((clip.start+clip.duration/2)*fps)/fps;if(clip.duration<frame*2)return;const newClipId=id("timeline-clip");const linked=(project.timelineClips??[]).filter(item=>item.kind==="audio"&&item.linkedVideoClipId===clip.id);try{change(p=>({...p,timelineClips:splitTimelineClip({tracks:p.tracks,timelineClips:p.timelineClips??[]},clip.id,Math.min(clip.start+clip.duration-frame,Math.max(clip.start+frame,splitAt)),{newClipId,...(linked.length?{newLinkedAudioClipIds:linked.map(()=>id("timeline-audio"))}:{})}).timelineClips}));setSelectedTimelineClipId(newClipId);setTimelineClipSettingsId(newClipId);}catch(error){setNotice(error instanceof Error?error.message:"Split failed.");}}}>Split at midpoint</button>
       <button disabled={Math.round(editorTime*Math.max(1,project.frameRate||24))/Math.max(1,project.frameRate||24)<=clip.start||Math.round(editorTime*Math.max(1,project.frameRate||24))/Math.max(1,project.frameRate||24)>=clip.start+clip.duration} onClick={()=>{const fps=Math.max(1,project.frameRate||24),splitAt=Math.round(editorTime*fps)/fps;if(splitAt<=clip.start||splitAt>=clip.start+clip.duration)return;const newClipId=id("timeline-clip");const linked=(project.timelineClips??[]).filter(item=>item.kind==="audio"&&item.linkedVideoClipId===clip.id);try{change(p=>({...p,timelineClips:splitTimelineClip({tracks:p.tracks,timelineClips:p.timelineClips??[]},clip.id,splitAt,{newClipId,...(linked.length?{newLinkedAudioClipIds:linked.map(()=>id("timeline-audio"))}:{})}).timelineClips}));setSelectedTimelineClipId(newClipId);setTimelineClipSettingsId(newClipId);}catch(error){setNotice(error instanceof Error?error.message:"Split failed.");}}}>Split at playhead</button>
 
       <button onClick={()=>{const newClipId=id("timeline-clip");try{change(p=>({...p,timelineClips:duplicateTimelineClip({tracks:p.tracks,timelineClips:p.timelineClips??[]},clip.id,{newClipId,start:clip.start+clip.duration,...(clip.kind==="video"&&(p.timelineClips??[]).some(item=>item.kind==="audio"&&item.linkedVideoClipId===clip.id)?{newAudioClipId:id("timeline-audio")}:{})}).timelineClips}));setSelectedTimelineClipId(newClipId);setTimelineClipSettingsId(newClipId);}catch(error){setNotice(error instanceof Error?error.message:"Duplicate failed.");}}}>Duplicate clip</button>
-      {clip.kind==="audio"&&clip.linkedVideoClipId&&<button onClick={()=>{try{change(p=>({...p,timelineClips:unlinkTimelineAudio({tracks:p.tracks,timelineClips:p.timelineClips??[]},clip.id).timelineClips}));}catch(error){setNotice(error instanceof Error?error.message:"Unlink failed.");}}}>Unlink audio</button>}
+      {clip.kind==="audio"&&clip.linkedVideoClipId&&<button onClick={()=>{try{unlinkRootTimelineAudio(clip.id);}catch(error){setNotice(error instanceof Error?error.message:"Unlink failed.");}}}>Unlink audio</button>}
     </div>
     
       <div className="settings-dialog-grid"><label className="field-label">Start (seconds)<input className="text-field" type="number" min="0" step={1/Math.max(1,project.frameRate)} value={clip.start} onChange={event=>{const value=Math.max(0,Number(event.target.value)||0);try{change(p=>({...p,timelineClips:moveTimelineClip({tracks:p.tracks,timelineClips:p.timelineClips??[]},clip.id,value).timelineClips}));}catch(error){setNotice(error instanceof Error?error.message:"Could not move clip.");}}}/></label><label className="field-label">Duration (seconds)<input className="text-field" type="number" min={1/Math.max(1,project.frameRate)} step={1/Math.max(1,project.frameRate)} value={clip.duration} onChange={event=>{const duration=Math.max(1/Math.max(1,project.frameRate),Number(event.target.value)||.1);try{change(p=>({...p,timelineClips:trimTimelineClip({tracks:p.tracks,timelineClips:p.timelineClips??[]},clip.id,duration).timelineClips}));}catch(error){setNotice(error instanceof Error?error.message:"Could not resize clip.");}}}/></label></div>
