@@ -76,6 +76,31 @@ describe("timeline clip resize and adjacent trimming", () => {
     expect(applyTimelineClipResize(clips, preview, 24).find(item => item.id === "right")).toEqual(clips[1]);
   });
 
+
+  it("clears stale linked-audio source ranges when the video has no explicit source range", () => {
+    const clips: TimelineClip[] = [
+      video("video", 0, 5),
+      {
+        id: "linked-audio", name: "linked audio", kind: "audio", trackId: "a1",
+        start: 0, duration: 5, linkedVideoClipId: "video", sourceIn: 12, sourceOut: 17
+      }
+    ];
+    const preview = calculateTimelineClipResizePreview(clips, "video", "right", 1, 12, 24)!;
+    const result = applyTimelineClipResize(clips, preview, 24);
+    const audio = result.find(item => item.id === "linked-audio")!;
+    expect(audio).toMatchObject({ start: 0, duration: 6, linkedVideoClipId: "video" });
+    expect(audio).not.toHaveProperty("sourceIn");
+    expect(audio).not.toHaveProperty("sourceOut");
+  });
+
+
+  it("does not round a right-edge trim past the last whole frame of a non-aligned timeline", () => {
+    const clips = [video("end-clip", 0, 10)];
+    const preview = calculateTimelineClipResizePreview(clips, "end-clip", "right", 2, 10.02, 24)!;
+    expect(preview.duration).toBe(10);
+    expect(preview.start + preview.duration).toBeLessThanOrEqual(10.02);
+  });
+
   it("does not mutate the caller's clip array", () => {
     const clips = [video("left", 0, 5), video("right", 5, 4)];
     const snapshot = JSON.stringify(clips);

@@ -116,6 +116,23 @@ describe("shared project timeline placement engine", () => {
   });
 
 
+
+  it("rejects incompatible destination tracks before suggesting a drag position", () => {
+    const project = structuredClone(sampleProject);
+    project.shots = [];
+    const videoTrack = project.tracks.find(track => track.kind === "video")!;
+    const audioTrack = project.tracks.find(track => track.kind === "audio")!;
+    const video = { id: "move-video", name: "Video", kind: "video" as const, trackId: videoTrack.id, start: 0, duration: 2 };
+    const audio = { id: "move-audio", name: "Audio", kind: "audio" as const, trackId: audioTrack.id, start: 0, duration: 2 };
+    project.timelineClips = [video, audio];
+    expect(calculateProjectTimelineDropPosition(project, video, audioTrack.id, 4, 12)).toBeNull();
+    expect(calculateProjectTimelineDropPosition(project, audio, videoTrack.id, 4, 12)).toBeNull();
+
+    const root = migrateLegacyProjectToComposition(project).rootComposition;
+    expect(calculateCanonicalCompositionDropPosition(root, video, audioTrack.id, 4, 12)).toBeNull();
+    expect(calculateCanonicalCompositionDropPosition(root, audio, videoTrack.id, 4, 12)).toBeNull();
+  });
+
   it("uses Master Shots as occupancy when dropping an ordinary clip", () => {
     const project = structuredClone(sampleProject);
     const videoTracks = project.tracks.filter(track => track.kind === "video");

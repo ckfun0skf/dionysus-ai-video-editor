@@ -30,6 +30,7 @@ export function collectCompositionLayers(project: DionysusProject): CompositionL
       ...(clip.modelName ? { modelName: clip.modelName } : {}),
       ...(clip.modelVersion ? { modelVersion: clip.modelVersion } : {}),
       muted: Boolean(clip.muted || track?.muted),
+      ...(clip.linkedVideoClipId ? { linkedVideoClipId: clip.linkedVideoClipId } : {}),
       volume: clip.volume, fadeIn: clip.fadeIn, fadeOut: clip.fadeOut, shortSourceBehavior: clip.shortSourceBehavior
     };
     if (clip.kind === "clip") {
@@ -81,6 +82,12 @@ export function collectCompositionLayers(project: DionysusProject): CompositionL
   });
   // Preserve Version layer order as the composition stacking order. Timing is checked per layer during rendering/export.
   return [...nested, ...timeline];
+}
+
+/** Linked source audio may point at a video asset; ordinary audio layers must point at audio assets. */
+export function isPlayableAudioLayer(layer: Pick<CompositionLayer, "kind" | "linkedVideoClipId">, asset: Pick<Asset, "kind"> | undefined): boolean {
+  if (layer.kind !== "audio" || !asset) return false;
+  return asset.kind === "audio" || (asset.kind === "video" && Boolean(layer.linkedVideoClipId));
 }
 
 export function getCompositionDuration(layers: CompositionLayer[]): number {
