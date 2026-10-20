@@ -2,6 +2,7 @@ import type { DionysusProject } from "./types";
 import { migrateLegacyProjectToComposition } from "./compositionMigration";
 import type { CompositionDocument } from "./compositionModel";
 import { assertValidCompositionDocument } from "./compositionCommands";
+import { getMasterShotStart } from "./masterTimeline";
 
 export const PROJECT_DOCUMENT_FORMAT = "dionysus-project-document" as const;
 export const PROJECT_DOCUMENT_VERSION = "2.0" as const;
@@ -85,7 +86,7 @@ export function readProjectDocument(value: unknown): ReadProjectDocumentResult {
     for (const shot of project.shots) {
       const placement = rootById.get(shot.id);
       if (!placement || placement.legacyData.entityType !== "master-shot" ||
-          placement.start !== (shot.masterStart ?? 0) ||
+          placement.start !== getMasterShotStart(project.shots, shot.id) ||
           placement.duration !== shot.duration ||
           (shot.masterTrackId && placement.trackId !== shot.masterTrackId)) {
         throw new Error("The project document contains root Composition placements that do not match the compatibility project.");
