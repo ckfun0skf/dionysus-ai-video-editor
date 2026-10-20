@@ -108,6 +108,24 @@ Maintain low-fi HTML prototype and UML sources for workspace, domain, edit seque
 7. Never claim fixed, merged, deployed, rendered or tested without matching evidence; record exact SHA.
 8. Handoff must list changed files, implemented behavior, tests/results, unresolved issues, PR/commit and next bounded action.
 
+
+## Live-state audit checkpoint — 2026-10-20
+
+- Current `main`: `01adc5f2e2f637474ba733b14a5e1f874805e68a`.
+- Task replan PR #92 is merged. Its follow-up commit `acf30000624a1a194d168629c8afaa1d4e2a9d38` has a successful exact-head CI run [39330374647](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39330374647); Pages workflow [39330494449](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39330494449) succeeded for the current main SHA. The dashboard and Timeline task page link to the published backlog mirror.
+- Task registry audit: all 20 task IDs are unique, milestone sequence is E0–E7, dependencies contain no cycles, and all dependency IDs resolve.
+- Issues #53 and #54 are closed; each current issue record points to the earlier PR #63 deployment evidence. Do not add browser smoke tests; the owner performs visual acceptance after deployment.
+- Issue #56 remains open and is explicitly tracked under DYS-004/DYS-019 in deferred E6 scope. Required acceptance includes asset-picker cards, context-menu Settings/Edit Timeline/Delete, dependent-use warning, reverse-use/reference management and per-asset frame size.
+- Draft PR #88 head `6b74e057132e1db238667cc6576b74e9b2202471` passed exact-head CI [39268343769](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39268343769) but only adds the pure snapshot helper; it does not change the Save-as-Clip UI.
+- Draft PR #89 head `6044273c2528de1c4f4b6437114884f79f774377` passed 206 tests but failed `tsc -b && vite build` in [39269841800](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39269841800). The mapper imports an unused type and incorrectly narrows the discriminated `CompositionSourceReference` union. Do not merge it as-is; keep both PRs in review until a clean, tested integration is ready.
+- The public Pages reader could not independently fetch the live HTML in this audit, so a successful deploy workflow is deployment evidence, not a claim that the rendered UI was visually accepted.
+
+## E2 implementation checkpoint — Composition command boundary
+
+Branch `feat/dys005-composition-commands` starts from current main and adds `src/compositionCommands.ts` plus `src/compositionCommands.test.ts`. The pure command functions operate on `CompositionDocument`, so the same semantics can be used at root and nested depth: insert, move a linked group, right-edge trim, split linked groups with source-range preservation, duplicate linked groups, delete descendants and unlink a dependent placement. Edits return new documents; IDs/tracks/timing/link cycles are checked, and compatibility fields in `legacyData` are synchronized for placement IDs, timing, source ranges and audio links.
+
+**Not yet implemented in this slice:** UI integration, snapping/conflict policy, command-backed Undo/Redo dispatch, pin selection UX, and root/nested integration tests. These are required follow-ups; this helper alone is not evidence that the Timeline Editor is complete.
+
 ## Recommended next step
 
-After this plan PR, do E0 against live state, then start E2. Inspect current PR #88/#89 against main; if stale or unsafe, create a clean branch and implement deterministic migration plus one shared edit-command path with regression tests. Do not implement more planning UI first.
+E0 is recorded above. Continue E2 by wiring the Composition command boundary into existing root and nested editor actions, preserving the existing click-to-place, overlap protection, linked audio, resize and Undo behavior. Inspect PR #88/#89 again before reuse; do not merge stale or failing code. Keep Storyboard, References and full Asset administration deferred until the Timeline/mobile gates pass.

@@ -67,7 +67,7 @@
         {
           "id": "DYS-002",
           "title": "Centralized UI localization and project validation",
-          "status": "done",
+          "status": "in_progress",
           "progress": 90,
           "summary": "Validate and migrate schemaVersion 1.0 deterministically, preserving alternatives, selection, provenance, source ranges, linked audio, pins and nesting.",
           "doc": "tasks/localization-and-validation.md",
@@ -100,7 +100,7 @@
             "Task report and CI run are linked from the task Markdown",
             "Versioned project boundary: src/projectDocument.ts and src/projectDocument.test.ts"
           ],
-          "notes": "Schema migration is a prerequisite for DYS-014: current Shot.slots[], ClipVersion.layers[] and root timelineClips[] must be migrated explicitly, not renamed or flattened. Target contract: docs/architecture/UNIFIED_COMPOSITION_MODEL.md. A versioned project import/export boundary now reads legacy schema-1.0 files and exports a `dionysus-project-document` 2.0 envelope with both the authoritative legacy project and a canonical Composition projection. This is transitional compatibility, not yet schema-2.0-only persistence.",
+          "notes": "The schema-1.0 to Composition projection and versioned project-document envelope are transitional compatibility, not canonical-only persistence. Final acceptance still requires migration diagnostics and root/nested command integration; preserve alternatives, provenance, pins, ranges, links and nesting without mutating the input.",
           "description": "Validate and migrate schemaVersion 1.0 deterministically, preserving alternatives, selection, provenance, source ranges, linked audio, pins and nesting.",
           "executionStage": "E2",
           "priority": "P0",
@@ -387,7 +387,7 @@
             "Blank-version independence integration test: src/App.test.tsx",
             "Functional code SHA ee1f90c3304ce0f2be5cef294c387192d2aa8969; main CI 39234313896 and Pages deployment 39234313840 passed"
           ],
-          "notes": "The user has not accepted issues #53/#54. A follow-up in Draft PR #63 now checks ordinary clip drag/drop and resize against Master Shot occupancy, trims a Master Shot when an ordinary clip resize reaches it, and retains Master Shot drag identity during protected dragover. Master and nested Clip Timeline Add layer menus now offer only Video, Audio and Text. Nested Image/Code/Clip choices are in a separate Add content menu; shared editor data/operations remain outstanding for #53. Verify exact-head CI and continue toward one shared Composition Editor; do not close either issue before user acceptance. Shared mixed-model drop/resize calculation and atomic application are now extracted to `src/projectTimelinePlacement.ts`, with pure unit tests in `src/projectTimelinePlacement.test.ts`. Shared-engine regression tests now also verify that linked source audio stays aligned when cross-model resize trims the video. Both Master Shot and ordinary clip moves now use `moveProjectTimelinePlacement()` in the shared project-level engine; tests cover generated Storyboard placement shifts and linked-audio group moves. Nested Clip Timelines now render explicit Video/Audio/Text tracks with multiple placements per track. Add layer creates a track; Add content creates a placement on a compatible track. Drag/drop between compatible nested tracks and audio-track mute are supported. Nested track-based editing is now covered by App integration tests for track menu choices, adding a placement to an empty track, and ruler/track alignment. Exact-head CI run 39217800522 passed. Project export now uses the versioned compatibility envelope and import accepts both that format and legacy schema-1.0 files. Linked timeline and nested module export/import regressions are covered by App tests. Nested Clip/Version Timeline now includes destination drag preview, visible snap guide, compatible cross-track moves, same-track overlap prevention, left/right resize handles, grey overlap preview, and atomic adjacent-layer trimming through one history update. Covered by src/nestedTimelinePlacement.ts, src/nestedTimelinePlacement.test.ts and src/timelineResize.test.ts. Merged and deployed in PR #63, merge/deployed SHA `9da2f2bfbf7e80abb73f5552a0d1447cff471c0b`; main CI 39227655141 and Pages deploy 39227655137 both passed. #53/#54 were closed as fixed at the owner's direction. Latest follow-up branch `feat/click-to-place-timeline-clips` changes root Add Clip to click-to-place, checks empty intervals against Master Shots and ordinary placements, prompts to ripple later clips or trim the new clip when the selected gap is too short, preserves linked audio/materialized Shot timing, extends runtime naturally, and commits the full edit as one Undo unit. Merged/deployed on main SHA `990158fc70cf0e6fe17a994237c1b0d65b7d60fb`; CI 39233639480 and Pages deployment 39233639536 passed. Track implementations/tests are in `src/projectTimelinePlacement.ts`, `src/projectTimelinePlacement.test.ts`, `src/App.tsx`, `src/App.test.tsx`, and `src/timelinePlacement.ts`. PR #66 shipped New Blank Version beside Duplicate Version for Clip Assets. It inherits duration/track setup, resets layers to empty with fresh track IDs, selects the new version, and leaves old versions untouched. Functional code SHA `ee1f90c3304ce0f2be5cef294c387192d2aa8969`; main CI 39234313896 and Pages deployment 39234313840 passed.",
+          "notes": "A shared pure CompositionDocument command boundary is now the first E2 implementation slice: insert, move linked groups, trim, split, duplicate, delete and unlink, with invariant checks and immutable results. This command layer is not yet wired into the production App/Clip editor; existing project-level placement helpers remain in use until the adapters are migrated. Do not mark this task done until integration tests prove the same commands run for root and nested Compositions.",
           "description": "Implement shared root/nested commands for insert, move/snap, conflicts, trim, split, duplicate, delete, linked audio, pins and Undo/Redo.",
           "executionStage": "E2-E4",
           "priority": "P0",
@@ -403,7 +403,7 @@
           "testStrategy": [
             "Source-time invariants, conflicts, linked audio, nested history and pins."
           ],
-          "nextAction": "Move each remaining edit path to shared commands.",
+          "nextAction": "Wire src/compositionCommands.ts into existing root and nested Editor actions through one state/command boundary; do not claim root/nested parity until App and Clip editor dispatch use it.",
           "handoffNotes": "Read docs/TIMELINE_FIRST_EXECUTION_BACKLOG.md for milestone gates and pickup rules. Re-query live GitHub before acting."
         },
         {
@@ -608,7 +608,7 @@
             "Exact-head code CI 39227084457: tests, TypeScript and Vite build passed",
             "Merge/deploy checkpoint: main SHA 9da2f2bfbf7e80abb73f5552a0d1447cff471c0b; CI 39227655141 and Pages deploy 39227655137 both passed."
           ],
-          "notes": "Re-query current PR #88/#89 heads, bases and checks; prior reports indicated stale-base Draft work. Do not assume shipped.",
+          "notes": "Live audit 2026-10-20: Draft PR #88 head 6b74e057132e1db238667cc6576b74e9b2202471 passed exact-head CI but only adds the pure snapshot helper; Draft PR #89 head 6044273c2528de1c4f4b6437114884f79f774377 has a failing TypeScript/build check and is not mergeable. Both need review against current main; do not assume either shipped.",
           "description": "Establish canonical Composition for root/nested timelines, shared commands and independent structure-preserving Project-to-Clip snapshots.",
           "executionStage": "E2 and E4",
           "priority": "P0",
