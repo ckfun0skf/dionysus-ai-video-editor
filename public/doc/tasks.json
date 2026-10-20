@@ -313,7 +313,7 @@
           "id": "DYS-005",
           "title": "Timeline editing and Version management",
           "status": "in_progress",
-          "progress": 86,
+          "progress": 87,
           "summary": "Implement shared root/nested commands for insert, move/snap, conflicts, trim, split, duplicate, delete, linked audio, pins and Undo/Redo.",
           "doc": "tasks/timeline-and-versions.md",
           "detail": "tasks/timeline-and-versions.html",
@@ -387,7 +387,7 @@
             "Blank-version independence integration test: src/App.test.tsx",
             "Functional code SHA ee1f90c3304ce0f2be5cef294c387192d2aa8969; main CI 39234313896 and Pages deployment 39234313840 passed"
           ],
-          "notes": "The Composition command boundary is now used by `src/timelineOperations.ts` for add/move/trim/split/duplicate/delete/unlink adapters, and nested Clip Version layer moves use the same track-aware `moveCompositionPlacementToTrack()` command. These adapters preserve current public operation behavior and are covered by existing regression suites, but the React Add Clip / placement-conflict path, nested Add/Delete/Resize actions, snapping/overlap policy and end-to-end Undo grouping still include project-specific logic. Continue migrating those paths and add root/nested parity tests before marking done.",
+          "notes": "PR #93 is merged on main as 5f8dbea57cc72a8b4a909db3b082ea0c54894529; its exact-head CI run 39398098386 passed 210 tests across 22 files plus TypeScript and production build. The Composition command boundary now backs root Timeline operation adapters and nested move. Follow-up branch feat/nested-composition-command-integration routes nested layer insertion/deletion through the same immutable Composition commands and routes the nested Editor Remove layer action through deleteClipVersionLayer(). This follow-up is awaiting PR CI. Remaining gaps include project-aware click-to-place/conflict dispatch, nested resize/source-range/adjacent-trim integration, snap/overlap parity, root/nested Undo parity, and canonical-only persistence/structure-preserving Save-as-Clip. Keep DYS-005 in progress; do not infer UI acceptance or deployment from command tests.",
           "description": "Implement shared root/nested commands for insert, move/snap, conflicts, trim, split, duplicate, delete, linked audio, pins and Undo/Redo.",
           "executionStage": "E2-E4",
           "priority": "P0",
@@ -403,8 +403,8 @@
           "testStrategy": [
             "Source-time invariants, conflicts, linked audio, nested history and pins."
           ],
-          "nextAction": "Wire src/compositionCommands.ts into existing root and nested Editor actions through one state/command boundary; do not claim root/nested parity until App and Clip editor dispatch use it.",
-          "handoffNotes": "Read docs/TIMELINE_FIRST_EXECUTION_BACKLOG.md for milestone gates and pickup rules. Re-query live GitHub before acting."
+          "nextAction": "Verify exact-head PR CI for nested insert/delete, then route nested resize/source-range/adjacent-trim and project-aware insertion/conflict dispatch through the Composition boundary while preserving snap/overlap guards; add root/nested parity and Undo tests.",
+          "handoffNotes": "Start from the current main SHA and the latest DYS-005 feature PR. Inspect docs/TIMELINE_FIRST_EXECUTION_BACKLOG.md for the exact slice and remaining gates. Do not merge failing Snapshot PR #89; do not add browser smoke tests; only ask the owner for visual acceptance after merge and verified Pages deployment."
         },
         {
           "id": "DYS-011",
