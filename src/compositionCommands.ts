@@ -507,3 +507,84 @@ export function unlinkCompositionPlacement(
   assertValidCompositionDocument(next);
   return next;
 }
+
+
+/** Add a canonical root track while retaining the original legacy track kind as metadata. */
+export function addCompositionTrack(
+  document: CompositionDocument,
+  track: CompositionDocument["tracks"][number],
+): CompositionDocument {
+  assertValidCompositionDocument(document);
+  if (!track.id.trim() || document.tracks.some(item => item.id === track.id)) {
+    throw new Error("Composition track IDs must be non-empty and unique.");
+  }
+  const next = clone(document);
+  next.tracks.push({ ...clone(track), order: next.tracks.length });
+  assertValidCompositionDocument(next);
+  return next;
+}
+
+/** Update canonical track properties without changing placement identity or source references. */
+export function updateCompositionTrack(
+  document: CompositionDocument,
+  trackId: string,
+  patch: Partial<CompositionDocument["tracks"][number]>,
+): CompositionDocument {
+  assertValidCompositionDocument(document);
+  if (!document.tracks.some(track => track.id === trackId)) throw new Error("Composition track not found.");
+  const next = clone(document);
+  next.tracks = next.tracks.map(track => track.id === trackId ? { ...track, ...clone(patch), id: track.id } : track);
+  assertValidCompositionDocument(next);
+  return next;
+}
+
+/** Remove a canonical track, moving Master Shots to a compatible fallback video track and deleting
+ * ordinary placements (plus their linked descendants) from the removed lane. */
+export function removeCompositionTrack(
+  document: CompositionDocument,
+  trackId: string,
+  fallbackVideoTrackId?: string,
+): CompositionDocument {
+  assertValidCompositionDocument(document);
+  if (!document.tracks.some(track => track.id === trackId)) throw new Error("Composition track not found.");
+  if (fallbackVideoTrackId && !document.tracks.some(track => track.id === fallbackVideoTrackId && track.kind === "video")) {
+    throw new Error("Fallback video track was not found.");
+  }
+  let next = clone(document);
+  const masterShots = next.placements.filter(placement =>
+    placement.trackId === trackId && placement.legacyData.entityType === "master-shot"
+  );
+  for (const placement of masterShots) {
+    if (!fallbackVideoTrackId) throw new Error("Cannot remove a track containing Master Shots without a fallback video track.");
+    next = moveCompositionPlacementToTrack(next, placement.id, fallbackVideoTrackId, placement.start);
+  }
+  const ordinary = next.placements.filter(placement =>
+    placement.trackId === trackId && placement.legacyData.entityType !== "master-shot"
+  );
+  for (const placement of ordinary) {
+    if (next.placements.some(item => item.id === placement.id)) next = deleteCompositionPlacement(next, placement.id);
+  }
+  next.tracks = next.tracks.filter(track => track.id !== trackId).map((track, order) => ({ ...track, order }));
+  assertValidCompositionDocument(next);
+  return next;
+}
+
+/** Reorder canonical tracks and keep stable placement IDs/track references. */
+export function reorderCompositionTrack(
+  document: CompositionDocument,
+  trackId: string,
+  targetIndex: number,
+): CompositionDocument {
+  assertValidCompositionDocument(document);
+  const ordered = [...document.tracks].sort((a, b) => a.order - b.order);
+  const sourceIndex = ordered.findIndex(track => track.id === trackId);
+  if (sourceIndex < 0) throw new Error("Composition track not found.");
+  const destination = Math.max(0, Math.min(ordered.length - 1, Math.trunc(targetIndex)));
+  const [moving] = ordered.splice(sourceIndex, 1);
+  ordered.splice(destination, 0, moving);
+  const next = clone(document);
+  const byId = new Map(ordered.map((track, order) => [track.id, { ...track, order }]));
+  next.tracks = next.tracks.map(track => byId.get(track.id)!);
+  assertValidCompositionDocument(next);
+  return next;
+}
