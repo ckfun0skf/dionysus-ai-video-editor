@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AudioLines, Check, CheckCircle2, ChevronDown, CircleHelp, Clapperboard, Clock3, Code2, Download, FileJson, Film, FolderOpen, Layers3, Maximize2, Plus, Save, Settings2, ShieldCheck, MoreHorizontal, Sparkles, SquarePlay, Upload, WandSparkles, Undo2, Redo2 } from "lucide-react";
 import { sampleProject } from "./sampleProject";
-import type { Asset, AssetKind, ClipVersion, CompositionLayer, DionysusProject, ReferenceProfile, ReferenceRole, Shot, TimelineClip } from "./types";
+import type { Asset, AssetKind, ClipVersion, CompositionDocument, CompositionLayer, DionysusProject, ReferenceProfile, ReferenceRole, Shot, TimelineClip } from "./types";
 import { validateProject } from "./projectValidation";
 import { addClipVersionLayer as addNestedLayer, addClipVersionTrack as addNestedTrack, deleteClipVersionLayer as deleteNestedLayer, duplicateClipVersionComposition, moveClipVersionLayer as moveNestedLayer, normalizeClipVersionTracks, updateClipVersionLayer as updateNestedLayer } from "./clipVersionTracks";
 import { createProjectDocument, readProjectDocument } from "./projectDocument";
+import { migrateLegacyProjectToComposition, projectRootCompositionToLegacy } from "./compositionMigration";
+import { applyCompositionResizePreview, deleteCompositionPlacement, insertCompositionPlacement, moveCompositionPlacementToTrack } from "./compositionCommands";
 import { moveNormalizedFrame, resizeNormalizedFrame } from "./previewTransform";
 import { getAllowedChildClipAssets, wouldCreateClipAssetCycle } from "./clipAssetGraph";
 import { t } from "./i18n";
@@ -196,14 +198,25 @@ export default function App() {
         : createEmptyProject();
     } catch { return createEmptyProject(); }
   });
+  // Root Composition is the live authority for Master Timeline placement/track commands.
+  // DionysusProject remains a deterministic schema-1.0 compatibility projection for the wider UI.
+  const [rootComposition, setRootComposition] = useState<CompositionDocument>(() => migrateLegacyProjectToComposition(project).rootComposition);
   const [undoStack, setUndoStack] = useState<DionysusProject[]>([]);
   const [redoStack, setRedoStack] = useState<DionysusProject[]>([]);
+  const [compositionUndoStack, setCompositionUndoStack] = useState<CompositionDocument[]>([]);
+  const [compositionRedoStack, setCompositionRedoStack] = useState<CompositionDocument[]>([]);
   const projectRef = useRef(project);
+  const rootCompositionRef = useRef(rootComposition);
   const undoStackRef = useRef(undoStack);
   const redoStackRef = useRef(redoStack);
+  const compositionUndoStackRef = useRef(compositionUndoStack);
+  const compositionRedoStackRef = useRef(compositionRedoStack);
   projectRef.current = project;
+  rootCompositionRef.current = rootComposition;
   undoStackRef.current = undoStack;
   redoStackRef.current = redoStack;
+  compositionUndoStackRef.current = compositionUndoStack;
+  compositionRedoStackRef.current = compositionRedoStack;
   const lastHistoryGroup = useRef("");
   const lastHistoryAt = useRef(0);
   const [projectSettingsOpen, setProjectSettingsOpen] = useState(false);
@@ -375,10 +388,10 @@ export default function App() {
       // store the versioned Composition snapshot beside it. Reopen prefers the envelope only
       // when both snapshots describe the same project revision.
       localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
-      localStorage.setItem(COMPOSITION_STORAGE_KEY, JSON.stringify(createProjectDocument(snapshot)));
+      localStorage.setItem(COMPOSITION_STORAGE_KEY, JSON.stringify(createProjectDocument(snapshot, rootComposition)));
     }
     catch { setNotice(t("notice.storageFull")); }
-  }, [project]);
+  }, [project, rootComposition]);
   useEffect(() => {
     function handleHistoryShortcut(event: KeyboardEvent) {
       const target = event.target;
@@ -594,23 +607,40 @@ export default function App() {
 
   const selectedStart = useMemo(() => getMasterShotStart(project.shots, selectedId), [project.shots, selectedId]);
   const slotCount = project.shots.reduce((n, s) => n + s.slots.length, 0);
-  function change(fn: (p: DionysusProject) => DionysusProject, historyGroup = "") {
+  function change(fn: (p: DionysusProject) => DionysusProject, historyGroup = "", canonicalRoot?: CompositionDocument) {
     const now = Date.now();
     const current = projectRef.current;
     const currentUndo = undoStackRef.current;
+    const currentRoot = rootCompositionRef.current;
     const coalesce = Boolean(historyGroup) && historyGroup === lastHistoryGroup.current && now - lastHistoryAt.current < 800;
     if (!coalesce) {
       const history = recordProjectChange({ current: copy(current), undo: currentUndo, redo: redoStackRef.current }, copy(current));
       undoStackRef.current = history.undo.map(copy);
       setUndoStack(undoStackRef.current);
+      compositionUndoStackRef.current = [...compositionUndoStackRef.current.slice(-49), structuredClone(currentRoot)];
+      setCompositionUndoStack(compositionUndoStackRef.current);
     }
     lastHistoryGroup.current = historyGroup;
     lastHistoryAt.current = now;
     redoStackRef.current = [];
     setRedoStack([]);
+    compositionRedoStackRef.current = [];
+    setCompositionRedoStack([]);
     const next = { ...fn(copy(current)), updatedAt: new Date().toISOString() };
-    projectRef.current = next;
-    setProject(next);
+    // Explicit root commands supply the canonical document first. Non-root domain edits refresh
+    // the root snapshot through the legacy migration until those domain editors are promoted.
+    const nextRoot = structuredClone(canonicalRoot ?? migrateLegacyProjectToComposition(next).rootComposition);
+    const projected = canonicalRoot ? projectRootCompositionToLegacy(next, nextRoot) : next;
+    projectRef.current = projected;
+    rootCompositionRef.current = nextRoot;
+    setProject(projected);
+    setRootComposition(nextRoot);
+  }
+
+  function changeRootComposition(update: (document: CompositionDocument) => CompositionDocument, historyGroup = "") {
+    const nextRoot = update(structuredClone(rootCompositionRef.current));
+    const nextProject = projectRootCompositionToLegacy(projectRef.current, nextRoot);
+    change(() => nextProject, historyGroup, nextRoot);
   }
 
   function beginTimelineClipPlacement(clip: TimelineClip) {
