@@ -1716,7 +1716,7 @@ export default function App() {
       const a=clipResizeRef.current;if(!a||a.id!==clip.id||a.pointerId!==e.pointerId)return;
       const preview=getTimelineClipResizePreview(a,e.clientX),currentClip=projectRef.current.timelineClips?.find(item=>item.id===clip.id);
       if(preview&&currentClip&&(Math.abs(preview.start-currentClip.start)>1e-6||Math.abs(preview.duration-currentClip.duration)>1e-6||preview.trims.length>0)){
-        change(p=>applyProjectTimelineClipResize(p,preview));
+        commitRootResizeOrLegacy(preview);
         setNotice(preview.trims.length?"Clip resized and adjacent timeline item trimmed. Use Undo to restore both.":"Clip resized.");
       }
       cancelTimelineClipResize();
@@ -2306,7 +2306,7 @@ export default function App() {
       const parsed = JSON.parse(await file.text()) as unknown;
       const { project: data } = readProjectDocument(parsed);
       if (!validateProject(data)) throw new Error(t("error.invalidProject"));
-      const normalized = normalizeLegacyTimelineTracks(data); setProject(normalized); setUndoStack([]); setRedoStack([]); lastHistoryGroup.current = ""; setSelectedId(normalized.shots[0]?.id ?? ""); setNotice(t("notice.projectImported"));
+      const normalized = normalizeLegacyTimelineTracks(data); const importedRoot = migrateLegacyProjectToComposition(normalized).rootComposition; projectRef.current = normalized; rootCompositionRef.current = importedRoot; setProject(normalized); setRootComposition(importedRoot); setUndoStack([]); setRedoStack([]); compositionUndoStackRef.current = []; compositionRedoStackRef.current = []; setCompositionUndoStack([]); setCompositionRedoStack([]); undoStackRef.current = []; redoStackRef.current = []; lastHistoryGroup.current = ""; setSelectedId(normalized.shots[0]?.id ?? ""); setNotice(t("notice.projectImported"));
     } catch (e) {
       setNotice(e instanceof Error ? e.message : t("error.importFailed"));
     } finally {
