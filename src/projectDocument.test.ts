@@ -88,7 +88,7 @@ describe("versioned project document boundary", () => {
 
   it("rejects invalid nested Composition timing and malformed pinned-version references", () => {
     const invalidNestedEnvelope = createProjectDocument(structuredClone(sampleProject));
-    const nested = structuredClone(invalidNestedEnvelope.compositionModel.legacyShotSlotCompositions[0]);
+    const nested = structuredClone(invalidNestedEnvelope.compositionModel.rootComposition);
     expect(nested.tracks.length).toBeGreaterThan(0);
     nested.placements.push({
       id: "invalid-nested-placement", name: "Invalid nested placement",

@@ -523,3 +523,9 @@ Verify the current branch head and its CI first. If it passes, continue the root
 - CI run 39487372239 on 1243fc047cbb7ede69b9bb476e5b653bf87f02f1 ran 251 tests: 250 passed, 1 failed. The failing negative test set nested document.duration to zero, but document duration is not currently defined as a strict positive invariant (empty roots can be duration zero); it did not corrupt a validated placement.
 - Corrected the test to add a nested placement with duration zero, which directly tests that recursive validation enforces the existing positive-finite placement duration invariant. The separate malformed pinned-version and cycle tests passed in that run. Exact-head CI for the corrected test/docs commit is required.
 - No task completion status changed; DYS-005/DYS-014 remain in_progress and PR #96 remains Draft/unmerged.
+
+## Nested validation fixture follow-up — 2026-10-20
+
+- Exact-head CI run 39487705640 on 1cb834f5b309e97f37f1f65c52bf4eb0e82f5bb2 failed in the new negative test before reaching the validator: the selected legacy Shot/Slot snapshot had zero tracks. This is a fixture-construction issue, not a validator result.
+- Updated the test to start from the valid root Composition (which has tracks), embed it as a nested snapshot, and add a zero-duration nested placement. The assertion now specifically exercises recursive placement-duration validation. Current head needs a fresh exact-head CI run.
+- DYS-005/DYS-014 remain in_progress. PR #96 remains Draft and unmerged. No browser smoke tests.
