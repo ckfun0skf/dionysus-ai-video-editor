@@ -57,7 +57,7 @@ Follow-up branch `feat/nested-composition-command-integration` routes nested `ad
 ### Remaining acceptance gates
 
 - Project-aware Master Timeline insertion/conflict resolution must dispatch through the shared Composition boundary while preserving snap, overlap, ripple/trim and auto-extend behavior.
-- Verify atomic Undo/Redo parity for root and nested interactions and persistence after export/reopen.
+- Extend shared-command routing from resize to root/nested move, split, duplicate and insertion; verify atomic Undo/Redo parity and persistence after export/reopen.
 - DYS-014 stays in progress until the Save-as-Clip UI produces an independent, structurally editable snapshot from the active authoritative state. PR #88 is helper-only; Draft PR #89 has a failed exact-head TypeScript/build and must not be merged as-is.
 - Ask the owner for visual acceptance only after merge and a verified GitHub Pages deployment. No browser smoke tests.
 
@@ -66,3 +66,10 @@ Follow-up branch `feat/nested-composition-command-integration` routes nested `ad
 Branch `feat/dys005-nested-resize-composition-command` adds `applyCompositionResizePreview()` to the immutable Composition command layer. The nested resize adapter now commits its already frame-snapped primary resize and any adjacent trim through that command, instead of directly transforming legacy layer arrays. Linked descendants receive the root timing and source range in the same immutable transaction, and legacy fields remain synchronized.
 
 Focused local validation passed 18 tests in `src/compositionCommands.test.ts`, `src/nestedTimelinePlacement.test.ts`, and `src/clipVersionTracks.test.ts`; full local validation passed 214 tests across 22 files, TypeScript, and the Vite production build. `npm audit` is unavailable because this repository has no lockfile. This is not a PR CI or deployment result. DYS-005 remains in progress: Master insertion/conflict dispatch, root/nested history parity, canonical persistence, and structure-preserving Save-as-Clip are still open. No browser smoke tests were run.
+
+
+## Root resize command integration — 2026-10-20
+
+Draft PR [#96](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/96) routes valid Master/root resize transactions through the same immutable `applyCompositionResizePreview()` command used by nested Clip Versions. Changed Composition placements are projected back into the transitional project model, including linked audio timing and source ranges. A regression test covers root video resize, linked audio propagation, source-range updates and input immutability.
+
+Exact-head CI [39417366266](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39417366266) passed at code/test SHA `8f9b88f42665038b905a6eec1bf682cde2d7ea3f`: test, TypeScript/build, and the workflow's non-blocking dependency audit step all succeeded. This is CI evidence only, not merge/deployment or visual acceptance. The adapter deliberately retains a compatibility fallback for materialized Storyboard placements and invalid legacy link groups; canonical-only persistence is not complete. No browser smoke tests were run.
