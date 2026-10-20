@@ -156,7 +156,7 @@ describe("nested Clip Version track operations", () => {
       layers: withPlacement.layers.map(layer => ({ ...layer, start: 99, sourceIn: 99 })),
     };
 
-    const moved = moveClipVersionLayer(saved, "canonical-placement", withPlacement.layers[0]?.trackId ?? saved.tracks![0].id, 4);
+    const moved = moveClipVersionLayer(saved, "canonical-placement", withPlacement.layers.find(layer => layer.id === "canonical-placement")?.trackId ?? saved.tracks![0].id, 4);
     const placement = moved.composition?.placements.find(item => item.id === "canonical-placement");
     const layer = moved.layers.find(item => item.id === "canonical-placement");
 
