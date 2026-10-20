@@ -197,3 +197,11 @@ Exact-head CI #1404 passed on `90949d515d30827502e61fd4e9b1de5235037382`: 230 te
 - CI run [39485463504](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39485463504) failed 32 App assertions because those tests manually replaced schema-1.0 local storage while retaining the prior v2 envelope at the same updatedAt. Legacy-only fixture writes now remove the v2 key; dedicated save/reopen tests continue to exercise both stores.
 - Project-document assertions compare with the deterministic canonical compatibility projection included in the v2 export, instead of the raw pre-projection object. The raw schema-1.0 import path remains lossless.
 - Exact-head CI for the correction is required. DYS-005/DYS-014 stay in_progress; PR #96 remains Draft and unmerged; no browser smoke tests.
+
+
+## Canonical track settings — 2026-10-20
+
+- Generic and Video layer settings now call the root Composition track command directly. Canonical fields include name, mute, background, transparency and opacity; track geometry/settings that have not been promoted yet remain in that track's legacyData so the schema-1.0 projection remains compatible.
+- App regressions now check not only the schema-1.0 track object but the stored root Composition track for background transparency/opacity and X/Y/width/height transform values.
+- The preceding exact-head CI run 39486016683 passed on 8bdafe463fea6b1bdb0ec082aab92c87b9bc7aba (249 tests/23 files, TS/build successful, npm audit found 0 vulnerabilities). This track-settings patch requires its own exact-head CI run.
+- Remains in progress: Shot/Slot and other storyboard/domain editors still perform legacy-first mutations; Storyboard materializations remain compatibility-only, and wider root track reorder plus invalid/nested/pinned history cases require additional coverage. DYS-005/DYS-014 stay in_progress. Keep PR #96 Draft/unmerged; no browser smoke tests.

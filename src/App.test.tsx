@@ -1067,6 +1067,8 @@ describe("Timeline preview", () => {
 
     expect(persistedProject().tracks.find(track => track.id === targetTrack.id))
       .toMatchObject({ x: 20, y: 25, width: 40, height: 30 });
+    const transformEnvelope = JSON.parse(localStorage.getItem("dionysus.composition.v2") ?? "null") as { compositionModel?: { rootComposition?: { tracks?: Array<{ id: string; legacyData?: Record<string, unknown> }> } } };
+    expect(transformEnvelope.compositionModel?.rootComposition?.tracks?.find(track => track.id === targetTrack.id)?.legacyData).toMatchObject({ x: 20, y: 25, width: 40, height: 30 });
   });
 
 });
@@ -1109,6 +1111,8 @@ describe("Timeline layer and Shot settings UX", () => {
     const track = persistedProject().tracks.find(item => item.kind === "video");
     expect(track?.backgroundTransparent).toBe(true);
     expect(track?.opacity).toBe(0.5);
+    const settingsEnvelope = JSON.parse(localStorage.getItem("dionysus.composition.v2") ?? "null") as { compositionModel?: { rootComposition?: { tracks?: Array<{ id: string; backgroundTransparent?: boolean; opacity?: number }> } } };
+    expect(settingsEnvelope.compositionModel?.rootComposition?.tracks?.find(item => item.id === track?.id)).toMatchObject({ backgroundTransparent: true, opacity: 0.5 });
   });
 
   it("stores editable Three.js source on a Code clip and shows its code thumbnail", async () => {
