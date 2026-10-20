@@ -359,11 +359,15 @@ export function projectRootCompositionToLegacy(
       const placement = placementsById.get(shot.id)!;
       if (placement.legacyData.entityType !== "master-shot") return shot;
       const legacyTrack = tracks.find(track => track.id === placement.trackId && track.kind === "video");
+      const implicitStart = getMasterShotStart(source.shots, shot.id);
+      const defaultVideoTrackId = source.tracks.find(track => track.kind === "video")?.id;
       return {
         ...shot,
-        masterStart: placement.start,
+        ...(shot.masterStart === undefined && placement.start === implicitStart ? {} : { masterStart: placement.start }),
         duration: placement.duration,
-        ...(legacyTrack ? { masterTrackId: legacyTrack.id } : {}),
+        ...(legacyTrack && (shot.masterTrackId !== undefined || legacyTrack.id !== defaultVideoTrackId)
+          ? { masterTrackId: legacyTrack.id }
+          : {}),
       };
     });
   const existingClips = new Map((source.timelineClips ?? []).map(clip => [clip.id, clip]));
