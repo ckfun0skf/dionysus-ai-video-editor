@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { recordProjectChange, redoProjectChange, undoProjectChange } from "./projectHistory";
 import { addVideoClip, deleteTimelineClip, duplicateTimelineClip, moveTimelineClip, splitTimelineClip, trimTimelineClip, unlinkTimelineAudio } from "./timelineOperations";
+import { addClipVersionLayer, updateClipVersionLayer } from "./clipVersionTracks";
+import { sampleProject } from "./sampleProject";
 import type { TimelineClip, TimelineTrack } from "./types";
 
 describe("project history", () => {
