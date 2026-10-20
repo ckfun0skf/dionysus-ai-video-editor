@@ -152,6 +152,85 @@ describe("structure-preserving Clip Version snapshots", () => {
     expect(version.generationRecords).toHaveLength(1);
   });
 
+  it("retains an existing nested Composition subtree even when it is not re-derived from parent placements", () => {
+    const project = fixture();
+    const nestedVersion = project.assets.find(asset => asset.id === "nested-asset")!.clipVersions![0];
+    const pinnedGrandchild = {
+      id: "composition:pinned-grandchild:v7",
+      name: "Pinned grandchild",
+      duration: 2,
+      frameRate: 24,
+      width: 640,
+      height: 360,
+      tracks: [{ id: "grandchild-track", name: "Video", kind: "video" as const, order: 0 }],
+      placements: [{
+        id: "grandchild-placement",
+        name: "Grandchild source",
+        trackId: "grandchild-track",
+        start: 0,
+        duration: 2,
+        order: 0,
+        source: { type: "asset" as const, assetId: "media" },
+        sourceIn: 8,
+        sourceOut: 10,
+        legacyData: { x: 31, y: 32, width: 41, height: 42, volume: 0.2 },
+      }],
+      provenance: {
+        kind: "derived-clip-version" as const,
+        sourceProjectId: project.id,
+        sourceCompositionId: "composition:old-parent",
+        createdAt: "2026-10-20T09:00:00.000Z",
+        pinnedVersions: [{ assetId: "media", versionId: "media-v7" }],
+      },
+    };
+    nestedVersion.composition = {
+      id: "composition:nested-asset:nested-v2",
+      name: "Canonical nested parent",
+      duration: 4,
+      frameRate: 24,
+      width: 640,
+      height: 360,
+      tracks: [{ id: "nested-video", name: "Nested video", kind: "video", order: 0 }],
+      placements: [{
+        id: "inner-layer",
+        name: "Inner",
+        trackId: "nested-video",
+        start: 0,
+        duration: 4,
+        order: 0,
+        source: { type: "asset", assetId: "media" },
+        sourceIn: 2,
+        sourceOut: 6,
+        legacyData: { x: 3, y: 4, width: 70, height: 80, opacity: 0.75, volume: 0.6 },
+      }],
+      nestedCompositions: [pinnedGrandchild],
+      provenance: {
+        kind: "derived-clip-version",
+        sourceProjectId: project.id,
+        sourceCompositionId: "composition:original-parent",
+        createdAt: "2026-10-20T08:00:00.000Z",
+        pinnedVersions: [{ assetId: "media", versionId: "media-v2" }],
+      },
+    };
+
+    const snapshot = createClipVersionSnapshot(project, {
+      assetId: "snapshot-with-subtree",
+      versionId: "snapshot-with-subtree-v1",
+      versionName: "Snapshot with subtree",
+      createdAt: "2026-10-20T11:30:00.000Z",
+    });
+    const embeddedParent = snapshot.composition?.nestedCompositions?.find(child => child.id === nestedVersion.composition?.id);
+
+    expect(embeddedParent?.provenance).toEqual(nestedVersion.composition.provenance);
+    expect(embeddedParent?.nestedCompositions).toEqual([pinnedGrandchild]);
+    expect(embeddedParent?.nestedCompositions?.[0]?.placements[0]).toMatchObject({
+      order: 0,
+      sourceIn: 8,
+      sourceOut: 10,
+      legacyData: { x: 31, y: 32, width: 41, height: 42, volume: 0.2 },
+    });
+  });
+
   it("round-trips Save-as-Clip edits through project JSON and reopens from canonical Composition", () => {
     const project = fixture();
     const originalNestedLayer = structuredClone(project.assets.find(asset => asset.id === "nested-asset")!.clipVersions![0].layers[0]);
