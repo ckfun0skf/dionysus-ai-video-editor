@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 import type { CompositionDocument, CompositionPlacement } from "./compositionModel";
 import {
+  addCompositionTrack,
   applyCompositionResizePreview,
   assertValidCompositionDocument,
   deleteCompositionPlacement,
   duplicateCompositionPlacement,
   insertCompositionPlacement,
   moveCompositionPlacement,
+  removeCompositionTrack,
+  reorderCompositionTrack,
   splitCompositionPlacement,
   trimCompositionPlacement,
   unlinkCompositionPlacement,
@@ -61,6 +64,21 @@ function placement(document: CompositionDocument, id: string): CompositionPlacem
 }
 
 describe("shared Composition editing commands", () => {
+  it("adds, reorders and removes root tracks through immutable Composition commands", () => {
+    const source = fixture();
+    const before = JSON.stringify(source);
+    const added = addCompositionTrack(source, {
+      id: "v2", name: "Video 2", kind: "video", order: 3, legacyData: { kind: "video" },
+    });
+    const reordered = reorderCompositionTrack(added, "t1", 0);
+    expect([...reordered.tracks].sort((a, b) => a.order - b.order).map(track => track.id)).toEqual(["t1", "v1", "a1", "v2"]);
+    const removed = removeCompositionTrack(reordered, "v2", "v1");
+    expect(removed.tracks.some(track => track.id === "v2")).toBe(false);
+    expect(removed.placements.map(item => item.id)).toEqual(["video", "audio"]);
+    expect(JSON.stringify(source)).toBe(before);
+  });
+
+
   it("inserts a placement on an existing track without mutating the original document", () => {
     const source = fixture();
     const before = JSON.stringify(source);
