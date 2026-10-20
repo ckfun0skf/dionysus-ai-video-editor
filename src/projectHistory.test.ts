@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { recordProjectChange, redoProjectChange, undoProjectChange } from "./projectHistory";
 import { addVideoClip, deleteTimelineClip, duplicateTimelineClip, moveTimelineClip, splitTimelineClip, trimTimelineClip, unlinkTimelineAudio } from "./timelineOperations";
-import type { TimelineTrack } from "./types";
+import type { TimelineClip, TimelineTrack } from "./types";
 
 describe("project history", () => {
   it("undoes and redoes timeline snapshots including linked audio state", () => {
@@ -101,7 +101,7 @@ describe("project history", () => {
       { id: "video-track", name: "Video", kind: "video" },
       { id: "audio-track", name: "Audio", kind: "audio" },
     ];
-    const initial = {
+    const initial: { id: string; tracks: TimelineTrack[]; timelineClips: TimelineClip[] } = {
       id: "project",
       tracks,
       timelineClips: [
