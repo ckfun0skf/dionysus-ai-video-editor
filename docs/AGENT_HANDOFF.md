@@ -2,6 +2,15 @@
 
 This file is the starting point for any agent continuing Dionysus. Keep project knowledge in Git; do not rely on chat history as the source of truth.
 
+## Live checkpoint — 2026-10-20
+
+- Latest confirmed `main` commit from GitHub commit search: `5f8dbea57cc72a8b4a909db3b082ea0c54894529` (`feat: add shared Composition editing commands`), squashed from PR #93. PR #93 exact-head CI [39398098386](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39398098386) passed 210 tests across 22 test files plus TypeScript and Vite production build.
+- PR #93 routes root Timeline operation adapters and nested Clip Version moves through immutable Composition commands. This is a code/engine slice, not completion of the Timeline UI or canonical persistence.
+- Current working branch: `feat/nested-composition-command-integration`; it routes nested layer insertion/deletion through Composition commands and changes the nested Editor Remove layer handler to use the adapter. The branch has not yet passed PR CI; check the exact head before relying on it.
+- Draft PR #88 remains snapshot-helper-only and is not wired to the Save-as-Clip UI. Draft PR #89's exact-head CI [39269841800](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39269841800) failed TypeScript/build; do not merge it as-is.
+- `public/doc/tasks.json` was validated on the post-PR-92 main: 20 unique task IDs, all dependencies resolve, no dependency cycles, complete required execution fields, and milestone order `M1 → M3 → M4 → M2 → M5`.
+- Main-push CI and Pages deployment for commit `5f8dbea...` could not be independently verified with the currently available connector calls. Do not state the live site is updated until the matching workflow/deployment evidence is obtained. The owner can visually validate only after merge and deployment.
+- No browser smoke tests. Never push directly to `main`; use a feature branch and one coherent PR. Keep Storyboard, References, and full Asset administration deferred until Timeline/mobile gates pass.
 ## Current strategic direction — Timeline-first Editor rebuild (2026-10-19)
 
 The owner confirmed that the product should rebuild the **Timeline Editor workspace first**. It includes an Editor-local source browser for Media/Audio/Text/Effects/Transitions, Preview/Canvas in the upper-right, and the multitrack Timeline below. Storyboard and References are later planning modules that connect to a usable Editor. On mobile, the bottom toolbar is contextual to the selected element; global module navigation belongs in the project/workspace header or menu. This supersedes older mobile notes that put Storyboard / Timeline / Assets / References in the Editor's permanent bottom bar.
