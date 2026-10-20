@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { sampleProject } from "./sampleProject";
-import { addClipVersionLayer, addClipVersionTrack, deleteClipVersionLayer, moveClipVersionLayer, normalizeClipVersionTracks, updateClipVersionLayer } from "./clipVersionTracks";
+import { addClipVersionLayer, addClipVersionTrack, deleteClipVersionLayer, duplicateClipVersionComposition, moveClipVersionLayer, normalizeClipVersionTracks, updateClipVersionLayer } from "./clipVersionTracks";
 import { validateProject } from "./projectValidation";
 
 describe("normalizeClipVersionTracks", () => {
@@ -279,4 +279,61 @@ describe("nested Clip Version track operations", () => {
     const audio = addClipVersionTrack(moved, { id: "audio-1", name: "Audio", kind: "audio" });
     expect(() => moveClipVersionLayer(audio, "layer-a", "audio-1", 0)).toThrow(/cannot be moved/);
   });
+  it("duplicates canonical placements and tracks with remapped linked references while retaining pinned children", () => {
+    const base = addClipVersionLayer(
+      structuredClone(sampleProject.shots[0].slots[0].versions[0]),
+      { id: "source-video", name: "Video", kind: "video", start: 0, duration: 3, assetId: "source-asset", sourceIn: 2, sourceOut: 5 },
+    );
+    const linked = addClipVersionLayer(base, {
+      id: "source-audio", name: "Audio", kind: "audio", start: 0, duration: 3,
+      assetId: "audio-asset", sourceIn: 2, sourceOut: 5, linkedVideoClipId: "source-video", volume: 0.6,
+    });
+    const composition = structuredClone(linked.composition!);
+    composition.provenance = {
+      kind: "derived-clip-version", sourceProjectId: "project-pin", sourceCompositionId: "source-comp",
+      createdAt: "2026-10-20T12:00:00.000Z", pinnedVersions: [{ assetId: "nested-asset", versionId: "nested-v2" }],
+    };
+    composition.nestedCompositions = [{
+      ...structuredClone(composition), id: "pinned-child", tracks: [], placements: [], nestedCompositions: [],
+    }];
+    const source = { ...linked, composition, layers: linked.layers.map(layer => ({ ...layer })) };
+    let n = 0;
+    const duplicate = duplicateClipVersionComposition(source, kind => kind + "-copy-" + (++n));
+    const duplicatedDoc = duplicate.composition!;
+    const sourcePlacementIds = new Set(composition.placements.map(item => item.id));
+    const sourceTrackIds = new Set(composition.tracks.map(item => item.id));
+    expect(duplicatedDoc.placements.every(item => !sourcePlacementIds.has(item.id))).toBe(true);
+    expect(duplicatedDoc.tracks.every(item => !sourceTrackIds.has(item.id))).toBe(true);
+    expect(duplicatedDoc.placements.every(item => duplicatedDoc.tracks.some(track => track.id === item.trackId))).toBe(true);
+    const duplicatedVideo = duplicate.layers.find(layer => layer.name === "Video")!;
+    const duplicatedAudio = duplicate.layers.find(layer => layer.name === "Audio")!;
+    expect(duplicatedAudio.id).not.toBe("source-audio");
+    expect(duplicatedAudio.linkedVideoClipId).toBe(duplicatedVideo.id);
+    const audioPlacement = duplicatedDoc.placements.find(item => item.id === duplicatedAudio.id)!;
+    expect(audioPlacement.linkedToPlacementId).toBe(duplicatedVideo.id);
+    expect(audioPlacement.legacyData).toMatchObject({ linkedVideoClipId: duplicatedVideo.id, volume: 0.6 });
+    expect(audioPlacement).toMatchObject({ sourceIn: 2, sourceOut: 5 });
+    expect(duplicatedDoc.provenance).toEqual(composition.provenance);
+    expect(duplicatedDoc.nestedCompositions?.[0]?.id).toBe("pinned-child");
+    expect(duplicatedDoc.nestedCompositions?.[0]?.placements).toEqual([]);
+    expect(source.composition?.placements.map(item => item.id)).toEqual(composition.placements.map(item => item.id));
+  });
+
+  it("duplicates legacy-only versions without breaking linked layer references", () => {
+    const version = structuredClone(sampleProject.shots[0].slots[0].versions[0]);
+    version.composition = undefined;
+    version.tracks = [{ id: "legacy-video-track", name: "Video", kind: "video" }, { id: "legacy-audio-track", name: "Audio", kind: "audio" }];
+    version.layers = [
+      { id: "legacy-video", name: "Video", kind: "video", trackId: "legacy-video-track", start: 0, duration: 2 },
+      { id: "legacy-audio", name: "Audio", kind: "audio", trackId: "legacy-audio-track", start: 0, duration: 2, linkedVideoClipId: "legacy-video" } as unknown as import("./types").CompositionLayer,
+    ];
+    let n = 0;
+    const duplicate = duplicateClipVersionComposition(version, kind => kind + "-legacy-copy-" + (++n));
+    expect(duplicate.layers[0].id).not.toBe("legacy-video");
+    expect(duplicate.layers[1].linkedVideoClipId).toBe(duplicate.layers[0].id);
+    expect(duplicate.layers[0].trackId).not.toBe("legacy-video-track");
+    expect(duplicate.layers[1].trackId).not.toBe("legacy-audio-track");
+    expect(duplicate.composition).toBeUndefined();
+  });
+
 });
