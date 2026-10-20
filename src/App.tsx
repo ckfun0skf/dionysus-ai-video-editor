@@ -2459,7 +2459,7 @@ export default function App() {
     if (!file) return;
     try {
       const parsed = JSON.parse(await file.text()) as unknown;
-      const { project: data, compositionModel } = readProjectDocument(parsed);
+      const { project: data, compositionModel } = readProjectDocument(parsed, true);
       if (!validateProject(data)) throw new Error(t("error.invalidProject"));
       const normalized = normalizeLegacyTimelineTracks(data); const migratedRoot = migrateLegacyProjectToComposition(normalized).rootComposition; const importedRoot = compositionModel?.rootComposition && JSON.stringify(projectRootCompositionToLegacy(normalized, compositionModel.rootComposition)) === JSON.stringify(normalized) ? structuredClone(compositionModel.rootComposition) : migratedRoot; projectRef.current = normalized; rootCompositionRef.current = importedRoot; setProject(normalized); setRootComposition(importedRoot); setUndoStack([]); setRedoStack([]); compositionUndoStackRef.current = []; compositionRedoStackRef.current = []; setCompositionUndoStack([]); setCompositionRedoStack([]); undoStackRef.current = []; redoStackRef.current = []; lastHistoryGroup.current = ""; setSelectedId(normalized.shots[0]?.id ?? ""); setNotice(t("notice.projectImported"));
     } catch (e) {
@@ -2613,7 +2613,7 @@ export default function App() {
       const clipId=event.dataTransfer.getData("text/dionysus-timeline-clip"),moving=(project.timelineClips??[]).find(clip=>clip.id===clipId)??clipDragSourceRef.current;
      if(!moving||!canPlaceTimelineClipOnTrack(moving,track))return;
      const pointerTime=((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration,rawStart=Math.max(0,pointerTime-moving.duration/2);
-     const pos=clipDropPreview?.trackId===track.id?{start:clipDropPreview.start,...(clipDropPreview.snapTime!==undefined?{snapTime:clipDropPreview.snapTime}:{})}:calculateProjectTimelineDropPosition(project,moving,track.id,rawStart,mediaTimelineDuration);
+     const pos=clipDropPreview?.trackId===track.id?{start:clipDropPreview.start,...(clipDropPreview.snapTime!==undefined?{snapTime:clipDropPreview.snapTime}:{})}:calculateRootTimelineDropPosition(moving,track.id,rawStart,mediaTimelineDuration);
      if(!pos){setNotice("No non-overlapping position is available on this layer.");clipDragSourceRef.current=null;setClipDropPreview(null);return;}
      const destinationConflict=rootCompositionRef.current.placements.some(placement=>placement.id!==moving.id&&placement.trackId===track.id&&pos.start<placement.start+placement.duration-1e-7&&pos.start+moving.duration>placement.start+1e-7);
      if(destinationConflict){setNotice("Drop cancelled: this position overlaps another clip on the destination layer.");clipDragSourceRef.current=null;setClipDropPreview(null);return;}
