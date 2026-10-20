@@ -1188,9 +1188,13 @@ export default function App() {
   }
 
   function calculateRootTimelineDropPosition(movingClip: TimelineClip, trackId: string, desiredStart: number, duration: number) {
-    return rootCompositionRef.current.placements.some(item => item.id === movingClip.id)
-      ? calculateCanonicalCompositionDropPosition(rootCompositionRef.current, movingClip, trackId, desiredStart, duration)
-      : calculateProjectTimelineDropPosition(projectRef.current, movingClip, trackId, desiredStart, duration);
+    if (rootCompositionRef.current.placements.some(item => item.id === movingClip.id)) {
+      const canonicalPosition = calculateCanonicalCompositionDropPosition(rootCompositionRef.current, movingClip, trackId, desiredStart, duration);
+      if (canonicalPosition) return canonicalPosition;
+    }
+    // Compatibility fallback for placements omitted from the root (e.g. legacy Storyboard
+    // materializations) or when the canonical candidate set cannot produce a visual snap.
+    return calculateProjectTimelineDropPosition(projectRef.current, movingClip, trackId, desiredStart, duration);
   }
 
   function moveRootTimelineClip(clipId: string, start: number) {
