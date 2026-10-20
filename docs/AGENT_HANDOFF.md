@@ -495,3 +495,10 @@ Verify the current branch head and its CI first. If it passes, continue the root
 - CI on 165708d2f5e5a1f7954d6ed370d4a9e625fa430e passed all 246 tests but failed TypeScript because getMasterShotPlacementItems became unused after canonical overlap checks. That helper has been removed. This source/test/docs follow-up requires exact-head CI.
 - Added tests for deliberately stale projection geometry, invalid canonical placement legacy metadata, and retaining valid stored nested/pinned snapshots without reconstructing them from legacy fields.
 - Still in progress: compatibility-only Storyboard materializations, legacy-first Shot/Slot/domain editors, broader root track reorder and track-settings integration, and malformed/nested/pinned snapshot/history coverage beyond these focused tests. DYS-005/DYS-014 remain in_progress; PR #96 stays Draft and unmerged. No browser smoke tests.
+
+
+## Recovery-fixture correction — 2026-10-20
+
+- CI run [39485463504](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39485463504) failed 32 App assertions because those tests manually replaced schema-1.0 local storage while retaining the prior v2 envelope at the same updatedAt. Legacy-only fixture writes now remove the v2 key; dedicated save/reopen tests continue to exercise both stores.
+- Project-document assertions compare with the deterministic canonical compatibility projection included in the v2 export, instead of the raw pre-projection object. The raw schema-1.0 import path remains lossless.
+- Exact-head CI for the correction is required. DYS-005/DYS-014 stay in_progress; PR #96 remains Draft and unmerged; no browser smoke tests.

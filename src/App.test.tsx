@@ -87,6 +87,7 @@ async function seedLinkedVideoAudioPairs(count = 1) {
   }
   project.timelineClips = clips;
   localStorage.setItem("dionysus.project.v1", JSON.stringify(project));
+    localStorage.removeItem("dionysus.composition.v2");
   act(() => root.unmount());
   root = createRoot(container);
   act(() => root.render(<App />));
@@ -126,6 +127,7 @@ afterEach(() => {
 describe("App history integration", () => {
   it("clears persisted demo seed shots and tracks from the existing demo project", async () => {
     localStorage.setItem("dionysus.project.v1", JSON.stringify(sampleProject));
+    localStorage.removeItem("dionysus.composition.v2");
     act(() => root.unmount());
     root = createRoot(container);
     act(() => root.render(<App />));
@@ -1029,6 +1031,7 @@ describe("Timeline preview", () => {
     targetTrack.width = 40;
     targetTrack.height = 30;
     localStorage.setItem("dionysus.project.v1", JSON.stringify(seeded));
+    localStorage.removeItem("dionysus.composition.v2");
 
     act(() => root.unmount());
     root = createRoot(container);
@@ -1237,6 +1240,7 @@ describe("Integrated timeline editor", () => {
     project.storyboardConnections = [];
     project.timelineClips = [{ id: "mixed-source", name: "Movable clip", kind: "video", trackId: videoTrack.id, start: 12, duration: 2 }];
     localStorage.setItem("dionysus.project.v1", JSON.stringify(project));
+    localStorage.removeItem("dionysus.composition.v2");
     act(() => root.unmount()); root = createRoot(container); act(() => root.render(<App />)); await flushEffects(); await openTimelineView();
     const source = timelineRows().find(row => row.textContent?.includes("Movable clip")) as HTMLButtonElement;
     const targetGroup = Array.from(container.querySelectorAll<HTMLElement>(".visual-track-group")).find(group => group.querySelector(".visual-track-label strong")?.textContent === targetTrack.name);
@@ -1262,6 +1266,7 @@ describe("Integrated timeline editor", () => {
     project.storyboardConnections = [];
     project.timelineClips = [{ id: "clip-before-shot", name: "Clip before Shot", kind: "video", trackId: videoTrack.id, start: 0, duration: 3 }];
     localStorage.setItem("dionysus.project.v1", JSON.stringify(project));
+    localStorage.removeItem("dionysus.composition.v2");
     act(() => root.unmount()); root = createRoot(container); act(() => root.render(<App />)); await flushEffects(); await openTimelineView();
     const clip = timelineRows().find(row => row.textContent?.includes("Clip before Shot")) as HTMLButtonElement;
     const right = clip.querySelector<HTMLElement>(".clip-resize-right"), lane = clip.closest(".visual-track-lane") as HTMLElement;
@@ -1293,6 +1298,7 @@ describe("Integrated timeline editor", () => {
     const targetTrack = project.tracks.find(track => track.kind === "video" && track.id !== project.tracks.find(item => item.kind === "video")?.id)!;
     project.timelineClips = [...(project.timelineClips ?? []), { id: "manual-drop-anchor", name: "Drop anchor", kind: "video", trackId: targetTrack.id, start: 4, duration: 2 }];
     localStorage.setItem("dionysus.project.v1", JSON.stringify(project));
+    localStorage.removeItem("dionysus.composition.v2");
     act(() => root.unmount()); root = createRoot(container); act(() => root.render(<App />)); await flushEffects(); await openTimelineView();
     const shotBlock = container.querySelector<HTMLButtonElement>(".master-shot-clip");
     const targetGroup = Array.from(container.querySelectorAll<HTMLElement>(".visual-track-group")).find(group => group.querySelector(".visual-track-label strong")?.textContent === targetTrack.name);
@@ -1367,7 +1373,8 @@ describe("Integrated timeline editor", () => {
     let project=persistedProject();const video=project.timelineClips!.find(clip=>clip.kind==="video"&&clip.id==="test-video-1")!;
     const targetTrack=project.tracks.find(track=>track.kind==="video"&&track.id!==video.trackId)!;
     project.timelineClips!.push({id:"test-anchor",name:"Drop alignment anchor",kind:"video",trackId:targetTrack.id,start:5,duration:2});
-    localStorage.setItem("dionysus.project.v1",JSON.stringify(project));act(()=>root.unmount());root=createRoot(container);act(()=>root.render(<App/>));await flushEffects();await openTimelineView();
+    localStorage.setItem("dionysus.project.v1",JSON.stringify(project));
+    localStorage.removeItem("dionysus.composition.v2");act(()=>root.unmount());root=createRoot(container);act(()=>root.render(<App/>));await flushEffects();await openTimelineView();
     const source=timelineRows().find(row=>row.textContent?.includes("Video clip 1")) as HTMLButtonElement;
     const group=Array.from(container.querySelectorAll<HTMLElement>(".visual-track-group")).find(g=>g.querySelector(".visual-track-label strong")?.textContent===targetTrack.name);
     const lane=group?.querySelector<HTMLElement>(".visual-track-lane");expect(lane).toBeTruthy();vi.spyOn(lane!,"getBoundingClientRect").mockReturnValue(new DOMRect(0,0,1200,76));
@@ -1675,6 +1682,7 @@ describe("Integrated timeline editor", () => {
     clipOnlyProject.shots = [];
     clipOnlyProject.storyboardConnections = [];
     localStorage.setItem("dionysus.project.v1", JSON.stringify(clipOnlyProject));
+    localStorage.removeItem("dionysus.composition.v2");
     act(() => root.unmount()); root = createRoot(container); act(() => root.render(<App />)); await flushEffects(); await openTimelineView();
     const before = persistedProject();
     const left = before.timelineClips?.find(clip => clip.id === "test-video-1")!;
@@ -1869,6 +1877,7 @@ describe("click-to-place timeline insertion", () => {
 
     act(() => root.unmount());
     localStorage.setItem("dionysus.project.v1", JSON.stringify(project));
+    localStorage.removeItem("dionysus.composition.v2");
     root = createRoot(container);
     act(() => root.render(<App />));
     await flushEffects();
@@ -1953,6 +1962,7 @@ describe("mobile touch timeline gestures", () => {
     ];
     act(() => root.unmount());
     localStorage.setItem("dionysus.project.v1", JSON.stringify(project));
+    localStorage.removeItem("dionysus.composition.v2");
     root = createRoot(container);
     act(() => root.render(<App />));
     await flushEffects();
@@ -2083,6 +2093,7 @@ describe("mobile contextual timeline tools", () => {
     ];
     act(() => root.unmount());
     localStorage.setItem("dionysus.project.v1", JSON.stringify(project));
+    localStorage.removeItem("dionysus.composition.v2");
     root = createRoot(container);
     act(() => root.render(<App />));
     await flushEffects();
@@ -2121,6 +2132,7 @@ describe("mobile timeline zoom controls", () => {
     ];
     act(() => root.unmount());
     localStorage.setItem("dionysus.project.v1", JSON.stringify(project));
+    localStorage.removeItem("dionysus.composition.v2");
     root = createRoot(container);
     act(() => root.render(<App />));
     await flushEffects();
@@ -2148,6 +2160,7 @@ describe("mobile touch trim handles", () => {
     ];
     act(() => root.unmount());
     localStorage.setItem("dionysus.project.v1", JSON.stringify(project));
+    localStorage.removeItem("dionysus.composition.v2");
     root = createRoot(container);
     act(() => root.render(<App />));
     await flushEffects();
@@ -2263,6 +2276,7 @@ describe("mobile preview history controls", () => {
     ];
     act(() => root.unmount());
     localStorage.setItem("dionysus.project.v1", JSON.stringify(project));
+    localStorage.removeItem("dionysus.composition.v2");
     root = createRoot(container);
     act(() => root.render(<App />));
     await flushEffects();
@@ -2305,6 +2319,7 @@ describe("mobile audio clip controls", () => {
     ];
     act(() => root.unmount());
     localStorage.setItem("dionysus.project.v1", JSON.stringify(project));
+    localStorage.removeItem("dionysus.composition.v2");
     root = createRoot(container);
     act(() => root.render(<App />));
     await flushEffects();

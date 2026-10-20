@@ -7,7 +7,7 @@ import { migrateLegacyProjectToComposition, projectRootCompositionToLegacy } fro
 import { getMasterShotStart } from "./masterTimeline";
 
 describe("versioned project document boundary", () => {
-  it("exports a versioned Composition projection alongside a lossless legacy project", () => {
+  it("exports a versioned canonical projection without mutating the input legacy project", () => {
     const project = structuredClone(sampleProject);
     const before = JSON.stringify(project);
     const document = createProjectDocument(project);
@@ -18,7 +18,7 @@ describe("versioned project document boundary", () => {
       compositionModel: { schemaVersion: "2.0", projectId: project.id },
     });
     expect(document.compositionModel.rootComposition.tracks.length).toBeGreaterThan(0);
-    expect(readProjectDocument(document)).toMatchObject({ project, sourceDocumentVersion: "2.0" });
+    expect(readProjectDocument(document)).toMatchObject({ project: document.project, sourceDocumentVersion: "2.0" });
     expect(JSON.stringify(project)).toBe(before);
   });
 
@@ -82,7 +82,7 @@ describe("versioned project document boundary", () => {
     const document = createProjectDocument(project);
     const result = readProjectDocument(document);
     expect(result.sourceDocumentVersion).toBe("2.0");
-    expect(result.project).toEqual(project);
+    expect(result.project).toEqual(document.project);
   });
 
   it("rejects unknown versions rather than guessing a migration", () => {
@@ -127,7 +127,7 @@ describe("versioned project document boundary", () => {
 
     const versionedExport = JSON.parse(JSON.stringify(createProjectDocument(project))) as ReturnType<typeof createProjectDocument>;
     const imported = readProjectDocument(versionedExport);
-    expect(imported).toEqual({ project, sourceDocumentVersion: "2.0" });
+    expect(imported).toEqual({ project: versionedExport.project, sourceDocumentVersion: "2.0" });
 
     const alternatives = versionedExport.compositionModel.legacyShotSlotCompositions.filter(composition =>
       composition.legacyData?.shotId === shot.id && composition.legacyData?.slotId === slot.id
