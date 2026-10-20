@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { sampleProject } from "./sampleProject";
+import { migrateLegacyProjectToComposition } from "./compositionMigration";
 import {
   applyProjectTimelineClipResize,
   applyProjectTimelineInsertion,
@@ -57,8 +58,16 @@ describe("shared project timeline placement engine", () => {
     const storyboardVideo = { id: "storyboard-" + shot.id + "-slot-a", name: "Generated video", kind: "video" as const, trackId: videoTracks[0].id, start: 2, duration: 3, shotId: shot.id };
     const storyboardAudio = { id: "storyboard-" + shot.id + "-slot-a-audio", name: "Generated audio", kind: "audio" as const, trackId: audioTrack.id, start: 2, duration: 3 };
     project.timelineClips = [storyboardVideo, storyboardAudio];
+    const before = structuredClone(project);
     const updated = moveProjectTimelinePlacement(project, { type: "shot", shotId: shot.id }, videoTracks[1].id, 5);
+    const projectedRoot = migrateLegacyProjectToComposition(updated).rootComposition;
     expect(updated.shots[0]).toMatchObject({ masterStart: 5, masterTrackId: videoTracks[1].id });
+    expect(projectedRoot.placements.find(placement => placement.id === shot.id)).toMatchObject({
+      start: 5,
+      duration: shot.duration,
+      trackId: videoTracks[1].id,
+    });
+    expect(project).toEqual(before);
     expect(updated.timelineClips).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: storyboardVideo.id, start: 5, trackId: videoTracks[1].id }),
       expect.objectContaining({ id: storyboardAudio.id, start: 5, trackId: audioTrack.id }),
