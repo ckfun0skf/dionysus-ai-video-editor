@@ -124,3 +124,10 @@ Migration now preserves already-canonical Clip/Shot Slot Version documents inste
 - Added `src/projectDocument.test.ts` coverage for root placement timing across save/reopen and project Undo/Redo.
 - This does **not** complete canonical root authority: project edit commands still mutate schema-1.0 `DionysusProject`, and the root Composition is regenerated from that state. Remaining gate: root Composition-backed live commands plus deterministic compatibility projection, migration/pin/nesting coverage, and exact-head CI.
 - No browser smoke tests were added or run. PR #96 remains Draft and unmerged.
+
+
+## Root Composition mutation audit — 2026-10-20
+
+The Master Shot move path now invokes the shared immutable Composition move command and projects the committed start/duration/track fields back into the schema-1.0 Shot, keeping materialized Storyboard placements aligned. A guarded compatibility fallback remains for malformed legacy projects.
+
+This is a partial root-command audit, **not** completion of canonical root live state. `App.tsx` still owns schema-1.0 `DionysusProject`; root Composition is regenerated from that project. The next architectural gate is to make `CompositionDocument` the root timeline state/history authority and derive deterministic compatibility projections from it. Save/reopen/Undo/Redo must prove stale legacy fields cannot override canonical placements.
