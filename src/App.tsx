@@ -7,7 +7,7 @@ import { validateProject } from "./projectValidation";
 import { addClipVersionLayer as addNestedLayer, addClipVersionTrack as addNestedTrack, deleteClipVersionLayer as deleteNestedLayer, duplicateClipVersionComposition, moveClipVersionLayer as moveNestedLayer, normalizeClipVersionTracks, updateClipVersionLayer as updateNestedLayer } from "./clipVersionTracks";
 import { createProjectDocument, readProjectDocument } from "./projectDocument";
 import { migrateLegacyProjectToComposition, projectRootCompositionToLegacy } from "./compositionMigration";
-import { addCompositionTrack, applyCompositionResizePreview, deleteCompositionPlacement, insertCompositionPlacement, moveCompositionPlacement, moveCompositionPlacementToTrack, removeCompositionTrack, updateCompositionTrack } from "./compositionCommands";
+import { addCompositionTrack, applyCompositionResizePreview, assertValidCompositionDocument, deleteCompositionPlacement, insertCompositionPlacement, moveCompositionPlacement, moveCompositionPlacementToTrack, removeCompositionTrack, reorderCompositionTrack, updateCompositionTrack } from "./compositionCommands";
 import { moveNormalizedFrame, resizeNormalizedFrame } from "./previewTransform";
 import { getAllowedChildClipAssets, wouldCreateClipAssetCycle } from "./clipAssetGraph";
 import { t } from "./i18n";
@@ -620,6 +620,71 @@ export default function App() {
 
   const selectedStart = useMemo(() => getMasterShotStart(project.shots, selectedId), [project.shots, selectedId]);
   const slotCount = project.shots.reduce((n, s) => n + s.slots.length, 0);
+  function reconcileRootComposition(current: CompositionDocument, target: CompositionDocument): CompositionDocument {
+    let next = structuredClone(current);
+    const targetTrackIds = new Set(target.tracks.map(track => track.id));
+    for (const track of target.tracks) {
+      if (!next.tracks.some(item => item.id === track.id)) next = addCompositionTrack(next, track);
+      else next = updateCompositionTrack(next, track.id, track);
+    }
+
+    const targetPlacementIds = new Set(target.placements.map(placement => placement.id));
+    for (const placement of [...next.placements]) {
+      if (!targetPlacementIds.has(placement.id) && next.placements.some(item => item.id === placement.id)) {
+        next = deleteCompositionPlacement(next, placement.id);
+      }
+    }
+
+    // Existing canonical placements are edited with the shared immutable commands; newly inserted
+    // legacy-domain items enter through the Composition insertion invariant checks.
+    for (const desired of target.placements) {
+      const existing = next.placements.find(placement => placement.id === desired.id);
+      if (!existing) {
+        next = insertCompositionPlacement(next, structuredClone(desired));
+        continue;
+      }
+      if (existing.trackId !== desired.trackId || existing.start !== desired.start) {
+        next = existing.trackId !== desired.trackId
+          ? moveCompositionPlacementToTrack(next, existing.id, desired.trackId, desired.start)
+          : moveCompositionPlacement(next, existing.id, desired.start);
+      }
+      const moved = next.placements.find(placement => placement.id === desired.id)!;
+      if (moved.duration !== desired.duration) {
+        next = applyCompositionResizePreview(next, { id: desired.id, start: desired.start, duration: desired.duration, edge: "right", trims: [] });
+      }
+      next.placements = next.placements.map(placement => placement.id === desired.id
+        ? structuredClone(desired)
+        : placement);
+    }
+
+    const targetTrackOrder = [...target.tracks].sort((a, b) => a.order - b.order);
+    targetTrackOrder.forEach((track, index) => {
+      const ordered = [...next.tracks].sort((a, b) => a.order - b.order);
+      const currentIndex = ordered.findIndex(item => item.id === track.id);
+      if (currentIndex >= 0 && currentIndex !== index) next = reorderCompositionTrack(next, track.id, index);
+    });
+    for (const track of [...next.tracks]) {
+      if (targetTrackIds.has(track.id)) continue;
+      const fallback = targetTrackOrder.find(item => item.kind === "video")?.id;
+      next = removeCompositionTrack(next, track.id, fallback);
+    }
+    next = {
+      ...next,
+      id: target.id,
+      name: target.name,
+      duration: target.duration,
+      frameRate: target.frameRate,
+      width: target.width,
+      height: target.height,
+      provenance: target.provenance,
+      nestedCompositions: structuredClone(target.nestedCompositions),
+      legacyData: structuredClone(target.legacyData),
+      tracks: [...target.tracks].sort((a, b) => a.order - b.order).map((track, order) => ({ ...structuredClone(track), order })),
+    };
+    assertValidCompositionDocument(next);
+    return next;
+  }
+
   function change(fn: (p: DionysusProject) => DionysusProject, historyGroup = "", canonicalRoot?: CompositionDocument) {
     const now = Date.now();
     const current = projectRef.current;
@@ -642,7 +707,7 @@ export default function App() {
     const next = { ...fn(copy(current)), updatedAt: new Date().toISOString() };
     // Explicit root commands supply the canonical document first. Non-root domain edits refresh
     // the root snapshot through the legacy migration until those domain editors are promoted.
-    const nextRoot = structuredClone(canonicalRoot ?? migrateLegacyProjectToComposition(next).rootComposition);
+    const nextRoot = canonicalRoot ? structuredClone(canonicalRoot) : reconcileRootComposition(currentRoot, migrateLegacyProjectToComposition(next).rootComposition);
     const projected = canonicalRoot ? projectRootCompositionToLegacy(next, nextRoot) : next;
     projectRef.current = projected;
     rootCompositionRef.current = nextRoot;
