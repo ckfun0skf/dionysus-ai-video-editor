@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { sampleProject } from "./sampleProject";
-import { addClipVersionLayer, addClipVersionTrack, moveClipVersionLayer, normalizeClipVersionTracks } from "./clipVersionTracks";
+import { addClipVersionLayer, addClipVersionTrack, deleteClipVersionLayer, moveClipVersionLayer, normalizeClipVersionTracks } from "./clipVersionTracks";
 import { validateProject } from "./projectValidation";
 
 describe("normalizeClipVersionTracks", () => {
@@ -54,6 +54,70 @@ describe("nested Clip Version track operations", () => {
     const withSecondLayer = addClipVersionLayer(withLayers, { id: "code-1", name: "Code", kind: "procedural", start: 1, duration: 2 }, "video-2");
     expect(withSecondLayer.tracks?.map(track => track.id)).toContain("video-2");
     expect(withSecondLayer.layers.filter(layer => layer.trackId === "video-2").map(layer => layer.id)).toEqual(["image-1", "code-1"]);
+  });
+
+  it("inserts layers through Composition commands without mutating the original version", () => {
+    const version = structuredClone(sampleProject.shots[0].slots[0].versions[0]);
+    const before = JSON.stringify(version);
+    const added = addClipVersionLayer(version, {
+      id: "image-command-added",
+      name: "Command-added image",
+      kind: "image",
+      start: 1,
+      duration: 2,
+      assetId: "image-asset",
+      x: 12,
+      prompt: "Preserve the original framing",
+    });
+    expect(added.layers.find(layer => layer.id === "image-command-added")).toMatchObject({
+      name: "Command-added image",
+      kind: "image",
+      assetId: "image-asset",
+      start: 1,
+      duration: 2,
+      x: 12,
+      prompt: "Preserve the original framing",
+      trackId: "clip-track:" + version.id + ":video",
+    });
+    expect(JSON.stringify(version)).toBe(before);
+    expect(() => addClipVersionLayer(added, {
+      id: "image-command-added",
+      name: "Duplicate",
+      kind: "image",
+      start: 0,
+      duration: 1,
+    })).toThrow(/unique/i);
+  });
+
+  it("deletes a nested root and linked descendants through Composition commands", () => {
+    const version = structuredClone(sampleProject.shots[0].slots[0].versions[0]);
+    version.tracks = [
+      { id: "nested-video", name: "Video", kind: "video" },
+      { id: "nested-audio", name: "Audio", kind: "audio" },
+    ];
+    version.layers = [
+      { id: "nested-source", name: "Source", kind: "video", trackId: "nested-video", start: 0, duration: 2, sourceIn: 0, sourceOut: 2 },
+      {
+        id: "nested-source-audio",
+        name: "Source audio",
+        kind: "audio",
+        trackId: "nested-audio",
+        start: 0,
+        duration: 2,
+        sourceIn: 0,
+        sourceOut: 2,
+        assetId: "source-asset",
+        linkedVideoClipId: "nested-source",
+      } as unknown as import("./types").CompositionLayer,
+      { id: "keep", name: "Independent", kind: "text", trackId: "clip-track:" + version.id + ":text", start: 3, duration: 1 },
+    ];
+    const before = JSON.stringify(version);
+    const deleted = deleteClipVersionLayer(version, "nested-source");
+    expect(deleted.layers.map(layer => layer.id)).toEqual(["keep"]);
+    expect(JSON.stringify(version)).toBe(before);
+
+    const deletedChildOnly = deleteClipVersionLayer(version, "nested-source-audio");
+    expect(deletedChildOnly.layers.map(layer => layer.id)).toEqual(["nested-source", "keep"]);
   });
 
   it("moves a layer to a compatible track and rejects incompatible track kinds", () => {
