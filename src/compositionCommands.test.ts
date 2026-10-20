@@ -10,9 +10,11 @@ import {
   moveCompositionPlacement,
   removeCompositionTrack,
   reorderCompositionTrack,
+  rippleReorderCompositionMasterShots,
   splitCompositionPlacement,
   trimCompositionPlacement,
   unlinkCompositionPlacement,
+  updateCompositionPlacement,
 } from "./compositionCommands";
 
 function fixture(): CompositionDocument {
@@ -78,6 +80,53 @@ describe("shared Composition editing commands", () => {
     expect(JSON.stringify(source)).toBe(before);
   });
 
+
+  it("removes a video track with a linked group atomically and rejects removing a Master Shot track without fallback", () => {
+    const source = fixture();
+    const withShotTrack = addCompositionTrack(source, {
+      id: "v2", name: "Video 2", kind: "video", order: 3, legacyData: { kind: "video" },
+    });
+    withShotTrack.placements.push({
+      id: "shot", name: "Master Shot", trackId: "v2", start: 8, duration: 3, order: 0,
+      source: { type: "shot", shotId: "shot" },
+      legacyData: { entityType: "master-shot", kind: "video", start: 8, duration: 3 },
+    });
+    expect(() => removeCompositionTrack(withShotTrack, "v2")).toThrow(/fallback video track/);
+    const moved = removeCompositionTrack(withShotTrack, "v2", "v1");
+    expect(moved.placements.find(item => item.id === "shot")).toMatchObject({ trackId: "v1", start: 8, duration: 3 });
+    expect(moved.tracks.some(track => track.id === "v2")).toBe(false);
+    expect(withShotTrack.placements.find(item => item.id === "shot")?.trackId).toBe("v2");
+  });
+
+  it("updates canonical source/link metadata without changing unrelated source ranges", () => {
+    const source = fixture();
+    const unlinked = updateCompositionPlacement(source, "audio", {
+      linkedToPlacementId: undefined,
+      source: { type: "asset", assetId: "different-audio" },
+      legacyData: { ...placement(source, "audio").legacyData, linkedVideoClipId: undefined },
+    });
+    expect(placement(unlinked, "audio")).toMatchObject({
+      source: { type: "asset", assetId: "different-audio" }, sourceIn: 2, sourceOut: 8,
+    });
+    expect(placement(unlinked, "audio").linkedToPlacementId).toBeUndefined();
+    expect(placement(unlinked, "audio").legacyData.linkedVideoClipId).toBeUndefined();
+    expect(placement(source, "audio").linkedToPlacementId).toBe("video");
+  });
+
+  it("ripple-reorders Master Shots from canonical placements and preserves source ranges", () => {
+    const source = fixture();
+    source.placements.push(
+      { id: "shot-a", name: "A", trackId: "v1", start: 0, duration: 3, order: 2, source: { type: "shot", shotId: "shot-a" }, legacyData: { entityType: "master-shot", kind: "video" } },
+      { id: "shot-b", name: "B", trackId: "v1", start: 3, duration: 4, order: 3, source: { type: "shot", shotId: "shot-b" }, legacyData: { entityType: "master-shot", kind: "video" } },
+    );
+    const before = JSON.stringify(source);
+    const next = rippleReorderCompositionMasterShots(source, "shot-b", 0, "v1");
+    expect(placement(next, "shot-b")).toMatchObject({ start: 0, duration: 4 });
+    expect(placement(next, "shot-a")).toMatchObject({ start: 4, duration: 3 });
+    expect(placement(next, "video")).toMatchObject({ start: 7, sourceIn: 2, sourceOut: 8 });
+    expect(placement(next, "audio")).toMatchObject({ start: 7, sourceIn: 2, sourceOut: 8, linkedToPlacementId: "video" });
+    expect(JSON.stringify(source)).toBe(before);
+  });
 
   it("inserts a placement on an existing track without mutating the original document", () => {
     const source = fixture();
