@@ -3,7 +3,7 @@ import { AudioLines, Check, CheckCircle2, ChevronDown, CircleHelp, Clapperboard,
 import { sampleProject } from "./sampleProject";
 import type { Asset, AssetKind, ClipVersion, CompositionLayer, DionysusProject, ReferenceProfile, ReferenceRole, Shot, TimelineClip } from "./types";
 import { validateProject } from "./projectValidation";
-import { addClipVersionLayer as addNestedLayer, addClipVersionTrack as addNestedTrack, deleteClipVersionLayer as deleteNestedLayer, moveClipVersionLayer as moveNestedLayer, normalizeClipVersionTracks } from "./clipVersionTracks";
+import { addClipVersionLayer as addNestedLayer, addClipVersionTrack as addNestedTrack, deleteClipVersionLayer as deleteNestedLayer, moveClipVersionLayer as moveNestedLayer, normalizeClipVersionTracks, updateClipVersionLayer as updateNestedLayer } from "./clipVersionTracks";
 import { createProjectDocument, readProjectDocument } from "./projectDocument";
 import { moveNormalizedFrame, resizeNormalizedFrame } from "./previewTransform";
 import { getAllowedChildClipAssets, wouldCreateClipAssetCycle } from "./clipAssetGraph";
@@ -1177,14 +1177,15 @@ export default function App() {
         code: requestedAsset.js ?? "",
       };
     }
-    updateTimelineVersion(tab, currentVersion => ({
-      ...currentVersion,
-      layers: currentVersion.layers.map(item => {
-        if (item.id !== layerId) return item;
-        const updated = { ...item, ...safePatch };
-        return typeof safePatch.duration === "number" ? withDurationAndClampedFades(updated, safePatch.duration) : updated;
-      })
-    }));
+    updateTimelineVersion(tab, currentVersion => {
+      const currentLayer = currentVersion.layers.find(item => item.id === layerId);
+      if (!currentLayer) return currentVersion;
+      const updated = { ...currentLayer, ...safePatch };
+      const clamped = typeof safePatch.duration === "number"
+        ? withDurationAndClampedFades(updated, safePatch.duration)
+        : updated;
+      return updateNestedLayer(currentVersion, layerId, clamped);
+    });
   }
 
   function addTimelineVersionTrack(tab: VersionTimelineTab, kind: "video" | "audio" | "text") {
