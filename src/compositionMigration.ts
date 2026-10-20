@@ -189,6 +189,21 @@ function versionComposition(
   height: number,
   legacyData: Record<string, unknown>,
 ): CompositionDocument {
+  // Once a Clip/Shot Slot Version has a canonical document, never reconstruct it from the
+  // compatibility layers: doing so drops nested Composition trees, provenance and pinned children.
+  if (version.composition) {
+    const canonical = structuredClone(version.composition);
+    return {
+      ...canonical,
+      legacyData: {
+        ...(canonical.legacyData ?? {}),
+        description: version.description,
+        scriptVersionIds: [...version.scriptVersionIds],
+        generationRecords: structuredClone(version.generationRecords),
+      },
+    };
+  }
+
   const encounteredKinds: Array<"video" | "audio" | "text"> = [];
   for (const layer of version.layers) {
     const kind = nestedTrackKind(layer);
