@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AudioLines, Check, CheckCircle2, ChevronDown, CircleHelp, Clapperboard, Clock3, Code2, Download, FileJson, Film, FolderOpen, Layers3, Maximize2, Plus, Save, Settings2, ShieldCheck, MoreHorizontal, Sparkles, SquarePlay, Upload, WandSparkles, Undo2, Redo2 } from "lucide-react";
 import { sampleProject } from "./sampleProject";
-import type { Asset, AssetKind, ClipVersion, CompositionDocument, CompositionLayer, DionysusProject, ReferenceProfile, ReferenceRole, Shot, TimelineClip } from "./types";
+import type { Asset, AssetKind, ClipVersion, CompositionLayer, DionysusProject, ReferenceProfile, ReferenceRole, Shot, TimelineClip } from "./types";
+import type { CompositionDocument } from "./compositionModel";
 import { validateProject } from "./projectValidation";
 import { addClipVersionLayer as addNestedLayer, addClipVersionTrack as addNestedTrack, deleteClipVersionLayer as deleteNestedLayer, duplicateClipVersionComposition, moveClipVersionLayer as moveNestedLayer, normalizeClipVersionTracks, updateClipVersionLayer as updateNestedLayer } from "./clipVersionTracks";
 import { createProjectDocument, readProjectDocument } from "./projectDocument";
@@ -828,6 +829,17 @@ export default function App() {
     projectRef.current = { ...copy(history.current), updatedAt: new Date().toISOString() };
     undoStackRef.current = history.undo.map(copy);
     redoStackRef.current = history.redo.map(copy);
+    const priorComposition = compositionUndoStackRef.current[compositionUndoStackRef.current.length - 1];
+    if (priorComposition) {
+      compositionUndoStackRef.current = compositionUndoStackRef.current.slice(0, -1);
+      compositionRedoStackRef.current = [...compositionRedoStackRef.current, structuredClone(rootCompositionRef.current)];
+      rootCompositionRef.current = structuredClone(priorComposition);
+      setRootComposition(rootCompositionRef.current);
+      setCompositionUndoStack(compositionUndoStackRef.current);
+      setCompositionRedoStack(compositionRedoStackRef.current);
+      // Root placement fields are re-projected from the history snapshot, never re-migrated.
+      projectRef.current = { ...projectRootCompositionToLegacy(projectRef.current, rootCompositionRef.current), updatedAt: new Date().toISOString() };
+    }
     setProject(projectRef.current);
     setUndoStack(undoStackRef.current);
     setRedoStack(redoStackRef.current);
@@ -840,6 +852,16 @@ export default function App() {
     projectRef.current = { ...copy(history.current), updatedAt: new Date().toISOString() };
     undoStackRef.current = history.undo.map(copy);
     redoStackRef.current = history.redo.map(copy);
+    const nextComposition = compositionRedoStackRef.current[compositionRedoStackRef.current.length - 1];
+    if (nextComposition) {
+      compositionRedoStackRef.current = compositionRedoStackRef.current.slice(0, -1);
+      compositionUndoStackRef.current = [...compositionUndoStackRef.current, structuredClone(rootCompositionRef.current)];
+      rootCompositionRef.current = structuredClone(nextComposition);
+      setRootComposition(rootCompositionRef.current);
+      setCompositionUndoStack(compositionUndoStackRef.current);
+      setCompositionRedoStack(compositionRedoStackRef.current);
+      projectRef.current = { ...projectRootCompositionToLegacy(projectRef.current, rootCompositionRef.current), updatedAt: new Date().toISOString() };
+    }
     setProject(projectRef.current);
     setUndoStack(undoStackRef.current);
     setRedoStack(redoStackRef.current);
