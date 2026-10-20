@@ -17,10 +17,8 @@ import { canPlaceTimelineClipOnTrack } from "./timelinePlacement";
 import { applyClipVersionResizePreview, calculateClipVersionDropPosition, calculateClipVersionResizePreview } from "./nestedTimelinePlacement";
 import {
   applyProjectTimelineClipResize,
-  applyProjectTimelineInsertion,
   applyCanonicalCompositionInsertion,
   calculateCanonicalCompositionInsertionPlan,
-  calculateProjectTimelineInsertionPlan,
   calculateProjectTimelineClipResizePreview,
   calculateProjectTimelineDropPosition,
   getProjectTimelinePlacementItems,
@@ -39,7 +37,7 @@ import SandboxedCodePreview from "./SandboxedCodePreview";
 import { deleteStoredMediaAsset, isStoredMediaPath, loadMediaBlobFromPath, resolveMediaSource, storeMediaAsset } from "./mediaAssetStore";
 import { createImageThumbnail, createVideoThumbnail, getAssetThumbnail } from "./mediaThumbnail";
 import { getAudioEnvelope, withDurationAndClampedFades } from "./audioEnvelope";
-import { getMasterShotIndexAtTime, getMasterShotStart, getMasterShotStarts, getMasterTimelineDuration, rippleReorderMasterShots, setMasterShotDuration, setMasterShotStart } from "./masterTimeline";
+import { getMasterShotIndexAtTime, getMasterShotStart, getMasterShotStarts, getMasterTimelineDuration, setMasterShotDuration, setMasterShotStart } from "./masterTimeline";
 import StoryboardFlowCanvas from "./StoryboardFlowCanvas";
 import AgentStoryboardModal from "./AgentStoryboardModal";
 import ProductionChecklistDrawer from "./ProductionChecklistDrawer";
