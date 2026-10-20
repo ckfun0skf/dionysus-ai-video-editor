@@ -124,7 +124,7 @@ Maintain low-fi HTML prototype and UML sources for workspace, domain, edit seque
 
 Branch `feat/dys005-composition-commands` starts from current main and adds `src/compositionCommands.ts` plus `src/compositionCommands.test.ts`. The pure command functions operate on `CompositionDocument`, so the same semantics can be used at root and nested depth: insert, move a linked group, right-edge trim, split linked groups with source-range preservation, duplicate linked groups, delete descendants and unlink a dependent placement. Edits return new documents; IDs/tracks/timing/link cycles are checked, and compatibility fields in `legacyData` are synchronized for placement IDs, timing, source ranges and audio links.
 
-**Not yet implemented in this slice:** UI integration, snapping/conflict policy, command-backed Undo/Redo dispatch, pin selection UX, and root/nested integration tests. These are required follow-ups; this helper alone is not evidence that the Timeline Editor is complete.
+**Integration progress (Draft PR #93):** root Timeline operation adapters now route add/move/trim/split/duplicate/delete/unlink through the Composition command boundary, while nested Clip Version layer movement uses the same track-aware move command. Existing React callbacks and history wrapper still own user interaction/Undo grouping. Remaining gates: route the UI insertion/conflict flow and nested add/delete/resize through the shared command boundary, add root/nested parity integration tests, and verify snapping/overlap behavior remains unchanged. This is partial engine integration, not a claim that the full Timeline is complete.
 
 ## Recommended next step
 

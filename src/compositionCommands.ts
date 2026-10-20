@@ -156,7 +156,7 @@ function validateNewIds(document: CompositionDocument, map: Record<string, strin
   }
   const existingIds = new Set(document.placements.map(item => item.id));
   if (values.some(newId => existingIds.has(newId))) {
-    throw new Error("New Composition placement IDs must not collide with existing IDs.");
+    throw new Error("New Composition placement IDs must be unique and must not collide with existing IDs.");
   }
 }
 
@@ -378,7 +378,6 @@ export function duplicateCompositionPlacement(
       ...clone(placement),
       id: input.newPlacementIds[placement.id],
       start: placement.start + delta,
-      name: placement.name + " copy",
       order,
       ...(placement.linkedToPlacementId && groupIds.has(placement.linkedToPlacementId)
         ? { linkedToPlacementId: input.newPlacementIds[placement.linkedToPlacementId] }

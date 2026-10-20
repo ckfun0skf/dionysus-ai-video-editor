@@ -1,4 +1,6 @@
 import type { ClipVersion, CompositionLayer, TimelineTrack } from "./types";
+import type { CompositionDocument, CompositionPlacement, CompositionSourceReference, CompositionTrack } from "./compositionModel";
+import { moveCompositionPlacementToTrack } from "./compositionCommands";
 
 export type CanonicalNestedTrackKind = "video" | "audio" | "text";
 
@@ -91,6 +93,61 @@ export function addClipVersionLayer(
 }
 
 /** Move a layer within or between compatible nested tracks. */
+function sourceReferenceForLayer(layer: CompositionLayer): CompositionSourceReference {
+  if (layer.kind === "composition" && layer.childCompositionId) {
+    return { type: "clip", assetId: layer.childCompositionId, ...(layer.clipVersionId ? { versionId: layer.clipVersionId } : {}) };
+  }
+  if (layer.assetId) return { type: "asset", assetId: layer.assetId };
+  if (layer.scriptVersionId) return { type: "script", scriptVersionId: layer.scriptVersionId };
+  return { type: "none" };
+}
+
+function compositionDocumentFromClipVersion(version: ClipVersion): CompositionDocument {
+  const normalized = normalizeClipVersionTracks(version);
+  const tracks: CompositionTrack[] = (normalized.tracks ?? []).map((track, order) => ({
+    id: track.id,
+    name: track.name,
+    kind: track.kind === "audio" ? "audio" : track.kind === "text" ? "text" : "video",
+    order,
+    ...(track.muted !== undefined ? { muted: track.muted } : {}),
+    ...(track.backgroundColor !== undefined ? { backgroundColor: track.backgroundColor } : {}),
+    ...(track.backgroundTransparent !== undefined ? { backgroundTransparent: track.backgroundTransparent } : {}),
+    ...(track.opacity !== undefined ? { opacity: track.opacity } : {}),
+    ...(track.originalKind !== undefined ? { originalKind: track.originalKind } : {}),
+  }));
+  const placements: CompositionPlacement[] = normalized.layers.map((layer, order) => {
+    const legacy = structuredClone(layer) as unknown as Record<string, unknown>;
+    const linkedToPlacementId = typeof legacy.linkedToPlacementId === "string"
+      ? legacy.linkedToPlacementId
+      : typeof legacy.linkedVideoClipId === "string" ? legacy.linkedVideoClipId : undefined;
+    const trackKind = layer.kind === "audio" ? "audio" : layer.kind === "text" ? "text" : "video";
+    return {
+      id: layer.id,
+      name: layer.name,
+      trackId: layer.trackId ?? tracks.find(track => track.kind === trackKind)?.id ?? "",
+      start: layer.start,
+      duration: layer.duration,
+      order,
+      source: sourceReferenceForLayer(layer),
+      ...(layer.sourceIn !== undefined ? { sourceIn: layer.sourceIn } : {}),
+      ...(layer.sourceOut !== undefined ? { sourceOut: layer.sourceOut } : {}),
+      ...(linkedToPlacementId ? { linkedToPlacementId } : {}),
+      legacyData: legacy,
+    };
+  });
+  return {
+    id: "compat:clip-version:" + version.id,
+    name: version.name,
+    duration: version.duration,
+    frameRate: 24,
+    width: 1920,
+    height: 1080,
+    tracks,
+    placements,
+  };
+}
+
+/** Move a nested layer through the same Composition command used by the Master Timeline adapter. */
 export function moveClipVersionLayer(
   version: ClipVersion,
   layerId: string,
@@ -103,8 +160,28 @@ export function moveClipVersionLayer(
   const target = normalized.tracks?.find(item => item.id === targetTrackId);
   if (!layer || !target) throw new Error("Layer or destination track was not found.");
   if (nestedTrackKind(layer) !== target.kind) throw new Error("This source type cannot be moved to the selected track.");
-  return {
-    ...normalized,
-    layers: normalized.layers.map(item => item.id === layerId ? { ...item, trackId: targetTrackId, start: Math.min(start, Math.max(0, normalized.duration - item.duration)) } : item),
-  };
+  const nextStart = Math.min(start, Math.max(0, normalized.duration - layer.duration));
+  const moved = moveCompositionPlacementToTrack(
+    compositionDocumentFromClipVersion(normalized),
+    layerId,
+    targetTrackId,
+    nextStart,
+  );
+  const layers = moved.placements.map(placement => {
+    const legacy = structuredClone(placement.legacyData) as unknown as Record<string, unknown>;
+    const output = {
+      ...legacy,
+      id: placement.id,
+      name: placement.name,
+      trackId: placement.trackId,
+      start: placement.start,
+      duration: placement.duration,
+    } as unknown as CompositionLayer;
+    if (placement.sourceIn === undefined) delete output.sourceIn;
+    else output.sourceIn = placement.sourceIn;
+    if (placement.sourceOut === undefined) delete output.sourceOut;
+    else output.sourceOut = placement.sourceOut;
+    return output;
+  });
+  return { ...normalized, layers };
 }

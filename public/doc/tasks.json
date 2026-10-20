@@ -313,7 +313,7 @@
           "id": "DYS-005",
           "title": "Timeline editing and Version management",
           "status": "in_progress",
-          "progress": 84,
+          "progress": 86,
           "summary": "Implement shared root/nested commands for insert, move/snap, conflicts, trim, split, duplicate, delete, linked audio, pins and Undo/Redo.",
           "doc": "tasks/timeline-and-versions.md",
           "detail": "tasks/timeline-and-versions.html",
@@ -387,7 +387,7 @@
             "Blank-version independence integration test: src/App.test.tsx",
             "Functional code SHA ee1f90c3304ce0f2be5cef294c387192d2aa8969; main CI 39234313896 and Pages deployment 39234313840 passed"
           ],
-          "notes": "A shared pure CompositionDocument command boundary is now the first E2 implementation slice: insert, move linked groups, trim, split, duplicate, delete and unlink, with invariant checks and immutable results. This command layer is not yet wired into the production App/Clip editor; existing project-level placement helpers remain in use until the adapters are migrated. Do not mark this task done until integration tests prove the same commands run for root and nested Compositions.",
+          "notes": "The Composition command boundary is now used by `src/timelineOperations.ts` for add/move/trim/split/duplicate/delete/unlink adapters, and nested Clip Version layer moves use the same track-aware `moveCompositionPlacementToTrack()` command. These adapters preserve current public operation behavior and are covered by existing regression suites, but the React Add Clip / placement-conflict path, nested Add/Delete/Resize actions, snapping/overlap policy and end-to-end Undo grouping still include project-specific logic. Continue migrating those paths and add root/nested parity tests before marking done.",
           "description": "Implement shared root/nested commands for insert, move/snap, conflicts, trim, split, duplicate, delete, linked audio, pins and Undo/Redo.",
           "executionStage": "E2-E4",
           "priority": "P0",
