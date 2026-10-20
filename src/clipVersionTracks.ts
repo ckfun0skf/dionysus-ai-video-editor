@@ -1,6 +1,6 @@
 import type { ClipVersion, CompositionLayer, TimelineTrack } from "./types";
 import type { CompositionDocument, CompositionPlacement, CompositionSourceReference, CompositionTrack } from "./compositionModel";
-import { moveCompositionPlacementToTrack } from "./compositionCommands";
+import { deleteCompositionPlacement, insertCompositionPlacement, moveCompositionPlacementToTrack } from "./compositionCommands";
 
 export type CanonicalNestedTrackKind = "video" | "audio" | "text";
 
@@ -86,10 +86,35 @@ export function addClipVersionLayer(
     };
     next = { ...normalized, tracks: [...(normalized.tracks ?? []), track] };
   }
-  return {
-    ...next,
-    layers: [...next.layers, { ...layer, trackId: track.id }],
-  };
+
+  const document = compositionDocumentFromClipVersion(next);
+  const legacyData = structuredClone(layer) as unknown as Record<string, unknown>;
+  const linkedToPlacementId = typeof legacyData.linkedToPlacementId === "string"
+    ? legacyData.linkedToPlacementId
+    : typeof legacyData.linkedVideoClipId === "string" ? legacyData.linkedVideoClipId : undefined;
+  const inserted = insertCompositionPlacement(document, {
+    id: layer.id,
+    name: layer.name,
+    trackId: track.id,
+    start: layer.start,
+    duration: layer.duration,
+    order: document.placements.length,
+    source: sourceReferenceForLayer(layer),
+    ...(layer.sourceIn !== undefined ? { sourceIn: layer.sourceIn } : {}),
+    ...(layer.sourceOut !== undefined ? { sourceOut: layer.sourceOut } : {}),
+    ...(linkedToPlacementId ? { linkedToPlacementId } : {}),
+    legacyData,
+  });
+  return { ...next, layers: compositionLayersFromCompositionDocument(inserted) };
+}
+
+/** Delete a nested placement through the same command used by the root Timeline. */
+export function deleteClipVersionLayer(version: ClipVersion, layerId: string): ClipVersion {
+  const normalized = normalizeClipVersionTracks(version);
+  const document = compositionDocumentFromClipVersion(normalized);
+  if (!document.placements.some(placement => placement.id === layerId)) return normalized;
+  const deleted = deleteCompositionPlacement(document, layerId);
+  return { ...normalized, layers: compositionLayersFromCompositionDocument(deleted) };
 }
 
 /** Move a layer within or between compatible nested tracks. */
@@ -147,6 +172,29 @@ function compositionDocumentFromClipVersion(version: ClipVersion): CompositionDo
   };
 }
 
+function compositionLayersFromCompositionDocument(document: CompositionDocument): CompositionLayer[] {
+  return document.placements.map(placement => {
+    const legacy = structuredClone(placement.legacyData) as unknown as Record<string, unknown>;
+    const output = {
+      ...legacy,
+      id: placement.id,
+      name: placement.name,
+      trackId: placement.trackId,
+      start: placement.start,
+      duration: placement.duration,
+    } as unknown as CompositionLayer;
+    if (placement.sourceIn === undefined) delete output.sourceIn;
+    else output.sourceIn = placement.sourceIn;
+    if (placement.sourceOut === undefined) delete output.sourceOut;
+    else output.sourceOut = placement.sourceOut;
+    const rawOutput = output as unknown as Record<string, unknown>;
+    delete rawOutput.linkedToPlacementId;
+    if (placement.linkedToPlacementId === undefined) delete rawOutput.linkedVideoClipId;
+    else rawOutput.linkedVideoClipId = placement.linkedToPlacementId;
+    return output;
+  });
+}
+
 /** Move a nested layer through the same Composition command used by the Master Timeline adapter. */
 export function moveClipVersionLayer(
   version: ClipVersion,
@@ -167,21 +215,5 @@ export function moveClipVersionLayer(
     targetTrackId,
     nextStart,
   );
-  const layers = moved.placements.map(placement => {
-    const legacy = structuredClone(placement.legacyData) as unknown as Record<string, unknown>;
-    const output = {
-      ...legacy,
-      id: placement.id,
-      name: placement.name,
-      trackId: placement.trackId,
-      start: placement.start,
-      duration: placement.duration,
-    } as unknown as CompositionLayer;
-    if (placement.sourceIn === undefined) delete output.sourceIn;
-    else output.sourceIn = placement.sourceIn;
-    if (placement.sourceOut === undefined) delete output.sourceOut;
-    else output.sourceOut = placement.sourceOut;
-    return output;
-  });
-  return { ...normalized, layers };
+  return { ...normalized, layers: compositionLayersFromCompositionDocument(moved) };
 }
