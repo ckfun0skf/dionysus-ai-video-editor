@@ -98,6 +98,12 @@ describe("shared Composition editing commands", () => {
     expect(withShotTrack.placements.find(item => item.id === "shot")?.trackId).toBe("v2");
   });
 
+  it("refuses to remove the final video track", () => {
+    const source = fixture();
+    expect(() => removeCompositionTrack(source, "v1")).toThrow(/last video track/);
+    expect(source.tracks.some(track => track.id === "v1")).toBe(true);
+  });
+
   it("removes a linked audio track without deleting its video parent on another track", () => {
     const source = fixture();
     const next = removeCompositionTrack(source, "a1");
