@@ -739,9 +739,25 @@ describe("App history integration", () => {
     await openTimelineView();
     await seedLinkedVideoAudioPairs();
 
+    // Linked audio can originate from a separate source file with its own non-zero in-point.
+    const seeded = persistedProject();
+    const seededVideo = seeded.timelineClips?.find(clip => clip.kind === "video" && clip.id.startsWith("test-video-"))!;
+    const seededAudio = seeded.timelineClips?.find(clip => clip.kind === "audio" && clip.linkedVideoClipId === seededVideo.id)!;
+    const distinctSourceProject = {
+      ...seeded,
+      timelineClips: (seeded.timelineClips ?? []).map(clip =>
+        clip.id === seededAudio.id ? { ...clip, sourceIn: 7, sourceOut: 12 } : clip
+      ),
+    };
+    localStorage.setItem("dionysus.project.v1", JSON.stringify(distinctSourceProject));
+    localStorage.removeItem("dionysus.composition.v2");
+    act(() => root.unmount()); root = createRoot(container); act(() => root.render(<App />));
+    await flushEffects(); await openTimelineView();
+
     const before = persistedProject();
     const video = before.timelineClips?.find(clip => clip.kind === "video" && !clip.id.startsWith("storyboard-"))!;
     const audio = before.timelineClips?.find(clip => clip.kind === "audio" && clip.linkedVideoClipId === video.id)!;
+    expect(audio).toMatchObject({ sourceIn: 7, sourceOut: 12 });
     await selectClip(video.name);
     await flushEffects();
     const playhead = container.querySelector<HTMLInputElement>('input[aria-label="Timeline playhead time"]');
@@ -763,8 +779,8 @@ describe("App history integration", () => {
 
     const audioParts = (after.timelineClips ?? []).filter(clip => clip.kind === "audio" && (clip.linkedVideoClipId === video.id || videoParts.some(part => part.id !== video.id && part.id === clip.linkedVideoClipId))).sort((a, b) => a.start - b.start);
     expect(audioParts).toHaveLength(2);
-    expect(audioParts[0]).toMatchObject({ id: audio.id, start: 0, duration: 2.5, sourceIn: 0, sourceOut: 2.5, linkedVideoClipId: videoParts[0].id });
-    expect(audioParts[1]).toMatchObject({ start: 2.5, duration: 2.5, sourceIn: 2.5, sourceOut: 5, linkedVideoClipId: videoParts[1].id });
+    expect(audioParts[0]).toMatchObject({ id: audio.id, start: 0, duration: 2.5, sourceIn: 7, sourceOut: 9.5, linkedVideoClipId: videoParts[0].id });
+    expect(audioParts[1]).toMatchObject({ start: 2.5, duration: 2.5, sourceIn: 9.5, sourceOut: 12, linkedVideoClipId: videoParts[1].id });
   });
 
   it("duplicates a Master video clip with a new linked-audio pair and preserves mix metadata", async () => {

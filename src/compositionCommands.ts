@@ -300,19 +300,16 @@ export function trimCompositionPlacement(
   const selected = requirePlacement(document, placementId);
   const root = getLinkedRoot(document, selected);
   const group = [root, ...getDescendants(document, root.id)];
-  const hasSourceRange = group.some(item => item.sourceIn !== undefined || item.sourceOut !== undefined);
-  const fallbackSourceIn = root.sourceIn ?? group.find(item => item.sourceIn !== undefined)?.sourceIn ?? 0;
   const groupIds = new Set(group.map(item => item.id));
   const next = clone(document);
   next.placements = next.placements.map(placement => {
     if (!groupIds.has(placement.id)) return placement;
-    if (!hasSourceRange) return syncLegacyPlacement({ ...placement, duration });
-    return syncLegacyPlacement({
-      ...placement,
-      duration,
-      sourceIn: fallbackSourceIn,
-      sourceOut: fallbackSourceIn + duration,
+    // Linked placements share timeline duration, but may use different source media and in-points.
+    // Resize each member against its own source range instead of copying the video range to audio.
+    const source = resizedSourceRange(placement, {
+      id: placement.id, start: placement.start, duration, edge: "right",
     });
+    return syncLegacyPlacement({ ...placement, duration, ...source });
   });
   extendCompositionDuration(next);
   assertValidCompositionDocument(next);
@@ -335,8 +332,8 @@ function resizedSourceRange(
 
 /**
  * Applies a frame-snapped resize preview and its adjacent trims as one immutable command.
- * A linked group always receives the root placement's timing and source range, so resizing
- * either member cannot leave linked audio out of sync with its video placement.
+ * Linked placements receive the same timeline start/duration, while each retains and adjusts
+ * its own source range; independently sourced linked audio must not inherit the video's in-point.
  */
 export function applyCompositionResizePreview(
   document: CompositionDocument,
@@ -360,26 +357,23 @@ export function applyCompositionResizePreview(
     rootUpdates.set(root.id, { ...resize, id: root.id });
   }
 
-  const updates = new Map<string, { resize: CompositionPlacementResize; source: Pick<CompositionPlacement, "sourceIn" | "sourceOut"> }>();
+  const updates = new Map<string, CompositionPlacementResize>();
   for (const [rootId, resize] of rootUpdates) {
     const root = requirePlacement(document, rootId);
-    const source = resizedSourceRange(root, resize);
     for (const placement of getLinkedGroup(document, root)) {
-      updates.set(placement.id, { resize, source });
+      updates.set(placement.id, resize);
     }
   }
 
   const next = clone(document);
   next.placements = next.placements.map(placement => {
-    const update = updates.get(placement.id);
-    if (!update) return placement;
-    const source = Object.keys(update.source).length
-      ? update.source
-      : resizedSourceRange(placement, update.resize);
+    const resize = updates.get(placement.id);
+    if (!resize) return placement;
+    const source = resizedSourceRange(placement, resize);
     return syncLegacyPlacement({
       ...placement,
-      start: update.resize.start,
-      duration: update.resize.duration,
+      start: resize.start,
+      duration: resize.duration,
       ...source,
     });
   });
@@ -411,12 +405,11 @@ export function splitCompositionPlacement(
   const splitPairs = new Map<string, { left: CompositionPlacement; right: CompositionPlacement }>();
   const orderOffsets = new Map<string, number>();
 
-  const rootRange = sourceRangeForSplit(selected);
   for (const placement of group) {
     const leftDuration = splitTime - placement.start;
     const rightDuration = placement.duration - leftDuration;
-    // Linked source audio follows the same source range as its video.
-    const range = placement.id === selected.id ? rootRange : placement.linkedToPlacementId ? rootRange : sourceRangeForSplit(placement);
+    // Split every linked member at the same timeline point but preserve that member's source offset.
+    const range = sourceRangeForSplit(placement);
     const { linkedToPlacementId: _link, ...base } = placement;
     const left = syncLegacyPlacement({
       ...base,

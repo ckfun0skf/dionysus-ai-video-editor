@@ -460,9 +460,21 @@ Exact-head CI at code SHA `47b700ea44937dbb8bfb6c35fbcf9efe690d4416` passed [wor
 - Root clip resize previews now derive the moving placement, source in-point, adjacent-placement timing and trim candidates from the live root `CompositionDocument`. Canonical drag/drop also uses the root placement's duration and root extent rather than stale legacy duration/timeline bounds.
 - Compatibility projection now clears legacy `clipVersionId` and `scriptVersionId` values when the canonical typed source no longer carries them, and re-emits only the selector appropriate to a canonical Clip or Script source.
 - Added stale-projection regressions for resize/adjacent trim planning and drag/drop duration, a source-selector projection regression, and an App-level resize → linked audio → Undo/Redo → saved Composition envelope → reopen regression.
-- Previous-head CI [#39481008190](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39481008190) passed on `d6a60062056a920846d62ae03e9f520845ed8d11`; it is **not** evidence for this follow-up commit. Run the repository's regular CI on the exact resulting head before treating this checkpoint as verified.
+- Exact-head CI [#39483256604](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39483256604) passed on `004302b6e0c4baca91681d9f6da0b200e1e45ad7`: 243 tests across 23 files, TypeScript and production build passed, npm audit reported 0 vulnerabilities.
 - Remaining gaps: some Storyboard materializations are compatibility-only and are not canonical placements; Shot/Slot and other domain editors still mutate schema-1.0 project data before reconciliation; broader root track-reorder and malformed-snapshot recovery behavior need explicit end-to-end coverage. Keep DYS-005/DYS-014 `in_progress`. No browser smoke tests; PR #96 stays Draft and unmerged.
 
 ## Next-agent pickup — current PR #96 state
 
 Start by fetching the live PR and verifying its branch head/CI; do not reuse the previous SHA or CI result without matching them. Continue auditing domain/storyboard mutations that still enter via schema-1.0 `DionysusProject`, and complete explicit canonical track-reorder, nested/pinned composition persistence and invalid-snapshot fallback coverage. Then inspect every pending change, keep related work in one coherent commit, and require a successful regular CI run on that exact final head. Never add/run browser smoke tests, never push to `main`, and never merge PR #96; leave it Draft while any required gate is open.
+
+
+## Linked audio with independent source ranges — 2026-10-20
+
+- Fixed canonical trim, resize and split so linked placements share timeline start/duration while retaining each placement's own source range. Linked audio can use a different source file/in-point; it must not inherit the video's sourceIn/sourceOut.
+- Regression tests cover independent non-zero source offsets through trim, resize and split, including input immutability. The App-level split test now seeds linked audio with source range 7–12 seconds and asserts it becomes 7–9.5 and 9.5–12 seconds while video splits at 0–2.5 and 2.5–5 seconds.
+- This follow-up still requires exact-head CI after the code/test/docs commit; the preceding CI above does not validate these new changes.
+- Remaining architecture gaps are unchanged: compatibility-only Storyboard materializations, legacy-first Shot/Slot/domain editors, full track reorder/edit integration, and malformed root-snapshot recovery still need audit and regression coverage. DYS-005/DYS-014 remain in_progress; PR #96 remains Draft and unmerged. No browser smoke tests.
+
+## Next-agent priority
+
+Verify the current branch head and its CI first. If it passes, continue the root mutation audit from the remaining compatibility-only Storyboard and legacy-first domain handlers, track reorder, and malformed/nested/pinned snapshot persistence. Do not mark DYS-005 or DYS-014 complete or recommend merging until those paths have meaningful tests and the final exact head passes regular CI.

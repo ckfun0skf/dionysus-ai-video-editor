@@ -178,6 +178,45 @@ describe("shared Composition editing commands", () => {
     expect(placement(next, "audio").legacyData).toMatchObject({ duration: 4, sourceOut: 6 });
   });
 
+  it("trims linked video and audio together while preserving different source in-points", () => {
+    const source = updateCompositionPlacement(fixture(), "audio", { sourceIn: 5, sourceOut: 11 });
+    const before = JSON.stringify(source);
+
+    const next = trimCompositionPlacement(source, "video", 4);
+
+    expect(placement(next, "video")).toMatchObject({ start: 1, duration: 4, sourceIn: 2, sourceOut: 6 });
+    expect(placement(next, "audio")).toMatchObject({ start: 1, duration: 4, sourceIn: 5, sourceOut: 9, linkedToPlacementId: "video" });
+    expect(JSON.stringify(source)).toBe(before);
+  });
+
+  it("resizes linked video and audio on shared timeline while preserving member source offsets", () => {
+    const source = updateCompositionPlacement(fixture(), "audio", { sourceIn: 5, sourceOut: 11 });
+    const before = JSON.stringify(source);
+
+    const next = applyCompositionResizePreview(source, {
+      id: "video", start: 1, duration: 8, edge: "right", trims: [],
+    });
+
+    expect(placement(next, "video")).toMatchObject({ start: 1, duration: 8, sourceIn: 2, sourceOut: 10 });
+    expect(placement(next, "audio")).toMatchObject({ start: 1, duration: 8, sourceIn: 5, sourceOut: 13, linkedToPlacementId: "video" });
+    expect(JSON.stringify(source)).toBe(before);
+  });
+
+  it("splits linked video and audio at one timeline point but keeps distinct source offsets", () => {
+    const source = updateCompositionPlacement(fixture(), "audio", { sourceIn: 5, sourceOut: 11 });
+    const before = JSON.stringify(source);
+
+    const next = splitCompositionPlacement(source, "video", 4, {
+      newPlacementIds: { video: "video-right", audio: "audio-right" },
+    });
+
+    expect(placement(next, "video")).toMatchObject({ start: 1, duration: 3, sourceIn: 2, sourceOut: 5 });
+    expect(placement(next, "video-right")).toMatchObject({ start: 4, duration: 3, sourceIn: 5, sourceOut: 8 });
+    expect(placement(next, "audio")).toMatchObject({ start: 1, duration: 3, sourceIn: 5, sourceOut: 8, linkedToPlacementId: "video" });
+    expect(placement(next, "audio-right")).toMatchObject({ start: 4, duration: 3, sourceIn: 8, sourceOut: 11, linkedToPlacementId: "video-right" });
+    expect(JSON.stringify(source)).toBe(before);
+  });
+
   it("commits resize and adjacent trim atomically while preserving linked timing and source ranges", () => {
     const source = fixture();
     source.placements.push(
