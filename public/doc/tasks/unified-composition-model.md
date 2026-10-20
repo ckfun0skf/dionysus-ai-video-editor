@@ -100,3 +100,10 @@ A regression now exercises the path: create a structure-preserving Master Timeli
 Exact-head CI [39429740312](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39429740312) passed at code/test SHA `7098229556fd466283a2e815de2ab44778089483`: 223 tests/23 files, TypeScript/build and dependency audit (0 vulnerabilities).
 
 Still open: canonical nested Undo/Redo, broader pin immutability across every edit route, and deterministic migration/legacy Shot Slot compatibility review. Keep DYS-014 in progress.
+
+
+## Source-reference preservation follow-up — 2026-10-20
+
+The UI inspector now passes only the actual changed fields to the canonical nested adapter, not a fully reconstructed layer object. This prevents unrelated transform/mix/timing edits from accidentally reclassifying the canonical source reference. Source-related fields intentionally trigger source-reference reconstruction; duration edits also preserve fade clamping.
+
+Exact-head CI [39430375517](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39430375517) passed at code SHA `47b700ea44937dbb8bfb6c35fbcf9efe690d4416`: 223 tests/23 files, TypeScript/build and dependency audit (0 vulnerabilities). Re-run exact-head CI after the final task-doc update.

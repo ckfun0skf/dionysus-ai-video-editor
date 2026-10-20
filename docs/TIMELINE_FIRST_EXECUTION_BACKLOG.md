@@ -170,3 +170,8 @@ Exact-head CI [39428872953](https://github.com/ckfun0skf/dionysus-ai-video-edito
 Added an integration regression covering snapshot creation → canonical nested placement edit → project JSON serialization/reload → reopen through the canonical Composition adapter. It verifies placement timing/transform/mix, source range, pinned nested child document/provenance, and that the source Clip Asset Version is unchanged. Exact-head CI [39429740312](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39429740312) passed at code/test SHA `7098229556fd466283a2e815de2ab44778089483`: 223 tests/23 files, TypeScript/build and dependency audit (0 vulnerabilities).
 
 This validates the covered JSON round-trip but does not finish canonical nested Undo/Redo, all source-pin mutation paths, or migration/legacy Shot Slot review. DYS-005/DYS-014 remain in progress.
+
+
+## Source-reference preservation follow-up — 2026-10-20
+
+The inspector now sends only changed fields to the canonical adapter. Transform-only edits retain the exact existing typed source reference, including source kinds not yet fully represented in the legacy layer schema; source references are reconstructed only for deliberate source-related edits. Exact-head CI [39430375517](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39430375517) passed at code SHA `47b700ea44937dbb8bfb6c35fbcf9efe690d4416`: 223 tests/23 files, TypeScript/build, dependency audit 0 vulnerabilities.

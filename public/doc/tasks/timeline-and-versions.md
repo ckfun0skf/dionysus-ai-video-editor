@@ -88,3 +88,8 @@ The nested Clip Version editor now treats `ClipVersion.composition` as authorita
 ## Save-as-Clip edit/reopen regression — 2026-10-20
 
 Added snapshot → canonical nested edit → JSON save/reload → reopen coverage, including placement timing/transform/mix, source ranges, pinned child Composition/provenance, and proof the source Clip Asset Version is unchanged. Exact-head CI [39429740312](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39429740312) passed at SHA `7098229556fd466283a2e815de2ab44778089483`: 223 tests/23 files, TypeScript/build and dependency audit (0 vulnerabilities). Canonical nested Undo/Redo and broader pin/migration audit remain open.
+
+
+## Source-reference preservation follow-up — 2026-10-20
+
+Inspector changes now pass only changed fields to the canonical adapter, preserving exact typed source references during transform-only edits and reconstructing the reference only for deliberate source changes. Exact-head CI [39430375517](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39430375517) passed at SHA `47b700ea44937dbb8bfb6c35fbcf9efe690d4416`: 223 tests/23 files, TypeScript/build, audit 0 vulnerabilities.

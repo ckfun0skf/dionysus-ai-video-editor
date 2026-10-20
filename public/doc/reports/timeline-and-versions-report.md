@@ -75,3 +75,8 @@ CI [#39218891285](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/
 ## Save-as-Clip edit/reopen integration regression — 2026-10-20
 
 Added snapshot → canonical nested edit → project JSON save/reload → reopen coverage. The test verifies edited timing/transform/mix, source ranges, pinned nested Composition/provenance and that the source Clip Asset Version remains unchanged. Exact-head CI [39429740312](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39429740312) passed at code/test SHA `7098229556fd466283a2e815de2ab44778089483`: 223 tests/23 files, TypeScript/build and dependency audit (0 vulnerabilities). Canonical nested Undo/Redo and broader pin/migration audit remain open.
+
+
+## Source-reference preservation follow-up — 2026-10-20
+
+The inspector now passes only changed fields to the canonical nested adapter, preserving exact source references on transform-only edits. Exact-head CI [39430375517](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39430375517) passed at code SHA `47b700ea44937dbb8bfb6c35fbcf9efe690d4416`: 223 tests/23 files, TypeScript/build and dependency audit 0 vulnerabilities.

@@ -366,3 +366,10 @@ Use [`docs/MOBILE_AGENT_PICKUP_PROMPT.md`](MOBILE_AGENT_PICKUP_PROMPT.md) and [`
 - Exact-head CI at code/test SHA `7098229556fd466283a2e815de2ab44778089483` passed [workflow 39429740312](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39429740312): 223 tests across 23 files, TypeScript, production build and dependency audit (0 vulnerabilities).
 - This proves the tested JSON round-trip for the covered snapshot/edit path, not every UI/history path. Canonical nested Undo/Redo, complete source pin immutability under all edit routes, and legacy migration/Shot Slot compatibility still require review. DYS-005/DYS-014 remain in progress.
 - PR #96 remains a Draft and is not merged. The docs/task registry must be refreshed at the final tested head and its exact-head CI must pass before the PR is considered ready. No browser smoke tests.
+
+
+## Follow-up fix — 2026-10-20 (preserve unchanged typed source refs)
+
+The App inspector now passes only fields actually changed by the user into `updateClipVersionLayer()` instead of passing the entire reconstructed layer. This is important because transform-only edits must not be interpreted as source replacement; the adapter now preserves the exact canonical source reference for unrelated edits and only rebuilds the source reference when a source-related field changes. Duration edits still include the fade values after clamping.
+
+Exact-head CI at code SHA `47b700ea44937dbb8bfb6c35fbcf9efe690d4416` passed [workflow 39430375517](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39430375517): 223 tests/23 files, TypeScript/build and dependency audit (0 vulnerabilities). Full PR-head CI must be rechecked after documentation changes.
