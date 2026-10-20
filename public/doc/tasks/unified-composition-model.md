@@ -116,3 +116,10 @@ Exact-head CI [39430375517](https://github.com/ckfun0skf/dionysus-ai-video-edito
 Regression coverage includes stale compatibility projections, nested Composition/provenance preservation, source-reference preservation, track/placement synchronization, Save-as-Clip → edit → JSON save/reload → reopen, and source-version mutation isolation. Exact-head CI [39431744433](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39431744433) passed at `bbbbf18743a66de4ba66c14b9cde98bd9d490238`: 223 tests across 23 files, TypeScript/build and dependency audit 0 vulnerabilities.
 
 Remaining: explicit nested Undo/Redo coverage, broader pinned-version/migration checks, and audit older Storyboard/Shot Slot handlers that directly mutate legacy `layers`. DYS-014 stays in progress. No browser smoke tests; documentation update requires a new exact-head CI run.
+
+
+## Canonical migration hardening — 2026-10-20
+
+Existing canonical Composition documents on Clip/Shot Slot Versions are now retained by migration rather than rebuilt from compatibility `layers`. Save-as-Clip also preserves already embedded child subtrees. Regression coverage checks placement order, source ranges, transform/mix, pins and provenance. Exact-head CI [39445108693](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39445108693) passed 223 tests/23 files, TypeScript/build and audit 0 vulnerabilities at `920ad9e5f3d0d290182b82e5e772ecbc1abe4694`.
+
+**Root state is still transitional:** the V2 export includes a canonical root Composition projection, but `DionysusProject` schema 1.0 remains the live editor state and import validates/rebuilds the projection from it. Full canonical root persistence/editing requires a separate root command/state migration. Keep DYS-014 in progress.

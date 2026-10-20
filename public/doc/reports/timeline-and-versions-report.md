@@ -89,3 +89,12 @@ The inspector now passes only changed fields to the canonical nested adapter, pr
 - Tests cover stale-projection rejection, nested document/provenance preservation, typed Shot Slot/script source refs during unrelated edits, and new track/placement synchronization. Save-as-Clip edit → JSON save/reload → reopen and source-version isolation coverage is also present.
 - Exact-head CI [39431744433](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39431744433) passed 223 tests across 23 files, TypeScript and production build, dependency audit 0 vulnerabilities at `bbbbf18743a66de4ba66c14b9cde98bd9d490238`.
 - Remaining: nested Undo/Redo and a full audit of older Storyboard/Shot Slot handlers that still mutate `layers`. No browser smoke tests; do not mark DYS-005/DYS-014 complete or merge without review/current exact-head CI.
+
+
+## Canonical migration and embedded subtree preservation — 2026-10-20
+
+- `compositionMigration.ts` now preserves an existing Clip/Shot Slot Version canonical document instead of reconstructing it from `layers`, retaining nested children, provenance, placement order, source ranges and transform/mix metadata.
+- `clipVersionSnapshot.ts` retains pre-embedded child subtrees when capturing a new Master Timeline snapshot.
+- Tests cover canonical migration for Clip Asset and Shot Slot Versions, plus nested subtree preservation in Save-as-Clip.
+- Exact-head CI [39445108693](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39445108693) passed 223 tests across 23 files, TypeScript/build and dependency audit 0 vulnerabilities at `920ad9e5f3d0d290182b82e5e772ecbc1abe4694`.
+- Root Composition remains a validated V2 export projection; schema-1.0 `DionysusProject` is still live editor state. Full canonical root persistence/editing is not complete. No browser smoke tests; no merge without review.

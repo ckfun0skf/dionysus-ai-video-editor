@@ -100,3 +100,10 @@ Inspector changes now pass only changed fields to the canonical adapter, preserv
 The nested Timeline helpers now treat an existing `ClipVersion.composition` as authoritative. Add/delete/move/resize, track-add and inspector patches update canonical placements/tracks, then refresh legacy `layers`/`tracks` projections. Inspector-only changes preserve typed Shot Slot/script source references and synchronize source ranges, transforms and mix/fade metadata. Regression tests cover stale projections, nested provenance, track/placement updates and source immutability.
 
 Exact-head CI [39431744433](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39431744433) passed at `bbbbf18743a66de4ba66c14b9cde98bd9d490238`: 223 tests across 23 files, TypeScript/build passed, dependency audit 0 vulnerabilities. Remaining: nested Undo/Redo, migration/pin immutability breadth, and audit legacy Storyboard/Shot Slot handlers that directly mutate `layers`. Keep DYS-005 in progress; no browser smoke tests.
+
+
+## Canonical migration hardening — 2026-10-20
+
+Migration now preserves already-canonical Clip/Shot Slot Version documents instead of reconstructing them from compatibility layers, and Save-as-Clip keeps existing embedded nested subtrees. Exact-head CI [39445108693](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39445108693) passed 223 tests/23 files, TypeScript/build and dependency audit 0 vulnerabilities.
+
+**Remaining architectural boundary:** root Composition in the V2 export remains a projection regenerated from the live schema-1.0 project. Canonical root Composition is not yet the live editor source of truth. Keep DYS-005 in progress; next root-persistence work must include canonical command state, deterministic legacy projection, edit/save/reopen and Undo/Redo coverage.
