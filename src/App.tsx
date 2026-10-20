@@ -3,7 +3,7 @@ import { AudioLines, Check, CheckCircle2, ChevronDown, CircleHelp, Clapperboard,
 import { sampleProject } from "./sampleProject";
 import type { Asset, AssetKind, ClipVersion, CompositionLayer, DionysusProject, ReferenceProfile, ReferenceRole, Shot, TimelineClip } from "./types";
 import { validateProject } from "./projectValidation";
-import { addClipVersionLayer as addNestedLayer, addClipVersionTrack as addNestedTrack, moveClipVersionLayer as moveNestedLayer, normalizeClipVersionTracks } from "./clipVersionTracks";
+import { addClipVersionLayer as addNestedLayer, addClipVersionTrack as addNestedTrack, deleteClipVersionLayer as deleteNestedLayer, moveClipVersionLayer as moveNestedLayer, normalizeClipVersionTracks } from "./clipVersionTracks";
 import { createProjectDocument, readProjectDocument } from "./projectDocument";
 import { moveNormalizedFrame, resizeNormalizedFrame } from "./previewTransform";
 import { getAllowedChildClipAssets, wouldCreateClipAssetCycle } from "./clipAssetGraph";
@@ -1221,7 +1221,7 @@ export default function App() {
   }
 
   function removeTimelineVersionLayer(tab: VersionTimelineTab, layerId: string) {
-    updateTimelineVersion(tab, version => ({ ...version, layers: version.layers.filter(layer => layer.id !== layerId) }));
+    updateTimelineVersion(tab, version => deleteNestedLayer(version, layerId));
     setSelectedCompositionLayerId(current => current === layerId ? "" : current);
   }
 
