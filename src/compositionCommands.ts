@@ -562,7 +562,11 @@ export function removeCompositionTrack(
   fallbackVideoTrackId?: string,
 ): CompositionDocument {
   assertValidCompositionDocument(document);
-  if (!document.tracks.some(track => track.id === trackId)) throw new Error("Composition track not found.");
+  const removingTrack = document.tracks.find(track => track.id === trackId);
+  if (!removingTrack) throw new Error("Composition track not found.");
+  if (removingTrack.kind === "video" && document.tracks.filter(track => track.kind === "video").length <= 1) {
+    throw new Error("Cannot remove the last video track.");
+  }
   if (fallbackVideoTrackId && !document.tracks.some(track => track.id === fallbackVideoTrackId && track.kind === "video")) {
     throw new Error("Fallback video track was not found.");
   }
