@@ -220,3 +220,9 @@ Exact-head CI #1404 passed on `90949d515d30827502e61fd4e9b1de5235037382`: 230 te
 - Replaced the prior top-level migration-snapshot check with tests that serialize and reopen an actual root containing a nested Composition with pinned-version provenance. Added rejection coverage for invalid nested timing, empty pinned version IDs and cyclic embedded snapshots.
 - The immediately preceding head 85cf6043070a711c469f2ec5baa588ad538d1ce5 passed exact-head CI run 39486652985: 249 tests across 23 files, TypeScript/build passed, npm audit reported 0 vulnerabilities. The recursive-validation batch still requires CI on its own exact head.
 - Still incomplete: full App-level editing/history transitions for nested/pinned compositions, legacy-first Shot/Slot and other domain editors, compatibility-only Storyboard materializations, track reorder/settings end-to-end coverage beyond the new track settings tests, and malformed import/recovery cases beyond the focused validation suite. Keep DYS-005/DYS-014 in_progress and PR #96 Draft/unmerged. No browser smoke tests.
+
+## Nested invalid-fixture correction — 2026-10-20
+
+- CI run 39487372239 on 1243fc047cbb7ede69b9bb476e5b653bf87f02f1 ran 251 tests: 250 passed, 1 failed. The failing negative test set nested document.duration to zero, but document duration is not currently defined as a strict positive invariant (empty roots can be duration zero); it did not corrupt a validated placement.
+- Corrected the test to add a nested placement with duration zero, which directly tests that recursive validation enforces the existing positive-finite placement duration invariant. The separate malformed pinned-version and cycle tests passed in that run. Exact-head CI for the corrected test/docs commit is required.
+- No task completion status changed; DYS-005/DYS-014 remain in_progress and PR #96 remains Draft/unmerged.
