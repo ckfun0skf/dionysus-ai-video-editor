@@ -1,4 +1,5 @@
 import type { DionysusProject, Shot, TimelineClip } from "./types";
+import type { CompositionPlacement } from "./compositionModel";
 import { assertValidCompositionDocument, applyCompositionResizePreview, insertCompositionPlacement } from "./compositionCommands";
 import { migrateLegacyProjectToComposition } from "./compositionMigration";
 import { getMasterShotStart } from "./masterTimeline";
@@ -340,7 +341,7 @@ export function applyProjectTimelineInsertion(
   // Materialized Storyboard items are still excluded from the canonical projection and retain
   // the compatibility path until their migration is completed.
   let rootComposition: ReturnType<typeof migrateLegacyProjectToComposition>["rootComposition"] | undefined;
-  let canonicalInserted;
+  let canonicalInserted: CompositionPlacement | undefined;
   try {
     rootComposition = migrateLegacyProjectToComposition(nextProject).rootComposition;
     assertValidCompositionDocument(rootComposition);
