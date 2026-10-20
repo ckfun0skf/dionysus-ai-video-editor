@@ -98,3 +98,21 @@ The inspector now passes only changed fields to the canonical nested adapter, pr
 - Tests cover canonical migration for Clip Asset and Shot Slot Versions, plus nested subtree preservation in Save-as-Clip.
 - Exact-head CI [39445108693](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39445108693) passed 223 tests across 23 files, TypeScript/build and dependency audit 0 vulnerabilities at `920ad9e5f3d0d290182b82e5e772ecbc1abe4694`.
 - Root Composition remains a validated V2 export projection; schema-1.0 `DionysusProject` is still live editor state. Full canonical root persistence/editing is not complete. No browser smoke tests; no merge without review.
+
+
+## Canonical Composition duplication audit — 2026-10-20
+
+### Code changes
+- `duplicateClipAssetVersion()` now calls the canonical-aware duplication helper instead of regenerating only legacy layer IDs.
+- Duplicating a Clip Version, Shot or Slot now remaps local Composition track and placement IDs, placement track references, linked video/audio IDs and compatibility projections. Source ranges and layer metadata are preserved; pinned nested Composition subtrees and provenance remain intact.
+- The Shot Slot Inspector now routes nested placement property, timing, source-range, prompt, generated-output, add and delete operations through canonical nested commands. This removes direct layer-array mutations from those inspected edit paths.
+- Added unit coverage for canonical and legacy-only duplication, track/placement identity, linked references, source ranges, nested pinned snapshots/provenance, and source immutability.
+
+### Verification status
+- The previously documented passing CI run applies to an earlier SHA only; it does not validate this follow-up.
+- Final exact-head CI must be checked after the documentation commits. Do not mark this report as fully validated until the run for the final branch SHA passes.
+- No browser smoke tests were added or run. PR #96 remains Draft and must not be merged without review.
+
+### Remaining gaps
+- Root Composition is still a projection rather than the live editor source of truth.
+- Continue the root persistence/save-reopen/Undo-Redo work after the final exact-head CI. Check remaining legacy workflows outside the nested Inspector before declaring every Shot Slot path canonical.
