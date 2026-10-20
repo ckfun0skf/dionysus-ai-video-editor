@@ -1,6 +1,6 @@
 import type { DionysusProject, Shot, TimelineClip } from "./types";
 import type { CompositionPlacement } from "./compositionModel";
-import { assertValidCompositionDocument, applyCompositionResizePreview, insertCompositionPlacement } from "./compositionCommands";
+import { assertValidCompositionDocument, applyCompositionResizePreview, insertCompositionPlacement, moveCompositionPlacementToTrack } from "./compositionCommands";
 import { migrateLegacyProjectToComposition } from "./compositionMigration";
 import { getMasterShotStart } from "./masterTimeline";
 import { calculateTimelineDropPosition } from "./timelinePlacement";
@@ -411,6 +411,45 @@ export function moveProjectTimelinePlacement(
   const moving = (project.timelineClips ?? []).find(item => item.id === target.clipId);
   if (!moving) throw new Error("Timeline clip not found.");
   if (!canPlaceTimelineClipOnTrack(moving, targetTrack)) throw new Error("This clip type cannot be placed on the destination track.");
+
+  let rootComposition: ReturnType<typeof migrateLegacyProjectToComposition>["rootComposition"] | undefined;
+  try {
+    rootComposition = migrateLegacyProjectToComposition(project).rootComposition;
+    assertValidCompositionDocument(rootComposition);
+  } catch {
+    rootComposition = undefined;
+  }
+  if (rootComposition?.placements.some(placement => placement.id === moving.id)) {
+    const movedComposition = moveCompositionPlacementToTrack(rootComposition, moving.id, targetTrackId, start);
+    const originalById = new Map(rootComposition.placements.map(placement => [placement.id, placement]));
+    const movedById = new Map(movedComposition.placements.map(placement => [placement.id, placement]));
+    const touchedIds = new Set(movedComposition.placements.filter(placement => {
+      const original = originalById.get(placement.id);
+      return original && (
+        original.start !== placement.start ||
+        original.duration !== placement.duration ||
+        original.trackId !== placement.trackId ||
+        original.sourceIn !== placement.sourceIn ||
+        original.sourceOut !== placement.sourceOut
+      );
+    }).map(placement => placement.id));
+    const timelineClips = (project.timelineClips ?? []).map(clip => {
+      if (!touchedIds.has(clip.id)) return clip;
+      const placement = movedById.get(clip.id);
+      if (!placement) return clip;
+      return {
+        ...clip,
+        trackId: placement.trackId,
+        start: placement.start,
+        duration: placement.duration,
+        ...(placement.sourceIn !== undefined ? { sourceIn: placement.sourceIn } : {}),
+        ...(placement.sourceOut !== undefined ? { sourceOut: placement.sourceOut } : {}),
+      };
+    });
+    return { ...project, timelineClips };
+  }
+
+  // Compatibility path for materialized Storyboard placements omitted from the root projection.
   const targetClips = (project.timelineClips ?? []).map(clip => clip.id === moving.id ? { ...clip, trackId: targetTrackId } : clip);
   const moved = moveTimelineClip({ tracks: project.tracks, timelineClips: targetClips }, moving.id, start);
   return { ...project, timelineClips: moved.timelineClips };
