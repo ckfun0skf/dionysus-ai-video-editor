@@ -1116,8 +1116,33 @@ export default function App() {
   function selectClipSlot(slotId: string) { setSelectedSlotId(slotId); }
   function addMasterTimelineTrack(kind: "video" | "audio" | "text" | "procedural", displayRole?: string) {
     const role = displayRole ?? (kind === "procedural" ? "Code" : kind === "audio" ? "Audio" : kind === "text" ? "Text" : "Video");
-    change(p => ({ ...p, tracks: [...p.tracks, { id: id("track-" + kind), name: role + " " + (p.tracks.filter(track => track.name.startsWith(role + " ")).length + 1), kind }] }));
+    const trackId = id("track-" + kind);
+    const name = role + " " + (project.tracks.filter(track => track.name.startsWith(role + " ")).length + 1);
+    const legacyTrack = { id: trackId, name, kind };
+    changeRootComposition(root => addCompositionTrack(root, {
+      ...legacyTrack,
+      kind: kind === "audio" ? "audio" : kind === "text" ? "text" : "video",
+      order: root.tracks.length,
+      ...(kind === "procedural" ? { originalKind: "procedural" } : {}),
+      legacyData: legacyTrack,
+    }));
     setShowAddLayerMenu(false);
+  }
+
+  function insertTimelineClipCanonical(clip: TimelineClip) {
+    const current = projectRef.current;
+    const candidate = { ...current, timelineClips: [...(current.timelineClips ?? []), clip] };
+    const placement = migrateLegacyProjectToComposition(candidate).rootComposition.placements.find(item => item.id === clip.id);
+    if (!placement) throw new Error("The clip could not be represented as a root Composition placement.");
+    changeRootComposition(root => insertCompositionPlacement(root, placement));
+  }
+
+  function deleteTimelineClipCanonical(clip: TimelineClip) {
+    if (rootCompositionRef.current.placements.some(placement => placement.id === clip.id)) {
+      changeRootComposition(root => deleteCompositionPlacement(root, clip.id));
+      return;
+    }
+    change(project => ({ ...project, timelineClips: deleteTimelineClip({ tracks: project.tracks, timelineClips: project.timelineClips ?? [] }, clip.id).timelineClips }));
   }
 
   function syncStoryboardToTimeline() {
