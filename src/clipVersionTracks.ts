@@ -367,3 +367,57 @@ export function applyClipVersionResizePreview(
   const resized = applyCompositionResizePreview(compositionDocumentFromClipVersion(normalized), preview);
   return versionWithComposition(normalized, resized);
 }
+
+/**
+ * Duplicate the editable top-level Clip Version without aliasing canonical placement/track IDs.
+ * Nested Composition documents remain pinned snapshots; only references to the duplicated
+ * document's own tracks and placements are remapped.
+ */
+export function duplicateClipVersionComposition(
+  version: ClipVersion,
+  createId: (kind: "clip-track" | "layer", previousId: string) => string,
+): ClipVersion {
+  const normalized = normalizeClipVersionTracks(version);
+  if (!normalized.composition) {
+    const trackIds = new Map((normalized.tracks ?? []).map(track => [track.id, createId("clip-track", track.id)]));
+    const layerIds = new Map(normalized.layers.map(layer => [layer.id, createId("layer", layer.id)]));
+    return {
+      ...normalized,
+      tracks: (normalized.tracks ?? []).map(track => ({ ...track, id: trackIds.get(track.id)! })),
+      layers: normalized.layers.map(layer => {
+        const next = { ...layer, id: layerIds.get(layer.id)!, ...(layer.trackId ? { trackId: trackIds.get(layer.trackId) ?? layer.trackId } : {}) };
+        const raw = next as unknown as Record<string, unknown>;
+        if (typeof raw.linkedVideoClipId === "string") raw.linkedVideoClipId = layerIds.get(raw.linkedVideoClipId) ?? raw.linkedVideoClipId;
+        if (typeof raw.linkedToPlacementId === "string") raw.linkedToPlacementId = layerIds.get(raw.linkedToPlacementId) ?? raw.linkedToPlacementId;
+        return next;
+      }),
+    };
+  }
+
+  const source = structuredClone(normalized.composition);
+  const trackIds = new Map(source.tracks.map(track => [track.id, createId("clip-track", track.id)]));
+  const placementIds = new Map(source.placements.map(placement => [placement.id, createId("layer", placement.id)]));
+  const composition = {
+    ...source,
+    tracks: source.tracks.map(track => ({
+      ...track,
+      id: trackIds.get(track.id)!,
+      legacyData: { ...(track.legacyData ?? {}), id: trackIds.get(track.id)! },
+    })),
+    placements: source.placements.map(placement => {
+      const nextId = placementIds.get(placement.id)!;
+      const linked = placement.linkedToPlacementId ? placementIds.get(placement.linkedToPlacementId) ?? placement.linkedToPlacementId : undefined;
+      const legacyData = { ...placement.legacyData, id: nextId, trackId: trackIds.get(placement.trackId) ?? placement.trackId };
+      if (typeof legacyData.linkedVideoClipId === "string") legacyData.linkedVideoClipId = placementIds.get(legacyData.linkedVideoClipId) ?? legacyData.linkedVideoClipId;
+      if (typeof legacyData.linkedToPlacementId === "string") legacyData.linkedToPlacementId = placementIds.get(legacyData.linkedToPlacementId) ?? legacyData.linkedToPlacementId;
+      return {
+        ...placement,
+        id: nextId,
+        trackId: trackIds.get(placement.trackId) ?? placement.trackId,
+        ...(linked ? { linkedToPlacementId: linked } : { linkedToPlacementId: undefined }),
+        legacyData,
+      };
+    }),
+  };
+  return versionWithComposition(normalized, composition);
+}
