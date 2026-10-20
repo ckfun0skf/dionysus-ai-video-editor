@@ -82,6 +82,96 @@ describe("migrateLegacyProjectToComposition", () => {
     expect(composition.placements[1].legacyData).toMatchObject({ x: 10, y: 20, width: 50, height: 60 });
   });
 
+  it("preserves canonical nested Composition trees, pins and provenance instead of rebuilding from layers", () => {
+    const project = structuredClone(sampleProject);
+    const child = {
+      id: "composition:child:pinned-v2",
+      name: "Pinned child",
+      duration: 3,
+      frameRate: 24,
+      width: 640,
+      height: 360,
+      tracks: [{ id: "child-track", name: "Child video", kind: "video" as const, order: 0 }],
+      placements: [{
+        id: "child-placement",
+        name: "Pinned source",
+        trackId: "child-track",
+        start: 0.5,
+        duration: 2,
+        order: 0,
+        source: { type: "asset" as const, assetId: "asset-v1" },
+        sourceIn: 4,
+        sourceOut: 6,
+        legacyData: { x: 11, y: 12, width: 80, height: 70, volume: 0.35 },
+      }],
+    };
+    const canonical = {
+      id: "composition:saved-clip:version-v3",
+      name: "Saved canonical tree",
+      duration: 9,
+      frameRate: 30,
+      width: 1280,
+      height: 720,
+      tracks: [{ id: "canonical-track", name: "Canonical lane", kind: "video" as const, order: 0, muted: true }],
+      placements: [{
+        id: "canonical-placement",
+        name: "Nested saved clip",
+        trackId: "canonical-track",
+        start: 2,
+        duration: 4,
+        order: 7,
+        source: { type: "clip" as const, assetId: "child-asset", versionId: "pinned-v2" },
+        sourceIn: 1,
+        sourceOut: 5,
+        legacyData: { x: 15, y: 25, width: 75, height: 65, volume: 0.6 },
+      }],
+      provenance: {
+        kind: "derived-clip-version" as const,
+        sourceProjectId: project.id,
+        sourceCompositionId: "composition:project:root:master",
+        sourceUpdatedAt: "2026-10-20T10:00:00.000Z",
+        createdAt: "2026-10-20T11:00:00.000Z",
+        pinnedVersions: [{ assetId: "child-asset", versionId: "pinned-v2" }],
+      },
+      nestedCompositions: [child],
+      legacyData: { snapshotMarker: "canonical-must-survive", description: "Version description", scriptVersionIds: ["script-v3"], generationRecords: [] },
+    };
+    const asset = {
+      id: "canonical-asset",
+      name: "Canonical asset",
+      kind: "clip" as const,
+      clipVersions: [{
+        id: "canonical-version",
+        name: "Version 3",
+        description: "Version description",
+        duration: 9,
+        layers: [{ id: "compatibility-layer", name: "Stale projection", kind: "video" as const, start: 0, duration: 1 }],
+        composition: structuredClone(canonical),
+        scriptVersionIds: ["script-v3"],
+        generationRecords: [],
+      }],
+    };
+    project.assets.push(asset);
+
+    const shotVersion = project.shots[0].slots[0].versions[0];
+    shotVersion.composition = structuredClone(canonical);
+    const result = migrateLegacyProjectToComposition(project);
+    const clipComposition = result.clipCompositions.find(item => item.id === canonical.id);
+    const slotComposition = result.legacyShotSlotCompositions.find(item => item.id === canonical.id);
+
+    expect(clipComposition).toEqual(canonical);
+    expect(slotComposition).toEqual(canonical);
+    expect(clipComposition?.placements[0]).toMatchObject({
+      order: 7,
+      source: { type: "clip", assetId: "child-asset", versionId: "pinned-v2" },
+      sourceIn: 1,
+      sourceOut: 5,
+      legacyData: { x: 15, y: 25, width: 75, height: 65, volume: 0.6 },
+    });
+    expect(clipComposition?.nestedCompositions?.[0]).toEqual(child);
+    expect(clipComposition?.provenance?.pinnedVersions).toEqual([{ assetId: "child-asset", versionId: "pinned-v2" }]);
+  });
+
   it("deduplicates a materialized Storyboard placement and reports dangling source references", () => {
     const project = structuredClone(sampleProject);
     const shot = project.shots[0];
