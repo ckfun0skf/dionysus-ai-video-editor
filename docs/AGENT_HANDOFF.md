@@ -315,3 +315,11 @@ Use [`docs/MOBILE_AGENT_PICKUP_PROMPT.md`](MOBILE_AGENT_PICKUP_PROMPT.md) and [`
 - Task records updated in `public/doc/tasks.json`, `public/doc/tasks/timeline-and-versions.md`, `public/doc/tasks/timeline-and-versions.html`, and `docs/TIMELINE_FIRST_EXECUTION_BACKLOG.md`. DYS-005 remains in progress; DYS-014 structure-preserving Save-as-Clip is not complete.
 - Next code slice: route root/nested move, split and duplicate through the shared Composition commands; add tests for root/nested parity and one-step Undo/Redo, then tackle canonical-only persistence and Save-as-Clip. Keep Storyboard/References redesign deferred until Timeline is usable.
 - No browser smoke tests, no direct push to `main`, no merge without current exact-head CI. Owner requested one consolidated visual acceptance after a coherent Timeline milestone is merged and Pages deployment is verified.
+
+
+## Current checkpoint — 2026-10-20 (root move integration)
+
+- Draft PR [#96](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/96), branch `feat/dys005-root-resize-composition-command`, now routes valid root resize, ordinary root insertion and ordinary root clip moves through shared Composition commands. Linked descendants are synchronized back to the transitional project state, source ranges are preserved, and duplicate placement IDs are rejected.
+- Code/test SHA `5cb79b8c5a2debd11008567630d0460bd5858737` passed exact-head CI [39419176885](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39419176885): tests, TypeScript/production build and the workflow's non-blocking dependency-audit step succeeded. Documentation changes require another exact-head CI check before merge.
+- Remaining: root/nested split and duplicate parity, atomic Undo/Redo grouping, canonical-only persistence and DYS-014 structure-preserving Save-as-Clip. Compatibility fallback remains for materialized Storyboard placements and invalid legacy projections.
+- Next: route root/nested split and duplicate through shared commands, add parity/history tests, then proceed to canonical persistence. No browser smoke tests, no direct main pushes, no merge without latest green CI.
