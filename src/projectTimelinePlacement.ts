@@ -1,7 +1,7 @@
 import type { DionysusProject, Shot, TimelineClip } from "./types";
-import type { CompositionPlacement } from "./compositionModel";
-import { assertValidCompositionDocument, applyCompositionResizePreview, insertCompositionPlacement, moveCompositionPlacementToTrack } from "./compositionCommands";
-import { migrateLegacyProjectToComposition } from "./compositionMigration";
+import type { CompositionDocument, CompositionPlacement } from "./compositionModel";
+import { assertValidCompositionDocument, applyCompositionResizePreview, insertCompositionPlacement, moveCompositionPlacement, moveCompositionPlacementToTrack } from "./compositionCommands";
+import { createRootCompositionPlacementForTimelineClip, migrateLegacyProjectToComposition } from "./compositionMigration";
 import { getMasterShotStart } from "./masterTimeline";
 import { calculateTimelineDropPosition } from "./timelinePlacement";
 import { applyTimelineClipResize, calculateTimelineClipResizePreview, type ClipResizePreview } from "./timelineResize";
@@ -193,6 +193,104 @@ export interface ProjectTimelineInsertionPlan {
 
 const insertionEpsilon = 1e-7;
 const snapInsertionFrame = (seconds: number, fps: number) => Math.round(seconds * fps) / fps;
+
+/** Calculate insert/ripple/trim intent from the live root Composition, not a migrated project projection. */
+export function calculateCanonicalCompositionInsertionPlan(
+  root: CompositionDocument,
+  draft: TimelineClip,
+  targetTrackId: string,
+  desiredStart: number,
+): ProjectTimelineInsertionPlan {
+  const fps = Math.max(1, Number.isFinite(root.frameRate) ? root.frameRate : 24);
+  const frame = 1 / fps;
+  const start = snapInsertionFrame(Math.max(0, Number.isFinite(desiredStart) ? desiredStart : 0), fps);
+  const validDuration = Number.isFinite(draft.duration) && draft.duration > 0;
+  const duration = validDuration ? Math.max(frame, snapInsertionFrame(draft.duration, fps)) : frame;
+  const clip = { ...draft, trackId: targetTrackId, start, duration };
+  const track = root.tracks.find(item => item.id === targetTrackId);
+  const expectedKind = clip.kind === "audio" ? "audio" : clip.kind === "text" ? "text" : "video";
+  if (!validDuration || !track || track.kind !== expectedKind) {
+    return { status: "invalid-track", clip, trackId: targetTrackId, start, duration, availableDuration: 0 };
+  }
+  const occupancy = root.placements
+    .filter(item => item.trackId === targetTrackId)
+    .map(item => ({
+      id: item.id, name: item.name, kind: (item.legacyData.kind as TimelineClip["kind"] | undefined) ?? "video",
+      trackId: item.trackId, start: item.start, duration: item.duration,
+    }))
+    .sort((a, b) => a.start - b.start || a.id.localeCompare(b.id));
+  const covering = occupancy.find(item => start >= item.start - insertionEpsilon && start < item.start + item.duration - insertionEpsilon);
+  if (covering) return {
+    status: "start-occupied", clip, trackId: targetTrackId, start, duration, availableDuration: 0,
+    conflictStart: covering.start, conflictId: covering.id, conflictName: covering.name,
+  };
+  const next = occupancy.find(item => item.start >= start - insertionEpsilon);
+  const availableDuration = next ? Math.max(0, next.start - start) : Number.POSITIVE_INFINITY;
+  if (!next || duration <= availableDuration + insertionEpsilon) {
+    return { status: "ready", clip, trackId: targetTrackId, start, duration, availableDuration };
+  }
+  const shiftBy = Math.ceil(((start + duration - next.start) * fps) - insertionEpsilon) / fps;
+  return {
+    status: "needs-resolution", clip, trackId: targetTrackId, start, duration, availableDuration,
+    conflictStart: next.start, conflictId: next.id, conflictName: next.name,
+    shiftBy: Math.max(frame, shiftBy),
+  };
+}
+
+/** Apply insertion and any ripple/trim as one immutable canonical root transaction. */
+export function applyCanonicalCompositionInsertion(
+  root: CompositionDocument,
+  project: DionysusProject,
+  plan: ProjectTimelineInsertionPlan,
+  resolution?: ProjectTimelineInsertResolution,
+): CompositionDocument {
+  if (plan.status === "invalid-track") throw new Error("This clip cannot be placed on the selected layer.");
+  if (plan.status === "start-occupied") throw new Error("Choose an empty point on the timeline layer.");
+  if (plan.status === "needs-resolution" && !resolution) throw new Error("Choose how to resolve the timeline overlap.");
+  if (root.placements.some(item => item.id === plan.clip.id)) throw new Error("Timeline placement IDs must be unique.");
+
+  const fps = Math.max(1, Number.isFinite(root.frameRate) ? root.frameRate : 24);
+  const frame = 1 / fps;
+  let next = structuredClone(root);
+  let inserted: TimelineClip = { ...plan.clip };
+  if (plan.status === "needs-resolution" && resolution === "trim") {
+    const trimDuration = Math.floor((plan.availableDuration + insertionEpsilon) * fps) / fps;
+    if (trimDuration < frame - insertionEpsilon) throw new Error("There is not enough room to keep even one frame. Choose Ripple later clips or another position.");
+    inserted = {
+      ...inserted, duration: trimDuration,
+      ...((inserted.sourceIn !== undefined || inserted.sourceOut !== undefined)
+        ? { sourceOut: (inserted.sourceIn ?? 0) + trimDuration } : {}),
+    };
+  } else if (plan.status === "needs-resolution" && resolution === "ripple") {
+    const boundary = plan.conflictStart;
+    const delta = plan.shiftBy;
+    if (boundary === undefined || delta === undefined || delta <= 0) throw new Error("The ripple insertion plan is incomplete.");
+    const affected = next.placements.filter(item => item.trackId === plan.trackId && item.start >= boundary - insertionEpsilon);
+    const roots = new Set<string>();
+    const byId = new Map(next.placements.map(item => [item.id, item]));
+    for (const placement of affected) {
+      let current = placement;
+      const visited = new Set<string>();
+      while (current.linkedToPlacementId) {
+        if (visited.has(current.id)) throw new Error("Composition placement links must not contain cycles.");
+        visited.add(current.id);
+        const parent = byId.get(current.linkedToPlacementId);
+        if (!parent) throw new Error("Linked Composition placement was not found.");
+        current = parent;
+      }
+      roots.add(current.id);
+    }
+    for (const rootId of roots) {
+      const placement = next.placements.find(item => item.id === rootId);
+      if (placement) next = moveCompositionPlacement(next, rootId, snapInsertionFrame(placement.start + delta, fps));
+    }
+  }
+  const canonical = createRootCompositionPlacementForTimelineClip(project, next, inserted);
+  next = insertCompositionPlacement(next, canonical);
+  next.duration = Math.max(next.duration, ...next.placements.map(item => item.start + item.duration));
+  assertValidCompositionDocument(next);
+  return next;
+}
 
 function materializedShotId(clip: TimelineClip, project: DionysusProject): string | undefined {
   if (!clip.id.startsWith("storyboard-")) return undefined;
