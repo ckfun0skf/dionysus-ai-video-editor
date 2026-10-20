@@ -1,6 +1,6 @@
 # DYS-005 — Master and nested Timeline editing with Version management
 
-**Status:** In progress · **Progress estimate:** 87% toward the revised target · **Updated:** 2026-10-20
+**Status:** In progress · **Progress estimate:** 89% toward the revised target · **Updated:** 2026-10-20
 
 ## Implemented
 - [x] Master and nested Shot-/Clip-Version tabs, active Version selection, **+ Add Version**, and **Edit**.
@@ -72,4 +72,9 @@ Focused local validation passed 18 tests in `src/compositionCommands.test.ts`, `
 
 Draft PR [#96](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/96) routes valid Master/root resize transactions through the same immutable `applyCompositionResizePreview()` command used by nested Clip Versions. Changed Composition placements are projected back into the transitional project model, including linked audio timing and source ranges. Valid ordinary root insertions now pass through `insertCompositionPlacement()`; duplicate placement IDs are rejected before insertion. Ordinary root clip moves now use `moveCompositionPlacementToTrack()` and synchronize moved linked descendants while preserving source ranges. Regression tests cover resize, move, linked-audio propagation/source ranges, input immutability, insertion, duplicate-ID rejection, and one-step Undo/Redo for a linked video+audio split.
 
-Exact-head CI [39421375204](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39421375204) passed at code/test SHA `b3ef901c8eaa3a193d4cbc47ac39a5d6274dbfe3` (217 tests passed, TypeScript and production build passed).: tests, TypeScript/build and the workflow's non-blocking dependency-audit step all succeeded. This is CI evidence only, not merge/deployment or visual acceptance. The adapter deliberately retains a compatibility fallback for materialized Storyboard placements and invalid legacy link groups; canonical-only persistence is not complete. No browser smoke tests were run.
+Exact-head CI [39425783751](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39425783751) passed at code/test SHA `30afa93ea6ff9f6086229b4fd7bd9daba6a02796`: 219 tests across 23 files, TypeScript and production build passed. The dependency-audit workflow step is non-blocking. This is CI evidence only, not merge/deployment or visual acceptance. This is CI evidence only, not merge/deployment or visual acceptance. The adapter deliberately retains a compatibility fallback for materialized Storyboard placements and invalid legacy link groups; canonical-only persistence is not complete. No browser smoke tests were run.
+
+
+## Save-as-Clip follow-up — 2026-10-20
+
+The Master Timeline Save-as-Clip path now calls `createClipVersionSnapshot()` instead of only flattening renderer layers and regenerating their IDs. This is shared DYS-014 foundation work: DYS-005 remains in progress and canonical-only editing is not complete. See [DYS-014](./unified-composition-model.md) for the snapshot contract and remaining editor-adapter gap.

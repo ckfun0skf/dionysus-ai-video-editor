@@ -51,3 +51,12 @@ CI [#39218891285](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/
 - The command applies a primary resize and its neighboring trim atomically, preserves source in/out behavior, synchronizes linked audio timing/source ranges with the root placement, and maintains compatibility fields without mutating the input.
 - `src/nestedTimelinePlacement.ts` is now a planning adapter only; `src/clipVersionTracks.ts` bridges the resulting command document back to the transitional nested Version representation.
 - Local focused validation passed 18 tests across `src/compositionCommands.test.ts`, `src/nestedTimelinePlacement.test.ts`, and `src/clipVersionTracks.test.ts`; full local validation passed 214 tests across 22 files, TypeScript, and the Vite production build. `npm audit` cannot run without a repository lockfile. Exact-head PR CI remains required; this branch is neither merged nor deployed. No browser smoke tests were run.
+
+
+## Structure-preserving Save-as-Clip foundation — 2026-10-20
+
+- Replaced the Master Timeline Save-as-Clip path that only flattened renderer layers and regenerated their IDs with `createClipVersionSnapshot()`.
+- Saved Clip Versions now include a canonical root Composition document, track and placement order, source ranges, transforms/mix metadata, recursively embedded nested Clip Asset Version and selected Shot Slot Version Composition documents, exact pinned-version provenance, script-version IDs and generation records.
+- The flattened `layers` array remains a compatibility/render projection. The nested editor has not yet migrated all edit operations to canonical Composition placements, so this is a structural snapshot milestone, not completion of canonical-authoritative editing.
+- Tests verify source immutability, source ranges, transforms/mix, nested child composition, pin/provenance retention, JSON round-trip and source nested-version mutation isolation.
+- Exact-head CI [39425783751](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39425783751) passed 219 tests across 23 files, TypeScript and production build at code/test SHA `30afa93ea6ff9f6086229b4fd7bd9daba6a02796`. The branch is not merged/deployed; no browser smoke tests were run.

@@ -145,3 +145,12 @@ Draft PR [#96](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/96) in
 ## Recommended next step
 
 Next audit UI edit handlers for one-command/one-history-entry behavior, establish canonical Composition persistence, and complete structure-preserving Save-as-Clip without flattening nested compositions. Verify the latest exact-head CI before any merge. Keep DYS-005 and DYS-014 in progress until the functional acceptance gates pass. After a coherent Timeline milestone is merged and Pages deployment is verified, ask the owner for one consolidated visual acceptance pass. No browser smoke tests.
+
+
+## Save-as-Clip structure-preservation checkpoint — 2026-10-20
+
+Draft PR [#96](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/96) now uses `src/clipVersionSnapshot.ts` instead of saving only a flattened list of renderer layers. Each saved Clip Version carries a canonical Composition document, original track/placement order, source ranges, legacy transform/mix fields, recursively embedded nested Clip Version and selected Shot Slot Version documents, exact pinned version references, and snapshot provenance. A flattened `layers` projection remains for current rendering/legacy nested editing and is explicitly not considered canonical-authoritative editing completion.
+
+Regression tests verify source immutability, source ranges, transform/mix preservation, nested child composition structure, pinning, generation/script provenance, JSON save/reload, and that mutating a source nested version after snapshot creation does not mutate the embedded snapshot. Code/test SHA `30afa93ea6ff9f6086229b4fd7bd9daba6a02796` passed exact-head CI [39425783751](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39425783751): 219 tests/23 files, TypeScript and production build. The audit workflow is non-blocking.
+
+**Remaining architecture gap:** the nested editor still edits compatibility `layers`; it must be migrated to edit the stored Composition tree and keep legacy render projection synchronized before claiming canonical-authoritative persistence or full Save-as-Clip acceptance. Next step is placement-to-editor adapters and edit/save/reopen/pin-immutability tests. No browser smoke tests; no direct main pushes; no merge without current exact-head CI and review.

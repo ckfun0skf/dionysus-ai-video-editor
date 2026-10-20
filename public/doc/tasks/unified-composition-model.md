@@ -1,6 +1,6 @@
 # DYS-014 — Unified Composition Model and structure-preserving snapshots
 
-**Status:** In progress · **Progress estimate:** 60% · **Updated:** 2026-10-19
+**Status:** In progress · **Progress estimate:** 68% · **Updated:** 2026-10-20
 
 ## Strategic UI direction (2026-10-19)
 
@@ -67,3 +67,18 @@ Current feature branch `feat/dys014-alternative-provenance-roundtrip` adds two f
 The previous mobile feature is shipped as app commit `6e130e33a4236fff97f468f6d76fef933677bb58`; exact-head CI [39259760793](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39259760793), main CI [39259981315](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39259981315) and Pages deployment [39259981194](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39259981194) passed.
 
 The migration test branch still requires exact-head CI. These tests strengthen the non-destructive transition boundary; they do **not** make Composition authoritative persistence or implement structure-preserving Save-as-Clip.
+
+
+## Structure-preserving Save-as-Clip foundation — 2026-10-20
+
+The Master Timeline Save-as-Clip action now delegates to `src/clipVersionSnapshot.ts`. A saved Clip Version contains:
+
+- A canonical root Composition document with tracks, ordered placements, source references and source ranges.
+- Recursively embedded Composition documents for exact nested Clip Asset Version references and the selected Shot Slot Versions, rather than relying only on the current flattened render layer list.
+- `CompositionDocument.provenance` with source project/composition identity, source update time, snapshot creation time, and pinned asset/clip-version or shot/slot/version tuples.
+- Original transform/mix/source metadata in placement legacy data, plus selected-version script IDs and generation records.
+- A compatibility `layers` projection so the current preview/rendering path continues to work while editor migration proceeds.
+
+Regression tests cover source immutability, track/order/source-range/transform/mix preservation, nested composition structure, pinned versions, provenance, JSON serialization/reload and isolation from subsequent mutation of the source nested version. Code/test SHA `30afa93ea6ff9f6086229b4fd7bd9daba6a02796` passed exact-head CI [39425783751](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39425783751): 219 tests across 23 files, TypeScript and production build.
+
+**Not complete:** the current nested editor still primarily edits the compatibility `layers` list. The canonical tree is persisted in the snapshot but is not yet the sole editable source of truth across every nested edit path. Next work must add canonical placement/editor adapters, synchronize the render projection, and prove edit → save → reopen parity plus source-version pin immutability. Keep DYS-014 in progress; do not merge on the strength of snapshot serialization tests alone.
