@@ -371,7 +371,7 @@ export function projectRootCompositionToLegacy(
       const existing = source.tracks.find(item => item.id === track.id);
       const legacyKind = legacy?.kind ?? track.originalKind ?? track.kind;
       return {
-        ...(existing ?? legacy ?? { id: track.id, name: track.name, kind: legacyKind }),
+        ...(existing ? { ...existing, ...(legacy ?? {}) } : legacy ?? { id: track.id, name: track.name, kind: legacyKind }),
         id: track.id,
         name: track.name,
         kind: legacyKind,
@@ -409,7 +409,7 @@ export function projectRootCompositionToLegacy(
     .map(placement => {
       const legacy = placement.legacyData as unknown as TimelineClip;
       const existing = existingClips.get(placement.id);
-      const base = existing ?? legacy;
+      const base = existing ? { ...existing, ...legacy } : legacy;
       if (!base || typeof base.kind !== "string") {
         throw new Error(`Root Composition placement "${placement.id}" has no compatible legacy clip metadata.`);
       }
