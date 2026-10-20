@@ -377,12 +377,18 @@ export function projectRootCompositionToLegacy(
         throw new Error(`Root Composition placement "${placement.id}" has no compatible legacy clip metadata.`);
       }
       const sourceRef = placement.source;
+      const {
+        assetId: _oldAssetId, shotId: _oldShotId, slotId: _oldSlotId,
+        sourceIn: _oldSourceIn, sourceOut: _oldSourceOut,
+        linkedVideoClipId: _oldLinkedVideoClipId, ...baseFields
+      } = base;
       const assetId = sourceRef.type === "asset" || sourceRef.type === "clip" ? sourceRef.assetId
-        : sourceRef.type === "missing" ? sourceRef.originalId : base.assetId;
-      const shotId = sourceRef.type === "shot" ? sourceRef.shotId : base.shotId;
-      const slotId = sourceRef.type === "shot" ? sourceRef.slotId : base.slotId;
+        : sourceRef.type === "missing" ? sourceRef.originalId : undefined;
+      const shotId = sourceRef.type === "shot" ? sourceRef.shotId : undefined;
+      const slotId = sourceRef.type === "shot" ? sourceRef.slotId : undefined;
+      const clipVersionId = sourceRef.type === "clip" ? sourceRef.versionId : undefined;
       return {
-        ...base,
+        ...baseFields,
         id: placement.id,
         name: placement.name,
         trackId: placement.trackId,
@@ -391,9 +397,10 @@ export function projectRootCompositionToLegacy(
         ...(assetId ? { assetId } : {}),
         ...(shotId ? { shotId } : {}),
         ...(slotId ? { slotId } : {}),
+        ...(clipVersionId ? { clipVersionId } : {}),
         ...(placement.sourceIn !== undefined ? { sourceIn: placement.sourceIn } : {}),
         ...(placement.sourceOut !== undefined ? { sourceOut: placement.sourceOut } : {}),
-        ...(placement.linkedToPlacementId ? { linkedVideoClipId: placement.linkedToPlacementId } : { linkedVideoClipId: undefined }),
+        ...(placement.linkedToPlacementId ? { linkedVideoClipId: placement.linkedToPlacementId } : {}),
       } as TimelineClip;
     });
   // Storyboard materializations are compatibility-only duplicates of Master Shots. Preserve them,
