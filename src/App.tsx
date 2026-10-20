@@ -186,7 +186,11 @@ export default function App() {
       // versioned Composition envelope only when it matches the legacy project's identity and
       // updatedAt; a stale envelope must never override a newer legacy recovery snapshot.
       const legacyRead = raw ? readProjectDocument(JSON.parse(raw) as unknown) : undefined;
-      const compositionRead = compositionRaw ? readProjectDocument(JSON.parse(compositionRaw) as unknown) : undefined;
+      let compositionRead: ReturnType<typeof readProjectDocument> | undefined;
+      if (compositionRaw) {
+        try { compositionRead = readProjectDocument(JSON.parse(compositionRaw) as unknown); }
+        catch { compositionRead = undefined; } // A stale/corrupt envelope must not hide a valid legacy recovery.
+      }
       const envelopeMatchesLegacy = Boolean(
         legacyRead && compositionRead &&
         JSON.stringify(legacyRead.project) === JSON.stringify(compositionRead.project)
@@ -205,10 +209,10 @@ export default function App() {
     try {
       const raw = localStorage.getItem(COMPOSITION_STORAGE_KEY);
       if (raw) {
-        const document = JSON.parse(raw) as { compositionModel?: { rootComposition?: CompositionDocument }; project?: DionysusProject };
-        if (document.project?.id === project.id && document.compositionModel?.rootComposition) {
-          // readProjectDocument validated the same envelope in the project initializer above.
-          return structuredClone(document.compositionModel.rootComposition);
+        const parsed = JSON.parse(raw) as { compositionModel?: { rootComposition?: CompositionDocument }; project?: DionysusProject };
+        const restored = readProjectDocument(parsed);
+        if (restored.project.id === project.id && parsed.compositionModel?.rootComposition) {
+          return structuredClone(parsed.compositionModel.rootComposition);
         }
       }
     } catch { /* Fall back to deterministic migration for old or corrupt recovery data. */ }
