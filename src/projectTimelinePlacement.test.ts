@@ -69,13 +69,13 @@ describe("shared project timeline placement engine", () => {
     const project = structuredClone(sampleProject);
     const videoTracks = project.tracks.filter(track => track.kind === "video");
     const audioTrack = project.tracks.find(track => track.kind === "audio")!;
-    const video = { id: "move-video", name: "Video", kind: "video" as const, trackId: videoTracks[0].id, start: 1, duration: 4 };
-    const audio = { id: "move-audio", name: "Audio", kind: "audio" as const, trackId: audioTrack.id, start: 1, duration: 4, linkedVideoClipId: video.id };
+    const video = { id: "move-video", name: "Video", kind: "video" as const, trackId: videoTracks[0].id, start: 1, duration: 4, sourceIn: 2, sourceOut: 6 };
+    const audio = { id: "move-audio", name: "Audio", kind: "audio" as const, trackId: audioTrack.id, start: 1, duration: 4, sourceIn: 2, sourceOut: 6, linkedVideoClipId: video.id };
     project.timelineClips = [video, audio];
     const updated = moveProjectTimelinePlacement(project, { type: "clip", clipId: video.id }, videoTracks[1].id, 8);
     expect(updated.timelineClips).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: video.id, trackId: videoTracks[1].id, start: 8 }),
-      expect.objectContaining({ id: audio.id, trackId: audioTrack.id, start: 8, duration: 4, linkedVideoClipId: video.id }),
+      expect.objectContaining({ id: video.id, trackId: videoTracks[1].id, start: 8, sourceIn: 2, sourceOut: 6 }),
+      expect.objectContaining({ id: audio.id, trackId: audioTrack.id, start: 8, duration: 4, sourceIn: 2, sourceOut: 6, linkedVideoClipId: video.id }),
     ]));
   });
 
