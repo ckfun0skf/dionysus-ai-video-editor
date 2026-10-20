@@ -3,7 +3,7 @@ import { AudioLines, Check, CheckCircle2, ChevronDown, CircleHelp, Clapperboard,
 import { sampleProject } from "./sampleProject";
 import type { Asset, AssetKind, ClipVersion, CompositionLayer, DionysusProject, ReferenceProfile, ReferenceRole, Shot, TimelineClip } from "./types";
 import { validateProject } from "./projectValidation";
-import { addClipVersionLayer as addNestedLayer, addClipVersionTrack as addNestedTrack, deleteClipVersionLayer as deleteNestedLayer, moveClipVersionLayer as moveNestedLayer, normalizeClipVersionTracks, updateClipVersionLayer as updateNestedLayer } from "./clipVersionTracks";
+import { addClipVersionLayer as addNestedLayer, addClipVersionTrack as addNestedTrack, deleteClipVersionLayer as deleteNestedLayer, duplicateClipVersionComposition, moveClipVersionLayer as moveNestedLayer, normalizeClipVersionTracks, updateClipVersionLayer as updateNestedLayer } from "./clipVersionTracks";
 import { createProjectDocument, readProjectDocument } from "./projectDocument";
 import { moveNormalizedFrame, resizeNormalizedFrame } from "./previewTransform";
 import { getAllowedChildClipAssets, wouldCreateClipAssetCycle } from "./clipAssetGraph";
@@ -1299,12 +1299,12 @@ export default function App() {
     const current = asset?.kind === "clip" ? asset.clipVersions?.find(item => item.id === versionId) : undefined;
     if (!asset || asset.kind !== "clip" || !current) return;
     const nextId = id("clip-version");
+    const duplicated = duplicateClipVersionComposition(current, kind => id(kind));
     const nextVersion: ClipVersion = {
-      ...(JSON.parse(JSON.stringify(current)) as ClipVersion),
+      ...duplicated,
       id: nextId,
       name: "Version " + ((asset.clipVersions?.length ?? 0) + 1),
       description: current.description ? "Copy of " + current.name + ": " + current.description : "New version based on " + current.name,
-      layers: current.layers.map(layer => ({ ...layer, id: id("layer") })),
       scriptVersionIds: [...current.scriptVersionIds],
       generationRecords: []
     };
