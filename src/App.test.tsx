@@ -1362,11 +1362,15 @@ describe("Integrated timeline editor", () => {
   it("places a selected source, previews it, trims and moves it, and preserves edits across Undo/Redo and reopen", async () => {
     await openTimelineView();
 
-    const uploadVideoControl = Array.from(container.querySelectorAll<HTMLLabelElement>("label"))
-      .find(label => label.textContent?.includes("Upload video"));
-    expect(uploadVideoControl).toBeTruthy();
-    expect(uploadVideoControl?.closest('[role="dialog"]')).toBeNull();
-    expect(uploadVideoControl?.querySelector('input[type="file"][accept="video/*"]')).toBeTruthy();
+    const addMediaButton = buttonsNamed("Add media").find(button => !button.disabled);
+    expect(addMediaButton).toBeTruthy();
+    click(addMediaButton!);
+    await flushEffects();
+    const videoImportControl = Array.from(container.querySelectorAll<HTMLLabelElement>('label[role="menuitem"]'))
+      .find(label => label.textContent?.trim() === "Video");
+    expect(videoImportControl).toBeTruthy();
+    expect(videoImportControl?.closest('[role="dialog"]')).toBeNull();
+    expect(videoImportControl?.querySelector('input[type="file"][accept="video/*"]')).toBeTruthy();
 
     const project = persistedProject();
     // Verify video placement creates an Audio layer when the project does not already have one.
