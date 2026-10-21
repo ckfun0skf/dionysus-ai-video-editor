@@ -3245,6 +3245,12 @@ export default function App() {
           ? <p className="empty-state-copy">Import an Image Asset first.</p>
           : <div className="code-image-reference-list">{project.assets.filter(asset=>asset.kind==="image").map(asset=><label key={asset.id}><input type="checkbox" checked={(clip.referencedImageAssetIds??[]).includes(asset.id)} onChange={event=>{const current=clip.referencedImageAssetIds??[];const next=event.target.checked?[...new Set([...current,asset.id])]:current.filter(id=>id!==asset.id);updateClip({referencedImageAssetIds:next});}}/><span>{asset.name}</span></label>)}</div>}
       </section>}
+      {clip.kind==="text"&&<section className="text-layer-style-inspector" aria-label="Text style">
+        <div className="inspector-subheading"><span>Text style</span><span className="small-count">Canvas</span></div>
+        <label className="field-label">Text color<input className="text-field" type="color" value={clip.textColor??"#ffffff"} onChange={event=>updateClip({textColor:event.target.value})}/></label>
+        <label className="field-label">Font size <strong>{clip.fontSize??32}px</strong><input className="text-field" type="number" min="8" max="200" step="1" value={clip.fontSize??32} onChange={event=>updateClip({fontSize:Math.max(8,Math.min(200,Number(event.target.value)||32))})}/></label>
+        <label className="field-label">Text alignment<select className="text-field" value={clip.textAlign??"center"} onChange={event=>updateClip({textAlign:event.target.value as "left"|"center"|"right"})}><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select></label>
+      </section>}
       <label className="field-label">Prompt / notes<textarea className="text-area" rows={3} value={clip.prompt??""} onChange={event=>updateClip({prompt:event.target.value})} placeholder="Optional source prompt or notes"/></label>
       <footer><button className="button button-quiet button-small danger-action" onClick={()=>{if(window.confirm("Delete clip “"+clip.name+"”?")){deleteTimelineClipCanonical(clip);setSelectedTimelineClipId("");setTimelineClipSettingsId("");}}}>Delete clip…</button><button className="button button-primary button-small" onClick={()=>setTimelineClipSettingsId("")}>Done</button></footer>
     </section></div>;})()}
