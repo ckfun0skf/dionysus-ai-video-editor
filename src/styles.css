@@ -1332,7 +1332,7 @@
 .timeline-clip-mute{position:absolute;z-index:4;right:3px;top:3px;width:20px;height:20px;padding:0;border:1px solid rgba(255,255,255,.22);border-radius:4px;background:rgba(8,10,16,.82);color:#fff;font-size:11px;cursor:pointer}
 .timeline-clip-mute[aria-pressed=true]{background:#873f48}
 .timeline-clip-unlink{position:absolute;z-index:4;right:3px;bottom:3px;padding:2px 4px;border:1px solid rgba(255,255,255,.22);border-radius:4px;background:rgba(8,10,16,.82);color:#fff;font-size:8px;cursor:pointer}
-.linked-audio-child{margin-left:28px;grid-template-columns:132px minmax(320px,1fr);min-height:48px;background:rgba(36,28,30,.45)}
+.linked-audio-child{margin-left:0;grid-template-columns:220px minmax(320px,1fr);min-height:48px;background:rgba(36,28,30,.45)}
 .linked-audio-child .visual-track-label{padding-top:6px;padding-bottom:6px}
 .linked-audio-child .visual-track-lane{min-height:48px;background-color:rgba(60,30,35,.2)}
 .nested-timeline-tab{margin:12px 0;padding:12px;border:1px solid var(--border,#30313a);border-radius:10px;background:var(--surface,#15161b);display:flex;flex-direction:column;gap:12px;min-width:0}
@@ -1469,8 +1469,10 @@
 }
 .timeline-master-actions {
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
+  padding-block: 4px;
 }
+.timeline-master-actions .button { min-height: 30px; padding-block: 5px; }
 .timeline-summary {
   color: var(--muted, #92939f);
   font-size: 10px;
@@ -3076,7 +3078,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 12px;
+  padding: 7px 10px;
   border-bottom: 1px solid var(--border, #30313a);
 }
 .timeline-source-heading > div { display:flex; flex-direction:column; gap:3px; min-width:0; }
@@ -3093,7 +3095,7 @@
   border-color:var(--border,#30313a); background:rgba(255,255,255,.045); outline:none;
 }
 .timeline-source-thumb { display:grid; place-items:center; flex:0 0 58px; width:58px; height:38px; overflow:hidden; border-radius:4px; background:#24252d; }
-.timeline-source-thumb > * { width:100%; height:100%; }
+.timeline-source-thumb > * { width:100%; height:100%; pointer-events:none; -webkit-user-drag:none; }
 .timeline-source-copy { display:flex; flex-direction:column; gap:4px; min-width:0; flex:1; }
 .timeline-source-copy strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10px; }
 .timeline-source-copy small { color:var(--muted,#92939f); font-size:9px; text-transform:capitalize; }
