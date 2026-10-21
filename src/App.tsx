@@ -2458,21 +2458,34 @@ export default function App() {
     setShowAssetCreateMenu(false);
   }
   async function uploadAssetForTimeline(file?: File) {
-    const track = projectRef.current.tracks.find(item => item.id === assetPickerTrackId);
-    if (!file || !track || (track.kind !== "video" && track.kind !== "audio")) return;
+    if (!file) return;
+    const mime = file.type.toLowerCase();
+    const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+    const kind: "video" | "audio" = mime.startsWith("audio/") || ["mp3", "wav", "m4a", "aac", "ogg", "flac"].includes(ext) || projectRef.current.tracks.find(item => item.id === assetPickerTrackId)?.kind === "audio"
+      ? "audio"
+      : "video";
     const assetId = id("asset");
-    const clipId = id("timeline-clip");
-    const kind: "video" | "audio" = track.kind === "audio" ? "audio" : "video";
     try {
-      const [path, thumbnailPath, sourceDuration] = await Promise.all([storeMediaAsset(assetId, file), kind === "video" ? createVideoThumbnail(file) : Promise.resolve(undefined), readMediaDuration(file, kind)]);
+      const [path, thumbnailPath, sourceDuration] = await Promise.all([
+        storeMediaAsset(assetId, file),
+        kind === "video" ? createVideoThumbnail(file) : Promise.resolve(undefined),
+        readMediaDuration(file, kind)
+      ]);
       const now = new Date().toISOString();
-      const asset: Asset = { id: assetId, name: file.name, kind, path, createdAt: now, updatedAt: now, notes: "Imported from Timeline; stored locally.", ...(sourceDuration ? { duration: sourceDuration } : {}), ...(thumbnailPath ? { thumbnailPath } : {}) };
-      const duration = sourceDuration ?? Math.max(.5, Math.min(3, mediaTimelineDuration - editorTime || 3));
-      const clip: TimelineClip = { id: clipId, name: file.name.replace(/\\.[^.]+$/, ""), kind, trackId: track.id, start: Math.round(editorTime * Math.max(1, projectRef.current.frameRate || 24)) / Math.max(1, projectRef.current.frameRate || 24), duration, assetId, sourceIn: 0 };
-      const current = projectRef.current; const nextProject = { ...current, assets: [...current.assets, asset], timelineClips: [...(current.timelineClips ?? []), clip] }; const placement = createRootCompositionPlacementForTimelineClip(nextProject, rootCompositionRef.current, clip); const nextRoot = insertCompositionPlacement(rootCompositionRef.current, placement); change(() => nextProject, "", nextRoot);
-      setSelectedTimelineClipId(clipId); setSelectedTimelineTrackId(track.id); setTimelineClipSettingsId(clipId); setAssetPickerTrackId("");
-      setNotice(file.name + " imported to Assets and added to the Timeline.");
-    } catch (error) { setNotice(error instanceof Error ? error.message : "Could not import this media file."); }
+      const asset: Asset = {
+        id: assetId, name: file.name, kind, path, createdAt: now, updatedAt: now,
+        notes: "Imported from Timeline; stored locally.",
+        ...(sourceDuration ? { duration: sourceDuration } : {}),
+        ...(thumbnailPath ? { thumbnailPath } : {})
+      };
+      change(project => ({ ...project, assets: [...project.assets, asset] }));
+      setAssetPickerTrackId("");
+      setNotice(sourceDuration
+        ? file.name + " added to Project Media (" + time(sourceDuration) + "). Drag it to the Timeline when ready."
+        : file.name + " added to Project Media. Duration metadata is unavailable; drag it to the Timeline when ready.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not import this media file.");
+    }
   }
   function removeAsset(assetId: string) {
     const usedByProfile = project.referenceProfiles.some(profile => profile.references.some(ref => ref.assetId === assetId));
