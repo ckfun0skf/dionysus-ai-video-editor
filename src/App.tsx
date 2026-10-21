@@ -872,7 +872,7 @@ export default function App() {
     }
     const kind: TimelineClip["kind"] = isAudio ? "audio" : asset.kind === "script" ? "procedural" : asset.kind === "clip" ? "clip" : "video";
     const version = asset.kind === "clip" ? (asset.clipVersions?.find(item => item.id === asset.selectedClipVersionId) ?? asset.clipVersions?.[0]) : undefined;
-    const duration = version?.duration ?? ((asset.kind === "video" || asset.kind === "audio") ? asset.duration : undefined) ?? Math.max(.5, Math.min(3, mediaTimelineDuration - editorTime || 3));
+    const duration = version?.duration ?? ((asset.kind === "video" || asset.kind === "audio") ? asset.duration : undefined) ?? (asset.kind === "image" ? 1 : Math.max(.5, Math.min(3, mediaTimelineDuration - editorTime || 3)));
     const clip: TimelineClip = { id: id("timeline-clip"), name: asset.name, kind, trackId: track.id, start: 0, duration, assetId: asset.id, sourceIn: 0, ...(version ? { clipVersionId: version.id } : {}), ...(asset.html !== undefined ? { html: asset.html } : {}), ...(asset.css !== undefined ? { css: asset.css } : {}), ...(asset.js !== undefined ? { code: asset.js } : {}) };
     let plan = calculateCanonicalCompositionInsertionPlan(rootCompositionRef.current, clip, track.id, desiredStart);
     if (plan.status === "start-occupied") {
