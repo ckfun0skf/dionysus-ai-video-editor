@@ -2737,7 +2737,7 @@ export default function App() {
         const audio = asset.kind === "audio";
         const compatibleKind = audio ? "audio" : "video";
         const track = project.tracks.find(item => item.id === selectedTimelineTrackId && item.kind === compatibleKind) ?? project.tracks.find(item => item.kind === compatibleKind);
-        return <button type="button" draggable className="timeline-source-item" key={asset.id} onDragStart={event=>{event.dataTransfer.setData("text/dionysus-project-asset",asset.id);event.dataTransfer.effectAllowed="copy";}} onClick={() => {
+        return <button type="button" draggable className="timeline-source-item" key={asset.id} onDragStart={event=>{event.dataTransfer.setData("text/dionysus-project-asset",asset.id);event.dataTransfer.setData("text/plain",asset.id);event.dataTransfer.effectAllowed="copy";event.dataTransfer.dropEffect="copy";}} onClick={() => {
           if (!track) { setNotice("Add a matching video or audio layer before placing this source."); return; }
           placeProjectAssetDirectly(asset, track);
         }} title={"Click to add or drag " + asset.name + " to the timeline"}>
