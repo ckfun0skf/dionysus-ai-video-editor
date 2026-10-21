@@ -280,6 +280,7 @@ describe("App history integration", () => {
 
   it("clears Undo/Redo history after importing a valid project", async () => {
     await openTimelineView();
+    const audioTrackIdsBefore = new Set(persistedProject().tracks.filter(track => track.kind === "audio").map(track => track.id));
     const addLayer = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Add layer"));
     click(addLayer!);
     const videoOption = Array.from(container.querySelectorAll<HTMLButtonElement>(".layer-add-menu button")).find(button => button.textContent?.trim() === "Video layer");
@@ -922,7 +923,6 @@ describe("App history integration", () => {
     const audioPicker = container.querySelector<HTMLElement>('.asset-picker-dialog[role="dialog"]');
     expect(audioPicker?.querySelector("#asset-picker-title")?.textContent).toBe("Add audio from Assets");
     expect(audioPicker?.querySelector('input[aria-label="Search assets"]')).toBeTruthy();
-    const audioTrackIdsBefore = new Set(persistedProject().tracks.filter(track => track.kind === "audio").map(track => track.id));
     const audioAssetCard = Array.from(audioPicker?.querySelectorAll<HTMLButtonElement>(".asset-picker-card") ?? []).find(button => button.textContent?.includes("Picker audio asset"));
     expect(audioAssetCard).toBeTruthy();
     click(audioAssetCard!);
