@@ -902,6 +902,13 @@ describe("App history integration", () => {
   });
 
   it("offers only Video, Audio and Text track types in Add layer while keeping linked audio independent", async () => {
+    const projectWithAudio = persistedProject();
+    projectWithAudio.assets.push({ id: "test-audio-picker-asset", name: "Picker audio asset", kind: "audio", path: "data:audio/wav;base64,UklGRg==", duration: 4 });
+    localStorage.setItem("dionysus.project.v1", JSON.stringify(projectWithAudio));
+    act(() => root.unmount());
+    root = createRoot(container);
+    act(() => root.render(<App />));
+    await flushEffects();
     await openTimelineView();
     const addLayer = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Add layer"));
     expect(addLayer).toBeTruthy();
@@ -915,8 +922,22 @@ describe("App history integration", () => {
     const audioPicker = container.querySelector<HTMLElement>('.asset-picker-dialog[role="dialog"]');
     expect(audioPicker?.querySelector("#asset-picker-title")?.textContent).toBe("Add audio from Assets");
     expect(audioPicker?.querySelector('input[aria-label="Search assets"]')).toBeTruthy();
-    click(Array.from(audioPicker?.querySelectorAll<HTMLButtonElement>("button") ?? []).find(button => button.textContent?.trim() === "Close")!);
+    const audioTrackIdsBefore = new Set(persistedProject().tracks.filter(track => track.kind === "audio").map(track => track.id));
+    const audioAssetCard = Array.from(audioPicker?.querySelectorAll<HTMLButtonElement>(".asset-picker-card") ?? []).find(button => button.textContent?.includes("Picker audio asset"));
+    expect(audioAssetCard).toBeTruthy();
+    click(audioAssetCard!);
     await flushEffects();
+    expect(container.querySelector(".timeline-placement-banner")?.textContent).toContain("Picker audio asset");
+    const addedAudioTrack = persistedProject().tracks.find(track => track.kind === "audio" && !audioTrackIdsBefore.has(track.id));
+    expect(addedAudioTrack).toBeTruthy();
+    const addedAudioLane = container.querySelector<HTMLElement>('.visual-track-lane[data-track-id="' + addedAudioTrack!.id + '"]');
+    expect(addedAudioLane).toBeTruthy();
+    Object.defineProperty(addedAudioLane!, "getBoundingClientRect", { configurable: true, value: () => ({ left: 0, top: 0, right: 100, bottom: 76, width: 100, height: 76, x: 0, y: 0, toJSON: () => ({}) }) });
+    const placeAudio = new MouseEvent("pointerdown", { bubbles: true, cancelable: true, clientX: 20 });
+    act(() => addedAudioLane!.dispatchEvent(placeAudio));
+    await flushEffects();
+    expect((persistedProject().timelineClips ?? []).some(clip => clip.assetId === "test-audio-picker-asset" && clip.kind === "audio" && clip.trackId === addedAudioTrack!.id)).toBe(true);
+    expect(container.querySelector(".asset-picker-dialog")).toBeNull();
 
     const visibleTrackKinds = Array.from(container.querySelectorAll<HTMLElement>(".visual-track-group")).map(group =>
       group.querySelector(".visual-track-label")?.textContent ?? ""
@@ -2629,6 +2650,14 @@ describe("mobile audio clip controls", () => {
   it("relinks a dragged Linked Audio row to another video and unlinks it to an Audio layer", async () => {
     await openTimelineView();
     await seedLinkedVideoAudioPairs(2);
+    const onlyFirstAudio = persistedProject();
+    onlyFirstAudio.timelineClips = (onlyFirstAudio.timelineClips ?? []).filter(clip => clip.id !== "test-audio-2");
+    localStorage.setItem("dionysus.project.v1", JSON.stringify(onlyFirstAudio));
+    act(() => root.unmount());
+    root = createRoot(container);
+    act(() => root.render(<App />));
+    await flushEffects();
+    await openTimelineView();
     const clips = () => persistedProject().timelineClips ?? [];
     const audio = () => clips().find(clip => clip.id === "test-audio-1")!;
     expect(audio().linkedVideoClipId).toBe("test-video-1");
