@@ -1363,6 +1363,8 @@ describe("Integrated timeline editor", () => {
     await openTimelineView();
 
     const project = persistedProject();
+    // Verify video placement creates an Audio layer when the project does not already have one.
+    project.tracks = project.tracks.filter(track => track.kind !== "audio");
     const source = {
       id: "integration-source-image",
       name: "Integration Source Frame",
@@ -1488,6 +1490,7 @@ describe("Integrated timeline editor", () => {
     const withVideo = persistedProject();
     const placedVideo = withVideo.timelineClips?.find(clip => clip.assetId === videoSource.id && clip.kind === "video");
     expect(placedVideo).toBeTruthy();
+    expect(withVideo.tracks.some(track => track.kind === "audio")).toBe(true);
     expect(withVideo.timelineClips?.find(clip => clip.linkedVideoClipId === placedVideo!.id)).toMatchObject({
       kind: "audio",
       assetId: videoSource.id,
