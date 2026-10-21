@@ -935,6 +935,22 @@ describe("App history integration", () => {
     expect(addedAudioClip).toMatchObject({ start: 0, duration: 4, assetId: "test-audio-picker-asset" });
     expect(container.querySelector(".asset-picker-dialog")).toBeNull();
 
+    // Add Audio on an existing lane must append after its current content.
+    const addAnotherAudio = container.querySelector<HTMLButtonElement>('button[aria-label="Add clip to ' + addedAudioTrack!.name + '"]');
+    expect(addAnotherAudio).toBeTruthy();
+    click(addAnotherAudio!);
+    await flushEffects();
+    const secondAudioPicker = container.querySelector<HTMLElement>('.asset-picker-dialog[role="dialog"]');
+    expect(secondAudioPicker?.querySelector("#asset-picker-title")?.textContent).toBe("Add audio from Assets");
+    const sameAssetAgain = Array.from(secondAudioPicker?.querySelectorAll<HTMLButtonElement>(".asset-picker-card") ?? []).find(button => button.textContent?.includes("Picker audio asset"));
+    expect(sameAssetAgain).toBeTruthy();
+    click(sameAssetAgain!);
+    await flushEffects();
+    const clipsOnAddedLane = (persistedProject().timelineClips ?? []).filter(clip => clip.assetId === "test-audio-picker-asset" && clip.trackId === addedAudioTrack!.id);
+    expect(clipsOnAddedLane).toHaveLength(2);
+    expect(clipsOnAddedLane.map(clip => clip.start).sort((x, y) => x - y)).toEqual([0, 4]);
+    expect(container.querySelector(".asset-picker-dialog")).toBeNull();
+
     const visibleTrackKinds = Array.from(container.querySelectorAll<HTMLElement>(".visual-track-group")).map(group =>
       group.querySelector(".visual-track-label")?.textContent ?? ""
     );
@@ -2679,6 +2695,8 @@ describe("mobile audio clip controls", () => {
     expect(emptyLinkedRow?.querySelector(".linked-audio-row-mute")).toBeNull();
     expect(emptyLinkedRow?.querySelector(".linked-audio-row-unlink")).toBeNull();
     expect(container.querySelector('.linked-audio-drop-target[data-linked-video-id="test-video-2"]')).toBeTruthy();
+    expect(clips().some(clip => clip.id === "test-video-2" && clip.kind === "video")).toBe(true);
+    expect(persistedProject().tracks.some(track => track.id === audioTrack!.id && track.kind === "audio")).toBe(true);
   });
 
   it("links a dropped audio asset to the video clip when dropped on a Video layer", async () => {
