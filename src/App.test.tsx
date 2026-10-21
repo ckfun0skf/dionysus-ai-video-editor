@@ -2633,6 +2633,20 @@ describe("mobile audio clip controls", () => {
     const audio = () => clips().find(clip => clip.id === "test-audio-1")!;
     expect(audio().linkedVideoClipId).toBe("test-video-1");
 
+    const linkedRow = Array.from(container.querySelectorAll<HTMLElement>(".linked-audio-row-handle")).find(row => row.textContent?.includes("Video clip 1"));
+    expect(linkedRow).toBeTruthy();
+    const rowMute = linkedRow!.querySelector<HTMLButtonElement>(".linked-audio-row-mute");
+    const rowUnlink = linkedRow!.querySelector<HTMLButtonElement>(".linked-audio-row-unlink");
+    expect(rowMute?.getAttribute("aria-label")).toBe("Mute Video clip 1 audio");
+    expect(rowUnlink?.getAttribute("aria-label")).toBe("Unlink Video clip 1 audio");
+    click(rowMute!);
+    await flushEffects();
+    expect(audio().muted).toBe(true);
+    expect(rowMute?.getAttribute("aria-pressed")).toBe("true");
+    click(rowMute!);
+    await flushEffects();
+    expect(audio().muted).toBe(false);
+
     const makeTransfer = () => {
       const payload = new Map<string, string>();
       return {
@@ -2675,6 +2689,12 @@ describe("mobile audio clip controls", () => {
     await dragRowTo(secondRow!, audioLane!, 950);
     expect(audio()).not.toHaveProperty("linkedVideoClipId");
     expect(audio().trackId).toBe(audioTrack!.id);
+    const emptyLinkedRow = Array.from(container.querySelectorAll<HTMLElement>(".linked-audio-row-handle")).find(row => row.textContent?.includes("Video clip 2"));
+    expect(emptyLinkedRow).toBeTruthy();
+    expect(emptyLinkedRow?.getAttribute("draggable")).toBe("false");
+    expect(emptyLinkedRow?.querySelector(".linked-audio-row-mute")).toBeNull();
+    expect(emptyLinkedRow?.querySelector(".linked-audio-row-unlink")).toBeNull();
+    expect(container.querySelector('.linked-audio-drop-target[data-linked-video-id="test-video-2"]')).toBeTruthy();
   });
 
   it("links a dropped audio asset to the video clip when dropped on a Video layer", async () => {
