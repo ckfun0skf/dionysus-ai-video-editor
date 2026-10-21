@@ -280,7 +280,6 @@ describe("App history integration", () => {
 
   it("clears Undo/Redo history after importing a valid project", async () => {
     await openTimelineView();
-    const audioTrackIdsBefore = new Set(persistedProject().tracks.filter(track => track.kind === "audio").map(track => track.id));
     const addLayer = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Add layer"));
     click(addLayer!);
     const videoOption = Array.from(container.querySelectorAll<HTMLButtonElement>(".layer-add-menu button")).find(button => button.textContent?.trim() === "Video layer");
@@ -911,6 +910,7 @@ describe("App history integration", () => {
     act(() => root.render(<App />));
     await flushEffects();
     await openTimelineView();
+    const audioTrackIdsBefore = new Set(persistedProject().tracks.filter(track => track.kind === "audio").map(track => track.id));
     const addLayer = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Add layer"));
     expect(addLayer).toBeTruthy();
     click(addLayer!);
