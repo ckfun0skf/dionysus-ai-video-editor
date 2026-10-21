@@ -325,6 +325,7 @@ describe("App history integration", () => {
     expect(buttonsNamed("Redo").every(button => button.disabled)).toBe(true);
     expect(persistedProject().tracks).toHaveLength(baseCount + 1);
     expect(persistedProject().tracks.at(-1)?.kind).toBe("audio");
+    expect(container.querySelector('[role="dialog"] #asset-picker-title')?.textContent).toBe("Add audio from Assets");
   });
 
   
@@ -2599,6 +2600,36 @@ describe("mobile audio clip controls", () => {
     const linked = (persistedProject().timelineClips ?? []).find(clip => clip.assetId === audioAsset.id);
     expect(linked).toMatchObject({ kind: "audio", linkedVideoClipId: "video-awaiting-audio", start: 0, duration: 8 });
     expect(linked?.trackId).not.toBe(videoTrack.id);
+  });
+
+  it("keeps an empty Linked Audio group drop target and accepts an audio asset", async () => {
+    await openTimelineView();
+    const project = persistedProject();
+    const videoTrack = project.tracks.find(track => track.kind === "video");
+    if (!videoTrack) throw new Error("Sample project needs a Video layer");
+    const audioAsset = { id: "test-audio-group-asset", name: "Group narration.wav", kind: "audio" as const, path: "/media/group-narration.wav", duration: 6 };
+    project.assets = [...project.assets, audioAsset];
+    project.timelineClips = [{ id: "video-empty-audio-group", name: "Video without linked audio", kind: "video", trackId: videoTrack.id, start: 2, duration: 6 }];
+    localStorage.setItem("dionysus.project.v1", JSON.stringify(project));
+    localStorage.removeItem("dionysus.composition.v2");
+    act(() => root.unmount());
+    root = createRoot(container);
+    act(() => root.render(<App />));
+    await flushEffects();
+    await openTimelineView();
+
+    const lane = container.querySelector<HTMLElement>('.linked-audio-drop-target[data-linked-video-id="video-empty-audio-group"]');
+    expect(lane).toBeTruthy();
+    expect(lane?.textContent).toContain("Drop audio here to add it to this video");
+    const transfer = { getData: (type: string) => type === "text/dionysus-project-asset" ? audioAsset.id : "", dropEffect: "copy", types: ["text/dionysus-project-asset"] } as unknown as DataTransfer;
+    const drop = new MouseEvent("drop", { bubbles: true, cancelable: true });
+    Object.defineProperty(drop, "dataTransfer", { value: transfer });
+    act(() => lane!.dispatchEvent(drop));
+    await flushEffects();
+
+    expect((persistedProject().timelineClips ?? []).find(clip => clip.assetId === audioAsset.id)).toMatchObject({
+      kind: "audio", linkedVideoClipId: "video-empty-audio-group", start: 2, duration: 6
+    });
   });
 
 });
