@@ -3437,3 +3437,13 @@
 .timeline-source-list.grid-view .timeline-source-item>svg{position:absolute;right:9px;top:9px;padding:3px;border-radius:5px;background:rgba(15,15,18,.8)}
 .timeline-source-list.grid-view .timeline-source-copy small{font-size:10px}
 @media(max-width:640px){.timeline-source-controls{grid-template-columns:minmax(0,1fr)}.timeline-source-controls input{grid-column:auto}.timeline-source-list.grid-view{grid-template-columns:repeat(auto-fill,minmax(88px,1fr))}}
+
+
+/* Issue #100: keep track labels readable and make asset drag targets obvious */
+.visual-track-label{min-width:180px;flex:0 0 180px;white-space:nowrap}
+.visual-track-label>div{min-width:0}
+.visual-track-label>div strong,.visual-track-label>div small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.visual-track-lane:has([data-drop-preview="true"]){outline:1px dashed var(--accent,#d5f36a);outline-offset:-2px}
+.timeline-source-item[draggable="true"]{cursor:grab}
+.timeline-source-item[draggable="true"]:active{cursor:grabbing}
+@media(max-width:760px){.visual-track-label{min-width:136px;flex-basis:136px}}
