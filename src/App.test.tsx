@@ -985,6 +985,55 @@ describe("App history integration", () => {
     expect(shot!.slots[0].versions[0].layers[0].prompt).toContain("Hero reference");
   });
 
+  it("creates linked audio when a Project Media audio asset is dragged onto an empty Linked Audio group", async () => {
+    await openTimelineView();
+    const project = persistedProject();
+    const videoTrack = project.tracks.find(track => track.kind === "video");
+    if (!videoTrack) throw new Error("Sample project needs a Video layer");
+    const audioAsset = { id: "empty-group-drop-audio", name: "Empty group narration.wav", kind: "audio" as const, path: "/media/empty-group-narration.wav", duration: 9 };
+    project.assets = [...project.assets, audioAsset];
+    project.timelineClips = [{ id: "video-empty-linked-audio", name: "Video without audio", kind: "video", trackId: videoTrack.id, start: 3, duration: 7 }];
+    localStorage.setItem("dionysus.project.v1", JSON.stringify(project));
+    localStorage.removeItem("dionysus.composition.v2");
+    act(() => root.unmount());
+    root = createRoot(container);
+    act(() => root.render(<App />));
+    await flushEffects();
+    await openTimelineView();
+
+    const lane = container.querySelector<HTMLElement>('.linked-audio-drop-target[data-linked-video-id="video-empty-linked-audio"]');
+    expect(lane).toBeTruthy();
+    expect(lane?.textContent).toContain("Drop audio here to add it to this video");
+    const source = Array.from(container.querySelectorAll<HTMLButtonElement>(".timeline-source-item")).find(button => button.textContent?.includes(audioAsset.name));
+    expect(source).toBeTruthy();
+
+    const payload = new Map<string, string>();
+    const transfer = {
+      setData: (type: string, value: string) => payload.set(type, value),
+      getData: (type: string) => payload.get(type) ?? "",
+      effectAllowed: "",
+      dropEffect: "",
+      types: ["text/dionysus-project-asset", "text/plain"]
+    } as unknown as DataTransfer;
+    const dragStart = new Event("dragstart", { bubbles: true, cancelable: true });
+    Object.defineProperty(dragStart, "dataTransfer", { value: transfer });
+    act(() => source!.dispatchEvent(dragStart));
+
+    const dragOver = new Event("dragover", { bubbles: true, cancelable: true });
+    Object.defineProperty(dragOver, "dataTransfer", { value: transfer });
+    act(() => lane!.dispatchEvent(dragOver));
+    expect(dragOver.defaultPrevented).toBe(true);
+
+    const drop = new Event("drop", { bubbles: true, cancelable: true });
+    Object.defineProperty(drop, "dataTransfer", { value: transfer });
+    act(() => lane!.dispatchEvent(drop));
+    await flushEffects();
+
+    expect((persistedProject().timelineClips ?? []).find(clip => clip.assetId === audioAsset.id)).toMatchObject({
+      kind: "audio", linkedVideoClipId: "video-empty-linked-audio", start: 3, duration: 7
+    });
+  });
+
 });
 
 
