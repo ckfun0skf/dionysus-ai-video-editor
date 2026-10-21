@@ -910,7 +910,12 @@ describe("App history integration", () => {
     const layerOptions = Array.from(masterLayersHeading?.querySelectorAll<HTMLButtonElement>(".layer-add-menu button") ?? []).map(button => (button.textContent ?? "").trim());
     expect(layerOptions.sort()).toEqual(["Audio layer", "Text layer", "Video layer"]);
     expect(layerOptions.some(label => label.includes("Add linked video/audio"))).toBe(false);
-    click(addLayer!);
+    click(Array.from(masterLayersHeading?.querySelectorAll<HTMLButtonElement>(".layer-add-menu button") ?? []).find(button => button.textContent?.includes("Audio layer"))!);
+    await flushEffects();
+    const audioPicker = container.querySelector<HTMLElement>('.asset-picker-dialog[role="dialog"]');
+    expect(audioPicker?.querySelector("#asset-picker-title")?.textContent).toBe("Add audio from Assets");
+    expect(audioPicker?.querySelector('input[aria-label="Search assets"]')).toBeTruthy();
+    click(Array.from(audioPicker?.querySelectorAll<HTMLButtonElement>("button") ?? []).find(button => button.textContent?.trim() === "Close")!);
     await flushEffects();
 
     const visibleTrackKinds = Array.from(container.querySelectorAll<HTMLElement>(".visual-track-group")).map(group =>
@@ -2619,6 +2624,56 @@ describe("mobile audio clip controls", () => {
     Object.defineProperty(dragStart, "dataTransfer", { value: transfer });
     act(() => rowHandle!.dispatchEvent(dragStart));
     expect(transfer.setData).toHaveBeenCalledWith("text/dionysus-timeline-clip", audio!.id);
+  });
+
+  it("relinks a dragged Linked Audio row to another video and unlinks it to an Audio layer", async () => {
+    await openTimelineView();
+    await seedLinkedVideoAudioPairs(2);
+    const clips = () => persistedProject().timelineClips ?? [];
+    const audio = () => clips().find(clip => clip.id === "test-audio-1")!;
+    expect(audio().linkedVideoClipId).toBe("test-video-1");
+
+    const makeTransfer = () => {
+      const payload = new Map<string, string>();
+      return {
+        transfer: {
+          setData: (type: string, value: string) => payload.set(type, value),
+          getData: (type: string) => payload.get(type) ?? "",
+          effectAllowed: "",
+          dropEffect: "",
+          types: ["text/dionysus-timeline-clip"]
+        } as unknown as DataTransfer
+      };
+    };
+    const dragRowTo = async (row: HTMLElement, target: HTMLElement) => {
+      const { transfer } = makeTransfer();
+      const start = new Event("dragstart", { bubbles: true, cancelable: true });
+      Object.defineProperty(start, "dataTransfer", { value: transfer });
+      act(() => row.dispatchEvent(start));
+      const over = new Event("dragover", { bubbles: true, cancelable: true });
+      Object.defineProperty(over, "dataTransfer", { value: transfer });
+      act(() => target.dispatchEvent(over));
+      const drop = new Event("drop", { bubbles: true, cancelable: true });
+      Object.defineProperty(drop, "dataTransfer", { value: transfer });
+      act(() => target.dispatchEvent(drop));
+      await flushEffects();
+    };
+
+    const firstRow = Array.from(container.querySelectorAll<HTMLElement>(".linked-audio-row-handle")).find(row => row.textContent?.includes("Video clip 1"));
+    const secondLane = container.querySelector<HTMLElement>('.linked-audio-drop-target[data-linked-video-id="test-video-2"]');
+    expect(firstRow).toBeTruthy();
+    expect(secondLane).toBeTruthy();
+    await dragRowTo(firstRow!, secondLane!);
+    expect(audio()).toMatchObject({ kind: "audio", linkedVideoClipId: "test-video-2", start: 5, duration: 5 });
+
+    const secondRow = Array.from(container.querySelectorAll<HTMLElement>(".linked-audio-row-handle")).find(row => row.textContent?.includes("Video clip 2"));
+    const audioTrack = persistedProject().tracks.find(track => track.kind === "audio");
+    const audioLane = audioTrack ? container.querySelector<HTMLElement>('.visual-track-lane[data-track-id="' + audioTrack.id + '"]') : null;
+    expect(secondRow).toBeTruthy();
+    expect(audioLane).toBeTruthy();
+    await dragRowTo(secondRow!, audioLane!);
+    expect(audio()).not.toHaveProperty("linkedVideoClipId");
+    expect(audio().trackId).toBe(audioTrack!.id);
   });
 
   it("links a dropped audio asset to the video clip when dropped on a Video layer", async () => {
