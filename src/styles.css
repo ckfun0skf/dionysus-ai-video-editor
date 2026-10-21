@@ -1332,7 +1332,7 @@
 .timeline-clip-mute{position:absolute;z-index:4;right:3px;top:3px;width:20px;height:20px;padding:0;border:1px solid rgba(255,255,255,.22);border-radius:4px;background:rgba(8,10,16,.82);color:#fff;font-size:11px;cursor:pointer}
 .timeline-clip-mute[aria-pressed=true]{background:#873f48}
 .timeline-clip-unlink{position:absolute;z-index:4;right:3px;bottom:3px;padding:2px 4px;border:1px solid rgba(255,255,255,.22);border-radius:4px;background:rgba(8,10,16,.82);color:#fff;font-size:8px;cursor:pointer}
-.linked-audio-child{margin-left:28px;grid-template-columns:132px minmax(320px,1fr);min-height:48px;background:rgba(36,28,30,.45)}
+.linked-audio-child{margin-left:0;grid-template-columns:220px minmax(320px,1fr);min-height:48px;background:rgba(36,28,30,.45)}
 .linked-audio-child .visual-track-label{padding-top:6px;padding-bottom:6px}
 .linked-audio-child .visual-track-lane{min-height:48px;background-color:rgba(60,30,35,.2)}
 .nested-timeline-tab{margin:12px 0;padding:12px;border:1px solid var(--border,#30313a);border-radius:10px;background:var(--surface,#15161b);display:flex;flex-direction:column;gap:12px;min-width:0}
@@ -1469,8 +1469,10 @@
 }
 .timeline-master-actions {
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
+  padding-block: 4px;
 }
+.timeline-master-actions .button { min-height: 30px; padding-block: 5px; }
 .timeline-summary {
   color: var(--muted, #92939f);
   font-size: 10px;
@@ -3076,7 +3078,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 12px;
+  padding: 7px 10px;
   border-bottom: 1px solid var(--border, #30313a);
 }
 .timeline-source-heading > div { display:flex; flex-direction:column; gap:3px; min-width:0; }
@@ -3093,7 +3095,7 @@
   border-color:var(--border,#30313a); background:rgba(255,255,255,.045); outline:none;
 }
 .timeline-source-thumb { display:grid; place-items:center; flex:0 0 58px; width:58px; height:38px; overflow:hidden; border-radius:4px; background:#24252d; }
-.timeline-source-thumb > * { width:100%; height:100%; }
+.timeline-source-thumb > * { width:100%; height:100%; pointer-events:none; -webkit-user-drag:none; }
 .timeline-source-copy { display:flex; flex-direction:column; gap:4px; min-width:0; flex:1; }
 .timeline-source-copy strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10px; }
 .timeline-source-copy small { color:var(--muted,#92939f); font-size:9px; text-transform:capitalize; }
@@ -3447,3 +3449,91 @@
 .timeline-source-item[draggable="true"]{cursor:grab}
 .timeline-source-item[draggable="true"]:active{cursor:grabbing}
 @media(max-width:760px){.visual-track-label{min-width:136px;flex-basis:136px}}
+
+
+/* Keep the ruler and every root timeline lane on one shared, scrollable time canvas. */
+.timeline-horizontal-scroll > .visual-timeline-ruler,
+.timeline-horizontal-scroll > .visual-track-list {
+  min-width: calc(var(--timeline-label-width, 220px) + var(--timeline-content-width, 960px));
+}
+.timeline-horizontal-scroll > .visual-track-list > .visual-track-group,
+.timeline-horizontal-scroll > .visual-track-list > .visual-track-group > .visual-track-row {
+  min-width: 100%;
+}
+@media (max-width: 760px) {
+  .timeline-horizontal-scroll { --timeline-label-width: 180px !important; }
+}
+
+
+/* Issue #100: dragging to a lane edge previews a new layer before committing the drop. */
+.visual-track-lane { position: relative; }
+.new-layer-drop-preview {
+  position: absolute; z-index: 8; top: 1px; bottom: 1px; min-width: 72px;
+  display: flex; flex-direction: column; justify-content: center; gap: 3px;
+  overflow: hidden; padding: 4px 7px; border: 1px dashed var(--accent, #d5f36a);
+  border-radius: 5px; background: rgba(213, 243, 106, .14); color: var(--accent, #d5f36a);
+  pointer-events: none; box-shadow: 0 0 0 1px rgba(0,0,0,.25);
+}
+.new-layer-drop-preview.before { outline: 2px solid var(--accent, #d5f36a); outline-offset: 2px; }
+.new-layer-drop-preview.after { outline: 2px solid var(--accent, #d5f36a); outline-offset: -2px; }
+.new-layer-drop-preview strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
+.new-layer-drop-preview small { font: 9px "DM Mono", monospace; opacity: .9; white-space: nowrap; }
+
+
+/* Linked audio rows are explicit drop targets for relinking source audio. */
+.linked-audio-drop-target { outline: 1px dashed transparent; outline-offset: -2px; transition: outline-color 100ms ease, background-color 100ms ease; }
+.linked-audio-drop-target.active { outline: 2px dashed var(--accent, #d5f36a); outline-offset: -3px; background-color: rgba(213,243,106,.1); }
+.linked-audio-drop-target .visual-media-clip[draggable="true"] { cursor: grab; }
+.linked-audio-drop-target .visual-media-clip[draggable="true"]:active { cursor: grabbing; }
+
+
+/* Issue #100 follow-up: use one responsive label-column width for ruler and every layer. */
+.timeline-horizontal-scroll {
+  --timeline-label-width: 244px !important;
+}
+.timeline-horizontal-scroll > .visual-timeline-ruler,
+.timeline-horizontal-scroll > .visual-track-list > .visual-track-group > .visual-track-row {
+  grid-template-columns: var(--timeline-label-width, 244px) minmax(var(--timeline-track-min-width, 320px), 1fr) !important;
+}
+.timeline-horizontal-scroll > .visual-timeline-ruler,
+.timeline-horizontal-scroll > .visual-track-list {
+  min-width: calc(var(--timeline-label-width, 244px) + var(--timeline-content-width, 960px));
+}
+.timeline-horizontal-scroll > .visual-track-list > .visual-track-group,
+.timeline-horizontal-scroll > .visual-track-list > .visual-track-group > .visual-track-row {
+  min-width: 100%;
+}
+@media (max-width: 900px) {
+  .timeline-horizontal-scroll {
+    --timeline-label-width: 190px !important;
+  }
+}
+@media (max-width: 640px) {
+  .timeline-horizontal-scroll {
+    --timeline-label-width: 132px !important;
+  }
+}
+
+
+/* Direct inline text editing on the integrated Timeline preview. */
+.preview-canvas-text-editor {
+  position: absolute;
+  z-index: 10;
+  box-sizing: border-box;
+  min-width: 2rem;
+  min-height: 2rem;
+  resize: none;
+  overflow: auto;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--accent, #7c83ff);
+  border-radius: 4px;
+  outline: 2px solid color-mix(in srgb, var(--accent, #7c83ff) 25%, transparent);
+  background: rgb(8 12 20 / 72%);
+  color: #fff;
+  font: inherit;
+  line-height: 1.2;
+  text-align: center;
+}
+.preview-canvas-text-editor:focus {
+  outline: 2px solid var(--accent, #7c83ff);
+}

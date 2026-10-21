@@ -81,6 +81,18 @@ describe("shared Composition editing commands", () => {
   });
 
 
+  it("removing a video track also removes linked audio on a separate audio track", () => {
+    const source = fixture();
+    const withFallback = addCompositionTrack(source, {
+      id: "v2", name: "Video 2", kind: "video", order: 3, legacyData: { kind: "video" },
+    });
+    const removed = removeCompositionTrack(withFallback, "v1", "v2");
+    expect(removed.tracks.some(track => track.id === "v1")).toBe(false);
+    expect(removed.tracks.some(track => track.id === "a1")).toBe(true);
+    expect(removed.placements).toHaveLength(0);
+    expect(() => assertValidCompositionDocument(removed)).not.toThrow();
+  });
+
   it("removes a video track with a linked group atomically and rejects removing a Master Shot track without fallback", () => {
     const source = fixture();
     const withShotTrack = addCompositionTrack(source, {
@@ -299,8 +311,18 @@ describe("shared Composition editing commands", () => {
     const moved = moveCompositionPlacement(unlinked, "audio", 9);
     expect(placement(moved, "audio").start).toBe(9);
     expect(placement(moved, "video").start).toBe(1);
-    const deleted = deleteCompositionPlacement(source, "video");
-    expect(deleted.placements).toHaveLength(0);
+    const withIndependentAudio = insertCompositionPlacement(source, {
+      id: "independent-audio",
+      name: "Independent audio",
+      trackId: "a1",
+      start: 0,
+      duration: 1,
+      order: 1,
+      source: { type: "asset", assetId: "independent-audio-asset" },
+      legacyData: { id: "independent-audio", kind: "audio", start: 0, duration: 1 },
+    });
+    const deleted = deleteCompositionPlacement(withIndependentAudio, "video");
+    expect(deleted.placements.map(item => item.id)).toEqual(["independent-audio"]);
   });
 
   it("rejects duplicate IDs, missing tracks, dangling links, invalid time, and cyclic links", () => {
