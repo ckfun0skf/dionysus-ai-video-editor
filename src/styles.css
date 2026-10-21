@@ -3540,6 +3540,6 @@
 
 .linked-audio-row-handle{cursor:grab;user-select:none;touch-action:pan-y}
 .linked-audio-row-handle:active{cursor:grabbing}
-.linked-audio-row-handle>svg:last-child{margin-left:auto;opacity:.55;flex-shrink:0}
+.linked-audio-row-handle>.linked-audio-drag-grip{margin-left:auto;opacity:.55;flex-shrink:0;font-size:16px;line-height:1}
 .linked-audio-child .timeline-clip-mute,.linked-audio-child .timeline-clip-unlink{right:4px}
 .linked-audio-child .timeline-clip-unlink{right:4px;bottom:3px}
