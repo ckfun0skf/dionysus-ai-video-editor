@@ -541,10 +541,23 @@ export function deleteCompositionPlacement(
 ): CompositionDocument {
   assertValidCompositionDocument(document);
   const selected = requirePlacement(document, placementId);
+  // Linked audio is a dependent child of its source video even though it is
+  // not a nested-composition descendant. Delete it with the source so the
+  // canonical document never leaves dangling linked-audio placements.
   const deleteIds = new Set<string>([
     selected.id,
     ...getDescendants(document, selected.id).map(placement => placement.id),
   ]);
+  let addedLinkedChild = true;
+  while (addedLinkedChild) {
+    addedLinkedChild = false;
+    for (const placement of document.placements) {
+      if (placement.linkedToPlacementId && deleteIds.has(placement.linkedToPlacementId) && !deleteIds.has(placement.id)) {
+        deleteIds.add(placement.id);
+        addedLinkedChild = true;
+      }
+    }
+  }
   const next = clone(document);
   next.placements = next.placements.filter(placement => !deleteIds.has(placement.id));
   assertValidCompositionDocument(next);
