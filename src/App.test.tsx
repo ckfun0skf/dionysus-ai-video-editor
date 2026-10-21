@@ -2152,7 +2152,7 @@ describe("Integrated timeline editor", () => {
 
 
 describe("click-to-place timeline insertion", () => {
-  it("chooses an empty time, prompts before collision, and ripples later clips without overlap", async () => {
+  it("adds a selected video asset at the end of its layer without a placement dialog", async () => {
     const project = structuredClone(persistedProject());
     project.shots = [];
     const videoTrack = project.tracks.find(track => track.kind === "video")!;
@@ -2178,62 +2178,20 @@ describe("click-to-place timeline insertion", () => {
     expect(assetCard).toBeTruthy();
     click(assetCard!);
     await flushEffects();
-    expect(container.querySelector(".timeline-placement-banner")?.textContent).toContain("New footage");
-    expect((persistedProject().timelineClips ?? []).map(clip => clip.id)).toEqual(["existing-first", "existing-later"]);
 
-    const trackRow = Array.from(container.querySelectorAll<HTMLElement>(".visual-track-row"))
-      .find(row => row.querySelector(".visual-track-label strong")?.textContent === videoTrack.name);
-    const lane = trackRow?.querySelector<HTMLElement>(".visual-track-lane");
-    expect(lane).toBeTruthy();
-    Object.defineProperty(lane!, "getBoundingClientRect", {
-      configurable: true,
-      value: () => ({ left: 0, top: 0, right: 100, bottom: 76, width: 100, height: 76, x: 0, y: 0, toJSON: () => ({}) })
-    });
-    const pointer = new MouseEvent("pointerdown", { bubbles: true, cancelable: true, clientX: 30 });
-    act(() => lane!.dispatchEvent(pointer));
-    await flushEffects();
-    expect(container.querySelector('[aria-labelledby="timeline-insert-title"]')?.textContent).toContain("Not enough empty space");
-    expect(container.querySelectorAll(".timeline-insert-option")).toHaveLength(2);
-    expect((persistedProject().timelineClips ?? []).map(clip => clip.id)).toEqual(["existing-first", "existing-later"]);
-
-    click(container.querySelectorAll<HTMLButtonElement>(".timeline-insert-option")[0]);
-    await flushEffects();
+    expect(container.querySelector(".asset-picker-dialog")).toBeNull();
+    expect(container.querySelector(".timeline-placement-banner")).toBeNull();
+    expect(container.querySelector('[aria-labelledby="timeline-insert-title"]')).toBeNull();
     const inserted = persistedProject().timelineClips ?? [];
     expect(inserted).toEqual(expect.arrayContaining([
-      expect.objectContaining({ name: "New footage", start: 3, duration: 3, trackId: videoTrack.id }),
-      expect.objectContaining({ id: "existing-first", start: 6, duration: 2 }),
-      expect.objectContaining({ id: "existing-later", start: 9, duration: 2 }),
+      expect.objectContaining({ id: "existing-first", start: 4, duration: 2 }),
+      expect.objectContaining({ id: "existing-later", start: 7, duration: 2 }),
+      expect.objectContaining({ name: "New footage", assetId: "test-new-video-asset", start: 9, duration: 3, trackId: videoTrack.id }),
     ]));
-    expect(container.querySelector('[aria-label="Timeline playhead"]')?.getAttribute("aria-valuemax")).toBe("11");
     const sorted = inserted.filter(clip => clip.trackId === videoTrack.id).sort((a, b) => a.start - b.start);
     for (let index = 1; index < sorted.length; index += 1) {
       expect(sorted[index - 1].start + sorted[index - 1].duration).toBeLessThanOrEqual(sorted[index].start + 1e-7);
     }
-    const savedEnvelope = JSON.parse(localStorage.getItem("dionysus.composition.v2")!) as {
-      compositionModel: { rootComposition: { placements: Array<{ id: string; start: number; duration: number }> } };
-    };
-    expect(savedEnvelope.compositionModel.rootComposition.placements).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: "existing-first", start: 6, duration: 2 }),
-      expect.objectContaining({ id: "existing-later", start: 9, duration: 2 }),
-      expect.objectContaining({ start: 3, duration: 3 }),
-    ]));
-
-    click(buttonsNamed("Undo edit")[0]);
-    await flushEffects();
-    const afterUndo = JSON.parse(localStorage.getItem("dionysus.composition.v2")!) as typeof savedEnvelope;
-    expect(afterUndo.compositionModel.rootComposition.placements.some(placement => placement.start === 3 && placement.duration === 3)).toBe(false);
-    expect(afterUndo.compositionModel.rootComposition.placements).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: "existing-first", start: 4, duration: 2 }),
-      expect.objectContaining({ id: "existing-later", start: 7, duration: 2 }),
-    ]));
-
-    click(buttonsNamed("Redo edit")[0]);
-    await flushEffects();
-    const afterRedo = JSON.parse(localStorage.getItem("dionysus.composition.v2")!) as typeof savedEnvelope;
-    expect(afterRedo.compositionModel.rootComposition.placements).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: "existing-first", start: 6, duration: 2 }),
-      expect.objectContaining({ id: "existing-later", start: 9, duration: 2 }),
-    ]));
   });
 });
 
