@@ -2549,17 +2549,19 @@ export default function App() {
     const mime = file.type.toLowerCase();
     const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
     const audioFile = mime.startsWith("audio/") || ["mp3", "wav", "m4a", "aac", "ogg", "flac"].includes(ext);
+    const imageFile = mime.startsWith("image/") || ["png", "jpg", "jpeg", "gif", "webp", "avif", "bmp"].includes(ext);
     const videoFile = mime.startsWith("video/") || ["mp4", "mov", "webm", "m4v", "mkv"].includes(ext);
-    // Recognize the uploaded file first; the selected layer is only a fallback for unknown formats.
-    const kind: "video" | "audio" = audioFile ? "audio"
-      : videoFile ? "video"
-      : projectRef.current.tracks.find(item => item.id === assetPickerTrackId)?.kind === "audio" ? "audio" : "video";
+    if (!audioFile && !imageFile && !videoFile) {
+      setNotice("Unsupported media type. Import a video, image, or audio file.");
+      return;
+    }
+    const kind: "video" | "audio" | "image" = audioFile ? "audio" : imageFile ? "image" : "video";
     const assetId = id("asset");
     try {
       const [path, thumbnailPath, sourceDuration] = await Promise.all([
         storeMediaAsset(assetId, file),
         kind === "video" ? createVideoThumbnail(file) : Promise.resolve(undefined),
-        readMediaDuration(file, kind)
+        kind === "image" ? Promise.resolve(undefined) : readMediaDuration(file, kind)
       ]);
       const now = new Date().toISOString();
       const asset: Asset = {
@@ -2572,7 +2574,7 @@ export default function App() {
       setAssetPickerTrackId("");
       setNotice(sourceDuration
         ? file.name + " added to Project Media (" + time(sourceDuration) + "). Drag it to the Timeline when ready."
-        : file.name + " added to Project Media. Duration metadata is unavailable; drag it to the Timeline when ready.");
+        : file.name + " added to Project Media. Drag it to the Timeline when ready.");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Could not import this media file.");
     }
@@ -2759,8 +2761,8 @@ export default function App() {
   <button type="button" aria-label="Fit timeline" onClick={() => setTimelineZoom(1)}>Fit</button>
 </div>
 <div className="timeline-tab-content master-timeline-content" style={{display:activeTimelineTabId === "master" ? "block" : "none"}}><div className="timeline-top-workspace">
-  <section className="timeline-source-browser" aria-label="Timeline source browser">
-    <div className="timeline-source-heading"><div><span className="timeline-source-kicker">PROJECT MEDIA</span><strong>Sources</strong><small>{project.assets.filter(asset => ["video","image","audio","clip","script"].includes(asset.kind)).length} assets available</small></div><div className="timeline-source-heading-actions"><button type="button" className={"media-view-toggle"+(timelineMediaView==="grid"?" active":"")} aria-label="Grid view" title="Grid view" aria-pressed={timelineMediaView==="grid"} onClick={()=>setTimelineMediaView("grid")}><Grid2X2 size={15}/></button><button type="button" className={"media-view-toggle"+(timelineMediaView==="list"?" active":"")} aria-label="List view" title="List view" aria-pressed={timelineMediaView==="list"} onClick={()=>setTimelineMediaView("list")}><List size={15}/></button><button className="button button-quiet button-small" onClick={() => setView("assets")}>Manage</button></div></div>
+  <section className="timeline-source-browser" aria-label="Timeline source browser" onDragOver={event=>{if(event.dataTransfer.types.includes("Files")){event.preventDefault();event.dataTransfer.dropEffect="copy";}}} onDrop={event=>{const file=event.dataTransfer.files?.[0];if(file){event.preventDefault();void uploadAssetForTimeline(file);}}}>
+    <div className="timeline-source-heading"><div><span className="timeline-source-kicker">PROJECT MEDIA</span><strong>Sources</strong><small>{project.assets.filter(asset => ["video","image","audio","clip","script"].includes(asset.kind)).length} assets available</small></div><div className="timeline-source-heading-actions"><button type="button" className={"media-view-toggle"+(timelineMediaView==="grid"?" active":"")} aria-label="Grid view" title="Grid view" aria-pressed={timelineMediaView==="grid"} onClick={()=>setTimelineMediaView("grid")}><Grid2X2 size={15}/></button><button type="button" className={"media-view-toggle"+(timelineMediaView==="list"?" active":"")} aria-label="List view" title="List view" aria-pressed={timelineMediaView==="list"} onClick={()=>setTimelineMediaView("list")}><List size={15}/></button><button className="button button-quiet button-small" onClick={() => setView("assets")}>Manage</button><div className="timeline-media-add-menu"><button type="button" className="button button-primary button-small" aria-label="Add media" title="Add media" onClick={()=>setShowAssetCreateMenu(value=>!value)}><Plus size={14}/></button>{showAssetCreateMenu&&<div className="timeline-media-add-popover" role="menu"><label role="menuitem">Video<input type="file" accept="video/*" hidden onChange={event=>{void uploadAssetForTimeline(event.target.files?.[0]);event.currentTarget.value="";setShowAssetCreateMenu(false);}}/></label><label role="menuitem">Image<input type="file" accept="image/*" hidden onChange={event=>{void uploadAssetForTimeline(event.target.files?.[0]);event.currentTarget.value="";setShowAssetCreateMenu(false);}}/></label><label role="menuitem">Audio<input type="file" accept="audio/*" hidden onChange={event=>{void uploadAssetForTimeline(event.target.files?.[0]);event.currentTarget.value="";setShowAssetCreateMenu(false);}}/></label></div>}</div></div></div>
     <div className="timeline-source-controls"><input aria-label="Search Project Media" placeholder="Search media…" value={timelineMediaSearch} onChange={event=>setTimelineMediaSearch(event.target.value)}/><select aria-label="Filter media type" value={timelineMediaFilter} onChange={event=>setTimelineMediaFilter(event.target.value as typeof timelineMediaFilter)}><option value="all">All types</option><option value="video">Video</option><option value="image">Image</option><option value="audio">Audio</option><option value="clip">Clip</option><option value="code">Code</option></select><select aria-label="Sort Project Media" value={timelineMediaSort} onChange={event=>setTimelineMediaSort(event.target.value as typeof timelineMediaSort)}><option value="recent">Recently added</option><option value="name">Name</option><option value="duration">Duration</option></select></div>
     <div className={"timeline-source-list "+(timelineMediaView==="grid"?"grid-view":"list-view")}>
       {project.assets.filter(asset => ["video","image","audio","clip","script"].includes(asset.kind)).filter(asset => asset.name.toLowerCase().includes(timelineMediaSearch.toLowerCase())&&(timelineMediaFilter==="all"||(timelineMediaFilter==="code"?asset.kind==="script":asset.kind===timelineMediaFilter))).sort((a,b)=>timelineMediaSort==="name"?a.name.localeCompare(b.name):timelineMediaSort==="duration"?(b.duration??0)-(a.duration??0):(b.createdAt??"").localeCompare(a.createdAt??"")).map(asset => {
@@ -2778,7 +2780,7 @@ export default function App() {
       })}
       {project.assets.filter(asset => ["video","image","audio","clip","script"].includes(asset.kind)).filter(asset => asset.name.toLowerCase().includes(timelineMediaSearch.toLowerCase())&&(timelineMediaFilter==="all"||asset.kind===timelineMediaFilter)).length === 0 && <div className="timeline-source-empty"><Film size={20}/><strong>No sources yet</strong><span>Import video, images or audio to start editing.</span><button className="button button-primary button-small" onClick={() => setView("assets")}>Open Assets</button></div>}
     </div>
-    <div className="timeline-source-footer"><label className="button button-quiet button-small"><Upload size={13}/> Upload video<input type="file" accept="video/*" hidden onChange={event=>{void uploadAssetForTimeline(event.target.files?.[0]);event.currentTarget.value="";}}/></label><button className="button button-quiet button-small" onClick={() => { const track = project.tracks.find(item => item.kind === "audio"); if (track) setAssetPickerTrackId(track.id); else setNotice("Add an audio layer before importing audio."); }}><AudioLines size={13}/> Add audio</button></div>
+    <div className="timeline-source-footer"><span>Drag files here to import</span></div>
   </section>
   <div className="timeline-preview-area">{renderTimelinePreview("master", "Master preview", activeShotInfo.shot?.title ?? project.name, runtime, activeShotInfo.shot?.title ?? project.name, activeShotInfo.shot?.intent ?? "", true)}</div>
 </div><div className="section-toolbar timeline-master-actions"><span className="timeline-summary">{project.shots.length} shots · {(project.timelineClips ?? []).length} clips</span><div className="inline-actions"><button className="button button-quiet button-small" onClick={saveMasterTimelineAsClipAsset}><Save size={14}/> Save as Clip Asset</button></div></div><div className="timeline-ruler" role="slider" aria-label="Master timeline playhead" aria-valuemin={0} aria-valuemax={runtime} aria-valuenow={editorTime} tabIndex={0}
