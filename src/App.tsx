@@ -2953,13 +2953,31 @@ export default function App() {
         setSelectedId(movingShot.id);setIsPlaying(false);playbackTimeRef.current=next;setEditorTime(next);setClipDropPreview(null);return;
       }
       const clipId=event.dataTransfer.getData("text/dionysus-timeline-clip"),candidate=(project.timelineClips??[]).find(clip=>clip.id===clipId)??clipDragSourceRef.current,moving=candidate?getCanonicalTimelineClipForDrop(candidate):undefined;
-     if(moving?.kind==="audio"&&track.kind==="video"){const dropTime=Math.max(0,Math.min(mediaTimelineDuration,((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration));const targets=(projectRef.current.timelineClips??[]).filter(item=>item.kind==="video"&&item.trackId===track.id);const target=targets.find(item=>dropTime>=item.start&&dropTime<=item.start+item.duration)??(targets.length===1?targets[0]:undefined);if(target){relinkRootAudioToVideo(moving,target);}else{setNotice("Drop audio over a video clip to link it.");}clipDragSourceRef.current=null;setClipDropPreview(null);return;}if(!moving||!canPlaceTimelineClipOnTrack(moving,track))return;
+     if(moving?.kind==="audio"&&track.kind==="video"){const dropTime=Math.max(0,Math.min(mediaTimelineDuration,((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration));const targets=(projectRef.current.timelineClips??[]).filter(item=>item.kind==="video"&&item.trackId===track.id);const target=targets.find(item=>dropTime>=item.start&&dropTime<=item.start+item.duration)??(targets.length===1?targets[0]:undefined);if(target){relinkRootAudioToVideo(moving,target);}else{setNotice("Drop audio over a video clip to link it.");}clipDragSourceRef.current=null;setClipDropPreview(null);return;}
+     if(!moving)return;
      const pointerTime=((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration,rawStart=Math.max(0,pointerTime-moving.duration/2);
+     if(moving.kind==="audio"&&moving.linkedVideoClipId&&track.kind==="audio"){
+       const independent={...moving,linkedVideoClipId:undefined};
+       const unlinkPosition=calculateRootTimelineDropPosition(independent,track.id,rawStart,mediaTimelineDuration);
+       if(!unlinkPosition){setNotice("No non-overlapping position is available on this Audio layer.");clipDragSourceRef.current=null;setClipDropPreview(null);return;}
+       try{
+         if(rootCompositionRef.current.placements.some(item=>item.id===moving.id)){
+           changeRootComposition(root=>moveCompositionPlacementToTrack(unlinkCompositionPlacement(root,moving.id),moving.id,track.id,unlinkPosition.start));
+         }else{
+           change(project=>{const unlinked=unlinkTimelineAudio({tracks:project.tracks,timelineClips:project.timelineClips??[]},moving.id);return moveProjectTimelinePlacement({...project,timelineClips:unlinked.timelineClips},{type:"clip",clipId:moving.id},track.id,unlinkPosition.start);});
+         }
+         setNotice("Audio unlinked and moved to an independent Audio layer.");
+         setSelectedTimelineClipId(moving.id);setSelectedTimelineTrackId(track.id);setIsPlaying(false);
+       }catch(error){setNotice(error instanceof Error?error.message:"Could not unlink audio.");}
+       finally{clipDragSourceRef.current=null;setClipDropPreview(null);}
+       return;
+     }
+     if(!canPlaceTimelineClipOnTrack(moving,track))return;
      const pos=clipDropPreview?.trackId===track.id?{start:clipDropPreview.start,...(clipDropPreview.snapTime!==undefined?{snapTime:clipDropPreview.snapTime}:{})}:calculateRootTimelineDropPosition(moving,track.id,rawStart,mediaTimelineDuration);
      if(!pos){setNotice("No non-overlapping position is available on this layer.");clipDragSourceRef.current=null;setClipDropPreview(null);return;}
      const destinationConflict=rootCompositionRef.current.placements.some(placement=>placement.id!==moving.id&&placement.trackId===track.id&&pos.start<placement.start+placement.duration-1e-7&&pos.start+moving.duration>placement.start+1e-7);
      if(destinationConflict){setNotice("Drop cancelled: this position overlaps another clip on the destination layer.");clipDragSourceRef.current=null;setClipDropPreview(null);return;}
-     try{if(moving.kind==="audio"&&moving.linkedVideoClipId&&track.kind==="audio"){if(rootCompositionRef.current.placements.some(item=>item.id===moving.id)){changeRootComposition(root=>moveCompositionPlacementToTrack(unlinkCompositionPlacement(root,moving.id),moving.id,track.id,pos.start));}else{change(project=>{const unlinked=unlinkTimelineAudio({tracks:project.tracks,timelineClips:project.timelineClips??[]},moving.id);return moveProjectTimelinePlacement({...project,timelineClips:unlinked.timelineClips},{type:"clip",clipId:moving.id},track.id,pos.start);});}setNotice("Audio unlinked and moved to an independent Audio layer.");}else{moveRootPlacementOrLegacy({ type: "clip", clipId: moving.id }, track.id, pos.start);setNotice(pos.snapTime!==undefined?"Clip snapped to an aligned, non-overlapping position.":"Clip moved to a non-overlapping position.");}setSelectedTimelineClipId(moving.id);setSelectedTimelineTrackId(track.id);setIsPlaying(false);}catch(error){setNotice(error instanceof Error?error.message:"Could not move the clip.");}finally{clipDragSourceRef.current=null;setClipDropPreview(null);}
+     try{moveRootPlacementOrLegacy({ type: "clip", clipId: moving.id }, track.id, pos.start);setNotice(pos.snapTime!==undefined?"Clip snapped to an aligned, non-overlapping position.":"Clip moved to a non-overlapping position.");setSelectedTimelineClipId(moving.id);setSelectedTimelineTrackId(track.id);setIsPlaying(false);}catch(error){setNotice(error instanceof Error?error.message:"Could not move the clip.");}finally{clipDragSourceRef.current=null;setClipDropPreview(null);}
    }}>
    <div className="visual-playhead" style={{left:(editorTime/mediaTimelineDuration*100)+"%"}}/>
     {(clipResizePreview?.trackId===track.id && clipResizePreview.overlap || shotResizePreview?.trackId===track.id && shotResizePreview.overlap) && <div className="clip-overlap-preview" style={{left:(((shotResizePreview?.trackId===track.id&&shotResizePreview.overlap)?shotResizePreview.overlap!.start:clipResizePreview!.overlap!.start)/mediaTimelineDuration*100)+"%",width:Math.max(0.25,(((shotResizePreview?.trackId===track.id&&shotResizePreview.overlap)?shotResizePreview.overlap!.duration:clipResizePreview!.overlap!.duration)/mediaTimelineDuration*100))+"%"}} aria-hidden="true"/>}
