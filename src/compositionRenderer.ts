@@ -368,6 +368,7 @@ export async function exportCompositionWebM(project: DionysusProject, options: R
     if (audioContext && audioResume) await audioResume;
     recorder.start(250);
     const audioStartAt = audioContext ? audioContext.currentTime + 0.05 : 0;
+    const mediaPlaybackTasks: Promise<void>[] = [];
     for (const item of scheduledAudio) {
       const offset = Math.max(0, item.layer.sourceIn ?? 0);
       const sourceDuration = item.buffer?.duration ?? item.media?.duration ?? Number.POSITIVE_INFINITY;
@@ -385,13 +386,22 @@ export async function exportCompositionWebM(project: DionysusProject, options: R
         if (item.source) {
           item.source.start(clipStartsAt, offset, playbackDuration);
         } else if (item.media) {
-          // Use a dedicated video element so seeking the picture does not interrupt its audio.
-          window.setTimeout(() => {
-            if (!item.media) return;
-            item.media.currentTime = offset;
-            void item.media.play().catch(() => undefined);
-          }, Math.max(0, item.layer.start * 1000));
-          window.setTimeout(() => item.media?.pause(), Math.max(0, (item.layer.start + playbackDuration) * 1000));
+          // Seek before play; a rejected media play must fail the export instead of silently dropping audio.
+          const media = item.media;
+          mediaPlaybackTasks.push(new Promise<void>((resolve, reject) => {
+            window.setTimeout(() => {
+              void (async () => {
+                try {
+                  await seekMedia(media, offset);
+                  await media.play();
+                  resolve();
+                } catch (error) {
+                  reject(new Error("Unable to start linked video audio during WebM export", { cause: error }));
+                }
+              })();
+            }, Math.max(0, item.layer.start * 1000));
+          }));
+          window.setTimeout(() => media.pause(), Math.max(0, (item.layer.start + playbackDuration) * 1000));
         }
       }
     }
@@ -403,6 +413,7 @@ export async function exportCompositionWebM(project: DionysusProject, options: R
       const remaining = ((frame + 1) * 1000 / fps) - (performance.now() - started);
       if (remaining > 0) await new Promise<void>(resolve => window.setTimeout(resolve, remaining));
     }
+    await Promise.all(mediaPlaybackTasks);
     recorder.stop();
     const blob = await finished;
     if (!blob.size) throw new Error("The browser produced an empty WebM file");
