@@ -3485,3 +3485,31 @@
 .linked-audio-drop-target.active { outline: 2px dashed var(--accent, #d5f36a); outline-offset: -3px; background-color: rgba(213,243,106,.1); }
 .linked-audio-drop-target .visual-media-clip[draggable="true"] { cursor: grab; }
 .linked-audio-drop-target .visual-media-clip[draggable="true"]:active { cursor: grabbing; }
+
+
+/* Issue #100 follow-up: use one responsive label-column width for ruler and every layer. */
+.timeline-horizontal-scroll {
+  --timeline-label-width: 244px !important;
+}
+.timeline-horizontal-scroll > .visual-timeline-ruler,
+.timeline-horizontal-scroll > .visual-track-list > .visual-track-group > .visual-track-row {
+  grid-template-columns: var(--timeline-label-width, 244px) minmax(var(--timeline-track-min-width, 320px), 1fr) !important;
+}
+.timeline-horizontal-scroll > .visual-timeline-ruler,
+.timeline-horizontal-scroll > .visual-track-list {
+  min-width: calc(var(--timeline-label-width, 244px) + var(--timeline-content-width, 960px));
+}
+.timeline-horizontal-scroll > .visual-track-list > .visual-track-group,
+.timeline-horizontal-scroll > .visual-track-list > .visual-track-group > .visual-track-row {
+  min-width: 100%;
+}
+@media (max-width: 900px) {
+  .timeline-horizontal-scroll {
+    --timeline-label-width: 190px !important;
+  }
+}
+@media (max-width: 640px) {
+  .timeline-horizontal-scroll {
+    --timeline-label-width: 132px !important;
+  }
+}
