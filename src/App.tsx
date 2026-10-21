@@ -778,6 +778,50 @@ export default function App() {
     }
   }
 
+  function placeProjectAssetDirectly(asset: Asset, track: DionysusProject["tracks"][number]) {
+    const isAudio = track.kind === "audio";
+    if (!isAudio && track.kind !== "video") {
+      setNotice("Choose a Video layer for visual assets or an Audio layer for audio.");
+      return;
+    }
+    if (isAudio && asset.kind !== "audio") {
+      setNotice("Only audio assets can be placed on an Audio layer.");
+      return;
+    }
+    const kind: TimelineClip["kind"] = isAudio ? "audio" : asset.kind === "script" ? "procedural" : asset.kind === "clip" ? "clip" : "video";
+    const version = asset.kind === "clip" ? (asset.clipVersions?.find(item => item.id === asset.selectedClipVersionId) ?? asset.clipVersions?.[0]) : undefined;
+    const duration = version?.duration ?? ((asset.kind === "video" || asset.kind === "audio") ? asset.duration : undefined) ?? Math.max(.5, Math.min(3, mediaTimelineDuration - editorTime || 3));
+    const clip: TimelineClip = { id: id("timeline-clip"), name: asset.name, kind, trackId: track.id, start: 0, duration, assetId: asset.id, sourceIn: 0, ...(version ? { clipVersionId: version.id } : {}), ...(asset.html !== undefined ? { html: asset.html } : {}), ...(asset.css !== undefined ? { css: asset.css } : {}), ...(asset.js !== undefined ? { code: asset.js } : {}) };
+    let plan = calculateCanonicalCompositionInsertionPlan(rootCompositionRef.current, clip, track.id, editorTime);
+    if (plan.status === "start-occupied") {
+      const trackClips = (projectRef.current.timelineClips ?? []).filter(item => item.trackId === track.id);
+      const appendAt = trackClips.reduce((end, item) => Math.max(end, item.start + item.duration), 0);
+      plan = calculateCanonicalCompositionInsertionPlan(rootCompositionRef.current, clip, track.id, appendAt);
+    }
+    if (plan.status === "invalid-track" || plan.status === "start-occupied") {
+      setNotice("Could not place this asset on the selected layer.");
+      return;
+    }
+    setSelectedTimelineTrackId(track.id);
+    setIsPlaying(false);
+    if (plan.status === "needs-resolution") {
+      setPendingTimelineClip({ ...clip, start: 0 });
+      setTimelineInsertConflict(plan);
+      setNotice("This placement overlaps existing clips. Choose ripple shift or trim to continue.");
+      return;
+    }
+    try {
+      changeRootComposition(root => applyCanonicalCompositionInsertion(root, projectRef.current, plan));
+      setSelectedTimelineClipId(plan.clip.id);
+      setTimelineClipSettingsId(plan.clip.id);
+      playbackTimeRef.current = plan.start;
+      setEditorTime(plan.start);
+      setNotice("Added “" + asset.name + "” to " + track.name + ".");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not place this asset.");
+    }
+  }
+
   function beginTimelineClipPlacement(clip: TimelineClip) {
     setPendingTimelineClip({ ...clip, start: 0 });
     setTimelineInsertConflict(null);
@@ -2617,9 +2661,7 @@ export default function App() {
         const track = project.tracks.find(item => item.kind === (audio ? "audio" : "video"));
         return <button type="button" className="timeline-source-item" key={asset.id} onClick={() => {
           if (!track) { setNotice("Add a matching video or audio layer before placing this source."); return; }
-          setAssetPickerTrackId(track.id);
-          setAssetPickerSearch(asset.name);
-          setAssetPickerFilter("all");
+          placeProjectAssetDirectly(asset, track);
         }} title={"Choose " + asset.name + " for the timeline"}>
           <span className="timeline-source-thumb"><AssetThumbnail asset={asset} assets={project.assets}/></span>
           <span className="timeline-source-copy"><strong title={asset.name}>{asset.name}</strong><small>{asset.kind === "clip" ? "Clip asset" : asset.kind === "script" ? "Code" : asset.kind}{asset.duration ? " · "+time(asset.duration) : ""}</small></span>
