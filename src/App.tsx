@@ -778,6 +778,33 @@ export default function App() {
     }
   }
 
+  function addLinkedAudioForVideoPlacement(root: CompositionDocument, project: DionysusProject, video: TimelineClip): CompositionDocument {
+    const asset = project.assets.find(item => item.id === video.assetId && item.kind === "video");
+    if (!asset || video.kind !== "video") return root;
+
+    let next = root;
+    let audioTrack = next.tracks.find(item => item.kind === "audio");
+    if (!audioTrack) {
+      audioTrack = { id: id("track-audio"), name: "Linked Audio", kind: "audio", order: next.tracks.length };
+      next = addCompositionTrack(next, audioTrack);
+    }
+
+    const linkedAudio: TimelineClip = {
+      id: id("timeline-audio"),
+      name: asset.name + " audio",
+      kind: "audio",
+      trackId: audioTrack.id,
+      start: video.start,
+      duration: video.duration,
+      assetId: asset.id,
+      linkedVideoClipId: video.id,
+      sourceIn: video.sourceIn ?? 0,
+      sourceOut: video.sourceOut ?? ((video.sourceIn ?? 0) + video.duration)
+    };
+    const audioPlacement = createRootCompositionPlacementForTimelineClip(project, next, linkedAudio);
+    return insertCompositionPlacement(next, audioPlacement);
+  }
+
   function placeProjectAssetDirectly(asset: Asset, track: DionysusProject["tracks"][number], desiredStart = editorTime) {
     const isAudio = track.kind === "audio";
     if (track.kind !== "video" && !isAudio) {
@@ -816,31 +843,8 @@ export default function App() {
     }
     try {
       changeRootComposition(root => {
-        let next = applyCanonicalCompositionInsertion(root, projectRef.current, plan);
-        // Keep embedded video audio as a linked child on the Audio layer. The browser's
-        // metadata API does not reliably expose whether a container has an audio stream,
-        // so the linked child is created for imported video sources and can be muted/unlinked.
-        if (asset.kind === "video") {
-          const audioTrack = projectRef.current.tracks.find(item => item.kind === "audio");
-          if (audioTrack && next.tracks.some(item => item.id === audioTrack.id && item.kind === "audio")) {
-            const video = plan.clip;
-            const linkedAudio: TimelineClip = {
-              id: id("timeline-audio"),
-              name: asset.name + " audio",
-              kind: "audio",
-              trackId: audioTrack.id,
-              start: video.start,
-              duration: video.duration,
-              assetId: asset.id,
-              linkedVideoClipId: video.id,
-              sourceIn: video.sourceIn ?? 0,
-              sourceOut: (video.sourceIn ?? 0) + video.duration
-            };
-            const audioPlacement = createRootCompositionPlacementForTimelineClip(projectRef.current, next, linkedAudio);
-            next = insertCompositionPlacement(next, audioPlacement);
-          }
-        }
-        return next;
+        const next = applyCanonicalCompositionInsertion(root, projectRef.current, plan);
+        return addLinkedAudioForVideoPlacement(next, projectRef.current, plan.clip);
       });
       setSelectedTimelineClipId(plan.clip.id);
       setTimelineClipSettingsId(plan.clip.id);
@@ -890,7 +894,10 @@ export default function App() {
       return;
     }
     try {
-      changeRootComposition(root => applyCanonicalCompositionInsertion(root, projectRef.current, plan));
+      changeRootComposition(root => {
+        const next = applyCanonicalCompositionInsertion(root, projectRef.current, plan);
+        return addLinkedAudioForVideoPlacement(next, projectRef.current, plan.clip);
+      });
       setSelectedTimelineClipId(plan.clip.id);
       setTimelineClipSettingsId(plan.clip.id);
       setPendingTimelineClip(null);
@@ -904,7 +911,10 @@ export default function App() {
     const plan = timelineInsertConflict;
     if (!plan) return;
     try {
-      changeRootComposition(root => applyCanonicalCompositionInsertion(root, projectRef.current, plan, resolution));
+      changeRootComposition(root => {
+        const next = applyCanonicalCompositionInsertion(root, projectRef.current, plan, resolution);
+        return addLinkedAudioForVideoPlacement(next, projectRef.current, plan.clip);
+      });
       setSelectedTimelineClipId(plan.clip.id);
       setSelectedTimelineTrackId(plan.trackId);
       setTimelineClipSettingsId(plan.clip.id);
