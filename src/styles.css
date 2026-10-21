@@ -3478,3 +3478,10 @@
 .new-layer-drop-preview.after { outline: 2px solid var(--accent, #d5f36a); outline-offset: -2px; }
 .new-layer-drop-preview strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
 .new-layer-drop-preview small { font: 9px "DM Mono", monospace; opacity: .9; white-space: nowrap; }
+
+
+/* Linked audio rows are explicit drop targets for relinking source audio. */
+.linked-audio-drop-target { outline: 1px dashed transparent; outline-offset: -2px; }
+.linked-audio-drop-target:has(.visual-media-clip.selected) { outline-color: rgba(255,255,255,.08); }
+.linked-audio-drop-target .visual-media-clip[draggable="true"] { cursor: grab; }
+.linked-audio-drop-target .visual-media-clip[draggable="true"]:active { cursor: grabbing; }
