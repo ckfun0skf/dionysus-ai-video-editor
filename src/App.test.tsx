@@ -2645,15 +2645,16 @@ describe("mobile audio clip controls", () => {
         } as unknown as DataTransfer
       };
     };
-    const dragRowTo = async (row: HTMLElement, target: HTMLElement) => {
+    const dragRowTo = async (row: HTMLElement, target: HTMLElement, clientX = 0) => {
       const { transfer } = makeTransfer();
       const start = new Event("dragstart", { bubbles: true, cancelable: true });
       Object.defineProperty(start, "dataTransfer", { value: transfer });
       act(() => row.dispatchEvent(start));
-      const over = new Event("dragover", { bubbles: true, cancelable: true });
+      Object.defineProperty(target, "getBoundingClientRect", { configurable: true, value: () => ({ left: 0, top: 0, right: 1000, bottom: 70, width: 1000, height: 70, x: 0, y: 0, toJSON: () => ({}) }) });
+      const over = new MouseEvent("dragover", { bubbles: true, cancelable: true, clientX, clientY: 35 });
       Object.defineProperty(over, "dataTransfer", { value: transfer });
       act(() => target.dispatchEvent(over));
-      const drop = new Event("drop", { bubbles: true, cancelable: true });
+      const drop = new MouseEvent("drop", { bubbles: true, cancelable: true, clientX, clientY: 35 });
       Object.defineProperty(drop, "dataTransfer", { value: transfer });
       act(() => target.dispatchEvent(drop));
       await flushEffects();
@@ -2671,7 +2672,7 @@ describe("mobile audio clip controls", () => {
     const audioLane = audioTrack ? container.querySelector<HTMLElement>('.visual-track-lane[data-track-id="' + audioTrack.id + '"]') : null;
     expect(secondRow).toBeTruthy();
     expect(audioLane).toBeTruthy();
-    await dragRowTo(secondRow!, audioLane!);
+    await dragRowTo(secondRow!, audioLane!, 950);
     expect(audio()).not.toHaveProperty("linkedVideoClipId");
     expect(audio().trackId).toBe(audioTrack!.id);
   });
