@@ -791,7 +791,17 @@ export default function App() {
       ? next.tracks.find(item => item.id === projectAudioTrack.id && item.kind === "audio")
       : next.tracks.find(item => item.kind === "audio");
     if (!audioTrack && projectAudioTrack) {
-      audioTrack = { ...projectAudioTrack, order: next.tracks.length };
+      audioTrack = {
+        id: projectAudioTrack.id,
+        name: projectAudioTrack.name,
+        kind: "audio",
+        order: next.tracks.length,
+        muted: projectAudioTrack.muted,
+        backgroundColor: projectAudioTrack.backgroundColor,
+        backgroundTransparent: projectAudioTrack.backgroundTransparent,
+        opacity: projectAudioTrack.opacity,
+        originalKind: projectAudioTrack.originalKind
+      };
       next = addCompositionTrack(next, audioTrack);
     }
     if (!audioTrack) {
