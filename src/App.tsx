@@ -783,9 +783,19 @@ export default function App() {
     if (!asset || video.kind !== "video") return root;
 
     let next = root;
-    let audioTrack = next.tracks.find(item => item.kind === "audio");
+    // Reuse the canonical project Audio track ID. Creating a fresh track merely because
+    // the migrated composition is missing that track can leave a second, empty Audio lane
+    // beside the one already visible in the legacy project projection.
+    const projectAudioTrack = project.tracks.find(item => item.kind === "audio");
+    let audioTrack = projectAudioTrack
+      ? next.tracks.find(item => item.id === projectAudioTrack.id && item.kind === "audio")
+      : next.tracks.find(item => item.kind === "audio");
+    if (!audioTrack && projectAudioTrack) {
+      audioTrack = projectAudioTrack;
+      next = addCompositionTrack(next, audioTrack);
+    }
     if (!audioTrack) {
-      audioTrack = { id: id("track-audio"), name: "Linked Audio", kind: "audio", order: next.tracks.length };
+      audioTrack = { id: id("track-audio"), name: "Audio 1", kind: "audio", order: next.tracks.length };
       next = addCompositionTrack(next, audioTrack);
     }
 
