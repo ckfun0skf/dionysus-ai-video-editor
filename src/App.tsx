@@ -425,6 +425,8 @@ export default function App() {
   const [showAddContentMenu, setShowAddContentMenu] = useState(false);
   const [selectedTimelineTrackId, setSelectedTimelineTrackId] = useState<string>("");
   const [selectedCompositionLayerId, setSelectedCompositionLayerId] = useState<string>("");
+  const [editingPreviewTextClipId, setEditingPreviewTextClipId] = useState<string>("");
+  const [previewTextDraft, setPreviewTextDraft] = useState("");
   const [collapsedVideoTrackIds, setCollapsedVideoTrackIds] = useState<string[]>([]);
   const [rippleReorderMode, setRippleReorderMode] = useState(false);
   const [storyboardMode, setStoryboardMode] = useState<"flow" | "list">("flow");
@@ -620,6 +622,24 @@ export default function App() {
           className="editor-preview-canvas"
           aria-label={title + " at " + editorTimeLabel(editorTime)}
         />
+        {view === "timeline" && editingPreviewTextClipId && (() => {
+          const textClip = (project.timelineClips ?? []).find(item => item.id === editingPreviewTextClipId && item.kind === "text");
+          if (!textClip || editorTime < textClip.start || editorTime >= textClip.start + textClip.duration) return null;
+          const commitText = () => {
+            if (previewTextDraft !== textClip.name) updateRootTimelineClip(textClip.id, { name: previewTextDraft });
+            setEditingPreviewTextClipId("");
+          };
+          return <textarea
+            className="preview-canvas-text-editor"
+            aria-label="Edit text directly on preview canvas"
+            autoFocus
+            value={previewTextDraft}
+            style={{ left: (textClip.x ?? 0) + "%", top: (textClip.y ?? 75) + "%", width: (textClip.width ?? 100) + "%", height: (textClip.height ?? 18) + "%" }}
+            onChange={event => setPreviewTextDraft(event.target.value)}
+            onBlur={commitText}
+            onKeyDown={event => { if (event.key === "Escape") { setEditingPreviewTextClipId(""); setPreviewTextDraft(textClip.name); } else if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.blur(); } }}
+          />;
+        })()}
         {(tabKey === "master" ? collectCompositionLayers(project) : activeVersionTimelineTab?.id === tabKey ? activeVersionTimeline?.layers ?? [] : []).filter(layer => (layer.kind === "procedural" || layer.kind === "script") && editorTime >= layer.start && editorTime < layer.start + layer.duration && (layer.html !== undefined || layer.css !== undefined || layer.code !== undefined)).map(layer => <SandboxedCodePreview
           key={layer.id}
           title={layer.name}
@@ -630,7 +650,7 @@ export default function App() {
           referencedImageAssetIds={layer.referencedImageAssetIds}
           style={{left:(layer.x??0)+"%",top:(layer.y??0)+"%",width:(layer.width??100)+"%",height:(layer.height??100)+"%",zIndex:1}}
         />)}
-        {view === "timeline" && (()=>{const layer=activeVersionTimeline?.layers.find(item=>item.id===selectedCompositionLayerId);const clip=(project.timelineClips??[]).find(item=>item.id===selectedTimelineClipId&&item.kind!=="audio");const track=project.tracks.find(item=>item.id===selectedTimelineTrackId);const target=layer??clip??track;const kind:PreviewTransformKind=layer?"layer":clip?"clip":"track";if(!target||(!layer&&!clip&&!selectedTimelineTrackId))return null;const key=kind+":"+target.id;const tab=kind==="layer"?activeVersionTimelineTab:undefined;const fallbackTrack=clip?project.tracks.find(item=>item.id===clip.trackId):undefined;const x=target.x??fallbackTrack?.x??0;const y=target.y??fallbackTrack?.y??0;const width=target.width??fallbackTrack?.width??100;const height=target.height??fallbackTrack?.height??100;const geometry=previewTransformDraft?.key===key?previewTransformDraft:{key,x,y,width,height};return <div className="selected-layer-frame" role="group" aria-label={target.name+" preview transform"} style={{left:geometry.x+"%",top:geometry.y+"%",width:geometry.width+"%",height:geometry.height+"%",touchAction:"none"}} onPointerDown={event=>startPreviewTransform(event,{id:target.id,kind,x,y,width,height,key,tab})} onPointerMove={movePreviewTransform} onPointerUp={finishPreviewTransform} onPointerCancel={finishPreviewTransform}><span>{target.name}</span><i data-handle="nw" aria-label="Resize top left" className="layer-frame-handle top-left"/><i data-handle="ne" aria-label="Resize top right" className="layer-frame-handle top-right"/><i data-handle="sw" aria-label="Resize bottom left" className="layer-frame-handle bottom-left"/><i data-handle="se" aria-label="Resize bottom right" className="layer-frame-handle bottom-right"/></div>;})()}
+        {view === "timeline" && (()=>{const layer=activeVersionTimeline?.layers.find(item=>item.id===selectedCompositionLayerId);const clip=(project.timelineClips??[]).find(item=>item.id===selectedTimelineClipId&&item.kind!=="audio");const track=project.tracks.find(item=>item.id===selectedTimelineTrackId);const target=layer??clip??track;const kind:PreviewTransformKind=layer?"layer":clip?"clip":"track";if(!target||(!layer&&!clip&&!selectedTimelineTrackId))return null;const key=kind+":"+target.id;const tab=kind==="layer"?activeVersionTimelineTab:undefined;const fallbackTrack=clip?project.tracks.find(item=>item.id===clip.trackId):undefined;const x=target.x??fallbackTrack?.x??0;const y=target.y??fallbackTrack?.y??0;const width=target.width??fallbackTrack?.width??100;const height=target.height??fallbackTrack?.height??100;const geometry=previewTransformDraft?.key===key?previewTransformDraft:{key,x,y,width,height};return <div className="selected-layer-frame" role="group" aria-label={target.name+" preview transform"} style={{left:geometry.x+"%",top:geometry.y+"%",width:geometry.width+"%",height:geometry.height+"%",touchAction:"none"}} onPointerDown={event=>startPreviewTransform(event,{id:target.id,kind,x,y,width,height,key,tab})} onDoubleClick={()=>{if(kind==="clip"&&clip?.kind==="text"){setEditingPreviewTextClipId(clip.id);setPreviewTextDraft(clip.name);}}} onPointerMove={movePreviewTransform} onPointerUp={finishPreviewTransform} onPointerCancel={finishPreviewTransform}><span>{target.name}</span><i data-handle="nw" aria-label="Resize top left" className="layer-frame-handle top-left"/><i data-handle="ne" aria-label="Resize top right" className="layer-frame-handle top-right"/><i data-handle="sw" aria-label="Resize bottom left" className="layer-frame-handle bottom-left"/><i data-handle="se" aria-label="Resize bottom right" className="layer-frame-handle bottom-right"/></div>;})()}
         {showPreviewOverlay && <div className="integrated-preview-overlay">
           <span>PREVIEW OVERLAY</span><strong>{overlayTitle}</strong><small>{overlaySubtitle || "No shot description"}</small>
         </div>}
