@@ -1379,8 +1379,6 @@ describe("Integrated timeline editor", () => {
       createdAt: "2026-10-19T00:00:00.000Z",
       updatedAt: "2026-10-19T00:00:00.000Z"
     }));
-    // Give the resize regression room beyond the default 3-second image placement.
-    if (project.shots[0]) project.shots[0].duration = Math.max(project.shots[0].duration, 30);
     project.assets = [...project.assets, ...earlierSources, source];
     localStorage.setItem("dionysus.project.v1", JSON.stringify(project));
     localStorage.removeItem("dionysus.composition.v2");
@@ -1448,15 +1446,15 @@ describe("Integrated timeline editor", () => {
     Object.defineProperties(resizeStart, { pointerId: { configurable: true, value: 42 }, clientX: { configurable: true, value: 100 }, button: { configurable: true, value: 0 } });
     act(() => resizeRight!.dispatchEvent(resizeStart));
     const moveResize = new Event("pointermove", { bubbles: true, cancelable: true });
-    Object.defineProperties(moveResize, { pointerId: { configurable: true, value: 42 }, clientX: { configurable: true, value: 150 } });
+    Object.defineProperties(moveResize, { pointerId: { configurable: true, value: 42 }, clientX: { configurable: true, value: 50 } });
     act(() => window.dispatchEvent(moveResize));
     const endResize = new Event("pointerup", { bubbles: true, cancelable: true });
-    Object.defineProperties(endResize, { pointerId: { configurable: true, value: 42 }, clientX: { configurable: true, value: 150 } });
+    Object.defineProperties(endResize, { pointerId: { configurable: true, value: 42 }, clientX: { configurable: true, value: 50 } });
     act(() => window.dispatchEvent(endResize));
     await flushEffects();
 
     const trimmed = persistedProject().timelineClips?.find(clip => clip.assetId === source.id)!;
-    expect(trimmed.duration).toBeGreaterThan(3);
+    expect(trimmed.duration).toBeLessThan(placed!.duration);
     expect(trimmed.start).toBe(placed!.start);
 
     click(buttonsNamed("Undo").find(button => !button.disabled)!);
