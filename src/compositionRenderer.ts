@@ -31,7 +31,7 @@ export function collectCompositionLayers(project: DionysusProject): CompositionL
       ...(clip.modelVersion ? { modelVersion: clip.modelVersion } : {}),
       muted: Boolean(clip.muted || track?.muted),
       ...(clip.linkedVideoClipId ? { linkedVideoClipId: clip.linkedVideoClipId } : {}),
-      volume: clip.volume, fadeIn: clip.fadeIn, fadeOut: clip.fadeOut, shortSourceBehavior: clip.shortSourceBehavior
+      volume: clip.volume, fadeIn: clip.fadeIn, fadeOut: clip.fadeOut, shortSourceBehavior: clip.shortSourceBehavior, textColor: clip.textColor, fontSize: clip.fontSize, textAlign: clip.textAlign
     };
     if (clip.kind === "clip") {
       const asset = project.assets.find(item => item.id === clip.assetId && item.kind === "clip");
@@ -166,10 +166,11 @@ function drawLayer(ctx: CanvasRenderingContext2D, layer: CompositionLayer, asset
   } else if (layer.kind === "text" || layer.kind === "composition" || !asset?.path) {
     ctx.fillStyle = layer.backgroundColor ?? "rgba(8,12,20,.85)";
     ctx.fillRect(x, y, w, h);
-    ctx.fillStyle = "#fff";
-    ctx.font = `600 ${Math.max(16, Math.round(height * .04))}px system-ui`;
-    ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillText(layer.name, x + w / 2, y + h / 2, Math.max(0, w - 24));
+    ctx.fillStyle = layer.textColor ?? "#fff";
+    ctx.font = `600 ${Math.max(8, Math.round(layer.fontSize ?? height * .04))}px system-ui`;
+    ctx.textAlign = layer.textAlign ?? "center"; ctx.textBaseline = "middle";
+    const textX = layer.textAlign === "left" ? x + 12 : layer.textAlign === "right" ? x + w - 12 : x + w / 2;
+    ctx.fillText(layer.name, textX, y + h / 2, Math.max(0, w - 24));
   }
   if (layer.borderColor && (layer.borderWidth ?? 0) > 0) {
     ctx.strokeStyle = layer.borderColor; ctx.lineWidth = layer.borderWidth!;
