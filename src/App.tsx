@@ -532,7 +532,7 @@ export default function App() {
           : new Set<string>();
         const previewScale = Math.min(1280 / Math.max(1, previewCanvasWidth), 720 / Math.max(1, previewCanvasHeight));
         const previewDimensions = { width: Math.max(1, Math.round(previewCanvasWidth * previewScale)), height: Math.max(1, Math.round(previewCanvasHeight * previewScale)) };
-        await renderCompositionFrame(frame, project, layers, editorTime, { ...previewDimensions, interactivePreview: true }, previewImagesRef.current, previewVideosRef.current, releases, compositionPath);
+        await renderCompositionFrame(frame, project, layers, editorTime, { ...previewDimensions, interactivePreview: isPlaying }, previewImagesRef.current, previewVideosRef.current, releases, compositionPath);
         if (renderId !== previewRenderId.current) return;
         const context = canvas.getContext("2d");
         if (context) {
@@ -549,7 +549,7 @@ export default function App() {
     };
     void render();
     return () => { if (previewRenderId.current === renderId) previewRenderId.current += 1; };
-  }, [project, editorTime, previewImage, runtime, view, activeVersionTimeline, activeTimelineTabId]);
+  }, [project, editorTime, previewImage, runtime, view, activeVersionTimeline, activeTimelineTabId, isPlaying]);
   useEffect(() => () => {
     previewMediaReleasesRef.current.forEach(release => release());
     previewMediaReleasesRef.current.clear();
