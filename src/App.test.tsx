@@ -1362,7 +1362,15 @@ describe("Integrated timeline editor", () => {
   it("places a selected source, previews it, trims and moves it, and preserves edits across Undo/Redo and reopen", async () => {
     await openTimelineView();
 
+    const uploadVideoControl = Array.from(container.querySelectorAll<HTMLLabelElement>("label"))
+      .find(label => label.textContent?.includes("Upload video"));
+    expect(uploadVideoControl).toBeTruthy();
+    expect(uploadVideoControl?.closest('[role="dialog"]')).toBeNull();
+    expect(uploadVideoControl?.querySelector('input[type="file"][accept="video/*"]')).toBeTruthy();
+
     const project = persistedProject();
+    // Verify video placement creates an Audio layer when the project does not already have one.
+    project.tracks = project.tracks.filter(track => track.kind !== "audio");
     const source = {
       id: "integration-source-image",
       name: "Integration Source Frame",
@@ -1379,7 +1387,16 @@ describe("Integrated timeline editor", () => {
       createdAt: "2026-10-19T00:00:00.000Z",
       updatedAt: "2026-10-19T00:00:00.000Z"
     }));
-    project.assets = [...project.assets, ...earlierSources, source];
+    const videoSource = {
+      id: "integration-source-video",
+      name: "Integration Source Video",
+      kind: "video" as const,
+      path: "data:video/mp4;base64,",
+      duration: 8,
+      createdAt: "2026-10-20T00:00:00.000Z",
+      updatedAt: "2026-10-20T00:00:00.000Z"
+    };
+    project.assets = [...project.assets, ...earlierSources, source, videoSource];
     localStorage.setItem("dionysus.project.v1", JSON.stringify(project));
     localStorage.removeItem("dionysus.composition.v2");
     act(() => root.unmount());
@@ -1388,35 +1405,22 @@ describe("Integrated timeline editor", () => {
     await flushEffects();
     await openTimelineView();
 
+    // Select the overlay Video layer first; Project Media should place directly without a picker.
+    const targetTrackId = "track-video-2";
+    const targetLabel = container.querySelector<HTMLElement>(`.visual-track-label:has(+ .visual-track-lane[data-track-id="${targetTrackId}"])`);
+    const lane = container.querySelector<HTMLElement>(`.visual-track-lane[data-track-id="${targetTrackId}"]`);
+    expect(lane).toBeTruthy();
+    if (targetLabel) click(targetLabel);
     const sourceButton = Array.from(container.querySelectorAll<HTMLButtonElement>(".timeline-source-item"))
       .find(button => button.textContent?.includes(source.name));
     expect(sourceButton).toBeTruthy();
     click(sourceButton!);
-
-    const picker = container.querySelector('[role="dialog"][aria-labelledby="asset-picker-title"]');
-    expect(picker).toBeTruthy();
-    const assetCard = Array.from(picker!.querySelectorAll<HTMLButtonElement>(".asset-picker-card"))
-      .find(button => button.textContent?.includes(source.name));
-    expect(assetCard).toBeTruthy();
-    click(assetCard!);
-    expect(container.querySelector(".timeline-placement-banner")?.textContent).toContain(source.name);
-
-    // Use the overlay Video layer so the fixture's pre-existing Master Shots remain untouched.
-    const targetTrackId = "track-video-2";
-    const lane = container.querySelector<HTMLElement>(`.visual-track-lane[data-track-id="${targetTrackId}"]`);
-    expect(lane).toBeTruthy();
-    Object.defineProperty(lane!, "getBoundingClientRect", {
-      configurable: true,
-      value: () => ({ left: 0, top: 0, right: 1000, bottom: 64, width: 1000, height: 64, x: 0, y: 0, toJSON: () => ({}) })
-    });
-    const place = new MouseEvent("pointerdown", { bubbles: true, cancelable: true, clientX: 200 });
-    Object.defineProperties(place, { pointerId: { configurable: true, value: 41 }, button: { configurable: true, value: 0 } });
-    act(() => lane!.dispatchEvent(place));
     await flushEffects();
 
     let edited = persistedProject();
     let placed = edited.timelineClips?.find(clip => clip.assetId === source.id);
     expect(placed).toMatchObject({ assetId: source.id, trackId: targetTrackId, kind: "video", duration: 3 });
+    expect(container.querySelector('[role="dialog"][aria-labelledby="asset-picker-title"]')).toBeNull();
     expect(container.querySelector(".timeline-placement-banner")).toBeNull();
     expect(container.querySelector(".integrated-preview-panel")).toBeTruthy();
     expect(container.querySelector(".integrated-preview-frame canvas")).toBeTruthy();
@@ -1459,15 +1463,15 @@ describe("Integrated timeline editor", () => {
     Object.defineProperties(resizeStart, { pointerId: { configurable: true, value: 42 }, clientX: { configurable: true, value: 100 }, button: { configurable: true, value: 0 } });
     act(() => resizeRight!.dispatchEvent(resizeStart));
     const moveResize = new Event("pointermove", { bubbles: true, cancelable: true });
-    Object.defineProperties(moveResize, { pointerId: { configurable: true, value: 42 }, clientX: { configurable: true, value: 150 } });
+    Object.defineProperties(moveResize, { pointerId: { configurable: true, value: 42 }, clientX: { configurable: true, value: 50 } });
     act(() => window.dispatchEvent(moveResize));
     const endResize = new Event("pointerup", { bubbles: true, cancelable: true });
-    Object.defineProperties(endResize, { pointerId: { configurable: true, value: 42 }, clientX: { configurable: true, value: 150 } });
+    Object.defineProperties(endResize, { pointerId: { configurable: true, value: 42 }, clientX: { configurable: true, value: 50 } });
     act(() => window.dispatchEvent(endResize));
     await flushEffects();
 
     const trimmed = persistedProject().timelineClips?.find(clip => clip.assetId === source.id)!;
-    expect(trimmed.duration).toBeGreaterThan(3);
+    expect(trimmed.duration).toBeLessThan(placed!.duration);
     expect(trimmed.start).toBe(placed!.start);
 
     click(buttonsNamed("Undo").find(button => !button.disabled)!);
@@ -1482,6 +1486,45 @@ describe("Integrated timeline editor", () => {
       start: trimmed.start,
       duration: trimmed.duration
     });
+
+    // Placing a video asset also creates a linked audio child on the Audio layer.
+    const videoSourceButton = Array.from(container.querySelectorAll<HTMLButtonElement>(".timeline-source-item"))
+      .find(button => button.textContent?.includes(videoSource.name));
+    expect(videoSourceButton).toBeTruthy();
+    click(videoSourceButton!);
+    await flushEffects();
+    const withVideo = persistedProject();
+    const placedVideo = withVideo.timelineClips?.find(clip => clip.assetId === videoSource.id && clip.kind === "video");
+    expect(placedVideo).toMatchObject({ duration: videoSource.duration });
+    expect(withVideo.tracks.some(track => track.kind === "audio")).toBe(true);
+    expect(withVideo.timelineClips?.find(clip => clip.linkedVideoClipId === placedVideo!.id)).toMatchObject({
+      kind: "audio",
+      assetId: videoSource.id,
+      start: placedVideo!.start,
+      duration: placedVideo!.duration
+    });
+
+    // Dragging from Project Media onto the video lane uses the same placement path,
+    // including linked audio creation, without opening a placement dialog.
+    const mediaTransfer = new Map<string, string>();
+    const mediaDataTransfer = {
+      setData: (type: string, value: string) => mediaTransfer.set(type, value),
+      getData: (type: string) => mediaTransfer.get(type) ?? "",
+      effectAllowed: "copy",
+      dropEffect: "copy"
+    };
+    const mediaDragStart = new Event("dragstart", { bubbles: true, cancelable: true });
+    Object.defineProperty(mediaDragStart, "dataTransfer", { value: mediaDataTransfer });
+    act(() => videoSourceButton!.dispatchEvent(mediaDragStart));
+    const mediaDrop = new MouseEvent("drop", { bubbles: true, cancelable: true, clientX: 0 });
+    Object.defineProperty(mediaDrop, "dataTransfer", { value: mediaDataTransfer });
+    act(() => lane!.dispatchEvent(mediaDrop));
+    await flushEffects();
+    const afterDrop = persistedProject();
+    const droppedVideo = afterDrop.timelineClips?.filter(clip => clip.assetId === videoSource.id && clip.kind === "video");
+    expect(droppedVideo).toHaveLength(2);
+    expect(afterDrop.timelineClips?.filter(clip => clip.linkedVideoClipId && droppedVideo!.some(video => video.id === clip.linkedVideoClipId))).toHaveLength(2);
+    expect(container.querySelector('[role="dialog"][aria-labelledby="asset-picker-title"]')).toBeNull();
 
     const beforeReopen = persistedProject().timelineClips?.find(clip => clip.assetId === source.id);
     act(() => root.unmount());

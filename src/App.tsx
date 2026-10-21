@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AudioLines, Check, CheckCircle2, ChevronDown, CircleHelp, Clapperboard, Clock3, Code2, Download, FileJson, Film, FolderOpen, Layers3, Maximize2, Plus, Save, Settings2, ShieldCheck, MoreHorizontal, Sparkles, SquarePlay, Upload, WandSparkles, Undo2, Redo2 } from "lucide-react";
+import { AudioLines, Check, CheckCircle2, ChevronDown, CircleHelp, Clapperboard, Clock3, Code2, Download, FileJson, Film, FolderOpen, Grid2X2, Layers3, List, Maximize2, Plus, Save, Settings2, ShieldCheck, MoreHorizontal, Sparkles, SquarePlay, Upload, WandSparkles, Undo2, Redo2 } from "lucide-react";
 import { sampleProject } from "./sampleProject";
 import type { Asset, AssetKind, ClipVersion, CompositionLayer, DionysusProject, ReferenceProfile, ReferenceRole, Shot, TimelineClip } from "./types";
 import type { CompositionDocument } from "./compositionModel";
@@ -296,6 +296,10 @@ export default function App() {
   const [assetPickerSearch, setAssetPickerSearch] = useState("");
   const [assetPickerFilter, setAssetPickerFilter] = useState<"all" | "video" | "code" | "audio">("all");
   const [assetPickerSort, setAssetPickerSort] = useState<"created" | "modified" | "name">("name");
+  const [timelineMediaView, setTimelineMediaView] = useState<"list" | "grid">("list");
+  const [timelineMediaSearch, setTimelineMediaSearch] = useState("");
+  const [timelineMediaFilter, setTimelineMediaFilter] = useState<"all" | "video" | "image" | "audio" | "code" | "clip">("all");
+  const [timelineMediaSort, setTimelineMediaSort] = useState<"name" | "recent" | "duration">("recent");
   const [codeAssetDraft, setCodeAssetDraft] = useState({ name: "New code asset", html: "<main>Build something here</main>", css: "body { font-family: system-ui; display: grid; place-items: center; min-height: 100vh; }", js: "console.log(\"Ready to create\");" });
 
   const [showProfileForm, setShowProfileForm] = useState(false);
@@ -774,6 +778,84 @@ export default function App() {
     }
   }
 
+  function addLinkedAudioForVideoPlacement(root: CompositionDocument, project: DionysusProject, video: TimelineClip): CompositionDocument {
+    const asset = project.assets.find(item => item.id === video.assetId && item.kind === "video");
+    if (!asset || video.kind !== "video") return root;
+
+    let next = root;
+    let audioTrack = next.tracks.find(item => item.kind === "audio");
+    if (!audioTrack) {
+      audioTrack = { id: id("track-audio"), name: "Linked Audio", kind: "audio", order: next.tracks.length };
+      next = addCompositionTrack(next, audioTrack);
+    }
+
+    const linkedAudio: TimelineClip = {
+      id: id("timeline-audio"),
+      name: asset.name + " audio",
+      kind: "audio",
+      trackId: audioTrack.id,
+      start: video.start,
+      duration: video.duration,
+      assetId: asset.id,
+      linkedVideoClipId: video.id,
+      sourceIn: video.sourceIn ?? 0,
+      sourceOut: video.sourceOut ?? ((video.sourceIn ?? 0) + video.duration)
+    };
+    const audioPlacement = createRootCompositionPlacementForTimelineClip(project, next, linkedAudio);
+    return insertCompositionPlacement(next, audioPlacement);
+  }
+
+  function placeProjectAssetDirectly(asset: Asset, track: DionysusProject["tracks"][number], desiredStart = editorTime) {
+    const isAudio = track.kind === "audio";
+    if (track.kind !== "video" && !isAudio) {
+      setNotice("Choose a Video layer for visual assets or an Audio layer for audio.");
+      return;
+    }
+    if (isAudio && asset.kind !== "audio") {
+      setNotice("Only audio assets can be placed on an Audio layer.");
+      return;
+    }
+    if (!isAudio && asset.kind === "audio") {
+      setNotice("Audio assets must be placed on an Audio layer.");
+      return;
+    }
+    const kind: TimelineClip["kind"] = isAudio ? "audio" : asset.kind === "script" ? "procedural" : asset.kind === "clip" ? "clip" : "video";
+    const version = asset.kind === "clip" ? (asset.clipVersions?.find(item => item.id === asset.selectedClipVersionId) ?? asset.clipVersions?.[0]) : undefined;
+    const duration = version?.duration ?? ((asset.kind === "video" || asset.kind === "audio") ? asset.duration : undefined) ?? Math.max(.5, Math.min(3, mediaTimelineDuration - editorTime || 3));
+    const clip: TimelineClip = { id: id("timeline-clip"), name: asset.name, kind, trackId: track.id, start: 0, duration, assetId: asset.id, sourceIn: 0, ...(version ? { clipVersionId: version.id } : {}), ...(asset.html !== undefined ? { html: asset.html } : {}), ...(asset.css !== undefined ? { css: asset.css } : {}), ...(asset.js !== undefined ? { code: asset.js } : {}) };
+    let plan = calculateCanonicalCompositionInsertionPlan(rootCompositionRef.current, clip, track.id, desiredStart);
+    if (plan.status === "start-occupied") {
+      const trackClips = (projectRef.current.timelineClips ?? []).filter(item => item.trackId === track.id);
+      const appendAt = trackClips.reduce((end, item) => Math.max(end, item.start + item.duration), 0);
+      plan = calculateCanonicalCompositionInsertionPlan(rootCompositionRef.current, clip, track.id, appendAt);
+    }
+    if (plan.status === "invalid-track" || plan.status === "start-occupied") {
+      setNotice("Could not place this asset on the selected layer.");
+      return;
+    }
+    setSelectedTimelineTrackId(track.id);
+    setIsPlaying(false);
+    if (plan.status === "needs-resolution") {
+      setPendingTimelineClip({ ...clip, start: 0 });
+      setTimelineInsertConflict(plan);
+      setNotice("This placement overlaps existing clips. Choose ripple shift or trim to continue.");
+      return;
+    }
+    try {
+      changeRootComposition(root => {
+        const next = applyCanonicalCompositionInsertion(root, projectRef.current, plan);
+        return addLinkedAudioForVideoPlacement(next, projectRef.current, plan.clip);
+      });
+      setSelectedTimelineClipId(plan.clip.id);
+      setTimelineClipSettingsId(plan.clip.id);
+      playbackTimeRef.current = plan.start;
+      setEditorTime(plan.start);
+      setNotice("Added “" + asset.name + "” to " + track.name + ".");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not place this asset.");
+    }
+  }
+
   function beginTimelineClipPlacement(clip: TimelineClip) {
     setPendingTimelineClip({ ...clip, start: 0 });
     setTimelineInsertConflict(null);
@@ -812,7 +894,10 @@ export default function App() {
       return;
     }
     try {
-      changeRootComposition(root => applyCanonicalCompositionInsertion(root, projectRef.current, plan));
+      changeRootComposition(root => {
+        const next = applyCanonicalCompositionInsertion(root, projectRef.current, plan);
+        return addLinkedAudioForVideoPlacement(next, projectRef.current, plan.clip);
+      });
       setSelectedTimelineClipId(plan.clip.id);
       setTimelineClipSettingsId(plan.clip.id);
       setPendingTimelineClip(null);
@@ -826,7 +911,10 @@ export default function App() {
     const plan = timelineInsertConflict;
     if (!plan) return;
     try {
-      changeRootComposition(root => applyCanonicalCompositionInsertion(root, projectRef.current, plan, resolution));
+      changeRootComposition(root => {
+        const next = applyCanonicalCompositionInsertion(root, projectRef.current, plan, resolution);
+        return addLinkedAudioForVideoPlacement(next, projectRef.current, plan.clip);
+      });
       setSelectedTimelineClipId(plan.clip.id);
       setSelectedTimelineTrackId(plan.trackId);
       setTimelineClipSettingsId(plan.clip.id);
@@ -2325,6 +2413,26 @@ export default function App() {
     change(p => ({ ...p, assets: [...p.assets, asset] }));
     setNotice(t("notice.assetAdded", { name: cleanName }));
   }
+  function readMediaDuration(file: File, kind: "video" | "audio"): Promise<number | undefined> {
+    return new Promise(resolve => {
+      const media = document.createElement(kind);
+      const objectUrl = URL.createObjectURL(file);
+      let settled = false;
+      const finish = (duration?: number) => {
+        if (settled) return;
+        settled = true;
+        media.removeAttribute("src");
+        media.load();
+        URL.revokeObjectURL(objectUrl);
+        resolve(duration && Number.isFinite(duration) && duration > 0 ? duration : undefined);
+      };
+      media.preload = "metadata";
+      media.onloadedmetadata = () => finish(media.duration);
+      media.onerror = () => finish(undefined);
+      media.src = objectUrl;
+    });
+  }
+
   function importAssetFile(file?: File) {
     if (!file) return;
     const mime = file.type.toLowerCase();
@@ -2362,10 +2470,10 @@ export default function App() {
     if (kind === "video" || kind === "audio") {
       const assetId = id("asset");
       const thumbnail = kind === "video" ? createVideoThumbnail(file) : Promise.resolve(undefined);
-      void Promise.all([storeMediaAsset(assetId, file), thumbnail]).then(([path, thumbnailPath]) => {
-        const asset: Asset = { id: assetId, name: file.name, kind, notes: "Imported media stored locally in IndexedDB.", path, ...(thumbnailPath ? { thumbnailPath } : {}) };
+      void Promise.all([storeMediaAsset(assetId, file), thumbnail, readMediaDuration(file, kind)]).then(([path, thumbnailPath, duration]) => {
+        const asset: Asset = { id: assetId, name: file.name, kind, notes: "Imported media stored locally in IndexedDB.", path, ...(duration ? { duration } : {}), ...(thumbnailPath ? { thumbnailPath } : {}) };
         change(p => ({ ...p, assets: [...p.assets, asset] }));
-        setNotice(thumbnailPath ? file.name + " imported with a preview thumbnail." : file.name + " imported and ready for composition.");
+        setNotice(duration ? file.name + " imported (" + time(duration) + ")." : file.name + " imported; duration metadata is unavailable.");
       }).catch(error => {
         setNotice(error instanceof Error ? error.message : "Could not store the imported media file.");
       });
@@ -2386,21 +2494,37 @@ export default function App() {
     setShowAssetCreateMenu(false);
   }
   async function uploadAssetForTimeline(file?: File) {
-    const track = projectRef.current.tracks.find(item => item.id === assetPickerTrackId);
-    if (!file || !track || (track.kind !== "video" && track.kind !== "audio")) return;
+    if (!file) return;
+    const mime = file.type.toLowerCase();
+    const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+    const audioFile = mime.startsWith("audio/") || ["mp3", "wav", "m4a", "aac", "ogg", "flac"].includes(ext);
+    const videoFile = mime.startsWith("video/") || ["mp4", "mov", "webm", "m4v", "mkv"].includes(ext);
+    // Recognize the uploaded file first; the selected layer is only a fallback for unknown formats.
+    const kind: "video" | "audio" = audioFile ? "audio"
+      : videoFile ? "video"
+      : projectRef.current.tracks.find(item => item.id === assetPickerTrackId)?.kind === "audio" ? "audio" : "video";
     const assetId = id("asset");
-    const clipId = id("timeline-clip");
-    const kind: "video" | "audio" = track.kind === "audio" ? "audio" : "video";
     try {
-      const [path, thumbnailPath] = await Promise.all([storeMediaAsset(assetId, file), kind === "video" ? createVideoThumbnail(file) : Promise.resolve(undefined)]);
+      const [path, thumbnailPath, sourceDuration] = await Promise.all([
+        storeMediaAsset(assetId, file),
+        kind === "video" ? createVideoThumbnail(file) : Promise.resolve(undefined),
+        readMediaDuration(file, kind)
+      ]);
       const now = new Date().toISOString();
-      const asset: Asset = { id: assetId, name: file.name, kind, path, createdAt: now, updatedAt: now, notes: "Imported from Timeline; stored locally.", ...(thumbnailPath ? { thumbnailPath } : {}) };
-      const duration = Math.max(.5, Math.min(3, mediaTimelineDuration - editorTime || 3));
-      const clip: TimelineClip = { id: clipId, name: file.name.replace(/\\.[^.]+$/, ""), kind, trackId: track.id, start: Math.round(editorTime * Math.max(1, projectRef.current.frameRate || 24)) / Math.max(1, projectRef.current.frameRate || 24), duration, assetId, sourceIn: 0 };
-      const current = projectRef.current; const nextProject = { ...current, assets: [...current.assets, asset], timelineClips: [...(current.timelineClips ?? []), clip] }; const placement = createRootCompositionPlacementForTimelineClip(nextProject, rootCompositionRef.current, clip); const nextRoot = insertCompositionPlacement(rootCompositionRef.current, placement); change(() => nextProject, "", nextRoot);
-      setSelectedTimelineClipId(clipId); setSelectedTimelineTrackId(track.id); setTimelineClipSettingsId(clipId); setAssetPickerTrackId("");
-      setNotice(file.name + " imported to Assets and added to the Timeline.");
-    } catch (error) { setNotice(error instanceof Error ? error.message : "Could not import this media file."); }
+      const asset: Asset = {
+        id: assetId, name: file.name, kind, path, createdAt: now, updatedAt: now,
+        notes: "Imported from Timeline; stored locally.",
+        ...(sourceDuration ? { duration: sourceDuration } : {}),
+        ...(thumbnailPath ? { thumbnailPath } : {})
+      };
+      change(project => ({ ...project, assets: [...project.assets, asset] }));
+      setAssetPickerTrackId("");
+      setNotice(sourceDuration
+        ? file.name + " added to Project Media (" + time(sourceDuration) + "). Drag it to the Timeline when ready."
+        : file.name + " added to Project Media. Duration metadata is unavailable; drag it to the Timeline when ready.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not import this media file.");
+    }
   }
   function removeAsset(assetId: string) {
     const usedByProfile = project.referenceProfiles.some(profile => profile.references.some(ref => ref.assetId === assetId));
@@ -2585,25 +2709,25 @@ export default function App() {
 </div>
 <div className="timeline-tab-content master-timeline-content" style={{display:activeTimelineTabId === "master" ? "block" : "none"}}><div className="timeline-top-workspace">
   <section className="timeline-source-browser" aria-label="Timeline source browser">
-    <div className="timeline-source-heading"><div><span className="timeline-source-kicker">PROJECT MEDIA</span><strong>Sources</strong><small>{project.assets.length} assets available</small></div><button className="button button-quiet button-small" onClick={() => setView("assets")}>Manage</button></div>
-    <div className="timeline-source-list">
-      {project.assets.filter(asset => ["video","image","audio","clip","script"].includes(asset.kind)).map(asset => {
+    <div className="timeline-source-heading"><div><span className="timeline-source-kicker">PROJECT MEDIA</span><strong>Sources</strong><small>{project.assets.filter(asset => ["video","image","audio","clip","script"].includes(asset.kind)).length} assets available</small></div><div className="timeline-source-heading-actions"><button type="button" className={"media-view-toggle"+(timelineMediaView==="grid"?" active":"")} aria-label="Grid view" title="Grid view" aria-pressed={timelineMediaView==="grid"} onClick={()=>setTimelineMediaView("grid")}><Grid2X2 size={15}/></button><button type="button" className={"media-view-toggle"+(timelineMediaView==="list"?" active":"")} aria-label="List view" title="List view" aria-pressed={timelineMediaView==="list"} onClick={()=>setTimelineMediaView("list")}><List size={15}/></button><button className="button button-quiet button-small" onClick={() => setView("assets")}>Manage</button></div></div>
+    <div className="timeline-source-controls"><input aria-label="Search Project Media" placeholder="Search media…" value={timelineMediaSearch} onChange={event=>setTimelineMediaSearch(event.target.value)}/><select aria-label="Filter media type" value={timelineMediaFilter} onChange={event=>setTimelineMediaFilter(event.target.value as typeof timelineMediaFilter)}><option value="all">All types</option><option value="video">Video</option><option value="image">Image</option><option value="audio">Audio</option><option value="clip">Clip</option><option value="code">Code</option></select><select aria-label="Sort Project Media" value={timelineMediaSort} onChange={event=>setTimelineMediaSort(event.target.value as typeof timelineMediaSort)}><option value="recent">Recently added</option><option value="name">Name</option><option value="duration">Duration</option></select></div>
+    <div className={"timeline-source-list "+(timelineMediaView==="grid"?"grid-view":"list-view")}>
+      {project.assets.filter(asset => ["video","image","audio","clip","script"].includes(asset.kind)).filter(asset => asset.name.toLowerCase().includes(timelineMediaSearch.toLowerCase())&&(timelineMediaFilter==="all"||(timelineMediaFilter==="code"?asset.kind==="script":asset.kind===timelineMediaFilter))).sort((a,b)=>timelineMediaSort==="name"?a.name.localeCompare(b.name):timelineMediaSort==="duration"?(b.duration??0)-(a.duration??0):(b.createdAt??"").localeCompare(a.createdAt??"")).map(asset => {
         const audio = asset.kind === "audio";
-        const track = project.tracks.find(item => item.kind === (audio ? "audio" : "video"));
-        return <button type="button" className="timeline-source-item" key={asset.id} onClick={() => {
+        const compatibleKind = audio ? "audio" : "video";
+        const track = project.tracks.find(item => item.id === selectedTimelineTrackId && item.kind === compatibleKind) ?? project.tracks.find(item => item.kind === compatibleKind);
+        return <button type="button" draggable className="timeline-source-item" key={asset.id} onDragStart={event=>{event.dataTransfer.setData("text/dionysus-project-asset",asset.id);event.dataTransfer.effectAllowed="copy";}} onClick={() => {
           if (!track) { setNotice("Add a matching video or audio layer before placing this source."); return; }
-          setAssetPickerTrackId(track.id);
-          setAssetPickerSearch(asset.name);
-          setAssetPickerFilter("all");
-        }} title={"Choose " + asset.name + " for the timeline"}>
+          placeProjectAssetDirectly(asset, track);
+        }} title={"Click to add or drag " + asset.name + " to the timeline"}>
           <span className="timeline-source-thumb"><AssetThumbnail asset={asset} assets={project.assets}/></span>
-          <span className="timeline-source-copy"><strong>{asset.name}</strong><small>{asset.kind === "clip" ? "Clip asset" : asset.kind === "script" ? "Code" : asset.kind}</small></span>
+          <span className="timeline-source-copy"><strong title={asset.name}>{asset.name}</strong><small>{asset.kind === "clip" ? "Clip asset" : asset.kind === "script" ? "Code" : asset.kind}{asset.duration ? " · "+time(asset.duration) : ""}</small></span>
           <Plus size={14}/>
         </button>;
       })}
-      {project.assets.length === 0 && <div className="timeline-source-empty"><Film size={20}/><strong>No sources yet</strong><span>Import video, images or audio to start editing.</span><button className="button button-primary button-small" onClick={() => setView("assets")}>Open Assets</button></div>}
+      {project.assets.filter(asset => ["video","image","audio","clip","script"].includes(asset.kind)).filter(asset => asset.name.toLowerCase().includes(timelineMediaSearch.toLowerCase())&&(timelineMediaFilter==="all"||asset.kind===timelineMediaFilter)).length === 0 && <div className="timeline-source-empty"><Film size={20}/><strong>No sources yet</strong><span>Import video, images or audio to start editing.</span><button className="button button-primary button-small" onClick={() => setView("assets")}>Open Assets</button></div>}
     </div>
-    <div className="timeline-source-footer"><button className="button button-quiet button-small" onClick={() => { const track = project.tracks.find(item => item.kind === "video"); if (track) setAssetPickerTrackId(track.id); else setNotice("Add a video layer before importing a source."); }}><Plus size={13}/> Add video / image</button><button className="button button-quiet button-small" onClick={() => { const track = project.tracks.find(item => item.kind === "audio"); if (track) setAssetPickerTrackId(track.id); else setNotice("Add an audio layer before importing audio."); }}><AudioLines size={13}/> Add audio</button></div>
+    <div className="timeline-source-footer"><label className="button button-quiet button-small"><Upload size={13}/> Upload video<input type="file" accept="video/*" hidden onChange={event=>{void uploadAssetForTimeline(event.target.files?.[0]);event.currentTarget.value="";}}/></label><button className="button button-quiet button-small" onClick={() => { const track = project.tracks.find(item => item.kind === "audio"); if (track) setAssetPickerTrackId(track.id); else setNotice("Add an audio layer before importing audio."); }}><AudioLines size={13}/> Add audio</button></div>
   </section>
   <div className="timeline-preview-area">{renderTimelinePreview("master", "Master preview", activeShotInfo.shot?.title ?? project.name, runtime, activeShotInfo.shot?.title ?? project.name, activeShotInfo.shot?.intent ?? "", true)}</div>
 </div><div className="section-toolbar timeline-master-actions"><span className="timeline-summary">{project.shots.length} shots · {(project.timelineClips ?? []).length} clips</span><div className="inline-actions"><button className="button button-quiet button-small" onClick={saveMasterTimelineAsClipAsset}><Save size={14}/> Save as Clip Asset</button><button className="button button-primary button-small" disabled={!selected} onClick={() => selected && addSlot(selected.id)}><Plus size={15}/> {t("action.addClipSlot")}</button></div></div><div className="timeline-ruler" role="slider" aria-label="Master timeline playhead" aria-valuemin={0} aria-valuemax={runtime} aria-valuenow={editorTime} tabIndex={0}
@@ -2691,9 +2815,11 @@ export default function App() {
   </div>
   <div className="visual-track-lane" data-track-id={track.id} style={{backgroundSize:(5/mediaTimelineDuration*100)+"% 100%",backgroundColor:track.kind==="video"?(track.backgroundTransparent?"transparent":track.backgroundColor??"#111113"):undefined,backgroundImage:track.kind==="video"&&track.backgroundTransparent?"none":undefined}}
    onContextMenu={event=>{event.preventDefault();setTrackContextMenuId(track.id);setTrackContextMenuPosition({x:Math.min(event.clientX,window.innerWidth-190),y:Math.min(event.clientY,window.innerHeight-180)});setSelectedTimelineTrackId(track.id);}} onPointerDown={event=>{if(event.target!==event.currentTarget)return;setSelectedTimelineTrackId(track.id);const rect=event.currentTarget.getBoundingClientRect();const next=Math.max(0,Math.min(mediaTimelineDuration,((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration));if(pendingTimelineClip){placePendingTimelineClip(track,next);return;}playbackTimeRef.current=next;setIsPlaying(false);setEditorTime(next);}}
-   onDragOver={event=>{event.preventDefault();event.dataTransfer.dropEffect="move";const masterShotId=event.dataTransfer.getData("text/dionysus-master-shot") || masterShotDragSourceRef.current;if(masterShotId){const shot=project.shots.find(item=>item.id===masterShotId);if(!shot||track.kind!=="video"){setClipDropPreview(null);return;}const moving=getCanonicalMasterShotTimelineClip(shot),rect=event.currentTarget.getBoundingClientRect(),pointerTime=((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration,rawStart=Math.max(0,pointerTime-moving.duration/2),pos=calculateRootTimelineDropPosition(moving,track.id,rawStart,mediaTimelineDuration);if(!pos){setClipDropPreview(null);return;}setClipDropPreview({trackId:track.id,start:pos.start,duration:moving.duration,name:moving.name,...(pos.snapTime!==undefined?{snapTime:pos.snapTime}:{})});return;}const dragId=event.dataTransfer.getData("text/dionysus-timeline-clip");const candidate=clipDragSourceRef.current??(project.timelineClips??[]).find(clip=>clip.id===dragId),moving=candidate?getCanonicalTimelineClipForDrop(candidate):undefined;if(!moving||!canPlaceTimelineClipOnTrack(moving,track)){setClipDropPreview(null);return;}const rect=event.currentTarget.getBoundingClientRect();const pointerTime=((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration;const rawStart=Math.max(0,pointerTime-moving.duration/2);const pos=calculateRootTimelineDropPosition(moving,track.id,rawStart,mediaTimelineDuration);if(!pos){setClipDropPreview(null);return;}setClipDropPreview({trackId:track.id,start:pos.start,duration:moving.duration,name:moving.name,...(pos.snapTime!==undefined?{snapTime:pos.snapTime}: {})});}}
+   onDragOver={event=>{event.preventDefault();const assetId=event.dataTransfer.getData("text/dionysus-project-asset");if(assetId){const asset=project.assets.find(item=>item.id===assetId);const compatible=Boolean(asset)&&((track.kind==="audio"&&asset!.kind==="audio")||(track.kind==="video"&&asset!.kind!=="audio"&&asset!.kind!=="script"?true:track.kind==="video"&&(asset!.kind==="script"||asset!.kind==="clip")));if(!compatible){event.dataTransfer.dropEffect="none";setClipDropPreview(null);return;}event.dataTransfer.dropEffect="copy";const rect=event.currentTarget.getBoundingClientRect();const pointerTime=((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration;const assetDuration=asset!.duration??3;const start=Math.max(0,Math.min(mediaTimelineDuration-assetDuration,pointerTime));setClipDropPreview({trackId:track.id,start,duration:assetDuration,name:asset!.name});return;}event.dataTransfer.dropEffect="move";const masterShotId=event.dataTransfer.getData("text/dionysus-master-shot") || masterShotDragSourceRef.current;if(masterShotId){const shot=project.shots.find(item=>item.id===masterShotId);if(!shot||track.kind!=="video"){setClipDropPreview(null);return;}const moving=getCanonicalMasterShotTimelineClip(shot),rect=event.currentTarget.getBoundingClientRect(),pointerTime=((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration,rawStart=Math.max(0,pointerTime-moving.duration/2),pos=calculateRootTimelineDropPosition(moving,track.id,rawStart,mediaTimelineDuration);if(!pos){setClipDropPreview(null);return;}setClipDropPreview({trackId:track.id,start:pos.start,duration:moving.duration,name:moving.name,...(pos.snapTime!==undefined?{snapTime:pos.snapTime}:{})});return;}const dragId=event.dataTransfer.getData("text/dionysus-timeline-clip");const candidate=clipDragSourceRef.current??(project.timelineClips??[]).find(clip=>clip.id===dragId),moving=candidate?getCanonicalTimelineClipForDrop(candidate):undefined;if(!moving||!canPlaceTimelineClipOnTrack(moving,track)){setClipDropPreview(null);return;}const rect=event.currentTarget.getBoundingClientRect();const pointerTime=((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration;const rawStart=Math.max(0,pointerTime-moving.duration/2);const pos=calculateRootTimelineDropPosition(moving,track.id,rawStart,mediaTimelineDuration);if(!pos){setClipDropPreview(null);return;}setClipDropPreview({trackId:track.id,start:pos.start,duration:moving.duration,name:moving.name,...(pos.snapTime!==undefined?{snapTime:pos.snapTime}: {})});}}
    onDrop={event=>{
      event.preventDefault();
+     const assetId=event.dataTransfer.getData("text/dionysus-project-asset");
+     if(assetId){const asset=project.assets.find(item=>item.id===assetId);const rect=event.currentTarget.getBoundingClientRect();const dropTime=Math.max(0,Math.min(mediaTimelineDuration,((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration));setClipDropPreview(null);if(asset){const compatible=(track.kind==="audio"&&asset.kind==="audio")||(track.kind==="video"&&asset.kind!=="audio");if(!compatible){setNotice(track.kind==="audio"?"Only audio assets can be dropped on an Audio layer.":"Audio assets must be dropped on an Audio layer.");return;}placeProjectAssetDirectly(asset,track,dropTime);}return;}
      const rect=event.currentTarget.getBoundingClientRect();
      const masterShotId=event.dataTransfer.getData("text/dionysus-master-shot") || masterShotDragSourceRef.current;
       if(masterShotId){
@@ -3094,7 +3220,7 @@ export default function App() {
         <footer><button className="button button-quiet button-small" onClick={()=>setTimelineInsertConflict(null)}>Choose another spot</button><button className="button button-quiet button-small" onClick={cancelTimelineClipPlacement}>Cancel adding clip</button></footer>
       </section>
     </div>}
-    {assetPickerTrackId && project.tracks.find(track=>track.id===assetPickerTrackId) && (()=>{const track=project.tracks.find(item=>item.id===assetPickerTrackId)!;const isAudio=track.kind==="audio";const available=project.assets.filter(asset=>isAudio?asset.kind==="audio":asset.kind==="video"||asset.kind==="image"||asset.kind==="script"||asset.kind==="clip").filter(asset=>{const match=(asset.name+" "+(asset.notes??"")).toLowerCase().includes(assetPickerSearch.toLowerCase());const typeMatch=assetPickerFilter==="all"||(assetPickerFilter==="video"?(asset.kind==="video"||asset.kind==="image"||asset.kind==="clip"):assetPickerFilter==="code"?asset.kind==="script":asset.kind==="audio");return match&&typeMatch;}).sort((a,b)=>assetPickerSort==="name"?a.name.localeCompare(b.name):assetPickerSort==="created"?(b.createdAt??"").localeCompare(a.createdAt??""): (b.updatedAt??b.createdAt??"").localeCompare(a.updatedAt??a.createdAt??""));const choose=(asset:Asset)=>{const kind:TimelineClip["kind"]=isAudio?"audio":asset.kind==="script"?"procedural":asset.kind==="clip"?"clip":"video";const clipId=id("timeline-clip");const clipVersion=asset.kind==="clip"?(asset.clipVersions?.find(version=>version.id===asset.selectedClipVersionId)??asset.clipVersions?.[0]):undefined;const duration=clipVersion?.duration??Math.max(.5,Math.min(3,mediaTimelineDuration-editorTime||3));const clip:TimelineClip={id:clipId,name:asset.name,kind,trackId:track.id,start:0,duration,assetId:asset.id,sourceIn:0,...(clipVersion?{clipVersionId:clipVersion.id}:{}),...(asset.html!==undefined?{html:asset.html}:{}),...(asset.css!==undefined?{css:asset.css}:{}),...(asset.js!==undefined?{code:asset.js}:{})};setAssetPickerTrackId("");beginTimelineClipPlacement(clip);};return <div className="settings-dialog-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setAssetPickerTrackId("");}}><section className="settings-dialog asset-picker-dialog" role="dialog" aria-modal="true" aria-labelledby="asset-picker-title"><header><div><span className="inspector-kicker">TIMELINE</span><h2 id="asset-picker-title">Add {isAudio?"audio":"clip"} from Assets</h2><p className="settings-dialog-description">Choose a reusable asset. New uploads are saved to the library too.</p></div><button className="button button-quiet button-small" onClick={()=>setAssetPickerTrackId("")}>Close</button></header><div className="asset-picker-controls"><input className="text-field" aria-label="Search assets" placeholder="Search assets…" value={assetPickerSearch} onChange={event=>setAssetPickerSearch(event.target.value)}/><select className="text-field" aria-label="Sort assets" value={assetPickerSort} onChange={event=>setAssetPickerSort(event.target.value as "created"|"modified"|"name")}><option value="created">Date created</option><option value="modified">Last modified</option><option value="name">Name</option></select></div>{!isAudio&&<div className="asset-picker-filters"><button className={assetPickerFilter==="all"?"active":""} onClick={()=>setAssetPickerFilter("all")}>All assets</button><button className={assetPickerFilter==="video"?"active":""} onClick={()=>setAssetPickerFilter("video")}>Video / image</button><button className={assetPickerFilter==="code"?"active":""} onClick={()=>setAssetPickerFilter("code")}>Code</button></div>}<div className="asset-picker-grid">{available.map(asset=>{return <button type="button" className="asset-picker-card" key={asset.id} onClick={()=>choose(asset)}><AssetThumbnail asset={asset} assets={project.assets}/><strong>{asset.name}</strong><small>{asset.kind==="script"?"Code asset":asset.kind==="clip"?"Clip asset":asset.kind==="audio"?"Audio":asset.kind==="image"?"Image":"Video"}{asset.createdAt?" · "+new Date(asset.createdAt).toLocaleDateString():""}</small></button>;})}{available.length===0&&<div className="asset-picker-empty">No matching assets. Upload media or create a code asset.</div>}</div><footer className="asset-picker-footer"><label className="button button-quiet button-small"><Upload size={14}/> Upload {isAudio?"audio":"video"}<input type="file" accept={isAudio?"audio/*":"video/*,image/*"} hidden onChange={event=>{void uploadAssetForTimeline(event.target.files?.[0]);event.currentTarget.value="";}}/></label>{!isAudio&&<><button className="button button-quiet button-small" onClick={()=>setClipAssetEditorOpen(true)}><Plus size={14}/> Create clip</button><button className="button button-primary button-small" onClick={()=>{setCodeAssetDraft({name:"New code asset",html:"<main>Build something here</main>",css:"body { font-family: system-ui; display: grid; place-items: center; min-height: 100vh; }",js:"// Start coding here"});setCodeAssetEditorOpen(true);}}><Plus size={14}/> Create code</button></>}</footer></section></div>;})()}
+    {assetPickerTrackId && project.tracks.find(track=>track.id===assetPickerTrackId) && (()=>{const track=project.tracks.find(item=>item.id===assetPickerTrackId)!;const isAudio=track.kind==="audio";const available=project.assets.filter(asset=>isAudio?asset.kind==="audio":asset.kind==="video"||asset.kind==="image"||asset.kind==="script"||asset.kind==="clip").filter(asset=>{const match=(asset.name+" "+(asset.notes??"")).toLowerCase().includes(assetPickerSearch.toLowerCase());const typeMatch=assetPickerFilter==="all"||(assetPickerFilter==="video"?(asset.kind==="video"||asset.kind==="image"||asset.kind==="clip"):assetPickerFilter==="code"?asset.kind==="script":asset.kind==="audio");return match&&typeMatch;}).sort((a,b)=>assetPickerSort==="name"?a.name.localeCompare(b.name):assetPickerSort==="created"?(b.createdAt??"").localeCompare(a.createdAt??""): (b.updatedAt??b.createdAt??"").localeCompare(a.updatedAt??a.createdAt??""));const choose=(asset:Asset)=>{const kind:TimelineClip["kind"]=isAudio?"audio":asset.kind==="script"?"procedural":asset.kind==="clip"?"clip":"video";const clipId=id("timeline-clip");const clipVersion=asset.kind==="clip"?(asset.clipVersions?.find(version=>version.id===asset.selectedClipVersionId)??asset.clipVersions?.[0]):undefined;const duration=clipVersion?.duration??((asset.kind==="video"||asset.kind==="audio")?asset.duration:undefined)??Math.max(.5,Math.min(3,mediaTimelineDuration-editorTime||3));const clip:TimelineClip={id:clipId,name:asset.name,kind,trackId:track.id,start:0,duration,assetId:asset.id,sourceIn:0,...(clipVersion?{clipVersionId:clipVersion.id}:{}),...(asset.html!==undefined?{html:asset.html}:{}),...(asset.css!==undefined?{css:asset.css}:{}),...(asset.js!==undefined?{code:asset.js}:{})};setAssetPickerTrackId("");beginTimelineClipPlacement(clip);};return <div className="settings-dialog-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setAssetPickerTrackId("");}}><section className="settings-dialog asset-picker-dialog" role="dialog" aria-modal="true" aria-labelledby="asset-picker-title"><header><div><span className="inspector-kicker">TIMELINE</span><h2 id="asset-picker-title">Add {isAudio?"audio":"clip"} from Assets</h2><p className="settings-dialog-description">Choose a reusable asset. New uploads are saved to the library too.</p></div><button className="button button-quiet button-small" onClick={()=>setAssetPickerTrackId("")}>Close</button></header><div className="asset-picker-controls"><input className="text-field" aria-label="Search assets" placeholder="Search assets…" value={assetPickerSearch} onChange={event=>setAssetPickerSearch(event.target.value)}/><select className="text-field" aria-label="Sort assets" value={assetPickerSort} onChange={event=>setAssetPickerSort(event.target.value as "created"|"modified"|"name")}><option value="created">Date created</option><option value="modified">Last modified</option><option value="name">Name</option></select></div>{!isAudio&&<div className="asset-picker-filters"><button className={assetPickerFilter==="all"?"active":""} onClick={()=>setAssetPickerFilter("all")}>All assets</button><button className={assetPickerFilter==="video"?"active":""} onClick={()=>setAssetPickerFilter("video")}>Video / image</button><button className={assetPickerFilter==="code"?"active":""} onClick={()=>setAssetPickerFilter("code")}>Code</button></div>}<div className="asset-picker-grid">{available.map(asset=>{return <button type="button" className="asset-picker-card" key={asset.id} onClick={()=>choose(asset)}><AssetThumbnail asset={asset} assets={project.assets}/><strong>{asset.name}</strong><small>{asset.kind==="script"?"Code asset":asset.kind==="clip"?"Clip asset":asset.kind==="audio"?"Audio":asset.kind==="image"?"Image":"Video"}{asset.createdAt?" · "+new Date(asset.createdAt).toLocaleDateString():""}</small></button>;})}{available.length===0&&<div className="asset-picker-empty">No matching assets. Upload media or create a code asset.</div>}</div><footer className="asset-picker-footer"><label className="button button-quiet button-small"><Upload size={14}/> Upload {isAudio?"audio":"video"}<input type="file" accept={isAudio?"audio/*":"video/*,image/*"} hidden onChange={event=>{void uploadAssetForTimeline(event.target.files?.[0]);event.currentTarget.value="";}}/></label>{!isAudio&&<><button className="button button-quiet button-small" onClick={()=>setClipAssetEditorOpen(true)}><Plus size={14}/> Create clip</button><button className="button button-primary button-small" onClick={()=>{setCodeAssetDraft({name:"New code asset",html:"<main>Build something here</main>",css:"body { font-family: system-ui; display: grid; place-items: center; min-height: 100vh; }",js:"// Start coding here"});setCodeAssetEditorOpen(true);}}><Plus size={14}/> Create code</button></>}</footer></section></div>;})()}
     {clipAssetEditorOpen && <ClipAssetEditor onClose={() => setClipAssetEditorOpen(false)} onSave={({name,canvasWidth,canvasHeight,duration}) => { const now = new Date().toISOString(); const version = { id: id("clip-version"), name: "Version A", description: "", duration, layers: [] as CompositionLayer[], scriptVersionIds: [] as string[], generationRecords: [] as ClipVersion["generationRecords"] }; const asset: Asset = { id: id("asset"), name, kind: "clip", canvasWidth, canvasHeight, notes: "Empty reusable Clip; edit its composition in the Timeline Editor.", createdAt: now, updatedAt: now, selectedClipVersionId: version.id, clipVersions: [version] }; change(p => ({ ...p, assets: [...p.assets, asset] })); setClipAssetEditorOpen(false); setNotice("Empty Clip asset saved to Assets. Add content from its Timeline Editor."); }} />}
     {projectSettingsOpen && <div className="settings-dialog-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setProjectSettingsOpen(false);}}>
       <section className="settings-dialog project-settings-dialog" role="dialog" aria-modal="true" aria-labelledby="project-settings-title">
