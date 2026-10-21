@@ -778,7 +778,7 @@ export default function App() {
     }
   }
 
-  function placeProjectAssetDirectly(asset: Asset, track: DionysusProject["tracks"][number]) {
+  function placeProjectAssetDirectly(asset: Asset, track: DionysusProject["tracks"][number], desiredStart = editorTime) {
     const isAudio = track.kind === "audio";
     if (!isAudio && track.kind !== "video") {
       setNotice("Choose a Video layer for visual assets or an Audio layer for audio.");
@@ -792,7 +792,7 @@ export default function App() {
     const version = asset.kind === "clip" ? (asset.clipVersions?.find(item => item.id === asset.selectedClipVersionId) ?? asset.clipVersions?.[0]) : undefined;
     const duration = version?.duration ?? ((asset.kind === "video" || asset.kind === "audio") ? asset.duration : undefined) ?? Math.max(.5, Math.min(3, mediaTimelineDuration - editorTime || 3));
     const clip: TimelineClip = { id: id("timeline-clip"), name: asset.name, kind, trackId: track.id, start: 0, duration, assetId: asset.id, sourceIn: 0, ...(version ? { clipVersionId: version.id } : {}), ...(asset.html !== undefined ? { html: asset.html } : {}), ...(asset.css !== undefined ? { css: asset.css } : {}), ...(asset.js !== undefined ? { code: asset.js } : {}) };
-    let plan = calculateCanonicalCompositionInsertionPlan(rootCompositionRef.current, clip, track.id, editorTime);
+    let plan = calculateCanonicalCompositionInsertionPlan(rootCompositionRef.current, clip, track.id, desiredStart);
     if (plan.status === "start-occupied") {
       const trackClips = (projectRef.current.timelineClips ?? []).filter(item => item.trackId === track.id);
       const appendAt = trackClips.reduce((end, item) => Math.max(end, item.start + item.duration), 0);
@@ -2659,10 +2659,10 @@ export default function App() {
       {project.assets.filter(asset => ["video","image","audio","clip","script"].includes(asset.kind)).filter(asset => asset.name.toLowerCase().includes(timelineMediaSearch.toLowerCase())&&(timelineMediaFilter==="all"||asset.kind===timelineMediaFilter)).sort((a,b)=>timelineMediaSort==="name"?a.name.localeCompare(b.name):timelineMediaSort==="duration"?(b.duration??0)-(a.duration??0):(b.createdAt??"").localeCompare(a.createdAt??"")).map(asset => {
         const audio = asset.kind === "audio";
         const track = project.tracks.find(item => item.kind === (audio ? "audio" : "video"));
-        return <button type="button" className="timeline-source-item" key={asset.id} onClick={() => {
+        return <button type="button" draggable className="timeline-source-item" key={asset.id} onDragStart={event=>{event.dataTransfer.setData("text/dionysus-project-asset",asset.id);event.dataTransfer.effectAllowed="copy";}} onClick={() => {
           if (!track) { setNotice("Add a matching video or audio layer before placing this source."); return; }
           placeProjectAssetDirectly(asset, track);
-        }} title={"Choose " + asset.name + " for the timeline"}>
+        }} title={"Click to add or drag " + asset.name + " to the timeline"}>
           <span className="timeline-source-thumb"><AssetThumbnail asset={asset} assets={project.assets}/></span>
           <span className="timeline-source-copy"><strong title={asset.name}>{asset.name}</strong><small>{asset.kind === "clip" ? "Clip asset" : asset.kind === "script" ? "Code" : asset.kind}{asset.duration ? " · "+time(asset.duration) : ""}</small></span>
           <Plus size={14}/>
@@ -2761,6 +2761,8 @@ export default function App() {
    onDragOver={event=>{event.preventDefault();event.dataTransfer.dropEffect="move";const masterShotId=event.dataTransfer.getData("text/dionysus-master-shot") || masterShotDragSourceRef.current;if(masterShotId){const shot=project.shots.find(item=>item.id===masterShotId);if(!shot||track.kind!=="video"){setClipDropPreview(null);return;}const moving=getCanonicalMasterShotTimelineClip(shot),rect=event.currentTarget.getBoundingClientRect(),pointerTime=((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration,rawStart=Math.max(0,pointerTime-moving.duration/2),pos=calculateRootTimelineDropPosition(moving,track.id,rawStart,mediaTimelineDuration);if(!pos){setClipDropPreview(null);return;}setClipDropPreview({trackId:track.id,start:pos.start,duration:moving.duration,name:moving.name,...(pos.snapTime!==undefined?{snapTime:pos.snapTime}:{})});return;}const dragId=event.dataTransfer.getData("text/dionysus-timeline-clip");const candidate=clipDragSourceRef.current??(project.timelineClips??[]).find(clip=>clip.id===dragId),moving=candidate?getCanonicalTimelineClipForDrop(candidate):undefined;if(!moving||!canPlaceTimelineClipOnTrack(moving,track)){setClipDropPreview(null);return;}const rect=event.currentTarget.getBoundingClientRect();const pointerTime=((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration;const rawStart=Math.max(0,pointerTime-moving.duration/2);const pos=calculateRootTimelineDropPosition(moving,track.id,rawStart,mediaTimelineDuration);if(!pos){setClipDropPreview(null);return;}setClipDropPreview({trackId:track.id,start:pos.start,duration:moving.duration,name:moving.name,...(pos.snapTime!==undefined?{snapTime:pos.snapTime}: {})});}}
    onDrop={event=>{
      event.preventDefault();
+     const assetId=event.dataTransfer.getData("text/dionysus-project-asset");
+     if(assetId){const asset=project.assets.find(item=>item.id===assetId);const rect=event.currentTarget.getBoundingClientRect();const dropTime=Math.max(0,Math.min(mediaTimelineDuration,((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration));setClipDropPreview(null);if(asset)placeProjectAssetDirectly(asset,track,dropTime);return;}
      const rect=event.currentTarget.getBoundingClientRect();
      const masterShotId=event.dataTransfer.getData("text/dionysus-master-shot") || masterShotDragSourceRef.current;
       if(masterShotId){
