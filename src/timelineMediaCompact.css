@@ -1,0 +1,100 @@
+/* DYS-018: compact the Timeline Project Media source header and make view switching read as one control. */
+.timeline-source-browser {
+  min-width: 0;
+}
+.timeline-source-heading {
+  align-items: center;
+  gap: 10px;
+  padding: 4px 2px 8px;
+  margin: 0;
+}
+.timeline-source-heading > div:first-child {
+  gap: 2px;
+}
+.timeline-source-heading .timeline-source-kicker {
+  font-size: 8px;
+  line-height: 1.2;
+  letter-spacing: .1em;
+}
+.timeline-source-heading > div:first-child strong {
+  font-size: 13px;
+  line-height: 1.2;
+}
+.timeline-source-heading > div:first-child small {
+  font-size: 9px;
+  line-height: 1.2;
+}
+.timeline-source-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex: 0 0 auto;
+}
+.timeline-source-heading-actions .media-view-toggle {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--line, #2b2b32);
+  border-radius: 0;
+  background: #1b1b20;
+  color: var(--muted, #8d8d99);
+}
+.timeline-source-heading-actions .media-view-toggle:first-child {
+  border-radius: 6px 0 0 6px;
+}
+.timeline-source-heading-actions .media-view-toggle + .media-view-toggle {
+  margin-left: -1px;
+}
+.timeline-source-heading-actions .media-view-toggle:nth-child(2) {
+  border-radius: 0 6px 6px 0;
+}
+.timeline-source-heading-actions .media-view-toggle.active {
+  position: relative;
+  z-index: 1;
+  color: var(--accent, #d5f36a);
+  border-color: #667744;
+  background: #282e20;
+}
+.timeline-source-heading-actions .button {
+  margin-left: 8px;
+  min-height: 30px;
+  padding: 6px 9px;
+}
+.timeline-source-controls {
+  display: grid;
+  grid-template-columns: minmax(110px, 1fr) minmax(82px, .7fr) minmax(95px, .8fr);
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 9px;
+}
+.timeline-source-controls input,
+.timeline-source-controls select {
+  width: 100%;
+  min-width: 0;
+  min-height: 30px;
+  height: 30px;
+  padding: 5px 7px;
+  font-size: 10px;
+}
+@media (max-width: 520px) {
+  .timeline-source-heading {
+    gap: 6px;
+    padding: 2px 0 7px;
+  }
+  .timeline-source-heading-actions .media-view-toggle {
+    width: 28px;
+    height: 28px;
+  }
+  .timeline-source-heading-actions .button {
+    margin-left: 6px;
+    padding: 5px 7px;
+  }
+  .timeline-source-controls {
+    grid-template-columns: minmax(0, 1fr) minmax(0, .85fr);
+  }
+  .timeline-source-controls input {
+    grid-column: 1 / -1;
+  }
+}
