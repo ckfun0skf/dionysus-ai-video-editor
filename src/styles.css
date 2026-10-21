@@ -3513,3 +3513,27 @@
     --timeline-label-width: 132px !important;
   }
 }
+
+
+/* Direct inline text editing on the integrated Timeline preview. */
+.preview-canvas-text-editor {
+  position: absolute;
+  z-index: 10;
+  box-sizing: border-box;
+  min-width: 2rem;
+  min-height: 2rem;
+  resize: none;
+  overflow: auto;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--accent, #7c83ff);
+  border-radius: 4px;
+  outline: 2px solid color-mix(in srgb, var(--accent, #7c83ff) 25%, transparent);
+  background: rgb(8 12 20 / 72%);
+  color: #fff;
+  font: inherit;
+  line-height: 1.2;
+  text-align: center;
+}
+.preview-canvas-text-editor:focus {
+  outline: 2px solid var(--accent, #7c83ff);
+}
