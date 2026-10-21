@@ -1379,6 +1379,8 @@ describe("Integrated timeline editor", () => {
       createdAt: "2026-10-19T00:00:00.000Z",
       updatedAt: "2026-10-19T00:00:00.000Z"
     }));
+    // Give the resize regression room beyond the default 3-second image placement.
+    if (project.shots[0]) project.shots[0].duration = Math.max(project.shots[0].duration, 30);
     project.assets = [...project.assets, ...earlierSources, source];
     localStorage.setItem("dionysus.project.v1", JSON.stringify(project));
     localStorage.removeItem("dionysus.composition.v2");
