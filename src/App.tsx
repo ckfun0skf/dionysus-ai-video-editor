@@ -2675,7 +2675,8 @@ export default function App() {
     <div className={"timeline-source-list "+(timelineMediaView==="grid"?"grid-view":"list-view")}>
       {project.assets.filter(asset => ["video","image","audio","clip","script"].includes(asset.kind)).filter(asset => asset.name.toLowerCase().includes(timelineMediaSearch.toLowerCase())&&(timelineMediaFilter==="all"||asset.kind===timelineMediaFilter)).sort((a,b)=>timelineMediaSort==="name"?a.name.localeCompare(b.name):timelineMediaSort==="duration"?(b.duration??0)-(a.duration??0):(b.createdAt??"").localeCompare(a.createdAt??"")).map(asset => {
         const audio = asset.kind === "audio";
-        const track = project.tracks.find(item => item.kind === (audio ? "audio" : "video"));
+        const compatibleKind = audio ? "audio" : "video";
+        const track = project.tracks.find(item => item.id === selectedTimelineTrackId && item.kind === compatibleKind) ?? project.tracks.find(item => item.kind === compatibleKind);
         return <button type="button" draggable className="timeline-source-item" key={asset.id} onDragStart={event=>{event.dataTransfer.setData("text/dionysus-project-asset",asset.id);event.dataTransfer.effectAllowed="copy";}} onClick={() => {
           if (!track) { setNotice("Add a matching video or audio layer before placing this source."); return; }
           placeProjectAssetDirectly(asset, track);
