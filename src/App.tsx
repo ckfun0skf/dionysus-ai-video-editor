@@ -2814,7 +2814,7 @@ export default function App() {
   <span><strong>Place “{pendingTimelineClip.name}”</strong><small>Click an empty position on a compatible timeline layer · {pendingTimelineClip.duration.toFixed(2)}s. Existing clips will not be silently overwritten.</small></span>
   <button className="button button-quiet button-small" onClick={cancelTimelineClipPlacement}>Cancel placement</button>
 </div>}
-<div className="timeline-horizontal-scroll" style={{ "--timeline-track-min-width": `${240 * timelineZoom}px` } as React.CSSProperties}>
+<div className="timeline-horizontal-scroll" style={{ "--timeline-track-min-width": `${240 * timelineZoom}px`, "--timeline-content-width": `${Math.max(960, mediaTimelineDuration * 48 * timelineZoom)}px` } as React.CSSProperties}>
   <div className="visual-timeline-ruler">
   <div className="visual-ruler-caption">TIME</div>
   <div className="visual-timeline-ruler-lane" role="slider" aria-label="Timeline playhead" aria-valuemin={0} aria-valuemax={mediaTimelineDuration} aria-valuenow={editorTime} tabIndex={0}
