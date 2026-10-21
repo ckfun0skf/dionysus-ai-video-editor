@@ -3449,3 +3449,17 @@
 .timeline-source-item[draggable="true"]{cursor:grab}
 .timeline-source-item[draggable="true"]:active{cursor:grabbing}
 @media(max-width:760px){.visual-track-label{min-width:136px;flex-basis:136px}}
+
+
+/* Keep the ruler and every root timeline lane on one shared, scrollable time canvas. */
+.timeline-horizontal-scroll > .visual-timeline-ruler,
+.timeline-horizontal-scroll > .visual-track-list {
+  min-width: calc(var(--timeline-label-width, 220px) + var(--timeline-content-width, 960px));
+}
+.timeline-horizontal-scroll > .visual-track-list > .visual-track-group,
+.timeline-horizontal-scroll > .visual-track-list > .visual-track-group > .visual-track-row {
+  min-width: 100%;
+}
+@media (max-width: 760px) {
+  .timeline-horizontal-scroll { --timeline-label-width: 180px !important; }
+}
