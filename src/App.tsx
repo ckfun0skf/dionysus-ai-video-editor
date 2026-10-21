@@ -809,6 +809,50 @@ export default function App() {
     }
   }
 
+  function addLinkedAudioAssetToVideoPlacement(root: CompositionDocument, project: DionysusProject, video: TimelineClip, asset: Asset): CompositionDocument {
+    if (video.kind !== "video" || asset.kind !== "audio") return root;
+    let next = root;
+    let audioTrack = next.tracks.find(item => item.kind === "audio");
+    if (!audioTrack) {
+      const legacyAudioTrack = project.tracks.find(item => item.kind === "audio");
+      const newAudioTrack: CompositionDocument["tracks"][number] = legacyAudioTrack
+        ? { id: legacyAudioTrack.id, name: legacyAudioTrack.name, kind: "audio", order: next.tracks.length, legacyData: { ...legacyAudioTrack } }
+        : { id: id("track-audio"), name: "Audio " + (next.tracks.filter(item => item.kind === "audio").length + 1), kind: "audio", order: next.tracks.length };
+      next = addCompositionTrack(next, newAudioTrack);
+      audioTrack = newAudioTrack;
+    }
+    const linkedAudio: TimelineClip = {
+      id: id("timeline-audio"), name: asset.name, kind: "audio", trackId: audioTrack.id,
+      start: video.start, duration: video.duration, assetId: asset.id, linkedVideoClipId: video.id,
+      sourceIn: 0, sourceOut: video.duration
+    };
+    return insertCompositionPlacement(next, createRootCompositionPlacementForTimelineClip(project, next, linkedAudio));
+  }
+
+  function relinkRootAudioToVideo(audio: TimelineClip, video: TimelineClip) {
+    if (audio.kind !== "audio" || video.kind !== "video") return;
+    const canonical = rootCompositionRef.current.placements.find(item => item.id === audio.id);
+    if (canonical) {
+      changeRootComposition(document => {
+        let next = document;
+        const current = next.placements.find(item => item.id === audio.id);
+        if (current?.linkedToPlacementId) next = unlinkCompositionPlacement(next, audio.id);
+        return updateCompositionPlacement(next, audio.id, {
+          trackId: current?.trackId ?? audio.trackId, start: video.start, duration: video.duration,
+          linkedToPlacementId: video.id, sourceIn: audio.sourceIn ?? 0, sourceOut: (audio.sourceIn ?? 0) + video.duration,
+          legacyData: { ...(current?.legacyData ?? {}), ...audio, start: video.start, duration: video.duration, linkedVideoClipId: video.id }
+        });
+      });
+    } else {
+      change(project => ({ ...project, timelineClips: (project.timelineClips ?? []).map(item => item.id === audio.id
+        ? { ...item, start: video.start, duration: video.duration, linkedVideoClipId: video.id }
+        : item) }));
+    }
+    setSelectedTimelineClipId(audio.id);
+    setSelectedTimelineTrackId(audio.trackId);
+    setNotice("Audio linked to " + video.name + ".");
+  }
+
   function addLinkedAudioForVideoPlacement(root: CompositionDocument, project: DionysusProject, video: TimelineClip): CompositionDocument {
     const asset = project.assets.find(item => item.id === video.assetId && item.kind === "video");
     if (!asset || video.kind !== "video") return root;
@@ -2875,7 +2919,7 @@ export default function App() {
      event.preventDefault();
      const assetId=event.dataTransfer.getData("text/dionysus-project-asset")||projectAssetDragSourceRef.current;
      if(assetId){
-       projectAssetDragSourceRef.current="";const asset=project.assets.find(item=>item.id===assetId);const rect=event.currentTarget.getBoundingClientRect();const dropTime=Math.max(0,Math.min(mediaTimelineDuration,((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration));const createLayer=newLayerDropPreview?.sourceTrackId===track.id&&newLayerDropPreview.assetId===assetId;setClipDropPreview(null);setNewLayerDropPreview(null);if(asset){if(createLayer){const kind: "video" | "audio"=asset.kind==="audio"?"audio":"video";const role=kind==="audio"?"Audio":"Video";const trackId=id("track-"+kind);const trackName=role+" "+(projectRef.current.tracks.filter(item=>item.name.startsWith(role+" ")).length+1);const legacyTrack={id:trackId,name:trackName,kind};const clipKind: TimelineClip["kind"]=kind==="audio"?"audio":asset.kind==="script"?"procedural":asset.kind==="clip"?"clip":"video";const version=asset.kind==="clip"?(asset.clipVersions?.find(item=>item.id===asset.selectedClipVersionId)??asset.clipVersions?.[0]):undefined;const duration=version?.duration??((asset.kind==="video"||asset.kind==="audio")?asset.duration:undefined)??Math.max(.5,Math.min(3,mediaTimelineDuration-dropTime||3));const clip:TimelineClip={id:id("timeline-clip"),name:asset.name,kind:clipKind,trackId,start:0,duration,assetId:asset.id,sourceIn:0,...(version?{clipVersionId:version.id}:{}),...(asset.html!==undefined?{html:asset.html}:{}),...(asset.css!==undefined?{css:asset.css}:{}),...(asset.js!==undefined?{code:asset.js}:{})};try{changeRootComposition(root=>{let next=addCompositionTrack(root,{...legacyTrack,kind,order:root.tracks.length,legacyData:legacyTrack});const plan=calculateCanonicalCompositionInsertionPlan(next,clip,trackId,dropTime);if(plan.status==="invalid-track"||plan.status==="start-occupied"||plan.status==="needs-resolution")throw new Error("Could not place this asset on the new layer.");next=applyCanonicalCompositionInsertion(next,projectRef.current,plan);return addLinkedAudioForVideoPlacement(next,projectRef.current,plan.clip);});setSelectedTimelineTrackId(trackId);setSelectedTimelineClipId(clip.id);setTimelineClipSettingsId(clip.id);setNotice("Created "+trackName+" and added “"+asset.name+"”.");}catch(error){setNotice(error instanceof Error?error.message:"Could not create a layer for this asset.");}return;}const compatible=(track.kind==="audio"&&asset.kind==="audio")||(track.kind==="video"&&asset.kind!=="audio");if(!compatible){setNotice(track.kind==="audio"?"Only audio assets can be dropped on an Audio layer.":"Audio assets must be dropped on a Video layer.");return;}placeProjectAssetDirectly(asset,track,dropTime);}return;}
+       projectAssetDragSourceRef.current="";const asset=project.assets.find(item=>item.id===assetId);const rect=event.currentTarget.getBoundingClientRect();const dropTime=Math.max(0,Math.min(mediaTimelineDuration,((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration));const createLayer=newLayerDropPreview?.sourceTrackId===track.id&&newLayerDropPreview.assetId===assetId;setClipDropPreview(null);setNewLayerDropPreview(null);if(asset){if(createLayer){const kind: "video" | "audio"=asset.kind==="audio"?"audio":"video";const role=kind==="audio"?"Audio":"Video";const trackId=id("track-"+kind);const trackName=role+" "+(projectRef.current.tracks.filter(item=>item.name.startsWith(role+" ")).length+1);const legacyTrack={id:trackId,name:trackName,kind};const clipKind: TimelineClip["kind"]=kind==="audio"?"audio":asset.kind==="script"?"procedural":asset.kind==="clip"?"clip":"video";const version=asset.kind==="clip"?(asset.clipVersions?.find(item=>item.id===asset.selectedClipVersionId)??asset.clipVersions?.[0]):undefined;const duration=version?.duration??((asset.kind==="video"||asset.kind==="audio")?asset.duration:undefined)??Math.max(.5,Math.min(3,mediaTimelineDuration-dropTime||3));const clip:TimelineClip={id:id("timeline-clip"),name:asset.name,kind:clipKind,trackId,start:0,duration,assetId:asset.id,sourceIn:0,...(version?{clipVersionId:version.id}:{}),...(asset.html!==undefined?{html:asset.html}:{}),...(asset.css!==undefined?{css:asset.css}:{}),...(asset.js!==undefined?{code:asset.js}:{})};try{changeRootComposition(root=>{let next=addCompositionTrack(root,{...legacyTrack,kind,order:root.tracks.length,legacyData:legacyTrack});const plan=calculateCanonicalCompositionInsertionPlan(next,clip,trackId,dropTime);if(plan.status==="invalid-track"||plan.status==="start-occupied"||plan.status==="needs-resolution")throw new Error("Could not place this asset on the new layer.");next=applyCanonicalCompositionInsertion(next,projectRef.current,plan);return addLinkedAudioForVideoPlacement(next,projectRef.current,plan.clip);});setSelectedTimelineTrackId(trackId);setSelectedTimelineClipId(clip.id);setTimelineClipSettingsId(clip.id);setNotice("Created "+trackName+" and added “"+asset.name+"”.");}catch(error){setNotice(error instanceof Error?error.message:"Could not create a layer for this asset.");}return;}if(track.kind==="video"&&asset.kind==="audio"){const targets=(projectRef.current.timelineClips??[]).filter(item=>item.kind==="video"&&item.trackId===track.id).sort((left,right)=>Math.abs(left.start-dropTime)-Math.abs(right.start-dropTime));const target=targets.find(item=>dropTime>=item.start&&dropTime<=item.start+item.duration)??(targets.length===1?targets[0]:undefined);if(!target){setNotice("Drop the audio over a video clip on this layer to link it.");return;}try{changeRootComposition(root=>addLinkedAudioAssetToVideoPlacement(root,projectRef.current,target,asset));setNotice("Linked audio added to "+target.name+".");}catch(error){setNotice(error instanceof Error?error.message:"Could not link audio to the video.");}return;}const compatible=(track.kind==="audio"&&asset.kind==="audio")||(track.kind==="video"&&asset.kind!=="audio");if(!compatible){setNotice(track.kind==="audio"?"Only audio assets can be dropped on an Audio layer.":"Audio assets must be dropped on a Video layer.");return;}placeProjectAssetDirectly(asset,track,dropTime);}return;}
      const rect=event.currentTarget.getBoundingClientRect();
      const masterShotId=event.dataTransfer.getData("text/dionysus-master-shot") || masterShotDragSourceRef.current;
       if(masterShotId){
@@ -2903,7 +2947,7 @@ export default function App() {
         setSelectedId(movingShot.id);setIsPlaying(false);playbackTimeRef.current=next;setEditorTime(next);setClipDropPreview(null);return;
       }
       const clipId=event.dataTransfer.getData("text/dionysus-timeline-clip"),candidate=(project.timelineClips??[]).find(clip=>clip.id===clipId)??clipDragSourceRef.current,moving=candidate?getCanonicalTimelineClipForDrop(candidate):undefined;
-     if(!moving||!canPlaceTimelineClipOnTrack(moving,track))return;
+     if(moving?.kind==="audio"&&track.kind==="video"){const dropTime=Math.max(0,Math.min(mediaTimelineDuration,((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration));const targets=(projectRef.current.timelineClips??[]).filter(item=>item.kind==="video"&&item.trackId===track.id);const target=targets.find(item=>dropTime>=item.start&&dropTime<=item.start+item.duration)??(targets.length===1?targets[0]:undefined);if(target){relinkRootAudioToVideo(moving,target);}else{setNotice("Drop audio over a video clip to link it.");}clipDragSourceRef.current=null;setClipDropPreview(null);return;}if(!moving||!canPlaceTimelineClipOnTrack(moving,track))return;
      const pointerTime=((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration,rawStart=Math.max(0,pointerTime-moving.duration/2);
      const pos=clipDropPreview?.trackId===track.id?{start:clipDropPreview.start,...(clipDropPreview.snapTime!==undefined?{snapTime:clipDropPreview.snapTime}:{})}:calculateRootTimelineDropPosition(moving,track.id,rawStart,mediaTimelineDuration);
      if(!pos){setNotice("No non-overlapping position is available on this layer.");clipDragSourceRef.current=null;setClipDropPreview(null);return;}

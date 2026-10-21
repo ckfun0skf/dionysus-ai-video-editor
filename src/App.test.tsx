@@ -2571,4 +2571,34 @@ describe("mobile audio clip controls", () => {
     expect(transfer.setData).toHaveBeenCalledWith("text/dionysus-timeline-clip", audio!.id);
   });
 
+  it("links a dropped audio asset to the video clip when dropped on a Video layer", async () => {
+    await openTimelineView();
+    const project = persistedProject();
+    const videoTrack = project.tracks.find(track => track.kind === "video");
+    if (!videoTrack) throw new Error("Sample project needs a Video layer");
+    const audioAsset = { id: "test-audio-drop-asset", name: "New narration.wav", kind: "audio" as const, path: "/media/new-narration.wav", duration: 8 };
+    project.assets = [...project.assets, audioAsset];
+    project.timelineClips = [{ id: "video-awaiting-audio", name: "Video awaiting audio", kind: "video", trackId: videoTrack.id, start: 0, duration: 8 }];
+    localStorage.setItem("dionysus.project.v1", JSON.stringify(project));
+    localStorage.removeItem("dionysus.composition.v2");
+    act(() => root.unmount());
+    root = createRoot(container);
+    act(() => root.render(<App />));
+    await flushEffects();
+    await openTimelineView();
+
+    const lane = container.querySelector('.visual-track-lane[data-track-id="' + videoTrack.id + '"]');
+    expect(lane).toBeTruthy();
+    Object.defineProperty(lane, "getBoundingClientRect", { configurable: true, value: () => ({ left: 0, top: 0, right: 1000, bottom: 70, width: 1000, height: 70, x: 0, y: 0, toJSON: () => ({}) }) });
+    const transfer = { getData: (type: string) => type === "text/dionysus-project-asset" ? audioAsset.id : "", dropEffect: "copy", types: ["text/dionysus-project-asset"] } as unknown as DataTransfer;
+    const drop = new MouseEvent("drop", { bubbles: true, cancelable: true, clientX: 10, clientY: 35 });
+    Object.defineProperty(drop, "dataTransfer", { value: transfer });
+    act(() => lane!.dispatchEvent(drop));
+    await flushEffects();
+
+    const linked = (persistedProject().timelineClips ?? []).find(clip => clip.assetId === audioAsset.id);
+    expect(linked).toMatchObject({ kind: "audio", linkedVideoClipId: "video-awaiting-audio", start: 0, duration: 8 });
+    expect(linked?.trackId).not.toBe(videoTrack.id);
+  });
+
 });
