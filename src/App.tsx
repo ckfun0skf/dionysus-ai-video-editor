@@ -787,9 +787,10 @@ export default function App() {
     // the migrated composition is missing that track can leave a second, empty Audio lane
     // beside the one already visible in the legacy project projection.
     const projectAudioTrack = project.tracks.find(item => item.kind === "audio");
-    let audioTrack = projectAudioTrack
-      ? next.tracks.find(item => item.id === projectAudioTrack.id && item.kind === "audio")
-      : next.tracks.find(item => item.kind === "audio");
+    // Prefer an Audio track already present in the canonical composition. A project may
+    // have a legacy Audio track whose ID differs from the migrated canonical track; choosing
+    // the legacy ID first would create a second lane despite an existing usable Audio lane.
+    let audioTrack = next.tracks.find(item => item.kind === "audio");
     if (!audioTrack && projectAudioTrack) {
       audioTrack = {
         id: projectAudioTrack.id,
