@@ -3,7 +3,7 @@ import { getAudioEnvelope } from "./audioEnvelope";
 import { getMasterShotStarts, getMasterTimelineDuration } from "./masterTimeline";
 import { loadMediaBlobFromPath, resolveMediaSource } from "./mediaAssetStore";
 
-export interface RenderOptions { fps?: number; width?: number; height?: number; duration?: number }
+export interface RenderOptions { fps?: number; width?: number; height?: number; duration?: number; /** Avoid blocking interactive preview frames on media seek completion; exports keep precise seeking by default. */ interactivePreview?: boolean }
 export interface ExportResult { blob: Blob; filename: string; mimeType: string }
 
 export function collectCompositionLayers(project: DionysusProject): CompositionLayer[] {
@@ -282,7 +282,17 @@ export async function renderCompositionFrame(canvas: HTMLCanvasElement, project:
       const localTime = seconds - layer.start;
       if (sourceSpan <= 0 || (layer.shortSourceBehavior !== "loop" && localTime >= sourceSpan)) continue;
       const sourceOffset = layer.shortSourceBehavior === "loop" ? localTime % sourceSpan : localTime;
-      await seekMedia(video, sourceIn + sourceOffset);
+      const targetTime = sourceIn + sourceOffset;
+      if (options.interactivePreview) {
+        // Interactive preview must not wait for every seeked event: slow media seeks can otherwise
+        // serialize rendering behind the playhead. Let the browser seek asynchronously and draw
+        // the most recently decoded frame; the next preview tick will request the latest time.
+        if (!video.seeking && Math.abs(video.currentTime - targetTime) >= 0.025) {
+          try { video.currentTime = targetTime; } catch { /* Keep the last decoded frame while media becomes seekable. */ }
+        }
+      } else {
+        await seekMedia(video, targetTime);
+      }
     }
     drawLayer(ctx, layer, asset, seconds, width, height, images, videos);
   }
