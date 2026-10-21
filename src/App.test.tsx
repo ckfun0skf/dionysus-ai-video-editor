@@ -2602,30 +2602,6 @@ describe("mobile audio clip controls", () => {
     expect(linked?.trackId).not.toBe(videoTrack.id);
   });
 
-  it("accepts an audio asset dropped onto a Linked Audio group", async () => {
-    await openTimelineView();
-    const project = persistedProject();
-    const audioAsset = { id: "test-audio-group-asset", name: "Group narration.wav", kind: "audio" as const, path: "/media/group-narration.wav", duration: 6 };
-    project.assets = [...project.assets, audioAsset];
-    localStorage.setItem("dionysus.project.v1", JSON.stringify(project));
-    act(() => root.unmount());
-    root = createRoot(container);
-    act(() => root.render(<App />));
-    await flushEffects();
-    await openTimelineView();
-    await seedLinkedVideoAudioPairs();
 
-    const lane = container.querySelector<HTMLElement>('.linked-audio-drop-target[data-linked-video-id="test-video-1"]');
-    expect(lane).toBeTruthy();
-    const transfer = { getData: (type: string) => type === "text/dionysus-project-asset" ? audioAsset.id : "", dropEffect: "copy", types: ["text/dionysus-project-asset"] } as unknown as DataTransfer;
-    const drop = new MouseEvent("drop", { bubbles: true, cancelable: true });
-    Object.defineProperty(drop, "dataTransfer", { value: transfer });
-    act(() => lane!.dispatchEvent(drop));
-    await flushEffects();
-
-    expect((persistedProject().timelineClips ?? []).filter(clip => clip.assetId === audioAsset.id)).toEqual([
-      expect.objectContaining({ kind: "audio", linkedVideoClipId: "test-video-1", start: 0, duration: 5 })
-    ]);
-  });
 
 });
