@@ -34,6 +34,8 @@ export function calculateTimelineClipResizePreview(
 
   const rate = Math.max(1, Number.isFinite(fps) ? fps : 24);
   const frame = 1 / rate;
+  // Timeline boundaries may not be exact frame multiples; never round a resize past the final whole frame.
+  const maxFrameAlignedEnd = Math.floor(timelineDuration * rate + epsilon) / rate;
   const oldStart = clip.start;
   const oldEnd = clip.start + clip.duration;
   const sameTrack = clips.filter(item => item.trackId === clip.trackId && item.id !== clipId);
@@ -43,7 +45,7 @@ export function calculateTimelineClipResizePreview(
   let overlap: { start: number; duration: number } | undefined;
 
   if (edge === "right") {
-    end = snapFrame(Math.max(oldStart + frame, Math.min(timelineDuration, oldEnd + deltaSeconds)), rate);
+    end = snapFrame(Math.max(oldStart + frame, Math.min(maxFrameAlignedEnd, oldEnd + deltaSeconds)), rate);
     const next = sameTrack.filter(item => item.start >= oldEnd - epsilon).sort((a, b) => a.start - b.start)[0];
     if (next && end > next.start + epsilon) {
       const nextEnd = next.start + next.duration;
@@ -86,7 +88,7 @@ export function calculateTimelineClipResizePreview(
   }
 
   start = Math.max(0, start);
-  end = Math.min(timelineDuration, Math.max(start + frame, end));
+  end = Math.min(maxFrameAlignedEnd, Math.max(start + frame, end));
   const nextStart = edge === "left" ? start : oldStart;
   const nextDuration = edge === "left" ? oldEnd - start : end - oldStart;
   return {
@@ -128,8 +130,11 @@ export function applyTimelineClipResize(clips: TimelineClip[], preview: ClipResi
     if (clip.kind !== "audio" || !clip.linkedVideoClipId || !changedVideos.has(clip.linkedVideoClipId)) return clip;
     const video = changed.find(item => item.id === clip.linkedVideoClipId);
     if (!video) return clip;
+    // The linked child mirrors the video's exact source window. Remove optional fields
+    // first so an absent video source range cannot leave stale audio offsets behind.
+    const { sourceIn: _oldSourceIn, sourceOut: _oldSourceOut, ...withoutOldSourceRange } = clip;
     return {
-      ...clip,
+      ...withoutOldSourceRange,
       start: video.start,
       duration: video.duration,
       ...(video.sourceIn !== undefined ? { sourceIn: video.sourceIn } : {}),

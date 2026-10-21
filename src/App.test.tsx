@@ -125,6 +125,25 @@ afterEach(() => {
 });
 
 describe("App history integration", () => {
+  it("keeps Asset management inside the editor shell and returns to Timeline", async () => {
+    expect(container.querySelector(".app-shell-editor")).toBeTruthy();
+    expect(container.querySelector(".timeline-workspace-bar")).toBeTruthy();
+    const manage = Array.from(container.querySelectorAll<HTMLButtonElement>(".timeline-source-heading button"))
+      .find(button => button.textContent?.trim() === "Manage");
+    expect(manage).toBeTruthy();
+    click(manage!);
+    await flushEffects();
+    expect(container.querySelector(".app-shell-editor")).toBeTruthy();
+    expect(container.querySelector(".editor-project-field span")?.textContent).toBe("DIONYSUS / ASSET LIBRARY");
+    expect(container.querySelector(".asset-grid") || container.querySelector(".timeline-source-empty") || container.querySelector(".section-toolbar")).toBeTruthy();
+    const backToTimeline = Array.from(container.querySelectorAll<HTMLButtonElement>(".editor-native-actions button"))
+      .find(button => button.textContent?.includes("Timeline"));
+    expect(backToTimeline).toBeTruthy();
+    click(backToTimeline!);
+    await flushEffects();
+    expect(container.querySelector(".timeline-workspace-bar")).toBeTruthy();
+  });
+
   it("clears persisted demo seed shots and tracks from the existing demo project", async () => {
     localStorage.setItem("dionysus.project.v1", JSON.stringify(sampleProject));
     localStorage.removeItem("dionysus.composition.v2");
@@ -571,6 +590,10 @@ describe("App history integration", () => {
     expect(audio()).toMatchObject({ start: 0.5, duration: 4.5, linkedVideoClipId: video().id });
   });
   it("expands storyboard shot versions and opens the selected version in the timeline", async () => {
+    const storyboardNav = Array.from(container.querySelectorAll<HTMLButtonElement>(".nav-item")).find(button => button.textContent?.includes("Storyboard"));
+    if (!storyboardNav) throw new Error("Storyboard navigation is missing");
+    click(storyboardNav);
+    await flushEffects();
     const toggle = container.querySelector<HTMLButtonElement>(".shot-version-toggle");
     expect(toggle).toBeTruthy();
     click(toggle!);
@@ -1336,6 +1359,146 @@ describe("Integrated timeline editor", () => {
     expect(shots[0].duration).toBe(6); expect(shots[1].duration).toBe(5); expect(shots[1].masterStart).toBeUndefined();
   });
 
+  it("places a selected source, previews it, trims and moves it, and preserves edits across Undo/Redo and reopen", async () => {
+    await openTimelineView();
+
+    const project = persistedProject();
+    const source = {
+      id: "integration-source-image",
+      name: "Integration Source Frame",
+      kind: "image" as const,
+      path: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='9'%3E%3Crect width='16' height='9' fill='%2300aacc'/%3E%3C/svg%3E",
+      createdAt: "2026-10-20T00:00:00.000Z",
+      updatedAt: "2026-10-20T00:00:00.000Z"
+    };
+    const earlierSources = Array.from({ length: 8 }, (_, index) => ({
+      id: "earlier-source-" + index,
+      name: "Earlier source " + index,
+      kind: "image" as const,
+      path: source.path,
+      createdAt: "2026-10-19T00:00:00.000Z",
+      updatedAt: "2026-10-19T00:00:00.000Z"
+    }));
+    project.assets = [...project.assets, ...earlierSources, source];
+    localStorage.setItem("dionysus.project.v1", JSON.stringify(project));
+    localStorage.removeItem("dionysus.composition.v2");
+    act(() => root.unmount());
+    root = createRoot(container);
+    act(() => root.render(<App />));
+    await flushEffects();
+    await openTimelineView();
+
+    const sourceButton = Array.from(container.querySelectorAll<HTMLButtonElement>(".timeline-source-item"))
+      .find(button => button.textContent?.includes(source.name));
+    expect(sourceButton).toBeTruthy();
+    click(sourceButton!);
+
+    const picker = container.querySelector('[role="dialog"][aria-labelledby="asset-picker-title"]');
+    expect(picker).toBeTruthy();
+    const assetCard = Array.from(picker!.querySelectorAll<HTMLButtonElement>(".asset-picker-card"))
+      .find(button => button.textContent?.includes(source.name));
+    expect(assetCard).toBeTruthy();
+    click(assetCard!);
+    expect(container.querySelector(".timeline-placement-banner")?.textContent).toContain(source.name);
+
+    // Use the overlay Video layer so the fixture's pre-existing Master Shots remain untouched.
+    const targetTrackId = "track-video-2";
+    const lane = container.querySelector<HTMLElement>(`.visual-track-lane[data-track-id="${targetTrackId}"]`);
+    expect(lane).toBeTruthy();
+    Object.defineProperty(lane!, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({ left: 0, top: 0, right: 1000, bottom: 64, width: 1000, height: 64, x: 0, y: 0, toJSON: () => ({}) })
+    });
+    const place = new MouseEvent("pointerdown", { bubbles: true, cancelable: true, clientX: 200 });
+    Object.defineProperties(place, { pointerId: { configurable: true, value: 41 }, button: { configurable: true, value: 0 } });
+    act(() => lane!.dispatchEvent(place));
+    await flushEffects();
+
+    let edited = persistedProject();
+    let placed = edited.timelineClips?.find(clip => clip.assetId === source.id);
+    expect(placed).toMatchObject({ assetId: source.id, trackId: targetTrackId, kind: "video", duration: 3 });
+    expect(container.querySelector(".timeline-placement-banner")).toBeNull();
+    expect(container.querySelector(".integrated-preview-panel")).toBeTruthy();
+    expect(container.querySelector(".integrated-preview-frame canvas")).toBeTruthy();
+    expect(container.querySelector(`.visual-media-clip.selected[title^="${source.name}"]`)).toBeTruthy();
+    const initialStart = placed!.start;
+
+    const clipButton = () => Array.from(container.querySelectorAll<HTMLButtonElement>(".visual-media-clip"))
+      .find(button => button.textContent?.includes(source.name));
+    const clipLane = clipButton()?.closest(".visual-track-lane") as HTMLDivElement | null;
+    expect(clipButton()).toBeTruthy();
+    expect(clipLane).toBe(lane);
+
+    // Move the selected source clip by dragging it to a later point on the same layer.
+    const transferValues = new Map<string, string>();
+    const dataTransfer = {
+      setData: (type: string, value: string) => transferValues.set(type, value),
+      getData: (type: string) => transferValues.get(type) ?? "",
+      effectAllowed: "move"
+    };
+    const dragStart = new Event("dragstart", { bubbles: true, cancelable: true });
+    Object.defineProperty(dragStart, "dataTransfer", { value: dataTransfer });
+    act(() => clipButton()!.dispatchEvent(dragStart));
+    const dragOver = new MouseEvent("dragover", { bubbles: true, cancelable: true, clientX: 600 });
+    Object.defineProperty(dragOver, "dataTransfer", { value: dataTransfer });
+    act(() => lane!.dispatchEvent(dragOver));
+    const drop = new MouseEvent("drop", { bubbles: true, cancelable: true, clientX: 600 });
+    Object.defineProperty(drop, "dataTransfer", { value: dataTransfer });
+    act(() => lane!.dispatchEvent(drop));
+    await flushEffects();
+
+    edited = persistedProject();
+    placed = edited.timelineClips?.find(clip => clip.assetId === source.id);
+    expect(placed).toBeTruthy();
+    expect(placed!.start).toBeGreaterThan(initialStart);
+
+    // Trim the right edge and verify one-step Undo/Redo restores the complete timing state.
+    const resizeRight = container.querySelector<HTMLElement>('.clip-resize-right[aria-label="Resize end of ' + source.name + '"]');
+    expect(resizeRight).toBeTruthy();
+    const resizeStart = new Event("pointerdown", { bubbles: true, cancelable: true });
+    Object.defineProperties(resizeStart, { pointerId: { configurable: true, value: 42 }, clientX: { configurable: true, value: 100 }, button: { configurable: true, value: 0 } });
+    act(() => resizeRight!.dispatchEvent(resizeStart));
+    const moveResize = new Event("pointermove", { bubbles: true, cancelable: true });
+    Object.defineProperties(moveResize, { pointerId: { configurable: true, value: 42 }, clientX: { configurable: true, value: 150 } });
+    act(() => window.dispatchEvent(moveResize));
+    const endResize = new Event("pointerup", { bubbles: true, cancelable: true });
+    Object.defineProperties(endResize, { pointerId: { configurable: true, value: 42 }, clientX: { configurable: true, value: 150 } });
+    act(() => window.dispatchEvent(endResize));
+    await flushEffects();
+
+    const trimmed = persistedProject().timelineClips?.find(clip => clip.assetId === source.id)!;
+    expect(trimmed.duration).toBeGreaterThan(3);
+    expect(trimmed.start).toBe(placed!.start);
+
+    click(buttonsNamed("Undo").find(button => !button.disabled)!);
+    await flushEffects();
+    expect(persistedProject().timelineClips?.find(clip => clip.assetId === source.id)).toMatchObject({
+      start: placed!.start,
+      duration: placed!.duration
+    });
+    click(buttonsNamed("Redo").find(button => !button.disabled)!);
+    await flushEffects();
+    expect(persistedProject().timelineClips?.find(clip => clip.assetId === source.id)).toMatchObject({
+      start: trimmed.start,
+      duration: trimmed.duration
+    });
+
+    const beforeReopen = persistedProject().timelineClips?.find(clip => clip.assetId === source.id);
+    act(() => root.unmount());
+    root = createRoot(container);
+    act(() => root.render(<App />));
+    await flushEffects();
+    const afterReopen = persistedProject().timelineClips?.find(clip => clip.assetId === source.id);
+    expect(afterReopen).toMatchObject({
+      id: beforeReopen!.id,
+      assetId: source.id,
+      trackId: targetTrackId,
+      start: beforeReopen!.start,
+      duration: beforeReopen!.duration
+    });
+    expect(container.querySelector(".integrated-preview-panel")).toBeTruthy();
+  });
+
   it("shows preview in the timeline workspace and provides playback controls", async () => {
     const timelineNav = Array.from(container.querySelectorAll<HTMLButtonElement>(".nav-item")).find(button => button.textContent?.includes("Timeline"));
     expect(timelineNav).toBeTruthy();
@@ -1346,6 +1509,7 @@ describe("Integrated timeline editor", () => {
     expect(buttonsNamed("Play preview").length).toBeGreaterThan(0);
   });
   it("updates project aspect ratio, resolution and frame rate from Project Settings", async () => {
+    await openTimelineView();
     const settingsButton = buttonsNamed("Project canvas settings")[0];
     expect(settingsButton).toBeTruthy();
     click(settingsButton);

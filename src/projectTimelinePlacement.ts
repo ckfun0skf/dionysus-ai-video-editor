@@ -50,6 +50,8 @@ export function calculateProjectTimelineDropPosition(
   desiredStart: number,
   timelineDuration: number,
 ): ReturnType<typeof calculateTimelineDropPosition> {
+  const targetTrack = project.tracks.find(track => track.id === targetTrackId);
+  if (!targetTrack || !canPlaceTimelineClipOnTrack(movingClip, targetTrack)) return null;
   return calculateTimelineDropPosition(
     getProjectTimelinePlacementItems(project, movingClip),
     movingClip.id,
@@ -368,6 +370,11 @@ export function calculateCanonicalCompositionDropPosition(
   desiredStart: number,
   timelineDuration: number,
 ): ReturnType<typeof calculateTimelineDropPosition> {
+  const destination = root.tracks.find(track => track.id === targetTrackId);
+  const destinationKind = destination?.kind === "audio" ? "audio" : destination?.kind === "text" ? "text" : "video";
+  if (!destination || !canPlaceTimelineClipOnTrack(movingClip, {
+    id: destination.id, name: destination.name, kind: destinationKind
+  })) return null;
   const movingPlacement = root.placements.find(placement => placement.id === movingClip.id);
   const duration = movingPlacement?.duration ?? movingClip.duration;
   const occupancy: TimelineClip[] = root.placements.map(placement => {

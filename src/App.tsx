@@ -29,7 +29,7 @@ import {
   type ProjectTimelineInsertResolution,
 } from "./projectTimelinePlacement";
 import { recordProjectChange, undoProjectChange as undoHistory, redoProjectChange as redoHistory } from "./projectHistory";
-import { collectCompositionLayers, renderCompositionFrame, exportCompositionWebM, downloadExport } from "./compositionRenderer";
+import { collectCompositionLayers, isPlayableAudioLayer, renderCompositionFrame, exportCompositionWebM, downloadExport } from "./compositionRenderer";
 import { createClipVersionSnapshot } from "./clipVersionSnapshot";
 import AIGenerationPanel from "./AIGenerationPanel";
 import CodePlayground from "./CodePlayground";
@@ -266,7 +266,7 @@ export default function App() {
   const [projectSettingsFrameRate, setProjectSettingsFrameRate] = useState(project.frameRate);
   const [projectSettingsAspect, setProjectSettingsAspect] = useState<"16:9" | "9:16" | "4:3" | "1:1" | "21:9" | "custom">("custom");
   const [projectSettingsResolution, setProjectSettingsResolution] = useState("custom");
-  const [view, setView] = useState<View>("storyboard");
+  const [view, setView] = useState<View>("timeline");
   const [editorTime, setEditorTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const playbackTimeRef = useRef(0);
@@ -553,12 +553,11 @@ export default function App() {
     let cancelled = false, frame = 0, warned = false;
     const players = new Map<string, { element: HTMLMediaElement; release?: () => void }>();
     const clips = (activeVersionTimeline ? activeVersionTimeline.layers : collectCompositionLayers(project))
-      .filter(layer => layer.kind === "audio" && Boolean(layer.assetId))
-      .map(layer => ({ ...layer, kind: "audio" as const, linkedVideoClipId: undefined }));
+      .filter(layer => layer.kind === "audio" && Boolean(layer.assetId));
     const prepare = async () => {
       for (const clip of clips) {
         const asset = project.assets.find(item => item.id === clip.assetId);
-        if (!asset?.path || (asset.kind !== "audio" && !(clip.linkedVideoClipId && asset.kind === "video"))) continue;
+        if (!asset?.path || !isPlayableAudioLayer(clip, asset)) continue;
         try {
           const source = await resolveMediaSource(asset.path);
           if (cancelled) { source.release?.(); continue; }
@@ -2544,7 +2543,7 @@ export default function App() {
     }
   }
   const nav: { id: View; label: string; icon: typeof Film }[] = [{ id: "storyboard", label: t("nav.storyboard"), icon: Clapperboard }, { id: "timeline", label: t("nav.timeline"), icon: Layers3 }, { id: "assets", label: t("nav.assets"), icon: Film }, { id: "references", label: t("nav.references"), icon: Sparkles }];
-  return <div className="app-shell">
+  return <div className={"app-shell" + (view === "timeline" || view === "assets" ? " app-shell-editor" : "")}>
     <aside className="sidebar">
       <div className="brand"><div className="brand-mark"><WandSparkles size={20}/></div><div><div className="brand-name">{t("brand.name")}</div><div className="brand-subtitle">{t("brand.subtitle")}</div></div></div>
       <div className="workspace-label">{t("nav.workspace")}</div>
@@ -2553,7 +2552,19 @@ export default function App() {
       <div className="sidebar-bottom"><div className="storage-card"><ShieldCheck size={16}/><div><strong>{t("storage.title")}</strong><span>{t("storage.description")}</span></div></div><button className="nav-item" onClick={() => setNotice(t("notice.projectSettingsPlanned"))}><Settings2 size={17}/><span>{t("nav.settings")}</span></button><button className="nav-item" onClick={() => setNotice(t("notice.helpDocs"))}><CircleHelp size={17}/><span>{t("nav.help")}</span></button><div className="user-chip"><div className="user-avatar">D</div><div><strong>{t("brand.name")}</strong><span>{t("user.workspace")}</span></div><span className="online-dot"/></div></div>
     </aside>
     <main className="main-area">
-      <header className="topbar"><div className="breadcrumbs"><span>{t("breadcrumb.projects")}</span><span className="crumb-sep">/</span><strong>{project.name}</strong><span className="local-pill"><span/> {t("status.localBadge")}</span></div><div className="top-actions"><button className="button button-quiet" onClick={() => fileInput.current?.click()}><FolderOpen size={15}/> {t("action.openProject")}</button><button className="button button-quiet" onClick={exportProject}><Save size={15}/> {t("action.exportProject")}</button><button className="button button-quiet button-small" aria-label="Undo" title="Undo" disabled={undoStack.length === 0} onClick={undoProjectChange}><Undo2 size={14}/> Undo</button><button className="button button-quiet button-small" aria-label="Redo" title="Redo" disabled={redoStack.length === 0} onClick={redoProjectChange}><Redo2 size={14}/> Redo</button><button className="button button-quiet" onClick={() => void exportVideo()}><Film size={15}/> Export WebM</button><button className="button button-primary" onClick={exportPlan}><Download size={15}/> {t("action.exportPlan")}</button><input ref={fileInput} type="file" accept=".json,.dionysus.json,application/json" hidden onChange={e => void importProject(e.target.files?.[0])}/></div></header>
+      {(view === "timeline" || view === "assets") ? <header className="editor-native-topbar">
+  <div className="editor-brand-project"><div className="brand-mark"><WandSparkles size={17}/></div><label className="editor-project-field"><span>{view === "assets" ? "DIONYSUS / ASSET LIBRARY" : "DIONYSUS / TIMELINE EDITOR"}</span><input aria-label="Project name" value={project.name} onChange={event => change(p => ({ ...p, name: event.target.value }))}/></label></div>
+  <div className="editor-native-actions">
+    <button className="button button-quiet button-small" onClick={() => fileInput.current?.click()}><FolderOpen size={14}/> Open</button>
+    <button className="button button-quiet button-small" onClick={exportProject}><Save size={14}/> Export Project</button>
+    <button className="button button-quiet button-small" aria-label="Undo" title="Undo" disabled={undoStack.length === 0} onClick={undoProjectChange}><Undo2 size={14}/> Undo</button>
+    <button className="button button-quiet button-small" aria-label="Redo" title="Redo" disabled={redoStack.length === 0} onClick={redoProjectChange}><Redo2 size={14}/> Redo</button>
+    <button className="button button-quiet button-small" aria-label="Project canvas settings" title="Project canvas settings" onClick={openProjectSettings}><Settings2 size={14}/> Canvas</button>
+    <button className="button button-quiet button-small" onClick={() => void exportVideo()}><Film size={14}/> Export WebM</button>
+    <button className="button button-primary button-small" onClick={() => setView(view === "assets" ? "timeline" : "storyboard")}>{view === "assets" ? <><Layers3 size={14}/> Timeline</> : <><Clapperboard size={14}/> Storyboard</>}</button>
+    <input ref={fileInput} type="file" accept=".json,.dionysus.json,application/json" hidden onChange={e => void importProject(e.target.files?.[0])}/>
+  </div>
+</header> : <header className="topbar"><div className="breadcrumbs"><span>{t("breadcrumb.projects")}</span><span className="crumb-sep">/</span><strong>{project.name}</strong><span className="local-pill"><span/> {t("status.localBadge")}</span></div><div className="top-actions"><button className="button button-quiet" onClick={() => fileInput.current?.click()}><FolderOpen size={15}/> {t("action.openProject")}</button><button className="button button-quiet" onClick={exportProject}><Save size={15}/> {t("action.exportProject")}</button><button className="button button-quiet button-small" aria-label="Undo" title="Undo" disabled={undoStack.length === 0} onClick={undoProjectChange}><Undo2 size={14}/> Undo</button><button className="button button-quiet button-small" aria-label="Redo" title="Redo" disabled={redoStack.length === 0} onClick={redoProjectChange}><Redo2 size={14}/> Redo</button><button className="button button-quiet" onClick={() => void exportVideo()}><Film size={15}/> Export WebM</button><button className="button button-primary" onClick={exportPlan}><Download size={15}/> {t("action.exportPlan")}</button><input ref={fileInput} type="file" accept=".json,.dionysus.json,application/json" hidden onChange={e => void importProject(e.target.files?.[0])}/></div></header>}
       <div className="page-content">
         <section className={"page-heading" + (view === "timeline" ? " timeline-page-heading" : "")}><div><div className="eyebrow"><span className="eyebrow-line"/> {t("heading.eyebrow")}</div><h1>{view === "storyboard" ? t("heading.storyboard.title") : view === "timeline" ? t("heading.timeline.title") : view === "assets" ? t("heading.assets.title") : t("heading.references.title")}</h1><p>{view === "storyboard" ? t("heading.storyboard.description") : view === "timeline" ? t("heading.timeline.description") : view === "assets" ? t("heading.assets.description") : t("heading.references.description")}</p></div><div className="heading-meta"><span className="status-dot"/> {t("status.autosaved")} <span className="meta-divider"/> <span>{t("project.versionFoundation")}</span></div></section>
         {view !== "timeline" && <section className="project-overview"><div className="overview-main"><div className="overview-icon"><Clapperboard size={19}/></div><div className="overview-copy"><div className="overview-kicker">{t("project.current")}</div><input className="project-name-input" aria-label={t("project.name")} value={project.name} onChange={e => change(p => ({ ...p, name: e.target.value }))}/><div className="project-subline"><span><Clock3 size={13}/> {t("project.runtimeSummary", { duration: time(runtime) })}</span><span><Film size={13}/> {t("project.shotCount", { count: project.shots.length })}</span><span><Layers3 size={13}/> {t("project.clipSlotCount", { count: slotCount })}</span></div></div></div><div className="project-specs"><div><span>{t("project.canvas")}</span><strong>{project.width} × {project.height}</strong></div><div><span>{t("project.frameRate")}</span><strong>{project.frameRate} FPS</strong></div><button className="icon-button" title="Project canvas settings" aria-label="Project canvas settings" onClick={openProjectSettings}><Settings2 size={17}/></button></div></section>}
@@ -2576,7 +2587,7 @@ export default function App() {
   <section className="timeline-source-browser" aria-label="Timeline source browser">
     <div className="timeline-source-heading"><div><span className="timeline-source-kicker">PROJECT MEDIA</span><strong>Sources</strong><small>{project.assets.length} assets available</small></div><button className="button button-quiet button-small" onClick={() => setView("assets")}>Manage</button></div>
     <div className="timeline-source-list">
-      {project.assets.filter(asset => ["video","image","audio","clip","script"].includes(asset.kind)).slice(0,8).map(asset => {
+      {project.assets.filter(asset => ["video","image","audio","clip","script"].includes(asset.kind)).map(asset => {
         const audio = asset.kind === "audio";
         const track = project.tracks.find(item => item.kind === (audio ? "audio" : "video"));
         return <button type="button" className="timeline-source-item" key={asset.id} onClick={() => {

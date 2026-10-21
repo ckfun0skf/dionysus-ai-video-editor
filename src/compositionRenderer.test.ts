@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { collectCompositionLayers, getCompositionDuration } from "./compositionRenderer";
+import { collectCompositionLayers, getCompositionDuration, isPlayableAudioLayer } from "./compositionRenderer";
 import { sampleProject } from "./sampleProject";
 
 describe("compositionRenderer", () => {
@@ -40,11 +40,20 @@ describe("compositionRenderer", () => {
     }, {
       id: "master-video-clip", name: "Master video clip", kind: "video", trackId: "track-video-1",
       start: 0, duration: 4, assetId: "video-asset", sourceIn: 1.5, sourceOut: 6, shortSourceBehavior: "loop", fitMode: "cover"
+    }, {
+      id: "linked-video-audio", name: "Master video clip audio", kind: "audio", trackId: "track-audio-1",
+      start: 0, duration: 4, assetId: "video-asset", linkedVideoClipId: "master-video-clip", sourceIn: 1.5, sourceOut: 5.5
     }];
     const layers = collectCompositionLayers(project);
-    expect(layers).toHaveLength(2);
+    expect(layers).toHaveLength(3);
     expect(layers[0]).toMatchObject({ id: "audio-clip", kind: "audio", start: 2, duration: 4, assetId: "audio-asset", muted: true, volume: 0.4, fadeIn: 0.5, fadeOut: 1 });
     expect(layers.find(layer => layer.id === "master-video-clip")).toMatchObject({ sourceIn: 1.5, sourceOut: 6, shortSourceBehavior: "loop", fitMode: "cover" });
+    const linkedAudio = layers.find(layer => layer.id === "linked-video-audio")!;
+    expect(linkedAudio).toMatchObject({ kind: "audio", assetId: "video-asset", linkedVideoClipId: "master-video-clip", sourceIn: 1.5 });
+    expect(isPlayableAudioLayer(linkedAudio, project.assets.find(asset => asset.id === "video-asset"))).toBe(true);
+    expect(isPlayableAudioLayer(linkedAudio, project.assets.find(asset => asset.id === "audio-asset"))).toBe(true);
+    expect(isPlayableAudioLayer({ kind: "audio" }, project.assets.find(asset => asset.id === "video-asset"))).toBe(false);
+    expect(isPlayableAudioLayer({ kind: "video" }, project.assets.find(asset => asset.id === "video-asset"))).toBe(false);
   });
 
   it("includes source-free Text blocks and procedural blocks, without pretending to render procedural code", () => {
