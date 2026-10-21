@@ -1498,6 +1498,28 @@ describe("Integrated timeline editor", () => {
       duration: placedVideo!.duration
     });
 
+    // Dragging from Project Media onto the video lane uses the same placement path,
+    // including linked audio creation, without opening a placement dialog.
+    const mediaTransfer = new Map<string, string>();
+    const mediaDataTransfer = {
+      setData: (type: string, value: string) => mediaTransfer.set(type, value),
+      getData: (type: string) => mediaTransfer.get(type) ?? "",
+      effectAllowed: "copy",
+      dropEffect: "copy"
+    };
+    const mediaDragStart = new Event("dragstart", { bubbles: true, cancelable: true });
+    Object.defineProperty(mediaDragStart, "dataTransfer", { value: mediaDataTransfer });
+    act(() => videoSourceButton!.dispatchEvent(mediaDragStart));
+    const mediaDrop = new MouseEvent("drop", { bubbles: true, cancelable: true, clientX: 0 });
+    Object.defineProperty(mediaDrop, "dataTransfer", { value: mediaDataTransfer });
+    act(() => lane!.dispatchEvent(mediaDrop));
+    await flushEffects();
+    const afterDrop = persistedProject();
+    const droppedVideo = afterDrop.timelineClips?.filter(clip => clip.assetId === videoSource.id && clip.kind === "video");
+    expect(droppedVideo).toHaveLength(2);
+    expect(afterDrop.timelineClips?.filter(clip => clip.linkedVideoClipId && droppedVideo!.some(video => video.id === clip.linkedVideoClipId))).toHaveLength(2);
+    expect(container.querySelector('[role="dialog"][aria-labelledby="asset-picker-title"]')).toBeNull();
+
     const beforeReopen = persistedProject().timelineClips?.find(clip => clip.assetId === source.id);
     act(() => root.unmount());
     root = createRoot(container);
