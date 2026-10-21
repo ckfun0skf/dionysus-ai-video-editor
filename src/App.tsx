@@ -643,7 +643,7 @@ export default function App() {
             style={{ left: (textClip.x ?? 0) + "%", top: (textClip.y ?? 75) + "%", width: (textClip.width ?? 100) + "%", height: (textClip.height ?? 18) + "%" }}
             onChange={event => setPreviewTextDraft(event.target.value)}
             onBlur={commitText}
-            onKeyDown={event => { if (event.key === "Escape") { event.preventDefault(); cancelPreviewTextCommitRef.current = true; setPreviewTextDraft(textClip.name); setEditingPreviewTextClipId(""); } else if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.blur(); } }}
+            onKeyDown={event => { if (event.key === "Escape") { event.preventDefault(); cancelPreviewTextCommitRef.current = true; event.currentTarget.blur(); setPreviewTextDraft(textClip.name); setEditingPreviewTextClipId(""); } else if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.blur(); } }}
           />;
         })()}
         {(tabKey === "master" ? collectCompositionLayers(project) : activeVersionTimelineTab?.id === tabKey ? activeVersionTimeline?.layers ?? [] : []).filter(layer => (layer.kind === "procedural" || layer.kind === "script") && editorTime >= layer.start && editorTime < layer.start + layer.duration && (layer.html !== undefined || layer.css !== undefined || layer.code !== undefined)).map(layer => <SandboxedCodePreview
