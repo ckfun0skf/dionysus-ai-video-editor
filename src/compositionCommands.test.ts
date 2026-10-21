@@ -81,6 +81,18 @@ describe("shared Composition editing commands", () => {
   });
 
 
+  it("removing a video track also removes linked audio on a separate audio track", () => {
+    const source = fixture();
+    const withFallback = addCompositionTrack(source, {
+      id: "v2", name: "Video 2", kind: "video", order: 3, legacyData: { kind: "video" },
+    });
+    const removed = removeCompositionTrack(withFallback, "v1", "v2");
+    expect(removed.tracks.some(track => track.id === "v1")).toBe(false);
+    expect(removed.tracks.some(track => track.id === "a1")).toBe(true);
+    expect(removed.placements).toHaveLength(0);
+    expect(() => assertValidCompositionDocument(removed)).not.toThrow();
+  });
+
   it("removes a video track with a linked group atomically and rejects removing a Master Shot track without fallback", () => {
     const source = fixture();
     const withShotTrack = addCompositionTrack(source, {
