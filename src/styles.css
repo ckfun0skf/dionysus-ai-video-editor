@@ -3463,3 +3463,18 @@
 @media (max-width: 760px) {
   .timeline-horizontal-scroll { --timeline-label-width: 180px !important; }
 }
+
+
+/* Issue #100: dragging to a lane edge previews a new layer before committing the drop. */
+.visual-track-lane { position: relative; }
+.new-layer-drop-preview {
+  position: absolute; z-index: 8; top: 1px; bottom: 1px; min-width: 72px;
+  display: flex; flex-direction: column; justify-content: center; gap: 3px;
+  overflow: hidden; padding: 4px 7px; border: 1px dashed var(--accent, #d5f36a);
+  border-radius: 5px; background: rgba(213, 243, 106, .14); color: var(--accent, #d5f36a);
+  pointer-events: none; box-shadow: 0 0 0 1px rgba(0,0,0,.25);
+}
+.new-layer-drop-preview.before { outline: 2px solid var(--accent, #d5f36a); outline-offset: 2px; }
+.new-layer-drop-preview.after { outline: 2px solid var(--accent, #d5f36a); outline-offset: -2px; }
+.new-layer-drop-preview strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
+.new-layer-drop-preview small { font: 9px "DM Mono", monospace; opacity: .9; white-space: nowrap; }
