@@ -2497,9 +2497,12 @@ export default function App() {
     if (!file) return;
     const mime = file.type.toLowerCase();
     const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
-    const kind: "video" | "audio" = mime.startsWith("audio/") || ["mp3", "wav", "m4a", "aac", "ogg", "flac"].includes(ext) || projectRef.current.tracks.find(item => item.id === assetPickerTrackId)?.kind === "audio"
-      ? "audio"
-      : "video";
+    const audioFile = mime.startsWith("audio/") || ["mp3", "wav", "m4a", "aac", "ogg", "flac"].includes(ext);
+    const videoFile = mime.startsWith("video/") || ["mp4", "mov", "webm", "m4v", "mkv"].includes(ext);
+    // Recognize the uploaded file first; the selected layer is only a fallback for unknown formats.
+    const kind: "video" | "audio" = audioFile ? "audio"
+      : videoFile ? "video"
+      : projectRef.current.tracks.find(item => item.id === assetPickerTrackId)?.kind === "audio" ? "audio" : "video";
     const assetId = id("asset");
     try {
       const [path, thumbnailPath, sourceDuration] = await Promise.all([
