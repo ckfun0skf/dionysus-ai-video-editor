@@ -427,6 +427,7 @@ export default function App() {
   const [selectedCompositionLayerId, setSelectedCompositionLayerId] = useState<string>("");
   const [editingPreviewTextClipId, setEditingPreviewTextClipId] = useState<string>("");
   const [previewTextDraft, setPreviewTextDraft] = useState("");
+  const cancelPreviewTextCommitRef = useRef(false);
   const [collapsedVideoTrackIds, setCollapsedVideoTrackIds] = useState<string[]>([]);
   const [rippleReorderMode, setRippleReorderMode] = useState(false);
   const [storyboardMode, setStoryboardMode] = useState<"flow" | "list">("flow");
@@ -626,6 +627,11 @@ export default function App() {
           const textClip = (project.timelineClips ?? []).find(item => item.id === editingPreviewTextClipId && item.kind === "text");
           if (!textClip || editorTime < textClip.start || editorTime >= textClip.start + textClip.duration) return null;
           const commitText = () => {
+            if (cancelPreviewTextCommitRef.current) {
+              cancelPreviewTextCommitRef.current = false;
+              setEditingPreviewTextClipId("");
+              return;
+            }
             if (previewTextDraft !== textClip.name) updateRootTimelineClip(textClip.id, { name: previewTextDraft });
             setEditingPreviewTextClipId("");
           };
@@ -637,7 +643,7 @@ export default function App() {
             style={{ left: (textClip.x ?? 0) + "%", top: (textClip.y ?? 75) + "%", width: (textClip.width ?? 100) + "%", height: (textClip.height ?? 18) + "%" }}
             onChange={event => setPreviewTextDraft(event.target.value)}
             onBlur={commitText}
-            onKeyDown={event => { if (event.key === "Escape") { setEditingPreviewTextClipId(""); setPreviewTextDraft(textClip.name); } else if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.blur(); } }}
+            onKeyDown={event => { if (event.key === "Escape") { event.preventDefault(); cancelPreviewTextCommitRef.current = true; setPreviewTextDraft(textClip.name); setEditingPreviewTextClipId(""); } else if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.blur(); } }}
           />;
         })()}
         {(tabKey === "master" ? collectCompositionLayers(project) : activeVersionTimelineTab?.id === tabKey ? activeVersionTimeline?.layers ?? [] : []).filter(layer => (layer.kind === "procedural" || layer.kind === "script") && editorTime >= layer.start && editorTime < layer.start + layer.duration && (layer.html !== undefined || layer.css !== undefined || layer.code !== undefined)).map(layer => <SandboxedCodePreview
