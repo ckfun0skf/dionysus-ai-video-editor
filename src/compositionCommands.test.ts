@@ -299,8 +299,18 @@ describe("shared Composition editing commands", () => {
     const moved = moveCompositionPlacement(unlinked, "audio", 9);
     expect(placement(moved, "audio").start).toBe(9);
     expect(placement(moved, "video").start).toBe(1);
-    const deleted = deleteCompositionPlacement(source, "video");
-    expect(deleted.placements).toHaveLength(0);
+    const withIndependentAudio = insertCompositionPlacement(source, {
+      id: "independent-audio",
+      name: "Independent audio",
+      trackId: "a1",
+      start: 0,
+      duration: 1,
+      order: 1,
+      source: { type: "asset", assetId: "independent-audio-asset" },
+      legacyData: { id: "independent-audio", kind: "audio", start: 0, duration: 1 },
+    });
+    const deleted = deleteCompositionPlacement(withIndependentAudio, "video");
+    expect(deleted.placements.map(item => item.id)).toEqual(["independent-audio"]);
   });
 
   it("rejects duplicate IDs, missing tracks, dangling links, invalid time, and cyclic links", () => {
