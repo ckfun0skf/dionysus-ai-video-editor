@@ -1423,7 +1423,7 @@ describe("Integrated timeline editor", () => {
 
     let edited = persistedProject();
     let placed = edited.timelineClips?.find(clip => clip.assetId === source.id);
-    expect(placed).toMatchObject({ assetId: source.id, trackId: targetTrackId, kind: "video", duration: 3 });
+    expect(placed).toMatchObject({ assetId: source.id, trackId: targetTrackId, kind: "video", duration: 1 }); // Still-image placements default to one second.
     expect(container.querySelector('[role="dialog"][aria-labelledby="asset-picker-title"]')).toBeNull();
     expect(container.querySelector(".timeline-placement-banner")).toBeNull();
     expect(container.querySelector(".integrated-preview-panel")).toBeTruthy();
