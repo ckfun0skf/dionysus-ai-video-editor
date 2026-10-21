@@ -1379,7 +1379,16 @@ describe("Integrated timeline editor", () => {
       createdAt: "2026-10-19T00:00:00.000Z",
       updatedAt: "2026-10-19T00:00:00.000Z"
     }));
-    project.assets = [...project.assets, ...earlierSources, source];
+    const videoSource = {
+      id: "integration-source-video",
+      name: "Integration Source Video",
+      kind: "video" as const,
+      path: "data:video/mp4;base64,",
+      duration: 8,
+      createdAt: "2026-10-20T00:00:00.000Z",
+      updatedAt: "2026-10-20T00:00:00.000Z"
+    };
+    project.assets = [...project.assets, ...earlierSources, source, videoSource];
     localStorage.setItem("dionysus.project.v1", JSON.stringify(project));
     localStorage.removeItem("dionysus.composition.v2");
     act(() => root.unmount());
@@ -1468,6 +1477,22 @@ describe("Integrated timeline editor", () => {
     expect(persistedProject().timelineClips?.find(clip => clip.assetId === source.id)).toMatchObject({
       start: trimmed.start,
       duration: trimmed.duration
+    });
+
+    // Placing a video asset also creates a linked audio child on the Audio layer.
+    const videoSourceButton = Array.from(container.querySelectorAll<HTMLButtonElement>(".timeline-source-item"))
+      .find(button => button.textContent?.includes(videoSource.name));
+    expect(videoSourceButton).toBeTruthy();
+    click(videoSourceButton!);
+    await flushEffects();
+    const withVideo = persistedProject();
+    const placedVideo = withVideo.timelineClips?.find(clip => clip.assetId === videoSource.id && clip.kind === "video");
+    expect(placedVideo).toBeTruthy();
+    expect(withVideo.timelineClips?.find(clip => clip.linkedVideoClipId === placedVideo!.id)).toMatchObject({
+      kind: "audio",
+      assetId: videoSource.id,
+      start: placedVideo!.start,
+      duration: placedVideo!.duration
     });
 
     const beforeReopen = persistedProject().timelineClips?.find(clip => clip.assetId === source.id);
