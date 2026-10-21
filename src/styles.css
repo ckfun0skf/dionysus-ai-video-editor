@@ -3481,7 +3481,7 @@
 
 
 /* Linked audio rows are explicit drop targets for relinking source audio. */
-.linked-audio-drop-target { outline: 1px dashed transparent; outline-offset: -2px; }
-.linked-audio-drop-target:has(.visual-media-clip.selected) { outline-color: rgba(255,255,255,.08); }
+.linked-audio-drop-target { outline: 1px dashed transparent; outline-offset: -2px; transition: outline-color 100ms ease, background-color 100ms ease; }
+.linked-audio-drop-target.active { outline: 2px dashed var(--accent, #d5f36a); outline-offset: -3px; background-color: rgba(213,243,106,.1); }
 .linked-audio-drop-target .visual-media-clip[draggable="true"] { cursor: grab; }
 .linked-audio-drop-target .visual-media-clip[draggable="true"]:active { cursor: grabbing; }
