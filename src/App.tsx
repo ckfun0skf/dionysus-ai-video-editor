@@ -530,7 +530,7 @@ export default function App() {
           : new Set<string>();
         const previewScale = Math.min(1280 / Math.max(1, previewCanvasWidth), 720 / Math.max(1, previewCanvasHeight));
         const previewDimensions = { width: Math.max(1, Math.round(previewCanvasWidth * previewScale)), height: Math.max(1, Math.round(previewCanvasHeight * previewScale)) };
-        await renderCompositionFrame(frame, project, layers, editorTime, previewDimensions, previewImagesRef.current, previewVideosRef.current, releases, compositionPath);
+        await renderCompositionFrame(frame, project, layers, editorTime, { ...previewDimensions, interactivePreview: true }, previewImagesRef.current, previewVideosRef.current, releases, compositionPath);
         if (renderId !== previewRenderId.current) return;
         const context = canvas.getContext("2d");
         if (context) {
