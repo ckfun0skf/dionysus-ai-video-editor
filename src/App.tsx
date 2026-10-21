@@ -296,6 +296,10 @@ export default function App() {
   const [assetPickerSearch, setAssetPickerSearch] = useState("");
   const [assetPickerFilter, setAssetPickerFilter] = useState<"all" | "video" | "code" | "audio">("all");
   const [assetPickerSort, setAssetPickerSort] = useState<"created" | "modified" | "name">("name");
+  const [timelineMediaView, setTimelineMediaView] = useState<"list" | "grid">("list");
+  const [timelineMediaSearch, setTimelineMediaSearch] = useState("");
+  const [timelineMediaFilter, setTimelineMediaFilter] = useState<"all" | "video" | "image" | "audio">("all");
+  const [timelineMediaSort, setTimelineMediaSort] = useState<"name" | "recent" | "duration">("recent");
   const [codeAssetDraft, setCodeAssetDraft] = useState({ name: "New code asset", html: "<main>Build something here</main>", css: "body { font-family: system-ui; display: grid; place-items: center; min-height: 100vh; }", js: "console.log(\"Ready to create\");" });
 
   const [showProfileForm, setShowProfileForm] = useState(false);
@@ -2585,9 +2589,10 @@ export default function App() {
 </div>
 <div className="timeline-tab-content master-timeline-content" style={{display:activeTimelineTabId === "master" ? "block" : "none"}}><div className="timeline-top-workspace">
   <section className="timeline-source-browser" aria-label="Timeline source browser">
-    <div className="timeline-source-heading"><div><span className="timeline-source-kicker">PROJECT MEDIA</span><strong>Sources</strong><small>{project.assets.length} assets available</small></div><button className="button button-quiet button-small" onClick={() => setView("assets")}>Manage</button></div>
-    <div className="timeline-source-list">
-      {project.assets.filter(asset => ["video","image","audio","clip","script"].includes(asset.kind)).map(asset => {
+    <div className="timeline-source-heading"><div><span className="timeline-source-kicker">PROJECT MEDIA</span><strong>Sources</strong><small>{project.assets.filter(asset => ["video","image","audio","clip","script"].includes(asset.kind)).length} assets available</small></div><div className="timeline-source-heading-actions"><button type="button" className={"media-view-toggle"+(timelineMediaView==="grid"?" active":"")} aria-label="Grid view" title="Grid view" aria-pressed={timelineMediaView==="grid"} onClick={()=>setTimelineMediaView("grid")}><Grid2 size={15}/></button><button type="button" className={"media-view-toggle"+(timelineMediaView==="list"?" active":"")} aria-label="List view" title="List view" aria-pressed={timelineMediaView==="list"} onClick={()=>setTimelineMediaView("list")}><List size={15}/></button><button className="button button-quiet button-small" onClick={() => setView("assets")}>Manage</button></div></div>
+    <div className="timeline-source-controls"><input aria-label="Search Project Media" placeholder="Search media…" value={timelineMediaSearch} onChange={event=>setTimelineMediaSearch(event.target.value)}/><select aria-label="Filter media type" value={timelineMediaFilter} onChange={event=>setTimelineMediaFilter(event.target.value as typeof timelineMediaFilter)}><option value="all">All types</option><option value="video">Video</option><option value="image">Image</option><option value="audio">Audio</option></select><select aria-label="Sort Project Media" value={timelineMediaSort} onChange={event=>setTimelineMediaSort(event.target.value as typeof timelineMediaSort)}><option value="recent">Recently added</option><option value="name">Name</option><option value="duration">Duration</option></select></div>
+    <div className={"timeline-source-list "+(timelineMediaView==="grid"?"grid-view":"list-view")}>
+      {project.assets.filter(asset => ["video","image","audio","clip","script"].includes(asset.kind)).filter(asset => asset.name.toLowerCase().includes(timelineMediaSearch.toLowerCase())&&(timelineMediaFilter==="all"||asset.kind===timelineMediaFilter)).sort((a,b)=>timelineMediaSort==="name"?a.name.localeCompare(b.name):timelineMediaSort==="duration"?(b.duration??0)-(a.duration??0):(b.createdAt??"").localeCompare(a.createdAt??"")).map(asset => {
         const audio = asset.kind === "audio";
         const track = project.tracks.find(item => item.kind === (audio ? "audio" : "video"));
         return <button type="button" className="timeline-source-item" key={asset.id} onClick={() => {
@@ -2597,11 +2602,11 @@ export default function App() {
           setAssetPickerFilter("all");
         }} title={"Choose " + asset.name + " for the timeline"}>
           <span className="timeline-source-thumb"><AssetThumbnail asset={asset} assets={project.assets}/></span>
-          <span className="timeline-source-copy"><strong>{asset.name}</strong><small>{asset.kind === "clip" ? "Clip asset" : asset.kind === "script" ? "Code" : asset.kind}</small></span>
+          <span className="timeline-source-copy"><strong title={asset.name}>{asset.name}</strong><small>{asset.kind === "clip" ? "Clip asset" : asset.kind === "script" ? "Code" : asset.kind}{asset.duration ? " · "+time(asset.duration) : ""}</small></span>
           <Plus size={14}/>
         </button>;
       })}
-      {project.assets.length === 0 && <div className="timeline-source-empty"><Film size={20}/><strong>No sources yet</strong><span>Import video, images or audio to start editing.</span><button className="button button-primary button-small" onClick={() => setView("assets")}>Open Assets</button></div>}
+      {project.assets.filter(asset => ["video","image","audio","clip","script"].includes(asset.kind)).filter(asset => asset.name.toLowerCase().includes(timelineMediaSearch.toLowerCase())&&(timelineMediaFilter==="all"||asset.kind===timelineMediaFilter)).length === 0 && <div className="timeline-source-empty"><Film size={20}/><strong>No sources yet</strong><span>Import video, images or audio to start editing.</span><button className="button button-primary button-small" onClick={() => setView("assets")}>Open Assets</button></div>}
     </div>
     <div className="timeline-source-footer"><button className="button button-quiet button-small" onClick={() => { const track = project.tracks.find(item => item.kind === "video"); if (track) setAssetPickerTrackId(track.id); else setNotice("Add a video layer before importing a source."); }}><Plus size={13}/> Add video / image</button><button className="button button-quiet button-small" onClick={() => { const track = project.tracks.find(item => item.kind === "audio"); if (track) setAssetPickerTrackId(track.id); else setNotice("Add an audio layer before importing audio."); }}><AudioLines size={13}/> Add audio</button></div>
   </section>
