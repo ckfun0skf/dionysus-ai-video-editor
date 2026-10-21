@@ -815,7 +815,33 @@ export default function App() {
       return;
     }
     try {
-      changeRootComposition(root => applyCanonicalCompositionInsertion(root, projectRef.current, plan));
+      changeRootComposition(root => {
+        let next = applyCanonicalCompositionInsertion(root, projectRef.current, plan);
+        // Keep embedded video audio as a linked child on the Audio layer. The browser's
+        // metadata API does not reliably expose whether a container has an audio stream,
+        // so the linked child is created for imported video sources and can be muted/unlinked.
+        if (asset.kind === "video") {
+          const audioTrack = projectRef.current.tracks.find(item => item.kind === "audio");
+          if (audioTrack && next.tracks.some(item => item.id === audioTrack.id && item.kind === "audio")) {
+            const video = plan.clip;
+            const linkedAudio: TimelineClip = {
+              id: id("timeline-audio"),
+              name: asset.name + " audio",
+              kind: "audio",
+              trackId: audioTrack.id,
+              start: video.start,
+              duration: video.duration,
+              assetId: asset.id,
+              linkedVideoClipId: video.id,
+              sourceIn: video.sourceIn ?? 0,
+              sourceOut: (video.sourceIn ?? 0) + video.duration
+            };
+            const audioPlacement = createRootCompositionPlacementForTimelineClip(projectRef.current, next, linkedAudio);
+            next = insertCompositionPlacement(next, audioPlacement);
+          }
+        }
+        return next;
+      });
       setSelectedTimelineClipId(plan.clip.id);
       setTimelineClipSettingsId(plan.clip.id);
       playbackTimeRef.current = plan.start;
