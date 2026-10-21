@@ -1388,35 +1388,22 @@ describe("Integrated timeline editor", () => {
     await flushEffects();
     await openTimelineView();
 
+    // Select the overlay Video layer first; Project Media should place directly without a picker.
+    const targetTrackId = "track-video-2";
+    const targetLabel = container.querySelector<HTMLElement>(`.visual-track-label:has(+ .visual-track-lane[data-track-id="${targetTrackId}"])`);
+    const lane = container.querySelector<HTMLElement>(`.visual-track-lane[data-track-id="${targetTrackId}"]`);
+    expect(lane).toBeTruthy();
+    if (targetLabel) click(targetLabel);
     const sourceButton = Array.from(container.querySelectorAll<HTMLButtonElement>(".timeline-source-item"))
       .find(button => button.textContent?.includes(source.name));
     expect(sourceButton).toBeTruthy();
     click(sourceButton!);
-
-    const picker = container.querySelector('[role="dialog"][aria-labelledby="asset-picker-title"]');
-    expect(picker).toBeTruthy();
-    const assetCard = Array.from(picker!.querySelectorAll<HTMLButtonElement>(".asset-picker-card"))
-      .find(button => button.textContent?.includes(source.name));
-    expect(assetCard).toBeTruthy();
-    click(assetCard!);
-    expect(container.querySelector(".timeline-placement-banner")?.textContent).toContain(source.name);
-
-    // Use the overlay Video layer so the fixture's pre-existing Master Shots remain untouched.
-    const targetTrackId = "track-video-2";
-    const lane = container.querySelector<HTMLElement>(`.visual-track-lane[data-track-id="${targetTrackId}"]`);
-    expect(lane).toBeTruthy();
-    Object.defineProperty(lane!, "getBoundingClientRect", {
-      configurable: true,
-      value: () => ({ left: 0, top: 0, right: 1000, bottom: 64, width: 1000, height: 64, x: 0, y: 0, toJSON: () => ({}) })
-    });
-    const place = new MouseEvent("pointerdown", { bubbles: true, cancelable: true, clientX: 200 });
-    Object.defineProperties(place, { pointerId: { configurable: true, value: 41 }, button: { configurable: true, value: 0 } });
-    act(() => lane!.dispatchEvent(place));
     await flushEffects();
 
     let edited = persistedProject();
     let placed = edited.timelineClips?.find(clip => clip.assetId === source.id);
     expect(placed).toMatchObject({ assetId: source.id, trackId: targetTrackId, kind: "video", duration: 3 });
+    expect(container.querySelector('[role="dialog"][aria-labelledby="asset-picker-title"]')).toBeNull();
     expect(container.querySelector(".timeline-placement-banner")).toBeNull();
     expect(container.querySelector(".integrated-preview-panel")).toBeTruthy();
     expect(container.querySelector(".integrated-preview-frame canvas")).toBeTruthy();
