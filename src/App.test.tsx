@@ -928,16 +928,11 @@ describe("App history integration", () => {
     expect(audioAssetCard).toBeTruthy();
     click(audioAssetCard!);
     await flushEffects();
-    expect(container.querySelector(".timeline-placement-banner")?.textContent).toContain("Picker audio asset");
+    expect(container.querySelector(".timeline-placement-banner")).toBeNull();
     const addedAudioTrack = persistedProject().tracks.find(track => track.kind === "audio" && !audioTrackIdsBefore.has(track.id));
     expect(addedAudioTrack).toBeTruthy();
-    const addedAudioLane = container.querySelector<HTMLElement>('.visual-track-lane[data-track-id="' + addedAudioTrack!.id + '"]');
-    expect(addedAudioLane).toBeTruthy();
-    Object.defineProperty(addedAudioLane!, "getBoundingClientRect", { configurable: true, value: () => ({ left: 0, top: 0, right: 100, bottom: 76, width: 100, height: 76, x: 0, y: 0, toJSON: () => ({}) }) });
-    const placeAudio = new MouseEvent("pointerdown", { bubbles: true, cancelable: true, clientX: 20 });
-    act(() => addedAudioLane!.dispatchEvent(placeAudio));
-    await flushEffects();
-    expect((persistedProject().timelineClips ?? []).some(clip => clip.assetId === "test-audio-picker-asset" && clip.kind === "audio" && clip.trackId === addedAudioTrack!.id)).toBe(true);
+    const addedAudioClip = (persistedProject().timelineClips ?? []).find(clip => clip.assetId === "test-audio-picker-asset" && clip.kind === "audio" && clip.trackId === addedAudioTrack!.id);
+    expect(addedAudioClip).toMatchObject({ start: 0, duration: 4, assetId: "test-audio-picker-asset" });
     expect(container.querySelector(".asset-picker-dialog")).toBeNull();
 
     const visibleTrackKinds = Array.from(container.querySelectorAll<HTMLElement>(".visual-track-group")).map(group =>
