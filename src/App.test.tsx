@@ -905,6 +905,7 @@ describe("App history integration", () => {
     const projectWithAudio = persistedProject();
     projectWithAudio.assets.push({ id: "test-audio-picker-asset", name: "Picker audio asset", kind: "audio", path: "data:audio/wav;base64,UklGRg==", duration: 4 });
     localStorage.setItem("dionysus.project.v1", JSON.stringify(projectWithAudio));
+    localStorage.removeItem("dionysus.composition.v2");
     act(() => root.unmount());
     root = createRoot(container);
     act(() => root.render(<App />));
@@ -2653,6 +2654,7 @@ describe("mobile audio clip controls", () => {
     const onlyFirstAudio = persistedProject();
     onlyFirstAudio.timelineClips = (onlyFirstAudio.timelineClips ?? []).filter(clip => clip.id !== "test-audio-2");
     localStorage.setItem("dionysus.project.v1", JSON.stringify(onlyFirstAudio));
+    localStorage.removeItem("dionysus.composition.v2");
     act(() => root.unmount());
     root = createRoot(container);
     act(() => root.render(<App />));
