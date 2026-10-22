@@ -229,3 +229,12 @@ Remaining work: move other command families through the session boundary; consol
 Exact code-head CI passed on `f288bc97afb3c6ae097482534cef2b2f50b4408b` in [run 39862822226](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39862822226): 26 test files / 281 tests; TypeScript/build passed; audit 0 vulnerabilities. The docs/task synchronization creates a newer SHA that needs a fresh exact-head run.
 
 Remaining work: route import and remaining direct state mutations through the session boundary; consolidate recovery/persistence without breaking v1 imports; migrate non-root editing and render/playback to the shared Composition contract. No browser smoke tests or UI acceptance are claimed.
+
+
+## E1 implementation checkpoint — 2026-10-22: import boundary
+
+`createImportedEditorSession()` in `src/editorSession.ts` now owns project import pairing. It accepts an imported canonical root only when the root's legacy Project projection exactly matches the imported Project; otherwise it selects the deterministic migrated root. In both cases it returns the Project compatibility projection rebuilt from the selected Composition. `App.tsx` routes import through this helper and resets paired history after the session is constructed.
+
+The new import tests cover accepted canonical root, stale canonical geometry fallback, schema-1.0 migration, pair consistency, and input immutability. Exact code-head CI passed on `4e372e079d8b3f4068493b472eb34956ece0eb52` in [run 39863556870](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39863556870): 26 test files / 283 tests; TypeScript/build passed; audit 0 vulnerabilities. The docs/task synchronization creates a newer SHA that needs fresh exact-head verification.
+
+Remaining: route other direct state mutations through the session boundary; safely consolidate recovery/persistence without breaking v1 imports; migrate non-root editing and render/playback to the shared Composition contract. No browser smoke tests or UI acceptance are claimed.
