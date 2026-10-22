@@ -7,7 +7,7 @@ import { validateProject } from "./projectValidation";
 import { addClipVersionLayer as addNestedLayer, addClipVersionTrack as addNestedTrack, deleteClipVersionLayer as deleteNestedLayer, duplicateClipVersionComposition, moveClipVersionLayer as moveNestedLayer, normalizeClipVersionTracks, updateClipVersionLayer as updateNestedLayer } from "./clipVersionTracks";
 import { createProjectDocument, readProjectDocument } from "./projectDocument";
 import { createRootCompositionPlacementForTimelineClip, migrateLegacyProjectToComposition, projectRootCompositionToLegacy } from "./compositionMigration";
-import { addCompositionLinkedAudioChild, addCompositionTrack, applyCompositionResizePreview, assertValidCompositionDocument, deleteCompositionPlacement, duplicateCompositionPlacement, duplicateLinkedAudio, extractLinkedAudio, insertCompositionPlacement, moveCompositionPlacement, moveCompositionPlacementToTrack, removeCompositionTrack, reorderCompositionTrack, rippleReorderCompositionMasterShots, splitCompositionPlacement, trimCompositionPlacement, updateCompositionLinkedAudioChild, updateCompositionPlacement, updateCompositionTrack } from "./compositionCommands";
+import { addCompositionLinkedAudioChild, addCompositionTrack, applyCompositionResizePreview, deleteCompositionPlacement, duplicateCompositionPlacement, duplicateLinkedAudio, extractLinkedAudio, insertCompositionPlacement, moveCompositionPlacement, moveCompositionPlacementToTrack, removeCompositionTrack, rippleReorderCompositionMasterShots, splitCompositionPlacement, trimCompositionPlacement, updateCompositionLinkedAudioChild, updateCompositionPlacement, updateCompositionTrack } from "./compositionCommands";
 import { moveNormalizedFrame, resizeNormalizedFrame } from "./previewTransform";
 import { getAllowedChildClipAssets, wouldCreateClipAssetCycle } from "./clipAssetGraph";
 import { t } from "./i18n";
@@ -29,6 +29,7 @@ import {
   type ProjectTimelineInsertResolution,
 } from "./projectTimelinePlacement";
 import { createEditorSessionHistory, recordEditorSessionChange, redoEditorSessionChange, undoEditorSessionChange, type EditorSessionHistory, type EditorSessionSnapshot } from "./editorSessionHistory";
+import { commitEditorSessionChange } from "./editorSession";
 import { collectCompositionLayers, isPlayableAudioLayer, renderCompositionFrame, exportCompositionWebM, downloadExport } from "./compositionRenderer";
 import { createClipVersionSnapshot } from "./clipVersionSnapshot";
 import AIGenerationPanel from "./AIGenerationPanel";
@@ -692,66 +693,6 @@ export default function App() {
 
   const selectedStart = useMemo(() => getMasterShotStart(project.shots, selectedId), [project.shots, selectedId]);
   const slotCount = project.shots.reduce((n, s) => n + s.slots.length, 0);
-  function reconcileRootComposition(current: CompositionDocument, target: CompositionDocument): CompositionDocument {
-    let next = structuredClone(current);
-    const targetTrackIds = new Set(target.tracks.map(track => track.id));
-    for (const track of target.tracks) {
-      if (!next.tracks.some(item => item.id === track.id)) next = addCompositionTrack(next, track);
-      else next = updateCompositionTrack(next, track.id, track);
-    }
-
-    const targetPlacementIds = new Set(target.placements.map(placement => placement.id));
-    for (const placement of [...next.placements]) {
-      if (!targetPlacementIds.has(placement.id) && next.placements.some(item => item.id === placement.id)) {
-        next = deleteCompositionPlacement(next, placement.id);
-      }
-    }
-
-    // Existing canonical placements are edited with the shared immutable commands; newly inserted
-    // legacy-domain items enter through the Composition insertion invariant checks.
-    for (const desired of target.placements) {
-      const existing = next.placements.find(placement => placement.id === desired.id);
-      if (!existing) {
-        next = insertCompositionPlacement(next, structuredClone(desired));
-        continue;
-      }
-      const current = next.placements.find(placement => placement.id === desired.id)!;
-      // Legacy project edits may refresh domain metadata, but must never overwrite canonical
-      // timing, track, source range, typed source or linked-group state for an existing placement.
-      next = updateCompositionPlacement(next, desired.id, {
-        name: desired.name,
-        legacyData: { ...current.legacyData, ...structuredClone(desired.legacyData) },
-      });
-    }
-
-    const targetTrackOrder = [...target.tracks].sort((a, b) => a.order - b.order);
-    targetTrackOrder.forEach((track, index) => {
-      const ordered = [...next.tracks].sort((a, b) => a.order - b.order);
-      const currentIndex = ordered.findIndex(item => item.id === track.id);
-      if (currentIndex >= 0 && currentIndex !== index) next = reorderCompositionTrack(next, track.id, index);
-    });
-    for (const track of [...next.tracks]) {
-      if (targetTrackIds.has(track.id)) continue;
-      const fallback = targetTrackOrder.find(item => item.kind === "video")?.id;
-      next = removeCompositionTrack(next, track.id, fallback);
-    }
-    next = {
-      ...next,
-      id: target.id,
-      name: target.name,
-      duration: target.duration,
-      frameRate: target.frameRate,
-      width: target.width,
-      height: target.height,
-      provenance: target.provenance,
-      nestedCompositions: structuredClone(target.nestedCompositions),
-      legacyData: structuredClone(target.legacyData),
-      tracks: [...target.tracks].sort((a, b) => a.order - b.order).map((track, order) => ({ ...structuredClone(track), order })),
-    };
-    assertValidCompositionDocument(next);
-    return next;
-  }
-
   function change(fn: (p: DionysusProject) => DionysusProject, historyGroup = "", canonicalRoot?: CompositionDocument) {
     const now = Date.now();
     const current = editorSessionRef.current.project;
@@ -765,12 +706,14 @@ export default function App() {
     editorHistoryRef.current = nextHistory;
     setEditorHistory(nextHistory);
     const next = { ...fn(copy(current)), updatedAt: new Date().toISOString() };
-    // Explicit root commands supply the canonical document first. Non-root domain edits refresh
-    // the root snapshot through the legacy migration until those domain editors are promoted.
-    const nextRoot = canonicalRoot ? structuredClone(canonicalRoot) : reconcileRootComposition(currentRoot, migrateLegacyProjectToComposition(next).rootComposition);
-    const projected = projectRootCompositionToLegacy(next, nextRoot);
-    editorSessionRef.current = { project: projected, composition: nextRoot };
-    setEditorSession(editorSessionRef.current);
+    const nextSession = commitEditorSessionChange(
+      { project: current, composition: currentRoot },
+      next,
+      canonicalRoot,
+    );
+    const projected = nextSession.project;
+    editorSessionRef.current = nextSession;
+    setEditorSession(nextSession);
     // Migrations may remove a legacy Audio Track that existed only to store owned source-audio
     // children. Keep the workspace selection on a real track rather than leaving stale controls
     // that try to edit a track no longer present in the canonical Composition.
