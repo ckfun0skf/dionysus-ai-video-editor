@@ -36,9 +36,10 @@ type RecoveryDocument = {
 };
 
 /**
- * Decide whether the canonical envelope is a safer recovery source than the legacy
- * mirror. Identity must match and both revisions must be parseable; otherwise prefer
- * a valid legacy document instead of letting an ambiguous canonical snapshot win.
+ * Prefer the canonical envelope when it refers to the same project as the legacy mirror.
+ * The v2 document is written first and is the authoritative snapshot; timestamps are
+ * metadata, not a vote between two independently mutable representations. If identity
+ * differs, keep the legacy document as the safer recovery candidate.
  */
 export function shouldPreferCompositionRecovery(
   legacyRead: RecoveryDocument | undefined,
@@ -46,14 +47,6 @@ export function shouldPreferCompositionRecovery(
 ): boolean {
   if (!compositionRead) return false;
   if (!legacyRead) return true;
-  if (
-    legacyRead.project.id !== compositionRead.project.id ||
-    legacyRead.project.name !== compositionRead.project.name
-  ) return false;
-
-  const legacyRevision = Date.parse(legacyRead.project.updatedAt);
-  const compositionRevision = Date.parse(compositionRead.project.updatedAt);
-  return Number.isFinite(legacyRevision) &&
-    Number.isFinite(compositionRevision) &&
-    compositionRevision >= legacyRevision;
+  return legacyRead.project.id === compositionRead.project.id &&
+    legacyRead.project.name === compositionRead.project.name;
 }
