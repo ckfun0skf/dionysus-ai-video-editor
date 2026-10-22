@@ -191,3 +191,8 @@ Current PR: [#111](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/11
 ### Active E1/E2 continuation — recovery arbitration (2026-10-22)
 
 The latest increment extracts `shouldPreferCompositionRecovery()` into `src/editorSessionPersistence.ts` and tests identity/revision edge cases. Verify exact-head CI after this docs sync, and comment on Issue #110 after each meaningful increment. Next inspect startup's repeated reads/projections and design a single-authority persistence/recovery transition that still imports schema-1.0 projects. Keep Issue #100 open; no browser smoke tests or merge without explicit approval.
+
+
+### Active E2 continuation — paired startup recovery read (2026-10-22)
+
+Latest code now reads the v1 and v2 recovery keys once in `createInitialEditorSession()` and uses the same parsed results for both project selection and canonical-root acceptance. Verify exact-head CI after this docs sync, and comment on Issue #110 after each meaningful increment. Next assess a single-authority persistence/recovery migration; do not simply delete the v1 key while legacy imports and consumers still exist. Keep Issue #100 open, no browser smoke tests, and no merge without explicit approval.
