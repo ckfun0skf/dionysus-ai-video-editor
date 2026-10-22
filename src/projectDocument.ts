@@ -1,5 +1,5 @@
 import type { DionysusProject } from "./types";
-import { migrateLegacyProjectToComposition, projectRootCompositionToLegacy } from "./compositionMigration";
+import { migrateLegacyProjectToComposition, migrateLinkedAudioPlacementsToOwnedChildren, projectRootCompositionToLegacy } from "./compositionMigration";
 import type { CompositionDocument } from "./compositionModel";
 import { assertValidCompositionDocument } from "./compositionCommands";
 
@@ -55,7 +55,9 @@ function readCompositionWarnings(value: unknown): DionysusProjectDocumentV2["com
 
 export function createProjectDocument(project: DionysusProject, canonicalRoot?: CompositionDocument): DionysusProjectDocumentV2 {
   const migrated = migrateLegacyProjectToComposition(project);
-  const rootComposition = canonicalRoot ? structuredClone(canonicalRoot) : migrated.rootComposition;
+  const rootComposition = migrateLinkedAudioPlacementsToOwnedChildren(
+    canonicalRoot ? structuredClone(canonicalRoot) : migrated.rootComposition
+  );
   assertValidCompositionDocument(rootComposition);
   // Never export stale schema-1.0 placement geometry next to a different canonical root.
   const projectedProject = projectRootCompositionToLegacy(project, rootComposition);
@@ -103,7 +105,9 @@ export function readProjectDocument(value: unknown, includeCompositionModel = fa
 
     // Validate canonical snapshots independently. Their timing/source/track/link values are
     // allowed to differ from a stale schema-1.0 projection; that projection is rebuilt from root.
-    const root = compositionModel.rootComposition as unknown as CompositionDocument;
+    const root = migrateLinkedAudioPlacementsToOwnedChildren(
+      compositionModel.rootComposition as unknown as CompositionDocument
+    );
     assertValidCompositionDocument(root);
     const clipCompositions = readCompositionSnapshots(compositionModel.clipCompositions, "Clip");
     const legacyShotSlotCompositions = readCompositionSnapshots(compositionModel.legacyShotSlotCompositions, "legacy Shot Slot");
