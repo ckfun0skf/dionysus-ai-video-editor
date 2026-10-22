@@ -651,3 +651,8 @@ Verify the current branch head and its CI first. If it passes, continue the root
 - `persistEditorSession()` now writes only `dionysus.composition.v2`. The v1 `dionysus.project.v1` key is retained as a read-only migration/recovery fallback; it is no longer rewritten on every edit.
 - Startup chooses one complete valid recovery document: a valid v2 envelope is authoritative, regardless of its project ID relative to a stale v1 mirror; v1 is used only when v2 is absent/invalid. The selected v2 Project and root Composition remain internally validated by `readProjectDocument()` and exact projection matching.
 - Persistence tests now assert canonical-only writes, projection correctness, and that a failed canonical write leaves an existing legacy fallback untouched. This is a single active authority with a legacy fallback, not a deletion of old data. Exact-head CI is pending after docs sync.
+
+
+## Validation correction — App tests follow canonical persistence (2026-10-22)
+
+The first CI run after switching autosave to canonical-only failed because the App integration-test helper still read only the legacy localStorage key. The product behavior is intentionally v2-first; `src/App.test.tsx` now reads the v2 envelope's Project projection first and uses v1 only as fallback. The failing run is [39866352949](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39866352949); rerun exact-head CI after this test adaptation. No production test failure has been isolated yet beyond the stale test helper assumptions; verify the full suite before claiming success.
