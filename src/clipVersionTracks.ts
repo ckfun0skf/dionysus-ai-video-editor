@@ -1,6 +1,6 @@
 import type { ClipVersion, CompositionLayer, TimelineTrack } from "./types";
 import type { CompositionDocument, CompositionPlacement, CompositionSourceReference, CompositionTrack } from "./compositionModel";
-import { applyCompositionResizePreview, deleteCompositionPlacement, insertCompositionPlacement, moveCompositionPlacementToTrack, updateCompositionPlacement, type CompositionResizePreview } from "./compositionCommands";
+import { applyCompositionResizePreview, deleteCompositionPlacement, insertCompositionPlacement, moveCompositionPlacementToTrack, updateCompositionPlacement, updateCompositionTrack, type CompositionResizePreview } from "./compositionCommands";
 
 export type CanonicalNestedTrackKind = "video" | "audio" | "text";
 
@@ -85,6 +85,26 @@ export function addClipVersionTrack(
   };
   const updatedComposition = { ...composition, tracks: [...composition.tracks, compositionTrack] };
   return { ...normalized, tracks: [...(normalized.tracks ?? []), nextTrack], composition: updatedComposition };
+}
+
+/** Update a nested track through the canonical Composition command and refresh its compatibility projection. */
+export function updateClipVersionTrack(
+  version: ClipVersion,
+  trackId: string,
+  patch: Partial<Pick<TimelineTrack, "name" | "muted" | "backgroundColor" | "backgroundTransparent" | "opacity">>,
+): ClipVersion {
+  const normalized = normalizeClipVersionTracks(version);
+  const track = normalized.tracks?.find(item => item.id === trackId);
+  if (!track) throw new Error("Clip Version track not found.");
+  const document = compositionDocumentFromClipVersion(normalized);
+  const canonicalTrack = document.tracks.find(item => item.id === trackId);
+  if (!canonicalTrack) throw new Error("Clip Version Composition track not found.");
+  const legacyData = { ...(canonicalTrack.legacyData ?? {}), ...structuredClone(patch) };
+  const updated = updateCompositionTrack(document, trackId, {
+    ...structuredClone(patch),
+    legacyData,
+  });
+  return versionWithComposition(normalized, updated);
 }
 
 /** Add a source placement to a compatible track, creating a deterministic default if needed. */
