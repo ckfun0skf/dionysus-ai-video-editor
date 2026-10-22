@@ -196,3 +196,8 @@ The latest increment extracts `shouldPreferCompositionRecovery()` into `src/edit
 ### Active E2 continuation — paired startup recovery read (2026-10-22)
 
 Latest code now reads the v1 and v2 recovery keys once in `createInitialEditorSession()` and uses the same parsed results for both project selection and canonical-root acceptance. Verify exact-head CI after this docs sync, and comment on Issue #110 after each meaningful increment. Next assess a single-authority persistence/recovery migration; do not simply delete the v1 key while legacy imports and consumers still exist. Keep Issue #100 open, no browser smoke tests, and no merge without explicit approval.
+
+
+### Active E2 continuation — canonical recovery precedence
+
+The latest recovery policy treats a valid v2 envelope as authoritative when its project identity matches the v1 mirror; timestamps no longer decide between two snapshots of the same project. Identity mismatch falls back to the legacy candidate, and legacy import remains available if v2 is absent/invalid. Check exact-head CI after docs sync and update Issue #110 after each meaningful increment. Next decide and test when the compatibility mirror can stop being written, without losing legacy import or recovery safety. Issue #100 stays open; no browser smoke tests or merge without explicit approval.
