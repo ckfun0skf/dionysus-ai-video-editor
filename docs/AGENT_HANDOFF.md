@@ -644,3 +644,10 @@ Verify the current branch head and its CI first. If it passes, continue the root
 - Tightened `shouldPreferCompositionRecovery()`: when a valid v2 envelope and v1 mirror identify the same project, v2 wins regardless of timestamp ordering. The v2 envelope is written first and is the authoritative root snapshot; timestamps are revision metadata, not a contest between two mutable copies.
 - If project ID/name differ, recovery still prefers the v1 candidate to avoid pairing one project's state with another project's canonical root. If v2 is absent/invalid, v1 remains the migration fallback.
 - Regression tests now prove canonical precedence for older/equal/invalid timestamps with matching identity and legacy fallback for identity mismatch. This reduces timestamp-based competition but dual-key writes remain until the compatibility transition is completed. Exact-head CI required after docs sync.
+
+
+## Latest increment — canonical-only autosave (2026-10-22)
+
+- `persistEditorSession()` now writes only `dionysus.composition.v2`. The v1 `dionysus.project.v1` key is retained as a read-only migration/recovery fallback; it is no longer rewritten on every edit.
+- Startup chooses one complete valid recovery document: a valid v2 envelope is authoritative, regardless of its project ID relative to a stale v1 mirror; v1 is used only when v2 is absent/invalid. The selected v2 Project and root Composition remain internally validated by `readProjectDocument()` and exact projection matching.
+- Persistence tests now assert canonical-only writes, projection correctness, and that a failed canonical write leaves an existing legacy fallback untouched. This is a single active authority with a legacy fallback, not a deletion of old data. Exact-head CI is pending after docs sync.
