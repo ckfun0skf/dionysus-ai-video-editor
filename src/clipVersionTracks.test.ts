@@ -264,11 +264,10 @@ describe("nested Clip Version track operations", () => {
     expect(placement).toMatchObject({ start: 1 });
     expect(placement?.sourceIn).toBeUndefined();
     expect(placement?.sourceOut).toBeUndefined();
-    expect(cleared.layers.find(layer => layer.id === "validated-inspector-layer")).toMatchObject({
-      start: 1,
-      sourceIn: undefined,
-      sourceOut: undefined,
-    });
+    const projectedLayer = cleared.layers.find(layer => layer.id === "validated-inspector-layer");
+    expect(projectedLayer?.start).toBe(1);
+    expect(projectedLayer?.sourceIn).toBeUndefined();
+    expect(projectedLayer?.sourceOut).toBeUndefined();
     expect(() => updateClipVersionLayer(base, "validated-inspector-layer", {
       trackId: "missing-track",
     })).toThrow(/track/i);
