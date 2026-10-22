@@ -125,6 +125,19 @@ describe("shared Composition editing commands", () => {
     expect(placement(source, "audio").linkedToPlacementId).toBe("video");
   });
 
+  it("removing a child audio lane cannot cascade-delete the linked video placement", () => {
+    const source = fixture();
+    // A separate empty audio lane is the one the owner removes; the linked child
+    // lives on another lane, but stale/legacy lane identity must not cascade to video.
+    const withExtraLane = addCompositionTrack(source, {
+      id: "a2", name: "Audio 2", kind: "audio", order: 3,
+    });
+    const next = removeCompositionTrack(withExtraLane, "a2");
+    expect(next.placements.map(item => item.id)).toContain("video");
+    expect(next.placements.map(item => item.id)).toContain("audio");
+    expect(placement(next, "audio").linkedToPlacementId).toBe("video");
+  });
+
   it("updates canonical source/link metadata without changing unrelated source ranges", () => {
     const source = fixture();
     const unlinked = updateCompositionPlacement(source, "audio", {
