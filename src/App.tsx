@@ -2518,22 +2518,62 @@ export default function App() {
     change(p => ({ ...p, assets: [...p.assets, asset] }));
     setNotice(t("notice.assetAdded", { name: cleanName }));
   }
-  function readMediaDuration(file: File, kind: "video" | "audio"): Promise<number | undefined> {
+  function readMediaDuration(file: File, kind: "video" | "audio"): Promise<{ duration?: number; hasAudio?: boolean }> {
     return new Promise(resolve => {
       const media = document.createElement(kind);
       const objectUrl = URL.createObjectURL(file);
       let settled = false;
-      const finish = (duration?: number) => {
+      let durationFallback: ReturnType<typeof globalThis.setTimeout> | undefined;
+      const inspectAudio = (): boolean | undefined => {
+        if (kind !== "video") return undefined;
+        const trackList = (media as HTMLVideoElement & { audioTracks?: { length: number } }).audioTracks;
+        if (trackList) return trackList.length > 0;
+        const capturable = media as HTMLMediaElement & { captureStream?: () => MediaStream };
+        if (typeof capturable.captureStream !== "function") return undefined;
+        try {
+          const stream = capturable.captureStream();
+          const hasAudio = stream.getAudioTracks().length > 0;
+          stream.getTracks().forEach(track => track.stop());
+          return hasAudio;
+        } catch {
+          return undefined;
+        }
+      };
+      const finish = (duration?: number, hasAudio?: boolean) => {
         if (settled) return;
         settled = true;
+        if (durationFallback !== undefined) globalThis.clearTimeout(durationFallback);
+        media.removeEventListener("loadedmetadata", onLoadedMetadata);
+        media.removeEventListener("loadeddata", onLoadedData);
+        media.removeEventListener("error", onError);
         media.removeAttribute("src");
         media.load();
         URL.revokeObjectURL(objectUrl);
-        resolve(duration && Number.isFinite(duration) && duration > 0 ? duration : undefined);
+        resolve({
+          ...(duration && Number.isFinite(duration) && duration > 0 ? { duration } : {}),
+          ...(hasAudio !== undefined ? { hasAudio } : {}),
+        });
       };
+      const onLoadedData = () => finish(media.duration, inspectAudio());
+      const onLoadedMetadata = () => {
+        if (kind === "audio") {
+          finish(media.duration);
+          return;
+        }
+        const hasAudio = inspectAudio();
+        if (hasAudio !== undefined) {
+          finish(media.duration, hasAudio);
+          return;
+        }
+        // Some browsers expose stream audio tracks only after the first decoded video frame.
+        // Do not block importing indefinitely when the browser offers no audio-track API.
+        durationFallback = globalThis.setTimeout(() => finish(media.duration), 2500);
+      };
+      const onError = () => finish(undefined, kind === "video" ? undefined : undefined);
       media.preload = "metadata";
-      media.onloadedmetadata = () => finish(media.duration);
-      media.onerror = () => finish(undefined);
+      media.addEventListener("loadedmetadata", onLoadedMetadata, { once: true });
+      media.addEventListener("loadeddata", onLoadedData, { once: true });
+      media.addEventListener("error", onError, { once: true });
       media.src = objectUrl;
     });
   }
@@ -2575,10 +2615,19 @@ export default function App() {
     if (kind === "video" || kind === "audio") {
       const assetId = id("asset");
       const thumbnail = kind === "video" ? createVideoThumbnail(file) : Promise.resolve(undefined);
-      void Promise.all([storeMediaAsset(assetId, file), thumbnail, readMediaDuration(file, kind)]).then(([path, thumbnailPath, duration]) => {
-        const asset: Asset = { id: assetId, name: file.name, kind, notes: "Imported media stored locally in IndexedDB.", path, ...(duration ? { duration } : {}), ...(thumbnailPath ? { thumbnailPath } : {}) };
+      void Promise.all([storeMediaAsset(assetId, file), thumbnail, readMediaDuration(file, kind)]).then(([path, thumbnailPath, metadata]) => {
+        const asset: Asset = {
+          id: assetId,
+          name: file.name,
+          kind,
+          notes: "Imported media stored locally in IndexedDB.",
+          path,
+          ...(metadata.duration ? { duration: metadata.duration } : {}),
+          ...(metadata.hasAudio !== undefined ? { hasAudio: metadata.hasAudio } : {}),
+          ...(thumbnailPath ? { thumbnailPath } : {}),
+        };
         change(p => ({ ...p, assets: [...p.assets, asset] }));
-        setNotice(duration ? file.name + " imported (" + time(duration) + ")." : file.name + " imported; duration metadata is unavailable.");
+        setNotice(metadata.duration ? file.name + " imported (" + time(metadata.duration) + ")." : file.name + " imported; duration metadata is unavailable.");
       }).catch(error => {
         setNotice(error instanceof Error ? error.message : "Could not store the imported media file.");
       });
