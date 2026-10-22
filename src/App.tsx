@@ -7,7 +7,7 @@ import { validateProject } from "./projectValidation";
 import { addClipVersionLayer as addNestedLayer, addClipVersionTrack as addNestedTrack, deleteClipVersionLayer as deleteNestedLayer, duplicateClipVersionComposition, moveClipVersionLayer as moveNestedLayer, normalizeClipVersionTracks, updateClipVersionLayer as updateNestedLayer } from "./clipVersionTracks";
 import { createProjectDocument, readProjectDocument } from "./projectDocument";
 import { createRootCompositionPlacementForTimelineClip, migrateLegacyProjectToComposition, projectRootCompositionToLegacy } from "./compositionMigration";
-import { addCompositionTrack, applyCompositionResizePreview, assertValidCompositionDocument, deleteCompositionPlacement, duplicateCompositionPlacement, duplicateLinkedAudio, extractLinkedAudio, insertCompositionPlacement, moveCompositionPlacement, moveCompositionPlacementToTrack, removeCompositionTrack, reorderCompositionTrack, rippleReorderCompositionMasterShots, splitCompositionPlacement, trimCompositionPlacement, unlinkCompositionPlacement, updateCompositionPlacement, updateCompositionTrack } from "./compositionCommands";
+import { addCompositionLinkedAudioChild, addCompositionTrack, applyCompositionResizePreview, assertValidCompositionDocument, deleteCompositionPlacement, duplicateCompositionPlacement, duplicateLinkedAudio, extractLinkedAudio, insertCompositionPlacement, moveCompositionPlacement, moveCompositionPlacementToTrack, removeCompositionTrack, reorderCompositionTrack, rippleReorderCompositionMasterShots, splitCompositionPlacement, trimCompositionPlacement, unlinkCompositionPlacement, updateCompositionLinkedAudioChild, updateCompositionPlacement, updateCompositionTrack } from "./compositionCommands";
 import { moveNormalizedFrame, resizeNormalizedFrame } from "./previewTransform";
 import { getAllowedChildClipAssets, wouldCreateClipAssetCycle } from "./clipAssetGraph";
 import { t } from "./i18n";
@@ -865,50 +865,32 @@ export default function App() {
 
   function addLinkedAudioForVideoPlacement(root: CompositionDocument, project: DionysusProject, video: TimelineClip): CompositionDocument {
     const asset = project.assets.find(item => item.id === video.assetId && item.kind === "video");
-    if (!asset || video.kind !== "video") return root;
+    if (!asset || video.kind !== "video" || asset.hasAudio === false) return root;
+    const owner = root.placements.find(item => item.id === video.id);
+    if (!owner || (owner.linkedAudioChildren ?? []).length) return root;
 
-    let next = root;
-    // Reuse the canonical project Audio track ID. Creating a fresh track merely because
-    // the migrated composition is missing that track can leave a second, empty Audio lane
-    // beside the one already visible in the legacy project projection.
-    const projectAudioTrack = project.tracks.find(item => item.kind === "audio");
-    // Prefer an Audio track already present in the canonical composition. A project may
-    // have a legacy Audio track whose ID differs from the migrated canonical track; choosing
-    // the legacy ID first would create a second lane despite an existing usable Audio lane.
-    let audioTrack = next.tracks.find(item => item.kind === "audio");
-    if (!audioTrack && projectAudioTrack) {
-      audioTrack = {
-        id: projectAudioTrack.id,
-        name: projectAudioTrack.name,
-        kind: "audio",
-        order: next.tracks.length,
-        muted: projectAudioTrack.muted,
-        backgroundColor: projectAudioTrack.backgroundColor,
-        backgroundTransparent: projectAudioTrack.backgroundTransparent,
-        opacity: projectAudioTrack.opacity,
-        originalKind: projectAudioTrack.originalKind
-      };
-      next = addCompositionTrack(next, audioTrack);
-    }
-    if (!audioTrack) {
-      audioTrack = { id: id("track-audio"), name: "Audio 1", kind: "audio", order: next.tracks.length };
-      next = addCompositionTrack(next, audioTrack);
-    }
-
-    const linkedAudio: TimelineClip = {
-      id: id("timeline-audio"),
+    const sourceIn = video.sourceIn ?? 0;
+    const sourceOut = video.sourceOut ?? (sourceIn + video.duration);
+    const childId = id("timeline-audio");
+    return addCompositionLinkedAudioChild(root, video.id, {
+      id: childId,
       name: asset.name + " audio",
-      kind: "audio",
-      trackId: audioTrack.id,
-      start: video.start,
-      duration: video.duration,
-      assetId: asset.id,
-      linkedVideoClipId: video.id,
-      sourceIn: video.sourceIn ?? 0,
-      sourceOut: video.sourceOut ?? ((video.sourceIn ?? 0) + video.duration)
-    };
-    const audioPlacement = createRootCompositionPlacementForTimelineClip(project, next, linkedAudio);
-    return insertCompositionPlacement(next, audioPlacement);
+      source: { type: "asset", assetId: asset.id },
+      sourceIn,
+      sourceOut,
+      legacyData: {
+        id: childId,
+        name: asset.name + " audio",
+        kind: "audio",
+        trackId: video.trackId,
+        start: video.start,
+        duration: video.duration,
+        assetId: asset.id,
+        linkedVideoClipId: video.id,
+        sourceIn,
+        sourceOut,
+      },
+    });
   }
 
   function placeProjectAssetDirectly(asset: Asset, track: DionysusProject["tracks"][number], desiredStart = editorTime) {
