@@ -637,3 +637,10 @@ Verify the current branch head and its CI first. If it passes, continue the root
 - Refactored `createInitialEditorSession()` to read the v1 and v2 localStorage keys once per startup and retain the parsed recovery results. Project selection and canonical-root restoration now use the same parsed snapshot pair instead of re-reading/re-parsing the keys in a second block.
 - The existing safety checks remain: recovery precedence is based on matching identity and comparable revisions; a canonical root is accepted only when its projected Project exactly matches the selected startup Project. Otherwise startup uses deterministic legacy migration.
 - This reduces inconsistent cross-read recovery decisions but does not remove dual-key storage. Exact-head CI must be checked after docs synchronization. PR #111 stays open/unmerged; Issue #100 stays open. No browser smoke tests or manual UI acceptance claimed.
+
+
+## Latest increment — canonical recovery no longer votes by timestamp (2026-10-22)
+
+- Tightened `shouldPreferCompositionRecovery()`: when a valid v2 envelope and v1 mirror identify the same project, v2 wins regardless of timestamp ordering. The v2 envelope is written first and is the authoritative root snapshot; timestamps are revision metadata, not a contest between two mutable copies.
+- If project ID/name differ, recovery still prefers the v1 candidate to avoid pairing one project's state with another project's canonical root. If v2 is absent/invalid, v1 remains the migration fallback.
+- Regression tests now prove canonical precedence for older/equal/invalid timestamps with matching identity and legacy fallback for identity mismatch. This reduces timestamp-based competition but dual-key writes remain until the compatibility transition is completed. Exact-head CI required after docs sync.
