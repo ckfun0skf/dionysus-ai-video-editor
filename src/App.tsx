@@ -4,7 +4,7 @@ import { sampleProject } from "./sampleProject";
 import type { Asset, AssetKind, ClipVersion, CompositionLayer, DionysusProject, ReferenceProfile, ReferenceRole, Shot, TimelineClip } from "./types";
 import type { CompositionDocument } from "./compositionModel";
 import { validateProject } from "./projectValidation";
-import { addClipVersionLayer as addNestedLayer, addClipVersionTrack as addNestedTrack, deleteClipVersionLayer as deleteNestedLayer, duplicateClipVersionComposition, moveClipVersionLayer as moveNestedLayer, normalizeClipVersionTracks, updateClipVersionLayer as updateNestedLayer, updateClipVersionTrack as updateNestedTrack } from "./clipVersionTracks";
+import { addClipVersionLayer as addNestedLayer, addClipVersionTrack as addNestedTrack, deleteClipVersionLayer as deleteNestedLayer, duplicateClipVersionComposition, moveClipVersionLayer as moveNestedLayer, normalizeClipVersionTracks, updateClipVersionDuration as updateNestedDuration, updateClipVersionLayer as updateNestedLayer, updateClipVersionTrack as updateNestedTrack } from "./clipVersionTracks";
 import { createProjectDocument, readProjectDocument } from "./projectDocument";
 import { createRootCompositionPlacementForTimelineClip, migrateLegacyProjectToComposition, projectRootCompositionToLegacy } from "./compositionMigration";
 import { addCompositionLinkedAudioChild, addCompositionTrack, applyCompositionResizePreview, deleteCompositionPlacement, duplicateCompositionPlacement, duplicateLinkedAudio, extractLinkedAudio, insertCompositionPlacement, moveCompositionPlacement, moveCompositionPlacementToTrack, removeCompositionTrack, rippleReorderCompositionMasterShots, splitCompositionPlacement, trimCompositionPlacement, updateCompositionLinkedAudioChild, updateCompositionPlacement, updateCompositionTrack } from "./compositionCommands";
@@ -1683,13 +1683,7 @@ export default function App() {
   function updateTimelineVersionDuration(tab: VersionTimelineTab, value: number) {
     if (!Number.isFinite(value) || value < 0.1) return;
     const duration = Math.max(0.1, value);
-    updateTimelineVersion(tab, version => ({
-      ...version,
-      duration,
-      ...(version.composition ? {
-        composition: { ...structuredClone(version.composition), duration },
-      } : {}),
-    }), "nested-duration:" + tab.id);
+    updateTimelineVersion(tab, version => updateNestedDuration(version, duration), "nested-duration:" + tab.id);
     if (editorTime > duration) {
       playbackTimeRef.current = duration;
       setEditorTime(duration);
