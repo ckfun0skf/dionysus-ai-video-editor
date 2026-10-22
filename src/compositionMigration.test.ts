@@ -16,19 +16,27 @@ describe("migrateLegacyProjectToComposition", () => {
     ];
     const result = migrateLegacyProjectToComposition(project);
     expect(result.schemaVersion).toBe("2.0");
-    expect(result.rootComposition.tracks.map((track) => track.id)).toEqual(project.tracks.map((track) => track.id));
+    expect(result.rootComposition.tracks.map((track) => track.id)).toEqual(project.tracks.map((track) => track.id).filter(id => id !== "track-audio-1"));
     const videoPlacement = result.rootComposition.placements.find((placement) => placement.id === "master-video")!;
-    const audioPlacement = result.rootComposition.placements.find((placement) => placement.id === "master-audio")!;
+    expect(result.rootComposition.placements.some((placement) => placement.id === "master-audio")).toBe(false);
     expect(result.rootComposition.placements.some((placement) => placement.source.type === "shot")).toBe(true);
     expect(videoPlacement).toMatchObject({
       start: 4, duration: 6, sourceIn: 2, sourceOut: 8,
       source: { type: "asset", assetId: "migration-video" },
       legacyData: { x: 10, y: 5, width: 80, height: 90 },
+      linkedAudioChildren: [{
+        id: "master-audio",
+        name: "Linked audio",
+        source: { type: "asset", assetId: "migration-audio" },
+        sourceIn: 1, sourceOut: 7,
+        volume: 0.4, fadeIn: 0.5, fadeOut: 1,
+        legacyData: { volume: 0.4, fadeIn: 0.5, fadeOut: 1 },
+      }],
     });
-    expect(audioPlacement).toMatchObject({
-      linkedToPlacementId: "master-video",
-      sourceIn: 1, sourceOut: 7,
-      legacyData: { volume: 0.4, fadeIn: 0.5, fadeOut: 1 },
+    const projected = projectRootCompositionToLegacy(project, result.rootComposition);
+    expect(projected.timelineClips?.find(clip => clip.id === "master-audio")).toMatchObject({
+      kind: "audio", trackId: "track-video-1", start: 4, duration: 6,
+      linkedVideoClipId: "master-video", sourceIn: 1, sourceOut: 7, volume: 0.4,
     });
   });
 
