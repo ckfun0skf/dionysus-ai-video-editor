@@ -622,3 +622,11 @@ Verify the current branch head and its CI first. If it passes, continue the root
 - Regression coverage starts with a non-empty previous-project undo history and asserts import returns the migrated paired session plus a fresh empty history. Existing canonical-root validation and legacy import behavior remain covered.
 - Exact-head CI for the final synchronized commit must be recorded before treating this increment as verified. PR #111 stays open/unmerged; Issue #100 stays open for owner acceptance. No browser smoke tests or manual UI acceptance claimed.
 - Next: inspect and route any remaining direct session mutations; then design single-authority recovery/persistence without dropping schema-1.0 compatibility. Project remains a compatibility projection, persistence remains dual-key, and non-root/render paths still need migration.
+
+
+## Latest increment — tested startup recovery arbitration (2026-10-22)
+
+- Moved `shouldPreferCompositionRecovery()` from the UI component into `src/editorSessionPersistence.ts`, next to the persistence boundary. It prefers the canonical envelope only when the project identity matches and both revisions are parseable, with canonical revision at least as new as the legacy mirror; if no valid legacy document exists, a valid canonical read may recover on its own.
+- Added tests for newer/equal revisions, mismatched IDs/names, invalid timestamps, and absent documents. This extracts and locks down the existing policy; it does not yet remove dual-key storage or make recovery a single-document load.
+- Exact-head CI must be checked after the synchronized commit. PR #111 remains open/unmerged; Issue #100 remains open. No browser smoke tests or manual UI acceptance claimed.
+- Next: inspect whether recovery parses/selects/project data more than once during startup, then design a tested single-authority persistence migration that retains schema-1.0 imports.
