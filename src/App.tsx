@@ -3005,24 +3005,12 @@ export default function App() {
         setSelectedId(movingShot.id);setIsPlaying(false);playbackTimeRef.current=next;setEditorTime(next);setClipDropPreview(null);return;
       }
       const clipId=event.dataTransfer.getData("text/dionysus-timeline-clip"),candidate=(project.timelineClips??[]).find(clip=>clip.id===clipId)??clipDragSourceRef.current,moving=candidate?getCanonicalTimelineClipForDrop(candidate):undefined;
-     if(moving?.kind==="audio"&&track.kind==="video"){const dropTime=Math.max(0,Math.min(mediaTimelineDuration,((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration));const targets=(projectRef.current.timelineClips??[]).filter(item=>item.kind==="video"&&item.trackId===track.id);const target=targets.find(item=>dropTime>=item.start&&dropTime<=item.start+item.duration)??(targets.length===1?targets[0]:undefined);if(target){relinkRootAudioToVideo(moving,target);}else{setNotice("Drop audio over a video clip to link it.");}clipDragSourceRef.current=null;setClipDropPreview(null);return;}
+     if(moving?.kind==="audio"&&track.kind==="video"){setNotice(moving.linkedVideoClipId?"Linked source audio belongs to its video clip. Use Extract Audio to move it to an independent track.":"Audio assets must be placed on an Audio Track, not linked to a video clip.");clipDragSourceRef.current=null;setClipDropPreview(null);return;}
      if(!moving)return;
      const pointerTime=((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration,rawStart=Math.max(0,pointerTime-moving.duration/2);
      if(moving.kind==="audio"&&moving.linkedVideoClipId&&track.kind==="audio"){
-       const independent={...moving,linkedVideoClipId:undefined};
-       const unlinkPosition=calculateRootTimelineDropPosition(independent,track.id,rawStart,mediaTimelineDuration);
-       if(!unlinkPosition){setNotice("No non-overlapping position is available on this Audio layer.");clipDragSourceRef.current=null;setClipDropPreview(null);return;}
-       try{
-         if(rootCompositionRef.current.placements.some(item=>item.id===moving.id)){
-           changeRootComposition(root=>moveCompositionPlacementToTrack(unlinkCompositionPlacement(root,moving.id),moving.id,track.id,unlinkPosition.start));
-         }else{
-           change(project=>{const unlinked=unlinkTimelineAudio({tracks:project.tracks,timelineClips:project.timelineClips??[]},moving.id);return moveProjectTimelinePlacement({...project,timelineClips:unlinked.timelineClips},{type:"clip",clipId:moving.id},track.id,unlinkPosition.start);});
-         }
-         setNotice("Audio unlinked and moved to an independent Audio layer.");
-         setSelectedTimelineClipId(moving.id);setSelectedTimelineTrackId(track.id);setIsPlaying(false);
-       }catch(error){setNotice(error instanceof Error?error.message:"Could not unlink audio.");}
-       finally{clipDragSourceRef.current=null;setClipDropPreview(null);}
-       return;
+       setNotice("Linked source audio is owned by its video clip. Use Extract Audio to create an independent Audio Track placement.");
+       clipDragSourceRef.current=null;setClipDropPreview(null);return;
      }
      if(!canPlaceTimelineClipOnTrack(moving,track))return;
      const pos=clipDropPreview?.trackId===track.id?{start:clipDropPreview.start,...(clipDropPreview.snapTime!==undefined?{snapTime:clipDropPreview.snapTime}:{})}:calculateRootTimelineDropPosition(moving,track.id,rawStart,mediaTimelineDuration);
@@ -3345,7 +3333,6 @@ export default function App() {
     {clipContextMenuId && view === "timeline" && <div className="shot-context-dismiss" onClick={()=>setClipContextMenuId("")}><span className="shot-context-menu" role="menu" style={{left:clipContextMenuPosition.x,top:clipContextMenuPosition.y}} onClick={event=>event.stopPropagation()}>
       <button role="menuitem" onClick={event=>{event.stopPropagation();setTimelineClipSettingsId(clipContextMenuId);setClipContextMenuId("");}}>Settings…</button>
       {project.timelineClips?.find(item=>item.id===clipContextMenuId)?.kind==="audio" && (()=>{const audio=project.timelineClips!.find(item=>item.id===clipContextMenuId)!;return <button role="menuitem" onClick={()=>{updateRootTimelineClip(audio.id,{muted:!audio.muted});setClipContextMenuId("");setNotice(audio.muted?"Audio clip unmuted.":"Audio clip muted.");}}>{audio.muted?"Unmute audio":"Mute audio"}</button>;})()}
-      {project.timelineClips?.find(item=>item.id===clipContextMenuId)?.kind==="audio" && project.timelineClips!.find(item=>item.id===clipContextMenuId)?.linkedVideoClipId && <button role="menuitem" onClick={()=>{try{unlinkRootTimelineAudio(clipContextMenuId);setNotice("Audio unlinked and moved to an independent Audio lane.");}catch(error){setNotice(error instanceof Error?error.message:"Could not unlink audio.");}setClipContextMenuId("");}}>Unlink audio</button>}
       <button role="menuitem" onClick={()=>{const clip=project.timelineClips?.find(item=>item.id===clipContextMenuId);if(clip){duplicateRootTimelineClip(clip);}setClipContextMenuId("");}}>Duplicate clip</button>
       <button role="menuitem" className="danger-action" onClick={()=>{const clip=project.timelineClips?.find(item=>item.id===clipContextMenuId);if(clip&&window.confirm("Delete clip “"+clip.name+"”?")){deleteTimelineClipCanonical(clip);setSelectedTimelineClipId("");}setClipContextMenuId("");}}>Delete clip…</button>
     </span></div>}
@@ -3358,7 +3345,7 @@ export default function App() {
       <button disabled={Math.round(editorTime*Math.max(1,project.frameRate||24))/Math.max(1,project.frameRate||24)<=clip.start||Math.round(editorTime*Math.max(1,project.frameRate||24))/Math.max(1,project.frameRate||24)>=clip.start+clip.duration} onClick={()=>{const fps=Math.max(1,project.frameRate||24),splitAt=Math.round(editorTime*fps)/fps;if(splitAt<=clip.start||splitAt>=clip.start+clip.duration)return;const newClipId=id("timeline-clip");try{splitRootTimelineClip(clip.id,splitAt,newClipId);setSelectedTimelineClipId(newClipId);setTimelineClipSettingsId(newClipId);}catch(error){setNotice(error instanceof Error?error.message:"Split failed.");}}}>Split at playhead</button>
 
       <button onClick={()=>{const newClipId=id("timeline-clip");try{duplicateRootTimelineClip(clip,newClipId);setSelectedTimelineClipId(newClipId);setTimelineClipSettingsId(newClipId);}catch(error){setNotice(error instanceof Error?error.message:"Duplicate failed.");}}}>Duplicate clip</button>
-      {clip.kind==="audio"&&clip.linkedVideoClipId&&<button onClick={()=>{try{unlinkRootTimelineAudio(clip.id);}catch(error){setNotice(error instanceof Error?error.message:"Unlink failed.");}}}>Unlink audio</button>}
+
     </div>
     
       <div className="settings-dialog-grid"><label className="field-label">Start (seconds)<input className="text-field" type="number" min="0" step={1/Math.max(1,project.frameRate)} value={clip.start} onChange={event=>{const value=Math.max(0,Number(event.target.value)||0);try{moveRootTimelineClip(clip.id,value);}catch(error){setNotice(error instanceof Error?error.message:"Could not move clip.");}}}/></label><label className="field-label">Duration (seconds)<input className="text-field" type="number" min={1/Math.max(1,project.frameRate)} step={1/Math.max(1,project.frameRate)} value={clip.duration} onChange={event=>{const duration=Math.max(1/Math.max(1,project.frameRate),Number(event.target.value)||.1);try{trimRootTimelineClip(clip.id,duration);}catch(error){setNotice(error instanceof Error?error.message:"Could not resize clip.");}}}/></label></div>
