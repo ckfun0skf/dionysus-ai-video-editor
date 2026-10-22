@@ -447,7 +447,10 @@ describe("nested Clip Version track operations", () => {
     expect((duplicate.layers[1] as unknown as Record<string, unknown>).linkedVideoClipId).toBe(duplicate.layers[0].id);
     expect(duplicate.layers[0].trackId).not.toBe("legacy-video-track");
     expect(duplicate.layers[1].trackId).not.toBe("legacy-audio-track");
-    expect(duplicate.composition).toBeUndefined();
+    expect(duplicate.composition).toBeDefined();
+    expect(duplicate.composition?.placements).toHaveLength(2);
+    expect(duplicate.composition?.placements.find(item => item.id === duplicate.layers[1].id)?.linkedToPlacementId).toBe(duplicate.layers[0].id);
+    expect(version.composition).toBeUndefined();
   });
 
 });
