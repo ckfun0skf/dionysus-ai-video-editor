@@ -206,3 +206,8 @@ The latest recovery policy treats a valid v2 envelope as authoritative when its 
 ### Active E2 continuation — canonical-only autosave
 
 Current code writes only the v2 canonical Composition envelope; the v1 schema-1.0 localStorage key is read-only fallback for absent/invalid canonical data. Startup selects one complete document and does not compare timestamps or mix the Project from one key with the root from another. Exact-head CI is pending after this docs sync; update Issue #110 after each meaningful increment. Next verify tests and consider explicit cleanup/retirement of the stale v1 key only after recovery and migration evidence is sufficient. Non-root editing and renderer/playback still use legacy projections; Issue #100 remains open. No browser smoke tests or merge without explicit owner approval.
+
+
+### Verified checkpoint — canonical-only persistence
+
+At head `c1009ae456df33815388c5cd62917c7606d396ac`, [exact-head CI run 39866541271](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39866541271) passed 26 test files / 286 tests, TypeScript/build and audit 0. App tests now read v2 persistence first. Current storage contract: write v2 only, read v1 only as fallback. Next: inspect the read-only legacy key cleanup policy and migrate non-root editing/render/playback; do not claim canonical-only in-memory state. Keep PR #111 unmerged pending owner approval and Issue #100 open; no browser smoke tests.
