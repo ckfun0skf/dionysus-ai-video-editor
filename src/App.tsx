@@ -31,7 +31,7 @@ import {
 import { createEditorSessionHistory, type EditorSessionHistory, type EditorSessionSnapshot } from "./editorSessionHistory";
 import { createImportedEditorSessionTransition, restoreEditorSessionHistory, transitionEditorSession } from "./editorSession";
 import { chooseEditorSessionRecoverySource, COMPOSITION_PROJECT_STORAGE_KEY, LEGACY_PROJECT_STORAGE_KEY, persistEditorSession } from "./editorSessionPersistence";
-import { collectCompositionLayers, isPlayableAudioLayer, renderCompositionFrame, exportCompositionWebM, downloadExport } from "./compositionRenderer";
+import { collectCompositionLayers, collectVersionRenderLayers, isPlayableAudioLayer, renderCompositionFrame, exportCompositionWebM, downloadExport } from "./compositionRenderer";
 import { createClipVersionSnapshot } from "./clipVersionSnapshot";
 import AIGenerationPanel from "./AIGenerationPanel";
 import CodePlayground from "./CodePlayground";
@@ -498,7 +498,7 @@ export default function App() {
     const canvas = previewCanvasRefs.current.get(activeTimelineTabId);
     if (!canvas || typeof CanvasRenderingContext2D === "undefined") return;
     const renderId = ++previewRenderId.current;
-    const allLayers = activeVersionTimeline ? activeVersionTimeline.layers : collectCompositionLayers(project);
+    const allLayers = activeVersionTimeline ? collectVersionRenderLayers(activeVersionTimeline) : collectCompositionLayers(project);
     const layers = allLayers.length
       ? allLayers.filter(layer => editorTime >= layer.start && editorTime < layer.start + layer.duration)
       : !activeVersionTimeline && previewImage ? [{ id: "editor-image-fallback", name: previewImage.name, kind: "image" as const, start: 0, duration: Math.max(runtime, 0.1), assetId: previewImage.id, fitMode: "contain" as const, x: 0, y: 0, width: 100, height: 100 }]
@@ -551,7 +551,7 @@ export default function App() {
     if (!isPlaying) return;
     let cancelled = false, frame = 0, warned = false;
     const players = new Map<string, { element: HTMLMediaElement; release?: () => void }>();
-    const clips = (activeVersionTimeline ? activeVersionTimeline.layers : collectCompositionLayers(project))
+    const clips = (activeVersionTimeline ? collectVersionRenderLayers(activeVersionTimeline) : collectCompositionLayers(project))
       .filter(layer => layer.kind === "audio" && Boolean(layer.assetId));
     const prepare = async () => {
       for (const clip of clips) {
@@ -634,7 +634,7 @@ export default function App() {
             onKeyDown={event => { if (event.key === "Escape") { event.preventDefault(); cancelPreviewTextCommitRef.current = true; event.currentTarget.blur(); setPreviewTextDraft(textClip.name); setEditingPreviewTextClipId(""); } else if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.blur(); } }}
           />;
         })()}
-        {(tabKey === "master" ? collectCompositionLayers(project) : activeVersionTimelineTab?.id === tabKey ? activeVersionTimeline?.layers ?? [] : []).filter(layer => (layer.kind === "procedural" || layer.kind === "script") && editorTime >= layer.start && editorTime < layer.start + layer.duration && (layer.html !== undefined || layer.css !== undefined || layer.code !== undefined)).map(layer => <SandboxedCodePreview
+        {(tabKey === "master" ? collectCompositionLayers(project) : activeVersionTimelineTab?.id === tabKey && activeVersionTimeline ? collectVersionRenderLayers(activeVersionTimeline) : []).filter(layer => (layer.kind === "procedural" || layer.kind === "script") && editorTime >= layer.start && editorTime < layer.start + layer.duration && (layer.html !== undefined || layer.css !== undefined || layer.code !== undefined)).map(layer => <SandboxedCodePreview
           key={layer.id}
           title={layer.name}
           html={layer.html}
