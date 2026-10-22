@@ -94,7 +94,7 @@ describe("Editor session transaction", () => {
     );
 
     expect(transition.session.project.name).toBe("Atomic transaction");
-    expect(transition.session.composition.name).toBe("Atomic transaction");
+    expect(transition.session.composition.name).toBe("Atomic transaction — Master Timeline");
     expect(transition.session.project.updatedAt).toBe("2026-10-22T12:34:56.000Z");
     expect(transition.history.undo).toHaveLength(1);
     expect(transition.history.undo[0]).toEqual(current);
