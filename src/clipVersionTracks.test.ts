@@ -81,10 +81,12 @@ describe("nested Clip Version track operations", () => {
       tracks: [{ id: "fresh-empty-video-track", name: "Video 1", kind: "video" as const }],
       composition: undefined,
     };
-    const ensured = ensureClipVersionComposition(version);
+    const ensured = ensureClipVersionComposition(version, { width: 1080, height: 1920 });
 
     expect(ensured.composition).toMatchObject({
       duration: 6,
+      width: 1080,
+      height: 1920,
       placements: [],
       tracks: [{ id: "fresh-empty-video-track", name: "Video 1", kind: "video" }],
     });
