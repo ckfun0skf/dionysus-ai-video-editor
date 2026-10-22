@@ -2531,13 +2531,9 @@ export default function App() {
           finish(media.duration);
           return;
         }
-        const hasAudio = inspectAudio();
-        if (hasAudio !== undefined) {
-          finish(media.duration, hasAudio);
-          return;
-        }
-        // Some browsers expose stream audio tracks only after the first decoded video frame.
-        // Do not block importing indefinitely when the browser offers no audio-track API.
+        // A video may expose its dimensions before demuxing/decode reveals its audio tracks.
+        // Inspect audio only after loadeddata; this avoids classifying an A/V file as silent
+        // just because the track list is temporarily empty at loadedmetadata.
         durationFallback = globalThis.setTimeout(() => finish(media.duration), 2500);
       };
       const onError = () => finish(undefined, kind === "video" ? undefined : undefined);
