@@ -455,11 +455,29 @@ export function applyCompositionResizePreview(
       ? getLinkedRoot(document, placement)
       : placement;
     const source = resizedSourceRange(sourcePlacement, resize);
+    const linkedAudioChildren = placement.linkedAudioChildren?.map(child => {
+      const sourceIn = child.sourceIn ?? placement.sourceIn ?? 0;
+      const previousSourceOut = child.sourceOut ?? sourceIn + placement.duration;
+      // Owned audio with a one-to-one source range follows the video edit while retaining
+      // its own source offset. If it has a deliberately different range, leave that range
+      // intact rather than silently changing the selected source.
+      if (Math.abs(previousSourceOut - sourceIn - placement.duration) > EPSILON) return child;
+      const edgeDelta = resize.edge === "left" ? resize.start - placement.start : 0;
+      const nextSourceIn = Math.max(0, sourceIn + edgeDelta);
+      const nextSourceOut = nextSourceIn + resize.duration;
+      return {
+        ...child,
+        sourceIn: nextSourceIn,
+        sourceOut: nextSourceOut,
+        legacyData: { ...child.legacyData, sourceIn: nextSourceIn, sourceOut: nextSourceOut },
+      };
+    });
     return syncLegacyPlacement({
       ...placement,
       start: resize.start,
       duration: resize.duration,
       ...source,
+      ...(linkedAudioChildren ? { linkedAudioChildren } : {}),
     });
   });
   extendCompositionDuration(next);
