@@ -10,6 +10,20 @@ This project uses a continuous, evidence-based workflow, not a one-time handoff 
 - No browser smoke tests. Do not claim visual/manual acceptance from CI. Do not merge a PR without explicit owner approval. Keep Issue #100 open until the owner accepts the deployed Pages UI.
 - When handing off, leave the exact current SHA, current CI state, outstanding work and next action in GitHub first; then provide a reusable prompt that does not assume the previous conversation is available.
 
+
+## Reusable continuation prompt — use for any continuation, not only a new chat
+
+You are continuing active development of Dionysus AI Video Editor. Do not assume the prior conversation has ended or that its last summary is current. Use the live repository and GitHub as the source of truth.
+
+1. Inspect current `main`, open PRs/issues, changed files, and exact-head CI before editing; re-check any historical checkpoint.
+2. Continue the highest-priority actionable work already tracked in the relevant issue/PR. Do not restart planning or ask for context that is already documented.
+3. Implement one coherent, testable code increment with regression coverage where practical.
+4. **Immediately after every meaningful increment, update the relevant GitHub issue body or add a comment** with the change, current SHA/PR, CI evidence or pending status, remaining work, and next action. Do not wait until the whole task is finished.
+5. Keep handoff/task/architecture docs aligned with actual code and issue state. Prefer code plus tests over documentation-only progress.
+6. Do not run browser smoke tests or claim manual UI acceptance. Do not merge without explicit owner approval; keep Issue #100 open until the owner accepts deployed Pages UI.
+7. Before pausing, leave current exact SHA, CI status, blockers and next concrete action in GitHub and the handoff. This loop applies whether work continues in the same conversation or is picked up by another agent.
+
+
 ---
 
 > **CURRENT DIRECTION (2026-10-19 — supersedes older checkpoint text below):** The owner has chosen a Timeline-first rebuild. Read [`docs/TIMELINE_EDITOR_REBUILD_PLAN.md`](TIMELINE_EDITOR_REBUILD_PLAN.md) and [`docs/architecture/TIMELINE_EDITOR_WORKSPACE.md`](architecture/TIMELINE_EDITOR_WORKSPACE.md) first. Timeline Editor is the first complete workspace and includes an upper-left Media/Audio/Text/Effects/Transitions source browser, upper-right Preview/Canvas, and lower multitrack Timeline. Later, Storyboard and References are planning modules around the Editor. On mobile, the Editor bottom bar is contextual to the selected element; module navigation lives in the project/workspace header or menu. Preserve tested logic and schema-1.0 project compatibility; rebuild the workspace/state boundary, not the whole codebase from zero. No automated browser smoke tests.
