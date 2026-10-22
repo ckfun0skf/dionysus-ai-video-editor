@@ -26,7 +26,6 @@ export function collectVersionRenderLayers(version: ClipVersion): CompositionLay
         start: owner.start,
         duration: owner.duration,
         linkedVideoClipId: owner.id,
-        muted: Boolean(child.muted || mutedByTrack.get(owner.trackId)),
       } as unknown as CompositionLayer & Record<string, unknown>;
 
       const sourceFields = layer as unknown as Record<string, unknown>;
@@ -54,8 +53,7 @@ export function collectVersionRenderLayers(version: ClipVersion): CompositionLay
       else layer.sourceIn = child.sourceIn;
       if (child.sourceOut === undefined) delete layer.sourceOut;
       else layer.sourceOut = child.sourceOut;
-      if (child.muted === undefined) delete layer.muted;
-      else layer.muted = child.muted;
+      layer.muted = Boolean(child.muted || mutedByTrack.get(owner.trackId));
       if (child.volume === undefined) delete layer.volume;
       else layer.volume = child.volume;
       if (child.fadeIn === undefined) delete layer.fadeIn;
