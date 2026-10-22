@@ -90,10 +90,13 @@ describe("shared project timeline placement engine", () => {
     const committed = applyCanonicalCompositionInsertion(root, project, plan, "ripple");
     expect(committed.placements).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: "new", start: 3, duration: 3 }),
-      expect.objectContaining({ id: "linked-video", start: 6, sourceIn: 10, sourceOut: 12 }),
-      expect.objectContaining({ id: "linked-audio", start: 6, sourceIn: 5, sourceOut: 7, linkedToPlacementId: "linked-video" }),
+      expect.objectContaining({
+        id: "linked-video", start: 6, sourceIn: 10, sourceOut: 12,
+        linkedAudioChildren: [expect.objectContaining({ id: "linked-audio", sourceIn: 5, sourceOut: 7 })],
+      }),
       expect.objectContaining({ id: "after", start: 9 }),
     ]));
+    expect(committed.placements.some(item => item.id === "linked-audio")).toBe(false);
     const projected = projectRootCompositionToLegacy(project, committed);
     expect(projected.timelineClips).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: "linked-video", start: 6, sourceIn: 10, sourceOut: 12 }),
@@ -205,7 +208,7 @@ describe("shared project timeline placement engine", () => {
     const updated = moveProjectTimelinePlacement(project, { type: "clip", clipId: video.id }, videoTracks[1].id, 8);
     expect(updated.timelineClips).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: video.id, trackId: videoTracks[1].id, start: 8, sourceIn: 2, sourceOut: 6 }),
-      expect.objectContaining({ id: audio.id, trackId: audioTrack.id, start: 8, duration: 4, sourceIn: 2, sourceOut: 6, linkedVideoClipId: video.id }),
+      expect.objectContaining({ id: audio.id, trackId: videoTracks[1].id, start: 8, duration: 4, sourceIn: 2, sourceOut: 6, linkedVideoClipId: video.id }),
     ]));
   });
 
@@ -221,7 +224,10 @@ describe("shared project timeline placement engine", () => {
     const updated = applyProjectTimelineClipResize(project, preview!);
     const updatedVideo = updated.timelineClips!.find(item => item.id === clip.id)!;
     const updatedAudio = updated.timelineClips!.find(item => item.id === audio.id)!;
-    expect(updatedAudio).toMatchObject({ start: updatedVideo.start, duration: updatedVideo.duration, linkedVideoClipId: clip.id });
+    expect(updatedAudio).toMatchObject({
+      start: updatedVideo.start, duration: updatedVideo.duration, linkedVideoClipId: clip.id,
+      trackId: updatedVideo.trackId, sourceIn: 0, sourceOut: updatedVideo.duration,
+    });
     expect(updatedAudio.fadeOut).toBeLessThanOrEqual(updatedAudio.duration);
   });
 
@@ -364,8 +370,13 @@ describe("shared project timeline placement engine", () => {
 
     expect(updated.timelineClips).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: video.id, start: 1, duration: 8, sourceIn: 2, sourceOut: 10 }),
-      expect.objectContaining({ id: audio.id, start: 1, duration: 8, sourceIn: 2, sourceOut: 10, linkedVideoClipId: video.id }),
+      expect.objectContaining({
+        id: audio.id, trackId: videoTrack.id, start: 1, duration: 8,
+        sourceIn: 2, sourceOut: 10, linkedVideoClipId: video.id,
+      }),
     ]));
+    const owner = migrateLegacyProjectToComposition(project).rootComposition.placements.find(item => item.id === video.id)!;
+    expect(owner.linkedAudioChildren).toHaveLength(1);
     expect(project.timelineClips).toEqual([video, audio]);
   });
 
