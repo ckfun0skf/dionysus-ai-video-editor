@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { migrateLegacyProjectToComposition, projectRootCompositionToLegacy } from "./compositionMigration";
 import { sampleProject } from "./sampleProject";
-import { commitEditorSessionChange, reconcileEditorSessionComposition, restoreEditorSessionHistory, transitionEditorSession } from "./editorSession";
+import { commitEditorSessionChange, createImportedEditorSession, reconcileEditorSessionComposition, restoreEditorSessionHistory, transitionEditorSession } from "./editorSession";
 import { createEditorSessionHistory } from "./editorSessionHistory";
 import type { EditorSessionSnapshot } from "./editorSessionHistory";
 
@@ -138,5 +138,33 @@ describe("Editor session history restoration", () => {
     expect(redo.session?.composition.name).toBe("After edit — Master Timeline");
     expect(redo.session?.project.updatedAt).toBe("2026-10-22T12:35:01.000Z");
     expect(redo.history.redo).toHaveLength(0);
+  });
+});
+
+
+describe("Imported editor session", () => {
+  it("accepts a canonical root only when its Project projection matches and always returns a paired session", () => {
+    const source = structuredClone(sampleProject);
+    const sourceRoot = migrateLegacyProjectToComposition(source).rootComposition;
+    const compatibleProject = projectRootCompositionToLegacy(source, sourceRoot);
+    const imported = createImportedEditorSession(compatibleProject, sourceRoot);
+
+    expect(imported.composition).toEqual(sourceRoot);
+    expect(imported.project).toEqual(compatibleProject);
+
+    const staleRoot = structuredClone(sourceRoot);
+    staleRoot.name = "Mismatched imported root";
+    const fallback = createImportedEditorSession(compatibleProject, staleRoot);
+    expect(fallback.composition.name).not.toBe("Mismatched imported root");
+    expect(fallback.project).toEqual(projectRootCompositionToLegacy(compatibleProject, fallback.composition));
+    expect(source).toEqual(sampleProject);
+  });
+
+  it("migrates legacy imports and projects the result back into one compatible session", () => {
+    const legacy = structuredClone(sampleProject);
+    const imported = createImportedEditorSession(legacy);
+    expect(imported.composition).toEqual(migrateLegacyProjectToComposition(legacy).rootComposition);
+    expect(imported.project).toEqual(projectRootCompositionToLegacy(legacy, imported.composition));
+    expect(legacy).toEqual(sampleProject);
   });
 });
