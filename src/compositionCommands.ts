@@ -583,6 +583,47 @@ export function unlinkCompositionPlacement(
 }
 
 
+/** Extract linked source audio into an independent placement without changing timing or source range. */
+export function extractLinkedAudio(
+  document: CompositionDocument,
+  placementId: string,
+): CompositionDocument {
+  const selected = requirePlacement(document, placementId);
+  if (selected.source.type !== "asset" && selected.source.type !== "clip") {
+    throw new Error("Only asset-backed linked audio can be extracted.");
+  }
+  const track = document.tracks.find(item => item.id === selected.trackId);
+  if (track?.kind !== "audio" || !selected.linkedToPlacementId) {
+    throw new Error("Only linked audio placements can be extracted.");
+  }
+  return unlinkCompositionPlacement(document, placementId);
+}
+
+/** Create an independent audio copy while leaving the linked original untouched. */
+export function duplicateLinkedAudio(
+  document: CompositionDocument,
+  placementId: string,
+  newPlacementId: string,
+): CompositionDocument {
+  assertValidCompositionDocument(document);
+  const selected = requirePlacement(document, placementId);
+  const track = document.tracks.find(item => item.id === selected.trackId);
+  if (track?.kind !== "audio" || !selected.linkedToPlacementId) {
+    throw new Error("Only linked audio placements can be duplicated as independent audio.");
+  }
+  if (!newPlacementId.trim() || document.placements.some(item => item.id === newPlacementId)) {
+    throw new Error("The duplicated audio placement ID must be non-empty and unique.");
+  }
+  const next = clone(document);
+  const original = requirePlacement(next, placementId);
+  const { linkedToPlacementId: _linkedToPlacementId, ...independent } = original;
+  const order = next.placements.filter(item => item.trackId === original.trackId)
+    .reduce((max, item) => Math.max(max, item.order), -1) + 1;
+  next.placements.push(syncLegacyPlacement({ ...independent, id: newPlacementId, name: original.name + " (copy)", order }));
+  assertValidCompositionDocument(next);
+  return next;
+}
+
 /** Add a canonical root track while retaining the original legacy track kind as metadata. */
 export function addCompositionTrack(
   document: CompositionDocument,
