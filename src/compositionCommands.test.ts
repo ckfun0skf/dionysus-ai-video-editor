@@ -90,6 +90,7 @@ describe("shared Composition editing commands", () => {
       name: "Linked audio (copy)", trackId: "a1", start: 1, duration: 6, sourceIn: 2, sourceOut: 8,
     });
     expect(placement(duplicated, "audio-copy").linkedToPlacementId).toBeUndefined();
+    expect(placement(duplicated, "audio-copy").legacyData.linkedVideoClipId).toBeUndefined();
     expect(source.placements).toHaveLength(2);
     expect(duplicated.placements).toHaveLength(3);
     expect(() => assertValidCompositionDocument(duplicated)).not.toThrow();
