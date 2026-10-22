@@ -201,3 +201,8 @@ Latest code now reads the v1 and v2 recovery keys once in `createInitialEditorSe
 ### Active E2 continuation — canonical recovery precedence
 
 The latest recovery policy treats a valid v2 envelope as authoritative when its project identity matches the v1 mirror; timestamps no longer decide between two snapshots of the same project. Identity mismatch falls back to the legacy candidate, and legacy import remains available if v2 is absent/invalid. Check exact-head CI after docs sync and update Issue #110 after each meaningful increment. Next decide and test when the compatibility mirror can stop being written, without losing legacy import or recovery safety. Issue #100 stays open; no browser smoke tests or merge without explicit approval.
+
+
+### Active E2 continuation — canonical-only autosave
+
+Current code writes only the v2 canonical Composition envelope; the v1 schema-1.0 localStorage key is read-only fallback for absent/invalid canonical data. Startup selects one complete document and does not compare timestamps or mix the Project from one key with the root from another. Exact-head CI is pending after this docs sync; update Issue #110 after each meaningful increment. Next verify tests and consider explicit cleanup/retirement of the stale v1 key only after recovery and migration evidence is sufficient. Non-root editing and renderer/playback still use legacy projections; Issue #100 remains open. No browser smoke tests or merge without explicit owner approval.
