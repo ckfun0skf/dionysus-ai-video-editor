@@ -11,6 +11,7 @@ import {
 import type { CompositionDocument } from "./compositionModel";
 import { migrateLegacyProjectToComposition, projectRootCompositionToLegacy } from "./compositionMigration";
 import type { EditorSessionSnapshot } from "./editorSessionHistory";
+import { recordEditorSessionChange, type EditorSessionHistory } from "./editorSessionHistory";
 import type { DionysusProject } from "./types";
 
 /**
@@ -99,4 +100,32 @@ export function commitEditorSessionChange(
       );
   const project = projectRootCompositionToLegacy(nextProject, composition);
   return { project, composition };
+}
+
+
+export interface EditorSessionTransition {
+  session: EditorSessionSnapshot;
+  history: EditorSessionHistory;
+}
+
+/**
+ * Run one editor edit as a single domain transaction: capture the pre-edit snapshot,
+ * apply the legacy-domain updater, reconcile/project the paired session, and return
+ * both the new session and its matching undo history without mutating caller state.
+ */
+export function transitionEditorSession(
+  current: EditorSessionSnapshot,
+  history: EditorSessionHistory,
+  updateProject: (project: DionysusProject) => DionysusProject,
+  historyGroup = "",
+  canonicalRoot?: CompositionDocument,
+  now = Date.now(),
+): EditorSessionTransition {
+  const nextHistory = recordEditorSessionChange(history, current, historyGroup, now);
+  const nextProject = {
+    ...updateProject(structuredClone(current.project)),
+    updatedAt: new Date(now).toISOString(),
+  };
+  const session = commitEditorSessionChange(current, nextProject, canonicalRoot);
+  return { session, history: nextHistory };
 }
