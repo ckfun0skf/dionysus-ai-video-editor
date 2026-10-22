@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { collectCompositionLayers, getCompositionDuration, isPlayableAudioLayer, waitForVideoFrame } from "./compositionRenderer";
 import { sampleProject } from "./sampleProject";
+import { migrateLegacyProjectToComposition } from "./compositionMigration";
 
 describe("compositionRenderer", () => {
   it("waits for decoded video data instead of treating loaded metadata as a drawable frame", async () => {
@@ -18,6 +19,69 @@ describe("compositionRenderer", () => {
     await waiting;
     expect(completed).toBe(true);
   });
+  it("prefers canonical nested Composition placements over stale compatibility layers", () => {
+    const project = structuredClone(sampleProject);
+    const shot = project.shots[0];
+    const slotVersion = shot.slots[0].versions[0];
+    slotVersion.layers = [{ id: "canonical-shot-layer", name: "Canonical shot layer", kind: "text", start: 0, duration: 2 }];
+    const shotDocument = migrateLegacyProjectToComposition(project).legacyShotSlotCompositions.find(document =>
+      document.legacyData?.shotId === shot.id &&
+      document.legacyData?.slotId === shot.slots[0].id &&
+      document.legacyData?.versionId === slotVersion.id
+    );
+    expect(shotDocument).toBeDefined();
+    slotVersion.composition = structuredClone(shotDocument!);
+    slotVersion.layers = [{ id: "stale-shot-layer", name: "Stale projection", kind: "text", start: 0, duration: 2 }];
+
+    const clipVersion = {
+      id: "canonical-clip-version",
+      name: "Canonical clip version",
+      description: "",
+      duration: 2,
+      layers: [{ id: "canonical-clip-layer", name: "Canonical clip layer", kind: "text" as const, start: 0, duration: 2 }],
+      scriptVersionIds: [],
+      generationRecords: [],
+    };
+    project.assets.push({
+      id: "canonical-clip-asset",
+      name: "Canonical clip",
+      kind: "clip",
+      selectedClipVersionId: clipVersion.id,
+      clipVersions: [clipVersion],
+    });
+    const clipDocument = migrateLegacyProjectToComposition(project).clipCompositions.find(document =>
+      document.legacyData?.assetId === "canonical-clip-asset" &&
+      document.legacyData?.clipVersionId === clipVersion.id
+    );
+    expect(clipDocument).toBeDefined();
+    clipVersion.composition = structuredClone(clipDocument!);
+    clipVersion.layers = [{ id: "stale-clip-layer", name: "Stale projection", kind: "text", start: 0, duration: 2 }];
+    project.timelineClips = [{
+      id: "canonical-clip-instance",
+      name: "Canonical clip instance",
+      kind: "clip",
+      trackId: "track-video-1",
+      start: 5,
+      duration: 2,
+      assetId: "canonical-clip-asset",
+      clipVersionId: clipVersion.id,
+    }];
+
+    const layers = collectCompositionLayers(project);
+    expect(layers).toContainEqual(expect.objectContaining({
+      id: "canonical-shot-layer",
+      name: "Canonical shot layer",
+      kind: "text",
+    }));
+    expect(layers).toContainEqual(expect.objectContaining({
+      id: "canonical-clip-instance:canonical-clip-layer:0",
+      name: "Canonical clip layer",
+      kind: "text",
+      start: 5,
+    }));
+    expect(layers.some(layer => layer.id === "stale-shot-layer" || layer.id.includes("stale-clip-layer"))).toBe(false);
+  });
+
   it("collects selected-version layers with absolute shot and slot offsets", () => {
     const project = structuredClone(sampleProject);
     project.shots[0].slots[0].versions[0].layers = [{ id: "layer-selected", name: "Selected layer", kind: "image", start: 1, duration: 2 }];
