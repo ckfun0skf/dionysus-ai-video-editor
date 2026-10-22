@@ -100,3 +100,17 @@ Migration must preserve IDs, alternatives, prompts, generation/reference history
 ## Acceptance
 
 Root and nested compositions share a document schema and editing mechanics. Save-as-Clip retains structure and pinned versions. Saved Clips can be placed elsewhere, opened and expanded without mutating the source Project. Tasks/runs remain auditable. Migration/round-trip and regression tests, TypeScript and production build must pass. Do not add browser smoke tests unless explicitly requested.
+
+
+## Linked source audio model
+
+**Owner-confirmed product contract (2026-10-22):** linked source audio belongs to its video placement / Video Layer relationship and is represented as a child placement, not as a standalone Audio Track. Adding a video must never create a blank Audio Track as a side effect.
+
+- Insert a linked audio child only when the source has an audio stream. A Video Layer can contain many video placements, each with its own linked audio child or no child if the source has no audio.
+- Linked child audio follows parent timing and source edits (move, trim, split, duplicate, delete) atomically. It cannot be dragged to another track and does not expose routine Unlink/Relink controls.
+- Mute controls exist per linked audio child and at Video Layer scope (the latter mutes all linked source audio belonging to that layer).
+- **Extract Audio** transfers the selected source audio into an independent Audio Track and prevents simultaneous playback of the same linked source. **Duplicate Audio** intentionally retains the linked source and creates an independent copy.
+- Create standalone Audio Tracks only when the user explicitly adds one or invokes Extract Audio. Deleting an unrelated Audio Track must not affect linked children. Video deletion semantics for linked children must be explicit and atomic.
+- Persistence, undo/redo and migration preserve parent identity, source ranges, timing, mute/mix state, and extraction/duplication outcomes. Tests cover sources with/without audio, multiple clips per Video Layer, and all linked-audio lifecycle operations.
+
+This owner decision supersedes any older statement in this document or implementation notes that linked audio should be routinely unlinked into an independent Audio Layer. This is a target contract, not a claim that current code already implements it.
