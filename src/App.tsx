@@ -30,6 +30,7 @@ import {
 } from "./projectTimelinePlacement";
 import { createEditorSessionHistory, recordEditorSessionChange, redoEditorSessionChange, undoEditorSessionChange, type EditorSessionHistory, type EditorSessionSnapshot } from "./editorSessionHistory";
 import { commitEditorSessionChange } from "./editorSession";
+import { COMPOSITION_PROJECT_STORAGE_KEY, LEGACY_PROJECT_STORAGE_KEY, persistEditorSession } from "./editorSessionPersistence";
 import { collectCompositionLayers, isPlayableAudioLayer, renderCompositionFrame, exportCompositionWebM, downloadExport } from "./compositionRenderer";
 import { createClipVersionSnapshot } from "./clipVersionSnapshot";
 import AIGenerationPanel from "./AIGenerationPanel";
@@ -53,8 +54,6 @@ type PreviewTransformStart = PreviewTransformDraft & {
   pointerId: number; startX: number; startY: number; frameWidth: number; frameHeight: number;
   tab?: VersionTimelineTab;
 };
-const STORAGE_KEY = "dionysus.project.v1";
-const COMPOSITION_STORAGE_KEY = "dionysus.composition.v2";
 const id = (prefix: string) => prefix + "-" + crypto.randomUUID();
 const time = (s: number) => String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(Math.floor(s % 60)).padStart(2, "0");
 const copy = (p: DionysusProject) => JSON.parse(JSON.stringify(p)) as DionysusProject;
@@ -191,8 +190,8 @@ function shouldPreferCompositionRecovery(
 function createInitialEditorSession(): EditorSessionSnapshot {
   let project: DionysusProject;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    const compositionRaw = localStorage.getItem(COMPOSITION_STORAGE_KEY);
+    const raw = localStorage.getItem(LEGACY_PROJECT_STORAGE_KEY);
+    const compositionRaw = localStorage.getItem(COMPOSITION_PROJECT_STORAGE_KEY);
     if (!raw && !compositionRaw) {
       project = createEmptyProject();
     } else {
@@ -228,9 +227,9 @@ function createInitialEditorSession(): EditorSessionSnapshot {
 
   let composition: CompositionDocument;
   try {
-    const raw = localStorage.getItem(COMPOSITION_STORAGE_KEY);
+    const raw = localStorage.getItem(COMPOSITION_PROJECT_STORAGE_KEY);
     if (raw) {
-      const legacyRaw = localStorage.getItem(STORAGE_KEY);
+      const legacyRaw = localStorage.getItem(LEGACY_PROJECT_STORAGE_KEY);
       let legacyRead: ReturnType<typeof readProjectDocument> | undefined;
       if (legacyRaw) {
         try { legacyRead = readProjectDocument(JSON.parse(legacyRaw) as unknown); }
@@ -438,12 +437,9 @@ export default function App() {
   const [isChecklistOpen, setIsChecklistOpen] = useState(false);
   useEffect(() => {
     try {
-      const snapshot = { ...project, updatedAt: new Date().toISOString() };
-      // Keep the established schema-1.0 recovery key intact for existing consumers/tests and
-      // store the versioned Composition snapshot beside it. Reopen prefers the envelope only
-      // when both snapshots describe the same project revision.
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
-      localStorage.setItem(COMPOSITION_STORAGE_KEY, JSON.stringify(createProjectDocument(snapshot, rootComposition)));
+      // Save the canonical versioned envelope first, then mirror its schema-1.0 projection.
+      // If the compatibility mirror cannot be written, recovery can still use the new root.
+      persistEditorSession(localStorage, { project, composition: rootComposition }, new Date().toISOString());
     }
     catch { setNotice(t("notice.storageFull")); }
   }, [project, rootComposition]);
