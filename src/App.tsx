@@ -28,7 +28,7 @@ import {
   type ProjectTimelineInsertionPlan,
   type ProjectTimelineInsertResolution,
 } from "./projectTimelinePlacement";
-import { recordProjectChange, undoProjectChange as undoHistory, redoProjectChange as redoHistory } from "./projectHistory";
+import { createEditorSessionHistory, recordEditorSessionChange, redoEditorSessionChange, undoEditorSessionChange, type EditorSessionHistory } from "./editorSessionHistory";
 import { collectCompositionLayers, isPlayableAudioLayer, renderCompositionFrame, exportCompositionWebM, downloadExport } from "./compositionRenderer";
 import { createClipVersionSnapshot } from "./clipVersionSnapshot";
 import AIGenerationPanel from "./AIGenerationPanel";
@@ -245,24 +245,15 @@ export default function App() {
     } catch { /* Fall back to deterministic migration for old or corrupt recovery data. */ }
     return migrateLegacyProjectToComposition(project).rootComposition;
   });
-  const [undoStack, setUndoStack] = useState<DionysusProject[]>([]);
-  const [redoStack, setRedoStack] = useState<DionysusProject[]>([]);
-  const [compositionUndoStack, setCompositionUndoStack] = useState<CompositionDocument[]>([]);
-  const [compositionRedoStack, setCompositionRedoStack] = useState<CompositionDocument[]>([]);
+  const [editorHistory, setEditorHistory] = useState<EditorSessionHistory>(() => createEditorSessionHistory());
+  const undoStack = editorHistory.undo;
+  const redoStack = editorHistory.redo;
   const projectRef = useRef(project);
   const rootCompositionRef = useRef(rootComposition);
-  const undoStackRef = useRef(undoStack);
-  const redoStackRef = useRef(redoStack);
-  const compositionUndoStackRef = useRef(compositionUndoStack);
-  const compositionRedoStackRef = useRef(compositionRedoStack);
+  const editorHistoryRef = useRef(editorHistory);
   projectRef.current = project;
   rootCompositionRef.current = rootComposition;
-  undoStackRef.current = undoStack;
-  redoStackRef.current = redoStack;
-  compositionUndoStackRef.current = compositionUndoStack;
-  compositionRedoStackRef.current = compositionRedoStack;
-  const lastHistoryGroup = useRef("");
-  const lastHistoryAt = useRef(0);
+  editorHistoryRef.current = editorHistory;
   const [projectSettingsOpen, setProjectSettingsOpen] = useState(false);
   const [projectSettingsWidth, setProjectSettingsWidth] = useState(project.width);
   const [projectSettingsHeight, setProjectSettingsHeight] = useState(project.height);
@@ -757,22 +748,15 @@ export default function App() {
   function change(fn: (p: DionysusProject) => DionysusProject, historyGroup = "", canonicalRoot?: CompositionDocument) {
     const now = Date.now();
     const current = projectRef.current;
-    const currentUndo = undoStackRef.current;
     const currentRoot = rootCompositionRef.current;
-    const coalesce = Boolean(historyGroup) && historyGroup === lastHistoryGroup.current && now - lastHistoryAt.current < 800;
-    if (!coalesce) {
-      const history = recordProjectChange({ current: copy(current), undo: currentUndo, redo: redoStackRef.current }, copy(current));
-      undoStackRef.current = history.undo.map(copy);
-      setUndoStack(undoStackRef.current);
-      compositionUndoStackRef.current = [...compositionUndoStackRef.current.slice(-49), structuredClone(currentRoot)];
-      setCompositionUndoStack(compositionUndoStackRef.current);
-    }
-    lastHistoryGroup.current = historyGroup;
-    lastHistoryAt.current = now;
-    redoStackRef.current = [];
-    setRedoStack([]);
-    compositionRedoStackRef.current = [];
-    setCompositionRedoStack([]);
+    const nextHistory = recordEditorSessionChange(
+      editorHistoryRef.current,
+      { project: current, composition: currentRoot },
+      historyGroup,
+      now,
+    );
+    editorHistoryRef.current = nextHistory;
+    setEditorHistory(nextHistory);
     const next = { ...fn(copy(current)), updatedAt: new Date().toISOString() };
     // Explicit root commands supply the canonical document first. Non-root domain edits refresh
     // the root snapshot through the legacy migration until those domain editors are promoted.
@@ -1096,48 +1080,38 @@ export default function App() {
   }
 
   function undoProjectChange() {
-    if (!undoStackRef.current.length) return;
-    lastHistoryGroup.current = "";
-    const history = undoHistory({ current: copy(projectRef.current), undo: undoStackRef.current, redo: redoStackRef.current });
-    projectRef.current = { ...copy(history.current), updatedAt: new Date().toISOString() };
-    undoStackRef.current = history.undo.map(copy);
-    redoStackRef.current = history.redo.map(copy);
-    const priorComposition = compositionUndoStackRef.current[compositionUndoStackRef.current.length - 1];
-    if (priorComposition) {
-      compositionUndoStackRef.current = compositionUndoStackRef.current.slice(0, -1);
-      compositionRedoStackRef.current = [...compositionRedoStackRef.current, structuredClone(rootCompositionRef.current)];
-      rootCompositionRef.current = structuredClone(priorComposition);
-      setRootComposition(rootCompositionRef.current);
-      setCompositionUndoStack(compositionUndoStackRef.current);
-      setCompositionRedoStack(compositionRedoStackRef.current);
-      // Root placement fields are re-projected from the history snapshot, never re-migrated.
-      projectRef.current = { ...projectRootCompositionToLegacy(projectRef.current, rootCompositionRef.current), updatedAt: new Date().toISOString() };
-    }
+    const result = undoEditorSessionChange(editorHistoryRef.current, {
+      project: projectRef.current,
+      composition: rootCompositionRef.current,
+    });
+    if (!result.snapshot) return;
+    editorHistoryRef.current = result.history;
+    setEditorHistory(result.history);
+    rootCompositionRef.current = structuredClone(result.snapshot.composition);
+    projectRef.current = {
+      ...projectRootCompositionToLegacy(copy(result.snapshot.project), rootCompositionRef.current),
+      updatedAt: new Date().toISOString(),
+    };
+    setRootComposition(rootCompositionRef.current);
     setProject(projectRef.current);
-    setUndoStack(undoStackRef.current);
-    setRedoStack(redoStackRef.current);
     setNotice("Last project change undone.");
   }
+
   function redoProjectChange() {
-    if (!redoStackRef.current.length) return;
-    lastHistoryGroup.current = "";
-    const history = redoHistory({ current: copy(projectRef.current), undo: undoStackRef.current, redo: redoStackRef.current });
-    projectRef.current = { ...copy(history.current), updatedAt: new Date().toISOString() };
-    undoStackRef.current = history.undo.map(copy);
-    redoStackRef.current = history.redo.map(copy);
-    const nextComposition = compositionRedoStackRef.current[compositionRedoStackRef.current.length - 1];
-    if (nextComposition) {
-      compositionRedoStackRef.current = compositionRedoStackRef.current.slice(0, -1);
-      compositionUndoStackRef.current = [...compositionUndoStackRef.current, structuredClone(rootCompositionRef.current)];
-      rootCompositionRef.current = structuredClone(nextComposition);
-      setRootComposition(rootCompositionRef.current);
-      setCompositionUndoStack(compositionUndoStackRef.current);
-      setCompositionRedoStack(compositionRedoStackRef.current);
-      projectRef.current = { ...projectRootCompositionToLegacy(projectRef.current, rootCompositionRef.current), updatedAt: new Date().toISOString() };
-    }
+    const result = redoEditorSessionChange(editorHistoryRef.current, {
+      project: projectRef.current,
+      composition: rootCompositionRef.current,
+    });
+    if (!result.snapshot) return;
+    editorHistoryRef.current = result.history;
+    setEditorHistory(result.history);
+    rootCompositionRef.current = structuredClone(result.snapshot.composition);
+    projectRef.current = {
+      ...projectRootCompositionToLegacy(copy(result.snapshot.project), rootCompositionRef.current),
+      updatedAt: new Date().toISOString(),
+    };
+    setRootComposition(rootCompositionRef.current);
     setProject(projectRef.current);
-    setUndoStack(undoStackRef.current);
-    setRedoStack(redoStackRef.current);
     setNotice("Project change restored.");
   }
   function addShot() {
@@ -2784,7 +2758,7 @@ export default function App() {
       const parsed = JSON.parse(await file.text()) as unknown;
       const { project: data, compositionModel } = readProjectDocument(parsed, true);
       if (!validateProject(data)) throw new Error(t("error.invalidProject"));
-      const normalized = compositionModel?.rootComposition ? data : normalizeLegacyTimelineTracks(data); const migratedRoot = migrateLegacyProjectToComposition(normalized).rootComposition; const importedRoot = compositionModel?.rootComposition && JSON.stringify(projectRootCompositionToLegacy(normalized, compositionModel.rootComposition)) === JSON.stringify(normalized) ? structuredClone(compositionModel.rootComposition) : migratedRoot; projectRef.current = normalized; rootCompositionRef.current = importedRoot; setProject(normalized); setRootComposition(importedRoot); setUndoStack([]); setRedoStack([]); compositionUndoStackRef.current = []; compositionRedoStackRef.current = []; setCompositionUndoStack([]); setCompositionRedoStack([]); undoStackRef.current = []; redoStackRef.current = []; lastHistoryGroup.current = ""; setSelectedId(normalized.shots[0]?.id ?? ""); setNotice(t("notice.projectImported"));
+      const normalized = compositionModel?.rootComposition ? data : normalizeLegacyTimelineTracks(data); const migratedRoot = migrateLegacyProjectToComposition(normalized).rootComposition; const importedRoot = compositionModel?.rootComposition && JSON.stringify(projectRootCompositionToLegacy(normalized, compositionModel.rootComposition)) === JSON.stringify(normalized) ? structuredClone(compositionModel.rootComposition) : migratedRoot; projectRef.current = normalized; rootCompositionRef.current = importedRoot; setProject(normalized); setRootComposition(importedRoot); editorHistoryRef.current = createEditorSessionHistory(); setEditorHistory(editorHistoryRef.current); setSelectedId(normalized.shots[0]?.id ?? ""); setNotice(t("notice.projectImported"));
     } catch (e) {
       setNotice(e instanceof Error ? e.message : t("error.importFailed"));
     } finally {
