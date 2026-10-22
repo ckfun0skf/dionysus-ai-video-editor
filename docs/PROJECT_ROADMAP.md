@@ -8,10 +8,10 @@ This document is a durable pickup ledger, not a claim that planned behavior alre
 
 ## Live architecture checkpoint — 2026-10-22
 
-- Current PR: [#111](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/111), branch `feat/e1-editor-session-history`; code checkpoint before this roadmap sync: `0496eab0b3b16b3ad72b4561e9b8e3eaff898b96`. Exact-head CI [39873169613](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39873169613) passed 26 test files / 294 tests, TypeScript/build and audit 0; this documentation sync creates a new head, so re-check exact-head CI.
+- Current PR: [#111](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/111), branch `feat/e1-editor-session-history`; code checkpoint before this roadmap sync: `baee6a47be54a007f5f9dba6ee3e08fbb0191263`. Exact-head CI [39873737409](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39873737409) passed 26 test files / 294 tests, TypeScript/build and audit 0; this documentation sync creates a new head, so re-check exact-head CI.
 - Editor state/history/import/recovery use a paired session snapshot. Autosave writes canonical v2 only; schema-1.0 is a read-only fallback.
 - Nested version render layers use canonical nested Composition where present, including linked-audio child source/ranges/mute/volume/fades and track mute. Master preview/audio/code preview/export start from canonical root Composition via a memoized adapter to the legacy renderer interface.
-- Nested track mute, duration and description operations update canonical Composition and the compatibility projection through dedicated helpers. New Blank Clip Versions immediately own an independent canonical Composition, including empty placements.
+- Nested track mute, duration and description operations update canonical Composition and compatibility projections through dedicated helpers. New Clip Asset Version A and New Blank Versions immediately own independent canonical Composition documents, including empty placements and the parent asset's canvas size.
 - Remaining: renderer output still uses legacy `CompositionLayer[]`; editable master/nested Timeline UI and some non-root/pinned snapshot paths remain compatibility-first. Do not call DYS-014 complete or claim canonical-only in-memory state.
 - Next: verify CI on the docs-synchronized head; then audit remaining non-root mutations and plan a tested nested editable UI migration. Keep Issue #100 open, no browser smoke tests, and no merge without explicit owner approval.
 
