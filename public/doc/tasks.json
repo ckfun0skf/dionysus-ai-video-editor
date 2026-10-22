@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "project": "Dionysus",
-  "updatedAt": "2026-10-20",
+  "updatedAt": "2026-10-22",
   "sourceOfTruth": "public/doc/tasks.json and docs/TIMELINE_FIRST_EXECUTION_BACKLOG.md",
   "statusDefinitions": {
     "done": "Implementation exists and has evidence; release/browser validation may still be pending.",
@@ -589,7 +589,7 @@
           "title": "Unified Composition model and structure-preserving snapshots",
           "status": "in_progress",
           "progress": 82,
-          "summary": "Make root and nested Composition documents authoritative for timeline edits, history and persistence; derive deterministic schema-1.0 compatibility projections without stale fields overwriting root state.",
+          "summary": "Converge root and nested editing on one authoritative Composition/session. The first E1 slice now records the Project compatibility projection and canonical root Composition in one bounded undo/redo history; live state, persistence, and render paths remain transitional.",
           "doc": "tasks/unified-composition-model.md",
           "detail": "tasks/unified-composition-model.html",
           "report": "reports/unified-composition-model-report.md",
@@ -673,9 +673,11 @@
             "Root and nested snapshot validation now include provenance and pinned version reference shape and prevent cyclic embedded snapshots. Focused save/reopen and invalid-snapshot tests added; UI-level nested edit/Undo/Redo history is still a separate uncovered gap.",
             "Nested validation follow-up CI had 250/251 pass; corrected a negative test to target zero-duration nested placement rather than document-level duration. Recursive code, pinned metadata and cycle protection remain under exact-head verification.",
             "The nested invalid-duration test fixture now starts from a valid root snapshot with tracks so it tests recursive placement validation rather than an empty compatibility snapshot; exact-head CI pending.",
-            "Canonical track settings dialogs and preview-frame transforms now share the root track command for fields promoted to the Composition schema and compatibility metadata. New source/test/docs head needs exact CI."
+            "Canonical track settings dialogs and preview-frame transforms now share the root track command for fields promoted to the Composition schema and compatibility metadata. New source/test/docs head needs exact CI.",
+            "src/editorSessionHistory.ts and src/editorSessionHistory.test.ts on feat/e1-editor-session-history (CI pending)",
+            "App integration: one history entry captures Project compatibility state + canonical root Composition"
           ],
-          "notes": "Root Composition is the live root timeline state with paired history snapshots; schema-1.0 DionysusProject is derived compatibility data. Validated v2 project imports/recovery restore the canonical root rather than re-migrating it, while schema-1.0 files still use deterministic migration. Root mutation paths now include canonical-first insertion/ripple/trim, Master Shot ripple reorder, drag/drop, move/resize/split/duplicate/delete, source/link edits, track add/update/removal, preview transforms and media import. Existing nested Clip Version/Shot Slot snapshots and pinned subtrees remain protected by migration. Exact-final-head CI passed on 37ae7063f1e92018b75cb469ec198f9ba826cfee: 240 tests across 23 files, TypeScript/production build passed, audit 0 vulnerabilities. Keep this checkpoint in progress until remaining compatibility-only paths are reviewed.",
+          "notes": "Status stays in_progress: a single paired history is implemented, but project and Composition live state are still separate and rendering/persistence still contain legacy projections. Documentation status is not completion evidence; record exact-head CI and follow-up issues as each slice lands.",
           "description": "Establish canonical Composition for root/nested timelines, shared commands and independent structure-preserving Project-to-Clip snapshots.",
           "executionStage": "E2 and E4",
           "priority": "P0",
@@ -691,7 +693,7 @@
           "testStrategy": [
             "Migration matrix, parity, snapshot independence and round-trip."
           ],
-          "nextAction": "Continue auditing compatibility-only Storyboard materializations and domain edits that refresh Composition metadata. Preserve canonical source/link/timing/pinned nested snapshots. Rerun CI on the final code/docs SHA. No browser smoke tests; PR #96 remains Draft and unmerged.",
+          "nextAction": "Verify exact-head CI for the atomic Editor-history slice. Then move canonical command dispatch into the session boundary and continue consolidating project persistence/recovery. Preserve schema-1.0 migration, stable IDs, source ranges, links, pins and nested snapshots; no browser smoke tests and no merge without owner approval.",
           "handoffNotes": "PR #96 remains Draft/unmerged. Root Composition now owns live root timeline mutations/history and validated v2 import/recovery; schema-1.0 data is a compatibility projection. Canonical-first insertion/ripple, Master Shot ripple reorder, source-range/link edits, split/duplicate/delete, track removal guards, preview transforms and media import have focused regression coverage. Nested canonical documents/pins are retained. Exact final SHA CI and remaining compatibility-path review are still required. No browser smoke tests; no main push or merge."
         }
       ],
