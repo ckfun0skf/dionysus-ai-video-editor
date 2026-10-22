@@ -83,6 +83,64 @@ describe("compositionRenderer", () => {
     expect(layers.some(layer => layer.id === "stale-shot-layer" || layer.id.includes("stale-clip-layer"))).toBe(false);
   });
 
+  it("renders canonical linked-audio children for nested Shot and Slot Versions", () => {
+    const project = structuredClone(sampleProject);
+    project.assets.push({
+      id: "nested-video-source",
+      name: "Nested video",
+      kind: "video",
+      path: "data:video/webm;base64,AA==",
+    });
+    const shot = project.shots[0];
+    const slot = shot.slots[0];
+    const version = slot.versions[0];
+    version.layers = [{
+      id: "nested-video-owner",
+      name: "Nested video owner",
+      kind: "video",
+      start: 0,
+      duration: 2,
+      assetId: "nested-video-source",
+    }];
+    const migrated = migrateLegacyProjectToComposition(project);
+    const canonical = migrated.legacyShotSlotCompositions.find(document =>
+      document.legacyData?.shotId === shot.id &&
+      document.legacyData?.slotId === slot.id &&
+      document.legacyData?.versionId === version.id
+    );
+    expect(canonical).toBeDefined();
+    version.composition = structuredClone(canonical!);
+    version.composition.placements[0].linkedAudioChildren = [{
+      id: "nested-linked-audio",
+      name: "Nested linked audio",
+      source: { type: "asset", assetId: "nested-video-source" },
+      sourceIn: 0,
+      sourceOut: 2,
+      muted: true,
+      volume: 0.4,
+      legacyData: {
+        kind: "audio",
+        assetId: "stale-audio-source",
+        linkedVideoClipId: "nested-video-owner",
+      },
+    }];
+
+    const layers = collectCompositionLayers(project);
+    const linkedAudio = layers.find(layer => layer.id === "nested-linked-audio");
+    expect(linkedAudio).toMatchObject({
+      kind: "audio",
+      assetId: "nested-video-source",
+      linkedVideoClipId: "nested-video-owner",
+      start: 0,
+      duration: 2,
+      sourceIn: 0,
+      sourceOut: 2,
+      muted: true,
+      volume: 0.4,
+    });
+    expect(isPlayableAudioLayer(linkedAudio!, project.assets.find(asset => asset.id === "nested-video-source"))).toBe(true);
+  });
+
   it("collects selected-version layers with absolute shot and slot offsets", () => {
     const project = structuredClone(sampleProject);
     project.shots[0].slots[0].versions[0].layers = [{ id: "layer-selected", name: "Selected layer", kind: "image", start: 1, duration: 2 }];
