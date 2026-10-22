@@ -28,7 +28,7 @@ import {
   type ProjectTimelineInsertionPlan,
   type ProjectTimelineInsertResolution,
 } from "./projectTimelinePlacement";
-import { createEditorSessionHistory, recordEditorSessionChange, redoEditorSessionChange, undoEditorSessionChange, type EditorSessionHistory, type EditorSessionSnapshot } from "./editorSessionHistory";
+import { createEditorSessionHistory, redoEditorSessionChange, undoEditorSessionChange, type EditorSessionHistory, type EditorSessionSnapshot } from "./editorSessionHistory";
 import { transitionEditorSession } from "./editorSession";
 import { COMPOSITION_PROJECT_STORAGE_KEY, LEGACY_PROJECT_STORAGE_KEY, persistEditorSession } from "./editorSessionPersistence";
 import { collectCompositionLayers, isPlayableAudioLayer, renderCompositionFrame, exportCompositionWebM, downloadExport } from "./compositionRenderer";
