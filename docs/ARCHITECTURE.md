@@ -56,3 +56,10 @@ Storyboard, Assets/References, project JSON import/export, nested Clip Assets, b
 ## Validation
 
 Use unit/integration tests for placement, pinning, dependencies, provenance, migration and snapshots; run `npm test` and `npm run build`. No automated browser smoke tests unless explicitly requested. Verify CI on exact PR head and Pages separately when in scope.
+
+
+## Linked source audio ownership
+
+The owner-confirmed target model (2026-10-22) treats source audio as a child placement associated with a Video Layer/video placement, not as an ordinary Audio Track. Inserting a video must not create an empty Audio Track. Create a linked audio child only if the source contains audio. Multiple clips on one Video Layer retain per-clip child audio, each synchronized to its parent clip. Support per-child mute and a parent Video Layer mute for its linked source audio.
+
+Do not expose routine Unlink/Relink or direct dragging for linked audio. Provide **Extract Audio** to transfer audio into an independent Audio Track without double playback, and a separate **Duplicate Audio** command to intentionally retain the linked original and create an independent copy. Independent Audio Tracks are created intentionally. Command-layer operations and schema migration must preserve ownership, timing/source ranges, mute/mix state, Undo/Redo and JSON round-trip. This target supersedes the older unlink-to-independent-track wording elsewhere in the legacy/current implementation; implementation status must be reported honestly.
