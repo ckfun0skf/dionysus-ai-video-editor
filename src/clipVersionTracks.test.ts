@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { sampleProject } from "./sampleProject";
-import { addClipVersionLayer, addClipVersionTrack, deleteClipVersionLayer, duplicateClipVersionComposition, moveClipVersionLayer, normalizeClipVersionTracks, updateClipVersionLayer, updateClipVersionTrack } from "./clipVersionTracks";
+import { addClipVersionLayer, addClipVersionTrack, deleteClipVersionLayer, duplicateClipVersionComposition, moveClipVersionLayer, normalizeClipVersionTracks, updateClipVersionDuration, updateClipVersionLayer, updateClipVersionTrack } from "./clipVersionTracks";
 import { validateProject } from "./projectValidation";
 
 describe("normalizeClipVersionTracks", () => {
@@ -54,6 +54,25 @@ describe("nested Clip Version track operations", () => {
     const withSecondLayer = addClipVersionLayer(withLayers, { id: "code-1", name: "Code", kind: "procedural", start: 1, duration: 2 }, "video-2");
     expect(withSecondLayer.tracks?.map(track => track.id)).toContain("video-2");
     expect(withSecondLayer.layers.filter(layer => layer.trackId === "video-2").map(layer => layer.id)).toEqual(["image-1", "code-1"]);
+  });
+
+  it("updates nested duration in canonical Composition and compatibility projection", () => {
+    const version = structuredClone(sampleProject.shots[0].slots[0].versions[0]);
+    const withLayer = addClipVersionLayer(version, {
+      id: "nested-duration-layer",
+      name: "Duration layer",
+      kind: "video",
+      start: 0,
+      duration: 2,
+    });
+    const updated = updateClipVersionDuration(withLayer, 3);
+
+    expect(updated.duration).toBe(3);
+    expect(updated.composition?.duration).toBe(3);
+    expect(updated.layers.find(layer => layer.id === "nested-duration-layer")?.duration).toBe(2);
+    expect(withLayer.duration).not.toBe(3);
+    expect(withLayer.composition?.duration).not.toBe(3);
+    expect(() => updateClipVersionDuration(withLayer, Number.NaN)).toThrow(/duration/i);
   });
 
   it("updates nested track mute in canonical Composition and compatibility projection", () => {
