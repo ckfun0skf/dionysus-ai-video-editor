@@ -10,7 +10,11 @@ export interface ExportResult { blob: Blob; filename: string; mimeType: string }
 export function collectVersionRenderLayers(version: ClipVersion): CompositionLayer[] {
   if (!version.composition) return version.layers;
 
-  const canonicalLayers = normalizeClipVersionTracks(version).layers;
+  const mutedByTrack = new Map(version.composition.tracks.map(track => [track.id, Boolean(track.muted)]));
+  const canonicalLayers = normalizeClipVersionTracks(version).layers.map(layer => ({
+    ...layer,
+    muted: Boolean(layer.muted || mutedByTrack.get(layer.trackId)),
+  }));
   const linkedAudioLayers = version.composition.placements.flatMap(owner =>
     (owner.linkedAudioChildren ?? []).map(child => {
       const layer = {
@@ -22,6 +26,7 @@ export function collectVersionRenderLayers(version: ClipVersion): CompositionLay
         start: owner.start,
         duration: owner.duration,
         linkedVideoClipId: owner.id,
+        muted: Boolean(child.muted || mutedByTrack.get(owner.trackId)),
       } as unknown as CompositionLayer & Record<string, unknown>;
 
       const sourceFields = layer as unknown as Record<string, unknown>;
