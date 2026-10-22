@@ -1357,6 +1357,20 @@ export default function App() {
 
   function updateRootTimelineClip(clipId: string, patch: Partial<TimelineClip>) {
     const current = projectRef.current.timelineClips?.find(item => item.id === clipId);
+    const linkedOwner = rootCompositionRef.current.placements.find(item =>
+      (item.linkedAudioChildren ?? []).some(child => child.id === clipId)
+    );
+    if (linkedOwner) {
+      const childPatch = {
+        ...(patch.muted !== undefined ? { muted: patch.muted } : {}),
+        ...(patch.volume !== undefined ? { volume: patch.volume } : {}),
+        ...(patch.fadeIn !== undefined ? { fadeIn: patch.fadeIn } : {}),
+        ...(patch.fadeOut !== undefined ? { fadeOut: patch.fadeOut } : {}),
+        ...(current ? { legacyData: { ...current, ...patch } } : {}),
+      };
+      changeRootComposition(root => updateCompositionLinkedAudioChild(root, clipId, childPatch));
+      return;
+    }
     const canonical = rootCompositionRef.current.placements.find(item => item.id === clipId);
     if (!current || !canonical) {
       change(project => ({ ...project, timelineClips: (project.timelineClips ?? []).map(item => item.id === clipId ? { ...item, ...patch } : item) }));
@@ -1381,12 +1395,9 @@ export default function App() {
       return updateCompositionPlacement(next, clipId, {
         name: updated.name,
         trackId: updated.trackId,
-        start: updated.start,
-        duration: updated.duration,
         source: sourceTemplate.source,
-        sourceIn: updated.sourceIn,
-        sourceOut: updated.sourceOut,
-        linkedToPlacementId: sourceTemplate.linkedToPlacementId,
+        ...(updated.sourceIn !== undefined ? { sourceIn: updated.sourceIn } : {}),
+        ...(updated.sourceOut !== undefined ? { sourceOut: updated.sourceOut } : {}),
         legacyData: { ...canonical.legacyData, ...updated },
       });
     });
