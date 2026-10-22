@@ -240,6 +240,45 @@ describe("nested Clip Version track operations", () => {
     expect(version.composition?.placements.find(item => item.id === "inspector-placement")?.start).toBe(1);
   });
 
+  it("routes inspector edits through Composition validation and clears optional source ranges", () => {
+    const base = addClipVersionLayer(
+      structuredClone(sampleProject.shots[0].slots[0].versions[0]),
+      {
+        id: "validated-inspector-layer",
+        name: "Before",
+        kind: "video",
+        start: 0,
+        duration: 2,
+        assetId: "source-asset",
+        sourceIn: 1,
+        sourceOut: 3,
+      },
+    );
+
+    const cleared = updateClipVersionLayer(base, "validated-inspector-layer", {
+      sourceIn: undefined,
+      sourceOut: undefined,
+      start: 1,
+    });
+    const placement = cleared.composition?.placements.find(item => item.id === "validated-inspector-layer");
+    expect(placement).toMatchObject({ start: 1 });
+    expect(placement?.sourceIn).toBeUndefined();
+    expect(placement?.sourceOut).toBeUndefined();
+    expect(cleared.layers.find(layer => layer.id === "validated-inspector-layer")).toMatchObject({
+      start: 1,
+      sourceIn: undefined,
+      sourceOut: undefined,
+    });
+    expect(() => updateClipVersionLayer(base, "validated-inspector-layer", {
+      trackId: "missing-track",
+    })).toThrow(/track/i);
+    expect(base.composition?.placements.find(item => item.id === "validated-inspector-layer")).toMatchObject({
+      start: 0,
+      sourceIn: 1,
+      sourceOut: 3,
+    });
+  });
+
   it("preserves canonical Shot Slot and script source references during inspector edits", () => {
     const base = addClipVersionLayer(
       structuredClone(sampleProject.shots[0].slots[0].versions[0]),
