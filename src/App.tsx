@@ -211,10 +211,14 @@ export default function App() {
         ? compositionRead?.project
         : legacyRead?.project ?? compositionRead?.project;
       if (!restored || !validateProject(restored)) return createEmptyProject();
-      // A validated v2 root is authoritative; its projection was rebuilt during read.
-      return preferComposition
+      // Normalize legacy schema-1 linked-audio rows immediately, not only after the
+      // user's first edit. Otherwise the live project can still claim a linked child belongs
+      // to an Audio Track while the canonical root has already moved it under the Video owner.
+      const normalized = preferComposition
         ? clearDemoSeedData(restored)
         : normalizeLegacyTimelineTracks(clearDemoSeedData(restored));
+      const migratedRoot = migrateLegacyProjectToComposition(normalized).rootComposition;
+      return projectRootCompositionToLegacy(normalized, migratedRoot);
     } catch { return createEmptyProject(); }
   });
   // Root Composition is the live authority for Master Timeline placement/track commands.
