@@ -257,11 +257,9 @@ export default function App() {
   const [editorHistory, setEditorHistory] = useState<EditorSessionHistory>(() => createEditorSessionHistory());
   const undoStack = editorHistory.undo;
   const redoStack = editorHistory.redo;
-  const projectRef = useRef(project);
-  const rootCompositionRef = useRef(rootComposition);
+  const editorSessionRef = useRef(editorSession);
   const editorHistoryRef = useRef(editorHistory);
-  projectRef.current = project;
-  rootCompositionRef.current = rootComposition;
+  editorSessionRef.current = editorSession;
   editorHistoryRef.current = editorHistory;
   const [projectSettingsOpen, setProjectSettingsOpen] = useState(false);
   const [projectSettingsWidth, setProjectSettingsWidth] = useState(project.width);
@@ -371,7 +369,7 @@ export default function App() {
   function updateTimelineScrub(event: React.PointerEvent<HTMLElement>, duration: number) {
     const rect = event.currentTarget.getBoundingClientRect();
     const rawTime = Math.max(0, Math.min(duration, ((event.clientX - rect.left) / Math.max(rect.width, 1)) * duration));
-    const frameRate = Math.max(1, projectRef.current.frameRate || 24);
+    const frameRate = Math.max(1, editorSessionRef.current.project.frameRate || 24);
     const next = Math.min(duration, Math.round(rawTime * frameRate) / frameRate);
     playbackTimeRef.current = next; setIsPlaying(false); setEditorTime(next);
   }
@@ -756,8 +754,8 @@ export default function App() {
 
   function change(fn: (p: DionysusProject) => DionysusProject, historyGroup = "", canonicalRoot?: CompositionDocument) {
     const now = Date.now();
-    const current = projectRef.current;
-    const currentRoot = rootCompositionRef.current;
+    const current = editorSessionRef.current.project;
+    const currentRoot = editorSessionRef.current.composition;
     const nextHistory = recordEditorSessionChange(
       editorHistoryRef.current,
       { project: current, composition: currentRoot },
@@ -771,9 +769,8 @@ export default function App() {
     // the root snapshot through the legacy migration until those domain editors are promoted.
     const nextRoot = canonicalRoot ? structuredClone(canonicalRoot) : reconcileRootComposition(currentRoot, migrateLegacyProjectToComposition(next).rootComposition);
     const projected = projectRootCompositionToLegacy(next, nextRoot);
-    projectRef.current = projected;
-    rootCompositionRef.current = nextRoot;
-    setEditorSession({ project: projected, composition: nextRoot });
+    editorSessionRef.current = { project: projected, composition: nextRoot };
+    setEditorSession(editorSessionRef.current);
     // Migrations may remove a legacy Audio Track that existed only to store owned source-audio
     // children. Keep the workspace selection on a real track rather than leaving stale controls
     // that try to edit a track no longer present in the canonical Composition.
@@ -784,8 +781,8 @@ export default function App() {
   }
 
   function changeRootComposition(update: (document: CompositionDocument) => CompositionDocument, historyGroup = "") {
-    const nextRoot = update(structuredClone(rootCompositionRef.current));
-    const nextProject = projectRootCompositionToLegacy(projectRef.current, nextRoot);
+    const nextRoot = update(structuredClone(editorSessionRef.current.composition));
+    const nextProject = projectRootCompositionToLegacy(editorSessionRef.current.project, nextRoot);
     change(() => nextProject, historyGroup, nextRoot);
   }
 
@@ -804,7 +801,7 @@ export default function App() {
 
   function moveRootPlacementOrLegacy(target: { type: "shot"; shotId: string } | { type: "clip"; clipId: string }, trackId: string, start: number) {
     const placementId = target.type === "shot" ? target.shotId : target.clipId;
-    if (rootCompositionRef.current.placements.some(placement => placement.id === placementId)) {
+    if (editorSessionRef.current.composition.placements.some(placement => placement.id === placementId)) {
       changeRootComposition(root => moveCompositionPlacementToTrack(root, placementId, trackId, start));
     } else {
       change(project => moveProjectTimelinePlacement(project, target, trackId, start));
@@ -813,7 +810,7 @@ export default function App() {
 
   function commitRootResizeOrLegacy(preview: ClipResizePreview) {
     const affectedIds = [preview.id, ...preview.trims.map(trim => trim.id)];
-    if (affectedIds.every(placementId => rootCompositionRef.current.placements.some(placement => placement.id === placementId))) {
+    if (affectedIds.every(placementId => editorSessionRef.current.composition.placements.some(placement => placement.id === placementId))) {
       changeRootComposition(root => applyCompositionResizePreview(root, preview));
     } else {
       change(project => applyProjectTimelineClipResize(project, preview));
@@ -868,11 +865,11 @@ export default function App() {
     const version = asset.kind === "clip" ? (asset.clipVersions?.find(item => item.id === asset.selectedClipVersionId) ?? asset.clipVersions?.[0]) : undefined;
     const duration = version?.duration ?? ((asset.kind === "video" || asset.kind === "audio") ? asset.duration : undefined) ?? (asset.kind === "image" ? 1 : Math.max(.5, Math.min(3, mediaTimelineDuration - editorTime || 3)));
     const clip: TimelineClip = { id: id("timeline-clip"), name: asset.name, kind, trackId: track.id, start: 0, duration, assetId: asset.id, sourceIn: 0, ...(version ? { clipVersionId: version.id } : {}), ...(asset.html !== undefined ? { html: asset.html } : {}), ...(asset.css !== undefined ? { css: asset.css } : {}), ...(asset.js !== undefined ? { code: asset.js } : {}) };
-    let plan = calculateCanonicalCompositionInsertionPlan(rootCompositionRef.current, clip, track.id, desiredStart);
+    let plan = calculateCanonicalCompositionInsertionPlan(editorSessionRef.current.composition, clip, track.id, desiredStart);
     if (plan.status === "start-occupied") {
-      const trackClips = (projectRef.current.timelineClips ?? []).filter(item => item.trackId === track.id && !item.linkedVideoClipId);
+      const trackClips = (editorSessionRef.current.project.timelineClips ?? []).filter(item => item.trackId === track.id && !item.linkedVideoClipId);
       const appendAt = trackClips.reduce((end, item) => Math.max(end, item.start + item.duration), 0);
-      plan = calculateCanonicalCompositionInsertionPlan(rootCompositionRef.current, clip, track.id, appendAt);
+      plan = calculateCanonicalCompositionInsertionPlan(editorSessionRef.current.composition, clip, track.id, appendAt);
     }
     if (plan.status === "invalid-track" || plan.status === "start-occupied") {
       setNotice("Could not place this asset on the selected layer.");
@@ -888,8 +885,8 @@ export default function App() {
     }
     try {
       changeRootComposition(root => {
-        const next = applyCanonicalCompositionInsertion(root, projectRef.current, plan);
-        return addLinkedAudioForVideoPlacement(next, projectRef.current, plan.clip);
+        const next = applyCanonicalCompositionInsertion(root, editorSessionRef.current.project, plan);
+        return addLinkedAudioForVideoPlacement(next, editorSessionRef.current.project, plan.clip);
       });
       setSelectedTimelineClipId(plan.clip.id);
       setTimelineClipSettingsId(plan.clip.id);
@@ -921,7 +918,7 @@ export default function App() {
       setNotice("Choose a compatible layer for this clip. Audio belongs on an Audio layer; visual assets belong on a Video layer.");
       return;
     }
-    const plan = calculateCanonicalCompositionInsertionPlan(rootCompositionRef.current, draft, targetTrack.id, desiredStart);
+    const plan = calculateCanonicalCompositionInsertionPlan(editorSessionRef.current.composition, draft, targetTrack.id, desiredStart);
     if (plan.status === "invalid-track") {
       setNotice("This clip cannot be placed on the selected layer.");
       return;
@@ -940,8 +937,8 @@ export default function App() {
     }
     try {
       changeRootComposition(root => {
-        const next = applyCanonicalCompositionInsertion(root, projectRef.current, plan);
-        return addLinkedAudioForVideoPlacement(next, projectRef.current, plan.clip);
+        const next = applyCanonicalCompositionInsertion(root, editorSessionRef.current.project, plan);
+        return addLinkedAudioForVideoPlacement(next, editorSessionRef.current.project, plan.clip);
       });
       setSelectedTimelineClipId(plan.clip.id);
       setTimelineClipSettingsId(plan.clip.id);
@@ -957,8 +954,8 @@ export default function App() {
     if (!plan) return;
     try {
       changeRootComposition(root => {
-        const next = applyCanonicalCompositionInsertion(root, projectRef.current, plan, resolution);
-        return addLinkedAudioForVideoPlacement(next, projectRef.current, plan.clip);
+        const next = applyCanonicalCompositionInsertion(root, editorSessionRef.current.project, plan, resolution);
+        return addLinkedAudioForVideoPlacement(next, editorSessionRef.current.project, plan.clip);
       });
       setSelectedTimelineClipId(plan.clip.id);
       setSelectedTimelineTrackId(plan.trackId);
@@ -974,7 +971,7 @@ export default function App() {
   }
 
   function openProjectSettings() {
-    const current = projectRef.current;
+    const current = editorSessionRef.current.project;
     const ratio = current.width / current.height;
     const known: Array<["16:9" | "9:16" | "4:3" | "1:1" | "21:9", number]> = [
       ["16:9", 16/9], ["9:16", 9/16], ["4:3", 4/3], ["1:1", 1], ["21:9", 21/9]
@@ -1079,7 +1076,7 @@ export default function App() {
       updateTimelineVersionLayer(active.tab, active.id, patch);
     } else if (active.kind === "clip") {
       updateRootTimelineClip(active.id,patch);
-    } else if (rootCompositionRef.current.tracks.some(track => track.id === active.id)) {
+    } else if (editorSessionRef.current.composition.tracks.some(track => track.id === active.id)) {
       changeRootComposition(root => updateRootTrackFromProjectPatch(root, active.id, patch));
     } else {
       change(p => ({ ...p, tracks: p.tracks.map(track => track.id === active.id ? { ...track, ...patch } : track) }));
@@ -1089,35 +1086,37 @@ export default function App() {
 
   function undoProjectChange() {
     const result = undoEditorSessionChange(editorHistoryRef.current, {
-      project: projectRef.current,
-      composition: rootCompositionRef.current,
+      project: editorSessionRef.current.project,
+      composition: editorSessionRef.current.composition,
     });
     if (!result.snapshot) return;
     editorHistoryRef.current = result.history;
     setEditorHistory(result.history);
-    rootCompositionRef.current = structuredClone(result.snapshot.composition);
-    projectRef.current = {
-      ...projectRootCompositionToLegacy(copy(result.snapshot.project), rootCompositionRef.current),
+    const composition = structuredClone(result.snapshot.composition);
+    const restoredProject = {
+      ...projectRootCompositionToLegacy(copy(result.snapshot.project), composition),
       updatedAt: new Date().toISOString(),
     };
-    setEditorSession({ project: projectRef.current, composition: rootCompositionRef.current });
+    editorSessionRef.current = { project: restoredProject, composition };
+    setEditorSession(editorSessionRef.current);
     setNotice("Last project change undone.");
   }
 
   function redoProjectChange() {
     const result = redoEditorSessionChange(editorHistoryRef.current, {
-      project: projectRef.current,
-      composition: rootCompositionRef.current,
+      project: editorSessionRef.current.project,
+      composition: editorSessionRef.current.composition,
     });
     if (!result.snapshot) return;
     editorHistoryRef.current = result.history;
     setEditorHistory(result.history);
-    rootCompositionRef.current = structuredClone(result.snapshot.composition);
-    projectRef.current = {
-      ...projectRootCompositionToLegacy(copy(result.snapshot.project), rootCompositionRef.current),
+    const composition = structuredClone(result.snapshot.composition);
+    const restoredProject = {
+      ...projectRootCompositionToLegacy(copy(result.snapshot.project), composition),
       updatedAt: new Date().toISOString(),
     };
-    setEditorSession({ project: projectRef.current, composition: rootCompositionRef.current });
+    editorSessionRef.current = { project: restoredProject, composition };
+    setEditorSession(editorSessionRef.current);
     setNotice("Project change restored.");
   }
   function addShot() {
@@ -1242,8 +1241,8 @@ export default function App() {
   function updateShot(shotId: string, patch: Partial<Shot>) {
     const textField = "title" in patch ? "shot-title:" + shotId : "intent" in patch ? "shot-intent:" + shotId : "";
     const { duration, ...domainPatch } = patch;
-    if (typeof duration === "number" && rootCompositionRef.current.placements.some(placement => placement.id === shotId)) {
-      const currentPlacement = rootCompositionRef.current.placements.find(placement => placement.id === shotId)!;
+    if (typeof duration === "number" && editorSessionRef.current.composition.placements.some(placement => placement.id === shotId)) {
+      const currentPlacement = editorSessionRef.current.composition.placements.find(placement => placement.id === shotId)!;
       changeRootComposition(root => applyCompositionResizePreview(root, {
         id: shotId, start: currentPlacement.start, duration, edge: "right", trims: [],
       }), textField);
@@ -1259,7 +1258,7 @@ export default function App() {
   }
   function updateMasterShotStart(shotId: string, value: number) {
     if (!Number.isFinite(value)) return;
-    if (rootCompositionRef.current.placements.some(placement => placement.id === shotId)) {
+    if (editorSessionRef.current.composition.placements.some(placement => placement.id === shotId)) {
       changeRootComposition(root => moveCompositionPlacement(root, shotId, value), "shot-start:" + shotId);
       return;
     }
@@ -1288,12 +1287,12 @@ export default function App() {
   }
 
   function insertTimelineClipCanonical(clip: TimelineClip) {
-    const placement = createRootCompositionPlacementForTimelineClip(projectRef.current, rootCompositionRef.current, clip);
+    const placement = createRootCompositionPlacementForTimelineClip(editorSessionRef.current.project, editorSessionRef.current.composition, clip);
     changeRootComposition(root => insertCompositionPlacement(root, placement));
   }
 
   function deleteTimelineClipCanonical(clip: TimelineClip) {
-    if (rootCompositionRef.current.placements.some(placement => placement.id === clip.id)) {
+    if (editorSessionRef.current.composition.placements.some(placement => placement.id === clip.id)) {
       changeRootComposition(root => deleteCompositionPlacement(root, clip.id));
       return;
     }
@@ -1301,8 +1300,8 @@ export default function App() {
   }
 
   function updateRootTimelineClip(clipId: string, patch: Partial<TimelineClip>) {
-    const current = projectRef.current.timelineClips?.find(item => item.id === clipId);
-    const linkedOwner = rootCompositionRef.current.placements.find(item =>
+    const current = editorSessionRef.current.project.timelineClips?.find(item => item.id === clipId);
+    const linkedOwner = editorSessionRef.current.composition.placements.find(item =>
       (item.linkedAudioChildren ?? []).some(child => child.id === clipId)
     );
     if (linkedOwner) {
@@ -1316,7 +1315,7 @@ export default function App() {
       changeRootComposition(root => updateCompositionLinkedAudioChild(root, clipId, childPatch));
       return;
     }
-    const canonical = rootCompositionRef.current.placements.find(item => item.id === clipId);
+    const canonical = editorSessionRef.current.composition.placements.find(item => item.id === clipId);
     if (!current || !canonical) {
       change(project => ({ ...project, timelineClips: (project.timelineClips ?? []).map(item => item.id === clipId ? { ...item, ...patch } : item) }));
       return;
@@ -1326,7 +1325,7 @@ export default function App() {
         patch.sourceOut === undefined && (current.sourceIn !== undefined || current.sourceOut !== undefined)) {
       updated.sourceOut = (updated.sourceIn ?? 0) + updated.duration;
     }
-    const sourceTemplate = createRootCompositionPlacementForTimelineClip(projectRef.current, rootCompositionRef.current, updated);
+    const sourceTemplate = createRootCompositionPlacementForTimelineClip(editorSessionRef.current.project, editorSessionRef.current.composition, updated);
     changeRootComposition(root => {
       let next = root;
       if (patch.start !== undefined && patch.start !== current.start) {
@@ -1349,7 +1348,7 @@ export default function App() {
   }
 
   function getCanonicalTimelineClipForDrop(clip: TimelineClip): TimelineClip {
-    const placement = rootCompositionRef.current.placements.find(item => item.id === clip.id);
+    const placement = editorSessionRef.current.composition.placements.find(item => item.id === clip.id);
     if (!placement) return clip;
     return {
       ...clip,
@@ -1364,8 +1363,8 @@ export default function App() {
   }
 
   function getCanonicalMasterShotTimelineClip(shot: Shot): TimelineClip {
-    const clip = asMasterShotTimelineClip(projectRef.current, shot);
-    const placement = rootCompositionRef.current.placements.find(item =>
+    const clip = asMasterShotTimelineClip(editorSessionRef.current.project, shot);
+    const placement = editorSessionRef.current.composition.placements.find(item =>
       item.id === shot.id && item.legacyData.entityType === "master-shot"
     );
     return placement
@@ -1374,17 +1373,17 @@ export default function App() {
   }
 
   function calculateRootTimelineDropPosition(movingClip: TimelineClip, trackId: string, desiredStart: number, duration: number) {
-    if (rootCompositionRef.current.placements.some(item => item.id === movingClip.id)) {
-      const canonicalPosition = calculateCanonicalCompositionDropPosition(rootCompositionRef.current, movingClip, trackId, desiredStart, duration);
+    if (editorSessionRef.current.composition.placements.some(item => item.id === movingClip.id)) {
+      const canonicalPosition = calculateCanonicalCompositionDropPosition(editorSessionRef.current.composition, movingClip, trackId, desiredStart, duration);
       if (canonicalPosition) return canonicalPosition;
     }
     // Compatibility fallback for placements omitted from the root (e.g. legacy Storyboard
     // materializations) or when the canonical candidate set cannot produce a visual snap.
-    return calculateProjectTimelineDropPosition(projectRef.current, movingClip, trackId, desiredStart, duration);
+    return calculateProjectTimelineDropPosition(editorSessionRef.current.project, movingClip, trackId, desiredStart, duration);
   }
 
   function moveRootTimelineClip(clipId: string, start: number) {
-    if (rootCompositionRef.current.placements.some(item => item.id === clipId)) {
+    if (editorSessionRef.current.composition.placements.some(item => item.id === clipId)) {
       changeRootComposition(root => moveCompositionPlacement(root, clipId, start));
       return;
     }
@@ -1392,7 +1391,7 @@ export default function App() {
   }
 
   function trimRootTimelineClip(clipId: string, duration: number) {
-    if (rootCompositionRef.current.placements.some(item => item.id === clipId)) {
+    if (editorSessionRef.current.composition.placements.some(item => item.id === clipId)) {
       changeRootComposition(root => trimCompositionPlacement(root, clipId, duration));
       return;
     }
@@ -1400,7 +1399,7 @@ export default function App() {
   }
 
   function splitRootTimelineClip(clipId: string, splitAt: number, selectedNewId = id("timeline-clip")) {
-    const root = rootCompositionRef.current;
+    const root = editorSessionRef.current.composition;
     if (!root.placements.some(item => item.id === clipId)) {
       change(project => ({ ...project, timelineClips: splitTimelineClip({ tracks: project.tracks, timelineClips: project.timelineClips ?? [] }, clipId, splitAt, { newClipId: selectedNewId }).timelineClips }));
       return selectedNewId;
@@ -1429,7 +1428,7 @@ export default function App() {
   }
 
   function duplicateRootTimelineClip(clip: TimelineClip, selectedNewId = id("timeline-clip")): string {
-    const root = rootCompositionRef.current;
+    const root = editorSessionRef.current.composition;
     if (!root.placements.some(item => item.id === clip.id)) {
       change(project => ({ ...project, timelineClips: duplicateTimelineClip({ tracks: project.tracks, timelineClips: project.timelineClips ?? [] }, clip.id, { newClipId: selectedNewId, start: clip.start + clip.duration }).timelineClips }));
       setSelectedTimelineClipId(selectedNewId);
@@ -1501,7 +1500,7 @@ export default function App() {
   }
 
   function saveMasterTimelineAsClipAsset() {
-    const current = projectRef.current;
+    const current = editorSessionRef.current.project;
     const now = new Date().toISOString();
     const assetId = id("asset");
     const versionId = id("clip-version");
@@ -1629,7 +1628,7 @@ export default function App() {
     setNotice("Generation provenance snapshot recorded. No AI provider was called.");
   }
   function getGenerationReferencePaths(shotId: string): string[] {
-    const current = projectRef.current;
+    const current = editorSessionRef.current.project;
     const shot = current.shots.find(item => item.id === shotId);
     if (!shot) return [];
     return current.referenceProfiles
@@ -1690,7 +1689,7 @@ export default function App() {
   }
 
   function updateTimelineVersionLayer(tab: VersionTimelineTab, layerId: string, patch: Partial<CompositionLayer>) {
-    const current = projectRef.current;
+    const current = editorSessionRef.current.project;
     const version = tab.assetId
       ? current.assets.find(asset => asset.id === tab.assetId && asset.kind === "clip")?.clipVersions?.find(item => item.id === tab.versionId)
       : current.shots.find(shot => shot.id === tab.shotId)?.slots.find(slot => slot.id === tab.slotId)?.versions.find(item => item.id === tab.versionId);
@@ -1740,7 +1739,7 @@ export default function App() {
   }
 
   function addTimelineVersionTrack(tab: VersionTimelineTab, kind: "video" | "audio" | "text") {
-    const current = projectRef.current;
+    const current = editorSessionRef.current.project;
     const version = tab.assetId
       ? current.assets.find(asset => asset.id === tab.assetId && asset.kind === "clip")?.clipVersions?.find(item => item.id === tab.versionId)
       : current.shots.find(shot => shot.id === tab.shotId)?.slots.find(slot => slot.id === tab.slotId)?.versions.find(item => item.id === tab.versionId);
@@ -1753,7 +1752,7 @@ export default function App() {
   }
 
   function addTimelineVersionLayer(tab: VersionTimelineTab, kind: CompositionLayer["kind"], targetTrackId?: string) {
-    const current = projectRef.current;
+    const current = editorSessionRef.current.project;
     const version = tab.assetId
       ? current.assets.find(asset => asset.id === tab.assetId && asset.kind === "clip")?.clipVersions?.find(item => item.id === tab.versionId)
       : current.shots.find(shot => shot.id === tab.shotId)?.slots.find(slot => slot.id === tab.slotId)?.versions.find(item => item.id === tab.versionId);
@@ -1796,7 +1795,7 @@ export default function App() {
 
 
   function createBlankClipAssetVersion(assetId: string, sourceVersionId: string) {
-    const asset = projectRef.current.assets.find(item => item.id === assetId && item.kind === "clip");
+    const asset = editorSessionRef.current.project.assets.find(item => item.id === assetId && item.kind === "clip");
     const current = asset?.kind === "clip" ? asset.clipVersions?.find(item => item.id === sourceVersionId) : undefined;
     if (!asset || asset.kind !== "clip" || !current) return;
     const nextId = id("clip-version");
@@ -1843,7 +1842,7 @@ export default function App() {
   }
 
   function duplicateClipAssetVersion(assetId: string, versionId: string) {
-    const asset = projectRef.current.assets.find(item => item.id === assetId && item.kind === "clip");
+    const asset = editorSessionRef.current.project.assets.find(item => item.id === assetId && item.kind === "clip");
     const current = asset?.kind === "clip" ? asset.clipVersions?.find(item => item.id === versionId) : undefined;
     if (!asset || asset.kind !== "clip" || !current) return;
     const nextId = id("clip-version");
@@ -1961,7 +1960,7 @@ export default function App() {
   }
 
   function openClipAssetTimeline(assetId: string, versionId: string) {
-    const asset = projectRef.current.assets.find(item => item.id === assetId && item.kind === "clip");
+    const asset = editorSessionRef.current.project.assets.find(item => item.id === assetId && item.kind === "clip");
     const version = asset?.kind === "clip" ? asset.clipVersions?.find(item => item.id === versionId) : undefined;
     if (!asset || asset.kind !== "clip" || !version) return;
     const tabId = "clip-asset:" + assetId + ":" + versionId;
@@ -2022,8 +2021,8 @@ export default function App() {
   }
 
   function getMasterShotResizePreview(active: NonNullable<typeof shotResizeRef.current>, clientX: number): ClipResizePreview | null {
-    const current = projectRef.current;
-    const root = rootCompositionRef.current;
+    const current = editorSessionRef.current.project;
+    const root = editorSessionRef.current.composition;
     const canonicalShot = root.placements.find(item => item.id === active.id && item.legacyData.entityType === "master-shot");
     const extent = canonicalShot
       ? Math.max(10, root.duration, ...root.placements.map(item => item.start + item.duration))
@@ -2061,8 +2060,8 @@ export default function App() {
   }
 
   function getTimelineClipResizePreview(active: NonNullable<typeof clipResizeRef.current>, clientX: number) {
-    const current = projectRef.current;
-    const root = rootCompositionRef.current;
+    const current = editorSessionRef.current.project;
+    const root = editorSessionRef.current.composition;
     const canonical = root.placements.some(item => item.id === active.id);
     const extent = canonical
       ? Math.max(10, root.duration, ...root.placements.map(item => item.start + item.duration))
@@ -2087,7 +2086,7 @@ export default function App() {
     const onMove=(e:PointerEvent)=>{const a=clipResizeRef.current;if(!a||a.id!==clip.id||a.pointerId!==e.pointerId)return;setClipResizePreview(getTimelineClipResizePreview(a,e.clientX));};
     const onUp=(e:PointerEvent)=>{
       const a=clipResizeRef.current;if(!a||a.id!==clip.id||a.pointerId!==e.pointerId)return;
-      const preview=getTimelineClipResizePreview(a,e.clientX),currentClip=projectRef.current.timelineClips?.find(item=>item.id===clip.id);
+      const preview=getTimelineClipResizePreview(a,e.clientX),currentClip=editorSessionRef.current.project.timelineClips?.find(item=>item.id===clip.id);
       if(preview&&currentClip&&(Math.abs(preview.start-currentClip.start)>1e-6||Math.abs(preview.duration-currentClip.duration)>1e-6||preview.trims.length>0)){
         commitRootResizeOrLegacy(preview);
         setNotice(preview.trims.length?"Clip resized and adjacent timeline item trimmed. Use Undo to restore both.":"Clip resized.");
@@ -2102,7 +2101,7 @@ export default function App() {
 
 
   function getNestedLayerResizePreview(active: NonNullable<typeof nestedResizeRef.current>, clientX: number) {
-    const fps = Math.max(1, projectRef.current.frameRate || 24);
+    const fps = Math.max(1, editorSessionRef.current.project.frameRate || 24);
     const delta = Math.round(((clientX - active.x) / Math.max(active.laneWidth, 1)) * active.version.duration * fps) / fps;
     return calculateClipVersionResizePreview(active.version, active.id, active.edge, delta, active.version.duration, fps);
   }
@@ -2132,7 +2131,7 @@ export default function App() {
     const getDrop = (clientX: number, clientY: number) => {
       const target = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
       const lane = target?.closest<HTMLElement>(".visual-track-lane[data-track-id]");
-      const currentProject = projectRef.current;
+      const currentProject = editorSessionRef.current.project;
       const track = currentProject.tracks.find(item => item.id === lane?.dataset.trackId);
       const moving = (currentProject.timelineClips ?? []).find(item => item.id === clip.id) ?? clip;
       if (!lane || !track || !canPlaceTimelineClipOnTrack(moving, track)) return null;
@@ -2283,7 +2282,7 @@ export default function App() {
       const pointerTime = ((clientX - rect.left) / Math.max(rect.width, 1)) * active.version.duration;
       const rawStart = Math.max(0, pointerTime - active.grabOffset);
       const position = calculateClipVersionDropPosition(
-        active.version, layer.id, track.id, rawStart, active.version.duration, Math.max(1, projectRef.current.frameRate || 24)
+        active.version, layer.id, track.id, rawStart, active.version.duration, Math.max(1, editorSessionRef.current.project.frameRate || 24)
       );
       return position ? { track, moving, position } : null;
     };
@@ -2654,7 +2653,7 @@ export default function App() {
     setNotice(t("notice.profileAdded", { name }));
   }
   function createStoryboardFromReference(profileId: string) {
-    const current = projectRef.current;
+    const current = editorSessionRef.current.project;
     const profile = current.referenceProfiles.find(item => item.id === profileId);
     if (!profile) return;
     const profileReferences = profile.references.filter(reference => current.assets.some(asset => asset.id === reference.assetId));
@@ -2742,7 +2741,7 @@ export default function App() {
     catch (error) { setNotice(error instanceof Error ? error.message : "Video export failed."); }
   }
   function exportProject() {
-    download((project.name.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "dionysus-project") + ".dionysus.json", createProjectDocument(project, rootCompositionRef.current));
+    download((project.name.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "dionysus-project") + ".dionysus.json", createProjectDocument(project, editorSessionRef.current.composition));
     setNotice(t("notice.projectExported"));
   }
   function exportPlan() {
@@ -2764,7 +2763,7 @@ export default function App() {
       const parsed = JSON.parse(await file.text()) as unknown;
       const { project: data, compositionModel } = readProjectDocument(parsed, true);
       if (!validateProject(data)) throw new Error(t("error.invalidProject"));
-      const normalized = compositionModel?.rootComposition ? data : normalizeLegacyTimelineTracks(data); const migratedRoot = migrateLegacyProjectToComposition(normalized).rootComposition; const importedRoot = compositionModel?.rootComposition && JSON.stringify(projectRootCompositionToLegacy(normalized, compositionModel.rootComposition)) === JSON.stringify(normalized) ? structuredClone(compositionModel.rootComposition) : migratedRoot; projectRef.current = normalized; rootCompositionRef.current = importedRoot; setEditorSession({ project: normalized, composition: importedRoot }); editorHistoryRef.current = createEditorSessionHistory(); setEditorHistory(editorHistoryRef.current); setSelectedId(normalized.shots[0]?.id ?? ""); setNotice(t("notice.projectImported"));
+      const normalized = compositionModel?.rootComposition ? data : normalizeLegacyTimelineTracks(data); const migratedRoot = migrateLegacyProjectToComposition(normalized).rootComposition; const importedRoot = compositionModel?.rootComposition && JSON.stringify(projectRootCompositionToLegacy(normalized, compositionModel.rootComposition)) === JSON.stringify(normalized) ? structuredClone(compositionModel.rootComposition) : migratedRoot; editorSessionRef.current = { project: normalized, composition: importedRoot }; setEditorSession(editorSessionRef.current); editorHistoryRef.current = createEditorSessionHistory(); setEditorHistory(editorHistoryRef.current); setSelectedId(normalized.shots[0]?.id ?? ""); setNotice(t("notice.projectImported"));
     } catch (e) {
       setNotice(e instanceof Error ? e.message : t("error.importFailed"));
     } finally {
@@ -2926,26 +2925,26 @@ export default function App() {
      event.preventDefault();
      const assetId=event.dataTransfer.getData("text/dionysus-project-asset")||projectAssetDragSourceRef.current;
      if(assetId){
-       projectAssetDragSourceRef.current="";const asset=project.assets.find(item=>item.id===assetId);const rect=event.currentTarget.getBoundingClientRect();const dropTime=Math.max(0,Math.min(mediaTimelineDuration,((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration));const createLayer=newLayerDropPreview?.sourceTrackId===track.id&&newLayerDropPreview.assetId===assetId;setClipDropPreview(null);setNewLayerDropPreview(null);if(asset){if(createLayer){const kind: "video" | "audio"=asset.kind==="audio"?"audio":"video";const role=kind==="audio"?"Audio":"Video";const trackId=id("track-"+kind);const trackName=role+" "+(projectRef.current.tracks.filter(item=>item.name.startsWith(role+" ")).length+1);const legacyTrack={id:trackId,name:trackName,kind};const clipKind: TimelineClip["kind"]=kind==="audio"?"audio":asset.kind==="script"?"procedural":asset.kind==="clip"?"clip":"video";const version=asset.kind==="clip"?(asset.clipVersions?.find(item=>item.id===asset.selectedClipVersionId)??asset.clipVersions?.[0]):undefined;const duration=version?.duration??((asset.kind==="video"||asset.kind==="audio")?asset.duration:undefined)??Math.max(.5,Math.min(3,mediaTimelineDuration-dropTime||3));const clip:TimelineClip={id:id("timeline-clip"),name:asset.name,kind:clipKind,trackId,start:0,duration,assetId:asset.id,sourceIn:0,...(version?{clipVersionId:version.id}:{}),...(asset.html!==undefined?{html:asset.html}:{}),...(asset.css!==undefined?{css:asset.css}:{}),...(asset.js!==undefined?{code:asset.js}:{})};try{changeRootComposition(root=>{let next=addCompositionTrack(root,{...legacyTrack,kind,order:root.tracks.length,legacyData:legacyTrack});const plan=calculateCanonicalCompositionInsertionPlan(next,clip,trackId,dropTime);if(plan.status==="invalid-track"||plan.status==="start-occupied"||plan.status==="needs-resolution")throw new Error("Could not place this asset on the new layer.");next=applyCanonicalCompositionInsertion(next,projectRef.current,plan);return addLinkedAudioForVideoPlacement(next,projectRef.current,plan.clip);});setSelectedTimelineTrackId(trackId);setSelectedTimelineClipId(clip.id);setTimelineClipSettingsId(clip.id);setNotice("Created "+trackName+" and added “"+asset.name+"”.");}catch(error){setNotice(error instanceof Error?error.message:"Could not create a layer for this asset.");}return;}if(track.kind==="video"&&asset.kind==="audio"){setNotice("Independent audio must be placed on an Audio layer. Only audio embedded in the video source appears as Linked Audio.");return;}const compatible=(track.kind==="audio"&&asset.kind==="audio")||(track.kind==="video"&&asset.kind!=="audio");if(!compatible){setNotice(track.kind==="audio"?"Only audio assets can be dropped on an Audio layer.":"Audio assets must be dropped on a Video layer.");return;}placeProjectAssetDirectly(asset,track,dropTime);}return;}
+       projectAssetDragSourceRef.current="";const asset=project.assets.find(item=>item.id===assetId);const rect=event.currentTarget.getBoundingClientRect();const dropTime=Math.max(0,Math.min(mediaTimelineDuration,((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration));const createLayer=newLayerDropPreview?.sourceTrackId===track.id&&newLayerDropPreview.assetId===assetId;setClipDropPreview(null);setNewLayerDropPreview(null);if(asset){if(createLayer){const kind: "video" | "audio"=asset.kind==="audio"?"audio":"video";const role=kind==="audio"?"Audio":"Video";const trackId=id("track-"+kind);const trackName=role+" "+(editorSessionRef.current.project.tracks.filter(item=>item.name.startsWith(role+" ")).length+1);const legacyTrack={id:trackId,name:trackName,kind};const clipKind: TimelineClip["kind"]=kind==="audio"?"audio":asset.kind==="script"?"procedural":asset.kind==="clip"?"clip":"video";const version=asset.kind==="clip"?(asset.clipVersions?.find(item=>item.id===asset.selectedClipVersionId)??asset.clipVersions?.[0]):undefined;const duration=version?.duration??((asset.kind==="video"||asset.kind==="audio")?asset.duration:undefined)??Math.max(.5,Math.min(3,mediaTimelineDuration-dropTime||3));const clip:TimelineClip={id:id("timeline-clip"),name:asset.name,kind:clipKind,trackId,start:0,duration,assetId:asset.id,sourceIn:0,...(version?{clipVersionId:version.id}:{}),...(asset.html!==undefined?{html:asset.html}:{}),...(asset.css!==undefined?{css:asset.css}:{}),...(asset.js!==undefined?{code:asset.js}:{})};try{changeRootComposition(root=>{let next=addCompositionTrack(root,{...legacyTrack,kind,order:root.tracks.length,legacyData:legacyTrack});const plan=calculateCanonicalCompositionInsertionPlan(next,clip,trackId,dropTime);if(plan.status==="invalid-track"||plan.status==="start-occupied"||plan.status==="needs-resolution")throw new Error("Could not place this asset on the new layer.");next=applyCanonicalCompositionInsertion(next,editorSessionRef.current.project,plan);return addLinkedAudioForVideoPlacement(next,editorSessionRef.current.project,plan.clip);});setSelectedTimelineTrackId(trackId);setSelectedTimelineClipId(clip.id);setTimelineClipSettingsId(clip.id);setNotice("Created "+trackName+" and added “"+asset.name+"”.");}catch(error){setNotice(error instanceof Error?error.message:"Could not create a layer for this asset.");}return;}if(track.kind==="video"&&asset.kind==="audio"){setNotice("Independent audio must be placed on an Audio layer. Only audio embedded in the video source appears as Linked Audio.");return;}const compatible=(track.kind==="audio"&&asset.kind==="audio")||(track.kind==="video"&&asset.kind!=="audio");if(!compatible){setNotice(track.kind==="audio"?"Only audio assets can be dropped on an Audio layer.":"Audio assets must be dropped on a Video layer.");return;}placeProjectAssetDirectly(asset,track,dropTime);}return;}
      const rect=event.currentTarget.getBoundingClientRect();
      const masterShotId=event.dataTransfer.getData("text/dionysus-master-shot") || masterShotDragSourceRef.current;
       if(masterShotId){
         const movingShot=project.shots.find(shot=>shot.id===masterShotId);
         if(!movingShot||track.kind!=="video"){setClipDropPreview(null);return;}
         const moving=getCanonicalMasterShotTimelineClip(movingShot);
-        const fps=Math.max(1,rootCompositionRef.current.frameRate||project.frameRate||24),pointerTime=((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration,rawStart=Math.max(0,pointerTime-moving.duration/2);
+        const fps=Math.max(1,editorSessionRef.current.composition.frameRate||project.frameRate||24),pointerTime=((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration,rawStart=Math.max(0,pointerTime-moving.duration/2);
         const pos=rippleReorderMode?null:(clipDropPreview?.trackId===track.id?{start:clipDropPreview.start,...(clipDropPreview.snapTime!==undefined?{snapTime:clipDropPreview.snapTime}:{})}:calculateRootTimelineDropPosition(moving,track.id,rawStart,mediaTimelineDuration));
         let next:number;
         if(rippleReorderMode){
           const targetCenter=Math.round(pointerTime*fps)/fps;
-          const shotPlacement=rootCompositionRef.current.placements.find(item=>item.id===movingShot.id&&item.legacyData.entityType==="master-shot");
+          const shotPlacement=editorSessionRef.current.composition.placements.find(item=>item.id===movingShot.id&&item.legacyData.entityType==="master-shot");
           if(!shotPlacement){setNotice("This Shot is not represented in the canonical root Composition.");setClipDropPreview(null);return;}
           changeRootComposition(root=>rippleReorderCompositionMasterShots(root,movingShot.id,targetCenter,track.id),"shot-ripple-reorder");
-          next=rootCompositionRef.current.placements.find(item=>item.id===movingShot.id)?.start??shotPlacement.start;
+          next=editorSessionRef.current.composition.placements.find(item=>item.id===movingShot.id)?.start??shotPlacement.start;
           setNotice("Ripple Reorder applied and Shot moved to the selected video layer.");
         }else{
           if(!pos){setNotice("No non-overlapping position is available on this video layer.");setClipDropPreview(null);return;}
-          const conflict=rootCompositionRef.current.placements.some(placement=>placement.id!==movingShot.id&&placement.trackId===track.id&&pos.start<placement.start+placement.duration-1e-7&&pos.start+moving.duration>placement.start+1e-7);
+          const conflict=editorSessionRef.current.composition.placements.some(placement=>placement.id!==movingShot.id&&placement.trackId===track.id&&pos.start<placement.start+placement.duration-1e-7&&pos.start+moving.duration>placement.start+1e-7);
           if(conflict){setNotice("Drop cancelled: this position overlaps another item on the destination layer.");setClipDropPreview(null);return;}
           next=pos.start;
           moveRootPlacementOrLegacy({ type: "shot", shotId: movingShot.id }, track.id, next);
@@ -2964,7 +2963,7 @@ export default function App() {
      if(!canPlaceTimelineClipOnTrack(moving,track))return;
      const pos=clipDropPreview?.trackId===track.id?{start:clipDropPreview.start,...(clipDropPreview.snapTime!==undefined?{snapTime:clipDropPreview.snapTime}:{})}:calculateRootTimelineDropPosition(moving,track.id,rawStart,mediaTimelineDuration);
      if(!pos){setNotice("No non-overlapping position is available on this layer.");clipDragSourceRef.current=null;setClipDropPreview(null);return;}
-     const destinationConflict=rootCompositionRef.current.placements.some(placement=>placement.id!==moving.id&&placement.trackId===track.id&&pos.start<placement.start+placement.duration-1e-7&&pos.start+moving.duration>placement.start+1e-7);
+     const destinationConflict=editorSessionRef.current.composition.placements.some(placement=>placement.id!==moving.id&&placement.trackId===track.id&&pos.start<placement.start+placement.duration-1e-7&&pos.start+moving.duration>placement.start+1e-7);
      if(destinationConflict){setNotice("Drop cancelled: this position overlaps another clip on the destination layer.");clipDragSourceRef.current=null;setClipDropPreview(null);return;}
      try{moveRootPlacementOrLegacy({ type: "clip", clipId: moving.id }, track.id, pos.start);setNotice(pos.snapTime!==undefined?"Clip snapped to an aligned, non-overlapping position.":"Clip moved to a non-overlapping position.");setSelectedTimelineClipId(moving.id);setSelectedTimelineTrackId(track.id);setIsPlaying(false);}catch(error){setNotice(error instanceof Error?error.message:"Could not move the clip.");}finally{clipDragSourceRef.current=null;setClipDropPreview(null);}
    }}>
@@ -3200,7 +3199,7 @@ export default function App() {
                         const blob=await response.blob();
                         if(!blob.type.startsWith("image/")) throw new Error("Provider response was not an image.");
                         const [path,thumbnailPath]=await Promise.all([storeMediaAsset(assetId,blob),createImageThumbnail(blob)]);
-                        const current=projectRef.current;
+                        const current=editorSessionRef.current.project;
                         const shot=current.shots.find(item=>item.id===selected.id);
                         const references=shot?current.referenceProfiles.filter(profile=>shot.referenceProfileIds.includes(profile.id)).flatMap(profile=>profile.references).filter(reference=>!shot.referenceOverrides.some(override=>override.referenceId===reference.id&&override.action==="exclude")).map(reference=>{const override=shot.referenceOverrides.find(item=>item.referenceId===reference.id&&item.action==="replace");return override?.replacementAssetId?{...reference,assetId:override.replacementAssetId}:{...reference};}):[];
                         const record={id:id("generation"),createdAt:new Date().toISOString(),prompt,referenceSnapshot:references,modelName:model,outputAssetId:assetId};
@@ -3275,7 +3274,7 @@ export default function App() {
     </section></div>;})()}
     {trackContextMenuId && view === "timeline" && <div className="shot-context-dismiss" onClick={()=>setTrackContextMenuId("")}><span className="shot-context-menu" role="menu" style={{left:trackContextMenuPosition.x,top:trackContextMenuPosition.y}} onClick={event=>event.stopPropagation()}>
       <button role="menuitem" onClick={()=>{const track=project.tracks.find(item=>item.id===trackContextMenuId);if(track?.kind==="video")setVideoTrackSettingsId(track.id);else if(track)setGenericTrackSettingsId(track.id);setTrackContextMenuId("");}}>Settings…</button>
-      {project.tracks.find(item=>item.id===trackContextMenuId)?.kind==="audio" && <button role="menuitem" onClick={()=>{changeRootComposition(root=>updateCompositionTrack(root,trackContextMenuId,{muted:!projectRef.current.tracks.find(item=>item.id===trackContextMenuId)?.muted}));setTrackContextMenuId("");}}>{project.tracks.find(item=>item.id===trackContextMenuId)?.muted?"Unmute audio":"Mute audio"}</button>}
+      {project.tracks.find(item=>item.id===trackContextMenuId)?.kind==="audio" && <button role="menuitem" onClick={()=>{changeRootComposition(root=>updateCompositionTrack(root,trackContextMenuId,{muted:!editorSessionRef.current.project.tracks.find(item=>item.id===trackContextMenuId)?.muted}));setTrackContextMenuId("");}}>{project.tracks.find(item=>item.id===trackContextMenuId)?.muted?"Unmute audio":"Mute audio"}</button>}
       <button role="menuitem" onClick={()=>{const track=project.tracks.find(item=>item.id===trackContextMenuId);if(track){const kind=track.kind==="video"?"video":track.kind==="audio"?"audio":track.kind==="text"?"text":"procedural";const clipId=id("timeline-clip");insertTimelineClipCanonical({id:clipId,name:(kind==="procedural"?"Code":kind==="text"?"Text":kind==="audio"?"Audio":"Video")+" clip",kind,trackId:track.id,start:editorTime,duration:Math.max(.5,Math.min(3,mediaTimelineDuration-editorTime||3))});setSelectedTimelineClipId(clipId);setTimelineClipSettingsId(clipId);}setTrackContextMenuId("");}}>Add clip</button>
       <button role="menuitem" className="danger-action" onClick={()=>{const track=project.tracks.find(item=>item.id===trackContextMenuId);if(track&&window.confirm("Remove layer “"+track.name+"” and all clips on it?")){try{changeRootComposition(root=>removeCompositionTrack(root,track.id,project.tracks.filter(item=>item.id!==track.id).find(item=>item.kind==="video")?.id));setSelectedTimelineClipId("");setTimelineClipSettingsId("");}catch(error){setNotice(error instanceof Error?error.message:"Could not remove this layer.");}}setTrackContextMenuId("");}}>Remove layer…</button>
     </span></div>}
@@ -3340,7 +3339,7 @@ export default function App() {
         <footer><button className="button button-quiet button-small" onClick={()=>setTimelineInsertConflict(null)}>Choose another spot</button><button className="button button-quiet button-small" onClick={cancelTimelineClipPlacement}>Cancel adding clip</button></footer>
       </section>
     </div>}
-    {assetPickerTrackId && project.tracks.find(track=>track.id===assetPickerTrackId) && (()=>{const track=project.tracks.find(item=>item.id===assetPickerTrackId)!;const isAudio=track.kind==="audio";const available=project.assets.filter(asset=>isAudio?asset.kind==="audio":asset.kind==="video"||asset.kind==="image"||asset.kind==="script"||asset.kind==="clip").filter(asset=>{const match=(asset.name+" "+(asset.notes??"")).toLowerCase().includes(assetPickerSearch.toLowerCase());const typeMatch=assetPickerFilter==="all"||(assetPickerFilter==="video"?(asset.kind==="video"||asset.kind==="image"||asset.kind==="clip"):assetPickerFilter==="code"?asset.kind==="script":asset.kind==="audio");return match&&typeMatch;}).sort((a,b)=>assetPickerSort==="name"?a.name.localeCompare(b.name):assetPickerSort==="created"?(b.createdAt??"").localeCompare(a.createdAt??""): (b.updatedAt??b.createdAt??"").localeCompare(a.updatedAt??a.createdAt??""));const choose=(asset:Asset)=>{const kind:TimelineClip["kind"]=isAudio?"audio":asset.kind==="script"?"procedural":asset.kind==="clip"?"clip":"video";const clipId=id("timeline-clip");const clipVersion=asset.kind==="clip"?(asset.clipVersions?.find(version=>version.id===asset.selectedClipVersionId)??asset.clipVersions?.[0]):undefined;const duration=clipVersion?.duration??((asset.kind==="video"||asset.kind==="audio")?asset.duration:undefined)??Math.max(.5,Math.min(3,mediaTimelineDuration-editorTime||3));const clip:TimelineClip={id:clipId,name:asset.name,kind,trackId:track.id,start:0,duration,assetId:asset.id,sourceIn:0,...(clipVersion?{clipVersionId:clipVersion.id}:{}),...(asset.html!==undefined?{html:asset.html}:{}),...(asset.css!==undefined?{css:asset.css}:{}),...(asset.js!==undefined?{code:asset.js}:{})};setAssetPickerTrackId("");if(track.kind==="video"||track.kind==="audio"){const appendAt=(projectRef.current.timelineClips??[]).filter(item=>item.trackId===track.id).reduce((end,item)=>Math.max(end,item.start+item.duration),0);placeProjectAssetDirectly(asset,track,appendAt);return;}beginTimelineClipPlacement(clip);};return <div className="settings-dialog-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setAssetPickerTrackId("");}}><section className="settings-dialog asset-picker-dialog" role="dialog" aria-modal="true" aria-labelledby="asset-picker-title"><header><div><span className="inspector-kicker">TIMELINE</span><h2 id="asset-picker-title">Add {isAudio?"audio":"clip"} from Assets</h2><p className="settings-dialog-description">Choose a reusable asset. New uploads are saved to the library too.</p></div><button className="button button-quiet button-small" onClick={()=>setAssetPickerTrackId("")}>Close</button></header><div className="asset-picker-controls"><input className="text-field" aria-label="Search assets" placeholder="Search assets…" value={assetPickerSearch} onChange={event=>setAssetPickerSearch(event.target.value)}/><select className="text-field" aria-label="Sort assets" value={assetPickerSort} onChange={event=>setAssetPickerSort(event.target.value as "created"|"modified"|"name")}><option value="created">Date created</option><option value="modified">Last modified</option><option value="name">Name</option></select></div>{!isAudio&&<div className="asset-picker-filters"><button className={assetPickerFilter==="all"?"active":""} onClick={()=>setAssetPickerFilter("all")}>All assets</button><button className={assetPickerFilter==="video"?"active":""} onClick={()=>setAssetPickerFilter("video")}>Video / image</button><button className={assetPickerFilter==="code"?"active":""} onClick={()=>setAssetPickerFilter("code")}>Code</button></div>}<div className="asset-picker-grid">{available.map(asset=>{return <button type="button" className="asset-picker-card" key={asset.id} onClick={()=>choose(asset)}><AssetThumbnail asset={asset} assets={project.assets}/><strong>{asset.name}</strong><small>{asset.kind==="script"?"Code asset":asset.kind==="clip"?"Clip asset":asset.kind==="audio"?"Audio":asset.kind==="image"?"Image":"Video"}{asset.createdAt?" · "+new Date(asset.createdAt).toLocaleDateString():""}</small></button>;})}{available.length===0&&<div className="asset-picker-empty">No matching assets. Upload media or create a code asset.</div>}</div><footer className="asset-picker-footer"><label className="button button-quiet button-small"><Upload size={14}/> Upload {isAudio?"audio":"video"}<input type="file" accept={isAudio?"audio/*":"video/*,image/*"} hidden onChange={event=>{void uploadAssetForTimeline(event.target.files?.[0]);event.currentTarget.value="";}}/></label>{!isAudio&&<><button className="button button-quiet button-small" onClick={()=>setClipAssetEditorOpen(true)}><Plus size={14}/> Create clip</button><button className="button button-primary button-small" onClick={()=>{setCodeAssetDraft({name:"New code asset",html:"<main>Build something here</main>",css:"body { font-family: system-ui; display: grid; place-items: center; min-height: 100vh; }",js:"// Start coding here"});setCodeAssetEditorOpen(true);}}><Plus size={14}/> Create code</button></>}</footer></section></div>;})()}
+    {assetPickerTrackId && project.tracks.find(track=>track.id===assetPickerTrackId) && (()=>{const track=project.tracks.find(item=>item.id===assetPickerTrackId)!;const isAudio=track.kind==="audio";const available=project.assets.filter(asset=>isAudio?asset.kind==="audio":asset.kind==="video"||asset.kind==="image"||asset.kind==="script"||asset.kind==="clip").filter(asset=>{const match=(asset.name+" "+(asset.notes??"")).toLowerCase().includes(assetPickerSearch.toLowerCase());const typeMatch=assetPickerFilter==="all"||(assetPickerFilter==="video"?(asset.kind==="video"||asset.kind==="image"||asset.kind==="clip"):assetPickerFilter==="code"?asset.kind==="script":asset.kind==="audio");return match&&typeMatch;}).sort((a,b)=>assetPickerSort==="name"?a.name.localeCompare(b.name):assetPickerSort==="created"?(b.createdAt??"").localeCompare(a.createdAt??""): (b.updatedAt??b.createdAt??"").localeCompare(a.updatedAt??a.createdAt??""));const choose=(asset:Asset)=>{const kind:TimelineClip["kind"]=isAudio?"audio":asset.kind==="script"?"procedural":asset.kind==="clip"?"clip":"video";const clipId=id("timeline-clip");const clipVersion=asset.kind==="clip"?(asset.clipVersions?.find(version=>version.id===asset.selectedClipVersionId)??asset.clipVersions?.[0]):undefined;const duration=clipVersion?.duration??((asset.kind==="video"||asset.kind==="audio")?asset.duration:undefined)??Math.max(.5,Math.min(3,mediaTimelineDuration-editorTime||3));const clip:TimelineClip={id:clipId,name:asset.name,kind,trackId:track.id,start:0,duration,assetId:asset.id,sourceIn:0,...(clipVersion?{clipVersionId:clipVersion.id}:{}),...(asset.html!==undefined?{html:asset.html}:{}),...(asset.css!==undefined?{css:asset.css}:{}),...(asset.js!==undefined?{code:asset.js}:{})};setAssetPickerTrackId("");if(track.kind==="video"||track.kind==="audio"){const appendAt=(editorSessionRef.current.project.timelineClips??[]).filter(item=>item.trackId===track.id).reduce((end,item)=>Math.max(end,item.start+item.duration),0);placeProjectAssetDirectly(asset,track,appendAt);return;}beginTimelineClipPlacement(clip);};return <div className="settings-dialog-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setAssetPickerTrackId("");}}><section className="settings-dialog asset-picker-dialog" role="dialog" aria-modal="true" aria-labelledby="asset-picker-title"><header><div><span className="inspector-kicker">TIMELINE</span><h2 id="asset-picker-title">Add {isAudio?"audio":"clip"} from Assets</h2><p className="settings-dialog-description">Choose a reusable asset. New uploads are saved to the library too.</p></div><button className="button button-quiet button-small" onClick={()=>setAssetPickerTrackId("")}>Close</button></header><div className="asset-picker-controls"><input className="text-field" aria-label="Search assets" placeholder="Search assets…" value={assetPickerSearch} onChange={event=>setAssetPickerSearch(event.target.value)}/><select className="text-field" aria-label="Sort assets" value={assetPickerSort} onChange={event=>setAssetPickerSort(event.target.value as "created"|"modified"|"name")}><option value="created">Date created</option><option value="modified">Last modified</option><option value="name">Name</option></select></div>{!isAudio&&<div className="asset-picker-filters"><button className={assetPickerFilter==="all"?"active":""} onClick={()=>setAssetPickerFilter("all")}>All assets</button><button className={assetPickerFilter==="video"?"active":""} onClick={()=>setAssetPickerFilter("video")}>Video / image</button><button className={assetPickerFilter==="code"?"active":""} onClick={()=>setAssetPickerFilter("code")}>Code</button></div>}<div className="asset-picker-grid">{available.map(asset=>{return <button type="button" className="asset-picker-card" key={asset.id} onClick={()=>choose(asset)}><AssetThumbnail asset={asset} assets={project.assets}/><strong>{asset.name}</strong><small>{asset.kind==="script"?"Code asset":asset.kind==="clip"?"Clip asset":asset.kind==="audio"?"Audio":asset.kind==="image"?"Image":"Video"}{asset.createdAt?" · "+new Date(asset.createdAt).toLocaleDateString():""}</small></button>;})}{available.length===0&&<div className="asset-picker-empty">No matching assets. Upload media or create a code asset.</div>}</div><footer className="asset-picker-footer"><label className="button button-quiet button-small"><Upload size={14}/> Upload {isAudio?"audio":"video"}<input type="file" accept={isAudio?"audio/*":"video/*,image/*"} hidden onChange={event=>{void uploadAssetForTimeline(event.target.files?.[0]);event.currentTarget.value="";}}/></label>{!isAudio&&<><button className="button button-quiet button-small" onClick={()=>setClipAssetEditorOpen(true)}><Plus size={14}/> Create clip</button><button className="button button-primary button-small" onClick={()=>{setCodeAssetDraft({name:"New code asset",html:"<main>Build something here</main>",css:"body { font-family: system-ui; display: grid; place-items: center; min-height: 100vh; }",js:"// Start coding here"});setCodeAssetEditorOpen(true);}}><Plus size={14}/> Create code</button></>}</footer></section></div>;})()}
     {clipAssetEditorOpen && <ClipAssetEditor onClose={() => setClipAssetEditorOpen(false)} onSave={({name,canvasWidth,canvasHeight,duration}) => { const now = new Date().toISOString(); const version = { id: id("clip-version"), name: "Version A", description: "", duration, layers: [] as CompositionLayer[], scriptVersionIds: [] as string[], generationRecords: [] as ClipVersion["generationRecords"] }; const asset: Asset = { id: id("asset"), name, kind: "clip", canvasWidth, canvasHeight, notes: "Empty reusable Clip; edit its composition in the Timeline Editor.", createdAt: now, updatedAt: now, selectedClipVersionId: version.id, clipVersions: [version] }; change(p => ({ ...p, assets: [...p.assets, asset] })); setClipAssetEditorOpen(false); setNotice("Empty Clip asset saved to Assets. Add content from its Timeline Editor."); }} />}
     {projectSettingsOpen && <div className="settings-dialog-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setProjectSettingsOpen(false);}}>
       <section className="settings-dialog project-settings-dialog" role="dialog" aria-modal="true" aria-labelledby="project-settings-title">
