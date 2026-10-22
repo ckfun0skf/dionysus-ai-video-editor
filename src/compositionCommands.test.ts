@@ -116,19 +116,25 @@ describe("shared Composition editing commands", () => {
     expect(source.tracks.some(track => track.id === "v1")).toBe(true);
   });
 
-  it("removes a linked audio track without deleting its video parent on another track", () => {
+  it("preserves linked audio when removing the only Audio lane by creating a replacement lane", () => {
     const source = fixture();
     const next = removeCompositionTrack(source, "a1");
     expect(next.tracks.some(track => track.id === "a1")).toBe(false);
+    expect(next.tracks.some(track => track.kind === "audio")).toBe(true);
     expect(next.placements.map(item => item.id)).toContain("video");
-    expect(next.placements.map(item => item.id)).not.toContain("audio");
-    expect(placement(source, "audio").linkedToPlacementId).toBe("video");
+    expect(next.placements.map(item => item.id)).toContain("audio");
+    expect(placement(next, "audio")).toMatchObject({
+      trackId: next.tracks.find(track => track.kind === "audio")!.id,
+      linkedToPlacementId: "video",
+    });
+    expect(placement(source, "audio").trackId).toBe("a1");
+    expect(() => assertValidCompositionDocument(next)).not.toThrow();
   });
 
-  it("removes a linked child from a legacy Audio lane ID without deleting its video parent", () => {
+  it("moves linked audio off a legacy Audio lane while preserving the parent-child link", () => {
     const source = fixture();
-    // Reproduce projects where the linked child uses a legacy Audio track ID that
-    // differs from the canonical Audio track ID shown by the timeline.
+    // Reproduce projects where the linked child uses an extra legacy Audio track ID
+    // while a separate canonical Audio lane is available.
     const withLegacyLane = addCompositionTrack(source, {
       id: "legacy-audio", name: "Audio (legacy)", kind: "audio", order: 3,
     });
@@ -138,8 +144,10 @@ describe("shared Composition editing commands", () => {
     const next = removeCompositionTrack(withChildOnLegacyLane, "legacy-audio");
     expect(next.tracks.some(track => track.id === "legacy-audio")).toBe(false);
     expect(next.placements.map(item => item.id)).toContain("video");
-    expect(next.placements.map(item => item.id)).not.toContain("audio");
+    expect(next.placements.map(item => item.id)).toContain("audio");
+    expect(placement(next, "audio")).toMatchObject({ trackId: "a1", linkedToPlacementId: "video" });
     expect(placement(next, "video").trackId).toBe("v1");
+    expect(() => assertValidCompositionDocument(next)).not.toThrow();
   });
 
   it("updates canonical source/link metadata without changing unrelated source ranges", () => {
