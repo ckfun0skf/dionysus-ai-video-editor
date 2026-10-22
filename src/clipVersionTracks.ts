@@ -88,9 +88,16 @@ export function addClipVersionTrack(
 }
 
 /** Materialize an independent canonical Composition even for an empty nested Version. */
-export function ensureClipVersionComposition(version: ClipVersion): ClipVersion {
+export function ensureClipVersionComposition(
+  version: ClipVersion,
+  dimensions?: { width: number; height: number },
+): ClipVersion {
   const normalized = normalizeClipVersionTracks(version);
-  return versionWithComposition(normalized, compositionDocumentFromClipVersion(normalized));
+  const document = compositionDocumentFromClipVersion(normalized);
+  const sizedDocument = !normalized.composition && dimensions
+    ? { ...document, width: dimensions.width, height: dimensions.height }
+    : document;
+  return versionWithComposition(normalized, sizedDocument);
 }
 
 /** Update a nested track through the canonical Composition command and refresh its compatibility projection. */
