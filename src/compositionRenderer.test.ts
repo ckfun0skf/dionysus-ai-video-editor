@@ -124,6 +124,24 @@ describe("compositionRenderer", () => {
         linkedVideoClipId: "nested-video-owner",
       },
     }];
+    version.composition.tracks.push({
+      id: "nested-muted-audio-track",
+      name: "Muted Audio",
+      kind: "audio",
+      order: version.composition.tracks.length,
+      muted: true,
+      legacyData: { kind: "audio", muted: true },
+    });
+    version.composition.placements.push({
+      id: "nested-muted-track-audio",
+      name: "Audio on muted track",
+      trackId: "nested-muted-audio-track",
+      start: 0,
+      duration: 2,
+      order: version.composition.placements.length,
+      source: { type: "asset", assetId: "nested-video-source" },
+      legacyData: { kind: "audio", assetId: "nested-video-source" },
+    });
 
     const layers = collectCompositionLayers(project);
     const linkedAudio = layers.find(layer => layer.id === "nested-linked-audio");
@@ -139,6 +157,11 @@ describe("compositionRenderer", () => {
       volume: 0.4,
     });
     expect(isPlayableAudioLayer(linkedAudio!, project.assets.find(asset => asset.id === "nested-video-source"))).toBe(true);
+    expect(layers.find(layer => layer.id === "nested-muted-track-audio")).toMatchObject({
+      kind: "audio",
+      muted: true,
+      assetId: "nested-video-source",
+    });
   });
 
   it("collects selected-version layers with absolute shot and slot offsets", () => {
