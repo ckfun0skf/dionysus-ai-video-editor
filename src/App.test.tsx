@@ -54,9 +54,14 @@ function actionNamed(name: string): HTMLButtonElement {
 }
 
 function persistedProject(): typeof sampleProject {
-  const raw = localStorage.getItem("dionysus.project.v1");
-  if (!raw) throw new Error("Expected project to be persisted");
-  return JSON.parse(raw) as typeof sampleProject;
+  const canonicalRaw = localStorage.getItem("dionysus.composition.v2");
+  if (canonicalRaw) {
+    const envelope = JSON.parse(canonicalRaw) as { project?: typeof sampleProject };
+    if (envelope.project) return envelope.project;
+  }
+  const legacyRaw = localStorage.getItem("dionysus.project.v1");
+  if (!legacyRaw) throw new Error("Expected project to be persisted");
+  return JSON.parse(legacyRaw) as typeof sampleProject;
 }
 
 async function flushEffects() {
