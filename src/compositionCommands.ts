@@ -576,7 +576,11 @@ export function unlinkCompositionPlacement(
   next.placements = next.placements.map(placement => {
     if (placement.id !== selected.id) return placement;
     const { linkedToPlacementId: _linkedToPlacementId, ...independent } = placement;
-    return syncLegacyPlacement(independent);
+    // Legacy projection fields are retained for compatibility, but an extracted placement
+    // must not keep the old relationship in legacyData or the UI will render it as linked.
+    const legacyData = { ...independent.legacyData };
+    delete legacyData.linkedVideoClipId;
+    return syncLegacyPlacement({ ...independent, legacyData });
   });
   assertValidCompositionDocument(next);
   return next;
