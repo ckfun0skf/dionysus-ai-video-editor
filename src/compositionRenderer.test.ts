@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { collectCompositionLayers, getCompositionDuration, isPlayableAudioLayer, waitForVideoFrame } from "./compositionRenderer";
+import { collectCompositionLayers, collectRootCompositionLayers, getCompositionDuration, isPlayableAudioLayer, waitForVideoFrame } from "./compositionRenderer";
 import { sampleProject } from "./sampleProject";
 import { migrateLegacyProjectToComposition } from "./compositionMigration";
 import type { ClipVersion } from "./types";
@@ -200,6 +200,42 @@ describe("compositionRenderer", () => {
     const layers = collectCompositionLayers(project);
     expect(layers.slice(0, 2).map(layer => layer.id)).toEqual(["top-layer", "bottom-layer"]);
     expect(layers.map(layer => layer.start)).toEqual([4, 0]);
+  });
+
+  it("uses canonical root placements instead of stale Project timeline projections for rendering", () => {
+    const project = structuredClone(sampleProject);
+    project.assets.push({
+      id: "canonical-root-video",
+      name: "Canonical root video",
+      kind: "video",
+      path: "data:video/webm;base64,AA==",
+    });
+    project.timelineClips = [{
+      id: "canonical-root-placement",
+      name: "Legacy name",
+      kind: "video",
+      trackId: "track-video-1",
+      start: 0,
+      duration: 2,
+      assetId: "canonical-root-video",
+      sourceIn: 0,
+      sourceOut: 2,
+    }];
+    const root = migrateLegacyProjectToComposition(project).rootComposition;
+    root.placements = root.placements.map(placement => placement.id === "canonical-root-placement"
+      ? { ...placement, name: "Canonical name", start: 3, sourceIn: 1, sourceOut: 3 }
+      : placement);
+
+    const layers = collectRootCompositionLayers(project, root);
+    expect(layers).toContainEqual(expect.objectContaining({
+      id: "canonical-root-placement",
+      name: "Canonical name",
+      start: 3,
+      sourceIn: 1,
+      sourceOut: 3,
+    }));
+    expect(collectCompositionLayers(project).find(layer => layer.id === "canonical-root-placement"))
+      .toMatchObject({ name: "Legacy name", start: 0, sourceIn: 0, sourceOut: 2 });
   });
 
   it("includes referenced master timeline clips and their media type", () => {
