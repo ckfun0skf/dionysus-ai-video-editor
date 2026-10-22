@@ -125,17 +125,21 @@ describe("shared Composition editing commands", () => {
     expect(placement(source, "audio").linkedToPlacementId).toBe("video");
   });
 
-  it("removing a child audio lane cannot cascade-delete the linked video placement", () => {
+  it("removes a linked child from a legacy Audio lane ID without deleting its video parent", () => {
     const source = fixture();
-    // A separate empty audio lane is the one the owner removes; the linked child
-    // lives on another lane, but stale/legacy lane identity must not cascade to video.
-    const withExtraLane = addCompositionTrack(source, {
-      id: "a2", name: "Audio 2", kind: "audio", order: 3,
+    // Reproduce projects where the linked child uses a legacy Audio track ID that
+    // differs from the canonical Audio track ID shown by the timeline.
+    const withLegacyLane = addCompositionTrack(source, {
+      id: "legacy-audio", name: "Audio (legacy)", kind: "audio", order: 3,
     });
-    const next = removeCompositionTrack(withExtraLane, "a2");
+    const withChildOnLegacyLane = updateCompositionPlacement(withLegacyLane, "audio", {
+      trackId: "legacy-audio",
+    });
+    const next = removeCompositionTrack(withChildOnLegacyLane, "legacy-audio");
+    expect(next.tracks.some(track => track.id === "legacy-audio")).toBe(false);
     expect(next.placements.map(item => item.id)).toContain("video");
-    expect(next.placements.map(item => item.id)).toContain("audio");
-    expect(placement(next, "audio").linkedToPlacementId).toBe("video");
+    expect(next.placements.map(item => item.id)).not.toContain("audio");
+    expect(placement(next, "video").trackId).toBe("v1");
   });
 
   it("updates canonical source/link metadata without changing unrelated source ranges", () => {
