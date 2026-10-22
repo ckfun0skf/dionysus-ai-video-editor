@@ -158,11 +158,11 @@ async function getOrLoadPreviewVideo(
 export function waitForVideoFrame(video: HTMLVideoElement): Promise<void> {
   if (video.readyState >= 2) return Promise.resolve();
   return new Promise((resolve, reject) => {
-    const timeout = window.setTimeout(() => finish(new Error("Unable to decode the first video frame")), 10000);
+    const timeout = globalThis.setTimeout(() => finish(new Error("Unable to decode the first video frame")), 10000);
     const onLoadedData = () => finish();
     const onError = () => finish(new Error("Unable to decode the first video frame"));
     const cleanup = () => {
-      window.clearTimeout(timeout);
+      globalThis.clearTimeout(timeout);
       video.removeEventListener("loadeddata", onLoadedData);
       video.removeEventListener("error", onError);
     };
