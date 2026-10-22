@@ -28,8 +28,8 @@ import {
   type ProjectTimelineInsertionPlan,
   type ProjectTimelineInsertResolution,
 } from "./projectTimelinePlacement";
-import { createEditorSessionHistory, redoEditorSessionChange, undoEditorSessionChange, type EditorSessionHistory, type EditorSessionSnapshot } from "./editorSessionHistory";
-import { transitionEditorSession } from "./editorSession";
+import { createEditorSessionHistory, type EditorSessionHistory, type EditorSessionSnapshot } from "./editorSessionHistory";
+import { restoreEditorSessionHistory, transitionEditorSession } from "./editorSession";
 import { COMPOSITION_PROJECT_STORAGE_KEY, LEGACY_PROJECT_STORAGE_KEY, persistEditorSession } from "./editorSessionPersistence";
 import { collectCompositionLayers, isPlayableAudioLayer, renderCompositionFrame, exportCompositionWebM, downloadExport } from "./compositionRenderer";
 import { createClipVersionSnapshot } from "./clipVersionSnapshot";
@@ -1018,38 +1018,30 @@ export default function App() {
   }
 
   function undoProjectChange() {
-    const result = undoEditorSessionChange(editorHistoryRef.current, {
-      project: editorSessionRef.current.project,
-      composition: editorSessionRef.current.composition,
-    });
-    if (!result.snapshot) return;
+    const result = restoreEditorSessionHistory(
+      editorSessionRef.current,
+      editorHistoryRef.current,
+      "undo",
+    );
+    if (!result.session) return;
     editorHistoryRef.current = result.history;
     setEditorHistory(result.history);
-    const composition = structuredClone(result.snapshot.composition);
-    const restoredProject = {
-      ...projectRootCompositionToLegacy(copy(result.snapshot.project), composition),
-      updatedAt: new Date().toISOString(),
-    };
-    editorSessionRef.current = { project: restoredProject, composition };
-    setEditorSession(editorSessionRef.current);
+    editorSessionRef.current = result.session;
+    setEditorSession(result.session);
     setNotice("Last project change undone.");
   }
 
   function redoProjectChange() {
-    const result = redoEditorSessionChange(editorHistoryRef.current, {
-      project: editorSessionRef.current.project,
-      composition: editorSessionRef.current.composition,
-    });
-    if (!result.snapshot) return;
+    const result = restoreEditorSessionHistory(
+      editorSessionRef.current,
+      editorHistoryRef.current,
+      "redo",
+    );
+    if (!result.session) return;
     editorHistoryRef.current = result.history;
     setEditorHistory(result.history);
-    const composition = structuredClone(result.snapshot.composition);
-    const restoredProject = {
-      ...projectRootCompositionToLegacy(copy(result.snapshot.project), composition),
-      updatedAt: new Date().toISOString(),
-    };
-    editorSessionRef.current = { project: restoredProject, composition };
-    setEditorSession(editorSessionRef.current);
+    editorSessionRef.current = result.session;
+    setEditorSession(result.session);
     setNotice("Project change restored.");
   }
   function addShot() {
