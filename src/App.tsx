@@ -271,6 +271,7 @@ export default function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const playbackTimeRef = useRef(0);
   const previewImagesRef = useRef(new Map<string, HTMLImageElement>());
+  const previewFrameTimeRef = useRef(-1);
   const previewVideosRef = useRef(new Map<string, HTMLVideoElement>());
   const previewMediaReleasesRef = useRef(new Map<string, () => void>());
   const [previewAssetId, setPreviewAssetId] = useState("");
@@ -534,16 +535,25 @@ export default function App() {
           : new Set<string>();
         const previewScale = Math.min(1280 / Math.max(1, previewCanvasWidth), 720 / Math.max(1, previewCanvasHeight));
         const previewDimensions = { width: Math.max(1, Math.round(previewCanvasWidth * previewScale)), height: Math.max(1, Math.round(previewCanvasHeight * previewScale)) };
-        await renderCompositionFrame(frame, project, layers, editorTime, { ...previewDimensions, interactivePreview: isPlaying }, previewImagesRef.current, previewVideosRef.current, releases, compositionPath);
-        if (renderId !== previewRenderId.current) return;
+        const frameTime = editorTime;
+        await renderCompositionFrame(frame, project, layers, frameTime, { ...previewDimensions, interactivePreview: isPlaying }, previewImagesRef.current, previewVideosRef.current, releases, compositionPath);
+        // During playback, rendering can take longer than one frame interval. Discarding every
+        // in-flight frame as soon as the playhead advances can starve the canvas and leave it
+        // black. Accept completed playback frames in time order; while paused, keep the strict
+        // latest-request check so scrubbing never paints an obsolete frame.
+        if (!isPlaying && renderId !== previewRenderId.current) return;
+        if (isPlaying && frameTime < previewFrameTimeRef.current) return;
         const context = canvas.getContext("2d");
         if (context) {
           canvas.width = frame.width;
           canvas.height = frame.height;
           context.drawImage(frame, 0, 0);
+          previewFrameTimeRef.current = frameTime;
         }
       } catch {
-        if (renderId === previewRenderId.current) {
+        // A transient media decode/seek failure during playback must not erase the last good
+        // composition frame. The next playback tick will retry rendering at the current time.
+        if (!isPlaying && renderId === previewRenderId.current) {
           const context = canvas.getContext("2d");
           if (context) { context.fillStyle = "#000"; context.fillRect(0, 0, canvas.width, canvas.height); }
         }
