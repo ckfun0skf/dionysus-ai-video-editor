@@ -255,3 +255,8 @@ This narrows the project-replacement transaction boundary; it does not solve dua
 ## E2 follow-up — startup recovery reads one paired snapshot (2026-10-22)
 
 `createInitialEditorSession()` now reads the legacy and canonical localStorage keys once and reuses those parsed results for both Project recovery selection and canonical-root acceptance. This prevents the startup code from selecting a Project using one pair of storage reads and attempting to restore its Composition from a later pair. Canonical-root restoration still requires matching identity/revision policy and exact compatibility projection equality; otherwise it falls back to deterministic migration. Dual-key persistence remains transitional.
+
+
+## E2 follow-up — canonical recovery authority is identity-based
+
+The startup recovery policy no longer compares timestamps to decide between two snapshots for the same project. A valid v2 envelope is the canonical root and wins over its v1 compatibility mirror when project ID/name match; timestamps remain metadata. A mismatched project identity still prevents the canonical candidate from overriding the legacy candidate, and v1 remains the fallback when v2 is absent or invalid. Tests cover older/equal/invalid timestamps and identity mismatch. The writer still mirrors v1 for compatibility, so the overall storage migration is not yet complete.
