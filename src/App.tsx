@@ -4,7 +4,7 @@ import { sampleProject } from "./sampleProject";
 import type { Asset, AssetKind, ClipVersion, CompositionLayer, DionysusProject, ReferenceProfile, ReferenceRole, Shot, TimelineClip } from "./types";
 import type { CompositionDocument } from "./compositionModel";
 import { validateProject } from "./projectValidation";
-import { addClipVersionLayer as addNestedLayer, addClipVersionTrack as addNestedTrack, deleteClipVersionLayer as deleteNestedLayer, duplicateClipVersionComposition, moveClipVersionLayer as moveNestedLayer, normalizeClipVersionTracks, updateClipVersionLayer as updateNestedLayer } from "./clipVersionTracks";
+import { addClipVersionLayer as addNestedLayer, addClipVersionTrack as addNestedTrack, deleteClipVersionLayer as deleteNestedLayer, duplicateClipVersionComposition, moveClipVersionLayer as moveNestedLayer, normalizeClipVersionTracks, updateClipVersionLayer as updateNestedLayer, updateClipVersionTrack as updateNestedTrack } from "./clipVersionTracks";
 import { createProjectDocument, readProjectDocument } from "./projectDocument";
 import { createRootCompositionPlacementForTimelineClip, migrateLegacyProjectToComposition, projectRootCompositionToLegacy } from "./compositionMigration";
 import { addCompositionLinkedAudioChild, addCompositionTrack, applyCompositionResizePreview, deleteCompositionPlacement, duplicateCompositionPlacement, duplicateLinkedAudio, extractLinkedAudio, insertCompositionPlacement, moveCompositionPlacement, moveCompositionPlacementToTrack, removeCompositionTrack, rippleReorderCompositionMasterShots, splitCompositionPlacement, trimCompositionPlacement, updateCompositionLinkedAudioChild, updateCompositionPlacement, updateCompositionTrack } from "./compositionCommands";
@@ -3013,7 +3013,7 @@ export default function App() {
         <div className="nested-timeline-row-label visual-track-label">
           <span>{track.kind === "audio" ? <AudioLines size={14}/> : track.kind === "text" ? <Sparkles size={14}/> : <Film size={14}/>}</span>
           <div><strong>{track.name}</strong><small>{track.kind === "audio" ? "Audio track" : track.kind === "text" ? "Text track" : "Video track"} · {layers.length} item{layers.length === 1 ? "" : "s"}</small></div>
-          {track.kind === "audio" && <button className="track-layer-mute" aria-label={(track.muted ? "Unmute " : "Mute ") + track.name} aria-pressed={Boolean(track.muted)} onClick={() => updateTimelineVersion(activeVersionTimelineTab, version => ({ ...normalizeClipVersionTracks(version), tracks: normalizeClipVersionTracks(version).tracks?.map(item => item.id === track.id ? { ...item, muted: !item.muted } : item) }))}>{track.muted ? "Unmute" : "Mute"}</button>}
+          {track.kind === "audio" && <button className="track-layer-mute" aria-label={(track.muted ? "Unmute " : "Mute ") + track.name} aria-pressed={Boolean(track.muted)} onClick={() => updateTimelineVersion(activeVersionTimelineTab, version => updateNestedTrack(version, track.id, { muted: !track.muted }))}>{track.muted ? "Unmute" : "Mute"}</button>}
           <button className="track-add-clip" aria-label={"Add content to " + track.name} title={"Add content to " + track.name} onClick={() => { addTimelineVersionLayer(activeVersionTimelineTab, track.kind === "audio" ? "audio" : track.kind === "text" ? "text" : "video", track.id); }}><Plus size={13}/></button>
         </div>
         <div className="nested-timeline-row-track visual-track-lane" data-track-id={track.id} style={{backgroundSize:(5/Math.max(activeVersionTimeline.duration,0.1)*100)+"% 100%"}} onDragOver={event=>{
