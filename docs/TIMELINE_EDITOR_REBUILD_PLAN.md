@@ -245,3 +245,8 @@ Remaining: route other direct state mutations through the session boundary; safe
 `createImportedEditorSessionTransition()` in `src/editorSession.ts` now returns the imported `EditorSessionSnapshot` and a newly empty `EditorSessionHistory` together. `App.tsx` replaces the current session and history from that result, rather than creating the session first and independently resetting history afterward. A regression test starts with populated Undo history and asserts that import produces a consistent legacy/canonical pair with no entries from the previous project.
 
 This narrows the project-replacement transaction boundary; it does not solve dual-key persistence, recovery arbitration, nested-editor state, or legacy rendering/playback. DYS-014 remains in progress. No browser smoke tests or manual UI acceptance are claimed.
+
+
+## E1/E2 follow-up — recovery arbitration is a tested persistence helper (2026-10-22)
+
+`shouldPreferCompositionRecovery()` now lives beside `persistEditorSession()` in `src/editorSessionPersistence.ts`, not inside `App.tsx`. Tests pin the current safety policy: matching project identity plus valid comparable revisions are required to prefer the canonical envelope over a valid legacy mirror; mismatched identity or unknown timestamps are not sufficient evidence. This improves determinism but does not claim a single-key recovery design; dual-key storage remains transitional.
