@@ -1,11 +1,12 @@
 ## Latest checkpoint — 2026-10-22 (E1 atomic Editor history)
 
-- Branch: `feat/e1-editor-session-history` (implementation PR not yet opened at the time this note was written).
+- Branch: `feat/e1-editor-session-history`; implementation PR: [#111](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/111) (Draft, unmerged).
 - Added `src/editorSessionHistory.ts` and deterministic unit tests. The Editor now records the legacy `DionysusProject` projection and canonical root `CompositionDocument` in one history entry; grouped rapid edits still coalesce, a new edit clears redo, history remains bounded, and project import resets history.
 - Updated the App's change/undo/redo/import paths to use that paired history rather than separate Project and Composition undo/redo stacks.
 - This is an E1 slice, **not** completion of the rebuild: current Project and Composition live states, dual persistence paths, and legacy-projection/render boundaries still need consolidation.
-- Validation status when recorded: exact-head CI pending; no local checkout available for local npm tests/build; no browser smoke tests or manual UI acceptance claimed.
-- Next action: open/inspect the implementation PR and verify exact-head CI. If checks pass, record the verified SHA and run results here and on Issue #110; then continue E1 command/state ownership. Do not merge without explicit owner approval; Issue #100 remains open.
+- Validation checkpoint: exact-head CI run [39859261009](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39859261009) passed on the pre-documentation head `c85f45d55ec4d4df474239fb63dd26208324964b`: 24 test files / 274 tests passed, TypeScript and production build passed, and npm audit found 0 vulnerabilities. Documentation synchronization changes this branch head, so confirm CI again on the final current SHA.
+- No local checkout was available for local npm tests/build; no browser smoke tests or manual UI acceptance claimed.
+- Next action: verify final-head CI, then continue E1 command/state ownership. Do not merge without explicit owner approval; Issue #100 remains open.
 
 ---
 
