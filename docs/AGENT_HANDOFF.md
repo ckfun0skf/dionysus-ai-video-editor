@@ -1,3 +1,15 @@
+## Latest checkpoint — 2026-10-22 (E1 session transition boundary)
+
+- Branch: `feat/e1-editor-session-history`; [PR #111](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/111) is Ready for review, open and unmerged.
+- The Editor now uses a paired `EditorSessionSnapshot` containing the schema-1.0 Project compatibility projection and canonical root Composition; history records/restores the pair, React state is a single pair, and callback reads use one `editorSessionRef`.
+- Added `src/editorSession.ts`: `reconcileEditorSessionComposition()` now lives outside the UI component, and `commitEditorSessionChange()` produces the next paired session for normal changes. Existing canonical placement geometry/source/link ownership is preserved against metadata-only legacy reconciliation. `src/editorSession.test.ts` covers this behavior and explicit canonical root commits.
+- Exact code-head CI passed for `d32ea856511b0fa13821577d5786048fa6983b37`, [run 39860987542](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39860987542): 25 test files / 277 tests, TypeScript/build passed, npm audit 0 vulnerabilities. This handoff/task refresh creates a newer SHA; confirm exact-head CI again before treating the docs-synchronized head as verified.
+- Remaining: `DionysusProject` remains a compatibility projection; browser persistence still uses v1/v2 keys; non-root domain edits and renderer/playback continue to use legacy projections in places. This does not finish canonical-only persistence or rendering.
+- No local checkout was available for local tests/build. No browser smoke tests or manual UI acceptance claimed. Do not merge without explicit owner approval; Issue #100 stays open.
+- Next: verify final-head CI, then continue moving command ownership into the Editor session and consolidating persistence/recovery.
+
+---
+
 ## Latest checkpoint — 2026-10-22 (E1 atomic session state and ref)
 
 - Branch: `feat/e1-editor-session-history`; [PR #111](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/111) is Ready for review, open and unmerged.
