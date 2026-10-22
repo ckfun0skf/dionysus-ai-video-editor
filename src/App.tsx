@@ -175,66 +175,55 @@ function AudioWaveform({ path }: { path?: string }) {
 }
 
 function createInitialEditorSession(): EditorSessionSnapshot {
-  let project: DionysusProject;
+  let legacyRead: ReturnType<typeof readProjectDocument> | undefined;
+  let compositionRead: ReturnType<typeof readProjectDocument> | undefined;
+
+  // Read both recovery sources once so project selection and canonical-root restoration
+  // cannot observe different localStorage revisions during the same startup.
   try {
-    const raw = localStorage.getItem(LEGACY_PROJECT_STORAGE_KEY);
+    const legacyRaw = localStorage.getItem(LEGACY_PROJECT_STORAGE_KEY);
     const compositionRaw = localStorage.getItem(COMPOSITION_PROJECT_STORAGE_KEY);
-    if (!raw && !compositionRaw) {
-      project = createEmptyProject();
-    } else {
-      // Keep the original schema-1.0 payload for compatibility. Prefer the versioned Composition
-      // envelope only when identity and revision prove it is not stale.
-      let legacyRead: ReturnType<typeof readProjectDocument> | undefined;
-      let compositionRead: ReturnType<typeof readProjectDocument> | undefined;
-      if (raw) {
-        try { legacyRead = readProjectDocument(JSON.parse(raw) as unknown); }
-        catch { legacyRead = undefined; }
-      }
-      if (compositionRaw) {
-        try { compositionRead = readProjectDocument(JSON.parse(compositionRaw) as unknown); }
-        catch { compositionRead = undefined; }
-      }
-      const preferComposition = shouldPreferCompositionRecovery(legacyRead, compositionRead);
-      const restored = preferComposition
-        ? compositionRead?.project
-        : legacyRead?.project ?? compositionRead?.project;
-      if (!restored || !validateProject(restored)) {
-        project = createEmptyProject();
-      } else if (preferComposition) {
-        project = clearDemoSeedData(restored);
-      } else {
-        const normalized = normalizeLegacyTimelineTracks(clearDemoSeedData(restored));
-        const migratedRoot = migrateLegacyProjectToComposition(normalized).rootComposition;
-        project = projectRootCompositionToLegacy(normalized, migratedRoot);
-      }
+    if (legacyRaw) {
+      try { legacyRead = readProjectDocument(JSON.parse(legacyRaw) as unknown); }
+      catch { legacyRead = undefined; }
+    }
+    if (compositionRaw) {
+      try { compositionRead = readProjectDocument(JSON.parse(compositionRaw) as unknown, true); }
+      catch { compositionRead = undefined; }
     }
   } catch {
-    project = createEmptyProject();
+    // If browser storage itself is unavailable, fall back to a fresh in-memory project.
+    legacyRead = undefined;
+    compositionRead = undefined;
   }
 
-  let composition: CompositionDocument;
-  try {
-    const raw = localStorage.getItem(COMPOSITION_PROJECT_STORAGE_KEY);
-    if (raw) {
-      const legacyRaw = localStorage.getItem(LEGACY_PROJECT_STORAGE_KEY);
-      let legacyRead: ReturnType<typeof readProjectDocument> | undefined;
-      if (legacyRaw) {
-        try { legacyRead = readProjectDocument(JSON.parse(legacyRaw) as unknown); }
-        catch { legacyRead = undefined; }
-      }
-      const parsed = JSON.parse(raw) as { compositionModel?: { rootComposition?: CompositionDocument }; project?: DionysusProject };
-      const restored = readProjectDocument(parsed, true);
-      if (restored.project.id === project.id && shouldPreferCompositionRecovery(legacyRead, restored) && parsed.compositionModel?.rootComposition) {
-        const candidateRoot = parsed.compositionModel.rootComposition;
-        if (JSON.stringify(projectRootCompositionToLegacy(project, candidateRoot)) === JSON.stringify(project)) {
-          composition = structuredClone(candidateRoot);
-          return { project, composition };
-        }
-      }
-    }
-  } catch { /* Fall back to deterministic migration for old or corrupt recovery data. */ }
-  composition = migrateLegacyProjectToComposition(project).rootComposition;
-  return { project, composition };
+  const preferComposition = shouldPreferCompositionRecovery(legacyRead, compositionRead);
+  const restored = preferComposition
+    ? compositionRead?.project
+    : legacyRead?.project ?? compositionRead?.project;
+
+  let project: DionysusProject;
+  if (!restored || !validateProject(restored)) {
+    project = createEmptyProject();
+  } else if (preferComposition) {
+    project = clearDemoSeedData(restored);
+  } else {
+    const normalized = normalizeLegacyTimelineTracks(clearDemoSeedData(restored));
+    const migratedRoot = migrateLegacyProjectToComposition(normalized).rootComposition;
+    project = projectRootCompositionToLegacy(normalized, migratedRoot);
+  }
+
+  const candidateRoot = compositionRead?.compositionModel?.rootComposition;
+  if (
+    candidateRoot &&
+    compositionRead?.project.id === project.id &&
+    shouldPreferCompositionRecovery(legacyRead, compositionRead) &&
+    JSON.stringify(projectRootCompositionToLegacy(project, candidateRoot)) === JSON.stringify(project)
+  ) {
+    return { project, composition: structuredClone(candidateRoot) };
+  }
+
+  return { project, composition: migrateLegacyProjectToComposition(project).rootComposition };
 }
 
 export default function App() {
