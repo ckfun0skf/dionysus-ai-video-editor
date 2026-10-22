@@ -648,7 +648,15 @@ export function removeCompositionTrack(
       ? next.placements.find(item => item.id === current.linkedToPlacementId)
       : undefined;
     if (parent && parent.trackId !== trackId) {
-      next = unlinkCompositionPlacement(next, current.id);
+      // Removing a linked-audio lane is a lane-only operation: preserve the video
+      // and detach its audio before deleting the child placement. Do not run the
+      // generic group deletion path while the child still points at its parent.
+      next = updateCompositionPlacement(next, current.id, {
+        linkedToPlacementId: undefined,
+        legacyData: { ...current.legacyData, linkedVideoClipId: undefined },
+      });
+      next = deleteCompositionPlacement(next, current.id);
+      continue;
     }
     if (next.placements.some(item => item.id === placement.id)) next = deleteCompositionPlacement(next, placement.id);
   }
