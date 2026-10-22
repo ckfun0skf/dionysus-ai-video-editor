@@ -681,7 +681,7 @@
             "Recovery tests prove a matching v2 canonical envelope wins over its v1 mirror independent of timestamps; identity mismatch still falls back safely.",
             "persistEditorSession() writes only the v2 canonical envelope; v1 localStorage data is read-only fallback. Tests cover canonical-only writes and failure preserving legacy recovery."
           ],
-          "notes": "Status remains in_progress. Edit/history/import use paired session boundaries. Startup reads both keys once and selects one complete document; valid v2 is authoritative, v1 is fallback only when v2 is absent/invalid. Autosave writes only v2. Non-root editing and renderer/playback retain legacy projections. Exact-head CI required after docs sync. No browser smoke tests; Issue #100 remains open.",
+          "notes": "Status remains in_progress. Edit/history/import use paired session boundaries. Startup reads both keys once and selects one complete valid document; v2 is authoritative, v1 is fallback only when v2 is absent/invalid. Autosave writes only v2; App integration tests now inspect v2 first. Non-root editing and renderer/playback retain legacy projections. Exact-head CI must pass after test adaptation. No browser smoke tests; Issue #100 remains open.",
           "description": "Establish canonical Composition for root/nested timelines, shared commands and independent structure-preserving Project-to-Clip snapshots.",
           "executionStage": "E2 and E4",
           "priority": "P0",
@@ -697,8 +697,8 @@
           "testStrategy": [
             "Migration matrix, parity, snapshot independence and round-trip."
           ],
-          "nextAction": "Verify exact-head CI after docs sync. Assess safe retirement/cleanup of the read-only v1 key, then migrate non-root editing and render/playback to the canonical Composition contract. Preserve schema-1.0 file import, stable IDs, source ranges, linked audio, pins and nested snapshots. No browser smoke tests or merge without owner approval.",
-          "handoffNotes": "PR #111 open/unmerged. Paired edit/history/import boundaries; one-read startup recovery; canonical-only v2 autosave with read-only v1 fallback. Verify exact-head CI. Next assess legacy-key cleanup and migrate non-root/render paths. Dual representation still exists in app memory; no browser smoke tests; Issue #100 open."
+          "nextAction": "Verify exact-head CI after the App test helper follows canonical-only persistence. If green, continue recovery/legacy-key retirement and migrate non-root editing and render/playback. Preserve schema-1.0 file import, stable IDs, source ranges, linked audio, pins and nested snapshots. No browser smoke tests or merge without owner approval.",
+          "handoffNotes": "PR #111 open/unmerged. Paired edit/history/import boundaries; one-read startup recovery; canonical-only v2 autosave with read-only v1 fallback. App tests now read v2 first; exact-head CI must verify this adaptation. Next assess legacy-key cleanup and migrate non-root/render paths. No browser smoke tests; Issue #100 open."
         }
       ],
       "executionStage": "E2",
