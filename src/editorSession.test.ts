@@ -153,9 +153,12 @@ describe("Imported editor session", () => {
     expect(imported.project).toEqual(compatibleProject);
 
     const staleRoot = structuredClone(sourceRoot);
-    staleRoot.name = "Mismatched imported root";
+    const stalePlacement = staleRoot.placements[0];
+    expect(stalePlacement).toBeDefined();
+    stalePlacement.start += 12;
     const fallback = createImportedEditorSession(compatibleProject, staleRoot);
-    expect(fallback.composition.name).not.toBe("Mismatched imported root");
+    expect(fallback.composition.placements.find(item => item.id === stalePlacement.id)?.start)
+      .toBe(sourceRoot.placements.find(item => item.id === stalePlacement.id)?.start);
     expect(fallback.project).toEqual(projectRootCompositionToLegacy(compatibleProject, fallback.composition));
     expect(source).toEqual(sampleProject);
   });
