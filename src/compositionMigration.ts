@@ -461,18 +461,11 @@ export function migrateLinkedAudioPlacementsToOwnedChildren(rootComposition: Com
   }
   next.placements = next.placements.filter(placement => !movedIds.has(placement.id));
 
-  const independentAudioTrackIds = new Set(next.placements
-    .filter(placement => placement.legacyData.kind === "audio" && !placement.linkedToPlacementId)
-    .map(placement => placement.trackId));
   const movedAudioTrackIds = new Set(candidates.map(placement => placement.trackId));
-  const unusedLegacyAudioTracks = new Set([...movedAudioTrackIds].filter(trackId => !independentAudioTrackIds.has(trackId)));
+  const unusedLegacyAudioTracks = new Set([...movedAudioTrackIds].filter(trackId =>
+    !next.placements.some(placement => placement.trackId === trackId)
+  ));
   next.tracks = next.tracks.filter(track => track.kind !== "audio" || !unusedLegacyAudioTracks.has(track.id));
-  const perTrack = new Map<string, number>();
-  next.placements = next.placements.map(placement => {
-    const order = perTrack.get(placement.trackId) ?? 0;
-    perTrack.set(placement.trackId, order + 1);
-    return { ...placement, order };
-  });
   return next;
 }
 
