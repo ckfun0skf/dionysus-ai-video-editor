@@ -121,6 +121,23 @@ export function updateClipVersionDuration(version: ClipVersion, duration: number
   };
 }
 
+/** Keep nested Version description metadata aligned with an existing canonical Composition snapshot. */
+export function updateClipVersionDescription(version: ClipVersion, description: string): ClipVersion {
+  const normalized = normalizeClipVersionTracks(version);
+  if (!normalized.composition) return { ...normalized, description };
+  return {
+    ...normalized,
+    description,
+    composition: {
+      ...structuredClone(normalized.composition),
+      legacyData: {
+        ...(normalized.composition.legacyData ?? {}),
+        description,
+      },
+    },
+  };
+}
+
 /** Add a source placement to a compatible track, creating a deterministic default if needed. */
 export function addClipVersionLayer(
   version: ClipVersion,
