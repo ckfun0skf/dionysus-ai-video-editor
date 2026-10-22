@@ -621,9 +621,11 @@ export function duplicateLinkedAudio(
   const next = clone(document);
   const original = requirePlacement(next, placementId);
   const { linkedToPlacementId: _linkedToPlacementId, ...independent } = original;
+  const legacyData = { ...independent.legacyData };
+  delete legacyData.linkedVideoClipId;
   const order = next.placements.filter(item => item.trackId === original.trackId)
     .reduce((max, item) => Math.max(max, item.order), -1) + 1;
-  next.placements.push(syncLegacyPlacement({ ...independent, id: newPlacementId, name: original.name + " (copy)", order }));
+  next.placements.push(syncLegacyPlacement({ ...independent, legacyData, id: newPlacementId, name: original.name + " (copy)", order }));
   assertValidCompositionDocument(next);
   return next;
 }
