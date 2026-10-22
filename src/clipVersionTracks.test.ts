@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { sampleProject } from "./sampleProject";
-import { addClipVersionLayer, addClipVersionTrack, deleteClipVersionLayer, duplicateClipVersionComposition, moveClipVersionLayer, normalizeClipVersionTracks, updateClipVersionDescription, updateClipVersionDuration, updateClipVersionLayer, updateClipVersionTrack } from "./clipVersionTracks";
+import { addClipVersionLayer, addClipVersionTrack, deleteClipVersionLayer, duplicateClipVersionComposition, ensureClipVersionComposition, moveClipVersionLayer, normalizeClipVersionTracks, updateClipVersionDescription, updateClipVersionDuration, updateClipVersionLayer, updateClipVersionTrack } from "./clipVersionTracks";
 import { validateProject } from "./projectValidation";
 
 describe("normalizeClipVersionTracks", () => {
@@ -70,6 +70,25 @@ describe("nested Clip Version track operations", () => {
     expect(updated.description).toBe("Updated canonical description");
     expect(updated.composition?.legacyData?.description).toBe("Updated canonical description");
     expect(withLayer.composition?.legacyData?.description).not.toBe("Updated canonical description");
+  });
+
+  it("materializes a canonical Composition for an empty nested Version", () => {
+    const version = {
+      ...structuredClone(sampleProject.shots[0].slots[0].versions[0]),
+      id: "empty-canonical-version",
+      duration: 6,
+      layers: [],
+      tracks: [{ id: "fresh-empty-video-track", name: "Video 1", kind: "video" as const }],
+      composition: undefined,
+    };
+    const ensured = ensureClipVersionComposition(version);
+
+    expect(ensured.composition).toMatchObject({
+      duration: 6,
+      placements: [],
+      tracks: [{ id: "fresh-empty-video-track", name: "Video 1", kind: "video" }],
+    });
+    expect(version.composition).toBeUndefined();
   });
 
   it("updates nested duration in canonical Composition and compatibility projection", () => {
