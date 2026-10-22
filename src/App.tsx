@@ -30,7 +30,7 @@ import {
 } from "./projectTimelinePlacement";
 import { createEditorSessionHistory, type EditorSessionHistory, type EditorSessionSnapshot } from "./editorSessionHistory";
 import { createImportedEditorSessionTransition, restoreEditorSessionHistory, transitionEditorSession } from "./editorSession";
-import { COMPOSITION_PROJECT_STORAGE_KEY, LEGACY_PROJECT_STORAGE_KEY, persistEditorSession } from "./editorSessionPersistence";
+import { COMPOSITION_PROJECT_STORAGE_KEY, LEGACY_PROJECT_STORAGE_KEY, persistEditorSession, shouldPreferCompositionRecovery } from "./editorSessionPersistence";
 import { collectCompositionLayers, isPlayableAudioLayer, renderCompositionFrame, exportCompositionWebM, downloadExport } from "./compositionRenderer";
 import { createClipVersionSnapshot } from "./clipVersionSnapshot";
 import AIGenerationPanel from "./AIGenerationPanel";
@@ -172,19 +172,6 @@ function AudioWaveform({ path }: { path?: string }) {
   return <div className={"audio-waveform"+(!path?" placeholder":peaks?" decoded":" loading")} aria-hidden="true">
     {peaks ? peaks.map((peak,index)=><i key={index} style={{height:(Math.max(3,peak*100))+"%"}}/>) : <span/>}
   </div>;
-}
-
-function shouldPreferCompositionRecovery(
-  legacyRead: ReturnType<typeof readProjectDocument> | undefined,
-  compositionRead: ReturnType<typeof readProjectDocument> | undefined,
-): boolean {
-  if (!compositionRead) return false;
-  if (!legacyRead) return true;
-  if (legacyRead.project.id !== compositionRead.project.id || legacyRead.project.name !== compositionRead.project.name) return false;
-  const legacyRevision = Date.parse(legacyRead.project.updatedAt);
-  const compositionRevision = Date.parse(compositionRead.project.updatedAt);
-  // Unknown timestamps are not enough evidence to override a valid legacy recovery.
-  return Number.isFinite(legacyRevision) && Number.isFinite(compositionRevision) && compositionRevision >= legacyRevision;
 }
 
 function createInitialEditorSession(): EditorSessionSnapshot {
