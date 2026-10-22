@@ -259,7 +259,9 @@ export function validateProject(value: unknown): value is DionysusProject {
       if (clip.kind !== "audio" || !clipIds.has(clip.linkedVideoClipId as string)) return false;
       const source = timelineClips.find(item => item.id === clip.linkedVideoClipId);
       if (!source || source.kind !== "video" || source.start !== clip.start || source.duration !== clip.duration) return false;
-      if (source.trackId !== clip.trackId) return false;
+      // Legacy schema-1 projects may still store linked audio on an Audio Track. The
+      // canonical projection migrates it to the owner's Video Track; both shapes are valid
+      // inputs during the compatibility transition.
     }
   }
   for (const profile of profiles) {
