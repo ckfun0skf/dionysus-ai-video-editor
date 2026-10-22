@@ -11,7 +11,7 @@ import {
 import type { CompositionDocument } from "./compositionModel";
 import { migrateLegacyProjectToComposition, projectRootCompositionToLegacy } from "./compositionMigration";
 import type { EditorSessionSnapshot } from "./editorSessionHistory";
-import { recordEditorSessionChange, type EditorSessionHistory } from "./editorSessionHistory";
+import { recordEditorSessionChange, redoEditorSessionChange, undoEditorSessionChange, type EditorSessionHistory } from "./editorSessionHistory";
 import type { DionysusProject } from "./types";
 
 /**
@@ -128,4 +128,32 @@ export function transitionEditorSession(
   };
   const session = commitEditorSessionChange(current, nextProject, canonicalRoot);
   return { session, history: nextHistory };
+}
+
+
+export type EditorSessionHistoryDirection = "undo" | "redo";
+
+export interface EditorSessionHistoryTransition {
+  session?: EditorSessionSnapshot;
+  history: EditorSessionHistory;
+}
+
+/** Restore one paired history snapshot and rebuild its compatibility projection atomically. */
+export function restoreEditorSessionHistory(
+  current: EditorSessionSnapshot,
+  history: EditorSessionHistory,
+  direction: EditorSessionHistoryDirection,
+  now = Date.now(),
+): EditorSessionHistoryTransition {
+  const result = direction === "undo"
+    ? undoEditorSessionChange(history, current)
+    : redoEditorSessionChange(history, current);
+  if (!result.snapshot) return { history: result.history };
+
+  const composition = structuredClone(result.snapshot.composition);
+  const project = {
+    ...projectRootCompositionToLegacy(structuredClone(result.snapshot.project), composition),
+    updatedAt: new Date(now).toISOString(),
+  };
+  return { session: { project, composition }, history: result.history };
 }
