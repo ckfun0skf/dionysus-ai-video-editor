@@ -186,3 +186,8 @@ Continue from `feat/mobile-audio-mute-state` (if already merged, inspect PR/main
 ### Active E1 continuation — atomic import replacement (2026-10-22)
 
 Current PR: [#111](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/111), branch `feat/e1-editor-session-history`. Continue from its live head, not from this note. `createImportedEditorSessionTransition()` now returns imported session + fresh empty history as one result; tests must protect against stale Undo/Redo crossing project boundaries. Verify exact-head CI after the synchronized docs commit, comment on Issue #110 after each meaningful increment, and keep Issue #100 open. Next inspect remaining direct session mutations and then safely consolidate dual-key recovery/persistence. Do not claim canonical-only state, do not run browser smoke tests, and do not merge without explicit owner approval.
+
+
+### Active E1/E2 continuation — recovery arbitration (2026-10-22)
+
+The latest increment extracts `shouldPreferCompositionRecovery()` into `src/editorSessionPersistence.ts` and tests identity/revision edge cases. Verify exact-head CI after this docs sync, and comment on Issue #110 after each meaningful increment. Next inspect startup's repeated reads/projections and design a single-authority persistence/recovery transition that still imports schema-1.0 projects. Keep Issue #100 open; no browser smoke tests or merge without explicit approval.
