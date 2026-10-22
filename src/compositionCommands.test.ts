@@ -76,6 +76,7 @@ describe("shared Composition editing commands", () => {
       id: "audio", trackId: "a1", start: 1, duration: 6, sourceIn: 2, sourceOut: 8,
     });
     expect(placement(extracted, "audio").linkedToPlacementId).toBeUndefined();
+    expect(placement(extracted, "audio").legacyData.linkedVideoClipId).toBeUndefined();
     expect(placement(source, "audio").linkedToPlacementId).toBe("video");
     expect(JSON.stringify(source)).toBe(before);
     expect(() => assertValidCompositionDocument(extracted)).not.toThrow();
