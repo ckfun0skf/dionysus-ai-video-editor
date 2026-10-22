@@ -5,7 +5,7 @@ import {
   COMPOSITION_PROJECT_STORAGE_KEY,
   LEGACY_PROJECT_STORAGE_KEY,
   persistEditorSession,
-  shouldPreferCompositionRecovery,
+  chooseEditorSessionRecoverySource,
 } from "./editorSessionPersistence";
 
 function memoryStorage(failOn?: string) {
@@ -23,27 +23,28 @@ function memoryStorage(failOn?: string) {
 }
 
 describe("Editor session persistence boundary", () => {
-  it("writes the canonical envelope before the compatible legacy projection at one revision", () => {
+  it("writes only the canonical envelope and preserves its compatibility projection", () => {
     const project = structuredClone(sampleProject);
     const composition = migrateLegacyProjectToComposition(project).rootComposition;
     const storage = memoryStorage();
 
     persistEditorSession(storage, { project, composition }, "2026-10-22T12:34:56.000Z");
 
-    expect(storage.writes).toEqual([COMPOSITION_PROJECT_STORAGE_KEY, LEGACY_PROJECT_STORAGE_KEY]);
+    expect(storage.writes).toEqual([COMPOSITION_PROJECT_STORAGE_KEY]);
     const envelope = JSON.parse(storage.values.get(COMPOSITION_PROJECT_STORAGE_KEY)!);
-    const legacy = JSON.parse(storage.values.get(LEGACY_PROJECT_STORAGE_KEY)!);
     expect(envelope.documentVersion).toBe("2.0");
     expect(envelope.project.updatedAt).toBe("2026-10-22T12:34:56.000Z");
-    expect(legacy.updatedAt).toBe(envelope.project.updatedAt);
-    expect(legacy).toEqual(envelope.project);
     expect(envelope.compositionModel.rootComposition).toEqual(composition);
+    expect(envelope.project).toEqual(JSON.parse(JSON.stringify(envelope.project)));
+    expect(storage.values.has(LEGACY_PROJECT_STORAGE_KEY)).toBe(false);
   });
 
-  it("leaves the new canonical envelope available if the compatibility mirror write fails", () => {
+  it("leaves the existing legacy fallback untouched if the canonical write fails", () => {
     const project = structuredClone(sampleProject);
     const composition = migrateLegacyProjectToComposition(project).rootComposition;
-    const storage = memoryStorage(LEGACY_PROJECT_STORAGE_KEY);
+    const storage = memoryStorage(COMPOSITION_PROJECT_STORAGE_KEY);
+    const legacy = JSON.stringify({ schemaVersion: "1.0", id: "legacy-fallback" });
+    storage.values.set(LEGACY_PROJECT_STORAGE_KEY, legacy);
 
     expect(() => persistEditorSession(
       storage,
@@ -51,34 +52,31 @@ describe("Editor session persistence boundary", () => {
       "2026-10-22T12:34:56.000Z",
     )).toThrow("storage full");
 
-    expect(storage.values.has(COMPOSITION_PROJECT_STORAGE_KEY)).toBe(true);
-    expect(storage.values.has(LEGACY_PROJECT_STORAGE_KEY)).toBe(false);
-    const envelope = JSON.parse(storage.values.get(COMPOSITION_PROJECT_STORAGE_KEY)!);
-    expect(envelope.compositionModel.rootComposition).toEqual(composition);
+    expect(storage.values.has(COMPOSITION_PROJECT_STORAGE_KEY)).toBe(false);
+    expect(storage.values.get(LEGACY_PROJECT_STORAGE_KEY)).toBe(legacy);
+    expect(storage.writes).toEqual([COMPOSITION_PROJECT_STORAGE_KEY]);
   });
 });
 
-
-describe("Editor session recovery arbitration", () => {
+describe("Editor session recovery source selection", () => {
   const doc = (id: string, name: string, updatedAt: string) => ({
     project: { id, name, updatedAt },
   });
 
-  it("prefers the canonical envelope for the same project regardless of timestamp ordering", () => {
-    const legacy = doc("p1", "Project", "2026-10-22T12:05:00.000Z");
-    expect(shouldPreferCompositionRecovery(legacy, doc("p1", "Project", "2026-10-22T12:00:00.000Z"))).toBe(true);
-    expect(shouldPreferCompositionRecovery(legacy, doc("p1", "Project", "2026-10-22T12:05:00.000Z"))).toBe(true);
-    expect(shouldPreferCompositionRecovery(legacy, doc("p1", "Project", "not-a-date"))).toBe(true);
+  it("chooses the complete canonical envelope whenever one is available", () => {
+    expect(chooseEditorSessionRecoverySource(
+      doc("old-project", "Legacy", "2026-10-22T12:05:00.000Z"),
+      doc("new-project", "Canonical", "2026-10-22T12:00:00.000Z"),
+    )).toBe("composition");
+    expect(chooseEditorSessionRecoverySource(
+      doc("p1", "Project", "not-a-date"),
+      doc("p1", "Project", "not-a-date"),
+    )).toBe("composition");
   });
 
-  it("does not let a canonical envelope from another project override the legacy mirror", () => {
-    expect(shouldPreferCompositionRecovery(doc("p1", "Project", "2026-10-22T12:00:00.000Z"), doc("p2", "Project", "2026-10-22T12:05:00.000Z"))).toBe(false);
-    expect(shouldPreferCompositionRecovery(doc("p1", "Project", "2026-10-22T12:00:00.000Z"), doc("p1", "Renamed elsewhere", "2026-10-22T12:05:00.000Z"))).toBe(false);
-  });
-
-  it("uses a canonical envelope when no legacy document exists and falls back when no canonical document exists", () => {
-    expect(shouldPreferCompositionRecovery(undefined, doc("p1", "Project", "not-a-date"))).toBe(true);
-    expect(shouldPreferCompositionRecovery(undefined, undefined)).toBe(false);
-    expect(shouldPreferCompositionRecovery(doc("p1", "Project", "2026-10-22T12:00:00.000Z"), undefined)).toBe(false);
+  it("uses legacy only when canonical recovery is absent or invalid", () => {
+    expect(chooseEditorSessionRecoverySource(doc("p1", "Project", "2026-10-22T12:00:00.000Z"), undefined)).toBe("legacy");
+    expect(chooseEditorSessionRecoverySource(undefined, undefined)).toBe("empty");
+    expect(chooseEditorSessionRecoverySource(undefined, doc("p1", "Project", "not-a-date"))).toBe("composition");
   });
 });
