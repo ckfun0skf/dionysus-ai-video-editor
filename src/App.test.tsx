@@ -1428,6 +1428,7 @@ describe("Integrated timeline editor", () => {
       kind: "video" as const,
       path: "data:video/mp4;base64,",
       duration: 8,
+      hasAudio: true,
       createdAt: "2026-10-20T00:00:00.000Z",
       updatedAt: "2026-10-20T00:00:00.000Z"
     };
