@@ -1482,8 +1482,15 @@ export default function App() {
   }
   function syncStoryboardToTimeline() {
     const videoTrack = project.tracks.find(track => track.kind === "video");
-    const audioTrack = project.tracks.find(track => track.kind === "audio");
-    if (!videoTrack || !audioTrack) { setNotice("Timeline needs both video and audio tracks before syncing."); return; }
+    if (!videoTrack) { setNotice("Timeline needs a Video layer before syncing."); return; }
+    const hasStoryboardAudio = project.shots.some(shot => shot.slots.some(slot =>
+      (slot.versions.find(version => version.id === slot.selectedVersionId) ?? slot.versions[0])
+        ?.layers.some(layer => layer.kind === "audio")
+    ));
+    const createdAudioTrack = !project.tracks.some(track => track.kind === "audio") && hasStoryboardAudio
+      ? { id: id("track-audio"), name: "Audio 1", kind: "audio" as const }
+      : undefined;
+    const audioTrack = project.tracks.find(track => track.kind === "audio") ?? createdAudioTrack;
     const shotStarts = getMasterShotStarts(project.shots);
     const generated = project.shots.flatMap((shot, shotIndex) => {
       const shotOffset = shotStarts[shotIndex];
@@ -1502,7 +1509,13 @@ export default function App() {
       });
       return clips;
     });
-    change(p => ({ ...p, timelineClips: [...(p.timelineClips ?? []).filter(clip => !clip.id.startsWith("storyboard-")), ...generated] }));
+    change(p => ({
+      ...p,
+      ...(createdAudioTrack && !p.tracks.some(track => track.kind === "audio")
+        ? { tracks: [...p.tracks, createdAudioTrack] }
+        : {}),
+      timelineClips: [...(p.timelineClips ?? []).filter(clip => !clip.id.startsWith("storyboard-")), ...generated],
+    }));
     setNotice("Storyboard synced to media timeline. Manually created clips were preserved.");
     setView("timeline");
   }
