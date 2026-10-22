@@ -1,0 +1,102 @@
+import {
+  addCompositionTrack,
+  assertValidCompositionDocument,
+  deleteCompositionPlacement,
+  insertCompositionPlacement,
+  removeCompositionTrack,
+  reorderCompositionTrack,
+  updateCompositionPlacement,
+  updateCompositionTrack,
+} from "./compositionCommands";
+import type { CompositionDocument } from "./compositionModel";
+import { migrateLegacyProjectToComposition, projectRootCompositionToLegacy } from "./compositionMigration";
+import type { EditorSessionSnapshot } from "./editorSessionHistory";
+import type { DionysusProject } from "./types";
+
+/**
+ * Reconcile legacy-domain edits into the canonical root without letting a migrated
+ * compatibility projection overwrite timing, track, source ranges, typed sources,
+ * or linked ownership for placements already present in the live document.
+ */
+export function reconcileEditorSessionComposition(
+  current: CompositionDocument,
+  target: CompositionDocument,
+): CompositionDocument {
+  let next = structuredClone(current);
+  const targetTrackIds = new Set(target.tracks.map(track => track.id));
+  for (const track of target.tracks) {
+    if (!next.tracks.some(item => item.id === track.id)) next = addCompositionTrack(next, track);
+    else next = updateCompositionTrack(next, track.id, track);
+  }
+
+  const targetPlacementIds = new Set(target.placements.map(placement => placement.id));
+  for (const placement of [...next.placements]) {
+    if (!targetPlacementIds.has(placement.id) && next.placements.some(item => item.id === placement.id)) {
+      next = deleteCompositionPlacement(next, placement.id);
+    }
+  }
+
+  // Existing canonical placements are edited with shared immutable commands. New legacy-domain
+  // items enter through Composition insertion checks.
+  for (const desired of target.placements) {
+    const existing = next.placements.find(placement => placement.id === desired.id);
+    if (!existing) {
+      next = insertCompositionPlacement(next, structuredClone(desired));
+      continue;
+    }
+    const currentPlacement = next.placements.find(placement => placement.id === desired.id)!;
+    // Compatibility/domain editors can refresh descriptive metadata, never canonical geometry
+    // or source/link ownership of a placement that already exists in the session.
+    next = updateCompositionPlacement(next, desired.id, {
+      name: desired.name,
+      legacyData: { ...currentPlacement.legacyData, ...structuredClone(desired.legacyData) },
+    });
+  }
+
+  const targetTrackOrder = [...target.tracks].sort((a, b) => a.order - b.order);
+  targetTrackOrder.forEach((track, index) => {
+    const ordered = [...next.tracks].sort((a, b) => a.order - b.order);
+    const currentIndex = ordered.findIndex(item => item.id === track.id);
+    if (currentIndex >= 0 && currentIndex !== index) next = reorderCompositionTrack(next, track.id, index);
+  });
+  for (const track of [...next.tracks]) {
+    if (targetTrackIds.has(track.id)) continue;
+    const fallback = targetTrackOrder.find(item => item.kind === "video")?.id;
+    next = removeCompositionTrack(next, track.id, fallback);
+  }
+  next = {
+    ...next,
+    id: target.id,
+    name: target.name,
+    duration: target.duration,
+    frameRate: target.frameRate,
+    width: target.width,
+    height: target.height,
+    provenance: target.provenance,
+    nestedCompositions: structuredClone(target.nestedCompositions),
+    legacyData: structuredClone(target.legacyData),
+    tracks: [...target.tracks].sort((a, b) => a.order - b.order).map((track, order) => ({ ...structuredClone(track), order })),
+  };
+  assertValidCompositionDocument(next);
+  return next;
+}
+
+/**
+ * Turn a Project-domain update into one paired Editor session transition. Root
+ * commands may supply an explicit canonical document; compatibility-first domain
+ * updates are reconciled against the current Composition before projecting back.
+ */
+export function commitEditorSessionChange(
+  current: EditorSessionSnapshot,
+  nextProject: DionysusProject,
+  canonicalRoot?: CompositionDocument,
+): EditorSessionSnapshot {
+  const composition = canonicalRoot
+    ? structuredClone(canonicalRoot)
+    : reconcileEditorSessionComposition(
+        current.composition,
+        migrateLegacyProjectToComposition(nextProject).rootComposition,
+      );
+  const project = projectRootCompositionToLegacy(nextProject, composition);
+  return { project, composition };
+}
