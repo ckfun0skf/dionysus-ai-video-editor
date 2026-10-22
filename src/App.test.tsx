@@ -1699,6 +1699,9 @@ describe("Integrated timeline editor", () => {
     expect(clip?.canvasWidth).toBe(1920);
     expect(clip?.canvasHeight).toBe(1080);
     expect(clip?.clipVersions?.[0].layers).toEqual([]);
+    expect(clip?.clipVersions?.[0].composition).toBeDefined();
+    expect(clip?.clipVersions?.[0].composition?.duration).toBe(4);
+    expect(clip?.clipVersions?.[0].composition?.placements).toHaveLength(0);
     const edit = Array.from(container.querySelectorAll<HTMLButtonElement>(".asset-card button")).find(button => button.textContent?.includes("Edit Timeline"));
     expect(edit).toBeTruthy();
     click(edit!);
