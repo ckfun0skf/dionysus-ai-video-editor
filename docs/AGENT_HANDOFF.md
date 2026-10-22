@@ -1,3 +1,17 @@
+## Latest checkpoint — 2026-10-22 (E1 edit, undo/redo and persistence boundaries)
+
+- Branch: `feat/e1-editor-session-history`; [PR #111](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/111) is Ready for review, open and unmerged.
+- One `EditorSessionSnapshot` pairs the schema-1.0 Project compatibility projection with the canonical root Composition. Shared history, React state and `editorSessionRef` keep the pair together.
+- `src/editorSession.ts` owns the main edit transaction through `transitionEditorSession()`: capture pre-edit paired history, apply the Project updater, stamp a revision, reconcile/project the pair, return session + history together. It also owns `restoreEditorSessionHistory()`, so Undo/Redo restore Composition and compatibility Project as one revision.
+- `src/editorSessionPersistence.ts` centralizes autosave and key names. It writes the v2 canonical Composition envelope first, then the matching v1 compatibility projection at the same timestamp. If the v1 mirror write fails after v2 succeeds, the new canonical envelope remains available for recovery. This is still dual-key compatibility storage, not a single-key migration.
+- Regression coverage: `src/editorSession.test.ts` covers canonical geometry, edit transaction immutability, and edit → Undo → Redo pair restoration; `src/editorSessionPersistence.test.ts` covers canonical-first order, same-revision projection and failed mirror recovery.
+- Exact code-head CI passed for `f288bc97afb3c6ae097482534cef2b2f50b4408b`, [run 39862822226](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39862822226): 26 test files / 281 tests, TypeScript/build passed, npm audit 0 vulnerabilities. This docs/task refresh creates a new SHA; re-check exact-head CI on that synchronized head.
+- Still incomplete: Project remains a compatibility projection; storage still uses v1/v2 keys; non-root editing and render/playback paths still use legacy projections in places. Do not call E1/E2/E3 complete based on this slice.
+- No local checkout was available for local tests/build. No browser smoke tests or manual UI acceptance claimed. Do not merge without explicit owner approval; Issue #100 remains open.
+- Next: verify docs-synchronized exact-head CI, then continue routing remaining state mutations/import through the session boundary and design a safe single authoritative persistence/recovery path.
+
+---
+
 ## Latest checkpoint — 2026-10-22 (E1 transaction + persistence boundaries)
 
 - Branch: `feat/e1-editor-session-history`; [PR #111](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/111) is Ready for review, open and unmerged.
