@@ -218,3 +218,14 @@ The broader boundary is still transitional: Project remains a compatibility proj
 Exact code-head CI passed on `784b2ca83e7861ef85667341911459c3a599a494` in [run 39862266483](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39862266483): 26 test files / 280 tests; TypeScript/build passed; audit 0 vulnerabilities. The docs/task synchronization creates a newer SHA and requires fresh exact-head verification.
 
 Remaining work: move other command families through the session boundary; consolidate recovery/persistence without breaking v1 imports; make non-root editing and render/playback use the intended shared Composition contract. No browser smoke tests or UI acceptance are claimed.
+
+
+## E1 implementation checkpoint — 2026-10-22: edit + Undo/Redo + persistence boundaries
+
+`transitionEditorSession()` in `src/editorSession.ts` owns the main edit transaction: paired pre-edit history capture, Project-domain update, common revision timestamp, Composition reconciliation/projection, and paired result. `restoreEditorSessionHistory()` now also owns Undo/Redo restoration, rebuilding the compatibility projection and timestamp alongside the restored canonical Composition. `App.tsx` consumes each returned session/history pair rather than rebuilding the halves inline.
+
+`src/editorSessionPersistence.ts` centralizes v1/v2 storage keys and autosave. It writes the v2 versioned envelope containing the canonical root first, then the matching v1 Project projection mirror with the same `updatedAt`. If the mirror write fails after the canonical write succeeds, recovery can still see the newest root. This remains a safe transitional dual-key design, not yet one storage key.
+
+Exact code-head CI passed on `f288bc97afb3c6ae097482534cef2b2f50b4408b` in [run 39862822226](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39862822226): 26 test files / 281 tests; TypeScript/build passed; audit 0 vulnerabilities. The docs/task synchronization creates a newer SHA that needs a fresh exact-head run.
+
+Remaining work: route import and remaining direct state mutations through the session boundary; consolidate recovery/persistence without breaking v1 imports; migrate non-root editing and render/playback to the shared Composition contract. No browser smoke tests or UI acceptance are claimed.
