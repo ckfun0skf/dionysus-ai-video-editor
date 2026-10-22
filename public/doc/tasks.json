@@ -588,8 +588,8 @@
           "id": "DYS-014",
           "title": "Unified Composition model and structure-preserving snapshots",
           "status": "in_progress",
-          "progress": 82,
-          "summary": "Converge root/nested editing on one authoritative Composition/session. PR #111 has paired edit/history/import boundaries, single-read startup recovery, canonical-only v2 autosave and read-only schema-1.0 fallback.",
+          "progress": 83,
+          "summary": "Converge root/nested editing on one authoritative Composition/session. PR #111 has paired edit/history/import boundaries, canonical-only v2 autosave with read-only schema-1.0 fallback, and a canonical nested/root render adapter; editable UI and some non-root command paths remain compatibility-first.",
           "doc": "tasks/unified-composition-model.md",
           "detail": "tasks/unified-composition-model.html",
           "report": "reports/unified-composition-model-report.md",
@@ -679,7 +679,8 @@
             "src/editorSessionPersistence.ts exports tested shouldPreferCompositionRecovery() for matching identity, comparable revisions, invalid timestamps and absent recovery documents.",
             "createInitialEditorSession() reads both recovery keys once and reuses the parsed pair for project selection and canonical-root acceptance.",
             "Recovery tests prove a matching v2 canonical envelope wins over its v1 mirror independent of timestamps; identity mismatch still falls back safely.",
-            "persistEditorSession() writes only the v2 canonical envelope; v1 localStorage data is read-only fallback. Tests cover canonical-only writes and failure preserving legacy recovery."
+            "persistEditorSession() writes only the v2 canonical envelope; v1 localStorage data is read-only fallback. Tests cover canonical-only writes and failure preserving legacy recovery.",
+            "Canonical render adapter: src/compositionRenderer.ts and src/compositionRenderer.test.ts; root/nested preview, playback and export use canonical Composition inputs, with linked-audio child and mute regression coverage. Prior exact-head CI 39871510663 passed at bad78e4aa45f3790f08bf30b1000deebc98fc702 (289 tests, TypeScript/build, audit 0); newer root-render head awaits exact-head CI."
           ],
           "notes": "Status remains in_progress. Paired edit/history/import boundaries; one-read startup recovery; canonical-only v2 autosave with read-only v1 fallback; App integration tests read v2 first. Exact-head CI 39866541271 passed at c1009ae456df33815388c5cd62917c7606d396ac: 26 files / 286 tests, type/build pass, audit 0. In-memory Project compatibility projection and non-root/render paths remain. No browser smoke tests; Issue #100 remains open.",
           "description": "Establish canonical Composition for root/nested timelines, shared commands and independent structure-preserving Project-to-Clip snapshots.",
@@ -697,8 +698,8 @@
           "testStrategy": [
             "Migration matrix, parity, snapshot independence and round-trip."
           ],
-          "nextAction": "Re-verify exact-head CI after this documentation sync. Then assess read-only legacy-key cleanup and migrate non-root editing and render/playback to canonical Composition. Preserve schema-1.0 file import, stable IDs, source ranges, linked audio, pins and nested snapshots. No browser smoke tests or merge without owner approval.",
-          "handoffNotes": "PR #111 open/unmerged. Paired edit/history/import boundaries; one-read startup recovery; canonical-only v2 autosave with read-only v1 fallback. Previous exact-head CI 39866541271 passed at c1009ae456df33815388c5cd62917c7606d396ac (26 files / 286 tests). Re-verify after this docs sync. Next assess legacy-key cleanup and migrate non-root/render paths. No browser smoke tests; Issue #100 open."
+          "nextAction": "Verify exact-head CI after the current root-render adapter and handoff/task sync. Then audit remaining direct non-root mutation paths and plan a tested migration of nested editable UI off legacy layer projections.",
+          "handoffNotes": "Current branch feat/e1-editor-session-history, PR #111 open/unmerged. Canonical root/nested render adapters now feed preview, playback and export while editable timeline UI remains compatibility-projected. Read docs/AGENT_HANDOFF.md and Issue #110 for latest code/CI checkpoints. Re-query exact current head and CI before continuing; no browser smoke tests, no merge without owner approval, and Issue #100 stays open for owner UI acceptance."
         }
       ],
       "executionStage": "E2",
