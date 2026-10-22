@@ -464,6 +464,20 @@ export default function App() {
         duplicateShot(selectedId);
         return;
       }
+      if (!event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey && (event.key === "[" || event.key === "]")) {
+        event.preventDefault();
+        const currentIndex = project.shots.findIndex(shot => shot.id === selectedId);
+        const nextIndex = Math.max(0, Math.min(project.shots.length - 1, currentIndex + (event.key === "]" ? 1 : -1)));
+        const nextShot = project.shots[nextIndex];
+        if (nextShot) {
+          setSelectedId(nextShot.id);
+          setSelectedSlotId(nextShot.slots[0]?.id ?? "");
+          const nextStart = project.shots.slice(0, nextIndex).reduce((sum, shot) => sum + shot.duration, 0);
+          setEditorTime(nextStart);
+          setNotice("Selected shot " + (nextIndex + 1) + " of " + project.shots.length + ".");
+        }
+        return;
+      }
       if (key !== "z") return;
       event.preventDefault();
       if (event.shiftKey) redoProjectChange();
