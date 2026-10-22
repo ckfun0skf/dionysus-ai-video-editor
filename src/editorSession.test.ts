@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { migrateLegacyProjectToComposition, projectRootCompositionToLegacy } from "./compositionMigration";
 import { sampleProject } from "./sampleProject";
-import { commitEditorSessionChange, reconcileEditorSessionComposition } from "./editorSession";
+import { commitEditorSessionChange, reconcileEditorSessionComposition, transitionEditorSession } from "./editorSession";
+import { createEditorSessionHistory } from "./editorSessionHistory";
 import type { EditorSessionSnapshot } from "./editorSessionHistory";
 
 function makeSession(): EditorSessionSnapshot {
@@ -74,5 +75,31 @@ describe("Editor session transition boundary", () => {
     expect(next.composition.height).toBe(1080);
     expect(current.project.width).not.toBe(1920);
     expect(current.composition.width).not.toBe(1920);
+  });
+});
+
+
+describe("Editor session transaction", () => {
+  it("returns the next paired session and matching pre-edit history without mutating the current session", () => {
+    const current = makeSession();
+    const history = createEditorSessionHistory();
+
+    const transition = transitionEditorSession(
+      current,
+      history,
+      project => ({ ...project, name: "Atomic transaction" }),
+      "rename",
+      undefined,
+      Date.parse("2026-10-22T12:34:56.000Z"),
+    );
+
+    expect(transition.session.project.name).toBe("Atomic transaction");
+    expect(transition.session.composition.name).toBe("Atomic transaction");
+    expect(transition.session.project.updatedAt).toBe("2026-10-22T12:34:56.000Z");
+    expect(transition.history.undo).toHaveLength(1);
+    expect(transition.history.undo[0]).toEqual(current);
+    expect(transition.history.redo).toEqual([]);
+    expect(current.project.name).not.toBe("Atomic transaction");
+    expect(current.composition.name).not.toBe("Atomic transaction");
   });
 });
