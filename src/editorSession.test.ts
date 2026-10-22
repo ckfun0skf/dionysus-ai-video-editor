@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { migrateLegacyProjectToComposition, projectRootCompositionToLegacy } from "./compositionMigration";
 import { sampleProject } from "./sampleProject";
-import { commitEditorSessionChange, createImportedEditorSession, reconcileEditorSessionComposition, restoreEditorSessionHistory, transitionEditorSession } from "./editorSession";
+import { commitEditorSessionChange, createImportedEditorSession, createImportedEditorSessionTransition, reconcileEditorSessionComposition, restoreEditorSessionHistory, transitionEditorSession } from "./editorSession";
 import { createEditorSessionHistory } from "./editorSessionHistory";
 import type { EditorSessionSnapshot } from "./editorSessionHistory";
 
@@ -169,5 +169,27 @@ describe("Imported editor session", () => {
     expect(imported.composition).toEqual(migrateLegacyProjectToComposition(legacy).rootComposition);
     expect(imported.project).toEqual(projectRootCompositionToLegacy(legacy, imported.composition));
     expect(legacy).toEqual(sampleProject);
+  });
+
+  it("replaces imported session and resets history together", () => {
+    const previous = makeSession();
+    const edited = transitionEditorSession(
+      previous,
+      createEditorSessionHistory(),
+      project => ({ ...project, name: "Previous project edit" }),
+      "rename",
+      undefined,
+      Date.parse("2026-10-22T12:34:56.000Z"),
+    );
+    expect(edited.history.undo).toHaveLength(1);
+
+    const imported = createImportedEditorSessionTransition(structuredClone(sampleProject));
+
+    expect(imported.session.project.name).toBe(sampleProject.name);
+    expect(imported.session.composition).toEqual(migrateLegacyProjectToComposition(sampleProject).rootComposition);
+    expect(imported.history).toEqual(createEditorSessionHistory());
+    expect(imported.history.undo).toEqual([]);
+    expect(imported.history.redo).toEqual([]);
+    expect(previous.project.name).not.toBe("Previous project edit");
   });
 });
