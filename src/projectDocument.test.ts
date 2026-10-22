@@ -249,7 +249,9 @@ describe("versioned project document boundary", () => {
     const owner = root.placements.find(placement => placement.id === video.id)!;
     const child = owner.linkedAudioChildren!.find(item => item.id === linked.id)!;
     owner.linkedAudioChildren = [];
-    root.tracks.push({ id: audioTrack.id, name: audioTrack.name, kind: "audio", order: root.tracks.length, legacyData: { ...audioTrack } });
+    if (!root.tracks.some(track => track.id === audioTrack.id)) {
+      root.tracks.push({ id: audioTrack.id, name: audioTrack.name, kind: "audio", order: root.tracks.length, legacyData: { ...audioTrack } });
+    }
     root.placements.push({
       id: child.id, name: child.name, trackId: audioTrack.id, start: video.start, duration: video.duration, order: 0,
       source: child.source, linkedToPlacementId: video.id, legacyData: { ...child.legacyData, id: child.id, kind: "audio", trackId: audioTrack.id, linkedVideoClipId: video.id },
