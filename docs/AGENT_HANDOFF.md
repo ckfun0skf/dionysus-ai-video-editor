@@ -1,12 +1,12 @@
-## Latest checkpoint — 2026-10-22 (E1 atomic Editor history)
+## Latest checkpoint — 2026-10-22 (E1 atomic Editor session)
 
-- Branch: `feat/e1-editor-session-history`; implementation PR: [#111](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/111) (Draft, unmerged).
-- Added `src/editorSessionHistory.ts` and deterministic unit tests. The Editor now records the legacy `DionysusProject` projection and canonical root `CompositionDocument` in one history entry; grouped rapid edits still coalesce, a new edit clears redo, history remains bounded, and project import resets history.
-- Updated the App's change/undo/redo/import paths to use that paired history rather than separate Project and Composition undo/redo stacks.
-- This is an E1 slice, **not** completion of the rebuild: current Project and Composition live states, dual persistence paths, and legacy-projection/render boundaries still need consolidation.
-- Validation checkpoint: exact-head CI run [39859261009](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39859261009) passed on the pre-documentation head `c85f45d55ec4d4df474239fb63dd26208324964b`: 24 test files / 274 tests passed, TypeScript and production build passed, and npm audit found 0 vulnerabilities. Documentation synchronization changes this branch head, so confirm CI again on the final current SHA.
-- No local checkout was available for local npm tests/build; no browser smoke tests or manual UI acceptance claimed.
-- Next action: verify final-head CI, then continue E1 command/state ownership. Do not merge without explicit owner approval; Issue #100 remains open.
+- Branch: `feat/e1-editor-session-history`; [PR #111](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/111) is Ready for review and remains unmerged.
+- `src/editorSessionHistory.ts` / `src/editorSessionHistory.test.ts` add one paired history entry for the schema-1.0 `DionysusProject` compatibility projection and canonical root `CompositionDocument`. Rapid same-group edits still coalesce (800 ms), new edits invalidate Redo, history is bounded, and import resets history.
+- A second E1 slice in `src/App.tsx` replaced separate React state initializers for Project and root Composition with one `EditorSessionSnapshot` state. Normal edit, Undo, Redo and import paths now commit the `{ project, composition }` pair in one React state update; existing UI consumers read derived members.
+- This does **not** yet make all state canonical-only: project/root refs, two browser persistence keys, non-root domain edits, legacy projections, and render/playback paths remain transitional.
+- Exact-head CI passed on the second code head `3ce28e4dca4d26deebcc483851e70f64b8e561c8`, [run 39859937316](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39859937316): 24 test files / 274 tests, TypeScript/build passed, npm audit 0 vulnerabilities. The task/handoff refresh creates a new branch head; verify CI on that final synchronized SHA before relying on this checkpoint.
+- No local checkout was available for local npm tests/build. No browser smoke tests or manual UI acceptance claimed. Do not merge without explicit owner approval; Issue #100 remains open.
+- Next: verify exact-head CI after docs sync, then continue E1 by bringing commands/ref ownership inside the session boundary, followed by the single persistence/recovery path. Keep Issues and handoff current after each meaningful increment.
 
 ---
 
