@@ -250,3 +250,8 @@ This narrows the project-replacement transaction boundary; it does not solve dua
 ## E1/E2 follow-up — recovery arbitration is a tested persistence helper (2026-10-22)
 
 `shouldPreferCompositionRecovery()` now lives beside `persistEditorSession()` in `src/editorSessionPersistence.ts`, not inside `App.tsx`. Tests pin the current safety policy: matching project identity plus valid comparable revisions are required to prefer the canonical envelope over a valid legacy mirror; mismatched identity or unknown timestamps are not sufficient evidence. This improves determinism but does not claim a single-key recovery design; dual-key storage remains transitional.
+
+
+## E2 follow-up — startup recovery reads one paired snapshot (2026-10-22)
+
+`createInitialEditorSession()` now reads the legacy and canonical localStorage keys once and reuses those parsed results for both Project recovery selection and canonical-root acceptance. This prevents the startup code from selecting a Project using one pair of storage reads and attempting to restore its Composition from a later pair. Canonical-root restoration still requires matching identity/revision policy and exact compatibility projection equality; otherwise it falls back to deterministic migration. Dual-key persistence remains transitional.
