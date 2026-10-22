@@ -11,7 +11,7 @@ import {
 import type { CompositionDocument } from "./compositionModel";
 import { migrateLegacyProjectToComposition, projectRootCompositionToLegacy } from "./compositionMigration";
 import type { EditorSessionSnapshot } from "./editorSessionHistory";
-import { recordEditorSessionChange, redoEditorSessionChange, undoEditorSessionChange, type EditorSessionHistory } from "./editorSessionHistory";
+import { createEditorSessionHistory, recordEditorSessionChange, redoEditorSessionChange, undoEditorSessionChange, type EditorSessionHistory } from "./editorSessionHistory";
 import type { DionysusProject } from "./types";
 
 /**
@@ -176,5 +176,20 @@ export function createImportedEditorSession(
   return {
     project: projectRootCompositionToLegacy(project, composition),
     composition,
+  };
+}
+
+
+/**
+ * Build a project-import replacement as one boundary result. A newly imported project
+ * must never retain Undo/Redo entries belonging to the previous project.
+ */
+export function createImportedEditorSessionTransition(
+  project: DionysusProject,
+  candidateRoot?: CompositionDocument,
+): { session: EditorSessionSnapshot; history: EditorSessionHistory } {
+  return {
+    session: createImportedEditorSession(project, candidateRoot),
+    history: createEditorSessionHistory(),
   };
 }
