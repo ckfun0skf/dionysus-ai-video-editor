@@ -211,3 +211,11 @@ Current code writes only the v2 canonical Composition envelope; the v1 schema-1.
 ### Verified checkpoint — canonical-only persistence
 
 At head `c1009ae456df33815388c5cd62917c7606d396ac`, [exact-head CI run 39866541271](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39866541271) passed 26 test files / 286 tests, TypeScript/build and audit 0. App tests now read v2 persistence first. Current storage contract: write v2 only, read v1 only as fallback. Next: inspect the read-only legacy key cleanup policy and migrate non-root editing/render/playback; do not claim canonical-only in-memory state. Keep PR #111 unmerged pending owner approval and Issue #100 open; no browser smoke tests.
+
+### Latest active continuation — canonical root/nested rendering (2026-10-22)
+
+Live state takes precedence over this note: inspect PR #111 and exact-head CI before editing. The current branch `feat/e1-editor-session-history` has paired Editor session/history/import boundaries and canonical-only v2 autosave (v1 remains a read-only migration fallback). `collectVersionRenderLayers()` resolves nested Shot/Slot and Clip Version placements from canonical Composition, including linked-audio child source/ranges/mute/volume/fades and nested track mute. Master preview, audio playback preparation, code preview and export use a memoized root render projection sourced from the canonical root Composition. The renderer still uses the legacy `CompositionLayer[]` interface; editable Timeline UI and some non-root command paths remain compatibility-first.
+
+Prior exact-head CI passed at `bad78e4aa45f3790f08bf30b1000deebc98fc702`, run 39871510663 (26 test files / 289 tests, TypeScript/build passed, audit 0). New root-render adapter and subsequent docs updates require fresh exact-head CI. Read `docs/AGENT_HANDOFF.md`, `docs/PROJECT_ROADMAP.md`, `public/doc/tasks.json`, and Issue #110 for current evidence.
+
+Next: verify exact-head CI on the live head; then audit remaining direct non-root mutation paths and design a tested migration of nested editable UI off compatibility layer projections. Keep DYS-014 in progress, Issue #100 open until owner acceptance, do not run browser smoke tests, and do not merge without explicit owner approval.
