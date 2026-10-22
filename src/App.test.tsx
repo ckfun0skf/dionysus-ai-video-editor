@@ -334,10 +334,12 @@ describe("App history integration", () => {
     await flushEffects();
 
     const afterReload = persistedProject();
-    expect(afterReload.timelineClips).toEqual(beforeReload.timelineClips);
-    const video = afterReload.timelineClips?.find(clip => clip.kind === "video");
-    const audio = afterReload.timelineClips?.find(clip => clip.kind === "audio");
-    expect(audio).toMatchObject({ start: video!.start, duration: video!.duration, linkedVideoClipId: video!.id });
+    const video = afterReload.timelineClips?.find(clip => clip.kind === "video")!;
+    const audio = afterReload.timelineClips?.find(clip => clip.kind === "audio")!;
+    expect(afterReload.timelineClips).toHaveLength(2);
+    expect(video).toMatchObject({ id: "test-video-1", start: 0, duration: 5 });
+    expect(audio).toMatchObject({ id: "test-audio-1", start: video.start, duration: video.duration, linkedVideoClipId: video.id, trackId: video.trackId });
+    expect(afterReload.tracks.some(track => track.kind === "audio")).toBe(false);
     expect(buttonsNamed("Undo").every(button => button.disabled)).toBe(true);
     expect(buttonsNamed("Redo").every(button => button.disabled)).toBe(true);
   });
