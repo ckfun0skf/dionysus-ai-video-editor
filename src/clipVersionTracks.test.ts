@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { sampleProject } from "./sampleProject";
-import { addClipVersionLayer, addClipVersionTrack, deleteClipVersionLayer, duplicateClipVersionComposition, moveClipVersionLayer, normalizeClipVersionTracks, updateClipVersionLayer } from "./clipVersionTracks";
+import { addClipVersionLayer, addClipVersionTrack, deleteClipVersionLayer, duplicateClipVersionComposition, moveClipVersionLayer, normalizeClipVersionTracks, updateClipVersionLayer, updateClipVersionTrack } from "./clipVersionTracks";
 import { validateProject } from "./projectValidation";
 
 describe("normalizeClipVersionTracks", () => {
@@ -54,6 +54,26 @@ describe("nested Clip Version track operations", () => {
     const withSecondLayer = addClipVersionLayer(withLayers, { id: "code-1", name: "Code", kind: "procedural", start: 1, duration: 2 }, "video-2");
     expect(withSecondLayer.tracks?.map(track => track.id)).toContain("video-2");
     expect(withSecondLayer.layers.filter(layer => layer.trackId === "video-2").map(layer => layer.id)).toEqual(["image-1", "code-1"]);
+  });
+
+  it("updates nested track mute in canonical Composition and compatibility projection", () => {
+    const version = structuredClone(sampleProject.shots[0].slots[0].versions[0]);
+    const withAudio = addClipVersionLayer(version, {
+      id: "nested-audio-for-track-mute",
+      name: "Nested audio",
+      kind: "audio",
+      start: 0,
+      duration: 2,
+    });
+    const audioTrack = withAudio.tracks?.find(track => track.kind === "audio");
+    expect(audioTrack).toBeDefined();
+    const before = structuredClone(withAudio);
+    const muted = updateClipVersionTrack(withAudio, audioTrack!.id, { muted: true });
+
+    expect(muted.composition?.tracks.find(track => track.id === audioTrack!.id)?.muted).toBe(true);
+    expect(muted.tracks?.find(track => track.id === audioTrack!.id)?.muted).toBe(true);
+    expect(before.composition?.tracks.find(track => track.id === audioTrack!.id)?.muted).toBeUndefined();
+    expect(() => updateClipVersionTrack(withAudio, "missing-track", { muted: true })).toThrow(/track/i);
   });
 
   it("inserts layers through Composition commands without mutating the original version", () => {
