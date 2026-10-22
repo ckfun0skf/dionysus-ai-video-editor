@@ -589,7 +589,7 @@
           "title": "Unified Composition model and structure-preserving snapshots",
           "status": "in_progress",
           "progress": 82,
-          "summary": "Converge root/nested editing on one authoritative Composition/session. PR #111 has paired edit/history/import boundaries, tested recovery arbitration, one-read startup recovery, and canonical-first autosave with v1 compatibility mirror.",
+          "summary": "Converge root/nested editing on one authoritative Composition/session. PR #111 has paired edit/history/import boundaries, one-read startup recovery, identity-based canonical precedence, and canonical-first autosave with v1 compatibility mirror.",
           "doc": "tasks/unified-composition-model.md",
           "detail": "tasks/unified-composition-model.html",
           "report": "reports/unified-composition-model-report.md",
@@ -677,9 +677,10 @@
             "PR #111 exact code-head CI 39863556870 on 4e372e079d8b3f4068493b472eb34956ece0eb52: 26 test files / 283 tests, TypeScript/build passed, npm audit 0 vulnerabilities. Final docs head requires exact-head verification",
             "createImportedEditorSessionTransition() returns imported paired session and fresh empty history together; regression test protects against cross-project Undo/Redo.",
             "src/editorSessionPersistence.ts exports tested shouldPreferCompositionRecovery() for matching identity, comparable revisions, invalid timestamps and absent recovery documents.",
-            "createInitialEditorSession() reads both recovery keys once and reuses the parsed pair for project selection and canonical-root acceptance."
+            "createInitialEditorSession() reads both recovery keys once and reuses the parsed pair for project selection and canonical-root acceptance.",
+            "Recovery tests prove a matching v2 canonical envelope wins over its v1 mirror independent of timestamps; identity mismatch still falls back safely."
           ],
-          "notes": "Status remains in_progress. Paired edit/Undo/Redo/import boundaries and tested recovery arbitration are in place; startup uses one paired read of the v1/v2 keys. Autosave still writes canonical v2 then v1 compatibility mirror. Non-root editing and renderer/playback retain legacy projections. Exact-head CI required after docs sync. No browser smoke tests; Issue #100 remains open.",
+          "notes": "Status remains in_progress. Paired edit/Undo/Redo/import boundaries; startup reads both keys once; v2 is authoritative for matching project identity, while v1 remains mismatch/absence fallback. Autosave still mirrors both keys. Non-root editing and renderer/playback retain legacy projections. Exact-head CI required after docs sync. No browser smoke tests; Issue #100 remains open.",
           "description": "Establish canonical Composition for root/nested timelines, shared commands and independent structure-preserving Project-to-Clip snapshots.",
           "executionStage": "E2 and E4",
           "priority": "P0",
@@ -695,8 +696,8 @@
           "testStrategy": [
             "Migration matrix, parity, snapshot independence and round-trip."
           ],
-          "nextAction": "Verify exact-head CI after docs sync. Design a single-authority persistence/recovery migration with schema-1.0 import compatibility; then continue non-root editor and render/playback migration. Preserve stable IDs, source ranges, linked audio, pinned versions and nested snapshots. No browser smoke tests or merge without owner approval.",
-          "handoffNotes": "PR #111 open/unmerged. Paired edit/history/import boundaries; tested recovery precedence; startup reads both storage keys once. Autosave remains dual-key canonical-first + v1 mirror. Verify exact-head CI after docs sync. Next design single-authority recovery without dropping schema-1.0 import. Legacy non-root/render paths remain. No browser smoke tests; Issue #100 stays open."
+          "nextAction": "Verify exact-head CI after docs sync. Design removal of routine v1 mirror writes with tested legacy fallback/recovery and failure behavior. Then migrate non-root editing and render/playback to the canonical Composition contract. No browser smoke tests or merge without owner approval.",
+          "handoffNotes": "PR #111 open/unmerged. Paired edit/history/import boundaries; startup reads both keys once; matching-identity v2 is canonical regardless of timestamps; v1 remains compatibility fallback. Autosave still writes both keys. Verify exact-head CI. Next design safe retirement of routine v1 writes; legacy non-root/render paths remain. No browser smoke tests; Issue #100 open."
         }
       ],
       "executionStage": "E2",
