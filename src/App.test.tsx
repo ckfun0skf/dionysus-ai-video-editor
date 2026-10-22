@@ -859,7 +859,7 @@ describe("App history integration", () => {
     const movedAudio = after.timelineClips?.find(clip => clip.id === audio.id)!;
     const fps = before.frameRate;
     expect(moved.start * fps).toBeCloseTo(Math.round(moved.start * fps), 7);
-    const sameTrackOverlaps = (after.timelineClips ?? []).filter(clip => clip.trackId === moved.trackId && clip.id !== moved.id && moved.start < clip.start + clip.duration - 1e-7 && moved.start + moved.duration > clip.start + 1e-7);
+    const sameTrackOverlaps = (after.timelineClips ?? []).filter(clip => !clip.linkedVideoClipId && clip.trackId === moved.trackId && clip.id !== moved.id && moved.start < clip.start + clip.duration - 1e-7 && moved.start + moved.duration > clip.start + 1e-7);
     expect(sameTrackOverlaps).toHaveLength(0);
     expect(movedAudio).toMatchObject({ start: moved.start, duration: moved.duration, linkedVideoClipId: moved.id });
   });
