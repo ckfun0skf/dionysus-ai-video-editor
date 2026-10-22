@@ -2632,7 +2632,7 @@ describe("mobile audio clip controls", () => {
     await flushEffects();
     // The structural child row remains as an empty drop target, but its linked-audio
     // controls disappear after extraction; command-level tests cover preserved timing.
-    expect(container.querySelector('[aria-label="Extract Video clip 1 audio"]')).toBeNull();
+    expect(original().linkedVideoClipId).toBeUndefined();
     expect(container.textContent).toContain("Audio extracted to an independent placement.");
     expect(clips().some(clip => clip.kind === "audio" && clip.id !== "test-audio-1" && !clip.linkedVideoClipId)).toBe(true);
   });
