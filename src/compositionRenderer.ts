@@ -104,6 +104,48 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
+// Concurrent preview ticks can reach the same uncached video before its metadata has loaded.
+// Share one in-flight load per preview video map/asset so racing renders do not create competing
+// media elements and overwrite the element that later frames are trying to seek and draw.
+const pendingVideoLoads = new WeakMap<Map<string, HTMLVideoElement>, Map<string, Promise<HTMLVideoElement>>>();
+
+async function getOrLoadPreviewVideo(
+  asset: Asset,
+  videos: Map<string, HTMLVideoElement>,
+  mediaReleases: Map<string, () => void>
+): Promise<HTMLVideoElement> {
+  const existing = videos.get(asset.id);
+  if (existing) return existing;
+
+  let pending = pendingVideoLoads.get(videos);
+  if (!pending) {
+    pending = new Map<string, Promise<HTMLVideoElement>>();
+    pendingVideoLoads.set(videos, pending);
+  }
+  const inFlight = pending.get(asset.id);
+  if (inFlight) return inFlight;
+
+  const loading = (async () => {
+    const video = document.createElement("video");
+    const resolved = await resolveMediaSource(asset.path!);
+    if (resolved.release) mediaReleases.set(asset.id, resolved.release);
+    if (resolved.remote) video.crossOrigin = "anonymous";
+    video.src = resolved.src;
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = "auto";
+    await loadMediaMetadata(video, "Unable to load video layer source");
+    videos.set(asset.id, video);
+    return video;
+  })();
+  pending.set(asset.id, loading);
+  try {
+    return await loading;
+  } finally {
+    if (pending.get(asset.id) === loading) pending.delete(asset.id);
+  }
+}
+
 function loadMediaMetadata(media: HTMLMediaElement, message: string): Promise<void> {
   if (media.readyState >= 1) return Promise.resolve();
   return new Promise((resolve, reject) => {
@@ -267,13 +309,7 @@ export async function renderCompositionFrame(canvas: HTMLCanvasElement, project:
       images.set(asset.id, await loadImage(resolved.src));
     }
     if (asset.kind === "video" && !videos.has(asset.id)) {
-      const video = document.createElement("video");
-      const resolved = await resolveMediaSource(asset.path);
-      if (resolved.release) mediaReleases.set(asset.id, resolved.release);
-      if (resolved.remote) video.crossOrigin = "anonymous";
-      video.src = resolved.src; video.muted = true; video.playsInline = true; video.preload = "auto";
-      await loadMediaMetadata(video, "Unable to load video layer source");
-      videos.set(asset.id, video);
+      await getOrLoadPreviewVideo(asset, videos, mediaReleases);
     }
     const video = asset.kind === "video" ? videos.get(asset.id) : undefined;
     if (video && video.readyState >= 1 && seconds >= layer.start && seconds < layer.start + layer.duration) {
