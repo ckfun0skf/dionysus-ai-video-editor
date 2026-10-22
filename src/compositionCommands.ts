@@ -639,17 +639,43 @@ export function removeCompositionTrack(
   const ordinary = next.placements.filter(placement =>
     placement.trackId === trackId && placement.legacyData.entityType !== "master-shot"
   );
+  // Linked audio is displayed as a child row under its video, so the Audio lane can
+  // appear empty even though it owns the linked placement. Removing that lane must
+  // not silently remove the child's media; relocate linked children to a surviving
+  // Audio lane (or create a replacement lane if this was the only one).
+  let replacementAudioTrack = removingTrack.kind === "audio"
+    ? next.tracks.find(track => track.kind === "audio" && track.id !== trackId)
+    : undefined;
   for (const placement of ordinary) {
     const current = next.placements.find(item => item.id === placement.id);
     if (!current) continue;
-    // Removing a child track must remove its linked child, not accidentally delete the parent
-    // video on a different track. Removing a parent still deletes its complete linked group.
     const parent = current.linkedToPlacementId
       ? next.placements.find(item => item.id === current.linkedToPlacementId)
       : undefined;
-    if (parent && parent.trackId !== trackId) {
-      next = unlinkCompositionPlacement(next, current.id);
+    if (removingTrack.kind === "audio" && parent) {
+      if (!replacementAudioTrack) {
+        const baseId = `audio-replacement-${trackId}`;
+        let replacementId = baseId;
+        let suffix = 2;
+        while (next.tracks.some(track => track.id === replacementId)) {
+          replacementId = `${baseId}-${suffix++}`;
+        }
+        replacementAudioTrack = {
+          id: replacementId,
+          name: "Audio",
+          kind: "audio",
+          order: next.tracks.length,
+        };
+        next = addCompositionTrack(next, replacementAudioTrack);
+      }
+      next = updateCompositionPlacement(next, current.id, {
+        trackId: replacementAudioTrack.id,
+        legacyData: { ...current.legacyData, trackId: replacementAudioTrack.id },
+      });
+      continue;
     }
+    // Removing a video parent still deletes its complete linked group. Unlinked clips
+    // on a removed lane are removed normally.
     if (next.placements.some(item => item.id === placement.id)) next = deleteCompositionPlacement(next, placement.id);
   }
   next.tracks = next.tracks.filter(track => track.id !== trackId).map((track, order) => ({ ...track, order }));
