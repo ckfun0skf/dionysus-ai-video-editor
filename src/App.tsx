@@ -30,7 +30,7 @@ import {
 } from "./projectTimelinePlacement";
 import { createEditorSessionHistory, type EditorSessionHistory, type EditorSessionSnapshot } from "./editorSessionHistory";
 import { createImportedEditorSessionTransition, restoreEditorSessionHistory, transitionEditorSession } from "./editorSession";
-import { COMPOSITION_PROJECT_STORAGE_KEY, LEGACY_PROJECT_STORAGE_KEY, persistEditorSession, shouldPreferCompositionRecovery } from "./editorSessionPersistence";
+import { chooseEditorSessionRecoverySource, COMPOSITION_PROJECT_STORAGE_KEY, LEGACY_PROJECT_STORAGE_KEY, persistEditorSession } from "./editorSessionPersistence";
 import { collectCompositionLayers, isPlayableAudioLayer, renderCompositionFrame, exportCompositionWebM, downloadExport } from "./compositionRenderer";
 import { createClipVersionSnapshot } from "./clipVersionSnapshot";
 import AIGenerationPanel from "./AIGenerationPanel";
@@ -197,15 +197,19 @@ function createInitialEditorSession(): EditorSessionSnapshot {
     compositionRead = undefined;
   }
 
-  const preferComposition = shouldPreferCompositionRecovery(legacyRead, compositionRead);
-  const restored = preferComposition
-    ? compositionRead?.project
-    : legacyRead?.project ?? compositionRead?.project;
+  const validLegacyRead = legacyRead && validateProject(legacyRead.project) ? legacyRead : undefined;
+  const validCompositionRead = compositionRead && validateProject(compositionRead.project) ? compositionRead : undefined;
+  const recoverySource = chooseEditorSessionRecoverySource(validLegacyRead, validCompositionRead);
+  const restored = recoverySource === "composition"
+    ? validCompositionRead?.project
+    : recoverySource === "legacy"
+      ? validLegacyRead?.project
+      : undefined;
 
   let project: DionysusProject;
-  if (!restored || !validateProject(restored)) {
+  if (!restored) {
     project = createEmptyProject();
-  } else if (preferComposition) {
+  } else if (recoverySource === "composition") {
     project = clearDemoSeedData(restored);
   } else {
     const normalized = normalizeLegacyTimelineTracks(clearDemoSeedData(restored));
@@ -213,11 +217,11 @@ function createInitialEditorSession(): EditorSessionSnapshot {
     project = projectRootCompositionToLegacy(normalized, migratedRoot);
   }
 
-  const candidateRoot = compositionRead?.compositionModel?.rootComposition;
+  const candidateRoot = recoverySource === "composition"
+    ? validCompositionRead?.compositionModel?.rootComposition
+    : undefined;
   if (
     candidateRoot &&
-    compositionRead?.project.id === project.id &&
-    shouldPreferCompositionRecovery(legacyRead, compositionRead) &&
     JSON.stringify(projectRootCompositionToLegacy(project, candidateRoot)) === JSON.stringify(project)
   ) {
     return { project, composition: structuredClone(candidateRoot) };
