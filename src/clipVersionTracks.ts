@@ -107,6 +107,20 @@ export function updateClipVersionTrack(
   return versionWithComposition(normalized, updated);
 }
 
+/** Update nested Version duration in the canonical Composition and its compatibility projection. */
+export function updateClipVersionDuration(version: ClipVersion, duration: number): ClipVersion {
+  if (!Number.isFinite(duration) || duration < 0.1) {
+    throw new Error("Clip Version duration must be finite and at least 0.1 seconds.");
+  }
+  const normalized = normalizeClipVersionTracks(version);
+  const document = compositionDocumentFromClipVersion(normalized);
+  const updatedComposition = { ...document, duration };
+  return {
+    ...versionWithComposition({ ...normalized, duration }, updatedComposition),
+    duration,
+  };
+}
+
 /** Add a source placement to a compatible track, creating a deterministic default if needed. */
 export function addClipVersionLayer(
   version: ClipVersion,
