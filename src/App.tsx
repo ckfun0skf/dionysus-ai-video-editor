@@ -28,7 +28,7 @@ import {
   type ProjectTimelineInsertionPlan,
   type ProjectTimelineInsertResolution,
 } from "./projectTimelinePlacement";
-import { createEditorSessionHistory, recordEditorSessionChange, redoEditorSessionChange, undoEditorSessionChange, type EditorSessionHistory } from "./editorSessionHistory";
+import { createEditorSessionHistory, recordEditorSessionChange, redoEditorSessionChange, undoEditorSessionChange, type EditorSessionHistory, type EditorSessionSnapshot } from "./editorSessionHistory";
 import { collectCompositionLayers, isPlayableAudioLayer, renderCompositionFrame, exportCompositionWebM, downloadExport } from "./compositionRenderer";
 import { createClipVersionSnapshot } from "./clipVersionSnapshot";
 import AIGenerationPanel from "./AIGenerationPanel";
@@ -187,15 +187,16 @@ function shouldPreferCompositionRecovery(
   return Number.isFinite(legacyRevision) && Number.isFinite(compositionRevision) && compositionRevision >= legacyRevision;
 }
 
-export default function App() {
-  const [project, setProject] = useState<DionysusProject>(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      const compositionRaw = localStorage.getItem(COMPOSITION_STORAGE_KEY);
-      if (!raw && !compositionRaw) return createEmptyProject();
-      // Keep the original storage key/schema-1.0 payload stable for compatibility. Prefer the
-      // versioned Composition envelope only when it matches the legacy project's identity and
-      // updatedAt; a stale envelope must never override a newer legacy recovery snapshot.
+function createInitialEditorSession(): EditorSessionSnapshot {
+  let project: DionysusProject;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const compositionRaw = localStorage.getItem(COMPOSITION_STORAGE_KEY);
+    if (!raw && !compositionRaw) {
+      project = createEmptyProject();
+    } else {
+      // Keep the original schema-1.0 payload for compatibility. Prefer the versioned Composition
+      // envelope only when identity and revision prove it is not stale.
       let legacyRead: ReturnType<typeof readProjectDocument> | undefined;
       let compositionRead: ReturnType<typeof readProjectDocument> | undefined;
       if (raw) {
@@ -204,47 +205,55 @@ export default function App() {
       }
       if (compositionRaw) {
         try { compositionRead = readProjectDocument(JSON.parse(compositionRaw) as unknown); }
-        catch { compositionRead = undefined; } // A corrupt envelope must not hide valid legacy recovery.
+        catch { compositionRead = undefined; }
       }
       const preferComposition = shouldPreferCompositionRecovery(legacyRead, compositionRead);
       const restored = preferComposition
         ? compositionRead?.project
         : legacyRead?.project ?? compositionRead?.project;
-      if (!restored || !validateProject(restored)) return createEmptyProject();
-      // Normalize legacy schema-1 linked-audio rows immediately, not only after the
-      // user's first edit. Otherwise the live project can still claim a linked child belongs
-      // to an Audio Track while the canonical root has already moved it under the Video owner.
-      if (preferComposition) return clearDemoSeedData(restored);
-      const normalized = normalizeLegacyTimelineTracks(clearDemoSeedData(restored));
-      const migratedRoot = migrateLegacyProjectToComposition(normalized).rootComposition;
-      return projectRootCompositionToLegacy(normalized, migratedRoot);
-    } catch { return createEmptyProject(); }
-  });
-  // Root Composition is the live authority for Master Timeline placement/track commands.
-  // DionysusProject remains a deterministic schema-1.0 compatibility projection for the wider UI.
-  const [rootComposition, setRootComposition] = useState<CompositionDocument>(() => {
-    try {
-      const raw = localStorage.getItem(COMPOSITION_STORAGE_KEY);
-      if (raw) {
-        const legacyRaw = localStorage.getItem(STORAGE_KEY);
-        let legacyRead: ReturnType<typeof readProjectDocument> | undefined;
-        if (legacyRaw) {
-          try { legacyRead = readProjectDocument(JSON.parse(legacyRaw) as unknown); }
-          catch { legacyRead = undefined; }
-        }
-        const parsed = JSON.parse(raw) as { compositionModel?: { rootComposition?: CompositionDocument }; project?: DionysusProject };
-        const restored = readProjectDocument(parsed, true);
-        if (restored.project.id === project.id && shouldPreferCompositionRecovery(legacyRead, restored) && parsed.compositionModel?.rootComposition) {
-          const candidateRoot = parsed.compositionModel.rootComposition;
-          // Keep demo-seed cleanup; otherwise trust the validated root snapshot.
-          if (JSON.stringify(projectRootCompositionToLegacy(project, candidateRoot)) === JSON.stringify(project)) {
-            return structuredClone(candidateRoot);
-          }
+      if (!restored || !validateProject(restored)) {
+        project = createEmptyProject();
+      } else if (preferComposition) {
+        project = clearDemoSeedData(restored);
+      } else {
+        const normalized = normalizeLegacyTimelineTracks(clearDemoSeedData(restored));
+        const migratedRoot = migrateLegacyProjectToComposition(normalized).rootComposition;
+        project = projectRootCompositionToLegacy(normalized, migratedRoot);
+      }
+    }
+  } catch {
+    project = createEmptyProject();
+  }
+
+  let composition: CompositionDocument;
+  try {
+    const raw = localStorage.getItem(COMPOSITION_STORAGE_KEY);
+    if (raw) {
+      const legacyRaw = localStorage.getItem(STORAGE_KEY);
+      let legacyRead: ReturnType<typeof readProjectDocument> | undefined;
+      if (legacyRaw) {
+        try { legacyRead = readProjectDocument(JSON.parse(legacyRaw) as unknown); }
+        catch { legacyRead = undefined; }
+      }
+      const parsed = JSON.parse(raw) as { compositionModel?: { rootComposition?: CompositionDocument }; project?: DionysusProject };
+      const restored = readProjectDocument(parsed, true);
+      if (restored.project.id === project.id && shouldPreferCompositionRecovery(legacyRead, restored) && parsed.compositionModel?.rootComposition) {
+        const candidateRoot = parsed.compositionModel.rootComposition;
+        if (JSON.stringify(projectRootCompositionToLegacy(project, candidateRoot)) === JSON.stringify(project)) {
+          composition = structuredClone(candidateRoot);
+          return { project, composition };
         }
       }
-    } catch { /* Fall back to deterministic migration for old or corrupt recovery data. */ }
-    return migrateLegacyProjectToComposition(project).rootComposition;
-  });
+    }
+  } catch { /* Fall back to deterministic migration for old or corrupt recovery data. */ }
+  composition = migrateLegacyProjectToComposition(project).rootComposition;
+  return { project, composition };
+}
+
+export default function App() {
+  const [editorSession, setEditorSession] = useState<EditorSessionSnapshot>(() => createInitialEditorSession());
+  const project = editorSession.project;
+  const rootComposition = editorSession.composition;
   const [editorHistory, setEditorHistory] = useState<EditorSessionHistory>(() => createEditorSessionHistory());
   const undoStack = editorHistory.undo;
   const redoStack = editorHistory.redo;
@@ -764,8 +773,7 @@ export default function App() {
     const projected = projectRootCompositionToLegacy(next, nextRoot);
     projectRef.current = projected;
     rootCompositionRef.current = nextRoot;
-    setProject(projected);
-    setRootComposition(nextRoot);
+    setEditorSession({ project: projected, composition: nextRoot });
     // Migrations may remove a legacy Audio Track that existed only to store owned source-audio
     // children. Keep the workspace selection on a real track rather than leaving stale controls
     // that try to edit a track no longer present in the canonical Composition.
@@ -1092,8 +1100,7 @@ export default function App() {
       ...projectRootCompositionToLegacy(copy(result.snapshot.project), rootCompositionRef.current),
       updatedAt: new Date().toISOString(),
     };
-    setRootComposition(rootCompositionRef.current);
-    setProject(projectRef.current);
+    setEditorSession({ project: projectRef.current, composition: rootCompositionRef.current });
     setNotice("Last project change undone.");
   }
 
@@ -1110,8 +1117,7 @@ export default function App() {
       ...projectRootCompositionToLegacy(copy(result.snapshot.project), rootCompositionRef.current),
       updatedAt: new Date().toISOString(),
     };
-    setRootComposition(rootCompositionRef.current);
-    setProject(projectRef.current);
+    setEditorSession({ project: projectRef.current, composition: rootCompositionRef.current });
     setNotice("Project change restored.");
   }
   function addShot() {
@@ -2758,7 +2764,7 @@ export default function App() {
       const parsed = JSON.parse(await file.text()) as unknown;
       const { project: data, compositionModel } = readProjectDocument(parsed, true);
       if (!validateProject(data)) throw new Error(t("error.invalidProject"));
-      const normalized = compositionModel?.rootComposition ? data : normalizeLegacyTimelineTracks(data); const migratedRoot = migrateLegacyProjectToComposition(normalized).rootComposition; const importedRoot = compositionModel?.rootComposition && JSON.stringify(projectRootCompositionToLegacy(normalized, compositionModel.rootComposition)) === JSON.stringify(normalized) ? structuredClone(compositionModel.rootComposition) : migratedRoot; projectRef.current = normalized; rootCompositionRef.current = importedRoot; setProject(normalized); setRootComposition(importedRoot); editorHistoryRef.current = createEditorSessionHistory(); setEditorHistory(editorHistoryRef.current); setSelectedId(normalized.shots[0]?.id ?? ""); setNotice(t("notice.projectImported"));
+      const normalized = compositionModel?.rootComposition ? data : normalizeLegacyTimelineTracks(data); const migratedRoot = migrateLegacyProjectToComposition(normalized).rootComposition; const importedRoot = compositionModel?.rootComposition && JSON.stringify(projectRootCompositionToLegacy(normalized, compositionModel.rootComposition)) === JSON.stringify(normalized) ? structuredClone(compositionModel.rootComposition) : migratedRoot; projectRef.current = normalized; rootCompositionRef.current = importedRoot; setEditorSession({ project: normalized, composition: importedRoot }); editorHistoryRef.current = createEditorSessionHistory(); setEditorHistory(editorHistoryRef.current); setSelectedId(normalized.shots[0]?.id ?? ""); setNotice(t("notice.projectImported"));
     } catch (e) {
       setNotice(e instanceof Error ? e.message : t("error.importFailed"));
     } finally {
