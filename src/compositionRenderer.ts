@@ -24,15 +24,25 @@ function renderLayersForVersion(version: ClipVersion): CompositionLayer[] {
         linkedVideoClipId: owner.id,
       } as unknown as CompositionLayer & Record<string, unknown>;
 
-      if (child.source.type === "asset" || child.source.type === "clip") layer.assetId = child.source.assetId;
-      else if (child.source.type === "missing") layer.assetId = child.source.originalId;
-      else if (child.source.type === "shot") {
-        layer.shotId = child.source.shotId;
-        if (child.source.slotId !== undefined) layer.slotId = child.source.slotId;
-        else delete layer.slotId;
+      const sourceFields = layer as unknown as Record<string, unknown>;
+      for (const key of ["assetId", "childCompositionId", "clipVersionId", "shotId", "slotId", "shotVersionId", "scriptVersionId"]) {
+        delete sourceFields[key];
+      }
+      if (child.source.type === "asset") {
+        sourceFields.assetId = child.source.assetId;
+      } else if (child.source.type === "clip") {
+        sourceFields.assetId = child.source.assetId;
+        sourceFields.childCompositionId = child.source.assetId;
+        if (child.source.versionId !== undefined) sourceFields.clipVersionId = child.source.versionId;
+      } else if (child.source.type === "missing") {
+        sourceFields.assetId = child.source.originalId;
+      } else if (child.source.type === "shot") {
+        sourceFields.shotId = child.source.shotId;
+        if (child.source.slotId !== undefined) sourceFields.slotId = child.source.slotId;
+        if (child.source.versionId !== undefined) sourceFields.shotVersionId = child.source.versionId;
       } else if (child.source.type === "script") {
-        if (child.source.scriptVersionId !== undefined) layer.scriptVersionId = child.source.scriptVersionId;
-        else delete layer.scriptVersionId;
+        if (child.source.assetId !== undefined) sourceFields.assetId = child.source.assetId;
+        if (child.source.scriptVersionId !== undefined) sourceFields.scriptVersionId = child.source.scriptVersionId;
       }
 
       if (child.sourceIn === undefined) delete layer.sourceIn;
