@@ -130,6 +130,7 @@ function isAsset(value: unknown): boolean {
       (value.modelName !== undefined && !isString(value.modelName)) ||
       (value.modelVersion !== undefined && !isString(value.modelVersion)) ||
       (value.thumbnailPath !== undefined && !isString(value.thumbnailPath)) ||
+      (value.hasAudio !== undefined && typeof value.hasAudio !== "boolean") ||
       (value.html !== undefined && !isString(value.html)) ||
       (value.css !== undefined && !isString(value.css)) ||
       (value.js !== undefined && !isString(value.js)) ||
