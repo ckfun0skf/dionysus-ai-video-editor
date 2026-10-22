@@ -589,7 +589,7 @@
           "title": "Unified Composition model and structure-preserving snapshots",
           "status": "in_progress",
           "progress": 82,
-          "summary": "Converge root and nested editing on one authoritative Composition/session. PR #111 now uses paired Project + root Composition history, one React session state, and one callback/session ref; persistence/recovery and render paths remain transitional.",
+          "summary": "Converge root and nested editing on one authoritative Composition/session. PR #111 now has paired history, one React session state/ref, and an extracted editorSession.ts transition boundary; persistence/recovery and render paths remain transitional.",
           "doc": "tasks/unified-composition-model.md",
           "detail": "tasks/unified-composition-model.html",
           "report": "reports/unified-composition-model-report.md",
@@ -671,9 +671,11 @@
             "PR #111: src/editorSessionHistory.ts and src/editorSessionHistory.test.ts",
             "App uses one EditorSessionSnapshot state for the Project compatibility projection and root Composition; normal edit/Undo/Redo/import update the pair atomically",
             "One editorSessionRef replaces separate projectRef/rootCompositionRef reads; edit, Undo/Redo and import replace full session pair atomically",
-            "PR #111 code-head CI 39860285572 on 6ccacdd359f3c508aeeae93c8e87b5b1c381f66b: 24 test files / 274 tests; TypeScript/build passed; npm audit 0 vulnerabilities. Docs-sync final head must be re-verified"
+            "PR #111 code-head CI 39860285572 on 6ccacdd359f3c508aeeae93c8e87b5b1c381f66b: 24 test files / 274 tests; TypeScript/build passed; npm audit 0 vulnerabilities. Docs-sync final head must be re-verified",
+            "src/editorSession.ts and src/editorSession.test.ts: extracted reconciliation + atomic paired session commit",
+            "PR #111 code-head CI 39860987542 on d32ea856511b0fa13821577d5786048fa6983b37: 25 test files / 277 tests, TypeScript/build passed, npm audit 0 vulnerabilities. Final docs head requires exact-head verification"
           ],
-          "notes": "Status remains in_progress. Project compatibility projection and canonical root Composition now share history, React state, and a single callback/session ref, but schema v1/v2 persistence, some non-root editing paths, and render/playback projections remain transitional. Code SHA 6ccacdd exact CI passed (24 files / 274 tests; TSC/build; audit 0); latest docs head needs separate CI.",
+          "notes": "Status remains in_progress. Project compatibility projection and root Composition share bounded history, one React state/ref, and the main change() path uses commitEditorSessionChange() from src/editorSession.ts. Persistence still uses separate v1/v2 keys; non-root editing and renderer/playback still have compatibility-first projections. Code-head run 39860987542 passed 25 test files / 277 tests, TypeScript/build, audit 0; docs-updated head needs separate CI.",
           "description": "Establish canonical Composition for root/nested timelines, shared commands and independent structure-preserving Project-to-Clip snapshots.",
           "executionStage": "E2 and E4",
           "priority": "P0",
@@ -689,8 +691,8 @@
           "testStrategy": [
             "Migration matrix, parity, snapshot independence and round-trip."
           ],
-          "nextAction": "Verify exact-head CI after the latest handoff/task sync in PR #111. Then bring command dispatch and transaction ownership into the session boundary and implement one authoritative persistence/recovery path. Preserve schema-1.0 migration, stable IDs, source ranges, linked audio, pinned versions and nested snapshots. No browser smoke tests or merge without owner approval.",
-          "handoffNotes": "PR #111 is Ready for review and unmerged. It has paired Project/Composition history, one React EditorSessionSnapshot state, and one editorSessionRef for callback reads/atomic pair replacement. Dual persistence, non-root compatibility-first paths, and legacy render/playback consumers remain. Verify exact-head CI after doc/task sync, then continue command/session ownership and single persistence/recovery path. Re-triage older PRs before reuse/closure; no browser smoke tests; #100 remains open."
+          "nextAction": "Verify exact-head CI after the latest handoff/task sync in PR #111. Then move all relevant command dispatch/transaction ownership behind the session boundary and consolidate persistence/recovery. Preserve schema-1.0 migration, stable IDs, source ranges, linked audio, pinned versions and nested snapshots; no browser smoke tests or merge without owner approval.",
+          "handoffNotes": "PR #111 is Ready for review and unmerged. It has paired Project/Composition history, one React EditorSessionSnapshot state, one editorSessionRef and a pure session transition boundary for the main change() path. Dual v1/v2 persistence, non-root compatibility-first paths, and legacy render/playback consumers remain. Verify exact-head CI after docs sync, then continue command/session ownership and one persistence/recovery path. No browser smoke tests; Issue #100 remains open."
         }
       ],
       "executionStage": "E2",
