@@ -2629,8 +2629,7 @@ describe("mobile audio clip controls", () => {
     const extract = row().querySelector<HTMLButtonElement>('[aria-label="Extract Video clip 1 audio"]');
     expect(extract).toBeTruthy();
     click(extract!);
-    await flushEffects();
-    await flushEffects();
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
     // The structural child row remains as an empty drop target, but its linked-audio
     // controls disappear after extraction; command-level tests cover preserved timing.
     expect(original().linkedVideoClipId).toBeUndefined();
