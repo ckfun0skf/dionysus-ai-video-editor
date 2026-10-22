@@ -2646,7 +2646,7 @@ export default function App() {
   }
   async function exportVideo() {
     setNotice("Rendering composition…");
-    try { const result = await exportCompositionWebM(project); downloadExport(result); setNotice("Video export complete: " + result.filename); }
+    try { const result = await exportCompositionWebM(projectRootCompositionToLegacy(project, rootComposition)); downloadExport(result); setNotice("Video export complete: " + result.filename); }
     catch (error) { setNotice(error instanceof Error ? error.message : "Video export failed."); }
   }
   function exportProject() {
