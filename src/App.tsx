@@ -417,8 +417,8 @@ export default function App() {
   const [isChecklistOpen, setIsChecklistOpen] = useState(false);
   useEffect(() => {
     try {
-      // Save the canonical versioned envelope first, then mirror its schema-1.0 projection.
-      // If the compatibility mirror cannot be written, recovery can still use the new root.
+      // Persist only the canonical versioned envelope. The schema-1.0 key is a read-only
+      // recovery fallback for projects saved by older app versions.
       persistEditorSession(localStorage, { project, composition: rootComposition }, new Date().toISOString());
     }
     catch { setNotice(t("notice.storageFull")); }
