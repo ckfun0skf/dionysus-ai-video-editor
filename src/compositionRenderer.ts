@@ -135,6 +135,9 @@ async function getOrLoadPreviewVideo(
     video.playsInline = true;
     video.preload = "auto";
     await loadMediaMetadata(video, "Unable to load video layer source");
+    // Metadata can arrive before the first frame is decoded. Cache only after the element can
+    // actually be drawn so every concurrent preview render shares a drawable video element.
+    await waitForVideoFrame(video);
     videos.set(asset.id, video);
     return video;
   })();
@@ -144,6 +147,33 @@ async function getOrLoadPreviewVideo(
   } finally {
     if (pending.get(asset.id) === loading) pending.delete(asset.id);
   }
+}
+
+/**
+ * `loadedmetadata` only guarantees duration/dimensions. The preview draws the video to a canvas,
+ * which stays black until the browser has decoded a drawable frame (`readyState >= HAVE_CURRENT_DATA`).
+ * Wait for that first frame once per cached preview element so the first render cannot silently
+ * complete with a black canvas while later renders are being invalidated by the playhead.
+ */
+export function waitForVideoFrame(video: HTMLVideoElement): Promise<void> {
+  if (video.readyState >= 2) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const timeout = window.setTimeout(() => finish(new Error("Unable to decode the first video frame")), 10000);
+    const onLoadedData = () => finish();
+    const onError = () => finish(new Error("Unable to decode the first video frame"));
+    const cleanup = () => {
+      window.clearTimeout(timeout);
+      video.removeEventListener("loadeddata", onLoadedData);
+      video.removeEventListener("error", onError);
+    };
+    function finish(error?: Error) {
+      cleanup();
+      if (error) reject(error);
+      else resolve();
+    }
+    video.addEventListener("loadeddata", onLoadedData, { once: true });
+    video.addEventListener("error", onError, { once: true });
+  });
 }
 
 function loadMediaMetadata(media: HTMLMediaElement, message: string): Promise<void> {
