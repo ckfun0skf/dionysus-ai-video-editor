@@ -64,41 +64,19 @@ describe("Editor session recovery arbitration", () => {
     project: { id, name, updatedAt },
   });
 
-  it("prefers a canonical envelope when identity matches and its valid revision is newer or equal", () => {
-    const legacy = doc("p1", "Project", "2026-10-22T12:00:00.000Z");
-    expect(shouldPreferCompositionRecovery(
-      legacy,
-      doc("p1", "Project", "2026-10-22T12:01:00.000Z"),
-    )).toBe(true);
-    expect(shouldPreferCompositionRecovery(
-      legacy,
-      doc("p1", "Project", "2026-10-22T12:00:00.000Z"),
-    )).toBe(true);
+  it("prefers the canonical envelope for the same project regardless of timestamp ordering", () => {
+    const legacy = doc("p1", "Project", "2026-10-22T12:05:00.000Z");
+    expect(shouldPreferCompositionRecovery(legacy, doc("p1", "Project", "2026-10-22T12:00:00.000Z"))).toBe(true);
+    expect(shouldPreferCompositionRecovery(legacy, doc("p1", "Project", "2026-10-22T12:05:00.000Z"))).toBe(true);
+    expect(shouldPreferCompositionRecovery(legacy, doc("p1", "Project", "not-a-date"))).toBe(true);
   });
 
   it("does not let a canonical envelope from another project override the legacy mirror", () => {
-    expect(shouldPreferCompositionRecovery(
-      doc("p1", "Project", "2026-10-22T12:00:00.000Z"),
-      doc("p2", "Project", "2026-10-22T12:05:00.000Z"),
-    )).toBe(false);
-    expect(shouldPreferCompositionRecovery(
-      doc("p1", "Project", "2026-10-22T12:00:00.000Z"),
-      doc("p1", "Renamed elsewhere", "2026-10-22T12:05:00.000Z"),
-    )).toBe(false);
+    expect(shouldPreferCompositionRecovery(doc("p1", "Project", "2026-10-22T12:00:00.000Z"), doc("p2", "Project", "2026-10-22T12:05:00.000Z"))).toBe(false);
+    expect(shouldPreferCompositionRecovery(doc("p1", "Project", "2026-10-22T12:00:00.000Z"), doc("p1", "Renamed elsewhere", "2026-10-22T12:05:00.000Z"))).toBe(false);
   });
 
-  it("does not use unknown timestamps as evidence to override a valid legacy mirror", () => {
-    expect(shouldPreferCompositionRecovery(
-      doc("p1", "Project", "not-a-date"),
-      doc("p1", "Project", "2026-10-22T12:05:00.000Z"),
-    )).toBe(false);
-    expect(shouldPreferCompositionRecovery(
-      doc("p1", "Project", "2026-10-22T12:00:00.000Z"),
-      doc("p1", "Project", "not-a-date"),
-    )).toBe(false);
-  });
-
-  it("uses a valid canonical envelope when no valid legacy document exists", () => {
+  it("uses a canonical envelope when no legacy document exists and falls back when no canonical document exists", () => {
     expect(shouldPreferCompositionRecovery(undefined, doc("p1", "Project", "not-a-date"))).toBe(true);
     expect(shouldPreferCompositionRecovery(undefined, undefined)).toBe(false);
     expect(shouldPreferCompositionRecovery(doc("p1", "Project", "2026-10-22T12:00:00.000Z"), undefined)).toBe(false);
