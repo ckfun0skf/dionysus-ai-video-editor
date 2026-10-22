@@ -21,8 +21,8 @@ describe("Editor session transition boundary", () => {
     desired.name = "Renamed placement";
     desired.start += 4;
     desired.duration += 2;
-    desired.sourceIn += 1;
-    desired.sourceOut += 1;
+    desired.sourceIn = (existing.sourceIn ?? 0) + 1;
+    desired.sourceOut = (existing.sourceOut ?? existing.duration) + 1;
 
     const next = reconcileEditorSessionComposition(current.composition, target);
     const actual = next.placements.find(item => item.id === existing.id)!;
