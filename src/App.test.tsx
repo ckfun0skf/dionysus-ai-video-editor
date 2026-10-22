@@ -2630,6 +2630,7 @@ describe("mobile audio clip controls", () => {
     expect(extract).toBeTruthy();
     click(extract!);
     await flushEffects();
+    await flushEffects();
     // The structural child row remains as an empty drop target, but its linked-audio
     // controls disappear after extraction; command-level tests cover preserved timing.
     expect(original().linkedVideoClipId).toBeUndefined();
