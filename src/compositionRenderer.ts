@@ -1,4 +1,4 @@
-import type { Asset, CompositionLayer, DionysusProject } from "./types";
+import type { Asset, ClipVersion, CompositionLayer, DionysusProject } from "./types";
 import { getAudioEnvelope } from "./audioEnvelope";
 import { getMasterShotStarts, getMasterTimelineDuration } from "./masterTimeline";
 import { loadMediaBlobFromPath, resolveMediaSource } from "./mediaAssetStore";
@@ -6,6 +6,52 @@ import { normalizeClipVersionTracks } from "./clipVersionTracks";
 
 export interface RenderOptions { fps?: number; width?: number; height?: number; duration?: number; /** Avoid blocking interactive preview frames on media seek completion; exports keep precise seeking by default. */ interactivePreview?: boolean }
 export interface ExportResult { blob: Blob; filename: string; mimeType: string }
+
+function renderLayersForVersion(version: ClipVersion): CompositionLayer[] {
+  if (!version.composition) return version.layers;
+
+  const canonicalLayers = normalizeClipVersionTracks(version).layers;
+  const linkedAudioLayers = version.composition.placements.flatMap(owner =>
+    (owner.linkedAudioChildren ?? []).map(child => {
+      const layer = {
+        ...(structuredClone(child.legacyData) as Record<string, unknown>),
+        id: child.id,
+        name: child.name,
+        kind: "audio",
+        trackId: owner.trackId,
+        start: owner.start,
+        duration: owner.duration,
+        linkedVideoClipId: owner.id,
+      } as unknown as CompositionLayer & Record<string, unknown>;
+
+      if (child.source.type === "asset" || child.source.type === "clip") layer.assetId = child.source.assetId;
+      else if (child.source.type === "missing") layer.assetId = child.source.originalId;
+      else if (child.source.type === "shot") {
+        layer.shotId = child.source.shotId;
+        if (child.source.slotId !== undefined) layer.slotId = child.source.slotId;
+        else delete layer.slotId;
+      } else if (child.source.type === "script") {
+        if (child.source.scriptVersionId !== undefined) layer.scriptVersionId = child.source.scriptVersionId;
+        else delete layer.scriptVersionId;
+      }
+
+      if (child.sourceIn === undefined) delete layer.sourceIn;
+      else layer.sourceIn = child.sourceIn;
+      if (child.sourceOut === undefined) delete layer.sourceOut;
+      else layer.sourceOut = child.sourceOut;
+      if (child.muted === undefined) delete layer.muted;
+      else layer.muted = child.muted;
+      if (child.volume === undefined) delete layer.volume;
+      else layer.volume = child.volume;
+      if (child.fadeIn === undefined) delete layer.fadeIn;
+      else layer.fadeIn = child.fadeIn;
+      if (child.fadeOut === undefined) delete layer.fadeOut;
+      else layer.fadeOut = child.fadeOut;
+      return layer;
+    })
+  );
+  return [...canonicalLayers, ...linkedAudioLayers];
+}
 
 export function collectCompositionLayers(project: DionysusProject): CompositionLayer[] {
   const shotStarts = getMasterShotStarts(project.shots);
@@ -16,7 +62,7 @@ export function collectCompositionLayers(project: DionysusProject): CompositionL
       if (!version) return [];
       // When present, the canonical nested Composition owns placement fields; the layer array
       // is only a compatibility projection and may be stale in recovered/imported documents.
-      const versionLayers = version.composition ? normalizeClipVersionTracks(version).layers : version.layers;
+      const versionLayers = renderLayersForVersion(version);
       return versionLayers.map(layer => ({ ...layer, start: layer.start + slot.start + shotOffset }));
     });
     return layers;
@@ -46,7 +92,7 @@ export function collectCompositionLayers(project: DionysusProject): CompositionL
       const result: CompositionLayer[] = [];
       // Resolve nested layers from the canonical document when available instead of trusting
       // its serialized schema-1.0 compatibility projection.
-      const versionLayers = version.composition ? normalizeClipVersionTracks(version).layers : version.layers;
+      const versionLayers = renderLayersForVersion(version);
       const repeats = clip.shortSourceBehavior === "loop" ? Math.max(1, Math.ceil(clip.duration / version.duration)) : 1;
       for (let repeat = 0; repeat < repeats; repeat += 1) {
         const repeatOffset = repeat * version.duration;
