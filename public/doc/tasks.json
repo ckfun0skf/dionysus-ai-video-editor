@@ -589,7 +589,7 @@
           "title": "Unified Composition model and structure-preserving snapshots",
           "status": "in_progress",
           "progress": 82,
-          "summary": "Converge root/nested editing on one authoritative Composition/session. PR #111 now has paired history, one session state/ref, an extracted transaction boundary, and canonical-first autosave with v1 compatibility mirror.",
+          "summary": "Converge root/nested editing on one authoritative Composition/session. PR #111 has paired history, a main edit transaction boundary, centralized Undo/Redo restoration, and canonical-first autosave with v1 compatibility mirror.",
           "doc": "tasks/unified-composition-model.md",
           "detail": "tasks/unified-composition-model.html",
           "report": "reports/unified-composition-model-report.md",
@@ -671,11 +671,11 @@
             "App uses one EditorSessionSnapshot state for the Project compatibility projection and root Composition; normal edit/Undo/Redo/import update the pair atomically",
             "One editorSessionRef replaces separate projectRef/rootCompositionRef reads; edit, Undo/Redo and import replace full session pair atomically",
             "src/editorSession.ts and src/editorSession.test.ts: extracted reconciliation + atomic paired session commit",
-            "src/editorSession.ts: transitionEditorSession() returns paired session and history from one domain transaction; regression test verifies paired snapshot and immutable pre-edit history",
-            "src/editorSessionPersistence.ts: canonical-first v2 envelope write followed by v1 projection mirror at the same revision; regression tests cover ordering and failed mirror recovery",
-            "PR #111 exact code-head CI 39862266483 on 784b2ca83e7861ef85667341911459c3a599a494: 26 test files / 280 tests, TypeScript/build passed, npm audit 0 vulnerabilities. Final docs head requires exact-head verification"
+            "src/editorSession.ts: transitionEditorSession() and restoreEditorSessionHistory() own paired edit and Undo/Redo transitions; tests verify paired restoration and revisions",
+            "src/editorSessionPersistence.ts: canonical-first v2 envelope then v1 mirror at same revision; tests cover order and failed mirror recovery",
+            "PR #111 exact code-head CI 39862822226 on f288bc97afb3c6ae097482534cef2b2f50b4408b: 26 test files / 281 tests, TypeScript/build passed, npm audit 0 vulnerabilities. Final docs head requires exact-head verification"
           ],
-          "notes": "Status remains in_progress. transitionEditorSession() owns the main edit transaction and returns paired session/history. persistEditorSession() writes v2 canonical envelope before the v1 compatibility mirror at the same timestamp; this reduces risk on a failed mirror write but remains dual-key. Non-root editing and renderer/playback still use legacy projections in places. Code-head CI 39862266483 passed 26 files / 280 tests, TypeScript/build, audit 0; docs-synchronized head needs exact-head CI.",
+          "notes": "Status remains in_progress. transitionEditorSession() owns the main edit transaction; restoreEditorSessionHistory() restores Undo/Redo as paired session snapshots with a fresh revision. persistEditorSession() writes the v2 canonical envelope before the v1 compatibility mirror at the same timestamp. Still dual-key storage; non-root editing and renderer/playback have legacy projections. Code-head CI 39862822226 passed 26 files / 281 tests, TypeScript/build, audit 0; docs-synchronized head needs exact-head CI.",
           "description": "Establish canonical Composition for root/nested timelines, shared commands and independent structure-preserving Project-to-Clip snapshots.",
           "executionStage": "E2 and E4",
           "priority": "P0",
@@ -691,8 +691,8 @@
           "testStrategy": [
             "Migration matrix, parity, snapshot independence and round-trip."
           ],
-          "nextAction": "Verify exact-head CI after this handoff/task sync. Then move remaining command families behind the session boundary and continue the single authoritative persistence/recovery design. Preserve schema-1.0 migration, stable IDs, source ranges, linked audio, pinned versions and nested snapshots. No browser smoke tests or merge without owner approval.",
-          "handoffNotes": "PR #111 Ready for review, open/unmerged. Current code includes paired session/history, transitionEditorSession() for main change() transaction, and canonical-first dual-key persistence through persistEditorSession(). Verify exact-head CI after handoff/task sync. Then extend the session boundary to remaining command families and continue persistence/recovery consolidation. Project compatibility projection, v1/v2 storage, and legacy render/playback paths remain. No browser smoke tests; Issue #100 remains open."
+          "nextAction": "Verify exact-head CI after the handoff/task sync. Then route import and remaining direct state mutations through the session boundary, and continue the single authoritative persistence/recovery design. Preserve schema-1.0 migration, stable IDs, source ranges, linked audio, pinned versions and nested snapshots. No browser smoke tests or merge without owner approval.",
+          "handoffNotes": "PR #111 Ready for review, open/unmerged. Paired session/history; transitionEditorSession() handles main edit transaction; restoreEditorSessionHistory() handles paired Undo/Redo; persistEditorSession() writes v2 canonical envelope before v1 compatibility mirror. Verify exact-head CI after handoff/task sync. Next route import and remaining direct state mutations through the session boundary, then continue persistence/recovery consolidation. Project compatibility projection, dual storage keys, and legacy render/playback paths remain. No browser smoke tests; Issue #100 remains open."
         }
       ],
       "executionStage": "E2",
