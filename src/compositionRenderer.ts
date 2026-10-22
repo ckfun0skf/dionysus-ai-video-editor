@@ -11,10 +11,13 @@ export function collectVersionRenderLayers(version: ClipVersion): CompositionLay
   if (!version.composition) return version.layers;
 
   const mutedByTrack = new Map(version.composition.tracks.map(track => [track.id, Boolean(track.muted)]));
-  const canonicalLayers = normalizeClipVersionTracks(version).layers.map(layer => ({
-    ...layer,
-    muted: Boolean(layer.muted || (layer.trackId ? mutedByTrack.get(layer.trackId) : false)),
-  }));
+  const canonicalLayers = normalizeClipVersionTracks(version).layers.map(layer => {
+    const trackId = layer.trackId;
+    return {
+      ...layer,
+      muted: Boolean(layer.muted || (trackId ? mutedByTrack.get(trackId) : false)),
+    };
+  });
   const linkedAudioLayers = version.composition.placements.flatMap(owner =>
     (owner.linkedAudioChildren ?? []).map(child => {
       const layer = {
