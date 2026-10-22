@@ -1520,19 +1520,21 @@ describe("Integrated timeline editor", () => {
       duration: trimmed.duration
     });
 
-    // Placing a video asset also creates a linked audio child on the Audio layer.
+    // Video insertion creates an owned source-audio child without creating an Audio Track.
     const videoSourceButton = Array.from(container.querySelectorAll<HTMLButtonElement>(".timeline-source-item"))
       .find(button => button.textContent?.includes(videoSource.name));
     expect(videoSourceButton).toBeTruthy();
+    const audioTracksBeforeVideoInsert = persistedProject().tracks.filter(track => track.kind === "audio").length;
     click(videoSourceButton!);
     await flushEffects();
     const withVideo = persistedProject();
     const placedVideo = withVideo.timelineClips?.find(clip => clip.assetId === videoSource.id && clip.kind === "video");
     expect(placedVideo).toMatchObject({ duration: videoSource.duration });
-    expect(withVideo.tracks.some(track => track.kind === "audio")).toBe(true);
+    expect(withVideo.tracks.filter(track => track.kind === "audio")).toHaveLength(audioTracksBeforeVideoInsert);
     expect(withVideo.timelineClips?.find(clip => clip.linkedVideoClipId === placedVideo!.id)).toMatchObject({
       kind: "audio",
       assetId: videoSource.id,
+      trackId: placedVideo!.trackId,
       start: placedVideo!.start,
       duration: placedVideo!.duration
     });
@@ -1628,7 +1630,7 @@ describe("Integrated timeline editor", () => {
     expect(container.querySelector(".clip-drop-preview")).toBeTruthy();expect(container.querySelector(".timeline-snap-guide")).toBeTruthy();
     const drop=new Event("drop",{bubbles:true,cancelable:true});Object.defineProperties(drop,{dataTransfer:{value:dt},clientX:{value:1200*2.5/15}});act(()=>lane!.dispatchEvent(drop));await flushEffects();
     const current=persistedProject(),moved=current.timelineClips!.find(clip=>clip.id===video.id)!;expect(moved.trackId).toBe(targetTrack.id);expect(moved.start*current.frameRate).toBeCloseTo(Math.round(moved.start*current.frameRate),7);
-    const overlaps=current.timelineClips!.filter(clip=>clip.id!==moved.id&&clip.trackId===moved.trackId&&moved.start<clip.start+clip.duration-1e-7&&moved.start+moved.duration>clip.start+1e-7);expect(overlaps).toHaveLength(0);
+    const overlaps=current.timelineClips!.filter(clip=>clip.id!==moved.id&&!clip.linkedVideoClipId&&clip.trackId===moved.trackId&&moved.start<clip.start+clip.duration-1e-7&&moved.start+moved.duration>clip.start+1e-7);expect(overlaps).toHaveLength(0);
     const audio=current.timelineClips!.find(clip=>clip.linkedVideoClipId===moved.id)!;expect(audio.start).toBe(moved.start);expect(audio.duration).toBe(moved.duration);
   });
   it("previews resize overlap, trims the adjacent clip on release, and restores both with one Undo", async () => {
@@ -1647,15 +1649,15 @@ describe("Integrated timeline editor", () => {
     click(buttonsNamed("Redo").find(button=>!button.disabled)!);await flushEffects();expect(videos()[0].duration).toBeGreaterThan(original[0].duration);expect(videos()[1].duration).toBeLessThan(original[1].duration);
     const afterRedo = videos();
     const saved = JSON.parse(localStorage.getItem("dionysus.composition.v2") ?? "null") as {
-      compositionModel?: { rootComposition?: { placements?: Array<{ id: string; start: number; duration: number; linkedToPlacementId?: string }> } };
+      compositionModel?: { rootComposition?: { placements?: Array<{ id: string; start: number; duration: number; linkedToPlacementId?: string; linkedAudioChildren?: Array<{ id: string; sourceIn?: number; sourceOut?: number }> }> } };
     };
     const savedPlacements = saved.compositionModel?.rootComposition?.placements ?? [];
     expect(savedPlacements.find(item => item.id === afterRedo[0].id)).toMatchObject({ start: afterRedo[0].start, duration: afterRedo[0].duration });
     expect(savedPlacements.find(item => item.id === afterRedo[1].id)).toMatchObject({ start: afterRedo[1].start, duration: afterRedo[1].duration });
     const afterRedoAudio = (persistedProject().timelineClips ?? []).find(clip => clip.linkedVideoClipId === afterRedo[1].id)!;
-    expect(savedPlacements.find(item => item.id === afterRedoAudio.id)).toMatchObject({
-      start: afterRedoAudio.start, duration: afterRedoAudio.duration, linkedToPlacementId: afterRedo[1].id,
-    });
+    expect(savedPlacements.find(item => item.id === afterRedo[1].id)?.linkedAudioChildren).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: afterRedoAudio.id, sourceIn: expect.any(Number), sourceOut: expect.any(Number) })]),
+    );
 
     act(() => root.unmount()); root = createRoot(container); act(() => root.render(<App />)); await flushEffects();
     const reopened = persistedProject();
@@ -1916,7 +1918,7 @@ describe("Integrated timeline editor", () => {
     const after = persistedProject().timelineClips ?? [];
     expect(after.find(clip => clip.id === source.id)).toMatchObject({ trackId: targetTrack.id, start: 5, duration: 5 });
     expect(after.find(clip => clip.id === sourceAudio.id)).toMatchObject({ start: 5, duration: 5, linkedVideoClipId: source.id });
-    expect(after.filter(clip => clip.trackId === targetTrack.id)).toHaveLength(1);
+    expect(after.filter(clip => clip.trackId === targetTrack.id && !clip.linkedVideoClipId)).toHaveLength(1);
   });
 
   it("rejects same-layer overlap during drag and keeps clips in non-overlapping positions", async () => {
@@ -2144,7 +2146,7 @@ describe("Integrated timeline editor", () => {
       expect.objectContaining({ id: "existing-later", start: 7, duration: 2 }),
       expect.objectContaining({ name: "New footage", assetId: "test-new-video-asset", start: 9, duration: 3, trackId: videoTrack.id }),
     ]));
-    const sorted = inserted.filter(clip => clip.trackId === videoTrack.id).sort((a, b) => a.start - b.start);
+    const sorted = inserted.filter(clip => clip.trackId === videoTrack.id && !clip.linkedVideoClipId).sort((a, b) => a.start - b.start);
     for (let index = 1; index < sorted.length; index += 1) {
       expect(sorted[index - 1].start + sorted[index - 1].duration).toBeLessThanOrEqual(sorted[index].start + 1e-7);
     }
