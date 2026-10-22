@@ -29,7 +29,7 @@ import {
   type ProjectTimelineInsertResolution,
 } from "./projectTimelinePlacement";
 import { createEditorSessionHistory, recordEditorSessionChange, redoEditorSessionChange, undoEditorSessionChange, type EditorSessionHistory, type EditorSessionSnapshot } from "./editorSessionHistory";
-import { commitEditorSessionChange } from "./editorSession";
+import { transitionEditorSession } from "./editorSession";
 import { COMPOSITION_PROJECT_STORAGE_KEY, LEGACY_PROJECT_STORAGE_KEY, persistEditorSession } from "./editorSessionPersistence";
 import { collectCompositionLayers, isPlayableAudioLayer, renderCompositionFrame, exportCompositionWebM, downloadExport } from "./compositionRenderer";
 import { createClipVersionSnapshot } from "./clipVersionSnapshot";
@@ -690,23 +690,17 @@ export default function App() {
   const selectedStart = useMemo(() => getMasterShotStart(project.shots, selectedId), [project.shots, selectedId]);
   const slotCount = project.shots.reduce((n, s) => n + s.slots.length, 0);
   function change(fn: (p: DionysusProject) => DionysusProject, historyGroup = "", canonicalRoot?: CompositionDocument) {
-    const now = Date.now();
-    const current = editorSessionRef.current.project;
-    const currentRoot = editorSessionRef.current.composition;
-    const nextHistory = recordEditorSessionChange(
+    const transition = transitionEditorSession(
+      editorSessionRef.current,
       editorHistoryRef.current,
-      { project: current, composition: currentRoot },
+      fn,
       historyGroup,
-      now,
-    );
-    editorHistoryRef.current = nextHistory;
-    setEditorHistory(nextHistory);
-    const next = { ...fn(copy(current)), updatedAt: new Date().toISOString() };
-    const nextSession = commitEditorSessionChange(
-      { project: current, composition: currentRoot },
-      next,
       canonicalRoot,
+      Date.now(),
     );
+    editorHistoryRef.current = transition.history;
+    setEditorHistory(transition.history);
+    const nextSession = transition.session;
     const projected = nextSession.project;
     editorSessionRef.current = nextSession;
     setEditorSession(nextSession);
