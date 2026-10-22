@@ -181,3 +181,8 @@ Continue from `feat/mobile-audio-clip-mute` (if already merged, inspect PR/main 
 ### Current DYS-012 mobile follow-up — mute-state accessibility (2026-10-19)
 
 Continue from `feat/mobile-audio-mute-state` (if already merged, inspect PR/main first). This slice adds a visible active state to the selected-audio Mute/Unmute button and asserts its `aria-pressed` value. Run exact-head CI/build, merge through PR, verify main CI and Pages deployment, then update task dashboard/report/handoff. No browser smoke tests. Keep DYS-012 in progress until phone portrait/landscape/tablet acceptance is evidenced.
+
+
+### Active E1 continuation — atomic import replacement (2026-10-22)
+
+Current PR: [#111](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/111), branch `feat/e1-editor-session-history`. Continue from its live head, not from this note. `createImportedEditorSessionTransition()` now returns imported session + fresh empty history as one result; tests must protect against stale Undo/Redo crossing project boundaries. Verify exact-head CI after the synchronized docs commit, comment on Issue #110 after each meaningful increment, and keep Issue #100 open. Next inspect remaining direct session mutations and then safely consolidate dual-key recovery/persistence. Do not claim canonical-only state, do not run browser smoke tests, and do not merge without explicit owner approval.
