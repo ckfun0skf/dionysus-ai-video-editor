@@ -164,3 +164,12 @@ PR disposition rule: do not merge, close or discard code automatically based on 
 ## 7. Pickup instructions
 
 Start from `docs/AGENT_PICKUP_PROMPT.md`, `docs/AGENT_HANDOFF.md`, this plan, `docs/architecture/TIMELINE_EDITOR_WORKSPACE.md`, `docs/architecture/UNIFIED_COMPOSITION_MODEL.md`, and `public/doc/tasks.json`. Re-query main, open PRs/issues and exact-head CI before coding. The first implementation step is not to redesign every panel at once: audit current code and reconcile PR #88/#89, then implement the canonical editing boundary and a functional Desktop workspace vertical slice with tests. Keep the existing deployable app available until the new workspace has parity and passes CI.
+
+
+## Owner-confirmed linked-audio interaction (2026-10-22)
+
+Implement source audio as child placements owned by video placements / their Video Layer relationship, not as ordinary Audio Tracks. Adding a video must not create a blank Audio Track. Add a linked audio child only when the source has audio. A Video Layer may contain many clips; each clip's child audio remains individually muteable and follows its parent through move, trim, split, duplicate and delete operations.
+
+Do not provide routine Unlink/Relink or direct dragging for linked audio. Provide **Extract Audio** to transfer audio into an independent Audio Track without double playback, and **Duplicate Audio** as a separate intentional command that retains the linked original and creates an independent copy. Add a parent Video Layer mute for all linked source audio on that layer, alongside per-clip mute. Users explicitly add standalone Audio Tracks when needed.
+
+Update the editing model, command layer, track rendering and tests together. Required regression cases: source with audio/no audio; multiple clips in one Video Layer; no accidental empty Audio Track; per-clip and layer mute; extract vs duplicate semantics; linked-child synchronization during move/trim/split/delete; unrelated Audio Track deletion; undo/redo and project JSON round-trip. This target supersedes earlier rebuild-plan wording that listed unlink/per-audio-track mute as the expected behavior. It is a design decision, not a statement that the current implementation is complete.

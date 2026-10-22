@@ -143,3 +143,18 @@ Dionysus must support a responsive phone workflow, not merely scale down the des
 - Desktop and mobile edit the same project and version data. Responsive presentation must not fork the project schema or silently change edit semantics.
 - Treat mobile browser support as the first delivery target. A separate native application is not implied by this requirement.
 - DYS-012 remains in progress until touch selection/scrubbing/version controls, narrow portrait/landscape layouts, and no-page-overflow behavior are validated. Automated browser smoke tests are not part of this project workflow; do not add or run them unless the owner explicitly asks.
+
+
+## Linked source audio contract
+
+**Owner-confirmed product decision (2026-10-22):** Linked source audio is a child placement owned by its Video Layer / video placement relationship, not a standalone Audio Track. Do not automatically create an empty Audio Track when inserting a video.
+
+- When a video placement is inserted, create a linked audio child only when the source actually contains audio. Keep its timing/source range synchronized with the parent video through ordinary move, trim, split, duplicate and delete operations.
+- Multiple video clips may coexist on one Video Layer. Each clip's linked audio is independently addressable and can be muted (and eventually have per-clip volume); the Video Layer also provides a parent-level mute for all linked source audio in that layer.
+- Linked audio is not directly draggable to another track and has no ordinary Unlink/Relink toggle. This avoids ambiguous ownership and accidental track creation/deletion.
+- **Extract Audio** creates an independent Audio placement on a real Audio Track and transfers ownership so the same source audio does not play twice. **Duplicate Audio** is a separate explicit operation that preserves the linked original and creates an independent copy; warn/avoid accidental doubled playback.
+- Independent Audio Tracks are created intentionally by the user or by Extract Audio, not as a side effect of inserting a video.
+- Removing a Video Layer/clip must follow explicit delete semantics for its linked child; removing an unrelated Audio Track must never delete linked source audio. Undo/Redo, save/reopen and project JSON round-trip preserve links, mute state, source ranges and extracted/duplicated relationships.
+- Acceptance tests cover videos with audio and without audio, multiple clips in one Video Layer, per-clip mute, parent-layer mute, extract, duplicate, split/trim/move/delete, and round-trip/Undo/Redo.
+
+This contract supersedes earlier PRD wording that described Unlink as converting linked audio into an independent Audio Layer. The current implementation may not yet satisfy this target; do not claim implementation complete until code and tests match it.
