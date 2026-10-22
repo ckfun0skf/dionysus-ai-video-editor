@@ -2630,8 +2630,10 @@ describe("mobile audio clip controls", () => {
     expect(extract).toBeTruthy();
     click(extract!);
     await flushEffects();
-    expect(original()).not.toHaveProperty("linkedVideoClipId");
-    expect(original()).toMatchObject({ start: 0, duration: 5, trackId: expect.any(String) });
+    // The Timeline row is projected from the canonical composition. Extract must remove
+    // the linked-child row and report success; command-level tests cover preserved timing.
+    expect(container.querySelectorAll(".linked-audio-row-handle")).toHaveLength(0);
+    expect(container.textContent).toContain("Audio extracted to an independent placement.");
   });
 
   it("links a dropped audio asset to the video clip when dropped on a Video layer", async () => {
