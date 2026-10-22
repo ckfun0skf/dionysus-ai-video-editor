@@ -238,3 +238,10 @@ Remaining work: route import and remaining direct state mutations through the se
 The new import tests cover accepted canonical root, stale canonical geometry fallback, schema-1.0 migration, pair consistency, and input immutability. Exact code-head CI passed on `4e372e079d8b3f4068493b472eb34956ece0eb52` in [run 39863556870](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39863556870): 26 test files / 283 tests; TypeScript/build passed; audit 0 vulnerabilities. The docs/task synchronization creates a newer SHA that needs fresh exact-head verification.
 
 Remaining: route other direct state mutations through the session boundary; safely consolidate recovery/persistence without breaking v1 imports; migrate non-root editing and render/playback to the shared Composition contract. No browser smoke tests or UI acceptance are claimed.
+
+
+## E1 follow-up — import replacement and history reset as one result (2026-10-22)
+
+`createImportedEditorSessionTransition()` in `src/editorSession.ts` now returns the imported `EditorSessionSnapshot` and a newly empty `EditorSessionHistory` together. `App.tsx` replaces the current session and history from that result, rather than creating the session first and independently resetting history afterward. A regression test starts with populated Undo history and asserts that import produces a consistent legacy/canonical pair with no entries from the previous project.
+
+This narrows the project-replacement transaction boundary; it does not solve dual-key persistence, recovery arbitration, nested-editor state, or legacy rendering/playback. DYS-014 remains in progress. No browser smoke tests or manual UI acceptance are claimed.
