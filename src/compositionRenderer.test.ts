@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { collectCompositionLayers, getCompositionDuration, isPlayableAudioLayer, waitForVideoFrame } from "./compositionRenderer";
 import { sampleProject } from "./sampleProject";
 import { migrateLegacyProjectToComposition } from "./compositionMigration";
+import type { ClipVersion } from "./types";
 
 describe("compositionRenderer", () => {
   it("waits for decoded video data instead of treating loaded metadata as a drawable frame", async () => {
@@ -33,7 +34,7 @@ describe("compositionRenderer", () => {
     slotVersion.composition = structuredClone(shotDocument!);
     slotVersion.layers = [{ id: "stale-shot-layer", name: "Stale projection", kind: "text", start: 0, duration: 2 }];
 
-    const clipVersion = {
+    const clipVersion: ClipVersion = {
       id: "canonical-clip-version",
       name: "Canonical clip version",
       description: "",
