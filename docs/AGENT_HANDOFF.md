@@ -630,3 +630,10 @@ Verify the current branch head and its CI first. If it passes, continue the root
 - Added tests for newer/equal revisions, mismatched IDs/names, invalid timestamps, and absent documents. This extracts and locks down the existing policy; it does not yet remove dual-key storage or make recovery a single-document load.
 - Exact-head CI must be checked after the synchronized commit. PR #111 remains open/unmerged; Issue #100 remains open. No browser smoke tests or manual UI acceptance claimed.
 - Next: inspect whether recovery parses/selects/project data more than once during startup, then design a tested single-authority persistence migration that retains schema-1.0 imports.
+
+
+## Latest increment — single-read startup recovery (2026-10-22)
+
+- Refactored `createInitialEditorSession()` to read the v1 and v2 localStorage keys once per startup and retain the parsed recovery results. Project selection and canonical-root restoration now use the same parsed snapshot pair instead of re-reading/re-parsing the keys in a second block.
+- The existing safety checks remain: recovery precedence is based on matching identity and comparable revisions; a canonical root is accepted only when its projected Project exactly matches the selected startup Project. Otherwise startup uses deterministic legacy migration.
+- This reduces inconsistent cross-read recovery decisions but does not remove dual-key storage. Exact-head CI must be checked after docs synchronization. PR #111 stays open/unmerged; Issue #100 stays open. No browser smoke tests or manual UI acceptance claimed.
