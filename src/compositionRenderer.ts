@@ -7,7 +7,7 @@ import { normalizeClipVersionTracks } from "./clipVersionTracks";
 export interface RenderOptions { fps?: number; width?: number; height?: number; duration?: number; /** Avoid blocking interactive preview frames on media seek completion; exports keep precise seeking by default. */ interactivePreview?: boolean }
 export interface ExportResult { blob: Blob; filename: string; mimeType: string }
 
-function renderLayersForVersion(version: ClipVersion): CompositionLayer[] {
+export function collectVersionRenderLayers(version: ClipVersion): CompositionLayer[] {
   if (!version.composition) return version.layers;
 
   const canonicalLayers = normalizeClipVersionTracks(version).layers;
@@ -72,7 +72,7 @@ export function collectCompositionLayers(project: DionysusProject): CompositionL
       if (!version) return [];
       // When present, the canonical nested Composition owns placement fields; the layer array
       // is only a compatibility projection and may be stale in recovered/imported documents.
-      const versionLayers = renderLayersForVersion(version);
+      const versionLayers = collectVersionRenderLayers(version);
       return versionLayers.map(layer => ({ ...layer, start: layer.start + slot.start + shotOffset }));
     });
     return layers;
@@ -102,7 +102,7 @@ export function collectCompositionLayers(project: DionysusProject): CompositionL
       const result: CompositionLayer[] = [];
       // Resolve nested layers from the canonical document when available instead of trusting
       // its serialized schema-1.0 compatibility projection.
-      const versionLayers = renderLayersForVersion(version);
+      const versionLayers = collectVersionRenderLayers(version);
       const repeats = clip.shortSourceBehavior === "loop" ? Math.max(1, Math.ceil(clip.duration / version.duration)) : 1;
       for (let repeat = 0; repeat < repeats; repeat += 1) {
         const repeatOffset = repeat * version.duration;
