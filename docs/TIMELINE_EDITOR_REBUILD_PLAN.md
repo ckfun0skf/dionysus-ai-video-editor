@@ -265,3 +265,8 @@ The startup recovery policy no longer compares timestamps to decide between two 
 ## E2 follow-up — canonical-only autosave with read-only legacy fallback
 
 `persistEditorSession()` now writes only the versioned v2 Composition envelope. The old schema-1.0 localStorage key is read-only and is considered only when the canonical envelope is missing or invalid. When both reads are valid, startup uses the complete canonical envelope rather than comparing two snapshots by timestamp or project identity; the envelope itself validates its project ID/name/root and startup verifies its Project projection before accepting the root. Tests cover canonical-only writes, the saved projection, recovery source selection, and preservation of an existing legacy fallback when the canonical write fails. The old key is not deleted in this slice.
+
+
+## Verified E2 checkpoint — canonical-only persistence (2026-10-22)
+
+Exact synchronized head `c1009ae456df33815388c5cd62917c7606d396ac` passed [CI run 39866541271](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39866541271): 26 test files / 286 tests, TypeScript/build passed, npm audit 0 vulnerabilities. The App integration-test helper now reads the v2 envelope first. Autosave writes only v2; v1 is a read-only fallback and is not deleted. The preceding CI failure was caused by the stale test helper reading only v1; the updated exact-head run is green. This is not the end of E2: in-memory Project compatibility projection, nested editing and renderer/playback migration remain.
