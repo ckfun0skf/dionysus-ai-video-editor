@@ -436,24 +436,8 @@ export function duplicateClipVersionComposition(
   version: ClipVersion,
   createId: (kind: "clip-track" | "layer", previousId: string) => string,
 ): ClipVersion {
-  const normalized = normalizeClipVersionTracks(version);
-  if (!normalized.composition) {
-    const trackIds = new Map((normalized.tracks ?? []).map(track => [track.id, createId("clip-track", track.id)]));
-    const layerIds = new Map(normalized.layers.map(layer => [layer.id, createId("layer", layer.id)]));
-    return {
-      ...normalized,
-      tracks: (normalized.tracks ?? []).map(track => ({ ...track, id: trackIds.get(track.id)! })),
-      layers: normalized.layers.map(layer => {
-        const next = { ...layer, id: layerIds.get(layer.id)!, ...(layer.trackId ? { trackId: trackIds.get(layer.trackId) ?? layer.trackId } : {}) };
-        const raw = next as unknown as Record<string, unknown>;
-        if (typeof raw.linkedVideoClipId === "string") raw.linkedVideoClipId = layerIds.get(raw.linkedVideoClipId) ?? raw.linkedVideoClipId;
-        if (typeof raw.linkedToPlacementId === "string") raw.linkedToPlacementId = layerIds.get(raw.linkedToPlacementId) ?? raw.linkedToPlacementId;
-        return next;
-      }),
-    };
-  }
-
-  const source = structuredClone(normalized.composition);
+  const normalized = ensureClipVersionComposition(version);
+  const source = structuredClone(normalized.composition!);
   const trackIds = new Map(source.tracks.map(track => [track.id, createId("clip-track", track.id)]));
   const placementIds = new Map(source.placements.map(placement => [placement.id, createId("layer", placement.id)]));
   const composition = {
