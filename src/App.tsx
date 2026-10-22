@@ -29,7 +29,7 @@ import {
   type ProjectTimelineInsertResolution,
 } from "./projectTimelinePlacement";
 import { createEditorSessionHistory, type EditorSessionHistory, type EditorSessionSnapshot } from "./editorSessionHistory";
-import { restoreEditorSessionHistory, transitionEditorSession } from "./editorSession";
+import { createImportedEditorSession, restoreEditorSessionHistory, transitionEditorSession } from "./editorSession";
 import { COMPOSITION_PROJECT_STORAGE_KEY, LEGACY_PROJECT_STORAGE_KEY, persistEditorSession } from "./editorSessionPersistence";
 import { collectCompositionLayers, isPlayableAudioLayer, renderCompositionFrame, exportCompositionWebM, downloadExport } from "./compositionRenderer";
 import { createClipVersionSnapshot } from "./clipVersionSnapshot";
@@ -2688,7 +2688,7 @@ export default function App() {
       const parsed = JSON.parse(await file.text()) as unknown;
       const { project: data, compositionModel } = readProjectDocument(parsed, true);
       if (!validateProject(data)) throw new Error(t("error.invalidProject"));
-      const normalized = compositionModel?.rootComposition ? data : normalizeLegacyTimelineTracks(data); const migratedRoot = migrateLegacyProjectToComposition(normalized).rootComposition; const importedRoot = compositionModel?.rootComposition && JSON.stringify(projectRootCompositionToLegacy(normalized, compositionModel.rootComposition)) === JSON.stringify(normalized) ? structuredClone(compositionModel.rootComposition) : migratedRoot; editorSessionRef.current = { project: normalized, composition: importedRoot }; setEditorSession(editorSessionRef.current); editorHistoryRef.current = createEditorSessionHistory(); setEditorHistory(editorHistoryRef.current); setSelectedId(normalized.shots[0]?.id ?? ""); setNotice(t("notice.projectImported"));
+      const normalized = compositionModel?.rootComposition ? data : normalizeLegacyTimelineTracks(data); const importedSession = createImportedEditorSession(normalized, compositionModel?.rootComposition); editorSessionRef.current = importedSession; setEditorSession(importedSession); editorHistoryRef.current = createEditorSessionHistory(); setEditorHistory(editorHistoryRef.current); setSelectedId(importedSession.project.shots[0]?.id ?? ""); setNotice(t("notice.projectImported"));
     } catch (e) {
       setNotice(e instanceof Error ? e.message : t("error.importFailed"));
     } finally {
