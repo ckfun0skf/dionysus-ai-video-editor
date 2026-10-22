@@ -1432,7 +1432,16 @@ describe("Integrated timeline editor", () => {
       createdAt: "2026-10-20T00:00:00.000Z",
       updatedAt: "2026-10-20T00:00:00.000Z"
     };
-    project.assets = [...project.assets, ...earlierSources, source, videoSource];
+    const unknownAudioVideoSource = {
+      id: "integration-source-unknown-audio",
+      name: "Unknown Audio Metadata Video",
+      kind: "video" as const,
+      path: "data:video/mp4;base64,",
+      duration: 4,
+      createdAt: "2026-10-20T00:00:00.000Z",
+      updatedAt: "2026-10-20T00:00:00.000Z"
+    };
+    project.assets = [...project.assets, ...earlierSources, source, videoSource, unknownAudioVideoSource];
     localStorage.setItem("dionysus.project.v1", JSON.stringify(project));
     localStorage.removeItem("dionysus.composition.v2");
     act(() => root.unmount());
@@ -1563,6 +1572,16 @@ describe("Integrated timeline editor", () => {
     expect(droppedVideo).toHaveLength(2);
     expect(afterDrop.timelineClips?.filter(clip => clip.linkedVideoClipId && droppedVideo!.some(video => video.id === clip.linkedVideoClipId))).toHaveLength(2);
     expect(container.querySelector('[role="dialog"][aria-labelledby="asset-picker-title"]')).toBeNull();
+
+    // Unknown audio metadata must not be treated as proof that a video contains audio.
+    const unknownSourceButton = Array.from(container.querySelectorAll<HTMLButtonElement>(".timeline-source-item"))
+      .find(button => button.textContent?.includes(unknownAudioVideoSource.name));
+    expect(unknownSourceButton).toBeTruthy();
+    click(unknownSourceButton!);
+    await flushEffects();
+    const unknownVideo = persistedProject().timelineClips?.find(clip => clip.assetId === unknownAudioVideoSource.id && clip.kind === "video");
+    expect(unknownVideo).toBeTruthy();
+    expect(persistedProject().timelineClips?.some(clip => clip.linkedVideoClipId === unknownVideo!.id)).toBe(false);
 
     const beforeReopen = persistedProject().timelineClips?.find(clip => clip.assetId === source.id);
     act(() => root.unmount());
