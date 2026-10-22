@@ -397,7 +397,6 @@ export default function App() {
   const projectAssetDragSourceRef = useRef<string>("");
   const [clipDropPreview, setClipDropPreview] = useState<{ trackId: string; start: number; duration: number; name: string; snapTime?: number } | null>(null);
   const [newLayerDropPreview, setNewLayerDropPreview] = useState<{ sourceTrackId: string; assetId: string; start: number; duration: number; name: string; kind: "video" | "audio"; edge: "before" | "after" } | null>(null);
-  const [audioRelinkPreviewVideoId, setAudioRelinkPreviewVideoId] = useState<string>("");
   const nestedLayerDragSourceRef = useRef("");
   const touchNestedMoveRef = useRef<{
     layer: CompositionLayer;
@@ -1501,6 +1500,7 @@ export default function App() {
         return sourceLayers.map(layer => {
           const kind = layer.kind === "audio" ? "audio" as const : "video" as const;
           const track = kind === "audio" ? audioTrack : project.tracks.find(item => item.id === getMasterShotTrackId(shot, project.tracks)) ?? videoTrack;
+          if (!track) throw new Error("Storyboard audio requires an Audio layer.");
           const assetId = layer.assetId && project.assets.some(asset => asset.id === layer.assetId) ? layer.assetId : undefined;
           const clipId = "storyboard-" + shot.id + "-" + slot.id + "-" + layer.id;
           const duration = Math.max(0.1, Math.min(layer.duration, Math.max(0.1, shot.duration - slot.start - layer.start)));
@@ -2628,22 +2628,24 @@ export default function App() {
     const kind: "video" | "audio" | "image" = audioFile ? "audio" : imageFile ? "image" : "video";
     const assetId = id("asset");
     try {
-      const [path, thumbnailPath, sourceDuration] = await Promise.all([
+      const [path, thumbnailPath, mediaMetadata] = await Promise.all([
         storeMediaAsset(assetId, file),
         kind === "video" ? createVideoThumbnail(file) : Promise.resolve(undefined),
         kind === "image" ? Promise.resolve(undefined) : readMediaDuration(file, kind)
       ]);
+      const duration = mediaMetadata?.duration;
       const now = new Date().toISOString();
       const asset: Asset = {
         id: assetId, name: file.name, kind, path, createdAt: now, updatedAt: now,
         notes: "Imported from Timeline; stored locally.",
-        ...(sourceDuration ? { duration: sourceDuration } : {}),
+        ...(duration ? { duration } : {}),
+        ...(mediaMetadata?.hasAudio !== undefined ? { hasAudio: mediaMetadata.hasAudio } : {}),
         ...(thumbnailPath ? { thumbnailPath } : {})
       };
       change(project => ({ ...project, assets: [...project.assets, asset] }));
       setAssetPickerTrackId("");
-      setNotice(sourceDuration
-        ? file.name + " added to Project Media (" + time(sourceDuration) + "). Drag it to the Timeline when ready."
+      setNotice(duration
+        ? file.name + " added to Project Media (" + time(duration) + "). Drag it to the Timeline when ready."
         : file.name + " added to Project Media. Drag it to the Timeline when ready.");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Could not import this media file.");
