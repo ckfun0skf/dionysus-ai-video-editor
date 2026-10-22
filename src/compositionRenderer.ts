@@ -2,6 +2,7 @@ import type { Asset, CompositionLayer, DionysusProject } from "./types";
 import { getAudioEnvelope } from "./audioEnvelope";
 import { getMasterShotStarts, getMasterTimelineDuration } from "./masterTimeline";
 import { loadMediaBlobFromPath, resolveMediaSource } from "./mediaAssetStore";
+import { normalizeClipVersionTracks } from "./clipVersionTracks";
 
 export interface RenderOptions { fps?: number; width?: number; height?: number; duration?: number; /** Avoid blocking interactive preview frames on media seek completion; exports keep precise seeking by default. */ interactivePreview?: boolean }
 export interface ExportResult { blob: Blob; filename: string; mimeType: string }
@@ -12,7 +13,11 @@ export function collectCompositionLayers(project: DionysusProject): CompositionL
     const shotOffset = shotStarts[shotIndex];
     const layers = shot.slots.flatMap(slot => {
       const version = slot.versions.find(item => item.id === slot.selectedVersionId);
-      return version ? version.layers.map(layer => ({ ...layer, start: layer.start + slot.start + shotOffset })) : [];
+      if (!version) return [];
+      // When present, the canonical nested Composition owns placement fields; the layer array
+      // is only a compatibility projection and may be stale in recovered/imported documents.
+      const versionLayers = version.composition ? normalizeClipVersionTracks(version).layers : version.layers;
+      return versionLayers.map(layer => ({ ...layer, start: layer.start + slot.start + shotOffset }));
     });
     return layers;
   });
@@ -39,11 +44,14 @@ export function collectCompositionLayers(project: DionysusProject): CompositionL
         ?? (clip.clipVersionId ? undefined : asset?.clipVersions?.find(item => item.id === asset.selectedClipVersionId) ?? asset?.clipVersions?.[0]);
       if (!version || version.duration <= 0) return [];
       const result: CompositionLayer[] = [];
+      // Resolve nested layers from the canonical document when available instead of trusting
+      // its serialized schema-1.0 compatibility projection.
+      const versionLayers = version.composition ? normalizeClipVersionTracks(version).layers : version.layers;
       const repeats = clip.shortSourceBehavior === "loop" ? Math.max(1, Math.ceil(clip.duration / version.duration)) : 1;
       for (let repeat = 0; repeat < repeats; repeat += 1) {
         const repeatOffset = repeat * version.duration;
         if (repeatOffset >= clip.duration) break;
-        for (const layer of version.layers) {
+        for (const layer of versionLayers) {
           const startOffset = repeatOffset + layer.start;
           if (startOffset >= clip.duration) continue;
           const visibleDuration = Math.min(layer.duration, version.duration - layer.start, clip.duration - startOffset);
