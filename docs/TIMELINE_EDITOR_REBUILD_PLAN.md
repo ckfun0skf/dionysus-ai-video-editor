@@ -198,3 +198,12 @@ The current PR #111 slice now routes all root timeline callback reads through a 
 Exact-head CI passed on code SHA `6ccacdd359f3c508aeeae93c8e87b5b1c381f66b` in [run 39860285572](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39860285572): 24 test files / 274 tests; TypeScript/build passed; audit 0 vulnerabilities. This note/task update changes the branch head, so the latest docs-synchronized SHA needs its own CI confirmation.
 
 Still not solved by this slice: project and canonical document are paired but not yet a canonical-only schema; browser persistence is still split across v1/v2 keys; renderer/playback still consumes legacy projections in some paths; the non-root editing model still needs a shared command/session boundary. The Editor remains in progress, not release-ready by virtue of CI alone.
+
+
+## E1 implementation checkpoint — 2026-10-22: extracted session transition
+
+The compatibility reconciliation algorithm has moved from `App.tsx` to `src/editorSession.ts`. `reconcileEditorSessionComposition(current, target)` preserves existing canonical placement timing, track, source range, typed source and linked ownership, while allowing descriptive metadata to refresh and requiring new placements to pass canonical insertion checks. `commitEditorSessionChange(current, nextProject, canonicalRoot?)` returns the next `EditorSessionSnapshot`, using an explicit root when a root command supplies one or reconciling the legacy project projection against the current Composition otherwise. The main App `change()` path now calls this pure session boundary.
+
+New tests in `src/editorSession.test.ts` cover canonical geometry preservation, legacy metadata updates, paired Project projection, explicit root updates and source snapshot independence. Exact code-head CI passed on `d32ea856511b0fa13821577d5786048fa6983b37` in [run 39860987542](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39860987542): 25 test files / 277 tests, TypeScript/build passed, audit 0 vulnerabilities. The accompanying task/handoff update creates a newer SHA that requires a fresh exact-head run.
+
+The broader boundary is still transitional: Project remains a compatibility projection, legacy domain editors may drive reconciliation, the v1/v2 browser persistence keys remain separate, and playback/rendering still uses legacy projections. No browser smoke tests or UI acceptance are claimed.
