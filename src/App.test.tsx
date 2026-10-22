@@ -222,29 +222,21 @@ describe("App history integration", () => {
     expect(video).toMatchObject({ start: 0.5, duration: expect.any(Number) });
   });
 
-  it("persists Audio Layer volume, fade-in, and fade-out controls", async () => {
+
+  it("persists per-clip mute state on video-owned source audio", async () => {
     await openTimelineView();
     await seedLinkedVideoAudioPairs();
 
-    await selectClip("Video clip 1 audio");
-    await flushEffects();
-    const volume = container.querySelector<HTMLInputElement>('input[aria-label="Timeline audio volume"]');
-    const fadeIn = container.querySelector<HTMLInputElement>('input[aria-label="Timeline audio fade in"]');
-    const fadeOut = container.querySelector<HTMLInputElement>('input[aria-label="Timeline audio fade out"]');
-    expect(volume).toBeTruthy();
-    expect(fadeIn).toBeTruthy();
-    expect(fadeOut).toBeTruthy();
-
-    setInputValue(volume!, "0.4");
-    await flushEffects();
-    setInputValue(fadeIn!, "0.75");
-    await flushEffects();
-    setInputValue(fadeOut!, "1.25");
+    const video = persistedProject().timelineClips!.find(clip => clip.kind === "video")!;
+    const audio = persistedProject().timelineClips!.find(clip => clip.kind === "audio" && clip.linkedVideoClipId === video.id)!;
+    const mute = buttonsNamed("Mute " + audio.name)[0];
+    expect(mute).toBeTruthy();
+    click(mute);
     await flushEffects();
 
-    const audio = persistedProject().timelineClips?.find(clip => clip.kind === "audio");
-    expect(audio).toMatchObject({ volume: 0.4, fadeIn: 0.75, fadeOut: 1.25 });
-    expect(persistedProject().timelineClips?.find(clip => clip.kind === "video")?.duration).toBe(audio?.duration);
+    const updated = persistedProject().timelineClips!.find(clip => clip.id === audio.id)!;
+    expect(updated).toMatchObject({ muted: true, trackId: video.trackId, linkedVideoClipId: video.id });
+    expect(buttonsNamed("Unmute " + audio.name)[0]).toBeTruthy();
   });
 
   it("supports Undo/Redo for adding actual timeline Layers", async () => {
@@ -518,18 +510,19 @@ describe("App history integration", () => {
     expect(project.timelineClips?.find(clip => clip.id === child.id)?.linkedVideoClipId).toBe(video.id);
   });
 
-  it("moves and trims linked audio through the App and restores both clips with Undo/Redo", async () => {
+
+  it("moves and trims a video while its owned source audio follows through Undo/Redo", async () => {
     await openTimelineView();
     await seedLinkedVideoAudioPairs();
 
     const clips = () => persistedProject().timelineClips ?? [];
     const video = () => clips().find(clip => clip.kind === "video")!;
-    const audio = () => clips().find(clip => clip.kind === "audio")!;
+    const audio = () => clips().find(clip => clip.kind === "audio" && clip.linkedVideoClipId === video().id)!;
 
     expect(video()).toMatchObject({ start: 0, duration: 5 });
-    expect(audio()).toMatchObject({ start: 0, duration: 5, linkedVideoClipId: video().id });
+    expect(audio()).toMatchObject({ start: 0, duration: 5, trackId: video().trackId });
 
-    await selectClip("Video clip 1 audio");
+    await selectClip(video().name);
     click(actionNamed("+0.5s"));
     await flushEffects();
     expect(video()).toMatchObject({ start: 0.5, duration: 5 });
@@ -560,6 +553,7 @@ describe("App history integration", () => {
     expect(video()).toMatchObject({ start: 0.5, duration: 4.5 });
     expect(audio()).toMatchObject({ start: 0.5, duration: 4.5, linkedVideoClipId: video().id });
   });
+
   it("expands storyboard shot versions and opens the selected version in the timeline", async () => {
     const storyboardNav = Array.from(container.querySelectorAll<HTMLButtonElement>(".nav-item")).find(button => button.textContent?.includes("Storyboard"));
     if (!storyboardNav) throw new Error("Storyboard navigation is missing");
@@ -993,14 +987,14 @@ describe("App history integration", () => {
     expect(shot!.slots[0].versions[0].layers[0].prompt).toContain("Hero reference");
   });
 
-  it("creates linked audio when a Project Media audio asset is dragged onto an empty Linked Audio group", async () => {
+
+  it("does not treat a dropped independent audio asset as embedded video source audio", async () => {
     await openTimelineView();
     const project = persistedProject();
-    const videoTrack = project.tracks.find(track => track.kind === "video");
-    if (!videoTrack) throw new Error("Sample project needs a Video layer");
-    const audioAsset = { id: "empty-group-drop-audio", name: "Empty group narration.wav", kind: "audio" as const, path: "/media/empty-group-narration.wav", duration: 9 };
+    const videoTrack = project.tracks.find(track => track.kind === "video")!;
+    const audioAsset = { id: "empty-group-drop-audio", name: "Independent narration.wav", kind: "audio" as const, path: "/media/independent-narration.wav", duration: 9 };
     project.assets = [...project.assets, audioAsset];
-    project.timelineClips = [{ id: "video-empty-linked-audio", name: "Video without audio", kind: "video", trackId: videoTrack.id, start: 3, duration: 7 }];
+    project.timelineClips = [{ id: "video-without-audio", name: "Video without audio", kind: "video", trackId: videoTrack.id, start: 3, duration: 7 }];
     localStorage.setItem("dionysus.project.v1", JSON.stringify(project));
     localStorage.removeItem("dionysus.composition.v2");
     act(() => root.unmount());
@@ -1009,43 +1003,22 @@ describe("App history integration", () => {
     await flushEffects();
     await openTimelineView();
 
-    const lane = container.querySelector<HTMLElement>('.linked-audio-drop-target[data-linked-video-id="video-empty-linked-audio"]');
-    expect(lane).toBeTruthy();
-    expect(lane?.textContent).toContain("Drop audio here to add it to this video");
+    expect(container.querySelector('.linked-audio-row-handle')).toBeNull();
     const source = Array.from(container.querySelectorAll<HTMLButtonElement>(".timeline-source-item")).find(button => button.textContent?.includes(audioAsset.name));
     expect(source).toBeTruthy();
-
-    const payload = new Map<string, string>();
-    const transfer = {
-      setData: (type: string, value: string) => payload.set(type, value),
-      getData: (type: string) => payload.get(type) ?? "",
-      effectAllowed: "",
-      dropEffect: "",
-      types: ["text/dionysus-project-asset", "text/plain"]
-    } as unknown as DataTransfer;
-    const dragStart = new Event("dragstart", { bubbles: true, cancelable: true });
-    Object.defineProperty(dragStart, "dataTransfer", { value: transfer });
-    act(() => source!.dispatchEvent(dragStart));
-
-    const dragOver = new Event("dragover", { bubbles: true, cancelable: true });
-    Object.defineProperty(dragOver, "dataTransfer", { value: transfer });
-    act(() => lane!.dispatchEvent(dragOver));
-    expect(dragOver.defaultPrevented).toBe(true);
-
-    const drop = new Event("drop", { bubbles: true, cancelable: true });
+    const lane = container.querySelector<HTMLElement>('.visual-track-lane[data-track-id="' + videoTrack.id + '"]');
+    expect(lane).toBeTruthy();
+    Object.defineProperty(lane, "getBoundingClientRect", { configurable: true, value: () => ({ left: 0, top: 0, right: 1000, bottom: 70, width: 1000, height: 70, x: 0, y: 0, toJSON: () => ({}) }) });
+    const transfer = { getData: (type: string) => type === "text/dionysus-project-asset" ? audioAsset.id : "", dropEffect: "copy", types: ["text/dionysus-project-asset"] } as unknown as DataTransfer;
+    const drop = new MouseEvent("drop", { bubbles: true, cancelable: true, clientX: 10, clientY: 35 });
     Object.defineProperty(drop, "dataTransfer", { value: transfer });
     act(() => lane!.dispatchEvent(drop));
     await flushEffects();
 
-    expect((persistedProject().timelineClips ?? []).find(clip => clip.assetId === audioAsset.id)).toMatchObject({
-      kind: "audio", linkedVideoClipId: "video-empty-linked-audio", start: 3, duration: 7
-    });
+    expect(persistedProject().timelineClips?.find(clip => clip.assetId === audioAsset.id)).toBeUndefined();
+    expect(persistedProject().timelineClips?.find(clip => clip.id === "video-without-audio")).not.toHaveProperty("linkedVideoClipId");
   });
 
-});
-
-
-describe("Timeline preview", () => {
   it("tracks the current playhead time in the preview", async () => {
     await openTimelineView();
     const canvas = container.querySelector<HTMLCanvasElement>(".integrated-preview-frame canvas");
