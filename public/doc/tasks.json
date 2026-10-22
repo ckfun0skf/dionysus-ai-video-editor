@@ -674,10 +674,11 @@
             "Nested validation follow-up CI had 250/251 pass; corrected a negative test to target zero-duration nested placement rather than document-level duration. Recursive code, pinned metadata and cycle protection remain under exact-head verification.",
             "The nested invalid-duration test fixture now starts from a valid root snapshot with tracks so it tests recursive placement validation rather than an empty compatibility snapshot; exact-head CI pending.",
             "Canonical track settings dialogs and preview-frame transforms now share the root track command for fields promoted to the Composition schema and compatibility metadata. New source/test/docs head needs exact CI.",
-            "src/editorSessionHistory.ts and src/editorSessionHistory.test.ts on feat/e1-editor-session-history (CI pending)",
-            "App integration: one history entry captures Project compatibility state + canonical root Composition"
+            "App integration: one history entry captures Project compatibility state + canonical root Composition",
+            "src/editorSessionHistory.ts and src/editorSessionHistory.test.ts in PR #111",
+            "PR #111 pre-documentation exact-head CI run 39859261009: 24 test files / 274 tests; TypeScript/build passed; npm audit 0 vulnerabilities. Final PR head after docs sync still needs exact-head CI."
           ],
-          "notes": "Status stays in_progress: a single paired history is implemented, but project and Composition live state are still separate and rendering/persistence still contain legacy projections. Documentation status is not completion evidence; record exact-head CI and follow-up issues as each slice lands.",
+          "notes": "Status stays in_progress: a single paired history is implemented, but project and Composition live state are still separate and rendering/persistence still contain legacy projections. PR #111's first code head passed 24 files / 274 tests, type-check/build, and audit 0; the final documentation-updated head must be checked separately.",
           "description": "Establish canonical Composition for root/nested timelines, shared commands and independent structure-preserving Project-to-Clip snapshots.",
           "executionStage": "E2 and E4",
           "priority": "P0",
@@ -693,8 +694,8 @@
           "testStrategy": [
             "Migration matrix, parity, snapshot independence and round-trip."
           ],
-          "nextAction": "Verify exact-head CI for the atomic Editor-history slice. Then move canonical command dispatch into the session boundary and continue consolidating project persistence/recovery. Preserve schema-1.0 migration, stable IDs, source ranges, links, pins and nested snapshots; no browser smoke tests and no merge without owner approval.",
-          "handoffNotes": "PR #96 remains Draft/unmerged. Root Composition now owns live root timeline mutations/history and validated v2 import/recovery; schema-1.0 data is a compatibility projection. Canonical-first insertion/ripple, Master Shot ripple reorder, source-range/link edits, split/duplicate/delete, track removal guards, preview transforms and media import have focused regression coverage. Nested canonical documents/pins are retained. Exact final SHA CI and remaining compatibility-path review are still required. No browser smoke tests; no main push or merge."
+          "nextAction": "Verify exact-head CI on the final PR #111 head after task/handoff synchronization. Then move canonical command dispatch into the session boundary and continue consolidating project persistence/recovery. Preserve schema-1.0 migration, stable IDs, source ranges, links, pins and nested snapshots; no browser smoke tests and no merge without owner approval.",
+          "handoffNotes": "PR #111 is the current E1 history slice and remains unmerged. It consolidates paired Project/Composition undo-redo snapshots, but current live-state, persistence, and rendering boundaries remain transitional. Re-query all open PRs and verify exact-head CI on the latest head before taking the next step. Historical references to PR #96/#88/#89 must be re-triaged against live code before reuse or closure."
         }
       ],
       "executionStage": "E2",
