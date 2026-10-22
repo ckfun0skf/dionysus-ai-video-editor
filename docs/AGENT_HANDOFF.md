@@ -1,13 +1,12 @@
-## Latest checkpoint — 2026-10-22 (canonical render adapter and session boundary)
+## Latest checkpoint — 2026-10-22 (canonical rendering and nested command boundary)
 
-- Branch: `feat/e1-editor-session-history`; [PR #111](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/111) remains open and unmerged. Issue #110 tracks the architecture rebuild; Issue #100 remains open for owner UI acceptance.
-- Latest code checkpoint before this handoff sync: `87f312a488c7e5c3afcfa04b0b7af41f8c380394`. The current CI run [39871859367](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39871859367) is in progress; this documentation commit will create a newer head, so verify exact-head CI again afterward.
+- Branch: `feat/e1-editor-session-history`; [PR #111](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/111) remains open and unmerged. Issue #110 tracks architecture; Issue #100 remains open for owner UI acceptance.
+- Latest code checkpoint before this handoff sync: `588b78f97185a178dcfacd98032613a09721ebfb`. Exact-head CI [39872441809](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39872441809) passed 26 test files / 293 tests, TypeScript/build, and npm audit 0 vulnerabilities. This docs sync will create a newer head; verify exact-head CI again afterward.
 - Editor state/history/import/recovery use a paired `EditorSessionSnapshot`. Autosave writes the canonical v2 Composition envelope only; schema-1.0 `dionysus.project.v1` is a read-only fallback.
-- Nested Clip/Shot Slot Inspector updates route through Composition placement commands and validate track/source ranges. When canonical nested Composition exists, preview/playback layers are derived from it rather than trusting stale `version.layers`. Canonical linked-audio children are adapted into render-only audio layers using their source/range/mute/volume/fade metadata, including owner-track mute.
-- Master preview, audio playback preparation, procedural/script preview, and export now start from the canonical root Composition via a memoized compatibility render adapter. The renderer still consumes `CompositionLayer[]`, and the editable master/nested timeline UI remains on compatibility projections.
-- Exact-head CI passed at prior head `bad78e4aa45f3790f08bf30b1000deebc98fc702`, [run 39871510663](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39871510663): 26 test files / 289 tests, TypeScript/build passed, npm audit 0 vulnerabilities. This does not validate the newer root-render adapter until current-head CI completes.
-- No local checkout test/build, browser smoke test, or manual UI acceptance is claimed. Do not merge without explicit owner approval.
-- Next: verify CI on the docs-synchronized head; if green, audit remaining non-root direct mutation paths and decide how to migrate nested editable UI off the compatibility layer projection without losing linked-audio ownership or pinned nested snapshots.
+- Nested Clip/Shot Slot Inspector edits, track mute, duration, and description now synchronize canonical Composition metadata with compatibility projections through dedicated helpers. Canonical nested render layers include linked-audio children with source/range/mute/volume/fade and owner-track mute semantics.
+- Master preview, audio playback preparation, procedural/script preview, and export start from the canonical root Composition through a memoized adapter to the legacy `CompositionLayer[]` renderer. Editable master/nested timeline UI remains compatibility-projected; this is not canonical-only rendering/UI.
+- No local checkout tests/build, browser smoke tests, or manual UI acceptance are claimed. Do not merge without explicit owner approval.
+- Next: verify exact-head CI after this docs sync, then audit remaining non-root edit/pinned snapshot paths and plan a tested migration of nested editable UI off compatibility layer projections.
 
 ---
 
