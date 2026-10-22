@@ -780,6 +780,13 @@ export default function App() {
     rootCompositionRef.current = nextRoot;
     setProject(projected);
     setRootComposition(nextRoot);
+    // Migrations may remove a legacy Audio Track that existed only to store owned source-audio
+    // children. Keep the workspace selection on a real track rather than leaving stale controls
+    // that try to edit a track no longer present in the canonical Composition.
+    if (selectedTimelineTrackId && !projected.tracks.some(track => track.id === selectedTimelineTrackId)) {
+      const fallbackTrack = projected.tracks.find(track => track.kind === "video") ?? projected.tracks[0];
+      setSelectedTimelineTrackId(fallbackTrack?.id ?? "");
+    }
   }
 
   function changeRootComposition(update: (document: CompositionDocument) => CompositionDocument, historyGroup = "") {
