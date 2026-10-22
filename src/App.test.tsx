@@ -449,24 +449,24 @@ describe("App history integration", () => {
     const clips = () => persistedProject().timelineClips ?? [];
     const video = () => clips().find(clip => clip.kind === "video")!;
     const audio = () => clips().find(clip => clip.kind === "audio" && clip.linkedVideoClipId)!;
-    const childId = () => audio().id;
+    const childId = audio().id;
     expect(audio().linkedVideoClipId).toBe(video().id);
 
     const extract = buttonsNamed("Extract Video clip 1 audio")[0];
     expect(extract).toBeTruthy();
     click(extract);
     await flushEffects();
-    const independent = () => clips().find(clip => clip.id === childId())!;
+    const independent = () => clips().find(clip => clip.id === childId)!;
     expect(independent()).not.toHaveProperty("linkedVideoClipId");
     expect(independent().trackId).not.toBe(video().trackId);
 
     click(buttonsNamed("Undo")[0]);
     await flushEffects();
-    expect(clips().find(clip => clip.id === childId())?.linkedVideoClipId).toBe(video().id);
+    expect(clips().find(clip => clip.id === childId)?.linkedVideoClipId).toBe(video().id);
 
     click(buttonsNamed("Redo").find(button => !button.disabled)!);
     await flushEffects();
-    expect(clips().find(clip => clip.id === childId())).not.toHaveProperty("linkedVideoClipId");
+    expect(clips().find(clip => clip.id === childId)).not.toHaveProperty("linkedVideoClipId");
   });
 
 
