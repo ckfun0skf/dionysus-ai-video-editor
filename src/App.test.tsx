@@ -2579,7 +2579,7 @@ describe("mobile audio clip controls", () => {
     expect(clips().some(clip => clip.kind === "audio" && clip.id !== "test-audio-1" && !clip.linkedVideoClipId)).toBe(true);
   });
 
-  it("links a dropped audio asset to the video clip when dropped on a Video layer", async () => {
+  it("rejects dropping independent audio onto a Video layer instead of linking it", async () => {
     await openTimelineView();
     const project = persistedProject();
     const videoTrack = project.tracks.find(track => track.kind === "video");
@@ -2604,9 +2604,9 @@ describe("mobile audio clip controls", () => {
     act(() => lane!.dispatchEvent(drop));
     await flushEffects();
 
-    const linked = (persistedProject().timelineClips ?? []).find(clip => clip.assetId === audioAsset.id);
-    expect(linked).toMatchObject({ kind: "audio", linkedVideoClipId: "video-awaiting-audio", start: 0, duration: 8 });
-    expect(linked?.trackId).not.toBe(videoTrack.id);
+    expect(persistedProject().timelineClips?.find(clip => clip.assetId === audioAsset.id)).toBeUndefined();
+    expect(persistedProject().timelineClips?.find(clip => clip.id === "video-awaiting-audio")).not.toHaveProperty("linkedVideoClipId");
+    expect(container.textContent).toContain("Independent audio must be placed on an Audio layer");
   });
 
 
