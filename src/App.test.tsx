@@ -2602,21 +2602,14 @@ describe("mobile audio clip controls", () => {
     await flushEffects();
     expect((persistedProject().timelineClips ?? []).find(item => item.id === "mobile-audio-mute-clip")?.muted).toBe(false);
   });
-  it("makes the Linked Audio layer row itself a drag handle for unlink and relink", async () => {
+  it("does not expose Linked Audio as a drag handle", async () => {
     await openTimelineView();
-    await seedLinkedVideoAudioPairs();
-    const audio = (persistedProject().timelineClips ?? []).find(clip => clip.kind === "audio" && clip.linkedVideoClipId);
-    expect(audio).toBeTruthy();
+    await seedLinkedVideoAudioPairs(1);
     const rowHandle = container.querySelector<HTMLElement>(".linked-audio-row-handle");
     expect(rowHandle).toBeTruthy();
-    expect(rowHandle?.getAttribute("draggable")).toBe("true");
-    const transfer = { setData: vi.fn(), effectAllowed: "" } as unknown as DataTransfer;
-    const dragStart = new Event("dragstart", { bubbles: true });
-    Object.defineProperty(dragStart, "dataTransfer", { value: transfer });
-    act(() => rowHandle!.dispatchEvent(dragStart));
-    expect(transfer.setData).toHaveBeenCalledWith("text/dionysus-timeline-clip", audio!.id);
+    expect(rowHandle?.getAttribute("draggable")).toBe("false");
+    expect(rowHandle?.getAttribute("title")).toBe("Linked audio is owned by this video placement");
   });
-
   it("extracts linked audio and duplicates it without changing the original video relationship", async () => {
     await openTimelineView();
     await seedLinkedVideoAudioPairs(1);
