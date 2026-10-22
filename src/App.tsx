@@ -31,7 +31,7 @@ import {
 import { createEditorSessionHistory, type EditorSessionHistory, type EditorSessionSnapshot } from "./editorSessionHistory";
 import { createImportedEditorSessionTransition, restoreEditorSessionHistory, transitionEditorSession } from "./editorSession";
 import { chooseEditorSessionRecoverySource, COMPOSITION_PROJECT_STORAGE_KEY, LEGACY_PROJECT_STORAGE_KEY, persistEditorSession } from "./editorSessionPersistence";
-import { collectCompositionLayers, collectRootCompositionLayers, collectVersionRenderLayers, isPlayableAudioLayer, renderCompositionFrame, exportCompositionWebM, downloadExport } from "./compositionRenderer";
+import { collectRootCompositionLayers, collectVersionRenderLayers, isPlayableAudioLayer, renderCompositionFrame, exportCompositionWebM, downloadExport } from "./compositionRenderer";
 import { createClipVersionSnapshot } from "./clipVersionSnapshot";
 import AIGenerationPanel from "./AIGenerationPanel";
 import CodePlayground from "./CodePlayground";
