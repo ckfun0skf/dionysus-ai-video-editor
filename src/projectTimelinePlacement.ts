@@ -1,7 +1,7 @@
 import type { DionysusProject, Shot, TimelineClip } from "./types";
 import type { CompositionDocument, CompositionPlacement } from "./compositionModel";
 import { assertValidCompositionDocument, applyCompositionResizePreview, insertCompositionPlacement, moveCompositionPlacement, moveCompositionPlacementToTrack } from "./compositionCommands";
-import { createRootCompositionPlacementForTimelineClip, migrateLegacyProjectToComposition } from "./compositionMigration";
+import { createRootCompositionPlacementForTimelineClip, migrateLegacyProjectToComposition, projectRootCompositionToLegacy } from "./compositionMigration";
 import { getMasterShotStart } from "./masterTimeline";
 import { calculateTimelineDropPosition } from "./timelinePlacement";
 import { applyTimelineClipResize, calculateTimelineClipResizePreview, type ClipResizePreview } from "./timelineResize";
@@ -36,7 +36,7 @@ export function getProjectTimelinePlacementItems(
     ? movingClip?.shotId ?? project.shots.find(shot => movingClip!.id.startsWith("storyboard-" + shot.id + "-"))?.id
     : excludeShotId;
   const items = [
-    ...(project.timelineClips ?? []).filter(clip => !clip.id.startsWith("storyboard-")),
+    ...(project.timelineClips ?? []).filter(clip => !clip.id.startsWith("storyboard-") && !clip.linkedVideoClipId),
     ...project.shots.filter(shot => shot.id !== associatedShotId).map(shot => asShotPlacement(project, shot)),
   ];
   if (materialized && movingClip && !items.some(item => item.id === movingClip.id)) items.push(movingClip);
@@ -135,53 +135,9 @@ export function applyProjectTimelineClipResize(
   const requestedIds = [preview.id, ...preview.trims.map(trim => trim.id)];
   if (rootComposition && requestedIds.every(id => rootComposition!.placements.some(item => item.id === id))) {
     const resized = applyCompositionResizePreview(rootComposition, preview);
-    const originalById = new Map(rootComposition.placements.map(placement => [placement.id, placement]));
-    const updatedById = new Map(resized.placements.map(placement => [placement.id, placement]));
-    // Include linked descendants changed by the shared command, not only the explicit resize
-    // and trim IDs. Otherwise the canonical document is correct but the compatibility projection
-    // leaves linked audio at its previous timing/source range.
-    const touchedIds = new Set(resized.placements.filter(placement => {
-      const original = originalById.get(placement.id);
-      return original && (
-        original.start !== placement.start ||
-        original.duration !== placement.duration ||
-        original.sourceIn !== placement.sourceIn ||
-        original.sourceOut !== placement.sourceOut ||
-        original.trackId !== placement.trackId
-      );
-    }).map(placement => placement.id));
-    const shots = project.shots.map(shot => {
-      if (!touchedIds.has(shot.id)) return shot;
-      const placement = updatedById.get(shot.id);
-      if (!placement) return shot;
-      return {
-        ...shot,
-        masterStart: placement.start,
-        duration: placement.duration,
-        masterTrackId: placement.trackId,
-      };
-    });
-    const timelineClips = (project.timelineClips ?? []).map(clip => {
-      if (!touchedIds.has(clip.id)) return clip;
-      const placement = updatedById.get(clip.id);
-      if (!placement) return clip;
-      const {
-        sourceIn: _sourceIn,
-        sourceOut: _sourceOut,
-        linkedVideoClipId: _linkedVideoClipId,
-        ...rest
-      } = clip;
-      return {
-        ...rest,
-        trackId: placement.trackId,
-        start: placement.start,
-        duration: placement.duration,
-        ...(placement.sourceIn !== undefined ? { sourceIn: placement.sourceIn } : {}),
-        ...(placement.sourceOut !== undefined ? { sourceOut: placement.sourceOut } : {}),
-        ...(placement.linkedToPlacementId ? { linkedVideoClipId: placement.linkedToPlacementId } : {}),
-      };
-    }).map(clip => clip.kind === "audio" ? withDurationAndClampedFades(clip, clip.duration) : clip);
-    return { ...project, shots, timelineClips };
+    // Project the canonical root in one place so owned audio children inherit their owner's
+    // committed timing/source range instead of being updated as independent placements.
+    return projectRootCompositionToLegacy(project, resized);
   }
 
   // Transitional fallback: legacy Storyboard materializations are intentionally omitted from the
@@ -638,32 +594,7 @@ export function moveProjectTimelinePlacement(
   }
   if (rootComposition?.placements.some(placement => placement.id === moving.id)) {
     const movedComposition = moveCompositionPlacementToTrack(rootComposition, moving.id, targetTrackId, start);
-    const originalById = new Map(rootComposition.placements.map(placement => [placement.id, placement]));
-    const movedById = new Map(movedComposition.placements.map(placement => [placement.id, placement]));
-    const touchedIds = new Set(movedComposition.placements.filter(placement => {
-      const original = originalById.get(placement.id);
-      return original && (
-        original.start !== placement.start ||
-        original.duration !== placement.duration ||
-        original.trackId !== placement.trackId ||
-        original.sourceIn !== placement.sourceIn ||
-        original.sourceOut !== placement.sourceOut
-      );
-    }).map(placement => placement.id));
-    const timelineClips = (project.timelineClips ?? []).map(clip => {
-      if (!touchedIds.has(clip.id)) return clip;
-      const placement = movedById.get(clip.id);
-      if (!placement) return clip;
-      return {
-        ...clip,
-        trackId: placement.trackId,
-        start: placement.start,
-        duration: placement.duration,
-        ...(placement.sourceIn !== undefined ? { sourceIn: placement.sourceIn } : {}),
-        ...(placement.sourceOut !== undefined ? { sourceOut: placement.sourceOut } : {}),
-      };
-    });
-    return { ...project, timelineClips };
+    return projectRootCompositionToLegacy(project, movedComposition);
   }
 
   // Compatibility path for materialized Storyboard placements omitted from the root projection.
