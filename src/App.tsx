@@ -1706,7 +1706,7 @@ export default function App() {
       ...track,
       id: id("clip-track"),
     }));
-    const nextVersion: ClipVersion = {
+    const nextVersion = normalizeClipVersionTracks({
       id: nextId,
       name: "Version " + ((asset.clipVersions?.length ?? 0) + 1),
       description: "Blank version based on " + current.name,
@@ -1715,7 +1715,7 @@ export default function App() {
       tracks,
       scriptVersionIds: [],
       generationRecords: [],
-    };
+    });
     change(p => ({
       ...p,
       assets: p.assets.map(item => item.id !== assetId || item.kind !== "clip" ? item : {
