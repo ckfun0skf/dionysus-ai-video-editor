@@ -7,6 +7,7 @@ import {
   type CompositionDocument,
   type CompositionMigrationResult,
   type CompositionMigrationWarning,
+  type CompositionLinkedAudioChild,
   type CompositionPlacement,
   type CompositionSourceReference,
   type CompositionTrack,
@@ -159,31 +160,62 @@ function rootPlacements(project: DionysusProject, warnings: CompositionMigration
     });
   }
 
-  const masterPlacements = project.shots.map((shot, index) => masterShotPlacement(project, shot, index));
-  const clipPlacements = clips.filter(clip => !duplicateCandidates.has(clip.id)).map((clip, order) => {
-    const source = sourceForTimelineClip(project, clip);
-    if (source.type === "missing") warnings.push({
-      code: "missing-source",
-      entityId: clip.id,
-      message: `Placement "${clip.id}" references missing source "${source.originalId}". The reference is retained as missing.`,
-    });
-    const linkedTarget = clip.linkedVideoClipId
-      ? skippedStoryboardTargets.get(clip.linkedVideoClipId) ?? clip.linkedVideoClipId
-      : undefined;
-    return {
+  // Migrate legacy linked-audio placements into owned child records. They no longer occupy
+  // an Audio Track in the canonical composition; their legacy IDs survive for projection/UI.
+  const childrenByOwner = new Map<string, CompositionLinkedAudioChild[]>();
+  const ownedChildIds = new Set<string>();
+  for (const clip of clips) {
+    if (clip.kind !== "audio" || !clip.linkedVideoClipId) continue;
+    const ownerId = skippedStoryboardTargets.get(clip.linkedVideoClipId) ?? clip.linkedVideoClipId;
+    const ownerClip = byId.get(ownerId);
+    if (!(ownerClip && (ownerClip.kind === "video" || ownerClip.kind === "clip")) && !shotIds.has(ownerId)) continue;
+    const child: CompositionLinkedAudioChild = {
       id: clip.id,
       name: clip.name,
-      trackId: clip.trackId,
-      start: clip.start,
-      duration: clip.duration,
-      order: project.shots.length + order,
-      source,
+      source: sourceForTimelineClip(project, clip),
       ...(clip.sourceIn !== undefined ? { sourceIn: clip.sourceIn } : {}),
       ...(clip.sourceOut !== undefined ? { sourceOut: clip.sourceOut } : {}),
-      ...(linkedTarget && (byId.has(linkedTarget) || shotIds.has(linkedTarget)) ? { linkedToPlacementId: linkedTarget } : {}),
+      ...(clip.muted !== undefined ? { muted: clip.muted } : {}),
+      ...(clip.volume !== undefined ? { volume: clip.volume } : {}),
+      ...(clip.fadeIn !== undefined ? { fadeIn: clip.fadeIn } : {}),
+      ...(clip.fadeOut !== undefined ? { fadeOut: clip.fadeOut } : {}),
       legacyData: record(clip),
     };
+    const children = childrenByOwner.get(ownerId) ?? [];
+    children.push(child);
+    childrenByOwner.set(ownerId, children);
+    ownedChildIds.add(clip.id);
+  }
+
+  const masterPlacements = project.shots.map((shot, index) => {
+    const placement = masterShotPlacement(project, shot, index);
+    const children = childrenByOwner.get(shot.id);
+    return children?.length ? { ...placement, linkedAudioChildren: structuredClone(children) } : placement;
   });
+  const clipPlacements = clips
+    .filter(clip => !duplicateCandidates.has(clip.id) && !ownedChildIds.has(clip.id))
+    .map((clip, order) => {
+      const source = sourceForTimelineClip(project, clip);
+      if (source.type === "missing") warnings.push({
+        code: "missing-source",
+        entityId: clip.id,
+        message: `Placement "${clip.id}" references missing source "${source.originalId}". The reference is retained as missing.`,
+      });
+      const children = childrenByOwner.get(clip.id);
+      return {
+        id: clip.id,
+        name: clip.name,
+        trackId: clip.trackId,
+        start: clip.start,
+        duration: clip.duration,
+        order: project.shots.length + order,
+        source,
+        ...(clip.sourceIn !== undefined ? { sourceIn: clip.sourceIn } : {}),
+        ...(clip.sourceOut !== undefined ? { sourceOut: clip.sourceOut } : {}),
+        ...(children?.length ? { linkedAudioChildren: structuredClone(children) } : {}),
+        legacyData: record(clip),
+      };
+    });
 
   const all = [...masterPlacements, ...clipPlacements];
   const trackOrder = new Map(project.tracks.map((track, index) => [track.id, index]));
@@ -318,7 +350,35 @@ function legacyShotSlotComposition(shot: Shot, slot: Shot["slots"][number], vers
  */
 export function migrateLegacyProjectToComposition(project: DionysusProject): CompositionMigrationResult {
   const warnings: CompositionMigrationWarning[] = [];
-  const tracks = rootTracks(project.tracks, warnings);
+  const clips = project.timelineClips ?? [];
+  const clipById = new Map(clips.map(clip => [clip.id, clip]));
+  const storyboardTargets = new Map<string, string>();
+  for (const clip of clips) {
+    if (clip.id.startsWith("storyboard-")) {
+      const shotId = storyboardShotId(project, clip);
+      if (shotId) storyboardTargets.set(clip.id, shotId);
+    }
+  }
+  const ownedLegacyAudioIds = new Set<string>();
+  for (const clip of clips) {
+    if (clip.kind !== "audio" || !clip.linkedVideoClipId) continue;
+    const ownerId = storyboardTargets.get(clip.linkedVideoClipId) ?? clip.linkedVideoClipId;
+    const owner = clipById.get(ownerId);
+    if ((owner && (owner.kind === "video" || owner.kind === "clip")) || project.shots.some(shot => shot.id === ownerId)) {
+      ownedLegacyAudioIds.add(clip.id);
+    }
+  }
+  // Old builds created/reused an Audio Track solely to store child-audio rows. Remove those
+  // backing-only tracks during migration; independent clips and deliberately empty tracks remain.
+  const tracksWithIndependentAudio = new Set(clips
+    .filter(clip => clip.kind === "audio" && !ownedLegacyAudioIds.has(clip.id))
+    .map(clip => clip.trackId));
+  const legacyLinkedOnlyTracks = new Set(clips
+    .filter(clip => ownedLegacyAudioIds.has(clip.id) && !tracksWithIndependentAudio.has(clip.trackId))
+    .map(clip => clip.trackId));
+  const tracks = rootTracks(project.tracks.filter(track =>
+    track.kind !== "audio" || !legacyLinkedOnlyTracks.has(track.id)
+  ), warnings);
   const placements = rootPlacements(project, warnings);
   const placementEnd = placements.reduce((end, placement) => Math.max(end, placement.start + placement.duration), 0);
   const rootComposition: CompositionDocument = {
@@ -445,6 +505,33 @@ export function projectRootCompositionToLegacy(
     });
   // Storyboard materializations are compatibility-only duplicates of Master Shots. Preserve them,
   // translating their start by the canonical shot delta so old consumers remain aligned.
+  const linkedAudioChildren: TimelineClip[] = rootComposition.placements.flatMap(owner =>
+    (owner.linkedAudioChildren ?? []).map(child => {
+      const legacy = child.legacyData as unknown as TimelineClip;
+      const sourceRef = child.source;
+      const assetId = sourceRef.type === "asset" || sourceRef.type === "clip" ? sourceRef.assetId
+        : sourceRef.type === "missing" ? sourceRef.originalId : undefined;
+      const shotId = sourceRef.type === "shot" ? sourceRef.shotId : undefined;
+      return {
+        ...legacy,
+        id: child.id,
+        name: child.name,
+        kind: "audio" as const,
+        trackId: owner.trackId,
+        start: owner.start,
+        duration: owner.duration,
+        ...(assetId ? { assetId } : {}),
+        ...(shotId ? { shotId } : {}),
+        ...(child.sourceIn !== undefined ? { sourceIn: child.sourceIn } : {}),
+        ...(child.sourceOut !== undefined ? { sourceOut: child.sourceOut } : {}),
+        ...(child.muted !== undefined ? { muted: child.muted } : {}),
+        ...(child.volume !== undefined ? { volume: child.volume } : {}),
+        ...(child.fadeIn !== undefined ? { fadeIn: child.fadeIn } : {}),
+        ...(child.fadeOut !== undefined ? { fadeOut: child.fadeOut } : {}),
+        linkedVideoClipId: owner.id,
+      };
+    })
+  );
   const storyboardClips = (source.timelineClips ?? []).filter(clip => clip.id.startsWith("storyboard-") && rootComposition.tracks.some(track => track.id === clip.trackId)).map(clip => {
     const shotId = clip.shotId ?? source.shots.find(shot => clip.id.startsWith("storyboard-" + shot.id + "-"))?.id;
     if (!shotId) return clip;
@@ -462,6 +549,6 @@ export function projectRootCompositionToLegacy(
     ...source,
     tracks,
     shots,
-    timelineClips: [...nonStoryboardClips, ...storyboardClips],
+    timelineClips: [...nonStoryboardClips.filter(clip => !(clip.kind === "audio" && clip.linkedVideoClipId)), ...linkedAudioChildren, ...storyboardClips],
   };
 }
