@@ -419,6 +419,63 @@ export function migrateLegacyProjectToComposition(project: DionysusProject): Com
  * shape. Domain data not represented by root Composition (assets, references, scripts, nested
  * version snapshots, etc.) is retained from the supplied project.
  */
+/**
+ * Convert the first canonical linked-audio representation (Audio-track placement with a
+ * linkedToPlacementId) into the owner-child contract. This runs when opening existing V2
+ * documents as well as during explicit compatibility migration, so old saved projects cannot
+ * silently keep the legacy orphan-prone representation.
+ */
+export function migrateLinkedAudioPlacementsToOwnedChildren(rootComposition: CompositionDocument): CompositionDocument {
+  const next = structuredClone(rootComposition);
+  const placementsById = new Map(next.placements.map(placement => [placement.id, placement]));
+  const candidates = next.placements.filter(placement => {
+    const owner = placement.linkedToPlacementId ? placementsById.get(placement.linkedToPlacementId) : undefined;
+    const track = next.tracks.find(item => item.id === placement.trackId);
+    return track?.kind === "audio" && placement.legacyData.kind === "audio" &&
+      owner && (owner.legacyData.kind === "video" || owner.legacyData.kind === "clip");
+  });
+  if (!candidates.length) return next;
+
+  const movedIds = new Set(candidates.map(placement => placement.id));
+  for (const childPlacement of candidates) {
+    const ownerId = childPlacement.linkedToPlacementId!;
+    const child: CompositionLinkedAudioChild = {
+      id: childPlacement.id,
+      name: childPlacement.name,
+      source: structuredClone(childPlacement.source),
+      ...(childPlacement.sourceIn !== undefined ? { sourceIn: childPlacement.sourceIn } : {}),
+      ...(childPlacement.sourceOut !== undefined ? { sourceOut: childPlacement.sourceOut } : {}),
+      ...(typeof childPlacement.legacyData.muted === "boolean" ? { muted: childPlacement.legacyData.muted } : {}),
+      ...(typeof childPlacement.legacyData.volume === "number" ? { volume: childPlacement.legacyData.volume } : {}),
+      ...(typeof childPlacement.legacyData.fadeIn === "number" ? { fadeIn: childPlacement.legacyData.fadeIn } : {}),
+      ...(typeof childPlacement.legacyData.fadeOut === "number" ? { fadeOut: childPlacement.legacyData.fadeOut } : {}),
+      legacyData: { ...childPlacement.legacyData },
+    };
+    next.placements = next.placements.map(owner => owner.id !== ownerId ? owner : ({
+      ...owner,
+      linkedAudioChildren: [
+        ...(owner.linkedAudioChildren ?? []).filter(existing => existing.id !== child.id),
+        child,
+      ],
+    }));
+  }
+  next.placements = next.placements.filter(placement => !movedIds.has(placement.id));
+
+  const independentAudioTrackIds = new Set(next.placements
+    .filter(placement => placement.legacyData.kind === "audio" && !placement.linkedToPlacementId)
+    .map(placement => placement.trackId));
+  const movedAudioTrackIds = new Set(candidates.map(placement => placement.trackId));
+  const unusedLegacyAudioTracks = new Set([...movedAudioTrackIds].filter(trackId => !independentAudioTrackIds.has(trackId)));
+  next.tracks = next.tracks.filter(track => track.kind !== "audio" || !unusedLegacyAudioTracks.has(track.id));
+  const perTrack = new Map<string, number>();
+  next.placements = next.placements.map(placement => {
+    const order = perTrack.get(placement.trackId) ?? 0;
+    perTrack.set(placement.trackId, order + 1);
+    return { ...placement, order };
+  });
+  return next;
+}
+
 export function projectRootCompositionToLegacy(
   project: DionysusProject,
   rootComposition: CompositionDocument,
