@@ -1,6 +1,6 @@
 import type { ClipVersion, CompositionLayer, TimelineTrack } from "./types";
 import type { CompositionDocument, CompositionPlacement, CompositionSourceReference, CompositionTrack } from "./compositionModel";
-import { applyCompositionResizePreview, deleteCompositionPlacement, insertCompositionPlacement, moveCompositionPlacementToTrack, type CompositionResizePreview } from "./compositionCommands";
+import { applyCompositionResizePreview, deleteCompositionPlacement, insertCompositionPlacement, moveCompositionPlacementToTrack, updateCompositionPlacement, type CompositionResizePreview } from "./compositionCommands";
 
 export type CanonicalNestedTrackKind = "video" | "audio" | "text";
 
@@ -310,8 +310,10 @@ export function updateClipVersionLayer(
   const linkedToPlacementId = typeof legacy.linkedToPlacementId === "string"
     ? legacy.linkedToPlacementId
     : typeof legacy.linkedVideoClipId === "string" ? legacy.linkedVideoClipId : undefined;
-  const updatedPlacement: CompositionPlacement = {
-    ...placement,
+  // Inspector edits must cross the same validated immutable command boundary as
+  // timeline operations. This keeps canonical geometry/source fields and their legacy
+  // projection synchronized, and validates track/placement invariants on every edit.
+  const nextDocument = updateCompositionPlacement(document, layerId, {
     name: updatedLayer.name,
     trackId: updatedLayer.trackId ?? placement.trackId,
     start: updatedLayer.start,
@@ -320,18 +322,11 @@ export function updateClipVersionLayer(
       .some(key => Object.prototype.hasOwnProperty.call(patch, key))
       ? sourceReferenceForLayer(updatedLayer)
       : placement.source,
-    ...(updatedLayer.sourceIn !== undefined ? { sourceIn: updatedLayer.sourceIn } : {}),
-    ...(updatedLayer.sourceIn === undefined ? { sourceIn: undefined } : {}),
-    ...(updatedLayer.sourceOut !== undefined ? { sourceOut: updatedLayer.sourceOut } : {}),
-    ...(updatedLayer.sourceOut === undefined ? { sourceOut: undefined } : {}),
-    ...(linkedToPlacementId ? { linkedToPlacementId } : { linkedToPlacementId: undefined }),
+    sourceIn: updatedLayer.sourceIn,
+    sourceOut: updatedLayer.sourceOut,
+    linkedToPlacementId,
     legacyData: { ...placement.legacyData, ...legacy },
-  };
-  const nextDocument = {
-    ...document,
-    duration: Math.max(document.duration, updatedLayer.start + updatedLayer.duration),
-    placements: document.placements.map(item => item.id === layerId ? updatedPlacement : item),
-  };
+  });
   return versionWithComposition(normalized, nextDocument);
 }
 
