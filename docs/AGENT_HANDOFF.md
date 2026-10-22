@@ -656,3 +656,11 @@ Verify the current branch head and its CI first. If it passes, continue the root
 ## Validation correction — App tests follow canonical persistence (2026-10-22)
 
 The first CI run after switching autosave to canonical-only failed because the App integration-test helper still read only the legacy localStorage key. The product behavior is intentionally v2-first; `src/App.test.tsx` now reads the v2 envelope's Project projection first and uses v1 only as fallback. The failing run is [39866352949](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39866352949); rerun exact-head CI after this test adaptation. No production test failure has been isolated yet beyond the stale test helper assumptions; verify the full suite before claiming success.
+
+
+## Verified checkpoint — canonical-only persistence (2026-10-22)
+
+- Final docs/test-synchronized head: `c1009ae456df33815388c5cd62917c7606d396ac`.
+- Exact-head CI [run 39866541271](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39866541271) passed: 26 test files / 286 tests; TypeScript and production build passed; npm audit 0 vulnerabilities.
+- `src/App.test.tsx` now reads the canonical v2 envelope first, matching the new persistence contract. The preceding run failed only because its helper still read v1; this was corrected and the full suite then passed.
+- PR #111 remains open/unmerged. v2 is the only routinely written project key; v1 is retained read-only fallback. Non-root editing and render/playback legacy paths remain. No browser smoke tests or manual UI acceptance claimed.
