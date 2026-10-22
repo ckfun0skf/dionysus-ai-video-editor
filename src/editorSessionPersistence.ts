@@ -10,9 +10,8 @@ export interface EditorSessionStorage {
 }
 
 /**
- * Persist the versioned Composition envelope first, then mirror its Project projection
- * to the established v1 key for compatibility. If writing the mirror fails (for example,
- * because storage is full), the canonical envelope is already available for recovery.
+ * Persist only the authoritative versioned Composition envelope. The schema-1.0 key
+ * remains a read-only migration fallback for older projects; it is not updated in parallel.
  */
 export function persistEditorSession(
   storage: EditorSessionStorage,
@@ -27,7 +26,6 @@ export function persistEditorSession(
     ...document,
     project: projection,
   }));
-  storage.setItem(LEGACY_PROJECT_STORAGE_KEY, JSON.stringify(projection));
 }
 
 
@@ -35,18 +33,18 @@ type RecoveryDocument = {
   project: Pick<DionysusProject, "id" | "name" | "updatedAt">;
 };
 
+export type EditorSessionRecoverySource = "composition" | "legacy" | "empty";
+
 /**
- * Prefer the canonical envelope when it refers to the same project as the legacy mirror.
- * The v2 document is written first and is the authoritative snapshot; timestamps are
- * metadata, not a vote between two independently mutable representations. If identity
- * differs, keep the legacy document as the safer recovery candidate.
+ * Choose one complete recovery document. A structurally valid canonical envelope is
+ * authoritative regardless of its relationship to a stale legacy mirror; legacy is
+ * read only when the canonical envelope is absent or invalid.
  */
-export function shouldPreferCompositionRecovery(
+export function chooseEditorSessionRecoverySource(
   legacyRead: RecoveryDocument | undefined,
   compositionRead: RecoveryDocument | undefined,
-): boolean {
-  if (!compositionRead) return false;
-  if (!legacyRead) return true;
-  return legacyRead.project.id === compositionRead.project.id &&
-    legacyRead.project.name === compositionRead.project.name;
+): EditorSessionRecoverySource {
+  if (compositionRead) return "composition";
+  if (legacyRead) return "legacy";
+  return "empty";
 }
