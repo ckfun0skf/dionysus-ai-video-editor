@@ -226,7 +226,10 @@ function validateNewIds(document: CompositionDocument, map: Record<string, strin
   if (new Set(values).size !== values.length) {
     throw new Error("New Composition placement IDs must be unique.");
   }
-  const existingIds = new Set(document.placements.map(item => item.id));
+  const existingIds = new Set([
+    ...document.placements.map(item => item.id),
+    ...document.placements.flatMap(item => (item.linkedAudioChildren ?? []).map(child => child.id)),
+  ]);
   if (values.some(newId => existingIds.has(newId))) {
     throw new Error("New Composition placement IDs must be unique and must not collide with existing IDs.");
   }
@@ -371,7 +374,22 @@ export function trimCompositionPlacement(
     const source = resizedSourceRange(sourcePlacement, {
       id: placement.id, start: placement.start, duration, edge: "right",
     });
-    return syncLegacyPlacement({ ...placement, duration, ...source });
+    const linkedAudioChildren = placement.linkedAudioChildren?.map(child => {
+      const sourceIn = child.sourceIn ?? placement.sourceIn ?? 0;
+      const previousSourceOut = child.sourceOut ?? sourceIn + placement.duration;
+      if (Math.abs(previousSourceOut - sourceIn - placement.duration) > EPSILON) return child;
+      const sourceOut = sourceIn + duration;
+      return {
+        ...child,
+        sourceIn,
+        sourceOut,
+        legacyData: { ...child.legacyData, sourceIn, sourceOut },
+      };
+    });
+    return syncLegacyPlacement({
+      ...placement, duration, ...source,
+      ...(linkedAudioChildren ? { linkedAudioChildren } : {}),
+    });
   });
   extendCompositionDuration(next);
   assertValidCompositionDocument(next);
@@ -482,14 +500,35 @@ export function splitCompositionPlacement(
       ? rootRange
       : sourceRangeForSplit(placement);
     const { linkedToPlacementId: _link, ...base } = placement;
+    const rightId = input.newPlacementIds[placement.id];
+    const splitChildren = (placement.linkedAudioChildren ?? []).map(child => {
+      const sourceIn = child.sourceIn ?? range?.sourceIn ?? placement.sourceIn ?? 0;
+      const sourceOut = child.sourceOut ?? range?.sourceOut ?? sourceIn + placement.duration;
+      const rightChildId = `${rightId}:audio:${child.id}`;
+      return {
+        left: {
+          ...child,
+          sourceIn,
+          sourceOut: sourceIn + leftDuration,
+          legacyData: { ...child.legacyData, sourceIn, sourceOut: sourceIn + leftDuration, linkedVideoClipId: placement.id },
+        },
+        right: {
+          ...child,
+          id: rightChildId,
+          sourceIn: sourceIn + leftDuration,
+          sourceOut,
+          legacyData: { ...child.legacyData, id: rightChildId, sourceIn: sourceIn + leftDuration, sourceOut, linkedVideoClipId: rightId },
+        },
+      };
+    });
     const left = syncLegacyPlacement({
       ...base,
       legacyData: { ...base.legacyData, fadeOut: undefined },
       ...(placement.linkedToPlacementId ? { linkedToPlacementId: placement.linkedToPlacementId } : {}),
       duration: leftDuration,
       ...(range ? { sourceIn: range.sourceIn, sourceOut: range.sourceIn + leftDuration } : {}),
+      ...(splitChildren.length ? { linkedAudioChildren: splitChildren.map(item => item.left) } : {}),
     });
-    const rightId = input.newPlacementIds[placement.id];
     const rightLink = placement.linkedToPlacementId
       ? input.newPlacementIds[placement.linkedToPlacementId] ?? placement.linkedToPlacementId
       : undefined;
@@ -502,9 +541,10 @@ export function splitCompositionPlacement(
       start: splitTime,
       duration: rightDuration,
       order,
-      legacyData: { ...base.legacyData, fadeIn: undefined },
+      legacyData: { ...base.legacyData, id: rightId, name: placement.name + " (2)", fadeIn: undefined },
       ...(rightLink ? { linkedToPlacementId: rightLink } : {}),
       ...(range ? { sourceIn: range.sourceIn + leftDuration, sourceOut: range.sourceOut } : {}),
+      ...(splitChildren.length ? { linkedAudioChildren: splitChildren.map(item => item.right) } : {}),
     });
     splitPairs.set(placement.id, { left, right });
   }
@@ -536,11 +576,26 @@ export function duplicateCompositionPlacement(
   const copies = group.map(placement => {
     const order = nextOrder(document, placement.trackId) + (orderOffsets.get(placement.trackId) ?? 0);
     orderOffsets.set(placement.trackId, (orderOffsets.get(placement.trackId) ?? 0) + 1);
+    const newId = input.newPlacementIds[placement.id];
+    const linkedAudioChildren = placement.linkedAudioChildren?.map(child => {
+      const childId = `${newId}:audio:${child.id}`;
+      return {
+        ...clone(child),
+        id: childId,
+        legacyData: {
+          ...child.legacyData,
+          id: childId,
+          name: child.name,
+          linkedVideoClipId: newId,
+        },
+      };
+    });
     return syncLegacyPlacement({
       ...clone(placement),
-      id: input.newPlacementIds[placement.id],
+      id: newId,
       start: placement.start + delta,
       order,
+      ...(linkedAudioChildren ? { linkedAudioChildren } : {}),
       ...(placement.linkedToPlacementId && groupIds.has(placement.linkedToPlacementId)
         ? { linkedToPlacementId: input.newPlacementIds[placement.linkedToPlacementId] }
         : {}),
