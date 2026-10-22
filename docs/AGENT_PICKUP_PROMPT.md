@@ -1,3 +1,17 @@
+## Mandatory agent operating loop — 2026-10-22
+
+This project uses a continuous, evidence-based workflow, not a one-time handoff assumption.
+
+- Before changing code, inspect the live repository, main SHA, relevant open issues and PRs, changed files, and exact-head CI. Treat older handoff text as historical until re-verified.
+- Work in coherent, testable increments. Prefer implementation and regression tests over planning-only changes.
+- **After every meaningful increment, update the relevant existing GitHub Issue or add a comment immediately.** Record what changed, exact commit/PR/CI evidence when available, what remains, and the next concrete action. Do not defer all issue updates until the entire PR is complete.
+- Update an issue body when its scope or acceptance checklist changes; use comments for progress checkpoints, decisions, validation, blockers and handoff. Reuse existing issues unless a genuinely distinct scope needs independent tracking.
+- Keep the task dashboard, handoff and architecture docs consistent with code and actual GitHub state. A documentation checkbox is not implementation evidence.
+- No browser smoke tests. Do not claim visual/manual acceptance from CI. Do not merge a PR without explicit owner approval. Keep Issue #100 open until the owner accepts the deployed Pages UI.
+- When handing off, leave the exact current SHA, current CI state, outstanding work and next action in GitHub first; then provide a reusable prompt that does not assume the previous conversation is available.
+
+---
+
 > **CURRENT DIRECTION (2026-10-19 — supersedes older checkpoint text below):** The owner has chosen a Timeline-first rebuild. Read [`docs/TIMELINE_EDITOR_REBUILD_PLAN.md`](TIMELINE_EDITOR_REBUILD_PLAN.md) and [`docs/architecture/TIMELINE_EDITOR_WORKSPACE.md`](architecture/TIMELINE_EDITOR_WORKSPACE.md) first. Timeline Editor is the first complete workspace and includes an upper-left Media/Audio/Text/Effects/Transitions source browser, upper-right Preview/Canvas, and lower multitrack Timeline. Later, Storyboard and References are planning modules around the Editor. On mobile, the Editor bottom bar is contextual to the selected element; module navigation lives in the project/workspace header or menu. Preserve tested logic and schema-1.0 project compatibility; rebuild the workspace/state boundary, not the whole codebase from zero. No automated browser smoke tests.
 
 > **Live baseline observed while preparing this plan:** `main` was `a54526fc82345c8813a6f0b770056dfe6e25a526`. PR #88/#89 are open Draft PRs. PR #89 exact-head CI [39269841800](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39269841800) passed 206 tests but failed TypeScript/build. Re-check GitHub before acting; this is a historical observation, not a promise that the current state is unchanged.
