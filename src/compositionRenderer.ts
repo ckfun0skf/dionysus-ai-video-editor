@@ -84,10 +84,13 @@ export function collectCompositionLayers(project: DionysusProject): CompositionL
   return [...nested, ...timeline];
 }
 
-/** Linked source audio may point at a video asset; ordinary audio layers must point at audio assets. */
+/** Audio tracks may reference an audio file or the sound component of a video source. */
 export function isPlayableAudioLayer(layer: Pick<CompositionLayer, "kind" | "linkedVideoClipId">, asset: Pick<Asset, "kind"> | undefined): boolean {
   if (layer.kind !== "audio" || !asset) return false;
-  return asset.kind === "audio" || (asset.kind === "video" && Boolean(layer.linkedVideoClipId));
+  // Extract/Duplicate converts source audio into an independent Audio Track placement. Its
+  // asset remains a video container, but the audio component must stay playable after the
+  // ownership link is removed; linkedVideoClipId is UI ownership, not codec eligibility.
+  return asset.kind === "audio" || asset.kind === "video";
 }
 
 export function getCompositionDuration(layers: CompositionLayer[]): number {
