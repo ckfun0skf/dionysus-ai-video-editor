@@ -5,6 +5,8 @@ import {
   applyCompositionResizePreview,
   assertValidCompositionDocument,
   deleteCompositionPlacement,
+  duplicateLinkedAudio,
+  extractLinkedAudio,
   duplicateCompositionPlacement,
   insertCompositionPlacement,
   moveCompositionPlacement,
@@ -66,6 +68,40 @@ function placement(document: CompositionDocument, id: string): CompositionPlacem
 }
 
 describe("shared Composition editing commands", () => {
+  it("extracts linked source audio without changing its timing or source range", () => {
+    const source = fixture();
+    const before = JSON.stringify(source);
+    const extracted = extractLinkedAudio(source, "audio");
+    expect(placement(extracted, "audio")).toMatchObject({
+      id: "audio", trackId: "a1", start: 1, duration: 6, sourceIn: 2, sourceOut: 8,
+    });
+    expect(placement(extracted, "audio").linkedToPlacementId).toBeUndefined();
+    expect(placement(source, "audio").linkedToPlacementId).toBe("video");
+    expect(JSON.stringify(source)).toBe(before);
+    expect(() => assertValidCompositionDocument(extracted)).not.toThrow();
+  });
+
+  it("duplicates linked source audio as an independent copy while retaining the original link", () => {
+    const source = fixture();
+    const duplicated = duplicateLinkedAudio(source, "audio", "audio-copy");
+    expect(placement(duplicated, "audio").linkedToPlacementId).toBe("video");
+    expect(placement(duplicated, "audio-copy")).toMatchObject({
+      name: "Linked audio (copy)", trackId: "a1", start: 1, duration: 6, sourceIn: 2, sourceOut: 8,
+    });
+    expect(placement(duplicated, "audio-copy").linkedToPlacementId).toBeUndefined();
+    expect(source.placements).toHaveLength(2);
+    expect(duplicated.placements).toHaveLength(3);
+    expect(() => assertValidCompositionDocument(duplicated)).not.toThrow();
+  });
+
+  it("rejects extract or duplicate operations for unlinked or non-audio placements", () => {
+    const source = fixture();
+    const independent = extractLinkedAudio(source, "audio");
+    expect(() => extractLinkedAudio(independent, "audio")).toThrow(/linked audio/);
+    expect(() => duplicateLinkedAudio(independent, "audio", "audio-copy")).toThrow(/linked audio/);
+    expect(() => duplicateLinkedAudio(source, "audio", "audio")).toThrow(/unique/);
+  });
+
   it("adds, reorders and removes root tracks through immutable Composition commands", () => {
     const source = fixture();
     const before = JSON.stringify(source);
