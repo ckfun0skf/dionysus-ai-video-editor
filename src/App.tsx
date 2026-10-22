@@ -876,7 +876,7 @@ export default function App() {
     const clip: TimelineClip = { id: id("timeline-clip"), name: asset.name, kind, trackId: track.id, start: 0, duration, assetId: asset.id, sourceIn: 0, ...(version ? { clipVersionId: version.id } : {}), ...(asset.html !== undefined ? { html: asset.html } : {}), ...(asset.css !== undefined ? { css: asset.css } : {}), ...(asset.js !== undefined ? { code: asset.js } : {}) };
     let plan = calculateCanonicalCompositionInsertionPlan(rootCompositionRef.current, clip, track.id, desiredStart);
     if (plan.status === "start-occupied") {
-      const trackClips = (projectRef.current.timelineClips ?? []).filter(item => item.trackId === track.id);
+      const trackClips = (projectRef.current.timelineClips ?? []).filter(item => item.trackId === track.id && !item.linkedVideoClipId);
       const appendAt = trackClips.reduce((end, item) => Math.max(end, item.start + item.duration), 0);
       plan = calculateCanonicalCompositionInsertionPlan(rootCompositionRef.current, clip, track.id, appendAt);
     }
