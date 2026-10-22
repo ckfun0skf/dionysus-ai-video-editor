@@ -179,6 +179,90 @@ describe("versioned project document boundary", () => {
   });
 
 
+  it("migrates legacy V2 linked-audio placements to owner-child data on read", () => {
+    const project = structuredClone(sampleProject);
+    project.shots = [];
+    project.assets.push({ id: "migration-video-audio", name: "Clip with sound", kind: "video", path: "idb://source-video" });
+    const videoTrack = project.tracks.find(track => track.kind === "video")!;
+    const audioTrack = project.tracks.find(track => track.kind === "audio")!;
+    const video = {
+      id: "legacy-v2-video", name: "Video", kind: "video" as const, trackId: videoTrack.id,
+      start: 2, duration: 5, assetId: "migration-video-audio", sourceIn: 1, sourceOut: 6,
+    };
+    const audio = {
+      id: "legacy-v2-linked-audio", name: "Video source audio", kind: "audio" as const, trackId: audioTrack.id,
+      start: 2, duration: 5, assetId: "migration-video-audio", sourceIn: 1, sourceOut: 6, linkedVideoClipId: video.id,
+      volume: 0.5, fadeIn: 0.25, fadeOut: 0.75,
+    };
+    project.timelineClips = [video, audio];
+
+    const envelope = JSON.parse(JSON.stringify(createProjectDocument(project))) as ReturnType<typeof createProjectDocument>;
+    const root = envelope.compositionModel.rootComposition;
+    const owner = root.placements.find(placement => placement.id === video.id)!;
+    const child = owner.linkedAudioChildren!.find(item => item.id === audio.id)!;
+    owner.linkedAudioChildren = [];
+    root.tracks.push({ id: audioTrack.id, name: audioTrack.name, kind: "audio", order: root.tracks.length, legacyData: { ...audioTrack } });
+    root.placements.push({
+      id: child.id,
+      name: child.name,
+      trackId: audioTrack.id,
+      start: video.start,
+      duration: video.duration,
+      order: 0,
+      source: child.source,
+      sourceIn: child.sourceIn,
+      sourceOut: child.sourceOut,
+      linkedToPlacementId: video.id,
+      legacyData: { ...child.legacyData, id: child.id, kind: "audio", trackId: audioTrack.id, linkedVideoClipId: video.id },
+    });
+    envelope.compositionModel.rootComposition = root;
+
+    const reopened = readProjectDocument(JSON.parse(JSON.stringify(envelope)), true);
+    const migratedRoot = reopened.compositionModel!.rootComposition;
+    expect(migratedRoot.placements.find(placement => placement.id === video.id)?.linkedAudioChildren).toMatchObject([{
+      id: audio.id, sourceIn: 1, sourceOut: 6, volume: 0.5, fadeIn: 0.25, fadeOut: 0.75,
+    }]);
+    expect(migratedRoot.placements.some(placement => placement.id === audio.id)).toBe(false);
+    expect(migratedRoot.tracks.some(track => track.id === audioTrack.id)).toBe(false);
+    expect(reopened.project.timelineClips?.find(clip => clip.id === audio.id)).toMatchObject({
+      kind: "audio", trackId: videoTrack.id, start: video.start, duration: video.duration, linkedVideoClipId: video.id,
+    });
+    expect(reopened.project.tracks.some(track => track.id === audioTrack.id)).toBe(false);
+  });
+
+  it("keeps an Audio Track during V2 linked-audio migration when it contains independent audio", () => {
+    const project = structuredClone(sampleProject);
+    project.shots = [];
+    project.assets.push(
+      { id: "migration-video-audio-2", name: "Clip with sound", kind: "video", path: "idb://source-video" },
+      { id: "migration-independent-audio", name: "Independent sound", kind: "audio", path: "idb://source-audio" },
+    );
+    const videoTrack = project.tracks.find(track => track.kind === "video")!;
+    const audioTrack = project.tracks.find(track => track.kind === "audio")!;
+    const video = { id: "v2-video-independent", name: "Video", kind: "video" as const, trackId: videoTrack.id, start: 0, duration: 4, assetId: "migration-video-audio-2" };
+    const linked = { id: "v2-linked-child", name: "Owned sound", kind: "audio" as const, trackId: audioTrack.id, start: 0, duration: 4, assetId: "migration-video-audio-2", linkedVideoClipId: video.id };
+    const independent = { id: "v2-independent-audio", name: "Music", kind: "audio" as const, trackId: audioTrack.id, start: 0, duration: 4, assetId: "migration-independent-audio" };
+    project.timelineClips = [video, linked, independent];
+
+    const envelope = JSON.parse(JSON.stringify(createProjectDocument(project))) as ReturnType<typeof createProjectDocument>;
+    const root = envelope.compositionModel.rootComposition;
+    const owner = root.placements.find(placement => placement.id === video.id)!;
+    const child = owner.linkedAudioChildren!.find(item => item.id === linked.id)!;
+    owner.linkedAudioChildren = [];
+    root.tracks.push({ id: audioTrack.id, name: audioTrack.name, kind: "audio", order: root.tracks.length, legacyData: { ...audioTrack } });
+    root.placements.push({
+      id: child.id, name: child.name, trackId: audioTrack.id, start: video.start, duration: video.duration, order: 0,
+      source: child.source, linkedToPlacementId: video.id, legacyData: { ...child.legacyData, id: child.id, kind: "audio", trackId: audioTrack.id, linkedVideoClipId: video.id },
+    });
+    envelope.compositionModel.rootComposition = root;
+
+    const reopened = readProjectDocument(JSON.parse(JSON.stringify(envelope)), true);
+    expect(reopened.compositionModel!.rootComposition.placements.find(placement => placement.id === video.id)?.linkedAudioChildren).toHaveLength(1);
+    expect(reopened.compositionModel!.rootComposition.placements.find(placement => placement.id === independent.id)).toBeTruthy();
+    expect(reopened.compositionModel!.rootComposition.tracks.find(track => track.id === audioTrack.id)).toBeTruthy();
+    expect(reopened.project.timelineClips?.find(clip => clip.id === independent.id)).toMatchObject({ trackId: audioTrack.id, kind: "audio" });
+  });
+
   it("persists root Composition through save/reopen and restores it across project Undo/Redo", () => {
     const original = structuredClone(sampleProject);
     const originalStart = getMasterShotStart(original.shots, original.shots[0].id);
