@@ -157,3 +157,24 @@ export function restoreEditorSessionHistory(
   };
   return { session: { project, composition }, history: result.history };
 }
+
+
+/**
+ * Import a project through the same paired-session boundary. A supplied canonical root
+ * is accepted only when its compatibility projection exactly matches the imported Project;
+ * otherwise use the deterministic legacy migration path.
+ */
+export function createImportedEditorSession(
+  project: DionysusProject,
+  candidateRoot?: CompositionDocument,
+): EditorSessionSnapshot {
+  const migratedRoot = migrateLegacyProjectToComposition(project).rootComposition;
+  const composition = candidateRoot &&
+    JSON.stringify(projectRootCompositionToLegacy(project, candidateRoot)) === JSON.stringify(project)
+    ? structuredClone(candidateRoot)
+    : migratedRoot;
+  return {
+    project: projectRootCompositionToLegacy(project, composition),
+    composition,
+  };
+}
