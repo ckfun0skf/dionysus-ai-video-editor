@@ -615,3 +615,10 @@ Verify the current branch head and its CI first. If it passes, continue the root
 - The existing App test for moving the selected track transform asserts both projected schema-1.0 values and saved root track legacyData, so it now exercises the true canonical path rather than allowing reconciliation to make the test pass afterwards.
 - Previous exact-head CI run 39488133593 passed on 88992a63a56f14a44ec5e77e4d580cf8d36db781: 251 tests / 23 files, TypeScript and production build passed, and npm audit reported 0 vulnerabilities. This source/test/docs commit requires a fresh exact-head CI run.
 - Remaining: Shot/Slot and Storyboard/domain editors are still legacy-first in several flows; some Storyboard materializations remain compatibility-only; complete track reorder/add/remove and UI-level nested/pinned edit history coverage are not yet proven. DYS-005/DYS-014 remain in_progress. PR #96 remains Draft and unmerged; no browser smoke tests.
+
+## Latest increment — atomic project-import replacement boundary (2026-10-22)
+
+- `createImportedEditorSessionTransition()` now returns the validated imported `{ session, history }` together. Project import cannot accidentally pair the new project with stale Undo/Redo entries from the previous project; `App.tsx` consumes this single result.
+- Regression coverage starts with a non-empty previous-project undo history and asserts import returns the migrated paired session plus a fresh empty history. Existing canonical-root validation and legacy import behavior remain covered.
+- Exact-head CI for the final synchronized commit must be recorded before treating this increment as verified. PR #111 stays open/unmerged; Issue #100 stays open for owner acceptance. No browser smoke tests or manual UI acceptance claimed.
+- Next: inspect and route any remaining direct session mutations; then design single-authority recovery/persistence without dropping schema-1.0 compatibility. Project remains a compatibility projection, persistence remains dual-key, and non-root/render paths still need migration.
