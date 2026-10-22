@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { migrateLegacyProjectToComposition } from "./compositionMigration";
+import { migrateLegacyProjectToComposition, projectRootCompositionToLegacy } from "./compositionMigration";
 import { sampleProject } from "./sampleProject";
 import {
   COMPOSITION_PROJECT_STORAGE_KEY,
@@ -35,7 +35,7 @@ describe("Editor session persistence boundary", () => {
     expect(envelope.documentVersion).toBe("2.0");
     expect(envelope.project.updatedAt).toBe("2026-10-22T12:34:56.000Z");
     expect(envelope.compositionModel.rootComposition).toEqual(composition);
-    expect(envelope.project).toEqual(JSON.parse(JSON.stringify(envelope.project)));
+    expect(envelope.project).toEqual(projectRootCompositionToLegacy({ ...project, updatedAt: "2026-10-22T12:34:56.000Z" }, composition));
     expect(storage.values.has(LEGACY_PROJECT_STORAGE_KEY)).toBe(false);
   });
 
