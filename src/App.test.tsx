@@ -2630,10 +2630,11 @@ describe("mobile audio clip controls", () => {
     expect(extract).toBeTruthy();
     click(extract!);
     await flushEffects();
-    // The Timeline row is projected from the canonical composition. Extract must remove
-    // the linked-child row and report success; command-level tests cover preserved timing.
-    expect(container.querySelectorAll(".linked-audio-row-handle")).toHaveLength(0);
+    // The structural child row remains as an empty drop target, but its linked-audio
+    // controls disappear after extraction; command-level tests cover preserved timing.
+    expect(container.querySelector('[aria-label="Extract Video clip 1 audio"]')).toBeNull();
     expect(container.textContent).toContain("Audio extracted to an independent placement.");
+    expect(clips().some(clip => clip.kind === "audio" && clip.id !== "test-audio-1" && !clip.linkedVideoClipId)).toBe(true);
   });
 
   it("links a dropped audio asset to the video clip when dropped on a Video layer", async () => {
