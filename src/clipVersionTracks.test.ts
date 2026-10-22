@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { sampleProject } from "./sampleProject";
-import { addClipVersionLayer, addClipVersionTrack, deleteClipVersionLayer, duplicateClipVersionComposition, moveClipVersionLayer, normalizeClipVersionTracks, updateClipVersionDuration, updateClipVersionLayer, updateClipVersionTrack } from "./clipVersionTracks";
+import { addClipVersionLayer, addClipVersionTrack, deleteClipVersionLayer, duplicateClipVersionComposition, moveClipVersionLayer, normalizeClipVersionTracks, updateClipVersionDescription, updateClipVersionDuration, updateClipVersionLayer, updateClipVersionTrack } from "./clipVersionTracks";
 import { validateProject } from "./projectValidation";
 
 describe("normalizeClipVersionTracks", () => {
@@ -54,6 +54,22 @@ describe("nested Clip Version track operations", () => {
     const withSecondLayer = addClipVersionLayer(withLayers, { id: "code-1", name: "Code", kind: "procedural", start: 1, duration: 2 }, "video-2");
     expect(withSecondLayer.tracks?.map(track => track.id)).toContain("video-2");
     expect(withSecondLayer.layers.filter(layer => layer.trackId === "video-2").map(layer => layer.id)).toEqual(["image-1", "code-1"]);
+  });
+
+  it("keeps nested Version description aligned with canonical Composition metadata", () => {
+    const version = structuredClone(sampleProject.shots[0].slots[0].versions[0]);
+    const withLayer = addClipVersionLayer(version, {
+      id: "nested-description-layer",
+      name: "Description layer",
+      kind: "video",
+      start: 0,
+      duration: 2,
+    });
+    const updated = updateClipVersionDescription(withLayer, "Updated canonical description");
+
+    expect(updated.description).toBe("Updated canonical description");
+    expect(updated.composition?.legacyData?.description).toBe("Updated canonical description");
+    expect(withLayer.composition?.legacyData?.description).not.toBe("Updated canonical description");
   });
 
   it("updates nested duration in canonical Composition and compatibility projection", () => {
