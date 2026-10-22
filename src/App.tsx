@@ -4,7 +4,7 @@ import { sampleProject } from "./sampleProject";
 import type { Asset, AssetKind, ClipVersion, CompositionLayer, DionysusProject, ReferenceProfile, ReferenceRole, Shot, TimelineClip } from "./types";
 import type { CompositionDocument } from "./compositionModel";
 import { validateProject } from "./projectValidation";
-import { addClipVersionLayer as addNestedLayer, addClipVersionTrack as addNestedTrack, deleteClipVersionLayer as deleteNestedLayer, duplicateClipVersionComposition, moveClipVersionLayer as moveNestedLayer, normalizeClipVersionTracks, updateClipVersionDescription as updateNestedDescription, updateClipVersionDuration as updateNestedDuration, updateClipVersionLayer as updateNestedLayer, updateClipVersionTrack as updateNestedTrack } from "./clipVersionTracks";
+import { addClipVersionLayer as addNestedLayer, addClipVersionTrack as addNestedTrack, deleteClipVersionLayer as deleteNestedLayer, duplicateClipVersionComposition, ensureClipVersionComposition as ensureNestedComposition, moveClipVersionLayer as moveNestedLayer, normalizeClipVersionTracks, updateClipVersionDescription as updateNestedDescription, updateClipVersionDuration as updateNestedDuration, updateClipVersionLayer as updateNestedLayer, updateClipVersionTrack as updateNestedTrack } from "./clipVersionTracks";
 import { createProjectDocument, readProjectDocument } from "./projectDocument";
 import { createRootCompositionPlacementForTimelineClip, migrateLegacyProjectToComposition, projectRootCompositionToLegacy } from "./compositionMigration";
 import { addCompositionLinkedAudioChild, addCompositionTrack, applyCompositionResizePreview, deleteCompositionPlacement, duplicateCompositionPlacement, duplicateLinkedAudio, extractLinkedAudio, insertCompositionPlacement, moveCompositionPlacement, moveCompositionPlacementToTrack, removeCompositionTrack, rippleReorderCompositionMasterShots, splitCompositionPlacement, trimCompositionPlacement, updateCompositionLinkedAudioChild, updateCompositionPlacement, updateCompositionTrack } from "./compositionCommands";
@@ -1706,7 +1706,7 @@ export default function App() {
       ...track,
       id: id("clip-track"),
     }));
-    const nextVersion = normalizeClipVersionTracks({
+    const nextVersion = ensureNestedComposition({
       id: nextId,
       name: "Version " + ((asset.clipVersions?.length ?? 0) + 1),
       description: "Blank version based on " + current.name,
