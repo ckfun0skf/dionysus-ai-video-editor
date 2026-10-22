@@ -189,3 +189,12 @@ The implementation now consists of two related slices in PR #111. First, `editor
 Exact-head CI passed for code head `3ce28e4dca4d26deebcc483851e70f64b8e561c8` in [run 39859937316](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39859937316): 24 test files / 274 tests, TypeScript/build passed, audit reported 0 vulnerabilities. Synchronizing this checkpoint into the docs/task registry changes the branch head and therefore requires another exact-head CI result.
 
 Boundaries still outstanding: refs are maintained separately for callback compatibility; persistence writes `dionysus.project.v1` and `dionysus.composition.v2`; non-root Shot/Slot editing and renderer/playback still cross legacy projections. Do not call the full canonical-state/persistence/render rebuild complete. No browser smoke tests or manual UI acceptance are claimed.
+
+
+## E1 implementation checkpoint — 2026-10-22: shared session reference
+
+The current PR #111 slice now routes all root timeline callback reads through a single `editorSessionRef` instead of separate `projectRef` and `rootCompositionRef`. Commit paths (normal edit, Undo, Redo, and import) replace the entire session object `{ project, composition }` before scheduling the paired React state update. Static inspection of the branch head found no remaining references to the removed refs and no direct writes to `editorSessionRef.current.project` / `.composition`.
+
+Exact-head CI passed on code SHA `6ccacdd359f3c508aeeae93c8e87b5b1c381f66b` in [run 39860285572](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39860285572): 24 test files / 274 tests; TypeScript/build passed; audit 0 vulnerabilities. This note/task update changes the branch head, so the latest docs-synchronized SHA needs its own CI confirmation.
+
+Still not solved by this slice: project and canonical document are paired but not yet a canonical-only schema; browser persistence is still split across v1/v2 keys; renderer/playback still consumes legacy projections in some paths; the non-root editing model still needs a shared command/session boundary. The Editor remains in progress, not release-ready by virtue of CI alone.
