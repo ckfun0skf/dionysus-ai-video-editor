@@ -227,7 +227,12 @@ export function validateProject(value: unknown): value is DionysusProject {
   for (const clip of timelineClips) {
     if (!trackIds.has(clip.trackId as string)) return false;
     const track = tracks.find(item => item.id === clip.trackId);
-    if (!track || (track.kind !== clip.kind && !(clip.kind === "clip" && track.kind === "video"))) return false;
+    const ownedAudioChild = clip.kind === "audio" && clip.linkedVideoClipId !== undefined;
+    // Canonical linked audio is projected onto its owner Video Track so the compatibility view
+    // does not need a phantom Audio Track merely to host a child row.
+    if (!track || (track.kind !== clip.kind &&
+      !(clip.kind === "clip" && track.kind === "video") &&
+      !(ownedAudioChild && track.kind === "video"))) return false;
     if (clip.assetId !== undefined && !assetIds.has(clip.assetId as string)) return false;
     if (clip.kind === "clip") {
       const clipAsset = assets.find(asset => asset.id === clip.assetId && asset.kind === "clip");
@@ -254,6 +259,7 @@ export function validateProject(value: unknown): value is DionysusProject {
       if (clip.kind !== "audio" || !clipIds.has(clip.linkedVideoClipId as string)) return false;
       const source = timelineClips.find(item => item.id === clip.linkedVideoClipId);
       if (!source || source.kind !== "video" || source.start !== clip.start || source.duration !== clip.duration) return false;
+      if (source.trackId !== clip.trackId) return false;
     }
   }
   for (const profile of profiles) {
