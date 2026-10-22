@@ -214,9 +214,8 @@ export default function App() {
       // Normalize legacy schema-1 linked-audio rows immediately, not only after the
       // user's first edit. Otherwise the live project can still claim a linked child belongs
       // to an Audio Track while the canonical root has already moved it under the Video owner.
-      const normalized = preferComposition
-        ? clearDemoSeedData(restored)
-        : normalizeLegacyTimelineTracks(clearDemoSeedData(restored));
+      if (preferComposition) return clearDemoSeedData(restored);
+      const normalized = normalizeLegacyTimelineTracks(clearDemoSeedData(restored));
       const migratedRoot = migrateLegacyProjectToComposition(normalized).rootComposition;
       return projectRootCompositionToLegacy(normalized, migratedRoot);
     } catch { return createEmptyProject(); }
