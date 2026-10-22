@@ -1,4 +1,4 @@
-import type { CompositionDocument, CompositionPlacement } from "./compositionModel";
+import type { CompositionDocument, CompositionLinkedAudioChild, CompositionPlacement } from "./compositionModel";
 
 const EPSILON = 0.001;
 
@@ -107,6 +107,25 @@ function assertValidCompositionDocumentTree(document: CompositionDocument, ances
       throw new Error("Composition source out-point must be finite and greater than source in-point.");
     }
     byId.set(placement.id, placement);
+  }
+
+  const allEntityIds = new Set(byId.keys());
+  for (const owner of document.placements) {
+    for (const child of owner.linkedAudioChildren ?? []) {
+      if (!child.id.trim() || allEntityIds.has(child.id)) {
+        throw new Error("Composition placement and linked-audio child IDs must be non-empty and unique.");
+      }
+      if (!child.source || typeof child.source.type !== "string") {
+        throw new Error("Linked audio children must retain a valid source reference.");
+      }
+      if (child.sourceIn !== undefined && (!Number.isFinite(child.sourceIn) || child.sourceIn < 0)) {
+        throw new Error("Linked audio source in-point must be finite and non-negative.");
+      }
+      if (child.sourceOut !== undefined && (!Number.isFinite(child.sourceOut) || child.sourceOut <= (child.sourceIn ?? 0))) {
+        throw new Error("Linked audio source out-point must be finite and greater than source in-point.");
+      }
+      allEntityIds.add(child.id);
+    }
   }
 
   for (const placement of document.placements) {
@@ -565,6 +584,50 @@ export function deleteCompositionPlacement(
 }
 
 /** Removes a link from a dependent placement without moving or mutating its source. */
+/** Add source audio to a video placement without creating an Audio Track. */
+export function addCompositionLinkedAudioChild(
+  document: CompositionDocument,
+  ownerPlacementId: string,
+  child: CompositionLinkedAudioChild,
+): CompositionDocument {
+  assertValidCompositionDocument(document);
+  const owner = requirePlacement(document, ownerPlacementId);
+  if (owner.legacyData.kind !== "video" && owner.legacyData.kind !== "clip") {
+    throw new Error("Linked source audio must belong to a video placement.");
+  }
+  if (!child.id.trim() || document.placements.some(item => item.id === child.id) ||
+      document.placements.some(item => (item.linkedAudioChildren ?? []).some(existing => existing.id === child.id))) {
+    throw new Error("Linked-audio child IDs must be non-empty and unique.");
+  }
+  const next = clone(document);
+  next.placements = next.placements.map(placement => placement.id === ownerPlacementId
+    ? { ...placement, linkedAudioChildren: [...(placement.linkedAudioChildren ?? []), clone(child)] }
+    : placement);
+  assertValidCompositionDocument(next);
+  return next;
+}
+
+/** Update a child property through its owning video placement, preserving its ownership. */
+export function updateCompositionLinkedAudioChild(
+  document: CompositionDocument,
+  childId: string,
+  patch: Partial<Omit<CompositionLinkedAudioChild, "id">>,
+): CompositionDocument {
+  assertValidCompositionDocument(document);
+  const owner = document.placements.find(placement => (placement.linkedAudioChildren ?? []).some(child => child.id === childId));
+  if (!owner) throw new Error("Linked audio child was not found.");
+  const next = clone(document);
+  next.placements = next.placements.map(placement => placement.id !== owner.id ? placement : {
+    ...placement,
+    linkedAudioChildren: (placement.linkedAudioChildren ?? []).map(child => child.id === childId
+      ? { ...child, ...clone(patch), id: child.id, legacyData: { ...child.legacyData, ...(patch.legacyData ?? {}) } }
+      : child),
+  });
+  assertValidCompositionDocument(next);
+  return next;
+}
+
+/** Legacy compatibility: remove a link from an old standalone linked-audio placement. */
 export function unlinkCompositionPlacement(
   document: CompositionDocument,
   placementId: string,
@@ -576,8 +639,6 @@ export function unlinkCompositionPlacement(
   next.placements = next.placements.map(placement => {
     if (placement.id !== selected.id) return placement;
     const { linkedToPlacementId: _linkedToPlacementId, ...independent } = placement;
-    // Legacy projection fields are retained for compatibility, but an extracted placement
-    // must not keep the old relationship in legacyData or the UI will render it as linked.
     const legacyData = { ...independent.legacyData };
     delete legacyData.linkedVideoClipId;
     return syncLegacyPlacement({ ...independent, legacyData });
@@ -586,13 +647,58 @@ export function unlinkCompositionPlacement(
   return next;
 }
 
+function uniqueAudioTrack(document: CompositionDocument, ownerId: string): CompositionDocument {
+  if (document.tracks.some(track => track.kind === "audio")) return document;
+  const base = `audio-extracted-${ownerId}`;
+  let id = base;
+  let suffix = 2;
+  const allIds = new Set([
+    ...document.tracks.map(track => track.id),
+    ...document.placements.map(placement => placement.id),
+    ...document.placements.flatMap(placement => (placement.linkedAudioChildren ?? []).map(child => child.id)),
+  ]);
+  while (allIds.has(id)) id = `${base}-${suffix++}`;
+  return addCompositionTrack(document, {
+    id, name: "Audio", kind: "audio", order: document.tracks.length,
+    legacyData: { id, name: "Audio", kind: "audio" },
+  });
+}
 
-/** Extract linked source audio into an independent placement without changing timing or source range. */
-export function extractLinkedAudio(
-  document: CompositionDocument,
-  placementId: string,
-): CompositionDocument {
-  const selected = requirePlacement(document, placementId);
+/** Convert an owned audio child into an independent Audio Track placement, preserving its range. */
+export function extractLinkedAudio(document: CompositionDocument, audioId: string): CompositionDocument {
+  assertValidCompositionDocument(document);
+  const owner = document.placements.find(placement => (placement.linkedAudioChildren ?? []).some(child => child.id === audioId));
+  if (owner) {
+    const child = owner.linkedAudioChildren!.find(item => item.id === audioId)!;
+    let next = clone(document);
+    next.placements = next.placements.map(placement => placement.id !== owner.id ? placement : {
+      ...placement,
+      linkedAudioChildren: (placement.linkedAudioChildren ?? []).filter(item => item.id !== audioId),
+    });
+    next = uniqueAudioTrack(next, owner.id);
+    const track = next.tracks.find(item => item.kind === "audio")!;
+    const legacy = { ...child.legacyData };
+    delete legacy.linkedVideoClipId;
+    const placement: CompositionPlacement = syncLegacyPlacement({
+      id: child.id,
+      name: child.name,
+      trackId: track.id,
+      start: owner.start,
+      duration: owner.duration,
+      order: nextOrder(next, track.id),
+      source: clone(child.source),
+      ...(child.sourceIn !== undefined ? { sourceIn: child.sourceIn } : {}),
+      ...(child.sourceOut !== undefined ? { sourceOut: child.sourceOut } : {}),
+      legacyData: { ...legacy, id: child.id, name: child.name, kind: "audio", trackId: track.id, start: owner.start, duration: owner.duration },
+    });
+    next.placements.push(placement);
+    extendCompositionDuration(next);
+    assertValidCompositionDocument(next);
+    return next;
+  }
+
+  // Keep old saved projects operable while migration moves their link into owner-child data.
+  const selected = requirePlacement(document, audioId);
   if (selected.source.type !== "asset" && selected.source.type !== "clip") {
     throw new Error("Only asset-backed linked audio can be extracted.");
   }
@@ -600,17 +706,49 @@ export function extractLinkedAudio(
   if (track?.kind !== "audio" || !selected.linkedToPlacementId) {
     throw new Error("Only linked audio placements can be extracted.");
   }
-  return unlinkCompositionPlacement(document, placementId);
+  return unlinkCompositionPlacement(document, audioId);
 }
 
-/** Create an independent audio copy while leaving the linked original untouched. */
+/** Duplicate owned source audio independently while leaving the owner and linked child intact. */
 export function duplicateLinkedAudio(
   document: CompositionDocument,
-  placementId: string,
+  audioId: string,
   newPlacementId: string,
 ): CompositionDocument {
   assertValidCompositionDocument(document);
-  const selected = requirePlacement(document, placementId);
+  const owner = document.placements.find(placement => (placement.linkedAudioChildren ?? []).some(child => child.id === audioId));
+  if (owner) {
+    if (!newPlacementId.trim() ||
+        document.placements.some(item => item.id === newPlacementId) ||
+        document.placements.some(item => (item.linkedAudioChildren ?? []).some(child => child.id === newPlacementId))) {
+      throw new Error("The duplicated audio placement ID must be non-empty and unique.");
+    }
+    const child = owner.linkedAudioChildren!.find(item => item.id === audioId)!;
+    let next = uniqueAudioTrack(clone(document), owner.id);
+    const track = next.tracks.find(item => item.kind === "audio")!;
+    const legacy = { ...child.legacyData };
+    delete legacy.linkedVideoClipId;
+    const copyPlacement = syncLegacyPlacement({
+      id: newPlacementId,
+      name: child.name + " (copy)",
+      trackId: track.id,
+      start: owner.start,
+      duration: owner.duration,
+      order: nextOrder(next, track.id),
+      source: clone(child.source),
+      ...(child.sourceIn !== undefined ? { sourceIn: child.sourceIn } : {}),
+      ...(child.sourceOut !== undefined ? { sourceOut: child.sourceOut } : {}),
+      muted: undefined,
+      legacyData: { ...legacy, id: newPlacementId, name: child.name + " (copy)", kind: "audio", trackId: track.id, start: owner.start, duration: owner.duration },
+    } as CompositionPlacement);
+    next.placements.push(copyPlacement);
+    extendCompositionDuration(next);
+    assertValidCompositionDocument(next);
+    return next;
+  }
+
+  // Compatibility fallback for projects not yet migrated to owner-child linked audio.
+  const selected = requirePlacement(document, audioId);
   const track = document.tracks.find(item => item.id === selected.trackId);
   if (track?.kind !== "audio" || !selected.linkedToPlacementId) {
     throw new Error("Only linked audio placements can be duplicated as independent audio.");
@@ -619,7 +757,7 @@ export function duplicateLinkedAudio(
     throw new Error("The duplicated audio placement ID must be non-empty and unique.");
   }
   const next = clone(document);
-  const original = requirePlacement(next, placementId);
+  const original = requirePlacement(next, audioId);
   const { linkedToPlacementId: _linkedToPlacementId, ...independent } = original;
   const legacyData = { ...independent.legacyData };
   delete legacyData.linkedVideoClipId;
