@@ -207,3 +207,14 @@ The compatibility reconciliation algorithm has moved from `App.tsx` to `src/edit
 New tests in `src/editorSession.test.ts` cover canonical geometry preservation, legacy metadata updates, paired Project projection, explicit root updates and source snapshot independence. Exact code-head CI passed on `d32ea856511b0fa13821577d5786048fa6983b37` in [run 39860987542](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39860987542): 25 test files / 277 tests, TypeScript/build passed, audit 0 vulnerabilities. The accompanying task/handoff update creates a newer SHA that requires a fresh exact-head run.
 
 The broader boundary is still transitional: Project remains a compatibility projection, legacy domain editors may drive reconciliation, the v1/v2 browser persistence keys remain separate, and playback/rendering still uses legacy projections. No browser smoke tests or UI acceptance are claimed.
+
+
+## E1 implementation checkpoint — 2026-10-22: transaction + persistence boundaries
+
+`transitionEditorSession()` in `src/editorSession.ts` now owns the main edit transaction: paired pre-edit history capture, Project-domain update, common revision timestamp, Composition reconciliation/projection, and paired result. `App.tsx`'s main `change()` applies the returned session/history pair. This keeps transaction logic testable and prevents the UI callback from independently constructing each half.
+
+`src/editorSessionPersistence.ts` centralizes the v1/v2 storage keys and autosave operation. It writes the v2 versioned envelope containing the canonical root first, then writes its v1 Project projection mirror with the same `updatedAt`. If the mirror write fails after the canonical write succeeds, recovery can still see the newest root. This is deliberately a safe transitional dual-key design, not yet one storage key. Tests cover write ordering, projection/revision consistency, and mirror failure.
+
+Exact code-head CI passed on `784b2ca83e7861ef85667341911459c3a599a494` in [run 39862266483](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39862266483): 26 test files / 280 tests; TypeScript/build passed; audit 0 vulnerabilities. The docs/task synchronization creates a newer SHA and requires fresh exact-head verification.
+
+Remaining work: move other command families through the session boundary; consolidate recovery/persistence without breaking v1 imports; make non-root editing and render/playback use the intended shared Composition contract. No browser smoke tests or UI acceptance are claimed.
