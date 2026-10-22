@@ -260,3 +260,8 @@ This narrows the project-replacement transaction boundary; it does not solve dua
 ## E2 follow-up — canonical recovery authority is identity-based
 
 The startup recovery policy no longer compares timestamps to decide between two snapshots for the same project. A valid v2 envelope is the canonical root and wins over its v1 compatibility mirror when project ID/name match; timestamps remain metadata. A mismatched project identity still prevents the canonical candidate from overriding the legacy candidate, and v1 remains the fallback when v2 is absent or invalid. Tests cover older/equal/invalid timestamps and identity mismatch. The writer still mirrors v1 for compatibility, so the overall storage migration is not yet complete.
+
+
+## E2 follow-up — canonical-only autosave with read-only legacy fallback
+
+`persistEditorSession()` now writes only the versioned v2 Composition envelope. The old schema-1.0 localStorage key is read-only and is considered only when the canonical envelope is missing or invalid. When both reads are valid, startup uses the complete canonical envelope rather than comparing two snapshots by timestamp or project identity; the envelope itself validates its project ID/name/root and startup verifies its Project projection before accepting the root. Tests cover canonical-only writes, the saved projection, recovery source selection, and preservation of an existing legacy fallback when the canonical write fails. The old key is not deleted in this slice.
