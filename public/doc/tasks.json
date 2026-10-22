@@ -589,7 +589,7 @@
           "title": "Unified Composition model and structure-preserving snapshots",
           "status": "in_progress",
           "progress": 82,
-          "summary": "Converge root and nested editing on one authoritative Composition/session. The first E1 slice now records the Project compatibility projection and canonical root Composition in one bounded undo/redo history; live state, persistence, and render paths remain transitional.",
+          "summary": "Converge root and nested editing on one authoritative Composition/session. PR #111 now pairs Project + root Composition in one bounded history and one React session state; persistence/recovery and render paths remain transitional.",
           "doc": "tasks/unified-composition-model.md",
           "detail": "tasks/unified-composition-model.html",
           "report": "reports/unified-composition-model-report.md",
@@ -674,11 +674,11 @@
             "Nested validation follow-up CI had 250/251 pass; corrected a negative test to target zero-duration nested placement rather than document-level duration. Recursive code, pinned metadata and cycle protection remain under exact-head verification.",
             "The nested invalid-duration test fixture now starts from a valid root snapshot with tracks so it tests recursive placement validation rather than an empty compatibility snapshot; exact-head CI pending.",
             "Canonical track settings dialogs and preview-frame transforms now share the root track command for fields promoted to the Composition schema and compatibility metadata. New source/test/docs head needs exact CI.",
-            "App integration: one history entry captures Project compatibility state + canonical root Composition",
-            "src/editorSessionHistory.ts and src/editorSessionHistory.test.ts in PR #111",
-            "PR #111 pre-documentation exact-head CI run 39859261009: 24 test files / 274 tests; TypeScript/build passed; npm audit 0 vulnerabilities. Final PR head after docs sync still needs exact-head CI."
+            "PR #111: src/editorSessionHistory.ts and src/editorSessionHistory.test.ts",
+            "App uses one EditorSessionSnapshot state for the Project compatibility projection and root Composition; normal edit/Undo/Redo/import update the pair atomically",
+            "Exact-head code CI run 39859937316 on 3ce28e4dca4d26deebcc483851e70f64b8e561c8: 24 test files / 274 tests, TypeScript/build passed, audit 0; final docs head requires re-check"
           ],
-          "notes": "Status stays in_progress: a single paired history is implemented, but project and Composition live state are still separate and rendering/persistence still contain legacy projections. PR #111's first code head passed 24 files / 274 tests, type-check/build, and audit 0; the final documentation-updated head must be checked separately.",
+          "notes": "Status stays in_progress: Project compatibility data and canonical root Composition are paired in history and one React state, but separate refs, dual persistence keys, non-root domain edits, and legacy render projections remain. Code head 3ce28e4 exact CI passed 24 files / 274 tests, TypeScript/build, audit 0; documentation-updated final head needs a separate exact-head run.",
           "description": "Establish canonical Composition for root/nested timelines, shared commands and independent structure-preserving Project-to-Clip snapshots.",
           "executionStage": "E2 and E4",
           "priority": "P0",
@@ -694,8 +694,8 @@
           "testStrategy": [
             "Migration matrix, parity, snapshot independence and round-trip."
           ],
-          "nextAction": "Verify exact-head CI on the final PR #111 head after task/handoff synchronization. Then move canonical command dispatch into the session boundary and continue consolidating project persistence/recovery. Preserve schema-1.0 migration, stable IDs, source ranges, links, pins and nested snapshots; no browser smoke tests and no merge without owner approval.",
-          "handoffNotes": "PR #111 is the current E1 history slice and remains unmerged. It consolidates paired Project/Composition undo-redo snapshots, but current live-state, persistence, and rendering boundaries remain transitional. Re-query all open PRs and verify exact-head CI on the latest head before taking the next step. Historical references to PR #96/#88/#89 must be re-triaged against live code before reuse or closure."
+          "nextAction": "Verify exact-head CI after task/handoff synchronization in PR #111. Then move canonical command dispatch/ref ownership inside the session boundary and consolidate persistence/recovery. Preserve schema-1.0 migration, stable IDs, source ranges, linked audio, pinned versions and nested snapshots; no browser smoke tests or merge without owner approval.",
+          "handoffNotes": "PR #111 is Ready for review but unmerged. Current E1 slices pair Project/Composition history and React state; project/root refs, persistence and render paths remain transitional. Verify exact-head CI after docs sync, then continue command/session boundary and persistence. Re-query open PRs and re-triage stale PRs #88/#89/#96 against live code before reusing/closing them. No browser smoke tests; Issue #100 remains open."
         }
       ],
       "executionStage": "E2",
