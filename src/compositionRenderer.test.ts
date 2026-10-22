@@ -1,8 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { collectCompositionLayers, getCompositionDuration, isPlayableAudioLayer } from "./compositionRenderer";
+import { collectCompositionLayers, getCompositionDuration, isPlayableAudioLayer, waitForVideoFrame } from "./compositionRenderer";
 import { sampleProject } from "./sampleProject";
 
 describe("compositionRenderer", () => {
+  it("waits for decoded video data instead of treating loaded metadata as a drawable frame", async () => {
+    let readyState = 1;
+    const video = new EventTarget() as HTMLVideoElement;
+    Object.defineProperty(video, "readyState", { configurable: true, get: () => readyState });
+    let completed = false;
+    const waiting = waitForVideoFrame(video).then(() => { completed = true; });
+
+    await Promise.resolve();
+    expect(completed).toBe(false);
+
+    readyState = 2;
+    video.dispatchEvent(new Event("loadeddata"));
+    await waiting;
+    expect(completed).toBe(true);
+  });
   it("collects selected-version layers with absolute shot and slot offsets", () => {
     const project = structuredClone(sampleProject);
     project.shots[0].slots[0].versions[0].layers = [{ id: "layer-selected", name: "Selected layer", kind: "image", start: 1, duration: 2 }];
