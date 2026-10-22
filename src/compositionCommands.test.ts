@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { CompositionDocument, CompositionPlacement } from "./compositionModel";
 import {
+  addCompositionLinkedAudioChild,
   addCompositionTrack,
   applyCompositionResizePreview,
   assertValidCompositionDocument,
   deleteCompositionPlacement,
+  duplicateLinkedAudio,
+  extractLinkedAudio,
   duplicateCompositionPlacement,
   insertCompositionPlacement,
   moveCompositionPlacement,
@@ -14,6 +17,7 @@ import {
   splitCompositionPlacement,
   trimCompositionPlacement,
   unlinkCompositionPlacement,
+  updateCompositionLinkedAudioChild,
   updateCompositionPlacement,
 } from "./compositionCommands";
 
@@ -66,6 +70,123 @@ function placement(document: CompositionDocument, id: string): CompositionPlacem
 }
 
 describe("shared Composition editing commands", () => {
+  it("extracts linked source audio without changing its timing or source range", () => {
+    const source = fixture();
+    const before = JSON.stringify(source);
+    const extracted = extractLinkedAudio(source, "audio");
+    expect(placement(extracted, "audio")).toMatchObject({
+      id: "audio", trackId: "a1", start: 1, duration: 6, sourceIn: 2, sourceOut: 8,
+    });
+    expect(placement(extracted, "audio").linkedToPlacementId).toBeUndefined();
+    expect(placement(extracted, "audio").legacyData.linkedVideoClipId).toBeUndefined();
+    expect(placement(source, "audio").linkedToPlacementId).toBe("video");
+    expect(JSON.stringify(source)).toBe(before);
+    expect(() => assertValidCompositionDocument(extracted)).not.toThrow();
+  });
+
+  it("duplicates linked source audio as an independent copy while retaining the original link", () => {
+    const source = fixture();
+    const duplicated = duplicateLinkedAudio(source, "audio", "audio-copy");
+    expect(placement(duplicated, "audio").linkedToPlacementId).toBe("video");
+    expect(placement(duplicated, "audio-copy")).toMatchObject({
+      name: "Linked audio (copy)", trackId: "a1", start: 1, duration: 6, sourceIn: 2, sourceOut: 8,
+    });
+    expect(placement(duplicated, "audio-copy").linkedToPlacementId).toBeUndefined();
+    expect(placement(duplicated, "audio-copy").legacyData.linkedVideoClipId).toBeUndefined();
+    expect(source.placements).toHaveLength(2);
+    expect(duplicated.placements).toHaveLength(3);
+    expect(() => assertValidCompositionDocument(duplicated)).not.toThrow();
+  });
+
+  it("owns linked source audio under the video placement and extracts it without an Audio-track dependency", () => {
+    const source = fixture();
+    source.placements = source.placements.filter(item => item.id !== "audio");
+    const withAudio = addCompositionLinkedAudioChild(source, "video", {
+      id: "owned-audio",
+      name: "Embedded sound",
+      source: { type: "asset", assetId: "video-asset" },
+      sourceIn: 2,
+      sourceOut: 8,
+      volume: 0.6,
+      legacyData: { id: "owned-audio", kind: "audio", linkedVideoClipId: "video", assetId: "video-asset" },
+    });
+    expect(withAudio.placements.map(item => item.id)).toEqual(["video"]);
+    expect(placement(withAudio, "video").linkedAudioChildren).toMatchObject([{
+      id: "owned-audio", sourceIn: 2, sourceOut: 8, volume: 0.6,
+    }]);
+
+    const muted = updateCompositionLinkedAudioChild(withAudio, "owned-audio", { muted: true });
+    expect(placement(muted, "video").linkedAudioChildren?.[0].muted).toBe(true);
+    const extracted = extractLinkedAudio(muted, "owned-audio");
+    expect(placement(extracted, "video").linkedAudioChildren).toEqual([]);
+    expect(placement(extracted, "owned-audio")).toMatchObject({
+      id: "owned-audio", name: "Embedded sound", trackId: "a1",
+      start: 1, duration: 6, sourceIn: 2, sourceOut: 8,
+      legacyData: { kind: "audio" },
+    });
+    expect(placement(extracted, "owned-audio").legacyData.linkedVideoClipId).toBeUndefined();
+    expect(() => assertValidCompositionDocument(extracted)).not.toThrow();
+  });
+
+  it("duplicates owned audio independently while preserving the original child", () => {
+    const source = fixture();
+    source.placements = source.placements.filter(item => item.id !== "audio");
+    const withAudio = addCompositionLinkedAudioChild(source, "video", {
+      id: "owned-audio",
+      name: "Embedded sound",
+      source: { type: "asset", assetId: "video-asset" },
+      sourceIn: 2,
+      sourceOut: 8,
+      legacyData: { id: "owned-audio", kind: "audio", linkedVideoClipId: "video", assetId: "video-asset" },
+    });
+    const duplicated = duplicateLinkedAudio(withAudio, "owned-audio", "independent-copy");
+    expect(placement(duplicated, "video").linkedAudioChildren).toMatchObject([{ id: "owned-audio", sourceIn: 2, sourceOut: 8 }]);
+    expect(placement(duplicated, "independent-copy")).toMatchObject({
+      id: "independent-copy", name: "Embedded sound (copy)", trackId: "a1",
+      start: 1, duration: 6, sourceIn: 2, sourceOut: 8,
+    });
+    expect(placement(duplicated, "independent-copy").legacyData.linkedVideoClipId).toBeUndefined();
+    expect(() => assertValidCompositionDocument(duplicated)).not.toThrow();
+  });
+
+  it("keeps owner audio through parent trim, split, duplicate and delete commands", () => {
+    const source = fixture();
+    source.placements = source.placements.filter(item => item.id !== "audio");
+    const withAudio = addCompositionLinkedAudioChild(source, "video", {
+      id: "owned-audio",
+      name: "Embedded sound",
+      source: { type: "asset", assetId: "video-asset" },
+      sourceIn: 2,
+      sourceOut: 8,
+      legacyData: { id: "owned-audio", kind: "audio", linkedVideoClipId: "video", assetId: "video-asset" },
+    });
+
+    const trimmed = trimCompositionPlacement(withAudio, "video", 4);
+    expect(placement(trimmed, "video").linkedAudioChildren?.[0]).toMatchObject({ sourceIn: 2, sourceOut: 6 });
+
+    const split = splitCompositionPlacement(withAudio, "video", 4, { newPlacementIds: { video: "video-right" } });
+    expect(placement(split, "video").linkedAudioChildren?.[0]).toMatchObject({ id: "owned-audio", sourceIn: 2, sourceOut: 5 });
+    const rightChild = placement(split, "video-right").linkedAudioChildren?.[0];
+    expect(rightChild).toMatchObject({ sourceIn: 5, sourceOut: 8, legacyData: { linkedVideoClipId: "video-right" } });
+    expect(rightChild?.id).not.toBe("owned-audio");
+
+    const duplicated = duplicateCompositionPlacement(withAudio, "video", {
+      start: 10, newPlacementIds: { video: "video-copy" },
+    });
+    expect(placement(duplicated, "video-copy").linkedAudioChildren).toHaveLength(1);
+    expect(placement(duplicated, "video-copy").linkedAudioChildren?.[0].id).not.toBe("owned-audio");
+    const deleted = deleteCompositionPlacement(withAudio, "video");
+    expect(deleted.placements).toHaveLength(0);
+  });
+
+  it("rejects extract or duplicate operations for unlinked or non-audio placements", () => {
+    const source = fixture();
+    const independent = extractLinkedAudio(source, "audio");
+    expect(() => extractLinkedAudio(independent, "audio")).toThrow(/linked audio/);
+    expect(() => duplicateLinkedAudio(independent, "audio", "audio-copy")).toThrow(/linked audio/);
+    expect(() => duplicateLinkedAudio(source, "audio", "audio")).toThrow(/unique/);
+  });
+
   it("adds, reorders and removes root tracks through immutable Composition commands", () => {
     const source = fixture();
     const before = JSON.stringify(source);

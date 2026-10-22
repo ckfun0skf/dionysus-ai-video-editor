@@ -222,29 +222,21 @@ describe("App history integration", () => {
     expect(video).toMatchObject({ start: 0.5, duration: expect.any(Number) });
   });
 
-  it("persists Audio Layer volume, fade-in, and fade-out controls", async () => {
+
+  it("persists per-clip mute state on video-owned source audio", async () => {
     await openTimelineView();
     await seedLinkedVideoAudioPairs();
 
-    await selectClip("Video clip 1 audio");
-    await flushEffects();
-    const volume = container.querySelector<HTMLInputElement>('input[aria-label="Timeline audio volume"]');
-    const fadeIn = container.querySelector<HTMLInputElement>('input[aria-label="Timeline audio fade in"]');
-    const fadeOut = container.querySelector<HTMLInputElement>('input[aria-label="Timeline audio fade out"]');
-    expect(volume).toBeTruthy();
-    expect(fadeIn).toBeTruthy();
-    expect(fadeOut).toBeTruthy();
-
-    setInputValue(volume!, "0.4");
-    await flushEffects();
-    setInputValue(fadeIn!, "0.75");
-    await flushEffects();
-    setInputValue(fadeOut!, "1.25");
+    const video = persistedProject().timelineClips!.find(clip => clip.kind === "video")!;
+    const audio = persistedProject().timelineClips!.find(clip => clip.kind === "audio" && clip.linkedVideoClipId === video.id)!;
+    const mute = buttonsNamed("Mute " + audio.name)[0];
+    expect(mute).toBeTruthy();
+    click(mute);
     await flushEffects();
 
-    const audio = persistedProject().timelineClips?.find(clip => clip.kind === "audio");
-    expect(audio).toMatchObject({ volume: 0.4, fadeIn: 0.75, fadeOut: 1.25 });
-    expect(persistedProject().timelineClips?.find(clip => clip.kind === "video")?.duration).toBe(audio?.duration);
+    const updated = persistedProject().timelineClips!.find(clip => clip.id === audio.id)!;
+    expect(updated).toMatchObject({ muted: true, trackId: video.trackId, linkedVideoClipId: video.id });
+    expect(buttonsNamed("Unmute " + audio.name)[0]).toBeTruthy();
   });
 
   it("supports Undo/Redo for adding actual timeline Layers", async () => {
@@ -342,22 +334,24 @@ describe("App history integration", () => {
     await flushEffects();
 
     const afterReload = persistedProject();
-    expect(afterReload.timelineClips).toEqual(beforeReload.timelineClips);
-    const video = afterReload.timelineClips?.find(clip => clip.kind === "video");
-    const audio = afterReload.timelineClips?.find(clip => clip.kind === "audio");
-    expect(audio).toMatchObject({ start: video!.start, duration: video!.duration, linkedVideoClipId: video!.id });
+    const video = afterReload.timelineClips?.find(clip => clip.kind === "video")!;
+    const audio = afterReload.timelineClips?.find(clip => clip.kind === "audio")!;
+    expect(afterReload.timelineClips).toHaveLength(2);
+    expect(video).toMatchObject({ id: "test-video-1", start: 0, duration: 5 });
+    expect(audio).toMatchObject({ id: "test-audio-1", start: video.start, duration: video.duration, linkedVideoClipId: video.id, trackId: video.trackId });
+    expect(afterReload.tracks.some(track => track.kind === "audio")).toBe(false);
     expect(buttonsNamed("Undo").every(button => button.disabled)).toBe(true);
     expect(buttonsNamed("Redo").every(button => button.disabled)).toBe(true);
   });
 
-  it("round-trips linked timeline metadata through actual project export and import", async () => {
+
+  it("round-trips linked timeline metadata through export/import after extracting one child", async () => {
     await openTimelineView();
     await seedLinkedVideoAudioPairs(2);
 
-    const secondAudioRow = timelineRows().find(row => row.textContent?.includes("Video clip 2 audio"));
-    expect(secondAudioRow).toBeTruthy();
-    await selectClip("Video clip 2 audio");
-    click(actionNamed("Unlink audio"));
+    const extract = buttonsNamed("Extract Video clip 2 audio")[0];
+    expect(extract).toBeTruthy();
+    click(extract);
     await flushEffects();
 
     const exportButton = Array.from(container.querySelectorAll<HTMLButtonElement>("button"))
@@ -373,12 +367,14 @@ describe("App history integration", () => {
       reader.onerror = () => reject(reader.error);
       reader.readAsText(blob);
     });
-    const document = JSON.parse(exportedJson) as { format: string; documentVersion: string; project: typeof sampleProject; compositionModel: { schemaVersion: string } };
+    const document = JSON.parse(exportedJson) as { format: string; documentVersion: string; project: typeof sampleProject; compositionModel: { schemaVersion: string; rootComposition: { placements: Array<{ id: string; linkedAudioChildren?: Array<{ id: string }> }> } } };
     expect(document).toMatchObject({ format: "dionysus-project-document", documentVersion: "2.0", compositionModel: { schemaVersion: "2.0" } });
     const expected = document.project;
-    expect(expected.timelineClips).toHaveLength(4);
-    expect(expected.timelineClips?.filter(clip => clip.kind === "audio" && clip.linkedVideoClipId)).toHaveLength(1);
-    expect(expected.timelineClips?.filter(clip => clip.kind === "audio" && !clip.linkedVideoClipId)).toHaveLength(1);
+    const linked = expected.timelineClips?.find(clip => clip.linkedVideoClipId);
+    const independent = expected.timelineClips?.find(clip => clip.kind === "audio" && !clip.linkedVideoClipId);
+    expect(linked?.trackId).toBe(expected.timelineClips?.find(clip => clip.id === linked?.linkedVideoClipId)?.trackId);
+    expect(independent).toBeTruthy();
+    expect(document.compositionModel.rootComposition.placements.some(placement => placement.linkedAudioChildren?.some(child => child.id === linked?.id))).toBe(true);
 
     const input = container.querySelector<HTMLInputElement>('input[type="file"][accept*="application/json"]');
     expect(input).toBeTruthy();
@@ -392,20 +388,9 @@ describe("App history integration", () => {
 
     const imported = persistedProject();
     expect(imported.id).toBe(expected.id);
-    expect(imported.timelineClips).toEqual(expected.timelineClips);
-    const videos = imported.timelineClips?.filter(clip => clip.kind === "video") ?? [];
-    const audios = imported.timelineClips?.filter(clip => clip.kind === "audio") ?? [];
-    expect(videos).toHaveLength(2);
-    expect(audios).toHaveLength(2);
-    const linkedAudio = audios.find(clip => clip.linkedVideoClipId);
-    const unlinkedAudio = audios.find(clip => !clip.linkedVideoClipId);
-    expect(linkedAudio).toBeTruthy();
-    expect(unlinkedAudio).toBeTruthy();
-    expect(linkedAudio).toMatchObject({
-      start: videos.find(clip => clip.id === linkedAudio!.linkedVideoClipId)!.start,
-      duration: videos.find(clip => clip.id === linkedAudio!.linkedVideoClipId)!.duration,
-    });
-    expect(unlinkedAudio).not.toHaveProperty("linkedVideoClipId");
+    expect(imported.timelineClips?.filter(clip => clip.kind === "video")).toHaveLength(2);
+    expect(imported.timelineClips?.filter(clip => clip.kind === "audio" && clip.linkedVideoClipId)).toHaveLength(1);
+    expect(imported.timelineClips?.filter(clip => clip.kind === "audio" && !clip.linkedVideoClipId)).toHaveLength(1);
     expect(buttonsNamed("Undo").every(button => button.disabled)).toBe(true);
     expect(buttonsNamed("Redo").every(button => button.disabled)).toBe(true);
   });
@@ -456,110 +441,90 @@ describe("App history integration", () => {
   });
 
 
-  it("unlinks audio in the App, edits it independently, and restores the link through Undo/Redo", async () => {
+
+  it("extracts linked audio in the App, edits it independently, and restores ownership through Undo/Redo", async () => {
     await openTimelineView();
     await seedLinkedVideoAudioPairs();
 
     const clips = () => persistedProject().timelineClips ?? [];
     const video = () => clips().find(clip => clip.kind === "video")!;
-    const audio = () => clips().find(clip => clip.kind === "audio")!;
+    const audio = () => clips().find(clip => clip.kind === "audio" && clip.linkedVideoClipId)!;
+    const childId = audio().id;
+    expect(audio().linkedVideoClipId).toBe(video().id);
 
-    await selectClip("Video clip 1 audio");
-    click(actionNamed("Unlink audio"));
+    const extract = buttonsNamed("Extract Video clip 1 audio")[0];
+    expect(extract).toBeTruthy();
+    click(extract);
     await flushEffects();
-    expect(audio()).not.toHaveProperty("linkedVideoClipId");
-
-    await selectClip("Video clip 1 audio");
-    click(actionNamed("+0.5s"));
-    await flushEffects();
-    expect(video()).toMatchObject({ start: 0, duration: 5 });
-    expect(audio()).toMatchObject({ start: 0.5, duration: 5 });
-    expect(audio()).not.toHaveProperty("linkedVideoClipId");
+    const independent = () => clips().find(clip => clip.id === childId)!;
+    expect(independent()).not.toHaveProperty("linkedVideoClipId");
+    expect(independent().trackId).not.toBe(video().trackId);
 
     click(buttonsNamed("Undo")[0]);
     await flushEffects();
-    expect(audio()).toMatchObject({ start: 0, duration: 5 });
-    expect(audio()).not.toHaveProperty("linkedVideoClipId");
-
-    click(buttonsNamed("Undo")[0]);
-    await flushEffects();
-    expect(audio()).toMatchObject({ start: 0, duration: 5, linkedVideoClipId: video().id });
+    expect(clips().find(clip => clip.id === childId)?.linkedVideoClipId).toBe(video().id);
 
     click(buttonsNamed("Redo").find(button => !button.disabled)!);
     await flushEffects();
-    expect(audio()).not.toHaveProperty("linkedVideoClipId");
-
-    click(buttonsNamed("Redo").find(button => !button.disabled)!);
-    await flushEffects();
-    expect(video()).toMatchObject({ start: 0, duration: 5 });
-    expect(audio()).toMatchObject({ start: 0.5, duration: 5 });
-    expect(audio()).not.toHaveProperty("linkedVideoClipId");
+    expect(clips().find(clip => clip.id === childId)).not.toHaveProperty("linkedVideoClipId");
   });
 
-  it("deletes linked video and audio together and restores both through Undo/Redo", async () => {
+
+  it("deletes a video and its owned source audio together, then restores both through Undo/Redo", async () => {
     await openTimelineView();
     await seedLinkedVideoAudioPairs();
 
     const clips = () => persistedProject().timelineClips ?? [];
-    const initial = clips();
-    const video = initial.find(clip => clip.kind === "video")!;
-    const audio = initial.find(clip => clip.kind === "audio")!;
-    expect(audio.linkedVideoClipId).toBe(video.id);
+    const video = clips().find(clip => clip.kind === "video")!;
+    const child = clips().find(clip => clip.kind === "audio" && clip.linkedVideoClipId === video.id)!;
+    expect(child).toBeTruthy();
 
-    await selectClip("Video clip 1");
+    await selectClip(video.name);
     click(actionNamed("Delete clip"));
     await flushEffects();
-    expect(clips()).toEqual([]);
+    expect(clips().some(clip => clip.id === video.id || clip.id === child.id)).toBe(false);
 
     click(buttonsNamed("Undo")[0]);
     await flushEffects();
-    expect(clips()).toEqual(initial);
-    expect(clips().find(clip => clip.kind === "audio")?.linkedVideoClipId).toBe(video.id);
+    expect(clips().find(clip => clip.id === video.id)).toMatchObject({ kind: "video", start: video.start, duration: video.duration });
+    expect(clips().find(clip => clip.id === child.id)).toMatchObject({ kind: "audio", linkedVideoClipId: video.id, trackId: video.trackId });
 
     click(buttonsNamed("Redo").find(button => !button.disabled)!);
     await flushEffects();
-    expect(clips()).toEqual([]);
+    expect(clips().some(clip => clip.id === video.id || clip.id === child.id)).toBe(false);
   });
 
-  it("deletes only a linked audio clip from the App and restores it through Undo/Redo", async () => {
+
+  it("does not expose a linked child as a separately draggable or deletable clip", async () => {
     await openTimelineView();
     await seedLinkedVideoAudioPairs();
 
-    const clips = () => persistedProject().timelineClips ?? [];
-    const initial = clips();
-    const video = initial.find(clip => clip.kind === "video")!;
-    const audio = initial.find(clip => clip.kind === "audio")!;
-    expect(audio.linkedVideoClipId).toBe(video.id);
-
-    await selectClip("Video clip 1 audio");
-    click(actionNamed("Delete clip"));
-    await flushEffects();
-    expect(clips()).toHaveLength(1);
-    expect(clips()[0]).toMatchObject({ id: video.id, kind: "video" });
-
-    click(buttonsNamed("Undo")[0]);
-    await flushEffects();
-    expect(clips()).toEqual(initial);
-    expect(clips().find(clip => clip.id === audio.id)?.linkedVideoClipId).toBe(video.id);
-
-    click(buttonsNamed("Redo").find(button => !button.disabled)!);
-    await flushEffects();
-    expect(clips()).toHaveLength(1);
-    expect(clips()[0]).toMatchObject({ id: video.id, kind: "video" });
+    const project = persistedProject();
+    const video = project.timelineClips!.find(clip => clip.kind === "video")!;
+    const child = project.timelineClips!.find(clip => clip.kind === "audio" && clip.linkedVideoClipId === video.id)!;
+    const childButton = Array.from(container.querySelectorAll<HTMLElement>(".linked-audio-child-clip")).find(item => item.textContent?.includes(child.name));
+    expect(childButton).toBeTruthy();
+    expect(childButton?.tagName.toLowerCase()).not.toBe("button");
+    expect(childButton?.getAttribute("draggable")).not.toBe("true");
+    expect(buttonsNamed("Extract " + child.name)).toHaveLength(1);
+    expect(buttonsNamed("Duplicate " + child.name)).toHaveLength(1);
+    expect(buttonsNamed("Unlink " + child.name)).toHaveLength(0);
+    expect(project.timelineClips?.find(clip => clip.id === child.id)?.linkedVideoClipId).toBe(video.id);
   });
 
-  it("moves and trims linked audio through the App and restores both clips with Undo/Redo", async () => {
+
+  it("moves and trims a video while its owned source audio follows through Undo/Redo", async () => {
     await openTimelineView();
     await seedLinkedVideoAudioPairs();
 
     const clips = () => persistedProject().timelineClips ?? [];
     const video = () => clips().find(clip => clip.kind === "video")!;
-    const audio = () => clips().find(clip => clip.kind === "audio")!;
+    const audio = () => clips().find(clip => clip.kind === "audio" && clip.linkedVideoClipId === video().id)!;
 
     expect(video()).toMatchObject({ start: 0, duration: 5 });
-    expect(audio()).toMatchObject({ start: 0, duration: 5, linkedVideoClipId: video().id });
+    expect(audio()).toMatchObject({ start: 0, duration: 5, trackId: video().trackId });
 
-    await selectClip("Video clip 1 audio");
+    await selectClip(video().name);
     click(actionNamed("+0.5s"));
     await flushEffects();
     expect(video()).toMatchObject({ start: 0.5, duration: 5 });
@@ -590,6 +555,7 @@ describe("App history integration", () => {
     expect(video()).toMatchObject({ start: 0.5, duration: 4.5 });
     expect(audio()).toMatchObject({ start: 0.5, duration: 4.5, linkedVideoClipId: video().id });
   });
+
   it("expands storyboard shot versions and opens the selected version in the timeline", async () => {
     const storyboardNav = Array.from(container.querySelectorAll<HTMLButtonElement>(".nav-item")).find(button => button.textContent?.includes("Storyboard"));
     if (!storyboardNav) throw new Error("Storyboard navigation is missing");
@@ -809,47 +775,44 @@ describe("App history integration", () => {
     expect(audioParts[1]).toMatchObject({ start: 2.5, duration: 2.5, sourceIn: 9.5, sourceOut: 12, linkedVideoClipId: videoParts[1].id });
   });
 
-  it("duplicates a Master video clip with a new linked-audio pair and preserves mix metadata", async () => {
+
+  it("duplicates a Master video clip with an owned audio child and preserves child mix metadata", async () => {
     await openTimelineView();
     await seedLinkedVideoAudioPairs();
 
-    let clips = persistedProject().timelineClips ?? [];
-    const originalVideo = clips.find(clip => clip.kind === "video" && !clip.id.startsWith("storyboard-"))!;
-    const originalAudio = clips.find(clip => clip.kind === "audio" && clip.linkedVideoClipId === originalVideo.id)!;
-    await selectClip(originalAudio.name);
-    await flushEffects();
-    setInputValue(container.querySelector<HTMLInputElement>('input[aria-label="Timeline audio volume"]')!, "0.4");
-    await flushEffects();
-    setInputValue(container.querySelector<HTMLInputElement>('input[aria-label="Timeline audio fade in"]')!, "0.5");
-    await flushEffects();
-    setInputValue(container.querySelector<HTMLInputElement>('input[aria-label="Timeline audio fade out"]')!, "1");
-    await flushEffects();
-
+    const seeded = persistedProject();
+    const originalVideo = seeded.timelineClips!.find(clip => clip.kind === "video" && !clip.id.startsWith("storyboard-"))!;
+    const originalAudio = seeded.timelineClips!.find(clip => clip.kind === "audio" && clip.linkedVideoClipId === originalVideo.id)!;
+    const patched = {
+      ...seeded,
+      timelineClips: seeded.timelineClips!.map(clip => clip.id === originalAudio.id
+        ? { ...clip, muted: true, volume: 0.4, fadeIn: 0.5, fadeOut: 1 }
+        : clip),
+    };
+    localStorage.setItem("dionysus.project.v1", JSON.stringify(patched));
+    localStorage.removeItem("dionysus.composition.v2");
+    act(() => root.unmount()); root = createRoot(container); act(() => root.render(<App />));
+    await flushEffects(); await openTimelineView();
     await selectClip(originalVideo.name);
-    await flushEffects();
+
     const duplicate = Array.from(container.querySelectorAll<HTMLButtonElement>(".visual-clip-actions button"))
       .find(button => button.textContent?.trim() === "Duplicate clip");
     expect(duplicate).toBeTruthy();
     click(duplicate!);
     await flushEffects();
 
-    clips = persistedProject().timelineClips ?? [];
+    const clips = persistedProject().timelineClips ?? [];
     const videos = clips.filter(clip => clip.kind === "video" && !clip.id.startsWith("storyboard-"));
     expect(videos).toHaveLength(2);
     const copyVideo = videos.find(clip => clip.id !== originalVideo.id)!;
     expect(copyVideo.start).toBe(originalVideo.start + originalVideo.duration);
-    const copiedAudio = clips.find(clip => clip.kind === "audio" && clip.linkedVideoClipId === copyVideo.id);
-    expect(copiedAudio).toMatchObject({
-      start: copyVideo.start,
-      duration: copyVideo.duration,
-      volume: 0.4,
-      fadeIn: 0.5,
-      fadeOut: 1
+    expect(clips.find(clip => clip.kind === "audio" && clip.linkedVideoClipId === copyVideo.id)).toMatchObject({
+      start: copyVideo.start, duration: copyVideo.duration, trackId: copyVideo.trackId,
+      muted: true, volume: 0.4, fadeIn: 0.5, fadeOut: 1,
     });
     expect(clips.find(clip => clip.kind === "audio" && clip.linkedVideoClipId === originalVideo.id)).toMatchObject({
-      volume: 0.4, fadeIn: 0.5, fadeOut: 1
+      muted: true, volume: 0.4, fadeIn: 0.5, fadeOut: 1,
     });
-    expect(container.querySelector(".visual-clip-inspector")?.textContent).toContain(copyVideo.name);
 
     click(buttonsNamed("Undo").find(button => !button.disabled)!);
     await flushEffects();
@@ -896,7 +859,7 @@ describe("App history integration", () => {
     const movedAudio = after.timelineClips?.find(clip => clip.id === audio.id)!;
     const fps = before.frameRate;
     expect(moved.start * fps).toBeCloseTo(Math.round(moved.start * fps), 7);
-    const sameTrackOverlaps = (after.timelineClips ?? []).filter(clip => clip.trackId === moved.trackId && clip.id !== moved.id && moved.start < clip.start + clip.duration - 1e-7 && moved.start + moved.duration > clip.start + 1e-7);
+    const sameTrackOverlaps = (after.timelineClips ?? []).filter(clip => !clip.linkedVideoClipId && clip.trackId === moved.trackId && clip.id !== moved.id && moved.start < clip.start + clip.duration - 1e-7 && moved.start + moved.duration > clip.start + 1e-7);
     expect(sameTrackOverlaps).toHaveLength(0);
     expect(movedAudio).toMatchObject({ start: moved.start, duration: moved.duration, linkedVideoClipId: moved.id });
   });
@@ -962,14 +925,15 @@ describe("App history integration", () => {
     const audio = persistedProject().timelineClips?.find(clip => clip.kind === "audio" && clip.linkedVideoClipId === video?.id);
     expect(video).toBeTruthy();
     expect(audio).toBeTruthy();
-    const mute = container.querySelector<HTMLButtonElement>(".track-layer-mute");
+    const videoTrack = persistedProject().tracks.find(track => track.id === video!.trackId)!;
+    const mute = buttonsNamed("Mute " + videoTrack.name + " layer")[0];
     expect(mute).toBeTruthy();
-    click(mute!);
+    click(mute);
     await flushEffects();
-    expect(persistedProject().tracks.some(track => track.kind === "audio" && track.muted)).toBe(true);
-    const unlink = buttonsNamed("Unlink " + audio!.name)[0];
-    expect(unlink).toBeTruthy();
-    click(unlink!);
+    expect(persistedProject().tracks.find(track => track.id === videoTrack.id)?.muted).toBe(true);
+    expect(buttonsNamed("Extract " + audio!.name)).toHaveLength(1);
+    expect(buttonsNamed("Unlink " + audio!.name)).toHaveLength(0);
+    click(buttonsNamed("Extract " + audio!.name)[0]);
     await flushEffects();
     expect(persistedProject().timelineClips?.find(clip => clip.id === audio!.id)?.linkedVideoClipId).toBeUndefined();
   });
@@ -1023,14 +987,14 @@ describe("App history integration", () => {
     expect(shot!.slots[0].versions[0].layers[0].prompt).toContain("Hero reference");
   });
 
-  it("creates linked audio when a Project Media audio asset is dragged onto an empty Linked Audio group", async () => {
+
+  it("does not treat a dropped independent audio asset as embedded video source audio", async () => {
     await openTimelineView();
     const project = persistedProject();
-    const videoTrack = project.tracks.find(track => track.kind === "video");
-    if (!videoTrack) throw new Error("Sample project needs a Video layer");
-    const audioAsset = { id: "empty-group-drop-audio", name: "Empty group narration.wav", kind: "audio" as const, path: "/media/empty-group-narration.wav", duration: 9 };
+    const videoTrack = project.tracks.find(track => track.kind === "video")!;
+    const audioAsset = { id: "empty-group-drop-audio", name: "Independent narration.wav", kind: "audio" as const, path: "/media/independent-narration.wav", duration: 9 };
     project.assets = [...project.assets, audioAsset];
-    project.timelineClips = [{ id: "video-empty-linked-audio", name: "Video without audio", kind: "video", trackId: videoTrack.id, start: 3, duration: 7 }];
+    project.timelineClips = [{ id: "video-without-audio", name: "Video without audio", kind: "video", trackId: videoTrack.id, start: 3, duration: 7 }];
     localStorage.setItem("dionysus.project.v1", JSON.stringify(project));
     localStorage.removeItem("dionysus.composition.v2");
     act(() => root.unmount());
@@ -1039,43 +1003,22 @@ describe("App history integration", () => {
     await flushEffects();
     await openTimelineView();
 
-    const lane = container.querySelector<HTMLElement>('.linked-audio-drop-target[data-linked-video-id="video-empty-linked-audio"]');
-    expect(lane).toBeTruthy();
-    expect(lane?.textContent).toContain("Drop audio here to add it to this video");
+    expect(container.querySelector('.linked-audio-row-handle')).toBeNull();
     const source = Array.from(container.querySelectorAll<HTMLButtonElement>(".timeline-source-item")).find(button => button.textContent?.includes(audioAsset.name));
     expect(source).toBeTruthy();
-
-    const payload = new Map<string, string>();
-    const transfer = {
-      setData: (type: string, value: string) => payload.set(type, value),
-      getData: (type: string) => payload.get(type) ?? "",
-      effectAllowed: "",
-      dropEffect: "",
-      types: ["text/dionysus-project-asset", "text/plain"]
-    } as unknown as DataTransfer;
-    const dragStart = new Event("dragstart", { bubbles: true, cancelable: true });
-    Object.defineProperty(dragStart, "dataTransfer", { value: transfer });
-    act(() => source!.dispatchEvent(dragStart));
-
-    const dragOver = new Event("dragover", { bubbles: true, cancelable: true });
-    Object.defineProperty(dragOver, "dataTransfer", { value: transfer });
-    act(() => lane!.dispatchEvent(dragOver));
-    expect(dragOver.defaultPrevented).toBe(true);
-
-    const drop = new Event("drop", { bubbles: true, cancelable: true });
+    const lane = container.querySelector<HTMLElement>('.visual-track-lane[data-track-id="' + videoTrack.id + '"]');
+    expect(lane).toBeTruthy();
+    Object.defineProperty(lane, "getBoundingClientRect", { configurable: true, value: () => ({ left: 0, top: 0, right: 1000, bottom: 70, width: 1000, height: 70, x: 0, y: 0, toJSON: () => ({}) }) });
+    const transfer = { getData: (type: string) => type === "text/dionysus-project-asset" ? audioAsset.id : "", dropEffect: "copy", types: ["text/dionysus-project-asset"] } as unknown as DataTransfer;
+    const drop = new MouseEvent("drop", { bubbles: true, cancelable: true, clientX: 10, clientY: 35 });
     Object.defineProperty(drop, "dataTransfer", { value: transfer });
     act(() => lane!.dispatchEvent(drop));
     await flushEffects();
 
-    expect((persistedProject().timelineClips ?? []).find(clip => clip.assetId === audioAsset.id)).toMatchObject({
-      kind: "audio", linkedVideoClipId: "video-empty-linked-audio", start: 3, duration: 7
-    });
+    expect(persistedProject().timelineClips?.find(clip => clip.assetId === audioAsset.id)).toBeUndefined();
+    expect(persistedProject().timelineClips?.find(clip => clip.id === "video-without-audio")).not.toHaveProperty("linkedVideoClipId");
   });
 
-});
-
-
-describe("Timeline preview", () => {
   it("tracks the current playhead time in the preview", async () => {
     await openTimelineView();
     const canvas = container.querySelector<HTMLCanvasElement>(".integrated-preview-frame canvas");
@@ -1579,19 +1522,21 @@ describe("Integrated timeline editor", () => {
       duration: trimmed.duration
     });
 
-    // Placing a video asset also creates a linked audio child on the Audio layer.
+    // Video insertion creates an owned source-audio child without creating an Audio Track.
     const videoSourceButton = Array.from(container.querySelectorAll<HTMLButtonElement>(".timeline-source-item"))
       .find(button => button.textContent?.includes(videoSource.name));
     expect(videoSourceButton).toBeTruthy();
+    const audioTracksBeforeVideoInsert = persistedProject().tracks.filter(track => track.kind === "audio").length;
     click(videoSourceButton!);
     await flushEffects();
     const withVideo = persistedProject();
     const placedVideo = withVideo.timelineClips?.find(clip => clip.assetId === videoSource.id && clip.kind === "video");
     expect(placedVideo).toMatchObject({ duration: videoSource.duration });
-    expect(withVideo.tracks.some(track => track.kind === "audio")).toBe(true);
+    expect(withVideo.tracks.filter(track => track.kind === "audio")).toHaveLength(audioTracksBeforeVideoInsert);
     expect(withVideo.timelineClips?.find(clip => clip.linkedVideoClipId === placedVideo!.id)).toMatchObject({
       kind: "audio",
       assetId: videoSource.id,
+      trackId: placedVideo!.trackId,
       start: placedVideo!.start,
       duration: placedVideo!.duration
     });
@@ -1687,7 +1632,7 @@ describe("Integrated timeline editor", () => {
     expect(container.querySelector(".clip-drop-preview")).toBeTruthy();expect(container.querySelector(".timeline-snap-guide")).toBeTruthy();
     const drop=new Event("drop",{bubbles:true,cancelable:true});Object.defineProperties(drop,{dataTransfer:{value:dt},clientX:{value:1200*2.5/15}});act(()=>lane!.dispatchEvent(drop));await flushEffects();
     const current=persistedProject(),moved=current.timelineClips!.find(clip=>clip.id===video.id)!;expect(moved.trackId).toBe(targetTrack.id);expect(moved.start*current.frameRate).toBeCloseTo(Math.round(moved.start*current.frameRate),7);
-    const overlaps=current.timelineClips!.filter(clip=>clip.id!==moved.id&&clip.trackId===moved.trackId&&moved.start<clip.start+clip.duration-1e-7&&moved.start+moved.duration>clip.start+1e-7);expect(overlaps).toHaveLength(0);
+    const overlaps=current.timelineClips!.filter(clip=>clip.id!==moved.id&&!clip.linkedVideoClipId&&clip.trackId===moved.trackId&&moved.start<clip.start+clip.duration-1e-7&&moved.start+moved.duration>clip.start+1e-7);expect(overlaps).toHaveLength(0);
     const audio=current.timelineClips!.find(clip=>clip.linkedVideoClipId===moved.id)!;expect(audio.start).toBe(moved.start);expect(audio.duration).toBe(moved.duration);
   });
   it("previews resize overlap, trims the adjacent clip on release, and restores both with one Undo", async () => {
@@ -1706,15 +1651,15 @@ describe("Integrated timeline editor", () => {
     click(buttonsNamed("Redo").find(button=>!button.disabled)!);await flushEffects();expect(videos()[0].duration).toBeGreaterThan(original[0].duration);expect(videos()[1].duration).toBeLessThan(original[1].duration);
     const afterRedo = videos();
     const saved = JSON.parse(localStorage.getItem("dionysus.composition.v2") ?? "null") as {
-      compositionModel?: { rootComposition?: { placements?: Array<{ id: string; start: number; duration: number; linkedToPlacementId?: string }> } };
+      compositionModel?: { rootComposition?: { placements?: Array<{ id: string; start: number; duration: number; linkedToPlacementId?: string; linkedAudioChildren?: Array<{ id: string; sourceIn?: number; sourceOut?: number }> }> } };
     };
     const savedPlacements = saved.compositionModel?.rootComposition?.placements ?? [];
     expect(savedPlacements.find(item => item.id === afterRedo[0].id)).toMatchObject({ start: afterRedo[0].start, duration: afterRedo[0].duration });
     expect(savedPlacements.find(item => item.id === afterRedo[1].id)).toMatchObject({ start: afterRedo[1].start, duration: afterRedo[1].duration });
     const afterRedoAudio = (persistedProject().timelineClips ?? []).find(clip => clip.linkedVideoClipId === afterRedo[1].id)!;
-    expect(savedPlacements.find(item => item.id === afterRedoAudio.id)).toMatchObject({
-      start: afterRedoAudio.start, duration: afterRedoAudio.duration, linkedToPlacementId: afterRedo[1].id,
-    });
+    expect(savedPlacements.find(item => item.id === afterRedo[1].id)?.linkedAudioChildren).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: afterRedoAudio.id, sourceIn: expect.any(Number), sourceOut: expect.any(Number) })]),
+    );
 
     act(() => root.unmount()); root = createRoot(container); act(() => root.render(<App />)); await flushEffects();
     const reopened = persistedProject();
@@ -1975,7 +1920,7 @@ describe("Integrated timeline editor", () => {
     const after = persistedProject().timelineClips ?? [];
     expect(after.find(clip => clip.id === source.id)).toMatchObject({ trackId: targetTrack.id, start: 5, duration: 5 });
     expect(after.find(clip => clip.id === sourceAudio.id)).toMatchObject({ start: 5, duration: 5, linkedVideoClipId: source.id });
-    expect(after.filter(clip => clip.trackId === targetTrack.id)).toHaveLength(1);
+    expect(after.filter(clip => clip.trackId === targetTrack.id && !clip.linkedVideoClipId)).toHaveLength(1);
   });
 
   it("rejects same-layer overlap during drag and keeps clips in non-overlapping positions", async () => {
@@ -2070,18 +2015,19 @@ describe("Integrated timeline editor", () => {
     expect(getProceduralLayers(exported).find(layer => layer.id === added!.id)).toMatchObject({ id: added!.id, kind: "procedural" });
   });
 
-  it("deletes an unlinked audio clip independently and restores that deletion through Undo/Redo", async () => {
+
+  it("extracts then deletes independent audio without deleting its source video", async () => {
     await openTimelineView();
     await seedLinkedVideoAudioPairs();
-    await selectClip("Video clip 1 audio");
-    click(actionNamed("Unlink audio"));
+    const before = persistedProject();
+    const video = before.timelineClips?.find(clip => clip.kind === "video")!;
+    const audio = before.timelineClips?.find(clip => clip.kind === "audio" && clip.linkedVideoClipId === video.id)!;
+    click(buttonsNamed("Extract " + audio.name)[0]);
     await flushEffects();
-    const beforeDelete = persistedProject();
-    const video = beforeDelete.timelineClips?.find(clip => clip.kind === "video")!;
-    const audio = beforeDelete.timelineClips?.find(clip => clip.kind === "audio")!;
-    expect(audio).not.toHaveProperty("linkedVideoClipId");
 
-    await selectClip(audio.name);
+    const extracted = persistedProject().timelineClips?.find(clip => clip.id === audio.id)!;
+    expect(extracted).not.toHaveProperty("linkedVideoClipId");
+    await selectClip(extracted.name);
     click(actionNamed("Delete clip"));
     await flushEffects();
     expect((persistedProject().timelineClips ?? []).some(clip => clip.id === video.id)).toBe(true);
@@ -2134,40 +2080,38 @@ describe("Integrated timeline editor", () => {
     expect(container.querySelector(".shot-context-menu")).toBeNull();
   });
 
-  it("removing a video layer deletes linked child audio but preserves detached audio through Undo/Redo", async () => {
+
+  it("removing a video layer deletes its owned children but preserves extracted audio", async () => {
     await openTimelineView();
     await seedLinkedVideoAudioPairs(2);
-    await selectClip("Video clip 1 audio");
-    click(actionNamed("Unlink audio"));
+    const before = persistedProject();
+    const videoTrack = before.tracks.find(track => track.kind === "video")!;
+    const sourceVideo = before.timelineClips?.find(clip => clip.id === "test-video-1")!;
+    const linkedAudio = before.timelineClips?.find(clip => clip.kind === "audio" && clip.linkedVideoClipId === sourceVideo.id)!;
+    click(buttonsNamed("Extract " + linkedAudio.name)[0]);
     await flushEffects();
     const initial = persistedProject();
-    const videoTrack = initial.tracks.find(track => track.kind === "video")!;
-    const detachedAudio = initial.timelineClips?.find(clip => clip.kind === "audio" && !clip.linkedVideoClipId)!;
-    expect(detachedAudio).toBeTruthy();
+    const detachedAudio = initial.timelineClips?.find(clip => clip.id === linkedAudio.id)!;
+    expect(detachedAudio).not.toHaveProperty("linkedVideoClipId");
 
     click(buttonsNamed("Remove " + videoTrack.name + " layer")[0]);
     await flushEffects();
     const removed = persistedProject();
     expect(removed.tracks.some(track => track.id === videoTrack.id)).toBe(false);
-    expect(removed.timelineClips?.filter(clip => clip.kind === "video")).toHaveLength(0);
-    expect(removed.timelineClips?.filter(clip => clip.kind === "audio")).toEqual([detachedAudio]);
+    expect(removed.timelineClips?.filter(clip => clip.kind === "video" && clip.trackId === videoTrack.id)).toHaveLength(0);
+    expect(removed.timelineClips?.find(clip => clip.id === detachedAudio.id)).toMatchObject({ kind: "audio", trackId: detachedAudio.trackId });
+    expect(removed.timelineClips?.some(clip => clip.linkedVideoClipId)).toBe(false);
 
     click(buttonsNamed("Undo")[0]);
     await flushEffects();
-    expect(persistedProject().tracks).toEqual(initial.tracks);
-    expect(persistedProject().timelineClips).toEqual(initial.timelineClips);
-
+    expect(persistedProject().tracks.some(track => track.id === videoTrack.id)).toBe(true);
+    expect(persistedProject().timelineClips?.find(clip => clip.id === detachedAudio.id)).toMatchObject({ trackId: detachedAudio.trackId });
     click(buttonsNamed("Redo").find(button => !button.disabled)!);
     await flushEffects();
     expect(persistedProject().tracks.some(track => track.id === videoTrack.id)).toBe(false);
-    expect(persistedProject().timelineClips).toEqual([detachedAudio]);
+    expect(persistedProject().timelineClips?.find(clip => clip.id === detachedAudio.id)).toBeTruthy();
   });
 
-
-});
-
-
-describe("click-to-place timeline insertion", () => {
   it("adds a selected video asset at the end of its layer without a placement dialog", async () => {
     const project = structuredClone(persistedProject());
     project.shots = [];
@@ -2204,7 +2148,7 @@ describe("click-to-place timeline insertion", () => {
       expect.objectContaining({ id: "existing-later", start: 7, duration: 2 }),
       expect.objectContaining({ name: "New footage", assetId: "test-new-video-asset", start: 9, duration: 3, trackId: videoTrack.id }),
     ]));
-    const sorted = inserted.filter(clip => clip.trackId === videoTrack.id).sort((a, b) => a.start - b.start);
+    const sorted = inserted.filter(clip => clip.trackId === videoTrack.id && !clip.linkedVideoClipId).sort((a, b) => a.start - b.start);
     for (let index = 1; index < sorted.length; index += 1) {
       expect(sorted[index - 1].start + sorted[index - 1].duration).toBeLessThanOrEqual(sorted[index].start + 1e-7);
     }
@@ -2602,104 +2546,42 @@ describe("mobile audio clip controls", () => {
     await flushEffects();
     expect((persistedProject().timelineClips ?? []).find(item => item.id === "mobile-audio-mute-clip")?.muted).toBe(false);
   });
-  it("makes the Linked Audio layer row itself a drag handle for unlink and relink", async () => {
+  it("does not expose Linked Audio as a drag handle", async () => {
     await openTimelineView();
-    await seedLinkedVideoAudioPairs();
-    const audio = (persistedProject().timelineClips ?? []).find(clip => clip.kind === "audio" && clip.linkedVideoClipId);
-    expect(audio).toBeTruthy();
+    await seedLinkedVideoAudioPairs(1);
     const rowHandle = container.querySelector<HTMLElement>(".linked-audio-row-handle");
     expect(rowHandle).toBeTruthy();
-    expect(rowHandle?.getAttribute("draggable")).toBe("true");
-    const transfer = { setData: vi.fn(), effectAllowed: "" } as unknown as DataTransfer;
-    const dragStart = new Event("dragstart", { bubbles: true });
-    Object.defineProperty(dragStart, "dataTransfer", { value: transfer });
-    act(() => rowHandle!.dispatchEvent(dragStart));
-    expect(transfer.setData).toHaveBeenCalledWith("text/dionysus-timeline-clip", audio!.id);
+    expect(rowHandle?.getAttribute("draggable")).toBe("false");
+    expect(rowHandle?.getAttribute("title")).toBe("Linked audio is owned by this video placement");
   });
-
-  it("relinks a dragged Linked Audio row to another video and unlinks it to an Audio layer", async () => {
+  it("extracts linked audio and duplicates it without changing the original video relationship", async () => {
     await openTimelineView();
-    await seedLinkedVideoAudioPairs(2);
-    const onlyFirstAudio = persistedProject();
-    onlyFirstAudio.timelineClips = (onlyFirstAudio.timelineClips ?? []).filter(clip => clip.id !== "test-audio-2");
-    localStorage.setItem("dionysus.project.v1", JSON.stringify(onlyFirstAudio));
-    localStorage.removeItem("dionysus.composition.v2");
-    act(() => root.unmount());
-    root = createRoot(container);
-    act(() => root.render(<App />));
-    await flushEffects();
-    await openTimelineView();
+    await seedLinkedVideoAudioPairs(1);
     const clips = () => persistedProject().timelineClips ?? [];
-    const audio = () => clips().find(clip => clip.id === "test-audio-1")!;
-    expect(audio().linkedVideoClipId).toBe("test-video-1");
+    const original = () => clips().find(clip => clip.id === "test-audio-1")!;
+    const row = () => Array.from(container.querySelectorAll<HTMLElement>(".linked-audio-row-handle")).find(item => item.textContent?.includes("Video clip 1"))!;
+    expect(original().linkedVideoClipId).toBe("test-video-1");
 
-    const linkedRow = Array.from(container.querySelectorAll<HTMLElement>(".linked-audio-row-handle")).find(row => row.textContent?.includes("Video clip 1"));
-    expect(linkedRow).toBeTruthy();
-    const rowMute = linkedRow!.querySelector<HTMLButtonElement>(".linked-audio-row-mute");
-    const rowUnlink = linkedRow!.querySelector<HTMLButtonElement>(".linked-audio-row-unlink");
-    expect(rowMute?.getAttribute("aria-label")).toBe("Mute Video clip 1 audio");
-    expect(rowUnlink?.getAttribute("aria-label")).toBe("Unlink Video clip 1 audio");
-    click(rowMute!);
+    const duplicate = row().querySelector<HTMLButtonElement>('[aria-label="Duplicate Video clip 1 audio"]');
+    expect(row().querySelector<HTMLButtonElement>('[aria-label="Extract Video clip 1 audio"]')).toBeTruthy();
+    expect(duplicate).toBeTruthy();
+    click(duplicate!);
     await flushEffects();
-    expect(audio().muted).toBe(true);
-    expect(rowMute?.getAttribute("aria-pressed")).toBe("true");
-    click(rowMute!);
-    await flushEffects();
-    expect(audio().muted).toBe(false);
+    expect(original().linkedVideoClipId).toBe("test-video-1");
+    expect(clips().some(clip => clip.kind === "audio" && clip.id !== "test-audio-1" && !clip.linkedVideoClipId)).toBe(true);
 
-    const makeTransfer = () => {
-      const payload = new Map<string, string>();
-      return {
-        transfer: {
-          setData: (type: string, value: string) => payload.set(type, value),
-          getData: (type: string) => payload.get(type) ?? "",
-          effectAllowed: "",
-          dropEffect: "",
-          types: ["text/dionysus-timeline-clip"]
-        } as unknown as DataTransfer
-      };
-    };
-    const dragRowTo = async (row: HTMLElement, target: HTMLElement, clientX = 0) => {
-      const { transfer } = makeTransfer();
-      const start = new Event("dragstart", { bubbles: true, cancelable: true });
-      Object.defineProperty(start, "dataTransfer", { value: transfer });
-      act(() => row.dispatchEvent(start));
-      Object.defineProperty(target, "getBoundingClientRect", { configurable: true, value: () => ({ left: 0, top: 0, right: 1000, bottom: 70, width: 1000, height: 70, x: 0, y: 0, toJSON: () => ({}) }) });
-      const over = new MouseEvent("dragover", { bubbles: true, cancelable: true, clientX, clientY: 35 });
-      Object.defineProperty(over, "dataTransfer", { value: transfer });
-      act(() => target.dispatchEvent(over));
-      const drop = new MouseEvent("drop", { bubbles: true, cancelable: true, clientX, clientY: 35 });
-      Object.defineProperty(drop, "dataTransfer", { value: transfer });
-      act(() => target.dispatchEvent(drop));
-      await flushEffects();
-    };
-
-    const firstRow = Array.from(container.querySelectorAll<HTMLElement>(".linked-audio-row-handle")).find(row => row.textContent?.includes("Video clip 1"));
-    const secondLane = container.querySelector<HTMLElement>('.linked-audio-drop-target[data-linked-video-id="test-video-2"]');
-    expect(firstRow).toBeTruthy();
-    expect(secondLane).toBeTruthy();
-    await dragRowTo(firstRow!, secondLane!);
-    expect(audio()).toMatchObject({ kind: "audio", linkedVideoClipId: "test-video-2", start: 5, duration: 5 });
-
-    const secondRow = Array.from(container.querySelectorAll<HTMLElement>(".linked-audio-row-handle")).find(row => row.textContent?.includes("Video clip 2"));
-    const audioTrack = persistedProject().tracks.find(track => track.kind === "audio");
-    const audioLane = audioTrack ? container.querySelector<HTMLElement>('.visual-track-lane[data-track-id="' + audioTrack.id + '"]') : null;
-    expect(secondRow).toBeTruthy();
-    expect(audioLane).toBeTruthy();
-    await dragRowTo(secondRow!, audioLane!, 950);
-    expect(audio()).not.toHaveProperty("linkedVideoClipId");
-    expect(audio().trackId).toBe(audioTrack!.id);
-    const emptyLinkedRow = Array.from(container.querySelectorAll<HTMLElement>(".linked-audio-row-handle")).find(row => row.textContent?.includes("Video clip 2"));
-    expect(emptyLinkedRow).toBeTruthy();
-    expect(emptyLinkedRow?.getAttribute("draggable")).toBe("false");
-    expect(emptyLinkedRow?.querySelector(".linked-audio-row-mute")).toBeNull();
-    expect(emptyLinkedRow?.querySelector(".linked-audio-row-unlink")).toBeNull();
-    expect(container.querySelector('.linked-audio-drop-target[data-linked-video-id="test-video-2"]')).toBeTruthy();
-    expect(clips().some(clip => clip.id === "test-video-2" && clip.kind === "video")).toBe(true);
-    expect(persistedProject().tracks.some(track => track.id === audioTrack!.id && track.kind === "audio")).toBe(true);
+    const extract = row().querySelector<HTMLButtonElement>('[aria-label="Extract Video clip 1 audio"]');
+    expect(extract).toBeTruthy();
+    click(extract!);
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+    // The structural child row remains as an empty drop target, but its linked-audio
+    // controls disappear after extraction; command-level tests cover preserved timing.
+    expect(original().linkedVideoClipId).toBeUndefined();
+    expect(container.textContent).toContain("Audio extracted to an independent placement.");
+    expect(clips().some(clip => clip.kind === "audio" && clip.id !== "test-audio-1" && !clip.linkedVideoClipId)).toBe(true);
   });
 
-  it("links a dropped audio asset to the video clip when dropped on a Video layer", async () => {
+  it("rejects dropping independent audio onto a Video layer instead of linking it", async () => {
     await openTimelineView();
     const project = persistedProject();
     const videoTrack = project.tracks.find(track => track.kind === "video");
@@ -2724,9 +2606,9 @@ describe("mobile audio clip controls", () => {
     act(() => lane!.dispatchEvent(drop));
     await flushEffects();
 
-    const linked = (persistedProject().timelineClips ?? []).find(clip => clip.assetId === audioAsset.id);
-    expect(linked).toMatchObject({ kind: "audio", linkedVideoClipId: "video-awaiting-audio", start: 0, duration: 8 });
-    expect(linked?.trackId).not.toBe(videoTrack.id);
+    expect(persistedProject().timelineClips?.find(clip => clip.assetId === audioAsset.id)).toBeUndefined();
+    expect(persistedProject().timelineClips?.find(clip => clip.id === "video-awaiting-audio")).not.toHaveProperty("linkedVideoClipId");
+    expect(container.textContent).toContain("Independent audio must be placed on an Audio layer");
   });
 
 

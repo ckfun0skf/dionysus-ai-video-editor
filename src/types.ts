@@ -1,7 +1,7 @@
 import type { CompositionDocument } from "./compositionModel";
 export type AssetKind = "video" | "image" | "audio" | "script" | "clip" | "other";
 export type ReferenceRole = "identity" | "face" | "body" | "outfit" | "pose" | "composition" | "lighting" | "environment" | "style" | "other";
-export interface Asset { id: string; name: string; kind: AssetKind; path?: string; notes?: string; prompt?: string; modelName?: string; modelVersion?: string; generationParameters?: Record<string, unknown>; thumbnailPath?: string; duration?: number; canvasWidth?: number; canvasHeight?: number; html?: string; css?: string; js?: string; clipVersions?: ClipVersion[]; selectedClipVersionId?: string; createdAt?: string; updatedAt?: string }
+export interface Asset { id: string; name: string; kind: AssetKind; path?: string; notes?: string; prompt?: string; modelName?: string; modelVersion?: string; generationParameters?: Record<string, unknown>; thumbnailPath?: string; duration?: number; /** Best-effort media metadata; undefined means the browser could not determine whether the source has audio. */ hasAudio?: boolean; canvasWidth?: number; canvasHeight?: number; html?: string; css?: string; js?: string; clipVersions?: ClipVersion[]; selectedClipVersionId?: string; createdAt?: string; updatedAt?: string }
 export interface ReferenceItem { id: string; assetId: string; role: ReferenceRole; notes?: string }
 export interface ReferenceProfile { id: string; name: string; entityType: "character" | "environment" | "prop" | "style" | "other"; references: ReferenceItem[] }
 export interface ReferenceOverride { referenceId: string; action: "exclude" | "replace"; replacementAssetId?: string; role?: ReferenceRole }

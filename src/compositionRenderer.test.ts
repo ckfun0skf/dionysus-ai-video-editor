@@ -52,7 +52,7 @@ describe("compositionRenderer", () => {
     expect(linkedAudio).toMatchObject({ kind: "audio", assetId: "video-asset", linkedVideoClipId: "master-video-clip", sourceIn: 1.5 });
     expect(isPlayableAudioLayer(linkedAudio, project.assets.find(asset => asset.id === "video-asset"))).toBe(true);
     expect(isPlayableAudioLayer(linkedAudio, project.assets.find(asset => asset.id === "audio-asset"))).toBe(true);
-    expect(isPlayableAudioLayer({ kind: "audio" }, project.assets.find(asset => asset.id === "video-asset"))).toBe(false);
+    expect(isPlayableAudioLayer({ kind: "audio" }, project.assets.find(asset => asset.id === "video-asset"))).toBe(true); // Extracted child audio remains playable without an ownership link.
     expect(isPlayableAudioLayer({ kind: "video" }, project.assets.find(asset => asset.id === "video-asset"))).toBe(false);
   });
 

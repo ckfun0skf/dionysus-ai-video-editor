@@ -7,11 +7,11 @@ import { validateProject } from "./projectValidation";
 import { addClipVersionLayer as addNestedLayer, addClipVersionTrack as addNestedTrack, deleteClipVersionLayer as deleteNestedLayer, duplicateClipVersionComposition, moveClipVersionLayer as moveNestedLayer, normalizeClipVersionTracks, updateClipVersionLayer as updateNestedLayer } from "./clipVersionTracks";
 import { createProjectDocument, readProjectDocument } from "./projectDocument";
 import { createRootCompositionPlacementForTimelineClip, migrateLegacyProjectToComposition, projectRootCompositionToLegacy } from "./compositionMigration";
-import { addCompositionTrack, applyCompositionResizePreview, assertValidCompositionDocument, deleteCompositionPlacement, duplicateCompositionPlacement, insertCompositionPlacement, moveCompositionPlacement, moveCompositionPlacementToTrack, removeCompositionTrack, reorderCompositionTrack, rippleReorderCompositionMasterShots, splitCompositionPlacement, trimCompositionPlacement, unlinkCompositionPlacement, updateCompositionPlacement, updateCompositionTrack } from "./compositionCommands";
+import { addCompositionLinkedAudioChild, addCompositionTrack, applyCompositionResizePreview, assertValidCompositionDocument, deleteCompositionPlacement, duplicateCompositionPlacement, duplicateLinkedAudio, extractLinkedAudio, insertCompositionPlacement, moveCompositionPlacement, moveCompositionPlacementToTrack, removeCompositionTrack, reorderCompositionTrack, rippleReorderCompositionMasterShots, splitCompositionPlacement, trimCompositionPlacement, updateCompositionLinkedAudioChild, updateCompositionPlacement, updateCompositionTrack } from "./compositionCommands";
 import { moveNormalizedFrame, resizeNormalizedFrame } from "./previewTransform";
 import { getAllowedChildClipAssets, wouldCreateClipAssetCycle } from "./clipAssetGraph";
 import { t } from "./i18n";
-import { duplicateTimelineClip, moveTimelineClip, splitTimelineClip, trimTimelineClip, unlinkTimelineAudio, deleteTimelineClip } from "./timelineOperations";
+import { duplicateTimelineClip, moveTimelineClip, splitTimelineClip, trimTimelineClip, deleteTimelineClip } from "./timelineOperations";
 import { type ClipResizePreview } from "./timelineResize";
 import { canPlaceTimelineClipOnTrack } from "./timelinePlacement";
 import { applyClipVersionResizePreview, calculateClipVersionDropPosition, calculateClipVersionResizePreview } from "./nestedTimelinePlacement";
@@ -211,10 +211,13 @@ export default function App() {
         ? compositionRead?.project
         : legacyRead?.project ?? compositionRead?.project;
       if (!restored || !validateProject(restored)) return createEmptyProject();
-      // A validated v2 root is authoritative; its projection was rebuilt during read.
-      return preferComposition
-        ? clearDemoSeedData(restored)
-        : normalizeLegacyTimelineTracks(clearDemoSeedData(restored));
+      // Normalize legacy schema-1 linked-audio rows immediately, not only after the
+      // user's first edit. Otherwise the live project can still claim a linked child belongs
+      // to an Audio Track while the canonical root has already moved it under the Video owner.
+      if (preferComposition) return clearDemoSeedData(restored);
+      const normalized = normalizeLegacyTimelineTracks(clearDemoSeedData(restored));
+      const migratedRoot = migrateLegacyProjectToComposition(normalized).rootComposition;
+      return projectRootCompositionToLegacy(normalized, migratedRoot);
     } catch { return createEmptyProject(); }
   });
   // Root Composition is the live authority for Master Timeline placement/track commands.
@@ -394,7 +397,6 @@ export default function App() {
   const projectAssetDragSourceRef = useRef<string>("");
   const [clipDropPreview, setClipDropPreview] = useState<{ trackId: string; start: number; duration: number; name: string; snapTime?: number } | null>(null);
   const [newLayerDropPreview, setNewLayerDropPreview] = useState<{ sourceTrackId: string; assetId: string; start: number; duration: number; name: string; kind: "video" | "audio"; edge: "before" | "after" } | null>(null);
-  const [audioRelinkPreviewVideoId, setAudioRelinkPreviewVideoId] = useState<string>("");
   const nestedLayerDragSourceRef = useRef("");
   const touchNestedMoveRef = useRef<{
     layer: CompositionLayer;
@@ -780,6 +782,13 @@ export default function App() {
     rootCompositionRef.current = nextRoot;
     setProject(projected);
     setRootComposition(nextRoot);
+    // Migrations may remove a legacy Audio Track that existed only to store owned source-audio
+    // children. Keep the workspace selection on a real track rather than leaving stale controls
+    // that try to edit a track no longer present in the canonical Composition.
+    if (selectedTimelineTrackId && !projected.tracks.some(track => track.id === selectedTimelineTrackId)) {
+      const fallbackTrack = projected.tracks.find(track => track.kind === "video") ?? projected.tracks[0];
+      setSelectedTimelineTrackId(fallbackTrack?.id ?? "");
+    }
   }
 
   function changeRootComposition(update: (document: CompositionDocument) => CompositionDocument, historyGroup = "") {
@@ -819,96 +828,34 @@ export default function App() {
     }
   }
 
-  function addLinkedAudioAssetToVideoPlacement(root: CompositionDocument, project: DionysusProject, video: TimelineClip, asset: Asset): CompositionDocument {
-    if (video.kind !== "video" || asset.kind !== "audio") return root;
-    let next = root;
-    let audioTrack = next.tracks.find(item => item.kind === "audio");
-    if (!audioTrack) {
-      const legacyAudioTrack = project.tracks.find(item => item.kind === "audio");
-      const newAudioTrack: CompositionDocument["tracks"][number] = legacyAudioTrack
-        ? { id: legacyAudioTrack.id, name: legacyAudioTrack.name, kind: "audio", order: next.tracks.length, legacyData: { ...legacyAudioTrack } }
-        : { id: id("track-audio"), name: "Audio " + (next.tracks.filter(item => item.kind === "audio").length + 1), kind: "audio", order: next.tracks.length };
-      next = addCompositionTrack(next, newAudioTrack);
-      audioTrack = newAudioTrack;
-    }
-    const linkedAudio: TimelineClip = {
-      id: id("timeline-audio"), name: asset.name, kind: "audio", trackId: audioTrack.id,
-      start: video.start, duration: video.duration, assetId: asset.id, linkedVideoClipId: video.id,
-      sourceIn: 0, sourceOut: video.duration
-    };
-    return insertCompositionPlacement(next, createRootCompositionPlacementForTimelineClip(project, next, linkedAudio));
-  }
-
-  function relinkRootAudioToVideo(audio: TimelineClip, video: TimelineClip) {
-    if (audio.kind !== "audio" || video.kind !== "video") return;
-    const canonical = rootCompositionRef.current.placements.find(item => item.id === audio.id);
-    if (canonical) {
-      changeRootComposition(document => {
-        let next = document;
-        const current = next.placements.find(item => item.id === audio.id);
-        if (current?.linkedToPlacementId) next = unlinkCompositionPlacement(next, audio.id);
-        return updateCompositionPlacement(next, audio.id, {
-          trackId: current?.trackId ?? audio.trackId, start: video.start, duration: video.duration,
-          linkedToPlacementId: video.id, sourceIn: audio.sourceIn ?? 0, sourceOut: (audio.sourceIn ?? 0) + video.duration,
-          legacyData: { ...(current?.legacyData ?? {}), ...audio, start: video.start, duration: video.duration, linkedVideoClipId: video.id }
-        });
-      });
-    } else {
-      change(project => ({ ...project, timelineClips: (project.timelineClips ?? []).map(item => item.id === audio.id
-        ? { ...item, start: video.start, duration: video.duration, linkedVideoClipId: video.id }
-        : item) }));
-    }
-    setSelectedTimelineClipId(audio.id);
-    setSelectedTimelineTrackId(audio.trackId);
-    setNotice("Audio linked to " + video.name + ".");
-  }
-
   function addLinkedAudioForVideoPlacement(root: CompositionDocument, project: DionysusProject, video: TimelineClip): CompositionDocument {
     const asset = project.assets.find(item => item.id === video.assetId && item.kind === "video");
-    if (!asset || video.kind !== "video") return root;
+    if (!asset || video.kind !== "video" || asset.hasAudio === false) return root;
+    const owner = root.placements.find(item => item.id === video.id);
+    if (!owner || (owner.linkedAudioChildren ?? []).length) return root;
 
-    let next = root;
-    // Reuse the canonical project Audio track ID. Creating a fresh track merely because
-    // the migrated composition is missing that track can leave a second, empty Audio lane
-    // beside the one already visible in the legacy project projection.
-    const projectAudioTrack = project.tracks.find(item => item.kind === "audio");
-    // Prefer an Audio track already present in the canonical composition. A project may
-    // have a legacy Audio track whose ID differs from the migrated canonical track; choosing
-    // the legacy ID first would create a second lane despite an existing usable Audio lane.
-    let audioTrack = next.tracks.find(item => item.kind === "audio");
-    if (!audioTrack && projectAudioTrack) {
-      audioTrack = {
-        id: projectAudioTrack.id,
-        name: projectAudioTrack.name,
-        kind: "audio",
-        order: next.tracks.length,
-        muted: projectAudioTrack.muted,
-        backgroundColor: projectAudioTrack.backgroundColor,
-        backgroundTransparent: projectAudioTrack.backgroundTransparent,
-        opacity: projectAudioTrack.opacity,
-        originalKind: projectAudioTrack.originalKind
-      };
-      next = addCompositionTrack(next, audioTrack);
-    }
-    if (!audioTrack) {
-      audioTrack = { id: id("track-audio"), name: "Audio 1", kind: "audio", order: next.tracks.length };
-      next = addCompositionTrack(next, audioTrack);
-    }
-
-    const linkedAudio: TimelineClip = {
-      id: id("timeline-audio"),
+    const sourceIn = video.sourceIn ?? 0;
+    const sourceOut = video.sourceOut ?? (sourceIn + video.duration);
+    const childId = id("timeline-audio");
+    return addCompositionLinkedAudioChild(root, video.id, {
+      id: childId,
       name: asset.name + " audio",
-      kind: "audio",
-      trackId: audioTrack.id,
-      start: video.start,
-      duration: video.duration,
-      assetId: asset.id,
-      linkedVideoClipId: video.id,
-      sourceIn: video.sourceIn ?? 0,
-      sourceOut: video.sourceOut ?? ((video.sourceIn ?? 0) + video.duration)
-    };
-    const audioPlacement = createRootCompositionPlacementForTimelineClip(project, next, linkedAudio);
-    return insertCompositionPlacement(next, audioPlacement);
+      source: { type: "asset", assetId: asset.id },
+      sourceIn,
+      sourceOut,
+      legacyData: {
+        id: childId,
+        name: asset.name + " audio",
+        kind: "audio",
+        trackId: video.trackId,
+        start: video.start,
+        duration: video.duration,
+        assetId: asset.id,
+        linkedVideoClipId: video.id,
+        sourceIn,
+        sourceOut,
+      },
+    });
   }
 
   function placeProjectAssetDirectly(asset: Asset, track: DionysusProject["tracks"][number], desiredStart = editorTime) {
@@ -931,7 +878,7 @@ export default function App() {
     const clip: TimelineClip = { id: id("timeline-clip"), name: asset.name, kind, trackId: track.id, start: 0, duration, assetId: asset.id, sourceIn: 0, ...(version ? { clipVersionId: version.id } : {}), ...(asset.html !== undefined ? { html: asset.html } : {}), ...(asset.css !== undefined ? { css: asset.css } : {}), ...(asset.js !== undefined ? { code: asset.js } : {}) };
     let plan = calculateCanonicalCompositionInsertionPlan(rootCompositionRef.current, clip, track.id, desiredStart);
     if (plan.status === "start-occupied") {
-      const trackClips = (projectRef.current.timelineClips ?? []).filter(item => item.trackId === track.id);
+      const trackClips = (projectRef.current.timelineClips ?? []).filter(item => item.trackId === track.id && !item.linkedVideoClipId);
       const appendAt = trackClips.reduce((end, item) => Math.max(end, item.start + item.duration), 0);
       plan = calculateCanonicalCompositionInsertionPlan(rootCompositionRef.current, clip, track.id, appendAt);
     }
@@ -1375,6 +1322,20 @@ export default function App() {
 
   function updateRootTimelineClip(clipId: string, patch: Partial<TimelineClip>) {
     const current = projectRef.current.timelineClips?.find(item => item.id === clipId);
+    const linkedOwner = rootCompositionRef.current.placements.find(item =>
+      (item.linkedAudioChildren ?? []).some(child => child.id === clipId)
+    );
+    if (linkedOwner) {
+      const childPatch = {
+        ...(patch.muted !== undefined ? { muted: patch.muted } : {}),
+        ...(patch.volume !== undefined ? { volume: patch.volume } : {}),
+        ...(patch.fadeIn !== undefined ? { fadeIn: patch.fadeIn } : {}),
+        ...(patch.fadeOut !== undefined ? { fadeOut: patch.fadeOut } : {}),
+        ...(current ? { legacyData: { ...current, ...patch } } : {}),
+      };
+      changeRootComposition(root => updateCompositionLinkedAudioChild(root, clipId, childPatch));
+      return;
+    }
     const canonical = rootCompositionRef.current.placements.find(item => item.id === clipId);
     if (!current || !canonical) {
       change(project => ({ ...project, timelineClips: (project.timelineClips ?? []).map(item => item.id === clipId ? { ...item, ...patch } : item) }));
@@ -1399,23 +1360,12 @@ export default function App() {
       return updateCompositionPlacement(next, clipId, {
         name: updated.name,
         trackId: updated.trackId,
-        start: updated.start,
-        duration: updated.duration,
         source: sourceTemplate.source,
-        sourceIn: updated.sourceIn,
-        sourceOut: updated.sourceOut,
-        linkedToPlacementId: sourceTemplate.linkedToPlacementId,
+        ...(updated.sourceIn !== undefined ? { sourceIn: updated.sourceIn } : {}),
+        ...(updated.sourceOut !== undefined ? { sourceOut: updated.sourceOut } : {}),
         legacyData: { ...canonical.legacyData, ...updated },
       });
     });
-  }
-
-  function unlinkRootTimelineAudio(clipId: string) {
-    if (rootCompositionRef.current.placements.some(item => item.id === clipId)) {
-      changeRootComposition(root => unlinkCompositionPlacement(root, clipId));
-      return;
-    }
-    change(project => ({ ...project, timelineClips: unlinkTimelineAudio({ tracks: project.tracks, timelineClips: project.timelineClips ?? [] }, clipId).timelineClips }));
   }
 
   function getCanonicalTimelineClipForDrop(clip: TimelineClip): TimelineClip {
@@ -1531,8 +1481,15 @@ export default function App() {
   }
   function syncStoryboardToTimeline() {
     const videoTrack = project.tracks.find(track => track.kind === "video");
-    const audioTrack = project.tracks.find(track => track.kind === "audio");
-    if (!videoTrack || !audioTrack) { setNotice("Timeline needs both video and audio tracks before syncing."); return; }
+    if (!videoTrack) { setNotice("Timeline needs a Video layer before syncing."); return; }
+    const hasStoryboardAudio = project.shots.some(shot => shot.slots.some(slot =>
+      (slot.versions.find(version => version.id === slot.selectedVersionId) ?? slot.versions[0])
+        ?.layers.some(layer => layer.kind === "audio")
+    ));
+    const createdAudioTrack = !project.tracks.some(track => track.kind === "audio") && hasStoryboardAudio
+      ? { id: id("track-audio"), name: "Audio 1", kind: "audio" as const }
+      : undefined;
+    const audioTrack = project.tracks.find(track => track.kind === "audio") ?? createdAudioTrack;
     const shotStarts = getMasterShotStarts(project.shots);
     const generated = project.shots.flatMap((shot, shotIndex) => {
       const shotOffset = shotStarts[shotIndex];
@@ -1543,6 +1500,7 @@ export default function App() {
         return sourceLayers.map(layer => {
           const kind = layer.kind === "audio" ? "audio" as const : "video" as const;
           const track = kind === "audio" ? audioTrack : project.tracks.find(item => item.id === getMasterShotTrackId(shot, project.tracks)) ?? videoTrack;
+          if (!track) throw new Error("Storyboard audio requires an Audio layer.");
           const assetId = layer.assetId && project.assets.some(asset => asset.id === layer.assetId) ? layer.assetId : undefined;
           const clipId = "storyboard-" + shot.id + "-" + slot.id + "-" + layer.id;
           const duration = Math.max(0.1, Math.min(layer.duration, Math.max(0.1, shot.duration - slot.start - layer.start)));
@@ -1551,7 +1509,13 @@ export default function App() {
       });
       return clips;
     });
-    change(p => ({ ...p, timelineClips: [...(p.timelineClips ?? []).filter(clip => !clip.id.startsWith("storyboard-")), ...generated] }));
+    change(p => ({
+      ...p,
+      ...(createdAudioTrack && !p.tracks.some(track => track.kind === "audio")
+        ? { tracks: [...p.tracks, createdAudioTrack] }
+        : {}),
+      timelineClips: [...(p.timelineClips ?? []).filter(clip => !clip.id.startsWith("storyboard-")), ...generated],
+    }));
     setNotice("Storyboard synced to media timeline. Manually created clips were preserved.");
     setView("timeline");
   }
@@ -2525,22 +2489,58 @@ export default function App() {
     change(p => ({ ...p, assets: [...p.assets, asset] }));
     setNotice(t("notice.assetAdded", { name: cleanName }));
   }
-  function readMediaDuration(file: File, kind: "video" | "audio"): Promise<number | undefined> {
+  function readMediaDuration(file: File, kind: "video" | "audio"): Promise<{ duration?: number; hasAudio?: boolean }> {
     return new Promise(resolve => {
       const media = document.createElement(kind);
       const objectUrl = URL.createObjectURL(file);
       let settled = false;
-      const finish = (duration?: number) => {
+      let durationFallback: ReturnType<typeof globalThis.setTimeout> | undefined;
+      const inspectAudio = (): boolean | undefined => {
+        if (kind !== "video") return undefined;
+        const trackList = (media as HTMLVideoElement & { audioTracks?: { length: number } }).audioTracks;
+        if (trackList) return trackList.length > 0;
+        const capturable = media as HTMLMediaElement & { captureStream?: () => MediaStream };
+        if (typeof capturable.captureStream !== "function") return undefined;
+        try {
+          const stream = capturable.captureStream();
+          const hasAudio = stream.getAudioTracks().length > 0;
+          stream.getTracks().forEach(track => track.stop());
+          return hasAudio;
+        } catch {
+          return undefined;
+        }
+      };
+      const finish = (duration?: number, hasAudio?: boolean) => {
         if (settled) return;
         settled = true;
+        if (durationFallback !== undefined) globalThis.clearTimeout(durationFallback);
+        media.removeEventListener("loadedmetadata", onLoadedMetadata);
+        media.removeEventListener("loadeddata", onLoadedData);
+        media.removeEventListener("error", onError);
         media.removeAttribute("src");
         media.load();
         URL.revokeObjectURL(objectUrl);
-        resolve(duration && Number.isFinite(duration) && duration > 0 ? duration : undefined);
+        resolve({
+          ...(duration && Number.isFinite(duration) && duration > 0 ? { duration } : {}),
+          ...(hasAudio !== undefined ? { hasAudio } : {}),
+        });
       };
+      const onLoadedData = () => finish(media.duration, inspectAudio());
+      const onLoadedMetadata = () => {
+        if (kind === "audio") {
+          finish(media.duration);
+          return;
+        }
+        // A video may expose its dimensions before demuxing/decode reveals its audio tracks.
+        // Inspect audio only after loadeddata; this avoids classifying an A/V file as silent
+        // just because the track list is temporarily empty at loadedmetadata.
+        durationFallback = globalThis.setTimeout(() => finish(media.duration), 2500);
+      };
+      const onError = () => finish(undefined, kind === "video" ? undefined : undefined);
       media.preload = "metadata";
-      media.onloadedmetadata = () => finish(media.duration);
-      media.onerror = () => finish(undefined);
+      media.addEventListener("loadedmetadata", onLoadedMetadata, { once: true });
+      media.addEventListener("loadeddata", onLoadedData, { once: true });
+      media.addEventListener("error", onError, { once: true });
       media.src = objectUrl;
     });
   }
@@ -2582,10 +2582,19 @@ export default function App() {
     if (kind === "video" || kind === "audio") {
       const assetId = id("asset");
       const thumbnail = kind === "video" ? createVideoThumbnail(file) : Promise.resolve(undefined);
-      void Promise.all([storeMediaAsset(assetId, file), thumbnail, readMediaDuration(file, kind)]).then(([path, thumbnailPath, duration]) => {
-        const asset: Asset = { id: assetId, name: file.name, kind, notes: "Imported media stored locally in IndexedDB.", path, ...(duration ? { duration } : {}), ...(thumbnailPath ? { thumbnailPath } : {}) };
+      void Promise.all([storeMediaAsset(assetId, file), thumbnail, readMediaDuration(file, kind)]).then(([path, thumbnailPath, metadata]) => {
+        const asset: Asset = {
+          id: assetId,
+          name: file.name,
+          kind,
+          notes: "Imported media stored locally in IndexedDB.",
+          path,
+          ...(metadata.duration ? { duration: metadata.duration } : {}),
+          ...(metadata.hasAudio !== undefined ? { hasAudio: metadata.hasAudio } : {}),
+          ...(thumbnailPath ? { thumbnailPath } : {}),
+        };
         change(p => ({ ...p, assets: [...p.assets, asset] }));
-        setNotice(duration ? file.name + " imported (" + time(duration) + ")." : file.name + " imported; duration metadata is unavailable.");
+        setNotice(metadata.duration ? file.name + " imported (" + time(metadata.duration) + ")." : file.name + " imported; duration metadata is unavailable.");
       }).catch(error => {
         setNotice(error instanceof Error ? error.message : "Could not store the imported media file.");
       });
@@ -2619,22 +2628,24 @@ export default function App() {
     const kind: "video" | "audio" | "image" = audioFile ? "audio" : imageFile ? "image" : "video";
     const assetId = id("asset");
     try {
-      const [path, thumbnailPath, sourceDuration] = await Promise.all([
+      const [path, thumbnailPath, mediaMetadata] = await Promise.all([
         storeMediaAsset(assetId, file),
         kind === "video" ? createVideoThumbnail(file) : Promise.resolve(undefined),
         kind === "image" ? Promise.resolve(undefined) : readMediaDuration(file, kind)
       ]);
+      const duration = mediaMetadata?.duration;
       const now = new Date().toISOString();
       const asset: Asset = {
         id: assetId, name: file.name, kind, path, createdAt: now, updatedAt: now,
         notes: "Imported from Timeline; stored locally.",
-        ...(sourceDuration ? { duration: sourceDuration } : {}),
+        ...(duration ? { duration } : {}),
+        ...(mediaMetadata?.hasAudio !== undefined ? { hasAudio: mediaMetadata.hasAudio } : {}),
         ...(thumbnailPath ? { thumbnailPath } : {})
       };
       change(project => ({ ...project, assets: [...project.assets, asset] }));
       setAssetPickerTrackId("");
-      setNotice(sourceDuration
-        ? file.name + " added to Project Media (" + time(sourceDuration) + "). Drag it to the Timeline when ready."
+      setNotice(duration
+        ? file.name + " added to Project Media (" + time(duration) + "). Drag it to the Timeline when ready."
         : file.name + " added to Project Media. Drag it to the Timeline when ready.");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Could not import this media file.");
@@ -2920,12 +2931,12 @@ export default function App() {
 </div>
 <div className="visual-track-list">
 {project.tracks.filter(track=>track.kind==="video"||track.kind==="audio"||track.kind==="text"||track.kind==="procedural").map(track=>{
- const clips=(project.timelineClips??[]).filter(clip=>clip.trackId===track.id && !(track.kind==="audio" && clip.linkedVideoClipId));
+ const clips=(project.timelineClips??[]).filter(clip=>clip.trackId===track.id && !clip.linkedVideoClipId);
  return <div className="visual-track-group" key={track.id}>
  <div className="visual-track-row">
   <div className={"visual-track-label"+(selectedTimelineTrackId===track.id?" selected-track-label":"")} onClick={()=>setSelectedTimelineTrackId(track.id)} onContextMenu={event=>{event.preventDefault();setTrackContextMenuId(track.id);setTrackContextMenuPosition({x:Math.min(event.clientX,window.innerWidth-190),y:Math.min(event.clientY,window.innerHeight-180)});setSelectedTimelineTrackId(track.id);}}>
    {track.kind==="video" && <button className="track-expand-toggle" aria-label={(collapsedVideoTrackIds.includes(track.id)?"Expand ":"Collapse ")+track.name} aria-expanded={!collapsedVideoTrackIds.includes(track.id)} onClick={()=>setCollapsedVideoTrackIds(current=>current.includes(track.id)?current.filter(id=>id!==track.id):[...current,track.id])}>{collapsedVideoTrackIds.includes(track.id)?"▸":"▾"}</button>}
-   <span className={track.kind==="audio"?"track-kind-audio":"track-kind-video"}>{track.kind==="audio"?<AudioLines size={15}/>:track.kind==="procedural"?<Code2 size={15}/>:track.kind==="text"?<Sparkles size={15}/>:<Film size={15}/>}</span><div><strong>{track.name||track.kind}</strong><small>{track.kind==="audio"?"Audio layer":track.kind==="procedural"?"Code layer":track.kind==="text"?"Text layer":track.kind==="effects"?"Effects layer":"Video layer"}</small></div>{track.kind==="video" && <button type="button" className="track-settings-button" title="Video layer settings" aria-label={"Settings for "+track.name} onClick={event=>{event.stopPropagation();setVideoTrackSettingsId(track.id);}}><Settings2 size={14}/></button>}{track.kind==="audio" && <button className={"track-layer-mute"+(track.muted?" muted":"")} aria-label={(track.muted?"Unmute ":"Mute ")+track.name+" layer"} aria-pressed={Boolean(track.muted)} title={track.muted?"Unmute audio layer":"Mute audio layer"} onClick={event=>{event.stopPropagation();changeRootComposition(root=>updateCompositionTrack(root,track.id,{muted:!track.muted}));}}>{track.muted?<VolumeX size={14}/>:<Volume2 size={14}/>}</button>}<button className="track-add-clip" aria-label={"Add clip to "+track.name} title={"Add clip to "+track.name} onClick={event=>{event.stopPropagation();if(track.kind==="effects"){setNotice("Effects layer clips are not yet supported.");return;}if(track.kind==="video"||track.kind==="audio"){setAssetPickerTrackId(track.id);setAssetPickerSearch("");setAssetPickerFilter(track.kind==="audio"?"audio":"all");return;}const kind=track.kind==="text"?"text":"procedural";const clipId=id("timeline-clip");const duration=Math.max(.5,Math.min(3,mediaTimelineDuration-editorTime||3));const name=(kind==="procedural"?"Code":"Text")+" clip "+((project.timelineClips??[]).filter(clip=>clip.trackId===track.id).length+1);beginTimelineClipPlacement({id:clipId,name,kind,trackId:track.id,start:0,duration});}}><Plus size={13}/></button><button className="track-remove-button" aria-label={"Remove "+track.name+" layer"} title={"Remove "+track.name+" layer"} onClick={event=>{event.stopPropagation();if(window.confirm("Remove layer “"+track.name+"” and all clips on it?")){try{changeRootComposition(root=>removeCompositionTrack(root,track.id,project.tracks.filter(item=>item.id!==track.id).find(item=>item.kind==="video")?.id));setSelectedTimelineClipId("");setTimelineClipSettingsId("");}catch(error){setNotice(error instanceof Error?error.message:"Could not remove this layer.");}}}}><span aria-hidden="true">×</span></button><button type="button" className="track-mobile-menu-button" aria-label={"Layer actions for "+track.name} title={"Layer actions for "+track.name} onClick={event=>{event.stopPropagation();setSelectedTimelineTrackId(track.id);setTrackContextMenuId(track.id);const rect=event.currentTarget.getBoundingClientRect();setTrackContextMenuPosition(window.innerWidth<=640?{x:12,y:Math.max(12,window.innerHeight-270)}:{x:Math.min(event.clientX||rect.left,window.innerWidth-190),y:Math.min(event.clientY||rect.bottom,window.innerHeight-180)});}}><MoreHorizontal size={17}/></button>
+   <span className={track.kind==="audio"?"track-kind-audio":"track-kind-video"}>{track.kind==="audio"?<AudioLines size={15}/>:track.kind==="procedural"?<Code2 size={15}/>:track.kind==="text"?<Sparkles size={15}/>:<Film size={15}/>}</span><div><strong>{track.name||track.kind}</strong><small>{track.kind==="audio"?"Audio layer":track.kind==="procedural"?"Code layer":track.kind==="text"?"Text layer":track.kind==="effects"?"Effects layer":"Video layer"}</small></div>{track.kind==="video" && <button type="button" className={"track-layer-mute"+(track.muted?" muted":"")} aria-label={(track.muted?"Unmute ":"Mute ")+track.name+" layer"} aria-pressed={Boolean(track.muted)} title={track.muted?"Unmute video layer":"Mute video layer"} onClick={event=>{event.stopPropagation();changeRootComposition(root=>updateCompositionTrack(root,track.id,{muted:!track.muted}));}}>{track.muted?<VolumeX size={14}/>:<Volume2 size={14}/>}</button>}{track.kind==="video" && <button type="button" className="track-settings-button" title="Video layer settings" aria-label={"Settings for "+track.name} onClick={event=>{event.stopPropagation();setVideoTrackSettingsId(track.id);}}><Settings2 size={14}/></button>}{track.kind==="audio" && <button className={"track-layer-mute"+(track.muted?" muted":"")} aria-label={(track.muted?"Unmute ":"Mute ")+track.name+" layer"} aria-pressed={Boolean(track.muted)} title={track.muted?"Unmute audio layer":"Mute audio layer"} onClick={event=>{event.stopPropagation();changeRootComposition(root=>updateCompositionTrack(root,track.id,{muted:!track.muted}));}}>{track.muted?<VolumeX size={14}/>:<Volume2 size={14}/>}</button>}<button className="track-add-clip" aria-label={"Add clip to "+track.name} title={"Add clip to "+track.name} onClick={event=>{event.stopPropagation();if(track.kind==="effects"){setNotice("Effects layer clips are not yet supported.");return;}if(track.kind==="video"||track.kind==="audio"){setAssetPickerTrackId(track.id);setAssetPickerSearch("");setAssetPickerFilter(track.kind==="audio"?"audio":"all");return;}const kind=track.kind==="text"?"text":"procedural";const clipId=id("timeline-clip");const duration=Math.max(.5,Math.min(3,mediaTimelineDuration-editorTime||3));const name=(kind==="procedural"?"Code":"Text")+" clip "+((project.timelineClips??[]).filter(clip=>clip.trackId===track.id).length+1);beginTimelineClipPlacement({id:clipId,name,kind,trackId:track.id,start:0,duration});}}><Plus size={13}/></button><button className="track-remove-button" aria-label={"Remove "+track.name+" layer"} title={"Remove "+track.name+" layer"} onClick={event=>{event.stopPropagation();if(window.confirm("Remove layer “"+track.name+"” and all clips on it?")){try{changeRootComposition(root=>removeCompositionTrack(root,track.id,project.tracks.filter(item=>item.id!==track.id).find(item=>item.kind==="video")?.id));setSelectedTimelineClipId("");setTimelineClipSettingsId("");}catch(error){setNotice(error instanceof Error?error.message:"Could not remove this layer.");}}}}><span aria-hidden="true">×</span></button><button type="button" className="track-mobile-menu-button" aria-label={"Layer actions for "+track.name} title={"Layer actions for "+track.name} onClick={event=>{event.stopPropagation();setSelectedTimelineTrackId(track.id);setTrackContextMenuId(track.id);const rect=event.currentTarget.getBoundingClientRect();setTrackContextMenuPosition(window.innerWidth<=640?{x:12,y:Math.max(12,window.innerHeight-270)}:{x:Math.min(event.clientX||rect.left,window.innerWidth-190),y:Math.min(event.clientY||rect.bottom,window.innerHeight-180)});}}><MoreHorizontal size={17}/></button>
   </div>
   <div className="visual-track-lane" data-track-id={track.id} style={{backgroundSize:(5/mediaTimelineDuration*100)+"% 100%",backgroundColor:track.kind==="video"?(track.backgroundTransparent?"transparent":track.backgroundColor??"#111113"):undefined,backgroundImage:track.kind==="video"&&track.backgroundTransparent?"none":undefined}}
    onContextMenu={event=>{event.preventDefault();setTrackContextMenuId(track.id);setTrackContextMenuPosition({x:Math.min(event.clientX,window.innerWidth-190),y:Math.min(event.clientY,window.innerHeight-180)});setSelectedTimelineTrackId(track.id);}} onPointerDown={event=>{if(event.target!==event.currentTarget)return;setSelectedTimelineTrackId(track.id);const rect=event.currentTarget.getBoundingClientRect();const next=Math.max(0,Math.min(mediaTimelineDuration,((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration));if(pendingTimelineClip){placePendingTimelineClip(track,next);return;}playbackTimeRef.current=next;setIsPlaying(false);setEditorTime(next);}}
@@ -2935,7 +2946,7 @@ export default function App() {
      event.preventDefault();
      const assetId=event.dataTransfer.getData("text/dionysus-project-asset")||projectAssetDragSourceRef.current;
      if(assetId){
-       projectAssetDragSourceRef.current="";const asset=project.assets.find(item=>item.id===assetId);const rect=event.currentTarget.getBoundingClientRect();const dropTime=Math.max(0,Math.min(mediaTimelineDuration,((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration));const createLayer=newLayerDropPreview?.sourceTrackId===track.id&&newLayerDropPreview.assetId===assetId;setClipDropPreview(null);setNewLayerDropPreview(null);if(asset){if(createLayer){const kind: "video" | "audio"=asset.kind==="audio"?"audio":"video";const role=kind==="audio"?"Audio":"Video";const trackId=id("track-"+kind);const trackName=role+" "+(projectRef.current.tracks.filter(item=>item.name.startsWith(role+" ")).length+1);const legacyTrack={id:trackId,name:trackName,kind};const clipKind: TimelineClip["kind"]=kind==="audio"?"audio":asset.kind==="script"?"procedural":asset.kind==="clip"?"clip":"video";const version=asset.kind==="clip"?(asset.clipVersions?.find(item=>item.id===asset.selectedClipVersionId)??asset.clipVersions?.[0]):undefined;const duration=version?.duration??((asset.kind==="video"||asset.kind==="audio")?asset.duration:undefined)??Math.max(.5,Math.min(3,mediaTimelineDuration-dropTime||3));const clip:TimelineClip={id:id("timeline-clip"),name:asset.name,kind:clipKind,trackId,start:0,duration,assetId:asset.id,sourceIn:0,...(version?{clipVersionId:version.id}:{}),...(asset.html!==undefined?{html:asset.html}:{}),...(asset.css!==undefined?{css:asset.css}:{}),...(asset.js!==undefined?{code:asset.js}:{})};try{changeRootComposition(root=>{let next=addCompositionTrack(root,{...legacyTrack,kind,order:root.tracks.length,legacyData:legacyTrack});const plan=calculateCanonicalCompositionInsertionPlan(next,clip,trackId,dropTime);if(plan.status==="invalid-track"||plan.status==="start-occupied"||plan.status==="needs-resolution")throw new Error("Could not place this asset on the new layer.");next=applyCanonicalCompositionInsertion(next,projectRef.current,plan);return addLinkedAudioForVideoPlacement(next,projectRef.current,plan.clip);});setSelectedTimelineTrackId(trackId);setSelectedTimelineClipId(clip.id);setTimelineClipSettingsId(clip.id);setNotice("Created "+trackName+" and added “"+asset.name+"”.");}catch(error){setNotice(error instanceof Error?error.message:"Could not create a layer for this asset.");}return;}if(track.kind==="video"&&asset.kind==="audio"){const targets=(projectRef.current.timelineClips??[]).filter(item=>item.kind==="video"&&item.trackId===track.id).sort((left,right)=>Math.abs(left.start-dropTime)-Math.abs(right.start-dropTime));const target=targets.find(item=>dropTime>=item.start&&dropTime<=item.start+item.duration)??(targets.length===1?targets[0]:undefined);if(!target){setNotice("Drop the audio over a video clip on this layer to link it.");return;}try{changeRootComposition(root=>addLinkedAudioAssetToVideoPlacement(root,projectRef.current,target,asset));setNotice("Linked audio added to "+target.name+".");}catch(error){setNotice(error instanceof Error?error.message:"Could not link audio to the video.");}return;}const compatible=(track.kind==="audio"&&asset.kind==="audio")||(track.kind==="video"&&asset.kind!=="audio");if(!compatible){setNotice(track.kind==="audio"?"Only audio assets can be dropped on an Audio layer.":"Audio assets must be dropped on a Video layer.");return;}placeProjectAssetDirectly(asset,track,dropTime);}return;}
+       projectAssetDragSourceRef.current="";const asset=project.assets.find(item=>item.id===assetId);const rect=event.currentTarget.getBoundingClientRect();const dropTime=Math.max(0,Math.min(mediaTimelineDuration,((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration));const createLayer=newLayerDropPreview?.sourceTrackId===track.id&&newLayerDropPreview.assetId===assetId;setClipDropPreview(null);setNewLayerDropPreview(null);if(asset){if(createLayer){const kind: "video" | "audio"=asset.kind==="audio"?"audio":"video";const role=kind==="audio"?"Audio":"Video";const trackId=id("track-"+kind);const trackName=role+" "+(projectRef.current.tracks.filter(item=>item.name.startsWith(role+" ")).length+1);const legacyTrack={id:trackId,name:trackName,kind};const clipKind: TimelineClip["kind"]=kind==="audio"?"audio":asset.kind==="script"?"procedural":asset.kind==="clip"?"clip":"video";const version=asset.kind==="clip"?(asset.clipVersions?.find(item=>item.id===asset.selectedClipVersionId)??asset.clipVersions?.[0]):undefined;const duration=version?.duration??((asset.kind==="video"||asset.kind==="audio")?asset.duration:undefined)??Math.max(.5,Math.min(3,mediaTimelineDuration-dropTime||3));const clip:TimelineClip={id:id("timeline-clip"),name:asset.name,kind:clipKind,trackId,start:0,duration,assetId:asset.id,sourceIn:0,...(version?{clipVersionId:version.id}:{}),...(asset.html!==undefined?{html:asset.html}:{}),...(asset.css!==undefined?{css:asset.css}:{}),...(asset.js!==undefined?{code:asset.js}:{})};try{changeRootComposition(root=>{let next=addCompositionTrack(root,{...legacyTrack,kind,order:root.tracks.length,legacyData:legacyTrack});const plan=calculateCanonicalCompositionInsertionPlan(next,clip,trackId,dropTime);if(plan.status==="invalid-track"||plan.status==="start-occupied"||plan.status==="needs-resolution")throw new Error("Could not place this asset on the new layer.");next=applyCanonicalCompositionInsertion(next,projectRef.current,plan);return addLinkedAudioForVideoPlacement(next,projectRef.current,plan.clip);});setSelectedTimelineTrackId(trackId);setSelectedTimelineClipId(clip.id);setTimelineClipSettingsId(clip.id);setNotice("Created "+trackName+" and added “"+asset.name+"”.");}catch(error){setNotice(error instanceof Error?error.message:"Could not create a layer for this asset.");}return;}if(track.kind==="video"&&asset.kind==="audio"){setNotice("Independent audio must be placed on an Audio layer. Only audio embedded in the video source appears as Linked Audio.");return;}const compatible=(track.kind==="audio"&&asset.kind==="audio")||(track.kind==="video"&&asset.kind!=="audio");if(!compatible){setNotice(track.kind==="audio"?"Only audio assets can be dropped on an Audio layer.":"Audio assets must be dropped on a Video layer.");return;}placeProjectAssetDirectly(asset,track,dropTime);}return;}
      const rect=event.currentTarget.getBoundingClientRect();
      const masterShotId=event.dataTransfer.getData("text/dionysus-master-shot") || masterShotDragSourceRef.current;
       if(masterShotId){
@@ -2963,24 +2974,12 @@ export default function App() {
         setSelectedId(movingShot.id);setIsPlaying(false);playbackTimeRef.current=next;setEditorTime(next);setClipDropPreview(null);return;
       }
       const clipId=event.dataTransfer.getData("text/dionysus-timeline-clip"),candidate=(project.timelineClips??[]).find(clip=>clip.id===clipId)??clipDragSourceRef.current,moving=candidate?getCanonicalTimelineClipForDrop(candidate):undefined;
-     if(moving?.kind==="audio"&&track.kind==="video"){const dropTime=Math.max(0,Math.min(mediaTimelineDuration,((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration));const targets=(projectRef.current.timelineClips??[]).filter(item=>item.kind==="video"&&item.trackId===track.id);const target=targets.find(item=>dropTime>=item.start&&dropTime<=item.start+item.duration)??(targets.length===1?targets[0]:undefined);if(target){relinkRootAudioToVideo(moving,target);}else{setNotice("Drop audio over a video clip to link it.");}clipDragSourceRef.current=null;setClipDropPreview(null);return;}
+     if(moving?.kind==="audio"&&track.kind==="video"){setNotice(moving.linkedVideoClipId?"Linked source audio belongs to its video clip. Use Extract Audio to move it to an independent track.":"Audio assets must be placed on an Audio Track, not linked to a video clip.");clipDragSourceRef.current=null;setClipDropPreview(null);return;}
      if(!moving)return;
      const pointerTime=((event.clientX-rect.left)/Math.max(rect.width,1))*mediaTimelineDuration,rawStart=Math.max(0,pointerTime-moving.duration/2);
      if(moving.kind==="audio"&&moving.linkedVideoClipId&&track.kind==="audio"){
-       const independent={...moving,linkedVideoClipId:undefined};
-       const unlinkPosition=calculateRootTimelineDropPosition(independent,track.id,rawStart,mediaTimelineDuration);
-       if(!unlinkPosition){setNotice("No non-overlapping position is available on this Audio layer.");clipDragSourceRef.current=null;setClipDropPreview(null);return;}
-       try{
-         if(rootCompositionRef.current.placements.some(item=>item.id===moving.id)){
-           changeRootComposition(root=>moveCompositionPlacementToTrack(unlinkCompositionPlacement(root,moving.id),moving.id,track.id,unlinkPosition.start));
-         }else{
-           change(project=>{const unlinked=unlinkTimelineAudio({tracks:project.tracks,timelineClips:project.timelineClips??[]},moving.id);return moveProjectTimelinePlacement({...project,timelineClips:unlinked.timelineClips},{type:"clip",clipId:moving.id},track.id,unlinkPosition.start);});
-         }
-         setNotice("Audio unlinked and moved to an independent Audio layer.");
-         setSelectedTimelineClipId(moving.id);setSelectedTimelineTrackId(track.id);setIsPlaying(false);
-       }catch(error){setNotice(error instanceof Error?error.message:"Could not unlink audio.");}
-       finally{clipDragSourceRef.current=null;setClipDropPreview(null);}
-       return;
+       setNotice("Linked source audio is owned by its video clip. Use Extract Audio to create an independent Audio Track placement.");
+       clipDragSourceRef.current=null;setClipDropPreview(null);return;
      }
      if(!canPlaceTimelineClipOnTrack(moving,track))return;
      const pos=clipDropPreview?.trackId===track.id?{start:clipDropPreview.start,...(clipDropPreview.snapTime!==undefined?{snapTime:clipDropPreview.snapTime}:{})}:calculateRootTimelineDropPosition(moving,track.id,rawStart,mediaTimelineDuration);
@@ -3041,16 +3040,16 @@ export default function App() {
    {!clips.length && !(track.kind==="video" && project.shots.some(shot=>getMasterShotTrackId(shot,project.tracks)===track.id)) && <span className="visual-track-empty">{track.kind==="procedural"?"Drop or add a Code clip to this lane":track.kind==="text"?"Drop or add a text clip to this lane":track.kind==="effects"?"No effects assigned to this lane.":"Drop or add a clip to this lane"}</span>}
   </div>
  </div>
- {track.kind==="video" && !collapsedVideoTrackIds.includes(track.id) && clips.filter(clip=>clip.kind==="video").map(videoClip=>{
+ {track.kind==="video" && !collapsedVideoTrackIds.includes(track.id) && clips.filter(clip=>clip.kind==="video" && (project.timelineClips??[]).some(child=>child.kind==="audio" && child.linkedVideoClipId===clip.id)).map(videoClip=>{
    const linkedAudio=(project.timelineClips??[]).filter(clip=>clip.kind==="audio"&&clip.linkedVideoClipId===videoClip.id);
    return <div className="visual-track-row linked-audio-child" key={"linked-"+videoClip.id}>
-    <div className="visual-track-label linked-audio-row-handle" draggable={Boolean(linkedAudio[0])} title="Drag this row to an Audio layer to unlink, or onto another video’s Linked Audio row to relink" onDragStart={event=>{const moving=linkedAudio[0];if(!moving)return;clipDragSourceRef.current=moving;event.dataTransfer.setData("text/dionysus-timeline-clip",moving.id);event.dataTransfer.effectAllowed="move";setClipDropPreview({trackId:moving.trackId,start:moving.start,duration:moving.duration,name:moving.name});}} onDragEnd={()=>{clipDragSourceRef.current=null;setClipDropPreview(null);setAudioRelinkPreviewVideoId("");}}><span className="track-kind-audio"><AudioLines size={14}/></span><div><strong>Linked audio</strong><small>{videoClip.name} · drag row to move</small></div><span className="linked-audio-row-controls">{linkedAudio[0]&&<><button type="button" className="linked-audio-row-mute" aria-label={(linkedAudio[0].muted?"Unmute ":"Mute ")+linkedAudio[0].name} aria-pressed={Boolean(linkedAudio[0].muted)} title={linkedAudio[0].muted?"Unmute linked audio":"Mute linked audio"} draggable={false} onPointerDown={event=>event.stopPropagation()} onClick={event=>{event.stopPropagation();updateRootTimelineClip(linkedAudio[0].id,{muted:!linkedAudio[0].muted});}}>{linkedAudio[0].muted?<VolumeX size={14}/>:<Volume2 size={14}/>}</button><button type="button" className="linked-audio-row-unlink" aria-label={"Unlink "+linkedAudio[0].name} title="Unlink audio" draggable={false} onPointerDown={event=>event.stopPropagation()} onClick={event=>{event.stopPropagation();try{unlinkRootTimelineAudio(linkedAudio[0].id);setNotice("Audio unlinked and moved into the independent Audio lane.");}catch(error){setNotice(error instanceof Error?error.message:"Unlink failed.");}}}>Unlink</button></>}<span className="linked-audio-drag-grip" aria-hidden="true">⠿</span></span></div>
-    <div className={"visual-track-lane linked-audio-drop-target"+(audioRelinkPreviewVideoId===videoClip.id?" active":"")} data-linked-video-id={videoClip.id} onDragLeave={event=>{const next=event.relatedTarget;if(!(next instanceof Node&&event.currentTarget.contains(next)))setAudioRelinkPreviewVideoId(current=>current===videoClip.id?"":current);}} onDragOver={event=>{const assetId=event.dataTransfer.getData("text/dionysus-project-asset")||projectAssetDragSourceRef.current;const asset=assetId?project.assets.find(item=>item.id===assetId):undefined;const dragId=event.dataTransfer.getData("text/dionysus-timeline-clip");const moving=clipDragSourceRef.current??(project.timelineClips??[]).find(item=>item.id===dragId);if(asset?.kind==="audio"||moving?.kind==="audio"){event.preventDefault();event.stopPropagation();event.dataTransfer.dropEffect=asset?"copy":"move";setAudioRelinkPreviewVideoId(videoClip.id);}}} onDrop={event=>{event.preventDefault();event.stopPropagation();setAudioRelinkPreviewVideoId("");const assetId=event.dataTransfer.getData("text/dionysus-project-asset")||projectAssetDragSourceRef.current;const asset=assetId?project.assets.find(item=>item.id===assetId):undefined;const dragId=event.dataTransfer.getData("text/dionysus-timeline-clip");const moving=clipDragSourceRef.current??(project.timelineClips??[]).find(item=>item.id===dragId);setClipDropPreview(null);try{const parent=(project.timelineClips??[]).find(item=>item.id===videoClip.id);if(!parent)throw new Error("Source video is no longer available.");if(asset){if(asset.kind!=="audio")throw new Error("Only audio assets can be linked to a Video layer.");changeRootComposition(root=>addLinkedAudioAssetToVideoPlacement(root,projectRef.current,parent,asset));setNotice("Linked audio added to "+parent.name+".");return;}if(!moving||moving.kind!=="audio"||moving.id===videoClip.id)return;const canonical=rootCompositionRef.current.placements.find(item=>item.id===moving.id);if(canonical){changeRootComposition(root=>{let next=root;const current=next.placements.find(item=>item.id===moving.id);if(current?.linkedToPlacementId)next=unlinkCompositionPlacement(next,moving.id);return updateCompositionPlacement(next,moving.id,{trackId:current?.trackId??moving.trackId,start:parent.start,duration:parent.duration,linkedToPlacementId:parent.id,sourceIn:moving.sourceIn,sourceOut:moving.sourceOut,legacyData:{...(current?.legacyData??{}),...moving,trackId:current?.trackId??moving.trackId,start:parent.start,duration:parent.duration,linkedVideoClipId:parent.id}});});}else{change(project=>({...project,timelineClips:(project.timelineClips??[]).map(item=>item.id===moving.id?{...item,start:parent.start,duration:parent.duration,linkedVideoClipId:parent.id}:item)}));}setSelectedTimelineClipId(moving.id);setSelectedTimelineTrackId(moving.trackId);setNotice("Audio linked to "+parent.name+".");}catch(error){setNotice(error instanceof Error?error.message:"Could not relink audio.");}finally{clipDragSourceRef.current=null;}}} style={{backgroundSize:(5/mediaTimelineDuration*100)+"% 100%"}}>
+    <div className="visual-track-label linked-audio-row-handle" draggable={false} title="Linked audio is owned by this video placement" ><span className="track-kind-audio"><AudioLines size={14}/></span><div><strong>Linked audio</strong><small>{videoClip.name} · source audio</small></div><span className="linked-audio-row-controls">{linkedAudio[0]&&<><button type="button" className="linked-audio-row-mute" aria-label={(linkedAudio[0].muted?"Unmute ":"Mute ")+linkedAudio[0].name} aria-pressed={Boolean(linkedAudio[0].muted)} title={linkedAudio[0].muted?"Unmute linked audio":"Mute linked audio"} draggable={false} onPointerDown={event=>event.stopPropagation()} onClick={event=>{event.stopPropagation();updateRootTimelineClip(linkedAudio[0].id,{muted:!linkedAudio[0].muted});}}>{linkedAudio[0].muted?<VolumeX size={14}/>:<Volume2 size={14}/>}</button><button type="button" className="linked-audio-row-unlink" aria-label={"Extract "+linkedAudio[0].name} title="Extract Audio to an independent Audio track" draggable={false} onPointerDown={event=>event.stopPropagation()} onClick={event=>{event.stopPropagation();try{changeRootComposition(document=>extractLinkedAudio(document,linkedAudio[0].id));setNotice("Audio extracted to an independent placement.");}catch(error){setNotice(error instanceof Error?error.message:"Could not extract linked audio.");}}}>Extract</button><button type="button" className="linked-audio-row-unlink" aria-label={"Duplicate "+linkedAudio[0].name} title="Duplicate Audio and keep the linked original" draggable={false} onPointerDown={event=>event.stopPropagation()} onClick={event=>{event.stopPropagation();try{const duplicateId=id("timeline-audio-copy");changeRootComposition(document=>duplicateLinkedAudio(document,linkedAudio[0].id,duplicateId));setNotice("Created an independent audio copy.");}catch(error){setNotice(error instanceof Error?error.message:"Could not duplicate linked audio.");}}}>Duplicate</button></>}<span className="linked-audio-drag-grip" aria-hidden="true">⠿</span></span></div>
+    <div className="visual-track-lane linked-audio-child-lane" data-linked-video-id={videoClip.id} title="Linked source audio follows this video clip; use Extract or Duplicate to create an independent track." style={{backgroundSize:(5/mediaTimelineDuration*100)+"% 100%"}}>
       <div className="visual-playhead" style={{left:(editorTime/mediaTimelineDuration*100)+"%"}}/>
-      {linkedAudio.length===0&&<span className="visual-track-empty">Drop audio here to add it to this video</span>}{linkedAudio.map(audio=><div className="visual-media-clip-wrap" key={audio.id} style={{left:(audio.start/mediaTimelineDuration*100)+"%",width:Math.max(2,audio.duration/mediaTimelineDuration*100)+"%"}}>
-        <button draggable className={"visual-media-clip audio-clip "+(audio.assetId?"audio-has-source":"audio-placeholder")+(audio.id===selectedTimelineClipId?" selected":"")} onDragStart={event=>{clipDragSourceRef.current=audio;event.dataTransfer.setData("text/dionysus-timeline-clip",audio.id);event.dataTransfer.effectAllowed="move";setClipDropPreview({trackId:audio.trackId,start:audio.start,duration:audio.duration,name:audio.name});}} onDragEnd={()=>{clipDragSourceRef.current=null;setClipDropPreview(null);}} onContextMenu={event=>{event.preventDefault();event.stopPropagation();setSelectedTimelineClipId(audio.id);setClipContextMenuId(audio.id);setClipContextMenuPosition({x:Math.min(event.clientX,window.innerWidth-190),y:Math.min(event.clientY,window.innerHeight-180)});}} onDoubleClick={()=>setTimelineClipSettingsId(audio.id)} onClick={()=>{setSelectedTimelineClipId(audio.id);setSelectedTimelineTrackId(track.id);setEditorTime(audio.start);setIsPlaying(false);playbackTimeRef.current=audio.start;}} title={audio.name+" · "+audio.duration.toFixed(1)+"s"}><span className="visual-clip-icon"><AudioLines size={13}/></span><span className="visual-clip-copy"><strong>{audio.name}</strong><small>{audio.duration.toFixed(1)}s · linked</small></span><AudioWaveform path={project.assets.find(asset=>asset.id===audio.assetId)?.path}/></button>
-        <button className="timeline-clip-mute" aria-label={(audio.muted?"Unmute ":"Mute ")+audio.name} aria-pressed={Boolean(audio.muted)} onClick={()=>updateRootTimelineClip(audio.id,{muted:!audio.muted})}>{audio.muted?<VolumeX size={14}/>:<Volume2 size={14}/>}</button>
-        <button className="timeline-clip-unlink" title="Unlink source audio" aria-label={"Unlink "+audio.name} onClick={()=>{try{unlinkRootTimelineAudio(audio.id);setNotice("Audio unlinked and moved into the independent audio lane.");}catch(error){setNotice(error instanceof Error?error.message:"Unlink failed.");}}}>Unlink</button>
+      {linkedAudio.map(audio=><div className="visual-media-clip-wrap linked-audio-child-clip" key={audio.id} style={{left:(audio.start/mediaTimelineDuration*100)+"%",width:Math.max(2,audio.duration/mediaTimelineDuration*100)+"%"}}>
+        <div className={"visual-media-clip audio-clip "+(audio.assetId?"audio-has-source":"audio-placeholder")} title={audio.name+" · "+audio.duration.toFixed(1)+"s · owned by "+videoClip.name}>
+          <span className="visual-clip-icon"><AudioLines size={13}/></span><span className="visual-clip-copy"><strong>{audio.name}</strong><small>{audio.duration.toFixed(1)}s · source audio</small></span><AudioWaveform path={project.assets.find(asset=>asset.id===audio.assetId)?.path}/>
+        </div>
       </div>)}
     </div>
    </div>;
@@ -3303,7 +3302,6 @@ export default function App() {
     {clipContextMenuId && view === "timeline" && <div className="shot-context-dismiss" onClick={()=>setClipContextMenuId("")}><span className="shot-context-menu" role="menu" style={{left:clipContextMenuPosition.x,top:clipContextMenuPosition.y}} onClick={event=>event.stopPropagation()}>
       <button role="menuitem" onClick={event=>{event.stopPropagation();setTimelineClipSettingsId(clipContextMenuId);setClipContextMenuId("");}}>Settings…</button>
       {project.timelineClips?.find(item=>item.id===clipContextMenuId)?.kind==="audio" && (()=>{const audio=project.timelineClips!.find(item=>item.id===clipContextMenuId)!;return <button role="menuitem" onClick={()=>{updateRootTimelineClip(audio.id,{muted:!audio.muted});setClipContextMenuId("");setNotice(audio.muted?"Audio clip unmuted.":"Audio clip muted.");}}>{audio.muted?"Unmute audio":"Mute audio"}</button>;})()}
-      {project.timelineClips?.find(item=>item.id===clipContextMenuId)?.kind==="audio" && project.timelineClips!.find(item=>item.id===clipContextMenuId)?.linkedVideoClipId && <button role="menuitem" onClick={()=>{try{unlinkRootTimelineAudio(clipContextMenuId);setNotice("Audio unlinked and moved to an independent Audio lane.");}catch(error){setNotice(error instanceof Error?error.message:"Could not unlink audio.");}setClipContextMenuId("");}}>Unlink audio</button>}
       <button role="menuitem" onClick={()=>{const clip=project.timelineClips?.find(item=>item.id===clipContextMenuId);if(clip){duplicateRootTimelineClip(clip);}setClipContextMenuId("");}}>Duplicate clip</button>
       <button role="menuitem" className="danger-action" onClick={()=>{const clip=project.timelineClips?.find(item=>item.id===clipContextMenuId);if(clip&&window.confirm("Delete clip “"+clip.name+"”?")){deleteTimelineClipCanonical(clip);setSelectedTimelineClipId("");}setClipContextMenuId("");}}>Delete clip…</button>
     </span></div>}
@@ -3316,7 +3314,7 @@ export default function App() {
       <button disabled={Math.round(editorTime*Math.max(1,project.frameRate||24))/Math.max(1,project.frameRate||24)<=clip.start||Math.round(editorTime*Math.max(1,project.frameRate||24))/Math.max(1,project.frameRate||24)>=clip.start+clip.duration} onClick={()=>{const fps=Math.max(1,project.frameRate||24),splitAt=Math.round(editorTime*fps)/fps;if(splitAt<=clip.start||splitAt>=clip.start+clip.duration)return;const newClipId=id("timeline-clip");try{splitRootTimelineClip(clip.id,splitAt,newClipId);setSelectedTimelineClipId(newClipId);setTimelineClipSettingsId(newClipId);}catch(error){setNotice(error instanceof Error?error.message:"Split failed.");}}}>Split at playhead</button>
 
       <button onClick={()=>{const newClipId=id("timeline-clip");try{duplicateRootTimelineClip(clip,newClipId);setSelectedTimelineClipId(newClipId);setTimelineClipSettingsId(newClipId);}catch(error){setNotice(error instanceof Error?error.message:"Duplicate failed.");}}}>Duplicate clip</button>
-      {clip.kind==="audio"&&clip.linkedVideoClipId&&<button onClick={()=>{try{unlinkRootTimelineAudio(clip.id);}catch(error){setNotice(error instanceof Error?error.message:"Unlink failed.");}}}>Unlink audio</button>}
+
     </div>
     
       <div className="settings-dialog-grid"><label className="field-label">Start (seconds)<input className="text-field" type="number" min="0" step={1/Math.max(1,project.frameRate)} value={clip.start} onChange={event=>{const value=Math.max(0,Number(event.target.value)||0);try{moveRootTimelineClip(clip.id,value);}catch(error){setNotice(error instanceof Error?error.message:"Could not move clip.");}}}/></label><label className="field-label">Duration (seconds)<input className="text-field" type="number" min={1/Math.max(1,project.frameRate)} step={1/Math.max(1,project.frameRate)} value={clip.duration} onChange={event=>{const duration=Math.max(1/Math.max(1,project.frameRate),Number(event.target.value)||.1);try{trimRootTimelineClip(clip.id,duration);}catch(error){setNotice(error instanceof Error?error.message:"Could not resize clip.");}}}/></label></div>

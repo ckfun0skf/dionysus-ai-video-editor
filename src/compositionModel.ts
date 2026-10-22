@@ -24,6 +24,21 @@ export interface CompositionTrack {
   legacyData?: Record<string, unknown>;
 }
 
+/** Audio embedded in a source video is owned by that video placement, not by an Audio Track. */
+export interface CompositionLinkedAudioChild {
+  id: string;
+  name: string;
+  source: CompositionSourceReference;
+  sourceIn?: number;
+  sourceOut?: number;
+  muted?: boolean;
+  volume?: number;
+  fadeIn?: number;
+  fadeOut?: number;
+  /** Preserve legacy clip metadata while this owned child is projected for playback/UI. */
+  legacyData: Record<string, unknown>;
+}
+
 export interface CompositionPlacement {
   id: string;
   name: string;
@@ -35,6 +50,8 @@ export interface CompositionPlacement {
   sourceIn?: number;
   sourceOut?: number;
   linkedToPlacementId?: string;
+  /** Embedded source audio follows this placement through timeline edits and persistence. */
+  linkedAudioChildren?: CompositionLinkedAudioChild[];
   /** Preserve placement-level properties not yet promoted into the canonical contract. */
   legacyData: Record<string, unknown>;
 }
