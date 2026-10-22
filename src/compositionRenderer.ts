@@ -3,6 +3,8 @@ import { getAudioEnvelope } from "./audioEnvelope";
 import { getMasterShotStarts, getMasterTimelineDuration } from "./masterTimeline";
 import { loadMediaBlobFromPath, resolveMediaSource } from "./mediaAssetStore";
 import { normalizeClipVersionTracks } from "./clipVersionTracks";
+import type { CompositionDocument } from "./compositionModel";
+import { projectRootCompositionToLegacy } from "./compositionMigration";
 
 export interface RenderOptions { fps?: number; width?: number; height?: number; duration?: number; /** Avoid blocking interactive preview frames on media seek completion; exports keep precise seeking by default. */ interactivePreview?: boolean }
 export interface ExportResult { blob: Blob; filename: string; mimeType: string }
@@ -152,6 +154,14 @@ export function collectCompositionLayers(project: DionysusProject): CompositionL
   });
   // Preserve Version layer order as the composition stacking order. Timing is checked per layer during rendering/export.
   return [...nested, ...timeline];
+}
+
+/** Resolve master-timeline render layers from the canonical root document, keeping the Project as domain/asset context. */
+export function collectRootCompositionLayers(
+  project: DionysusProject,
+  rootComposition: CompositionDocument,
+): CompositionLayer[] {
+  return collectCompositionLayers(projectRootCompositionToLegacy(project, rootComposition));
 }
 
 /** Audio tracks may reference an audio file or the sound component of a video source. */
