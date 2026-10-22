@@ -830,7 +830,8 @@ export default function App() {
 
   function addLinkedAudioForVideoPlacement(root: CompositionDocument, project: DionysusProject, video: TimelineClip): CompositionDocument {
     const asset = project.assets.find(item => item.id === video.assetId && item.kind === "video");
-    if (!asset || video.kind !== "video" || asset.hasAudio === false) return root;
+    // Unknown metadata is not proof that the source has audio. Only create an owned child after detection confirms an audio track; this avoids phantom Linked Audio rows on silent/unsupported media.
+    if (!asset || video.kind !== "video" || asset.hasAudio !== true) return root;
     const owner = root.placements.find(item => item.id === video.id);
     if (!owner || (owner.linkedAudioChildren ?? []).length) return root;
 
