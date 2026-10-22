@@ -1,3 +1,16 @@
+## Latest checkpoint — 2026-10-22 (E1 atomic session state and ref)
+
+- Branch: `feat/e1-editor-session-history`; [PR #111](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/111) is Ready for review, open and unmerged.
+- The Editor now uses one `EditorSessionSnapshot` React state containing the schema-1.0 Project compatibility projection and canonical root Composition. Normal edits, Undo, Redo and project import commit the pair in one state update.
+- A single `editorSessionRef` now backs timeline callbacks and command reads. Its `project` and `composition` members are replaced together; no partial writes to either member remain in `src/App.tsx`.
+- `editorSessionHistory.ts` stores the paired snapshot, with 800 ms same-group coalescing, redo invalidation on new edits, bounded history, and import reset; tests are in `src/editorSessionHistory.test.ts`.
+- Exact code-head CI passed for `6ccacdd359f3c508aeeae93c8e87b5b1c381f66b`, [run 39860285572](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39860285572): 24 test files / 274 tests, TypeScript/build passed, npm audit 0 vulnerabilities. This handoff/task refresh creates a new branch SHA, so re-check exact-head CI on the final synchronized head.
+- Still transitional: current Project is a compatibility projection; two browser storage keys remain; persistence/recovery and render/playback are not canonical-only; non-root Shot/Slot paths still need migration. Do not mark E1/E2/E3 complete based on this slice.
+- No local checkout was available for local tests/build. No browser smoke tests or manual UI acceptance claimed. Do not merge without explicit owner approval; Issue #100 stays open.
+- Next: verify final-head CI after this docs sync, then continue consolidating command/session ownership and implement the single authoritative persistence/recovery path.
+
+---
+
 ## Latest checkpoint — 2026-10-22 (E1 atomic Editor session)
 
 - Branch: `feat/e1-editor-session-history`; [PR #111](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/111) is Ready for review and remains unmerged.
