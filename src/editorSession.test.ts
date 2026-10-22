@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { migrateLegacyProjectToComposition, projectRootCompositionToLegacy } from "./compositionMigration";
 import { sampleProject } from "./sampleProject";
-import { commitEditorSessionChange, reconcileEditorSessionComposition, transitionEditorSession } from "./editorSession";
+import { commitEditorSessionChange, reconcileEditorSessionComposition, restoreEditorSessionHistory, transitionEditorSession } from "./editorSession";
 import { createEditorSessionHistory } from "./editorSessionHistory";
 import type { EditorSessionSnapshot } from "./editorSessionHistory";
 
@@ -101,5 +101,42 @@ describe("Editor session transaction", () => {
     expect(transition.history.redo).toEqual([]);
     expect(current.project.name).not.toBe("Atomic transaction");
     expect(current.composition.name).not.toBe("Atomic transaction");
+  });
+});
+
+
+describe("Editor session history restoration", () => {
+  it("restores undo and redo as complete sessions with a fresh compatibility revision", () => {
+    const before = makeSession();
+    const edited = transitionEditorSession(
+      before,
+      createEditorSessionHistory(),
+      project => ({ ...project, name: "After edit" }),
+      "rename",
+      undefined,
+      Date.parse("2026-10-22T12:34:56.000Z"),
+    );
+    const undo = restoreEditorSessionHistory(
+      edited.session,
+      edited.history,
+      "undo",
+      Date.parse("2026-10-22T12:35:00.000Z"),
+    );
+
+    expect(undo.session?.project.name).toBe(before.project.name);
+    expect(undo.session?.composition.name).toBe(before.composition.name);
+    expect(undo.session?.project.updatedAt).toBe("2026-10-22T12:35:00.000Z");
+    expect(undo.history.redo).toHaveLength(1);
+
+    const redo = restoreEditorSessionHistory(
+      undo.session!,
+      undo.history,
+      "redo",
+      Date.parse("2026-10-22T12:35:01.000Z"),
+    );
+    expect(redo.session?.project.name).toBe("After edit");
+    expect(redo.session?.composition.name).toBe("After edit — Master Timeline");
+    expect(redo.session?.project.updatedAt).toBe("2026-10-22T12:35:01.000Z");
+    expect(redo.history.redo).toHaveLength(0);
   });
 });
