@@ -123,7 +123,13 @@ describe("compositionRenderer", () => {
         assetId: "stale-audio-source",
         linkedVideoClipId: "nested-video-owner",
       },
+    }, {
+      id: "nested-owner-muted-audio",
+      name: "Audio muted by owner track",
+      source: { type: "asset", assetId: "nested-video-source" },
+      legacyData: { kind: "audio", assetId: "nested-video-source" },
     }];
+    version.composition.tracks[0].muted = true;
     version.composition.tracks.push({
       id: "nested-muted-audio-track",
       name: "Muted Audio",
@@ -157,6 +163,11 @@ describe("compositionRenderer", () => {
       volume: 0.4,
     });
     expect(isPlayableAudioLayer(linkedAudio!, project.assets.find(asset => asset.id === "nested-video-source"))).toBe(true);
+    expect(layers.find(layer => layer.id === "nested-owner-muted-audio")).toMatchObject({
+      kind: "audio",
+      muted: true,
+      assetId: "nested-video-source",
+    });
     expect(layers.find(layer => layer.id === "nested-muted-track-audio")).toMatchObject({
       kind: "audio",
       muted: true,
