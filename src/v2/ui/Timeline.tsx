@@ -214,7 +214,6 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
   const laneH = (k: string) => (k === "text" ? TEXT_LANE_H : 56);
   const mainIdx = preview.tracks.findIndex((t) => t.id === main?.id);
   const mainTop = 30 + (topLane ? TEXT_LANE_H : 0) + preview.tracks.slice(0, Math.max(0, mainIdx)).reduce((h, t) => h + laneH(t.kind), 0);
-  const laneEnd = (ps: { startTicks: number; durationTicks: number }[]) => ps.reduce((m, p) => Math.max(m, p.startTicks + p.durationTicks), 0);
   const step = pps >= 80 ? 1 : pps >= 30 ? 2 : pps >= 12 ? 5 : 10;
   const ticks: number[] = [];
   const rulerSeconds = (contentW + pad + padRight) / pps;
