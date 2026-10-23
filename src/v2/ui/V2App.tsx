@@ -10,6 +10,7 @@ import { useThumbs } from "./useThumbs";
 import { useMediaPreviews } from "./useMedia";
 import { TransformHandles, TransformInspector } from "./Transform";
 import { TextPanel } from "./TextPanel";
+import { HtmlEditor } from "./HtmlEditor";
 import { ExportDialog } from "./ExportDialog";
 import { ProjectsDialog } from "./Projects";
 import type { Resolution } from "../render";
@@ -56,6 +57,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const [toast, setToast] = useState<string>();
   const [inspOpen, setInspOpen] = useState(false);
   const [textOpen, setTextOpen] = useState(false);
+  const [htmlEdit, setHtmlEdit] = useState<{ placementId: string; assetId: string; source: string }>();
   const [inlineId, setInlineId] = useState<string>();
   const [subId, setSubId] = useState<string>();
   const [ripple, setRippleState] = useState(() => localStorage.getItem("v2.ripple") === "1");
@@ -126,7 +128,25 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     else togglePlay();
   };
   const isText = selected?.placement.clipType === "text";
-  const gizmo = { onDelete: () => del(false), onEdit: () => (isText ? setTextOpen(true) : setInspOpen(true)), onDuplicate: () => duplicate(), onDoubleTap: () => { if (isText) setInlineId(selected!.placement.id); } };
+  const openCode = async () => {
+    const pl = selected?.placement;
+    const ver = pl && project.assets[pl.source.assetId]?.versions.find((v) => v.id === pl.source.versionId);
+    const blob = ver && (await storage.blobs.get(ver.media.blobKey));
+    if (pl && blob) setHtmlEdit({ placementId: pl.id, assetId: pl.source.assetId, source: await blob.text() });
+    else setToast("Could not load this clip's code");
+  };
+  const saveCode = async (html: string) => {
+    if (!htmlEdit) return;
+    const asset = project.assets[htmlEdit.assetId];
+    const prev = asset?.versions.find((v) => v.id === asset.selectedVersionId) ?? asset?.versions[0];
+    if (!asset || !prev) return;
+    const id = newId("ver"), blobKey = `${asset.id}/${id}`;
+    await storage.blobs.put(blobKey, new Blob([html], { type: "text/html" }));
+    engine.dispatch(cmd.addAssetVersion(asset.id, { ...prev, id, createdAt: new Date().toISOString(), media: { ...prev.media, blobKey }, provenance: { source: "import", inputs: [] } }, htmlEdit.placementId));
+    setHtmlEdit(undefined); setToast("HTML clip updated (Undo to revert)");
+  };
+  const isHtml = selected?.placement.clipType === "html";
+  const gizmo = { onDelete: () => del(false), onEdit: () => (isText ? setTextOpen(true) : isHtml ? void openCode() : setInspOpen(true)), onDuplicate: () => duplicate(), onDoubleTap: () => { if (isText) setInlineId(selected!.placement.id); } };
   const inlineBox = inlineId && selected?.placement.id === inlineId ? player.boxes.get(inlineId) : undefined;
   const inlineEditor = inlineBox && canvasRef.current && (() => {
     const c = canvasRef.current, r = c.getBoundingClientRect(), pr = c.parentElement!.getBoundingClientRect(), k = r.width / c.width;
@@ -274,6 +294,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       <button className="v2-tool" onClick={split}><b><Ic g="✂" /></b><span>Split</span></button>
       <button className="v2-tool" title={ripple ? "Delete and close the gap (Del)" : "Delete (Del) · Shift+Del ripple delete"} onClick={() => del()}><b><Ic g="🗑" /></b><span>{ripple ? "Ripple delete" : "Delete"}</span></button>
       {speedSelect}
+      {isHtml && <button className="v2-tool" title="Edit HTML, CSS and JS with live preview" onClick={() => void openCode()}><b aria-hidden><Ic g="</>" /></b><span>Edit code</span></button>}
       {[...clipActions, ...timeActions, ...linkedAudioActions].map((a) => <button key={a.label} className="v2-tool" title={a.title} onClick={a.run}><b aria-hidden><Ic g={a.icon} /></b><span>{a.label}</span></button>)}
       {!["image", "html", "text"].includes(selected.placement.clipType) && (
         <label className="v2-tool v2-volume"><b><Ic g="🔊" /></b>
@@ -336,6 +357,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       ...(transitionTools ? [<span key="tr" className="v2-trans-wrap">{transitionTools}</span>] : []),
       tool("✂", "Split", split),
       tool("🗑", ripple ? "Ripple delete" : "Delete", () => del(), "delete", ripple ? "Delete and close the gap" : "Delete"),
+      ...(isHtml ? [tool("</>", "Edit code", () => void openCode(), "edit-code", "Edit HTML, CSS and JS with live preview")] : []),
       ...(isText ? [tool("T", "Edit text", () => setTextOpen(true), "edit-text", "Templates, font, style, effects, animation")] : []),
       tool("⤧", "Adjust", () => setInspOpen(true), "adjust", "Transform, keyframes and fades"),
       ...(speedSelect ? [tool("⏩", `Speed ${sp!.speed ?? 1}×`, () => setMenu("speed"), "speed", "Playback speed")] : []),
@@ -391,6 +413,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       {notice && <RecoveryNotice failure={notice} storage={storage} onDismiss={() => setNotice(undefined)} />}
       {projects && <ProjectsDialog storage={storage} current={project} onOpen={(id) => { setProjects(false); onSwitch(id); }} onRenameCurrent={(n) => engine.dispatch(cmd.renameProject(n))} onClose={() => setProjects(false)} />}
       {exporting && <ExportDialog project={project} blobs={storage.blobs} res={res} onRes={setRes} onClose={() => setExporting(false)} />}
+      {htmlEdit && <HtmlEditor source={htmlEdit.source} mobile={mobile} onSave={(h) => void saveCode(h)} onClose={() => setHtmlEdit(undefined)} />}
       {toast && <div className="v2-toast" role="status" onClick={() => setToast(undefined)}>{toast}</div>}
       {mobile ? (
         <>

@@ -1,0 +1,77 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import { HTML_SANDBOX, withRuntime } from "../render";
+import { joinHtml, splitHtml, type HtmlParts } from "./htmlSource";
+
+type Pane = "html" | "css" | "js";
+const PANES: { id: Pane; label: string }[] = [{ id: "html", label: "HTML" }, { id: "css", label: "CSS" }, { id: "js", label: "JS" }];
+
+/** Monospace textarea with a line-number gutter. Tab inserts two spaces. */
+function Code({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  const gutter = useRef<HTMLDivElement>(null);
+  const lines = value.split("\n").length;
+  return (
+    <div className="v2-code">
+      <div className="v2-code-gutter" ref={gutter} aria-hidden>{Array.from({ length: lines }, (_, i) => <div key={i}>{i + 1}</div>)}</div>
+      <textarea aria-label={`${label} code`} spellCheck={false} autoCapitalize="off" autoCorrect="off" value={value}
+        onScroll={(e) => { if (gutter.current) gutter.current.scrollTop = e.currentTarget.scrollTop; }}
+        onKeyDown={(e) => {
+          if (e.key !== "Tab") return;
+          e.preventDefault();
+          const t = e.currentTarget, s = t.selectionStart;
+          onChange(value.slice(0, s) + "  " + value.slice(t.selectionEnd));
+          requestAnimationFrame(() => { t.selectionStart = t.selectionEnd = s + 2; });
+        }}
+        onChange={(e) => onChange(e.target.value)} />
+    </div>
+  );
+}
+
+/** Live preview: the same sandbox + CSP as HTML clips, driven at wall-clock time. */
+function LivePreview({ src }: { src: string }) {
+  const ref = useRef<HTMLIFrameElement>(null);
+  useEffect(() => {
+    let raf = 0, seq = 0; const t0 = performance.now();
+    const onMsg = (e: MessageEvent) => { if (e.source === ref.current?.contentWindow) (e.data?.bmp as ImageBitmap | undefined)?.close?.(); };
+    addEventListener("message", onMsg);
+    const tick = () => { ref.current?.contentWindow?.postMessage({ type: "dionysus:frame", seq: ++seq, t: (performance.now() - t0) / 1000 }, "*"); raf = requestAnimationFrame(tick); };
+    raf = requestAnimationFrame(tick);
+    return () => { cancelAnimationFrame(raf); removeEventListener("message", onMsg); };
+  }, [src]);
+  return <iframe ref={ref} className="v2-code-preview" title="Live preview" sandbox={HTML_SANDBOX} srcDoc={withRuntime(src)} />;
+}
+
+/**
+ * CodePen-like editor for an HTML clip: tabs on mobile, split panes on desktop, debounced live preview.
+ * Save creates a new asset version (one undo step); Cancel discards.
+ */
+export function HtmlEditor({ source, mobile, onSave, onClose }: { source: string; mobile: boolean; onSave: (html: string) => void; onClose: () => void }) {
+  const initial = useMemo(() => splitHtml(source), [source]);
+  const [parts, setParts] = useState<HtmlParts>(initial);
+  const [pane, setPane] = useState<Pane | "preview">("html");
+  const joined = joinHtml(parts);
+  const [live, setLive] = useState(joined);
+  useEffect(() => { const id = setTimeout(() => setLive(joined), 400); return () => clearTimeout(id); }, [joined]);
+  const dirty = joined !== joinHtml(initial);
+  const code = (p: Pane) => <Code key={p} label={PANES.find((x) => x.id === p)!.label} value={parts[p]} onChange={(v) => setParts({ ...parts, [p]: v })} />;
+  return (
+    <div className={`v2-code-editor ${mobile ? "is-mobile" : ""}`} role="dialog" aria-label="HTML clip editor">
+      <div className="v2-code-bar">
+        {mobile
+          ? <div role="tablist" className="v2-tp-tabs">{[...PANES, { id: "preview" as const, label: "Preview" }].map((p) => <button key={p.id} role="tab" aria-selected={pane === p.id} className={`v2-tp-tab ${pane === p.id ? "is-active" : ""}`} onClick={() => setPane(p.id)}>{p.label}</button>)}</div>
+          : <b>Edit HTML clip</b>}
+        <span className="v2-code-actions">
+          <button className="v2-btn" onClick={onClose}>Cancel</button>
+          <button className="v2-btn is-primary" disabled={!dirty} title={dirty ? "Save as a new version of this clip (undoable)" : "No changes"} onClick={() => onSave(joined)}>Save</button>
+        </span>
+      </div>
+      {mobile ? (
+        <div className="v2-code-body">{pane === "preview" ? <LivePreview src={live} /> : code(pane)}</div>
+      ) : (
+        <div className="v2-code-split">
+          {PANES.map((p) => <section key={p.id} className="v2-code-pane"><h4>{p.label}</h4>{code(p.id)}</section>)}
+          <section className="v2-code-pane is-preview"><h4>Preview</h4><LivePreview src={live} /></section>
+        </div>
+      )}
+    </div>
+  );
+}

@@ -157,3 +157,16 @@ export const duplicateClips = (ids: string[], newIds: string[]): Command => ({
   label: `Duplicate ${ids.length > 1 ? `${ids.length} clips` : "clip"}`,
   apply: (p) => withRoot(p, (c) => edit.duplicateClips(c, ids, idFeed(newIds)).comp),
 });
+
+/** Add a new version to an asset, select it, and point one placement at it (e.g. after editing an HTML clip). Undo restores both. */
+export const addAssetVersion = (assetId: string, version: AssetVersion, placementId?: string): Command => ({
+  label: "Edit HTML clip",
+  apply: (p) => {
+    const a = p.assets[assetId];
+    if (!a) return p;
+    const assets = { ...p.assets, [assetId]: { ...a, versions: [...a.versions, version], selectedVersionId: version.id } };
+    const next = { ...p, assets };
+    if (!placementId) return next;
+    return withRoot(next, (c) => ({ ...c, tracks: c.tracks.map((t) => ({ ...t, placements: t.placements.map((pl) => (pl.id === placementId ? { ...pl, source: { ...pl.source, versionId: version.id } } : pl)) })) }));
+  },
+});
