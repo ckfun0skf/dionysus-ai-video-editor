@@ -789,3 +789,8 @@ The pinned-version regression again passed all 298 tests, but TypeScript correct
 ### Canonical metadata-update follow-up (2026-10-23)
 
 Legacy-only ordinary Timeline clips are now promoted before metadata, geometry, and explicit source-identity edits. Linked-audio children are routed through their canonical owned-child metadata path; malformed unrepresentable rows retain a guarded compatibility fallback. Exact code-head CI passed at `c322e6f5df3ad8455582d26f472e14cf5cc5624e`, run [39961446762](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39961446762). Issue #100/#110 and PR #111 record the implementation. DYS-014 remains in progress: remaining Project/Shot mutation paths, full history/save/reopen matrix, and renderer/playback boundaries remain open. Issue #100 remains open for owner UI acceptance; PR #111 remains unmerged. New docs commits require exact-head CI.
+
+
+### Master Shot canonical timing fallback (2026-10-23)
+
+`ensureCanonicalMasterShots()` now promotes missing Master Shot placements from deterministic migration before duration/start edits. App duration/start handlers use canonical resize/move commands after promotion, with a focused regression for a partial root and Project projection timing. Code/test head `26a6578f98d64ad9dd5ed5850e668687f4cb5089` passed exact-head CI [39962319324](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39962319324). DYS-014 remains in progress; remaining Project/Shot mutations, broad root/nested history save/reopen, and renderer/playback boundaries remain open. Issue #100 remains open for owner UI acceptance; PR #111 remains open/unmerged. New docs/task commits require exact-head CI.
