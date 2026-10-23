@@ -666,3 +666,10 @@ The first CI run after switching autosave to canonical-only failed because the A
 - Exact-head CI [run 39866541271](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39866541271) passed: 26 test files / 286 tests; TypeScript and production build passed; npm audit 0 vulnerabilities.
 - `src/App.test.tsx` now reads the canonical v2 envelope first, matching the new persistence contract. The preceding run failed only because its helper still read v1; this was corrected and the full suite then passed.
 - PR #111 remains open/unmerged. v2 is the only routinely written project key; v1 is retained read-only fallback. Non-root editing and render/playback legacy paths remain. No browser smoke tests or manual UI acceptance claimed.
+
+## Latest increment — nested source-union projection cleanup (2026-10-22)
+
+- `compositionLayersFromCompositionDocument()` now clears source-discriminant compatibility fields (`assetId`, `childCompositionId`, `clipVersionId`, `shotId`, `slotId`, `shotVersionId`, `scriptVersionId`) before projecting the canonical `CompositionSourceReference`. Switching a nested placement from a Clip Composition to a direct asset can no longer leak the old Clip identity into the compatibility layer used by legacy renderer/UI consumers.
+- Added a regression test that changes a nested Clip source into a direct asset and asserts the canonical source and compatibility layer contain only the new source identity.
+- Code commits: `231a14b10b9df7d2cb3526a9e2dfa9cd69d481a9` and `a4cc58fd3102ac2fb7c42a00baa44d6e1b776eff`. Exact-head CI is pending; do not treat this increment as validated until the latest head's test/build/audit run passes.
+- PR #111 remains open/unmerged; Issue #110 tracks architecture and Issue #100 remains open for owner UI acceptance. No browser smoke tests or manual UI acceptance claimed.
