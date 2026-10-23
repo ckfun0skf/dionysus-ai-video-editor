@@ -1,6 +1,6 @@
 import type { DionysusProject, Shot, TimelineClip } from "./types";
-import type { CompositionDocument, CompositionPlacement } from "./compositionModel";
-import { assertValidCompositionDocument, applyCompositionResizePreview, insertCompositionPlacement, moveCompositionPlacement, moveCompositionPlacementToTrack, trimCompositionPlacement } from "./compositionCommands";
+import type { CompositionDocument, CompositionLinkedAudioChild, CompositionPlacement, CompositionSourceReference } from "./compositionModel";
+import { addCompositionLinkedAudioChild, assertValidCompositionDocument, applyCompositionResizePreview, insertCompositionPlacement, moveCompositionPlacement, moveCompositionPlacementToTrack, trimCompositionPlacement } from "./compositionCommands";
 import { createRootCompositionPlacementForTimelineClip, migrateLegacyProjectToComposition, projectRootCompositionToLegacy } from "./compositionMigration";
 import { getMasterShotStart } from "./masterTimeline";
 import { calculateTimelineDropPosition } from "./timelinePlacement";
@@ -549,12 +549,59 @@ export function ensureCanonicalTimelineClips(
   }).sort((a, b) => Number(Boolean(a.linkedVideoClipId)) - Number(Boolean(b.linkedVideoClipId)));
   let next = root;
   for (const clip of expanded) {
-    // A video promotion may already materialize its legacy linked-audio row as an owned
-    // Composition child. Do not insert that same ID again as a root placement.
     if (
       next.placements.some(placement => placement.id === clip.id) ||
       next.placements.some(placement => (placement.linkedAudioChildren ?? []).some(child => child.id === clip.id))
     ) continue;
+
+    // Canonical linked audio is owned by the video placement, not a second placement
+    // linked by ID. This also lets split/duplicate commands preserve the child metadata.
+    if (clip.kind === "audio" && clip.linkedVideoClipId) {
+      const owner = next.placements.find(placement => placement.id === clip.linkedVideoClipId);
+      if (owner) {
+        const asset = clip.assetId ? project.assets.find(item => item.id === clip.assetId) : undefined;
+        let source: CompositionSourceReference = { type: "none" };
+        if (clip.shotId) {
+          source = {
+            type: "shot",
+            shotId: clip.shotId,
+            ...(clip.slotId ? { slotId: clip.slotId } : {}),
+            ...(typeof (clip as unknown as Record<string, unknown>).shotVersionId === "string"
+              ? { versionId: (clip as unknown as Record<string, unknown>).shotVersionId as string }
+              : {}),
+          };
+        } else if (clip.assetId && !asset) {
+          source = { type: "missing", originalKind: clip.kind, originalId: clip.assetId };
+        } else if (asset?.kind === "clip") {
+          source = {
+            type: "clip",
+            assetId: asset.id,
+            ...(clip.clipVersionId ?? asset.selectedClipVersionId
+              ? { versionId: clip.clipVersionId ?? asset.selectedClipVersionId }
+              : {}),
+          };
+        } else if (asset) {
+          source = { type: "asset", assetId: asset.id };
+        } else if (clip.scriptVersionId) {
+          source = { type: "script", scriptVersionId: clip.scriptVersionId };
+        }
+        const legacyData = structuredClone(clip) as unknown as Record<string, unknown>;
+        const child: CompositionLinkedAudioChild = {
+          id: clip.id,
+          name: clip.name,
+          source,
+          ...(clip.sourceIn !== undefined ? { sourceIn: clip.sourceIn } : {}),
+          ...(clip.sourceOut !== undefined ? { sourceOut: clip.sourceOut } : {}),
+          ...(clip.muted !== undefined ? { muted: clip.muted } : {}),
+          ...(clip.volume !== undefined ? { volume: clip.volume } : {}),
+          ...(clip.fadeIn !== undefined ? { fadeIn: clip.fadeIn } : {}),
+          ...(clip.fadeOut !== undefined ? { fadeOut: clip.fadeOut } : {}),
+          legacyData,
+        };
+        next = addCompositionLinkedAudioChild(next, owner.id, child);
+        continue;
+      }
+    }
     next = insertCompositionPlacement(next, createRootCompositionPlacementForTimelineClip(project, next, clip));
   }
   return next;
