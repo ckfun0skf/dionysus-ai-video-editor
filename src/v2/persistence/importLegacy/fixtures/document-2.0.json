@@ -1,0 +1,24 @@
+{
+  "format": "dionysus-project-document", "documentVersion": "2.0",
+  "project": {
+    "schemaVersion": "1.0", "id": "p2", "name": "Doc project", "frameRate": 30, "width": 1920, "height": 1080,
+    "createdAt": "2025-02-01T00:00:00.000Z",
+    "assets": [ { "id": "a1", "name": "clip.webm", "kind": "video", "path": "data:video/webm;base64,BBBB", "duration": 8 },
+                { "id": "a2", "name": "logo.png", "kind": "image", "path": "data:image/png;base64,CCCC" } ],
+    "tracks": [], "timelineClips": [ { "id": "stale", "trackId": "x", "start": 99, "duration": 1, "assetId": "a1", "sourceIn": 0 } ]
+  },
+  "compositionModel": {
+    "schemaVersion": "2.0", "projectId": "p2", "name": "Doc project",
+    "rootComposition": {
+      "id": "root", "name": "Master", "duration": 8, "frameRate": 30, "width": 1920, "height": 1080,
+      "tracks": [ { "id": "ov", "name": "Overlay", "kind": "video", "order": 0 }, { "id": "bg", "name": "Main", "kind": "video", "order": 1 } ],
+      "placements": [
+        { "id": "p1", "name": "Clip", "trackId": "bg", "start": 0, "duration": 6, "order": 0, "source": { "type": "asset", "assetId": "a1" }, "sourceIn": 2,
+          "linkedAudioChildren": [ { "id": "la", "name": "Clip audio", "source": { "type": "asset", "assetId": "a1" }, "legacyData": {} } ], "legacyData": { "volume": 0.5 } },
+        { "id": "p2", "name": "Logo", "trackId": "ov", "start": 1, "duration": 3, "order": 0, "source": { "type": "asset", "assetId": "a2" }, "legacyData": {} },
+        { "id": "p3", "name": "Shot", "trackId": "ov", "start": 5, "duration": 1, "order": 1, "source": { "type": "shot", "shotId": "s1" }, "legacyData": {} }
+      ]
+    },
+    "clipCompositions": []
+  }
+}

@@ -1,0 +1,129 @@
+{
+  "project": {
+    "schema": "dionysus/3.0",
+    "id": "legacy_p2",
+    "name": "Doc project",
+    "settings": {
+      "width": 1920,
+      "height": 1080,
+      "fps": 30
+    },
+    "rootCompositionId": "legacy_p2_root",
+    "assets": {
+      "legacy_a1": {
+        "id": "legacy_a1",
+        "kind": "video",
+        "name": "clip.webm",
+        "selectedVersionId": "legacy_a1_v1",
+        "versions": [
+          {
+            "id": "legacy_a1_v1",
+            "createdAt": "2026-01-01T00:00:00.000Z",
+            "media": {
+              "blobKey": "legacy_a1/v1",
+              "mime": "video/webm",
+              "durationTicks": 960000
+            },
+            "provenance": {
+              "source": "legacy",
+              "inputs": []
+            }
+          }
+        ]
+      },
+      "legacy_a2": {
+        "id": "legacy_a2",
+        "kind": "image",
+        "name": "logo.png",
+        "selectedVersionId": "legacy_a2_v1",
+        "versions": [
+          {
+            "id": "legacy_a2_v1",
+            "createdAt": "2026-01-01T00:00:00.000Z",
+            "media": {
+              "blobKey": "legacy_a2/v1",
+              "mime": "image/png"
+            },
+            "provenance": {
+              "source": "legacy",
+              "inputs": []
+            }
+          }
+        ]
+      }
+    },
+    "compositions": {
+      "legacy_p2_root": {
+        "id": "legacy_p2_root",
+        "name": "Master Timeline",
+        "tracks": [
+          {
+            "id": "legacy_ov",
+            "kind": "video",
+            "name": "Overlay",
+            "placements": [
+              {
+                "id": "legacy_p2",
+                "startTicks": 120000,
+                "durationTicks": 360000,
+                "sourceInTicks": 0,
+                "source": {
+                  "kind": "assetVersion",
+                  "assetId": "legacy_a2",
+                  "versionId": "legacy_a2_v1"
+                },
+                "clipType": "image",
+                "volume": 1
+              }
+            ]
+          },
+          {
+            "id": "legacy_bg",
+            "kind": "video",
+            "name": "Main",
+            "placements": [
+              {
+                "id": "legacy_p1",
+                "startTicks": 0,
+                "durationTicks": 720000,
+                "sourceInTicks": 240000,
+                "source": {
+                  "kind": "assetVersion",
+                  "assetId": "legacy_a1",
+                  "versionId": "legacy_a1_v1"
+                },
+                "clipType": "video",
+                "volume": 0.5
+              }
+            ]
+          },
+          {
+            "id": "legacy_audio",
+            "kind": "audio",
+            "name": "Audio 1",
+            "placements": []
+          }
+        ]
+      }
+    },
+    "meta": {
+      "createdAt": "2025-02-01T00:00:00.000Z",
+      "updatedAt": "2026-01-01T00:00:00.000Z"
+    }
+  },
+  "blobs": [
+    {
+      "key": "legacy_a1/v1",
+      "dataUrl": "data:video/webm;base64,BBBB"
+    },
+    {
+      "key": "legacy_a2/v1",
+      "dataUrl": "data:image/png;base64,CCCC"
+    }
+  ],
+  "warnings": [
+    "Clip \"Clip\": linked audio is not supported yet and plays from the video element.",
+    "Clip p3 references unsupported or missing media and was skipped."
+  ],
+  "sourceVersion": "2.0"
+}
