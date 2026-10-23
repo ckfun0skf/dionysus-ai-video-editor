@@ -222,3 +222,7 @@ export const moveLayer = (id: string, dir: "up" | "down", trackId?: string): Com
   label: dir === "up" ? "Layer up" : "Layer down",
   apply: (p) => withRoot(p, (c) => ops.moveLayer(c, id, dir, trackId)),
 });
+export const reorderMain = (id: string, toIndex: number): Command => ({
+  label: "Reorder clips",
+  apply: (p) => withRoot(p, (c) => ops.reorderMain(c, id, toIndex)),
+});

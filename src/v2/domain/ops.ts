@@ -321,3 +321,21 @@ export function setKeyframe(comp: Composition, placementId: string, prop: Keyfra
 export function mainTrack(comp: Composition): Track | undefined {
   return lastVideo(comp.tracks);
 }
+
+/** CapCut long-press reorder: move main-track clip `id` to position `toIndex`, re-packing the track gaplessly
+ * from its first clip's start. Durations are kept; returns the same comp when nothing changes. */
+export function reorderMain(comp: Composition, id: string, toIndex: number): Composition {
+  const main = mainTrack(comp);
+  if (!main) return comp;
+  const sorted = [...main.placements].sort((a, b) => a.startTicks - b.startTicks);
+  const from = sorted.findIndex((p) => p.id === id);
+  if (from < 0) return comp;
+  const to = Math.max(0, Math.min(sorted.length - 1, toIndex));
+  const order = [...sorted];
+  const [p] = order.splice(from, 1);
+  order.splice(to, 0, p);
+  let t = sorted[0].startTicks;
+  const packed = order.map((x) => { const y = { ...x, startTicks: t }; t += x.durationTicks; return y; });
+  if (packed.every((x, i) => x.id === sorted[i].id && x.startTicks === sorted[i].startTicks)) return comp;
+  return { ...comp, tracks: comp.tracks.map((tr) => tr.id === main.id ? { ...tr, placements: packed } : tr) };
+}
