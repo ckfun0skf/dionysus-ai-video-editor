@@ -8,6 +8,9 @@ import { edit, ops, transitions, compositionDuration, TICKS_PER_SECOND, formatTi
 import { Ic } from "./Icon";
 
 interface Props {
+  /** Mobile: the expanded group (lifted so the bottom toolbar's ‹ can collapse it). */
+  expanded?: ops.TrackGroup;
+  onExpand?: (g: ops.TrackGroup | undefined) => void;
   engine: Engine;
   project: Project;
   time: number;
@@ -54,13 +57,15 @@ const HEADER_W = 84;
 export const TEXT_LANE_H = 32;
 export const SIDE_W = 144;
 
-export function Timeline({ engine, project, time, playing, onSeek, selectedId, selectedIds, onToggleSelect, multiMode, onSelect, pps, onZoom, centered, thumbs, peaks, strips, onAddMedia, sideColumn, timeLabel, topLane, ripple, onTransition }: Props) {
+export function Timeline({ engine, project, time, playing, onSeek, selectedId, selectedIds, onToggleSelect, multiMode, onSelect, pps, onZoom, centered, thumbs, peaks, strips, onAddMedia, sideColumn, timeLabel, topLane, ripple, onTransition, expanded: expandedProp, onExpand }: Props) {
   const comp = project.compositions[project.rootCompositionId];
   const scrollRef = useRef<HTMLDivElement>(null);
   const [gesture, setGesture] = useState<Gesture>();
   const [scrollTop, setScrollTop] = useState(0);
   /** Mobile: the group shown as its real layers (others are collapsed into one lane each). */
-  const [expanded, setExpanded] = useState<ops.TrackGroup>();
+  const [expandedInner, setExpandedInner] = useState<ops.TrackGroup>();
+  const expanded = onExpand ? expandedProp : expandedInner;
+  const setExpanded = onExpand ?? setExpandedInner;
   const [confirmDel, setConfirmDel] = useState<string>();
   const [menu, setMenu] = useState<{ id: string; x: number; y: number }>();
   const menuArm = useRef<string>();
@@ -92,7 +97,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
   const toPx = (t: number) => (t / TICKS_PER_SECOND) * pps;
   const toTicks = (px: number) => Math.round((px / pps) * TICKS_PER_SECOND);
   const duration = compositionDuration(comp);
-  const pad = centered ? Math.round(viewW * PLAYHEAD_FRAC) : 0;
+  const pad = centered ? Math.max(Math.round(viewW * PLAYHEAD_FRAC), sideColumn ? SIDE_W + 8 : 0) : 0;
   const padRight = centered ? viewW - pad : 0;
   const contentW = Math.max(toPx(duration) + (centered ? 0 : 400), centered ? 1 : viewW - HEADER_W);
 
@@ -278,20 +283,20 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
           ))(r))}
         </div>
       )}
-      {centered && sideColumn && <div ref={sideRef} className="v2-side-col" data-testid="side-col" style={{ width: SIDE_W, paddingTop: mainTop - scrollTop }}><div className="v2-side-main">{sideColumn}</div>
-        {!expanded && laneTops.map(({ group, top, hasClips }) => (
-          <button key={group} className="v2-group-icon" data-group={group} aria-label={ops.GROUP_LABEL[group]} title={hasClips ? `${ops.GROUP_LABEL[group]}: tap to show layers` : ops.GROUP_LABEL[group]}
-            style={{ top }} onClick={() => { if (hasClips) setExpanded(group); }}>
-            <Ic g={GROUP_ICON[group]} size={16} />
-          </button>
-        ))}
-        {expanded && layerTops.map(({ id, top }) => { const t = comp.tracks.find((x) => x.id === id); return t && (
-          <div key={id} className="v2-layer-side" data-track-id={id} style={{ top }}>
-            <LayerControls t={t} isMain={t.id === main?.id} onToggle={() => engine.dispatch(cmd.toggleTrackHidden(t.id))} onDelete={() => setConfirmDel(t.id)} />
-          </div>); })}
-      </div>}
       <div className="v2-scroll" ref={scrollRef} onScroll={onScroll} onPointerMove={onPointerMove} onPointerUp={(e) => onPointerUp(e)} onPointerCancel={() => { cancelPress(); setGesture(undefined); }}>
-        <div className="v2-content" style={{ width: contentW + pad + padRight, paddingLeft: pad, paddingRight: padRight }}>
+        <div className="v2-content" onPointerDown={(e) => { if (centered && e.target === e.currentTarget) { onSelect(undefined); setExpanded(undefined); } }} style={{ width: contentW + pad + padRight, paddingLeft: pad, paddingRight: padRight }}>
+          {centered && sideColumn && <div ref={sideRef} className="v2-side-col" data-testid="side-col" style={{ width: SIDE_W, left: pad - SIDE_W, paddingTop: mainTop }}><div className="v2-side-main">{sideColumn}</div>
+            {!expanded && laneTops.map(({ group, top, hasClips }) => (
+              <button key={group} className="v2-group-icon" data-group={group} aria-label={ops.GROUP_LABEL[group]} title={hasClips ? `${ops.GROUP_LABEL[group]}: tap to show layers` : ops.GROUP_LABEL[group]}
+                style={{ top }} onClick={() => { if (hasClips) setExpanded(group); }}>
+                <Ic g={GROUP_ICON[group]} size={16} />
+              </button>
+            ))}
+            {expanded && layerTops.map(({ id, top }) => { const t = comp.tracks.find((x) => x.id === id); return t && (
+              <div key={id} className="v2-layer-side" data-track-id={id} style={{ top }}>
+                <LayerControls t={t} isMain={t.id === main?.id} onToggle={() => engine.dispatch(cmd.toggleTrackHidden(t.id))} onDelete={() => setConfirmDel(t.id)} />
+              </div>); })}
+          </div>}
           <div className="v2-ruler" onPointerDown={scrub}>
             {ticks.map((s) => (
               <span key={s} className="v2-tick" style={{ left: s * pps }}>{formatTimecode(s * TICKS_PER_SECOND, project.settings.fps).slice(0, 5)}</span>
@@ -317,7 +322,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
             </div>
           ) : (({ t }) => (
             <div key={t.id} className={`v2-lane kind-${t.kind} ${t.muted ? "is-muted" : ""} ${t.hidden ? "is-hidden" : ""}`} data-track-id={t.id} data-group={r.group}
-              onPointerDown={(e) => { if (e.target === e.currentTarget) { onSelect(undefined); if (centered && r.group !== "main") setExpanded(undefined); if (!centered) scrub(e); } }}
+              onPointerDown={(e) => { if (e.target === e.currentTarget) { onSelect(undefined); if (centered) setExpanded(undefined); if (!centered) scrub(e); } }}
               onContextMenu={(e) => { if (centered) { e.preventDefault(); return; } const id = (e.target as HTMLElement).closest("[data-placement-id]")?.getAttribute("data-placement-id"); if (id) { e.preventDefault(); onSelect(id); setMenu({ id, x: e.clientX, y: e.clientY }); } }}
               onDragOver={(e) => e.preventDefault()} onDrop={(e) => onDrop(e, t.id)}>
               {centered && t.muted && <span className="v2-lane-label"><Ic g="🔇" /></span>}
@@ -377,7 +382,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
       {confirmDel && (() => { const t = comp.tracks.find((x) => x.id === confirmDel); return t ? <ConfirmDialog title="Delete layer?" message={`Delete this layer and its ${t.placements.length} clip${t.placements.length === 1 ? "" : "s"}? You can undo this.`} confirm="Delete"
         onCancel={() => setConfirmDel(undefined)} onConfirm={() => { engine.dispatch(cmd.deleteTrack(t.id)); setConfirmDel(undefined); onSelect(undefined); }} /> : null; })()}
       {menu && <LayerMenu comp={comp} id={menu.id} x={menu.x} y={menu.y} onClose={() => setMenu(undefined)} run={(c) => { engine.dispatch(c); setMenu(undefined); }} />}
-      {centered && <div className="v2-playhead-fixed" style={{ left: (sideColumn ? SIDE_W : 0) + pad }} aria-hidden />}
+      {centered && <div className="v2-playhead-fixed" style={{ left: pad }} aria-hidden />}
       {centered && timeLabel && <div className="v2-time-label">{timeLabel}</div>}
     </div>
   );
@@ -441,10 +446,34 @@ const SQ = 52, SQ_GAP = 6;
 export function reorderSlot(x: number, rowLeft: number, count: number): number {
   return Math.max(0, Math.min(count - 1, Math.round((x - rowLeft - SQ / 2) / (SQ + SQ_GAP))));
 }
+/** Edge auto-scroll: px per frame when the finger is inside the left/right edge zone, faster the deeper it goes (negative = left edge). */
+export const EDGE_ZONE = 56, EDGE_MAX = 14;
+export function edgeSpeed(x: number, width: number): number {
+  if (x < EDGE_ZONE) return -Math.ceil(EDGE_MAX * Math.min(1, (EDGE_ZONE - x) / EDGE_ZONE));
+  if (x > width - EDGE_ZONE) return Math.ceil(EDGE_MAX * Math.min(1, (x - (width - EDGE_ZONE)) / EDGE_ZONE));
+  return 0;
+}
+/** Clamp the reorder row's left so it can scroll until its first or last slot sits just inside the edge zone. */
+export function clampRowLeft(left: number, base: number, count: number, width: number): number {
+  const span = count * (SQ + SQ_GAP);
+  return Math.max(Math.min(base, width - EDGE_ZONE - span), Math.min(Math.max(base, EDGE_ZONE), left));
+}
 function ReorderStrip({ track, state, top, root, thumbs, onMove, onDrop }: { track: Track; state: { id: string; x0: number; x: number; from: number; closing?: boolean }; top: number; root: HTMLDivElement | null; thumbs?: Record<string, string>; onMove: (x: number) => void; onDrop: (to: number) => void }) {
   const sorted = [...track.placements].sort((a, b) => a.startTicks - b.startTicks);
   const ox = root?.getBoundingClientRect().left ?? 0;
-  const rowLeft = state.x0 - ox - state.from * (SQ + SQ_GAP) - SQ / 2;
+  const baseLeft = state.x0 - ox - state.from * (SQ + SQ_GAP) - SQ / 2;
+  const width = root?.clientWidth ?? 390;
+  // Holding the finger near a viewport edge scrolls the row (the slot indicator follows), so the first clip can reach the end.
+  const [shift, setShift] = useState(0);
+  const finger = useRef(state.x); finger.current = state.x;
+  useEffect(() => {
+    if (state.closing) return;
+    let raf = 0;
+    const tick = () => { const v = edgeSpeed(finger.current - ox, width); if (v) setShift((sh) => baseLeft - clampRowLeft(baseLeft - sh - v, baseLeft, sorted.length, width)); raf = requestAnimationFrame(tick); };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [state.closing]); // eslint-disable-line react-hooks/exhaustive-deps
+  const rowLeft = baseLeft - shift;
   const to = reorderSlot(state.x - ox, rowLeft, sorted.length);
   const latest = useRef(to); latest.current = to;
   useEffect(() => {

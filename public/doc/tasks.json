@@ -1991,6 +1991,12 @@
           "title": "Layer management: SRT imports as new text layer, per-layer eye/delete with confirm, hidden layers skipped in preview/export",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-095",
+          "title": "CapCut parity: toolbar ‹ / empty tap collapses group, left column scrolls with timeline before t=0, reorder edge auto-scroll",
+          "status": "done",
+          "progress": 100
         }
       ]
     },
