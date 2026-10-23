@@ -13,10 +13,40 @@ const c=document.querySelector("canvas");let bmp=null;if(c&&c.width&&c.height){t
 parent.postMessage({type:"dionysus:frame",seq:d.seq,bmp},"*",bmp?[bmp]:[])});
 addEventListener("load",()=>parent.postMessage({type:"dionysus:ready"},"*"))})()</script>`;
 
-/** Prepend the frame-seek runtime (after a doctype, if any) so it runs before page scripts. */
-export function withRuntime(html: string): string {
-  const m = /^\s*<!doctype[^>]*>/i.exec(html);
-  return m ? m[0] + HTML_RUNTIME + html.slice(m[0].length) : HTML_RUNTIME + html;
+/** three.js is self-hosted (public/vendor) and pinned by SRI; it is the only script URL a clip may load. */
+export const THREE_PATH = "vendor/three-0.160.0.module.min.js";
+export const THREE_INTEGRITY = "sha384-8/hf5tabFfIo0BPku31TKUvGIKpWGYaMwNtlSNqNyZzXgZCMd4lnOGWbJElML9dv";
+const LEGACY_THREE = /https:\/\/unpkg\.com\/three@[\d.]+\/build\/three\.module(?:\.min)?\.js/g;
+
+/** Absolute URL of the vendored three.js for this deployment (works from the opaque-origin iframe). */
+export function threeUrl(base = (import.meta as { env?: { BASE_URL?: string } }).env?.BASE_URL ?? "/", href = globalThis.location?.href ?? "http://localhost/"): string {
+  return new URL(`${base}${THREE_PATH}`, href).href;
+}
+
+/** Locked-down policy: nothing remote except the pinned three.js file; inline/blob:/data: for the page itself. */
+export function clipCsp(three: string): string {
+  return [
+    "default-src 'none'",
+    `script-src 'unsafe-inline' blob: data: ${three}`,
+    "style-src 'unsafe-inline' blob: data:",
+    "img-src blob: data:", "font-src blob: data:", "media-src blob: data:", "connect-src blob: data:", "worker-src blob:",
+  ].join("; ");
+}
+
+const attr = (v: string) => v.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+
+/**
+ * Prepend (after a doctype, if any) the CSP meta, an import map exposing `three` with its integrity hash,
+ * and the frame-seek runtime, so all three apply before any page markup or script. Old clips that import
+ * three.js from unpkg are pointed at the pinned local copy.
+ */
+export function withRuntime(html: string, three = threeUrl()): string {
+  const head = `<meta http-equiv="Content-Security-Policy" content="${attr(clipCsp(three))}">`
+    + `<script type="importmap">${JSON.stringify({ imports: { three }, integrity: { [three]: THREE_INTEGRITY } })}</script>`
+    + HTML_RUNTIME;
+  const page = html.replace(LEGACY_THREE, "three");
+  const m = /^\s*<!doctype[^>]*>/i.exec(page);
+  return m ? m[0] + head + page.slice(m[0].length) : head + page;
 }
 
 export const HTML_SANDBOX = "allow-scripts";
@@ -109,7 +139,7 @@ export const THREE_TEMPLATE = `<!doctype html>
 <html><head><meta charset="utf-8"><style>html,body{margin:0;height:100%;background:#000;overflow:hidden}canvas{display:block}</style></head>
 <body><canvas id="c"></canvas>
 <script type="module">
-import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
+import * as THREE from "three"; // pinned, self-hosted copy (see THREE_PATH)
 const canvas = document.getElementById("c");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
 renderer.setSize(innerWidth, innerHeight, false);
