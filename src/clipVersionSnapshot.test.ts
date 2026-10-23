@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { DionysusProject, GenerationRecord } from "./types";
 import { createClipVersionSnapshot } from "./clipVersionSnapshot";
+import { migrateLegacyProjectToComposition } from "./compositionMigration";
 import { normalizeClipVersionTracks, updateClipVersionLayer } from "./clipVersionTracks";
 
 function fixture(): DionysusProject {
@@ -150,6 +151,33 @@ describe("structure-preserving Clip Version snapshots", () => {
     ]));
     expect(version.scriptVersionIds).toContain("script-version-1");
     expect(version.generationRecords).toHaveLength(1);
+  });
+
+  it("captures the authoritative root Composition instead of remigrating a stale legacy projection", () => {
+    const project = fixture();
+    const root = migrateLegacyProjectToComposition(project).rootComposition;
+    const source = root.placements.find(item => item.id === "nested-placement");
+    expect(source).toBeTruthy();
+    const canonicalRoot = {
+      ...root,
+      placements: root.placements.map(item => item.id !== "nested-placement" ? item : {
+        ...item,
+        start: 9,
+        legacyData: { ...item.legacyData, start: 9 },
+      }),
+    };
+
+    const snapshot = createClipVersionSnapshot(project, {
+      assetId: "canonical-root-snapshot",
+      versionId: "canonical-root-version",
+      versionName: "Canonical Root",
+      createdAt: "2026-10-22T12:00:00.000Z",
+      rootComposition: canonicalRoot,
+    });
+
+    expect(snapshot.composition?.placements.find(item => item.id === "nested-placement")?.start).toBe(9);
+    expect(snapshot.layers.find(item => item.id === "nested-placement")?.start).toBe(9);
+    expect(project.timelineClips?.find(item => item.id === "nested-placement")?.start).toBe(5);
   });
 
   it("retains an existing nested Composition subtree even when it is not re-derived from parent placements", () => {
