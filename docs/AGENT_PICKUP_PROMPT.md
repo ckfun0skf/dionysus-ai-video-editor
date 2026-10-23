@@ -236,3 +236,7 @@ The first CI for the expanded selector cleanup passed all 26 test files but fail
 - Snapshot child attachment now resolves Shot/Slot/version references from each canonical placement, records the exact pin, embeds that exact version's Composition recursively, and still preserves the current selected version snapshots as separate pins where relevant. The same path works inside nested Compositions.
 - Added regression coverage where a root placement pins `shot-version-1` while the slot selection has moved to `shot-version-2`; the snapshot must contain both the exact pinned child and the current selected child, with both pin records.
 - Code/test commits: `efe8486bf96fa47ae26874245b42a4ea739da826`, `41f44a5e78bfeef8a9816192198f9e317e0f4a4a`. Exact-head CI is pending; do not check this snapshot item complete until tests/build/audit pass.
+
+## Validation correction — keep Shot source discriminant narrowed (2026-10-23)
+
+The pinned Shot Slot snapshot regression passed with all 298 tests, but TypeScript caught that a nested callback did not retain the `placement.source.type === "shot"` discriminant. The resolver now captures the narrowed source union in a local constant before looking up the Shot and Slot. Fix commit: `f79818e90f6fd7ccc94a3c235665650ed6344c40`. Exact-head CI for this correction and final docs sync is pending; keep the Issue #110 pinned-snapshot checkbox unchecked until it passes.
