@@ -78,9 +78,9 @@ export function reconcileEditorSessionComposition(
 
   next = {
     ...next,
-    // A Project migration reconstructs a deterministic legacy root ID and has no snapshot
-    // provenance. Those are not authority over the live canonical document identity/metadata.
-    id: next.id,
+    // Root IDs are deterministic by the v2 project-document contract; provenance and
+    // canonical-only metadata, however, may not be reconstructible from the legacy projection.
+    id: target.id,
     name: target.name,
     duration: target.duration,
     frameRate: target.frameRate,
