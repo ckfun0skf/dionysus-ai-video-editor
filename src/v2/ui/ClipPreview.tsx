@@ -37,7 +37,7 @@ export function FilmstripTiles({ strip, p, width, pps }: { strip: Filmstrip; p: 
       {Array.from({ length: n }, (_, i) => {
         const tl = Math.min(dur, (i * tileW + tileW / 2) / pps);
         const t = p.reverse ? src0 + (dur - tl) * speed : src0 + tl * speed;
-        return <img key={i} src={strip.frames[nearestFrame(strip.times, t)]} alt="" style={{ left: i * tileW, width: tileW }} />;
+        return <img key={i} src={strip.frames[nearestFrame(strip.times, t)]} alt="" draggable={false} style={{ left: i * tileW, width: tileW }} />;
       })}
     </div>
   );
