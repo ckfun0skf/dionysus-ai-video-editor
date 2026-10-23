@@ -1877,6 +1877,12 @@
           "title": "Lucide icon set across v2 desktop and mobile",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-076",
+          "title": "Bottom sheets: drag/swipe to dismiss, resizable preview/timeline split, collapsible desktop side panel, reduced-motion aware",
+          "status": "done",
+          "progress": 100
         }
       ]
     },

@@ -14,6 +14,7 @@ import { ProjectsDialog } from "./Projects";
 import type { Resolution } from "../render";
 import { addCueAt, downloadSrt, importSrtFile, SubtitleEditor, SubtitleLane } from "./Subtitles";
 import { Ic } from "./Icon";
+import { PanelGrabber, PREVIEW_DEFAULT, Sheet } from "./Sheet";
 
 type Menu = "multi" | "root" | "edit" | "edit-hint" | "audio" | "zoom" | "speed" | "text";
 const SPEEDS = [0.25, 0.5, 1, 1.5, 2, 4];
@@ -32,6 +33,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const [notice, setNotice] = useState(recovery);
   const { project, canUndo, canRedo } = useEngineState(engine);
   const mobile = useIsMobile();
+  const [previewVh, setPreviewVh] = useState(PREVIEW_DEFAULT);
+  const [sideOpen, setSideOpen] = useState(true);
   const [time, setTime] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [sel, setSel] = useState<string[]>([]);
@@ -269,7 +272,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   ));
 
   const preview = (
-    <section className="v2-preview" aria-label="Preview">
+    <section className="v2-preview" aria-label="Preview" style={mobile ? { height: `${previewVh}dvh` } : undefined}>
       <div className="v2-canvas-wrap"><canvas ref={canvasRef} width={1280} height={720} onClick={togglePlay} />
         {visual && player.boxes.get(visual.id) && canvasRef.current && <TransformHandles engine={engine} placement={visual} time={time} box={player.boxes.get(visual.id)!} canvas={canvasRef.current} />}
       </div>
@@ -372,6 +375,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
               <button className="v2-icon" aria-label="Redo" disabled={!canRedo} onClick={() => engine.redo()}><Ic g="↷" /></button>
             </span>
           </div>
+          <PanelGrabber vh={previewVh} onChange={setPreviewVh} />
           <Timeline engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} selectedIds={sel} onToggleSelect={toggleClip} multiMode={multiMode} onSelect={selectClip} peaks={peaks} strips={strips} pps={pps} onZoom={(z) => setPps(clampPps(z))} centered topLane={topLane} ripple={ripple} onTransition={onTransition}
             thumbs={thumbs} onAddMedia={() => setSheet(true)}
             timeLabel={<><b>{formatTimecode(time, project.settings.fps).slice(0, 5)}</b> / {formatTimecode(duration, project.settings.fps).slice(0, 5)}</>}
@@ -383,14 +387,15 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
             {activeMenu !== "root" && <button className="v2-tool v2-tool-back" aria-label="Back" onClick={back}>‹</button>}
             {mobileTools[activeMenu]}
           </nav>
-          {sheet && <div className="v2-sheet-backdrop" onClick={() => setSheet(false)}><div className="v2-sheet" onClick={(e) => e.stopPropagation()}>{browser}</div></div>}
+          {sheet && <Sheet label="Media" onClose={() => setSheet(false)}>{browser}</Sheet>}
           {!sheet && <div hidden>{browser}</div>}
           {cue && <div className="v2-msub"><SubtitleEditor engine={engine} sub={cue} onDelete={delCue} /></div>}
-          {inspOpen && selected && <div className="v2-sheet-backdrop" onClick={() => setInspOpen(false)}><div className="v2-sheet v2-msheet-insp" onClick={(e) => e.stopPropagation()}><TransformInspector engine={engine} placement={selected.placement} time={time} /><button className="v2-btn" onClick={() => setInspOpen(false)}>Done</button></div></div>}
+          {inspOpen && selected && <Sheet label="Adjust" className="v2-msheet-insp" onClose={() => setInspOpen(false)}><TransformInspector engine={engine} placement={selected.placement} time={time} /><button className="v2-btn" onClick={() => setInspOpen(false)}>Done</button></Sheet>}
         </>
       ) : (
-        <div className="v2-desktop-grid">
-          <div className="v2-side">{selected && <TransformInspector engine={engine} placement={selected.placement} time={time} />}{cue && <SubtitleEditor engine={engine} sub={cue} onDelete={delCue} />}{browser}</div>
+        <div className={`v2-desktop-grid ${sideOpen ? "" : "side-closed"}`}>
+          <button className="v2-icon v2-side-toggle" aria-label={sideOpen ? "Hide side panel" : "Show side panel"} title={sideOpen ? "Hide side panel" : "Show side panel"} aria-expanded={sideOpen} onClick={() => setSideOpen(!sideOpen)}><Ic g={sideOpen ? "panel-close" : "panel-open"} size={18} /></button>
+          <div className="v2-side" hidden={!sideOpen}>{selected && <TransformInspector engine={engine} placement={selected.placement} time={time} />}{cue && <SubtitleEditor engine={engine} sub={cue} onDelete={delCue} />}{browser}</div>
           {preview}
           <section className="v2-timeline-panel" aria-label="Timeline">
             <div className="v2-timeline-toolbar">{selectionActions}<span className="v2-hint">Space play · S split · F freeze · Del delete · Shift+Del ripple · R ripple · Shift-click multi-select · ⌘C/⌘V/⌘D · ⌘/Ctrl+Z undo</span></div>
