@@ -549,7 +549,12 @@ export function ensureCanonicalTimelineClips(
   }).sort((a, b) => Number(Boolean(a.linkedVideoClipId)) - Number(Boolean(b.linkedVideoClipId)));
   let next = root;
   for (const clip of expanded) {
-    if (next.placements.some(placement => placement.id === clip.id)) continue;
+    // A video promotion may already materialize its legacy linked-audio row as an owned
+    // Composition child. Do not insert that same ID again as a root placement.
+    if (
+      next.placements.some(placement => placement.id === clip.id) ||
+      next.placements.some(placement => (placement.linkedAudioChildren ?? []).some(child => child.id === clip.id))
+    ) continue;
     next = insertCompositionPlacement(next, createRootCompositionPlacementForTimelineClip(project, next, clip));
   }
   return next;
