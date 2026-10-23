@@ -180,6 +180,61 @@ describe("structure-preserving Clip Version snapshots", () => {
     expect(project.timelineClips?.find(item => item.id === "nested-placement")?.start).toBe(5);
   });
 
+  it("embeds the exact Shot Slot version pinned by a canonical placement, not only the current selection", () => {
+    const project = fixture();
+    const shot = project.shots[0];
+    const slot = shot.slots[0];
+    const newer = structuredClone(slot.versions[0]);
+    newer.id = "shot-version-2";
+    newer.name = "Newer selected version";
+    newer.layers = [{ id: "shot-layer-v2", name: "Newer layer", kind: "video", start: 0, duration: 4, assetId: "media" }];
+    newer.scriptVersionIds = [];
+    newer.generationRecords = [];
+    slot.versions.push(newer);
+    slot.selectedVersionId = newer.id;
+    project.timelineClips!.push({
+      id: "pinned-shot-slot-placement",
+      name: "Pinned older Shot Slot version",
+      kind: "video",
+      trackId: "video-track",
+      start: 9,
+      duration: 4,
+      shotId: shot.id,
+      slotId: slot.id,
+    });
+
+    const migratedRoot = migrateLegacyProjectToComposition(project).rootComposition;
+    const canonicalRoot = {
+      ...migratedRoot,
+      placements: migratedRoot.placements.map(placement => placement.id !== "pinned-shot-slot-placement"
+        ? placement
+        : { ...placement, source: { type: "shot" as const, shotId: shot.id, slotId: slot.id, versionId: "shot-version-1" } }),
+    };
+    const snapshot = createClipVersionSnapshot(project, {
+      assetId: "pinned-shot-snapshot",
+      versionId: "pinned-shot-snapshot-v1",
+      versionName: "Pinned Shot Snapshot",
+      createdAt: "2026-10-23T01:00:00.000Z",
+      rootComposition: canonicalRoot,
+    });
+
+    const embedded = snapshot.composition?.nestedCompositions ?? [];
+    expect(embedded).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: "composition:legacy-shot-slot:shot-1:slot-1:shot-version-1",
+        placements: expect.arrayContaining([expect.objectContaining({ id: "shot-layer" })]),
+      }),
+      expect.objectContaining({
+        id: "composition:legacy-shot-slot:shot-1:slot-1:shot-version-2",
+        placements: expect.arrayContaining([expect.objectContaining({ id: "shot-layer-v2" })]),
+      }),
+    ]));
+    expect(snapshot.composition?.provenance?.pinnedVersions).toEqual(expect.arrayContaining([
+      { shotId: "shot-1", slotId: "slot-1", versionId: "shot-version-1" },
+      { shotId: "shot-1", slotId: "slot-1", versionId: "shot-version-2" },
+    ]));
+  });
+
   it("retains an existing nested Composition subtree even when it is not re-derived from parent placements", () => {
     const project = fixture();
     const nestedVersion = project.assets.find(asset => asset.id === "nested-asset")!.clipVersions![0];
