@@ -1702,8 +1702,8 @@
         {
           "id": "V2-033",
           "title": "WebCodecs MP4 export (MediaRecorder WebM fallback)",
-          "status": "planned",
-          "progress": 0
+          "status": "done",
+          "progress": 100
         }
       ]
     },

@@ -178,3 +178,15 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 .v2-wave.wave-video { background: linear-gradient(transparent, rgba(0,0,0,.45)); }
 .v2-clip-name { z-index: 1; text-shadow: 0 1px 2px #000; }
 .v2-clip .v2-fade, .v2-clip .v2-kf-dot, .v2-clip .v2-handle { z-index: 2; }
+.v2-modal { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.6); display: grid; place-items: center; }
+.v2-modal-card { width: min(92vw, 420px); background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; box-shadow: 0 12px 32px rgba(0,0,0,.6); }
+.v2-modal-card h2 { margin: 0 0 12px; font-size: 16px; }
+.v2-modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
+.v2-modal-actions .v2-btn { min-height: 44px; min-width: 88px; display: inline-grid; place-items: center; text-decoration: none; color: var(--text); }
+.v2-modal-actions .v2-btn:hover { border-color: var(--accent); }
+.v2-field { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.v2-field select { min-height: 44px; background: #2a2a31; color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 0 8px; }
+.v2-muted { color: var(--muted); font-size: 12px; }
+.v2-progress { height: 8px; background: #2a2a31; border-radius: 4px; overflow: hidden; }
+.v2-progress span { display: block; height: 100%; background: var(--accent); transition: width .15s linear; }
+.v2-export-d { min-height: 36px; }
