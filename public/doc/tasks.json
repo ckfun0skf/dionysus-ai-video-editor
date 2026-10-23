@@ -589,7 +589,7 @@
           "title": "Unified Composition model and structure-preserving snapshots",
           "status": "in_progress",
           "progress": 90,
-          "summary": "Converge root/nested editing on one authoritative Composition/session. PR #111 has paired edit/history/import boundaries, canonical-only v2 autosave with read-only schema-1.0 fallback, canonical root/nested render adapters, nested command helpers, immediate canonical empty Clip Asset/Version snapshots with canvas dimensions, canonicalization of legacy-only version duplicates, Save-as-Clip snapshots sourced from the live root, canonical version-description synchronization, and unique IDs for duplicated top-level Composition documents. Editable UI and remaining pinned/non-root paths remain in progress.",
+          "summary": "Converge root/nested editing on one authoritative Composition/session. PR #111 has paired edit/history/import boundaries, canonical-only v2 autosave with read-only schema-1.0 fallback, canonical root/nested render adapters, nested command helpers, immediate canonical empty Clip Asset/Version snapshots with canvas dimensions, canonicalization of legacy-only version duplicates, Save-as-Clip snapshots sourced from the live root, canonical version-description synchronization, unique IDs for duplicated top-level Composition documents, and cleanup of stale source-type IDs when projecting nested canonical sources back to legacy layers. Editable UI and remaining pinned/non-root paths remain in progress.",
           "doc": "tasks/unified-composition-model.md",
           "detail": "tasks/unified-composition-model.html",
           "report": "reports/unified-composition-model-report.md",
