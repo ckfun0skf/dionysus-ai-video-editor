@@ -721,9 +721,23 @@ export default function App() {
     const placementId = target.type === "shot" ? target.shotId : target.clipId;
     if (editorSessionRef.current.composition.placements.some(placement => placement.id === placementId)) {
       changeRootComposition(root => moveCompositionPlacementToTrack(root, placementId, trackId, start));
-    } else {
-      change(project => moveProjectTimelinePlacement(project, target, trackId, start));
+      return;
     }
+
+    // A Timeline clip may still exist in a legacy Project snapshot without a canonical placement.
+    // Promote that clip into the live Composition before editing it, rather than moving it only
+    // in the compatibility projection. Shot-domain edits remain on their dedicated migration path.
+    if (target.type === "clip") {
+      const clip = (editorSessionRef.current.project.timelineClips ?? []).find(item => item.id === target.clipId);
+      if (clip) {
+        changeRootComposition(root => {
+          const inserted = insertCompositionPlacement(root, createRootCompositionPlacementForTimelineClip(editorSessionRef.current.project, root, clip));
+          return moveCompositionPlacementToTrack(inserted, placementId, trackId, start);
+        });
+        return;
+      }
+    }
+    change(project => moveProjectTimelinePlacement(project, target, trackId, start));
   }
 
   function commitRootResizeOrLegacy(preview: ClipResizePreview) {
