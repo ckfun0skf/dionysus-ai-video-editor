@@ -75,4 +75,27 @@ describe("V2App", () => {
     expect(el.querySelector('[data-placement-id="v"]')!.textContent).not.toContain("2×");
     expect(el.querySelector('[aria-label="Reversed"]')).toBeNull();
   });
+
+  it("adds, edits and deletes text; SRT import is one undo step", async () => {
+    const el = document.createElement("div");
+    document.body.appendChild(el);
+    await act(async () => { createRoot(el).render(<V2App />); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+    const btn = (label: string) => Array.from(el.querySelectorAll("button")).find((b) => b.textContent?.includes(label)) as HTMLButtonElement;
+    await act(async () => { btn("Add text").click(); });
+    const ta = el.querySelector('textarea[aria-label="Subtitle text"]') as HTMLTextAreaElement;
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
+    await act(async () => { setter.call(ta, "Hi there"); ta.dispatchEvent(new Event("input", { bubbles: true })); });
+    expect(el.querySelector("[data-subtitle-id]")!.textContent).toContain("Hi there");
+    await act(async () => { btn("Delete").click(); });
+    expect(el.querySelector("[data-subtitle-id]")).toBeNull();
+    const input = el.querySelector('input[aria-label="Import SRT file"]') as HTMLInputElement;
+    const file = new File(["1\n00:00:00,000 --> 00:00:01,000\nA\n\n2\n00:00:02,000 --> 00:00:03,000\nB\n"], "s.srt");
+    Object.defineProperty(file, "text", { value: async () => "1\n00:00:00,000 --> 00:00:01,000\nA\n\n2\n00:00:02,000 --> 00:00:03,000\nB\n" });
+    Object.defineProperty(input, "files", { value: [file], configurable: true });
+    await act(async () => { input.dispatchEvent(new Event("change", { bubbles: true })); await new Promise((r) => setTimeout(r, 20)); });
+    expect(el.querySelectorAll("[data-subtitle-id]").length).toBe(2);
+    await act(async () => { (el.querySelector('[aria-label="Undo"]') as HTMLButtonElement).click(); });
+    expect(el.querySelectorAll("[data-subtitle-id]").length).toBe(0);
+  });
 });

@@ -156,3 +156,10 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 .v2-fade.in { left: 0; background: linear-gradient(to bottom right, rgba(0,0,0,.55) 50%, transparent 50%); }
 .v2-fade.out { right: 0; background: linear-gradient(to bottom left, rgba(0,0,0,.55) 50%, transparent 50%); }
 .v2-kf-dot { position: absolute; bottom: 3px; width: 8px; height: 8px; margin-left: -4px; background: #ffd23f; transform: rotate(45deg); pointer-events: none; }
+/* Subtitles (V2-030) */
+.v2-lane.kind-text { background: #17141c; }
+.v2-clip.clip-text { background: #6b4bbd; border-color: #8d6ee0; cursor: grab; touch-action: none; }
+.v2-sub-text { width: 100%; box-sizing: border-box; background: #111; color: var(--text, #eee); border: 1px solid var(--line); border-radius: 6px; padding: 8px; font: inherit; resize: vertical; min-height: 64px; }
+.v2-sub-text:focus, .v2-sub-time input:focus { outline: 2px solid var(--accent, #4f8cff); }
+.v2-sub-time input { background: #111; color: inherit; border: 1px solid var(--line); border-radius: 6px; min-height: 32px; padding: 0 6px; }
+.v2-msub { position: fixed; left: 0; right: 0; bottom: 64px; z-index: 20; background: var(--panel); border-top: 1px solid var(--line); max-height: 40dvh; overflow-y: auto; }

@@ -18,6 +18,8 @@ interface Props {
   onAddMedia?: () => void;
   sideColumn?: ReactNode;
   timeLabel?: ReactNode;
+  /** Extra lane rendered above the tracks (subtitles), given the time↔px mapping. */
+  topLane?: { label: string; render: (toPx: (t: number) => number, toTicks: (px: number) => number) => ReactNode };
 }
 
 /** Fixed playhead position in centered mode, as a fraction of the viewport width. */
@@ -29,7 +31,7 @@ type Gesture =
 
 const HEADER_W = 84;
 
-export function Timeline({ engine, project, time, playing, onSeek, selectedId, onSelect, pps, centered, thumbs, onAddMedia, sideColumn, timeLabel }: Props) {
+export function Timeline({ engine, project, time, playing, onSeek, selectedId, onSelect, pps, centered, thumbs, onAddMedia, sideColumn, timeLabel, topLane }: Props) {
   const comp = project.compositions[project.rootCompositionId];
   const scrollRef = useRef<HTMLDivElement>(null);
   const [gesture, setGesture] = useState<Gesture>();
@@ -154,6 +156,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, o
       {!centered && (
         <div className="v2-track-headers">
           <div className="v2-ruler-spacer" />
+          {topLane && <div className="v2-track-header kind-text"><span>{topLane.label}</span></div>}
           {comp.tracks.map((t) => (
             <div key={t.id} className={`v2-track-header kind-${t.kind}`}>
               <span>{t.name}</span>
@@ -169,6 +172,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, o
               <span key={s} className="v2-tick" style={{ left: s * pps }}>{formatTimecode(s * TICKS_PER_SECOND, project.settings.fps).slice(0, 5)}</span>
             ))}
           </div>
+          {topLane?.render(toPx, toTicks)}
           {preview.tracks.map((t) => (
             <div key={t.id} className={`v2-lane kind-${t.kind} ${t.muted ? "is-muted" : ""}`} data-track-id={t.id}
               onPointerDown={(e) => { if (e.target === e.currentTarget) { onSelect(undefined); if (!centered) scrub(e); } }}

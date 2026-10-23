@@ -7,6 +7,7 @@ import { activeAt, placeRect, type Placed } from "./frame";
 import { TICKS_PER_SECOND, ticksToSeconds } from "../domain/time";
 import { compositionDuration, fadeAt, versionOf, type Project } from "../domain/model";
 import type { BlobStore } from "../ports/storage";
+import { subtitleAt } from "../domain/subtitles";
 import { correctDrift, createClock, type Clock } from "./clock";
 
 type MediaEl = HTMLVideoElement | HTMLAudioElement | HTMLImageElement;
@@ -191,6 +192,8 @@ export class Player {
         }
       }
     }
+    const cue = subtitleAt(comp, this.time);
+    if (ctx && canvas && cue) drawSubtitle(ctx, canvas.width, canvas.height, cue.text);
     for (const [id, el] of this.pool) if (!live.has(id) && "pause" in el && !el.paused) el.pause();
     for (const id of [...this.pool.keys()]) if (!findAny(this.project, id)) this.release(id);
     this.onTime?.(this.time, this.playing);
@@ -206,4 +209,27 @@ export class Player {
 
 function findAny(p: Project, placementId: string) {
   return p.compositions[p.rootCompositionId].tracks.some((t) => t.placements.some((pl) => pl.id === placementId));
+}
+
+/** Subtitle style: white, dark outline, bottom-centred, wraps to 80% width. */
+export function drawSubtitle(ctx: CanvasRenderingContext2D, w: number, h: number, text: string) {
+  const size = Math.round(h * 0.055);
+  ctx.save();
+  ctx.font = `600 ${size}px system-ui, sans-serif`;
+  ctx.textAlign = "center"; ctx.textBaseline = "bottom"; ctx.lineJoin = "round";
+  const lines: string[] = [];
+  for (const para of text.split("\n")) {
+    let line = "";
+    for (const word of para.split(" ")) {
+      const t = line ? `${line} ${word}` : word;
+      if (ctx.measureText(t).width > w * 0.8 && line) { lines.push(line); line = word; } else line = t;
+    }
+    lines.push(line);
+  }
+  lines.forEach((l, i) => {
+    const y = h * 0.92 - (lines.length - 1 - i) * size * 1.25;
+    ctx.lineWidth = size * 0.18; ctx.strokeStyle = "rgba(0,0,0,.85)"; ctx.strokeText(l, w / 2, y);
+    ctx.fillStyle = "#fff"; ctx.fillText(l, w / 2, y);
+  });
+  ctx.restore();
 }
