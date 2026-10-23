@@ -12,22 +12,22 @@ const setup = () => { const e = new Engine(createProject("t")); e.dispatch([cmd.
 describe("addAssetsInSequence", () => {
   it("appends picked items end-to-end on the main track from the playhead, one undo", () => {
     const e = setup();
-    const before = root(e.project).tracks.length;
+    const before = root(e.getState().project).tracks.length;
     e.dispatch(cmd.addAssetsInSequence(["v", "w"], s(2)));
-    const main = ops.mainTrack(root(e.project))!;
+    const main = ops.mainTrack(root(e.getState().project))!;
     expect(main.placements.map((p) => [p.startTicks, p.durationTicks])).toEqual([[s(2), s(10)], [s(12), s(4)]]);
-    expect(root(e.project).tracks.length).toBe(before);
+    expect(root(e.getState().project).tracks.length).toBe(before);
     e.undo();
-    expect(ops.mainTrack(root(e.project))!.placements).toHaveLength(0);
+    expect(ops.mainTrack(root(e.getState().project))!.placements).toHaveLength(0);
   });
   it("overlay puts items on a new track above the main track", () => {
     const e = setup();
     e.dispatch(cmd.addAssetsInSequence(["w"], s(3), "ov"));
-    const c = root(e.project);
+    const c = root(e.getState().project);
     expect(c.tracks[0].id).toBe("ov");
     expect(c.tracks[0].placements[0].startTicks).toBe(s(3));
     expect(ops.mainTrack(c)!.id).not.toBe("ov");
     e.undo();
-    expect(root(e.project).tracks.some((t) => t.id === "ov")).toBe(false);
+    expect(root(e.getState().project).tracks.some((t) => t.id === "ov")).toBe(false);
   });
 });
