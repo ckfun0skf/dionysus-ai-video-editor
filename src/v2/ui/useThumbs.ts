@@ -8,7 +8,7 @@ export function useThumbs(project: Project, blobs: BlobStore): Record<string, st
   useEffect(() => {
     let alive = true;
     for (const a of Object.values(project.assets)) {
-      if (a.kind === "audio" || thumbs[a.id]) continue;
+      if (a.kind === "audio" || a.kind === "html" || thumbs[a.id]) continue;
       const v = a.versions.find((x) => x.id === a.selectedVersionId) ?? a.versions[0];
       if (!v) continue;
       void blobs.get(v.media.blobKey).then((b) => b && grab(a.kind, b)).then((url) => {

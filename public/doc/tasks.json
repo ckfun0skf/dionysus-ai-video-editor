@@ -1690,8 +1690,8 @@
         {
           "id": "V2-031",
           "title": "HTML component clip (sandboxed iframe, frame-seek protocol) + three.js",
-          "status": "planned",
-          "progress": 0
+          "status": "done",
+          "progress": 100
         },
         {
           "id": "V2-032",

@@ -24,6 +24,7 @@ describe("v2 persistence", () => {
   it("detects media kinds", () => {
     expect(mediaKindOf({ type: "", name: "a.MP4" })).toBe("video");
     expect(mediaKindOf({ type: "audio/mpeg", name: "x" })).toBe("audio");
+    expect(mediaKindOf({ type: "", name: "x.html" })).toBe("html");
     expect(mediaKindOf({ type: "text/plain", name: "x.txt" })).toBeUndefined();
   });
 

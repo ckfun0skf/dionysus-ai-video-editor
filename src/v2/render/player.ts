@@ -9,6 +9,7 @@ import { compositionDuration, fadeAt, versionOf, type Project } from "../domain/
 import type { BlobStore } from "../ports/storage";
 import { subtitleAt } from "../domain/subtitles";
 import { correctDrift, createClock, type Clock } from "./clock";
+import { HtmlClipHost } from "./htmlClip";
 
 type MediaEl = HTMLVideoElement | HTMLAudioElement | HTMLImageElement;
 
@@ -16,6 +17,7 @@ export class Player {
   private urls = new Map<string, Promise<string | undefined>>();
   private resolvedUrls = new Map<string, string>();
   private pool = new Map<string, MediaEl>();
+  private html = new Map<string, { key: string; host: HtmlClipHost }>();
   private raf = 0;
   private playing = false;
   private startClock = 0;
@@ -95,6 +97,17 @@ export class Player {
     return el;
   }
 
+  /** Sandboxed iframe for an HTML clip, sized to the output canvas so the page renders at full resolution. */
+  private htmlHost(placementId: string, blobKey: string, w: number, h: number): HtmlClipHost {
+    const key = `${blobKey}@${w}x${h}`;
+    const hit = this.html.get(placementId);
+    if (hit?.key === key) return hit.host;
+    hit?.host.dispose();
+    const host = new HtmlClipHost(this.blobs.get(blobKey).then((b) => b?.text()), w, h, () => { if (!this.playing) this.draw(); });
+    this.html.set(placementId, { key, host });
+    return host;
+  }
+
   private release(id: string) {
     const el = this.pool.get(id);
     if (el && "pause" in el) { el.pause(); el.removeAttribute("src"); el.load(); this.gains.get(el)?.disconnect(); this.gains.delete(el); }
@@ -151,6 +164,20 @@ export class Player {
     for (const { track, placement, sourceTicks, mix } of layers) {
       const version = versionOf(this.project, placement.source);
       if (!version || track.hidden) continue;
+      if (placement.clipType === "html") {
+        live.add(placement.id);
+        const host = this.htmlHost(placement.id, version.media.blobKey, canvas?.width ?? 1280, canvas?.height ?? 720);
+        host.request(Math.round(ticksToSeconds(sourceTicks) * 1000) / 1000);
+        const f = host.frame;
+        if (ctx && canvas && f) {
+          const r = placeRect(placement, f.width, f.height, canvas.width, canvas.height, this.time);
+          this.boxes.set(placement.id, r);
+          ctx.save(); ctx.globalAlpha = r.alpha * (mix ?? 1); ctx.translate(r.cx, r.cy); ctx.rotate(r.rot);
+          ctx.drawImage(f, r.sx, r.sy, r.sw, r.sh, -r.w / 2, -r.h / 2, r.w, r.h);
+          ctx.restore();
+        }
+        continue;
+      }
       const src = this.url(version.media.blobKey);
       if (!src) continue;
       live.add(placement.id);
@@ -197,6 +224,7 @@ export class Player {
     if (ctx && canvas && cue) drawSubtitle(ctx, canvas.width, canvas.height, cue.text);
     for (const [id, el] of this.pool) if (!live.has(id) && "pause" in el && !el.paused) el.pause();
     for (const id of [...this.pool.keys()]) if (!findAny(this.project, id)) this.release(id);
+    for (const [id, h] of this.html) if (!findAny(this.project, id)) { h.host.dispose(); this.html.delete(id); }
     this.onTime?.(this.time, this.playing);
   }
 
@@ -207,6 +235,7 @@ export class Player {
       this.draw();
       await Promise.all(this.urls.values());
       await Promise.all([...this.pool.values()].map(settle));
+      await Promise.all([...this.html.values()].map((h) => h.host.settle()));
     }
     this.draw();
   }
@@ -214,6 +243,7 @@ export class Player {
   dispose() {
     this.pause();
     for (const id of [...this.pool.keys()]) this.release(id);
+    this.html.forEach((h) => h.host.dispose()); this.html.clear();
     this.resolvedUrls.forEach((u) => URL.revokeObjectURL(u));
     void this.audioCtx?.close().catch(() => undefined);
   }

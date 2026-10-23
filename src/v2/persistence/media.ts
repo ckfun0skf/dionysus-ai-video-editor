@@ -7,14 +7,17 @@ export function mediaKindOf(file: { type: string; name: string }): MediaKind | u
   if (file.type.startsWith("video/")) return "video";
   if (file.type.startsWith("image/")) return "image";
   if (file.type.startsWith("audio/")) return "audio";
+  if (file.type === "text/html") return "html";
   const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
   if (["mp4", "webm", "mov", "m4v"].includes(ext)) return "video";
   if (["png", "jpg", "jpeg", "gif", "webp"].includes(ext)) return "image";
   if (["mp3", "wav", "m4a", "aac", "ogg", "flac"].includes(ext)) return "audio";
+  if (["html", "htm"].includes(ext)) return "html";
   return undefined;
 }
 
 export async function probeMedia(kind: MediaKind, url: string): Promise<{ durationTicks?: number; width?: number; height?: number }> {
+  if (kind === "html") return { width: 1920, height: 1080 }; // renders at the output size; length is set on the timeline
   if (kind === "image") {
     const img = new Image();
     img.src = url;
