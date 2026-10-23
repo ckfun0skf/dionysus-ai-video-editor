@@ -1901,6 +1901,12 @@
           "title": "Text panel (templates, fonts, style, effects, animations) and double-tap inline text editing",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-080",
+          "title": "CodePen-style HTML clip editor (tabs on mobile, split panes on desktop, debounced sandboxed live preview, save as undoable new version)",
+          "status": "done",
+          "progress": 100
         }
       ]
     },
