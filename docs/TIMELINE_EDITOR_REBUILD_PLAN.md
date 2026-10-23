@@ -299,3 +299,9 @@ The pinned-version regression again passed all 298 tests, but TypeScript correct
 - Found that `compositionMigration.ts`'s legacy nested-layer source adapter did not recognize legacy metadata carrying `shotId`, `slotId`, and `shotVersionId`. Such a layer could migrate to `source: { type: "none" }` even though the nested editing adapter already recognizes Shot Slot sources.
 - `sourceForLayer()` now converts those metadata fields into a canonical `CompositionSourceReference` of type `shot`, preserving the explicit version pin. Added regression coverage for a legacy nested Clip Version layer referencing a specific Shot Slot version.
 - Code/test commits: `08ff16b8fde8f232d7731452fd06b8eb14efdac5`, `16df0113ebb3bffd4d6429644759f3edafd8918a`. Verified at `64733f71509273065fef23821728c3da8ce49a4`, [CI run 39882323664](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39882323664): 26 test files / 299 tests, TypeScript/build passed, audit 0. Issue #110's nested Shot Slot migration checkbox is checked; this docs sync needs fresh exact-head CI.
+
+## Reconciliation follow-up — preserve canonical pinned child trees (2026-10-23)
+
+- Audit found `reconcileEditorSessionComposition()` replaced `nestedCompositions` with a fresh legacy migration result on every compatibility-first Project edit. That target can omit already-embedded pinned child trees, so a metadata-only edit could silently drop them.
+- The reconciliation boundary now preserves existing canonical nested Composition snapshots by ID and appends only newly discovered child IDs from the migrated target. Existing canonical child data wins on an ID collision.
+- Added regression coverage in `src/editorSession.test.ts` for a legacy-domain project rename preserving a pinned older Shot Slot child tree. Code/test commits: `9d05a458c1b86714dc5a586461b9913a23552ac5`, `28c82ed18aae641631def38e2a852d02fc95fb20`. Exact-head CI pending; Issue #110 has an unchecked item until it passes.
