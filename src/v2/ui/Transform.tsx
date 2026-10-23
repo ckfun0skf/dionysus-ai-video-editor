@@ -1,38 +1,70 @@
 import { useRef, type PointerEvent as RPE } from "react";
 import { cmd, type Engine } from "../engine";
-import { transformOf, type Placement } from "../domain";
+import { evalKeys, transformOf, ticksToSeconds, secondsToTicks, type KeyframeProp, type Placement } from "../domain";
 import type { Placed } from "../render";
 
 type Patch = Parameters<typeof cmd.setTransform>[1];
+const KEYED: KeyframeProp[] = ["x", "y", "scale", "rotation", "opacity"];
+
+/** Transform value at absolute time (keyframes applied, fades not). */
+export function valuesAt(p: Placement, time: number) {
+  const t = transformOf(p);
+  for (const k of KEYED) { const v = evalKeys(p.keyframes?.[k], time - p.startTicks); if (v !== undefined) t[k] = v; }
+  return t;
+}
+
+/** Route a patch: keyframed props get a key at the playhead, the rest go to the static transform. */
+export function applyPatch(engine: Engine, p: Placement, time: number, patch: Patch) {
+  if (patch === null) { engine.dispatch(cmd.setTransform(p.id, null)); return; }
+  const rest: Exclude<Patch, null> = { ...patch };
+  for (const k of KEYED) {
+    if (patch[k] !== undefined && p.keyframes?.[k]?.length) { engine.dispatch(cmd.setKeyframe(p.id, k, time - p.startTicks, patch[k]!)); delete rest[k]; }
+  }
+  if (Object.keys(rest).length) engine.dispatch(cmd.setTransform(p.id, rest));
+}
 
 /** Slider inspector for a visual clip's transform. Each drag is one undo step. */
-export function TransformInspector({ engine, placement }: { engine: Engine; placement: Placement }) {
-  const t = transformOf(placement);
-  const set = (patch: Patch) => engine.dispatch(cmd.setTransform(placement.id, patch));
-  const row = (label: string, value: number, min: number, max: number, step: number, fmt: (v: number) => string, patch: (v: number) => Patch) => (
+export function TransformInspector({ engine, placement, time }: { engine: Engine; placement: Placement; time: number }) {
+  const t = valuesAt(placement, time);
+  const offset = time - placement.startTicks;
+  const inside = offset >= 0 && offset <= placement.durationTicks;
+  const set = (patch: Patch) => applyPatch(engine, placement, time, patch);
+  const row = (label: string, value: number, min: number, max: number, step: number, fmt: (v: number) => string, patch: (v: number) => Patch, prop?: KeyframeProp) => {
+    const keys = prop ? placement.keyframes?.[prop] : undefined;
+    const onKey = !!keys?.some((k) => Math.abs(k.t - offset) <= 600);
+    return (
     <label className="v2-insp-row" key={label}>
       <span>{label}</span>
       <input type="range" min={min} max={max} step={step} value={value} aria-label={label}
         onPointerDown={() => engine.beginGesture()} onPointerUp={() => engine.endGesture()} onBlur={() => engine.endGesture()}
         onChange={(e) => set(patch(Number(e.target.value)))} />
       <output>{fmt(value)}</output>
+      {prop ? <button type="button" className={`v2-kf ${onKey ? "is-on" : keys?.length ? "is-keyed" : ""}`} disabled={!inside} aria-pressed={onKey}
+        title={onKey ? `Remove ${label} keyframe at playhead` : `Add ${label} keyframe at playhead`} aria-label={`${label} keyframe`}
+        onClick={(e) => { e.preventDefault(); engine.dispatch(cmd.setKeyframe(placement.id, prop, offset, onKey ? null : value)); }}>◆</button> : <span />}
     </label>
-  );
+    );
+  };
   const pct = (v: number) => `${Math.round(v * 100)}%`;
+  const maxFade = Math.min(10, ticksToSeconds(placement.durationTicks));
+  const fade = (label: string, ticks: number | undefined, key: "in" | "out") => row(label, ticksToSeconds(ticks ?? 0), 0, maxFade, 0.05, (v) => `${v.toFixed(1)}s`, (v) => { engine.dispatch(cmd.setFades(placement.id, { [key]: secondsToTicks(v) })); return {}; });
+  const fades = <>{fade("Fade in", placement.fadeInTicks, "in")}{fade("Fade out", placement.fadeOutTicks, "out")}</>;
+  if (placement.clipType === "audio") return <section className="v2-inspector" aria-label="Fades"><div className="v2-panel-head"><strong>Fades</strong></div>{fades}</section>;
   return (
     <section className="v2-inspector" aria-label="Transform">
       <div className="v2-panel-head"><strong>Transform</strong>
         <button className="v2-btn" title="Reset position, scale, rotation, opacity and crop" disabled={!placement.transform} onClick={() => set(null)}>Reset</button>
       </div>
-      {row("Position X", t.x, -1, 1, 0.005, pct, (x) => ({ x }))}
-      {row("Position Y", t.y, -1, 1, 0.005, pct, (y) => ({ y }))}
-      {row("Scale", t.scale, 0.05, 4, 0.01, pct, (scale) => ({ scale }))}
-      {row("Rotation", t.rotation, -180, 180, 1, (v) => `${Math.round(v)}°`, (rotation) => ({ rotation }))}
-      {row("Opacity", t.opacity, 0, 1, 0.01, pct, (opacity) => ({ opacity }))}
+      {row("Position X", t.x, -1, 1, 0.005, pct, (x) => ({ x }), "x")}
+      {row("Position Y", t.y, -1, 1, 0.005, pct, (y) => ({ y }), "y")}
+      {row("Scale", t.scale, 0.05, 4, 0.01, pct, (scale) => ({ scale }), "scale")}
+      {row("Rotation", t.rotation, -180, 180, 1, (v) => `${Math.round(v)}°`, (rotation) => ({ rotation }), "rotation")}
+      {row("Opacity", t.opacity, 0, 1, 0.01, pct, (opacity) => ({ opacity }), "opacity")}
       {row("Crop left", t.crop.l, 0, 0.9, 0.005, pct, (l) => ({ crop: { l } }))}
       {row("Crop right", t.crop.r, 0, 0.9, 0.005, pct, (r) => ({ crop: { r } }))}
       {row("Crop top", t.crop.t, 0, 0.9, 0.005, pct, (v) => ({ crop: { t: v } }))}
       {row("Crop bottom", t.crop.b, 0, 0.9, 0.005, pct, (b) => ({ crop: { b } }))}
+      {fades}
     </section>
   );
 }
@@ -41,8 +73,8 @@ export function TransformInspector({ engine, placement }: { engine: Engine; plac
  * On-canvas handles over the selected clip: drag the box to move, a corner to scale, the top knob to rotate.
  * `box` is in canvas pixels; `canvas` gives the CSS scale. One gesture = one undo step.
  */
-export function TransformHandles({ engine, placement, box, canvas }: { engine: Engine; placement: Placement; box: Placed; canvas: HTMLCanvasElement }) {
-  const drag = useRef<{ mode: "move" | "scale" | "rotate"; x0: number; y0: number; t0: ReturnType<typeof transformOf>; cx: number; cy: number }>();
+export function TransformHandles({ engine, placement, box, canvas, time }: { engine: Engine; placement: Placement; box: Placed; canvas: HTMLCanvasElement; time: number }) {
+  const drag = useRef<{ mode: "move" | "scale" | "rotate"; x0: number; y0: number; t0: ReturnType<typeof valuesAt>; cx: number; cy: number }>();
   const rect = canvas.getBoundingClientRect();
   const parent = canvas.parentElement!.getBoundingClientRect();
   const k = rect.width / canvas.width || 1;
@@ -54,7 +86,7 @@ export function TransformHandles({ engine, placement, box, canvas }: { engine: E
     e.stopPropagation(); e.preventDefault();
     (e.target as Element).setPointerCapture?.(e.pointerId);
     engine.beginGesture();
-    drag.current = { mode, x0: e.clientX, y0: e.clientY, t0: transformOf(placement), cx: rect.left + box.cx * k, cy: rect.top + box.cy * k };
+    drag.current = { mode, x0: e.clientX, y0: e.clientY, t0: valuesAt(placement, time), cx: rect.left + box.cx * k, cy: rect.top + box.cy * k };
   };
   const move = (e: RPE) => {
     const d = drag.current;
@@ -70,7 +102,7 @@ export function TransformHandles({ engine, placement, box, canvas }: { engine: E
       if (e.shiftKey) deg = Math.round(deg / 15) * 15;
       patch = { rotation: deg };
     }
-    engine.dispatch(cmd.setTransform(placement.id, patch));
+    applyPatch(engine, placement, time, patch);
   };
   const end = () => { if (drag.current) { drag.current = undefined; engine.endGesture(); } };
   const handlers = { onPointerMove: move, onPointerUp: end, onPointerCancel: end };

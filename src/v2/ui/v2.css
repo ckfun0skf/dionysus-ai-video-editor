@@ -146,3 +146,13 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 .v2-side .v2-inspector { border-bottom: 1px solid var(--line); }
 .v2-tool select { background: transparent; color: inherit; border: 1px solid var(--line); border-radius: 6px; min-height: 28px; }
 .v2-tool.is-active { color: var(--accent, #4f8cff); background: rgba(79, 140, 255, .12); }
+/* Fades + keyframes (V2-063) */
+.v2-insp-row { grid-template-columns: 76px 1fr 44px 28px; }
+.v2-kf { width: 28px; height: 28px; border: none; background: transparent; color: var(--muted, #888); font-size: 12px; border-radius: 6px; cursor: pointer; }
+.v2-kf::after { content: ""; } .v2-kf:hover:not(:disabled) { background: rgba(255,255,255,.08); }
+.v2-kf.is-keyed { color: #c9a227; } .v2-kf.is-on { color: #ffd23f; text-shadow: 0 0 6px rgba(255,210,63,.6); }
+.v2-kf:disabled { opacity: .3; cursor: default; }
+.v2-fade { position: absolute; top: 0; bottom: 0; pointer-events: none; }
+.v2-fade.in { left: 0; background: linear-gradient(to bottom right, rgba(0,0,0,.55) 50%, transparent 50%); }
+.v2-fade.out { right: 0; background: linear-gradient(to bottom left, rgba(0,0,0,.55) 50%, transparent 50%); }
+.v2-kf-dot { position: absolute; bottom: 3px; width: 8px; height: 8px; margin-left: -4px; background: #ffd23f; transform: rotate(45deg); pointer-events: none; }

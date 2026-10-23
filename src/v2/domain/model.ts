@@ -51,6 +51,44 @@ export interface Placement {
   reverse?: boolean;
   /** Freeze frame: holds the single source frame at sourceInTicks for the whole duration. */
   freeze?: boolean;
+  /** Fade in/out length in ticks: ramps opacity (visual) and volume (audio) from/to 0. */
+  fadeInTicks?: number;
+  fadeOutTicks?: number;
+  /** Per-property keyframes; `t` is ticks from the clip start. Linear between keys, held outside. */
+  keyframes?: Partial<Record<KeyframeProp, Keyframe[]>>;
+}
+
+export type KeyframeProp = "x" | "y" | "scale" | "rotation" | "opacity";
+export interface Keyframe { t: number; v: number }
+
+/** Piecewise-linear value of sorted keys at offset `t`; undefined when there are no keys. */
+export function evalKeys(keys: Keyframe[] | undefined, t: number): number | undefined {
+  if (!keys?.length) return undefined;
+  if (t <= keys[0].t) return keys[0].v;
+  for (let i = 1; i < keys.length; i += 1) {
+    const a = keys[i - 1], b = keys[i];
+    if (t <= b.t) return a.v + ((b.v - a.v) * (t - a.t)) / (b.t - a.t || 1);
+  }
+  return keys[keys.length - 1].v;
+}
+
+/** 0..1 fade multiplier at absolute time `t`. */
+export function fadeAt(p: Placement, t: number): number {
+  const o = t - p.startTicks;
+  let g = 1;
+  if (p.fadeInTicks) g = Math.min(g, Math.max(0, o / p.fadeInTicks));
+  if (p.fadeOutTicks) g = Math.min(g, Math.max(0, (p.durationTicks - o) / p.fadeOutTicks));
+  return g;
+}
+
+/** Effective transform at absolute time `t`: static transform overridden by keyframes, opacity × fade. */
+export function transformAt(p: Placement, t: number): Transform {
+  const base = transformOf(p);
+  const o = t - p.startTicks;
+  const out = { ...base };
+  for (const k of ["x", "y", "scale", "rotation", "opacity"] as const) { const v = evalKeys(p.keyframes?.[k], o); if (v !== undefined) out[k] = v; }
+  out.opacity *= fadeAt(p, t);
+  return out;
 }
 
 export const MIN_SPEED = 0.25;
