@@ -1,6 +1,9 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
-import { HTML_RUNTIME, HTML_SANDBOX, HtmlClipHost, isValidFrame, THREE_TEMPLATE, withRuntime } from "./htmlClip";
+import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { resolve } from "node:path";
+import { clipCsp, HTML_RUNTIME, HTML_SANDBOX, HtmlClipHost, isValidFrame, THREE_INTEGRITY, THREE_PATH, THREE_TEMPLATE, threeUrl, withRuntime } from "./htmlClip";
 import { frameWarnings } from "./export/encode";
 import { mediaKindOf } from "../persistence/media";
 import { audioPlan } from "./export/plan";
@@ -9,11 +12,25 @@ import { createProject } from "../domain";
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
 describe("html clips", () => {
-  it("injects the frame runtime after the doctype and before page scripts", () => {
-    const out = withRuntime("<!DOCTYPE html><html><script>x()</script></html>");
-    expect(out.startsWith("<!DOCTYPE html>" + HTML_RUNTIME)).toBe(true);
-    expect(withRuntime("<p>hi</p>")).toBe(HTML_RUNTIME + "<p>hi</p>");
-    expect(THREE_TEMPLATE).toContain("dionysus.onFrame");
+  it("injects CSP, pinned three.js import map and runtime after the doctype, before page content", () => {
+    const three = "https://x.test/app/vendor/three.js";
+    const out = withRuntime("<!DOCTYPE html><html><script>x()</script></html>", three);
+    expect(out.startsWith('<!DOCTYPE html><meta http-equiv="Content-Security-Policy"')).toBe(true);
+    expect(out.indexOf(HTML_RUNTIME)).toBeLessThan(out.indexOf("<html>"));
+    expect(out).toContain(`"integrity":{"${three}":"${THREE_INTEGRITY}"}`);
+    const csp = clipCsp(three);
+    expect(csp).toMatch(/^default-src 'none'/);
+    expect(csp).toContain(`script-src 'unsafe-inline' blob: data: ${three}`);
+    expect(csp).not.toMatch(/https?:\/\/(?!x\.test\/app\/vendor\/three\.js)/);
+    expect(withRuntime('import * as T from "https://unpkg.com/three@0.160.0/build/three.module.js"', three)).toContain('from "three"');
+    expect(THREE_TEMPLATE).toContain('from "three"');
+    expect(THREE_TEMPLATE).not.toContain("unpkg");
+    expect(threeUrl("/dionysus-ai-video-editor/", "https://h.io/dionysus-ai-video-editor/?v2")).toBe(`https://h.io/dionysus-ai-video-editor/${THREE_PATH}`);
+  });
+
+  it("vendored three.js matches its pinned integrity hash", () => {
+    const buf = readFileSync(resolve(__dirname, "../../../public", THREE_PATH));
+    expect(`sha384-${createHash("sha384").update(buf).digest("base64")}`).toBe(THREE_INTEGRITY);
   });
 
   it("recognises .html files and keeps them out of the audio mix", () => {

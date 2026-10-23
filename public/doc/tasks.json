@@ -1859,6 +1859,12 @@
           "title": "Review: validate HTML clip frames; report frame timeouts in the export dialog",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-073",
+          "title": "Review: CSP in HTML clip srcdoc; self-hosted three.js pinned by SRI",
+          "status": "done",
+          "progress": 100
         }
       ]
     },
