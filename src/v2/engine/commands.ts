@@ -188,3 +188,28 @@ export const duplicateAbove = (id: string, newIdValue: string, dx = 0.02, dy = 0
     return { ...c, tracks: [...c.tracks.slice(0, ti), track, ...c.tracks.slice(ti)] };
   }),
 });
+
+/**
+ * Lay assets end-to-end starting at `startTicks`. Video goes to the main track, or to a new
+ * video track `overlayTrackId` stacked above everything; audio goes to the first audio track.
+ */
+export const addAssetsInSequence = (assetIds: string[], startTicks: number, overlayTrackId?: string): Command => ({
+  label: overlayTrackId ? "Add overlay" : "Add media",
+  apply: (p) => withRoot(p, (c) => {
+    let comp = c;
+    if (overlayTrackId) comp = ops.addTrack(comp, "video", overlayTrackId);
+    let at = Math.max(0, Math.round(startTicks));
+    for (const id of assetIds) {
+      const asset = p.assets[id];
+      const version = asset?.versions.find((v) => v.id === asset.selectedVersionId) ?? asset?.versions[0];
+      if (!asset || !version) throw new Error("asset missing");
+      const kind: TrackKind = trackKindFor(asset.kind);
+      let tid = (kind === "video" ? (overlayTrackId ? comp.tracks.find((t) => t.id === overlayTrackId) : ops.mainTrack(comp)) : comp.tracks.find((t) => t.kind === kind))?.id;
+      if (!tid) { tid = newId("trk"); comp = ops.addTrack(comp, kind, tid); }
+      const pl = placementForAsset(asset, version, at);
+      comp = ops.insertPlacement(comp, tid, pl);
+      at += pl.durationTicks;
+    }
+    return comp;
+  }),
+});

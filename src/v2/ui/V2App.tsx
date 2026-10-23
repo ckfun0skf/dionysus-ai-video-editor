@@ -16,6 +16,8 @@ import { ProjectsDialog } from "./Projects";
 import type { Resolution } from "../render";
 import { addCueAt, downloadSrt, importSrtFile, SubtitleEditor, SubtitleLane } from "./Subtitles";
 import { Ic } from "./Icon";
+import { MediaPicker, type Picked } from "./MediaPicker";
+import { libraryFile } from "./libraryItems";
 import { PanelGrabber, PREVIEW_DEFAULT, Sheet } from "./Sheet";
 
 type Menu = "multi" | "root" | "edit" | "edit-hint" | "audio" | "zoom" | "speed" | "text";
@@ -47,6 +49,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const [hasClip, setHasClip] = useState(false);
   const [pps, setPps] = useState(40);
   const [sheet, setSheet] = useState(false);
+  const [picker, setPicker] = useState<null | "main" | "overlay">(null);
   const [busy, setBusy] = useState(0);
   const [menu, setMenu] = useState<Menu>("root");
   const [res, setRes] = useState<Resolution>("1080p");
@@ -204,6 +207,25 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
         setToast(`${f.name}: ${e instanceof Error ? e.message : "import failed"}`);
       } finally { setBusy((b) => b - 1); }
     }
+  };
+  /** Import picked files + library items, then lay them out from the playhead in one undo step. */
+  const addPicked = async ({ files, library }: Picked, mode: "main" | "overlay") => {
+    setPicker(null);
+    const at = Math.round(player.time);
+    const all = [...files, ...library.map(libraryFile).filter((f): f is File => !!f)];
+    const ids: string[] = [];
+    setBusy((b) => b + all.length);
+    for (const f of all) {
+      try {
+        const asset = await importFile(f, storage.blobs);
+        if (asset && engine.dispatch(cmd.importAsset(asset))) ids.push(asset.id);
+        else if (!asset) setToast(`${f.name}: unsupported file type`);
+      } catch (e) { setToast(`${f.name}: ${e instanceof Error ? e.message : "import failed"}`); } finally { setBusy((b) => b - 1); }
+    }
+    const steps = [];
+    if (ids.length) steps.push(cmd.addAssetsInSequence(ids, at, mode === "overlay" ? newId("trk") : undefined));
+    if (library.some((l) => l.id === "text")) steps.push(cmd.addTextClip(at, {}));
+    if (steps.length) engine.dispatch(steps, mode === "overlay" ? "Add overlay" : "Add media");
   };
   const addToTimeline = (a: Asset) => { engine.dispatch(cmd.addAssetToTimeline(a.id, mobile ? player.time : duration)); if (mobile) setSheet(false); };
 
@@ -439,7 +461,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           </div>
           <PanelGrabber vh={previewVh} onChange={setPreviewVh} />
           <Timeline engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} selectedIds={sel} onToggleSelect={toggleClip} multiMode={multiMode} onSelect={selectClip} peaks={peaks} strips={strips} pps={pps} onZoom={(z) => setPps(clampPps(z))} centered topLane={topLane} ripple={ripple} onTransition={onTransition}
-            thumbs={thumbs} onAddMedia={() => setSheet(true)}
+            thumbs={thumbs} onAddMedia={() => setPicker("main")}
             timeLabel={<><b>{formatTimecode(time, project.settings.fps).slice(0, 5)}</b> / {formatTimecode(duration, project.settings.fps).slice(0, 5)}</>}
             sideColumn={<>
               {firstVideoTrack && <button className="v2-side-btn" onClick={() => engine.dispatch(cmd.toggleTrackMute(firstVideoTrack.id))}><b aria-hidden><Ic g={firstVideoTrack.muted ? "🔇" : "🔊"} /></b><span>{firstVideoTrack.muted ? "Unmute clip audio" : "Mute clip audio"}</span></button>}
@@ -449,6 +471,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
             {activeMenu !== "root" && <button className="v2-tool v2-tool-back" aria-label="Back" onClick={back}>‹</button>}
             {mobileTools[activeMenu]}
           </nav>
+          {picker && <MediaPicker title={picker === "overlay" ? "Add overlay" : "Add media"} onClose={() => setPicker(null)} onAdd={(p) => void addPicked(p, picker)} />}
           {sheet && <Sheet label="Media" onClose={() => setSheet(false)}>{browser}</Sheet>}
           {!sheet && <div hidden>{browser}</div>}
           {cue && <div className="v2-msub"><SubtitleEditor engine={engine} sub={cue} onDelete={delCue} /></div>}
