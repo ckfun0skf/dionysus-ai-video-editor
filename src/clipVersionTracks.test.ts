@@ -316,6 +316,36 @@ describe("nested Clip Version track operations", () => {
     expect(version.composition?.placements.find(item => item.id === "inspector-placement")?.start).toBe(1);
   });
 
+  it("clears stale clip identity when a nested placement changes to a direct asset", () => {
+    const version = addClipVersionLayer(
+      structuredClone(sampleProject.shots[0].slots[0].versions[0]),
+      {
+        id: "source-kind-switch",
+        name: "Nested composition source",
+        kind: "composition",
+        start: 0,
+        duration: 2,
+        assetId: "old-child",
+        childCompositionId: "old-child",
+        clipVersionId: "old-version",
+      } as unknown as import("./types").CompositionLayer,
+    );
+
+    const edited = updateClipVersionLayer(version, "source-kind-switch", {
+      kind: "video",
+      assetId: "new-asset",
+      childCompositionId: undefined,
+      clipVersionId: undefined,
+    });
+    const placement = edited.composition?.placements.find(item => item.id === "source-kind-switch");
+    const layer = edited.layers.find(item => item.id === "source-kind-switch");
+
+    expect(placement?.source).toEqual({ type: "asset", assetId: "new-asset" });
+    expect(layer?.assetId).toBe("new-asset");
+    expect(layer).not.toHaveProperty("childCompositionId");
+    expect(layer).not.toHaveProperty("clipVersionId");
+  });
+
   it("routes inspector edits through Composition validation and clears optional source ranges", () => {
     const base = addClipVersionLayer(
       structuredClone(sampleProject.shots[0].slots[0].versions[0]),
