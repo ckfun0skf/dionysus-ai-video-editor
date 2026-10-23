@@ -1621,8 +1621,8 @@
         {
           "id": "V2-023",
           "title": "Schema 1.0/2.0 one-way importer",
-          "status": "planned",
-          "progress": 0,
+          "status": "done",
+          "progress": 100,
           "acceptance": [
             "Fixture projects import with warnings report"
           ]

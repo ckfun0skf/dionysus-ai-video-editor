@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Player } from "../render";
 import { cmd } from "../engine";
-import { importFile } from "../persistence";
+import { importFile, importLegacy } from "../persistence";
 import { compositionDuration, findPlacement, formatTimecode, secondsToTicks, type Asset } from "../domain";
 import { useEditorBoot, useEngineState, useIsMobile, type EditorContext } from "./useEditor";
 import { Timeline } from "./Timeline";
@@ -79,6 +79,22 @@ function Editor({ engine, storage }: EditorContext) {
       } finally { setBusy((b) => b - 1); }
     }
   };
+  const legacyRef = useRef<HTMLInputElement>(null);
+  const onLegacy = async (f: File | undefined) => {
+    if (!f) return;
+    setBusy((b) => b + 1);
+    try {
+      const out = importLegacy(JSON.parse(await readText(f)));
+      for (const b of out.blobs) await storage.blobs.put(b.key, await (await fetch(b.dataUrl)).blob());
+      await storage.projects.save(out.project);
+      storage.lastProjectId.set(out.project.id);
+      engine.reset(out.project);
+      setToast(`Imported "${out.project.name}" (legacy ${out.sourceVersion})${out.warnings.length ? ` with ${out.warnings.length} warning(s) — see console` : ""}.`);
+      if (out.warnings.length) console.warn("Legacy import warnings:\n" + out.warnings.join("\n"));
+    } catch (e) {
+      setToast(`${f.name}: ${e instanceof Error ? e.message : "legacy import failed"}`);
+    } finally { setBusy((b) => b - 1); }
+  };
   const addToTimeline = (a: Asset) => { engine.dispatch(cmd.addAssetToTimeline(a.id, mobile ? player.time : duration)); if (mobile) setSheet(false); };
 
   const browser = (
@@ -86,6 +102,7 @@ function Editor({ engine, storage }: EditorContext) {
       <div className="v2-panel-head">
         <strong>Media</strong>
         <button className="v2-btn primary" onClick={() => fileRef.current?.click()}>＋ Import</button>
+        <button className="v2-btn" title="Open a project saved by the legacy Dionysus editor (.json)" onClick={() => legacyRef.current?.click()}>Import legacy project</button>
         {mobile && <button className="v2-btn" onClick={() => setSheet(false)}>Done</button>}
       </div>
       {busy > 0 && <p className="v2-hint">Importing {busy}…</p>}
@@ -101,6 +118,7 @@ function Editor({ engine, storage }: EditorContext) {
           </li>
         ))}
       </ul>
+      <input ref={legacyRef} data-testid="legacy-input" type="file" hidden accept="application/json,.json,.dionysus" onChange={(e) => { void onLegacy(e.target.files?.[0]); e.target.value = ""; }} />
       <input ref={fileRef} type="file" hidden multiple accept="video/*,image/*,audio/*" onChange={(e) => { void onFiles(e.target.files); e.target.value = ""; }} />
     </section>
   );
@@ -256,4 +274,10 @@ function AssetThumb({ asset, engineBlobs }: { asset: Asset; engineBlobs: EditorC
   }, [key, asset.kind, engineBlobs]);
   if (asset.kind === "audio" || !url) return <span className="v2-thumb">{asset.kind === "audio" ? "♫" : "…"}</span>;
   return asset.kind === "image" ? <img className="v2-thumb" src={url} alt="" /> : <video className="v2-thumb" src={`${url}#t=0.1`} muted preload="metadata" />;
+}
+
+/** File.text() with a FileReader fallback (older WebViews, jsdom). */
+function readText(f: File): Promise<string> {
+  if (typeof f.text === "function") return f.text();
+  return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = () => rej(r.error); r.readAsText(f); });
 }
