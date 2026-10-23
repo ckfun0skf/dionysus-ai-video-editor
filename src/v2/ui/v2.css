@@ -128,3 +128,19 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 .v2-recovery-actions .v2-btn { min-height: 44px; }
 
 .v2-clip-badge { margin-right: 4px; font-size: 10px; opacity: .85; }
+/* Transform: inspector + on-canvas handles (V2-061) */
+.v2-inspector { padding: 8px; display: flex; flex-direction: column; gap: 2px; min-width: 240px; }
+.v2-insp-row { display: grid; grid-template-columns: 84px 1fr 44px; align-items: center; gap: 6px; min-height: 32px; font-size: 12px; color: var(--muted, #aaa); }
+.v2-insp-row input { width: 100%; accent-color: var(--accent, #4f8cff); }
+.v2-insp-row output { text-align: right; font-variant-numeric: tabular-nums; color: var(--text, #eee); }
+.v2-xform { position: absolute; border: 1.5px solid var(--accent, #4f8cff); cursor: move; touch-action: none; box-sizing: border-box; transform-origin: center; }
+.v2-xform:hover { background: rgba(79, 140, 255, .08); }
+.v2-xform-h { position: absolute; width: 14px; height: 14px; background: #fff; border: 2px solid var(--accent, #4f8cff); border-radius: 50%; touch-action: none; }
+.v2-xform-h::after, .v2-xform-rot::after { content: ""; position: absolute; inset: -15px; }
+.v2-xform-h.nw { left: -8px; top: -8px; cursor: nwse-resize; } .v2-xform-h.se { right: -8px; bottom: -8px; cursor: nwse-resize; }
+.v2-xform-h.ne { right: -8px; top: -8px; cursor: nesw-resize; } .v2-xform-h.sw { left: -8px; bottom: -8px; cursor: nesw-resize; }
+.v2-xform-rot { position: absolute; left: 50%; top: -30px; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%; background: var(--accent, #4f8cff); cursor: grab; touch-action: none; }
+.v2-msheet-insp { max-height: 40dvh; overflow-y: auto; }
+.v2-side { grid-area: browser; display: flex; flex-direction: column; min-height: 0; overflow: auto; border-right: 1px solid var(--line); background: var(--panel); }
+.v2-side .v2-browser { border-right: none; overflow: visible; }
+.v2-side .v2-inspector { border-bottom: 1px solid var(--line); }

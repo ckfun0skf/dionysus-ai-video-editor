@@ -3,7 +3,7 @@
  * Video/audio elements are slaved to the timeline time with drift correction; audio is routed through a
  * per-element GainNode when an AudioContext is available.
  */
-import { activeAt, fitRect } from "./frame";
+import { activeAt, placeRect, type Placed } from "./frame";
 import { TICKS_PER_SECOND, ticksToSeconds } from "../domain/time";
 import { compositionDuration, versionOf, type Project } from "../domain/model";
 import type { BlobStore } from "../ports/storage";
@@ -23,6 +23,8 @@ export class Player {
   private gains = new Map<HTMLMediaElement, GainNode>();
   private startTicks = 0;
   time = 0;
+  /** Canvas-space placement of each visual clip in the last drawn frame (for on-canvas handles). */
+  boxes = new Map<string, Placed>();
   project: Project;
   canvas?: HTMLCanvasElement;
   onTime?: (t: number, playing: boolean) => void;
@@ -141,6 +143,7 @@ export class Player {
     const comp = this.project.compositions[this.project.rootCompositionId];
     const layers = activeAt(comp, this.time);
     const live = new Set<string>();
+    this.boxes = new Map();
     const canvas = this.canvas;
     const ctx = canvas?.getContext("2d");
     if (canvas && ctx) { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, canvas.width, canvas.height); }
@@ -173,8 +176,11 @@ export class Player {
         const w = el instanceof HTMLVideoElement ? el.videoWidth : (el as HTMLImageElement).naturalWidth;
         const h = el instanceof HTMLVideoElement ? el.videoHeight : (el as HTMLImageElement).naturalHeight;
         if (w && h && (!(el instanceof HTMLVideoElement) || el.readyState >= 2)) {
-          const r = fitRect(w, h, canvas.width, canvas.height);
-          ctx.drawImage(el as CanvasImageSource, r.x, r.y, r.w, r.h);
+          const r = placeRect(placement, w, h, canvas.width, canvas.height);
+          this.boxes.set(placement.id, r);
+          ctx.save(); ctx.globalAlpha = r.alpha; ctx.translate(r.cx, r.cy); ctx.rotate(r.rot);
+          ctx.drawImage(el as CanvasImageSource, r.sx, r.sy, r.sw, r.sh, -r.w / 2, -r.h / 2, r.w, r.h);
+          ctx.restore();
         }
       }
     }

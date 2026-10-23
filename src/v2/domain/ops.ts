@@ -1,5 +1,5 @@
 /** Pure placement operations. All return new Composition objects (no mutation). */
-import { findPlacement, newId, trackKindFor, type Composition, type Placement, type Track } from "./model";
+import { clampTransform, findPlacement, newId, trackKindFor, transformOf, type Transform, type Composition, type Placement, type Track } from "./model";
 
 export const MIN_DURATION_TICKS = 1200; // 10 ms
 
@@ -147,4 +147,14 @@ export function extractAudio(comp: Composition, placementId: string, mode: "extr
 
 export function setLinkedAudioMuted(comp: Composition, placementId: string, muted: boolean): Composition {
   return { ...comp, tracks: comp.tracks.map((t) => ({ ...t, placements: t.placements.map((p) => (p.id === placementId && p.clipType === "video" ? { ...p, linkedAudio: { ...p.linkedAudio, muted } } : p)) })) };
+}
+
+/** Merge a partial transform into a visual placement (clamped). Audio placements are unchanged. */
+export function setTransform(comp: Composition, placementId: string, patch: Partial<Omit<Transform, "crop">> & { crop?: Partial<Transform["crop"]> } | null): Composition {
+  return { ...comp, tracks: comp.tracks.map((t) => ({ ...t, placements: t.placements.map((p) => {
+    if (p.id !== placementId || p.clipType === "audio") return p;
+    if (patch === null) { const { transform: _t, ...rest } = p; void _t; return rest; }
+    const cur = transformOf(p);
+    return { ...p, transform: clampTransform({ ...cur, ...patch, crop: { ...cur.crop, ...patch.crop } }) };
+  }) })) };
 }

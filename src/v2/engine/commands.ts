@@ -93,4 +93,9 @@ export const setLinkedAudioMuted = (id: string, muted: boolean): Command => ({
   label: muted ? "Mute clip audio" : "Restore clip audio",
   apply: (p) => withRoot(p, (c) => ops.setLinkedAudioMuted(c, id, muted)),
 });
+export const setTransform = (id: string, patch: Parameters<typeof ops.setTransform>[2]): Command => ({
+  label: patch === null ? "Reset transform" : "Transform",
+  coalesceKey: patch === null ? undefined : `transform:${id}`,
+  apply: (p) => withRoot(p, (c) => ops.setTransform(c, id, patch)),
+});
 export const renameProject = (name: string): Command => ({ label: "Rename project", coalesceKey: "rename", apply: (p) => ({ ...p, name }) });
