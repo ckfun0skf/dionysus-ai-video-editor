@@ -1943,6 +1943,12 @@
           "title": "HTML editor: libraries multi-select combobox (dropdown / bottom sheet, removable chips)",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-087",
+          "title": "Mobile: full-screen media picker (Device / Library tabs, multi-select Add to main track at playhead)",
+          "status": "done",
+          "progress": 100
         }
       ]
     },
