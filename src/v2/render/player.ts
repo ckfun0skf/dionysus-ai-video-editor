@@ -160,12 +160,19 @@ export class Player {
         const vol = Math.max(0, placement.volume ?? 1);
         const gain = this.gainFor(el);
         if (gain) { gain.gain.value = vol; el.volume = 1; } else el.volume = Math.min(1, vol);
-        if (this.playing) {
-          if (el.paused) { el.currentTime = target; el.playbackRate = 1; void el.play().catch(() => undefined); }
+        // Reverse and freeze cannot use native playback: hold the element paused and seek it per frame.
+        const scrub = !!placement.reverse || !!placement.freeze;
+        if (scrub) el.muted = true;
+        const speed = placement.speed ?? 1;
+        if (this.playing && scrub) {
+          if (!el.paused) el.pause();
+          if (Math.abs(el.currentTime - target) > 0.04) el.currentTime = target;
+        } else if (this.playing) {
+          if (el.paused) { el.currentTime = target; el.playbackRate = speed; void el.play().catch(() => undefined); }
           else {
             const fix = correctDrift(el.currentTime, target);
             if (fix.seek !== undefined) el.currentTime = fix.seek;
-            if (el.playbackRate !== fix.rate) el.playbackRate = fix.rate;
+            if (el.playbackRate !== fix.rate * speed) el.playbackRate = fix.rate * speed;
           }
         } else {
           if (!el.paused) el.pause();

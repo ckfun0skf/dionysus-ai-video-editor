@@ -1,5 +1,5 @@
 /** Pure placement operations. All return new Composition objects (no mutation). */
-import { clampTransform, findPlacement, newId, trackKindFor, transformOf, type Transform, type Composition, type Placement, type Track } from "./model";
+import { clampTransform, MAX_SPEED, MIN_SPEED, sourceAt, findPlacement, newId, trackKindFor, transformOf, type Transform, type Composition, type Placement, type Track } from "./model";
 
 export const MIN_DURATION_TICKS = 1200; // 10 ms
 
@@ -74,17 +74,23 @@ export function trimPlacement(comp: Composition, placementId: string, edge: "lef
   const others = found.track.placements.filter((o) => o.id !== p.id);
   const end = p.startTicks + p.durationTicks;
   let updated: Placement;
+  // Freeze frames and images hold one frame: no source bounds, sourceIn preserved (images use 0).
+  const unbounded = maxSourceTicks === undefined || !!p.freeze;
+  const s = p.speed ?? 1, rev = !!p.reverse;
+  const spanEnd = p.sourceInTicks + p.durationTicks * s; // source end of the used span
   if (edge === "left") {
     const prevEnd = Math.max(0, ...others.filter((o) => o.startTicks + o.durationTicks <= p.startTicks).map((o) => o.startTicks + o.durationTicks));
-    let start = Math.min(Math.max(toTicks, prevEnd, p.startTicks - p.sourceInTicks), end - MIN_DURATION_TICKS);
-    if (maxSourceTicks === undefined) start = Math.min(Math.max(toTicks, prevEnd), end - MIN_DURATION_TICKS);
+    const srcRoom = unbounded ? Infinity : rev ? (maxSourceTicks! - spanEnd) / s : p.sourceInTicks / s;
+    const start = Math.min(Math.max(toTicks, prevEnd, Math.ceil(p.startTicks - srcRoom)), end - MIN_DURATION_TICKS);
     const delta = start - p.startTicks;
-    updated = { ...p, startTicks: start, durationTicks: end - start, sourceInTicks: maxSourceTicks === undefined ? 0 : p.sourceInTicks + delta };
+    const sourceInTicks = p.clipType === "image" ? 0 : unbounded || rev ? p.sourceInTicks : Math.max(0, p.sourceInTicks + Math.round(delta * s));
+    updated = { ...p, startTicks: start, durationTicks: end - start, sourceInTicks };
   } else {
     const nextStart = Math.min(Infinity, ...others.filter((o) => o.startTicks >= end).map((o) => o.startTicks));
-    const sourceLimit = maxSourceTicks === undefined ? Infinity : p.startTicks + (maxSourceTicks - p.sourceInTicks);
-    const newEnd = Math.max(Math.min(toTicks, nextStart, sourceLimit), p.startTicks + MIN_DURATION_TICKS);
-    updated = { ...p, durationTicks: newEnd - p.startTicks };
+    const srcRoom = unbounded ? Infinity : rev ? p.sourceInTicks / s : (maxSourceTicks! - spanEnd) / s;
+    const newEnd = Math.max(Math.min(toTicks, nextStart, Math.floor(end + srcRoom)), p.startTicks + MIN_DURATION_TICKS);
+    const sourceInTicks = rev && !unbounded ? Math.max(0, p.sourceInTicks - Math.round((newEnd - end) * s)) : p.sourceInTicks;
+    updated = { ...p, durationTicks: newEnd - p.startTicks, sourceInTicks };
   }
   return mapTrack(comp, found.track.id, (t) => ({ ...t, placements: t.placements.map((o) => (o.id === p.id ? updated : o)) }));
 }
@@ -98,7 +104,12 @@ export function splitPlacement(comp: Composition, placementId: string, atTicks: 
   const offset = atTicks - p.startTicks;
   if (offset < MIN_DURATION_TICKS || p.durationTicks - offset < MIN_DURATION_TICKS) return comp;
   const left: Placement = { ...p, durationTicks: offset };
-  const right: Placement = { ...p, id: newIdValue, startTicks: atTicks, durationTicks: p.durationTicks - offset, sourceInTicks: p.clipType === "image" ? 0 : p.sourceInTicks + offset };
+  const s = p.speed ?? 1;
+  const hold = p.clipType === "image" || p.freeze;
+  const cut = Math.round(offset * s), cutRev = Math.round((p.durationTicks - offset) * s);
+  // Reverse: the left part shows the END of the source span, so it gets the later sourceIn.
+  if (p.reverse && !hold) left.sourceInTicks = p.sourceInTicks + cutRev;
+  const right: Placement = { ...p, id: newIdValue, startTicks: atTicks, durationTicks: p.durationTicks - offset, sourceInTicks: p.clipType === "image" ? 0 : hold || p.reverse ? p.sourceInTicks : p.sourceInTicks + cut };
   return mapTrack(comp, found.track.id, (t) => ({ ...t, placements: sortPlacements(t.placements.flatMap((o) => (o.id === p.id ? [left, right] : [o]))) }));
 }
 
@@ -157,4 +168,52 @@ export function setTransform(comp: Composition, placementId: string, patch: Part
     const cur = transformOf(p);
     return { ...p, transform: clampTransform({ ...cur, ...patch, crop: { ...cur.crop, ...patch.crop } }) };
   }) })) };
+}
+
+function mapPlacement(comp: Composition, id: string, fn: (p: Placement, t: Track) => Placement): Composition {
+  return { ...comp, tracks: comp.tracks.map((t) => ({ ...t, placements: t.placements.map((p) => (p.id === id ? fn(p, t) : p)) })) };
+}
+
+/**
+ * Change speed keeping the same source span: duration scales by old/new speed. If the longer clip would
+ * overlap the next clip it is shortened to fit (the tail of the span is dropped).
+ */
+export function setSpeed(comp: Composition, placementId: string, speed: number): Composition {
+  speed = Math.min(MAX_SPEED, Math.max(MIN_SPEED, speed));
+  return mapPlacement(comp, placementId, (p, t) => {
+    if (p.clipType === "image" || p.freeze) return p;
+    const span = p.durationTicks * (p.speed ?? 1);
+    const next = Math.min(Infinity, ...t.placements.filter((o) => o.id !== p.id && o.startTicks >= p.startTicks + p.durationTicks).map((o) => o.startTicks));
+    const durationTicks = Math.max(MIN_DURATION_TICKS, Math.min(Math.round(span / speed), next - p.startTicks));
+    const out: Placement = { ...p, durationTicks, speed };
+    if (speed === 1) delete out.speed;
+    return out;
+  });
+}
+
+export function setReverse(comp: Composition, placementId: string, reverse: boolean): Composition {
+  return mapPlacement(comp, placementId, (p) => {
+    if (p.clipType === "image" || p.freeze) return p;
+    const out: Placement = { ...p, reverse };
+    if (!reverse) delete out.reverse;
+    return out;
+  });
+}
+
+/**
+ * CapCut-style freeze: split the video clip at `atTicks` and insert a held frame of `holdTicks` there,
+ * pushing every later clip on that track right by `holdTicks`.
+ */
+export function freezeFrame(comp: Composition, placementId: string, atTicks: number, holdTicks: number, freezeId = newId("plc"), splitId = newId("plc")): Composition {
+  atTicks = Math.round(atTicks);
+  const found = findPlacement(comp, placementId);
+  if (!found) throw new Error(`Unknown placement ${placementId}`);
+  const p = found.placement;
+  if (p.clipType !== "video" || atTicks < p.startTicks || atTicks >= p.startTicks + p.durationTicks) return comp;
+  const frame = sourceAt(p, atTicks);
+  let next = splitPlacement(comp, placementId, atTicks, splitId);
+  next = mapTrack(next, found.track.id, (t) => ({ ...t, placements: t.placements.map((o) => (o.startTicks >= atTicks ? { ...o, startTicks: o.startTicks + holdTicks } : o)) }));
+  const { speed: _s, reverse: _r, ...base } = p; void _s; void _r;
+  const frozen: Placement = { ...base, id: freezeId, startTicks: atTicks, durationTicks: holdTicks, sourceInTicks: frame, freeze: true, linkedAudio: { muted: true } };
+  return mapTrack(next, found.track.id, (t) => ({ ...t, placements: sortPlacements([...t.placements, frozen]) }));
 }

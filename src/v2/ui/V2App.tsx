@@ -8,7 +8,8 @@ import { Timeline } from "./Timeline";
 import { useThumbs } from "./useThumbs";
 import { TransformHandles, TransformInspector } from "./Transform";
 
-type Menu = "root" | "edit" | "edit-hint" | "audio" | "zoom";
+type Menu = "root" | "edit" | "edit-hint" | "audio" | "zoom" | "speed";
+const SPEEDS = [0.25, 0.5, 1, 1.5, 2, 4];
 
 /** `openStorage` is injectable for tests; production uses IndexedDB (memory fallback). */
 export function V2App({ openStorage }: { openStorage?: () => Promise<EditorContext["storage"]> } = {}) {
@@ -65,6 +66,7 @@ function Editor({ engine, storage, recovery }: EditorContext) {
       else if (e.key === " ") { e.preventDefault(); togglePlay(); }
       else if (e.key.toLowerCase() === "s" && !mod) split();
       else if (e.key === "Delete" || e.key === "Backspace") del();
+      else if (e.key.toLowerCase() === "f" && !mod && selectedId) engine.dispatch(cmd.freezeFrame(selectedId, Math.round(player.time)));
       else if (e.key === "ArrowLeft") seek(player.time - secondsToTicks(1 / project.settings.fps));
       else if (e.key === "ArrowRight") seek(player.time + secondsToTicks(1 / project.settings.fps));
     };
@@ -130,11 +132,26 @@ function Editor({ engine, storage, recovery }: EditorContext) {
       : { icon: "🔇", label: "Mute clip audio", title: "Silence only this clip's own audio", run: () => engine.dispatch(cmd.setLinkedAudioMuted(selected.placement.id, true)) },
   ] : [];
 
+  // Speed / reverse / freeze (video only; freeze clips are held frames so only reverse/speed are hidden).
+  const sp = selected?.placement;
+  const timeActions = sp && sp.clipType === "video" && !sp.freeze ? [
+    { icon: "❄", label: "Freeze", title: "Hold the frame under the playhead for 3 s (F)", run: () => { engine.dispatch(cmd.freezeFrame(sp.id, Math.round(player.time))); setToast("Freeze frame inserted (3 s)"); } },
+    { icon: "⟲", label: sp.reverse ? "Play forward" : "Reverse", title: sp.reverse ? "Play this clip forwards again" : "Play this clip backwards (muted)", run: () => engine.dispatch(cmd.setReverse(sp.id, !sp.reverse)) },
+  ] : [];
+  const speedSelect = sp && sp.clipType !== "image" && !sp.freeze ? (
+    <label className="v2-tool" title="Playback speed — changes the clip's length"><b aria-hidden>⏩</b>
+      <select aria-label="Speed" value={sp.speed ?? 1} onChange={(e) => engine.dispatch(cmd.setSpeed(sp.id, Number(e.target.value)))}>
+        {SPEEDS.map((s) => <option key={s} value={s}>{s}×</option>)}
+      </select>
+    </label>
+  ) : null;
+
   const selectionActions = selected ? (
     <>
       <button className="v2-tool" onClick={split}><b>✂</b><span>Split</span></button>
       <button className="v2-tool" onClick={del}><b>🗑</b><span>Delete</span></button>
-      {linkedAudioActions.map((a) => <button key={a.label} className="v2-tool" title={a.title} onClick={a.run}><b aria-hidden>{a.icon}</b><span>{a.label}</span></button>)}
+      {speedSelect}
+      {[...timeActions, ...linkedAudioActions].map((a) => <button key={a.label} className="v2-tool" title={a.title} onClick={a.run}><b aria-hidden>{a.icon}</b><span>{a.label}</span></button>)}
       {selected.placement.clipType !== "image" && (
         <label className="v2-tool v2-volume"><b>🔊</b>
           <input type="range" min={0} max={1} step={0.05} value={selected.placement.volume ?? 1} aria-label="Volume" onPointerDown={() => engine.beginGesture()} onPointerUp={() => engine.endGesture()} onBlur={() => engine.endGesture()} onChange={(e) => engine.dispatch(cmd.setPlacementVolume(selected.placement.id, Number(e.target.value)))} />
@@ -170,8 +187,8 @@ function Editor({ engine, storage, recovery }: EditorContext) {
     else if (el?.requestFullscreen) void el.requestFullscreen().catch(() => setFs((f) => !f));
     else setFs((f) => !f);
   };
-  const activeMenu: Menu = selected ? "edit" : menu;
-  const back = () => (selected ? setSelectedId(undefined) : setMenu("root"));
+  const activeMenu: Menu = selected ? (menu === "speed" ? "speed" : "edit") : menu === "speed" ? "root" : menu;
+  const back = () => (selected && menu !== "speed" ? setSelectedId(undefined) : setMenu("root"));
   const tool = (icon: string, label: string, onClick: () => void, key = label, title?: string) => (
     <button key={key} className="v2-tool" title={title} onClick={onClick}><b aria-hidden>{icon}</b><span>{label}</span></button>
   );
@@ -188,7 +205,8 @@ function Editor({ engine, storage, recovery }: EditorContext) {
       tool("✂", "Split", split),
       tool("🗑", "Delete", del),
       ...(visual ? [tool("⤧", "Adjust", () => setInspOpen(true), "adjust", "Position, scale, rotation, opacity, crop")] : []),
-      ...linkedAudioActions.map((a) => tool(a.icon, a.label, a.run, a.label, a.title)),
+      ...(speedSelect ? [tool("⏩", `Speed ${sp!.speed ?? 1}×`, () => setMenu("speed"), "speed", "Playback speed")] : []),
+      ...[...timeActions, ...linkedAudioActions].map((a) => tool(a.icon, a.label, a.run, a.label, a.title)),
       ...(selected.placement.clipType !== "image" ? [
         <label key="vol" className="v2-tool v2-volume"><b aria-hidden>🔊</b>
           <input type="range" min={0} max={1} step={0.05} value={selected.placement.volume ?? 1} aria-label="Volume" onPointerDown={() => engine.beginGesture()} onPointerUp={() => engine.endGesture()} onBlur={() => engine.endGesture()} onChange={(e) => engine.dispatch(cmd.setPlacementVolume(selected.placement.id, Number(e.target.value)))} />
@@ -199,6 +217,9 @@ function Editor({ engine, storage, recovery }: EditorContext) {
       tool("♫", "Import audio", () => setSheet(true)),
       tool("▤", "Audio track", () => engine.dispatch(cmd.addTrack("audio"))),
     ],
+    speed: sp ? SPEEDS.map((s) => (
+      <button key={s} className={`v2-tool ${(sp.speed ?? 1) === s ? "is-active" : ""}`} aria-pressed={(sp.speed ?? 1) === s} onClick={() => engine.dispatch(cmd.setSpeed(sp.id, s))}><b>{s}×</b><span>{s === 1 ? "Normal" : s < 1 ? "Slow" : "Fast"}</span></button>
+    )) : [],
     zoom: [
       tool("＋", "Zoom in", () => setPps((p) => Math.min(400, p * 1.5))),
       tool("－", "Zoom out", () => setPps((p) => Math.max(4, p / 1.5))),
@@ -257,7 +278,7 @@ function Editor({ engine, storage, recovery }: EditorContext) {
           <div className="v2-side">{visual && <TransformInspector engine={engine} placement={visual} />}{browser}</div>
           {preview}
           <section className="v2-timeline-panel" aria-label="Timeline">
-            <div className="v2-timeline-toolbar">{selectionActions}<span className="v2-hint">Space play · S split · Del delete · ⌘/Ctrl+Z undo</span></div>
+            <div className="v2-timeline-toolbar">{selectionActions}<span className="v2-hint">Space play · S split · F freeze · Del delete · ⌘/Ctrl+Z undo</span></div>
             <Timeline engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} onSelect={setSelectedId} pps={pps} centered={false} />
           </section>
         </div>

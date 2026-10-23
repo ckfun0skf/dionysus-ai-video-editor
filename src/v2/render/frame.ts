@@ -1,5 +1,5 @@
 /** Pure frame resolution: which placements are active at time t, bottom-to-top. */
-import { transformOf, type Composition, type Placement, type Track } from "../domain/model";
+import { sourceAt, transformOf, type Composition, type Placement, type Track } from "../domain/model";
 
 export interface ActiveLayer { track: Track; placement: Placement; sourceTicks: number }
 
@@ -8,7 +8,7 @@ export function activeAt(comp: Composition, t: number): ActiveLayer[] {
   for (let i = comp.tracks.length - 1; i >= 0; i -= 1) {
     const track = comp.tracks[i];
     for (const p of track.placements) {
-      if (t >= p.startTicks && t < p.startTicks + p.durationTicks) out.push({ track, placement: p, sourceTicks: p.sourceInTicks + (t - p.startTicks) });
+      if (t >= p.startTicks && t < p.startTicks + p.durationTicks) out.push({ track, placement: p, sourceTicks: sourceAt(p, t) });
     }
   }
   return out;
