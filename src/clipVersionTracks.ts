@@ -315,6 +315,12 @@ function compositionLayersFromCompositionDocument(document: CompositionDocument)
     if (placement.sourceOut === undefined) delete output.sourceOut;
     else output.sourceOut = placement.sourceOut;
     const rawOutput = output as unknown as Record<string, unknown>;
+    // The compatibility layer is a projection of the canonical source union. Clear
+    // discriminant-specific legacy fields first so a source-type change cannot leave
+    // stale clip/shot/script references beside the new canonical source.
+    for (const key of ["assetId", "childCompositionId", "clipVersionId", "shotId", "slotId", "shotVersionId", "scriptVersionId"]) {
+      delete rawOutput[key];
+    }
     if (placement.source.type === "asset") rawOutput.assetId = placement.source.assetId;
     else if (placement.source.type === "clip") {
       rawOutput.childCompositionId = placement.source.assetId;
