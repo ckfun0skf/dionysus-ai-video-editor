@@ -1,6 +1,6 @@
 import type { DionysusProject, Shot, TimelineClip } from "./types";
 import type { CompositionDocument, CompositionPlacement } from "./compositionModel";
-import { assertValidCompositionDocument, applyCompositionResizePreview, insertCompositionPlacement, moveCompositionPlacement, moveCompositionPlacementToTrack } from "./compositionCommands";
+import { assertValidCompositionDocument, applyCompositionResizePreview, insertCompositionPlacement, moveCompositionPlacement, moveCompositionPlacementToTrack, trimCompositionPlacement } from "./compositionCommands";
 import { createRootCompositionPlacementForTimelineClip, migrateLegacyProjectToComposition, projectRootCompositionToLegacy } from "./compositionMigration";
 import { getMasterShotStart } from "./masterTimeline";
 import { calculateTimelineDropPosition } from "./timelinePlacement";
@@ -563,6 +563,17 @@ export function applyCanonicalRootTimelineResize(
 ): CompositionDocument {
   const next = ensureCanonicalTimelineClips(project, root, [preview.id, ...preview.trims.map(trim => trim.id)]);
   return applyCompositionResizePreview(next, preview);
+}
+
+/** Promote a legacy-only clip and linked group before applying a canonical trim. */
+export function trimCanonicalRootTimelineClip(
+  project: DionysusProject,
+  root: CompositionDocument,
+  clipId: string,
+  duration: number,
+): CompositionDocument {
+  const next = ensureCanonicalTimelineClips(project, root, [clipId]);
+  return trimCompositionPlacement(next, clipId, duration);
 }
 
 /** Promote a legacy-only timeline clip into the live canonical root before applying a move. */
