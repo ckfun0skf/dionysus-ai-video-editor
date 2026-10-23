@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { sampleProject } from "./sampleProject";
 import { migrateLegacyProjectToComposition, projectRootCompositionToLegacy } from "./compositionMigration";
-import { duplicateCompositionPlacement, moveCompositionPlacement, splitCompositionPlacement, updateCompositionPlacement } from "./compositionCommands";
+import { applyCompositionResizePreview, duplicateCompositionPlacement, moveCompositionPlacement, splitCompositionPlacement, updateCompositionPlacement } from "./compositionCommands";
 import {
   applyCanonicalRootTimelineResize,
   applyProjectTimelineClipResize,
@@ -16,11 +16,39 @@ import {
   getProjectTimelinePlacementItems,
   moveCanonicalRootTimelineClip,
   ensureCanonicalTimelineClips,
+  ensureCanonicalMasterShots,
   trimCanonicalRootTimelineClip,
   moveProjectTimelinePlacement,
 } from "./projectTimelinePlacement";
 
 describe("shared project timeline placement engine", () => {
+  it("promotes a missing Master Shot before canonical start and duration edits", () => {
+    const project = structuredClone(sampleProject);
+    const shot = project.shots[0]!;
+    const root = migrateLegacyProjectToComposition(project).rootComposition;
+    const partialRoot = {
+      ...root,
+      placements: root.placements.filter(placement => placement.id !== shot.id),
+    };
+    expect(partialRoot.placements.some(placement => placement.id === shot.id)).toBe(false);
+
+    const promoted = ensureCanonicalMasterShots(project, partialRoot, [shot.id]);
+    expect(promoted.placements.find(placement => placement.id === shot.id)).toMatchObject({
+      legacyData: { entityType: "master-shot" },
+      duration: shot.duration,
+    });
+
+    const moved = moveCompositionPlacement(promoted, shot.id, 7);
+    const resized = applyCompositionResizePreview(moved, {
+      id: shot.id, start: 7, duration: 8, edge: "right", trims: [],
+    });
+    const projected = projectRootCompositionToLegacy(project, resized);
+    expect(projected.shots.find(item => item.id === shot.id)).toMatchObject({
+      masterStart: 7,
+      duration: 8,
+    });
+  });
+
   it("promotes a legacy-only linked group before canonical split and duplicate", () => {
     const project = structuredClone(sampleProject);
     project.shots = [];
