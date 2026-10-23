@@ -39,30 +39,29 @@ describe("shared project timeline placement engine", () => {
     project.timelineClips = [...(project.timelineClips ?? []), video, audio];
 
     const promoted = ensureCanonicalTimelineClips(project, root, [video.id]);
-    expect(promoted.placements.find(item => item.id === video.id)).toBeDefined();
-    expect(promoted.placements.find(item => item.id === audio.id)).toMatchObject({
-      linkedToPlacementId: video.id, sourceIn: 8, sourceOut: 12,
+    expect(promoted.placements.find(item => item.id === video.id)).toMatchObject({
+      linkedAudioChildren: [{ id: audio.id, sourceIn: 8, sourceOut: 12, volume: 0.4 }],
     });
 
     const split = splitCompositionPlacement(promoted, video.id, 2, {
-      newPlacementIds: { [video.id]: "legacy-split-video-right", [audio.id]: "legacy-split-audio-right" },
+      newPlacementIds: { [video.id]: "legacy-split-video-right" },
     });
     const projected = projectRootCompositionToLegacy(project, split);
     expect(projected.timelineClips?.filter(item => item.kind === "video" && item.id.startsWith("legacy-split-video"))).toHaveLength(2);
     expect(projected.timelineClips?.find(item => item.id === audio.id)).toMatchObject({
       start: 0, duration: 2, sourceIn: 8, sourceOut: 10, linkedVideoClipId: video.id,
     });
-    expect(projected.timelineClips?.find(item => item.id === "legacy-split-audio-right")).toMatchObject({
+    expect(projected.timelineClips?.find(item => item.id === "legacy-split-video-right:audio:legacy-split-audio")).toMatchObject({
       start: 2, duration: 2, sourceIn: 10, sourceOut: 12, linkedVideoClipId: "legacy-split-video-right",
     });
 
     const duplicated = duplicateCompositionPlacement(promoted, video.id, {
-      newPlacementIds: { [video.id]: "legacy-split-video-copy", [audio.id]: "legacy-split-audio-copy" },
+      newPlacementIds: { [video.id]: "legacy-split-video-copy" },
       start: 4,
     });
     const duplicatedProject = projectRootCompositionToLegacy(project, duplicated);
     expect(duplicatedProject.timelineClips?.find(item => item.id === "legacy-split-video-copy")).toMatchObject({ start: 4, duration: 4 });
-    expect(duplicatedProject.timelineClips?.find(item => item.id === "legacy-split-audio-copy")).toMatchObject({
+    expect(duplicatedProject.timelineClips?.find(item => item.id === "legacy-split-video-copy:audio:legacy-split-audio")).toMatchObject({
       start: 4, duration: 4, linkedVideoClipId: "legacy-split-video-copy", volume: 0.4,
     });
   });
