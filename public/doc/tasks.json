@@ -1558,8 +1558,8 @@
         {
           "id": "V2-020",
           "title": "IndexedDB ProjectStore + BlobStore adapters",
-          "status": "planned",
-          "progress": 0,
+          "status": "done",
+          "progress": 100,
           "acceptance": [
             "Contract test suite passes against memory + IDB"
           ]
