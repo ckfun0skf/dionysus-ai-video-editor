@@ -20,6 +20,17 @@ export function withRuntime(html: string): string {
 }
 
 export const HTML_SANDBOX = "allow-scripts";
+/** Largest frame accepted from a clip (8K); anything else is treated as a bad frame. */
+export const MAX_FRAME_SIDE = 8192;
+
+/** A frame from the iframe is untrusted: only a real, non-empty, bounded ImageBitmap may reach drawImage. */
+export function isValidFrame(v: unknown): v is ImageBitmap {
+  if (typeof ImageBitmap === "undefined" || !(v instanceof ImageBitmap)) return false;
+  const { width: w, height: h } = v;
+  return Number.isInteger(w) && Number.isInteger(h) && w > 0 && h > 0 && w <= MAX_FRAME_SIDE && h <= MAX_FRAME_SIDE;
+}
+
+export type FrameIssue = "timeout" | "invalid";
 
 /** One iframe per placement; keeps the last delivered frame and requests at most one at a time. */
 export class HtmlClipHost {
@@ -31,12 +42,17 @@ export class HtmlClipHost {
   private seq = 0;
   private ready = false;
   private waiters = new Set<() => void>();
+  /** Problem with the most recently delivered frame (cleared by a good frame). */
+  issue?: FrameIssue;
   private onMsg = (e: MessageEvent) => {
-    if (e.source !== this.iframe.contentWindow || !e.data || typeof e.data !== "object") return;
-    if (e.data.type === "dionysus:ready") { this.ready = true; this.pump(); return; }
-    if (e.data.type !== "dionysus:frame" || e.data.seq !== this.inflight?.seq) return;
-    const bmp = e.data.bmp as ImageBitmap | null;
-    if (bmp) { this.frame?.close?.(); this.frame = bmp; }
+    if (e.source !== this.iframe.contentWindow) return;
+    const d: unknown = e.data;
+    if (!d || typeof d !== "object") return;
+    const { type, seq, bmp } = d as { type?: unknown; seq?: unknown; bmp?: unknown };
+    if (type === "dionysus:ready") { this.ready = true; this.pump(); return; }
+    if (type !== "dionysus:frame" || seq !== this.inflight?.seq) return;
+    if (isValidFrame(bmp)) { this.frame?.close?.(); this.frame = bmp; this.issue = undefined; }
+    else { this.issue = "invalid"; if (typeof ImageBitmap !== "undefined" && bmp instanceof ImageBitmap) bmp.close(); }
     this.shown = this.inflight?.t; this.inflight = undefined;
     this.onFrame();
     this.pump();
@@ -61,11 +77,14 @@ export class HtmlClipHost {
 
   settled() { return this.want === undefined || (this.shown === this.want && !this.inflight); }
 
-  /** Resolves when the requested frame has arrived, or after `ms` so export never hangs on a broken page. */
-  settle(ms = 4000): Promise<void> {
-    if (this.settled()) return Promise.resolve();
+  /**
+   * Resolves when the requested frame has arrived, or after `ms` so export never hangs on a broken page.
+   * Returns the frame's problem, if any: "timeout" (the stale/blank previous frame is still shown) or "invalid".
+   */
+  settle(ms = 4000): Promise<FrameIssue | undefined> {
+    if (this.settled()) return Promise.resolve(this.issue);
     return new Promise((res) => {
-      const done = () => { clearTimeout(to); this.waiters.delete(done); res(); };
+      const done = () => { clearTimeout(to); this.waiters.delete(done); res(this.settled() ? this.issue : "timeout"); };
       const to = setTimeout(done, ms);
       this.waiters.add(done);
     });

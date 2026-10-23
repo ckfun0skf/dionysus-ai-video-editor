@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
-import { HTML_RUNTIME, HTML_SANDBOX, HtmlClipHost, THREE_TEMPLATE, withRuntime } from "./htmlClip";
+import { HTML_RUNTIME, HTML_SANDBOX, HtmlClipHost, isValidFrame, THREE_TEMPLATE, withRuntime } from "./htmlClip";
+import { frameWarnings } from "./export/encode";
 import { mediaKindOf } from "../persistence/media";
 import { audioPlan } from "./export/plan";
 import { createProject } from "../domain";
@@ -53,5 +54,43 @@ describe("html clips", () => {
     expect(onFrame).toHaveBeenCalledTimes(2);
     host.dispose();
     expect(host.iframe.isConnected).toBe(false);
+  });
+
+  it("rejects hostile frames and reports timeouts instead of hanging", async () => {
+    class FakeBitmap { constructor(public width: number, public height: number) {} close = vi.fn(); }
+    vi.stubGlobal("ImageBitmap", FakeBitmap);
+    try {
+      expect(isValidFrame(new FakeBitmap(640, 360))).toBe(true);
+      for (const bad of [{ width: 10, height: 10 }, new FakeBitmap(0, 10), new FakeBitmap(1e6, 10), new FakeBitmap(NaN, 2), "x", null]) expect(isValidFrame(bad)).toBe(false);
+      const host = new HtmlClipHost(Promise.resolve(""), 64, 64, () => undefined);
+      await tick();
+      const win = host.iframe.contentWindow!;
+      const sent: { seq: number }[] = [];
+      vi.spyOn(win, "postMessage").mockImplementation(((m: { seq: number }) => { sent.push(m); }) as never);
+      const reply = (data: unknown) => window.dispatchEvent(new MessageEvent("message", { data, source: win }));
+      reply({ type: "dionysus:ready" });
+      host.request(0);
+      const good = new FakeBitmap(64, 64);
+      reply({ type: "dionysus:frame", seq: sent[0].seq, bmp: good });
+      expect(host.frame).toBe(good);
+      host.request(1);
+      const huge = new FakeBitmap(99999, 99999);
+      reply({ type: "dionysus:frame", seq: sent[1].seq, bmp: huge });
+      expect(host.frame).toBe(good); // previous good frame kept
+      expect(huge.close).toHaveBeenCalled();
+      expect(await host.settle(10)).toBe("invalid");
+      host.request(2); // page never answers
+      expect(await host.settle(10)).toBe("timeout");
+      host.dispose();
+    } finally { vi.unstubAllGlobals(); }
+  });
+
+  it("summarises frame issues per clip for the export dialog", () => {
+    const p = createProject();
+    p.assets.h = { id: "h", kind: "html", name: "scene.html", versions: [] };
+    p.compositions[p.rootCompositionId].tracks[0].placements.push({ id: "x", startTicks: 0, durationTicks: 1, sourceInTicks: 0, source: { kind: "assetVersion", assetId: "h", versionId: "1" }, clipType: "html" });
+    const w = frameWarnings(p, [{ placementId: "x", t: 240000, issue: "timeout" }, { placementId: "x", t: 120000, issue: "timeout" }, { placementId: "x", t: 360000, issue: "invalid" }]);
+    expect(w).toEqual(["scene.html: 2 frames timed out (4 s), 1 invalid frame, first at 1.00 s. Those frames reuse the last good image (or are blank)."]);
+    expect(frameWarnings(p, [])).toEqual([]);
   });
 });

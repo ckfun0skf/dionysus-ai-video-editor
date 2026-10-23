@@ -9,7 +9,7 @@ import { compositionDuration, fadeAt, versionOf, type Project } from "../domain/
 import type { BlobStore } from "../ports/storage";
 import { subtitleAt } from "../domain/subtitles";
 import { correctDrift, createClock, type Clock } from "./clock";
-import { HtmlClipHost } from "./htmlClip";
+import { HtmlClipHost, isValidFrame, type FrameIssue } from "./htmlClip";
 
 type MediaEl = HTMLVideoElement | HTMLAudioElement | HTMLImageElement;
 
@@ -17,6 +17,8 @@ export class Player {
   private urls = new Map<string, Promise<string | undefined>>();
   private resolvedUrls = new Map<string, string>();
   private pool = new Map<string, MediaEl>();
+  /** HTML clip frames that timed out or were rejected during renderAt (export reports these). */
+  frameIssues: { placementId: string; t: number; issue: FrameIssue }[] = [];
   private html = new Map<string, { key: string; host: HtmlClipHost }>();
   private raf = 0;
   private playing = false;
@@ -169,12 +171,14 @@ export class Player {
         const host = this.htmlHost(placement.id, version.media.blobKey, canvas?.width ?? 1280, canvas?.height ?? 720);
         host.request(Math.round(ticksToSeconds(sourceTicks) * 1000) / 1000);
         const f = host.frame;
-        if (ctx && canvas && f) {
+        if (ctx && canvas && isValidFrame(f)) {
           const r = placeRect(placement, f.width, f.height, canvas.width, canvas.height, this.time);
           this.boxes.set(placement.id, r);
-          ctx.save(); ctx.globalAlpha = r.alpha * (mix ?? 1); ctx.translate(r.cx, r.cy); ctx.rotate(r.rot);
-          ctx.drawImage(f, r.sx, r.sy, r.sw, r.sh, -r.w / 2, -r.h / 2, r.w, r.h);
-          ctx.restore();
+          ctx.save();
+          try { // a detached/closed bitmap must not throw out of draw() and stall preview or export
+            ctx.globalAlpha = r.alpha * (mix ?? 1); ctx.translate(r.cx, r.cy); ctx.rotate(r.rot);
+            ctx.drawImage(f, r.sx, r.sy, r.sw, r.sh, -r.w / 2, -r.h / 2, r.w, r.h);
+          } catch { host.issue = "invalid"; } finally { ctx.restore(); }
         }
         continue;
       }
@@ -238,6 +242,13 @@ export class Player {
       await Promise.all([...this.html.values()].map((h) => h.host.settle()));
     }
     this.draw();
+    const comp = this.project.compositions[this.project.rootCompositionId];
+    const live = new Set(activeAt(comp, this.time).map((l) => l.placement.id));
+    for (const [id, h] of this.html) {
+      if (!live.has(id)) continue;
+      const issue: FrameIssue | undefined = !h.host.settled() ? "timeout" : h.host.issue;
+      if (issue) this.frameIssues.push({ placementId: id, t: this.time, issue });
+    }
   }
 
   dispose() {

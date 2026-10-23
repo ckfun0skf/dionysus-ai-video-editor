@@ -209,3 +209,5 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 .v2-trans.has-trans { opacity: 1; background: var(--accent); color: #111; border-color: var(--accent); }
 .v2-trans.is-selected { box-shadow: 0 0 0 3px rgba(90,209,200,.45); }
 .v2-trans-tools { display: inline-flex; align-items: center; gap: 2px; padding: 0 6px; border-right: 1px solid var(--line); }
+.v2-warn { margin: 8px 0; padding: 8px 10px; border: 1px solid #b8862b; border-radius: 8px; background: rgba(184,134,43,.12); color: #f0c674; font-size: 13px; }
+.v2-warn ul { margin: 4px 0 0; padding-left: 18px; color: var(--text); }
