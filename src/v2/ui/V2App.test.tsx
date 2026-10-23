@@ -98,4 +98,19 @@ describe("V2App", () => {
     await act(async () => { (el.querySelector('[aria-label="Undo"]') as HTMLButtonElement).click(); });
     expect(el.querySelectorAll("[data-subtitle-id]").length).toBe(0);
   });
+
+  it("ripple toggle persists and is reflected on Delete", async () => {
+    localStorage.removeItem("v2.ripple");
+    const el = document.createElement("div");
+    document.body.appendChild(el);
+    await act(async () => { createRoot(el).render(<V2App />); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+    const toggle = el.querySelector('button[aria-pressed][title^="Ripple"]') as HTMLButtonElement;
+    expect(toggle.getAttribute("aria-pressed")).toBe("false");
+    await act(async () => { toggle.click(); });
+    expect(toggle.getAttribute("aria-pressed")).toBe("true");
+    expect(localStorage.getItem("v2.ripple")).toBe("1");
+    await act(async () => { window.dispatchEvent(new KeyboardEvent("keydown", { key: "r" })); });
+    expect(toggle.getAttribute("aria-pressed")).toBe("false");
+  });
 });
