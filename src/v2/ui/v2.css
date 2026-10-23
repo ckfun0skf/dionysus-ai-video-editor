@@ -215,3 +215,25 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 .v2-ic { display: inline-block; vertical-align: middle; flex: none; }
 .v2-tool b, .v2-side-btn b { display: flex; justify-content: center; align-items: center; }
 .v2-icon, .v2-play, .v2-mplay { display: inline-flex; align-items: center; justify-content: center; }
+
+/* Bottom sheets + panel grabber (drag to dismiss / resize) */
+@keyframes v2-sheet-in { from { transform: translateY(100%); } to { transform: none; } }
+@keyframes v2-fade-in { from { opacity: 0; } to { opacity: 1; } }
+.v2-sheet-backdrop { animation: v2-fade-in .18s ease-out; }
+.v2-sheet { animation: v2-sheet-in .24s cubic-bezier(.2,.8,.2,1); transition: transform .2s ease-out; touch-action: pan-y; }
+.v2-sheet.is-dragging { transition: none; }
+.v2-grabber { display: flex; width: 100%; height: 24px; align-items: center; justify-content: center; background: none; border: none; cursor: grab; position: sticky; top: 0; z-index: 1; }
+.v2-grabber span, .v2-panel-grabber span { width: 40px; height: 4px; border-radius: 2px; background: #555; }
+.v2-grabber:hover span, .v2-panel-grabber:hover span, .v2-panel-grabber:focus-visible span { background: #888; }
+.v2-panel-grabber { flex: none; height: 16px; display: flex; align-items: center; justify-content: center; background: #121212; cursor: row-resize; touch-action: none; }
+.v2-app.is-mobile .v2-preview { transition: height .2s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .v2-sheet, .v2-sheet-backdrop { animation: none; transition: none; }
+  .v2-app.is-mobile .v2-preview { transition: none; }
+}
+.v2-desktop-grid { position: relative; transition: grid-template-columns .2s ease-out; }
+.v2-desktop-grid.side-closed { grid-template-columns: 0 1fr; }
+.v2-side-toggle { position: absolute; top: 6px; left: 6px; z-index: 5; background: rgba(20,20,24,.85) !important; border-radius: 8px; }
+.v2-desktop-grid:not(.side-closed) .v2-side-toggle { left: auto; right: calc(70% + 6px); }
+.v2-desktop-grid .v2-side { padding-top: 40px; }
+@media (prefers-reduced-motion: reduce) { .v2-desktop-grid { transition: none; } }

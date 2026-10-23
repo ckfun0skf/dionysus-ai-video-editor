@@ -2,7 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   AudioLines, Blend, Check, ClipboardPaste, Code2, Copy, CopyPlus, Diamond, Download, FileAudio, Film, Gauge, ListChecks, Maximize, Menu, Minus,
   Music, Pause, Pencil, Play, Plus, Redo2, Rewind, ArrowLeftToLine, Scissors, SkipBack, SlidersHorizontal, Snowflake, Trash2, TriangleAlert, Type, Undo2,
-  Upload, Volume1, Volume2, VolumeX, X, ZoomIn, ZoomOut, Search,
+  Upload, Volume1, Volume2, VolumeX, X, ZoomIn, ZoomOut, Search, PanelLeftClose, PanelLeftOpen,
 } from "lucide-react";
 
 /**
@@ -14,7 +14,7 @@ export const ICONS: Record<string, LucideIcon> = {
   "📋": ClipboardPaste, "🗑": Trash2, "✓": Check, "⤓": FileAudio, "🔈": Volume1, "🔇": VolumeX, "🔊": Volume2, "❄": Snowflake, "⟲": Rewind,
   "⏩": Gauge, "✂": Scissors, "＋": Plus, "+": Plus, "－": Minus, "▭": Film, "♫": Music, "▤": AudioLines, "⤢": Search, "⤧": SlidersHorizontal,
   "☑": ListChecks, T: Type, "⇪": Upload, "⇩": Download, "⛶": Maximize, "☰": Menu, "◆": Diamond, "⧓": Blend, "⚠": TriangleAlert, "</>": Code2,
-  "zoom-in": ZoomIn, "zoom-out": ZoomOut,
+  "zoom-in": ZoomIn, "panel-close": PanelLeftClose, "panel-open": PanelLeftOpen, "zoom-out": ZoomOut,
 };
 
 export function Ic({ g, size = 20, className }: { g: string; size?: number; className?: string }) {
