@@ -329,7 +329,7 @@ The pinned-version regression again passed all 298 tests, but TypeScript correct
 - Added a deterministic persistence test that writes a v2 envelope containing a canonical root with an embedded pinned nested Composition and provenance, reopens it through `readProjectDocument()`, and asserts the exact child snapshot and pin metadata survive.
 - Code/test head `a2e31ee6615e05e1d250cc307c47d1ec7b77d9ac` passed [exact-head CI run 39938305163](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39938305163): 27 test files / 313 tests, TypeScript/production build passed, npm audit 0 vulnerabilities. Issue #110 checklist item is checked. This is one save/reopen slice, not completion of the full edit/undo/redo/round-trip matrix.
 
-## Pending persistence regression — linked-audio child edit sequence (2026-10-23)
+## Verified persistence regression — linked-audio child edit sequence (2026-10-23)
 
-- Added a deterministic scenario for trim, resize and split of a canonical linked-audio child with a source in-point different from its video owner; the v2 envelope is saved and reopened before assertions.
-- Covers source range, split-child identity and linked owner metadata. Code/test commit `0714f28b93d82091f960b0cd77cd8e21736f3d0a`; exact-head CI remains pending. The broader edit → undo/redo → save/reopen matrix remains open.
+- Deterministic coverage trims, resizes and splits a canonical linked-audio child with a source in-point different from its video owner; the v2 envelope is saved and reopened before assertions.
+- Covers source range, split-child identity and linked owner metadata. Code/test SHA `0714f28b93d82091f960b0cd77cd8e21736f3d0a` passed exact-head CI [run 39948473082](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39948473082): 27 test files / 315 tests, TypeScript/build passed, audit 0 vulnerabilities. Issue #110 subtask checked. The broader edit → undo/redo → save/reopen matrix remains open; the docs-synchronized head needs its own CI.
