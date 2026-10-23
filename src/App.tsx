@@ -1751,14 +1751,15 @@ export default function App() {
     if (!asset || asset.kind !== "clip" || !current) return;
     const nextId = id("clip-version");
     const duplicated = duplicateClipVersionComposition(current, kind => id(kind));
-    const nextVersion: ClipVersion = {
+    const nextDescription = current.description ? "Copy of " + current.name + ": " + current.description : "New version based on " + current.name;
+    const nextVersion: ClipVersion = updateNestedDescription({
       ...duplicated,
       id: nextId,
       name: "Version " + ((asset.clipVersions?.length ?? 0) + 1),
-      description: current.description ? "Copy of " + current.name + ": " + current.description : "New version based on " + current.name,
+      description: nextDescription,
       scriptVersionIds: [...current.scriptVersionIds],
       generationRecords: []
-    };
+    }, nextDescription);
     change(p => ({
       ...p,
       assets: p.assets.map(item => item.id !== assetId || item.kind !== "clip" ? item : {
@@ -1827,8 +1828,9 @@ export default function App() {
     if (!shot || !slot) return;
     const current = slot.versions.find(version => version.id === slot.selectedVersionId) ?? slot.versions[0];
     const nextId = id("version");
+    const nextDescription = current ? (current.description ? "Copy of " + current.name + ": " + current.description : "New version based on " + current.name) : "";
     const nextVersion = current
-      ? { ...duplicateClipVersionComposition(current, kind => id(kind)), id: nextId, name: "Version " + (slot.versions.length + 1), description: current.description ? "Copy of " + current.name + ": " + current.description : "New version based on " + current.name, scriptVersionIds: [...current.scriptVersionIds], generationRecords: [] }
+      ? updateNestedDescription({ ...duplicateClipVersionComposition(current, kind => id(kind)), id: nextId, name: "Version " + (slot.versions.length + 1), description: nextDescription, scriptVersionIds: [...current.scriptVersionIds], generationRecords: [] }, nextDescription)
       : ensureNestedComposition({
           id: nextId,
           name: "Version 1",
