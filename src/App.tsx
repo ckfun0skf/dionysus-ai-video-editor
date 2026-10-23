@@ -1826,7 +1826,17 @@ export default function App() {
     if (!shot || !slot) return;
     const current = slot.versions.find(version => version.id === slot.selectedVersionId) ?? slot.versions[0];
     const nextId = id("version");
-    const nextVersion = current ? { ...duplicateClipVersionComposition(current, kind => id(kind)), id: nextId, name: "Version " + (slot.versions.length + 1), description: current.description ? "Copy of " + current.name + ": " + current.description : "New version based on " + current.name, scriptVersionIds: [...current.scriptVersionIds], generationRecords: [] } : { id: nextId, name: "Version 1", description: "", duration: slot.duration, layers: [], scriptVersionIds: [], generationRecords: [] };
+    const nextVersion = current
+      ? { ...duplicateClipVersionComposition(current, kind => id(kind)), id: nextId, name: "Version " + (slot.versions.length + 1), description: current.description ? "Copy of " + current.name + ": " + current.description : "New version based on " + current.name, scriptVersionIds: [...current.scriptVersionIds], generationRecords: [] }
+      : ensureNestedComposition({
+          id: nextId,
+          name: "Version 1",
+          description: "",
+          duration: slot.duration,
+          layers: [],
+          scriptVersionIds: [],
+          generationRecords: [],
+        }, { width: rootComposition.width, height: rootComposition.height });
     change(p => ({ ...p, shots: p.shots.map(item => item.id !== shotId ? item : { ...item, slots: item.slots.map(s => s.id !== slotId ? s : { ...s, versions: [...s.versions, nextVersion], selectedVersionId: nextId }) }) }));
     setNotice("New version created; the previous versions are preserved.");
     return nextId;
