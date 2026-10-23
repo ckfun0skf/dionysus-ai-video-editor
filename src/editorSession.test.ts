@@ -55,6 +55,27 @@ describe("Editor session transition boundary", () => {
     expect(current.project.shots.find(item => item.id === shot.id)?.title).not.toBe("Renamed from Storyboard");
   });
 
+  it("preserves already-pinned nested Composition trees during legacy-domain reconciliation", () => {
+    const current = makeSession();
+    const pinnedChild = structuredClone(current.composition);
+    pinnedChild.id = "composition:pinned-shot-slot:older-version";
+    pinnedChild.name = "Pinned older Shot Slot version";
+    pinnedChild.nestedCompositions = [];
+    current.composition.nestedCompositions = [pinnedChild];
+    const nextProject = structuredClone(current.project);
+    nextProject.name = "Metadata-only rename";
+
+    const next = commitEditorSessionChange(current, nextProject);
+
+    expect(next.composition.nestedCompositions).toEqual([
+      expect.objectContaining({
+        id: "composition:pinned-shot-slot:older-version",
+        name: "Pinned older Shot Slot version",
+      }),
+    ]);
+    expect(current.composition.nestedCompositions?.[0].id).toBe("composition:pinned-shot-slot:older-version");
+  });
+
   it("commits an explicit canonical root and its Project projection as one immutable session", () => {
     const current = makeSession();
     const nextProject = structuredClone(current.project);
