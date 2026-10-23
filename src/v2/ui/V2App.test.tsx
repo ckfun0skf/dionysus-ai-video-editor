@@ -96,10 +96,14 @@ describe("V2App", () => {
     const file = new File(["1\n00:00:00,000 --> 00:00:01,000\nA\n\n2\n00:00:02,000 --> 00:00:03,000\nB\n"], "s.srt");
     Object.defineProperty(file, "text", { value: async () => "1\n00:00:00,000 --> 00:00:01,000\nA\n\n2\n00:00:02,000 --> 00:00:03,000\nB\n" });
     Object.defineProperty(input, "files", { value: [file], configurable: true });
+    const lanes = el.querySelectorAll(".v2-lane[data-track-id]").length, texts = el.querySelectorAll(".v2-clip.clip-text").length;
     await act(async () => { input.dispatchEvent(new Event("change", { bubbles: true })); await new Promise((r) => setTimeout(r, 20)); });
-    expect(el.querySelectorAll("[data-subtitle-id]").length).toBe(2);
+    // SRT import adds a NEW text layer with one text clip per cue (nothing replaced).
+    expect(el.querySelectorAll(".v2-lane[data-track-id]").length).toBe(lanes + 1);
+    expect(el.querySelectorAll(".v2-clip.clip-text").length).toBe(texts + 2);
     await act(async () => { (el.querySelector('[aria-label="Undo"]') as HTMLButtonElement).click(); });
-    expect(el.querySelectorAll("[data-subtitle-id]").length).toBe(0);
+    expect(el.querySelectorAll(".v2-lane[data-track-id]").length).toBe(lanes);
+    expect(el.querySelectorAll(".v2-clip.clip-text").length).toBe(texts);
   });
 
   it("ripple toggle persists and is reflected on Delete", async () => {

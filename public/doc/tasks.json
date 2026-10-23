@@ -1985,6 +1985,12 @@
           "title": "Mobile group lanes: icon-only buttons in left column, no in-lane labels",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-094",
+          "title": "Layer management: SRT imports as new text layer, per-layer eye/delete with confirm, hidden layers skipped in preview/export",
+          "status": "done",
+          "progress": 100
         }
       ]
     },

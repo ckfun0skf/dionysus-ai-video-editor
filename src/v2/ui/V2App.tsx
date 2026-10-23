@@ -113,7 +113,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const textTools = [
     { icon: "T", label: "Add text", title: "Add a text clip at the playhead (T)", run: addText },
     { icon: "≡", label: "Add subtitle", title: "Add a subtitle cue at the playhead", run: addSubtitle },
-    { icon: "⇪", label: "Import SRT", title: "Replace subtitles with an .srt file", run: () => srtRef.current?.click() },
+    { icon: "⇪", label: "Import SRT", title: "Import an .srt file as a new text layer", run: () => srtRef.current?.click() },
     { icon: "⇩", label: "Export SRT", title: "Download subtitles as .srt", run: exportSrt },
   ];
   const visual = selected && selected.placement.clipType !== "audio" ? selected.placement : undefined;

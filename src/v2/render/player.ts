@@ -193,7 +193,7 @@ export class Player {
       const el = this.element(placement.id, placement.clipType, src);
       if ("pause" in el) {
         const target = ticksToSeconds(sourceTicks);
-        el.muted = !!track.muted || (placement.clipType === "video" && !!placement.linkedAudio?.muted);
+        el.muted = !!track.muted || !!track.hidden || (placement.clipType === "video" && !!placement.linkedAudio?.muted);
         const vol = Math.max(0, placement.volume ?? 1) * fadeAt(placement, this.time);
         const gain = this.gainFor(el);
         if (gain) { gain.gain.value = vol; el.volume = 1; } else el.volume = Math.min(1, vol);

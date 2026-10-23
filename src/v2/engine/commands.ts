@@ -226,3 +226,25 @@ export const reorderMain = (id: string, toIndex: number): Command => ({
   label: "Reorder clips",
   apply: (p) => withRoot(p, (c) => ops.reorderMain(c, id, toIndex)),
 });
+
+export const toggleTrackHidden = (trackId: string): Command => ({
+  label: "Toggle layer visibility",
+  apply: (p) => withRoot(p, (c) => ({ ...c, tracks: c.tracks.map((t) => (t.id === trackId ? { ...t, hidden: !t.hidden || undefined } : t)) })),
+});
+/** Remove a whole layer and all its clips (never the main track). One undo step. */
+export const deleteTrack = (trackId: string): Command => ({
+  label: "Delete layer",
+  apply: (p) => withRoot(p, (c) => ops.deleteLayer(c, trackId)),
+});
+/** SRT import: cues become text clips on a NEW layer at the top of Text & Stickers; existing layers are untouched. */
+export const importSrtLayer = (list: Subtitle[], trackId = newId("trk")): Command => ({
+  label: "Import subtitles",
+  apply: (p) => withRoot(p, (c) => {
+    if (!list.length) return c;
+    let comp = ops.addTrack(c, "text", trackId);
+    const tr = comp.tracks.find((t) => t.id === trackId)!;
+    const placements: Placement[] = list.map((s) => ({ id: newId("plc"), startTicks: s.startTicks, durationTicks: s.durationTicks, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "text", text: textOf({ text: s.text }) }));
+    comp = { ...comp, tracks: comp.tracks.map((t) => (t === tr ? { ...t, name: "Subtitles", placements: [...placements].sort((a, b) => a.startTicks - b.startTicks) } : t)) };
+    return comp;
+  }),
+});

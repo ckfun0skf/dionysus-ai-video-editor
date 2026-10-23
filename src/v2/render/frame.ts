@@ -9,6 +9,7 @@ export function activeAt(comp: Composition, t: number): ActiveLayer[] {
   const out: ActiveLayer[] = [];
   for (let i = comp.tracks.length - 1; i >= 0; i -= 1) {
     const track = comp.tracks[i];
+    if (track.hidden) continue; // hidden layers are skipped in preview and export alike
     const tr = trackTransitions(track).find((x) => t >= x.from && t < x.to);
     if (tr) {
       // Outgoing below, incoming on top; each holds its edge frame outside its own span.

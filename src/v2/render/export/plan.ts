@@ -37,7 +37,7 @@ export function audioPlan(project: Project): AudioSegment[] {
   const s = (t: number) => t / TICKS_PER_SECOND;
   const out: AudioSegment[] = [];
   for (const track of comp.tracks) {
-    if (track.muted) continue;
+    if (track.muted || track.hidden) continue;
     for (const p of track.placements) {
       if (p.clipType === "image" || p.clipType === "html" || p.reverse || p.freeze || (p.clipType === "video" && p.linkedAudio?.muted)) continue;
       const v = versionOf(project, p.source);

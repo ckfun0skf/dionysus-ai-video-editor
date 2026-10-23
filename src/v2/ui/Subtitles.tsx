@@ -14,7 +14,7 @@ export function addCueAt(engine: Engine, time: number): string | undefined {
 
 export async function importSrtFile(engine: Engine, file: File): Promise<number> {
   const list = subs.parseSrt(await file.text());
-  if (list.length) engine.dispatch(cmd.setSubtitles(list));
+  if (list.length) engine.dispatch(cmd.importSrtLayer(list));
   return list.length;
 }
 

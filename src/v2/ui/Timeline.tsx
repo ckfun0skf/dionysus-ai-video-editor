@@ -61,6 +61,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
   const [scrollTop, setScrollTop] = useState(0);
   /** Mobile: the group shown as its real layers (others are collapsed into one lane each). */
   const [expanded, setExpanded] = useState<ops.TrackGroup>();
+  const [confirmDel, setConfirmDel] = useState<string>();
   const [menu, setMenu] = useState<{ id: string; x: number; y: number }>();
   const menuArm = useRef<string>();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -246,6 +247,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
   const mainTop = 30 + (topLane ? TEXT_LANE_H : 0);
   // Align an icon-only button in the fixed left column with each collapsed group lane (CapCut); hidden while a group is expanded.
   const sideRef = useRef<HTMLDivElement>(null);
+  const [layerTops, setLayerTops] = useState<{ id: string; top: number }[]>([]);
   const [laneTops, setLaneTops] = useState<{ group: ops.TrackGroup; top: number; hasClips: boolean }[]>([]);
   useLayoutEffect(() => {
     const side = sideRef.current, sc = scrollRef.current;
@@ -253,6 +255,8 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
     const base = side.getBoundingClientRect().top;
     const next = [...sc.querySelectorAll<HTMLElement>(".v2-lane.is-collapsed")].map((l) => { const r = l.getBoundingClientRect(); return { group: l.dataset.group as ops.TrackGroup, top: Math.round(r.top - base + (r.height - 36) / 2), hasClips: !!l.querySelector(".v2-clip") }; });
     if (JSON.stringify(next) !== JSON.stringify(laneTops)) setLaneTops(next);
+    const rowsNext = expanded ? [...sc.querySelectorAll<HTMLElement>(`.v2-lane[data-track-id][data-group="${expanded}"]`)].map((l) => { const r = l.getBoundingClientRect(); return { id: l.dataset.trackId!, top: Math.round(r.top - base + (r.height - 36) / 2) }; }) : [];
+    if (JSON.stringify(rowsNext) !== JSON.stringify(layerTops)) setLayerTops(rowsNext);
   });
   const step = pps >= 80 ? 1 : pps >= 30 ? 2 : pps >= 12 ? 5 : 10;
   const ticks: number[] = [];
@@ -269,6 +273,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
             <div key={t.id} className={`v2-track-header kind-${t.kind}`}>
               <span>{t.name}</span>
               <button className="v2-icon" title={t.muted ? "Unmute track" : "Mute track"} aria-label={t.muted ? "Unmute track" : "Mute track"} onClick={() => engine.dispatch(cmd.toggleTrackMute(t.id))}><Ic g={t.muted ? "🔇" : "🔊"} /></button>
+              <LayerControls t={t} isMain={t.id === main?.id} onToggle={() => engine.dispatch(cmd.toggleTrackHidden(t.id))} onDelete={() => setConfirmDel(t.id)} />
             </div>
           ))(r))}
         </div>
@@ -280,6 +285,10 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
             <Ic g={GROUP_ICON[group]} size={16} />
           </button>
         ))}
+        {expanded && layerTops.map(({ id, top }) => { const t = comp.tracks.find((x) => x.id === id); return t && (
+          <div key={id} className="v2-layer-side" data-track-id={id} style={{ top }}>
+            <LayerControls t={t} isMain={t.id === main?.id} onToggle={() => engine.dispatch(cmd.toggleTrackHidden(t.id))} onDelete={() => setConfirmDel(t.id)} />
+          </div>); })}
       </div>}
       <div className="v2-scroll" ref={scrollRef} onScroll={onScroll} onPointerMove={onPointerMove} onPointerUp={(e) => onPointerUp(e)} onPointerCancel={() => { cancelPress(); setGesture(undefined); }}>
         <div className="v2-content" style={{ width: contentW + pad + padRight, paddingLeft: pad, paddingRight: padRight }}>
@@ -307,7 +316,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
               ))}
             </div>
           ) : (({ t }) => (
-            <div key={t.id} className={`v2-lane kind-${t.kind} ${t.muted ? "is-muted" : ""}`} data-track-id={t.id} data-group={r.group}
+            <div key={t.id} className={`v2-lane kind-${t.kind} ${t.muted ? "is-muted" : ""} ${t.hidden ? "is-hidden" : ""}`} data-track-id={t.id} data-group={r.group}
               onPointerDown={(e) => { if (e.target === e.currentTarget) { onSelect(undefined); if (centered && r.group !== "main") setExpanded(undefined); if (!centered) scrub(e); } }}
               onContextMenu={(e) => { if (centered) { e.preventDefault(); return; } const id = (e.target as HTMLElement).closest("[data-placement-id]")?.getAttribute("data-placement-id"); if (id) { e.preventDefault(); onSelect(id); setMenu({ id, x: e.clientX, y: e.clientY }); } }}
               onDragOver={(e) => e.preventDefault()} onDrop={(e) => onDrop(e, t.id)}>
@@ -365,6 +374,8 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
       {reorder && main && <ReorderStrip track={main} state={reorder} top={mainTop} root={rootRef.current} thumbs={thumbs}
         onMove={(x) => setReorder((r) => r && !r.closing ? { ...r, x } : r)}
         onDrop={(to) => { setReorder((r) => r && { ...r, closing: true }); setTimeout(() => { if (to !== reorder.from) { engine.dispatch(cmd.reorderMain(reorder.id, to)); haptic(10); } setReorder(undefined); }, REORDER_ANIM_MS); }} />}
+      {confirmDel && (() => { const t = comp.tracks.find((x) => x.id === confirmDel); return t ? <ConfirmDialog title="Delete layer?" message={`Delete this layer and its ${t.placements.length} clip${t.placements.length === 1 ? "" : "s"}? You can undo this.`} confirm="Delete"
+        onCancel={() => setConfirmDel(undefined)} onConfirm={() => { engine.dispatch(cmd.deleteTrack(t.id)); setConfirmDel(undefined); onSelect(undefined); }} /> : null; })()}
       {menu && <LayerMenu comp={comp} id={menu.id} x={menu.x} y={menu.y} onClose={() => setMenu(undefined)} run={(c) => { engine.dispatch(c); setMenu(undefined); }} />}
       {centered && <div className="v2-playhead-fixed" style={{ left: (sideColumn ? SIDE_W : 0) + pad }} aria-hidden />}
       {centered && timeLabel && <div className="v2-time-label">{timeLabel}</div>}
@@ -460,6 +471,30 @@ function ReorderStrip({ track, state, top, root, thumbs, onMove, onDrop }: { tra
           style={{ left, width: SQ, height: SQ, ...(bg ? { backgroundImage: `url(${bg})` } : {}) }} />;
       })}
       {!state.closing && <div className="v2-reorder-slot" style={{ left: rowLeft + to * (SQ + SQ_GAP) - 3 }} />}
+    </div>
+  );
+}
+
+/** Per-layer eye (hide/show) and ✕ (delete, asks first). The main track can be hidden but not deleted. */
+export function LayerControls({ t, isMain, onToggle, onDelete }: { t: Track; isMain: boolean; onToggle: () => void; onDelete: () => void }) {
+  return <span className="v2-layer-ctl">
+    <button className={`v2-icon ${t.hidden ? "is-off" : ""}`} aria-pressed={!!t.hidden} aria-label={t.hidden ? `Show ${t.name}` : `Hide ${t.name}`} title={t.hidden ? "Show layer (included in preview and export)" : "Hide layer (skipped in preview and export)"} onClick={onToggle}><Ic g={t.hidden ? "eye-off" : "eye"} size={16} /></button>
+    {!isMain && <button className="v2-icon v2-danger-icon" aria-label={`Delete ${t.name}`} title="Delete layer and its clips" onClick={onDelete}><Ic g="✕" size={16} /></button>}
+  </span>;
+}
+
+export function ConfirmDialog({ title, message, confirm, onConfirm, onCancel }: { title: string; message: string; confirm: string; onConfirm: () => void; onCancel: () => void }) {
+  useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === "Escape") onCancel(); }; addEventListener("keydown", k); return () => removeEventListener("keydown", k); }, [onCancel]);
+  return (
+    <div className="v2-menu-backdrop v2-confirm-backdrop" onPointerDown={onCancel}>
+      <div className="v2-confirm" role="alertdialog" aria-modal="true" aria-label={title} onPointerDown={(e) => e.stopPropagation()}>
+        <h4>{title}</h4>
+        <p>{message}</p>
+        <div className="v2-confirm-actions">
+          <button className="v2-btn" autoFocus onClick={onCancel}>Cancel</button>
+          <button className="v2-btn danger" onClick={onConfirm}>{confirm}</button>
+        </div>
+      </div>
     </div>
   );
 }

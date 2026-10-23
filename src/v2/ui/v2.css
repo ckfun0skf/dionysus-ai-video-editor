@@ -360,3 +360,20 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 .v2-group-icon::before { content: ""; position: absolute; inset: -4px; } /* 44px touch target */
 .v2-group-icon:hover, .v2-group-icon:focus-visible { color: var(--text); background: #26262b; }
 .v2-side-main { display: flex; gap: 4px; height: 56px; align-items: center; } .v2-side-main .v2-side-btn { height: 52px; }
+/* V2-094 layer controls + confirm dialog */
+.v2-layer-ctl { display: inline-flex; gap: 2px; }
+.v2-layer-ctl .v2-icon { min-width: 32px; min-height: 32px; }
+.v2-layer-ctl .is-off { color: var(--accent); }
+.v2-danger-icon:hover, .v2-danger-icon:focus-visible { color: #ff5c5c; }
+.v2-lane.is-hidden .v2-clip { opacity: .35; filter: grayscale(.6); }
+.v2-confirm-backdrop { background: rgba(0,0,0,.5); display: grid; place-items: center; }
+.v2-confirm { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; width: min(320px, 88vw); color: var(--text); box-shadow: 0 8px 30px rgba(0,0,0,.5); }
+.v2-confirm h4 { margin: 0 0 6px; font-size: 16px; }
+.v2-confirm p { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
+.v2-confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.v2-confirm-actions .v2-btn { min-height: 44px; min-width: 88px; }
+.v2-btn.danger { background: #d93636; color: #fff; border-color: #d93636; }
+.v2-btn.danger:hover { background: #ef4444; }
+
+/* V2-094: per-layer eye / delete in the mobile left column, aligned with each expanded layer row */
+.v2-layer-side { position: absolute; right: 4px; height: 36px; display: flex; gap: 4px; align-items: center; }
