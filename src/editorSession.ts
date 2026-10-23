@@ -78,15 +78,19 @@ export function reconcileEditorSessionComposition(
 
   next = {
     ...next,
-    id: target.id,
+    // A Project migration reconstructs a deterministic legacy root ID and has no snapshot
+    // provenance. Those are not authority over the live canonical document identity/metadata.
+    id: next.id,
     name: target.name,
     duration: target.duration,
     frameRate: target.frameRate,
     width: target.width,
     height: target.height,
-    provenance: target.provenance,
+    provenance: target.provenance ?? next.provenance,
     nestedCompositions,
-    legacyData: structuredClone(target.legacyData),
+    // Keep canonical-only root metadata while allowing the latest Project projection to update
+    // fields it actually owns (for example storyboardConnections).
+    legacyData: { ...(next.legacyData ?? {}), ...(target.legacyData ?? {}) },
     tracks: [...target.tracks].sort((a, b) => a.order - b.order).map((track, order) => ({ ...structuredClone(track), order })),
   };
   assertValidCompositionDocument(next);
