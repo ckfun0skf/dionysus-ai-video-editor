@@ -270,3 +270,7 @@ The startup recovery policy no longer compares timestamps to decide between two 
 ## Verified E2 checkpoint — canonical-only persistence (2026-10-22)
 
 Exact synchronized head `c1009ae456df33815388c5cd62917c7606d396ac` passed [CI run 39866541271](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39866541271): 26 test files / 286 tests, TypeScript/build passed, npm audit 0 vulnerabilities. The App integration-test helper now reads the v2 envelope first. Autosave writes only v2; v1 is a read-only fallback and is not deleted. The preceding CI failure was caused by the stale test helper reading only v1; the updated exact-head run is green. This is not the end of E2: in-memory Project compatibility projection, nested editing and renderer/playback migration remain.
+
+## E1 follow-up — complete root and linked-audio source selector projection (2026-10-23)
+
+Canonical source projection now clears `childCompositionId` and `shotVersionId` as well as asset/shot/slot/clip/script selector fields from both ordinary root placements and linked-audio children before rebuilding fields from the typed source union. Regression tests exercise stale values for both paths. Code/test commits: `da2c294151ae691cb3924bacd6d6b6c92674a26b`, `f2ad672ca5a6a5f1bccaae0a3e68e0946b78b47d`. Exact-head CI for the expanded fix is pending; the previous head passed CI run 39878812633. This closes only the projection-field consistency gap, not DYS-014: legacy-domain reconciliation, non-root/pinned round-trip, and renderer/playback contract migration remain open.
