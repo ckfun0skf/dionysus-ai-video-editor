@@ -1,8 +1,9 @@
 /** Schema 3.0 domain model (MVP subset). Pure data; see docs/v2/MODULE_DESIGN.md §5. */
+import type { TextData } from "./text";
 export const SCHEMA = "dionysus/3.0" as const;
 
 /** `html`: a sandboxed HTML/three.js page rendered per frame from clip time (see render/htmlClip). */
-export type MediaKind = "video" | "image" | "audio" | "html";
+export type MediaKind = "video" | "image" | "audio" | "html" | "text";
 export type TrackKind = "video" | "audio" | "text";
 
 export interface MediaRef {
@@ -59,7 +60,14 @@ export interface Placement {
   keyframes?: Partial<Record<KeyframeProp, Keyframe[]>>;
   /** Transition from the clip that ends where this one starts (see domain/transitions). */
   transitionIn?: { kind: "crossfade"; durationTicks: number };
+  /** Text clips (`clipType: "text"`): content and style. Their `source` is TEXT_SOURCE (no media). */
+  text?: TextData;
 }
+
+/** Placeholder source of text clips: they reference no asset. */
+export const TEXT_SOURCE: SourceRef = { kind: "assetVersion", assetId: "", versionId: "" };
+/** Clips that hold one picture (no source time): images and text. */
+export const isStill = (p: Pick<Placement, "clipType">) => p.clipType === "image" || p.clipType === "text";
 
 export type KeyframeProp = "x" | "y" | "scale" | "rotation" | "opacity";
 export interface Keyframe { t: number; v: number }
@@ -98,7 +106,7 @@ export const MIN_SPEED = 0.25;
 export const MAX_SPEED = 4;
 /** Source time shown at absolute timeline time `t` (accounts for speed, reverse and freeze). */
 export function sourceAt(p: Placement, t: number): number {
-  if (p.freeze || p.clipType === "image") return p.sourceInTicks;
+  if (p.freeze || isStill(p)) return p.sourceInTicks;
   const s = p.speed ?? 1;
   const o = Math.min(Math.max(0, t - p.startTicks), p.durationTicks);
   return p.reverse ? p.sourceInTicks + Math.max(0, Math.round((p.durationTicks - o) * s) - 1) : p.sourceInTicks + Math.round(o * s);
@@ -186,7 +194,7 @@ export function createProject(name = "Untitled project", now = new Date().toISOS
 }
 
 export function trackKindFor(kind: MediaKind): TrackKind {
-  return kind === "audio" ? "audio" : "video";
+  return kind === "audio" ? "audio" : kind === "text" ? "text" : "video";
 }
 
 export function compositionDuration(comp: Composition): number {

@@ -1883,6 +1883,12 @@
           "title": "Bottom sheets: drag/swipe to dismiss, resizable preview/timeline split, collapsible desktop side panel, reduced-motion aware",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-077",
+          "title": "Text clips on dedicated text tracks (trim/split/move/duplicate/delete), canvas text renderer with style/effects/animations",
+          "status": "done",
+          "progress": 100
         }
       ]
     },

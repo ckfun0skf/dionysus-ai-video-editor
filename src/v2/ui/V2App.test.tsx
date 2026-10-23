@@ -83,6 +83,9 @@ describe("V2App", () => {
     await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
     const btn = (label: string) => Array.from(el.querySelectorAll("button")).find((b) => b.textContent?.includes(label)) as HTMLButtonElement;
     await act(async () => { btn("Add text").click(); });
+    expect(el.querySelector(".v2-clip.clip-text")).toBeTruthy();
+    await act(async () => { btn("Done").click(); });
+    await act(async () => { btn("Add subtitle").click(); });
     const ta = el.querySelector('textarea[aria-label="Subtitle text"]') as HTMLTextAreaElement;
     const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
     await act(async () => { setter.call(ta, "Hi there"); ta.dispatchEvent(new Event("input", { bubbles: true })); });

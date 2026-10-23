@@ -1,5 +1,5 @@
 /** Pure placement operations. All return new Composition objects (no mutation). */
-import { clampTransform, type KeyframeProp, MAX_SPEED, MIN_SPEED, sourceAt, findPlacement, newId, trackKindFor, transformOf, type Transform, type Composition, type Placement, type Track } from "./model";
+import { clampTransform, type KeyframeProp, MAX_SPEED, MIN_SPEED, sourceAt, isStill, findPlacement, newId, trackKindFor, transformOf, type Transform, type Composition, type Placement, type Track } from "./model";
 
 export const MIN_DURATION_TICKS = 1200; // 10 ms
 
@@ -83,7 +83,7 @@ export function trimPlacement(comp: Composition, placementId: string, edge: "lef
     const srcRoom = unbounded ? Infinity : rev ? (maxSourceTicks! - spanEnd) / s : p.sourceInTicks / s;
     const start = Math.min(Math.max(toTicks, prevEnd, Math.ceil(p.startTicks - srcRoom)), end - MIN_DURATION_TICKS);
     const delta = start - p.startTicks;
-    const sourceInTicks = p.clipType === "image" ? 0 : unbounded || rev ? p.sourceInTicks : Math.max(0, p.sourceInTicks + Math.round(delta * s));
+    const sourceInTicks = isStill(p) ? 0 : unbounded || rev ? p.sourceInTicks : Math.max(0, p.sourceInTicks + Math.round(delta * s));
     updated = { ...p, startTicks: start, durationTicks: end - start, sourceInTicks, ...(p.keyframes ? { keyframes: shiftKeys(p.keyframes, -delta) } : {}) };
   } else {
     const nextStart = Math.min(Infinity, ...others.filter((o) => o.startTicks >= end).map((o) => o.startTicks));
@@ -105,13 +105,13 @@ export function splitPlacement(comp: Composition, placementId: string, atTicks: 
   if (offset < MIN_DURATION_TICKS || p.durationTicks - offset < MIN_DURATION_TICKS) return comp;
   const left: Placement = { ...p, durationTicks: offset };
   const s = p.speed ?? 1;
-  const hold = p.clipType === "image" || p.freeze;
+  const hold = isStill(p) || p.freeze;
   const cut = Math.round(offset * s), cutRev = Math.round((p.durationTicks - offset) * s);
   // Reverse: the left part shows the END of the source span, so it gets the later sourceIn.
   // Fades stay on the outer edges; keyframes keep their absolute timing (offsets are clip-relative).
   if (p.fadeOutTicks) delete left.fadeOutTicks;
   if (p.reverse && !hold) left.sourceInTicks = p.sourceInTicks + cutRev;
-  const right: Placement = { ...p, id: newIdValue, startTicks: atTicks, durationTicks: p.durationTicks - offset, sourceInTicks: p.clipType === "image" ? 0 : hold || p.reverse ? p.sourceInTicks : p.sourceInTicks + cut };
+  const right: Placement = { ...p, id: newIdValue, startTicks: atTicks, durationTicks: p.durationTicks - offset, sourceInTicks: isStill(p) ? 0 : hold || p.reverse ? p.sourceInTicks : p.sourceInTicks + cut };
   if (p.fadeInTicks) delete right.fadeInTicks;
   if (p.keyframes) right.keyframes = shiftKeys(p.keyframes, -offset);
   return mapTrack(comp, found.track.id, (t) => ({ ...t, placements: sortPlacements(t.placements.flatMap((o) => (o.id === p.id ? [left, right] : [o]))) }));
@@ -185,7 +185,7 @@ function mapPlacement(comp: Composition, id: string, fn: (p: Placement, t: Track
 export function setSpeed(comp: Composition, placementId: string, speed: number): Composition {
   speed = Math.min(MAX_SPEED, Math.max(MIN_SPEED, speed));
   return mapPlacement(comp, placementId, (p, t) => {
-    if (p.clipType === "image" || p.freeze) return p;
+    if (isStill(p) || p.freeze) return p;
     const span = p.durationTicks * (p.speed ?? 1);
     const next = Math.min(Infinity, ...t.placements.filter((o) => o.id !== p.id && o.startTicks >= p.startTicks + p.durationTicks).map((o) => o.startTicks));
     const durationTicks = Math.max(MIN_DURATION_TICKS, Math.min(Math.round(span / speed), next - p.startTicks));
@@ -197,7 +197,7 @@ export function setSpeed(comp: Composition, placementId: string, speed: number):
 
 export function setReverse(comp: Composition, placementId: string, reverse: boolean): Composition {
   return mapPlacement(comp, placementId, (p) => {
-    if (p.clipType === "image" || p.freeze) return p;
+    if (isStill(p) || p.freeze) return p;
     const out: Placement = { ...p, reverse };
     if (!reverse) delete out.reverse;
     return out;

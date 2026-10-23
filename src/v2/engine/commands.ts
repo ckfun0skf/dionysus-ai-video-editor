@@ -6,6 +6,32 @@ import * as subs from "../domain/subtitles";
 import * as edit from "../domain/edit";
 import * as transitions from "../domain/transitions";
 import type { Subtitle } from "../domain/model";
+import { TEXT_SOURCE } from "../domain/model";
+import { DEFAULT_TEXT_TICKS, textOf, type TextData } from "../domain/text";
+
+/**
+ * Add a text clip at `at`: onto the first text track with room, else a new text track on top.
+ * Text clips trim/split/move/duplicate/delete like media clips (they are ordinary placements).
+ */
+export const addTextClip = (at: number, data: Partial<TextData> = {}, id = newId("plc")): Command => ({
+  label: "Add text",
+  apply: (p) => withRoot(p, (c) => {
+    const start = Math.max(0, Math.round(at));
+    const pl: Placement = { id, startTicks: start, durationTicks: DEFAULT_TEXT_TICKS, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "text", text: textOf(data) };
+    const fits = (t: Composition["tracks"][number]) => t.placements.every((o) => o.startTicks >= start + pl.durationTicks || o.startTicks + o.durationTicks <= start);
+    let comp = c;
+    let track = comp.tracks.find((t) => t.kind === "text" && fits(t));
+    if (!track) { comp = ops.addTrack(comp, "text"); track = comp.tracks[0]; }
+    return ops.insertPlacement(comp, track.id, pl);
+  }),
+});
+
+/** Patch a text clip's content/style. Typing into one clip coalesces into one undo step. */
+export const updateText = (id: string, patch: Partial<TextData>, label = "Edit text"): Command => ({
+  label,
+  coalesceKey: `text:${id}:${Object.keys(patch).sort().join(",")}`,
+  apply: (p) => withRoot(p, (c) => ({ ...c, tracks: c.tracks.map((t) => ({ ...t, placements: t.placements.map((pl) => (pl.id === id && pl.clipType === "text" ? { ...pl, text: textOf({ ...pl.text, ...patch }) } : pl)) })) })),
+});
 
 function withRoot(project: Project, fn: (c: Composition) => Composition): Project {
   const id = project.rootCompositionId;

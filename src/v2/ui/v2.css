@@ -237,3 +237,5 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 .v2-desktop-grid:not(.side-closed) .v2-side-toggle { left: auto; right: calc(70% + 6px); }
 .v2-desktop-grid .v2-side { padding-top: 40px; }
 @media (prefers-reduced-motion: reduce) { .v2-desktop-grid { transition: none; } }
+.v2-clip.clip-text { background: #c9661e; border-color: #ff9a3d; }
+.v2-clip.clip-text.is-selected { border-color: #fff; }
