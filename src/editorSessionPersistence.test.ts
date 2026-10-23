@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { migrateLegacyProjectToComposition, projectRootCompositionToLegacy } from "./compositionMigration";
+import { addCompositionLinkedAudioChild, extractLinkedAudio } from "./compositionCommands";
 import { readProjectDocument } from "./projectDocument";
 import { sampleProject } from "./sampleProject";
 import {
@@ -68,6 +69,59 @@ describe("Editor session persistence boundary", () => {
     expect(reopenedRoot.id).toBe(root.id);
     expect(reopenedRoot.nestedCompositions).toEqual([pinnedChild]);
     expect(reopenedRoot.nestedCompositions?.[0].provenance).toEqual(pinnedChild.provenance);
+  });
+
+  it("round-trips extracted linked audio with a non-zero source in-point as an independent audio placement", () => {
+    const project = structuredClone(sampleProject);
+    project.assets.push({
+      id: "persisted-linked-audio-source",
+      name: "Embedded source audio",
+      kind: "audio",
+      path: "idb://persisted-linked-audio-source",
+    });
+    let root = migrateLegacyProjectToComposition(project).rootComposition;
+    const owner = root.placements.find(item => item.source.type === "asset" || item.source.type === "clip");
+    expect(owner).toBeDefined();
+    const sourceIn = 3;
+    const sourceOut = sourceIn + owner!.duration;
+    root = addCompositionLinkedAudioChild(root, owner!.id, {
+      id: "persisted-linked-audio-child",
+      name: "Embedded audio",
+      source: { type: "asset", assetId: "persisted-linked-audio-source" },
+      sourceIn,
+      sourceOut,
+      legacyData: {
+        id: "persisted-linked-audio-child",
+        kind: "audio",
+        linkedVideoClipId: owner!.id,
+        assetId: "persisted-linked-audio-source",
+      },
+    });
+    root = extractLinkedAudio(root, "persisted-linked-audio-child");
+    const sessionProject = projectRootCompositionToLegacy(project, root);
+    const storage = memoryStorage();
+
+    persistEditorSession(storage, { project: sessionProject, composition: root }, "2026-10-23T11:00:00.000Z");
+    const reopened = readProjectDocument(
+      JSON.parse(storage.values.get(COMPOSITION_PROJECT_STORAGE_KEY)!),
+      true,
+    );
+    const restored = reopened.compositionModel!.rootComposition.placements.find(
+      item => item.id === "persisted-linked-audio-child",
+    );
+
+    expect(restored).toMatchObject({
+      id: "persisted-linked-audio-child",
+      trackId: root.tracks.find(track => track.kind === "audio")?.id,
+      start: owner!.start,
+      duration: owner!.duration,
+      source: { type: "asset", assetId: "persisted-linked-audio-source" },
+      sourceIn,
+      sourceOut,
+    });
+    expect(restored?.linkedToPlacementId).toBeUndefined();
+    expect(reopened.compositionModel!.rootComposition.placements
+      .find(item => item.id === owner!.id)?.linkedAudioChildren).toEqual([]);
   });
 
   it("leaves the existing legacy fallback untouched if the canonical write fails", () => {
