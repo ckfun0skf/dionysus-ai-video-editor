@@ -1567,8 +1567,8 @@
         {
           "id": "V2-021",
           "title": "Canvas 2D preview renderer + playback clock + audio graph",
-          "status": "planned",
-          "progress": 0,
+          "status": "done",
+          "progress": 100,
           "acceptance": [
             "Frame-accurate seek in tests via fake media"
           ]
@@ -1576,8 +1576,8 @@
         {
           "id": "V2-022",
           "title": "Timeline UI: tracks, placements, drag/resize/snap",
-          "status": "planned",
-          "progress": 0,
+          "status": "done",
+          "progress": 100,
           "acceptance": [
             "All edits via commands"
           ]
