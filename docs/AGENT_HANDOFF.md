@@ -747,3 +747,10 @@ The pinned-version regression again passed all 298 tests, but TypeScript correct
 - `src/editorSessionPersistence.test.ts` now verifies a canonical linked-audio child is trimmed, resized, and split with its video owner, then persisted as v2 and reopened through `readProjectDocument()`.
 - Assertions cover left/right video source ranges, the child audio's independent source offset, regenerated right-hand child ID, and owner references after reopen.
 - Code/test SHA `0714f28b93d82091f960b0cd77cd8e21736f3d0a` passed exact-head CI [run 39948473082](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39948473082): 27 test files / 315 tests, TypeScript/production build passed, npm audit 0 vulnerabilities. The matching subtask is checked in Issue #110. The docs-synchronized head `ef0ed0c43bbd98c9a3d93aa0299a083d46ca29c2` also passed [exact-head CI run 39948801413](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39948801413): 27 test files passed, TypeScript/production build passed, npm audit 0 vulnerabilities.
+
+
+### Canonical Timeline move-path continuation (2026-10-23)
+
+- `src/App.tsx` now promotes a legacy-only Timeline clip into the current canonical root Composition before moving it with `moveCompositionPlacementToTrack()`. Existing canonical placements already used that command; this removes the clip-move fallback to `moveProjectTimelinePlacement()` for clips that can be resolved from the session Project. Shot-domain fallback remains unchanged, and resize fallback is still outstanding.
+- Code commit: `7bfc6b90e770a941399668ceff42db438cdc3be0`. Exact-head CI run 39955595704 was still in progress when this note was prepared; do not treat the change as validated until the run completes. PR #111 remains open/unmerged; Issue #110 and Issue #100 remain open. No browser smoke test or manual UI acceptance was performed.
+- Next: add regression coverage for the legacy-only clip promotion path, migrate the resize fallback without losing linked-audio/source-range semantics, then rerun exact-head CI and synchronize this note with the final docs head.
