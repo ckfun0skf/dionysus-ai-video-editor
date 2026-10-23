@@ -655,8 +655,12 @@ export function applyCanonicalRootTimelineResize(
   root: CompositionDocument,
   preview: ClipResizePreview,
 ): CompositionDocument {
-  const next = ensureCanonicalTimelineClips(project, root, [preview.id, ...preview.trims.map(trim => trim.id)]);
-  return applyCompositionResizePreview(next, preview);
+  const affectedIds = [preview.id, ...preview.trims.map(trim => trim.id)];
+  const shotIds = affectedIds.filter(placementId => project.shots.some(shot => shot.id === placementId));
+  const clipIds = affectedIds.filter(placementId => !shotIds.includes(placementId));
+  const promotedClips = ensureCanonicalTimelineClips(project, root, clipIds);
+  const promoted = ensureCanonicalMasterShots(project, promotedClips, shotIds);
+  return applyCompositionResizePreview(promoted, preview);
 }
 
 /** Promote a legacy-only clip and linked group before applying a canonical trim. */
