@@ -341,3 +341,8 @@ The pinned-version regression again passed all 298 tests, but TypeScript correct
 - App split and duplicate now promote missing clips before running shared Composition commands. Added regression coverage for split source ranges and duplicate timing/mix metadata; the pre-existing App midpoint split, playhead split, and linked-video/audio duplicate tests also pass.
 - Exact code/test head cbd030a49fe7e3c418dc695ad1e592c748a7ea80 passed CI run 39960129613: 27 test files / 319 tests; TypeScript/production build passed; npm audit 0 vulnerabilities.
 - This closes only the ordinary Timeline split/duplicate compatibility fallback slice. Other Shot/Project mutation paths, broader root/nested history round-trips, and renderer/playback migration remain open. DYS-014 stays in progress. PR #111 remains open/unmerged; Issue #100 remains open for deployed owner acceptance. No browser smoke tests or manual UI acceptance claimed.
+
+
+### Canonical metadata-update follow-up (2026-10-23)
+
+Legacy-only ordinary Timeline clips are now promoted before metadata, geometry, and explicit source-identity edits. Linked-audio children are routed through their canonical owned-child metadata path; malformed unrepresentable rows retain a guarded compatibility fallback. Exact code-head CI passed at `c322e6f5df3ad8455582d26f472e14cf5cc5624e`, run [39961446762](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39961446762). Issue #100/#110 and PR #111 record the implementation. DYS-014 remains in progress: remaining Project/Shot mutation paths, full history/save/reopen matrix, and renderer/playback boundaries remain open. Issue #100 remains open for owner UI acceptance; PR #111 remains unmerged. New docs commits require exact-head CI.
