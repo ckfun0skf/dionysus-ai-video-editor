@@ -588,8 +588,8 @@
           "id": "DYS-014",
           "title": "Unified Composition model and structure-preserving snapshots",
           "status": "in_progress",
-          "progress": 87,
-          "summary": "Converge root/nested editing on one authoritative Composition/session. PR #111 has paired edit/history/import boundaries, canonical-only v2 autosave with read-only schema-1.0 fallback, canonical root/nested render adapters, nested track/duration/description helpers, immediate canonical empty Clip Asset/Version snapshots with canvas dimensions, and canonicalization of legacy-only version duplicates; editable UI and pinned/non-root paths remain in progress.",
+          "progress": 88,
+          "summary": "Converge root/nested editing on one authoritative Composition/session. PR #111 has paired edit/history/import boundaries, canonical-only v2 autosave with read-only schema-1.0 fallback, canonical root/nested render adapters, nested command helpers, immediate canonical empty Clip Asset/Version snapshots with canvas dimensions, canonicalization of legacy-only version duplicates, and Save-as-Clip snapshots sourced from the live canonical root. Editable UI and remaining pinned/non-root paths remain in progress.",
           "doc": "tasks/unified-composition-model.md",
           "detail": "tasks/unified-composition-model.html",
           "report": "reports/unified-composition-model-report.md",
@@ -684,7 +684,8 @@
             "Exact-head CI 39872441809 passed at 588b78f97185a178dcfacd98032613a09721ebfb (26 files / 293 tests, TypeScript/build, audit 0). Includes canonical root/nested render adapters, linked-audio child source/mute projection, nested track mute/duration/description metadata helpers. Editable UI and some non-root/pinned snapshot paths remain compatibility-first.",
             "Exact-head CI 39873169613 passed at 0496eab0b3b16b3ad72b4561e9b8e3eaff898b96 (26 files / 294 tests, TypeScript/build, audit 0). Includes canonical root/nested render adapters, nested track mute/duration/description helpers, and empty Clip Version canonical Composition materialization. Editable UI and some non-root/pinned snapshot paths remain compatibility-first.",
             "Exact-head CI 39873737409 passed at baee6a47be54a007f5f9dba6ee3e08fbb0191263 (26 files / 294 tests, TypeScript/build, audit 0). New initial Clip Assets and New Blank Versions materialize canonical Composition immediately, with parent canvas dimensions preserved.",
-            "Exact-head CI 39874236364 passed at 9140b61cb8a4492561d39d7b5511c935f952c631 (26 files / 294 tests, TypeScript/build, audit 0). Legacy-only Clip Version duplication now materializes canonical Composition and remaps linked references; initial and blank Clip Versions preserve parent canvas size."
+            "Exact-head CI 39874236364 passed at 9140b61cb8a4492561d39d7b5511c935f952c631 (26 files / 294 tests, TypeScript/build, audit 0). Legacy-only Clip Version duplication now materializes canonical Composition and remaps linked references; initial and blank Clip Versions preserve parent canvas size.",
+            "Exact-head CI 39875993855 passed at 798024589d78ef21e6408b93e4527d1b703f5b51 (26 files / 296 tests, TypeScript/build, audit 0). Save-as-Clip Asset now captures the authoritative root Composition and derives render layers from it, preventing stale legacy projections from dropping canonical edits."
           ],
           "notes": "Status remains in_progress. Paired edit/history/import boundaries; one-read startup recovery; canonical-only v2 autosave with read-only v1 fallback; App integration tests read v2 first. Exact-head CI 39866541271 passed at c1009ae456df33815388c5cd62917c7606d396ac: 26 files / 286 tests, type/build pass, audit 0. In-memory Project compatibility projection and non-root/render paths remain. No browser smoke tests; Issue #100 remains open.",
           "description": "Establish canonical Composition for root/nested timelines, shared commands and independent structure-preserving Project-to-Clip snapshots.",
@@ -702,8 +703,8 @@
           "testStrategy": [
             "Migration matrix, parity, snapshot independence and round-trip."
           ],
-          "nextAction": "Verify exact-head CI after the current handoff/task sync. Then audit remaining non-root edit and pinned snapshot paths and plan a tested migration of nested editable UI off compatibility layer projections.",
-          "handoffNotes": "Current branch feat/e1-editor-session-history, PR #111 open/unmerged. Latest code checkpoint 9140b61cb8a4492561d39d7b5511c935f952c631 passed CI run 39874236364 (294 tests, TypeScript/build, audit 0); docs sync creates a newer head so re-query CI. Read docs/AGENT_HANDOFF.md and Issue #110 for latest checkpoint. No browser smoke tests; no merge without owner approval; Issue #100 stays open for owner UI acceptance."
+          "nextAction": "Verify exact-head CI after the current handoff/roadmap/task/prompt sync. Then audit remaining non-root edit and pinned snapshot paths and plan a tested migration of nested editable UI off compatibility layer projections.",
+          "handoffNotes": "Current branch feat/e1-editor-session-history, PR #111 open/unmerged. Latest validated code checkpoint 798024589d78ef21e6408b93e4527d1b703f5b51 passed CI run 39875993855 (26 files / 296 tests, TypeScript/build, audit 0); docs sync creates a newer head so re-query CI. Read docs/AGENT_HANDOFF.md and Issue #110 for current checkpoint. No browser smoke tests; no merge without owner approval; Issue #100 stays open for owner UI acceptance."
         }
       ],
       "executionStage": "E2",
