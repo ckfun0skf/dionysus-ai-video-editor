@@ -699,3 +699,9 @@ The pinned Shot Slot snapshot regression passed with all 298 tests, but TypeScri
 ## Validation correction — explicitly guard optional Shot Slot ID (2026-10-23)
 
 The pinned-version regression again passed all 298 tests, but TypeScript correctly required a local guard because `CompositionSourceReference.shot.slotId` is optional. The resolver now captures `slotId`, skips Shot references without a Slot, and uses the narrowed local value for lookup and pinning. Fix commit: `27af284afe3794da779da7d6d44d5367b2d56492`. Exact-head CI passed at `16ef37a520c302995e02b9c6843de912f4edea3f`, [run 39881785207](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39881785207): 26 test files / 298 tests, TypeScript/build passed, npm audit 0 vulnerabilities. The Issue #110 snapshot item is now checked; this subsequent docs sync needs fresh exact-head CI.
+
+## Nested legacy Shot Slot source migration audit (2026-10-23)
+
+- Found that `compositionMigration.ts`'s legacy nested-layer source adapter did not recognize legacy metadata carrying `shotId`, `slotId`, and `shotVersionId`. Such a layer could migrate to `source: { type: "none" }` even though the nested editing adapter already recognizes Shot Slot sources.
+- `sourceForLayer()` now converts those metadata fields into a canonical `CompositionSourceReference` of type `shot`, preserving the explicit version pin. Added regression coverage for a legacy nested Clip Version layer referencing a specific Shot Slot version.
+- Code/test commits: `08ff16b8fde8f232d7731452fd06b8eb14efdac5`, `16df0113ebb3bffd4d6429644759f3edafd8918a`. Exact-head CI is pending; do not check off the Issue #110 item until tests/build/audit pass.
