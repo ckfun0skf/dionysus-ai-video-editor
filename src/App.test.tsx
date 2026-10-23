@@ -1825,6 +1825,7 @@ describe("Integrated timeline editor", () => {
     expect(assetAfter.clipVersions![1].composition).toBeDefined();
     expect(assetAfter.clipVersions![1].composition?.duration).toBe(6);
     expect(assetAfter.clipVersions![1].composition?.placements).toHaveLength(0);
+    expect(assetAfter.clipVersions![1].composition?.legacyData?.description).toBe(assetAfter.clipVersions![1].description);
     expect(assetAfter.clipVersions![1].composition?.tracks.map(track => track.id)).toEqual(assetAfter.clipVersions![1].tracks?.map(track => track.id));
     expect(assetAfter.clipVersions![1].tracks?.map(track => track.id)).not.toContain(assetAfter.clipVersions![0].tracks?.[0]?.id);
     expect(container.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toContain("Version 2");
