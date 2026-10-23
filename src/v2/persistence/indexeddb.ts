@@ -1,6 +1,7 @@
 /** IndexedDB storage for v2 (separate database from the legacy app). */
 import type { Storage } from "../ports/storage";
 import type { Project } from "../domain/model";
+import { migrateProject } from "./schema";
 
 const DB_NAME = "dionysus-v2";
 const LAST_KEY = "dionysus.v2.lastProjectId";
@@ -21,14 +22,16 @@ function open(): Promise<IDBDatabase> {
     r.onerror = () => reject(r.error);
   });
 }
-
 export function createIndexedDbStorage(): Storage {
   const dbp = open();
   const tx = async (store: string, mode: IDBTransactionMode) => (await dbp).transaction(store, mode).objectStore(store);
   return {
     projects: {
       list: async () => ((await req((await tx("projects", "readonly")).getAll())) as Project[]).map((p) => ({ id: p.id, name: p.name, updatedAt: p.meta.updatedAt })),
-      load: async (id) => (await req((await tx("projects", "readonly")).get(id))) as Project | undefined,
+      load: async (id) => {
+        const raw = await req((await tx("projects", "readonly")).get(id));
+        return raw === undefined ? undefined : migrateProject(raw);
+      },
       save: async (p) => void (await req((await tx("projects", "readwrite")).put(p))),
       delete: async (id) => void (await req((await tx("projects", "readwrite")).delete(id))),
     },
