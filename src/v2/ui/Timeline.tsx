@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { cmd, type Engine } from "../engine";
+import { clampPps, haptic, LONG_PRESS_MS, LONG_PRESS_SLOP, pinchZoom, touchDistance } from "./gestures";
 import { edit, ops, compositionDuration, TICKS_PER_SECOND, formatTimecode, type Composition, type Project } from "../domain";
 
 interface Props {
@@ -16,6 +17,8 @@ interface Props {
   multiMode?: boolean;
   onSelect: (id?: string) => void;
   pps: number;
+  /** Pinch (touch) or Ctrl/⌘+wheel (trackpad) zoom. */
+  onZoom?: (pps: number) => void;
   /** Mobile/CapCut mode: fixed centred playhead, the tracks scroll under it. */
   centered: boolean;
   /** Centered mode extras (CapCut layout). */
@@ -33,17 +36,37 @@ interface Props {
 const PLAYHEAD_FRAC = 0.42;
 
 type Gesture =
-  | { kind: "move"; id: string; x0: number; y0: number; start0: number; trackId: string; start: number; active: boolean }
-  | { kind: "trim"; id: string; edge: "left" | "right"; x0: number; edge0: number; to: number };
+  | { kind: "move"; id: string; x0: number; y0: number; start0: number; trackId: string; start: number; active: boolean; snap?: number }
+  | { kind: "trim"; id: string; edge: "left" | "right"; x0: number; edge0: number; to: number; snap?: number };
 
 const HEADER_W = 84;
 
-export function Timeline({ engine, project, time, playing, onSeek, selectedId, selectedIds, onToggleSelect, multiMode, onSelect, pps, centered, thumbs, onAddMedia, sideColumn, timeLabel, topLane, ripple }: Props) {
+export function Timeline({ engine, project, time, playing, onSeek, selectedId, selectedIds, onToggleSelect, multiMode, onSelect, pps, onZoom, centered, thumbs, onAddMedia, sideColumn, timeLabel, topLane, ripple }: Props) {
   const comp = project.compositions[project.rootCompositionId];
   const scrollRef = useRef<HTMLDivElement>(null);
   const [gesture, setGesture] = useState<Gesture>();
   const [viewW, setViewW] = useState(800);
   const programmatic = useRef(false);
+  const press = useRef<{ timer: ReturnType<typeof setTimeout>; x: number; y: number }>();
+  const zoomRef = useRef({ pps, onZoom });
+  zoomRef.current = { pps, onZoom };
+
+  // Pinch-to-zoom (two fingers) and Ctrl/⌘+wheel. Native non-passive listeners so we can stop page zoom.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    let pinch: { d0: number; pps0: number } | undefined;
+    const ts = (e: TouchEvent) => { if (e.touches.length === 2) { pinch = { d0: touchDistance(e.touches[0], e.touches[1]), pps0: zoomRef.current.pps }; cancelPress(); } };
+    const tm = (e: TouchEvent) => { if (pinch && e.touches.length === 2) { e.preventDefault(); zoomRef.current.onZoom?.(pinchZoom(pinch.pps0, pinch.d0, touchDistance(e.touches[0], e.touches[1]))); } };
+    const te = (e: TouchEvent) => { if (e.touches.length < 2) pinch = undefined; };
+    const wheel = (e: WheelEvent) => { if (!e.ctrlKey && !e.metaKey) return; e.preventDefault(); zoomRef.current.onZoom?.(clampPps(zoomRef.current.pps * Math.exp(-e.deltaY / 200))); };
+    el.addEventListener("touchstart", ts, { passive: true });
+    el.addEventListener("touchmove", tm, { passive: false });
+    el.addEventListener("touchend", te);
+    el.addEventListener("wheel", wheel, { passive: false });
+    return () => { el.removeEventListener("touchstart", ts); el.removeEventListener("touchmove", tm); el.removeEventListener("touchend", te); el.removeEventListener("wheel", wheel); };
+  }, []);
+  const cancelPress = () => { if (press.current) { clearTimeout(press.current.timer); press.current = undefined; } };
   const toPx = (t: number) => (t / TICKS_PER_SECOND) * pps;
   const toTicks = (px: number) => Math.round((px / pps) * TICKS_PER_SECOND);
   const duration = compositionDuration(comp);
@@ -99,10 +122,21 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
   const onClipDown = (e: React.PointerEvent, id: string, trackId: string, start: number) => {
     e.stopPropagation();
     if (onToggleSelect && (multiMode || e.shiftKey || e.metaKey || e.ctrlKey)) { onToggleSelect(id); return; }
-    if (centered && selectedId !== id) { onSelect(id); return; } // tap to select first on touch layouts
+    const target = e.currentTarget as HTMLElement;
+    const { clientX, clientY, pointerId } = e;
+    const startMove = (active: boolean) => {
+      target.setPointerCapture?.(pointerId);
+      setGesture({ kind: "move", id, x0: clientX, y0: clientY, start0: start, trackId, start, active });
+    };
+    if (centered && selectedId !== id) {
+      // Touch layouts: tap selects; long-press selects AND picks the clip up for dragging.
+      onSelect(id);
+      cancelPress();
+      press.current = { x: clientX, y: clientY, timer: setTimeout(() => { press.current = undefined; haptic(15); startMove(true); }, LONG_PRESS_MS) };
+      return;
+    }
     onSelect(id);
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    setGesture({ kind: "move", id, x0: e.clientX, y0: e.clientY, start0: start, trackId, start, active: false });
+    startMove(false);
   };
   const onTrimDown = (e: React.PointerEvent, id: string, edge: "left" | "right", edgeTicks: number) => {
     e.stopPropagation();
@@ -111,6 +145,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
     setGesture({ kind: "trim", id, edge, x0: e.clientX, edge0: edgeTicks, to: edgeTicks });
   };
   const onPointerMove = (e: React.PointerEvent) => {
+    if (press.current && Math.hypot(e.clientX - press.current.x, e.clientY - press.current.y) > LONG_PRESS_SLOP) cancelPress();
     if (!gesture) return;
     if (gesture.kind === "move") {
       const dx = e.clientX - gesture.x0;
@@ -119,13 +154,20 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
       const raw = Math.max(0, gesture.start0 + toTicks(dx));
       const start = Math.max(0, ops.snapMove(comp, raw, p.durationTicks, snapThreshold, [time], gesture.id));
       const trackId = trackAt(e.clientX, e.clientY) ?? gesture.trackId;
-      setGesture({ ...gesture, start, trackId, active });
+      // Snap line at whichever edge aligned (start snaps first, like ops.snapMove).
+      const snap = start === raw ? undefined : ops.snapTicks(comp, raw, snapThreshold, [time], gesture.id) !== raw ? start : start + p.durationTicks;
+      if (snap !== undefined && snap !== gesture.snap) haptic(8);
+      setGesture({ ...gesture, start, trackId, active, snap });
     } else {
-      const to = ops.snapTicks(comp, gesture.edge0 + toTicks(e.clientX - gesture.x0), snapThreshold, [time], gesture.id);
-      setGesture({ ...gesture, to });
+      const raw = gesture.edge0 + toTicks(e.clientX - gesture.x0);
+      const to = ops.snapTicks(comp, raw, snapThreshold, [time], gesture.id);
+      const snap = to === raw ? undefined : to;
+      if (snap !== undefined && snap !== gesture.snap) haptic(8);
+      setGesture({ ...gesture, to, snap });
     }
   };
   const onPointerUp = () => {
+    cancelPress();
     if (!gesture) return;
     if (gesture.kind === "move" && gesture.active) engine.dispatch(cmd.movePlacement(gesture.id, gesture.trackId, gesture.start));
     if (gesture.kind === "trim" && gesture.to !== gesture.edge0) engine.dispatch(cmd.trimPlacement(gesture.id, gesture.edge, gesture.to, ripple));
@@ -173,7 +215,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
           ))}
         </div>
       )}
-      <div className="v2-scroll" ref={scrollRef} onScroll={onScroll} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={() => setGesture(undefined)}>
+      <div className="v2-scroll" ref={scrollRef} onScroll={onScroll} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={() => { cancelPress(); setGesture(undefined); }}>
         <div className="v2-content" style={{ width: contentW + pad + padRight, paddingLeft: pad, paddingRight: padRight }}>
           <div className="v2-ruler" onPointerDown={scrub}>
             {ticks.map((s) => (
@@ -212,6 +254,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
               )}
             </div>
           ))}
+          {gesture?.snap !== undefined && (gesture.kind === "trim" || gesture.active) && <div className="v2-snap-line" data-testid="snap-line" style={{ left: pad + toPx(gesture.snap) }} aria-hidden />}
           {!centered && <div className="v2-playhead" style={{ left: toPx(time) }} />}
         </div>
       </div>
