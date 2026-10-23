@@ -1735,12 +1735,15 @@
           "report": "",
           "subtasks": [],
           "acceptance": [
-            "UX bar: selected/hover states, tooltips, empty states, undoable, 44px targets"
+            "UX bar: selected/hover states, tooltips, empty states, undoable, 44px targets",
+            "Placement.transform (absent = identity), clamped by ops.setTransform; drawn via render/frame placeRect",
+            "Drag box = move, corner = scale, top knob = rotate (Shift snaps 15°); inspector sliders + Reset; each drag is one undo step",
+            "Desktop: inspector above Media when a visual clip is selected; mobile: Edit → Adjust sheet"
           ],
           "id": "V2-061",
           "title": "Clip transform (position/scale/rotation/opacity/crop) with on-canvas handles + inspector",
-          "status": "planned",
-          "progress": 0
+          "status": "done",
+          "progress": 100
         },
         {
           "doc": "docs/v2/MODULE_DESIGN.md",

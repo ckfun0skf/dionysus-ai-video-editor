@@ -43,6 +43,23 @@ export interface Placement {
    * follows every move/trim/split/delete. `muted` is set by Extract Audio (audio then lives on an audio track).
    */
   linkedAudio?: LinkedAudio;
+  /** Visual transform (video/image). Absent = identity. */
+  transform?: Transform;
+}
+
+/**
+ * x/y: offset of the clip centre from the frame centre, as a fraction of frame width/height.
+ * scale: 1 = contain-fit. rotation: degrees clockwise. opacity: 0..1. crop: fraction trimmed per edge.
+ */
+export interface Transform { x: number; y: number; scale: number; rotation: number; opacity: number; crop: { l: number; t: number; r: number; b: number } }
+export const IDENTITY_TRANSFORM: Transform = { x: 0, y: 0, scale: 1, rotation: 0, opacity: 1, crop: { l: 0, t: 0, r: 0, b: 0 } };
+export function transformOf(p: Placement): Transform { return { ...IDENTITY_TRANSFORM, ...p.transform, crop: { ...IDENTITY_TRANSFORM.crop, ...p.transform?.crop } }; }
+
+/** Clamp a transform patch into valid ranges (crop leaves at least 5% of each axis). */
+export function clampTransform(t: Transform): Transform {
+  const c = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, Number.isFinite(v) ? v : 0));
+  const l = c(t.crop.l, 0, 0.95), tt = c(t.crop.t, 0, 0.95);
+  return { x: c(t.x, -2, 2), y: c(t.y, -2, 2), scale: c(t.scale, 0.05, 10), rotation: c(t.rotation, -360, 360), opacity: c(t.opacity, 0, 1), crop: { l, t: tt, r: c(t.crop.r, 0, 0.95 - l), b: c(t.crop.b, 0, 0.95 - tt) } };
 }
 
 export interface LinkedAudio { muted?: boolean }

@@ -6,6 +6,7 @@ import { compositionDuration, findPlacement, formatTimecode, secondsToTicks, typ
 import { useEditorBoot, useEngineState, useIsMobile, type EditorContext, type LoadFailure } from "./useEditor";
 import { Timeline } from "./Timeline";
 import { useThumbs } from "./useThumbs";
+import { TransformHandles, TransformInspector } from "./Transform";
 
 type Menu = "root" | "edit" | "edit-hint" | "audio" | "zoom";
 
@@ -31,6 +32,8 @@ function Editor({ engine, storage, recovery }: EditorContext) {
   const [res, setRes] = useState("1080p");
   const [fs, setFs] = useState(false);
   const [toast, setToast] = useState<string>();
+  const [inspOpen, setInspOpen] = useState(false);
+  const [, setFrame] = useState(0); // bumps on every drawn frame so on-canvas handles track player.boxes
   const thumbs = useThumbs(project, storage.blobs);
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(undefined), 3000); return () => clearTimeout(t); }, [toast]);
   const playerRef = useRef<Player>();
@@ -39,10 +42,11 @@ function Editor({ engine, storage, recovery }: EditorContext) {
   const comp = project.compositions[project.rootCompositionId];
   const selected = selectedId ? findPlacement(comp, selectedId) : undefined;
   const duration = compositionDuration(comp);
+  const visual = selected && selected.placement.clipType !== "audio" ? selected.placement : undefined;
 
   if (!playerRef.current) playerRef.current = new Player(project, storage.blobs);
   const player = playerRef.current;
-  useEffect(() => { player.onTime = (t, p) => { setTime(t); setPlaying(p); }; return () => player.dispose(); }, [player]);
+  useEffect(() => { player.onTime = (t, p) => { setTime(t); setPlaying(p); setFrame((f) => f + 1); }; return () => player.dispose(); }, [player]);
   useEffect(() => { player.canvas = canvasRef.current ?? undefined; player.draw(); }, [player, mobile]);
   useEffect(() => { player.setProject(project); }, [player, project]);
   useEffect(() => { if (selectedId && !selected) setSelectedId(undefined); }, [selectedId, selected]);
@@ -151,7 +155,9 @@ function Editor({ engine, storage, recovery }: EditorContext) {
 
   const preview = (
     <section className="v2-preview" aria-label="Preview">
-      <div className="v2-canvas-wrap"><canvas ref={canvasRef} width={1280} height={720} onClick={togglePlay} /></div>
+      <div className="v2-canvas-wrap"><canvas ref={canvasRef} width={1280} height={720} onClick={togglePlay} />
+        {visual && player.boxes.get(visual.id) && canvasRef.current && <TransformHandles engine={engine} placement={visual} box={player.boxes.get(visual.id)!} canvas={canvasRef.current} />}
+      </div>
       {!mobile && transport}
     </section>
   );
@@ -181,6 +187,7 @@ function Editor({ engine, storage, recovery }: EditorContext) {
     edit: selected ? [
       tool("✂", "Split", split),
       tool("🗑", "Delete", del),
+      ...(visual ? [tool("⤧", "Adjust", () => setInspOpen(true), "adjust", "Position, scale, rotation, opacity, crop")] : []),
       ...linkedAudioActions.map((a) => tool(a.icon, a.label, a.run, a.label, a.title)),
       ...(selected.placement.clipType !== "image" ? [
         <label key="vol" className="v2-tool v2-volume"><b aria-hidden>🔊</b>
@@ -243,10 +250,11 @@ function Editor({ engine, storage, recovery }: EditorContext) {
           </nav>
           {sheet && <div className="v2-sheet-backdrop" onClick={() => setSheet(false)}><div className="v2-sheet" onClick={(e) => e.stopPropagation()}>{browser}</div></div>}
           {!sheet && <div hidden>{browser}</div>}
+          {inspOpen && visual && <div className="v2-sheet-backdrop" onClick={() => setInspOpen(false)}><div className="v2-sheet v2-msheet-insp" onClick={(e) => e.stopPropagation()}><TransformInspector engine={engine} placement={visual} /><button className="v2-btn" onClick={() => setInspOpen(false)}>Done</button></div></div>}
         </>
       ) : (
         <div className="v2-desktop-grid">
-          {browser}
+          <div className="v2-side">{visual && <TransformInspector engine={engine} placement={visual} />}{browser}</div>
           {preview}
           <section className="v2-timeline-panel" aria-label="Timeline">
             <div className="v2-timeline-toolbar">{selectionActions}<span className="v2-hint">Space play · S split · Del delete · ⌘/Ctrl+Z undo</span></div>
