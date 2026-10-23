@@ -1,6 +1,6 @@
 /** Command factories for the MVP timeline. Each wraps a pure domain op. */
 import type { Command } from "./engine";
-import { DEFAULT_IMAGE_TICKS, newId, trackKindFor, type Asset, type AssetVersion, type Composition, type Placement, type Project, type TrackKind } from "../domain/model";
+import { DEFAULT_IMAGE_TICKS, newId, trackKindFor, type Asset, type AssetVersion, type Composition, type Placement, type Project, type TrackKind, transformOf } from "../domain/model";
 import * as ops from "../domain/ops";
 import * as subs from "../domain/subtitles";
 import * as edit from "../domain/edit";
@@ -169,4 +169,22 @@ export const addAssetVersion = (assetId: string, version: AssetVersion, placemen
     if (!placementId) return next;
     return withRoot(next, (c) => ({ ...c, tracks: c.tracks.map((t) => ({ ...t, placements: t.placements.map((pl) => (pl.id === placementId ? { ...pl, source: { ...pl.source, versionId: version.id } } : pl)) })) }));
   },
+});
+
+/**
+ * Preview duplicate (CapCut-style): copy one element onto a NEW track inserted directly above
+ * its source track, same start/duration so both show at once, nudged by (dx, dy) frame fractions.
+ */
+export const duplicateAbove = (id: string, newIdValue: string, dx = 0.02, dy = 0.02, trackIdValue = newId("trk")): Command => ({
+  label: "Duplicate",
+  apply: (p) => withRoot(p, (c) => {
+    const ti = c.tracks.findIndex((t) => t.placements.some((pl) => pl.id === id));
+    if (ti < 0) return c;
+    const src = c.tracks[ti], pl = src.placements.find((x) => x.id === id)!;
+    const t = transformOf(pl);
+    const copy: Placement = { ...structuredClone(pl), id: newIdValue, transform: { ...t, x: t.x + dx, y: t.y + dy } };
+    const n = c.tracks.filter((x) => x.kind === src.kind).length + 1;
+    const track = { id: trackIdValue, kind: src.kind, name: `${src.kind[0].toUpperCase()}${src.kind.slice(1)} ${n}`, placements: [copy] };
+    return { ...c, tracks: [...c.tracks.slice(0, ti), track, ...c.tracks.slice(ti)] };
+  }),
 });

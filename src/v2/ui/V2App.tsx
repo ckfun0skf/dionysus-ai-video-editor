@@ -87,6 +87,12 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     setSel(ids);
   };
   const duplicate = () => { if (!sel.length) return; const ids = sel.map(() => newId("plc")); engine.dispatch(cmd.duplicateClips(sel, ids)); setSel(ids); };
+  /** Preview duplicate: copy on a new track right above, same time, nudged ~20px, copy selected. */
+  const duplicateAbove = () => {
+    if (sel.length !== 1) return duplicate();
+    const st = engine.getState().project.settings; const id = newId("plc");
+    engine.dispatch(cmd.duplicateAbove(sel[0], id, 20 / (st?.width || 1080), 20 / (st?.height || 1920))); setSel([id]);
+  };
   const delSel = (rippleOverride?: boolean) => { if (sel.length) { engine.dispatch(cmd.deleteClips(sel, rippleOverride ?? ripple)); setSel([]); setMultiMode(false); } };
   const onTransition = (id: string) => {
     const p = findPlacement(comp, id)?.placement;
@@ -147,7 +153,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     setHtmlEdit(undefined); setToast("HTML clip updated (Undo to revert)");
   };
   const isHtml = selected?.placement.clipType === "html";
-  const gizmo = { onDelete: () => del(false), onEdit: () => (isText ? setTextOpen(true) : isHtml ? void openCode() : setInspOpen(true)), onDuplicate: () => duplicate(), onDoubleTap: () => { if (isText) setInlineId(selected!.placement.id); } };
+  const gizmo = { onDelete: () => del(false), onEdit: () => (isText ? setTextOpen(true) : isHtml ? void openCode() : setInspOpen(true)), onDuplicate: () => duplicateAbove(), onDoubleTap: () => { if (isText) setInlineId(selected!.placement.id); } };
   const inlineBox = inlineId && selected?.placement.id === inlineId ? player.boxes.get(inlineId) : undefined;
   const inlineEditor = inlineBox && canvasRef.current && (() => {
     const c = canvasRef.current, r = c.getBoundingClientRect(), pr = c.parentElement!.getBoundingClientRect(), k = r.width / c.width;
@@ -246,7 +252,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   );
 
   const clipActions = [
-    { icon: "⧉", label: "Duplicate", title: "Duplicate after the selection (⌘/Ctrl+D)", run: duplicate },
+    { icon: "⧉", label: "Duplicate", title: "Duplicate onto a new track above, same time (⌘/Ctrl+D duplicates after on the same track)", run: duplicateAbove },
     { icon: "⎘", label: "Copy", title: "Copy (⌘/Ctrl+C) — paste at the playhead with ⌘/Ctrl+V", run: copy },
   ];
   const pasteAction = { icon: "📋", label: "Paste", title: hasClip ? "Paste at the playhead (⌘/Ctrl+V)" : "Copy a clip first", run: paste };
