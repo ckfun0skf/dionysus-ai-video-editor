@@ -36,6 +36,8 @@ function Editor({ engine, storage, recovery }: EditorContext) {
   const [toast, setToast] = useState<string>();
   const [inspOpen, setInspOpen] = useState(false);
   const [subId, setSubId] = useState<string>();
+  const [ripple, setRippleState] = useState(() => localStorage.getItem("v2.ripple") === "1");
+  const setRipple = (on: boolean) => { setRippleState(on); localStorage.setItem("v2.ripple", on ? "1" : "0"); setToast(on ? "Ripple on: delete and trim close gaps" : "Ripple off"); };
   const srtRef = useRef<HTMLInputElement>(null);
   const [, setFrame] = useState(0); // bumps on every drawn frame so on-canvas handles track player.boxes
   const thumbs = useThumbs(project, storage.blobs);
@@ -73,18 +75,19 @@ function Editor({ engine, storage, recovery }: EditorContext) {
   const seek = useCallback((t: number) => player.seek(t), [player]);
   const togglePlay = useCallback(() => (player.isPlaying ? player.pause() : player.play()), [player]);
   const split = useCallback(() => { if (selectedId) engine.dispatch(cmd.splitPlacement(selectedId, Math.round(player.time))); }, [engine, player, selectedId]);
-  const del = useCallback(() => { if (selectedId) { engine.dispatch(cmd.deletePlacement(selectedId)); setSelectedId(undefined); } }, [engine, selectedId]);
+  const del = useCallback((rippleOverride?: boolean) => { if (selectedId) { engine.dispatch(cmd.deleteClips([selectedId], rippleOverride ?? ripple)); setSelectedId(undefined); } }, [engine, selectedId, ripple]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement)?.closest("input,textarea")) return;
+      if ((e.target as HTMLElement)?.closest?.("input,textarea,select")) return;
       const mod = e.metaKey || e.ctrlKey;
       if (mod && e.key.toLowerCase() === "z") { e.preventDefault(); if (e.shiftKey) engine.redo(); else engine.undo(); }
       else if (mod && e.key.toLowerCase() === "y") { e.preventDefault(); engine.redo(); }
       else if (e.key === " ") { e.preventDefault(); togglePlay(); }
       else if (e.key.toLowerCase() === "s" && !mod) split();
       else if ((e.key === "Delete" || e.key === "Backspace") && subId) delCue();
-      else if (e.key === "Delete" || e.key === "Backspace") del();
+      else if (e.key === "Delete" || e.key === "Backspace") del(e.shiftKey ? true : undefined);
+      else if (e.key.toLowerCase() === "r" && !mod) setRipple(!ripple);
       else if (e.key.toLowerCase() === "t" && !mod) addText();
       else if (e.key.toLowerCase() === "f" && !mod && selectedId) engine.dispatch(cmd.freezeFrame(selectedId, Math.round(player.time)));
       else if (e.key === "ArrowLeft") seek(player.time - secondsToTicks(1 / project.settings.fps));
@@ -144,6 +147,10 @@ function Editor({ engine, storage, recovery }: EditorContext) {
     </div>
   );
 
+  const rippleToggle = (
+    <button key="ripple" className={`v2-tool ${ripple ? "is-active" : ""}`} aria-pressed={ripple} title="Ripple: delete and trim move later clips to close gaps (R)" onClick={() => setRipple(!ripple)}><b aria-hidden>⇤</b><span>Ripple {ripple ? "on" : "off"}</span></button>
+  );
+
   // Linked audio (owned child of a video clip): extract / duplicate / mute-restore. All undoable commands.
   const linkedAudioActions = selected && selected.placement.clipType === "video" ? [
     { icon: "⤓", label: "Extract audio", title: "Move this clip's audio to an audio track (mutes the clip's own audio)", run: () => { engine.dispatch(cmd.extractAudio(selected.placement.id, "extract")); setToast("Audio extracted to an audio track"); } },
@@ -170,7 +177,7 @@ function Editor({ engine, storage, recovery }: EditorContext) {
   const selectionActions = selected ? (
     <>
       <button className="v2-tool" onClick={split}><b>✂</b><span>Split</span></button>
-      <button className="v2-tool" onClick={del}><b>🗑</b><span>Delete</span></button>
+      <button className="v2-tool" title={ripple ? "Delete and close the gap (Del)" : "Delete (Del) · Shift+Del ripple delete"} onClick={() => del()}><b>🗑</b><span>{ripple ? "Ripple delete" : "Delete"}</span></button>
       {speedSelect}
       {[...timeActions, ...linkedAudioActions].map((a) => <button key={a.label} className="v2-tool" title={a.title} onClick={a.run}><b aria-hidden>{a.icon}</b><span>{a.label}</span></button>)}
       {selected.placement.clipType !== "image" && (
@@ -179,6 +186,7 @@ function Editor({ engine, storage, recovery }: EditorContext) {
         </label>
       )}
       <button className="v2-tool" onClick={() => engine.dispatch(cmd.toggleTrackMute(selected.track.id))}><b>{selected.track.muted ? "🔈" : "🔇"}</b><span>{selected.track.muted ? "Unmute track" : "Mute track"}</span></button>
+      {rippleToggle}
       <button className="v2-tool" onClick={() => setSelectedId(undefined)}><b>✓</b><span>Done</span></button>
     </>
   ) : (
@@ -187,6 +195,7 @@ function Editor({ engine, storage, recovery }: EditorContext) {
       <button className="v2-tool" onClick={() => engine.dispatch(cmd.addTrack("video"))}><b>▭</b><span>Video track</span></button>
       <button className="v2-tool" onClick={() => engine.dispatch(cmd.addTrack("audio"))}><b>♫</b><span>Audio track</span></button>
       {textTools.map((a) => <button key={a.label} className="v2-tool" title={a.title} onClick={a.run}><b aria-hidden>{a.icon}</b><span>{a.label}</span></button>)}
+      {rippleToggle}
       <button className="v2-tool" onClick={() => setPps((p) => Math.min(400, p * 1.5))}><b>＋</b><span>Zoom in</span></button>
       <button className="v2-tool" onClick={() => setPps((p) => Math.max(4, p / 1.5))}><b>－</b><span>Zoom out</span></button>
     </>
@@ -222,11 +231,12 @@ function Editor({ engine, storage, recovery }: EditorContext) {
       tool("T", "Text", () => setMenu("text")),
       tool("▭", "Video track", () => engine.dispatch(cmd.addTrack("video"))),
       tool("⤢", "Zoom", () => setMenu("zoom")),
+      rippleToggle,
     ],
     "edit-hint": [<span key="h" className="v2-tool-hint">Tap a clip on the timeline to edit it</span>],
     edit: selected ? [
       tool("✂", "Split", split),
-      tool("🗑", "Delete", del),
+      tool("🗑", ripple ? "Ripple delete" : "Delete", () => del(), "delete", ripple ? "Delete and close the gap" : "Delete"),
       tool("⤧", "Adjust", () => setInspOpen(true), "adjust", "Transform, keyframes and fades"),
       ...(speedSelect ? [tool("⏩", `Speed ${sp!.speed ?? 1}×`, () => setMenu("speed"), "speed", "Playback speed")] : []),
       ...[...timeActions, ...linkedAudioActions].map((a) => tool(a.icon, a.label, a.run, a.label, a.title)),
@@ -235,6 +245,7 @@ function Editor({ engine, storage, recovery }: EditorContext) {
           <input type="range" min={0} max={1} step={0.05} value={selected.placement.volume ?? 1} aria-label="Volume" onPointerDown={() => engine.beginGesture()} onPointerUp={() => engine.endGesture()} onBlur={() => engine.endGesture()} onChange={(e) => engine.dispatch(cmd.setPlacementVolume(selected.placement.id, Number(e.target.value)))} />
         </label>] : []),
       tool(selected.track.muted ? "🔈" : "🔇", selected.track.muted ? "Unmute track" : "Mute track", () => engine.dispatch(cmd.toggleTrackMute(selected.track.id))),
+      rippleToggle,
     ] : [],
     audio: [
       tool("♫", "Import audio", () => setSheet(true)),
@@ -281,7 +292,7 @@ function Editor({ engine, storage, recovery }: EditorContext) {
               <button className="v2-icon" aria-label="Redo" disabled={!canRedo} onClick={() => engine.redo()}>↷</button>
             </span>
           </div>
-          <Timeline engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} onSelect={selectClip} pps={pps} centered topLane={topLane}
+          <Timeline engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} onSelect={selectClip} pps={pps} centered topLane={topLane} ripple={ripple}
             thumbs={thumbs} onAddMedia={() => setSheet(true)}
             timeLabel={<><b>{formatTimecode(time, project.settings.fps).slice(0, 5)}</b> / {formatTimecode(duration, project.settings.fps).slice(0, 5)}</>}
             sideColumn={<>
@@ -303,8 +314,8 @@ function Editor({ engine, storage, recovery }: EditorContext) {
           <div className="v2-side">{selected && <TransformInspector engine={engine} placement={selected.placement} time={time} />}{cue && <SubtitleEditor engine={engine} sub={cue} onDelete={delCue} />}{browser}</div>
           {preview}
           <section className="v2-timeline-panel" aria-label="Timeline">
-            <div className="v2-timeline-toolbar">{selectionActions}<span className="v2-hint">Space play · S split · F freeze · Del delete · ⌘/Ctrl+Z undo</span></div>
-            <Timeline engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} onSelect={selectClip} pps={pps} centered={false} topLane={topLane} />
+            <div className="v2-timeline-toolbar">{selectionActions}<span className="v2-hint">Space play · S split · F freeze · Del delete · Shift+Del ripple · R ripple · ⌘/Ctrl+Z undo</span></div>
+            <Timeline engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} onSelect={selectClip} pps={pps} centered={false} topLane={topLane} ripple={ripple} />
           </section>
         </div>
       )}

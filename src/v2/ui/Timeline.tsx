@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { cmd, type Engine } from "../engine";
-import { ops, compositionDuration, TICKS_PER_SECOND, formatTimecode, type Composition, type Project } from "../domain";
+import { edit, ops, compositionDuration, TICKS_PER_SECOND, formatTimecode, type Composition, type Project } from "../domain";
 
 interface Props {
   engine: Engine;
@@ -19,6 +19,8 @@ interface Props {
   sideColumn?: ReactNode;
   timeLabel?: ReactNode;
   /** Extra lane rendered above the tracks (subtitles), given the time↔px mapping. */
+  /** Ripple mode: trims move later clips on the track. */
+  ripple?: boolean;
   topLane?: { label: string; render: (toPx: (t: number) => number, toTicks: (px: number) => number) => ReactNode };
 }
 
@@ -31,7 +33,7 @@ type Gesture =
 
 const HEADER_W = 84;
 
-export function Timeline({ engine, project, time, playing, onSeek, selectedId, onSelect, pps, centered, thumbs, onAddMedia, sideColumn, timeLabel, topLane }: Props) {
+export function Timeline({ engine, project, time, playing, onSeek, selectedId, onSelect, pps, centered, thumbs, onAddMedia, sideColumn, timeLabel, topLane, ripple }: Props) {
   const comp = project.compositions[project.rootCompositionId];
   const scrollRef = useRef<HTMLDivElement>(null);
   const [gesture, setGesture] = useState<Gesture>();
@@ -82,9 +84,9 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, o
       const p = comp.tracks.flatMap((t) => t.placements).find((x) => x.id === gesture.id);
       const asset = p && project.assets[p.source.assetId];
       const max = asset?.kind === "image" ? undefined : asset?.versions.find((v) => v.id === p?.source.versionId)?.media.durationTicks;
-      return ops.trimPlacement(comp, gesture.id, gesture.edge, gesture.to, max);
+      return (ripple ? edit.rippleTrim : ops.trimPlacement)(comp, gesture.id, gesture.edge, gesture.to, max);
     } catch { return comp; }
-  }, [gesture, comp, project.assets]);
+  }, [gesture, comp, project.assets, ripple]);
 
   const snapThreshold = toTicks(8);
   const trackAt = (x: number, y: number) => (document.elementFromPoint(x, y)?.closest("[data-track-id]") as HTMLElement | null)?.dataset.trackId;
@@ -120,7 +122,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, o
   const onPointerUp = () => {
     if (!gesture) return;
     if (gesture.kind === "move" && gesture.active) engine.dispatch(cmd.movePlacement(gesture.id, gesture.trackId, gesture.start));
-    if (gesture.kind === "trim" && gesture.to !== gesture.edge0) engine.dispatch(cmd.trimPlacement(gesture.id, gesture.edge, gesture.to));
+    if (gesture.kind === "trim" && gesture.to !== gesture.edge0) engine.dispatch(cmd.trimPlacement(gesture.id, gesture.edge, gesture.to, ripple));
     setGesture(undefined);
   };
 
