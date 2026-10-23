@@ -273,3 +273,6 @@ Verified slice (2026-10-23): `projectTimelinePlacement.ts` now promotes legacy-o
 
 
 Verified implementation slice in progress (2026-10-23): ordinary Timeline move, trim, resize, split, duplicate, and delete now route legacy-only clips through canonical root Composition promotion, including linked audio owner/child placements. Focused tests cover move, trim, resize/adjacent trim, linked-audio synchronization, and immutability; App integration tests cover split/duplicate. Check exact-head CI for the latest docs-synchronized commit before calling this slice validated. Next continue with remaining Shot-domain/Project mutation paths, root/nested save/reopen history coverage, and renderer/playback migration off `CompositionLayer[]`. Do not mark DYS-014 complete, merge PR #111, or close Issue #100.
+
+
+Scope correction (2026-10-23): canonical promotion currently covers ordinary Timeline move, trim, resize, and delete. Do not assume split/duplicate are migrated: a trial canonical route caused three App integration test failures and was reverted. Continue investigating those paths separately with parity tests. Rollback/fix code head `64fa699c60592bcc49222ee89a2e785063bc477a` passed CI run [39958220582](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39958220582); check exact docs-synced head CI.
