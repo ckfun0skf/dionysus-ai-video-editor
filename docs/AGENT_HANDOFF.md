@@ -695,3 +695,7 @@ The first CI for the expanded selector cleanup passed all 26 test files but fail
 ## Validation correction — keep Shot source discriminant narrowed (2026-10-23)
 
 The pinned Shot Slot snapshot regression passed with all 298 tests, but TypeScript caught that a nested callback did not retain the `placement.source.type === "shot"` discriminant. The resolver now captures the narrowed source union in a local constant before looking up the Shot and Slot. Fix commit: `f79818e90f6fd7ccc94a3c235665650ed6344c40`. Exact-head CI for this correction and final docs sync is pending; keep the Issue #110 pinned-snapshot checkbox unchecked until it passes.
+
+## Validation correction — explicitly guard optional Shot Slot ID (2026-10-23)
+
+The pinned-version regression again passed all 298 tests, but TypeScript correctly required a local guard because `CompositionSourceReference.shot.slotId` is optional. The resolver now captures `slotId`, skips Shot references without a Slot, and uses the narrowed local value for lookup and pinning. Fix commit: `27af284afe3794da779da7d6d44d5367b2d56492`. Exact-head CI for this correction and docs sync is pending; keep the Issue #110 snapshot item unchecked until it passes.
