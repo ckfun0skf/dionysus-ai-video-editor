@@ -12,7 +12,7 @@ import { moveNormalizedFrame, resizeNormalizedFrame } from "./previewTransform";
 import { timelineClipPatchChangesSourceIdentity } from "./timelineClipSourcePatch";
 import { getAllowedChildClipAssets, wouldCreateClipAssetCycle } from "./clipAssetGraph";
 import { t } from "./i18n";
-import { duplicateTimelineClip, moveTimelineClip, splitTimelineClip, trimTimelineClip, deleteTimelineClip } from "./timelineOperations";
+import { moveTimelineClip, deleteTimelineClip } from "./timelineOperations";
 import { type ClipResizePreview } from "./timelineResize";
 import { canPlaceTimelineClipOnTrack } from "./timelinePlacement";
 import { applyClipVersionResizePreview, calculateClipVersionDropPosition, calculateClipVersionResizePreview } from "./nestedTimelinePlacement";
