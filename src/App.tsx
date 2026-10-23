@@ -9,6 +9,7 @@ import { createProjectDocument, readProjectDocument } from "./projectDocument";
 import { createRootCompositionPlacementForTimelineClip, migrateLegacyProjectToComposition, projectRootCompositionToLegacy } from "./compositionMigration";
 import { addCompositionLinkedAudioChild, addCompositionTrack, applyCompositionResizePreview, deleteCompositionPlacement, duplicateCompositionPlacement, duplicateLinkedAudio, extractLinkedAudio, insertCompositionPlacement, moveCompositionPlacement, moveCompositionPlacementToTrack, removeCompositionTrack, rippleReorderCompositionMasterShots, splitCompositionPlacement, trimCompositionPlacement, updateCompositionLinkedAudioChild, updateCompositionPlacement, updateCompositionTrack } from "./compositionCommands";
 import { moveNormalizedFrame, resizeNormalizedFrame } from "./previewTransform";
+import { timelineClipPatchChangesSourceIdentity } from "./timelineClipSourcePatch";
 import { getAllowedChildClipAssets, wouldCreateClipAssetCycle } from "./clipAssetGraph";
 import { t } from "./i18n";
 import { duplicateTimelineClip, moveTimelineClip, splitTimelineClip, trimTimelineClip, deleteTimelineClip } from "./timelineOperations";
@@ -1234,7 +1235,11 @@ export default function App() {
         patch.sourceOut === undefined && (current.sourceIn !== undefined || current.sourceOut !== undefined)) {
       updated.sourceOut = (updated.sourceIn ?? 0) + updated.duration;
     }
-    const sourceTemplate = createRootCompositionPlacementForTimelineClip(editorSessionRef.current.project, editorSessionRef.current.composition, updated);
+    // Metadata/geometry edits must preserve the canonical source exactly. Re-derive it from
+    // the Project projection only when the caller explicitly changes source identity fields.
+    const sourceTemplate = timelineClipPatchChangesSourceIdentity(patch)
+      ? createRootCompositionPlacementForTimelineClip(editorSessionRef.current.project, editorSessionRef.current.composition, updated)
+      : undefined;
     changeRootComposition(root => {
       let next = root;
       if (patch.start !== undefined && patch.start !== current.start) {
@@ -1248,10 +1253,10 @@ export default function App() {
       return updateCompositionPlacement(next, clipId, {
         name: updated.name,
         trackId: updated.trackId,
-        source: sourceTemplate.source,
+        ...(sourceTemplate ? { source: sourceTemplate.source } : {}),
         ...(updated.sourceIn !== undefined ? { sourceIn: updated.sourceIn } : {}),
         ...(updated.sourceOut !== undefined ? { sourceOut: updated.sourceOut } : {}),
-        legacyData: { ...canonical.legacyData, ...updated },
+        legacyData: { ...canonical.legacyData, ...patch },
       });
     });
   }
