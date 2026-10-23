@@ -3,7 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { resolve } from "node:path";
-import { clipCsp, HTML_RUNTIME, HTML_SANDBOX, HtmlClipHost, isValidFrame, THREE_INTEGRITY, THREE_PATH, THREE_TEMPLATE, threeUrl, withRuntime } from "./htmlClip";
+import { clipCsp, HTML_LIBRARIES, HTML_RUNTIME_JS, HTML_SANDBOX, HtmlClipHost, isValidFrame, THREE_TEMPLATE, withRuntime } from "./htmlClip";
+import { readClipConfig, vendorUrl, writeClipConfig } from "./htmlLibs";
 import { frameWarnings } from "./export/encode";
 import { mediaKindOf } from "../persistence/media";
 import { audioPlan } from "./export/plan";
@@ -12,25 +13,77 @@ import { createProject } from "../domain";
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
 describe("html clips", () => {
-  it("injects CSP, pinned three.js import map and runtime after the doctype, before page content", () => {
-    const three = "https://x.test/app/vendor/three.js";
-    const out = withRuntime("<!DOCTYPE html><html><script>x()</script></html>", three);
+  it("builds import map + CSP only from the selected libraries, after the doctype", () => {
+    const url = (l: { path: string }) => `https://x.test/app/${l.path}`;
+    const three = HTML_LIBRARIES[0];
+    const out = withRuntime('<!DOCTYPE html><html><script type="module">import * as T from "three"</script></html>', url);
     expect(out.startsWith('<!DOCTYPE html><meta http-equiv="Content-Security-Policy"')).toBe(true);
-    expect(out.indexOf(HTML_RUNTIME)).toBeLessThan(out.indexOf("<html>"));
-    expect(out).toContain(`"integrity":{"${three}":"${THREE_INTEGRITY}"}`);
-    const csp = clipCsp(three);
+    expect(out.indexOf("dionysus:ready")).toBeLessThan(out.indexOf("<html>"));
+    expect(out).toContain(`"integrity":{"${url(three)}":"${three.integrity}"}`);
+    // no library imported → no import map, no remote script origin at all
+    const plain = withRuntime("<canvas></canvas><script>requestAnimationFrame(()=>{})</script>", url);
+    expect(plain).not.toContain("importmap");
+    expect(plain).not.toMatch(/https?:\/\//);
+    // explicit selection overrides detection
+    expect(withRuntime(writeClipConfig('<html><head></head>import "three"</html>', { libs: [] }), url)).not.toContain("importmap");
+    const csp = clipCsp([url(three)]);
     expect(csp).toMatch(/^default-src 'none'/);
-    expect(csp).toContain(`script-src 'unsafe-inline' blob: data: ${three}`);
-    expect(csp).not.toMatch(/https?:\/\/(?!x\.test\/app\/vendor\/three\.js)/);
-    expect(withRuntime('import * as T from "https://unpkg.com/three@0.160.0/build/three.module.js"', three)).toContain('from "three"');
-    expect(THREE_TEMPLATE).toContain('from "three"');
+    expect(csp).toContain(`script-src 'unsafe-inline' blob: data: ${url(three)}`);
+    expect(clipCsp()).not.toMatch(/https?:/);
+    expect(withRuntime('import * as T from "https://unpkg.com/three@0.160.0/build/three.module.js"', url)).toContain('from "three"');
     expect(THREE_TEMPLATE).not.toContain("unpkg");
-    expect(threeUrl("/dionysus-ai-video-editor/", "https://h.io/dionysus-ai-video-editor/?v2")).toBe(`https://h.io/dionysus-ai-video-editor/${THREE_PATH}`);
+    expect(vendorUrl("vendor/x.js", "/dionysus-ai-video-editor/", "https://h.io/dionysus-ai-video-editor/?v2")).toBe("https://h.io/dionysus-ai-video-editor/vendor/x.js");
   });
 
-  it("vendored three.js matches its pinned integrity hash", () => {
-    const buf = readFileSync(resolve(__dirname, "../../../public", THREE_PATH));
-    expect(`sha384-${createHash("sha384").update(buf).digest("base64")}`).toBe(THREE_INTEGRITY);
+  it("every registry library matches its pinned integrity hash", () => {
+    for (const l of HTML_LIBRARIES) {
+      const buf = readFileSync(resolve(__dirname, "../../../public", l.path));
+      expect(`sha384-${createHash("sha384").update(buf).digest("base64")}`).toBe(l.integrity);
+    }
+  });
+
+  it("only the registry mentions a specific library", () => {
+    const src = readFileSync(resolve(__dirname, "htmlClip.ts"), "utf8").split("/** Starter clip")[0];
+    expect(src.toLowerCase()).not.toContain("three");
+  });
+
+  it("clip config round-trips; attachments inline into CSS url() and the runtime", () => {
+    const html = writeClipConfig("<html><head></head><body><style>i{background:url(./a.png)}</style></body></html>", { libs: ["three"], assets: { "a.png": "data:image/png;base64,AAAA" } });
+    expect(readClipConfig(html)).toEqual({ libs: ["three"], assets: { "a.png": "data:image/png;base64,AAAA" } });
+    expect(readClipConfig(writeClipConfig(html, {}))).toEqual({});
+    const out = withRuntime(html, () => "https://x.test/t.js");
+    expect(out).toContain('url("data:image/png;base64,AAAA")');
+    expect(out).toContain('const ASSETS={"a.png":');
+  });
+
+  it("virtual-time shim: rAF, performance.now and Date.now follow t; Math.random is seeded", () => {
+    const run = () => {
+      const w: Record<string, unknown> = {};
+      const perf = { now: () => 0 };
+      const msgs: unknown[] = [];
+      let listener: ((e: unknown) => void) | undefined;
+      const parent = { postMessage: (m: unknown) => msgs.push(m) };
+      class MO { observe() {} }
+      class XHR {} (XHR.prototype as unknown as { open: () => void }).open = () => {};
+      const M = Object.create(Math) as Math;
+      const fn = new Function("window", "performance", "Date", "Math", "addEventListener", "parent", "document", "MutationObserver", "XMLHttpRequest", "URL", "Blob", "atob", "createImageBitmap",
+        `const ASSETS={};${HTML_RUNTIME_JS}; return {Date: window.Date};`);
+      w.fetch = () => {};
+      const r = fn(w, perf, Date, M, (ev: string, f: (e: unknown) => void) => { if (ev === "message") listener = f; }, parent, { querySelector: () => null }, MO, XHR, URL, Blob, atob, undefined);
+      return { w, perf, M, msgs, parent, send: (t: number) => listener!({ data: { type: "dionysus:frame", seq: 1, t }, source: parent }), D: r.Date as DateConstructor };
+    };
+    const a = run();
+    const seen: number[] = [];
+    const loop = (ts: number) => { seen.push(ts); (a.w.requestAnimationFrame as (f: (n: number) => void) => void)(loop); };
+    (a.w.requestAnimationFrame as (f: (n: number) => void) => void)(loop);
+    a.send(1.5);
+    expect(seen).toEqual([1500]);
+    expect(a.perf.now()).toBe(1500);
+    expect(a.D.now() - new a.D().getTime()).toBe(0);
+    a.send(2);
+    expect(seen).toEqual([1500, 2000]);
+    const b = run();
+    expect([a.M.random(), a.M.random()]).toEqual([b.M.random(), b.M.random()]);
   });
 
   it("recognises .html files and keeps them out of the audio mix", () => {
