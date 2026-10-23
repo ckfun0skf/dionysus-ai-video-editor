@@ -181,7 +181,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, o
                   <div key={p.id} className={`v2-clip clip-${p.clipType} ${sel ? "is-selected" : ""}`} data-placement-id={p.id}
                     style={{ left: toPx(p.startTicks), width: Math.max(4, toPx(p.durationTicks)), ...(centered && thumbs?.[p.source.assetId] && p.clipType !== "audio" ? { backgroundImage: `url(${thumbs[p.source.assetId]})` } : {}) }}
                     onPointerDown={(e) => onClipDown(e, p.id, t.id, p.startTicks)} title={asset?.name}>
-                    <span className="v2-clip-name">{p.linkedAudio?.muted && <span className="v2-clip-badge" title="Clip audio muted" aria-label="Clip audio muted">🔇</span>}{asset?.name ?? "missing media"}</span>
+                    <span className="v2-clip-name">{p.freeze && <span className="v2-clip-badge" title="Freeze frame" aria-label="Freeze frame">❄</span>}{p.reverse && <span className="v2-clip-badge" title="Reversed" aria-label="Reversed">⟲</span>}{p.speed && p.speed !== 1 && <span className="v2-clip-badge" title={`Speed ${p.speed}×`}>{p.speed}×</span>}{p.linkedAudio?.muted && !p.freeze && <span className="v2-clip-badge" title="Clip audio muted" aria-label="Clip audio muted">🔇</span>}{asset?.name ?? "missing media"}</span>
                     {sel && <>
                       <div className="v2-handle left" aria-label="Trim start" onPointerDown={(e) => onTrimDown(e, p.id, "left", p.startTicks)} />
                       <div className="v2-handle right" aria-label="Trim end" onPointerDown={(e) => onTrimDown(e, p.id, "right", p.startTicks + p.durationTicks)} />

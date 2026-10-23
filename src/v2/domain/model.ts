@@ -45,6 +45,22 @@ export interface Placement {
   linkedAudio?: LinkedAudio;
   /** Visual transform (video/image). Absent = identity. */
   transform?: Transform;
+  /** Playback speed (0.25..4, default 1). Timeline duration = source span / speed. */
+  speed?: number;
+  /** Play the source span backwards. */
+  reverse?: boolean;
+  /** Freeze frame: holds the single source frame at sourceInTicks for the whole duration. */
+  freeze?: boolean;
+}
+
+export const MIN_SPEED = 0.25;
+export const MAX_SPEED = 4;
+/** Source time shown at absolute timeline time `t` (accounts for speed, reverse and freeze). */
+export function sourceAt(p: Placement, t: number): number {
+  if (p.freeze || p.clipType === "image") return p.sourceInTicks;
+  const s = p.speed ?? 1;
+  const o = Math.min(Math.max(0, t - p.startTicks), p.durationTicks);
+  return p.reverse ? p.sourceInTicks + Math.max(0, Math.round((p.durationTicks - o) * s) - 1) : p.sourceInTicks + Math.round(o * s);
 }
 
 /**

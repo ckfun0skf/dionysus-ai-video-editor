@@ -144,3 +144,5 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 .v2-side { grid-area: browser; display: flex; flex-direction: column; min-height: 0; overflow: auto; border-right: 1px solid var(--line); background: var(--panel); }
 .v2-side .v2-browser { border-right: none; overflow: visible; }
 .v2-side .v2-inspector { border-bottom: 1px solid var(--line); }
+.v2-tool select { background: transparent; color: inherit; border: 1px solid var(--line); border-radius: 6px; min-height: 28px; }
+.v2-tool.is-active { color: var(--accent, #4f8cff); background: rgba(79, 140, 255, .12); }

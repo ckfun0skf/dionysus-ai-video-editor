@@ -8,6 +8,8 @@ beforeAll(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   (globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver = class { observe() {} disconnect() {} };
   HTMLCanvasElement.prototype.getContext = (() => null) as never;
+  Element.prototype.setPointerCapture = () => undefined;
+  Element.prototype.releasePointerCapture = () => undefined;
   Object.defineProperty(globalThis, "indexedDB", { value: undefined, configurable: true });
 });
 afterEach(() => { document.body.innerHTML = ""; });
@@ -44,5 +46,33 @@ describe("V2App", () => {
     (Array.from(alert.querySelectorAll("button")).find((b) => b.textContent === "Dismiss") as HTMLButtonElement).click();
     await act(async () => {});
     expect(el.querySelector(".v2-recovery")).toBeNull();
+  });
+
+  it("speed, reverse and freeze on a selected video clip are undoable", async () => {
+    const { createMemoryStorage } = await import("../persistence");
+    const { createProject } = await import("../domain");
+    const storage = createMemoryStorage();
+    const p = createProject();
+    p.assets.a = { id: "a", kind: "video", name: "clip.mp4", versions: [{ id: "1", createdAt: "", media: { blobKey: "k", mime: "video/mp4", durationTicks: 1200000 }, provenance: { source: "import", inputs: [] } }] };
+    p.compositions[p.rootCompositionId].tracks[0].placements.push({ id: "v", startTicks: 0, durationTicks: 480000, sourceInTicks: 0, source: { kind: "assetVersion", assetId: "a", versionId: "1" }, clipType: "video" });
+    await storage.projects.save(p);
+    storage.lastProjectId.set(p.id);
+    const el = document.createElement("div");
+    document.body.appendChild(el);
+    await act(async () => { createRoot(el).render(<V2App openStorage={async () => storage} />); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+    const clip = el.querySelector('[data-placement-id="v"]') as HTMLElement;
+    await act(async () => { clip.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true })); window.dispatchEvent(new MouseEvent("pointerup")); });
+    const speed = el.querySelector('select[aria-label="Speed"]') as HTMLSelectElement;
+    await act(async () => { speed.value = "2"; speed.dispatchEvent(new Event("change", { bubbles: true })); });
+    expect(el.querySelector('[data-placement-id="v"]')!.textContent).toContain("2×");
+    const btn = (label: string) => Array.from(el.querySelectorAll("button")).find((b) => b.textContent?.includes(label)) as HTMLButtonElement;
+    await act(async () => { btn("Reverse").click(); });
+    expect(el.querySelector('[aria-label="Reversed"]')).toBeTruthy();
+    await act(async () => { btn("Freeze").click(); });
+    expect(el.querySelector('[aria-label="Freeze frame"]')).toBeTruthy();
+    for (let i = 0; i < 3; i += 1) await act(async () => { (el.querySelector('[aria-label="Undo"]') as HTMLButtonElement).click(); });
+    expect(el.querySelector('[data-placement-id="v"]')!.textContent).not.toContain("2×");
+    expect(el.querySelector('[aria-label="Reversed"]')).toBeNull();
   });
 });

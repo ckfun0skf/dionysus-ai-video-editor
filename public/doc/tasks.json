@@ -1751,12 +1751,15 @@
           "report": "",
           "subtasks": [],
           "acceptance": [
-            "UX bar: selected/hover states, tooltips, empty states, undoable, 44px targets"
+            "UX bar: selected/hover states, tooltips, empty states, undoable, 44px targets",
+            "Placement.speed (0.25–4×, duration = span/speed, clamped by next clip), reverse, freeze; domain sourceAt() maps timeline→source for render, split and trim",
+            "Freeze (F) splits at the playhead, inserts a 3 s held frame and pushes later clips on that track",
+            "Timeline badges 2× / ⟲ / ❄; reverse and freeze are muted and scrubbed per frame"
           ],
           "id": "V2-062",
           "title": "Speed, freeze frame, reverse",
-          "status": "planned",
-          "progress": 0
+          "status": "done",
+          "progress": 100
         },
         {
           "doc": "docs/v2/MODULE_DESIGN.md",
