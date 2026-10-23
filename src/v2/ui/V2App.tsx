@@ -10,6 +10,7 @@ import { useThumbs } from "./useThumbs";
 import { useMediaPreviews } from "./useMedia";
 import { TransformHandles, TransformInspector } from "./Transform";
 import { ExportDialog } from "./ExportDialog";
+import { ProjectsDialog } from "./Projects";
 import type { Resolution } from "../render";
 import { addCueAt, downloadSrt, importSrtFile, SubtitleEditor, SubtitleLane } from "./Subtitles";
 
@@ -18,13 +19,15 @@ const SPEEDS = [0.25, 0.5, 1, 1.5, 2, 4];
 
 /** `openStorage` is injectable for tests; production uses IndexedDB (memory fallback). */
 export function V2App({ openStorage }: { openStorage?: () => Promise<EditorContext["storage"]> } = {}) {
-  const boot = useEditorBoot(openStorage);
+  const [key, setKey] = useState(0);
+  const boot = useEditorBoot(openStorage, key);
   if (boot.status === "loading") return <div className="v2-loading">Loading Dionysus v2…</div>;
   if (boot.status === "error") return <div className="v2-loading" role="alert">Could not start the v2 editor: {boot.error}. <button onClick={() => location.reload()}>Retry</button></div>;
-  return <Editor {...boot.ctx} />;
+  const switchTo = async (id: string) => { await boot.ctx.flush(); boot.ctx.storage.lastProjectId.set(id); setKey((k) => k + 1); };
+  return <Editor key={key} {...boot.ctx} onSwitch={(id) => void switchTo(id)} />;
 }
 
-function Editor({ engine, storage, recovery }: EditorContext) {
+function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwitch: (id: string) => void }) {
   const [notice, setNotice] = useState(recovery);
   const { project, canUndo, canRedo } = useEngineState(engine);
   const mobile = useIsMobile();
@@ -42,6 +45,7 @@ function Editor({ engine, storage, recovery }: EditorContext) {
   const [menu, setMenu] = useState<Menu>("root");
   const [res, setRes] = useState<Resolution>("1080p");
   const [exporting, setExporting] = useState(false);
+  const [projects, setProjects] = useState(false);
   const openExport = () => { player.pause(); setExporting(true); };
   const [fs, setFs] = useState(false);
   const [toast, setToast] = useState<string>();
@@ -102,7 +106,7 @@ function Editor({ engine, storage, recovery }: EditorContext) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (exporting || (e.target as HTMLElement)?.closest?.("input,textarea,select")) return;
+      if (exporting || projects || (e.target as HTMLElement)?.closest?.("input,textarea,select")) return;
       const mod = e.metaKey || e.ctrlKey;
       if (mod && e.key.toLowerCase() === "z") { e.preventDefault(); if (e.shiftKey) engine.redo(); else engine.undo(); }
       else if (mod && e.key.toLowerCase() === "e") { e.preventDefault(); openExport(); }
@@ -317,6 +321,7 @@ function Editor({ engine, storage, recovery }: EditorContext) {
       {mobile ? (
         <header className="v2-header v2-mheader">
           <a className="v2-icon v2-close" href={window.location.pathname} aria-label="Close (back to classic editor)">✕</a>
+          <button className="v2-icon v2-projects-btn" aria-label="Projects" title="Projects: new, open, rename, delete" onClick={() => setProjects(true)}>☰</button>
           <span className="v2-spacer" />
           <select className="v2-res" aria-label="Export resolution" value={res} onChange={(e) => setRes(e.target.value as Resolution)}>
             {["720p", "1080p", "2K", "4K"].map((r) => <option key={r}>{r}</option>)}
@@ -326,12 +331,14 @@ function Editor({ engine, storage, recovery }: EditorContext) {
       ) : (
         <header className="v2-header">
           <a className="v2-back" href={window.location.pathname} title="Back to classic editor">‹ Classic</a>
+          <button className="v2-btn v2-projects-btn" title="Projects: new, open, rename, delete" onClick={() => setProjects(true)}>☰ Projects</button>
           <input className="v2-title" value={project.name} aria-label="Project name" onFocus={() => engine.beginGesture()} onBlur={() => engine.endGesture()} onChange={(e) => engine.dispatch(cmd.renameProject(e.target.value))} />
           <span className="v2-badge">v2 preview</span>
           <button className="v2-btn primary v2-export-d" title="Export MP4 (⌘/Ctrl+E)" onClick={openExport}>Export</button>
         </header>
       )}
       {notice && <RecoveryNotice failure={notice} storage={storage} onDismiss={() => setNotice(undefined)} />}
+      {projects && <ProjectsDialog storage={storage} current={project} onOpen={(id) => { setProjects(false); onSwitch(id); }} onRenameCurrent={(n) => engine.dispatch(cmd.renameProject(n))} onClose={() => setProjects(false)} />}
       {exporting && <ExportDialog project={project} blobs={storage.blobs} res={res} onRes={setRes} onClose={() => setExporting(false)} />}
       {toast && <div className="v2-toast" role="status" onClick={() => setToast(undefined)}>{toast}</div>}
       {mobile ? (

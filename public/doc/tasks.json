@@ -1839,8 +1839,8 @@
           ],
           "id": "V2-068",
           "title": "Project list: new/open/rename/delete",
-          "status": "planned",
-          "progress": 0
+          "status": "done",
+          "progress": 100
         }
       ]
     },
