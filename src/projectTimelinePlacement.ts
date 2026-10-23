@@ -522,6 +522,23 @@ export type ProjectTimelineMoveTarget =
   | { type: "shot"; shotId: string }
   | { type: "clip"; clipId: string };
 
+/** Promote a legacy-only timeline clip into the live canonical root before applying a move. */
+export function moveCanonicalRootTimelineClip(
+  project: DionysusProject,
+  root: CompositionDocument,
+  clipId: string,
+  targetTrackId: string,
+  start: number,
+): CompositionDocument {
+  let next = root;
+  if (!next.placements.some(placement => placement.id === clipId)) {
+    const clip = (project.timelineClips ?? []).find(item => item.id === clipId);
+    if (!clip) throw new Error("Timeline clip not found for canonical promotion.");
+    next = insertCompositionPlacement(next, createRootCompositionPlacementForTimelineClip(project, next, clip));
+  }
+  return moveCompositionPlacementToTrack(next, clipId, targetTrackId, start);
+}
+
 /** Commit a valid placement move for either a Master Shot or an ordinary timeline clip. */
 export function moveProjectTimelinePlacement(
   project: DionysusProject,
