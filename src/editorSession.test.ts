@@ -76,6 +76,32 @@ describe("Editor session transition boundary", () => {
     expect(current.composition.nestedCompositions?.[0].id).toBe("composition:pinned-shot-slot:older-version");
   });
 
+  it("preserves canonical root identity, provenance, and unknown metadata during legacy reconciliation", () => {
+    const current = makeSession();
+    current.composition.id = "canonical-root-custom-id";
+    current.composition.provenance = {
+      kind: "master-timeline-snapshot",
+      sourceProjectId: current.project.id,
+      sourceCompositionId: "source-composition-id",
+      sourceUpdatedAt: current.project.updatedAt,
+      createdAt: "2026-10-22T12:00:00.000Z",
+      pinnedVersions: [],
+    };
+    current.composition.legacyData = {
+      ...(current.composition.legacyData ?? {}),
+      canonicalOnlyFlag: "preserve-me",
+    };
+    const nextProject = structuredClone(current.project);
+    nextProject.name = "Metadata-only project rename";
+
+    const next = commitEditorSessionChange(current, nextProject);
+
+    expect(next.composition.id).toBe("canonical-root-custom-id");
+    expect(next.composition.provenance).toEqual(current.composition.provenance);
+    expect(next.composition.legacyData).toMatchObject({ canonicalOnlyFlag: "preserve-me" });
+    expect(next.composition.name).toBe("Metadata-only project rename — Master Timeline");
+  });
+
   it("commits an explicit canonical root and its Project projection as one immutable session", () => {
     const current = makeSession();
     const nextProject = structuredClone(current.project);
