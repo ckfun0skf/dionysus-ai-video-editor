@@ -523,7 +523,7 @@ export type ProjectTimelineMoveTarget =
   | { type: "clip"; clipId: string };
 
 /** Materialize a legacy clip and its linked owner/children before canonical edits. */
-function ensureCanonicalTimelineClips(
+export function ensureCanonicalTimelineClips(
   project: DionysusProject,
   root: CompositionDocument,
   requestedIds: string[],
