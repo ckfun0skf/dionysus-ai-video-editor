@@ -339,3 +339,9 @@ export function reorderMain(comp: Composition, id: string, toIndex: number): Com
   if (packed.every((x, i) => x.id === sorted[i].id && x.startTicks === sorted[i].startTicks)) return comp;
   return { ...comp, tracks: comp.tracks.map((tr) => tr.id === main.id ? { ...tr, placements: packed } : tr) };
 }
+
+/** Delete a layer with all its clips. The main track is never removed. */
+export function deleteLayer(comp: Composition, trackId: string): Composition {
+  if (mainTrack(comp)?.id === trackId || !comp.tracks.some((t) => t.id === trackId)) return comp;
+  return { ...comp, tracks: comp.tracks.filter((t) => t.id !== trackId) };
+}
