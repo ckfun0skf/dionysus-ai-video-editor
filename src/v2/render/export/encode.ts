@@ -6,7 +6,7 @@ import { Player } from "../player";
 import { audioPlan, exportDuration, exportSize, frameTimes, type AudioSegment, type Resolution } from "./plan";
 
 export interface ExportProgress { stage: "audio" | "video" | "finalize"; done: number; total: number }
-export interface ExportResult { blob: Blob; ext: "mp4" | "webm"; note?: string }
+export interface ExportResult { blob: Blob; ext: "mp4" | "webm"; note?: string; warnings?: string[] }
 export interface ExportOptions { res: Resolution; onProgress?: (p: ExportProgress) => void; signal?: AbortSignal; forceWebm?: boolean }
 
 const RATE = 48_000;
@@ -65,8 +65,11 @@ export async function exportProject(project: Project, blobs: BlobStore, o: Expor
   player.canvas = canvas;
   try {
     const avc = o.forceWebm ? undefined : await pickAvc(width, height, fps);
-    if (avc) return await toMp4(player, canvas, avc, audio, frameTimes(Math.round(seconds * 120_000), fps), fps, o);
-    return await toWebm(player, canvas, audio, frameTimes(Math.round(seconds * 120_000), fps), fps, o);
+    const r = avc
+      ? await toMp4(player, canvas, avc, audio, frameTimes(Math.round(seconds * 120_000), fps), fps, o)
+      : await toWebm(player, canvas, audio, frameTimes(Math.round(seconds * 120_000), fps), fps, o);
+    const warnings = frameWarnings(project, player.frameIssues);
+    return warnings.length ? { ...r, warnings } : r;
   } finally { player.dispose(); }
 }
 
@@ -138,4 +141,21 @@ async function toWebm(player: Player, canvas: HTMLCanvasElement, audio: AudioBuf
     }
   } finally { rec.stop(); src?.stop(); await stopped; void ac?.close(); stream.getTracks().forEach((t) => t.stop()); }
   return { blob: new Blob(parts, { type: "video/webm" }), ext: "webm", note: "This browser has no H.264 encoder, so the export is WebM (recorded in real time)." };
+}
+
+/** One line per HTML clip whose frames timed out or were rejected; the export used the last good frame. */
+export function frameWarnings(project: Project, issues: { placementId: string; t: number; issue: "timeout" | "invalid" }[]): string[] {
+  const by = new Map<string, { timeout: number; invalid: number; first: number }>();
+  for (const i of issues) {
+    const e = by.get(i.placementId) ?? { timeout: 0, invalid: 0, first: i.t };
+    e[i.issue] += 1; e.first = Math.min(e.first, i.t);
+    by.set(i.placementId, e);
+  }
+  const comp = project.compositions[project.rootCompositionId];
+  return [...by].map(([id, e]) => {
+    const p = comp.tracks.flatMap((t) => t.placements).find((x) => x.id === id);
+    const name = (p && project.assets[p.source.assetId]?.name) ?? "HTML clip";
+    const what = [e.timeout && `${e.timeout} frame${e.timeout > 1 ? "s" : ""} timed out (4 s)`, e.invalid && `${e.invalid} invalid frame${e.invalid > 1 ? "s" : ""}`].filter(Boolean).join(", ");
+    return `${name}: ${what}, first at ${(e.first / 120_000).toFixed(2)} s. Those frames reuse the last good image (or are blank).`;
+  });
 }

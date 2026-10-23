@@ -40,6 +40,12 @@ describe("ExportDialog", () => {
     await act(async () => btn(el, "Cancel export").click());
     expect(btn(el, "Start export")).toBeTruthy();
   });
+  it("warns when HTML clip frames timed out, but still offers the file", async () => {
+    const { el } = mount(vi.fn(async () => ({ blob: new Blob(["a"]), ext: "mp4" as const, warnings: ["scene.html: 3 frames timed out (4 s), first at 1.00 s."] })));
+    await act(async () => btn(el, "Start export").click());
+    expect(el.querySelector('[role="alert"]')!.textContent).toContain("scene.html: 3 frames timed out");
+    expect(btn(el, "Download")).toBeTruthy();
+  });
   it("reports errors with retry", async () => {
     const { el } = mount(vi.fn(async () => { throw new Error("The timeline is empty"); }));
     await act(async () => btn(el, "Start export").click());
