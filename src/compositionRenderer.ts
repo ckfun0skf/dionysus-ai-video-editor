@@ -402,7 +402,7 @@ export async function renderCompositionFrame(canvas: HTMLCanvasElement, project:
         await renderCompositionFrame(
           childCanvas,
           project,
-          childVersion.layers,
+          collectVersionRenderLayers(childVersion),
           seconds - layer.start,
           options,
           images,
