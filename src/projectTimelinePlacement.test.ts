@@ -13,10 +13,38 @@ import {
   calculateProjectTimelineClipResizePreview,
   calculateProjectTimelineDropPosition,
   getProjectTimelinePlacementItems,
+  moveCanonicalRootTimelineClip,
   moveProjectTimelinePlacement,
 } from "./projectTimelinePlacement";
 
 describe("shared project timeline placement engine", () => {
+  it("promotes a legacy-only clip into canonical Composition before moving it", () => {
+    const project = structuredClone(sampleProject);
+    let root = migrateLegacyProjectToComposition(project).rootComposition;
+    const videoTrack = root.tracks.find(track => track.kind === "video");
+    expect(videoTrack).toBeDefined();
+    const clip = {
+      id: "legacy-only-timeline-clip",
+      name: "Legacy-only clip",
+      kind: "video" as const,
+      trackId: videoTrack!.id,
+      start: 0,
+      duration: 2,
+    };
+    project.timelineClips = [...(project.timelineClips ?? []), clip];
+    const before = structuredClone(root);
+
+    root = moveCanonicalRootTimelineClip(project, root, clip.id, videoTrack!.id, 4);
+
+    expect(root.placements.find(placement => placement.id === clip.id)).toMatchObject({
+      id: clip.id,
+      trackId: videoTrack!.id,
+      start: 4,
+      duration: 2,
+    });
+    expect(before.placements.some(placement => placement.id === clip.id)).toBe(false);
+  });
+
   it("plans insertion from canonical root occupancy even when the legacy projection is stale", () => {
     const project = structuredClone(sampleProject);
     project.shots = [];
