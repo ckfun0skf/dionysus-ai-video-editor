@@ -163,3 +163,6 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 .v2-sub-text:focus, .v2-sub-time input:focus { outline: 2px solid var(--accent, #4f8cff); }
 .v2-sub-time input { background: #111; color: inherit; border: 1px solid var(--line); border-radius: 6px; min-height: 32px; padding: 0 6px; }
 .v2-msub { position: fixed; left: 0; right: 0; bottom: 64px; z-index: 20; background: var(--panel); border-top: 1px solid var(--line); max-height: 40dvh; overflow-y: auto; }
+/* Multi-select (V2-064) */
+.v2-sel-count { align-self: center; padding: 0 8px; color: var(--accent, #4f8cff); font-weight: 600; white-space: nowrap; }
+.v2-tool:disabled { opacity: .4; cursor: default; }

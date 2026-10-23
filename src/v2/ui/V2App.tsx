@@ -2,14 +2,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Player } from "../render";
 import { cmd } from "../engine";
 import { importFile } from "../persistence";
-import { compositionDuration, findPlacement, formatTimecode, secondsToTicks, type Asset } from "../domain";
+import { compositionDuration, edit, findPlacement, newId, formatTimecode, secondsToTicks, type Asset } from "../domain";
 import { useEditorBoot, useEngineState, useIsMobile, type EditorContext, type LoadFailure } from "./useEditor";
 import { Timeline } from "./Timeline";
 import { useThumbs } from "./useThumbs";
 import { TransformHandles, TransformInspector } from "./Transform";
 import { addCueAt, downloadSrt, importSrtFile, SubtitleEditor, SubtitleLane } from "./Subtitles";
 
-type Menu = "root" | "edit" | "edit-hint" | "audio" | "zoom" | "speed" | "text";
+type Menu = "multi" | "root" | "edit" | "edit-hint" | "audio" | "zoom" | "speed" | "text";
 const SPEEDS = [0.25, 0.5, 1, 1.5, 2, 4];
 
 /** `openStorage` is injectable for tests; production uses IndexedDB (memory fallback). */
@@ -26,7 +26,12 @@ function Editor({ engine, storage, recovery }: EditorContext) {
   const mobile = useIsMobile();
   const [time, setTime] = useState(0);
   const [playing, setPlaying] = useState(false);
-  const [selectedId, setSelectedId] = useState<string>();
+  const [sel, setSel] = useState<string[]>([]);
+  const selectedId = sel.length === 1 ? sel[0] : undefined;
+  const setSelectedId = (id?: string) => setSel(id ? [id] : []);
+  const [multiMode, setMultiMode] = useState(false);
+  const clipboard = useRef<edit.ClipboardItem[]>([]);
+  const [hasClip, setHasClip] = useState(false);
   const [pps, setPps] = useState(40);
   const [sheet, setSheet] = useState(false);
   const [busy, setBusy] = useState(0);
@@ -50,7 +55,18 @@ function Editor({ engine, storage, recovery }: EditorContext) {
   const duration = compositionDuration(comp);
   const cues = comp.subtitles ?? [];
   const cue = subId ? cues.find((s) => s.id === subId) : undefined;
-  const selectClip = (id?: string) => { setSelectedId(id); if (id) setSubId(undefined); };
+  const selectClip = (id?: string) => { setSelectedId(id); if (id) setSubId(undefined); else setMultiMode(false); };
+  const toggleClip = (id: string) => { setSubId(undefined); setSel((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id])); };
+  const allIds = comp.tracks.flatMap((t) => t.placements.map((p) => p.id));
+  const copy = () => { if (!sel.length) return; clipboard.current = edit.copyClips(comp, sel); setHasClip(true); setToast(`Copied ${sel.length} clip${sel.length > 1 ? "s" : ""}`); };
+  const paste = () => {
+    if (!clipboard.current.length) { setToast("Nothing to paste — copy a clip first"); return; }
+    const ids = clipboard.current.map(() => newId("plc"));
+    engine.dispatch(cmd.pasteClips(clipboard.current, Math.round(player.time), ids));
+    setSel(ids);
+  };
+  const duplicate = () => { if (!sel.length) return; const ids = sel.map(() => newId("plc")); engine.dispatch(cmd.duplicateClips(sel, ids)); setSel(ids); };
+  const delSel = (rippleOverride?: boolean) => { if (sel.length) { engine.dispatch(cmd.deleteClips(sel, rippleOverride ?? ripple)); setSel([]); setMultiMode(false); } };
   const selectCue = (id?: string) => { setSubId(id); if (id) setSelectedId(undefined); };
   const addText = () => { const id = addCueAt(engine, player.time); if (id) selectCue(id); else setToast("There is already text at the playhead"); };
   const delCue = () => { if (subId) { engine.dispatch(cmd.removeSubtitle(subId)); setSubId(undefined); } };
@@ -69,7 +85,7 @@ function Editor({ engine, storage, recovery }: EditorContext) {
   useEffect(() => { player.onTime = (t, p) => { setTime(t); setPlaying(p); setFrame((f) => f + 1); }; return () => player.dispose(); }, [player]);
   useEffect(() => { player.canvas = canvasRef.current ?? undefined; player.draw(); }, [player, mobile]);
   useEffect(() => { player.setProject(project); }, [player, project]);
-  useEffect(() => { if (selectedId && !selected) setSelectedId(undefined); }, [selectedId, selected]);
+  useEffect(() => { const live = sel.filter((id) => allIds.includes(id)); if (live.length !== sel.length) setSel(live); });
   useEffect(() => { if (subId && !cue) setSubId(undefined); }, [subId, cue]);
 
   const seek = useCallback((t: number) => player.seek(t), [player]);
@@ -86,7 +102,12 @@ function Editor({ engine, storage, recovery }: EditorContext) {
       else if (e.key === " ") { e.preventDefault(); togglePlay(); }
       else if (e.key.toLowerCase() === "s" && !mod) split();
       else if ((e.key === "Delete" || e.key === "Backspace") && subId) delCue();
-      else if (e.key === "Delete" || e.key === "Backspace") del(e.shiftKey ? true : undefined);
+      else if (e.key === "Delete" || e.key === "Backspace") delSel(e.shiftKey ? true : undefined);
+      else if (mod && e.key.toLowerCase() === "c") { e.preventDefault(); copy(); }
+      else if (mod && e.key.toLowerCase() === "v") { e.preventDefault(); paste(); }
+      else if (mod && e.key.toLowerCase() === "d") { e.preventDefault(); duplicate(); }
+      else if (mod && e.key.toLowerCase() === "a") { e.preventDefault(); setSubId(undefined); setSel(allIds); }
+      else if (e.key === "Escape") { setSel([]); setMultiMode(false); }
       else if (e.key.toLowerCase() === "r" && !mod) setRipple(!ripple);
       else if (e.key.toLowerCase() === "t" && !mod) addText();
       else if (e.key.toLowerCase() === "f" && !mod && selectedId) engine.dispatch(cmd.freezeFrame(selectedId, Math.round(player.time)));
@@ -151,6 +172,20 @@ function Editor({ engine, storage, recovery }: EditorContext) {
     <button key="ripple" className={`v2-tool ${ripple ? "is-active" : ""}`} aria-pressed={ripple} title="Ripple: delete and trim move later clips to close gaps (R)" onClick={() => setRipple(!ripple)}><b aria-hidden>⇤</b><span>Ripple {ripple ? "on" : "off"}</span></button>
   );
 
+  const clipActions = [
+    { icon: "⧉", label: "Duplicate", title: "Duplicate after the selection (⌘/Ctrl+D)", run: duplicate },
+    { icon: "⎘", label: "Copy", title: "Copy (⌘/Ctrl+C) — paste at the playhead with ⌘/Ctrl+V", run: copy },
+  ];
+  const pasteAction = { icon: "📋", label: "Paste", title: hasClip ? "Paste at the playhead (⌘/Ctrl+V)" : "Copy a clip first", run: paste };
+  const multiBar = sel.length > 1 ? (
+    <>
+      <span className="v2-sel-count" role="status">{sel.length} selected</span>
+      <button className="v2-tool" title={ripple ? "Delete all and close gaps (Del)" : "Delete all (Del)"} onClick={() => delSel()}><b>🗑</b><span>{ripple ? "Ripple delete" : "Delete"}</span></button>
+      {clipActions.map((a) => <button key={a.label} className="v2-tool" title={a.title} onClick={a.run}><b aria-hidden>{a.icon}</b><span>{a.label}</span></button>)}
+      <button className="v2-tool" title="Clear selection (Esc)" onClick={() => selectClip(undefined)}><b>✓</b><span>Done</span></button>
+    </>
+  ) : null;
+
   // Linked audio (owned child of a video clip): extract / duplicate / mute-restore. All undoable commands.
   const linkedAudioActions = selected && selected.placement.clipType === "video" ? [
     { icon: "⤓", label: "Extract audio", title: "Move this clip's audio to an audio track (mutes the clip's own audio)", run: () => { engine.dispatch(cmd.extractAudio(selected.placement.id, "extract")); setToast("Audio extracted to an audio track"); } },
@@ -174,12 +209,12 @@ function Editor({ engine, storage, recovery }: EditorContext) {
     </label>
   ) : null;
 
-  const selectionActions = selected ? (
+  const selectionActions = multiBar ?? (selected ? (
     <>
       <button className="v2-tool" onClick={split}><b>✂</b><span>Split</span></button>
       <button className="v2-tool" title={ripple ? "Delete and close the gap (Del)" : "Delete (Del) · Shift+Del ripple delete"} onClick={() => del()}><b>🗑</b><span>{ripple ? "Ripple delete" : "Delete"}</span></button>
       {speedSelect}
-      {[...timeActions, ...linkedAudioActions].map((a) => <button key={a.label} className="v2-tool" title={a.title} onClick={a.run}><b aria-hidden>{a.icon}</b><span>{a.label}</span></button>)}
+      {[...clipActions, ...timeActions, ...linkedAudioActions].map((a) => <button key={a.label} className="v2-tool" title={a.title} onClick={a.run}><b aria-hidden>{a.icon}</b><span>{a.label}</span></button>)}
       {selected.placement.clipType !== "image" && (
         <label className="v2-tool v2-volume"><b>🔊</b>
           <input type="range" min={0} max={1} step={0.05} value={selected.placement.volume ?? 1} aria-label="Volume" onPointerDown={() => engine.beginGesture()} onPointerUp={() => engine.endGesture()} onBlur={() => engine.endGesture()} onChange={(e) => engine.dispatch(cmd.setPlacementVolume(selected.placement.id, Number(e.target.value)))} />
@@ -198,8 +233,9 @@ function Editor({ engine, storage, recovery }: EditorContext) {
       {rippleToggle}
       <button className="v2-tool" onClick={() => setPps((p) => Math.min(400, p * 1.5))}><b>＋</b><span>Zoom in</span></button>
       <button className="v2-tool" onClick={() => setPps((p) => Math.max(4, p / 1.5))}><b>－</b><span>Zoom out</span></button>
+      <button className="v2-tool" title={pasteAction.title} disabled={!hasClip} onClick={paste}><b aria-hidden>📋</b><span>Paste</span></button>
     </>
-  );
+  ));
 
   const preview = (
     <section className="v2-preview" aria-label="Preview">
@@ -218,8 +254,8 @@ function Editor({ engine, storage, recovery }: EditorContext) {
     else if (el?.requestFullscreen) void el.requestFullscreen().catch(() => setFs((f) => !f));
     else setFs((f) => !f);
   };
-  const activeMenu: Menu = selected ? (menu === "speed" ? "speed" : "edit") : menu === "speed" ? "root" : cue ? "text" : menu;
-  const back = () => { if (selected && menu !== "speed") setSelectedId(undefined); else { setSubId(undefined); setMenu("root"); } };
+  const activeMenu: Menu = multiMode || sel.length > 1 ? "multi" : selected ? (menu === "speed" ? "speed" : "edit") : menu === "speed" ? "root" : cue ? "text" : menu;
+  const back = () => { if (multiMode || sel.length > 1) selectClip(undefined); else if (selected && menu !== "speed") setSelectedId(undefined); else { setSubId(undefined); setMenu("root"); } };
   const tool = (icon: string, label: string, onClick: () => void, key = label, title?: string) => (
     <button key={key} className="v2-tool" title={title} onClick={onClick}><b aria-hidden>{icon}</b><span>{label}</span></button>
   );
@@ -231,6 +267,7 @@ function Editor({ engine, storage, recovery }: EditorContext) {
       tool("T", "Text", () => setMenu("text")),
       tool("▭", "Video track", () => engine.dispatch(cmd.addTrack("video"))),
       tool("⤢", "Zoom", () => setMenu("zoom")),
+      ...(hasClip ? [tool(pasteAction.icon, pasteAction.label, paste, "paste", pasteAction.title)] : []),
       rippleToggle,
     ],
     "edit-hint": [<span key="h" className="v2-tool-hint">Tap a clip on the timeline to edit it</span>],
@@ -239,7 +276,8 @@ function Editor({ engine, storage, recovery }: EditorContext) {
       tool("🗑", ripple ? "Ripple delete" : "Delete", () => del(), "delete", ripple ? "Delete and close the gap" : "Delete"),
       tool("⤧", "Adjust", () => setInspOpen(true), "adjust", "Transform, keyframes and fades"),
       ...(speedSelect ? [tool("⏩", `Speed ${sp!.speed ?? 1}×`, () => setMenu("speed"), "speed", "Playback speed")] : []),
-      ...[...timeActions, ...linkedAudioActions].map((a) => tool(a.icon, a.label, a.run, a.label, a.title)),
+      tool("☑", "Select", () => setMultiMode(true), "multi", "Select several clips"),
+      ...[...clipActions, ...timeActions, ...linkedAudioActions].map((a) => tool(a.icon, a.label, a.run, a.label, a.title)),
       ...(selected.placement.clipType !== "image" ? [
         <label key="vol" className="v2-tool v2-volume"><b aria-hidden>🔊</b>
           <input type="range" min={0} max={1} step={0.05} value={selected.placement.volume ?? 1} aria-label="Volume" onPointerDown={() => engine.beginGesture()} onPointerUp={() => engine.endGesture()} onBlur={() => engine.endGesture()} onChange={(e) => engine.dispatch(cmd.setPlacementVolume(selected.placement.id, Number(e.target.value)))} />
@@ -247,6 +285,11 @@ function Editor({ engine, storage, recovery }: EditorContext) {
       tool(selected.track.muted ? "🔈" : "🔇", selected.track.muted ? "Unmute track" : "Mute track", () => engine.dispatch(cmd.toggleTrackMute(selected.track.id))),
       rippleToggle,
     ] : [],
+    multi: [
+      <span key="n" className="v2-sel-count" role="status">{sel.length} selected · tap clips</span>,
+      tool("🗑", "Delete", () => delSel(), "del"),
+      ...clipActions.map((a) => tool(a.icon, a.label, a.run, a.label, a.title)),
+    ],
     audio: [
       tool("♫", "Import audio", () => setSheet(true)),
       tool("▤", "Audio track", () => engine.dispatch(cmd.addTrack("audio"))),
@@ -292,7 +335,7 @@ function Editor({ engine, storage, recovery }: EditorContext) {
               <button className="v2-icon" aria-label="Redo" disabled={!canRedo} onClick={() => engine.redo()}>↷</button>
             </span>
           </div>
-          <Timeline engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} onSelect={selectClip} pps={pps} centered topLane={topLane} ripple={ripple}
+          <Timeline engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} selectedIds={sel} onToggleSelect={toggleClip} multiMode={multiMode} onSelect={selectClip} pps={pps} centered topLane={topLane} ripple={ripple}
             thumbs={thumbs} onAddMedia={() => setSheet(true)}
             timeLabel={<><b>{formatTimecode(time, project.settings.fps).slice(0, 5)}</b> / {formatTimecode(duration, project.settings.fps).slice(0, 5)}</>}
             sideColumn={<>
@@ -314,8 +357,8 @@ function Editor({ engine, storage, recovery }: EditorContext) {
           <div className="v2-side">{selected && <TransformInspector engine={engine} placement={selected.placement} time={time} />}{cue && <SubtitleEditor engine={engine} sub={cue} onDelete={delCue} />}{browser}</div>
           {preview}
           <section className="v2-timeline-panel" aria-label="Timeline">
-            <div className="v2-timeline-toolbar">{selectionActions}<span className="v2-hint">Space play · S split · F freeze · Del delete · Shift+Del ripple · R ripple · ⌘/Ctrl+Z undo</span></div>
-            <Timeline engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} onSelect={selectClip} pps={pps} centered={false} topLane={topLane} ripple={ripple} />
+            <div className="v2-timeline-toolbar">{selectionActions}<span className="v2-hint">Space play · S split · F freeze · Del delete · Shift+Del ripple · R ripple · Shift-click multi-select · ⌘C/⌘V/⌘D · ⌘/Ctrl+Z undo</span></div>
+            <Timeline engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} selectedIds={sel} onToggleSelect={toggleClip} multiMode={multiMode} onSelect={selectClip} pps={pps} centered={false} topLane={topLane} ripple={ripple} />
           </section>
         </div>
       )}
