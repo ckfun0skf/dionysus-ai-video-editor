@@ -44,4 +44,21 @@ describe("V2App", () => {
     expect(el.querySelectorAll(".v2-lane").length).toBe(2);
     expect(el.querySelectorAll(".v2-clip").length).toBe(3);
   });
+
+  it("shows a recovery notice (not a silent reset) when the last project fails its schema check", async () => {
+    const { createMemoryStorage } = await import("../persistence");
+    const storage = createMemoryStorage();
+    storage.projects.load = async () => { throw new Error('Unsupported project schema "dionysus/0.1".'); };
+    storage.lastProjectId.set("broken");
+    const el = document.createElement("div");
+    document.body.appendChild(el);
+    await act(async () => { createRoot(el).render(<V2App openStorage={async () => storage} />); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+    const alert = el.querySelector(".v2-recovery")!;
+    expect(alert.textContent).toContain("couldn’t be opened");
+    expect(alert.textContent).toContain("dionysus/0.1");
+    (Array.from(alert.querySelectorAll("button")).find((b) => b.textContent === "Dismiss") as HTMLButtonElement).click();
+    await act(async () => {});
+    expect(el.querySelector(".v2-recovery")).toBeNull();
+  });
 });

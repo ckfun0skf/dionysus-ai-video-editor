@@ -120,3 +120,9 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 .v2-tool-back { min-width: 36px !important; background: #2a2a2e !important; border-radius: 6px; font-size: 22px !important; color: var(--text) !important; justify-content: center; }
 .v2-tool-hint { color: var(--muted); font-size: 12px; align-self: center; padding: 0 8px; white-space: nowrap; }
 .v2-toast { position: absolute; left: 50%; bottom: 140px; transform: translateX(-50%); background: #2a2a2e; color: var(--text); padding: 8px 14px; border-radius: 8px; z-index: 25; font-size: 12px; max-width: 80%; text-align: center; }
+
+/* Load-failure recovery notice */
+.v2-recovery { position: absolute; top: 56px; left: 50%; transform: translateX(-50%); z-index: 30; width: min(92%, 480px); background: #2a1d1f; border: 1px solid #b4474f; color: var(--text); border-radius: 10px; padding: 12px 14px; font-size: 13px; box-shadow: 0 8px 24px rgba(0,0,0,.5); }
+.v2-recovery p { margin: 6px 0 10px; color: #e6c9cb; }
+.v2-recovery-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.v2-recovery-actions .v2-btn { min-height: 44px; }

@@ -32,6 +32,7 @@ export function createIndexedDbStorage(): Storage {
         const raw = await req((await tx("projects", "readonly")).get(id));
         return raw === undefined ? undefined : migrateProject(raw);
       },
+      loadRaw: async (id) => req((await tx("projects", "readonly")).get(id)),
       save: async (p) => void (await req((await tx("projects", "readwrite")).put(p))),
       delete: async (id) => void (await req((await tx("projects", "readwrite")).delete(id))),
     },
