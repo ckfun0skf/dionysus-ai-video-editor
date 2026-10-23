@@ -16,7 +16,7 @@ export function useMediaPreviews(project: Project, blobs: BlobStore) {
   useEffect(() => {
     mounted.current = true;
     for (const a of Object.values(project.assets)) {
-      if (a.kind === "image") continue;
+      if (a.kind === "image" || a.kind === "html") continue;
       for (const v of a.versions) {
         const key = mediaKey(a.id, v.id);
         if (started.current.has(key)) continue;

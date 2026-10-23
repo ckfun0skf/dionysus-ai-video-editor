@@ -1,7 +1,8 @@
 /** Schema 3.0 domain model (MVP subset). Pure data; see docs/v2/MODULE_DESIGN.md §5. */
 export const SCHEMA = "dionysus/3.0" as const;
 
-export type MediaKind = "video" | "image" | "audio";
+/** `html`: a sandboxed HTML/three.js page rendered per frame from clip time (see render/htmlClip). */
+export type MediaKind = "video" | "image" | "audio" | "html";
 export type TrackKind = "video" | "audio" | "text";
 
 export interface MediaRef {

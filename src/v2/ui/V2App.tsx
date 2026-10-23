@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Player } from "../render";
+import { Player, THREE_TEMPLATE } from "../render";
 import { cmd } from "../engine";
 import { importFile } from "../persistence";
 import { compositionDuration, edit, transitions, findPlacement, newId, formatTimecode, secondsToTicks, type Asset } from "../domain";
@@ -135,7 +135,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  const onFiles = async (files: FileList | null) => {
+  const onFiles = async (files: FileList | File[] | null) => {
     if (!files?.length) return;
     setBusy((b) => b + files.length);
     for (const f of Array.from(files)) {
@@ -155,10 +155,11 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       <div className="v2-panel-head">
         <strong>Media</strong>
         <button className="v2-btn primary" onClick={() => fileRef.current?.click()}>＋ Import</button>
+        <button className="v2-btn" title="Add an HTML/three.js clip (edit the .html and re-import to change it)" onClick={() => void onFiles([new File([THREE_TEMPLATE], "three-scene.html", { type: "text/html" })])}>＋ HTML clip</button>
         {mobile && <button className="v2-btn" onClick={() => setSheet(false)}>Done</button>}
       </div>
       {busy > 0 && <p className="v2-hint">Importing {busy}…</p>}
-      {Object.values(project.assets).length === 0 && <p className="v2-hint">Import video, image or audio files, then {mobile ? "tap" : "drag or click"} ＋ to add them to the timeline.</p>}
+      {Object.values(project.assets).length === 0 && <p className="v2-hint">Import video, image, audio or HTML files, then {mobile ? "tap" : "drag or click"} ＋ to add them to the timeline.</p>}
       <ul className="v2-assets">
         {Object.values(project.assets).map((a) => (
           <li key={a.id} draggable onDragStart={(e) => e.dataTransfer.setData("application/x-dionysus-asset", a.id)} className={`v2-asset kind-${a.kind}`}>
@@ -170,7 +171,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           </li>
         ))}
       </ul>
-      <input ref={fileRef} type="file" hidden multiple accept="video/*,image/*,audio/*" onChange={(e) => { void onFiles(e.target.files); e.target.value = ""; }} />
+      <input ref={fileRef} type="file" hidden multiple accept="video/*,image/*,audio/*,.html,.htm,text/html" onChange={(e) => { void onFiles(e.target.files); e.target.value = ""; }} />
       <input ref={srtRef} type="file" hidden accept=".srt,.vtt,text/plain" aria-label="Import SRT file" onChange={(e) => { void onSrt(e.target.files?.[0]); e.target.value = ""; }} />
     </section>
   );
@@ -244,7 +245,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       <button className="v2-tool" title={ripple ? "Delete and close the gap (Del)" : "Delete (Del) · Shift+Del ripple delete"} onClick={() => del()}><b>🗑</b><span>{ripple ? "Ripple delete" : "Delete"}</span></button>
       {speedSelect}
       {[...clipActions, ...timeActions, ...linkedAudioActions].map((a) => <button key={a.label} className="v2-tool" title={a.title} onClick={a.run}><b aria-hidden>{a.icon}</b><span>{a.label}</span></button>)}
-      {selected.placement.clipType !== "image" && (
+      {selected.placement.clipType !== "image" && selected.placement.clipType !== "html" && (
         <label className="v2-tool v2-volume"><b>🔊</b>
           <input type="range" min={0} max={1} step={0.05} value={selected.placement.volume ?? 1} aria-label="Volume" onPointerDown={() => engine.beginGesture()} onPointerUp={() => engine.endGesture()} onBlur={() => engine.endGesture()} onChange={(e) => engine.dispatch(cmd.setPlacementVolume(selected.placement.id, Number(e.target.value)))} />
         </label>
@@ -308,7 +309,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       ...(speedSelect ? [tool("⏩", `Speed ${sp!.speed ?? 1}×`, () => setMenu("speed"), "speed", "Playback speed")] : []),
       tool("☑", "Select", () => setMultiMode(true), "multi", "Select several clips"),
       ...[...clipActions, ...timeActions, ...linkedAudioActions].map((a) => tool(a.icon, a.label, a.run, a.label, a.title)),
-      ...(selected.placement.clipType !== "image" ? [
+      ...(selected.placement.clipType !== "image" && selected.placement.clipType !== "html" ? [
         <label key="vol" className="v2-tool v2-volume"><b aria-hidden>🔊</b>
           <input type="range" min={0} max={1} step={0.05} value={selected.placement.volume ?? 1} aria-label="Volume" onPointerDown={() => engine.beginGesture()} onPointerUp={() => engine.endGesture()} onBlur={() => engine.endGesture()} onChange={(e) => engine.dispatch(cmd.setPlacementVolume(selected.placement.id, Number(e.target.value)))} />
         </label>] : []),
@@ -405,12 +406,13 @@ function AssetThumb({ asset, engineBlobs }: { asset: Asset; engineBlobs: EditorC
   const [url, setUrl] = useState<string>();
   const key = (asset.versions.find((v) => v.id === asset.selectedVersionId) ?? asset.versions[0])?.media.blobKey;
   useEffect(() => {
-    if (asset.kind === "audio" || !key) return;
+    if (asset.kind === "audio" || asset.kind === "html" || !key) return;
     let u: string | undefined;
     let alive = true;
     void engineBlobs.get(key).then((b) => { if (b && alive) { u = URL.createObjectURL(b); setUrl(u); } });
     return () => { alive = false; if (u) URL.revokeObjectURL(u); };
   }, [key, asset.kind, engineBlobs]);
+  if (asset.kind === "html") return <span className="v2-thumb" title="HTML clip (sandboxed)">{"</>"}</span>;
   if (asset.kind === "audio" || !url) return <span className="v2-thumb">{asset.kind === "audio" ? "♫" : "…"}</span>;
   return asset.kind === "image" ? <img className="v2-thumb" src={url} alt="" /> : <video className="v2-thumb" src={`${url}#t=0.1`} muted preload="metadata" />;
 }

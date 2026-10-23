@@ -39,7 +39,7 @@ export function audioPlan(project: Project): AudioSegment[] {
   for (const track of comp.tracks) {
     if (track.muted) continue;
     for (const p of track.placements) {
-      if (p.clipType === "image" || p.reverse || p.freeze || (p.clipType === "video" && p.linkedAudio?.muted)) continue;
+      if (p.clipType === "image" || p.clipType === "html" || p.reverse || p.freeze || (p.clipType === "video" && p.linkedAudio?.muted)) continue;
       const v = versionOf(project, p.source);
       if (!v || (p.volume ?? 1) <= 0) continue;
       out.push({ blobKey: v.media.blobKey, start: s(p.startTicks), duration: s(p.durationTicks), offset: s(p.sourceInTicks), rate: p.speed ?? 1, volume: p.volume ?? 1, fadeIn: s(p.fadeInTicks ?? 0), fadeOut: s(p.fadeOutTicks ?? 0) });
