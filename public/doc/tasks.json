@@ -1955,6 +1955,12 @@
           "title": "Mobile: Overlay button (picker → new track above at playhead)",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-089",
+          "title": "Timeline track groups: main pinned, collapsed Overlay/Audio/Text & Stickers lanes, layer menu, stickers",
+          "status": "done",
+          "progress": 100
         }
       ]
     },

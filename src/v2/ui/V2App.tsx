@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { hitTest, Player, THREE_TEMPLATE } from "../render";
 import { cmd } from "../engine";
 import { importFile } from "../persistence";
-import { compositionDuration, edit, transitions, findPlacement, newId, formatTimecode, secondsToTicks, type Asset } from "../domain";
+import { compositionDuration, edit, ops, transitions, findPlacement, newId, formatTimecode, secondsToTicks, type Asset } from "../domain";
 import { useEditorBoot, useEngineState, useIsMobile, type EditorContext, type LoadFailure } from "./useEditor";
 import { Timeline } from "./Timeline";
 import { clampPps } from "./gestures";
@@ -17,7 +17,7 @@ import type { Resolution } from "../render";
 import { addCueAt, downloadSrt, importSrtFile, SubtitleEditor, SubtitleLane } from "./Subtitles";
 import { Ic } from "./Icon";
 import { MediaPicker, type Picked } from "./MediaPicker";
-import { libraryFile } from "./libraryItems";
+import { libraryFile, stickerFile } from "./libraryItems";
 import { PanelGrabber, PREVIEW_DEFAULT, Sheet } from "./Sheet";
 
 type Menu = "multi" | "root" | "edit" | "edit-hint" | "audio" | "zoom" | "speed" | "text";
@@ -209,22 +209,25 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     }
   };
   /** Import picked files + library items, then lay them out from the playhead in one undo step. */
-  const addPicked = async ({ files, library }: Picked, mode: "main" | "overlay") => {
+  const addPicked = async ({ files, library, stickers }: Picked, mode: "main" | "overlay") => {
     setPicker(null);
     const at = Math.round(player.time);
     const all = [...files, ...library.map(libraryFile).filter((f): f is File => !!f)];
-    const ids: string[] = [];
-    setBusy((b) => b + all.length);
-    for (const f of all) {
+    const ids: string[] = [], stickerIds: string[] = [];
+    const stickerFiles = await Promise.all(stickers.map((s) => stickerFile(s).catch(() => undefined)));
+    const jobs = [...all.map((f) => ({ f, out: ids })), ...stickerFiles.filter((f): f is File => !!f).map((f) => ({ f, out: stickerIds }))];
+    setBusy((b) => b + jobs.length);
+    for (const { f, out } of jobs) {
       try {
         const asset = await importFile(f, storage.blobs);
-        if (asset && engine.dispatch(cmd.importAsset(asset))) ids.push(asset.id);
+        if (asset && engine.dispatch(cmd.importAsset(asset))) out.push(asset.id);
         else if (!asset) setToast(`${f.name}: unsupported file type`);
       } catch (e) { setToast(`${f.name}: ${e instanceof Error ? e.message : "import failed"}`); } finally { setBusy((b) => b - 1); }
     }
     const steps = [];
     if (ids.length) steps.push(cmd.addAssetsInSequence(ids, at, mode === "overlay" ? newId("trk") : undefined));
     if (library.some((l) => l.id === "text")) steps.push(cmd.addTextClip(at, {}));
+    if (stickerIds.length) steps.push(cmd.addAssetsInSequence(stickerIds, at, newId("trk"), "text"));
     if (steps.length) engine.dispatch(steps, mode === "overlay" ? "Add overlay" : "Add media");
   };
   const addToTimeline = (a: Asset) => { engine.dispatch(cmd.addAssetToTimeline(a.id, mobile ? player.time : duration)); if (mobile) setSheet(false); };
@@ -361,7 +364,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     </section>
   );
 
-  const firstVideoTrack = comp.tracks.find((t) => t.kind === "video");
+  const firstVideoTrack = ops.mainTrack(comp);
   const firstClip = firstVideoTrack?.placements[0];
   const fullscreen = () => {
     const el = canvasRef.current?.parentElement;

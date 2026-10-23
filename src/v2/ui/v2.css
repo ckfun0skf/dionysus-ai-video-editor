@@ -313,3 +313,23 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 .v2-pick-badge.is-on { background: var(--accent, #4fa3ff); border-color: var(--accent, #4fa3ff); }
 .v2-picker-foot { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-top: 1px solid var(--border, #3a3a40); }
 .v2-picker-foot .v2-btn { min-height: 44px; min-width: 96px; }
+.v2-group-header { position: relative; height: 22px; font-size: 11px; color: var(--muted, #999); display: flex; align-items: center; border-top: 1px solid var(--border, #2a2a30); }
+.v2-group-header .v2-group-name { padding-left: 6px; position: sticky; left: 0; text-transform: uppercase; letter-spacing: .04em; }
+.v2-track-headers .v2-group-header { padding-left: 8px; text-transform: uppercase; letter-spacing: .04em; }
+.v2-group-back { position: absolute; top: 0; height: 22px; padding: 0 10px; border: 0; border-radius: 6px; background: var(--surface-2, #2a2a2e); color: var(--text, #eee); font-size: 12px; cursor: pointer; }
+.v2-group-back::after { content: ""; position: absolute; inset: -11px 0; } /* 44px touch target */
+.v2-group-back:hover { background: var(--surface-3, #34343a); }
+.v2-lane.is-collapsed { height: 40px; position: relative; }
+.v2-lane.is-collapsed .v2-clip { height: 30px; top: 5px; border: 0; padding: 0 6px; text-align: left; font: inherit; font-size: 11px; color: #fff; background-size: auto 100%; cursor: pointer; opacity: .92; }
+.v2-lane.is-collapsed .v2-clip:hover { opacity: 1; filter: brightness(1.1); }
+.v2-lane.is-collapsed.group-overlay .v2-clip { background-color: #3d6fd8; }
+.v2-lane.is-collapsed.group-text .v2-clip { background-color: #d97a1a; }
+.v2-lane.is-collapsed.group-audio .v2-clip { background-color: #2f9e6a; }
+.v2-lane-empty { position: absolute; top: 12px; font-size: 12px; color: var(--muted, #888); pointer-events: none; white-space: nowrap; }
+.v2-menu-backdrop { position: fixed; inset: 0; z-index: 70; }
+.v2-layer-menu { position: fixed; width: 210px; padding: 6px; border-radius: 12px; background: var(--surface-1, #1c1c20); border: 1px solid var(--border, #3a3a40); box-shadow: 0 10px 30px #000a; display: flex; flex-direction: column; }
+.v2-layer-menu button { min-height: 44px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; color: var(--text, #eee); text-align: left; cursor: pointer; }
+.v2-layer-menu button:hover:not(:disabled) { background: var(--surface-2, #2a2a2e); }
+.v2-layer-menu button:disabled { opacity: .4; cursor: default; }
+.v2-pick-tile.is-sticker { background: repeating-conic-gradient(#2a2a2e 0 25%, #222226 0 50%) 0 0/16px 16px; }
+.v2-pick-tile.is-sticker img { inset: 14%; width: 72%; height: 72%; object-fit: contain; }

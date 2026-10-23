@@ -26,12 +26,75 @@ export function firstFreeStart(track: Track, desired: number, dur: number, ignor
   return start;
 }
 
-export function addTrack(comp: Composition, kind: Track["kind"], id = newId("trk")): Composition {
+export function addTrack(comp: Composition, kind: Track["kind"], id = newId("trk"), group?: "overlay" | "text"): Composition {
   const n = comp.tracks.filter((t) => t.kind === kind).length + 1;
-  const track: Track = { id, kind, name: `${kind[0].toUpperCase()}${kind.slice(1)} ${n}`, placements: [] };
-  // Video tracks stack on top; audio go to the bottom.
+  const name = kind === "video" && group === "text" ? `Sticker ${comp.tracks.filter((t) => t.group === "text").length + 1}` : `${kind[0].toUpperCase()}${kind.slice(1)} ${n}`;
+  const track: Track = { id, kind, name, placements: [], ...(kind === "video" && group === "text" ? { group } : {}) };
+  // New tracks go on top of their group (audio at the bottom); groups keep their stacking order.
   const tracks = kind === "audio" ? [...comp.tracks, track] : [track, ...comp.tracks];
-  return { ...comp, tracks };
+  return { ...comp, tracks: orderByGroup(tracks) };
+}
+
+export type TrackGroup = "main" | "overlay" | "text" | "audio";
+export const GROUP_LABEL: Record<TrackGroup, string> = { main: "Main", overlay: "Overlay", text: "Text & Stickers", audio: "Audio" };
+const RANK: Record<TrackGroup, number> = { text: 0, overlay: 1, main: 2, audio: 3 };
+const lastVideo = (tracks: Track[]) => { for (let i = tracks.length - 1; i >= 0; i--) if (tracks[i].kind === "video" && tracks[i].group !== "text") return tracks[i]; return undefined; };
+/** Which timeline group a track belongs to. Text & Stickers sits above Overlay, which sits above Main. */
+export function groupOf(comp: Pick<Composition, "tracks">, t: Track): TrackGroup {
+  if (t.kind === "audio") return "audio";
+  if (t.kind === "text" || t.group === "text") return "text";
+  return lastVideo(comp.tracks)?.id === t.id ? "main" : "overlay";
+}
+/** Stable-sort tracks by group (array index 0 = top layer); order inside a group is preserved. */
+export function orderByGroup(tracks: Track[]): Track[] {
+  const c = { tracks };
+  return tracks.map((t, i) => ({ t, i, r: RANK[groupOf(c, t)] })).sort((a, b) => a.r - b.r || a.i - b.i).map((x) => x.t);
+}
+export const tracksInGroup = (comp: Composition, g: TrackGroup) => comp.tracks.filter((t) => groupOf(comp, t) === g);
+
+const dropEmpty = (comp: Composition, trackId: string, keep?: string) => {
+  const t = comp.tracks.find((x) => x.id === trackId);
+  return t && !t.placements.length && t.id !== keep ? removeTrack(comp, trackId) : comp;
+};
+
+/** Move a visual clip (not text) between the Overlay and Text & Stickers groups, onto a new top layer there. */
+export function moveToGroup(comp: Composition, placementId: string, group: "overlay" | "text", trackId = newId("trk")): Composition {
+  const found = findPlacement(comp, placementId);
+  if (!found || found.placement.clipType === "text" || found.placement.clipType === "audio") return comp;
+  if (groupOf(comp, found.track) === group) return comp;
+  const main = lastVideo(comp.tracks)?.id;
+  let next = mapTrack(comp, found.track.id, (t) => ({ ...t, placements: t.placements.filter((p) => p.id !== placementId) }));
+  next = dropEmpty(next, found.track.id, main);
+  next = addTrack(next, "video", trackId, group);
+  return mapTrack(next, trackId, (t) => ({ ...t, placements: [found.placement] }));
+}
+
+/**
+ * Raise (up) or lower (down) a clip one layer inside its group: onto the neighbouring layer when it is the
+ * same kind and free, otherwise onto a new layer just past it. Never crosses group boundaries or the main track.
+ */
+export function moveLayer(comp: Composition, placementId: string, dir: "up" | "down", newTrackId = newId("trk")): Composition {
+  const found = findPlacement(comp, placementId);
+  if (!found) return comp;
+  const g = groupOf(comp, found.track);
+  if (g === "main" || g === "audio") return comp;
+  const p = found.placement;
+  const i = comp.tracks.findIndex((t) => t.id === found.track.id);
+  const j = dir === "up" ? i - 1 : i + 1;
+  const neighbour = comp.tracks[j];
+  const inGroup = neighbour && groupOf(comp, neighbour) === g;
+  if (!inGroup && found.track.placements.length === 1) return comp; // already the outermost layer
+  const main = lastVideo(comp.tracks)?.id;
+  let next = mapTrack(comp, found.track.id, (t) => ({ ...t, placements: t.placements.filter((x) => x.id !== placementId) }));
+  if (inGroup && neighbour.kind === found.track.kind && isFree(neighbour, p.startTicks, p.durationTicks)) {
+    next = mapTrack(next, neighbour.id, (t) => ({ ...t, placements: sortPlacements([...t.placements, p]) }));
+  } else {
+    const at = inGroup ? (dir === "up" ? j : j + 1) : dir === "up" ? i : i + 1;
+    const n = next.tracks.filter((t) => t.kind === found.track.kind).length + 1;
+    const track: Track = { id: newTrackId, kind: found.track.kind, name: found.track.group === "text" ? `Sticker ${n}` : `${found.track.kind[0].toUpperCase()}${found.track.kind.slice(1)} ${n}`, placements: [p], ...(found.track.group ? { group: found.track.group } : {}) };
+    next = { ...next, tracks: [...next.tracks.slice(0, at), track, ...next.tracks.slice(at)] };
+  }
+  return dropEmpty(next, found.track.id, main);
 }
 
 export function removeTrack(comp: Composition, trackId: string): Composition {
@@ -256,6 +319,5 @@ export function setKeyframe(comp: Composition, placementId: string, prop: Keyfra
 
 /** CapCut-style main track: the bottom-most video track. Overlay video tracks sit above it. */
 export function mainTrack(comp: Composition): Track | undefined {
-  for (let i = comp.tracks.length - 1; i >= 0; i--) if (comp.tracks[i].kind === "video") return comp.tracks[i];
-  return undefined;
+  return lastVideo(comp.tracks);
 }

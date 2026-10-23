@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { LIBRARY_ITEMS, type LibraryItem } from "./libraryItems";
+import { LIBRARY_ITEMS, STICKERS, stickerUrl, type LibraryItem, type Sticker } from "./libraryItems";
 
-export type Picked = { files: File[]; library: LibraryItem[] };
-type Tab = "device" | "library";
+export type Picked = { files: File[]; library: LibraryItem[]; stickers: Sticker[] };
+type Tab = "device" | "library" | "stickers";
 
 /** Full-screen CapCut-style picker: Device (photos/videos) and Library tabs, multi-select, then Add. */
 export function MediaPicker({ title, onAdd, onClose }: { title: string; onAdd: (p: Picked) => void; onClose: () => void }) {
@@ -20,6 +20,7 @@ export function MediaPicker({ title, onAdd, onClose }: { title: string; onAdd: (
   const add = () => onAdd({
     files: order.filter((k) => k.startsWith("f")).map((k) => files[Number(k.slice(1, k.indexOf(":")))]).filter(Boolean),
     library: order.filter((k) => k.startsWith("l:")).map((k) => LIBRARY_ITEMS.find((it) => `l:${it.id}` === k)!).filter(Boolean),
+    stickers: order.filter((k) => k.startsWith("s:")).map((k) => STICKERS.find((it) => `s:${it.id}` === k)!).filter(Boolean),
   });
   const badge = (k: string) => { const n = order.indexOf(k); return <span className={`v2-pick-badge ${n >= 0 ? "is-on" : ""}`} aria-hidden>{n >= 0 ? n + 1 : ""}</span>; };
   return (
@@ -30,8 +31,8 @@ export function MediaPicker({ title, onAdd, onClose }: { title: string; onAdd: (
         <span />
       </header>
       <div className="v2-picker-tabs" role="tablist">
-        {(["device", "library"] as Tab[]).map((t) => (
-          <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? "is-on" : ""} onClick={() => setTab(t)}>{t === "device" ? "Device" : "Library"}</button>
+        {(["device", "library", "stickers"] as Tab[]).map((t) => (
+          <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? "is-on" : ""} onClick={() => setTab(t)}>{t === "device" ? "Device" : t === "library" ? "Library" : "Stickers"}</button>
         ))}
       </div>
       <div className="v2-picker-body">
@@ -55,6 +56,17 @@ export function MediaPicker({ title, onAdd, onClose }: { title: string; onAdd: (
                 ); })}
               </div>
             )}
+          </>
+        ) : tab === "stickers" ? (
+          <>
+            <p className="v2-muted">Stickers go to the Text &amp; Stickers group, above overlays.</p>
+            <div className="v2-picker-grid">
+              {STICKERS.map((it) => { const k = `s:${it.id}`; return (
+                <button key={k} className={`v2-pick-tile is-sticker ${picked.has(k) ? "is-on" : ""}`} aria-pressed={picked.has(k)} title={it.name} aria-label={it.name} onClick={() => toggle(k)}>
+                  <img src={stickerUrl(it)} alt="" />{badge(k)}
+                </button>
+              ); })}
+            </div>
           </>
         ) : (
           <div className="v2-picker-grid">

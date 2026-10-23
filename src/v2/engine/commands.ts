@@ -193,11 +193,11 @@ export const duplicateAbove = (id: string, newIdValue: string, dx = 0.02, dy = 0
  * Lay assets end-to-end starting at `startTicks`. Video goes to the main track, or to a new
  * video track `overlayTrackId` stacked above everything; audio goes to the first audio track.
  */
-export const addAssetsInSequence = (assetIds: string[], startTicks: number, overlayTrackId?: string): Command => ({
-  label: overlayTrackId ? "Add overlay" : "Add media",
+export const addAssetsInSequence = (assetIds: string[], startTicks: number, overlayTrackId?: string, group: "overlay" | "text" = "overlay"): Command => ({
+  label: group === "text" ? "Add stickers" : overlayTrackId ? "Add overlay" : "Add media",
   apply: (p) => withRoot(p, (c) => {
     let comp = c;
-    if (overlayTrackId) comp = ops.addTrack(comp, "video", overlayTrackId);
+    if (overlayTrackId) comp = ops.addTrack(comp, "video", overlayTrackId, group);
     let at = Math.max(0, Math.round(startTicks));
     for (const id of assetIds) {
       const asset = p.assets[id];
@@ -212,4 +212,13 @@ export const addAssetsInSequence = (assetIds: string[], startTicks: number, over
     }
     return comp;
   }),
+});
+
+export const moveToGroup = (id: string, group: "overlay" | "text", trackId?: string): Command => ({
+  label: group === "text" ? "Move to Text & Stickers" : "Move to Overlay",
+  apply: (p) => withRoot(p, (c) => ops.moveToGroup(c, id, group, trackId)),
+});
+export const moveLayer = (id: string, dir: "up" | "down", trackId?: string): Command => ({
+  label: dir === "up" ? "Layer up" : "Layer down",
+  apply: (p) => withRoot(p, (c) => ops.moveLayer(c, id, dir, trackId)),
 });
