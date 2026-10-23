@@ -1997,6 +1997,12 @@
           "title": "CapCut parity: toolbar ‹ / empty tap collapses group, left column scrolls with timeline before t=0, reorder edge auto-scroll",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-096",
+          "title": "Root toolbar modes: Edit/Audio/Text/Effect/Overlay with back",
+          "status": "done",
+          "progress": 100
         }
       ]
     },

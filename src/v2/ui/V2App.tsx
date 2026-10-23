@@ -21,7 +21,7 @@ import { projectMediaList } from "./projectMedia";
 import { libraryFile, stickerFile } from "./libraryItems";
 import { PanelGrabber, PREVIEW_DEFAULT, Sheet } from "./Sheet";
 
-type Menu = "multi" | "root" | "edit" | "edit-hint" | "audio" | "zoom" | "speed" | "text";
+type Menu = "multi" | "root" | "edit" | "audio" | "speed" | "text" | "effect" | "overlay";
 const SPEEDS = [0.25, 0.5, 1, 1.5, 2, 4];
 
 /** `openStorage` is injectable for tests; production uses IndexedDB (memory fallback). */
@@ -50,7 +50,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const [hasClip, setHasClip] = useState(false);
   const [pps, setPps] = useState(40);
   const [sheet, setSheet] = useState(false);
-  const [picker, setPicker] = useState<null | "main" | "overlay">(null);
+  const [picker, setPicker] = useState<null | "main" | "overlay" | "audio" | "stickers">(null);
   const [busy, setBusy] = useState(0);
   const [menu, setMenu] = useState<Menu>("root");
   /** Mobile: which timeline group is expanded into its layers (the toolbar ‹ collapses it). */
@@ -377,24 +377,54 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     else setFs((f) => !f);
   };
   const activeMenu: Menu = multiMode || sel.length > 1 ? "multi" : selected ? (menu === "speed" ? "speed" : "edit") : menu === "speed" ? "root" : cue ? "text" : menu;
-  const back = () => { if (expanded && !multiMode && sel.length <= 1 && menu !== "speed") { setExpanded(undefined); setSelectedId(undefined); return; } if (multiMode || sel.length > 1) selectClip(undefined); else if (selected && menu !== "speed") setSelectedId(undefined); else { setSubId(undefined); setMenu("root"); } };
+  /** CapCut root modes. Edit edits the main-track clip under the playhead; Audio/Text/Overlay expand their group. */
+  const mainAt = (t: number) => { const m = ops.mainTrack(comp); return m?.placements.find((p) => p.startTicks <= t && t < p.startTicks + p.durationTicks) ?? (m && t >= compositionDuration(comp) ? m.placements[m.placements.length - 1] : undefined); };
+  const enterMode = (m: "edit" | "audio" | "text" | "effect" | "overlay") => {
+    setSubId(undefined); setMultiMode(false);
+    if (m === "edit") { const p = mainAt(player.time); setSel(p ? [p.id] : []); setExpanded(undefined); }
+    else { setSel([]); setExpanded(m === "effect" ? undefined : m); }
+    setMenu(m);
+  };
+  const toRoot = () => { setSel([]); setSubId(undefined); setMultiMode(false); setExpanded(undefined); setMenu("root"); };
+  const back = () => {
+    if (multiMode || sel.length > 1) { selectClip(undefined); return; }
+    if (menu === "speed") { setMenu(selected && ops.groupOf(comp, selected.track) !== "main" ? (expanded && expanded !== "main" ? expanded : "root") : "edit"); return; }
+    if ((selected && menu !== "edit") || (subId && menu === "text")) { setSel([]); setSubId(undefined); return; }
+    toRoot();
+  };
+  const onExpand = (g?: ops.TrackGroup) => {
+    setExpanded(g);
+    if (g && g !== "main") setMenu(g);
+    else if (!g && menu !== "root" && menu !== "speed" && menu !== "multi") setMenu("root");
+  };
+  // Edit mode follows the playhead: scrolling the timeline changes which main-track clip is being edited.
+  useEffect(() => { if (!mobile || menu !== "edit" || multiMode) return; const p = mainAt(time); if (p && p.id !== selectedId) setSel([p.id]); }, [time, menu]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Tapping a clip enters its mode: main → Edit, otherwise that group's mode (the group is expanded by the timeline).
+  useEffect(() => {
+    if (!mobile || !selected) return;
+    const g = ops.groupOf(comp, selected.track);
+    if (g === "main") { if (menu !== "edit" && menu !== "speed") setMenu("edit"); } else if (menu === "root" || menu === "edit" || menu === "effect") setMenu(g);
+  }, [selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const addTransitionNearPlayhead = () => {
+    const ps = [...(ops.mainTrack(comp)?.placements ?? [])].sort((a, b) => a.startTicks - b.startTicks).slice(1);
+    if (!ps.length) { setToast("Transitions go between two main-track clips — add another clip first"); return; }
+    const t = player.time;
+    const p = ps.reduce((a, b) => (Math.abs(b.startTicks - t) < Math.abs(a.startTicks - t) ? b : a));
+    if (p.transitionIn) { setSel([p.id]); setToast("This cut already has a transition — adjust it below"); } else onTransition(p.id);
+    seek(p.startTicks);
+  };
   const tool = (icon: string, label: string, onClick: () => void, key = label, title?: string) => (
     <button key={key} className="v2-tool" title={title} onClick={onClick}><b aria-hidden><Ic g={icon} /></b><span>{label}</span></button>
   );
   const mobileTools: Record<Menu, JSX.Element[]> = {
     root: [
-      tool("✎", "Edit", () => setMenu("edit-hint")),
-      tool("♫", "Audio", () => setMenu("audio")),
-      tool("＋", "Media", () => setSheet(true)),
-      tool("⧉", "Overlay", () => setPicker("overlay"), "overlay", "Add photos, videos or clips on a new track above, starting at the playhead"),
-      tool("T", "Text", () => setMenu("text")),
-      tool("▭", "Video track", () => engine.dispatch(cmd.addTrack("video"))),
-      tool("⤢", "Zoom", () => setMenu("zoom")),
-      ...(hasClip ? [tool(pasteAction.icon, pasteAction.label, paste, "paste", pasteAction.title)] : []),
-      rippleToggle, snapToggle,
+      tool("✂", "Edit", () => enterMode("edit"), "edit", "Edit the main-track clip under the playhead"),
+      tool("♫", "Audio", () => enterMode("audio"), "audio", "Audio layers: add music and sounds"),
+      tool("T", "Text", () => enterMode("text"), "text", "Text, stickers and subtitles"),
+      tool("effect", "Effect", () => enterMode("effect"), "effect", "Transitions between main-track clips"),
+      tool("overlay", "Overlay", () => enterMode("overlay"), "overlay", "Photos and videos on layers above the main track"),
     ],
-    "edit-hint": [<span key="h" className="v2-tool-hint">Tap a clip on the timeline to edit it</span>],
-    edit: selected ? [
+    edit: !selected ? [<span key="h" className="v2-tool-hint">Move the playhead over a main-track clip to edit it</span>] : [
       ...(transitionTools ? [<span key="tr" className="v2-trans-wrap">{transitionTools}</span>] : []),
       tool("✂", "Split", split),
       tool("🗑", ripple ? "Ripple delete" : "Delete", () => del(), "delete", ripple ? "Delete and close the gap" : "Delete"),
@@ -409,25 +439,28 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           <input type="range" min={0} max={1} step={0.05} value={selected.placement.volume ?? 1} aria-label="Volume" onPointerDown={() => engine.beginGesture()} onPointerUp={() => engine.endGesture()} onBlur={() => engine.endGesture()} onChange={(e) => engine.dispatch(cmd.setPlacementVolume(selected.placement.id, Number(e.target.value)))} />
         </label>] : []),
       tool(selected.track.muted ? "🔈" : "🔇", selected.track.muted ? "Unmute track" : "Mute track", () => engine.dispatch(cmd.toggleTrackMute(selected.track.id))),
+      ...(hasClip ? [tool(pasteAction.icon, pasteAction.label, paste, "paste", pasteAction.title)] : []),
       rippleToggle, snapToggle,
-    ] : [],
+    ],
     multi: [
       <span key="n" className="v2-sel-count" role="status">{sel.length} selected · tap clips</span>,
       tool("🗑", "Delete", () => delSel(), "del"),
       ...clipActions.map((a) => tool(a.icon, a.label, a.run, a.label, a.title)),
     ],
-    audio: [
-      tool("♫", "Import audio", () => setSheet(true)),
-      tool("▤", "Audio track", () => engine.dispatch(cmd.addTrack("audio"))),
-    ],
+    audio: [tool("＋", "Add audio", () => setPicker("audio"), "add-audio", "Add music or sound from this project or your device")],
     speed: sp ? SPEEDS.map((s) => (
       <button key={s} className={`v2-tool ${(sp.speed ?? 1) === s ? "is-active" : ""}`} aria-pressed={(sp.speed ?? 1) === s} onClick={() => engine.dispatch(cmd.setSpeed(sp.id, s))}><b>{s}×</b><span>{s === 1 ? "Normal" : s < 1 ? "Slow" : "Fast"}</span></button>
     )) : [],
-    text: textTools.map((a) => tool(a.icon, a.label, a.run, a.label, a.title)),
-    zoom: [
-      tool("zoom-in", "Zoom in", () => setPps((p) => Math.min(400, p * 1.5))),
-      tool("zoom-out", "Zoom out", () => setPps((p) => Math.max(4, p / 1.5))),
+    text: [
+      tool("T", "Add text", addText, "add-text", "Add a text clip at the playhead"),
+      tool("sticker", "Stickers", () => setPicker("stickers"), "stickers", "Add stickers to the Text & Stickers group"),
+      ...textTools.slice(1).map((a) => tool(a.icon, a.label, a.run, a.label, a.title)),
+      tool("template", "Templates", () => { addText(); setTextOpen(true); }, "templates", "Add a text clip and pick a template"),
     ],
+    effect: [
+      tool("⧓", "Transition", addTransitionNearPlayhead, "transition", "Add a crossfade at the cut nearest the playhead"),
+    ],
+    overlay: [tool("＋", "Add overlay", () => setPicker("overlay"), "add-overlay", "Add photos, videos or clips on a new layer above, at the playhead")],
   };
 
   return (
@@ -468,7 +501,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
             </span>
           </div>
           <PanelGrabber vh={previewVh} onChange={setPreviewVh} />
-          <Timeline engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} selectedIds={sel} onToggleSelect={toggleClip} multiMode={multiMode} onSelect={selectClip} peaks={peaks} strips={strips} pps={pps} onZoom={(z) => setPps(clampPps(z))} centered topLane={topLane} ripple={ripple} onTransition={onTransition} expanded={expanded} onExpand={setExpanded}
+          <Timeline engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} selectedIds={sel} onToggleSelect={toggleClip} multiMode={multiMode} onSelect={selectClip} peaks={peaks} strips={strips} pps={pps} onZoom={(z) => setPps(clampPps(z))} centered topLane={topLane} ripple={ripple} onTransition={onTransition} expanded={expanded} onExpand={onExpand}
             thumbs={thumbs} onAddMedia={() => setPicker("main")}
             timeLabel={<><b>{formatTimecode(time, project.settings.fps).slice(0, 5)}</b> / {formatTimecode(duration, project.settings.fps).slice(0, 5)}</>}
             sideColumn={<>
@@ -476,10 +509,10 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
               <button className="v2-side-btn v2-cover" onClick={() => seek(0)} style={firstClip && thumbs[firstClip.source.assetId] ? { backgroundImage: `url(${thumbs[firstClip.source.assetId]})` } : undefined}><span>Cover</span></button>
             </>} />
           <nav className="v2-toolbar" aria-label={selected ? "Clip actions" : "Timeline actions"}>
-            {(activeMenu !== "root" || expanded) && <button className="v2-tool v2-tool-back" aria-label={expanded && activeMenu === "root" ? `Collapse ${ops.GROUP_LABEL[expanded]}` : "Back"} title={expanded ? `Collapse ${ops.GROUP_LABEL[expanded]}` : "Back"} onClick={back}>‹</button>}
+            {(activeMenu !== "root" || expanded) && <button className="v2-tool v2-tool-back" aria-label={activeMenu === "root" && expanded ? `Collapse ${ops.GROUP_LABEL[expanded]}` : "Back"} title={activeMenu === "root" && expanded ? `Collapse ${ops.GROUP_LABEL[expanded]}` : "Back"} onClick={back}>‹</button>}
             {mobileTools[activeMenu]}
           </nav>
-          {picker && <MediaPicker media={projectMedia} title={picker === "overlay" ? "Add overlay" : "Add media"} onClose={() => setPicker(null)} onAdd={(p) => void addPicked(p, picker)} />}
+          {picker && <MediaPicker media={projectMedia} title={picker === "overlay" ? "Add overlay" : picker === "audio" ? "Add audio" : picker === "stickers" ? "Add stickers" : "Add media"} only={picker === "audio" ? "audio" : undefined} initialTab={picker === "stickers" ? "stickers" : undefined} onClose={() => setPicker(null)} onAdd={(p) => void addPicked(p, picker === "overlay" || picker === "stickers" ? "overlay" : "main")} />}
           {sheet && <Sheet label="Media" onClose={() => setSheet(false)}>{browser}</Sheet>}
           {!sheet && <div hidden>{browser}</div>}
           {cue && <div className="v2-msub"><SubtitleEditor engine={engine} sub={cue} onDelete={delCue} /></div>}

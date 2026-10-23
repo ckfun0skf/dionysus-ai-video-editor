@@ -115,7 +115,7 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 .v2-timeline.is-centered .v2-clip { border-radius: 4px; top: 2px; bottom: 2px; }
 .v2-app.is-mobile .v2-playhead-fixed { width: 2px; background: #fff; }
 .v2-app.is-mobile .v2-toolbar { background: #161616; border-top: none; align-items: stretch; }
-.v2-tool-back { min-width: 36px !important; background: #2a2a2e !important; border-radius: 6px; font-size: 22px !important; color: var(--text) !important; justify-content: center; }
+.v2-tool-back { min-width: 44px !important; background: #2a2a2e !important; border-radius: 6px; font-size: 22px !important; color: var(--text) !important; justify-content: center; }
 .v2-tool-hint { color: var(--muted); font-size: 12px; align-self: center; padding: 0 8px; white-space: nowrap; }
 .v2-toast { position: absolute; left: 50%; bottom: 140px; transform: translateX(-50%); background: #2a2a2e; color: var(--text); padding: 8px 14px; border-radius: 8px; z-index: 25; font-size: 12px; max-width: 80%; text-align: center; }
 
