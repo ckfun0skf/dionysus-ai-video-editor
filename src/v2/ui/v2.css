@@ -272,3 +272,9 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 @media (prefers-reduced-motion: reduce) { .v2-code-editor { animation: none; } }
 .v2-guide { position: absolute; z-index: 8; pointer-events: none; background: #ff3df2; }
 .v2-guide.v { width: 1px; } .v2-guide.h { height: 1px; }
+.v2-code-settings { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--v2-line, #2a2a30); font-size: 12px; }
+.v2-code-label { color: var(--v2-muted, #9a9aa5); font-weight: 600; margin-left: 4px; }
+.v2-chip { text-transform: none; display: inline-flex; align-items: center; gap: 4px; min-height: 32px; padding: 0 10px; border-radius: 16px; background: var(--v2-surface-2, #24242a); cursor: pointer; }
+.v2-chip:hover { background: var(--v2-surface-3, #2e2e36); }
+.v2-chip button { min-width: 28px; min-height: 28px; background: none; border: 0; color: inherit; cursor: pointer; }
+.v2-err { color: #ff6b6b; }
