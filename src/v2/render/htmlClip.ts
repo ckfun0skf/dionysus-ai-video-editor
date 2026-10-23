@@ -1,53 +1,75 @@
+import { HTML_LIBRARIES, readClipConfig, selectedLibraries, vendorUrl, type HtmlLibrary } from "./htmlLibs";
+
 /**
- * HTML / three.js clips. The user's HTML runs in a sandboxed iframe (scripts only: opaque origin, no
- * access to the editor, storage or cookies). It is driven by time, never by its own clock:
+ * HTML clips. The user's HTML runs in a sandboxed iframe (scripts only: opaque origin, no access to the
+ * editor, storage or cookies). It is driven by timeline time, never by its own clock:
  *   editor → iframe  {type:"dionysus:frame", seq, t}   (t = clip-local seconds)
  *   iframe → editor  {type:"dionysus:frame", seq, bmp}  (ImageBitmap of its first <canvas>)
- * Pages register a renderer with `dionysus.onFrame(t => …)`; the runtime below is injected ahead of
- * the page so any canvas (2D, WebGL, three.js) is captured right after it renders frame t.
+ * Library-agnostic time contract: pages may use `dionysus.onFrame(t => …)` OR plain
+ * requestAnimationFrame / performance.now / Date.now, which the shim below drives from t. Math.random is
+ * seeded so export is deterministic. Attached files resolve by relative name to blob: URLs.
  */
-export const HTML_RUNTIME = `<script>(()=>{const fns=[];window.dionysus={t:0,onFrame(f){fns.push(f)}};
+export const HTML_RUNTIME_JS = `const fns=[],q=new Map();let vt=0,rid=0,s=0x2f6b1d3;const E=1767225600000;
+const vnow=()=>vt*1000;performance.now=vnow;const OD=Date;
+window.Date=class extends OD{constructor(...a){a.length?super(...a):super(E+vnow())}static now(){return E+vnow()}};
+window.requestAnimationFrame=(cb)=>{q.set(++rid,cb);return rid};window.cancelAnimationFrame=(i)=>{q.delete(i)};
+Math.random=()=>{s=s+0x6D2B79F5|0;let t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296};
+const A={};for(const[n,d]of Object.entries(ASSETS)){const m=/^data:([^;,]*)(;base64)?,([\\s\\S]*)$/.exec(d);if(!m)continue;
+const raw=m[2]?atob(m[3]):decodeURIComponent(m[3]);const u=new Uint8Array(raw.length);for(let i=0;i<raw.length;i++)u[i]=raw.charCodeAt(i);
+A[n]=URL.createObjectURL(new Blob([u],{type:m[1]||"application/octet-stream"}))}
+const res=(n)=>typeof n==="string"?A[n.replace(/^\\.\\//,"")]:undefined;
+const of=window.fetch;window.fetch=(i,o)=>of(res(i)||i,o);
+const xo=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(m,u,...r){return xo.call(this,m,res(u)||u,...r)};
+const AT=["src","href","poster","data"];const fix=(el)=>{if(!el.getAttribute)return;for(const a of AT){const v=el.getAttribute(a),b=res(v);if(b)el.setAttribute(a,b)}};
+new MutationObserver((ms)=>{for(const m of ms){if(m.type==="attributes")fix(m.target);for(const n of m.addedNodes)if(n.nodeType===1){fix(n);n.querySelectorAll("*").forEach(fix)}}})
+.observe(document,{subtree:true,childList:true,attributes:true,attributeFilter:AT});
+window.dionysus={t:0,onFrame(f){fns.push(f)},asset:(n)=>res(n)};
 addEventListener("message",async(e)=>{const d=e.data;if(!d||d.type!=="dionysus:frame"||e.source!==parent)return;
-window.dionysus.t=d.t;try{for(const f of fns){const r=f(d.t);if(r&&r.then)await r}}catch(err){console.error(err)}
+vt=d.t;window.dionysus.t=d.t;try{const cbs=[...q.values()];q.clear();for(const cb of cbs)cb(vnow());
+for(const f of fns){const r=f(d.t);if(r&&r.then)await r}}catch(err){console.error(err)}
 const c=document.querySelector("canvas");let bmp=null;if(c&&c.width&&c.height){try{bmp=await createImageBitmap(c)}catch(_){}}
 parent.postMessage({type:"dionysus:frame",seq:d.seq,bmp},"*",bmp?[bmp]:[])});
-addEventListener("load",()=>parent.postMessage({type:"dionysus:ready"},"*"))})()</script>`;
+addEventListener("load",()=>parent.postMessage({type:"dionysus:ready"},"*"));`;
 
-/** three.js is self-hosted (public/vendor) and pinned by SRI; it is the only script URL a clip may load. */
-export const THREE_PATH = "vendor/three-0.160.0.module.min.js";
-export const THREE_INTEGRITY = "sha384-8/hf5tabFfIo0BPku31TKUvGIKpWGYaMwNtlSNqNyZzXgZCMd4lnOGWbJElML9dv";
-const LEGACY_THREE = /https:\/\/unpkg\.com\/three@[\d.]+\/build\/three\.module(?:\.min)?\.js/g;
+/** Runtime script tag with the clip's attachments inlined (name → data: URL). */
+export const htmlRuntime = (assets: Record<string, string> = {}) =>
+  `<script>(()=>{const ASSETS=${JSON.stringify(assets).replace(/</g, "\\u003c")};${HTML_RUNTIME_JS}})()</script>`;
+export const HTML_RUNTIME = htmlRuntime();
 
-/** Absolute URL of the vendored three.js for this deployment (works from the opaque-origin iframe). */
-export function threeUrl(base = (import.meta as { env?: { BASE_URL?: string } }).env?.BASE_URL ?? "/", href = globalThis.location?.href ?? "http://localhost/"): string {
-  return new URL(`${base}${THREE_PATH}`, href).href;
-}
-
-/** Locked-down policy: nothing remote except the pinned three.js file; inline/blob:/data: for the page itself. */
-export function clipCsp(three: string): string {
+/** Locked-down policy: nothing remote except the selected, pinned library files; inline/blob:/data: for the page. */
+export function clipCsp(libUrls: string[] = []): string {
   return [
     "default-src 'none'",
-    `script-src 'unsafe-inline' blob: data: ${three}`,
+    ["script-src 'unsafe-inline' blob: data:", ...libUrls].join(" "),
     "style-src 'unsafe-inline' blob: data:",
     "img-src blob: data:", "font-src blob: data:", "media-src blob: data:", "connect-src blob: data:", "worker-src blob:",
   ].join("; ");
 }
 
 const attr = (v: string) => v.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /**
- * Prepend (after a doctype, if any) the CSP meta, an import map exposing `three` with its integrity hash,
- * and the frame-seek runtime, so all three apply before any page markup or script. Old clips that import
- * three.js from unpkg are pointed at the pinned local copy.
+ * Prepend (after a doctype, if any) the CSP meta, an import map for the selected libraries (with SRI),
+ * and the runtime, so all apply before any page markup or script. CSS url(name) references to
+ * attachments are inlined. Legacy CDN URLs of a selected library point at its pinned copy.
  */
-export function withRuntime(html: string, three = threeUrl()): string {
-  const head = `<meta http-equiv="Content-Security-Policy" content="${attr(clipCsp(three))}">`
-    + `<script type="importmap">${JSON.stringify({ imports: { three }, integrity: { [three]: THREE_INTEGRITY } })}</script>`
-    + HTML_RUNTIME;
-  const page = html.replace(LEGACY_THREE, "three");
+export function withRuntime(html: string, url: (l: HtmlLibrary) => string = (l) => vendorUrl(l.path)): string {
+  const libs = selectedLibraries(html);
+  const urls = libs.map(url);
+  const assets = readClipConfig(html).assets ?? {};
+  const map = { imports: Object.fromEntries(libs.map((l, i) => [l.specifier, urls[i]])), integrity: Object.fromEntries(libs.map((l, i) => [urls[i], l.integrity])) };
+  const head = `<meta http-equiv="Content-Security-Policy" content="${attr(clipCsp(urls))}">`
+    + (libs.length ? `<script type="importmap">${JSON.stringify(map)}</script>` : "")
+    + htmlRuntime(assets);
+  let page = html;
+  for (const l of libs) if (l.legacy) page = page.replace(new RegExp(l.legacy.source, "g"), l.specifier);
+  for (const [n, d] of Object.entries(assets)) page = page.replace(new RegExp(`url\\(\\s*(["']?)(?:\\./)?${esc(n)}\\1\\s*\\)`, "g"), `url("${d}")`);
   const m = /^\s*<!doctype[^>]*>/i.exec(page);
   return m ? m[0] + head + page.slice(m[0].length) : head + page;
 }
+
+export { HTML_LIBRARIES };
 
 export const HTML_SANDBOX = "allow-scripts";
 /** Largest frame accepted from a clip (8K); anything else is treated as a bad frame. */
@@ -134,12 +156,12 @@ export class HtmlClipHost {
   }
 }
 
-/** Starter clip: a three.js scene whose every pixel is a function of t (so preview == export). */
+/** Starter clip (example using the three.js registry entry): a scene whose every pixel is a function of t (so preview == export). */
 export const THREE_TEMPLATE = `<!doctype html>
 <html><head><meta charset="utf-8"><style>html,body{margin:0;height:100%;background:#000;overflow:hidden}canvas{display:block}</style></head>
 <body><canvas id="c"></canvas>
 <script type="module">
-import * as THREE from "three"; // pinned, self-hosted copy (see THREE_PATH)
+import * as THREE from "three"; // pinned, self-hosted library (see render/htmlLibs.ts)
 const canvas = document.getElementById("c");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
 renderer.setSize(innerWidth, innerHeight, false);
@@ -149,7 +171,7 @@ camera.position.z = 4;
 const cube = new THREE.Mesh(new THREE.TorusKnotGeometry(0.8, 0.28, 160, 24), new THREE.MeshStandardMaterial({ color: 0x5ad1c8, metalness: 0.3, roughness: 0.35 }));
 scene.add(cube, new THREE.AmbientLight(0xffffff, 0.4));
 const light = new THREE.DirectionalLight(0xffffff, 2); light.position.set(2, 3, 4); scene.add(light);
-// Draw frame t (seconds into the clip). Never use Date.now()/requestAnimationFrame for motion.
+// Draw frame t (seconds into the clip). Plain requestAnimationFrame / performance.now also follow t.
 dionysus.onFrame((t) => {
   cube.rotation.set(t * 0.9, t * 1.3, 0);
   scene.background = new THREE.Color().setHSL((t * 0.05) % 1, 0.35, 0.12);

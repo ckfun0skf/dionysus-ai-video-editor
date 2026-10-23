@@ -212,7 +212,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       <div className="v2-panel-head">
         <strong>Media</strong>
         <button className="v2-btn primary" onClick={() => fileRef.current?.click()}><Ic g="＋" size={16} /> Import</button>
-        <button className="v2-btn" title="Add an HTML/three.js clip (edit the .html and re-import to change it)" onClick={() => void onFiles([new File([THREE_TEMPLATE], "three-scene.html", { type: "text/html" })])}><Ic g="＋" size={16} /> HTML clip</button>
+        <button className="v2-btn" title="Add an HTML clip (example uses three.js) (edit the .html and re-import to change it)" onClick={() => void onFiles([new File([THREE_TEMPLATE], "three-scene.html", { type: "text/html" })])}><Ic g="＋" size={16} /> HTML clip</button>
         {mobile && <button className="v2-btn" onClick={() => setSheet(false)}>Done</button>}
       </div>
       {busy > 0 && <p className="v2-hint">Importing {busy}…</p>}

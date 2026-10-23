@@ -2,7 +2,7 @@
 import type { TextData } from "./text";
 export const SCHEMA = "dionysus/3.0" as const;
 
-/** `html`: a sandboxed HTML/three.js page rendered per frame from clip time (see render/htmlClip). */
+/** `html`: a sandboxed HTML page (libraries opt-in via render/htmlLibs) rendered per frame from clip time (see render/htmlClip). */
 export type MediaKind = "video" | "image" | "audio" | "html" | "text";
 export type TrackKind = "video" | "audio" | "text";
 

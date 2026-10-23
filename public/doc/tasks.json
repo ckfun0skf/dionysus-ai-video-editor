@@ -1919,6 +1919,12 @@
           "title": "Preview duplicate: copy onto a new track directly above, same time, +20px offset, copy selected, one undo",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-083",
+          "title": "HTML clips: library registry (three.js first entry, SRI, import map + CSP from selection), virtual-time shim (rAF/performance.now/Date), seeded Math.random, attachment runtime",
+          "status": "done",
+          "progress": 100
         }
       ]
     },
