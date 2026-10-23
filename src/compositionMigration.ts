@@ -525,7 +525,8 @@ export function projectRootCompositionToLegacy(
       }
       const sourceRef = placement.source;
       const {
-        assetId: _oldAssetId, shotId: _oldShotId, slotId: _oldSlotId,
+        assetId: _oldAssetId, childCompositionId: _oldChildCompositionId,
+        shotId: _oldShotId, slotId: _oldSlotId, shotVersionId: _oldShotVersionId,
         clipVersionId: _oldClipVersionId, scriptVersionId: _oldScriptVersionId,
         sourceIn: _oldSourceIn, sourceOut: _oldSourceOut,
         linkedVideoClipId: _oldLinkedVideoClipId, ...baseFields
@@ -560,8 +561,10 @@ export function projectRootCompositionToLegacy(
       const legacy = child.legacyData as unknown as TimelineClip;
       const {
         assetId: _oldAssetId,
+        childCompositionId: _oldChildCompositionId,
         shotId: _oldShotId,
         slotId: _oldSlotId,
+        shotVersionId: _oldShotVersionId,
         clipVersionId: _oldClipVersionId,
         scriptVersionId: _oldScriptVersionId,
         sourceIn: _oldSourceIn,
