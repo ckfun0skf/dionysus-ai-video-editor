@@ -608,6 +608,35 @@ export function ensureCanonicalTimelineClips(
 }
 
 /** Promote every legacy-only clip affected by a resize, then apply the shared Composition resize command. */
+/**
+ * Promote missing Master Shot placements from the deterministic legacy migration before
+ * duration/start edits. Master Shots are timeline placements too; they must not fall back
+ * to shot-array timing when a partially migrated root is encountered.
+ */
+export function ensureCanonicalMasterShots(
+  project: DionysusProject,
+  root: CompositionDocument,
+  shotIds: string[],
+): CompositionDocument {
+  const migrated = migrateLegacyProjectToComposition(project).rootComposition;
+  let next = root;
+  for (const shotId of shotIds) {
+    if (next.placements.some(placement => placement.id === shotId)) continue;
+    const source = migrated.placements.find(placement =>
+      placement.id === shotId && placement.legacyData.entityType === "master-shot"
+    );
+    if (!source) continue;
+    let placement = structuredClone(source);
+    if (!next.tracks.some(track => track.id === placement.trackId)) {
+      const fallbackTrack = next.tracks.find(track => track.kind === "video");
+      if (!fallbackTrack) throw new Error("Cannot promote a Master Shot without a canonical video track.");
+      placement = { ...placement, trackId: fallbackTrack.id };
+    }
+    next = insertCompositionPlacement(next, placement);
+  }
+  return next;
+}
+
 export function applyCanonicalRootTimelineResize(
   project: DionysusProject,
   root: CompositionDocument,
