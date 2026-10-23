@@ -1471,12 +1471,15 @@
         {
           "id": "V2-001",
           "title": "Module design doc merged",
-          "status": "in_progress",
-          "progress": 50,
+          "status": "done",
+          "progress": 100,
           "doc": "../../docs/v2/MODULE_DESIGN.md",
           "pr": null,
           "acceptance": [
             "Doc on main"
+          ],
+          "prs": [
+            "feat/v2-domain-engine"
           ]
         },
         {
@@ -1492,11 +1495,14 @@
         {
           "id": "V2-003",
           "title": "src/v2/domain types + ids + schema 3.0 zod-free validators",
-          "status": "planned",
-          "progress": 0,
+          "status": "done",
+          "progress": 100,
           "acceptance": [
             "Pure TS, no DOM imports",
             "Unit tests"
+          ],
+          "prs": [
+            "feat/v2-domain-engine"
           ]
         }
       ]
@@ -1510,20 +1516,26 @@
         {
           "id": "V2-010",
           "title": "Command bus, transactions, undo/redo",
-          "status": "planned",
-          "progress": 0,
+          "status": "done",
+          "progress": 100,
           "acceptance": [
             "Atomic multi-op steps",
             "Property tests: undo(redo(x))==x"
+          ],
+          "prs": [
+            "feat/v2-domain-engine"
           ]
         },
         {
           "id": "V2-011",
           "title": "Port placement ops (insert/move/trim/split/duplicate) from compositionCommands",
-          "status": "planned",
-          "progress": 0,
+          "status": "done",
+          "progress": 100,
           "acceptance": [
             "Old tests ported and green"
+          ],
+          "prs": [
+            "feat/v2-domain-engine"
           ]
         },
         {
