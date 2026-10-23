@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { migrateLegacyProjectToComposition, projectRootCompositionToLegacy } from "./compositionMigration";
-import { addCompositionLinkedAudioChild, extractLinkedAudio, insertCompositionPlacement } from "./compositionCommands";
+import { addCompositionLinkedAudioChild, applyCompositionResizePreview, extractLinkedAudio, insertCompositionPlacement, splitCompositionPlacement, trimCompositionPlacement } from "./compositionCommands";
 import { readProjectDocument } from "./projectDocument";
 import { sampleProject } from "./sampleProject";
 import {
@@ -143,6 +143,93 @@ describe("Editor session persistence boundary", () => {
     expect(restored?.linkedToPlacementId).toBeUndefined();
     expect(reopened.compositionModel!.rootComposition.placements
       .find(item => item.id === owner!.id)?.linkedAudioChildren).toEqual([]);
+  });
+
+  it("round-trips linked-audio child ranges through trim, resize and split", () => {
+    const project = structuredClone(sampleProject);
+    project.assets.push(
+      {
+        id: "linked-child-persist-audio",
+        name: "Linked child audio source",
+        kind: "audio",
+        path: "idb://linked-child-persist-audio",
+      },
+      {
+        id: "linked-child-persist-video",
+        name: "Linked child video source",
+        kind: "video",
+        path: "idb://linked-child-persist-video",
+      },
+    );
+    let root = migrateLegacyProjectToComposition(project).rootComposition;
+    const videoTrack = root.tracks.find(track => track.kind === "video");
+    expect(videoTrack).toBeDefined();
+    const owner = {
+      id: "linked-child-persist-video-placement",
+      name: "Video with embedded audio",
+      trackId: videoTrack!.id,
+      start: root.duration + 1,
+      duration: 6,
+      order: root.placements.length,
+      source: { type: "asset" as const, assetId: "linked-child-persist-video" },
+      sourceIn: 2,
+      sourceOut: 8,
+      legacyData: { id: "linked-child-persist-video-placement", kind: "video", assetId: "linked-child-persist-video" },
+    };
+    root = insertCompositionPlacement(root, owner);
+    root = addCompositionLinkedAudioChild(root, owner.id, {
+      id: "linked-child-persist-audio-child",
+      name: "Embedded audio",
+      source: { type: "asset", assetId: "linked-child-persist-audio" },
+      sourceIn: 5,
+      sourceOut: 11,
+      legacyData: {
+        id: "linked-child-persist-audio-child",
+        kind: "audio",
+        linkedVideoClipId: owner.id,
+        assetId: "linked-child-persist-audio",
+      },
+    });
+
+    // Exercise three canonical edit commands before persisting the same document.
+    root = trimCompositionPlacement(root, owner.id, 4);
+    root = applyCompositionResizePreview(root, {
+      id: owner.id, start: owner.start, duration: 8, edge: "right", trims: [],
+    });
+    root = splitCompositionPlacement(root, owner.id, owner.start + 4, {
+      newPlacementIds: { [owner.id]: "linked-child-persist-video-right" },
+    });
+
+    const sessionProject = projectRootCompositionToLegacy(project, root);
+    const storage = memoryStorage();
+    persistEditorSession(storage, { project: sessionProject, composition: root }, "2026-10-23T12:00:00.000Z");
+    const reopened = readProjectDocument(
+      JSON.parse(storage.values.get(COMPOSITION_PROJECT_STORAGE_KEY)!),
+      true,
+    );
+    const reopenedRoot = reopened.compositionModel!.rootComposition;
+    const left = reopenedRoot.placements.find(item => item.id === owner.id)!;
+    const right = reopenedRoot.placements.find(item => item.id === "linked-child-persist-video-right")!;
+    const rightAudioId = "linked-child-persist-video-right:audio:linked-child-persist-audio-child";
+
+    expect(left).toMatchObject({ start: owner.start, duration: 4, sourceIn: 2, sourceOut: 6 });
+    expect(left.linkedAudioChildren).toMatchObject([{
+      id: "linked-child-persist-audio-child",
+      source: { type: "asset", assetId: "linked-child-persist-audio" },
+      sourceIn: 5,
+      sourceOut: 9,
+      legacyData: { linkedVideoClipId: owner.id, sourceIn: 5, sourceOut: 9 },
+    }]);
+    expect(right).toMatchObject({
+      start: owner.start + 4, duration: 4, sourceIn: 6, sourceOut: 10,
+    });
+    expect(right.linkedAudioChildren).toMatchObject([{
+      id: rightAudioId,
+      source: { type: "asset", assetId: "linked-child-persist-audio" },
+      sourceIn: 9,
+      sourceOut: 13,
+      legacyData: { linkedVideoClipId: right.id, sourceIn: 9, sourceOut: 13 },
+    }]);
   });
 
   it("leaves the existing legacy fallback untouched if the canonical write fails", () => {
