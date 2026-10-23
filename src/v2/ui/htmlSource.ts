@@ -4,7 +4,7 @@ export interface HtmlParts { html: string; css: string; js: string; module: bool
 export function splitHtml(src: string): HtmlParts {
   const doc = new DOMParser().parseFromString(src, "text/html");
   const css = [...doc.querySelectorAll("style")].map((s) => s.textContent ?? "").join("\n").trim();
-  const scripts = [...doc.querySelectorAll("script")];
+  const scripts = [...doc.querySelectorAll("script")].filter((s) => s.type !== "application/json" && s.type !== "importmap");
   const js = scripts.map((s) => s.textContent ?? "").join("\n").trim();
   const module = scripts.some((s) => s.type === "module") || scripts.length === 0;
   doc.querySelectorAll("style,script").forEach((n) => n.remove());

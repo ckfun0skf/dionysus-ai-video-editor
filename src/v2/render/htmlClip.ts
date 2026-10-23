@@ -69,7 +69,7 @@ export function withRuntime(html: string, url: (l: HtmlLibrary) => string = (l) 
   return m ? m[0] + head + page.slice(m[0].length) : head + page;
 }
 
-export { HTML_LIBRARIES };
+
 
 export const HTML_SANDBOX = "allow-scripts";
 /** Largest frame accepted from a clip (8K); anything else is treated as a bad frame. */

@@ -1925,6 +1925,12 @@
           "title": "HTML clips: library registry (three.js first entry, SRI, import map + CSP from selection), virtual-time shim (rAF/performance.now/Date), seeded Math.random, attachment runtime",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-084",
+          "title": "HTML editor: library toggles from registry and file attachments (by relative name)",
+          "status": "done",
+          "progress": 100
         }
       ]
     },

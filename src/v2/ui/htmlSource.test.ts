@@ -30,3 +30,11 @@ describe("HTML editor source", () => {
     expect(src()).toBe("v1");
   });
 });
+
+describe("clip config in the editor", () => {
+  it("keeps the config script out of the JS pane", async () => {
+    const { writeClipConfig } = await import("../render");
+    const src = writeClipConfig("<!doctype html><html><head></head><body><script>go()</script></body></html>", { libs: [], assets: { "a.png": "data:," } });
+    expect(splitHtml(src).js).toBe("go()");
+  });
+});
