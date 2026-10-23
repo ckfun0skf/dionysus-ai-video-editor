@@ -80,7 +80,7 @@ describe("Editor session persistence boundary", () => {
       path: "idb://persisted-linked-audio-source",
     });
     let root = migrateLegacyProjectToComposition(project).rootComposition;
-    const owner = root.placements.find(item => item.source.type === "asset" || item.source.type === "clip");
+    const owner = root.placements[0];
     expect(owner).toBeDefined();
     const sourceIn = 3;
     const sourceOut = sourceIn + owner!.duration;
