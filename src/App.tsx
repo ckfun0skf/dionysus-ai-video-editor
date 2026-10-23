@@ -1419,6 +1419,7 @@ export default function App() {
       versionId,
       versionName,
       createdAt: now,
+      rootComposition: editorSessionRef.current.composition,
     });
     const asset: Asset = {
       id: assetId,
