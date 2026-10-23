@@ -517,9 +517,9 @@ export function projectRootCompositionToLegacy(
   const placedClips = rootComposition.placements
     .filter(placement => placement.legacyData.entityType !== "master-shot")
     .map(placement => {
-      const legacy = placement.legacyData as unknown as TimelineClip;
+      const legacy = placement.legacyData as unknown as TimelineClip & Record<string, unknown>;
       const existing = existingClips.get(placement.id);
-      const base = existing ? { ...existing, ...legacy } : legacy;
+      const base = (existing ? { ...existing, ...legacy } : legacy) as TimelineClip & Record<string, unknown>;
       if (!base || typeof base.kind !== "string") {
         throw new Error(`Root Composition placement "${placement.id}" has no compatible legacy clip metadata.`);
       }
@@ -558,7 +558,7 @@ export function projectRootCompositionToLegacy(
   // translating their start by the canonical shot delta so old consumers remain aligned.
   const linkedAudioChildren: TimelineClip[] = rootComposition.placements.flatMap(owner =>
     (owner.linkedAudioChildren ?? []).map(child => {
-      const legacy = child.legacyData as unknown as TimelineClip;
+      const legacy = child.legacyData as unknown as TimelineClip & Record<string, unknown>;
       const {
         assetId: _oldAssetId,
         childCompositionId: _oldChildCompositionId,
