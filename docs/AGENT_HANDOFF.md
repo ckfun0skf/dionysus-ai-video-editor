@@ -730,3 +730,8 @@ The pinned-version regression again passed all 298 tests, but TypeScript correct
 - The deterministic root + pinned nested edit → Undo/Redo → v2 JSON save/reopen test is in `src/editorSession.test.ts`; it checks both placements' timing, the nested Shot Slot source/version pin, and provenance. The matching Issue #110 subtask is checked.
 - Root reconciliation preserves canonical provenance and canonical-only metadata while retaining the deterministic root ID required by the v2 document contract. The matching Issue #110 item is checked.
 - The task-registry-synchronized checkpoint `0ee800302923e34175d67012812b1e2e4d46b239` passed [CI run 39937818376](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39937818376): 27 test files / 312 tests, TypeScript/production build passed, npm audit 0 vulnerabilities. This follow-up documentation commit requires its own exact-head CI; continue checking exact head before further work.
+
+## Verified persistence slice — pinned nested Composition save/reopen (2026-10-23)
+
+- `src/editorSessionPersistence.test.ts` now verifies a v2 save/reopen round trip retains an embedded pinned nested Composition and its provenance/pin metadata.
+- Exact-head CI passed at `a2e31ee6615e05e1d250cc307c47d1ec7b77d9ac`, [run 39938305163](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39938305163): 27 test files / 313 tests, TypeScript/production build passed, npm audit 0 vulnerabilities. Issue #110 item is checked. The broader edit → undo/redo → save/reopen → JSON round-trip matrix remains incomplete.
