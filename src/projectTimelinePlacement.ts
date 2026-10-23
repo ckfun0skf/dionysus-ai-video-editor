@@ -522,6 +522,26 @@ export type ProjectTimelineMoveTarget =
   | { type: "shot"; shotId: string }
   | { type: "clip"; clipId: string };
 
+/** Promote every legacy-only clip affected by a resize, then apply the shared Composition resize command. */
+export function applyCanonicalRootTimelineResize(
+  project: DionysusProject,
+  root: CompositionDocument,
+  preview: ClipResizePreview,
+): CompositionDocument {
+  const ids = [preview.id, ...preview.trims.map(trim => trim.id)];
+  const clips = ids.map(clipId => {
+    const clip = (project.timelineClips ?? []).find(item => item.id === clipId);
+    if (!clip) throw new Error("Timeline clip not found for canonical resize promotion: " + clipId);
+    return clip;
+  }).sort((a, b) => Number(Boolean(a.linkedVideoClipId)) - Number(Boolean(b.linkedVideoClipId)));
+  let next = root;
+  for (const clip of clips) {
+    if (next.placements.some(placement => placement.id === clip.id)) continue;
+    next = insertCompositionPlacement(next, createRootCompositionPlacementForTimelineClip(project, next, clip));
+  }
+  return applyCompositionResizePreview(next, preview);
+}
+
 /** Promote a legacy-only timeline clip into the live canonical root before applying a move. */
 export function moveCanonicalRootTimelineClip(
   project: DionysusProject,
