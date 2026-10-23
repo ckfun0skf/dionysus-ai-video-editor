@@ -684,3 +684,10 @@ The first CI run after switching autosave to canonical-only failed because the A
 ## Validation correction — projection fixture metadata is intentionally legacy-only (2026-10-23)
 
 The first CI for the expanded selector cleanup passed all 26 test files but failed TypeScript because `childCompositionId` and `shotVersionId` are intentionally not declared on the public `TimelineClip` type. The projection handles them as unknown legacy compatibility fields. Updated the implementation to narrow legacy metadata through `Record<string, unknown>` and changed regression fixtures to inject those unknown legacy fields through typed spreads. Fix commits: `d2ac053a9179802828b2d47ce7bffbe810327e56`, `bd012ac135cb0a20da38232217bce42c083dff1a`. Exact-head CI for this correction and the docs-synchronized head is pending; do not mark the selector expansion complete until it passes.
+
+## Pinned Shot Slot snapshot audit — preserve the version named by the canonical placement (2026-10-23)
+
+- The next non-root/pinned-path audit found `createClipVersionSnapshot()` embedded the currently selected Shot Slot version for each slot but did not resolve an explicit `CompositionSourceReference` of type `shot` to the exact `versionId` pinned by a canonical placement. If selection changed after the placement was pinned, the saved tree could omit the referenced version's child Composition.
+- Snapshot child attachment now resolves Shot/Slot/version references from each canonical placement, records the exact pin, embeds that exact version's Composition recursively, and still preserves the current selected version snapshots as separate pins where relevant. The same path works inside nested Compositions.
+- Added regression coverage where a root placement pins `shot-version-1` while the slot selection has moved to `shot-version-2`; the snapshot must contain both the exact pinned child and the current selected child, with both pin records.
+- Code/test commits: `efe8486bf96fa47ae26874245b42a4ea739da826`, `41f44a5e78bfeef8a9816192198f9e317e0f4a4a`. Exact-head CI is pending; do not check this snapshot item complete until tests/build/audit pass.
