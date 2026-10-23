@@ -70,6 +70,15 @@ export function createRootCompositionPlacementForTimelineClip(
 }
 
 function sourceForLayer(project: DionysusProject, layer: CompositionLayer): CompositionSourceReference {
+  const metadata = layer as unknown as Record<string, unknown>;
+  if (typeof metadata.shotId === "string") {
+    return {
+      type: "shot",
+      shotId: metadata.shotId,
+      ...(typeof metadata.slotId === "string" ? { slotId: metadata.slotId } : {}),
+      ...(typeof metadata.shotVersionId === "string" ? { versionId: metadata.shotVersionId } : {}),
+    };
+  }
   if (layer.kind === "composition" && layer.childCompositionId) {
     const asset = findAsset(project, layer.childCompositionId);
     if (!asset || asset.kind !== "clip") return { type: "missing", originalKind: layer.kind, originalId: layer.childCompositionId };
