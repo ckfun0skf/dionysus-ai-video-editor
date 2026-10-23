@@ -1949,6 +1949,12 @@
           "title": "Mobile: full-screen media picker (Device / Library tabs, multi-select Add to main track at playhead)",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-088",
+          "title": "Mobile: Overlay button (picker → new track above at playhead)",
+          "status": "done",
+          "progress": 100
         }
       ]
     },
