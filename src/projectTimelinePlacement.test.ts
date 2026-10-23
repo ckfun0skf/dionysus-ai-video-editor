@@ -52,6 +52,33 @@ describe("shared project timeline placement engine", () => {
     });
   });
 
+  it("promotes a missing Master Shot before canonical timeline resize", () => {
+    const project = structuredClone(sampleProject);
+    const shot = project.shots[0]!;
+    const root = migrateLegacyProjectToComposition(project).rootComposition;
+    const original = root.placements.find(placement => placement.id === shot.id)!;
+    const partialRoot = {
+      ...root,
+      placements: root.placements.filter(placement => placement.id !== shot.id),
+    };
+    const preview = {
+      id: shot.id,
+      start: original.start,
+      duration: Math.max(0.1, original.duration - 0.5),
+      edge: "right" as const,
+      trims: [],
+    };
+
+    const resized = applyCanonicalRootTimelineResize(project, partialRoot, preview);
+    expect(resized.placements.find(placement => placement.id === shot.id)).toMatchObject({
+      start: original.start,
+      duration: preview.duration,
+      legacyData: { entityType: "master-shot" },
+    });
+    expect(projectRootCompositionToLegacy(project, resized).shots.find(item => item.id === shot.id)?.duration)
+      .toBe(preview.duration);
+  });
+
   it("promotes a legacy-only linked group before canonical split and duplicate", () => {
     const project = structuredClone(sampleProject);
     project.shots = [];
