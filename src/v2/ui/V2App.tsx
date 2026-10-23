@@ -378,7 +378,6 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
               {firstVideoTrack && <button className="v2-side-btn" onClick={() => engine.dispatch(cmd.toggleTrackMute(firstVideoTrack.id))}><b aria-hidden>{firstVideoTrack.muted ? "🔇" : "🔊"}</b><span>{firstVideoTrack.muted ? "Unmute clip audio" : "Mute clip audio"}</span></button>}
               <button className="v2-side-btn v2-cover" onClick={() => seek(0)} style={firstClip && thumbs[firstClip.source.assetId] ? { backgroundImage: `url(${thumbs[firstClip.source.assetId]})` } : undefined}><span>Cover</span></button>
             </>} />
-          <button className="v2-fab" aria-label="Add media" onClick={() => setSheet(true)}>✦</button>
           <nav className="v2-toolbar" aria-label={selected ? "Clip actions" : "Timeline actions"}>
             {activeMenu !== "root" && <button className="v2-tool v2-tool-back" aria-label="Back" onClick={back}>‹</button>}
             {mobileTools[activeMenu]}

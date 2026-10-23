@@ -173,4 +173,22 @@ describe("V2App", () => {
     await act(async () => { (el.querySelector('[aria-label="Undo"]') as HTMLButtonElement).click(); });
     expect(marker().getAttribute("aria-label")).toMatch(/^Crossfade/);
   });
+
+  it("mobile: track controls are a fixed column beside (not over) the lanes; no floating action button", async () => {
+    const mm = window.matchMedia;
+    window.matchMedia = ((q: string) => ({ matches: true, media: q, addEventListener() {}, removeEventListener() {} })) as never;
+    try {
+      const el = document.createElement("div");
+      document.body.appendChild(el);
+      await act(async () => { createRoot(el).render(<V2App />); });
+      await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+      const side = el.querySelector('[data-testid="side-col"]')!;
+      const scroll = el.querySelector(".v2-scroll")!;
+      expect(side).toBeTruthy();
+      expect(side.parentElement).toBe(scroll.parentElement);
+      expect(scroll.contains(side)).toBe(false);
+      expect(side.nextElementSibling).toBe(scroll);
+      expect(el.querySelector(".v2-fab")).toBeNull();
+    } finally { window.matchMedia = mm; }
+  });
 });

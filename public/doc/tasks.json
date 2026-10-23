@@ -1865,6 +1865,12 @@
           "title": "Review: CSP in HTML clip srcdoc; self-hosted three.js pinned by SRI",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-074",
+          "title": "Mobile timeline: fixed opaque track-control column; remove floating button",
+          "status": "done",
+          "progress": 100
         }
       ]
     },
