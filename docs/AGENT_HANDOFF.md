@@ -1,14 +1,15 @@
-## Latest checkpoint — 2026-10-22 (canonical rendering and snapshot duplication)
+## Latest checkpoint — 2026-10-22 (canonical root snapshots and nested versions)
 
 - Branch: `feat/e1-editor-session-history`; [PR #111](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/111) remains open and unmerged. Issue #110 tracks architecture; Issue #100 remains open for owner UI acceptance.
-- Latest code checkpoint before this handoff sync: `9140b61cb8a4492561d39d7b5511c935f952c631`. Exact-head CI [39874236364](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39874236364) passed 26 test files / 294 tests, TypeScript/build, and npm audit 0 vulnerabilities. This docs sync creates a newer head; verify exact-head CI again afterward.
-- Editor state/history/import/recovery use a paired `EditorSessionSnapshot`. Autosave writes the canonical v2 Composition envelope only; schema-1.0 `dionysus.project.v1` is a read-only fallback.
-- Nested Clip/Shot Slot Inspector edits, track mute, duration, and description synchronize canonical Composition metadata with compatibility projections through dedicated helpers. Initial Clip Asset Version A and New Blank Versions materialize independent canonical Composition documents immediately, including empty placements and the parent asset's canvas dimensions.
-- Legacy-only Clip Version duplication now materializes a canonical source snapshot before duplicating and remaps track, placement, and linked-audio references. Pinned nested snapshots remain preserved.
-- Nested render layers come from canonical nested Composition where present, including linked-audio children with source/range/mute/volume/fade and owner-track mute. Master preview, audio playback preparation, procedural/script preview, and export start from canonical root Composition through a memoized adapter to the legacy `CompositionLayer[]` renderer.
-- Editable master/nested Timeline UI remains compatibility-projected; renderer output still uses `CompositionLayer[]`. This is not canonical-only rendering/UI.
+- Latest validated code head: `798024589d78ef21e6408b93e4527d1b703f5b51`. Exact-head CI [39875993855](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39875993855) passed 26 test files / 296 tests, TypeScript/build, and npm audit 0 vulnerabilities. This documentation sync creates a newer head; verify exact-head CI afterward.
+- Editor state/history/import/recovery use a paired `EditorSessionSnapshot`. Autosave writes canonical v2 only; schema-1.0 `dionysus.project.v1` remains a read-only fallback.
+- Nested Clip/Shot Slot Inspector edits, track mute, duration, and description synchronize canonical Composition metadata with compatibility projections through dedicated helpers. Initial Clip Asset Version A and New Blank Versions materialize independent canonical Composition documents immediately, including empty placements and parent canvas dimensions.
+- Legacy-only Clip Version duplication canonicalizes the source before remapping tracks, placements, and linked-audio references.
+- Save-as-Clip Asset now uses the authoritative Editor-session root Composition. Its nested Composition and flattened renderer projection are derived from the same root, preventing stale legacy Project data from silently replacing canonical-only edits. Regression coverage confirms a canonical placement moved to 9s is saved/rendered at 9s while the stale legacy project remains at 5s.
+- Nested render layers use canonical nested Composition where present, including linked-audio children with source/range/mute/volume/fade and owner-track mute. Master preview, audio playback preparation, procedural/script preview, and export start from canonical root Composition through a memoized adapter to the legacy `CompositionLayer[]` renderer.
+- Editable master/nested Timeline UI remains compatibility-projected; renderer output still uses `CompositionLayer[]`. Some non-root/pinned snapshot paths remain to audit. This is not canonical-only rendering/UI.
 - No local checkout tests/build, browser smoke tests, or manual UI acceptance are claimed. Do not merge without explicit owner approval.
-- Next: verify exact-head CI after this docs sync, then audit remaining non-root edit/pinned snapshot paths and plan a tested migration of nested editable UI off compatibility layer projections.
+- Next: verify exact-head CI after this docs sync, then audit remaining non-root edit/pinned snapshot paths and plan a tested nested editable UI migration off compatibility layer projections.
 
 ---
 
