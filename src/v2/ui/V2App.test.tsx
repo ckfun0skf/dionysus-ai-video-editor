@@ -113,4 +113,38 @@ describe("V2App", () => {
     await act(async () => { window.dispatchEvent(new KeyboardEvent("keydown", { key: "r" })); });
     expect(toggle.getAttribute("aria-pressed")).toBe("false");
   });
+
+  it("shift-click multi-select: duplicate, copy/paste and delete act on all selected clips", async () => {
+    const { createMemoryStorage } = await import("../persistence");
+    const { createProject } = await import("../domain");
+    const storage = createMemoryStorage();
+    const p = createProject();
+    p.assets.a = { id: "a", kind: "video", name: "clip.mp4", versions: [{ id: "1", createdAt: "", media: { blobKey: "k", mime: "video/mp4", durationTicks: 1200000 }, provenance: { source: "import", inputs: [] } }] };
+    for (const [id, start] of [["m1", 0], ["m2", 240000]] as const) p.compositions[p.rootCompositionId].tracks[0].placements.push({ id, startTicks: start, durationTicks: 240000, sourceInTicks: 0, source: { kind: "assetVersion", assetId: "a", versionId: "1" }, clipType: "video" });
+    await storage.projects.save(p);
+    storage.lastProjectId.set(p.id);
+    const el = document.createElement("div");
+    document.body.appendChild(el);
+    await act(async () => { createRoot(el).render(<V2App openStorage={async () => storage} />); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+    const down = (id: string, shiftKey = false) => act(async () => { el.querySelector(`[data-placement-id="${id}"]`)!.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, shiftKey })); window.dispatchEvent(new MouseEvent("pointerup")); });
+    const clips = () => el.querySelectorAll("[data-placement-id]").length;
+    const btn = (label: string) => Array.from(el.querySelectorAll("button")).find((b) => b.textContent?.includes(label)) as HTMLButtonElement;
+    await down("m1");
+    await down("m2", true);
+    expect(el.querySelector(".v2-sel-count")!.textContent).toContain("2 selected");
+    expect(el.querySelectorAll(".v2-clip.is-selected").length).toBe(2);
+    await act(async () => { btn("Duplicate").click(); });
+    expect(clips()).toBe(4);
+    await act(async () => { (el.querySelector('[aria-label="Undo"]') as HTMLButtonElement).click(); });
+    expect(clips()).toBe(2);
+    await down("m1");
+    await down("m2", true);
+    await act(async () => { btn("Copy").click(); });
+    await act(async () => { btn("Done").click(); });
+    await act(async () => { btn("Paste").click(); });
+    expect(clips()).toBe(4);
+    await act(async () => { btn("Delete").click(); });
+    expect(clips()).toBe(2);
+  });
 });

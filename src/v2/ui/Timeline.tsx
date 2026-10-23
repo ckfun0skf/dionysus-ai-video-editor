@@ -9,6 +9,11 @@ interface Props {
   playing: boolean;
   onSeek: (t: number) => void;
   selectedId?: string;
+  /** Multi-selection (highlighted); trim handles show only for a single `selectedId`. */
+  selectedIds?: string[];
+  /** Shift/⌘/Ctrl-click (or mobile multi-select mode) toggles a clip in the selection. */
+  onToggleSelect?: (id: string) => void;
+  multiMode?: boolean;
   onSelect: (id?: string) => void;
   pps: number;
   /** Mobile/CapCut mode: fixed centred playhead, the tracks scroll under it. */
@@ -33,7 +38,7 @@ type Gesture =
 
 const HEADER_W = 84;
 
-export function Timeline({ engine, project, time, playing, onSeek, selectedId, onSelect, pps, centered, thumbs, onAddMedia, sideColumn, timeLabel, topLane, ripple }: Props) {
+export function Timeline({ engine, project, time, playing, onSeek, selectedId, selectedIds, onToggleSelect, multiMode, onSelect, pps, centered, thumbs, onAddMedia, sideColumn, timeLabel, topLane, ripple }: Props) {
   const comp = project.compositions[project.rootCompositionId];
   const scrollRef = useRef<HTMLDivElement>(null);
   const [gesture, setGesture] = useState<Gesture>();
@@ -93,6 +98,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, o
 
   const onClipDown = (e: React.PointerEvent, id: string, trackId: string, start: number) => {
     e.stopPropagation();
+    if (onToggleSelect && (multiMode || e.shiftKey || e.metaKey || e.ctrlKey)) { onToggleSelect(id); return; }
     if (centered && selectedId !== id) { onSelect(id); return; } // tap to select first on touch layouts
     onSelect(id);
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -183,8 +189,9 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, o
               {t.placements.map((p) => {
                 const asset = project.assets[p.source.assetId];
                 const sel = p.id === selectedId;
+                const inSel = sel || !!selectedIds?.includes(p.id);
                 return (
-                  <div key={p.id} className={`v2-clip clip-${p.clipType} ${sel ? "is-selected" : ""}`} data-placement-id={p.id}
+                  <div key={p.id} className={`v2-clip clip-${p.clipType} ${inSel ? "is-selected" : ""}`} data-placement-id={p.id}
                     style={{ left: toPx(p.startTicks), width: Math.max(4, toPx(p.durationTicks)), ...(centered && thumbs?.[p.source.assetId] && p.clipType !== "audio" ? { backgroundImage: `url(${thumbs[p.source.assetId]})` } : {}) }}
                     onPointerDown={(e) => onClipDown(e, p.id, t.id, p.startTicks)} title={asset?.name}>
                     <span className="v2-clip-name">{p.freeze && <span className="v2-clip-badge" title="Freeze frame" aria-label="Freeze frame">❄</span>}{p.reverse && <span className="v2-clip-badge" title="Reversed" aria-label="Reversed">⟲</span>}{p.speed && p.speed !== 1 && <span className="v2-clip-badge" title={`Speed ${p.speed}×`}>{p.speed}×</span>}{p.linkedAudio?.muted && !p.freeze && <span className="v2-clip-badge" title="Clip audio muted" aria-label="Clip audio muted">🔇</span>}{asset?.name ?? "missing media"}</span>

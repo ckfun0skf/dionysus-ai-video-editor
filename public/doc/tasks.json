@@ -1787,8 +1787,8 @@
           ],
           "id": "V2-064",
           "title": "Ripple delete/trim, multi-select, copy/paste, duplicate",
-          "status": "in_progress",
-          "progress": 40
+          "status": "done",
+          "progress": 100
         },
         {
           "doc": "docs/v2/MODULE_DESIGN.md",
