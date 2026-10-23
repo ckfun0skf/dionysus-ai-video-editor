@@ -63,6 +63,7 @@ describe("shared project timeline placement engine", () => {
     };
     const preview = {
       id: shot.id,
+      trackId: original.trackId,
       start: original.start,
       duration: Math.max(0.1, original.duration - 0.5),
       edge: "right" as const,
