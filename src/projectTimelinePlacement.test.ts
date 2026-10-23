@@ -15,10 +15,32 @@ import {
   calculateProjectTimelineDropPosition,
   getProjectTimelinePlacementItems,
   moveCanonicalRootTimelineClip,
+  trimCanonicalRootTimelineClip,
   moveProjectTimelinePlacement,
 } from "./projectTimelinePlacement";
 
 describe("shared project timeline placement engine", () => {
+  it("promotes a legacy-only clip and linked audio before canonical trim", () => {
+    const project = structuredClone(sampleProject);
+    const root = migrateLegacyProjectToComposition(project).rootComposition;
+    const videoTrack = root.tracks.find(track => track.kind === "video");
+    const audioTrack = root.tracks.find(track => track.kind === "audio");
+    expect(videoTrack).toBeDefined();
+    expect(audioTrack).toBeDefined();
+    const clip = { id: "legacy-trim-video", name: "Trim video", kind: "video" as const, trackId: videoTrack!.id, start: 0, duration: 4 };
+    const audio = { id: "legacy-trim-audio", name: "Trim audio", kind: "audio" as const, trackId: audioTrack!.id, start: 0, duration: 4, linkedVideoClipId: clip.id };
+    project.timelineClips = [...(project.timelineClips ?? []), clip, audio];
+
+    const next = trimCanonicalRootTimelineClip(project, root, clip.id, 1.5);
+
+    expect(next.placements.find(placement => placement.id === clip.id)).toMatchObject({ duration: 1.5 });
+    expect(next.placements.find(placement => placement.id === audio.id)).toMatchObject({
+      linkedToPlacementId: clip.id,
+      duration: 1.5,
+    });
+    expect(root.placements.some(placement => placement.id === clip.id || placement.id === audio.id)).toBe(false);
+  });
+
   it("promotes legacy-only clips before applying a canonical resize and adjacent trim", () => {
     const project = structuredClone(sampleProject);
     let root = migrateLegacyProjectToComposition(project).rootComposition;
