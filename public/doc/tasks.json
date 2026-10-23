@@ -1967,6 +1967,12 @@
           "title": "Main track long-press reorder: clips collapse to square thumbs, drag to reorder, gapless, one undo",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-091",
+          "title": "Fix: long-press on main-track clip always enters reorder (never layer menu); block native touch callout",
+          "status": "done",
+          "progress": 100
         }
       ]
     },

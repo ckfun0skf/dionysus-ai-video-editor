@@ -347,3 +347,6 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 @keyframes v2-reorder-in { from { opacity: 0; transform: scaleX(1.6); } to { opacity: 1; transform: none; } }
 @keyframes v2-reorder-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: scaleX(1.6); } }
 .v2-timeline.is-reordering .v2-handle, .v2-timeline.is-reordering .v2-main-add { display: none; }
+/* V2-091: no native long-press callout/selection on touch timeline */
+.v2-timeline.is-centered, .v2-timeline.is-centered * { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.v2-timeline.is-centered img, .v2-timeline.is-centered canvas { -webkit-user-drag: none; pointer-events: none; }

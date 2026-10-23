@@ -23,3 +23,10 @@ describe("reorderMain", () => {
     expect(ops.reorderMain(c, "zz", 0)).toBe(c);
   });
 });
+describe("reorderMain single clip", () => {
+  it("is a no-op with one clip", () => {
+    const p = createProject("t"); let c = p.compositions[p.rootCompositionId];
+    const m = ops.mainTrack(c)!; c = { ...c, tracks: c.tracks.map((t) => t.id === m.id ? { ...t, placements: [pl("a", 0, 100)] } : t) };
+    expect(ops.reorderMain(c, "a", 0)).toBe(c);
+  });
+});

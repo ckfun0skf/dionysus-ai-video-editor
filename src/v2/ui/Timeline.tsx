@@ -152,7 +152,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
     };
     menuArm.current = undefined;
     const mainT = ops.mainTrack(comp);
-    if (centered && mainT?.id === trackId && mainT.placements.length > 1) {
+    if (centered && mainT?.id === trackId) {
       // Main track on touch: tap selects, long-press enters reorder mode (no free drag, so the track stays gapless).
       onSelect(id);
       cancelPress();
@@ -250,7 +250,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
   for (let s = 0; s <= rulerSeconds; s += step) ticks.push(s);
 
   return (
-    <div ref={rootRef} className={`v2-timeline ${centered ? "is-centered" : ""} ${reorder ? "is-reordering" : ""}`}>
+    <div ref={rootRef} onContextMenu={centered ? (e) => e.preventDefault() : undefined} className={`v2-timeline ${centered ? "is-centered" : ""} ${reorder ? "is-reordering" : ""}`}>
       {!centered && (
         <div className="v2-track-headers">
           <div className="v2-ruler-spacer" />
@@ -293,7 +293,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
           ) : (({ t }) => (
             <div key={t.id} className={`v2-lane kind-${t.kind} ${t.muted ? "is-muted" : ""}`} data-track-id={t.id} data-group={r.group}
               onPointerDown={(e) => { if (e.target === e.currentTarget) { onSelect(undefined); if (centered && r.group !== "main") setExpanded(undefined); if (!centered) scrub(e); } }}
-              onContextMenu={(e) => { const id = (e.target as HTMLElement).closest("[data-placement-id]")?.getAttribute("data-placement-id"); if (id) { e.preventDefault(); onSelect(id); setMenu({ id, x: e.clientX, y: e.clientY }); } }}
+              onContextMenu={(e) => { if (centered) { e.preventDefault(); return; } const id = (e.target as HTMLElement).closest("[data-placement-id]")?.getAttribute("data-placement-id"); if (id) { e.preventDefault(); onSelect(id); setMenu({ id, x: e.clientX, y: e.clientY }); } }}
               onDragOver={(e) => e.preventDefault()} onDrop={(e) => onDrop(e, t.id)}>
               {centered && t.muted && <span className="v2-lane-label"><Ic g="🔇" /></span>}
               {t.placements.map((p) => {
@@ -422,10 +422,14 @@ function ReorderStrip({ track, state, top, root, thumbs, onMove, onDrop }: { tra
   useEffect(() => {
     const move = (e: PointerEvent) => { e.preventDefault(); onMove(e.clientX); };
     const up = () => onDrop(latest.current);
+    // Stop the browser from claiming the touch as a pan (which would fire pointercancel mid-drag) or a callout.
+    const block = (e: Event) => e.preventDefault();
+    window.addEventListener("touchmove", block, { passive: false });
+    window.addEventListener("contextmenu", block);
     window.addEventListener("pointermove", move, { passive: false });
     window.addEventListener("pointerup", up, { once: true });
     window.addEventListener("pointercancel", up, { once: true });
-    return () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up); };
+    return () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up); window.removeEventListener("touchmove", block); window.removeEventListener("contextmenu", block); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const others = sorted.filter((p) => p.id !== state.id);
   return (
