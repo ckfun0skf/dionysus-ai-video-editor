@@ -434,7 +434,7 @@ export function applyClipVersionResizePreview(
  */
 export function duplicateClipVersionComposition(
   version: ClipVersion,
-  createId: (kind: "clip-track" | "layer", previousId: string) => string,
+  createId: (kind: "clip-track" | "layer" | "composition", previousId: string) => string,
 ): ClipVersion {
   const normalized = ensureClipVersionComposition(version);
   const source = structuredClone(normalized.composition!);
@@ -442,6 +442,7 @@ export function duplicateClipVersionComposition(
   const placementIds = new Map(source.placements.map(placement => [placement.id, createId("layer", placement.id)]));
   const composition = {
     ...source,
+    id: createId("composition", source.id),
     tracks: source.tracks.map(track => ({
       ...track,
       id: trackIds.get(track.id)!,
