@@ -1224,6 +1224,13 @@ export default function App() {
       changeRootComposition(root => deleteCompositionPlacement(root, clip.id));
       return;
     }
+    const current = editorSessionRef.current.project.timelineClips?.find(item => item.id === clip.id);
+    if (current) {
+      changeRootComposition(root => deleteCompositionPlacement(
+        ensureCanonicalTimelineClips(editorSessionRef.current.project, root, [clip.id]), clip.id,
+      ));
+      return;
+    }
     change(project => ({ ...project, timelineClips: deleteTimelineClip({ tracks: project.tracks, timelineClips: project.timelineClips ?? [] }, clip.id).timelineClips }));
   }
 
@@ -1317,6 +1324,13 @@ export default function App() {
   function moveRootTimelineClip(clipId: string, start: number) {
     if (editorSessionRef.current.composition.placements.some(item => item.id === clipId)) {
       changeRootComposition(root => moveCompositionPlacement(root, clipId, start));
+      return;
+    }
+    const current = editorSessionRef.current.project.timelineClips?.find(item => item.id === clipId);
+    if (current) {
+      changeRootComposition(root => moveCanonicalRootTimelineClip(
+        editorSessionRef.current.project, root, clipId, current.trackId, start,
+      ));
       return;
     }
     change(project => ({ ...project, timelineClips: moveTimelineClip({ tracks: project.tracks, timelineClips: project.timelineClips ?? [] }, clipId, start).timelineClips }));
