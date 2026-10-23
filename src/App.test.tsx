@@ -603,6 +603,7 @@ describe("App history integration", () => {
     expect(created?.composition?.placements).toHaveLength(created?.layers.length ?? 0);
     expect(created?.composition?.width).toBeGreaterThan(0);
     expect(created?.composition?.height).toBeGreaterThan(0);
+    expect(created?.composition?.legacyData?.description).toBe(created?.description);
   });
 
   it("edits Master Shot placement independently from Version and Slot internal duration", async () => {
