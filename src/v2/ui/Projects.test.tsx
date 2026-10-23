@@ -33,7 +33,7 @@ describe("project list", () => {
     await wait();
     const title = () => (el.querySelector('[aria-label="Project name"]') as HTMLInputElement).value;
     expect(title()).toBe("My first v2 project");
-    await act(async () => btn(el, "☰ Projects").click()); await wait();
+    await act(async () => btn(el, "Projects").click()); await wait();
     const dlg = () => el.querySelector('[aria-label="Projects"][role="dialog"]')!;
     expect(dlg().querySelectorAll("li")).toHaveLength(2);
     expect(dlg().querySelector('[aria-current="true"]')!.textContent).toContain("My first v2 project");
@@ -60,8 +60,8 @@ describe("project list", () => {
     expect(storage.lastProjectId.get()).toBe(other.id);
 
     // new project opens empty
-    await act(async () => btn(el, "☰ Projects").click()); await wait();
-    await act(async () => btn(dlg(), "＋ New project").click()); await wait(); await wait();
+    await act(async () => btn(el, "Projects").click()); await wait();
+    await act(async () => btn(dlg(), " New project").click()); await wait(); await wait();
     expect(title()).toMatch(/^Untitled/);
     expect((await storage.projects.list())).toHaveLength(3);
   });

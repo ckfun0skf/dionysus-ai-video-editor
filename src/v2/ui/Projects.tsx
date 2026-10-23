@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createProject, type Project } from "../domain";
 import type { ProjectSummary, Storage } from "../ports";
+import { Ic } from "./Icon";
 
 /** Human "updated" label: just now / 5 min ago / 3 h ago / date. */
 export function ago(iso: string, now = Date.now()) {
@@ -54,7 +55,7 @@ export function ProjectsDialog({ storage, current, onOpen, onRenameCurrent, onCl
   return (
     <div className="v2-modal" role="dialog" aria-modal="true" aria-label="Projects">
       <div className="v2-modal-card v2-projects">
-        <div className="v2-panel-head"><h2>Projects</h2><span className="v2-spacer" /><button className="v2-btn primary" title="Start an empty project" onClick={() => void create()}>＋ New project</button></div>
+        <div className="v2-panel-head"><h2>Projects</h2><span className="v2-spacer" /><button className="v2-btn primary" title="Start an empty project" onClick={() => void create()}><Ic g="＋" size={16} /> New project</button></div>
         {!list ? <p className="v2-muted">Loading…</p> : list.length === 0 ? <p className="v2-empty">No projects yet — create one to start editing.</p> : (
           <ul className="v2-project-list">
             {list.map((p) => (
@@ -69,8 +70,8 @@ export function ProjectsDialog({ storage, current, onOpen, onRenameCurrent, onCl
                 {confirm === p.id ? (
                   <><button className="v2-btn danger" onClick={() => void remove(p.id)}>Delete</button><button className="v2-btn" onClick={() => setConfirm(undefined)}>Keep</button></>
                 ) : (
-                  <><button className="v2-icon" aria-label={`Rename ${p.name}`} title="Rename" onClick={() => setEditing(p.id)}>✎</button>
-                  <button className="v2-icon" aria-label={`Delete ${p.name}`} title={p.id === current.id ? "Open another project to delete this one" : "Delete"} disabled={p.id === current.id} onClick={() => setConfirm(p.id)}>🗑</button></>
+                  <><button className="v2-icon" aria-label={`Rename ${p.name}`} title="Rename" onClick={() => setEditing(p.id)}><Ic g="✎" /></button>
+                  <button className="v2-icon" aria-label={`Delete ${p.name}`} title={p.id === current.id ? "Open another project to delete this one" : "Delete"} disabled={p.id === current.id} onClick={() => setConfirm(p.id)}><Ic g="🗑" /></button></>
                 )}
               </li>
             ))}

@@ -2,6 +2,7 @@ import { useRef, type PointerEvent as RPE } from "react";
 import { cmd, type Engine } from "../engine";
 import { evalKeys, transformOf, ticksToSeconds, secondsToTicks, type KeyframeProp, type Placement } from "../domain";
 import type { Placed } from "../render";
+import { Ic } from "./Icon";
 
 type Patch = Parameters<typeof cmd.setTransform>[1];
 const KEYED: KeyframeProp[] = ["x", "y", "scale", "rotation", "opacity"];
@@ -41,7 +42,7 @@ export function TransformInspector({ engine, placement, time }: { engine: Engine
       <output>{fmt(value)}</output>
       {prop ? <button type="button" className={`v2-kf ${onKey ? "is-on" : keys?.length ? "is-keyed" : ""}`} disabled={!inside} aria-pressed={onKey}
         title={onKey ? `Remove ${label} keyframe at playhead` : `Add ${label} keyframe at playhead`} aria-label={`${label} keyframe`}
-        onClick={(e) => { e.preventDefault(); engine.dispatch(cmd.setKeyframe(placement.id, prop, offset, onKey ? null : value)); }}>◆</button> : <span />}
+        onClick={(e) => { e.preventDefault(); engine.dispatch(cmd.setKeyframe(placement.id, prop, offset, onKey ? null : value)); }}><Ic g="◆" /></button> : <span />}
     </label>
     );
   };

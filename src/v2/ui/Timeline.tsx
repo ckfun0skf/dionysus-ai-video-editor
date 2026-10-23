@@ -5,6 +5,7 @@ import type { Filmstrip, Peaks } from "./media";
 import { mediaKey } from "./useMedia";
 import { clampPps, haptic, LONG_PRESS_MS, LONG_PRESS_SLOP, pinchZoom, touchDistance } from "./gestures";
 import { edit, ops, transitions, compositionDuration, TICKS_PER_SECOND, formatTimecode, type Composition, type Project } from "../domain";
+import { Ic } from "./Icon";
 
 interface Props {
   engine: Engine;
@@ -220,7 +221,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
           {comp.tracks.map((t) => (
             <div key={t.id} className={`v2-track-header kind-${t.kind}`}>
               <span>{t.name}</span>
-              <button className="v2-icon" title={t.muted ? "Unmute track" : "Mute track"} aria-label={t.muted ? "Unmute track" : "Mute track"} onClick={() => engine.dispatch(cmd.toggleTrackMute(t.id))}>{t.muted ? "🔇" : "🔊"}</button>
+              <button className="v2-icon" title={t.muted ? "Unmute track" : "Mute track"} aria-label={t.muted ? "Unmute track" : "Mute track"} onClick={() => engine.dispatch(cmd.toggleTrackMute(t.id))}><Ic g={t.muted ? "🔇" : "🔊"} /></button>
             </div>
           ))}
         </div>
@@ -238,7 +239,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
             <div key={t.id} className={`v2-lane kind-${t.kind} ${t.muted ? "is-muted" : ""}`} data-track-id={t.id}
               onPointerDown={(e) => { if (e.target === e.currentTarget) { onSelect(undefined); if (!centered) scrub(e); } }}
               onDragOver={(e) => e.preventDefault()} onDrop={(e) => onDrop(e, t.id)}>
-              {centered && t.muted && <span className="v2-lane-label">🔇</span>}
+              {centered && t.muted && <span className="v2-lane-label"><Ic g="🔇" /></span>}
               {t.placements.map((p) => {
                 const asset = project.assets[p.source.assetId];
                 const sel = p.id === selectedId;
@@ -257,7 +258,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
                         {pk && <Waveform peaks={pk} p={p} width={w} height={p.clipType === "audio" ? 38 : 14} kind={p.clipType === "audio" ? "audio" : "video"} />}
                       </>;
                     })()}
-                    <span className="v2-clip-name">{p.freeze && <span className="v2-clip-badge" title="Freeze frame" aria-label="Freeze frame">❄</span>}{p.reverse && <span className="v2-clip-badge" title="Reversed" aria-label="Reversed">⟲</span>}{p.speed && p.speed !== 1 && <span className="v2-clip-badge" title={`Speed ${p.speed}×`}>{p.speed}×</span>}{p.linkedAudio?.muted && !p.freeze && <span className="v2-clip-badge" title="Clip audio muted" aria-label="Clip audio muted">🔇</span>}{asset?.name ?? "missing media"}</span>
+                    <span className="v2-clip-name">{p.freeze && <span className="v2-clip-badge" title="Freeze frame" aria-label="Freeze frame"><Ic g="❄" /></span>}{p.reverse && <span className="v2-clip-badge" title="Reversed" aria-label="Reversed"><Ic g="⟲" /></span>}{p.speed && p.speed !== 1 && <span className="v2-clip-badge" title={`Speed ${p.speed}×`}>{p.speed}×</span>}{p.linkedAudio?.muted && !p.freeze && <span className="v2-clip-badge" title="Clip audio muted" aria-label="Clip audio muted"><Ic g="🔇" /></span>}{asset?.name ?? "missing media"}</span>
                     {!!p.fadeInTicks && <span className="v2-fade in" aria-label="Fade in" style={{ width: toPx(p.fadeInTicks) }} />}
                     {!!p.fadeOutTicks && <span className="v2-fade out" aria-label="Fade out" style={{ width: toPx(p.fadeOutTicks) }} />}
                     {[...new Set(Object.values(p.keyframes ?? {}).flatMap((ks) => ks!.map((k) => k.t)))].filter((k) => k >= 0 && k <= p.durationTicks).map((k) => (
@@ -276,7 +277,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
                   <button key={`tr-${p.id}`} className={`v2-trans ${tr ? "has-trans" : ""} ${tr && p.id === selectedId ? "is-selected" : ""}`} style={{ left: toPx(p.startTicks) }}
                     aria-label={tr ? `${transitions.TRANSITIONS[tr.kind].label} ${tr.durationTicks / TICKS_PER_SECOND}s` : "Add crossfade"} title={tr ? "Edit transition" : "Add a crossfade at this cut"}
                     onPointerDown={(e) => e.stopPropagation()} onClick={() => onTransition(p.id)}>
-                    {tr ? transitions.TRANSITIONS[tr.kind].icon : "+"}
+                    <Ic g={tr ? transitions.TRANSITIONS[tr.kind].icon : "+"} size={14} />
                   </button>
                 );
               })}
