@@ -47,30 +47,41 @@ export function createClipVersionSnapshot(
     // subtree verbatim; only append referenced children that are not already embedded.
     const children: CompositionDocument[] = structuredClone(document.nestedCompositions ?? []);
     const childIds = new Set(children.map(child => child.id));
-    for (const placement of document.placements) {
-      if (placement.source.type !== "clip" || !placement.source.versionId) continue;
-      const key = placement.source.assetId + "@" + placement.source.versionId;
-      addPin({ assetId: placement.source.assetId, versionId: placement.source.versionId });
-      if (ancestry.has(key)) continue;
-      const child = compositionForClip(placement.source.assetId, placement.source.versionId);
-      if (!child || childIds.has(child.id)) continue;
+    const attachShotSlotVersion = (shotId: string, slotId: string, versionId: string) => {
+      addPin({ shotId, slotId, versionId });
+      const key = "shot:" + shotId + ":" + slotId + "@" + versionId;
+      if (ancestry.has(key)) return;
+      const child = migrated.legacyShotSlotCompositions.find(candidate =>
+        candidate.legacyData?.shotId === shotId
+        && candidate.legacyData?.slotId === slotId
+        && candidate.legacyData?.versionId === versionId
+      );
+      if (!child || childIds.has(child.id)) return;
       childIds.add(child.id);
       children.push(attachChildren(child, new Set([...ancestry, key])));
+    };
+    for (const placement of document.placements) {
+      if (placement.source.type === "clip" && placement.source.versionId) {
+        const key = placement.source.assetId + "@" + placement.source.versionId;
+        addPin({ assetId: placement.source.assetId, versionId: placement.source.versionId });
+        if (ancestry.has(key)) continue;
+        const child = compositionForClip(placement.source.assetId, placement.source.versionId);
+        if (!child || childIds.has(child.id)) continue;
+        childIds.add(child.id);
+        children.push(attachChildren(child, new Set([...ancestry, key])));
+      } else if (placement.source.type === "shot" && placement.source.slotId) {
+        const shot = project.shots.find(candidate => candidate.id === placement.source.shotId);
+        const slot = shot?.slots.find(candidate => candidate.id === placement.source.slotId);
+        const versionId = placement.source.versionId ?? slot?.selectedVersionId;
+        if (versionId) attachShotSlotVersion(placement.source.shotId, placement.source.slotId, versionId);
+      }
     }
     if (includeSelectedShotSlots) {
       for (const shot of project.shots) {
         for (const slot of shot.slots) {
           const selected = slot.versions.find(version => version.id === slot.selectedVersionId);
           if (!selected) continue;
-          addPin({ shotId: shot.id, slotId: slot.id, versionId: selected.id });
-          const child = migrated.legacyShotSlotCompositions.find(document =>
-            document.legacyData?.shotId === shot.id
-            && document.legacyData?.slotId === slot.id
-            && document.legacyData?.versionId === selected.id
-          );
-          if (!child || childIds.has(child.id)) continue;
-          childIds.add(child.id);
-          children.push(attachChildren(child, ancestry));
+          attachShotSlotVersion(shot.id, slot.id, selected.id);
         }
       }
     }
