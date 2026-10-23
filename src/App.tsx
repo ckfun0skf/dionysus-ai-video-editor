@@ -1235,8 +1235,20 @@ export default function App() {
   }
 
   function updateRootTimelineClip(clipId: string, patch: Partial<TimelineClip>) {
-    const current = editorSessionRef.current.project.timelineClips?.find(item => item.id === clipId);
-    const linkedOwner = editorSessionRef.current.composition.placements.find(item =>
+    const session = editorSessionRef.current;
+    const current = session.project.timelineClips?.find(item => item.id === clipId);
+    if (!current) {
+      change(project => ({ ...project, timelineClips: (project.timelineClips ?? []).map(item => item.id === clipId ? { ...item, ...patch } : item) }));
+      return;
+    }
+
+    // Older Storyboard/materialized clips may not yet have a root placement. Promote them
+    // before every edit so metadata, geometry and source-identity changes share one canonical path.
+    const baseRoot = session.composition.placements.some(item => item.id === clipId)
+      || session.composition.placements.some(item => (item.linkedAudioChildren ?? []).some(child => child.id === clipId))
+      ? session.composition
+      : ensureCanonicalTimelineClips(session.project, session.composition, [clipId]);
+    const linkedOwner = baseRoot.placements.find(item =>
       (item.linkedAudioChildren ?? []).some(child => child.id === clipId)
     );
     if (linkedOwner) {
@@ -1245,13 +1257,21 @@ export default function App() {
         ...(patch.volume !== undefined ? { volume: patch.volume } : {}),
         ...(patch.fadeIn !== undefined ? { fadeIn: patch.fadeIn } : {}),
         ...(patch.fadeOut !== undefined ? { fadeOut: patch.fadeOut } : {}),
-        ...(current ? { legacyData: { ...current, ...patch } } : {}),
+        legacyData: { ...current, ...patch },
       };
-      changeRootComposition(root => updateCompositionLinkedAudioChild(root, clipId, childPatch));
+      changeRootComposition(root => updateCompositionLinkedAudioChild(
+        root.placements.some(item => (item.linkedAudioChildren ?? []).some(child => child.id === clipId))
+          ? root
+          : ensureCanonicalTimelineClips(session.project, root, [clipId]),
+        clipId,
+        childPatch,
+      ));
       return;
     }
-    const canonical = editorSessionRef.current.composition.placements.find(item => item.id === clipId);
-    if (!current || !canonical) {
+
+    const canonical = baseRoot.placements.find(item => item.id === clipId);
+    if (!canonical) {
+      // Preserve compatibility for malformed legacy rows that cannot be represented canonically.
       change(project => ({ ...project, timelineClips: (project.timelineClips ?? []).map(item => item.id === clipId ? { ...item, ...patch } : item) }));
       return;
     }
@@ -1263,10 +1283,13 @@ export default function App() {
     // Metadata/geometry edits must preserve the canonical source exactly. Re-derive it from
     // the Project projection only when the caller explicitly changes source identity fields.
     const sourceTemplate = timelineClipPatchChangesSourceIdentity(patch)
-      ? createRootCompositionPlacementForTimelineClip(editorSessionRef.current.project, editorSessionRef.current.composition, updated)
+      ? createRootCompositionPlacementForTimelineClip(session.project, baseRoot, updated)
       : undefined;
     changeRootComposition(root => {
-      let next = root;
+      let next = root.placements.some(item => item.id === clipId)
+        || root.placements.some(item => (item.linkedAudioChildren ?? []).some(child => child.id === clipId))
+        ? root
+        : ensureCanonicalTimelineClips(session.project, root, [clipId]);
       if (patch.start !== undefined && patch.start !== current.start) {
         next = moveCompositionPlacement(next, clipId, updated.start);
       }
@@ -1275,13 +1298,15 @@ export default function App() {
           id: clipId, start: updated.start, duration: updated.duration, edge: "right", trims: [],
         });
       }
+      const liveCanonical = next.placements.find(item => item.id === clipId);
+      if (!liveCanonical) throw new Error("Timeline clip could not be promoted into the canonical Composition.");
       return updateCompositionPlacement(next, clipId, {
         name: updated.name,
         trackId: updated.trackId,
         ...(sourceTemplate ? { source: sourceTemplate.source } : {}),
         ...(updated.sourceIn !== undefined ? { sourceIn: updated.sourceIn } : {}),
         ...(updated.sourceOut !== undefined ? { sourceOut: updated.sourceOut } : {}),
-        legacyData: { ...canonical.legacyData, ...patch },
+        legacyData: { ...liveCanonical.legacyData, ...patch },
       });
     });
   }
