@@ -135,6 +135,8 @@ export interface Track {
   name: string;
   muted?: boolean;
   hidden?: boolean;
+  /** Video tracks only: "text" puts stickers/HTML in the Text & Stickers group (interleaved with text). */
+  group?: "overlay" | "text";
   placements: Placement[];
 }
 

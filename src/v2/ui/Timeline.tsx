@@ -4,7 +4,7 @@ import { FilmstripTiles, Waveform } from "./ClipPreview";
 import type { Filmstrip, Peaks } from "./media";
 import { mediaKey } from "./useMedia";
 import { clampPps, haptic, LONG_PRESS_MS, LONG_PRESS_SLOP, pinchZoom, touchDistance } from "./gestures";
-import { edit, ops, transitions, compositionDuration, TICKS_PER_SECOND, formatTimecode, type Composition, type Project } from "../domain";
+import { edit, ops, transitions, compositionDuration, TICKS_PER_SECOND, formatTimecode, type Composition, type Project, type Track } from "../domain";
 import { Ic } from "./Icon";
 
 interface Props {
@@ -59,6 +59,10 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
   const scrollRef = useRef<HTMLDivElement>(null);
   const [gesture, setGesture] = useState<Gesture>();
   const [scrollTop, setScrollTop] = useState(0);
+  /** Mobile: the group shown as its real layers (others are collapsed into one lane each). */
+  const [expanded, setExpanded] = useState<ops.TrackGroup>();
+  const [menu, setMenu] = useState<{ id: string; x: number; y: number }>();
+  const menuArm = useRef<string>();
   const [viewW, setViewW] = useState(800);
   const programmatic = useRef(false);
   const press = useRef<{ timer: ReturnType<typeof setTimeout>; x: number; y: number }>();
@@ -143,15 +147,17 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
       target.setPointerCapture?.(pointerId);
       setGesture({ kind: "move", id, x0: clientX, y0: clientY, start0: start, trackId, start, active });
     };
+    menuArm.current = undefined;
     if (centered && selectedId !== id) {
-      // Touch layouts: tap selects; long-press selects AND picks the clip up for dragging.
+      // Touch layouts: tap selects; long-press selects AND picks the clip up (drag it, or release in place for the layer menu).
       onSelect(id);
       cancelPress();
-      press.current = { x: clientX, y: clientY, timer: setTimeout(() => { press.current = undefined; haptic(15); startMove(true); }, LONG_PRESS_MS) };
+      press.current = { x: clientX, y: clientY, timer: setTimeout(() => { press.current = undefined; haptic(15); menuArm.current = id; startMove(true); }, LONG_PRESS_MS) };
       return;
     }
     onSelect(id);
     startMove(false);
+    if (centered) { cancelPress(); press.current = { x: clientX, y: clientY, timer: setTimeout(() => { press.current = undefined; haptic(15); menuArm.current = id; }, LONG_PRESS_MS) }; }
   };
   const onTrimDown = (e: React.PointerEvent, id: string, edge: "left" | "right", edgeTicks: number) => {
     e.stopPropagation();
@@ -181,9 +187,16 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
       setGesture({ ...gesture, to, snap });
     }
   };
-  const onPointerUp = () => {
+  const onPointerUp = (e?: React.PointerEvent) => {
     cancelPress();
     if (!gesture) return;
+    if (gesture.kind === "move" && menuArm.current === gesture.id && gesture.start === gesture.start0 && gesture.trackId === comp.tracks.find((t) => t.placements.some((p) => p.id === gesture.id))?.id) {
+      menuArm.current = undefined;
+      setGesture(undefined);
+      setMenu({ id: gesture.id, x: e?.clientX ?? gesture.x0, y: e?.clientY ?? gesture.y0 });
+      return;
+    }
+    menuArm.current = undefined;
     if (gesture.kind === "move" && gesture.active) engine.dispatch(cmd.movePlacement(gesture.id, gesture.trackId, gesture.start));
     if (gesture.kind === "trim" && gesture.to !== gesture.edge0) engine.dispatch(cmd.trimPlacement(gesture.id, gesture.edge, gesture.to, ripple));
     setGesture(undefined);
@@ -210,10 +223,12 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
   };
 
   const main = ops.mainTrack(comp);
-  // Top of the main track inside the scroll content (ruler 30px, compact text lanes, 56px media lanes).
-  const laneH = (k: string) => (k === "text" ? TEXT_LANE_H : 56);
-  const mainIdx = preview.tracks.findIndex((t) => t.id === main?.id);
-  const mainTop = 30 + (topLane ? TEXT_LANE_H : 0) + preview.tracks.slice(0, Math.max(0, mainIdx)).reduce((h, t) => h + laneH(t.kind), 0);
+  // Keep the selected clip's group open on mobile so its trim handles are reachable.
+  const selGroup = useMemo(() => { const t = selectedId ? comp.tracks.find((x) => x.placements.some((p) => p.id === selectedId)) : undefined; return t && ops.groupOf(comp, t); }, [selectedId, comp]);
+  useEffect(() => { if (centered && selGroup && selGroup !== "main") setExpanded(selGroup); }, [selGroup, centered]);
+  const rows = useMemo(() => buildRows(preview, centered, expanded), [preview, centered, expanded]);
+  // Mobile pins the main track first: its top is just below the ruler (and the subtitle lane).
+  const mainTop = 30 + (topLane ? TEXT_LANE_H : 0);
   const step = pps >= 80 ? 1 : pps >= 30 ? 2 : pps >= 12 ? 5 : 10;
   const ticks: number[] = [];
   const rulerSeconds = (contentW + pad + padRight) / pps;
@@ -225,16 +240,16 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
         <div className="v2-track-headers">
           <div className="v2-ruler-spacer" />
           {topLane && <div className="v2-track-header kind-text"><span>{topLane.label}</span></div>}
-          {comp.tracks.map((t) => (
+          {rows.map((r) => r.type === "header" ? <div key={r.key} className="v2-group-header" data-group={r.group}>{ops.GROUP_LABEL[r.group]}</div> : r.type === "track" && (({ t }) => (
             <div key={t.id} className={`v2-track-header kind-${t.kind}`}>
               <span>{t.name}</span>
               <button className="v2-icon" title={t.muted ? "Unmute track" : "Mute track"} aria-label={t.muted ? "Unmute track" : "Mute track"} onClick={() => engine.dispatch(cmd.toggleTrackMute(t.id))}><Ic g={t.muted ? "🔇" : "🔊"} /></button>
             </div>
-          ))}
+          ))(r))}
         </div>
       )}
       {centered && sideColumn && <div className="v2-side-col" data-testid="side-col" style={{ width: SIDE_W, paddingTop: mainTop - scrollTop }}>{sideColumn}</div>}
-      <div className="v2-scroll" ref={scrollRef} onScroll={onScroll} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={() => { cancelPress(); setGesture(undefined); }}>
+      <div className="v2-scroll" ref={scrollRef} onScroll={onScroll} onPointerMove={onPointerMove} onPointerUp={(e) => onPointerUp(e)} onPointerCancel={() => { cancelPress(); setGesture(undefined); }}>
         <div className="v2-content" style={{ width: contentW + pad + padRight, paddingLeft: pad, paddingRight: padRight }}>
           <div className="v2-ruler" onPointerDown={scrub}>
             {ticks.map((s) => (
@@ -242,9 +257,28 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
             ))}
           </div>
           {topLane?.render(toPx, toTicks)}
-          {preview.tracks.map((t) => (
-            <div key={t.id} className={`v2-lane kind-${t.kind} ${t.muted ? "is-muted" : ""}`} data-track-id={t.id}
-              onPointerDown={(e) => { if (e.target === e.currentTarget) { onSelect(undefined); if (!centered) scrub(e); } }}
+          {rows.map((r) => r.type === "header" ? (
+            <div key={r.key} className="v2-group-header" data-group={r.group}>
+              {centered && <button className="v2-group-back" aria-label={`Collapse ${ops.GROUP_LABEL[r.group]}`} title="Collapse back to one lane" style={{ left: scrollRef.current?.scrollLeft ?? 0 }} onClick={() => { setExpanded(undefined); onSelect(undefined); }}>‹ {ops.GROUP_LABEL[r.group]}</button>}
+              {!centered && <span className="v2-group-name">{ops.GROUP_LABEL[r.group]}</span>}
+            </div>
+          ) : r.type === "collapsed" ? (
+            <div key={r.key} className={`v2-lane is-collapsed group-${r.group}`} data-group={r.group} aria-label={`${ops.GROUP_LABEL[r.group]} (collapsed)`}
+              onPointerDown={(e) => { if (e.target === e.currentTarget) onSelect(undefined); }}>
+              {!r.placements.length && <span className="v2-lane-empty" style={{ left: (scrollRef.current?.scrollLeft ?? 0) + 8 }}><Ic g={r.group === "audio" ? "♫" : r.group === "text" ? "T" : "▣"} size={12} /> {ops.GROUP_LABEL[r.group]}</span>}
+              {r.placements.map((p) => (
+                <button key={p.id} className={`v2-clip clip-${p.clipType} ${p.id === selectedId ? "is-selected" : ""}`} data-placement-id={p.id}
+                  style={{ left: toPx(p.startTicks), width: Math.max(4, toPx(p.durationTicks)), ...(thumbs?.[p.source.assetId] && p.clipType !== "audio" ? { backgroundImage: `url(${thumbs[p.source.assetId]})` } : {}) }}
+                  title={`${p.clipType === "text" ? p.text?.text : project.assets[p.source.assetId]?.name ?? ""} — tap to open ${ops.GROUP_LABEL[r.group]} layers`}
+                  onPointerDown={(e) => e.stopPropagation()} onClick={() => { setExpanded(r.group); onSelect(p.id); }}>
+                  <span className="v2-clip-name">{p.clipType === "text" ? <><Ic g="T" size={12} /> {p.text?.text || "Text"}</> : project.assets[p.source.assetId]?.name}</span>
+                </button>
+              ))}
+            </div>
+          ) : (({ t }) => (
+            <div key={t.id} className={`v2-lane kind-${t.kind} ${t.muted ? "is-muted" : ""}`} data-track-id={t.id} data-group={r.group}
+              onPointerDown={(e) => { if (e.target === e.currentTarget) { onSelect(undefined); if (centered && r.group !== "main") setExpanded(undefined); if (!centered) scrub(e); } }}
+              onContextMenu={(e) => { const id = (e.target as HTMLElement).closest("[data-placement-id]")?.getAttribute("data-placement-id"); if (id) { e.preventDefault(); onSelect(id); setMenu({ id, x: e.clientX, y: e.clientY }); } }}
               onDragOver={(e) => e.preventDefault()} onDrop={(e) => onDrop(e, t.id)}>
               {centered && t.muted && <span className="v2-lane-label"><Ic g="🔇" /></span>}
               {t.placements.map((p) => {
@@ -289,7 +323,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
                 );
               })}
             </div>
-          ))}
+          ))(r))}
           {gesture?.snap !== undefined && (gesture.kind === "trim" || gesture.active) && <div className="v2-snap-line" data-testid="snap-line" style={{ left: pad + toPx(gesture.snap) }} aria-hidden />}
           {!centered && <div className="v2-playhead" style={{ left: toPx(time) }} />}
         </div>
@@ -297,8 +331,60 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
       {centered && onAddMedia && main && !gesture && !selectedId && !selectedIds?.length && (
         <button className="v2-main-add" style={{ top: mainTop - scrollTop + 8 }} aria-label="Add media to main track" title="Add photos, videos or library items to the main track at the playhead" onClick={onAddMedia}><Ic g="+" size={22} /></button>
       )}
+      {menu && <LayerMenu comp={comp} id={menu.id} x={menu.x} y={menu.y} onClose={() => setMenu(undefined)} run={(c) => { engine.dispatch(c); setMenu(undefined); }} />}
       {centered && <div className="v2-playhead-fixed" style={{ left: (sideColumn ? SIDE_W : 0) + pad }} aria-hidden />}
       {centered && timeLabel && <div className="v2-time-label">{timeLabel}</div>}
+    </div>
+  );
+}
+
+type Row =
+  | { type: "header"; key: string; group: ops.TrackGroup }
+  | { type: "collapsed"; key: string; group: ops.TrackGroup; placements: Track["placements"] }
+  | { type: "track"; key: string; group: ops.TrackGroup; t: Track };
+
+/**
+ * Timeline rows. Mobile: main track first, then one collapsed lane per group (Overlay, Audio, Text & Stickers);
+ * the expanded group lists its layers bottom-up (a lower row draws higher on the canvas, like CapCut).
+ * Desktop: every track, grouped top-layer-first under group headers.
+ */
+export function buildRows(comp: Composition, mobile: boolean, expanded?: ops.TrackGroup): Row[] {
+  const rows: Row[] = [];
+  const track = (g: ops.TrackGroup) => (t: Track): Row => ({ type: "track", key: t.id, group: g, t });
+  if (!mobile) {
+    for (const g of ["text", "overlay", "main", "audio"] as const) {
+      const ts = ops.tracksInGroup(comp, g);
+      if (!ts.length) continue;
+      rows.push({ type: "header", key: `h-${g}`, group: g }, ...ts.map(track(g)));
+    }
+    return rows;
+  }
+  rows.push(...ops.tracksInGroup(comp, "main").map(track("main")));
+  for (const g of ["overlay", "audio", "text"] as const) {
+    const ts = ops.tracksInGroup(comp, g);
+    if (expanded === g && ts.length) rows.push({ type: "header", key: `h-${g}`, group: g }, ...[...ts].reverse().map(track(g)));
+    else rows.push({ type: "collapsed", key: `c-${g}`, group: g, placements: ts.flatMap((t) => t.placements).sort((a, b) => a.startTicks - b.startTicks) });
+  }
+  return rows;
+}
+
+/** Long-press / right-click menu: layer up/down inside the group, or move between Overlay and Text & Stickers. */
+function LayerMenu({ comp, id, x, y, onClose, run }: { comp: Composition; id: string; x: number; y: number; onClose: () => void; run: (c: ReturnType<typeof cmd.moveLayer>) => void }) {
+  const t = comp.tracks.find((tr) => tr.placements.some((p) => p.id === id));
+  const p = t?.placements.find((q) => q.id === id);
+  useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); }; addEventListener("keydown", k); return () => removeEventListener("keydown", k); }, [onClose]);
+  if (!t || !p) return null;
+  const g = ops.groupOf(comp, t);
+  const can = (dir: "up" | "down") => ops.moveLayer(comp, id, dir, "probe") !== comp;
+  const target = g === "text" ? "overlay" : "text";
+  const movable = p.clipType !== "text" && p.clipType !== "audio";
+  return (
+    <div className="v2-menu-backdrop" onPointerDown={onClose}>
+      <div className="v2-layer-menu" role="menu" aria-label="Clip layer" style={{ left: Math.min(x, innerWidth - 220), top: Math.max(8, Math.min(y - 160, innerHeight - 200)) }} onPointerDown={(e) => e.stopPropagation()}>
+        <button role="menuitem" disabled={!can("up")} title="Draw this clip above the next layer in its group" onClick={() => run(cmd.moveLayer(id, "up"))}>⬆ Layer up</button>
+        <button role="menuitem" disabled={!can("down")} title="Draw this clip below the next layer in its group" onClick={() => run(cmd.moveLayer(id, "down"))}>⬇ Layer down</button>
+        {movable && <button role="menuitem" title={`Move to the ${ops.GROUP_LABEL[target]} group`} onClick={() => run(cmd.moveToGroup(id, target))}>⇄ Move to {ops.GROUP_LABEL[target]}</button>}
+      </div>
     </div>
   );
 }
