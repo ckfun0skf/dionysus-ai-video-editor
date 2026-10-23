@@ -333,3 +333,8 @@ The ordinary Timeline clip move and resize fallbacks now promote any missing leg
 ### Canonical Timeline mutation fallbacks (2026-10-23)
 
 Ordinary Timeline move, trim, resize, split, duplicate, and delete paths now promote legacy-only clips plus linked owner/child placements into canonical root Composition before edits. The promotion is owner-first to preserve linked-audio ownership. Tests cover move/trim/resize promotion, linked-audio timing, adjacent trim, and source-document immutability. Exact-head CI for the latest code/doc-synced head is pending; do not mark DYS-014 complete. Remaining work includes Shot-domain and other Project mutations, renderer/playback migration off `CompositionLayer[]`, and broader root/nested history persistence tests.
+
+
+### Scope correction (2026-10-23)
+
+Canonical promotion now covers ordinary Timeline move, trim, resize, and delete. A proposed migration for legacy-only split/duplicate caused three existing App integration test failures and was reverted; those fallback paths remain open until parity can be preserved. Rollback/fix code head `64fa699c60592bcc49222ee89a2e785063bc477a` passed tests in CI run [39958220582](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39958220582); exact docs-synchronized CI remains required.
