@@ -1606,7 +1606,10 @@
           "status": "done",
           "progress": 100,
           "acceptance": [
-            "Frame-accurate seek in tests via fake media"
+            "Frame-accurate seek in tests via fake media",
+            "AudioContext.currentTime is the master clock (wall-clock fallback, continuous switch)",
+            "Media elements slaved with drift correction (hard seek >250ms, ±5% rate nudge >30ms)",
+            "Per-element GainNode audio graph"
           ]
         },
         {

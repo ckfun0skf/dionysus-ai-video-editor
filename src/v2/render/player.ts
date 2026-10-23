@@ -1,11 +1,13 @@
 /**
- * Preview player: canvas compositor + media element pool, driven by a wall clock.
- * Video/audio elements are slaved to the timeline time with drift correction.
+ * Preview player: canvas compositor + media element pool, driven by a master Clock (AudioContext by default).
+ * Video/audio elements are slaved to the timeline time with drift correction; audio is routed through a
+ * per-element GainNode when an AudioContext is available.
  */
 import { activeAt, fitRect } from "./frame";
 import { TICKS_PER_SECOND, ticksToSeconds } from "../domain/time";
 import { compositionDuration, versionOf, type Project } from "../domain/model";
 import type { BlobStore } from "../ports/storage";
+import { correctDrift, createClock, type Clock } from "./clock";
 
 type MediaEl = HTMLVideoElement | HTMLAudioElement | HTMLImageElement;
 
@@ -15,14 +17,33 @@ export class Player {
   private pool = new Map<string, MediaEl>();
   private raf = 0;
   private playing = false;
-  private startWall = 0;
+  private startClock = 0;
+  private clock: Clock;
+  private audioCtx?: AudioContext;
+  private gains = new Map<HTMLMediaElement, GainNode>();
   private startTicks = 0;
   time = 0;
   project: Project;
   canvas?: HTMLCanvasElement;
   onTime?: (t: number, playing: boolean) => void;
 
-  constructor(project: Project, private blobs: BlobStore) { this.project = project; }
+  constructor(project: Project, private blobs: BlobStore, clock?: Clock) {
+    this.project = project;
+    if (clock) this.clock = clock;
+    else { const c = createClock(); this.clock = c.clock; this.audioCtx = c.ctx; }
+  }
+  get clockKind() { return this.clock.kind; }
+
+  /** Route a media element through Web Audio (once). Volume then lives on the GainNode. */
+  private gainFor(el: HTMLMediaElement): GainNode | undefined {
+    if (!this.audioCtx) return undefined;
+    let g = this.gains.get(el);
+    if (!g) {
+      try { g = this.audioCtx.createGain(); this.audioCtx.createMediaElementSource(el).connect(g).connect(this.audioCtx.destination); this.gains.set(el, g); }
+      catch { return undefined; }
+    }
+    return g;
+  }
 
   setProject(p: Project) {
     this.project = p;
@@ -73,7 +94,7 @@ export class Player {
 
   private release(id: string) {
     const el = this.pool.get(id);
-    if (el && "pause" in el) { el.pause(); el.removeAttribute("src"); el.load(); }
+    if (el && "pause" in el) { el.pause(); el.removeAttribute("src"); el.load(); this.gains.get(el)?.disconnect(); this.gains.delete(el); }
     this.pool.delete(id);
   }
 
@@ -82,16 +103,23 @@ export class Player {
   play() {
     if (this.playing) return;
     if (this.time >= this.duration()) this.time = 0;
-    this.playing = true; this.startWall = performance.now(); this.startTicks = this.time;
+    this.clock.start?.();
+    this.playing = true; this.startClock = this.clock.now(); this.startTicks = this.time;
     const loop = () => {
       if (!this.playing) return;
-      this.time = Math.round(this.startTicks + ((performance.now() - this.startWall) / 1000) * TICKS_PER_SECOND);
-      if (this.time >= this.duration()) { this.time = this.duration(); this.pause(); }
-      this.draw();
-      this.raf = requestAnimationFrame(loop);
+      this.tick();
+      if (this.playing) this.raf = requestAnimationFrame(loop);
     };
     this.raf = requestAnimationFrame(loop);
     this.onTime?.(this.time, true);
+  }
+
+  /** Advance time from the master clock and render (one animation frame). */
+  tick() {
+    if (!this.playing) return;
+    this.time = Math.round(this.startTicks + (this.clock.now() - this.startClock) * TICKS_PER_SECOND);
+    if (this.time >= this.duration()) { this.time = this.duration(); this.pause(); return; }
+    this.draw();
   }
 
   pause() {
@@ -104,7 +132,7 @@ export class Player {
 
   seek(t: number) {
     this.time = Math.max(0, Math.round(t));
-    if (this.playing) { this.startWall = performance.now(); this.startTicks = this.time; }
+    if (this.playing) { this.startClock = this.clock.now(); this.startTicks = this.time; }
     this.draw();
   }
 
@@ -126,10 +154,16 @@ export class Player {
       if ("pause" in el) {
         const target = ticksToSeconds(sourceTicks);
         el.muted = !!track.muted;
-        el.volume = Math.min(1, Math.max(0, placement.volume ?? 1));
+        const vol = Math.max(0, placement.volume ?? 1);
+        const gain = this.gainFor(el);
+        if (gain) { gain.gain.value = vol; el.volume = 1; } else el.volume = Math.min(1, vol);
         if (this.playing) {
-          if (el.paused) { el.currentTime = target; void el.play().catch(() => undefined); }
-          else if (Math.abs(el.currentTime - target) > 0.25) el.currentTime = target;
+          if (el.paused) { el.currentTime = target; el.playbackRate = 1; void el.play().catch(() => undefined); }
+          else {
+            const fix = correctDrift(el.currentTime, target);
+            if (fix.seek !== undefined) el.currentTime = fix.seek;
+            if (el.playbackRate !== fix.rate) el.playbackRate = fix.rate;
+          }
         } else {
           if (!el.paused) el.pause();
           if (Math.abs(el.currentTime - target) > 0.02) el.currentTime = target;
@@ -153,6 +187,7 @@ export class Player {
     this.pause();
     for (const id of [...this.pool.keys()]) this.release(id);
     this.resolvedUrls.forEach((u) => URL.revokeObjectURL(u));
+    void this.audioCtx?.close().catch(() => undefined);
   }
 }
 
