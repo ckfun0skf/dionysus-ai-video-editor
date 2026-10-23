@@ -42,12 +42,14 @@ export function insertPlacement(comp: Composition, trackId: string, placement: P
   const track = comp.tracks.find((t) => t.id === trackId);
   if (!track) throw new Error(`Unknown track ${trackId}`);
   if (trackKindFor(placement.clipType) !== track.kind) throw new Error(`Cannot place ${placement.clipType} on ${track.kind} track`);
+  placement = { ...placement, startTicks: Math.max(0, Math.round(placement.startTicks)), durationTicks: Math.round(placement.durationTicks), sourceInTicks: Math.round(placement.sourceInTicks) };
   const start = firstFreeStart(track, placement.startTicks, placement.durationTicks);
   return mapTrack(comp, trackId, (t) => ({ ...t, placements: sortPlacements([...t.placements, { ...placement, startTicks: start }]) }));
 }
 
 /** Move a placement to a (possibly different) track and start. Rejects overlaps by pushing to the next free slot. */
 export function movePlacement(comp: Composition, placementId: string, toTrackId: string, startTicks: number): Composition {
+  startTicks = Math.max(0, Math.round(startTicks));
   const found = findPlacement(comp, placementId);
   if (!found) throw new Error(`Unknown placement ${placementId}`);
   const target = comp.tracks.find((t) => t.id === toTrackId);
@@ -65,6 +67,7 @@ export function movePlacement(comp: Composition, placementId: string, toTrackId:
  * (undefined for images = unlimited). Clamped by neighbours and source bounds.
  */
 export function trimPlacement(comp: Composition, placementId: string, edge: "left" | "right", toTicks: number, maxSourceTicks?: number): Composition {
+  toTicks = Math.round(toTicks);
   const found = findPlacement(comp, placementId);
   if (!found) throw new Error(`Unknown placement ${placementId}`);
   const p = found.placement;
@@ -88,6 +91,7 @@ export function trimPlacement(comp: Composition, placementId: string, edge: "lef
 
 /** Split at absolute timeline time. Returns unchanged comp when `atTicks` is not strictly inside. */
 export function splitPlacement(comp: Composition, placementId: string, atTicks: number, newIdValue = newId("plc")): Composition {
+  atTicks = Math.round(atTicks);
   const found = findPlacement(comp, placementId);
   if (!found) throw new Error(`Unknown placement ${placementId}`);
   const p = found.placement;

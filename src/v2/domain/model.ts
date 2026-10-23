@@ -128,6 +128,7 @@ export function validateComposition(comp: Composition): string[] {
   for (const t of comp.tracks) {
     const sorted = [...t.placements].sort((a, b) => a.startTicks - b.startTicks);
     sorted.forEach((p, i) => {
+      if (![p.startTicks, p.durationTicks, p.sourceInTicks].every(Number.isInteger)) errors.push(`${p.id}: non-integer ticks`);
       if (p.durationTicks <= 0) errors.push(`${p.id}: non-positive duration`);
       if (p.startTicks < 0) errors.push(`${p.id}: negative start`);
       if (p.sourceInTicks < 0) errors.push(`${p.id}: negative source in`);

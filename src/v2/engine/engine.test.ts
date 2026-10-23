@@ -79,8 +79,10 @@ describe("v2 engine", () => {
     e.undo();
     expect(Object.keys(e.getState().project.assets)).toHaveLength(0);
     e.redo();
+    e.beginGesture();
     e.dispatch(cmd.renameProject("a"));
     e.dispatch(cmd.renameProject("ab"));
+    e.endGesture();
     e.undo();
     expect(e.getState().project.name).toBe("t");
   });
@@ -99,5 +101,64 @@ describe("v2 engine", () => {
     expect(snapTicks(c, s(10.1), s(0.2))).toBe(s(10));
     expect(snapTicks(c, s(5), s(0.2), [s(5.1)])).toBe(s(5.1));
     expect(snapMove(c, s(7.9), s(2), s(0.2), [s(10)])).toBe(s(8));
+  });
+
+  it("coalesces only inside a gesture; separate gestures are separate steps", () => {
+    const e = new Engine(createProject("t"));
+    e.dispatch(cmd.renameProject("a"));
+    e.dispatch(cmd.renameProject("ab")); // no gesture: two steps
+    e.undo();
+    expect(e.getState().project.name).toBe("a");
+    e.beginGesture(); e.dispatch(cmd.renameProject("x")); e.dispatch(cmd.renameProject("xy")); e.endGesture();
+    e.beginGesture(); e.dispatch(cmd.renameProject("xyz")); e.endGesture();
+    e.undo();
+    expect(e.getState().project.name).toBe("xy");
+  });
+
+  it("redo after coalescing restores the merged result and does not re-merge", () => {
+    const e = new Engine(createProject("t"));
+    e.beginGesture(); e.dispatch(cmd.renameProject("a")); e.dispatch(cmd.renameProject("ab"));
+    e.undo();
+    expect(e.getState().project.name).toBe("t");
+    e.redo();
+    expect(e.getState().project.name).toBe("ab");
+    e.dispatch(cmd.renameProject("abc")); // gesture was closed by undo/redo
+    e.undo();
+    expect(e.getState().project.name).toBe("ab");
+  });
+
+  it("trim clamps to source length, minimum duration and neighbours", () => {
+    const e = setup();
+    e.dispatch(cmd.addAssetToTimeline("v", 0, undefined, "p1"));
+    e.dispatch(cmd.trimPlacement("p1", "right", s(60)));
+    expect(findPlacement(root(e.getState().project), "p1")!.placement.durationTicks).toBe(s(10));
+    e.dispatch(cmd.trimPlacement("p1", "right", 5));
+    expect(findPlacement(root(e.getState().project), "p1")!.placement.durationTicks).toBeGreaterThanOrEqual(1200);
+    e.dispatch(cmd.addAssetToTimeline("v", s(12), undefined, "p2"));
+    e.dispatch(cmd.trimPlacement("p1", "right", s(10)));
+    e.dispatch(cmd.trimPlacement("p2", "left", 0));
+    const p2 = findPlacement(root(e.getState().project), "p2")!.placement;
+    expect(p2.startTicks).toBeGreaterThanOrEqual(s(10));
+  });
+
+  it("rounds fractional ticks and validation rejects non-integers", () => {
+    const e = setup();
+    e.dispatch(cmd.addAssetToTimeline("v", 0, undefined, "p1"));
+    e.dispatch(cmd.splitPlacement("p1", s(2) + 0.4));
+    e.dispatch(cmd.movePlacement("p1", root(e.getState().project).tracks[0].id, 10.6));
+    for (const t of root(e.getState().project).tracks) for (const p of t.placements) expect(Number.isInteger(p.startTicks) && Number.isInteger(p.durationTicks)).toBe(true);
+    const c = root(e.getState().project);
+    const bad = { ...c, tracks: c.tracks.map((t, i) => (i ? t : { ...t, placements: t.placements.map((p) => ({ ...p, startTicks: p.startTicks + 0.5 })) })) };
+    expect(validateComposition(bad).some((m) => m.includes("non-integer"))).toBe(true);
+  });
+
+  it("removeAsset also cleans nested compositions", () => {
+    const e = setup();
+    e.dispatch(cmd.addAssetToTimeline("v", 0, undefined, "p1"));
+    const p = e.getState().project;
+    const nested = { ...root(p), id: "nested" };
+    e.reset({ ...p, compositions: { ...p.compositions, nested } });
+    e.dispatch(cmd.removeAsset("v"));
+    expect(findPlacement(e.getState().project.compositions.nested, "p1")).toBeUndefined();
   });
 });

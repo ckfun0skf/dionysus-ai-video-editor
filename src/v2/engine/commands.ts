@@ -20,7 +20,10 @@ export const removeAsset = (assetId: string): Command => ({
   apply: (p) => {
     const { [assetId]: _removed, ...rest } = p.assets;
     void _removed;
-    return withRoot({ ...p, assets: rest }, (c) => ({ ...c, tracks: c.tracks.map((t) => ({ ...t, placements: t.placements.filter((pl) => pl.source.assetId !== assetId) })) }));
+    // Remove placements in every composition (nested ones included). Blobs are kept so
+    // undo works; unreferenced blobs are collected at boot by persistence/gc.
+    const compositions = Object.fromEntries(Object.entries(p.compositions).map(([id, c]) => [id, { ...c, tracks: c.tracks.map((t) => ({ ...t, placements: t.placements.filter((pl) => pl.source.assetId !== assetId) })) }]));
+    return { ...p, assets: rest, compositions };
   },
 });
 
