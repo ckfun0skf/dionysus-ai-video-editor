@@ -25,6 +25,7 @@ import {
   calculateProjectTimelineClipResizePreview,
   calculateProjectTimelineDropPosition,
   getProjectTimelinePlacementItems,
+  trimCanonicalRootTimelineClip,
   moveCanonicalRootTimelineClip,
   moveProjectTimelinePlacement,
   type ProjectTimelineInsertionPlan,
@@ -1325,7 +1326,9 @@ export default function App() {
       changeRootComposition(root => trimCompositionPlacement(root, clipId, duration));
       return;
     }
-    change(project => ({ ...project, timelineClips: trimTimelineClip({ tracks: project.tracks, timelineClips: project.timelineClips ?? [] }, clipId, duration).timelineClips }));
+    changeRootComposition(root => trimCanonicalRootTimelineClip(
+      editorSessionRef.current.project, root, clipId, duration,
+    ));
   }
 
   function splitRootTimelineClip(clipId: string, splitAt: number, selectedNewId = id("timeline-clip")) {
