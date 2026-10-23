@@ -48,6 +48,8 @@ type Gesture =
   | { kind: "trim"; id: string; edge: "left" | "right"; x0: number; edge0: number; to: number; snap?: number };
 
 const HEADER_W = 84;
+/** Centered mode: width of the fixed, opaque track-control column left of the lanes. */
+export const SIDE_W = 76;
 
 export function Timeline({ engine, project, time, playing, onSeek, selectedId, selectedIds, onToggleSelect, multiMode, onSelect, pps, onZoom, centered, thumbs, peaks, strips, onAddMedia, sideColumn, timeLabel, topLane, ripple, onTransition }: Props) {
   const comp = project.compositions[project.rootCompositionId];
@@ -223,6 +225,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
           ))}
         </div>
       )}
+      {centered && sideColumn && <div className="v2-side-col" data-testid="side-col" style={{ width: SIDE_W }}>{sideColumn}</div>}
       <div className="v2-scroll" ref={scrollRef} onScroll={onScroll} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={() => { cancelPress(); setGesture(undefined); }}>
         <div className="v2-content" style={{ width: contentW + pad + padRight, paddingLeft: pad, paddingRight: padRight }}>
           <div className="v2-ruler" onPointerDown={scrub}>
@@ -286,9 +289,8 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
           {!centered && <div className="v2-playhead" style={{ left: toPx(time) }} />}
         </div>
       </div>
-      {centered && <div className="v2-playhead-fixed" style={{ left: `${PLAYHEAD_FRAC * 100}%` }} aria-hidden />}
+      {centered && <div className="v2-playhead-fixed" style={{ left: (sideColumn ? SIDE_W : 0) + pad }} aria-hidden />}
       {centered && timeLabel && <div className="v2-time-label">{timeLabel}</div>}
-      {centered && sideColumn && <div className="v2-side-col" style={{ width: Math.max(0, pad - 12) }}>{sideColumn}</div>}
     </div>
   );
 }
