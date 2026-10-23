@@ -242,3 +242,19 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 .v2-timeline.is-centered .v2-lane.kind-text { height: 32px; }
 .v2-timeline.is-centered .v2-lane.kind-text .v2-clip { height: 26px; top: 3px; }
 .v2-giz .v2-ic { color: #111; } .v2-giz.se .v2-ic { color: #fff; }
+.v2-textpanel { display: flex; flex-direction: column; gap: 8px; padding: 8px 0; }
+.v2-tp-text { width: 100%; box-sizing: border-box; background: #1b1b20; color: #fff; border: 1px solid #333; border-radius: 8px; padding: 8px; font: inherit; resize: vertical; }
+.v2-tp-tabs { display: flex; gap: 4px; overflow-x: auto; }
+.v2-tp-tab { flex: none; min-height: 44px; padding: 0 12px; background: none; border: 0; color: var(--muted, #999); border-bottom: 2px solid transparent; cursor: pointer; }
+.v2-tp-tab:hover { color: #fff; } .v2-tp-tab.is-active { color: #fff; border-bottom-color: var(--accent, #20d5ec); }
+.v2-tp-body { display: flex; flex-direction: column; gap: 6px; }
+.v2-tp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 6px; }
+.v2-tp-tpl { min-height: 44px; border-radius: 8px; border: 1px solid #333; background: #1b1b20; color: #fff; font-size: 15px; cursor: pointer; }
+.v2-tp-tpl:hover { border-color: #666; } .v2-tp-tpl.is-active { border-color: var(--accent, #20d5ec); }
+.v2-tp-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 44px; font-size: 13px; }
+.v2-tp-row input[type=range] { flex: 1; max-width: 60%; }
+.v2-tp-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.v2-chip { min-height: 44px; min-width: 44px; padding: 0 12px; border-radius: 22px; border: 1px solid #333; background: #1b1b20; color: #ddd; cursor: pointer; text-transform: capitalize; }
+.v2-chip:hover { border-color: #666; } .v2-chip.is-active { background: var(--accent, #20d5ec); color: #000; border-color: transparent; }
+.v2-tp-h { font-size: 12px; color: var(--muted, #999); }
+.v2-inline-edit { position: absolute; z-index: 9; background: rgba(0,0,0,.55); color: #fff; border: 1.5px solid var(--accent, #4f8cff); border-radius: 4px; text-align: center; resize: none; font-weight: 700; padding: 4px; box-sizing: border-box; }

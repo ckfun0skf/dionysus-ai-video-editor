@@ -1895,6 +1895,12 @@
           "title": "Preview tap-to-select (rotation-aware hit test), CapCut gizmo corner buttons, pinch/twist gestures",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-079",
+          "title": "Text panel (templates, fonts, style, effects, animations) and double-tap inline text editing",
+          "status": "done",
+          "progress": 100
         }
       ]
     },
