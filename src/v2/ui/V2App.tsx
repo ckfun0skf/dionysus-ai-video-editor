@@ -57,6 +57,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const [toast, setToast] = useState<string>();
   const [inspOpen, setInspOpen] = useState(false);
   const [textOpen, setTextOpen] = useState(false);
+  const [snapOn, setSnapOn] = useState(true);
   const [htmlEdit, setHtmlEdit] = useState<{ placementId: string; assetId: string; source: string }>();
   const [inlineId, setInlineId] = useState<string>();
   const [subId, setSubId] = useState<string>();
@@ -240,6 +241,10 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     <button key="ripple" className={`v2-tool ${ripple ? "is-active" : ""}`} aria-pressed={ripple} title="Ripple: delete and trim move later clips to close gaps (R)" onClick={() => setRipple(!ripple)}><b aria-hidden><Ic g="⇤" /></b><span>Ripple {ripple ? "on" : "off"}</span></button>
   );
 
+  const snapToggle = (
+    <button key="snap" className={`v2-tool ${snapOn ? "is-active" : ""}`} aria-pressed={snapOn} title="Smart snapping and alignment guides in the preview (hold Alt to skip once)" onClick={() => setSnapOn(!snapOn)}><b aria-hidden><Ic g="🧲" /></b><span>Snap {snapOn ? "on" : "off"}</span></button>
+  );
+
   const clipActions = [
     { icon: "⧉", label: "Duplicate", title: "Duplicate after the selection (⌘/Ctrl+D)", run: duplicate },
     { icon: "⎘", label: "Copy", title: "Copy (⌘/Ctrl+C) — paste at the playhead with ⌘/Ctrl+V", run: copy },
@@ -302,7 +307,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
         </label>
       )}
       <button className="v2-tool" onClick={() => engine.dispatch(cmd.toggleTrackMute(selected.track.id))}><b><Ic g={selected.track.muted ? "🔈" : "🔇"} /></b><span>{selected.track.muted ? "Unmute track" : "Mute track"}</span></button>
-      {rippleToggle}
+      {rippleToggle}{snapToggle}
       <button className="v2-tool" onClick={() => setSelectedId(undefined)}><b><Ic g="✓" /></b><span>Done</span></button>
     </>
   ) : (
@@ -311,7 +316,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       <button className="v2-tool" onClick={() => engine.dispatch(cmd.addTrack("video"))}><b><Ic g="▭" /></b><span>Video track</span></button>
       <button className="v2-tool" onClick={() => engine.dispatch(cmd.addTrack("audio"))}><b><Ic g="♫" /></b><span>Audio track</span></button>
       {textTools.map((a) => <button key={a.label} className="v2-tool" title={a.title} onClick={a.run}><b aria-hidden><Ic g={a.icon} /></b><span>{a.label}</span></button>)}
-      {rippleToggle}
+      {rippleToggle}{snapToggle}
       <button className="v2-tool" onClick={() => setPps((p) => Math.min(400, p * 1.5))}><b><Ic g="zoom-in" /></b><span>Zoom in</span></button>
       <button className="v2-tool" onClick={() => setPps((p) => Math.max(4, p / 1.5))}><b><Ic g="zoom-out" /></b><span>Zoom out</span></button>
       <button className="v2-tool" title={pasteAction.title} disabled={!hasClip} onClick={paste}><b aria-hidden><Ic g="📋" /></b><span>Paste</span></button>
@@ -321,7 +326,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const preview = (
     <section className="v2-preview" aria-label="Preview" style={mobile ? { height: `${previewVh}dvh` } : undefined}>
       <div className="v2-canvas-wrap"><canvas ref={canvasRef} width={1280} height={720} onClick={onCanvasTap} title="Tap an element to select it · tap empty space to play/pause" />
-        {visual && player.boxes.get(visual.id) && canvasRef.current && <TransformHandles engine={engine} placement={visual} time={time} box={player.boxes.get(visual.id)!} canvas={canvasRef.current} actions={gizmo} />}
+        {visual && player.boxes.get(visual.id) && canvasRef.current && <TransformHandles engine={engine} placement={visual} time={time} box={player.boxes.get(visual.id)!} canvas={canvasRef.current} actions={gizmo} snapping={snapOn} others={[...player.boxes].filter(([id]) => id !== visual.id).map(([, b]) => b)} />}
         {inlineEditor}
       </div>
       {!mobile && transport}
@@ -350,7 +355,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       tool("▭", "Video track", () => engine.dispatch(cmd.addTrack("video"))),
       tool("⤢", "Zoom", () => setMenu("zoom")),
       ...(hasClip ? [tool(pasteAction.icon, pasteAction.label, paste, "paste", pasteAction.title)] : []),
-      rippleToggle,
+      rippleToggle, snapToggle,
     ],
     "edit-hint": [<span key="h" className="v2-tool-hint">Tap a clip on the timeline to edit it</span>],
     edit: selected ? [
@@ -368,7 +373,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           <input type="range" min={0} max={1} step={0.05} value={selected.placement.volume ?? 1} aria-label="Volume" onPointerDown={() => engine.beginGesture()} onPointerUp={() => engine.endGesture()} onBlur={() => engine.endGesture()} onChange={(e) => engine.dispatch(cmd.setPlacementVolume(selected.placement.id, Number(e.target.value)))} />
         </label>] : []),
       tool(selected.track.muted ? "🔈" : "🔇", selected.track.muted ? "Unmute track" : "Mute track", () => engine.dispatch(cmd.toggleTrackMute(selected.track.id))),
-      rippleToggle,
+      rippleToggle, snapToggle,
     ] : [],
     multi: [
       <span key="n" className="v2-sel-count" role="status">{sel.length} selected · tap clips</span>,

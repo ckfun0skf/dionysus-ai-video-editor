@@ -1,9 +1,10 @@
-import { useRef, type PointerEvent as RPE } from "react";
+import { useRef, useState, type PointerEvent as RPE } from "react";
 import { cmd, type Engine } from "../engine";
 import { evalKeys, transformOf, ticksToSeconds, secondsToTicks, type KeyframeProp, type Placement } from "../domain";
 import type { Placed } from "../render";
 import { Ic } from "./Icon";
 import { pinchPatch } from "./gestures";
+import { SNAP_PX, snapMove, snapRotation, snapScale, snapTargets, type Guides, type SnapBox } from "./snap";
 
 type Patch = Parameters<typeof cmd.setTransform>[1];
 const KEYED: KeyframeProp[] = ["x", "y", "scale", "rotation", "opacity"];
@@ -82,10 +83,11 @@ export interface GizmoActions { onDelete: () => void; onEdit: () => void; onDupl
  * duplicate (bottom-left), and one-finger rotate+scale (bottom-right). Two fingers anywhere on
  * the box pinch to scale and twist to rotate. Each gesture is one undo step.
  */
-export function TransformHandles({ engine, placement, box, canvas, time, actions }: { engine: Engine; placement: Placement; box: Placed; canvas: HTMLCanvasElement; time: number; actions?: GizmoActions }) {
-  const drag = useRef<{ mode: "move" | "spin"; x0: number; y0: number; t0: ReturnType<typeof valuesAt>; cx: number; cy: number }>();
+export function TransformHandles({ engine, placement, box, canvas, time, actions, others = [], snapping = true }: { engine: Engine; placement: Placement; box: Placed; canvas: HTMLCanvasElement; time: number; actions?: GizmoActions; others?: SnapBox[]; snapping?: boolean }) {
+  const drag = useRef<{ mode: "move" | "spin"; x0: number; y0: number; t0: ReturnType<typeof valuesAt>; cx: number; cy: number; b0: Placed }>();
+  const [guides, setGuides] = useState<Guides>({});
   const pts = useRef(new Map<number, { x: number; y: number }>());
-  const pinch = useRef<{ a0: { x: number; y: number }; b0: { x: number; y: number }; t0: ReturnType<typeof valuesAt> }>();
+  const pinch = useRef<{ a0: { x: number; y: number }; b0: { x: number; y: number }; t0: ReturnType<typeof valuesAt>; box: Placed }>();
   const rect = canvas.getBoundingClientRect();
   const parent = canvas.parentElement!.getBoundingClientRect();
   const k = rect.width / canvas.width || 1;
@@ -104,7 +106,7 @@ export function TransformHandles({ engine, placement, box, canvas, time, actions
     if (pts.current.size === 2) {
       const [a0, b0] = [...pts.current.values()];
       drag.current = undefined;
-      pinch.current = { a0, b0, t0: valuesAt(placement, time) };
+      pinch.current = { a0, b0, t0: valuesAt(placement, time), box: box };
       return;
     }
     if (mode === "move" && pts.current.size === 1) {
@@ -113,7 +115,31 @@ export function TransformHandles({ engine, placement, box, canvas, time, actions
       lastTap.current = now;
     }
     startGesture();
-    drag.current = { mode, x0: e.clientX, y0: e.clientY, t0: valuesAt(placement, time), cx: rect.left + box.cx * k, cy: rect.top + box.cy * k };
+    drag.current = { mode, x0: e.clientX, y0: e.clientY, t0: valuesAt(placement, time), cx: rect.left + box.cx * k, cy: rect.top + box.cy * k, b0: box };
+  };
+  /**
+   * Resolve one gesture frame: move by (dx, dy) screen px, scale by `ratio`, rotate to `rot`.
+   * Smart snapping (canvas centre/edges, other elements, right angles) unless disabled (toggle or Alt).
+   */
+  const solve = (t0: ReturnType<typeof valuesAt>, b0: Placed, dx: number, dy: number, ratio: number, rot: number, off: boolean, mode: "move" | "scale") => {
+    const W = canvas.width, H = canvas.height, thr = SNAP_PX / k;
+    let cdx = dx / k, cdy = dy / k, r = ratio, deg = rot;
+    const g: Guides = {};
+    let snapped = false;
+    if (snapping && !off) {
+      const sr = snapRotation(deg);
+      if (sr.snapped && deg !== t0.rotation) { deg = sr.deg; snapped = true; }
+      const b: SnapBox = { cx: b0.cx + cdx, cy: b0.cy + cdy, w: b0.w * r, h: b0.h * r, rot: (deg * Math.PI) / 180 };
+      const tg = snapTargets(W, H, others);
+      if (mode === "move") { const m = snapMove(b, tg, thr); cdx += m.dx; cdy += m.dy; Object.assign(g, m.guides); snapped ||= m.guides.x !== undefined || m.guides.y !== undefined; }
+      else { const m = snapScale(b, tg, thr); r *= m.k; Object.assign(g, m.guides); snapped ||= m.k !== 1; }
+    }
+    const was = guides.x !== undefined || guides.y !== undefined;
+    const now = g.x !== undefined || g.y !== undefined;
+    if (now && (!was || g.x !== guides.x || g.y !== guides.y)) navigator.vibrate?.(8); // light haptic tick on snap
+    void snapped;
+    setGuides(g);
+    applyPatch(engine, placement, time, { x: t0.x + cdx / W, y: t0.y + cdy / H, scale: t0.scale * r, rotation: deg });
   };
   const move = (e: RPE) => {
     if (!pts.current.has(e.pointerId)) return;
@@ -121,24 +147,25 @@ export function TransformHandles({ engine, placement, box, canvas, time, actions
     const pc = pinch.current;
     if (pc && pts.current.size >= 2) {
       const [a1, b1] = [...pts.current.values()];
-      applyPatch(engine, placement, time, pinchPatch(pc.t0, pc.a0, pc.b0, a1, b1));
+      // Pinch + twist + pan in one gesture: the touch midpoint drives translation.
+      const pp = pinchPatch(pc.t0, pc.a0, pc.b0, a1, b1);
+      const mdx = (a1.x + b1.x - pc.a0.x - pc.b0.x) / 2, mdy = (a1.y + b1.y - pc.a0.y - pc.b0.y) / 2;
+      solve(pc.t0, pc.box, mdx, mdy, pp.scale / (pc.t0.scale || 1), pp.rotation, e.altKey, "move");
       return;
     }
     const d = drag.current;
     if (!d) return;
-    let patch: Patch;
-    if (d.mode === "move") patch = { x: d.t0.x + (e.clientX - d.x0) / k / canvas.width, y: d.t0.y + (e.clientY - d.y0) / k / canvas.height };
-    else {
-      // One-finger rotate+scale around the centre (bottom-right knob).
-      const p0 = { x: d.cx, y: d.cy };
-      patch = pinchPatch(d.t0, p0, { x: d.x0, y: d.y0 }, p0, { x: e.clientX, y: e.clientY });
-      if (e.shiftKey) patch.rotation = Math.round(patch.rotation! / 15) * 15;
-    }
-    applyPatch(engine, placement, time, patch);
+    if (d.mode === "move") { solve(d.t0, d.b0, e.clientX - d.x0, e.clientY - d.y0, 1, d.t0.rotation, e.altKey, "move"); return; }
+    // One-finger rotate+scale around the centre (bottom-right knob).
+    const p0 = { x: d.cx, y: d.cy };
+    const pp = pinchPatch(d.t0, p0, { x: d.x0, y: d.y0 }, p0, { x: e.clientX, y: e.clientY });
+    const rot = e.shiftKey ? Math.round(pp.rotation / 15) * 15 : pp.rotation;
+    solve(d.t0, d.b0, 0, 0, pp.scale / (d.t0.scale || 1), rot, e.altKey, "scale");
   };
   const end = (e: RPE) => {
     pts.current.delete(e.pointerId);
     if (pts.current.size > 0) return;
+    setGuides({});
     if (drag.current || pinch.current) { drag.current = undefined; pinch.current = undefined; engine.endGesture(); }
   };
   const handlers = { onPointerMove: move, onPointerUp: end, onPointerCancel: end };
@@ -146,11 +173,15 @@ export function TransformHandles({ engine, placement, box, canvas, time, actions
     <button key={c} type="button" className={`v2-giz ${c}`} aria-label={label} title={label} onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); run(); }}><Ic g={g} size={14} /></button>
   );
   return (
-    <div className="v2-xform" style={style} {...handlers} onPointerDown={start("move")} title="Drag to move · pinch to scale · twist to rotate" data-testid="transform-box" onClick={(e) => e.stopPropagation()}>
+    <>
+    {guides.x !== undefined && <div className="v2-guide v" data-testid="guide-x" style={{ left: rect.left - parent.left + guides.x * k, top: rect.top - parent.top, height: rect.height }} />}
+    {guides.y !== undefined && <div className="v2-guide h" data-testid="guide-y" style={{ top: rect.top - parent.top + guides.y * k, left: rect.left - parent.left, width: rect.width }} />}
+    <div className="v2-xform" style={style} {...handlers} onPointerDown={start("move")} title="Drag to move · pinch to scale · twist to rotate · hold Alt to skip snapping" data-testid="transform-box" onClick={(e) => e.stopPropagation()}>
       {btn("nw", "Delete", "🗑", actions?.onDelete)}
       {btn("ne", "Edit", "✎", actions?.onEdit)}
       {btn("sw", "Duplicate", "⧉", actions?.onDuplicate)}
       <span className="v2-giz se" role="slider" aria-label="Rotate and scale" aria-valuenow={Math.round(valuesAt(placement, time).rotation)} onPointerDown={start("spin")} {...handlers}><Ic g="⟳" size={14} /></span>
     </div>
+    </>
   );
 }

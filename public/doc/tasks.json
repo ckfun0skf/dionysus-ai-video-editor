@@ -1907,6 +1907,12 @@
           "title": "CodePen-style HTML clip editor (tabs on mobile, split panes on desktop, debounced sandboxed live preview, save as undoable new version)",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-081",
+          "title": "Two-finger move+pinch+twist in one undo; smart snapping & alignment guides (canvas/element centers+edges, 90° rotation), haptic tick, Alt/toggle to disable",
+          "status": "done",
+          "progress": 100
         }
       ]
     },
