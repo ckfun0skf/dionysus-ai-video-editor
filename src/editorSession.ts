@@ -65,6 +65,17 @@ export function reconcileEditorSessionComposition(
     const fallback = targetTrackOrder.find(item => item.kind === "video")?.id;
     next = removeCompositionTrack(next, track.id, fallback);
   }
+  // Reconciliation can be triggered by legacy-domain metadata edits, whose migrated
+  // target only contains snapshots discoverable from the Project projection. Preserve the
+  // canonical document's already-pinned child trees; append newly discovered children by ID.
+  const nestedCompositions = [...(next.nestedCompositions ?? [])];
+  const nestedCompositionIds = new Set(nestedCompositions.map(child => child.id));
+  for (const child of target.nestedCompositions ?? []) {
+    if (nestedCompositionIds.has(child.id)) continue;
+    nestedCompositionIds.add(child.id);
+    nestedCompositions.push(structuredClone(child));
+  }
+
   next = {
     ...next,
     id: target.id,
@@ -74,7 +85,7 @@ export function reconcileEditorSessionComposition(
     width: target.width,
     height: target.height,
     provenance: target.provenance,
-    nestedCompositions: structuredClone(target.nestedCompositions),
+    nestedCompositions,
     legacyData: structuredClone(target.legacyData),
     tracks: [...target.tracks].sort((a, b) => a.order - b.order).map((track, order) => ({ ...structuredClone(track), order })),
   };
