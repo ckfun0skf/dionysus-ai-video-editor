@@ -10,7 +10,7 @@ export type Command = { label: string; apply: (project: Project) => Project; coa
 
 export interface EngineState { project: Project; canUndo: boolean; canRedo: boolean; revision: number }
 
-interface HistoryEntry { label: string; before: Project; coalesceKey?: string }
+interface HistoryEntry { label: string; before: Project; coalesceKey?: string; gesture?: number }
 
 export class Engine {
   private project: Project;
@@ -18,6 +18,8 @@ export class Engine {
   private future: { label: string; after: Project }[] = [];
   private listeners = new Set<() => void>();
   private revision = 0;
+  private gesture = 0;
+  private gestureOpen = false;
   private snapshot: EngineState;
   readonly limit: number;
 
@@ -56,8 +58,10 @@ export class Engine {
     next = { ...next, meta: { ...next.meta, updatedAt: new Date().toISOString() } };
     const key = cmds.length === 1 ? cmds[0].coalesceKey : undefined;
     const last = this.past[this.past.length - 1];
-    if (!(key && last && last.coalesceKey === key)) {
-      this.past.push({ label: label ?? cmds.map((c) => c.label).join(" + "), before: this.project, coalesceKey: key });
+    // Coalesce only within one open gesture (beginGesture..endGesture) with the same key.
+    const merge = key && this.gestureOpen && last && last.coalesceKey === key && last.gesture === this.gesture;
+    if (!merge) {
+      this.past.push({ label: label ?? cmds.map((c) => c.label).join(" + "), before: this.project, coalesceKey: key, gesture: this.gestureOpen ? this.gesture : undefined });
       if (this.past.length > this.limit) this.past.shift();
     }
     this.future = [];
@@ -66,7 +70,12 @@ export class Engine {
     return true;
   }
 
+  /** Start a continuous gesture (drag, slider). Same-key dispatches inside it merge into one undo step. */
+  beginGesture() { this.gesture += 1; this.gestureOpen = true; }
+  endGesture() { this.gestureOpen = false; }
+
   undo(): boolean {
+    this.gestureOpen = false;
     const entry = this.past.pop();
     if (!entry) return false;
     this.future.push({ label: entry.label, after: this.project });
@@ -76,6 +85,7 @@ export class Engine {
   }
 
   redo(): boolean {
+    this.gestureOpen = false;
     const entry = this.future.pop();
     if (!entry) return false;
     this.past.push({ label: entry.label, before: this.project });
@@ -87,6 +97,7 @@ export class Engine {
   /** Replace the document without history (e.g. after loading). */
   reset(project: Project) {
     this.project = project;
+    this.gestureOpen = false;
     this.past = [];
     this.future = [];
     this.emit();

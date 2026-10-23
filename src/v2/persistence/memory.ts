@@ -11,6 +11,6 @@ export function createMemoryStorage(): Storage {
     save: async (p) => void projects.set(p.id, p),
     delete: async (id) => void projects.delete(id),
   };
-  const bs: BlobStore = { put: async (k, b) => void blobs.set(k, b), get: async (k) => blobs.get(k), delete: async (k) => void blobs.delete(k) };
+  const bs: BlobStore = { put: async (k, b) => void blobs.set(k, b), get: async (k) => blobs.get(k), delete: async (k) => void blobs.delete(k), keys: async () => [...blobs.keys()] };
   return { projects: ps, blobs: bs, lastProjectId: { get: () => last, set: (id) => { last = id; } } };
 }

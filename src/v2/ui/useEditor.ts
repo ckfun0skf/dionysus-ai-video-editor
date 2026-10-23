@@ -1,40 +1,48 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { Engine } from "../engine/engine";
-import { createProject, type Project } from "../domain/model";
-import { createIndexedDbStorage } from "../persistence/indexeddb";
-import { createMemoryStorage } from "../persistence/memory";
-import { attachAutosave } from "../persistence/autosave";
-import type { Storage } from "../ports/storage";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import { Engine } from "../engine";
+import { createProject, type Project } from "../domain";
+import { attachAutosave, collectUnusedBlobs, createIndexedDbStorage, createMemoryStorage } from "../persistence";
+import type { Storage } from "../ports";
 
 export interface EditorContext { engine: Engine; storage: Storage }
+export type BootState = { status: "loading" } | { status: "ready"; ctx: EditorContext } | { status: "error"; error: string };
 
-/** Boot: open storage, load last project (or create one), wire autosave. */
-export function useEditorBoot(): EditorContext | undefined {
-  const [ctx, setCtx] = useState<EditorContext>();
-  const started = useRef(false);
+async function openStorage(): Promise<Storage> {
+  try {
+    if (typeof indexedDB === "undefined") throw new Error("no indexedDB");
+    const s = createIndexedDbStorage();
+    await s.projects.list();
+    return s;
+  } catch {
+    return createMemoryStorage();
+  }
+}
+
+/** Boot: open storage, load last project (or create one), wire autosave. Cleans up on unmount. */
+export function useEditorBoot(): BootState {
+  const [state, setState] = useState<BootState>({ status: "loading" });
   useEffect(() => {
-    if (started.current) return;
-    started.current = true;
-    let dispose = () => {};
+    let cancelled = false;
+    let dispose: (() => void) | undefined;
     (async () => {
-      let storage: Storage;
-      try { storage = typeof indexedDB !== "undefined" ? createIndexedDbStorage() : createMemoryStorage(); await storage.projects.list(); }
-      catch { storage = createMemoryStorage(); }
+      const storage = await openStorage();
+      await collectUnusedBlobs(storage).catch(() => 0);
       const lastId = storage.lastProjectId.get();
       let project: Project | undefined = lastId ? await storage.projects.load(lastId).catch(() => undefined) : undefined;
       if (!project) { project = createProject("My first v2 project"); await storage.projects.save(project); }
+      if (cancelled) return;
       storage.lastProjectId.set(project.id);
       const engine = new Engine(project);
-      const auto = attachAutosave(engine, storage.projects);
+      const auto = attachAutosave(engine, storage.projects, 500, (e) => console.warn("v2 autosave failed; retrying", e));
       const onHide = () => void auto.flush();
       window.addEventListener("pagehide", onHide);
       document.addEventListener("visibilitychange", onHide);
-      dispose = () => { auto.dispose(); window.removeEventListener("pagehide", onHide); document.removeEventListener("visibilitychange", onHide); };
-      setCtx({ engine, storage });
-    })();
-    return () => dispose();
+      dispose = () => { void auto.flush(); auto.dispose(); window.removeEventListener("pagehide", onHide); document.removeEventListener("visibilitychange", onHide); };
+      setState({ status: "ready", ctx: { engine, storage } });
+    })().catch((e) => { if (!cancelled) setState({ status: "error", error: e instanceof Error ? e.message : String(e) }); });
+    return () => { cancelled = true; dispose?.(); };
   }, []);
-  return ctx;
+  return state;
 }
 
 export function useEngineState(engine: Engine) {

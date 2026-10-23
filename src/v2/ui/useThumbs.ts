@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import type { Project } from "../domain/model";
-import type { BlobStore } from "../ports/storage";
+import type { Project } from "../domain";
+import type { BlobStore } from "../ports";
 
 /** First-frame thumbnail (data URL) per asset for filmstrips; images use the image itself. */
 export function useThumbs(project: Project, blobs: BlobStore): Record<string, string> {

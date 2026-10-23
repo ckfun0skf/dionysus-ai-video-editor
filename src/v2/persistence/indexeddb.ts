@@ -36,6 +36,7 @@ export function createIndexedDbStorage(): Storage {
       put: async (k, b) => void (await req((await tx("blobs", "readwrite")).put(b, k))),
       get: async (k) => (await req((await tx("blobs", "readonly")).get(k))) as Blob | undefined,
       delete: async (k) => void (await req((await tx("blobs", "readwrite")).delete(k))),
+      keys: async () => ((await req((await tx("blobs", "readonly")).getAllKeys())) as IDBValidKey[]).map(String),
     },
     lastProjectId: { get: () => localStorage.getItem(LAST_KEY), set: (id) => localStorage.setItem(LAST_KEY, id) },
   };

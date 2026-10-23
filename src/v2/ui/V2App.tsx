@@ -1,19 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Player } from "../render";
+import { cmd } from "../engine";
+import { importFile } from "../persistence";
+import { compositionDuration, findPlacement, formatTimecode, secondsToTicks, type Asset } from "../domain";
 import { useEditorBoot, useEngineState, useIsMobile, type EditorContext } from "./useEditor";
 import { Timeline } from "./Timeline";
 import { useThumbs } from "./useThumbs";
 
 type Menu = "root" | "edit" | "edit-hint" | "audio" | "zoom";
-import { Player } from "../render/player";
-import * as cmd from "../engine/commands";
-import { importFile } from "../persistence/media";
-import { compositionDuration, findPlacement, type Asset } from "../domain/model";
-import { formatTimecode, secondsToTicks } from "../domain/time";
 
 export function V2App() {
-  const ctx = useEditorBoot();
-  if (!ctx) return <div className="v2-loading">Loading Dionysus v2…</div>;
-  return <Editor {...ctx} />;
+  const boot = useEditorBoot();
+  if (boot.status === "loading") return <div className="v2-loading">Loading Dionysus v2…</div>;
+  if (boot.status === "error") return <div className="v2-loading" role="alert">Could not start the v2 editor: {boot.error}. <button onClick={() => location.reload()}>Retry</button></div>;
+  return <Editor {...boot.ctx} />;
 }
 
 function Editor({ engine, storage }: EditorContext) {
@@ -47,7 +47,7 @@ function Editor({ engine, storage }: EditorContext) {
 
   const seek = useCallback((t: number) => player.seek(t), [player]);
   const togglePlay = useCallback(() => (player.isPlaying ? player.pause() : player.play()), [player]);
-  const split = useCallback(() => { if (selectedId) engine.dispatch(cmd.splitPlacement(selectedId, player.time)); }, [engine, player, selectedId]);
+  const split = useCallback(() => { if (selectedId) engine.dispatch(cmd.splitPlacement(selectedId, Math.round(player.time))); }, [engine, player, selectedId]);
   const del = useCallback(() => { if (selectedId) { engine.dispatch(cmd.deletePlacement(selectedId)); setSelectedId(undefined); } }, [engine, selectedId]);
 
   useEffect(() => {
@@ -73,6 +73,9 @@ function Editor({ engine, storage }: EditorContext) {
       try {
         const asset = await importFile(f, storage.blobs);
         if (asset) engine.dispatch(cmd.importAsset(asset));
+        else setToast(`${f.name}: unsupported file type`);
+      } catch (e) {
+        setToast(`${f.name}: ${e instanceof Error ? e.message : "import failed"}`);
       } finally { setBusy((b) => b - 1); }
     }
   };
@@ -118,7 +121,7 @@ function Editor({ engine, storage }: EditorContext) {
       <button className="v2-tool" onClick={del}><b>🗑</b><span>Delete</span></button>
       {selected.placement.clipType !== "image" && (
         <label className="v2-tool v2-volume"><b>🔊</b>
-          <input type="range" min={0} max={1} step={0.05} value={selected.placement.volume ?? 1} aria-label="Volume" onChange={(e) => engine.dispatch(cmd.setPlacementVolume(selected.placement.id, Number(e.target.value)))} />
+          <input type="range" min={0} max={1} step={0.05} value={selected.placement.volume ?? 1} aria-label="Volume" onPointerDown={() => engine.beginGesture()} onPointerUp={() => engine.endGesture()} onBlur={() => engine.endGesture()} onChange={(e) => engine.dispatch(cmd.setPlacementVolume(selected.placement.id, Number(e.target.value)))} />
         </label>
       )}
       <button className="v2-tool" onClick={() => engine.dispatch(cmd.toggleTrackMute(selected.track.id))}><b>{selected.track.muted ? "🔈" : "🔇"}</b><span>{selected.track.muted ? "Unmute track" : "Mute track"}</span></button>
@@ -168,7 +171,7 @@ function Editor({ engine, storage }: EditorContext) {
       tool("🗑", "Delete", del),
       ...(selected.placement.clipType !== "image" ? [
         <label key="vol" className="v2-tool v2-volume"><b aria-hidden>🔊</b>
-          <input type="range" min={0} max={1} step={0.05} value={selected.placement.volume ?? 1} aria-label="Volume" onChange={(e) => engine.dispatch(cmd.setPlacementVolume(selected.placement.id, Number(e.target.value)))} />
+          <input type="range" min={0} max={1} step={0.05} value={selected.placement.volume ?? 1} aria-label="Volume" onPointerDown={() => engine.beginGesture()} onPointerUp={() => engine.endGesture()} onBlur={() => engine.endGesture()} onChange={(e) => engine.dispatch(cmd.setPlacementVolume(selected.placement.id, Number(e.target.value)))} />
         </label>] : []),
       tool(selected.track.muted ? "🔈" : "🔇", selected.track.muted ? "Unmute track" : "Mute track", () => engine.dispatch(cmd.toggleTrackMute(selected.track.id))),
     ] : [],
@@ -196,10 +199,11 @@ function Editor({ engine, storage }: EditorContext) {
       ) : (
         <header className="v2-header">
           <a className="v2-back" href={window.location.pathname} title="Back to classic editor">‹ Classic</a>
-          <input className="v2-title" value={project.name} aria-label="Project name" onChange={(e) => engine.dispatch(cmd.renameProject(e.target.value))} />
+          <input className="v2-title" value={project.name} aria-label="Project name" onFocus={() => engine.beginGesture()} onBlur={() => engine.endGesture()} onChange={(e) => engine.dispatch(cmd.renameProject(e.target.value))} />
           <span className="v2-badge">v2 preview</span>
         </header>
       )}
+      {toast && <div className="v2-toast" role="status" onClick={() => setToast(undefined)}>{toast}</div>}
       {mobile ? (
         <>
           {preview}
@@ -223,7 +227,6 @@ function Editor({ engine, storage }: EditorContext) {
             {activeMenu !== "root" && <button className="v2-tool v2-tool-back" aria-label="Back" onClick={back}>‹</button>}
             {mobileTools[activeMenu]}
           </nav>
-          {toast && <div className="v2-toast" role="status" onClick={() => setToast(undefined)}>{toast}</div>}
           {sheet && <div className="v2-sheet-backdrop" onClick={() => setSheet(false)}><div className="v2-sheet" onClick={(e) => e.stopPropagation()}>{browser}</div></div>}
           {!sheet && <div hidden>{browser}</div>}
         </>
@@ -243,7 +246,7 @@ function Editor({ engine, storage }: EditorContext) {
 
 function AssetThumb({ asset, engineBlobs }: { asset: Asset; engineBlobs: EditorContext["storage"]["blobs"] }) {
   const [url, setUrl] = useState<string>();
-  const key = asset.versions[0]?.media.blobKey;
+  const key = (asset.versions.find((v) => v.id === asset.selectedVersionId) ?? asset.versions[0])?.media.blobKey;
   useEffect(() => {
     if (asset.kind === "audio" || !key) return;
     let u: string | undefined;

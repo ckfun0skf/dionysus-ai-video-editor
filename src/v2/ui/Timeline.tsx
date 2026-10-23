@@ -1,9 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import type { Engine } from "../engine/engine";
-import * as cmd from "../engine/commands";
-import * as ops from "../domain/ops";
-import { compositionDuration, type Composition, type Project } from "../domain/model";
-import { TICKS_PER_SECOND, formatTimecode } from "../domain/time";
+import { cmd, type Engine } from "../engine";
+import { ops, compositionDuration, TICKS_PER_SECOND, formatTimecode, type Composition, type Project } from "../domain";
 
 interface Props {
   engine: Engine;

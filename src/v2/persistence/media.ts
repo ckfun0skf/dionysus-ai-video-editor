@@ -24,10 +24,21 @@ export async function probeMedia(kind: MediaKind, url: string): Promise<{ durati
   const el = document.createElement(kind === "video" ? "video" : "audio");
   el.preload = "metadata";
   el.src = url;
-  await new Promise<void>((res) => { el.onloadedmetadata = () => res(); el.onerror = () => res(); setTimeout(res, 8000); });
-  const d = Number.isFinite(el.duration) ? el.duration : 5;
+  await withTimeout(new Promise<void>((res, rej) => { el.onloadedmetadata = () => res(); el.onerror = () => rej(new Error("Unsupported or corrupt media")); }), 8000);
+  // Some recordings (e.g. MediaRecorder WebM) report Infinity until seeked to the end.
+  if (!Number.isFinite(el.duration)) {
+    el.currentTime = 1e9;
+    await withTimeout(new Promise<void>((res) => { el.ondurationchange = () => { if (Number.isFinite(el.duration)) res(); }; }), 3000).catch(() => undefined);
+  }
+  if (!Number.isFinite(el.duration) || el.duration <= 0) throw new Error("Could not determine media duration");
+  const d = el.duration;
   const v = el as HTMLVideoElement;
   return { durationTicks: secondsToTicks(d), width: v.videoWidth || undefined, height: v.videoHeight || undefined };
+}
+
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  let t: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([p, new Promise<never>((_, rej) => { t = setTimeout(() => rej(new Error("Timed out reading media")), ms); })]).finally(() => clearTimeout(t));
 }
 
 export async function importFile(file: File, blobs: BlobStore, probe = probeMedia): Promise<Asset | undefined> {
@@ -36,10 +47,10 @@ export async function importFile(file: File, blobs: BlobStore, probe = probeMedi
   const id = newId("ast");
   const versionId = newId("ver");
   const blobKey = `${id}/${versionId}`;
-  await blobs.put(blobKey, file);
   const url = URL.createObjectURL(file);
   try {
-    const info = await probe(kind, url);
+    const info = await probe(kind, url); // throws on unreadable media: nothing is stored
+    await blobs.put(blobKey, file);
     return {
       id, kind, name: file.name, selectedVersionId: versionId,
       versions: [{ id: versionId, createdAt: new Date().toISOString(), media: { blobKey, mime: file.type, ...info }, provenance: { source: "import", inputs: [] } }],

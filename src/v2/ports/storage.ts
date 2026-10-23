@@ -13,6 +13,7 @@ export interface BlobStore {
   put(key: string, blob: Blob): Promise<void>;
   get(key: string): Promise<Blob | undefined>;
   delete(key: string): Promise<void>;
+  keys(): Promise<string[]>;
 }
 
 export interface Storage { projects: ProjectStore; blobs: BlobStore; lastProjectId: { get(): string | null; set(id: string): void } }
