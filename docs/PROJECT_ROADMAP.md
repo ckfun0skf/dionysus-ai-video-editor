@@ -310,3 +310,7 @@ A deterministic test now covers root and pinned nested Composition edits through
 ## Pinned nested Composition persistence verification (2026-10-23)
 
 A deterministic regression now saves a v2 envelope containing a pinned nested Composition, reopens it through `readProjectDocument()`, and verifies the exact child tree and provenance survive. Code/test head `a2e31ee6615e05e1d250cc307c47d1ec7b77d9ac` passed [CI run 39938305163](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39938305163): 27 test files / 313 tests, TypeScript/build passed, audit 0. Issue #110 item is checked; this does not complete the full root/nested edit-history-round-trip matrix.
+
+## Linked-audio persistence verification (2026-10-23)
+
+Extracted linked audio with a non-zero source in-point now has a deterministic v2 save/reopen regression: the child becomes an independent Audio placement and retains its canonical source/range, owner-aligned timing and unlinked state. Exact-head CI at `9ec9146ed52542f794a4f554eb2cb3193f8fd18e`, [run 39941912597](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39941912597), passed 27 test files / 314 tests, TypeScript/build and audit (0 vulnerabilities). Issue #110's specific extraction-persistence subtask is checked; broad edit-history-round-trip and renderer/UI migrations remain open.
