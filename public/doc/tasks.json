@@ -1913,6 +1913,12 @@
           "title": "Two-finger move+pinch+twist in one undo; smart snapping & alignment guides (canvas/element centers+edges, 90° rotation), haptic tick, Alt/toggle to disable",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-082",
+          "title": "Preview duplicate: copy onto a new track directly above, same time, +20px offset, copy selected, one undo",
+          "status": "done",
+          "progress": 100
         }
       ]
     },
