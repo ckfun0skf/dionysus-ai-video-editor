@@ -762,3 +762,11 @@ The pinned-version regression again passed all 298 tests, but TypeScript correct
 - `src/projectTimelinePlacement.test.ts` now covers both move and resize promotion, linked-audio timing, and input Composition immutability.
 - Exact-head code commit `4c796da2dd54793a0d104d1f78b979fb026fa194` passed CI [run 39956221638](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39956221638): 27 test files / 317 tests passed; TypeScript and production build passed; dependency audit passed. The docs-synchronized head still needs its own exact-head CI.
 - This closes only the ordinary Timeline clip move/resize fallback slice. Other Project-domain edits, Shot-domain paths, canonical renderer/playback contract, and broader root/nested round-trip coverage remain incomplete. Issue #110 remains open; PR #111 is not merged; Issue #100 remains open for owner UI acceptance.
+
+
+### Expanded canonical Timeline mutation migration (2026-10-23)
+
+- Extended the canonical promotion path beyond drag-move/resize: ordinary Timeline move, trim, split, duplicate, and delete now promote legacy-only clips into the live root Composition before applying canonical Composition commands. Promotion expands the selected clip to include its linked owner/child group and inserts owner-first so linked audio remains attached and timing stays coupled.
+- Regression coverage includes legacy-only move, trim, resize/adjacent trim, linked-audio synchronization, and input Composition immutability. Existing App integration tests cover canonical split/duplicate workflows; exact-head CI for the newest changes is pending at time of this documentation update.
+- Latest code commits include `f6cc46d27b1eff9fc1dcb57b9dfb7b02b3722f0b`. Verify the final docs-synchronized commit's exact-head CI before treating this slice as validated.
+- This closes only the ordinary Timeline clip compatibility fallback slice. Shot-domain edits, other Project mutation paths, renderer/playback migration off `CompositionLayer[]`, and broad nested/root history round-trips remain open. PR #111 stays open/unmerged; Issue #100 stays open for owner UI acceptance.
