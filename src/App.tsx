@@ -18,7 +18,6 @@ import { canPlaceTimelineClipOnTrack } from "./timelinePlacement";
 import { applyClipVersionResizePreview, calculateClipVersionDropPosition, calculateClipVersionResizePreview } from "./nestedTimelinePlacement";
 import {
   applyCanonicalRootTimelineResize,
-  applyProjectTimelineClipResize,
   calculateCanonicalCompositionResizePreview,
   applyCanonicalCompositionInsertion,
   calculateCanonicalCompositionDropPosition,
