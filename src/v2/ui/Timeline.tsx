@@ -52,7 +52,7 @@ const HEADER_W = 84;
 /** Centered mode: width of the fixed, opaque track-control column left of the lanes. */
 /** Compact height of text lanes in centered (mobile) mode; keeps the side column aligned with the main track. */
 export const TEXT_LANE_H = 32;
-export const SIDE_W = 76;
+export const SIDE_W = 144;
 
 export function Timeline({ engine, project, time, playing, onSeek, selectedId, selectedIds, onToggleSelect, multiMode, onSelect, pps, onZoom, centered, thumbs, peaks, strips, onAddMedia, sideColumn, timeLabel, topLane, ripple, onTransition }: Props) {
   const comp = project.compositions[project.rootCompositionId];
@@ -244,6 +244,16 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
   const rows = useMemo(() => buildRows(preview, centered, expanded), [preview, centered, expanded]);
   // Mobile pins the main track first: its top is just below the ruler (and the subtitle lane).
   const mainTop = 30 + (topLane ? TEXT_LANE_H : 0);
+  // Align an icon-only button in the fixed left column with each collapsed group lane (CapCut); hidden while a group is expanded.
+  const sideRef = useRef<HTMLDivElement>(null);
+  const [laneTops, setLaneTops] = useState<{ group: ops.TrackGroup; top: number; hasClips: boolean }[]>([]);
+  useLayoutEffect(() => {
+    const side = sideRef.current, sc = scrollRef.current;
+    if (!side || !sc) return;
+    const base = side.getBoundingClientRect().top;
+    const next = [...sc.querySelectorAll<HTMLElement>(".v2-lane.is-collapsed")].map((l) => { const r = l.getBoundingClientRect(); return { group: l.dataset.group as ops.TrackGroup, top: Math.round(r.top - base + (r.height - 36) / 2), hasClips: !!l.querySelector(".v2-clip") }; });
+    if (JSON.stringify(next) !== JSON.stringify(laneTops)) setLaneTops(next);
+  });
   const step = pps >= 80 ? 1 : pps >= 30 ? 2 : pps >= 12 ? 5 : 10;
   const ticks: number[] = [];
   const rulerSeconds = (contentW + pad + padRight) / pps;
@@ -263,7 +273,14 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
           ))(r))}
         </div>
       )}
-      {centered && sideColumn && <div className="v2-side-col" data-testid="side-col" style={{ width: SIDE_W, paddingTop: mainTop - scrollTop }}>{sideColumn}</div>}
+      {centered && sideColumn && <div ref={sideRef} className="v2-side-col" data-testid="side-col" style={{ width: SIDE_W, paddingTop: mainTop - scrollTop }}><div className="v2-side-main">{sideColumn}</div>
+        {!expanded && laneTops.map(({ group, top, hasClips }) => (
+          <button key={group} className="v2-group-icon" data-group={group} aria-label={ops.GROUP_LABEL[group]} title={hasClips ? `${ops.GROUP_LABEL[group]}: tap to show layers` : ops.GROUP_LABEL[group]}
+            style={{ top }} onClick={() => { if (hasClips) setExpanded(group); }}>
+            <Ic g={GROUP_ICON[group]} size={16} />
+          </button>
+        ))}
+      </div>}
       <div className="v2-scroll" ref={scrollRef} onScroll={onScroll} onPointerMove={onPointerMove} onPointerUp={(e) => onPointerUp(e)} onPointerCancel={() => { cancelPress(); setGesture(undefined); }}>
         <div className="v2-content" style={{ width: contentW + pad + padRight, paddingLeft: pad, paddingRight: padRight }}>
           <div className="v2-ruler" onPointerDown={scrub}>
@@ -280,7 +297,6 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
           ) : r.type === "collapsed" ? (
             <div key={r.key} className={`v2-lane is-collapsed group-${r.group}`} data-group={r.group} aria-label={`${ops.GROUP_LABEL[r.group]} (collapsed)`}
               onPointerDown={(e) => { if (e.target === e.currentTarget) onSelect(undefined); }}>
-              {!r.placements.length && <span className="v2-lane-empty" style={{ left: (scrollRef.current?.scrollLeft ?? 0) + 8 }}><Ic g={r.group === "audio" ? "♫" : r.group === "text" ? "T" : "▣"} size={12} /> {ops.GROUP_LABEL[r.group]}</span>}
               {r.placements.map((p) => (
                 <button key={p.id} className={`v2-clip clip-${p.clipType} ${p.id === selectedId ? "is-selected" : ""}`} data-placement-id={p.id}
                   style={{ left: toPx(p.startTicks), width: Math.max(4, toPx(p.durationTicks)), ...(thumbs?.[p.source.assetId] && p.clipType !== "audio" ? { backgroundImage: `url(${thumbs[p.source.assetId]})` } : {}) }}
@@ -407,6 +423,7 @@ function LayerMenu({ comp, id, x, y, onClose, run }: { comp: Composition; id: st
   );
 }
 
+const GROUP_ICON: Record<ops.TrackGroup, string> = { main: "image", overlay: "image", audio: "♫", text: "T" };
 const REORDER_ANIM_MS = 180;
 const SQ = 52, SQ_GAP = 6;
 /** Slot the dragged thumb lands in, given the finger x relative to where the row starts. */
