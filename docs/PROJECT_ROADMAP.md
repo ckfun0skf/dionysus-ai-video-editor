@@ -318,3 +318,8 @@ Extracted linked audio with a non-zero source in-point now has a deterministic v
 ## Verified linked-audio child edit round-trip (2026-10-23)
 
 A v2 save/reopen regression exercises canonical linked-audio children through trim, resize, and split before persistence. It verifies source ranges remain independent from the video source offset and that split-child identity/owner references survive reopening. Code/test SHA `0714f28b93d82091f960b0cd77cd8e21736f3d0a` passed [exact-head CI run 39948473082](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39948473082): 27 test files / 315 tests, TypeScript/build passed, audit 0 vulnerabilities. The Issue #110 subtask is checked; the overall root/nested history round-trip remains incomplete. The docs-synchronized head `ef0ed0c43bbd98c9a3d93aa0299a083d46ca29c2` also passed [exact-head CI run 39948801413](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39948801413): 27 test files, TypeScript/build passed, npm audit 0 vulnerabilities.
+
+
+### E1 canonical move-path slice (2026-10-23)
+
+A legacy-only Timeline clip is now inserted into the live canonical root Composition before a move is applied through `moveCompositionPlacementToTrack()`, instead of using the legacy Project move helper. This is a partial migration only: the Shot-domain fallback and resize fallback remain. Code commit `7bfc6b90e770a941399668ceff42db438cdc3be0`; exact-head CI run 39955595704 was in progress at the time of writing, so validation is pending. Issue #110 remains in progress and no checklist item is marked complete by this partial slice.
