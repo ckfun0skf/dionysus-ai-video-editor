@@ -2015,6 +2015,12 @@
           "title": "CapCut animation picker + timeline badges",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-102",
+          "title": "Hotfix: IndexedDB reopen on closed connection",
+          "status": "done",
+          "progress": 100
         }
       ]
     },
