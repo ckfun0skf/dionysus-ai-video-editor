@@ -26,6 +26,7 @@ import {
   calculateProjectTimelineDropPosition,
   getProjectTimelinePlacementItems,
   ensureCanonicalTimelineClips,
+  ensureCanonicalMasterShots,
   trimCanonicalRootTimelineClip,
   moveCanonicalRootTimelineClip,
   moveProjectTimelinePlacement,
@@ -1169,15 +1170,26 @@ export default function App() {
   function updateShot(shotId: string, patch: Partial<Shot>) {
     const textField = "title" in patch ? "shot-title:" + shotId : "intent" in patch ? "shot-intent:" + shotId : "";
     const { duration, ...domainPatch } = patch;
-    if (typeof duration === "number" && editorSessionRef.current.composition.placements.some(placement => placement.id === shotId)) {
-      const currentPlacement = editorSessionRef.current.composition.placements.find(placement => placement.id === shotId)!;
-      changeRootComposition(root => applyCompositionResizePreview(root, {
-        id: shotId, start: currentPlacement.start, duration, edge: "right", trims: [],
-      }), textField);
-      if (Object.keys(domainPatch).length) {
-        change(p => ({ ...p, shots: p.shots.map(shot => shot.id === shotId ? { ...shot, ...domainPatch } : shot) }), textField);
+    if (typeof duration === "number") {
+      const session = editorSessionRef.current;
+      const baseRoot = ensureCanonicalMasterShots(session.project, session.composition, [shotId]);
+      const currentPlacement = baseRoot.placements.find(placement => placement.id === shotId);
+      if (currentPlacement) {
+        changeRootComposition(root => {
+          const promoted = root.placements.some(placement => placement.id === shotId)
+            ? root
+            : ensureCanonicalMasterShots(session.project, root, [shotId]);
+          const livePlacement = promoted.placements.find(placement => placement.id === shotId);
+          if (!livePlacement) throw new Error("Master Shot could not be promoted into the canonical Composition.");
+          return applyCompositionResizePreview(promoted, {
+            id: shotId, start: livePlacement.start, duration, edge: "right", trims: [],
+          });
+        }, textField);
+        if (Object.keys(domainPatch).length) {
+          change(p => ({ ...p, shots: p.shots.map(shot => shot.id === shotId ? { ...shot, ...domainPatch } : shot) }), textField);
+        }
+        return;
       }
-      return;
     }
     change(p => {
       const shots = typeof duration === "number" ? setMasterShotDuration(p.shots, shotId, duration) : p.shots;
@@ -1186,8 +1198,16 @@ export default function App() {
   }
   function updateMasterShotStart(shotId: string, value: number) {
     if (!Number.isFinite(value)) return;
-    if (editorSessionRef.current.composition.placements.some(placement => placement.id === shotId)) {
-      changeRootComposition(root => moveCompositionPlacement(root, shotId, value), "shot-start:" + shotId);
+    const session = editorSessionRef.current;
+    const baseRoot = ensureCanonicalMasterShots(session.project, session.composition, [shotId]);
+    if (baseRoot.placements.some(placement => placement.id === shotId)) {
+      changeRootComposition(root => moveCompositionPlacement(
+        root.placements.some(placement => placement.id === shotId)
+          ? root
+          : ensureCanonicalMasterShots(session.project, root, [shotId]),
+        shotId,
+        value,
+      ), "shot-start:" + shotId);
       return;
     }
     change(p => ({ ...p, shots: setMasterShotStart(p.shots, shotId, value) }), "shot-start:" + shotId);
