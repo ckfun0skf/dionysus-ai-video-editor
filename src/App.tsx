@@ -25,6 +25,7 @@ import {
   calculateProjectTimelineClipResizePreview,
   calculateProjectTimelineDropPosition,
   getProjectTimelinePlacementItems,
+  ensureCanonicalTimelineClips,
   trimCanonicalRootTimelineClip,
   moveCanonicalRootTimelineClip,
   moveProjectTimelinePlacement,
