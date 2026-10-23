@@ -770,3 +770,9 @@ The pinned-version regression again passed all 298 tests, but TypeScript correct
 - Regression coverage includes legacy-only move, trim, resize/adjacent trim, linked-audio synchronization, and input Composition immutability. Existing App integration tests cover canonical split/duplicate workflows; exact-head CI for the newest changes is pending at time of this documentation update.
 - Latest code commits include `f6cc46d27b1eff9fc1dcb57b9dfb7b02b3722f0b`. Verify the final docs-synchronized commit's exact-head CI before treating this slice as validated.
 - This closes only the ordinary Timeline clip compatibility fallback slice. Shot-domain edits, other Project mutation paths, renderer/playback migration off `CompositionLayer[]`, and broad nested/root history round-trips remain open. PR #111 stays open/unmerged; Issue #100 stays open for owner UI acceptance.
+
+
+### Scope correction after regression check (2026-10-23)
+
+- A broader attempt to route legacy-only split/duplicate through canonical promotion failed three existing App integration tests; the change was reverted. Split/duplicate compatibility fallbacks remain intentionally unchanged until a parity-preserving migration is designed.
+- The current canonical promotion scope is ordinary Timeline move, trim, resize, and delete. CI for rollback/fix code head `64fa699c60592bcc49222ee89a2e785063bc477a` passed tests; exact docs-synchronized head CI still required. Failed exploratory run: [39957948620](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39957948620); passing rollback/fix run: [39958220582](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39958220582).
