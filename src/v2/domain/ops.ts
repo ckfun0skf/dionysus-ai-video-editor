@@ -253,3 +253,9 @@ export function setKeyframe(comp: Composition, placementId: string, prop: Keyfra
     return out;
   });
 }
+
+/** CapCut-style main track: the bottom-most video track. Overlay video tracks sit above it. */
+export function mainTrack(comp: Composition): Track | undefined {
+  for (let i = comp.tracks.length - 1; i >= 0; i--) if (comp.tracks[i].kind === "video") return comp.tracks[i];
+  return undefined;
+}

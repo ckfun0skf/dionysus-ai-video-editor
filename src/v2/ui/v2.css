@@ -113,7 +113,6 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 .v2-timeline.is-centered .v2-ruler { margin-top: 0; }
 .v2-timeline.is-centered .v2-clip.clip-video, .v2-timeline.is-centered .v2-clip.clip-image { background-size: auto 100%; background-repeat: repeat-x; background-position: left center; }
 .v2-timeline.is-centered .v2-clip { border-radius: 4px; top: 2px; bottom: 2px; }
-.v2-lane-add { position: absolute; top: 10px; width: 36px; height: 36px; border-radius: 6px; border: none; background: #fff; color: #111 !important; font-size: 24px !important; line-height: 1; z-index: 3; }
 .v2-app.is-mobile .v2-playhead-fixed { width: 2px; background: #fff; }
 .v2-app.is-mobile .v2-toolbar { background: #161616; border-top: none; align-items: stretch; }
 .v2-tool-back { min-width: 36px !important; background: #2a2a2e !important; border-radius: 6px; font-size: 22px !important; color: var(--text) !important; justify-content: center; }
@@ -278,3 +277,5 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 .v2-chip:hover { background: var(--v2-surface-3, #2e2e36); }
 .v2-chip button { min-width: 28px; min-height: 28px; background: none; border: 0; color: inherit; cursor: pointer; }
 .v2-err { color: #ff6b6b; }
+.v2-main-add { position: absolute; right: 10px; z-index: 6; width: 44px; height: 40px; border-radius: 8px; border: none; background: #fff; color: #111; display: grid; place-items: center; box-shadow: 0 2px 10px rgba(0,0,0,.5); cursor: pointer; transition: transform .12s; }
+.v2-main-add:hover { background: #e9e9ee; } .v2-main-add:active { transform: scale(.94); }

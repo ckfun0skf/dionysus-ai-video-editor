@@ -58,6 +58,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
   const comp = project.compositions[project.rootCompositionId];
   const scrollRef = useRef<HTMLDivElement>(null);
   const [gesture, setGesture] = useState<Gesture>();
+  const [scrollTop, setScrollTop] = useState(0);
   const [viewW, setViewW] = useState(800);
   const programmatic = useRef(false);
   const press = useRef<{ timer: ReturnType<typeof setTimeout>; x: number; y: number }>();
@@ -113,6 +114,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
 
   const onScroll = () => {
     const el = scrollRef.current;
+    if (el && el.scrollTop !== scrollTop) setScrollTop(el.scrollTop);
     if (!centered || !el) return;
     if (programmatic.current) { programmatic.current = false; return; }
     if (!playing) onSeek(Math.max(0, toTicks(el.scrollLeft)));
@@ -207,8 +209,11 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
     engine.dispatch(cmd.addAssetToTimeline(assetId, Math.max(0, toTicks(e.clientX - rect.left)), trackId));
   };
 
-  const firstVideo = comp.tracks.find((t) => t.kind === "video");
-  const laneEnd = (ps: { startTicks: number; durationTicks: number }[]) => ps.reduce((m, p) => Math.max(m, p.startTicks + p.durationTicks), 0);
+  const main = ops.mainTrack(comp);
+  // Top of the main track inside the scroll content (ruler 30px, compact text lanes, 56px media lanes).
+  const laneH = (k: string) => (k === "text" ? TEXT_LANE_H : 56);
+  const mainIdx = preview.tracks.findIndex((t) => t.id === main?.id);
+  const mainTop = 30 + (topLane ? TEXT_LANE_H : 0) + preview.tracks.slice(0, Math.max(0, mainIdx)).reduce((h, t) => h + laneH(t.kind), 0);
   const step = pps >= 80 ? 1 : pps >= 30 ? 2 : pps >= 12 ? 5 : 10;
   const ticks: number[] = [];
   const rulerSeconds = (contentW + pad + padRight) / pps;
@@ -228,7 +233,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
           ))}
         </div>
       )}
-      {centered && sideColumn && <div className="v2-side-col" data-testid="side-col" style={{ width: SIDE_W, paddingTop: 30 + TEXT_LANE_H * Math.max(0, preview.tracks.findIndex((t) => t.kind === "video")) }}>{sideColumn}</div>}
+      {centered && sideColumn && <div className="v2-side-col" data-testid="side-col" style={{ width: SIDE_W, paddingTop: mainTop - scrollTop }}>{sideColumn}</div>}
       <div className="v2-scroll" ref={scrollRef} onScroll={onScroll} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={() => { cancelPress(); setGesture(undefined); }}>
         <div className="v2-content" style={{ width: contentW + pad + padRight, paddingLeft: pad, paddingRight: padRight }}>
           <div className="v2-ruler" onPointerDown={scrub}>
@@ -283,15 +288,15 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
                   </button>
                 );
               })}
-              {centered && onAddMedia && t.id === firstVideo?.id && (
-                <button className="v2-lane-add" style={{ left: toPx(laneEnd(t.placements)) + 8 }} aria-label="Add media" onPointerDown={(e) => e.stopPropagation()} onClick={onAddMedia}>+</button>
-              )}
             </div>
           ))}
           {gesture?.snap !== undefined && (gesture.kind === "trim" || gesture.active) && <div className="v2-snap-line" data-testid="snap-line" style={{ left: pad + toPx(gesture.snap) }} aria-hidden />}
           {!centered && <div className="v2-playhead" style={{ left: toPx(time) }} />}
         </div>
       </div>
+      {centered && onAddMedia && main && !gesture && !selectedId && !selectedIds?.length && (
+        <button className="v2-main-add" style={{ top: mainTop - scrollTop + 8 }} aria-label="Add media to main track" title="Add photos, videos or library items to the main track at the playhead" onClick={onAddMedia}><Ic g="+" size={22} /></button>
+      )}
       {centered && <div className="v2-playhead-fixed" style={{ left: (sideColumn ? SIDE_W : 0) + pad }} aria-hidden />}
       {centered && timeLabel && <div className="v2-time-label">{timeLabel}</div>}
     </div>
