@@ -1973,6 +1973,12 @@
           "title": "Fix: long-press on main-track clip always enters reorder (never layer menu); block native touch callout",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-092",
+          "title": "Media picker: Project media tab (first) to re-add previously imported assets",
+          "status": "done",
+          "progress": 100
         }
       ]
     },
