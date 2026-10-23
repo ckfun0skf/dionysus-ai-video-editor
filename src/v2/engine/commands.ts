@@ -79,7 +79,7 @@ export const addAssetToTimeline = (assetId: string, startTicks: number, trackId?
     const kind: TrackKind = trackKindFor(asset.kind);
     return withRoot(p, (c) => {
       let comp = c;
-      let tid = trackId && comp.tracks.find((t) => t.id === trackId && t.kind === kind) ? trackId : comp.tracks.find((t) => t.kind === kind)?.id;
+      let tid = trackId && comp.tracks.find((t) => t.id === trackId && t.kind === kind) ? trackId : (kind === "video" ? ops.mainTrack(comp) : comp.tracks.find((t) => t.kind === kind))?.id;
       if (!tid) {
         tid = newId("trk");
         comp = ops.addTrack(comp, kind, tid);

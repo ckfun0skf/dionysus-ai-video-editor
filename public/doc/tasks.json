@@ -1931,6 +1931,12 @@
           "title": "HTML editor: library toggles from registry and file attachments (by relative name)",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-085",
+          "title": "Mobile: main track + floating add button (no trim overlap)",
+          "status": "done",
+          "progress": 100
         }
       ]
     },
