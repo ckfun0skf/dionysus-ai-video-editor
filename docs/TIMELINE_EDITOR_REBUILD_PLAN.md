@@ -311,3 +311,9 @@ The pinned-version regression again passed all 298 tests, but TypeScript correct
 - Root Timeline metadata/geometry edits retain the canonical source unless source identity fields are explicitly patched; helper/test: `src/timelineClipSourcePatch.ts` and `src/timelineClipSourcePatch.test.ts`.
 - Compatibility-first session reconciliation preserves existing canonical nested/pinned Composition children by ID and appends newly discovered children instead of replacing pinned snapshots.
 - Exact code/test head `22dadc5764baf60d95a109ea75d8a5ad1be9ed49` passed [CI run 39936044698](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39936044698): 27 test files / 310 tests, TypeScript/build passed, npm audit 0 vulnerabilities. Issue #110 checklist items are checked. The documentation/task-synchronized checkpoint `80b8c4f22f2367b2fa48502295ffc1cdff6394cb` passed [CI run 39936506656](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39936506656): 27 test files / 310 tests, TypeScript/build passed, npm audit 0 vulnerabilities. Any subsequent code or documentation commit requires a fresh exact-head CI run.
+
+## Root identity/provenance reconciliation follow-up (2026-10-23)
+
+- Audit found `reconcileEditorSessionComposition()` also replaced the live root Composition ID with a deterministic ID from legacy migration and cleared `provenance` / canonical-only `legacyData` when the migrated target omitted those fields.
+- The boundary now retains the current canonical ID, preserves provenance when the target has none, and merges target-owned legacy metadata over existing canonical-only fields. Regression coverage checks all three across a metadata-only project rename.
+- Code/test commits: `709692e86f82d233f77df8b1538244c7c8f586b7`, `fbc380918f9d709a8cf44d3b024027ef6243b331`. Exact-head CI pending; Issue #110 item remains unchecked until it passes.
