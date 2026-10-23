@@ -1,5 +1,5 @@
 /** Pure placement operations. All return new Composition objects (no mutation). */
-import { clampTransform, MAX_SPEED, MIN_SPEED, sourceAt, findPlacement, newId, trackKindFor, transformOf, type Transform, type Composition, type Placement, type Track } from "./model";
+import { clampTransform, type KeyframeProp, MAX_SPEED, MIN_SPEED, sourceAt, findPlacement, newId, trackKindFor, transformOf, type Transform, type Composition, type Placement, type Track } from "./model";
 
 export const MIN_DURATION_TICKS = 1200; // 10 ms
 
@@ -84,7 +84,7 @@ export function trimPlacement(comp: Composition, placementId: string, edge: "lef
     const start = Math.min(Math.max(toTicks, prevEnd, Math.ceil(p.startTicks - srcRoom)), end - MIN_DURATION_TICKS);
     const delta = start - p.startTicks;
     const sourceInTicks = p.clipType === "image" ? 0 : unbounded || rev ? p.sourceInTicks : Math.max(0, p.sourceInTicks + Math.round(delta * s));
-    updated = { ...p, startTicks: start, durationTicks: end - start, sourceInTicks };
+    updated = { ...p, startTicks: start, durationTicks: end - start, sourceInTicks, ...(p.keyframes ? { keyframes: shiftKeys(p.keyframes, -delta) } : {}) };
   } else {
     const nextStart = Math.min(Infinity, ...others.filter((o) => o.startTicks >= end).map((o) => o.startTicks));
     const srcRoom = unbounded ? Infinity : rev ? p.sourceInTicks / s : (maxSourceTicks! - spanEnd) / s;
@@ -108,8 +108,12 @@ export function splitPlacement(comp: Composition, placementId: string, atTicks: 
   const hold = p.clipType === "image" || p.freeze;
   const cut = Math.round(offset * s), cutRev = Math.round((p.durationTicks - offset) * s);
   // Reverse: the left part shows the END of the source span, so it gets the later sourceIn.
+  // Fades stay on the outer edges; keyframes keep their absolute timing (offsets are clip-relative).
+  if (p.fadeOutTicks) delete left.fadeOutTicks;
   if (p.reverse && !hold) left.sourceInTicks = p.sourceInTicks + cutRev;
   const right: Placement = { ...p, id: newIdValue, startTicks: atTicks, durationTicks: p.durationTicks - offset, sourceInTicks: p.clipType === "image" ? 0 : hold || p.reverse ? p.sourceInTicks : p.sourceInTicks + cut };
+  if (p.fadeInTicks) delete right.fadeInTicks;
+  if (p.keyframes) right.keyframes = shiftKeys(p.keyframes, -offset);
   return mapTrack(comp, found.track.id, (t) => ({ ...t, placements: sortPlacements(t.placements.flatMap((o) => (o.id === p.id ? [left, right] : [o]))) }));
 }
 
@@ -216,4 +220,36 @@ export function freezeFrame(comp: Composition, placementId: string, atTicks: num
   const { speed: _s, reverse: _r, ...base } = p; void _s; void _r;
   const frozen: Placement = { ...base, id: freezeId, startTicks: atTicks, durationTicks: holdTicks, sourceInTicks: frame, freeze: true, linkedAudio: { muted: true } };
   return mapTrack(next, found.track.id, (t) => ({ ...t, placements: sortPlacements([...t.placements, frozen]) }));
+}
+
+function shiftKeys(k: NonNullable<Placement["keyframes"]>, by: number): Placement["keyframes"] {
+  return Object.fromEntries(Object.entries(k).map(([prop, keys]) => [prop, keys!.map((x) => ({ ...x, t: x.t + by }))]));
+}
+
+/** Set fade lengths (ticks); each clamped to >= 0 and together to the clip duration. 0 removes. */
+export function setFades(comp: Composition, placementId: string, fades: { in?: number; out?: number }): Composition {
+  return mapPlacement(comp, placementId, (p) => {
+    const fin = Math.round(Math.max(0, Math.min(fades.in ?? p.fadeInTicks ?? 0, p.durationTicks)));
+    const fout = Math.round(Math.max(0, Math.min(fades.out ?? p.fadeOutTicks ?? 0, p.durationTicks - fin)));
+    const out: Placement = { ...p, fadeInTicks: fin, fadeOutTicks: fout };
+    if (!fin) delete out.fadeInTicks;
+    if (!fout) delete out.fadeOutTicks;
+    return out;
+  });
+}
+
+/** Insert or replace the key of `prop` at clip offset `t` (visual clips only). `value` null removes it. */
+export function setKeyframe(comp: Composition, placementId: string, prop: KeyframeProp, t: number, value: number | null): Composition {
+  t = Math.round(t);
+  return mapPlacement(comp, placementId, (p) => {
+    if (p.clipType === "audio") return p;
+    const keys = (p.keyframes?.[prop] ?? []).filter((k) => Math.abs(k.t - t) > 600); // within 5 ms = same key
+    if (value !== null) keys.push({ t, v: value });
+    keys.sort((a, b) => a.t - b.t);
+    const keyframes = { ...p.keyframes, [prop]: keys };
+    if (!keys.length) delete keyframes[prop];
+    const out: Placement = { ...p, keyframes };
+    if (!Object.keys(keyframes).length) delete out.keyframes;
+    return out;
+  });
 }

@@ -5,7 +5,7 @@
  */
 import { activeAt, placeRect, type Placed } from "./frame";
 import { TICKS_PER_SECOND, ticksToSeconds } from "../domain/time";
-import { compositionDuration, versionOf, type Project } from "../domain/model";
+import { compositionDuration, fadeAt, versionOf, type Project } from "../domain/model";
 import type { BlobStore } from "../ports/storage";
 import { correctDrift, createClock, type Clock } from "./clock";
 
@@ -157,7 +157,7 @@ export class Player {
       if ("pause" in el) {
         const target = ticksToSeconds(sourceTicks);
         el.muted = !!track.muted || (placement.clipType === "video" && !!placement.linkedAudio?.muted);
-        const vol = Math.max(0, placement.volume ?? 1);
+        const vol = Math.max(0, placement.volume ?? 1) * fadeAt(placement, this.time);
         const gain = this.gainFor(el);
         if (gain) { gain.gain.value = vol; el.volume = 1; } else el.volume = Math.min(1, vol);
         // Reverse and freeze cannot use native playback: hold the element paused and seek it per frame.
@@ -183,7 +183,7 @@ export class Player {
         const w = el instanceof HTMLVideoElement ? el.videoWidth : (el as HTMLImageElement).naturalWidth;
         const h = el instanceof HTMLVideoElement ? el.videoHeight : (el as HTMLImageElement).naturalHeight;
         if (w && h && (!(el instanceof HTMLVideoElement) || el.readyState >= 2)) {
-          const r = placeRect(placement, w, h, canvas.width, canvas.height);
+          const r = placeRect(placement, w, h, canvas.width, canvas.height, this.time);
           this.boxes.set(placement.id, r);
           ctx.save(); ctx.globalAlpha = r.alpha; ctx.translate(r.cx, r.cy); ctx.rotate(r.rot);
           ctx.drawImage(el as CanvasImageSource, r.sx, r.sy, r.sw, r.sh, -r.w / 2, -r.h / 2, r.w, r.h);

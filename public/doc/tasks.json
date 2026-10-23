@@ -1767,12 +1767,15 @@
           "report": "",
           "subtasks": [],
           "acceptance": [
-            "UX bar: selected/hover states, tooltips, empty states, undoable, 44px targets"
+            "UX bar: selected/hover states, tooltips, empty states, undoable, 44px targets",
+            "fadeInTicks/fadeOutTicks ramp opacity (visual) and volume (audio); clamped to duration; split keeps them on outer edges",
+            "Linear keyframes for x/y/scale/rotation/opacity (clip-relative ticks); ◆ per inspector row adds/removes at playhead; editing a keyed prop (slider or canvas handle) keys it; split/left-trim keep timing",
+            "Timeline shows fade ramps and keyframe diamonds"
           ],
           "id": "V2-063",
           "title": "Fades and keyframes",
-          "status": "planned",
-          "progress": 0
+          "status": "done",
+          "progress": 100
         },
         {
           "doc": "docs/v2/MODULE_DESIGN.md",
