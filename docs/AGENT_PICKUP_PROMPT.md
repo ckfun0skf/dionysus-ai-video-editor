@@ -298,3 +298,10 @@ Current verified code checkpoint: `c322e6f5df3ad8455582d26f472e14cf5cc5624e` pas
 `ensureCanonicalMasterShots()` now promotes missing Master Shot placements from deterministic migration before duration/start edits. App duration/start handlers use canonical resize/move commands after promotion, with a focused regression for a partial root and Project projection timing. Code/test head `26a6578f98d64ad9dd5ed5850e668687f4cb5089` passed exact-head CI [39962319324](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39962319324). DYS-014 remains in progress; remaining Project/Shot mutations, broad root/nested history save/reopen, and renderer/playback boundaries remain open. Issue #100 remains open for owner UI acceptance; PR #111 remains open/unmerged. New docs/task commits require exact-head CI.
 
 Latest verified code/test checkpoint: `26a6578f98d64ad9dd5ed5850e668687f4cb5089` passed CI 39962319324. It adds canonical Master Shot promotion for missing placements before duration/start changes. The docs-synchronized head still needs its own exact-head CI check.
+
+
+## Renderer continuation — nested Clip Version canonical source (2026-10-23)
+
+- Code commit `1a64c0355f92632a81155bab9a35128ef50ed509` changes recursive nested-clip rendering to pass `collectVersionRenderLayers(childVersion)` instead of the potentially stale `childVersion.layers` compatibility array. This aligns nested preview frames with the canonical Composition placements/tracks/source metadata already used by the top-level renderer adapter.
+- Exact-head CI run 2032 is pending at the time of this note; verify it against this commit before treating the slice as validated. This is an implementation slice, not completion of the broader renderer/playback migration.
+- PR #111 remains open/unmerged. Issue #100 remains open for owner UI acceptance; no browser smoke test or manual UI acceptance is claimed.
