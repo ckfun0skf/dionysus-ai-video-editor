@@ -397,3 +397,9 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 .v2-anim-badges .is-in { order: 0; } .v2-anim-badges .is-loop { order: 1; } .v2-anim-badges .is-out { order: 2; }
 .v2-anim-badges.is-narrow { right: auto; gap: 0; }
 .v2-anim-badges.is-narrow .v2-anim-badge { width: 10px; height: 10px; border-radius: 2px; margin: 0; }
+/* V2-099: layer drag handle, focused-mode hidden-group range lines, timecode never covered */
+.v2-drag-handle { cursor: grab; touch-action: none; }
+.v2-drag-handle.is-dragging, .is-layer-dragging .v2-drag-handle { cursor: grabbing; color: var(--accent); }
+.v2-lane.is-layer-dragging { box-shadow: 0 4px 14px rgba(0,0,0,.5); outline: 1px dashed var(--accent); background: #1c1c22; }
+.v2-hidden-range { position: absolute; height: 2px; border-radius: 1px; pointer-events: none; z-index: 3; opacity: .95; }
+.v2-timeline.is-centered .v2-time-label { top: 0; height: 28px; line-height: 28px; padding-left: 0; padding-right: 8px; z-index: 9; }

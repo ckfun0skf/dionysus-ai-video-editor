@@ -52,49 +52,25 @@ export function orderByGroup(tracks: Track[]): Track[] {
 }
 export const tracksInGroup = (comp: Composition, g: TrackGroup) => comp.tracks.filter((t) => groupOf(comp, t) === g);
 
-const dropEmpty = (comp: Composition, trackId: string, keep?: string) => {
-  const t = comp.tracks.find((x) => x.id === trackId);
-  return t && !t.placements.length && t.id !== keep ? removeTrack(comp, trackId) : comp;
-};
-
-/** Move a visual clip (not text) between the Overlay and Text & Stickers groups, onto a new top layer there. */
-export function moveToGroup(comp: Composition, placementId: string, group: "overlay" | "text", trackId = newId("trk")): Composition {
-  const found = findPlacement(comp, placementId);
-  if (!found || found.placement.clipType === "text" || found.placement.clipType === "audio") return comp;
-  if (groupOf(comp, found.track) === group) return comp;
-  const main = lastVideo(comp.tracks)?.id;
-  let next = mapTrack(comp, found.track.id, (t) => ({ ...t, placements: t.placements.filter((p) => p.id !== placementId) }));
-  next = dropEmpty(next, found.track.id, main);
-  next = addTrack(next, "video", trackId, group);
-  return mapTrack(next, trackId, (t) => ({ ...t, placements: [found.placement] }));
-}
 
 /**
- * Raise (up) or lower (down) a clip one layer inside its group: onto the neighbouring layer when it is the
- * same kind and free, otherwise onto a new layer just past it. Never crosses group boundaries or the main track.
+ * Reorder a layer inside its group (V2-099 ≡ handle). `toIndex` is the target position among the group's
+ * tracks in array order (0 = top layer). Never crosses group boundaries; main and audio-less no-ops return comp.
  */
-export function moveLayer(comp: Composition, placementId: string, dir: "up" | "down", newTrackId = newId("trk")): Composition {
-  const found = findPlacement(comp, placementId);
-  if (!found) return comp;
-  const g = groupOf(comp, found.track);
-  if (g === "main" || g === "audio") return comp;
-  const p = found.placement;
-  const i = comp.tracks.findIndex((t) => t.id === found.track.id);
-  const j = dir === "up" ? i - 1 : i + 1;
-  const neighbour = comp.tracks[j];
-  const inGroup = neighbour && groupOf(comp, neighbour) === g;
-  if (!inGroup && found.track.placements.length === 1) return comp; // already the outermost layer
-  const main = lastVideo(comp.tracks)?.id;
-  let next = mapTrack(comp, found.track.id, (t) => ({ ...t, placements: t.placements.filter((x) => x.id !== placementId) }));
-  if (inGroup && neighbour.kind === found.track.kind && isFree(neighbour, p.startTicks, p.durationTicks)) {
-    next = mapTrack(next, neighbour.id, (t) => ({ ...t, placements: sortPlacements([...t.placements, p]) }));
-  } else {
-    const at = inGroup ? (dir === "up" ? j : j + 1) : dir === "up" ? i : i + 1;
-    const n = next.tracks.filter((t) => t.kind === found.track.kind).length + 1;
-    const track: Track = { id: newTrackId, kind: found.track.kind, name: found.track.group === "text" ? `Sticker ${n}` : `${found.track.kind[0].toUpperCase()}${found.track.kind.slice(1)} ${n}`, placements: [p], ...(found.track.group ? { group: found.track.group } : {}) };
-    next = { ...next, tracks: [...next.tracks.slice(0, at), track, ...next.tracks.slice(at)] };
-  }
-  return dropEmpty(next, found.track.id, main);
+export function reorderTrack(comp: Composition, trackId: string, toIndex: number): Composition {
+  const t = comp.tracks.find((x) => x.id === trackId);
+  if (!t) return comp;
+  const g = groupOf(comp, t);
+  if (g === "main") return comp;
+  const members = tracksInGroup(comp, g);
+  const from = members.indexOf(t);
+  const to = Math.max(0, Math.min(members.length - 1, toIndex));
+  if (from === to) return comp;
+  const order = members.filter((x) => x !== t);
+  order.splice(to, 0, t);
+  let k = 0;
+  const tracks = comp.tracks.map((x) => (groupOf(comp, x) === g ? order[k++] : x));
+  return { ...comp, tracks };
 }
 
 export function removeTrack(comp: Composition, trackId: string): Composition {

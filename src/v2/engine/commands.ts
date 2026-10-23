@@ -214,13 +214,9 @@ export const addAssetsInSequence = (assetIds: string[], startTicks: number, over
   }),
 });
 
-export const moveToGroup = (id: string, group: "overlay" | "text", trackId?: string): Command => ({
-  label: group === "text" ? "Move to Text & Stickers" : "Move to Overlay",
-  apply: (p) => withRoot(p, (c) => ops.moveToGroup(c, id, group, trackId)),
-});
-export const moveLayer = (id: string, dir: "up" | "down", trackId?: string): Command => ({
-  label: dir === "up" ? "Layer up" : "Layer down",
-  apply: (p) => withRoot(p, (c) => ops.moveLayer(c, id, dir, trackId)),
+export const reorderTrack = (trackId: string, toIndex: number): Command => ({
+  label: "Reorder layer",
+  apply: (p) => withRoot(p, (c) => ops.reorderTrack(c, trackId, toIndex)),
 });
 export const reorderMain = (id: string, toIndex: number): Command => ({
   label: "Reorder clips",

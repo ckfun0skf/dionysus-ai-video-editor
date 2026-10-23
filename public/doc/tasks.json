@@ -2021,6 +2021,12 @@
           "title": "Hotfix: IndexedDB reopen on closed connection",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-099",
+          "title": "Layer drag reorder, focus-mode timeline, remove group pills",
+          "status": "done",
+          "progress": 100
         }
       ]
     },
