@@ -1,6 +1,6 @@
 /** Multi-clip editing: ripple delete/trim, duplicate, copy/paste. Pure; returns new Compositions. */
 import { findPlacement, newId, trackKindFor, type Composition, type Placement, type TrackKind } from "./model";
-import { firstFreeStart, insertPlacement, trimPlacement } from "./ops";
+import { insertPlacement, trimPlacement } from "./ops";
 
 const end = (p: Placement) => p.startTicks + p.durationTicks;
 
