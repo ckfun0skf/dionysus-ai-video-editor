@@ -1,6 +1,6 @@
 import type { ClipVersion, DionysusProject, GenerationRecord } from "./types";
 import type { CompositionDocument, CompositionPinnedVersion } from "./compositionModel";
-import { migrateLegacyProjectToComposition } from "./compositionMigration";
+import { migrateLegacyProjectToComposition, projectRootCompositionToLegacy } from "./compositionMigration";
 import { collectCompositionLayers, getCompositionDuration } from "./compositionRenderer";
 
 /**
@@ -9,12 +9,13 @@ import { collectCompositionLayers, getCompositionDuration } from "./compositionR
  */
 export function createClipVersionSnapshot(
   project: DionysusProject,
-  options: { assetId: string; versionId: string; versionName: string; createdAt?: string },
+  options: { assetId: string; versionId: string; versionName: string; createdAt?: string; rootComposition?: CompositionDocument },
 ): ClipVersion {
   const createdAt = options.createdAt ?? new Date().toISOString();
   const migrated = migrateLegacyProjectToComposition(project);
-  const root = structuredClone(migrated.rootComposition);
-  const flattenedLayers = structuredClone(collectCompositionLayers(project));
+  const root = structuredClone(options.rootComposition ?? migrated.rootComposition);
+  const snapshotProject = options.rootComposition ? projectRootCompositionToLegacy(project, root) : project;
+  const flattenedLayers = structuredClone(collectCompositionLayers(snapshotProject));
   const duration = Math.max(0.1, root.duration, getCompositionDuration(flattenedLayers));
 
   const pinnedVersions: CompositionPinnedVersion[] = [];
