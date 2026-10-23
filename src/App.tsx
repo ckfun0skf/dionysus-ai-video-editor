@@ -25,6 +25,7 @@ import {
   calculateProjectTimelineClipResizePreview,
   calculateProjectTimelineDropPosition,
   getProjectTimelinePlacementItems,
+  ensureCanonicalTimelineClips,
   trimCanonicalRootTimelineClip,
   moveCanonicalRootTimelineClip,
   moveProjectTimelinePlacement,
@@ -1332,64 +1333,62 @@ export default function App() {
   }
 
   function splitRootTimelineClip(clipId: string, splitAt: number, selectedNewId = id("timeline-clip")) {
-    const root = editorSessionRef.current.composition;
-    if (!root.placements.some(item => item.id === clipId)) {
-      change(project => ({ ...project, timelineClips: splitTimelineClip({ tracks: project.tracks, timelineClips: project.timelineClips ?? [] }, clipId, splitAt, { newClipId: selectedNewId }).timelineClips }));
-      return selectedNewId;
-    }
-    const byId = new Map(root.placements.map(item => [item.id, item]));
-    let groupRoot = byId.get(clipId)!;
-    while (groupRoot.linkedToPlacementId) {
-      const parent = byId.get(groupRoot.linkedToPlacementId);
-      if (!parent) throw new Error("Linked placement parent is missing.");
-      groupRoot = parent;
-    }
-    const groupIds = new Set<string>([groupRoot.id]);
-    let changed = true;
-    while (changed) {
-      changed = false;
-      for (const placement of root.placements) {
-        if (placement.linkedToPlacementId && groupIds.has(placement.linkedToPlacementId) && !groupIds.has(placement.id)) {
-          groupIds.add(placement.id);
-          changed = true;
+    changeRootComposition(document => {
+      const root = ensureCanonicalTimelineClips(editorSessionRef.current.project, document, [clipId]);
+      const byId = new Map(root.placements.map(item => [item.id, item]));
+      let groupRoot = byId.get(clipId);
+      if (!groupRoot) throw new Error("Timeline clip could not be promoted into canonical Composition.");
+      while (groupRoot.linkedToPlacementId) {
+        const parent = byId.get(groupRoot.linkedToPlacementId);
+        if (!parent) throw new Error("Linked placement parent is missing.");
+        groupRoot = parent;
+      }
+      const groupIds = new Set<string>([groupRoot.id]);
+      let changed = true;
+      while (changed) {
+        changed = false;
+        for (const placement of root.placements) {
+          if (placement.linkedToPlacementId && groupIds.has(placement.linkedToPlacementId) && !groupIds.has(placement.id)) {
+            groupIds.add(placement.id);
+            changed = true;
+          }
         }
       }
-    }
-    const newPlacementIds = Object.fromEntries([...groupIds].map(oldId => [oldId, oldId === clipId ? selectedNewId : id("timeline-clip")]));
-    changeRootComposition(document => splitCompositionPlacement(document, clipId, splitAt, { newPlacementIds }));
+      const newPlacementIds = Object.fromEntries([...groupIds].map(oldId => [oldId, oldId === clipId ? selectedNewId : id("timeline-clip")]));
+      return splitCompositionPlacement(root, clipId, splitAt, { newPlacementIds });
+    });
     return selectedNewId;
   }
 
   function duplicateRootTimelineClip(clip: TimelineClip, selectedNewId = id("timeline-clip")): string {
-    const root = editorSessionRef.current.composition;
-    if (!root.placements.some(item => item.id === clip.id)) {
-      change(project => ({ ...project, timelineClips: duplicateTimelineClip({ tracks: project.tracks, timelineClips: project.timelineClips ?? [] }, clip.id, { newClipId: selectedNewId, start: clip.start + clip.duration }).timelineClips }));
-      setSelectedTimelineClipId(selectedNewId);
-      return selectedNewId;
-    }
-    const byId = new Map(root.placements.map(item => [item.id, item]));
-    let groupRoot = byId.get(clip.id)!;
-    while (groupRoot.linkedToPlacementId) {
-      const parent = byId.get(groupRoot.linkedToPlacementId);
-      if (!parent) throw new Error("Linked placement parent is missing.");
-      groupRoot = parent;
-    }
-    const groupIds = new Set<string>([groupRoot.id]);
-    let changed = true;
-    while (changed) {
-      changed = false;
-      for (const placement of root.placements) {
-        if (placement.linkedToPlacementId && groupIds.has(placement.linkedToPlacementId) && !groupIds.has(placement.id)) {
-          groupIds.add(placement.id);
-          changed = true;
+    let resultingSelectedId = selectedNewId;
+    changeRootComposition(document => {
+      const root = ensureCanonicalTimelineClips(editorSessionRef.current.project, document, [clip.id]);
+      const byId = new Map(root.placements.map(item => [item.id, item]));
+      let groupRoot = byId.get(clip.id);
+      if (!groupRoot) throw new Error("Timeline clip could not be promoted into canonical Composition.");
+      while (groupRoot.linkedToPlacementId) {
+        const parent = byId.get(groupRoot.linkedToPlacementId);
+        if (!parent) throw new Error("Linked placement parent is missing.");
+        groupRoot = parent;
+      }
+      const groupIds = new Set<string>([groupRoot.id]);
+      let changed = true;
+      while (changed) {
+        changed = false;
+        for (const placement of root.placements) {
+          if (placement.linkedToPlacementId && groupIds.has(placement.linkedToPlacementId) && !groupIds.has(placement.id)) {
+            groupIds.add(placement.id);
+            changed = true;
+          }
         }
       }
-    }
-    const newPlacementIds = Object.fromEntries([...groupIds].map(oldId => [oldId, oldId === clip.id ? selectedNewId : id("timeline-clip")]));
-    const next = duplicateCompositionPlacement(root, clip.id, { newPlacementIds, start: clip.start + clip.duration });
-    changeRootComposition(() => next);
-    setSelectedTimelineClipId(newPlacementIds[clip.id]);
-    return newPlacementIds[clip.id];
+      const newPlacementIds = Object.fromEntries([...groupIds].map(oldId => [oldId, oldId === clip.id ? selectedNewId : id("timeline-clip")]));
+      resultingSelectedId = newPlacementIds[clip.id];
+      return duplicateCompositionPlacement(root, clip.id, { newPlacementIds, start: clip.start + clip.duration });
+    });
+    setSelectedTimelineClipId(resultingSelectedId);
+    return resultingSelectedId;
   }
   function syncStoryboardToTimeline() {
     const videoTrack = project.tracks.find(track => track.kind === "video");
