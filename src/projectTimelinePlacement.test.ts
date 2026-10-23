@@ -17,6 +17,7 @@ import {
   moveCanonicalRootTimelineClip,
   ensureCanonicalTimelineClips,
   ensureCanonicalMasterShots,
+  moveCanonicalMasterShot,
   trimCanonicalRootTimelineClip,
   moveProjectTimelinePlacement,
 } from "./projectTimelinePlacement";
@@ -38,7 +39,9 @@ describe("shared project timeline placement engine", () => {
       duration: shot.duration,
     });
 
-    const moved = moveCompositionPlacement(promoted, shot.id, 7);
+    const videoTrackId = promoted.tracks.find(track => track.kind === "video")!.id;
+    const moved = moveCanonicalMasterShot(project, partialRoot, shot.id, videoTrackId, 7);
+    expect(moved.placements.find(placement => placement.id === shot.id)?.start).toBe(7);
     const resized = applyCompositionResizePreview(moved, {
       id: shot.id, start: 7, duration: 8, edge: "right", trims: [],
     });
