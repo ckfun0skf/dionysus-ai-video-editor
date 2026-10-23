@@ -637,6 +637,19 @@ export function ensureCanonicalMasterShots(
   return next;
 }
 
+
+/** Promote a legacy-only Master Shot placement before a Timeline drag/drop move. */
+export function moveCanonicalMasterShot(
+  project: DionysusProject,
+  root: CompositionDocument,
+  shotId: string,
+  targetTrackId: string,
+  start: number,
+): CompositionDocument {
+  const next = ensureCanonicalMasterShots(project, root, [shotId]);
+  return moveCompositionPlacementToTrack(next, shotId, targetTrackId, start);
+}
+
 export function applyCanonicalRootTimelineResize(
   project: DionysusProject,
   root: CompositionDocument,
