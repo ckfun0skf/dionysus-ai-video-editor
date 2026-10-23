@@ -1,6 +1,6 @@
 import type { DionysusProject, Shot, TimelineClip } from "./types";
-import type { CompositionDocument, CompositionPlacement } from "./compositionModel";
-import { assertValidCompositionDocument, applyCompositionResizePreview, insertCompositionPlacement, moveCompositionPlacement, moveCompositionPlacementToTrack } from "./compositionCommands";
+import type { CompositionDocument, CompositionLinkedAudioChild, CompositionPlacement, CompositionSourceReference } from "./compositionModel";
+import { addCompositionLinkedAudioChild, assertValidCompositionDocument, applyCompositionResizePreview, insertCompositionPlacement, moveCompositionPlacement, moveCompositionPlacementToTrack, trimCompositionPlacement } from "./compositionCommands";
 import { createRootCompositionPlacementForTimelineClip, migrateLegacyProjectToComposition, projectRootCompositionToLegacy } from "./compositionMigration";
 import { getMasterShotStart } from "./masterTimeline";
 import { calculateTimelineDropPosition } from "./timelinePlacement";
@@ -521,6 +521,170 @@ export function applyProjectTimelineInsertion(
 export type ProjectTimelineMoveTarget =
   | { type: "shot"; shotId: string }
   | { type: "clip"; clipId: string };
+
+/** Materialize a legacy clip and its linked owner/children before canonical edits. */
+export function ensureCanonicalTimelineClips(
+  project: DionysusProject,
+  root: CompositionDocument,
+  requestedIds: string[],
+): CompositionDocument {
+  const projectClips = project.timelineClips ?? [];
+  const selected = requestedIds.map(clipId => {
+    const clip = projectClips.find(item => item.id === clipId);
+    if (!clip) throw new Error("Timeline clip not found for canonical promotion: " + clipId);
+    return clip;
+  });
+  const ids = new Set(selected.map(clip => clip.id));
+  // Include owner clips for selected linked children, and all linked children for selected owners.
+  for (const clip of selected) {
+    if (clip.linkedVideoClipId) ids.add(clip.linkedVideoClipId);
+    for (const child of projectClips) {
+      if (child.linkedVideoClipId === clip.id) ids.add(child.id);
+    }
+  }
+  const expanded = [...ids].map(clipId => {
+    const clip = projectClips.find(item => item.id === clipId);
+    if (!clip) throw new Error("Linked Timeline clip not found for canonical promotion: " + clipId);
+    return clip;
+  }).sort((a, b) => Number(Boolean(a.linkedVideoClipId)) - Number(Boolean(b.linkedVideoClipId)));
+  let next = root;
+  for (const clip of expanded) {
+    if (
+      next.placements.some(placement => placement.id === clip.id) ||
+      next.placements.some(placement => (placement.linkedAudioChildren ?? []).some(child => child.id === clip.id))
+    ) continue;
+
+    // Canonical linked audio is owned by the video placement, not a second placement
+    // linked by ID. This also lets split/duplicate commands preserve the child metadata.
+    if (clip.kind === "audio" && clip.linkedVideoClipId) {
+      const owner = next.placements.find(placement => placement.id === clip.linkedVideoClipId);
+      if (owner) {
+        const asset = clip.assetId ? project.assets.find(item => item.id === clip.assetId) : undefined;
+        let source: CompositionSourceReference = { type: "none" };
+        if (clip.shotId) {
+          source = {
+            type: "shot",
+            shotId: clip.shotId,
+            ...(clip.slotId ? { slotId: clip.slotId } : {}),
+            ...(typeof (clip as unknown as Record<string, unknown>).shotVersionId === "string"
+              ? { versionId: (clip as unknown as Record<string, unknown>).shotVersionId as string }
+              : {}),
+          };
+        } else if (clip.assetId && !asset) {
+          source = { type: "missing", originalKind: clip.kind, originalId: clip.assetId };
+        } else if (asset?.kind === "clip") {
+          source = {
+            type: "clip",
+            assetId: asset.id,
+            ...(clip.clipVersionId ?? asset.selectedClipVersionId
+              ? { versionId: clip.clipVersionId ?? asset.selectedClipVersionId }
+              : {}),
+          };
+        } else if (asset) {
+          source = { type: "asset", assetId: asset.id };
+        } else if (clip.scriptVersionId) {
+          source = { type: "script", scriptVersionId: clip.scriptVersionId };
+        }
+        const legacyData = structuredClone(clip) as unknown as Record<string, unknown>;
+        const child: CompositionLinkedAudioChild = {
+          id: clip.id,
+          name: clip.name,
+          source,
+          ...(clip.sourceIn !== undefined ? { sourceIn: clip.sourceIn } : {}),
+          ...(clip.sourceOut !== undefined ? { sourceOut: clip.sourceOut } : {}),
+          ...(clip.muted !== undefined ? { muted: clip.muted } : {}),
+          ...(clip.volume !== undefined ? { volume: clip.volume } : {}),
+          ...(clip.fadeIn !== undefined ? { fadeIn: clip.fadeIn } : {}),
+          ...(clip.fadeOut !== undefined ? { fadeOut: clip.fadeOut } : {}),
+          legacyData,
+        };
+        next = addCompositionLinkedAudioChild(next, owner.id, child);
+        continue;
+      }
+    }
+    next = insertCompositionPlacement(next, createRootCompositionPlacementForTimelineClip(project, next, clip));
+  }
+  return next;
+}
+
+/** Promote every legacy-only clip affected by a resize, then apply the shared Composition resize command. */
+/**
+ * Promote missing Master Shot placements from the deterministic legacy migration before
+ * duration/start edits. Master Shots are timeline placements too; they must not fall back
+ * to shot-array timing when a partially migrated root is encountered.
+ */
+export function ensureCanonicalMasterShots(
+  project: DionysusProject,
+  root: CompositionDocument,
+  shotIds: string[],
+): CompositionDocument {
+  const migrated = migrateLegacyProjectToComposition(project).rootComposition;
+  let next = root;
+  for (const shotId of shotIds) {
+    if (next.placements.some(placement => placement.id === shotId)) continue;
+    const source = migrated.placements.find(placement =>
+      placement.id === shotId && placement.legacyData.entityType === "master-shot"
+    );
+    if (!source) continue;
+    let placement = structuredClone(source);
+    if (!next.tracks.some(track => track.id === placement.trackId)) {
+      const fallbackTrack = next.tracks.find(track => track.kind === "video");
+      if (!fallbackTrack) throw new Error("Cannot promote a Master Shot without a canonical video track.");
+      placement = { ...placement, trackId: fallbackTrack.id };
+    }
+    next = insertCompositionPlacement(next, placement);
+  }
+  return next;
+}
+
+
+/** Promote a legacy-only Master Shot placement before a Timeline drag/drop move. */
+export function moveCanonicalMasterShot(
+  project: DionysusProject,
+  root: CompositionDocument,
+  shotId: string,
+  targetTrackId: string,
+  start: number,
+): CompositionDocument {
+  const next = ensureCanonicalMasterShots(project, root, [shotId]);
+  return moveCompositionPlacementToTrack(next, shotId, targetTrackId, start);
+}
+
+export function applyCanonicalRootTimelineResize(
+  project: DionysusProject,
+  root: CompositionDocument,
+  preview: ClipResizePreview,
+): CompositionDocument {
+  const affectedIds = [preview.id, ...preview.trims.map(trim => trim.id)];
+  const shotIds = affectedIds.filter(placementId => project.shots.some(shot => shot.id === placementId));
+  const clipIds = affectedIds.filter(placementId => !shotIds.includes(placementId));
+  const promotedClips = ensureCanonicalTimelineClips(project, root, clipIds);
+  const promoted = ensureCanonicalMasterShots(project, promotedClips, shotIds);
+  return applyCompositionResizePreview(promoted, preview);
+}
+
+/** Promote a legacy-only clip and linked group before applying a canonical trim. */
+export function trimCanonicalRootTimelineClip(
+  project: DionysusProject,
+  root: CompositionDocument,
+  clipId: string,
+  duration: number,
+): CompositionDocument {
+  const next = ensureCanonicalTimelineClips(project, root, [clipId]);
+  return trimCompositionPlacement(next, clipId, duration);
+}
+
+/** Promote a legacy-only timeline clip into the live canonical root before applying a move. */
+export function moveCanonicalRootTimelineClip(
+  project: DionysusProject,
+  root: CompositionDocument,
+  clipId: string,
+  targetTrackId: string,
+  start: number,
+): CompositionDocument {
+  const next = ensureCanonicalTimelineClips(project, root, [clipId]);
+  return moveCompositionPlacementToTrack(next, clipId, targetTrackId, start);
+}
 
 /** Commit a valid placement move for either a Master Shot or an ordinary timeline clip. */
 export function moveProjectTimelinePlacement(

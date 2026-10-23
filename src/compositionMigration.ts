@@ -70,6 +70,15 @@ export function createRootCompositionPlacementForTimelineClip(
 }
 
 function sourceForLayer(project: DionysusProject, layer: CompositionLayer): CompositionSourceReference {
+  const metadata = layer as unknown as Record<string, unknown>;
+  if (typeof metadata.shotId === "string") {
+    return {
+      type: "shot",
+      shotId: metadata.shotId,
+      ...(typeof metadata.slotId === "string" ? { slotId: metadata.slotId } : {}),
+      ...(typeof metadata.shotVersionId === "string" ? { versionId: metadata.shotVersionId } : {}),
+    };
+  }
   if (layer.kind === "composition" && layer.childCompositionId) {
     const asset = findAsset(project, layer.childCompositionId);
     if (!asset || asset.kind !== "clip") return { type: "missing", originalKind: layer.kind, originalId: layer.childCompositionId };
@@ -517,15 +526,16 @@ export function projectRootCompositionToLegacy(
   const placedClips = rootComposition.placements
     .filter(placement => placement.legacyData.entityType !== "master-shot")
     .map(placement => {
-      const legacy = placement.legacyData as unknown as TimelineClip;
+      const legacy = placement.legacyData as unknown as TimelineClip & Record<string, unknown>;
       const existing = existingClips.get(placement.id);
-      const base = existing ? { ...existing, ...legacy } : legacy;
+      const base = (existing ? { ...existing, ...legacy } : legacy) as TimelineClip & Record<string, unknown>;
       if (!base || typeof base.kind !== "string") {
         throw new Error(`Root Composition placement "${placement.id}" has no compatible legacy clip metadata.`);
       }
       const sourceRef = placement.source;
       const {
-        assetId: _oldAssetId, shotId: _oldShotId, slotId: _oldSlotId,
+        assetId: _oldAssetId, childCompositionId: _oldChildCompositionId,
+        shotId: _oldShotId, slotId: _oldSlotId, shotVersionId: _oldShotVersionId,
         clipVersionId: _oldClipVersionId, scriptVersionId: _oldScriptVersionId,
         sourceIn: _oldSourceIn, sourceOut: _oldSourceOut,
         linkedVideoClipId: _oldLinkedVideoClipId, ...baseFields
@@ -557,13 +567,29 @@ export function projectRootCompositionToLegacy(
   // translating their start by the canonical shot delta so old consumers remain aligned.
   const linkedAudioChildren: TimelineClip[] = rootComposition.placements.flatMap(owner =>
     (owner.linkedAudioChildren ?? []).map(child => {
-      const legacy = child.legacyData as unknown as TimelineClip;
+      const legacy = child.legacyData as unknown as TimelineClip & Record<string, unknown>;
+      const {
+        assetId: _oldAssetId,
+        childCompositionId: _oldChildCompositionId,
+        shotId: _oldShotId,
+        slotId: _oldSlotId,
+        shotVersionId: _oldShotVersionId,
+        clipVersionId: _oldClipVersionId,
+        scriptVersionId: _oldScriptVersionId,
+        sourceIn: _oldSourceIn,
+        sourceOut: _oldSourceOut,
+        linkedVideoClipId: _oldLinkedVideoClipId,
+        ...baseFields
+      } = legacy;
       const sourceRef = child.source;
       const assetId = sourceRef.type === "asset" || sourceRef.type === "clip" ? sourceRef.assetId
         : sourceRef.type === "missing" ? sourceRef.originalId : undefined;
       const shotId = sourceRef.type === "shot" ? sourceRef.shotId : undefined;
+      const slotId = sourceRef.type === "shot" ? sourceRef.slotId : undefined;
+      const clipVersionId = sourceRef.type === "clip" ? sourceRef.versionId : undefined;
+      const scriptVersionId = sourceRef.type === "script" ? sourceRef.scriptVersionId : undefined;
       return {
-        ...legacy,
+        ...baseFields,
         id: child.id,
         name: child.name,
         kind: "audio" as const,
@@ -572,6 +598,9 @@ export function projectRootCompositionToLegacy(
         duration: owner.duration,
         ...(assetId ? { assetId } : {}),
         ...(shotId ? { shotId } : {}),
+        ...(slotId ? { slotId } : {}),
+        ...(clipVersionId ? { clipVersionId } : {}),
+        ...(scriptVersionId ? { scriptVersionId } : {}),
         ...(child.sourceIn !== undefined ? { sourceIn: child.sourceIn } : {}),
         ...(child.sourceOut !== undefined ? { sourceOut: child.sourceOut } : {}),
         ...(child.muted !== undefined ? { muted: child.muted } : {}),

@@ -1,7 +1,7 @@
 import type { ClipVersion, DionysusProject, GenerationRecord } from "./types";
 import type { CompositionDocument, CompositionPinnedVersion } from "./compositionModel";
 import { migrateLegacyProjectToComposition } from "./compositionMigration";
-import { collectCompositionLayers, getCompositionDuration } from "./compositionRenderer";
+import { collectCompositionLayers, collectRootCompositionLayers, getCompositionDuration } from "./compositionRenderer";
 
 /**
  * Capture a structurally editable Master Timeline snapshot.
@@ -9,12 +9,14 @@ import { collectCompositionLayers, getCompositionDuration } from "./compositionR
  */
 export function createClipVersionSnapshot(
   project: DionysusProject,
-  options: { assetId: string; versionId: string; versionName: string; createdAt?: string },
+  options: { assetId: string; versionId: string; versionName: string; createdAt?: string; rootComposition?: CompositionDocument },
 ): ClipVersion {
   const createdAt = options.createdAt ?? new Date().toISOString();
   const migrated = migrateLegacyProjectToComposition(project);
-  const root = structuredClone(migrated.rootComposition);
-  const flattenedLayers = structuredClone(collectCompositionLayers(project));
+  const root = structuredClone(options.rootComposition ?? migrated.rootComposition);
+  const flattenedLayers = structuredClone(options.rootComposition
+    ? collectRootCompositionLayers(project, root)
+    : collectCompositionLayers(project));
   const duration = Math.max(0.1, root.duration, getCompositionDuration(flattenedLayers));
 
   const pinnedVersions: CompositionPinnedVersion[] = [];
@@ -45,30 +47,44 @@ export function createClipVersionSnapshot(
     // subtree verbatim; only append referenced children that are not already embedded.
     const children: CompositionDocument[] = structuredClone(document.nestedCompositions ?? []);
     const childIds = new Set(children.map(child => child.id));
-    for (const placement of document.placements) {
-      if (placement.source.type !== "clip" || !placement.source.versionId) continue;
-      const key = placement.source.assetId + "@" + placement.source.versionId;
-      addPin({ assetId: placement.source.assetId, versionId: placement.source.versionId });
-      if (ancestry.has(key)) continue;
-      const child = compositionForClip(placement.source.assetId, placement.source.versionId);
-      if (!child || childIds.has(child.id)) continue;
+    const attachShotSlotVersion = (shotId: string, slotId: string, versionId: string) => {
+      addPin({ shotId, slotId, versionId });
+      const key = "shot:" + shotId + ":" + slotId + "@" + versionId;
+      if (ancestry.has(key)) return;
+      const child = migrated.legacyShotSlotCompositions.find(candidate =>
+        candidate.legacyData?.shotId === shotId
+        && candidate.legacyData?.slotId === slotId
+        && candidate.legacyData?.versionId === versionId
+      );
+      if (!child || childIds.has(child.id)) return;
       childIds.add(child.id);
       children.push(attachChildren(child, new Set([...ancestry, key])));
+    };
+    for (const placement of document.placements) {
+      if (placement.source.type === "clip" && placement.source.versionId) {
+        const key = placement.source.assetId + "@" + placement.source.versionId;
+        addPin({ assetId: placement.source.assetId, versionId: placement.source.versionId });
+        if (ancestry.has(key)) continue;
+        const child = compositionForClip(placement.source.assetId, placement.source.versionId);
+        if (!child || childIds.has(child.id)) continue;
+        childIds.add(child.id);
+        children.push(attachChildren(child, new Set([...ancestry, key])));
+      } else if (placement.source.type === "shot") {
+        const source = placement.source;
+        const slotId = source.slotId;
+        if (!slotId) continue;
+        const shot = project.shots.find(candidate => candidate.id === source.shotId);
+        const slot = shot?.slots.find(candidate => candidate.id === slotId);
+        const versionId = source.versionId ?? slot?.selectedVersionId;
+        if (versionId) attachShotSlotVersion(source.shotId, slotId, versionId);
+      }
     }
     if (includeSelectedShotSlots) {
       for (const shot of project.shots) {
         for (const slot of shot.slots) {
           const selected = slot.versions.find(version => version.id === slot.selectedVersionId);
           if (!selected) continue;
-          addPin({ shotId: shot.id, slotId: slot.id, versionId: selected.id });
-          const child = migrated.legacyShotSlotCompositions.find(document =>
-            document.legacyData?.shotId === shot.id
-            && document.legacyData?.slotId === slot.id
-            && document.legacyData?.versionId === selected.id
-          );
-          if (!child || childIds.has(child.id)) continue;
-          childIds.add(child.id);
-          children.push(attachChildren(child, ancestry));
+          attachShotSlotVersion(shot.id, slot.id, selected.id);
         }
       }
     }

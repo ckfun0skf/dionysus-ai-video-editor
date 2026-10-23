@@ -54,9 +54,14 @@ function actionNamed(name: string): HTMLButtonElement {
 }
 
 function persistedProject(): typeof sampleProject {
-  const raw = localStorage.getItem("dionysus.project.v1");
-  if (!raw) throw new Error("Expected project to be persisted");
-  return JSON.parse(raw) as typeof sampleProject;
+  const canonicalRaw = localStorage.getItem("dionysus.composition.v2");
+  if (canonicalRaw) {
+    const envelope = JSON.parse(canonicalRaw) as { project?: typeof sampleProject };
+    if (envelope.project) return envelope.project;
+  }
+  const legacyRaw = localStorage.getItem("dionysus.project.v1");
+  if (!legacyRaw) throw new Error("Expected project to be persisted");
+  return JSON.parse(legacyRaw) as typeof sampleProject;
 }
 
 async function flushEffects() {
@@ -570,6 +575,35 @@ describe("App history integration", () => {
     click(option!);
     await flushEffects();
     expect(container.querySelector<HTMLInputElement>('.version-panel input[aria-label="Clip slot name"]')?.value).toBe("Opening image");
+  });
+
+  it("creates new storyboard versions with independent canonical Composition snapshots", async () => {
+    const storyboardNav = Array.from(container.querySelectorAll<HTMLButtonElement>(".nav-item")).find(button => button.textContent?.includes("Storyboard"));
+    if (!storyboardNav) throw new Error("Storyboard navigation is missing");
+    click(storyboardNav);
+    await flushEffects();
+    const toggle = container.querySelector<HTMLButtonElement>(".shot-version-toggle");
+    if (!toggle) throw new Error("Storyboard version toggle is missing");
+    click(toggle);
+    const option = Array.from(container.querySelectorAll<HTMLButtonElement>(".shot-version-option")).find(button => button.textContent?.includes("Opening image"));
+    if (!option) throw new Error("Opening image version is missing");
+    click(option);
+    await flushEffects();
+
+    const create = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Create new version"));
+    if (!create) throw new Error("Create new version action is missing");
+    click(create);
+    await flushEffects();
+
+    const project = persistedProject();
+    const slot = project.shots.flatMap(shot => shot.slots).find(item => item.name === "Opening image");
+    expect(slot).toBeTruthy();
+    const created = slot!.versions.find(version => version.id === slot!.selectedVersionId);
+    expect(created?.composition).toBeDefined();
+    expect(created?.composition?.placements).toHaveLength(created?.layers.length ?? 0);
+    expect(created?.composition?.width).toBeGreaterThan(0);
+    expect(created?.composition?.height).toBeGreaterThan(0);
+    expect(created?.composition?.legacyData?.description).toBe(created?.description);
   });
 
   it("edits Master Shot placement independently from Version and Slot internal duration", async () => {
@@ -1694,6 +1728,11 @@ describe("Integrated timeline editor", () => {
     expect(clip?.canvasWidth).toBe(1920);
     expect(clip?.canvasHeight).toBe(1080);
     expect(clip?.clipVersions?.[0].layers).toEqual([]);
+    expect(clip?.clipVersions?.[0].composition).toBeDefined();
+    expect(clip?.clipVersions?.[0].composition?.duration).toBe(4);
+    expect(clip?.clipVersions?.[0].composition?.width).toBe(1920);
+    expect(clip?.clipVersions?.[0].composition?.height).toBe(1080);
+    expect(clip?.clipVersions?.[0].composition?.placements).toHaveLength(0);
     const edit = Array.from(container.querySelectorAll<HTMLButtonElement>(".asset-card button")).find(button => button.textContent?.includes("Edit Timeline"));
     expect(edit).toBeTruthy();
     click(edit!);
@@ -1783,6 +1822,11 @@ describe("Integrated timeline editor", () => {
     expect(assetAfter.clipVersions![0].layers.map(layer => layer.id)).toEqual(originalLayerIds);
     expect(assetAfter.clipVersions![0].layers).toHaveLength(1);
     expect(assetAfter.clipVersions![1]).toMatchObject({ duration: 6, layers: [], name: "Version 2" });
+    expect(assetAfter.clipVersions![1].composition).toBeDefined();
+    expect(assetAfter.clipVersions![1].composition?.duration).toBe(6);
+    expect(assetAfter.clipVersions![1].composition?.placements).toHaveLength(0);
+    expect(assetAfter.clipVersions![1].composition?.legacyData?.description).toBe(assetAfter.clipVersions![1].description);
+    expect(assetAfter.clipVersions![1].composition?.tracks.map(track => track.id)).toEqual(assetAfter.clipVersions![1].tracks?.map(track => track.id));
     expect(assetAfter.clipVersions![1].tracks?.map(track => track.id)).not.toContain(assetAfter.clipVersions![0].tracks?.[0]?.id);
     expect(container.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toContain("Version 2");
     expect(container.querySelector(".nested-timeline-empty")).toBeTruthy();

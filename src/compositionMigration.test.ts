@@ -12,7 +12,7 @@ describe("migrateLegacyProjectToComposition", () => {
     );
     project.timelineClips = [
       { id: "master-video", name: "Source shot", kind: "video", trackId: "track-video-1", start: 4, duration: 6, assetId: "migration-video", sourceIn: 2, sourceOut: 8, x: 10, y: 5, width: 80, height: 90 },
-      { id: "master-audio", name: "Linked audio", kind: "audio", trackId: "track-audio-1", start: 4, duration: 6, assetId: "migration-audio", linkedVideoClipId: "master-video", sourceIn: 1, sourceOut: 7, volume: 0.4, fadeIn: 0.5, fadeOut: 1 },
+      { id: "master-audio", name: "Linked audio", kind: "audio", trackId: "track-audio-1", start: 4, duration: 6, assetId: "migration-audio", linkedVideoClipId: "master-video", sourceIn: 1, sourceOut: 7, volume: 0.4, fadeIn: 0.5, fadeOut: 1, clipVersionId: "stale-linked-clip-version", ...({ childCompositionId: "stale-child-composition", shotVersionId: "stale-shot-version" } as Record<string, unknown>) },
     ];
     const result = migrateLegacyProjectToComposition(project);
     expect(result.schemaVersion).toBe("2.0");
@@ -38,6 +38,10 @@ describe("migrateLegacyProjectToComposition", () => {
       kind: "audio", trackId: "track-video-1", start: 4, duration: 6,
       linkedVideoClipId: "master-video", sourceIn: 1, sourceOut: 7, volume: 0.4,
     });
+    const projectedAudio = projected.timelineClips?.find(clip => clip.id === "master-audio")!;
+    expect(projectedAudio).not.toHaveProperty("clipVersionId");
+    expect(projectedAudio).not.toHaveProperty("childCompositionId");
+    expect(projectedAudio).not.toHaveProperty("shotVersionId");
   });
 
   it("clears stale legacy source-selector IDs when projecting a changed canonical typed source", () => {
@@ -52,6 +56,7 @@ describe("migrateLegacyProjectToComposition", () => {
       id: "source-placement", name: "Source placement", kind: "video", trackId: track.id,
       start: 0, duration: 4, assetId: "legacy-source",
       clipVersionId: "stale-clip-version", scriptVersionId: "stale-script-version",
+      ...({ childCompositionId: "stale-child-composition", shotVersionId: "stale-shot-version" } as Record<string, unknown>),
     }];
     const root = migrateLegacyProjectToComposition(project).rootComposition;
     const assetChanged = updateCompositionPlacement(root, "source-placement", {
@@ -61,6 +66,8 @@ describe("migrateLegacyProjectToComposition", () => {
     expect(assetProjection).toMatchObject({ assetId: "canonical-source" });
     expect(assetProjection).not.toHaveProperty("clipVersionId");
     expect(assetProjection).not.toHaveProperty("scriptVersionId");
+    expect(assetProjection).not.toHaveProperty("childCompositionId");
+    expect(assetProjection).not.toHaveProperty("shotVersionId");
 
     const scriptChanged = updateCompositionPlacement(root, "source-placement", {
       source: { type: "script", scriptVersionId: "canonical-script-version" },
@@ -69,6 +76,46 @@ describe("migrateLegacyProjectToComposition", () => {
     expect(scriptProjection).not.toHaveProperty("assetId");
     expect(scriptProjection).not.toHaveProperty("clipVersionId");
     expect(scriptProjection).toMatchObject({ scriptVersionId: "canonical-script-version" });
+  });
+
+  it("preserves Shot Slot source references in legacy nested Clip Version layers", () => {
+    const project = structuredClone(sampleProject);
+    const shot = project.shots[0];
+    const slot = shot.slots[0];
+    project.assets.push({
+      id: "shot-source-clip",
+      name: "Clip containing a Shot Slot source",
+      kind: "clip",
+      clipVersions: [{
+        id: "shot-source-clip-v1",
+        name: "Version 1",
+        description: "",
+        duration: 4,
+        layers: [{
+          id: "nested-shot-source",
+          name: "Pinned Shot Slot",
+          kind: "video",
+          start: 0,
+          duration: 4,
+          ...({
+            shotId: shot.id,
+            slotId: slot.id,
+            shotVersionId: slot.selectedVersionId,
+          } as Record<string, unknown>),
+        }],
+        scriptVersionIds: [],
+        generationRecords: [],
+      }],
+    });
+
+    const result = migrateLegacyProjectToComposition(project);
+    const nested = result.clipCompositions.find(item => item.legacyData?.assetId === "shot-source-clip");
+    expect(nested?.placements.find(item => item.id === "nested-shot-source")?.source).toEqual({
+      type: "shot",
+      shotId: shot.id,
+      slotId: slot.id,
+      versionId: slot.selectedVersionId,
+    });
   });
 
   it("pins Shot Slot and Clip Asset versions instead of resolving to a mutable latest version", () => {

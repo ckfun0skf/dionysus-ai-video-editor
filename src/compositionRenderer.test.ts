@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { collectCompositionLayers, getCompositionDuration, isPlayableAudioLayer, waitForVideoFrame } from "./compositionRenderer";
+import { collectCompositionLayers, collectRootCompositionLayers, getCompositionDuration, isPlayableAudioLayer, waitForVideoFrame } from "./compositionRenderer";
 import { sampleProject } from "./sampleProject";
+import { migrateLegacyProjectToComposition } from "./compositionMigration";
+import type { ClipVersion } from "./types";
 
 describe("compositionRenderer", () => {
   it("waits for decoded video data instead of treating loaded metadata as a drawable frame", async () => {
@@ -18,6 +20,161 @@ describe("compositionRenderer", () => {
     await waiting;
     expect(completed).toBe(true);
   });
+  it("prefers canonical nested Composition placements over stale compatibility layers", () => {
+    const project = structuredClone(sampleProject);
+    const shot = project.shots[0];
+    const slotVersion = shot.slots[0].versions[0];
+    slotVersion.layers = [{ id: "canonical-shot-layer", name: "Canonical shot layer", kind: "text", start: 0, duration: 2 }];
+    const shotDocument = migrateLegacyProjectToComposition(project).legacyShotSlotCompositions.find(document =>
+      document.legacyData?.shotId === shot.id &&
+      document.legacyData?.slotId === shot.slots[0].id &&
+      document.legacyData?.versionId === slotVersion.id
+    );
+    expect(shotDocument).toBeDefined();
+    slotVersion.composition = structuredClone(shotDocument!);
+    slotVersion.layers = [{ id: "stale-shot-layer", name: "Stale projection", kind: "text", start: 0, duration: 2 }];
+
+    const clipVersion: ClipVersion = {
+      id: "canonical-clip-version",
+      name: "Canonical clip version",
+      description: "",
+      duration: 2,
+      layers: [{ id: "canonical-clip-layer", name: "Canonical clip layer", kind: "text" as const, start: 0, duration: 2 }],
+      scriptVersionIds: [],
+      generationRecords: [],
+    };
+    project.assets.push({
+      id: "canonical-clip-asset",
+      name: "Canonical clip",
+      kind: "clip",
+      selectedClipVersionId: clipVersion.id,
+      clipVersions: [clipVersion],
+    });
+    const clipDocument = migrateLegacyProjectToComposition(project).clipCompositions.find(document =>
+      document.legacyData?.assetId === "canonical-clip-asset" &&
+      document.legacyData?.clipVersionId === clipVersion.id
+    );
+    expect(clipDocument).toBeDefined();
+    clipVersion.composition = structuredClone(clipDocument!);
+    clipVersion.layers = [{ id: "stale-clip-layer", name: "Stale projection", kind: "text", start: 0, duration: 2 }];
+    project.timelineClips = [{
+      id: "canonical-clip-instance",
+      name: "Canonical clip instance",
+      kind: "clip",
+      trackId: "track-video-1",
+      start: 5,
+      duration: 2,
+      assetId: "canonical-clip-asset",
+      clipVersionId: clipVersion.id,
+    }];
+
+    const layers = collectCompositionLayers(project);
+    expect(layers).toContainEqual(expect.objectContaining({
+      id: "canonical-shot-layer",
+      name: "Canonical shot layer",
+      kind: "text",
+    }));
+    expect(layers).toContainEqual(expect.objectContaining({
+      id: "canonical-clip-instance:canonical-clip-layer:0",
+      name: "Canonical clip layer",
+      kind: "text",
+      start: 5,
+    }));
+    expect(layers.some(layer => layer.id === "stale-shot-layer" || layer.id.includes("stale-clip-layer"))).toBe(false);
+  });
+
+  it("renders canonical linked-audio children for nested Shot and Slot Versions", () => {
+    const project = structuredClone(sampleProject);
+    project.assets.push({
+      id: "nested-video-source",
+      name: "Nested video",
+      kind: "video",
+      path: "data:video/webm;base64,AA==",
+    });
+    const shot = project.shots[0];
+    const slot = shot.slots[0];
+    const version = slot.versions[0];
+    version.layers = [{
+      id: "nested-video-owner",
+      name: "Nested video owner",
+      kind: "video",
+      start: 0,
+      duration: 2,
+      assetId: "nested-video-source",
+    }];
+    const migrated = migrateLegacyProjectToComposition(project);
+    const canonical = migrated.legacyShotSlotCompositions.find(document =>
+      document.legacyData?.shotId === shot.id &&
+      document.legacyData?.slotId === slot.id &&
+      document.legacyData?.versionId === version.id
+    );
+    expect(canonical).toBeDefined();
+    version.composition = structuredClone(canonical!);
+    version.composition.placements[0].linkedAudioChildren = [{
+      id: "nested-linked-audio",
+      name: "Nested linked audio",
+      source: { type: "asset", assetId: "nested-video-source" },
+      sourceIn: 0,
+      sourceOut: 2,
+      muted: true,
+      volume: 0.4,
+      legacyData: {
+        kind: "audio",
+        assetId: "stale-audio-source",
+        linkedVideoClipId: "nested-video-owner",
+      },
+    }, {
+      id: "nested-owner-muted-audio",
+      name: "Audio muted by owner track",
+      source: { type: "asset", assetId: "nested-video-source" },
+      legacyData: { kind: "audio", assetId: "nested-video-source" },
+    }];
+    version.composition.tracks[0].muted = true;
+    version.composition.tracks.push({
+      id: "nested-muted-audio-track",
+      name: "Muted Audio",
+      kind: "audio",
+      order: version.composition.tracks.length,
+      muted: true,
+      legacyData: { kind: "audio", muted: true },
+    });
+    version.composition.placements.push({
+      id: "nested-muted-track-audio",
+      name: "Audio on muted track",
+      trackId: "nested-muted-audio-track",
+      start: 0,
+      duration: 2,
+      order: version.composition.placements.length,
+      source: { type: "asset", assetId: "nested-video-source" },
+      legacyData: { kind: "audio", assetId: "nested-video-source" },
+    });
+
+    const layers = collectCompositionLayers(project);
+    const linkedAudio = layers.find(layer => layer.id === "nested-linked-audio");
+    expect(linkedAudio).toMatchObject({
+      kind: "audio",
+      assetId: "nested-video-source",
+      linkedVideoClipId: "nested-video-owner",
+      start: 0,
+      duration: 2,
+      sourceIn: 0,
+      sourceOut: 2,
+      muted: true,
+      volume: 0.4,
+    });
+    expect(isPlayableAudioLayer(linkedAudio!, project.assets.find(asset => asset.id === "nested-video-source"))).toBe(true);
+    expect(layers.find(layer => layer.id === "nested-owner-muted-audio")).toMatchObject({
+      kind: "audio",
+      muted: true,
+      assetId: "nested-video-source",
+    });
+    expect(layers.find(layer => layer.id === "nested-muted-track-audio")).toMatchObject({
+      kind: "audio",
+      muted: true,
+      assetId: "nested-video-source",
+    });
+  });
+
   it("collects selected-version layers with absolute shot and slot offsets", () => {
     const project = structuredClone(sampleProject);
     project.shots[0].slots[0].versions[0].layers = [{ id: "layer-selected", name: "Selected layer", kind: "image", start: 1, duration: 2 }];
@@ -43,6 +200,42 @@ describe("compositionRenderer", () => {
     const layers = collectCompositionLayers(project);
     expect(layers.slice(0, 2).map(layer => layer.id)).toEqual(["top-layer", "bottom-layer"]);
     expect(layers.map(layer => layer.start)).toEqual([4, 0]);
+  });
+
+  it("uses canonical root placements instead of stale Project timeline projections for rendering", () => {
+    const project = structuredClone(sampleProject);
+    project.assets.push({
+      id: "canonical-root-video",
+      name: "Canonical root video",
+      kind: "video",
+      path: "data:video/webm;base64,AA==",
+    });
+    project.timelineClips = [{
+      id: "canonical-root-placement",
+      name: "Legacy name",
+      kind: "video",
+      trackId: "track-video-1",
+      start: 0,
+      duration: 2,
+      assetId: "canonical-root-video",
+      sourceIn: 0,
+      sourceOut: 2,
+    }];
+    const root = migrateLegacyProjectToComposition(project).rootComposition;
+    root.placements = root.placements.map(placement => placement.id === "canonical-root-placement"
+      ? { ...placement, name: "Canonical name", start: 3, sourceIn: 1, sourceOut: 3 }
+      : placement);
+
+    const layers = collectRootCompositionLayers(project, root);
+    expect(layers).toContainEqual(expect.objectContaining({
+      id: "canonical-root-placement",
+      name: "Canonical name",
+      start: 3,
+      sourceIn: 1,
+      sourceOut: 3,
+    }));
+    expect(collectCompositionLayers(project).find(layer => layer.id === "canonical-root-placement"))
+      .toMatchObject({ name: "Legacy name", start: 0, sourceIn: 0, sourceOut: 2 });
   });
 
   it("includes referenced master timeline clips and their media type", () => {

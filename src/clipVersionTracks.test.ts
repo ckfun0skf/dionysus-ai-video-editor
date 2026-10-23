@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { sampleProject } from "./sampleProject";
-import { addClipVersionLayer, addClipVersionTrack, deleteClipVersionLayer, duplicateClipVersionComposition, moveClipVersionLayer, normalizeClipVersionTracks, updateClipVersionLayer } from "./clipVersionTracks";
+import { addClipVersionLayer, addClipVersionTrack, deleteClipVersionLayer, duplicateClipVersionComposition, ensureClipVersionComposition, moveClipVersionLayer, normalizeClipVersionTracks, updateClipVersionDescription, updateClipVersionDuration, updateClipVersionLayer, updateClipVersionTrack } from "./clipVersionTracks";
 import { validateProject } from "./projectValidation";
 
 describe("normalizeClipVersionTracks", () => {
@@ -54,6 +54,82 @@ describe("nested Clip Version track operations", () => {
     const withSecondLayer = addClipVersionLayer(withLayers, { id: "code-1", name: "Code", kind: "procedural", start: 1, duration: 2 }, "video-2");
     expect(withSecondLayer.tracks?.map(track => track.id)).toContain("video-2");
     expect(withSecondLayer.layers.filter(layer => layer.trackId === "video-2").map(layer => layer.id)).toEqual(["image-1", "code-1"]);
+  });
+
+  it("keeps nested Version description aligned with canonical Composition metadata", () => {
+    const version = structuredClone(sampleProject.shots[0].slots[0].versions[0]);
+    const withLayer = addClipVersionLayer(version, {
+      id: "nested-description-layer",
+      name: "Description layer",
+      kind: "video",
+      start: 0,
+      duration: 2,
+    });
+    const updated = updateClipVersionDescription(withLayer, "Updated canonical description");
+
+    expect(updated.description).toBe("Updated canonical description");
+    expect(updated.composition?.legacyData?.description).toBe("Updated canonical description");
+    expect(withLayer.composition?.legacyData?.description).not.toBe("Updated canonical description");
+  });
+
+  it("materializes a canonical Composition for an empty nested Version", () => {
+    const version = {
+      ...structuredClone(sampleProject.shots[0].slots[0].versions[0]),
+      id: "empty-canonical-version",
+      duration: 6,
+      layers: [],
+      tracks: [{ id: "fresh-empty-video-track", name: "Video 1", kind: "video" as const }],
+      composition: undefined,
+    };
+    const ensured = ensureClipVersionComposition(version, { width: 1080, height: 1920 });
+
+    expect(ensured.composition).toMatchObject({
+      duration: 6,
+      width: 1080,
+      height: 1920,
+      placements: [],
+      tracks: [{ id: "fresh-empty-video-track", name: "Video 1", kind: "video" }],
+    });
+    expect(version.composition).toBeUndefined();
+  });
+
+  it("updates nested duration in canonical Composition and compatibility projection", () => {
+    const version = structuredClone(sampleProject.shots[0].slots[0].versions[0]);
+    const withLayer = addClipVersionLayer(version, {
+      id: "nested-duration-layer",
+      name: "Duration layer",
+      kind: "video",
+      start: 0,
+      duration: 2,
+    });
+    const updated = updateClipVersionDuration(withLayer, 3);
+
+    expect(updated.duration).toBe(3);
+    expect(updated.composition?.duration).toBe(3);
+    expect(updated.layers.find(layer => layer.id === "nested-duration-layer")?.duration).toBe(2);
+    expect(withLayer.duration).not.toBe(3);
+    expect(withLayer.composition?.duration).not.toBe(3);
+    expect(() => updateClipVersionDuration(withLayer, Number.NaN)).toThrow(/duration/i);
+  });
+
+  it("updates nested track mute in canonical Composition and compatibility projection", () => {
+    const version = structuredClone(sampleProject.shots[0].slots[0].versions[0]);
+    const withAudio = addClipVersionLayer(version, {
+      id: "nested-audio-for-track-mute",
+      name: "Nested audio",
+      kind: "audio",
+      start: 0,
+      duration: 2,
+    });
+    const audioTrack = withAudio.tracks?.find(track => track.kind === "audio");
+    expect(audioTrack).toBeDefined();
+    const before = structuredClone(withAudio);
+    const muted = updateClipVersionTrack(withAudio, audioTrack!.id, { muted: true });
+
+    expect(muted.composition?.tracks.find(track => track.id === audioTrack!.id)?.muted).toBe(true);
+    expect(muted.tracks?.find(track => track.id === audioTrack!.id)?.muted).toBe(true);
+    expect(before.composition?.tracks.find(track => track.id === audioTrack!.id)?.muted).toBeUndefined();
+    expect(() => updateClipVersionTrack(withAudio, "missing-track", { muted: true })).toThrow(/track/i);
   });
 
   it("inserts layers through Composition commands without mutating the original version", () => {
@@ -240,6 +316,74 @@ describe("nested Clip Version track operations", () => {
     expect(version.composition?.placements.find(item => item.id === "inspector-placement")?.start).toBe(1);
   });
 
+  it("clears stale clip identity when a nested placement changes to a direct asset", () => {
+    const version = addClipVersionLayer(
+      structuredClone(sampleProject.shots[0].slots[0].versions[0]),
+      {
+        id: "source-kind-switch",
+        name: "Nested composition source",
+        kind: "composition",
+        start: 0,
+        duration: 2,
+        assetId: "old-child",
+        childCompositionId: "old-child",
+        clipVersionId: "old-version",
+      } as unknown as import("./types").CompositionLayer,
+    );
+
+    const edited = updateClipVersionLayer(version, "source-kind-switch", {
+      kind: "video",
+      assetId: "new-asset",
+      childCompositionId: undefined,
+      clipVersionId: undefined,
+    });
+    const placement = edited.composition?.placements.find(item => item.id === "source-kind-switch");
+    const layer = edited.layers.find(item => item.id === "source-kind-switch");
+
+    expect(placement?.source).toEqual({ type: "asset", assetId: "new-asset" });
+    expect(layer?.assetId).toBe("new-asset");
+    expect(layer).not.toHaveProperty("childCompositionId");
+    expect(layer).not.toHaveProperty("clipVersionId");
+  });
+
+  it("routes inspector edits through Composition validation and clears optional source ranges", () => {
+    const base = addClipVersionLayer(
+      structuredClone(sampleProject.shots[0].slots[0].versions[0]),
+      {
+        id: "validated-inspector-layer",
+        name: "Before",
+        kind: "video",
+        start: 0,
+        duration: 2,
+        assetId: "source-asset",
+        sourceIn: 1,
+        sourceOut: 3,
+      },
+    );
+
+    const cleared = updateClipVersionLayer(base, "validated-inspector-layer", {
+      sourceIn: undefined,
+      sourceOut: undefined,
+      start: 1,
+    });
+    const placement = cleared.composition?.placements.find(item => item.id === "validated-inspector-layer");
+    expect(placement).toMatchObject({ start: 1 });
+    expect(placement?.sourceIn).toBeUndefined();
+    expect(placement?.sourceOut).toBeUndefined();
+    const projectedLayer = cleared.layers.find(layer => layer.id === "validated-inspector-layer");
+    expect(projectedLayer?.start).toBe(1);
+    expect(projectedLayer?.sourceIn).toBeUndefined();
+    expect(projectedLayer?.sourceOut).toBeUndefined();
+    expect(() => updateClipVersionLayer(base, "validated-inspector-layer", {
+      trackId: "missing-track",
+    })).toThrow(/track/i);
+    expect(base.composition?.placements.find(item => item.id === "validated-inspector-layer")).toMatchObject({
+      start: 0,
+      sourceIn: 1,
+      sourceOut: 3,
+    });
+  });
+
   it("preserves canonical Shot Slot and script source references during inspector edits", () => {
     const base = addClipVersionLayer(
       structuredClone(sampleProject.shots[0].slots[0].versions[0]),
@@ -300,6 +444,7 @@ describe("nested Clip Version track operations", () => {
     let n = 0;
     const duplicate = duplicateClipVersionComposition(source, kind => kind + "-copy-" + (++n));
     const duplicatedDoc = duplicate.composition!;
+    expect(duplicatedDoc.id).not.toBe(composition.id);
     const sourcePlacementIds = new Set(composition.placements.map(item => item.id));
     const sourceTrackIds = new Set(composition.tracks.map(item => item.id));
     expect(duplicatedDoc.placements.every(item => !sourcePlacementIds.has(item.id))).toBe(true);
@@ -333,7 +478,10 @@ describe("nested Clip Version track operations", () => {
     expect((duplicate.layers[1] as unknown as Record<string, unknown>).linkedVideoClipId).toBe(duplicate.layers[0].id);
     expect(duplicate.layers[0].trackId).not.toBe("legacy-video-track");
     expect(duplicate.layers[1].trackId).not.toBe("legacy-audio-track");
-    expect(duplicate.composition).toBeUndefined();
+    expect(duplicate.composition).toBeDefined();
+    expect(duplicate.composition?.placements).toHaveLength(2);
+    expect(duplicate.composition?.placements.find(item => item.id === duplicate.layers[1].id)?.linkedToPlacementId).toBe(duplicate.layers[0].id);
+    expect(version.composition).toBeUndefined();
   });
 
 });

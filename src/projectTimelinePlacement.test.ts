@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { sampleProject } from "./sampleProject";
 import { migrateLegacyProjectToComposition, projectRootCompositionToLegacy } from "./compositionMigration";
-import { moveCompositionPlacement, updateCompositionPlacement } from "./compositionCommands";
+import { applyCompositionResizePreview, duplicateCompositionPlacement, moveCompositionPlacement, splitCompositionPlacement, updateCompositionPlacement } from "./compositionCommands";
 import {
+  applyCanonicalRootTimelineResize,
   applyProjectTimelineClipResize,
   applyProjectTimelineInsertion,
   applyCanonicalCompositionInsertion,
@@ -13,10 +14,202 @@ import {
   calculateProjectTimelineClipResizePreview,
   calculateProjectTimelineDropPosition,
   getProjectTimelinePlacementItems,
+  moveCanonicalRootTimelineClip,
+  ensureCanonicalTimelineClips,
+  ensureCanonicalMasterShots,
+  moveCanonicalMasterShot,
+  trimCanonicalRootTimelineClip,
   moveProjectTimelinePlacement,
 } from "./projectTimelinePlacement";
 
 describe("shared project timeline placement engine", () => {
+  it("promotes a missing Master Shot before canonical start and duration edits", () => {
+    const project = structuredClone(sampleProject);
+    const shot = project.shots[0]!;
+    const root = migrateLegacyProjectToComposition(project).rootComposition;
+    const partialRoot = {
+      ...root,
+      placements: root.placements.filter(placement => placement.id !== shot.id),
+    };
+    expect(partialRoot.placements.some(placement => placement.id === shot.id)).toBe(false);
+
+    const promoted = ensureCanonicalMasterShots(project, partialRoot, [shot.id]);
+    expect(promoted.placements.find(placement => placement.id === shot.id)).toMatchObject({
+      legacyData: { entityType: "master-shot" },
+      duration: shot.duration,
+    });
+
+    const videoTrackId = promoted.tracks.find(track => track.kind === "video")!.id;
+    const moved = moveCanonicalMasterShot(project, partialRoot, shot.id, videoTrackId, 7);
+    expect(moved.placements.find(placement => placement.id === shot.id)?.start).toBe(7);
+    const resized = applyCompositionResizePreview(moved, {
+      id: shot.id, start: 7, duration: 8, edge: "right", trims: [],
+    });
+    const projected = projectRootCompositionToLegacy(project, resized);
+    expect(projected.shots.find(item => item.id === shot.id)).toMatchObject({
+      masterStart: 7,
+      duration: 8,
+    });
+  });
+
+  it("promotes a missing Master Shot before canonical timeline resize", () => {
+    const project = structuredClone(sampleProject);
+    const shot = project.shots[0]!;
+    const root = migrateLegacyProjectToComposition(project).rootComposition;
+    const original = root.placements.find(placement => placement.id === shot.id)!;
+    const partialRoot = {
+      ...root,
+      placements: root.placements.filter(placement => placement.id !== shot.id),
+    };
+    const preview = {
+      id: shot.id,
+      trackId: original.trackId,
+      start: original.start,
+      duration: Math.max(0.1, original.duration - 0.5),
+      edge: "right" as const,
+      trims: [],
+    };
+
+    const resized = applyCanonicalRootTimelineResize(project, partialRoot, preview);
+    expect(resized.placements.find(placement => placement.id === shot.id)).toMatchObject({
+      start: original.start,
+      duration: preview.duration,
+      legacyData: { entityType: "master-shot" },
+    });
+    expect(projectRootCompositionToLegacy(project, resized).shots.find(item => item.id === shot.id)?.duration)
+      .toBe(preview.duration);
+  });
+
+  it("promotes a legacy-only linked group before canonical split and duplicate", () => {
+    const project = structuredClone(sampleProject);
+    project.shots = [];
+    const root = migrateLegacyProjectToComposition(project).rootComposition;
+    const videoTrack = root.tracks.find(track => track.kind === "video")!;
+    const audioTrack = root.tracks.find(track => track.kind === "audio")!;
+    const video = {
+      id: "legacy-split-video", name: "Legacy split video", kind: "video" as const,
+      trackId: videoTrack.id, start: 0, duration: 4, sourceIn: 3, sourceOut: 7,
+    };
+    const audio = {
+      id: "legacy-split-audio", name: "Legacy split audio", kind: "audio" as const,
+      trackId: audioTrack.id, start: 0, duration: 4, sourceIn: 8, sourceOut: 12,
+      linkedVideoClipId: video.id, volume: 0.4,
+    };
+    project.timelineClips = [...(project.timelineClips ?? []), video, audio];
+
+    const promoted = ensureCanonicalTimelineClips(project, root, [video.id]);
+    expect(promoted.placements.find(item => item.id === video.id)).toMatchObject({
+      linkedAudioChildren: [{ id: audio.id, sourceIn: 8, sourceOut: 12, volume: 0.4 }],
+    });
+
+    const split = splitCompositionPlacement(promoted, video.id, 2, {
+      newPlacementIds: { [video.id]: "legacy-split-video-right" },
+    });
+    const projected = projectRootCompositionToLegacy(project, split);
+    expect(projected.timelineClips?.filter(item => item.kind === "video" && item.id.startsWith("legacy-split-video"))).toHaveLength(2);
+    expect(projected.timelineClips?.find(item => item.id === audio.id)).toMatchObject({
+      start: 0, duration: 2, sourceIn: 8, sourceOut: 10, linkedVideoClipId: video.id,
+    });
+    expect(projected.timelineClips?.find(item => item.id === "legacy-split-video-right:audio:legacy-split-audio")).toMatchObject({
+      start: 2, duration: 2, sourceIn: 10, sourceOut: 12, linkedVideoClipId: "legacy-split-video-right",
+    });
+
+    const duplicated = duplicateCompositionPlacement(promoted, video.id, {
+      newPlacementIds: { [video.id]: "legacy-split-video-copy" },
+      start: 4,
+    });
+    const duplicatedProject = projectRootCompositionToLegacy(project, duplicated);
+    expect(duplicatedProject.timelineClips?.find(item => item.id === "legacy-split-video-copy")).toMatchObject({ start: 4, duration: 4 });
+    expect(duplicatedProject.timelineClips?.find(item => item.id === "legacy-split-video-copy:audio:legacy-split-audio")).toMatchObject({
+      start: 4, duration: 4, linkedVideoClipId: "legacy-split-video-copy", volume: 0.4,
+    });
+  });
+
+  it("promotes a legacy-only clip and linked audio before canonical trim", () => {
+    const project = structuredClone(sampleProject);
+    const root = migrateLegacyProjectToComposition(project).rootComposition;
+    const videoTrack = root.tracks.find(track => track.kind === "video");
+    const audioTrack = root.tracks.find(track => track.kind === "audio");
+    expect(videoTrack).toBeDefined();
+    expect(audioTrack).toBeDefined();
+    const clip = { id: "legacy-trim-video", name: "Trim video", kind: "video" as const, trackId: videoTrack!.id, start: 0, duration: 4 };
+    const audio = { id: "legacy-trim-audio", name: "Trim audio", kind: "audio" as const, trackId: audioTrack!.id, start: 0, duration: 4, linkedVideoClipId: clip.id };
+    project.timelineClips = [...(project.timelineClips ?? []), clip, audio];
+
+    const next = trimCanonicalRootTimelineClip(project, root, clip.id, 1.5);
+
+    expect(next.placements.find(placement => placement.id === clip.id)).toMatchObject({ duration: 1.5 });
+    expect(next.placements.find(placement => placement.id === clip.id)?.linkedAudioChildren).toMatchObject([
+      { id: audio.id },
+    ]);
+    expect(root.placements.some(placement => placement.id === clip.id || placement.id === audio.id)).toBe(false);
+  });
+
+  it("promotes legacy-only clips before applying a canonical resize and adjacent trim", () => {
+    const project = structuredClone(sampleProject);
+    let root = migrateLegacyProjectToComposition(project).rootComposition;
+    const videoTrack = root.tracks.find(track => track.kind === "video");
+    expect(videoTrack).toBeDefined();
+    const audioTrack = root.tracks.find(track => track.kind === "audio");
+    expect(audioTrack).toBeDefined();
+    const first = { id: "legacy-resize-first", name: "First", kind: "video" as const, trackId: videoTrack!.id, start: 0, duration: 2 };
+    const firstAudio = { id: "legacy-resize-first-audio", name: "First audio", kind: "audio" as const, trackId: audioTrack!.id, start: 0, duration: 2, linkedVideoClipId: first.id };
+    const second = { id: "legacy-resize-second", name: "Second", kind: "video" as const, trackId: videoTrack!.id, start: 2, duration: 4 };
+    project.timelineClips = [...(project.timelineClips ?? []), first, firstAudio, second];
+    const before = structuredClone(root);
+    const preview = { id: first.id, trackId: first.trackId, edge: "right" as const, start: 0, duration: 3, trims: [{ id: second.id, start: 3, duration: 3, edge: "left" as const }] };
+
+    root = applyCanonicalRootTimelineResize(project, root, preview);
+
+    expect(root.placements.find(placement => placement.id === first.id)).toMatchObject({ start: 0, duration: 3 });
+    expect(root.placements.find(placement => placement.id === second.id)).toMatchObject({ start: 3, duration: 3 });
+    expect(root.placements.find(placement => placement.id === first.id)?.linkedAudioChildren).toMatchObject([
+      { id: firstAudio.id },
+    ]);
+    expect(before.placements.some(placement => placement.id === first.id || placement.id === firstAudio.id || placement.id === second.id)).toBe(false);
+  });
+
+  it("promotes a legacy-only clip into canonical Composition before moving it", () => {
+    const project = structuredClone(sampleProject);
+    let root = migrateLegacyProjectToComposition(project).rootComposition;
+    const videoTrack = root.tracks.find(track => track.kind === "video");
+    expect(videoTrack).toBeDefined();
+    const audioTrack = root.tracks.find(track => track.kind === "audio");
+    expect(audioTrack).toBeDefined();
+    const clip = {
+      id: "legacy-only-timeline-clip",
+      name: "Legacy-only clip",
+      kind: "video" as const,
+      trackId: videoTrack!.id,
+      start: 0,
+      duration: 2,
+    };
+    const linkedAudio = {
+      id: "legacy-only-timeline-audio",
+      name: "Legacy-only clip audio",
+      kind: "audio" as const,
+      trackId: audioTrack!.id,
+      start: 0,
+      duration: 2,
+      linkedVideoClipId: clip.id,
+    };
+    project.timelineClips = [...(project.timelineClips ?? []), clip, linkedAudio];
+    const before = structuredClone(root);
+
+    root = moveCanonicalRootTimelineClip(project, root, clip.id, videoTrack!.id, 4);
+
+    expect(root.placements.find(placement => placement.id === clip.id)).toMatchObject({
+      id: clip.id,
+      trackId: videoTrack!.id,
+      start: 4,
+      duration: 2,
+    });
+    expect(root.placements.find(placement => placement.id === clip.id)?.linkedAudioChildren).toMatchObject([
+      { id: linkedAudio.id },
+    ]);
+    expect(before.placements.some(placement => placement.id === clip.id || placement.id === linkedAudio.id)).toBe(false);
+  });
+
   it("plans insertion from canonical root occupancy even when the legacy projection is stale", () => {
     const project = structuredClone(sampleProject);
     project.shots = [];

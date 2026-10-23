@@ -1,3 +1,31 @@
+## Mandatory agent operating loop — 2026-10-22
+
+This project uses a continuous, evidence-based workflow, not a one-time handoff assumption.
+
+- Before changing code, inspect the live repository, main SHA, relevant open issues and PRs, changed files, and exact-head CI. Treat older handoff text as historical until re-verified.
+- Work in coherent, testable increments. Prefer implementation and regression tests over planning-only changes.
+- **After every meaningful increment, update the relevant existing GitHub Issue or add a comment immediately.** Record what changed, exact commit/PR/CI evidence when available, what remains, and the next concrete action. Do not defer all issue updates until the entire PR is complete.
+- Update an issue body when its scope or acceptance checklist changes; use comments for progress checkpoints, decisions, validation, blockers and handoff. Reuse existing issues unless a genuinely distinct scope needs independent tracking.
+- Keep the task dashboard, handoff and architecture docs consistent with code and actual GitHub state. A documentation checkbox is not implementation evidence.
+- No browser smoke tests. Do not claim visual/manual acceptance from CI. Do not merge a PR without explicit owner approval. Keep Issue #100 open until the owner accepts the deployed Pages UI.
+- When handing off, leave the exact current SHA, current CI state, outstanding work and next action in GitHub first; then provide a reusable prompt that does not assume the previous conversation is available.
+
+
+## Reusable continuation prompt — use for any continuation, not only a new chat
+
+You are continuing active development of Dionysus AI Video Editor. Do not assume the prior conversation has ended or that its last summary is current. Use the live repository and GitHub as the source of truth.
+
+1. Inspect current `main`, open PRs/issues, changed files, and exact-head CI before editing; re-check any historical checkpoint.
+2. Continue the highest-priority actionable work already tracked in the relevant issue/PR. Do not restart planning or ask for context that is already documented.
+3. Implement one coherent, testable code increment with regression coverage where practical.
+4. **Immediately after every meaningful increment, update the relevant GitHub issue body or add a comment** with the change, current SHA/PR, CI evidence or pending status, remaining work, and next action. Do not wait until the whole task is finished.
+5. Keep handoff/task/architecture docs aligned with actual code and issue state. Prefer code plus tests over documentation-only progress.
+6. Do not run browser smoke tests or claim manual UI acceptance. Do not merge without explicit owner approval; keep Issue #100 open until the owner accepts deployed Pages UI.
+7. Before pausing, leave current exact SHA, CI status, blockers and next concrete action in GitHub and the handoff. This loop applies whether work continues in the same conversation or is picked up by another agent.
+
+
+---
+
 > **CURRENT DIRECTION (2026-10-19 — supersedes older checkpoint text below):** The owner has chosen a Timeline-first rebuild. Read [`docs/TIMELINE_EDITOR_REBUILD_PLAN.md`](TIMELINE_EDITOR_REBUILD_PLAN.md) and [`docs/architecture/TIMELINE_EDITOR_WORKSPACE.md`](architecture/TIMELINE_EDITOR_WORKSPACE.md) first. Timeline Editor is the first complete workspace and includes an upper-left Media/Audio/Text/Effects/Transitions source browser, upper-right Preview/Canvas, and lower multitrack Timeline. Later, Storyboard and References are planning modules around the Editor. On mobile, the Editor bottom bar is contextual to the selected element; module navigation lives in the project/workspace header or menu. Preserve tested logic and schema-1.0 project compatibility; rebuild the workspace/state boundary, not the whole codebase from zero. No automated browser smoke tests.
 
 > **Live baseline observed while preparing this plan:** `main` was `a54526fc82345c8813a6f0b770056dfe6e25a526`. PR #88/#89 are open Draft PRs. PR #89 exact-head CI [39269841800](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39269841800) passed 206 tests but failed TypeScript/build. Re-check GitHub before acting; this is a historical observation, not a promise that the current state is unchanged.
@@ -153,3 +181,142 @@ Continue from `feat/mobile-audio-clip-mute` (if already merged, inspect PR/main 
 ### Current DYS-012 mobile follow-up — mute-state accessibility (2026-10-19)
 
 Continue from `feat/mobile-audio-mute-state` (if already merged, inspect PR/main first). This slice adds a visible active state to the selected-audio Mute/Unmute button and asserts its `aria-pressed` value. Run exact-head CI/build, merge through PR, verify main CI and Pages deployment, then update task dashboard/report/handoff. No browser smoke tests. Keep DYS-012 in progress until phone portrait/landscape/tablet acceptance is evidenced.
+
+
+### Active E1 continuation — atomic import replacement (2026-10-22)
+
+Current PR: [#111](https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/111), branch `feat/e1-editor-session-history`. Continue from its live head, not from this note. `createImportedEditorSessionTransition()` now returns imported session + fresh empty history as one result; tests must protect against stale Undo/Redo crossing project boundaries. Verify exact-head CI after the synchronized docs commit, comment on Issue #110 after each meaningful increment, and keep Issue #100 open. Next inspect remaining direct session mutations and then safely consolidate dual-key recovery/persistence. Do not claim canonical-only state, do not run browser smoke tests, and do not merge without explicit owner approval.
+
+
+### Active E1/E2 continuation — recovery arbitration (2026-10-22)
+
+The latest increment extracts `shouldPreferCompositionRecovery()` into `src/editorSessionPersistence.ts` and tests identity/revision edge cases. Verify exact-head CI after this docs sync, and comment on Issue #110 after each meaningful increment. Next inspect startup's repeated reads/projections and design a single-authority persistence/recovery transition that still imports schema-1.0 projects. Keep Issue #100 open; no browser smoke tests or merge without explicit approval.
+
+
+### Active E2 continuation — paired startup recovery read (2026-10-22)
+
+Latest code now reads the v1 and v2 recovery keys once in `createInitialEditorSession()` and uses the same parsed results for both project selection and canonical-root acceptance. Verify exact-head CI after this docs sync, and comment on Issue #110 after each meaningful increment. Next assess a single-authority persistence/recovery migration; do not simply delete the v1 key while legacy imports and consumers still exist. Keep Issue #100 open, no browser smoke tests, and no merge without explicit approval.
+
+
+### Active E2 continuation — canonical recovery precedence
+
+The latest recovery policy treats a valid v2 envelope as authoritative when its project identity matches the v1 mirror; timestamps no longer decide between two snapshots of the same project. Identity mismatch falls back to the legacy candidate, and legacy import remains available if v2 is absent/invalid. Check exact-head CI after docs sync and update Issue #110 after each meaningful increment. Next decide and test when the compatibility mirror can stop being written, without losing legacy import or recovery safety. Issue #100 stays open; no browser smoke tests or merge without explicit approval.
+
+
+### Active E2 continuation — canonical-only autosave
+
+Current code writes only the v2 canonical Composition envelope; the v1 schema-1.0 localStorage key is read-only fallback for absent/invalid canonical data. Startup selects one complete document and does not compare timestamps or mix the Project from one key with the root from another. Exact-head CI is pending after this docs sync; update Issue #110 after each meaningful increment. Next verify tests and consider explicit cleanup/retirement of the stale v1 key only after recovery and migration evidence is sufficient. Non-root editing and renderer/playback still use legacy projections; Issue #100 remains open. No browser smoke tests or merge without explicit owner approval.
+
+
+### Verified checkpoint — canonical-only persistence
+
+At head `c1009ae456df33815388c5cd62917c7606d396ac`, [exact-head CI run 39866541271](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39866541271) passed 26 test files / 286 tests, TypeScript/build and audit 0. App tests now read v2 persistence first. Current storage contract: write v2 only, read v1 only as fallback. Next: inspect the read-only legacy key cleanup policy and migrate non-root editing/render/playback; do not claim canonical-only in-memory state. Keep PR #111 unmerged pending owner approval and Issue #100 open; no browser smoke tests.
+
+### Latest active continuation — canonical rendering and nested commands (2026-10-22)
+
+Live state takes precedence over this note: inspect PR #111 and exact-head CI before editing. Latest validated code checkpoint before this docs sync: `6a4632ece321518b95c48bea29d34c559a8d6ecb`; exact-head CI [39877068547](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39877068547) passed 26 test files / 297 tests, TypeScript/build and audit 0. This docs update creates a newer head, so verify exact-head CI again.
+
+The branch `feat/e1-editor-session-history` has paired Editor session/history/import boundaries and canonical-only v2 autosave (v1 remains a read-only migration fallback). `collectVersionRenderLayers()` resolves nested Shot/Slot and Clip Version placements from canonical Composition, including linked-audio children and nested track mute. Master preview/audio/code preview/export use a memoized root render adapter. Nested track mute, duration and description controls synchronize canonical Composition and compatibility metadata. The selected storyboard Version description editor now uses the canonical helper; duplication of Clip Asset/storyboard Versions and creation of blank Versions sync descriptions into canonical metadata.
+
+Initial Clip Assets and New Blank Versions materialize independent canonical Composition documents immediately, preserving parent canvas dimensions even when empty. Duplicating a legacy-only Clip Version first canonicalizes its source and remaps track, placement and linked-audio references; duplicated top-level Composition documents receive fresh IDs while nested pinned children remain unchanged. Save-as-Clip Asset receives the live canonical root Composition and derives both the saved nested document and flattened renderer projection from that same root, so stale legacy Project timing cannot overwrite canonical timing.
+
+Read `docs/AGENT_HANDOFF.md`, `docs/PROJECT_ROADMAP.md`, `public/doc/tasks.json`, and Issue #110 for current evidence. Next: verify CI on the docs-synchronized head, then audit remaining non-root edit/pinned snapshot paths and plan a tested nested editable UI migration. Keep DYS-014 in progress, Issue #100 open until owner acceptance, do not run browser smoke tests, and do not merge without explicit owner approval.
+
+Latest continuation note (2026-10-22): nested Clip Version projection and root linked-audio child projection now clear stale source-type fields before mapping canonical `CompositionSourceReference` back to compatibility layers; regression tests cover switching from Clip Composition to a direct asset and linked audio carrying stale `clipVersionId` metadata. Code head before documentation sync: `a4cc58fd3102ac2fb7c42a00baa44d6e1b776eff`. The docs-synchronized head `2121c59ad7d0da64548081301655df6e3f6a82a4` passed exact-head CI [run 39878411955](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39878411955): 26 test files / 297 tests, TypeScript/build passed, npm audit 0 vulnerabilities. Re-run exact-head CI if you make further changes. Continue auditing non-root edit/pinned snapshot paths and plan nested editable UI migration; DYS-014 stays in progress, Issue #100 stays open, no browser smoke tests, no merge without explicit owner approval.
+
+Latest continuation note (2026-10-23): an additional source-projection audit found stale `childCompositionId` and `shotVersionId` fields could survive in root-placement and linked-audio legacy projections. Both are now cleared alongside all other source-selector fields; regression tests cover the stale values. Code/test commits: `da2c294151ae691cb3924bacd6d6b6c92674a26b`, `f2ad672ca5a6a5f1bccaae0a3e68e0946b78b47d`. The code/test checkpoint `0c891c71b0c3218362bb86c7db798d2090ee0add` passed exact-head CI [run 39880867984](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39880867984): 26 test files / 297 tests, TypeScript/build passed, audit 0. The selector cleanup is checked off in Issue #110. Re-run exact-head CI after this docs sync; keep completed items checked and leave remaining reconciliation/pinned/render/UI work unchecked. Continue remaining non-root/pinned snapshot audit and canonical Timeline command migration; DYS-014 in progress, #100 open, no browser smoke tests, no merge without owner approval.
+
+## Validation correction — projection fixture metadata is intentionally legacy-only (2026-10-23)
+
+The first CI for the expanded selector cleanup passed all 26 test files but failed TypeScript because `childCompositionId` and `shotVersionId` are intentionally not declared on the public `TimelineClip` type. The projection handles them as unknown legacy compatibility fields. Updated the implementation to narrow legacy metadata through `Record<string, unknown>` and changed regression fixtures to inject those unknown legacy fields through typed spreads. Fix commits: `d2ac053a9179802828b2d47ce7bffbe810327e56`, `bd012ac135cb0a20da38232217bce42c083dff1a`. Exact-head CI for this correction and the docs-synchronized head is pending; do not mark the selector expansion complete until it passes.
+
+## Pinned Shot Slot snapshot audit — preserve the version named by the canonical placement (2026-10-23)
+
+- The next non-root/pinned-path audit found `createClipVersionSnapshot()` embedded the currently selected Shot Slot version for each slot but did not resolve an explicit `CompositionSourceReference` of type `shot` to the exact `versionId` pinned by a canonical placement. If selection changed after the placement was pinned, the saved tree could omit the referenced version's child Composition.
+- Snapshot child attachment now resolves Shot/Slot/version references from each canonical placement, records the exact pin, embeds that exact version's Composition recursively, and still preserves the current selected version snapshots as separate pins where relevant. The same path works inside nested Compositions.
+- Added regression coverage where a root placement pins `shot-version-1` while the slot selection has moved to `shot-version-2`; the snapshot must contain both the exact pinned child and the current selected child, with both pin records.
+- Code/test commits: `efe8486bf96fa47ae26874245b42a4ea739da826`, `41f44a5e78bfeef8a9816192198f9e317e0f4a4a`. Exact-head CI is pending; do not check this snapshot item complete until tests/build/audit pass.
+
+## Validation correction — keep Shot source discriminant narrowed (2026-10-23)
+
+The pinned Shot Slot snapshot regression passed with all 298 tests, but TypeScript caught that a nested callback did not retain the `placement.source.type === "shot"` discriminant. The resolver now captures the narrowed source union in a local constant before looking up the Shot and Slot. Fix commit: `f79818e90f6fd7ccc94a3c235665650ed6344c40`. Exact-head CI for this correction and final docs sync is pending; keep the Issue #110 pinned-snapshot checkbox unchecked until it passes.
+
+## Validation correction — explicitly guard optional Shot Slot ID (2026-10-23)
+
+The pinned-version regression again passed all 298 tests, but TypeScript correctly required a local guard because `CompositionSourceReference.shot.slotId` is optional. The resolver now captures `slotId`, skips Shot references without a Slot, and uses the narrowed local value for lookup and pinning. Fix commit: `27af284afe3794da779da7d6d44d5367b2d56492`. Exact-head CI passed at `16ef37a520c302995e02b9c6843de912f4edea3f`, [run 39881785207](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39881785207): 26 test files / 298 tests, TypeScript/build passed, audit 0. The Issue #110 snapshot item is checked; rerun exact-head CI after this docs sync.
+
+## Nested legacy Shot Slot source migration audit (2026-10-23)
+
+- Found that `compositionMigration.ts`'s legacy nested-layer source adapter did not recognize legacy metadata carrying `shotId`, `slotId`, and `shotVersionId`. Such a layer could migrate to `source: { type: "none" }` even though the nested editing adapter already recognizes Shot Slot sources.
+- `sourceForLayer()` now converts those metadata fields into a canonical `CompositionSourceReference` of type `shot`, preserving the explicit version pin. Added regression coverage for a legacy nested Clip Version layer referencing a specific Shot Slot version.
+- Code/test commits: `08ff16b8fde8f232d7731452fd06b8eb14efdac5`, `16df0113ebb3bffd4d6429644759f3edafd8918a`. Verified at `64733f71509273065fef23821728c3da8ce49a4`, [CI run 39882323664](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39882323664): 26 test files / 299 tests, TypeScript/build passed, audit 0. Issue #110's nested Shot Slot migration checkbox is checked; re-run exact-head CI after this docs update.
+
+Latest continuation (2026-10-23): found a canonical pinned-subtree preservation gap in `reconcileEditorSessionComposition()`. A legacy-domain edit could replace root `nestedCompositions` with a freshly migrated target and drop embedded pinned child trees. The boundary now preserves existing canonical children by ID and appends only newly discovered children; regression test covers metadata-only rename. Code/test commits `9d05a458c1b86714dc5a586461b9913a23552ac5`, `28c82ed18aae641631def38e2a852d02fc95fb20`. Exact-head CI passed at `22dadc5764baf60d95a109ea75d8a5ad1be9ed49`, [run 39936044698](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39936044698): 27 test files / 310 tests, TypeScript/build passed, audit 0. Issue #110 item is checked; verify exact-head CI again after docs changes. Continue broader nested/pinned save-reopen round trips and migration away from legacy-to-canonical reconciliation. No browser smoke tests, no merge without owner approval.
+
+Latest verified checkpoint (2026-10-23): root Timeline metadata/geometry edits preserve canonical source identity unless source fields are explicitly patched (`src/timelineClipSourcePatch.ts` and tests); session reconciliation preserves existing canonical pinned nested child Compositions by ID and appends only newly discovered children. Both are checked in Issue #110. Exact code/test head `22dadc5764baf60d95a109ea75d8a5ad1be9ed49` passed [CI run 39936044698](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39936044698): 27 files / 310 tests, TypeScript/build passed, audit 0. The docs/task-synchronized checkpoint `80b8c4f22f2367b2fa48502295ffc1cdff6394cb` passed [CI run 39936506656](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39936506656): 27 files / 310 tests, TypeScript/build passed, audit 0. Re-run exact-head CI after any further commit. Continue with remaining legacy-to-canonical editable paths and deterministic root/nested edit → undo/redo → save/reopen → JSON round-trip coverage; keep DYS-014 in progress, PR #111 unmerged, Issue #100 open. No browser smoke tests.
+
+Latest continuation (2026-10-23): root reconciliation also used to replace a live canonical Composition ID with the legacy migration ID and erase provenance/canonical-only metadata. It now respects the deterministic root ID required by the v2 project-document contract, retains provenance if target migration omits it, and merges target metadata without dropping canonical-only fields. Regression added for provenance/unknown metadata across a metadata-only rename while retaining the deterministic root ID contract. Code/test commits `709692e86f82d233f77df8b1538244c7c8f586b7`, `fbc380918f9d709a8cf44d3b024027ef6243b331`, `441adf8c91b2780d740d88323dc15367c76ea1f8`, `c0a0d43e79390bc7409184b59b769dd39794bc70`; exact-head CI passed at `f85fb463654880704b852b88f7a765ac09f02216`, [run 39937441846](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39937441846): 27 files / 312 tests, TypeScript/build passed, audit 0. Issue #110 item is checked; verify exact-head CI again after docs changes.
+
+Verified checkpoint (2026-10-23): `src/editorSession.test.ts` now covers a root + pinned nested edit through Undo/Redo and v2 JSON save/reopen, including source/version pin and provenance. Root reconciliation preserves canonical provenance/unknown metadata while keeping the deterministic v2 root ID. Both Issue #110 items are checked. Task-registry-synchronized checkpoint `0ee800302923e34175d67012812b1e2e4d46b239` passed [CI run 39937818376](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39937818376): 27 files / 312 tests, TypeScript/build passed, audit 0. This docs follow-up requires exact-head CI; continue broadening round-trip coverage and migrating editable Timeline/render/playback paths. No browser smoke tests or merge without owner approval.
+
+Latest verified persistence slice (2026-10-23): `src/editorSessionPersistence.test.ts` now covers v2 save/reopen of a root containing a pinned nested Composition and provenance. Exact-head CI passed at `a2e31ee6615e05e1d250cc307c47d1ec7b77d9ac`, [run 39938305163](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39938305163): 27 files / 313 tests, TypeScript/build passed, audit 0. Issue #110 item checked. Continue the full deterministic edit → undo/redo → save/reopen → JSON round-trip matrix across root and nested compositions; do not mark the broader item complete yet.
+
+Latest verified code slice (2026-10-23): `src/editorSessionPersistence.test.ts` covers extracting linked audio with a non-zero source in-point, v2 save, and reopen as an independent Audio placement with source range/timing retained. Exact-head CI passed at `9ec9146ed52542f794a4f554eb2cb3193f8fd18e`, [run 39941912597](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39941912597): 27 files / 314 tests, TypeScript/build passed, audit 0. The matching Issue #110 subtask is checked. Do not mark the broader edit → undo/redo → save/reopen matrix or full linked-audio trim/resize/split persistence as complete; continue canonical editable UI and render/playback migration.
+
+Latest verified slice (2026-10-23): `src/editorSessionPersistence.test.ts` exercises canonical linked-audio child trim → resize → split → v2 save/reopen, separate from the verified extract-to-independent-audio test. Code/test SHA `0714f28b93d82091f960b0cd77cd8e21736f3d0a` passed exact-head CI [run 39948473082](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39948473082): 27 test files / 315 tests, TypeScript/build passed, audit 0. The Issue #110 subtask is checked. The docs-synchronized head `ef0ed0c43bbd98c9a3d93aa0299a083d46ca29c2` passed [exact-head CI run 39948801413](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39948801413): 27 test files, TypeScript/build passed, audit 0. Any further repository commit requires a fresh exact-head CI. Continue the broader edit/history round-trip and canonical render/playback/UI work.
+
+
+Latest in-progress slice (2026-10-23): `src/App.tsx` promotes a legacy-only Timeline clip into canonical Composition before moving it with `moveCompositionPlacementToTrack()`. This removes one clip-move compatibility fallback but does not finish the migration: Shot-domain fallback and resize fallback remain. Commit `7bfc6b90e770a941399668ceff42db438cdc3be0`; exact-head CI run 39955595704 was in progress when recorded. First add focused regression coverage for promotion, then migrate resize with source-range/linked-audio parity, and only then update Issue #110 checkboxes based on verified completion. Do not merge PR #111 or close Issue #100.
+
+
+Verified slice (2026-10-23): `projectTimelinePlacement.ts` now promotes legacy-only Timeline clips and their linked owner/child clips before canonical move or resize commands. Regression tests cover both operations, linked-audio synchronization, and immutability. Code head `4c796da2dd54793a0d104d1f78b979fb026fa194` passed exact-head CI [run 39956221638](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39956221638): 27 test files / 317 tests, TypeScript/build and audit passed. Next focus on other legacy mutation paths and canonical renderer/playback migration; do not mark DYS-014 complete or merge PR #111. After syncing docs/tasks, verify CI on that exact docs-synchronized head.
+
+
+Verified implementation slice in progress (2026-10-23): ordinary Timeline move, trim, resize, split, duplicate, and delete now route legacy-only clips through canonical root Composition promotion, including linked audio owner/child placements. Focused tests cover move, trim, resize/adjacent trim, linked-audio synchronization, and immutability; App integration tests cover split/duplicate. Check exact-head CI for the latest docs-synchronized commit before calling this slice validated. Next continue with remaining Shot-domain/Project mutation paths, root/nested save/reopen history coverage, and renderer/playback migration off `CompositionLayer[]`. Do not mark DYS-014 complete, merge PR #111, or close Issue #100.
+
+
+Latest scope correction (2026-10-23): canonical promotion now covers ordinary Timeline move, trim, resize, delete, split and duplicate. The first split/duplicate attempt failed three App tests and was reverted; the follow-up fixed the underlying linked-audio ownership mismatch by promoting legacy linked audio as an owned Composition child. Exact code/test head `cbd030a49fe7e3c418dc695ad1e592c748a7ea80` passed [CI run 39960129613](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39960129613): 27 test files / 319 tests, TypeScript/build, audit 0. New commits still require exact-head CI.
+
+
+### Canonical split/duplicate migration verified (2026-10-23)
+
+- Legacy-only linked audio is now promoted as an owned Composition child under its video placement, not as a separate root placement. This fixes the canonical ownership mismatch that prevented split/duplicate parity.
+- App split and duplicate now promote missing clips before running shared Composition commands. Added regression coverage for split source ranges and duplicate timing/mix metadata; the pre-existing App midpoint split, playhead split, and linked-video/audio duplicate tests also pass.
+- Exact code/test head cbd030a49fe7e3c418dc695ad1e592c748a7ea80 passed CI run 39960129613: 27 test files / 319 tests; TypeScript/production build passed; npm audit 0 vulnerabilities.
+- This closes only the ordinary Timeline split/duplicate compatibility fallback slice. Other Shot/Project mutation paths, broader root/nested history round-trips, and renderer/playback migration remain open. DYS-014 stays in progress. PR #111 remains open/unmerged; Issue #100 remains open for deployed owner acceptance. No browser smoke tests or manual UI acceptance claimed.
+
+
+### Canonical metadata-update follow-up (2026-10-23)
+
+Legacy-only ordinary Timeline clips are now promoted before metadata, geometry, and explicit source-identity edits. Linked-audio children are routed through their canonical owned-child metadata path; malformed unrepresentable rows retain a guarded compatibility fallback. Exact code-head CI passed at `c322e6f5df3ad8455582d26f472e14cf5cc5624e`, run [39961446762](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39961446762). Issue #100/#110 and PR #111 record the implementation. DYS-014 remains in progress: remaining Project/Shot mutation paths, full history/save/reopen matrix, and renderer/playback boundaries remain open. Issue #100 remains open for owner UI acceptance; PR #111 remains unmerged. New docs commits require exact-head CI.
+
+Current verified code checkpoint: `c322e6f5df3ad8455582d26f472e14cf5cc5624e` passed exact-head CI run 39961446762. It includes canonical promotion for Timeline move/trim/resize/delete/split/duplicate and metadata/source-identity updates; legacy linked audio is an owned Composition child. The task registry/docs sync is a later commit and must be checked against its own exact-head CI before claiming a final pass.
+
+
+### Master Shot canonical timing fallback (2026-10-23)
+
+`ensureCanonicalMasterShots()` now promotes missing Master Shot placements from deterministic migration before duration/start edits. App duration/start handlers use canonical resize/move commands after promotion, with a focused regression for a partial root and Project projection timing. Code/test head `26a6578f98d64ad9dd5ed5850e668687f4cb5089` passed exact-head CI [39962319324](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39962319324). DYS-014 remains in progress; remaining Project/Shot mutations, broad root/nested history save/reopen, and renderer/playback boundaries remain open. Issue #100 remains open for owner UI acceptance; PR #111 remains open/unmerged. New docs/task commits require exact-head CI.
+
+Latest verified code/test checkpoint: `26a6578f98d64ad9dd5ed5850e668687f4cb5089` passed CI 39962319324. It adds canonical Master Shot promotion for missing placements before duration/start changes. The docs-synchronized head still needs its own exact-head CI check.
+
+
+## Renderer continuation — nested Clip Version canonical source (2026-10-23)
+
+- Code commit `1a64c0355f92632a81155bab9a35128ef50ed509` changes recursive nested-clip rendering to pass `collectVersionRenderLayers(childVersion)` instead of the potentially stale `childVersion.layers` compatibility array. This aligns nested preview frames with the canonical Composition placements/tracks/source metadata already used by the top-level renderer adapter.
+- Exact-head CI run 2032 is pending at the time of this note; verify it against this commit before treating the slice as validated. This is an implementation slice, not completion of the broader renderer/playback migration.
+- PR #111 remains open/unmerged. Issue #100 remains open for owner UI acceptance; no browser smoke test or manual UI acceptance is claimed.
+
+
+## Master Shot drag-move canonicalization (2026-10-23)
+
+- The Timeline drag/drop path now promotes a legacy-only Master Shot into the live root Composition before moving it with `moveCompositionPlacementToTrack`, instead of mutating only the Project compatibility projection. This complements the existing canonical Master Shot start/duration paths.
+- Added `moveCanonicalMasterShot` and regression coverage in `src/projectTimelinePlacement.test.ts` for promotion followed by a canonical move and duration edit.
+- Code/test head `d70199eced579713b754366896c50a8e48888595`; exact-head CI run 2040 was in progress when this note was written. Verify it and the docs-synchronized head before treating this slice as validated.
+- DYS-014 remains in progress. PR #111 remains open/unmerged and Issue #100 remains open for owner UI acceptance; no browser smoke tests or manual UI acceptance are claimed.
+
+
+## Master Shot resize promotion (2026-10-23)
+
+- `applyCanonicalRootTimelineResize` now promotes missing Master Shot placements as well as legacy-only ordinary Timeline clips before applying a resize preview. This closes the drag-resize path where a missing Shot placement could reach the resize command without being present in canonical Composition.
+- Added regression coverage in `src/projectTimelinePlacement.test.ts` asserting a legacy-only Master Shot is promoted, resized canonically, and projected back with the updated duration.
+- The first docs-synchronized build exposed a missing `trackId` in the new resize-preview test; fixed in `src/projectTimelinePlacement.test.ts`. Corrected code/test head `ddf43daea3784f4127f09b7890396fc323dc9780` passed [exact-head CI run 39976840360](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39976840360): 27 test files / 321 tests, TypeScript/production build passed, npm audit 0 vulnerabilities. This documentation update requires its own exact-head CI verification. DYS-014 remains in progress; PR #111 stays open/unmerged; Issue #100 stays open for owner acceptance.

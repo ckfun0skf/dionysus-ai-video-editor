@@ -1,10 +1,75 @@
-import type { Asset, CompositionLayer, DionysusProject } from "./types";
+import type { Asset, ClipVersion, CompositionLayer, DionysusProject } from "./types";
 import { getAudioEnvelope } from "./audioEnvelope";
 import { getMasterShotStarts, getMasterTimelineDuration } from "./masterTimeline";
 import { loadMediaBlobFromPath, resolveMediaSource } from "./mediaAssetStore";
+import { normalizeClipVersionTracks } from "./clipVersionTracks";
+import type { CompositionDocument } from "./compositionModel";
+import { projectRootCompositionToLegacy } from "./compositionMigration";
 
 export interface RenderOptions { fps?: number; width?: number; height?: number; duration?: number; /** Avoid blocking interactive preview frames on media seek completion; exports keep precise seeking by default. */ interactivePreview?: boolean }
 export interface ExportResult { blob: Blob; filename: string; mimeType: string }
+
+export function collectVersionRenderLayers(version: ClipVersion): CompositionLayer[] {
+  if (!version.composition) return version.layers;
+
+  const mutedByTrack = new Map(version.composition.tracks.map(track => [track.id, Boolean(track.muted)]));
+  const canonicalLayers = normalizeClipVersionTracks(version).layers.map(layer => {
+    const trackId = layer.trackId;
+    return {
+      ...layer,
+      muted: Boolean(layer.muted || (trackId ? mutedByTrack.get(trackId) : false)),
+    };
+  });
+  const linkedAudioLayers = version.composition.placements.flatMap(owner =>
+    (owner.linkedAudioChildren ?? []).map(child => {
+      const layer = {
+        ...(structuredClone(child.legacyData) as Record<string, unknown>),
+        id: child.id,
+        name: child.name,
+        kind: "audio",
+        trackId: owner.trackId,
+        start: owner.start,
+        duration: owner.duration,
+        linkedVideoClipId: owner.id,
+      } as unknown as CompositionLayer & Record<string, unknown>;
+
+      const sourceFields = layer as unknown as Record<string, unknown>;
+      for (const key of ["assetId", "childCompositionId", "clipVersionId", "shotId", "slotId", "shotVersionId", "scriptVersionId"]) {
+        delete sourceFields[key];
+      }
+      if (child.source.type === "asset") {
+        sourceFields.assetId = child.source.assetId;
+      } else if (child.source.type === "clip") {
+        sourceFields.assetId = child.source.assetId;
+        sourceFields.childCompositionId = child.source.assetId;
+        if (child.source.versionId !== undefined) sourceFields.clipVersionId = child.source.versionId;
+      } else if (child.source.type === "missing") {
+        sourceFields.assetId = child.source.originalId;
+      } else if (child.source.type === "shot") {
+        sourceFields.shotId = child.source.shotId;
+        if (child.source.slotId !== undefined) sourceFields.slotId = child.source.slotId;
+        if (child.source.versionId !== undefined) sourceFields.shotVersionId = child.source.versionId;
+      } else if (child.source.type === "script") {
+        if (child.source.assetId !== undefined) sourceFields.assetId = child.source.assetId;
+        if (child.source.scriptVersionId !== undefined) sourceFields.scriptVersionId = child.source.scriptVersionId;
+      }
+
+      if (child.sourceIn === undefined) delete layer.sourceIn;
+      else layer.sourceIn = child.sourceIn;
+      if (child.sourceOut === undefined) delete layer.sourceOut;
+      else layer.sourceOut = child.sourceOut;
+      layer.muted = Boolean(child.muted || mutedByTrack.get(owner.trackId));
+      if (child.volume === undefined) delete layer.volume;
+      else layer.volume = child.volume;
+      if (child.fadeIn === undefined) delete layer.fadeIn;
+      else layer.fadeIn = child.fadeIn;
+      if (child.fadeOut === undefined) delete layer.fadeOut;
+      else layer.fadeOut = child.fadeOut;
+      return layer;
+    })
+  );
+  return [...canonicalLayers, ...linkedAudioLayers];
+}
 
 export function collectCompositionLayers(project: DionysusProject): CompositionLayer[] {
   const shotStarts = getMasterShotStarts(project.shots);
@@ -12,7 +77,11 @@ export function collectCompositionLayers(project: DionysusProject): CompositionL
     const shotOffset = shotStarts[shotIndex];
     const layers = shot.slots.flatMap(slot => {
       const version = slot.versions.find(item => item.id === slot.selectedVersionId);
-      return version ? version.layers.map(layer => ({ ...layer, start: layer.start + slot.start + shotOffset })) : [];
+      if (!version) return [];
+      // When present, the canonical nested Composition owns placement fields; the layer array
+      // is only a compatibility projection and may be stale in recovered/imported documents.
+      const versionLayers = collectVersionRenderLayers(version);
+      return versionLayers.map(layer => ({ ...layer, start: layer.start + slot.start + shotOffset }));
     });
     return layers;
   });
@@ -39,11 +108,14 @@ export function collectCompositionLayers(project: DionysusProject): CompositionL
         ?? (clip.clipVersionId ? undefined : asset?.clipVersions?.find(item => item.id === asset.selectedClipVersionId) ?? asset?.clipVersions?.[0]);
       if (!version || version.duration <= 0) return [];
       const result: CompositionLayer[] = [];
+      // Resolve nested layers from the canonical document when available instead of trusting
+      // its serialized schema-1.0 compatibility projection.
+      const versionLayers = collectVersionRenderLayers(version);
       const repeats = clip.shortSourceBehavior === "loop" ? Math.max(1, Math.ceil(clip.duration / version.duration)) : 1;
       for (let repeat = 0; repeat < repeats; repeat += 1) {
         const repeatOffset = repeat * version.duration;
         if (repeatOffset >= clip.duration) break;
-        for (const layer of version.layers) {
+        for (const layer of versionLayers) {
           const startOffset = repeatOffset + layer.start;
           if (startOffset >= clip.duration) continue;
           const visibleDuration = Math.min(layer.duration, version.duration - layer.start, clip.duration - startOffset);
@@ -82,6 +154,14 @@ export function collectCompositionLayers(project: DionysusProject): CompositionL
   });
   // Preserve Version layer order as the composition stacking order. Timing is checked per layer during rendering/export.
   return [...nested, ...timeline];
+}
+
+/** Resolve master-timeline render layers from the canonical root document, keeping the Project as domain/asset context. */
+export function collectRootCompositionLayers(
+  project: DionysusProject,
+  rootComposition: CompositionDocument,
+): CompositionLayer[] {
+  return collectCompositionLayers(projectRootCompositionToLegacy(project, rootComposition));
 }
 
 /** Audio tracks may reference an audio file or the sound component of a video source. */
@@ -322,7 +402,7 @@ export async function renderCompositionFrame(canvas: HTMLCanvasElement, project:
         await renderCompositionFrame(
           childCanvas,
           project,
-          childVersion.layers,
+          collectVersionRenderLayers(childVersion),
           seconds - layer.start,
           options,
           images,

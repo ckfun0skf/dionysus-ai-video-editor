@@ -1,6 +1,6 @@
 import type { ClipVersion, CompositionLayer, TimelineTrack } from "./types";
 import type { CompositionDocument, CompositionPlacement, CompositionSourceReference, CompositionTrack } from "./compositionModel";
-import { applyCompositionResizePreview, deleteCompositionPlacement, insertCompositionPlacement, moveCompositionPlacementToTrack, type CompositionResizePreview } from "./compositionCommands";
+import { applyCompositionResizePreview, deleteCompositionPlacement, insertCompositionPlacement, moveCompositionPlacementToTrack, updateCompositionPlacement, updateCompositionTrack, type CompositionResizePreview } from "./compositionCommands";
 
 export type CanonicalNestedTrackKind = "video" | "audio" | "text";
 
@@ -85,6 +85,70 @@ export function addClipVersionTrack(
   };
   const updatedComposition = { ...composition, tracks: [...composition.tracks, compositionTrack] };
   return { ...normalized, tracks: [...(normalized.tracks ?? []), nextTrack], composition: updatedComposition };
+}
+
+/** Materialize an independent canonical Composition even for an empty nested Version. */
+export function ensureClipVersionComposition(
+  version: ClipVersion,
+  dimensions?: { width: number; height: number },
+): ClipVersion {
+  const normalized = normalizeClipVersionTracks(version);
+  const document = compositionDocumentFromClipVersion(normalized);
+  const sizedDocument = !normalized.composition && dimensions
+    ? { ...document, width: dimensions.width, height: dimensions.height }
+    : document;
+  return versionWithComposition(normalized, sizedDocument);
+}
+
+/** Update a nested track through the canonical Composition command and refresh its compatibility projection. */
+export function updateClipVersionTrack(
+  version: ClipVersion,
+  trackId: string,
+  patch: Partial<Pick<TimelineTrack, "name" | "muted" | "backgroundColor" | "backgroundTransparent" | "opacity">>,
+): ClipVersion {
+  const normalized = normalizeClipVersionTracks(version);
+  const track = normalized.tracks?.find(item => item.id === trackId);
+  if (!track) throw new Error("Clip Version track not found.");
+  const document = compositionDocumentFromClipVersion(normalized);
+  const canonicalTrack = document.tracks.find(item => item.id === trackId);
+  if (!canonicalTrack) throw new Error("Clip Version Composition track not found.");
+  const legacyData = { ...(canonicalTrack.legacyData ?? {}), ...structuredClone(patch) };
+  const updated = updateCompositionTrack(document, trackId, {
+    ...structuredClone(patch),
+    legacyData,
+  });
+  return versionWithComposition(normalized, updated);
+}
+
+/** Update nested Version duration in the canonical Composition and its compatibility projection. */
+export function updateClipVersionDuration(version: ClipVersion, duration: number): ClipVersion {
+  if (!Number.isFinite(duration) || duration < 0.1) {
+    throw new Error("Clip Version duration must be finite and at least 0.1 seconds.");
+  }
+  const normalized = normalizeClipVersionTracks(version);
+  const document = compositionDocumentFromClipVersion(normalized);
+  const updatedComposition = { ...document, duration };
+  return {
+    ...versionWithComposition({ ...normalized, duration }, updatedComposition),
+    duration,
+  };
+}
+
+/** Keep nested Version description metadata aligned with an existing canonical Composition snapshot. */
+export function updateClipVersionDescription(version: ClipVersion, description: string): ClipVersion {
+  const normalized = normalizeClipVersionTracks(version);
+  if (!normalized.composition) return { ...normalized, description };
+  return {
+    ...normalized,
+    description,
+    composition: {
+      ...structuredClone(normalized.composition),
+      legacyData: {
+        ...(normalized.composition.legacyData ?? {}),
+        description,
+      },
+    },
+  };
 }
 
 /** Add a source placement to a compatible track, creating a deterministic default if needed. */
@@ -251,6 +315,12 @@ function compositionLayersFromCompositionDocument(document: CompositionDocument)
     if (placement.sourceOut === undefined) delete output.sourceOut;
     else output.sourceOut = placement.sourceOut;
     const rawOutput = output as unknown as Record<string, unknown>;
+    // The compatibility layer is a projection of the canonical source union. Clear
+    // discriminant-specific legacy fields first so a source-type change cannot leave
+    // stale clip/shot/script references beside the new canonical source.
+    for (const key of ["assetId", "childCompositionId", "clipVersionId", "shotId", "slotId", "shotVersionId", "scriptVersionId"]) {
+      delete rawOutput[key];
+    }
     if (placement.source.type === "asset") rawOutput.assetId = placement.source.assetId;
     else if (placement.source.type === "clip") {
       rawOutput.childCompositionId = placement.source.assetId;
@@ -310,8 +380,10 @@ export function updateClipVersionLayer(
   const linkedToPlacementId = typeof legacy.linkedToPlacementId === "string"
     ? legacy.linkedToPlacementId
     : typeof legacy.linkedVideoClipId === "string" ? legacy.linkedVideoClipId : undefined;
-  const updatedPlacement: CompositionPlacement = {
-    ...placement,
+  // Inspector edits must cross the same validated immutable command boundary as
+  // timeline operations. This keeps canonical geometry/source fields and their legacy
+  // projection synchronized, and validates track/placement invariants on every edit.
+  const nextDocument = updateCompositionPlacement(document, layerId, {
     name: updatedLayer.name,
     trackId: updatedLayer.trackId ?? placement.trackId,
     start: updatedLayer.start,
@@ -320,18 +392,11 @@ export function updateClipVersionLayer(
       .some(key => Object.prototype.hasOwnProperty.call(patch, key))
       ? sourceReferenceForLayer(updatedLayer)
       : placement.source,
-    ...(updatedLayer.sourceIn !== undefined ? { sourceIn: updatedLayer.sourceIn } : {}),
-    ...(updatedLayer.sourceIn === undefined ? { sourceIn: undefined } : {}),
-    ...(updatedLayer.sourceOut !== undefined ? { sourceOut: updatedLayer.sourceOut } : {}),
-    ...(updatedLayer.sourceOut === undefined ? { sourceOut: undefined } : {}),
-    ...(linkedToPlacementId ? { linkedToPlacementId } : { linkedToPlacementId: undefined }),
+    sourceIn: updatedLayer.sourceIn,
+    sourceOut: updatedLayer.sourceOut,
+    linkedToPlacementId,
     legacyData: { ...placement.legacyData, ...legacy },
-  };
-  const nextDocument = {
-    ...document,
-    duration: Math.max(document.duration, updatedLayer.start + updatedLayer.duration),
-    placements: document.placements.map(item => item.id === layerId ? updatedPlacement : item),
-  };
+  });
   return versionWithComposition(normalized, nextDocument);
 }
 
@@ -375,30 +440,15 @@ export function applyClipVersionResizePreview(
  */
 export function duplicateClipVersionComposition(
   version: ClipVersion,
-  createId: (kind: "clip-track" | "layer", previousId: string) => string,
+  createId: (kind: "clip-track" | "layer" | "composition", previousId: string) => string,
 ): ClipVersion {
-  const normalized = normalizeClipVersionTracks(version);
-  if (!normalized.composition) {
-    const trackIds = new Map((normalized.tracks ?? []).map(track => [track.id, createId("clip-track", track.id)]));
-    const layerIds = new Map(normalized.layers.map(layer => [layer.id, createId("layer", layer.id)]));
-    return {
-      ...normalized,
-      tracks: (normalized.tracks ?? []).map(track => ({ ...track, id: trackIds.get(track.id)! })),
-      layers: normalized.layers.map(layer => {
-        const next = { ...layer, id: layerIds.get(layer.id)!, ...(layer.trackId ? { trackId: trackIds.get(layer.trackId) ?? layer.trackId } : {}) };
-        const raw = next as unknown as Record<string, unknown>;
-        if (typeof raw.linkedVideoClipId === "string") raw.linkedVideoClipId = layerIds.get(raw.linkedVideoClipId) ?? raw.linkedVideoClipId;
-        if (typeof raw.linkedToPlacementId === "string") raw.linkedToPlacementId = layerIds.get(raw.linkedToPlacementId) ?? raw.linkedToPlacementId;
-        return next;
-      }),
-    };
-  }
-
-  const source = structuredClone(normalized.composition);
+  const normalized = ensureClipVersionComposition(version);
+  const source = structuredClone(normalized.composition!);
   const trackIds = new Map(source.tracks.map(track => [track.id, createId("clip-track", track.id)]));
   const placementIds = new Map(source.placements.map(placement => [placement.id, createId("layer", placement.id)]));
   const composition = {
     ...source,
+    id: createId("composition", source.id),
     tracks: source.tracks.map(track => ({
       ...track,
       id: trackIds.get(track.id)!,
