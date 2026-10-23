@@ -29,6 +29,7 @@ import {
   ensureCanonicalMasterShots,
   trimCanonicalRootTimelineClip,
   moveCanonicalRootTimelineClip,
+  moveCanonicalMasterShot,
   moveProjectTimelinePlacement,
   type ProjectTimelineInsertionPlan,
   type ProjectTimelineInsertResolution,
@@ -736,6 +737,15 @@ export default function App() {
       if (clip) {
         changeRootComposition(root => moveCanonicalRootTimelineClip(
           editorSessionRef.current.project, root, placementId, trackId, start,
+        ));
+        return;
+      }
+    }
+    if (target.type === "shot") {
+      const shot = editorSessionRef.current.project.shots.find(item => item.id === target.shotId);
+      if (shot) {
+        changeRootComposition(root => moveCanonicalMasterShot(
+          editorSessionRef.current.project, root, target.shotId, trackId, start,
         ));
         return;
       }
