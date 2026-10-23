@@ -4,18 +4,24 @@
  * span the clips hold their edge frame, so no extra media handles are needed.
  */
 import type { Composition, Placement, Track } from "./model";
+import { applyPreset, getPreset, listPresets } from "../registry";
 
 export interface TransitionKind {
+  id: string;
   label: string;
   icon: string;
   /** Opacity multipliers for the outgoing and incoming clip at progress a (0..1). Incoming is drawn on top. */
   mix(a: number): { out: number; in: number };
 }
 
-export const TRANSITIONS = {
-  crossfade: { label: "Crossfade", icon: "⧓", mix: (a: number) => ({ out: 1, in: a }) },
-} satisfies Record<string, TransitionKind>;
-export type TransitionId = keyof typeof TRANSITIONS;
+/** Transition kind from the preset registry (undefined when the id is unknown). */
+export function transitionKind(id: string): TransitionKind | undefined {
+  const d = getPreset("transition", id);
+  if (!d) return undefined;
+  return { id, label: d.name, icon: d.preview.icon ?? "⧓", mix: (a) => { const f = applyPreset("transition", id, a); return { out: f.mixOut ?? 1, in: f.mixIn ?? 1 }; } };
+}
+export const transitionKinds = () => listPresets("transition").map((d) => transitionKind(d.id)!);
+export type TransitionId = string;
 export interface Transition { kind: TransitionId; durationTicks: number }
 
 export const DEFAULT_TRANSITION_TICKS = 60_000; // 0.5 s
@@ -39,7 +45,7 @@ export function trackTransitions(track: Track): ActiveTransition[] {
   for (const p of track.placements) {
     if (!p.transitionIn || track.kind !== "video") continue;
     const prev = previousAdjacent(track, p);
-    const kind = TRANSITIONS[p.transitionIn.kind];
+    const kind = transitionKind(p.transitionIn.kind);
     if (!prev || !kind) continue;
     const d = Math.min(p.transitionIn.durationTicks, maxTransition(prev, p));
     out.push({ prev, next: p, from: p.startTicks - Math.floor(d / 2), to: p.startTicks + Math.ceil(d / 2), kind });

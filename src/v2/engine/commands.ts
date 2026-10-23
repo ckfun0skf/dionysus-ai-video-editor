@@ -129,7 +129,7 @@ export const setTransform = (id: string, patch: Parameters<typeof ops.setTransfo
   apply: (p) => withRoot(p, (c) => ops.setTransform(c, id, patch)),
 });
 export const setSpeed = (id: string, speed: number): Command => ({ label: `Speed ${speed}×`, coalesceKey: `speed:${id}`, apply: (p) => withRoot(p, (c) => ops.setSpeed(c, id, speed)) });
-export const setTransition = (id: string, t: transitions.Transition | undefined): Command => ({ label: t ? `${transitions.TRANSITIONS[t.kind].label} ${t.durationTicks / 120000}s` : "Remove transition", coalesceKey: `transition:${id}`, apply: (p) => withRoot(p, (c) => transitions.setTransition(c, id, t)) });
+export const setTransition = (id: string, t: transitions.Transition | undefined): Command => ({ label: t ? `${(transitions.transitionKind(t.kind)?.label ?? "Transition")} ${t.durationTicks / 120000}s` : "Remove transition", coalesceKey: `transition:${id}`, apply: (p) => withRoot(p, (c) => transitions.setTransition(c, id, t)) });
 export const setReverse = (id: string, reverse: boolean): Command => ({ label: reverse ? "Reverse" : "Play forward", apply: (p) => withRoot(p, (c) => ops.setReverse(c, id, reverse)) });
 export const freezeFrame = (id: string, at: number, holdTicks = 3 * 120_000): Command => ({ label: "Freeze frame", apply: (p) => withRoot(p, (c) => ops.freezeFrame(c, id, at, holdTicks)) });
 export const setFades = (id: string, fades: { in?: number; out?: number }): Command => ({ label: "Fade", coalesceKey: `fade:${id}`, apply: (p) => withRoot(p, (c) => ops.setFades(c, id, fades)) });

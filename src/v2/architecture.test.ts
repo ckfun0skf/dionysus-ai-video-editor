@@ -5,16 +5,17 @@ import { describe, expect, it } from "vitest";
 
 const V2 = resolve(__dirname);
 const ALLOWED: Record<string, string[]> = {
-  domain: ["domain"],
-  ports: ["domain", "ports"],
-  engine: ["domain", "ports", "engine"],
-  persistence: ["domain", "ports", "persistence"],
-  render: ["domain", "ports", "render"],
-  ui: ["domain", "ports", "engine", "persistence", "render", "ui"],
+  registry: ["registry"],
+  domain: ["domain", "registry"],
+  ports: ["registry", "domain", "ports"],
+  engine: ["registry", "domain", "ports", "engine"],
+  persistence: ["registry", "domain", "ports", "persistence"],
+  render: ["registry", "domain", "ports", "render"],
+  ui: ["domain", "ports", "engine", "persistence", "render", "registry", "ui"],
 };
 /** Known violations being fixed in follow-up PRs; must shrink to empty. */
 const KNOWN_VIOLATIONS = new Set<string>();
-const NO_DOM = new Set(["domain", "ports", "engine"]);
+const NO_DOM = new Set(["registry", "domain", "ports", "engine"]);
 
 function files(dir: string): string[] {
   return readdirSync(dir).flatMap((n) => {

@@ -23,7 +23,7 @@ describe("TextPanel", () => {
     expect(get().text!.text).toBe("Hello");
     await act(async () => { btn("Animation").click(); });
     await render();
-    await act(async () => { btn("typewriter").click(); });
+    await act(async () => { btn("Typewriter").click(); });
     expect(get().text!.animIn).toBe("typewriter");
     e.undo(); e.undo();
     expect(get().text!.effect ?? "none").toBe("none");

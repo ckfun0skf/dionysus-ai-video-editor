@@ -1,6 +1,11 @@
 import { useState } from "react";
 import { cmd, type Engine } from "../engine";
 import { text as T, type Placement, type TextData } from "../domain";
+import { listPresets, type PresetKind } from "../registry";
+
+/** Chip ids for a preset kind, "none" first; labels come from the registry. */
+const presetIds = (k: PresetKind) => ["none", ...listPresets(k).map((d) => d.id)];
+const presetName = (k: PresetKind, id: string) => (id === "none" ? "None" : listPresets(k).find((d) => d.id === id)?.name ?? id);
 
 const TABS = ["Templates", "Font", "Style", "Effects", "Animation"] as const;
 type Tab = (typeof TABS)[number];
@@ -20,9 +25,9 @@ export function TextPanel({ engine, placement }: { engine: Engine; placement: Pl
   const color = (label: string, value: string, on: (v: string) => void) => (
     <label className="v2-tp-row">{label}<input type="color" aria-label={label} value={value} onFocus={() => engine.beginGesture()} onBlur={() => engine.endGesture()} onChange={(e) => on(e.target.value)} /></label>
   );
-  const chips = <K extends string>(label: string, list: readonly K[], value: K, on: (v: K) => void) => (
+  const chips = <K extends string>(label: string, list: readonly K[], value: K, on: (v: K) => void, name: (v: K) => string = (v) => v) => (
     <div className="v2-tp-chips" role="radiogroup" aria-label={label}>
-      {list.map((v) => <button key={v} role="radio" aria-checked={v === value} className={`v2-chip ${v === value ? "is-active" : ""}`} onClick={() => on(v)}>{v}</button>)}
+      {list.map((v) => <button key={v} role="radio" aria-checked={v === value} className={`v2-chip ${v === value ? "is-active" : ""}`} onClick={() => on(v)}>{name(v)}</button>)}
     </div>
   );
   return (
@@ -57,13 +62,13 @@ export function TextPanel({ engine, placement }: { engine: Engine; placement: Pl
           {d.background && color("Background color", d.background.color, (v) => set({ background: { ...d.background!, color: v } }))}
         </>}
         {tab === "Effects" && <>
-          {chips("Effect", ["none", "glow", "neon", "hollow", "echo"] as const, d.effect ?? "none", (v) => set({ effect: v }, "Effect"))}
+          {chips("Effect", presetIds("effect"), d.effect ?? "none", (v) => set({ effect: v }, "Effect"), (v) => presetName("effect", v))}
           {color("Effect color", d.effectColor ?? "#20d5ec", (v) => set({ effectColor: v }))}
         </>}
         {tab === "Animation" && <>
-          <span className="v2-tp-h">In</span>{chips("In animation", ["none", "fade", "slide-up", "pop", "typewriter"] as const, d.animIn ?? "none", (v) => set({ animIn: v }, "In animation"))}
-          <span className="v2-tp-h">Out</span>{chips("Out animation", ["none", "fade", "slide-down", "shrink"] as const, d.animOut ?? "none", (v) => set({ animOut: v }, "Out animation"))}
-          <span className="v2-tp-h">Loop</span>{chips("Loop animation", ["none", "pulse", "wiggle", "float"] as const, d.loop ?? "none", (v) => set({ loop: v }, "Loop animation"))}
+          <span className="v2-tp-h">In</span>{chips("In animation", presetIds("textAnimIn"), d.animIn ?? "none", (v) => set({ animIn: v }, "In animation"), (v) => presetName("textAnimIn", v))}
+          <span className="v2-tp-h">Out</span>{chips("Out animation", presetIds("textAnimOut"), d.animOut ?? "none", (v) => set({ animOut: v }, "Out animation"), (v) => presetName("textAnimOut", v))}
+          <span className="v2-tp-h">Loop</span>{chips("Loop animation", presetIds("textAnimLoop"), d.loop ?? "none", (v) => set({ loop: v }, "Loop animation"), (v) => presetName("textAnimLoop", v))}
         </>}
       </div>
     </div>

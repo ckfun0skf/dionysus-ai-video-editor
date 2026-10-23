@@ -1,8 +1,10 @@
-/** Text clips: a placement with `clipType: "text"` on a text track. Pure data + animation math. */
-export type TextAnimIn = "none" | "fade" | "slide-up" | "pop" | "typewriter";
-export type TextAnimOut = "none" | "fade" | "slide-down" | "shrink";
-export type TextAnimLoop = "none" | "pulse" | "wiggle" | "float";
-export type TextEffect = "none" | "glow" | "neon" | "hollow" | "echo";
+/** Text clips: a placement with `clipType: "text"` on a text track. Pure data; animation math lives in the preset registry. */
+import { applyPreset, identityFrame, loopPeriod, type PresetFrame } from "../registry";
+/** Preset ids from the registry ("none" or undefined = no preset). */
+export type TextAnimIn = string;
+export type TextAnimOut = string;
+export type TextAnimLoop = string;
+export type TextEffect = string;
 
 export interface TextData {
   text: string;
@@ -40,31 +42,16 @@ const ANIM_TICKS = 60_000; // 0.5 s
 export function textOf(d?: Partial<TextData>): TextData { return { ...DEFAULT_TEXT, ...d }; }
 
 /** Per-frame animation state for a text clip at clip offset `o` of `dur` ticks. */
-export interface TextAnimState { alpha: number; dx: number; dy: number; scale: number; rot: number; chars: number }
-const ease = (x: number) => 1 - (1 - x) ** 3;
+export type TextAnimState = PresetFrame;
 export function textAnimAt(d: TextData, o: number, dur: number): TextAnimState {
-  const s: TextAnimState = { alpha: 1, dx: 0, dy: 0, scale: 1, rot: 0, chars: 1 };
   const a = Math.min(d.animTicks ?? ANIM_TICKS, dur / 2);
   const pin = a > 0 ? Math.min(1, Math.max(0, o / a)) : 1;
   const pout = a > 0 ? Math.min(1, Math.max(0, (dur - o) / a)) : 1;
-  const ei = ease(pin), eo = ease(pout);
-  switch (d.animIn ?? "none") {
-    case "fade": s.alpha *= ei; break;
-    case "slide-up": s.alpha *= ei; s.dy += (1 - ei) * 0.08; break;
-    case "pop": s.scale *= 0.4 + 0.6 * ei + Math.sin(pin * Math.PI) * 0.12; s.alpha *= Math.min(1, pin * 3); break;
-    case "typewriter": s.chars = pin; break;
-  }
-  switch (d.animOut ?? "none") {
-    case "fade": s.alpha *= eo; break;
-    case "slide-down": s.alpha *= eo; s.dy += (1 - eo) * 0.08; break;
-    case "shrink": s.scale *= eo; break;
-  }
-  const sec = o / 120_000;
-  switch (d.loop ?? "none") {
-    case "pulse": s.scale *= 1 + 0.06 * Math.sin(sec * Math.PI * 2); break;
-    case "wiggle": s.rot += 4 * Math.sin(sec * Math.PI * 4); break;
-    case "float": s.dy += 0.015 * Math.sin(sec * Math.PI * 2); break;
-  }
+  let s = identityFrame();
+  s = applyPreset("textAnimIn", d.animIn, pin, s);
+  s = applyPreset("textAnimOut", d.animOut, pout, s);
+  const per = loopPeriod(d.loop) * 120_000;
+  s = applyPreset("textAnimLoop", d.loop, (((o % per) + per) % per) / per, s);
   return s;
 }
 
