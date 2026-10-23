@@ -577,6 +577,34 @@ describe("App history integration", () => {
     expect(container.querySelector<HTMLInputElement>('.version-panel input[aria-label="Clip slot name"]')?.value).toBe("Opening image");
   });
 
+  it("creates new storyboard versions with independent canonical Composition snapshots", async () => {
+    const storyboardNav = Array.from(container.querySelectorAll<HTMLButtonElement>(".nav-item")).find(button => button.textContent?.includes("Storyboard"));
+    if (!storyboardNav) throw new Error("Storyboard navigation is missing");
+    click(storyboardNav);
+    await flushEffects();
+    const toggle = container.querySelector<HTMLButtonElement>(".shot-version-toggle");
+    if (!toggle) throw new Error("Storyboard version toggle is missing");
+    click(toggle);
+    const option = Array.from(container.querySelectorAll<HTMLButtonElement>(".shot-version-option")).find(button => button.textContent?.includes("Opening image"));
+    if (!option) throw new Error("Opening image version is missing");
+    click(option);
+    await flushEffects();
+
+    const create = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Create new version"));
+    if (!create) throw new Error("Create new version action is missing");
+    click(create);
+    await flushEffects();
+
+    const project = persistedProject();
+    const slot = project.shots.flatMap(shot => shot.slots).find(item => item.name === "Opening image");
+    expect(slot).toBeTruthy();
+    const created = slot!.versions.find(version => version.id === slot!.selectedVersionId);
+    expect(created?.composition).toBeDefined();
+    expect(created?.composition?.placements).toHaveLength(created?.layers.length ?? 0);
+    expect(created?.composition?.width).toBeGreaterThan(0);
+    expect(created?.composition?.height).toBeGreaterThan(0);
+  });
+
   it("edits Master Shot placement independently from Version and Slot internal duration", async () => {
     await openTimelineView();
     const firstShotBlock = container.querySelector<HTMLButtonElement>(".master-shot-clip");
