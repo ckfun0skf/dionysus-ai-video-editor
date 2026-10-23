@@ -1979,6 +1979,12 @@
           "title": "Media picker: Project media tab (first) to re-add previously imported assets",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-093",
+          "title": "Mobile group lanes: icon-only buttons in left column, no in-lane labels",
+          "status": "done",
+          "progress": 100
         }
       ]
     },
