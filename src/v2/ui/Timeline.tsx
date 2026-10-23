@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Engine } from "../engine/engine";
 import * as cmd from "../engine/commands";
 import * as ops from "../domain/ops";
@@ -16,7 +16,15 @@ interface Props {
   pps: number;
   /** Mobile/CapCut mode: fixed centred playhead, the tracks scroll under it. */
   centered: boolean;
+  /** Centered mode extras (CapCut layout). */
+  thumbs?: Record<string, string>;
+  onAddMedia?: () => void;
+  sideColumn?: ReactNode;
+  timeLabel?: ReactNode;
 }
+
+/** Fixed playhead position in centered mode, as a fraction of the viewport width. */
+const PLAYHEAD_FRAC = 0.42;
 
 type Gesture =
   | { kind: "move"; id: string; x0: number; y0: number; start0: number; trackId: string; start: number; active: boolean }
@@ -24,16 +32,17 @@ type Gesture =
 
 const HEADER_W = 84;
 
-export function Timeline({ engine, project, time, playing, onSeek, selectedId, onSelect, pps, centered }: Props) {
+export function Timeline({ engine, project, time, playing, onSeek, selectedId, onSelect, pps, centered, thumbs, onAddMedia, sideColumn, timeLabel }: Props) {
   const comp = project.compositions[project.rootCompositionId];
   const scrollRef = useRef<HTMLDivElement>(null);
   const [gesture, setGesture] = useState<Gesture>();
   const [viewW, setViewW] = useState(800);
   const programmatic = useRef(false);
   const toPx = (t: number) => (t / TICKS_PER_SECOND) * pps;
-  const toTicks = (px: number) => (px / pps) * TICKS_PER_SECOND;
+  const toTicks = (px: number) => Math.round((px / pps) * TICKS_PER_SECOND);
   const duration = compositionDuration(comp);
-  const pad = centered ? viewW / 2 : 0;
+  const pad = centered ? Math.round(viewW * PLAYHEAD_FRAC) : 0;
+  const padRight = centered ? viewW - pad : 0;
   const contentW = Math.max(toPx(duration) + (centered ? 0 : 400), centered ? 1 : viewW - HEADER_W);
 
   useLayoutEffect(() => {
@@ -136,9 +145,11 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, o
     engine.dispatch(cmd.addAssetToTimeline(assetId, Math.max(0, toTicks(e.clientX - rect.left)), trackId));
   };
 
+  const firstVideo = comp.tracks.find((t) => t.kind === "video");
+  const laneEnd = (ps: { startTicks: number; durationTicks: number }[]) => ps.reduce((m, p) => Math.max(m, p.startTicks + p.durationTicks), 0);
   const step = pps >= 80 ? 1 : pps >= 30 ? 2 : pps >= 12 ? 5 : 10;
   const ticks: number[] = [];
-  const rulerSeconds = (contentW + pad * 2) / pps;
+  const rulerSeconds = (contentW + pad + padRight) / pps;
   for (let s = 0; s <= rulerSeconds; s += step) ticks.push(s);
 
   return (
@@ -155,7 +166,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, o
         </div>
       )}
       <div className="v2-scroll" ref={scrollRef} onScroll={onScroll} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={() => setGesture(undefined)}>
-        <div className="v2-content" style={{ width: contentW + pad * 2, paddingLeft: pad, paddingRight: pad }}>
+        <div className="v2-content" style={{ width: contentW + pad + padRight, paddingLeft: pad, paddingRight: padRight }}>
           <div className="v2-ruler" onPointerDown={scrub}>
             {ticks.map((s) => (
               <span key={s} className="v2-tick" style={{ left: s * pps }}>{formatTimecode(s * TICKS_PER_SECOND, project.settings.fps).slice(0, 5)}</span>
@@ -165,13 +176,13 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, o
             <div key={t.id} className={`v2-lane kind-${t.kind} ${t.muted ? "is-muted" : ""}`} data-track-id={t.id}
               onPointerDown={(e) => { if (e.target === e.currentTarget) { onSelect(undefined); if (!centered) scrub(e); } }}
               onDragOver={(e) => e.preventDefault()} onDrop={(e) => onDrop(e, t.id)}>
-              {centered && <span className="v2-lane-label">{t.muted ? "🔇 " : ""}{t.name}</span>}
+              {centered && t.muted && <span className="v2-lane-label">🔇</span>}
               {t.placements.map((p) => {
                 const asset = project.assets[p.source.assetId];
                 const sel = p.id === selectedId;
                 return (
                   <div key={p.id} className={`v2-clip clip-${p.clipType} ${sel ? "is-selected" : ""}`} data-placement-id={p.id}
-                    style={{ left: toPx(p.startTicks), width: Math.max(4, toPx(p.durationTicks)) }}
+                    style={{ left: toPx(p.startTicks), width: Math.max(4, toPx(p.durationTicks)), ...(centered && thumbs?.[p.source.assetId] && p.clipType !== "audio" ? { backgroundImage: `url(${thumbs[p.source.assetId]})` } : {}) }}
                     onPointerDown={(e) => onClipDown(e, p.id, t.id, p.startTicks)} title={asset?.name}>
                     <span className="v2-clip-name">{asset?.name ?? "missing media"}</span>
                     {sel && <>
@@ -181,12 +192,17 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, o
                   </div>
                 );
               })}
+              {centered && onAddMedia && t.id === firstVideo?.id && (
+                <button className="v2-lane-add" style={{ left: toPx(laneEnd(t.placements)) + 8 }} aria-label="Add media" onPointerDown={(e) => e.stopPropagation()} onClick={onAddMedia}>+</button>
+              )}
             </div>
           ))}
           {!centered && <div className="v2-playhead" style={{ left: toPx(time) }} />}
         </div>
       </div>
-      {centered && <div className="v2-playhead-fixed" aria-hidden />}
+      {centered && <div className="v2-playhead-fixed" style={{ left: `${PLAYHEAD_FRAC * 100}%` }} aria-hidden />}
+      {centered && timeLabel && <div className="v2-time-label">{timeLabel}</div>}
+      {centered && sideColumn && <div className="v2-side-col" style={{ width: Math.max(0, pad - 12) }}>{sideColumn}</div>}
     </div>
   );
 }
