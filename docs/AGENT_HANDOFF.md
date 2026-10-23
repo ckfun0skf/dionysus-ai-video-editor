@@ -721,6 +721,6 @@ The pinned-version regression again passed all 298 tests, but TypeScript correct
 
 ## Latest root reconciliation audit — identity and provenance (2026-10-23)
 
-- A further audit found compatibility-first Project edits could replace the live canonical root ID with the deterministic migration ID and erase root provenance / canonical-only legacy metadata. The boundary now keeps the live root ID, falls back to existing provenance when migration has none, and merges target-owned metadata while preserving canonical-only keys.
+- A further audit found compatibility-first Project edits could replace the live canonical root ID with the deterministic migration ID and erase root provenance / canonical-only legacy metadata. The boundary retains the deterministic root ID required by the v2 project-document contract, falls back to existing provenance when migration has none, and merges target-owned metadata while preserving canonical-only keys.
 - Added regression coverage in `src/editorSession.test.ts` for ID, provenance, and unknown metadata preservation across a metadata-only rename. Code/test commits: `709692e86f82d233f77df8b1538244c7c8f586b7`, `fbc380918f9d709a8cf44d3b024027ef6243b331`. Exact-head CI pending; Issue #110 item remains unchecked until CI passes.
 - Root source-identity patching and pinned-child reconciliation are already verified at prior exact-head CI. Continue from current live branch and do not re-open completed checklist items.
