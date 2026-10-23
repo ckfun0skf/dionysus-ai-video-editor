@@ -192,6 +192,27 @@ All registries share `createRegistry<T extends { id: string }>()` with `register
 | `generators` | `{ id, kinds, buildPrompt(spec), generate?(req, signal) → AssetVersion }` — `manual` provider (copy prompt, import result) ships first |
 | `qaCheckers` | `{ id, appliesTo: "asset"|"shot"|"composition", run(project, target) → QaResult[] }` (missing reference, stale input, duration mismatch, resolution, aspect) |
 
+### 6.1 Preset registry (`src/v2/registry`, V2-097)
+
+Text animations (in/out/loop), text effects, transitions and stickers are data-driven presets. The UI lists them
+only via `listPresets(kind)`; nothing hard-codes a preset id list.
+
+- **Descriptor** (`types.ts`, JSON-serializable): `id`, `kind` (`textAnimIn | textAnimOut | textAnimLoop | effect |
+  transition | sticker`), `category`, `name`, `type` (render-function key), `params` (schema with `default`s) and a
+  `preview` hint. Built-ins live in `presets.ts`; more can come from JSON or a backend via `registerPresets(json)`
+  (invalid descriptors are rejected and their ids returned).
+- **Render function** (`renderers.ts`): `RENDERERS[type](frame, progress, params) => frame`, pure. It maps
+  normalized progress (0..1) to alpha/dx/dy/scale/rot/chars, `clip`, `filter`, transition `mixOut/mixIn`, text `fx`,
+  or a sticker `svg`. In presets get progress 0→1 over the in duration; out presets get 1→0 (1 = fully shown);
+  loop presets get the phase within their `period` param (seconds); transitions get progress across the cut.
+- **Add a preset:** append a descriptor to `BUILTIN_PRESETS` reusing an existing `type` (e.g. a new slide direction
+  is just new `dirX/dirY` defaults). For new behaviour, add a function to `RENDERERS` (or `registerRenderer` at
+  runtime) and point the descriptor's `type` at it. The renderer must not throw for any progress in [0,1].
+- **Remove a preset:** delete its descriptor (or `unregisterPreset(kind, id)`). Projects that still reference the id
+  render as identity (no animation), never crash.
+- Layering: `registry` imports nothing else in v2; `domain`, `render` and `ui` may import it.
+- Tests (`registry.test.ts`): descriptor contract, JSON round-trip, and every preset rendering at t = 0, 0.5, 1.
+
 ## 7. Commands & history
 
 - **Command** = `{ type, payload }`; a handler is `(draft: Project, payload, ctx) => void` applied via Immer-style structural sharing (or hand-rolled patches) producing **forward + inverse patches**.

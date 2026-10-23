@@ -361,9 +361,9 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
                 const tr = p.transitionIn;
                 return (
                   <button key={`tr-${p.id}`} className={`v2-trans ${tr ? "has-trans" : ""} ${tr && p.id === selectedId ? "is-selected" : ""}`} style={{ left: toPx(p.startTicks) }}
-                    aria-label={tr ? `${transitions.TRANSITIONS[tr.kind].label} ${tr.durationTicks / TICKS_PER_SECOND}s` : "Add crossfade"} title={tr ? "Edit transition" : "Add a crossfade at this cut"}
+                    aria-label={tr ? `${(transitions.transitionKind(tr.kind)?.label ?? "Transition")} ${tr.durationTicks / TICKS_PER_SECOND}s` : "Add crossfade"} title={tr ? "Edit transition" : "Add a crossfade at this cut"}
                     onPointerDown={(e) => e.stopPropagation()} onClick={() => onTransition(p.id)}>
-                    <Ic g={tr ? transitions.TRANSITIONS[tr.kind].icon : "+"} size={14} />
+                    <Ic g={tr ? (transitions.transitionKind(tr.kind)?.icon ?? "⧓") : "+"} size={14} />
                   </button>
                 );
               })}

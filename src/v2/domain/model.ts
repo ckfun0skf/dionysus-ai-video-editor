@@ -59,7 +59,8 @@ export interface Placement {
   /** Per-property keyframes; `t` is ticks from the clip start. Linear between keys, held outside. */
   keyframes?: Partial<Record<KeyframeProp, Keyframe[]>>;
   /** Transition from the clip that ends where this one starts (see domain/transitions). */
-  transitionIn?: { kind: "crossfade"; durationTicks: number };
+  /** `kind` is a transition preset id from the registry. */
+  transitionIn?: { kind: string; durationTicks: number };
   /** Text clips (`clipType: "text"`): content and style. Their `source` is TEXT_SOURCE (no media). */
   text?: TextData;
 }

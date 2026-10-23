@@ -320,9 +320,11 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const trIn = sp?.transitionIn;
   const transitionTools = sp && trIn ? (
     <span className="v2-trans-tools" role="group" aria-label="Transition">
-      <b aria-hidden><Ic g={transitions.TRANSITIONS[trIn.kind].icon} /></b>
+      {transitions.transitionKinds().map((k) => (
+        <button key={k.id} className={`v2-tool ${trIn.kind === k.id ? "is-active" : ""}`} aria-pressed={trIn.kind === k.id} title={k.label} onClick={() => engine.dispatch(cmd.setTransition(sp.id, { kind: k.id, durationTicks: trIn.durationTicks }))}><b aria-hidden><Ic g={k.icon} /></b><span>{k.label}</span></button>
+      ))}
       {transitions.TRANSITION_LENGTHS.map((d) => (
-        <button key={d} className={`v2-tool ${trIn.durationTicks === d ? "is-active" : ""}`} aria-pressed={trIn.durationTicks === d} title={`Crossfade length ${d / 120000}s`} onClick={() => engine.dispatch(cmd.setTransition(sp.id, { kind: trIn.kind, durationTicks: d }))}><span>{d / 120000}s</span></button>
+        <button key={d} className={`v2-tool ${trIn.durationTicks === d ? "is-active" : ""}`} aria-pressed={trIn.durationTicks === d} title={`Transition length ${d / 120000}s`} onClick={() => engine.dispatch(cmd.setTransition(sp.id, { kind: trIn.kind, durationTicks: d }))}><span>{d / 120000}s</span></button>
       ))}
       <button className="v2-tool" title="Remove the transition into this clip" onClick={() => engine.dispatch(cmd.setTransition(sp.id, undefined))}><b aria-hidden><Ic g="✕" /></b><span>No transition</span></button>
     </span>

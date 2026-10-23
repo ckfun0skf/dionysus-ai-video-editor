@@ -2003,6 +2003,12 @@
           "title": "Root toolbar modes: Edit/Audio/Text/Effect/Overlay with back",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-097",
+          "title": "Preset registry: data-driven text animations, effects, transitions, stickers",
+          "status": "done",
+          "progress": 100
         }
       ]
     },
