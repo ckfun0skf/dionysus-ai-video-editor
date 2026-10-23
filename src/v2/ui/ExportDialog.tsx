@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { exportName, exportProject, RESOLUTIONS, type ExportProgress, type ExportResult, type Resolution } from "../render";
 import type { Project } from "../domain";
 import type { BlobStore } from "../ports";
+import { Ic } from "./Icon";
 
 type Run = typeof exportProject;
 type State = { s: "idle" } | { s: "running"; p: ExportProgress } | { s: "done"; r: ExportResult; url: string } | { s: "error"; msg: string };
@@ -49,7 +50,7 @@ export function ExportDialog({ project, blobs, res, onRes, onClose, run = export
         {st.s === "done" && <>
           <p role="status">Done — {st.r.ext.toUpperCase()}, {(st.r.blob.size / 1e6).toFixed(1)} MB.</p>
           {st.r.note && <p className="v2-muted">{st.r.note}</p>}
-          {!!st.r.warnings?.length && <div className="v2-warn" role="alert"><b>⚠ Some HTML clip frames could not be rendered</b><ul>{st.r.warnings.map((w) => <li key={w}>{w}</li>)}</ul></div>}
+          {!!st.r.warnings?.length && <div className="v2-warn" role="alert"><b><Ic g="⚠" size={16} /> Some HTML clip frames could not be rendered</b><ul>{st.r.warnings.map((w) => <li key={w}>{w}</li>)}</ul></div>}
           <div className="v2-modal-actions"><button className="v2-btn" onClick={onClose}>Close</button><a className="v2-btn primary" href={st.url} download={exportName(project.name, st.r.ext)}>Download</a></div>
         </>}
         {st.s === "error" && <>

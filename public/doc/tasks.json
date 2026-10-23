@@ -1871,6 +1871,12 @@
           "title": "Mobile timeline: fixed opaque track-control column; remove floating button",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-075",
+          "title": "Lucide icon set across v2 desktop and mobile",
+          "status": "done",
+          "progress": 100
         }
       ]
     },

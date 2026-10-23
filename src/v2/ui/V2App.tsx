@@ -13,6 +13,7 @@ import { ExportDialog } from "./ExportDialog";
 import { ProjectsDialog } from "./Projects";
 import type { Resolution } from "../render";
 import { addCueAt, downloadSrt, importSrtFile, SubtitleEditor, SubtitleLane } from "./Subtitles";
+import { Ic } from "./Icon";
 
 type Menu = "multi" | "root" | "edit" | "edit-hint" | "audio" | "zoom" | "speed" | "text";
 const SPEEDS = [0.25, 0.5, 1, 1.5, 2, 4];
@@ -154,20 +155,20 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     <section className="v2-browser" aria-label="Media">
       <div className="v2-panel-head">
         <strong>Media</strong>
-        <button className="v2-btn primary" onClick={() => fileRef.current?.click()}>＋ Import</button>
-        <button className="v2-btn" title="Add an HTML/three.js clip (edit the .html and re-import to change it)" onClick={() => void onFiles([new File([THREE_TEMPLATE], "three-scene.html", { type: "text/html" })])}>＋ HTML clip</button>
+        <button className="v2-btn primary" onClick={() => fileRef.current?.click()}><Ic g="＋" size={16} /> Import</button>
+        <button className="v2-btn" title="Add an HTML/three.js clip (edit the .html and re-import to change it)" onClick={() => void onFiles([new File([THREE_TEMPLATE], "three-scene.html", { type: "text/html" })])}><Ic g="＋" size={16} /> HTML clip</button>
         {mobile && <button className="v2-btn" onClick={() => setSheet(false)}>Done</button>}
       </div>
       {busy > 0 && <p className="v2-hint">Importing {busy}…</p>}
-      {Object.values(project.assets).length === 0 && <p className="v2-hint">Import video, image, audio or HTML files, then {mobile ? "tap" : "drag or click"} ＋ to add them to the timeline.</p>}
+      {Object.values(project.assets).length === 0 && <p className="v2-hint">Import video, image, audio or HTML files, then {mobile ? "tap" : "drag or click"} + to add them to the timeline.</p>}
       <ul className="v2-assets">
         {Object.values(project.assets).map((a) => (
           <li key={a.id} draggable onDragStart={(e) => e.dataTransfer.setData("application/x-dionysus-asset", a.id)} className={`v2-asset kind-${a.kind}`}>
             <AssetThumb asset={a} engineBlobs={storage.blobs} />
             <span className="v2-asset-name" title={a.name}>{a.name}</span>
             <small>{a.kind}{a.versions[0]?.media.durationTicks ? ` · ${formatTimecode(a.versions[0].media.durationTicks, project.settings.fps).slice(0, 5)}` : ""}</small>
-            <button className="v2-btn" aria-label={`Add ${a.name} to timeline`} onClick={() => addToTimeline(a)}>＋</button>
-            <button className="v2-icon" aria-label={`Remove ${a.name}`} onClick={() => engine.dispatch(cmd.removeAsset(a.id))}>✕</button>
+            <button className="v2-btn" aria-label={`Add ${a.name} to timeline`} onClick={() => addToTimeline(a)}><Ic g="＋" /></button>
+            <button className="v2-icon" aria-label={`Remove ${a.name}`} onClick={() => engine.dispatch(cmd.removeAsset(a.id))}><Ic g="✕" /></button>
           </li>
         ))}
       </ul>
@@ -178,16 +179,16 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
 
   const transport = (
     <div className="v2-transport">
-      <button className="v2-icon" aria-label="Undo" disabled={!canUndo} onClick={() => engine.undo()}>↶</button>
-      <button className="v2-icon" aria-label="Redo" disabled={!canRedo} onClick={() => engine.redo()}>↷</button>
-      <button className="v2-icon" aria-label="Go to start" onClick={() => seek(0)}>⏮</button>
-      <button className="v2-play" aria-label={playing ? "Pause" : "Play"} onClick={togglePlay}>{playing ? "❚❚" : "▶"}</button>
+      <button className="v2-icon" aria-label="Undo" disabled={!canUndo} onClick={() => engine.undo()}><Ic g="↶" /></button>
+      <button className="v2-icon" aria-label="Redo" disabled={!canRedo} onClick={() => engine.redo()}><Ic g="↷" /></button>
+      <button className="v2-icon" aria-label="Go to start" onClick={() => seek(0)}><Ic g="⏮" /></button>
+      <button className="v2-play" aria-label={playing ? "Pause" : "Play"} onClick={togglePlay}><Ic g={playing ? "❚❚" : "▶"} /></button>
       <span className="v2-time">{formatTimecode(time, project.settings.fps)} / {formatTimecode(duration, project.settings.fps)}</span>
     </div>
   );
 
   const rippleToggle = (
-    <button key="ripple" className={`v2-tool ${ripple ? "is-active" : ""}`} aria-pressed={ripple} title="Ripple: delete and trim move later clips to close gaps (R)" onClick={() => setRipple(!ripple)}><b aria-hidden>⇤</b><span>Ripple {ripple ? "on" : "off"}</span></button>
+    <button key="ripple" className={`v2-tool ${ripple ? "is-active" : ""}`} aria-pressed={ripple} title="Ripple: delete and trim move later clips to close gaps (R)" onClick={() => setRipple(!ripple)}><b aria-hidden><Ic g="⇤" /></b><span>Ripple {ripple ? "on" : "off"}</span></button>
   );
 
   const clipActions = [
@@ -198,9 +199,9 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const multiBar = sel.length > 1 ? (
     <>
       <span className="v2-sel-count" role="status">{sel.length} selected</span>
-      <button className="v2-tool" title={ripple ? "Delete all and close gaps (Del)" : "Delete all (Del)"} onClick={() => delSel()}><b>🗑</b><span>{ripple ? "Ripple delete" : "Delete"}</span></button>
-      {clipActions.map((a) => <button key={a.label} className="v2-tool" title={a.title} onClick={a.run}><b aria-hidden>{a.icon}</b><span>{a.label}</span></button>)}
-      <button className="v2-tool" title="Clear selection (Esc)" onClick={() => selectClip(undefined)}><b>✓</b><span>Done</span></button>
+      <button className="v2-tool" title={ripple ? "Delete all and close gaps (Del)" : "Delete all (Del)"} onClick={() => delSel()}><b><Ic g="🗑" /></b><span>{ripple ? "Ripple delete" : "Delete"}</span></button>
+      {clipActions.map((a) => <button key={a.label} className="v2-tool" title={a.title} onClick={a.run}><b aria-hidden><Ic g={a.icon} /></b><span>{a.label}</span></button>)}
+      <button className="v2-tool" title="Clear selection (Esc)" onClick={() => selectClip(undefined)}><b><Ic g="✓" /></b><span>Done</span></button>
     </>
   ) : null;
 
@@ -220,7 +221,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     { icon: "⟲", label: sp.reverse ? "Play forward" : "Reverse", title: sp.reverse ? "Play this clip forwards again" : "Play this clip backwards (muted)", run: () => engine.dispatch(cmd.setReverse(sp.id, !sp.reverse)) },
   ] : [];
   const speedSelect = sp && sp.clipType !== "image" && !sp.freeze ? (
-    <label className="v2-tool" title="Playback speed — changes the clip's length"><b aria-hidden>⏩</b>
+    <label className="v2-tool" title="Playback speed — changes the clip's length"><b aria-hidden><Ic g="⏩" /></b>
       <select aria-label="Speed" value={sp.speed ?? 1} onChange={(e) => engine.dispatch(cmd.setSpeed(sp.id, Number(e.target.value)))}>
         {SPEEDS.map((s) => <option key={s} value={s}>{s}×</option>)}
       </select>
@@ -230,40 +231,40 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const trIn = sp?.transitionIn;
   const transitionTools = sp && trIn ? (
     <span className="v2-trans-tools" role="group" aria-label="Transition">
-      <b aria-hidden>{transitions.TRANSITIONS[trIn.kind].icon}</b>
+      <b aria-hidden><Ic g={transitions.TRANSITIONS[trIn.kind].icon} /></b>
       {transitions.TRANSITION_LENGTHS.map((d) => (
         <button key={d} className={`v2-tool ${trIn.durationTicks === d ? "is-active" : ""}`} aria-pressed={trIn.durationTicks === d} title={`Crossfade length ${d / 120000}s`} onClick={() => engine.dispatch(cmd.setTransition(sp.id, { kind: trIn.kind, durationTicks: d }))}><span>{d / 120000}s</span></button>
       ))}
-      <button className="v2-tool" title="Remove the transition into this clip" onClick={() => engine.dispatch(cmd.setTransition(sp.id, undefined))}><b aria-hidden>✕</b><span>No transition</span></button>
+      <button className="v2-tool" title="Remove the transition into this clip" onClick={() => engine.dispatch(cmd.setTransition(sp.id, undefined))}><b aria-hidden><Ic g="✕" /></b><span>No transition</span></button>
     </span>
   ) : null;
 
   const selectionActions = multiBar ?? (selected ? (
     <>
       {transitionTools}
-      <button className="v2-tool" onClick={split}><b>✂</b><span>Split</span></button>
-      <button className="v2-tool" title={ripple ? "Delete and close the gap (Del)" : "Delete (Del) · Shift+Del ripple delete"} onClick={() => del()}><b>🗑</b><span>{ripple ? "Ripple delete" : "Delete"}</span></button>
+      <button className="v2-tool" onClick={split}><b><Ic g="✂" /></b><span>Split</span></button>
+      <button className="v2-tool" title={ripple ? "Delete and close the gap (Del)" : "Delete (Del) · Shift+Del ripple delete"} onClick={() => del()}><b><Ic g="🗑" /></b><span>{ripple ? "Ripple delete" : "Delete"}</span></button>
       {speedSelect}
-      {[...clipActions, ...timeActions, ...linkedAudioActions].map((a) => <button key={a.label} className="v2-tool" title={a.title} onClick={a.run}><b aria-hidden>{a.icon}</b><span>{a.label}</span></button>)}
+      {[...clipActions, ...timeActions, ...linkedAudioActions].map((a) => <button key={a.label} className="v2-tool" title={a.title} onClick={a.run}><b aria-hidden><Ic g={a.icon} /></b><span>{a.label}</span></button>)}
       {selected.placement.clipType !== "image" && selected.placement.clipType !== "html" && (
-        <label className="v2-tool v2-volume"><b>🔊</b>
+        <label className="v2-tool v2-volume"><b><Ic g="🔊" /></b>
           <input type="range" min={0} max={1} step={0.05} value={selected.placement.volume ?? 1} aria-label="Volume" onPointerDown={() => engine.beginGesture()} onPointerUp={() => engine.endGesture()} onBlur={() => engine.endGesture()} onChange={(e) => engine.dispatch(cmd.setPlacementVolume(selected.placement.id, Number(e.target.value)))} />
         </label>
       )}
-      <button className="v2-tool" onClick={() => engine.dispatch(cmd.toggleTrackMute(selected.track.id))}><b>{selected.track.muted ? "🔈" : "🔇"}</b><span>{selected.track.muted ? "Unmute track" : "Mute track"}</span></button>
+      <button className="v2-tool" onClick={() => engine.dispatch(cmd.toggleTrackMute(selected.track.id))}><b><Ic g={selected.track.muted ? "🔈" : "🔇"} /></b><span>{selected.track.muted ? "Unmute track" : "Mute track"}</span></button>
       {rippleToggle}
-      <button className="v2-tool" onClick={() => setSelectedId(undefined)}><b>✓</b><span>Done</span></button>
+      <button className="v2-tool" onClick={() => setSelectedId(undefined)}><b><Ic g="✓" /></b><span>Done</span></button>
     </>
   ) : (
     <>
-      <button className="v2-tool" onClick={() => (mobile ? setSheet(true) : fileRef.current?.click())}><b>＋</b><span>Media</span></button>
-      <button className="v2-tool" onClick={() => engine.dispatch(cmd.addTrack("video"))}><b>▭</b><span>Video track</span></button>
-      <button className="v2-tool" onClick={() => engine.dispatch(cmd.addTrack("audio"))}><b>♫</b><span>Audio track</span></button>
-      {textTools.map((a) => <button key={a.label} className="v2-tool" title={a.title} onClick={a.run}><b aria-hidden>{a.icon}</b><span>{a.label}</span></button>)}
+      <button className="v2-tool" onClick={() => (mobile ? setSheet(true) : fileRef.current?.click())}><b><Ic g="＋" /></b><span>Media</span></button>
+      <button className="v2-tool" onClick={() => engine.dispatch(cmd.addTrack("video"))}><b><Ic g="▭" /></b><span>Video track</span></button>
+      <button className="v2-tool" onClick={() => engine.dispatch(cmd.addTrack("audio"))}><b><Ic g="♫" /></b><span>Audio track</span></button>
+      {textTools.map((a) => <button key={a.label} className="v2-tool" title={a.title} onClick={a.run}><b aria-hidden><Ic g={a.icon} /></b><span>{a.label}</span></button>)}
       {rippleToggle}
-      <button className="v2-tool" onClick={() => setPps((p) => Math.min(400, p * 1.5))}><b>＋</b><span>Zoom in</span></button>
-      <button className="v2-tool" onClick={() => setPps((p) => Math.max(4, p / 1.5))}><b>－</b><span>Zoom out</span></button>
-      <button className="v2-tool" title={pasteAction.title} disabled={!hasClip} onClick={paste}><b aria-hidden>📋</b><span>Paste</span></button>
+      <button className="v2-tool" onClick={() => setPps((p) => Math.min(400, p * 1.5))}><b><Ic g="zoom-in" /></b><span>Zoom in</span></button>
+      <button className="v2-tool" onClick={() => setPps((p) => Math.max(4, p / 1.5))}><b><Ic g="zoom-out" /></b><span>Zoom out</span></button>
+      <button className="v2-tool" title={pasteAction.title} disabled={!hasClip} onClick={paste}><b aria-hidden><Ic g="📋" /></b><span>Paste</span></button>
     </>
   ));
 
@@ -287,7 +288,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const activeMenu: Menu = multiMode || sel.length > 1 ? "multi" : selected ? (menu === "speed" ? "speed" : "edit") : menu === "speed" ? "root" : cue ? "text" : menu;
   const back = () => { if (multiMode || sel.length > 1) selectClip(undefined); else if (selected && menu !== "speed") setSelectedId(undefined); else { setSubId(undefined); setMenu("root"); } };
   const tool = (icon: string, label: string, onClick: () => void, key = label, title?: string) => (
-    <button key={key} className="v2-tool" title={title} onClick={onClick}><b aria-hidden>{icon}</b><span>{label}</span></button>
+    <button key={key} className="v2-tool" title={title} onClick={onClick}><b aria-hidden><Ic g={icon} /></b><span>{label}</span></button>
   );
   const mobileTools: Record<Menu, JSX.Element[]> = {
     root: [
@@ -310,7 +311,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       tool("☑", "Select", () => setMultiMode(true), "multi", "Select several clips"),
       ...[...clipActions, ...timeActions, ...linkedAudioActions].map((a) => tool(a.icon, a.label, a.run, a.label, a.title)),
       ...(selected.placement.clipType !== "image" && selected.placement.clipType !== "html" ? [
-        <label key="vol" className="v2-tool v2-volume"><b aria-hidden>🔊</b>
+        <label key="vol" className="v2-tool v2-volume"><b aria-hidden><Ic g="🔊" /></b>
           <input type="range" min={0} max={1} step={0.05} value={selected.placement.volume ?? 1} aria-label="Volume" onPointerDown={() => engine.beginGesture()} onPointerUp={() => engine.endGesture()} onBlur={() => engine.endGesture()} onChange={(e) => engine.dispatch(cmd.setPlacementVolume(selected.placement.id, Number(e.target.value)))} />
         </label>] : []),
       tool(selected.track.muted ? "🔈" : "🔇", selected.track.muted ? "Unmute track" : "Mute track", () => engine.dispatch(cmd.toggleTrackMute(selected.track.id))),
@@ -330,8 +331,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     )) : [],
     text: textTools.map((a) => tool(a.icon, a.label, a.run, a.label, a.title)),
     zoom: [
-      tool("＋", "Zoom in", () => setPps((p) => Math.min(400, p * 1.5))),
-      tool("－", "Zoom out", () => setPps((p) => Math.max(4, p / 1.5))),
+      tool("zoom-in", "Zoom in", () => setPps((p) => Math.min(400, p * 1.5))),
+      tool("zoom-out", "Zoom out", () => setPps((p) => Math.max(4, p / 1.5))),
     ],
   };
 
@@ -339,8 +340,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     <div className={`v2-app ${mobile ? "is-mobile" : "is-desktop"} ${fs ? "is-fs" : ""}`}>
       {mobile ? (
         <header className="v2-header v2-mheader">
-          <a className="v2-icon v2-close" href={window.location.pathname} aria-label="Close (back to classic editor)">✕</a>
-          <button className="v2-icon v2-projects-btn" aria-label="Projects" title="Projects: new, open, rename, delete" onClick={() => setProjects(true)}>☰</button>
+          <a className="v2-icon v2-close" href={window.location.pathname} aria-label="Close (back to classic editor)"><Ic g="✕" /></a>
+          <button className="v2-icon v2-projects-btn" aria-label="Projects" title="Projects: new, open, rename, delete" onClick={() => setProjects(true)}><Ic g="☰" /></button>
           <span className="v2-spacer" />
           <select className="v2-res" aria-label="Export resolution" value={res} onChange={(e) => setRes(e.target.value as Resolution)}>
             {["720p", "1080p", "2K", "4K"].map((r) => <option key={r}>{r}</option>)}
@@ -350,7 +351,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       ) : (
         <header className="v2-header">
           <a className="v2-back" href={window.location.pathname} title="Back to classic editor">‹ Classic</a>
-          <button className="v2-btn v2-projects-btn" title="Projects: new, open, rename, delete" onClick={() => setProjects(true)}>☰ Projects</button>
+          <button className="v2-btn v2-projects-btn" aria-label="Projects" title="Projects: new, open, rename, delete" onClick={() => setProjects(true)}><Ic g="☰" size={16} /> Projects</button>
           <input className="v2-title" value={project.name} aria-label="Project name" onFocus={() => engine.beginGesture()} onBlur={() => engine.endGesture()} onChange={(e) => engine.dispatch(cmd.renameProject(e.target.value))} />
           <span className="v2-badge">v2 preview</span>
           <button className="v2-btn primary v2-export-d" title="Export MP4 (⌘/Ctrl+E)" onClick={openExport}>Export</button>
@@ -364,18 +365,18 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
         <>
           {preview}
           <div className="v2-mcontrols">
-            <button className="v2-icon" aria-label="Fullscreen" onClick={fullscreen}>⛶</button>
-            <button className="v2-icon v2-mplay" aria-label={playing ? "Pause" : "Play"} onClick={togglePlay}>{playing ? "❚❚" : "▶"}</button>
+            <button className="v2-icon" aria-label="Fullscreen" onClick={fullscreen}><Ic g="⛶" /></button>
+            <button className="v2-icon v2-mplay" aria-label={playing ? "Pause" : "Play"} onClick={togglePlay}><Ic g={playing ? "❚❚" : "▶"} /></button>
             <span className="v2-mundo">
-              <button className="v2-icon" aria-label="Undo" disabled={!canUndo} onClick={() => engine.undo()}>↶</button>
-              <button className="v2-icon" aria-label="Redo" disabled={!canRedo} onClick={() => engine.redo()}>↷</button>
+              <button className="v2-icon" aria-label="Undo" disabled={!canUndo} onClick={() => engine.undo()}><Ic g="↶" /></button>
+              <button className="v2-icon" aria-label="Redo" disabled={!canRedo} onClick={() => engine.redo()}><Ic g="↷" /></button>
             </span>
           </div>
           <Timeline engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} selectedIds={sel} onToggleSelect={toggleClip} multiMode={multiMode} onSelect={selectClip} peaks={peaks} strips={strips} pps={pps} onZoom={(z) => setPps(clampPps(z))} centered topLane={topLane} ripple={ripple} onTransition={onTransition}
             thumbs={thumbs} onAddMedia={() => setSheet(true)}
             timeLabel={<><b>{formatTimecode(time, project.settings.fps).slice(0, 5)}</b> / {formatTimecode(duration, project.settings.fps).slice(0, 5)}</>}
             sideColumn={<>
-              {firstVideoTrack && <button className="v2-side-btn" onClick={() => engine.dispatch(cmd.toggleTrackMute(firstVideoTrack.id))}><b aria-hidden>{firstVideoTrack.muted ? "🔇" : "🔊"}</b><span>{firstVideoTrack.muted ? "Unmute clip audio" : "Mute clip audio"}</span></button>}
+              {firstVideoTrack && <button className="v2-side-btn" onClick={() => engine.dispatch(cmd.toggleTrackMute(firstVideoTrack.id))}><b aria-hidden><Ic g={firstVideoTrack.muted ? "🔇" : "🔊"} /></b><span>{firstVideoTrack.muted ? "Unmute clip audio" : "Mute clip audio"}</span></button>}
               <button className="v2-side-btn v2-cover" onClick={() => seek(0)} style={firstClip && thumbs[firstClip.source.assetId] ? { backgroundImage: `url(${thumbs[firstClip.source.assetId]})` } : undefined}><span>Cover</span></button>
             </>} />
           <nav className="v2-toolbar" aria-label={selected ? "Clip actions" : "Timeline actions"}>
@@ -411,8 +412,8 @@ function AssetThumb({ asset, engineBlobs }: { asset: Asset; engineBlobs: EditorC
     void engineBlobs.get(key).then((b) => { if (b && alive) { u = URL.createObjectURL(b); setUrl(u); } });
     return () => { alive = false; if (u) URL.revokeObjectURL(u); };
   }, [key, asset.kind, engineBlobs]);
-  if (asset.kind === "html") return <span className="v2-thumb" title="HTML clip (sandboxed)">{"</>"}</span>;
-  if (asset.kind === "audio" || !url) return <span className="v2-thumb">{asset.kind === "audio" ? "♫" : "…"}</span>;
+  if (asset.kind === "html") return <span className="v2-thumb" title="HTML clip (sandboxed)"><Ic g="</>" /></span>;
+  if (asset.kind === "audio" || !url) return <span className="v2-thumb">{asset.kind === "audio" ? <Ic g="♫" /> : "…"}</span>;
   return asset.kind === "image" ? <img className="v2-thumb" src={url} alt="" /> : <video className="v2-thumb" src={`${url}#t=0.1`} muted preload="metadata" />;
 }
 

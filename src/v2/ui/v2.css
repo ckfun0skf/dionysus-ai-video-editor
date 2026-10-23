@@ -210,3 +210,8 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 .v2-trans-tools { display: inline-flex; align-items: center; gap: 2px; padding: 0 6px; border-right: 1px solid var(--line); }
 .v2-warn { margin: 8px 0; padding: 8px 10px; border: 1px solid #b8862b; border-radius: 8px; background: rgba(184,134,43,.12); color: #f0c674; font-size: 13px; }
 .v2-warn ul { margin: 4px 0 0; padding-left: 18px; color: var(--text); }
+
+/* lucide icons */
+.v2-ic { display: inline-block; vertical-align: middle; flex: none; }
+.v2-tool b, .v2-side-btn b { display: flex; justify-content: center; align-items: center; }
+.v2-icon, .v2-play, .v2-mplay { display: inline-flex; align-items: center; justify-content: center; }
