@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "project": "Dionysus",
-  "updatedAt": "2026-10-20",
-  "sourceOfTruth": "public/doc/tasks.json and docs/TIMELINE_FIRST_EXECUTION_BACKLOG.md",
+  "updatedAt": "2026-10-23",
+  "sourceOfTruth": "public/doc/tasks.json on main (see docs/v2/MODULE_DESIGN.md §14)",
   "statusDefinitions": {
     "done": "Implementation exists and has evidence; release/browser validation may still be pending.",
     "in_progress": "Work has started but implementation or verification remains.",
@@ -1461,6 +1461,209 @@
         "DYS-009",
         "DYS-010"
       ]
+    },
+    {
+      "id": "V2-M0",
+      "title": "v2 contracts & tracking",
+      "phase": "v2",
+      "goal": "Domain types, registries, storage/command interfaces; STATUS page generated from tasks.json.",
+      "tasks": [
+        {
+          "id": "V2-001",
+          "title": "Module design doc merged",
+          "status": "in_progress",
+          "progress": 50,
+          "doc": "../../docs/v2/MODULE_DESIGN.md",
+          "pr": null,
+          "acceptance": [
+            "Doc on main"
+          ]
+        },
+        {
+          "id": "V2-002",
+          "title": "STATUS page generator + CI check that PRs touch tasks.json",
+          "status": "planned",
+          "progress": 0,
+          "acceptance": [
+            "npm run status builds public/doc/STATUS.html",
+            "CI fails if src/v2 changes without tasks.json change"
+          ]
+        },
+        {
+          "id": "V2-003",
+          "title": "src/v2/domain types + ids + schema 3.0 zod-free validators",
+          "status": "planned",
+          "progress": 0,
+          "acceptance": [
+            "Pure TS, no DOM imports",
+            "Unit tests"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "V2-M1",
+      "title": "Engine: commands & history",
+      "phase": "v2",
+      "goal": "Single Command/Transaction/History over the project document.",
+      "tasks": [
+        {
+          "id": "V2-010",
+          "title": "Command bus, transactions, undo/redo",
+          "status": "planned",
+          "progress": 0,
+          "acceptance": [
+            "Atomic multi-op steps",
+            "Property tests: undo(redo(x))==x"
+          ]
+        },
+        {
+          "id": "V2-011",
+          "title": "Port placement ops (insert/move/trim/split/duplicate) from compositionCommands",
+          "status": "planned",
+          "progress": 0,
+          "acceptance": [
+            "Old tests ported and green"
+          ]
+        },
+        {
+          "id": "V2-012",
+          "title": "Linked audio: Extract/Duplicate Audio commands",
+          "status": "planned",
+          "progress": 0,
+          "acceptance": [
+            "Single undo step"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "V2-M2",
+      "title": "Timeline editor MVP (behind ?v2 flag)",
+      "phase": "v2",
+      "goal": "Video/image/audio/text tracks, preview, snap, resize, IndexedDB persistence.",
+      "tasks": [
+        {
+          "id": "V2-020",
+          "title": "IndexedDB ProjectStore + BlobStore adapters",
+          "status": "planned",
+          "progress": 0,
+          "acceptance": [
+            "Contract test suite passes against memory + IDB"
+          ]
+        },
+        {
+          "id": "V2-021",
+          "title": "Canvas 2D preview renderer + playback clock + audio graph",
+          "status": "planned",
+          "progress": 0,
+          "acceptance": [
+            "Frame-accurate seek in tests via fake media"
+          ]
+        },
+        {
+          "id": "V2-022",
+          "title": "Timeline UI: tracks, placements, drag/resize/snap",
+          "status": "planned",
+          "progress": 0,
+          "acceptance": [
+            "All edits via commands"
+          ]
+        },
+        {
+          "id": "V2-023",
+          "title": "Schema 1.0/2.0 one-way importer",
+          "status": "planned",
+          "progress": 0,
+          "acceptance": [
+            "Fixture projects import with warnings report"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "V2-M3",
+      "title": "Rich clips & export",
+      "phase": "v2",
+      "goal": "Subtitles, HTML/three.js components, nested Clip Assets, WebCodecs export.",
+      "tasks": [
+        {
+          "id": "V2-030",
+          "title": "Subtitle track + SRT/VTT import/export",
+          "status": "planned",
+          "progress": 0
+        },
+        {
+          "id": "V2-031",
+          "title": "HTML component clip (sandboxed iframe, frame-seek protocol) + three.js",
+          "status": "planned",
+          "progress": 0
+        },
+        {
+          "id": "V2-032",
+          "title": "Save-as-Clip / nested Composition editing",
+          "status": "planned",
+          "progress": 0
+        },
+        {
+          "id": "V2-033",
+          "title": "WebCodecs MP4 export (MediaRecorder WebM fallback)",
+          "status": "planned",
+          "progress": 0
+        }
+      ]
+    },
+    {
+      "id": "V2-M4",
+      "title": "Pipeline: story JSON → storyboard → todo",
+      "phase": "v2",
+      "goal": "Prompt template, JSON import, versions, dependency graph, staleness, QA.",
+      "tasks": [
+        {
+          "id": "V2-040",
+          "title": "Story JSON schema + prompt template + importer",
+          "status": "planned",
+          "progress": 0
+        },
+        {
+          "id": "V2-041",
+          "title": "Asset/Shot versions, version picker (≤10 compare), provenance",
+          "status": "planned",
+          "progress": 0
+        },
+        {
+          "id": "V2-042",
+          "title": "Dependency graph: last-frame derivation + 'may not match' warnings",
+          "status": "planned",
+          "progress": 0
+        },
+        {
+          "id": "V2-043",
+          "title": "Production todo list + QA checker registry",
+          "status": "planned",
+          "progress": 0
+        },
+        {
+          "id": "V2-044",
+          "title": "Storyboard → timeline assembly",
+          "status": "planned",
+          "progress": 0
+        }
+      ]
+    },
+    {
+      "id": "V2-M5",
+      "title": "Switch-over",
+      "phase": "v2",
+      "goal": "v2 default, legacy behind ?legacy, then removal.",
+      "tasks": [
+        {
+          "id": "V2-050",
+          "title": "Default to v2; legacy read-only importer only",
+          "status": "planned",
+          "progress": 0
+        }
+      ]
     }
   ],
   "currentDirection": "Timeline-first: canonical Composition/migration/edit commands; functional Desktop source browser + same-page Preview/Canvas + multitrack Timeline; editing parity and structure-preserving Save-as-Clip; then mobile. Defer full Storyboard, References, Asset administration and Production Task graph until Timeline gates pass.",
@@ -1479,7 +1682,13 @@
     "M3",
     "M4",
     "M2",
-    "M5"
+    "M5",
+    "V2-M0",
+    "V2-M1",
+    "V2-M2",
+    "V2-M3",
+    "V2-M4",
+    "V2-M5"
   ],
   "milestoneSequence": [
     {
