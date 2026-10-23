@@ -1937,6 +1937,12 @@
           "title": "Mobile: main track + floating add button (no trim overlap)",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-086",
+          "title": "HTML editor: libraries multi-select combobox (dropdown / bottom sheet, removable chips)",
+          "status": "done",
+          "progress": 100
         }
       ]
     },

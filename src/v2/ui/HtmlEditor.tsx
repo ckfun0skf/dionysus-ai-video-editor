@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { HTML_LIBRARIES, HTML_SANDBOX, readClipConfig, selectedLibraries, withRuntime, writeClipConfig, type ClipConfig } from "../render";
+import { HTML_SANDBOX, readClipConfig, selectedLibraries, withRuntime, writeClipConfig, type ClipConfig } from "../render";
+import { LibraryPicker } from "./LibraryPicker";
 import { joinHtml, splitHtml, type HtmlParts } from "./htmlSource";
 
 type Pane = "html" | "css" | "js";
@@ -65,7 +66,7 @@ export function HtmlEditor({ source, mobile, onSave, onClose }: { source: string
           <button className="v2-btn is-primary" disabled={!dirty} title={dirty ? "Save as a new version of this clip (undoable)" : "No changes"} onClick={() => onSave(joined)}>Save</button>
         </span>
       </div>
-      <ClipSettings cfg={cfg} onChange={setCfg} />
+      <ClipSettings cfg={cfg} onChange={setCfg} mobile={mobile} />
       {mobile ? (
         <div className="v2-code-body">{pane === "preview" ? <LivePreview src={live} /> : code(pane)}</div>
       ) : (
@@ -82,7 +83,7 @@ const MAX_ATTACHMENT = 15 * 1024 * 1024;
 const readData = (f: File) => new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = () => rej(r.error); r.readAsDataURL(f); });
 
 /** Library toggles (from the registry) and file attachments referenced by relative name. */
-function ClipSettings({ cfg, onChange }: { cfg: ClipConfig; onChange: (c: ClipConfig) => void }) {
+function ClipSettings({ cfg, onChange, mobile }: { cfg: ClipConfig; onChange: (c: ClipConfig) => void; mobile: boolean }) {
   const libs = cfg.libs ?? [], assets = cfg.assets ?? {};
   const [err, setErr] = useState("");
   const attach = async (files: FileList | null) => {
@@ -95,13 +96,7 @@ function ClipSettings({ cfg, onChange }: { cfg: ClipConfig; onChange: (c: ClipCo
   };
   return (
     <div className="v2-code-settings">
-      <span className="v2-code-label">Libraries</span>
-      {HTML_LIBRARIES.map((l) => (
-        <label key={l.id} className="v2-chip" title={`Self-hosted ${l.name} ${l.version}, pinned by SRI. Import it as "${l.specifier}".`}>
-          <input type="checkbox" checked={libs.includes(l.id)} onChange={(e) => onChange({ ...cfg, libs: e.target.checked ? [...libs, l.id] : libs.filter((x) => x !== l.id) })} />
-          {l.name}
-        </label>
-      ))}
+      <LibraryPicker mobile={mobile} value={libs} onChange={(l) => onChange({ ...cfg, libs: l })} />
       <span className="v2-code-label">Files</span>
       {Object.keys(assets).length === 0 && <span className="v2-muted">None. Attach images, models or fonts, then use them by name, e.g. src="logo.png".</span>}
       {Object.keys(assets).map((n) => (
