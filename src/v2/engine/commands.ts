@@ -85,4 +85,12 @@ export const setPlacementVolume = (id: string, volume: number): Command => ({
   coalesceKey: `volume:${id}`,
   apply: (p) => withRoot(p, (c) => ({ ...c, tracks: c.tracks.map((t) => ({ ...t, placements: t.placements.map((pl) => (pl.id === id ? { ...pl, volume } : pl)) })) })),
 });
+export const extractAudio = (id: string, mode: "extract" | "duplicate", newIdValue?: string): Command => ({
+  label: mode === "extract" ? "Extract audio" : "Duplicate audio",
+  apply: (p) => withRoot(p, (c) => ops.extractAudio(c, id, mode, newIdValue)),
+});
+export const setLinkedAudioMuted = (id: string, muted: boolean): Command => ({
+  label: muted ? "Mute clip audio" : "Restore clip audio",
+  apply: (p) => withRoot(p, (c) => ops.setLinkedAudioMuted(c, id, muted)),
+});
 export const renameProject = (name: string): Command => ({ label: "Rename project", coalesceKey: "rename", apply: (p) => ({ ...p, name }) });

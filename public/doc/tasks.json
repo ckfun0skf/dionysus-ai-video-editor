@@ -1708,6 +1708,134 @@
       ]
     },
     {
+      "id": "V2-M6",
+      "title": "Feature completion (also V2-030 subtitles, V2-031 HTML/three.js, V2-033 MP4 export)",
+      "phase": "v2",
+      "goal": "Subtitles, HTML/three.js components, nested Clip Assets, WebCodecs export.",
+      "tasks": [
+        {
+          "doc": "docs/v2/MODULE_DESIGN.md",
+          "detail": "",
+          "report": "",
+          "subtasks": [],
+          "acceptance": [
+            "Video placement owns its embedded audio (follows move/trim/split/delete)",
+            "Extract audio: aligned audio placement + linked audio muted; Duplicate keeps it",
+            "Mute/Restore clip audio; all undoable",
+            "UX bar: selected/hover states, tooltips, empty states, undoable, 44px targets"
+          ],
+          "id": "V2-060",
+          "title": "Linked audio as owned child + Extract/Duplicate Audio",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "doc": "docs/v2/MODULE_DESIGN.md",
+          "detail": "",
+          "report": "",
+          "subtasks": [],
+          "acceptance": [
+            "UX bar: selected/hover states, tooltips, empty states, undoable, 44px targets"
+          ],
+          "id": "V2-061",
+          "title": "Clip transform (position/scale/rotation/opacity/crop) with on-canvas handles + inspector",
+          "status": "planned",
+          "progress": 0
+        },
+        {
+          "doc": "docs/v2/MODULE_DESIGN.md",
+          "detail": "",
+          "report": "",
+          "subtasks": [],
+          "acceptance": [
+            "UX bar: selected/hover states, tooltips, empty states, undoable, 44px targets"
+          ],
+          "id": "V2-062",
+          "title": "Speed, freeze frame, reverse",
+          "status": "planned",
+          "progress": 0
+        },
+        {
+          "doc": "docs/v2/MODULE_DESIGN.md",
+          "detail": "",
+          "report": "",
+          "subtasks": [],
+          "acceptance": [
+            "UX bar: selected/hover states, tooltips, empty states, undoable, 44px targets"
+          ],
+          "id": "V2-063",
+          "title": "Fades and keyframes",
+          "status": "planned",
+          "progress": 0
+        },
+        {
+          "doc": "docs/v2/MODULE_DESIGN.md",
+          "detail": "",
+          "report": "",
+          "subtasks": [],
+          "acceptance": [
+            "UX bar: selected/hover states, tooltips, empty states, undoable, 44px targets"
+          ],
+          "id": "V2-064",
+          "title": "Ripple delete/trim, multi-select, copy/paste, duplicate",
+          "status": "planned",
+          "progress": 0
+        },
+        {
+          "doc": "docs/v2/MODULE_DESIGN.md",
+          "detail": "",
+          "report": "",
+          "subtasks": [],
+          "acceptance": [
+            "UX bar: selected/hover states, tooltips, empty states, undoable, 44px targets"
+          ],
+          "id": "V2-065",
+          "title": "Mobile gestures: long-press drag, pinch zoom, snapping feedback + haptics",
+          "status": "planned",
+          "progress": 0
+        },
+        {
+          "doc": "docs/v2/MODULE_DESIGN.md",
+          "detail": "",
+          "report": "",
+          "subtasks": [],
+          "acceptance": [
+            "UX bar: selected/hover states, tooltips, empty states, undoable, 44px targets"
+          ],
+          "id": "V2-066",
+          "title": "Audio waveforms and per-clip filmstrips",
+          "status": "planned",
+          "progress": 0
+        },
+        {
+          "doc": "docs/v2/MODULE_DESIGN.md",
+          "detail": "",
+          "report": "",
+          "subtasks": [],
+          "acceptance": [
+            "UX bar: selected/hover states, tooltips, empty states, undoable, 44px targets"
+          ],
+          "id": "V2-067",
+          "title": "Transitions registry (crossfade first)",
+          "status": "planned",
+          "progress": 0
+        },
+        {
+          "doc": "docs/v2/MODULE_DESIGN.md",
+          "detail": "",
+          "report": "",
+          "subtasks": [],
+          "acceptance": [
+            "UX bar: selected/hover states, tooltips, empty states, undoable, 44px targets"
+          ],
+          "id": "V2-068",
+          "title": "Project list: new/open/rename/delete",
+          "status": "planned",
+          "progress": 0
+        }
+      ]
+    },
+    {
       "id": "V2-M4",
       "title": "Pipeline: story JSON → storyboard → todo",
       "phase": "v2",

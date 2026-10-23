@@ -117,10 +117,20 @@ function Editor({ engine, storage, recovery }: EditorContext) {
     </div>
   );
 
+  // Linked audio (owned child of a video clip): extract / duplicate / mute-restore. All undoable commands.
+  const linkedAudioActions = selected && selected.placement.clipType === "video" ? [
+    { icon: "⤓", label: "Extract audio", title: "Move this clip's audio to an audio track (mutes the clip's own audio)", run: () => { engine.dispatch(cmd.extractAudio(selected.placement.id, "extract")); setToast("Audio extracted to an audio track"); } },
+    { icon: "⧉", label: "Duplicate audio", title: "Copy this clip's audio to an audio track (keeps the clip's own audio)", run: () => { engine.dispatch(cmd.extractAudio(selected.placement.id, "duplicate")); setToast("Audio duplicated to an audio track"); } },
+    selected.placement.linkedAudio?.muted
+      ? { icon: "🔈", label: "Restore clip audio", title: "Play this clip's own audio again", run: () => engine.dispatch(cmd.setLinkedAudioMuted(selected.placement.id, false)) }
+      : { icon: "🔇", label: "Mute clip audio", title: "Silence only this clip's own audio", run: () => engine.dispatch(cmd.setLinkedAudioMuted(selected.placement.id, true)) },
+  ] : [];
+
   const selectionActions = selected ? (
     <>
       <button className="v2-tool" onClick={split}><b>✂</b><span>Split</span></button>
       <button className="v2-tool" onClick={del}><b>🗑</b><span>Delete</span></button>
+      {linkedAudioActions.map((a) => <button key={a.label} className="v2-tool" title={a.title} onClick={a.run}><b aria-hidden>{a.icon}</b><span>{a.label}</span></button>)}
       {selected.placement.clipType !== "image" && (
         <label className="v2-tool v2-volume"><b>🔊</b>
           <input type="range" min={0} max={1} step={0.05} value={selected.placement.volume ?? 1} aria-label="Volume" onPointerDown={() => engine.beginGesture()} onPointerUp={() => engine.endGesture()} onBlur={() => engine.endGesture()} onChange={(e) => engine.dispatch(cmd.setPlacementVolume(selected.placement.id, Number(e.target.value)))} />
@@ -156,8 +166,8 @@ function Editor({ engine, storage, recovery }: EditorContext) {
   };
   const activeMenu: Menu = selected ? "edit" : menu;
   const back = () => (selected ? setSelectedId(undefined) : setMenu("root"));
-  const tool = (icon: string, label: string, onClick: () => void, key = label) => (
-    <button key={key} className="v2-tool" onClick={onClick}><b aria-hidden>{icon}</b><span>{label}</span></button>
+  const tool = (icon: string, label: string, onClick: () => void, key = label, title?: string) => (
+    <button key={key} className="v2-tool" title={title} onClick={onClick}><b aria-hidden>{icon}</b><span>{label}</span></button>
   );
   const mobileTools: Record<Menu, JSX.Element[]> = {
     root: [
@@ -171,6 +181,7 @@ function Editor({ engine, storage, recovery }: EditorContext) {
     edit: selected ? [
       tool("✂", "Split", split),
       tool("🗑", "Delete", del),
+      ...linkedAudioActions.map((a) => tool(a.icon, a.label, a.run, a.label, a.title)),
       ...(selected.placement.clipType !== "image" ? [
         <label key="vol" className="v2-tool v2-volume"><b aria-hidden>🔊</b>
           <input type="range" min={0} max={1} step={0.05} value={selected.placement.volume ?? 1} aria-label="Volume" onPointerDown={() => engine.beginGesture()} onPointerUp={() => engine.endGesture()} onBlur={() => engine.endGesture()} onChange={(e) => engine.dispatch(cmd.setPlacementVolume(selected.placement.id, Number(e.target.value)))} />

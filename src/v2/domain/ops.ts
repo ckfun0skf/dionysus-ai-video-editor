@@ -126,3 +126,25 @@ export function snapMove(comp: Composition, start: number, dur: number, threshol
   const e = snapTicks(comp, start + dur, threshold, extra, ignoreId);
   return e !== start + dur ? e - dur : start;
 }
+
+/**
+ * Copy a video placement's embedded audio onto an audio track as an independent placement, aligned in time.
+ * mode "extract" also mutes the owned linked audio; "duplicate" keeps it playing. Uses the first audio track
+ * that is free over the whole range, else adds a new audio track.
+ */
+export function extractAudio(comp: Composition, placementId: string, mode: "extract" | "duplicate", newIdValue = newId("plc"), newTrackId = newId("trk")): Composition {
+  const found = findPlacement(comp, placementId);
+  if (!found) throw new Error(`Unknown placement ${placementId}`);
+  const v = found.placement;
+  if (v.clipType !== "video") throw new Error("Only video clips have linked audio");
+  let next = comp;
+  let track = next.tracks.find((t) => t.kind === "audio" && firstFreeStart(t, v.startTicks, v.durationTicks) === v.startTicks);
+  if (!track) { next = addTrack(next, "audio", newTrackId); track = next.tracks.find((t) => t.id === newTrackId)!; }
+  const audio: Placement = { id: newIdValue, startTicks: v.startTicks, durationTicks: v.durationTicks, sourceInTicks: v.sourceInTicks, source: v.source, clipType: "audio", volume: v.volume ?? 1 };
+  next = insertPlacement(next, track.id, audio);
+  return mode === "extract" ? setLinkedAudioMuted(next, placementId, true) : next;
+}
+
+export function setLinkedAudioMuted(comp: Composition, placementId: string, muted: boolean): Composition {
+  return { ...comp, tracks: comp.tracks.map((t) => ({ ...t, placements: t.placements.map((p) => (p.id === placementId && p.clipType === "video" ? { ...p, linkedAudio: { ...p.linkedAudio, muted } } : p)) })) };
+}

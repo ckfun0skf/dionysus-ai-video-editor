@@ -162,3 +162,18 @@ describe("v2 engine", () => {
     expect(findPlacement(e.getState().project.compositions.nested, "p1")).toBeUndefined();
   });
 });
+
+describe("linked audio commands", () => {
+  it("extract audio is one undo step; restore toggles the owned child", () => {
+    const e = setup();
+    e.dispatch(cmd.addAssetToTimeline("v", 0, undefined, "pv"));
+    e.dispatch(cmd.extractAudio("pv", "extract", "pa"));
+    expect(findPlacement(root(e.getState().project), "pa")?.placement.clipType).toBe("audio");
+    expect(findPlacement(root(e.getState().project), "pv")?.placement.linkedAudio?.muted).toBe(true);
+    e.dispatch(cmd.setLinkedAudioMuted("pv", false));
+    expect(findPlacement(root(e.getState().project), "pv")?.placement.linkedAudio?.muted).toBe(false);
+    e.undo(); e.undo();
+    expect(findPlacement(root(e.getState().project), "pa")).toBeUndefined();
+    expect(findPlacement(root(e.getState().project), "pv")?.placement.linkedAudio).toBeUndefined();
+  });
+});
