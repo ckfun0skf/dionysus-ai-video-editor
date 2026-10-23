@@ -24,7 +24,19 @@ export class Player {
 
   constructor(project: Project, private blobs: BlobStore) { this.project = project; }
 
-  setProject(p: Project) { this.project = p; this.draw(); }
+  setProject(p: Project) {
+    this.project = p;
+    // Revoke object URLs whose asset version is gone (asset removed or version dropped).
+    const live = new Set(Object.values(p.assets).flatMap((a) => a.versions.map((v) => v.media.blobKey)));
+    for (const key of [...this.urls.keys()]) {
+      if (live.has(key)) continue;
+      const u = this.resolvedUrls.get(key);
+      if (u) URL.revokeObjectURL(u);
+      this.resolvedUrls.delete(key);
+      this.urls.delete(key);
+    }
+    this.draw();
+  }
   get isPlaying() { return this.playing; }
 
   private url(blobKey: string): string | undefined {
@@ -73,7 +85,7 @@ export class Player {
     this.playing = true; this.startWall = performance.now(); this.startTicks = this.time;
     const loop = () => {
       if (!this.playing) return;
-      this.time = this.startTicks + ((performance.now() - this.startWall) / 1000) * TICKS_PER_SECOND;
+      this.time = Math.round(this.startTicks + ((performance.now() - this.startWall) / 1000) * TICKS_PER_SECOND);
       if (this.time >= this.duration()) { this.time = this.duration(); this.pause(); }
       this.draw();
       this.raf = requestAnimationFrame(loop);
@@ -91,7 +103,7 @@ export class Player {
   }
 
   seek(t: number) {
-    this.time = Math.max(0, t);
+    this.time = Math.max(0, Math.round(t));
     if (this.playing) { this.startWall = performance.now(); this.startTicks = this.time; }
     this.draw();
   }

@@ -1546,6 +1546,42 @@
           "acceptance": [
             "Single undo step"
           ]
+        },
+        {
+          "doc": "docs/v2/MODULE_DESIGN.md",
+          "detail": "",
+          "report": "",
+          "subtasks": [],
+          "acceptance": [],
+          "id": "V2-013",
+          "title": "Engine/persistence correctness (review fixes)",
+          "status": "done",
+          "progress": 100,
+          "summary": "Autosave depends on ports/ProjectSource; lastSaved after success with retry; gesture-bounded undo coalescing; integer ticks enforced; boot cleanup and error state; removeAsset cleans nested comps, unreferenced blobs GC at boot; media probe fails loudly; player revokes URLs of removed assets; per-layer barrels."
+        },
+        {
+          "doc": "docs/v2/MODULE_DESIGN.md",
+          "detail": "",
+          "report": "",
+          "subtasks": [],
+          "acceptance": [],
+          "id": "V2-014",
+          "title": "Branded IDs (AssetId, PlacementId…)",
+          "status": "planned",
+          "progress": 0,
+          "summary": "Deferred review nit: nominal ID types in domain."
+        },
+        {
+          "doc": "docs/v2/MODULE_DESIGN.md",
+          "detail": "",
+          "report": "",
+          "subtasks": [],
+          "acceptance": [],
+          "id": "V2-015",
+          "title": "Rational fps {num,den}",
+          "status": "planned",
+          "progress": 0,
+          "summary": "Deferred review nit: represent fps as a rational for 29.97 etc."
         }
       ]
     },
