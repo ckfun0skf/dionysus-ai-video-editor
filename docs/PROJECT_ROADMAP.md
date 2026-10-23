@@ -259,5 +259,5 @@ The next agent should read `docs/MOBILE_AGENT_PICKUP_PROMPT.md` and `docs/MOBILE
 
 ## Architecture follow-up — canonical source projection cleanup (2026-10-22)
 
-- Nested Clip Version compatibility layers now clear source-type-specific legacy IDs before projecting the canonical source union. Regression coverage guards against a Clip-to-asset source switch retaining stale `childCompositionId` / `clipVersionId` metadata.
+- Nested Clip Version compatibility layers and root linked-audio child projections now clear source-type-specific legacy IDs before projecting the canonical source union. Regression coverage guards against Clip-to-asset source switches and stale linked-audio `clipVersionId` metadata.
 - This is a bounded consistency fix, not completion of DYS-014: the editable Timeline UI and renderer still have compatibility-projection boundaries to migrate. Exact-head CI passed on the docs-synchronized head `2121c59ad7d0da64548081301655df6e3f6a82a4`, [run 39878411955](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39878411955): 26 test files / 297 tests, TypeScript/build passed, npm audit 0 vulnerabilities.
