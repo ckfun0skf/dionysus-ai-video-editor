@@ -379,6 +379,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       tool("✎", "Edit", () => setMenu("edit-hint")),
       tool("♫", "Audio", () => setMenu("audio")),
       tool("＋", "Media", () => setSheet(true)),
+      tool("⧉", "Overlay", () => setPicker("overlay"), "overlay", "Add photos, videos or clips on a new track above, starting at the playhead"),
       tool("T", "Text", () => setMenu("text")),
       tool("▭", "Video track", () => engine.dispatch(cmd.addTrack("video"))),
       tool("⤢", "Zoom", () => setMenu("zoom")),
