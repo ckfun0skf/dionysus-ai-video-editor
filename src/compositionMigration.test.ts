@@ -12,7 +12,7 @@ describe("migrateLegacyProjectToComposition", () => {
     );
     project.timelineClips = [
       { id: "master-video", name: "Source shot", kind: "video", trackId: "track-video-1", start: 4, duration: 6, assetId: "migration-video", sourceIn: 2, sourceOut: 8, x: 10, y: 5, width: 80, height: 90 },
-      { id: "master-audio", name: "Linked audio", kind: "audio", trackId: "track-audio-1", start: 4, duration: 6, assetId: "migration-audio", linkedVideoClipId: "master-video", sourceIn: 1, sourceOut: 7, volume: 0.4, fadeIn: 0.5, fadeOut: 1, clipVersionId: "stale-linked-clip-version" },
+      { id: "master-audio", name: "Linked audio", kind: "audio", trackId: "track-audio-1", start: 4, duration: 6, assetId: "migration-audio", linkedVideoClipId: "master-video", sourceIn: 1, sourceOut: 7, volume: 0.4, fadeIn: 0.5, fadeOut: 1, clipVersionId: "stale-linked-clip-version", childCompositionId: "stale-child-composition", shotVersionId: "stale-shot-version" },
     ];
     const result = migrateLegacyProjectToComposition(project);
     expect(result.schemaVersion).toBe("2.0");
@@ -38,7 +38,10 @@ describe("migrateLegacyProjectToComposition", () => {
       kind: "audio", trackId: "track-video-1", start: 4, duration: 6,
       linkedVideoClipId: "master-video", sourceIn: 1, sourceOut: 7, volume: 0.4,
     });
-    expect(projected.timelineClips?.find(clip => clip.id === "master-audio")).not.toHaveProperty("clipVersionId");
+    const projectedAudio = projected.timelineClips?.find(clip => clip.id === "master-audio")!;
+    expect(projectedAudio).not.toHaveProperty("clipVersionId");
+    expect(projectedAudio).not.toHaveProperty("childCompositionId");
+    expect(projectedAudio).not.toHaveProperty("shotVersionId");
   });
 
   it("clears stale legacy source-selector IDs when projecting a changed canonical typed source", () => {
@@ -53,6 +56,7 @@ describe("migrateLegacyProjectToComposition", () => {
       id: "source-placement", name: "Source placement", kind: "video", trackId: track.id,
       start: 0, duration: 4, assetId: "legacy-source",
       clipVersionId: "stale-clip-version", scriptVersionId: "stale-script-version",
+      childCompositionId: "stale-child-composition", shotVersionId: "stale-shot-version",
     }];
     const root = migrateLegacyProjectToComposition(project).rootComposition;
     const assetChanged = updateCompositionPlacement(root, "source-placement", {
@@ -62,6 +66,8 @@ describe("migrateLegacyProjectToComposition", () => {
     expect(assetProjection).toMatchObject({ assetId: "canonical-source" });
     expect(assetProjection).not.toHaveProperty("clipVersionId");
     expect(assetProjection).not.toHaveProperty("scriptVersionId");
+    expect(assetProjection).not.toHaveProperty("childCompositionId");
+    expect(assetProjection).not.toHaveProperty("shotVersionId");
 
     const scriptChanged = updateCompositionPlacement(root, "source-placement", {
       source: { type: "script", scriptVersionId: "canonical-script-version" },
