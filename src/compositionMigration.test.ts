@@ -78,6 +78,46 @@ describe("migrateLegacyProjectToComposition", () => {
     expect(scriptProjection).toMatchObject({ scriptVersionId: "canonical-script-version" });
   });
 
+  it("preserves Shot Slot source references in legacy nested Clip Version layers", () => {
+    const project = structuredClone(sampleProject);
+    const shot = project.shots[0];
+    const slot = shot.slots[0];
+    project.assets.push({
+      id: "shot-source-clip",
+      name: "Clip containing a Shot Slot source",
+      kind: "clip",
+      clipVersions: [{
+        id: "shot-source-clip-v1",
+        name: "Version 1",
+        description: "",
+        duration: 4,
+        layers: [{
+          id: "nested-shot-source",
+          name: "Pinned Shot Slot",
+          kind: "video",
+          start: 0,
+          duration: 4,
+          ...({
+            shotId: shot.id,
+            slotId: slot.id,
+            shotVersionId: slot.selectedVersionId,
+          } as Record<string, unknown>),
+        }],
+        scriptVersionIds: [],
+        generationRecords: [],
+      }],
+    });
+
+    const result = migrateLegacyProjectToComposition(project);
+    const nested = result.clipCompositions.find(item => item.legacyData?.assetId === "shot-source-clip");
+    expect(nested?.placements.find(item => item.id === "nested-shot-source")?.source).toEqual({
+      type: "shot",
+      shotId: shot.id,
+      slotId: slot.id,
+      versionId: slot.selectedVersionId,
+    });
+  });
+
   it("pins Shot Slot and Clip Asset versions instead of resolving to a mutable latest version", () => {
     const project = structuredClone(sampleProject);
     project.assets.push({
