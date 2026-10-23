@@ -1800,8 +1800,8 @@
           ],
           "id": "V2-065",
           "title": "Mobile gestures: long-press drag, pinch zoom, snapping feedback + haptics",
-          "status": "planned",
-          "progress": 0
+          "status": "done",
+          "progress": 100
         },
         {
           "doc": "docs/v2/MODULE_DESIGN.md",

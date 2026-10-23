@@ -5,6 +5,7 @@ import { importFile } from "../persistence";
 import { compositionDuration, edit, findPlacement, newId, formatTimecode, secondsToTicks, type Asset } from "../domain";
 import { useEditorBoot, useEngineState, useIsMobile, type EditorContext, type LoadFailure } from "./useEditor";
 import { Timeline } from "./Timeline";
+import { clampPps } from "./gestures";
 import { useThumbs } from "./useThumbs";
 import { TransformHandles, TransformInspector } from "./Transform";
 import { addCueAt, downloadSrt, importSrtFile, SubtitleEditor, SubtitleLane } from "./Subtitles";
@@ -335,7 +336,7 @@ function Editor({ engine, storage, recovery }: EditorContext) {
               <button className="v2-icon" aria-label="Redo" disabled={!canRedo} onClick={() => engine.redo()}>↷</button>
             </span>
           </div>
-          <Timeline engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} selectedIds={sel} onToggleSelect={toggleClip} multiMode={multiMode} onSelect={selectClip} pps={pps} centered topLane={topLane} ripple={ripple}
+          <Timeline engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} selectedIds={sel} onToggleSelect={toggleClip} multiMode={multiMode} onSelect={selectClip} pps={pps} onZoom={(z) => setPps(clampPps(z))} centered topLane={topLane} ripple={ripple}
             thumbs={thumbs} onAddMedia={() => setSheet(true)}
             timeLabel={<><b>{formatTimecode(time, project.settings.fps).slice(0, 5)}</b> / {formatTimecode(duration, project.settings.fps).slice(0, 5)}</>}
             sideColumn={<>
@@ -358,7 +359,7 @@ function Editor({ engine, storage, recovery }: EditorContext) {
           {preview}
           <section className="v2-timeline-panel" aria-label="Timeline">
             <div className="v2-timeline-toolbar">{selectionActions}<span className="v2-hint">Space play · S split · F freeze · Del delete · Shift+Del ripple · R ripple · Shift-click multi-select · ⌘C/⌘V/⌘D · ⌘/Ctrl+Z undo</span></div>
-            <Timeline engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} selectedIds={sel} onToggleSelect={toggleClip} multiMode={multiMode} onSelect={selectClip} pps={pps} centered={false} topLane={topLane} ripple={ripple} />
+            <Timeline engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} selectedIds={sel} onToggleSelect={toggleClip} multiMode={multiMode} onSelect={selectClip} pps={pps} onZoom={(z) => setPps(clampPps(z))} centered={false} topLane={topLane} ripple={ripple} />
           </section>
         </div>
       )}
