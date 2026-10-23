@@ -170,3 +170,11 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 .v2-snap-line { position: absolute; top: 0; bottom: 0; width: 0; border-left: 2px dashed #ffd84d; pointer-events: none; z-index: 6; animation: v2-snap-in .12s ease-out; }
 @keyframes v2-snap-in { from { opacity: 0; } to { opacity: 1; } }
 .v2-timeline.is-centered .v2-scroll { overscroll-behavior-x: contain; }
+/* Waveforms and filmstrips (V2-066) */
+.v2-strip { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.v2-strip img { position: absolute; top: 0; height: 100%; object-fit: cover; opacity: .9; }
+.v2-wave { position: absolute; left: 0; bottom: 0; pointer-events: none; }
+.v2-wave.wave-audio { top: 0; bottom: auto; }
+.v2-wave.wave-video { background: linear-gradient(transparent, rgba(0,0,0,.45)); }
+.v2-clip-name { z-index: 1; text-shadow: 0 1px 2px #000; }
+.v2-clip .v2-fade, .v2-clip .v2-kf-dot, .v2-clip .v2-handle { z-index: 2; }

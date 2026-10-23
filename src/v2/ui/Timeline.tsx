@@ -1,5 +1,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { cmd, type Engine } from "../engine";
+import { FilmstripTiles, Waveform } from "./ClipPreview";
+import type { Filmstrip, Peaks } from "./media";
+import { mediaKey } from "./useMedia";
 import { clampPps, haptic, LONG_PRESS_MS, LONG_PRESS_SLOP, pinchZoom, touchDistance } from "./gestures";
 import { edit, ops, compositionDuration, TICKS_PER_SECOND, formatTimecode, type Composition, type Project } from "../domain";
 
@@ -23,6 +26,9 @@ interface Props {
   centered: boolean;
   /** Centered mode extras (CapCut layout). */
   thumbs?: Record<string, string>;
+  /** Per asset-version waveforms / filmstrips (see useMediaPreviews). */
+  peaks?: Record<string, Peaks>;
+  strips?: Record<string, Filmstrip>;
   onAddMedia?: () => void;
   sideColumn?: ReactNode;
   timeLabel?: ReactNode;
@@ -41,7 +47,7 @@ type Gesture =
 
 const HEADER_W = 84;
 
-export function Timeline({ engine, project, time, playing, onSeek, selectedId, selectedIds, onToggleSelect, multiMode, onSelect, pps, onZoom, centered, thumbs, onAddMedia, sideColumn, timeLabel, topLane, ripple }: Props) {
+export function Timeline({ engine, project, time, playing, onSeek, selectedId, selectedIds, onToggleSelect, multiMode, onSelect, pps, onZoom, centered, thumbs, peaks, strips, onAddMedia, sideColumn, timeLabel, topLane, ripple }: Props) {
   const comp = project.compositions[project.rootCompositionId];
   const scrollRef = useRef<HTMLDivElement>(null);
   const [gesture, setGesture] = useState<Gesture>();
@@ -234,8 +240,18 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
                 const inSel = sel || !!selectedIds?.includes(p.id);
                 return (
                   <div key={p.id} className={`v2-clip clip-${p.clipType} ${inSel ? "is-selected" : ""}`} data-placement-id={p.id}
-                    style={{ left: toPx(p.startTicks), width: Math.max(4, toPx(p.durationTicks)), ...(centered && thumbs?.[p.source.assetId] && p.clipType !== "audio" ? { backgroundImage: `url(${thumbs[p.source.assetId]})` } : {}) }}
+                    style={{ left: toPx(p.startTicks), width: Math.max(4, toPx(p.durationTicks)), ...(centered && thumbs?.[p.source.assetId] && p.clipType !== "audio" && !strips?.[mediaKey(p.source.assetId, p.source.versionId)] ? { backgroundImage: `url(${thumbs[p.source.assetId]})` } : {}) }}
                     onPointerDown={(e) => onClipDown(e, p.id, t.id, p.startTicks)} title={asset?.name}>
+                    {(() => {
+                      const key = mediaKey(p.source.assetId, p.source.versionId);
+                      const w = Math.max(4, toPx(p.durationTicks));
+                      const strip = p.clipType === "video" ? strips?.[key] : undefined;
+                      const pk = p.clipType !== "image" && !(p.clipType === "video" && (p.linkedAudio?.muted || p.freeze || p.reverse)) ? peaks?.[key] : undefined;
+                      return <>
+                        {strip && <FilmstripTiles strip={strip} p={p} width={w} pps={pps} />}
+                        {pk && <Waveform peaks={pk} p={p} width={w} height={p.clipType === "audio" ? 38 : 14} kind={p.clipType === "audio" ? "audio" : "video"} />}
+                      </>;
+                    })()}
                     <span className="v2-clip-name">{p.freeze && <span className="v2-clip-badge" title="Freeze frame" aria-label="Freeze frame">❄</span>}{p.reverse && <span className="v2-clip-badge" title="Reversed" aria-label="Reversed">⟲</span>}{p.speed && p.speed !== 1 && <span className="v2-clip-badge" title={`Speed ${p.speed}×`}>{p.speed}×</span>}{p.linkedAudio?.muted && !p.freeze && <span className="v2-clip-badge" title="Clip audio muted" aria-label="Clip audio muted">🔇</span>}{asset?.name ?? "missing media"}</span>
                     {!!p.fadeInTicks && <span className="v2-fade in" aria-label="Fade in" style={{ width: toPx(p.fadeInTicks) }} />}
                     {!!p.fadeOutTicks && <span className="v2-fade out" aria-label="Fade out" style={{ width: toPx(p.fadeOutTicks) }} />}
