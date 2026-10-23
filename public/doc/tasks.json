@@ -1590,6 +1590,20 @@
           "acceptance": [
             "Fixture projects import with warnings report"
           ]
+        },
+        {
+          "id": "V2-024",
+          "title": "Mobile UI aligned with CapCut reference",
+          "status": "done",
+          "progress": 100,
+          "summary": "Dark CapCut-style mobile layout: X / resolution / cyan Export top bar, 45% preview, fullscreen-play-undo/redo row, time row + ruler, fixed white playhead at 42%, side column (mute clip audio, cover), filmstrip video track with + button, contextual scrolling tool bar with back, floating action button. Export button is a placeholder until V2-04x. Legacy app gets a small 'Try new editor (v2)' link.",
+          "doc": "docs/v2/MODULE_DESIGN.md",
+          "detail": "",
+          "report": "",
+          "subtasks": [],
+          "acceptance": [
+            "Verified at 390x844: no horizontal overflow, filmstrip thumbnails, contextual tools"
+          ]
         }
       ]
     },
