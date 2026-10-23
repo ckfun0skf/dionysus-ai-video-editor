@@ -735,3 +735,9 @@ The pinned-version regression again passed all 298 tests, but TypeScript correct
 
 - `src/editorSessionPersistence.test.ts` now verifies a v2 save/reopen round trip retains an embedded pinned nested Composition and its provenance/pin metadata.
 - Exact-head CI passed at `a2e31ee6615e05e1d250cc307c47d1ec7b77d9ac`, [run 39938305163](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39938305163): 27 test files / 313 tests, TypeScript/production build passed, npm audit 0 vulnerabilities. Issue #110 item is checked. The broader edit → undo/redo → save/reopen → JSON round-trip matrix remains incomplete.
+
+## Verified linked-audio persistence slice (2026-10-23)
+
+- Added a deterministic v2 save/reopen regression in `src/editorSessionPersistence.test.ts`: extract a linked-audio child with a non-zero source in-point into an independent Audio placement, persist the paired session, reopen through `readProjectDocument()`, and assert its source reference/range, owner-aligned timing, and unlinked state survive.
+- Exact-head CI passed at `9ec9146ed52542f794a4f554eb2cb3193f8fd18e`, [run 39941912597](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39941912597): 27 test files / 314 tests, TypeScript/production build passed, npm audit 0 vulnerabilities. The matching E1 subtask is checked in Issue #110.
+- This verifies extracted-audio persistence only; the broader edit → undo/redo → save/reopen → JSON round-trip matrix and the complete linked-audio trim/resize/split persistence scenario remain open. Keep DYS-014 in progress; PR #111 remains unmerged, Issue #100 remains open, and no browser/manual UI acceptance is claimed.
