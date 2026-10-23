@@ -1707,16 +1707,17 @@ export default function App() {
       ...track,
       id: id("clip-track"),
     }));
-    const nextVersion = ensureNestedComposition({
+    const nextDescription = "Blank version based on " + current.name;
+    const nextVersion = updateNestedDescription(ensureNestedComposition({
       id: nextId,
       name: "Version " + ((asset.clipVersions?.length ?? 0) + 1),
-      description: "Blank version based on " + current.name,
+      description: nextDescription,
       duration: current.duration,
       layers: [],
       tracks,
       scriptVersionIds: [],
       generationRecords: [],
-    }, { width: asset.canvasWidth ?? 1920, height: asset.canvasHeight ?? 1080 });
+    }, { width: asset.canvasWidth ?? 1920, height: asset.canvasHeight ?? 1080 }), nextDescription);
     change(p => ({
       ...p,
       assets: p.assets.map(item => item.id !== assetId || item.kind !== "clip" ? item : {
@@ -1831,7 +1832,7 @@ export default function App() {
     const nextDescription = current ? (current.description ? "Copy of " + current.name + ": " + current.description : "New version based on " + current.name) : "";
     const nextVersion = current
       ? updateNestedDescription({ ...duplicateClipVersionComposition(current, kind => id(kind)), id: nextId, name: "Version " + (slot.versions.length + 1), description: nextDescription, scriptVersionIds: [...current.scriptVersionIds], generationRecords: [] }, nextDescription)
-      : ensureNestedComposition({
+      : updateNestedDescription(ensureNestedComposition({
           id: nextId,
           name: "Version 1",
           description: "",
@@ -1839,7 +1840,7 @@ export default function App() {
           layers: [],
           scriptVersionIds: [],
           generationRecords: [],
-        }, { width: rootComposition.width, height: rootComposition.height });
+        }, { width: rootComposition.width, height: rootComposition.height }), nextDescription);
     change(p => ({ ...p, shots: p.shots.map(item => item.id !== shotId ? item : { ...item, slots: item.slots.map(s => s.id !== slotId ? s : { ...s, versions: [...s.versions, nextVersion], selectedVersionId: nextId }) }) }));
     setNotice("New version created; the previous versions are preserved.");
     return nextId;
