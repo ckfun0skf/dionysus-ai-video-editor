@@ -333,3 +333,11 @@ The pinned-version regression again passed all 298 tests, but TypeScript correct
 
 - Deterministic coverage trims, resizes and splits a canonical linked-audio child with a source in-point different from its video owner; the v2 envelope is saved and reopened before assertions.
 - Covers source range, split-child identity and linked owner metadata. Code/test SHA `0714f28b93d82091f960b0cd77cd8e21736f3d0a` passed exact-head CI [run 39948473082](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39948473082): 27 test files / 315 tests, TypeScript/build passed, audit 0 vulnerabilities. Issue #110 subtask checked. The broader edit → undo/redo → save/reopen matrix remains open. Docs-synchronized head `ef0ed0c43bbd98c9a3d93aa0299a083d46ca29c2` passed [exact-head CI run 39948801413](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39948801413): 27 test files, TypeScript/build passed, audit 0.
+
+
+### Canonical split/duplicate migration verified (2026-10-23)
+
+- Legacy-only linked audio is now promoted as an owned Composition child under its video placement, not as a separate root placement. This fixes the canonical ownership mismatch that prevented split/duplicate parity.
+- App split and duplicate now promote missing clips before running shared Composition commands. Added regression coverage for split source ranges and duplicate timing/mix metadata; the pre-existing App midpoint split, playhead split, and linked-video/audio duplicate tests also pass.
+- Exact code/test head cbd030a49fe7e3c418dc695ad1e592c748a7ea80 passed CI run 39960129613: 27 test files / 319 tests; TypeScript/production build passed; npm audit 0 vulnerabilities.
+- This closes only the ordinary Timeline split/duplicate compatibility fallback slice. Other Shot/Project mutation paths, broader root/nested history round-trips, and renderer/playback migration remain open. DYS-014 stays in progress. PR #111 remains open/unmerged; Issue #100 remains open for deployed owner acceptance. No browser smoke tests or manual UI acceptance claimed.
