@@ -1485,8 +1485,8 @@
         {
           "id": "V2-002",
           "title": "STATUS page generator + CI check that PRs touch tasks.json",
-          "status": "planned",
-          "progress": 0,
+          "status": "in_progress",
+          "progress": 50,
           "acceptance": [
             "npm run status builds public/doc/STATUS.html",
             "CI fails if src/v2 changes without tasks.json change"
