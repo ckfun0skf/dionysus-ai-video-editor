@@ -75,7 +75,7 @@ export function TransformInspector({ engine, placement, time }: { engine: Engine
  * On-canvas handles over the selected clip: drag the box to move, a corner to scale, the top knob to rotate.
  * `box` is in canvas pixels; `canvas` gives the CSS scale. One gesture = one undo step.
  */
-export interface GizmoActions { onDelete: () => void; onEdit: () => void; onDuplicate: () => void }
+export interface GizmoActions { onDelete: () => void; onEdit: () => void; onDuplicate: () => void; onDoubleTap?: () => void }
 
 /**
  * CapCut-style gizmo: drag body to move; corner buttons delete (top-left), edit (top-right),
@@ -95,6 +95,7 @@ export function TransformHandles({ engine, placement, box, canvas, time, actions
     left: rect.left - parent.left + box.cx * k - bw / 2, top: rect.top - parent.top + box.cy * k - bh / 2,
     width: bw, height: bh, transform: `rotate(${box.rot}rad)`,
   };
+  const lastTap = useRef(0);
   const startGesture = () => { if (!drag.current && !pinch.current) engine.beginGesture(); };
   const start = (mode: "move" | "spin") => (e: RPE) => {
     e.stopPropagation(); e.preventDefault();
@@ -105,6 +106,11 @@ export function TransformHandles({ engine, placement, box, canvas, time, actions
       drag.current = undefined;
       pinch.current = { a0, b0, t0: valuesAt(placement, time) };
       return;
+    }
+    if (mode === "move" && pts.current.size === 1) {
+      const now = Date.now();
+      if (now - lastTap.current < 320) { lastTap.current = 0; pts.current.clear(); actions?.onDoubleTap?.(); return; }
+      lastTap.current = now;
     }
     startGesture();
     drag.current = { mode, x0: e.clientX, y0: e.clientY, t0: valuesAt(placement, time), cx: rect.left + box.cx * k, cy: rect.top + box.cy * k };

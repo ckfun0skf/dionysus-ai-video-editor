@@ -9,6 +9,7 @@ import { clampPps } from "./gestures";
 import { useThumbs } from "./useThumbs";
 import { useMediaPreviews } from "./useMedia";
 import { TransformHandles, TransformInspector } from "./Transform";
+import { TextPanel } from "./TextPanel";
 import { ExportDialog } from "./ExportDialog";
 import { ProjectsDialog } from "./Projects";
 import type { Resolution } from "../render";
@@ -54,6 +55,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const [fs, setFs] = useState(false);
   const [toast, setToast] = useState<string>();
   const [inspOpen, setInspOpen] = useState(false);
+  const [textOpen, setTextOpen] = useState(false);
+  const [inlineId, setInlineId] = useState<string>();
   const [subId, setSubId] = useState<string>();
   const [ripple, setRippleState] = useState(() => localStorage.getItem("v2.ripple") === "1");
   const setRipple = (on: boolean) => { setRippleState(on); localStorage.setItem("v2.ripple", on ? "1" : "0"); setToast(on ? "Ripple on: delete and trim close gaps" : "Ripple off"); };
@@ -122,7 +125,18 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     else if (selectedId) setSelectedId(undefined);
     else togglePlay();
   };
-  const gizmo = { onDelete: () => del(false), onEdit: () => setInspOpen(true), onDuplicate: () => duplicate() };
+  const isText = selected?.placement.clipType === "text";
+  const gizmo = { onDelete: () => del(false), onEdit: () => (isText ? setTextOpen(true) : setInspOpen(true)), onDuplicate: () => duplicate(), onDoubleTap: () => { if (isText) setInlineId(selected!.placement.id); } };
+  const inlineBox = inlineId && selected?.placement.id === inlineId ? player.boxes.get(inlineId) : undefined;
+  const inlineEditor = inlineBox && canvasRef.current && (() => {
+    const c = canvasRef.current, r = c.getBoundingClientRect(), pr = c.parentElement!.getBoundingClientRect(), k = r.width / c.width;
+    const w = Math.max(120, inlineBox.w * k), h = Math.max(44, inlineBox.h * k);
+    return <textarea className="v2-inline-edit" aria-label="Edit text inline" autoFocus defaultValue={selected!.placement.text?.text ?? ""}
+      style={{ left: r.left - pr.left + inlineBox.cx * k - w / 2, top: r.top - pr.top + inlineBox.cy * k - h / 2, width: w, height: h }}
+      onFocus={(e) => { engine.beginGesture(); e.currentTarget.select(); }} onBlur={() => { engine.endGesture(); setInlineId(undefined); }}
+      onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Escape" || (e.key === "Enter" && !e.shiftKey)) { e.preventDefault(); e.currentTarget.blur(); } }}
+      onChange={(e) => engine.dispatch(cmd.updateText(inlineId!, { text: e.target.value }, "Type text"))} />;
+  })();
   const del = useCallback((rippleOverride?: boolean) => { if (selectedId) { engine.dispatch(cmd.deleteClips([selectedId], rippleOverride ?? ripple)); setSelectedId(undefined); } }, [engine, selectedId, ripple]);
 
   useEffect(() => {
@@ -287,6 +301,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     <section className="v2-preview" aria-label="Preview" style={mobile ? { height: `${previewVh}dvh` } : undefined}>
       <div className="v2-canvas-wrap"><canvas ref={canvasRef} width={1280} height={720} onClick={onCanvasTap} title="Tap an element to select it · tap empty space to play/pause" />
         {visual && player.boxes.get(visual.id) && canvasRef.current && <TransformHandles engine={engine} placement={visual} time={time} box={player.boxes.get(visual.id)!} canvas={canvasRef.current} actions={gizmo} />}
+        {inlineEditor}
       </div>
       {!mobile && transport}
     </section>
@@ -321,6 +336,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       ...(transitionTools ? [<span key="tr" className="v2-trans-wrap">{transitionTools}</span>] : []),
       tool("✂", "Split", split),
       tool("🗑", ripple ? "Ripple delete" : "Delete", () => del(), "delete", ripple ? "Delete and close the gap" : "Delete"),
+      ...(isText ? [tool("T", "Edit text", () => setTextOpen(true), "edit-text", "Templates, font, style, effects, animation")] : []),
       tool("⤧", "Adjust", () => setInspOpen(true), "adjust", "Transform, keyframes and fades"),
       ...(speedSelect ? [tool("⏩", `Speed ${sp!.speed ?? 1}×`, () => setMenu("speed"), "speed", "Playback speed")] : []),
       tool("☑", "Select", () => setMultiMode(true), "multi", "Select several clips"),
@@ -403,11 +419,12 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           {!sheet && <div hidden>{browser}</div>}
           {cue && <div className="v2-msub"><SubtitleEditor engine={engine} sub={cue} onDelete={delCue} /></div>}
           {inspOpen && selected && <Sheet label="Adjust" className="v2-msheet-insp" onClose={() => setInspOpen(false)}><TransformInspector engine={engine} placement={selected.placement} time={time} /><button className="v2-btn" onClick={() => setInspOpen(false)}>Done</button></Sheet>}
+          {textOpen && selected && isText && <Sheet label="Text" className="v2-msheet-insp" onClose={() => setTextOpen(false)}><TextPanel engine={engine} placement={selected.placement} /><button className="v2-btn" onClick={() => setTextOpen(false)}>Done</button></Sheet>}
         </>
       ) : (
         <div className={`v2-desktop-grid ${sideOpen ? "" : "side-closed"}`}>
           <button className="v2-icon v2-side-toggle" aria-label={sideOpen ? "Hide side panel" : "Show side panel"} title={sideOpen ? "Hide side panel" : "Show side panel"} aria-expanded={sideOpen} onClick={() => setSideOpen(!sideOpen)}><Ic g={sideOpen ? "panel-close" : "panel-open"} size={18} /></button>
-          <div className="v2-side" hidden={!sideOpen}>{selected && <TransformInspector engine={engine} placement={selected.placement} time={time} />}{cue && <SubtitleEditor engine={engine} sub={cue} onDelete={delCue} />}{browser}</div>
+          <div className="v2-side" hidden={!sideOpen}>{selected && isText && <TextPanel engine={engine} placement={selected.placement} />}{selected && <TransformInspector engine={engine} placement={selected.placement} time={time} />}{cue && <SubtitleEditor engine={engine} sub={cue} onDelete={delCue} />}{browser}</div>
           {preview}
           <section className="v2-timeline-panel" aria-label="Timeline">
             <div className="v2-timeline-toolbar">{selectionActions}<span className="v2-hint">Space play · S split · F freeze · Del delete · Shift+Del ripple · R ripple · Shift-click multi-select · ⌘C/⌘V/⌘D · ⌘/Ctrl+Z undo</span></div>
