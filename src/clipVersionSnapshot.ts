@@ -1,7 +1,7 @@
 import type { ClipVersion, DionysusProject, GenerationRecord } from "./types";
 import type { CompositionDocument, CompositionPinnedVersion } from "./compositionModel";
-import { migrateLegacyProjectToComposition, projectRootCompositionToLegacy } from "./compositionMigration";
-import { collectCompositionLayers, getCompositionDuration } from "./compositionRenderer";
+import { migrateLegacyProjectToComposition } from "./compositionMigration";
+import { collectCompositionLayers, collectRootCompositionLayers, getCompositionDuration } from "./compositionRenderer";
 
 /**
  * Capture a structurally editable Master Timeline snapshot.
@@ -14,8 +14,9 @@ export function createClipVersionSnapshot(
   const createdAt = options.createdAt ?? new Date().toISOString();
   const migrated = migrateLegacyProjectToComposition(project);
   const root = structuredClone(options.rootComposition ?? migrated.rootComposition);
-  const snapshotProject = options.rootComposition ? projectRootCompositionToLegacy(project, root) : project;
-  const flattenedLayers = structuredClone(collectCompositionLayers(snapshotProject));
+  const flattenedLayers = structuredClone(options.rootComposition
+    ? collectRootCompositionLayers(project, root)
+    : collectCompositionLayers(project));
   const duration = Math.max(0.1, root.duration, getCompositionDuration(flattenedLayers));
 
   const pinnedVersions: CompositionPinnedVersion[] = [];
