@@ -358,3 +358,11 @@ Legacy-only ordinary Timeline clips are now promoted before metadata, geometry, 
 - Code commit `1a64c0355f92632a81155bab9a35128ef50ed509` changes recursive nested-clip rendering to pass `collectVersionRenderLayers(childVersion)` instead of the potentially stale `childVersion.layers` compatibility array. This aligns nested preview frames with the canonical Composition placements/tracks/source metadata already used by the top-level renderer adapter.
 - Exact-head CI run 2032 is pending at the time of this note; verify it against this commit before treating the slice as validated. This is an implementation slice, not completion of the broader renderer/playback migration.
 - PR #111 remains open/unmerged. Issue #100 remains open for owner UI acceptance; no browser smoke test or manual UI acceptance is claimed.
+
+
+## Master Shot drag-move canonicalization (2026-10-23)
+
+- The Timeline drag/drop path now promotes a legacy-only Master Shot into the live root Composition before moving it with `moveCompositionPlacementToTrack`, instead of mutating only the Project compatibility projection. This complements the existing canonical Master Shot start/duration paths.
+- Added `moveCanonicalMasterShot` and regression coverage in `src/projectTimelinePlacement.test.ts` for promotion followed by a canonical move and duration edit.
+- Code/test head `d70199eced579713b754366896c50a8e48888595`; exact-head CI run 2040 was in progress when this note was written. Verify it and the docs-synchronized head before treating this slice as validated.
+- DYS-014 remains in progress. PR #111 remains open/unmerged and Issue #100 remains open for owner UI acceptance; no browser smoke tests or manual UI acceptance are claimed.
