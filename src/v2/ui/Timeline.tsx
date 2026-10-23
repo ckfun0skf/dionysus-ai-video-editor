@@ -4,7 +4,7 @@ import { FilmstripTiles, Waveform } from "./ClipPreview";
 import type { Filmstrip, Peaks } from "./media";
 import { mediaKey } from "./useMedia";
 import { clampPps, haptic, LONG_PRESS_MS, LONG_PRESS_SLOP, pinchZoom, touchDistance } from "./gestures";
-import { edit, ops, transitions, compositionDuration, TICKS_PER_SECOND, formatTimecode, type Composition, type Project, type Track } from "../domain";
+import { edit, ops, transitions, compositionDuration, TICKS_PER_SECOND, formatTimecode, type Composition, type Placement, type Project, type Track } from "../domain";
 import { Ic } from "./Icon";
 
 interface Props {
@@ -316,7 +316,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
                   style={{ left: toPx(p.startTicks), width: Math.max(4, toPx(p.durationTicks)), ...(thumbs?.[p.source.assetId] && p.clipType !== "audio" ? { backgroundImage: `url(${thumbs[p.source.assetId]})` } : {}) }}
                   title={`${p.clipType === "text" ? p.text?.text : project.assets[p.source.assetId]?.name ?? ""} — tap to open ${ops.GROUP_LABEL[r.group]} layers`}
                   onPointerDown={(e) => e.stopPropagation()} onClick={() => { setExpanded(r.group); onSelect(p.id); }}>
-                  <span className="v2-clip-name">{p.clipType === "text" ? <><Ic g="T" size={12} /> {p.text?.text || "Text"}</> : project.assets[p.source.assetId]?.name}</span>
+                  <span className="v2-clip-name">{p.clipType === "text" ? <><Ic g="T" size={12} /> {p.text?.text || "Text"}</> : project.assets[p.source.assetId]?.name}</span><AnimBadges p={p} width={Math.max(4, toPx(p.durationTicks))} />
                 </button>
               ))}
             </div>
@@ -344,7 +344,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
                         {pk && <Waveform peaks={pk} p={p} width={w} height={p.clipType === "audio" ? 38 : 14} kind={p.clipType === "audio" ? "audio" : "video"} />}
                       </>;
                     })()}
-                    <span className="v2-clip-name">{p.freeze && <span className="v2-clip-badge" title="Freeze frame" aria-label="Freeze frame"><Ic g="❄" /></span>}{p.reverse && <span className="v2-clip-badge" title="Reversed" aria-label="Reversed"><Ic g="⟲" /></span>}{p.speed && p.speed !== 1 && <span className="v2-clip-badge" title={`Speed ${p.speed}×`}>{p.speed}×</span>}{p.linkedAudio?.muted && !p.freeze && <span className="v2-clip-badge" title="Clip audio muted" aria-label="Clip audio muted"><Ic g="🔇" /></span>}{p.clipType === "text" ? <><Ic g="T" size={12} /> {p.text?.text || "Text"}</> : asset?.name ?? "missing media"}</span>
+                    <span className="v2-clip-name">{p.freeze && <span className="v2-clip-badge" title="Freeze frame" aria-label="Freeze frame"><Ic g="❄" /></span>}{p.reverse && <span className="v2-clip-badge" title="Reversed" aria-label="Reversed"><Ic g="⟲" /></span>}{p.speed && p.speed !== 1 && <span className="v2-clip-badge" title={`Speed ${p.speed}×`}>{p.speed}×</span>}{p.linkedAudio?.muted && !p.freeze && <span className="v2-clip-badge" title="Clip audio muted" aria-label="Clip audio muted"><Ic g="🔇" /></span>}{p.clipType === "text" ? <><Ic g="T" size={12} /> {p.text?.text || "Text"}</> : asset?.name ?? "missing media"}</span><AnimBadges p={p} width={Math.max(4, toPx(p.durationTicks))} />
                     {!!p.fadeInTicks && <span className="v2-fade in" aria-label="Fade in" style={{ width: toPx(p.fadeInTicks) }} />}
                     {!!p.fadeOutTicks && <span className="v2-fade out" aria-label="Fade out" style={{ width: toPx(p.fadeOutTicks) }} />}
                     {[...new Set(Object.values(p.keyframes ?? {}).flatMap((ks) => ks!.map((k) => k.t)))].filter((k) => k >= 0 && k <= p.durationTicks).map((k) => (
@@ -525,5 +525,25 @@ export function ConfirmDialog({ title, message, confirm, onConfirm, onCancel }: 
         </div>
       </div>
     </div>
+  );
+}
+
+/** Which animation badges a clip shows (V2-098). */
+export function animBadges(p: Placement): ("in" | "out" | "loop")[] {
+  const t = p.text;
+  if (!t) return [];
+  const on = (v?: string) => !!v && v !== "none";
+  return [...(on(t.animIn) ? ["in" as const] : []), ...(on(t.animOut) ? ["out" as const] : []), ...(on(t.loop) ? ["loop" as const] : [])];
+}
+const BADGE_LABEL = { in: "In animation", out: "Out animation", loop: "Loop animation" } as const;
+/** In badge at the clip start, Out at the end, Loop in between; on narrow clips they pack into one corner chip. */
+function AnimBadges({ p, width }: { p: Placement; width: number }) {
+  const b = animBadges(p);
+  if (!b.length) return null;
+  const narrow = width < b.length * 16 + 8;
+  return (
+    <span className={`v2-anim-badges ${narrow ? "is-narrow" : ""}`} aria-label={b.map((k) => BADGE_LABEL[k]).join(", ")}>
+      {b.map((k) => <span key={k} className={`v2-anim-badge is-${k}`} title={BADGE_LABEL[k]}><Ic g={`anim-${k}`} size={9} /></span>)}
+    </span>
   );
 }
