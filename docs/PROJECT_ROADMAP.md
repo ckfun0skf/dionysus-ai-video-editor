@@ -323,3 +323,8 @@ A v2 save/reopen regression exercises canonical linked-audio children through tr
 ### E1 canonical move-path slice (2026-10-23)
 
 A legacy-only Timeline clip is now inserted into the live canonical root Composition before a move is applied through `moveCompositionPlacementToTrack()`, instead of using the legacy Project move helper. This is a partial migration only: the Shot-domain fallback and resize fallback remain. Code commit `7bfc6b90e770a941399668ceff42db438cdc3be0`; exact-head CI run 39955595704 was in progress at the time of writing, so validation is pending. Issue #110 remains in progress and no checklist item is marked complete by this partial slice.
+
+
+### Verified canonical move/resize promotion (2026-10-23)
+
+The ordinary Timeline clip move and resize fallbacks now promote any missing legacy-only clip and its linked owner/child clips into the canonical root Composition before invoking shared Composition commands. Tests verify linked-audio synchronization and source-document immutability. Exact-head code commit `4c796da2dd54793a0d104d1f78b979fb026fa194` passed [CI run 39956221638](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39956221638): 27 files / 317 tests, TypeScript/build and dependency audit passed. This is a bounded partial migration, not completion of DYS-014; Shot-domain/other Project mutation paths, renderer/playback contract migration, and broad root/nested history round-trips remain.
