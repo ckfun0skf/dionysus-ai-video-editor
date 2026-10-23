@@ -4,7 +4,9 @@ import { createProject, type Project } from "../domain";
 import { attachAutosave, collectUnusedBlobs, createIndexedDbStorage, createMemoryStorage } from "../persistence";
 import type { Storage } from "../ports";
 
-export interface EditorContext { engine: Engine; storage: Storage }
+/** Set when the last project failed to load; the stored record is kept untouched for recovery. */
+export interface LoadFailure { projectId: string; error: string }
+export interface EditorContext { engine: Engine; storage: Storage; recovery?: LoadFailure }
 export type BootState = { status: "loading" } | { status: "ready"; ctx: EditorContext } | { status: "error"; error: string };
 
 async function openStorage(): Promise<Storage> {
@@ -19,17 +21,24 @@ async function openStorage(): Promise<Storage> {
 }
 
 /** Boot: open storage, load last project (or create one), wire autosave. Cleans up on unmount. */
-export function useEditorBoot(): BootState {
+export function useEditorBoot(open: () => Promise<Storage> = openStorage): BootState {
   const [state, setState] = useState<BootState>({ status: "loading" });
   useEffect(() => {
     let cancelled = false;
     let dispose: (() => void) | undefined;
     (async () => {
-      const storage = await openStorage();
+      const storage = await open();
       await collectUnusedBlobs(storage).catch(() => 0);
       const lastId = storage.lastProjectId.get();
-      let project: Project | undefined = lastId ? await storage.projects.load(lastId).catch(() => undefined) : undefined;
-      if (!project) { project = createProject("My first v2 project"); await storage.projects.save(project); }
+      let recovery: LoadFailure | undefined;
+      let project: Project | undefined;
+      if (lastId) {
+        try { project = await storage.projects.load(lastId); } catch (e) {
+          recovery = { projectId: lastId, error: e instanceof Error ? e.message : String(e) };
+          console.error("v2: last project failed to load; starting a new one and keeping the original", e);
+        }
+      }
+      if (!project) { project = createProject(recovery ? "Recovered session" : "My first v2 project"); await storage.projects.save(project); }
       if (cancelled) return;
       storage.lastProjectId.set(project.id);
       const engine = new Engine(project);
@@ -38,7 +47,7 @@ export function useEditorBoot(): BootState {
       window.addEventListener("pagehide", onHide);
       document.addEventListener("visibilitychange", onHide);
       dispose = () => { void auto.flush(); auto.dispose(); window.removeEventListener("pagehide", onHide); document.removeEventListener("visibilitychange", onHide); };
-      setState({ status: "ready", ctx: { engine, storage } });
+      setState({ status: "ready", ctx: { engine, storage, recovery } });
     })().catch((e) => { if (!cancelled) setState({ status: "error", error: e instanceof Error ? e.message : String(e) }); });
     return () => { cancelled = true; dispose?.(); };
   }, []);

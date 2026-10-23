@@ -8,6 +8,7 @@ export function createMemoryStorage(): Storage {
   const ps: ProjectStore = {
     list: async () => [...projects.values()].map((p) => ({ id: p.id, name: p.name, updatedAt: p.meta.updatedAt })),
     load: async (id) => projects.get(id),
+    loadRaw: async (id) => projects.get(id),
     save: async (p) => void projects.set(p.id, p),
     delete: async (id) => void projects.delete(id),
   };

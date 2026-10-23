@@ -3,20 +3,22 @@ import { Player } from "../render";
 import { cmd } from "../engine";
 import { importFile, importLegacy } from "../persistence";
 import { compositionDuration, findPlacement, formatTimecode, secondsToTicks, type Asset } from "../domain";
-import { useEditorBoot, useEngineState, useIsMobile, type EditorContext } from "./useEditor";
+import { useEditorBoot, useEngineState, useIsMobile, type EditorContext, type LoadFailure } from "./useEditor";
 import { Timeline } from "./Timeline";
 import { useThumbs } from "./useThumbs";
 
 type Menu = "root" | "edit" | "edit-hint" | "audio" | "zoom";
 
-export function V2App() {
-  const boot = useEditorBoot();
+/** `openStorage` is injectable for tests; production uses IndexedDB (memory fallback). */
+export function V2App({ openStorage }: { openStorage?: () => Promise<EditorContext["storage"]> } = {}) {
+  const boot = useEditorBoot(openStorage);
   if (boot.status === "loading") return <div className="v2-loading">Loading Dionysus v2…</div>;
   if (boot.status === "error") return <div className="v2-loading" role="alert">Could not start the v2 editor: {boot.error}. <button onClick={() => location.reload()}>Retry</button></div>;
   return <Editor {...boot.ctx} />;
 }
 
-function Editor({ engine, storage }: EditorContext) {
+function Editor({ engine, storage, recovery }: EditorContext) {
+  const [notice, setNotice] = useState(recovery);
   const { project, canUndo, canRedo } = useEngineState(engine);
   const mobile = useIsMobile();
   const [time, setTime] = useState(0);
@@ -221,6 +223,7 @@ function Editor({ engine, storage }: EditorContext) {
           <span className="v2-badge">v2 preview</span>
         </header>
       )}
+      {notice && <RecoveryNotice failure={notice} storage={storage} onDismiss={() => setNotice(undefined)} />}
       {toast && <div className="v2-toast" role="status" onClick={() => setToast(undefined)}>{toast}</div>}
       {mobile ? (
         <>
@@ -281,3 +284,26 @@ function readText(f: File): Promise<string> {
   if (typeof f.text === "function") return f.text();
   return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = () => rej(r.error); r.readAsText(f); });
 }
+
+/** Shown when the last project failed its schema check. The original record is never modified. */
+function RecoveryNotice({ failure, storage, onDismiss }: { failure: LoadFailure; storage: EditorContext["storage"]; onDismiss: () => void }) {
+  const download = async () => {
+    const raw = await storage.projects.loadRaw(failure.projectId);
+    const url = URL.createObjectURL(new Blob([JSON.stringify(raw, null, 2)], { type: "application/json" }));
+    const a = Object.assign(document.createElement("a"), { href: url, download: `dionysus-backup-${failure.projectId}.json` });
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+  return (
+    <div className="v2-recovery" role="alert">
+      <strong>Your last project couldn’t be opened.</strong>
+      <p>{failure.error} It is still saved and has not been changed; you are in a new “Recovered session”.</p>
+      <div className="v2-recovery-actions">
+        <button className="v2-btn primary" onClick={() => void download()}>Download backup</button>
+        <button className="v2-btn" onClick={() => location.reload()}>Retry</button>
+        <button className="v2-btn" onClick={onDismiss}>Dismiss</button>
+      </div>
+    </div>
+  );
+}
+

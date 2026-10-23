@@ -1640,6 +1640,21 @@
           "acceptance": [
             "Verified at 390x844: no horizontal overflow, filmstrip thumbnails, contextual tools"
           ]
+        },
+        {
+          "doc": "docs/v2/MODULE_DESIGN.md",
+          "detail": "",
+          "report": "",
+          "subtasks": [],
+          "acceptance": [
+            "No silent reset: alert shows the error",
+            "Original record untouched; Download backup + Retry + Dismiss",
+            "Component test"
+          ],
+          "id": "V2-025",
+          "title": "Recovery notice when the last project fails its schema check",
+          "status": "done",
+          "progress": 100
         }
       ]
     },

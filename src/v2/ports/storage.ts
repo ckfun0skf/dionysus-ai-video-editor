@@ -5,6 +5,8 @@ export interface ProjectSummary { id: string; name: string; updatedAt: string }
 export interface ProjectStore {
   list(): Promise<ProjectSummary[]>;
   load(id: string): Promise<Project | undefined>;
+  /** Stored record without schema checks, for backups/recovery of projects that fail to load. */
+  loadRaw(id: string): Promise<unknown>;
   save(project: Project): Promise<void>;
   delete(id: string): Promise<void>;
 }
