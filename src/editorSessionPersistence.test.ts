@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { migrateLegacyProjectToComposition, projectRootCompositionToLegacy } from "./compositionMigration";
+import { readProjectDocument } from "./projectDocument";
 import { sampleProject } from "./sampleProject";
 import {
   COMPOSITION_PROJECT_STORAGE_KEY,
@@ -37,6 +38,36 @@ describe("Editor session persistence boundary", () => {
     expect(envelope.compositionModel.rootComposition).toEqual(composition);
     expect(envelope.project).toEqual(projectRootCompositionToLegacy({ ...project, updatedAt: "2026-10-22T12:34:56.000Z" }, composition));
     expect(storage.values.has(LEGACY_PROJECT_STORAGE_KEY)).toBe(false);
+  });
+
+  it("round-trips canonical pinned nested Composition trees through save and reopen", () => {
+    const project = structuredClone(sampleProject);
+    const root = migrateLegacyProjectToComposition(project).rootComposition;
+    const pinnedChild = structuredClone(root);
+    pinnedChild.id = "composition:pinned-shot-slot:older-version";
+    pinnedChild.name = "Pinned older Shot Slot version";
+    pinnedChild.nestedCompositions = [];
+    pinnedChild.provenance = {
+      kind: "derived-clip-version",
+      sourceProjectId: project.id,
+      sourceCompositionId: "source-composition",
+      sourceUpdatedAt: project.updatedAt,
+      createdAt: "2026-10-23T10:30:00.000Z",
+      pinnedVersions: [{ shotId: "shot-1", slotId: "slot-1", versionId: "shot-version-1" }],
+    };
+    root.nestedCompositions = [pinnedChild];
+    const sessionProject = projectRootCompositionToLegacy(project, root);
+    const storage = memoryStorage();
+
+    persistEditorSession(storage, { project: sessionProject, composition: root }, "2026-10-23T10:31:00.000Z");
+    const saved = JSON.parse(storage.values.get(COMPOSITION_PROJECT_STORAGE_KEY)!);
+    const reopened = readProjectDocument(saved, true);
+    const reopenedRoot = reopened.compositionModel!.rootComposition;
+
+    expect(reopened.sourceDocumentVersion).toBe("2.0");
+    expect(reopenedRoot.id).toBe(root.id);
+    expect(reopenedRoot.nestedCompositions).toEqual([pinnedChild]);
+    expect(reopenedRoot.nestedCompositions?.[0].provenance).toEqual(pinnedChild.provenance);
   });
 
   it("leaves the existing legacy fallback untouched if the canonical write fails", () => {
