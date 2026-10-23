@@ -1658,6 +1658,20 @@
           "title": "Recovery notice when the last project fails its schema check",
           "status": "done",
           "progress": 100
+        },
+        {
+          "doc": "docs/v2/MODULE_DESIGN.md",
+          "detail": "",
+          "report": "",
+          "subtasks": [],
+          "acceptance": [
+            "§4 lists only existing files + a planned list",
+            "§12 describes the ?v2 lazy entry and switch-over"
+          ],
+          "id": "V2-026",
+          "title": "Align MODULE_DESIGN §4/§12 with the code (one tree, ?v2 only)",
+          "status": "done",
+          "progress": 100
         }
       ]
     },

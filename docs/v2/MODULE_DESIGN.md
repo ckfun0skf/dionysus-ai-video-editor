@@ -65,34 +65,22 @@ Ideas reused from existing docs (all retained as v2 invariants):
 
 ## 4. Folder tree
 
+One tree, as it exists today. Planned modules are listed separately and are added only when a feature needs them, so this section never describes files that don't exist.
+
 ```
+src/main.tsx               # entry: ?v2 → lazy import("./v2/main"), otherwise the legacy app
 src/v2/
-  main.tsx                 # v2 entry (mounted by ?v2 or /v2/)
-  domain/
-    ids.ts  time.ts        # branded ids, frame/tick math (integer ticks, rational fps)
-    project.ts asset.ts shot.ts composition.ts subtitle.ts htmlComponent.ts
-    graph.ts               # dependency graph + staleness
-    validate.ts            # structural validation (schema 3.x)
-    ops/                   # pure placement ops: insert, move, trim, split, ripple, snap
-  ports/                   # interfaces only
-    storage.ts blobStore.ts clock.ts generator.ts
-  registry/
-    clipTypes.ts trackTypes.ts effects.ts importers.ts exporters.ts generators.ts qaCheckers.ts
-  engine/
-    commands/              # one file per command family (timeline, asset, shot, storyboard)
-    history.ts transaction.ts store.ts selectors.ts events.ts
-  persistence/
-    indexeddb/ memory/ schema/ (migrations 3.x→3.y)
-  render/
-    frameGraph.ts          # resolve composition @ t → ordered layer list (pure)
-    canvas2d/ webgl/ html/ audio/ playback.ts export/
-  plugins/                 # built-in registrations: video,image,audio,text,subtitle,html,three
-  pipeline/                # story JSON schema, prompt templates, todo derivation, QA
-  ui/
-    shell/ desktop/ mobile/ timeline/ preview/ browser/ inspector/ storyboard/ versions/
-    hooks/ (useEngine, useSelector, usePlayback)
-  test/fixtures/
+  main.tsx                 # mountV2(root)
+  architecture.test.ts     # enforces the §3 layering + barrel imports
+  domain/   index.ts model.ts time.ts ops.ts     # schema 3.0 model, integer ticks, pure placement ops, validation
+  ports/    index.ts storage.ts projectSource.ts  # interfaces only
+  engine/   index.ts engine.ts commands.ts        # command engine, history, gesture coalescing
+  persistence/ index.ts indexeddb.ts memory.ts schema.ts autosave.ts media.ts gc.ts
+  render/   index.ts frame.ts player.ts clock.ts  # activeAt/fitRect, canvas preview player, AudioContext master clock
+  ui/       V2App.tsx Timeline.tsx useEditor.ts useThumbs.ts TryV2Link.tsx v2.css
 ```
+
+**Planned (not created yet):** `registry/` (clip/track types, effects, importers/exporters, transitions), `render/export/` (WebCodecs MP4 + WebM fallback), `render/html/` (sandboxed iframe clips), `pipeline/` (story JSON, QA), and splitting `ui/` into `timeline/ preview/ inspector/ mobile/` once files grow past ~400 lines. Tests live next to their code (`*.test.ts(x)`).
 
 ## 5. Domain model (schema 3.0)
 
@@ -260,10 +248,9 @@ PR #111 `editorSession*.ts`: treat as reference for session-state shape (selecti
 
 ## 12. Coexistence & switch-over
 
-1. **Side-by-side:** v2 is a separate Vite entry (`v2/index.html` → `src/v2/main.tsx`), also reachable via `?v2` on the main page. Same Pages deployment; legacy untouched.
+1. **Same entry, opt-in by `?v2`:** there's no separate Vite entry. `src/main.tsx` lazy-loads `src/v2/main.tsx` (its own chunk) when the URL has `?v2`; otherwise it mounts the legacy app. The legacy app is unchanged apart from a small "Try new editor (v2)" link.
 2. **Separate storage:** v2 uses its own IndexedDB database (`dionysus-v2`). Legacy data is not imported (no legacy projects exist).
-3. **Feature flag** `localStorage["dionysus.ui"] = "v2"` makes `/` redirect to v2; banner “Back to classic”.
-4. **Switch-over** when the MVP passes the acceptance checklist: v2 becomes the default and the legacy app (and the "Try new editor (v2)" link) is removed in one PR.
+3. **Switch-over** when the MVP passes the acceptance checklist: v2 becomes the default (no `?v2` needed), and the legacy app and the link are removed in one PR.
 
 ## 13. Testing strategy
 
