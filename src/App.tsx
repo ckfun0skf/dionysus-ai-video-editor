@@ -17,6 +17,7 @@ import { type ClipResizePreview } from "./timelineResize";
 import { canPlaceTimelineClipOnTrack } from "./timelinePlacement";
 import { applyClipVersionResizePreview, calculateClipVersionDropPosition, calculateClipVersionResizePreview } from "./nestedTimelinePlacement";
 import {
+  applyCanonicalRootTimelineResize,
   applyProjectTimelineClipResize,
   calculateCanonicalCompositionResizePreview,
   applyCanonicalCompositionInsertion,
@@ -745,7 +746,9 @@ export default function App() {
     if (affectedIds.every(placementId => editorSessionRef.current.composition.placements.some(placement => placement.id === placementId))) {
       changeRootComposition(root => applyCompositionResizePreview(root, preview));
     } else {
-      change(project => applyProjectTimelineClipResize(project, preview));
+      changeRootComposition(root => applyCanonicalRootTimelineResize(
+        editorSessionRef.current.project, root, preview,
+      ));
     }
   }
 
