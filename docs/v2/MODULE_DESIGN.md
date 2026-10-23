@@ -28,7 +28,7 @@ Ideas reused from existing docs (all retained as v2 invariants):
 - Cloud sync, multi-user collaboration, accounts (interfaces only).
 - Built-in AI generation API calls or an autonomous agent (provider interface only).
 - Transitions/effects beyond a registry stub; color grading; keyframe curves beyond opacity/volume/transform.
-- Bidirectional compatibility with legacy schema (import is one-way).
+- Any compatibility with legacy schema 1.0/2.0 projects (owner decision 2026-10-23: no legacy projects exist, so there is no importer).
 
 ## 3. Layered architecture
 
@@ -61,7 +61,7 @@ Ideas reused from existing docs (all retained as v2 invariants):
 | `render` | `domain`, `ports`, `registry` | `engine` mutation APIs, UI |
 | `plugins` | `domain`, `registry`, `render` types | UI internals |
 | `ui` | everything above via public `index.ts` | other features' internals; `legacy` `src/*` |
-| v2 anything | — | legacy `src/*.ts(x)` (except the one-way importer, which copies needed code) |
+| v2 anything | — | legacy `src/*.ts(x)` |
 
 ## 4. Folder tree
 
@@ -82,7 +82,7 @@ src/v2/
     commands/              # one file per command family (timeline, asset, shot, storyboard)
     history.ts transaction.ts store.ts selectors.ts events.ts
   persistence/
-    indexeddb/ memory/ schema/ (migrations 3.x→3.y) importLegacy/ (1.0/2.0 → 3.0)
+    indexeddb/ memory/ schema/ (migrations 3.x→3.y)
   render/
     frameGraph.ts          # resolve composition @ t → ordered layer list (pure)
     canvas2d/ webgl/ html/ audio/ playback.ts export/
@@ -200,7 +200,7 @@ All registries share `createRegistry<T extends { id: string }>()` with `register
 | `clipTypes` | `{ id, trackKinds, propsSchema, defaultDuration(src), renderLayer(ctx,t), audioNode?(ctx), inspector?: React.FC }` |
 | `trackTypes` | `{ id, accepts(clipType), renderOrder }` |
 | `effects` / `transitions` | `{ id, params, apply(gpuCtx, inputs, t) }` (stub in v2.0) |
-| `importers` / `exporters` | `{ id, accept(file|json), import(...) → Command[] }` / `{ id, export(project, opts) → Blob }` (story JSON, SRT/VTT, legacy 1.0/2.0, MP4/WebM, project zip) |
+| `importers` / `exporters` | `{ id, accept(file|json), import(...) → Command[] }` / `{ id, export(project, opts) → Blob }` (story JSON, SRT/VTT, MP4/WebM, project zip) |
 | `generators` | `{ id, kinds, buildPrompt(spec), generate?(req, signal) → AssetVersion }` — `manual` provider (copy prompt, import result) ships first |
 | `qaCheckers` | `{ id, appliesTo: "asset"|"shot"|"composition", run(project, target) → QaResult[] }` (missing reference, stale input, duration mismatch, resolution, aspect) |
 
@@ -236,10 +236,10 @@ interface BlobStore { put(blob, meta): Promise<string /*key*/>; get(key): Promis
 4. **HTML / three.js layers**: run in a sandboxed `iframe` (`sandbox="allow-scripts"`, no same-origin) with a postMessage protocol `{ seek(t), play, pause, params }`; component must be **deterministic in t** (the `t` is supplied, no wall clock). Preview overlays the iframe in the DOM above canvas; export captures via `OffscreenCanvas` transfer from the iframe (three.js renders to its canvas → `transferToImageBitmap`); DOM-only components export via SVG `foreignObject` rasterization (documented limitation).
 5. **Export**: frame-stepped offline render → **WebCodecs** `VideoEncoder`/`AudioEncoder` + mp4 muxer (`mp4-muxer`); fallback `MediaRecorder` WebM (legacy approach). Runs in a worker where possible; progress + cancel.
 
-## 10. Schema versioning & legacy import
+## 10. Schema versioning
 
-- Every document carries `schema: "dionysus/<major>.<minor>"`. Minor bumps = additive, migrated in `persistence/schema/migrations` (ordered pure functions, each tested with fixtures). Major = new importer.
-- **One-way legacy importer** (`importLegacy/`) for schema **1.0** (legacy `types.ts` project) and **2.0** (`dionysus-project-document`): reuse ideas from `compositionMigration` (legacy timeline → root composition; linked audio → owned children), output 3.0 plus a warnings report (unsupported fields, missing blobs). No 3.0 → legacy writer.
+- Every document carries `schema: "dionysus/<major>.<minor>"`. Minor bumps = additive, migrated by the `MIGRATIONS` chain in `persistence/schema.ts` (`migrateProject`, run on every load; pure functions, each tested). A project that fails the check is never overwritten: the UI shows a recovery notice with *Download backup*.
+- **No legacy importer.** Schema 1.0/2.0 compatibility was dropped (no legacy projects exist); the legacy app is deleted once v2 is the default.
 
 ## 11. Legacy module audit
 
@@ -252,18 +252,18 @@ interface BlobStore { put(blob, meta): Promise<string /*key*/>; get(key): Promis
 | `audioEnvelope.ts` | **Reuse as-is** | Pure, tiny, tested; copy to `domain/audio/envelope.ts` (seconds→ticks wrapper). |
 | `mediaAssetStore.ts` | **Adapt** | Becomes `persistence/indexeddb/blobStore.ts` behind `BlobStore`; add hashing, GC, URL lifetime. |
 | `mediaThumbnail.ts` | **Reuse (light adapt)** | Image/video thumbnail generation moves to `render/thumbnails.ts`; store thumbs as blobs not data URLs. |
-| `projectDocument.ts` | **Drop** (input only) | 2.0 envelope only read by legacy importer. |
-| `projectValidation.ts` | **Drop** | Rewritten for schema 3.0 in `domain/validate.ts`; legacy validation reused inside importer. |
-| `compositionMigration.ts` | **Adapt** | Core of `importLegacy/` (one-way); `projectRootCompositionToLegacy` dropped. |
+| `projectDocument.ts` | **Drop** (input only) | Removed with the legacy app. |
+| `projectValidation.ts` | **Drop** | Rewritten for schema 3.0 in `domain/validate.ts`; removed with the legacy app. |
+| `compositionMigration.ts` | **Adapt** | Ideas only (linked audio → owned children); removed with the legacy app. |
 
 PR #111 `editorSession*.ts`: treat as reference for session-state shape (selection/playhead/zoom); do not import.
 
 ## 12. Coexistence & switch-over
 
 1. **Side-by-side:** v2 is a separate Vite entry (`v2/index.html` → `src/v2/main.tsx`), also reachable via `?v2` on the main page. Same Pages deployment; legacy untouched.
-2. **Separate storage:** v2 uses its own IndexedDB database (`dionysus-v2`). Legacy data reaches v2 only through *Import legacy project* (from JSON export or by reading the legacy DB read-only).
+2. **Separate storage:** v2 uses its own IndexedDB database (`dionysus-v2`). Legacy data is not imported (no legacy projects exist).
 3. **Feature flag** `localStorage["dionysus.ui"] = "v2"` makes `/` redirect to v2; banner “Back to classic”.
-4. **Switch-over** when the MVP + importer pass the acceptance checklist: v2 default, legacy at `?legacy` for one release, then removed (legacy files deleted in one PR; importer keeps its copied code).
+4. **Switch-over** when the MVP passes the acceptance checklist: v2 becomes the default and the legacy app (and the "Try new editor (v2)" link) is removed in one PR.
 
 ## 13. Testing strategy
 
@@ -299,7 +299,7 @@ Rules:
 | 8 | Timeline view: add/move/trim/split/delete/snap | V2-M2 |
 | 9 | Preview playback (canvas + audio clock) | V2-M2 |
 | 10 | Mobile CapCut-style shell (fixed center playhead, contextual bottom toolbar, touch trim) | V2-M2 |
-| 11 | Legacy importer 1.0/2.0 | V2-M2 |
+| 11 | ~~Legacy importer 1.0/2.0~~ (cancelled, V2-023) | — |
 | 12–15 | Text/subtitles, HTML+three.js clips, nested compositions/Save-as-Clip, WebCodecs export | V2-M3 |
 | 16–20 | Story JSON template/importer, versions UI, dependency/staleness, to-do + QA, storyboard→timeline | V2-M4 |
 | 21 | Switch-over | V2-M5 |
