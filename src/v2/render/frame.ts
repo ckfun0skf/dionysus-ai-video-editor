@@ -1,13 +1,23 @@
 /** Pure frame resolution: which placements are active at time t, bottom-to-top. */
+import { trackTransitions } from "../domain/transitions";
 import { sourceAt, transformAt, transformOf, type Composition, type Placement, type Track } from "../domain/model";
 
-export interface ActiveLayer { track: Track; placement: Placement; sourceTicks: number }
+/** `mix` multiplies the layer's opacity (transitions). */
+export interface ActiveLayer { track: Track; placement: Placement; sourceTicks: number; mix?: number }
 
 export function activeAt(comp: Composition, t: number): ActiveLayer[] {
   const out: ActiveLayer[] = [];
   for (let i = comp.tracks.length - 1; i >= 0; i -= 1) {
     const track = comp.tracks[i];
+    const tr = trackTransitions(track).find((x) => t >= x.from && t < x.to);
+    if (tr) {
+      // Outgoing below, incoming on top; each holds its edge frame outside its own span.
+      const m = tr.kind.mix((t - tr.from) / (tr.to - tr.from));
+      out.push({ track, placement: tr.prev, sourceTicks: sourceAt(tr.prev, Math.min(t, tr.prev.startTicks + tr.prev.durationTicks - 1)), mix: m.out });
+      out.push({ track, placement: tr.next, sourceTicks: sourceAt(tr.next, t), mix: m.in });
+    }
     for (const p of track.placements) {
+      if (tr && (p === tr.prev || p === tr.next)) continue;
       if (t >= p.startTicks && t < p.startTicks + p.durationTicks) out.push({ track, placement: p, sourceTicks: sourceAt(p, t) });
     }
   }

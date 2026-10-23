@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Player } from "../render";
 import { cmd } from "../engine";
 import { importFile } from "../persistence";
-import { compositionDuration, edit, findPlacement, newId, formatTimecode, secondsToTicks, type Asset } from "../domain";
+import { compositionDuration, edit, transitions, findPlacement, newId, formatTimecode, secondsToTicks, type Asset } from "../domain";
 import { useEditorBoot, useEngineState, useIsMobile, type EditorContext, type LoadFailure } from "./useEditor";
 import { Timeline } from "./Timeline";
 import { clampPps } from "./gestures";
@@ -78,6 +78,11 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   };
   const duplicate = () => { if (!sel.length) return; const ids = sel.map(() => newId("plc")); engine.dispatch(cmd.duplicateClips(sel, ids)); setSel(ids); };
   const delSel = (rippleOverride?: boolean) => { if (sel.length) { engine.dispatch(cmd.deleteClips(sel, rippleOverride ?? ripple)); setSel([]); setMultiMode(false); } };
+  const onTransition = (id: string) => {
+    const p = findPlacement(comp, id)?.placement;
+    if (p && !p.transitionIn) { engine.dispatch(cmd.setTransition(id, { kind: "crossfade", durationTicks: transitions.DEFAULT_TRANSITION_TICKS })); setToast("Crossfade added (Undo to remove)"); }
+    setSel([id]); setSubId(undefined);
+  };
   const selectCue = (id?: string) => { setSubId(id); if (id) setSelectedId(undefined); };
   const addText = () => { const id = addCueAt(engine, player.time); if (id) selectCue(id); else setToast("There is already text at the playhead"); };
   const delCue = () => { if (subId) { engine.dispatch(cmd.removeSubtitle(subId)); setSubId(undefined); } };
@@ -221,8 +226,20 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     </label>
   ) : null;
 
+  const trIn = sp?.transitionIn;
+  const transitionTools = sp && trIn ? (
+    <span className="v2-trans-tools" role="group" aria-label="Transition">
+      <b aria-hidden>{transitions.TRANSITIONS[trIn.kind].icon}</b>
+      {transitions.TRANSITION_LENGTHS.map((d) => (
+        <button key={d} className={`v2-tool ${trIn.durationTicks === d ? "is-active" : ""}`} aria-pressed={trIn.durationTicks === d} title={`Crossfade length ${d / 120000}s`} onClick={() => engine.dispatch(cmd.setTransition(sp.id, { kind: trIn.kind, durationTicks: d }))}><span>{d / 120000}s</span></button>
+      ))}
+      <button className="v2-tool" title="Remove the transition into this clip" onClick={() => engine.dispatch(cmd.setTransition(sp.id, undefined))}><b aria-hidden>✕</b><span>No transition</span></button>
+    </span>
+  ) : null;
+
   const selectionActions = multiBar ?? (selected ? (
     <>
+      {transitionTools}
       <button className="v2-tool" onClick={split}><b>✂</b><span>Split</span></button>
       <button className="v2-tool" title={ripple ? "Delete and close the gap (Del)" : "Delete (Del) · Shift+Del ripple delete"} onClick={() => del()}><b>🗑</b><span>{ripple ? "Ripple delete" : "Delete"}</span></button>
       {speedSelect}
@@ -284,6 +301,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     ],
     "edit-hint": [<span key="h" className="v2-tool-hint">Tap a clip on the timeline to edit it</span>],
     edit: selected ? [
+      ...(transitionTools ? [<span key="tr" className="v2-trans-wrap">{transitionTools}</span>] : []),
       tool("✂", "Split", split),
       tool("🗑", ripple ? "Ripple delete" : "Delete", () => del(), "delete", ripple ? "Delete and close the gap" : "Delete"),
       tool("⤧", "Adjust", () => setInspOpen(true), "adjust", "Transform, keyframes and fades"),
@@ -352,7 +370,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
               <button className="v2-icon" aria-label="Redo" disabled={!canRedo} onClick={() => engine.redo()}>↷</button>
             </span>
           </div>
-          <Timeline engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} selectedIds={sel} onToggleSelect={toggleClip} multiMode={multiMode} onSelect={selectClip} peaks={peaks} strips={strips} pps={pps} onZoom={(z) => setPps(clampPps(z))} centered topLane={topLane} ripple={ripple}
+          <Timeline engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} selectedIds={sel} onToggleSelect={toggleClip} multiMode={multiMode} onSelect={selectClip} peaks={peaks} strips={strips} pps={pps} onZoom={(z) => setPps(clampPps(z))} centered topLane={topLane} ripple={ripple} onTransition={onTransition}
             thumbs={thumbs} onAddMedia={() => setSheet(true)}
             timeLabel={<><b>{formatTimecode(time, project.settings.fps).slice(0, 5)}</b> / {formatTimecode(duration, project.settings.fps).slice(0, 5)}</>}
             sideColumn={<>
@@ -375,7 +393,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           {preview}
           <section className="v2-timeline-panel" aria-label="Timeline">
             <div className="v2-timeline-toolbar">{selectionActions}<span className="v2-hint">Space play · S split · F freeze · Del delete · Shift+Del ripple · R ripple · Shift-click multi-select · ⌘C/⌘V/⌘D · ⌘/Ctrl+Z undo</span></div>
-            <Timeline engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} selectedIds={sel} onToggleSelect={toggleClip} multiMode={multiMode} onSelect={selectClip} peaks={peaks} strips={strips} pps={pps} onZoom={(z) => setPps(clampPps(z))} centered={false} topLane={topLane} ripple={ripple} />
+            <Timeline engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} selectedIds={sel} onToggleSelect={toggleClip} multiMode={multiMode} onSelect={selectClip} peaks={peaks} strips={strips} pps={pps} onZoom={(z) => setPps(clampPps(z))} centered={false} topLane={topLane} ripple={ripple} onTransition={onTransition} />
           </section>
         </div>
       )}

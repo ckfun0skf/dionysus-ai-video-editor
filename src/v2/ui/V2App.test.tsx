@@ -147,4 +147,30 @@ describe("V2App", () => {
     await act(async () => { btn("Delete").click(); });
     expect(clips()).toBe(2);
   });
+
+  it("crossfade: add at a cut, change length, remove, all undoable", async () => {
+    const { createMemoryStorage } = await import("../persistence");
+    const { createProject } = await import("../domain");
+    const storage = createMemoryStorage();
+    const p = createProject();
+    p.assets.a = { id: "a", kind: "video", name: "clip.mp4", versions: [{ id: "1", createdAt: "", media: { blobKey: "k", mime: "video/mp4", durationTicks: 1200000 }, provenance: { source: "import", inputs: [] } }] };
+    const mk = (id: string, start: number) => ({ id, startTicks: start, durationTicks: 240000, sourceInTicks: 0, source: { kind: "assetVersion" as const, assetId: "a", versionId: "1" }, clipType: "video" as const });
+    p.compositions[p.rootCompositionId].tracks[0].placements.push(mk("v1", 0), mk("v2", 240000));
+    await storage.projects.save(p); storage.lastProjectId.set(p.id);
+    const el = document.createElement("div"); document.body.appendChild(el);
+    await act(async () => { createRoot(el).render(<V2App openStorage={async () => storage} />); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+    const marker = () => el.querySelector(".v2-trans") as HTMLButtonElement;
+    expect(marker().getAttribute("aria-label")).toBe("Add crossfade");
+    await act(async () => { marker().click(); });
+    expect(marker().getAttribute("aria-label")).toBe("Crossfade 0.5s");
+    const group = () => el.querySelector('[aria-label="Transition"]') as HTMLElement;
+    const btnIn = (root: Element, t: string) => Array.from(root.querySelectorAll("button")).find((b) => b.textContent?.includes(t)) as HTMLButtonElement;
+    await act(async () => { btnIn(group(), "1s").click(); });
+    expect(marker().getAttribute("aria-label")).toBe("Crossfade 1s");
+    await act(async () => { btnIn(group(), "No transition").click(); });
+    expect(marker().getAttribute("aria-label")).toBe("Add crossfade");
+    await act(async () => { (el.querySelector('[aria-label="Undo"]') as HTMLButtonElement).click(); });
+    expect(marker().getAttribute("aria-label")).toMatch(/^Crossfade/);
+  });
 });
