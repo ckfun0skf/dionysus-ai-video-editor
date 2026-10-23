@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { migrateLegacyProjectToComposition, projectRootCompositionToLegacy } from "./compositionMigration";
+import { moveCompositionPlacement } from "./compositionCommands";
+import { createProjectDocument, readProjectDocument } from "./projectDocument";
 import { sampleProject } from "./sampleProject";
 import { commitEditorSessionChange, createImportedEditorSession, createImportedEditorSessionTransition, reconcileEditorSessionComposition, restoreEditorSessionHistory, transitionEditorSession } from "./editorSession";
 import { createEditorSessionHistory } from "./editorSessionHistory";
@@ -185,6 +187,97 @@ describe("Editor session history restoration", () => {
     expect(redo.session?.composition.name).toBe("After edit — Master Timeline");
     expect(redo.session?.project.updatedAt).toBe("2026-10-22T12:35:01.000Z");
     expect(redo.history.redo).toHaveLength(0);
+  });
+});
+
+
+describe("Canonical nested edit round-trip", () => {
+  it("restores root and pinned nested edits through undo/redo and preserves them through JSON save/reopen", () => {
+    const before = makeSession();
+    const root = structuredClone(before.composition);
+    const rootPlacement = root.placements[0];
+    expect(rootPlacement).toBeDefined();
+
+    const pinnedChild = structuredClone(root);
+    pinnedChild.id = "composition:pinned-round-trip";
+    pinnedChild.name = "Pinned Shot Slot version";
+    pinnedChild.nestedCompositions = [];
+    const childPlacement = pinnedChild.placements[0];
+    expect(childPlacement).toBeDefined();
+    childPlacement.source = {
+      type: "shot",
+      shotId: "shot-pinned-round-trip",
+      slotId: "slot-pinned-round-trip",
+      versionId: "version-pinned-round-trip",
+    };
+    pinnedChild.provenance = {
+      kind: "derived-clip-version",
+      createdAt: "2026-10-23T10:00:00.000Z",
+      pinnedVersions: [{
+        shotId: "shot-pinned-round-trip",
+        slotId: "slot-pinned-round-trip",
+        versionId: "version-pinned-round-trip",
+      }],
+    };
+    root.nestedCompositions = [pinnedChild];
+    before.composition = root;
+    before.project = projectRootCompositionToLegacy(before.project, root);
+
+    const movedRoot = moveCompositionPlacement(root, rootPlacement.id, rootPlacement.start + 2);
+    const movedChild = moveCompositionPlacement(pinnedChild, childPlacement.id, childPlacement.start + 4);
+    movedRoot.nestedCompositions = [movedChild];
+    const nextProject = projectRootCompositionToLegacy(before.project, movedRoot);
+    const edit = transitionEditorSession(
+      before,
+      createEditorSessionHistory(),
+      () => nextProject,
+      "root-and-nested-move",
+      movedRoot,
+      Date.parse("2026-10-23T10:01:00.000Z"),
+    );
+
+    const undo = restoreEditorSessionHistory(
+      edit.session,
+      edit.history,
+      "undo",
+      Date.parse("2026-10-23T10:02:00.000Z"),
+    );
+    expect(undo.session?.composition.placements.find(item => item.id === rootPlacement.id)?.start)
+      .toBe(rootPlacement.start);
+    expect(undo.session?.composition.nestedCompositions?.[0].placements.find(item => item.id === childPlacement.id)?.start)
+      .toBe(childPlacement.start);
+
+    const redo = restoreEditorSessionHistory(
+      undo.session!,
+      undo.history,
+      "redo",
+      Date.parse("2026-10-23T10:03:00.000Z"),
+    );
+    expect(redo.session?.composition.placements.find(item => item.id === rootPlacement.id)?.start)
+      .toBe(rootPlacement.start + 2);
+    expect(redo.session?.composition.nestedCompositions?.[0].placements.find(item => item.id === childPlacement.id)?.start)
+      .toBe(childPlacement.start + 4);
+
+    const saved = createProjectDocument(redo.session!.project, redo.session!.composition);
+    const reopened = readProjectDocument(JSON.parse(JSON.stringify(saved)), true);
+    const restoredChild = reopened.compositionModel?.rootComposition.nestedCompositions?.find(
+      item => item.id === "composition:pinned-round-trip",
+    );
+    expect(reopened.compositionModel?.rootComposition.placements.find(item => item.id === rootPlacement.id)?.start)
+      .toBe(rootPlacement.start + 2);
+    expect(restoredChild?.placements.find(item => item.id === childPlacement.id)?.start)
+      .toBe(childPlacement.start + 4);
+    expect(restoredChild?.placements.find(item => item.id === childPlacement.id)?.source).toEqual({
+      type: "shot",
+      shotId: "shot-pinned-round-trip",
+      slotId: "slot-pinned-round-trip",
+      versionId: "version-pinned-round-trip",
+    });
+    expect(restoredChild?.provenance?.pinnedVersions).toEqual([{
+      shotId: "shot-pinned-round-trip",
+      slotId: "slot-pinned-round-trip",
+      versionId: "version-pinned-round-trip",
+    }]);
   });
 });
 
