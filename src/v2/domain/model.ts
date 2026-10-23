@@ -132,7 +132,11 @@ export interface Composition {
   name: string;
   /** index 0 = top visual layer */
   tracks: Track[];
+  /** Timed text cues drawn over the picture (V2-030). */
+  subtitles?: Subtitle[];
 }
+
+export interface Subtitle { id: string; startTicks: number; durationTicks: number; text: string }
 
 export interface Project {
   schema: typeof SCHEMA;
@@ -185,6 +189,7 @@ export function trackKindFor(kind: MediaKind): TrackKind {
 export function compositionDuration(comp: Composition): number {
   let end = 0;
   for (const t of comp.tracks) for (const p of t.placements) end = Math.max(end, p.startTicks + p.durationTicks);
+  for (const s of comp.subtitles ?? []) end = Math.max(end, s.startTicks + s.durationTicks);
   return end;
 }
 

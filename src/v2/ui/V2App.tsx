@@ -7,8 +7,9 @@ import { useEditorBoot, useEngineState, useIsMobile, type EditorContext, type Lo
 import { Timeline } from "./Timeline";
 import { useThumbs } from "./useThumbs";
 import { TransformHandles, TransformInspector } from "./Transform";
+import { addCueAt, downloadSrt, importSrtFile, SubtitleEditor, SubtitleLane } from "./Subtitles";
 
-type Menu = "root" | "edit" | "edit-hint" | "audio" | "zoom" | "speed";
+type Menu = "root" | "edit" | "edit-hint" | "audio" | "zoom" | "speed" | "text";
 const SPEEDS = [0.25, 0.5, 1, 1.5, 2, 4];
 
 /** `openStorage` is injectable for tests; production uses IndexedDB (memory fallback). */
@@ -34,6 +35,8 @@ function Editor({ engine, storage, recovery }: EditorContext) {
   const [fs, setFs] = useState(false);
   const [toast, setToast] = useState<string>();
   const [inspOpen, setInspOpen] = useState(false);
+  const [subId, setSubId] = useState<string>();
+  const srtRef = useRef<HTMLInputElement>(null);
   const [, setFrame] = useState(0); // bumps on every drawn frame so on-canvas handles track player.boxes
   const thumbs = useThumbs(project, storage.blobs);
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(undefined), 3000); return () => clearTimeout(t); }, [toast]);
@@ -43,6 +46,20 @@ function Editor({ engine, storage, recovery }: EditorContext) {
   const comp = project.compositions[project.rootCompositionId];
   const selected = selectedId ? findPlacement(comp, selectedId) : undefined;
   const duration = compositionDuration(comp);
+  const cues = comp.subtitles ?? [];
+  const cue = subId ? cues.find((s) => s.id === subId) : undefined;
+  const selectClip = (id?: string) => { setSelectedId(id); if (id) setSubId(undefined); };
+  const selectCue = (id?: string) => { setSubId(id); if (id) setSelectedId(undefined); };
+  const addText = () => { const id = addCueAt(engine, player.time); if (id) selectCue(id); else setToast("There is already text at the playhead"); };
+  const delCue = () => { if (subId) { engine.dispatch(cmd.removeSubtitle(subId)); setSubId(undefined); } };
+  const onSrt = async (f?: File) => { if (!f) return; const n = await importSrtFile(engine, f); setToast(n ? `Imported ${n} subtitles (Undo to revert)` : `${f.name}: no subtitles found`); };
+  const exportSrt = () => (cues.length ? downloadSrt(cues, project.name) : setToast("No subtitles to export — add text first"));
+  const topLane = cues.length ? { label: "Text", render: (toPx: (t: number) => number, toTicks: (px: number) => number) => <SubtitleLane engine={engine} list={cues} selectedId={subId} onSelect={selectCue} toPx={toPx} toTicks={toTicks} /> } : undefined;
+  const textTools = [
+    { icon: "T", label: "Add text", title: "Add a subtitle at the playhead (T)", run: addText },
+    { icon: "⇪", label: "Import SRT", title: "Replace subtitles with an .srt file", run: () => srtRef.current?.click() },
+    { icon: "⇩", label: "Export SRT", title: "Download subtitles as .srt", run: exportSrt },
+  ];
   const visual = selected && selected.placement.clipType !== "audio" ? selected.placement : undefined;
 
   if (!playerRef.current) playerRef.current = new Player(project, storage.blobs);
@@ -51,6 +68,7 @@ function Editor({ engine, storage, recovery }: EditorContext) {
   useEffect(() => { player.canvas = canvasRef.current ?? undefined; player.draw(); }, [player, mobile]);
   useEffect(() => { player.setProject(project); }, [player, project]);
   useEffect(() => { if (selectedId && !selected) setSelectedId(undefined); }, [selectedId, selected]);
+  useEffect(() => { if (subId && !cue) setSubId(undefined); }, [subId, cue]);
 
   const seek = useCallback((t: number) => player.seek(t), [player]);
   const togglePlay = useCallback(() => (player.isPlaying ? player.pause() : player.play()), [player]);
@@ -65,14 +83,16 @@ function Editor({ engine, storage, recovery }: EditorContext) {
       else if (mod && e.key.toLowerCase() === "y") { e.preventDefault(); engine.redo(); }
       else if (e.key === " ") { e.preventDefault(); togglePlay(); }
       else if (e.key.toLowerCase() === "s" && !mod) split();
+      else if ((e.key === "Delete" || e.key === "Backspace") && subId) delCue();
       else if (e.key === "Delete" || e.key === "Backspace") del();
+      else if (e.key.toLowerCase() === "t" && !mod) addText();
       else if (e.key.toLowerCase() === "f" && !mod && selectedId) engine.dispatch(cmd.freezeFrame(selectedId, Math.round(player.time)));
       else if (e.key === "ArrowLeft") seek(player.time - secondsToTicks(1 / project.settings.fps));
       else if (e.key === "ArrowRight") seek(player.time + secondsToTicks(1 / project.settings.fps));
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [engine, togglePlay, split, del, seek, player, project.settings.fps]);
+  });
 
   const onFiles = async (files: FileList | null) => {
     if (!files?.length) return;
@@ -110,6 +130,7 @@ function Editor({ engine, storage, recovery }: EditorContext) {
         ))}
       </ul>
       <input ref={fileRef} type="file" hidden multiple accept="video/*,image/*,audio/*" onChange={(e) => { void onFiles(e.target.files); e.target.value = ""; }} />
+      <input ref={srtRef} type="file" hidden accept=".srt,.vtt,text/plain" aria-label="Import SRT file" onChange={(e) => { void onSrt(e.target.files?.[0]); e.target.value = ""; }} />
     </section>
   );
 
@@ -165,6 +186,7 @@ function Editor({ engine, storage, recovery }: EditorContext) {
       <button className="v2-tool" onClick={() => (mobile ? setSheet(true) : fileRef.current?.click())}><b>＋</b><span>Media</span></button>
       <button className="v2-tool" onClick={() => engine.dispatch(cmd.addTrack("video"))}><b>▭</b><span>Video track</span></button>
       <button className="v2-tool" onClick={() => engine.dispatch(cmd.addTrack("audio"))}><b>♫</b><span>Audio track</span></button>
+      {textTools.map((a) => <button key={a.label} className="v2-tool" title={a.title} onClick={a.run}><b aria-hidden>{a.icon}</b><span>{a.label}</span></button>)}
       <button className="v2-tool" onClick={() => setPps((p) => Math.min(400, p * 1.5))}><b>＋</b><span>Zoom in</span></button>
       <button className="v2-tool" onClick={() => setPps((p) => Math.max(4, p / 1.5))}><b>－</b><span>Zoom out</span></button>
     </>
@@ -187,8 +209,8 @@ function Editor({ engine, storage, recovery }: EditorContext) {
     else if (el?.requestFullscreen) void el.requestFullscreen().catch(() => setFs((f) => !f));
     else setFs((f) => !f);
   };
-  const activeMenu: Menu = selected ? (menu === "speed" ? "speed" : "edit") : menu === "speed" ? "root" : menu;
-  const back = () => (selected && menu !== "speed" ? setSelectedId(undefined) : setMenu("root"));
+  const activeMenu: Menu = selected ? (menu === "speed" ? "speed" : "edit") : menu === "speed" ? "root" : cue ? "text" : menu;
+  const back = () => { if (selected && menu !== "speed") setSelectedId(undefined); else { setSubId(undefined); setMenu("root"); } };
   const tool = (icon: string, label: string, onClick: () => void, key = label, title?: string) => (
     <button key={key} className="v2-tool" title={title} onClick={onClick}><b aria-hidden>{icon}</b><span>{label}</span></button>
   );
@@ -197,6 +219,7 @@ function Editor({ engine, storage, recovery }: EditorContext) {
       tool("✎", "Edit", () => setMenu("edit-hint")),
       tool("♫", "Audio", () => setMenu("audio")),
       tool("＋", "Media", () => setSheet(true)),
+      tool("T", "Text", () => setMenu("text")),
       tool("▭", "Video track", () => engine.dispatch(cmd.addTrack("video"))),
       tool("⤢", "Zoom", () => setMenu("zoom")),
     ],
@@ -220,6 +243,7 @@ function Editor({ engine, storage, recovery }: EditorContext) {
     speed: sp ? SPEEDS.map((s) => (
       <button key={s} className={`v2-tool ${(sp.speed ?? 1) === s ? "is-active" : ""}`} aria-pressed={(sp.speed ?? 1) === s} onClick={() => engine.dispatch(cmd.setSpeed(sp.id, s))}><b>{s}×</b><span>{s === 1 ? "Normal" : s < 1 ? "Slow" : "Fast"}</span></button>
     )) : [],
+    text: textTools.map((a) => tool(a.icon, a.label, a.run, a.label, a.title)),
     zoom: [
       tool("＋", "Zoom in", () => setPps((p) => Math.min(400, p * 1.5))),
       tool("－", "Zoom out", () => setPps((p) => Math.max(4, p / 1.5))),
@@ -257,7 +281,7 @@ function Editor({ engine, storage, recovery }: EditorContext) {
               <button className="v2-icon" aria-label="Redo" disabled={!canRedo} onClick={() => engine.redo()}>↷</button>
             </span>
           </div>
-          <Timeline engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} onSelect={setSelectedId} pps={pps} centered
+          <Timeline engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} onSelect={selectClip} pps={pps} centered topLane={topLane}
             thumbs={thumbs} onAddMedia={() => setSheet(true)}
             timeLabel={<><b>{formatTimecode(time, project.settings.fps).slice(0, 5)}</b> / {formatTimecode(duration, project.settings.fps).slice(0, 5)}</>}
             sideColumn={<>
@@ -271,15 +295,16 @@ function Editor({ engine, storage, recovery }: EditorContext) {
           </nav>
           {sheet && <div className="v2-sheet-backdrop" onClick={() => setSheet(false)}><div className="v2-sheet" onClick={(e) => e.stopPropagation()}>{browser}</div></div>}
           {!sheet && <div hidden>{browser}</div>}
+          {cue && <div className="v2-msub"><SubtitleEditor engine={engine} sub={cue} onDelete={delCue} /></div>}
           {inspOpen && selected && <div className="v2-sheet-backdrop" onClick={() => setInspOpen(false)}><div className="v2-sheet v2-msheet-insp" onClick={(e) => e.stopPropagation()}><TransformInspector engine={engine} placement={selected.placement} time={time} /><button className="v2-btn" onClick={() => setInspOpen(false)}>Done</button></div></div>}
         </>
       ) : (
         <div className="v2-desktop-grid">
-          <div className="v2-side">{selected && <TransformInspector engine={engine} placement={selected.placement} time={time} />}{browser}</div>
+          <div className="v2-side">{selected && <TransformInspector engine={engine} placement={selected.placement} time={time} />}{cue && <SubtitleEditor engine={engine} sub={cue} onDelete={delCue} />}{browser}</div>
           {preview}
           <section className="v2-timeline-panel" aria-label="Timeline">
             <div className="v2-timeline-toolbar">{selectionActions}<span className="v2-hint">Space play · S split · F freeze · Del delete · ⌘/Ctrl+Z undo</span></div>
-            <Timeline engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} onSelect={setSelectedId} pps={pps} centered={false} />
+            <Timeline engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} onSelect={selectClip} pps={pps} centered={false} topLane={topLane} />
           </section>
         </div>
       )}

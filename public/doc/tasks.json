@@ -1684,8 +1684,8 @@
         {
           "id": "V2-030",
           "title": "Subtitle track + SRT/VTT import/export",
-          "status": "planned",
-          "progress": 0
+          "status": "done",
+          "progress": 100
         },
         {
           "id": "V2-031",

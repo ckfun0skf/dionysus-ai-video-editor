@@ -2,6 +2,8 @@
 import type { Command } from "./engine";
 import { DEFAULT_IMAGE_TICKS, newId, trackKindFor, type Asset, type AssetVersion, type Composition, type Placement, type Project, type TrackKind } from "../domain/model";
 import * as ops from "../domain/ops";
+import * as subs from "../domain/subtitles";
+import type { Subtitle } from "../domain/model";
 
 function withRoot(project: Project, fn: (c: Composition) => Composition): Project {
   const id = project.rootCompositionId;
@@ -107,4 +109,8 @@ export const setKeyframe = (id: string, prop: Parameters<typeof ops.setKeyframe>
   coalesceKey: value === null ? undefined : `kf:${id}:${prop}`,
   apply: (p) => withRoot(p, (c) => ops.setKeyframe(c, id, prop, t, value)),
 });
+export const addSubtitle = (s: Subtitle): Command => ({ label: "Add text", apply: (p) => withRoot(p, (c) => subs.addSubtitle(c, s)) });
+export const updateSubtitle = (id: string, patch: Partial<Omit<Subtitle, "id">>): Command => ({ label: "Edit text", coalesceKey: `sub:${id}`, apply: (p) => withRoot(p, (c) => subs.updateSubtitle(c, id, patch)) });
+export const removeSubtitle = (id: string): Command => ({ label: "Delete text", apply: (p) => withRoot(p, (c) => subs.removeSubtitle(c, id)) });
+export const setSubtitles = (list: Subtitle[], label = "Import subtitles"): Command => ({ label, apply: (p) => withRoot(p, (c) => subs.setSubtitles(c, list)) });
 export const renameProject = (name: string): Command => ({ label: "Rename project", coalesceKey: "rename", apply: (p) => ({ ...p, name }) });
