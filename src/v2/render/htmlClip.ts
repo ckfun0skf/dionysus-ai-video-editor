@@ -1,4 +1,4 @@
-import { HTML_LIBRARIES, readClipConfig, selectedLibraries, vendorUrl, type HtmlLibrary } from "./htmlLibs";
+import { readClipConfig, selectedLibraries, vendorUrl, type HtmlLibrary } from "./htmlLibs";
 
 /**
  * HTML clips. The user's HTML runs in a sandboxed iframe (scripts only: opaque origin, no access to the
