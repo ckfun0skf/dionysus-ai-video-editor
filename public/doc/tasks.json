@@ -1841,6 +1841,12 @@
           "title": "Project list: new/open/rename/delete",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-070",
+          "title": "Review: blob GC grace period, cross-tab lock, skip unloadable projects, never throw",
+          "status": "done",
+          "progress": 100
         }
       ]
     },

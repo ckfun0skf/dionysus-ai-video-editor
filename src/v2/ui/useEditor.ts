@@ -29,7 +29,7 @@ export function useEditorBoot(open: () => Promise<Storage> = openStorage, key = 
     let dispose: (() => void) | undefined;
     (async () => {
       const storage = await open();
-      await collectUnusedBlobs(storage).catch(() => 0);
+      await collectUnusedBlobs(storage, { onError: (e) => console.warn("v2: blob GC skipped", e) });
       const lastId = storage.lastProjectId.get();
       let recovery: LoadFailure | undefined;
       let project: Project | undefined;
