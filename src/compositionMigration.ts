@@ -558,12 +558,26 @@ export function projectRootCompositionToLegacy(
   const linkedAudioChildren: TimelineClip[] = rootComposition.placements.flatMap(owner =>
     (owner.linkedAudioChildren ?? []).map(child => {
       const legacy = child.legacyData as unknown as TimelineClip;
+      const {
+        assetId: _oldAssetId,
+        shotId: _oldShotId,
+        slotId: _oldSlotId,
+        clipVersionId: _oldClipVersionId,
+        scriptVersionId: _oldScriptVersionId,
+        sourceIn: _oldSourceIn,
+        sourceOut: _oldSourceOut,
+        linkedVideoClipId: _oldLinkedVideoClipId,
+        ...baseFields
+      } = legacy;
       const sourceRef = child.source;
       const assetId = sourceRef.type === "asset" || sourceRef.type === "clip" ? sourceRef.assetId
         : sourceRef.type === "missing" ? sourceRef.originalId : undefined;
       const shotId = sourceRef.type === "shot" ? sourceRef.shotId : undefined;
+      const slotId = sourceRef.type === "shot" ? sourceRef.slotId : undefined;
+      const clipVersionId = sourceRef.type === "clip" ? sourceRef.versionId : undefined;
+      const scriptVersionId = sourceRef.type === "script" ? sourceRef.scriptVersionId : undefined;
       return {
-        ...legacy,
+        ...baseFields,
         id: child.id,
         name: child.name,
         kind: "audio" as const,
@@ -572,6 +586,9 @@ export function projectRootCompositionToLegacy(
         duration: owner.duration,
         ...(assetId ? { assetId } : {}),
         ...(shotId ? { shotId } : {}),
+        ...(slotId ? { slotId } : {}),
+        ...(clipVersionId ? { clipVersionId } : {}),
+        ...(scriptVersionId ? { scriptVersionId } : {}),
         ...(child.sourceIn !== undefined ? { sourceIn: child.sourceIn } : {}),
         ...(child.sourceOut !== undefined ? { sourceOut: child.sourceOut } : {}),
         ...(child.muted !== undefined ? { muted: child.muted } : {}),
