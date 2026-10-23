@@ -371,3 +371,10 @@ Legacy-only ordinary Timeline clips are now promoted before metadata, geometry, 
 - Added `moveCanonicalMasterShot` and regression coverage in `src/projectTimelinePlacement.test.ts` for promotion followed by a canonical move and duration edit.
 - Code/test head `d70199eced579713b754366896c50a8e48888595`; exact-head CI run 2040 was in progress when this note was written. Verify it and the docs-synchronized head before treating this slice as validated.
 - DYS-014 remains in progress. PR #111 remains open/unmerged and Issue #100 remains open for owner UI acceptance; no browser smoke tests or manual UI acceptance are claimed.
+
+
+## Master Shot resize promotion (2026-10-23)
+
+- `applyCanonicalRootTimelineResize` now promotes missing Master Shot placements as well as legacy-only ordinary Timeline clips before applying a resize preview. This closes the drag-resize path where a missing Shot placement could reach the resize command without being present in canonical Composition.
+- Added regression coverage in `src/projectTimelinePlacement.test.ts` asserting a legacy-only Master Shot is promoted, resized canonically, and projected back with the updated duration.
+- Code/test SHA `809d80d53f30b0dff5f9da4ba64be1c8027d3480`; exact-head CI had not appeared yet when this note was written. Keep the related checklist item unchecked until CI succeeds. DYS-014 remains in progress; PR #111 stays open/unmerged; Issue #100 stays open for owner acceptance.
