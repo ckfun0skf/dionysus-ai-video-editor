@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { migrateLegacyProjectToComposition, projectRootCompositionToLegacy } from "./compositionMigration";
-import { addCompositionLinkedAudioChild, extractLinkedAudio } from "./compositionCommands";
+import { addCompositionLinkedAudioChild, extractLinkedAudio, insertCompositionPlacement } from "./compositionCommands";
 import { readProjectDocument } from "./projectDocument";
 import { sampleProject } from "./sampleProject";
 import {
@@ -73,15 +73,36 @@ describe("Editor session persistence boundary", () => {
 
   it("round-trips extracted linked audio with a non-zero source in-point as an independent audio placement", () => {
     const project = structuredClone(sampleProject);
-    project.assets.push({
-      id: "persisted-linked-audio-source",
-      name: "Embedded source audio",
-      kind: "audio",
-      path: "idb://persisted-linked-audio-source",
-    });
+    project.assets.push(
+      {
+        id: "persisted-linked-audio-source",
+        name: "Embedded source audio",
+        kind: "audio",
+        path: "idb://persisted-linked-audio-source",
+      },
+      {
+        id: "persisted-linked-video-source",
+        name: "Video with embedded audio",
+        kind: "video",
+        path: "idb://persisted-linked-video-source",
+      },
+    );
     let root = migrateLegacyProjectToComposition(project).rootComposition;
-    const owner = root.placements[0];
-    expect(owner).toBeDefined();
+    const videoTrack = root.tracks.find(track => track.kind === "video");
+    expect(videoTrack).toBeDefined();
+    const owner = {
+      id: "persisted-linked-video",
+      name: "Video with embedded audio",
+      trackId: videoTrack!.id,
+      start: root.duration + 1,
+      duration: 5,
+      order: root.placements.length,
+      source: { type: "asset" as const, assetId: "persisted-linked-video-source" },
+      sourceIn: 0,
+      sourceOut: 5,
+      legacyData: { id: "persisted-linked-video", kind: "video", assetId: "persisted-linked-video-source" },
+    };
+    root = insertCompositionPlacement(root, owner);
     const sourceIn = 3;
     const sourceOut = sourceIn + owner!.duration;
     root = addCompositionLinkedAudioChild(root, owner!.id, {
