@@ -754,3 +754,11 @@ The pinned-version regression again passed all 298 tests, but TypeScript correct
 - `src/App.tsx` now promotes a legacy-only Timeline clip into the current canonical root Composition before moving it with `moveCompositionPlacementToTrack()`. Existing canonical placements already used that command; this removes the clip-move fallback to `moveProjectTimelinePlacement()` for clips that can be resolved from the session Project. Shot-domain fallback remains unchanged, and resize fallback is still outstanding.
 - Code commit: `7bfc6b90e770a941399668ceff42db438cdc3be0`. Exact-head CI run 39955595704 was still in progress when this note was prepared; do not treat the change as validated until the run completes. PR #111 remains open/unmerged; Issue #110 and Issue #100 remain open. No browser smoke test or manual UI acceptance was performed.
 - Next: add regression coverage for the legacy-only clip promotion path, migrate the resize fallback without losing linked-audio/source-range semantics, then rerun exact-head CI and synchronize this note with the final docs head.
+
+
+### Verified canonical move + resize promotion (2026-10-23)
+
+- Follow-up closed the gap noted above: `moveCanonicalRootTimelineClip()` and `applyCanonicalRootTimelineResize()` share `ensureCanonicalTimelineClips()`, which promotes missing legacy clips plus linked owner/child clips in owner-first order before applying canonical commands. This keeps linked audio synchronized when a legacy-only video clip is moved or resized.
+- `src/projectTimelinePlacement.test.ts` now covers both move and resize promotion, linked-audio timing, and input Composition immutability.
+- Exact-head code commit `4c796da2dd54793a0d104d1f78b979fb026fa194` passed CI [run 39956221638](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39956221638): 27 test files / 317 tests passed; TypeScript and production build passed; dependency audit passed. The docs-synchronized head still needs its own exact-head CI.
+- This closes only the ordinary Timeline clip move/resize fallback slice. Other Project-domain edits, Shot-domain paths, canonical renderer/playback contract, and broader root/nested round-trip coverage remain incomplete. Issue #110 remains open; PR #111 is not merged; Issue #100 remains open for owner UI acceptance.
