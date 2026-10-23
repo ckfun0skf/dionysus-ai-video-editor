@@ -1847,6 +1847,12 @@
           "title": "Review: blob GC grace period, cross-tab lock, skip unloadable projects, never throw",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-071",
+          "title": "Review: architecture test catches side-effect and multi-line imports",
+          "status": "done",
+          "progress": 100
         }
       ]
     },

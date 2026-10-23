@@ -22,17 +22,29 @@ function files(dir: string): string[] {
     return statSync(p).isDirectory() ? files(p) : /\.tsx?$/.test(n) && !/\.test\.tsx?$/.test(n) ? [p] : [];
   });
 }
+/** Every module specifier: `import x from`, `export … from`, side-effect `import "x"`, and dynamic `import("x")`. */
+export function importSpecs(src: string): string[] {
+  const code = src.replace(/\/\*[\s\S]*?\*\/|(^|[^:"'`])\/\/.*$/gm, "$1");
+  const re = /\b(?:import|export)\s+(?:type\s+)?[^"'`;]*?\bfrom\s*["']([^"']+)["']|\bimport\s*["']([^"']+)["']|\bimport\s*\(\s*["']([^"']+)["']\s*\)/g;
+  return [...code.matchAll(re)].map((m) => m[1] ?? m[2] ?? m[3]);
+}
 const layerOf = (file: string) => relative(V2, file).split(/[\\/]/)[0];
 
 describe("v2 architecture", () => {
   const all = files(V2).filter((f) => layerOf(f) in ALLOWED);
   it("finds v2 sources", () => expect(all.length).toBeGreaterThan(5));
+  it("import scanner catches every import form", () => {
+    expect(importSpecs([
+      'import a from "./a";', 'import { b,\n c } from "../b";', 'import type { T } from "./t";', 'export * from "./e";',
+      'export { f } from "./f";', 'import "./side";', "import './side2'", 'await import("./dyn");', '// import "./commented";',
+    ].join("\n"))).toEqual(["./a", "../b", "./t", "./e", "./f", "./side", "./side2", "./dyn"]);
+  });
   for (const file of all) {
     const layer = layerOf(file);
     const name = relative(V2, file).replace(/\\/g, "/");
     (KNOWN_VIOLATIONS.has(name) ? it.skip : it)(`${name} respects layer rules`, () => {
       const src = readFileSync(file, "utf8");
-      const specs = [...src.matchAll(/(?:import|export)[^"']*?from\s*["']([^"']+)["']|import\(\s*["']([^"']+)["']\s*\)/g)].map((m) => m[1] ?? m[2]);
+      const specs = importSpecs(src);
       for (const spec of specs) {
         if (spec.startsWith(".")) {
           const target = resolve(dirname(file), spec);
