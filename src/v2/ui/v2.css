@@ -380,3 +380,20 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 
 /* V2-095: the mobile left column lives inside the scroll content just before t=0, so it scrolls away with the clips and never covers them. */
 .v2-content > .v2-side-col { position: absolute; top: 0; bottom: 0; min-height: 100%; box-sizing: border-box; padding-bottom: 6px; justify-content: flex-start; }
+
+/* V2-098 animation picker + timeline badges */
+.v2-ptiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 8px; padding: 8px 0; }
+.v2-ptile { display: flex; flex-direction: column; align-items: center; gap: 4px; min-height: 44px; padding: 4px; background: #1f1f23; border: 2px solid transparent; border-radius: 8px; color: var(--text); font-size: 11px; cursor: pointer; transition: border-color .12s, background .12s; }
+.v2-ptile canvas { width: 100%; aspect-ratio: 3 / 2; border-radius: 4px; background: #111; }
+.v2-ptile:hover { background: #2a2a2e; }
+.v2-ptile.is-active { border-color: var(--accent, #20d5ec); }
+.v2-ptile:focus-visible { outline: 2px solid var(--accent, #20d5ec); outline-offset: 2px; }
+.v2-anim .v2-tp-tabs button { min-height: 44px; padding: 0 16px; }
+.v2-anim output { margin-left: auto; margin-right: 8px; color: var(--muted, #aaa); }
+.v2-sheet.is-compact { max-height: 30dvh; transition: max-height .2s ease-out; }
+.v2-anim-badges { position: absolute; left: 1px; right: 1px; bottom: 1px; display: flex; justify-content: space-between; pointer-events: none; }
+.v2-anim-badge { display: inline-grid; place-items: center; width: 13px; height: 13px; border-radius: 3px; background: rgba(0,0,0,.65); color: #fff; }
+.v2-anim-badges .is-loop { margin: 0 auto; }
+.v2-anim-badges .is-in { order: 0; } .v2-anim-badges .is-loop { order: 1; } .v2-anim-badges .is-out { order: 2; }
+.v2-anim-badges.is-narrow { right: auto; gap: 0; }
+.v2-anim-badges.is-narrow .v2-anim-badge { width: 10px; height: 10px; border-radius: 2px; margin: 0; }

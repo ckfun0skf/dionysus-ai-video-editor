@@ -10,6 +10,7 @@ import { useThumbs } from "./useThumbs";
 import { useMediaPreviews } from "./useMedia";
 import { TransformHandles, TransformInspector } from "./Transform";
 import { TextPanel } from "./TextPanel";
+import { AnimationPicker } from "./AnimationPicker";
 import { HtmlEditor } from "./HtmlEditor";
 import { ExportDialog } from "./ExportDialog";
 import { ProjectsDialog } from "./Projects";
@@ -63,6 +64,9 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const [toast, setToast] = useState<string>();
   const [inspOpen, setInspOpen] = useState(false);
   const [textOpen, setTextOpen] = useState(false);
+  /** V2-098: animation sheet; after a pick the sheet shrinks and the preview loops over the clip's time range. */
+  const [animOpen, setAnimOpen] = useState(false);
+  const [animLoop, setAnimLoop] = useState(false);
   const [snapOn, setSnapOn] = useState(true);
   const [htmlEdit, setHtmlEdit] = useState<{ placementId: string; assetId: string; source: string }>();
   const [inlineId, setInlineId] = useState<string>();
@@ -129,6 +133,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   useEffect(() => { if (subId && !cue) setSubId(undefined); }, [subId, cue]);
 
   const seek = useCallback((t: number) => player.seek(t), [player]);
+  const closeAnim = () => { setAnimOpen(false); setTextOpen(false); if (animLoop) { setAnimLoop(false); player.pause(); } };
   const togglePlay = useCallback(() => (player.isPlaying ? player.pause() : player.play()), [player]);
   const split = useCallback(() => { if (selectedId) engine.dispatch(cmd.splitPlacement(selectedId, Math.round(player.time))); }, [engine, player, selectedId]);
   // Tap in the preview selects the topmost element (rotation-aware); empty space deselects, then toggles play.
@@ -141,6 +146,15 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     else togglePlay();
   };
   const isText = selected?.placement.clipType === "text";
+  const loopClip = (mobile ? animOpen || textOpen : true) && animLoop && isText ? selected!.placement : undefined;
+  useEffect(() => {
+    if (!loopClip) return;
+    const end = loopClip.startTicks + loopClip.durationTicks;
+    if (time < loopClip.startTicks || time >= end - 1) player.seek(loopClip.startTicks);
+    if (!player.isPlaying) player.play();
+  }, [loopClip, time, player]);
+  const wasLooping = useRef(false);
+  useEffect(() => { if (wasLooping.current && !loopClip) { player.pause(); setAnimLoop(false); } wasLooping.current = !!loopClip; }, [loopClip, player]);
   const openCode = async () => {
     const pl = selected?.placement;
     const ver = pl && project.assets[pl.source.assetId]?.versions.find((v) => v.id === pl.source.versionId);
@@ -431,7 +445,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       tool("✂", "Split", split),
       tool("🗑", ripple ? "Ripple delete" : "Delete", () => del(), "delete", ripple ? "Delete and close the gap" : "Delete"),
       ...(isHtml ? [tool("</>", "Edit code", () => void openCode(), "edit-code", "Edit HTML, CSS and JS with live preview")] : []),
-      ...(isText ? [tool("T", "Edit text", () => setTextOpen(true), "edit-text", "Templates, font, style, effects, animation")] : []),
+      ...(isText ? [tool("T", "Edit text", () => setTextOpen(true), "edit-text", "Templates, font, style, effects, animation"), tool("anim", "Animation", () => setAnimOpen(true), "anim", "In, out and loop animations")] : []),
       tool("⤧", "Adjust", () => setInspOpen(true), "adjust", "Transform, keyframes and fades"),
       ...(speedSelect ? [tool("⏩", `Speed ${sp!.speed ?? 1}×`, () => setMenu("speed"), "speed", "Playback speed")] : []),
       tool("☑", "Select", () => setMultiMode(true), "multi", "Select several clips"),
@@ -519,12 +533,13 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           {!sheet && <div hidden>{browser}</div>}
           {cue && <div className="v2-msub"><SubtitleEditor engine={engine} sub={cue} onDelete={delCue} /></div>}
           {inspOpen && selected && <Sheet label="Adjust" className="v2-msheet-insp" onClose={() => setInspOpen(false)}><TransformInspector engine={engine} placement={selected.placement} time={time} /><button className="v2-btn" onClick={() => setInspOpen(false)}>Done</button></Sheet>}
-          {textOpen && selected && isText && <Sheet label="Text" className="v2-msheet-insp" onClose={() => setTextOpen(false)}><TextPanel engine={engine} placement={selected.placement} /><button className="v2-btn" onClick={() => setTextOpen(false)}>Done</button></Sheet>}
+          {textOpen && selected && isText && <Sheet label="Text" className={`v2-msheet-insp ${animLoop ? "is-compact" : ""}`} onClose={closeAnim}><TextPanel engine={engine} placement={selected.placement} onAnimPicked={() => setAnimLoop(true)} /><button className="v2-btn" onClick={closeAnim}>Done</button></Sheet>}
+          {animOpen && !textOpen && selected && isText && <Sheet label="Animation" className={`v2-msheet-insp v2-anim-sheet ${animLoop ? "is-compact" : ""}`} onClose={closeAnim}><AnimationPicker engine={engine} placement={selected.placement} onPicked={() => setAnimLoop(true)} /><button className="v2-btn" onClick={closeAnim}>Done</button></Sheet>}
         </>
       ) : (
         <div className={`v2-desktop-grid ${sideOpen ? "" : "side-closed"}`}>
           <button className="v2-icon v2-side-toggle" aria-label={sideOpen ? "Hide side panel" : "Show side panel"} title={sideOpen ? "Hide side panel" : "Show side panel"} aria-expanded={sideOpen} onClick={() => setSideOpen(!sideOpen)}><Ic g={sideOpen ? "panel-close" : "panel-open"} size={18} /></button>
-          <div className="v2-side" hidden={!sideOpen}>{selected && isText && <TextPanel engine={engine} placement={selected.placement} />}{selected && <TransformInspector engine={engine} placement={selected.placement} time={time} />}{cue && <SubtitleEditor engine={engine} sub={cue} onDelete={delCue} />}{browser}</div>
+          <div className="v2-side" hidden={!sideOpen}>{selected && isText && <TextPanel engine={engine} placement={selected.placement} onAnimPicked={() => setAnimLoop(true)} />}{selected && <TransformInspector engine={engine} placement={selected.placement} time={time} />}{cue && <SubtitleEditor engine={engine} sub={cue} onDelete={delCue} />}{browser}</div>
           {preview}
           <section className="v2-timeline-panel" aria-label="Timeline">
             <div className="v2-timeline-toolbar">{selectionActions}<span className="v2-hint">Space play · S split · F freeze · Del delete · Shift+Del ripple · R ripple · Shift-click multi-select · ⌘C/⌘V/⌘D · ⌘/Ctrl+Z undo</span></div>

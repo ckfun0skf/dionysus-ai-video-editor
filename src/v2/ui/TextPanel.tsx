@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { cmd, type Engine } from "../engine";
 import { text as T, type Placement, type TextData } from "../domain";
+import { AnimationPicker } from "./AnimationPicker";
+import { PresetTile } from "./PresetTile";
 import { listPresets, type PresetKind } from "../registry";
 
 /** Chip ids for a preset kind, "none" first; labels come from the registry. */
@@ -8,11 +10,11 @@ const presetIds = (k: PresetKind) => ["none", ...listPresets(k).map((d) => d.id)
 const presetName = (k: PresetKind, id: string) => (id === "none" ? "None" : listPresets(k).find((d) => d.id === id)?.name ?? id);
 
 const TABS = ["Templates", "Font", "Style", "Effects", "Animation"] as const;
-type Tab = (typeof TABS)[number];
+export type Tab = (typeof TABS)[number];
 
 /** Text clip editor: templates, fonts, style, effects, animations. Every change is undoable; slider drags are one step. */
-export function TextPanel({ engine, placement }: { engine: Engine; placement: Placement }) {
-  const [tab, setTab] = useState<Tab>("Templates");
+export function TextPanel({ engine, placement, onAnimPicked, initialTab = "Templates" }: { engine: Engine; placement: Placement; onAnimPicked?: () => void; initialTab?: Tab }) {
+  const [tab, setTab] = useState<Tab>(initialTab);
   const d = T.textOf(placement.text);
   const set = (patch: Partial<TextData>, label?: string) => engine.dispatch(cmd.updateText(placement.id, patch, label));
   const range = (label: string, key: "size" | "letterSpacing" | "lineHeight" | "strokeWidth", min: number, max: number, step: number) => (
@@ -62,14 +64,12 @@ export function TextPanel({ engine, placement }: { engine: Engine; placement: Pl
           {d.background && color("Background color", d.background.color, (v) => set({ background: { ...d.background!, color: v } }))}
         </>}
         {tab === "Effects" && <>
-          {chips("Effect", presetIds("effect"), d.effect ?? "none", (v) => set({ effect: v }, "Effect"), (v) => presetName("effect", v))}
+          <div className="v2-ptiles" role="radiogroup" aria-label="Effect">
+            {presetIds("effect").map((id) => <PresetTile key={id} kind="effect" id={id} label={presetName("effect", id)} active={(d.effect ?? "none") === id} animate={false} onPick={() => set({ effect: id }, "Effect")} />)}
+          </div>
           {color("Effect color", d.effectColor ?? "#20d5ec", (v) => set({ effectColor: v }))}
         </>}
-        {tab === "Animation" && <>
-          <span className="v2-tp-h">In</span>{chips("In animation", presetIds("textAnimIn"), d.animIn ?? "none", (v) => set({ animIn: v }, "In animation"), (v) => presetName("textAnimIn", v))}
-          <span className="v2-tp-h">Out</span>{chips("Out animation", presetIds("textAnimOut"), d.animOut ?? "none", (v) => set({ animOut: v }, "Out animation"), (v) => presetName("textAnimOut", v))}
-          <span className="v2-tp-h">Loop</span>{chips("Loop animation", presetIds("textAnimLoop"), d.loop ?? "none", (v) => set({ loop: v }, "Loop animation"), (v) => presetName("textAnimLoop", v))}
-        </>}
+        {tab === "Animation" && <AnimationPicker engine={engine} placement={placement} onPicked={onAnimPicked} />}
       </div>
     </div>
   );

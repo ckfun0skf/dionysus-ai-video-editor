@@ -2009,6 +2009,12 @@
           "title": "Preset registry: data-driven text animations, effects, transitions, stickers",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-098",
+          "title": "CapCut animation picker + timeline badges",
+          "status": "done",
+          "progress": 100
         }
       ]
     },
