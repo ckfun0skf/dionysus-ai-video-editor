@@ -306,3 +306,7 @@ Compatibility-first reconciliation retains the deterministic root ID required by
 ## Verified root/pinned round-trip and reconciliation checkpoint (2026-10-23)
 
 A deterministic test now covers root and pinned nested Composition edits through Undo/Redo and v2 JSON save/reopen, including Shot Slot version pin and provenance. Compatibility-first reconciliation also preserves root provenance/canonical-only metadata while keeping the deterministic v2 root ID. Issue #110 items are checked. Task-registry-synchronized checkpoint `0ee800302923e34175d67012812b1e2e4d46b239` passed [CI run 39937818376](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39937818376): 27 test files / 312 tests, TypeScript/build passed, audit 0. This follow-up docs commit needs its own exact-head CI; broader round-trip matrix and render/playback/UI migrations remain incomplete.
+
+## Pinned nested Composition persistence verification (2026-10-23)
+
+A deterministic regression now saves a v2 envelope containing a pinned nested Composition, reopens it through `readProjectDocument()`, and verifies the exact child tree and provenance survive. Code/test head `a2e31ee6615e05e1d250cc307c47d1ec7b77d9ac` passed [CI run 39938305163](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39938305163): 27 test files / 313 tests, TypeScript/build passed, audit 0. Issue #110 item is checked; this does not complete the full root/nested edit-history-round-trip matrix.
