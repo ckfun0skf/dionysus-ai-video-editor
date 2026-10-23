@@ -33,7 +33,7 @@ export interface TextData {
   animTicks?: number;
 }
 
-export const DEFAULT_TEXT: TextData = { text: "Text", font: "system-ui, sans-serif", size: 0.08, bold: true, color: "#ffffff", align: "center", strokeWidth: 0, strokeColor: "#000000" };
+export const DEFAULT_TEXT: TextData = { text: "Text", font: "system-ui, sans-serif", size: 0.1, bold: true, color: "#ffffff", align: "center", strokeWidth: 0, strokeColor: "#000000" };
 export const DEFAULT_TEXT_TICKS = 3 * 120_000;
 const ANIM_TICKS = 60_000; // 0.5 s
 

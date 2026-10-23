@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Player, THREE_TEMPLATE } from "../render";
+import { hitTest, Player, THREE_TEMPLATE } from "../render";
 import { cmd } from "../engine";
 import { importFile } from "../persistence";
 import { compositionDuration, edit, transitions, findPlacement, newId, formatTimecode, secondsToTicks, type Asset } from "../domain";
@@ -113,6 +113,16 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const seek = useCallback((t: number) => player.seek(t), [player]);
   const togglePlay = useCallback(() => (player.isPlaying ? player.pause() : player.play()), [player]);
   const split = useCallback(() => { if (selectedId) engine.dispatch(cmd.splitPlacement(selectedId, Math.round(player.time))); }, [engine, player, selectedId]);
+  // Tap in the preview selects the topmost element (rotation-aware); empty space deselects, then toggles play.
+  const onCanvasTap = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const c = e.currentTarget, r = c.getBoundingClientRect();
+    const k = c.width / (r.width || 1);
+    const id = hitTest(player.boxes, (e.clientX - r.left) * k, (e.clientY - r.top) * k);
+    if (id) { setSel([id]); setSubId(undefined); }
+    else if (selectedId) setSelectedId(undefined);
+    else togglePlay();
+  };
+  const gizmo = { onDelete: () => del(false), onEdit: () => setInspOpen(true), onDuplicate: () => duplicate() };
   const del = useCallback((rippleOverride?: boolean) => { if (selectedId) { engine.dispatch(cmd.deleteClips([selectedId], rippleOverride ?? ripple)); setSelectedId(undefined); } }, [engine, selectedId, ripple]);
 
   useEffect(() => {
@@ -275,8 +285,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
 
   const preview = (
     <section className="v2-preview" aria-label="Preview" style={mobile ? { height: `${previewVh}dvh` } : undefined}>
-      <div className="v2-canvas-wrap"><canvas ref={canvasRef} width={1280} height={720} onClick={togglePlay} />
-        {visual && player.boxes.get(visual.id) && canvasRef.current && <TransformHandles engine={engine} placement={visual} time={time} box={player.boxes.get(visual.id)!} canvas={canvasRef.current} />}
+      <div className="v2-canvas-wrap"><canvas ref={canvasRef} width={1280} height={720} onClick={onCanvasTap} title="Tap an element to select it · tap empty space to play/pause" />
+        {visual && player.boxes.get(visual.id) && canvasRef.current && <TransformHandles engine={engine} placement={visual} time={time} box={player.boxes.get(visual.id)!} canvas={canvasRef.current} actions={gizmo} />}
       </div>
       {!mobile && transport}
     </section>

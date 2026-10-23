@@ -1889,6 +1889,12 @@
           "title": "Text clips on dedicated text tracks (trim/split/move/duplicate/delete), canvas text renderer with style/effects/animations",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-078",
+          "title": "Preview tap-to-select (rotation-aware hit test), CapCut gizmo corner buttons, pinch/twist gestures",
+          "status": "done",
+          "progress": 100
         }
       ]
     },
