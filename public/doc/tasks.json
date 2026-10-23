@@ -1813,8 +1813,8 @@
           ],
           "id": "V2-066",
           "title": "Audio waveforms and per-clip filmstrips",
-          "status": "planned",
-          "progress": 0
+          "status": "done",
+          "progress": 100
         },
         {
           "doc": "docs/v2/MODULE_DESIGN.md",

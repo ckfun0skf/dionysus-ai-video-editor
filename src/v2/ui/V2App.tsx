@@ -7,6 +7,7 @@ import { useEditorBoot, useEngineState, useIsMobile, type EditorContext, type Lo
 import { Timeline } from "./Timeline";
 import { clampPps } from "./gestures";
 import { useThumbs } from "./useThumbs";
+import { useMediaPreviews } from "./useMedia";
 import { TransformHandles, TransformInspector } from "./Transform";
 import { addCueAt, downloadSrt, importSrtFile, SubtitleEditor, SubtitleLane } from "./Subtitles";
 
@@ -47,6 +48,7 @@ function Editor({ engine, storage, recovery }: EditorContext) {
   const srtRef = useRef<HTMLInputElement>(null);
   const [, setFrame] = useState(0); // bumps on every drawn frame so on-canvas handles track player.boxes
   const thumbs = useThumbs(project, storage.blobs);
+  const { peaks, strips } = useMediaPreviews(project, storage.blobs);
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(undefined), 3000); return () => clearTimeout(t); }, [toast]);
   const playerRef = useRef<Player>();
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -336,7 +338,7 @@ function Editor({ engine, storage, recovery }: EditorContext) {
               <button className="v2-icon" aria-label="Redo" disabled={!canRedo} onClick={() => engine.redo()}>↷</button>
             </span>
           </div>
-          <Timeline engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} selectedIds={sel} onToggleSelect={toggleClip} multiMode={multiMode} onSelect={selectClip} pps={pps} onZoom={(z) => setPps(clampPps(z))} centered topLane={topLane} ripple={ripple}
+          <Timeline engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} selectedIds={sel} onToggleSelect={toggleClip} multiMode={multiMode} onSelect={selectClip} peaks={peaks} strips={strips} pps={pps} onZoom={(z) => setPps(clampPps(z))} centered topLane={topLane} ripple={ripple}
             thumbs={thumbs} onAddMedia={() => setSheet(true)}
             timeLabel={<><b>{formatTimecode(time, project.settings.fps).slice(0, 5)}</b> / {formatTimecode(duration, project.settings.fps).slice(0, 5)}</>}
             sideColumn={<>
@@ -359,7 +361,7 @@ function Editor({ engine, storage, recovery }: EditorContext) {
           {preview}
           <section className="v2-timeline-panel" aria-label="Timeline">
             <div className="v2-timeline-toolbar">{selectionActions}<span className="v2-hint">Space play · S split · F freeze · Del delete · Shift+Del ripple · R ripple · Shift-click multi-select · ⌘C/⌘V/⌘D · ⌘/Ctrl+Z undo</span></div>
-            <Timeline engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} selectedIds={sel} onToggleSelect={toggleClip} multiMode={multiMode} onSelect={selectClip} pps={pps} onZoom={(z) => setPps(clampPps(z))} centered={false} topLane={topLane} ripple={ripple} />
+            <Timeline engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} selectedIds={sel} onToggleSelect={toggleClip} multiMode={multiMode} onSelect={selectClip} peaks={peaks} strips={strips} pps={pps} onZoom={(z) => setPps(clampPps(z))} centered={false} topLane={topLane} ripple={ripple} />
           </section>
         </div>
       )}
