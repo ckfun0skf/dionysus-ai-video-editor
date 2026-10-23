@@ -148,7 +148,7 @@ export class Player {
     const canvas = this.canvas;
     const ctx = canvas?.getContext("2d");
     if (canvas && ctx) { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, canvas.width, canvas.height); }
-    for (const { track, placement, sourceTicks } of layers) {
+    for (const { track, placement, sourceTicks, mix } of layers) {
       const version = versionOf(this.project, placement.source);
       if (!version || track.hidden) continue;
       const src = this.url(version.media.blobKey);
@@ -162,7 +162,8 @@ export class Player {
         const gain = this.gainFor(el);
         if (gain) { gain.gain.value = vol; el.volume = 1; } else el.volume = Math.min(1, vol);
         // Reverse and freeze cannot use native playback: hold the element paused and seek it per frame.
-        const scrub = !!placement.reverse || !!placement.freeze;
+        const held = this.time < placement.startTicks || this.time >= placement.startTicks + placement.durationTicks; // transition overhang
+        const scrub = !!placement.reverse || !!placement.freeze || held;
         if (scrub) el.muted = true;
         const speed = placement.speed ?? 1;
         if (this.playing && scrub) {
@@ -186,7 +187,7 @@ export class Player {
         if (w && h && (!(el instanceof HTMLVideoElement) || el.readyState >= 2)) {
           const r = placeRect(placement, w, h, canvas.width, canvas.height, this.time);
           this.boxes.set(placement.id, r);
-          ctx.save(); ctx.globalAlpha = r.alpha; ctx.translate(r.cx, r.cy); ctx.rotate(r.rot);
+          ctx.save(); ctx.globalAlpha = r.alpha * (mix ?? 1); ctx.translate(r.cx, r.cy); ctx.rotate(r.rot);
           ctx.drawImage(el as CanvasImageSource, r.sx, r.sy, r.sw, r.sh, -r.w / 2, -r.h / 2, r.w, r.h);
           ctx.restore();
         }

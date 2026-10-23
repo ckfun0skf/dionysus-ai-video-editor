@@ -4,7 +4,7 @@ import { FilmstripTiles, Waveform } from "./ClipPreview";
 import type { Filmstrip, Peaks } from "./media";
 import { mediaKey } from "./useMedia";
 import { clampPps, haptic, LONG_PRESS_MS, LONG_PRESS_SLOP, pinchZoom, touchDistance } from "./gestures";
-import { edit, ops, compositionDuration, TICKS_PER_SECOND, formatTimecode, type Composition, type Project } from "../domain";
+import { edit, ops, transitions, compositionDuration, TICKS_PER_SECOND, formatTimecode, type Composition, type Project } from "../domain";
 
 interface Props {
   engine: Engine;
@@ -35,6 +35,8 @@ interface Props {
   /** Extra lane rendered above the tracks (subtitles), given the time↔px mapping. */
   /** Ripple mode: trims move later clips on the track. */
   ripple?: boolean;
+  /** Click on a cut marker between adjacent clips (id = incoming clip). */
+  onTransition?: (id: string) => void;
   topLane?: { label: string; render: (toPx: (t: number) => number, toTicks: (px: number) => number) => ReactNode };
 }
 
@@ -47,7 +49,7 @@ type Gesture =
 
 const HEADER_W = 84;
 
-export function Timeline({ engine, project, time, playing, onSeek, selectedId, selectedIds, onToggleSelect, multiMode, onSelect, pps, onZoom, centered, thumbs, peaks, strips, onAddMedia, sideColumn, timeLabel, topLane, ripple }: Props) {
+export function Timeline({ engine, project, time, playing, onSeek, selectedId, selectedIds, onToggleSelect, multiMode, onSelect, pps, onZoom, centered, thumbs, peaks, strips, onAddMedia, sideColumn, timeLabel, topLane, ripple, onTransition }: Props) {
   const comp = project.compositions[project.rootCompositionId];
   const scrollRef = useRef<HTMLDivElement>(null);
   const [gesture, setGesture] = useState<Gesture>();
@@ -263,6 +265,16 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
                       <div className="v2-handle right" aria-label="Trim end" onPointerDown={(e) => onTrimDown(e, p.id, "right", p.startTicks + p.durationTicks)} />
                     </>}
                   </div>
+                );
+              })}
+              {onTransition && t.kind === "video" && t.placements.filter((p) => transitions.previousAdjacent(t, p)).map((p) => {
+                const tr = p.transitionIn;
+                return (
+                  <button key={`tr-${p.id}`} className={`v2-trans ${tr ? "has-trans" : ""} ${tr && p.id === selectedId ? "is-selected" : ""}`} style={{ left: toPx(p.startTicks) }}
+                    aria-label={tr ? `${transitions.TRANSITIONS[tr.kind].label} ${tr.durationTicks / TICKS_PER_SECOND}s` : "Add crossfade"} title={tr ? "Edit transition" : "Add a crossfade at this cut"}
+                    onPointerDown={(e) => e.stopPropagation()} onClick={() => onTransition(p.id)}>
+                    {tr ? transitions.TRANSITIONS[tr.kind].icon : "+"}
+                  </button>
                 );
               })}
               {centered && onAddMedia && t.id === firstVideo?.id && (

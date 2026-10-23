@@ -56,6 +56,8 @@ export interface Placement {
   fadeOutTicks?: number;
   /** Per-property keyframes; `t` is ticks from the clip start. Linear between keys, held outside. */
   keyframes?: Partial<Record<KeyframeProp, Keyframe[]>>;
+  /** Transition from the clip that ends where this one starts (see domain/transitions). */
+  transitionIn?: { kind: "crossfade"; durationTicks: number };
 }
 
 export type KeyframeProp = "x" | "y" | "scale" | "rotation" | "opacity";
