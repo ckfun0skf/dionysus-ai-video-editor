@@ -4,4 +4,3 @@ export { attachAutosave } from "./autosave";
 export { importFile, mediaKindOf, probeMedia } from "./media";
 export { collectUnusedBlobs } from "./gc";
 export { migrateProject, SchemaError, MIGRATIONS } from "./schema";
-export { importLegacy, type LegacyImport } from "./importLegacy";
