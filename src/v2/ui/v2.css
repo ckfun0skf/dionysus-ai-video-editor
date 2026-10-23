@@ -333,3 +333,17 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 .v2-layer-menu button:disabled { opacity: .4; cursor: default; }
 .v2-pick-tile.is-sticker { background: repeating-conic-gradient(#2a2a2e 0 25%, #222226 0 50%) 0 0/16px 16px; }
 .v2-pick-tile.is-sticker img { inset: 14%; width: 72%; height: 72%; object-fit: contain; }
+
+/* V2-090 main-track long-press reorder */
+.v2-timeline.is-reordering .v2-scroll { overflow: hidden; touch-action: none; }
+.v2-timeline.is-reordering .v2-clip { opacity: .25; transition: opacity .18s; }
+.v2-reorder { position: absolute; left: 0; right: 0; height: 60px; z-index: 30; pointer-events: none; animation: v2-reorder-in .18s ease-out; }
+.v2-reorder.is-closing { animation: v2-reorder-out .18s ease-in forwards; }
+.v2-reorder-thumb { position: absolute; top: 4px; border-radius: 8px; background: var(--panel) center/cover; border: 2px solid transparent; box-shadow: 0 2px 6px rgba(0,0,0,.4); transition: left .16s ease-out, transform .16s; }
+.v2-reorder-thumb.clip-video { background-color: var(--video); }
+.v2-reorder-thumb.clip-image { background-color: var(--image); }
+.v2-reorder-thumb.is-dragging { transition: transform .16s; transform: scale(1.12); border-color: var(--accent); z-index: 2; }
+.v2-reorder-slot { position: absolute; top: 2px; width: 2px; height: 56px; background: var(--accent); border-radius: 1px; opacity: .8; transition: left .16s; }
+@keyframes v2-reorder-in { from { opacity: 0; transform: scaleX(1.6); } to { opacity: 1; transform: none; } }
+@keyframes v2-reorder-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: scaleX(1.6); } }
+.v2-timeline.is-reordering .v2-handle, .v2-timeline.is-reordering .v2-main-add { display: none; }

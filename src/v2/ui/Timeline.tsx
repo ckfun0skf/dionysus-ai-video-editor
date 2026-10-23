@@ -63,6 +63,9 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
   const [expanded, setExpanded] = useState<ops.TrackGroup>();
   const [menu, setMenu] = useState<{ id: string; x: number; y: number }>();
   const menuArm = useRef<string>();
+  const rootRef = useRef<HTMLDivElement>(null);
+  // CapCut long-press reorder on the main track: clips collapse to square thumbs; drag one to a new slot.
+  const [reorder, setReorder] = useState<{ id: string; x0: number; x: number; from: number; closing?: boolean }>();
   const [viewW, setViewW] = useState(800);
   const programmatic = useRef(false);
   const press = useRef<{ timer: ReturnType<typeof setTimeout>; x: number; y: number }>();
@@ -148,6 +151,18 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
       setGesture({ kind: "move", id, x0: clientX, y0: clientY, start0: start, trackId, start, active });
     };
     menuArm.current = undefined;
+    const mainT = ops.mainTrack(comp);
+    if (centered && mainT?.id === trackId && mainT.placements.length > 1) {
+      // Main track on touch: tap selects, long-press enters reorder mode (no free drag, so the track stays gapless).
+      onSelect(id);
+      cancelPress();
+      press.current = { x: clientX, y: clientY, timer: setTimeout(() => {
+        press.current = undefined; haptic(15);
+        const from = [...mainT.placements].sort((a, b) => a.startTicks - b.startTicks).findIndex((p) => p.id === id);
+        setReorder({ id, x0: clientX, x: clientX, from });
+      }, LONG_PRESS_MS) };
+      return;
+    }
     if (centered && selectedId !== id) {
       // Touch layouts: tap selects; long-press selects AND picks the clip up (drag it, or release in place for the layer menu).
       onSelect(id);
@@ -235,7 +250,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
   for (let s = 0; s <= rulerSeconds; s += step) ticks.push(s);
 
   return (
-    <div className={`v2-timeline ${centered ? "is-centered" : ""}`}>
+    <div ref={rootRef} className={`v2-timeline ${centered ? "is-centered" : ""} ${reorder ? "is-reordering" : ""}`}>
       {!centered && (
         <div className="v2-track-headers">
           <div className="v2-ruler-spacer" />
@@ -331,6 +346,9 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
       {centered && onAddMedia && main && !gesture && !selectedId && !selectedIds?.length && (
         <button className="v2-main-add" style={{ top: mainTop - scrollTop + 8 }} aria-label="Add media to main track" title="Add photos, videos or library items to the main track at the playhead" onClick={onAddMedia}><Ic g="+" size={22} /></button>
       )}
+      {reorder && main && <ReorderStrip track={main} state={reorder} top={mainTop} root={rootRef.current} thumbs={thumbs}
+        onMove={(x) => setReorder((r) => r && !r.closing ? { ...r, x } : r)}
+        onDrop={(to) => { setReorder((r) => r && { ...r, closing: true }); setTimeout(() => { if (to !== reorder.from) { engine.dispatch(cmd.reorderMain(reorder.id, to)); haptic(10); } setReorder(undefined); }, REORDER_ANIM_MS); }} />}
       {menu && <LayerMenu comp={comp} id={menu.id} x={menu.x} y={menu.y} onClose={() => setMenu(undefined)} run={(c) => { engine.dispatch(c); setMenu(undefined); }} />}
       {centered && <div className="v2-playhead-fixed" style={{ left: (sideColumn ? SIDE_W : 0) + pad }} aria-hidden />}
       {centered && timeLabel && <div className="v2-time-label">{timeLabel}</div>}
@@ -385,6 +403,42 @@ function LayerMenu({ comp, id, x, y, onClose, run }: { comp: Composition; id: st
         <button role="menuitem" disabled={!can("down")} title="Draw this clip below the next layer in its group" onClick={() => run(cmd.moveLayer(id, "down"))}>⬇ Layer down</button>
         {movable && <button role="menuitem" title={`Move to the ${ops.GROUP_LABEL[target]} group`} onClick={() => run(cmd.moveToGroup(id, target))}>⇄ Move to {ops.GROUP_LABEL[target]}</button>}
       </div>
+    </div>
+  );
+}
+
+const REORDER_ANIM_MS = 180;
+const SQ = 52, SQ_GAP = 6;
+/** Slot the dragged thumb lands in, given the finger x relative to where the row starts. */
+export function reorderSlot(x: number, rowLeft: number, count: number): number {
+  return Math.max(0, Math.min(count - 1, Math.round((x - rowLeft - SQ / 2) / (SQ + SQ_GAP))));
+}
+function ReorderStrip({ track, state, top, root, thumbs, onMove, onDrop }: { track: Track; state: { id: string; x0: number; x: number; from: number; closing?: boolean }; top: number; root: HTMLDivElement | null; thumbs?: Record<string, string>; onMove: (x: number) => void; onDrop: (to: number) => void }) {
+  const sorted = [...track.placements].sort((a, b) => a.startTicks - b.startTicks);
+  const ox = root?.getBoundingClientRect().left ?? 0;
+  const rowLeft = state.x0 - ox - state.from * (SQ + SQ_GAP) - SQ / 2;
+  const to = reorderSlot(state.x - ox, rowLeft, sorted.length);
+  const latest = useRef(to); latest.current = to;
+  useEffect(() => {
+    const move = (e: PointerEvent) => { e.preventDefault(); onMove(e.clientX); };
+    const up = () => onDrop(latest.current);
+    window.addEventListener("pointermove", move, { passive: false });
+    window.addEventListener("pointerup", up, { once: true });
+    window.addEventListener("pointercancel", up, { once: true });
+    return () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const others = sorted.filter((p) => p.id !== state.id);
+  return (
+    <div className={`v2-reorder ${state.closing ? "is-closing" : ""}`} data-testid="reorder-strip" role="listbox" aria-label="Reorder clips: drag left or right, release to drop" style={{ top: top + 4 }}>
+      {sorted.map((p) => {
+        const drag = p.id === state.id;
+        const slot = drag ? to : (() => { const i = others.indexOf(p); return i >= to ? i + 1 : i; })();
+        const left = drag ? state.x - ox - SQ / 2 : rowLeft + slot * (SQ + SQ_GAP);
+        const bg = thumbs?.[p.source.assetId];
+        return <div key={p.id} role="option" aria-selected={drag} data-reorder-id={p.id} data-slot={slot} className={`v2-reorder-thumb clip-${p.clipType} ${drag ? "is-dragging" : ""}`}
+          style={{ left, width: SQ, height: SQ, ...(bg ? { backgroundImage: `url(${bg})` } : {}) }} />;
+      })}
+      {!state.closing && <div className="v2-reorder-slot" style={{ left: rowLeft + to * (SQ + SQ_GAP) - 3 }} />}
     </div>
   );
 }
