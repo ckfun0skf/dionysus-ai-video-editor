@@ -12,7 +12,7 @@ describe("migrateLegacyProjectToComposition", () => {
     );
     project.timelineClips = [
       { id: "master-video", name: "Source shot", kind: "video", trackId: "track-video-1", start: 4, duration: 6, assetId: "migration-video", sourceIn: 2, sourceOut: 8, x: 10, y: 5, width: 80, height: 90 },
-      { id: "master-audio", name: "Linked audio", kind: "audio", trackId: "track-audio-1", start: 4, duration: 6, assetId: "migration-audio", linkedVideoClipId: "master-video", sourceIn: 1, sourceOut: 7, volume: 0.4, fadeIn: 0.5, fadeOut: 1, clipVersionId: "stale-linked-clip-version", childCompositionId: "stale-child-composition", shotVersionId: "stale-shot-version" },
+      { id: "master-audio", name: "Linked audio", kind: "audio", trackId: "track-audio-1", start: 4, duration: 6, assetId: "migration-audio", linkedVideoClipId: "master-video", sourceIn: 1, sourceOut: 7, volume: 0.4, fadeIn: 0.5, fadeOut: 1, clipVersionId: "stale-linked-clip-version", ...({ childCompositionId: "stale-child-composition", shotVersionId: "stale-shot-version" } as Record<string, unknown>) },
     ];
     const result = migrateLegacyProjectToComposition(project);
     expect(result.schemaVersion).toBe("2.0");
@@ -56,7 +56,7 @@ describe("migrateLegacyProjectToComposition", () => {
       id: "source-placement", name: "Source placement", kind: "video", trackId: track.id,
       start: 0, duration: 4, assetId: "legacy-source",
       clipVersionId: "stale-clip-version", scriptVersionId: "stale-script-version",
-      childCompositionId: "stale-child-composition", shotVersionId: "stale-shot-version",
+      ...({ childCompositionId: "stale-child-composition", shotVersionId: "stale-shot-version" } as Record<string, unknown>),
     }];
     const root = migrateLegacyProjectToComposition(project).rootComposition;
     const assetChanged = updateCompositionPlacement(root, "source-placement", {
