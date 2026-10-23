@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useEditorBoot, useEngineState, useIsMobile, type EditorContext } from "./useEditor";
 import { Timeline } from "./Timeline";
+import { useThumbs } from "./useThumbs";
+
+type Menu = "root" | "edit" | "edit-hint" | "audio" | "zoom";
 import { Player } from "../render/player";
 import * as cmd from "../engine/commands";
 import { importFile } from "../persistence/media";
@@ -22,6 +25,12 @@ function Editor({ engine, storage }: EditorContext) {
   const [pps, setPps] = useState(40);
   const [sheet, setSheet] = useState(false);
   const [busy, setBusy] = useState(0);
+  const [menu, setMenu] = useState<Menu>("root");
+  const [res, setRes] = useState("1080p");
+  const [fs, setFs] = useState(false);
+  const [toast, setToast] = useState<string>();
+  const thumbs = useThumbs(project, storage.blobs);
+  useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(undefined), 3000); return () => clearTimeout(t); }, [toast]);
   const playerRef = useRef<Player>();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -132,19 +141,89 @@ function Editor({ engine, storage }: EditorContext) {
     </section>
   );
 
+  const firstVideoTrack = comp.tracks.find((t) => t.kind === "video");
+  const firstClip = firstVideoTrack?.placements[0];
+  const fullscreen = () => {
+    const el = canvasRef.current?.parentElement;
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else if (el?.requestFullscreen) void el.requestFullscreen().catch(() => setFs((f) => !f));
+    else setFs((f) => !f);
+  };
+  const activeMenu: Menu = selected ? "edit" : menu;
+  const back = () => (selected ? setSelectedId(undefined) : setMenu("root"));
+  const tool = (icon: string, label: string, onClick: () => void, key = label) => (
+    <button key={key} className="v2-tool" onClick={onClick}><b aria-hidden>{icon}</b><span>{label}</span></button>
+  );
+  const mobileTools: Record<Menu, JSX.Element[]> = {
+    root: [
+      tool("✎", "Edit", () => setMenu("edit-hint")),
+      tool("♫", "Audio", () => setMenu("audio")),
+      tool("＋", "Media", () => setSheet(true)),
+      tool("▭", "Video track", () => engine.dispatch(cmd.addTrack("video"))),
+      tool("⤢", "Zoom", () => setMenu("zoom")),
+    ],
+    "edit-hint": [<span key="h" className="v2-tool-hint">Tap a clip on the timeline to edit it</span>],
+    edit: selected ? [
+      tool("✂", "Split", split),
+      tool("🗑", "Delete", del),
+      ...(selected.placement.clipType !== "image" ? [
+        <label key="vol" className="v2-tool v2-volume"><b aria-hidden>🔊</b>
+          <input type="range" min={0} max={1} step={0.05} value={selected.placement.volume ?? 1} aria-label="Volume" onChange={(e) => engine.dispatch(cmd.setPlacementVolume(selected.placement.id, Number(e.target.value)))} />
+        </label>] : []),
+      tool(selected.track.muted ? "🔈" : "🔇", selected.track.muted ? "Unmute track" : "Mute track", () => engine.dispatch(cmd.toggleTrackMute(selected.track.id))),
+    ] : [],
+    audio: [
+      tool("♫", "Import audio", () => setSheet(true)),
+      tool("▤", "Audio track", () => engine.dispatch(cmd.addTrack("audio"))),
+    ],
+    zoom: [
+      tool("＋", "Zoom in", () => setPps((p) => Math.min(400, p * 1.5))),
+      tool("－", "Zoom out", () => setPps((p) => Math.max(4, p / 1.5))),
+    ],
+  };
+
   return (
-    <div className={`v2-app ${mobile ? "is-mobile" : "is-desktop"}`}>
-      <header className="v2-header">
-        <a className="v2-back" href={window.location.pathname} title="Back to classic editor">‹ Classic</a>
-        <input className="v2-title" value={project.name} aria-label="Project name" onChange={(e) => engine.dispatch(cmd.renameProject(e.target.value))} />
-        <span className="v2-badge">v2 preview</span>
-      </header>
+    <div className={`v2-app ${mobile ? "is-mobile" : "is-desktop"} ${fs ? "is-fs" : ""}`}>
+      {mobile ? (
+        <header className="v2-header v2-mheader">
+          <a className="v2-icon v2-close" href={window.location.pathname} aria-label="Close (back to classic editor)">✕</a>
+          <span className="v2-spacer" />
+          <select className="v2-res" aria-label="Export resolution" value={res} onChange={(e) => setRes(e.target.value)}>
+            {["720p", "1080p", "2K", "4K"].map((r) => <option key={r}>{r}</option>)}
+          </select>
+          <button className="v2-export" onClick={() => setToast(`Export (${res}) is coming soon — tracked as V2-04x.`)}>Export</button>
+        </header>
+      ) : (
+        <header className="v2-header">
+          <a className="v2-back" href={window.location.pathname} title="Back to classic editor">‹ Classic</a>
+          <input className="v2-title" value={project.name} aria-label="Project name" onChange={(e) => engine.dispatch(cmd.renameProject(e.target.value))} />
+          <span className="v2-badge">v2 preview</span>
+        </header>
+      )}
       {mobile ? (
         <>
           {preview}
-          {transport}
-          <Timeline engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} onSelect={setSelectedId} pps={pps} centered />
-          <nav className="v2-toolbar" aria-label={selected ? "Clip actions" : "Timeline actions"}>{selectionActions}</nav>
+          <div className="v2-mcontrols">
+            <button className="v2-icon" aria-label="Fullscreen" onClick={fullscreen}>⛶</button>
+            <button className="v2-icon v2-mplay" aria-label={playing ? "Pause" : "Play"} onClick={togglePlay}>{playing ? "❚❚" : "▶"}</button>
+            <span className="v2-mundo">
+              <button className="v2-icon" aria-label="Undo" disabled={!canUndo} onClick={() => engine.undo()}>↶</button>
+              <button className="v2-icon" aria-label="Redo" disabled={!canRedo} onClick={() => engine.redo()}>↷</button>
+            </span>
+          </div>
+          <Timeline engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} onSelect={setSelectedId} pps={pps} centered
+            thumbs={thumbs} onAddMedia={() => setSheet(true)}
+            timeLabel={<><b>{formatTimecode(time, project.settings.fps).slice(0, 5)}</b> / {formatTimecode(duration, project.settings.fps).slice(0, 5)}</>}
+            sideColumn={<>
+              {firstVideoTrack && <button className="v2-side-btn" onClick={() => engine.dispatch(cmd.toggleTrackMute(firstVideoTrack.id))}><b aria-hidden>{firstVideoTrack.muted ? "🔇" : "🔊"}</b><span>{firstVideoTrack.muted ? "Unmute clip audio" : "Mute clip audio"}</span></button>}
+              <button className="v2-side-btn v2-cover" onClick={() => seek(0)} style={firstClip && thumbs[firstClip.source.assetId] ? { backgroundImage: `url(${thumbs[firstClip.source.assetId]})` } : undefined}><span>Cover</span></button>
+            </>} />
+          <button className="v2-fab" aria-label="Add media" onClick={() => setSheet(true)}>✦</button>
+          <nav className="v2-toolbar" aria-label={selected ? "Clip actions" : "Timeline actions"}>
+            {activeMenu !== "root" && <button className="v2-tool v2-tool-back" aria-label="Back" onClick={back}>‹</button>}
+            {mobileTools[activeMenu]}
+          </nav>
+          {toast && <div className="v2-toast" role="status" onClick={() => setToast(undefined)}>{toast}</div>}
           {sheet && <div className="v2-sheet-backdrop" onClick={() => setSheet(false)}><div className="v2-sheet" onClick={(e) => e.stopPropagation()}>{browser}</div></div>}
           {!sheet && <div hidden>{browser}</div>}
         </>
