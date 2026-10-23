@@ -256,3 +256,8 @@ The next agent should read `docs/MOBILE_AGENT_PICKUP_PROMPT.md` and `docs/MOBILE
 - DYS-012 remains in progress pending owner evidence for phone portrait, landscape, tablet, touch interactions and page-level overflow.
 - Next implementation branch: `feat/dys014-alternative-provenance-roundtrip`. The current slice adds migration tests for all Shot Slot alternatives and generation/reference/model/output provenance, plus JSON round-trip tests for schema-1.0 and the versioned 2.0 envelope. Exact-head CI is required before calling that test slice validated.
 - After these checks, resume canonical-only Composition persistence and structure-preserving Project-to-Clip snapshots. Do not auto-create duplicate Clip Assets per Shot without an explicit owner decision.
+
+## Architecture follow-up — canonical source projection cleanup (2026-10-22)
+
+- Nested Clip Version compatibility layers now clear source-type-specific legacy IDs before projecting the canonical source union. Regression coverage guards against a Clip-to-asset source switch retaining stale `childCompositionId` / `clipVersionId` metadata.
+- This is a bounded consistency fix, not completion of DYS-014: the editable Timeline UI and renderer still have compatibility-projection boundaries to migrate. Exact-head CI must pass after this documentation sync.
