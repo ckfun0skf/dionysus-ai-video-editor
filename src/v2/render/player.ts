@@ -8,6 +8,7 @@ import { TICKS_PER_SECOND, ticksToSeconds } from "../domain/time";
 import { compositionDuration, fadeAt, versionOf, type Project } from "../domain/model";
 import type { BlobStore } from "../ports/storage";
 import { subtitleAt } from "../domain/subtitles";
+import { drawTextClip } from "./text";
 import { correctDrift, createClock, type Clock } from "./clock";
 import { HtmlClipHost, isValidFrame, type FrameIssue } from "./htmlClip";
 
@@ -164,6 +165,10 @@ export class Player {
     const ctx = canvas?.getContext("2d");
     if (canvas && ctx) { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, canvas.width, canvas.height); }
     for (const { track, placement, sourceTicks, mix } of layers) {
+      if (placement.clipType === "text") {
+        if (ctx && canvas && !track.hidden) this.boxes.set(placement.id, drawTextClip(ctx, placement, canvas.width, canvas.height, this.time, mix ?? 1));
+        continue;
+      }
       const version = versionOf(this.project, placement.source);
       if (!version || track.hidden) continue;
       if (placement.clipType === "html") {

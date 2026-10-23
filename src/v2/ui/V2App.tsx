@@ -88,13 +88,15 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     setSel([id]); setSubId(undefined);
   };
   const selectCue = (id?: string) => { setSubId(id); if (id) setSelectedId(undefined); };
-  const addText = () => { const id = addCueAt(engine, player.time); if (id) selectCue(id); else setToast("There is already text at the playhead"); };
+  const addSubtitle = () => { const id = addCueAt(engine, player.time); if (id) selectCue(id); else setToast("There is already a subtitle at the playhead"); };
+  const addText = () => { const id = newId("plc"); if (engine.dispatch(cmd.addTextClip(Math.round(player.time), {}, id))) { setSel([id]); setSubId(undefined); } };
   const delCue = () => { if (subId) { engine.dispatch(cmd.removeSubtitle(subId)); setSubId(undefined); } };
   const onSrt = async (f?: File) => { if (!f) return; const n = await importSrtFile(engine, f); setToast(n ? `Imported ${n} subtitles (Undo to revert)` : `${f.name}: no subtitles found`); };
   const exportSrt = () => (cues.length ? downloadSrt(cues, project.name) : setToast("No subtitles to export — add text first"));
   const topLane = cues.length ? { label: "Text", render: (toPx: (t: number) => number, toTicks: (px: number) => number) => <SubtitleLane engine={engine} list={cues} selectedId={subId} onSelect={selectCue} toPx={toPx} toTicks={toTicks} /> } : undefined;
   const textTools = [
-    { icon: "T", label: "Add text", title: "Add a subtitle at the playhead (T)", run: addText },
+    { icon: "T", label: "Add text", title: "Add a text clip at the playhead (T)", run: addText },
+    { icon: "≡", label: "Add subtitle", title: "Add a subtitle cue at the playhead", run: addSubtitle },
     { icon: "⇪", label: "Import SRT", title: "Replace subtitles with an .srt file", run: () => srtRef.current?.click() },
     { icon: "⇩", label: "Export SRT", title: "Download subtitles as .srt", run: exportSrt },
   ];
@@ -223,7 +225,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     { icon: "❄", label: "Freeze", title: "Hold the frame under the playhead for 3 s (F)", run: () => { engine.dispatch(cmd.freezeFrame(sp.id, Math.round(player.time))); setToast("Freeze frame inserted (3 s)"); } },
     { icon: "⟲", label: sp.reverse ? "Play forward" : "Reverse", title: sp.reverse ? "Play this clip forwards again" : "Play this clip backwards (muted)", run: () => engine.dispatch(cmd.setReverse(sp.id, !sp.reverse)) },
   ] : [];
-  const speedSelect = sp && sp.clipType !== "image" && !sp.freeze ? (
+  const speedSelect = sp && sp.clipType !== "image" && sp.clipType !== "text" && !sp.freeze ? (
     <label className="v2-tool" title="Playback speed — changes the clip's length"><b aria-hidden><Ic g="⏩" /></b>
       <select aria-label="Speed" value={sp.speed ?? 1} onChange={(e) => engine.dispatch(cmd.setSpeed(sp.id, Number(e.target.value)))}>
         {SPEEDS.map((s) => <option key={s} value={s}>{s}×</option>)}
@@ -249,7 +251,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       <button className="v2-tool" title={ripple ? "Delete and close the gap (Del)" : "Delete (Del) · Shift+Del ripple delete"} onClick={() => del()}><b><Ic g="🗑" /></b><span>{ripple ? "Ripple delete" : "Delete"}</span></button>
       {speedSelect}
       {[...clipActions, ...timeActions, ...linkedAudioActions].map((a) => <button key={a.label} className="v2-tool" title={a.title} onClick={a.run}><b aria-hidden><Ic g={a.icon} /></b><span>{a.label}</span></button>)}
-      {selected.placement.clipType !== "image" && selected.placement.clipType !== "html" && (
+      {!["image", "html", "text"].includes(selected.placement.clipType) && (
         <label className="v2-tool v2-volume"><b><Ic g="🔊" /></b>
           <input type="range" min={0} max={1} step={0.05} value={selected.placement.volume ?? 1} aria-label="Volume" onPointerDown={() => engine.beginGesture()} onPointerUp={() => engine.endGesture()} onBlur={() => engine.endGesture()} onChange={(e) => engine.dispatch(cmd.setPlacementVolume(selected.placement.id, Number(e.target.value)))} />
         </label>
@@ -313,7 +315,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       ...(speedSelect ? [tool("⏩", `Speed ${sp!.speed ?? 1}×`, () => setMenu("speed"), "speed", "Playback speed")] : []),
       tool("☑", "Select", () => setMultiMode(true), "multi", "Select several clips"),
       ...[...clipActions, ...timeActions, ...linkedAudioActions].map((a) => tool(a.icon, a.label, a.run, a.label, a.title)),
-      ...(selected.placement.clipType !== "image" && selected.placement.clipType !== "html" ? [
+      ...(!["image", "html", "text"].includes(selected.placement.clipType) ? [
         <label key="vol" className="v2-tool v2-volume"><b aria-hidden><Ic g="🔊" /></b>
           <input type="range" min={0} max={1} step={0.05} value={selected.placement.volume ?? 1} aria-label="Volume" onPointerDown={() => engine.beginGesture()} onPointerUp={() => engine.endGesture()} onBlur={() => engine.endGesture()} onChange={(e) => engine.dispatch(cmd.setPlacementVolume(selected.placement.id, Number(e.target.value)))} />
         </label>] : []),
