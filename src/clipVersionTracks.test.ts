@@ -414,6 +414,7 @@ describe("nested Clip Version track operations", () => {
     let n = 0;
     const duplicate = duplicateClipVersionComposition(source, kind => kind + "-copy-" + (++n));
     const duplicatedDoc = duplicate.composition!;
+    expect(duplicatedDoc.id).not.toBe(composition.id);
     const sourcePlacementIds = new Set(composition.placements.map(item => item.id));
     const sourceTrackIds = new Set(composition.tracks.map(item => item.id));
     expect(duplicatedDoc.placements.every(item => !sourcePlacementIds.has(item.id))).toBe(true);
