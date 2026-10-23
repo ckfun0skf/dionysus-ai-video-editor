@@ -181,7 +181,7 @@ describe("V2App", () => {
     expect(marker().getAttribute("aria-label")).toMatch(/^Crossfade/);
   });
 
-  it("mobile: track controls are a fixed column beside (not over) the lanes; no floating action button", async () => {
+  it("mobile: track controls sit inside the scroll content before t=0 (scroll with clips, never over them); no floating action button", async () => {
     const mm = window.matchMedia;
     window.matchMedia = ((q: string) => ({ matches: true, media: q, addEventListener() {}, removeEventListener() {} })) as never;
     try {
@@ -192,9 +192,11 @@ describe("V2App", () => {
       const side = el.querySelector('[data-testid="side-col"]')!;
       const scroll = el.querySelector(".v2-scroll")!;
       expect(side).toBeTruthy();
-      expect(side.parentElement).toBe(scroll.parentElement);
-      expect(scroll.contains(side)).toBe(false);
-      expect(side.nextElementSibling).toBe(scroll);
+      expect(side.parentElement).toBe(el.querySelector(".v2-content"));
+      expect(scroll.contains(side)).toBe(true);
+      // Right edge of the column is exactly t=0 (the content's left padding).
+      const content = side.parentElement as HTMLElement;
+      expect(parseFloat((side as HTMLElement).style.left) + 144).toBe(parseFloat(content.style.paddingLeft));
       expect(el.querySelector(".v2-fab")).toBeNull();
     } finally { window.matchMedia = mm; }
   });

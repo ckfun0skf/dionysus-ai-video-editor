@@ -53,6 +53,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const [picker, setPicker] = useState<null | "main" | "overlay">(null);
   const [busy, setBusy] = useState(0);
   const [menu, setMenu] = useState<Menu>("root");
+  /** Mobile: which timeline group is expanded into its layers (the toolbar ‹ collapses it). */
+  const [expanded, setExpanded] = useState<ops.TrackGroup>();
   const [res, setRes] = useState<Resolution>("1080p");
   const [exporting, setExporting] = useState(false);
   const [projects, setProjects] = useState(false);
@@ -375,7 +377,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     else setFs((f) => !f);
   };
   const activeMenu: Menu = multiMode || sel.length > 1 ? "multi" : selected ? (menu === "speed" ? "speed" : "edit") : menu === "speed" ? "root" : cue ? "text" : menu;
-  const back = () => { if (multiMode || sel.length > 1) selectClip(undefined); else if (selected && menu !== "speed") setSelectedId(undefined); else { setSubId(undefined); setMenu("root"); } };
+  const back = () => { if (expanded && !multiMode && sel.length <= 1 && menu !== "speed") { setExpanded(undefined); setSelectedId(undefined); return; } if (multiMode || sel.length > 1) selectClip(undefined); else if (selected && menu !== "speed") setSelectedId(undefined); else { setSubId(undefined); setMenu("root"); } };
   const tool = (icon: string, label: string, onClick: () => void, key = label, title?: string) => (
     <button key={key} className="v2-tool" title={title} onClick={onClick}><b aria-hidden><Ic g={icon} /></b><span>{label}</span></button>
   );
@@ -466,7 +468,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
             </span>
           </div>
           <PanelGrabber vh={previewVh} onChange={setPreviewVh} />
-          <Timeline engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} selectedIds={sel} onToggleSelect={toggleClip} multiMode={multiMode} onSelect={selectClip} peaks={peaks} strips={strips} pps={pps} onZoom={(z) => setPps(clampPps(z))} centered topLane={topLane} ripple={ripple} onTransition={onTransition}
+          <Timeline engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} selectedIds={sel} onToggleSelect={toggleClip} multiMode={multiMode} onSelect={selectClip} peaks={peaks} strips={strips} pps={pps} onZoom={(z) => setPps(clampPps(z))} centered topLane={topLane} ripple={ripple} onTransition={onTransition} expanded={expanded} onExpand={setExpanded}
             thumbs={thumbs} onAddMedia={() => setPicker("main")}
             timeLabel={<><b>{formatTimecode(time, project.settings.fps).slice(0, 5)}</b> / {formatTimecode(duration, project.settings.fps).slice(0, 5)}</>}
             sideColumn={<>
@@ -474,7 +476,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
               <button className="v2-side-btn v2-cover" onClick={() => seek(0)} style={firstClip && thumbs[firstClip.source.assetId] ? { backgroundImage: `url(${thumbs[firstClip.source.assetId]})` } : undefined}><span>Cover</span></button>
             </>} />
           <nav className="v2-toolbar" aria-label={selected ? "Clip actions" : "Timeline actions"}>
-            {activeMenu !== "root" && <button className="v2-tool v2-tool-back" aria-label="Back" onClick={back}>‹</button>}
+            {(activeMenu !== "root" || expanded) && <button className="v2-tool v2-tool-back" aria-label={expanded && activeMenu === "root" ? `Collapse ${ops.GROUP_LABEL[expanded]}` : "Back"} title={expanded ? `Collapse ${ops.GROUP_LABEL[expanded]}` : "Back"} onClick={back}>‹</button>}
             {mobileTools[activeMenu]}
           </nav>
           {picker && <MediaPicker media={projectMedia} title={picker === "overlay" ? "Add overlay" : "Add media"} onClose={() => setPicker(null)} onAdd={(p) => void addPicked(p, picker)} />}

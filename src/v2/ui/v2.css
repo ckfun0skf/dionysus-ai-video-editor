@@ -377,3 +377,6 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 
 /* V2-094: per-layer eye / delete in the mobile left column, aligned with each expanded layer row */
 .v2-layer-side { position: absolute; right: 4px; height: 36px; display: flex; gap: 4px; align-items: center; }
+
+/* V2-095: the mobile left column lives inside the scroll content just before t=0, so it scrolls away with the clips and never covers them. */
+.v2-content > .v2-side-col { position: absolute; top: 0; bottom: 0; min-height: 100%; box-sizing: border-box; padding-bottom: 6px; justify-content: flex-start; }
