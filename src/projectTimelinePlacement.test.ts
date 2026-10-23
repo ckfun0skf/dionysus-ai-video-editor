@@ -80,10 +80,9 @@ describe("shared project timeline placement engine", () => {
     const next = trimCanonicalRootTimelineClip(project, root, clip.id, 1.5);
 
     expect(next.placements.find(placement => placement.id === clip.id)).toMatchObject({ duration: 1.5 });
-    expect(next.placements.find(placement => placement.id === audio.id)).toMatchObject({
-      linkedToPlacementId: clip.id,
-      duration: 1.5,
-    });
+    expect(next.placements.find(placement => placement.id === clip.id)?.linkedAudioChildren).toMatchObject([
+      { id: audio.id },
+    ]);
     expect(root.placements.some(placement => placement.id === clip.id || placement.id === audio.id)).toBe(false);
   });
 
@@ -105,11 +104,9 @@ describe("shared project timeline placement engine", () => {
 
     expect(root.placements.find(placement => placement.id === first.id)).toMatchObject({ start: 0, duration: 3 });
     expect(root.placements.find(placement => placement.id === second.id)).toMatchObject({ start: 3, duration: 3 });
-    expect(root.placements.find(placement => placement.id === firstAudio.id)).toMatchObject({
-      linkedToPlacementId: first.id,
-      start: 0,
-      duration: 3,
-    });
+    expect(root.placements.find(placement => placement.id === first.id)?.linkedAudioChildren).toMatchObject([
+      { id: firstAudio.id },
+    ]);
     expect(before.placements.some(placement => placement.id === first.id || placement.id === firstAudio.id || placement.id === second.id)).toBe(false);
   });
 
@@ -148,11 +145,9 @@ describe("shared project timeline placement engine", () => {
       start: 4,
       duration: 2,
     });
-    expect(root.placements.find(placement => placement.id === linkedAudio.id)).toMatchObject({
-      linkedToPlacementId: clip.id,
-      start: 4,
-      duration: 2,
-    });
+    expect(root.placements.find(placement => placement.id === clip.id)?.linkedAudioChildren).toMatchObject([
+      { id: linkedAudio.id },
+    ]);
     expect(before.placements.some(placement => placement.id === clip.id || placement.id === linkedAudio.id)).toBe(false);
   });
 
