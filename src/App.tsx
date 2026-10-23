@@ -1347,10 +1347,10 @@ export default function App() {
   }
 
   function splitRootTimelineClip(clipId: string, splitAt: number, selectedNewId = id("timeline-clip")) {
-    const root = editorSessionRef.current.composition;
+    const currentProject = editorSessionRef.current.project;
+    let root = editorSessionRef.current.composition;
     if (!root.placements.some(item => item.id === clipId)) {
-      change(project => ({ ...project, timelineClips: splitTimelineClip({ tracks: project.tracks, timelineClips: project.timelineClips ?? [] }, clipId, splitAt, { newClipId: selectedNewId }).timelineClips }));
-      return selectedNewId;
+      root = ensureCanonicalTimelineClips(currentProject, root, [clipId]);
     }
     const byId = new Map(root.placements.map(item => [item.id, item]));
     let groupRoot = byId.get(clipId)!;
@@ -1371,16 +1371,16 @@ export default function App() {
       }
     }
     const newPlacementIds = Object.fromEntries([...groupIds].map(oldId => [oldId, oldId === clipId ? selectedNewId : id("timeline-clip")]));
-    changeRootComposition(document => splitCompositionPlacement(document, clipId, splitAt, { newPlacementIds }));
+    const nextRoot = splitCompositionPlacement(root, clipId, splitAt, { newPlacementIds });
+    change(() => projectRootCompositionToLegacy(currentProject, nextRoot), "", nextRoot);
     return selectedNewId;
   }
 
   function duplicateRootTimelineClip(clip: TimelineClip, selectedNewId = id("timeline-clip")): string {
-    const root = editorSessionRef.current.composition;
+    const currentProject = editorSessionRef.current.project;
+    let root = editorSessionRef.current.composition;
     if (!root.placements.some(item => item.id === clip.id)) {
-      change(project => ({ ...project, timelineClips: duplicateTimelineClip({ tracks: project.tracks, timelineClips: project.timelineClips ?? [] }, clip.id, { newClipId: selectedNewId, start: clip.start + clip.duration }).timelineClips }));
-      setSelectedTimelineClipId(selectedNewId);
-      return selectedNewId;
+      root = ensureCanonicalTimelineClips(currentProject, root, [clip.id]);
     }
     const byId = new Map(root.placements.map(item => [item.id, item]));
     let groupRoot = byId.get(clip.id)!;
@@ -1402,7 +1402,7 @@ export default function App() {
     }
     const newPlacementIds = Object.fromEntries([...groupIds].map(oldId => [oldId, oldId === clip.id ? selectedNewId : id("timeline-clip")]));
     const next = duplicateCompositionPlacement(root, clip.id, { newPlacementIds, start: clip.start + clip.duration });
-    changeRootComposition(() => next);
+    change(() => projectRootCompositionToLegacy(currentProject, next), "", next);
     setSelectedTimelineClipId(newPlacementIds[clip.id]);
     return newPlacementIds[clip.id];
   }
