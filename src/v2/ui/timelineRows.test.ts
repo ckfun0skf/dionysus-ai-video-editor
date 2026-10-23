@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createProject, ops } from "../domain";
-import { buildRows } from "./Timeline";
+import { hiddenRanges, layerSlot, buildRows } from "./Timeline";
 
 const comp = () => {
   const p = createProject("t");
@@ -18,9 +18,30 @@ describe("timeline rows", () => {
   });
   it("mobile expanded: layers listed bottom-up (lower row draws higher)", () => {
     const c = comp();
-    expect(sig(buildRows(c, true, "overlay")).slice(1, 4)).toEqual(["header:overlay", "o1", "o2"]);
+    expect(sig(buildRows(c, true, "overlay")).slice(1, 3)).toEqual(["o1", "o2"]);
     const text = sig(buildRows(c, true, "text"));
-    expect(text.slice(-3)).toEqual(["header:text", "t1", "s1"]);
+    expect(text.slice(-2)).toEqual(["t1", "s1"]);
+    expect(text.some((r) => r.startsWith("header"))).toBe(false); // V2-099: no in-timeline group pill on mobile
+  });
+  it("focused mode shows only main + the active group; hidden groups become range lines", () => {
+    const c = comp();
+    const s = sig(buildRows(c, true, "overlay", "overlay"));
+    expect(s.some((r) => /text|audio/.test(r))).toBe(false);
+    const hr = hiddenRanges(c, "overlay");
+    expect(hr.map((h) => h.group)).not.toContain("overlay");
+    expect(hiddenRanges(c, undefined)).toEqual([]);
+    const pl = (id: string, st: number, d: number, clipType = "text") => ({ id, startTicks: st, durationTicks: d, sourceInTicks: 0, clipType, source: { assetId: id, versionId: id } }) as never;
+    let c2 = ops.insertPlacement(c, "t1", pl("a", 0, 100));
+    c2 = ops.insertPlacement(c2, "s1", pl("b", 50, 100, "image"));
+    c2 = ops.insertPlacement(c2, "t1", pl("c", 400, 10));
+    expect(hiddenRanges(c2, "overlay")).toEqual([{ group: "text", ranges: [[0, 150], [400, 410]] }]);
+  });
+  it("layer drag slot follows the dragged row's centre", () => {
+    const lanes = [{ top: 0, h: 40 }, { top: 40, h: 40 }, { top: 80, h: 40 }];
+    expect(layerSlot(lanes, 0, 0)).toBe(0);
+    expect(layerSlot(lanes, 0, 45)).toBe(1);
+    expect(layerSlot(lanes, 0, 90)).toBe(2);
+    expect(layerSlot(lanes, 2, -85)).toBe(0);
   });
   it("desktop: every track under group headers, top layer first", () => {
     const s = sig(buildRows(comp(), false));

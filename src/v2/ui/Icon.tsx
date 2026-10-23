@@ -15,7 +15,7 @@ export const ICONS: Record<string, LucideIcon> = {
   "📋": ClipboardPaste, "🗑": Trash2, "✓": Check, "⤓": FileAudio, "🔈": Volume1, "🔇": VolumeX, "🔊": Volume2, "❄": Snowflake, "⟲": Rewind,
   "⏩": Gauge, "✂": Scissors, "＋": Plus, "+": Plus, "－": Minus, "▭": Film, "♫": Music, "▤": AudioLines, "⤢": Search, "⤧": SlidersHorizontal,
   "☑": ListChecks, T: Type, "⇪": Upload, "⇩": Download, "⛶": Maximize, "☰": Menu, "◆": Diamond, "⧓": Blend, "⚠": TriangleAlert, "</>": Code2,
-  "image": Image, "effect": Sparkles, "overlay": PictureInPicture2, "sticker": Sticker, "template": LayoutTemplate, "anim": Wand2, "anim-in": ArrowLeft, "anim-out": ArrowRight, "anim-loop": Repeat, "eye": Eye, "eye-off": EyeOff, "zoom-in": ZoomIn, "panel-close": PanelLeftClose, "panel-open": PanelLeftOpen, "zoom-out": ZoomOut,
+  "image": Image, "effect": Sparkles, "overlay": PictureInPicture2, "sticker": Sticker, "template": LayoutTemplate, "anim": Wand2, "grip": Menu, "anim-in": ArrowLeft, "anim-out": ArrowRight, "anim-loop": Repeat, "eye": Eye, "eye-off": EyeOff, "zoom-in": ZoomIn, "panel-close": PanelLeftClose, "panel-open": PanelLeftOpen, "zoom-out": ZoomOut,
 };
 
 export function Ic({ g, size = 20, className }: { g: string; size?: number; className?: string }) {
