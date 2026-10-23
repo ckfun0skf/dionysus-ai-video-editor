@@ -24,9 +24,12 @@ describe("shared project timeline placement engine", () => {
     let root = migrateLegacyProjectToComposition(project).rootComposition;
     const videoTrack = root.tracks.find(track => track.kind === "video");
     expect(videoTrack).toBeDefined();
+    const audioTrack = root.tracks.find(track => track.kind === "audio");
+    expect(audioTrack).toBeDefined();
     const first = { id: "legacy-resize-first", name: "First", kind: "video" as const, trackId: videoTrack!.id, start: 0, duration: 2 };
+    const firstAudio = { id: "legacy-resize-first-audio", name: "First audio", kind: "audio" as const, trackId: audioTrack!.id, start: 0, duration: 2, linkedVideoClipId: first.id };
     const second = { id: "legacy-resize-second", name: "Second", kind: "video" as const, trackId: videoTrack!.id, start: 2, duration: 4 };
-    project.timelineClips = [...(project.timelineClips ?? []), first, second];
+    project.timelineClips = [...(project.timelineClips ?? []), first, firstAudio, second];
     const before = structuredClone(root);
     const preview = { id: first.id, trackId: first.trackId, edge: "right" as const, start: 0, duration: 3, trims: [{ id: second.id, start: 3, duration: 3, edge: "left" as const }] };
 
@@ -34,7 +37,12 @@ describe("shared project timeline placement engine", () => {
 
     expect(root.placements.find(placement => placement.id === first.id)).toMatchObject({ start: 0, duration: 3 });
     expect(root.placements.find(placement => placement.id === second.id)).toMatchObject({ start: 3, duration: 3 });
-    expect(before.placements.some(placement => placement.id === first.id || placement.id === second.id)).toBe(false);
+    expect(root.placements.find(placement => placement.id === firstAudio.id)).toMatchObject({
+      linkedToPlacementId: first.id,
+      start: 0,
+      duration: 3,
+    });
+    expect(before.placements.some(placement => placement.id === first.id || placement.id === firstAudio.id || placement.id === second.id)).toBe(false);
   });
 
   it("promotes a legacy-only clip into canonical Composition before moving it", () => {
@@ -42,6 +50,8 @@ describe("shared project timeline placement engine", () => {
     let root = migrateLegacyProjectToComposition(project).rootComposition;
     const videoTrack = root.tracks.find(track => track.kind === "video");
     expect(videoTrack).toBeDefined();
+    const audioTrack = root.tracks.find(track => track.kind === "audio");
+    expect(audioTrack).toBeDefined();
     const clip = {
       id: "legacy-only-timeline-clip",
       name: "Legacy-only clip",
@@ -50,7 +60,16 @@ describe("shared project timeline placement engine", () => {
       start: 0,
       duration: 2,
     };
-    project.timelineClips = [...(project.timelineClips ?? []), clip];
+    const linkedAudio = {
+      id: "legacy-only-timeline-audio",
+      name: "Legacy-only clip audio",
+      kind: "audio" as const,
+      trackId: audioTrack!.id,
+      start: 0,
+      duration: 2,
+      linkedVideoClipId: clip.id,
+    };
+    project.timelineClips = [...(project.timelineClips ?? []), clip, linkedAudio];
     const before = structuredClone(root);
 
     root = moveCanonicalRootTimelineClip(project, root, clip.id, videoTrack!.id, 4);
@@ -61,7 +80,12 @@ describe("shared project timeline placement engine", () => {
       start: 4,
       duration: 2,
     });
-    expect(before.placements.some(placement => placement.id === clip.id)).toBe(false);
+    expect(root.placements.find(placement => placement.id === linkedAudio.id)).toMatchObject({
+      linkedToPlacementId: clip.id,
+      start: 4,
+      duration: 2,
+    });
+    expect(before.placements.some(placement => placement.id === clip.id || placement.id === linkedAudio.id)).toBe(false);
   });
 
   it("plans insertion from canonical root occupancy even when the legacy projection is stale", () => {
