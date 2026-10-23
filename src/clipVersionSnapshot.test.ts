@@ -176,7 +176,7 @@ describe("structure-preserving Clip Version snapshots", () => {
     });
 
     expect(snapshot.composition?.placements.find(item => item.id === "nested-placement")?.start).toBe(9);
-    expect(snapshot.layers.find(item => item.id === "nested-placement")?.start).toBe(9);
+    expect(snapshot.layers.find(item => item.id.startsWith("nested-placement:"))?.start).toBe(9);
     expect(project.timelineClips?.find(item => item.id === "nested-placement")?.start).toBe(5);
   });
 
