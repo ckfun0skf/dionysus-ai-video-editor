@@ -522,23 +522,46 @@ export type ProjectTimelineMoveTarget =
   | { type: "shot"; shotId: string }
   | { type: "clip"; clipId: string };
 
+/** Materialize a legacy clip and its linked owner/children before canonical edits. */
+function ensureCanonicalTimelineClips(
+  project: DionysusProject,
+  root: CompositionDocument,
+  requestedIds: string[],
+): CompositionDocument {
+  const projectClips = project.timelineClips ?? [];
+  const selected = requestedIds.map(clipId => {
+    const clip = projectClips.find(item => item.id === clipId);
+    if (!clip) throw new Error("Timeline clip not found for canonical promotion: " + clipId);
+    return clip;
+  });
+  const ids = new Set(selected.map(clip => clip.id));
+  // Include owner clips for selected linked children, and all linked children for selected owners.
+  for (const clip of selected) {
+    if (clip.linkedVideoClipId) ids.add(clip.linkedVideoClipId);
+    for (const child of projectClips) {
+      if (child.linkedVideoClipId === clip.id) ids.add(child.id);
+    }
+  }
+  const expanded = [...ids].map(clipId => {
+    const clip = projectClips.find(item => item.id === clipId);
+    if (!clip) throw new Error("Linked Timeline clip not found for canonical promotion: " + clipId);
+    return clip;
+  }).sort((a, b) => Number(Boolean(a.linkedVideoClipId)) - Number(Boolean(b.linkedVideoClipId)));
+  let next = root;
+  for (const clip of expanded) {
+    if (next.placements.some(placement => placement.id === clip.id)) continue;
+    next = insertCompositionPlacement(next, createRootCompositionPlacementForTimelineClip(project, next, clip));
+  }
+  return next;
+}
+
 /** Promote every legacy-only clip affected by a resize, then apply the shared Composition resize command. */
 export function applyCanonicalRootTimelineResize(
   project: DionysusProject,
   root: CompositionDocument,
   preview: ClipResizePreview,
 ): CompositionDocument {
-  const ids = [preview.id, ...preview.trims.map(trim => trim.id)];
-  const clips = ids.map(clipId => {
-    const clip = (project.timelineClips ?? []).find(item => item.id === clipId);
-    if (!clip) throw new Error("Timeline clip not found for canonical resize promotion: " + clipId);
-    return clip;
-  }).sort((a, b) => Number(Boolean(a.linkedVideoClipId)) - Number(Boolean(b.linkedVideoClipId)));
-  let next = root;
-  for (const clip of clips) {
-    if (next.placements.some(placement => placement.id === clip.id)) continue;
-    next = insertCompositionPlacement(next, createRootCompositionPlacementForTimelineClip(project, next, clip));
-  }
+  const next = ensureCanonicalTimelineClips(project, root, [preview.id, ...preview.trims.map(trim => trim.id)]);
   return applyCompositionResizePreview(next, preview);
 }
 
@@ -550,12 +573,7 @@ export function moveCanonicalRootTimelineClip(
   targetTrackId: string,
   start: number,
 ): CompositionDocument {
-  let next = root;
-  if (!next.placements.some(placement => placement.id === clipId)) {
-    const clip = (project.timelineClips ?? []).find(item => item.id === clipId);
-    if (!clip) throw new Error("Timeline clip not found for canonical promotion.");
-    next = insertCompositionPlacement(next, createRootCompositionPlacementForTimelineClip(project, next, clip));
-  }
+  const next = ensureCanonicalTimelineClips(project, root, [clipId]);
   return moveCompositionPlacementToTrack(next, clipId, targetTrackId, start);
 }
 
