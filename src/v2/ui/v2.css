@@ -134,11 +134,11 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 .v2-insp-row output { text-align: right; font-variant-numeric: tabular-nums; color: var(--text, #eee); }
 .v2-xform { position: absolute; border: 1.5px solid var(--accent, #4f8cff); cursor: move; touch-action: none; box-sizing: border-box; transform-origin: center; }
 .v2-xform:hover { background: rgba(79, 140, 255, .08); }
-.v2-xform-h { position: absolute; width: 14px; height: 14px; background: #fff; border: 2px solid var(--accent, #4f8cff); border-radius: 50%; touch-action: none; }
-.v2-xform-h::after, .v2-xform-rot::after { content: ""; position: absolute; inset: -15px; }
-.v2-xform-h.nw { left: -8px; top: -8px; cursor: nwse-resize; } .v2-xform-h.se { right: -8px; bottom: -8px; cursor: nwse-resize; }
-.v2-xform-h.ne { right: -8px; top: -8px; cursor: nesw-resize; } .v2-xform-h.sw { left: -8px; bottom: -8px; cursor: nesw-resize; }
-.v2-xform-rot { position: absolute; left: 50%; top: -30px; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%; background: var(--accent, #4f8cff); cursor: grab; touch-action: none; }
+.v2-giz { position: absolute; width: 26px; height: 26px; padding: 0; display: grid; place-items: center; border-radius: 50%; background: #fff; color: #111; border: 0; box-shadow: 0 1px 4px rgba(0,0,0,.5); touch-action: none; cursor: pointer; }
+.v2-giz::after { content: ""; position: absolute; inset: -9px; }
+.v2-giz:hover { background: #e6eeff; }
+.v2-giz.nw { left: -13px; top: -13px; } .v2-giz.ne { right: -13px; top: -13px; }
+.v2-giz.sw { left: -13px; bottom: -13px; } .v2-giz.se { right: -13px; bottom: -13px; cursor: grab; background: var(--accent, #4f8cff); color: #fff; }
 .v2-msheet-insp { max-height: 40dvh; overflow-y: auto; }
 .v2-side { grid-area: browser; display: flex; flex-direction: column; min-height: 0; overflow: auto; border-right: 1px solid var(--line); background: var(--panel); }
 .v2-side .v2-browser { border-right: none; overflow: visible; }
@@ -239,3 +239,6 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 @media (prefers-reduced-motion: reduce) { .v2-desktop-grid { transition: none; } }
 .v2-clip.clip-text { background: #c9661e; border-color: #ff9a3d; }
 .v2-clip.clip-text.is-selected { border-color: #fff; }
+.v2-timeline.is-centered .v2-lane.kind-text { height: 32px; }
+.v2-timeline.is-centered .v2-lane.kind-text .v2-clip { height: 26px; top: 3px; }
+.v2-giz .v2-ic { color: #111; } .v2-giz.se .v2-ic { color: #fff; }

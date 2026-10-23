@@ -50,6 +50,8 @@ type Gesture =
 
 const HEADER_W = 84;
 /** Centered mode: width of the fixed, opaque track-control column left of the lanes. */
+/** Compact height of text lanes in centered (mobile) mode; keeps the side column aligned with the main track. */
+export const TEXT_LANE_H = 32;
 export const SIDE_W = 76;
 
 export function Timeline({ engine, project, time, playing, onSeek, selectedId, selectedIds, onToggleSelect, multiMode, onSelect, pps, onZoom, centered, thumbs, peaks, strips, onAddMedia, sideColumn, timeLabel, topLane, ripple, onTransition }: Props) {
@@ -226,7 +228,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
           ))}
         </div>
       )}
-      {centered && sideColumn && <div className="v2-side-col" data-testid="side-col" style={{ width: SIDE_W }}>{sideColumn}</div>}
+      {centered && sideColumn && <div className="v2-side-col" data-testid="side-col" style={{ width: SIDE_W, paddingTop: 30 + TEXT_LANE_H * Math.max(0, preview.tracks.findIndex((t) => t.kind === "video")) }}>{sideColumn}</div>}
       <div className="v2-scroll" ref={scrollRef} onScroll={onScroll} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={() => { cancelPress(); setGesture(undefined); }}>
         <div className="v2-content" style={{ width: contentW + pad + padRight, paddingLeft: pad, paddingRight: padRight }}>
           <div className="v2-ruler" onPointerDown={scrub}>
