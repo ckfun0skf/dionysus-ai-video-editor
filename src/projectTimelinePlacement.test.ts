@@ -3,6 +3,7 @@ import { sampleProject } from "./sampleProject";
 import { migrateLegacyProjectToComposition, projectRootCompositionToLegacy } from "./compositionMigration";
 import { moveCompositionPlacement, updateCompositionPlacement } from "./compositionCommands";
 import {
+  applyCanonicalRootTimelineResize,
   applyProjectTimelineClipResize,
   applyProjectTimelineInsertion,
   applyCanonicalCompositionInsertion,
@@ -18,6 +19,24 @@ import {
 } from "./projectTimelinePlacement";
 
 describe("shared project timeline placement engine", () => {
+  it("promotes legacy-only clips before applying a canonical resize and adjacent trim", () => {
+    const project = structuredClone(sampleProject);
+    let root = migrateLegacyProjectToComposition(project).rootComposition;
+    const videoTrack = root.tracks.find(track => track.kind === "video");
+    expect(videoTrack).toBeDefined();
+    const first = { id: "legacy-resize-first", name: "First", kind: "video" as const, trackId: videoTrack!.id, start: 0, duration: 2 };
+    const second = { id: "legacy-resize-second", name: "Second", kind: "video" as const, trackId: videoTrack!.id, start: 2, duration: 4 };
+    project.timelineClips = [...(project.timelineClips ?? []), first, second];
+    const before = structuredClone(root);
+    const preview = { id: first.id, trackId: first.trackId, edge: "right" as const, start: 0, duration: 3, trims: [{ id: second.id, start: 3, duration: 3, edge: "left" as const }] };
+
+    root = applyCanonicalRootTimelineResize(project, root, preview);
+
+    expect(root.placements.find(placement => placement.id === first.id)).toMatchObject({ start: 0, duration: 3 });
+    expect(root.placements.find(placement => placement.id === second.id)).toMatchObject({ start: 3, duration: 3 });
+    expect(before.placements.some(placement => placement.id === first.id || placement.id === second.id)).toBe(false);
+  });
+
   it("promotes a legacy-only clip into canonical Composition before moving it", () => {
     const project = structuredClone(sampleProject);
     let root = migrateLegacyProjectToComposition(project).rootComposition;
