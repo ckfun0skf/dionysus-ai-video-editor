@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { TimelineClip } from "./types";
 import { timelineClipPatchChangesSourceIdentity } from "./timelineClipSourcePatch";
 
 describe("timelineClipPatchChangesSourceIdentity", () => {
@@ -7,7 +8,7 @@ describe("timelineClipPatchChangesSourceIdentity", () => {
     [{ x: 20, y: 10, width: 80, height: 90 }, "preview transform"],
     [{ name: "Renamed clip" }, "display name"],
     [{ start: 4, duration: 3, sourceIn: 1, sourceOut: 4 }, "timing and source range"],
-  ] as const)("does not re-derive canonical source for %s (%s)", patch => {
+  ] as Array<[Partial<TimelineClip>, string]>)("does not re-derive canonical source for %s (%s)", patch => {
     expect(timelineClipPatchChangesSourceIdentity(patch)).toBe(false);
   });
 
@@ -18,7 +19,7 @@ describe("timelineClipPatchChangesSourceIdentity", () => {
     [{ slotId: "slot-next" }, "slot"],
     [{ clipVersionId: "version-next" }, "clip version"],
     [{ scriptVersionId: "script-next" }, "script version"],
-  ] as const)("rebuilds canonical source for explicit %s edits (%s)", patch => {
+  ] as Array<[Partial<TimelineClip>, string]>)("rebuilds canonical source for explicit %s edits (%s)", patch => {
     expect(timelineClipPatchChangesSourceIdentity(patch)).toBe(true);
   });
 });
