@@ -199,12 +199,35 @@ export class Player {
     this.onTime?.(this.time, this.playing);
   }
 
+  /** Offline rendering (export): draw time `t` once every source is decoded and seeked. */
+  async renderAt(t: number) {
+    this.time = Math.max(0, Math.round(t));
+    for (let pass = 0; pass < 3; pass++) {
+      this.draw();
+      await Promise.all(this.urls.values());
+      await Promise.all([...this.pool.values()].map(settle));
+    }
+    this.draw();
+  }
+
   dispose() {
     this.pause();
     for (const id of [...this.pool.keys()]) this.release(id);
     this.resolvedUrls.forEach((u) => URL.revokeObjectURL(u));
     void this.audioCtx?.close().catch(() => undefined);
   }
+}
+
+/** Resolves when a media element can show its current frame (or after a timeout, so export never hangs). */
+function settle(el: MediaEl, ms = 4000): Promise<void> {
+  const ready = () => (el instanceof HTMLImageElement ? el.complete : el instanceof HTMLVideoElement ? !el.seeking && el.readyState >= 2 : true);
+  if (ready() || !el.getAttribute("src")) return Promise.resolve();
+  return new Promise((res) => {
+    const done = () => { clearTimeout(to); ["seeked", "loadeddata", "load", "error"].forEach((e) => el.removeEventListener(e, check)); res(); };
+    const check = () => ready() && done();
+    const to = setTimeout(done, ms);
+    ["seeked", "loadeddata", "load", "error"].forEach((e) => el.addEventListener(e, check));
+  });
 }
 
 function findAny(p: Project, placementId: string) {

@@ -9,6 +9,8 @@ import { clampPps } from "./gestures";
 import { useThumbs } from "./useThumbs";
 import { useMediaPreviews } from "./useMedia";
 import { TransformHandles, TransformInspector } from "./Transform";
+import { ExportDialog } from "./ExportDialog";
+import type { Resolution } from "../render";
 import { addCueAt, downloadSrt, importSrtFile, SubtitleEditor, SubtitleLane } from "./Subtitles";
 
 type Menu = "multi" | "root" | "edit" | "edit-hint" | "audio" | "zoom" | "speed" | "text";
@@ -38,7 +40,9 @@ function Editor({ engine, storage, recovery }: EditorContext) {
   const [sheet, setSheet] = useState(false);
   const [busy, setBusy] = useState(0);
   const [menu, setMenu] = useState<Menu>("root");
-  const [res, setRes] = useState("1080p");
+  const [res, setRes] = useState<Resolution>("1080p");
+  const [exporting, setExporting] = useState(false);
+  const openExport = () => { player.pause(); setExporting(true); };
   const [fs, setFs] = useState(false);
   const [toast, setToast] = useState<string>();
   const [inspOpen, setInspOpen] = useState(false);
@@ -98,9 +102,10 @@ function Editor({ engine, storage, recovery }: EditorContext) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement)?.closest?.("input,textarea,select")) return;
+      if (exporting || (e.target as HTMLElement)?.closest?.("input,textarea,select")) return;
       const mod = e.metaKey || e.ctrlKey;
       if (mod && e.key.toLowerCase() === "z") { e.preventDefault(); if (e.shiftKey) engine.redo(); else engine.undo(); }
+      else if (mod && e.key.toLowerCase() === "e") { e.preventDefault(); openExport(); }
       else if (mod && e.key.toLowerCase() === "y") { e.preventDefault(); engine.redo(); }
       else if (e.key === " ") { e.preventDefault(); togglePlay(); }
       else if (e.key.toLowerCase() === "s" && !mod) split();
@@ -313,19 +318,21 @@ function Editor({ engine, storage, recovery }: EditorContext) {
         <header className="v2-header v2-mheader">
           <a className="v2-icon v2-close" href={window.location.pathname} aria-label="Close (back to classic editor)">✕</a>
           <span className="v2-spacer" />
-          <select className="v2-res" aria-label="Export resolution" value={res} onChange={(e) => setRes(e.target.value)}>
+          <select className="v2-res" aria-label="Export resolution" value={res} onChange={(e) => setRes(e.target.value as Resolution)}>
             {["720p", "1080p", "2K", "4K"].map((r) => <option key={r}>{r}</option>)}
           </select>
-          <button className="v2-export" onClick={() => setToast(`Export (${res}) is coming soon — tracked as V2-04x.`)}>Export</button>
+          <button className="v2-export" title="Export MP4 (⌘/Ctrl+E)" onClick={openExport}>Export</button>
         </header>
       ) : (
         <header className="v2-header">
           <a className="v2-back" href={window.location.pathname} title="Back to classic editor">‹ Classic</a>
           <input className="v2-title" value={project.name} aria-label="Project name" onFocus={() => engine.beginGesture()} onBlur={() => engine.endGesture()} onChange={(e) => engine.dispatch(cmd.renameProject(e.target.value))} />
           <span className="v2-badge">v2 preview</span>
+          <button className="v2-btn primary v2-export-d" title="Export MP4 (⌘/Ctrl+E)" onClick={openExport}>Export</button>
         </header>
       )}
       {notice && <RecoveryNotice failure={notice} storage={storage} onDismiss={() => setNotice(undefined)} />}
+      {exporting && <ExportDialog project={project} blobs={storage.blobs} res={res} onRes={setRes} onClose={() => setExporting(false)} />}
       {toast && <div className="v2-toast" role="status" onClick={() => setToast(undefined)}>{toast}</div>}
       {mobile ? (
         <>
