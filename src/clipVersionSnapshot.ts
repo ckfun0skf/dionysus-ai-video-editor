@@ -70,10 +70,11 @@ export function createClipVersionSnapshot(
         childIds.add(child.id);
         children.push(attachChildren(child, new Set([...ancestry, key])));
       } else if (placement.source.type === "shot" && placement.source.slotId) {
-        const shot = project.shots.find(candidate => candidate.id === placement.source.shotId);
-        const slot = shot?.slots.find(candidate => candidate.id === placement.source.slotId);
-        const versionId = placement.source.versionId ?? slot?.selectedVersionId;
-        if (versionId) attachShotSlotVersion(placement.source.shotId, placement.source.slotId, versionId);
+        const source = placement.source;
+        const shot = project.shots.find(candidate => candidate.id === source.shotId);
+        const slot = shot?.slots.find(candidate => candidate.id === source.slotId);
+        const versionId = source.versionId ?? slot?.selectedVersionId;
+        if (versionId) attachShotSlotVersion(source.shotId, source.slotId, versionId);
       }
     }
     if (includeSelectedShotSlots) {
