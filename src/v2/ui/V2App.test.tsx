@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { V2App } from "./V2App";
+import legacy from "../persistence/importLegacy/fixtures/project-1.0.json";
 
 beforeAll(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -27,5 +28,20 @@ describe("V2App", () => {
     expect(el.querySelectorAll(".v2-lane").length).toBe(3);
     await act(async () => { (el.querySelector('[aria-label="Undo"]') as HTMLButtonElement).click(); });
     expect(el.querySelectorAll(".v2-lane").length).toBe(2);
+  });
+
+  it("imports a legacy project via the Import legacy project button", async () => {
+    const el = document.createElement("div");
+    document.body.appendChild(el);
+    await act(async () => { createRoot(el).render(<V2App />); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+    expect(Array.from(el.querySelectorAll("button")).some((b) => b.textContent === "Import legacy project")).toBe(true);
+    const input = el.querySelector('[data-testid="legacy-input"]') as HTMLInputElement;
+    const file = new File([JSON.stringify(legacy)], "beach.json", { type: "application/json" });
+    Object.defineProperty(input, "files", { value: [file], configurable: true });
+    await act(async () => { input.dispatchEvent(new Event("change", { bubbles: true })); await new Promise((r) => setTimeout(r, 50)); });
+    expect(el.textContent).toContain('Imported "Beach trip"');
+    expect(el.querySelectorAll(".v2-lane").length).toBe(2);
+    expect(el.querySelectorAll(".v2-clip").length).toBe(3);
   });
 });
