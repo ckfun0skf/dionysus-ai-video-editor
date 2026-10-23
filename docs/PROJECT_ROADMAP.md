@@ -328,3 +328,8 @@ A legacy-only Timeline clip is now inserted into the live canonical root Composi
 ### Verified canonical move/resize promotion (2026-10-23)
 
 The ordinary Timeline clip move and resize fallbacks now promote any missing legacy-only clip and its linked owner/child clips into the canonical root Composition before invoking shared Composition commands. Tests verify linked-audio synchronization and source-document immutability. Exact-head code commit `4c796da2dd54793a0d104d1f78b979fb026fa194` passed [CI run 39956221638](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39956221638): 27 files / 317 tests, TypeScript/build and dependency audit passed. This is a bounded partial migration, not completion of DYS-014; Shot-domain/other Project mutation paths, renderer/playback contract migration, and broad root/nested history round-trips remain.
+
+
+### Canonical Timeline mutation fallbacks (2026-10-23)
+
+Ordinary Timeline move, trim, resize, split, duplicate, and delete paths now promote legacy-only clips plus linked owner/child placements into canonical root Composition before edits. The promotion is owner-first to preserve linked-audio ownership. Tests cover move/trim/resize promotion, linked-audio timing, adjacent trim, and source-document immutability. Exact-head CI for the latest code/doc-synced head is pending; do not mark DYS-014 complete. Remaining work includes Shot-domain and other Project mutations, renderer/playback migration off `CompositionLayer[]`, and broader root/nested history persistence tests.
