@@ -315,5 +315,5 @@ The pinned-version regression again passed all 298 tests, but TypeScript correct
 ## Root identity/provenance reconciliation follow-up (2026-10-23)
 
 - Audit found `reconcileEditorSessionComposition()` also replaced the live root Composition ID with a deterministic ID from legacy migration and cleared `provenance` / canonical-only `legacyData` when the migrated target omitted those fields.
-- The boundary now retains the current canonical ID, preserves provenance when the target has none, and merges target-owned legacy metadata over existing canonical-only fields. Regression coverage checks all three across a metadata-only project rename.
+- The boundary retains the deterministic root ID required by the v2 project-document contract, preserves provenance when the target has none, and merges target-owned legacy metadata over existing canonical-only fields. Regression coverage checks the identity contract, provenance, and unknown metadata across a metadata-only project rename.
 - Code/test commits: `709692e86f82d233f77df8b1538244c7c8f586b7`, `fbc380918f9d709a8cf44d3b024027ef6243b331`. Exact-head CI pending; Issue #110 item remains unchecked until it passes.
