@@ -350,3 +350,8 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 /* V2-091: no native long-press callout/selection on touch timeline */
 .v2-timeline.is-centered, .v2-timeline.is-centered * { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
 .v2-timeline.is-centered img, .v2-timeline.is-centered canvas { -webkit-user-drag: none; pointer-events: none; }
+/* V2-092 Project media tab */
+.v2-pick-tile.is-asset { position: relative; }
+.v2-pick-tile.is-asset > b { font-size: 22px; color: var(--muted); }
+.v2-pick-dur { position: absolute; right: 4px; bottom: 18px; font-style: normal; font-size: 10px; background: rgba(0,0,0,.65); color: #fff; padding: 1px 4px; border-radius: 4px; }
+.v2-pick-name { position: absolute; left: 0; right: 0; bottom: 0; font-size: 10px; padding: 2px 4px; background: rgba(0,0,0,.55); color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }

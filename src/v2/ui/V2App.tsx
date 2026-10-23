@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { hitTest, Player, THREE_TEMPLATE } from "../render";
 import { cmd } from "../engine";
 import { importFile } from "../persistence";
@@ -17,6 +17,7 @@ import type { Resolution } from "../render";
 import { addCueAt, downloadSrt, importSrtFile, SubtitleEditor, SubtitleLane } from "./Subtitles";
 import { Ic } from "./Icon";
 import { MediaPicker, type Picked } from "./MediaPicker";
+import { projectMediaList } from "./projectMedia";
 import { libraryFile, stickerFile } from "./libraryItems";
 import { PanelGrabber, PREVIEW_DEFAULT, Sheet } from "./Sheet";
 
@@ -209,11 +210,11 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     }
   };
   /** Import picked files + library items, then lay them out from the playhead in one undo step. */
-  const addPicked = async ({ files, library, stickers }: Picked, mode: "main" | "overlay") => {
+  const addPicked = async ({ files, library, stickers, assets = [] }: Picked, mode: "main" | "overlay") => {
     setPicker(null);
     const at = Math.round(player.time);
     const all = [...files, ...library.map(libraryFile).filter((f): f is File => !!f)];
-    const ids: string[] = [], stickerIds: string[] = [];
+    const ids: string[] = assets.filter((id) => project.assets[id]), stickerIds: string[] = [];
     const stickerFiles = await Promise.all(stickers.map((s) => stickerFile(s).catch(() => undefined)));
     const jobs = [...all.map((f) => ({ f, out: ids })), ...stickerFiles.filter((f): f is File => !!f).map((f) => ({ f, out: stickerIds }))];
     setBusy((b) => b + jobs.length);
@@ -230,6 +231,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     if (stickerIds.length) steps.push(cmd.addAssetsInSequence(stickerIds, at, newId("trk"), "text"));
     if (steps.length) engine.dispatch(steps, mode === "overlay" ? "Add overlay" : "Add media");
   };
+  const projectMedia = useMemo(() => projectMediaList(project, thumbs), [project, thumbs]);
   const addToTimeline = (a: Asset) => { engine.dispatch(cmd.addAssetToTimeline(a.id, mobile ? player.time : duration)); if (mobile) setSheet(false); };
 
   const browser = (
@@ -475,7 +477,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
             {activeMenu !== "root" && <button className="v2-tool v2-tool-back" aria-label="Back" onClick={back}>‹</button>}
             {mobileTools[activeMenu]}
           </nav>
-          {picker && <MediaPicker title={picker === "overlay" ? "Add overlay" : "Add media"} onClose={() => setPicker(null)} onAdd={(p) => void addPicked(p, picker)} />}
+          {picker && <MediaPicker media={projectMedia} title={picker === "overlay" ? "Add overlay" : "Add media"} onClose={() => setPicker(null)} onAdd={(p) => void addPicked(p, picker)} />}
           {sheet && <Sheet label="Media" onClose={() => setSheet(false)}>{browser}</Sheet>}
           {!sheet && <div hidden>{browser}</div>}
           {cue && <div className="v2-msub"><SubtitleEditor engine={engine} sub={cue} onDelete={delCue} /></div>}

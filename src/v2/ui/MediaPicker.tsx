@@ -1,12 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { LIBRARY_ITEMS, STICKERS, stickerUrl, type LibraryItem, type Sticker } from "./libraryItems";
 
-export type Picked = { files: File[]; library: LibraryItem[]; stickers: Sticker[] };
-type Tab = "device" | "library" | "stickers";
+export type Picked = { files: File[]; library: LibraryItem[]; stickers: Sticker[]; assets?: string[] };
+type Tab = "project" | "device" | "library" | "stickers";
+/** A media asset already imported into this project (blob persists in IndexedDB), for re-adding without re-upload. */
+export type ProjectMedia = { id: string; name: string; kind: "video" | "image" | "audio"; thumb?: string; durationTicks?: number; createdAt: string };
+const TAB_LABEL: Record<Tab, string> = { project: "Project media", device: "Device", library: "Library", stickers: "Stickers" };
+const fmtDur = (ticks?: number) => { if (!ticks) return ""; const s = Math.round(ticks / 120_000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
 
 /** Full-screen CapCut-style picker: Device (photos/videos) and Library tabs, multi-select, then Add. */
-export function MediaPicker({ title, onAdd, onClose }: { title: string; onAdd: (p: Picked) => void; onClose: () => void }) {
-  const [tab, setTab] = useState<Tab>("device");
+export function MediaPicker({ title, onAdd, onClose, media = [] }: { title: string; onAdd: (p: Picked) => void; onClose: () => void; media?: ProjectMedia[] }) {
+  const [tab, setTab] = useState<Tab>(media.length ? "project" : "device");
+  const recent = useMemo(() => [...media].sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [media]);
   const [files, setFiles] = useState<File[]>([]);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const input = useRef<HTMLInputElement>(null);
@@ -20,6 +25,7 @@ export function MediaPicker({ title, onAdd, onClose }: { title: string; onAdd: (
   const add = () => onAdd({
     files: order.filter((k) => k.startsWith("f")).map((k) => files[Number(k.slice(1, k.indexOf(":")))]).filter(Boolean),
     library: order.filter((k) => k.startsWith("l:")).map((k) => LIBRARY_ITEMS.find((it) => `l:${it.id}` === k)!).filter(Boolean),
+    assets: order.filter((k) => k.startsWith("a:")).map((k) => k.slice(2)),
     stickers: order.filter((k) => k.startsWith("s:")).map((k) => STICKERS.find((it) => `s:${it.id}` === k)!).filter(Boolean),
   });
   const badge = (k: string) => { const n = order.indexOf(k); return <span className={`v2-pick-badge ${n >= 0 ? "is-on" : ""}`} aria-hidden>{n >= 0 ? n + 1 : ""}</span>; };
@@ -31,12 +37,25 @@ export function MediaPicker({ title, onAdd, onClose }: { title: string; onAdd: (
         <span />
       </header>
       <div className="v2-picker-tabs" role="tablist">
-        {(["device", "library", "stickers"] as Tab[]).map((t) => (
-          <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? "is-on" : ""} onClick={() => setTab(t)}>{t === "device" ? "Device" : t === "library" ? "Library" : "Stickers"}</button>
+        {(["project", "device", "library", "stickers"] as Tab[]).map((t) => (
+          <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? "is-on" : ""} onClick={() => setTab(t)}>{TAB_LABEL[t]}</button>
         ))}
       </div>
       <div className="v2-picker-body">
-        {tab === "device" ? (
+        {tab === "project" ? (
+          recent.length === 0 ? <p className="v2-muted v2-picker-empty">Nothing imported yet. Media you add to this project shows up here, newest first, so you can re-add it without uploading again.</p> : (
+            <div className="v2-picker-grid" data-testid="project-media">
+              {recent.map((m) => { const k = `a:${m.id}`; return (
+                <button key={k} className={`v2-pick-tile is-asset ${picked.has(k) ? "is-on" : ""}`} aria-pressed={picked.has(k)} title={m.name} aria-label={m.name} onClick={() => toggle(k)}>
+                  {m.thumb ? <img src={m.thumb} alt="" draggable={false} /> : <b aria-hidden>{m.kind === "audio" ? "♫" : m.kind === "video" ? "▶" : "▣"}</b>}
+                  {m.kind !== "image" && m.durationTicks ? <i className="v2-pick-dur">{fmtDur(m.durationTicks)}</i> : null}
+                  <span className="v2-pick-name">{m.name}</span>
+                  {badge(k)}
+                </button>
+              ); })}
+            </div>
+          )
+        ) : tab === "device" ? (
           <>
             <button className="v2-btn v2-picker-browse" title="Choose photos and videos from this device" onClick={() => input.current?.click()}>＋ Choose photos &amp; videos</button>
             <input ref={input} type="file" hidden multiple accept="image/*,video/*" aria-label="Choose photos and videos" onChange={(e) => {
