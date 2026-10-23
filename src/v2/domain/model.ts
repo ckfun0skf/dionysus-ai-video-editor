@@ -38,7 +38,14 @@ export interface Placement {
   source: SourceRef;
   clipType: MediaKind;
   volume?: number;
+  /**
+   * Owned child: the embedded source audio of a video placement. It is part of the placement, so it
+   * follows every move/trim/split/delete. `muted` is set by Extract Audio (audio then lives on an audio track).
+   */
+  linkedAudio?: LinkedAudio;
 }
+
+export interface LinkedAudio { muted?: boolean }
 
 export interface Track {
   id: string;

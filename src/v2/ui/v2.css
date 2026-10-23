@@ -126,3 +126,5 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 .v2-recovery p { margin: 6px 0 10px; color: #e6c9cb; }
 .v2-recovery-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .v2-recovery-actions .v2-btn { min-height: 44px; }
+
+.v2-clip-badge { margin-right: 4px; font-size: 10px; opacity: .85; }
