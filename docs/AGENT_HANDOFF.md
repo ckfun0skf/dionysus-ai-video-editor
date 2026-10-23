@@ -776,3 +776,11 @@ The pinned-version regression again passed all 298 tests, but TypeScript correct
 
 - A broader attempt to route legacy-only split/duplicate through canonical promotion failed three existing App integration tests; the change was reverted. Split/duplicate compatibility fallbacks remain intentionally unchanged until a parity-preserving migration is designed.
 - The current canonical promotion scope is ordinary Timeline move, trim, resize, and delete. CI for rollback/fix code head `64fa699c60592bcc49222ee89a2e785063bc477a` passed tests; exact docs-synchronized head CI still required. Failed exploratory run: [39957948620](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39957948620); passing rollback/fix run: [39958220582](https://github.com/ckfun0skf/dionysus-ai-video-editor/actions/runs/39958220582).
+
+
+### Canonical split/duplicate migration verified (2026-10-23)
+
+- Legacy-only linked audio is now promoted as an owned Composition child under its video placement, not as a separate root placement. This fixes the canonical ownership mismatch that prevented split/duplicate parity.
+- App split and duplicate now promote missing clips before running shared Composition commands. Added regression coverage for split source ranges and duplicate timing/mix metadata; the pre-existing App midpoint split, playhead split, and linked-video/audio duplicate tests also pass.
+- Exact code/test head cbd030a49fe7e3c418dc695ad1e592c748a7ea80 passed CI run 39960129613: 27 test files / 319 tests; TypeScript/production build passed; npm audit 0 vulnerabilities.
+- This closes only the ordinary Timeline split/duplicate compatibility fallback slice. Other Shot/Project mutation paths, broader root/nested history round-trips, and renderer/playback migration remain open. DYS-014 stays in progress. PR #111 remains open/unmerged; Issue #100 remains open for deployed owner acceptance. No browser smoke tests or manual UI acceptance claimed.
