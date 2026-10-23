@@ -25,6 +25,7 @@ import {
   calculateProjectTimelineClipResizePreview,
   calculateProjectTimelineDropPosition,
   getProjectTimelinePlacementItems,
+  moveCanonicalRootTimelineClip,
   moveProjectTimelinePlacement,
   type ProjectTimelineInsertionPlan,
   type ProjectTimelineInsertResolution,
@@ -730,10 +731,9 @@ export default function App() {
     if (target.type === "clip") {
       const clip = (editorSessionRef.current.project.timelineClips ?? []).find(item => item.id === target.clipId);
       if (clip) {
-        changeRootComposition(root => {
-          const inserted = insertCompositionPlacement(root, createRootCompositionPlacementForTimelineClip(editorSessionRef.current.project, root, clip));
-          return moveCompositionPlacementToTrack(inserted, placementId, trackId, start);
-        });
+        changeRootComposition(root => moveCanonicalRootTimelineClip(
+          editorSessionRef.current.project, root, placementId, trackId, start,
+        ));
         return;
       }
     }
