@@ -34,7 +34,7 @@ import "./desktop/desktop.css";
 import { ContextMenu, type MenuItem } from "./desktop/ContextMenu";
 import { ShortcutsOverlay } from "./desktop/ShortcutsOverlay";
 import { DesktopTooltips } from "./desktop/Tooltip";
-import { MOD, shuttleLabel, shuttleNext } from "./desktop/shortcuts";
+import { editPoints, jumpEditPoint, MOD, shuttleLabel, shuttleNext, splitTargets } from "./desktop/shortcuts";
 import { LIBRARY_ITEMS, type LibraryItem, type Sticker } from "./libraryItems";
 import { text as textDomain } from "../domain";
 
@@ -212,6 +212,12 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const seek = useCallback((t: number) => player.seek(t), [player]);
   const closeAnim = () => { setAnimOpen(false); setTextOpen(false); if (animLoop) { setAnimLoop(false); player.pause(); } };
   const togglePlay = useCallback(() => (player.isPlaying ? player.pause() : player.play()), [player]);
+  const splitAtPlayhead = () => {
+    const t = Math.round(player.time), ids = splitTargets(comp, sel, t);
+    if (!ids.length) { setToast("No clip under the playhead to split — move the playhead inside a clip"); return; }
+    engine.dispatch(ids.map((id) => cmd.splitPlacement(id, t)), ids.length > 1 ? `Split ${ids.length} clips` : "Split clip");
+  };
+  const cut = () => { if (!sel.length) return; clipboard.current = edit.copyClips(comp, sel); setHasClip(true); engine.dispatch(cmd.deleteClips(sel, ripple)); setToast(`Cut ${sel.length} clip${sel.length > 1 ? "s" : ""} — ${MOD} V to paste`); setSel([]); setMultiMode(false); };
   const split = useCallback(() => { if (selectedId) engine.dispatch(cmd.splitPlacement(selectedId, Math.round(player.time))); }, [engine, player, selectedId]);
   // Tap in the preview selects the topmost element (rotation-aware); empty space deselects, then toggles play.
   const onCanvasTap = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -297,7 +303,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (exporting || projects || kbdOpen || ctx || (e.target as HTMLElement)?.closest?.("input,textarea,select,[role=menu],[role=dialog]")) return;
+      if (exporting || projects || kbdOpen || ctx || (e.target as HTMLElement)?.closest?.("input,textarea,select,[contenteditable=true],[role=menu],[role=dialog]")) return;
       const mod = e.metaKey || e.ctrlKey;
       const k = e.key.toLowerCase();
       // V2-107 desktop-only keys (mobile keeps its existing map).
@@ -312,6 +318,15 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
         if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && e.altKey) { e.preventDefault(); nudge((e.key === "ArrowLeft" ? -1 : 1) * (e.shiftKey ? 10 : 1) * fpsTicks); return; }
         if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && e.shiftKey) { e.preventDefault(); seek(player.time + (e.key === "ArrowLeft" ? -1 : 1) * secondsToTicks(1)); return; }
         if (e.key === " ") { e.preventDefault(); playPause(); return; }
+      }
+      // V2-110: NLE keys — Cmd/Ctrl+B (CapCut) and Cmd/Ctrl+K (Premiere) split at the playhead, Cmd+X cuts, ↑/↓ jump edit points.
+      if (mod && (k === "b" || k === "k") && !e.shiftKey && !e.altKey) { e.preventDefault(); splitAtPlayhead(); return; }
+      if (mod && k === "x") { e.preventDefault(); cut(); return; }
+      if (!mod && !e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+        e.preventDefault();
+        const to = jumpEditPoint(editPoints(comp), player.time, e.key === "ArrowUp" ? -1 : 1, secondsToTicks(0.5 / project.settings.fps));
+        if (to !== undefined) { setRate(0); player.pause(); seek(to); }
+        return;
       }
       if (mod && e.key.toLowerCase() === "z") { e.preventDefault(); if (e.shiftKey) engine.redo(); else engine.undo(); }
       else if (mod && e.key.toLowerCase() === "e") { e.preventDefault(); openExport(); }
@@ -659,7 +674,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const anySel = sel.length > 0;
   const desktopToolbar = (
     <div className="v2-dtoolbar" role="toolbar" aria-label="Timeline tools">
-      {iconBtn("✂", "Split", split, { title: "Split at the playhead (S)", disabled: !selectedId })}
+      {iconBtn("✂", "Split", split, { title: `Split at the playhead (S · ${MOD}B · ${MOD}K)`, disabled: !selectedId })}
       {iconBtn("🗑", ripple ? "Ripple delete" : "Delete", () => delSel(), { title: ripple ? "Delete and close the gap (Del)" : "Delete (Del) · Shift+Del ripple delete", disabled: !anySel, key: "del" })}
       {iconBtn("⧉", "Duplicate", duplicateAbove, { title: "Duplicate (⌘/Ctrl+D)", disabled: !anySel })}
       {iconBtn("⎘", "Copy", copy, { title: "Copy (⌘/Ctrl+C)", disabled: !anySel })}
@@ -704,6 +719,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       { label: "Split at playhead", icon: "✂", shortcut: "S", disabled: !inside || sel.length > 1, onSelect: () => engine.dispatch(cmd.splitPlacement(p.id, t)) },
       "sep",
       { label: `Copy${many}`, icon: "⎘", shortcut: k("C"), onSelect: copy },
+      { label: `Cut${many}`, icon: "✂", shortcut: k("X"), onSelect: cut },
       { label: "Paste at playhead", icon: "📋", shortcut: k("V"), disabled: !hasClip, onSelect: paste },
       { label: `Duplicate${many}`, icon: "⧉", shortcut: k("D"), onSelect: duplicate },
       ...(p.clipType === "video" && !p.freeze && sel.length === 1 ? [{ label: "Freeze frame", icon: "❄", shortcut: "F", disabled: !inside, onSelect: () => { engine.dispatch(cmd.freezeFrame(p.id, t)); setToast("Freeze frame inserted (3 s)"); } }] : []),
