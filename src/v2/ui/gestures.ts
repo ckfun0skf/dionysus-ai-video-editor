@@ -30,3 +30,16 @@ export function pinchPatch(t0: { scale: number; rotation: number }, a0: Pt, b0: 
   rot = ((((rot + 180) % 360) + 360) % 360) - 180;
   return { scale: Math.max(0.05, Math.min(20, (t0.scale * d1) / d0)), rotation: rot };
 }
+
+/** V2-113: movement (CSS px) before a press on the preview counts as a drag instead of a tap. */
+export const TAP_SLOP = 6;
+export type PreviewGesture = "pending" | "tap" | "move" | "pinch" | "ignore";
+/**
+ * Classify a preview press: two fingers pinch the selection; one finger past TAP_SLOP moves it
+ * (unless the press began on another element or nothing is selected); release before that is a tap.
+ */
+export function classifyPreview({ fingers, moved, released, onOther, hasSelection }: { fingers: number; moved: number; released: boolean; onOther: boolean; hasSelection: boolean }): PreviewGesture {
+  if (fingers >= 2) return hasSelection ? "pinch" : "ignore";
+  if (moved > TAP_SLOP) return hasSelection && !onOther ? "move" : "ignore";
+  return released ? "tap" : "pending";
+}

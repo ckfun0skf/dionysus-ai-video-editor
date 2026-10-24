@@ -2195,6 +2195,12 @@
           "title": "Google Maps-style snapping drag for every resize grabber (timeline splitter + all mobile sheets)",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-113",
+          "title": "Small elements easy to grab: 48px min hit area, drag/pinch anywhere on preview, tap tolerance + overlap cycling, touch-adjust-proof gizmo",
+          "status": "done",
+          "progress": 100
         }
       ]
     },
