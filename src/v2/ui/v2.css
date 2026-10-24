@@ -420,3 +420,14 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 .v2-scope-chip { position: absolute; top: 6px; left: 50%; transform: translateX(-50%); display: flex; gap: 4px; padding: 3px; border-radius: 999px; background: rgba(15,15,18,.85); z-index: 6; }
 .v2-scope-chip .v2-chip { padding: 0 12px; font-size: 13px; text-transform: none; }
 .v2-scope-chip .v2-chip:hover { background: rgba(255,255,255,.12); }
+
+/* V2-100 desktop pass: roomy track headers so name + controls never clip */
+@media (min-width: 900px) {
+  .v2-track-headers { width: 236px; }
+  .v2-track-header > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .v2-side-fx > summary { padding: 0 12px; }
+}
+@media (min-width: 900px) {
+  .v2-track-header { gap: 2px; padding-right: 6px; }
+  .v2-side .v2-effects { padding: 0 12px; }
+}

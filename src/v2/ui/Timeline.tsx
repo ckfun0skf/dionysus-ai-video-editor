@@ -56,7 +56,7 @@ type Gesture =
   | { kind: "move"; id: string; x0: number; y0: number; start0: number; trackId: string; start: number; active: boolean; snap?: number }
   | { kind: "trim"; id: string; edge: "left" | "right"; x0: number; edge0: number; to: number; snap?: number };
 
-const HEADER_W = 84;
+const HEADER_W = typeof window !== "undefined" && window.innerWidth >= 900 ? 236 : 84;
 /** Centered mode: width of the fixed, opaque track-control column left of the lanes. */
 /** Compact height of text lanes in centered (mobile) mode; keeps the side column aligned with the main track. */
 export const TEXT_LANE_H = 32;
@@ -314,7 +314,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
           {rows.map((r) => r.type === "header" ? <div key={r.key} className="v2-group-header" data-group={r.group}>{ops.GROUP_LABEL[r.group]}</div> : r.type === "track" && (({ t }) => (
             <div key={t.id} className={`v2-track-header kind-${t.kind} ${layerDrag?.id === t.id ? "is-layer-dragging" : ""}`} style={layerShift(t.id)}>
               <span>{t.name}</span>
-              <button className="v2-icon" title={t.muted ? "Unmute track" : "Mute track"} aria-label={t.muted ? "Unmute track" : "Mute track"} onClick={() => engine.dispatch(cmd.toggleTrackMute(t.id))}><Ic g={t.muted ? "🔇" : "🔊"} /></button>
+              {t.kind !== "effect" && <button className="v2-icon" title={t.muted ? "Unmute track" : "Mute track"} aria-label={t.muted ? "Unmute track" : "Mute track"} onClick={() => engine.dispatch(cmd.toggleTrackMute(t.id))}><Ic g={t.muted ? "🔇" : "🔊"} /></button>}
               <LayerControls t={t} isMain={t.id === main?.id} onToggle={() => engine.dispatch(cmd.toggleTrackHidden(t.id))} onDelete={() => setConfirmDel(t.id)} onReorder={(e) => startLayerDrag(e, t.id)} dragging={layerDrag?.id === t.id} onEditAll={onEditLayer && t.kind === "text" && layers.textClipCount(t) > 0 ? () => onEditLayer(t.id) : undefined} />
             </div>
           ))(r))}

@@ -2039,6 +2039,12 @@
           "title": "Layer styles for text/subtitle layers: Edit all, overrides, custom dot, gizmo scope",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-100",
+          "title": "Desktop pass: roomy track headers, Effect tool + side inspector, effect-layer reorder verified at 1440x900/1280x800",
+          "status": "done",
+          "progress": 100
         }
       ]
     },
