@@ -278,3 +278,23 @@ button.v2-sb-conn:focus-visible { outline: 2px solid var(--accent); outline-offs
 .v2-sb-actsheet > button.danger { color: #f87171; }
 .v2-sb-actsheet > button:active:not(:disabled) { background: #ffffff10; }
 .v2-sb-actsheet-cancel { justify-content: center; margin-top: 6px; background: #ffffff0d !important; font-weight: 600; }
+/* V2-CUT-05: per-shot references and version pins. */
+.v2-sb-refs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.v2-sb-refs > li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px; }
+.v2-sb-refs > li.pinned .v2-sb-slot, .v2-sb-slot.pinned { border-color: color-mix(in srgb, var(--accent) 60%, transparent); }
+.v2-sb-refs > li.pinned .v2-sb-slot-text em, .v2-sb-slot.pinned .v2-sb-slot-text em, .v2-sb-pinned { color: var(--accent); }
+.v2-sb-slot-text em svg, .v2-sb-pinned svg { vertical-align: -1px; margin-right: 2px; }
+.v2-sb-refpick, .v2-sb-addref { min-height: 40px; max-width: 150px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--text); padding: 0 8px; font: inherit; font-size: 13px; }
+.v2-sb-addref { max-width: none; width: 100%; color: var(--muted); }
+.v2-sb-refpick:focus-visible, .v2-sb-addref:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
+.v2-sb-newref { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px dashed var(--line); border-radius: 10px; }
+.v2-sb-addasset { margin-top: 8px; }
+@media (pointer: coarse), (max-width: 820px) {
+  .v2-sb-refpick, .v2-sb-addref { font-size: 16px; min-height: 44px; }
+  .v2-sb-refpick { max-width: 132px; }
+}
+/* Native selects: own the look so WebKit/iOS doesn't paint a light control on the dark sheet; the picker stays native. */
+.v2-sb-field select, .v2-sb-refpick, .v2-sb-addref { -webkit-appearance: none; appearance: none; background-color: var(--bg); color: var(--text); padding-right: 30px; text-overflow: ellipsis;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 10px center; }
+.v2-sb-field select:disabled { opacity: .55; }

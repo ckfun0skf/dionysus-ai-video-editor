@@ -11,6 +11,7 @@
  */
 import type { Project } from "./model";
 import type { AssetSlot, QaCheck, Shot, Storyboard } from "./storyboard";
+import { addSlot, withRefs, type SlotPatch } from "./storyRefs";
 import type { ConnectionKind, StoryConnection, StoryEffect, StoryLayer, StoryTransition } from "./storyJson";
 
 export const MIN_SHOT_SEC = 0.5, MAX_SHOT_SEC = 120, DEFAULT_SHOT_SEC = 5;
@@ -80,6 +81,10 @@ export interface ShotPatch {
   title?: string; description?: string; durationSec?: number; prompt?: string; camera?: string; dialogue?: string; captions?: boolean;
   qa?: QaCheck[]; layers?: StoryLayer[]; effects?: StoryEffect[];
   render?: "ai" | "html" | "still"; clipSlot?: string;
+  /** V2-CUT-05: the shot's reference assets (the clip slot is kept). */
+  slotIds?: string[];
+  /** V2-CUT-05: asset slots created with this edit (same undo step), usually also listed in `slotIds`. */
+  newSlots?: { id: string; patch: SlotPatch }[];
 }
 
 /** Slots that can be the clip of a shot rendered `render` (html: html assets; still: image assets). */
@@ -104,9 +109,10 @@ export function addShot(p: Project, id: string, init: ShotPatch = {}, afterId?: 
 
 /** Apply edits to a shot. Shortening it fits its layers and effects into the new length. */
 export function updateShot(p: Project, id: string, patch: ShotPatch): Project {
-  const b = p.storyboard, s = b?.shots[id];
-  if (!b || !s) return p;
-  let n: Shot = { ...s };
+  if (!p.storyboard?.shots[id]) return p;
+  for (const ns of patch.newSlots ?? []) p = addSlot(p, ns.id, ns.patch);
+  const b = p.storyboard!, s = b.shots[id];
+  let n: Shot = patch.slotIds ? withRefs(b, s, patch.slotIds) : { ...s };
   const text = (k: "title" | "description" | "prompt") => { if (patch[k] !== undefined) n[k] = k === "title" ? patch[k]!.trim() || s.title : patch[k]!; };
   text("title"); text("description"); text("prompt");
   for (const k of ["camera", "dialogue"] as const) if (patch[k] !== undefined) { const v = patch[k]!.trim(); if (v) n[k] = patch[k]; else delete n[k]; }
@@ -120,6 +126,7 @@ export function updateShot(p: Project, id: string, patch: ShotPatch): Project {
     n = { ...rest, ...fitParts(n, n.durationSec) };
   }
   if (patch.render !== undefined) n = withRender(b, n, patch.render, patch.clipSlot);
+  if (n.refOverrides) n = withRefs(b, n, n.slotIds); // drop pins of references the edit removed
   if (JSON.stringify(n) === JSON.stringify(s)) return p;
   return renameShotAssets(p, { ...b, shots: { ...b.shots, [id]: n } });
 }

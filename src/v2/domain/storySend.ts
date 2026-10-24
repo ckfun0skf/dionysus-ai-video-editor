@@ -14,7 +14,7 @@ import { addTrack, groupOf, insertPlacement, isFree, mainTrack } from "./ops";
 import { SUBTITLE_STYLE } from "./layerStyle";
 import { getPreset, parsePresetRef, type PresetKind } from "../registry";
 import { DEFAULT_TEXT_SIZE, DEFAULT_TRANSITION_SEC, TEXT_LINE_HEIGHT, type StoryBox, type StoryLayer, type StoryMediaLayer, type StoryTextLayer, type StoryTextStyle } from "./storyJson";
-import { sendPlan, type Shot, type Storyboard } from "./storyboard";
+import { pinOf, sendPlan, type Shot, type Storyboard } from "./storyboard";
 import { clampToClip, placeOnFreeTrack } from "./storyLinks";
 import { textOf, textStyleData, textStyleFields, type TextData } from "./text";
 import { previousAdjacent, setTransition } from "./transitions";
@@ -94,10 +94,12 @@ function shotClip(asset: Asset, v: AssetVersion, shot: Shot, at: number): Placem
   return { id: newId("plc"), startTicks: at, durationTicks, sourceInTicks: 0, source: { kind: "assetVersion", assetId: asset.id, versionId: v.id }, clipType: asset.kind, volume: 1, storyShot: shot.id };
 }
 
-function mediaLayer(p: Project, b: Storyboard, l: StoryMediaLayer, start: number, dur: number, anchor: string): Placement | undefined {
+function mediaLayer(p: Project, b: Storyboard, shot: Shot, l: StoryMediaLayer, start: number, dur: number, anchor: string): Placement | undefined {
   const slot = b.slots[l.asset];
   const a = slot?.assetId ? p.assets[slot.assetId] : undefined;
-  const v = a && selectedVersion(a);
+  // A version pinned for this shot wins over the slot's selected one (V2-CUT-05).
+  const pin = pinOf(p, shot, l.asset);
+  const v = a && ((pin && a.versions.find((x) => x.id === pin)) || selectedVersion(a));
   if (!a || !v || (a.kind !== "image" && a.kind !== "video" && a.kind !== "html")) return undefined;
   const mw = v.media.width ?? p.settings.width, mh = v.media.height ?? p.settings.height;
   const max = a.kind === "video" ? v.media.durationTicks : undefined;
@@ -121,7 +123,7 @@ function addLinked(p: Project, b: Storyboard, comp: Composition, shot: Shot, cli
       c = placeOnFreeTrack(c, pl, plainText());
       res.layers += 1;
     } else {
-      const pl = mediaLayer(p, b, l, start, r.duration, anchor);
+      const pl = mediaLayer(p, b, shot, l, start, r.duration, anchor);
       if (!pl) { res.skippedLayers += 1; continue; }
       c = placeOnFreeTrack(c, pl, overlay(c));
       res.layers += 1;

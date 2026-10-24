@@ -5,7 +5,7 @@
  * prompts, QA checks, and per-version facts frozen at upload time (inputs used, QA results, the
  * clip version a last frame came from). Staleness ("may not match") is derived, never stored.
  */
-import { isStill, newId, type AssetVersion, type MediaKind, type MediaRef, type Placement, type Project } from "./model";
+import { isStill, newId, type AssetVersion, type Composition, type MediaKind, type MediaRef, type Placement, type Project } from "./model";
 import { mainTrack } from "./ops";
 import type { ShotRender, StoryAssetType, StoryConnection, StoryDoc, StoryEffect, StoryLayer, StoryMeta } from "./storyJson";
 import { followStoryLinks } from "./storyLinks";
@@ -41,6 +41,11 @@ export interface Shot {
   clipSlot?: string;
   /** The shot's own AI clip asset, kept aside while the shot is made as html or still (V2-CUT-02). */
   ownAssetId?: string;
+  /**
+   * Per-shot reference overrides (V2-CUT-05): slot id → version id this shot uses instead of the slot's selected
+   * version. Applies to the shot's reference assets and media layers, never to its clip slot.
+   */
+  refOverrides?: Record<string, string>;
   /** v1.1, kept as written: placed on the timeline by "Send to timeline" (see domain/storySend). */
   layers?: StoryLayer[];
   captions?: boolean;
@@ -110,6 +115,35 @@ export function versionsOf(p: Project, owner: { assetId?: string }): AssetVersio
   return (owner.assetId && p.assets[owner.assetId]?.versions) || [];
 }
 
+/** The version a shot pins for reference slot `slotId`, when the pin is valid (V2-CUT-05). */
+export function pinOf(p: Project, shot: Shot | undefined, slotId: string): string | undefined {
+  const v = shot?.refOverrides?.[slotId];
+  const slot = p.storyboard?.slots[slotId];
+  return v && slot && slotId !== shot!.clipSlot && versionsOf(p, slot).some((x) => x.id === v) ? v : undefined;
+}
+
+/** The version of reference slot `slotId` that shot `shot` uses: its pin, else the slot's selected version. */
+export function refVersionOf(p: Project, shot: Shot | undefined, slotId: string): string | undefined {
+  const slot = p.storyboard?.slots[slotId];
+  return slot ? pinOf(p, shot, slotId) ?? selectedOf(p, slot) : undefined;
+}
+
+/** Linked layer placements in `c` whose shot pins the slot backed by `assetId` (they keep their version). */
+export function pinnedLayers(p: Project, c: Composition, assetId: string): Map<string, string> {
+  const out = new Map<string, string>();
+  const b = p.storyboard;
+  const slot = b && Object.values(b.slots).find((s) => s.assetId === assetId);
+  if (!b || !slot || !Object.values(b.shots).some((s) => s.refOverrides?.[slot.id])) return out;
+  const anchors = new Map<string, string>();
+  for (const t of c.tracks) for (const pl of t.placements) if (pl.storyShot) anchors.set(pl.id, pl.storyShot);
+  for (const t of c.tracks) for (const pl of t.placements) {
+    if (pl.source.assetId !== assetId || !pl.storyLink) continue;
+    const v = pinOf(p, b.shots[anchors.get(pl.storyLink.anchor) ?? ""], slot.id);
+    if (v) out.set(pl.id, v);
+  }
+  return out;
+}
+
 export const kindForSlot = (t: StoryAssetType): MediaKind => (t === "video" ? "video" : t === "audio" ? "audio" : t === "html" ? "html" : "image");
 
 export type Target = { slot: string } | { shot: string };
@@ -128,7 +162,7 @@ export function addStoryVersion(p: Project, target: Target, media: MediaRef, opt
   const owner = isSlot ? b.slots[target.slot] : b.shots[target.shot];
   if (!owner) return p;
   const inputIds = isSlot ? (owner as AssetSlot).references : (owner as Shot).slotIds;
-  const inputs = inputIds.flatMap((slotId) => { const s = b.slots[slotId]; const v = s && selectedOf(p, s); return v ? [{ slotId, versionId: v }] : []; });
+  const inputs = inputIds.flatMap((slotId) => { const s = b.slots[slotId]; const v = s && (isSlot ? selectedOf(p, s) : refVersionOf(p, owner as Shot, slotId)); return v ? [{ slotId, versionId: v }] : []; });
   let derivedFrom = opts.derivedFrom;
   if (isSlot && !derivedFrom && (owner as AssetSlot).source.type === "lastFrame") {
     const shotId = ((owner as AssetSlot).source as { shotId: string }).shotId;
@@ -186,14 +220,15 @@ export function syncPlacements(p: Project, assetId: string): Project {
   const compositions = { ...p.compositions };
   for (const [cid, c] of Object.entries(p.compositions)) {
     const mainId = mainTrack(c)?.id;
+    const pinned = pinnedLayers(p, c, assetId);
     let compChanged = false;
     const tracks = c.tracks.map((t) => {
-      if (!t.placements.some((pl) => pl.source.assetId === assetId && pl.source.versionId !== v.id)) return t;
+      if (!t.placements.some((pl) => pl.source.assetId === assetId && pl.source.versionId !== v.id && !pinned.has(pl.id))) return t;
       compChanged = true;
       let pls = [...t.placements].sort((x, y) => x.startTicks - y.startTicks);
       for (let i = 0; i < pls.length; i += 1) {
         const pl = pls[i];
-        if (pl.source.assetId !== assetId || pl.source.versionId === v.id) continue;
+        if (pl.source.assetId !== assetId || pl.source.versionId === v.id || pinned.has(pl.id)) continue;
         const { storyTrim, ...rest } = pl;
         const next: Placement = { ...rest, source: { ...pl.source, versionId: v.id } };
         if (max && !isStill(pl)) {
@@ -301,16 +336,18 @@ export function storyStatus(p: Project): StoryStatus {
   const visiting = new Set<string>();
   const shotLabel = (id: string) => `shot ${b.order.indexOf(id) + 1}${b.shots[id] ? ` “${b.shots[id].title}”` : ""}`;
   const slotLabel = (id: string) => `“${b.slots[id]?.name ?? id}”`;
-  const inputsReasons = (info: VersionInfo | undefined, ids: string[]) => {
+  const inputsReasons = (info: VersionInfo | undefined, ids: string[], user?: Shot) => {
     const reasons: string[] = [];
     for (const slotId of ids) {
       const s = b.slots[slotId];
       if (!s) continue;
-      const cur = selectedOf(p, s);
+      // A shot that pins a version of this reference compares against the pin (V2-CUT-05).
+      const pin = pinOf(p, user, slotId);
+      const cur = pin ?? selectedOf(p, s);
       const used = info?.inputs.find((i) => i.slotId === slotId)?.versionId;
-      if (cur && used && used !== cur) reasons.push(`made with an older version of ${slotLabel(slotId)}`);
+      if (cur && used && used !== cur) reasons.push(pin ? `made with a different version of ${slotLabel(slotId)} than the one pinned for this shot` : `made with an older version of ${slotLabel(slotId)}`);
       else if (cur && info && !used) reasons.push(`made before ${slotLabel(slotId)} was uploaded`);
-      else if (slot(slotId).stale) reasons.push(`${slotLabel(slotId)} may not match`);
+      else if ((!pin || pin === selectedOf(p, s)) && slot(slotId).stale) reasons.push(`${slotLabel(slotId)} may not match`);
     }
     return reasons;
   };
@@ -341,7 +378,7 @@ export function storyStatus(p: Project): StoryStatus {
     const s = b.shots[id];
     const v = selectedOf(p, s);
     // An html/still shot is exactly its clip slot's selected version.
-    const reasons = s.clipSlot ? [...slot(s.clipSlot).reasons] : v ? inputsReasons(b.versions[v], s.slotIds) : [];
+    const reasons = s.clipSlot ? [...slot(s.clipSlot).reasons] : v ? inputsReasons(b.versions[v], s.slotIds, s) : [];
     visiting.delete(id);
     return (out.shots[id] = { stale: reasons.length > 0, reasons });
   };
