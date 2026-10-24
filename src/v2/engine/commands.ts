@@ -10,6 +10,7 @@ import * as transitions from "../domain/transitions";
 import type { Subtitle } from "../domain/model";
 import { TEXT_SOURCE } from "../domain/model";
 import * as board from "../domain/storyboard";
+import * as storyEdit from "../domain/storyEdit";
 import { sendStory } from "../domain/storySend";
 import type { StoryDoc } from "../domain/storyJson";
 import { DEFAULT_TEXT, DEFAULT_TEXT_TICKS, textOf, type TextData } from "../domain/text";
@@ -322,3 +323,11 @@ export const addStoryVersion = (...args: Parameters<typeof board.addStoryVersion
 export const selectStoryVersion = (assetId: string, versionId: string): Command => ({ label: "Choose version", apply: (p) => board.selectStoryVersion(p, assetId, versionId) });
 export const setStorySkipped = (target: { slot: string } | { shot: string }, skipped: boolean): Command => ({ label: skipped ? "Skip step" : "Include step", apply: (p) => board.setStorySkipped(p, target, skipped) });
 export const setQaResult = (versionId: string, checkId: string, result: board.QaResult | undefined): Command => ({ label: "QA check", apply: (p) => board.setQaResult(p, versionId, checkId, result) });
+
+/** Storyboard editing (V2-CUT-02, domain/storyEdit). Each is one undo step. */
+export const addShot = (id: string, init: storyEdit.ShotPatch = {}, afterId?: string | null): Command => ({ label: "Add shot", apply: (p) => storyEdit.addShot(p, id, init, afterId) });
+export const updateShot = (id: string, patch: storyEdit.ShotPatch, label = "Edit shot"): Command => ({ label, apply: (p) => storyEdit.updateShot(p, id, patch) });
+export const duplicateShot = (id: string, copyId: string): Command => ({ label: "Duplicate shot", apply: (p) => storyEdit.duplicateShot(p, id, copyId) });
+export const deleteShot = (id: string): Command => ({ label: "Delete shot", apply: (p) => storyEdit.deleteShot(p, id) });
+export const moveShot = (id: string, index: number): Command => ({ label: "Move shot", apply: (p) => storyEdit.moveShot(p, id, index) });
+export const setConnection = (from: string, to: string, patch: storyEdit.ConnectionPatch): Command => ({ label: "Edit connection", apply: (p) => storyEdit.setConnection(p, from, to, patch) });

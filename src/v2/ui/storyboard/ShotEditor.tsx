@@ -1,0 +1,220 @@
+/**
+ * Shot and connection editors (V2-CUT-02). Phones: a bottom sheet with Cancel and ✓ (saves), like CapCut.
+ * Desktop: the side panel with Cancel / Save (⌘/Ctrl+Enter). A save is one undo step.
+ */
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { board, storyEdit, story, type Project, type QaCheck, type Shot } from "../../domain";
+import { getPreset, listPresets, parsePresetRef } from "../../registry";
+import { Ic } from "../Icon";
+import { Sheet } from "../Sheet";
+import { TYPE_ICON } from "./BoardView";
+
+type Render = "ai" | "html" | "still";
+const RENDERS: { id: Render; label: string; icon: string; hint: string }[] = [
+  { id: "ai", label: "AI video", icon: "▭", hint: "Generate the clip in your AI tool from the clip prompt." },
+  { id: "html", label: "HTML", icon: "</>", hint: "Plays an HTML asset (title cards, charts, UI) for the shot's length." },
+  { id: "still", label: "Still", icon: "image", hint: "Shows an image asset for the shot's length." },
+];
+
+/** A side panel on desktop, a bottom sheet on phones. */
+function Panel({ mobile, label, onDone, extra, children, className = "" }: { mobile: boolean; label: string; onDone: () => void; extra?: ReactNode; children: ReactNode; className?: string }) {
+  return mobile
+    ? <Sheet label={label} onClose={onDone} className={`v2-sb-sheet ${className}`} initial={2} extra={extra}>{children}</Sheet>
+    : <aside className={`v2-sb-detail ${className}`} role="dialog" aria-label={label}>{children}</aside>;
+}
+
+const sec = (x: number) => `${Math.round(x * 100) / 100}`;
+const effectName = (id: string) => { const r = parsePresetRef(id); return (r && getPreset("videoEffect", r.id)?.name) || id; };
+
+export function ShotEditor({ project, shot, number, isNew, mobile, onSave, onCancel, onDelete }: {
+  project: Project; shot: Shot; number: number; isNew?: boolean; mobile: boolean;
+  onSave: (patch: storyEdit.ShotPatch) => void; onCancel: () => void; onDelete?: () => void;
+}) {
+  const b = project.storyboard!;
+  const [title, setTitle] = useState(isNew ? "" : shot.title);
+  const [dur, setDur] = useState(sec(shot.durationSec));
+  const [description, setDescription] = useState(shot.description);
+  const [prompt, setPrompt] = useState(shot.prompt);
+  const [camera, setCamera] = useState(shot.camera ?? "");
+  const [dialogue, setDialogue] = useState(shot.dialogue ?? "");
+  const [captions, setCaptions] = useState(!!shot.captions);
+  const [qa, setQa] = useState<QaCheck[]>(shot.qa);
+  const [render, setRender] = useState<Render>(shot.render ?? "ai");
+  const [clipSlot, setClipSlot] = useState(shot.clipSlot ?? "");
+  const [layers, setLayers] = useState(shot.layers ?? []);
+  const [effects, setEffects] = useState(shot.effects ?? []);
+  const titleRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { if (isNew && !mobile) titleRef.current?.focus(); }, [isNew, mobile]);
+
+  const choices = useMemo(() => (render === "ai" ? [] : storyEdit.clipSlotsFor(b, render)), [b, render]);
+  const slotOk = render === "ai" || choices.some((s) => s.id === clipSlot);
+  const n = Number(dur.replace(",", "."));
+  const durOk = Number.isFinite(n) && n >= storyEdit.MIN_SHOT_SEC && n <= storyEdit.MAX_SHOT_SEC;
+  const past = durOk ? storyEdit.partsPastEnd({ layers, effects }, n) : 0;
+  const ok = durOk && slotOk;
+
+  const patch = (): storyEdit.ShotPatch => ({
+    title: title.trim() || (isNew ? "New shot" : shot.title), description, durationSec: n, prompt, camera, dialogue, captions: captions && !!dialogue.trim(),
+    qa, layers, effects, render, ...(render !== "ai" ? { clipSlot } : {}),
+  });
+  const save = () => { if (ok) onSave(patch()); };
+  const label = isNew ? `New shot ${number}` : `Edit shot ${number}`;
+  const onKey = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); save(); }
+    else if (e.key === "Escape" && !mobile) { e.preventDefault(); e.stopPropagation(); onCancel(); }
+  };
+  const pickRender = (r: Render) => {
+    setRender(r);
+    if (r !== "ai" && !storyEdit.clipSlotsFor(b, r).some((s) => s.id === clipSlot)) setClipSlot(storyEdit.clipSlotsFor(b, r)[0]?.id ?? "");
+  };
+
+  return (
+    <Panel mobile={mobile} label={label} onDone={() => (ok ? save() : onCancel())} className="v2-sb-editor"
+      extra={<button type="button" className="v2-btn v2-sb-btn" onClick={onCancel}>Cancel</button>}>
+      <form className="v2-sb-detail-body v2-sb-form" onSubmit={(e) => { e.preventDefault(); save(); }} onKeyDown={onKey} aria-label={label}>
+        {!mobile && (
+          <div className="v2-sb-detail-head"><Ic g="✎" size={18} /><h3>{label}</h3>
+            <button type="button" className="v2-btn v2-sb-btn" onClick={onCancel}>Cancel</button>
+            <button type="submit" className="v2-btn v2-sb-btn primary" disabled={!ok} title="Save (⌘/Ctrl+Enter)">Save</button>
+          </div>
+        )}
+        <div className="v2-sb-row">
+          <label className="v2-sb-field grow">Title<input ref={titleRef} value={title} onChange={(e) => setTitle(e.target.value)} placeholder={isNew ? "New shot" : shot.title} maxLength={80} /></label>
+          <label className="v2-sb-field len">Length (s)<input value={dur} onChange={(e) => setDur(e.target.value)} inputMode="decimal" aria-invalid={!durOk} aria-describedby="v2-sb-dur-hint" /></label>
+        </div>
+        {!durOk && <p className="v2-sb-err" id="v2-sb-dur-hint" role="alert"><Ic g="alert" size={14} /> Length must be {storyEdit.MIN_SHOT_SEC}–{storyEdit.MAX_SHOT_SEC} seconds.</p>}
+        {past > 0 && <p className="v2-hint" role="note"><Ic g="⚠" size={12} /> {past} layer{past > 1 ? "s or effects run" : " or effect runs"} past {sec(n)} s; {past > 1 ? "they" : "it"} will be shortened to fit.</p>}
+
+        <fieldset className="v2-sb-field">
+          <legend>Clip made as</legend>
+          <div className="v2-sb-seg" role="radiogroup" aria-label="Clip made as">
+            {RENDERS.map((r) => <button type="button" key={r.id} role="radio" aria-checked={render === r.id} className={render === r.id ? "on" : ""} onClick={() => pickRender(r.id)}><Ic g={r.icon} size={15} /> {r.label}</button>)}
+          </div>
+          <p className="v2-hint">{RENDERS.find((r) => r.id === render)!.hint}</p>
+          {render !== "ai" && (choices.length
+            ? <label className="v2-sb-field">{render === "html" ? "HTML asset" : "Image asset"}
+                <select value={clipSlot} onChange={(e) => setClipSlot(e.target.value)}>{choices.map((s) => <option key={s.id} value={s.id}>{s.name}{board.versionsOf(project, s).length ? "" : " (no version yet)"}</option>)}</select>
+              </label>
+            : <p className="v2-sb-err" role="alert"><Ic g="alert" size={14} /> This storyboard has no {render === "html" ? "HTML" : "image"} asset to use yet.</p>)}
+          {render !== "ai" && shot.render === undefined && shot.assetId && <p className="v2-hint">The shot’s AI clip versions are kept; switch back to AI video to use them again.</p>}
+        </fieldset>
+
+        <label className="v2-sb-field">{render === "ai" ? "Clip prompt" : "Clip prompt (optional)"}<textarea rows={4} value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder={render === "ai" ? "What the AI video should show" : "Notes for making the clip"} /></label>
+        <label className="v2-sb-field">Description<textarea rows={2} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What happens in this shot" /></label>
+        <label className="v2-sb-field">Camera<input value={camera} onChange={(e) => setCamera(e.target.value)} placeholder="e.g. slow push-in, low angle" /></label>
+        <label className="v2-sb-field">Dialogue<textarea rows={2} value={dialogue} onChange={(e) => setDialogue(e.target.value)} placeholder="Spoken lines or voice-over" /></label>
+        <label className="v2-sb-check"><input type="checkbox" checked={captions && !!dialogue.trim()} disabled={!dialogue.trim()} onChange={(e) => setCaptions(e.target.checked)} /> Add the dialogue as captions when sent to the timeline</label>
+
+        <fieldset className="v2-sb-field">
+          <legend>Checks</legend>
+          <ul className="v2-sb-editlist">
+            {qa.map((q, i) => (
+              <li key={q.id}>
+                <input value={q.text} aria-label={`Check ${i + 1}`} onChange={(e) => setQa(qa.map((x) => (x.id === q.id ? { ...x, text: e.target.value } : x)))} placeholder="e.g. The lantern is lit" />
+                <button type="button" className="v2-icon v2-sb-icon" aria-label={`Remove check ${i + 1}`} onClick={() => setQa(qa.filter((x) => x.id !== q.id))}><Ic g="✕" size={16} /></button>
+              </li>
+            ))}
+          </ul>
+          <button type="button" className="v2-btn v2-sb-btn" onClick={() => setQa([...qa, { id: storyEdit.newCheckId(shot.id, qa), text: "" }])}><Ic g="+" size={16} /> Add check</button>
+        </fieldset>
+
+        {(layers.length > 0 || effects.length > 0) && (
+          <fieldset className="v2-sb-field">
+            <legend>Layers & effects</legend>
+            <ul className="v2-sb-editlist">
+              {layers.map((l, i) => (
+                <li key={l.id}>
+                  <span className="v2-sb-editlist-text"><Ic g={l.type === "text" ? "T" : TYPE_ICON[l.type] ?? "image"} size={14} /> {l.type === "text" ? `Text “${l.text.split("\n").join(" / ")}”` : `${l.type === "html" ? "HTML" : l.type === "image" ? "Image" : "Video"} · ${b.slots[l.asset]?.name ?? l.asset}`} · {sec(l.startSec)}–{sec(l.endSec)} s</span>
+                  <button type="button" className="v2-icon v2-sb-icon" aria-label={`Remove layer ${i + 1}`} onClick={() => setLayers(layers.filter((x) => x !== l))}><Ic g="✕" size={16} /></button>
+                </li>
+              ))}
+              {effects.map((e, i) => (
+                <li key={`e${i}`}>
+                  <span className="v2-sb-editlist-text"><Ic g="effect" size={14} /> {effectName(e.preset)}{e.startSec !== undefined || e.endSec !== undefined ? ` · ${sec(e.startSec ?? 0)}–${e.endSec === undefined ? "end" : `${sec(e.endSec)} s`}` : ""}</span>
+                  <button type="button" className="v2-icon v2-sb-icon" aria-label={`Remove effect ${i + 1}`} onClick={() => setEffects(effects.filter((x) => x !== e))}><Ic g="✕" size={16} /></button>
+                </li>
+              ))}
+            </ul>
+            <p className="v2-hint">Removing one here doesn’t touch clips already on the timeline.</p>
+          </fieldset>
+        )}
+        {mobile && <button type="submit" className="v2-btn primary v2-sb-btn v2-sb-wide" disabled={!ok}>{isNew ? "Add shot" : "Save"}</button>}
+        {onDelete && !isNew && <button type="button" className="v2-btn v2-sb-btn v2-sb-danger v2-sb-wide" onClick={onDelete}><Ic g="🗑" size={16} /> Delete shot</button>}
+      </form>
+    </Panel>
+  );
+}
+
+const KINDS: { id: story.ConnectionKind; label: string; hint: string }[] = [
+  { id: "cut", label: "Cut", hint: "A plain cut to the next shot." },
+  { id: "continuity", label: "Continuity", hint: "The next shot continues this one (often from its last frame)." },
+  { id: "match", label: "Match cut", hint: "Cut on a matching shape, motion or framing." },
+];
+const DURATIONS = [0.3, 0.5, 0.8, 1, 1.5, 2];
+
+/** How shot `from` leads into the next shot: kind, transition and a note. Each change is applied (and undoable) right away. */
+export function ConnectionEditor({ project, from, to, mobile, onChange, onClose }: {
+  project: Project; from: string; to: string; mobile: boolean; onChange: (patch: storyEdit.ConnectionPatch) => void; onClose: () => void;
+}) {
+  const b = project.storyboard!;
+  const c = storyEdit.connectionBetween(b, from, to);
+  const [note, setNote] = useState(c?.note ?? "");
+  useEffect(() => setNote(c?.note ?? ""), [from, to]); // eslint-disable-line react-hooks/exhaustive-deps
+  const no = (id: string) => b.order.indexOf(id) + 1;
+  const kind = c?.kind ?? "cut";
+  const tr = c?.transition;
+  const trId = tr ? parsePresetRef(tr.preset)?.id ?? tr.preset : "";
+  const durSec = typeof tr?.params?.durationSec === "number" ? tr.params.durationSec : story.DEFAULT_TRANSITION_SEC;
+  const presets = listPresets("transition");
+  const label = `Shot ${no(from)} → shot ${no(to)}`;
+  const commitNote = () => { if (note.trim() !== (c?.note ?? "")) onChange({ note }); };
+  return (
+    <Panel mobile={mobile} label={label} onDone={() => { commitNote(); onClose(); }} className="v2-sb-conn-editor">
+      <div className="v2-sb-detail-body v2-sb-form">
+        {!mobile && <div className="v2-sb-detail-head"><Ic g="link" size={18} /><h3>{label}</h3><button className="v2-icon v2-sb-icon" aria-label="Close" title="Close (Esc)" onClick={() => { commitNote(); onClose(); }}><Ic g="✕" size={18} /></button></div>}
+        <fieldset className="v2-sb-field">
+          <legend>Connection</legend>
+          <div className="v2-sb-seg" role="radiogroup" aria-label="Connection">
+            {KINDS.map((k) => <button type="button" key={k.id} role="radio" aria-checked={kind === k.id} className={kind === k.id ? "on" : ""} onClick={() => onChange({ kind: k.id })}>{k.label}</button>)}
+          </div>
+          <p className="v2-hint">{KINDS.find((k) => k.id === kind)!.hint}</p>
+        </fieldset>
+        <fieldset className="v2-sb-field">
+          <legend>Transition</legend>
+          <div className="v2-sb-chips" role="radiogroup" aria-label="Transition">
+            <button type="button" role="radio" aria-checked={!tr} className={!tr ? "on" : ""} onClick={() => onChange({ transition: null })}>None</button>
+            {presets.map((d) => <button type="button" key={d.id} role="radio" aria-checked={trId === d.id} className={trId === d.id ? "on" : ""} title={d.description} onClick={() => onChange({ transition: { preset: d.id, params: { ...(tr?.params ?? {}), durationSec: durSec } } })}>{d.preview?.icon ? `${d.preview.icon} ` : ""}{d.name}</button>)}
+          </div>
+          {tr && (
+            <>
+              <div className="v2-sb-chips" role="radiogroup" aria-label="Transition length">
+                {DURATIONS.map((d) => <button type="button" key={d} role="radio" aria-checked={durSec === d} className={durSec === d ? "on" : ""} onClick={() => onChange({ transition: { ...tr, params: { ...(tr.params ?? {}), durationSec: d } } })}>{d} s</button>)}
+              </div>
+              <p className="v2-hint">Added on the timeline by Send when both clips sit next to each other; it is capped at half the shorter clip.</p>
+            </>
+          )}
+        </fieldset>
+        <label className="v2-sb-field">Note<input value={note} onChange={(e) => setNote(e.target.value)} onBlur={commitNote} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitNote(); } }} placeholder="e.g. Same light, keeper turns left" maxLength={200} /></label>
+      </div>
+    </Panel>
+  );
+}
+
+export interface SheetAction { label: string; icon: string; onSelect: () => void; danger?: boolean; disabled?: boolean }
+
+/** Phone action sheet (long-press or ⋯ on a shot): big rows, Cancel at the bottom. */
+export function ActionSheet({ title, actions, onClose }: { title: string; actions: SheetAction[]; onClose: () => void }) {
+  const first = useRef<HTMLButtonElement>(null);
+  useEffect(() => { first.current?.focus({ preventScroll: true }); const k = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); }; addEventListener("keydown", k); return () => removeEventListener("keydown", k); }, [onClose]);
+  return (
+    <div className="v2-sb-actsheet-backdrop" onClick={onClose}>
+      <div className="v2-sb-actsheet" role="menu" aria-label={title} onClick={(e) => e.stopPropagation()}>
+        <p className="v2-sb-actsheet-title">{title}</p>
+        {actions.map((a, i) => (
+          <button key={a.label} ref={i === 0 ? first : undefined} role="menuitem" className={a.danger ? "danger" : ""} disabled={a.disabled} onClick={() => { onClose(); a.onSelect(); }}><Ic g={a.icon} size={20} /> {a.label}</button>
+        ))}
+        <button className="v2-sb-actsheet-cancel" onClick={onClose}>Cancel</button>
+      </div>
+    </div>
+  );
+}

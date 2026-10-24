@@ -39,6 +39,8 @@ export interface Shot {
   render?: Exclude<ShotRender, "ai">;
   /** v1.1: the html (render html) or image (render still) slot that is the shot's clip. */
   clipSlot?: string;
+  /** The shot's own AI clip asset, kept aside while the shot is made as html or still (V2-CUT-02). */
+  ownAssetId?: string;
   /** v1.1, kept as written: placed on the timeline by "Send to timeline" (see domain/storySend). */
   layers?: StoryLayer[];
   captions?: boolean;
@@ -262,10 +264,15 @@ export type SendState = "ready" | "placed" | "missing" | "skipped";
 export function sendPlan(p: Project): { shotId: string; assetId?: string; state: SendState }[] {
   const b = p.storyboard;
   if (!b) return [];
-  const used = new Set(Object.values(p.compositions).flatMap((c) => c.tracks.flatMap((t) => t.placements.map((pl) => pl.source.assetId))));
+  const all = Object.values(p.compositions).flatMap((c) => c.tracks.flatMap((t) => t.placements));
+  // A clip sent from the board names its shot; other clips of the asset (placed by hand, or sent before
+  // V2-CUT-02) count for every shot showing it. Linked layers never do.
+  const sentAs = new Set(all.flatMap((pl) => (pl.storyShot ? [pl.storyShot] : [])));
+  const loose = new Set(all.filter((pl) => !pl.storyShot && !pl.storyLink).map((pl) => pl.source.assetId));
   return b.order.filter((id) => b.shots[id]).map((id) => {
     const s = b.shots[id];
-    const state: SendState = s.skipped ? "skipped" : !s.assetId || !p.assets[s.assetId] ? "missing" : used.has(s.assetId) ? "placed" : "ready";
+    const placed = sentAs.has(id) || (!!s.assetId && loose.has(s.assetId));
+    const state: SendState = s.skipped ? "skipped" : !s.assetId || !p.assets[s.assetId] ? "missing" : placed ? "placed" : "ready";
     return { shotId: id, assetId: s.assetId, state };
   });
 }
