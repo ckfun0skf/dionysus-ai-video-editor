@@ -320,3 +320,32 @@ button.v2-sb-conn:focus-visible { outline: 2px solid var(--accent); outline-offs
 .v2-sb-attach-item.role-start-frame .v2-sb-role, .v2-sb-attach-item.role-end-frame .v2-sb-role { color: var(--accent); }
 .v2-sb-attach-save { min-height: 36px; }
 @media (pointer: coarse) { .v2-sb-attach-save { min-height: 44px; min-width: 44px; } }
+
+/* V2-SB-121: trim on upload / adjust trim. */
+.v2-trim .v2-trim-card { width: min(92vw, 560px); max-height: calc(100dvh - 32px); overflow: auto; }
+.v2-trim-choice { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+.v2-trim-choice button { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border-radius: 10px; border: 1px solid var(--line); background: #ffffff08; color: var(--text); font: inherit; cursor: pointer; }
+.v2-trim-choice button.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.v2-trim-preview { position: relative; background: #000; border-radius: 8px; overflow: hidden; aspect-ratio: 16 / 9; }
+.v2-trim-preview video { width: 100%; height: 100%; object-fit: contain; display: block; }
+.v2-trim-play { position: absolute; left: 8px; bottom: 8px; min-height: 44px; display: inline-flex; align-items: center; gap: 6px; background: rgba(0,0,0,.6); }
+.v2-trim-strip { position: relative; height: 52px; margin-top: 12px; border-radius: 8px; overflow: hidden; background: #ffffff10; touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }
+.v2-trim-strip:active { cursor: grabbing; }
+.v2-trim-frames { position: absolute; inset: 0; display: flex; }
+.v2-trim-frames > * { flex: 1 1 0; min-width: 0; height: 100%; object-fit: cover; border-right: 1px solid #0006; }
+.v2-trim-shade { position: absolute; top: 0; bottom: 0; background: rgba(0,0,0,.6); pointer-events: none; }
+.v2-trim-window { position: absolute; top: 0; bottom: 0; border: 3px solid var(--accent); border-radius: 8px; box-sizing: border-box; pointer-events: none; box-shadow: 0 0 0 1px #0008; }
+.v2-trim-range { width: 100%; margin: 10px 0 0; min-height: 32px; accent-color: var(--accent); }
+.v2-trim-read { margin: 4px 0 0; font-variant-numeric: tabular-nums; }
+.v2-sb-versions li { display: flex; flex-direction: column; gap: 4px; }
+.v2-sb-trimbtn { min-height: 32px; font-size: 12px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 0 8px; }
+.v2-sb-trimmed { color: var(--accent) !important; }
+@media (max-width: 480px) {
+  .v2-trim { place-items: end stretch; }
+  .v2-trim .v2-trim-card { width: 100%; max-width: 100%; border-radius: 16px 16px 0 0; padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+  .v2-trim .v2-modal-actions { flex-wrap: wrap; }
+  .v2-trim .v2-modal-actions .v2-btn { flex: 1 1 0; }
+  .v2-trim-strip { height: 56px; }
+  .v2-trim-range { min-height: 44px; }
+  .v2-sb-trimbtn { min-height: 44px; }
+}

@@ -2341,6 +2341,12 @@
           "progress": 100
         },
         {
+          "id": "V2-SB-121",
+          "title": "Trim on upload: a shot clip more than 0.5 s longer than planned offers \"Trim to N s\" (filmstrip with a fixed window, centred, preview of the window) or \"Keep full M s\" (extends the shot); trim stored per version and used by Send to timeline, version swaps (R01 ripple), the length warning and Use last frame; Adjust trim on version cards; optional shots[].genDurationSec for fixed-length models (RULE 13); each change is one undo step",
+          "status": "done",
+          "progress": 100
+        },
+        {
           "id": "V2-BUG-EXPORT-BLACK",
           "title": "P0 export fix: video clips exported as black on Android Chrome (audio/images/text fine). Export now decodes video frame-accurately with WebCodecs (mp4box demux + VideoDecoder, edit lists, B-frames, rotation); unsupported files fall back to muted media elements kept in the DOM, awaited per frame with requestVideoFrameCallback, nudged once and verified for a real picture; a clip with no picture stops the export with a message naming it (HEVC advice), partial gaps become export warnings",
           "status": "done",

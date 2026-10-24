@@ -63,7 +63,8 @@ Notation: `?` = optional. All coordinates are 0-1 fractions of the frame, measur
 | Field | Type | Notes |
 |---|---|---|
 | `id`, `title`, `description?` | string | Unchanged. |
-| `durationSec` | number, 0.5-120 | Should match what the video model can generate (RULE 13). |
+| `durationSec` | number, 0.5-120 | Should match what the video model can generate (RULE 13). This is the length the shot takes in the edit. |
+| `genDurationSec?` **(new, V2-SB-121)** | number, 0.5-120, >= `durationSec` | Only for video models that render fixed lengths: the length to generate (for example 8 for a 5 s shot). The uploaded clip is then trimmed to `durationSec` (§4.4). Omitted, or equal to `durationSec`, means "generate `durationSec`". A value outside 0.5-120 or shorter than `durationSec` is ignored with a warning. |
 | `prompt` | string | Required when `render` is `"ai"`. Optional for `"html"` and `"still"` (keep it anyway for v1.0 readers). Never asks for text. |
 | `assets` | string[] | Asset ids used. Should include `clip`. |
 | `camera?`, `dialogue?` | string | Unchanged. |
@@ -190,6 +191,7 @@ Planned as future registry entries, with no schema change needed: `grain`, `colo
 | Invalid `style` values (`size` outside (0, 1], non-hex `color`, unknown `align`, non-boolean `bold`) | Warn and drop that value. |
 | Unknown param key, wrong param type, number outside the ParamSpec range | Warn; unknown keys are ignored, wrong types use the default, out-of-range numbers are clamped. |
 | Transition `durationSec` <= 0 | Warn and use the 0.5 s default. |
+| `genDurationSec` outside 0.5-120 or shorter than `durationSec` | Warn and ignore it. |
 | A malformed `transition` (not `{preset}`) | Warn and use a cut. |
 | Text likely wider than its box or the frame | Warn (see "Text sizing" in §2.5). |
 | `position` outside 0-1, or a `box` reaching outside the frame | Warn. |
@@ -256,6 +258,19 @@ The production to-do lists every asset and shot once, in a **suggested order**: 
 - **UI:** on a phone, long-press a step and drag it, or let go without moving for a sheet with *Move up*, *Move down*, *Do this as early as possible*, *Do this as late as possible* and *Reset to suggested order*. On a desktop, drag a step (or its grip), use Alt+↑/↓, or right-click (or Shift+F10) for the same menu.
 - The order only affects the production list. It does not change the shot order, the timeline, or Send.
 
+### 4.4 Trim on upload (V2-SB-121)
+
+AI video models often render fixed lengths (5, 8 or 10 s), so an uploaded shot clip can be longer than the shot.
+
+- **Choice on upload:** when a video uploaded to an `ai` shot is more than 0.5 s longer than `durationSec`, the app asks before adding it:
+  - **Trim to N s** (N = `durationSec`): a filmstrip of the clip with a fixed N-second window, starting centred. Drag the window, tap the strip, or use the slider (arrow keys on a desktop); the preview plays just the window.
+  - **Keep full M s:** the whole clip is used and the shot's `durationSec` becomes M.
+  - Cancel discards the upload. Either choice is one undo step (the upload and the length change together).
+- **Stored per version:** the trim is app state on the version (`Storyboard.versions[id].trim = { inTicks, outTicks }`, source ticks), not part of the import format. A trim covering the whole clip is not stored.
+- **Where it applies:** *Send to timeline* places the clip with `sourceIn` and length from the trim. Version swaps follow each version's trim: a timeline clip that still shows the previous version's range (its whole clip or its trim) takes the new version's range, and later clips on the main track ripple (V2-SB-R01). Clips trimmed by hand on the timeline keep their trim. The length warning (clip vs `durationSec`, ±0.5 s) uses the trimmed length, and *Use last frame* takes the frame at the trim's end.
+- **Adjust trim:** a shot video version that is longer than planned, or already trimmed, has *Trim* / *Adjust trim* on its version card. The same picker opens with the current window; *Use full clip* removes the trim. Changing the trim of the version in use updates its timeline clips the same way as a swap (one undo step).
+- Clips that are too short are unchanged: they are added as they are and show the length warning.
+
 ## 5. Planner prompt (updated)
 
 **Published guide (V2-SB-114).** The planner material is generated from the registry by `src/v2/domain/storyPrompt.ts` and `src/v2/domain/aiGuide.ts`, and published with the app:
@@ -289,7 +304,7 @@ RULES
 10. Transitions go on connections. Post camera moves (push-in etc.) and looks go in the shot's "effects", and the generation prompt then says "static camera".
 11. Only use preset ids listed in the PRESETS section.
 12. Preset params use the units noted in brackets in the PRESETS section; "fade-in"/"fade-out" "length" is a fraction (0.05–1) of the effect's time range, not seconds.
-13. "durationSec" should match what the video model can generate.
+13. "durationSec" should match what the video model can generate. If the model only renders fixed lengths (e.g. 5 or 8 s) and the shot should be shorter, keep "durationSec" at the length the edit needs and set "genDurationSec" to the length to generate; the user trims the clip on upload.
 14. Every clip prompt starts with a "References:" block that numbers the images attached to the clip in the order of the shot's "references" (else its "assets"): "Image 1 (<asset name>): …", one line each, saying explicitly whether the image is the START FRAME (or END FRAME) or only a reference, and what to take from it (identity, overall look, or materials and colours only, not its framing or wide view). Then state the framing from the first frame to the last. Set "references" with roles whenever the order or use is not obvious from the asset types.
 ```
 
