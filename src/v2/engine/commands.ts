@@ -2,12 +2,13 @@
 import type { Command } from "./engine";
 import { DEFAULT_EFFECT_TICKS, DEFAULT_IMAGE_TICKS, newId, trackKindFor, type Asset, type AssetVersion, type Composition, type Placement, type Project, type TrackKind, transformOf } from "../domain/model";
 import * as ops from "../domain/ops";
+import * as layers from "../domain/layerStyle";
 import * as subs from "../domain/subtitles";
 import * as edit from "../domain/edit";
 import * as transitions from "../domain/transitions";
 import type { Subtitle } from "../domain/model";
 import { TEXT_SOURCE } from "../domain/model";
-import { DEFAULT_TEXT_TICKS, textOf, type TextData } from "../domain/text";
+import { DEFAULT_TEXT, DEFAULT_TEXT_TICKS, textOf, type TextData } from "../domain/text";
 
 /**
  * Add a text clip at `at`: onto the first text track with room, else a new text track on top.
@@ -20,8 +21,10 @@ export const addTextClip = (at: number, data: Partial<TextData> = {}, id = newId
     const pl: Placement = { id, startTicks: start, durationTicks: DEFAULT_TEXT_TICKS, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "text", text: textOf(data) };
     const fits = (t: Composition["tracks"][number]) => t.placements.every((o) => o.startTicks >= start + pl.durationTicks || o.startTicks + o.durationTicks <= start);
     let comp = c;
-    let track = comp.tracks.find((t) => t.kind === "text" && fits(t));
+    let track = comp.tracks.find((t) => t.kind === "text" && !t.layerStyle?.subtitle && fits(t));
     if (!track) { comp = ops.addTrack(comp, "text"); track = comp.tracks[0]; }
+    // On a styled layer the clip stores only what was asked for; the layer supplies the rest.
+    if (track.layerStyle) pl.text = { text: DEFAULT_TEXT.text, ...data } as TextData;
     return ops.insertPlacement(comp, track.id, pl);
   }),
 });
@@ -51,7 +54,7 @@ export const setEffect = (id: string, patch: { preset?: string; params?: Record<
 export const updateText = (id: string, patch: Partial<TextData>, label = "Edit text"): Command => ({
   label,
   coalesceKey: `text:${id}:${Object.keys(patch).sort().join(",")}`,
-  apply: (p) => withRoot(p, (c) => ({ ...c, tracks: c.tracks.map((t) => ({ ...t, placements: t.placements.map((pl) => (pl.id === id && pl.clipType === "text" ? { ...pl, text: textOf({ ...pl.text, ...patch }) } : pl)) })) })),
+  apply: (p) => withRoot(p, (c) => ({ ...c, tracks: c.tracks.map((t) => ({ ...t, placements: t.placements.map((pl) => (pl.id === id && pl.clipType === "text" ? { ...pl, text: { ...pl.text, ...patch } as TextData } : pl)) })) })),
 });
 
 function withRoot(project: Project, fn: (c: Composition) => Composition): Project {
@@ -260,8 +263,17 @@ export const importSrtLayer = (list: Subtitle[], trackId = newId("trk")): Comman
     if (!list.length) return c;
     let comp = ops.addTrack(c, "text", trackId);
     const tr = comp.tracks.find((t) => t.id === trackId)!;
-    const placements: Placement[] = list.map((s) => ({ id: newId("plc"), startTicks: s.startTicks, durationTicks: s.durationTicks, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "text", text: textOf({ text: s.text }) }));
-    comp = { ...comp, tracks: comp.tracks.map((t) => (t === tr ? { ...t, name: "Subtitles", placements: [...placements].sort((a, b) => a.startTicks - b.startTicks) } : t)) };
+    const placements: Placement[] = list.map((s) => ({ id: newId("plc"), startTicks: s.startTicks, durationTicks: s.durationTicks, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "text", text: { text: s.text } as TextData }));
+    comp = { ...comp, tracks: comp.tracks.map((t) => (t === tr ? { ...t, name: "Subtitles", layerStyle: layers.SUBTITLE_STYLE, placements: [...placements].sort((a, b) => a.startTicks - b.startTicks) } : t)) };
     return comp;
   }),
 });
+
+/** V2-103 "Edit all": change the shared style of a text layer (clip overrides for those keys are cleared). Slider drags coalesce. */
+export const setLayerStyle = (trackId: string, patch: { text?: layers.LayerTextStyle; transform?: layers.LayerTransform }, label = "Edit layer style"): Command => ({
+  label,
+  coalesceKey: `layer:${trackId}:${Object.keys(patch.text ?? {}).sort().join(",")}|${Object.keys(patch.transform ?? {}).sort().join(",")}`,
+  apply: (p) => withRoot(p, (c) => layers.setLayerStyle(c, trackId, patch)),
+});
+/** V2-103: drop a clip's own style so it follows its layer again. */
+export const resetToLayerStyle = (id: string): Command => ({ label: "Reset to layer style", apply: (p) => withRoot(p, (c) => layers.resetToLayer(c, id)) });

@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { cmd, type Engine } from "../engine";
-import { text as T, type Placement, type TextData } from "../domain";
+import { layers, text as T, type Placement, type TextData, type Track } from "../domain";
 import { AnimationPicker } from "./AnimationPicker";
 import { PresetTile } from "./PresetTile";
+import { Ic } from "./Icon";
 import { listPresets, type PresetKind } from "../registry";
 
 /** Chip ids for a preset kind, "none" first; labels come from the registry. */
@@ -13,10 +14,27 @@ const TABS = ["Templates", "Font", "Style", "Effects", "Animation"] as const;
 export type Tab = (typeof TABS)[number];
 
 /** Text clip editor: templates, fonts, style, effects, animations. Every change is undoable; slider drags are one step. */
-export function TextPanel({ engine, placement, onAnimPicked, initialTab = "Templates" }: { engine: Engine; placement: Placement; onAnimPicked?: () => void; initialTab?: Tab }) {
+/**
+ * V2-103: `layer` = layer mode ("Edit all"): edits go to the layer style and reach every clip on it.
+ * `track` (clip mode) = the clip's layer, for the "custom" dot and "Reset to layer style".
+ * `placement` must be the effective placement (layers.effectivePlacement) so the controls show what renders.
+ */
+export function TextPanel({ engine, placement, onAnimPicked, initialTab = "Templates", layer, track }: { engine: Engine; placement?: Placement; onAnimPicked?: () => void; initialTab?: Tab; layer?: Track; track?: Track }) {
   const [tab, setTab] = useState<Tab>(initialTab);
-  const d = T.textOf(placement.text);
-  const set = (patch: Partial<TextData>, label?: string) => engine.dispatch(cmd.updateText(placement.id, patch, label));
+  const ls = layer?.layerStyle;
+  const pl: Placement = placement ?? layer?.placements.find((p) => p.clipType === "text") ?? { id: "", startTicks: 0, durationTicks: T.DEFAULT_TEXT_TICKS, sourceInTicks: 0, source: { kind: "assetVersion", assetId: "", versionId: "" }, clipType: "text" };
+  const d = layer ? T.textOf(ls?.text) : T.textOf(pl.text);
+  const setLayer = (patch: Partial<TextData>, label?: string) => { const { text: _x, ...rest } = patch; void _x; engine.dispatch(cmd.setLayerStyle(layer!.id, { text: rest }, label)); };
+  const set = layer ? setLayer : (patch: Partial<TextData>, label?: string) => engine.dispatch(cmd.updateText(pl.id, patch, label));
+  const lt = { x: 0, y: 0, scale: 1, ...ls?.transform };
+  const tf = (label: string, key: "x" | "y" | "scale", min: number, max: number, step: number) => (
+    <label className="v2-tp-row">{label}
+      <input type="range" min={min} max={max} step={step} value={lt[key]} aria-label={`Layer ${label}`}
+        onPointerDown={() => engine.beginGesture()} onPointerUp={() => engine.endGesture()} onBlur={() => engine.endGesture()}
+        onChange={(e) => engine.dispatch(cmd.setLayerStyle(layer!.id, { transform: { [key]: Number(e.target.value) } }, `Layer ${label}`))} />
+    </label>
+  );
+  const custom = !layer && track?.layerStyle && placement ? layers.isCustom(track, track.placements.find((p) => p.id === placement.id) ?? placement) : false;
   const range = (label: string, key: "size" | "letterSpacing" | "lineHeight" | "strokeWidth", min: number, max: number, step: number) => (
     <label className="v2-tp-row">{label}
       <input type="range" min={min} max={max} step={step} value={d[key] ?? (key === "lineHeight" ? 1.25 : 0)} aria-label={label}
@@ -33,8 +51,13 @@ export function TextPanel({ engine, placement, onAnimPicked, initialTab = "Templ
     </div>
   );
   return (
-    <div className="v2-textpanel">
-      <textarea className="v2-tp-text" aria-label="Text content" value={d.text} rows={2} onFocus={() => engine.beginGesture()} onBlur={() => engine.endGesture()} onChange={(e) => set({ text: e.target.value }, "Type text")} />
+    <div className={`v2-textpanel ${layer ? "is-layer" : ""}`}>
+      {layer && <div className="v2-tp-layerhead" role="status"><Ic g="layers" size={14} /> Editing all {layers.textClipCount(layer)} clips in layer <b>{layer.name}</b></div>}
+      {!layer && track?.layerStyle && <div className="v2-tp-layerhead">
+        {custom ? <><span className="v2-custom-dot" aria-hidden /> Custom style on this clip</> : <>Follows layer style <b>{track.name}</b></>}
+        <button className="v2-btn" disabled={!custom} title="Drop this clip's own style so it matches the rest of the layer (undoable)" onClick={() => engine.dispatch(cmd.resetToLayerStyle(pl.id))}>Reset to layer style</button>
+      </div>}
+      {!layer && <textarea className="v2-tp-text" aria-label="Text content" value={d.text} rows={2} onFocus={() => engine.beginGesture()} onBlur={() => engine.endGesture()} onChange={(e) => set({ text: e.target.value }, "Type text")} />}
       <div className="v2-tp-tabs" role="tablist">
         {TABS.map((t) => <button key={t} role="tab" aria-selected={t === tab} className={`v2-tp-tab ${t === tab ? "is-active" : ""}`} onClick={() => setTab(t)}>{t}</button>)}
       </div>
@@ -52,6 +75,7 @@ export function TextPanel({ engine, placement, onAnimPicked, initialTab = "Templ
           </div>
         </>}
         {tab === "Style" && <>
+          {layer && <>{tf("Position X", "x", -0.5, 0.5, 0.01)}{tf("Position Y", "y", -0.5, 0.5, 0.01)}{tf("Scale", "scale", 0.3, 3, 0.05)}</>}
           {color("Color", d.color, (v) => set({ color: v }))}
           {range("Size", "size", 0.03, 0.3, 0.005)}
           {chips("Alignment", ["left", "center", "right"] as const, d.align, (v) => set({ align: v }))}
@@ -69,7 +93,7 @@ export function TextPanel({ engine, placement, onAnimPicked, initialTab = "Templ
           </div>
           {color("Effect color", d.effectColor ?? "#20d5ec", (v) => set({ effectColor: v }))}
         </>}
-        {tab === "Animation" && <AnimationPicker engine={engine} placement={placement} onPicked={onAnimPicked} />}
+        {tab === "Animation" && <AnimationPicker engine={engine} placement={layer ? { ...pl, text: d } : pl} onPicked={onAnimPicked} onSet={layer ? setLayer : undefined} />}
       </div>
     </div>
   );

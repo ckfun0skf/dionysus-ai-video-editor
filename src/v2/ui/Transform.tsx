@@ -83,7 +83,7 @@ export interface GizmoActions { onDelete: () => void; onEdit: () => void; onDupl
  * duplicate (bottom-left), and one-finger rotate+scale (bottom-right). Two fingers anywhere on
  * the box pinch to scale and twist to rotate. Each gesture is one undo step.
  */
-export function TransformHandles({ engine, placement, box, canvas, time, actions, others = [], snapping = true }: { engine: Engine; placement: Placement; box: Placed; canvas: HTMLCanvasElement; time: number; actions?: GizmoActions; others?: SnapBox[]; snapping?: boolean }) {
+export function TransformHandles({ engine, placement, box, canvas, time, actions, others = [], snapping = true, route }: { engine: Engine; placement: Placement; box: Placed; canvas: HTMLCanvasElement; time: number; actions?: GizmoActions; others?: SnapBox[]; snapping?: boolean; /** V2-103: send gesture patches elsewhere (Whole layer). */ route?: (patch: Patch) => void }) {
   const drag = useRef<{ mode: "move" | "spin"; x0: number; y0: number; t0: ReturnType<typeof valuesAt>; cx: number; cy: number; b0: Placed }>();
   const [guides, setGuides] = useState<Guides>({});
   const pts = useRef(new Map<number, { x: number; y: number }>());
@@ -139,7 +139,7 @@ export function TransformHandles({ engine, placement, box, canvas, time, actions
     if (now && (!was || g.x !== guides.x || g.y !== guides.y)) navigator.vibrate?.(8); // light haptic tick on snap
     void snapped;
     setGuides(g);
-    applyPatch(engine, placement, time, { x: t0.x + cdx / W, y: t0.y + cdy / H, scale: t0.scale * r, rotation: deg });
+    (route ?? ((pt: Patch) => applyPatch(engine, placement, time, pt)))({ x: t0.x + cdx / W, y: t0.y + cdy / H, scale: t0.scale * r, rotation: deg });
   };
   const move = (e: RPE) => {
     if (!pts.current.has(e.pointerId)) return;

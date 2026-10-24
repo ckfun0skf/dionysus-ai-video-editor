@@ -2033,6 +2033,12 @@
           "title": "Effect layers: effect clips on the main-track render, live picker, focus mode",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-103",
+          "title": "Layer styles for text/subtitle layers: Edit all, overrides, custom dot, gizmo scope",
+          "status": "done",
+          "progress": 100
         }
       ]
     },

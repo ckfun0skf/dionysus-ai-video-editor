@@ -9,6 +9,7 @@ import { compositionDuration, fadeAt, versionOf, type Project } from "../domain/
 import type { BlobStore } from "../ports/storage";
 import { subtitleAt } from "../domain/subtitles";
 import { drawTextClip } from "./text";
+import { effectivePlacement } from "../domain/layerStyle";
 import { applyEffectFrame, effectFrameAt } from "./effects";
 import { mainTrack } from "../domain/ops";
 import { correctDrift, createClock, type Clock } from "./clock";
@@ -171,8 +172,10 @@ export class Player {
     const mainId = mainTrack(comp)?.id;
     let fxDone = !fx;
     const applyFx = () => { fxDone = true; if (fx && ctx && canvas) applyEffectFrame(ctx, canvas.width, canvas.height, fx); };
-    for (const { track, placement, sourceTicks, mix } of layers) {
-      if (placement.clipType === "effect") continue;
+    for (const { track, placement: raw, sourceTicks, mix } of layers) {
+      if (raw.clipType === "effect") continue;
+      // V2-103: text clips render with their layer style merged under their own overrides (preview and export alike).
+      const placement = effectivePlacement(track, raw);
       if (!fxDone && track.id !== mainId && track.kind !== "audio") applyFx();
       if (placement.clipType === "text") {
         if (ctx && canvas && !track.hidden) this.boxes.set(placement.id, drawTextClip(ctx, placement, canvas.width, canvas.height, this.time, mix ?? 1));

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { hitTest, Player, THREE_TEMPLATE } from "../render";
 import { cmd } from "../engine";
 import { importFile } from "../persistence";
-import { compositionDuration, edit, ops, transitions, findPlacement, newId, formatTimecode, secondsToTicks, type Asset } from "../domain";
+import { compositionDuration, edit, layers, ops, transitions, findPlacement, newId, formatTimecode, secondsToTicks, type Asset } from "../domain";
 import { useEditorBoot, useEngineState, useIsMobile, type EditorContext, type LoadFailure } from "./useEditor";
 import { Timeline } from "./Timeline";
 import { clampPps } from "./gestures";
@@ -65,6 +65,10 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const [toast, setToast] = useState<string>();
   const [inspOpen, setInspOpen] = useState(false);
   const [textOpen, setTextOpen] = useState(false);
+  /** V2-103: text layer being edited as a whole ("Edit all"). */
+  const [layerEdit, setLayerEdit] = useState<string>();
+  /** V2-103: gizmo scope on styled text layers; undefined = layer default (Whole layer for subtitles). */
+  const [gizmoScope, setGizmoScope] = useState<"clip" | "layer">();
   /** V2-098: animation sheet; after a pick the sheet shrinks and the preview loops over the clip's time range. */
   const [animOpen, setAnimOpen] = useState(false);
   const [fxOpen, setFxOpen] = useState(false);
@@ -124,7 +128,26 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     { icon: "⇪", label: "Import SRT", title: "Import an .srt file as a new text layer", run: () => srtRef.current?.click() },
     { icon: "⇩", label: "Export SRT", title: "Download subtitles as .srt", run: exportSrt },
   ];
-  const visual = selected && selected.placement.clipType !== "audio" ? selected.placement : undefined;
+  // V2-103: controls and gizmo work on the effective placement (layer style merged under the clip's overrides).
+  const selTrack = selected?.track;
+  const effSel = selected ? layers.effectivePlacement(selTrack, selected.placement) : undefined;
+  const visual = effSel && effSel.clipType !== "audio" ? effSel : undefined;
+  const styledText = !!(selTrack?.layerStyle && selected?.placement.clipType === "text");
+  const scope = styledText ? gizmoScope ?? (selTrack!.layerStyle!.subtitle ? "layer" : "clip") : "clip";
+  useEffect(() => { setGizmoScope(undefined); }, [selectedId]);
+  useEffect(() => { if (selectedId) setLayerEdit(undefined); }, [selectedId]);
+  const layerTrack = layerEdit ? comp.tracks.find((t) => t.id === layerEdit) : undefined;
+  useEffect(() => { if (layerEdit && !layerTrack) setLayerEdit(undefined); }, [layerEdit, layerTrack]);
+  const editLayer = (id: string) => { setSel([]); setSubId(undefined); setLayerEdit(id); if (!mobile) setSideOpen(true); };
+  const layerRoute = scope === "layer" && selTrack ? (patch: { x?: number; y?: number; scale?: number; rotation?: number } | null) => {
+    if (!patch) return;
+    const { x, y, scale, rotation } = patch;
+    engine.dispatch(cmd.setLayerStyle(selTrack.id, { transform: Object.fromEntries(Object.entries({ x, y, scale, rotation }).filter(([, v]) => v !== undefined)) }, "Move layer"));
+  } : undefined;
+  const scopeChip = styledText && <div className="v2-scope-chip" role="radiogroup" aria-label="Gizmo applies to">
+    {(["clip", "layer"] as const).map((k) => <button key={k} role="radio" aria-checked={scope === k} className={`v2-chip ${scope === k ? "is-active" : ""}`}
+      title={k === "clip" ? "Move/scale only this clip (it gets a custom position)" : `Move/scale every clip on ${selTrack!.name}`} onClick={() => setGizmoScope(k)}>{k === "clip" ? "This clip" : "Whole layer"}</button>)}
+  </div>;
 
   if (!playerRef.current) playerRef.current = new Player(project, storage.blobs);
   const player = playerRef.current;
@@ -380,8 +403,9 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const preview = (
     <section className="v2-preview" aria-label="Preview" style={mobile ? { height: `${previewVh}dvh` } : undefined}>
       <div className="v2-canvas-wrap"><canvas ref={canvasRef} width={1280} height={720} onClick={onCanvasTap} title="Tap an element to select it · tap empty space to play/pause" />
-        {visual && player.boxes.get(visual.id) && canvasRef.current && <TransformHandles engine={engine} placement={visual} time={time} box={player.boxes.get(visual.id)!} canvas={canvasRef.current} actions={gizmo} snapping={snapOn} others={[...player.boxes].filter(([id]) => id !== visual.id).map(([, b]) => b)} />}
+        {visual && player.boxes.get(visual.id) && canvasRef.current && <TransformHandles engine={engine} placement={visual} time={time} box={player.boxes.get(visual.id)!} canvas={canvasRef.current} actions={gizmo} route={layerRoute} snapping={snapOn} others={[...player.boxes].filter(([id]) => id !== visual.id).map(([, b]) => b)} />}
         {inlineEditor}
+        {visual && scopeChip}
       </div>
       {!mobile && transport}
     </section>
@@ -527,7 +551,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
             </span>
           </div>
           <PanelGrabber vh={previewVh} onChange={setPreviewVh} />
-          <Timeline focus={focusGroup} engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} selectedIds={sel} onToggleSelect={toggleClip} multiMode={multiMode} onSelect={selectClip} peaks={peaks} strips={strips} pps={pps} onZoom={(z) => setPps(clampPps(z))} centered topLane={topLane} ripple={ripple} onTransition={onTransition} expanded={expanded} onExpand={onExpand}
+          <Timeline focus={focusGroup} engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} selectedIds={sel} onToggleSelect={toggleClip} multiMode={multiMode} onSelect={selectClip} peaks={peaks} strips={strips} pps={pps} onZoom={(z) => setPps(clampPps(z))} centered topLane={topLane} ripple={ripple} onTransition={onTransition} onEditLayer={editLayer} expanded={expanded} onExpand={onExpand}
             thumbs={thumbs} onAddMedia={() => setPicker("main")}
             timeLabel={<><b>{formatTimecode(time, project.settings.fps).slice(0, 5)}</b> / {formatTimecode(duration, project.settings.fps).slice(0, 5)}</>}
             sideColumn={<>
@@ -543,18 +567,19 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           {!sheet && <div hidden>{browser}</div>}
           {cue && <div className="v2-msub"><SubtitleEditor engine={engine} sub={cue} onDelete={delCue} /></div>}
           {inspOpen && selected && <Sheet label="Adjust" className="v2-msheet-insp" onClose={() => setInspOpen(false)}><TransformInspector engine={engine} placement={selected.placement} time={time} /><button className="v2-btn" onClick={() => setInspOpen(false)}>Done</button></Sheet>}
-          {textOpen && selected && isText && <Sheet label="Text" className={`v2-msheet-insp ${animLoop ? "is-compact" : ""}`} onClose={closeAnim}><TextPanel engine={engine} placement={selected.placement} onAnimPicked={() => setAnimLoop(true)} /><button className="v2-btn" onClick={closeAnim}>Done</button></Sheet>}
+          {layerTrack && !selected && <Sheet label="Edit all" className="v2-msheet-insp" onClose={() => setLayerEdit(undefined)}><TextPanel key={layerTrack.id} engine={engine} layer={layerTrack} initialTab="Style" /><button className="v2-btn" onClick={() => setLayerEdit(undefined)}>Done</button></Sheet>}
+          {textOpen && selected && isText && <Sheet label="Text" className={`v2-msheet-insp ${animLoop ? "is-compact" : ""}`} onClose={closeAnim}><TextPanel engine={engine} placement={effSel} track={selTrack} onAnimPicked={() => setAnimLoop(true)} /><button className="v2-btn" onClick={closeAnim}>Done</button></Sheet>}
           {fxOpen && <Sheet label="Effects" className="v2-msheet-insp" onClose={() => setFxOpen(false)}><EffectPicker engine={engine} at={time} placement={isEffect ? selected!.placement : undefined} onAdded={(id) => setSel([id])} onClose={() => setFxOpen(false)} /><button className="v2-btn" onClick={() => setFxOpen(false)}>Done</button></Sheet>}
           {animOpen && !textOpen && selected && isText && <Sheet label="Animation" className={`v2-msheet-insp v2-anim-sheet ${animLoop ? "is-compact" : ""}`} onClose={closeAnim}><AnimationPicker engine={engine} placement={selected.placement} onPicked={() => setAnimLoop(true)} /><button className="v2-btn" onClick={closeAnim}>Done</button></Sheet>}
         </>
       ) : (
         <div className={`v2-desktop-grid ${sideOpen ? "" : "side-closed"}`}>
           <button className="v2-icon v2-side-toggle" aria-label={sideOpen ? "Hide side panel" : "Show side panel"} title={sideOpen ? "Hide side panel" : "Show side panel"} aria-expanded={sideOpen} onClick={() => setSideOpen(!sideOpen)}><Ic g={sideOpen ? "panel-close" : "panel-open"} size={18} /></button>
-          <div className="v2-side" hidden={!sideOpen}>{selected && isText && <TextPanel engine={engine} placement={selected.placement} onAnimPicked={() => setAnimLoop(true)} />}{selected && isEffect && <EffectPicker engine={engine} at={time} placement={selected.placement} />}{selected && !isEffect && <TransformInspector engine={engine} placement={selected.placement} time={time} />}{!selected && !cue && <details className="v2-side-fx"><summary title="Effect layers: blur, zoom, B&W, vignette… applied to the main track">Effects</summary><EffectPicker engine={engine} at={time} onAdded={(id) => setSel([id])} /></details>}{cue && <SubtitleEditor engine={engine} sub={cue} onDelete={delCue} />}{browser}</div>
+          <div className="v2-side" hidden={!sideOpen}>{selected && isText && <TextPanel engine={engine} placement={effSel} track={selTrack} onAnimPicked={() => setAnimLoop(true)} />}{selected && isEffect && <EffectPicker engine={engine} at={time} placement={selected.placement} />}{selected && !isEffect && <TransformInspector engine={engine} placement={selected.placement} time={time} />}{layerTrack && !selected && <TextPanel key={layerTrack.id} engine={engine} layer={layerTrack} initialTab="Style" />}{!selected && !cue && !layerTrack && <details className="v2-side-fx"><summary title="Effect layers: blur, zoom, B&W, vignette… applied to the main track">Effects</summary><EffectPicker engine={engine} at={time} onAdded={(id) => setSel([id])} /></details>}{cue && <SubtitleEditor engine={engine} sub={cue} onDelete={delCue} />}{browser}</div>
           {preview}
           <section className="v2-timeline-panel" aria-label="Timeline">
             <div className="v2-timeline-toolbar">{selectionActions}<span className="v2-hint">Space play · S split · F freeze · Del delete · Shift+Del ripple · R ripple · Shift-click multi-select · ⌘C/⌘V/⌘D · ⌘/Ctrl+Z undo</span></div>
-            <Timeline focus={focusGroup} engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} selectedIds={sel} onToggleSelect={toggleClip} multiMode={multiMode} onSelect={selectClip} peaks={peaks} strips={strips} pps={pps} onZoom={(z) => setPps(clampPps(z))} centered={false} topLane={topLane} ripple={ripple} onTransition={onTransition} />
+            <Timeline focus={focusGroup} engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} selectedIds={sel} onToggleSelect={toggleClip} multiMode={multiMode} onSelect={selectClip} peaks={peaks} strips={strips} pps={pps} onZoom={(z) => setPps(clampPps(z))} centered={false} topLane={topLane} ripple={ripple} onTransition={onTransition} onEditLayer={editLayer} />
           </section>
         </div>
       )}
