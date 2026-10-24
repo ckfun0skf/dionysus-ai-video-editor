@@ -21,9 +21,18 @@ import { cues as cueLayer } from "../domain";
 import { Ic } from "./Icon";
 import { MediaPicker, type Picked } from "./MediaPicker";
 import { projectMediaList } from "./projectMedia";
-import { libraryFile, stickerFile } from "./libraryItems";
+import { libraryFile, stickerFile, stickers } from "./libraryItems";
 import { EffectPicker } from "./EffectPicker";
 import { PanelGrabber, PREVIEW_DEFAULT, Sheet } from "./Sheet";
+import { AssetBrowser, type BrowserTab } from "./desktop/AssetBrowser";
+import { Inspector, type InspectorTab } from "./desktop/Inspector";
+import { ProjectSettings } from "./desktop/ProjectSettings";
+import { Splitter } from "./desktop/Splitter";
+import { clampSizes, DEFAULT_SIZES, LIMITS, loadSizes, previewCanvasSize, saveSizes, type PanelSizes } from "./desktop/layout";
+import { readDragItem } from "./desktop/dnd";
+import "./desktop/desktop.css";
+import { LIBRARY_ITEMS, type LibraryItem, type Sticker } from "./libraryItems";
+import { text as textDomain } from "../domain";
 
 type Menu = "multi" | "root" | "edit" | "audio" | "speed" | "text" | "effect" | "overlay";
 const SPEEDS = [0.25, 0.5, 1, 1.5, 2, 4];
@@ -43,7 +52,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const { project, canUndo, canRedo } = useEngineState(engine);
   const mobile = useIsMobile();
   const [previewVh, setPreviewVh] = useState(PREVIEW_DEFAULT);
-  const [sideOpen, setSideOpen] = useState(true);
+  /** Opening a side editor on desktop reveals the inspector if it was hidden. */
+  const setSideOpen = (open: boolean) => { if (open) setSizes((z) => (z.rightOpen ? z : { ...z, rightOpen: true })); };
   const [time, setTime] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [sel, setSel] = useState<string[]>([]);
@@ -85,6 +95,23 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const [ripple, setRippleState] = useState(() => localStorage.getItem("v2.ripple") === "1");
   const setRipple = (on: boolean) => { setRippleState(on); localStorage.setItem("v2.ripple", on ? "1" : "0"); setToast(on ? "Ripple on: delete and trim close gaps" : "Ripple off"); };
   const srtRef = useRef<HTMLInputElement>(null);
+  /** V2-106 desktop shell: panel sizes (persisted), browser tab, inspector tab. */
+  const [sizes, setSizes] = useState<PanelSizes>(() => loadSizes());
+  const sizesRef = useRef(sizes); sizesRef.current = sizes;
+  const [vp, setVp] = useState(() => ({ w: window.innerWidth, h: window.innerHeight }));
+  useEffect(() => { const r = () => setVp({ w: window.innerWidth, h: window.innerHeight }); window.addEventListener("resize", r); return () => window.removeEventListener("resize", r); }, []);
+  const lay = clampSizes(sizes, vp.w, vp.h);
+  const resize = (patch: Partial<PanelSizes>) => {
+    // Update the ref synchronously so a keyboard step can commit (persist) in the same tick.
+    const n = clampSizes({ ...sizesRef.current, ...patch }, window.innerWidth, window.innerHeight);
+    sizesRef.current = n; setSizes(n);
+  };
+  const commitSizes = () => saveSizes(sizesRef.current);
+  const togglePanel = (k: "leftOpen" | "rightOpen") => setSizes((s) => { const n = { ...s, [k]: !s[k] }; saveSizes(n); return n; });
+  const [btab, setBtabState] = useState<BrowserTab>(() => (localStorage.getItem("v2.browserTab") as BrowserTab) || "media");
+  const setBtab = (t: BrowserTab) => { setBtabState(t); localStorage.setItem("v2.browserTab", t); };
+  const [itab, setItab] = useState<string>();
+  const preferTab = useRef<string>();
   const [, setFrame] = useState(0); // bumps on every drawn frame so on-canvas handles track player.boxes
   const thumbs = useThumbs(project, storage.blobs);
   const { peaks, strips } = useMediaPreviews(project, storage.blobs);
@@ -118,7 +145,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const onTransition = (id: string) => {
     const p = findPlacement(comp, id)?.placement;
     if (p && !p.transitionIn) { engine.dispatch(cmd.setTransition(id, { kind: "crossfade", durationTicks: transitions.DEFAULT_TRANSITION_TICKS })); setToast("Crossfade added (Undo to remove)"); }
-    setSel([id]); setSubId(undefined);
+    setSel([id]); setSubId(undefined); preferTab.current = "transition"; setItab("transition");
   };
   const selectCue = (id?: string) => { setSubId(id); if (id) setSelectedId(undefined); };
   const addText = () => { const id = newId("plc"); if (engine.dispatch(cmd.addTextClip(Math.round(player.time), {}, id))) { setSel([id]); setSubId(undefined); } };
@@ -255,18 +282,20 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  const onFiles = async (files: FileList | File[] | null) => {
-    if (!files?.length) return;
+  const onFiles = async (files: FileList | File[] | null): Promise<string[]> => {
+    const ids: string[] = [];
+    if (!files?.length) return ids;
     setBusy((b) => b + files.length);
     for (const f of Array.from(files)) {
       try {
         const asset = await importFile(f, storage.blobs);
-        if (asset) engine.dispatch(cmd.importAsset(asset));
+        if (asset) { if (engine.dispatch(cmd.importAsset(asset))) ids.push(asset.id); }
         else setToast(`${f.name}: unsupported file type`);
       } catch (e) {
         setToast(`${f.name}: ${e instanceof Error ? e.message : "import failed"}`);
       } finally { setBusy((b) => b - 1); }
     }
+    return ids;
   };
   /** Import picked files + library items, then lay them out from the playhead in one undo step. */
   const addPicked = async ({ files, library, stickers, assets = [] }: Picked, mode: "main" | "overlay") => {
@@ -293,6 +322,12 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const projectMedia = useMemo(() => projectMediaList(project, thumbs), [project, thumbs]);
   const addToTimeline = (a: Asset) => { engine.dispatch(cmd.addAssetToTimeline(a.id, mobile ? player.time : duration)); if (mobile) setSheet(false); };
 
+  const fileInputs = (
+    <>
+      <input ref={fileRef} type="file" hidden multiple accept="video/*,image/*,audio/*,.html,.htm,text/html" onChange={(e) => { void onFiles(e.target.files); e.target.value = ""; }} />
+      <input ref={srtRef} type="file" hidden accept=".srt,.vtt,text/plain" aria-label="Import SRT file" onChange={(e) => { void onSrt(e.target.files?.[0]); e.target.value = ""; }} />
+    </>
+  );
   const browser = (
     <section className="v2-browser" aria-label="Media">
       <div className="v2-panel-head">
@@ -314,20 +349,10 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           </li>
         ))}
       </ul>
-      <input ref={fileRef} type="file" hidden multiple accept="video/*,image/*,audio/*,.html,.htm,text/html" onChange={(e) => { void onFiles(e.target.files); e.target.value = ""; }} />
-      <input ref={srtRef} type="file" hidden accept=".srt,.vtt,text/plain" aria-label="Import SRT file" onChange={(e) => { void onSrt(e.target.files?.[0]); e.target.value = ""; }} />
+      {fileInputs}
     </section>
   );
 
-  const transport = (
-    <div className="v2-transport">
-      <button className="v2-icon" aria-label="Undo" disabled={!canUndo} onClick={() => engine.undo()}><Ic g="↶" /></button>
-      <button className="v2-icon" aria-label="Redo" disabled={!canRedo} onClick={() => engine.redo()}><Ic g="↷" /></button>
-      <button className="v2-icon" aria-label="Go to start" onClick={() => seek(0)}><Ic g="⏮" /></button>
-      <button className="v2-play" aria-label={playing ? "Pause" : "Play"} onClick={togglePlay}><Ic g={playing ? "❚❚" : "▶"} /></button>
-      <span className="v2-time">{formatTimecode(time, project.settings.fps)} / {formatTimecode(duration, project.settings.fps)}</span>
-    </div>
-  );
 
   const rippleToggle = (
     <button key="ripple" className={`v2-tool ${ripple ? "is-active" : ""}`} aria-pressed={ripple} title="Ripple: delete and trim move later clips to close gaps (R)" onClick={() => setRipple(!ripple)}><b aria-hidden><Ic g="⇤" /></b><span>Ripple {ripple ? "on" : "off"}</span></button>
@@ -342,14 +367,6 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     { icon: "⎘", label: "Copy", title: "Copy (⌘/Ctrl+C) — paste at the playhead with ⌘/Ctrl+V", run: copy },
   ];
   const pasteAction = { icon: "📋", label: "Paste", title: hasClip ? "Paste at the playhead (⌘/Ctrl+V)" : "Copy a clip first", run: paste };
-  const multiBar = sel.length > 1 ? (
-    <>
-      <span className="v2-sel-count" role="status">{sel.length} selected</span>
-      <button className="v2-tool" title={ripple ? "Delete all and close gaps (Del)" : "Delete all (Del)"} onClick={() => delSel()}><b><Ic g="🗑" /></b><span>{ripple ? "Ripple delete" : "Delete"}</span></button>
-      {clipActions.map((a) => <button key={a.label} className="v2-tool" title={a.title} onClick={a.run}><b aria-hidden><Ic g={a.icon} /></b><span>{a.label}</span></button>)}
-      <button className="v2-tool" title="Clear selection (Esc)" onClick={() => selectClip(undefined)}><b><Ic g="✓" /></b><span>Done</span></button>
-    </>
-  ) : null;
 
   // Linked audio (owned child of a video clip): extract / duplicate / mute-restore. All undoable commands.
   const linkedAudioActions = selected && selected.placement.clipType === "video" ? [
@@ -387,47 +404,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     </span>
   ) : null;
 
-  const selectionActions = multiBar ?? (selected ? (
-    <>
-      {transitionTools}
-      <button className="v2-tool" onClick={split}><b><Ic g="✂" /></b><span>Split</span></button>
-      <button className="v2-tool" title={ripple ? "Delete and close the gap (Del)" : "Delete (Del) · Shift+Del ripple delete"} onClick={() => del()}><b><Ic g="🗑" /></b><span>{ripple ? "Ripple delete" : "Delete"}</span></button>
-      {speedSelect}
-      {isHtml && <button className="v2-tool" title="Edit HTML, CSS and JS with live preview" onClick={() => void openCode()}><b aria-hidden><Ic g="</>" /></b><span>Edit code</span></button>}
-      {[...clipActions, ...timeActions, ...linkedAudioActions].map((a) => <button key={a.label} className="v2-tool" title={a.title} onClick={a.run}><b aria-hidden><Ic g={a.icon} /></b><span>{a.label}</span></button>)}
-      {!["image", "html", "text"].includes(selected.placement.clipType) && (
-        <label className="v2-tool v2-volume"><b><Ic g="🔊" /></b>
-          <input type="range" min={0} max={1} step={0.05} value={selected.placement.volume ?? 1} aria-label="Volume" onPointerDown={() => engine.beginGesture()} onPointerUp={() => engine.endGesture()} onBlur={() => engine.endGesture()} onChange={(e) => engine.dispatch(cmd.setPlacementVolume(selected.placement.id, Number(e.target.value)))} />
-        </label>
-      )}
-      <button className="v2-tool" onClick={() => engine.dispatch(cmd.toggleTrackMute(selected.track.id))}><b><Ic g={selected.track.muted ? "🔈" : "🔇"} /></b><span>{selected.track.muted ? "Unmute track" : "Mute track"}</span></button>
-      {rippleToggle}{snapToggle}
-      <button className="v2-tool" onClick={() => setSelectedId(undefined)}><b><Ic g="✓" /></b><span>Done</span></button>
-    </>
-  ) : (
-    <>
-      <button className="v2-tool" onClick={() => (mobile ? setSheet(true) : fileRef.current?.click())}><b><Ic g="＋" /></b><span>Media</span></button>
-      <button className="v2-tool" onClick={() => engine.dispatch(cmd.addTrack("video"))}><b><Ic g="▭" /></b><span>Video track</span></button>
-      <button className="v2-tool" onClick={() => engine.dispatch(cmd.addTrack("audio"))}><b><Ic g="♫" /></b><span>Audio track</span></button>
-      {!mobile && <button className="v2-tool v2-fx-tool" title="Add an effect layer (blur, zoom, B&W…)" onClick={() => { setSel([]); setSideOpen(true); setFxOpen(true); }}><b aria-hidden><Ic g="effect" /></b><span>Effect</span></button>}
-      {textTools.map((a) => <button key={a.label} className="v2-tool" title={a.title} onClick={a.run}><b aria-hidden><Ic g={a.icon} /></b><span>{a.label}</span></button>)}
-      {rippleToggle}{snapToggle}
-      <button className="v2-tool" onClick={() => setPps((p) => Math.min(400, p * 1.5))}><b><Ic g="zoom-in" /></b><span>Zoom in</span></button>
-      <button className="v2-tool" onClick={() => setPps((p) => Math.max(4, p / 1.5))}><b><Ic g="zoom-out" /></b><span>Zoom out</span></button>
-      <button className="v2-tool" title={pasteAction.title} disabled={!hasClip} onClick={paste}><b aria-hidden><Ic g="📋" /></b><span>Paste</span></button>
-    </>
-  ));
 
-  const preview = (
-    <section className="v2-preview" aria-label="Preview" style={mobile ? { height: `${previewVh}dvh` } : undefined}>
-      <div className="v2-canvas-wrap"><canvas ref={canvasRef} width={1280} height={720} onClick={onCanvasTap} title="Tap an element to select it · tap empty space to play/pause" />
-        {visual && player.boxes.get(visual.id) && canvasRef.current && <TransformHandles engine={engine} placement={visual} time={time} box={player.boxes.get(visual.id)!} canvas={canvasRef.current} actions={gizmo} route={layerRoute} snapping={snapOn} others={[...player.boxes].filter(([id]) => id !== visual.id).map(([, b]) => b)} />}
-        {inlineEditor}
-        {visual && scopeChip}
-      </div>
-      {!mobile && transport}
-    </section>
-  );
 
   const firstVideoTrack = ops.mainTrack(comp);
   const firstClip = firstVideoTrack?.placements[0];
@@ -531,6 +508,153 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     overlay: [tool("＋", "Add overlay", () => setPicker("overlay"), "add-overlay", "Add photos, videos or clips on a new layer above, at the playhead")],
   };
 
+  // ───────────── V2-106 desktop shell ─────────────
+  const DEFAULT_ACCEPT = "video/*,image/*,audio/*,.html,.htm,text/html";
+  const importDialog = (accept?: string) => { const f = fileRef.current; if (!f) return; f.accept = accept ?? DEFAULT_ACCEPT; f.click(); };
+  /** Import files, then place them at `at` (one undo step for the placement). */
+  const importAt = async (files: File[], at: number, trackId?: string) => {
+    const ids = await onFiles(files);
+    if (!ids.length) return;
+    if (ids.length === 1 && trackId) engine.dispatch(cmd.addAssetToTimeline(ids[0], at, trackId));
+    else engine.dispatch(cmd.addAssetsInSequence(ids, at));
+  };
+  const addTextAt = (at: number, template?: string) => {
+    const id = newId("plc");
+    const data = template ? textDomain.TEXT_TEMPLATES.find((t) => t.id === template)?.data : undefined;
+    if (engine.dispatch(cmd.addTextClip(Math.round(at), data ?? {}, id))) { setSel([id]); setSubId(undefined); }
+  };
+  const addStickerAt = async (st: Sticker, at: number) => {
+    try {
+      const asset = await importFile(await stickerFile(st), storage.blobs);
+      if (asset) engine.dispatch([cmd.importAsset(asset), cmd.addAssetsInSequence([asset.id], Math.round(at), newId("trk"), "text")], "Add sticker");
+    } catch { setToast("Could not add that sticker"); }
+  };
+  const addEffectAt = (preset: string, at: number) => { const id = newId("plc"); if (engine.dispatch(cmd.addEffectClip(Math.round(at), preset, undefined, id))) setSel([id]); };
+  const addLibraryAt = async (it: LibraryItem, at: number, trackId?: string) => {
+    if (it.id === "text") return addTextAt(at);
+    const f = libraryFile(it);
+    if (f) await importAt([f], Math.round(at), trackId);
+  };
+  const onDropData = (dt: DataTransfer, at: number, trackId?: string) => {
+    const it = readDragItem(dt);
+    if (it?.kind === "text") addTextAt(at, it.template);
+    else if (it?.kind === "effect") addEffectAt(it.id, at);
+    else if (it?.kind === "sticker") { const st = stickers().find((x) => x.id === it.id); if (st) void addStickerAt(st, at); }
+    else if (it?.kind === "library") { const li = LIBRARY_ITEMS.find((x) => x.id === it.id); if (li) void addLibraryAt(li, at, trackId); }
+    else if (dt.files?.length) void importAt(Array.from(dt.files), at, trackId);
+  };
+  const assetBrowser = (
+    <AssetBrowser project={project} thumbs={thumbs} busy={busy} tab={btab} onTab={setBtab}
+      onImport={importDialog} onFiles={(fs) => void onFiles(fs)} onAddAsset={addToTimeline} onRemoveAsset={(a) => engine.dispatch(cmd.removeAsset(a.id))}
+      onAddText={(tp) => addTextAt(player.time, tp)} onImportSrt={() => srtRef.current?.click()}
+      onAddSticker={(st) => void addStickerAt(st, player.time)} onAddEffect={(id) => addEffectAt(id, player.time)}
+      onAddTransition={addTransitionNearPlayhead} onAddLibrary={(it) => void addLibraryAt(it, player.time)} />
+  );
+  useEffect(() => { setItab(preferTab.current); preferTab.current = undefined; }, [selectedId]);
+  const fpsNow = project.settings.fps;
+  const clipName = (p: NonNullable<typeof selected>["placement"]) => p.clipType === "text" ? (p.text?.text?.split("\n")[0] || "Text") : p.clipType === "effect" ? `Effect · ${p.effect?.preset ?? ""}` : project.assets[p.source.assetId]?.name ?? p.clipType;
+  const KIND_ICON: Record<string, string> = { video: "▭", image: "image", audio: "♫", text: "T", html: "</>", effect: "effect" };
+  const volumeRow = (pl: NonNullable<typeof selected>["placement"]) => (
+    <label className="v2-insp-row"><span>Volume</span>
+      <input type="range" min={0} max={1} step={0.05} value={pl.volume ?? 1} aria-label="Volume" onPointerDown={() => engine.beginGesture()} onPointerUp={() => engine.endGesture()} onBlur={() => engine.endGesture()} onChange={(e) => engine.dispatch(cmd.setPlacementVolume(pl.id, Number(e.target.value)))} />
+      <output>{Math.round((pl.volume ?? 1) * 100)}%</output><span />
+    </label>
+  );
+  const actionList = (list: { icon: string; label: string; title: string; run: () => void }[]) => (
+    <div className="v2-insp-actions">{list.map((a) => <button key={a.label} className="v2-btn" title={a.title} onClick={a.run}><Ic g={a.icon} size={16} /> {a.label}</button>)}</div>
+  );
+  const inspectorTabs = (): { icon: string; title: string; subtitle?: string; tabs: InspectorTab[]; actions?: JSX.Element; onDone?: () => void } => {
+    if (sel.length > 1) return { icon: "☑", title: `${sel.length} clips`, onDone: () => selectClip(undefined), tabs: [{ id: "multi", label: "Selection", render: () => <div className="v2-psettings">
+      <p className="v2-sel-count" role="status">{sel.length} selected</p>
+      {actionList([{ icon: "🗑", label: ripple ? "Ripple delete all" : "Delete all", title: "Delete every selected clip (Del)", run: () => delSel() }, ...clipActions.map((a) => ({ ...a, label: `${a.label} all` }))])}
+      <p className="v2-abnote">Shift-click clips on the timeline to add or remove them from the selection.</p></div> }] };
+    if (subsTrack && !selected) return { icon: "≡", title: "Edit subtitles", subtitle: subsTrack.name, onDone: () => setSubsEdit(undefined), tabs: [{ id: "subs", label: "Subtitles", render: () => <SubtitleList engine={engine} track={subsTrack} time={time} playing={playing} onSeek={seek} desktop name={project.name} focusCue={subsCue} /> }] };
+    if (layerTrack && !selected) return { icon: "layers", title: "Edit all", subtitle: layerTrack.name, onDone: () => setLayerEdit(undefined), tabs: [{ id: "layer", label: "Layer style", render: () => <TextPanel key={layerTrack.id} engine={engine} layer={layerTrack} initialTab="Style" /> }] };
+    if (cue && !selected) return { icon: "≡", title: "Subtitle", onDone: () => setSubId(undefined), tabs: [{ id: "cue", label: "Subtitle", render: () => <SubtitleEditor engine={engine} sub={cue} onDelete={delCue} /> }] };
+    if (!selected) return { icon: "settings", title: "Project", subtitle: `${project.settings.width}×${project.settings.height} · ${fpsNow} fps`, tabs: [{ id: "project", label: "Project", render: () => <ProjectSettings engine={engine} project={project} extra={textLayers.length ? <section aria-label="Subtitles"><h4>Subtitles</h4>{actionList([{ icon: "≡", label: "Edit subtitles", title: "Edit every subtitle in a list: text, timing, split, merge, find & replace", run: editSubtitles }, { icon: "⇩", label: "Export SRT", title: "Download subtitles as .srt", run: exportSrt }])}</section> : undefined} /> }] };
+    const pl = selected.placement, kind = pl.clipType;
+    const sub = `${formatTimecode(pl.startTicks, fpsNow).slice(0, 8)} · ${(pl.durationTicks / 120000).toFixed(1)}s`;
+    const base = { icon: KIND_ICON[kind] ?? "▭", title: clipName(pl), subtitle: sub, onDone: () => setSelectedId(undefined) };
+    const transform: InspectorTab = { id: "basic", label: "Basic", icon: "⤧", render: () => <TransformInspector engine={engine} placement={pl} time={time} /> };
+    const speedTab: InspectorTab = { id: "speed", label: "Speed", icon: "⏩", render: () => <div className="v2-psettings">
+      <section aria-label="Speed"><h4>Speed</h4>
+        <div className="v2-seg" role="radiogroup" aria-label="Speed">{SPEEDS.map((x) => <button key={x} role="radio" aria-checked={(pl.speed ?? 1) === x} className={`v2-seg-btn ${(pl.speed ?? 1) === x ? "is-active" : ""}`} title={x === 1 ? "Normal speed" : `${x}× — changes the clip's length`} onClick={() => engine.dispatch(cmd.setSpeed(pl.id, x))}>{x}×</button>)}</div>
+      </section>
+      {timeActions.length > 0 && <section aria-label="Time"><h4>Time</h4>{actionList(timeActions)}</section>}
+    </div> };
+    const audioTab: InspectorTab = { id: "audio", label: "Audio", icon: "🔊", render: () => <div className="v2-psettings">
+      <section aria-label="Volume"><h4>Volume</h4>{volumeRow(pl)}</section>
+      {kind === "audio" && <TransformInspector engine={engine} placement={pl} time={time} />}
+      {linkedAudioActions.length > 0 && <section aria-label="Clip audio"><h4>Clip audio</h4>{actionList(linkedAudioActions)}</section>}
+      <section aria-label="Track"><h4>Track</h4>{actionList([{ icon: selected.track.muted ? "🔈" : "🔇", label: selected.track.muted ? "Unmute track" : "Mute track", title: "Silence the whole track", run: () => engine.dispatch(cmd.toggleTrackMute(selected.track.id)) }])}</section>
+    </div> };
+    const transTab: InspectorTab | undefined = transitionTools ? { id: "transition", label: "Transition", icon: "⧓", render: () => <div className="v2-psettings"><section aria-label="Transition in"><h4>Transition in</h4>{transitionTools}</section></div> } : undefined;
+    if (kind === "text") return { ...base, actions: <>
+      {selTrack?.layerStyle && <button className="v2-btn v2-btn-sm" title={`Style every clip on ${selTrack.name}`} onClick={() => editLayer(selTrack.id)}><Ic g="layers" size={14} /> Edit all</button>}
+      <button className="v2-btn v2-btn-sm" title="Open this layer's subtitle list at this clip" onClick={() => openSubs(selected.track.id, pl.id)}><Ic g="≡" size={14} /> Subtitles</button>
+    </>, tabs: [{ id: "text", label: "Text", icon: "T", render: () => <TextPanel engine={engine} placement={effSel} track={selTrack} onAnimPicked={() => setAnimLoop(true)} initialTab="Font" /> }, { ...transform, label: "Transform" }] };
+    if (kind === "effect") return { ...base, tabs: [{ id: "effect", label: "Effect", icon: "effect", render: () => <EffectPicker engine={engine} at={time} placement={pl} /> }] };
+    if (kind === "audio") return { ...base, tabs: [audioTab, ...(speedSelect ? [speedTab] : [])] };
+    if (kind === "html") return { ...base, actions: <button className="v2-btn v2-btn-sm" title="Edit HTML, CSS and JS with live preview" onClick={() => void openCode()}><Ic g="</>" size={14} /> Edit code</button>, tabs: [transform, ...(transTab ? [transTab] : [])] };
+    if (kind === "image") return { ...base, tabs: [transform, ...(transTab ? [transTab] : [])] };
+    return { ...base, tabs: [transform, ...(speedSelect || timeActions.length ? [speedTab] : []), audioTab, ...(transTab ? [transTab] : [])] };
+  };
+  const insp = !mobile ? inspectorTabs() : undefined;
+  const iconBtn = (icon: string, label: string, run: () => void, opts: { title?: string; disabled?: boolean; pressed?: boolean; key?: string } = {}) => (
+    <button key={opts.key ?? label} className={`v2-dtool ${opts.pressed ? "is-active" : ""}`} aria-label={label} aria-pressed={opts.pressed} title={opts.title ?? label} disabled={opts.disabled} onClick={run}><Ic g={icon} size={18} /><span className="v2-sr">{label}</span></button>
+  );
+  const anySel = sel.length > 0;
+  const desktopToolbar = (
+    <div className="v2-dtoolbar" role="toolbar" aria-label="Timeline tools">
+      {iconBtn("✂", "Split", split, { title: "Split at the playhead (S)", disabled: !selectedId })}
+      {iconBtn("🗑", ripple ? "Ripple delete" : "Delete", () => delSel(), { title: ripple ? "Delete and close the gap (Del)" : "Delete (Del) · Shift+Del ripple delete", disabled: !anySel, key: "del" })}
+      {iconBtn("⧉", "Duplicate", duplicateAbove, { title: "Duplicate (⌘/Ctrl+D)", disabled: !anySel })}
+      {iconBtn("⎘", "Copy", copy, { title: "Copy (⌘/Ctrl+C)", disabled: !anySel })}
+      {iconBtn("📋", "Paste", paste, { title: hasClip ? "Paste at the playhead (⌘/Ctrl+V)" : "Copy a clip first", disabled: !hasClip })}
+      {iconBtn("❄", "Freeze", () => { if (sp) { engine.dispatch(cmd.freezeFrame(sp.id, Math.round(player.time))); setToast("Freeze frame inserted (3 s)"); } }, { title: "Freeze the frame under the playhead for 3 s (F)", disabled: !(sp && sp.clipType === "video" && !sp.freeze) })}
+      <span className="v2-dsep" aria-hidden />
+      <button className="v2-dtool v2-dtool-text" title="Add an empty video (overlay) track" onClick={() => engine.dispatch(cmd.addTrack("video"))}><Ic g="▭" size={16} /><span>Video track</span></button>
+      <button className="v2-dtool v2-dtool-text" title="Add an empty audio track" onClick={() => engine.dispatch(cmd.addTrack("audio"))}><Ic g="♫" size={16} /><span>Audio track</span></button>
+      <span className="v2-spacer" />
+      {sel.length > 1 && <span className="v2-sel-count v2-sel-pill" role="status">{sel.length} selected</span>}
+      <button className={`v2-dtool ${ripple ? "is-active" : ""}`} aria-pressed={ripple} aria-label="Ripple" title="Ripple: delete and trim move later clips to close gaps (R)" onClick={() => setRipple(!ripple)}><Ic g="⇤" size={18} /><span className="v2-sr">Ripple {ripple ? "on" : "off"}</span></button>
+      <button className={`v2-dtool ${snapOn ? "is-active" : ""}`} aria-pressed={snapOn} aria-label="Snap" title="Smart snapping and alignment guides in the preview (hold Alt to skip once)" onClick={() => setSnapOn(!snapOn)}><Ic g="🧲" size={18} /><span className="v2-sr">Snap {snapOn ? "on" : "off"}</span></button>
+      <span className="v2-dsep" aria-hidden />
+      {iconBtn("zoom-out", "Zoom out", () => setPps((p) => clampPps(p / 1.5)), { title: "Zoom out (−)" })}
+      <input className="v2-zoom" type="range" min={Math.log(4)} max={Math.log(400)} step={0.01} value={Math.log(pps)} aria-label="Timeline zoom" title="Timeline zoom (⌘/Ctrl+scroll)" onChange={(e) => setPps(clampPps(Math.exp(Number(e.target.value))))} />
+      {iconBtn("zoom-in", "Zoom in", () => setPps((p) => clampPps(p * 1.5)), { title: "Zoom in (+)" })}
+      {iconBtn("fit", "Zoom to fit", () => { const w = (document.querySelector(".v2-dshell .v2-scroll") as HTMLElement | null)?.clientWidth ?? 800; setPps(clampPps((w - 80) / Math.max(1, duration / 120000))); }, { title: "Fit the whole project in view" })}
+    </div>
+  );
+  const stepFrame = (n: number) => seek(player.time + n * secondsToTicks(1 / fpsNow));
+  const desktopTransport = (
+    <div className="v2-dtransport">
+      <span className="v2-time"><b>{formatTimecode(time, fpsNow)}</b> / {formatTimecode(duration, fpsNow)}</span>
+      <span className="v2-dtransport-mid">
+        {iconBtn("⏮", "Go to start", () => seek(0), { title: "Go to start (Home)" })}
+        {iconBtn("step-back", "Previous frame", () => stepFrame(-1), { title: "Previous frame (←)" })}
+        <button className="v2-play" aria-label={playing ? "Pause" : "Play"} title={playing ? "Pause (Space)" : "Play (Space)"} onClick={togglePlay}><Ic g={playing ? "❚❚" : "▶"} /></button>
+        {iconBtn("step-fwd", "Next frame", () => stepFrame(1), { title: "Next frame (→)" })}
+        {iconBtn("⏭", "Go to end", () => seek(duration), { title: "Go to end (End)" })}
+      </span>
+      <span className="v2-dtransport-end">
+        <span className="v2-ratio" title="Project aspect — change it in the inspector with nothing selected">{project.settings.width}×{project.settings.height}</span>
+        {iconBtn("⛶", "Fullscreen", fullscreen, { title: "Fullscreen preview" })}
+      </span>
+    </div>
+  );
+  const canvasSize = previewCanvasSize(project.settings);
+  useEffect(() => { player.draw(); }, [player, canvasSize.width, canvasSize.height, project.settings.background]);
+  const preview = (
+    <section className="v2-preview" aria-label="Preview" style={mobile ? { height: `${previewVh}dvh` } : undefined}>
+      <div className="v2-canvas-wrap"><canvas ref={canvasRef} width={canvasSize.width} height={canvasSize.height} onClick={onCanvasTap} title={mobile ? "Tap an element to select it · tap empty space to play/pause" : "Click an element to select it · click empty space to play/pause"} />
+        {visual && player.boxes.get(visual.id) && canvasRef.current && <TransformHandles engine={engine} placement={visual} time={time} box={player.boxes.get(visual.id)!} canvas={canvasRef.current} actions={gizmo} route={layerRoute} snapping={snapOn} others={[...player.boxes].filter(([id]) => id !== visual.id).map(([, b]) => b)} />}
+        {inlineEditor}
+        {visual && scopeChip}
+      </div>
+      {!mobile && desktopTransport}
+    </section>
+  );
   return (
     <div className={`v2-app ${mobile ? "is-mobile" : "is-desktop"} ${fs ? "is-fs" : ""}`}>
       {mobile ? (
@@ -544,12 +668,19 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           <button className="v2-export" title="Export MP4 (⌘/Ctrl+E)" onClick={openExport}>Export</button>
         </header>
       ) : (
-        <header className="v2-header">
+        <header className="v2-header v2-dheader">
           <a className="v2-back" href={window.location.pathname} title="Back to classic editor">‹ Classic</a>
+          <button className="v2-dtool" aria-label={lay.leftOpen ? "Hide asset panel" : "Show asset panel"} title={lay.leftOpen ? "Hide asset panel" : "Show asset panel"} aria-pressed={lay.leftOpen} onClick={() => togglePanel("leftOpen")}><Ic g={lay.leftOpen ? "panel-close" : "panel-open"} size={18} /></button>
           <button className="v2-btn v2-projects-btn" aria-label="Projects" title="Projects: new, open, rename, delete" onClick={() => setProjects(true)}><Ic g="☰" size={16} /> Projects</button>
-          <input className="v2-title" value={project.name} aria-label="Project name" onFocus={() => engine.beginGesture()} onBlur={() => engine.endGesture()} onChange={(e) => engine.dispatch(cmd.renameProject(e.target.value))} />
+          <input className="v2-title" value={project.name} aria-label="Project name" title="Rename project" onFocus={() => engine.beginGesture()} onBlur={() => engine.endGesture()} onChange={(e) => engine.dispatch(cmd.renameProject(e.target.value))} />
           <span className="v2-badge">v2 preview</span>
-          <button className="v2-btn primary v2-export-d" title="Export MP4 (⌘/Ctrl+E)" onClick={openExport}>Export</button>
+          <span className="v2-spacer" />
+          <span className="v2-dgroup">
+            <button className="v2-dtool" aria-label="Undo" title="Undo (⌘/Ctrl+Z)" disabled={!canUndo} onClick={() => engine.undo()}><Ic g="↶" size={18} /></button>
+            <button className="v2-dtool" aria-label="Redo" title="Redo (⇧⌘Z / Ctrl+Y)" disabled={!canRedo} onClick={() => engine.redo()}><Ic g="↷" size={18} /></button>
+          </span>
+          <button className="v2-dtool" aria-label={lay.rightOpen ? "Hide inspector" : "Show inspector"} title={lay.rightOpen ? "Hide inspector" : "Show inspector"} aria-pressed={lay.rightOpen} onClick={() => togglePanel("rightOpen")}><Ic g={lay.rightOpen ? "panel-r-close" : "panel-r-open"} size={18} /></button>
+          <button className="v2-btn primary v2-export-d" title="Export MP4 (⌘/Ctrl+E)" onClick={openExport}><Ic g="⇪" size={16} /> Export</button>
         </header>
       )}
       {notice && <RecoveryNotice failure={notice} storage={storage} onDismiss={() => setNotice(undefined)} />}
@@ -599,13 +730,17 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           {animOpen && !textOpen && selected && isText && <Sheet label="Animation" className={`v2-msheet-insp v2-anim-sheet ${animLoop ? "is-compact" : ""}`} onClose={closeAnim}><AnimationPicker engine={engine} placement={selected.placement} onPicked={() => setAnimLoop(true)} /><button className="v2-btn" onClick={closeAnim}>Done</button></Sheet>}
         </>
       ) : (
-        <div className={`v2-desktop-grid ${sideOpen ? "" : "side-closed"}`}>
-          <button className="v2-icon v2-side-toggle" aria-label={sideOpen ? "Hide side panel" : "Show side panel"} title={sideOpen ? "Hide side panel" : "Show side panel"} aria-expanded={sideOpen} onClick={() => setSideOpen(!sideOpen)}><Ic g={sideOpen ? "panel-close" : "panel-open"} size={18} /></button>
-          <div className="v2-side" hidden={!sideOpen}>{subsTrack && !selected && <SubtitleList engine={engine} track={subsTrack} time={time} playing={playing} onSeek={seek} desktop name={project.name} focusCue={subsCue} />}{selected && isText && <TextPanel engine={engine} placement={effSel} track={selTrack} onAnimPicked={() => setAnimLoop(true)} />}{selected && isEffect && <EffectPicker engine={engine} at={time} placement={selected.placement} />}{selected && !isEffect && <TransformInspector engine={engine} placement={selected.placement} time={time} />}{layerTrack && !selected && !subsTrack && <TextPanel key={layerTrack.id} engine={engine} layer={layerTrack} initialTab="Style" />}{!selected && !cue && !layerTrack && !subsTrack && <details className="v2-side-fx" open={fxOpen} onToggle={(e) => setFxOpen((e.currentTarget as HTMLDetailsElement).open)}><summary title="Effect layers: blur, zoom, B&W, vignette… applied to the main track">Effects</summary><EffectPicker engine={engine} at={time} onAdded={(id) => setSel([id])} /></details>}{cue && <SubtitleEditor engine={engine} sub={cue} onDelete={delCue} />}{browser}</div>
-          {preview}
-          <section className="v2-timeline-panel" aria-label="Timeline">
-            <div className="v2-timeline-toolbar">{selectionActions}<span className="v2-hint">Space play · S split · F freeze · Del delete · Shift+Del ripple · R ripple · Shift-click multi-select · ⌘C/⌘V/⌘D · ⌘/Ctrl+Z undo</span></div>
-            <Timeline focus={focusGroup} onFocusGroup={(g) => { setSel([]); setMenu(g && g !== "main" ? g : "root"); }} engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} selectedIds={sel} onToggleSelect={toggleClip} multiMode={multiMode} onSelect={selectClip} peaks={peaks} strips={strips} pps={pps} onZoom={(z) => setPps(clampPps(z))} centered={false} topLane={topLane} ripple={ripple} onTransition={onTransition} onEditSubs={openSubs} onEditLayer={editLayer} />
+        <div className="v2-dshell" style={{ gridTemplateColumns: `${lay.leftOpen ? lay.left : 0}px ${lay.leftOpen ? 5 : 0}px minmax(0,1fr) ${lay.rightOpen ? 5 : 0}px ${lay.rightOpen ? lay.right : 0}px`, gridTemplateRows: `minmax(0,1fr) 5px ${lay.timeline}px` }}>
+          {fileInputs}
+          {lay.leftOpen && <div className="v2-dpane v2-dpane-left">{assetBrowser}</div>}
+          {lay.leftOpen && <Splitter label="Resize asset panel" value={lay.left} dir="right" min={LIMITS.left[0]} max={LIMITS.left[1]} onChange={(v) => resize({ left: v })} onCommit={commitSizes} onReset={() => { resize({ left: DEFAULT_SIZES.left }); commitSizes(); }} />}
+          <div className="v2-dpane v2-dpane-center">{preview}</div>
+          {lay.rightOpen && <Splitter label="Resize inspector" value={lay.right} dir="left" min={LIMITS.right[0]} max={LIMITS.right[1]} onChange={(v) => resize({ right: v })} onCommit={commitSizes} onReset={() => { resize({ right: DEFAULT_SIZES.right }); commitSizes(); }} />}
+          {lay.rightOpen && insp && <div className="v2-dpane v2-dpane-right"><Inspector key={insp.title === "Project" ? "project" : selectedId ?? insp.title} {...insp} tab={itab} onTab={setItab} /></div>}
+          <div className="v2-dsplit-h"><Splitter label="Resize timeline" value={lay.timeline} dir="up" min={LIMITS.timeline[0]} max={LIMITS.timeline[1]} onChange={(v) => resize({ timeline: v })} onCommit={commitSizes} onReset={() => { resize({ timeline: DEFAULT_SIZES.timeline }); commitSizes(); }} /></div>
+          <section className="v2-timeline-panel v2-dtimeline" aria-label="Timeline">
+            {desktopToolbar}
+            <Timeline focus={focusGroup} onFocusGroup={(g) => { setSel([]); setMenu(g && g !== "main" ? g : "root"); }} engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} selectedIds={sel} onToggleSelect={toggleClip} multiMode={multiMode} onSelect={selectClip} peaks={peaks} strips={strips} pps={pps} onZoom={(z) => setPps(clampPps(z))} centered={false} topLane={topLane} ripple={ripple} onTransition={onTransition} onEditSubs={openSubs} onEditLayer={editLayer} onDropData={onDropData} />
           </section>
         </div>
       )}

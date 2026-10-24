@@ -163,7 +163,8 @@ export interface Project {
   schema: typeof SCHEMA;
   id: string;
   name: string;
-  settings: { width: number; height: number; fps: number };
+  /** `background` (V2-106): canvas fill behind every layer, default black. Optional so 3.0 projects stay valid. */
+  settings: { width: number; height: number; fps: number; background?: string };
   rootCompositionId: string;
   assets: Record<string, Asset>;
   compositions: Record<string, Composition>;
