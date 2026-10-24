@@ -14,7 +14,10 @@ const setup = () => {
 
 describe("effect layers (V2-101)", () => {
   it("registry has only the real effects, separate from text effects", () => {
-    expect(listPresets("videoEffect").map((d) => d.id).sort()).toEqual(["blur", "bw", "fade-in", "fade-out", "ken-burns", "shake", "vignette"]);
+    // V2-FX-MOD: new effect modules add themselves, so check the originals are there rather than an exact list.
+    const fx = listPresets("videoEffect").map((d) => d.id);
+    expect(fx).toEqual(expect.arrayContaining(["blur", "bw", "fade-in", "fade-out", "ken-burns", "shake", "vignette"]));
+    for (const id of ["neon", "echo", "hollow"]) expect(fx).not.toContain(id);
     expect(listPresets("effect").map((d) => d.id)).toContain("glow");
   });
   it("adds effect clips on an Effects layer above main, valid and undoable", () => {

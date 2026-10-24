@@ -152,6 +152,7 @@
             {
               "key": "distance",
               "label": "Distance",
+              "description": "How far the text travels, as a fraction of the frame size (0.1 = 10%).",
               "type": "number",
               "min": 0,
               "max": 0.5,
@@ -161,6 +162,7 @@
             {
               "key": "dirX",
               "label": "X",
+              "description": "Side the text is offset to while hidden (it slides from / to there): -1 left, 1 right, 0 none.",
               "type": "number",
               "min": -1,
               "max": 1,
@@ -169,6 +171,7 @@
             {
               "key": "dirY",
               "label": "Y",
+              "description": "Side the text is offset to while hidden: -1 above, 1 below, 0 none.",
               "type": "number",
               "min": -1,
               "max": 1,
@@ -185,6 +188,7 @@
             {
               "key": "distance",
               "label": "Distance",
+              "description": "How far the text travels, as a fraction of the frame size (0.1 = 10%).",
               "type": "number",
               "min": 0,
               "max": 0.5,
@@ -194,6 +198,7 @@
             {
               "key": "dirX",
               "label": "X",
+              "description": "Side the text is offset to while hidden (it slides from / to there): -1 left, 1 right, 0 none.",
               "type": "number",
               "min": -1,
               "max": 1,
@@ -202,6 +207,7 @@
             {
               "key": "dirY",
               "label": "Y",
+              "description": "Side the text is offset to while hidden: -1 above, 1 below, 0 none.",
               "type": "number",
               "min": -1,
               "max": 1,
@@ -218,6 +224,7 @@
             {
               "key": "overshoot",
               "label": "Overshoot",
+              "description": "Extra size at the middle of the pop, as a fraction of full size (0.12 = 12% larger).",
               "type": "number",
               "min": 0,
               "max": 0.5,
@@ -256,6 +263,7 @@
             {
               "key": "blur",
               "label": "Blur",
+              "description": "Blur radius in pixels at the hidden end.",
               "type": "number",
               "min": 0,
               "max": 30,
@@ -284,6 +292,7 @@
             {
               "key": "distance",
               "label": "Distance",
+              "description": "How far the text travels, as a fraction of the frame size (0.1 = 10%).",
               "type": "number",
               "min": 0,
               "max": 0.5,
@@ -293,6 +302,7 @@
             {
               "key": "dirX",
               "label": "X",
+              "description": "Side the text is offset to while hidden (it slides from / to there): -1 left, 1 right, 0 none.",
               "type": "number",
               "min": -1,
               "max": 1,
@@ -301,6 +311,7 @@
             {
               "key": "dirY",
               "label": "Y",
+              "description": "Side the text is offset to while hidden: -1 above, 1 below, 0 none.",
               "type": "number",
               "min": -1,
               "max": 1,
@@ -324,6 +335,7 @@
             {
               "key": "blur",
               "label": "Blur",
+              "description": "Blur radius in pixels at the hidden end.",
               "type": "number",
               "min": 0,
               "max": 30,
@@ -352,6 +364,7 @@
             {
               "key": "period",
               "label": "Period",
+              "description": "Length of one cycle in seconds.",
               "type": "number",
               "min": 0.2,
               "max": 4,
@@ -360,6 +373,7 @@
             {
               "key": "amount",
               "label": "Amount",
+              "description": "Size change at the peak, as a fraction of full size (0.06 = 6%).",
               "type": "number",
               "min": 0,
               "max": 0.3,
@@ -377,6 +391,7 @@
             {
               "key": "period",
               "label": "Period",
+              "description": "Length of one cycle in seconds.",
               "type": "number",
               "min": 0.2,
               "max": 4,
@@ -385,6 +400,7 @@
             {
               "key": "degrees",
               "label": "Degrees",
+              "description": "Largest rotation each way, in degrees.",
               "type": "number",
               "min": 0,
               "max": 30,
@@ -401,6 +417,7 @@
             {
               "key": "period",
               "label": "Period",
+              "description": "Length of one cycle in seconds.",
               "type": "number",
               "min": 0.2,
               "max": 4,
@@ -409,6 +426,7 @@
             {
               "key": "amount",
               "label": "Amount",
+              "description": "Largest vertical offset, as a fraction of the frame height.",
               "type": "number",
               "min": 0,
               "max": 0.1,
@@ -426,6 +444,7 @@
             {
               "key": "period",
               "label": "Period",
+              "description": "Length of one cycle in seconds.",
               "type": "number",
               "min": 0.2,
               "max": 4,
@@ -483,6 +502,7 @@
             {
               "key": "amount",
               "label": "Amount",
+              "description": "Blur strength 0-1; 1 = a blur radius of 2% of the frame height.",
               "type": "number",
               "min": 0,
               "max": 1,
@@ -500,6 +520,7 @@
             {
               "key": "zoom",
               "label": "Zoom",
+              "description": "Extra zoom reached at the end of the range, as a fraction of full size (0.25 = 25% larger).",
               "type": "number",
               "min": 0,
               "max": 1,
@@ -509,6 +530,7 @@
             {
               "key": "pan",
               "label": "Pan",
+              "description": "Horizontal drift reached at the end of the range, as a fraction of the frame width (negative = left).",
               "type": "number",
               "min": -0.3,
               "max": 0.3,
@@ -526,6 +548,7 @@
             {
               "key": "amount",
               "label": "Amount",
+              "description": "Largest offset, as a fraction of the frame size.",
               "type": "number",
               "min": 0,
               "max": 0.1,
@@ -535,6 +558,7 @@
             {
               "key": "speed",
               "label": "Speed",
+              "description": "Shake oscillations over the whole effect range (a count, not per second).",
               "type": "number",
               "min": 2,
               "max": 40,
@@ -552,6 +576,7 @@
             {
               "key": "amount",
               "label": "Amount",
+              "description": "Edge darkness, 0 (none) to 1 (black corners).",
               "type": "number",
               "min": 0,
               "max": 1,
@@ -569,6 +594,7 @@
             {
               "key": "amount",
               "label": "Amount",
+              "description": "Desaturation, 0 (full colour) to 1 (black and white).",
               "type": "number",
               "min": 0,
               "max": 1,
@@ -576,6 +602,59 @@
               "default": 1
             }
           ]
+        },
+        {
+          "id": "glow",
+          "version": 1,
+          "name": "Glow",
+          "description": "Soft bloom: bright areas bleed a gentle halo of light; dreamy, warm or magical scenes.",
+          "params": [
+            {
+              "key": "strength",
+              "label": "Strength",
+              "type": "number",
+              "min": 0,
+              "max": 1,
+              "step": 0.05,
+              "default": 0.6,
+              "description": "Opacity of the added light, 0 (off) to 1 (full)."
+            },
+            {
+              "key": "radius",
+              "label": "Radius",
+              "type": "number",
+              "min": 0.01,
+              "max": 0.2,
+              "step": 0.01,
+              "default": 0.05,
+              "description": "Halo size as a fraction of the frame height."
+            },
+            {
+              "key": "threshold",
+              "label": "Threshold",
+              "type": "number",
+              "min": 0,
+              "max": 1,
+              "step": 0.25,
+              "default": 0.5,
+              "description": "Which areas glow, 0 (the whole picture, soft haze) to 1 (only the brightest highlights)."
+            },
+            {
+              "key": "color",
+              "label": "Tint",
+              "type": "color",
+              "default": "#ffffff",
+              "description": "Colour of the light (#rrggbb); white keeps the picture's own colours."
+            }
+          ],
+          "ai": {
+            "use": "dream sequences, memories, candle or sunset light, magic moments",
+            "avoid": "dark scenes with no highlights (little visible effect)",
+            "example": {
+              "strength": 0.5,
+              "radius": 0.08
+            }
+          }
         }
       ]
     },
@@ -605,6 +684,7 @@
             {
               "key": "color",
               "label": "Colour",
+              "description": "Colour the picture dips through (#rrggbb).",
               "type": "color",
               "default": "#ffffff"
             }
@@ -619,18 +699,19 @@
             {
               "key": "color",
               "label": "Colour",
+              "description": "Flash colour (#rrggbb).",
               "type": "color",
               "default": "#ffffff"
             },
             {
               "key": "strength",
               "label": "Strength",
+              "description": "Opacity of the flash at its peak, 0 (none) to 1 (full).",
               "type": "number",
               "min": 0,
               "max": 1,
               "step": 0.05,
-              "default": 0.9,
-              "description": "Opacity of the flash at its peak."
+              "default": 0.9
             }
           ]
         },
@@ -643,32 +724,32 @@
             {
               "key": "dirX",
               "label": "Direction X",
+              "description": "Horizontal direction the picture moves: -1 (left), 1 (right) or 0 (none).",
               "type": "number",
               "min": -1,
               "max": 1,
               "step": 1,
-              "default": -1,
-              "description": "Horizontal direction the picture moves: -1 left, 1 right, 0 none."
+              "default": -1
             },
             {
               "key": "dirY",
               "label": "Direction Y",
+              "description": "Vertical direction the picture moves: -1 (up), 1 (down) or 0 (none).",
               "type": "number",
               "min": -1,
               "max": 1,
               "step": 1,
-              "default": 0,
-              "description": "Vertical direction the picture moves: -1 up, 1 down, 0 none."
+              "default": 0
             },
             {
               "key": "blur",
               "label": "Motion blur",
+              "description": "Blur at the middle of the move, as a fraction of the frame height.",
               "type": "number",
               "min": 0,
               "max": 0.1,
               "step": 0.005,
-              "default": 0,
-              "description": "Blur at the middle of the move, as a fraction of the frame height."
+              "default": 0
             }
           ]
         },
@@ -681,32 +762,32 @@
             {
               "key": "dirX",
               "label": "Direction X",
+              "description": "Horizontal direction the picture moves: -1 (left), 1 (right) or 0 (none).",
               "type": "number",
               "min": -1,
               "max": 1,
               "step": 1,
-              "default": 1,
-              "description": "Horizontal direction the picture moves: -1 left, 1 right, 0 none."
+              "default": 1
             },
             {
               "key": "dirY",
               "label": "Direction Y",
+              "description": "Vertical direction the picture moves: -1 (up), 1 (down) or 0 (none).",
               "type": "number",
               "min": -1,
               "max": 1,
               "step": 1,
-              "default": 0,
-              "description": "Vertical direction the picture moves: -1 up, 1 down, 0 none."
+              "default": 0
             },
             {
               "key": "blur",
               "label": "Motion blur",
+              "description": "Blur at the middle of the move, as a fraction of the frame height.",
               "type": "number",
               "min": 0,
               "max": 0.1,
               "step": 0.005,
-              "default": 0,
-              "description": "Blur at the middle of the move, as a fraction of the frame height."
+              "default": 0
             }
           ]
         },
@@ -719,32 +800,32 @@
             {
               "key": "dirX",
               "label": "Direction X",
+              "description": "Horizontal direction the picture moves: -1 (left), 1 (right) or 0 (none).",
               "type": "number",
               "min": -1,
               "max": 1,
               "step": 1,
-              "default": 0,
-              "description": "Horizontal direction the picture moves: -1 left, 1 right, 0 none."
+              "default": 0
             },
             {
               "key": "dirY",
               "label": "Direction Y",
+              "description": "Vertical direction the picture moves: -1 (up), 1 (down) or 0 (none).",
               "type": "number",
               "min": -1,
               "max": 1,
               "step": 1,
-              "default": -1,
-              "description": "Vertical direction the picture moves: -1 up, 1 down, 0 none."
+              "default": -1
             },
             {
               "key": "blur",
               "label": "Motion blur",
+              "description": "Blur at the middle of the move, as a fraction of the frame height.",
               "type": "number",
               "min": 0,
               "max": 0.1,
               "step": 0.005,
-              "default": 0,
-              "description": "Blur at the middle of the move, as a fraction of the frame height."
+              "default": 0
             }
           ]
         },
@@ -757,32 +838,32 @@
             {
               "key": "dirX",
               "label": "Direction X",
+              "description": "Horizontal direction the picture moves: -1 (left), 1 (right) or 0 (none).",
               "type": "number",
               "min": -1,
               "max": 1,
               "step": 1,
-              "default": 0,
-              "description": "Horizontal direction the picture moves: -1 left, 1 right, 0 none."
+              "default": 0
             },
             {
               "key": "dirY",
               "label": "Direction Y",
+              "description": "Vertical direction the picture moves: -1 (up), 1 (down) or 0 (none).",
               "type": "number",
               "min": -1,
               "max": 1,
               "step": 1,
-              "default": 1,
-              "description": "Vertical direction the picture moves: -1 up, 1 down, 0 none."
+              "default": 1
             },
             {
               "key": "blur",
               "label": "Motion blur",
+              "description": "Blur at the middle of the move, as a fraction of the frame height.",
               "type": "number",
               "min": 0,
               "max": 0.1,
               "step": 0.005,
-              "default": 0,
-              "description": "Blur at the middle of the move, as a fraction of the frame height."
+              "default": 0
             }
           ]
         },
@@ -795,32 +876,32 @@
             {
               "key": "dirX",
               "label": "Direction X",
+              "description": "Horizontal direction the picture moves: -1 (left), 1 (right) or 0 (none).",
               "type": "number",
               "min": -1,
               "max": 1,
               "step": 1,
-              "default": -1,
-              "description": "Horizontal direction the picture moves: -1 left, 1 right, 0 none."
+              "default": -1
             },
             {
               "key": "dirY",
               "label": "Direction Y",
+              "description": "Vertical direction the picture moves: -1 (up), 1 (down) or 0 (none).",
               "type": "number",
               "min": -1,
               "max": 1,
               "step": 1,
-              "default": 0,
-              "description": "Vertical direction the picture moves: -1 up, 1 down, 0 none."
+              "default": 0
             },
             {
               "key": "blur",
               "label": "Motion blur",
+              "description": "Blur at the middle of the move, as a fraction of the frame height.",
               "type": "number",
               "min": 0,
               "max": 0.1,
               "step": 0.005,
-              "default": 0.04,
-              "description": "Blur at the middle of the move, as a fraction of the frame height."
+              "default": 0.04
             }
           ]
         },
@@ -833,22 +914,22 @@
             {
               "key": "dirX",
               "label": "Direction X",
+              "description": "Horizontal direction the picture moves: -1 (left), 1 (right) or 0 (none).",
               "type": "number",
               "min": -1,
               "max": 1,
               "step": 1,
-              "default": -1,
-              "description": "Horizontal direction the picture moves: -1 left, 1 right, 0 none."
+              "default": -1
             },
             {
               "key": "dirY",
               "label": "Direction Y",
+              "description": "Vertical direction the picture moves: -1 (up), 1 (down) or 0 (none).",
               "type": "number",
               "min": -1,
               "max": 1,
               "step": 1,
-              "default": 0,
-              "description": "Vertical direction the picture moves: -1 up, 1 down, 0 none."
+              "default": 0
             }
           ]
         },
@@ -861,22 +942,22 @@
             {
               "key": "dirX",
               "label": "Direction X",
+              "description": "Horizontal direction the picture moves: -1 (left), 1 (right) or 0 (none).",
               "type": "number",
               "min": -1,
               "max": 1,
               "step": 1,
-              "default": 1,
-              "description": "Horizontal direction the picture moves: -1 left, 1 right, 0 none."
+              "default": 1
             },
             {
               "key": "dirY",
               "label": "Direction Y",
+              "description": "Vertical direction the picture moves: -1 (up), 1 (down) or 0 (none).",
               "type": "number",
               "min": -1,
               "max": 1,
               "step": 1,
-              "default": 0,
-              "description": "Vertical direction the picture moves: -1 up, 1 down, 0 none."
+              "default": 0
             }
           ]
         },
@@ -889,22 +970,22 @@
             {
               "key": "dirX",
               "label": "Direction X",
+              "description": "Horizontal direction the picture moves: -1 (left), 1 (right) or 0 (none).",
               "type": "number",
               "min": -1,
               "max": 1,
               "step": 1,
-              "default": -1,
-              "description": "Horizontal direction the picture moves: -1 left, 1 right, 0 none."
+              "default": -1
             },
             {
               "key": "dirY",
               "label": "Direction Y",
+              "description": "Vertical direction the picture moves: -1 (up), 1 (down) or 0 (none).",
               "type": "number",
               "min": -1,
               "max": 1,
               "step": 1,
-              "default": 0,
-              "description": "Vertical direction the picture moves: -1 up, 1 down, 0 none."
+              "default": 0
             }
           ]
         },
@@ -917,22 +998,22 @@
             {
               "key": "dirX",
               "label": "Direction X",
+              "description": "Horizontal direction the picture moves: -1 (left), 1 (right) or 0 (none).",
               "type": "number",
               "min": -1,
               "max": 1,
               "step": 1,
-              "default": 0,
-              "description": "Horizontal direction the picture moves: -1 left, 1 right, 0 none."
+              "default": 0
             },
             {
               "key": "dirY",
               "label": "Direction Y",
+              "description": "Vertical direction the picture moves: -1 (up), 1 (down) or 0 (none).",
               "type": "number",
               "min": -1,
               "max": 1,
               "step": 1,
-              "default": 1,
-              "description": "Vertical direction the picture moves: -1 up, 1 down, 0 none."
+              "default": 1
             }
           ]
         },
@@ -945,22 +1026,22 @@
             {
               "key": "dirX",
               "label": "Direction X",
+              "description": "Horizontal direction the picture moves: -1 (left), 1 (right) or 0 (none).",
               "type": "number",
               "min": -1,
               "max": 1,
               "step": 1,
-              "default": 0,
-              "description": "Horizontal direction the picture moves: -1 left, 1 right, 0 none."
+              "default": 0
             },
             {
               "key": "dirY",
               "label": "Direction Y",
+              "description": "Vertical direction the picture moves: -1 (up), 1 (down) or 0 (none).",
               "type": "number",
               "min": -1,
               "max": 1,
               "step": 1,
-              "default": -1,
-              "description": "Vertical direction the picture moves: -1 up, 1 down, 0 none."
+              "default": -1
             }
           ]
         },
@@ -980,32 +1061,32 @@
             {
               "key": "outScale",
               "label": "Out zoom",
+              "description": "Scale the outgoing clip reaches, as a multiplier of full size (1 = unchanged).",
               "type": "number",
               "min": 0.2,
               "max": 3,
               "step": 0.05,
-              "default": 1.8,
-              "description": "Scale the outgoing clip reaches."
+              "default": 1.8
             },
             {
               "key": "inScale",
               "label": "In zoom",
+              "description": "Scale the incoming clip starts from, as a multiplier of full size (1 = unchanged).",
               "type": "number",
               "min": 0.2,
               "max": 3,
               "step": 0.05,
-              "default": 0.6,
-              "description": "Scale the incoming clip starts from."
+              "default": 0.6
             },
             {
               "key": "blur",
               "label": "Blur",
+              "description": "Peak blur as a fraction of the frame height.",
               "type": "number",
               "min": 0,
               "max": 0.1,
               "step": 0.005,
-              "default": 0.02,
-              "description": "Peak blur as a fraction of the frame height."
+              "default": 0.02
             }
           ]
         },
@@ -1018,32 +1099,32 @@
             {
               "key": "outScale",
               "label": "Out zoom",
+              "description": "Scale the outgoing clip reaches, as a multiplier of full size (1 = unchanged).",
               "type": "number",
               "min": 0.2,
               "max": 3,
               "step": 0.05,
-              "default": 0.5,
-              "description": "Scale the outgoing clip reaches."
+              "default": 0.5
             },
             {
               "key": "inScale",
               "label": "In zoom",
+              "description": "Scale the incoming clip starts from, as a multiplier of full size (1 = unchanged).",
               "type": "number",
               "min": 0.2,
               "max": 3,
               "step": 0.05,
-              "default": 1.6,
-              "description": "Scale the incoming clip starts from."
+              "default": 1.6
             },
             {
               "key": "blur",
               "label": "Blur",
+              "description": "Peak blur as a fraction of the frame height.",
               "type": "number",
               "min": 0,
               "max": 0.1,
               "step": 0.005,
-              "default": 0.02,
-              "description": "Peak blur as a fraction of the frame height."
+              "default": 0.02
             }
           ]
         },
@@ -1056,12 +1137,12 @@
             {
               "key": "degrees",
               "label": "Turn",
+              "description": "Degrees each clip turns.",
               "type": "number",
               "min": 30,
               "max": 720,
               "step": 15,
-              "default": 180,
-              "description": "Degrees each clip turns."
+              "default": 180
             }
           ]
         },
@@ -1074,12 +1155,12 @@
             {
               "key": "blur",
               "label": "Blur",
+              "description": "Peak blur as a fraction of the frame height.",
               "type": "number",
               "min": 0,
               "max": 0.1,
               "step": 0.005,
-              "default": 0.03,
-              "description": "Peak blur as a fraction of the frame height."
+              "default": 0.03
             }
           ]
         },
@@ -1092,22 +1173,22 @@
             {
               "key": "blur",
               "label": "Blur",
+              "description": "Peak blur as a fraction of the frame height.",
               "type": "number",
               "min": 0,
               "max": 0.1,
               "step": 0.005,
-              "default": 0.05,
-              "description": "Peak blur as a fraction of the frame height."
+              "default": 0.05
             },
             {
               "key": "cut",
               "label": "Hard cut",
+              "description": "Switch mode: 1 (on) swaps the clips at full blur, 0 (off) dissolves them.",
               "type": "number",
               "min": 0,
               "max": 1,
               "step": 1,
-              "default": 1,
-              "description": "1 swaps the clips at full blur instead of dissolving."
+              "default": 1
             }
           ]
         },
@@ -1120,12 +1201,12 @@
             {
               "key": "amount",
               "label": "Amount",
+              "description": "Largest band shift as a fraction of the frame width.",
               "type": "number",
               "min": 0,
               "max": 0.3,
               "step": 0.01,
-              "default": 0.08,
-              "description": "Largest band shift as a fraction of the frame width."
+              "default": 0.08
             }
           ]
         },
@@ -1138,12 +1219,12 @@
             {
               "key": "amount",
               "label": "Amount",
+              "description": "Largest jolt as a fraction of the frame.",
               "type": "number",
               "min": 0,
               "max": 0.15,
               "step": 0.005,
-              "default": 0.04,
-              "description": "Largest jolt as a fraction of the frame."
+              "default": 0.04
             }
           ]
         }

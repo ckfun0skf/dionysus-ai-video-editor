@@ -63,9 +63,16 @@ function styleLook(d: PresetDescriptor): string {
   const bits = [typeof data.font === "string" ? `font ${data.font}` : "", typeof data.color === "string" ? `colour ${data.color}` : "", typeof data.size === "number" ? `size ${num(data.size)}` : ""].filter(Boolean);
   return bits.length ? ` Look: ${bits.join(", ")}.` : "";
 }
+/** The descriptor's optional planner hints (V2-FX-MOD `ai`): when to use it, when not to, example params. */
+function aiHints(d: PresetDescriptor): string {
+  const a = d.ai;
+  if (!a) return "";
+  const dot = (t: string) => t.replace(/\.?$/, ".");
+  return [a.use ? ` Use for: ${dot(a.use)}` : "", a.avoid ? ` Avoid: ${dot(a.avoid)}` : "", a.example && Object.keys(a.example).length ? ` Example params: ${JSON.stringify(a.example)}.` : ""].join("");
+}
 export function presetLine(d: PresetDescriptor): string {
   const params = d.params.length ? ` Params: ${d.params.map(paramText).join("; ")}.` : "";
-  return `- ${d.id}: ${d.description}${d.kind === "textStyle" ? styleLook(d) : ""}${params}`;
+  return `- ${d.id}: ${d.description}${d.kind === "textStyle" ? styleLook(d) : ""}${params}${aiHints(d)}`;
 }
 
 const REFERENCE_ROLES_TXT = REFERENCE_ROLES.map((r) => `"${r}"`).join(" | ");

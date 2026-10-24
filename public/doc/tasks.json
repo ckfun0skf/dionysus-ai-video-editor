@@ -2381,6 +2381,12 @@
           "title": "Host-independent AI links: the in-app short prompt and Open guide link are built at runtime from the deployment (origin + Vite base; localhost/LAN fall back to the configured site); one build setting DIONYSUS_SITE_URL (default: the GitHub Pages URL) sets Vite's base and the absolute links in the AI files, which vite build regenerates for the build's site URL; the format reference is published as ai/STORYBOARD_FORMAT.md instead of linking to github.com; deployment guide in docs/v2/DEPLOYMENT.md",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-FX-MOD",
+          "title": "Modular presets: every effect, transition, text animation, text effect, sticker, text style and font is one file under src/v2/presets/<kind>/<id>.ts (definePreset + typed per-kind helpers), auto-discovered with import.meta.glob and validated at load (bad modules fail tests and the build); the registry, pickers and tiles, generated inspector param controls (ParamSpec), preview and export renderer, storyboard importer, AI guide, presets.json and llms.txt all pick a new file up with no other change; canvas hooks (videoEffect draw, transition paint) with scratch contexts; all 72 built-ins migrated with golden frame tests proving no behaviour change; smoke-render and descriptor-completeness tests (descriptions, param units); npm run new:preset scaffold; docs/v2/ADDING_EFFECTS.md; proven by the new Glow video effect, added as a single file",
+          "status": "done",
+          "progress": 100
         }
       ]
     },

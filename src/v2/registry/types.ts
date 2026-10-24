@@ -44,7 +44,13 @@ export interface PresetDescriptor {
    * fraction of frame height), e.g. `{ "font": "impact", "color": "#ffe14d", "strokeWidth": 0.08 }`.
    */
   data?: Record<string, unknown>;
+  /**
+   * Optional hints for planner AIs (V2-FX-MOD), printed next to the description in the generated guide and presets.json:
+   * when to pick the preset, when not to, and example params.
+   */
+  ai?: PresetAiHints;
 }
+export interface PresetAiHints { use?: string; avoid?: string; example?: Params }
 
 /** Text effect styling produced by `effect` presets. */
 export interface FxStyle { glowBlur?: number; neon?: boolean; hollow?: boolean; echo?: { dx: number; dy: number; alpha: number }[]; color?: string }
@@ -66,7 +72,31 @@ export interface PresetFrame {
   blur?: number; gray?: number; vignette?: number;
   /** Stickers: SVG markup to draw. */
   svg?: string;
+  /**
+   * Video effects with a `draw` hook (V2-FX-MOD): extra canvas passes run after the frame's transform/filter, in order,
+   * on the composited picture. Not serializable; produced by `applyPreset`, consumed by `applyEffectFrame`.
+   */
+  passes?: PaintPass[];
 }
+/** 2D context type shared by on-screen, offscreen and export canvases. */
+export type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
+/**
+ * What the renderer hands a canvas hook: the target context (already showing the picture), its size in pixels, and
+ * `scratch(w, h, slot?)`, a reusable offscreen context (cleared, sized w × h; one per slot) for blur/bloom-style work.
+ * `scratch` returns undefined where no offscreen canvas exists (tests, very old browsers): skip the pass then.
+ */
+export interface PaintEnv { ctx: Ctx2D; w: number; h: number; scratch: (w: number, h: number, slot?: number) => Ctx2D | undefined }
+export type PaintPass = (env: PaintEnv) => void;
+/** A preset's canvas hook: `PaintEnv` plus the preset's progress and resolved params. */
+export interface PaintArgs extends PaintEnv { p: number; params: Params }
+export type PaintFn = (a: PaintArgs) => void;
+/**
+ * Transition canvas hook: called once per side (`"out"` / `"in"`) after that side is drawn with its look, inside its
+ * clip. `mix` is that side's opacity at this progress (mixOut / mixIn), e.g. to fade an overlay with its clip.
+ */
+export type TransitionPaintFn = (a: PaintArgs & { side: "out" | "in"; mix: number }) => void;
+/** Optional canvas hooks of a render `type` (see `HOOKS` in renderers.ts). */
+export interface RenderHooks { draw?: PaintFn; paint?: TransitionPaintFn }
 /**
  * How one side of a transition is drawn on top of its normal placement, in frame space. Offsets are fractions of the
  * frame width / height, `scale` and `rot` (degrees) act about the frame centre, `blur` is a fraction of the frame height,
@@ -78,8 +108,26 @@ export interface TransLayer {
   dx?: number; dy?: number; scale?: number; rot?: number; blur?: number;
   clip?: [number, number, number, number]; iris?: number; glitch?: number; seed?: number;
   tint?: string; tintAlpha?: number;
+  /** Transition `paint` hook (V2-FX-MOD) bound to this side, run after the side is drawn (inside its clip). */
+  paint?: PaintPass;
 }
+/** Preset ids are lowercase-friendly slugs; "@" is reserved for version pins (`ken-burns@2`). */
+export const PRESET_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/;
 export const identityFrame = (): PresetFrame => ({ alpha: 1, dx: 0, dy: 0, scale: 1, rot: 0, chars: 1 });
 
 /** Pure: returns a new frame given the incoming one, progress and resolved params. Must not throw for p in [0,1]. */
 export type RenderFn = (f: PresetFrame, p: number, params: Params) => PresetFrame;
+
+/**
+ * Curated font (V2-FX-MOD: one module per font in src/v2/presets/font/). System stacks only (no network), so preview
+ * and export match offline and on iOS Safari. Ids are part of the storyboard format: never rename one.
+ */
+export interface FontDef {
+  id: string;
+  label: string;
+  stack: string;
+  /** One line for the planner guide. */
+  description: string;
+  /** Rough average glyph width in em, used only for the importer's "text may overflow" warning. */
+  width: number;
+}

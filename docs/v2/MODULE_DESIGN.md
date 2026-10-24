@@ -62,6 +62,8 @@ Product direction: see [VISION.md](./VISION.md).
 | `domain` | nothing outside `domain` | React, DOM, `idb`, `engine`, `render` |
 | `engine` | `domain`, `ports` | React, DOM, persistence implementations |
 | `persistence` | `domain`, `ports` | `engine` internals, UI |
+| `registry` | `presets` (preset modules) | everything else |
+| `presets` | `registry/types` only | DOM, React, `render`, `engine` |
 | `render` | `domain`, `ports`, `registry` | `engine` mutation APIs, UI |
 | `plugins` | `domain`, `registry`, `render` types | UI internals |
 | `ui` | everything above via public `index.ts` | other features' internals; `legacy` `src/*` |
@@ -209,13 +211,25 @@ only via `listPresets(kind)`; nothing hard-codes a preset id list.
   normalized progress (0..1) to alpha/dx/dy/scale/rot/chars, `clip`, `filter`, transition `mixOut/mixIn`, text `fx`,
   or a sticker `svg`. In presets get progress 0→1 over the in duration; out presets get 1→0 (1 = fully shown);
   loop presets get the phase within their `period` param (seconds); transitions get progress across the cut.
-- **Add a preset:** append a descriptor to `BUILTIN_PRESETS` reusing an existing `type` (e.g. a new slide direction
-  is just new `dirX/dirY` defaults). For new behaviour, add a function to `RENDERERS` (or `registerRenderer` at
-  runtime) and point the descriptor's `type` at it. The renderer must not throw for any progress in [0,1].
-- **Remove a preset:** delete its descriptor (or `unregisterPreset(kind, id)`). Projects that still reference the id
+- **Preset modules (V2-FX-MOD):** every built-in is one file, `src/v2/presets/<kind>/<id>.ts`, exporting
+  `defineVideoEffect({...})` / `defineTransition` / `defineTextAnimIn` … (`presets/define.ts`). `presets/index.ts`
+  discovers them with an eager `import.meta.glob`; `presets/load.ts` validates them (problems fail tests and the build)
+  and derives the descriptors, `RENDERERS` and `HOOKS` that `registry` exposes unchanged (`BUILTIN_PRESETS`,
+  `FONTS`). Shared math lives in `presets/_lib/`. Built-ins keep their legacy `type` keys so JSON descriptors still
+  resolve.
+- **Canvas hooks:** a videoEffect may add `draw({ ctx, w, h, p, params, scratch })` (run on the finished picture after
+  the built-in look) and a transition `paint({ ..., side, mix })` (run per side inside its clip). `applyPreset` binds
+  them into the frame (`passes`, `tOut.paint` / `tIn.paint`); `render` supplies the canvas and `scratch` contexts, so
+  preset code stays DOM-free.
+- **Add a preset:** add one file (`npm run new:preset -- <kind> <id>`); see `docs/v2/ADDING_EFFECTS.md`. For runtime
+  additions, `registerPresets(json)` with an existing `type`, or `registerRenderer(type, fn, hooks)`. Render code must
+  not throw for any progress in [0,1].
+- **Remove a preset:** delete its file (or `unregisterPreset(kind, id)`). Projects that still reference the id
   render as identity (no animation), never crash.
-- Layering: `registry` imports nothing else in v2; `domain`, `render` and `ui` may import it.
-- Tests (`registry.test.ts`): descriptor contract, JSON round-trip, and every preset rendering at t = 0, 0.5, 1.
+- Layering: `registry` imports only `presets` (which imports only `registry/types`); `domain`, `render` and `ui` may
+  import `registry`. `presets` has no DOM access.
+- Tests: `registry.test.ts` (descriptor contract, JSON round-trip), `registry/golden.test.ts` (frames of the migrated
+  built-ins are pinned), `presets/presets.test.ts` (loader validation, completeness, smoke render of every preset).
 
 ## 7. Commands & history
 

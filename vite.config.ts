@@ -1,4 +1,4 @@
-import { defineConfig, type Plugin } from "vite";
+import { defineConfig, runnerImport, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -12,6 +12,13 @@ const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), 
  * the GitHub Pages project site (DEFAULT_SITE_URL) is used. `--base` on the CLI still overrides the path.
  */
 const SITE_URL = buildSiteUrl(process.env.DIONYSUS_SITE_URL);
+
+/** What the plugin uses from src/v2/domain/aiGuide.ts (declared here so tsconfig.node does not type-check the app). */
+interface AiGuideModule {
+  aiGuideFiles(site: string, formatDoc: string): Record<string, string>;
+  FORMAT_DOC_SOURCE: string;
+  PRESET_PROBLEMS: string[];
+}
 
 /**
  * Writes the AI planner files (ai/storyboard-guide.md/.html, ai/presets.json, llms.txt) into the build output,
@@ -31,7 +38,10 @@ function aiFilesPlugin(): Plugin {
       site = buildSiteUrl(process.env.DIONYSUS_SITE_URL, c.base);
     },
     async closeBundle() {
-      const { aiGuideFiles, FORMAT_DOC_SOURCE } = await import("./src/v2/domain/aiGuide");
+      // Loaded through Vite's module runner (not a plain import) so the preset modules' import.meta.glob discovery works.
+      const { module } = await runnerImport<AiGuideModule>(resolve(root, "src/v2/domain/aiGuide.ts"), { configFile: false, root, logLevel: "warn" });
+      const { aiGuideFiles, FORMAT_DOC_SOURCE, PRESET_PROBLEMS } = module;
+      if (PRESET_PROBLEMS.length) throw new Error(`Invalid preset modules:\n  ${PRESET_PROBLEMS.join("\n  ")}`);
       const files = aiGuideFiles(site, readFileSync(resolve(root, FORMAT_DOC_SOURCE), "utf8"));
       for (const [rel, content] of Object.entries(files)) {
         const file = resolve(outDir, rel.replace(/^public\//, ""));

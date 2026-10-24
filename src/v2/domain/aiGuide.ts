@@ -9,6 +9,8 @@
  * resolves itself (the HTML page's `rel=alternate`) are relative.
  */
 import { FONTS, listPresets } from "../registry";
+/** Re-exported for the build plugin (vite.config.ts), which fails the build on invalid preset modules. */
+export { PRESET_PROBLEMS } from "../registry";
 import { FORMAT_REVISION, GUIDE_KINDS, guideSections } from "./storyPrompt";
 import { aiLinks, DEFAULT_SITE_URL } from "./siteUrl";
 import { DEFAULT_TRANSITION_SEC, STORYBOARD_FORMAT } from "./storyJson";
@@ -52,7 +54,7 @@ export function presetsJson(site = DEFAULT_SITE_URL): string {
     guide: aiLinks(site).guide,
     kinds: Object.fromEntries(GUIDE_KINDS.map(({ kind, usedIn }) => [kind, {
       usedIn,
-      presets: listPresets(kind).map((d) => ({ id: d.id, version: d.version, name: d.name, description: d.description, params: d.params.map((p) => ({ ...p })), ...(d.kind === "textStyle" && d.data ? { data: d.data } : {}) })),
+      presets: listPresets(kind).map((d) => ({ id: d.id, version: d.version, name: d.name, description: d.description, params: d.params.map((p) => ({ ...p })), ...(d.kind === "textStyle" && d.data ? { data: d.data } : {}), ...(d.ai ? { ai: d.ai } : {}) })),
     }])),
     transitionDefaultSec: DEFAULT_TRANSITION_SEC,
     fonts: FONTS.map((f) => ({ id: f.id, description: f.description })),

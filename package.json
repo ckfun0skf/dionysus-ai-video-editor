@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "check:tasks": "node scripts/check-tasks-updated.mjs",
-    "gen:ai": "UPDATE_AI_GUIDE=1 vitest run src/v2/domain/aiGuide.test.ts"
+    "gen:ai": "UPDATE_AI_GUIDE=1 vitest run src/v2/domain/aiGuide.test.ts",
+    "new:preset": "node scripts/new-preset.mjs"
   },
   "dependencies": {
     "lucide-react": "^0.468.0",
