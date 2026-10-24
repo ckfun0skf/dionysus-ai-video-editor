@@ -16,11 +16,11 @@ export const ANIM_MIN_S = 0.1, ANIM_MAX_S = 2;
  * CapCut-style animation picker (V2-098): In / Out / Loop tabs, a grid of live tiles rendered with the registry's
  * own render functions, and a duration slider. Every pick and slider drag is one undo step.
  */
-export function AnimationPicker({ engine, placement, onPicked }: { engine: Engine; placement: Placement; onPicked?: () => void }) {
+export function AnimationPicker({ engine, placement, onPicked, onSet }: { engine: Engine; placement: Placement; onPicked?: () => void; /** V2-103 layer mode: route edits to the layer style. */ onSet?: (patch: Partial<TextData>, label?: string) => void }) {
   const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("In");
   const d = T.textOf(placement.text);
   const cur = TABS.find((t) => t.id === tab)!;
-  const set = (patch: Partial<TextData>, label?: string) => engine.dispatch(cmd.updateText(placement.id, patch, label));
+  const set = onSet ?? ((patch: Partial<TextData>, label?: string) => engine.dispatch(cmd.updateText(placement.id, patch, label)));
   const value = d[cur.key] ?? "none";
   const durS = Math.min((d.animTicks ?? 60_000), placement.durationTicks / 2) / TPS;
   return (
