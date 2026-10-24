@@ -161,7 +161,7 @@
 
 /* Hover styles only where a pointer can hover: iOS keeps :hover after a tap (V2-SB-R09). */
 @media (hover: hover) {
-  .v2-sb-shotwrap:hover .v2-sb-grip { opacity: 1; }
+  .v2-sb-shotwrap:hover .v2-sb-grip, .v2-prod-item:hover .v2-prod-grip { opacity: 1; }
   button.v2-sb-conn:hover { background: #ffffff08; color: var(--text); }
   .v2-sb-addshot:hover { border-color: var(--accent); color: var(--text); }
   .v2-sb-shot-more:hover { color: var(--text); }
@@ -298,3 +298,13 @@ button.v2-sb-conn:focus-visible { outline: 2px solid var(--accent); outline-offs
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat; background-position: right 10px center; }
 .v2-sb-field select:disabled { opacity: .55; }
+
+/* V2-CUT-07: reorder production steps (drag, long-press, Alt+↑/↓, menu). */
+.v2-prod-order { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--muted); }
+.v2-prod-item { position: relative; }
+.v2-prod-item .v2-prod-step { touch-action: pan-y; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.v2-prod-grip { left: -2px; height: 40px; }
+.v2-prod-item:focus-within .v2-prod-grip { opacity: 1; }
+.v2-prod-item:has(.v2-prod-grip) .v2-prod-step { padding-left: 20px; }
+.v2-drag-lift .v2-prod-step { border-color: var(--accent); box-shadow: 0 14px 36px #000a; background: var(--panel); }
+@media (max-width: 820px) { .v2-prod-order .v2-linkbtn { min-height: 44px; padding: 0 4px; font-size: 14px; } }

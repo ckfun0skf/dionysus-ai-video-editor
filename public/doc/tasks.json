@@ -2097,8 +2097,8 @@
         {
           "id": "V2-CUT-07",
           "title": "Guided asset generation wizard: copy prompt, upload into slot, provenance (prompt/model), progress, skip/regenerate as version/reorder",
-          "status": "todo",
-          "progress": 0
+          "status": "done",
+          "progress": 100
         },
         {
           "id": "V2-CUT-08",

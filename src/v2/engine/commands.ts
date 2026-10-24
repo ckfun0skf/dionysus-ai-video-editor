@@ -12,6 +12,7 @@ import { TEXT_SOURCE } from "../domain/model";
 import * as board from "../domain/storyboard";
 import * as storyEdit from "../domain/storyEdit";
 import * as storyRefs from "../domain/storyRefs";
+import * as storySteps from "../domain/storySteps";
 import { sendStory } from "../domain/storySend";
 import type { StoryDoc } from "../domain/storyJson";
 import { DEFAULT_TEXT, DEFAULT_TEXT_TICKS, textOf, type TextData } from "../domain/text";
@@ -338,3 +339,7 @@ export const setRefOverride = (shotId: string, slotId: string, versionId: string
 export const addSlot = (id: string, patch: storyRefs.SlotPatch): Command => ({ label: "Add asset", apply: (p) => storyRefs.addSlot(p, id, patch) });
 export const updateSlot = (id: string, patch: storyRefs.SlotPatch): Command => ({ label: "Edit asset", apply: (p) => storyRefs.updateSlot(p, id, patch) });
 export const deleteSlot = (id: string): Command => ({ label: "Delete asset", apply: (p) => storyRefs.deleteSlot(p, id) });
+
+/** Production step order (V2-CUT-07, domain/storySteps): move step `key` to index `to`, clamped to dependency order. */
+export const moveStep = (key: string, to: number): Command => ({ label: "Move step", apply: (p) => storySteps.moveStep(p, board.productionSteps(p).map((s) => s.key), key, to) });
+export const resetStepOrder = (): Command => ({ label: "Reset step order", apply: (p) => storySteps.resetStepOrder(p) });

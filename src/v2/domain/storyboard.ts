@@ -9,6 +9,7 @@ import { isStill, newId, type AssetVersion, type Composition, type MediaKind, ty
 import { mainTrack } from "./ops";
 import type { ShotRender, StoryAssetType, StoryConnection, StoryDoc, StoryEffect, StoryLayer, StoryMeta } from "./storyJson";
 import { followStoryLinks } from "./storyLinks";
+import { orderSteps } from "./storySteps";
 import { TICKS_PER_SECOND } from "./time";
 
 export interface QaCheck { id: string; text: string }
@@ -70,6 +71,8 @@ export interface Storyboard {
   slots: Record<string, AssetSlot>;
   connections: StoryConnection[];
   versions: Record<string, VersionInfo>;
+  /** Production step order chosen by the user (step keys, V2-CUT-07); always applied in dependency order. */
+  stepOrder?: string[];
 }
 
 const qaList = (owner: string, texts: string[]): QaCheck[] => texts.map((text, i) => ({ id: `${owner}.qa${i + 1}`, text }));
@@ -441,11 +444,14 @@ export function productionSteps(p: Project): ProductionStep[] {
     if (!s || seen.has(`shot:${id}`)) return;
     seen.add(`shot:${id}`);
     s.slotIds.forEach(slot);
+    (s.layers ?? []).forEach((l) => { if (l.type !== "text") slot(l.asset); }); // media-layer assets come before the shot too
     // html/still shots: the step is checking the clip slot's version (its upload is the slot's own step).
     if (s.clipSlot) slot(s.clipSlot);
     out.push({ target: { shot: id }, key: `shot:${id}`, ...state(s, status.shots[id], undefined, s.clipSlot) });
   };
   b.order.forEach(shot);
   Object.keys(b.slots).forEach(slot);
-  return out;
+  if (!b.stepOrder?.length) return out;
+  const byKey = new Map(out.map((s) => [s.key, s]));
+  return orderSteps(b, out.map((s) => s.key)).map((k) => byKey.get(k)!);
 }
