@@ -2359,6 +2359,12 @@
           "progress": 100
         },
         {
+          "id": "V2-SB-123",
+          "title": "Asset-level reference roles: assets[].references entries may be { asset, role, note } (start-frame = base image to edit, identity, look, detail; one base image; end-frame warns and is used as detail); asset image prompts get the same attach-in-order list and References block as shots (copy prompt adds it, per-image save), role selects in the asset editor, spec section 2.3.1, RULE 17 with worked example, fixture card-still exercises it",
+          "status": "done",
+          "progress": 100
+        },
+        {
           "id": "V2-SB-122",
           "title": "Clarify durationSec vs genDurationSec in AI guide: durationSec is the planned on-screen edit length set by pacing (not the model's limits), genDurationSec the longer length to generate (omit when equal), worked example, example shot with genDurationSec, short-prompt line; RULE on transitions overlapping shots (centred, clamped to half the shorter shot) and single clean identity references",
           "status": "done",

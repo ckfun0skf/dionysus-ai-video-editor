@@ -25,6 +25,8 @@ export const STILL_ASSET_TYPES: readonly StoryAssetType[] = ["image", "frame", "
  */
 export const REFERENCE_ROLES = ["start-frame", "end-frame", "identity", "look", "detail"] as const;
 export type ReferenceRole = (typeof REFERENCE_ROLES)[number];
+/** Roles an asset's own references can have (V2-SB-123): an image has no end frame; "start-frame" = the base image to edit. */
+export const ASSET_REFERENCE_ROLES: readonly ReferenceRole[] = ["start-frame", "identity", "look", "detail"];
 /** Default transition length in seconds when `params.durationSec` is absent. */
 export const DEFAULT_TRANSITION_SEC = 0.5;
 
@@ -33,8 +35,15 @@ export type StoryAssetSource = { type: "generate" } | { type: "upload" } | { typ
 
 export interface StoryAsset {
   id: string; name: string; type: StoryAssetType; aspect: string;
-  prompt: string; references: string[]; source: StoryAssetSource; qa: string[]; notes?: string;
+  /** The assets this one is generated from, in attach order (Image 1, Image 2 …): ids, or objects with a role (V2-SB-123). */
+  prompt: string; references: StoryAssetRef[]; source: StoryAssetSource; qa: string[]; notes?: string;
 }
+/** How an asset uses one of its references (V2-SB-123). No `role` = inferred from the referenced asset's type. */
+export interface AssetRefRole { role?: ReferenceRole; note?: string }
+/** One entry of `assets[].references`: an asset id, or `{ asset, role?, note? }` (V2-SB-123). */
+export type StoryAssetRef = string | ({ asset: string } & AssetRefRole);
+/** The asset id of an `assets[].references` entry. */
+export const assetRefId = (r: StoryAssetRef): string => (typeof r === "string" ? r : r.asset);
 export type StoryParams = Record<string, number | string>;
 /** Text look: same keys as a text layer `style`. Extra keys are kept and passed through. */
 export interface StoryTextStyle { font?: string; size?: number; color?: string; align?: (typeof TEXT_ALIGNS)[number]; bold?: boolean; [extra: string]: unknown }
@@ -357,6 +366,35 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
   const shotIds = new Set<string>();
   const shotPre = rawShots.map((s, i) => { const path = `shots[${i}]`; if (!isObj(s)) { err(path, "Each shot must be an object."); return undefined; } return { s, path, id: checkId(s.id, path, shotIds, "shot") }; });
 
+  /**
+   * assets[].references (V2-SB-123): asset ids, or objects { asset, role?, note? } that say how the image model should
+   * use each attached image. An asset image has no end frame; "start-frame" means the base image to edit.
+   */
+  const assetRefsOf = (v: unknown, path: string) => {
+    const ids: string[] = [], refs: StoryAssetRef[] = [];
+    if (v === undefined) return refs;
+    if (!Array.isArray(v)) { err(path, '"references" must be a list of asset ids or { "asset": "<asset id>", "role": "<role>" } objects.'); return refs; }
+    v.forEach((r, j) => {
+      const rp = `${path}[${j}]`;
+      const asset = typeof r === "string" ? r.trim() : isObj(r) ? str(r.asset) ?? "" : "";
+      if (!asset) return err(rp, typeof r === "string" || isObj(r) ? 'A reference needs the id of the asset to attach ("asset").' : 'Each reference must be an asset id or { "asset": "<asset id>", "role": "<role>", "note"?: "…" }.');
+      if (ids.includes(asset)) return warn(rp, `Asset "${asset}" is already in this asset's references; the repeat is ignored.`);
+      ids.push(asset);
+      if (!isObj(r)) return void refs.push(asset);
+      const note = str(r.note);
+      let role: ReferenceRole | undefined;
+      if (r.role !== undefined) {
+        const w = str(r.role) as ReferenceRole;
+        if (w === "end-frame") { warn(`${rp}.role`, 'An asset image has no end frame; using "detail". Use "start-frame" for the base image to edit.'); role = "detail"; }
+        else if (REFERENCE_ROLES.includes(w)) role = w;
+        else { warn(`${rp}.role`, `Unknown role ${JSON.stringify(r.role)}; using "detail". Roles: ${ASSET_REFERENCE_ROLES.join(", ")}.`); role = "detail"; }
+      }
+      refs.push({ asset, ...(role ? { role } : {}), ...(note ? { note } : {}) });
+    });
+    if (refs.filter((x) => typeof x !== "string" && x.role === "start-frame").length > 1) err(path, 'Only one reference can be "start-frame" (the base image to edit).');
+    return refs;
+  };
+
   const rawAssets = raw.assets === undefined ? [] : Array.isArray(raw.assets) ? raw.assets : (err("assets", '"assets" must be a list.'), []);
   const assetIds = new Set<string>();
   const assets: StoryAsset[] = [];
@@ -382,13 +420,13 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
     if (asp && !ASPECT_RE.test(asp)) err(`${path}.aspect`, `Aspect "${asp}" should look like "16:9".`);
     const name = str(a.name) || id;
     const notes = str(a.notes);
-    assets.push({ id, name, type, aspect: asp || aspect, prompt, references: strList(a.references, `${path}.references`), source, qa: strList(a.qa, `${path}.qa`), ...(notes ? { notes } : {}) });
+    assets.push({ id, name, type, aspect: asp || aspect, prompt, references: assetRefsOf(a.references, `${path}.references`), source, qa: strList(a.qa, `${path}.qa`), ...(notes ? { notes } : {}) });
   });
-  assets.forEach((a, i) => a.references.forEach((r, j) => {
+  assets.forEach((a, i) => a.references.map(assetRefId).forEach((r, j) => {
     if (r === a.id) err(`assets[${i}].references[${j}]`, `Asset "${a.id}" can't reference itself.`);
     else if (!assetIds.has(r)) err(`assets[${i}].references[${j}]`, `Unknown asset "${r}".`);
   }));
-  const refCycle = findCycle(new Map(assets.map((a) => [a.id, a.references])));
+  const refCycle = findCycle(new Map(assets.map((a) => [a.id, a.references.map(assetRefId)])));
   if (refCycle) err("assets", `Assets reference each other in a loop: ${refCycle.join(" → ")}.`);
   const assetById = new Map(assets.map((a) => [a.id, a]));
   const unknownAsset = (id: string) => `Unknown asset "${id}"${assetIds.size ? ` (assets: ${list([...assetIds], 8)})` : ""}.`;
@@ -563,7 +601,7 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
   const depCycle = findCycle(new Map([...deps].map(([k, v]) => [k, v.filter((d) => d !== k)])));
   if (depCycle) err("shots", `Last-frame links form a loop: ${depCycle.join(" → ")}.`);
   const usedBy = (id: string) => shots.some((s) => s.assets.includes(id) || (s.render && s.render !== "ai" && s.clip === id) || s.layers?.some((l) => l.type !== "text" && l.asset === id));
-  assets.forEach((a, i) => { if (!usedBy(a.id) && !assets.some((b) => b.references.includes(a.id))) warn(`assets[${i}]`, `Asset "${a.id}" isn't used by any shot.`); });
+  assets.forEach((a, i) => { if (!usedBy(a.id) && !assets.some((b) => b.references.some((r) => assetRefId(r) === a.id))) warn(`assets[${i}]`, `Asset "${a.id}" isn't used by any shot.`); });
 
   let connections: StoryConnection[] = [];
   if (raw.connections === undefined) {

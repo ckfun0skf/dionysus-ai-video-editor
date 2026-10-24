@@ -11,7 +11,7 @@
  */
 import type { Composition, Project } from "./model";
 import { kindForSlot, pinOf, refVersionOf, selectedOf, versionsOf, type AssetSlot, type QaCheck, type Shot, type ShotReference, type Storyboard } from "./storyboard";
-import { inferReferenceRole, STORY_ASSET_TYPES, type ReferenceRole, type StoryAssetType } from "./storyJson";
+import { ASSET_REFERENCE_ROLES, inferReferenceRole, STORY_ASSET_TYPES, type AssetRefRole, type ReferenceRole, type StoryAssetType } from "./storyJson";
 
 /** Reference slots of a shot: its assets, then its media layers' assets (no clip slot, no duplicates). */
 export function shotRefIds(b: Storyboard, s: Shot): string[] {
@@ -72,6 +72,8 @@ if (SLOT_TYPES.length !== STORY_ASSET_TYPES.length) throw new Error("SLOT_TYPES 
 export interface SlotPatch {
   name?: string; type?: StoryAssetType; aspect?: string; prompt?: string; notes?: string;
   references?: string[]; source?: "generate" | "upload"; qa?: QaCheck[];
+  /** Roles / notes per reference id (V2-SB-123); entries for ids not in the references are dropped. */
+  refRoles?: Record<string, AssetRefRole>;
 }
 
 /** A slot id from its name ("Keeper's coat" → keeper-s-coat), unique in the storyboard. */
@@ -126,9 +128,26 @@ function cleanSlot(b: Storyboard, s: AssetSlot, patch: SlotPatch, hasVersions: b
   if (patch.prompt !== undefined) n.prompt = patch.prompt;
   if (patch.notes !== undefined) { if (patch.notes.trim()) n.notes = patch.notes; else delete n.notes; }
   if (patch.references) { const ok = new Set(referenceChoices(b, s.id).map((x) => x.id)); n.references = [...new Set(patch.references)].filter((r) => ok.has(r)); }
+  if (patch.refRoles) n.refRoles = patch.refRoles;
+  setRefRoles(n, n.refRoles);
   if (patch.source && s.source.type !== "lastFrame") n.source = { type: patch.source };
   if (patch.qa) n.qa = patch.qa.filter((q) => q.text.trim()).map((q) => ({ id: q.id, text: q.text.trim() }));
   return n;
+}
+
+/** Keep only valid role entries for ids still in `n.references` (one base image at most); drop the map when empty. */
+function setRefRoles(n: AssetSlot, roles: Record<string, AssetRefRole> | undefined) {
+  const out: Record<string, AssetRefRole> = {};
+  let base = false;
+  for (const id of n.references) {
+    const r = roles?.[id];
+    if (!r) continue;
+    let role = r.role && ASSET_REFERENCE_ROLES.includes(r.role) ? r.role : undefined;
+    if (role === "start-frame") { if (base) role = "detail"; base = true; }
+    const note = r.note?.trim();
+    if (role || note) out[id] = { ...(role ? { role } : {}), ...(note ? { note } : {}) };
+  }
+  if (Object.keys(out).length) n.refRoles = out; else delete n.refRoles;
 }
 
 /** Add an asset slot. Its name is required; type defaults to image, aspect to the storyboard's. */
@@ -156,7 +175,12 @@ export function deleteSlot(p: Project, id: string): Project {
   const b = p.storyboard;
   if (!b?.slots[id] || slotDeleteBlock(b, id)) return p;
   const { [id]: _gone, ...rest } = b.slots;
-  const slots = Object.fromEntries(Object.entries(rest).map(([k, s]) => [k, s.references.includes(id) ? { ...s, references: s.references.filter((r) => r !== id) } : s]));
+  const slots = Object.fromEntries(Object.entries(rest).map(([k, s]) => {
+    if (!s.references.includes(id)) return [k, s];
+    const n: AssetSlot = { ...s, references: s.references.filter((r) => r !== id) };
+    setRefRoles(n, n.refRoles);
+    return [k, n];
+  }));
   const shots = Object.fromEntries(Object.entries(b.shots).map(([k, s]) => {
     if (!s.slotIds.includes(id) && !s.refOverrides?.[id] && !s.references?.some((r) => r.slotId === id)) return [k, s];
     const n: Shot = { ...s, slotIds: s.slotIds.filter((r) => r !== id) };
@@ -253,8 +277,59 @@ export function promptWithReferences(b: Storyboard, shot: Shot): string {
   return !block || hasReferencesBlock(shot.prompt) ? shot.prompt : `${block}\n\n${shot.prompt}`;
 }
 
-/** The media version a shot uses for each image in its attach list (pins respected). */
-export function attachVersions(p: Project, shot: Shot): { item: AttachItem; versionId?: string }[] {
+/** The media version a shot (pins respected) or an asset (selected versions) uses for each image in its attach list. */
+export function attachVersions(p: Project, owner: Shot | AssetSlot): { item: AttachItem; versionId?: string }[] {
   const b = p.storyboard;
-  return b ? attachList(b, shot).map((item) => ({ item, versionId: refVersionOf(p, shot, item.slotId) })) : [];
+  if (!b) return [];
+  if (isShot(owner)) return attachList(b, owner).map((item) => ({ item, versionId: refVersionOf(p, owner, item.slotId) }));
+  return slotAttachList(b, owner).map((item) => ({ item, versionId: refVersionOf(p, undefined, item.slotId) }));
+}
+
+const isShot = (o: Shot | AssetSlot): o is Shot => "slotIds" in o;
+
+/** For an asset's image generation, a start frame is the base image to edit, never the opening of a clip. */
+const ASSET_ROLE_USE: Record<ReferenceRole, string> = {
+  ...ROLE_USE,
+  "start-frame": "BASE IMAGE: start from exactly this image and change only what the prompt asks",
+  identity: "reference only: keep this identity (face, body, clothes)",
+  look: "reference only: overall look (palette, light, texture) only",
+  detail: "reference only: materials, colours and objects only; do not reproduce its framing or wide view",
+};
+/** Asset attach-list labels: "Start frame" reads as "Base image" when generating an image (V2-SB-123). */
+export const ASSET_ROLE_LABEL: Record<ReferenceRole, string> = { ...ROLE_LABEL, "start-frame": "Base image" };
+
+/** The role an asset's reference plays when the asset does not say: like a shot's, but there is no end frame. */
+export function inferredAssetRole(ref: AssetSlot): ReferenceRole {
+  const r = inferredRole(ref);
+  return r === "end-frame" ? "detail" : r;
+}
+
+/**
+ * The images to attach when generating an asset (V2-SB-123): its `references` in order, each with its stated role
+ * or one inferred from the referenced asset's type. Only one base image: an inferred extra one is details only.
+ */
+export function slotAttachList(b: Storyboard, slot: AssetSlot): AttachItem[] {
+  const items: AttachItem[] = [];
+  for (const id of slot.references) {
+    if (!b.slots[id] || id === slot.id) continue;
+    const meta = slot.refRoles?.[id];
+    let role = meta?.role ?? inferredAssetRole(b.slots[id]);
+    if (role === "start-frame" && items.some((x) => x.role === "start-frame")) role = "detail";
+    items.push({ no: items.length + 1, slotId: id, role, ...(meta?.note ? { note: meta.note } : {}), inferred: !meta?.role });
+  }
+  return items;
+}
+
+/** The "References:" block an asset image prompt starts with (V2-SB-123). Empty when the asset has no references. */
+export function slotReferencesBlock(b: Storyboard, slot: AssetSlot): string {
+  const items = slotAttachList(b, slot);
+  if (!items.length) return "";
+  const lines = items.map((x) => `Image ${x.no} (${b.slots[x.slotId].name}): ${ASSET_ROLE_USE[x.role]}${x.note ? `. ${x.note.replace(/\.$/, "")}` : ""}.`);
+  return `References:\n${lines.join("\n")}`;
+}
+
+/** The asset prompt to copy: its prompt with the References block prepended unless it already has one. */
+export function slotPromptWithReferences(b: Storyboard, slot: AssetSlot): string {
+  const block = slotReferencesBlock(b, slot);
+  return !block || hasReferencesBlock(slot.prompt) ? slot.prompt : `${block}\n\n${slot.prompt}`;
 }

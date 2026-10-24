@@ -7,7 +7,7 @@
  */
 import { isStill, newId, type AssetVersion, type Composition, type MediaKind, type MediaRef, type Placement, type Project } from "./model";
 import { mainTrack } from "./ops";
-import type { ReferenceRole, ShotRender, StoryAssetType, StoryConnection, StoryDoc, StoryEffect, StoryLayer, StoryMeta } from "./storyJson";
+import { assetRefId, type AssetRefRole, type ReferenceRole, type ShotRender, type StoryAssetRef, type StoryAssetType, type StoryConnection, type StoryDoc, type StoryEffect, type StoryLayer, type StoryMeta } from "./storyJson";
 import { followStoryLinks } from "./storyLinks";
 import { orderSteps } from "./storySteps";
 import { TICKS_PER_SECOND } from "./time";
@@ -19,8 +19,10 @@ export type SlotSource = { type: "generate" } | { type: "upload" } | { type: "la
 /** A reference asset the story needs (character sheet, location, last frame of shot X …). */
 export interface AssetSlot {
   id: string; name: string; type: StoryAssetType; aspect: string; prompt: string;
-  /** Other slots this one is generated from. */
+  /** Other slots this one is generated from, in attach order. */
   references: string[];
+  /** V2-SB-123: role / note per reference id (absent or no `role` = inferred from the referenced slot's type). */
+  refRoles?: Record<string, AssetRefRole>;
   source: SlotSource; qa: QaCheck[]; notes?: string;
   /** Backing project asset; created on first upload. */
   assetId?: string;
@@ -109,6 +111,12 @@ export interface Storyboard {
   stepOrder?: string[];
 }
 
+/** `{ refRoles }` from an asset's object-form references (V2-SB-123), or nothing when none has a role or note. */
+function refRolesOf(refs: StoryAssetRef[]): { refRoles?: Record<string, AssetRefRole> } {
+  const out: Record<string, AssetRefRole> = {};
+  for (const r of refs) if (typeof r !== "string" && (r.role || r.note)) out[r.asset] = { ...(r.role ? { role: r.role } : {}), ...(r.note ? { note: r.note } : {}) };
+  return Object.keys(out).length ? { refRoles: out } : {};
+}
 const qaList = (owner: string, texts: string[]): QaCheck[] => texts.map((text, i) => ({ id: `${owner}.qa${i + 1}`, text }));
 
 /** Build a storyboard from a validated StoryDoc (see storyJson.validateStoryboard). */
@@ -116,9 +124,10 @@ export function storyboardFromDoc(doc: StoryDoc): Storyboard {
   const slots: Record<string, AssetSlot> = {};
   for (const a of doc.assets) {
     slots[a.id] = {
-      id: a.id, name: a.name, type: a.type, aspect: a.aspect, prompt: a.prompt, references: [...a.references],
+      id: a.id, name: a.name, type: a.type, aspect: a.aspect, prompt: a.prompt, references: a.references.map(assetRefId),
       source: a.source.type === "lastFrame" ? { type: "lastFrame", shotId: a.source.shot } : { type: a.source.type },
       qa: qaList(a.id, a.qa), ...(a.notes ? { notes: a.notes } : {}),
+      ...refRolesOf(a.references),
     };
   }
   const shots: Record<string, Shot> = {};

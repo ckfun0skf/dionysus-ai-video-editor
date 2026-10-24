@@ -349,3 +349,5 @@ button.v2-sb-conn:focus-visible { outline: 2px solid var(--accent); outline-offs
   .v2-trim-range { min-height: 44px; }
   .v2-sb-trimbtn { min-height: 44px; }
 }
+.v2-sb-refroles { margin-top: 8px; }
+.v2-sb-refroles .v2-sb-field { margin: 0; font-size: 13px; }

@@ -184,3 +184,48 @@ describe("attach order and References block (V2-SB-120)", () => {
     expect(document.querySelector('[data-testid="attach-order"] [role="status"]')?.textContent).toBe("Image 1 downloaded");
   });
 });
+
+describe("asset reference roles (V2-SB-123)", () => {
+  const assetDoc = (() => {
+    const r = story.validateStoryboard({
+      format: "dionysus.storyboard/1",
+      meta: { title: "T", aspect: "16:9" },
+      assets: [
+        { id: "photo", name: "Photo", type: "image", prompt: "A photo" },
+        { id: "look", name: "Look", type: "style", prompt: "Warm film look" },
+        { id: "poster", name: "Poster", type: "image", prompt: "A poster", references: [{ asset: "photo", role: "start-frame", note: "keep the pose" }, "look"] },
+      ],
+      shots: [{ id: "a", title: "One", description: "", durationSec: 4, prompt: "Walk", assets: ["poster"], qa: [] }],
+      connections: [],
+    });
+    if (!r.ok) throw new Error(JSON.stringify(r.errors));
+    return r.doc;
+  })();
+
+  it("an asset prompt gets the attach order and References block, and roles are editable", async () => {
+    const el = document.createElement("div"); document.body.appendChild(el);
+    engine = new Engine(createProject("t"));
+    engine.dispatch(cmd.createStoryboard(assetDoc));
+    await act(async () => createRoot(el).render(<StoryboardView engine={engine} blobs={createMemoryStorage().blobs} onClose={() => {}} />));
+    await click(btn(/^Poster:/));
+    const rows = [...document.querySelectorAll('[data-testid="attach-order"] li')].map((li) => li.textContent ?? "");
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toContain("Image 1 · Photo");
+    expect(rows[0]).toContain("Base image · not added yet · keep the pose");
+    expect(rows[1]).toContain("Image 2 · Look");
+    expect(rows[1]).toContain("Look");
+
+    let copied = "";
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async (t: string) => { copied = t; } } });
+    await click(document.querySelector('[data-testid="copy-clip-prompt"]') as HTMLElement);
+    expect(copied).toBe("References:\nImage 1 (Photo): BASE IMAGE: start from exactly this image and change only what the prompt asks. keep the pose.\nImage 2 (Look): reference only: overall look (palette, light, texture) only.\n\nA poster");
+
+    await click(btn("Edit"));
+    const role = [...document.querySelectorAll<HTMLSelectElement>(".v2-sb-refroles select")];
+    expect(role.map((s) => s.value)).toEqual(["start-frame", ""]);
+    expect(role[1].options[0].textContent).toBe("Auto (Look)");
+    await act(async () => setValue(role[1], "detail", "change"));
+    await click(btn("Save"));
+    expect(sb().slots.poster.refRoles).toEqual({ photo: { role: "start-frame", note: "keep the pose" }, look: { role: "detail" } });
+  });
+});

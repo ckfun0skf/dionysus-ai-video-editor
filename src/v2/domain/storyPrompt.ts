@@ -83,7 +83,9 @@ const FORMAT_SECTION = () => `{
       "aspect"?: string,         // defaults to meta.aspect; character sheets often "1:1"
       "prompt": string,          // full, self-contained image/video generation prompt (required when source is "generate");
                                  // for "html": describes the animated component the user's AI will build as one .html file
-      "references"?: string[],   // ids of other assets to feed as references when generating this one
+      "references"?: (string | { "asset": "<asset id>", "role"?: "start-frame" | "identity" | "look" | "detail", "note"?: string })[],
+                                 // other assets to attach when generating this one, IN THIS ORDER (Image 1, Image 2 …); a plain id
+                                 // = role from its type; for an image "start-frame" means the base image to edit (no end-frame)
       "source": "generate" | "upload" | { "type": "lastFrame", "shot": "<shot id>" },   // "html" can't use lastFrame
       "qa": string[]             // 2-5 concrete yes/no checks to verify the asset by looking
   } ],
@@ -151,6 +153,7 @@ export const RULES = [
   `Every clip prompt starts with a "References:" block that numbers the images attached to the clip in the order of the shot's "references" (else its "assets"): "Image 1 (<asset name>): …", one line each, saying explicitly whether the image is the START FRAME (or END FRAME) or only a reference, and what to take from it (identity, overall look, or materials and colours only, not its framing or wide view). Then state the framing from the first frame to the last. Set "references" with roles whenever the order or use is not obvious from the asset types.`,
   `A transition in "connections" overlaps the two shots, centred on the cut: it adds no time and eats half its length from the end of the "from" shot and half from the start of the "to" shot. It is clamped to half the shorter of the two shots. For example, a 0.8 s transition out of a 2.5 s shot blends the last 0.4 s of that shot with the first 0.4 s of the next, and the total length stays the same; keep transitions short on short shots so their key action isn't covered.`,
   `For an "identity" reference prefer a single clean portrait or character image (one view, plain background) over a multi-view character sheet: the sheet's layout (several poses, panels, labels) can leak into the generated frames.`,
+  `An asset made from other assets lists them in its "references" in attach order, as objects with a "role" when the use is not obvious from the type. Its prompt then starts with the same numbered "References:" block as a clip prompt; for an image, "start-frame" means the base image to edit (there is no end frame). Example: a close-up of the keeper's lantern on a table: "references": [{ "asset": "lantern", "role": "detail", "note": "brass and glass only" }, "keeper"], prompt "References:\\nImage 1 (Brass lantern): reference only: materials, colours and objects only; brass and glass only.\\nImage 2 (The keeper): reference only: keep this identity (face, body, clothes).\\n\\nClose-up of …".`,
 ];
 export const rulesSection = () => RULES.map((r, i) => `${i + 1}. ${r}`).join("\n");
 

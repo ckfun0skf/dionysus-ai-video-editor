@@ -47,9 +47,31 @@ Notation: `?` = optional. All coordinates are 0-1 fractions of the frame, measur
 | `type` | `character`, `location`, `prop`, `style`, `image`, `frame`, `video`, `audio`, **`html` (new)** | |
 | `aspect?` | aspect string | Defaults to `meta.aspect`. |
 | `prompt` | string | For `html`, this describes the component (see below) and is required when the source is `"generate"`. |
-| `references?` | string[] | Asset ids. No self-references and no loops. |
+| `references?` | (string \| AssetReference)[] | The assets this one is made from, in attach order. A plain asset id, or **(new, V2-SB-123)** an object with a role (§2.3.1). No self-references and no loops. |
 | `source` | `"generate"`, `"upload"` or `{type:"lastFrame", shot}` | **Future, not v1:** `{type:"template", template, params}` (§6). |
 | `qa` | string[] | 2-5 yes/no checks that can be verified by looking. |
+
+#### 2.3.1 `assets[].references[]` objects (V2-SB-123)
+
+Image models also take reference images next to the prompt and number them ("Image 1", "Image 2"). An asset's `references` fixes that order and, written as objects, says how each image is to be used, so a room sheet used for its drawers is not copied as a whole room.
+
+| Field | Type | Notes |
+|---|---|---|
+| `asset` | asset id | Must exist; not the asset itself; no loops. |
+| `role?` | `"start-frame"`, `"identity"`, `"look"` or `"detail"` | Same meanings as for shots (§2.4.1), except that an image has no end frame: `start-frame` is the **base image** to start from and edit. If omitted, inferred from the referenced asset: `frame` type or a `lastFrame` source → `start-frame` (only the first; a second becomes `detail`), `character` → `identity`, `style` → `look`, everything else → `detail`. |
+| `note?` | string | Extra instruction for this image. |
+
+- **Order = numbering.** The first entry is Image 1. Strings and objects can be mixed: `["style", { "asset": "flat", "role": "detail", "note": "the drawers only" }]`.
+- **Validation.** Unknown asset id, a self-reference or a loop: error. More than one `start-frame`: error. `"end-frame"`: warning, used as `detail`. Unknown role: warning, used as `detail`. The same asset twice: warning, the repeat is ignored.
+- **In the app.** The asset's *Prompt* section shows an **Attach in this order** list (Image 1, Image 2 … with each role and a Save button per image), and *Copy prompt* prepends a numbered `References:` block unless the prompt already has one. *Edit asset → Made from* lets the user set each image's role (Auto = inferred).
+- **Prompt.** An asset prompt with references starts with the same kind of block as a clip prompt (RULE 17), for example:
+
+```
+References:
+Image 1 (Brass lantern): reference only: the lantern's brass and glass only; do not copy its product-shot framing.
+
+Character sheet of an elderly lighthouse keeper holding a brass storm lantern, …
+```
 
 **`html` assets** are only for animated, 3D or three.js graphics.
 - The asset is never a file path and never inline HTML. Its `prompt` describes the component.
@@ -202,10 +224,11 @@ Planned as future registry entries, with no schema change needed: `grain`, `colo
 | `clip` on a `render: "ai"` shot | Warn and ignore. |
 | Unknown font id | Warn and use `sans`. |
 | Unknown `references[].role`, or the same asset twice in `references` | Warn; the role is used as `detail`, the repeat is ignored. |
+| `"end-frame"` in an asset's `references` (V2-SB-123) | Warn; used as `detail` (an image has no end frame). |
 
 **Errors.** The import is rejected for:
 - an unknown asset id in `clip`, a layer `asset`, `assets` or `references`;
-- more than one `start-frame` or more than one `end-frame` in a shot's `references`;
+- more than one `start-frame` or more than one `end-frame` in a shot's `references`, or more than one `start-frame` in an asset's `references`;
 - a `clip` of the wrong asset type for its `render`;
 - `render: "html"` or `"still"` without `clip`;
 - a layer with both `position` and `box`, or with neither (except for `html`, `image` and `video` layers, which require `box` and reject `position`);
@@ -309,6 +332,7 @@ RULES
 14. Every clip prompt starts with a "References:" block that numbers the images attached to the clip in the order of the shot's "references" (else its "assets"): "Image 1 (<asset name>): …", one line each, saying explicitly whether the image is the START FRAME (or END FRAME) or only a reference, and what to take from it (identity, overall look, or materials and colours only, not its framing or wide view). Then state the framing from the first frame to the last. Set "references" with roles whenever the order or use is not obvious from the asset types.
 15. A transition in "connections" overlaps the two shots, centred on the cut: it adds no time and eats half its length from the end of the "from" shot and half from the start of the "to" shot. It is clamped to half the shorter of the two shots. For example, a 0.8 s transition out of a 2.5 s shot blends the last 0.4 s of that shot with the first 0.4 s of the next, and the total length stays the same; keep transitions short on short shots so their key action isn't covered.
 16. For an "identity" reference prefer a single clean portrait or character image (one view, plain background) over a multi-view character sheet: the sheet's layout (several poses, panels, labels) can leak into the generated frames.
+17. An asset made from other assets lists them in its "references" in attach order, as objects with a "role" when the use is not obvious from the type . Its prompt then starts with the same numbered "References:" block as a clip prompt; for an image, "start-frame" means the base image to edit (there is no end frame).
 ```
 
 ## 6. Decisions, open questions and future work
@@ -326,6 +350,7 @@ RULES
 - **s03** is `render: "still"` with `clip: "card-still"`. It has a framed text layer (`box`, `textStyle: "plain"` plus inline serif style, fade-in) and a `ken-burns` effect.
 - **s07** is `render: "still"` with `clip: "title-bg"`. It has a centred `ALLOTMENT` text layer that uses `meta.textStyles["ata-title"]`.
 - **Connections:** s06→s07 uses `dip` (0.5 s) and s07→s08 uses `crossfade` (0.8 s).
+- **Asset `card-still`** (V2-SB-123) is made from `[{ "asset": "flat", "role": "detail", "note": "…drawers only…" }, "style"]`, and its prompt starts with the matching two-image `References:` block.
 
 Excerpt (prompt shortened):
 
