@@ -459,3 +459,9 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 .v2-group-focus .v2-focus-hint { opacity: 0; font-size: 10px; text-transform: none; color: var(--accent); }
 .v2-group-focus:hover .v2-focus-hint, .v2-group-focus.is-on .v2-focus-hint { opacity: 1; }
 .v2-group-focus.is-on { color: var(--accent); }
+
+/* V2-105 subtitle layer picker */
+.v2-subs-pick-row { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; margin-bottom: 6px; text-align: left; }
+.v2-subs-pick-name { display: flex; flex-direction: column; min-width: 0; }
+.v2-subs-pick-name em { font-style: normal; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.v2-cue.is-target { outline: 2px solid var(--accent); outline-offset: -2px; }

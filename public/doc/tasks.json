@@ -2051,6 +2051,12 @@
           "title": "Subtitle list editor: Edit subtitles (timecodes, inline text, add/split/merge/delete, find & replace, Export SRT), Add subtitle removed, desktop focus mode",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-105",
+          "title": "Edit subtitles reachable on mobile: Text toolbar + clip toolbar entry, layer picker, 4-control mobile layer row with layout test",
+          "status": "done",
+          "progress": 100
         }
       ]
     },

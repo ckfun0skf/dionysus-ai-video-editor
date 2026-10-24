@@ -22,7 +22,7 @@ function Tc({ value, label, onCommit }: { value: number; label: string; onCommit
     onChange={(e) => setDraft(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commit(); (e.target as HTMLInputElement).blur(); } if (e.key === "Escape") setDraft(undefined); }} />;
 }
 
-export function SubtitleList({ engine, track, time, playing, onSeek, desktop, name }: { engine: Engine; track: Track; time: number; playing: boolean; onSeek: (t: number) => void; desktop: boolean; name: string }) {
+export function SubtitleList({ engine, track, time, playing, onSeek, desktop, name, focusCue }: { engine: Engine; track: Track; time: number; playing: boolean; onSeek: (t: number) => void; desktop: boolean; name: string; focusCue?: string }) {
   const list = cueOps.cuesOf(track);
   const active = cueOps.activeCue(track, time);
   const rowsRef = useRef<HTMLDivElement>(null);
@@ -35,6 +35,17 @@ export function SubtitleList({ engine, track, time, playing, onSeek, desktop, na
     if (!playing || !active) return;
     rowsRef.current?.querySelector<HTMLElement>(`[data-cue="${active}"]`)?.scrollIntoView?.({ block: "nearest" });
   }, [active, playing]);
+
+  // V2-105: opened from a selected clip → scroll to that line and jump the playhead there.
+  const [target, setTarget] = useState(focusCue);
+  useEffect(() => {
+    setTarget(focusCue);
+    const c = focusCue && list.find((x) => x.id === focusCue);
+    if (!c) return;
+    onSeek(c.startTicks);
+    requestAnimationFrame(() => rowsRef.current?.querySelector<HTMLElement>(`[data-cue="${focusCue}"]`)?.scrollIntoView?.({ block: "center" }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusCue, track.id]);
 
   const focusRow = (id: string) => requestAnimationFrame(() => rowsRef.current?.querySelector<HTMLTextAreaElement>(`[data-cue="${id}"] textarea`)?.focus());
   const addAfter = (id: string) => { const n = newId("plc"); const before = engine.getState().project; engine.dispatch(cmd.addCueAfter(id, n)); if (engine.getState().project === before) setMsg("No room after this subtitle — shorten it or move the next one"); else focusRow(n); };
@@ -62,7 +73,7 @@ export function SubtitleList({ engine, track, time, playing, onSeek, desktop, na
       {!list.length && <p className="v2-empty-hint">No subtitles on this layer yet. Import an SRT file or add text.</p>}
       <div className="v2-cuerows" ref={rowsRef}>
         {list.map((c, i) => (
-          <div key={c.id} data-cue={c.id} className={`v2-cue ${c.id === active ? "is-active" : ""}`} onPointerDown={(e) => { if (!(e.target as HTMLElement).closest("button,input")) onSeek(c.startTicks); }}>
+          <div key={c.id} data-cue={c.id} className={`v2-cue ${c.id === active ? "is-active" : ""} ${c.id === target ? "is-target" : ""}`} onPointerDown={(e) => { setTarget(undefined); if (!(e.target as HTMLElement).closest("button,input")) onSeek(c.startTicks); }}>
             <div className="v2-cue-times">
               <span className="v2-cue-n">{i + 1}</span>
               <Tc label={`Start of subtitle ${i + 1}`} value={c.startTicks} onCommit={(s) => engine.dispatch(cmd.setCueTimes(c.id, s, c.startTicks + c.durationTicks))} />

@@ -70,6 +70,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   /** V2-103: text layer being edited as a whole ("Edit all"). */
   const [layerEdit, setLayerEdit] = useState<string>();
   const [subsEdit, setSubsEdit] = useState<string>();
+  const [subsCue, setSubsCue] = useState<string>();
+  const [subsPick, setSubsPick] = useState(false);
   /** V2-103: gizmo scope on styled text layers; undefined = layer default (Whole layer for subtitles). */
   const [gizmoScope, setGizmoScope] = useState<"clip" | "layer">();
   /** V2-098: animation sheet; after a pick the sheet shrinks and the preview loops over the clip's time range. */
@@ -128,6 +130,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const textTools = [
     { icon: "T", label: "Add text", title: "Add a text clip at the playhead (T)", run: addText },
     { icon: "⇪", label: "Import SRT", title: "Import an .srt file as a new text layer", run: () => srtRef.current?.click() },
+    { icon: "≡", label: "Edit subtitles", title: "Edit every subtitle in a list: text, timing, split, merge, find & replace", run: () => editSubtitles() },
     { icon: "⇩", label: "Export SRT", title: "Download subtitles as .srt", run: exportSrt },
   ];
   // V2-103: controls and gizmo work on the effective placement (layer style merged under the clip's overrides).
@@ -142,7 +145,16 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   useEffect(() => { if (layerEdit && !layerTrack) setLayerEdit(undefined); }, [layerEdit, layerTrack]);
   const subsTrack = subsEdit ? comp.tracks.find((t) => t.id === subsEdit) : undefined;
   useEffect(() => { if (subsEdit && !subsTrack) setSubsEdit(undefined); }, [subsEdit, subsTrack]);
-  const openSubs = (id: string) => { setSubsEdit(id); setLayerEdit(undefined); setSel([]); setSideOpen(true); };
+  const openSubs = (id: string, cueId?: string) => { setSubsEdit(id); setSubsCue(cueId); setSubsPick(false); setLayerEdit(undefined); setSel([]); setSideOpen(true); };
+  // V2-105: toolbar entry. Selected clip's layer → else the only text layer → else a picker (subtitle layers first).
+  const textLayers = comp.tracks.filter((t) => t.kind === "text" && t.placements.some((p) => p.clipType === "text")).sort((a, b) => Number(!!b.layerStyle?.subtitle) - Number(!!a.layerStyle?.subtitle));
+  const editSubtitles = () => {
+    const cur = selected && selected.track.kind === "text" && selected.placement.clipType === "text" ? selected : undefined;
+    if (cur) return openSubs(cur.track.id, cur.placement.id);
+    if (!textLayers.length) return setToast("No subtitles yet — Import SRT or Add text first");
+    if (textLayers.length === 1) return openSubs(textLayers[0].id);
+    setSubsPick(true);
+  };
   const editLayer = (id: string) => { setSel([]); setSubId(undefined); setLayerEdit(id); if (!mobile) setSideOpen(true); };
   const layerRoute = scope === "layer" && selTrack ? (patch: { x?: number; y?: number; scale?: number; rotation?: number } | null) => {
     if (!patch) return;
@@ -484,7 +496,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       tool("✂", "Split", split),
       tool("🗑", ripple ? "Ripple delete" : "Delete", () => del(), "delete", ripple ? "Delete and close the gap" : "Delete"),
       ...(isHtml ? [tool("</>", "Edit code", () => void openCode(), "edit-code", "Edit HTML, CSS and JS with live preview")] : []),
-      ...(isText ? [tool("T", "Edit text", () => setTextOpen(true), "edit-text", "Templates, font, style, effects, animation"), tool("anim", "Animation", () => setAnimOpen(true), "anim", "In, out and loop animations")] : []),
+      ...(isText ? [tool("T", "Edit text", () => setTextOpen(true), "edit-text", "Templates, font, style, effects, animation"), tool("anim", "Animation", () => setAnimOpen(true), "anim", "In, out and loop animations"), tool("≡", "Subtitles", () => openSubs(selected.track.id, selected.placement.id), "subs-list", "Open this layer's subtitle list at this clip")] : []),
       tool("⤧", "Adjust", () => setInspOpen(true), "adjust", "Transform, keyframes and fades"),
       ...(speedSelect ? [tool("⏩", `Speed ${sp!.speed ?? 1}×`, () => setMenu("speed"), "speed", "Playback speed")] : []),
       tool("☑", "Select", () => setMultiMode(true), "multi", "Select several clips"),
@@ -544,6 +556,13 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       {projects && <ProjectsDialog storage={storage} current={project} onOpen={(id) => { setProjects(false); onSwitch(id); }} onRenameCurrent={(n) => engine.dispatch(cmd.renameProject(n))} onClose={() => setProjects(false)} />}
       {exporting && <ExportDialog project={project} blobs={storage.blobs} res={res} onRes={setRes} onClose={() => setExporting(false)} />}
       {htmlEdit && <HtmlEditor source={htmlEdit.source} mobile={mobile} onSave={(h) => void saveCode(h)} onClose={() => setHtmlEdit(undefined)} />}
+      {subsPick && <div className="v2-menu-backdrop v2-confirm-backdrop" onPointerDown={() => setSubsPick(false)}>
+        <div className="v2-confirm v2-subs-pick" role="dialog" aria-modal="true" aria-label="Choose a text layer" onPointerDown={(e) => e.stopPropagation()}>
+          <h4>Edit subtitles</h4><p>Which text layer?</p>
+          {textLayers.map((t) => <button key={t.id} className="v2-btn v2-subs-pick-row" onClick={() => openSubs(t.id)}><Ic g="≡" size={16} /><span className="v2-subs-pick-name"><b>{t.name}</b><em>{(() => { const c = cueLayer.cuesOf(t); const f = c[0]?.text.replace(/\s+/g, " ") ?? ""; return `${f.length > 24 ? f.slice(0, 24) + "…" : f} · ${c.length} line${c.length === 1 ? "" : "s"}`; })()}</em></span></button>)}
+          <div className="v2-confirm-actions"><button className="v2-btn" onClick={() => setSubsPick(false)}>Cancel</button></div>
+        </div>
+      </div>}
       {toast && <div className="v2-toast" role="status" onClick={() => setToast(undefined)}>{toast}</div>}
       {mobile ? (
         <>
@@ -573,7 +592,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           {!sheet && <div hidden>{browser}</div>}
           {cue && <div className="v2-msub"><SubtitleEditor engine={engine} sub={cue} onDelete={delCue} /></div>}
           {inspOpen && selected && <Sheet label="Adjust" className="v2-msheet-insp" onClose={() => setInspOpen(false)}><TransformInspector engine={engine} placement={selected.placement} time={time} /><button className="v2-btn" onClick={() => setInspOpen(false)}>Done</button></Sheet>}
-          {subsTrack && <Sheet label="Edit subtitles" className="v2-msheet-tall" onClose={() => setSubsEdit(undefined)}><SubtitleList engine={engine} track={subsTrack} time={time} playing={playing} onSeek={seek} desktop={false} name={project.name} /></Sheet>}
+          {subsTrack && <Sheet label="Edit subtitles" className="v2-msheet-tall" onClose={() => setSubsEdit(undefined)}><SubtitleList engine={engine} track={subsTrack} time={time} playing={playing} onSeek={seek} desktop={false} name={project.name} focusCue={subsCue} /></Sheet>}
           {layerTrack && !selected && <Sheet label="Edit all" className="v2-msheet-insp" onClose={() => setLayerEdit(undefined)}><TextPanel key={layerTrack.id} engine={engine} layer={layerTrack} initialTab="Style" /><button className="v2-btn" onClick={() => setLayerEdit(undefined)}>Done</button></Sheet>}
           {textOpen && selected && isText && <Sheet label="Text" className={`v2-msheet-insp ${animLoop ? "is-compact" : ""}`} onClose={closeAnim}><TextPanel engine={engine} placement={effSel} track={selTrack} onAnimPicked={() => setAnimLoop(true)} /><button className="v2-btn" onClick={closeAnim}>Done</button></Sheet>}
           {fxOpen && <Sheet label="Effects" className="v2-msheet-insp" onClose={() => setFxOpen(false)}><EffectPicker engine={engine} at={time} placement={isEffect ? selected!.placement : undefined} onAdded={(id) => setSel([id])} onClose={() => setFxOpen(false)} /><button className="v2-btn" onClick={() => setFxOpen(false)}>Done</button></Sheet>}
@@ -582,7 +601,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       ) : (
         <div className={`v2-desktop-grid ${sideOpen ? "" : "side-closed"}`}>
           <button className="v2-icon v2-side-toggle" aria-label={sideOpen ? "Hide side panel" : "Show side panel"} title={sideOpen ? "Hide side panel" : "Show side panel"} aria-expanded={sideOpen} onClick={() => setSideOpen(!sideOpen)}><Ic g={sideOpen ? "panel-close" : "panel-open"} size={18} /></button>
-          <div className="v2-side" hidden={!sideOpen}>{subsTrack && !selected && <SubtitleList engine={engine} track={subsTrack} time={time} playing={playing} onSeek={seek} desktop name={project.name} />}{selected && isText && <TextPanel engine={engine} placement={effSel} track={selTrack} onAnimPicked={() => setAnimLoop(true)} />}{selected && isEffect && <EffectPicker engine={engine} at={time} placement={selected.placement} />}{selected && !isEffect && <TransformInspector engine={engine} placement={selected.placement} time={time} />}{layerTrack && !selected && !subsTrack && <TextPanel key={layerTrack.id} engine={engine} layer={layerTrack} initialTab="Style" />}{!selected && !cue && !layerTrack && !subsTrack && <details className="v2-side-fx" open={fxOpen} onToggle={(e) => setFxOpen((e.currentTarget as HTMLDetailsElement).open)}><summary title="Effect layers: blur, zoom, B&W, vignette… applied to the main track">Effects</summary><EffectPicker engine={engine} at={time} onAdded={(id) => setSel([id])} /></details>}{cue && <SubtitleEditor engine={engine} sub={cue} onDelete={delCue} />}{browser}</div>
+          <div className="v2-side" hidden={!sideOpen}>{subsTrack && !selected && <SubtitleList engine={engine} track={subsTrack} time={time} playing={playing} onSeek={seek} desktop name={project.name} focusCue={subsCue} />}{selected && isText && <TextPanel engine={engine} placement={effSel} track={selTrack} onAnimPicked={() => setAnimLoop(true)} />}{selected && isEffect && <EffectPicker engine={engine} at={time} placement={selected.placement} />}{selected && !isEffect && <TransformInspector engine={engine} placement={selected.placement} time={time} />}{layerTrack && !selected && !subsTrack && <TextPanel key={layerTrack.id} engine={engine} layer={layerTrack} initialTab="Style" />}{!selected && !cue && !layerTrack && !subsTrack && <details className="v2-side-fx" open={fxOpen} onToggle={(e) => setFxOpen((e.currentTarget as HTMLDetailsElement).open)}><summary title="Effect layers: blur, zoom, B&W, vignette… applied to the main track">Effects</summary><EffectPicker engine={engine} at={time} onAdded={(id) => setSel([id])} /></details>}{cue && <SubtitleEditor engine={engine} sub={cue} onDelete={delCue} />}{browser}</div>
           {preview}
           <section className="v2-timeline-panel" aria-label="Timeline">
             <div className="v2-timeline-toolbar">{selectionActions}<span className="v2-hint">Space play · S split · F freeze · Del delete · Shift+Del ripple · R ripple · Shift-click multi-select · ⌘C/⌘V/⌘D · ⌘/Ctrl+Z undo</span></div>
