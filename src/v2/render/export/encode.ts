@@ -1,4 +1,4 @@
-/** Export: offline frame-by-frame render → WebCodecs H.264/AAC MP4, or a real-time MediaRecorder WebM fallback. */
+/** Export: offline frame-by-frame render → WebCodecs H.264 MP4 (AAC, else Opus audio), or a real-time MediaRecorder WebM fallback. */
 import { ArrayBufferTarget, Muxer } from "mp4-muxer";
 import type { Project } from "../../domain/model";
 import type { BlobStore } from "../../ports/storage";
@@ -7,7 +7,12 @@ import { ExportVideoFrames } from "./videoFrames";
 import { audioPlan, exportDuration, exportSize, frameTimes, type AudioSegment, type Resolution } from "./plan";
 
 export interface ExportProgress { stage: "audio" | "video" | "finalize"; done: number; total: number }
-export interface ExportResult { blob: Blob; ext: "mp4" | "webm"; note?: string; warnings?: string[] }
+/**
+ * What an export actually writes (V2-SB-129): container, video codec, and audio codec. `audio` is undefined when the
+ * timeline has no sound, and "none" when it has sound but this browser can't encode any audio for the container.
+ */
+export interface ExportFormat { ext: "mp4" | "webm"; video: string; audio?: "AAC" | "Opus" | "none" }
+export interface ExportResult { blob: Blob; ext: "mp4" | "webm"; format?: ExportFormat; note?: string; warnings?: string[] }
 export interface ExportOptions { res: Resolution; onProgress?: (p: ExportProgress) => void; signal?: AbortSignal; forceWebm?: boolean }
 
 const RATE = 48_000;
@@ -27,6 +32,54 @@ export async function pickAvc(w: number, h: number, fps: number): Promise<VideoE
     if ((await VideoEncoder.isConfigSupported(cfg).catch(() => ({ supported: false }))).supported) return cfg;
   }
   return undefined;
+}
+
+/** AAC-LC configs to try, best first, then Opus (MP4 allows both; Chromium builds without proprietary codecs lack AAC). */
+export const AUDIO_CANDIDATES: AudioEncoderConfig[] = [
+  { codec: "mp4a.40.2", sampleRate: RATE, numberOfChannels: 2, bitrate: 192_000 },
+  { codec: "mp4a.40.2", sampleRate: RATE, numberOfChannels: 2, bitrate: 128_000 },
+  { codec: "mp4a.40.2", sampleRate: RATE, numberOfChannels: 2 },
+  { codec: "opus", sampleRate: RATE, numberOfChannels: 2, bitrate: 192_000 },
+  { codec: "opus", sampleRate: RATE, numberOfChannels: 2 },
+];
+
+/** The first audio config this browser can encode for MP4 (AAC preferred), or undefined. */
+export async function pickAudio(): Promise<AudioEncoderConfig | undefined> {
+  if (typeof AudioEncoder === "undefined") return undefined;
+  for (const c of AUDIO_CANDIDATES) if ((await AudioEncoder.isConfigSupported(c).catch(() => ({ supported: false }))).supported) return { ...c };
+  return undefined;
+}
+
+const audioName = (c: AudioEncoderConfig | undefined): ExportFormat["audio"] => (!c ? "none" : c.codec === "opus" ? "Opus" : "AAC");
+const WEBM_MIMES = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"];
+/** Codecs named in a WebM MIME type (as MediaRecorder reports it). */
+export function webmFormat(mime: string | undefined, hasAudio: boolean): ExportFormat {
+  const c = /codecs="?([^";]+)/i.exec(mime ?? "")?.[1]?.toLowerCase() ?? "";
+  const video = /vp9|vp09/.test(c) ? "VP9" : /vp8/.test(c) ? "VP8" : /avc1|h264/.test(c) ? "H.264" : /av1|av01/.test(c) ? "AV1" : "VP8/VP9";
+  return { ext: "webm", video, ...(hasAudio ? { audio: "Opus" as const } : {}) };
+}
+
+/** Human label, e.g. "MP4 (H.264 + AAC)", "MP4 (H.264, silent)", "WebM (VP9 + Opus)". */
+export function formatLabel(f: ExportFormat): string {
+  const a = f.audio === undefined ? "" : f.audio === "none" ? ", silent" : ` + ${f.audio}`;
+  return `${f.ext === "mp4" ? "MP4" : "WebM"} (${f.video}${a})`;
+}
+
+/** A short explanation when the format is not the standard H.264 + AAC MP4, else undefined. */
+export function formatNote(f: ExportFormat): string | undefined {
+  if (f.ext === "webm") return "This browser has no H.264 encoder, so the export is WebM, recorded in real time (keep this tab open).";
+  if (f.audio === "none") return "This browser can't encode MP4 audio, so the file is silent.";
+  if (f.audio === "Opus") return "This browser can't encode AAC, so the audio is Opus. Most players handle it; some older players and editors may play the file silent. Export in Safari, or Chrome on macOS or Windows, for AAC.";
+  return undefined;
+}
+
+/** What `exportProject` will write at this resolution in this browser, without rendering anything. */
+export async function probeExportFormat(project: Project, res: Resolution): Promise<ExportFormat> {
+  const { width, height } = exportSize(res, project.settings);
+  const hasAudio = audioPlan(project).length > 0;
+  if (await pickAvc(width, height, project.settings.fps)) return { ext: "mp4", video: "H.264", ...(hasAudio ? { audio: audioName(await pickAudio()) } : {}) };
+  const mime = typeof MediaRecorder === "undefined" ? undefined : WEBM_MIMES.find((m) => MediaRecorder.isTypeSupported(m));
+  return webmFormat(mime, hasAudio);
 }
 
 /** Mix the audio plan offline (decoded sources, speed, volume, fades). */
@@ -78,13 +131,10 @@ export async function exportProject(project: Project, blobs: BlobStore, o: Expor
 }
 
 async function toMp4(player: Player, canvas: HTMLCanvasElement, cfg: VideoEncoderConfig, audio: AudioBuffer | undefined, times: number[], fps: number, o: ExportOptions, check: () => void): Promise<ExportResult> {
-  const aCfg: AudioEncoderConfig = { codec: "mp4a.40.2", sampleRate: RATE, numberOfChannels: 2, bitrate: 192_000 };
   // AAC first; Opus-in-MP4 where AAC is unavailable (e.g. Chromium without proprietary codecs).
-  const ok = async (c: AudioEncoderConfig) => typeof AudioEncoder !== "undefined" && !!(await AudioEncoder.isConfigSupported(c).catch(() => ({ supported: false }))).supported;
-  if (audio && !(await ok(aCfg))) aCfg.codec = "opus";
-  const aac = !!audio && (await ok(aCfg));
+  const aCfg = audio ? await pickAudio() : undefined;
   const target = new ArrayBufferTarget();
-  const muxer = new Muxer({ target, fastStart: "in-memory", video: { codec: "avc", width: cfg.width, height: cfg.height, frameRate: fps }, ...(aac ? { audio: { codec: aCfg.codec === "opus" ? ("opus" as const) : ("aac" as const), numberOfChannels: 2, sampleRate: RATE } } : {}) });
+  const muxer = new Muxer({ target, fastStart: "in-memory", video: { codec: "avc", width: cfg.width, height: cfg.height, frameRate: fps }, ...(aCfg ? { audio: { codec: aCfg.codec === "opus" ? ("opus" as const) : ("aac" as const), numberOfChannels: 2, sampleRate: RATE } } : {}) });
   let failure: unknown;
   const venc = new VideoEncoder({ output: (c, m) => muxer.addVideoChunk(c, m), error: (e) => { failure = e; } });
   venc.configure(cfg);
@@ -107,7 +157,7 @@ async function toMp4(player: Player, canvas: HTMLCanvasElement, cfg: VideoEncode
   }
   o.onProgress?.({ stage: "finalize", done: 0, total: 1 });
   await venc.flush(); venc.close();
-  if (aac && audio) {
+  if (aCfg && audio) {
     const aenc = new AudioEncoder({ output: (c, m) => muxer.addAudioChunk(c, m), error: (e) => { failure = e; } });
     aenc.configure(aCfg);
     const n = Math.min(audio.length, Math.round((times.length / fps) * RATE));
@@ -122,7 +172,8 @@ async function toMp4(player: Player, canvas: HTMLCanvasElement, cfg: VideoEncode
   }
   if (failure) throw failure;
   muxer.finalize();
-  return { blob: new Blob([target.buffer], { type: "video/mp4" }), ext: "mp4", note: audio && !aac ? "This browser can't encode MP4 audio, so the file is silent." : undefined };
+  const format: ExportFormat = { ext: "mp4", video: "H.264", ...(audio ? { audio: audioName(aCfg) } : {}) };
+  return { blob: new Blob([target.buffer], { type: "video/mp4" }), ext: "mp4", format, note: formatNote(format) };
 }
 
 /** Fallback: real-time capture (frames paced to the wall clock) with the pre-mixed audio played into the recorder. */
@@ -133,7 +184,7 @@ async function toWebm(player: Player, canvas: HTMLCanvasElement, audio: AudioBuf
   const ac = audio ? new AudioContext({ sampleRate: RATE }) : undefined;
   let src: AudioBufferSourceNode | undefined;
   if (ac && audio) { const dest = ac.createMediaStreamDestination(); src = ac.createBufferSource(); src.buffer = audio; src.connect(dest); dest.stream.getAudioTracks().forEach((t) => stream.addTrack(t)); }
-  const mime = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"].find((m) => MediaRecorder.isTypeSupported(m));
+  const mime = WEBM_MIMES.find((m) => MediaRecorder.isTypeSupported(m));
   const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
   const parts: Blob[] = [];
   rec.ondataavailable = (e) => e.data.size && parts.push(e.data);
@@ -152,7 +203,8 @@ async function toWebm(player: Player, canvas: HTMLCanvasElement, audio: AudioBuf
       o.onProgress?.({ stage: "video", done: i + 1, total: times.length });
     }
   } finally { rec.stop(); src?.stop(); await stopped; void ac?.close(); stream.getTracks().forEach((t) => t.stop()); }
-  return { blob: new Blob(parts, { type: "video/webm" }), ext: "webm", note: "This browser has no H.264 encoder, so the export is WebM (recorded in real time)." };
+  const format = webmFormat(rec.mimeType || mime, !!audio);
+  return { blob: new Blob(parts, { type: "video/webm" }), ext: "webm", format, note: formatNote(format) };
 }
 
 const clipName = (project: Project, id: string, fallback: string) => {
