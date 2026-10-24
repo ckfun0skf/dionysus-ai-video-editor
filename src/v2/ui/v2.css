@@ -390,7 +390,6 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 .v2-ptile:focus-visible { outline: 2px solid var(--accent, #20d5ec); outline-offset: 2px; }
 .v2-anim .v2-tp-tabs button { min-height: 44px; padding: 0 16px; }
 .v2-anim output { margin-left: auto; margin-right: 8px; color: var(--muted, #aaa); }
-.v2-sheet.is-compact { max-height: 30dvh; transition: max-height .2s ease-out; }
 .v2-anim-badges { position: absolute; left: 1px; right: 1px; bottom: 1px; display: flex; justify-content: space-between; pointer-events: none; }
 .v2-anim-badge { display: inline-grid; place-items: center; width: 13px; height: 13px; border-radius: 3px; background: rgba(0,0,0,.65); color: #fff; }
 .v2-anim-badges .is-loop { margin: 0 auto; }
@@ -547,3 +546,12 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 .v2-cuelist-head > strong { min-width: 0; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 15px; }
 .v2-cuelist-actions { display: flex; align-items: center; flex: none; }
 .v2-app.is-desktop .v2-tp-tabs { gap: 0; }
+
+/* V2-112 — Google Maps–style snapping sheets & splitter (height driven from JS: snapDrag.ts) */
+.v2-sheet.is-snap { max-height: none; transition: none; overscroll-behavior: contain; will-change: height; }
+.v2-sheet.is-snap > .v2-grabber, .v2-sheet.is-snap .v2-sheet-head, .v2-sheet.is-snap .v2-cuelist-head, .v2-sheet.is-snap .v2-panel-head { touch-action: none; cursor: grab; -webkit-user-select: none; user-select: none; }
+.v2-sheet.is-snap > .v2-grabber:active { cursor: grabbing; }
+.v2-panel-grabber { position: relative; z-index: 3; height: 20px; cursor: grab; -webkit-user-select: none; user-select: none; }
+.v2-panel-grabber::after { content: ""; position: absolute; inset: -12px 0; }
+.v2-panel-grabber:active { cursor: grabbing; }
+.v2-app.is-mobile .v2-preview { will-change: height; transition: none; }

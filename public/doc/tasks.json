@@ -2189,6 +2189,12 @@
           "title": "UX review P2 polish: CapCut-style sheet header with ✓ on every sheet, side padding, accent theme + colour swatch, toast above sheets, scope chip only for a selected text clip (Apply to: This clip | All in layer), 4px Focus lines, ruler labels clear the time readout, reorder strip fade, scroll fades, themed resolution select, clip-name pills, desktop swatch row, 32px desktop targets, playhead 0.5, SRT → Edit subtitles opens the new layer, window-relative timeline, menu clamp, tile font fit, attach accepts web assets",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-112",
+          "title": "Google Maps-style snapping drag for every resize grabber (timeline splitter + all mobile sheets)",
+          "status": "done",
+          "progress": 100
         }
       ]
     },
