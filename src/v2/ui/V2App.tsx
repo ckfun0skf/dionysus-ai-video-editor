@@ -583,6 +583,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       ...clipActions.map((a) => tool(a.icon, a.label, a.run, a.label, a.title)),
     ] : [
       ...(transitionTools ? [<span key="tr" className="v2-trans-wrap">{transitionTools}</span>] : []),
+      // Linked storyboard clips: up front so it is visible without scrolling the tool row.
+      ...(selLink ? [tool("board", "Storyboard", () => openStory(selLink.target), "open-story", `Open ${selLink.label} in the storyboard: pick versions there`)] : []),
       tool("✂", "Split", split),
       tool("🗑", ripple ? "Ripple delete" : "Delete", () => del(), "delete", ripple ? "Delete and close the gap" : "Delete"),
       ...(isHtml ? [tool("</>", "Edit code", () => void openCode(), "edit-code", "Edit HTML, CSS and JS with live preview")] : []),
@@ -590,7 +592,6 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       tool("⤧", "Adjust", () => setInspOpen(true), "adjust", "Transform, keyframes and fades"),
       ...(speedSelect ? [tool("⏩", `Speed ${sp!.speed ?? 1}×`, () => setMenu("speed"), "speed", "Playback speed")] : []),
       tool("☑", "Select", () => setMultiMode(true), "multi", "Select several clips"),
-      ...(selLink ? [tool("board", "Storyboard", () => openStory(selLink.target), "open-story", `Open ${selLink.label} in the storyboard: pick versions there`)] : []),
       ...[...clipActions, ...timeActions, ...linkedAudioActions].map((a) => tool(a.icon, a.label, a.run, a.label, a.title)),
       ...(!["image", "html", "text"].includes(selected.placement.clipType) ? [
         <label key="vol" className="v2-tool v2-volume"><b aria-hidden><Ic g="🔊" /></b>
@@ -837,7 +838,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           <button className="v2-btn primary v2-export-d" title="Export MP4 (⌘/Ctrl+E)" onClick={openExport}><Ic g="⇪" size={16} /> Export</button>
         </header>
       )}
-      {board && <StoryboardView engine={engine} blobs={storage.blobs} initialOpen={boardOpen} onClose={() => { setBoard(false); setBoardOpen(undefined); }} />}
+      {board && <StoryboardView engine={engine} blobs={storage.blobs} initialOpen={boardOpen} onClose={() => { setBoard(false); setBoardOpen(undefined); }}
+        onView={(id) => { setBoard(false); setBoardOpen(undefined); const pl = ops.mainTrack(engine.getState().project.compositions[engine.getState().project.rootCompositionId])?.placements.find((x) => x.id === id); if (pl) { if (mobile) setMenu("edit"); selectClip(id); seek(pl.startTicks); } }} />}
       {notice && <RecoveryNotice failure={notice} storage={storage} onDismiss={() => setNotice(undefined)} />}
       {projects && <ProjectsDialog storage={storage} current={project} onOpen={(id) => { setProjects(false); onSwitch(id); }} onRenameCurrent={(n) => engine.dispatch(cmd.renameProject(n))} onClose={() => setProjects(false)} />}
       {exporting && <ExportDialog project={project} blobs={storage.blobs} res={res} onRes={setRes} onClose={() => setExporting(false)} />}

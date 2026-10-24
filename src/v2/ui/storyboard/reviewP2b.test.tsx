@@ -1,0 +1,136 @@
+// @vitest-environment jsdom
+import { act } from "react";
+import { createRoot } from "react-dom/client";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { createProject, EXAMPLE_STORYBOARD, ops, story, type MediaRef } from "../../domain";
+import { cmd, Engine } from "../../engine";
+import { createMemoryStorage } from "../../persistence";
+import { secondsToTicks as s } from "../../domain/time";
+import { StoryboardView } from "./StoryboardView";
+
+let phone = false;
+beforeAll(() => {
+  (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  (globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver = class { observe() {} disconnect() {} };
+  HTMLCanvasElement.prototype.getContext = (() => null) as never;
+  window.matchMedia = ((q: string) => ({ matches: phone && q.includes("max-width"), media: q, addEventListener() {}, removeEventListener() {} })) as never;
+});
+afterEach(() => { document.body.innerHTML = ""; phone = false; });
+
+const doc = (() => { const r = story.validateStoryboard(EXAMPLE_STORYBOARD); if (!r.ok) throw new Error("bad"); return r.doc; })();
+const media = (sec: number): MediaRef => ({ blobKey: `b${sec}`, mime: "video/mp4", durationTicks: s(sec) });
+const btn = (el: Element, t: string) => [...el.querySelectorAll("button")].find((b) => b.textContent?.trim() === t || b.getAttribute("aria-label") === t) as HTMLButtonElement;
+const setText = (ta: HTMLTextAreaElement, v: string) => {
+  Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(ta, v);
+  ta.dispatchEvent(new Event("input", { bubbles: true }));
+};
+
+function setup(withBoard = true) {
+  const e = new Engine(createProject("t"));
+  if (withBoard) { e.dispatch(cmd.createStoryboard(doc)); e.dispatch(cmd.addStoryVersion({ shot: "s1" }, media(5), { versionId: "a1" })); }
+  return e;
+}
+async function mountBoard(e: Engine, onView?: (id: string) => void) {
+  const el = document.createElement("div"); document.body.appendChild(el);
+  await act(async () => createRoot(el).render(<StoryboardView engine={e} blobs={createMemoryStorage().blobs} onClose={() => {}} onView={onView} />));
+  return el;
+}
+
+describe("storyboard review P2 (second batch)", () => {
+  it("R13: the Send note offers View, which hands over the first new clip", async () => {
+    const e = setup();
+    const onView = vi.fn();
+    const el = await mountBoard(e, onView);
+    await act(async () => btn(el, "Send to timeline").click());
+    const note = el.querySelector(".v2-sb-note")!;
+    expect(note.textContent).toMatch(/Added 1 clip/);
+    await act(async () => btn(note, "View").click());
+    const p = e.getState().project;
+    const placed = ops.mainTrack(p.compositions[p.rootCompositionId])!.placements;
+    expect(onView).toHaveBeenCalledWith(placed[0].id);
+  });
+
+  it("R12: desktop header has a labelled AI prompt and Replace asks before importing", async () => {
+    const el = await mountBoard(setup());
+    expect(btn(el, "AI prompt").textContent).toContain("AI prompt");
+    const rep = btn(el, "Replace storyboard");
+    expect(rep.classList.contains("v2-sb-danger")).toBe(true);
+    await act(async () => rep.click());
+    expect(el.querySelector('[aria-label="Storyboard JSON"]')).toBeNull();
+    expect(el.textContent).toContain("Replace this storyboard?");
+    await act(async () => btn(el, "Cancel").click());
+    expect(el.textContent).not.toContain("Replace this storyboard?");
+    await act(async () => btn(el, "Replace storyboard").click());
+    await act(async () => btn(el, "Continue").click());
+    expect(el.querySelector('[aria-label="Storyboard JSON"]')).not.toBeNull();
+  });
+
+  it("R11: on phones Send is the labelled primary and the rest sits in a '⋯' menu", async () => {
+    phone = true;
+    const el = await mountBoard(setup());
+    const send = btn(el, "Send to timeline");
+    expect(send.classList.contains("primary")).toBe(true);
+    expect(send.textContent!.trim()).toBe("Send");
+    expect(btn(el, "AI prompt")).toBeUndefined();
+    await act(async () => btn(el, "More storyboard actions").click());
+    const items = [...el.querySelectorAll('[role="menuitem"]')].map((x) => x.textContent!.trim());
+    expect(items).toEqual(["AI prompt", "Replace storyboard…"]);
+    await act(async () => (el.querySelectorAll('[role="menuitem"]')[1] as HTMLButtonElement).click());
+    expect(el.textContent).toContain("Replace this storyboard?");
+  });
+
+  it("R10: phone production keeps text states and the nav says the state", async () => {
+    phone = true;
+    const el = await mountBoard(setup());
+    await act(async () => btn(el, "Production steps").click());
+    const states = [...el.querySelectorAll(".v2-prod-state-m")].map((x) => x.textContent);
+    expect(states.length).toBeGreaterThan(1);
+    expect(states.every((t) => t && t.length > 0)).toBe(true);
+    await act(async () => (el.querySelector(".v2-prod-step") as HTMLButtonElement).click());
+    expect(el.querySelector(".v2-prod-count")!.textContent).toMatch(/^1\/\d+ · \S/);
+  });
+
+  it("R14: Load example fills a valid storyboard; problems select their JSON", async () => {
+    const el = await mountBoard(setup(false));
+    await act(async () => btn(el, "2 · Import JSON")?.click() ?? [...el.querySelectorAll("button")].find((b) => /Import/.test(b.textContent ?? ""))!.click());
+    await act(async () => btn(el, "Load example").click());
+    expect(el.querySelector('[data-testid="story-preview"]')).not.toBeNull();
+    const ta = el.querySelector('[aria-label="Storyboard JSON"]') as HTMLTextAreaElement;
+    const bad = structuredClone(EXAMPLE_STORYBOARD) as unknown as { shots: { durationSec: unknown }[] };
+    bad.shots[1].durationSec = "five";
+    const text = "Here you go:\n```json\n" + JSON.stringify(bad, null, 2) + "\n```";
+    await act(async () => setText(ta, text));
+    const err = [...el.querySelectorAll(".v2-sb-errlink")].find((b) => b.textContent!.includes("shots[1].durationSec")) as HTMLButtonElement;
+    expect(err.textContent).toContain('Duration "five"');
+    await act(async () => err.click());
+    expect(text.slice(ta.selectionStart, ta.selectionEnd)).toBe('"durationSec": "five"');
+  });
+
+  it("R14: locateIssue maps paths, parents and syntax errors to the pasted text", () => {
+    const json = '{\n  "meta": { "title": "x" },\n  "shots": [ { "id": "a", "durationSec": 0 } ]\n}';
+    const text = "Sure!\n" + json;
+    const r = (path: string, at?: number) => { const x = story.locateIssue(text, { path, message: "", at })!; return text.slice(x.start, x.end); };
+    expect(r("shots[0].durationSec")).toBe('"durationSec": 0');
+    expect(r("meta.title")).toBe('"title": "x"');
+    expect(r("shots[0].missing")).toBe('{ "id": "a", "durationSec": 0 }');
+    const broken = '{ "shots": [ }';
+    const res = story.parseStoryboard(broken);
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.errors[0].at).toBeTypeOf("number");
+  });
+
+  it("R15: the version in use says so on the card, not in a tooltip", () => {
+    const src = readFileSync(resolve(__dirname, "StoryDetail.tsx"), "utf8");
+    expect(src).not.toMatch(/title=\{on \? "In use"/);
+    expect(src).toContain("v2-sb-inuse");
+  });
+
+  it("phones: the clip toolbar shows Storyboard before Split for linked clips", () => {
+    const src = readFileSync(resolve(__dirname, "../V2App.tsx"), "utf8");
+    expect(src.indexOf('"open-story"')).toBeGreaterThan(0);
+    expect(src.indexOf('"open-story"')).toBeLessThan(src.lastIndexOf('tool("✂", "Split", split)'));
+    expect(src.indexOf('"open-story"')).toBeLessThan(src.indexOf('tool("☑", "Select"'));
+  });
+});

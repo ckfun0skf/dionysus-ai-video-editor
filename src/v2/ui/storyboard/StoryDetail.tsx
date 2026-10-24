@@ -94,10 +94,10 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
               const info = b.versions[v.id];
               return (
                 <li key={v.id}>
-                  <button className={`v2-sb-version ${on ? "on" : ""}`} aria-pressed={on} title={on ? "In use" : "Use this version"}
+                  <button className={`v2-sb-version ${on ? "on" : ""}`} aria-pressed={on} title={on ? undefined : "Use this version"}
                     onClick={() => { if (!on && owner.assetId) swap(cmd.selectStoryVersion(owner.assetId, v.id)); }}>
                     <Thumb src={thumbs[v.id]} icon={icon} count={0} />
-                    <span><b>v{i + 1}{on && <Ic g="ok" size={13} />}</b><em>{info?.derivedFrom ? `Frame of shot ${shotNo(info.derivedFrom.shotId)}` : fmtDate(v.createdAt)}</em>{info?.model && <em title="Made with">{info.model}</em>}</span>
+                    <span><b>v{i + 1}{on && <span className="v2-sb-inuse"><Ic g="ok" size={13} /> In use</span>}</b><em>{info?.derivedFrom ? `Frame of shot ${shotNo(info.derivedFrom.shotId)}` : fmtDate(v.createdAt)}</em>{info?.model && <em title="Made with">{info.model}</em>}</span>
                   </button>
                 </li>
               );

@@ -52,8 +52,8 @@ export function ProductionView({ project, thumbs, engine, blobs, mobile }: { pro
               <button className={`v2-prod-step ${s.state} ${s.key === cur ? "open" : ""}`} aria-current={s.key === cur ? "step" : undefined} onClick={() => setCur(s.key)} title={LABEL[s.state]}>
                 <span className="v2-prod-n">{j + 1}</span>
                 <Thumb src={v && thumbs[v]} icon={"slot" in s.target ? TYPE_ICON[b.slots[s.target.slot].type] ?? "image" : "▭"} count={0} />
-                <span className="v2-prod-text"><b>{name(s)}</b><em>{what(s)}</em></span>
-                <span className={`v2-prod-state ${s.state}`}><Ic g={ICON[s.state]} size={14} /><span>{LABEL[s.state]}</span></span>
+                <span className="v2-prod-text"><b>{name(s)}</b><em>{what(s)}</em>{mobile && <span className={`v2-prod-state-m ${s.state}`}><Ic g={ICON[s.state]} size={12} />{LABEL[s.state]}</span>}</span>
+                {!mobile && <span className={`v2-prod-state ${s.state}`}><Ic g={ICON[s.state]} size={14} /><span>{LABEL[s.state]}</span></span>}
               </button>
             </li>
           );
@@ -64,7 +64,7 @@ export function ProductionView({ project, thumbs, engine, blobs, mobile }: { pro
   const nav = step && (
     <div className="v2-prod-nav">
       {mobile && <button className="v2-btn v2-sb-btn" onClick={() => setCur(undefined)}><Ic g="todo" size={16} /> All steps</button>}
-      <span className="v2-prod-count">{mobile ? `${i + 1}/${steps.length}` : `Step ${i + 1} of ${steps.length} · ${LABEL[step.state]}`}</span>
+      <span className="v2-prod-count">{mobile ? `${i + 1}/${steps.length} · ${LABEL[step.state]}` : `Step ${i + 1} of ${steps.length} · ${LABEL[step.state]}`}</span>
       <span className="v2-spacer" />
       <button className="v2-icon v2-sb-icon" aria-label="Previous step" title="Previous step" disabled={i <= 0} onClick={() => setCur(steps[i - 1].key)}><Ic g="anim-in" size={18} /></button>
       <button className="v2-btn primary v2-sb-btn" disabled={!nextOpen} onClick={() => nextOpen && setCur(nextOpen.key)} aria-label={nextOpen ? "Next to do" : "All done"} title={nextOpen ? `Go to step ${steps.indexOf(nextOpen) + 1}: ${name(nextOpen)}` : "Nothing left to do"}>
