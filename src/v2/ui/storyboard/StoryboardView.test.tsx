@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { createProject, EXAMPLE_STORYBOARD, GUIDE_URL, storyboardShortPrompt, storyboardSystemPrompt, story, type MediaRef } from "../../domain";
+import { createProject, EXAMPLE_STORYBOARD, runtimeAiLinks, storyboardShortPrompt, storyboardSystemPrompt, story, type MediaRef } from "../../domain";
 import { cmd, Engine } from "../../engine";
 import { createMemoryStorage } from "../../persistence";
 import { V2App } from "../V2App";
@@ -51,7 +51,7 @@ describe("storyboard workspace", () => {
     await act(async () => (el.querySelector('[data-testid="step-prompt"]') as HTMLButtonElement).click());
     const ta = () => (el.querySelector('[aria-label="AI system prompt"]') as HTMLTextAreaElement).value;
     expect(ta()).toBe(storyboardShortPrompt());
-    expect(ta()).toContain(GUIDE_URL);
+    expect(ta()).toContain(runtimeAiLinks().guide);
     await act(async () => (el.querySelector('[data-testid="copy-prompt"]') as HTMLButtonElement).click()); await wait();
     expect(writeText).toHaveBeenLastCalledWith(storyboardShortPrompt());
     expect(el.querySelector('[data-testid="copy-prompt"]')!.textContent).toContain("Copied");
@@ -61,6 +61,25 @@ describe("storyboard workspace", () => {
     expect(el.querySelector('[data-testid="copy-prompt"]')!.textContent).toContain("Copy full prompt");
     await act(async () => (el.querySelector('[data-testid="copy-prompt"]') as HTMLButtonElement).click()); await wait();
     expect(writeText).toHaveBeenLastCalledWith(storyboardSystemPrompt());
+  });
+
+  it("builds the copied prompt and the Open guide link from the deployment it runs on (V2-OPS-LINKS)", async () => {
+    const writeText = vi.fn(async () => {});
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    const base = (import.meta as unknown as { env: { BASE_URL: string } }).env.BASE_URL;
+    vi.stubGlobal("location", { href: `https://video.example.com${base}?v2`, hostname: "video.example.com", origin: "https://video.example.com" });
+    try {
+      const el = await mount();
+      await act(async () => (el.querySelector('[data-testid="step-prompt"]') as HTMLButtonElement).click());
+      const site = `https://video.example.com${base}`;
+      const ta = (el.querySelector('[aria-label="AI system prompt"]') as HTMLTextAreaElement).value;
+      expect(ta).toContain(`guide: ${site}ai/storyboard-guide.md`);
+      expect(ta).toContain(`${site}ai/presets.json`);
+      expect(ta).not.toContain("github.io");
+      expect((el.querySelector('a[title^="Open the storyboard guide"]') as HTMLAnchorElement).getAttribute("href")).toBe(`${site}ai/storyboard-guide.html`);
+      await act(async () => (el.querySelector('[data-testid="copy-prompt"]') as HTMLButtonElement).click()); await wait();
+      expect(writeText).toHaveBeenLastCalledWith(ta);
+    } finally { vi.unstubAllGlobals(); }
   });
 
   it("lists path-addressed errors for bad JSON and previews a valid storyboard", async () => {

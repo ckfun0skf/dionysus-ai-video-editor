@@ -2363,6 +2363,12 @@
           "title": "P0 export fix: video clips exported as black on Android Chrome (audio/images/text fine). Export now decodes video frame-accurately with WebCodecs (mp4box demux + VideoDecoder, edit lists, B-frames, rotation); unsupported files fall back to muted media elements kept in the DOM, awaited per frame with requestVideoFrameCallback, nudged once and verified for a real picture; a clip with no picture stops the export with a message naming it (HEVC advice), partial gaps become export warnings",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-OPS-LINKS",
+          "title": "Host-independent AI links: the in-app short prompt and Open guide link are built at runtime from the deployment (origin + Vite base; localhost/LAN fall back to the configured site); one build setting DIONYSUS_SITE_URL (default: the GitHub Pages URL) sets Vite's base and the absolute links in the AI files, which vite build regenerates for the build's site URL; the format reference is published as ai/STORYBOARD_FORMAT.md instead of linking to github.com; deployment guide in docs/v2/DEPLOYMENT.md",
+          "status": "done",
+          "progress": 100
         }
       ]
     },

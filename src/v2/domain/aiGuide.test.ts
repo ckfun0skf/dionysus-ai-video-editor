@@ -6,15 +6,17 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { listPresets } from "../registry";
-import { aiGuideFiles, presetsJson, storyboardGuideMarkdown } from "./aiGuide";
-import { EXAMPLE_STORYBOARD, GUIDE_KINDS, GUIDE_URL, RULES, storyboardShortPrompt, storyboardSystemPrompt } from "./storyPrompt";
+import { aiGuideFiles, FORMAT_DOC_SOURCE, llmsTxt, presetsJson, storyboardGuideHtml, storyboardGuideMarkdown } from "./aiGuide";
+import { aiLinks, DEFAULT_SITE_URL } from "./siteUrl";
+import { EXAMPLE_STORYBOARD, GUIDE_KINDS, RULES, storyboardShortPrompt, storyboardSystemPrompt } from "./storyPrompt";
 import { validateStoryboard } from "./storyJson";
 
 const root = resolve(__dirname, "../../..");
 const update = !!process.env.UPDATE_AI_GUIDE;
+const formatDoc = readFileSync(resolve(root, FORMAT_DOC_SOURCE), "utf8");
 
 describe("AI planner guide (V2-SB-114)", () => {
-  it.each(Object.entries(aiGuideFiles()))("%s is up to date (npm run gen:ai)", (rel, content) => {
+  it.each(Object.entries(aiGuideFiles(DEFAULT_SITE_URL, formatDoc)))("%s is up to date (npm run gen:ai)", (rel, content) => {
     const file = resolve(root, rel);
     if (update) { mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, content); }
     expect(existsSync(file), `${rel} is missing; run npm run gen:ai`).toBe(true);
@@ -40,7 +42,7 @@ describe("AI planner guide (V2-SB-114)", () => {
     for (const s of ["FORMAT (", "PRESETS", "RULES", "EXAMPLE", `14. ${RULES[13]}`, "not seconds", "START FRAME", "\"references\"?", "\"genDurationSec\"?", "- crossfade:", "- ken-burns:"]) expect(full).toContain(s);
     expect(RULES).toHaveLength(16);
     const short = storyboardShortPrompt();
-    expect(short).toContain(GUIDE_URL);
+    expect(short).toContain(aiLinks(DEFAULT_SITE_URL).guide); // outside a browser the prompt links to the configured site
     expect(short).toContain("Full prompt");
     expect(short.length).toBeLessThan(1500);
     expect(short).toContain('"durationSec": 4, "genDurationSec": 6');
@@ -53,5 +55,39 @@ describe("AI planner guide (V2-SB-114)", () => {
     const r = validateStoryboard(EXAMPLE_STORYBOARD);
     expect(r.ok && r.warnings).toEqual([]);
     expect(JSON.stringify(EXAMPLE_STORYBOARD)).toContain('"transition"');
+  });
+});
+
+describe("AI links follow the configured site URL (V2-OPS-LINKS)", () => {
+  const SITE = "https://video.example.com/editor/";
+
+  it("every generated file links to the given site, and the spec is published next to the guide", () => {
+    const files = aiGuideFiles(SITE, formatDoc);
+    for (const [rel, content] of Object.entries(files)) {
+      expect(content, rel).not.toContain("github.io");
+      expect(content, rel).not.toContain("github.com");
+    }
+    const md = storyboardGuideMarkdown(SITE);
+    expect(md).toContain(`(${SITE}?v2)`);
+    expect(md).toContain(`Machine-readable presets: ${SITE}ai/presets.json.`);
+    expect(md).toContain(`Full format reference: ${SITE}ai/STORYBOARD_FORMAT.md.`);
+    expect(JSON.parse(presetsJson(SITE)).guide).toBe(`${SITE}ai/storyboard-guide.md`);
+    for (const p of ["ai/storyboard-guide.md", "ai/storyboard-guide.html", "ai/presets.json", "ai/STORYBOARD_FORMAT.md", "?v2"]) expect(llmsTxt(SITE)).toContain(`(${SITE}${p})`);
+    expect(storyboardGuideHtml(SITE)).toContain('<link rel="alternate" type="text/markdown" href="storyboard-guide.md">');
+    expect(files["public/ai/STORYBOARD_FORMAT.md"]).toBe(formatDoc);
+  });
+
+  it("only the site URL differs between deployments", () => {
+    const def = aiGuideFiles(DEFAULT_SITE_URL, formatDoc);
+    const other = aiGuideFiles(SITE, formatDoc);
+    for (const rel of Object.keys(def)) expect(other[rel], rel).toBe(def[rel].split(DEFAULT_SITE_URL).join(SITE));
+  });
+
+  it("the short prompt links to the site it is given", () => {
+    const short = storyboardShortPrompt(aiLinks(SITE));
+    expect(short).toContain(`guide: ${SITE}ai/storyboard-guide.md`);
+    expect(short).toContain(`${SITE}ai/storyboard-guide.html`);
+    expect(short).toContain(`${SITE}ai/presets.json`);
+    expect(short).not.toContain("github.io");
   });
 });

@@ -19,7 +19,7 @@ Dionysus is a local-first AI video planning and composition editor. It is design
 
 ## Task tracking
 
-The task dashboard is published with the static site at `doc/task.html` (GitHub Pages path: `/dionysus-ai-video-editor/doc/task.html`). Each task has a detail HTML page, a Markdown specification, and a completion report under `public/doc/`. Keep these files synchronized as task status changes.
+The task dashboard is published with the static site at `doc/task.html` (on the default GitHub Pages deployment: `/dionysus-ai-video-editor/doc/task.html`). Each task has a detail HTML page, a Markdown specification, and a completion report under `public/doc/`. Keep these files synchronized as task status changes.
 
 ## Localization
 
@@ -36,7 +36,7 @@ npm test
 npm run build
 ```
 
-The app is a static Vite web application. CI runs for pull requests targeting `main`, pushes to `main`, and manual dispatches; feature-branch pushes do not trigger a separate full CI run. Stale runs for the same pull request/ref are cancelled when newer commits arrive. The GitHub Pages workflow deploys the site when changes reach `main`.
+The app is a static Vite web application. CI runs for pull requests targeting `main`, pushes to `main`, and manual dispatches; feature-branch pushes do not trigger a separate full CI run. Stale runs for the same pull request/ref are cancelled when newer commits arrive. The GitHub Pages workflow deploys the site when changes reach `main`. To deploy to another host or path, set `DIONYSUS_SITE_URL` for the build; see [docs/v2/DEPLOYMENT.md](docs/v2/DEPLOYMENT.md).
 
 ## Public preview and data safety
 
