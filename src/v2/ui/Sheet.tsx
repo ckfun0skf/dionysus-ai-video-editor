@@ -1,4 +1,5 @@
 import { useRef, useState, type ReactNode } from "react";
+import { Ic } from "./Icon";
 
 /** Close when dragged down past 35% of the sheet (or 120px), or flicked down faster than 0.6 px/ms. */
 export function shouldDismiss(dy: number, height: number, velocity: number): boolean {
@@ -9,7 +10,7 @@ export function shouldDismiss(dy: number, height: number, velocity: number): boo
  * Mobile bottom sheet: slides up, drag the grabber (or the sheet while scrolled to the top) down to
  * dismiss, tap the backdrop or press Escape to close. Motion is disabled under prefers-reduced-motion (CSS).
  */
-export function Sheet({ onClose, label, className = "", children }: { onClose: () => void; label: string; className?: string; children: ReactNode }) {
+export function Sheet({ onClose, label, className = "", children, head = true, extra }: { onClose: () => void; label: string; className?: string; children: ReactNode; head?: boolean; extra?: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   const drag = useRef<{ y0: number; t0: number; id: number }>();
   const [dy, setDy] = useState(0);
@@ -40,10 +41,17 @@ export function Sheet({ onClose, label, className = "", children }: { onClose: (
       <div ref={ref} role="dialog" aria-label={label} className={`v2-sheet ${dy ? "is-dragging" : ""} ${className}`} style={dy ? { transform: `translateY(${dy}px)` } : undefined}
         onClick={(e) => e.stopPropagation()} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={() => { drag.current = undefined; setDy(0); }}>
         <button className="v2-grabber" aria-label={`Close ${label}`} title="Drag down or tap to close" onClick={onClose}><span /></button>
+        {/* V2-111: CapCut-style header — title on the left, optional controls, ✓ Done at the top right (always reachable). */}
+        {head && <div className="v2-sheet-head"><h3 className="v2-sheet-title">{label}</h3>{extra}<SheetDone onClick={onClose} /></div>}
         {children}
       </div>
     </div>
   );
+}
+
+/** The ✓ that closes a sheet; also used inside panels that draw their own header row. */
+export function SheetDone({ onClick }: { onClick: () => void }) {
+  return <button className="v2-icon v2-sheet-done" aria-label="Done" title="Done" onClick={onClick}><Ic g="✓" size={22} /><span className="v2-sr">Done</span></button>;
 }
 
 /** Mobile preview height (dvh) from a drag on the panel grabber; clamped so both panes stay usable. */

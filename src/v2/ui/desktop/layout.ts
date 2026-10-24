@@ -23,10 +23,16 @@ export function clampSizes(s: PanelSizes, vw = Infinity, vh = Infinity): PanelSi
   return { left, right, timeline, leftOpen: s.leftOpen, rightOpen: s.rightOpen };
 }
 
-export function loadSizes(store: Pick<Storage, "getItem"> | undefined = globalThis.localStorage): PanelSizes {
+/** V2-111: first-run timeline height — 40% of the window (300–420px), so ~4 tracks show at 900px tall. */
+export function defaultTimeline(vh?: number): number {
+  return vh ? clamp(vh * 0.4, [DEFAULT_SIZES.timeline, 420]) : DEFAULT_SIZES.timeline;
+}
+
+/** Saved sizes (per browser); a first visit gets the defaults with a window-relative timeline height. */
+export function loadSizes(store: Pick<Storage, "getItem"> | undefined = globalThis.localStorage, vh?: number): PanelSizes {
   try {
     const raw = JSON.parse(store?.getItem(LAYOUT_KEY) ?? "null") as Partial<PanelSizes> | null;
-    if (!raw || typeof raw !== "object") return { ...DEFAULT_SIZES };
+    if (!raw || typeof raw !== "object") return { ...DEFAULT_SIZES, timeline: defaultTimeline(vh) };
     const num = (k: "left" | "right" | "timeline") => (typeof raw[k] === "number" && Number.isFinite(raw[k]) ? (raw[k] as number) : DEFAULT_SIZES[k]);
     const bool = (k: "leftOpen" | "rightOpen") => (typeof raw[k] === "boolean" ? (raw[k] as boolean) : DEFAULT_SIZES[k]);
     return clampSizes({ left: num("left"), right: num("right"), timeline: num("timeline"), leftOpen: bool("leftOpen"), rightOpen: bool("rightOpen") });

@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { HTML_SANDBOX, readClipConfig, selectedLibraries, withRuntime, writeClipConfig, type ClipConfig } from "../render";
 import { LibraryPicker } from "./LibraryPicker";
 import { joinHtml, splitHtml, type HtmlParts } from "./htmlSource";
+/** V2-111: what an HTML clip can attach (so iOS offers Photos/Files rather than a generic picker). */
+export const ATTACH_ACCEPT = "image/*,video/*,audio/*,.svg,.json,.csv,.txt,.js,.mjs,.css,.glb,.gltf,.bin,.woff,.woff2,.ttf,.otf";
 
 type Pane = "html" | "css" | "js";
 const PANES: { id: Pane; label: string }[] = [{ id: "html", label: "HTML" }, { id: "css", label: "CSS" }, { id: "js", label: "JS" }];
@@ -104,7 +106,7 @@ function ClipSettings({ cfg, onChange, mobile }: { cfg: ClipConfig; onChange: (c
           <button aria-label={`Remove ${n}`} title={`Remove ${n}`} onClick={() => { const a = { ...assets }; delete a[n]; onChange({ ...cfg, assets: a }); }}>×</button>
         </span>
       ))}
-      <label className="v2-btn" title="Attach files to this clip">+ Attach<input type="file" multiple hidden aria-label="Attach files" onChange={(e) => void attach(e.target.files)} /></label>
+      <label className="v2-btn" title="Attach files to this clip">+ Attach<input type="file" multiple hidden accept={ATTACH_ACCEPT} aria-label="Attach files" onChange={(e) => void attach(e.target.files)} /></label>
       {err && <span role="alert" className="v2-err">{err}</span>}
     </div>
   );

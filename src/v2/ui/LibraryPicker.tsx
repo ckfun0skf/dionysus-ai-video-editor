@@ -48,7 +48,7 @@ export function LibraryPicker({ value, onChange, mobile }: { value: string[]; on
           </span>
         );
       })}
-      {open && (mobile ? <Sheet label="Libraries" className="v2-libpick-sheet" onClose={() => setOpen(false)}><h3>Libraries</h3>{panel}<button className="v2-btn primary" onClick={() => setOpen(false)}>Done</button></Sheet> : <div className="v2-libpick-drop">{panel}</div>)}
+      {open && (mobile ? <Sheet label="Libraries" className="v2-libpick-sheet" onClose={() => setOpen(false)}>{panel}</Sheet> : <div className="v2-libpick-drop">{panel}</div>)}
     </div>
   );
 }

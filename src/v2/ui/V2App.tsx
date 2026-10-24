@@ -23,7 +23,8 @@ import { MediaPicker, type Picked } from "./MediaPicker";
 import { projectMediaList } from "./projectMedia";
 import { libraryFile, stickerFile, stickers } from "./libraryItems";
 import { EffectPicker } from "./EffectPicker";
-import { PanelGrabber, PREVIEW_DEFAULT, Sheet } from "./Sheet";
+import { PanelGrabber, PREVIEW_DEFAULT, Sheet, SheetDone } from "./Sheet";
+import { useEdgeFade } from "./useEdgeFade";
 import { AssetBrowser, type BrowserTab } from "./desktop/AssetBrowser";
 import { Inspector, type InspectorTab } from "./desktop/Inspector";
 import { ProjectSettings } from "./desktop/ProjectSettings";
@@ -90,6 +91,9 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const [subsEdit, setSubsEdit] = useState<string>();
   const [subsCue, setSubsCue] = useState<string>();
   const [subsPick, setSubsPick] = useState(false);
+  const toolbarFade = useEdgeFade<HTMLElement>();
+  /** V2-111: the layer the last SRT import created — "Edit subtitles" opens it directly instead of asking. */
+  const [srtLayer, setSrtLayer] = useState<string>();
   /** V2-103: gizmo scope on styled text layers; undefined = layer default (Whole layer for subtitles). */
   const [gizmoScope, setGizmoScope] = useState<"clip" | "layer">();
   /** V2-098: animation sheet; after a pick the sheet shrinks and the preview loops over the clip's time range. */
@@ -104,7 +108,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const setRipple = (on: boolean) => { setRippleState(on); localStorage.setItem("v2.ripple", on ? "1" : "0"); setToast(on ? "Ripple on: delete and trim close gaps" : "Ripple off"); };
   const srtRef = useRef<HTMLInputElement>(null);
   /** V2-106 desktop shell: panel sizes (persisted), browser tab, inspector tab. */
-  const [sizes, setSizes] = useState<PanelSizes>(() => loadSizes());
+  const [sizes, setSizes] = useState<PanelSizes>(() => loadSizes(undefined, window.innerHeight));
   const sizesRef = useRef(sizes); sizesRef.current = sizes;
   const [vp, setVp] = useState(() => ({ w: window.innerWidth, h: window.innerHeight }));
   useEffect(() => { const r = () => setVp({ w: window.innerWidth, h: window.innerHeight }); window.addEventListener("resize", r); return () => window.removeEventListener("resize", r); }, []);
@@ -158,7 +162,15 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const selectCue = (id?: string) => { setSubId(id); if (id) setSelectedId(undefined); };
   const addText = () => { const id = newId("plc"); if (engine.dispatch(cmd.addTextClip(Math.round(player.time), {}, id))) { setSel([id]); setSubId(undefined); } };
   const delCue = () => { if (subId) { engine.dispatch(cmd.removeSubtitle(subId)); setSubId(undefined); } };
-  const onSrt = async (f?: File) => { if (!f) return; const n = await importSrtFile(engine, f); setToast(n ? `Imported ${n} subtitles (Undo to revert)` : `${f.name}: no subtitles found`); };
+  const onSrt = async (f?: File) => {
+    if (!f) return;
+    const rootOf = () => { const p = engine.getState().project; return p.compositions[p.rootCompositionId]; };
+    const before = new Set(rootOf().tracks.map((t) => t.id));
+    const n = await importSrtFile(engine, f);
+    const added = rootOf().tracks.find((t) => !before.has(t.id) && t.kind === "text");
+    if (added) setSrtLayer(added.id);
+    setToast(n ? `Imported ${n} subtitles (Undo to revert)` : `${f.name}: no subtitles found`);
+  };
   const subLayer = comp.tracks.find((t) => t.kind === "text" && t.layerStyle?.subtitle && t.placements.length) ?? comp.tracks.find((t) => t.kind === "text" && t.placements.some((p) => p.clipType === "text"));
   const exportSrt = () => (subLayer ? downloadText(cueLayer.layerToSrt(subLayer), project.name) : cues.length ? downloadSrt(cues, project.name) : setToast("No subtitles to export — import an SRT or add text first"));
   const topLane = cues.length ? { label: "Text", render: (toPx: (t: number) => number, toTicks: (px: number) => number) => <SubtitleLane engine={engine} list={cues} selectedId={subId} onSelect={selectCue} toPx={toPx} toTicks={toTicks} /> } : undefined;
@@ -188,6 +200,9 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     if (cur) return openSubs(cur.track.id, cur.placement.id);
     if (!textLayers.length) return setToast("No subtitles yet — Import SRT or Add text first");
     if (textLayers.length === 1) return openSubs(textLayers[0].id);
+    const recent = textLayers.find((t) => t.id === srtLayer);
+    setSrtLayer(undefined); // one-shot: straight after Import SRT, open the layer that was just made
+    if (recent) return openSubs(recent.id);
     setSubsPick(true);
   };
   const editLayer = (id: string) => { setSel([]); setSubId(undefined); setLayerEdit(id); if (!mobile) setSideOpen(true); };
@@ -196,9 +211,11 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     const { x, y, scale, rotation } = patch;
     engine.dispatch(cmd.setLayerStyle(selTrack.id, { transform: Object.fromEntries(Object.entries({ x, y, scale, rotation }).filter(([, v]) => v !== undefined)) }, "Move layer"));
   } : undefined;
-  const scopeChip = styledText && <div className="v2-scope-chip" role="radiogroup" aria-label="Gizmo applies to">
+  // V2-111: only while a styled text clip is selected; on mobile it lives in the Text/Animation/Adjust sheet header.
+  const scopeChip = styledText && <div className="v2-scope-chip" role="radiogroup" aria-label="Move and scale apply to">
+    <span className="v2-scope-label" aria-hidden>Apply to:</span>
     {(["clip", "layer"] as const).map((k) => <button key={k} role="radio" aria-checked={scope === k} className={`v2-chip ${scope === k ? "is-active" : ""}`}
-      title={k === "clip" ? "Move/scale only this clip (it gets a custom position)" : `Move/scale every clip on ${selTrack!.name}`} onClick={() => setGizmoScope(k)}>{k === "clip" ? "This clip" : "Whole layer"}</button>)}
+      title={k === "clip" ? "Move/scale only this clip (it gets a custom position)" : `Move/scale every clip on ${selTrack!.name}`} onClick={() => setGizmoScope(k)}>{k === "clip" ? "This clip" : "All in layer"}</button>)}
   </div>;
 
   if (!playerRef.current) playerRef.current = new Player(project, storage.blobs);
@@ -402,7 +419,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
         <strong>Media</strong>
         <button className="v2-btn primary" onClick={() => fileRef.current?.click()}><Ic g="＋" size={16} /> Import</button>
         <button className="v2-btn" title="Add an HTML clip (example uses three.js) (edit the .html and re-import to change it)" onClick={() => void onFiles([new File([THREE_TEMPLATE], "three-scene.html", { type: "text/html" })])}><Ic g="＋" size={16} /> HTML clip</button>
-        {mobile && <button className="v2-btn" onClick={() => setSheet(false)}>Done</button>}
+        {mobile && <SheetDone onClick={() => setSheet(false)} />}
       </div>
       {busy > 0 && <p className="v2-hint">Importing {busy}…</p>}
       {Object.values(project.assets).length === 0 && <p className="v2-hint">Import video, image, audio or HTML files, then {mobile ? "tap" : "drag or click"} + to add them to the timeline.</p>}
@@ -753,7 +770,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       <div className="v2-canvas-wrap"><canvas ref={canvasRef} width={canvasSize.width} height={canvasSize.height} onClick={onCanvasTap} title={mobile ? "Tap an element to select it · tap empty space to play/pause" : "Click an element to select it · click empty space to play/pause"} />
         {visual && player.boxes.get(visual.id) && canvasRef.current && <TransformHandles engine={engine} placement={visual} time={time} box={player.boxes.get(visual.id)!} canvas={canvasRef.current} actions={gizmo} route={layerRoute} snapping={snapOn} others={[...player.boxes].filter(([id]) => id !== visual.id).map(([, b]) => b)} />}
         {inlineEditor}
-        {visual && scopeChip}
+        {!mobile && visual && scopeChip}
       </div>
       {!mobile && desktopTransport}
     </section>
@@ -821,20 +838,20 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
               {firstVideoTrack && <button className="v2-side-btn" onClick={() => engine.dispatch(cmd.toggleTrackMute(firstVideoTrack.id))}><b aria-hidden><Ic g={firstVideoTrack.muted ? "🔇" : "🔊"} /></b><span>{firstVideoTrack.muted ? "Unmute clip audio" : "Mute clip audio"}</span></button>}
               <button className="v2-side-btn v2-cover" onClick={() => seek(0)} style={firstClip && thumbs[firstClip.source.assetId] ? { backgroundImage: `url(${thumbs[firstClip.source.assetId]})` } : undefined}><span>Cover</span></button>
             </>} />
-          <nav className="v2-toolbar" aria-label={selected ? "Clip actions" : "Timeline actions"}>
+          <nav ref={toolbarFade} className="v2-toolbar" aria-label={selected ? "Clip actions" : "Timeline actions"}>
             {(activeMenu !== "root" || expanded) && <button className="v2-tool v2-tool-back" aria-label={activeMenu === "root" && expanded ? `Collapse ${ops.GROUP_LABEL[expanded]}` : "Back"} title={activeMenu === "root" && expanded ? `Collapse ${ops.GROUP_LABEL[expanded]}` : "Back"} onClick={back}>‹</button>}
             {mobileTools[activeMenu]}
           </nav>
           {picker && <MediaPicker media={projectMedia} title={picker === "overlay" ? "Add overlay" : picker === "audio" ? "Add audio" : picker === "stickers" ? "Add stickers" : "Add media"} only={picker === "audio" ? "audio" : undefined} initialTab={picker === "stickers" ? "stickers" : undefined} onClose={() => setPicker(null)} onAdd={(p) => void addPicked(p, picker === "overlay" || picker === "stickers" ? "overlay" : "main")} />}
-          {sheet && <Sheet label="Media" onClose={() => setSheet(false)}>{browser}</Sheet>}
+          {sheet && <Sheet label="Media" head={false} onClose={() => setSheet(false)}>{browser}</Sheet>}
           {!sheet && <div hidden>{browser}</div>}
           {cue && <div className="v2-msub"><SubtitleEditor engine={engine} sub={cue} onDelete={delCue} /></div>}
-          {inspOpen && selected && <Sheet label="Adjust" className="v2-msheet-insp" onClose={() => setInspOpen(false)}><TransformInspector engine={engine} placement={selected.placement} time={time} /><button className="v2-btn" onClick={() => setInspOpen(false)}>Done</button></Sheet>}
-          {subsTrack && <Sheet label="Edit subtitles" className="v2-msheet-tall" onClose={() => setSubsEdit(undefined)}><SubtitleList engine={engine} track={subsTrack} time={time} playing={playing} onSeek={seek} desktop={false} name={project.name} focusCue={subsCue} /></Sheet>}
-          {layerTrack && !selected && <Sheet label="Edit all" className="v2-msheet-insp" onClose={() => setLayerEdit(undefined)}><TextPanel key={layerTrack.id} engine={engine} layer={layerTrack} initialTab="Style" /><button className="v2-btn" onClick={() => setLayerEdit(undefined)}>Done</button></Sheet>}
-          {textOpen && selected && isText && <Sheet label="Text" className={`v2-msheet-insp ${animLoop ? "is-compact" : ""}`} onClose={closeAnim}><TextPanel engine={engine} placement={effSel} track={selTrack} onAnimPicked={() => setAnimLoop(true)} /><button className="v2-btn" onClick={closeAnim}>Done</button></Sheet>}
-          {fxOpen && <Sheet label="Effects" className="v2-msheet-insp" onClose={() => setFxOpen(false)}><EffectPicker engine={engine} at={time} placement={isEffect ? selected!.placement : undefined} onAdded={(id) => setSel([id])} onClose={() => setFxOpen(false)} /><button className="v2-btn" onClick={() => setFxOpen(false)}>Done</button></Sheet>}
-          {animOpen && !textOpen && selected && isText && <Sheet label="Animation" className={`v2-msheet-insp v2-anim-sheet ${animLoop ? "is-compact" : ""}`} onClose={closeAnim}><AnimationPicker engine={engine} placement={selected.placement} onPicked={() => setAnimLoop(true)} /><button className="v2-btn" onClick={closeAnim}>Done</button></Sheet>}
+          {inspOpen && selected && <Sheet label="Adjust" className="v2-msheet-insp" extra={scopeChip || undefined} onClose={() => setInspOpen(false)}><TransformInspector engine={engine} placement={selected.placement} time={time} /></Sheet>}
+          {subsTrack && <Sheet label="Edit subtitles" className="v2-msheet-tall" head={false} onClose={() => setSubsEdit(undefined)}><SubtitleList engine={engine} track={subsTrack} time={time} playing={playing} onSeek={seek} desktop={false} name={project.name} focusCue={subsCue} onDone={() => setSubsEdit(undefined)} /></Sheet>}
+          {layerTrack && !selected && <Sheet label={`Edit all · ${layerTrack.name}`} className="v2-msheet-insp" onClose={() => setLayerEdit(undefined)}><TextPanel key={layerTrack.id} engine={engine} layer={layerTrack} initialTab="Style" /></Sheet>}
+          {textOpen && selected && isText && <Sheet label="Text" className={`v2-msheet-insp ${animLoop ? "is-compact" : ""}`} extra={scopeChip || undefined} onClose={closeAnim}><TextPanel engine={engine} placement={effSel} track={selTrack} onAnimPicked={() => setAnimLoop(true)} /></Sheet>}
+          {fxOpen && <Sheet label="Effects" className="v2-msheet-insp" onClose={() => setFxOpen(false)}><EffectPicker engine={engine} at={time} placement={isEffect ? selected!.placement : undefined} onAdded={(id) => setSel([id])} onClose={() => setFxOpen(false)} /></Sheet>}
+          {animOpen && !textOpen && selected && isText && <Sheet label="Animation" className={`v2-msheet-insp v2-anim-sheet ${animLoop ? "is-compact" : ""}`} extra={scopeChip || undefined} onClose={closeAnim}><AnimationPicker engine={engine} placement={selected.placement} onPicked={() => setAnimLoop(true)} /></Sheet>}
         </>
       ) : (
         <div className="v2-dshell" style={{ gridTemplateColumns: `${lay.leftOpen ? lay.left : 0}px ${lay.leftOpen ? 5 : 0}px minmax(0,1fr) ${lay.rightOpen ? 5 : 0}px ${lay.rightOpen ? lay.right : 0}px`, gridTemplateRows: `minmax(0,1fr) 5px ${lay.timeline}px` }}>

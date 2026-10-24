@@ -3,14 +3,19 @@ import { Ic } from "../Icon";
 
 export type MenuItem = { label: string; icon?: string; shortcut?: string; onSelect: () => void; disabled?: boolean; danger?: boolean } | "sep";
 
+/** Keep a w×h menu opened at (x, y) 4px inside a vw×vh viewport. */
+export function clampMenu(x: number, y: number, w: number, h: number, vw: number, vh: number) {
+  return { left: Math.max(4, Math.min(x, vw - w - 4)), top: Math.max(4, Math.min(y, vh - h - 4)) };
+}
+
 /** V2-107: right-click menu. Keyboard: ↑/↓/Home/End move, Enter activates, Esc or click outside closes. Stays inside the viewport. */
 export function ContextMenu({ x, y, items, label, onClose }: { x: number; y: number; items: MenuItem[]; label: string; onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ left: x, top: y });
   useLayoutEffect(() => {
     const el = ref.current; if (!el) return;
-    const r = el.getBoundingClientRect();
-    setPos({ left: Math.max(4, Math.min(x, window.innerWidth - r.width - 4)), top: Math.max(4, Math.min(y, window.innerHeight - r.height - 4)) });
+    // V2-111: offset* ignores the scale(.97) entry animation, which made getBoundingClientRect ~3% short.
+    setPos(clampMenu(x, y, el.offsetWidth, el.offsetHeight, window.innerWidth, window.innerHeight));
     el.querySelector<HTMLButtonElement>("[role=menuitem]:not(:disabled)")?.focus();
   }, [x, y]);
   useEffect(() => {

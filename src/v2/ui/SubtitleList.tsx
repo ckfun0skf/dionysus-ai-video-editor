@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { cmd, type Engine } from "../engine";
 import { cues as cueOps, newId, type Track } from "../domain";
 import { Ic } from "./Icon";
+import { SheetDone } from "./Sheet";
 
 export function downloadText(text: string, name: string) {
   const url = URL.createObjectURL(new Blob([text], { type: "application/x-subrip" }));
@@ -22,7 +23,7 @@ function Tc({ value, label, onCommit }: { value: number; label: string; onCommit
     onChange={(e) => setDraft(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commit(); (e.target as HTMLInputElement).blur(); } if (e.key === "Escape") setDraft(undefined); }} />;
 }
 
-export function SubtitleList({ engine, track, time, playing, onSeek, desktop, name, focusCue }: { engine: Engine; track: Track; time: number; playing: boolean; onSeek: (t: number) => void; desktop: boolean; name: string; focusCue?: string }) {
+export function SubtitleList({ engine, track, time, playing, onSeek, desktop, name, focusCue, onDone }: { engine: Engine; track: Track; time: number; playing: boolean; onSeek: (t: number) => void; desktop: boolean; name: string; focusCue?: string; onDone?: () => void }) {
   const list = cueOps.cuesOf(track);
   const active = cueOps.activeCue(track, time);
   const rowsRef = useRef<HTMLDivElement>(null);
@@ -56,12 +57,13 @@ export function SubtitleList({ engine, track, time, playing, onSeek, desktop, na
   return (
     <section className="v2-cuelist" aria-label={`Edit subtitles: ${track.name}`}>
       <div className="v2-panel-head v2-cuelist-head">
-        <strong>Edit subtitles · {list.length}</strong>
+        <strong title="Edit subtitles">Subtitles · {list.length}</strong>
         <span className="v2-cuelist-actions">
           <button className="v2-icon" aria-label="Undo" title="Undo (⌘/Ctrl+Z)" disabled={!engine.getState().canUndo} onPointerDown={(e) => e.preventDefault()} onClick={() => { (document.activeElement as HTMLElement | null)?.blur?.(); engine.undo(); }}><Ic g="↶" size={18} /></button>
           <button className="v2-icon" aria-label="Redo" title="Redo (⇧⌘/Ctrl+Shift+Z)" disabled={!engine.getState().canRedo} onClick={() => engine.redo()}><Ic g="↷" size={18} /></button>
           <button className={`v2-icon ${frOpen ? "is-on" : ""}`} aria-pressed={frOpen} aria-label="Find and replace" title="Find & replace in every subtitle on this layer" onClick={() => setFrOpen(!frOpen)}><Ic g="⤢" size={18} /></button>
           <button className="v2-icon v2-cue-export" aria-label="Export SRT" title="Download this layer as an .srt file" disabled={!list.length} onClick={() => downloadText(cueOps.layerToSrt(track), name)}><Ic g="⇩" size={18} /></button>
+          {onDone && <SheetDone onClick={onDone} />}
         </span>
       </div>
       {frOpen && <div className="v2-findrep">

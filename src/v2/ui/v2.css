@@ -490,3 +490,60 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
   .v2-timeline.is-centered .v2-lane.kind-text[data-track-id] { height: 48px; }
   .v2-timeline.is-centered .v2-lane.kind-text[data-track-id] .v2-clip { height: 40px; top: 4px; }
 }
+
+/* ===== V2-111: UX review P2 polish ===== */
+/* P2-2/5/7 sheets: side padding, CapCut-style header with ✓ at the top right, room below the last row */
+.v2-sheet { box-sizing: border-box; padding-inline: 16px; padding-bottom: calc(env(safe-area-inset-bottom) + 16px); }
+.v2-sheet > .v2-grabber { background: var(--panel); margin-inline: -16px; width: calc(100% + 32px); }
+.v2-sheet-head { position: sticky; top: 24px; z-index: 1; display: flex; align-items: center; gap: 8px; min-height: 44px; background: var(--panel); }
+.v2-sheet-title { flex: 1; min-width: 0; margin: 0; font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.v2-sheet-head:has(.v2-scope-chip) .v2-sheet-title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.v2-sheet-done { margin-left: auto; min-width: 44px; min-height: 44px; color: var(--accent) !important; flex: none; }
+.v2-sheet-done:hover { background: color-mix(in srgb, var(--accent) 16%, transparent) !important; }
+.v2-sheet-done:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.v2-sheet .v2-browser .v2-panel-head .v2-sheet-done { order: 9; }
+.v2-msheet-tall > .v2-cuelist { flex: 1; min-height: 0; }
+.v2-ptiles { padding-bottom: 12px; }
+/* P2-8 scope chip: "Apply to: This clip | All in layer", in the sheet header on mobile */
+.v2-scope-label { align-self: center; padding: 0 4px 0 8px; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.v2-sheet-head .v2-scope-chip { position: static; transform: none; background: #1d1d22; flex: none; }
+.v2-sheet-head .v2-scope-chip .v2-chip { padding: 0 10px; }
+/* P2-3 theme sliders + a real colour swatch */
+.v2-tp-row input[type=range], .v2-anim input[type=range] { accent-color: var(--accent); }
+.v2-color-val { display: inline-flex; align-items: center; gap: 8px; }
+.v2-color-val code { font: 500 12px ui-monospace, monospace; color: var(--muted); }
+.v2-tp-row input[type=color] { -webkit-appearance: none; appearance: none; width: 44px; height: 32px; padding: 2px; border: 1px solid #ffffff40; border-radius: 8px; background: #1d1d22; cursor: pointer; }
+.v2-tp-row input[type=color]::-webkit-color-swatch-wrapper { padding: 0; }
+.v2-tp-row input[type=color]::-webkit-color-swatch { border: none; border-radius: 5px; box-shadow: inset 0 0 0 1px #0004; }
+.v2-tp-row input[type=color]::-moz-color-swatch { border: none; border-radius: 5px; }
+.v2-tp-row input[type=color]:hover { border-color: var(--accent); }
+/* P2-4 a toast never covers an open sheet: it moves to the top, above the sheet */
+.v2-app:has(.v2-sheet-backdrop) .v2-toast { top: calc(env(safe-area-inset-top) + 64px); bottom: auto; z-index: 30; box-shadow: 0 4px 16px #0008; }
+/* P2-9 Focus mode lines: 4px with an outline so they read on any clip */
+.v2-hidden-range { height: 4px; border-radius: 2px; box-shadow: 0 0 0 1px rgba(0,0,0,.7); opacity: 1; }
+/* P2-10 ruler labels that would sit under the fixed time readout fade out */
+.v2-tick { transition: opacity .12s; }
+.v2-tick.is-under { opacity: 0; }
+/* P2-11 reorder: the full-length strip almost disappears behind the thumbnails */
+.v2-timeline.is-reordering .v2-clip { opacity: .1; }
+/* P2-12/15 scroll cue on overflowing rows (data-fade set by useEdgeFade) */
+[data-fade="r"] { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent); }
+[data-fade="l"] { -webkit-mask-image: linear-gradient(90deg, transparent, #000 36px); mask-image: linear-gradient(90deg, transparent, #000 36px); }
+[data-fade="lr"] { -webkit-mask-image: linear-gradient(90deg, transparent, #000 36px, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(90deg, transparent, #000 36px, #000 calc(100% - 36px), transparent); }
+.v2-tp-tabs { scrollbar-width: none; }
+.v2-app.is-desktop .v2-tp-tab { padding: 0 9px; }
+/* P2-13 resolution picker: themed on iOS too */
+.v2-res { -webkit-appearance: none; appearance: none; padding-right: 28px; background: #1e1e22 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23e8e8ea' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center; color: var(--text); }
+.v2-res:hover { background-color: #2a2a30; }
+/* P2-16 clip names on a semi-opaque pill */
+.v2-clip-name { right: auto; max-width: calc(100% - 12px); box-sizing: border-box; padding: 1px 6px; border-radius: 4px; background: rgba(0,0,0,.6); line-height: 15px; text-shadow: none; }
+/* P2-19 desktop: 32×32 targets with 4px gaps in the timeline toolbar and track headers */
+.v2-app.is-desktop .v2-dtoolbar { gap: 4px; }
+.v2-app.is-desktop .v2-track-header { gap: 4px; }
+.v2-app.is-desktop .v2-track-header .v2-icon, .v2-app.is-desktop .v2-layer-ctl .v2-icon { min-width: 32px; min-height: 32px; }
+.v2-app.is-desktop .v2-layer-ctl { gap: 4px; }
+.v2-kf { width: 32px; height: 32px; }
+.v2-sheet .v2-cuelist-head { position: sticky; top: 24px; z-index: 1; background: var(--panel); padding: 0; gap: 4px; min-height: 44px; }
+.v2-cuelist-head > strong { min-width: 0; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 15px; }
+.v2-cuelist-actions { display: flex; align-items: center; flex: none; }
+.v2-app.is-desktop .v2-tp-tabs { gap: 0; }
