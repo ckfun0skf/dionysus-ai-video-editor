@@ -2045,6 +2045,12 @@
           "title": "Desktop pass: roomy track headers, Effect tool + side inspector, effect-layer reorder verified at 1440x900/1280x800",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-104",
+          "title": "Subtitle list editor: Edit subtitles (timecodes, inline text, add/split/merge/delete, find & replace, Export SRT), Add subtitle removed, desktop focus mode",
+          "status": "done",
+          "progress": 100
         }
       ]
     },

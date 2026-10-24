@@ -85,13 +85,7 @@ describe("V2App", () => {
     await act(async () => { btn("Add text").click(); });
     expect(el.querySelector(".v2-clip.clip-text")).toBeTruthy();
     await act(async () => { btn("Done").click(); });
-    await act(async () => { btn("Add subtitle").click(); });
-    const ta = el.querySelector('textarea[aria-label="Subtitle text"]') as HTMLTextAreaElement;
-    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
-    await act(async () => { setter.call(ta, "Hi there"); ta.dispatchEvent(new Event("input", { bubbles: true })); });
-    expect(el.querySelector("[data-subtitle-id]")!.textContent).toContain("Hi there");
-    await act(async () => { btn("Delete").click(); });
-    expect(el.querySelector("[data-subtitle-id]")).toBeNull();
+    expect(btn("Add subtitle")).toBeUndefined(); // V2-104: replaced by Import SRT + Edit subtitles
     const input = el.querySelector('input[aria-label="Import SRT file"]') as HTMLInputElement;
     const file = new File(["1\n00:00:00,000 --> 00:00:01,000\nA\n\n2\n00:00:02,000 --> 00:00:03,000\nB\n"], "s.srt");
     Object.defineProperty(file, "text", { value: async () => "1\n00:00:00,000 --> 00:00:01,000\nA\n\n2\n00:00:02,000 --> 00:00:03,000\nB\n" });
@@ -101,6 +95,16 @@ describe("V2App", () => {
     // SRT import adds a NEW text layer with one text clip per cue (nothing replaced).
     expect(el.querySelectorAll(".v2-lane[data-track-id]").length).toBe(lanes + 1);
     expect(el.querySelectorAll(".v2-clip.clip-text").length).toBe(texts + 2);
+    // V2-104: Edit subtitles list editor on the imported layer
+    await act(async () => { (el.querySelector('[aria-label="Edit subtitles in Subtitles"]') as HTMLButtonElement).click(); });
+    const rows = el.querySelectorAll(".v2-cue");
+    expect(rows.length).toBe(2);
+    const ta = el.querySelector('textarea[aria-label="Subtitle 1 text"]') as HTMLTextAreaElement;
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
+    await act(async () => { ta.focus(); setter.call(ta, "Hi"); ta.dispatchEvent(new Event("input", { bubbles: true })); setter.call(ta, "Hi there"); ta.dispatchEvent(new Event("input", { bubbles: true })); ta.blur(); });
+    expect(Array.from(el.querySelectorAll(".v2-clip.clip-text")).some((c) => c.textContent?.includes("Hi there"))).toBe(true);
+    await act(async () => { (el.querySelector('[aria-label="Undo"]') as HTMLButtonElement).click(); });
+    expect((el.querySelector('textarea[aria-label="Subtitle 1 text"]') as HTMLTextAreaElement).value).toBe("A");
     await act(async () => { (el.querySelector('[aria-label="Undo"]') as HTMLButtonElement).click(); });
     expect(el.querySelectorAll(".v2-lane[data-track-id]").length).toBe(lanes);
     expect(el.querySelectorAll(".v2-clip.clip-text").length).toBe(texts);

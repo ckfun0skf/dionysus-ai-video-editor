@@ -10,6 +10,9 @@ import { getPreset } from "../registry";
 
 interface Props {
   /** V2-103: open the layer-mode text editor ("Edit all") for a text layer. */
+  onEditSubs?: (trackId: string) => void;
+  /** Desktop: click a group header to focus that group (only its layers shown; others become lines on the main track). */
+  onFocusGroup?: (g?: ops.TrackGroup) => void;
   onEditLayer?: (trackId: string) => void;
   /** Mobile: the expanded group (lifted so the bottom toolbar's ‹ can collapse it). */
   expanded?: ops.TrackGroup;
@@ -56,13 +59,13 @@ type Gesture =
   | { kind: "move"; id: string; x0: number; y0: number; start0: number; trackId: string; start: number; active: boolean; snap?: number }
   | { kind: "trim"; id: string; edge: "left" | "right"; x0: number; edge0: number; to: number; snap?: number };
 
-const HEADER_W = typeof window !== "undefined" && window.innerWidth >= 900 ? 236 : 84;
+const HEADER_W = typeof window !== "undefined" && window.innerWidth >= 900 ? 264 : 84;
 /** Centered mode: width of the fixed, opaque track-control column left of the lanes. */
 /** Compact height of text lanes in centered (mobile) mode; keeps the side column aligned with the main track. */
 export const TEXT_LANE_H = 32;
 export const SIDE_W = 144;
 
-export function Timeline({ engine, project, time, playing, onSeek, selectedId, selectedIds, onToggleSelect, multiMode, onSelect, pps, onZoom, centered, thumbs, peaks, strips, onAddMedia, sideColumn, timeLabel, topLane, ripple, onTransition, expanded: expandedProp, onExpand, focus, onEditLayer }: Props) {
+export function Timeline({ engine, project, time, playing, onSeek, selectedId, selectedIds, onToggleSelect, multiMode, onSelect, pps, onZoom, centered, thumbs, peaks, strips, onAddMedia, sideColumn, timeLabel, topLane, ripple, onTransition, expanded: expandedProp, onExpand, focus, onEditLayer, onEditSubs, onFocusGroup }: Props) {
   const comp = project.compositions[project.rootCompositionId];
   const scrollRef = useRef<HTMLDivElement>(null);
   const [gesture, setGesture] = useState<Gesture>();
@@ -311,11 +314,11 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
         <div className="v2-track-headers">
           <div className="v2-ruler-spacer" />
           {topLane && <div className="v2-track-header kind-text"><span>{topLane.label}</span></div>}
-          {rows.map((r) => r.type === "header" ? <div key={r.key} className="v2-group-header" data-group={r.group}>{ops.GROUP_LABEL[r.group]}</div> : r.type === "track" && (({ t }) => (
+          {rows.map((r) => r.type === "header" ? (onFocusGroup && r.group !== "main" ? <button key={r.key} className={`v2-group-header v2-group-focus ${focus === r.group ? "is-on" : ""}`} data-group={r.group} aria-pressed={focus === r.group} title={focus === r.group ? "Show all layers" : `Focus ${ops.GROUP_LABEL[r.group]}: show only these layers`} onClick={() => onFocusGroup(focus === r.group ? undefined : r.group)}>{ops.GROUP_LABEL[r.group]}<span className="v2-focus-hint">{focus === r.group ? "Show all" : "Focus"}</span></button> : <div key={r.key} className="v2-group-header" data-group={r.group}>{ops.GROUP_LABEL[r.group]}</div>) : r.type === "track" && (({ t }) => (
             <div key={t.id} className={`v2-track-header kind-${t.kind} ${layerDrag?.id === t.id ? "is-layer-dragging" : ""}`} style={layerShift(t.id)}>
               <span>{t.name}</span>
-              {t.kind !== "effect" && <button className="v2-icon" title={t.muted ? "Unmute track" : "Mute track"} aria-label={t.muted ? "Unmute track" : "Mute track"} onClick={() => engine.dispatch(cmd.toggleTrackMute(t.id))}><Ic g={t.muted ? "🔇" : "🔊"} /></button>}
-              <LayerControls t={t} isMain={t.id === main?.id} onToggle={() => engine.dispatch(cmd.toggleTrackHidden(t.id))} onDelete={() => setConfirmDel(t.id)} onReorder={(e) => startLayerDrag(e, t.id)} dragging={layerDrag?.id === t.id} onEditAll={onEditLayer && t.kind === "text" && layers.textClipCount(t) > 0 ? () => onEditLayer(t.id) : undefined} />
+              {t.kind !== "effect" && t.kind !== "text" && <button className="v2-icon" title={t.muted ? "Unmute track" : "Mute track"} aria-label={t.muted ? "Unmute track" : "Mute track"} onClick={() => engine.dispatch(cmd.toggleTrackMute(t.id))}><Ic g={t.muted ? "🔇" : "🔊"} /></button>}
+              <LayerControls t={t} isMain={t.id === main?.id} onToggle={() => engine.dispatch(cmd.toggleTrackHidden(t.id))} onDelete={() => setConfirmDel(t.id)} onReorder={(e) => startLayerDrag(e, t.id)} dragging={layerDrag?.id === t.id} onEditAll={onEditLayer && t.kind === "text" && layers.textClipCount(t) > 0 ? () => onEditLayer(t.id) : undefined} onEditSubs={onEditSubs && t.kind === "text" && layers.textClipCount(t) > 0 ? () => onEditSubs(t.id) : undefined} />
             </div>
           ))(r))}
         </div>
@@ -331,7 +334,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
             ))}
             {expanded && layerTops.map(({ id, top }) => { const t = comp.tracks.find((x) => x.id === id); return t && (
               <div key={id} className="v2-layer-side" data-track-id={id} style={{ top }}>
-                <LayerControls t={t} isMain={t.id === main?.id} onToggle={() => engine.dispatch(cmd.toggleTrackHidden(t.id))} onDelete={() => setConfirmDel(t.id)} onReorder={(e) => startLayerDrag(e, t.id)} dragging={layerDrag?.id === t.id} onEditAll={onEditLayer && t.kind === "text" && layers.textClipCount(t) > 0 ? () => onEditLayer(t.id) : undefined} />
+                <LayerControls t={t} isMain={t.id === main?.id} onToggle={() => engine.dispatch(cmd.toggleTrackHidden(t.id))} onDelete={() => setConfirmDel(t.id)} onReorder={(e) => startLayerDrag(e, t.id)} dragging={layerDrag?.id === t.id} onEditAll={onEditLayer && t.kind === "text" && layers.textClipCount(t) > 0 ? () => onEditLayer(t.id) : undefined} onEditSubs={onEditSubs && t.kind === "text" && layers.textClipCount(t) > 0 ? () => onEditSubs(t.id) : undefined} />
               </div>); })}
           </div>}
           <div className="v2-ruler" onPointerDown={scrub}>
@@ -554,8 +557,9 @@ function ReorderStrip({ track, state, top, root, thumbs, onMove, onDrop }: { tra
 }
 
 /** Per-layer eye (hide/show) and ✕ (delete, asks first). The main track can be hidden but not deleted. */
-export function LayerControls({ t, isMain, onToggle, onDelete, onReorder, dragging, onEditAll }: { t: Track; isMain: boolean; onToggle: () => void; onDelete: () => void; onReorder?: (e: React.PointerEvent) => void; dragging?: boolean; onEditAll?: () => void }) {
+export function LayerControls({ t, isMain, onToggle, onDelete, onReorder, dragging, onEditAll, onEditSubs }: { t: Track; isMain: boolean; onToggle: () => void; onDelete: () => void; onReorder?: (e: React.PointerEvent) => void; dragging?: boolean; onEditAll?: () => void; onEditSubs?: () => void }) {
   return <span className="v2-layer-ctl">
+    {onEditSubs && <button className="v2-icon v2-edit-subs" aria-label={`Edit subtitles in ${t.name}`} title="Edit subtitles: every line in a list — text, timing, split, merge, find & replace, export SRT" onClick={onEditSubs}><Ic g="≡" size={16} /></button>}
     {onEditAll && <button className="v2-icon v2-edit-all" aria-label={`Edit all clips in ${t.name}`} title="Edit all: style, font, effects, animation and position for every clip on this layer" onClick={onEditAll}><Ic g="layers" size={16} /></button>}
     {!isMain && onReorder && <button className={`v2-icon v2-drag-handle ${dragging ? "is-dragging" : ""}`} aria-label={`Reorder ${t.name}`} title="Drag up or down to reorder this layer in its group" onPointerDown={onReorder}><Ic g="grip" size={16} /></button>}
     <button className={`v2-icon ${t.hidden ? "is-off" : ""}`} aria-pressed={!!t.hidden} aria-label={t.hidden ? `Show ${t.name}` : `Hide ${t.name}`} title={t.hidden ? "Show layer (included in preview and export)" : "Hide layer (skipped in preview and export)"} onClick={onToggle}><Ic g={t.hidden ? "eye-off" : "eye"} size={16} /></button>

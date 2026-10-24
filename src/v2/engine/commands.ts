@@ -3,6 +3,7 @@ import type { Command } from "./engine";
 import { DEFAULT_EFFECT_TICKS, DEFAULT_IMAGE_TICKS, newId, trackKindFor, type Asset, type AssetVersion, type Composition, type Placement, type Project, type TrackKind, transformOf } from "../domain/model";
 import * as ops from "../domain/ops";
 import * as layers from "../domain/layerStyle";
+import * as cueOps from "../domain/subtitleLayer";
 import * as subs from "../domain/subtitles";
 import * as edit from "../domain/edit";
 import * as transitions from "../domain/transitions";
@@ -277,3 +278,12 @@ export const setLayerStyle = (trackId: string, patch: { text?: layers.LayerTextS
 });
 /** V2-103: drop a clip's own style so it follows its layer again. */
 export const resetToLayerStyle = (id: string): Command => ({ label: "Reset to layer style", apply: (p) => withRoot(p, (c) => layers.resetToLayer(c, id)) });
+
+/* V2-104: subtitle list editor ops on a text layer's cues (one undo step each; text typing coalesces in a gesture). */
+export const setCueText = (id: string, text: string): Command => ({ label: "Edit subtitle text", coalesceKey: `cuetext:${id}`, apply: (p) => withRoot(p, (c) => cueOps.setCueText(c, id, text)) });
+export const setCueTimes = (id: string, start: number, end: number): Command => ({ label: "Edit subtitle timing", apply: (p) => withRoot(p, (c) => cueOps.setCueTimes(c, id, start, end)) });
+export const addCueAfter = (id: string, newId: string): Command => ({ label: "Add subtitle", apply: (p) => withRoot(p, (c) => cueOps.addCueAfter(c, id, newId)) });
+export const deleteCue = (id: string): Command => ({ label: "Delete subtitle", apply: (p) => withRoot(p, (c) => cueOps.deleteCue(c, id)) });
+export const splitCue = (id: string, pos: number, newId: string): Command => ({ label: "Split subtitle", apply: (p) => withRoot(p, (c) => cueOps.splitCue(c, id, pos, newId)) });
+export const mergeCueNext = (id: string): Command => ({ label: "Merge subtitles", apply: (p) => withRoot(p, (c) => cueOps.mergeNext(c, id)) });
+export const replaceInLayer = (trackId: string, find: string, repl: string, matchCase = false): Command => ({ label: "Replace in subtitles", apply: (p) => withRoot(p, (c) => cueOps.replaceAll(c, trackId, find, repl, matchCase)) });
