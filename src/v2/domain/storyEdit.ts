@@ -161,7 +161,8 @@ function withRender(b: Storyboard, s: Shot, render: "ai" | "html" | "still", cli
 export function duplicateShot(p: Project, id: string, copyId: string): Project {
   const b = p.storyboard, s = b?.shots[id];
   if (!b || !s || b.shots[copyId]) return p;
-  const { assetId: _a, ownAssetId: _o, skipped: _s, ...rest } = structuredClone(s);
+  // The copy keeps the keyframe as a plain reference: a keyframe belongs to one shot (V2-SB-124).
+  const { assetId: _a, ownAssetId: _o, skipped: _s, keyframe: _k, ...rest } = structuredClone(s);
   const copy: Shot = { ...rest, id: copyId, title: `${s.title} (copy)`, qa: s.qa.map((q, i) => ({ id: `${copyId}.qa${i + 1}`, text: q.text })) };
   // An html or still shot shows its slot, so the copy shows the same versions.
   if (s.clipSlot && b.slots[s.clipSlot]?.assetId) copy.assetId = b.slots[s.clipSlot].assetId;
@@ -183,7 +184,11 @@ export function deleteShot(p: Project, id: string): Project {
   const b = p.storyboard;
   if (!b?.shots[id]) return p;
   const { [id]: _gone, ...shots } = b.shots;
-  const slots = Object.fromEntries(Object.entries(b.slots).map(([k, s]) => [k, s.source.type === "lastFrame" && s.source.shotId === id ? { ...s, source: { type: "upload" as const } } : s]));
+  const slots = Object.fromEntries(Object.entries(b.slots).map(([k, s]) => {
+    if (s.source.type === "lastFrame" && s.source.shotId === id) return [k, { ...s, source: { type: "upload" as const } }];
+    if (s.keyframeOf === id) { const { keyframeOf: _k, ...rest } = s; return [k, rest]; } // stays as a plain frame asset
+    return [k, s];
+  }));
   return renameShotAssets(p, { ...b, order: b.order.filter((x) => x !== id), shots, slots, connections: b.connections.filter((c) => c.from !== id && c.to !== id) });
 }
 

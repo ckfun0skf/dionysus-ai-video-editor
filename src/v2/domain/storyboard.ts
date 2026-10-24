@@ -7,7 +7,7 @@
  */
 import { isStill, newId, type AssetVersion, type Composition, type MediaKind, type MediaRef, type Placement, type Project } from "./model";
 import { mainTrack } from "./ops";
-import { assetRefId, type AssetRefRole, type ReferenceRole, type ShotRender, type StoryAssetRef, type StoryAssetType, type StoryConnection, type StoryDoc, type StoryEffect, type StoryLayer, type StoryMeta } from "./storyJson";
+import { assetRefId, keyframeId, type AssetRefRole, type ReferenceRole, type ShotRender, type StoryAssetRef, type StoryAssetType, type StoryConnection, type StoryDoc, type StoryEffect, type StoryLayer, type StoryMeta } from "./storyJson";
 import { followStoryLinks } from "./storyLinks";
 import { orderSteps } from "./storySteps";
 import { TICKS_PER_SECOND } from "./time";
@@ -27,6 +27,8 @@ export interface AssetSlot {
   /** Backing project asset; created on first upload. */
   assetId?: string;
   skipped?: boolean;
+  /** V2-SB-124: this slot is the keyframe of that shot (its clip's start frame, made first). */
+  keyframeOf?: string;
 }
 
 export interface Shot {
@@ -63,6 +65,11 @@ export interface Shot {
    * fixed lengths). Uploads longer than `durationSec` are offered a trim.
    */
   genDurationSec?: number;
+  /**
+   * V2-SB-124: keyframe then animate. The frame slot made first and attached as the clip's start frame (Image 1); it is
+   * also in `slotIds`, so the clip is flagged when the keyframe changes.
+   */
+  keyframe?: string;
 }
 
 /** One numbered image for a shot's clip generation and how the model should use it. */
@@ -143,6 +150,15 @@ export function storyboardFromDoc(doc: StoryDoc): Storyboard {
       ...(s.references?.length ? { references: s.references.map((r) => ({ slotId: r.asset, role: r.role, ...(r.note ? { note: r.note } : {}) })) } : {}),
     };
     if (shots[s.id].clipSlot && !shots[s.id].slotIds.includes(shots[s.id].clipSlot!)) shots[s.id].slotIds.push(shots[s.id].clipSlot!);
+    if (s.keyframe) {
+      const id = keyframeId(s.id);
+      slots[id] = {
+        id, name: `Keyframe · ${s.title}`, type: "frame", aspect: doc.meta.aspect, prompt: s.keyframe.prompt, references: s.keyframe.references.map(assetRefId),
+        source: { type: "generate" }, qa: qaList(id, s.keyframe.qa), keyframeOf: s.id, ...refRolesOf(s.keyframe.references),
+      };
+      shots[s.id].keyframe = id;
+      shots[s.id].slotIds.unshift(id);
+    }
   }
   return { format: "dionysus.storyboard/1", meta: structuredClone(doc.meta), order: doc.shots.map((s) => s.id), shots, slots, connections: doc.connections.map((c) => structuredClone(c)), versions: {} };
 }
@@ -509,8 +525,10 @@ export function productionSteps(p: Project): ProductionStep[] {
     const s = b.shots[id];
     if (!s || seen.has(`shot:${id}`)) return;
     seen.add(`shot:${id}`);
-    s.slotIds.forEach(slot);
+    s.slotIds.forEach((x) => { if (x !== s.keyframe) slot(x); });
     (s.layers ?? []).forEach((l) => { if (l.type !== "text") slot(l.asset); }); // media-layer assets come before the shot too
+    // V2-SB-124: the keyframe comes right before its clip (after the references it is made from).
+    if (s.keyframe) slot(s.keyframe);
     // html/still shots: the step is checking the clip slot's version (its upload is the slot's own step).
     if (s.clipSlot) slot(s.clipSlot);
     out.push({ target: { shot: id }, key: `shot:${id}`, ...state(s, status.shots[id], undefined, s.clipSlot) });

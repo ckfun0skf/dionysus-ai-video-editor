@@ -2359,6 +2359,12 @@
           "progress": 100
         },
         {
+          "id": "V2-SB-124",
+          "title": "Keyframe then animate: shots[].keyframe { prompt, references, qa } makes a still of the opening frame that is produced before the clip and attached first as its start-frame (explicit start-frame references become detail); board Keyframe section with Add keyframe, staleness and production order follow it; spec section 2.4.2, RULE 18 with worked example, fixture s04 exercises it. Also: V2App tests unmount their React roots so CI no longer fails on console writes after teardown; phone touch targets raised to 44px (board connection rows, sheet grabber tap area)",
+          "status": "done",
+          "progress": 100
+        },
+        {
           "id": "V2-SB-123",
           "title": "Asset-level reference roles: assets[].references entries may be { asset, role, note } (start-frame = base image to edit, identity, look, detail; one base image; end-frame warns and is used as detail); asset image prompts get the same attach-in-order list and References block as shots (copy prompt adds it, per-image save), role selects in the asset editor, spec section 2.3.1, RULE 17 with worked example, fixture card-still exercises it",
           "status": "done",

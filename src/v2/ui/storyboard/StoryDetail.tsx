@@ -199,6 +199,11 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
         {err && <p className="v2-sb-err" role="alert"><Ic g="alert" size={14} /> {err}</p>}
       </Section>
 
+      {shot && !shot.render && <Keyframe shot={shot} project={project} thumbs={thumbs} engine={engine} onOpen={onOpen} />}
+      {slot?.keyframeOf && b.shots[slot.keyframeOf] && (
+        <p className="v2-hint v2-sb-kfnote">Keyframe of shot {shotNo(slot.keyframeOf)}: make this still first; the clip animates from it (Image 1, the start frame).{" "}
+          <button className="v2-linkbtn" onClick={() => onOpen({ shot: slot.keyframeOf! })}>Open shot {shotNo(slot.keyframeOf)}</button></p>
+      )}
       {owner.prompt && (
         <Section title={shot ? "Clip prompt" : "Prompt"} extra={<CopyButton text={() => (shot ? storyRefs.promptWithReferences(b, shot) : slot ? storyRefs.slotPromptWithReferences(b, slot) : owner.prompt)} label="Copy prompt" testId="copy-clip-prompt" />}>
           <p className="v2-sb-prompt">{owner.prompt}</p>
@@ -370,6 +375,41 @@ function ShotLayers({ shot, project, onOpen }: { shot: Shot; project: Project; o
         {effects.map((e, i) => <li key={`e${i}`}><Ic g="effect" size={14} /> <span>Effect {e.preset}{secs(e.startSec, e.endSec)}</span></li>)}
       </ul>
       <p className="v2-hint">Added with the shot by Send to timeline. They follow the shot when you swap its version.</p>
+    </Section>
+  );
+}
+
+/**
+ * Keyframe then animate (V2-SB-124): the opening still made first, with its own prompt and versions, attached to the
+ * clip as Image 1 (start frame). Without one, offer to add it.
+ */
+function Keyframe({ shot, project, thumbs, engine, onOpen }: { shot: Shot; project: Project; thumbs: Record<string, string>; engine: Engine; onOpen: (t: BoardTarget) => void }) {
+  const b = project.storyboard!;
+  const kf = shot.keyframe ? b.slots[shot.keyframe] : undefined;
+  if (kf) {
+    const vs = board.versionsOf(project, kf);
+    const used = board.refVersionOf(project, shot, kf.id);
+    const no = vs.findIndex((v) => v.id === used) + 1;
+    const sub = no > 0 ? `v${no} · Image 1, the start frame` : "Not added yet · make this still first";
+    return (
+      <Section title="Keyframe">
+        <button className="v2-sb-slot" data-testid="keyframe-open" onClick={() => onOpen({ slot: kf.id })} aria-label={`Keyframe ${kf.name}: ${sub}`}>
+          <Thumb src={used && thumbs[used]} icon="image" count={0} />
+          <span className="v2-sb-slot-text"><b>{kf.name}</b><em>{sub}</em></span>
+        </button>
+      </Section>
+    );
+  }
+  const add = () => {
+    let id = `${shot.id}.keyframe`;
+    for (let i = 2; b.slots[id] || b.shots[id]; i++) id = `${shot.id}.keyframe${i}`;
+    engine.dispatch(cmd.addKeyframe(shot.id, id));
+    if (engine.getState().project.storyboard?.slots[id]) onOpen({ slot: id });
+  };
+  return (
+    <Section title="Keyframe">
+      <p className="v2-hint">Make the opening still first, then animate it: you pick the exact first frame before paying for video.</p>
+      <div className="v2-sb-actions"><button className="v2-btn v2-sb-btn" data-testid="keyframe-add" onClick={add}><Ic g="image" size={16} /> Add keyframe</button></div>
     </Section>
   );
 }

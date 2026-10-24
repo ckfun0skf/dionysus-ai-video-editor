@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import { createRoot } from "react-dom/client";
+import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { V2App } from "./V2App";
 
@@ -12,13 +12,23 @@ beforeAll(() => {
   Element.prototype.releasePointerCapture = () => undefined;
   Object.defineProperty(globalThis, "indexedDB", { value: undefined, configurable: true });
 });
-afterEach(() => { document.body.innerHTML = ""; });
+/**
+ * Unmount every app after each test and let its async work settle (autosave flush, storage, logs), so nothing writes
+ * to the console after the file's environment is torn down (that made CI fail with EnvironmentTeardownError).
+ */
+const roots: Root[] = [];
+const track = (r: Root) => { roots.push(r); return r; };
+afterEach(async () => {
+  await act(async () => { for (const r of roots.splice(0)) r.unmount(); });
+  await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+  document.body.innerHTML = "";
+});
 
 describe("V2App", () => {
   it("boots with desktop layout: media, preview and timeline", async () => {
     const el = document.createElement("div");
     document.body.appendChild(el);
-    await act(async () => { createRoot(el).render(<V2App />); });
+    await act(async () => { track(createRoot(el)).render(<V2App />); });
     await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
     expect(el.querySelector('[aria-label="Media"]')).toBeTruthy();
     expect(el.querySelector('[aria-label="Preview"]')).toBeTruthy();
@@ -38,7 +48,7 @@ describe("V2App", () => {
     storage.lastProjectId.set("broken");
     const el = document.createElement("div");
     document.body.appendChild(el);
-    await act(async () => { createRoot(el).render(<V2App openStorage={async () => storage} />); });
+    await act(async () => { track(createRoot(el)).render(<V2App openStorage={async () => storage} />); });
     await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
     const alert = el.querySelector(".v2-recovery")!;
     expect(alert.textContent).toContain("couldn’t be opened");
@@ -59,7 +69,7 @@ describe("V2App", () => {
     storage.lastProjectId.set(p.id);
     const el = document.createElement("div");
     document.body.appendChild(el);
-    await act(async () => { createRoot(el).render(<V2App openStorage={async () => storage} />); });
+    await act(async () => { track(createRoot(el)).render(<V2App openStorage={async () => storage} />); });
     await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
     const clip = el.querySelector('[data-placement-id="v"]') as HTMLElement;
     await act(async () => { clip.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true })); window.dispatchEvent(new MouseEvent("pointerup")); });
@@ -80,7 +90,7 @@ describe("V2App", () => {
   it("adds, edits and deletes text; SRT import is one undo step", async () => {
     const el = document.createElement("div");
     document.body.appendChild(el);
-    await act(async () => { createRoot(el).render(<V2App />); });
+    await act(async () => { track(createRoot(el)).render(<V2App />); });
     await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
     const btn = (label: string) => Array.from(el.querySelectorAll("button")).find((b) => b.textContent?.includes(label)) as HTMLButtonElement;
     // V2-106: text is added from the asset browser's Text tab.
@@ -117,7 +127,7 @@ describe("V2App", () => {
     localStorage.removeItem("v2.ripple");
     const el = document.createElement("div");
     document.body.appendChild(el);
-    await act(async () => { createRoot(el).render(<V2App />); });
+    await act(async () => { track(createRoot(el)).render(<V2App />); });
     await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
     const toggle = el.querySelector('button[aria-pressed][title^="Ripple"]') as HTMLButtonElement;
     expect(toggle.getAttribute("aria-pressed")).toBe("false");
@@ -139,7 +149,7 @@ describe("V2App", () => {
     storage.lastProjectId.set(p.id);
     const el = document.createElement("div");
     document.body.appendChild(el);
-    await act(async () => { createRoot(el).render(<V2App openStorage={async () => storage} />); });
+    await act(async () => { track(createRoot(el)).render(<V2App openStorage={async () => storage} />); });
     await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
     const down = (id: string, shiftKey = false) => act(async () => { el.querySelector(`[data-placement-id="${id}"]`)!.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, shiftKey })); window.dispatchEvent(new MouseEvent("pointerup")); });
     const clips = () => el.querySelectorAll("[data-placement-id]").length;
@@ -177,7 +187,7 @@ describe("V2App", () => {
   it("transition picker (desktop): the junction opens it without adding anything; tiles apply, None removes, each pick is one undo step", async () => {
     const storage = await twoClipStorage();
     const el = document.createElement("div"); document.body.appendChild(el);
-    await act(async () => { createRoot(el).render(<V2App openStorage={async () => storage} />); });
+    await act(async () => { track(createRoot(el)).render(<V2App openStorage={async () => storage} />); });
     await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
     const marker = () => el.querySelector(".v2-trans") as HTMLButtonElement;
     expect(marker().getAttribute("aria-label")).toBe("Add transition");
@@ -212,7 +222,7 @@ describe("V2App", () => {
     try {
       const storage = await twoClipStorage();
       const el = document.createElement("div"); document.body.appendChild(el);
-      await act(async () => { createRoot(el).render(<V2App openStorage={async () => storage} />); });
+      await act(async () => { track(createRoot(el)).render(<V2App openStorage={async () => storage} />); });
       await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
       await act(async () => { (el.querySelector(".v2-trans") as HTMLButtonElement).click(); });
       const sheet = document.querySelector(".v2-trans-sheet") as HTMLElement;
@@ -232,7 +242,7 @@ describe("V2App", () => {
     try {
       const el = document.createElement("div");
       document.body.appendChild(el);
-      await act(async () => { createRoot(el).render(<V2App />); });
+      await act(async () => { track(createRoot(el)).render(<V2App />); });
       await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
       const side = el.querySelector('[data-testid="side-col"]')!;
       const scroll = el.querySelector(".v2-scroll")!;

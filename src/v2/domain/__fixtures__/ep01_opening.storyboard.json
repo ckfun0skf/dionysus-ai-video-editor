@@ -252,6 +252,20 @@
         "style"
       ],
       "camera": "Static medium from behind",
+      "keyframe": {
+        "prompt": "References:\nImage 1 (Mara): reference only: keep this identity (face, body, hair, the silver streak).\nImage 2 (Mara's flat): reference only: overall look and materials, not its framing.\n\nPhotorealistic cinematic still, 35mm film look, clear golden morning light. Medium shot from behind, eye height, ~50mm lens feel: Mara in a grey knit sweater and dark blue-grey trousers, no coat, stands at the ceramic-white rounded drawer wall of her flat holding a small blank cream card at chest height. Her head is tilted slightly down towards the card. No legible text, no logos, no extra people.",
+        "references": [
+          "mara",
+          {
+            "asset": "flat",
+            "role": "look"
+          }
+        ],
+        "qa": [
+          "Grey knit sweater, NO coat",
+          "The card is blank and clearly held in her hands"
+        ]
+      },
       "qa": [
         "Grey knit sweater, NO coat",
         "Silver streak visible above left temple if the side of her head shows",
