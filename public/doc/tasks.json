@@ -2339,6 +2339,12 @@
           "title": "Reference roles in clip prompts: optional shots[].references (asset, role start-frame/end-frame/identity/look/detail, note) fix the image numbering; roles inferred from asset type otherwise; RULE 14 References block; \"Attach in this order\" with pinned-version thumbnails and Save (iOS share sheet); Copy prompt prepends the block when missing",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-BUG-EXPORT-BLACK",
+          "title": "P0 export fix: video clips exported as black on Android Chrome (audio/images/text fine). Export now decodes video frame-accurately with WebCodecs (mp4box demux + VideoDecoder, edit lists, B-frames, rotation); unsupported files fall back to muted media elements kept in the DOM, awaited per frame with requestVideoFrameCallback, nudged once and verified for a real picture; a clip with no picture stops the export with a message naming it (HEVC advice), partial gaps become export warnings",
+          "status": "done",
+          "progress": 100
         }
       ]
     },
