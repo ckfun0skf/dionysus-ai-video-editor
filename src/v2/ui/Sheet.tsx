@@ -22,11 +22,12 @@ function scrolledAbove(el: Element | null, root: Element): boolean {
  * release springs to peek / half / full, or closes below peek. Flicks move ≥ 1 snap. Dragging the content
  * expands the sheet first; at full it scrolls, and pulling down while scrolled to the top collapses the sheet.
  */
-export function Sheet({ onClose, label, className = "", children, head = true, extra, snaps = SHEET_SNAPS, initial = 1, snapTo }: {
+export function Sheet({ onClose, label, className = "", children, head = true, extra, snaps = SHEET_SNAPS, initial = 1, snapTo, dim = true }: {
   onClose: () => void; label: string; className?: string; children: ReactNode; head?: boolean; extra?: ReactNode;
   /** Snap heights as viewport fractions, ascending. */ snaps?: number[];
   /** Initial snap index. */ initial?: number;
   /** Request a snap (e.g. collapse to peek while an animation loops). */ snapTo?: number;
+  /** False: no dimming and taps outside the sheet reach the app (the preview stays usable; close with ✓ or the grabber). */ dim?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const cur = useRef(initial);
@@ -108,7 +109,7 @@ export function Sheet({ onClose, label, className = "", children, head = true, e
     drag.end(e.timeStamp);
   };
   return (
-    <div className="v2-sheet-backdrop" onClick={onClose} onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}>
+    <div className={`v2-sheet-backdrop ${dim ? "" : "is-clear"}`} onClick={onClose} onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}>
       <div ref={ref} role="dialog" aria-label={label} className={`v2-sheet is-snap ${className}`}
         onClickCapture={(e) => { if (suppressClick.current) { e.stopPropagation(); e.preventDefault(); suppressClick.current = false; } }}
         onClick={(e) => e.stopPropagation()} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={() => { if (pd.current?.moved) drag.end(); pd.current = null; }}>

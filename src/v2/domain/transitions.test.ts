@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createProject, type Placement } from "./model";
-import { setTransition, trackTransitions } from "./transitions";
+import { cutsOnTrack, setTransition, setTransitionAll, trackTransitions, transitionKind, transitionKinds } from "./transitions";
 import { activeAt } from "../render/frame";
 
 const T = 120_000;
@@ -35,5 +35,25 @@ describe("transitions", () => {
     const c = setTransition(comp(clip("a", 0), clip("b", 2 * T)), "b", { kind: "crossfade", durationTicks: T });
     c.tracks[0].placements[1] = { ...c.tracks[0].placements[1], startTicks: 3 * T };
     expect(trackTransitions(c.tracks[0])).toEqual([]);
+  });
+  it("Apply to all sets (or clears) every cut on the track, each clamped to its own clips", () => {
+    const c = comp(clip("a", 0), clip("b", 2 * T, T / 2), clip("c", 2.5 * T), clip("d", 8 * T));
+    expect(cutsOnTrack(c, "a").map((p) => p.id)).toEqual(["b", "c"]);
+    const all = setTransitionAll(c, "a", { kind: "zoom-in", durationTicks: T });
+    expect(all.tracks[0].placements.map((p) => p.transitionIn)).toEqual([undefined, { kind: "zoom-in", durationTicks: T / 2 }, { kind: "zoom-in", durationTicks: T / 2 }, undefined]);
+    expect(setTransitionAll(all, "d", undefined).tracks[0].placements.every((p) => !p.transitionIn)).toBe(true);
+  });
+  it("every transition kind has a category, finite look values and ends fully on the incoming clip", () => {
+    const kinds = transitionKinds();
+    expect(kinds.length).toBeGreaterThanOrEqual(20);
+    expect(kinds.filter((k) => k.popular).length).toBeGreaterThanOrEqual(6);
+    for (const k of kinds) {
+      expect(k.category, k.id).toBeTruthy();
+      expect(k.mix(1).in, k.id).toBeGreaterThan(0.99);
+      for (let i = 0; i <= 10; i++) { const l = k.look(i / 10); for (const v of [l.out, l.in]) for (const n of Object.values(v ?? {})) if (typeof n === "number") expect(Number.isFinite(n), k.id).toBe(true); }
+    }
+    expect(transitionKind("push-left")!.look(0.5).in?.dx).toBeGreaterThan(0);
+    expect(transitionKind("push-left")!.look(1).in?.dx ?? 0).toBeCloseTo(0, 5);
+    expect(transitionKind("wipe-right")!.look(0.5).in?.clip).toBeTruthy();
   });
 });

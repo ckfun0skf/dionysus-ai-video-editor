@@ -94,17 +94,17 @@ describe("storyboard v1.1: warnings and fallbacks (never reject)", () => {
     const w = warnsOf((d) => {
       d.shots[0].layers = [text({ textStyle: "sparkle", anim: { in: "spin", out: "melt", loop: "orbit" } })];
       d.shots[0].effects = [{ preset: "grain" }];
-      d.connections[0].transition = { preset: "wipe-left" };
+      d.connections[0].transition = { preset: "star-wipe" };
     });
     expect(w.join("\n")).toMatch(/shots\[0\]\.layers\[0\]\.textStyle: Unknown text style "sparkle"; using "plain"/);
     expect(w.join("\n")).toMatch(/anim\.in: Unknown in animation "spin"; using no animation/);
     expect(w.join("\n")).toMatch(/anim\.out: Unknown out animation "melt"/);
     expect(w.join("\n")).toMatch(/anim\.loop: Unknown loop animation "orbit"/);
     expect(w.join("\n")).toMatch(/shots\[0\]\.effects\[0\]\.preset: Unknown effect "grain"; using no effect/);
-    expect(w.join("\n")).toMatch(/connections\[0\]\.transition\.preset: Unknown transition "wipe-left"; using a cut \(the id is kept for export\)\. Known: crossfade, dip/);
-    const doc = docOf((d) => { d.shots[0].effects = [{ preset: "grain" }]; d.connections[0].transition = { preset: "wipe-left" }; d.shots[0].layers = [text({ textStyle: "sparkle" })]; });
+    expect(w.join("\n")).toMatch(/connections\[0\]\.transition\.preset: Unknown transition "star-wipe"; using a cut \(the id is kept for export\)\. Known: crossfade, dip, dip-white/);
+    const doc = docOf((d) => { d.shots[0].effects = [{ preset: "grain" }]; d.connections[0].transition = { preset: "star-wipe" }; d.shots[0].layers = [text({ textStyle: "sparkle" })]; });
     expect(doc.shots[0].effects?.[0].preset).toBe("grain");
-    expect(doc.connections[0].transition?.preset).toBe("wipe-left");
+    expect(doc.connections[0].transition?.preset).toBe("star-wipe");
     expect((doc.shots[0].layers?.[0] as { textStyle?: string }).textStyle).toBe("sparkle");
   });
   it("id@N resolves to the current version and warns when N differs", () => {

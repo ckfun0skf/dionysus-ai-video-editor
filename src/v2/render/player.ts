@@ -15,6 +15,7 @@ import { mainTrack } from "../domain/ops";
 import { correctDrift, createClock, type Clock } from "./clock";
 import { HtmlClipHost, isValidFrame, type FrameIssue } from "./htmlClip";
 import type { ExportVideoFrames } from "./export/videoFrames";
+import { drawWithLook } from "./transitionDraw";
 
 type MediaEl = HTMLVideoElement | HTMLAudioElement | HTMLImageElement;
 /** Frame problems found while rendering offline: HTML clip timeouts/invalid frames, video frames with no picture. */
@@ -197,7 +198,7 @@ export class Player {
     const mainId = mainTrack(comp)?.id;
     let fxDone = !fx;
     const applyFx = () => { fxDone = true; if (fx && ctx && canvas) applyEffectFrame(ctx, canvas.width, canvas.height, fx); };
-    for (const { track, placement: raw, sourceTicks, mix } of layers) {
+    for (const { track, placement: raw, sourceTicks, mix, tfx } of layers) {
       if (raw.clipType === "effect") continue;
       // V2-103: text clips render with their layer style merged under their own overrides (preview and export alike).
       const placement = effectivePlacement(track, raw);
@@ -216,11 +217,12 @@ export class Player {
         if (ctx && canvas && isValidFrame(f)) {
           const r = placeRect(placement, f.width, f.height, canvas.width, canvas.height, this.time);
           this.boxes.set(placement.id, r);
-          ctx.save();
           try { // a detached/closed bitmap must not throw out of draw() and stall preview or export
-            ctx.globalAlpha = r.alpha * (mix ?? 1); ctx.translate(r.cx, r.cy); ctx.rotate(r.rot);
-            ctx.drawImage(f, r.sx, r.sy, r.sw, r.sh, -r.w / 2, -r.h / 2, r.w, r.h);
-          } catch { host.issue = "invalid"; } finally { ctx.restore(); }
+            drawWithLook(ctx, canvas.width, canvas.height, tfx, (g) => {
+              g.save();
+              try { g.globalAlpha = r.alpha * (mix ?? 1); g.translate(r.cx, r.cy); g.rotate(r.rot); g.drawImage(f, r.sx, r.sy, r.sw, r.sh, -r.w / 2, -r.h / 2, r.w, r.h); } finally { g.restore(); }
+            });
+          } catch { host.issue = "invalid"; }
         }
         continue;
       }
@@ -230,9 +232,11 @@ export class Player {
         if (ctx && canvas) {
           const r = placeRect(placement, f.width, f.height, canvas.width, canvas.height, this.time);
           this.boxes.set(placement.id, r);
-          ctx.save(); ctx.globalAlpha = r.alpha * (mix ?? 1); ctx.translate(r.cx, r.cy); ctx.rotate(r.rot);
-          ctx.drawImage(f.image, r.sx, r.sy, r.sw, r.sh, -r.w / 2, -r.h / 2, r.w, r.h);
-          ctx.restore();
+          drawWithLook(ctx, canvas.width, canvas.height, tfx, (g) => {
+            g.save(); g.globalAlpha = r.alpha * (mix ?? 1); g.translate(r.cx, r.cy); g.rotate(r.rot);
+            g.drawImage(f.image, r.sx, r.sy, r.sw, r.sh, -r.w / 2, -r.h / 2, r.w, r.h);
+            g.restore();
+          });
         }
         continue;
       }
@@ -277,9 +281,11 @@ export class Player {
         if (w && h && (!(el instanceof HTMLVideoElement) || el.readyState >= 2)) {
           const r = placeRect(placement, w, h, canvas.width, canvas.height, this.time);
           this.boxes.set(placement.id, r);
-          ctx.save(); ctx.globalAlpha = r.alpha * (mix ?? 1); ctx.translate(r.cx, r.cy); ctx.rotate(r.rot);
-          ctx.drawImage(el as CanvasImageSource, r.sx, r.sy, r.sw, r.sh, -r.w / 2, -r.h / 2, r.w, r.h);
-          ctx.restore();
+          drawWithLook(ctx, canvas.width, canvas.height, tfx, (g) => {
+            g.save(); g.globalAlpha = r.alpha * (mix ?? 1); g.translate(r.cx, r.cy); g.rotate(r.rot);
+            g.drawImage(el as CanvasImageSource, r.sx, r.sy, r.sw, r.sh, -r.w / 2, -r.h / 2, r.w, r.h);
+            g.restore();
+          });
         }
       }
     }

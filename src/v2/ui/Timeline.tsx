@@ -434,12 +434,12 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
                   onPointerDown={(e) => e.stopPropagation()} onClick={onAddMedia}><Ic g="+" size={22} /></button>
               )}
               {onTransition && t.kind === "video" && t.placements.filter((p) => transitions.previousAdjacent(t, p)).map((p) => {
-                const tr = p.transitionIn;
+                const tr = p.transitionIn, kind = tr && transitions.transitionKind(tr.kind);
                 return (
                   <button key={`tr-${p.id}`} className={`v2-trans ${tr ? "has-trans" : ""} ${tr && p.id === selectedId ? "is-selected" : ""}`} style={{ left: toPx(p.startTicks) }}
-                    aria-label={tr ? `${(transitions.transitionKind(tr.kind)?.label ?? "Transition")} ${tr.durationTicks / TICKS_PER_SECOND}s` : "Add crossfade"} title={tr ? "Edit transition" : "Add a crossfade at this cut"}
+                    aria-label={tr ? `${kind?.label ?? "Transition"} ${tr.durationTicks / TICKS_PER_SECOND}s` : "Add transition"} title={tr ? `${kind?.label ?? "Transition"}: tap to change` : "Add a transition at this cut"}
                     onPointerDown={(e) => e.stopPropagation()} onClick={() => onTransition(p.id)}>
-                    <Ic g={tr ? (transitions.transitionKind(tr.kind)?.icon ?? "⧓") : "+"} size={14} />
+                    <Ic g={tr ? "⧓" : "cut"} size={14} />
                   </button>
                 );
               })}

@@ -4,7 +4,7 @@
  * span the clips hold their edge frame, so no extra media handles are needed.
  */
 import type { Composition, Placement, Track } from "./model";
-import { applyPreset, getPreset, listPresets } from "../registry";
+import { applyPreset, getPreset, listPresets, type TransLayer } from "../registry";
 
 export interface TransitionKind {
   id: string;
@@ -12,13 +12,23 @@ export interface TransitionKind {
   icon: string;
   /** Opacity multipliers for the outgoing and incoming clip at progress a (0..1). Incoming is drawn on top. */
   mix(a: number): { out: number; in: number };
+  /** Extra look of the outgoing and incoming clip at progress a (motion, blur, wipe, tint); undefined sides are plain. */
+  look(a: number): { out?: TransLayer; in?: TransLayer };
+  /** Registry category (e.g. "Slide"), for pickers. */
+  category: string;
+  /** Shown on the picker's Popular tab. */
+  popular: boolean;
 }
 
 /** Transition kind from the preset registry (undefined when the id is unknown). */
 export function transitionKind(id: string): TransitionKind | undefined {
   const d = getPreset("transition", id);
   if (!d) return undefined;
-  return { id, label: d.name, icon: d.preview.icon ?? "⧓", mix: (a) => { const f = applyPreset("transition", id, a); return { out: f.mixOut ?? 1, in: f.mixIn ?? 1 }; } };
+  return {
+    id, label: d.name, icon: d.preview.icon ?? "⧓", category: d.category, popular: !!(d.data as { popular?: boolean } | undefined)?.popular,
+    mix: (a) => { const f = applyPreset("transition", id, a); return { out: f.mixOut ?? 1, in: f.mixIn ?? 1 }; },
+    look: (a) => { const f = applyPreset("transition", id, a); return { out: f.tOut, in: f.tIn }; },
+  };
 }
 export const transitionKinds = () => listPresets("transition").map((d) => transitionKind(d.id)!);
 export type TransitionId = string;
@@ -64,6 +74,33 @@ export function setTransition(comp: Composition, id: string, t: Transition | und
         if (q.id !== id) return q;
         const n: Placement = { ...q };
         if (t) n.transitionIn = { kind: t.kind, durationTicks: Math.max(1, Math.round(t.durationTicks)) };
+        else delete n.transitionIn;
+        return n;
+      }) };
+    }),
+  };
+}
+
+/** Every cut on the track holding `id` (incoming clips with an adjacent clip before them). */
+export function cutsOnTrack(comp: Composition, id: string): Placement[] {
+  const track = comp.tracks.find((t) => t.placements.some((q) => q.id === id));
+  return track ? track.placements.filter((q) => previousAdjacent(track, q)) : [];
+}
+
+/**
+ * Set or clear the same transition on every cut of the track holding `id` ("Apply to all"). Each cut's length is
+ * clamped to what its two clips allow.
+ */
+export function setTransitionAll(comp: Composition, id: string, t: Transition | undefined): Composition {
+  return {
+    ...comp,
+    tracks: comp.tracks.map((track) => {
+      if (!track.placements.some((q) => q.id === id)) return track;
+      return { ...track, placements: track.placements.map((q) => {
+        const prev = previousAdjacent(track, q);
+        if (!prev) return q;
+        const n: Placement = { ...q };
+        if (t) n.transitionIn = { kind: t.kind, durationTicks: Math.max(1, Math.min(Math.round(t.durationTicks), maxTransition(prev, q))) };
         else delete n.transitionIn;
         return n;
       }) };

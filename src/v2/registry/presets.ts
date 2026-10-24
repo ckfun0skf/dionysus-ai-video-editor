@@ -2,11 +2,16 @@
  * Built-in preset descriptors: plain JSON-serializable data. To add a preset, append a descriptor here (or load
  * one at runtime with `registerPresets`) whose `type` names a function in renderers.ts. See docs/v2/MODULE_DESIGN.md.
  */
-import type { PresetDescriptor } from "./types";
+import type { ParamSpec, PresetDescriptor } from "./types";
 
 const svg = (body: string) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="400" height="400">${body}</svg>`;
 const RED = "#ff3b30", YEL = "#ffd60a";
 const P = (d: Omit<PresetDescriptor, "params" | "preview" | "version"> & Partial<Pick<PresetDescriptor, "params" | "preview" | "version">>): PresetDescriptor => ({ version: 1, params: [], preview: {}, ...d });
+const NUM = (key: string, label: string, min: number, max: number, def: number, step: number, description: string): ParamSpec => ({ key, label, type: "number", min, max, step, default: def, description });
+const DIRS = (x: number, y: number): ParamSpec[] => [NUM("dirX", "Direction X", -1, 1, x, 1, "Horizontal direction the picture moves: -1 left, 1 right, 0 none."), NUM("dirY", "Direction Y", -1, 1, y, 1, "Vertical direction the picture moves: -1 up, 1 down, 0 none.")];
+const NUM_BLUR = (d: number) => NUM("blur", "Blur", 0, 0.1, d, 0.005, "Peak blur as a fraction of the frame height.");
+const MBLUR = (d = 0) => NUM("blur", "Motion blur", 0, 0.1, d, 0.005, "Blur at the middle of the move, as a fraction of the frame height.");
+const NUM_STRENGTH = NUM("strength", "Strength", 0, 1, 0.9, 0.05, "Opacity of the flash at its peak.");
 const sticker = (id: string, name: string, description: string, body: string) => P({ id, kind: "sticker", category: "Shapes", name, description, type: "sticker", params: [{ key: "svg", label: "SVG", type: "string", default: svg(body) }] });
 
 export const BUILTIN_PRESETS: PresetDescriptor[] = [
@@ -43,9 +48,29 @@ export const BUILTIN_PRESETS: PresetDescriptor[] = [
   P({ id: "shake", kind: "videoEffect", description: "Handheld camera shake.", category: "Motion", name: "Shake", type: "vShake", params: [{ key: "amount", label: "Amount", type: "number", min: 0, max: 0.1, step: 0.005, default: 0.02 }, { key: "speed", label: "Speed", type: "number", min: 2, max: 40, step: 1, default: 16 }] }),
   P({ id: "vignette", kind: "videoEffect", description: "Darkens the frame edges to focus the centre.", category: "Lens", name: "Vignette", type: "vVignette", params: [{ key: "amount", label: "Amount", type: "number", min: 0, max: 1, step: 0.05, default: 0.6 }] }),
   P({ id: "bw", kind: "videoEffect", description: "Black-and-white (desaturated) picture.", category: "Color", name: "B&W", type: "vGray", params: [{ key: "amount", label: "Amount", type: "number", min: 0, max: 1, step: 0.05, default: 1 }] }),
-  // Transitions
-  P({ id: "crossfade", kind: "transition", description: "The outgoing clip dissolves into the incoming clip.", category: "Basic", name: "Crossfade", type: "crossfade", preview: { icon: "⧓" } }),
-  P({ id: "dip", kind: "transition", description: "Fades the outgoing clip to black, then up into the incoming clip.", category: "Basic", name: "Dip to black", type: "dip", preview: { icon: "◐" } }),
+  // Transitions (V2-TL-TRANS). `data.popular` puts a preset on the picker's Popular tab.
+  P({ id: "crossfade", kind: "transition", description: "The outgoing clip dissolves into the incoming clip.", category: "Basic", name: "Crossfade", type: "crossfade", preview: { icon: "⧓" }, data: { popular: true } }),
+  P({ id: "dip", kind: "transition", description: "Fades the outgoing clip to black, then up into the incoming clip.", category: "Basic", name: "Dip to black", type: "dip", preview: { icon: "◐" }, data: { popular: true } }),
+  P({ id: "dip-white", kind: "transition", description: "Fades the outgoing clip to white, then out of white into the incoming clip; dreamy or memory scenes.", category: "Basic", name: "Dip to white", type: "dipColor", params: [{ key: "color", label: "Colour", type: "color", default: "#ffffff" }], data: { popular: true } }),
+  P({ id: "flash", kind: "transition", description: "A quick bright flash hides the cut; punchy, for beats and reveals.", category: "Basic", name: "Flash", type: "flash", params: [{ key: "color", label: "Colour", type: "color", default: "#ffffff" }, NUM_STRENGTH] }),
+  P({ id: "push-left", kind: "transition", description: "The incoming clip pushes the outgoing clip out to the left.", category: "Slide", name: "Push left", type: "push", params: [...DIRS(-1, 0), MBLUR()], data: { popular: true } }),
+  P({ id: "push-right", kind: "transition", description: "The incoming clip pushes the outgoing clip out to the right.", category: "Slide", name: "Push right", type: "push", params: [...DIRS(1, 0), MBLUR()] }),
+  P({ id: "push-up", kind: "transition", description: "The incoming clip pushes the outgoing clip up and out of frame.", category: "Slide", name: "Push up", type: "push", params: [...DIRS(0, -1), MBLUR()] }),
+  P({ id: "push-down", kind: "transition", description: "The incoming clip pushes the outgoing clip down and out of frame.", category: "Slide", name: "Push down", type: "push", params: [...DIRS(0, 1), MBLUR()] }),
+  P({ id: "whip-left", kind: "transition", description: "A fast push to the left with motion blur, like a whip pan.", category: "Slide", name: "Whip pan", type: "push", params: [...DIRS(-1, 0), MBLUR(0.04)], data: { popular: true } }),
+  P({ id: "slide-over", kind: "transition", description: "The incoming clip slides in from the right over the outgoing clip, which darkens.", category: "Slide", name: "Slide over", type: "cover", params: [...DIRS(-1, 0)] }),
+  P({ id: "wipe-right", kind: "transition", description: "A hard edge sweeps left to right, revealing the incoming clip.", category: "Wipe", name: "Wipe right", type: "wipeT", params: [...DIRS(1, 0)], data: { popular: true } }),
+  P({ id: "wipe-left", kind: "transition", description: "A hard edge sweeps right to left, revealing the incoming clip.", category: "Wipe", name: "Wipe left", type: "wipeT", params: [...DIRS(-1, 0)] }),
+  P({ id: "wipe-down", kind: "transition", description: "A hard edge sweeps top to bottom, revealing the incoming clip.", category: "Wipe", name: "Wipe down", type: "wipeT", params: [...DIRS(0, 1)] }),
+  P({ id: "wipe-up", kind: "transition", description: "A hard edge sweeps bottom to top, revealing the incoming clip.", category: "Wipe", name: "Wipe up", type: "wipeT", params: [...DIRS(0, -1)] }),
+  P({ id: "iris", kind: "transition", description: "The incoming clip opens from a growing circle in the centre.", category: "Wipe", name: "Circle open", type: "iris" }),
+  P({ id: "zoom-in", kind: "transition", description: "Rushes forward: the outgoing clip zooms in and the incoming clip continues the push; energetic.", category: "Zoom", name: "Zoom in", type: "zoomT", params: [NUM("outScale", "Out zoom", 0.2, 3, 1.8, 0.05, "Scale the outgoing clip reaches."), NUM("inScale", "In zoom", 0.2, 3, 0.6, 0.05, "Scale the incoming clip starts from."), NUM_BLUR(0.02)], data: { popular: true } }),
+  P({ id: "zoom-out", kind: "transition", description: "Pulls back: the outgoing clip shrinks away and the incoming clip settles in from larger.", category: "Zoom", name: "Zoom out", type: "zoomT", params: [NUM("outScale", "Out zoom", 0.2, 3, 0.5, 0.05, "Scale the outgoing clip reaches."), NUM("inScale", "In zoom", 0.2, 3, 1.6, 0.05, "Scale the incoming clip starts from."), NUM_BLUR(0.02)] }),
+  P({ id: "spin", kind: "transition", description: "The outgoing clip spins away and the incoming clip spins into place; playful.", category: "Zoom", name: "Spin", type: "spin", params: [NUM("degrees", "Turn", 30, 720, 180, 15, "Degrees each clip turns.")] }),
+  P({ id: "blur-dissolve", kind: "transition", description: "Both clips soften into a blur while they cross-dissolve; smooth and gentle.", category: "Blur", name: "Blur dissolve", type: "blurT", params: [NUM_BLUR(0.03)], data: { popular: true } }),
+  P({ id: "defocus", kind: "transition", description: "The outgoing clip goes out of focus, then the incoming clip pulls into focus.", category: "Blur", name: "Defocus", type: "blurT", params: [NUM_BLUR(0.05), NUM("cut", "Hard cut", 0, 1, 1, 1, "1 swaps the clips at full blur instead of dissolving.")] }),
+  P({ id: "glitch", kind: "transition", description: "Digital glitch: picture bands jump sideways around a hard cut; tech, horror, hype.", category: "Glitch", name: "Glitch", type: "glitch", params: [NUM("amount", "Amount", 0, 0.3, 0.08, 0.01, "Largest band shift as a fraction of the frame width.")], data: { popular: true } }),
+  P({ id: "shake", kind: "transition", description: "A camera jolt around a hard cut; impacts and beat drops.", category: "Glitch", name: "Shake", type: "shake", params: [NUM("amount", "Amount", 0, 0.15, 0.04, 0.005, "Largest jolt as a fraction of the frame.")] }),
   // Stickers
   sticker("arrow-right", "Arrow →", "Red arrow pointing right.", `<path d="M20 100h130" stroke="${RED}" stroke-width="18" stroke-linecap="round"/><path d="M110 55l50 45-50 45" fill="none" stroke="${RED}" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>`),
   sticker("arrow-down", "Arrow ↓", "Yellow arrow pointing down.", `<path d="M100 20v130" stroke="${YEL}" stroke-width="18" stroke-linecap="round"/><path d="M55 110l45 50 45-50" fill="none" stroke="${YEL}" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>`),
