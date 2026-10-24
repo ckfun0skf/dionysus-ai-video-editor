@@ -63,7 +63,7 @@ Notation: `?` = optional. All coordinates are 0-1 fractions of the frame, measur
 | Field | Type | Notes |
 |---|---|---|
 | `id`, `title`, `description?` | string | Unchanged. |
-| `durationSec` | number, 0.5-120 | Should match what the video model can generate (RULE 12). |
+| `durationSec` | number, 0.5-120 | Should match what the video model can generate (RULE 13). |
 | `prompt` | string | Required when `render` is `"ai"`. Optional for `"html"` and `"still"` (keep it anyway for v1.0 readers). Never asks for text. |
 | `assets` | string[] | Asset ids used. Should include `clip`. |
 | `camera?`, `dialogue?` | string | Unchanged. |
@@ -73,6 +73,32 @@ Notation: `?` = optional. All coordinates are 0-1 fractions of the frame, measur
 | `layers?` **(new)** | Layer[] | §2.5 |
 | `captions?` **(new)** | boolean | When `true`, the shot's `dialogue` is rendered into the shared subtitle text layer. Has no effect, and triggers a warning, if there is no `dialogue`. |
 | `effects?` **(new)** | Effect[] | §2.7 |
+| `references?` **(new, V2-SB-120)** | Reference[] | §2.4.1. The images to attach to the clip generation, in order, with their roles. |
+
+#### 2.4.1 `shots[].references[]` (V2-SB-120)
+
+Video models take a few images next to the prompt and refer to them by position ("Image 1", "Image 2"). `references` fixes that numbering and says how each image is to be used, so a location sheet is not mistaken for the opening frame.
+
+| Field | Type | Notes |
+|---|---|---|
+| `asset` | asset id | Must exist. If it is not in the shot's `assets`, the importer adds it there (so it counts as an input of the shot). |
+| `role` | `"start-frame"`, `"end-frame"`, `"identity"`, `"look"` or `"detail"` | `start-frame`: the clip opens on exactly this image. `end-frame`: the clip ends on it. `identity`: keep this character's identity. `look`: overall look only. `detail`: materials, colours and objects only; do not reproduce its framing. If omitted, inferred from the asset type (below). |
+| `note?` | string | Extra instruction for this image, e.g. `"materials and colours only, do not show the wide view"`. |
+
+- **Order = numbering.** The first entry is Image 1.
+- **Fallback.** Without `references`, the images are the shot's `assets` in order (minus the `clip` asset and media-layer assets), with the role inferred from the asset: `frame` type or a `lastFrame` source → `start-frame` (only the first one; a second becomes `detail`), `character` → `identity`, `style` → `look`, everything else (`location`, `prop`, `image` …) → `detail`. Assets in `assets` that `references` does not list are appended after it the same way.
+- **Validation.** Unknown asset id: error. More than one `start-frame` or more than one `end-frame`: error. Unknown role: warning, used as `detail`. The same asset twice: warning, the repeat is ignored.
+- **Prompt.** Every clip prompt starts with a `References:` block (RULE 14) that matches this order, for example:
+
+```
+References:
+Image 1 (Last frame of shot 1): START FRAME: the clip opens on exactly this image.
+Image 2 (Mara's flat): reference only, not a frame: materials and colours only; do not show the wide view.
+Image 3 (Series look): reference only, not a frame: overall look only.
+Framing: opens on the start frame at the door, ends on a close-up of Mara at the window.
+```
+
+- **In the app.** The shot details and the production step show **Attach in this order** next to *Copy prompt*: Image 1, Image 2 … with a thumbnail of the version the shot uses (a pinned version when the shot pins one, §4.2), the role, and *Save* (the share sheet on phones, so *Save Image* / *Save to Files* work on iPhone; a download on desktop). *Copy prompt* prepends a `References:` block generated from the roles when the prompt has no line starting with `References:`, so the copied prompt is right even when the planner forgot the block. Editing a shot's assets keeps the roles of the ones that stay; removing or deleting an asset drops its reference.
 
 ### 2.5 `shots[].layers[]`
 
@@ -173,9 +199,11 @@ Planned as future registry entries, with no schema change needed: `grain`, `colo
 | `captions: true` without `dialogue` | Warn and do nothing. Non-boolean `captions` also warns. |
 | `clip` on a `render: "ai"` shot | Warn and ignore. |
 | Unknown font id | Warn and use `sans`. |
+| Unknown `references[].role`, or the same asset twice in `references` | Warn; the role is used as `detail`, the repeat is ignored. |
 
 **Errors.** The import is rejected for:
-- an unknown asset id in `clip`, a layer `asset` or `assets`;
+- an unknown asset id in `clip`, a layer `asset`, `assets` or `references`;
+- more than one `start-frame` or more than one `end-frame` in a shot's `references`;
 - a `clip` of the wrong asset type for its `render`;
 - `render: "html"` or `"still"` without `clip`;
 - a layer with both `position` and `box`, or with neither (except for `html`, `image` and `video` layers, which require `box` and reject `position`);
@@ -243,7 +271,7 @@ Run `npm run gen:ai` after changing presets, fonts, the rules or the example; `a
 
 The app offers two prompts (Storyboard → AI prompt):
 - **Short prompt** (default): links to the guide and tells the AI to read it first. An AI that can't open links is told to ask the user for the full prompt instead of guessing the format.
-- **Full prompt**: the guide inlined (FORMAT, PRESETS, RULES 1-13, EXAMPLE), for AIs without web access.
+- **Full prompt**: the guide inlined (FORMAT, PRESETS, RULES 1-14, EXAMPLE), for AIs without web access.
 
 The presets section of the planner prompt is **generated from the registry** (only ids listed there may be used): for each kind, it lists every id with a one-line description and its params with defaults. The rules section becomes:
 
@@ -260,7 +288,9 @@ RULES
 9. Use "html" assets and "render": "html" only for animated, 3D or three.js graphics. Plain text is a text layer.
 10. Transitions go on connections. Post camera moves (push-in etc.) and looks go in the shot's "effects", and the generation prompt then says "static camera".
 11. Only use preset ids listed in the PRESETS section.
-12. "durationSec" should match what the video model can generate.
+12. Preset params use the units noted in brackets in the PRESETS section; "fade-in"/"fade-out" "length" is a fraction (0.05–1) of the effect's time range, not seconds.
+13. "durationSec" should match what the video model can generate.
+14. Every clip prompt starts with a "References:" block that numbers the images attached to the clip in the order of the shot's "references" (else its "assets"): "Image 1 (<asset name>): …", one line each, saying explicitly whether the image is the START FRAME (or END FRAME) or only a reference, and what to take from it (identity, overall look, or materials and colours only, not its framing or wide view). Then state the framing from the first frame to the last. Set "references" with roles whenever the order or use is not obvious from the asset types.
 ```
 
 ## 6. Decisions, open questions and future work
@@ -270,7 +300,7 @@ RULES
 - **Resolved:** `id@N` resolves to the current version with a warning; old render functions are not kept (§3.1).
 - **Resolved:** there is no `meta.minImporter`. A v1.0 build reports the unknown asset type with its path, which is enough.
 - **Promotion:** the UX and id rules for promoting a `meta.textStyles` entry into the registry.
-- **Durations:** whether the planner prompt should list per-model duration limits for RULE 12.
+- **Durations:** whether the planner prompt should list per-model duration limits for RULE 13.
 
 ## 7. Worked example
 

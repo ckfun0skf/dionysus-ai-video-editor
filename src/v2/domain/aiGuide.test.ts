@@ -35,10 +35,10 @@ describe("AI planner guide (V2-SB-114)", () => {
     expect(md).toContain("length 0.05–1, default 0.5 (fraction of the effect's time range, not seconds");
   });
 
-  it("the full prompt inlines the guide with RULES 1-13; the short prompt links to it", () => {
+  it("the full prompt inlines the guide with RULES 1-14; the short prompt links to it", () => {
     const full = storyboardSystemPrompt();
-    for (const s of ["FORMAT (", "PRESETS", "RULES", "EXAMPLE", `13. ${RULES[12]}`, "not seconds", "- crossfade:", "- ken-burns:"]) expect(full).toContain(s);
-    expect(RULES).toHaveLength(13);
+    for (const s of ["FORMAT (", "PRESETS", "RULES", "EXAMPLE", `14. ${RULES[13]}`, "not seconds", "START FRAME", "\"references\"?", "- crossfade:", "- ken-burns:"]) expect(full).toContain(s);
+    expect(RULES).toHaveLength(14);
     const short = storyboardShortPrompt();
     expect(short).toContain(GUIDE_URL);
     expect(short).toContain("Full prompt");

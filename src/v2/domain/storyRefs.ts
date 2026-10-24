@@ -10,8 +10,8 @@
  *   clips on the timeline; a slot that is a shot's clip or a layer's asset cannot be deleted.
  */
 import type { Composition, Project } from "./model";
-import { kindForSlot, pinOf, selectedOf, versionsOf, type AssetSlot, type QaCheck, type Shot, type Storyboard } from "./storyboard";
-import { STORY_ASSET_TYPES, type StoryAssetType } from "./storyJson";
+import { kindForSlot, pinOf, refVersionOf, selectedOf, versionsOf, type AssetSlot, type QaCheck, type Shot, type ShotReference, type Storyboard } from "./storyboard";
+import { inferReferenceRole, STORY_ASSET_TYPES, type ReferenceRole, type StoryAssetType } from "./storyJson";
 
 /** Reference slots of a shot: its assets, then its media layers' assets (no clip slot, no duplicates). */
 export function shotRefIds(b: Storyboard, s: Shot): string[] {
@@ -158,8 +158,9 @@ export function deleteSlot(p: Project, id: string): Project {
   const { [id]: _gone, ...rest } = b.slots;
   const slots = Object.fromEntries(Object.entries(rest).map(([k, s]) => [k, s.references.includes(id) ? { ...s, references: s.references.filter((r) => r !== id) } : s]));
   const shots = Object.fromEntries(Object.entries(b.shots).map(([k, s]) => {
-    if (!s.slotIds.includes(id) && !s.refOverrides?.[id]) return [k, s];
+    if (!s.slotIds.includes(id) && !s.refOverrides?.[id] && !s.references?.some((r) => r.slotId === id)) return [k, s];
     const n: Shot = { ...s, slotIds: s.slotIds.filter((r) => r !== id) };
+    if (n.references) { const refs = n.references.filter((r) => r.slotId !== id); if (refs.length) n.references = refs; else delete n.references; }
     if (n.refOverrides?.[id]) { const { [id]: _p, ...o } = n.refOverrides; if (Object.keys(o).length) n.refOverrides = o; else delete n.refOverrides; }
     return [k, n];
   }));
@@ -171,6 +172,10 @@ export function withRefs(b: Storyboard, s: Shot, slotIds: string[]): Shot {
   const ids = [...new Set(slotIds)].filter((id) => b.slots[id] && id !== s.clipSlot);
   const n: Shot = { ...s, slotIds: s.clipSlot && b.slots[s.clipSlot] ? [...ids, s.clipSlot] : ids };
   const keep = new Set(shotRefIds(b, n));
+  if (n.references) {
+    const refs = n.references.filter((r) => ids.includes(r.slotId));
+    if (refs.length) n.references = refs; else delete n.references;
+  }
   if (n.refOverrides) {
     const o = Object.fromEntries(Object.entries(n.refOverrides).filter(([k]) => keep.has(k)));
     if (Object.keys(o).length) n.refOverrides = o; else delete n.refOverrides;
@@ -183,4 +188,73 @@ export function pinLabel(p: Project, s: Shot, slotId: string): string | undefine
   const pin = pinOf(p, s, slotId), slot = p.storyboard?.slots[slotId];
   if (!pin || !slot) return undefined;
   return `v${versionsOf(p, slot).findIndex((v) => v.id === pin) + 1}`;
+}
+
+/** Labels for the reference roles (V2-SB-120), as the attach list shows them. */
+export const ROLE_LABEL: Record<ReferenceRole, string> = {
+  "start-frame": "Start frame", "end-frame": "End frame", identity: "Identity", look: "Look", detail: "Details only",
+};
+/** What the model is told to do with an image of each role, in the References block. */
+const ROLE_USE: Record<ReferenceRole, string> = {
+  "start-frame": "START FRAME: the clip opens on exactly this image",
+  "end-frame": "END FRAME: the clip ends on exactly this image",
+  identity: "reference only, not a frame: keep this identity (face, body, clothes)",
+  look: "reference only, not a frame: overall look (palette, light, texture) only",
+  detail: "reference only, not a frame: materials, colours and objects only; do not reproduce its framing or wide view",
+};
+
+/** One numbered image to attach to a shot's clip generation (`no` is 1-based). */
+export interface AttachItem { no: number; slotId: string; role: ReferenceRole; note?: string; inferred: boolean }
+
+/** The role a slot plays when the shot does not say (frame / last frame → start frame, character → identity …). */
+export function inferredRole(slot: AssetSlot): ReferenceRole {
+  return inferReferenceRole(slot.type, slot.source.type === "lastFrame");
+}
+
+/**
+ * The images to attach for a shot's clip, in order (V2-SB-120): the shot's explicit `references` first, then its
+ * other reference slots in `slotIds` order with inferred roles. Never the clip slot, never media-layer assets (they
+ * are composited later). Only one start frame and one end frame: an inferred extra one is used as details only.
+ */
+export function attachList(b: Storyboard, shot: Shot): AttachItem[] {
+  const ok = (id: string) => !!b.slots[id] && id !== shot.clipSlot && shot.slotIds.includes(id);
+  const explicit: ShotReference[] = (shot.references ?? []).filter((r) => ok(r.slotId));
+  const seen = new Set(explicit.map((r) => r.slotId));
+  const items: Omit<AttachItem, "no">[] = explicit.map((r) => ({ slotId: r.slotId, role: r.role, ...(r.note ? { note: r.note } : {}), inferred: false }));
+  for (const id of shot.slotIds) {
+    if (!ok(id) || seen.has(id)) continue;
+    seen.add(id);
+    let role = inferredRole(b.slots[id]);
+    if ((role === "start-frame" || role === "end-frame") && items.some((x) => x.role === role)) role = "detail";
+    items.push({ slotId: id, role, inferred: true });
+  }
+  return items.map((x, i) => ({ ...x, no: i + 1 }));
+}
+
+/**
+ * The numbered "References:" block a clip prompt starts with (V2-SB-120): one line per attached image saying whether
+ * it is the start / end frame or only a reference and what to take from it. Empty when nothing is attached.
+ */
+export function referencesBlock(b: Storyboard, shot: Shot): string {
+  const items = attachList(b, shot);
+  if (!items.length) return "";
+  const lines = items.map((x) => `Image ${x.no} (${b.slots[x.slotId].name}): ${ROLE_USE[x.role]}${x.note ? `. ${x.note.replace(/\.$/, "")}` : ""}.`);
+  if (!items.some((x) => x.role === "start-frame")) lines.push("No image is the start frame: compose the opening frame from the prompt.");
+  if (shot.camera) lines.push(`Framing, first frame to last: ${shot.camera.replace(/\.$/, "")}.`);
+  return `References:\n${lines.join("\n")}`;
+}
+
+/** True when a prompt already starts with (or contains a line starting) "References:". */
+export const hasReferencesBlock = (prompt: string) => /^\s*References\s*:/im.test(prompt);
+
+/** The clip prompt to copy: the shot's prompt with the References block prepended unless it already has one. */
+export function promptWithReferences(b: Storyboard, shot: Shot): string {
+  const block = referencesBlock(b, shot);
+  return !block || hasReferencesBlock(shot.prompt) ? shot.prompt : `${block}\n\n${shot.prompt}`;
+}
+
+/** The media version a shot uses for each image in its attach list (pins respected). */
+export function attachVersions(p: Project, shot: Shot): { item: AttachItem; versionId?: string }[] {
+  const b = p.storyboard;
+  return b ? attachList(b, shot).map((item) => ({ item, versionId: refVersionOf(p, shot, item.slotId) })) : [];
 }

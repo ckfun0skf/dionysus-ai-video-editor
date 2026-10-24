@@ -7,7 +7,7 @@
  */
 import { isStill, newId, type AssetVersion, type Composition, type MediaKind, type MediaRef, type Placement, type Project } from "./model";
 import { mainTrack } from "./ops";
-import type { ShotRender, StoryAssetType, StoryConnection, StoryDoc, StoryEffect, StoryLayer, StoryMeta } from "./storyJson";
+import type { ReferenceRole, ShotRender, StoryAssetType, StoryConnection, StoryDoc, StoryEffect, StoryLayer, StoryMeta } from "./storyJson";
 import { followStoryLinks } from "./storyLinks";
 import { orderSteps } from "./storySteps";
 import { TICKS_PER_SECOND } from "./time";
@@ -51,7 +51,15 @@ export interface Shot {
   layers?: StoryLayer[];
   captions?: boolean;
   effects?: StoryEffect[];
+  /**
+   * V2-SB-120: the images to attach to the clip generation, in order ("Image 1" first), with their roles. Absent = the
+   * shot's reference slots in `slotIds` order with roles inferred from the slot type (see storyRefs.attachList).
+   */
+  references?: ShotReference[];
 }
+
+/** One numbered image for a shot's clip generation and how the model should use it. */
+export interface ShotReference { slotId: string; role: ReferenceRole; note?: string }
 
 /** Facts about one uploaded version, frozen when it was added. */
 export interface VersionInfo {
@@ -96,6 +104,7 @@ export function storyboardFromDoc(doc: StoryDoc): Storyboard {
       ...(s.layers?.length ? { layers: structuredClone(s.layers) } : {}),
       ...(s.captions ? { captions: true } : {}),
       ...(s.effects?.length ? { effects: structuredClone(s.effects) } : {}),
+      ...(s.references?.length ? { references: s.references.map((r) => ({ slotId: r.asset, role: r.role, ...(r.note ? { note: r.note } : {}) })) } : {}),
     };
     if (shots[s.id].clipSlot && !shots[s.id].slotIds.includes(shots[s.id].clipSlot!)) shots[s.id].slotIds.push(shots[s.id].clipSlot!);
   }

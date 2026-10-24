@@ -2333,6 +2333,12 @@
           "title": "Preset param descriptions (ParamSpec.description): fade-in/fade-out length documented as a fraction of the effect's time range in the guide, presets.json, prompts and editor tooltip",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-SB-120",
+          "title": "Reference roles in clip prompts: optional shots[].references (asset, role start-frame/end-frame/identity/look/detail, note) fix the image numbering; roles inferred from asset type otherwise; RULE 14 References block; \"Attach in this order\" with pinned-version thumbnails and Save (iOS share sheet); Copy prompt prepends the block when missing",
+          "status": "done",
+          "progress": 100
         }
       ]
     },
