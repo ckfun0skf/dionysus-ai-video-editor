@@ -2079,8 +2079,8 @@
         {
           "id": "V2-CUT-04",
           "title": "Send storyboard to timeline + clip version picker (choose among ~10 versions)",
-          "status": "todo",
-          "progress": 0
+          "status": "done",
+          "progress": 100
         },
         {
           "id": "V2-CUT-05",
@@ -2243,8 +2243,8 @@
         {
           "id": "V2-044",
           "title": "Storyboard → timeline assembly",
-          "status": "planned",
-          "progress": 0
+          "status": "done",
+          "progress": 100
         }
       ]
     },

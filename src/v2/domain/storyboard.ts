@@ -128,14 +128,51 @@ export function addStoryVersion(p: Project, target: Target, media: MediaRef, opt
     shots: isSlot ? b.shots : { ...b.shots, [owner.id]: nextOwner as Shot },
     versions: { ...b.versions, [version.id]: info },
   };
-  return { ...p, assets: { ...p.assets, [assetId]: asset }, storyboard: board };
+  return syncPlacements({ ...p, assets: { ...p.assets, [assetId]: asset }, storyboard: board }, assetId);
 }
 
 /** Select an existing version of a slot/shot backing asset. */
 export function selectStoryVersion(p: Project, assetId: string, versionId: string): Project {
   const a = p.assets[assetId];
   if (!a || !a.versions.some((v) => v.id === versionId) || a.selectedVersionId === versionId) return p;
-  return { ...p, assets: { ...p.assets, [assetId]: { ...a, selectedVersionId: versionId } } };
+  return syncPlacements({ ...p, assets: { ...p.assets, [assetId]: { ...a, selectedVersionId: versionId } } }, assetId);
+}
+
+/**
+ * Linked placements (V2-CUT-04): every timeline clip of a storyboard asset follows the version
+ * picked on the board. Trims are kept, clamped when the new media is shorter.
+ */
+export function syncPlacements(p: Project, assetId: string): Project {
+  const a = p.assets[assetId];
+  const v = a?.versions.find((x) => x.id === a.selectedVersionId);
+  if (!v) return p;
+  const max = v.media.durationTicks;
+  let changed = false;
+  const compositions = Object.fromEntries(Object.entries(p.compositions).map(([id, c]) => [id, { ...c, tracks: c.tracks.map((t) => ({ ...t, placements: t.placements.map((pl) => {
+    if (pl.source.assetId !== assetId || pl.source.versionId === v.id) return pl;
+    changed = true;
+    const next = { ...pl, source: { ...pl.source, versionId: v.id } };
+    if (max && pl.clipType !== "image") {
+      if (next.sourceInTicks >= max) next.sourceInTicks = 0;
+      const room = Math.floor((max - next.sourceInTicks) / (pl.speed ?? 1));
+      if (next.durationTicks > room) next.durationTicks = Math.max(1, room);
+    }
+    return next;
+  }) })) }]));
+  return changed ? { ...p, compositions } : p;
+}
+
+/** Shots in story order with whether "Send to timeline" would add them. */
+export type SendState = "ready" | "placed" | "missing" | "skipped";
+export function sendPlan(p: Project): { shotId: string; assetId?: string; state: SendState }[] {
+  const b = p.storyboard;
+  if (!b) return [];
+  const used = new Set(Object.values(p.compositions).flatMap((c) => c.tracks.flatMap((t) => t.placements.map((pl) => pl.source.assetId))));
+  return b.order.filter((id) => b.shots[id]).map((id) => {
+    const s = b.shots[id];
+    const state: SendState = s.skipped ? "skipped" : !s.assetId || !p.assets[s.assetId] ? "missing" : used.has(s.assetId) ? "placed" : "ready";
+    return { shotId: id, assetId: s.assetId, state };
+  });
 }
 
 export function setQaResult(p: Project, versionId: string, checkId: string, result: QaResult | undefined): Project {

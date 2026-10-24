@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import type { StoryDoc } from "../../domain";
+import { board, type StoryDoc } from "../../domain";
 import { cmd, type Engine } from "../../engine";
 import type { BlobStore } from "../../ports";
 import { Ic } from "../Icon";
@@ -35,17 +35,26 @@ export function StoryboardView({ engine, blobs, onClose }: { engine: Engine; blo
     setStep(undefined);
     setNote(has ? "Storyboard replaced — Undo to get the old one back" : `“${doc.meta.title}” is ready`);
   }, [engine, has]);
+  const send = useCallback(() => {
+    const plan = board.sendPlan(project), count = (st: string) => plan.filter((x) => x.state === st).length;
+    const ready = count("ready"), missing = count("missing");
+    const placed = count("placed"), need = missing ? `${missing} shot${missing > 1 ? "s" : ""} still need${missing > 1 ? "" : "s"} a clip` : "";
+    if (!ready) { setNote(!placed ? "No clips to send yet — upload a clip for a shot first" : `Already on the timeline — versions you pick here update it${need ? ` · ${need}` : ""}`); return; }
+    engine.dispatch(cmd.sendStoryToTimeline());
+    setNote(`Added ${ready} clip${ready > 1 ? "s" : ""} to the end of the timeline${need ? ` · ${need}` : ""}`);
+  }, [engine, project]);
   const title = step === "prompt" ? (has ? "AI prompt" : "1 · AI prompt") : step === "import" ? (has ? "Replace storyboard" : "2 · Import JSON") : step === "production" ? "Production" : "Storyboard";
   return (
     <div className="v2-board" role="region" aria-label="Storyboard">
       <header className="v2-board-head">
         <button className="v2-btn v2-sb-btn" aria-label={step ? "Back to storyboard" : "Back to editor"} title={step ? "Back (Esc)" : "Back to the timeline editor (Esc)"} onClick={() => (step ? setStep(undefined) : onClose())}><Ic g="anim-in" size={18} /> <span className={has && !step ? "v2-sb-hide-narrow" : ""}>{step ? "Back" : "Editor"}</span></button>
-        <h2><Ic g="board" size={18} /> <span>{title}</span></h2>
+        <h2><Ic g="board" size={18} /> <span className={has && !step ? "v2-sb-hide-narrow" : ""}>{title}</span></h2>
         <span className="v2-spacer" />
         {has && (!step || step === "production") && <>
           <button className="v2-icon v2-sb-icon" aria-label="Undo" title="Undo" disabled={!canUndo} onClick={() => engine.undo()}><Ic g="↶" size={18} /></button>
           <button className="v2-icon v2-sb-icon" aria-label="Redo" title="Redo" disabled={!canRedo} onClick={() => engine.redo()}><Ic g="↷" size={18} /></button>
           {!step && <button className="v2-btn primary v2-sb-btn" aria-label="Production steps" title="Step-by-step list: generate, upload, pick and check every asset and clip" onClick={() => { setOpen(undefined); setStep("production"); }}><Ic g="todo" size={18} /> <span className="v2-sb-hide-narrow">Production</span></button>}
+          <button className="v2-btn v2-sb-btn" aria-label="Send to timeline" title="Add every shot that has a clip to the end of the timeline, in story order. Timeline clips follow the version you pick here." onClick={send}><Ic g="to-timeline" size={18} /> <span className="v2-sb-hide-narrow">Send to timeline</span></button>
           {!step && <><button className="v2-icon v2-sb-icon" aria-label="AI prompt" title="Copy the AI prompt again" onClick={() => setStep("prompt")}><Ic g="⎘" size={18} /></button>
           <button className="v2-icon v2-sb-icon" aria-label="Replace storyboard" title="Import a new storyboard JSON (replaces this one; Undo restores it)" onClick={() => setStep("import")}><Ic g="json" size={18} /></button></>}
         </>}

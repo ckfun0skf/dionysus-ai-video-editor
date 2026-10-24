@@ -30,6 +30,20 @@ async function mount(onClose = () => {}) {
 const doc = (() => { const r = story.validateStoryboard(EXAMPLE_STORYBOARD); if (!r.ok) throw new Error("bad"); return r.doc; })();
 
 describe("storyboard workspace", () => {
+  it("sends shots with clips to the timeline and marks them", async () => {
+    const el = await mount();
+    await act(async () => engine.dispatch(cmd.createStoryboard(doc)));
+    await act(async () => btn(el, "Send to timeline").click());
+    expect(el.querySelector(".v2-sb-note")!.textContent).toMatch(/No clips to send yet/);
+    const clip: MediaRef = { blobKey: "c", mime: "video/mp4", durationTicks: 1000 };
+    await act(async () => engine.dispatch(cmd.addStoryVersion({ shot: "s1" }, clip)));
+    await act(async () => btn(el, "Send to timeline").click());
+    expect(el.querySelector(".v2-sb-note")!.textContent).toBe("Added 1 clip to the end of the timeline · 2 shots still need a clip");
+    expect(el.querySelectorAll(".v2-sb-placed")).toHaveLength(1);
+    await act(async () => btn(el, "Undo").click());
+    expect(el.querySelectorAll(".v2-sb-placed")).toHaveLength(0);
+  });
+
   it("copies the AI prompt and shows confirmation", async () => {
     const writeText = vi.fn(async () => {});
     Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });

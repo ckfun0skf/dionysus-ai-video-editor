@@ -37,6 +37,7 @@ export function BoardView({ project, thumbs, onOpen, openKey }: { project: Proje
   const used = new Set(shots.flatMap((s) => s.slotIds));
   const others = slots.filter((s) => !used.has(s.id));
   const done = (o: AssetSlot | Shot) => board.versionsOf(project, o).length > 0 || !!o.skipped;
+  const placed = new Set(board.sendPlan(project).filter((x) => x.state === "placed").map((x) => x.shotId));
   const staleCount = [...Object.values(status.slots), ...Object.values(status.shots)].filter((s) => s.stale).length;
   const total = shots.reduce((t, s) => t + s.durationSec, 0);
   const shotNo = (id: string) => b.order.indexOf(id) + 1;
@@ -81,7 +82,7 @@ export function BoardView({ project, thumbs, onOpen, openKey }: { project: Proje
                   <span className="v2-sb-shot-text">
                     <b><span className="v2-sb-no">{i + 1}</span>{s.title}</b>
                     <em>{s.durationSec}s{s.description ? ` · ${s.description}` : ""}</em>
-                    <span className="v2-sb-shot-status">{status.shots[s.id]?.stale ? <Warn st={status.shots[s.id]} /> : versionLabel(project, s, "No clip yet")}</span>
+                    <span className="v2-sb-shot-status">{status.shots[s.id]?.stale ? <Warn st={status.shots[s.id]} /> : <>{versionLabel(project, s, "No clip yet")}{placed.has(s.id) && <span className="v2-sb-placed" title="This shot is on the timeline and follows the version you pick"> · On timeline</span>}</>}</span>
                   </span>
                   <Ic g="anim-out" size={16} />
                 </button>
