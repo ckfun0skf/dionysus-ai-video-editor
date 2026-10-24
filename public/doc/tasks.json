@@ -2115,14 +2115,14 @@
         {
           "id": "V2-CUT-10",
           "title": "QA checklists per asset and per clip",
-          "status": "todo",
-          "progress": 0
+          "status": "done",
+          "progress": 100
         },
         {
           "id": "V2-CUT-11",
           "title": "Production todo list (step-by-step: assets, clip prompts, clip versions, pick version, QA)",
-          "status": "todo",
-          "progress": 0
+          "status": "done",
+          "progress": 100
         },
         {
           "id": "V2-CUT-12",
@@ -2237,8 +2237,8 @@
         {
           "id": "V2-043",
           "title": "Production todo list + QA checker registry",
-          "status": "planned",
-          "progress": 0
+          "status": "done",
+          "progress": 100
         },
         {
           "id": "V2-044",

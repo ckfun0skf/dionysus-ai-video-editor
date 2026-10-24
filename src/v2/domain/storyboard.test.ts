@@ -103,4 +103,30 @@ describe("storyboard domain", () => {
     expect(board.selectStoryVersion(p, "nope", "x")).toBe(p);
     expect(board.storyStatus(createProject())).toEqual({ slots: {}, shots: {} });
   });
+
+  it("lists production steps in a workable order with states and QA progress", () => {
+    let p = fresh();
+    const keys = () => board.productionSteps(p).map((x) => x.key);
+    const stateOf = (k: string) => board.productionSteps(p).find((x) => x.key === k)!;
+    const k = keys();
+    for (const [a, b2] of [["slot:keeper", "shot:s1"], ["shot:s1", "slot:s1-end"], ["slot:s1-end", "shot:s2"], ["shot:s2", "shot:s3"]]) expect(k.indexOf(a)).toBeLessThan(k.indexOf(b2));
+    expect(new Set(k).size).toBe(k.length);
+    expect(k.length).toBe(Object.keys(p.storyboard!.slots).length + 3);
+    expect(stateOf("slot:keeper").state).toBe("todo");
+    expect(stateOf("slot:s1-end")).toMatchObject({ state: "blocked", blockedBy: "s1" });
+    p = up(p, { slot: "keeper" });
+    const ks = stateOf("slot:keeper");
+    expect(ks.state).toBe(ks.qaTotal ? "check" : "done");
+    const v = board.selectedOf(p, p.storyboard!.slots.keeper)!;
+    for (const q of p.storyboard!.slots.keeper.qa) p = board.setQaResult(p, v, q.id, "pass");
+    expect(stateOf("slot:keeper")).toMatchObject({ state: "done", qaDone: ks.qaTotal });
+    p = board.setStorySkipped(p, { slot: "cliff" }, true);
+    expect(stateOf("slot:cliff").state).toBe("skipped");
+    expect(board.setStorySkipped(p, { slot: "cliff" }, true)).toBe(p);
+    p = board.setStorySkipped(p, { slot: "cliff" }, false);
+    expect(stateOf("slot:cliff").state).toBe("todo");
+    p = produced();
+    p = board.addStoryVersion(p, { shot: "s1" }, vid, { versionId: "late" });
+    expect(stateOf("slot:s1-end").state).toBe("stale");
+  });
 });

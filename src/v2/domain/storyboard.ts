@@ -209,3 +209,64 @@ export function storyStatus(p: Project): StoryStatus {
   Object.keys(b.shots).forEach(shot);
   return out;
 }
+
+/** Skip (or un-skip) a slot or shot in the production list. */
+export function setStorySkipped(p: Project, target: Target, skipped: boolean): Project {
+  const b = p.storyboard;
+  if (!b) return p;
+  const isSlot = "slot" in target;
+  const owner = isSlot ? b.slots[target.slot] : b.shots[target.shot];
+  if (!owner || !!owner.skipped === skipped) return p;
+  const next = { ...owner, skipped: skipped || undefined };
+  return { ...p, storyboard: isSlot ? { ...b, slots: { ...b.slots, [owner.id]: next as AssetSlot } } : { ...b, shots: { ...b.shots, [owner.id]: next as Shot } } };
+}
+
+/** One row of the production to-do list (V2-CUT-11). */
+export type StepState = "todo" | "blocked" | "check" | "stale" | "done" | "skipped";
+export interface ProductionStep { target: Target; key: string; state: StepState; blockedBy?: string; qaDone: number; qaTotal: number }
+
+/**
+ * The production to-do list in a workable order: every asset comes before the shots that use it,
+ * references before what is made from them, and a last-frame asset right after its source shot.
+ * A step is done once a version is chosen, its checks have all passed, and nothing upstream changed.
+ */
+export function productionSteps(p: Project): ProductionStep[] {
+  const b = p.storyboard;
+  if (!b) return [];
+  const status = storyStatus(p);
+  const seen = new Set<string>();
+  const out: ProductionStep[] = [];
+  const state = (owner: AssetSlot | Shot, st: Staleness | undefined, blockedBy?: string): Omit<ProductionStep, "target" | "key"> => {
+    const v = selectedOf(p, owner);
+    const qa = (v && b.versions[v]?.qa) || {};
+    const qaDone = owner.qa.filter((q) => qa[q.id] === "pass").length;
+    const base = { qaDone, qaTotal: owner.qa.length };
+    if (owner.skipped) return { ...base, state: "skipped" };
+    if (!v) return blockedBy ? { ...base, state: "blocked", blockedBy } : { ...base, state: "todo" };
+    if (st?.stale) return { ...base, state: "stale" };
+    return { ...base, state: qaDone < owner.qa.length ? "check" : "done" };
+  };
+  const slot = (id: string) => {
+    const s = b.slots[id];
+    if (!s || seen.has(`slot:${id}`)) return;
+    seen.add(`slot:${id}`);
+    s.references.forEach(slot);
+    let blockedBy: string | undefined;
+    if (s.source.type === "lastFrame") {
+      shot(s.source.shotId);
+      const src = b.shots[s.source.shotId];
+      if (src && !selectedOf(p, src)) blockedBy = s.source.shotId;
+    }
+    out.push({ target: { slot: id }, key: `slot:${id}`, ...state(s, status.slots[id], blockedBy) });
+  };
+  const shot = (id: string) => {
+    const s = b.shots[id];
+    if (!s || seen.has(`shot:${id}`)) return;
+    seen.add(`shot:${id}`);
+    s.slotIds.forEach(slot);
+    out.push({ target: { shot: id }, key: `shot:${id}`, ...state(s, status.shots[id]) });
+  };
+  b.order.forEach(shot);
+  Object.keys(b.slots).forEach(slot);
+  return out;
+}

@@ -13,9 +13,11 @@ const ACCEPT: Partial<Record<MediaKind, string>> = { image: "image/*", video: "v
 const fmtDate = (iso: string) => { const d = new Date(iso); return Number.isNaN(+d) ? "" : d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); };
 
 /** Details for one shot or asset slot: versions (pick one), upload, prompt to copy, last-frame extraction. */
-export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, onClose, onOpen }: {
+export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, onClose, onOpen, inline, head }: {
   project: Project; target: BoardTarget; thumbs: Record<string, string>; engine: Engine; blobs: BlobStore; mobile: boolean;
   onClose: () => void; onOpen: (t: BoardTarget) => void;
+  /** Production wizard: render in place (no sheet / side panel) under `head`. */
+  inline?: boolean; head?: ReactNode;
 }) {
   const b = project.storyboard!;
   const isSlot = "slot" in target;
@@ -23,6 +25,7 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState<string>();
   const [err, setErr] = useState<string>();
+  const [model, setModel] = useState("");
   if (!owner) return null;
   const shotNo = (id: string) => b.order.indexOf(id) + 1;
   const slot = isSlot ? (owner as AssetSlot) : undefined;
@@ -47,7 +50,7 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
     if (!a) throw new Error("That file type isn't supported.");
     const media = a.versions[0].media;
     if (a.kind !== kind) { await blobs.delete(media.blobKey).catch(() => undefined); throw new Error(`This needs ${kind === "image" ? "an image" : `a ${kind} file`}, but “${f.name}” is ${a.kind === "image" ? "an image" : `a ${a.kind} file`}.`); }
-    engine.dispatch(cmd.addStoryVersion(target, media));
+    engine.dispatch(cmd.addStoryVersion(target, media, model.trim() ? { model: model.trim() } : {}));
   });
   const useLastFrame = () => run("Taking the last frame…", async () => {
     const v = lfShot && board.versionsOf(project, lfShot).find((x) => x.id === lfVersion);
@@ -62,7 +65,8 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
 
   const body = (
     <div className="v2-sb-detail-body">
-      {!mobile && <div className="v2-sb-detail-head"><Ic g={icon} size={18} /><h3>{title}</h3><button className="v2-icon v2-sb-icon" aria-label="Close details" title="Close (Esc)" onClick={onClose}><Ic g="✕" size={18} /></button></div>}
+      {head}
+      {(inline || !mobile) && <div className="v2-sb-detail-head"><Ic g={icon} size={18} /><h3>{title}</h3>{!inline && <button className="v2-icon v2-sb-icon" aria-label="Close details" title="Close (Esc)" onClick={onClose}><Ic g="✕" size={18} /></button>}</div>}
       {shot && <p className="v2-sb-detail-desc">{shot.durationSec}s · {shot.description}</p>}
       {st?.stale && <div className="v2-sb-warnbox" role="note"><Warn st={st} /><ul>{st.reasons.map((r) => <li key={r}>{r}</li>)}</ul><p>Upload a new version made with the current assets, or keep this one if it still looks right.</p></div>}
 
@@ -77,7 +81,7 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
                   <button className={`v2-sb-version ${on ? "on" : ""}`} aria-pressed={on} title={on ? "In use" : "Use this version"}
                     onClick={() => !on && owner.assetId && engine.dispatch(cmd.selectStoryVersion(owner.assetId, v.id))}>
                     <Thumb src={thumbs[v.id]} icon={icon} count={0} />
-                    <span><b>v{i + 1}{on && <Ic g="ok" size={13} />}</b><em>{info?.derivedFrom ? `Frame of shot ${shotNo(info.derivedFrom.shotId)}` : fmtDate(v.createdAt)}</em></span>
+                    <span><b>v{i + 1}{on && <Ic g="ok" size={13} />}</b><em>{info?.derivedFrom ? `Frame of shot ${shotNo(info.derivedFrom.shotId)}` : fmtDate(v.createdAt)}</em>{info?.model && <em title="Made with">{info.model}</em>}</span>
                   </button>
                 </li>
               );
@@ -90,6 +94,7 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
               <Ic g="link" size={16} /> Use last frame of shot {shotNo(lf)}
             </button>
           )}
+          {!lf && <input className="v2-sb-model" value={model} onChange={(e) => setModel(e.target.value)} placeholder="Made with (optional), e.g. Veo 3" aria-label="AI tool or model used (saved with the upload)" maxLength={60} />}
           <button className={`v2-btn v2-sb-btn ${lf ? "" : "primary"}`} disabled={!!busy} onClick={() => fileRef.current?.click()}>
             <Ic g="⇪" size={16} /> {versions.length ? "Upload new version" : shot ? "Upload clip" : "Upload"}
           </button>
@@ -110,10 +115,16 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
       {shot && shot.slotIds.length > 0 && <Section title="Assets in this shot"><Chips ids={shot.slotIds} project={project} thumbs={thumbs} onOpen={onOpen} /></Section>}
       {slot && slot.references.length > 0 && <Section title="Made using"><Chips ids={slot.references} project={project} thumbs={thumbs} onOpen={onOpen} /></Section>}
       {slot && <UsedIn slot={slot} project={project} onOpen={onOpen} />}
-      {owner.qa.length > 0 && <Section title="Checks"><ul className="v2-sb-qa">{owner.qa.map((q) => <li key={q.id}><Ic g="☑" size={14} /> {q.text}</li>)}</ul></Section>}
+      {owner.qa.length > 0 && <Checks owner={owner} selected={selected} project={project} engine={engine} />}
+      <div className="v2-sb-actions">
+        <button className="v2-btn v2-sb-btn" aria-pressed={!!owner.skipped} title={owner.skipped ? "Put this back on the production list" : "Not needed — leave it off the production list"} onClick={() => engine.dispatch(cmd.setStorySkipped(target, !owner.skipped))}>
+          <Ic g={owner.skipped ? "↶" : "skip"} size={16} /> {owner.skipped ? "Include again" : "Skip this"}
+        </button>
+      </div>
       {slot?.notes && <Section title="Notes"><p className="v2-sb-prompt">{slot.notes}</p></Section>}
     </div>
   );
+  if (inline) return <section className="v2-sb-inline" aria-label={title}>{body}</section>;
   return mobile
     ? <Sheet label={title} onClose={onClose} className="v2-sb-sheet" initial={2}>{body}</Sheet>
     : <aside className="v2-sb-detail" role="dialog" aria-label={title}>{body}</aside>;
@@ -140,4 +151,31 @@ function UsedIn({ slot, project, onOpen }: { slot: AssetSlot; project: Project; 
   const shots = b.order.filter((id) => b.shots[id]?.slotIds.includes(slot.id));
   if (!shots.length) return null;
   return <Section title="Used in"><div className="v2-sb-actions">{shots.map((id) => <button key={id} className="v2-btn v2-sb-btn" onClick={() => onOpen({ shot: id })}><Ic g="▭" size={14} /> Shot {b.order.indexOf(id) + 1}</button>)}</div></Section>;
+}
+
+/** QA checklist for the version in use: pass / fail per check, saved with that version (V2-CUT-10). */
+function Checks({ owner, selected, project, engine }: { owner: AssetSlot | Shot; selected?: string; project: Project; engine: Engine }) {
+  const res = (selected && project.storyboard!.versions[selected]?.qa) || {};
+  const done = owner.qa.filter((q) => res[q.id] === "pass").length;
+  return (
+    <Section title={selected ? `Checks · ${done}/${owner.qa.length} passed` : "Checks"}>
+      {!selected && <p className="v2-hint">Upload a version, then tick these off.</p>}
+      <ul className="v2-sb-qa">
+        {owner.qa.map((q) => {
+          const r = res[q.id];
+          const set = (v: "pass" | "fail") => selected && engine.dispatch(cmd.setQaResult(selected, q.id, r === v ? undefined : v));
+          return (
+            <li key={q.id} className={r ?? ""}>
+              <span className="v2-sb-qa-text"><Ic g={r === "pass" ? "ok" : r === "fail" ? "alert" : "☑"} size={14} /> {q.text}</span>
+              {selected && <span className="v2-sb-qa-btns" role="group" aria-label={`Check: ${q.text}`}>
+                <button className={`v2-sb-qa-btn ${r === "pass" ? "on" : ""}`} aria-pressed={r === "pass"} title="Looks right" onClick={() => set("pass")}>Pass</button>
+                <button className={`v2-sb-qa-btn fail ${r === "fail" ? "on" : ""}`} aria-pressed={r === "fail"} title="Needs another version" onClick={() => set("fail")}>Fail</button>
+              </span>}
+            </li>
+          );
+        })}
+      </ul>
+      {owner.qa.some((q) => res[q.id] === "fail") && <p className="v2-hint">Failed? Generate it again and upload it as a new version — the old one stays here.</p>}
+    </Section>
+  );
 }

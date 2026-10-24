@@ -310,4 +310,5 @@ export const createStoryboard = (doc: StoryDoc): Command => ({ label: "Create st
 export const removeStoryboard = (): Command => ({ label: "Remove storyboard", apply: (p) => board.setStoryboard(p, undefined) });
 export const addStoryVersion = (...args: Parameters<typeof board.addStoryVersion> extends [unknown, ...infer R] ? R : never): Command => ({ label: "Upload version", apply: (p) => board.addStoryVersion(p, ...args) });
 export const selectStoryVersion = (assetId: string, versionId: string): Command => ({ label: "Choose version", apply: (p) => board.selectStoryVersion(p, assetId, versionId) });
+export const setStorySkipped = (target: { slot: string } | { shot: string }, skipped: boolean): Command => ({ label: skipped ? "Skip step" : "Include step", apply: (p) => board.setStorySkipped(p, target, skipped) });
 export const setQaResult = (versionId: string, checkId: string, result: board.QaResult | undefined): Command => ({ label: "QA check", apply: (p) => board.setQaResult(p, versionId, checkId, result) });
