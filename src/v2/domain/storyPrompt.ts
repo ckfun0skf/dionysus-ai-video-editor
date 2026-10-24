@@ -126,6 +126,15 @@ const FORMAT_SECTION = () => `{
       "kind": ${CONNECTION_KINDS.map((k) => `"${k}"`).join(" | ")},
       "note"?: string,
       "transition"?: { "preset": "<transition id>", "params"?: { "durationSec"?: number } }   // omitted = cut; default ${DEFAULT_TRANSITION_SEC} s
+  } ],
+  "audio"?: [ {                  // voiceover, music beds and sound effects, placed by shot (assets of type "audio")
+      "id"?: string, "asset": "<audio asset id>", "kind": "voiceover" | "music" | "sfx",
+      "from": "<shot id>",       // the shot it starts in
+      "atSec"?: number,          // seconds into "from" (default 0)
+      "to"?: "<shot id>",        // plays to the end of this shot (same as or after "from"); omitted = the audio's own length
+      "durationSec"?: number,    // stop after this many seconds (with "to": whichever comes first); audio is never looped
+      "volume"?: number,         // 0-1; default music 0.35, voiceover and sfx 1
+      "fadeInSec"?: number, "fadeOutSec"?: number   // default music 1 s each, others 0
   } ]
 }
 
@@ -201,6 +210,7 @@ export const RULE_LIST: readonly { key: string; text: string }[] = [
   { key: "identity-portrait", text: `For an "identity" reference prefer a single clean portrait or character image (one view, plain background) over a multi-view character sheet: the sheet's layout (several poses, panels, labels) can leak into the generated frames.` },
   { key: "asset-references", text: `An asset made from other assets lists them in its "references" in attach order, as objects with a "role" when the use is not obvious from the type. Its prompt then starts with the same numbered "References:" block as a clip prompt; for an image, "start-frame" means the base image to edit (there is no end frame). Example: a close-up of the hero holding a mug: "references": [{ "asset": "mug", "role": "detail", "note": "glaze and colour only" }, "hero"], prompt "References:\\nImage 1 (Blue mug): reference only: materials, colours and objects only; glaze and colour only.\\nImage 2 (Hero): reference only: keep this identity (face, body, clothes).\\n\\nClose-up of …".` },
   { key: "keyframe", text: `Keyframe then animate: when the opening composition matters (a character's pose, a precise layout, a hero product shot), give the "ai" shot a "keyframe": { "prompt", "references", "qa" }. The app turns it into an image asset "<shot id>.keyframe" that is made first, then attached to the clip as Image 1, the START FRAME (do not also give the shot a "start-frame" reference). The keyframe prompt describes one still image (with its own "References:" block, as for an asset); the clip prompt then describes only the motion from that frame. Example: "keyframe": { "prompt": "References:\\nImage 1 (Hero): reference only: keep this identity (face, body, clothes).\\n\\nThe hero sits at a café table, both hands around a blue mug …", "references": ["hero", "cafe"], "qa": ["The hero's face matches the reference"] }, clip prompt "References:\\nImage 1 (Keyframe · …): START FRAME …\\n\\nShe slowly lifts the mug …".` },
+  { key: "audio", text: `Audio: put each voiceover, music bed or sound effect in "audio" as a cue on an asset of type "audio" (source "generate" with a prompt for the user's voice/music/sound tool, e.g. the exact voiceover script and voice, or "upload"). "from" is the shot it starts in, "atSec" the offset into that shot, "to" the last shot it plays under. A music bed usually runs "from" the first shot "to" the last with "volume" 0.2-0.4 under speech; a voiceover spans the shots it describes; a sound effect sits at the moment in one shot ("atSec") with no "to". Example: { "asset": "score", "kind": "music", "from": "s1", "to": "s6", "volume": 0.3, "fadeOutSec": 2 }, { "asset": "door-slam", "kind": "sfx", "from": "s4", "atSec": 1.2 }. Do not put spoken lines that the video model renders (shot "dialogue") into a voiceover too.` },
 ];
 export const RULES: readonly string[] = RULE_LIST.map((r) => r.text);
 /** 1-based public number of a rule, by key. */

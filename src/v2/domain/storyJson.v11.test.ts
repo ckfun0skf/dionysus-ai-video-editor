@@ -35,7 +35,7 @@ describe("storyboard v1.1: the ep01 fixture", () => {
     if (!r.ok) return;
     expect(r.warnings).toEqual([]);
     const { doc } = r;
-    expect(story.storySummary(doc)).toBe("12 shots · 72s · 8 assets · 77 QA checks · 2 layers · 1 effect · 2 transitions");
+    expect(story.storySummary(doc)).toBe("12 shots · 72s · 11 assets · 85 QA checks · 2 layers · 1 effect · 2 transitions · 3 audio cues");
     expect(doc.meta.textStyles).toEqual({ "ata-title": { font: "serif", size: 0.09, color: "#ffffff", align: "center", bold: false } });
     const s03 = doc.shots.find((s) => s.id === "s03")!;
     expect(s03).toMatchObject({ render: "still", clip: "card-still", effects: [{ preset: "ken-burns", params: {} }] });

@@ -353,3 +353,7 @@ button.v2-sb-conn:focus-visible { outline: 2px solid var(--accent); outline-offs
 }
 .v2-sb-refroles { margin-top: 8px; }
 .v2-sb-refroles .v2-sb-field { margin: 0; font-size: 13px; }
+/* Phones: inline links in the shot and asset details are 44px tap targets (V2-SB-125). */
+@media (pointer: coarse), (max-width: 820px) {
+  .v2-sb-kfnote .v2-linkbtn, .v2-sb-layers .v2-linkbtn { display: inline-flex; align-items: center; min-height: 44px; padding: 0 4px; margin: -12px 0; vertical-align: middle; }
+}

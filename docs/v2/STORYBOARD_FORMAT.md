@@ -27,6 +27,7 @@ Notation: `?` = optional. All coordinates are 0-1 fractions of the frame, measur
 | `assets` | Asset[] | §2.3 |
 | `shots` | Shot[] | §2.4. Listed in edit order. |
 | `connections?` | Connection[] | §2.6. If omitted, adjacent shots are joined by a cut (or by continuity when a lastFrame link exists). |
+| `audio?` | AudioCue[] | §2.8 (V2-SB-125). Voiceover, music beds and sound effects placed by shot. |
 
 ### 2.2 `meta`
 
@@ -198,6 +199,61 @@ Post camera moves (push-in through `ken-burns`, `shake`) and looks (`bw`, `vigne
 
 `fade-in` / `fade-out` `params.length` is a **fraction (0.05–1) of the effect's time range**, not seconds: on a 4 s shot with no `startSec`/`endSec`, `{"length": 0.25}` fades over the first (or last) 1 s. For a fade of N seconds, set `startSec`/`endSec` to an N-second range and keep `length: 1`, or use `length = N / range`.
 
+### 2.8 `audio[]` (V2-SB-125)
+
+Audio cues place an asset of type `audio` in story time: a voiceover across the shots it describes, a music bed under a whole sequence, or a sound effect at a moment in one shot. The audio file itself is an ordinary asset. Give it `source: "generate"` with a prompt for the user's voice, music or sound tool (for a voiceover, the exact script and the voice), or `source: "upload"`. Audio assets can't use `lastFrame`.
+
+```json
+"audio": [
+  { "id": "bed", "asset": "score", "kind": "music", "from": "s01", "to": "s06", "volume": 0.3, "fadeOutSec": 2 },
+  { "asset": "vo-intro", "kind": "voiceover", "from": "s01", "atSec": 0.5, "to": "s03" },
+  { "asset": "door", "kind": "sfx", "from": "s06", "atSec": 3.2 }
+]
+```
+
+| Field | Type | Notes |
+|---|---|---|
+| `id?` | string | Default `audio<N>` (its position, from 1). Must be unique. |
+| `asset` | asset id | Required. Must be an asset with `type: "audio"`. |
+| `kind` | `"voiceover"`, `"music"` or `"sfx"` | Required. Sets the defaults and the timeline layer (Voiceover, Music, Sound effects). |
+| `from` | shot id | Required. The shot the cue starts in. |
+| `atSec?` | number ≥ 0 | Seconds into `from`. Default 0. |
+| `to?` | shot id | The last shot the cue plays under: it ends at the end of that shot. It must be `from` or a later shot. Omitted: the audio's own length. |
+| `durationSec?` | number > 0 | Stop after this many seconds. With `to`, whichever comes first. |
+| `volume?` | 0–1 | Default: music 0.35, voiceover and sfx 1. |
+| `fadeInSec?`, `fadeOutSec?` | number ≥ 0 | Default: music 1 s each, others 0. Clamped to the cue's length. |
+
+**Import.** These are errors:
+
+- an unknown asset or shot;
+- an asset that is not `audio`;
+- a missing or unknown `kind`;
+- `to` before `from`;
+- a duplicate id.
+
+These are warnings, and the value is ignored:
+
+- a negative `atSec`;
+- a `durationSec` of 0 or less;
+- a negative fade;
+- a `volume` outside 0–1.
+
+Two more cases only warn: `atSec` at or past the end of `from`, and a cue with both `to` and `durationSec`. Audio cues count as uses of their asset, so the "isn't used by any shot" warning does not fire.
+
+**Board.** A shot's details list the cues that play under it, under **Audio**. Each row gives the kind, the asset (tap it to open it), the shots, the volume and the fades. An audio asset's details list its cues. Audio assets have their own production step and an upload button that accepts audio files.
+
+**Send to timeline.** A cue is placed when its `from` shot is sent:
+
+- **Start and end.** It starts `atSec` into that shot's clip. It ends at the earliest of: the end of the `to` shot's clip (when that clip is sent in the same batch), `atSec + durationSec`, and the end of the audio. Audio is never looped.
+- **Layers, volume and fades.** Each kind goes on its own audio layer: Voiceover, Music or Sound effects. A new layer is added when the existing one is busy. Volume and fades are set on the clip, and you can change them on the timeline.
+- **Linking.** A cue that fits inside its first shot (typically a sound effect) is linked to that shot's clip, so it follows a version swap like other linked items. A cue across shots is placed and not linked.
+- **Skipped cues.** A cue whose asset has no version yet is skipped and counted. Send again after uploading it.
+
+**Board edits.**
+
+- *Deleting a shot:* a cue that started in it moves to the next shot it covered, or is removed when it covered no other shot. A cue that ended in it now ends with the shot before.
+- *Deleting the audio asset:* its cues are removed.
+
 ## 3. Preset system
 
 ### 3.1 Rules
@@ -364,6 +420,7 @@ RULES
 16. For an "identity" reference prefer a single clean portrait or character image (one view, plain background) over a multi-view character sheet: the sheet's layout (several poses, panels, labels) can leak into the generated frames.
 17. An asset made from other assets lists them in its "references" in attach order, as objects with a "role" when the use is not obvious from the type. Its prompt then starts with the same numbered "References:" block as a clip prompt; for an image, "start-frame" means the base image to edit (there is no end frame). Example: a close-up of the hero holding a mug: "references": [{ "asset": "mug", "role": "detail", "note": "glaze and colour only" }, "hero"], prompt "References:\nImage 1 (Blue mug): reference only: materials, colours and objects only; glaze and colour only.\nImage 2 (Hero): reference only: keep this identity (face, body, clothes).\n\nClose-up of …".
 18. Keyframe then animate: when the opening composition matters (a character's pose, a precise layout, a hero product shot), give the "ai" shot a "keyframe": { "prompt", "references", "qa" }. The app turns it into an image asset "<shot id>.keyframe" that is made first, then attached to the clip as Image 1, the START FRAME (do not also give the shot a "start-frame" reference). The keyframe prompt describes one still image (with its own "References:" block, as for an asset); the clip prompt then describes only the motion from that frame. Example: "keyframe": { "prompt": "References:\nImage 1 (Hero): reference only: keep this identity (face, body, clothes).\n\nThe hero sits at a café table, both hands around a blue mug …", "references": ["hero", "cafe"], "qa": ["The hero's face matches the reference"] }, clip prompt "References:\nImage 1 (Keyframe · …): START FRAME …\n\nShe slowly lifts the mug …".
+19. Audio: put each voiceover, music bed or sound effect in "audio" as a cue on an asset of type "audio" (source "generate" with a prompt for the user's voice/music/sound tool, e.g. the exact voiceover script and voice, or "upload"). "from" is the shot it starts in, "atSec" the offset into that shot, "to" the last shot it plays under. A music bed usually runs "from" the first shot "to" the last with "volume" 0.2-0.4 under speech; a voiceover spans the shots it describes; a sound effect sits at the moment in one shot ("atSec") with no "to". Example: { "asset": "score", "kind": "music", "from": "s1", "to": "s6", "volume": 0.3, "fadeOutSec": 2 }, { "asset": "door-slam", "kind": "sfx", "from": "s4", "atSec": 1.2 }. Do not put spoken lines that the video model renders (shot "dialogue") into a voiceover too.
 ```
 
 ## 6. Decisions, open questions and future work

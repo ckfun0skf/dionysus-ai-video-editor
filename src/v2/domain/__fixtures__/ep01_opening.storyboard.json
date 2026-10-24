@@ -148,6 +148,40 @@
         "Card sits near frame centre with clear empty space on it",
         "No text, letters or logos anywhere"
       ]
+    },
+    {
+      "id": "vo-mara",
+      "name": "Mara V.O. (shots 01-03)",
+      "type": "audio",
+      "prompt": "Voiceover, Mara (woman, early 30s, calm, warm, slightly wry; close-mic, dry room, no music): \"I've never been hungry. I've never been late. I've never been afraid of tomorrow.\" Unhurried, with a short pause after each sentence; about 8 seconds in total.",
+      "source": "generate",
+      "qa": [
+        "The words match the script exactly",
+        "One calm female voice, no music or effects",
+        "About 8 seconds long"
+      ]
+    },
+    {
+      "id": "door",
+      "name": "Soft door close (s06)",
+      "type": "audio",
+      "source": "upload",
+      "qa": [
+        "A soft, quiet door close with no slam",
+        "Under 2 seconds"
+      ]
+    },
+    {
+      "id": "score",
+      "name": "Score: street montage (s06-s12)",
+      "type": "audio",
+      "prompt": "Instrumental music bed, about 40 seconds: seductive and sincere, warm Rhodes piano and soft strings over a slow, light pulse, gently optimistic with a faint unease underneath. No vocals. Builds slightly towards the end and resolves.",
+      "source": "generate",
+      "qa": [
+        "No vocals",
+        "Warm and optimistic with a hint of unease",
+        "At least 35 seconds long"
+      ]
     }
   ],
   "shots": [
@@ -480,6 +514,35 @@
       "to": "s09",
       "kind": "match",
       "note": "Same street; s09-s11 use the street reference"
+    }
+  ],
+  "audio": [
+    {
+      "id": "vo",
+      "asset": "vo-mara",
+      "kind": "voiceover",
+      "from": "s01",
+      "atSec": 0.5,
+      "to": "s03"
+    },
+    {
+      "id": "door",
+      "asset": "door",
+      "kind": "sfx",
+      "from": "s06",
+      "atSec": 4.5,
+      "volume": 0.6
+    },
+    {
+      "id": "bed",
+      "asset": "score",
+      "kind": "music",
+      "from": "s06",
+      "atSec": 5,
+      "to": "s12",
+      "volume": 0.3,
+      "fadeInSec": 1,
+      "fadeOutSec": 3
     }
   ]
 }

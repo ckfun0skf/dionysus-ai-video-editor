@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { board, storyRefs, TICKS_PER_SECOND, type AssetSlot, type AssetVersion, type MediaKind, type MediaRef, type Project, type Shot } from "../../domain";
+import { board, story, storyRefs, TICKS_PER_SECOND, type AssetSlot, type AssetVersion, type MediaKind, type MediaRef, type Project, type Shot } from "../../domain";
 import { cmd, type Command, type Engine } from "../../engine";
 import { importFile } from "../../persistence";
 import type { BlobStore } from "../../ports";
@@ -212,6 +212,7 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
       )}
       {shot && (shot.camera || shot.dialogue) && <Section title="Direction">{shot.camera && <p className="v2-sb-kv"><b>Camera</b> {shot.camera}</p>}{shot.dialogue && <p className="v2-sb-kv"><b>Dialogue</b> {shot.dialogue}</p>}</Section>}
       {shot && <ShotLayers shot={shot} project={project} onOpen={onOpen} />}
+      {(shot || slot?.type === "audio") && <AudioCues shotId={shot?.id} assetId={shot ? undefined : slot?.id} project={project} onOpen={onOpen} />}
       {shot && <ShotRefs shot={shot} project={project} thumbs={thumbs} onOpen={onOpen} onPin={pin} onEdit={onEdit} note={refNote} />}
       {slot && slot.references.length > 0 && <Section title="Made using"><Chips ids={slot.references} project={project} thumbs={thumbs} onOpen={onOpen} /></Section>}
       {slot && <UsedIn slot={slot} project={project} onOpen={onOpen} />}
@@ -375,6 +376,45 @@ function ShotLayers({ shot, project, onOpen }: { shot: Shot; project: Project; o
         {effects.map((e, i) => <li key={`e${i}`}><Ic g="effect" size={14} /> <span>Effect {e.preset}{secs(e.startSec, e.endSec)}</span></li>)}
       </ul>
       <p className="v2-hint">Added with the shot by Send to timeline. They follow the shot when you swap its version.</p>
+    </Section>
+  );
+}
+
+const AUDIO_KIND_LABEL = { voiceover: "Voiceover", music: "Music", sfx: "Sound effect" } as const;
+
+/**
+ * Audio cues (V2-SB-125) that play under a shot, or that place an audio asset: where they run, volume and fades.
+ * Send to timeline puts them on Voiceover, Music and Sound effects layers.
+ */
+function AudioCues({ shotId, assetId, project, onOpen }: { shotId?: string; assetId?: string; project: Project; onOpen: (t: BoardTarget) => void }) {
+  const b = project.storyboard!;
+  const no = (id: string) => b.order.indexOf(id) + 1;
+  const cues = (b.audio ?? []).filter((c) => {
+    if (assetId) return c.asset === assetId;
+    const i = no(shotId!), from = no(c.from), to = c.to ? no(c.to) : from;
+    return i >= from && i <= Math.max(from, to);
+  });
+  if (!cues.length) return null;
+  const pct = (v: number) => `${Math.round(v * 100)}%`;
+  return (
+    <Section title="Audio">
+      <ul className="v2-sb-layers v2-sb-audio" data-testid="audio-cues">
+        {cues.map((c) => {
+          const d = story.AUDIO_DEFAULTS[c.kind];
+          const where = c.to ? `shots ${no(c.from)}–${no(c.to)}` : `shot ${no(c.from)}`;
+          const at = c.atSec ? ` from ${c.atSec} s` : "";
+          const len = c.durationSec !== undefined ? ` · ${c.durationSec} s` : "";
+          const fi = c.fadeInSec ?? d.fadeInSec, fo = c.fadeOutSec ?? d.fadeOutSec;
+          const fades = fi || fo ? ` · fade ${fi} s in, ${fo} s out` : "";
+          const name = b.slots[c.asset]?.name ?? c.asset;
+          return (
+            <li key={c.id}><Ic g={TYPE_ICON.audio} size={14} /> <span>{AUDIO_KIND_LABEL[c.kind]}{" "}
+              {assetId ? <b>{name}</b> : <button className="v2-linkbtn" onClick={() => onOpen({ slot: c.asset })}>{name}</button>}
+              {" "}· {where}{at}{len} · volume {pct(c.volume ?? d.volume)}{fades}</span></li>
+          );
+        })}
+      </ul>
+      <p className="v2-hint">{assetId ? "Upload the audio file above. " : ""}Send to timeline adds {cues.length > 1 ? "these" : "this"} on audio layers (Voiceover, Music, Sound effects); change volume and fades there.</p>
     </Section>
   );
 }
