@@ -360,6 +360,9 @@ function AttachOrder({ shot, slot, project, thumbs, blobs }: { shot?: Shot; slot
 
 const secs = (a?: number, z?: number) => (a === undefined && z === undefined ? "" : ` · ${a ?? 0}–${z === undefined ? "end" : `${z} s`}`);
 
+/** V2-SB-126: a layer with follow "shot" gets the shot's zoom and pan as keyframes on Send to timeline. */
+const follows = (l: { follow?: "shot" }) => (l.follow === "shot" ? " · moves with the shot" : "");
+
 /** What "Send to timeline" adds with this shot (v1.1): text and media layers, captions, effects. */
 function ShotLayers({ shot, project, onOpen }: { shot: Shot; project: Project; onOpen: (t: BoardTarget) => void }) {
   const b = project.storyboard!;
@@ -369,13 +372,13 @@ function ShotLayers({ shot, project, onOpen }: { shot: Shot; project: Project; o
     <Section title="Layers & effects">
       <ul className="v2-sb-layers">
         {layers.map((l, i) => l.type === "text"
-          ? <li key={i}><Ic g="T" size={14} /> <span>Text “{l.text.split("\n").join(" / ")}”{l.textStyle ? ` · ${l.textStyle}` : ""}{secs(l.startSec, l.endSec)}</span></li>
+          ? <li key={i}><Ic g="T" size={14} /> <span>Text “{l.text.split("\n").join(" / ")}”{l.textStyle ? ` · ${l.textStyle}` : ""}{secs(l.startSec, l.endSec)}{follows(l)}</span></li>
           : <li key={i}><Ic g={TYPE_ICON[l.type] ?? "image"} size={14} /> <span>{l.type === "html" ? "HTML" : l.type === "image" ? "Image" : "Video"} layer{" "}
-              {b.slots[l.asset] ? <button className="v2-linkbtn" onClick={() => onOpen({ slot: l.asset })}>{b.slots[l.asset].name}</button> : l.asset}{secs(l.startSec, l.endSec)}</span></li>)}
+              {b.slots[l.asset] ? <button className="v2-linkbtn" onClick={() => onOpen({ slot: l.asset })}>{b.slots[l.asset].name}</button> : l.asset}{secs(l.startSec, l.endSec)}{follows(l)}</span></li>)}
         {shot.captions && <li><Ic g="≡" size={14} /> <span>Captions from the dialogue{shot.dialogue ? "" : " (none written)"}</span></li>}
         {effects.map((e, i) => <li key={`e${i}`}><Ic g="effect" size={14} /> <span>Effect {e.preset}{secs(e.startSec, e.endSec)}</span></li>)}
       </ul>
-      <p className="v2-hint">Added with the shot by Send to timeline. They follow the shot when you swap its version.</p>
+      <p className="v2-hint">Added with the shot by Send to timeline. They follow the shot when you swap its version.{layers.length && effects.length ? " Effects zoom and pan only the picture: layers stay fixed to the frame unless marked “moves with the shot”." : ""}</p>
     </Section>
   );
 }

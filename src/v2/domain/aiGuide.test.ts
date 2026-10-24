@@ -37,16 +37,21 @@ describe("AI planner guide (V2-SB-114)", () => {
     expect(md).toContain("length 0.05–1, default 0.5 (fraction of the effect's time range, not seconds");
   });
 
-  it("the full prompt inlines the guide with RULES 1-19; the short prompt links to it", () => {
+  it("the full prompt inlines the guide with RULES 1-20; the short prompt links to it", () => {
     const full = storyboardSystemPrompt();
     for (const s of ["FORMAT (", "PRESETS", "RULES", "EXAMPLE", `14. ${RULES[13]}`, "not seconds", "START FRAME", "\"references\"?", "\"genDurationSec\"?", "- crossfade:", "- ken-burns:"]) expect(full).toContain(s);
-    expect(RULES).toHaveLength(19);
+    expect(RULES).toHaveLength(20);
     // V2-SB-125: audio cues: the format block, a rule and a worked example.
     expect(full).toContain('"audio"?: [ {');
     expect(full).toContain('"kind": "voiceover" | "music" | "sfx"');
     expect(full).toContain(`19. ${RULES[18]}`);
     expect(RULES[18]).toContain('{ "asset": "score", "kind": "music", "from": "s1", "to": "s6", "volume": 0.3, "fadeOutSec": 2 }');
     expect(RULES[18]).toMatch(/sound effect sits at the moment in one shot \("atSec"\) with no "to"/);
+    // V2-SB-126: fixed vs following layers: the format lines, a rule and a worked example that imports cleanly.
+    expect(full).toContain('"follow"?: "frame" | "shot" }      // default "frame" (fixed)');
+    expect(full).toContain(`20. ${RULES[19]}`);
+    const tag = JSON.parse(RULES[ruleNumber("layer-follow") - 1].match(/(\{ "id": "tag".*?"follow": "shot" \})/)![1]);
+    expect(tag).toMatchObject({ type: "text", follow: "shot" });
     // V2-SB-124: keyframe then animate: the format line, a rule and a worked example.
     expect(full).toContain('"keyframe"?: { "prompt": string, "references"?:');
     expect(full).toContain(`18. ${RULES[17]}`);
@@ -130,9 +135,9 @@ describe("generic storyboard guide (V2-SB-GUIDE-GENERIC)", () => {
 
   it("numbers the rules stably: append-only keys, and every RULE n the spec cites exists", () => {
     // Rule numbers are public (the spec, users, other AIs). Append new keys at the end; never reorder or delete.
-    expect(RULE_LIST.slice(0, 19).map((r) => r.key)).toEqual([
+    expect(RULE_LIST.slice(0, 20).map((r) => r.key)).toEqual([
       "reusable-assets", "standalone-prompts", "last-frame-continuity", "uploads", "qa-checks", "ids", "valid-json", "text-in-layers", "html-only-for-graphics",
-      "transitions-and-effects", "known-presets", "param-units", "duration", "references-block", "transition-overlap", "identity-portrait", "asset-references", "keyframe", "audio",
+      "transitions-and-effects", "known-presets", "param-units", "duration", "references-block", "transition-overlap", "identity-portrait", "asset-references", "keyframe", "audio", "layer-follow",
     ]);
     expect(new Set(RULE_LIST.map((r) => r.key)).size).toBe(RULE_LIST.length);
     RULE_LIST.forEach((r, i) => expect(section("RULES")).toContain(`${i + 1}. ${r.text}`));
@@ -140,6 +145,7 @@ describe("generic storyboard guide (V2-SB-GUIDE-GENERIC)", () => {
     expect(ruleNumber("references-block")).toBe(14);
     expect(ruleNumber("asset-references")).toBe(17);
     expect(ruleNumber("audio")).toBe(19);
+    expect(ruleNumber("layer-follow")).toBe(20);
     expect(RULES[ruleNumber("duration") - 1]).toMatch(/^"durationSec" is how long/);
     expect(RULES[ruleNumber("references-block") - 1]).toMatch(/"References:" block/);
     const cited = [...formatDoc.matchAll(/RULES? (\d+)(?:[-–](\d+))?/g)].flatMap((m) => [Number(m[1]), ...(m[2] ? [Number(m[2])] : [])]);

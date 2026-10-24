@@ -39,7 +39,7 @@ describe("storyboard v1.1: the ep01 fixture", () => {
     expect(doc.meta.textStyles).toEqual({ "ata-title": { font: "serif", size: 0.09, color: "#ffffff", align: "center", bold: false } });
     const s03 = doc.shots.find((s) => s.id === "s03")!;
     expect(s03).toMatchObject({ render: "still", clip: "card-still", effects: [{ preset: "ken-burns", params: {} }] });
-    expect(s03.layers).toEqual([{ id: "s03-card-text", type: "text", text: "You may also enjoy: kintsugi.", startSec: 0.5, endSec: 6, box: { x: 0.37, y: 0.42, width: 0.3, height: 0.12 }, textStyle: "plain", style: { font: "serif", size: 0.035, color: "#3a3a3a", align: "center" }, anim: { in: "fade", durationSec: 0.6 } }]);
+    expect(s03.layers).toEqual([{ id: "s03-card-text", type: "text", text: "You may also enjoy: kintsugi.", startSec: 0.5, endSec: 6, box: { x: 0.37, y: 0.42, width: 0.3, height: 0.12 }, textStyle: "plain", style: { font: "serif", size: 0.035, color: "#3a3a3a", align: "center" }, anim: { in: "fade", durationSec: 0.6 }, follow: "shot" }]);
     const s07 = doc.shots.find((s) => s.id === "s07")!;
     expect(s07).toMatchObject({ render: "still", clip: "title-bg" });
     expect(s07.layers?.[0]).toMatchObject({ id: "s07-title", text: "ALLOTMENT", startSec: 0.5, endSec: 5.5, position: { x: 0.5, y: 0.5 }, textStyle: "ata-title", anim: { in: "fade", out: "fade", durationSec: 0.8 } });
