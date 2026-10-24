@@ -14,6 +14,12 @@ describe("migrateProject", () => {
     expect(() => migrateProject({ ...createProject(), rootCompositionId: "nope" })).toThrow(/malformed/);
     expect(() => migrateProject(42)).toThrow(SchemaError);
   });
+  it("upgrades 3.0 projects to 3.1 without touching their content", () => {
+    const cur = createProject("old");
+    const up = migrateProject(JSON.parse(JSON.stringify({ ...cur, schema: "dionysus/3.0" })));
+    expect(up).toEqual({ ...cur, schema: "dionysus/3.1" });
+    expect(up.storyboard).toBeUndefined();
+  });
   it("runs registered migrations in a chain", () => {
     const cur = createProject("m");
     MIGRATIONS["test/1"] = (r) => ({ ...r, schema: "test/2" });
