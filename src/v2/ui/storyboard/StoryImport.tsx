@@ -41,7 +41,7 @@ export function PromptPanel() {
 }
 
 /** Step 2: paste or choose a file, validate live, preview, then create. */
-export function ImportPanel({ onCreate }: { onCreate?: (doc: StoryDoc) => void }) {
+export function ImportPanel({ onCreate, replacing }: { onCreate?: (doc: StoryDoc) => void; replacing?: boolean }) {
   const [text, setText] = useState("");
   const [file, setFile] = useState<string>();
   const input = useRef<HTMLInputElement>(null);
@@ -80,8 +80,8 @@ export function ImportPanel({ onCreate }: { onCreate?: (doc: StoryDoc) => void }
           <div className="v2-sb-actions">
             <button className="v2-btn v2-sb-btn" title="Save the checked, normalised storyboard as a .json file" onClick={() => downloadJson(result.doc)}><Ic g="⇩" size={16} /> Download .json</button>
           </div>
-          {onCreate ? <button className="v2-btn primary v2-sb-btn" onClick={() => onCreate(result.doc)}>Create storyboard</button>
-            : <p className="v2-hint">Looks good. Turning it into a storyboard arrives in the next update.</p>}
+          {onCreate && <button className="v2-btn primary v2-sb-btn" onClick={() => onCreate(result.doc)}>{replacing ? "Replace storyboard" : "Create storyboard"}</button>}
+          {replacing && <p className="v2-hint">Replacing keeps nothing from the current storyboard; Undo brings it back.</p>}
         </div>
       )}
     </section>
