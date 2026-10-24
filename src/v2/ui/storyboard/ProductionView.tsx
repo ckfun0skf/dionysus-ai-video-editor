@@ -19,7 +19,15 @@ export function ProductionView({ project, thumbs, engine, blobs, mobile }: { pro
   const i = steps.findIndex((s) => s.key === cur);
   const step = steps[i];
   const name = (s: ProductionStep) => ("slot" in s.target ? b.slots[s.target.slot].name : `Shot ${b.order.indexOf(s.target.shot) + 1} · ${b.shots[s.target.shot].title}`);
+  const status = board.storyStatus(project);
   const what = (s: ProductionStep) => {
+    if (s.state === "stale") { // V2-SB-R08: say what to redo and why, not the original instruction
+      const isSlot = "slot" in s.target;
+      const reason = (isSlot ? status.slots[(s.target as { slot: string }).slot] : status.shots[(s.target as { shot: string }).shot])?.reasons[0];
+      const sl = isSlot ? b.slots[(s.target as { slot: string }).slot] : undefined;
+      const verb = !sl ? "Regenerate" : sl.source.type === "lastFrame" ? "Take the frame again" : sl.source.type === "upload" ? "Upload it again" : "Regenerate";
+      return reason ? `${verb} — ${reason.charAt(0).toUpperCase()}${reason.slice(1)}` : verb;
+    }
     if (s.state === "blocked" && s.blockedBy) return `After shot ${b.order.indexOf(s.blockedBy) + 1} has a clip`;
     if (s.state === "check") return `Checks ${s.qaDone}/${s.qaTotal}`;
     if ("slot" in s.target) { const sl = b.slots[s.target.slot]; return sl.source.type === "lastFrame" ? `Last frame of shot ${b.order.indexOf(sl.source.shotId) + 1}` : sl.source.type === "upload" ? "Upload your file" : `Generate ${sl.type}`; }

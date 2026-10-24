@@ -4,7 +4,7 @@ import { FilmstripTiles, Waveform } from "./ClipPreview";
 import type { Filmstrip, Peaks } from "./media";
 import { mediaKey } from "./useMedia";
 import { clampPps, haptic, LONG_PRESS_MS, LONG_PRESS_SLOP, pinchZoom, touchDistance } from "./gestures";
-import { edit, layers, ops, transitions, compositionDuration, TICKS_PER_SECOND, formatTimecode, type Composition, type Placement, type Project, type Track } from "../domain";
+import { board, edit, layers, ops, transitions, compositionDuration, TICKS_PER_SECOND, formatTimecode, type Composition, type Placement, type Project, type Track } from "../domain";
 import { Ic } from "./Icon";
 import { getPreset } from "../registry";
 
@@ -397,6 +397,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
               )))}
               {t.placements.map((p) => {
                 const asset = project.assets[p.source.assetId];
+                const link = project.storyboard && p.source.assetId ? board.storyLinkOf(project, p.source.assetId) : undefined;
                 const sel = p.id === selectedId;
                 const inSel = sel || !!selectedIds?.includes(p.id);
                 return (
@@ -413,7 +414,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
                         {pk && <Waveform peaks={pk} p={p} width={w} height={p.clipType === "audio" ? 38 : 14} kind={p.clipType === "audio" ? "audio" : "video"} />}
                       </>;
                     })()}
-                    <span className="v2-clip-name">{p.freeze && <span className="v2-clip-badge" title="Freeze frame" aria-label="Freeze frame"><Ic g="❄" /></span>}{p.reverse && <span className="v2-clip-badge" title="Reversed" aria-label="Reversed"><Ic g="⟲" /></span>}{p.speed && p.speed !== 1 && <span className="v2-clip-badge" title={`Speed ${p.speed}×`}>{p.speed}×</span>}{p.linkedAudio?.muted && !p.freeze && <span className="v2-clip-badge" title="Clip audio muted" aria-label="Clip audio muted"><Ic g="🔇" /></span>}{p.clipType === "effect" ? <><Ic g="effect" size={12} /> {effectName(p)}</> : p.clipType === "text" ? <><Ic g="T" size={12} /> {p.text?.text || "Text"}</> : asset?.name ?? "missing media"}</span><AnimBadges p={p} width={Math.max(4, toPx(p.durationTicks))} />
+                    <span className="v2-clip-name">{link && <span className="v2-clip-badge v2-clip-link" title={`${link.label} on the storyboard: follows the version you pick there (now v${link.versionNo} of ${link.versionCount})`} aria-label={`Storyboard ${link.label}, version ${link.versionNo}`}><Ic g="link" size={11} />v{link.versionNo}</span>}{p.freeze && <span className="v2-clip-badge" title="Freeze frame" aria-label="Freeze frame"><Ic g="❄" /></span>}{p.reverse && <span className="v2-clip-badge" title="Reversed" aria-label="Reversed"><Ic g="⟲" /></span>}{p.speed && p.speed !== 1 && <span className="v2-clip-badge" title={`Speed ${p.speed}×`}>{p.speed}×</span>}{p.linkedAudio?.muted && !p.freeze && <span className="v2-clip-badge" title="Clip audio muted" aria-label="Clip audio muted"><Ic g="🔇" /></span>}{p.clipType === "effect" ? <><Ic g="effect" size={12} /> {effectName(p)}</> : p.clipType === "text" ? <><Ic g="T" size={12} /> {p.text?.text || "Text"}</> : asset?.name ?? "missing media"}</span><AnimBadges p={p} width={Math.max(4, toPx(p.durationTicks))} />
                     {layers.isCustom(t, p) && <span className="v2-custom-dot" title="Custom style: this clip differs from its layer style" aria-label="Custom style" />}
                     {!!p.fadeInTicks && <span className="v2-fade in" aria-label="Fade in" style={{ width: toPx(p.fadeInTicks) }} />}
                     {!!p.fadeOutTicks && <span className="v2-fade out" aria-label="Fade out" style={{ width: toPx(p.fadeOutTicks) }} />}

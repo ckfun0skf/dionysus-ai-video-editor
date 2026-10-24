@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { hitCandidates, isBackdrop, pickAt, Player, THREE_TEMPLATE } from "../render";
 import { cmd } from "../engine";
 import { importFile } from "../persistence";
-import { compositionDuration, edit, layers, ops, transitions, findPlacement, newId, formatTimecode, secondsToTicks, type Asset } from "../domain";
+import { board as storyDomain, compositionDuration, edit, layers, ops, transitions, findPlacement, newId, formatTimecode, secondsToTicks, type Asset } from "../domain";
 import { useEditorBoot, useEngineState, useIsMobile, type EditorContext, type LoadFailure } from "./useEditor";
 import { Timeline } from "./Timeline";
 import { clampPps } from "./gestures";
@@ -15,6 +15,7 @@ import { HtmlEditor } from "./HtmlEditor";
 import { ExportDialog } from "./ExportDialog";
 import { ProjectsDialog } from "./Projects";
 import { StoryboardView } from "./storyboard/StoryboardView";
+import type { BoardTarget } from "./storyboard/BoardView";
 import type { Resolution } from "../render";
 import { downloadSrt, importSrtFile, SubtitleEditor, SubtitleLane } from "./Subtitles";
 import { downloadText, SubtitleList } from "./SubtitleList";
@@ -83,6 +84,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const [exporting, setExporting] = useState(false);
   const [projects, setProjects] = useState(false);
   const [board, setBoard] = useState(false);
+  const [boardOpen, setBoardOpen] = useState<BoardTarget>(); // shot or slot to open with the board ("Open in storyboard")
   const openExport = () => { player.pause(); setExporting(true); };
   const [fs, setFs] = useState(false);
   const [toast, setToast] = useState<string>();
@@ -269,6 +271,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const onCanvasTap = (e: React.MouseEvent<HTMLCanvasElement>) => tapAt(e.clientX, e.clientY);
   const isText = selected?.placement.clipType === "text";
   const isEffect = selected?.placement.clipType === "effect";
+  const selLink = selected?.placement.source.assetId ? storyDomain.storyLinkOf(project, selected.placement.source.assetId) : undefined;
+  const openStory = (t: BoardTarget) => { player.pause(); setBoardOpen(t); setBoard(true); };
   const loopClip = (mobile ? animOpen || textOpen : true) && animLoop && isText ? selected!.placement : undefined;
   useEffect(() => {
     if (!loopClip) return;
@@ -586,6 +590,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       tool("⤧", "Adjust", () => setInspOpen(true), "adjust", "Transform, keyframes and fades"),
       ...(speedSelect ? [tool("⏩", `Speed ${sp!.speed ?? 1}×`, () => setMenu("speed"), "speed", "Playback speed")] : []),
       tool("☑", "Select", () => setMultiMode(true), "multi", "Select several clips"),
+      ...(selLink ? [tool("board", "Storyboard", () => openStory(selLink.target), "open-story", `Open ${selLink.label} in the storyboard: pick versions there`)] : []),
       ...[...clipActions, ...timeActions, ...linkedAudioActions].map((a) => tool(a.icon, a.label, a.run, a.label, a.title)),
       ...(!["image", "html", "text"].includes(selected.placement.clipType) ? [
         <label key="vol" className="v2-tool v2-volume"><b aria-hidden><Ic g="🔊" /></b>
@@ -756,6 +761,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     const p = f.placement, t = Math.round(time);
     const inside = t > p.startTicks && t < p.startTicks + p.durationTicks;
     const many = sel.length > 1 ? ` ${sel.length} clips` : "";
+    const ctxLink = p.source.assetId ? storyDomain.storyLinkOf(project, p.source.assetId) : undefined;
     return [
       { label: "Split at playhead", icon: "✂", shortcut: "S", disabled: !inside || sel.length > 1, onSelect: () => engine.dispatch(cmd.splitPlacement(p.id, t)) },
       "sep",
@@ -764,6 +770,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       { label: "Paste at playhead", icon: "📋", shortcut: k("V"), disabled: !hasClip, onSelect: paste },
       { label: `Duplicate${many}`, icon: "⧉", shortcut: k("D"), onSelect: duplicate },
       ...(p.clipType === "video" && !p.freeze && sel.length === 1 ? [{ label: "Freeze frame", icon: "❄", shortcut: "F", disabled: !inside, onSelect: () => { engine.dispatch(cmd.freezeFrame(p.id, t)); setToast("Freeze frame inserted (3 s)"); } }] : []),
+      ...(ctxLink && sel.length === 1 ? [{ label: "Open in storyboard", icon: "board", onSelect: () => openStory(ctxLink.target) }] : []),
       ...(p.clipType === "html" && sel.length === 1 ? [{ label: "Edit code…", icon: "✎", onSelect: () => void openCode() }] : []),
       "sep",
       { label: `Delete${many}`, icon: "🗑", shortcut: "Del", danger: true, onSelect: () => delSel(false) },
@@ -830,7 +837,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           <button className="v2-btn primary v2-export-d" title="Export MP4 (⌘/Ctrl+E)" onClick={openExport}><Ic g="⇪" size={16} /> Export</button>
         </header>
       )}
-      {board && <StoryboardView engine={engine} blobs={storage.blobs} onClose={() => setBoard(false)} />}
+      {board && <StoryboardView engine={engine} blobs={storage.blobs} initialOpen={boardOpen} onClose={() => { setBoard(false); setBoardOpen(undefined); }} />}
       {notice && <RecoveryNotice failure={notice} storage={storage} onDismiss={() => setNotice(undefined)} />}
       {projects && <ProjectsDialog storage={storage} current={project} onOpen={(id) => { setProjects(false); onSwitch(id); }} onRenameCurrent={(n) => engine.dispatch(cmd.renameProject(n))} onClose={() => setProjects(false)} />}
       {exporting && <ExportDialog project={project} blobs={storage.blobs} res={res} onRes={setRes} onClose={() => setExporting(false)} />}

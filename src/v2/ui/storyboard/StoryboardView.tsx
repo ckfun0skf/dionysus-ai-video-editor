@@ -14,13 +14,14 @@ import "./storyboard.css";
 type Step = "prompt" | "import" | "production";
 
 /** Storyboard workspace (V2-M4). Full-screen over the editor so the timeline keeps its state. */
-export function StoryboardView({ engine, blobs, onClose }: { engine: Engine; blobs: BlobStore; onClose: () => void }) {
+/** `initialOpen` opens that shot or slot right away (timeline "Open in storyboard"). */
+export function StoryboardView({ engine, blobs, onClose, initialOpen }: { engine: Engine; blobs: BlobStore; onClose: () => void; initialOpen?: BoardTarget }) {
   const { project, canUndo, canRedo } = useEngineState(engine);
   const thumbs = useVersionThumbs(project, blobs);
   const has = !!project.storyboard;
   const [step, setStep] = useState<Step | undefined>();
   const [note, setNote] = useState<string>();
-  const [open, setOpen] = useState<BoardTarget>();
+  const [open, setOpen] = useState<BoardTarget | undefined>(initialOpen);
   const mobile = useIsMobile();
   useEffect(() => { if (!note) return; const t = setTimeout(() => setNote(undefined), 3500); return () => clearTimeout(t); }, [note]);
   useEffect(() => {
