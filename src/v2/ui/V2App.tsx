@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { hitTest, Player, THREE_TEMPLATE } from "../render";
+import { hitCandidates, isBackdrop, pickAt, Player, THREE_TEMPLATE } from "../render";
 import { cmd } from "../engine";
 import { importFile } from "../persistence";
 import { compositionDuration, edit, layers, ops, transitions, findPlacement, newId, formatTimecode, secondsToTicks, type Asset } from "../domain";
@@ -236,15 +236,35 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   };
   const cut = () => { if (!sel.length) return; clipboard.current = edit.copyClips(comp, sel); setHasClip(true); engine.dispatch(cmd.deleteClips(sel, ripple)); setToast(`Cut ${sel.length} clip${sel.length > 1 ? "s" : ""} — ${MOD} V to paste`); setSel([]); setMultiMode(false); };
   const split = useCallback(() => { if (selectedId) engine.dispatch(cmd.splitPlacement(selectedId, Math.round(player.time))); }, [engine, player, selectedId]);
-  // Tap in the preview selects the topmost element (rotation-aware); empty space deselects, then toggles play.
-  const onCanvasTap = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const c = e.currentTarget, r = c.getBoundingClientRect();
+  // V2-113: tap selection is forgiving — every element has at least a 48px hit box, near-misses
+  // (24px on touch) count, the smallest wins, and tapping the same spot again cycles through overlaps.
+  // Empty space deselects, then toggles play.
+  const lastTap = useRef<{ x: number; y: number; id?: string }>();
+  const canvasPoint = (cx: number, cy: number) => {
+    const c = canvasRef.current!, r = c.getBoundingClientRect();
     const k = c.width / (r.width || 1);
-    const id = hitTest(player.boxes, (e.clientX - r.left) * k, (e.clientY - r.top) * k);
-    if (id) { setSel([id]); setSubId(undefined); }
+    return { x: (cx - r.left) * k, y: (cy - r.top) * k, k, W: c.width, H: c.height };
+  };
+  const tapAt = (cx: number, cy: number, onGizmo = false) => {
+    if (!canvasRef.current) return;
+    const { x, y, k, W, H } = canvasPoint(cx, cy);
+    const prev = lastTap.current;
+    const again = !!prev && prev.id === selectedId && Math.hypot(cx - prev.x, cy - prev.y) <= 16;
+    if (onGizmo && !again) { lastTap.current = { x: cx, y: cy, id: selectedId }; return; }
+    const id = pickAt(player.boxes, x, y, { tol: (mobile ? 24 : 8) * k, min: 48 * k, current: selectedId, cycle: again,
+      // Re-tapping the selected overlay never jumps to the full-frame background behind it.
+      skip: onGizmo ? (pid, b) => pid !== selectedId && isBackdrop(b, W, H) : undefined });
+    lastTap.current = { x: cx, y: cy, id };
+    if (id) { if (id !== selectedId || sel.length !== 1) { setSel([id]); setSubId(undefined); } }
     else if (selectedId) setSelectedId(undefined);
     else togglePlay();
   };
+  const otherAt = (cx: number, cy: number) => {
+    if (!canvasRef.current) return undefined;
+    const { x, y, k, W, H } = canvasPoint(cx, cy);
+    return hitCandidates(player.boxes, x, y, { min: 48 * k, skip: (id, b) => id === selectedId || isBackdrop(b, W, H) })[0];
+  };
+  const onCanvasTap = (e: React.MouseEvent<HTMLCanvasElement>) => tapAt(e.clientX, e.clientY);
   const isText = selected?.placement.clipType === "text";
   const isEffect = selected?.placement.clipType === "effect";
   const loopClip = (mobile ? animOpen || textOpen : true) && animLoop && isText ? selected!.placement : undefined;
@@ -274,7 +294,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     setHtmlEdit(undefined); setToast("HTML clip updated (Undo to revert)");
   };
   const isHtml = selected?.placement.clipType === "html";
-  const gizmo = { onDelete: () => del(false), onEdit: () => (isText ? setTextOpen(true) : isHtml ? void openCode() : setInspOpen(true)), onDuplicate: () => duplicateAbove(), onDoubleTap: () => { if (isText) setInlineId(selected!.placement.id); } };
+  const gizmo = { onDelete: () => del(false), onEdit: () => (isText ? setTextOpen(true) : isHtml ? void openCode() : setInspOpen(true)), onDuplicate: () => duplicateAbove(), onDoubleTap: () => { if (isText) setInlineId(selected!.placement.id); }, onTap: tapAt, otherAt };
   const inlineBox = inlineId && selected?.placement.id === inlineId ? player.boxes.get(inlineId) : undefined;
   const inlineEditor = inlineBox && canvasRef.current && (() => {
     const c = canvasRef.current, r = c.getBoundingClientRect(), pr = c.parentElement!.getBoundingClientRect(), k = r.width / c.width;

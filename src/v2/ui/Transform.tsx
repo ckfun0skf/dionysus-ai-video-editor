@@ -1,9 +1,9 @@
-import { useRef, useState, type PointerEvent as RPE } from "react";
+import { useEffect, useRef, useState, type PointerEvent as RPE } from "react";
 import { cmd, type Engine } from "../engine";
 import { evalKeys, transformOf, ticksToSeconds, secondsToTicks, type KeyframeProp, type Placement } from "../domain";
 import type { Placed } from "../render";
 import { Ic } from "./Icon";
-import { pinchPatch } from "./gestures";
+import { classifyPreview, pinchPatch, TAP_SLOP } from "./gestures";
 import { SNAP_PX, snapMove, snapRotation, snapScale, snapTargets, type Guides, type SnapBox } from "./snap";
 
 type Patch = Parameters<typeof cmd.setTransform>[1];
@@ -78,7 +78,13 @@ export function TransformInspector({ engine, placement, time }: { engine: Engine
  */
 /** Gap kept between the gizmo frame and the preview edge so the 26px corner buttons (offset 13px) stay tappable. */
 export const GIZMO_INSET = 16;
-export interface GizmoActions { onDelete: () => void; onEdit: () => void; onDuplicate: () => void; onDoubleTap?: () => void }
+export interface GizmoActions {
+  onDelete: () => void; onEdit: () => void; onDuplicate: () => void; onDoubleTap?: () => void;
+  /** V2-113: a tap (no drag) at client point; `onGizmo` when it landed on the selected element's frame. */
+  onTap?: (clientX: number, clientY: number, onGizmo: boolean) => void;
+  /** V2-113: another (non-background) element under this client point, if any. */
+  otherAt?: (clientX: number, clientY: number) => string | undefined;
+}
 
 /**
  * CapCut-style gizmo: drag body to move; corner buttons delete (top-left), edit (top-right),
@@ -105,24 +111,43 @@ export function TransformHandles({ engine, placement, box, canvas, time, actions
   }
   const style = { left, top, width, height, transform: `rotate(${box.rot}rad)` };
   const lastTap = useRef(0);
-  const startGesture = () => { if (!drag.current && !pinch.current) engine.beginGesture(); };
+  const began = useRef(false);
+  /** V2-113: one-finger press in the preview outside the frame (or a tap candidate on the frame). */
+  const press = useRef<{ id: number; x0: number; y0: number; onOther: boolean; state: "pending" | "move" | "ignore"; gizmo: boolean }>();
+  const tapTimer = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => () => clearTimeout(tapTimer.current), []);
+  const startGesture = () => { if (!began.current) { began.current = true; engine.beginGesture(); } };
+  const capture = (e: RPE) => { try { (e.currentTarget as Element).setPointerCapture?.(e.pointerId); } catch { /* synthetic or lost pointer */ } };
+  const enterPinch = () => {
+    const [a0, b0] = [...pts.current.values()];
+    startGesture();
+    drag.current = undefined;
+    if (press.current) press.current.state = "ignore";
+    pinch.current = { a0, b0, t0: valuesAt(placement, time), box };
+  };
   const start = (mode: "move" | "spin") => (e: RPE) => {
     e.stopPropagation(); e.preventDefault();
-    (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+    capture(e);
     pts.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (pts.current.size === 2) {
-      const [a0, b0] = [...pts.current.values()];
-      drag.current = undefined;
-      pinch.current = { a0, b0, t0: valuesAt(placement, time), box: box };
-      return;
-    }
+    if (pts.current.size === 2) { enterPinch(); return; }
     if (mode === "move" && pts.current.size === 1) {
       const now = Date.now();
-      if (now - lastTap.current < 320) { lastTap.current = 0; pts.current.clear(); actions?.onDoubleTap?.(); return; }
+      if (now - lastTap.current < 320) { lastTap.current = 0; clearTimeout(tapTimer.current); pts.current.clear(); actions?.onDoubleTap?.(); return; }
       lastTap.current = now;
+      press.current = { id: e.pointerId, x0: e.clientX, y0: e.clientY, onOther: false, state: "move", gizmo: true };
     }
     startGesture();
     drag.current = { mode, x0: e.clientX, y0: e.clientY, t0: valuesAt(placement, time), cx: rect.left + box.cx * k, cy: rect.top + box.cy * k, b0: box };
+  };
+  /** V2-113: press anywhere else on the preview — tap selects/deselects, drag moves the selection, two fingers pinch it. */
+  const startOutside = (e: RPE) => {
+    if (e.button > 0) return;
+    e.preventDefault();
+    capture(e);
+    pts.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pts.current.size === 2) { enterPinch(); return; }
+    if (pts.current.size > 2) return;
+    press.current = { id: e.pointerId, x0: e.clientX, y0: e.clientY, onOther: !!actions?.otherAt?.(e.clientX, e.clientY), state: "pending", gizmo: false };
   };
   /**
    * Resolve one gesture frame: move by (dx, dy) screen px, scale by `ratio`, rotate to `rot`.
@@ -151,6 +176,19 @@ export function TransformHandles({ engine, placement, box, canvas, time, actions
   const move = (e: RPE) => {
     if (!pts.current.has(e.pointerId)) return;
     pts.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const pr = press.current;
+    if (pr && pr.id === e.pointerId && !pinch.current) {
+      const moved = Math.hypot(e.clientX - pr.x0, e.clientY - pr.y0);
+      if (pr.gizmo) { if (moved > TAP_SLOP) pr.gizmo = false; }
+      else if (pr.state === "pending") {
+        const g = classifyPreview({ fingers: pts.current.size, moved, released: false, onOther: pr.onOther, hasSelection: true });
+        if (g === "move") {
+          pr.state = "move";
+          startGesture();
+          drag.current = { mode: "move", x0: pr.x0, y0: pr.y0, t0: valuesAt(placement, time), cx: rect.left + box.cx * k, cy: rect.top + box.cy * k, b0: box };
+        } else if (g === "ignore") pr.state = "ignore";
+      }
+    }
     const pc = pinch.current;
     if (pc && pts.current.size >= 2) {
       const [a1, b1] = [...pts.current.values()];
@@ -170,10 +208,23 @@ export function TransformHandles({ engine, placement, box, canvas, time, actions
     solve(d.t0, d.b0, 0, 0, pp.scale / (d.t0.scale || 1), rot, e.altKey, "scale");
   };
   const end = (e: RPE) => {
+    if (!pts.current.has(e.pointerId)) return;
     pts.current.delete(e.pointerId);
+    const pr = press.current;
+    if (pr?.id === e.pointerId && !pinch.current && e.type === "pointerup") {
+      const { clientX: x, clientY: y } = e;
+      // A tap outside the frame selects / deselects now; a tap on the frame waits out the double-tap window.
+      if (!pr.gizmo && pr.state === "pending") actions?.onTap?.(x, y, false);
+      else if (pr.gizmo && Date.now() - lastTap.current < 600) {
+        clearTimeout(tapTimer.current);
+        tapTimer.current = setTimeout(() => actions?.onTap?.(x, y, true), 320);
+      }
+    }
     if (pts.current.size > 0) return;
+    press.current = undefined;
     setGuides({});
-    if (drag.current || pinch.current) { drag.current = undefined; pinch.current = undefined; engine.endGesture(); }
+    drag.current = undefined; pinch.current = undefined;
+    if (began.current) { began.current = false; engine.endGesture(); }
   };
   const handlers = { onPointerMove: move, onPointerUp: end, onPointerCancel: end };
   const btn = (c: string, label: string, g: string, run?: () => void) => run && (
@@ -181,9 +232,14 @@ export function TransformHandles({ engine, placement, box, canvas, time, actions
   );
   return (
     <>
+    <div className="v2-xform-catch" data-testid="preview-catch" {...handlers} onPointerDown={startOutside} onClick={(e) => e.stopPropagation()}
+      title="Drag anywhere to move the selection · pinch or twist to scale and rotate · tap empty space to deselect" />
     {guides.x !== undefined && <div className="v2-guide v" data-testid="guide-x" style={{ left: rect.left - parent.left + guides.x * k, top: rect.top - parent.top, height: rect.height }} />}
     {guides.y !== undefined && <div className="v2-guide h" data-testid="guide-y" style={{ top: rect.top - parent.top + guides.y * k, left: rect.left - parent.left, width: rect.width }} />}
-    <div className="v2-xform" style={style} {...handlers} onPointerDown={start("move")} title="Drag to move · pinch to scale · twist to rotate · hold Alt to skip snapping" data-testid="transform-box" onClick={(e) => e.stopPropagation()}>
+    <div className="v2-xform" style={style} data-testid="transform-box">
+      {/* V2-113: the drag surface is a sibling of the corner buttons, not their parent, so a finger in
+          the middle of a small frame isn't touch-adjusted onto a nearby button or the rotate knob. */}
+      <div className="v2-xform-body" tabIndex={-1} data-testid="transform-body" {...handlers} onPointerDown={start("move")} title="Drag to move · pinch to scale · twist to rotate · hold Alt to skip snapping" onClick={(e) => e.stopPropagation()} />
       {btn("nw", "Delete", "🗑", actions?.onDelete)}
       {btn("ne", "Edit", "✎", actions?.onEdit)}
       {btn("sw", "Duplicate", "⧉", actions?.onDuplicate)}

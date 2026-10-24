@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { clampPps, MAX_PPS, MIN_PPS, pinchZoom } from "./gestures";
+import { clampPps, classifyPreview, MAX_PPS, MIN_PPS, pinchZoom, TAP_SLOP } from "./gestures";
 import { Timeline } from "./Timeline";
 import { Engine } from "../engine";
 import { createProject } from "../domain";
@@ -68,5 +68,23 @@ describe("Timeline touch gestures", () => {
     const scroll = el.querySelector(".v2-scroll")!;
     act(() => { scroll.dispatchEvent(new WheelEvent("wheel", { deltaY: -100, ctrlKey: true, cancelable: true })); });
     expect(onZoom.mock.calls[0][0]).toBeGreaterThan(40);
+  });
+});
+
+describe("V2-113 preview gesture classification", () => {
+  const base = { fingers: 1, moved: 0, released: false, onOther: false, hasSelection: true };
+  it("tells taps from drags by the 6px slop", () => {
+    expect(classifyPreview(base)).toBe("pending");
+    expect(classifyPreview({ ...base, moved: 5, released: true })).toBe("tap");
+    expect(classifyPreview({ ...base, moved: TAP_SLOP + 1 })).toBe("move");
+  });
+  it("never moves the selection from another element or without one", () => {
+    expect(classifyPreview({ ...base, moved: 20, onOther: true })).toBe("ignore");
+    expect(classifyPreview({ ...base, moved: 20, hasSelection: false })).toBe("ignore");
+    expect(classifyPreview({ ...base, released: true, onOther: true })).toBe("tap");
+  });
+  it("two fingers pinch the selection", () => {
+    expect(classifyPreview({ ...base, fingers: 2 })).toBe("pinch");
+    expect(classifyPreview({ ...base, fingers: 2, hasSelection: false })).toBe("ignore");
   });
 });
