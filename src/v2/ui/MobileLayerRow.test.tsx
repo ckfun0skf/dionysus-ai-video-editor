@@ -119,3 +119,17 @@ describe("V2-105 mobile layer row + Edit subtitles entry points", () => {
     expect(el.querySelectorAll(".v2-cue").length).toBe(2);
   });
 });
+
+describe("V2-109 touch targets", () => {
+  it("a coarse-pointer block gives icons, gizmo, transitions and header controls a 44px hit area", () => {
+    const css = readFileSync(resolve(__dirname, "v2.css"), "utf8");
+    const block = css.slice(css.indexOf("@media (pointer: coarse)"));
+    expect(block).toMatch(/\.v2-icon[^{]*\{ min-width: 44px; min-height: 44px; \}/);
+    expect(block).toMatch(/\.v2-res, \.v2-app \.v2-export \{ min-height: 44px; \}/);
+    expect(block).toContain(".v2-giz::after { inset: -10px; }");
+    // 4 controls × 44px fit the mobile column.
+    expect(4 * 44 + 2).toBeLessThanOrEqual(SIDE_W);
+    // Contrast: the white "+" tile keeps dark ink (beats `.v2-app button { color: inherit }`).
+    expect(css).toMatch(/\.v2-app \.v2-main-add \{[^}]*color: #111/);
+  });
+});

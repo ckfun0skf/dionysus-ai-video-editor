@@ -2171,6 +2171,12 @@
           "title": "Hotfix: iOS Safari media import — chunked ArrayBuffer storage (no File/Blob in IndexedDB), persist(), quota message",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-109",
+          "title": "Mobile UX review P1: trailing + tile with contrast, modal fit, 44px coarse-pointer targets, gizmo inside preview",
+          "status": "done",
+          "progress": 100
         }
       ]
     },

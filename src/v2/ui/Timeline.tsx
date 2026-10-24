@@ -67,7 +67,9 @@ const HEADER_W = typeof window !== "undefined" && window.innerWidth >= 900 ? 264
 /** Centered mode: width of the fixed, opaque track-control column left of the lanes. */
 /** Compact height of text lanes in centered (mobile) mode; keeps the side column aligned with the main track. */
 export const TEXT_LANE_H = 32;
-export const SIDE_W = 144;
+/** True on touch-first devices (phones/tablets): controls grow to 44px hit areas there. */
+export const coarsePointer = () => typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
+export const SIDE_W = 184;
 
 export function Timeline({ engine, project, time, playing, onSeek, selectedId, selectedIds, onToggleSelect, multiMode, onSelect, pps, onZoom, centered, thumbs, peaks, strips, onAddMedia, sideColumn, timeLabel, topLane, ripple, onTransition, expanded: expandedProp, onExpand, focus, onEditLayer, onEditSubs, onFocusGroup, onDropData, onContextMenu }: Props) {
   const comp = project.compositions[project.rootCompositionId];
@@ -279,9 +281,10 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
     const side = sideRef.current, sc = scrollRef.current;
     if (!side || !sc) return;
     const base = side.getBoundingClientRect().top;
-    const next = [...sc.querySelectorAll<HTMLElement>(".v2-lane.is-collapsed")].map((l) => { const r = l.getBoundingClientRect(); return { group: l.dataset.group as ops.TrackGroup, top: Math.round(r.top - base + (r.height - 36) / 2), hasClips: !!l.querySelector(".v2-clip") }; });
+    const rowH = coarsePointer() ? 44 : 36; // side-column button height (44px touch targets on phones)
+    const next = [...sc.querySelectorAll<HTMLElement>(".v2-lane.is-collapsed")].map((l) => { const r = l.getBoundingClientRect(); return { group: l.dataset.group as ops.TrackGroup, top: Math.round(r.top - base + (r.height - rowH) / 2), hasClips: !!l.querySelector(".v2-clip") }; });
     if (JSON.stringify(next) !== JSON.stringify(laneTops)) setLaneTops(next);
-    const rowsNext = expanded ? [...sc.querySelectorAll<HTMLElement>(`.v2-lane[data-track-id][data-group="${expanded}"]`)].map((l) => { const r = l.getBoundingClientRect(); return { id: l.dataset.trackId!, top: Math.round(r.top - base + (r.height - 36) / 2) }; }) : [];
+    const rowsNext = expanded ? [...sc.querySelectorAll<HTMLElement>(`.v2-lane[data-track-id][data-group="${expanded}"]`)].map((l) => { const r = l.getBoundingClientRect(); return { id: l.dataset.trackId!, top: Math.round(r.top - base + (r.height - rowH) / 2) }; }) : [];
     if (JSON.stringify(rowsNext) !== JSON.stringify(layerTops)) setLayerTops(rowsNext);
   });
   const startLayerDrag = (e: React.PointerEvent, id: string) => {
@@ -352,7 +355,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
             ))}
             {expanded && layerTops.map(({ id, top }) => { const t = comp.tracks.find((x) => x.id === id); return t && (
               <div key={id} className="v2-layer-side" data-track-id={id} style={{ top }}>
-                {/* V2-105: the 144px mobile column fits 4 controls; "Edit subtitles" lives in the Text toolbar and the clip toolbar instead. */}
+                {/* V2-105: the 184px mobile column fits 4 44px controls; "Edit subtitles" lives in the Text toolbar and the clip toolbar instead. */}
                 <LayerControls t={t} isMain={t.id === main?.id} onToggle={() => engine.dispatch(cmd.toggleTrackHidden(t.id))} onDelete={() => setConfirmDel(t.id)} onReorder={(e) => startLayerDrag(e, t.id)} dragging={layerDrag?.id === t.id} onEditAll={onEditLayer && t.kind === "text" && layers.textClipCount(t) > 0 ? () => onEditLayer(t.id) : undefined} />
               </div>); })}
           </div>}
@@ -420,6 +423,11 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
                   </div>
                 );
               })}
+              {/* V2-109: CapCut-style add tile trails the last main clip and scrolls with the track (never covers clips). */}
+              {centered && onAddMedia && t.id === main?.id && !gesture && !selectedId && !selectedIds?.length && (
+                <button className="v2-main-add" style={{ left: toPx(Math.max(0, ...t.placements.map((p) => p.startTicks + p.durationTicks))) + 12 }} aria-label="Add media to main track" title="Add photos, videos or library items to the main track at the playhead"
+                  onPointerDown={(e) => e.stopPropagation()} onClick={onAddMedia}><Ic g="+" size={22} /></button>
+              )}
               {onTransition && t.kind === "video" && t.placements.filter((p) => transitions.previousAdjacent(t, p)).map((p) => {
                 const tr = p.transitionIn;
                 return (
@@ -436,9 +444,6 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
           {!centered && <div className="v2-playhead" style={{ left: toPx(time) }} />}
         </div>
       </div>
-      {centered && onAddMedia && main && !gesture && !selectedId && !selectedIds?.length && (
-        <button className="v2-main-add" style={{ top: mainTop - scrollTop + 8 }} aria-label="Add media to main track" title="Add photos, videos or library items to the main track at the playhead" onClick={onAddMedia}><Ic g="+" size={22} /></button>
-      )}
       {reorder && main && <ReorderStrip track={main} state={reorder} top={mainTop} root={rootRef.current} thumbs={thumbs}
         onMove={(x) => setReorder((r) => r && !r.closing ? { ...r, x } : r)}
         onDrop={(to) => { setReorder((r) => r && { ...r, closing: true }); setTimeout(() => { if (to !== reorder.from) { engine.dispatch(cmd.reorderMain(reorder.id, to)); haptic(10); } setReorder(undefined); }, REORDER_ANIM_MS); }} />}
