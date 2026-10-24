@@ -63,8 +63,8 @@ Notation: `?` = optional. All coordinates are 0-1 fractions of the frame, measur
 | Field | Type | Notes |
 |---|---|---|
 | `id`, `title`, `description?` | string | Unchanged. |
-| `durationSec` | number, 0.5-120 | Should match what the video model can generate (RULE 13). This is the length the shot takes in the edit. |
-| `genDurationSec?` **(new, V2-SB-121)** | number, 0.5-120, >= `durationSec` | Only for video models that render fixed lengths: the length to generate (for example 8 for a 5 s shot). The uploaded clip is then trimmed to `durationSec` (§4.4). Omitted, or equal to `durationSec`, means "generate `durationSec`". A value outside 0.5-120 or shorter than `durationSec` is ignored with a warning. |
+| `durationSec` | number, 0.5-120 | How long the shot stays on screen in the final edit, decided from the story's pacing, not from the video model's limits (RULE 13). Never put the planned length only in `description`. |
+| `genDurationSec?` **(new, V2-SB-121)** | number, 0.5-120, >= `durationSec` | Only when the video model must render longer than the shot (a minimum or fixed lengths, e.g. 6/10/15 s): the length to generate. Example: a 4 s beat with a model that renders 6 s minimum: `"durationSec": 4, "genDurationSec": 6`. The uploaded clip is then trimmed to `durationSec` (§4.4). Omitted, or equal to `durationSec`, means "generate `durationSec`". A value outside 0.5-120 or shorter than `durationSec` is ignored with a warning. |
 | `prompt` | string | Required when `render` is `"ai"`. Optional for `"html"` and `"still"` (keep it anyway for v1.0 readers). Never asks for text. |
 | `assets` | string[] | Asset ids used. Should include `clip`. |
 | `camera?`, `dialogue?` | string | Unchanged. |
@@ -304,8 +304,10 @@ RULES
 10. Transitions go on connections. Post camera moves (push-in etc.) and looks go in the shot's "effects", and the generation prompt then says "static camera".
 11. Only use preset ids listed in the PRESETS section.
 12. Preset params use the units noted in brackets in the PRESETS section; "fade-in"/"fade-out" "length" is a fraction (0.05–1) of the effect's time range, not seconds.
-13. "durationSec" should match what the video model can generate. If the model only renders fixed lengths (e.g. 5 or 8 s) and the shot should be shorter, keep "durationSec" at the length the edit needs and set "genDurationSec" to the length to generate; the user trims the clip on upload.
+13. "durationSec" is how long the shot stays on screen in the final edit (its planned edit length). Decide it from the story's pacing, NOT from what the video model can generate, and never put the planned length only in "description" or notes. If the video model can't render that length (it has a minimum or fixed lengths, e.g. 6, 10 or 15 s), keep "durationSec" at the planned length and set "genDurationSec" to the length to ask the model for; it must be greater than "durationSec" (omit it when they are equal). When the clip is uploaded the app trims it to "durationSec" and the user picks which part to keep. Example: a 4 s beat with a model that renders 6 s minimum: "durationSec": 4, "genDurationSec": 6.
 14. Every clip prompt starts with a "References:" block that numbers the images attached to the clip in the order of the shot's "references" (else its "assets"): "Image 1 (<asset name>): …", one line each, saying explicitly whether the image is the START FRAME (or END FRAME) or only a reference, and what to take from it (identity, overall look, or materials and colours only, not its framing or wide view). Then state the framing from the first frame to the last. Set "references" with roles whenever the order or use is not obvious from the asset types.
+15. A transition in "connections" overlaps the two shots, centred on the cut: it adds no time and eats half its length from the end of the "from" shot and half from the start of the "to" shot. It is clamped to half the shorter of the two shots. For example, a 0.8 s transition out of a 2.5 s shot blends the last 0.4 s of that shot with the first 0.4 s of the next, and the total length stays the same; keep transitions short on short shots so their key action isn't covered.
+16. For an "identity" reference prefer a single clean portrait or character image (one view, plain background) over a multi-view character sheet: the sheet's layout (several poses, panels, labels) can leak into the generated frames.
 ```
 
 ## 6. Decisions, open questions and future work
