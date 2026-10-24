@@ -41,18 +41,47 @@ describe("send storyboard to timeline", () => {
     expect(main(e.getState().project).placements.map((p) => [p.source.versionId, p.startTicks])).toEqual([["a1", 0], ["c1", s(5)], ["b1", s(9)]]);
   });
 
-  it("linked clips follow the picked version, keeping trims and clamping to shorter media", () => {
+  it("an untrimmed linked clip takes each version's full length and the main track ripples", () => {
     const e = setup();
     e.dispatch(cmd.sendStoryToTimeline());
-    const id = main(e.getState().project).placements[0].id;
+    const [id, next] = main(e.getState().project).placements.map((p) => p.id);
+    const at = (pid: string) => main(e.getState().project).placements.find((p) => p.id === pid)!;
+    const before = e.getState().project;
     e.dispatch(cmd.addStoryVersion({ shot: "s1" }, clip(3), { versionId: "a2" }));
-    let pl = main(e.getState().project).placements.find((p) => p.id === id)!;
-    expect([pl.source.versionId, pl.durationTicks]).toEqual(["a2", s(3)]);
+    expect([at(id).source.versionId, at(id).durationTicks]).toEqual(["a2", s(3)]);
+    expect(at(next).startTicks).toBe(s(3));
+    expect(board.linkedLengthChanges(before, e.getState().project, shotAsset(e, "s1"))).toEqual([{ placementId: id, fromTicks: s(5), toTicks: s(3) }]);
+    // Switching back restores the longer take in full and pushes the next clip again.
     e.dispatch(cmd.selectStoryVersion(shotAsset(e, "s1"), "a1"));
-    pl = main(e.getState().project).placements.find((p) => p.id === id)!;
-    expect([pl.source.versionId, pl.durationTicks]).toEqual(["a1", s(3)]);
+    expect([at(id).source.versionId, at(id).durationTicks, at(next).startTicks]).toEqual(["a1", s(5), s(5)]);
     e.undo();
-    expect(main(e.getState().project).placements.find((p) => p.id === id)!.source.versionId).toBe("a2");
+    expect([at(id).source.versionId, at(id).durationTicks, at(next).startTicks]).toEqual(["a2", s(3), s(3)]);
+  });
+
+  it("a trimmed linked clip keeps its trims, clamped to shorter media, and still ripples", () => {
+    const e = setup();
+    e.dispatch(cmd.sendStoryToTimeline());
+    const [id, next] = main(e.getState().project).placements.map((p) => p.id);
+    const at = (pid: string) => main(e.getState().project).placements.find((p) => p.id === pid)!;
+    e.dispatch(cmd.trimPlacement(id, "right", s(4), true));
+    expect([at(id).durationTicks, at(next).startTicks]).toEqual([s(4), s(4)]);
+    e.dispatch(cmd.addStoryVersion({ shot: "s1" }, clip(6), { versionId: "a2" }));
+    expect([at(id).durationTicks, at(next).startTicks]).toEqual([s(4), s(4)]);
+    e.dispatch(cmd.addStoryVersion({ shot: "s1" }, clip(3), { versionId: "a3" }));
+    expect([at(id).source.versionId, at(id).durationTicks, at(next).startTicks]).toEqual(["a3", s(3), s(3)]);
+  });
+
+  it("on an overlay track a longer version grows only up to the next clip", () => {
+    const e = setup();
+    e.dispatch(cmd.addStoryVersion({ shot: "s1" }, clip(3), { versionId: "a2" }));
+    const p0 = e.getState().project;
+    const s1 = shotAsset(e, "s1");
+    const pl = (pid: string, start: number, dur: number, versionId: string, assetId = s1) => ({ id: pid, startTicks: start, durationTicks: dur, sourceInTicks: 0, clipType: "video" as const, source: { kind: "assetVersion" as const, assetId, versionId } });
+    const comp = p0.compositions[p0.rootCompositionId];
+    const overlay = { id: "ov", kind: "video" as const, name: "Overlay", placements: [pl("o1", 0, s(3), "a2"), pl("o2", s(4), s(1), "c1", shotAsset(e, "s3"))] };
+    const withOverlay = { ...p0, compositions: { ...p0.compositions, [comp.id]: { ...comp, tracks: [overlay, ...comp.tracks] } } };
+    const out = board.selectStoryVersion(withOverlay, s1, "a1").compositions[comp.id].tracks[0].placements;
+    expect(out.map((x) => [x.id, x.startTicks, x.durationTicks])).toEqual([["o1", 0, s(4)], ["o2", s(4), s(1)]]);
   });
 
   it("skipped shots are not sent", () => {

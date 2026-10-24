@@ -45,3 +45,16 @@ describe("Sheet", () => {
     vi.unstubAllGlobals(); localStorage.removeItem("v2.mobile.previewVh");
   });
 });
+
+describe("Sheet header CSS (V2-SB-R02)", () => {
+  it("pins the grabber at top:0 above the sticky header, after the coarse-pointer override", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const css = readFileSync(resolve(__dirname, "v2.css"), "utf8");
+    const relative = css.indexOf(".v2-app .v2-grabber { position: relative; }");
+    const pinned = css.indexOf(".v2-app .v2-sheet > .v2-grabber, .v2-sheet > .v2-grabber { position: sticky; top: 0; z-index: 2; }");
+    expect(relative).toBeGreaterThan(-1);
+    expect(pinned).toBeGreaterThan(relative);
+    expect(css).toMatch(/\.v2-sheet-head \{ position: sticky; top: 24px; z-index: 1;/);
+  });
+});

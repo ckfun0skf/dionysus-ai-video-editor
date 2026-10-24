@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "project": "Dionysus",
-  "updatedAt": "2026-10-23",
+  "updatedAt": "2026-10-24",
   "sourceOfTruth": "public/doc/tasks.json on main (see docs/v2/MODULE_DESIGN.md §14)",
   "statusDefinitions": {
     "done": "Implementation exists and has evidence; release/browser validation may still be pending.",
@@ -2207,6 +2207,96 @@
           "title": "Storyboard board view: shot cards in order, connections, asset needs, version counts, may-not-match warnings, undoable create/replace",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-SB-R01",
+          "title": "Storyboard review P1-1: version swap keeps the main track contiguous — untrimmed linked clips take the new version's full length (switching back restores it), trimmed clips keep trims clamped, later main-track clips ripple; swap note shows the length change",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "V2-SB-R02",
+          "title": "Storyboard review P1-2: iOS sheet grabber pinned at top:0 above the sticky header so scrolled content never shows above the title",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "V2-SB-R03",
+          "title": "Storyboard review P2-1: blank-frame detection in last-frame extraction and video thumbnails (wait a frame after seeking, reject empty grabs with an error)",
+          "status": "todo",
+          "progress": 0
+        },
+        {
+          "id": "V2-SB-R04",
+          "title": "Storyboard review P2-2: editor media thumbnails follow the selected version (cache keyed by version)",
+          "status": "todo",
+          "progress": 0
+        },
+        {
+          "id": "V2-SB-R05",
+          "title": "Storyboard review P2-3: linked timeline clips show a link + version chip and an 'Open in storyboard' menu item",
+          "status": "todo",
+          "progress": 0
+        },
+        {
+          "id": "V2-SB-R06",
+          "title": "Storyboard review P2-4: warn when a clip's length differs from the planned shot length",
+          "status": "todo",
+          "progress": 0
+        },
+        {
+          "id": "V2-SB-R07",
+          "title": "Storyboard review P2-5: shot status line shows version, 'On timeline' and 'May not match' together",
+          "status": "todo",
+          "progress": 0
+        },
+        {
+          "id": "V2-SB-R08",
+          "title": "Storyboard review P2-6: Production sub-label shows the stale reason (Regenerate — …)",
+          "status": "todo",
+          "progress": 0
+        },
+        {
+          "id": "V2-SB-R09",
+          "title": "Storyboard review P2-10: hover rules gated behind @media (hover: hover) (no sticky hover on iOS)",
+          "status": "todo",
+          "progress": 0
+        },
+        {
+          "id": "V2-SB-R10",
+          "title": "Storyboard review P2-7: mobile Production keeps text state labels and a fuller step header",
+          "status": "todo",
+          "progress": 0
+        },
+        {
+          "id": "V2-SB-R11",
+          "title": "Storyboard review P2-8: mobile board header — labelled Send primary button, AI prompt and Replace storyboard in a '⋯' menu",
+          "status": "todo",
+          "progress": 0
+        },
+        {
+          "id": "V2-SB-R12",
+          "title": "Storyboard review P2-9: desktop board header — labelled AI prompt and destructive Replace storyboard with confirm",
+          "status": "todo",
+          "progress": 0
+        },
+        {
+          "id": "V2-SB-R13",
+          "title": "Storyboard review P2-11: Send note with a 'View' action that stays longer",
+          "status": "todo",
+          "progress": 0
+        },
+        {
+          "id": "V2-SB-R14",
+          "title": "Storyboard review P2-12: Import JSON — one-tap 'Load example', errors jump to the line, quoted values",
+          "status": "todo",
+          "progress": 0
+        },
+        {
+          "id": "V2-SB-R15",
+          "title": "Storyboard review P2-13: desktop 'In use' version label no longer covers the action button",
+          "status": "todo",
+          "progress": 0
         }
       ]
     },

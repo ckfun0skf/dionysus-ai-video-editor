@@ -166,3 +166,5 @@
   .v2-prod-nav .v2-spacer { flex: 1; }
 }
 .v2-sb-placed { color: var(--accent); }
+/* V2-SB-R01: note after a version swap changed the length of linked timeline clips. */
+.v2-sb-swapnote { margin: 8px 0 0; display: flex; gap: 6px; align-items: flex-start; font-size: 13px; color: #c4b5fd; }
