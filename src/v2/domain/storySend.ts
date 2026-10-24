@@ -5,7 +5,8 @@
  * - text layers become text clips, html/image/video layers become overlay clips filling their box;
  * - `captions: true` writes the dialogue into the shared subtitle layer for the shot's range;
  * - shot effects become effect-layer clips over the shot (or their sub-range);
- * - a connection `transition` becomes `transitionIn` on the `to` clip when the two clips are adjacent.
+ * - a connection `transition` becomes `transitionIn` on the `to` clip when the two clips are adjacent;
+ * - audio cues (V2-SB-125) go on Voiceover, Music and Sound effects layers with their volume and fades.
  * Every layer, caption and effect clip is linked to the shot clip (see storyLinks). Unknown preset ids fall back:
  * transition → cut, textStyle → plain, text animations and effects → none.
  */
@@ -13,7 +14,7 @@ import { DEFAULT_IMAGE_TICKS, newId, TEXT_SOURCE, type Asset, type AssetVersion,
 import { addTrack, groupOf, insertPlacement, isFree, mainTrack } from "./ops";
 import { SUBTITLE_STYLE } from "./layerStyle";
 import { getPreset, parsePresetRef, type PresetKind } from "../registry";
-import { DEFAULT_TEXT_SIZE, DEFAULT_TRANSITION_SEC, TEXT_LINE_HEIGHT, type StoryBox, type StoryLayer, type StoryMediaLayer, type StoryTextLayer, type StoryTextStyle } from "./storyJson";
+import { AUDIO_DEFAULTS, DEFAULT_TEXT_SIZE, DEFAULT_TRANSITION_SEC, type AudioKind, TEXT_LINE_HEIGHT, type StoryBox, type StoryLayer, type StoryMediaLayer, type StoryTextLayer, type StoryTextStyle } from "./storyJson";
 import { pinOf, sendPlan, versionSpan, type Shot, type Storyboard } from "./storyboard";
 import { clampToClip, placeOnFreeTrack } from "./storyLinks";
 import { textOf, textStyleData, textStyleFields, type TextData } from "./text";
@@ -21,7 +22,10 @@ import { previousAdjacent, setTransition } from "./transitions";
 import { secondsToTicks } from "./time";
 
 /** What one send added, for the confirmation note. */
-export interface SendResult { shots: number; layers: number; captions: number; effects: number; transitions: number; skippedLayers: number; firstClipId?: string }
+export interface SendResult { shots: number; layers: number; captions: number; effects: number; transitions: number; skippedLayers: number; audio: number; skippedAudio: number; firstClipId?: string }
+
+/** Audio layer names per cue kind (V2-SB-125): one kind per layer, so voice, music and effects mix separately. */
+export const AUDIO_TRACK_NAMES: Record<AudioKind, string> = { voiceover: "Voiceover", music: "Music", sfx: "Sound effects" };
 
 const selectedVersion = (a: Asset): AssetVersion | undefined => a.versions.find((v) => v.id === a.selectedVersionId) ?? a.versions[0];
 
@@ -150,9 +154,48 @@ function addLinked(p: Project, b: Storyboard, comp: Composition, shot: Shot, cli
   return c;
 }
 
+/**
+ * Audio cues (V2-SB-125) whose `from` shot was sent now. A cue starts `atSec` into that shot's clip and ends at the end
+ * of the `to` shot's clip, after `durationSec`, or with the audio, whichever comes first (never looped). A cue that fits
+ * inside its first shot is linked to it (it follows the shot); a cue across shots stays where it was placed.
+ */
+function addAudio(p: Project, b: Storyboard, comp: Composition, sent: { shot: Shot; clip: Placement }[], res: SendResult): Composition {
+  let c = comp;
+  const clips = new Map(sent.map((x) => [x.shot.id, x.clip]));
+  for (const cue of b.audio ?? []) {
+    const first = clips.get(cue.from);
+    if (!first) continue;
+    const slot = b.slots[cue.asset];
+    const a = slot?.assetId ? p.assets[slot.assetId] : undefined;
+    const v = a && selectedVersion(a);
+    if (!a || !v || a.kind !== "audio") { res.skippedAudio += 1; continue; }
+    const start = first.startTicks + Math.max(0, secondsToTicks(cue.atSec ?? 0));
+    const last = cue.to ? clips.get(cue.to) : undefined;
+    const media = v.media.durationTicks;
+    let end = last && last.startTicks >= first.startTicks ? last.startTicks + last.durationTicks : undefined;
+    if (cue.durationSec !== undefined) end = Math.min(end ?? Infinity, start + secondsToTicks(cue.durationSec));
+    if (end === undefined) end = media ? start + media : first.startTicks + first.durationTicks;
+    if (media) end = Math.min(end, start + media);
+    if (end <= start) { res.skippedAudio += 1; continue; }
+    const dur = end - start, d = AUDIO_DEFAULTS[cue.kind];
+    const fade = (sec: number) => Math.min(dur, Math.max(0, secondsToTicks(sec)));
+    const fadeIn = fade(cue.fadeInSec ?? d.fadeInSec), fadeOut = fade(cue.fadeOutSec ?? d.fadeOutSec);
+    const inside = end <= first.startTicks + first.durationTicks;
+    const pl: Placement = {
+      id: newId("plc"), startTicks: start, durationTicks: dur, sourceInTicks: 0, source: { kind: "assetVersion", assetId: a.id, versionId: v.id },
+      clipType: "audio", volume: cue.volume ?? d.volume, ...(fadeIn ? { fadeInTicks: fadeIn } : {}), ...(fadeOut ? { fadeOutTicks: fadeOut } : {}),
+      ...(inside ? { storyLink: { anchor: first.id } } : {}),
+    };
+    const name = AUDIO_TRACK_NAMES[cue.kind];
+    c = placeOnFreeTrack(c, pl, (t) => t.kind === "audio" && t.name === name, { name });
+    res.audio += 1;
+  }
+  return c;
+}
+
 /** Append every ready shot to the root composition with its linked items. Returns the project unchanged if none is ready. */
 export function sendStory(p: Project): { project: Project; result: SendResult } {
-  const result: SendResult = { shots: 0, layers: 0, captions: 0, effects: 0, transitions: 0, skippedLayers: 0 };
+  const result: SendResult = { shots: 0, layers: 0, captions: 0, effects: 0, transitions: 0, skippedLayers: 0, audio: 0, skippedAudio: 0 };
   const b = p.storyboard;
   const ready = sendPlan(p).filter((s) => s.state === "ready");
   if (!b || !ready.length) return { project: p, result };
@@ -188,5 +231,6 @@ export function sendStory(p: Project): { project: Project; result: SendResult } 
     result.transitions += 1;
   }
   for (const { shot, clip } of sent) comp = addLinked(p, b, comp, shot, clip, result);
+  comp = addAudio(p, b, comp, sent, result);
   return { project: { ...p, compositions: { ...p.compositions, [p.rootCompositionId]: comp } }, result };
 }

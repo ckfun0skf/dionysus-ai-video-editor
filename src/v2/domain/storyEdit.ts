@@ -189,7 +189,22 @@ export function deleteShot(p: Project, id: string): Project {
     if (s.keyframeOf === id) { const { keyframeOf: _k, ...rest } = s; return [k, rest]; } // stays as a plain frame asset
     return [k, s];
   }));
-  return renameShotAssets(p, { ...b, order: b.order.filter((x) => x !== id), shots, slots, connections: b.connections.filter((c) => c.from !== id && c.to !== id) });
+  // V2-SB-125: a cue that starts in the shot starts with the next shot it spans, else it goes; one that ends in it
+  // ends with the shot before.
+  const at = b.order.indexOf(id), prev = b.order[at - 1], nextId = b.order[at + 1];
+  const audio = b.audio?.flatMap((c): NonNullable<Storyboard["audio"]> => {
+    if (c.from === id) {
+      if (!c.to || !nextId) return [];
+      const { atSec: _a, to, ...r } = c;
+      return [{ ...r, from: nextId, ...(to !== nextId ? { to } : {}) }];
+    }
+    if (c.to !== id) return [c];
+    const { to: _t, ...r } = c;
+    return [prev && prev !== c.from ? { ...r, to: prev } : r];
+  });
+  const next: Storyboard = { ...b, order: b.order.filter((x) => x !== id), shots, slots, connections: b.connections.filter((c) => c.from !== id && c.to !== id) };
+  if (audio?.length) next.audio = audio; else delete next.audio;
+  return renameShotAssets(p, next);
 }
 
 /** Move a shot to position `index` (0-based, clamped). */

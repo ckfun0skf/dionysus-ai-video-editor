@@ -189,7 +189,11 @@ export function deleteSlot(p: Project, id: string): Project {
     if (n.refOverrides?.[id]) { const { [id]: _p, ...o } = n.refOverrides; if (Object.keys(o).length) n.refOverrides = o; else delete n.refOverrides; }
     return [k, n];
   }));
-  return { ...p, storyboard: { ...b, slots, shots } };
+  const next: Storyboard = { ...b, slots, shots };
+  // V2-SB-125: the asset's audio cues go with it.
+  const audio = b.audio?.filter((c) => c.asset !== id);
+  if (audio?.length) next.audio = audio; else delete next.audio;
+  return { ...p, storyboard: next };
 }
 
 /**

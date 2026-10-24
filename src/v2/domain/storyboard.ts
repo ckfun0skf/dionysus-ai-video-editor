@@ -7,7 +7,7 @@
  */
 import { isStill, newId, type AssetVersion, type Composition, type MediaKind, type MediaRef, type Placement, type Project } from "./model";
 import { mainTrack } from "./ops";
-import { assetRefId, keyframeId, type AssetRefRole, type ReferenceRole, type ShotRender, type StoryAssetRef, type StoryAssetType, type StoryConnection, type StoryDoc, type StoryEffect, type StoryLayer, type StoryMeta } from "./storyJson";
+import { assetRefId, keyframeId, type AssetRefRole, type ReferenceRole, type ShotRender, type StoryAssetRef, type StoryAssetType, type StoryAudio, type StoryConnection, type StoryDoc, type StoryEffect, type StoryLayer, type StoryMeta } from "./storyJson";
 import { followStoryLinks } from "./storyLinks";
 import { orderSteps } from "./storySteps";
 import { TICKS_PER_SECOND } from "./time";
@@ -116,6 +116,8 @@ export interface Storyboard {
   versions: Record<string, VersionInfo>;
   /** Production step order chosen by the user (step keys, V2-CUT-07); always applied in dependency order. */
   stepOrder?: string[];
+  /** V2-SB-125: voiceover, music and sound-effect cues placed by shot; Send to timeline puts them on audio tracks. */
+  audio?: StoryAudio[];
 }
 
 /** `{ refRoles }` from an asset's object-form references (V2-SB-123), or nothing when none has a role or note. */
@@ -160,7 +162,7 @@ export function storyboardFromDoc(doc: StoryDoc): Storyboard {
       shots[s.id].slotIds.unshift(id);
     }
   }
-  return { format: "dionysus.storyboard/1", meta: structuredClone(doc.meta), order: doc.shots.map((s) => s.id), shots, slots, connections: doc.connections.map((c) => structuredClone(c)), versions: {} };
+  return { format: "dionysus.storyboard/1", meta: structuredClone(doc.meta), order: doc.shots.map((s) => s.id), shots, slots, connections: doc.connections.map((c) => structuredClone(c)), versions: {}, ...(doc.audio?.length ? { audio: structuredClone(doc.audio) } : {}) };
 }
 
 export function setStoryboard(p: Project, board: Storyboard | undefined): Project {

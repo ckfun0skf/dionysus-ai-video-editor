@@ -2359,6 +2359,12 @@
           "progress": 100
         },
         {
+          "id": "V2-SB-125",
+          "title": "Audio placement: top-level audio[] cues { asset, kind voiceover|music|sfx, from, atSec, to, durationSec, volume, fades } on audio assets; validation with errors and warnings; board Audio section in the shot and audio-asset details; Send to timeline places cues on Voiceover, Music and Sound effects layers with volume and fades (spanning cues unlinked, single-shot cues linked); shot and asset deletes keep cues consistent; spec section 2.8, RULE 19 with worked examples, fixture voiceover, music bed and door sfx; phone link buttons in the shot detail raised to 44px",
+          "status": "done",
+          "progress": 100
+        },
+        {
           "id": "V2-SB-124",
           "title": "Keyframe then animate: shots[].keyframe { prompt, references, qa } makes a still of the opening frame that is produced before the clip and attached first as its start-frame (explicit start-frame references become detail); board Keyframe section with Add keyframe, staleness and production order follow it; spec section 2.4.2, RULE 18 with worked example, fixture s04 exercises it. Also: V2App tests unmount their React roots so CI no longer fails on console writes after teardown; phone touch targets raised to 44px (board connection rows, sheet grabber tap area)",
           "status": "done",

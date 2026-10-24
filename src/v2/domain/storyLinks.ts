@@ -64,7 +64,7 @@ export function placeOnFreeTrack(comp: Composition, pl: Placement, fits: (t: Tra
   let track = comp.tracks.find((t) => fits(t) && isFree(t, pl.startTicks, pl.durationTicks));
   let c = comp;
   if (!track) {
-    const kind = pl.clipType === "text" ? "text" : pl.clipType === "effect" ? "effect" : "video";
+    const kind = pl.clipType === "text" ? "text" : pl.clipType === "effect" ? "effect" : pl.clipType === "audio" ? "audio" : "video";
     const id = `trk_${pl.id}`;
     c = addTrack(c, kind, id);
     c = { ...c, tracks: c.tracks.map((t) => (t.id === id ? { ...t, ...newTrack, id } : t)) };

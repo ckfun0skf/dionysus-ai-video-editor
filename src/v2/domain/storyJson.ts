@@ -91,7 +91,24 @@ export interface StoryKeyframe { prompt: string; references: StoryAssetRef[]; qa
 export const keyframeId = (shotId: string) => `${shotId}.keyframe`;
 export interface StoryConnection { from: string; to: string; kind: ConnectionKind; note?: string; transition?: StoryTransition }
 export interface StoryMeta { title: string; logline?: string; synopsis?: string; aspect: string; style?: string; language?: string; textStyles?: Record<string, StoryTextStyle> }
-export interface StoryDoc { format: typeof STORYBOARD_FORMAT; meta: StoryMeta; assets: StoryAsset[]; shots: StoryShot[]; connections: StoryConnection[] }
+/** V2-SB-125: what an audio cue is for. It sets the defaults (music sits under the picture and fades). */
+export const AUDIO_KINDS = ["voiceover", "music", "sfx"] as const;
+export type AudioKind = (typeof AUDIO_KINDS)[number];
+/** Volume (0–1) and fades (seconds) a cue gets when it does not say. */
+export const AUDIO_DEFAULTS: Record<AudioKind, { volume: number; fadeInSec: number; fadeOutSec: number }> = {
+  voiceover: { volume: 1, fadeInSec: 0, fadeOutSec: 0 },
+  music: { volume: 0.35, fadeInSec: 1, fadeOutSec: 1 },
+  sfx: { volume: 1, fadeInSec: 0, fadeOutSec: 0 },
+};
+/**
+ * V2-SB-125: an audio asset placed in story time. It starts `atSec` into shot `from` and runs to the end of shot `to`
+ * (a voiceover or music bed across shots), or for `durationSec`, else for the audio's own length. Never looped.
+ */
+export interface StoryAudio {
+  id: string; asset: string; kind: AudioKind; from: string; to?: string;
+  atSec?: number; durationSec?: number; volume?: number; fadeInSec?: number; fadeOutSec?: number;
+}
+export interface StoryDoc { format: typeof STORYBOARD_FORMAT; meta: StoryMeta; assets: StoryAsset[]; shots: StoryShot[]; connections: StoryConnection[]; audio?: StoryAudio[] }
 
 /** `at`: character offset in the extracted JSON, for syntax errors that have no path. */
 export interface StoryIssue { path: string; message: string; at?: number }
@@ -421,6 +438,7 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
       const shot = str(src.shot) ?? "";
       if (!shotIds.has(shot)) err(`${path}.source.shot`, shot ? `Unknown shot "${shot}" (shots: ${[...shotIds].join(", ")}).` : 'A lastFrame source needs "shot": the id of the shot whose last frame this is.');
       if (type === "html") err(`${path}.source`, 'An html asset can\'t be a last frame; use "generate" (the user asks their AI for the .html) or "upload".');
+      if (type === "audio") err(`${path}.source`, 'An audio asset can\'t be a last frame; use "generate" (the user makes it with their AI voice or music tool) or "upload".');
       source = { type: "lastFrame", shot };
     } else err(`${path}.source`, 'Source must be "generate", "upload", or { "type": "lastFrame", "shot": "<shot id>" }.');
     const prompt = str(a.prompt) ?? "";
@@ -631,7 +649,49 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
   }));
   const depCycle = findCycle(new Map([...deps].map(([k, v]) => [k, v.filter((d) => d !== k)])));
   if (depCycle) err("shots", `Last-frame links form a loop: ${depCycle.join(" → ")}.`);
-  const usedBy = (id: string) => shots.some((s) => s.assets.includes(id) || s.keyframe?.references.some((r) => assetRefId(r) === id) || (s.render && s.render !== "ai" && s.clip === id) || s.layers?.some((l) => l.type !== "text" && l.asset === id));
+  // V2-SB-125: audio cues (voiceover, music beds, sound effects) placed by shot.
+  const audio: StoryAudio[] = [];
+  if (raw.audio !== undefined && !Array.isArray(raw.audio)) err("audio", '"audio" must be a list of cues.');
+  else (raw.audio as unknown[] | undefined)?.forEach((c, i) => {
+    const path = `audio[${i}]`;
+    if (!isObj(c)) return err(path, `Each audio cue must be an object { "asset", "kind", "from", … }.`);
+    const id = str(c.id) || `audio${i + 1}`;
+    if (audio.some((x) => x.id === id)) err(`${path}.id`, `Audio cue id "${id}" is used twice.`);
+    const asset = str(c.asset) ?? "";
+    const a = assetById.get(asset);
+    if (!a) err(`${path}.asset`, asset ? `Unknown asset "${asset}". Declare it in "assets" with "type": "audio".` : `Each audio cue needs "asset": the id of an audio asset.`);
+    else if (a.type !== "audio") err(`${path}.asset`, `Asset "${asset}" is a ${a.type}; an audio cue needs an asset with "type": "audio".`);
+    const kind = str(c.kind) as AudioKind | undefined;
+    if (!kind || !AUDIO_KINDS.includes(kind)) err(`${path}.kind`, `Kind ${JSON.stringify(c.kind ?? null)} must be one of: ${AUDIO_KINDS.join(", ")}.`);
+    const from = str(c.from) ?? "";
+    if (!shotIds.has(from)) err(`${path}.from`, from ? `Unknown shot "${from}".` : `Each audio cue needs "from": the shot it starts in.`);
+    let to = str(c.to);
+    if (c.to !== undefined && !to) { warn(`${path}.to`, `"to" must be a shot id; it is ignored.`); to = undefined; }
+    if (to && !shotIds.has(to)) err(`${path}.to`, `Unknown shot "${to}".`);
+    else if (to && shotIds.has(from) && (order.get(to) ?? 0) < (order.get(from) ?? 0)) err(`${path}.to`, `Shot "${to}" comes before "${from}"; "to" is the last shot the cue plays under.`);
+    const cue: StoryAudio = { id, asset, kind: kind ?? "sfx", from, ...(to && to !== from ? { to } : {}) };
+    const sec = (k: "atSec" | "durationSec" | "fadeInSec" | "fadeOutSec", min: number, rule: string) => {
+      if (c[k] === undefined) return;
+      const n = num(c[k]);
+      if (n === undefined || n < min) warn(`${path}.${k}`, `${k} ${JSON.stringify(c[k])} is ignored: ${rule}.`);
+      else cue[k] = n;
+    };
+    sec("atSec", 0, "use seconds from the start of the \"from\" shot, 0 or more");
+    sec("durationSec", 0.001, "use seconds greater than 0");
+    sec("fadeInSec", 0, "use seconds, 0 or more");
+    sec("fadeOutSec", 0, "use seconds, 0 or more");
+    if (c.volume !== undefined) {
+      const v = num(c.volume);
+      if (v === undefined || v < 0 || v > 1) warn(`${path}.volume`, `Volume ${JSON.stringify(c.volume)} is ignored: use 0 to 1 (default ${AUDIO_DEFAULTS[cue.kind].volume}).`);
+      else cue.volume = v;
+    }
+    const fromShot = shots.find((s) => s.id === from);
+    if (fromShot && cue.atSec !== undefined && cue.atSec >= fromShot.durationSec) warn(`${path}.atSec`, `atSec ${cue.atSec} is at or past the end of shot "${from}" (${fromShot.durationSec} s); the cue starts later than that shot.`);
+    if (cue.to && cue.durationSec !== undefined) warn(`${path}.durationSec`, `The cue has both "to" and "durationSec"; it stops at whichever comes first.`);
+    audio.push(cue);
+  });
+
+  const usedBy = (id: string) => audio.some((c) => c.asset === id) || shots.some((s) => s.assets.includes(id) || s.keyframe?.references.some((r) => assetRefId(r) === id) || (s.render && s.render !== "ai" && s.clip === id) || s.layers?.some((l) => l.type !== "text" && l.asset === id));
   assets.forEach((a, i) => { if (!usedBy(a.id) && !assets.some((b) => b.references.some((r) => assetRefId(r) === a.id))) warn(`assets[${i}]`, `Asset "${a.id}" isn't used by any shot.`); });
 
   let connections: StoryConnection[] = [];
@@ -667,7 +727,7 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
   });
 
   if (errors.length) return { ok: false, errors, warnings };
-  return { ok: true, doc: { format: STORYBOARD_FORMAT, meta, assets, shots, connections }, warnings };
+  return { ok: true, doc: { format: STORYBOARD_FORMAT, meta, assets, shots, connections, ...(audio.length ? { audio } : {}) }, warnings };
 }
 
 /**
@@ -706,7 +766,8 @@ export function storySummary(doc: StoryDoc): string {
   const layers = doc.shots.reduce((t, s) => t + (s.layers?.length ?? 0), 0);
   const effects = doc.shots.reduce((t, s) => t + (s.effects?.length ?? 0), 0);
   const transitions = doc.connections.filter((c) => c.transition).length;
-  const extra = [layers && n(layers, "layer"), effects && n(effects, "effect"), transitions && n(transitions, "transition")].filter(Boolean);
+  const cues = doc.audio?.length ?? 0;
+  const extra = [layers && n(layers, "layer"), effects && n(effects, "effect"), transitions && n(transitions, "transition"), cues && n(cues, "audio cue")].filter(Boolean);
   return `${n(doc.shots.length, "shot")} · ${Math.round(total * 10) / 10}s · ${n(doc.assets.length, "asset")}${frames ? ` (${n(frames, "last-frame link")})` : ""} · ${n(qa, "QA check")}${extra.length ? ` · ${extra.join(" · ")}` : ""}`;
 }
 
