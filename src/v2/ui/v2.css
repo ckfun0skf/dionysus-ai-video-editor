@@ -154,6 +154,9 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 .v2-tool.is-active { color: var(--accent, #4f8cff); background: rgba(79, 140, 255, .12); }
 /* Fades + keyframes (V2-063) */
 .v2-insp-row { grid-template-columns: 76px 1fr 44px 28px; }
+/* Blend mode (V2-SB-128) */
+.v2-insp-row.v2-insp-blend { grid-template-columns: 76px 1fr; }
+.v2-insp-blend select { width: 100%; min-height: 32px; background: #2a2a31; color: var(--text, #eee); border: 1px solid var(--line); border-radius: 6px; padding: 0 8px; font-size: 13px; }
 .v2-kf { width: 28px; height: 28px; border: none; background: transparent; color: var(--muted, #888); font-size: 12px; border-radius: 6px; cursor: pointer; }
 .v2-kf::after { content: ""; } .v2-kf:hover:not(:disabled) { background: rgba(255,255,255,.08); }
 .v2-kf.is-keyed { color: #c9a227; } .v2-kf.is-on { color: #ffd23f; text-shadow: 0 0 6px rgba(255,210,63,.6); }
@@ -627,4 +630,5 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 @media (pointer: coarse), (max-width: 820px) {
   .v2-app .v2-sheet > .v2-grabber, .v2-sheet > .v2-grabber { height: 44px; }
   .v2-sheet-head, .v2-sheet .v2-cuelist-head { top: 44px; }
+  .v2-insp-blend select { min-height: 44px; font-size: 16px; }
 }

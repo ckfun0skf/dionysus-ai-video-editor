@@ -3,7 +3,7 @@
  * validating each one. Pure (no import.meta, no DOM) so tests can feed it fake module maps.
  */
 import { identityFrame, PRESET_ID_RE, PRESET_KINDS, type FontDef, type ParamSpec, type PresetDescriptor, type RenderFn, type RenderHooks } from "../registry/types";
-import type { ModuleKind, PresetModule } from "./define";
+import { BLEND_OPS, type ModuleKind, type PresetModule } from "./define";
 
 export interface LoadedPresets {
   descriptors: PresetDescriptor[];
@@ -84,6 +84,8 @@ export function moduleProblems(m: PresetModule | undefined, path: string, fontId
   else if (m.kind === "textStyle") {
     if (!m.data || typeof m.data !== "object") out.push("textStyle needs data");
     else if (m.data.font !== undefined && !fontIds.has(m.data.font)) out.push(`data.font "${m.data.font}" is not a font id`);
+  } else if (m.kind === "blend") {
+    if (!(BLEND_OPS as readonly string[]).includes(m.op)) out.push(`blend op "${String(m.op)}" must be one of: ${BLEND_OPS.join(", ")}`);
   } else if (m.kind === "videoEffect") {
     if (!isFn(m.frame) && !isFn(m.draw)) out.push("videoEffect needs frame and/or draw");
     if (m.draw !== undefined && !isFn(m.draw)) out.push("draw must be a function");
@@ -122,6 +124,7 @@ export function loadPresetModules(found: Record<string, { default?: PresetModule
     let type = "none", params: ParamSpec[] = [], data: Record<string, unknown> | undefined;
     if (m.kind === "sticker") { type = "sticker"; params = [{ key: "svg", label: "SVG", type: "string", default: m.svg, description: "SVG markup of the sticker (200 × 200 viewBox)." }]; }
     else if (m.kind === "textStyle") data = { ...m.data };
+    else if (m.kind === "blend") data = { op: m.op };
     else {
       type = m.type ?? `${m.kind}/${m.id}`;
       params = m.params ?? [];

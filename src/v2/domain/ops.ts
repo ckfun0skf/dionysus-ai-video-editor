@@ -236,6 +236,16 @@ export function setSpeed(comp: Composition, placementId: string, speed: number):
   });
 }
 
+/** Blend mode of a visual clip (a `blend` preset id); undefined or "normal" clears it. */
+export function setBlend(comp: Composition, placementId: string, blend: string | undefined): Composition {
+  return mapPlacement(comp, placementId, (p) => {
+    if (p.clipType === "audio" || p.clipType === "effect") return p;
+    const out: Placement = { ...p, blend };
+    if (!blend || blend === "normal") delete out.blend;
+    return out;
+  });
+}
+
 export function setReverse(comp: Composition, placementId: string, reverse: boolean): Composition {
   return mapPlacement(comp, placementId, (p) => {
     if (isStill(p) || p.freeze) return p;

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type PointerEvent as RPE } from "react";
 import { cmd, type Engine } from "../engine";
 import { evalKeys, transformOf, ticksToSeconds, secondsToTicks, type KeyframeProp, type Placement } from "../domain";
 import type { Placed } from "../render";
+import { listPresets } from "../registry";
 import { Ic } from "./Icon";
 import { classifyPreview, pinchPatch, TAP_SLOP } from "./gestures";
 import { SNAP_PX, snapMove, snapRotation, snapScale, snapTargets, type Guides, type SnapBox } from "./snap";
@@ -63,6 +64,13 @@ export function TransformInspector({ engine, placement, time }: { engine: Engine
       {row("Scale", t.scale, 0.05, 4, 0.01, pct, (scale) => ({ scale }), "scale")}
       {row("Rotation", t.rotation, -180, 180, 1, (v) => `${Math.round(v)}°`, (rotation) => ({ rotation }), "rotation")}
       {row("Opacity", t.opacity, 0, 1, 0.01, pct, (opacity) => ({ opacity }), "opacity")}
+      <label className="v2-insp-row v2-insp-blend" key="blend" title="How this clip mixes with the layers under it">
+        <span>Blend</span>
+        <select aria-label="Blend mode" value={placement.blend ?? "normal"} onChange={(e) => engine.dispatch(cmd.setBlend(placement.id, e.target.value))}>
+          {listPresets("blend").map((d) => <option key={d.id} value={d.id} title={d.description}>{d.name}</option>)}
+          {placement.blend && !listPresets("blend").some((d) => d.id === placement.blend) && <option value={placement.blend}>{placement.blend} (unknown)</option>}
+        </select>
+      </label>
       {row("Crop left", t.crop.l, 0, 0.9, 0.005, pct, (l) => ({ crop: { l } }))}
       {row("Crop right", t.crop.r, 0, 0.9, 0.005, pct, (r) => ({ crop: { r } }))}
       {row("Crop top", t.crop.t, 0, 0.9, 0.005, pct, (v) => ({ crop: { t: v } }))}

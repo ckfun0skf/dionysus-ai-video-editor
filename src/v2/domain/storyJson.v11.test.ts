@@ -39,7 +39,7 @@ describe("storyboard v1.1: the ep01 fixture", () => {
     expect(doc.meta.textStyles).toEqual({ "ata-title": { font: "serif", size: 0.09, color: "#ffffff", align: "center", bold: false, letterSpacing: 0.25, shadow: { color: "#000000", blur: 0.3, x: 0, y: 0.03 } } });
     const s03 = doc.shots.find((s) => s.id === "s03")!;
     expect(s03).toMatchObject({ render: "still", clip: "card-still", effects: [{ preset: "ken-burns", params: {} }] });
-    expect(s03.layers).toEqual([{ id: "s03-card-text", type: "text", text: "You may also enjoy: kintsugi.", startSec: 0.5, endSec: 6, box: { x: 0.37, y: 0.42, width: 0.3, height: 0.12 }, textStyle: "plain", style: { font: "serif", size: 0.035, color: "#3a3a3a", align: "center" }, anim: { in: "fade", durationSec: 0.6 }, follow: "shot" }]);
+    expect(s03.layers).toEqual([{ id: "s03-card-text", type: "text", text: "You may also enjoy: kintsugi.", startSec: 0.5, endSec: 6, box: { x: 0.37, y: 0.42, width: 0.3, height: 0.12 }, textStyle: "plain", style: { font: "serif", size: 0.035, color: "#3a3a3a", align: "center" }, anim: { in: "fade", durationSec: 0.6 }, follow: "shot", blend: "multiply", opacity: 0.9 }]);
     const s07 = doc.shots.find((s) => s.id === "s07")!;
     expect(s07).toMatchObject({ render: "still", clip: "title-bg" });
     expect(s07.layers?.[0]).toMatchObject({ id: "s07-title", text: "ALLOTMENT", startSec: 0.5, endSec: 5.5, position: { x: 0.5, y: 0.5 }, textStyle: "ata-title", anim: { in: "fade", out: "fade", durationSec: 0.8 } });
@@ -117,10 +117,10 @@ describe("storyboard v1.1: warnings and fallbacks (never reject)", () => {
     const w = warnsOf((d) => { d.connections.push({ from: "s1", to: "s3", kind: "cut", transition: { preset: "dip" } }); });
     expect(w).toEqual(['connections[2].transition: "s1" and "s3" are not next to each other, so this transition is played as a cut (it is kept for export).']);
   });
-  it("blend and trackMotion warn and are dropped", () => {
+  it("trackMotion warns and is dropped; blend (V2-SB-128) is kept", () => {
     const w = warnsOf((d) => { d.shots[0].layers = [text({ blend: "screen", trackMotion: { target: "face" } })]; });
-    expect(w).toEqual(['shots[0].layers[0].blend: "blend" is not supported yet; it is ignored.', 'shots[0].layers[0].trackMotion: "trackMotion" is not supported yet; it is ignored.']);
-    expect(Object.keys(docOf((d) => { d.shots[0].layers = [text({ blend: "screen" })]; }).shots[0].layers![0])).not.toContain("blend");
+    expect(w).toEqual(['shots[0].layers[0].trackMotion: "trackMotion" is not supported yet; it is ignored.']);
+    expect(docOf((d) => { d.shots[0].layers = [text({ blend: "screen" })]; }).shots[0].layers![0]).toMatchObject({ blend: "screen" });
   });
   it("captions without dialogue warn", () => {
     expect(warnsOf((d) => { d.shots[0].captions = true; })).toEqual(['shots[0].captions: captions is on but shot "s1" has no "dialogue"; nothing will be captioned.']);

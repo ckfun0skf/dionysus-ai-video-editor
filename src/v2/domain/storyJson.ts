@@ -64,7 +64,13 @@ export interface StoryTextAnim { in?: string; out?: string; loop?: string; durat
  */
 export const LAYER_FOLLOW = ["frame", "shot"] as const;
 export type LayerFollow = (typeof LAYER_FOLLOW)[number];
-interface StoryLayerBase { id: string; startSec: number; endSec: number; follow?: "shot" }
+interface StoryLayerBase {
+  id: string; startSec: number; endSec: number; follow?: "shot";
+  /** V2-SB-128: a `blend` registry id (optionally `id@N`), kept as written; absent = normal. */
+  blend?: string;
+  /** V2-SB-128: 0 (invisible) to 1 (solid, the default). */
+  opacity?: number;
+}
 export interface StoryTextLayer extends StoryLayerBase {
   type: "text"; text: string; position?: StoryPoint; box?: StoryBox;
   /** Registry `textStyle` id (optionally `id@N`) or a `meta.textStyles` key, kept as written. */
@@ -246,7 +252,7 @@ const STYLE_RANGES: Record<string, [number, number, string]> = {
 /** Missing shadow / background fields are filled from these (also the text panel's defaults). */
 export const TEXT_SHADOW_DEFAULT = { color: "#000000", blur: 0.15, x: 0.03, y: 0.03 };
 export const TEXT_BACKGROUND_DEFAULT = { color: "#000000", opacity: 0.6 };
-const KIND_LABEL: Record<PresetKind, string> = { textAnimIn: "in animation", textAnimOut: "out animation", textAnimLoop: "loop animation", effect: "text effect", videoEffect: "effect", transition: "transition", sticker: "sticker", textStyle: "text style" };
+const KIND_LABEL: Record<PresetKind, string> = { textAnimIn: "in animation", textAnimOut: "out animation", textAnimLoop: "loop animation", effect: "text effect", videoEffect: "effect", transition: "transition", sticker: "sticker", textStyle: "text style", blend: "blend mode" };
 const list = (xs: string[], max = 12) => `${xs.slice(0, max).join(", ")}${xs.length > max ? ", …" : ""}`;
 const fmt = (n: number) => String(Math.round(n * 1000) / 1000);
 
@@ -520,7 +526,15 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
       const id = checkId(l.id, lp, ids, "layer");
       const type = str(l.type) as StoryLayerType;
       if (!LAYER_TYPES.includes(type)) return err(`${lp}.type`, `Layer type ${JSON.stringify(l.type ?? "")} must be one of: ${LAYER_TYPES.join(", ")}.`);
-      for (const k of ["blend", "trackMotion"]) if (l[k] !== undefined) warn(`${lp}.${k}`, `"${k}" is not supported yet; it is ignored.`);
+      if (l.trackMotion !== undefined) warn(`${lp}.trackMotion`, '"trackMotion" is not supported yet; it is ignored.');
+      const blend = presetRef("blend", l.blend, `${lp}.blend`, '"normal"');
+      let opacity: number | undefined;
+      if (l.opacity !== undefined) {
+        const o = num(l.opacity);
+        if (o === undefined || o < 0 || o > 1) warn(`${lp}.opacity`, `opacity ${JSON.stringify(l.opacity)} is ignored: use 0 (invisible) to 1 (solid, the default).`);
+        else opacity = o;
+      }
+      const look = { ...(blend ? { blend } : {}), ...(opacity !== undefined ? { opacity } : {}) };
       const range = timeRange(l, lp, dur, true);
       const startSec = range.startSec ?? 0, endSec = range.endSec ?? startSec;
       let follow: "shot" | undefined;
@@ -564,7 +578,7 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
           const room = box ? box.width : 1;
           if (w > room * 1.02) warn(`${lp}.text`, box ? `The text is about ${fmt(w)} of the frame wide but the box is ${fmt(box.width)}; it may overflow (text does not wrap). Use a smaller "style.size", a wider box or shorter text.` : `The text is about ${fmt(w)} of the frame wide and may run off screen (text does not wrap). Use a smaller "style.size" or shorter text.`);
         }
-        out.push({ id, type, text, startSec, endSec, ...(position ? { position } : {}), ...(box ? { box } : {}), ...(textStyle ? { textStyle } : {}), ...(style ? { style } : {}), ...(anim ? { anim } : {}), ...(follow ? { follow } : {}) });
+        out.push({ id, type, text, startSec, endSec, ...(position ? { position } : {}), ...(box ? { box } : {}), ...(textStyle ? { textStyle } : {}), ...(style ? { style } : {}), ...(anim ? { anim } : {}), ...(follow ? { follow } : {}), ...look });
       } else {
         const asset = str(l.asset) ?? "";
         const a = assetById.get(asset);
@@ -573,7 +587,7 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
         else if (type === "html" ? a.type !== "html" : type === "video" ? a.type !== "video" : !STILL_ASSET_TYPES.includes(a.type)) err(`${lp}.asset`, `A ${type} layer can't show asset "${asset}" (type ${a.type}); it needs ${type === "html" ? "an html" : type === "video" ? "a video" : "an image"} asset.`);
         if (l.position !== undefined) err(`${lp}.position`, `${type} layers are placed with "box" { x, y, width, height }, not "position".`);
         const box = l.box === undefined ? (l.position === undefined ? (err(`${lp}.box`, `A ${type} layer needs "box" { x, y, width, height }.`), undefined) : undefined) : boxOf(l.box, `${lp}.box`);
-        if (box) out.push({ id, type, asset, startSec, endSec, box, ...(follow ? { follow } : {}) });
+        if (box) out.push({ id, type, asset, startSec, endSec, box, ...(follow ? { follow } : {}), ...look });
       }
     });
     return out;

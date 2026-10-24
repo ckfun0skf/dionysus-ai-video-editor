@@ -7,3 +7,4 @@ export { boxDistance, hitCandidates, hitTest, inBox, isBackdrop, pickAt } from "
 export * from "./htmlLibs";
 export { effectFrameAt, applyEffectFrame } from "./effects";
 export { drawWithLook, isPlainLook } from "./transitionDraw";
+export { blendOp, withBlend } from "./blend";

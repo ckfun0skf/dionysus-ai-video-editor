@@ -52,6 +52,7 @@ export const GUIDE_KINDS: { kind: PresetKind; title: string; usedIn: string }[] 
   { kind: "textAnimOut", title: "Text animations out", usedIn: "shots[].layers[].anim.out" },
   { kind: "textAnimLoop", title: "Text loops", usedIn: "shots[].layers[].anim.loop" },
   { kind: "videoEffect", title: "Video effects", usedIn: "shots[].effects[].preset" },
+  { kind: "blend", title: "Blend modes", usedIn: `shots[].layers[].blend (default "normal"), with "opacity" 0-1 (default 1)` },
   { kind: "transition", title: "Transitions", usedIn: `connections[].transition.preset (params.durationSec, default ${DEFAULT_TRANSITION_SEC})` },
 ];
 
@@ -146,9 +147,10 @@ Layer (times in seconds from the shot start, 0 <= startSec < endSec <= durationS
            "textStyle"?: "<text style id or meta.textStyles key>",
            "style"?: TextStyle,                // overrides the text style
            "anim"?: { "in"?: "<id>", "out"?: "<id>", "loop"?: "<id>", "durationSec"?: number },
+           "blend"?: "<blend id>", "opacity"?: number (0-1, default 1),
            "follow"?: "frame" | "shot" }      // default "frame" (fixed); "shot" = moves with the shot's zoom/pan effects
   Media: { "id": string, "type": "html" | "image" | "video", "asset": "<asset id>", "startSec": number, "endSec": number,
-           "box": { "x", "y", "width", "height" }, "follow"?: "frame" | "shot" }
+           "box": { "x", "y", "width", "height" }, "blend"?: "<blend id>", "opacity"?: number (0-1), "follow"?: "frame" | "shot" }
 TextStyle: { "font"?: "<font id>", "size"?: number (fraction of frame height, 0-1), "color"?: "#rrggbb", "align"?: "left" | "center" | "right", "bold"?: boolean,
              "italic"?: boolean, "letterSpacing"?: number (em, -0.2-1), "lineHeight"?: number (0.8-3),
              "strokeWidth"?: number (outline, fraction of font size, 0-0.3), "strokeColor"?: "#rrggbb",
@@ -219,6 +221,7 @@ export const RULE_LIST: readonly { key: string; text: string }[] = [
   { key: "audio", text: `Audio: put each voiceover, music bed or sound effect in "audio" as a cue on an asset of type "audio" (source "generate" with a prompt for the user's voice/music/sound tool, e.g. the exact voiceover script and voice, or "upload"). "from" is the shot it starts in, "atSec" the offset into that shot, "to" the last shot it plays under. A music bed usually runs "from" the first shot "to" the last with "volume" 0.2-0.4 under speech; a voiceover spans the shots it describes; a sound effect sits at the moment in one shot ("atSec") with no "to". Example: { "asset": "score", "kind": "music", "from": "s1", "to": "s6", "volume": 0.3, "fadeOutSec": 2 }, { "asset": "door-slam", "kind": "sfx", "from": "s4", "atSec": 1.2 }. Do not put spoken lines that the video model renders (shot "dialogue") into a voiceover too.` },
   { key: "layer-follow", text: `Layers stay fixed to the frame by default: a shot's video effects (e.g. "ken-burns" zoom and pan) move only the picture, so titles, labels and logos stay put and readable. Give a layer "follow": "shot" only when it belongs to the scene and must move with the picture, e.g. a name tag pinned to a sign or a label on an object while the shot slowly zooms: { "id": "tag", "type": "text", "text": "ROOM 12", "startSec": 0, "endSec": 4, "position": { "x": 0.62, "y": 0.4 }, "follow": "shot" }. It only has an effect when an effect moves or zooms the shot while the layer is on screen.` },
   { key: "text-style-extras", text: `Keep text readable on any picture: give light text an outline ("strokeWidth" about 0.04-0.08 with a dark "strokeColor"), a soft "shadow", or a "background" box (captions, lower thirds). Use "letterSpacing" (in em) for airy titles, "lineHeight" for multi-line cards, "italic" for emphasis, and a text "effect" with "effectColor" only for stylised titles. Sizes and offsets are fractions of the font size; null removes a style's shadow or background. Example: "style": { "color": "#ffffff", "strokeWidth": 0.06, "strokeColor": "#000000", "shadow": { "color": "#000000", "blur": 0.3, "x": 0, "y": 0.04 } }. Put a look used on several layers into "meta.textStyles" once.` },
+  { key: "blend-overlays", text: `For overlays (light leaks, flares, dust, film grain, paper or ink textures) use an image or video layer with a "blend" mode and, if needed, an "opacity" below 1: "screen" or "add" for elements on black (the black disappears), "multiply" for elements on white (the white disappears), "overlay" or "soft-light" for textures on mid grey. Example: { "id": "leak", "type": "video", "asset": "light-leak", "startSec": 0, "endSec": 3, "box": { "x": 0, "y": 0, "width": 1, "height": 1 }, "blend": "screen", "opacity": 0.7 }. Ask for the overlay asset full-frame on a plain black, white or grey background. Leave "blend" out ("normal") for titles, logos and pictures that should simply cover the shot.` },
 ];
 export const RULES: readonly string[] = RULE_LIST.map((r) => r.text);
 /** 1-based public number of a rule, by key. */

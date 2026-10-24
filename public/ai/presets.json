@@ -837,6 +837,81 @@
         }
       ]
     },
+    "blend": {
+      "usedIn": "shots[].layers[].blend (default \"normal\"), with \"opacity\" 0-1 (default 1)",
+      "categories": [
+        "Basic",
+        "Lighten",
+        "Darken",
+        "Contrast"
+      ],
+      "presets": [
+        {
+          "id": "normal",
+          "version": 1,
+          "name": "Normal",
+          "category": "Basic",
+          "description": "Covers the layers under it (default).",
+          "params": []
+        },
+        {
+          "id": "screen",
+          "version": 1,
+          "name": "Screen",
+          "category": "Lighten",
+          "description": "Black disappears and light areas brighten what is under it. Use for light leaks, flares, sparks, dust or glow footage shot on black.",
+          "params": []
+        },
+        {
+          "id": "add",
+          "version": 1,
+          "name": "Add",
+          "category": "Lighten",
+          "description": "Adds its brightness to what is under it (linear dodge); black disappears, bright areas burn to white. Stronger than screen: use for fire, sparks and lens flares.",
+          "params": []
+        },
+        {
+          "id": "lighten",
+          "version": 1,
+          "name": "Lighten",
+          "category": "Lighten",
+          "description": "Keeps whichever pixel is lighter, the clip or what is under it. Use to drop a dark background off light graphics.",
+          "params": []
+        },
+        {
+          "id": "multiply",
+          "version": 1,
+          "name": "Multiply",
+          "category": "Darken",
+          "description": "White disappears and dark areas darken what is under it. Use for paper, ink, scribbles, shadows or vignettes on white.",
+          "params": []
+        },
+        {
+          "id": "darken",
+          "version": 1,
+          "name": "Darken",
+          "category": "Darken",
+          "description": "Keeps whichever pixel is darker, the clip or what is under it. Use to drop a white background off dark graphics.",
+          "params": []
+        },
+        {
+          "id": "overlay",
+          "version": 1,
+          "name": "Overlay",
+          "category": "Contrast",
+          "description": "Adds contrast: mid grey disappears, lighter areas brighten and darker areas darken what is under it. Use for film grain, textures and colour washes on grey.",
+          "params": []
+        },
+        {
+          "id": "soft-light",
+          "version": 1,
+          "name": "Soft light",
+          "category": "Contrast",
+          "description": "A gentler overlay: mid grey disappears and the picture under it is lightly brightened or darkened. Use for subtle grain, haze or colour tints.",
+          "params": []
+        }
+      ]
+    },
     "transition": {
       "usedIn": "connections[].transition.preset (params.durationSec, default 0.5)",
       "categories": [

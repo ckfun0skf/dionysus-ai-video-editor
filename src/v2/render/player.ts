@@ -16,6 +16,7 @@ import { correctDrift, createClock, type Clock } from "./clock";
 import { HtmlClipHost, isValidFrame, type FrameIssue } from "./htmlClip";
 import type { ExportVideoFrames } from "./export/videoFrames";
 import { drawWithLook } from "./transitionDraw";
+import { withBlend } from "./blend";
 
 type MediaEl = HTMLVideoElement | HTMLAudioElement | HTMLImageElement;
 /** Frame problems found while rendering offline: HTML clip timeouts/invalid frames, video frames with no picture. */
@@ -204,7 +205,7 @@ export class Player {
       const placement = effectivePlacement(track, raw);
       if (!fxDone && track.id !== mainId && track.kind !== "audio") applyFx();
       if (placement.clipType === "text") {
-        if (ctx && canvas && !track.hidden) this.boxes.set(placement.id, drawTextClip(ctx, placement, canvas.width, canvas.height, this.time, mix ?? 1));
+        if (ctx && canvas && !track.hidden) withBlend(ctx, placement.blend, () => this.boxes.set(placement.id, drawTextClip(ctx, placement, canvas.width, canvas.height, this.time, mix ?? 1)));
         continue;
       }
       const version = versionOf(this.project, placement.source);
@@ -218,10 +219,10 @@ export class Player {
           const r = placeRect(placement, f.width, f.height, canvas.width, canvas.height, this.time);
           this.boxes.set(placement.id, r);
           try { // a detached/closed bitmap must not throw out of draw() and stall preview or export
-            drawWithLook(ctx, canvas.width, canvas.height, tfx, (g) => {
+            withBlend(ctx, placement.blend, () => drawWithLook(ctx, canvas.width, canvas.height, tfx, (g) => {
               g.save();
               try { g.globalAlpha = r.alpha * (mix ?? 1); g.translate(r.cx, r.cy); g.rotate(r.rot); g.drawImage(f, r.sx, r.sy, r.sw, r.sh, -r.w / 2, -r.h / 2, r.w, r.h); } finally { g.restore(); }
-            });
+            }));
           } catch { host.issue = "invalid"; }
         }
         continue;
@@ -232,11 +233,11 @@ export class Player {
         if (ctx && canvas) {
           const r = placeRect(placement, f.width, f.height, canvas.width, canvas.height, this.time);
           this.boxes.set(placement.id, r);
-          drawWithLook(ctx, canvas.width, canvas.height, tfx, (g) => {
+          withBlend(ctx, placement.blend, () => drawWithLook(ctx, canvas.width, canvas.height, tfx, (g) => {
             g.save(); g.globalAlpha = r.alpha * (mix ?? 1); g.translate(r.cx, r.cy); g.rotate(r.rot);
             g.drawImage(f.image, r.sx, r.sy, r.sw, r.sh, -r.w / 2, -r.h / 2, r.w, r.h);
             g.restore();
-          });
+          }));
         }
         continue;
       }
@@ -281,11 +282,11 @@ export class Player {
         if (w && h && (!(el instanceof HTMLVideoElement) || el.readyState >= 2)) {
           const r = placeRect(placement, w, h, canvas.width, canvas.height, this.time);
           this.boxes.set(placement.id, r);
-          drawWithLook(ctx, canvas.width, canvas.height, tfx, (g) => {
+          withBlend(ctx, placement.blend, () => drawWithLook(ctx, canvas.width, canvas.height, tfx, (g) => {
             g.save(); g.globalAlpha = r.alpha * (mix ?? 1); g.translate(r.cx, r.cy); g.rotate(r.rot);
             g.drawImage(el as CanvasImageSource, r.sx, r.sy, r.sw, r.sh, -r.w / 2, -r.h / 2, r.w, r.h);
             g.restore();
-          });
+          }));
         }
       }
     }
