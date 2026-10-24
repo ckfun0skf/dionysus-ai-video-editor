@@ -53,6 +53,14 @@ export interface TransitionModule extends ModuleBase { kind: "transition"; frame
 export interface StickerModule extends Omit<ModuleBase, "params" | "type"> { kind: "sticker"; svg: string }
 /** Text style: one-tap text clip fields (font id, colour, stroke, shadow, effect, animations…); no render function. */
 export interface TextStyleModule extends Omit<ModuleBase, "params" | "type"> { kind: "textStyle"; data: TextStyleData }
+/**
+ * Blend mode (V2-SB-128): how a clip mixes with what is under it. `op` is a canvas composite operation that renders
+ * the same in preview and export on every supported browser (see BLEND_OPS); no render function.
+ */
+export interface BlendModule extends Omit<ModuleBase, "params" | "type"> { kind: "blend"; op: BlendOp }
+/** Composite operations a blend preset may use (all supported by Chrome, Safari/iOS and Firefox canvas). */
+export const BLEND_OPS = ["source-over", "screen", "lighter", "lighten", "multiply", "darken", "overlay", "soft-light", "hard-light", "difference", "color-dodge", "color-burn"] as const;
+export type BlendOp = (typeof BLEND_OPS)[number];
 /** Curated font (system stacks only, so preview and export match offline). The id must equal the file name. */
 export interface FontModule extends FontDef { kind: "font"; order?: number }
 
@@ -65,7 +73,7 @@ export interface TextStyleData {
   effect?: string; effectColor?: string; animIn?: string; animOut?: string; loop?: string;
 }
 
-export type PresetModule = TextAnimModule | TextEffectModule | VideoEffectModule | TransitionModule | StickerModule | TextStyleModule | FontModule;
+export type PresetModule = TextAnimModule | TextEffectModule | VideoEffectModule | TransitionModule | StickerModule | TextStyleModule | BlendModule | FontModule;
 export type ModuleKind = PresetKind | "font";
 
 /** Generic form: `export default definePreset({ kind: "videoEffect", id: "glow", … })`. */
@@ -83,4 +91,5 @@ export const defineVideoEffect = def<VideoEffectModule>("videoEffect");
 export const defineTransition = def<TransitionModule>("transition");
 export const defineSticker = def<StickerModule>("sticker");
 export const defineTextStyle = def<TextStyleModule>("textStyle");
+export const defineBlend = def<BlendModule>("blend");
 export const defineFont = def<FontModule>("font");

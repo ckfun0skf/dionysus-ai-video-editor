@@ -37,10 +37,17 @@ describe("AI planner guide (V2-SB-114)", () => {
     expect(md).toContain("length 0.05–1, default 0.5 (fraction of the effect's time range, not seconds");
   });
 
-  it("the full prompt inlines the guide with RULES 1-21; the short prompt links to it", () => {
+  it("the full prompt inlines the guide with RULES 1-22; the short prompt links to it", () => {
     const full = storyboardSystemPrompt();
     for (const s of ["FORMAT (", "PRESETS", "RULES", "EXAMPLE", `14. ${RULES[13]}`, "not seconds", "START FRAME", "\"references\"?", "\"genDurationSec\"?", "- crossfade:", "- ken-burns:"]) expect(full).toContain(s);
-    expect(RULES).toHaveLength(21);
+    expect(RULES).toHaveLength(22);
+    // V2-SB-128: blend modes: the format lines, the blend catalogue and a rule with an example that imports cleanly.
+    expect(full).toContain('"blend"?: "<blend id>", "opacity"?: number (0-1, default 1)');
+    expect(full).toContain('Blend modes — shots[].layers[].blend');
+    expect(full).toContain("- screen:");
+    expect(full).toContain(`22. ${RULES[21]}`);
+    const leak = JSON.parse(RULES[ruleNumber("blend-overlays") - 1].match(/(\{ "id": "leak".*?"opacity": 0\.7 \})/)![1]);
+    expect(leak).toMatchObject({ type: "video", blend: "screen", opacity: 0.7 });
     // V2-SB-125: audio cues: the format block, a rule and a worked example.
     expect(full).toContain('"audio"?: [ {');
     expect(full).toContain('"kind": "voiceover" | "music" | "sfx"');
@@ -139,9 +146,9 @@ describe("generic storyboard guide (V2-SB-GUIDE-GENERIC)", () => {
 
   it("numbers the rules stably: append-only keys, and every RULE n the spec cites exists", () => {
     // Rule numbers are public (the spec, users, other AIs). Append new keys at the end; never reorder or delete.
-    expect(RULE_LIST.slice(0, 21).map((r) => r.key)).toEqual([
+    expect(RULE_LIST.slice(0, 22).map((r) => r.key)).toEqual([
       "reusable-assets", "standalone-prompts", "last-frame-continuity", "uploads", "qa-checks", "ids", "valid-json", "text-in-layers", "html-only-for-graphics",
-      "transitions-and-effects", "known-presets", "param-units", "duration", "references-block", "transition-overlap", "identity-portrait", "asset-references", "keyframe", "audio", "layer-follow", "text-style-extras",
+      "transitions-and-effects", "known-presets", "param-units", "duration", "references-block", "transition-overlap", "identity-portrait", "asset-references", "keyframe", "audio", "layer-follow", "text-style-extras", "blend-overlays",
     ]);
     expect(new Set(RULE_LIST.map((r) => r.key)).size).toBe(RULE_LIST.length);
     RULE_LIST.forEach((r, i) => expect(section("RULES")).toContain(`${i + 1}. ${r.text}`));
@@ -151,6 +158,7 @@ describe("generic storyboard guide (V2-SB-GUIDE-GENERIC)", () => {
     expect(ruleNumber("audio")).toBe(19);
     expect(ruleNumber("layer-follow")).toBe(20);
     expect(ruleNumber("text-style-extras")).toBe(21);
+    expect(ruleNumber("blend-overlays")).toBe(22);
     expect(RULES[ruleNumber("duration") - 1]).toMatch(/^"durationSec" is how long/);
     expect(RULES[ruleNumber("references-block") - 1]).toMatch(/"References:" block/);
     const cited = [...formatDoc.matchAll(/RULES? (\d+)(?:[-–](\d+))?/g)].flatMap((m) => [Number(m[1]), ...(m[2] ? [Number(m[2])] : [])]);

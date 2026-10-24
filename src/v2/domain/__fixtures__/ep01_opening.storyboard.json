@@ -272,7 +272,9 @@
             "in": "fade",
             "durationSec": 0.6
           },
-          "follow": "shot"
+          "follow": "shot",
+          "blend": "multiply",
+          "opacity": 0.9
         }
       ],
       "effects": [

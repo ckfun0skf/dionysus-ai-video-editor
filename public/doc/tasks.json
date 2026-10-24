@@ -2359,6 +2359,12 @@
           "progress": 100
         },
         {
+          "id": "V2-SB-128",
+          "title": "Blend modes and overlays: new blend preset kind (normal, screen, add, lighten, multiply, darken, overlay, soft-light; one file each, op validated by the loader); clips get an optional blend applied as the canvas composite operation in preview and export; inspector Blend select next to Opacity (44px on phones); storyboard layers accept blend and opacity (0-1) with warnings for unknown ids and bad values, sent to the clip; generated guide lists blend modes; spec section 2.5, RULE 22 with overlay example, fixture s03 card text multiplies onto the card",
+          "status": "done",
+          "progress": 100
+        },
+        {
           "id": "V2-SB-127",
           "title": "Text style extras: storyboard text styles (layer style and meta.textStyles) accept the same fields as the editor: italic, letterSpacing, lineHeight, strokeWidth/strokeColor outline, shadow and background (or null to clear the style's), text effect (glow, neon, hollow, echo) and effectColor; validated with warnings, defaults filled, sent to text clips; new textStyle presets cinematic and soft-shadow (one file each); text effects listed in the generated guide; spec section 2.5, RULE 21 with worked example, fixture ata-title uses letter spacing and a soft shadow",
           "status": "done",

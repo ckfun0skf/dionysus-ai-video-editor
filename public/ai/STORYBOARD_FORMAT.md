@@ -165,6 +165,7 @@ Layers are drawn in list order: later layers sit on top. There is no `zIndex`. `
 | `style?` | `{font?, size?, color?, align?, bold?, …extras}` | `font` is a curated font id (§3.2). `size` is a fraction of frame height. `color` is a CSS hex value. `align` is `left`, `center` or `right`. `bold` is a boolean; a numeric weight of 600 or more is accepted and mapped to bold. Extras (V2-SB-127): see "Text style extras" below. |
 | `anim?` | `{in?, out?, loop?, durationSec?}` | Ids of the `textAnimIn`, `textAnimOut` and `textAnimLoop` kinds. `durationSec` applies to in and out. |
 | `follow?` | `"frame"` \| `"shot"` | V2-SB-126. Default `"frame"`: the layer stays fixed to the frame. `"shot"`: it moves with the shot's zoom and pan (see "Fixed or following layers" below). |
+| `blend?`, `opacity?` | blend id, number 0 to 1 | V2-SB-128. How the layer mixes with what is under it (default `normal`), and its opacity (default 1). See "Blend modes and overlays" below. |
 
 Style resolution: the `textStyle` preset is applied first, then the inline `style` overrides it.
 
@@ -187,15 +188,31 @@ Example: `"style": { "color": "#ffffff", "strokeWidth": 0.06, "strokeColor": "#0
 - With `box`, the text is centred in the box. Its size is `style.size` when given; otherwise it is fitted to the box height (`height / (lines × 1.2)`). The box width does not shrink the text.
 - The importer estimates the rendered width from the font's average character width and warns on `<layer>.text` when the text is likely wider than the box (or the frame, for `position`). Use `position`, shorter text or a smaller `size` to fix it.
 
-**HTML layer:** `{id, type:"html", asset:<html asset id>, startSec, endSec, box, follow?}`
+**HTML layer:** `{id, type:"html", asset:<html asset id>, startSec, endSec, box, follow?, blend?, opacity?}`
 
-**Image / video layer:** `{id, type:"image"|"video", asset:<asset id>, startSec, endSec, box, follow?}`. These land in the overlay group above the shot.
+**Image / video layer:** `{id, type:"image"|"video", asset:<asset id>, startSec, endSec, box, follow?, blend?, opacity?}`. These land in the overlay group above the shot.
 
 **Fixed or following layers (V2-SB-126).** Video effects (`shots[].effects`, e.g. `ken-burns`) move, zoom and colour only the shot's own picture; every layer is drawn on top of the result, so by default text and overlays stay **fixed to the frame**, whatever the effect order. A layer with `follow: "shot"` instead moves with the picture: on Send to timeline the zoom (`scale`) and pan (`dx`, `dy`) of the shot's effects over the layer's time range are baked into the placement's x, y and scale keyframes (linear keys sampled every 0.25 s and at effect boundaries; a point at offset (x, y) from the frame centre goes to (dx + scale·x, dy + scale·y) and its size is multiplied by scale). Look-only effects (colour, blur, vignette) are not followed. The keyframes are ordinary keyframes: the user can edit or clear them in the inspector, and they do not update if the effect is changed later.
 - `"frame"` is the default and is not stored. Any other value warns and is ignored.
 - `follow: "shot"` on a layer during which no effect moves or zooms the shot warns ("stays put").
 
-**Not in v1:** `blend` and `trackMotion`. If either is present, the importer warns and ignores it; it does not reject the file.
+**Blend modes and overlays (V2-SB-128).** Any layer may set `blend`, a registry `blend` id (`id@N` is accepted; the version is dropped), and `opacity`, 0 (invisible) to 1 (solid, the default). The layer is drawn with the matching canvas composite operation over everything under it (the shot and earlier layers), the same way in preview and export. On Send to timeline, `blend` becomes the clip's blend mode and `opacity` its transform opacity; both can be changed in the inspector (Adjust / Transform → Blend, Opacity).
+
+| Id | Operation | Use |
+|---|---|---|
+| `normal` | source-over | Covers what is under it (default; not stored). |
+| `screen` | screen | Black disappears, light areas brighten: light leaks, flares, dust, glow shot on black. |
+| `add` | lighter | Linear dodge, stronger than `screen`: fire, sparks, lens flares. |
+| `lighten` | lighten | Keeps the lighter pixel: light graphics on a dark background. |
+| `multiply` | multiply | White disappears, dark areas darken: paper, ink, scribbles, shadows on white. |
+| `darken` | darken | Keeps the darker pixel: dark graphics on a white background. |
+| `overlay` | overlay | Mid grey disappears, contrast goes up: film grain and textures on grey. |
+| `soft-light` | soft-light | A gentler overlay: subtle grain, haze, tints. |
+
+- An unknown `blend` id warns and draws normally; the id is kept for re-export. `opacity` outside 0–1 warns and is ignored.
+- Example overlay: `{ "id": "leak", "type": "video", "asset": "light-leak", "startSec": 0, "endSec": 3, "box": { "x": 0, "y": 0, "width": 1, "height": 1 }, "blend": "screen", "opacity": 0.7 }`.
+
+**Not in v1:** `trackMotion`. If present, the importer warns and ignores it; it does not reject the file.
 
 ### 2.6 `connections[]`
 
@@ -296,6 +313,7 @@ This is a snapshot only. **The live list always comes from the registry**, and t
 | transition | `crossfade`, `dip` (dip to black) |
 | textStyle | `plain`, `caption`, `outline`, `neon`, `pop`, `typewriter`, `glow`, `echo`, `soft-shadow`, `cinematic` |
 | effect (text styling) | `glow`, `neon`, `hollow`, `echo`; used in `style.effect` (V2-SB-127) |
+| blend | `normal`, `screen`, `add`, `lighten`, `multiply`, `darken`, `overlay`, `soft-light`; used in `layers[].blend` (V2-SB-128) |
 | fonts (curated ids, not presets) | `sans`, `serif`, `mono`, `impact`, `rounded`, `hand`, `script`, `condensed`. No web fonts. |
 
 Planned as future registry entries, with no schema change needed: `grain`, `colour-grade`, `dip-to-white`, and wipe transitions.
@@ -320,7 +338,8 @@ Planned as future registry entries, with no schema change needed: `grain`, `colo
 | `position` outside 0-1, or a `box` reaching outside the frame | Warn. |
 | `anim` in + out longer than the layer | Warn. |
 | `transition` between shots that are not adjacent on the main track | Warn and use a cut. Keep the transition on export. |
-| `blend` or `trackMotion` on a layer | Warn and ignore. |
+| `trackMotion` on a layer | Warn and ignore. |
+| Unknown `blend` id, or `opacity` outside 0–1 (V2-SB-128) | Warn; draw normally / ignore the opacity. The blend id is kept for export. |
 | `follow` other than `"frame"` or `"shot"`, or `"shot"` with nothing moving the shot during the layer | Warn and ignore (§2.5). |
 | `captions: true` without `dialogue` | Warn and do nothing. Non-boolean `captions` also warns. |
 | `clip` on a `render: "ai"` shot | Warn and ignore. |
@@ -445,12 +464,13 @@ RULES
 19. Audio: put each voiceover, music bed or sound effect in "audio" as a cue on an asset of type "audio" (source "generate" with a prompt for the user's voice/music/sound tool, e.g. the exact voiceover script and voice, or "upload"). "from" is the shot it starts in, "atSec" the offset into that shot, "to" the last shot it plays under. A music bed usually runs "from" the first shot "to" the last with "volume" 0.2-0.4 under speech; a voiceover spans the shots it describes; a sound effect sits at the moment in one shot ("atSec") with no "to". Example: { "asset": "score", "kind": "music", "from": "s1", "to": "s6", "volume": 0.3, "fadeOutSec": 2 }, { "asset": "door-slam", "kind": "sfx", "from": "s4", "atSec": 1.2 }. Do not put spoken lines that the video model renders (shot "dialogue") into a voiceover too.
 20. Layers stay fixed to the frame by default: a shot's video effects (e.g. "ken-burns" zoom and pan) move only the picture, so titles, labels and logos stay put and readable. Give a layer "follow": "shot" only when it belongs to the scene and must move with the picture, e.g. a name tag pinned to a sign or a label on an object while the shot slowly zooms: { "id": "tag", "type": "text", "text": "ROOM 12", "startSec": 0, "endSec": 4, "position": { "x": 0.62, "y": 0.4 }, "follow": "shot" }. It only has an effect when an effect moves or zooms the shot while the layer is on screen.
 21. Keep text readable on any picture: give light text an outline ("strokeWidth" about 0.04-0.08 with a dark "strokeColor"), a soft "shadow", or a "background" box (captions, lower thirds). Use "letterSpacing" (in em) for airy titles, "lineHeight" for multi-line cards, "italic" for emphasis, and a text "effect" with "effectColor" only for stylised titles. Sizes and offsets are fractions of the font size; null removes a style's shadow or background. Example: "style": { "color": "#ffffff", "strokeWidth": 0.06, "strokeColor": "#000000", "shadow": { "color": "#000000", "blur": 0.3, "x": 0, "y": 0.04 } }. Put a look used on several layers into "meta.textStyles" once.
+22. For overlays (light leaks, flares, dust, film grain, paper or ink textures) use an image or video layer with a "blend" mode and, if needed, an "opacity" below 1: "screen" or "add" for elements on black (the black disappears), "multiply" for elements on white (the white disappears), "overlay" or "soft-light" for textures on mid grey. Example: { "id": "leak", "type": "video", "asset": "light-leak", "startSec": 0, "endSec": 3, "box": { "x": 0, "y": 0, "width": 1, "height": 1 }, "blend": "screen", "opacity": 0.7 }. Ask for the overlay asset full-frame on a plain black, white or grey background. Leave "blend" out ("normal") for titles, logos and pictures that should simply cover the shot.
 ```
 
 ## 6. Decisions, open questions and future work
 
 - **Template HTML:** asset `source: {type:"template", template, params}` for registered built-in templates. This needs a template registry and a ParamSpec for templates. Not in v1.
-- **`blend`** (layer blend modes) and **`trackMotion`** (layers that follow tracked motion inside the clip, e.g. a moving face): semantics are still to be defined. Not in v1. Following the shot's own zoom and pan effects is `follow: "shot"` (§2.5).
+- **`trackMotion`** (layers that follow tracked motion inside the clip, e.g. a moving face): semantics are still to be defined. Not in v1. Following the shot's own zoom and pan effects is `follow: "shot"` (§2.5). Layer blend modes shipped in V2-SB-128 (`blend`, `opacity`; §2.5).
 - **Resolved:** `id@N` resolves to the current version with a warning; old render functions are not kept (§3.1).
 - **Resolved:** there is no `meta.minImporter`. A v1.0 build reports the unknown asset type with its path, which is enough.
 - **Promotion:** the UX and id rules for promoting a `meta.textStyles` entry into the registry.
@@ -459,7 +479,7 @@ RULES
 ## 7. Worked example
 
 `src/v2/domain/__fixtures__/ep01_opening.storyboard.json` (12 shots) imports with no warnings and shows the following:
-- **s03** is `render: "still"` with `clip: "card-still"`. It has a framed text layer (`box`, `textStyle: "plain"` plus inline serif style, fade-in) and a `ken-burns` effect.
+- **s03** is `render: "still"` with `clip: "card-still"`. It has a framed text layer (`box`, `textStyle: "plain"` plus inline serif style, fade-in, `follow: "shot"`, and V2-SB-128 `blend: "multiply"` with `opacity: 0.9`, so the ink takes on the card's paper texture) and a `ken-burns` effect.
 - **s07** is `render: "still"` with `clip: "title-bg"`. It has a centred `ALLOTMENT` text layer that uses `meta.textStyles["ata-title"]` (serif, with V2-SB-127 `letterSpacing` 0.25 and a soft `shadow`).
 - **Connections:** s06→s07 uses `dip` (0.5 s) and s07→s08 uses `crossfade` (0.8 s).
 - **Asset `card-still`** (V2-SB-123) is made from `[{ "asset": "flat", "role": "detail", "note": "…drawers only…" }, "style"]`, and its prompt starts with the matching two-image `References:` block.

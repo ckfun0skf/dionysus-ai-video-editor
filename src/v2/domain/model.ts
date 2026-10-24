@@ -71,6 +71,11 @@ export interface Placement {
   transitionIn?: { kind: string; durationTicks: number };
   /** Text clips (`clipType: "text"`): content and style. Their `source` is TEXT_SOURCE (no media). */
   text?: TextData;
+  /**
+   * Blend mode (V2-SB-128): a `blend` registry preset id (screen, multiply, overlay…) for how this visual clip mixes
+   * with the layers under it. Absent = normal.
+   */
+  blend?: string;
   /** Effect clips (`clipType: "effect"`): a `videoEffect` registry preset id and its params. Source is TEXT_SOURCE. */
   effect?: { preset: string; params?: Record<string, number | string> };
   /**
