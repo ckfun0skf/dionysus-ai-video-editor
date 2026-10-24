@@ -9,6 +9,8 @@ import * as edit from "../domain/edit";
 import * as transitions from "../domain/transitions";
 import type { Subtitle } from "../domain/model";
 import { TEXT_SOURCE } from "../domain/model";
+import * as board from "../domain/storyboard";
+import type { StoryDoc } from "../domain/storyJson";
 import { DEFAULT_TEXT, DEFAULT_TEXT_TICKS, textOf, type TextData } from "../domain/text";
 
 /**
@@ -302,3 +304,10 @@ export const deleteCue = (id: string): Command => ({ label: "Delete subtitle", a
 export const splitCue = (id: string, pos: number, newId: string): Command => ({ label: "Split subtitle", apply: (p) => withRoot(p, (c) => cueOps.splitCue(c, id, pos, newId)) });
 export const mergeCueNext = (id: string): Command => ({ label: "Merge subtitles", apply: (p) => withRoot(p, (c) => cueOps.mergeNext(c, id)) });
 export const replaceInLayer = (trackId: string, find: string, repl: string, matchCase = false): Command => ({ label: "Replace in subtitles", apply: (p) => withRoot(p, (c) => cueOps.replaceAll(c, trackId, find, repl, matchCase)) });
+
+/** Storyboard (V2-CUT-01): wrappers so storyboard edits are undoable like timeline edits. */
+export const createStoryboard = (doc: StoryDoc): Command => ({ label: "Create storyboard", apply: (p) => board.setStoryboard(p, board.storyboardFromDoc(doc)) });
+export const removeStoryboard = (): Command => ({ label: "Remove storyboard", apply: (p) => board.setStoryboard(p, undefined) });
+export const addStoryVersion = (...args: Parameters<typeof board.addStoryVersion> extends [unknown, ...infer R] ? R : never): Command => ({ label: "Upload version", apply: (p) => board.addStoryVersion(p, ...args) });
+export const selectStoryVersion = (assetId: string, versionId: string): Command => ({ label: "Choose version", apply: (p) => board.selectStoryVersion(p, assetId, versionId) });
+export const setQaResult = (versionId: string, checkId: string, result: board.QaResult | undefined): Command => ({ label: "QA check", apply: (p) => board.setQaResult(p, versionId, checkId, result) });

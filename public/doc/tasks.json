@@ -2061,8 +2061,8 @@
         {
           "id": "V2-CUT-01",
           "title": "Storyboard domain: shots, order/connections, per-shot reference assets, asset/clip prompts, QA checks, frame dependencies (asset = last frame of clip X)",
-          "status": "todo",
-          "progress": 0
+          "status": "done",
+          "progress": 100
         },
         {
           "id": "V2-CUT-02",
@@ -2109,8 +2109,8 @@
         {
           "id": "V2-CUT-09",
           "title": "Version-change warnings: \"may not match\" on downstream assets/clips, propagated transitively",
-          "status": "todo",
-          "progress": 0
+          "status": "done",
+          "progress": 100
         },
         {
           "id": "V2-CUT-10",
@@ -2225,8 +2225,8 @@
         {
           "id": "V2-042",
           "title": "Dependency graph: last-frame derivation + 'may not match' warnings",
-          "status": "planned",
-          "progress": 0
+          "status": "done",
+          "progress": 100
         },
         {
           "id": "V2-043",

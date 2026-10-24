@@ -11,3 +11,5 @@ export * as cues from "./subtitleLayer";
 export * as story from "./storyJson";
 export type { StoryDoc, StoryAsset, StoryShot, StoryConnection, StoryIssue, StoryParseResult } from "./storyJson";
 export { storyboardSystemPrompt, EXAMPLE_STORYBOARD } from "./storyPrompt";
+export * as board from "./storyboard";
+export type { Storyboard, AssetSlot, Shot, VersionInfo, QaCheck, QaResult, Staleness, StoryStatus } from "./storyboard";

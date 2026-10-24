@@ -2,7 +2,10 @@
 import { SCHEMA, validateComposition, type Project } from "../domain";
 
 /** Registered upgrades keyed by the schema they upgrade FROM. Add an entry when SCHEMA changes. */
-export const MIGRATIONS: Record<string, (raw: Record<string, unknown>) => Record<string, unknown>> = {};
+export const MIGRATIONS: Record<string, (raw: Record<string, unknown>) => Record<string, unknown>> = {
+  /** 3.1 adds the optional `storyboard`; nothing else changes. */
+  "dionysus/3.0": (r) => ({ ...r, schema: "dionysus/3.1" }),
+};
 
 export class SchemaError extends Error {}
 

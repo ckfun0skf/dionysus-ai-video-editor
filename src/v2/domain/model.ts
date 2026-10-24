@@ -1,6 +1,8 @@
 /** Schema 3.0 domain model (MVP subset). Pure data; see docs/v2/MODULE_DESIGN.md §5. */
 import type { TextData } from "./text";
-export const SCHEMA = "dionysus/3.0" as const;
+import type { Storyboard } from "./storyboard";
+/** 3.1 (V2-CUT-01): optional `storyboard`. Older schemas upgrade via persistence/schema MIGRATIONS. */
+export const SCHEMA = "dionysus/3.1" as const;
 
 /** `html`: a sandboxed HTML page (libraries opt-in via render/htmlLibs) rendered per frame from clip time (see render/htmlClip). */
 export type MediaKind = "video" | "image" | "audio" | "html" | "text" | "effect";
@@ -169,6 +171,8 @@ export interface Project {
   assets: Record<string, Asset>;
   compositions: Record<string, Composition>;
   meta: { createdAt: string; updatedAt: string };
+  /** Storyboard workspace (3.1); absent until the user imports one. */
+  storyboard?: Storyboard;
 }
 
 /** Default still-image duration when placed on the timeline. */
