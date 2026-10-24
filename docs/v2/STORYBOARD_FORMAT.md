@@ -1,0 +1,247 @@
+# `dionysus.storyboard/1` format (v1.1)
+
+This is the source of truth for the storyboard JSON format. The importer is `src/v2/domain/storyJson.ts`; the worked example `src/v2/domain/__fixtures__/ep01_opening.storyboard.json` is imported by the tests. When this document and the code disagree, fix one of them in the same PR.
+
+Implementation status is tracked in `public/doc/tasks.json` (tasks `V2-SB-11x`).
+
+## 1. Overview and compatibility
+
+- The format string stays `"dionysus.storyboard/1"`. v1.1 is additive: **every new field is optional**, and every existing v1 file stays valid with the same meaning.
+- Readers ignore unknown fields (the current importer, `src/v2/domain/storyJson.ts`, already does).
+- **Caveat for v1.0 importers.** They reject asset `type: "html"` and require a shot `prompt`. A v1.1 file that uses html assets or leaves out a prompt therefore needs a v1.1 importer. Planners should keep a shot `prompt` even where v1.1 makes it optional. The worked example does this and still imports cleanly in today's app.
+- Design principles:
+  - Look and motion are named by **preset id + params**, never by a closed enum.
+  - On-screen text never goes in a generation prompt.
+  - Unknown presets degrade gracefully: warn, fall back, and keep the id for re-export.
+
+## 2. Field reference
+
+Notation: `?` = optional. All coordinates are 0-1 fractions of the frame, measured from the top-left. All times are seconds.
+
+### 2.1 Root
+
+| Field | Type | Notes |
+|---|---|---|
+| `format` | `"dionysus.storyboard/1"` | Unchanged. |
+| `meta` | object | §2.2 |
+| `assets` | Asset[] | §2.3 |
+| `shots` | Shot[] | §2.4. Listed in edit order. |
+| `connections?` | Connection[] | §2.6. If omitted, adjacent shots are joined by a cut (or by continuity when a lastFrame link exists). |
+
+### 2.2 `meta`
+
+| Field | Type | Notes |
+|---|---|---|
+| `title` | string | Required. |
+| `logline?`, `synopsis?`, `style?`, `language?` | string | Unchanged. |
+| `aspect` | `"16:9"`, `"9:16"`, `"1:1"`, `"4:5"` or `"21:9"` | Unchanged. |
+| `textStyles?` **(new)** | `{ "<id>": TextStyle }` | One-off text styles for this storyboard. They are imported as project text styles and can be promoted to the registry later. Layers reference them through `textStyle`. Ids must not clash with registry `textStyle` ids; if one does, the local style wins and the importer warns. |
+
+`TextStyle` = `{ font?, size?, color?, align?, bold?, ... }`, with the same keys as a text layer's `style` (§2.5). Extra keys are kept and passed through.
+
+### 2.3 `assets[]`
+
+| Field | Type | Notes |
+|---|---|---|
+| `id`, `name` | string | Short and stable. |
+| `type` | `character`, `location`, `prop`, `style`, `image`, `frame`, `video`, `audio`, **`html` (new)** | |
+| `aspect?` | aspect string | Defaults to `meta.aspect`. |
+| `prompt` | string | For `html`, this describes the component (see below) and is required when the source is `"generate"`. |
+| `references?` | string[] | Asset ids. No self-references and no loops. |
+| `source` | `"generate"`, `"upload"` or `{type:"lastFrame", shot}` | **Future, not v1:** `{type:"template", template, params}` (§6). |
+| `qa` | string[] | 2-5 yes/no checks that can be verified by looking. |
+
+**`html` assets** are only for animated, 3D or three.js graphics.
+- The asset is never a file path and never inline HTML. Its `prompt` describes the component.
+- Guided flow: the user takes the prompt to their own AI, gets back an `.html` file and uploads it into the asset slot. Uploads are versioned like images.
+- The app stores the whole HTML document as an asset-version blob. An `html` asset can't use a `lastFrame` source.
+- Per-clip config lives inside the HTML, in `<script type="application/json" id="dionysus-clip">`.
+- v1 has no params for HTML.
+
+### 2.4 `shots[]`
+
+| Field | Type | Notes |
+|---|---|---|
+| `id`, `title`, `description?` | string | Unchanged. |
+| `durationSec` | number, 0.5-120 | Should match what the video model can generate (RULE 12). |
+| `prompt` | string | Required when `render` is `"ai"`. Optional for `"html"` and `"still"` (keep it anyway for v1.0 readers). Never asks for text. |
+| `assets` | string[] | Asset ids used. Should include `clip`. |
+| `camera?`, `dialogue?` | string | Unchanged. |
+| `qa` | string[] | 2-5 visual checks. |
+| `render?` **(new)** | `"ai"`, `"html"` or `"still"` | Default `"ai"`. The production to-do uses this to choose the step: generate a clip, upload or refresh the HTML, or use the still. |
+| `clip?` **(new)** | asset id | Required when `render` is `"html"` (must point to an `html` asset) or `"still"` (must point to an `image` asset). Ignored for `"ai"`, with a warning. The clip renders from the asset's **selected** version (the one the user picked in the asset's version history), not simply the latest upload. |
+| `layers?` **(new)** | Layer[] | §2.5 |
+| `captions?` **(new)** | boolean | When `true`, the shot's `dialogue` is rendered into the shared subtitle text layer. Has no effect, and triggers a warning, if there is no `dialogue`. |
+| `effects?` **(new)** | Effect[] | §2.7 |
+
+### 2.5 `shots[].layers[]`
+
+Layers are drawn in list order: later layers sit on top. There is no `zIndex`. `startSec` and `endSec` are relative to the shot start, with `0 <= startSec < endSec <= durationSec`.
+
+**Text layer**
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | string | Unique within the shot. |
+| `type` | `"text"` | |
+| `text` | string | |
+| `startSec`, `endSec` | number | |
+| `position` **or** `box` | `{x,y}` or `{x,y,width,height}` | `position` (preferred) gives the text centre. `box` gives the top-left corner plus size. Give exactly one. See "Text sizing" below. |
+| `textStyle?` | preset id | A registry `textStyle` id or a `meta.textStyles` key. Default `plain`. |
+| `style?` | `{font?, size?, color?, align?, bold?}` | `font` is a curated font id (§3.2). `size` is a fraction of frame height. `color` is a CSS hex value. `align` is `left`, `center` or `right`. `bold` is a boolean; a numeric weight of 600 or more is accepted and mapped to bold. |
+| `anim?` | `{in?, out?, loop?, durationSec?}` | Ids of the `textAnimIn`, `textAnimOut` and `textAnimLoop` kinds. `durationSec` applies to in and out. |
+
+Style resolution: the `textStyle` preset is applied first, then the inline `style` overrides it.
+
+**Text sizing.** Text is a single line per `\n`-separated line; it is **never wrapped**.
+- With `position`, the text is centred on the point. Its size is `style.size`, else the `textStyle` size, else 0.1 of the frame height.
+- With `box`, the text is centred in the box. Its size is `style.size` when given; otherwise it is fitted to the box height (`height / (lines × 1.2)`). The box width does not shrink the text.
+- The importer estimates the rendered width from the font's average character width and warns on `<layer>.text` when the text is likely wider than the box (or the frame, for `position`). Use `position`, shorter text or a smaller `size` to fix it.
+
+**HTML layer:** `{id, type:"html", asset:<html asset id>, startSec, endSec, box}`
+
+**Image / video layer:** `{id, type:"image"|"video", asset:<asset id>, startSec, endSec, box}`. These land in the overlay group above the shot.
+
+**Not in v1:** `blend` and `trackMotion`. If either is present, the importer warns and ignores it; it does not reject the file.
+
+### 2.6 `connections[]`
+
+| Field | Type | Notes |
+|---|---|---|
+| `from`, `to` | shot id | |
+| `kind` | `"cut"`, `"continuity"` or `"match"` | Unchanged. `continuity` defaults to a cut. |
+| `note?` | string | |
+| `transition?` **(new)** | `{preset:<transition id>, params?:{durationSec?, ...}}` | If missing, the connection is a cut. It is stored on the `to` shot's clip as `transitionIn`. It only applies when `from` and `to` are adjacent (consecutive in `shots` order, which is the main-track order); otherwise the importer warns and treats the connection as a cut. `params.durationSec` defaults to **0.5 s** and is clamped to half the shorter of the two clips. |
+
+### 2.7 `shots[].effects[]`
+
+| Field | Type | Notes |
+|---|---|---|
+| `preset` | videoEffect id | |
+| `params?` | object | Keys come from the preset's ParamSpec. Missing keys take their defaults. |
+| `startSec?`, `endSec?` | number | Relative to the shot. Default is the whole shot. |
+
+Post camera moves (push-in through `ken-burns`, `shake`) and looks (`bw`, `vignette`) go here, not in the generation prompt.
+
+## 3. Preset system
+
+### 3.1 Rules
+
+- Every look or motion is referenced by **preset id + params**. The schema only checks that the id is a string; the app validates it against its preset registry at import.
+- Registry descriptor: `{id, kind, version, description, category, name, type, params: ParamSpec[], preview, data?}`. `ParamSpec` is `number` (min/max/step/default), `color` or `string`. `version` starts at 1 and is bumped whenever a preset's look or behaviour changes. `description` is one line, used in the planner guide. `data` holds the text clip fields of a `textStyle` preset (with `font` as a font id).
+- Preset ids match `^[A-Za-z0-9][A-Za-z0-9_.-]*$`; `@` is reserved for version pins.
+- Kinds: `textAnimIn`, `textAnimOut`, `textAnimLoop`, `effect` (text styling: glow, neon, hollow, echo), `videoEffect`, `transition`, `sticker`, and the new `textStyle` (moving out of `TEXT_TEMPLATES`).
+- **Version pinning:** `id@N` (for example `ken-burns@2`) is accepted and stored as written. It always resolves to the **current** preset; old render functions are not kept. If `N` differs from the current version, the importer warns.
+
+### 3.2 Registry snapshot (2026-10-24)
+
+This is a snapshot only. **The live list always comes from the registry**, and the planner prompt is generated from it.
+
+| Kind | Ids |
+|---|---|
+| textAnimIn | `fade`, `slide-up`, `slide-left`, `pop`, `zoom-in`, `typewriter`, `wipe`, `blur-in` |
+| textAnimOut | `fade`, `slide-down`, `shrink`, `blur-out`, `wipe-out` |
+| textAnimLoop | `pulse`, `wiggle`, `float`, `blink` |
+| videoEffect | `fade-in`, `fade-out`, `blur`, `ken-burns` (slow zoom / push-in), `shake`, `vignette`, `bw` |
+| transition | `crossfade`, `dip` (dip to black) |
+| textStyle | `plain`, `caption`, `outline`, `neon`, `pop`, `typewriter`, `glow`, `echo` |
+| effect (text styling) | `glow`, `neon`, `hollow`, `echo` |
+| fonts (curated ids, not presets) | `sans`, `serif`, `mono`, `impact`, `rounded`, `hand`, `script`, `condensed`. No web fonts. |
+
+Planned as future registry entries, with no schema change needed: `grain`, `colour-grade`, `dip-to-white`, and wipe transitions.
+
+## 4. Importer behaviour
+
+**Warnings and fallbacks.** These never reject the file.
+
+| Situation | Behaviour |
+|---|---|
+| Unknown or removed preset id | Warn and fall back: transition → cut, textStyle → `plain`, textAnim or effect → none. **The original id is kept** for re-export. |
+| `id@N` that differs from the current version | Warn and use the current version. Keep `id@N`. |
+| A `meta.textStyles` id that is also a registry `textStyle` id | Warn; the storyboard's own style wins. |
+| Invalid `style` values (`size` outside (0, 1], non-hex `color`, unknown `align`, non-boolean `bold`) | Warn and drop that value. |
+| Unknown param key, wrong param type, number outside the ParamSpec range | Warn; unknown keys are ignored, wrong types use the default, out-of-range numbers are clamped. |
+| Transition `durationSec` <= 0 | Warn and use the 0.5 s default. |
+| A malformed `transition` (not `{preset}`) | Warn and use a cut. |
+| Text likely wider than its box or the frame | Warn (see "Text sizing" in §2.5). |
+| `position` outside 0-1, or a `box` reaching outside the frame | Warn. |
+| `anim` in + out longer than the layer | Warn. |
+| `transition` between shots that are not adjacent on the main track | Warn and use a cut. Keep the transition on export. |
+| `blend` or `trackMotion` on a layer | Warn and ignore. |
+| `captions: true` without `dialogue` | Warn and do nothing. Non-boolean `captions` also warns. |
+| `clip` on a `render: "ai"` shot | Warn and ignore. |
+| Unknown font id | Warn and use `sans`. |
+
+**Errors.** The import is rejected for:
+- an unknown asset id in `clip`, a layer `asset` or `assets`;
+- a `clip` of the wrong asset type for its `render`;
+- `render: "html"` or `"still"` without `clip`;
+- a layer with both `position` and `box`, or with neither (except for `html`, `image` and `video` layers, which require `box` and reject `position`);
+- a `box` with a width or height <= 0;
+- `endSec <= startSec`, `endSec > durationSec`, a negative `startSec`, or a layer without `startSec`/`endSec`;
+- duplicate layer ids within a shot;
+- an unknown `render` or layer `type`, a layer `asset` of the wrong type, a text layer without `text`, or an effect without `preset`;
+- an `html` asset with a `lastFrame` source, or a generated `html` asset without a `prompt`.
+
+Every error and warning carries a JSON path (for example `shots[2].layers[0].endSec`) that the import screen highlights in the pasted text.
+
+**Mapping notes**
+
+- **Placement:** `box` and `position` map to the layer clip's Transform. Positions are fractions times the frame size. A text `box` maps to the box centre (the text is centred there, sized as in §2.5); a `position` is the centre itself. Media layers fill their `box`.
+- **Transitions:** a connection's transition becomes `transitionIn` on the incoming (`to`) clip.
+- **Effects:** each shot effect becomes an effect-layer clip over the shot's time range (or its sub-range), linked to the shot's clip.
+- **Linked layers:** text, html, image and video layers become clips in the overlay group, linked to the shot's clip, so they move and trim with it (the same mechanism as storyboard send-to-timeline linked clips).
+- **Version swaps:** when the shot's clip is swapped to another version with a different length, linked layers and effects are **clamped** to the clip's new length (ranges are trimmed; ones that would start after the end are shortened to the end), never dropped.
+- **Captions:** `captions: true` writes `dialogue` into the shared subtitle text layer for the shot's range.
+- **Text styles:** `meta.textStyles` entries become project text styles before layers are resolved.
+- **HTML and still clips:** a `render: "html"` or `"still"` shot's clip is rendered from the **selected** version of the `clip` asset (see §2.4).
+
+## 5. Planner prompt (updated)
+
+The presets section of the planner prompt is **generated from the registry** (only ids listed there may be used): for each kind, it lists every id with a one-line description and its params with defaults. The rules section becomes:
+
+```
+RULES
+1. Every recurring character, location, prop and the overall style gets ONE reusable asset with a detailed prompt; shots reference these ids instead of repeating descriptions.
+2. Write prompts that work on their own (a generator only sees that prompt plus the reference images). Repeat key visual details (clothes, colours, lighting, style) in every prompt.
+3. When a shot must continue seamlessly from the previous one, add an asset with "type": "frame" and "source": { "type": "lastFrame", "shot": "<previous shot id>" }, use it in the next shot's "assets", and mark the connection "continuity". Never make a shot depend on its own last frame or create loops.
+4. Use "source": "upload" for things the user already has (logos, real photos, products).
+5. Every asset and shot gets 2–5 QA checks that a person can verify by looking: identity consistency, key props, framing, artefacts (extra fingers, warped text, watermarks).
+6. Keep ids short and stable (e.g. "hero", "kitchen", "s1", "s1-end"). Shots are listed in order; "connections" may be omitted for simple hard cuts.
+7. Output valid JSON only: double quotes, no comments, no trailing commas.
+8. Every piece of on-screen text (titles, cards, labels, captions) goes into a text layer, never into a generation prompt. Prompts ask for clean, empty surfaces where the text will sit.
+9. Use "html" assets and "render": "html" only for animated, 3D or three.js graphics. Plain text is a text layer.
+10. Transitions go on connections. Post camera moves (push-in etc.) and looks go in the shot's "effects", and the generation prompt then says "static camera".
+11. Only use preset ids listed in the PRESETS section.
+12. "durationSec" should match what the video model can generate.
+```
+
+## 6. Decisions, open questions and future work
+
+- **Template HTML:** asset `source: {type:"template", template, params}` for registered built-in templates. This needs a template registry and a ParamSpec for templates. Not in v1.
+- **`blend`** (layer blend modes) and **`trackMotion`** (layers that follow tracked motion): semantics are still to be defined. Not in v1.
+- **Resolved:** `id@N` resolves to the current version with a warning; old render functions are not kept (§3.1).
+- **Resolved:** there is no `meta.minImporter`. A v1.0 build reports the unknown asset type with its path, which is enough.
+- **Promotion:** the UX and id rules for promoting a `meta.textStyles` entry into the registry.
+- **Durations:** whether the planner prompt should list per-model duration limits for RULE 12.
+
+## 7. Worked example
+
+`src/v2/domain/__fixtures__/ep01_opening.storyboard.json` (12 shots) imports with no warnings and shows the following:
+- **s03** is `render: "still"` with `clip: "card-still"`. It has a framed text layer (`box`, `textStyle: "plain"` plus inline serif style, fade-in) and a `ken-burns` effect.
+- **s07** is `render: "still"` with `clip: "title-bg"`. It has a centred `ALLOTMENT` text layer that uses `meta.textStyles["ata-title"]`.
+- **Connections:** s06→s07 uses `dip` (0.5 s) and s07→s08 uses `crossfade` (0.8 s).
+
+Excerpt (prompt shortened):
+
+```json
+{
+  "id": "s07", "title": "Title: ALLOTMENT", "durationSec": 6,
+  "render": "still", "clip": "title-bg", "assets": ["title-bg", "style"],
+  "prompt": "… plain deep slate-blue background … No text or letters of any kind.",
+  "layers": [{ "id": "s07-title", "type": "text", "text": "ALLOTMENT",
+    "startSec": 0.5, "endSec": 5.5, "position": { "x": 0.5, "y": 0.5 },
+    "textStyle": "ata-title", "anim": { "in": "fade", "out": "fade", "durationSec": 0.8 } }],
+  "qa": ["…"]
+}
+```

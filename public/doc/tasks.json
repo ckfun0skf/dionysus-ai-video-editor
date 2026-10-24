@@ -2297,6 +2297,36 @@
           "title": "Storyboard review P2-13: desktop 'In use' version label no longer covers the action button",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-SB-110",
+          "title": "Storyboard format v1.1: spec in docs/v2/STORYBOARD_FORMAT.md (selected-version clips, text box sizing, 0.5 s transition default, swap clamping)",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "V2-SB-111",
+          "title": "Preset registry: version and description on every preset, textStyle kind (replaces TEXT_TEMPLATES), curated font ids, id@N references",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "V2-SB-112",
+          "title": "Storyboard importer v1.1: render/clip, layers, captions, effects, transitions, meta.textStyles with every warning, fallback and path-addressed error; ep01 fixture test",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "V2-SB-113",
+          "title": "Storyboard v1.1 domain: html asset upload slot, production steps by render, linked layers/effects/captions/transitions on send, clamped on version swap",
+          "status": "todo",
+          "progress": 0
+        },
+        {
+          "id": "V2-SB-114",
+          "title": "AI planner guide: generated storyboard-guide, presets.json and llms.txt; short and full AI prompts in the UI",
+          "status": "todo",
+          "progress": 0
         }
       ]
     },

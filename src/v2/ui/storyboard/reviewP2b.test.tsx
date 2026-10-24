@@ -108,6 +108,22 @@ describe("storyboard review P2 (second batch)", () => {
     expect(text.slice(ta.selectionStart, ta.selectionEnd)).toBe('"durationSec": "five"');
   });
 
+  it("V2-SB-112: import warnings show their path and select their JSON", async () => {
+    const el = await mountBoard(setup(false));
+    await act(async () => btn(el, "2 · Import JSON")?.click() ?? [...el.querySelectorAll("button")].find((b) => /Import/.test(b.textContent ?? ""))!.click());
+    const ta = el.querySelector('[aria-label="Storyboard JSON"]') as HTMLTextAreaElement;
+    const fx = JSON.parse(readFileSync(resolve(__dirname, "../../domain/__fixtures__/ep01_opening.storyboard.json"), "utf8"));
+    fx.shots[2].layers[0].textStyle = "sparkle";
+    const text = JSON.stringify(fx, null, 2);
+    await act(async () => setText(ta, text));
+    expect(el.querySelector('[data-testid="story-preview"]')).not.toBeNull();
+    const warn = el.querySelector('[data-testid="story-warnings"] .v2-sb-errlink') as HTMLButtonElement;
+    expect(warn.textContent).toContain("shots[2].layers[0].textStyle");
+    expect(warn.textContent).toContain('Unknown text style "sparkle"');
+    await act(async () => warn.click());
+    expect(text.slice(ta.selectionStart, ta.selectionEnd)).toBe('"textStyle": "sparkle"');
+  });
+
   it("R14: locateIssue maps paths, parents and syntax errors to the pasted text", () => {
     const json = '{\n  "meta": { "title": "x" },\n  "shots": [ { "id": "a", "durationSec": 0 } ]\n}';
     const text = "Sure!\n" + json;

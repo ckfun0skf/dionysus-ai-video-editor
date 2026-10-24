@@ -100,7 +100,7 @@ export function AssetBrowser({ project, thumbs, busy, tab, onTab, ...a }: Browse
           </button>
           <p className="v2-abnote">Pick a starting look — style it in the inspector on the right.</p>
           <ul className="v2-tiles v2-tiles-text" aria-label="Text presets">
-            {T.TEXT_TEMPLATES.map((tp) => (
+            {T.textTemplates().map((tp) => (
               <li key={tp.id} className="v2-tile" draggable onDragStart={(e) => setDragItem(e.dataTransfer, { kind: "text", template: tp.id })}>
                 <button className="v2-tile-main" aria-label={`Add ${tp.label} text`} title={`Add ${tp.label} text at the playhead`} onClick={() => a.onAddText(tp.id)}>
                   <span className="v2-tile-thumb v2-textprev"><TextSample data={tp.data} label={tp.label} /><span className="v2-tile-add" aria-hidden><Ic g="＋" size={16} /></span></span>

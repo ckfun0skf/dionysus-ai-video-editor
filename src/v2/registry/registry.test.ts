@@ -1,5 +1,5 @@
 import { describe, expect, it, afterEach } from "vitest";
-import { applyPreset, defaultsOf, getPreset, listPresets, PRESET_KINDS, registerPresets, registerRenderer, RENDERERS, resetPresets, unregisterPreset, type PresetFrame } from ".";
+import { applyPreset, defaultsOf, FONTS, fontStack, fontIdOfStack, getPreset, listPresets, parsePresetRef, PRESET_KINDS, registerPresets, registerRenderer, RENDERERS, resetPresets, resolvePresetRef, unregisterPreset, type PresetFrame } from ".";
 
 const finite = (f: PresetFrame) => [f.alpha, f.dx, f.dy, f.scale, f.rot, f.chars].every(Number.isFinite);
 
@@ -11,6 +11,8 @@ describe("preset registry", () => {
       expect(list.length, k).toBeGreaterThan(0);
       for (const d of list) {
         expect(d.id && d.name && d.category && d.type).toBeTruthy();
+        expect(Number.isInteger(d.version) && d.version >= 1, `${k}:${d.id} version`).toBe(true);
+        expect(d.description.length, `${k}:${d.id} description`).toBeGreaterThan(10);
         expect(RENDERERS[d.type], `${k}:${d.id} renderer`).toBeTypeOf("function");
         expect(JSON.parse(JSON.stringify(d))).toEqual(d);
         for (const p of d.params) expect(defaultsOf(d)[p.key]).toBe(p.default);
@@ -48,5 +50,37 @@ describe("preset registry", () => {
     expect(applyPreset("textAnimIn", "fade", -3).alpha).toBe(0);
     expect(applyPreset("textAnimIn", "fade", 9).alpha).toBe(1);
     expect(applyPreset("textAnimLoop", "wiggle", 0.125, undefined, { degrees: 10 }).rot).toBeCloseTo(10);
+  });
+  it("textStyle presets carry JSON text data with font ids", () => {
+    const ids = listPresets("textStyle").map((d) => d.id);
+    expect(ids).toEqual(["plain", "caption", "outline", "neon", "pop", "typewriter", "glow", "echo"]);
+    for (const d of listPresets("textStyle")) {
+      expect(d.type).toBe("none");
+      expect(d.data, d.id).toBeTypeOf("object");
+      const font = d.data?.font;
+      if (font !== undefined) expect(FONTS.some((f) => f.id === font), `${d.id} font ${String(font)}`).toBe(true);
+    }
+  });
+  it("fonts: ids, stacks and fallbacks", () => {
+    expect(FONTS.map((f) => f.id)).toEqual(["sans", "serif", "mono", "impact", "rounded", "hand", "script", "condensed"]);
+    for (const f of FONTS) { expect(fontIdOfStack(fontStack(f.id))).toBe(f.id); expect(f.width).toBeGreaterThan(0.3); expect(f.description).toBeTruthy(); }
+    expect(fontStack("nope")).toBe(FONTS[0].stack);
+    expect(fontStack("Foo, serif")).toBe("Foo, serif");
+  });
+  it("parses and resolves id@version references", () => {
+    expect(parsePresetRef("ken-burns")).toEqual({ id: "ken-burns" });
+    expect(parsePresetRef(" ken-burns@2 ")).toEqual({ id: "ken-burns", version: 2 });
+    expect(parsePresetRef("bad id")).toBeUndefined();
+    expect(parsePresetRef("x@")).toBeUndefined();
+    expect(resolvePresetRef("videoEffect", "ken-burns@1")).toMatchObject({ descriptor: { id: "ken-burns" }, versionMismatch: false });
+    expect(resolvePresetRef("videoEffect", "ken-burns@3")).toMatchObject({ descriptor: { id: "ken-burns", version: 1 }, versionMismatch: true });
+    expect(resolvePresetRef("videoEffect", "grain")).toMatchObject({ descriptor: undefined, ref: { id: "grain" }, versionMismatch: false });
+    expect(resolvePresetRef("videoEffect", undefined).descriptor).toBeUndefined();
+  });
+  it("registerPresets validates id and version and fills defaults", () => {
+    const base = { kind: "videoEffect", name: "X", type: "none", params: [] };
+    expect(registerPresets([{ ...base, id: "has space" }, { ...base, id: "v0", version: 0 }, { ...base, id: "v1.5", version: 1.5 }])).toEqual(["has space", "v0", "v1.5"]);
+    expect(registerPresets([{ ...base, id: "ok" }])).toEqual([]);
+    expect(getPreset("videoEffect", "ok")).toMatchObject({ version: 1, description: "", category: "Other" });
   });
 });
