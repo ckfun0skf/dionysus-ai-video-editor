@@ -2,8 +2,11 @@ import { drawVideoFrame } from "../frameGrab";
 
 export const BLANK_FRAME = "Couldn’t read the last frame in this browser — upload it instead";
 
-/** Grab (nearly) the last frame of a video blob as a PNG. Throws when the browser only yields an empty frame. Seeks a little before the end: some browsers return a black frame at exactly `duration`. */
-export async function extractLastFrame(video: Blob, timeoutMs = 8000): Promise<{ blob: Blob; width: number; height: number }> {
+/**
+ * Grab (nearly) the last frame of a video blob as a PNG. Throws when the browser only yields an empty frame. Seeks a little before the end: some browsers return a black frame at exactly `duration`.
+ * `endSec` (V2-SB-121): the end of a trimmed clip, used instead of the file's end.
+ */
+export async function extractLastFrame(video: Blob, timeoutMs = 8000, endSec?: number): Promise<{ blob: Blob; width: number; height: number }> {
   const url = URL.createObjectURL(video);
   const el = document.createElement("video");
   el.muted = true; el.playsInline = true; el.preload = "auto"; el.src = url;
@@ -14,7 +17,8 @@ export async function extractLastFrame(video: Blob, timeoutMs = 8000): Promise<{
   });
   try {
     await wait("loadeddata");
-    const d = Number.isFinite(el.duration) ? el.duration : 0;
+    const full = Number.isFinite(el.duration) ? el.duration : 0;
+    const d = endSec !== undefined && endSec > 0 && (!full || endSec < full) ? endSec : full;
     el.currentTime = Math.max(0, d - Math.min(0.05, d / 10));
     await wait("seeked");
     const w = el.videoWidth, h = el.videoHeight;

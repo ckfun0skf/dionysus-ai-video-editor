@@ -34,6 +34,7 @@ export function ShotEditor({ project, shot, number, isNew, mobile, onSave, onCan
   const b = project.storyboard!;
   const [title, setTitle] = useState(isNew ? "" : shot.title);
   const [dur, setDur] = useState(sec(shot.durationSec));
+  const [gen, setGen] = useState(shot.genDurationSec ? sec(shot.genDurationSec) : "");
   const [description, setDescription] = useState(shot.description);
   const [prompt, setPrompt] = useState(shot.prompt);
   const [camera, setCamera] = useState(shot.camera ?? "");
@@ -66,10 +67,14 @@ export function ShotEditor({ project, shot, number, isNew, mobile, onSave, onCan
   const n = Number(dur.replace(",", "."));
   const durOk = Number.isFinite(n) && n >= storyEdit.MIN_SHOT_SEC && n <= storyEdit.MAX_SHOT_SEC;
   const past = durOk ? storyEdit.partsPastEnd({ layers, effects }, n) : 0;
-  const ok = durOk && slotOk;
+  const g = Number(gen.replace(",", "."));
+  // V2-SB-121: optional length to generate (fixed-length models); empty = the shot length.
+  const genOk = render !== "ai" || !gen.trim() || (Number.isFinite(g) && g <= storyEdit.MAX_SHOT_SEC && (!durOk || g >= n));
+  const ok = durOk && slotOk && genOk;
 
   const patch = (): storyEdit.ShotPatch => ({
     title: title.trim() || (isNew ? "New shot" : shot.title), description, durationSec: n, prompt, camera, dialogue, captions: captions && !!dialogue.trim(),
+    ...(render === "ai" ? { genDurationSec: gen.trim() ? g : null } : {}),
     qa, layers, effects, render, ...(render !== "ai" ? { clipSlot } : {}),
     slotIds: refs, ...(pending.length ? { newSlots: pending.filter((x) => refs.includes(x.id)) } : {}),
   });
@@ -97,7 +102,9 @@ export function ShotEditor({ project, shot, number, isNew, mobile, onSave, onCan
         <div className="v2-sb-row">
           <label className="v2-sb-field grow">Title<input ref={titleRef} value={title} onChange={(e) => setTitle(e.target.value)} placeholder={isNew ? "New shot" : shot.title} maxLength={80} /></label>
           <label className="v2-sb-field len">Length (s)<input value={dur} onChange={(e) => setDur(e.target.value)} inputMode="decimal" aria-invalid={!durOk} aria-describedby="v2-sb-dur-hint" /></label>
+          {render === "ai" && <label className="v2-sb-field len" title="For video models that only make fixed lengths (e.g. 8 s for a 5 s shot). Uploads are trimmed to the shot length.">Generate (s)<input value={gen} onChange={(e) => setGen(e.target.value)} inputMode="decimal" placeholder="same" aria-invalid={!genOk} aria-describedby="v2-sb-gen-hint" /></label>}
         </div>
+        {!genOk && <p className="v2-sb-err" id="v2-sb-gen-hint" role="alert"><Ic g="alert" size={14} /> Generate length must be at least the shot length and at most {storyEdit.MAX_SHOT_SEC} seconds, or empty.</p>}
         {!durOk && <p className="v2-sb-err" id="v2-sb-dur-hint" role="alert"><Ic g="alert" size={14} /> Length must be {storyEdit.MIN_SHOT_SEC}–{storyEdit.MAX_SHOT_SEC} seconds.</p>}
         {past > 0 && <p className="v2-hint" role="note"><Ic g="⚠" size={12} /> {past} layer{past > 1 ? "s or effects run" : " or effect runs"} past {sec(n)} s; {past > 1 ? "they" : "it"} will be shortened to fit.</p>}
 

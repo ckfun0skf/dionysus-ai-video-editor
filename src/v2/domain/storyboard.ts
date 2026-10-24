@@ -56,6 +56,11 @@ export interface Shot {
    * shot's reference slots in `slotIds` order with roles inferred from the slot type (see storyRefs.attachList).
    */
   references?: ShotReference[];
+  /**
+   * V2-SB-121: the length to ask the video model for, when it differs from `durationSec` (models that only render
+   * fixed lengths). Uploads longer than `durationSec` are offered a trim.
+   */
+  genDurationSec?: number;
 }
 
 /** One numbered image for a shot's clip generation and how the model should use it. */
@@ -69,6 +74,27 @@ export interface VersionInfo {
   derivedFrom?: { shotId: string; versionId: string };
   qa?: Record<string, QaResult>;
   model?: string;
+  /** V2-SB-121: the part of a video version the shot uses (source in and out). Absent = the whole clip. */
+  trim?: VersionTrim;
+}
+
+/** Source range of a video version, in ticks (V2-SB-121). */
+export interface VersionTrim { inTicks: number; outTicks: number }
+
+/** A trim clamped to a clip `durTicks` long; undefined when it is missing or covers the whole clip. */
+export function normTrim(t: VersionTrim | undefined, durTicks: number | undefined): VersionTrim | undefined {
+  if (!t || !durTicks || !Number.isFinite(t.inTicks) || !Number.isFinite(t.outTicks)) return undefined;
+  const inTicks = Math.round(Math.min(Math.max(0, t.inTicks), durTicks - 1));
+  const outTicks = Math.round(Math.min(Math.max(inTicks + 1, t.outTicks), durTicks));
+  return inTicks === 0 && outTicks === durTicks ? undefined : { inTicks, outTicks };
+}
+
+/** The part of a video version the storyboard uses: its trim, else the whole clip. Undefined for media without a length. */
+export function versionSpan(b: Storyboard | undefined, v: AssetVersion | undefined): { inTicks: number; lenTicks: number } | undefined {
+  const d = v?.media.durationTicks;
+  if (!v || !d) return undefined;
+  const t = normTrim(b?.versions[v.id]?.trim, d);
+  return t ? { inTicks: t.inTicks, lenTicks: t.outTicks - t.inTicks } : { inTicks: 0, lenTicks: d };
 }
 
 export interface Storyboard {
@@ -104,6 +130,7 @@ export function storyboardFromDoc(doc: StoryDoc): Storyboard {
       ...(s.layers?.length ? { layers: structuredClone(s.layers) } : {}),
       ...(s.captions ? { captions: true } : {}),
       ...(s.effects?.length ? { effects: structuredClone(s.effects) } : {}),
+      ...(s.genDurationSec ? { genDurationSec: s.genDurationSec } : {}),
       ...(s.references?.length ? { references: s.references.map((r) => ({ slotId: r.asset, role: r.role, ...(r.note ? { note: r.note } : {}) })) } : {}),
     };
     if (shots[s.id].clipSlot && !shots[s.id].slotIds.includes(shots[s.id].clipSlot!)) shots[s.id].slotIds.push(shots[s.id].clipSlot!);
@@ -164,7 +191,7 @@ export type Target = { slot: string } | { shot: string };
  * Upload a new version into a slot or shot and select it. Inputs (and the last-frame source for
  * derived slots) are frozen from the current selections so later changes can be detected.
  */
-export function addStoryVersion(p: Project, target: Target, media: MediaRef, opts: { versionId?: string; model?: string; now?: string; derivedFrom?: { shotId: string; versionId: string } } = {}): Project {
+export function addStoryVersion(p: Project, target: Target, media: MediaRef, opts: { versionId?: string; model?: string; now?: string; derivedFrom?: { shotId: string; versionId: string }; trim?: VersionTrim } = {}): Project {
   const b = p.storyboard;
   if (!b) return p;
   // An html or still shot has no clip of its own: its versions live on the clip slot.
@@ -190,7 +217,8 @@ export function addStoryVersion(p: Project, target: Target, media: MediaRef, opt
   const name = isSlot ? (owner as AssetSlot).name : `${b.order.indexOf(owner.id) + 1}. ${(owner as Shot).title}`;
   const asset = prev ? { ...prev, versions: [...prev.versions, version], selectedVersionId: version.id }
     : { id: assetId, kind: isSlot ? kindForSlot((owner as AssetSlot).type) : ("video" as MediaKind), name, versions: [version], selectedVersionId: version.id };
-  const info: VersionInfo = { inputs, ...(derivedFrom ? { derivedFrom } : {}), ...(opts.model ? { model: opts.model } : {}) };
+  const trim = !isSlot && media.durationTicks ? normTrim(opts.trim, media.durationTicks) : undefined;
+  const info: VersionInfo = { inputs, ...(derivedFrom ? { derivedFrom } : {}), ...(opts.model ? { model: opts.model } : {}), ...(trim ? { trim } : {}) };
   const nextOwner = { ...owner, assetId, skipped: undefined };
   const board: Storyboard = {
     ...b,
@@ -215,19 +243,38 @@ export function selectStoryVersion(p: Project, assetId: string, versionId: strin
 }
 
 /**
+ * Change (or clear) the trim of a shot clip version (V2-SB-121). When the version is in use, its timeline clips that
+ * still show the old trimmed range take the new one (main track ripples); clips trimmed by hand keep their trims.
+ */
+export function setVersionTrim(p: Project, assetId: string, versionId: string, trim: VersionTrim | undefined): Project {
+  const b = p.storyboard, a = p.assets[assetId];
+  const v = a?.versions.find((x) => x.id === versionId);
+  const info = b?.versions[versionId];
+  if (!b || !v || !info || !v.media.durationTicks) return p;
+  const t = normTrim(trim, v.media.durationTicks);
+  if (JSON.stringify(t) === JSON.stringify(normTrim(info.trim, v.media.durationTicks))) return p;
+  const before = versionSpan(b, v)!;
+  const { trim: _old, ...rest } = info;
+  const next = { ...p, storyboard: { ...b, versions: { ...b.versions, [versionId]: t ? { ...rest, trim: t } : rest } } };
+  return a.selectedVersionId === versionId ? syncPlacements(next, assetId, { versionId, before }) : next;
+}
+
+/**
  * Linked placements (V2-CUT-04, V2-SB-R01): every timeline clip of a storyboard asset follows the
  * version picked on the board.
- * - An untrimmed clip (starts at source 0 and spans the whole previous version) takes the new
- *   version's full length, so switching back to a longer take restores it.
+ * - An untrimmed clip (shows exactly the previous version's used range: the whole clip, or its V2-SB-121 trim) takes
+ *   the new version's range, so switching back to a longer take restores it.
  * - A trimmed clip keeps its trims, clamped to the new media.
  * - On the main track, later clips ripple by the length change (no gap, no overlap). On other
  *   tracks a longer clip only grows up to the next clip.
  */
-export function syncPlacements(p: Project, assetId: string): Project {
+export function syncPlacements(p: Project, assetId: string, retrim?: { versionId: string; before: { inTicks: number; lenTicks: number } }): Project {
   const a = p.assets[assetId];
   const v = a?.versions.find((x) => x.id === a.selectedVersionId);
   if (!v) return p;
   const max = v.media.durationTicks;
+  const span = versionSpan(p.storyboard, v);
+  const stale = (pl: Placement) => pl.source.assetId === assetId && (pl.source.versionId !== v.id || retrim?.versionId === v.id);
   let changed = false;
   const compositions = { ...p.compositions };
   for (const [cid, c] of Object.entries(p.compositions)) {
@@ -235,24 +282,25 @@ export function syncPlacements(p: Project, assetId: string): Project {
     const pinned = pinnedLayers(p, c, assetId);
     let compChanged = false;
     const tracks = c.tracks.map((t) => {
-      if (!t.placements.some((pl) => pl.source.assetId === assetId && pl.source.versionId !== v.id && !pinned.has(pl.id))) return t;
+      if (!t.placements.some((pl) => stale(pl) && !pinned.has(pl.id))) return t;
       compChanged = true;
       let pls = [...t.placements].sort((x, y) => x.startTicks - y.startTicks);
       for (let i = 0; i < pls.length; i += 1) {
         const pl = pls[i];
-        if (pl.source.assetId !== assetId || pl.source.versionId === v.id || pinned.has(pl.id)) continue;
+        if (!stale(pl) || pinned.has(pl.id)) continue;
         const { storyTrim, ...rest } = pl;
         const next: Placement = { ...rest, source: { ...pl.source, versionId: v.id } };
         if (max && !isStill(pl)) {
           const speed = pl.speed ?? 1;
-          const prevFull = a.versions.find((x) => x.id === pl.source.versionId)?.media.durationTicks;
+          const prev = pl.source.versionId === v.id && retrim ? retrim.before : versionSpan(p.storyboard, a.versions.find((x) => x.id === pl.source.versionId));
           // A trim remembered from an earlier clamp still applies if the clip was not edited since.
           const memo = storyTrim && storyTrim.clampedTo === pl.durationTicks && storyTrim.inTicks === pl.sourceInTicks ? storyTrim : undefined;
-          const untrimmed = !memo && !pl.freeze && pl.sourceInTicks === 0 && !!prevFull && Math.abs(pl.durationTicks - Math.floor(prevFull / speed)) <= 1;
+          const untrimmed = !memo && !pl.freeze && !!prev && pl.sourceInTicks === prev.inTicks && Math.abs(pl.durationTicks - Math.floor(prev.lenTicks / speed)) <= 1;
+          if (untrimmed && span) next.sourceInTicks = span.inTicks;
           if (next.sourceInTicks >= max) next.sourceInTicks = 0;
           const room = Math.max(1, Math.floor((max - next.sourceInTicks) / speed));
           const want = memo?.durationTicks ?? pl.durationTicks;
-          if (untrimmed) next.durationTicks = room;
+          if (untrimmed) next.durationTicks = Math.max(1, Math.min(room, Math.floor((span?.lenTicks ?? max) / speed)));
           else if (pl.freeze) next.durationTicks = pl.durationTicks;
           else if (want > room) { next.durationTicks = room; next.storyTrim = { durationTicks: want, clampedTo: room, inTicks: next.sourceInTicks }; }
           else next.durationTicks = want;
@@ -277,7 +325,7 @@ export function syncPlacements(p: Project, assetId: string): Project {
 /** Selected clip length vs the planned shot length, when they differ by more than half a second (V2-SB-R06). */
 export function shotLengthMismatch(p: Project, s: Shot): { actualSec: number; plannedSec: number } | undefined {
   const v = versionsOf(p, s).find((x) => x.id === selectedOf(p, s));
-  const d = v?.media.durationTicks;
+  const d = versionSpan(p.storyboard, v)?.lenTicks;
   if (!d || !s.durationSec) return undefined;
   const actualSec = d / TICKS_PER_SECOND;
   return Math.abs(actualSec - s.durationSec) > 0.5 ? { actualSec, plannedSec: s.durationSec } : undefined;

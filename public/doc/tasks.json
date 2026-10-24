@@ -2339,6 +2339,12 @@
           "title": "Reference roles in clip prompts: optional shots[].references (asset, role start-frame/end-frame/identity/look/detail, note) fix the image numbering; roles inferred from asset type otherwise; RULE 14 References block; \"Attach in this order\" with pinned-version thumbnails and Save (iOS share sheet); Copy prompt prepends the block when missing",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-SB-121",
+          "title": "Trim on upload: a shot clip more than 0.5 s longer than planned offers \"Trim to N s\" (filmstrip with a fixed window, centred, preview of the window) or \"Keep full M s\" (extends the shot); trim stored per version and used by Send to timeline, version swaps (R01 ripple), the length warning and Use last frame; Adjust trim on version cards; optional shots[].genDurationSec for fixed-length models (RULE 13); each change is one undo step",
+          "status": "done",
+          "progress": 100
         }
       ]
     },

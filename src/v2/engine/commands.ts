@@ -323,6 +323,18 @@ export const createStoryboard = (doc: StoryDoc): Command => ({ label: "Create st
 export const removeStoryboard = (): Command => ({ label: "Remove storyboard", apply: (p) => board.setStoryboard(p, undefined) });
 export const addStoryVersion = (...args: Parameters<typeof board.addStoryVersion> extends [unknown, ...infer R] ? R : never): Command => ({ label: "Upload version", apply: (p) => board.addStoryVersion(p, ...args) });
 export const selectStoryVersion = (assetId: string, versionId: string): Command => ({ label: "Choose version", apply: (p) => board.selectStoryVersion(p, assetId, versionId) });
+/**
+ * V2-SB-121: upload a shot clip longer than planned, either trimmed (`trim`) or kept whole (`keepFullSec` extends
+ * the shot's planned length). One undo step.
+ */
+export const addTrimmedShotVersion = (shotId: string, media: Parameters<typeof board.addStoryVersion>[2], opts: { trim?: board.VersionTrim; keepFullSec?: number; versionId?: string; model?: string } = {}): Command => ({
+  label: opts.trim ? "Upload trimmed version" : "Upload version",
+  apply: (p) => {
+    const next = opts.keepFullSec ? storyEdit.updateShot(p, shotId, { durationSec: opts.keepFullSec }) : p;
+    return board.addStoryVersion(next, { shot: shotId }, media, { versionId: opts.versionId, model: opts.model, trim: opts.trim });
+  },
+});
+export const setVersionTrim = (assetId: string, versionId: string, trim: board.VersionTrim | undefined): Command => ({ label: trim ? "Trim version" : "Use full clip", apply: (p) => board.setVersionTrim(p, assetId, versionId, trim) });
 export const setStorySkipped = (target: { slot: string } | { shot: string }, skipped: boolean): Command => ({ label: skipped ? "Skip step" : "Include step", apply: (p) => board.setStorySkipped(p, target, skipped) });
 export const setQaResult = (versionId: string, checkId: string, result: board.QaResult | undefined): Command => ({ label: "QA check", apply: (p) => board.setQaResult(p, versionId, checkId, result) });
 

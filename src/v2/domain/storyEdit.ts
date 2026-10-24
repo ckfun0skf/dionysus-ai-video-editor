@@ -81,6 +81,8 @@ export interface ShotPatch {
   title?: string; description?: string; durationSec?: number; prompt?: string; camera?: string; dialogue?: string; captions?: boolean;
   qa?: QaCheck[]; layers?: StoryLayer[]; effects?: StoryEffect[];
   render?: "ai" | "html" | "still"; clipSlot?: string;
+  /** V2-SB-121: length to generate; null clears it. Ignored (cleared) when not longer than `durationSec`. */
+  genDurationSec?: number | null;
   /** V2-CUT-05: the shot's reference assets (the clip slot is kept). */
   slotIds?: string[];
   /** V2-CUT-05: asset slots created with this edit (same undo step), usually also listed in `slotIds`. */
@@ -121,6 +123,8 @@ export function updateShot(p: Project, id: string, patch: ShotPatch): Project {
   if (patch.layers) { if (patch.layers.length) n.layers = patch.layers; else delete n.layers; }
   if (patch.effects) { if (patch.effects.length) n.effects = patch.effects; else delete n.effects; }
   if (patch.durationSec !== undefined && Number.isFinite(patch.durationSec)) n.durationSec = clampSec(patch.durationSec);
+  if (patch.genDurationSec !== undefined) { if (patch.genDurationSec && Number.isFinite(patch.genDurationSec)) n.genDurationSec = clampSec(patch.genDurationSec); else delete n.genDurationSec; }
+  if (n.genDurationSec !== undefined && n.genDurationSec <= n.durationSec) delete n.genDurationSec;
   if (patch.durationSec !== undefined || patch.layers || patch.effects) {
     const { layers: _l, effects: _e, ...rest } = n;
     n = { ...rest, ...fitParts(n, n.durationSec) };
