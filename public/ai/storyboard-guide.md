@@ -38,6 +38,8 @@ How to use it: the user has agreed a story with you. Turn it into a production s
                                  // the images to attach to the clip generation IN THIS ORDER (Image 1, Image 2 …) and how to use each;
                                  // omitted = "assets" order with roles from the type (frame → start-frame, character → identity,
                                  // style → look, others → detail); at most one "start-frame" and one "end-frame"
+      "keyframe"?: { "prompt": string, "references"?: [ "<asset id>" | { "asset", "role"?, "note"? } ], "qa"?: string[] },
+                                 // render "ai" only: the opening still to generate FIRST; the clip animates from it (Image 1, start frame)
       "camera"?: string,
       "dialogue"?: string,
       "qa": string[],            // 2-5 concrete yes/no checks for the clip
@@ -166,6 +168,7 @@ Fonts — TextStyle "font":
 15. A transition in "connections" overlaps the two shots, centred on the cut: it adds no time and eats half its length from the end of the "from" shot and half from the start of the "to" shot. It is clamped to half the shorter of the two shots. For example, a 0.8 s transition out of a 2.5 s shot blends the last 0.4 s of that shot with the first 0.4 s of the next, and the total length stays the same; keep transitions short on short shots so their key action isn't covered.
 16. For an "identity" reference prefer a single clean portrait or character image (one view, plain background) over a multi-view character sheet: the sheet's layout (several poses, panels, labels) can leak into the generated frames.
 17. An asset made from other assets lists them in its "references" in attach order, as objects with a "role" when the use is not obvious from the type. Its prompt then starts with the same numbered "References:" block as a clip prompt; for an image, "start-frame" means the base image to edit (there is no end frame). Example: a close-up of the keeper's lantern on a table: "references": [{ "asset": "lantern", "role": "detail", "note": "brass and glass only" }, "keeper"], prompt "References:\nImage 1 (Brass lantern): reference only: materials, colours and objects only; brass and glass only.\nImage 2 (The keeper): reference only: keep this identity (face, body, clothes).\n\nClose-up of …".
+18. Keyframe then animate: when the opening composition matters (a character's pose, a precise layout, a hero product shot), give the "ai" shot a "keyframe": { "prompt", "references", "qa" }. The app turns it into an image asset "<shot id>.keyframe" that is made first, then attached to the clip as Image 1, the START FRAME (do not also give the shot a "start-frame" reference). The keyframe prompt describes one still image (with its own "References:" block, as for an asset); the clip prompt then describes only the motion from that frame. Example: "keyframe": { "prompt": "References:\nImage 1 (The keeper): reference only: keep this identity (face, body, clothes).\n\nThe keeper stands by the lantern, lit from below …", "references": ["keeper", "lighthouse"], "qa": ["The keeper's face matches the reference"] }, clip prompt "References:\nImage 1 (Keyframe · …): START FRAME …\n\nShe slowly turns from the lantern …".
 
 ## EXAMPLE
 ```json

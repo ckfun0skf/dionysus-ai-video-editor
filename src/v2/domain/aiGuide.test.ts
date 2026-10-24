@@ -37,10 +37,15 @@ describe("AI planner guide (V2-SB-114)", () => {
     expect(md).toContain("length 0.05–1, default 0.5 (fraction of the effect's time range, not seconds");
   });
 
-  it("the full prompt inlines the guide with RULES 1-17; the short prompt links to it", () => {
+  it("the full prompt inlines the guide with RULES 1-18; the short prompt links to it", () => {
     const full = storyboardSystemPrompt();
     for (const s of ["FORMAT (", "PRESETS", "RULES", "EXAMPLE", `14. ${RULES[13]}`, "not seconds", "START FRAME", "\"references\"?", "\"genDurationSec\"?", "- crossfade:", "- ken-burns:"]) expect(full).toContain(s);
-    expect(RULES).toHaveLength(17);
+    expect(RULES).toHaveLength(18);
+    // V2-SB-124: keyframe then animate: the format line, a rule and a worked example.
+    expect(full).toContain('"keyframe"?: { "prompt": string, "references"?:');
+    expect(full).toContain(`18. ${RULES[17]}`);
+    expect(RULES[17]).toMatch(/Image 1, the START FRAME/);
+    expect(RULES[17]).toContain('"keyframe": { "prompt": "References:');
     // V2-SB-123: asset references can carry roles; the format, a rule and a worked example say so.
     expect(full).toContain('"references"?: (string | { "asset": "<asset id>", "role"?: "start-frame" | "identity" | "look" | "detail", "note"?: string })[]');
     expect(full).toContain(`17. ${RULES[16]}`);

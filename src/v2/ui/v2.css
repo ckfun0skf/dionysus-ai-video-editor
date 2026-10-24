@@ -621,3 +621,10 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 .v2-trans:not(.has-trans) { opacity: .9; border-radius: 5px; width: 18px; margin-left: -9px; background: #f4f4f5; color: #111; border-color: #f4f4f5; }
 .v2-trans:not(.has-trans)::before { inset: -11px -13px; }
 .v2-empty-hint { color: var(--muted); font-size: 13px; text-align: center; margin: 8px 0; }
+
+/* Touch targets (V2-SB-124 follow-up): the sheet grabber's tap area is 44px tall on touch screens; the visible bar stays
+   40×4. The sticky header below it moves down by the same amount. */
+@media (pointer: coarse), (max-width: 820px) {
+  .v2-app .v2-sheet > .v2-grabber, .v2-sheet > .v2-grabber { height: 44px; }
+  .v2-sheet-head, .v2-sheet .v2-cuelist-head { top: 44px; }
+}

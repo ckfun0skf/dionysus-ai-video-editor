@@ -79,7 +79,16 @@ export interface StoryShot {
   references?: StoryReference[];
   /** V2-SB-121: seconds to generate when the model renders fixed lengths (e.g. 8 for a 5 s shot); the upload is trimmed to `durationSec`. */
   genDurationSec?: number;
+  /**
+   * V2-SB-124: keyframe then animate. A still image made first (its own prompt, references and versions) that the clip
+   * animates from: it becomes the asset `keyframeId(shot)` and is attached as the clip's "start-frame" (Image 1).
+   */
+  keyframe?: StoryKeyframe;
 }
+/** V2-SB-124: the opening still of a shot, generated before its clip. `references` work like an asset's (V2-SB-123). */
+export interface StoryKeyframe { prompt: string; references: StoryAssetRef[]; qa: string[] }
+/** The asset id a shot's keyframe gets (V2-SB-124); an asset may not use it. */
+export const keyframeId = (shotId: string) => `${shotId}.keyframe`;
 export interface StoryConnection { from: string; to: string; kind: ConnectionKind; note?: string; transition?: StoryTransition }
 export interface StoryMeta { title: string; logline?: string; synopsis?: string; aspect: string; style?: string; language?: string; textStyles?: Record<string, StoryTextStyle> }
 export interface StoryDoc { format: typeof STORYBOARD_FORMAT; meta: StoryMeta; assets: StoryAsset[]; shots: StoryShot[]; connections: StoryConnection[] }
@@ -541,6 +550,22 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
     return out;
   };
 
+  /**
+   * shots[].keyframe (V2-SB-124): { prompt, references?, qa? } for render "ai" shots. Its references are checked like an
+   * asset's; its id `<shot id>.keyframe` must be free.
+   */
+  const keyframeOf = (v: unknown, path: string, shotId: string, mode: ShotRender): StoryKeyframe | undefined => {
+    if (v === undefined) return undefined;
+    if (!isObj(v)) { err(path, 'Should be { "prompt": "<the opening still>", "references"?: [ … ], "qa"?: [ … ] }.'); return undefined; }
+    if (mode !== "ai") { warn(path, `A keyframe only applies to AI-generated clips; it is ignored for this render "${mode}" shot.`); return undefined; }
+    const prompt = str(v.prompt) ?? "";
+    if (!prompt) err(`${path}.prompt`, `Shot "${shotId}" has a keyframe, so it needs a keyframe "prompt" (the still image to generate first).`);
+    if (assetIds.has(keyframeId(shotId))) err(path, `Asset id "${keyframeId(shotId)}" is reserved for the keyframe of shot "${shotId}"; rename that asset.`);
+    const references = assetRefsOf(v.references, `${path}.references`);
+    references.map(assetRefId).forEach((r, j) => { if (!assetIds.has(r)) err(`${path}.references[${j}]`, unknownAsset(r)); });
+    return { prompt, references, qa: strList(v.qa, `${path}.qa`) };
+  };
+
   const shots: StoryShot[] = [];
   for (const pre of shotPre) {
     if (!pre) continue;
@@ -588,19 +613,25 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
     }
     const effects = effectsOf(s.effects, `${path}.effects`, dur);
     if (effects) shot.effects = effects;
+    const keyframe = keyframeOf(s.keyframe, `${path}.keyframe`, id, mode);
+    if (keyframe) {
+      shot.keyframe = keyframe;
+      // The keyframe is the start frame: another start frame stated for the clip is used as details only.
+      shot.references?.forEach((r, j) => { if (r.role === "start-frame") { warn(`${path}.references[${j}].role`, `Shot "${id}" has a keyframe, which is its start frame; "${r.asset}" is used as "detail".`); r.role = "detail"; } });
+    }
     shots.push(shot);
   }
 
   // Frame dependencies: shot B using "last frame of A" depends on A's clip.
   const order = new Map(shots.map((s, i) => [s.id, i]));
-  const deps = new Map(shots.map((s) => [s.id, s.assets.flatMap((a) => { const src = assetById.get(a)?.source; return src?.type === "lastFrame" ? [src.shot] : []; })]));
+  const deps = new Map(shots.map((s) => [s.id, [...s.assets, ...(s.keyframe?.references.map(assetRefId) ?? [])].flatMap((a) => { const src = assetById.get(a)?.source; return src?.type === "lastFrame" ? [src.shot] : []; })]));
   shots.forEach((s, i) => (deps.get(s.id) ?? []).forEach((d) => {
     if (d === s.id) err(`shots[${i}].assets`, `Shot "${s.id}" can't use its own last frame.`);
     else if ((order.get(d) ?? -1) > i) warn(`shots[${i}].assets`, `Shot "${s.id}" uses the last frame of "${d}", which comes later in the order.`);
   }));
   const depCycle = findCycle(new Map([...deps].map(([k, v]) => [k, v.filter((d) => d !== k)])));
   if (depCycle) err("shots", `Last-frame links form a loop: ${depCycle.join(" → ")}.`);
-  const usedBy = (id: string) => shots.some((s) => s.assets.includes(id) || (s.render && s.render !== "ai" && s.clip === id) || s.layers?.some((l) => l.type !== "text" && l.asset === id));
+  const usedBy = (id: string) => shots.some((s) => s.assets.includes(id) || s.keyframe?.references.some((r) => assetRefId(r) === id) || (s.render && s.render !== "ai" && s.clip === id) || s.layers?.some((l) => l.type !== "text" && l.asset === id));
   assets.forEach((a, i) => { if (!usedBy(a.id) && !assets.some((b) => b.references.some((r) => assetRefId(r) === a.id))) warn(`assets[${i}]`, `Asset "${a.id}" isn't used by any shot.`); });
 
   let connections: StoryConnection[] = [];

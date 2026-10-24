@@ -184,6 +184,7 @@ export function deleteSlot(p: Project, id: string): Project {
   const shots = Object.fromEntries(Object.entries(b.shots).map(([k, s]) => {
     if (!s.slotIds.includes(id) && !s.refOverrides?.[id] && !s.references?.some((r) => r.slotId === id)) return [k, s];
     const n: Shot = { ...s, slotIds: s.slotIds.filter((r) => r !== id) };
+    if (n.keyframe === id) delete n.keyframe;
     if (n.references) { const refs = n.references.filter((r) => r.slotId !== id); if (refs.length) n.references = refs; else delete n.references; }
     if (n.refOverrides?.[id]) { const { [id]: _p, ...o } = n.refOverrides; if (Object.keys(o).length) n.refOverrides = o; else delete n.refOverrides; }
     return [k, n];
@@ -191,10 +192,29 @@ export function deleteSlot(p: Project, id: string): Project {
   return { ...p, storyboard: { ...b, slots, shots } };
 }
 
+/**
+ * Keyframe then animate (V2-SB-124): add a frame slot `id` as the opening still of shot `shotId`, made from the shot's
+ * current references, and attach it as the clip's start frame (Image 1). AI shots only; one keyframe per shot.
+ */
+export function addKeyframe(p: Project, shotId: string, id: string): Project {
+  const b = p.storyboard, s = b?.shots[shotId];
+  if (!b || !s || s.render || s.keyframe || b.slots[id] || b.shots[id]) return p;
+  const slot: AssetSlot = {
+    id, name: `Keyframe · ${s.title}`, type: "frame", aspect: b.meta.aspect || "16:9",
+    prompt: `The opening frame of shot ${b.order.indexOf(shotId) + 1}, as one still image.${s.description ? ` ${s.description}` : ""}`,
+    references: s.slotIds.filter((x) => b.slots[x] && x !== s.clipSlot), source: { type: "generate" }, qa: [], keyframeOf: shotId,
+  };
+  const shot: Shot = { ...s, keyframe: id, slotIds: [id, ...s.slotIds] };
+  // The keyframe is now the start frame: a start frame stated before becomes details only.
+  if (shot.references?.some((r) => r.role === "start-frame")) shot.references = shot.references.map((r) => (r.role === "start-frame" ? { ...r, role: "detail" } : r));
+  return { ...p, storyboard: { ...b, slots: { ...b.slots, [id]: slot }, shots: { ...b.shots, [shotId]: shot } } };
+}
+
 /** Reference ids kept for a shot after its list is edited (clip slot kept; pins of dropped references removed). */
 export function withRefs(b: Storyboard, s: Shot, slotIds: string[]): Shot {
   const ids = [...new Set(slotIds)].filter((id) => b.slots[id] && id !== s.clipSlot);
   const n: Shot = { ...s, slotIds: s.clipSlot && b.slots[s.clipSlot] ? [...ids, s.clipSlot] : ids };
+  if (n.keyframe && !ids.includes(n.keyframe)) delete n.keyframe;
   const keep = new Set(shotRefIds(b, n));
   if (n.references) {
     const refs = n.references.filter((r) => ids.includes(r.slotId));
@@ -244,7 +264,11 @@ export function attachList(b: Storyboard, shot: Shot): AttachItem[] {
   const ok = (id: string) => !!b.slots[id] && id !== shot.clipSlot && shot.slotIds.includes(id);
   const explicit: ShotReference[] = (shot.references ?? []).filter((r) => ok(r.slotId));
   const seen = new Set(explicit.map((r) => r.slotId));
-  const items: Omit<AttachItem, "no">[] = explicit.map((r) => ({ slotId: r.slotId, role: r.role, ...(r.note ? { note: r.note } : {}), inferred: false }));
+  const kf = shot.keyframe && ok(shot.keyframe) ? shot.keyframe : undefined;
+  const items: Omit<AttachItem, "no">[] = [];
+  // V2-SB-124: the keyframe is always Image 1 and the only start frame.
+  if (kf) { items.push({ slotId: kf, role: "start-frame", inferred: false }); seen.add(kf); }
+  for (const r of explicit) if (r.slotId !== kf) items.push({ slotId: r.slotId, role: kf && r.role === "start-frame" ? "detail" : r.role, ...(r.note ? { note: r.note } : {}), inferred: false });
   for (const id of shot.slotIds) {
     if (!ok(id) || seen.has(id)) continue;
     seen.add(id);

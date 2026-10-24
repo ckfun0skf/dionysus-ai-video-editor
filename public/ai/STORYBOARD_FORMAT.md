@@ -90,6 +90,7 @@ Character sheet of an elderly lighthouse keeper holding a brass storm lantern, �
 | `prompt` | string | Required when `render` is `"ai"`. Optional for `"html"` and `"still"` (keep it anyway for v1.0 readers). Never asks for text. |
 | `assets` | string[] | Asset ids used. Should include `clip`. |
 | `camera?`, `dialogue?` | string | Unchanged. |
+| `keyframe?` **(new, V2-SB-124)** | object | `ai` shots only: the opening still to make first; the clip animates from it. See §2.4.2. |
 | `qa` | string[] | 2-5 visual checks. |
 | `render?` **(new)** | `"ai"`, `"html"` or `"still"` | Default `"ai"`. The production to-do uses this to choose the step: generate a clip, upload or refresh the HTML, or use the still. |
 | `clip?` **(new)** | asset id | Required when `render` is `"html"` (must point to an `html` asset) or `"still"` (must point to an `image` asset). Ignored for `"ai"`, with a warning. The clip renders from the asset's **selected** version (the one the user picked in the asset's version history), not simply the latest upload. |
@@ -122,6 +123,29 @@ Framing: opens on the start frame at the door, ends on a close-up of Mara at the
 ```
 
 - **In the app.** The shot details and the production step show **Attach in this order** next to *Copy prompt*: Image 1, Image 2 … with a thumbnail of the version the shot uses (a pinned version when the shot pins one, §4.2), the role, and *Save* (the share sheet on phones, so *Save Image* / *Save to Files* work on iPhone; a download on desktop). *Copy prompt* prepends a `References:` block generated from the roles when the prompt has no line starting with `References:`, so the copied prompt is right even when the planner forgot the block. Editing a shot's assets keeps the roles of the ones that stay; removing or deleting an asset drops its reference.
+
+#### 2.4.2 `shots[].keyframe` (V2-SB-124)
+
+**Keyframe then animate.** An `ai` shot can ask for its opening still to be made first, with its own prompt, references and versions; the clip is then generated from that still.
+
+```json
+"keyframe": {
+  "prompt": "References:\nImage 1 (The keeper): reference only: keep this identity (face, body, clothes).\n\nThe keeper by the lantern, lit from below …",
+  "references": ["keeper", { "asset": "lighthouse", "role": "look" }],
+  "qa": ["The keeper's face matches the reference"]
+}
+```
+
+| Field | Type | Notes |
+|---|---|---|
+| `prompt` | string | Required. One still image (the first frame of the clip). Like an asset prompt, it starts with a `References:` block when `references` is set. |
+| `references?` | (asset id \| object)[] | The images to attach when generating the keyframe, in order, exactly as `assets[].references` (§2.3.1). Omitted = none. |
+| `qa?` | string[] | Checks for the still. |
+
+- **On import** the keyframe becomes an asset slot with id `<shot id>.keyframe` (type `frame`, the project aspect, `source: generate`, name `Keyframe · <shot title>`). It is added first to the shot's assets and is always **Image 1, the start frame** of the clip. A `start-frame` in the shot's `references` is turned into `detail` with a warning, and an inferred start frame (a `frame` asset) becomes `detail`.
+- **Production order:** the keyframe step comes after the assets it is made from and right before its shot. A new keyframe version makes the clip's versions stale (the shot's inputs include it).
+- **Errors:** a missing `prompt`, an unknown reference, or an asset whose id is `<shot id>.keyframe`. A reference that is a last-frame asset of the same shot (or that would create a loop) is an error, as for `assets`. **Warnings:** a keyframe on an `html` or `still` shot (ignored).
+- **On the board:** an AI shot's details show its keyframe (or *Add keyframe*, which creates one from the shot's current references). The keyframe's details say which shot it opens. Deleting the keyframe asset makes the shot a plain AI shot again; deleting the shot keeps the asset as an ordinary frame. Duplicating a shot keeps the keyframe as a plain reference of the copy.
 
 ### 2.5 `shots[].layers[]`
 
@@ -333,6 +357,7 @@ RULES
 15. A transition in "connections" overlaps the two shots, centred on the cut: it adds no time and eats half its length from the end of the "from" shot and half from the start of the "to" shot. It is clamped to half the shorter of the two shots. For example, a 0.8 s transition out of a 2.5 s shot blends the last 0.4 s of that shot with the first 0.4 s of the next, and the total length stays the same; keep transitions short on short shots so their key action isn't covered.
 16. For an "identity" reference prefer a single clean portrait or character image (one view, plain background) over a multi-view character sheet: the sheet's layout (several poses, panels, labels) can leak into the generated frames.
 17. An asset made from other assets lists them in its "references" in attach order, as objects with a "role" when the use is not obvious from the type . Its prompt then starts with the same numbered "References:" block as a clip prompt; for an image, "start-frame" means the base image to edit (there is no end frame).
+18. Keyframe then animate: when the opening composition matters (a character's pose, a precise layout, a hero product shot), give the "ai" shot a "keyframe": { "prompt", "references", "qa" }. The app turns it into an image asset "<shot id>.keyframe" that is made first, then attached to the clip as Image 1, the START FRAME (do not also give the shot a "start-frame" reference). The keyframe prompt describes one still image; the clip prompt then describes only the motion from that frame.
 ```
 
 ## 6. Decisions, open questions and future work
