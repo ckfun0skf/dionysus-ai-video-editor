@@ -35,13 +35,15 @@ export function addTrack(comp: Composition, kind: Track["kind"], id = newId("trk
   return { ...comp, tracks: orderByGroup(tracks) };
 }
 
-export type TrackGroup = "main" | "overlay" | "text" | "audio";
-export const GROUP_LABEL: Record<TrackGroup, string> = { main: "Main", overlay: "Overlay", text: "Text & Stickers", audio: "Audio" };
-const RANK: Record<TrackGroup, number> = { text: 0, overlay: 1, main: 2, audio: 3 };
+export type TrackGroup = "main" | "overlay" | "text" | "audio" | "effect";
+export const GROUP_LABEL: Record<TrackGroup, string> = { main: "Main", overlay: "Overlay", text: "Text & Stickers", audio: "Audio", effect: "Effects" };
+/** Effect layers sit just above main: they only modify the main-track render (overlays/text draw on top). */
+const RANK: Record<TrackGroup, number> = { text: 0, overlay: 1, effect: 2, main: 3, audio: 4 };
 const lastVideo = (tracks: Track[]) => { for (let i = tracks.length - 1; i >= 0; i--) if (tracks[i].kind === "video" && tracks[i].group !== "text") return tracks[i]; return undefined; };
 /** Which timeline group a track belongs to. Text & Stickers sits above Overlay, which sits above Main. */
 export function groupOf(comp: Pick<Composition, "tracks">, t: Track): TrackGroup {
   if (t.kind === "audio") return "audio";
+  if (t.kind === "effect") return "effect";
   if (t.kind === "text" || t.group === "text") return "text";
   return lastVideo(comp.tracks)?.id === t.id ? "main" : "overlay";
 }

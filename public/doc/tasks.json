@@ -2027,6 +2027,12 @@
           "title": "Layer drag reorder, focus-mode timeline, remove group pills",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-101",
+          "title": "Effect layers: effect clips on the main-track render, live picker, focus mode",
+          "status": "done",
+          "progress": 100
         }
       ]
     },

@@ -9,6 +9,8 @@ import { compositionDuration, fadeAt, versionOf, type Project } from "../domain/
 import type { BlobStore } from "../ports/storage";
 import { subtitleAt } from "../domain/subtitles";
 import { drawTextClip } from "./text";
+import { applyEffectFrame, effectFrameAt } from "./effects";
+import { mainTrack } from "../domain/ops";
 import { correctDrift, createClock, type Clock } from "./clock";
 import { HtmlClipHost, isValidFrame, type FrameIssue } from "./htmlClip";
 
@@ -164,7 +166,14 @@ export class Player {
     const canvas = this.canvas;
     const ctx = canvas?.getContext("2d");
     if (canvas && ctx) { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+    // V2-101: effect layers modify only the main-track render; applied once main is drawn, before overlays/text.
+    const fx = effectFrameAt(comp, this.time);
+    const mainId = mainTrack(comp)?.id;
+    let fxDone = !fx;
+    const applyFx = () => { fxDone = true; if (fx && ctx && canvas) applyEffectFrame(ctx, canvas.width, canvas.height, fx); };
     for (const { track, placement, sourceTicks, mix } of layers) {
+      if (placement.clipType === "effect") continue;
+      if (!fxDone && track.id !== mainId && track.kind !== "audio") applyFx();
       if (placement.clipType === "text") {
         if (ctx && canvas && !track.hidden) this.boxes.set(placement.id, drawTextClip(ctx, placement, canvas.width, canvas.height, this.time, mix ?? 1));
         continue;
@@ -229,6 +238,7 @@ export class Player {
         }
       }
     }
+    if (!fxDone) applyFx();
     const cue = subtitleAt(comp, this.time);
     if (ctx && canvas && cue) drawSubtitle(ctx, canvas.width, canvas.height, cue.text);
     for (const [id, el] of this.pool) if (!live.has(id) && "pause" in el && !el.paused) el.pause();

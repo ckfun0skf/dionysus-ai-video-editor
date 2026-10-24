@@ -1,6 +1,6 @@
 /** Command factories for the MVP timeline. Each wraps a pure domain op. */
 import type { Command } from "./engine";
-import { DEFAULT_IMAGE_TICKS, newId, trackKindFor, type Asset, type AssetVersion, type Composition, type Placement, type Project, type TrackKind, transformOf } from "../domain/model";
+import { DEFAULT_EFFECT_TICKS, DEFAULT_IMAGE_TICKS, newId, trackKindFor, type Asset, type AssetVersion, type Composition, type Placement, type Project, type TrackKind, transformOf } from "../domain/model";
 import * as ops from "../domain/ops";
 import * as subs from "../domain/subtitles";
 import * as edit from "../domain/edit";
@@ -24,6 +24,27 @@ export const addTextClip = (at: number, data: Partial<TextData> = {}, id = newId
     if (!track) { comp = ops.addTrack(comp, "text"); track = comp.tracks[0]; }
     return ops.insertPlacement(comp, track.id, pl);
   }),
+});
+
+/** V2-101: add an effect clip at `at` (default length) on the first effect layer with room, else a new layer on top. */
+export const addEffectClip = (at: number, preset: string, params?: Record<string, number | string>, id = newId("plc")): Command => ({
+  label: "Add effect",
+  apply: (p) => withRoot(p, (c) => {
+    const start = Math.max(0, Math.round(at));
+    const pl: Placement = { id, startTicks: start, durationTicks: DEFAULT_EFFECT_TICKS, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "effect", effect: { preset, ...(params ? { params } : {}) } };
+    const fits = (t: Composition["tracks"][number]) => t.placements.every((o) => o.startTicks >= start + pl.durationTicks || o.startTicks + o.durationTicks <= start);
+    let comp = c;
+    let track = comp.tracks.find((t) => t.kind === "effect" && fits(t));
+    if (!track) { const tid = newId("trk"); comp = ops.addTrack(comp, "effect", tid); track = comp.tracks.find((t) => t.id === tid)!; }
+    return ops.insertPlacement(comp, track.id, pl);
+  }),
+});
+
+/** V2-101: change an effect clip's preset (params reset) or patch its params. Param drags coalesce. */
+export const setEffect = (id: string, patch: { preset?: string; params?: Record<string, number | string> }, label = patch.preset ? "Change effect" : "Effect settings"): Command => ({
+  label,
+  coalesceKey: patch.preset ? undefined : `fx:${id}:${Object.keys(patch.params ?? {}).sort().join(",")}`,
+  apply: (p) => withRoot(p, (c) => ({ ...c, tracks: c.tracks.map((t) => ({ ...t, placements: t.placements.map((pl) => (pl.id === id && pl.clipType === "effect" && pl.effect ? { ...pl, effect: patch.preset ? { preset: patch.preset } : { ...pl.effect, params: { ...pl.effect.params, ...patch.params } } } : pl)) })) })),
 });
 
 /** Patch a text clip's content/style. Typing into one clip coalesces into one undo step. */

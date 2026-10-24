@@ -403,3 +403,8 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 .v2-lane.is-layer-dragging { box-shadow: 0 4px 14px rgba(0,0,0,.5); outline: 1px dashed var(--accent); background: #1c1c22; }
 .v2-hidden-range { position: absolute; height: 2px; border-radius: 1px; pointer-events: none; z-index: 3; opacity: .95; }
 .v2-timeline.is-centered .v2-time-label { top: 0; height: 28px; line-height: 28px; padding-left: 0; padding-right: 8px; z-index: 9; }
+/* V2-101 effect layers */
+.v2-lane.kind-effect .v2-clip, .v2-lane.group-effect .v2-clip { background: #6b21a8; border-color: #a855f7; }
+.v2-side-fx { border-top: 1px solid #2a2a2e; padding: 8px 0; }
+.v2-side-fx > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 600; }
+.v2-side-fx > summary:hover { color: #fff; }
