@@ -196,6 +196,17 @@ Every error and warning carries a JSON path (for example `shots[2].layers[0].end
 - **Text styles:** `meta.textStyles` entries are resolved before layers: a text layer's `textStyle` names a `meta.textStyles` key first, then a registry preset, else `plain`; its inline `style` is applied on top.
 - **HTML and still clips:** a `render: "html"` or `"still"` shot's clip is rendered from the **selected** version of the `clip` asset (see §2.4) for the shot's `durationSec`. The shot shares that asset's versions: its production step waits until the asset has one, and uploading to the shot adds a version to the asset.
 
+### 4.1 Editing on the board (V2-CUT-02)
+
+After import, shots can be added, edited, duplicated, deleted and reordered on the board. Each change is one undo step.
+
+- **Reorder:** drag a card (desktop: drag or the grip; phones: long-press, then drag), use Move up/down, or press Alt+↑/↓. A connection is kept when its two shots stop being adjacent, but its transition, kind and note are ignored until they are next to each other again (the same rule as the importer). The board says which links were affected. Clips already on the timeline keep their place.
+- **Edit:** title, length, how the clip is made (AI video, HTML or still, with the asset to use), clip prompt, description, camera, dialogue, captions, checks, and removing layers or effects. Shortening a shot clamps layers and effects that run past the new end. Switching an AI shot to HTML or still keeps its AI versions; switching back restores them.
+- **Duplicate:** inserted after the original with the same plan and no clip versions. HTML and still copies share the original's asset.
+- **Delete:** the shot's versions stay in the media library and its clips stay on the timeline. Assets taken from its last frame become uploads (their versions are kept). Its connections are removed.
+- **Connections:** tap the line between two adjacent shots to set the kind, transition (preset and length) and note.
+- **Timeline links:** clips sent from a shot record the shot id, so duplicated HTML or still shots, which share an asset, are each tracked as placed.
+
 ## 5. Planner prompt (updated)
 
 **Published guide (V2-SB-114).** The planner material is generated from the registry by `src/v2/domain/storyPrompt.ts` and `src/v2/domain/aiGuide.ts`, and published with the app:

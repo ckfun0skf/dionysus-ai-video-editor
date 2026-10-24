@@ -91,7 +91,7 @@ const effects = () => (t: Track) => t.kind === "effect";
 function shotClip(asset: Asset, v: AssetVersion, shot: Shot, at: number): Placement {
   const planned = shot.durationSec > 0 ? secondsToTicks(shot.durationSec) : DEFAULT_IMAGE_TICKS;
   const durationTicks = shot.clipSlot || asset.kind === "html" ? planned : asset.kind === "image" ? DEFAULT_IMAGE_TICKS : v.media.durationTicks ?? DEFAULT_IMAGE_TICKS;
-  return { id: newId("plc"), startTicks: at, durationTicks, sourceInTicks: 0, source: { kind: "assetVersion", assetId: asset.id, versionId: v.id }, clipType: asset.kind, volume: 1 };
+  return { id: newId("plc"), startTicks: at, durationTicks, sourceInTicks: 0, source: { kind: "assetVersion", assetId: asset.id, versionId: v.id }, clipType: asset.kind, volume: 1, storyShot: shot.id };
 }
 
 function mediaLayer(p: Project, b: Storyboard, l: StoryMediaLayer, start: number, dur: number, anchor: string): Placement | undefined {
@@ -171,7 +171,8 @@ export function sendStory(p: Project): { project: Project; result: SendResult } 
   for (const conn of b.connections) {
     const kind = conn.transition && presetId("transition", conn.transition.preset);
     const to = kind ? sent.find((x) => x.shot.id === conn.to) : undefined;
-    if (!kind || !to) continue;
+    const fi = b.order.indexOf(conn.from);
+    if (!kind || !to || fi < 0 || b.order[fi + 1] !== conn.to) continue;
     const main = comp.tracks.find((t) => t.id === tid)!;
     const prev = previousAdjacent(main, to.clip);
     const fromAsset = b.shots[conn.from]?.assetId;

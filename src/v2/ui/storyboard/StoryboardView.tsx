@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { board, ops, type StoryDoc } from "../../domain";
+import { board, ops, storyEdit, type Shot, type StoryDoc } from "../../domain";
 import { cmd, type Engine } from "../../engine";
 import type { BlobStore } from "../../ports";
 import { Ic } from "../Icon";
 import { ConfirmDialog } from "../Timeline";
 import { ContextMenu } from "../desktop/ContextMenu";
 import { useEngineState, useIsMobile } from "../useEditor";
-import { BoardView, type BoardTarget } from "./BoardView";
+import { haptic } from "../gestures";
+import { BoardView, type BoardEdit, type BoardTarget } from "./BoardView";
+import { ActionSheet, ConnectionEditor, ShotEditor } from "./ShotEditor";
 import { StoryDetail } from "./StoryDetail";
 import { ProductionView } from "./ProductionView";
 import { ImportPanel, PromptPanel } from "./StoryImport";
@@ -33,13 +35,18 @@ export function StoryboardView({ engine, blobs, onClose, initialOpen, onView }: 
   const moreBtn = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState<BoardTarget | undefined>(initialOpen);
   const mobile = useIsMobile();
+  // V2-CUT-02: shot editing. `editing.after` set = a new shot not yet added (Save adds it, one undo step).
+  const [editing, setEditing] = useState<{ shot: string; after?: string | null }>();
+  const [conn, setConn] = useState<{ from: string; to: string }>();
+  const [shotMenu, setShotMenu] = useState<{ shot: string; at?: { x: number; y: number } }>();
+  const [confirmDelete, setConfirmDelete] = useState<string>();
   useEffect(() => { if (!note) return; const t = setTimeout(() => setNoteState(undefined), note.action ? NOTE_ACTION_MS : NOTE_MS); return () => clearTimeout(t); }, [note]);
   useEffect(() => {
     const k = (e: KeyboardEvent) => { // The mobile Sheet closes itself on Escape; skip it here so one press doesn't also close the board.
-      if (e.key !== "Escape" || e.target instanceof HTMLTextAreaElement || (e.target instanceof Element && e.target.closest(".v2-sheet-backdrop, .v2-cmenu")) || confirmReplace) return;
-      (open ? setOpen(undefined) : step ? setStep(undefined) : onClose()); };
+      if (e.key !== "Escape" || e.defaultPrevented || e.target instanceof HTMLTextAreaElement || (e.target instanceof Element && e.target.closest(".v2-sheet-backdrop, .v2-cmenu, .v2-sb-actsheet-backdrop")) || confirmReplace || confirmDelete || shotMenu) return;
+      (editing ? setEditing(undefined) : conn ? setConn(undefined) : open ? setOpen(undefined) : step ? setStep(undefined) : onClose()); };
     window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k);
-  }, [open, step, onClose, confirmReplace]);
+  }, [open, step, onClose, confirmReplace, confirmDelete, shotMenu, editing, conn]);
   const create = useCallback((doc: StoryDoc) => {
     setOpen(undefined);
     engine.dispatch(cmd.createStoryboard(doc));
@@ -62,6 +69,70 @@ export function StoryboardView({ engine, blobs, onClose, initialOpen, onView }: 
     setNote(`Added ${ready} clip${ready > 1 ? "s" : ""}${linked ? ` and ${linked} layer${linked > 1 ? "s" : ""}` : ""} to the end of the timeline${need ? ` · ${need}` : ""}`, first && onView ? { label: "View", run: () => onView(first.id) } : undefined);
   }, [engine, project, onView, setNote]);
   const askReplace = () => setConfirmReplace(true);
+
+  /* V2-CUT-02: board editing. Every change is one undo step; notes say what else changed. */
+  const sb = project.storyboard;
+  const no = (id: string) => (sb ? sb.order.indexOf(id) + 1 : 0);
+  const undoAction = { label: "Undo", run: () => engine.undo() };
+  const moveTo = (id: string, to: number) => {
+    if (!sb) return;
+    const from = sb.order.indexOf(id);
+    if (from < 0 || to === from) return;
+    const lost = storyEdit.connectionsLostByMove(sb, storyEdit.orderAfterMove(sb, id, to));
+    engine.dispatch(cmd.moveShot(id, to));
+    haptic(8);
+    const what = lost.map((c) => (c.transition ? "transition" : c.kind === "continuity" ? "continuity link" : c.kind === "match" ? "match cut" : "note")).filter((x, i, a) => a.indexOf(x) === i).join(" and ");
+    setNote(`Moved “${sb.shots[id].title}” to shot ${to + 1}${lost.length ? ` · its ${what} with the old neighbour is off until they’re next to each other again` : ""} · Clips already on the timeline keep their place`, undoAction);
+  };
+  const newShot = (after?: string) => { setOpen(undefined); setConn(undefined); setEditing({ shot: storyEdit.nextShotId(sb!), after: after ?? (sb!.order.at(-1) ?? null) }); };
+  const duplicate = (id: string) => {
+    const copy = storyEdit.nextShotId(sb!);
+    engine.dispatch(cmd.duplicateShot(id, copy));
+    setNote(`Duplicated as shot ${no(id) + 1} (no clip versions${sb!.shots[id].clipSlot ? "; it shares the same HTML/still" : ""})`, { label: "Open", run: () => setOpen({ shot: copy }) });
+  };
+  const remove = (id: string) => {
+    engine.dispatch(cmd.deleteShot(id));
+    if (open && "shot" in open && open.shot === id) setOpen(undefined);
+    setEditing(undefined); setConn(undefined);
+    setNote("Shot deleted · Its clips stay in the media library and on the timeline", undoAction);
+  };
+  const boardEdit: BoardEdit = {
+    move: moveTo,
+    menu: (id, at) => setShotMenu({ shot: id, at: mobile ? undefined : at }),
+    remove: (id) => setConfirmDelete(id),
+    add: () => newShot(),
+    connection: (from, to) => { setOpen(undefined); setEditing(undefined); setConn({ from, to }); },
+  };
+  const shotActions = (id: string) => {
+    const i = no(id) - 1, last = (sb?.order.length ?? 0) - 1;
+    return [
+      { label: "Edit shot", icon: "✎", shortcut: undefined as string | undefined, onSelect: () => { setOpen(undefined); setConn(undefined); setEditing({ shot: id }); } },
+      { label: "Duplicate", icon: "⧉", onSelect: () => duplicate(id) },
+      { label: "Insert shot after", icon: "+", onSelect: () => newShot(id) },
+      { label: "Move up", icon: "↑", shortcut: mobile ? undefined : "Alt+↑", disabled: i <= 0, onSelect: () => moveTo(id, i - 1) },
+      { label: "Move down", icon: "↓", shortcut: mobile ? undefined : "Alt+↓", disabled: i >= last, onSelect: () => moveTo(id, i + 1) },
+      { label: "Delete shot…", icon: "🗑", shortcut: mobile ? undefined : "Del", danger: true, onSelect: () => setConfirmDelete(id) },
+    ];
+  };
+  const deleteMessage = (id: string) => {
+    if (!sb?.shots[id]) return "";
+    const fx = storyEdit.deleteShotEffects(sb, id);
+    const parts = ["Its clip versions stay in the media library, and clips already on the timeline stay where they are."];
+    if (fx.frames.length) parts.push(`${fx.frames.map((f) => `“${f.name}”`).join(", ")} ${fx.frames.length > 1 ? "were" : "was"} taken from its last frame and will become ${fx.frames.length > 1 ? "uploads" : "an upload"} (versions kept).`);
+    parts.push("Undo brings the shot back.");
+    return parts.join(" ");
+  };
+  const editShot: Shot | undefined = editing && sb ? sb.shots[editing.shot] ?? (editing.after !== undefined ? { id: editing.shot, title: "New shot", description: "", durationSec: storyEdit.DEFAULT_SHOT_SEC, prompt: "", slotIds: [], qa: [] } : undefined) : undefined;
+  const isNew = !!editing && !!sb && !sb.shots[editing.shot];
+  const saveShot = (patch: storyEdit.ShotPatch) => {
+    if (!editing) return;
+    if (isNew) {
+      engine.dispatch(cmd.addShot(editing.shot, patch, editing.after));
+      setNote(`Added shot ${no(editing.after ?? "") + 1}`, { label: "Open", run: () => setOpen({ shot: editing.shot }) });
+    } else engine.dispatch(cmd.updateShot(editing.shot, patch));
+    setEditing(undefined);
+    if (!isNew && !mobile) setOpen({ shot: editing.shot });
+  };
   const title = step === "prompt" ? (has ? "AI prompt" : "1 · AI prompt") : step === "import" ? (has ? "Replace storyboard" : "2 · Import JSON") : step === "production" ? "Production" : "Storyboard";
   return (
     <div className="v2-board" role="region" aria-label="Storyboard">
@@ -87,7 +158,7 @@ export function StoryboardView({ engine, blobs, onClose, initialOpen, onView }: 
       </header>
       <div className="v2-board-body">
         {step === "production" && has ? <ProductionView project={project} thumbs={thumbs} engine={engine} blobs={blobs} mobile={mobile} /> : step === "prompt" ? <PromptPanel /> : step === "import" ? <ImportPanel onCreate={create} replacing={has} /> : has ? (
-          <BoardView project={project} thumbs={thumbs} onOpen={setOpen} openKey={open && ("slot" in open ? open.slot : open.shot)} />
+          <BoardView project={project} thumbs={thumbs} onOpen={(t) => { setEditing(undefined); setConn(undefined); setOpen(t); }} openKey={editing?.shot ?? (open && ("slot" in open ? open.slot : open.shot))} edit={boardEdit} mobile={mobile} />
         ) : (
           <div className="v2-sb-empty">
             <div className="v2-sb-hero"><Ic g="board" size={36} /><h3>Plan your video with your own AI</h3><p>Agree the story with your AI, have it write a storyboard JSON, then import it here. Dionysus turns it into shots, the assets each needs, and a step-by-step production list.</p></div>
@@ -101,7 +172,17 @@ export function StoryboardView({ engine, blobs, onClose, initialOpen, onView }: 
           </div>
         )}
       </div>
-      {has && open && !step && <StoryDetail project={project} target={open} thumbs={thumbs} engine={engine} blobs={blobs} mobile={mobile} onClose={() => setOpen(undefined)} onOpen={setOpen} />}
+      {has && open && !step && !editing && !conn && <StoryDetail project={project} target={open} thumbs={thumbs} engine={engine} blobs={blobs} mobile={mobile} onClose={() => setOpen(undefined)} onOpen={setOpen}
+        onEdit={"shot" in open ? () => setEditing({ shot: open.shot }) : undefined} />}
+      {has && editShot && !step && <ShotEditor key={editing!.shot} project={project} shot={editShot} number={isNew ? no(editing!.after ?? "") + 1 : no(editShot.id)} isNew={isNew} mobile={mobile}
+        onSave={saveShot} onCancel={() => setEditing(undefined)} onDelete={() => setConfirmDelete(editShot.id)} />}
+      {has && conn && !step && sb && storyEdit.adjacent(sb, conn.from, conn.to) && <ConnectionEditor project={project} from={conn.from} to={conn.to} mobile={mobile}
+        onChange={(patch) => engine.dispatch(cmd.setConnection(conn.from, conn.to, patch))} onClose={() => setConn(undefined)} />}
+      {shotMenu && sb?.shots[shotMenu.shot] && (shotMenu.at
+        ? <ContextMenu x={shotMenu.at.x} y={shotMenu.at.y} label={`Shot ${no(shotMenu.shot)} actions`} onClose={() => setShotMenu(undefined)} items={shotActions(shotMenu.shot).flatMap((a, i) => (i === 5 || i === 3 ? ["sep" as const, a] : [a]))} />
+        : <ActionSheet title={`Shot ${no(shotMenu.shot)} · ${sb.shots[shotMenu.shot].title}`} actions={shotActions(shotMenu.shot)} onClose={() => setShotMenu(undefined)} />)}
+      {confirmDelete && sb?.shots[confirmDelete] && <ConfirmDialog title={`Delete shot ${no(confirmDelete)} “${sb.shots[confirmDelete].title}”?`} message={deleteMessage(confirmDelete)} confirm="Delete"
+        onCancel={() => setConfirmDelete(undefined)} onConfirm={() => { const id = confirmDelete; setConfirmDelete(undefined); remove(id); }} />}
       {note && <div className="v2-sb-note" role="status"><span>{note.text}</span>{note.action && <button className="v2-sb-note-act" onClick={() => { setNoteState(undefined); note.action!.run(); }}>{note.action.label}</button>}</div>}
       {more && <ContextMenu x={more.x} y={more.y} label="More storyboard actions" onClose={() => setMore(undefined)} items={[
         { label: "AI prompt", icon: "⎘", onSelect: () => setStep("prompt") },

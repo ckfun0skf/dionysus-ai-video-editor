@@ -15,9 +15,11 @@ const kindName = (k: MediaKind) => KIND_NAME[k] ?? `a ${k} file`;
 const fmtDate = (iso: string) => { const d = new Date(iso); return Number.isNaN(+d) ? "" : d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); };
 
 /** Details for one shot or asset slot: versions (pick one), upload, prompt to copy, last-frame extraction. */
-export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, onClose, onOpen, inline, head }: {
+export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, onClose, onOpen, inline, head, onEdit }: {
   project: Project; target: BoardTarget; thumbs: Record<string, string>; engine: Engine; blobs: BlobStore; mobile: boolean;
   onClose: () => void; onOpen: (t: BoardTarget) => void;
+  /** V2-CUT-02: open the shot editor. */
+  onEdit?: () => void;
   /** Production wizard: render in place (no sheet / side panel) under `head`. */
   inline?: boolean; head?: ReactNode;
 }) {
@@ -86,7 +88,7 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
   const body = (
     <div className="v2-sb-detail-body">
       {head}
-      {(inline || !mobile) && <div className="v2-sb-detail-head"><Ic g={icon} size={18} /><h3>{title}</h3>{!inline && <button className="v2-icon v2-sb-icon" aria-label="Close details" title="Close (Esc)" onClick={onClose}><Ic g="✕" size={18} /></button>}</div>}
+      {(inline || !mobile) && <div className="v2-sb-detail-head"><Ic g={icon} size={18} /><h3>{title}</h3>{onEdit && <button className="v2-btn v2-sb-btn" onClick={onEdit} title="Edit title, length, prompt, how the clip is made, checks…"><Ic g="✎" size={16} /> Edit</button>}{!inline && <button className="v2-icon v2-sb-icon" aria-label="Close details" title="Close (Esc)" onClick={onClose}><Ic g="✕" size={18} /></button>}</div>}
       {shot && <p className="v2-sb-detail-desc">{shot.durationSec}s · {shot.description}</p>}
       {clipSlot && (
         <p className="v2-sb-cliplink" role="note">
@@ -155,7 +157,7 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
   );
   if (inline) return <section className="v2-sb-inline" aria-label={title}>{body}</section>;
   return mobile
-    ? <Sheet label={title} onClose={onClose} className="v2-sb-sheet" initial={2}>{body}</Sheet>
+    ? <Sheet label={title} onClose={onClose} className="v2-sb-sheet" initial={2} extra={onEdit && <button className="v2-btn v2-sb-btn" onClick={onEdit}><Ic g="✎" size={16} /> Edit</button>}>{body}</Sheet>
     : <aside className="v2-sb-detail" role="dialog" aria-label={title}>{body}</aside>;
 }
 

@@ -2067,8 +2067,8 @@
         {
           "id": "V2-CUT-02",
           "title": "Storyboard view (shots list/board, CRUD, reorder)",
-          "status": "todo",
-          "progress": 0
+          "status": "done",
+          "progress": 100
         },
         {
           "id": "V2-CUT-03",

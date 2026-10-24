@@ -77,6 +77,8 @@ export interface Placement {
    * Storyboard linked item (V2-SB-113): a layer, caption or effect clip sent with a shot. It follows the shot clip
    * `anchor` on version swaps (see domain/storyLinks). `want` remembers the offset/length before a clamp.
    */
+  /** Storyboard shot this clip was sent as (V2-CUT-02): lets shots that share a clip asset be sent once each. */
+  storyShot?: string;
   storyLink?: { anchor: string; want?: { offset: number; duration: number; clampedOffset: number; clampedDuration: number } };
 }
 
