@@ -165,3 +165,4 @@
   .v2-prod-nav { position: sticky; top: -16px; z-index: 2; background: var(--bg); padding-top: 12px; flex-wrap: nowrap; }
   .v2-prod-nav .v2-spacer { flex: 1; }
 }
+.v2-sb-placed { color: var(--accent); }

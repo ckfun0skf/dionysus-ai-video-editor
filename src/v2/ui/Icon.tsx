@@ -11,7 +11,7 @@ import {
  * (e.g. "✂") so menus stay data; unknown keys fall back to the text itself.
  */
 export const ICONS: Record<string, LucideIcon> = {
-  board: Clapperboard, json: FileJson, link: Link2, ok: CircleCheck, alert: CircleAlert, todo: ListTodo, "image-up": ImageUp, regen: RefreshCw, skip: SkipForward,
+  board: Clapperboard, json: FileJson, link: Link2, ok: CircleCheck, alert: CircleAlert, todo: ListTodo, "image-up": ImageUp, regen: RefreshCw, skip: SkipForward, "to-timeline": Film,
   "≡": Captions, "⟳": RotateCw, "🧲": Magnet,
   "✎": Pencil, "✕": X, "↶": Undo2, "↷": Redo2, "⏮": SkipBack, "❚❚": Pause, "▶": Play, "⇤": ArrowLeftToLine, "⧉": CopyPlus, "⎘": Copy,
   "📋": ClipboardPaste, "🗑": Trash2, "✓": Check, "⤓": FileAudio, "🔈": Volume1, "🔇": VolumeX, "🔊": Volume2, "❄": Snowflake, "⟲": Rewind,
