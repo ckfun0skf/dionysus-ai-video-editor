@@ -3,6 +3,7 @@ import { ArrayBufferTarget, Muxer } from "mp4-muxer";
 import type { Project } from "../../domain/model";
 import type { BlobStore } from "../../ports/storage";
 import { Player } from "../player";
+import { ExportVideoFrames } from "./videoFrames";
 import { audioPlan, exportDuration, exportSize, frameTimes, type AudioSegment, type Resolution } from "./plan";
 
 export interface ExportProgress { stage: "audio" | "video" | "finalize"; done: number; total: number }
@@ -63,17 +64,20 @@ export async function exportProject(project: Project, blobs: BlobStore, o: Expor
   canvas.width = width; canvas.height = height;
   const player = new Player(project, blobs, still);
   player.canvas = canvas;
+  player.offline = true;
+  player.exportVideo = new ExportVideoFrames((k) => blobs.get(k));
+  const check = () => stopOnBlankVideo(project, player);
   try {
     const avc = o.forceWebm ? undefined : await pickAvc(width, height, fps);
     const r = avc
-      ? await toMp4(player, canvas, avc, audio, frameTimes(Math.round(seconds * 120_000), fps), fps, o)
-      : await toWebm(player, canvas, audio, frameTimes(Math.round(seconds * 120_000), fps), fps, o);
-    const warnings = frameWarnings(project, player.frameIssues);
+      ? await toMp4(player, canvas, avc, audio, frameTimes(Math.round(seconds * 120_000), fps), fps, o, check)
+      : await toWebm(player, canvas, audio, frameTimes(Math.round(seconds * 120_000), fps), fps, o, check);
+    const warnings = frameWarnings(project, player.frameIssues, player.videoStats);
     return warnings.length ? { ...r, warnings } : r;
   } finally { player.dispose(); }
 }
 
-async function toMp4(player: Player, canvas: HTMLCanvasElement, cfg: VideoEncoderConfig, audio: AudioBuffer | undefined, times: number[], fps: number, o: ExportOptions): Promise<ExportResult> {
+async function toMp4(player: Player, canvas: HTMLCanvasElement, cfg: VideoEncoderConfig, audio: AudioBuffer | undefined, times: number[], fps: number, o: ExportOptions, check: () => void): Promise<ExportResult> {
   const aCfg: AudioEncoderConfig = { codec: "mp4a.40.2", sampleRate: RATE, numberOfChannels: 2, bitrate: 192_000 };
   // AAC first; Opus-in-MP4 where AAC is unavailable (e.g. Chromium without proprietary codecs).
   const ok = async (c: AudioEncoderConfig) => typeof AudioEncoder !== "undefined" && !!(await AudioEncoder.isConfigSupported(c).catch(() => ({ supported: false }))).supported;
@@ -84,15 +88,22 @@ async function toMp4(player: Player, canvas: HTMLCanvasElement, cfg: VideoEncode
   let failure: unknown;
   const venc = new VideoEncoder({ output: (c, m) => muxer.addVideoChunk(c, m), error: (e) => { failure = e; } });
   venc.configure(cfg);
+  try {
   for (let i = 0; i < times.length; i++) {
     abortIf(o.signal);
     if (failure) throw failure;
     await player.renderAt(times[i]);
+    check();
     const frame = new VideoFrame(canvas, { timestamp: Math.round((i * 1e6) / fps), duration: Math.round(1e6 / fps) });
     venc.encode(frame, { keyFrame: i % (fps * 2) === 0 });
     frame.close();
     while (venc.encodeQueueSize > 8) await new Promise((r) => setTimeout(r, 1));
     o.onProgress?.({ stage: "video", done: i + 1, total: times.length });
+  }
+  } catch (e) {
+    // Free the hardware encoder on abort or a hard export error (e.g. a clip with no picture).
+    if (venc.state !== "closed") venc.close();
+    throw e;
   }
   o.onProgress?.({ stage: "finalize", done: 0, total: 1 });
   await venc.flush(); venc.close();
@@ -115,7 +126,7 @@ async function toMp4(player: Player, canvas: HTMLCanvasElement, cfg: VideoEncode
 }
 
 /** Fallback: real-time capture (frames paced to the wall clock) with the pre-mixed audio played into the recorder. */
-async function toWebm(player: Player, canvas: HTMLCanvasElement, audio: AudioBuffer | undefined, times: number[], fps: number, o: ExportOptions): Promise<ExportResult> {
+async function toWebm(player: Player, canvas: HTMLCanvasElement, audio: AudioBuffer | undefined, times: number[], fps: number, o: ExportOptions, check: () => void): Promise<ExportResult> {
   if (typeof MediaRecorder === "undefined" || !canvas.captureStream) throw new Error("This browser can't export video (no WebCodecs or MediaRecorder).");
   const stream = canvas.captureStream(0);
   const vt = stream.getVideoTracks()[0] as MediaStreamTrack & { requestFrame?: () => void };
@@ -134,6 +145,7 @@ async function toWebm(player: Player, canvas: HTMLCanvasElement, audio: AudioBuf
     for (let i = 0; i < times.length; i++) {
       abortIf(o.signal);
       await player.renderAt(times[i]);
+      check();
       const wait = t0 + (i * 1000) / fps - performance.now();
       if (wait > 0) await new Promise((r) => setTimeout(r, wait));
       vt.requestFrame?.();
@@ -143,19 +155,40 @@ async function toWebm(player: Player, canvas: HTMLCanvasElement, audio: AudioBuf
   return { blob: new Blob(parts, { type: "video/webm" }), ext: "webm", note: "This browser has no H.264 encoder, so the export is WebM (recorded in real time)." };
 }
 
-/** One line per HTML clip whose frames timed out or were rejected; the export used the last good frame. */
-export function frameWarnings(project: Project, issues: { placementId: string; t: number; issue: "timeout" | "invalid" }[]): string[] {
-  const by = new Map<string, { timeout: number; invalid: number; first: number }>();
+const clipName = (project: Project, id: string, fallback: string) => {
+  const p = project.compositions[project.rootCompositionId].tracks.flatMap((t) => t.placements).find((x) => x.id === id);
+  return { name: (p && project.assets[p.source.assetId]?.name) || fallback, at: p ? p.startTicks / 120_000 : 0 };
+};
+
+/** How to get a clip through export when this browser can't decode it. */
+export function decodeAdvice(reason: string): string {
+  return /HEVC|H\.265|hvc1|hev1/i.test(reason)
+    ? "Re-import it as H.264 MP4 (on iPhone: Settings › Camera › Formats › Most Compatible, or convert it first), or export on a device that plays HEVC (desktop Safari/Chrome on a recent Mac or PC)."
+    : "Re-import it as an H.264 MP4, or try exporting in desktop Chrome.";
+}
+
+/** A video clip whose first frames all came out without a picture stops the export with a message naming it, rather than writing black. */
+export function stopOnBlankVideo(project: Project, player: Pick<Player, "videoStats" | "exportVideo">) {
+  for (const [id, s] of player.videoStats) {
+    if (s.frames < 3 || s.blank < s.frames) continue;
+    const { name, at } = clipName(project, id, "a video clip");
+    const why = [player.exportVideo?.reasons.get(id), s.detail].filter(Boolean).join("; ");
+    throw new Error(`The video clip "${name}" (at ${at.toFixed(1)} s on the timeline) has no picture in this browser — ${why || "no frame could be decoded"}. ${decodeAdvice(why)}`);
+  }
+}
+
+/** One line per clip whose frames timed out, were rejected (HTML clips) or had no picture (video clips). */
+export function frameWarnings(project: Project, issues: { placementId: string; t: number; issue: "timeout" | "invalid" | "blank" }[], videoStats?: Player["videoStats"]): string[] {
+  const by = new Map<string, { timeout: number; invalid: number; blank: number; first: number }>();
   for (const i of issues) {
-    const e = by.get(i.placementId) ?? { timeout: 0, invalid: 0, first: i.t };
+    const e = by.get(i.placementId) ?? { timeout: 0, invalid: 0, blank: 0, first: i.t };
     e[i.issue] += 1; e.first = Math.min(e.first, i.t);
     by.set(i.placementId, e);
   }
-  const comp = project.compositions[project.rootCompositionId];
   return [...by].map(([id, e]) => {
-    const p = comp.tracks.flatMap((t) => t.placements).find((x) => x.id === id);
-    const name = (p && project.assets[p.source.assetId]?.name) ?? "HTML clip";
-    const what = [e.timeout && `${e.timeout} frame${e.timeout > 1 ? "s" : ""} timed out (4 s)`, e.invalid && `${e.invalid} invalid frame${e.invalid > 1 ? "s" : ""}`].filter(Boolean).join(", ");
-    return `${name}: ${what}, first at ${(e.first / 120_000).toFixed(2)} s. Those frames reuse the last good image (or are blank).`;
+    const name = clipName(project, id, e.blank ? "Video clip" : "HTML clip").name;
+    const s = (n: number) => (n > 1 ? "s" : "");
+    const what = [e.timeout && `${e.timeout} frame${s(e.timeout)} timed out (4 s)`, e.invalid && `${e.invalid} invalid frame${s(e.invalid)}`, e.blank && `${e.blank} frame${s(e.blank)} had no picture${videoStats?.get(id)?.detail ? ` (${videoStats.get(id)!.detail})` : ""}`].filter(Boolean).join(", ");
+    return `${name}: ${what}, first at ${(e.first / 120_000).toFixed(2)} s. ${e.blank ? "Those frames show what is underneath the clip." : "Those frames reuse the last good image (or are blank)."}`;
   });
 }
