@@ -3,8 +3,9 @@ import type { StoryDoc } from "../../domain";
 import { cmd, type Engine } from "../../engine";
 import type { BlobStore } from "../../ports";
 import { Ic } from "../Icon";
-import { useEngineState } from "../useEditor";
+import { useEngineState, useIsMobile } from "../useEditor";
 import { BoardView, type BoardTarget } from "./BoardView";
+import { StoryDetail } from "./StoryDetail";
 import { ImportPanel, PromptPanel } from "./StoryImport";
 import { useVersionThumbs } from "./useVersionThumbs";
 import "./storyboard.css";
@@ -12,18 +13,23 @@ import "./storyboard.css";
 type Step = "prompt" | "import";
 
 /** Storyboard workspace (V2-M4). Full-screen over the editor so the timeline keeps its state. */
-export function StoryboardView({ engine, blobs, onClose, onOpenItem }: { engine: Engine; blobs: BlobStore; onClose: () => void; onOpenItem?: (t: BoardTarget) => void }) {
+export function StoryboardView({ engine, blobs, onClose }: { engine: Engine; blobs: BlobStore; onClose: () => void }) {
   const { project, canUndo, canRedo } = useEngineState(engine);
   const thumbs = useVersionThumbs(project, blobs);
   const has = !!project.storyboard;
   const [step, setStep] = useState<Step | undefined>();
   const [note, setNote] = useState<string>();
+  const [open, setOpen] = useState<BoardTarget>();
+  const mobile = useIsMobile();
   useEffect(() => { if (!note) return; const t = setTimeout(() => setNote(undefined), 3500); return () => clearTimeout(t); }, [note]);
   useEffect(() => {
-    const k = (e: KeyboardEvent) => { if (e.key === "Escape" && !(e.target instanceof HTMLTextAreaElement)) (step ? setStep(undefined) : onClose()); };
+    const k = (e: KeyboardEvent) => { // The mobile Sheet closes itself on Escape; skip it here so one press doesn't also close the board.
+      if (e.key !== "Escape" || e.target instanceof HTMLTextAreaElement || (e.target instanceof Element && e.target.closest(".v2-sheet-backdrop"))) return;
+      (open ? setOpen(undefined) : step ? setStep(undefined) : onClose()); };
     window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k);
-  }, [step, onClose]);
+  }, [open, step, onClose]);
   const create = useCallback((doc: StoryDoc) => {
+    setOpen(undefined);
     engine.dispatch(cmd.createStoryboard(doc));
     setStep(undefined);
     setNote(has ? "Storyboard replaced — Undo to get the old one back" : `“${doc.meta.title}” is ready`);
@@ -44,7 +50,7 @@ export function StoryboardView({ engine, blobs, onClose, onOpenItem }: { engine:
       </header>
       <div className="v2-board-body">
         {step === "prompt" ? <PromptPanel /> : step === "import" ? <ImportPanel onCreate={create} replacing={has} /> : has ? (
-          <BoardView project={project} thumbs={thumbs} onOpen={(t) => (onOpenItem ? onOpenItem(t) : setNote("Uploading versions and picking one per shot arrives in the next update."))} />
+          <BoardView project={project} thumbs={thumbs} onOpen={setOpen} openKey={open && ("slot" in open ? open.slot : open.shot)} />
         ) : (
           <div className="v2-sb-empty">
             <div className="v2-sb-hero"><Ic g="board" size={36} /><h3>Plan your video with your own AI</h3><p>Agree the story with your AI, have it write a storyboard JSON, then import it here. Dionysus turns it into shots, the assets each needs, and a step-by-step production list.</p></div>
@@ -58,6 +64,7 @@ export function StoryboardView({ engine, blobs, onClose, onOpenItem }: { engine:
           </div>
         )}
       </div>
+      {has && open && !step && <StoryDetail project={project} target={open} thumbs={thumbs} engine={engine} blobs={blobs} mobile={mobile} onClose={() => setOpen(undefined)} onOpen={setOpen} />}
       {note && <div className="v2-sb-note" role="status">{note}</div>}
     </div>
   );
