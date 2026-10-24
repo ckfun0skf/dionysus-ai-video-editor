@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto";
 import { describe, expect, it } from "vitest";
-import { createDbHandle, createIndexedDbStorage, isClosedError, RELOAD_NEEDED } from "./indexeddb";
+import { createDbHandle, createIndexedDbStorage, DB_VERSION, isClosedError, RELOAD_NEEDED } from "./indexeddb";
 
 let n = 0;
 const name = () => `reopen-test-${++n}`;
@@ -28,7 +28,7 @@ describe("IndexedDB connection resilience (V2-102)", () => {
     const s = createIndexedDbStorage(db);
     await s.blobs.put("a", new Blob(["1"]));
     // A newer tab opens version 2: our connection must let go (not block it).
-    await new Promise<void>((res, rej) => { const r = indexedDB.open(db, 2); r.onsuccess = () => { r.result.close(); res(); }; r.onerror = () => rej(r.error); r.onblocked = () => rej(new Error("blocked")); });
+    await new Promise<void>((res, rej) => { const r = indexedDB.open(db, DB_VERSION + 1); r.onsuccess = () => { r.result.close(); res(); }; r.onerror = () => rej(r.error); r.onblocked = () => rej(new Error("blocked")); });
     // Our next open is now at v1 < v2 → VersionError → friendly reload message.
     await expect(s.blobs.keys()).rejects.toThrow(RELOAD_NEEDED);
   });

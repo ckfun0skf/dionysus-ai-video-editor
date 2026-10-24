@@ -16,6 +16,12 @@ export function mediaKindOf(file: { type: string; name: string }): MediaKind | u
   return undefined;
 }
 
+const MIME_BY_EXT: Record<string, string> = { mov: "video/quicktime", mp4: "video/mp4", m4v: "video/mp4", webm: "video/webm", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", heic: "image/heic", mp3: "audio/mpeg", wav: "audio/wav", m4a: "audio/mp4", aac: "audio/aac", ogg: "audio/ogg", flac: "audio/flac", html: "text/html", htm: "text/html" };
+/** The file's MIME type, or one guessed from the extension (iOS picker files sometimes arrive with an empty type). */
+export function mimeOf(file: { type: string; name: string }): string {
+  return file.type || MIME_BY_EXT[file.name.split(".").pop()?.toLowerCase() ?? ""] || "";
+}
+
 export async function probeMedia(kind: MediaKind, url: string): Promise<{ durationTicks?: number; width?: number; height?: number }> {
   if (kind === "html") return { width: 1920, height: 1080 }; // renders at the output size; length is set on the timeline
   if (kind === "image") {
@@ -53,10 +59,12 @@ export async function importFile(file: File, blobs: BlobStore, probe = probeMedi
   const url = URL.createObjectURL(file);
   try {
     const info = await probe(kind, url); // throws on unreadable media: nothing is stored
-    await blobs.put(blobKey, file);
+    const mime = mimeOf(file);
+    // Storage chunks the bytes itself (V2-108); retyping only matters when the picker gave no type.
+    await blobs.put(blobKey, mime === file.type ? file : new Blob([file], { type: mime }));
     return {
       id, kind, name: file.name, selectedVersionId: versionId,
-      versions: [{ id: versionId, createdAt: new Date().toISOString(), media: { blobKey, mime: file.type, ...info }, provenance: { source: "import", inputs: [] } }],
+      versions: [{ id: versionId, createdAt: new Date().toISOString(), media: { blobKey, mime, ...info }, provenance: { source: "import", inputs: [] } }],
     };
   } finally {
     URL.revokeObjectURL(url);
