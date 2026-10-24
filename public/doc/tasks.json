@@ -2159,6 +2159,12 @@
           "title": "Desktop redesign: asset browser tabs, contextual inspector, project settings, resizable persisted panels",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-107",
+          "title": "Desktop shortcuts: J/K/L shuttle, ? sheet, context menus, tooltips, nudge/zoom keys",
+          "status": "done",
+          "progress": 100
         }
       ]
     },
