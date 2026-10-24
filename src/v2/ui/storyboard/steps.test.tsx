@@ -2,7 +2,8 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import { board, createProject, EXAMPLE_STORYBOARD, story, storySteps } from "../../domain";
+import { board, createProject, story, storySteps } from "../../domain";
+import { LANTERN_KEEPER } from "../../domain/__fixtures__/lanternKeeper";
 import { cmd, Engine } from "../../engine";
 import { createMemoryStorage } from "../../persistence";
 import { StoryboardView } from "./StoryboardView";
@@ -15,7 +16,7 @@ beforeAll(() => {
 });
 afterEach(() => { document.body.innerHTML = ""; phone = false; });
 const btn = (el: Element, t: string) => [...el.querySelectorAll("button")].find((b) => b.getAttribute("aria-label") === t || b.textContent?.trim() === t) as HTMLButtonElement;
-const doc = (() => { const r = story.validateStoryboard(EXAMPLE_STORYBOARD); if (!r.ok) throw new Error("bad"); return r.doc; })();
+const doc = (() => { const r = story.validateStoryboard(LANTERN_KEEPER); if (!r.ok) throw new Error("bad"); return r.doc; })();
 
 async function mount() {
   const el = document.createElement("div"); document.body.appendChild(el);

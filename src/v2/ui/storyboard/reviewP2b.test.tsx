@@ -4,7 +4,8 @@ import { createRoot } from "react-dom/client";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { createProject, EXAMPLE_STORYBOARD, ops, story, type MediaRef } from "../../domain";
+import { createProject, ops, story, type MediaRef } from "../../domain";
+import { LANTERN_KEEPER } from "../../domain/__fixtures__/lanternKeeper";
 import { cmd, Engine } from "../../engine";
 import { createMemoryStorage } from "../../persistence";
 import { secondsToTicks as s } from "../../domain/time";
@@ -19,7 +20,7 @@ beforeAll(() => {
 });
 afterEach(() => { document.body.innerHTML = ""; phone = false; });
 
-const doc = (() => { const r = story.validateStoryboard(EXAMPLE_STORYBOARD); if (!r.ok) throw new Error("bad"); return r.doc; })();
+const doc = (() => { const r = story.validateStoryboard(LANTERN_KEEPER); if (!r.ok) throw new Error("bad"); return r.doc; })();
 const media = (sec: number): MediaRef => ({ blobKey: `b${sec}`, mime: "video/mp4", durationTicks: s(sec) });
 const btn = (el: Element, t: string) => [...el.querySelectorAll("button")].find((b) => b.textContent?.trim() === t || b.getAttribute("aria-label") === t) as HTMLButtonElement;
 const setText = (ta: HTMLTextAreaElement, v: string) => {
@@ -98,7 +99,7 @@ describe("storyboard review P2 (second batch)", () => {
     await act(async () => btn(el, "Load example").click());
     expect(el.querySelector('[data-testid="story-preview"]')).not.toBeNull();
     const ta = el.querySelector('[aria-label="Storyboard JSON"]') as HTMLTextAreaElement;
-    const bad = structuredClone(EXAMPLE_STORYBOARD) as unknown as { shots: { durationSec: unknown }[] };
+    const bad = structuredClone(LANTERN_KEEPER) as unknown as { shots: { durationSec: unknown }[] };
     bad.shots[1].durationSec = "five";
     const text = "Here you go:\n```json\n" + JSON.stringify(bad, null, 2) + "\n```";
     await act(async () => setText(ta, text));

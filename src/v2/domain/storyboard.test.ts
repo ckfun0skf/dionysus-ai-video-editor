@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { createProject, type MediaRef, type Project } from "./model";
 import * as board from "./storyboard";
-import { EXAMPLE_STORYBOARD } from "./storyPrompt";
+import { LANTERN_KEEPER } from "./__fixtures__/lanternKeeper";
 import { validateStoryboard } from "./storyJson";
 
-const doc = (() => { const r = validateStoryboard(EXAMPLE_STORYBOARD); if (!r.ok) throw new Error("bad example"); return r.doc; })();
+const doc = (() => { const r = validateStoryboard(LANTERN_KEEPER); if (!r.ok) throw new Error("bad example"); return r.doc; })();
 const img: MediaRef = { blobKey: "b", mime: "image/png", width: 16, height: 9 };
 const vid: MediaRef = { blobKey: "v", mime: "video/mp4", durationTicks: 600_000 };
 let n = 0;

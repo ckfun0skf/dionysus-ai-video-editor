@@ -2,7 +2,8 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import { board, createProject, EXAMPLE_STORYBOARD, story, type MediaRef } from "../../domain";
+import { board, createProject, story, type MediaRef } from "../../domain";
+import { LANTERN_KEEPER } from "../../domain/__fixtures__/lanternKeeper";
 import { cmd, Engine } from "../../engine";
 import { createMemoryStorage } from "../../persistence";
 import { secondsToTicks as s } from "../../domain/time";
@@ -18,7 +19,7 @@ beforeAll(() => {
 });
 afterEach(() => { document.body.innerHTML = ""; });
 
-const doc = (() => { const r = story.validateStoryboard(EXAMPLE_STORYBOARD); if (!r.ok) throw new Error("bad"); return r.doc; })();
+const doc = (() => { const r = story.validateStoryboard(LANTERN_KEEPER); if (!r.ok) throw new Error("bad"); return r.doc; })();
 const media = (sec: number, mime = "video/mp4"): MediaRef => ({ blobKey: `b${sec}${mime}`, mime, durationTicks: mime.startsWith("video") ? s(sec) : undefined });
 
 /** s1 has v1 (5 s) on the timeline, then the keeper changes, so s1 "may not match"; s1 then gets a 3 s v2. */

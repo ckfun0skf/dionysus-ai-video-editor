@@ -6,9 +6,9 @@ To plan a storyboard for Dionysus, read the storyboard guide first and reply wit
 
 ## Storyboard planning
 
-- [Storyboard guide](https://ckfun0skf.github.io/dionysus-ai-video-editor/ai/storyboard-guide.md): the dionysus.storyboard/1 (v1.1) JSON format, the preset ids you may use, the rules and an example
+- [Storyboard guide](https://ckfun0skf.github.io/dionysus-ai-video-editor/ai/storyboard-guide.md): the dionysus.storyboard/1 (v1.1) JSON format and how it becomes a video, how to choose presets, the preset ids you may use (grouped by category), the numbered rules and an example
 - [Storyboard guide as a web page](https://ckfun0skf.github.io/dionysus-ai-video-editor/ai/storyboard-guide.html): the same guide as HTML
-- [Presets](https://ckfun0skf.github.io/dionysus-ai-video-editor/ai/presets.json): machine-readable preset ids, descriptions and params with defaults
+- [Presets](https://ckfun0skf.github.io/dionysus-ai-video-editor/ai/presets.json): machine-readable preset ids, categories, descriptions, params with defaults and usage hints
 
 ## Optional
 

@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 import { listPresets } from "../registry";
 import { aiGuideFiles, FORMAT_DOC_SOURCE, llmsTxt, presetsJson, storyboardGuideHtml, storyboardGuideMarkdown } from "./aiGuide";
 import { aiLinks, DEFAULT_SITE_URL } from "./siteUrl";
-import { EXAMPLE_STORYBOARD, GUIDE_KINDS, RULES, storyboardShortPrompt, storyboardSystemPrompt } from "./storyPrompt";
+import { CHOOSING_PRESETS, EXAMPLE_STORYBOARD, GUIDE_KINDS, HOW_IT_WORKS, presetsByCategory, RULE_LIST, RULES, ruleNumber, storyboardShortPrompt, storyboardSystemPrompt } from "./storyPrompt";
 import { validateStoryboard } from "./storyJson";
 
 const root = resolve(__dirname, "../../..");
@@ -50,7 +50,7 @@ describe("AI planner guide (V2-SB-114)", () => {
     expect(full).toContain('"references"?: (string | { "asset": "<asset id>", "role"?: "start-frame" | "identity" | "look" | "detail", "note"?: string })[]');
     expect(full).toContain(`17. ${RULES[16]}`);
     expect(RULES[16]).toMatch(/"start-frame" means the base image to edit/);
-    expect(RULES[16]).toContain('"references": [{ "asset": "lantern", "role": "detail", "note": "brass and glass only" }, "keeper"]');
+    expect(RULES[16]).toContain('"references": [{ "asset": "mug", "role": "detail", "note": "glaze and colour only" }, "hero"]');
     const short = storyboardShortPrompt();
     expect(short).toContain(aiLinks(DEFAULT_SITE_URL).guide); // outside a browser the prompt links to the configured site
     expect(short).toContain("Full prompt");
@@ -65,6 +65,81 @@ describe("AI planner guide (V2-SB-114)", () => {
     const r = validateStoryboard(EXAMPLE_STORYBOARD);
     expect(r.ok && r.warnings).toEqual([]);
     expect(JSON.stringify(EXAMPLE_STORYBOARD)).toContain('"transition"');
+  });
+});
+
+describe("generic storyboard guide (V2-SB-GUIDE-GENERIC)", () => {
+  const md = storyboardGuideMarkdown();
+  const section = (title: string) => md.split(`\n## ${title}\n`)[1]?.split("\n## ")[0] ?? "";
+
+  it("has generic sections in a fixed order, in both the guide and the full prompt", () => {
+    const titles = [...md.matchAll(/^## (.+)$/gm)].map((m) => m[1].replace(/ \(.*$/, ""));
+    expect(titles).toEqual(["HOW IT WORKS", "FORMAT", "CHOOSING PRESETS", "PRESETS", "RULES", "EXAMPLE"]);
+    const full = storyboardSystemPrompt();
+    let at = -1;
+    for (const t of ["HOW IT WORKS", "FORMAT (", "CHOOSING PRESETS", "PRESETS\n", "RULES\n", "EXAMPLE\n"]) {
+      const i = full.indexOf(t, at + 1);
+      expect(i, t).toBeGreaterThan(at);
+      at = i;
+    }
+    expect(full).toContain(HOW_IT_WORKS);
+    expect(full).toContain(CHOOSING_PRESETS);
+  });
+
+  it("generates the catalogue from the descriptors, grouped by kind, then by category", () => {
+    const presets = section("PRESETS");
+    const blocks = presets.split("\n\n");
+    for (const { kind, title } of GUIDE_KINDS) {
+      const block = blocks.find((b) => b.startsWith(`${title} — `));
+      expect(block, title).toBeDefined();
+      const groups = presetsByCategory(kind);
+      expect(groups.flatMap((g) => g.presets.map((d) => d.id)).sort()).toEqual(listPresets(kind).map((d) => d.id).sort());
+      // Each category header appears once, in order, and is followed by exactly its presets.
+      const lines = block!.split("\n").slice(1);
+      const expected = groups.flatMap((g) => [`[${g.category}]`, ...g.presets.map((d) => `- ${d.id}:`)]);
+      expect(lines.map((l) => (l.startsWith("[") ? l : l.slice(0, l.indexOf(":") + 1)))).toEqual(expected);
+    }
+    expect(presets).toContain("[Light]\n- glow: "); // a module's category shows up without touching the guide
+    expect(presets).toMatch(/- glow: .* Use for: /); // and so do its planner hints
+    const json = JSON.parse(presetsJson());
+    expect(json.kinds.videoEffect.categories).toEqual(presetsByCategory("videoEffect").map((g) => g.category));
+    expect(json.kinds.videoEffect.presets.find((p: { id: string }) => p.id === "glow")).toMatchObject({ category: "Light", ai: { use: expect.any(String) } });
+  });
+
+  it("keeps the generic sections story-neutral and the example short", () => {
+    const generic = [HOW_IT_WORKS, CHOOSING_PRESETS, ...RULES, section("FORMAT")].join("\n").toLowerCase();
+    for (const word of ["keeper", "lantern", "lighthouse", "allotment", "mara"]) expect(generic, word).not.toContain(word);
+    for (const { kind } of GUIDE_KINDS) for (const d of listPresets(kind)) expect(CHOOSING_PRESETS).not.toContain(`"${d.id}"`);
+    const ex = EXAMPLE_STORYBOARD;
+    expect(JSON.stringify(ex).toLowerCase()).not.toMatch(/keeper|lantern|allotment/);
+    expect(ex.shots.length).toBeLessThanOrEqual(4);
+    // …but it still shows every part of the format a planner usually needs.
+    expect(ex.assets.some((a) => typeof a.source === "object" && a.source.type === "lastFrame")).toBe(true);
+    expect(ex.connections.some((c) => c.kind === "continuity")).toBe(true);
+    expect(ex.shots.some((s) => s.references?.some((r) => r.role === "start-frame"))).toBe(true);
+    expect(ex.shots.some((s) => s.layers?.some((l) => l.type === "text" && l.anim))).toBe(true);
+    expect(ex.shots.some((s) => s.effects?.length)).toBe(true);
+    expect(ex.shots.every((s) => s.prompt.startsWith("References:"))).toBe(true);
+  });
+
+  it("numbers the rules stably: append-only keys, and every RULE n the spec cites exists", () => {
+    // Rule numbers are public (the spec, users, other AIs). Append new keys at the end; never reorder or delete.
+    expect(RULE_LIST.slice(0, 18).map((r) => r.key)).toEqual([
+      "reusable-assets", "standalone-prompts", "last-frame-continuity", "uploads", "qa-checks", "ids", "valid-json", "text-in-layers", "html-only-for-graphics",
+      "transitions-and-effects", "known-presets", "param-units", "duration", "references-block", "transition-overlap", "identity-portrait", "asset-references", "keyframe",
+    ]);
+    expect(new Set(RULE_LIST.map((r) => r.key)).size).toBe(RULE_LIST.length);
+    RULE_LIST.forEach((r, i) => expect(section("RULES")).toContain(`${i + 1}. ${r.text}`));
+    expect(ruleNumber("duration")).toBe(13);
+    expect(ruleNumber("references-block")).toBe(14);
+    expect(ruleNumber("asset-references")).toBe(17);
+    expect(RULES[ruleNumber("duration") - 1]).toMatch(/^"durationSec" is how long/);
+    expect(RULES[ruleNumber("references-block") - 1]).toMatch(/"References:" block/);
+    const cited = [...formatDoc.matchAll(/RULES? (\d+)(?:[-–](\d+))?/g)].flatMap((m) => [Number(m[1]), ...(m[2] ? [Number(m[2])] : [])]);
+    expect(cited.length).toBeGreaterThan(0);
+    for (const n of cited) expect(n, `STORYBOARD_FORMAT.md cites RULE ${n}`).toBeLessThanOrEqual(RULES.length);
+    // The spec's copy of the rules matches the generated list.
+    RULE_LIST.forEach((r, i) => expect(formatDoc, `rule ${i + 1} in STORYBOARD_FORMAT.md`).toContain(`${i + 1}. ${r.text}`));
   });
 });
 

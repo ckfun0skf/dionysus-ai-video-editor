@@ -2,12 +2,13 @@ import { describe, expect, it } from "vitest";
 import { Engine } from "./engine";
 import * as cmd from "./commands";
 import * as ops from "../domain/ops";
-import { board, EXAMPLE_STORYBOARD } from "../domain";
+import { board } from "../domain";
+import { LANTERN_KEEPER } from "../domain/__fixtures__/lanternKeeper";
 import { createProject, type MediaRef, type Project } from "../domain/model";
 import { validateStoryboard } from "../domain/storyJson";
 import { secondsToTicks as s } from "../domain/time";
 
-const r = validateStoryboard(EXAMPLE_STORYBOARD);
+const r = validateStoryboard(LANTERN_KEEPER);
 if (!r.ok) throw new Error("bad example");
 const clip = (sec: number): MediaRef => ({ blobKey: `b${sec}`, mime: "video/mp4", durationTicks: s(sec) });
 const main = (p: Project) => ops.mainTrack(p.compositions[p.rootCompositionId])!;

@@ -13,32 +13,34 @@ import { runtimeAiLinks, type AiLinks } from "./siteUrl";
 /** Spec version the guide describes (the format string stays `dionysus.storyboard/1`). */
 export const FORMAT_REVISION = "1.1";
 
+/**
+ * The guide's worked example (V2-SB-GUIDE-GENERIC): short and story-neutral, but it uses every part of the format a
+ * planner usually needs: reusable assets, reference roles, last-frame continuity, genDurationSec, a text layer with a
+ * style and animation, video effects and a transition. It must import with no warnings (aiGuide.test.ts).
+ */
 export const EXAMPLE_STORYBOARD: StoryDoc = {
   format: STORYBOARD_FORMAT,
   meta: {
-    title: "The Lantern Keeper", logline: "An old keeper lights the last lantern before the storm.", aspect: "16:9", style: "Painterly realism, warm lantern light against cold blue dusk, 35mm film grain", language: "en",
-    textStyles: { "keeper-title": { font: "serif", size: 0.1, color: "#fff4d6", bold: false } },
+    title: "First Light", logline: "A cyclist reaches the hilltop just as the sun rises.", aspect: "16:9", style: "Natural cinematic realism, soft golden-hour light, shallow depth of field", language: "en",
+    textStyles: { "title-card": { font: "serif", size: 0.09, color: "#fff6e0" } },
   },
   assets: [
-    { id: "keeper", name: "The keeper", type: "character", aspect: "1:1", prompt: "Character sheet of an elderly lighthouse keeper, weathered face, grey beard, yellow oilskin coat, front and 3/4 views, neutral background, painterly realism", references: [], source: { type: "generate" }, qa: ["Same face and beard in every view", "Yellow oilskin coat, no logos", "No extra fingers or limbs"] },
-    { id: "cliff", name: "Cliff and lighthouse", type: "location", aspect: "16:9", prompt: "Wide establishing shot of a lonely white lighthouse on a black basalt cliff at blue dusk, storm clouds rolling in, painterly realism", references: [], source: { type: "generate" }, qa: ["Lighthouse is white with a red cap", "Storm clouds on the left, calm sky on the right"] },
-    { id: "lantern", name: "Brass lantern", type: "prop", aspect: "1:1", prompt: "Antique brass storm lantern with glass chimney, product shot on dark background", references: [], source: { type: "upload" }, qa: ["Glass chimney intact"] },
-    { id: "s1-end", name: "Last frame of shot 1", type: "frame", aspect: "16:9", prompt: "", references: [], source: { type: "lastFrame", shot: "s1" }, qa: ["Keeper is at the door, lantern in his right hand"] },
+    { id: "rider", name: "The rider", type: "character", aspect: "1:1", prompt: "Portrait of a young woman cyclist, short dark hair, red cycling jacket, grey helmet, plain light background, natural cinematic realism", references: [], source: { type: "generate" }, qa: ["Red jacket and grey helmet", "Face clearly visible", "No logos or text"] },
+    { id: "hill", name: "Hill road", type: "location", aspect: "16:9", prompt: "Empty winding road up a grassy hill before sunrise, mist in the valley, soft blue-gold sky, natural cinematic realism", references: [], source: { type: "generate" }, qa: ["Road winds up to the hilltop", "No people or vehicles"] },
+    { id: "s1-end", name: "Last frame of shot 1", type: "frame", aspect: "16:9", prompt: "", references: [], source: { type: "lastFrame", shot: "s1" }, qa: ["Rider is near the hilltop"] },
   ],
   shots: [
-    { id: "s1", title: "Climbing the cliff path", description: "The keeper walks up the cliff path toward the lighthouse door.", durationSec: 5, prompt: "References:\nImage 1 (The keeper): reference only, not a frame: keep his face, beard and yellow oilskin coat.\nImage 2 (Cliff and lighthouse): reference only, not a frame: the lighthouse, cliff and dusk colours only; do not copy its wide framing.\nImage 3 (Brass lantern): reference only: the lantern's brass and glass only.\nNo image is the start frame. Framing: starts as a medium-wide tracking shot from behind on the path, ends close behind him at the lighthouse door.\n\nThe elderly keeper in a yellow oilskin coat walks up a cliff path toward a white lighthouse at dusk, carrying a brass lantern, wind in his coat, slow tracking shot from behind, ends with him reaching the door", assets: ["keeper", "cliff", "lantern"], qa: ["Keeper matches the character sheet", "Lantern stays in his right hand", "Ends at the lighthouse door"], camera: "Slow tracking shot from behind" },
-    { id: "s2", title: "Lighting the lamp", description: "Inside the lamp room he lights the great lamp.", durationSec: 6, prompt: "References:\nImage 1 (Last frame of shot 1): START FRAME: the clip opens on exactly this image.\nImage 2 (The keeper): reference only, not a frame: keep his face, beard and coat.\nImage 3 (Brass lantern): reference only: the lantern's brass and glass only.\nFraming: opens on the start frame at the door, ends on a medium shot of the keeper beside the lit lamp.\n\nContinuing from the first frame: the keeper steps inside, climbs to the lamp room and lights the great lamp with his brass lantern, warm light floods the room, medium shot", assets: ["s1-end", "keeper", "lantern"], references: [{ asset: "s1-end", role: "start-frame" }, { asset: "keeper", role: "identity" }, { asset: "lantern", role: "detail", note: "brass and glass only" }], qa: ["First frame matches the end of shot 1", "Lamp ignites with a warm glow", "No text or watermarks"], camera: "Medium shot, handheld", dialogue: "One more night.", captions: true },
+    { id: "s1", title: "The climb", description: "She climbs the last stretch of the hill road.", durationSec: 4, prompt: "References:\nImage 1 (The rider): reference only, not a frame: keep her face, red jacket and grey helmet.\nImage 2 (Hill road): reference only, not a frame: the road, hill and sky colours; do not copy its framing.\nNo image is the start frame. Framing: side tracking shot, she rides into frame and ends near the hilltop.\n\nThe cyclist in a red jacket pedals hard up a winding hill road before sunrise, mist below, side tracking shot", assets: ["rider", "hill"], qa: ["Rider matches the portrait", "Ends near the hilltop"], camera: "Side tracking shot" },
+    { id: "s2", title: "The top", description: "She reaches the top and stops.", durationSec: 3, genDurationSec: 5, prompt: "References:\nImage 1 (Last frame of shot 1): START FRAME: the clip opens on exactly this image.\nImage 2 (The rider): reference only, not a frame: keep her face, jacket and helmet.\nFraming: opens on the start frame, ends on a medium shot of her stopping at the top.\n\nContinuing from the first frame: the cyclist reaches the hilltop, stops and looks toward the horizon, breathing hard", assets: ["s1-end", "rider"], references: [{ asset: "s1-end", role: "start-frame" }, { asset: "rider", role: "identity" }], qa: ["First frame matches the end of shot 1", "Same jacket and helmet"] },
     {
-      id: "s3", title: "Beam across the storm", description: "The beam sweeps across the storm from outside; the title appears.", durationSec: 4, genDurationSec: 6,
-      prompt: "References:\nImage 1 (Cliff and lighthouse): reference only, not a frame: the same lighthouse and cliff; match its look.\nNo image is the start frame. Framing: one static exterior wide shot from first frame to last.\n\nExterior wide shot, static camera: the lighthouse beam sweeps across dark storm clouds and crashing waves, rain starts, dramatic, calm dark sky in the upper half, no text or letters of any kind",
-      assets: ["cliff"], qa: ["Beam is clearly visible", "Same lighthouse as the establishing shot", "No text or letters in the picture"], camera: "Static wide shot",
-      layers: [{ id: "s3-title", type: "text", text: "THE LANTERN KEEPER", startSec: 1, endSec: 4, position: { x: 0.5, y: 0.3 }, textStyle: "keeper-title", anim: { in: "fade", out: "fade", durationSec: 0.8 } }],
-      effects: [{ preset: "ken-burns", params: { zoom: 0.15 } }],
+      id: "s3", title: "Sunrise", description: "The sun rises over the valley; title card.", durationSec: 4, prompt: "References:\nImage 1 (Hill road): reference only, not a frame: the same hill and valley.\nNo image is the start frame. Framing: one static wide shot.\n\nStatic wide shot from behind the cyclist on the hilltop as the sun rises over the misty valley, clear empty sky in the upper third, no text", assets: ["hill"], qa: ["Sun is rising", "Empty sky in the upper third for the title"], camera: "Static wide shot",
+      layers: [{ id: "s3-title", type: "text", text: "FIRST LIGHT", startSec: 1, endSec: 4, position: { x: 0.5, y: 0.25 }, textStyle: "title-card", anim: { in: "fade", out: "fade", durationSec: 0.6 } }],
+      effects: [{ preset: "ken-burns", params: { zoom: 0.1 } }, { preset: "glow", params: { strength: 0.4 } }],
     },
   ],
   connections: [
     { from: "s1", to: "s2", kind: "continuity", note: "Shot 2 starts from the last frame of shot 1" },
-    { from: "s2", to: "s3", kind: "cut", transition: { preset: "crossfade", params: { durationSec: 0.8 } } },
+    { from: "s2", to: "s3", kind: "cut", transition: { preset: "crossfade", params: { durationSec: 0.6 } } },
   ],
 };
 
@@ -139,38 +141,82 @@ Layer (times in seconds from the shot start, 0 <= startSec < endSec <= durationS
 TextStyle: { "font"?: "<font id>", "size"?: number (fraction of frame height, 0-1), "color"?: "#rrggbb", "align"?: "left" | "center" | "right", "bold"?: boolean }
 Text is one line per "\\n" and is never wrapped: keep lines short. Without "size", text uses the style's size (else 0.1), or fits the box height.`;
 
-export function presetsSection(): string {
-  const blocks = GUIDE_KINDS.map(({ kind, title, usedIn }) => `${title} — ${usedIn}:\n${listPresets(kind).map(presetLine).join("\n")}`);
-  blocks.push(`Fonts — TextStyle "font":\n${FONTS.map((f) => `- ${f.id}: ${f.description}`).join("\n")}`);
-  return `Only these ids may be used. Omitted params take their defaults.\n\n${blocks.join("\n\n")}`;
+/** Categories of `kind` in registry order (first appearance), each with its presets. */
+export function presetsByCategory(kind: PresetKind): { category: string; presets: PresetDescriptor[] }[] {
+  const groups = new Map<string, PresetDescriptor[]>();
+  for (const d of listPresets(kind)) {
+    const c = d.category?.trim() || "Other";
+    groups.set(c, [...(groups.get(c) ?? []), d]);
+  }
+  return [...groups].map(([category, presets]) => ({ category, presets }));
 }
 
-export const RULES = [
-  "Every recurring character, location, prop and the overall style gets ONE reusable asset with a detailed prompt; shots reference these ids instead of repeating descriptions.",
-  "Write prompts that work on their own (a generator only sees that prompt plus the reference images). Repeat key visual details (clothes, colours, lighting, style) in every prompt.",
-  `When a shot must continue seamlessly from the previous one, add an asset with "type": "frame" and "source": { "type": "lastFrame", "shot": "<previous shot id>" }, use it in the next shot's "assets", and mark the connection "continuity". Never make a shot depend on its own last frame or create loops.`,
-  `Use "source": "upload" for things the user already has (logos, real photos, products).`,
-  "Every asset and shot gets 2–5 QA checks that a person can verify by looking: identity consistency, key props, framing, artefacts (extra fingers, warped text, watermarks).",
-  `Keep ids short and stable (e.g. "hero", "kitchen", "s1", "s1-end"). Shots are listed in order; "connections" may be omitted for simple hard cuts.`,
-  "Output valid JSON only: double quotes, no comments, no trailing commas.",
-  "Every piece of on-screen text (titles, cards, labels, captions) goes into a text layer, never into a generation prompt. Prompts ask for clean, empty surfaces where the text will sit.",
-  `Use "html" assets and "render": "html" only for animated, 3D or three.js graphics. Plain text is a text layer.`,
-  `Transitions go on connections. Post camera moves (push-in etc.) and looks go in the shot's "effects", and the generation prompt then says "static camera".`,
-  "Only use preset ids listed in the PRESETS section.",
-  `Preset params use the units noted in brackets in the PRESETS section; "fade-in"/"fade-out" "length" is a fraction (0.05–1) of the effect's time range, not seconds.`,
-  `"durationSec" is how long the shot stays on screen in the final edit (its planned edit length). Decide it from the story's pacing, NOT from what the video model can generate, and never put the planned length only in "description" or notes. If the video model can't render that length (it has a minimum or fixed lengths, e.g. 6, 10 or 15 s), keep "durationSec" at the planned length and set "genDurationSec" to the length to ask the model for; it must be greater than "durationSec" (omit it when they are equal). When the clip is uploaded the app trims it to "durationSec" and the user picks which part to keep. Example: a 4 s beat with a model that renders 6 s minimum: "durationSec": 4, "genDurationSec": 6.`,
-  `Every clip prompt starts with a "References:" block that numbers the images attached to the clip in the order of the shot's "references" (else its "assets"): "Image 1 (<asset name>): …", one line each, saying explicitly whether the image is the START FRAME (or END FRAME) or only a reference, and what to take from it (identity, overall look, or materials and colours only, not its framing or wide view). Then state the framing from the first frame to the last. Set "references" with roles whenever the order or use is not obvious from the asset types.`,
-  `A transition in "connections" overlaps the two shots, centred on the cut: it adds no time and eats half its length from the end of the "from" shot and half from the start of the "to" shot. It is clamped to half the shorter of the two shots. For example, a 0.8 s transition out of a 2.5 s shot blends the last 0.4 s of that shot with the first 0.4 s of the next, and the total length stays the same; keep transitions short on short shots so their key action isn't covered.`,
-  `For an "identity" reference prefer a single clean portrait or character image (one view, plain background) over a multi-view character sheet: the sheet's layout (several poses, panels, labels) can leak into the generated frames.`,
-  `An asset made from other assets lists them in its "references" in attach order, as objects with a "role" when the use is not obvious from the type. Its prompt then starts with the same numbered "References:" block as a clip prompt; for an image, "start-frame" means the base image to edit (there is no end frame). Example: a close-up of the keeper's lantern on a table: "references": [{ "asset": "lantern", "role": "detail", "note": "brass and glass only" }, "keeper"], prompt "References:\\nImage 1 (Brass lantern): reference only: materials, colours and objects only; brass and glass only.\\nImage 2 (The keeper): reference only: keep this identity (face, body, clothes).\\n\\nClose-up of …".`,
-  `Keyframe then animate: when the opening composition matters (a character's pose, a precise layout, a hero product shot), give the "ai" shot a "keyframe": { "prompt", "references", "qa" }. The app turns it into an image asset "<shot id>.keyframe" that is made first, then attached to the clip as Image 1, the START FRAME (do not also give the shot a "start-frame" reference). The keyframe prompt describes one still image (with its own "References:" block, as for an asset); the clip prompt then describes only the motion from that frame. Example: "keyframe": { "prompt": "References:\\nImage 1 (The keeper): reference only: keep this identity (face, body, clothes).\\n\\nThe keeper stands by the lantern, lit from below …", "references": ["keeper", "lighthouse"], "qa": ["The keeper's face matches the reference"] }, clip prompt "References:\\nImage 1 (Keyframe · …): START FRAME …\\n\\nShe slowly turns from the lantern …".`,
+/** The preset catalogue (V2-SB-GUIDE-GENERIC): generated from the descriptors, grouped by kind, then by category. */
+export function presetsSection(): string {
+  const blocks = GUIDE_KINDS.map(({ kind, title, usedIn }) => {
+    const groups = presetsByCategory(kind).map(({ category, presets }) => `[${category}]\n${presets.map(presetLine).join("\n")}`);
+    return `${title} — ${usedIn}:\n${groups.join("\n")}`;
+  });
+  blocks.push(`Fonts — TextStyle "font":\n${FONTS.map((f) => `- ${f.id}: ${f.description}`).join("\n")}`);
+  return `Only these ids may be used. Omitted params take their defaults. Within each kind, presets are grouped by [category].\n\n${blocks.join("\n\n")}`;
+}
+
+/** How a storyboard becomes a video, for planners that have never seen Dionysus. Story-neutral; names no preset ids. */
+export const HOW_IT_WORKS = `A storyboard is one JSON object with three lists:
+- "assets": everything that must exist before the clips can be made: characters, locations, props, a style frame, uploads, and "frame" assets taken from the last frame of a shot for continuity. Each asset has its own self-contained generation prompt, the other assets it is made from ("references") and QA checks.
+- "shots": the clips of the final edit in playback order. Each has a clip generation prompt, the assets it uses (attached to the generator as numbered images), its on-screen length ("durationSec") and, optionally, text layers and video effects that the editor draws on top.
+- "connections": what happens between two adjacent shots: a plain cut, continuity from the previous shot's last frame, or a transition preset.
+The user imports the JSON into Dionysus, which checks it and lists every problem with its path. The app then walks the user through generating (with their own AI tools and your prompts) or uploading each asset and clip, in dependency order. Finally the editor assembles the timeline: shots in order, trimmed to "durationSec", with your text layers, effects and transitions applied.
+So split the work: generation prompts describe only the picture and its motion; on-screen text, post camera moves, looks and transitions are done by the editor with presets and stay out of the prompts.`;
+
+/** Generic guidance for picking presets; the per-preset "Use for" / "Avoid" hints in the catalogue come from the descriptors. */
+export const CHOOSING_PRESETS = `Presets are the editor's built-in tools: video effects on a shot, transitions on connections, text styles and text animations on text layers. Each one in the PRESETS section has an id, a one-line description, its params (range, default and unit) and sometimes "Use for" / "Avoid" hints.
+- Choose by purpose: match the description and hints to what the moment needs (mood, energy, what the viewer should notice), not the name alone.
+- Less is more: most cuts need no transition (omit it). Use one or two transition styles for the whole video and save the energetic ones for beats that call for them. Use at most one or two effects per shot.
+- Effects are post-production: use them for camera moves the clip doesn't have, colour or light looks, and fades. When an effect adds the camera move, the generation prompt says "static camera".
+- Stay consistent: give recurring text one look (a text style preset or a "meta.textStyles" entry) and the same in/out animation throughout; keep loops for short emphasis.
+- Params: omit them to use the defaults and set only what you need, within the listed range and unit. Unknown ids, unknown params and out-of-range values are reported on import.`;
+
+/**
+ * Planner rules (V2-SB-GUIDE-GENERIC). Their numbers are public: STORYBOARD_FORMAT.md, users and other AIs cite them
+ * ("RULE 13"), so the list is append-only: add new rules at the end, never reorder or delete; to retire a rule,
+ * rewrite its text. aiGuide.test.ts pins the key order. Rules stay story-neutral (no names from an example story).
+ */
+export const RULE_LIST: readonly { key: string; text: string }[] = [
+  { key: "reusable-assets", text: "Every recurring character, location, prop and the overall style gets ONE reusable asset with a detailed prompt; shots reference these ids instead of repeating descriptions." },
+  { key: "standalone-prompts", text: "Write prompts that work on their own (a generator only sees that prompt plus the reference images). Repeat key visual details (clothes, colours, lighting, style) in every prompt." },
+  { key: "last-frame-continuity", text: `When a shot must continue seamlessly from the previous one, add an asset with "type": "frame" and "source": { "type": "lastFrame", "shot": "<previous shot id>" }, use it in the next shot's "assets", and mark the connection "continuity". Never make a shot depend on its own last frame or create loops.` },
+  { key: "uploads", text: `Use "source": "upload" for things the user already has (logos, real photos, products).` },
+  { key: "qa-checks", text: "Every asset and shot gets 2–5 QA checks that a person can verify by looking: identity consistency, key props, framing, artefacts (extra fingers, warped text, watermarks)." },
+  { key: "ids", text: `Keep ids short and stable (e.g. "hero", "kitchen", "s1", "s1-end"). Shots are listed in order; "connections" may be omitted for simple hard cuts.` },
+  { key: "valid-json", text: "Output valid JSON only: double quotes, no comments, no trailing commas." },
+  { key: "text-in-layers", text: "Every piece of on-screen text (titles, cards, labels, captions) goes into a text layer, never into a generation prompt. Prompts ask for clean, empty surfaces where the text will sit." },
+  { key: "html-only-for-graphics", text: `Use "html" assets and "render": "html" only for animated, 3D or three.js graphics. Plain text is a text layer.` },
+  { key: "transitions-and-effects", text: `Transitions go on connections. Post camera moves (push-in etc.) and looks go in the shot's "effects", and the generation prompt then says "static camera".` },
+  { key: "known-presets", text: "Only use preset ids listed in the PRESETS section." },
+  { key: "param-units", text: `Preset params use the units noted in brackets in the PRESETS section; "fade-in"/"fade-out" "length" is a fraction (0.05–1) of the effect's time range, not seconds.` },
+  { key: "duration", text: `"durationSec" is how long the shot stays on screen in the final edit (its planned edit length). Decide it from the story's pacing, NOT from what the video model can generate, and never put the planned length only in "description" or notes. If the video model can't render that length (it has a minimum or fixed lengths, e.g. 6, 10 or 15 s), keep "durationSec" at the planned length and set "genDurationSec" to the length to ask the model for; it must be greater than "durationSec" (omit it when they are equal). When the clip is uploaded the app trims it to "durationSec" and the user picks which part to keep. Example: a 4 s beat with a model that renders 6 s minimum: "durationSec": 4, "genDurationSec": 6.` },
+  { key: "references-block", text: `Every clip prompt starts with a "References:" block that numbers the images attached to the clip in the order of the shot's "references" (else its "assets"): "Image 1 (<asset name>): …", one line each, saying explicitly whether the image is the START FRAME (or END FRAME) or only a reference, and what to take from it (identity, overall look, or materials and colours only, not its framing or wide view). Then state the framing from the first frame to the last. Set "references" with roles whenever the order or use is not obvious from the asset types.` },
+  { key: "transition-overlap", text: `A transition in "connections" overlaps the two shots, centred on the cut: it adds no time and eats half its length from the end of the "from" shot and half from the start of the "to" shot. It is clamped to half the shorter of the two shots. For example, a 0.8 s transition out of a 2.5 s shot blends the last 0.4 s of that shot with the first 0.4 s of the next, and the total length stays the same; keep transitions short on short shots so their key action isn't covered.` },
+  { key: "identity-portrait", text: `For an "identity" reference prefer a single clean portrait or character image (one view, plain background) over a multi-view character sheet: the sheet's layout (several poses, panels, labels) can leak into the generated frames.` },
+  { key: "asset-references", text: `An asset made from other assets lists them in its "references" in attach order, as objects with a "role" when the use is not obvious from the type. Its prompt then starts with the same numbered "References:" block as a clip prompt; for an image, "start-frame" means the base image to edit (there is no end frame). Example: a close-up of the hero holding a mug: "references": [{ "asset": "mug", "role": "detail", "note": "glaze and colour only" }, "hero"], prompt "References:\\nImage 1 (Blue mug): reference only: materials, colours and objects only; glaze and colour only.\\nImage 2 (Hero): reference only: keep this identity (face, body, clothes).\\n\\nClose-up of …".` },
+  { key: "keyframe", text: `Keyframe then animate: when the opening composition matters (a character's pose, a precise layout, a hero product shot), give the "ai" shot a "keyframe": { "prompt", "references", "qa" }. The app turns it into an image asset "<shot id>.keyframe" that is made first, then attached to the clip as Image 1, the START FRAME (do not also give the shot a "start-frame" reference). The keyframe prompt describes one still image (with its own "References:" block, as for an asset); the clip prompt then describes only the motion from that frame. Example: "keyframe": { "prompt": "References:\\nImage 1 (Hero): reference only: keep this identity (face, body, clothes).\\n\\nThe hero sits at a café table, both hands around a blue mug …", "references": ["hero", "cafe"], "qa": ["The hero's face matches the reference"] }, clip prompt "References:\\nImage 1 (Keyframe · …): START FRAME …\\n\\nShe slowly lifts the mug …".` },
 ];
+export const RULES: readonly string[] = RULE_LIST.map((r) => r.text);
+/** 1-based public number of a rule, by key. */
+export function ruleNumber(key: string): number {
+  const i = RULE_LIST.findIndex((r) => r.key === key);
+  if (i < 0) throw new Error(`Unknown rule "${key}"`);
+  return i + 1;
+}
 export const rulesSection = () => RULES.map((r, i) => `${i + 1}. ${r}`).join("\n");
 
-/** FORMAT, PRESETS, RULES and EXAMPLE; `heading` formats each section title (plain caps in the prompt, `##` in markdown). */
+/** HOW IT WORKS, FORMAT, CHOOSING PRESETS, PRESETS, RULES and EXAMPLE; `heading` formats each section title (plain caps in the prompt, `##` in markdown). */
 export function guideSections(heading: (title: string) => string): string {
   return [
+    `${heading("HOW IT WORKS")}\n${HOW_IT_WORKS}`,
     `${heading(`FORMAT ("${STORYBOARD_FORMAT}", v${FORMAT_REVISION})`)}\n\`\`\`\n${FORMAT_SECTION()}\n\`\`\``,
+    `${heading("CHOOSING PRESETS")}\n${CHOOSING_PRESETS}`,
     `${heading("PRESETS")}\n${presetsSection()}`,
     `${heading("RULES")}\n${rulesSection()}`,
     `${heading("EXAMPLE")}\n\`\`\`json\n${JSON.stringify(EXAMPLE_STORYBOARD, null, 2)}\n\`\`\``,
@@ -193,7 +239,7 @@ export function storyboardShortPrompt(links: AiLinks = runtimeAiLinks()): string
   return `${ROLE}.
 
 1. First read the storyboard guide: ${links.guide}
-   It defines the JSON format ("${STORYBOARD_FORMAT}", v${FORMAT_REVISION}), the preset ids you may use, the rules and an example. Follow it exactly. (Same guide as a web page: ${links.guideHtml} · presets as JSON: ${links.presets})
+   It explains how the format works and defines the JSON ("${STORYBOARD_FORMAT}", v${FORMAT_REVISION}), how to choose presets, the preset ids you may use, the numbered rules and an example. Follow it exactly. (Same guide as a web page: ${links.guideHtml} · presets as JSON: ${links.presets})
 2. If you can't open links, don't guess the format. Reply only: "I can't open the guide — please paste the full Dionysus prompt." The user will then paste it (Dionysus → Storyboard → AI prompt → Full prompt).
 3. "durationSec" is the planned on-screen length of the shot in the edit, not what the video model can render. If the model must render longer (e.g. 6 s minimum), keep "durationSec" at the planned length and put the length to generate in "genDurationSec" (e.g. "durationSec": 4, "genDurationSec": 6).
 4. Otherwise reply with ONLY one JSON code block containing the storyboard for our story — no commentary before or after.`;

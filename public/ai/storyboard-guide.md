@@ -4,6 +4,14 @@ This guide is for AI assistants that plan a video storyboard for the Dionysus vi
 
 How to use it: the user has agreed a story with you. Turn it into a production storyboard and reply with ONLY one JSON code block in the format below — no commentary before or after. The user pastes your reply into Dionysus (Storyboard → Import JSON), which checks it, then generates or uploads every asset and clip from your prompts.
 
+## HOW IT WORKS
+A storyboard is one JSON object with three lists:
+- "assets": everything that must exist before the clips can be made: characters, locations, props, a style frame, uploads, and "frame" assets taken from the last frame of a shot for continuity. Each asset has its own self-contained generation prompt, the other assets it is made from ("references") and QA checks.
+- "shots": the clips of the final edit in playback order. Each has a clip generation prompt, the assets it uses (attached to the generator as numbered images), its on-screen length ("durationSec") and, optionally, text layers and video effects that the editor draws on top.
+- "connections": what happens between two adjacent shots: a plain cut, continuity from the previous shot's last frame, or a transition preset.
+The user imports the JSON into Dionysus, which checks it and lists every problem with its path. The app then walks the user through generating (with their own AI tools and your prompts) or uploading each asset and clip, in dependency order. Finally the editor assembles the timeline: shots in order, trimmed to "durationSec", with your text layers, effects and transitions applied.
+So split the work: generation prompts describe only the picture and its motion; on-screen text, post camera moves, looks and transitions are done by the editor with presets and stay out of the prompts.
+
 ## FORMAT ("dionysus.storyboard/1", v1.1)
 ```
 {
@@ -70,73 +78,102 @@ TextStyle: { "font"?: "<font id>", "size"?: number (fraction of frame height, 0-
 Text is one line per "\n" and is never wrapped: keep lines short. Without "size", text uses the style's size (else 0.1), or fits the box height.
 ```
 
+## CHOOSING PRESETS
+Presets are the editor's built-in tools: video effects on a shot, transitions on connections, text styles and text animations on text layers. Each one in the PRESETS section has an id, a one-line description, its params (range, default and unit) and sometimes "Use for" / "Avoid" hints.
+- Choose by purpose: match the description and hints to what the moment needs (mood, energy, what the viewer should notice), not the name alone.
+- Less is more: most cuts need no transition (omit it). Use one or two transition styles for the whole video and save the energetic ones for beats that call for them. Use at most one or two effects per shot.
+- Effects are post-production: use them for camera moves the clip doesn't have, colour or light looks, and fades. When an effect adds the camera move, the generation prompt says "static camera".
+- Stay consistent: give recurring text one look (a text style preset or a "meta.textStyles" entry) and the same in/out animation throughout; keep loops for short emphasis.
+- Params: omit them to use the defaults and set only what you need, within the listed range and unit. Unknown ids, unknown params and out-of-range values are reported on import.
+
 ## PRESETS
-Only these ids may be used. Omitted params take their defaults.
+Only these ids may be used. Omitted params take their defaults. Within each kind, presets are grouped by [category].
 
 Text styles — shots[].layers[].textStyle (default "plain"):
+[Basic]
 - plain: Bold white sans-serif with no decoration; the default. Look: font sans, colour #ffffff.
 - caption: Smaller bold white text on a translucent black box; subtitles and lower thirds. Look: font sans, colour #ffffff, size 0.06.
-- outline: Yellow Impact letters with a thick black outline; meme or punchy look. Look: font impact, colour #ffe14d.
-- neon: White rounded letters with a pink neon glow and a gentle pulse. Look: font rounded, colour #ffffff.
-- pop: Large white Impact title with a hard drop shadow that pops in and shrinks out. Look: font impact, colour #ffffff, size 0.14.
 - typewriter: Light grey monospace that types itself on. Look: font mono, colour #e8e8e8.
-- glow: Italic white serif with a cyan glow that floats softly. Look: font serif, colour #ffffff.
+[Bold]
+- outline: Yellow Impact letters with a thick black outline; meme or punchy look. Look: font impact, colour #ffe14d.
+- pop: Large white Impact title with a hard drop shadow that pops in and shrinks out. Look: font impact, colour #ffffff, size 0.14.
 - echo: White Impact letters with pink echo copies that slide up in. Look: font impact, colour #ffffff.
+[Light]
+- neon: White rounded letters with a pink neon glow and a gentle pulse. Look: font rounded, colour #ffffff.
+- glow: Italic white serif with a cyan glow that floats softly. Look: font serif, colour #ffffff.
 
 Text animations in — shots[].layers[].anim.in:
+[Basic]
 - fade: Fades the text in from transparent.
 - slide-up: Fades in while sliding up into place from slightly below. Params: distance 0–0.5, default 0.08 (How far the text travels, as a fraction of the frame size (0.1 = 10%)); dirX -1–1, default 0 (Side the text is offset to while hidden (it slides from / to there): -1 left, 1 right, 0 none); dirY -1–1, default 1 (Side the text is offset to while hidden: -1 above, 1 below, 0 none).
 - slide-left: Fades in while sliding left into place from the right. Params: distance 0–0.5, default 0.15 (How far the text travels, as a fraction of the frame size (0.1 = 10%)); dirX -1–1, default 1 (Side the text is offset to while hidden (it slides from / to there): -1 left, 1 right, 0 none); dirY -1–1, default 0 (Side the text is offset to while hidden: -1 above, 1 below, 0 none).
-- pop: Scales up from small with a springy overshoot; lively titles and labels. Params: overshoot 0–0.5, default 0.12 (Extra size at the middle of the pop, as a fraction of full size (0.12 = 12% larger)).
 - zoom-in: Grows from nothing to full size.
+[Bounce]
+- pop: Scales up from small with a springy overshoot; lively titles and labels. Params: overshoot 0–0.5, default 0.12 (Extra size at the middle of the pop, as a fraction of full size (0.12 = 12% larger)).
+[Type]
 - typewriter: Reveals the text one character at a time.
+[Reveal]
 - wipe: Reveals the text left to right behind a moving edge.
 - blur-in: Fades in from a soft blur to sharp; gentle, cinematic. Params: blur 0–30, default 8 (Blur radius in pixels at the hidden end).
 
 Text animations out — shots[].layers[].anim.out:
+[Basic]
 - fade: Fades the text out to transparent.
 - slide-down: Fades out while sliding down. Params: distance 0–0.5, default 0.08 (How far the text travels, as a fraction of the frame size (0.1 = 10%)); dirX -1–1, default 0 (Side the text is offset to while hidden (it slides from / to there): -1 left, 1 right, 0 none); dirY -1–1, default 1 (Side the text is offset to while hidden: -1 above, 1 below, 0 none).
 - shrink: Shrinks to nothing.
+[Reveal]
 - blur-out: Blurs and fades away. Params: blur 0–30, default 8 (Blur radius in pixels at the hidden end).
 - wipe-out: Hides the text right to left behind a moving edge.
 
 Text loops — shots[].layers[].anim.loop:
+[Basic]
 - pulse: Gently grows and shrinks in a loop. Params: period 0.2–4, default 1 (Length of one cycle in seconds); amount 0–0.3, default 0.06 (Size change at the peak, as a fraction of full size (0.06 = 6%)).
 - wiggle: Rocks side to side in a loop; playful. Params: period 0.2–4, default 1 (Length of one cycle in seconds); degrees 0–30, default 4 (Largest rotation each way, in degrees).
 - float: Bobs softly up and down in a loop. Params: period 0.2–4, default 1 (Length of one cycle in seconds); amount 0–0.1, default 0.015 (Largest vertical offset, as a fraction of the frame height).
 - blink: Blinks on and off in a loop. Params: period 0.2–4, default 1 (Length of one cycle in seconds).
 
 Video effects — shots[].effects[].preset:
+[Basic]
 - fade-in: Fades the picture in from black at the start of the range. Params: length 0.05–1, default 0.5 (fraction of the effect's time range, not seconds; 0.5 fades in over the first half of the range).
 - fade-out: Fades the picture out to black at the end of the range. Params: length 0.05–1, default 0.5 (fraction of the effect's time range, not seconds; 0.5 fades out over the last half of the range).
+[Lens]
 - blur: Blurs the whole picture. Params: amount 0–1, default 0.5 (Blur strength 0-1; 1 = a blur radius of 2% of the frame height).
+- vignette: Darkens the frame edges to focus the centre. Params: amount 0–1, default 0.6 (Edge darkness, 0 (none) to 1 (black corners)).
+[Motion]
 - ken-burns: Slow zoom and pan across the picture (push-in); brings stills to life. Params: zoom 0–1, default 0.25 (Extra zoom reached at the end of the range, as a fraction of full size (0.25 = 25% larger)); pan -0.3–0.3, default 0.05 (Horizontal drift reached at the end of the range, as a fraction of the frame width (negative = left)).
 - shake: Handheld camera shake. Params: amount 0–0.1, default 0.02 (Largest offset, as a fraction of the frame size); speed 2–40, default 16 (Shake oscillations over the whole effect range (a count, not per second)).
-- vignette: Darkens the frame edges to focus the centre. Params: amount 0–1, default 0.6 (Edge darkness, 0 (none) to 1 (black corners)).
+[Color]
 - bw: Black-and-white (desaturated) picture. Params: amount 0–1, default 1 (Desaturation, 0 (full colour) to 1 (black and white)).
+[Light]
 - glow: Soft bloom: bright areas bleed a gentle halo of light; dreamy, warm or magical scenes. Params: strength 0–1, default 0.6 (Opacity of the added light, 0 (off) to 1 (full)); radius 0.01–0.2, default 0.05 (Halo size as a fraction of the frame height); threshold 0–1, default 0.5 (Which areas glow, 0 (the whole picture, soft haze) to 1 (only the brightest highlights)); color (color), default "#ffffff" (Colour of the light (#rrggbb); white keeps the picture's own colours). Use for: dream sequences, memories, candle or sunset light, magic moments. Avoid: dark scenes with no highlights (little visible effect). Example params: {"strength":0.5,"radius":0.08}.
 
 Transitions — connections[].transition.preset (params.durationSec, default 0.5):
+[Basic]
 - crossfade: The outgoing clip dissolves into the incoming clip.
 - dip: Fades the outgoing clip to black, then up into the incoming clip.
 - dip-white: Fades the outgoing clip to white, then out of white into the incoming clip; dreamy or memory scenes. Params: color (color), default "#ffffff" (Colour the picture dips through (#rrggbb)).
 - flash: A quick bright flash hides the cut; punchy, for beats and reveals. Params: color (color), default "#ffffff" (Flash colour (#rrggbb)); strength 0–1, default 0.9 (Opacity of the flash at its peak, 0 (none) to 1 (full)).
+[Slide]
 - push-left: The incoming clip pushes the outgoing clip out to the left. Params: dirX -1–1, default -1 (Horizontal direction the picture moves: -1 (left), 1 (right) or 0 (none)); dirY -1–1, default 0 (Vertical direction the picture moves: -1 (up), 1 (down) or 0 (none)); blur 0–0.1, default 0 (Blur at the middle of the move, as a fraction of the frame height).
 - push-right: The incoming clip pushes the outgoing clip out to the right. Params: dirX -1–1, default 1 (Horizontal direction the picture moves: -1 (left), 1 (right) or 0 (none)); dirY -1–1, default 0 (Vertical direction the picture moves: -1 (up), 1 (down) or 0 (none)); blur 0–0.1, default 0 (Blur at the middle of the move, as a fraction of the frame height).
 - push-up: The incoming clip pushes the outgoing clip up and out of frame. Params: dirX -1–1, default 0 (Horizontal direction the picture moves: -1 (left), 1 (right) or 0 (none)); dirY -1–1, default -1 (Vertical direction the picture moves: -1 (up), 1 (down) or 0 (none)); blur 0–0.1, default 0 (Blur at the middle of the move, as a fraction of the frame height).
 - push-down: The incoming clip pushes the outgoing clip down and out of frame. Params: dirX -1–1, default 0 (Horizontal direction the picture moves: -1 (left), 1 (right) or 0 (none)); dirY -1–1, default 1 (Vertical direction the picture moves: -1 (up), 1 (down) or 0 (none)); blur 0–0.1, default 0 (Blur at the middle of the move, as a fraction of the frame height).
 - whip-left: A fast push to the left with motion blur, like a whip pan. Params: dirX -1–1, default -1 (Horizontal direction the picture moves: -1 (left), 1 (right) or 0 (none)); dirY -1–1, default 0 (Vertical direction the picture moves: -1 (up), 1 (down) or 0 (none)); blur 0–0.1, default 0.04 (Blur at the middle of the move, as a fraction of the frame height).
 - slide-over: The incoming clip slides in from the right over the outgoing clip, which darkens. Params: dirX -1–1, default -1 (Horizontal direction the picture moves: -1 (left), 1 (right) or 0 (none)); dirY -1–1, default 0 (Vertical direction the picture moves: -1 (up), 1 (down) or 0 (none)).
+[Wipe]
 - wipe-right: A hard edge sweeps left to right, revealing the incoming clip. Params: dirX -1–1, default 1 (Horizontal direction the picture moves: -1 (left), 1 (right) or 0 (none)); dirY -1–1, default 0 (Vertical direction the picture moves: -1 (up), 1 (down) or 0 (none)).
 - wipe-left: A hard edge sweeps right to left, revealing the incoming clip. Params: dirX -1–1, default -1 (Horizontal direction the picture moves: -1 (left), 1 (right) or 0 (none)); dirY -1–1, default 0 (Vertical direction the picture moves: -1 (up), 1 (down) or 0 (none)).
 - wipe-down: A hard edge sweeps top to bottom, revealing the incoming clip. Params: dirX -1–1, default 0 (Horizontal direction the picture moves: -1 (left), 1 (right) or 0 (none)); dirY -1–1, default 1 (Vertical direction the picture moves: -1 (up), 1 (down) or 0 (none)).
 - wipe-up: A hard edge sweeps bottom to top, revealing the incoming clip. Params: dirX -1–1, default 0 (Horizontal direction the picture moves: -1 (left), 1 (right) or 0 (none)); dirY -1–1, default -1 (Vertical direction the picture moves: -1 (up), 1 (down) or 0 (none)).
 - iris: The incoming clip opens from a growing circle in the centre.
+[Zoom]
 - zoom-in: Rushes forward: the outgoing clip zooms in and the incoming clip continues the push; energetic. Params: outScale 0.2–3, default 1.8 (Scale the outgoing clip reaches, as a multiplier of full size (1 = unchanged)); inScale 0.2–3, default 0.6 (Scale the incoming clip starts from, as a multiplier of full size (1 = unchanged)); blur 0–0.1, default 0.02 (Peak blur as a fraction of the frame height).
 - zoom-out: Pulls back: the outgoing clip shrinks away and the incoming clip settles in from larger. Params: outScale 0.2–3, default 0.5 (Scale the outgoing clip reaches, as a multiplier of full size (1 = unchanged)); inScale 0.2–3, default 1.6 (Scale the incoming clip starts from, as a multiplier of full size (1 = unchanged)); blur 0–0.1, default 0.02 (Peak blur as a fraction of the frame height).
 - spin: The outgoing clip spins away and the incoming clip spins into place; playful. Params: degrees 30–720, default 180 (Degrees each clip turns).
+[Blur]
 - blur-dissolve: Both clips soften into a blur while they cross-dissolve; smooth and gentle. Params: blur 0–0.1, default 0.03 (Peak blur as a fraction of the frame height).
 - defocus: The outgoing clip goes out of focus, then the incoming clip pulls into focus. Params: blur 0–0.1, default 0.05 (Peak blur as a fraction of the frame height); cut 0–1, default 1 (Switch mode: 1 (on) swaps the clips at full blur, 0 (off) dissolves them).
+[Glitch]
 - glitch: Digital glitch: picture bands jump sideways around a hard cut; tech, horror, hype. Params: amount 0–0.3, default 0.08 (Largest band shift as a fraction of the frame width).
 - shake: A camera jolt around a hard cut; impacts and beat drops. Params: amount 0–0.15, default 0.04 (Largest jolt as a fraction of the frame).
 
@@ -167,72 +204,57 @@ Fonts — TextStyle "font":
 14. Every clip prompt starts with a "References:" block that numbers the images attached to the clip in the order of the shot's "references" (else its "assets"): "Image 1 (<asset name>): …", one line each, saying explicitly whether the image is the START FRAME (or END FRAME) or only a reference, and what to take from it (identity, overall look, or materials and colours only, not its framing or wide view). Then state the framing from the first frame to the last. Set "references" with roles whenever the order or use is not obvious from the asset types.
 15. A transition in "connections" overlaps the two shots, centred on the cut: it adds no time and eats half its length from the end of the "from" shot and half from the start of the "to" shot. It is clamped to half the shorter of the two shots. For example, a 0.8 s transition out of a 2.5 s shot blends the last 0.4 s of that shot with the first 0.4 s of the next, and the total length stays the same; keep transitions short on short shots so their key action isn't covered.
 16. For an "identity" reference prefer a single clean portrait or character image (one view, plain background) over a multi-view character sheet: the sheet's layout (several poses, panels, labels) can leak into the generated frames.
-17. An asset made from other assets lists them in its "references" in attach order, as objects with a "role" when the use is not obvious from the type. Its prompt then starts with the same numbered "References:" block as a clip prompt; for an image, "start-frame" means the base image to edit (there is no end frame). Example: a close-up of the keeper's lantern on a table: "references": [{ "asset": "lantern", "role": "detail", "note": "brass and glass only" }, "keeper"], prompt "References:\nImage 1 (Brass lantern): reference only: materials, colours and objects only; brass and glass only.\nImage 2 (The keeper): reference only: keep this identity (face, body, clothes).\n\nClose-up of …".
-18. Keyframe then animate: when the opening composition matters (a character's pose, a precise layout, a hero product shot), give the "ai" shot a "keyframe": { "prompt", "references", "qa" }. The app turns it into an image asset "<shot id>.keyframe" that is made first, then attached to the clip as Image 1, the START FRAME (do not also give the shot a "start-frame" reference). The keyframe prompt describes one still image (with its own "References:" block, as for an asset); the clip prompt then describes only the motion from that frame. Example: "keyframe": { "prompt": "References:\nImage 1 (The keeper): reference only: keep this identity (face, body, clothes).\n\nThe keeper stands by the lantern, lit from below …", "references": ["keeper", "lighthouse"], "qa": ["The keeper's face matches the reference"] }, clip prompt "References:\nImage 1 (Keyframe · …): START FRAME …\n\nShe slowly turns from the lantern …".
+17. An asset made from other assets lists them in its "references" in attach order, as objects with a "role" when the use is not obvious from the type. Its prompt then starts with the same numbered "References:" block as a clip prompt; for an image, "start-frame" means the base image to edit (there is no end frame). Example: a close-up of the hero holding a mug: "references": [{ "asset": "mug", "role": "detail", "note": "glaze and colour only" }, "hero"], prompt "References:\nImage 1 (Blue mug): reference only: materials, colours and objects only; glaze and colour only.\nImage 2 (Hero): reference only: keep this identity (face, body, clothes).\n\nClose-up of …".
+18. Keyframe then animate: when the opening composition matters (a character's pose, a precise layout, a hero product shot), give the "ai" shot a "keyframe": { "prompt", "references", "qa" }. The app turns it into an image asset "<shot id>.keyframe" that is made first, then attached to the clip as Image 1, the START FRAME (do not also give the shot a "start-frame" reference). The keyframe prompt describes one still image (with its own "References:" block, as for an asset); the clip prompt then describes only the motion from that frame. Example: "keyframe": { "prompt": "References:\nImage 1 (Hero): reference only: keep this identity (face, body, clothes).\n\nThe hero sits at a café table, both hands around a blue mug …", "references": ["hero", "cafe"], "qa": ["The hero's face matches the reference"] }, clip prompt "References:\nImage 1 (Keyframe · …): START FRAME …\n\nShe slowly lifts the mug …".
 
 ## EXAMPLE
 ```json
 {
   "format": "dionysus.storyboard/1",
   "meta": {
-    "title": "The Lantern Keeper",
-    "logline": "An old keeper lights the last lantern before the storm.",
+    "title": "First Light",
+    "logline": "A cyclist reaches the hilltop just as the sun rises.",
     "aspect": "16:9",
-    "style": "Painterly realism, warm lantern light against cold blue dusk, 35mm film grain",
+    "style": "Natural cinematic realism, soft golden-hour light, shallow depth of field",
     "language": "en",
     "textStyles": {
-      "keeper-title": {
+      "title-card": {
         "font": "serif",
-        "size": 0.1,
-        "color": "#fff4d6",
-        "bold": false
+        "size": 0.09,
+        "color": "#fff6e0"
       }
     }
   },
   "assets": [
     {
-      "id": "keeper",
-      "name": "The keeper",
+      "id": "rider",
+      "name": "The rider",
       "type": "character",
       "aspect": "1:1",
-      "prompt": "Character sheet of an elderly lighthouse keeper, weathered face, grey beard, yellow oilskin coat, front and 3/4 views, neutral background, painterly realism",
+      "prompt": "Portrait of a young woman cyclist, short dark hair, red cycling jacket, grey helmet, plain light background, natural cinematic realism",
       "references": [],
       "source": {
         "type": "generate"
       },
       "qa": [
-        "Same face and beard in every view",
-        "Yellow oilskin coat, no logos",
-        "No extra fingers or limbs"
+        "Red jacket and grey helmet",
+        "Face clearly visible",
+        "No logos or text"
       ]
     },
     {
-      "id": "cliff",
-      "name": "Cliff and lighthouse",
+      "id": "hill",
+      "name": "Hill road",
       "type": "location",
       "aspect": "16:9",
-      "prompt": "Wide establishing shot of a lonely white lighthouse on a black basalt cliff at blue dusk, storm clouds rolling in, painterly realism",
+      "prompt": "Empty winding road up a grassy hill before sunrise, mist in the valley, soft blue-gold sky, natural cinematic realism",
       "references": [],
       "source": {
         "type": "generate"
       },
       "qa": [
-        "Lighthouse is white with a red cap",
-        "Storm clouds on the left, calm sky on the right"
-      ]
-    },
-    {
-      "id": "lantern",
-      "name": "Brass lantern",
-      "type": "prop",
-      "aspect": "1:1",
-      "prompt": "Antique brass storm lantern with glass chimney, product shot on dark background",
-      "references": [],
-      "source": {
-        "type": "upload"
-      },
-      "qa": [
-        "Glass chimney intact"
+        "Road winds up to the hilltop",
+        "No people or vehicles"
       ]
     },
     {
@@ -247,39 +269,37 @@ Fonts — TextStyle "font":
         "shot": "s1"
       },
       "qa": [
-        "Keeper is at the door, lantern in his right hand"
+        "Rider is near the hilltop"
       ]
     }
   ],
   "shots": [
     {
       "id": "s1",
-      "title": "Climbing the cliff path",
-      "description": "The keeper walks up the cliff path toward the lighthouse door.",
-      "durationSec": 5,
-      "prompt": "References:\nImage 1 (The keeper): reference only, not a frame: keep his face, beard and yellow oilskin coat.\nImage 2 (Cliff and lighthouse): reference only, not a frame: the lighthouse, cliff and dusk colours only; do not copy its wide framing.\nImage 3 (Brass lantern): reference only: the lantern's brass and glass only.\nNo image is the start frame. Framing: starts as a medium-wide tracking shot from behind on the path, ends close behind him at the lighthouse door.\n\nThe elderly keeper in a yellow oilskin coat walks up a cliff path toward a white lighthouse at dusk, carrying a brass lantern, wind in his coat, slow tracking shot from behind, ends with him reaching the door",
+      "title": "The climb",
+      "description": "She climbs the last stretch of the hill road.",
+      "durationSec": 4,
+      "prompt": "References:\nImage 1 (The rider): reference only, not a frame: keep her face, red jacket and grey helmet.\nImage 2 (Hill road): reference only, not a frame: the road, hill and sky colours; do not copy its framing.\nNo image is the start frame. Framing: side tracking shot, she rides into frame and ends near the hilltop.\n\nThe cyclist in a red jacket pedals hard up a winding hill road before sunrise, mist below, side tracking shot",
       "assets": [
-        "keeper",
-        "cliff",
-        "lantern"
+        "rider",
+        "hill"
       ],
       "qa": [
-        "Keeper matches the character sheet",
-        "Lantern stays in his right hand",
-        "Ends at the lighthouse door"
+        "Rider matches the portrait",
+        "Ends near the hilltop"
       ],
-      "camera": "Slow tracking shot from behind"
+      "camera": "Side tracking shot"
     },
     {
       "id": "s2",
-      "title": "Lighting the lamp",
-      "description": "Inside the lamp room he lights the great lamp.",
-      "durationSec": 6,
-      "prompt": "References:\nImage 1 (Last frame of shot 1): START FRAME: the clip opens on exactly this image.\nImage 2 (The keeper): reference only, not a frame: keep his face, beard and coat.\nImage 3 (Brass lantern): reference only: the lantern's brass and glass only.\nFraming: opens on the start frame at the door, ends on a medium shot of the keeper beside the lit lamp.\n\nContinuing from the first frame: the keeper steps inside, climbs to the lamp room and lights the great lamp with his brass lantern, warm light floods the room, medium shot",
+      "title": "The top",
+      "description": "She reaches the top and stops.",
+      "durationSec": 3,
+      "genDurationSec": 5,
+      "prompt": "References:\nImage 1 (Last frame of shot 1): START FRAME: the clip opens on exactly this image.\nImage 2 (The rider): reference only, not a frame: keep her face, jacket and helmet.\nFraming: opens on the start frame, ends on a medium shot of her stopping at the top.\n\nContinuing from the first frame: the cyclist reaches the hilltop, stops and looks toward the horizon, breathing hard",
       "assets": [
         "s1-end",
-        "keeper",
-        "lantern"
+        "rider"
       ],
       "references": [
         {
@@ -287,56 +307,45 @@ Fonts — TextStyle "font":
           "role": "start-frame"
         },
         {
-          "asset": "keeper",
+          "asset": "rider",
           "role": "identity"
-        },
-        {
-          "asset": "lantern",
-          "role": "detail",
-          "note": "brass and glass only"
         }
       ],
       "qa": [
         "First frame matches the end of shot 1",
-        "Lamp ignites with a warm glow",
-        "No text or watermarks"
-      ],
-      "camera": "Medium shot, handheld",
-      "dialogue": "One more night.",
-      "captions": true
+        "Same jacket and helmet"
+      ]
     },
     {
       "id": "s3",
-      "title": "Beam across the storm",
-      "description": "The beam sweeps across the storm from outside; the title appears.",
+      "title": "Sunrise",
+      "description": "The sun rises over the valley; title card.",
       "durationSec": 4,
-      "genDurationSec": 6,
-      "prompt": "References:\nImage 1 (Cliff and lighthouse): reference only, not a frame: the same lighthouse and cliff; match its look.\nNo image is the start frame. Framing: one static exterior wide shot from first frame to last.\n\nExterior wide shot, static camera: the lighthouse beam sweeps across dark storm clouds and crashing waves, rain starts, dramatic, calm dark sky in the upper half, no text or letters of any kind",
+      "prompt": "References:\nImage 1 (Hill road): reference only, not a frame: the same hill and valley.\nNo image is the start frame. Framing: one static wide shot.\n\nStatic wide shot from behind the cyclist on the hilltop as the sun rises over the misty valley, clear empty sky in the upper third, no text",
       "assets": [
-        "cliff"
+        "hill"
       ],
       "qa": [
-        "Beam is clearly visible",
-        "Same lighthouse as the establishing shot",
-        "No text or letters in the picture"
+        "Sun is rising",
+        "Empty sky in the upper third for the title"
       ],
       "camera": "Static wide shot",
       "layers": [
         {
           "id": "s3-title",
           "type": "text",
-          "text": "THE LANTERN KEEPER",
+          "text": "FIRST LIGHT",
           "startSec": 1,
           "endSec": 4,
           "position": {
             "x": 0.5,
-            "y": 0.3
+            "y": 0.25
           },
-          "textStyle": "keeper-title",
+          "textStyle": "title-card",
           "anim": {
             "in": "fade",
             "out": "fade",
-            "durationSec": 0.8
+            "durationSec": 0.6
           }
         }
       ],
@@ -344,7 +353,13 @@ Fonts — TextStyle "font":
         {
           "preset": "ken-burns",
           "params": {
-            "zoom": 0.15
+            "zoom": 0.1
+          }
+        },
+        {
+          "preset": "glow",
+          "params": {
+            "strength": 0.4
           }
         }
       ]
@@ -364,7 +379,7 @@ Fonts — TextStyle "font":
       "transition": {
         "preset": "crossfade",
         "params": {
-          "durationSec": 0.8
+          "durationSec": 0.6
         }
       }
     }

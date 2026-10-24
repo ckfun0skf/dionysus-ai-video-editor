@@ -2,7 +2,8 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { board, createProject, EXAMPLE_STORYBOARD, story } from "../../domain";
+import { board, createProject, story } from "../../domain";
+import { LANTERN_KEEPER } from "../../domain/__fixtures__/lanternKeeper";
 import { cmd, Engine } from "../../engine";
 import { createMemoryStorage } from "../../persistence";
 import { StoryboardView } from "./StoryboardView";
@@ -24,7 +25,7 @@ beforeAll(() => {
 afterEach(() => { document.body.innerHTML = ""; });
 const wait = () => act(async () => { await new Promise((r) => setTimeout(r, 20)); });
 const btn = (el: Element, t: string | RegExp) => [...el.querySelectorAll("button")].find((b) => { const s = b.getAttribute("aria-label") ?? b.textContent?.trim() ?? ""; return typeof t === "string" ? s === t || b.textContent?.trim() === t : t.test(s) || t.test(b.textContent ?? ""); }) as HTMLButtonElement;
-const doc = (() => { const r = story.validateStoryboard(EXAMPLE_STORYBOARD); if (!r.ok) throw new Error("bad"); return r.doc; })();
+const doc = (() => { const r = story.validateStoryboard(LANTERN_KEEPER); if (!r.ok) throw new Error("bad"); return r.doc; })();
 
 async function mount() {
   const el = document.createElement("div"); document.body.appendChild(el);

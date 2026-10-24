@@ -11,7 +11,7 @@
 import { FONTS, listPresets } from "../registry";
 /** Re-exported for the build plugin (vite.config.ts), which fails the build on invalid preset modules. */
 export { PRESET_PROBLEMS } from "../registry";
-import { FORMAT_REVISION, GUIDE_KINDS, guideSections } from "./storyPrompt";
+import { FORMAT_REVISION, GUIDE_KINDS, guideSections, presetsByCategory } from "./storyPrompt";
 import { aiLinks, DEFAULT_SITE_URL } from "./siteUrl";
 import { DEFAULT_TRANSITION_SEC, STORYBOARD_FORMAT } from "./storyJson";
 
@@ -54,7 +54,8 @@ export function presetsJson(site = DEFAULT_SITE_URL): string {
     guide: aiLinks(site).guide,
     kinds: Object.fromEntries(GUIDE_KINDS.map(({ kind, usedIn }) => [kind, {
       usedIn,
-      presets: listPresets(kind).map((d) => ({ id: d.id, version: d.version, name: d.name, description: d.description, params: d.params.map((p) => ({ ...p })), ...(d.kind === "textStyle" && d.data ? { data: d.data } : {}), ...(d.ai ? { ai: d.ai } : {}) })),
+      categories: presetsByCategory(kind).map((g) => g.category),
+      presets: listPresets(kind).map((d) => ({ id: d.id, version: d.version, name: d.name, category: d.category, description: d.description, params: d.params.map((p) => ({ ...p })), ...(d.kind === "textStyle" && d.data ? { data: d.data } : {}), ...(d.ai ? { ai: d.ai } : {}) })),
     }])),
     transitionDefaultSec: DEFAULT_TRANSITION_SEC,
     fonts: FONTS.map((f) => ({ id: f.id, description: f.description })),
@@ -72,9 +73,9 @@ To plan a storyboard for Dionysus, read the storyboard guide first and reply wit
 
 ## Storyboard planning
 
-- [Storyboard guide](${l.guide}): the ${STORYBOARD_FORMAT} (v${FORMAT_REVISION}) JSON format, the preset ids you may use, the rules and an example
+- [Storyboard guide](${l.guide}): the ${STORYBOARD_FORMAT} (v${FORMAT_REVISION}) JSON format and how it becomes a video, how to choose presets, the preset ids you may use (grouped by category), the numbered rules and an example
 - [Storyboard guide as a web page](${l.guideHtml}): the same guide as HTML
-- [Presets](${l.presets}): machine-readable preset ids, descriptions and params with defaults
+- [Presets](${l.presets}): machine-readable preset ids, categories, descriptions, params with defaults and usage hints
 
 ## Optional
 

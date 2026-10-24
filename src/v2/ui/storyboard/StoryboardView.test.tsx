@@ -2,7 +2,8 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { createProject, EXAMPLE_STORYBOARD, runtimeAiLinks, storyboardShortPrompt, storyboardSystemPrompt, story, type MediaRef } from "../../domain";
+import { createProject, runtimeAiLinks, storyboardShortPrompt, storyboardSystemPrompt, story, type MediaRef } from "../../domain";
+import { LANTERN_KEEPER } from "../../domain/__fixtures__/lanternKeeper";
 import { cmd, Engine } from "../../engine";
 import { createMemoryStorage } from "../../persistence";
 import { V2App } from "../V2App";
@@ -27,7 +28,7 @@ async function mount(onClose = () => {}) {
   await act(async () => createRoot(el).render(<StoryboardView engine={engine} blobs={createMemoryStorage().blobs} onClose={onClose} />));
   return el;
 }
-const doc = (() => { const r = story.validateStoryboard(EXAMPLE_STORYBOARD); if (!r.ok) throw new Error("bad"); return r.doc; })();
+const doc = (() => { const r = story.validateStoryboard(LANTERN_KEEPER); if (!r.ok) throw new Error("bad"); return r.doc; })();
 
 describe("storyboard workspace", () => {
   it("sends shots with clips to the timeline and marks them", async () => {
@@ -88,11 +89,11 @@ describe("storyboard workspace", () => {
     const ta = el.querySelector('[aria-label="Storyboard JSON"]') as HTMLTextAreaElement;
     await act(async () => setText(ta, '{ "shots": [ }'));
     expect(el.querySelector('[data-testid="story-errors"]')!.textContent).toMatch(/line 1, column/);
-    const bad = structuredClone(EXAMPLE_STORYBOARD) as unknown as { shots: { durationSec: number }[] };
+    const bad = structuredClone(LANTERN_KEEPER) as unknown as { shots: { durationSec: number }[] };
     bad.shots[1].durationSec = 0;
     await act(async () => setText(ta, JSON.stringify(bad)));
     expect(el.querySelector('[data-testid="story-errors"]')!.textContent).toContain("shots[1].durationSec");
-    await act(async () => setText(ta, "Here you go:\n```json\n" + JSON.stringify(EXAMPLE_STORYBOARD) + "\n```"));
+    await act(async () => setText(ta, "Here you go:\n```json\n" + JSON.stringify(LANTERN_KEEPER) + "\n```"));
     expect(el.querySelector('[data-testid="story-errors"]')).toBeNull();
     const pv = el.querySelector('[data-testid="story-preview"]')!;
     expect(pv.textContent).toContain("The Lantern Keeper");
@@ -132,7 +133,7 @@ describe("storyboard workspace", () => {
     expect(el.querySelector('[aria-label="Storyboard JSON"]')).toBeNull();
     await act(async () => btn(el, "Continue").click());
     const ta = el.querySelector('[aria-label="Storyboard JSON"]') as HTMLTextAreaElement;
-    const other = structuredClone(EXAMPLE_STORYBOARD) as unknown as { meta: { title: string } }; other.meta.title = "Second cut";
+    const other = structuredClone(LANTERN_KEEPER) as unknown as { meta: { title: string } }; other.meta.title = "Second cut";
     await act(async () => setText(ta, JSON.stringify(other)));
     await act(async () => btn(el, "Replace storyboard").click());
     expect(engine.getState().project.storyboard?.meta.title).toBe("Second cut");
@@ -145,7 +146,7 @@ describe("storyboard workspace", () => {
     const el = await mount();
     await act(async () => (el.querySelector('[data-testid="step-import"]') as HTMLButtonElement).click());
     const input = el.querySelector('input[type="file"]') as HTMLInputElement;
-    const f = new File([JSON.stringify(EXAMPLE_STORYBOARD)], "lantern.json", { type: "application/json" });
+    const f = new File([JSON.stringify(LANTERN_KEEPER)], "lantern.json", { type: "application/json" });
     Object.defineProperty(input, "files", { value: [f], configurable: true });
     await act(async () => input.dispatchEvent(new Event("change", { bubbles: true }))); await wait();
     expect(el.textContent).toContain("From lantern.json");

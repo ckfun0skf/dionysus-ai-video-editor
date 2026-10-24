@@ -3,7 +3,7 @@ import { createProject, type MediaRef, type Placement, type Project } from "./mo
 import * as board from "./storyboard";
 import * as edit from "./storyEdit";
 import * as refs from "./storyRefs";
-import { EXAMPLE_STORYBOARD } from "./storyPrompt";
+import { LANTERN_KEEPER } from "./__fixtures__/lanternKeeper";
 import { validateStoryboard, type StoryDoc } from "./storyJson";
 import { sendStory } from "./storySend";
 
@@ -16,7 +16,7 @@ const fresh = (d: StoryDoc) => board.setStoryboard(createProject("s"), board.sto
 const sb = (p: Project) => p.storyboard!;
 const all = (p: Project): Placement[] => Object.values(p.compositions).flatMap((c) => c.tracks.flatMap((t) => t.placements));
 
-const example = parse(EXAMPLE_STORYBOARD);
+const example = parse(LANTERN_KEEPER);
 /** Two shots sharing a photo: shot a uses it as a reference, shot b also as an image layer. */
 const layered = parse({
   format: "dionysus.storyboard/1",

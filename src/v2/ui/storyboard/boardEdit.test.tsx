@@ -2,7 +2,8 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import { createProject, EXAMPLE_STORYBOARD, story } from "../../domain";
+import { createProject, story } from "../../domain";
+import { LANTERN_KEEPER } from "../../domain/__fixtures__/lanternKeeper";
 import { cmd, Engine } from "../../engine";
 import { createMemoryStorage } from "../../persistence";
 import { StoryboardView } from "./StoryboardView";
@@ -16,7 +17,7 @@ beforeAll(() => {
 });
 afterEach(() => { document.body.innerHTML = ""; phone = false; });
 
-const doc = (() => { const r = story.validateStoryboard(EXAMPLE_STORYBOARD); if (!r.ok) throw new Error("bad"); return r.doc; })();
+const doc = (() => { const r = story.validateStoryboard(LANTERN_KEEPER); if (!r.ok) throw new Error("bad"); return r.doc; })();
 const btn = (t: string | RegExp) => [...document.querySelectorAll("button")].find((b) => {
   const s = b.textContent?.trim() ?? "", a = b.getAttribute("aria-label") ?? "";
   return typeof t === "string" ? s === t || a === t : t.test(s) || t.test(a);
