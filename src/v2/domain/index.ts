@@ -8,3 +8,6 @@ export * as text from "./text";
 export type { TextData } from "./text";
 export * as layers from "./layerStyle";
 export * as cues from "./subtitleLayer";
+export * as story from "./storyJson";
+export type { StoryDoc, StoryAsset, StoryShot, StoryConnection, StoryIssue, StoryParseResult } from "./storyJson";
+export { storyboardSystemPrompt, EXAMPLE_STORYBOARD } from "./storyPrompt";
