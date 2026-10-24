@@ -41,6 +41,10 @@ How to use it: the user has agreed a story with you. Turn it into a production s
       "durationSec": number,     // 0.5–120; match what the video model can generate (usually 4–10)
       "prompt": string,          // full clip generation prompt; required for render "ai", keep one for "html"/"still" too
       "assets": string[],        // ids of the assets this clip uses (include "clip" when set)
+      "references"?: [ { "asset": "&lt;asset id&gt;", "role": "start-frame" | "end-frame" | "identity" | "look" | "detail", "note"?: string } ],
+                                 // the images to attach to the clip generation IN THIS ORDER (Image 1, Image 2 …) and how to use each;
+                                 // omitted = "assets" order with roles from the type (frame → start-frame, character → identity,
+                                 // style → look, others → detail); at most one "start-frame" and one "end-frame"
       "camera"?: string,
       "dialogue"?: string,
       "qa": string[],            // 2-5 concrete yes/no checks for the clip
@@ -144,6 +148,7 @@ Fonts — TextStyle "font":
 11. Only use preset ids listed in the PRESETS section.
 12. Preset params use the units noted in brackets in the PRESETS section; "fade-in"/"fade-out" "length" is a fraction (0.05–1) of the effect's time range, not seconds.
 13. "durationSec" should match what the video model can generate.
+14. Every clip prompt starts with a "References:" block that numbers the images attached to the clip in the order of the shot's "references" (else its "assets"): "Image 1 (&lt;asset name&gt;): …", one line each, saying explicitly whether the image is the START FRAME (or END FRAME) or only a reference, and what to take from it (identity, overall look, or materials and colours only, not its framing or wide view). Then state the framing from the first frame to the last. Set "references" with roles whenever the order or use is not obvious from the asset types.
 
 ## EXAMPLE
 ```json
@@ -232,7 +237,7 @@ Fonts — TextStyle "font":
       "title": "Climbing the cliff path",
       "description": "The keeper walks up the cliff path toward the lighthouse door.",
       "durationSec": 5,
-      "prompt": "The elderly keeper in a yellow oilskin coat walks up a cliff path toward a white lighthouse at dusk, carrying a brass lantern, wind in his coat, slow tracking shot from behind, ends with him reaching the door",
+      "prompt": "References:\nImage 1 (The keeper): reference only, not a frame: keep his face, beard and yellow oilskin coat.\nImage 2 (Cliff and lighthouse): reference only, not a frame: the lighthouse, cliff and dusk colours only; do not copy its wide framing.\nImage 3 (Brass lantern): reference only: the lantern's brass and glass only.\nNo image is the start frame. Framing: starts as a medium-wide tracking shot from behind on the path, ends close behind him at the lighthouse door.\n\nThe elderly keeper in a yellow oilskin coat walks up a cliff path toward a white lighthouse at dusk, carrying a brass lantern, wind in his coat, slow tracking shot from behind, ends with him reaching the door",
       "assets": [
         "keeper",
         "cliff",
@@ -250,11 +255,26 @@ Fonts — TextStyle "font":
       "title": "Lighting the lamp",
       "description": "Inside the lamp room he lights the great lamp.",
       "durationSec": 6,
-      "prompt": "Continuing from the first frame: the keeper steps inside, climbs to the lamp room and lights the great lamp with his brass lantern, warm light floods the room, medium shot",
+      "prompt": "References:\nImage 1 (Last frame of shot 1): START FRAME: the clip opens on exactly this image.\nImage 2 (The keeper): reference only, not a frame: keep his face, beard and coat.\nImage 3 (Brass lantern): reference only: the lantern's brass and glass only.\nFraming: opens on the start frame at the door, ends on a medium shot of the keeper beside the lit lamp.\n\nContinuing from the first frame: the keeper steps inside, climbs to the lamp room and lights the great lamp with his brass lantern, warm light floods the room, medium shot",
       "assets": [
         "s1-end",
         "keeper",
         "lantern"
+      ],
+      "references": [
+        {
+          "asset": "s1-end",
+          "role": "start-frame"
+        },
+        {
+          "asset": "keeper",
+          "role": "identity"
+        },
+        {
+          "asset": "lantern",
+          "role": "detail",
+          "note": "brass and glass only"
+        }
       ],
       "qa": [
         "First frame matches the end of shot 1",
@@ -270,7 +290,7 @@ Fonts — TextStyle "font":
       "title": "Beam across the storm",
       "description": "The beam sweeps across the storm from outside; the title appears.",
       "durationSec": 4,
-      "prompt": "Exterior wide shot, static camera: the lighthouse beam sweeps across dark storm clouds and crashing waves, rain starts, dramatic, calm dark sky in the upper half, no text or letters of any kind",
+      "prompt": "References:\nImage 1 (Cliff and lighthouse): reference only, not a frame: the same lighthouse and cliff; match its look.\nNo image is the start frame. Framing: one static exterior wide shot from first frame to last.\n\nExterior wide shot, static camera: the lighthouse beam sweeps across dark storm clouds and crashing waves, rain starts, dramatic, calm dark sky in the upper half, no text or letters of any kind",
       "assets": [
         "cliff"
       ],

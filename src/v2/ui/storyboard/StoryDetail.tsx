@@ -4,6 +4,7 @@ import { cmd, type Command, type Engine } from "../../engine";
 import { importFile } from "../../persistence";
 import type { BlobStore } from "../../ports";
 import { Ic } from "../Icon";
+import { extFor, safeName, saveFile } from "../saveFile";
 import { Sheet } from "../Sheet";
 import { type BoardTarget, LengthWarn, shotIcon, Thumb, TYPE_ICON, Warn } from "./BoardView";
 import { extractLastFrame } from "./lastFrame";
@@ -159,8 +160,9 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
       </Section>
 
       {owner.prompt && (
-        <Section title={shot ? "Clip prompt" : "Prompt"} extra={<CopyButton text={() => owner.prompt} label="Copy prompt" />}>
+        <Section title={shot ? "Clip prompt" : "Prompt"} extra={<CopyButton text={() => (shot ? storyRefs.promptWithReferences(b, shot) : owner.prompt)} label="Copy prompt" testId="copy-clip-prompt" />}>
           <p className="v2-sb-prompt">{owner.prompt}</p>
+          {shot && <AttachOrder shot={shot} project={project} thumbs={thumbs} blobs={blobs} />}
         </Section>
       )}
       {shot && (shot.camera || shot.dialogue) && <Section title="Direction">{shot.camera && <p className="v2-sb-kv"><b>Camera</b> {shot.camera}</p>}{shot.dialogue && <p className="v2-sb-kv"><b>Dialogue</b> {shot.dialogue}</p>}</Section>}
@@ -239,6 +241,70 @@ function ShotRefs({ shot, project, thumbs, onOpen, onPin, onEdit, note }: { note
       {note && <p className="v2-sb-swapnote" role="status"><Ic g="pin" size={14} /> {note}</p>}
       {ids.some((id) => board.versionsOf(project, b.slots[id]).length > 1) && <p className="v2-hint">Pin a version to keep this shot on it when the asset changes; other shots follow the version in use.</p>}
     </Section>
+  );
+}
+
+/**
+ * "Attach in this order" (V2-SB-120): the images to give the video model with the clip prompt, numbered as the
+ * prompt's References block names them, each with the version this shot uses (pins respected), its role and a Save
+ * button. Blobs are loaded ahead so Save can open the iOS share sheet within the tap.
+ */
+function AttachOrder({ shot, project, thumbs, blobs }: { shot: Shot; project: Project; thumbs: Record<string, string>; blobs: BlobStore }) {
+  const b = project.storyboard!;
+  const rows = storyRefs.attachVersions(project, shot);
+  const media = (versionId?: string, slotId?: string) => {
+    const s = slotId ? b.slots[slotId] : undefined;
+    return versionId && s ? board.versionsOf(project, s).find((v) => v.id === versionId)?.media : undefined;
+  };
+  const keys = rows.map((r) => media(r.versionId, r.item.slotId)?.blobKey ?? "").join("|");
+  const [loaded, setLoaded] = useState<Record<string, Blob>>({});
+  const [note, setNote] = useState<string>();
+  useEffect(() => {
+    let live = true;
+    const want = keys.split("|").filter(Boolean);
+    void Promise.all(want.map(async (k) => [k, await blobs.get(k).catch(() => undefined)] as const)).then((xs) => {
+      if (live) setLoaded(Object.fromEntries(xs.filter((x): x is readonly [string, Blob] => !!x[1])));
+    });
+    return () => { live = false; };
+  }, [keys, blobs]);
+  useEffect(() => { if (!note) return; const t = setTimeout(() => setNote(undefined), 5000); return () => clearTimeout(t); }, [note]);
+  if (!rows.length) return null;
+  const added = !storyRefs.hasReferencesBlock(shot.prompt);
+  const save = async (no: number, name: string, key: string, mime: string) => {
+    const blob = loaded[key] ?? (await blobs.get(key));
+    if (!blob) { setNote("This image's file is missing from this device."); return; }
+    const r = await saveFile(blob, `shot${b.order.indexOf(shot.id) + 1}-image${no}-${safeName(name)}.${extFor(blob.type || mime)}`);
+    if (r === "downloaded") setNote(`Image ${no} downloaded`);
+  };
+  return (
+    <div className="v2-sb-attach" data-testid="attach-order">
+      <h5>Attach in this order</h5>
+      <ol className="v2-sb-attach-list" aria-label="Images to attach, in order">
+        {rows.map(({ item, versionId }) => {
+          const s = b.slots[item.slotId];
+          const m = media(versionId, item.slotId);
+          const vNo = board.versionsOf(project, s).findIndex((v) => v.id === versionId) + 1;
+          const pinned = !!board.pinOf(project, shot, item.slotId);
+          const role = storyRefs.ROLE_LABEL[item.role];
+          return (
+            <li key={item.slotId} className={`v2-sb-attach-item role-${item.role}`}>
+              <span className="v2-sb-attach-no" aria-hidden>{item.no}</span>
+              <Thumb src={versionId && thumbs[versionId]} icon={TYPE_ICON[s.type] ?? "image"} count={0} />
+              <span className="v2-sb-slot-text">
+                <b>Image {item.no} · {s.name}</b>
+                <em><span className="v2-sb-role">{role}</span>{vNo > 0 ? ` · ${pinned ? "pinned " : ""}v${vNo}` : " · not added yet"}{item.note ? ` · ${item.note}` : ""}</em>
+              </span>
+              <button className="v2-btn v2-sb-btn v2-sb-attach-save" disabled={!m} aria-label={`Save image ${item.no}: ${s.name}`} title={m ? "Save this image to attach it in your AI tool" : "Upload a version of this asset first"}
+                onClick={() => m && void save(item.no, s.name, m.blobKey, m.mime)}>
+                <Ic g="⇩" size={16} /> Save
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+      <p className="v2-hint">{added ? "Copy prompt adds a numbered References block that says how to use each image." : "The prompt already has a References block; check it matches this order."}</p>
+      {note && <p className="v2-sb-swapnote" role="status">{note}</p>}
+    </div>
   );
 }
 

@@ -19,6 +19,12 @@ export type StoryLayerType = (typeof LAYER_TYPES)[number];
 export const TEXT_ALIGNS = ["left", "center", "right"] as const;
 /** Asset types that are still pictures (usable as image layers). `render: "still"` needs exactly `image`. */
 export const STILL_ASSET_TYPES: readonly StoryAssetType[] = ["image", "frame", "character", "location", "prop", "style"];
+/**
+ * How an attached image is used by the video model (V2-SB-120). The order of `shots[].references` is the image
+ * numbering ("Image 1", "Image 2" …) the clip prompt refers to.
+ */
+export const REFERENCE_ROLES = ["start-frame", "end-frame", "identity", "look", "detail"] as const;
+export type ReferenceRole = (typeof REFERENCE_ROLES)[number];
 /** Default transition length in seconds when `params.durationSec` is absent. */
 export const DEFAULT_TRANSITION_SEC = 0.5;
 
@@ -47,6 +53,8 @@ export type StoryLayer = StoryTextLayer | StoryMediaLayer;
 export interface StoryEffect { preset: string; params?: StoryParams; startSec?: number; endSec?: number }
 /** `preset` is a transition id, kept as written; `params.durationSec` defaults to 0.5 s. */
 export interface StoryTransition { preset: string; params?: StoryParams }
+/** One numbered image attached to a clip generation, with how to use it (V2-SB-120). */
+export interface StoryReference { asset: string; role: ReferenceRole; note?: string }
 export interface StoryShot {
   id: string; title: string; description: string; durationSec: number;
   /** Required for `render: "ai"`; may be empty for html and still shots. */
@@ -58,6 +66,8 @@ export interface StoryShot {
   layers?: StoryLayer[];
   captions?: boolean;
   effects?: StoryEffect[];
+  /** V2-SB-120: images to attach, in order, with their roles. Absent = `assets` order with roles inferred from type. */
+  references?: StoryReference[];
 }
 export interface StoryConnection { from: string; to: string; kind: ConnectionKind; note?: string; transition?: StoryTransition }
 export interface StoryMeta { title: string; logline?: string; synopsis?: string; aspect: string; style?: string; language?: string; textStyles?: Record<string, StoryTextStyle> }
@@ -459,6 +469,38 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
     });
   };
 
+  /**
+   * shots[].references (V2-SB-120): known asset ids, at most one start-frame and one end-frame, no repeats. An unknown
+   * role warns and is used as "detail"; a missing role is inferred from the asset type. Referenced assets missing
+   * from the shot's "assets" are added to it, so they count as its inputs.
+   */
+  const referencesOf = (v: unknown, path: string, used: string[]): StoryReference[] | undefined => {
+    if (v === undefined) return undefined;
+    if (!Array.isArray(v)) { err(path, '"references" must be a list like [ { "asset": "<asset id>", "role": "start-frame" } ].'); return undefined; }
+    const out: StoryReference[] = [];
+    v.forEach((r, j) => {
+      const rp = `${path}[${j}]`;
+      if (!isObj(r)) return err(rp, 'Each reference must be an object { "asset": "<asset id>", "role": "<role>", "note"?: "…" }.');
+      const asset = str(r.asset) ?? "";
+      if (!asset) return err(`${rp}.asset`, 'A reference needs "asset": the id of the asset to attach.');
+      const a = assetById.get(asset);
+      if (!a) return err(`${rp}.asset`, unknownAsset(asset));
+      if (out.some((x) => x.asset === asset)) return warn(rp, `Asset "${asset}" is already in this shot's references; the repeat is ignored.`);
+      let role: ReferenceRole;
+      if (r.role === undefined) role = inferReferenceRole(a.type, a.source.type === "lastFrame");
+      else if (REFERENCE_ROLES.includes(str(r.role) as ReferenceRole)) role = str(r.role) as ReferenceRole;
+      else { warn(`${rp}.role`, `Unknown role ${JSON.stringify(r.role)}; using "detail". Roles: ${REFERENCE_ROLES.join(", ")}.`); role = "detail"; }
+      const note = str(r.note);
+      out.push({ asset, role, ...(note ? { note } : {}) });
+      if (!used.includes(asset)) used.push(asset);
+    });
+    for (const role of ["start-frame", "end-frame"] as const) {
+      const n = out.filter((x) => x.role === role).length;
+      if (n > 1) err(path, `A shot can have only one "${role}" reference, but it has ${n}.`);
+    }
+    return out;
+  };
+
   const shots: StoryShot[] = [];
   for (const pre of shotPre) {
     if (!pre) continue;
@@ -475,7 +517,9 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
     if (!prompt && mode === "ai") err(`${path}.prompt`, `Shot "${id}" needs a clip generation "prompt".`);
     const used = strList(s.assets, `${path}.assets`);
     used.forEach((a, j) => { if (!assetIds.has(a)) err(`${path}.assets[${j}]`, unknownAsset(a)); });
+    const references = referencesOf(s.references, `${path}.references`, used);
     const shot: StoryShot = { id, title: str(s.title) || id, description: str(s.description) ?? "", durationSec: dur, prompt, assets: used, qa: strList(s.qa, `${path}.qa`) };
+    if (references) shot.references = references;
     const camera = str(s.camera), dialogue = str(s.dialogue);
     if (camera) shot.camera = camera;
     if (dialogue) shot.dialogue = dialogue;
@@ -547,6 +591,17 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
 
   if (errors.length) return { ok: false, errors, warnings };
   return { ok: true, doc: { format: STORYBOARD_FORMAT, meta, assets, shots, connections }, warnings };
+}
+
+/**
+ * The role an image plays when a shot does not say (V2-SB-120): a frame or last frame opens the clip, a character
+ * gives identity, a style the look, anything else (location, prop, image …) details only.
+ */
+export function inferReferenceRole(type: StoryAssetType, lastFrame = false): ReferenceRole {
+  if (lastFrame || type === "frame") return "start-frame";
+  if (type === "character") return "identity";
+  if (type === "style") return "look";
+  return "detail";
 }
 
 /** First cycle in a dependency map (node → nodes it depends on), as a path ending where it started. */

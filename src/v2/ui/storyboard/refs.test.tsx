@@ -146,3 +146,41 @@ describe("per-shot references (V2-CUT-05)", () => {
     expect(document.querySelector('.v2-sheet select[aria-label="Version of Photo for this shot"], .v2-sb-sheet select[aria-label="Version of Photo for this shot"]')).toBeTruthy();
   });
 });
+
+describe("attach order and References block (V2-SB-120)", () => {
+  it("lists the images to attach with roles and pinned versions, copies the prompt with the block, and saves an image", async () => {
+    const el = document.createElement("div"); document.body.appendChild(el);
+    const store = createMemoryStorage().blobs;
+    await store.put("b", new Blob(["png"], { type: "image/png" }));
+    engine = new Engine(createProject("t"));
+    engine.dispatch(cmd.createStoryboard(doc));
+    engine.dispatch(cmd.addStoryVersion({ slot: "photo" }, img));
+    engine.dispatch(cmd.addStoryVersion({ slot: "photo" }, img));
+    const v1 = engine.getState().project.assets[sb().slots.photo.assetId!].versions[0].id;
+    engine.dispatch(cmd.setRefOverride("a", "photo", v1));
+    await act(async () => createRoot(el).render(<StoryboardView engine={engine} blobs={store} onClose={() => {}} />));
+    await openShot("a");
+    const list = document.querySelector('[data-testid="attach-order"]')!;
+    expect(list.querySelector("h5")?.textContent).toBe("Attach in this order");
+    expect(list.querySelector("li")?.textContent).toContain("Image 1 · Photo");
+    expect(list.querySelector("li")?.textContent).toContain("Details only · pinned v1");
+
+    let copied = "";
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async (t: string) => { copied = t; } } });
+    await click(document.querySelector('[data-testid="copy-clip-prompt"]') as HTMLElement);
+    expect(copied).toMatch(/^References:\nImage 1 \(Photo\): reference only, not a frame: materials[\s\S]*No image is the start frame[\s\S]*\n\nWalk$/);
+
+    const urls: string[] = [];
+    URL.createObjectURL = (() => { urls.push("blob:x"); return "blob:x"; }) as never;
+    URL.revokeObjectURL = (() => {}) as never;
+    let downloaded = "";
+    const orig = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = function (this: HTMLAnchorElement) { downloaded = this.download; };
+    try {
+      await click(btn("Save image 1: Photo"));
+      await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    } finally { HTMLAnchorElement.prototype.click = orig; }
+    expect(downloaded).toBe("shot1-image1-Photo.png");
+    expect(document.querySelector('[data-testid="attach-order"] [role="status"]')?.textContent).toBe("Image 1 downloaded");
+  });
+});

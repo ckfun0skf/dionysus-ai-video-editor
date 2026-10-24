@@ -6,7 +6,7 @@
  * and presets.json can't drift apart (aiGuide.test.ts fails when the published files are stale).
  */
 import { FONTS, listPresets, type ParamSpec, type PresetDescriptor, type PresetKind } from "../registry";
-import { CONNECTION_KINDS, DEFAULT_TRANSITION_SEC, SHOT_RENDERS, STORY_ASSET_TYPES, STORYBOARD_FORMAT, type StoryDoc } from "./storyJson";
+import { CONNECTION_KINDS, DEFAULT_TRANSITION_SEC, REFERENCE_ROLES, SHOT_RENDERS, STORY_ASSET_TYPES, STORYBOARD_FORMAT, type StoryDoc } from "./storyJson";
 
 /** Public site the guide files are deployed to (GitHub Pages). The short prompt always links here, also in dev. */
 export const PUBLIC_SITE_URL = "https://ckfun0skf.github.io/dionysus-ai-video-editor/";
@@ -30,11 +30,11 @@ export const EXAMPLE_STORYBOARD: StoryDoc = {
     { id: "s1-end", name: "Last frame of shot 1", type: "frame", aspect: "16:9", prompt: "", references: [], source: { type: "lastFrame", shot: "s1" }, qa: ["Keeper is at the door, lantern in his right hand"] },
   ],
   shots: [
-    { id: "s1", title: "Climbing the cliff path", description: "The keeper walks up the cliff path toward the lighthouse door.", durationSec: 5, prompt: "The elderly keeper in a yellow oilskin coat walks up a cliff path toward a white lighthouse at dusk, carrying a brass lantern, wind in his coat, slow tracking shot from behind, ends with him reaching the door", assets: ["keeper", "cliff", "lantern"], qa: ["Keeper matches the character sheet", "Lantern stays in his right hand", "Ends at the lighthouse door"], camera: "Slow tracking shot from behind" },
-    { id: "s2", title: "Lighting the lamp", description: "Inside the lamp room he lights the great lamp.", durationSec: 6, prompt: "Continuing from the first frame: the keeper steps inside, climbs to the lamp room and lights the great lamp with his brass lantern, warm light floods the room, medium shot", assets: ["s1-end", "keeper", "lantern"], qa: ["First frame matches the end of shot 1", "Lamp ignites with a warm glow", "No text or watermarks"], camera: "Medium shot, handheld", dialogue: "One more night.", captions: true },
+    { id: "s1", title: "Climbing the cliff path", description: "The keeper walks up the cliff path toward the lighthouse door.", durationSec: 5, prompt: "References:\nImage 1 (The keeper): reference only, not a frame: keep his face, beard and yellow oilskin coat.\nImage 2 (Cliff and lighthouse): reference only, not a frame: the lighthouse, cliff and dusk colours only; do not copy its wide framing.\nImage 3 (Brass lantern): reference only: the lantern's brass and glass only.\nNo image is the start frame. Framing: starts as a medium-wide tracking shot from behind on the path, ends close behind him at the lighthouse door.\n\nThe elderly keeper in a yellow oilskin coat walks up a cliff path toward a white lighthouse at dusk, carrying a brass lantern, wind in his coat, slow tracking shot from behind, ends with him reaching the door", assets: ["keeper", "cliff", "lantern"], qa: ["Keeper matches the character sheet", "Lantern stays in his right hand", "Ends at the lighthouse door"], camera: "Slow tracking shot from behind" },
+    { id: "s2", title: "Lighting the lamp", description: "Inside the lamp room he lights the great lamp.", durationSec: 6, prompt: "References:\nImage 1 (Last frame of shot 1): START FRAME: the clip opens on exactly this image.\nImage 2 (The keeper): reference only, not a frame: keep his face, beard and coat.\nImage 3 (Brass lantern): reference only: the lantern's brass and glass only.\nFraming: opens on the start frame at the door, ends on a medium shot of the keeper beside the lit lamp.\n\nContinuing from the first frame: the keeper steps inside, climbs to the lamp room and lights the great lamp with his brass lantern, warm light floods the room, medium shot", assets: ["s1-end", "keeper", "lantern"], references: [{ asset: "s1-end", role: "start-frame" }, { asset: "keeper", role: "identity" }, { asset: "lantern", role: "detail", note: "brass and glass only" }], qa: ["First frame matches the end of shot 1", "Lamp ignites with a warm glow", "No text or watermarks"], camera: "Medium shot, handheld", dialogue: "One more night.", captions: true },
     {
       id: "s3", title: "Beam across the storm", description: "The beam sweeps across the storm from outside; the title appears.", durationSec: 4,
-      prompt: "Exterior wide shot, static camera: the lighthouse beam sweeps across dark storm clouds and crashing waves, rain starts, dramatic, calm dark sky in the upper half, no text or letters of any kind",
+      prompt: "References:\nImage 1 (Cliff and lighthouse): reference only, not a frame: the same lighthouse and cliff; match its look.\nNo image is the start frame. Framing: one static exterior wide shot from first frame to last.\n\nExterior wide shot, static camera: the lighthouse beam sweeps across dark storm clouds and crashing waves, rain starts, dramatic, calm dark sky in the upper half, no text or letters of any kind",
       assets: ["cliff"], qa: ["Beam is clearly visible", "Same lighthouse as the establishing shot", "No text or letters in the picture"], camera: "Static wide shot",
       layers: [{ id: "s3-title", type: "text", text: "THE LANTERN KEEPER", startSec: 1, endSec: 4, position: { x: 0.5, y: 0.3 }, textStyle: "keeper-title", anim: { in: "fade", out: "fade", durationSec: 0.8 } }],
       effects: [{ preset: "ken-burns", params: { zoom: 0.15 } }],
@@ -72,6 +72,7 @@ export function presetLine(d: PresetDescriptor): string {
   return `- ${d.id}: ${d.description}${d.kind === "textStyle" ? styleLook(d) : ""}${params}`;
 }
 
+const REFERENCE_ROLES_TXT = REFERENCE_ROLES.map((r) => `"${r}"`).join(" | ");
 const FORMAT_SECTION = () => `{
   "format": "${STORYBOARD_FORMAT}",
   "meta": {
@@ -97,6 +98,10 @@ const FORMAT_SECTION = () => `{
       "durationSec": number,     // 0.5–120; match what the video model can generate (usually 4–10)
       "prompt": string,          // full clip generation prompt; required for render "ai", keep one for "html"/"still" too
       "assets": string[],        // ids of the assets this clip uses (include "clip" when set)
+      "references"?: [ { "asset": "<asset id>", "role": ${REFERENCE_ROLES_TXT}, "note"?: string } ],
+                                 // the images to attach to the clip generation IN THIS ORDER (Image 1, Image 2 …) and how to use each;
+                                 // omitted = "assets" order with roles from the type (frame → start-frame, character → identity,
+                                 // style → look, others → detail); at most one "start-frame" and one "end-frame"
       "camera"?: string,
       "dialogue"?: string,
       "qa": string[],            // 2-5 concrete yes/no checks for the clip
@@ -146,6 +151,7 @@ export const RULES = [
   "Only use preset ids listed in the PRESETS section.",
   `Preset params use the units noted in brackets in the PRESETS section; "fade-in"/"fade-out" "length" is a fraction (0.05–1) of the effect's time range, not seconds.`,
   `"durationSec" should match what the video model can generate.`,
+  `Every clip prompt starts with a "References:" block that numbers the images attached to the clip in the order of the shot's "references" (else its "assets"): "Image 1 (<asset name>): …", one line each, saying explicitly whether the image is the START FRAME (or END FRAME) or only a reference, and what to take from it (identity, overall look, or materials and colours only, not its framing or wide view). Then state the framing from the first frame to the last. Set "references" with roles whenever the order or use is not obvious from the asset types.`,
 ];
 export const rulesSection = () => RULES.map((r, i) => `${i + 1}. ${r}`).join("\n");
 
