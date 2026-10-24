@@ -76,6 +76,8 @@ export function TransformInspector({ engine, placement, time }: { engine: Engine
  * On-canvas handles over the selected clip: drag the box to move, a corner to scale, the top knob to rotate.
  * `box` is in canvas pixels; `canvas` gives the CSS scale. One gesture = one undo step.
  */
+/** Gap kept between the gizmo frame and the preview edge so the 26px corner buttons (offset 13px) stay tappable. */
+export const GIZMO_INSET = 16;
 export interface GizmoActions { onDelete: () => void; onEdit: () => void; onDuplicate: () => void; onDoubleTap?: () => void }
 
 /**
@@ -93,10 +95,15 @@ export function TransformHandles({ engine, placement, box, canvas, time, actions
   const k = rect.width / canvas.width || 1;
   // Keep the gizmo at least 64px so its corner buttons never overlap on small elements.
   const bw = Math.max(64, box.w * k), bh = Math.max(64, box.h * k);
-  const style = {
-    left: rect.left - parent.left + box.cx * k - bw / 2, top: rect.top - parent.top + box.cy * k - bh / 2,
-    width: bw, height: bh, transform: `rotate(${box.rot}rad)`,
-  };
+  let left = rect.left - parent.left + box.cx * k - bw / 2, top = rect.top - parent.top + box.cy * k - bh / 2, width = bw, height = bh;
+  // V2-109: a clip filling the preview would push its corner buttons outside (clipped, untappable):
+  // inset the unrotated gizmo frame so every handle stays inside the preview, as CapCut does.
+  if (Math.abs(Math.sin(box.rot)) < 0.02 && parent.width > 0) {
+    const r = Math.min(left + width, parent.width - GIZMO_INSET), b = Math.min(top + height, parent.height - GIZMO_INSET);
+    left = Math.max(left, GIZMO_INSET); top = Math.max(top, GIZMO_INSET);
+    width = Math.max(48, r - left); height = Math.max(48, b - top);
+  }
+  const style = { left, top, width, height, transform: `rotate(${box.rot}rad)` };
   const lastTap = useRef(0);
   const startGesture = () => { if (!drag.current && !pinch.current) engine.beginGesture(); };
   const start = (mode: "move" | "spin") => (e: RPE) => {

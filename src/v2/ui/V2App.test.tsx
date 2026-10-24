@@ -203,8 +203,11 @@ describe("V2App", () => {
       expect(scroll.contains(side)).toBe(true);
       // Right edge of the column is exactly t=0 (the content's left padding).
       const content = side.parentElement as HTMLElement;
-      expect(parseFloat((side as HTMLElement).style.left) + 144).toBe(parseFloat(content.style.paddingLeft));
+      expect(parseFloat((side as HTMLElement).style.left) + 184).toBe(parseFloat(content.style.paddingLeft));
       expect(el.querySelector(".v2-fab")).toBeNull();
+      // V2-109: the CapCut "+" trails the main lane (scrolls with the track) and is never a floating overlay.
+      const add = el.querySelector('[aria-label="Add media to main track"]') as HTMLElement;
+      expect(add.parentElement!.classList.contains("v2-lane")).toBe(true);
       // V2-096: the root toolbar is exactly the five CapCut modes; each mode has ‹ back to root.
       const labels = () => [...el.querySelectorAll(".v2-toolbar .v2-tool span")].map((x) => x.textContent);
       expect(labels()).toEqual(["Edit", "Audio", "Text", "Effect", "Overlay"]);
