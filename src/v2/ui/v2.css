@@ -201,7 +201,9 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 .v2-project-list .v2-icon, .v2-project-list .v2-btn { min-width: 44px; min-height: 44px; }
 .v2-btn.danger { background: #b4474f; border-color: #b4474f; }
 .v2-undo-bar { margin-top: 8px; display: flex; align-items: center; gap: 8px; color: var(--muted); }
-.v2-projects-btn { min-height: 36px; }
+.v2-projects-btn, .v2-board-btn { min-height: 36px; }
+.v2-board-btn { display: inline-flex; align-items: center; gap: 6px; }
+.v2-mheader .v2-board-btn, .v2-mheader .v2-projects-btn { min-width: 44px; min-height: 44px; display: grid; place-items: center; }
 .v2-empty { color: var(--muted); text-align: center; padding: 24px 8px; }
 .v2-trans { position: absolute; top: 50%; z-index: 4; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%; border: 1px solid var(--line); background: #2a2a31; color: var(--muted); font-size: 12px; line-height: 1; padding: 0; opacity: .55; transition: opacity .12s, transform .12s; }
 .v2-trans::before { content: ""; position: absolute; inset: -11px; } /* 44px touch target */
