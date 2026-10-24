@@ -3,8 +3,9 @@
  * params schema + defaults, preview hint, and a `type` key) plus a pure render function looked up by `type` in the
  * code registry. Descriptors can be loaded from JSON or a backend; render functions ship with the code.
  */
-export type PresetKind = "textAnimIn" | "textAnimOut" | "textAnimLoop" | "effect" | "transition" | "sticker";
-export const PRESET_KINDS: PresetKind[] = ["textAnimIn", "textAnimOut", "textAnimLoop", "effect", "transition", "sticker"];
+/** `effect` = text styling (Glow/Neon…); `videoEffect` = effect-layer presets applied to the main-track render (V2-101). */
+export type PresetKind = "textAnimIn" | "textAnimOut" | "textAnimLoop" | "effect" | "videoEffect" | "transition" | "sticker";
+export const PRESET_KINDS: PresetKind[] = ["textAnimIn", "textAnimOut", "textAnimLoop", "effect", "videoEffect", "transition", "sticker"];
 
 export type ParamSpec =
   | { key: string; label: string; type: "number"; min: number; max: number; step?: number; default: number }
@@ -38,6 +39,8 @@ export interface PresetFrame {
   /** Transitions: opacity of the outgoing / incoming clip. */
   mixOut?: number; mixIn?: number;
   fx?: FxStyle;
+  /** Video effects: blur radius as a fraction of frame height, grayscale 0..1, vignette strength 0..1. */
+  blur?: number; gray?: number; vignette?: number;
   /** Stickers: SVG markup to draw. */
   svg?: string;
 }

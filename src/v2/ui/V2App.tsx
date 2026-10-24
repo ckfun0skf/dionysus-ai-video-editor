@@ -20,6 +20,7 @@ import { Ic } from "./Icon";
 import { MediaPicker, type Picked } from "./MediaPicker";
 import { projectMediaList } from "./projectMedia";
 import { libraryFile, stickerFile } from "./libraryItems";
+import { EffectPicker } from "./EffectPicker";
 import { PanelGrabber, PREVIEW_DEFAULT, Sheet } from "./Sheet";
 
 type Menu = "multi" | "root" | "edit" | "audio" | "speed" | "text" | "effect" | "overlay";
@@ -66,6 +67,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const [textOpen, setTextOpen] = useState(false);
   /** V2-098: animation sheet; after a pick the sheet shrinks and the preview loops over the clip's time range. */
   const [animOpen, setAnimOpen] = useState(false);
+  const [fxOpen, setFxOpen] = useState(false);
   const [animLoop, setAnimLoop] = useState(false);
   const [snapOn, setSnapOn] = useState(true);
   const [htmlEdit, setHtmlEdit] = useState<{ placementId: string; assetId: string; source: string }>();
@@ -146,6 +148,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     else togglePlay();
   };
   const isText = selected?.placement.clipType === "text";
+  const isEffect = selected?.placement.clipType === "effect";
   const loopClip = (mobile ? animOpen || textOpen : true) && animLoop && isText ? selected!.placement : undefined;
   useEffect(() => {
     if (!loopClip) return;
@@ -392,14 +395,14 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     else if (el?.requestFullscreen) void el.requestFullscreen().catch(() => setFs((f) => !f));
     else setFs((f) => !f);
   };
-  const focusGroup = menu === "audio" || menu === "text" || menu === "overlay" ? menu : undefined;
+  const focusGroup = menu === "audio" || menu === "text" || menu === "overlay" || menu === "effect" ? menu : undefined;
   const activeMenu: Menu = multiMode || sel.length > 1 ? "multi" : selected ? (menu === "speed" ? "speed" : "edit") : menu === "speed" ? "root" : cue ? "text" : menu;
   /** CapCut root modes. Edit edits the main-track clip under the playhead; Audio/Text/Overlay expand their group. */
   const mainAt = (t: number) => { const m = ops.mainTrack(comp); return m?.placements.find((p) => p.startTicks <= t && t < p.startTicks + p.durationTicks) ?? (m && t >= compositionDuration(comp) ? m.placements[m.placements.length - 1] : undefined); };
   const enterMode = (m: "edit" | "audio" | "text" | "effect" | "overlay") => {
     setSubId(undefined); setMultiMode(false);
     if (m === "edit") { const p = mainAt(player.time); setSel(p ? [p.id] : []); setExpanded(undefined); }
-    else { setSel([]); setExpanded(m === "effect" ? undefined : m); }
+    else { setSel([]); setExpanded(m); }
     setMenu(m);
   };
   const toRoot = () => { setSel([]); setSubId(undefined); setMultiMode(false); setExpanded(undefined); setMenu("root"); };
@@ -438,10 +441,15 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       tool("✂", "Edit", () => enterMode("edit"), "edit", "Edit the main-track clip under the playhead"),
       tool("♫", "Audio", () => enterMode("audio"), "audio", "Audio layers: add music and sounds"),
       tool("T", "Text", () => enterMode("text"), "text", "Text, stickers and subtitles"),
-      tool("effect", "Effect", () => enterMode("effect"), "effect", "Transitions between main-track clips"),
+      tool("effect", "Effect", () => enterMode("effect"), "effect", "Effect layers (blur, zoom, B&W…) and transitions"),
       tool("overlay", "Overlay", () => enterMode("overlay"), "overlay", "Photos and videos on layers above the main track"),
     ],
-    edit: !selected ? [<span key="h" className="v2-tool-hint">Move the playhead over a main-track clip to edit it</span>] : [
+    edit: !selected ? [<span key="h" className="v2-tool-hint">Move the playhead over a main-track clip to edit it</span>] : isEffect ? [
+      tool("effect", "Effect", () => setFxOpen(true), "fx-edit", "Change the preset or its settings"),
+      tool("✂", "Split", split),
+      tool("🗑", "Delete", () => del(), "delete", "Delete this effect clip"),
+      ...clipActions.map((a) => tool(a.icon, a.label, a.run, a.label, a.title)),
+    ] : [
       ...(transitionTools ? [<span key="tr" className="v2-trans-wrap">{transitionTools}</span>] : []),
       tool("✂", "Split", split),
       tool("🗑", ripple ? "Ripple delete" : "Delete", () => del(), "delete", ripple ? "Delete and close the gap" : "Delete"),
@@ -475,6 +483,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       tool("template", "Templates", () => { addText(); setTextOpen(true); }, "templates", "Add a text clip and pick a template"),
     ],
     effect: [
+      tool("＋", "Add effect", () => setFxOpen(true), "add-effect", "Add an effect clip at the playhead (changes only the main track)"),
       tool("⧓", "Transition", addTransitionNearPlayhead, "transition", "Add a crossfade at the cut nearest the playhead"),
     ],
     overlay: [tool("＋", "Add overlay", () => setPicker("overlay"), "add-overlay", "Add photos, videos or clips on a new layer above, at the playhead")],
@@ -535,12 +544,13 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           {cue && <div className="v2-msub"><SubtitleEditor engine={engine} sub={cue} onDelete={delCue} /></div>}
           {inspOpen && selected && <Sheet label="Adjust" className="v2-msheet-insp" onClose={() => setInspOpen(false)}><TransformInspector engine={engine} placement={selected.placement} time={time} /><button className="v2-btn" onClick={() => setInspOpen(false)}>Done</button></Sheet>}
           {textOpen && selected && isText && <Sheet label="Text" className={`v2-msheet-insp ${animLoop ? "is-compact" : ""}`} onClose={closeAnim}><TextPanel engine={engine} placement={selected.placement} onAnimPicked={() => setAnimLoop(true)} /><button className="v2-btn" onClick={closeAnim}>Done</button></Sheet>}
+          {fxOpen && <Sheet label="Effects" className="v2-msheet-insp" onClose={() => setFxOpen(false)}><EffectPicker engine={engine} at={time} placement={isEffect ? selected!.placement : undefined} onAdded={(id) => setSel([id])} onClose={() => setFxOpen(false)} /><button className="v2-btn" onClick={() => setFxOpen(false)}>Done</button></Sheet>}
           {animOpen && !textOpen && selected && isText && <Sheet label="Animation" className={`v2-msheet-insp v2-anim-sheet ${animLoop ? "is-compact" : ""}`} onClose={closeAnim}><AnimationPicker engine={engine} placement={selected.placement} onPicked={() => setAnimLoop(true)} /><button className="v2-btn" onClick={closeAnim}>Done</button></Sheet>}
         </>
       ) : (
         <div className={`v2-desktop-grid ${sideOpen ? "" : "side-closed"}`}>
           <button className="v2-icon v2-side-toggle" aria-label={sideOpen ? "Hide side panel" : "Show side panel"} title={sideOpen ? "Hide side panel" : "Show side panel"} aria-expanded={sideOpen} onClick={() => setSideOpen(!sideOpen)}><Ic g={sideOpen ? "panel-close" : "panel-open"} size={18} /></button>
-          <div className="v2-side" hidden={!sideOpen}>{selected && isText && <TextPanel engine={engine} placement={selected.placement} onAnimPicked={() => setAnimLoop(true)} />}{selected && <TransformInspector engine={engine} placement={selected.placement} time={time} />}{cue && <SubtitleEditor engine={engine} sub={cue} onDelete={delCue} />}{browser}</div>
+          <div className="v2-side" hidden={!sideOpen}>{selected && isText && <TextPanel engine={engine} placement={selected.placement} onAnimPicked={() => setAnimLoop(true)} />}{selected && isEffect && <EffectPicker engine={engine} at={time} placement={selected.placement} />}{selected && !isEffect && <TransformInspector engine={engine} placement={selected.placement} time={time} />}{!selected && !cue && <details className="v2-side-fx"><summary title="Effect layers: blur, zoom, B&W, vignette… applied to the main track">Effects</summary><EffectPicker engine={engine} at={time} onAdded={(id) => setSel([id])} /></details>}{cue && <SubtitleEditor engine={engine} sub={cue} onDelete={delCue} />}{browser}</div>
           {preview}
           <section className="v2-timeline-panel" aria-label="Timeline">
             <div className="v2-timeline-toolbar">{selectionActions}<span className="v2-hint">Space play · S split · F freeze · Del delete · Shift+Del ripple · R ripple · Shift-click multi-select · ⌘C/⌘V/⌘D · ⌘/Ctrl+Z undo</span></div>

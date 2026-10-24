@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createProject, ops } from "../domain";
-import { hiddenRanges, layerSlot, buildRows } from "./Timeline";
+import { GROUP_COLOR, hiddenRanges, layerSlot, buildRows } from "./Timeline";
 
 const comp = () => {
   const p = createProject("t");
@@ -48,5 +48,19 @@ describe("timeline rows", () => {
     expect(s.slice(0, 3)).toEqual(["header:text", "s1", "t1"]);
     expect(s).toContain("header:overlay");
     expect(s).toContain("header:main");
+  });
+});
+
+describe("effect group (V2-101)", () => {
+  it("shows as a purple hidden line in other modes and as its own focus in Effect mode", async () => {
+    const { Engine, cmd } = await import("../engine");
+    const e = new Engine(createProject("x"));
+    e.dispatch(cmd.addEffectClip(0, "bw"));
+    const p = e.getState().project; const comp = p.compositions[p.rootCompositionId];
+    expect(hiddenRanges(comp, "overlay").find((r) => r.group === "effect")?.ranges).toEqual([[0, 360000]]);
+    expect(GROUP_COLOR.effect).toBe("#a855f7");
+    expect(buildRows(comp, true, "effect", "effect").map((r) => `${r.type}:${r.group}`)).toEqual(["track:main", "track:effect"]);
+    const y = createProject("y");
+    expect(buildRows(y.compositions[y.rootCompositionId], true).some((r) => r.group === "effect")).toBe(false);
   });
 });

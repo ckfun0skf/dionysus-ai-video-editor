@@ -3,8 +3,9 @@ import type { TextData } from "./text";
 export const SCHEMA = "dionysus/3.0" as const;
 
 /** `html`: a sandboxed HTML page (libraries opt-in via render/htmlLibs) rendered per frame from clip time (see render/htmlClip). */
-export type MediaKind = "video" | "image" | "audio" | "html" | "text";
-export type TrackKind = "video" | "audio" | "text";
+export type MediaKind = "video" | "image" | "audio" | "html" | "text" | "effect";
+/** `effect` tracks hold effect clips (V2-101): time ranges that apply a registry preset to the main-track render. */
+export type TrackKind = "video" | "audio" | "text" | "effect";
 
 export interface MediaRef {
   blobKey: string;
@@ -63,12 +64,16 @@ export interface Placement {
   transitionIn?: { kind: string; durationTicks: number };
   /** Text clips (`clipType: "text"`): content and style. Their `source` is TEXT_SOURCE (no media). */
   text?: TextData;
+  /** Effect clips (`clipType: "effect"`): a `videoEffect` registry preset id and its params. Source is TEXT_SOURCE. */
+  effect?: { preset: string; params?: Record<string, number | string> };
 }
 
 /** Placeholder source of text clips: they reference no asset. */
 export const TEXT_SOURCE: SourceRef = { kind: "assetVersion", assetId: "", versionId: "" };
 /** Clips that hold one picture (no source time): images and text. */
-export const isStill = (p: Pick<Placement, "clipType">) => p.clipType === "image" || p.clipType === "text";
+export const isStill = (p: Pick<Placement, "clipType">) => p.clipType === "image" || p.clipType === "text" || p.clipType === "effect";
+/** Default length of a new effect clip. */
+export const DEFAULT_EFFECT_TICKS = 3 * 120_000;
 
 export type KeyframeProp = "x" | "y" | "scale" | "rotation" | "opacity";
 export interface Keyframe { t: number; v: number }
@@ -197,7 +202,7 @@ export function createProject(name = "Untitled project", now = new Date().toISOS
 }
 
 export function trackKindFor(kind: MediaKind): TrackKind {
-  return kind === "audio" ? "audio" : kind === "text" ? "text" : "video";
+  return kind === "audio" ? "audio" : kind === "text" ? "text" : kind === "effect" ? "effect" : "video";
 }
 
 export function compositionDuration(comp: Composition): number {

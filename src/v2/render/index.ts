@@ -5,3 +5,4 @@ export * from "./export/plan"; export { exportProject, type ExportProgress, type
 export * from "./htmlClip";
 export { hitTest, inBox } from "./hit";
 export * from "./htmlLibs";
+export { effectFrameAt, applyEffectFrame } from "./effects";

@@ -6,6 +6,7 @@ import { mediaKey } from "./useMedia";
 import { clampPps, haptic, LONG_PRESS_MS, LONG_PRESS_SLOP, pinchZoom, touchDistance } from "./gestures";
 import { edit, ops, transitions, compositionDuration, TICKS_PER_SECOND, formatTimecode, type Composition, type Placement, type Project, type Track } from "../domain";
 import { Ic } from "./Icon";
+import { getPreset } from "../registry";
 
 interface Props {
   /** Mobile: the expanded group (lifted so the bottom toolbar's ‹ can collapse it). */
@@ -348,9 +349,9 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
               {r.placements.map((p) => (
                 <button key={p.id} className={`v2-clip clip-${p.clipType} ${p.id === selectedId ? "is-selected" : ""}`} data-placement-id={p.id}
                   style={{ left: toPx(p.startTicks), width: Math.max(4, toPx(p.durationTicks)), ...(thumbs?.[p.source.assetId] && p.clipType !== "audio" ? { backgroundImage: `url(${thumbs[p.source.assetId]})` } : {}) }}
-                  title={`${p.clipType === "text" ? p.text?.text : project.assets[p.source.assetId]?.name ?? ""} — tap to open ${ops.GROUP_LABEL[r.group]} layers`}
+                  title={`${p.clipType === "effect" ? effectName(p) : p.clipType === "text" ? p.text?.text : project.assets[p.source.assetId]?.name ?? ""} — tap to open ${ops.GROUP_LABEL[r.group]} layers`}
                   onPointerDown={(e) => e.stopPropagation()} onClick={() => { setExpanded(r.group); onSelect(p.id); }}>
-                  <span className="v2-clip-name">{p.clipType === "text" ? <><Ic g="T" size={12} /> {p.text?.text || "Text"}</> : project.assets[p.source.assetId]?.name}</span><AnimBadges p={p} width={Math.max(4, toPx(p.durationTicks))} />
+                  <span className="v2-clip-name">{p.clipType === "effect" ? <><Ic g="effect" size={12} /> {effectName(p)}</> : p.clipType === "text" ? <><Ic g="T" size={12} /> {p.text?.text || "Text"}</> : project.assets[p.source.assetId]?.name}</span><AnimBadges p={p} width={Math.max(4, toPx(p.durationTicks))} />
                 </button>
               ))}
             </div>
@@ -370,7 +371,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
                 return (
                   <div key={p.id} className={`v2-clip clip-${p.clipType} ${inSel ? "is-selected" : ""}`} data-placement-id={p.id}
                     style={{ left: toPx(p.startTicks), width: Math.max(4, toPx(p.durationTicks)), ...(centered && thumbs?.[p.source.assetId] && p.clipType !== "audio" && !strips?.[mediaKey(p.source.assetId, p.source.versionId)] ? { backgroundImage: `url(${thumbs[p.source.assetId]})` } : {}) }}
-                    onPointerDown={(e) => onClipDown(e, p.id, t.id, p.startTicks)} title={p.clipType === "text" ? p.text?.text : asset?.name}>
+                    onPointerDown={(e) => onClipDown(e, p.id, t.id, p.startTicks)} title={p.clipType === "effect" ? `Effect: ${effectName(p)}` : p.clipType === "text" ? p.text?.text : asset?.name}>
                     {(() => {
                       const key = mediaKey(p.source.assetId, p.source.versionId);
                       const w = Math.max(4, toPx(p.durationTicks));
@@ -381,7 +382,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
                         {pk && <Waveform peaks={pk} p={p} width={w} height={p.clipType === "audio" ? 38 : 14} kind={p.clipType === "audio" ? "audio" : "video"} />}
                       </>;
                     })()}
-                    <span className="v2-clip-name">{p.freeze && <span className="v2-clip-badge" title="Freeze frame" aria-label="Freeze frame"><Ic g="❄" /></span>}{p.reverse && <span className="v2-clip-badge" title="Reversed" aria-label="Reversed"><Ic g="⟲" /></span>}{p.speed && p.speed !== 1 && <span className="v2-clip-badge" title={`Speed ${p.speed}×`}>{p.speed}×</span>}{p.linkedAudio?.muted && !p.freeze && <span className="v2-clip-badge" title="Clip audio muted" aria-label="Clip audio muted"><Ic g="🔇" /></span>}{p.clipType === "text" ? <><Ic g="T" size={12} /> {p.text?.text || "Text"}</> : asset?.name ?? "missing media"}</span><AnimBadges p={p} width={Math.max(4, toPx(p.durationTicks))} />
+                    <span className="v2-clip-name">{p.freeze && <span className="v2-clip-badge" title="Freeze frame" aria-label="Freeze frame"><Ic g="❄" /></span>}{p.reverse && <span className="v2-clip-badge" title="Reversed" aria-label="Reversed"><Ic g="⟲" /></span>}{p.speed && p.speed !== 1 && <span className="v2-clip-badge" title={`Speed ${p.speed}×`}>{p.speed}×</span>}{p.linkedAudio?.muted && !p.freeze && <span className="v2-clip-badge" title="Clip audio muted" aria-label="Clip audio muted"><Ic g="🔇" /></span>}{p.clipType === "effect" ? <><Ic g="effect" size={12} /> {effectName(p)}</> : p.clipType === "text" ? <><Ic g="T" size={12} /> {p.text?.text || "Text"}</> : asset?.name ?? "missing media"}</span><AnimBadges p={p} width={Math.max(4, toPx(p.durationTicks))} />
                     {!!p.fadeInTicks && <span className="v2-fade in" aria-label="Fade in" style={{ width: toPx(p.fadeInTicks) }} />}
                     {!!p.fadeOutTicks && <span className="v2-fade out" aria-label="Fade out" style={{ width: toPx(p.fadeOutTicks) }} />}
                     {[...new Set(Object.values(p.keyframes ?? {}).flatMap((ks) => ks!.map((k) => k.t)))].filter((k) => k >= 0 && k <= p.durationTicks).map((k) => (
@@ -442,12 +443,12 @@ type Row =
  * Desktop: every track, grouped top-layer-first under group headers.
  */
 /** Group colours for the hidden-group range lines (and lane tints). */
-export const GROUP_COLOR: Record<ops.TrackGroup, string> = { main: "#888", text: "#f5a623", overlay: "#3b82f6", audio: "#22c55e" };
+export const GROUP_COLOR: Record<ops.TrackGroup, string> = { main: "#888", text: "#f5a623", overlay: "#3b82f6", audio: "#22c55e", effect: "#a855f7" };
 /** V2-099: in a focused mode, the time ranges where each hidden group has clips (merged), stacked one line per group. */
 export function hiddenRanges(comp: Composition, focus?: ops.TrackGroup): { group: ops.TrackGroup; ranges: [number, number][] }[] {
   if (!focus) return [];
   const out: { group: ops.TrackGroup; ranges: [number, number][] }[] = [];
-  for (const g of ["text", "overlay", "audio"] as const) {
+  for (const g of ["text", "overlay", "effect", "audio"] as const) {
     if (g === focus) continue;
     const ps = ops.tracksInGroup(comp, g).flatMap((t) => t.placements).sort((a, b) => a.startTicks - b.startTicks);
     const ranges: [number, number][] = [];
@@ -461,7 +462,7 @@ export function buildRows(comp: Composition, mobile: boolean, expanded?: ops.Tra
   const rows: Row[] = [];
   const track = (g: ops.TrackGroup) => (t: Track): Row => ({ type: "track", key: t.id, group: g, t });
   if (!mobile) {
-    for (const g of ["text", "overlay", "main", "audio"] as const) {
+    for (const g of ["text", "overlay", "effect", "main", "audio"] as const) {
       if (focus && g !== focus && g !== "main") continue;
       const ts = ops.tracksInGroup(comp, g);
       if (!ts.length) continue;
@@ -470,9 +471,11 @@ export function buildRows(comp: Composition, mobile: boolean, expanded?: ops.Tra
     return rows;
   }
   rows.push(...ops.tracksInGroup(comp, "main").map(track("main")));
-  for (const g of ["overlay", "audio", "text"] as const) {
+  for (const g of ["effect", "overlay", "audio", "text"] as const) {
     if (focus && g !== focus) continue;
     const ts = ops.tracksInGroup(comp, g);
+    // Effect lane appears once the project has effect layers (or in Effect mode).
+    if (g === "effect" && !ts.length && focus !== "effect") continue;
     // V2-099: no in-timeline group header on mobile; exit via empty-space tap or the toolbar ‹.
     if (expanded === g && ts.length) rows.push(...[...ts].reverse().map(track(g)));
     else rows.push({ type: "collapsed", key: `c-${g}`, group: g, placements: ts.flatMap((t) => t.placements).sort((a, b) => a.startTicks - b.startTicks) });
@@ -480,7 +483,9 @@ export function buildRows(comp: Composition, mobile: boolean, expanded?: ops.Tra
   return rows;
 }
 
-const GROUP_ICON: Record<ops.TrackGroup, string> = { main: "image", overlay: "image", audio: "♫", text: "T" };
+/** V2-101: display name of an effect clip's preset. */
+export const effectName = (p: Placement) => getPreset("videoEffect", p.effect?.preset)?.name ?? "Effect";
+const GROUP_ICON: Record<ops.TrackGroup, string> = { main: "image", overlay: "image", audio: "♫", text: "T", effect: "effect" };
 const REORDER_ANIM_MS = 180;
 const SQ = 52, SQ_GAP = 6;
 /** Slot the dragged thumb lands in, given the finger x relative to where the row starts. */

@@ -26,6 +26,14 @@ export const RENDERERS: Record<string, RenderFn> = {
   neon: (f, _p, k) => ({ ...f, fx: { ...f.fx, neon: true, glowBlur: n(k.blur, 0.6), color: s(k.color, "#20d5ec") } }),
   hollow: (f) => ({ ...f, fx: { ...f.fx, hollow: true } }),
   echo: (f, _p, k) => { const o = n(k.offset, 0.06); return { ...f, fx: { ...f.fx, color: s(k.color, "#20d5ec"), echo: [{ dx: o * 2, dy: o * 2, alpha: 0.35 }, { dx: o, dy: o, alpha: 0.6 }] } }; },
+  // video effects (V2-101): composed in effect-layer order onto the main-track frame
+  vFadeIn: (f, p, k) => ({ ...f, alpha: f.alpha * Math.min(1, p / Math.max(0.01, n(k.length, 0.5))) }),
+  vFadeOut: (f, p, k) => ({ ...f, alpha: f.alpha * Math.min(1, (1 - p) / Math.max(0.01, n(k.length, 0.5))) }),
+  vBlur: (f, _p, k) => ({ ...f, blur: (f.blur ?? 0) + n(k.amount, 0.5) * 0.02 }),
+  vZoom: (f, p, k) => ({ ...f, scale: f.scale * (1 + n(k.zoom, 0.25) * p), dx: f.dx + n(k.pan, 0.05) * p }),
+  vShake: (f, p, k) => { const a = n(k.amount, 0.02), w = n(k.speed, 16) * Math.PI * 2 * p; return { ...f, dx: f.dx + a * Math.sin(w), dy: f.dy + a * Math.sin(w * 1.37 + 1), scale: f.scale * (1 + a * 2) }; },
+  vVignette: (f, _p, k) => ({ ...f, vignette: Math.min(1, Math.max(f.vignette ?? 0, n(k.amount, 0.6))) }),
+  vGray: (f, _p, k) => ({ ...f, gray: Math.min(1, (f.gray ?? 0) + n(k.amount, 1)) }),
   // transitions: p is progress across the cut
   crossfade: (f, p) => ({ ...f, mixOut: 1, mixIn: Math.max(0, Math.min(1, p)) }),
   dip: (f, p) => ({ ...f, mixOut: p < 0.5 ? 1 - p * 2 : 0, mixIn: p < 0.5 ? 0 : (p - 0.5) * 2 }),

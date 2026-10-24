@@ -35,6 +35,14 @@ export const BUILTIN_PRESETS: PresetDescriptor[] = [
   P({ id: "neon", kind: "effect", category: "Light", name: "Neon", type: "neon", params: [{ key: "blur", label: "Blur", type: "number", min: 0, max: 1, step: 0.01, default: 0.6 }] }),
   P({ id: "hollow", kind: "effect", category: "Style", name: "Hollow", type: "hollow" }),
   P({ id: "echo", kind: "effect", category: "Style", name: "Echo", type: "echo", params: [{ key: "offset", label: "Offset", type: "number", min: 0, max: 0.3, step: 0.01, default: 0.06 }] }),
+  // Video effects (effect layers, V2-101): p = progress through the effect clip
+  P({ id: "fade-in", kind: "videoEffect", category: "Basic", name: "Fade in", type: "vFadeIn", params: [{ key: "length", label: "Length", type: "number", min: 0.05, max: 1, step: 0.05, default: 0.5 }] }),
+  P({ id: "fade-out", kind: "videoEffect", category: "Basic", name: "Fade out", type: "vFadeOut", params: [{ key: "length", label: "Length", type: "number", min: 0.05, max: 1, step: 0.05, default: 0.5 }] }),
+  P({ id: "blur", kind: "videoEffect", category: "Lens", name: "Blur", type: "vBlur", params: [{ key: "amount", label: "Amount", type: "number", min: 0, max: 1, step: 0.05, default: 0.5 }] }),
+  P({ id: "ken-burns", kind: "videoEffect", category: "Motion", name: "Zoom", type: "vZoom", params: [{ key: "zoom", label: "Zoom", type: "number", min: 0, max: 1, step: 0.05, default: 0.25 }, { key: "pan", label: "Pan", type: "number", min: -0.3, max: 0.3, step: 0.01, default: 0.05 }] }),
+  P({ id: "shake", kind: "videoEffect", category: "Motion", name: "Shake", type: "vShake", params: [{ key: "amount", label: "Amount", type: "number", min: 0, max: 0.1, step: 0.005, default: 0.02 }, { key: "speed", label: "Speed", type: "number", min: 2, max: 40, step: 1, default: 16 }] }),
+  P({ id: "vignette", kind: "videoEffect", category: "Lens", name: "Vignette", type: "vVignette", params: [{ key: "amount", label: "Amount", type: "number", min: 0, max: 1, step: 0.05, default: 0.6 }] }),
+  P({ id: "bw", kind: "videoEffect", category: "Color", name: "B&W", type: "vGray", params: [{ key: "amount", label: "Amount", type: "number", min: 0, max: 1, step: 0.05, default: 1 }] }),
   // Transitions
   P({ id: "crossfade", kind: "transition", category: "Basic", name: "Crossfade", type: "crossfade", preview: { icon: "⧓" } }),
   P({ id: "dip", kind: "transition", category: "Basic", name: "Dip to black", type: "dip", preview: { icon: "◐" } }),
