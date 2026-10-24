@@ -2360,7 +2360,7 @@
         },
         {
           "id": "V2-SB-128",
-          "title": "Blend modes and overlays: new blend preset kind (normal, screen, add, lighten, multiply, darken, overlay, soft-light; one file each, op validated by the loader); clips get an optional blend applied as the canvas composite operation in preview and export; inspector Blend select next to Opacity (44px on phones); storyboard layers accept blend and opacity (0-1) with warnings for unknown ids and bad values, sent to the clip; generated guide lists blend modes; spec section 2.5, RULE 22 with overlay example, fixture s03 card text multiplies onto the card",
+          "title": "Blend modes and overlays: new blend preset kind (normal, screen, add, lighten, multiply, darken, overlay, soft-light; one file each, op validated by the loader); clips get an optional blend applied as the canvas composite operation in preview and export; inspector Blend select next to Opacity (44px on phones); storyboard layers accept blend and opacity (0-1) with warnings for unknown ids and bad values, sent to the clip; generated guide lists blend modes; spec section 2.5, RULE 22 with overlay example, fixture s03 card text multiplies onto the card; Blend select styled dark with its own arrow so it stays readable in Safari/WebKit",
           "status": "done",
           "progress": 100
         },
