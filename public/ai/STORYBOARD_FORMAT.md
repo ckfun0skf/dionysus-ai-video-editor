@@ -38,7 +38,7 @@ Notation: `?` = optional. All coordinates are 0-1 fractions of the frame, measur
 | `aspect` | `"16:9"`, `"9:16"`, `"1:1"`, `"4:5"` or `"21:9"` | Unchanged. |
 | `textStyles?` **(new)** | `{ "<id>": TextStyle }` | One-off text styles for this storyboard. They are imported as project text styles and can be promoted to the registry later. Layers reference them through `textStyle`. Ids must not clash with registry `textStyle` ids; if one does, the local style wins and the importer warns. |
 
-`TextStyle` = `{ font?, size?, color?, align?, bold?, ... }`, with the same keys as a text layer's `style` (§2.5). Extra keys are kept and passed through.
+`TextStyle` = `{ font?, size?, color?, align?, bold?, italic?, letterSpacing?, lineHeight?, strokeWidth?, strokeColor?, shadow?, background?, effect?, effectColor? }`, with the same keys as a text layer's `style` (§2.5, including the V2-SB-127 extras). Unknown keys warn and are kept for re-export, but have no effect.
 
 ### 2.3 `assets[]`
 
@@ -162,11 +162,25 @@ Layers are drawn in list order: later layers sit on top. There is no `zIndex`. `
 | `startSec`, `endSec` | number | |
 | `position` **or** `box` | `{x,y}` or `{x,y,width,height}` | `position` (preferred) gives the text centre. `box` gives the top-left corner plus size. Give exactly one. See "Text sizing" below. |
 | `textStyle?` | preset id | A registry `textStyle` id or a `meta.textStyles` key. Default `plain`. |
-| `style?` | `{font?, size?, color?, align?, bold?}` | `font` is a curated font id (§3.2). `size` is a fraction of frame height. `color` is a CSS hex value. `align` is `left`, `center` or `right`. `bold` is a boolean; a numeric weight of 600 or more is accepted and mapped to bold. |
+| `style?` | `{font?, size?, color?, align?, bold?, …extras}` | `font` is a curated font id (§3.2). `size` is a fraction of frame height. `color` is a CSS hex value. `align` is `left`, `center` or `right`. `bold` is a boolean; a numeric weight of 600 or more is accepted and mapped to bold. Extras (V2-SB-127): see "Text style extras" below. |
 | `anim?` | `{in?, out?, loop?, durationSec?}` | Ids of the `textAnimIn`, `textAnimOut` and `textAnimLoop` kinds. `durationSec` applies to in and out. |
 | `follow?` | `"frame"` \| `"shot"` | V2-SB-126. Default `"frame"`: the layer stays fixed to the frame. `"shot"`: it moves with the shot's zoom and pan (see "Fixed or following layers" below). |
 
 Style resolution: the `textStyle` preset is applied first, then the inline `style` overrides it.
+
+**Text style extras (V2-SB-127).** The same fields as `textStyle` preset `data` and the text panel, so a storyboard can describe any look the editor can make. Lengths are fractions of the **font size**, so a look scales with the text.
+
+| Field | Type | Notes |
+|---|---|---|
+| `italic?` | boolean | |
+| `letterSpacing?` | number, −0.2 to 1 | Extra space between letters, in em (0.3 = airy title). Browsers without canvas letter spacing (older Safari) draw normal spacing. |
+| `lineHeight?` | number, 0.8 to 3 | Line height multiplier for multi-line text (default 1.25; box-fitted text uses 1.2). |
+| `strokeWidth?`, `strokeColor?` | number 0 to 0.3, hex | Outline around the letters. 0.04–0.08 with a dark colour keeps light text readable. |
+| `shadow?` | `{color?, blur?, x?, y?}` or `null` | Drop shadow. `blur` 0–1, `x`/`y` −1 to 1. Missing fields default to `{ "color": "#000000", "blur": 0.15, "x": 0.03, "y": 0.03 }`. `null` removes the text style's shadow. |
+| `background?` | `{color?, opacity?}` or `null` | Box behind the text. `opacity` 0–1. Missing fields default to `{ "color": "#000000", "opacity": 0.6 }`. `null` removes the text style's box. |
+| `effect?`, `effectColor?` | text effect id or `"none"`, hex | A registry `effect` (`glow`, `neon`, `hollow`, `echo`), drawn in `effectColor`. `id@N` is accepted; the version is dropped. |
+
+Example: `"style": { "color": "#ffffff", "strokeWidth": 0.06, "strokeColor": "#000000", "shadow": { "color": "#000000", "blur": 0.3, "x": 0, "y": 0.04 } }`.
 
 **Text sizing.** Text is a single line per `\n`-separated line; it is **never wrapped**.
 - With `position`, the text is centred on the point. Its size is `style.size`, else the `textStyle` size, else 0.1 of the frame height.
@@ -280,8 +294,8 @@ This is a snapshot only. **The live list always comes from the registry**, and t
 | textAnimLoop | `pulse`, `wiggle`, `float`, `blink` |
 | videoEffect | `fade-in`, `fade-out`, `blur`, `ken-burns` (slow zoom / push-in), `shake`, `vignette`, `bw` |
 | transition | `crossfade`, `dip` (dip to black) |
-| textStyle | `plain`, `caption`, `outline`, `neon`, `pop`, `typewriter`, `glow`, `echo` |
-| effect (text styling) | `glow`, `neon`, `hollow`, `echo` |
+| textStyle | `plain`, `caption`, `outline`, `neon`, `pop`, `typewriter`, `glow`, `echo`, `soft-shadow`, `cinematic` |
+| effect (text styling) | `glow`, `neon`, `hollow`, `echo`; used in `style.effect` (V2-SB-127) |
 | fonts (curated ids, not presets) | `sans`, `serif`, `mono`, `impact`, `rounded`, `hand`, `script`, `condensed`. No web fonts. |
 
 Planned as future registry entries, with no schema change needed: `grain`, `colour-grade`, `dip-to-white`, and wipe transitions.
@@ -296,6 +310,8 @@ Planned as future registry entries, with no schema change needed: `grain`, `colo
 | `id@N` that differs from the current version | Warn and use the current version. Keep `id@N`. |
 | A `meta.textStyles` id that is also a registry `textStyle` id | Warn; the storyboard's own style wins. |
 | Invalid `style` values (`size` outside (0, 1], non-hex `color`, unknown `align`, non-boolean `bold`) | Warn and drop that value. |
+| Invalid style extras (V2-SB-127): non-boolean `italic`; `letterSpacing`, `lineHeight` or `strokeWidth` out of range; non-hex `strokeColor` or `effectColor`; malformed `shadow` or `background`; unknown `effect` | Warn and drop that value. |
+| Unknown `style` / `meta.textStyles` field | Warn; the field is kept for re-export but has no effect. |
 | Unknown param key, wrong param type, number outside the ParamSpec range | Warn; unknown keys are ignored, wrong types use the default, out-of-range numbers are clamped. |
 | Transition `durationSec` <= 0 | Warn and use the 0.5 s default. |
 | `genDurationSec` outside 0.5-120 or shorter than `durationSec` | Warn and ignore it. |
@@ -428,6 +444,7 @@ RULES
 18. Keyframe then animate: when the opening composition matters (a character's pose, a precise layout, a hero product shot), give the "ai" shot a "keyframe": { "prompt", "references", "qa" }. The app turns it into an image asset "<shot id>.keyframe" that is made first, then attached to the clip as Image 1, the START FRAME (do not also give the shot a "start-frame" reference). The keyframe prompt describes one still image (with its own "References:" block, as for an asset); the clip prompt then describes only the motion from that frame. Example: "keyframe": { "prompt": "References:\nImage 1 (Hero): reference only: keep this identity (face, body, clothes).\n\nThe hero sits at a café table, both hands around a blue mug …", "references": ["hero", "cafe"], "qa": ["The hero's face matches the reference"] }, clip prompt "References:\nImage 1 (Keyframe · …): START FRAME …\n\nShe slowly lifts the mug …".
 19. Audio: put each voiceover, music bed or sound effect in "audio" as a cue on an asset of type "audio" (source "generate" with a prompt for the user's voice/music/sound tool, e.g. the exact voiceover script and voice, or "upload"). "from" is the shot it starts in, "atSec" the offset into that shot, "to" the last shot it plays under. A music bed usually runs "from" the first shot "to" the last with "volume" 0.2-0.4 under speech; a voiceover spans the shots it describes; a sound effect sits at the moment in one shot ("atSec") with no "to". Example: { "asset": "score", "kind": "music", "from": "s1", "to": "s6", "volume": 0.3, "fadeOutSec": 2 }, { "asset": "door-slam", "kind": "sfx", "from": "s4", "atSec": 1.2 }. Do not put spoken lines that the video model renders (shot "dialogue") into a voiceover too.
 20. Layers stay fixed to the frame by default: a shot's video effects (e.g. "ken-burns" zoom and pan) move only the picture, so titles, labels and logos stay put and readable. Give a layer "follow": "shot" only when it belongs to the scene and must move with the picture, e.g. a name tag pinned to a sign or a label on an object while the shot slowly zooms: { "id": "tag", "type": "text", "text": "ROOM 12", "startSec": 0, "endSec": 4, "position": { "x": 0.62, "y": 0.4 }, "follow": "shot" }. It only has an effect when an effect moves or zooms the shot while the layer is on screen.
+21. Keep text readable on any picture: give light text an outline ("strokeWidth" about 0.04-0.08 with a dark "strokeColor"), a soft "shadow", or a "background" box (captions, lower thirds). Use "letterSpacing" (in em) for airy titles, "lineHeight" for multi-line cards, "italic" for emphasis, and a text "effect" with "effectColor" only for stylised titles. Sizes and offsets are fractions of the font size; null removes a style's shadow or background. Example: "style": { "color": "#ffffff", "strokeWidth": 0.06, "strokeColor": "#000000", "shadow": { "color": "#000000", "blur": 0.3, "x": 0, "y": 0.04 } }. Put a look used on several layers into "meta.textStyles" once.
 ```
 
 ## 6. Decisions, open questions and future work
@@ -443,7 +460,7 @@ RULES
 
 `src/v2/domain/__fixtures__/ep01_opening.storyboard.json` (12 shots) imports with no warnings and shows the following:
 - **s03** is `render: "still"` with `clip: "card-still"`. It has a framed text layer (`box`, `textStyle: "plain"` plus inline serif style, fade-in) and a `ken-burns` effect.
-- **s07** is `render: "still"` with `clip: "title-bg"`. It has a centred `ALLOTMENT` text layer that uses `meta.textStyles["ata-title"]`.
+- **s07** is `render: "still"` with `clip: "title-bg"`. It has a centred `ALLOTMENT` text layer that uses `meta.textStyles["ata-title"]` (serif, with V2-SB-127 `letterSpacing` 0.25 and a soft `shadow`).
 - **Connections:** s06→s07 uses `dip` (0.5 s) and s07→s08 uses `crossfade` (0.8 s).
 - **Asset `card-still`** (V2-SB-123) is made from `[{ "asset": "flat", "role": "detail", "note": "…drawers only…" }, "style"]`, and its prompt starts with the matching two-image `References:` block.
 

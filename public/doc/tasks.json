@@ -2359,6 +2359,12 @@
           "progress": 100
         },
         {
+          "id": "V2-SB-127",
+          "title": "Text style extras: storyboard text styles (layer style and meta.textStyles) accept the same fields as the editor: italic, letterSpacing, lineHeight, strokeWidth/strokeColor outline, shadow and background (or null to clear the style's), text effect (glow, neon, hollow, echo) and effectColor; validated with warnings, defaults filled, sent to text clips; new textStyle presets cinematic and soft-shadow (one file each); text effects listed in the generated guide; spec section 2.5, RULE 21 with worked example, fixture ata-title uses letter spacing and a soft shadow",
+          "status": "done",
+          "progress": 100
+        },
+        {
           "id": "V2-SB-126",
           "title": "Fixed or following layers: verified that video effects (ken-burns etc.) change only the main-track picture, so text and overlays are already fixed to the frame regardless of effect-track order; new optional layer field follow \"frame\" (default) | \"shot\": on Send to timeline the zoom and pan of the shot's effects are baked into x/y/scale keyframes so the layer moves with the picture (look-only effects ignored); warnings for invalid values and for nothing to follow; board marks following layers; spec section 2.5, RULE 20 with worked example, fixture s03 card text follows its push-in",
           "status": "done",

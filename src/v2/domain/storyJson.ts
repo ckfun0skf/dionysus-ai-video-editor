@@ -47,7 +47,14 @@ export type StoryAssetRef = string | ({ asset: string } & AssetRefRole);
 export const assetRefId = (r: StoryAssetRef): string => (typeof r === "string" ? r : r.asset);
 export type StoryParams = Record<string, number | string>;
 /** Text look: same keys as a text layer `style`. Extra keys are kept and passed through. */
-export interface StoryTextStyle { font?: string; size?: number; color?: string; align?: (typeof TEXT_ALIGNS)[number]; bold?: boolean; [extra: string]: unknown }
+export interface StoryTextStyle {
+  font?: string; size?: number; color?: string; align?: (typeof TEXT_ALIGNS)[number]; bold?: boolean;
+  /** V2-SB-127 extras. Sizes are fractions of the font size; `null` clears a preset's shadow or background. */
+  italic?: boolean; letterSpacing?: number; lineHeight?: number; strokeWidth?: number; strokeColor?: string;
+  shadow?: { color: string; blur: number; x: number; y: number } | null; background?: { color: string; opacity: number } | null;
+  effect?: string; effectColor?: string;
+  [extra: string]: unknown;
+}
 export interface StoryPoint { x: number; y: number }
 export interface StoryBox { x: number; y: number; width: number; height: number }
 export interface StoryTextAnim { in?: string; out?: string; loop?: string; durationSec?: number }
@@ -228,6 +235,17 @@ const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !
 const str = (v: unknown) => (typeof v === "string" ? v.trim() : undefined);
 const num = (v: unknown): number | undefined => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
 const HEX_RE = /^#([0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+/** Fields a storyboard text style may set (V2-SB-127): the same names as textStyle preset data and text clips. */
+export const TEXT_STYLE_KEYS = ["font", "size", "color", "align", "bold", "italic", "letterSpacing", "lineHeight", "strokeWidth", "strokeColor", "shadow", "background", "effect", "effectColor"];
+/** Numeric style extras: allowed range and unit (V2-SB-127). */
+const STYLE_RANGES: Record<string, [number, number, string]> = {
+  letterSpacing: [-0.2, 1, "extra space between letters, in em"],
+  lineHeight: [0.8, 3, "line height multiplier"],
+  strokeWidth: [0, 0.3, "outline width, as a fraction of the font size"],
+};
+/** Missing shadow / background fields are filled from these (also the text panel's defaults). */
+export const TEXT_SHADOW_DEFAULT = { color: "#000000", blur: 0.15, x: 0.03, y: 0.03 };
+export const TEXT_BACKGROUND_DEFAULT = { color: "#000000", opacity: 0.6 };
 const KIND_LABEL: Record<PresetKind, string> = { textAnimIn: "in animation", textAnimOut: "out animation", textAnimLoop: "loop animation", effect: "text effect", videoEffect: "effect", transition: "transition", sticker: "sticker", textStyle: "text style" };
 const list = (xs: string[], max = 12) => `${xs.slice(0, max).join(", ")}${xs.length > max ? ", …" : ""}`;
 const fmt = (n: number) => String(Math.round(n * 1000) / 1000);
@@ -288,7 +306,7 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
     return id;
   };
 
-  /** A text look (meta.textStyles entry or a layer's inline style). Bad values warn and are dropped; extras pass through. */
+  /** A text look (meta.textStyles entry or a layer's inline style). Bad values warn and are dropped; unknown fields warn and pass through. */
   const textStyleOf = (v: unknown, path: string): StoryTextStyle | undefined => {
     if (v === undefined) return undefined;
     if (!isObj(v)) { err(path, 'Should be an object like { "font": "serif", "size": 0.08, "color": "#ffffff", "align": "center", "bold": true }.'); return undefined; }
@@ -309,6 +327,32 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
       if (n === undefined) { delete out.bold; warn(`${path}.bold`, `Bold ${JSON.stringify(v.bold)} is ignored: use true or false.`); }
       else out.bold = n >= 600;
     }
+    // V2-SB-127: style extras (the same fields as textStyle preset data). Bad values warn and are dropped.
+    if (v.italic !== undefined && typeof v.italic !== "boolean") { delete out.italic; warn(`${path}.italic`, `Italic ${JSON.stringify(v.italic)} is ignored: use true or false.`); }
+    for (const [k, [lo, hi, unit]] of Object.entries(STYLE_RANGES)) {
+      if (v[k] === undefined) continue;
+      const n = num(v[k]);
+      if (n === undefined || n < lo || n > hi) { delete out[k]; warn(`${path}.${k}`, `${k} ${JSON.stringify(v[k])} is ignored: use ${lo} to ${hi} (${unit}).`); }
+    }
+    for (const k of ["strokeColor", "effectColor"]) if (v[k] !== undefined && !(typeof v[k] === "string" && HEX_RE.test(v[k] as string))) { delete out[k]; warn(`${path}.${k}`, `${k} ${JSON.stringify(v[k])} is ignored: use a hex value like "#000000".`); }
+    if (v.shadow !== undefined && v.shadow !== null) {
+      const sh = v.shadow, d = TEXT_SHADOW_DEFAULT;
+      const ok = isObj(sh) && (sh.color === undefined || (typeof sh.color === "string" && HEX_RE.test(sh.color))) && (["blur", "x", "y"] as const).every((k) => sh[k] === undefined || (num(sh[k]) !== undefined && Math.abs(num(sh[k])!) <= 1 && (k !== "blur" || num(sh[k])! >= 0)));
+      if (!ok) { delete out.shadow; warn(`${path}.shadow`, `shadow is ignored: use { "color": "#000000", "blur": 0-1, "x": -1-1, "y": -1-1 } (blur and offsets are fractions of the font size), or null for none.`); }
+      else out.shadow = { color: (sh.color as string | undefined) ?? d.color, blur: num(sh.blur) ?? d.blur, x: num(sh.x) ?? d.x, y: num(sh.y) ?? d.y };
+    }
+    if (v.background !== undefined && v.background !== null) {
+      const bg = v.background, d = TEXT_BACKGROUND_DEFAULT;
+      const ok = isObj(bg) && (bg.color === undefined || (typeof bg.color === "string" && HEX_RE.test(bg.color))) && (bg.opacity === undefined || (num(bg.opacity) !== undefined && num(bg.opacity)! >= 0 && num(bg.opacity)! <= 1));
+      if (!ok) { delete out.background; warn(`${path}.background`, `background is ignored: use { "color": "#000000", "opacity": 0-1 }, or null for none.`); }
+      else out.background = { color: (bg.color as string | undefined) ?? d.color, opacity: num(bg.opacity) ?? d.opacity };
+    }
+    if (v.effect !== undefined && v.effect !== "none") {
+      const ref = str(v.effect) ? parsePresetRef(str(v.effect)!) : undefined;
+      if (!ref || !getPreset("effect", ref.id)) { delete out.effect; warn(`${path}.effect`, `Unknown text effect ${JSON.stringify(v.effect)}; ignoring it. Text effects: ${list(["none", ...listPresets("effect").map((d) => d.id)])}.`); }
+      else out.effect = ref.id;
+    }
+    for (const k of Object.keys(v)) if (!TEXT_STYLE_KEYS.includes(k)) warn(`${path}.${k}`, `Unknown text style field "${k}" has no effect (kept for re-export). Fields: ${TEXT_STYLE_KEYS.join(", ")}.`);
     return out;
   };
 

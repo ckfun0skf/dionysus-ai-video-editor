@@ -5,7 +5,7 @@ import { fontStack } from "../registry";
 describe("text styles (registry textStyle presets)", () => {
   it("textTemplates lists every style with CSS font stacks and no nulls", () => {
     const list = text.textTemplates();
-    expect(list.map((t) => t.id)).toEqual(["plain", "caption", "outline", "neon", "pop", "typewriter", "glow", "echo"]);
+    expect(list.map((t) => t.id)).toEqual(["plain", "caption", "outline", "neon", "pop", "typewriter", "glow", "echo", "soft-shadow", "cinematic"]);
     for (const t of list) {
       expect(t.label).toBeTruthy();
       for (const v of Object.values(t.data)) expect(v).not.toBeNull();

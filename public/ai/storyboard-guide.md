@@ -84,7 +84,11 @@ Layer (times in seconds from the shot start, 0 <= startSec < endSec <= durationS
            "follow"?: "frame" | "shot" }      // default "frame" (fixed); "shot" = moves with the shot's zoom/pan effects
   Media: { "id": string, "type": "html" | "image" | "video", "asset": "<asset id>", "startSec": number, "endSec": number,
            "box": { "x", "y", "width", "height" }, "follow"?: "frame" | "shot" }
-TextStyle: { "font"?: "<font id>", "size"?: number (fraction of frame height, 0-1), "color"?: "#rrggbb", "align"?: "left" | "center" | "right", "bold"?: boolean }
+TextStyle: { "font"?: "<font id>", "size"?: number (fraction of frame height, 0-1), "color"?: "#rrggbb", "align"?: "left" | "center" | "right", "bold"?: boolean,
+             "italic"?: boolean, "letterSpacing"?: number (em, -0.2-1), "lineHeight"?: number (0.8-3),
+             "strokeWidth"?: number (outline, fraction of font size, 0-0.3), "strokeColor"?: "#rrggbb",
+             "shadow"?: { "color", "blur", "x", "y" } | null (fractions of font size), "background"?: { "color", "opacity" } | null,
+             "effect"?: "<text effect id>" | "none", "effectColor"?: "#rrggbb" }
 Text is one line per "\n" and is never wrapped: keep lines short. Without "size", text uses the style's size (else 0.1), or fits the box height.
 ```
 
@@ -104,6 +108,7 @@ Text styles — shots[].layers[].textStyle (default "plain"):
 - plain: Bold white sans-serif with no decoration; the default. Look: font sans, colour #ffffff.
 - caption: Smaller bold white text on a translucent black box; subtitles and lower thirds. Look: font sans, colour #ffffff, size 0.06.
 - typewriter: Light grey monospace that types itself on. Look: font mono, colour #e8e8e8.
+- soft-shadow: Bold white sans-serif with a soft drop shadow; stays readable on bright pictures without a box. Look: font sans, colour #ffffff.
 [Bold]
 - outline: Yellow Impact letters with a thick black outline; meme or punchy look. Look: font impact, colour #ffe14d.
 - pop: Large white Impact title with a hard drop shadow that pops in and shrinks out. Look: font impact, colour #ffffff, size 0.14.
@@ -111,6 +116,16 @@ Text styles — shots[].layers[].textStyle (default "plain"):
 [Light]
 - neon: White rounded letters with a pink neon glow and a gentle pulse. Look: font rounded, colour #ffffff.
 - glow: Italic white serif with a cyan glow that floats softly. Look: font serif, colour #ffffff.
+[Film]
+- cinematic: Warm off-white serif, widely letter-spaced, with a soft shadow; film titles and chapter cards. Look: font serif, colour #f5f1e8, size 0.07.
+
+Text effects — shots[].layers[].style.effect and meta.textStyles[].effect, coloured by "effectColor" (default "none"):
+[Light]
+- glow: Soft coloured glow around the letters. Params: blur 0–1, default 0.35 (Glow radius as a fraction of the font size).
+- neon: Bright neon tube look with a strong coloured glow. Params: blur 0–1, default 0.6 (Glow radius as a fraction of the font size).
+[Style]
+- hollow: Outline-only letters with a transparent fill.
+- echo: Repeated offset copies behind the text. Params: offset 0–0.3, default 0.06 (Offset between the copies, as a fraction of the font size).
 
 Text animations in — shots[].layers[].anim.in:
 [Basic]
@@ -218,6 +233,7 @@ Fonts — TextStyle "font":
 18. Keyframe then animate: when the opening composition matters (a character's pose, a precise layout, a hero product shot), give the "ai" shot a "keyframe": { "prompt", "references", "qa" }. The app turns it into an image asset "<shot id>.keyframe" that is made first, then attached to the clip as Image 1, the START FRAME (do not also give the shot a "start-frame" reference). The keyframe prompt describes one still image (with its own "References:" block, as for an asset); the clip prompt then describes only the motion from that frame. Example: "keyframe": { "prompt": "References:\nImage 1 (Hero): reference only: keep this identity (face, body, clothes).\n\nThe hero sits at a café table, both hands around a blue mug …", "references": ["hero", "cafe"], "qa": ["The hero's face matches the reference"] }, clip prompt "References:\nImage 1 (Keyframe · …): START FRAME …\n\nShe slowly lifts the mug …".
 19. Audio: put each voiceover, music bed or sound effect in "audio" as a cue on an asset of type "audio" (source "generate" with a prompt for the user's voice/music/sound tool, e.g. the exact voiceover script and voice, or "upload"). "from" is the shot it starts in, "atSec" the offset into that shot, "to" the last shot it plays under. A music bed usually runs "from" the first shot "to" the last with "volume" 0.2-0.4 under speech; a voiceover spans the shots it describes; a sound effect sits at the moment in one shot ("atSec") with no "to". Example: { "asset": "score", "kind": "music", "from": "s1", "to": "s6", "volume": 0.3, "fadeOutSec": 2 }, { "asset": "door-slam", "kind": "sfx", "from": "s4", "atSec": 1.2 }. Do not put spoken lines that the video model renders (shot "dialogue") into a voiceover too.
 20. Layers stay fixed to the frame by default: a shot's video effects (e.g. "ken-burns" zoom and pan) move only the picture, so titles, labels and logos stay put and readable. Give a layer "follow": "shot" only when it belongs to the scene and must move with the picture, e.g. a name tag pinned to a sign or a label on an object while the shot slowly zooms: { "id": "tag", "type": "text", "text": "ROOM 12", "startSec": 0, "endSec": 4, "position": { "x": 0.62, "y": 0.4 }, "follow": "shot" }. It only has an effect when an effect moves or zooms the shot while the layer is on screen.
+21. Keep text readable on any picture: give light text an outline ("strokeWidth" about 0.04-0.08 with a dark "strokeColor"), a soft "shadow", or a "background" box (captions, lower thirds). Use "letterSpacing" (in em) for airy titles, "lineHeight" for multi-line cards, "italic" for emphasis, and a text "effect" with "effectColor" only for stylised titles. Sizes and offsets are fractions of the font size; null removes a style's shadow or background. Example: "style": { "color": "#ffffff", "strokeWidth": 0.06, "strokeColor": "#000000", "shadow": { "color": "#000000", "blur": 0.3, "x": 0, "y": 0.04 } }. Put a look used on several layers into "meta.textStyles" once.
 
 ## EXAMPLE
 ```json
