@@ -12,6 +12,7 @@ import { TransformHandles, TransformInspector } from "./Transform";
 import { TextPanel } from "./TextPanel";
 import { AnimationPicker } from "./AnimationPicker";
 import { HtmlEditor } from "./HtmlEditor";
+import { clipFileFrom } from "./htmlPackage";
 import { ExportDialog } from "./ExportDialog";
 import { ProjectsDialog } from "./Projects";
 import { StoryboardView } from "./storyboard/StoryboardView";
@@ -414,7 +415,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     setBusy((b) => b + files.length);
     for (const f of Array.from(files)) {
       try {
-        const asset = await importFile(f, storage.blobs);
+        const asset = await importFile(await clipFileFrom(f), storage.blobs);
         if (asset) { if (engine.dispatch(cmd.importAsset(asset))) ids.push(asset.id); }
         else setToast(`${f.name}: unsupported file type`);
       } catch (e) {
@@ -434,7 +435,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     setBusy((b) => b + jobs.length);
     for (const { f, out } of jobs) {
       try {
-        const asset = await importFile(f, storage.blobs);
+        const asset = await importFile(await clipFileFrom(f), storage.blobs);
         if (asset && engine.dispatch(cmd.importAsset(asset))) out.push(asset.id);
         else if (!asset) setToast(`${f.name}: unsupported file type`);
       } catch (e) { setToast(`${f.name}: ${e instanceof Error ? e.message : "import failed"}`); } finally { setBusy((b) => b - 1); }
@@ -450,7 +451,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
 
   const fileInputs = (
     <>
-      <input ref={fileRef} type="file" hidden multiple accept="video/*,image/*,audio/*,.html,.htm,text/html" onChange={(e) => { void onFiles(e.target.files); e.target.value = ""; }} />
+      <input ref={fileRef} type="file" hidden multiple accept="video/*,image/*,audio/*,.html,.htm,text/html,.zip,application/zip" onChange={(e) => { void onFiles(e.target.files); e.target.value = ""; }} />
       <input ref={srtRef} type="file" hidden accept=".srt,.vtt,text/plain" aria-label="Import SRT file" onChange={(e) => { void onSrt(e.target.files?.[0]); e.target.value = ""; }} />
     </>
   );
@@ -630,7 +631,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   };
 
   // ───────────── V2-106 desktop shell ─────────────
-  const DEFAULT_ACCEPT = "video/*,image/*,audio/*,.html,.htm,text/html";
+  const DEFAULT_ACCEPT = "video/*,image/*,audio/*,.html,.htm,text/html,.zip,application/zip";
   const importDialog = (accept?: string) => { const f = fileRef.current; if (!f) return; f.accept = accept ?? DEFAULT_ACCEPT; f.click(); };
   /** Import files, then place them at `at` (one undo step for the placement). */
   const importAt = async (files: File[], at: number, trackId?: string) => {

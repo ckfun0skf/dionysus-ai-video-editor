@@ -14,6 +14,7 @@ export { PRESET_PROBLEMS } from "../registry";
 import { FORMAT_REVISION, GUIDE_KINDS, guideSections, presetsByCategory } from "./storyPrompt";
 import { aiLinks, DEFAULT_SITE_URL } from "./siteUrl";
 import { DEFAULT_TRANSITION_SEC, STORYBOARD_FORMAT } from "./storyJson";
+import { HTML_CLIP_FORMAT } from "./htmlClipPackage";
 
 const GUIDE_TITLE = `Dionysus storyboard guide (${STORYBOARD_FORMAT}, v${FORMAT_REVISION})`;
 
@@ -80,20 +81,24 @@ To plan a storyboard for Dionysus, read the storyboard guide first and reply wit
 ## Optional
 
 - [Format reference](${l.formatDoc}): the full specification, including importer warnings and errors
+- [HTML clip package](${l.htmlClipSpec}): the ${HTML_CLIP_FORMAT} single-file format for "html" assets (manifest, runtime contract, bindings, params, template)
 - [Open the app](${l.app})
 `;
 }
 
 /** Source of the format reference that is published as ai/STORYBOARD_FORMAT.md (the guide links there). */
 export const FORMAT_DOC_SOURCE = "docs/v2/STORYBOARD_FORMAT.md";
+/** Source of the HTML clip package spec, published as ai/HTML_CLIP_PACKAGE.md (V2-HTML-PKG; html asset prompts link there). */
+export const CLIP_DOC_SOURCE = "docs/v2/HTML_CLIP_PACKAGE.md";
 
 /**
  * Repo-relative path → generated content for a site URL (default: DEFAULT_SITE_URL, as committed). Pass the text of
  * FORMAT_DOC_SOURCE to include its published copy (this module does no file I/O; it also runs in the browser).
  */
-export function aiGuideFiles(site = DEFAULT_SITE_URL, formatDoc?: string): Record<string, string> {
+export function aiGuideFiles(site = DEFAULT_SITE_URL, formatDoc?: string, clipDoc?: string): Record<string, string> {
   return {
     ...(formatDoc === undefined ? {} : { "public/ai/STORYBOARD_FORMAT.md": formatDoc }),
+    ...(clipDoc === undefined ? {} : { "public/ai/HTML_CLIP_PACKAGE.md": clipDoc }),
     "public/ai/storyboard-guide.md": storyboardGuideMarkdown(site),
     "public/ai/storyboard-guide.html": storyboardGuideHtml(site),
     "public/ai/presets.json": presetsJson(site),

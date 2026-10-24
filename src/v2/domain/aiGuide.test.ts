@@ -6,17 +6,30 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { listPresets } from "../registry";
-import { aiGuideFiles, FORMAT_DOC_SOURCE, llmsTxt, presetsJson, storyboardGuideHtml, storyboardGuideMarkdown } from "./aiGuide";
+import { aiGuideFiles, CLIP_DOC_SOURCE, FORMAT_DOC_SOURCE, llmsTxt, presetsJson, storyboardGuideHtml, storyboardGuideMarkdown } from "./aiGuide";
 import { aiLinks, DEFAULT_SITE_URL } from "./siteUrl";
 import { CHOOSING_PRESETS, EXAMPLE_STORYBOARD, GUIDE_KINDS, HOW_IT_WORKS, presetsByCategory, RULE_LIST, RULES, ruleNumber, storyboardShortPrompt, storyboardSystemPrompt } from "./storyPrompt";
 import { validateStoryboard } from "./storyJson";
+import { HTML_CLIP_CONTRACT, HTML_CLIP_FORMAT, htmlClipTemplate, lintHtmlClip } from "./htmlClipPackage";
 
 const root = resolve(__dirname, "../../..");
 const update = !!process.env.UPDATE_AI_GUIDE;
 const formatDoc = readFileSync(resolve(root, FORMAT_DOC_SOURCE), "utf8");
+const clipDocPath = resolve(root, CLIP_DOC_SOURCE);
+let clipDoc = readFileSync(clipDocPath, "utf8");
+/** The doc's generated blocks (contract, template) are rewritten by `npm run gen:ai` and checked otherwise. */
+const between = (doc: string, tag: string) => doc.split(`<!-- ${tag}:start -->\n`)[1]?.split(`\n<!-- ${tag}:end -->`)[0];
+const CLIP_BLOCKS: Record<string, string> = { contract: HTML_CLIP_CONTRACT, template: `\`\`\`html\n${htmlClipTemplate()}\`\`\`` };
+if (update) {
+  for (const [tag, body] of Object.entries(CLIP_BLOCKS)) {
+    const old = between(clipDoc, tag);
+    if (old !== undefined) clipDoc = clipDoc.replace(`<!-- ${tag}:start -->\n${old}\n<!-- ${tag}:end -->`, `<!-- ${tag}:start -->\n${body}\n<!-- ${tag}:end -->`);
+  }
+  writeFileSync(clipDocPath, clipDoc);
+}
 
 describe("AI planner guide (V2-SB-114)", () => {
-  it.each(Object.entries(aiGuideFiles(DEFAULT_SITE_URL, formatDoc)))("%s is up to date (npm run gen:ai)", (rel, content) => {
+  it.each(Object.entries(aiGuideFiles(DEFAULT_SITE_URL, formatDoc, clipDoc)))("%s is up to date (npm run gen:ai)", (rel, content) => {
     const file = resolve(root, rel);
     if (update) { mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, content); }
     expect(existsSync(file), `${rel} is missing; run npm run gen:ai`).toBe(true);
@@ -37,10 +50,10 @@ describe("AI planner guide (V2-SB-114)", () => {
     expect(md).toContain("length 0.05–1, default 0.5 (fraction of the effect's time range, not seconds");
   });
 
-  it("the full prompt inlines the guide with RULES 1-22; the short prompt links to it", () => {
+  it("the full prompt inlines the guide with RULES 1-23; the short prompt links to it", () => {
     const full = storyboardSystemPrompt();
     for (const s of ["FORMAT (", "PRESETS", "RULES", "EXAMPLE", `14. ${RULES[13]}`, "not seconds", "START FRAME", "\"references\"?", "\"genDurationSec\"?", "- crossfade:", "- ken-burns:"]) expect(full).toContain(s);
-    expect(RULES).toHaveLength(22);
+    expect(RULES).toHaveLength(23);
     // V2-SB-128: blend modes: the format lines, the blend catalogue and a rule with an example that imports cleanly.
     expect(full).toContain('"blend"?: "<blend id>", "opacity"?: number (0-1, default 1)');
     expect(full).toContain('Blend modes — shots[].layers[].blend');
@@ -73,6 +86,10 @@ describe("AI planner guide (V2-SB-114)", () => {
     expect(full).toContain(`17. ${RULES[16]}`);
     expect(RULES[16]).toMatch(/"start-frame" means the base image to edit/);
     expect(RULES[16]).toContain('"references": [{ "asset": "mug", "role": "detail", "note": "glaze and colour only" }, "hero"]');
+    // V2-HTML-PKG: an html asset's prompt is a design brief; the app adds the package instructions.
+    expect(full).toContain(`23. ${RULES[22]}`);
+    expect(RULES[ruleNumber("html-clip-package") - 1]).toContain(HTML_CLIP_FORMAT);
+    expect(full).toContain('for "html": a design brief for the AI that writes the clip as one .html file');
     const short = storyboardShortPrompt();
     expect(short).toContain(aiLinks(DEFAULT_SITE_URL).guide); // outside a browser the prompt links to the configured site
     expect(short).toContain("Full prompt");
@@ -146,9 +163,10 @@ describe("generic storyboard guide (V2-SB-GUIDE-GENERIC)", () => {
 
   it("numbers the rules stably: append-only keys, and every RULE n the spec cites exists", () => {
     // Rule numbers are public (the spec, users, other AIs). Append new keys at the end; never reorder or delete.
-    expect(RULE_LIST.slice(0, 22).map((r) => r.key)).toEqual([
+    expect(RULE_LIST.slice(0, 23).map((r) => r.key)).toEqual([
       "reusable-assets", "standalone-prompts", "last-frame-continuity", "uploads", "qa-checks", "ids", "valid-json", "text-in-layers", "html-only-for-graphics",
       "transitions-and-effects", "known-presets", "param-units", "duration", "references-block", "transition-overlap", "identity-portrait", "asset-references", "keyframe", "audio", "layer-follow", "text-style-extras", "blend-overlays",
+      "html-clip-package",
     ]);
     expect(new Set(RULE_LIST.map((r) => r.key)).size).toBe(RULE_LIST.length);
     RULE_LIST.forEach((r, i) => expect(section("RULES")).toContain(`${i + 1}. ${r.text}`));
@@ -159,6 +177,7 @@ describe("generic storyboard guide (V2-SB-GUIDE-GENERIC)", () => {
     expect(ruleNumber("layer-follow")).toBe(20);
     expect(ruleNumber("text-style-extras")).toBe(21);
     expect(ruleNumber("blend-overlays")).toBe(22);
+    expect(ruleNumber("html-clip-package")).toBe(23);
     expect(RULES[ruleNumber("duration") - 1]).toMatch(/^"durationSec" is how long/);
     expect(RULES[ruleNumber("references-block") - 1]).toMatch(/"References:" block/);
     const cited = [...formatDoc.matchAll(/RULES? (\d+)(?:[-–](\d+))?/g)].flatMap((m) => [Number(m[1]), ...(m[2] ? [Number(m[2])] : [])]);
@@ -173,7 +192,7 @@ describe("AI links follow the configured site URL (V2-OPS-LINKS)", () => {
   const SITE = "https://video.example.com/editor/";
 
   it("every generated file links to the given site, and the spec is published next to the guide", () => {
-    const files = aiGuideFiles(SITE, formatDoc);
+    const files = aiGuideFiles(SITE, formatDoc, clipDoc);
     for (const [rel, content] of Object.entries(files)) {
       expect(content, rel).not.toContain("github.io");
       expect(content, rel).not.toContain("github.com");
@@ -186,11 +205,13 @@ describe("AI links follow the configured site URL (V2-OPS-LINKS)", () => {
     for (const p of ["ai/storyboard-guide.md", "ai/storyboard-guide.html", "ai/presets.json", "ai/STORYBOARD_FORMAT.md", "?v2"]) expect(llmsTxt(SITE)).toContain(`(${SITE}${p})`);
     expect(storyboardGuideHtml(SITE)).toContain('<link rel="alternate" type="text/markdown" href="storyboard-guide.md">');
     expect(files["public/ai/STORYBOARD_FORMAT.md"]).toBe(formatDoc);
+    expect(files["public/ai/HTML_CLIP_PACKAGE.md"]).toBe(clipDoc);
+    expect(llmsTxt(SITE)).toContain(`(${SITE}ai/HTML_CLIP_PACKAGE.md)`);
   });
 
   it("only the site URL differs between deployments", () => {
-    const def = aiGuideFiles(DEFAULT_SITE_URL, formatDoc);
-    const other = aiGuideFiles(SITE, formatDoc);
+    const def = aiGuideFiles(DEFAULT_SITE_URL, formatDoc, clipDoc);
+    const other = aiGuideFiles(SITE, formatDoc, clipDoc);
     for (const rel of Object.keys(def)) expect(other[rel], rel).toBe(def[rel].split(DEFAULT_SITE_URL).join(SITE));
   });
 
@@ -200,5 +221,25 @@ describe("AI links follow the configured site URL (V2-OPS-LINKS)", () => {
     expect(short).toContain(`${SITE}ai/storyboard-guide.html`);
     expect(short).toContain(`${SITE}ai/presets.json`);
     expect(short).not.toContain("github.io");
+  });
+});
+
+describe("HTML clip package spec (V2-HTML-PKG)", () => {
+  it("keeps the contract and the template in HTML_CLIP_PACKAGE.md in sync with the code (npm run gen:ai)", () => {
+    for (const [tag, body] of Object.entries(CLIP_BLOCKS)) expect(between(clipDoc, tag), `${tag} block`).toBe(body);
+  });
+
+  it("the template and the worked example lint without errors, and the format spec links the package spec", () => {
+    const blocks = [...clipDoc.matchAll(/```html\n([\s\S]*?)```/g)].map((m) => m[1]).filter((b) => b.startsWith("<!doctype"));
+    expect(blocks.length).toBeGreaterThanOrEqual(2);
+    for (const html of blocks) {
+      const r = lintHtmlClip(html, { libs: [] });
+      expect(r.issues.filter((i) => i.level === "error"), html.slice(0, 200)).toEqual([]);
+      expect(r.legacy).toBe(false);
+    }
+    expect(clipDoc).toContain("First Light");
+    expect(clipDoc.toLowerCase()).not.toMatch(/keeper|lantern/);
+    expect(formatDoc).toContain("[HTML_CLIP_PACKAGE.md](HTML_CLIP_PACKAGE.md)");
+    expect(clipDoc).toContain(`RULE ${ruleNumber("html-clip-package")}`);
   });
 });

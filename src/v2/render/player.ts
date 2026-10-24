@@ -13,7 +13,9 @@ import { effectivePlacement } from "../domain/layerStyle";
 import { applyEffectFrame, effectFrameAt } from "./effects";
 import { mainTrack } from "../domain/ops";
 import { correctDrift, createClock, type Clock } from "./clock";
-import { HtmlClipHost, isValidFrame, type FrameIssue } from "./htmlClip";
+import { HtmlClipHost, isValidFrame, type FrameIssue, type HtmlClipInit } from "./htmlClip";
+import { bindingSignature, resolveClipBindings } from "../domain/htmlClipBindings";
+import { readManifest, type HtmlClipManifest } from "../domain/htmlClipPackage";
 import type { ExportVideoFrames } from "./export/videoFrames";
 import { drawWithLook } from "./transitionDraw";
 import { withBlend } from "./blend";
@@ -42,6 +44,8 @@ export class Player {
   private pendingFrame = new Map<HTMLVideoElement, Promise<void>>();
   private probe?: CanvasRenderingContext2D | null;
   private html = new Map<string, { key: string; host: HtmlClipHost }>();
+  /** Manifest per HTML blob, read when its clip first loads (blobs are immutable). */
+  private manifests = new Map<string, HtmlClipManifest>();
   private raf = 0;
   private playing = false;
   private startClock = 0;
@@ -132,13 +136,26 @@ export class Player {
 
   /** Sandboxed iframe for an HTML clip, sized to the output canvas so the page renders at full resolution. */
   private htmlHost(placementId: string, blobKey: string, w: number, h: number): HtmlClipHost {
-    const key = `${blobKey}@${w}x${h}`;
+    // Bound assets (V2-HTML-PKG) are part of the key, so selecting another version of a bound asset reloads the clip.
+    const known = this.manifests.get(blobKey);
+    const sizeKey = `${blobKey}@${w}x${h}`;
+    const key = known ? `${sizeKey}|${bindingSignature(resolveClipBindings(this.project, known))}` : undefined;
     const hit = this.html.get(placementId);
-    if (hit?.key === key) return hit.host;
+    if (hit && (hit.key === key || (!key && hit.key.startsWith(`${sizeKey}|`)))) return hit.host;
     hit?.host.dispose();
-    const host = new HtmlClipHost(this.blobs.get(blobKey).then((b) => b?.text()), w, h, () => { if (!this.playing) this.draw(); });
-    this.html.set(placementId, { key, host });
-    return host;
+    const entry = { key: key ?? `${sizeKey}|?`, host: undefined as unknown as HtmlClipHost };
+    entry.host = new HtmlClipHost(this.blobs.get(blobKey).then((b) => b?.text()), w, h, () => { if (!this.playing) this.draw(); }, async (html): Promise<HtmlClipInit> => {
+      const m = readManifest(html);
+      this.manifests.set(blobKey, m);
+      const binds = resolveClipBindings(this.project, m);
+      entry.key = `${sizeKey}|${bindingSignature(binds)}`;
+      const blobs = await Promise.all(binds.map((b) => this.blobs.get(b.blobKey).catch(() => undefined)));
+      const bindings: NonNullable<HtmlClipInit["bindings"]> = {};
+      binds.forEach((b, i) => { const blob = blobs[i]; if (blob) bindings[b.name] = { type: b.type, blob }; });
+      return { width: w, height: h, bindings };
+    });
+    this.html.set(placementId, entry);
+    return entry.host;
   }
 
   private release(id: string) {
@@ -213,7 +230,7 @@ export class Player {
       if (placement.clipType === "html") {
         live.add(placement.id);
         const host = this.htmlHost(placement.id, version.media.blobKey, canvas?.width ?? 1280, canvas?.height ?? 720);
-        host.request(Math.round(ticksToSeconds(sourceTicks) * 1000) / 1000);
+        host.request(Math.round(ticksToSeconds(sourceTicks) * 1000) / 1000, ticksToSeconds(placement.sourceInTicks + placement.durationTicks * (placement.speed ?? 1)));
         const f = host.frame;
         if (ctx && canvas && isValidFrame(f)) {
           const r = placeRect(placement, f.width, f.height, canvas.width, canvas.height, this.time);

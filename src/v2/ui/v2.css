@@ -634,3 +634,31 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
   .v2-sheet-head, .v2-sheet .v2-cuelist-head { top: 44px; }
   .v2-insp-blend select { min-height: 44px; font-size: 16px; }
 }
+
+/* V2-HTML-PKG: HTML clip package import / export / validation */
+.v2-html-import { display: grid; gap: 8px; padding: 8px; border: 1px dashed var(--line); border-radius: 10px; }
+.v2-html-import.is-drag { border-color: #5ad1c8; background: #5ad1c814; }
+.v2-html-import textarea { width: 100%; box-sizing: border-box; min-height: 96px; resize: vertical; font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text); background: #1b1b20; border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+.v2-html-import-file { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; }
+.v2-html-import-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.v2-html-import-actions .v2-btn, .v2-html-import-file .v2-btn { min-height: 44px; display: inline-flex; align-items: center; padding: 0 14px; cursor: pointer; }
+.v2-clip-issues { display: grid; gap: 4px; font-size: 13px; }
+.v2-clip-issues ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; max-height: 200px; overflow: auto; }
+.v2-clip-issues li { padding: 4px 8px; border-radius: 6px; border-left: 3px solid; overflow-wrap: anywhere; }
+.v2-clip-issues li.is-error { border-color: #ff6b6b; background: #ff6b6b14; }
+.v2-clip-issues li.is-warning { border-color: #f5c451; background: #f5c45110; }
+.v2-clip-issues code { opacity: .6; font-size: 11px; }
+.v2-code-editor > .v2-clip-issues { padding: 4px 12px; }
+.v2-clip-export { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.v2-btn-small { min-height: 32px; font-size: 12px; padding: 0 8px; }
+.v2-clip-params { align-items: center; }
+.v2-clip-param { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; min-height: 32px; }
+.v2-clip-param input[type="number"], .v2-clip-param input[type="text"] { width: 9em; }
+.v2-sb-copyrow { display: inline-flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.v2-sb-htmlimport { margin-top: 8px; }
+.v2-sb-htmlimport > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; color: var(--muted); }
+@media (pointer: coarse), (max-width: 820px) {
+  .v2-btn-small, .v2-clip-param, .v2-clip-export .v2-btn { min-height: 44px; }
+  .v2-html-import textarea, .v2-clip-param input, .v2-clip-param select { font-size: 16px; }
+  .v2-clip-param input, .v2-clip-param select { min-height: 44px; }
+}

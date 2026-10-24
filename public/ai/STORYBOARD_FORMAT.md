@@ -75,11 +75,11 @@ Portrait of the hero at a café table holding the blue mug, …
 ```
 
 **`html` assets** are only for animated, 3D or three.js graphics.
-- The asset is never a file path and never inline HTML. Its `prompt` describes the component.
-- Guided flow: the user takes the prompt to their own AI, gets back an `.html` file and uploads it into the asset slot. Uploads are versioned like images.
+- The asset is never a file path and never inline HTML. Its `prompt` is a **design brief** for the AI that writes the clip (what it shows, how it moves over its length, colours, type and layout), not code (RULE 23).
+- Media the clip uses (logos, photos, footage, music) are listed in its `references`; they become the clip's bound assets.
+- Guided flow: the app copies the brief together with the **HTML clip package** instructions (format `dionysus.htmlclip/1`, see [HTML_CLIP_PACKAGE.md](HTML_CLIP_PACKAGE.md), published next to this file), filled in with the asset's size, length, bound assets and allowed libraries. The user pastes the AI's single `.html` reply back (or uploads an `.html` or `.dionysus-html.zip` file) and it becomes a new version. Uploads are versioned like images.
 - The app stores the whole HTML document as an asset-version blob. An `html` asset can't use a `lastFrame` source.
-- Per-clip config lives inside the HTML, in `<script type="application/json" id="dionysus-clip">`.
-- v1 has no params for HTML.
+- Per-clip config (length, size, background, libraries, bindings, params) lives inside the HTML, in `<script type="application/json" id="dionysus-clip">`; HTML without it still plays (legacy).
 
 ### 2.4 `shots[]`
 
@@ -425,6 +425,7 @@ AI video models often render fixed lengths (5, 8 or 10 s), so an uploaded shot c
 | `public/ai/storyboard-guide.html` | `ai/storyboard-guide.html` — the same guide as a web page |
 | `public/ai/presets.json` | `ai/presets.json` — machine-readable preset ids, categories, descriptions, params and defaults, usage hints, and font ids |
 | `public/ai/STORYBOARD_FORMAT.md` | `ai/STORYBOARD_FORMAT.md` — this specification (copied from `docs/v2/`) |
+| `public/ai/HTML_CLIP_PACKAGE.md` | `ai/HTML_CLIP_PACKAGE.md` — the HTML clip package spec for `html` assets (copied from `docs/v2/`) |
 | `public/llms.txt` | `llms.txt` |
 
 Run `npm run gen:ai` after changing presets, fonts, the rules or the example; `aiGuide.test.ts` fails while the committed files are stale.
@@ -465,6 +466,7 @@ RULES
 20. Layers stay fixed to the frame by default: a shot's video effects (e.g. "ken-burns" zoom and pan) move only the picture, so titles, labels and logos stay put and readable. Give a layer "follow": "shot" only when it belongs to the scene and must move with the picture, e.g. a name tag pinned to a sign or a label on an object while the shot slowly zooms: { "id": "tag", "type": "text", "text": "ROOM 12", "startSec": 0, "endSec": 4, "position": { "x": 0.62, "y": 0.4 }, "follow": "shot" }. It only has an effect when an effect moves or zooms the shot while the layer is on screen.
 21. Keep text readable on any picture: give light text an outline ("strokeWidth" about 0.04-0.08 with a dark "strokeColor"), a soft "shadow", or a "background" box (captions, lower thirds). Use "letterSpacing" (in em) for airy titles, "lineHeight" for multi-line cards, "italic" for emphasis, and a text "effect" with "effectColor" only for stylised titles. Sizes and offsets are fractions of the font size; null removes a style's shadow or background. Example: "style": { "color": "#ffffff", "strokeWidth": 0.06, "strokeColor": "#000000", "shadow": { "color": "#000000", "blur": 0.3, "x": 0, "y": 0.04 } }. Put a look used on several layers into "meta.textStyles" once.
 22. For overlays (light leaks, flares, dust, film grain, paper or ink textures) use an image or video layer with a "blend" mode and, if needed, an "opacity" below 1: "screen" or "add" for elements on black (the black disappears), "multiply" for elements on white (the white disappears), "overlay" or "soft-light" for textures on mid grey. Example: { "id": "leak", "type": "video", "asset": "light-leak", "startSec": 0, "endSec": 3, "box": { "x": 0, "y": 0, "width": 1, "height": 1 }, "blend": "screen", "opacity": 0.7 }. Ask for the overlay asset full-frame on a plain black, white or grey background. Leave "blend" out ("normal") for titles, logos and pictures that should simply cover the shot.
+23. An "html" asset's "prompt" is a design brief for the AI that will write the clip, not code: what it shows, how it moves over its length, colours, type and layout. List the media it uses (logos, photos, footage, music) in its "references"; the app copies the brief together with the HTML clip package instructions (format "dionysus.htmlclip/1", spec HTML_CLIP_PACKAGE.md next to this guide), filled in with the asset's size, length, bound assets and allowed libraries, and the user pastes the AI's single .html file back as a version.
 ```
 
 ## 6. Decisions, open questions and future work

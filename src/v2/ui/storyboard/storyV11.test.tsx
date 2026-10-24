@@ -58,7 +58,7 @@ describe("storyboard v1.1 UI", () => {
     expect(layers).toContain("Text “Hello”");
     expect(layers).toContain("Effect ken-burns");
     const input = el.querySelector('input[type="file"]') as HTMLInputElement;
-    expect(input.accept).toBe(".html,.htm,text/html");
+    expect(input.accept).toBe(".html,.htm,text/html,.zip,application/zip");
     Object.defineProperty(input, "files", { value: [new File(["<html></html>"], "logo.html", { type: "text/html" })], configurable: true });
     await act(async () => input.dispatchEvent(new Event("change", { bubbles: true }))); await wait();
     const b = engine.getState().project.storyboard!;

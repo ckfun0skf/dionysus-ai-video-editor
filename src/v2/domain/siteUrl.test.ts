@@ -18,6 +18,7 @@ describe("site URL (V2-OPS-LINKS)", () => {
       app: "https://video.example.com/editor/?v2",
       guide: "https://video.example.com/editor/ai/storyboard-guide.md",
       guideHtml: "https://video.example.com/editor/ai/storyboard-guide.html",
+      htmlClipSpec: "https://video.example.com/editor/ai/HTML_CLIP_PACKAGE.md",
       presets: "https://video.example.com/editor/ai/presets.json",
       formatDoc: "https://video.example.com/editor/ai/STORYBOARD_FORMAT.md",
       llms: "https://video.example.com/editor/llms.txt",

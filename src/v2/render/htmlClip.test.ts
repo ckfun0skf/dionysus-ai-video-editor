@@ -49,15 +49,15 @@ describe("html clips", () => {
 
   it("clip config round-trips; attachments inline into CSS url() and the runtime", () => {
     const html = writeClipConfig("<html><head></head><body><style>i{background:url(./a.png)}</style></body></html>", { libs: ["three"], assets: { "a.png": "data:image/png;base64,AAAA" } });
-    expect(readClipConfig(html)).toEqual({ libs: ["three"], assets: { "a.png": "data:image/png;base64,AAAA" } });
+    expect(readClipConfig(html)).toEqual({ libs: ["three"], files: { "a.png": "data:image/png;base64,AAAA" } });
     expect(readClipConfig(writeClipConfig(html, {}))).toEqual({});
     const out = withRuntime(html, () => "https://x.test/t.js");
     expect(out).toContain('url("data:image/png;base64,AAAA")');
-    expect(out).toContain('const ASSETS={"a.png":');
+    expect(out).toContain('const M={"libs":["three"],"files":{"a.png":');
   });
 
-  it("virtual-time shim: rAF, performance.now and Date.now follow t; Math.random is seeded", () => {
-    const run = () => {
+  it("virtual-time shim: rAF, performance.now and Date.now follow t; Math.random is seeded", async () => {
+    const run = (manifest: object = {}) => {
       const w: Record<string, unknown> = {};
       const perf = { now: () => 0 };
       const msgs: unknown[] = [];
@@ -67,23 +67,38 @@ describe("html clips", () => {
       class XHR {} (XHR.prototype as unknown as { open: () => void }).open = () => {};
       const M = Object.create(Math) as Math;
       const fn = new Function("window", "performance", "Date", "Math", "addEventListener", "parent", "document", "MutationObserver", "XMLHttpRequest", "URL", "Blob", "atob", "createImageBitmap",
-        `const ASSETS={};${HTML_RUNTIME_JS}; return {Date: window.Date};`);
+        `const M=${JSON.stringify(manifest)};${HTML_RUNTIME_JS}; return {Date: window.Date};`);
       w.fetch = () => {};
       const r = fn(w, perf, Date, M, (ev: string, f: (e: unknown) => void) => { if (ev === "message") listener = f; }, parent, { querySelector: () => null }, MO, XHR, URL, Blob, atob, undefined);
-      return { w, perf, M, msgs, parent, send: (t: number) => listener!({ data: { type: "dionysus:frame", seq: 1, t }, source: parent }), D: r.Date as DateConstructor };
+      const post = async (data: object) => { await listener!({ data, source: parent }); };
+      return { w, perf, M, msgs, parent, post, send: (t: number, duration?: number) => post({ type: "dionysus:frame", seq: 1, t, duration }), D: r.Date as DateConstructor };
     };
     const a = run();
     const seen: number[] = [];
     const loop = (ts: number) => { seen.push(ts); (a.w.requestAnimationFrame as (f: (n: number) => void) => void)(loop); };
     (a.w.requestAnimationFrame as (f: (n: number) => void) => void)(loop);
-    a.send(1.5);
+    await a.send(1.5);
     expect(seen).toEqual([1500]);
     expect(a.perf.now()).toBe(1500);
     expect(a.D.now() - new a.D().getTime()).toBe(0);
-    a.send(2);
+    await a.send(2);
     expect(seen).toEqual([1500, 2000]);
     const b = run();
     expect([a.M.random(), a.M.random()]).toEqual([b.M.random(), b.M.random()]);
+
+    // dionysus.clip: init once before the first frame; ctx from the manifest, then the init message and each frame.
+    const c = run({ durationSec: 4, width: 100, height: 50, params: { speed: { type: "number", default: 2 } }, bindings: { logo: { type: "image" } } });
+    const calls: string[] = [];
+    type Ctx = { t: number; progress: number; duration: number; width: number; params: Record<string, unknown>; bindings: Record<string, { url: string | null }> };
+    (c.w.dionysus as { clip: (d: object) => void }).clip({
+      init: async (ctx: Ctx) => { calls.push(`init ${ctx.width} ${ctx.bindings.logo.url ? "bound" : "unbound"}`); },
+      render: (t: number, ctx: Ctx) => { calls.push(`render ${t} ${ctx.progress} ${ctx.duration} ${ctx.params.speed}`); },
+    });
+    await c.post({ type: "dionysus:init", width: 200, height: 100, params: { speed: 3 }, bindings: { logo: { type: "image", blob: new Blob(["x"]) } } });
+    await c.send(1);
+    await c.send(3, 6);
+    expect(calls).toEqual(["init 200 bound", "render 1 0.25 4 3", "render 3 0.5 6 3"]);
+    expect(c.msgs.filter((m) => (m as { type: string }).type === "dionysus:frame")).toHaveLength(2);
   });
 
   it("recognises .html files and keeps them out of the audio mix", () => {
@@ -104,11 +119,13 @@ describe("html clips", () => {
     expect(host.iframe.srcdoc).toContain("dionysus:frame");
     const win = host.iframe.contentWindow!;
     const sent: { seq: number; t: number }[] = [];
-    vi.spyOn(win, "postMessage").mockImplementation(((m: { seq: number; t: number }) => { sent.push(m); }) as never);
+    const inits: unknown[] = [];
+    vi.spyOn(win, "postMessage").mockImplementation(((m: { type: string; seq: number; t: number }) => { (m.type === "dionysus:init" ? inits : sent).push(m); }) as never);
     const reply = (data: unknown) => window.dispatchEvent(new MessageEvent("message", { data, source: win }));
     host.request(1); // not ready yet: nothing sent
     expect(sent).toHaveLength(0);
     reply({ type: "dionysus:ready" });
+    expect(inits).toEqual([{ type: "dionysus:init", width: 640, height: 360 }]); // size first, then frames
     expect(sent.map((m) => m.t)).toEqual([1]);
     host.request(2); host.request(3); // coalesced while frame 1 is in flight
     expect(sent).toHaveLength(1);
@@ -126,6 +143,25 @@ describe("html clips", () => {
     expect(host.iframe.isConnected).toBe(false);
   });
 
+  it("awaits the init builder (bindings, length) before the first frame, which carries the duration (V2-HTML-PKG)", async () => {
+    const blob = new Blob(["x"], { type: "image/png" });
+    const init = vi.fn(async () => ({ width: 320, height: 180, bindings: { logo: { type: "image", blob } } }));
+    const host = new HtmlClipHost(Promise.resolve("<canvas></canvas>"), 320, 180, () => undefined, init);
+    await tick();
+    expect(init).toHaveBeenCalledWith("<canvas></canvas>");
+    const win = host.iframe.contentWindow!;
+    const sent: { type: string; t?: number; duration?: number; bindings?: unknown }[] = [];
+    vi.spyOn(win, "postMessage").mockImplementation(((m: (typeof sent)[number]) => { sent.push(m); }) as never);
+    host.request(0.5, 4);
+    window.dispatchEvent(new MessageEvent("message", { data: { type: "dionysus:ready" }, source: win }));
+    expect(sent).toHaveLength(0); // waiting for init
+    await tick();
+    expect(sent.map((m) => m.type)).toEqual(["dionysus:init", "dionysus:frame"]);
+    expect(sent[0].bindings).toEqual({ logo: { type: "image", blob } });
+    expect(sent[1]).toMatchObject({ t: 0.5, duration: 4 });
+    host.dispose();
+  });
+
   it("rejects hostile frames and reports timeouts instead of hanging", async () => {
     class FakeBitmap { constructor(public width: number, public height: number) {} close = vi.fn(); }
     vi.stubGlobal("ImageBitmap", FakeBitmap);
@@ -136,7 +172,7 @@ describe("html clips", () => {
       await tick();
       const win = host.iframe.contentWindow!;
       const sent: { seq: number }[] = [];
-      vi.spyOn(win, "postMessage").mockImplementation(((m: { seq: number }) => { sent.push(m); }) as never);
+      vi.spyOn(win, "postMessage").mockImplementation(((m: { type: string; seq: number }) => { if (m.type === "dionysus:frame") sent.push(m); }) as never);
       const reply = (data: unknown) => window.dispatchEvent(new MessageEvent("message", { data, source: win }));
       reply({ type: "dionysus:ready" });
       host.request(0);
