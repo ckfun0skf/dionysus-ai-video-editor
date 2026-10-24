@@ -152,7 +152,6 @@
   .v2-prod { grid-template-columns: minmax(0, 1fr); }
   .v2-prod-list { position: static; }
   .v2-sb-inline { border: 0; background: transparent; margin: 0 -12px; }
-  .v2-prod-state span { display: none; }
   .v2-prod-nav { position: sticky; top: -16px; z-index: 2; background: var(--bg); padding-top: 12px; flex-wrap: nowrap; }
   .v2-prod-nav .v2-spacer { flex: 1; }
 }
@@ -162,6 +161,8 @@
 
 /* Hover styles only where a pointer can hover: iOS keeps :hover after a tap (V2-SB-R09). */
 @media (hover: hover) {
+  .v2-board .v2-cmenu-item:hover { background: #2e2e36; }
+  .v2-sb-note-act:hover { background: #ffffff14; }
   .v2-sb-btn:hover { border-color: var(--accent); }
   .v2-sb-step:hover { border-color: var(--accent); background: #202026; }
   .v2-sb-icon:hover:not(:disabled) { background: #ffffff14; }
@@ -177,3 +178,24 @@
 .v2-sb-shot-status { display: flex; flex-wrap: wrap; align-items: center; column-gap: 8px; row-gap: 2px; }
 .v2-sb-len { display: inline-flex; align-items: center; gap: 4px; color: #fbbf24; font-size: 12px; font-weight: 600; }
 .v2-sb-lenline { margin: 8px 0 0; }
+
+/* V2-SB-R11/R12: header actions. Replace is destructive; the phone '⋯' menu uses touch-sized items. */
+.v2-sb-danger { color: #fca5a5; }
+.v2-sb-prod-icon { color: var(--accent); padding: 0 12px; }
+.v2-board .v2-cmenu { position: fixed; z-index: 60; min-width: 220px; padding: 5px; border: 1px solid var(--line); border-radius: 12px; background: #1e1e23; box-shadow: 0 12px 32px #0009; }
+.v2-board .v2-cmenu-item { display: grid; grid-template-columns: 20px 1fr auto; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 0 12px 0 10px; border: 0; border-radius: 8px; background: none; color: var(--text); font: 14px/1.2 system-ui; text-align: left; }
+.v2-board .v2-cmenu-item.is-danger { color: #fca5a5; }
+.v2-board .v2-cmenu-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+@media (max-width: 480px) { .v2-board-head .v2-sb-btn.primary { padding: 0 14px; font-weight: 600; } }
+/* V2-SB-R13: Send note with a View action. */
+.v2-sb-note { display: flex; align-items: center; gap: 12px; }
+.v2-sb-note-act { flex: none; min-height: 36px; padding: 0 12px; border: 0; border-radius: 8px; background: none; color: var(--accent); font: inherit; font-weight: 700; cursor: pointer; }
+@media (pointer: coarse) { .v2-sb-note-act { min-height: 44px; } }
+/* V2-SB-R10: phones keep the step state as text, on its own line under the sub-label. */
+.v2-prod-state-m { display: inline-flex; align-items: center; gap: 4px; margin-top: 2px; font-size: 11px; font-weight: 600; color: var(--muted); }
+.v2-prod-state-m.done { color: var(--accent); } .v2-prod-state-m.stale, .v2-prod-state-m.check { color: #fbbf24; }
+/* V2-SB-R15: the selected version says "In use" on the card instead of in a tooltip that covered the action below. */
+.v2-sb-inuse { display: inline-flex; align-items: center; gap: 3px; margin-left: auto; font-size: 11px; font-weight: 600; }
+/* V2-SB-R14: each import problem is a button that selects the JSON it is about. */
+.v2-sb-errlink { display: inline; padding: 2px 0; border: 0; background: none; color: inherit; font: inherit; line-height: inherit; text-align: left; text-decoration: underline dotted #fb718599; text-underline-offset: 3px; cursor: pointer; }
+.v2-sb-errlink:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }

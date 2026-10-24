@@ -24,7 +24,8 @@ export interface StoryConnection { from: string; to: string; kind: ConnectionKin
 export interface StoryMeta { title: string; logline?: string; synopsis?: string; aspect: string; style?: string; language?: string }
 export interface StoryDoc { format: typeof STORYBOARD_FORMAT; meta: StoryMeta; assets: StoryAsset[]; shots: StoryShot[]; connections: StoryConnection[] }
 
-export interface StoryIssue { path: string; message: string }
+/** `at`: character offset in the extracted JSON, for syntax errors that have no path. */
+export interface StoryIssue { path: string; message: string; at?: number }
 export type StoryParseResult =
   | { ok: true; doc: StoryDoc; warnings: StoryIssue[] }
   | { ok: false; errors: StoryIssue[]; warnings: StoryIssue[] };
@@ -124,7 +125,7 @@ export function parseStoryboard(text: string): StoryParseResult {
   try { raw = JSON.parse(json); } catch {
     const at = jsonSyntaxError(json);
     const where = at ? ` at ${lineCol(json, at.pos)}: ${at.message}` : "";
-    return { ok: false, errors: [{ path: "", message: `Not valid JSON${where}. Tip: ask the AI to reply with only the JSON in one code block.` }], warnings: [] };
+    return { ok: false, errors: [{ path: "", message: `Not valid JSON${where}. Tip: ask the AI to reply with only the JSON in one code block.`, ...(at ? { at: at.pos } : {}) }], warnings: [] };
   }
   return validateStoryboard(raw);
 }
@@ -209,7 +210,7 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
     if (!pre) continue;
     const { s, path, id } = pre;
     const dur = typeof s.durationSec === "number" ? s.durationSec : NaN;
-    if (!(dur >= 0.5 && dur <= 120)) err(`${path}.durationSec`, s.durationSec === undefined ? `Shot "${id}" needs "durationSec" (seconds, 0.5–120).` : `Duration ${String(s.durationSec)} must be a number of seconds between 0.5 and 120.`);
+    if (!(dur >= 0.5 && dur <= 120)) err(`${path}.durationSec`, s.durationSec === undefined ? `Shot "${id}" needs "durationSec" (seconds, 0.5–120).` : `Duration ${JSON.stringify(s.durationSec)} must be a number of seconds between 0.5 and 120.`);
     const prompt = str(s.prompt) ?? "";
     if (!prompt) err(`${path}.prompt`, `Shot "${id}" needs a clip generation "prompt".`);
     const used = strList(s.assets, `${path}.assets`);
@@ -275,4 +276,58 @@ export function storySummary(doc: StoryDoc): string {
   const frames = doc.assets.filter((a) => a.source.type === "lastFrame").length;
   const qa = doc.assets.reduce((t, a) => t + a.qa.length, 0) + doc.shots.reduce((t, s) => t + s.qa.length, 0);
   return `${doc.shots.length} shot${doc.shots.length === 1 ? "" : "s"} · ${Math.round(total * 10) / 10}s · ${doc.assets.length} asset${doc.assets.length === 1 ? "" : "s"}${frames ? ` (${frames} last-frame link${frames === 1 ? "" : "s"})` : ""} · ${qa} QA check${qa === 1 ? "" : "s"}`;
+}
+
+/**
+ * Character ranges of every member in a JSON text, keyed by the validator's paths
+ * ("meta.title", "shots[0].durationSec"). A member's range covers `"key": value`; array items cover the value.
+ * Best effort: stops quietly at the first syntax error.
+ */
+export function jsonPathRanges(json: string): Map<string, { start: number; end: number }> {
+  const out = new Map<string, { start: number; end: number }>();
+  let i = 0;
+  const ws = () => { while (i < json.length && /\s/.test(json[i])) i++; };
+  const str = () => { const a = i++; while (i < json.length && json[i] !== '"') i += json[i] === "\\" ? 2 : 1; i++; return json.slice(a, i); };
+  const value = (path: string, start: number): void => {
+    ws();
+    const c = json[i];
+    if (c === "{") {
+      i++; ws();
+      while (i < json.length && json[i] !== "}") {
+        ws(); const ks = i; if (json[i] !== '"') throw 0;
+        const key = JSON.parse(str()) as string; ws(); if (json[i++] !== ":") throw 0;
+        value(path ? `${path}.${key}` : key, ks); ws();
+        if (json[i] === ",") i++;
+        else if (json[i] !== "}") throw 0;
+      }
+      i++;
+    } else if (c === "[") {
+      i++; ws(); let n = 0;
+      while (i < json.length && json[i] !== "]") {
+        ws(); value(`${path}[${n++}]`, i); ws();
+        if (json[i] === ",") i++;
+        else if (json[i] !== "]") throw 0;
+      }
+      i++;
+    } else if (c === '"') str();
+    else { const m = /^[^,}\]\s]+/.exec(json.slice(i)); if (!m) throw 0; i += m[0].length; }
+    if (path) out.set(path, { start, end: i });
+  };
+  try { value("", 0); } catch { /* partial map is still useful */ }
+  return out;
+}
+
+/** Where an issue points in the pasted text (which may wrap the JSON in chat text or a fence); falls back to the nearest parent. */
+export function locateIssue(text: string, issue: StoryIssue): { start: number; end: number } | undefined {
+  const json = extractJson(text);
+  const base = Math.max(0, text.indexOf(json));
+  if (issue.at !== undefined) { const end = json.indexOf("\n", issue.at); return { start: base + issue.at, end: base + (end < 0 ? json.length : end) }; }
+  if (!issue.path) return undefined;
+  const ranges = jsonPathRanges(json);
+  for (let p = issue.path; p; p = p.replace(/(\.[^.[\]]+|\[\d+\])$/, "") ) {
+    const r = ranges.get(p);
+    if (r) return { start: base + r.start, end: base + r.end };
+    if (!/(\.[^.[\]]+|\[\d+\])$/.test(p)) break;
+  }
+  return undefined;
 }

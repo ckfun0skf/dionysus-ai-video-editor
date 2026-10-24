@@ -45,7 +45,19 @@ export function ImportPanel({ onCreate, replacing }: { onCreate?: (doc: StoryDoc
   const [text, setText] = useState("");
   const [file, setFile] = useState<string>();
   const input = useRef<HTMLInputElement>(null);
+  const area = useRef<HTMLTextAreaElement>(null);
+  /** V2-SB-R14: an error jumps to (selects) the part of the JSON it is about. */
+  const jump = (r?: { start: number; end: number }) => {
+    const ta = area.current;
+    if (!ta || !r) return;
+    ta.focus();
+    ta.setSelectionRange(r.start, Math.max(r.start, r.end));
+    const line = text.slice(0, r.start).split("\n").length - 1;
+    const lh = parseFloat(getComputedStyle(ta).lineHeight) || 18;
+    ta.scrollTop = Math.max(0, (line - 2) * lh);
+  };
   const result = useMemo(() => (text.trim() ? story.parseStoryboard(text) : undefined), [text]);
+  const locs = useMemo(() => (result && !result.ok ? result.errors.map((e) => story.locateIssue(text, e)) : []), [result, text]);
   const pick = async (f?: File) => { if (!f) return; setFile(f.name); setText(await readFileText(f)); };
   const paste = async () => { try { const t = await navigator.clipboard.readText(); if (t) { setFile(undefined); setText(t); } } catch { /* permission denied: user can long-press paste */ } };
   return (
@@ -54,15 +66,19 @@ export function ImportPanel({ onCreate, replacing }: { onCreate?: (doc: StoryDoc
         <button className="v2-btn v2-sb-btn" title="Paste the AI's reply from the clipboard" onClick={() => void paste()}><Ic g="📋" size={16} /> Paste</button>
         <button className="v2-btn v2-sb-btn" title="Import a .json file" onClick={() => input.current?.click()}><Ic g="json" size={16} /> Choose file</button>
         <input ref={input} type="file" accept=".json,application/json,.txt,text/plain" hidden aria-label="Storyboard JSON file" onChange={(e) => { void pick(e.target.files?.[0]); e.target.value = ""; }} />
+        {!text && <button className="v2-btn v2-sb-btn" title="Fill in the example storyboard to see how import works" onClick={() => { setFile(undefined); setText(JSON.stringify(EXAMPLE_STORYBOARD, null, 2)); }}><Ic g="board" size={16} /> Load example</button>}
         {text && <button className="v2-btn v2-sb-btn" title="Clear" onClick={() => { setText(""); setFile(undefined); }}><Ic g="✕" size={16} /> Clear</button>}
       </div>
-      <textarea className="v2-sb-code" aria-label="Storyboard JSON" placeholder={'Paste the AI\'s reply here — the whole message is fine, Dionysus finds the JSON.\n\n{ "format": "dionysus.storyboard/1", … }'} value={text} rows={10} spellCheck={false} onChange={(e) => { setFile(undefined); setText(e.target.value); }} />
+      <textarea ref={area} className="v2-sb-code" aria-label="Storyboard JSON" placeholder={'Paste the AI\'s reply here — the whole message is fine, Dionysus finds the JSON.\n\n{ "format": "dionysus.storyboard/1", … }'} value={text} rows={10} spellCheck={false} onChange={(e) => { setFile(undefined); setText(e.target.value); }} />
       {file && <p className="v2-hint">From {file}</p>}
       {result && !result.ok && (
         <div className="v2-sb-errors" role="alert" data-testid="story-errors">
           <h4><Ic g="alert" size={16} /> {result.errors.length} problem{result.errors.length === 1 ? "" : "s"} to fix</h4>
-          <p className="v2-hint">Fix them here, or copy the list back to your AI and ask it to correct the JSON.</p>
-          <ul>{result.errors.map((e, i) => <li key={i}>{e.path && <code>{e.path}</code>} {e.message}</li>)}</ul>
+          <p className="v2-hint">Tap a problem to select it in the JSON and fix it here, or copy the list back to your AI and ask it to correct the JSON.</p>
+          <ul>{result.errors.map((e, i) => {
+            const body = <>{e.path && <code>{e.path}</code>} {e.message}</>;
+            return <li key={i}>{locs[i] ? <button className="v2-sb-errlink" title="Select this in the JSON" onClick={() => jump(locs[i])}>{body}</button> : body}</li>;
+          })}</ul>
           <CopyButton text={() => `Please fix these problems in the storyboard JSON and reply with the full corrected JSON only:\n${result.errors.map((e) => `- ${e.path ? e.path + ": " : ""}${e.message}`).join("\n")}`} label="Copy fix-up request" />
         </div>
       )}

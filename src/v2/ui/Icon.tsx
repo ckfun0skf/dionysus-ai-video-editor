@@ -1,6 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import {
-  Clapperboard, FileJson, Link2, CircleCheck, CircleAlert, ListTodo, ImageUp, RefreshCw,
+  Clapperboard, Ellipsis, FileJson, Link2, CircleCheck, CircleAlert, ListTodo, ImageUp, RefreshCw,
   AudioLines, Blend, Check, ClipboardPaste, Code2, Copy, CopyPlus, Diamond, Download, FileAudio, Film, Gauge, ListChecks, Maximize, Menu, Minus,
   Music, Pause, Pencil, Play, Plus, Redo2, Rewind, ArrowLeftToLine, Scissors, SkipBack, SlidersHorizontal, Snowflake, Trash2, TriangleAlert, Type, Undo2,
   Image, Wand2, ArrowLeft, ArrowRight, Repeat, Sparkles, PictureInPicture2, Sticker, LayoutTemplate, Eye, EyeOff, Upload, Volume1, Volume2, VolumeX, X, ZoomIn, ZoomOut, Search, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, SkipForward, StepBack, StepForward, Keyboard, Settings2, Shrink, Captions, RotateCw, Magnet, Layers,
@@ -11,7 +11,7 @@ import {
  * (e.g. "✂") so menus stay data; unknown keys fall back to the text itself.
  */
 export const ICONS: Record<string, LucideIcon> = {
-  board: Clapperboard, json: FileJson, link: Link2, ok: CircleCheck, alert: CircleAlert, todo: ListTodo, "image-up": ImageUp, regen: RefreshCw, skip: SkipForward, "to-timeline": Film,
+  board: Clapperboard, "⋯": Ellipsis, json: FileJson, link: Link2, ok: CircleCheck, alert: CircleAlert, todo: ListTodo, "image-up": ImageUp, regen: RefreshCw, skip: SkipForward, "to-timeline": Film,
   "≡": Captions, "⟳": RotateCw, "🧲": Magnet,
   "✎": Pencil, "✕": X, "↶": Undo2, "↷": Redo2, "⏮": SkipBack, "❚❚": Pause, "▶": Play, "⇤": ArrowLeftToLine, "⧉": CopyPlus, "⎘": Copy,
   "📋": ClipboardPaste, "🗑": Trash2, "✓": Check, "⤓": FileAudio, "🔈": Volume1, "🔇": VolumeX, "🔊": Volume2, "❄": Snowflake, "⟲": Rewind,

@@ -2265,38 +2265,38 @@
         {
           "id": "V2-SB-R10",
           "title": "Storyboard review P2-7: mobile Production keeps text state labels and a fuller step header",
-          "status": "todo",
-          "progress": 0
+          "status": "done",
+          "progress": 100
         },
         {
           "id": "V2-SB-R11",
           "title": "Storyboard review P2-8: mobile board header — labelled Send primary button, AI prompt and Replace storyboard in a '⋯' menu",
-          "status": "todo",
-          "progress": 0
+          "status": "done",
+          "progress": 100
         },
         {
           "id": "V2-SB-R12",
           "title": "Storyboard review P2-9: desktop board header — labelled AI prompt and destructive Replace storyboard with confirm",
-          "status": "todo",
-          "progress": 0
+          "status": "done",
+          "progress": 100
         },
         {
           "id": "V2-SB-R13",
           "title": "Storyboard review P2-11: Send note with a 'View' action that stays longer",
-          "status": "todo",
-          "progress": 0
+          "status": "done",
+          "progress": 100
         },
         {
           "id": "V2-SB-R14",
           "title": "Storyboard review P2-12: Import JSON — one-tap 'Load example', errors jump to the line, quoted values",
-          "status": "todo",
-          "progress": 0
+          "status": "done",
+          "progress": 100
         },
         {
           "id": "V2-SB-R15",
           "title": "Storyboard review P2-13: desktop 'In use' version label no longer covers the action button",
-          "status": "todo",
-          "progress": 0
+          "status": "done",
+          "progress": 100
         }
       ]
     },
