@@ -2,7 +2,8 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { EXAMPLE_STORYBOARD, storyboardSystemPrompt } from "../../domain";
+import { createProject, EXAMPLE_STORYBOARD, storyboardSystemPrompt, story, type MediaRef } from "../../domain";
+import { cmd, Engine } from "../../engine";
 import { createMemoryStorage } from "../../persistence";
 import { V2App } from "../V2App";
 import { StoryboardView } from "./StoryboardView";
@@ -19,11 +20,14 @@ const setText = (ta: HTMLTextAreaElement, v: string) => {
   Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(ta, v);
   ta.dispatchEvent(new Event("input", { bubbles: true }));
 };
-async function mount(onClose = () => {}, onCreate?: () => void) {
+let engine: Engine;
+async function mount(onClose = () => {}) {
   const el = document.createElement("div"); document.body.appendChild(el);
-  await act(async () => createRoot(el).render(<StoryboardView onClose={onClose} onCreate={onCreate} />));
+  engine = new Engine(createProject("t"));
+  await act(async () => createRoot(el).render(<StoryboardView engine={engine} blobs={createMemoryStorage().blobs} onClose={onClose} />));
   return el;
 }
+const doc = (() => { const r = story.validateStoryboard(EXAMPLE_STORYBOARD); if (!r.ok) throw new Error("bad"); return r.doc; })();
 
 describe("storyboard workspace", () => {
   it("copies the AI prompt and shows confirmation", async () => {
@@ -38,8 +42,7 @@ describe("storyboard workspace", () => {
   });
 
   it("lists path-addressed errors for bad JSON and previews a valid storyboard", async () => {
-    const onCreate = vi.fn();
-    const el = await mount(() => {}, onCreate);
+    const el = await mount();
     await act(async () => (el.querySelector('[data-testid="step-import"]') as HTMLButtonElement).click());
     const ta = el.querySelector('[aria-label="Storyboard JSON"]') as HTMLTextAreaElement;
     await act(async () => setText(ta, '{ "shots": [ }'));
@@ -59,7 +62,39 @@ describe("storyboard workspace", () => {
     await act(async () => btn(pv, "Download .json").click());
     expect(clicked).toEqual(["the-lantern-keeper.storyboard.json"]);
     await act(async () => btn(pv, "Create storyboard").click());
-    expect(onCreate).toHaveBeenCalledWith(expect.objectContaining({ shots: expect.any(Array) }));
+    expect(engine.getState().project.storyboard?.order).toEqual(["s1", "s2", "s3"]);
+    expect(el.querySelectorAll(".v2-sb-shot")).toHaveLength(3);
+    expect(el.querySelector('[role="status"]')!.textContent).toContain("The Lantern Keeper");
+  });
+
+  it("shows shots in order with connections, asset needs and transitive warnings; undo/replace", async () => {
+    const el = await mount();
+    await act(async () => engine.dispatch(cmd.createStoryboard(doc)));
+    const shots = [...el.querySelectorAll(".v2-sb-shot")];
+    expect(shots.map((s) => s.querySelector(".v2-sb-no")!.textContent)).toEqual(["1", "2", "3"]);
+    expect(el.querySelectorAll(".v2-sb-conn")).toHaveLength(2);
+    expect(el.querySelector(".v2-sb-conn.continuity")).not.toBeNull();
+    expect(shots[0].textContent).toContain("No clip yet");
+    expect(shots[1].textContent).toContain("Taken from shot 1’s clip");
+    const img: MediaRef = { blobKey: "b", mime: "image/png", width: 16, height: 9 };
+    const vid: MediaRef = { blobKey: "v", mime: "video/mp4", durationTicks: 600_000 };
+    await act(async () => { engine.dispatch(cmd.addStoryVersion({ slot: "keeper" }, img)); engine.dispatch(cmd.addStoryVersion({ shot: "s1" }, vid)); });
+    expect(el.querySelector(".v2-sb-shot")!.textContent).toContain("1 version");
+    expect(el.textContent).not.toMatch(/may not match/);
+    await act(async () => engine.dispatch(cmd.addStoryVersion({ slot: "keeper" }, img)));
+    expect(el.querySelector(".v2-sb-shot")!.classList.contains("stale")).toBe(true);
+    expect(el.querySelector(".v2-sb-stats")!.textContent).toMatch(/may not match/);
+    await act(async () => btn(el, "Undo").click());
+    expect(el.querySelector(".v2-sb-shot")!.classList.contains("stale")).toBe(false);
+    await act(async () => btn(el, "Replace storyboard").click());
+    const ta = el.querySelector('[aria-label="Storyboard JSON"]') as HTMLTextAreaElement;
+    const other = structuredClone(EXAMPLE_STORYBOARD) as unknown as { meta: { title: string } }; other.meta.title = "Second cut";
+    await act(async () => setText(ta, JSON.stringify(other)));
+    await act(async () => btn(el, "Replace storyboard").click());
+    expect(engine.getState().project.storyboard?.meta.title).toBe("Second cut");
+    expect(el.querySelector('[role="status"]')!.textContent).toMatch(/Undo/);
+    await act(async () => btn(el, "Undo").click());
+    expect(engine.getState().project.storyboard?.meta.title).toBe("The Lantern Keeper");
   });
 
   it("imports a chosen .json file", async () => {
@@ -90,6 +125,8 @@ describe("storyboard workspace", () => {
     await wait();
     await act(async () => btn(el, "Storyboard").click());
     expect(el.querySelector('[role="region"][aria-label="Storyboard"]')).not.toBeNull();
+    expect(el.querySelector(".v2-board .v2-hint")!.textContent).toMatch(/never calls an AI/);
+    await act(async () => window.dispatchEvent(new KeyboardEvent("keydown", { key: " " })));
     await act(async () => btn(el, "Back to editor").click());
     expect(el.querySelector('[role="region"][aria-label="Storyboard"]')).toBeNull();
   });

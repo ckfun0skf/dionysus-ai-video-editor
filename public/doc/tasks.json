@@ -2201,6 +2201,12 @@
           "title": "Small elements easy to grab: 48px min hit area, drag/pinch anywhere on preview, tap tolerance + overlap cycling, touch-adjust-proof gizmo",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-CUT-02a",
+          "title": "Storyboard board view: shot cards in order, connections, asset needs, version counts, may-not-match warnings, undoable create/replace",
+          "status": "done",
+          "progress": 100
         }
       ]
     },

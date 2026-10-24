@@ -20,7 +20,7 @@ export function useThumbs(project: Project, blobs: BlobStore): Record<string, st
   return thumbs;
 }
 
-async function grab(kind: string, blob: Blob): Promise<string | undefined> {
+export async function grab(kind: string, blob: Blob): Promise<string | undefined> {
   const url = URL.createObjectURL(blob);
   try {
     const el = kind === "image" ? new Image() : document.createElement("video");
