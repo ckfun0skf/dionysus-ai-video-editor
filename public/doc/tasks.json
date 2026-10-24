@@ -2165,6 +2165,12 @@
           "title": "Desktop shortcuts: J/K/L shuttle, ? sheet, context menus, tooltips, nudge/zoom keys",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-108",
+          "title": "Hotfix: iOS Safari media import — chunked ArrayBuffer storage (no File/Blob in IndexedDB), persist(), quota message",
+          "status": "done",
+          "progress": 100
         }
       ]
     },
