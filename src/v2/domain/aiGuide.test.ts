@@ -35,14 +35,18 @@ describe("AI planner guide (V2-SB-114)", () => {
     expect(md).toContain("length 0.05–1, default 0.5 (fraction of the effect's time range, not seconds");
   });
 
-  it("the full prompt inlines the guide with RULES 1-14; the short prompt links to it", () => {
+  it("the full prompt inlines the guide with RULES 1-16; the short prompt links to it", () => {
     const full = storyboardSystemPrompt();
     for (const s of ["FORMAT (", "PRESETS", "RULES", "EXAMPLE", `14. ${RULES[13]}`, "not seconds", "START FRAME", "\"references\"?", "\"genDurationSec\"?", "- crossfade:", "- ken-burns:"]) expect(full).toContain(s);
-    expect(RULES).toHaveLength(14);
+    expect(RULES).toHaveLength(16);
     const short = storyboardShortPrompt();
     expect(short).toContain(GUIDE_URL);
     expect(short).toContain("Full prompt");
     expect(short.length).toBeLessThan(1500);
+    expect(short).toContain('"durationSec": 4, "genDurationSec": 6');
+    expect(full).toContain('"durationSec": 4, "genDurationSec": 6');
+    expect(full).not.toContain("match what the video model can generate");
+    expect(EXAMPLE_STORYBOARD.shots.some((s) => s.genDurationSec !== undefined && s.genDurationSec > s.durationSec)).toBe(true);
   });
 
   it("the example imports with no warnings and uses v1.1 fields", () => {

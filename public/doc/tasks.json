@@ -2353,6 +2353,12 @@
           "progress": 100
         },
         {
+          "id": "V2-SB-122",
+          "title": "Clarify durationSec vs genDurationSec in AI guide: durationSec is the planned on-screen edit length set by pacing (not the model's limits), genDurationSec the longer length to generate (omit when equal), worked example, example shot with genDurationSec, short-prompt line; RULE on transitions overlapping shots (centred, clamped to half the shorter shot) and single clean identity references",
+          "status": "done",
+          "progress": 100
+        },
+        {
           "id": "V2-BUG-EXPORT-BLACK",
           "title": "P0 export fix: video clips exported as black on Android Chrome (audio/images/text fine). Export now decodes video frame-accurately with WebCodecs (mp4box demux + VideoDecoder, edit lists, B-frames, rotation); unsupported files fall back to muted media elements kept in the DOM, awaited per frame with requestVideoFrameCallback, nudged once and verified for a real picture; a clip with no picture stops the export with a message naming it (HEVC advice), partial gaps become export warnings",
           "status": "done",
