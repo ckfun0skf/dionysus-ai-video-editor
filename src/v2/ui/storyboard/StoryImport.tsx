@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { EXAMPLE_STORYBOARD, GUIDE_HTML_URL, story, storyboardShortPrompt, storyboardSystemPrompt, type StoryDoc } from "../../domain";
+import { EXAMPLE_STORYBOARD, runtimeAiLinks, story, storyboardShortPrompt, storyboardSystemPrompt, type StoryDoc } from "../../domain";
 import { Ic } from "../Icon";
 import { copyText } from "./clipboard";
 
@@ -31,7 +31,9 @@ export function CopyButton({ text, label, primary, testId }: { text: () => strin
  */
 export function PromptPanel() {
   const [kind, setKind] = useState<"short" | "full">("short");
-  const short = useMemo(storyboardShortPrompt, []);
+  // Links follow the deployment the app runs on (V2-OPS-LINKS), not a hard-coded host.
+  const links = useMemo(runtimeAiLinks, []);
+  const short = useMemo(() => storyboardShortPrompt(links), [links]);
   const full = useMemo(storyboardSystemPrompt, []);
   const prompt = kind === "short" ? short : full;
   return (
@@ -44,7 +46,7 @@ export function PromptPanel() {
       <div className="v2-sb-actions">
         <CopyButton key={kind} text={() => prompt} label={kind === "short" ? "Copy AI prompt" : "Copy full prompt"} primary testId="copy-prompt" />
         <CopyButton text={() => JSON.stringify(EXAMPLE_STORYBOARD, null, 2)} label="Copy example JSON" />
-        <a className="v2-btn v2-sb-btn" href={GUIDE_HTML_URL} target="_blank" rel="noopener noreferrer" title="Open the storyboard guide the short prompt links to"><Ic g="link" size={16} /> Open guide</a>
+        <a className="v2-btn v2-sb-btn" href={links.guideHtml} target="_blank" rel="noopener noreferrer" title="Open the storyboard guide the short prompt links to"><Ic g="link" size={16} /> Open guide</a>
       </div>
       <textarea className="v2-sb-code" aria-label="AI system prompt" readOnly value={prompt} rows={14} onFocus={(e) => e.currentTarget.select()} />
       {kind === "short" && <p className="v2-hint">If your AI says it can't open the link, choose Full prompt and paste that instead.</p>}

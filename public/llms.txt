@@ -12,5 +12,5 @@ To plan a storyboard for Dionysus, read the storyboard guide first and reply wit
 
 ## Optional
 
-- [Format reference](https://github.com/ckfun0skf/dionysus-ai-video-editor/blob/main/docs/v2/STORYBOARD_FORMAT.md): the full specification, including importer warnings and errors
+- [Format reference](https://ckfun0skf.github.io/dionysus-ai-video-editor/ai/STORYBOARD_FORMAT.md): the full specification, including importer warnings and errors
 - [Open the app](https://ckfun0skf.github.io/dionysus-ai-video-editor/?v2)

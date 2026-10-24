@@ -1,19 +1,15 @@
 /**
  * Planner prompts for the user's own AI (V2-CUT-06, v1.1 V2-SB-114). No AI calls are made by the app.
- * - `storyboardShortPrompt()` points the AI at the published guide (public/ai/storyboard-guide.md).
+ * - `storyboardShortPrompt()` points the AI at the published guide (public/ai/storyboard-guide.md). Its links are built
+ *   at runtime from the deployment the app is served from (siteUrl.ts), never from a hard-coded host.
  * - `storyboardSystemPrompt()` is the full prompt: the same guide inlined, for AIs that can't open links.
  * The FORMAT, PRESETS, RULES and EXAMPLE sections are built here from the preset registry, so the guide, the prompts
  * and presets.json can't drift apart (aiGuide.test.ts fails when the published files are stale).
  */
 import { FONTS, listPresets, type ParamSpec, type PresetDescriptor, type PresetKind } from "../registry";
 import { CONNECTION_KINDS, DEFAULT_TRANSITION_SEC, REFERENCE_ROLES, SHOT_RENDERS, STORY_ASSET_TYPES, STORYBOARD_FORMAT, type StoryDoc } from "./storyJson";
+import { runtimeAiLinks, type AiLinks } from "./siteUrl";
 
-/** Public site the guide files are deployed to (GitHub Pages). The short prompt always links here, also in dev. */
-export const PUBLIC_SITE_URL = "https://ckfun0skf.github.io/dionysus-ai-video-editor/";
-export const GUIDE_URL = `${PUBLIC_SITE_URL}ai/storyboard-guide.md`;
-export const GUIDE_HTML_URL = `${PUBLIC_SITE_URL}ai/storyboard-guide.html`;
-export const PRESETS_URL = `${PUBLIC_SITE_URL}ai/presets.json`;
-export const FORMAT_DOC_URL = "https://github.com/ckfun0skf/dionysus-ai-video-editor/blob/main/docs/v2/STORYBOARD_FORMAT.md";
 /** Spec version the guide describes (the format string stays `dionysus.storyboard/1`). */
 export const FORMAT_REVISION = "1.1";
 
@@ -180,11 +176,11 @@ Now write the storyboard JSON for our story.`;
 }
 
 /** Short prompt: links to the published guide; the AI asks for the full prompt when it can't open links. */
-export function storyboardShortPrompt(): string {
+export function storyboardShortPrompt(links: AiLinks = runtimeAiLinks()): string {
   return `${ROLE}.
 
-1. First read the storyboard guide: ${GUIDE_URL}
-   It defines the JSON format ("${STORYBOARD_FORMAT}", v${FORMAT_REVISION}), the preset ids you may use, the rules and an example. Follow it exactly. (Same guide as a web page: ${GUIDE_HTML_URL} · presets as JSON: ${PRESETS_URL})
+1. First read the storyboard guide: ${links.guide}
+   It defines the JSON format ("${STORYBOARD_FORMAT}", v${FORMAT_REVISION}), the preset ids you may use, the rules and an example. Follow it exactly. (Same guide as a web page: ${links.guideHtml} · presets as JSON: ${links.presets})
 2. If you can't open links, don't guess the format. Reply only: "I can't open the guide — please paste the full Dionysus prompt." The user will then paste it (Dionysus → Storyboard → AI prompt → Full prompt).
 3. "durationSec" is the planned on-screen length of the shot in the edit, not what the video model can render. If the model must render longer (e.g. 6 s minimum), keep "durationSec" at the planned length and put the length to generate in "genDurationSec" (e.g. "durationSec": 4, "genDurationSec": 6).
 4. Otherwise reply with ONLY one JSON code block containing the storyboard for our story — no commentary before or after.`;
