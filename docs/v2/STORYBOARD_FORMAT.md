@@ -217,6 +217,15 @@ A shot's **references** are the assets in its `assets` list plus the assets of i
 - **Editing references:** Edit shot has a *Reference assets* list: remove, add an existing asset, or create a new one (name, type, prompt). Saving the shot and creating the new assets is one undo step. Removing a reference drops its pin.
 - **Editing assets:** an asset's details have Edit (name, type, aspect, generate/upload, prompt, *Made from* without cycles, checks, notes) and the board has *Add asset*. Once an asset has versions its type can only change within the same media kind, and the clip asset of a shot keeps its type. Renaming also renames the media-library asset when it still has the old name. Deleting removes the asset from shots, pins and other assets' *Made from*, keeps its versions in the media library, and is blocked (with the reason) while it is a shot's clip or layer.
 
+### 4.3 Production step order (V2-CUT-07)
+
+The production to-do lists every asset and shot once, in a **suggested order**: each asset comes before the shots that use it (including the assets of a shot's media layers and the clip asset of an HTML or still shot), an asset comes after the assets it is made from (`references`), and a last-frame asset comes right after its source shot.
+
+- **Your order (`stepOrder`):** steps can be reordered. The chosen order is kept as `Storyboard.stepOrder` (step keys `slot:<id>` and `shot:<id>`, app state only, not part of the import format) and is always applied as a stable topological sort, so a step never comes before something it needs, even after shots or references change. Steps that are not in the saved order (a new shot or asset) take their place next to their suggested neighbour; keys of deleted shots or assets are ignored.
+- **Moves:** a move that would put a step above something it needs, or below something made from it, stops right next to that step, and the note says which one. Each move is one undo step. *Reset order* goes back to the suggested order (also one undo step).
+- **UI:** on a phone, long-press a step and drag it, or let go without moving for a sheet with *Move up*, *Move down*, *Do this as early as possible*, *Do this as late as possible* and *Reset to suggested order*. On a desktop, drag a step (or its grip), use Alt+↑/↓, or right-click (or Shift+F10) for the same menu.
+- The order only affects the production list. It does not change the shot order, the timeline, or Send.
+
 ## 5. Planner prompt (updated)
 
 **Published guide (V2-SB-114).** The planner material is generated from the registry by `src/v2/domain/storyPrompt.ts` and `src/v2/domain/aiGuide.ts`, and published with the app:

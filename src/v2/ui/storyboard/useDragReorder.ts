@@ -16,8 +16,12 @@ import { haptic, LONG_PRESS_MS, LONG_PRESS_SLOP } from "../gestures";
 const MOUSE_SLOP = 5, EDGE = 56, MAX_SCROLL = 14;
 
 export interface DragReorderOpts {
-  /** Drop: move item `from` to index `to` (both in the current order). */
-  onMove: (from: number, to: number) => void;
+  /**
+   * Drop: move item `from` to index `to` (both in the current order). With `clamp`, `to` is the clamped
+   * index and `wanted` the index the user dropped on, so the caller can explain why it stopped short.
+   * Also called when the clamp blocks the move entirely (`to === from`, `wanted !== from`).
+   */
+  onMove: (from: number, to: number, wanted: number) => void;
   /** Touch long-press released without moving (open the action sheet). */
   onHold?: (index: number) => void;
   /** Clamp a target index (e.g. to keep dependency order); defaults to any index. */
@@ -26,7 +30,7 @@ export interface DragReorderOpts {
 
 type G = {
   id: number; touch: boolean; index: number; el: HTMLElement; list: HTMLElement; x0: number; y0: number;
-  state: "wait" | "lifted" | "drag"; timer?: number; tops: number[]; heights: number[]; to: number;
+  state: "wait" | "lifted" | "drag"; timer?: number; tops: number[]; heights: number[]; to: number; want: number;
   scroller: HTMLElement | null; scroll0: number; y: number; raf?: number;
 };
 
@@ -69,7 +73,7 @@ function makeDrag(optsRef: { current: DragReorderOpts }) {
     window.setTimeout(() => window.removeEventListener("click", swallow, { capture: true }), 400);
     if (!drop) return;
     if (s.state === "lifted") optsRef.current.onHold?.(s.index);
-    else if (s.to !== s.index) optsRef.current.onMove(s.index, s.to);
+    else if (s.to !== s.index || s.want !== s.index) optsRef.current.onMove(s.index, s.to, s.want);
   };
   const layout = (s: G) => {
     const dy = s.y - s.y0 + ((s.scroller?.scrollTop ?? 0) - s.scroll0);
@@ -81,6 +85,7 @@ function makeDrag(optsRef: { current: DragReorderOpts }) {
       if (i > s.index && mid > c) to = i;
     }
     const clamp = optsRef.current.clamp;
+    s.want = to;
     s.to = clamp ? clamp(s.index, to) : to;
     const gap = s.index + 1 < s.tops.length ? s.tops[s.index + 1] - s.tops[s.index] : s.heights[s.index];
     items(s.list).forEach((it, i) => {
@@ -139,7 +144,7 @@ function makeDrag(optsRef: { current: DragReorderOpts }) {
     const el = (e.currentTarget as HTMLElement).closest<HTMLElement>("[data-reorder]");
     const list = el?.parentElement;
     if (!el || !list) return;
-    const s: G = { id: e.pointerId, touch: e.pointerType !== "mouse", index, el, list, x0: e.clientX, y0: e.clientY, y: e.clientY, state: "wait", tops: [], heights: [], to: index, scroller: scrollParent(list), scroll0: 0 };
+    const s: G = { id: e.pointerId, touch: e.pointerType !== "mouse", index, el, list, x0: e.clientX, y0: e.clientY, y: e.clientY, state: "wait", tops: [], heights: [], to: index, want: index, scroller: scrollParent(list), scroll0: 0 };
     g.current = s;
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);

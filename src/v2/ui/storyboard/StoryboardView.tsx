@@ -194,7 +194,7 @@ export function StoryboardView({ engine, blobs, onClose, initialOpen, onView }: 
         </>}
       </header>
       <div className="v2-board-body">
-        {step === "production" && has ? <ProductionView project={project} thumbs={thumbs} engine={engine} blobs={blobs} mobile={mobile} /> : step === "prompt" ? <PromptPanel /> : step === "import" ? <ImportPanel onCreate={create} replacing={has} /> : has ? (
+        {step === "production" && has ? <ProductionView project={project} thumbs={thumbs} engine={engine} blobs={blobs} mobile={mobile} onNote={setNote} /> : step === "prompt" ? <PromptPanel /> : step === "import" ? <ImportPanel onCreate={create} replacing={has} /> : has ? (
           <BoardView project={project} thumbs={thumbs} onOpen={(t) => { setEditing(undefined); setEditingSlot(undefined); setConn(undefined); setOpen(t); }} openKey={editing?.shot ?? editingSlot?.slot ?? (open && ("slot" in open ? open.slot : open.shot))} edit={boardEdit} mobile={mobile} />
         ) : (
           <div className="v2-sb-empty">
