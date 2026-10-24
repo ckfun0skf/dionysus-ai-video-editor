@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { board, story, storyRefs, TICKS_PER_SECOND, type AssetSlot, type AssetVersion, type MediaKind, type MediaRef, type Project, type Shot } from "../../domain";
+import { board, htmlClipPackagePrompt, lintHtmlClip, runtimeAiLinks, slotBindings, slotPackageInput, story, storyRefs, TICKS_PER_SECOND, type AssetSlot, type AssetVersion, type MediaKind, type MediaRef, type Project, type Shot } from "../../domain";
 import { cmd, type Command, type Engine } from "../../engine";
 import { importFile } from "../../persistence";
+import { CLIP_LIBRARIES } from "../../render";
+import { HtmlExportButtons, HtmlImport } from "../HtmlImport";
+import { HTML_IMPORT_ACCEPT, importHtmlPackage } from "../htmlPackage";
 import type { BlobStore } from "../../ports";
 import { Ic } from "../Icon";
 import { extFor, safeName, saveFile } from "../saveFile";
@@ -11,7 +14,7 @@ import { extractLastFrame } from "./lastFrame";
 import { CopyButton } from "./StoryImport";
 import { TrimPicker } from "./TrimPicker";
 
-const ACCEPT: Partial<Record<MediaKind, string>> = { image: "image/*", video: "video/*", audio: "audio/*", html: ".html,.htm,text/html" };
+const ACCEPT: Partial<Record<MediaKind, string>> = { image: "image/*", video: "video/*", audio: "audio/*", html: HTML_IMPORT_ACCEPT };
 const KIND_NAME: Partial<Record<MediaKind, string>> = { image: "an image", html: "an HTML file", audio: "an audio file", video: "a video file" };
 const kindName = (k: MediaKind) => KIND_NAME[k] ?? `a ${k} file`;
 const fmtDate = (iso: string) => { const d = new Date(iso); return Number.isNaN(+d) ? "" : d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); };
@@ -45,6 +48,10 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
   /** html/still shot: its clip is this slot (versions, upload and checks of the clip live there). */
   const clipSlot = shot?.clipSlot ? b.slots[shot.clipSlot] : undefined;
   const kind: MediaKind = slot ? board.kindForSlot(slot.type) : clipSlot ? board.kindForSlot(clipSlot.type) : "video";
+  /** V2-HTML-PKG: the html asset whose package this panel imports, exports and prompts for. */
+  const htmlSlot = kind === "html" ? slot ?? clipSlot : undefined;
+  const expectBindings = htmlSlot ? Object.fromEntries(slotBindings(b, htmlSlot).map((x) => [x.name, x.type])) : undefined;
+  const packagePrompt = (full: boolean) => htmlClipPackagePrompt(slotPackageInput(b, htmlSlot!), { libs: CLIP_LIBRARIES, specUrl: runtimeAiLinks().htmlClipSpec, full });
   const versions = board.versionsOf(project, owner);
   const selected = board.selectedOf(project, owner);
   const status = board.storyStatus(project);
@@ -91,7 +98,23 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
     setErr(undefined); setBusy(label);
     try { await fn(); } catch (e) { setErr(e instanceof Error ? e.message : String(e)); } finally { setBusy(undefined); }
   };
+  /** Add a validated single-file HTML clip as a new version (V2-HTML-PKG). */
+  const addHtml = (html: string, name: string) => run("Adding…", async () => {
+    const a = await importFile(new File([html], `${name || "clip"}.html`, { type: "text/html" }), blobs);
+    if (!a) throw new Error("Couldn't store the clip.");
+    swap(cmd.addStoryVersion(target, a.versions[0].media, model.trim() ? { model: model.trim() } : {}));
+  });
   const upload = (f: File) => run("Adding…", async () => {
+    if (kind === "html") {
+      // A .html or .dionysus-html.zip: convert to the single file and validate before it becomes a version.
+      const html = await importHtmlPackage(f);
+      const errors = lintHtmlClip(html, { libs: CLIP_LIBRARIES, expectBindings }).issues.filter((i) => i.level === "error");
+      if (errors.length) throw new Error(`“${f.name}” can't be added: ${errors.map((e) => e.message).join(" ")}`);
+      const a = await importFile(new File([html], f.name.replace(/(\.dionysus-html)?\.zip$/i, ".html"), { type: "text/html" }), blobs);
+      if (!a) throw new Error("Couldn't store the clip.");
+      swap(cmd.addStoryVersion(target, a.versions[0].media, model.trim() ? { model: model.trim() } : {}));
+      return;
+    }
     const a = await importFile(f, blobs);
     if (!a) throw new Error("That file type isn't supported.");
     const media = a.versions[0].media;
@@ -172,6 +195,7 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
                     <Thumb src={thumbs[v.id]} icon={icon} count={0} />
                     <span><b>v{i + 1}{on && <span className="v2-sb-inuse"><Ic g="ok" size={13} /> In use</span>}</b><em>{info?.derivedFrom ? `Frame of shot ${shotNo(info.derivedFrom.shotId)}` : fmtDate(v.createdAt)}</em>{info?.model && <em title="Made with">{info.model}</em>}{pinnedIn.length > 0 && <em className="v2-sb-pinned"><Ic g="pin" size={12} /> Pinned in shot {pinnedIn.join(", ")}</em>}{trimmed && <em className="v2-sb-trimmed" title="Part of the clip in use"><Ic g="✂" size={12} /> {s1(trimmed.inTicks)}–{s1(trimmed.inTicks + trimmed.lenTicks)} s of {s1(v.media.durationTicks ?? 0)} s</em>}</span>
                   </button>
+                  {htmlSlot && <HtmlExportButtons small name={htmlSlot.id} label={`v${i + 1}`} html={() => blobs.get(v.media.blobKey).then((x) => x?.text())} />}
                   {canTrim && <button className="v2-btn v2-sb-trimbtn" disabled={!!busy} onClick={() => adjustTrim(v)} aria-label={`Adjust trim of v${i + 1}`} title="Choose which part of the clip the shot uses"><Ic g="✂" size={14} /> {trimmed ? "Adjust trim" : "Trim"}</button>}
                 </li>
               );
@@ -193,6 +217,12 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
           <input ref={fileRef} type="file" hidden accept={ACCEPT[kind]} aria-label={`Upload ${kind} for ${title}`}
             onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void upload(f); }} />
         </div>
+        {htmlSlot && (
+          <details className="v2-sb-htmlimport" open={!versions.length}>
+            <summary>Paste the AI's reply or import a package</summary>
+            <HtmlImport expectBindings={expectBindings} busy={!!busy} onAdd={(h, n) => addHtml(h, n)} />
+          </details>
+        )}
         {lf && !lfVersion && <p className="v2-hint">Shot {shotNo(lf)} needs a clip first. <button className="v2-linkbtn" onClick={() => onOpen({ shot: lf })}>Open shot {shotNo(lf)}</button></p>}
         {swapNote && <p className="v2-sb-swapnote" role="status"><Ic g="to-timeline" size={14} /> {swapNote}</p>}
         {busy && <p className="v2-hint" role="status">{busy}</p>}
@@ -204,7 +234,16 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
         <p className="v2-hint v2-sb-kfnote">Keyframe of shot {shotNo(slot.keyframeOf)}: make this still first; the clip animates from it (Image 1, the start frame).{" "}
           <button className="v2-linkbtn" onClick={() => onOpen({ shot: slot.keyframeOf! })}>Open shot {shotNo(slot.keyframeOf)}</button></p>
       )}
-      {owner.prompt && (
+      {htmlSlot && (
+        <Section title={shot ? `HTML clip prompt · ${htmlSlot.name}` : "Prompt"} extra={<span className="v2-sb-copyrow">
+          <CopyButton text={() => packagePrompt(false)} label="Copy prompt" testId="copy-html-prompt" />
+          <CopyButton text={() => packagePrompt(true)} label="Copy full prompt" testId="copy-html-prompt-full" />
+        </span>}>
+          <p className="v2-hint">The design brief plus the HTML clip package instructions (dionysus.htmlclip/1: length, size, bound assets, allowed libraries). Paste the AI's reply above. “Full” includes the whole spec, for AIs that can't open links.</p>
+          {htmlSlot.prompt && <p className="v2-sb-prompt">{htmlSlot.prompt}</p>}
+        </Section>
+      )}
+      {owner.prompt && !(htmlSlot && slot) && (
         <Section title={shot ? "Clip prompt" : "Prompt"} extra={<CopyButton text={() => (shot ? storyRefs.promptWithReferences(b, shot) : slot ? storyRefs.slotPromptWithReferences(b, slot) : owner.prompt)} label="Copy prompt" testId="copy-clip-prompt" />}>
           <p className="v2-sb-prompt">{owner.prompt}</p>
           {(shot || slot) && <AttachOrder shot={shot} slot={shot ? undefined : slot} project={project} thumbs={thumbs} blobs={blobs} />}

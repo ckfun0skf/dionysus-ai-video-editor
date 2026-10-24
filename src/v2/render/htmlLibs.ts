@@ -1,3 +1,4 @@
+import { readManifest, writeManifest, type ClipLibrary, type HtmlClipManifest } from "../domain";
 /**
  * Library registry for HTML clips. Each entry is a self-hosted (public/vendor) ES module pinned by SRI.
  * A clip opts in per library; the import map and CSP allowlist are generated from the selection only.
@@ -41,24 +42,22 @@ export function detectLibraries(html: string): string[] {
   return HTML_LIBRARIES.filter((l) => new RegExp(`(?:from|import)\\s*\\(?\\s*["']${esc(l.specifier)}["']`).test(html) || (l.legacy && new RegExp(l.legacy.source).test(html))).map((l) => l.id);
 }
 
-/** Per-clip settings, stored inside the clip's HTML so versions/undo/export carry them unchanged. */
-export interface ClipConfig { libs?: string[]; assets?: Record<string, string> }
-const CFG_RE = /<script type="application\/json" id="dionysus-clip">([\s\S]*?)<\/script>\s*/i;
+/**
+ * Per-clip settings: the clip's `dionysus.htmlclip/1` manifest (domain/htmlClipPackage.ts), stored inside the HTML so
+ * versions, undo and project export carry it unchanged. `assets` is the pre-V2-HTML-PKG name of `files`; it is read
+ * as `files` and written as `files`.
+ */
+export type ClipConfig = HtmlClipManifest & { assets?: Record<string, string> };
 
-export function readClipConfig(html: string): ClipConfig {
-  const m = CFG_RE.exec(html);
-  if (!m) return {};
-  try { const c = JSON.parse(m[1].replace(/<\\\//g, "</")) as ClipConfig; return c && typeof c === "object" ? c : {}; } catch { return {}; }
-}
+export const readClipConfig = (html: string): HtmlClipManifest => readManifest(html);
 
 export function writeClipConfig(html: string, cfg: ClipConfig): string {
-  const body = html.replace(CFG_RE, "");
-  const empty = !cfg.libs && !Object.keys(cfg.assets ?? {}).length;
-  if (empty) return body;
-  const tag = `<script type="application/json" id="dionysus-clip">${JSON.stringify(cfg).replace(/<\//g, "<\\/")}</script>\n`;
-  const m = /<head[^>]*>/i.exec(body);
-  return m ? body.slice(0, m.index + m[0].length) + tag + body.slice(m.index + m[0].length) : tag + body;
+  const { assets, ...rest } = cfg;
+  return writeManifest(html, { ...rest, files: rest.files ?? assets });
 }
+
+/** The registry's public part, for validation and AI prompts (domain code never sees vendor paths). */
+export const CLIP_LIBRARIES: readonly ClipLibrary[] = HTML_LIBRARIES.map(({ id, name, version, specifier, legacy }) => ({ id, name, version, specifier, legacy }));
 
 /** Selected libraries: the explicit selection, else whatever the page imports. */
 export const selectedLibraries = (html: string): HtmlLibrary[] => (readClipConfig(html).libs ?? detectLibraries(html)).map(libById).filter((l): l is HtmlLibrary => !!l);

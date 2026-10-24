@@ -32,6 +32,8 @@ export interface AiLinks {
   presets: string;
   /** The full format reference, published next to the guide. */
   formatDoc: string;
+  /** The HTML clip package spec (V2-HTML-PKG), published next to the guide. */
+  htmlClipSpec: string;
   llms: string;
 }
 
@@ -39,7 +41,7 @@ export interface AiLinks {
 export function aiLinks(site: string): AiLinks {
   const s = normalizeSiteUrl(site);
   const at = (p: string) => new URL(p, s).href;
-  return { site: s, app: at("?v2"), guide: at("ai/storyboard-guide.md"), guideHtml: at("ai/storyboard-guide.html"), presets: at("ai/presets.json"), formatDoc: at("ai/STORYBOARD_FORMAT.md"), llms: at("llms.txt") };
+  return { site: s, app: at("?v2"), guide: at("ai/storyboard-guide.md"), guideHtml: at("ai/storyboard-guide.html"), presets: at("ai/presets.json"), formatDoc: at("ai/STORYBOARD_FORMAT.md"), htmlClipSpec: at("ai/HTML_CLIP_PACKAGE.md"), llms: at("llms.txt") };
 }
 
 /** Hosts an outside AI can't reach (dev server, LAN). Prompts copied there link to the configured public site instead. */

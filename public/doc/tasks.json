@@ -2423,6 +2423,12 @@
           "title": "Generic AI storyboard guide: story-neutral HOW IT WORKS and CHOOSING PRESETS sections; the preset catalogue generated from descriptors and grouped by kind, then category, with each module's ai hints (presets.json gains categories and category); a short neutral example (\"First Light\", 3 shots) that imports with no warnings, with the old example kept as a test fixture; rules keyed and append-only so RULE numbers stay stable, with the STORYBOARD_FORMAT.md copy and citations checked by tests; short and full prompts updated",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-HTML-PKG",
+          "title": "HTML clip package standard (dionysus.htmlclip/1): one self-contained .html with a JSON manifest (length, size, background, libraries, bindings to other assets, user params, embedded files) and a deterministic runtime contract (dionysus.clip init/render on the first canvas, no network); portable .dionysus-html.zip (manifest.json, index.html, style.css, script.js, files) exported per version and imported by file picker or drop, also from the media bin; validation with codes on paste/import (errors block, warnings don't; legacy clips still import); paste the AI's reply back as a new version; html asset prompts are design briefs (RULE 21) and Copy prompt combines the brief with a filled-in package block linking ai/HTML_CLIP_PACKAGE.md from the runtime origin (full variant inlines the contract and a template); bound assets resolved per selected version; manifest param editor in the HTML editor; spec docs/v2/HTML_CLIP_PACKAGE.md",
+          "status": "done",
+          "progress": 100
         }
       ]
     },

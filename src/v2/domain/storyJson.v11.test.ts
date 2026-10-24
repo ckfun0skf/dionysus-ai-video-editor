@@ -218,7 +218,7 @@ describe("storyboard v1.1: hard errors (path-addressed)", () => {
     expect(errsOf((d) => { d.shots[0].layers = [text({ text: " " })]; })).toEqual(['shots[0].layers[0].text: A text layer needs "text".']);
     expect(errsOf((d) => { d.shots[0].effects = [{ params: {} }]; })[0]).toMatch(/^shots\[0\]\.effects\[0\]\.preset: An effect needs "preset": one of fade-in, fade-out, blur, ken-burns/);
     expect(errsOf((d) => { d.assets[1].source = { type: "lastFrame", shot: "s1" }; })).toContain('assets[1].source: An html asset can\'t be a last frame; use "generate" (the user asks their AI for the .html) or "upload".');
-    expect(errsOf((d) => { d.assets[1].prompt = ""; })).toEqual(['assets[1].prompt: Asset "logo" is html, so its "prompt" must describe the animation for the user\'s AI.']);
+    expect(errsOf((d) => { d.assets[1].prompt = ""; })).toEqual(['assets[1].prompt: Asset "logo" is html, so its "prompt" must be a design brief for the user\'s AI (what it shows and how it moves).']);
     expect(errsOf((d) => { d.meta.textStyles = "big"; })[0]).toMatch(/^meta\.textStyles: Should be an object/);
   });
   it("errors point at the right place in the pasted text", () => {

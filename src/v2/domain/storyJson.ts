@@ -499,7 +499,7 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
       source = { type: "lastFrame", shot };
     } else err(`${path}.source`, 'Source must be "generate", "upload", or { "type": "lastFrame", "shot": "<shot id>" }.');
     const prompt = str(a.prompt) ?? "";
-    if (source.type === "generate" && !prompt) err(`${path}.prompt`, type === "html" ? `Asset "${id}" is html, so its "prompt" must describe the animation for the user's AI.` : `Asset "${id}" is generated, so it needs a generation "prompt".`);
+    if (source.type === "generate" && !prompt) err(`${path}.prompt`, type === "html" ? `Asset "${id}" is html, so its "prompt" must be a design brief for the user's AI (what it shows and how it moves).` : `Asset "${id}" is generated, so it needs a generation "prompt".`);
     const asp = str(a.aspect);
     if (asp && !ASPECT_RE.test(asp)) err(`${path}.aspect`, `Aspect "${asp}" should look like "16:9".`);
     const name = str(a.name) || id;
