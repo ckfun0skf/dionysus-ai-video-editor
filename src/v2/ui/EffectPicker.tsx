@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useEdgeFade } from "./useEdgeFade";
 import { cmd, type Engine } from "../engine";
 import { newId, type Placement } from "../domain";
 import { applyEffectFrame } from "../render";
@@ -44,6 +45,7 @@ function EffectTile({ id, label, active, onPick }: { id: string; label: string; 
  * With `placement` (an effect clip): a pick changes its preset; None deletes the clip; sliders edit params.
  */
 export function EffectPicker({ engine, at, placement, onAdded, onClose }: { engine: Engine; at: number; placement?: Placement; onAdded?: (id: string) => void; onClose?: () => void }) {
+  const tabsFade = useEdgeFade<HTMLDivElement>();
   const cats = categories("videoEffect");
   const [cat, setCat] = useState<string>("All");
   const cur = placement?.effect?.preset;
@@ -63,7 +65,7 @@ export function EffectPicker({ engine, at, placement, onAdded, onClose }: { engi
   const vals = d ? defaultsOf(d, placement?.effect?.params) : {};
   return (
     <div className="v2-anim v2-effects">
-      <div className="v2-tp-tabs" role="tablist" aria-label="Effect category">
+      <div ref={tabsFade} className="v2-tp-tabs" role="tablist" aria-label="Effect category">
         {["All", ...cats].map((c) => <button key={c} role="tab" aria-selected={c === cat} className={`v2-tp-tab ${c === cat ? "is-active" : ""}`} onClick={() => setCat(c)}>{c}</button>)}
       </div>
       <div className="v2-ptiles" role="radiogroup" aria-label="Effects">

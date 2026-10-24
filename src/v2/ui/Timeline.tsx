@@ -57,7 +57,10 @@ interface Props {
 }
 
 /** Fixed playhead position in centered mode, as a fraction of the viewport width. */
-const PLAYHEAD_FRAC = 0.42;
+// V2-111: true centre line, like CapCut.
+const PLAYHEAD_FRAC = 0.5;
+/** V2-111: a ruler label at screen x (≈34px wide) would sit under the fixed time readout ending at labelRight → fade it out. */
+export const tickUnderLabel = (x: number, labelRight: number) => x + 34 > 0 && x < labelRight + 4;
 
 type Gesture =
   | { kind: "move"; id: string; x0: number; y0: number; start0: number; trackId: string; start: number; active: boolean; snap?: number }
@@ -112,12 +115,13 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
   /** A layer drag ending over empty space fires a click there; it must not count as an exit tap. */
   const dragEndAt = useRef(0);
   const cancelPress = () => { if (press.current) { clearTimeout(press.current.timer); press.current = undefined; } };
+  const labelRef = useRef<HTMLDivElement>(null);
   const toPx = (t: number) => (t / TICKS_PER_SECOND) * pps;
   const toTicks = (px: number) => Math.round((px / pps) * TICKS_PER_SECOND);
   const duration = compositionDuration(comp);
   const pad = centered ? Math.max(Math.round(viewW * PLAYHEAD_FRAC), sideColumn ? SIDE_W + 8 : 0) : 0;
   const padRight = centered ? viewW - pad : 0;
-  const contentW = Math.max(toPx(duration) + (centered ? 0 : 400), centered ? 1 : viewW - HEADER_W);
+  const contentW = Math.max(toPx(duration) + (centered ? 0 : 400), centered ? 1 : viewW); // V2-111: the ruler/lanes always reach the panel's right edge (viewW is the scroller, headers excluded)
 
   useLayoutEffect(() => {
     const el = scrollRef.current;
@@ -361,7 +365,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
           </div>}
           <div className="v2-ruler" onPointerDown={scrub}>
             {ticks.map((s) => (
-              <span key={s} className="v2-tick" style={{ left: s * pps }}>{formatTimecode(s * TICKS_PER_SECOND, project.settings.fps).slice(0, 5)}</span>
+              <span key={s} className={`v2-tick ${centered && timeLabel && tickUnderLabel(pad + s * pps - toPx(time), 12 + (labelRef.current?.offsetWidth ?? 92)) ? "is-under" : ""}`} style={{ left: s * pps }}>{formatTimecode(s * TICKS_PER_SECOND, project.settings.fps).slice(0, 5)}</span>
             ))}
           </div>
           {topLane?.render(toPx, toTicks)}
@@ -389,7 +393,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
               onDragOver={dragOver} onDrop={(e) => onDrop(e, t.id)}>
               {centered && t.muted && <span className="v2-lane-label"><Ic g="🔇" /></span>}
               {t.id === main?.id && focus && hiddenRanges(preview, focus).map(({ group, ranges }, i) => ranges.map(([a, b]) => (
-                <span key={`${group}-${a}`} className="v2-hidden-range" data-group={group} aria-hidden title={`${ops.GROUP_LABEL[group]} clips here`} style={{ left: toPx(a), width: Math.max(2, toPx(b - a)), top: 1 + i * 3, background: GROUP_COLOR[group] }} />
+                <span key={`${group}-${a}`} className="v2-hidden-range" data-group={group} aria-hidden title={`${ops.GROUP_LABEL[group]} clips here`} style={{ left: toPx(a), width: Math.max(2, toPx(b - a)), top: 2 + i * 5, background: GROUP_COLOR[group] }} />
               )))}
               {t.placements.map((p) => {
                 const asset = project.assets[p.source.assetId];
@@ -450,7 +454,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
       {confirmDel && (() => { const t = comp.tracks.find((x) => x.id === confirmDel); return t ? <ConfirmDialog title="Delete layer?" message={`Delete this layer and its ${t.placements.length} clip${t.placements.length === 1 ? "" : "s"}? You can undo this.`} confirm="Delete"
         onCancel={() => setConfirmDel(undefined)} onConfirm={() => { engine.dispatch(cmd.deleteTrack(t.id)); setConfirmDel(undefined); onSelect(undefined); }} /> : null; })()}
       {centered && <div className="v2-playhead-fixed" style={{ left: pad }} aria-hidden />}
-      {centered && timeLabel && <div className="v2-time-label">{timeLabel}</div>}
+      {centered && timeLabel && <div ref={labelRef} className="v2-time-label">{timeLabel}</div>}
     </div>
   );
 }

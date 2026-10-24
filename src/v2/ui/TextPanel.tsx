@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useEdgeFade } from "./useEdgeFade";
 import { cmd, type Engine } from "../engine";
 import { layers, text as T, type Placement, type TextData, type Track } from "../domain";
 import { AnimationPicker } from "./AnimationPicker";
@@ -20,6 +21,7 @@ export type Tab = (typeof TABS)[number];
  * `placement` must be the effective placement (layers.effectivePlacement) so the controls show what renders.
  */
 export function TextPanel({ engine, placement, onAnimPicked, initialTab = "Templates", layer, track }: { engine: Engine; placement?: Placement; onAnimPicked?: () => void; initialTab?: Tab; layer?: Track; track?: Track }) {
+  const tabsFade = useEdgeFade<HTMLDivElement>();
   const [tab, setTab] = useState<Tab>(initialTab);
   const ls = layer?.layerStyle;
   const pl: Placement = placement ?? layer?.placements.find((p) => p.clipType === "text") ?? { id: "", startTicks: 0, durationTicks: T.DEFAULT_TEXT_TICKS, sourceInTicks: 0, source: { kind: "assetVersion", assetId: "", versionId: "" }, clipType: "text" };
@@ -43,7 +45,7 @@ export function TextPanel({ engine, placement, onAnimPicked, initialTab = "Templ
     </label>
   );
   const color = (label: string, value: string, on: (v: string) => void) => (
-    <label className="v2-tp-row">{label}<input type="color" aria-label={label} value={value} onFocus={() => engine.beginGesture()} onBlur={() => engine.endGesture()} onChange={(e) => on(e.target.value)} /></label>
+    <label className="v2-tp-row v2-tp-color">{label}<span className="v2-color-val"><code>{value.toUpperCase()}</code><input type="color" aria-label={label} value={value} onFocus={() => engine.beginGesture()} onBlur={() => engine.endGesture()} onChange={(e) => on(e.target.value)} /></span></label>
   );
   const chips = <K extends string>(label: string, list: readonly K[], value: K, on: (v: K) => void, name: (v: K) => string = (v) => v) => (
     <div className="v2-tp-chips" role="radiogroup" aria-label={label}>
@@ -58,7 +60,7 @@ export function TextPanel({ engine, placement, onAnimPicked, initialTab = "Templ
         <button className="v2-btn" disabled={!custom} title="Drop this clip's own style so it matches the rest of the layer (undoable)" onClick={() => engine.dispatch(cmd.resetToLayerStyle(pl.id))}>Reset to layer style</button>
       </div>}
       {!layer && <textarea className="v2-tp-text" aria-label="Text content" value={d.text} rows={2} onFocus={() => engine.beginGesture()} onBlur={() => engine.endGesture()} onChange={(e) => set({ text: e.target.value }, "Type text")} />}
-      <div className="v2-tp-tabs" role="tablist">
+      <div ref={tabsFade} className="v2-tp-tabs" role="tablist">
         {TABS.map((t) => <button key={t} role="tab" aria-selected={t === tab} className={`v2-tp-tab ${t === tab ? "is-active" : ""}`} onClick={() => setTab(t)}>{t}</button>)}
       </div>
       <div className="v2-tp-body" role="tabpanel" aria-label={tab}>

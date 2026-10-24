@@ -11,6 +11,11 @@ export function tileProgress(kind: PresetKind, u: number): number {
   return u;
 }
 
+/** Font size that keeps a sample measured at `px` (width `tw`) inside 80% of a `w`-wide tile. */
+export function tileFontPx(px: number, tw: number, w: number): number {
+  return tw > w * 0.8 ? Math.max(8, (px * w * 0.8) / tw) : px;
+}
+
 /**
  * Live-looping preview of a preset on "ABC123", drawn with the same render function the player uses
  * (V2-098). Works for text animations, effects (static style) and stickers (SVG).
@@ -31,8 +36,12 @@ export function PresetTile({ kind, id, label, active, onPick, sample = "ABC123",
       } else {
         const u = ((now - t0) % (kind === "textAnimLoop" ? loopPeriod(id) * 1000 : CYCLE_MS)) / (kind === "textAnimLoop" ? loopPeriod(id) * 1000 : CYCLE_MS);
         const f = id === "none" ? identityFrame() : applyPreset(kind, id, kind === "effect" ? 0 : tileProgress(kind, u), identityFrame(), kind === "effect" ? { color: "#20d5ec" } : undefined);
-        const px = h * 0.32;
-        g.font = `700 ${px}px system-ui, sans-serif`; g.textAlign = "center"; g.textBaseline = "middle";
+        // V2-111: shrink the sample to fit 80% of the tile width (long samples / wide fonts were clipped at the edges).
+        let px = h * 0.32;
+        g.font = `700 ${px}px system-ui, sans-serif`;
+        const fit = tileFontPx(px, g.measureText(sample).width, w);
+        if (fit !== px) { px = fit; g.font = `700 ${px}px system-ui, sans-serif`; }
+        g.textAlign = "center"; g.textBaseline = "middle";
         const text = sample.slice(0, Math.round(sample.length * Math.max(0, Math.min(1, f.chars))));
         const tw = g.measureText(sample).width;
         g.globalAlpha = Math.max(0, Math.min(1, f.alpha));

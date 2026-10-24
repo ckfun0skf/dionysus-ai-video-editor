@@ -93,6 +93,14 @@ describe("V2-105 mobile layer row + Edit subtitles entry points", () => {
     expect(el.querySelectorAll(".v2-cue").length).toBe(2);
     await act(async () => { (el.querySelector('[aria-label="Close Edit subtitles"]') as HTMLButtonElement | null)?.click(); });
     await importSrt();
+    // V2-111 P2-6: straight after Import SRT, Edit subtitles opens the new layer (no picker detour)…
+    const before = el.querySelectorAll(".v2-cue").length;
+    await act(async () => { tool("Edit subtitles")!.click(); });
+    expect(el.querySelector('[aria-label="Choose a text layer"]')).toBeNull();
+    expect(el.querySelectorAll(".v2-cue").length).toBe(2);
+    expect(before).toBe(0);
+    await act(async () => { (el.querySelector('[aria-label="Close Edit subtitles"]') as HTMLButtonElement | null)?.click(); });
+    // …after that, with several layers, it asks which one.
     await act(async () => { tool("Edit subtitles")!.click(); });
     const pick = el.querySelector('[aria-label="Choose a text layer"]')!;
     expect(pick).toBeTruthy();

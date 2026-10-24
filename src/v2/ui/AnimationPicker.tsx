@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useEdgeFade } from "./useEdgeFade";
 import { cmd, type Engine } from "../engine";
 import { text as T, type Placement, type TextData } from "../domain";
 import { listPresets, type PresetKind } from "../registry";
@@ -17,6 +18,7 @@ export const ANIM_MIN_S = 0.1, ANIM_MAX_S = 2;
  * own render functions, and a duration slider. Every pick and slider drag is one undo step.
  */
 export function AnimationPicker({ engine, placement, onPicked, onSet }: { engine: Engine; placement: Placement; onPicked?: () => void; /** V2-103 layer mode: route edits to the layer style. */ onSet?: (patch: Partial<TextData>, label?: string) => void }) {
+  const tabsFade = useEdgeFade<HTMLDivElement>();
   const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("In");
   const d = T.textOf(placement.text);
   const cur = TABS.find((t) => t.id === tab)!;
@@ -25,7 +27,7 @@ export function AnimationPicker({ engine, placement, onPicked, onSet }: { engine
   const durS = Math.min((d.animTicks ?? 60_000), placement.durationTicks / 2) / TPS;
   return (
     <div className="v2-anim">
-      <div className="v2-tp-tabs" role="tablist" aria-label="Animation type">
+      <div ref={tabsFade} className="v2-tp-tabs" role="tablist" aria-label="Animation type">
         {TABS.map((t) => <button key={t.id} role="tab" aria-selected={t.id === tab} className={`v2-tp-tab ${t.id === tab ? "is-active" : ""}`} onClick={() => setTab(t.id)}>{t.id}{d[t.key] && d[t.key] !== "none" ? " •" : ""}</button>)}
       </div>
       <div className="v2-ptiles" role="radiogroup" aria-label={`${tab} animation`}>
