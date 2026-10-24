@@ -14,6 +14,7 @@ import { AnimationPicker } from "./AnimationPicker";
 import { HtmlEditor } from "./HtmlEditor";
 import { ExportDialog } from "./ExportDialog";
 import { ProjectsDialog } from "./Projects";
+import { StoryboardView } from "./storyboard/StoryboardView";
 import type { Resolution } from "../render";
 import { downloadSrt, importSrtFile, SubtitleEditor, SubtitleLane } from "./Subtitles";
 import { downloadText, SubtitleList } from "./SubtitleList";
@@ -81,6 +82,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const [res, setRes] = useState<Resolution>("1080p");
   const [exporting, setExporting] = useState(false);
   const [projects, setProjects] = useState(false);
+  const [board, setBoard] = useState(false);
   const openExport = () => { player.pause(); setExporting(true); };
   const [fs, setFs] = useState(false);
   const [toast, setToast] = useState<string>();
@@ -801,6 +803,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
         <header className="v2-header v2-mheader">
           <a className="v2-icon v2-close" href={window.location.pathname} aria-label="Close (back to classic editor)"><Ic g="✕" /></a>
           <button className="v2-icon v2-projects-btn" aria-label="Projects" title="Projects: new, open, rename, delete" onClick={() => setProjects(true)}><Ic g="☰" /></button>
+          <button className="v2-icon v2-board-btn" aria-label="Storyboard" title="Storyboard: plan shots with your own AI" onClick={() => setBoard(true)}><Ic g="board" /></button>
           <span className="v2-spacer" />
           <select className="v2-res" aria-label="Export resolution" value={res} onChange={(e) => setRes(e.target.value as Resolution)}>
             {["720p", "1080p", "2K", "4K"].map((r) => <option key={r}>{r}</option>)}
@@ -812,6 +815,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           <a className="v2-back" href={window.location.pathname} title="Back to classic editor">‹ Classic</a>
           <button className="v2-dtool" aria-label={lay.leftOpen ? "Hide asset panel" : "Show asset panel"} title={lay.leftOpen ? "Hide asset panel" : "Show asset panel"} aria-pressed={lay.leftOpen} onClick={() => togglePanel("leftOpen")}><Ic g={lay.leftOpen ? "panel-close" : "panel-open"} size={18} /></button>
           <button className="v2-btn v2-projects-btn" aria-label="Projects" title="Projects: new, open, rename, delete" onClick={() => setProjects(true)}><Ic g="☰" size={16} /> Projects</button>
+          <button className="v2-btn v2-board-btn" aria-label="Storyboard" title="Storyboard: plan shots with your own AI, import its JSON" onClick={() => setBoard(true)}><Ic g="board" size={16} /> Storyboard</button>
           <input className="v2-title" value={project.name} aria-label="Project name" title="Rename project" onFocus={() => engine.beginGesture()} onBlur={() => engine.endGesture()} onChange={(e) => engine.dispatch(cmd.renameProject(e.target.value))} />
           <span className="v2-badge">v2 preview</span>
           <span className="v2-spacer" />
@@ -824,6 +828,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           <button className="v2-btn primary v2-export-d" title="Export MP4 (⌘/Ctrl+E)" onClick={openExport}><Ic g="⇪" size={16} /> Export</button>
         </header>
       )}
+      {board && <StoryboardView onClose={() => setBoard(false)} />}
       {notice && <RecoveryNotice failure={notice} storage={storage} onDismiss={() => setNotice(undefined)} />}
       {projects && <ProjectsDialog storage={storage} current={project} onOpen={(id) => { setProjects(false); onSwitch(id); }} onRenameCurrent={(n) => engine.dispatch(cmd.renameProject(n))} onClose={() => setProjects(false)} />}
       {exporting && <ExportDialog project={project} blobs={storage.blobs} res={res} onRes={setRes} onClose={() => setExporting(false)} />}

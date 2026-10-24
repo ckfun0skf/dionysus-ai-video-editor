@@ -2091,8 +2091,8 @@
         {
           "id": "V2-CUT-06",
           "title": "Storyboard JSON schema (shots, per-asset prompts/type/aspect/references, per-clip prompts, QA checks) + copyable system prompt, paste-in validation, plan export",
-          "status": "todo",
-          "progress": 0
+          "status": "done",
+          "progress": 100
         },
         {
           "id": "V2-CUT-07",
