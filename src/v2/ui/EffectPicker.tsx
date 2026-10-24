@@ -8,7 +8,7 @@ import { applyPreset, categories, defaultsOf, getPreset, identityFrame, listPres
 const CYCLE_MS = 1800;
 
 /** Procedural sample picture (sky, sun, hills) so tiles preview effects without any media. */
-function drawSample(g: CanvasRenderingContext2D, w: number, h: number) {
+export function drawSample(g: CanvasRenderingContext2D, w: number, h: number) {
   const sky = g.createLinearGradient(0, 0, 0, h); sky.addColorStop(0, "#3b82f6"); sky.addColorStop(1, "#f9a8d4");
   g.fillStyle = sky; g.fillRect(0, 0, w, h);
   g.fillStyle = "#fde047"; g.beginPath(); g.arc(w * 0.7, h * 0.35, h * 0.16, 0, Math.PI * 2); g.fill();

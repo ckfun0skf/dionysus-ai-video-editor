@@ -6,3 +6,4 @@ export * from "./htmlClip";
 export { boxDistance, hitCandidates, hitTest, inBox, isBackdrop, pickAt } from "./hit";
 export * from "./htmlLibs";
 export { effectFrameAt, applyEffectFrame } from "./effects";
+export { drawWithLook, isPlainLook } from "./transitionDraw";

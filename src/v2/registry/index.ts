@@ -4,7 +4,7 @@ import { RENDERERS } from "./renderers";
 import { identityFrame, PRESET_KINDS, type Params, type PresetDescriptor, type PresetFrame, type PresetKind, type RenderFn } from "./types";
 export * from "./types";
 export * from "./fonts";
-export { RENDERERS } from "./renderers";
+export { RENDERERS, hash } from "./renderers";
 
 /** Preset ids are lowercase-friendly slugs; "@" is reserved for version pins (`ken-burns@2`). */
 export const PRESET_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/;

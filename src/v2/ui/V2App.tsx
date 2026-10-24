@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { hitCandidates, isBackdrop, pickAt, Player, THREE_TEMPLATE } from "../render";
 import { cmd } from "../engine";
 import { importFile } from "../persistence";
-import { board as storyDomain, compositionDuration, edit, layers, ops, transitions, findPlacement, newId, formatTimecode, secondsToTicks, type Asset } from "../domain";
+import { board as storyDomain, compositionDuration, edit, layers, ops, transitions, findPlacement, newId, formatTimecode, secondsToTicks, TICKS_PER_SECOND, type Asset } from "../domain";
 import { useEditorBoot, useEngineState, useIsMobile, type EditorContext, type LoadFailure } from "./useEditor";
 import { Timeline } from "./Timeline";
 import { clampPps } from "./gestures";
@@ -25,6 +25,7 @@ import { MediaPicker, type Picked } from "./MediaPicker";
 import { projectMediaList } from "./projectMedia";
 import { libraryFile, stickerFile, stickers } from "./libraryItems";
 import { EffectPicker } from "./EffectPicker";
+import { TransitionPicker, cutOf } from "./TransitionPicker";
 import { loadPreviewVh, PanelGrabber, Sheet, SheetDone } from "./Sheet";
 import { useEdgeFade } from "./useEdgeFade";
 import { AssetBrowser, type BrowserTab } from "./desktop/AssetBrowser";
@@ -103,6 +104,10 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   /** V2-098: animation sheet; after a pick the sheet shrinks and the preview loops over the clip's time range. */
   const [animOpen, setAnimOpen] = useState(false);
   const [fxOpen, setFxOpen] = useState(false);
+  /** V2-TL-TRANS: incoming clip of the cut whose transition picker sheet is open (mobile). */
+  const [transFor, setTransFor] = useState<string>();
+  /** Stop time (ticks) of a junction preview started by the transition picker. */
+  const stopAt = useRef<number>();
   const [animLoop, setAnimLoop] = useState(false);
   const [snapOn, setSnapOn] = useState(true);
   const [htmlEdit, setHtmlEdit] = useState<{ placementId: string; assetId: string; source: string }>();
@@ -158,9 +163,10 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     engine.dispatch(cmd.duplicateAbove(sel[0], id, 20 / (st?.width || 1080), 20 / (st?.height || 1920))); setSel([id]);
   };
   const delSel = (rippleOverride?: boolean) => { if (sel.length) { engine.dispatch(cmd.deleteClips(sel, rippleOverride ?? ripple)); setSel([]); setMultiMode(false); } };
+  /** Junction button: open the transition picker for the cut before clip `id` (sheet on mobile, inspector tab on desktop). */
   const onTransition = (id: string) => {
-    const p = findPlacement(comp, id)?.placement;
-    if (p && !p.transitionIn) { engine.dispatch(cmd.setTransition(id, { kind: "crossfade", durationTicks: transitions.DEFAULT_TRANSITION_TICKS })); setToast("Crossfade added (Undo to remove)"); }
+    if (!cutOf(comp, id)) return;
+    if (mobile) { setTransFor(id); return; }
     setSel([id]); setSubId(undefined); preferTab.current = "transition"; setItab("transition");
   };
   const selectCue = (id?: string) => { setSubId(id); if (id) setSelectedId(undefined); };
@@ -224,15 +230,22 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
 
   if (!playerRef.current) playerRef.current = new Player(project, storage.blobs);
   const player = playerRef.current;
-  useEffect(() => { player.onTime = (t, p) => { setTime(t); setPlaying(p); setFrame((f) => f + 1); }; return () => player.dispose(); }, [player]);
+  useEffect(() => { player.onTime = (t, p) => { if (p && stopAt.current !== undefined && t >= stopAt.current) { stopAt.current = undefined; player.pause(); return; } setTime(t); setPlaying(p); setFrame((f) => f + 1); }; return () => player.dispose(); }, [player]);
   useEffect(() => { player.canvas = canvasRef.current ?? undefined; player.draw(); }, [player, mobile]);
   useEffect(() => { player.setProject(project); }, [player, project]);
   useEffect(() => { const live = sel.filter((id) => allIds.includes(id)); if (live.length !== sel.length) setSel(live); });
   useEffect(() => { if (subId && !cue) setSubId(undefined); }, [subId, cue]);
 
-  const seek = useCallback((t: number) => player.seek(t), [player]);
+  const seek = useCallback((t: number) => { stopAt.current = undefined; player.seek(t); }, [player]);
   const closeAnim = () => { setAnimOpen(false); setTextOpen(false); if (animLoop) { setAnimLoop(false); player.pause(); } };
-  const togglePlay = useCallback(() => (player.isPlaying ? player.pause() : player.play()), [player]);
+  const togglePlay = useCallback(() => { stopAt.current = undefined; return player.isPlaying ? player.pause() : player.play(); }, [player]);
+  /** V2-TL-TRANS: play the cut at `at` from about 1 s before the transition to 1 s after it, then pause. */
+  const previewCut = useCallback((at: number, d: number) => {
+    player.pause(); stopAt.current = undefined;
+    player.seek(Math.max(0, at - Math.floor(d / 2) - TICKS_PER_SECOND));
+    stopAt.current = at + Math.ceil(d / 2) + TICKS_PER_SECOND;
+    player.play();
+  }, [player]);
   const splitAtPlayhead = () => {
     const t = Math.round(player.time), ids = splitTargets(comp, sel, t);
     if (!ids.length) { setToast("No clip under the playhead to split — move the playhead inside a clip"); return; }
@@ -504,17 +517,10 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     </label>
   ) : null;
 
-  const trIn = sp?.transitionIn;
-  const transitionTools = sp && trIn ? (
-    <span className="v2-trans-tools" role="group" aria-label="Transition">
-      {transitions.transitionKinds().map((k) => (
-        <button key={k.id} className={`v2-tool ${trIn.kind === k.id ? "is-active" : ""}`} aria-pressed={trIn.kind === k.id} title={k.label} onClick={() => engine.dispatch(cmd.setTransition(sp.id, { kind: k.id, durationTicks: trIn.durationTicks }))}><b aria-hidden><Ic g={k.icon} /></b><span>{k.label}</span></button>
-      ))}
-      {transitions.TRANSITION_LENGTHS.map((d) => (
-        <button key={d} className={`v2-tool ${trIn.durationTicks === d ? "is-active" : ""}`} aria-pressed={trIn.durationTicks === d} title={`Transition length ${d / 120000}s`} onClick={() => engine.dispatch(cmd.setTransition(sp.id, { kind: trIn.kind, durationTicks: d }))}><span>{d / 120000}s</span></button>
-      ))}
-      <button className="v2-tool" title="Remove the transition into this clip" onClick={() => engine.dispatch(cmd.setTransition(sp.id, undefined))}><b aria-hidden><Ic g="✕" /></b><span>No transition</span></button>
-    </span>
+  /** The selected clip starts a cut, so it can have a transition in. */
+  const spCut = sp ? cutOf(comp, sp.id) : undefined;
+  const transitionTools = sp && spCut ? (
+    <TransitionPicker key={sp.id} engine={engine} comp={comp} placementId={sp.id} thumbs={thumbs} onPreview={previewCut} onToast={setToast} />
   ) : null;
 
 
@@ -562,8 +568,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     if (!ps.length) { setToast("Transitions go between two main-track clips — add another clip first"); return; }
     const t = player.time;
     const p = ps.reduce((a, b) => (Math.abs(b.startTicks - t) < Math.abs(a.startTicks - t) ? b : a));
-    if (p.transitionIn) { setSel([p.id]); setToast("This cut already has a transition — adjust it below"); } else onTransition(p.id);
     seek(p.startTicks);
+    onTransition(p.id);
   };
   const tool = (icon: string, label: string, onClick: () => void, key = label, title?: string) => (
     <button key={key} className="v2-tool" title={title} onClick={onClick}><b aria-hidden><Ic g={icon} /></b><span>{label}</span></button>
@@ -582,7 +588,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       tool("🗑", "Delete", () => del(), "delete", "Delete this effect clip"),
       ...clipActions.map((a) => tool(a.icon, a.label, a.run, a.label, a.title)),
     ] : [
-      ...(transitionTools ? [<span key="tr" className="v2-trans-wrap">{transitionTools}</span>] : []),
+      ...(spCut ? [tool("⧓", sp!.transitionIn ? (transitions.transitionKind(sp!.transitionIn.kind)?.label ?? "Transition") : "Transition", () => setTransFor(sp!.id), "transition-in", "Pick the transition into this clip")] : []),
       // Linked storyboard clips: up front so it is visible without scrolling the tool row.
       ...(selLink ? [tool("board", "Storyboard", () => openStory(selLink.target), "open-story", `Open ${selLink.label} in the storyboard: pick versions there`)] : []),
       tool("✂", "Split", split),
@@ -618,7 +624,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     ],
     effect: [
       tool("＋", "Add effect", () => setFxOpen(true), "add-effect", "Add an effect clip at the playhead (changes only the main track)"),
-      tool("⧓", "Transition", addTransitionNearPlayhead, "transition", "Add a crossfade at the cut nearest the playhead"),
+      tool("⧓", "Transition", addTransitionNearPlayhead, "transition", "Pick a transition for the cut nearest the playhead"),
     ],
     overlay: [tool("＋", "Add overlay", () => setPicker("overlay"), "add-overlay", "Add photos, videos or clips on a new layer above, at the playhead")],
   };
@@ -703,7 +709,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       {linkedAudioActions.length > 0 && <section aria-label="Clip audio"><h4>Clip audio</h4>{actionList(linkedAudioActions)}</section>}
       <section aria-label="Track"><h4>Track</h4>{actionList([{ icon: selected.track.muted ? "🔈" : "🔇", label: selected.track.muted ? "Unmute track" : "Mute track", title: "Silence the whole track", run: () => engine.dispatch(cmd.toggleTrackMute(selected.track.id)) }])}</section>
     </div> };
-    const transTab: InspectorTab | undefined = transitionTools ? { id: "transition", label: "Transition", icon: "⧓", render: () => <div className="v2-psettings"><section aria-label="Transition in"><h4>Transition in</h4>{transitionTools}</section></div> } : undefined;
+    const transTab: InspectorTab | undefined = transitionTools ? { id: "transition", label: "Transition", icon: "⧓", render: () => transitionTools } : undefined;
     if (kind === "text") return { ...base, actions: <>
       {selTrack?.layerStyle && <button className="v2-btn v2-btn-sm" title={`Style every clip on ${selTrack.name}`} onClick={() => editLayer(selTrack.id)}><Ic g="layers" size={14} /> Edit all</button>}
       <button className="v2-btn v2-btn-sm" title="Open this layer's subtitle list at this clip" onClick={() => openSubs(selected.track.id, pl.id)}><Ic g="≡" size={14} /> Subtitles</button>
@@ -886,6 +892,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           {subsTrack && <Sheet label="Edit subtitles" className="v2-msheet-tall" head={false} onClose={() => setSubsEdit(undefined)}><SubtitleList engine={engine} track={subsTrack} time={time} playing={playing} onSeek={seek} desktop={false} name={project.name} focusCue={subsCue} onDone={() => setSubsEdit(undefined)} /></Sheet>}
           {layerTrack && !selected && <Sheet label={`Edit all · ${layerTrack.name}`} className="v2-msheet-insp" onClose={() => setLayerEdit(undefined)}><TextPanel key={layerTrack.id} engine={engine} layer={layerTrack} initialTab="Style" /></Sheet>}
           {textOpen && selected && isText && <Sheet label="Text" className="v2-msheet-insp" snapTo={animLoop ? 0 : undefined} extra={scopeChip || undefined} onClose={closeAnim}><TextPanel engine={engine} placement={effSel} track={selTrack} onAnimPicked={() => setAnimLoop(true)} /></Sheet>}
+          {transFor && cutOf(comp, transFor) && <Sheet label="Transitions" head={false} dim={false} className="v2-trans-sheet" onClose={() => setTransFor(undefined)}><TransitionPicker key={transFor} engine={engine} comp={comp} placementId={transFor} thumbs={thumbs} onPreview={previewCut} onToast={setToast} onDone={() => setTransFor(undefined)} /></Sheet>}
           {fxOpen && <Sheet label="Effects" className="v2-msheet-insp" onClose={() => setFxOpen(false)}><EffectPicker engine={engine} at={time} placement={isEffect ? selected!.placement : undefined} onAdded={(id) => setSel([id])} onClose={() => setFxOpen(false)} /></Sheet>}
           {animOpen && !textOpen && selected && isText && <Sheet label="Animation" className="v2-msheet-insp v2-anim-sheet" snapTo={animLoop ? 0 : undefined} extra={scopeChip || undefined} onClose={closeAnim}><AnimationPicker engine={engine} placement={selected.placement} onPicked={() => setAnimLoop(true)} /></Sheet>}
         </>

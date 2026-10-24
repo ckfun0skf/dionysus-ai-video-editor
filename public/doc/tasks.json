@@ -2353,6 +2353,12 @@
           "progress": 100
         },
         {
+          "id": "V2-TL-TRANS",
+          "title": "CapCut-style transition picker: tapping a cut opens a bottom sheet (mobile, preview stays visible) or the inspector Transition tab (desktop) with search, Saved/Popular/category tabs, a None tile and 22 looping tile previews of the two real clips drawn by the same look renderer as preview and export (push, slide, whip, wipes, iris, zoom, spin, blur, glitch, shake, flash, dips); a tap applies it as one undo step and plays the cut from 1 s before to 1 s after; duration slider clamped to half the shorter clip, Apply to all, Save; junction shows a cut icon or the transition badge",
+          "status": "done",
+          "progress": 100
+        },
+        {
           "id": "V2-SB-122",
           "title": "Clarify durationSec vs genDurationSec in AI guide: durationSec is the planned on-screen edit length set by pacing (not the model's limits), genDurationSec the longer length to generate (omit when equal), worked example, example shot with genDurationSec, short-prompt line; RULE on transitions overlapping shots (centred, clamped to half the shorter shot) and single clean identity references",
           "status": "done",

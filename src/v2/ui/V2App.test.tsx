@@ -162,7 +162,7 @@ describe("V2App", () => {
     expect(clips()).toBe(2);
   });
 
-  it("crossfade: add at a cut, change length, remove, all undoable", async () => {
+  const twoClipStorage = async () => {
     const { createMemoryStorage } = await import("../persistence");
     const { createProject } = await import("../domain");
     const storage = createMemoryStorage();
@@ -171,21 +171,59 @@ describe("V2App", () => {
     const mk = (id: string, start: number) => ({ id, startTicks: start, durationTicks: 240000, sourceInTicks: 0, source: { kind: "assetVersion" as const, assetId: "a", versionId: "1" }, clipType: "video" as const });
     p.compositions[p.rootCompositionId].tracks[0].placements.push(mk("v1", 0), mk("v2", 240000));
     await storage.projects.save(p); storage.lastProjectId.set(p.id);
+    return storage;
+  };
+
+  it("transition picker (desktop): the junction opens it without adding anything; tiles apply, None removes, each pick is one undo step", async () => {
+    const storage = await twoClipStorage();
     const el = document.createElement("div"); document.body.appendChild(el);
     await act(async () => { createRoot(el).render(<V2App openStorage={async () => storage} />); });
     await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
     const marker = () => el.querySelector(".v2-trans") as HTMLButtonElement;
-    expect(marker().getAttribute("aria-label")).toBe("Add crossfade");
+    expect(marker().getAttribute("aria-label")).toBe("Add transition");
     await act(async () => { marker().click(); });
+    expect(marker().getAttribute("aria-label")).toBe("Add transition");
+    const tile = (id: string) => el.querySelector(`.v2-transpick [data-transition="${id}"]`) as HTMLButtonElement;
+    expect(tile("none").getAttribute("aria-checked")).toBe("true");
+    await act(async () => { tile("crossfade").click(); });
     expect(marker().getAttribute("aria-label")).toBe("Crossfade 0.5s");
-    const group = () => el.querySelector('[aria-label="Transition"]') as HTMLElement;
-    const btnIn = (root: Element, t: string) => Array.from(root.querySelectorAll("button")).find((b) => b.textContent?.includes(t)) as HTMLButtonElement;
-    await act(async () => { btnIn(group(), "1s").click(); });
-    expect(marker().getAttribute("aria-label")).toBe("Crossfade 1s");
-    await act(async () => { btnIn(group(), "No transition").click(); });
-    expect(marker().getAttribute("aria-label")).toBe("Add crossfade");
+    expect(marker().classList.contains("has-trans")).toBe(true);
+    expect(tile("crossfade").getAttribute("aria-checked")).toBe("true");
+    await act(async () => { tile("zoom-in").click(); });
+    expect(marker().getAttribute("aria-label")).toMatch(/^Zoom.* 0\.5s$/);
+    await act(async () => { tile("none").click(); });
+    expect(marker().getAttribute("aria-label")).toBe("Add transition");
     await act(async () => { (el.querySelector('[aria-label="Undo"]') as HTMLButtonElement).click(); });
-    expect(marker().getAttribute("aria-label")).toMatch(/^Crossfade/);
+    expect(marker().getAttribute("aria-label")).toMatch(/^Zoom/);
+    await act(async () => { (el.querySelector('[aria-label="Undo"]') as HTMLButtonElement).click(); });
+    expect(marker().getAttribute("aria-label")).toBe("Crossfade 0.5s");
+    // search filters across categories and hides the tabs
+    const search = el.querySelector('input[aria-label="Search transitions"]') as HTMLInputElement;
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+    await act(async () => { setter.call(search, "wipe"); search.dispatchEvent(new Event("input", { bubbles: true })); });
+    expect(el.querySelector('.v2-transpick [role="tablist"]')).toBeNull();
+    expect(tile("wipe-up")).toBeTruthy();
+    expect(tile("crossfade")).toBeNull();
+  });
+
+  it("transition picker (mobile): the junction opens a non-dimming bottom sheet; ✓ closes it", async () => {
+    const mm = window.matchMedia;
+    window.matchMedia = ((q: string) => ({ matches: true, media: q, addEventListener() {}, removeEventListener() {} })) as never;
+    try {
+      const storage = await twoClipStorage();
+      const el = document.createElement("div"); document.body.appendChild(el);
+      await act(async () => { createRoot(el).render(<V2App openStorage={async () => storage} />); });
+      await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+      await act(async () => { (el.querySelector(".v2-trans") as HTMLButtonElement).click(); });
+      const sheet = document.querySelector(".v2-trans-sheet") as HTMLElement;
+      expect(sheet).toBeTruthy();
+      expect(sheet.closest(".v2-sheet-backdrop")!.classList.contains("is-clear")).toBe(true);
+      await act(async () => { (document.querySelector('.v2-trans-sheet [data-transition="crossfade"]') as HTMLButtonElement).click(); });
+      expect((el.querySelector(".v2-trans") as HTMLElement).getAttribute("aria-label")).toBe("Crossfade 0.5s");
+      const done = Array.from(sheet.querySelectorAll("button")).find((b) => /done/i.test(b.getAttribute("aria-label") ?? b.textContent ?? "")) as HTMLButtonElement;
+      await act(async () => { done.click(); });
+      expect(document.querySelector(".v2-trans-sheet")).toBeNull();
+    } finally { window.matchMedia = mm; }
   });
 
   it("mobile: track controls sit inside the scroll content before t=0 (scroll with clips, never over them); no floating action button", async () => {

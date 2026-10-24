@@ -595,6 +595,557 @@
           "name": "Dip to black",
           "description": "Fades the outgoing clip to black, then up into the incoming clip.",
           "params": []
+        },
+        {
+          "id": "dip-white",
+          "version": 1,
+          "name": "Dip to white",
+          "description": "Fades the outgoing clip to white, then out of white into the incoming clip; dreamy or memory scenes.",
+          "params": [
+            {
+              "key": "color",
+              "label": "Colour",
+              "type": "color",
+              "default": "#ffffff"
+            }
+          ]
+        },
+        {
+          "id": "flash",
+          "version": 1,
+          "name": "Flash",
+          "description": "A quick bright flash hides the cut; punchy, for beats and reveals.",
+          "params": [
+            {
+              "key": "color",
+              "label": "Colour",
+              "type": "color",
+              "default": "#ffffff"
+            },
+            {
+              "key": "strength",
+              "label": "Strength",
+              "type": "number",
+              "min": 0,
+              "max": 1,
+              "step": 0.05,
+              "default": 0.9,
+              "description": "Opacity of the flash at its peak."
+            }
+          ]
+        },
+        {
+          "id": "push-left",
+          "version": 1,
+          "name": "Push left",
+          "description": "The incoming clip pushes the outgoing clip out to the left.",
+          "params": [
+            {
+              "key": "dirX",
+              "label": "Direction X",
+              "type": "number",
+              "min": -1,
+              "max": 1,
+              "step": 1,
+              "default": -1,
+              "description": "Horizontal direction the picture moves: -1 left, 1 right, 0 none."
+            },
+            {
+              "key": "dirY",
+              "label": "Direction Y",
+              "type": "number",
+              "min": -1,
+              "max": 1,
+              "step": 1,
+              "default": 0,
+              "description": "Vertical direction the picture moves: -1 up, 1 down, 0 none."
+            },
+            {
+              "key": "blur",
+              "label": "Motion blur",
+              "type": "number",
+              "min": 0,
+              "max": 0.1,
+              "step": 0.005,
+              "default": 0,
+              "description": "Blur at the middle of the move, as a fraction of the frame height."
+            }
+          ]
+        },
+        {
+          "id": "push-right",
+          "version": 1,
+          "name": "Push right",
+          "description": "The incoming clip pushes the outgoing clip out to the right.",
+          "params": [
+            {
+              "key": "dirX",
+              "label": "Direction X",
+              "type": "number",
+              "min": -1,
+              "max": 1,
+              "step": 1,
+              "default": 1,
+              "description": "Horizontal direction the picture moves: -1 left, 1 right, 0 none."
+            },
+            {
+              "key": "dirY",
+              "label": "Direction Y",
+              "type": "number",
+              "min": -1,
+              "max": 1,
+              "step": 1,
+              "default": 0,
+              "description": "Vertical direction the picture moves: -1 up, 1 down, 0 none."
+            },
+            {
+              "key": "blur",
+              "label": "Motion blur",
+              "type": "number",
+              "min": 0,
+              "max": 0.1,
+              "step": 0.005,
+              "default": 0,
+              "description": "Blur at the middle of the move, as a fraction of the frame height."
+            }
+          ]
+        },
+        {
+          "id": "push-up",
+          "version": 1,
+          "name": "Push up",
+          "description": "The incoming clip pushes the outgoing clip up and out of frame.",
+          "params": [
+            {
+              "key": "dirX",
+              "label": "Direction X",
+              "type": "number",
+              "min": -1,
+              "max": 1,
+              "step": 1,
+              "default": 0,
+              "description": "Horizontal direction the picture moves: -1 left, 1 right, 0 none."
+            },
+            {
+              "key": "dirY",
+              "label": "Direction Y",
+              "type": "number",
+              "min": -1,
+              "max": 1,
+              "step": 1,
+              "default": -1,
+              "description": "Vertical direction the picture moves: -1 up, 1 down, 0 none."
+            },
+            {
+              "key": "blur",
+              "label": "Motion blur",
+              "type": "number",
+              "min": 0,
+              "max": 0.1,
+              "step": 0.005,
+              "default": 0,
+              "description": "Blur at the middle of the move, as a fraction of the frame height."
+            }
+          ]
+        },
+        {
+          "id": "push-down",
+          "version": 1,
+          "name": "Push down",
+          "description": "The incoming clip pushes the outgoing clip down and out of frame.",
+          "params": [
+            {
+              "key": "dirX",
+              "label": "Direction X",
+              "type": "number",
+              "min": -1,
+              "max": 1,
+              "step": 1,
+              "default": 0,
+              "description": "Horizontal direction the picture moves: -1 left, 1 right, 0 none."
+            },
+            {
+              "key": "dirY",
+              "label": "Direction Y",
+              "type": "number",
+              "min": -1,
+              "max": 1,
+              "step": 1,
+              "default": 1,
+              "description": "Vertical direction the picture moves: -1 up, 1 down, 0 none."
+            },
+            {
+              "key": "blur",
+              "label": "Motion blur",
+              "type": "number",
+              "min": 0,
+              "max": 0.1,
+              "step": 0.005,
+              "default": 0,
+              "description": "Blur at the middle of the move, as a fraction of the frame height."
+            }
+          ]
+        },
+        {
+          "id": "whip-left",
+          "version": 1,
+          "name": "Whip pan",
+          "description": "A fast push to the left with motion blur, like a whip pan.",
+          "params": [
+            {
+              "key": "dirX",
+              "label": "Direction X",
+              "type": "number",
+              "min": -1,
+              "max": 1,
+              "step": 1,
+              "default": -1,
+              "description": "Horizontal direction the picture moves: -1 left, 1 right, 0 none."
+            },
+            {
+              "key": "dirY",
+              "label": "Direction Y",
+              "type": "number",
+              "min": -1,
+              "max": 1,
+              "step": 1,
+              "default": 0,
+              "description": "Vertical direction the picture moves: -1 up, 1 down, 0 none."
+            },
+            {
+              "key": "blur",
+              "label": "Motion blur",
+              "type": "number",
+              "min": 0,
+              "max": 0.1,
+              "step": 0.005,
+              "default": 0.04,
+              "description": "Blur at the middle of the move, as a fraction of the frame height."
+            }
+          ]
+        },
+        {
+          "id": "slide-over",
+          "version": 1,
+          "name": "Slide over",
+          "description": "The incoming clip slides in from the right over the outgoing clip, which darkens.",
+          "params": [
+            {
+              "key": "dirX",
+              "label": "Direction X",
+              "type": "number",
+              "min": -1,
+              "max": 1,
+              "step": 1,
+              "default": -1,
+              "description": "Horizontal direction the picture moves: -1 left, 1 right, 0 none."
+            },
+            {
+              "key": "dirY",
+              "label": "Direction Y",
+              "type": "number",
+              "min": -1,
+              "max": 1,
+              "step": 1,
+              "default": 0,
+              "description": "Vertical direction the picture moves: -1 up, 1 down, 0 none."
+            }
+          ]
+        },
+        {
+          "id": "wipe-right",
+          "version": 1,
+          "name": "Wipe right",
+          "description": "A hard edge sweeps left to right, revealing the incoming clip.",
+          "params": [
+            {
+              "key": "dirX",
+              "label": "Direction X",
+              "type": "number",
+              "min": -1,
+              "max": 1,
+              "step": 1,
+              "default": 1,
+              "description": "Horizontal direction the picture moves: -1 left, 1 right, 0 none."
+            },
+            {
+              "key": "dirY",
+              "label": "Direction Y",
+              "type": "number",
+              "min": -1,
+              "max": 1,
+              "step": 1,
+              "default": 0,
+              "description": "Vertical direction the picture moves: -1 up, 1 down, 0 none."
+            }
+          ]
+        },
+        {
+          "id": "wipe-left",
+          "version": 1,
+          "name": "Wipe left",
+          "description": "A hard edge sweeps right to left, revealing the incoming clip.",
+          "params": [
+            {
+              "key": "dirX",
+              "label": "Direction X",
+              "type": "number",
+              "min": -1,
+              "max": 1,
+              "step": 1,
+              "default": -1,
+              "description": "Horizontal direction the picture moves: -1 left, 1 right, 0 none."
+            },
+            {
+              "key": "dirY",
+              "label": "Direction Y",
+              "type": "number",
+              "min": -1,
+              "max": 1,
+              "step": 1,
+              "default": 0,
+              "description": "Vertical direction the picture moves: -1 up, 1 down, 0 none."
+            }
+          ]
+        },
+        {
+          "id": "wipe-down",
+          "version": 1,
+          "name": "Wipe down",
+          "description": "A hard edge sweeps top to bottom, revealing the incoming clip.",
+          "params": [
+            {
+              "key": "dirX",
+              "label": "Direction X",
+              "type": "number",
+              "min": -1,
+              "max": 1,
+              "step": 1,
+              "default": 0,
+              "description": "Horizontal direction the picture moves: -1 left, 1 right, 0 none."
+            },
+            {
+              "key": "dirY",
+              "label": "Direction Y",
+              "type": "number",
+              "min": -1,
+              "max": 1,
+              "step": 1,
+              "default": 1,
+              "description": "Vertical direction the picture moves: -1 up, 1 down, 0 none."
+            }
+          ]
+        },
+        {
+          "id": "wipe-up",
+          "version": 1,
+          "name": "Wipe up",
+          "description": "A hard edge sweeps bottom to top, revealing the incoming clip.",
+          "params": [
+            {
+              "key": "dirX",
+              "label": "Direction X",
+              "type": "number",
+              "min": -1,
+              "max": 1,
+              "step": 1,
+              "default": 0,
+              "description": "Horizontal direction the picture moves: -1 left, 1 right, 0 none."
+            },
+            {
+              "key": "dirY",
+              "label": "Direction Y",
+              "type": "number",
+              "min": -1,
+              "max": 1,
+              "step": 1,
+              "default": -1,
+              "description": "Vertical direction the picture moves: -1 up, 1 down, 0 none."
+            }
+          ]
+        },
+        {
+          "id": "iris",
+          "version": 1,
+          "name": "Circle open",
+          "description": "The incoming clip opens from a growing circle in the centre.",
+          "params": []
+        },
+        {
+          "id": "zoom-in",
+          "version": 1,
+          "name": "Zoom in",
+          "description": "Rushes forward: the outgoing clip zooms in and the incoming clip continues the push; energetic.",
+          "params": [
+            {
+              "key": "outScale",
+              "label": "Out zoom",
+              "type": "number",
+              "min": 0.2,
+              "max": 3,
+              "step": 0.05,
+              "default": 1.8,
+              "description": "Scale the outgoing clip reaches."
+            },
+            {
+              "key": "inScale",
+              "label": "In zoom",
+              "type": "number",
+              "min": 0.2,
+              "max": 3,
+              "step": 0.05,
+              "default": 0.6,
+              "description": "Scale the incoming clip starts from."
+            },
+            {
+              "key": "blur",
+              "label": "Blur",
+              "type": "number",
+              "min": 0,
+              "max": 0.1,
+              "step": 0.005,
+              "default": 0.02,
+              "description": "Peak blur as a fraction of the frame height."
+            }
+          ]
+        },
+        {
+          "id": "zoom-out",
+          "version": 1,
+          "name": "Zoom out",
+          "description": "Pulls back: the outgoing clip shrinks away and the incoming clip settles in from larger.",
+          "params": [
+            {
+              "key": "outScale",
+              "label": "Out zoom",
+              "type": "number",
+              "min": 0.2,
+              "max": 3,
+              "step": 0.05,
+              "default": 0.5,
+              "description": "Scale the outgoing clip reaches."
+            },
+            {
+              "key": "inScale",
+              "label": "In zoom",
+              "type": "number",
+              "min": 0.2,
+              "max": 3,
+              "step": 0.05,
+              "default": 1.6,
+              "description": "Scale the incoming clip starts from."
+            },
+            {
+              "key": "blur",
+              "label": "Blur",
+              "type": "number",
+              "min": 0,
+              "max": 0.1,
+              "step": 0.005,
+              "default": 0.02,
+              "description": "Peak blur as a fraction of the frame height."
+            }
+          ]
+        },
+        {
+          "id": "spin",
+          "version": 1,
+          "name": "Spin",
+          "description": "The outgoing clip spins away and the incoming clip spins into place; playful.",
+          "params": [
+            {
+              "key": "degrees",
+              "label": "Turn",
+              "type": "number",
+              "min": 30,
+              "max": 720,
+              "step": 15,
+              "default": 180,
+              "description": "Degrees each clip turns."
+            }
+          ]
+        },
+        {
+          "id": "blur-dissolve",
+          "version": 1,
+          "name": "Blur dissolve",
+          "description": "Both clips soften into a blur while they cross-dissolve; smooth and gentle.",
+          "params": [
+            {
+              "key": "blur",
+              "label": "Blur",
+              "type": "number",
+              "min": 0,
+              "max": 0.1,
+              "step": 0.005,
+              "default": 0.03,
+              "description": "Peak blur as a fraction of the frame height."
+            }
+          ]
+        },
+        {
+          "id": "defocus",
+          "version": 1,
+          "name": "Defocus",
+          "description": "The outgoing clip goes out of focus, then the incoming clip pulls into focus.",
+          "params": [
+            {
+              "key": "blur",
+              "label": "Blur",
+              "type": "number",
+              "min": 0,
+              "max": 0.1,
+              "step": 0.005,
+              "default": 0.05,
+              "description": "Peak blur as a fraction of the frame height."
+            },
+            {
+              "key": "cut",
+              "label": "Hard cut",
+              "type": "number",
+              "min": 0,
+              "max": 1,
+              "step": 1,
+              "default": 1,
+              "description": "1 swaps the clips at full blur instead of dissolving."
+            }
+          ]
+        },
+        {
+          "id": "glitch",
+          "version": 1,
+          "name": "Glitch",
+          "description": "Digital glitch: picture bands jump sideways around a hard cut; tech, horror, hype.",
+          "params": [
+            {
+              "key": "amount",
+              "label": "Amount",
+              "type": "number",
+              "min": 0,
+              "max": 0.3,
+              "step": 0.01,
+              "default": 0.08,
+              "description": "Largest band shift as a fraction of the frame width."
+            }
+          ]
+        },
+        {
+          "id": "shake",
+          "version": 1,
+          "name": "Shake",
+          "description": "A camera jolt around a hard cut; impacts and beat drops.",
+          "params": [
+            {
+              "key": "amount",
+              "label": "Amount",
+              "type": "number",
+              "min": 0,
+              "max": 0.15,
+              "step": 0.005,
+              "default": 0.04,
+              "description": "Largest jolt as a fraction of the frame."
+            }
+          ]
         }
       ]
     }

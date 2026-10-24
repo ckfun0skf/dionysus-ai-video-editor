@@ -598,3 +598,26 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 .v2-app.is-mobile .v2-preview { will-change: height; transition: none; }
 /* V2-113: with a selection, the whole preview catches drags (move), pinches and taps. */
 .v2-xform-catch { position: absolute; inset: 0; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+
+/* V2-TL-TRANS — CapCut-style transition picker (bottom sheet on mobile, inspector tab on desktop) */
+.v2-sheet-backdrop.is-clear { background: transparent; pointer-events: none; animation: none; }
+.v2-sheet-backdrop.is-clear > .v2-sheet { pointer-events: auto; box-shadow: 0 -8px 24px rgba(0,0,0,.45); }
+.v2-transpick { display: flex; flex-direction: column; gap: 4px; padding: 0 10px 10px; min-width: 0; }
+.v2-trans-head { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+.v2-trans-search { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; min-height: 46px; box-sizing: border-box; padding: 0 10px; border-radius: 23px; background: #1b1b20; border: 1px solid #333; color: var(--muted); }
+.v2-trans-search:focus-within { border-color: var(--accent, #20d5ec); }
+.v2-trans-search input { flex: 1; min-width: 0; min-height: 44px; padding: 0; background: none; border: 0; outline: none; color: var(--text); font: inherit; font-size: 16px; } /* 16px: no iOS focus zoom */
+.v2-app .v2-transpick .v2-tp-tab { min-width: 44px; }
+.v2-ttiles { grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); }
+.v2-ttile canvas { aspect-ratio: 1 / 1; }
+.v2-ttile span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.v2-trans-controls { position: sticky; bottom: 0; display: flex; flex-direction: column; gap: 2px; padding-top: 4px; background: var(--panel); border-top: 1px solid var(--line); }
+.v2-trans-controls output { margin-left: 0; min-width: 3.5em; }
+.v2-trans-controls input[type=range] { min-height: 44px; margin: 0; }
+.v2-trans-actions { display: flex; gap: 8px; }
+.v2-app .v2-transpick .v2-trans-actions .v2-btn { flex: 1; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; color: var(--text); }
+.v2-trans-actions .v2-btn.is-active { border-color: var(--accent, #20d5ec); color: var(--accent, #20d5ec); }
+.v2-trans-actions .v2-btn:disabled { opacity: .45; }
+.v2-trans:not(.has-trans) { opacity: .9; border-radius: 5px; width: 18px; margin-left: -9px; background: #f4f4f5; color: #111; border-color: #f4f4f5; }
+.v2-trans:not(.has-trans)::before { inset: -11px -13px; }
+.v2-empty-hint { color: var(--muted); font-size: 13px; text-align: center; margin: 8px 0; }

@@ -59,11 +59,25 @@ export interface PresetFrame {
   filter?: string;
   /** Transitions: opacity of the outgoing / incoming clip. */
   mixOut?: number; mixIn?: number;
+  /** Transitions (V2-TL-TRANS): extra per-layer look of the outgoing / incoming clip (motion, blur, wipe, tint). */
+  tOut?: TransLayer; tIn?: TransLayer;
   fx?: FxStyle;
   /** Video effects: blur radius as a fraction of frame height, grayscale 0..1, vignette strength 0..1. */
   blur?: number; gray?: number; vignette?: number;
   /** Stickers: SVG markup to draw. */
   svg?: string;
+}
+/**
+ * How one side of a transition is drawn on top of its normal placement, in frame space. Offsets are fractions of the
+ * frame width / height, `scale` and `rot` (degrees) act about the frame centre, `blur` is a fraction of the frame height,
+ * `clip` keeps only the inset rectangle [left, top, right, bottom] (fractions), `iris` keeps a centred circle whose
+ * radius is a fraction of the frame's half-diagonal, `glitch` shifts horizontal bands by up to that fraction of the
+ * width (`seed` picks the pattern), and `tint` paints a colour over the frame at `tintAlpha`.
+ */
+export interface TransLayer {
+  dx?: number; dy?: number; scale?: number; rot?: number; blur?: number;
+  clip?: [number, number, number, number]; iris?: number; glitch?: number; seed?: number;
+  tint?: string; tintAlpha?: number;
 }
 export const identityFrame = (): PresetFrame => ({ alpha: 1, dx: 0, dy: 0, scale: 1, rot: 0, chars: 1 });
 

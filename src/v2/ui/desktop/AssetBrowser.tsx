@@ -135,7 +135,7 @@ export function AssetBrowser({ project, thumbs, busy, tab, onTab, ...a }: Browse
             ))}
           </ul>
           <div className="v2-abhead"><strong>Transitions</strong></div>
-          <button className="v2-btn v2-wide" title="Add a crossfade at the main-track cut nearest the playhead" onClick={a.onAddTransition}><Ic g="⧓" size={16} /> Crossfade at nearest cut</button>
+          <button className="v2-btn v2-wide" title="Pick a transition for the main-track cut nearest the playhead" onClick={a.onAddTransition}><Ic g="⧓" size={16} /> Transition at nearest cut</button>
         </>}
         {tab === "templates" && <>
           <div className="v2-abhead"><strong>Code clips</strong></div>

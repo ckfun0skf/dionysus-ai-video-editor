@@ -114,6 +114,26 @@ Video effects — shots[].effects[].preset:
 Transitions — connections[].transition.preset (params.durationSec, default 0.5):
 - crossfade: The outgoing clip dissolves into the incoming clip.
 - dip: Fades the outgoing clip to black, then up into the incoming clip.
+- dip-white: Fades the outgoing clip to white, then out of white into the incoming clip; dreamy or memory scenes. Params: color (color), default "#ffffff".
+- flash: A quick bright flash hides the cut; punchy, for beats and reveals. Params: color (color), default "#ffffff"; strength 0–1, default 0.9 (Opacity of the flash at its peak).
+- push-left: The incoming clip pushes the outgoing clip out to the left. Params: dirX -1–1, default -1 (Horizontal direction the picture moves: -1 left, 1 right, 0 none); dirY -1–1, default 0 (Vertical direction the picture moves: -1 up, 1 down, 0 none); blur 0–0.1, default 0 (Blur at the middle of the move, as a fraction of the frame height).
+- push-right: The incoming clip pushes the outgoing clip out to the right. Params: dirX -1–1, default 1 (Horizontal direction the picture moves: -1 left, 1 right, 0 none); dirY -1–1, default 0 (Vertical direction the picture moves: -1 up, 1 down, 0 none); blur 0–0.1, default 0 (Blur at the middle of the move, as a fraction of the frame height).
+- push-up: The incoming clip pushes the outgoing clip up and out of frame. Params: dirX -1–1, default 0 (Horizontal direction the picture moves: -1 left, 1 right, 0 none); dirY -1–1, default -1 (Vertical direction the picture moves: -1 up, 1 down, 0 none); blur 0–0.1, default 0 (Blur at the middle of the move, as a fraction of the frame height).
+- push-down: The incoming clip pushes the outgoing clip down and out of frame. Params: dirX -1–1, default 0 (Horizontal direction the picture moves: -1 left, 1 right, 0 none); dirY -1–1, default 1 (Vertical direction the picture moves: -1 up, 1 down, 0 none); blur 0–0.1, default 0 (Blur at the middle of the move, as a fraction of the frame height).
+- whip-left: A fast push to the left with motion blur, like a whip pan. Params: dirX -1–1, default -1 (Horizontal direction the picture moves: -1 left, 1 right, 0 none); dirY -1–1, default 0 (Vertical direction the picture moves: -1 up, 1 down, 0 none); blur 0–0.1, default 0.04 (Blur at the middle of the move, as a fraction of the frame height).
+- slide-over: The incoming clip slides in from the right over the outgoing clip, which darkens. Params: dirX -1–1, default -1 (Horizontal direction the picture moves: -1 left, 1 right, 0 none); dirY -1–1, default 0 (Vertical direction the picture moves: -1 up, 1 down, 0 none).
+- wipe-right: A hard edge sweeps left to right, revealing the incoming clip. Params: dirX -1–1, default 1 (Horizontal direction the picture moves: -1 left, 1 right, 0 none); dirY -1–1, default 0 (Vertical direction the picture moves: -1 up, 1 down, 0 none).
+- wipe-left: A hard edge sweeps right to left, revealing the incoming clip. Params: dirX -1–1, default -1 (Horizontal direction the picture moves: -1 left, 1 right, 0 none); dirY -1–1, default 0 (Vertical direction the picture moves: -1 up, 1 down, 0 none).
+- wipe-down: A hard edge sweeps top to bottom, revealing the incoming clip. Params: dirX -1–1, default 0 (Horizontal direction the picture moves: -1 left, 1 right, 0 none); dirY -1–1, default 1 (Vertical direction the picture moves: -1 up, 1 down, 0 none).
+- wipe-up: A hard edge sweeps bottom to top, revealing the incoming clip. Params: dirX -1–1, default 0 (Horizontal direction the picture moves: -1 left, 1 right, 0 none); dirY -1–1, default -1 (Vertical direction the picture moves: -1 up, 1 down, 0 none).
+- iris: The incoming clip opens from a growing circle in the centre.
+- zoom-in: Rushes forward: the outgoing clip zooms in and the incoming clip continues the push; energetic. Params: outScale 0.2–3, default 1.8 (Scale the outgoing clip reaches); inScale 0.2–3, default 0.6 (Scale the incoming clip starts from); blur 0–0.1, default 0.02 (Peak blur as a fraction of the frame height).
+- zoom-out: Pulls back: the outgoing clip shrinks away and the incoming clip settles in from larger. Params: outScale 0.2–3, default 0.5 (Scale the outgoing clip reaches); inScale 0.2–3, default 1.6 (Scale the incoming clip starts from); blur 0–0.1, default 0.02 (Peak blur as a fraction of the frame height).
+- spin: The outgoing clip spins away and the incoming clip spins into place; playful. Params: degrees 30–720, default 180 (Degrees each clip turns).
+- blur-dissolve: Both clips soften into a blur while they cross-dissolve; smooth and gentle. Params: blur 0–0.1, default 0.03 (Peak blur as a fraction of the frame height).
+- defocus: The outgoing clip goes out of focus, then the incoming clip pulls into focus. Params: blur 0–0.1, default 0.05 (Peak blur as a fraction of the frame height); cut 0–1, default 1 (1 swaps the clips at full blur instead of dissolving).
+- glitch: Digital glitch: picture bands jump sideways around a hard cut; tech, horror, hype. Params: amount 0–0.3, default 0.08 (Largest band shift as a fraction of the frame width).
+- shake: A camera jolt around a hard cut; impacts and beat drops. Params: amount 0–0.15, default 0.04 (Largest jolt as a fraction of the frame).
 
 Fonts — TextStyle "font":
 - sans: Clean system sans-serif; the default.
