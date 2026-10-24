@@ -89,7 +89,7 @@ export function versionsOf(p: Project, owner: { assetId?: string }): AssetVersio
   return (owner.assetId && p.assets[owner.assetId]?.versions) || [];
 }
 
-const kindForSlot = (t: StoryAssetType): MediaKind => (t === "video" ? "video" : t === "audio" ? "audio" : "image");
+export const kindForSlot = (t: StoryAssetType): MediaKind => (t === "video" ? "video" : t === "audio" ? "audio" : "image");
 
 type Target = { slot: string } | { shot: string };
 

@@ -3,18 +3,18 @@ import { Ic } from "../Icon";
 
 export type BoardTarget = { slot: string } | { shot: string };
 
-const TYPE_ICON: Record<string, string> = { video: "▭", audio: "♫", frame: "link" };
+export const TYPE_ICON: Record<string, string> = { video: "▭", audio: "♫", frame: "link" };
 const CONN_LABEL: Record<string, string> = { continuity: "Continuity", match: "Match cut", cut: "Cut" };
 
 /** "2 of 3" for the selected version, or what is still missing. */
-function versionLabel(p: Project, o: AssetSlot | Shot, empty: string): string {
+export function versionLabel(p: Project, o: AssetSlot | Shot, empty: string): string {
   const vs = board.versionsOf(p, o);
   if (!vs.length) return o.skipped ? "Skipped" : empty;
   const i = vs.findIndex((v) => v.id === board.selectedOf(p, o));
   return vs.length === 1 ? "1 version" : `v${i + 1} of ${vs.length}`;
 }
 
-function Thumb({ src, icon, count }: { src?: string; icon: string; count: number }) {
+export function Thumb({ src, icon, count }: { src?: string; icon: string; count: number }) {
   return (
     <span className={`v2-sb-thumb ${src ? "" : "empty"}`} style={src ? { backgroundImage: `url(${src})` } : undefined}>
       {!src && <Ic g={icon} size={18} />}
@@ -23,13 +23,13 @@ function Thumb({ src, icon, count }: { src?: string; icon: string; count: number
   );
 }
 
-function Warn({ st }: { st?: Staleness }) {
+export function Warn({ st }: { st?: Staleness }) {
   if (!st?.stale) return null;
   return <span className="v2-sb-stale" title={`May not match: ${st.reasons.join("; ")}`}><Ic g="⚠" size={13} /> May not match</span>;
 }
 
 /** Storyboard overview: shots in order with their connections, the assets each needs, version counts and warnings. */
-export function BoardView({ project, thumbs, onOpen }: { project: Project; thumbs: Record<string, string>; onOpen: (t: BoardTarget) => void }) {
+export function BoardView({ project, thumbs, onOpen, openKey }: { project: Project; thumbs: Record<string, string>; onOpen: (t: BoardTarget) => void; openKey?: string }) {
   const b = project.storyboard!;
   const status = board.storyStatus(project);
   const shots = b.order.map((id) => b.shots[id]).filter(Boolean);
@@ -47,7 +47,7 @@ export function BoardView({ project, thumbs, onOpen }: { project: Project; thumb
     const sub = s.source.type === "lastFrame" && !n ? (shotNo(s.source.shotId) ? `Taken from shot ${shotNo(s.source.shotId)}’s clip` : "Taken from a shot’s clip") : versionLabel(project, s, s.source.type === "upload" ? "Upload needed" : "Needs generating");
     return (
       <li key={s.id}>
-        <button className={`v2-sb-slot ${status.slots[s.id]?.stale ? "stale" : ""} ${n ? "" : "todo"}`} onClick={() => onOpen({ slot: s.id })} aria-label={`${s.name}: ${sub}${status.slots[s.id]?.stale ? ", may not match" : ""}`} title={s.prompt || s.name}>
+        <button className={`v2-sb-slot ${status.slots[s.id]?.stale ? "stale" : ""} ${n ? "" : "todo"} ${openKey === s.id ? "open" : ""}`} aria-current={openKey === s.id || undefined} onClick={() => onOpen({ slot: s.id })} aria-label={`${s.name}: ${sub}${status.slots[s.id]?.stale ? ", may not match" : ""}`} title={s.prompt || s.name}>
           <Thumb src={sel && thumbs[sel]} icon={TYPE_ICON[s.type] ?? "image"} count={n} />
           <span className="v2-sb-slot-text"><b>{s.name}</b><em>{status.slots[s.id]?.stale ? <Warn st={status.slots[s.id]} /> : sub}</em></span>
         </button>
@@ -76,7 +76,7 @@ export function BoardView({ project, thumbs, onOpen }: { project: Project; thumb
           return (
             <li key={s.id} className="v2-sb-shotwrap">
               <article className={`v2-sb-shot ${status.shots[s.id]?.stale ? "stale" : ""}`} aria-label={`Shot ${i + 1}: ${s.title}`}>
-                <button className="v2-sb-shot-main" onClick={() => onOpen({ shot: s.id })} title="Open shot: clip prompt, versions and QA">
+                <button className={`v2-sb-shot-main ${openKey === s.id ? "open" : ""}`} aria-current={openKey === s.id || undefined} onClick={() => onOpen({ shot: s.id })} title="Open shot: clip prompt, versions and QA">
                   <Thumb src={sel && thumbs[sel]} icon="▭" count={n} />
                   <span className="v2-sb-shot-text">
                     <b><span className="v2-sb-no">{i + 1}</span>{s.title}</b>
