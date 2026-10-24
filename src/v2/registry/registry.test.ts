@@ -53,7 +53,7 @@ describe("preset registry", () => {
   });
   it("textStyle presets carry JSON text data with font ids", () => {
     const ids = listPresets("textStyle").map((d) => d.id);
-    expect(ids).toEqual(["plain", "caption", "outline", "neon", "pop", "typewriter", "glow", "echo"]);
+    expect(ids).toEqual(["plain", "caption", "outline", "neon", "pop", "typewriter", "glow", "echo", "soft-shadow", "cinematic"]);
     for (const d of listPresets("textStyle")) {
       expect(d.type).toBe("none");
       expect(d.data, d.id).toBeTypeOf("object");

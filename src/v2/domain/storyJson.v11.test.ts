@@ -36,7 +36,7 @@ describe("storyboard v1.1: the ep01 fixture", () => {
     expect(r.warnings).toEqual([]);
     const { doc } = r;
     expect(story.storySummary(doc)).toBe("12 shots · 72s · 11 assets · 85 QA checks · 2 layers · 1 effect · 2 transitions · 3 audio cues");
-    expect(doc.meta.textStyles).toEqual({ "ata-title": { font: "serif", size: 0.09, color: "#ffffff", align: "center", bold: false } });
+    expect(doc.meta.textStyles).toEqual({ "ata-title": { font: "serif", size: 0.09, color: "#ffffff", align: "center", bold: false, letterSpacing: 0.25, shadow: { color: "#000000", blur: 0.3, x: 0, y: 0.03 } } });
     const s03 = doc.shots.find((s) => s.id === "s03")!;
     expect(s03).toMatchObject({ render: "still", clip: "card-still", effects: [{ preset: "ken-burns", params: {} }] });
     expect(s03.layers).toEqual([{ id: "s03-card-text", type: "text", text: "You may also enjoy: kintsugi.", startSec: 0.5, endSec: 6, box: { x: 0.37, y: 0.42, width: 0.3, height: 0.12 }, textStyle: "plain", style: { font: "serif", size: 0.035, color: "#3a3a3a", align: "center" }, anim: { in: "fade", durationSec: 0.6 }, follow: "shot" }]);

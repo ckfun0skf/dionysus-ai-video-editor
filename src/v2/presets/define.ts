@@ -59,7 +59,7 @@ export interface FontModule extends FontDef { kind: "font"; order?: number }
 /** Fields a textStyle may set; the importer and text panel read these. `font` is a font id, `size` a fraction of frame height. */
 export interface TextStyleData {
   font?: string; bold?: boolean; italic?: boolean; color?: string; size?: number;
-  strokeWidth?: number; strokeColor?: string;
+  strokeWidth?: number; strokeColor?: string; letterSpacing?: number; lineHeight?: number; align?: "left" | "center" | "right";
   shadow?: { color: string; blur: number; x: number; y: number } | null;
   background?: { color: string; opacity: number } | null;
   effect?: string; effectColor?: string; animIn?: string; animOut?: string; loop?: string;

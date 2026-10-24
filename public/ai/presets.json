@@ -8,7 +8,8 @@
       "categories": [
         "Basic",
         "Bold",
-        "Light"
+        "Light",
+        "Film"
       ],
       "presets": [
         {
@@ -143,6 +144,126 @@
             "effectColor": "#ff4d6d",
             "animIn": "slide-up"
           }
+        },
+        {
+          "id": "soft-shadow",
+          "version": 1,
+          "name": "Soft shadow",
+          "category": "Basic",
+          "description": "Bold white sans-serif with a soft drop shadow; stays readable on bright pictures without a box.",
+          "params": [],
+          "data": {
+            "font": "sans",
+            "bold": true,
+            "color": "#ffffff",
+            "shadow": {
+              "color": "#000000",
+              "blur": 0.25,
+              "x": 0.02,
+              "y": 0.04
+            },
+            "background": null,
+            "strokeWidth": 0,
+            "effect": "none"
+          }
+        },
+        {
+          "id": "cinematic",
+          "version": 1,
+          "name": "Cinematic",
+          "category": "Film",
+          "description": "Warm off-white serif, widely letter-spaced, with a soft shadow; film titles and chapter cards.",
+          "params": [],
+          "data": {
+            "font": "serif",
+            "bold": false,
+            "color": "#f5f1e8",
+            "letterSpacing": 0.3,
+            "shadow": {
+              "color": "#000000",
+              "blur": 0.3,
+              "x": 0,
+              "y": 0.02
+            },
+            "background": null,
+            "strokeWidth": 0,
+            "effect": "none",
+            "size": 0.07
+          }
+        }
+      ]
+    },
+    "effect": {
+      "usedIn": "shots[].layers[].style.effect and meta.textStyles[].effect, coloured by \"effectColor\" (default \"none\")",
+      "categories": [
+        "Light",
+        "Style"
+      ],
+      "presets": [
+        {
+          "id": "glow",
+          "version": 1,
+          "name": "Glow",
+          "category": "Light",
+          "description": "Soft coloured glow around the letters.",
+          "params": [
+            {
+              "key": "blur",
+              "label": "Blur",
+              "description": "Glow radius as a fraction of the font size.",
+              "type": "number",
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "default": 0.35
+            }
+          ]
+        },
+        {
+          "id": "neon",
+          "version": 1,
+          "name": "Neon",
+          "category": "Light",
+          "description": "Bright neon tube look with a strong coloured glow.",
+          "params": [
+            {
+              "key": "blur",
+              "label": "Blur",
+              "description": "Glow radius as a fraction of the font size.",
+              "type": "number",
+              "min": 0,
+              "max": 1,
+              "step": 0.01,
+              "default": 0.6
+            }
+          ]
+        },
+        {
+          "id": "hollow",
+          "version": 1,
+          "name": "Hollow",
+          "category": "Style",
+          "description": "Outline-only letters with a transparent fill.",
+          "params": []
+        },
+        {
+          "id": "echo",
+          "version": 1,
+          "name": "Echo",
+          "category": "Style",
+          "description": "Repeated offset copies behind the text.",
+          "params": [
+            {
+              "key": "offset",
+              "label": "Offset",
+              "description": "Offset between the copies, as a fraction of the font size.",
+              "type": "number",
+              "min": 0,
+              "max": 0.3,
+              "step": 0.01,
+              "default": 0.06
+            }
+          ]
         }
       ]
     },
