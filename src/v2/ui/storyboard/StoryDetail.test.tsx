@@ -42,6 +42,19 @@ const pick = async (input: HTMLInputElement, f: File) => {
 };
 
 describe("storyboard detail", () => {
+  it("says when picking a version changes the length of the linked timeline clip (V2-SB-R01)", async () => {
+    const { el, engine } = await mount();
+    await act(async () => {
+      engine.dispatch(cmd.addStoryVersion({ shot: "s1" }, { ...vid, durationTicks: 600_000 }, { versionId: "a1" }));
+      engine.dispatch(cmd.addStoryVersion({ shot: "s1" }, { ...vid, durationTicks: 360_000 }, { versionId: "a2" }));
+      engine.dispatch(cmd.sendStoryToTimeline());
+    });
+    await act(async () => (el.querySelector(".v2-sb-shot-main") as HTMLButtonElement).click());
+    const vs = [...el.querySelectorAll(".v2-sb-version")] as HTMLButtonElement[];
+    await act(async () => vs[0].click());
+    expect(el.querySelector(".v2-sb-swapnote")!.textContent).toContain("Shot 1 on timeline updated to v1 (5 s, was 3 s)");
+  });
+
   it("opens a shot with its prompt, uploads clip versions and picks one", async () => {
     const { el, p } = await mount();
     await act(async () => (el.querySelector(".v2-sb-shot-main") as HTMLButtonElement).click());

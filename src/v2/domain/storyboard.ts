@@ -5,7 +5,8 @@
  * prompts, QA checks, and per-version facts frozen at upload time (inputs used, QA results, the
  * clip version a last frame came from). Staleness ("may not match") is derived, never stored.
  */
-import { newId, type AssetVersion, type MediaKind, type MediaRef, type Project } from "./model";
+import { isStill, newId, type AssetVersion, type MediaKind, type MediaRef, type Project } from "./model";
+import { mainTrack } from "./ops";
 import type { StoryAssetType, StoryConnection, StoryDoc, StoryMeta } from "./storyJson";
 
 export interface QaCheck { id: string; text: string }
@@ -139,8 +140,13 @@ export function selectStoryVersion(p: Project, assetId: string, versionId: strin
 }
 
 /**
- * Linked placements (V2-CUT-04): every timeline clip of a storyboard asset follows the version
- * picked on the board. Trims are kept, clamped when the new media is shorter.
+ * Linked placements (V2-CUT-04, V2-SB-R01): every timeline clip of a storyboard asset follows the
+ * version picked on the board.
+ * - An untrimmed clip (starts at source 0 and spans the whole previous version) takes the new
+ *   version's full length, so switching back to a longer take restores it.
+ * - A trimmed clip keeps its trims, clamped to the new media.
+ * - On the main track, later clips ripple by the length change (no gap, no overlap). On other
+ *   tracks a longer clip only grows up to the next clip.
  */
 export function syncPlacements(p: Project, assetId: string): Project {
   const a = p.assets[assetId];
@@ -148,18 +154,49 @@ export function syncPlacements(p: Project, assetId: string): Project {
   if (!v) return p;
   const max = v.media.durationTicks;
   let changed = false;
-  const compositions = Object.fromEntries(Object.entries(p.compositions).map(([id, c]) => [id, { ...c, tracks: c.tracks.map((t) => ({ ...t, placements: t.placements.map((pl) => {
-    if (pl.source.assetId !== assetId || pl.source.versionId === v.id) return pl;
-    changed = true;
-    const next = { ...pl, source: { ...pl.source, versionId: v.id } };
-    if (max && pl.clipType !== "image") {
-      if (next.sourceInTicks >= max) next.sourceInTicks = 0;
-      const room = Math.floor((max - next.sourceInTicks) / (pl.speed ?? 1));
-      if (next.durationTicks > room) next.durationTicks = Math.max(1, room);
-    }
-    return next;
-  }) })) }]));
+  const compositions = { ...p.compositions };
+  for (const [cid, c] of Object.entries(p.compositions)) {
+    const mainId = mainTrack(c)?.id;
+    let compChanged = false;
+    const tracks = c.tracks.map((t) => {
+      if (!t.placements.some((pl) => pl.source.assetId === assetId && pl.source.versionId !== v.id)) return t;
+      compChanged = true;
+      let pls = [...t.placements].sort((x, y) => x.startTicks - y.startTicks);
+      for (let i = 0; i < pls.length; i += 1) {
+        const pl = pls[i];
+        if (pl.source.assetId !== assetId || pl.source.versionId === v.id) continue;
+        const next = { ...pl, source: { ...pl.source, versionId: v.id } };
+        if (max && !isStill(pl)) {
+          const speed = pl.speed ?? 1;
+          const prevFull = a.versions.find((x) => x.id === pl.source.versionId)?.media.durationTicks;
+          const untrimmed = !pl.freeze && pl.sourceInTicks === 0 && !!prevFull && Math.abs(pl.durationTicks - Math.floor(prevFull / speed)) <= 1;
+          if (next.sourceInTicks >= max) next.sourceInTicks = 0;
+          const room = Math.max(1, Math.floor((max - next.sourceInTicks) / speed));
+          if (untrimmed) next.durationTicks = room;
+          else if (!pl.freeze && next.durationTicks > room) next.durationTicks = room;
+          if (t.id !== mainId && next.durationTicks > pl.durationTicks) {
+            const after = pls.find((o, j) => j > i && o.startTicks >= pl.startTicks + pl.durationTicks);
+            if (after) next.durationTicks = Math.max(pl.durationTicks, Math.min(next.durationTicks, after.startTicks - pl.startTicks));
+          }
+          if (next.fadeInTicks && next.fadeInTicks > next.durationTicks) next.fadeInTicks = next.durationTicks;
+          if (next.fadeOutTicks && next.fadeOutTicks > next.durationTicks) next.fadeOutTicks = next.durationTicks;
+        }
+        const delta = next.durationTicks - pl.durationTicks;
+        const oldEnd = pl.startTicks + pl.durationTicks;
+        pls = pls.map((o, j) => (j === i ? next : t.id === mainId && delta && j > i && o.startTicks >= oldEnd ? { ...o, startTicks: Math.max(0, o.startTicks + delta) } : o));
+      }
+      return { ...t, placements: pls };
+    });
+    if (compChanged) { changed = true; compositions[cid] = { ...c, tracks }; }
+  }
   return changed ? { ...p, compositions } : p;
+}
+
+/** Linked timeline clips of `assetId` whose length differs between two project states (for the swap note). */
+export function linkedLengthChanges(before: Project, after: Project, assetId: string): { placementId: string; fromTicks: number; toTicks: number }[] {
+  const lengths = (p: Project) => new Map(Object.values(p.compositions).flatMap((c) => c.tracks.flatMap((t) => t.placements.filter((pl) => pl.source.assetId === assetId).map((pl) => [pl.id, pl.durationTicks] as const))));
+  const was = lengths(before);
+  return [...lengths(after)].flatMap(([placementId, toTicks]) => { const fromTicks = was.get(placementId); return fromTicks !== undefined && fromTicks !== toTicks ? [{ placementId, fromTicks, toTicks }] : []; });
 }
 
 /** Shots in story order with whether "Send to timeline" would add them. */

@@ -1,6 +1,6 @@
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { board, type AssetSlot, type MediaKind, type Project, type Shot } from "../../domain";
-import { cmd, type Engine } from "../../engine";
+import { cmd, type Command, type Engine } from "../../engine";
 import { importFile } from "../../persistence";
 import type { BlobStore } from "../../ports";
 import { Ic } from "../Icon";
@@ -26,6 +26,8 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
   const [busy, setBusy] = useState<string>();
   const [err, setErr] = useState<string>();
   const [model, setModel] = useState("");
+  const [swapNote, setSwapNote] = useState<string>();
+  useEffect(() => { if (!swapNote) return; const t = setTimeout(() => setSwapNote(undefined), 6000); return () => clearTimeout(t); }, [swapNote]);
   if (!owner) return null;
   const shotNo = (id: string) => b.order.indexOf(id) + 1;
   const slot = isSlot ? (owner as AssetSlot) : undefined;
@@ -41,6 +43,20 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
   const lfShot = lf ? b.shots[lf] : undefined;
   const lfVersion = lfShot ? board.selectedOf(project, lfShot) : undefined;
 
+  /** Change the version in use; when linked timeline clips change length, say so (V2-SB-R01). */
+  const swap = (c: Command) => {
+    const before = engine.getState().project;
+    engine.dispatch(c);
+    const after = engine.getState().project;
+    const nb = after.storyboard, o = nb && (isSlot ? nb.slots[owner.id] : nb.shots[owner.id]);
+    const changes = o?.assetId ? board.linkedLengthChanges(before, after, o.assetId) : [];
+    if (!changes.length || !o?.assetId) return;
+    const a = after.assets[o.assetId];
+    const vNo = a.versions.findIndex((v) => v.id === a.selectedVersionId) + 1;
+    const sec = (t: number) => `${Math.round(t / 12_000) / 10} s`;
+    const { fromTicks, toTicks } = changes[0];
+    setSwapNote(`${shot ? `Shot ${shotNo(owner.id)}` : slot!.name} on timeline updated to v${vNo} (${sec(toTicks)}, was ${sec(fromTicks)})${changes.length > 1 ? ` · ${changes.length} clips` : ""}`);
+  };
   const run = async (label: string, fn: () => Promise<void>) => {
     setErr(undefined); setBusy(label);
     try { await fn(); } catch (e) { setErr(e instanceof Error ? e.message : String(e)); } finally { setBusy(undefined); }
@@ -50,7 +66,7 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
     if (!a) throw new Error("That file type isn't supported.");
     const media = a.versions[0].media;
     if (a.kind !== kind) { await blobs.delete(media.blobKey).catch(() => undefined); throw new Error(`This needs ${kind === "image" ? "an image" : `a ${kind} file`}, but “${f.name}” is ${a.kind === "image" ? "an image" : `a ${a.kind} file`}.`); }
-    engine.dispatch(cmd.addStoryVersion(target, media, model.trim() ? { model: model.trim() } : {}));
+    swap(cmd.addStoryVersion(target, media, model.trim() ? { model: model.trim() } : {}));
   });
   const useLastFrame = () => run("Taking the last frame…", async () => {
     const v = lfShot && board.versionsOf(project, lfShot).find((x) => x.id === lfVersion);
@@ -79,7 +95,7 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
               return (
                 <li key={v.id}>
                   <button className={`v2-sb-version ${on ? "on" : ""}`} aria-pressed={on} title={on ? "In use" : "Use this version"}
-                    onClick={() => !on && owner.assetId && engine.dispatch(cmd.selectStoryVersion(owner.assetId, v.id))}>
+                    onClick={() => { if (!on && owner.assetId) swap(cmd.selectStoryVersion(owner.assetId, v.id)); }}>
                     <Thumb src={thumbs[v.id]} icon={icon} count={0} />
                     <span><b>v{i + 1}{on && <Ic g="ok" size={13} />}</b><em>{info?.derivedFrom ? `Frame of shot ${shotNo(info.derivedFrom.shotId)}` : fmtDate(v.createdAt)}</em>{info?.model && <em title="Made with">{info.model}</em>}</span>
                   </button>
@@ -102,6 +118,7 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
             onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void upload(f); }} />
         </div>
         {lf && !lfVersion && <p className="v2-hint">Shot {shotNo(lf)} needs a clip first. <button className="v2-linkbtn" onClick={() => onOpen({ shot: lf })}>Open shot {shotNo(lf)}</button></p>}
+        {swapNote && <p className="v2-sb-swapnote" role="status"><Ic g="to-timeline" size={14} /> {swapNote}</p>}
         {busy && <p className="v2-hint" role="status">{busy}</p>}
         {err && <p className="v2-sb-err" role="alert"><Ic g="alert" size={14} /> {err}</p>}
       </Section>
