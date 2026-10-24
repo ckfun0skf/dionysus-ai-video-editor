@@ -2177,6 +2177,12 @@
           "title": "Mobile UX review P1: trailing + tile with contrast, modal fit, 44px coarse-pointer targets, gizmo inside preview",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-110",
+          "title": "Desktop UX review P1: Cmd/Ctrl+B/K split, Cmd+X cut, up/down edit points, ripple toast, keys ignored while typing",
+          "status": "done",
+          "progress": 100
         }
       ]
     },

@@ -122,6 +122,49 @@ describe("V2-106 desktop shell", () => {
     expect(el.querySelectorAll(".v2-clip.clip-text").length).toBe(0);
   });
 
+  it("V2-110: Ctrl/Cmd+B and +K split at the playhead, Cmd+X cuts, ↑/↓ jump edit points, R toasts ripple", async () => {
+    const { q, el, click } = await boot();
+    await click(q('.v2-abtabs [title="Text"]'));
+    await click(q('[aria-label="Add Plain text"]'));
+    const clips = () => el.querySelectorAll(".v2-clip.clip-text").length;
+    const toast = () => q(".v2-toast")?.textContent ?? "";
+    const key = (key: string, o: KeyboardEventInit = {}) => act(async () => { window.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, ...o })); });
+    expect(clips()).toBe(1);
+    await key("ArrowRight", { shiftKey: true }); // playhead 1 s, inside the clip
+    await key("b", { ctrlKey: true });
+    expect(clips()).toBe(2);
+    await click(q('[aria-label="Undo"]'));
+    expect(clips()).toBe(1);
+    await key("k", { metaKey: true });
+    expect(clips()).toBe(2);
+    await click(q('[aria-label="Undo"]'));
+    // ↑ jumps back to the clip start (0): splitting there is refused with a hint, not a silent no-op.
+    await key("ArrowUp");
+    await key("b", { ctrlKey: true });
+    expect(clips()).toBe(1);
+    expect(toast()).toMatch(/No clip under the playhead/);
+    // ↓ jumps to the next edit point (the clip end): still nothing to split.
+    await key("ArrowDown");
+    await key("b", { ctrlKey: true });
+    expect(clips()).toBe(1);
+    // R toggles ripple with a visible on/off toast; it is ignored while typing.
+    await key("r");
+    expect(toast()).toMatch(/^Ripple on/);
+    await key("r");
+    expect(toast()).toBe("Ripple off");
+    const input = document.createElement("input"); el.appendChild(input);
+    await act(async () => { input.dispatchEvent(new KeyboardEvent("keydown", { key: "r", bubbles: true })); input.dispatchEvent(new KeyboardEvent("keydown", { key: "t", bubbles: true })); });
+    expect(toast()).toBe("Ripple off");
+    expect(clips()).toBe(1);
+    // Cmd/Ctrl+X: copy then delete (undoable); the clip can be pasted back.
+    await act(async () => { q<HTMLElement>(".v2-clip.clip-text").dispatchEvent(new MouseEvent("click", { bubbles: true })); });
+    await key("x", { ctrlKey: true });
+    expect(clips()).toBe(0);
+    expect(toast()).toMatch(/^Cut 1 clip/);
+    await key("v", { ctrlKey: true });
+    expect(clips()).toBe(1);
+  });
+
   it("Alt+arrow nudges the selected clip by a frame (undoable); +/- zoom", async () => {
     const { q, click } = await boot();
     await click(q('.v2-abtabs [title="Text"]'));
