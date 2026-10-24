@@ -1,0 +1,16 @@
+# Dionysus AI Video Editor
+
+> A browser video editor (works on phones, including iOS Safari) that turns a storyboard JSON planned by your own AI into a production to-do list and a timeline. Dionysus makes no AI calls itself: the user's AI writes the storyboard, and the user generates and uploads the clips.
+
+To plan a storyboard for Dionysus, read the storyboard guide first and reply with one JSON code block in its format.
+
+## Storyboard planning
+
+- [Storyboard guide](https://ckfun0skf.github.io/dionysus-ai-video-editor/ai/storyboard-guide.md): the dionysus.storyboard/1 (v1.1) JSON format, the preset ids you may use, the rules and an example
+- [Storyboard guide as a web page](https://ckfun0skf.github.io/dionysus-ai-video-editor/ai/storyboard-guide.html): the same guide as HTML
+- [Presets](https://ckfun0skf.github.io/dionysus-ai-video-editor/ai/presets.json): machine-readable preset ids, descriptions and params with defaults
+
+## Optional
+
+- [Format reference](https://github.com/ckfun0skf/dionysus-ai-video-editor/blob/main/docs/v2/STORYBOARD_FORMAT.md): the full specification, including importer warnings and errors
+- [Open the app](https://ckfun0skf.github.io/dionysus-ai-video-editor/?v2)

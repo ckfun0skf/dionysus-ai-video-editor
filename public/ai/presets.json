@@ -1,0 +1,635 @@
+{
+  "format": "dionysus.storyboard/1",
+  "revision": "1.1",
+  "guide": "https://ckfun0skf.github.io/dionysus-ai-video-editor/ai/storyboard-guide.md",
+  "kinds": {
+    "textStyle": {
+      "usedIn": "shots[].layers[].textStyle (default \"plain\")",
+      "presets": [
+        {
+          "id": "plain",
+          "version": 1,
+          "name": "Plain",
+          "description": "Bold white sans-serif with no decoration; the default.",
+          "params": [],
+          "data": {
+            "font": "sans",
+            "bold": true,
+            "color": "#ffffff",
+            "strokeWidth": 0,
+            "shadow": null,
+            "background": null,
+            "effect": "none"
+          }
+        },
+        {
+          "id": "caption",
+          "version": 1,
+          "name": "Caption",
+          "description": "Smaller bold white text on a translucent black box; subtitles and lower thirds.",
+          "params": [],
+          "data": {
+            "font": "sans",
+            "bold": true,
+            "color": "#ffffff",
+            "background": {
+              "color": "#000000",
+              "opacity": 0.6
+            },
+            "effect": "none",
+            "size": 0.06
+          }
+        },
+        {
+          "id": "outline",
+          "version": 1,
+          "name": "Outline",
+          "description": "Yellow Impact letters with a thick black outline; meme or punchy look.",
+          "params": [],
+          "data": {
+            "font": "impact",
+            "color": "#ffe14d",
+            "strokeWidth": 0.08,
+            "strokeColor": "#000000",
+            "effect": "none"
+          }
+        },
+        {
+          "id": "neon",
+          "version": 1,
+          "name": "Neon",
+          "description": "White rounded letters with a pink neon glow and a gentle pulse.",
+          "params": [],
+          "data": {
+            "font": "rounded",
+            "color": "#ffffff",
+            "effect": "neon",
+            "effectColor": "#ff3df2",
+            "loop": "pulse"
+          }
+        },
+        {
+          "id": "pop",
+          "version": 1,
+          "name": "Pop title",
+          "description": "Large white Impact title with a hard drop shadow that pops in and shrinks out.",
+          "params": [],
+          "data": {
+            "font": "impact",
+            "color": "#ffffff",
+            "shadow": {
+              "color": "#000000",
+              "blur": 0,
+              "x": 0.05,
+              "y": 0.05
+            },
+            "animIn": "pop",
+            "animOut": "shrink",
+            "size": 0.14
+          }
+        },
+        {
+          "id": "typewriter",
+          "version": 1,
+          "name": "Typewriter",
+          "description": "Light grey monospace that types itself on.",
+          "params": [],
+          "data": {
+            "font": "mono",
+            "bold": false,
+            "color": "#e8e8e8",
+            "animIn": "typewriter",
+            "effect": "none"
+          }
+        },
+        {
+          "id": "glow",
+          "version": 1,
+          "name": "Glow",
+          "description": "Italic white serif with a cyan glow that floats softly.",
+          "params": [],
+          "data": {
+            "font": "serif",
+            "italic": true,
+            "color": "#ffffff",
+            "effect": "glow",
+            "effectColor": "#20d5ec",
+            "loop": "float"
+          }
+        },
+        {
+          "id": "echo",
+          "version": 1,
+          "name": "Echo",
+          "description": "White Impact letters with pink echo copies that slide up in.",
+          "params": [],
+          "data": {
+            "font": "impact",
+            "color": "#ffffff",
+            "effect": "echo",
+            "effectColor": "#ff4d6d",
+            "animIn": "slide-up"
+          }
+        }
+      ]
+    },
+    "textAnimIn": {
+      "usedIn": "shots[].layers[].anim.in",
+      "presets": [
+        {
+          "id": "fade",
+          "version": 1,
+          "name": "Fade",
+          "description": "Fades the text in from transparent.",
+          "params": []
+        },
+        {
+          "id": "slide-up",
+          "version": 1,
+          "name": "Slide up",
+          "description": "Fades in while sliding up into place from slightly below.",
+          "params": [
+            {
+              "key": "distance",
+              "label": "Distance",
+              "type": "number",
+              "min": 0,
+              "max": 0.5,
+              "step": 0.01,
+              "default": 0.08
+            },
+            {
+              "key": "dirX",
+              "label": "X",
+              "type": "number",
+              "min": -1,
+              "max": 1,
+              "default": 0
+            },
+            {
+              "key": "dirY",
+              "label": "Y",
+              "type": "number",
+              "min": -1,
+              "max": 1,
+              "default": 1
+            }
+          ]
+        },
+        {
+          "id": "slide-left",
+          "version": 1,
+          "name": "Slide left",
+          "description": "Fades in while sliding left into place from the right.",
+          "params": [
+            {
+              "key": "distance",
+              "label": "Distance",
+              "type": "number",
+              "min": 0,
+              "max": 0.5,
+              "step": 0.01,
+              "default": 0.15
+            },
+            {
+              "key": "dirX",
+              "label": "X",
+              "type": "number",
+              "min": -1,
+              "max": 1,
+              "default": 1
+            },
+            {
+              "key": "dirY",
+              "label": "Y",
+              "type": "number",
+              "min": -1,
+              "max": 1,
+              "default": 0
+            }
+          ]
+        },
+        {
+          "id": "pop",
+          "version": 1,
+          "name": "Pop",
+          "description": "Scales up from small with a springy overshoot; lively titles and labels.",
+          "params": [
+            {
+              "key": "overshoot",
+              "label": "Overshoot",
+              "type": "number",
+              "min": 0,
+              "max": 0.5,
+              "step": 0.01,
+              "default": 0.12
+            }
+          ]
+        },
+        {
+          "id": "zoom-in",
+          "version": 1,
+          "name": "Zoom",
+          "description": "Grows from nothing to full size.",
+          "params": []
+        },
+        {
+          "id": "typewriter",
+          "version": 1,
+          "name": "Typewriter",
+          "description": "Reveals the text one character at a time.",
+          "params": []
+        },
+        {
+          "id": "wipe",
+          "version": 1,
+          "name": "Wipe",
+          "description": "Reveals the text left to right behind a moving edge.",
+          "params": []
+        },
+        {
+          "id": "blur-in",
+          "version": 1,
+          "name": "Blur",
+          "description": "Fades in from a soft blur to sharp; gentle, cinematic.",
+          "params": [
+            {
+              "key": "blur",
+              "label": "Blur",
+              "type": "number",
+              "min": 0,
+              "max": 30,
+              "default": 8
+            }
+          ]
+        }
+      ]
+    },
+    "textAnimOut": {
+      "usedIn": "shots[].layers[].anim.out",
+      "presets": [
+        {
+          "id": "fade",
+          "version": 1,
+          "name": "Fade",
+          "description": "Fades the text out to transparent.",
+          "params": []
+        },
+        {
+          "id": "slide-down",
+          "version": 1,
+          "name": "Slide down",
+          "description": "Fades out while sliding down.",
+          "params": [
+            {
+              "key": "distance",
+              "label": "Distance",
+              "type": "number",
+              "min": 0,
+              "max": 0.5,
+              "step": 0.01,
+              "default": 0.08
+            },
+            {
+              "key": "dirX",
+              "label": "X",
+              "type": "number",
+              "min": -1,
+              "max": 1,
+              "default": 0
+            },
+            {
+              "key": "dirY",
+              "label": "Y",
+              "type": "number",
+              "min": -1,
+              "max": 1,
+              "default": 1
+            }
+          ]
+        },
+        {
+          "id": "shrink",
+          "version": 1,
+          "name": "Shrink",
+          "description": "Shrinks to nothing.",
+          "params": []
+        },
+        {
+          "id": "blur-out",
+          "version": 1,
+          "name": "Blur",
+          "description": "Blurs and fades away.",
+          "params": [
+            {
+              "key": "blur",
+              "label": "Blur",
+              "type": "number",
+              "min": 0,
+              "max": 30,
+              "default": 8
+            }
+          ]
+        },
+        {
+          "id": "wipe-out",
+          "version": 1,
+          "name": "Wipe",
+          "description": "Hides the text right to left behind a moving edge.",
+          "params": []
+        }
+      ]
+    },
+    "textAnimLoop": {
+      "usedIn": "shots[].layers[].anim.loop",
+      "presets": [
+        {
+          "id": "pulse",
+          "version": 1,
+          "name": "Pulse",
+          "description": "Gently grows and shrinks in a loop.",
+          "params": [
+            {
+              "key": "period",
+              "label": "Period",
+              "type": "number",
+              "min": 0.2,
+              "max": 4,
+              "default": 1
+            },
+            {
+              "key": "amount",
+              "label": "Amount",
+              "type": "number",
+              "min": 0,
+              "max": 0.3,
+              "step": 0.01,
+              "default": 0.06
+            }
+          ]
+        },
+        {
+          "id": "wiggle",
+          "version": 1,
+          "name": "Wiggle",
+          "description": "Rocks side to side in a loop; playful.",
+          "params": [
+            {
+              "key": "period",
+              "label": "Period",
+              "type": "number",
+              "min": 0.2,
+              "max": 4,
+              "default": 1
+            },
+            {
+              "key": "degrees",
+              "label": "Degrees",
+              "type": "number",
+              "min": 0,
+              "max": 30,
+              "default": 4
+            }
+          ]
+        },
+        {
+          "id": "float",
+          "version": 1,
+          "name": "Float",
+          "description": "Bobs softly up and down in a loop.",
+          "params": [
+            {
+              "key": "period",
+              "label": "Period",
+              "type": "number",
+              "min": 0.2,
+              "max": 4,
+              "default": 1
+            },
+            {
+              "key": "amount",
+              "label": "Amount",
+              "type": "number",
+              "min": 0,
+              "max": 0.1,
+              "step": 0.005,
+              "default": 0.015
+            }
+          ]
+        },
+        {
+          "id": "blink",
+          "version": 1,
+          "name": "Blink",
+          "description": "Blinks on and off in a loop.",
+          "params": [
+            {
+              "key": "period",
+              "label": "Period",
+              "type": "number",
+              "min": 0.2,
+              "max": 4,
+              "default": 1
+            }
+          ]
+        }
+      ]
+    },
+    "videoEffect": {
+      "usedIn": "shots[].effects[].preset",
+      "presets": [
+        {
+          "id": "fade-in",
+          "version": 1,
+          "name": "Fade in",
+          "description": "Fades the picture in from black at the start of the range.",
+          "params": [
+            {
+              "key": "length",
+              "label": "Length",
+              "type": "number",
+              "min": 0.05,
+              "max": 1,
+              "step": 0.05,
+              "default": 0.5
+            }
+          ]
+        },
+        {
+          "id": "fade-out",
+          "version": 1,
+          "name": "Fade out",
+          "description": "Fades the picture out to black at the end of the range.",
+          "params": [
+            {
+              "key": "length",
+              "label": "Length",
+              "type": "number",
+              "min": 0.05,
+              "max": 1,
+              "step": 0.05,
+              "default": 0.5
+            }
+          ]
+        },
+        {
+          "id": "blur",
+          "version": 1,
+          "name": "Blur",
+          "description": "Blurs the whole picture.",
+          "params": [
+            {
+              "key": "amount",
+              "label": "Amount",
+              "type": "number",
+              "min": 0,
+              "max": 1,
+              "step": 0.05,
+              "default": 0.5
+            }
+          ]
+        },
+        {
+          "id": "ken-burns",
+          "version": 1,
+          "name": "Zoom",
+          "description": "Slow zoom and pan across the picture (push-in); brings stills to life.",
+          "params": [
+            {
+              "key": "zoom",
+              "label": "Zoom",
+              "type": "number",
+              "min": 0,
+              "max": 1,
+              "step": 0.05,
+              "default": 0.25
+            },
+            {
+              "key": "pan",
+              "label": "Pan",
+              "type": "number",
+              "min": -0.3,
+              "max": 0.3,
+              "step": 0.01,
+              "default": 0.05
+            }
+          ]
+        },
+        {
+          "id": "shake",
+          "version": 1,
+          "name": "Shake",
+          "description": "Handheld camera shake.",
+          "params": [
+            {
+              "key": "amount",
+              "label": "Amount",
+              "type": "number",
+              "min": 0,
+              "max": 0.1,
+              "step": 0.005,
+              "default": 0.02
+            },
+            {
+              "key": "speed",
+              "label": "Speed",
+              "type": "number",
+              "min": 2,
+              "max": 40,
+              "step": 1,
+              "default": 16
+            }
+          ]
+        },
+        {
+          "id": "vignette",
+          "version": 1,
+          "name": "Vignette",
+          "description": "Darkens the frame edges to focus the centre.",
+          "params": [
+            {
+              "key": "amount",
+              "label": "Amount",
+              "type": "number",
+              "min": 0,
+              "max": 1,
+              "step": 0.05,
+              "default": 0.6
+            }
+          ]
+        },
+        {
+          "id": "bw",
+          "version": 1,
+          "name": "B&W",
+          "description": "Black-and-white (desaturated) picture.",
+          "params": [
+            {
+              "key": "amount",
+              "label": "Amount",
+              "type": "number",
+              "min": 0,
+              "max": 1,
+              "step": 0.05,
+              "default": 1
+            }
+          ]
+        }
+      ]
+    },
+    "transition": {
+      "usedIn": "connections[].transition.preset (params.durationSec, default 0.5)",
+      "presets": [
+        {
+          "id": "crossfade",
+          "version": 1,
+          "name": "Crossfade",
+          "description": "The outgoing clip dissolves into the incoming clip.",
+          "params": []
+        },
+        {
+          "id": "dip",
+          "version": 1,
+          "name": "Dip to black",
+          "description": "Fades the outgoing clip to black, then up into the incoming clip.",
+          "params": []
+        }
+      ]
+    }
+  },
+  "transitionDefaultSec": 0.5,
+  "fonts": [
+    {
+      "id": "sans",
+      "description": "Clean system sans-serif; the default."
+    },
+    {
+      "id": "serif",
+      "description": "Classic book serif for titles and literary cards."
+    },
+    {
+      "id": "mono",
+      "description": "Monospace, typewriter or terminal feel."
+    },
+    {
+      "id": "impact",
+      "description": "Heavy condensed display face for punchy titles."
+    },
+    {
+      "id": "rounded",
+      "description": "Soft rounded sans, friendly and playful."
+    },
+    {
+      "id": "hand",
+      "description": "Casual handwritten marker look."
+    },
+    {
+      "id": "script",
+      "description": "Flowing brush script for elegant accents."
+    },
+    {
+      "id": "condensed",
+      "description": "Narrow sans that fits long lines."
+    }
+  ]
+}

@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { createProject, EXAMPLE_STORYBOARD, storyboardSystemPrompt, story, type MediaRef } from "../../domain";
+import { createProject, EXAMPLE_STORYBOARD, GUIDE_URL, storyboardShortPrompt, storyboardSystemPrompt, story, type MediaRef } from "../../domain";
 import { cmd, Engine } from "../../engine";
 import { createMemoryStorage } from "../../persistence";
 import { V2App } from "../V2App";
@@ -44,15 +44,23 @@ describe("storyboard workspace", () => {
     expect(el.querySelectorAll(".v2-sb-placed")).toHaveLength(0);
   });
 
-  it("copies the AI prompt and shows confirmation", async () => {
+  it("copies the short AI prompt, and the full prompt when chosen", async () => {
     const writeText = vi.fn(async () => {});
     Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
     const el = await mount();
     await act(async () => (el.querySelector('[data-testid="step-prompt"]') as HTMLButtonElement).click());
-    expect((el.querySelector('[aria-label="AI system prompt"]') as HTMLTextAreaElement).value).toBe(storyboardSystemPrompt());
+    const ta = () => (el.querySelector('[aria-label="AI system prompt"]') as HTMLTextAreaElement).value;
+    expect(ta()).toBe(storyboardShortPrompt());
+    expect(ta()).toContain(GUIDE_URL);
     await act(async () => (el.querySelector('[data-testid="copy-prompt"]') as HTMLButtonElement).click()); await wait();
-    expect(writeText).toHaveBeenCalledWith(storyboardSystemPrompt());
+    expect(writeText).toHaveBeenLastCalledWith(storyboardShortPrompt());
     expect(el.querySelector('[data-testid="copy-prompt"]')!.textContent).toContain("Copied");
+    await act(async () => (el.querySelector('[data-testid="prompt-full"]') as HTMLButtonElement).click());
+    expect(el.querySelector('[data-testid="prompt-full"]')!.getAttribute("aria-checked")).toBe("true");
+    expect(ta()).toBe(storyboardSystemPrompt());
+    expect(el.querySelector('[data-testid="copy-prompt"]')!.textContent).toContain("Copy full prompt");
+    await act(async () => (el.querySelector('[data-testid="copy-prompt"]') as HTMLButtonElement).click()); await wait();
+    expect(writeText).toHaveBeenLastCalledWith(storyboardSystemPrompt());
   });
 
   it("lists path-addressed errors for bad JSON and previews a valid storyboard", async () => {

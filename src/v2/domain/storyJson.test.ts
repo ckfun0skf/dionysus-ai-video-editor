@@ -9,7 +9,7 @@ describe("storyboard JSON", () => {
     const r = story.parseStoryboard(JSON.stringify(EXAMPLE_STORYBOARD));
     expect(r.ok).toBe(true);
     if (r.ok) { expect(r.doc).toEqual(EXAMPLE_STORYBOARD); expect(r.warnings).toEqual([]); }
-    expect(story.storySummary(EXAMPLE_STORYBOARD)).toBe("3 shots · 15s · 4 assets (1 last-frame link) · 15 QA checks");
+    expect(story.storySummary(EXAMPLE_STORYBOARD)).toBe("3 shots · 15s · 4 assets (1 last-frame link) · 16 QA checks · 1 layer · 1 effect · 1 transition");
   });
   it("the system prompt embeds the format and a parseable example", () => {
     const p = storyboardSystemPrompt();

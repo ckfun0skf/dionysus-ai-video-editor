@@ -2325,8 +2325,8 @@
         {
           "id": "V2-SB-114",
           "title": "AI planner guide: generated storyboard-guide, presets.json and llms.txt; short and full AI prompts in the UI",
-          "status": "todo",
-          "progress": 0
+          "status": "done",
+          "progress": 100
         }
       ]
     },
