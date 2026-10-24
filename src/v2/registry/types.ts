@@ -10,10 +10,16 @@
 export type PresetKind = "textAnimIn" | "textAnimOut" | "textAnimLoop" | "effect" | "videoEffect" | "transition" | "sticker" | "textStyle";
 export const PRESET_KINDS: PresetKind[] = ["textAnimIn", "textAnimOut", "textAnimLoop", "effect", "videoEffect", "transition", "sticker", "textStyle"];
 
-export type ParamSpec =
-  | { key: string; label: string; type: "number"; min: number; max: number; step?: number; default: number }
-  | { key: string; label: string; type: "color"; default: string }
-  | { key: string; label: string; type: "string"; default: string };
+/**
+ * One preset parameter. `description` is an optional plain-English note on what the value means (its unit, or what it
+ * is a fraction of); it is shown as the editor's tooltip and in the generated planner guide and presets.json, so
+ * ambiguous params should always have one.
+ */
+export type ParamSpec = ParamBase & (
+  | { type: "number"; min: number; max: number; step?: number; default: number }
+  | { type: "color"; default: string }
+  | { type: "string"; default: string });
+interface ParamBase { key: string; label: string; description?: string }
 export type Params = Record<string, number | string>;
 
 export interface PresetDescriptor {

@@ -123,12 +123,14 @@ Style resolution: the `textStyle` preset is applied first, then the inline `styl
 
 Post camera moves (push-in through `ken-burns`, `shake`) and looks (`bw`, `vignette`) go here, not in the generation prompt.
 
+`fade-in` / `fade-out` `params.length` is a **fraction (0.05–1) of the effect's time range**, not seconds: on a 4 s shot with no `startSec`/`endSec`, `{"length": 0.25}` fades over the first (or last) 1 s. For a fade of N seconds, set `startSec`/`endSec` to an N-second range and keep `length: 1`, or use `length = N / range`.
+
 ## 3. Preset system
 
 ### 3.1 Rules
 
 - Every look or motion is referenced by **preset id + params**. The schema only checks that the id is a string; the app validates it against its preset registry at import.
-- Registry descriptor: `{id, kind, version, description, category, name, type, params: ParamSpec[], preview, data?}`. `ParamSpec` is `number` (min/max/step/default), `color` or `string`. `version` starts at 1 and is bumped whenever a preset's look or behaviour changes. `description` is one line, used in the planner guide. `data` holds the text clip fields of a `textStyle` preset (with `font` as a font id).
+- Registry descriptor: `{id, kind, version, description, category, name, type, params: ParamSpec[], preview, data?}`. `ParamSpec` is `number` (min/max/step/default), `color` or `string`, with an optional `description` that states the unit or what the value is a fraction of (shown as the editor tooltip and in the generated guide and presets.json; ambiguous params must have one). `version` starts at 1 and is bumped whenever a preset's look or behaviour changes. `description` is one line, used in the planner guide. `data` holds the text clip fields of a `textStyle` preset (with `font` as a font id).
 - Preset ids match `^[A-Za-z0-9][A-Za-z0-9_.-]*$`; `@` is reserved for version pins.
 - Kinds: `textAnimIn`, `textAnimOut`, `textAnimLoop`, `effect` (text styling: glow, neon, hollow, echo), `videoEffect`, `transition`, `sticker`, and the new `textStyle` (moving out of `TEXT_TEMPLATES`).
 - **Version pinning:** `id@N` (for example `ken-burns@2`) is accepted and stored as written. It always resolves to the **current** preset; old render functions are not kept. If `N` differs from the current version, the importer warns.
@@ -241,7 +243,7 @@ Run `npm run gen:ai` after changing presets, fonts, the rules or the example; `a
 
 The app offers two prompts (Storyboard → AI prompt):
 - **Short prompt** (default): links to the guide and tells the AI to read it first. An AI that can't open links is told to ask the user for the full prompt instead of guessing the format.
-- **Full prompt**: the guide inlined (FORMAT, PRESETS, RULES 1-12, EXAMPLE), for AIs without web access.
+- **Full prompt**: the guide inlined (FORMAT, PRESETS, RULES 1-13, EXAMPLE), for AIs without web access.
 
 The presets section of the planner prompt is **generated from the registry** (only ids listed there may be used): for each kind, it lists every id with a one-line description and its params with defaults. The rules section becomes:
 

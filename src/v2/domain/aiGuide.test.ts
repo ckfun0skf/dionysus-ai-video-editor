@@ -30,12 +30,15 @@ describe("AI planner guide (V2-SB-114)", () => {
     expect(md).not.toContain("arrow-right"); // stickers are not storyboard fields
     const json = JSON.parse(presetsJson());
     expect(json.kinds.videoEffect.presets.find((p: { id: string }) => p.id === "ken-burns").params[0]).toMatchObject({ key: "zoom", default: 0.25 });
+    const fade = json.kinds.videoEffect.presets.find((p: { id: string }) => p.id === "fade-in").params[0];
+    expect(fade.description).toMatch(/fraction of the effect.s time range, not seconds/);
+    expect(md).toContain("length 0.05–1, default 0.5 (fraction of the effect's time range, not seconds");
   });
 
-  it("the full prompt inlines the guide with RULES 1-12; the short prompt links to it", () => {
+  it("the full prompt inlines the guide with RULES 1-13; the short prompt links to it", () => {
     const full = storyboardSystemPrompt();
-    for (const s of ["FORMAT (", "PRESETS", "RULES", "EXAMPLE", `12. ${RULES[11]}`, "- crossfade:", "- ken-burns:"]) expect(full).toContain(s);
-    expect(RULES).toHaveLength(12);
+    for (const s of ["FORMAT (", "PRESETS", "RULES", "EXAMPLE", `13. ${RULES[12]}`, "not seconds", "- crossfade:", "- ken-burns:"]) expect(full).toContain(s);
+    expect(RULES).toHaveLength(13);
     const short = storyboardShortPrompt();
     expect(short).toContain(GUIDE_URL);
     expect(short).toContain("Full prompt");

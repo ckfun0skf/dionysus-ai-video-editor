@@ -73,7 +73,7 @@ export function EffectPicker({ engine, at, placement, onAdded, onClose }: { engi
         {list.map((p) => <EffectTile key={p.id} id={p.id} label={p.name} active={cur === p.id} onPick={() => pick(p.id)} />)}
       </div>
       {d && placement && d.params.map((s) => s.type === "number" && (
-        <label key={s.key} className="v2-tp-row">{s.label} <output>{Number(vals[s.key]).toFixed(2)}</output>
+        <label key={s.key} className="v2-tp-row" title={s.description}>{s.label} <output>{Number(vals[s.key]).toFixed(2)}</output>
           <input type="range" aria-label={`${d.name} ${s.label}`} min={s.min} max={s.max} step={s.step ?? 0.01} value={Number(vals[s.key])}
             onPointerDown={() => engine.beginGesture()} onPointerUp={() => engine.endGesture()} onBlur={() => engine.endGesture()}
             onChange={(e) => engine.dispatch(cmd.setEffect(placement.id, { params: { [s.key]: Number(e.target.value) } }))} />

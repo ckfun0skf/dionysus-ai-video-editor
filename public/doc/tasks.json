@@ -2327,6 +2327,12 @@
           "title": "AI planner guide: generated storyboard-guide, presets.json and llms.txt; short and full AI prompts in the UI",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-SB-115",
+          "title": "Preset param descriptions (ParamSpec.description): fade-in/fade-out length documented as a fraction of the effect's time range in the guide, presets.json, prompts and editor tooltip",
+          "status": "done",
+          "progress": 100
         }
       ]
     },
