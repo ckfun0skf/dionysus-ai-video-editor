@@ -199,3 +199,6 @@
 /* V2-SB-R14: each import problem is a button that selects the JSON it is about. */
 .v2-sb-errlink { display: inline; padding: 2px 0; border: 0; background: none; color: inherit; font: inherit; line-height: inherit; text-align: left; text-decoration: underline dotted #fb718599; text-underline-offset: 3px; cursor: pointer; }
 .v2-sb-errlink:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+.v2-sb-warn .v2-sb-errlink { text-decoration-color: #fbbf2499; }
+.v2-sb-warn li { display: flex; gap: 6px; align-items: baseline; }
+.v2-sb-warn code { overflow-wrap: anywhere; }

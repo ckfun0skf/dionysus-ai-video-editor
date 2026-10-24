@@ -3,9 +3,12 @@
  * params schema + defaults, preview hint, and a `type` key) plus a pure render function looked up by `type` in the
  * code registry. Descriptors can be loaded from JSON or a backend; render functions ship with the code.
  */
-/** `effect` = text styling (Glow/Neon…); `videoEffect` = effect-layer presets applied to the main-track render (V2-101). */
-export type PresetKind = "textAnimIn" | "textAnimOut" | "textAnimLoop" | "effect" | "videoEffect" | "transition" | "sticker";
-export const PRESET_KINDS: PresetKind[] = ["textAnimIn", "textAnimOut", "textAnimLoop", "effect", "videoEffect", "transition", "sticker"];
+/**
+ * `effect` = text styling (Glow/Neon…); `videoEffect` = effect-layer presets applied to the main-track render (V2-101);
+ * `textStyle` = one-tap text looks (formerly TEXT_TEMPLATES): plain data in `data`, no animation of its own.
+ */
+export type PresetKind = "textAnimIn" | "textAnimOut" | "textAnimLoop" | "effect" | "videoEffect" | "transition" | "sticker" | "textStyle";
+export const PRESET_KINDS: PresetKind[] = ["textAnimIn", "textAnimOut", "textAnimLoop", "effect", "videoEffect", "transition", "sticker", "textStyle"];
 
 export type ParamSpec =
   | { key: string; label: string; type: "number"; min: number; max: number; step?: number; default: number }
@@ -18,11 +21,23 @@ export interface PresetDescriptor {
   kind: PresetKind;
   category: string;
   name: string;
+  /**
+   * Behaviour version, starting at 1. Bump it whenever the look or motion of an existing id changes, so storyboards that
+   * pin `id@N` (docs/v2/STORYBOARD_FORMAT.md §3) get a warning instead of a silent change.
+   */
+  version: number;
+  /** One line in plain English: what it looks like and when to use it. Shown to planner AIs in the generated guide. */
+  description: string;
   /** Key into the render-function registry. Several descriptors may share one type with different defaults. */
   type: string;
   params: ParamSpec[];
   /** Short glyph/hint for list tiles; tiles normally live-render the preset itself. */
   preview: { icon?: string; text?: string };
+  /**
+   * Kind-specific static data. `textStyle`: text clip fields to apply (font is a curated font id, see fonts.ts; size is a
+   * fraction of frame height), e.g. `{ "font": "impact", "color": "#ffe14d", "strokeWidth": 0.08 }`.
+   */
+  data?: Record<string, unknown>;
 }
 
 /** Text effect styling produced by `effect` presets. */

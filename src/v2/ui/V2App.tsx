@@ -635,7 +635,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   };
   const addTextAt = (at: number, template?: string) => {
     const id = newId("plc");
-    const data = template ? textDomain.TEXT_TEMPLATES.find((t) => t.id === template)?.data : undefined;
+    const data = template ? textDomain.textStyleData(template) : undefined;
     if (engine.dispatch(cmd.addTextClip(Math.round(at), data ?? {}, id))) { setSel([id]); setSubId(undefined); }
   };
   const addStickerAt = async (st: Sticker, at: number) => {

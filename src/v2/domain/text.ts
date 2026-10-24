@@ -1,5 +1,5 @@
 /** Text clips: a placement with `clipType: "text"` on a text track. Pure data; animation math lives in the preset registry. */
-import { applyPreset, identityFrame, loopPeriod, type PresetFrame } from "../registry";
+import { applyPreset, fontStack, getPreset, identityFrame, listPresets, loopPeriod, type PresetFrame } from "../registry";
 /** Preset ids from the registry ("none" or undefined = no preset). */
 export type TextAnimIn = string;
 export type TextAnimOut = string;
@@ -61,26 +61,23 @@ export function visibleText(text: string, chars: number): string {
   return cs.slice(0, Math.round(cs.length * Math.min(1, Math.max(0, chars)))).join("");
 }
 
-/** Curated fonts: system stacks only (no network), so preview and export match offline. */
-export const FONTS: { label: string; stack: string }[] = [
-  { label: "Sans", stack: "system-ui, sans-serif" },
-  { label: "Serif", stack: "Georgia, 'Times New Roman', serif" },
-  { label: "Mono", stack: "ui-monospace, 'Courier New', monospace" },
-  { label: "Impact", stack: "Impact, 'Arial Black', sans-serif" },
-  { label: "Rounded", stack: "ui-rounded, 'Trebuchet MS', sans-serif" },
-  { label: "Hand", stack: "'Comic Sans MS', 'Chalkboard SE', cursive" },
-  { label: "Script", stack: "'Brush Script MT', 'Snell Roundhand', cursive" },
-  { label: "Condensed", stack: "'Arial Narrow', 'Roboto Condensed', sans-serif" },
-];
+/** Curated fonts with stable ids live in the registry (registry/fonts.ts); text clips store the CSS stack. */
+export { FONTS, fontStack, fontIdOfStack } from "../registry";
 
-/** One-tap looks. Applying a template keeps the clip's own text. */
-export const TEXT_TEMPLATES: { id: string; label: string; data: Partial<TextData> }[] = [
-  { id: "plain", label: "Plain", data: { font: FONTS[0].stack, bold: true, color: "#ffffff", strokeWidth: 0, shadow: undefined, background: undefined, effect: "none" } },
-  { id: "caption", label: "Caption", data: { font: FONTS[0].stack, bold: true, color: "#ffffff", background: { color: "#000000", opacity: 0.6 }, effect: "none", size: 0.06 } },
-  { id: "outline", label: "Outline", data: { font: FONTS[3].stack, color: "#ffe14d", strokeWidth: 0.08, strokeColor: "#000000", effect: "none" } },
-  { id: "neon", label: "Neon", data: { font: FONTS[4].stack, color: "#ffffff", effect: "neon", effectColor: "#ff3df2", loop: "pulse" } },
-  { id: "pop", label: "Pop title", data: { font: FONTS[3].stack, color: "#ffffff", shadow: { color: "#000000", blur: 0, x: 0.05, y: 0.05 }, animIn: "pop", animOut: "shrink", size: 0.14 } },
-  { id: "typewriter", label: "Typewriter", data: { font: FONTS[2].stack, bold: false, color: "#e8e8e8", animIn: "typewriter", effect: "none" } },
-  { id: "glow", label: "Glow", data: { font: FONTS[1].stack, italic: true, color: "#ffffff", effect: "glow", effectColor: "#20d5ec", loop: "float" } },
-  { id: "echo", label: "Echo", data: { font: FONTS[3].stack, color: "#ffffff", effect: "echo", effectColor: "#ff4d6d", animIn: "slide-up" } },
-];
+/**
+ * Text clip fields of a `textStyle` preset (one-tap looks, formerly TEXT_TEMPLATES). Font ids become CSS stacks and
+ * JSON nulls clear the field. Unknown ids return undefined.
+ */
+export function textStyleData(id: string | undefined): Partial<TextData> | undefined {
+  const d = getPreset("textStyle", id);
+  return d ? textStyleFields(d.data ?? {}) : undefined;
+}
+/** Map plain style data (preset `data`, storyboard `meta.textStyles`) onto text clip fields. */
+export function textStyleFields(data: Record<string, unknown>): Partial<TextData> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(data)) out[k] = v === null ? undefined : k === "font" ? fontStack(String(v)) : v;
+  return out as Partial<TextData>;
+}
+/** One-tap looks for the text panels, in registry order. Applying one keeps the clip's own text. */
+export const textTemplates = (): { id: string; label: string; data: Partial<TextData> }[] =>
+  listPresets("textStyle").map((d) => ({ id: d.id, label: d.name, data: textStyleFields(d.data ?? {}) }));

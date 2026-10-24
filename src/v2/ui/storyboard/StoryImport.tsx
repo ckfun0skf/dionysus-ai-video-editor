@@ -57,7 +57,7 @@ export function ImportPanel({ onCreate, replacing }: { onCreate?: (doc: StoryDoc
     ta.scrollTop = Math.max(0, (line - 2) * lh);
   };
   const result = useMemo(() => (text.trim() ? story.parseStoryboard(text) : undefined), [text]);
-  const locs = useMemo(() => (result && !result.ok ? result.errors.map((e) => story.locateIssue(text, e)) : []), [result, text]);
+  const locs = useMemo(() => (result ? (result.ok ? result.warnings : result.errors).map((e) => story.locateIssue(text, e)) : []), [result, text]);
   const pick = async (f?: File) => { if (!f) return; setFile(f.name); setText(await readFileText(f)); };
   const paste = async () => { try { const t = await navigator.clipboard.readText(); if (t) { setFile(undefined); setText(t); } } catch { /* permission denied: user can long-press paste */ } };
   return (
@@ -86,7 +86,10 @@ export function ImportPanel({ onCreate, replacing }: { onCreate?: (doc: StoryDoc
         <div className="v2-sb-preview" data-testid="story-preview">
           <h4><Ic g="ok" size={16} /> {result.doc.meta.title}</h4>
           <p className="v2-sb-sum">{story.storySummary(result.doc)}</p>
-          {result.warnings.length > 0 && <ul className="v2-sb-warn">{result.warnings.map((w, i) => <li key={i}><Ic g="⚠" size={14} /> {w.message}</li>)}</ul>}
+          {result.warnings.length > 0 && <ul className="v2-sb-warn" data-testid="story-warnings">{result.warnings.map((w, i) => {
+            const body = <>{w.path && <code>{w.path}</code>} {w.message}</>;
+            return <li key={i}><Ic g="⚠" size={14} /> {locs[i] ? <button className="v2-sb-errlink" title="Select this in the JSON" onClick={() => jump(locs[i])}>{body}</button> : body}</li>;
+          })}</ul>}
           <ol className="v2-sb-shotlist">
             {result.doc.shots.map((s) => (
               <li key={s.id}><b>{s.title}</b> <span className="v2-muted">{s.durationSec}s · {s.assets.length} asset{s.assets.length === 1 ? "" : "s"}</span>

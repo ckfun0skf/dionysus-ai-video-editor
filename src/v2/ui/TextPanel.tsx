@@ -64,7 +64,7 @@ export function TextPanel({ engine, placement, onAnimPicked, initialTab = "Templ
         {TABS.map((t) => <button key={t} role="tab" aria-selected={t === tab} className={`v2-tp-tab ${t === tab ? "is-active" : ""}`} onClick={() => setTab(t)}>{t}</button>)}
       </div>
       <div className="v2-tp-body" role="tabpanel" aria-label={tab}>
-        {tab === "Templates" && <div className="v2-tp-grid">{T.TEXT_TEMPLATES.map((tp) => {
+        {tab === "Templates" && <div className="v2-tp-grid">{T.textTemplates().map((tp) => {
           const s = T.textOf(tp.data);
           return <button key={tp.id} className="v2-tp-tpl" title={`Apply ${tp.label}`} onClick={() => set(tp.data, `Template ${tp.label}`)}
             style={{ fontFamily: s.font, fontWeight: s.bold ? 700 : 400, fontStyle: s.italic ? "italic" : "normal", color: s.effect === "hollow" ? "transparent" : s.color, WebkitTextStroke: s.strokeWidth ? `1px ${s.strokeColor}` : undefined, textShadow: s.effect === "neon" || s.effect === "glow" ? `0 0 6px ${s.effectColor}` : undefined, background: s.background ? s.background.color : undefined }}>{tp.label}</button>;

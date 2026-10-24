@@ -1,0 +1,467 @@
+{
+  "format": "dionysus.storyboard/1",
+  "meta": {
+    "title": "After the Algorithm, Ep 1 \"Allotment\", opening (shots 01-12)",
+    "logline": "In a gentle 2071 where an unseen system called the Quiet provides everything, Mara starts an ordinary, perfect morning.",
+    "synopsis": "Cold open in Mara's flat: breakfast and a suggestion card arrive in the drawer wall, she thanks the Quiet, takes her notebook and coat and leaves. Title. A montage of the too-perfect hill street: children roaming free, a full weekday café, cold-water swimmers at the sea steps. Shot 03 is a still of a blank card with the card line in a text layer; shot 07 is the title card ALLOTMENT, a text layer over the generated title-bg still. All on-screen text lives in shot text layers and is never generated. Everything is generated from scratch: no existing references are used.",
+    "aspect": "16:9",
+    "style": "Photorealistic cinematic still, 35mm film look, soft natural film grain, shallow depth of field, clear golden morning light, low warm sun. Palette: slate blue, sea-glass green, wet concrete grey, with warm human accents of ochre, rust and mustard yellow. Technology is ceramic-white, rounded and silent. Avoid: No holograms, no robots, no floating screens, no chrome, no neon, no legible text or signage, no logos, no extra people in the foreground, no watermark-like overlays.",
+    "language": "en",
+    "textStyles": {
+      "ata-title": {
+        "font": "serif",
+        "size": 0.09,
+        "color": "#ffffff",
+        "align": "center",
+        "bold": false
+      }
+    }
+  },
+  "assets": [
+    {
+      "id": "style",
+      "name": "Series look (photoreal, morning)",
+      "type": "style",
+      "prompt": "Photorealistic cinematic still, 35mm film look, soft natural film grain, shallow depth of field, clear golden morning light, low warm sun. Palette: slate blue, sea-glass green, wet concrete grey, with warm human accents of ochre, rust and mustard yellow. Technology is ceramic-white, rounded and silent. Style reference frame: a quiet sunlit hillside town street in 2071 with ceramic-white rounded fixtures, no people in foreground. No holograms, no robots, no floating screens, no chrome, no neon, no legible text or signage, no logos, no extra people in the foreground, no watermark-like overlays.",
+      "references": [],
+      "source": "generate",
+      "qa": [
+        "Golden low morning light",
+        "Palette slate blue, sea-glass green, concrete grey with ochre accents",
+        "No neon, screens, holograms or chrome",
+        "No legible text or logos"
+      ]
+    },
+    {
+      "id": "mara",
+      "name": "Mara (character sheet)",
+      "type": "character",
+      "aspect": "1:1",
+      "prompt": "Photorealistic cinematic still, 35mm film look, soft natural film grain, shallow depth of field, clear golden morning light, low warm sun. Palette: slate blue, sea-glass green, wet concrete grey, with warm human accents of ochre, rust and mustard yellow. Technology is ceramic-white, rounded and silent. Character sheet of Mara, a 34-year-old Black woman, slim, close-cropped natural black hair with a single silver streak above her left temple, thoughtful dark eyes, calm neutral expression, wearing a grey knit sweater, dark blue-grey trousers and brown leather ankle boots, no coat, no jewellery. Four views side by side on a plain soft grey background: front, three-quarter front, left profile, back. Full body, even soft light, same person in every view. No holograms, no robots, no floating screens, no chrome, no neon, no legible text or signage, no logos, no extra people in the foreground, no watermark-like overlays.",
+      "references": [
+        "style"
+      ],
+      "source": "generate",
+      "qa": [
+        "Same face in every view",
+        "Silver streak above her LEFT temple only",
+        "Grey knit sweater, blue-grey trousers, brown ankle boots, no coat",
+        "Normal hands, five fingers each"
+      ]
+    },
+    {
+      "id": "coat",
+      "name": "Mara's mustard-ochre coat",
+      "type": "prop",
+      "aspect": "1:1",
+      "prompt": "Photorealistic cinematic still, 35mm film look, soft natural film grain, shallow depth of field, clear golden morning light, low warm sun. Palette: slate blue, sea-glass green, wet concrete grey, with warm human accents of ochre, rust and mustard yellow. Technology is ceramic-white, rounded and silent. Product shot of a knee-length mustard-ochre wool coat, single-breasted, plain notched lapels with no pin or badge, simple buttons, on an invisible mannequin, front view, plain soft grey background. No holograms, no robots, no floating screens, no chrome, no neon, no legible text or signage, no logos, no extra people in the foreground, no watermark-like overlays.",
+      "references": [
+        "style"
+      ],
+      "source": "generate",
+      "qa": [
+        "Mustard-ochre wool colour",
+        "Knee length",
+        "No pin, badge or logo on the lapel"
+      ]
+    },
+    {
+      "id": "flat",
+      "name": "Mara's flat (N1 room reference)",
+      "type": "location",
+      "prompt": "Photorealistic cinematic still, 35mm film look, soft natural film grain, shallow depth of field, clear golden morning light, low warm sun. Palette: slate blue, sea-glass green, wet concrete grey, with warm human accents of ochre, rust and mustard yellow. Technology is ceramic-white, rounded and silent. Wide shot, eye height, ~35mm lens feel: a tidy, pleasant flat on the Rise: a table, a chair, a long wall of rounded ceramic-white drawers on one side, a window at frame left. Nothing out of place. Golden light rakes across the floor and table from the window at frame left. No person in frame. No holograms, no robots, no floating screens, no chrome, no neon, no legible text or signage, no logos, no extra people in the foreground, no watermark-like overlays.",
+      "references": [
+        "style"
+      ],
+      "source": "generate",
+      "qa": [
+        "Window at frame left",
+        "Ceramic-white rounded drawer wall clearly visible",
+        "No people",
+        "No screens or text"
+      ]
+    },
+    {
+      "id": "street",
+      "name": "Rise hill street (N2 street reference)",
+      "type": "location",
+      "prompt": "Photorealistic cinematic still, 35mm film look, soft natural film grain, shallow depth of field, clear golden morning light, low warm sun. Palette: slate blue, sea-glass green, wet concrete grey, with warm human accents of ochre, rust and mustard yellow. Technology is ceramic-white, rounded and silent. Wide shot, eye height, centred composition: a clean, gardened residential street on a hill, everything a little too symmetrical: identical neat hedges, tidy doorsteps, a centred vanishing point, ceramic-white rounded street furniture. No people in foreground. No holograms, no robots, no floating screens, no chrome, no neon, no legible text or signage, no logos, no extra people in the foreground, no watermark-like overlays.",
+      "references": [
+        "style"
+      ],
+      "source": "generate",
+      "qa": [
+        "Symmetrical hedges and doorsteps",
+        "Ceramic-white rounded street furniture",
+        "No legible signs or text",
+        "No neon or screens"
+      ]
+    },
+    {
+      "id": "notebook",
+      "name": "Mara's notebook",
+      "type": "prop",
+      "aspect": "1:1",
+      "prompt": "Photorealistic cinematic still, 35mm film look, soft natural film grain, shallow depth of field, clear golden morning light, low warm sun. Palette: slate blue, sea-glass green, wet concrete grey, with warm human accents of ochre, rust and mustard yellow. Technology is ceramic-white, rounded and silent. Product-style insert: a small pocket notebook with a plain dark cover held shut by a red elastic band, closed, on a wooden surface. No writing visible. No holograms, no robots, no floating screens, no chrome, no neon, no legible text or signage, no logos, no extra people in the foreground, no watermark-like overlays.",
+      "references": [
+        "style"
+      ],
+      "source": "generate",
+      "qa": [
+        "Red elastic band around the cover",
+        "Notebook is closed",
+        "No text on the cover"
+      ]
+    },
+    {
+      "id": "title-bg",
+      "name": "Title card background",
+      "type": "image",
+      "prompt": "Photorealistic cinematic still, 35mm film look, soft natural film grain, shallow depth of field, clear golden morning light, low warm sun. Palette: slate blue, sea-glass green, wet concrete grey, with warm human accents of ochre, rust and mustard yellow. Technology is ceramic-white, rounded and silent. A plain, softly textured background in deep slate blue with very subtle film grain and a faint warm vignette, completely empty, no objects, no text. The centre of the frame is a clean, empty, evenly lit area. No holograms, no robots, no floating screens, no chrome, no neon, no logos, no watermark-like overlays. No text or letters of any kind.",
+      "references": [
+        "style"
+      ],
+      "source": "generate",
+      "qa": [
+        "Plain deep slate-blue background",
+        "No text or letters",
+        "Even, calm texture with film grain"
+      ]
+    },
+    {
+      "id": "card-still",
+      "name": "Suggestion card still (s03)",
+      "type": "image",
+      "prompt": "Photorealistic cinematic still, 35mm film look, soft natural film grain, shallow depth of field, clear golden morning light, low warm sun. Palette: slate blue, sea-glass green, wet concrete grey, with warm human accents of ochre, rust and mustard yellow. Technology is ceramic-white, rounded and silent. Insert, top-down three-quarter view: a second rounded ceramic-white drawer from Mara's flat slid out, a small blank cream card lying in it near the centre of the frame, card face completely clean and empty, sharp focus. Golden morning light. No holograms, no robots, no floating screens, no chrome, no neon, no legible text or signage, no logos, no extra people in the foreground, no watermark-like overlays.",
+      "references": [
+        "flat",
+        "style"
+      ],
+      "source": "generate",
+      "qa": [
+        "Card face is completely blank and clean",
+        "Drawer matches the flat's ceramic-white rounded drawers",
+        "Card sits near frame centre with clear empty space on it",
+        "No text, letters or logos anywhere"
+      ]
+    }
+  ],
+  "shots": [
+    {
+      "id": "s01",
+      "title": "The perfect flat",
+      "description": "Planned 5 s; trim in edit. Mara V.O. over 01-03: \"I've never been hungry. I've never been late. I've never been afraid of tomorrow.\"",
+      "durationSec": 6,
+      "prompt": "Photorealistic cinematic still, 35mm film look, soft natural film grain, shallow depth of field, clear golden morning light, low warm sun. Palette: slate blue, sea-glass green, wet concrete grey, with warm human accents of ochre, rust and mustard yellow. Technology is ceramic-white, rounded and silent. Wide shot, eye height, ~35mm lens feel: a tidy, pleasant flat on the Rise: a table, a chair, a long wall of rounded ceramic-white drawers on one side, a window at frame left. Golden light rakes across the floor and table from the window at frame left. No person in frame. Locked-off static camera. Only the light moves: sunlight shimmers very slightly on the floor; dust motes drift. Soft room tone. No holograms, no robots, no floating screens, no chrome, no neon, no legible text or signage, no logos, no extra people in the foreground, no watermark-like overlays.",
+      "assets": [
+        "flat",
+        "style"
+      ],
+      "camera": "Locked-off static wide",
+      "qa": [
+        "Matches the flat reference: window left, drawer wall visible",
+        "No people at any point",
+        "Camera does not move or zoom",
+        "No text, screens or morphing"
+      ]
+    },
+    {
+      "id": "s02",
+      "title": "Breakfast arrives",
+      "description": "Planned 4 s; trim in edit. Mara V.O. continues. Light ripple on the drawer is added in post.",
+      "durationSec": 6,
+      "prompt": "Photorealistic cinematic still, 35mm film look, soft natural film grain, shallow depth of field, clear golden morning light, low warm sun. Palette: slate blue, sea-glass green, wet concrete grey, with warm human accents of ochre, rust and mustard yellow. Technology is ceramic-white, rounded and silent. Insert, camera slightly above: one rounded ceramic-white wall drawer from Mara's flat, slightly open, revealing a neat breakfast tray with bread, fruit and a cup, exactly right. The drawer face fills the frame. Golden morning light from frame left. Static camera. The drawer slides smoothly open toward camera and stops. Nothing else moves. Soft neutral drawer sound. Do not add light effects. No holograms, no robots, no floating screens, no chrome, no neon, no legible text or signage, no logos, no extra people in the foreground, no watermark-like overlays.",
+      "assets": [
+        "flat",
+        "style"
+      ],
+      "camera": "Static insert, slightly high",
+      "qa": [
+        "Drawer matches the flat's ceramic-white rounded drawers",
+        "Tray holds bread, fruit and a cup",
+        "Drawer moves once and stops",
+        "No text or extra objects appearing"
+      ]
+    },
+    {
+      "id": "s03",
+      "title": "The suggestion card",
+      "description": "Planned 3 s, still image only. The card line \"You may also enjoy: kintsugi.\" is a text layer on this shot and must never be generated. Gentle push-in is a ken-burns effect in post.",
+      "durationSec": 6,
+      "prompt": "Photorealistic cinematic still, 35mm film look, soft natural film grain, shallow depth of field, clear golden morning light, low warm sun. Palette: slate blue, sea-glass green, wet concrete grey, with warm human accents of ochre, rust and mustard yellow. Technology is ceramic-white, rounded and silent. Insert, top-down three-quarter view: a second rounded ceramic-white drawer from Mara's flat slid out, a small blank cream card lying in it near the centre of the frame, card face completely clean and empty, sharp focus. Golden morning light. No holograms, no robots, no floating screens, no chrome, no neon, no legible text or signage, no logos, no extra people in the foreground, no watermark-like overlays.",
+      "assets": [
+        "card-still",
+        "flat",
+        "style"
+      ],
+      "camera": "Still top-down three-quarter insert; push-in in post",
+      "qa": [
+        "Card is completely blank in the still",
+        "Drawer matches the flat's drawers",
+        "Text layer sits on the card face and is legible",
+        "No generated text anywhere"
+      ],
+      "render": "still",
+      "clip": "card-still",
+      "layers": [
+        {
+          "id": "s03-card-text",
+          "type": "text",
+          "text": "You may also enjoy: kintsugi.",
+          "startSec": 0.5,
+          "endSec": 6,
+          "box": {
+            "x": 0.37,
+            "y": 0.42,
+            "width": 0.3,
+            "height": 0.12
+          },
+          "textStyle": "plain",
+          "style": {
+            "font": "serif",
+            "size": 0.035,
+            "color": "#3a3a3a",
+            "align": "center"
+          },
+          "anim": {
+            "in": "fade",
+            "durationSec": 0.6
+          }
+        }
+      ],
+      "effects": [
+        {
+          "preset": "ken-burns",
+          "params": {}
+        }
+      ]
+    },
+    {
+      "id": "s04",
+      "title": "Thank you",
+      "description": "Planned 4.5 s; trim in edit. Audio: MARA O.S. \"Thank you.\" / THE QUIET V.O. \"You're welcome, Mara.\" Back to camera, so no lip-sync.",
+      "durationSec": 6,
+      "prompt": "Photorealistic cinematic still, 35mm film look, soft natural film grain, shallow depth of field, clear golden morning light, low warm sun. Palette: slate blue, sea-glass green, wet concrete grey, with warm human accents of ochre, rust and mustard yellow. Technology is ceramic-white, rounded and silent. Medium shot from behind, eye height, ~50mm lens feel: Mara, a 34-year-old Black woman, slim, close-cropped natural black hair with a single silver streak above her left temple, thoughtful dark eyes, wearing a grey knit sweater, dark blue-grey trousers, no coat. She stands at the ceramic-white rounded drawer wall of her flat holding a small blank cream card. Static camera. She reads the card, tilts her head slightly and smiles, read only through her shoulders and cheek line. She does not turn to camera. No visible speech. She is NOT wearing a coat. No holograms, no robots, no floating screens, no chrome, no neon, no legible text or signage, no logos, no extra people in the foreground, no watermark-like overlays.",
+      "assets": [
+        "mara",
+        "flat",
+        "style"
+      ],
+      "camera": "Static medium from behind",
+      "qa": [
+        "Grey knit sweater, NO coat",
+        "Silver streak visible above left temple if the side of her head shows",
+        "Hands and card not melted together",
+        "She never turns to camera"
+      ]
+    },
+    {
+      "id": "s05",
+      "title": "Taking the notebook",
+      "description": "Planned 4 s; trim in edit. Room tone only. Notebook stays closed (D-099).",
+      "durationSec": 6,
+      "prompt": "Photorealistic cinematic still, 35mm film look, soft natural film grain, shallow depth of field, clear golden morning light, low warm sun. Palette: slate blue, sea-glass green, wet concrete grey, with warm human accents of ochre, rust and mustard yellow. Technology is ceramic-white, rounded and silent. Insert on a small side table in Mara's flat, separate from the main table: a lopsided handmade clay pot, a pair of binoculars still in their box, two small plain guild pins in a dish, and a pocket notebook with a red elastic band, closed. Static camera, eye level. Late in the shot a hand in a grey knit sweater cuff enters from frame right and picks up the closed notebook in one smooth motion. The notebook stays closed. No holograms, no robots, no floating screens, no chrome, no neon, no legible text or signage, no logos, no extra people in the foreground, no watermark-like overlays.",
+      "assets": [
+        "mara",
+        "notebook",
+        "flat",
+        "style"
+      ],
+      "camera": "Static insert, eye level",
+      "qa": [
+        "All four objects present: clay pot, boxed binoculars, pins, notebook",
+        "Hand has five normal fingers and a grey knit cuff",
+        "Notebook stays closed",
+        "Hand enters from frame right"
+      ]
+    },
+    {
+      "id": "s06",
+      "title": "Coat on, out the door",
+      "description": "Planned 2.5 s; trim in edit. Costume change: starts in sweater with coat in hand, ends wearing the coat. Soft door sound; music comes in under the cut.",
+      "durationSec": 6,
+      "prompt": "Photorealistic cinematic still, 35mm film look, soft natural film grain, shallow depth of field, clear golden morning light, low warm sun. Palette: slate blue, sea-glass green, wet concrete grey, with warm human accents of ochre, rust and mustard yellow. Technology is ceramic-white, rounded and silent. Medium shot, eye height, in her flat: Mara, a 34-year-old Black woman, slim, close-cropped natural black hair with a single silver streak above her left temple, thoughtful dark eyes, wearing a grey knit sweater, dark blue-grey trousers, no coat, holding a knee-length mustard-ochre wool coat open with one arm already in the sleeve. Static camera. She puts her second arm in, shrugs the coat onto her shoulders and walks out of frame LEFT wearing it. No holograms, no robots, no floating screens, no chrome, no neon, no legible text or signage, no logos, no extra people in the foreground, no watermark-like overlays.",
+      "assets": [
+        "mara",
+        "coat",
+        "flat",
+        "style"
+      ],
+      "camera": "Static medium",
+      "qa": [
+        "Coat is knee-length mustard-ochre wool",
+        "She exits frame left",
+        "No pin on the lapel",
+        "Face matches the Mara character sheet"
+      ]
+    },
+    {
+      "id": "s07",
+      "title": "Title: ALLOTMENT",
+      "description": "Planned 5 s. Title card: the title-bg still with ALLOTMENT as a centred white serif text layer (ata-title), fading in and out; the word is never generated by the image or video model. Title sting from the series music library.",
+      "durationSec": 6,
+      "prompt": "Photorealistic cinematic still, 35mm film look, soft natural film grain, shallow depth of field, clear golden morning light, low warm sun. Palette: slate blue, sea-glass green, wet concrete grey, with warm human accents of ochre, rust and mustard yellow. Technology is ceramic-white, rounded and silent. A plain, softly textured background in deep slate blue with very subtle film grain and a faint warm vignette, completely empty, no objects, no text. The centre of the frame is a clean, empty, evenly lit area. No holograms, no robots, no floating screens, no chrome, no neon, no logos, no watermark-like overlays. No text or letters of any kind.",
+      "assets": [
+        "title-bg",
+        "style"
+      ],
+      "camera": "Still, full frame",
+      "qa": [
+        "Background matches title-bg: plain deep slate blue",
+        "No generated text or letters in the still",
+        "ALLOTMENT text layer is centred, white serif and legible",
+        "Title fades in and out"
+      ],
+      "render": "still",
+      "clip": "title-bg",
+      "layers": [
+        {
+          "id": "s07-title",
+          "type": "text",
+          "text": "ALLOTMENT",
+          "startSec": 0.5,
+          "endSec": 5.5,
+          "position": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "textStyle": "ata-title",
+          "anim": {
+            "in": "fade",
+            "out": "fade",
+            "durationSec": 0.8
+          }
+        }
+      ]
+    },
+    {
+      "id": "s08",
+      "title": "The too-perfect street",
+      "description": "Planned 6 s. Shot 07 (title ALLOTMENT) comes before this in the edit. Music in, seductive and sincere.",
+      "durationSec": 6,
+      "prompt": "Photorealistic cinematic still, 35mm film look, soft natural film grain, shallow depth of field, clear golden morning light, low warm sun. Palette: slate blue, sea-glass green, wet concrete grey, with warm human accents of ochre, rust and mustard yellow. Technology is ceramic-white, rounded and silent. Wide shot, eye height, centred composition: a clean, gardened residential street on a hill, everything a little too symmetrical: identical neat hedges, tidy doorsteps, a centred vanishing point, ceramic-white rounded street furniture. Golden morning light. Static camera. Leaves stir gently; one or two small distant figures cross far in the back. Nothing else moves. No holograms, no robots, no floating screens, no chrome, no neon, no legible text or signage, no logos, no extra people in the foreground, no watermark-like overlays.",
+      "assets": [
+        "street",
+        "style"
+      ],
+      "camera": "Static wide, centred",
+      "qa": [
+        "Matches the street reference",
+        "Camera does not push in",
+        "Distant figures do not split or morph",
+        "No legible signs"
+      ]
+    },
+    {
+      "id": "s09",
+      "title": "Mara steps out",
+      "description": "Planned 7 s. Screen direction right to left. Walking is medium risk; fallback is a static frame she walks through.",
+      "durationSec": 6,
+      "prompt": "Photorealistic cinematic still, 35mm film look, soft natural film grain, shallow depth of field, clear golden morning light, low warm sun. Palette: slate blue, sea-glass green, wet concrete grey, with warm human accents of ochre, rust and mustard yellow. Technology is ceramic-white, rounded and silent. Medium-to-wide shot, eye height, static frame: Mara, a 34-year-old Black woman, slim, close-cropped natural black hair with a single silver streak above her left temple, thoughtful dark eyes, wearing a knee-length mustard-ochre wool coat (hem just above the knee) over a grey knit sweater, dark blue-grey trousers, brown leather ankle boots, no pin on the lapel. She steps out of a doorway into the sun on the symmetrical gardened hill street and walks from frame RIGHT to frame LEFT at an easy pace, exiting left. Feet plant naturally on the pavement. No holograms, no robots, no floating screens, no chrome, no neon, no legible text or signage, no logos, no extra people in the foreground, no watermark-like overlays.",
+      "assets": [
+        "mara",
+        "coat",
+        "street",
+        "style"
+      ],
+      "camera": "Static frame (or gentle follow)",
+      "qa": [
+        "Mustard-ochre coat, brown ankle boots, no pin",
+        "Walks right to left",
+        "Feet touch the ground, no gliding",
+        "Same street as shot 08"
+      ]
+    },
+    {
+      "id": "s10",
+      "title": "Children roam",
+      "description": "Planned 6 s. No identifiable children.",
+      "durationSec": 6,
+      "prompt": "Photorealistic cinematic still, 35mm film look, soft natural film grain, shallow depth of field, clear golden morning light, low warm sun. Palette: slate blue, sea-glass green, wet concrete grey, with warm human accents of ochre, rust and mustard yellow. Technology is ceramic-white, rounded and silent. Wide shot of a clean, gardened residential street on a hill, everything a little too symmetrical: identical neat hedges, tidy doorsteps, a centred vanishing point, ceramic-white rounded street furniture: several children of different ages roam alone, unhurried, crossing left to right and right to left at an easy pace; no anxious adults watching. Faces small or turned away. Golden morning light. Static camera. No holograms, no robots, no floating screens, no chrome, no neon, no legible text or signage, no logos, no extra people in the foreground, no watermark-like overlays.",
+      "assets": [
+        "street",
+        "style"
+      ],
+      "camera": "Static wide",
+      "qa": [
+        "Same street as shot 08",
+        "Children walk naturally, no clipping through each other",
+        "No clear faces",
+        "Camera does not push in"
+      ]
+    },
+    {
+      "id": "s11",
+      "title": "Weekday café",
+      "description": "Planned 5 s. Music plus café murmur.",
+      "durationSec": 6,
+      "prompt": "Photorealistic cinematic still, 35mm film look, soft natural film grain, shallow depth of field, clear golden morning light, low warm sun. Palette: slate blue, sea-glass green, wet concrete grey, with warm human accents of ochre, rust and mustard yellow. Technology is ceramic-white, rounded and silent. Wide shot: a pavement café on the same symmetrical gardened hill street, every table full on a weekday morning, relaxed adults with nowhere to be, cups and conversation, mustard and ochre umbrellas. Static camera. People chat, sip and lean back with gentle natural movement. Faces small in frame. No holograms, no robots, no floating screens, no chrome, no neon, no legible text or signage, no logos, no extra people in the foreground, no watermark-like overlays.",
+      "assets": [
+        "street",
+        "style"
+      ],
+      "camera": "Static wide",
+      "qa": [
+        "Same street style as shot 08",
+        "Faces not melted or distorted",
+        "No legible menus or signs",
+        "Camera does not push in"
+      ]
+    },
+    {
+      "id": "s12",
+      "title": "Sea steps",
+      "description": "Planned 6 s. Music plus water and laughter.",
+      "durationSec": 6,
+      "prompt": "Photorealistic cinematic still, 35mm film look, soft natural film grain, shallow depth of field, clear golden morning light, low warm sun. Palette: slate blue, sea-glass green, wet concrete grey, with warm human accents of ochre, rust and mustard yellow. Technology is ceramic-white, rounded and silent. Wide shot, slightly high: wide pale stone sea steps at the end of the hill street leading into calm sparkling water; a cold-water swimming group in the water and on the steps, towels and laughter. Static camera. Swimmers bob and splash; sunlight glitters on the water. No holograms, no robots, no floating screens, no chrome, no neon, no legible text or signage, no logos, no extra people in the foreground, no watermark-like overlays.",
+      "assets": [
+        "style"
+      ],
+      "camera": "Static wide, slightly high",
+      "qa": [
+        "Stone steps lead into the sea",
+        "Swimmers' bodies not merged or distorted",
+        "No street furniture floating on the steps",
+        "No text or logos"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "from": "s01",
+      "to": "s02",
+      "kind": "match",
+      "note": "Same flat; s02-s05 use the flat reference"
+    },
+    {
+      "from": "s06",
+      "to": "s07",
+      "kind": "cut",
+      "note": "Dip to black into the title card",
+      "transition": {
+        "preset": "dip",
+        "params": {
+          "durationSec": 0.5
+        }
+      }
+    },
+    {
+      "from": "s07",
+      "to": "s08",
+      "kind": "cut",
+      "note": "Title card crossfades into the street; music in",
+      "transition": {
+        "preset": "crossfade",
+        "params": {
+          "durationSec": 0.8
+        }
+      }
+    },
+    {
+      "from": "s08",
+      "to": "s09",
+      "kind": "match",
+      "note": "Same street; s09-s11 use the street reference"
+    }
+  ]
+}
