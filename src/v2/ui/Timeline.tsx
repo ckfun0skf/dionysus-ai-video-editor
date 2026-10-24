@@ -334,7 +334,8 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
             ))}
             {expanded && layerTops.map(({ id, top }) => { const t = comp.tracks.find((x) => x.id === id); return t && (
               <div key={id} className="v2-layer-side" data-track-id={id} style={{ top }}>
-                <LayerControls t={t} isMain={t.id === main?.id} onToggle={() => engine.dispatch(cmd.toggleTrackHidden(t.id))} onDelete={() => setConfirmDel(t.id)} onReorder={(e) => startLayerDrag(e, t.id)} dragging={layerDrag?.id === t.id} onEditAll={onEditLayer && t.kind === "text" && layers.textClipCount(t) > 0 ? () => onEditLayer(t.id) : undefined} onEditSubs={onEditSubs && t.kind === "text" && layers.textClipCount(t) > 0 ? () => onEditSubs(t.id) : undefined} />
+                {/* V2-105: the 144px mobile column fits 4 controls; "Edit subtitles" lives in the Text toolbar and the clip toolbar instead. */}
+                <LayerControls t={t} isMain={t.id === main?.id} onToggle={() => engine.dispatch(cmd.toggleTrackHidden(t.id))} onDelete={() => setConfirmDel(t.id)} onReorder={(e) => startLayerDrag(e, t.id)} dragging={layerDrag?.id === t.id} onEditAll={onEditLayer && t.kind === "text" && layers.textClipCount(t) > 0 ? () => onEditLayer(t.id) : undefined} />
               </div>); })}
           </div>}
           <div className="v2-ruler" onPointerDown={scrub}>
