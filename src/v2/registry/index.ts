@@ -1,13 +1,12 @@
 /** Preset registry (V2-097): the only source of animation / effect / transition / sticker lists. */
 import { BUILTIN_PRESETS } from "./presets";
-import { RENDERERS } from "./renderers";
-import { identityFrame, PRESET_KINDS, type Params, type PresetDescriptor, type PresetFrame, type PresetKind, type RenderFn } from "./types";
+import { HOOKS, RENDERERS } from "./renderers";
+import { identityFrame, PRESET_ID_RE, PRESET_KINDS, type Params, type PresetDescriptor, type PresetFrame, type PresetKind, type RenderFn, type RenderHooks } from "./types";
 export * from "./types";
 export * from "./fonts";
-export { RENDERERS, hash } from "./renderers";
+export { HOOKS, RENDERERS, hash } from "./renderers";
+export { PRESET_PROBLEMS, PRESET_MODULE_PATHS } from "../presets";
 
-/** Preset ids are lowercase-friendly slugs; "@" is reserved for version pins (`ken-burns@2`). */
-export const PRESET_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/;
 const key = (kind: PresetKind, id: string) => `${kind}:${id}`;
 const table = new Map<string, PresetDescriptor>();
 let version = 0;
@@ -25,8 +24,14 @@ export function registerPresets(list: unknown[]): string[] {
   return bad;
 }
 export function unregisterPreset(kind: PresetKind, id: string) { version += 1; return table.delete(key(kind, id)); }
-/** Register a render function for a new descriptor `type` (code side of a new preset). */
-export function registerRenderer(type: string, fn: RenderFn) { (RENDERERS as Record<string, RenderFn>)[type] = fn; }
+/**
+ * Register a render function (and optional canvas hooks) for a new descriptor `type` at runtime. Built-in presets
+ * don't need this: their module files under src/v2/presets/ are registered automatically.
+ */
+export function registerRenderer(type: string, fn: RenderFn, hooks?: RenderHooks) {
+  RENDERERS[type] = fn;
+  if (hooks?.draw || hooks?.paint) HOOKS[type] = hooks; else delete HOOKS[type];
+}
 export const registryVersion = () => version;
 export function resetPresets() { table.clear(); registerPresets(BUILTIN_PRESETS); }
 resetPresets();
@@ -44,7 +49,14 @@ export function applyPreset(kind: PresetKind, id: string | undefined, p: number,
   const d = getPreset(kind, id);
   if (!d) return f;
   const fn = RENDERERS[d.type];
-  return fn ? fn(f, Math.max(0, Math.min(1, Number.isFinite(p) ? p : 0)), defaultsOf(d, params)) : f;
+  if (!fn) return f;
+  const t = Math.max(0, Math.min(1, Number.isFinite(p) ? p : 0)), k = defaultsOf(d, params), out = fn(f, t, k), h = HOOKS[d.type];
+  if (!h) return out;
+  // Canvas hooks (V2-FX-MOD) ride on the frame as closures bound to this progress and these params.
+  const { draw, paint } = h;
+  if (draw && d.kind === "videoEffect") return { ...out, passes: [...(out.passes ?? []), (env) => draw({ ...env, p: t, params: k })] };
+  if (paint && d.kind === "transition") return { ...out, tOut: { ...out.tOut, paint: (env) => paint({ ...env, p: t, params: k, side: "out", mix: out.mixOut ?? 1 }) }, tIn: { ...out.tIn, paint: (env) => paint({ ...env, p: t, params: k, side: "in", mix: out.mixIn ?? 1 }) } };
+  return out;
 }
 export const loopPeriod = (id: string | undefined, params?: Params) => { const d = getPreset("textAnimLoop", id); const v = d ? defaultsOf(d, params).period : 1; return typeof v === "number" && v > 0 ? v : 1; };
 

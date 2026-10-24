@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { applyPreset, identityFrame, loopPeriod, type PresetKind } from "../registry";
+import { applyPreset, getPreset, identityFrame, loopPeriod, type PresetKind } from "../registry";
 
 /** One cycle of a tile preview, in ms. In/out play then hold; loops run one period. */
 const CYCLE_MS = 1600;
@@ -17,11 +17,12 @@ export function tileFontPx(px: number, tw: number, w: number): number {
 }
 
 /**
- * Live-looping preview of a preset on "ABC123", drawn with the same render function the player uses
+ * Live-looping preview of a preset on `sample` (default: the descriptor's `preview.text`, else "ABC123"), drawn with the same render function the player uses
  * (V2-098). Works for text animations, effects (static style) and stickers (SVG).
  */
-export function PresetTile({ kind, id, label, active, onPick, sample = "ABC123", animate = true }: { kind: PresetKind; id: string; label: string; active?: boolean; onPick: () => void; sample?: string; animate?: boolean }) {
+export function PresetTile({ kind, id, label, active, onPick, sample: sampleProp, animate = true }: { kind: PresetKind; id: string; label: string; active?: boolean; onPick: () => void; sample?: string; animate?: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null);
+  const sample = sampleProp ?? getPreset(kind, id)?.preview.text ?? "ABC123";
   useEffect(() => {
     const c = ref.current, g = c?.getContext?.("2d");
     if (!c || !g) return;

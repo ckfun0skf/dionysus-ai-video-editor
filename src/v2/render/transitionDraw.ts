@@ -7,6 +7,7 @@
  * and scaled back up, which is cheap on phones and looks the same everywhere.
  */
 import { hash, type TransLayer } from "../registry";
+import { paintScratch } from "./paintScratch";
 
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 type AnyCanvas = HTMLCanvasElement | OffscreenCanvas;
@@ -29,7 +30,7 @@ function scratchCtx(w: number, h: number): OffscreenCanvasRenderingContext2D | C
 export function isPlainLook(fx: TransLayer | undefined): boolean {
   if (!fx) return true;
   return !fx.dx && !fx.dy && (fx.scale === undefined || fx.scale === 1) && !fx.rot && !(fx.blur && fx.blur > 0) && !fx.clip
-    && fx.iris === undefined && !(fx.glitch && fx.glitch > 0) && !(fx.tint && (fx.tintAlpha ?? 0) > 0);
+    && fx.iris === undefined && !(fx.glitch && fx.glitch > 0) && !(fx.tint && (fx.tintAlpha ?? 0) > 0) && !fx.paint;
 }
 
 /** Downscale factor for a blur radius in pixels (1 = no blur). */
@@ -43,6 +44,7 @@ export function drawWithLook(ctx: Ctx, W: number, H: number, fx: TransLayer | un
   if (isPlainLook(fx)) { draw(ctx); return; }
   const f = fx!;
   ctx.save();
+  const alpha = ctx.globalAlpha;
   // Wipe / iris clip in frame space (the edge stays put while the picture moves).
   if (f.clip || f.iris !== undefined) {
     ctx.beginPath();
@@ -87,6 +89,13 @@ export function drawWithLook(ctx: Ctx, W: number, H: number, fx: TransLayer | un
     ctx.globalAlpha = Math.min(1, f.tintAlpha!);
     ctx.fillStyle = f.tint;
     ctx.fillRect(0, 0, W, H);
+  }
+  // Transition `paint` hook (V2-FX-MOD): draws over this side, inside its clip, at the side's opacity.
+  if (f.paint) {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    f.paint({ ctx, w: W, h: H, scratch: paintScratch });
+    ctx.restore();
   }
   ctx.restore();
 }

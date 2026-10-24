@@ -5,6 +5,7 @@
  */
 import type { Composition } from "../domain/model";
 import { applyPreset, identityFrame, type PresetFrame } from "../registry";
+import { runPasses } from "./paintScratch";
 
 /** Composite effect frame at time t, or undefined when no visible effect clip is active. Pure. */
 export function effectFrameAt(comp: Composition, t: number): PresetFrame | undefined {
@@ -21,7 +22,9 @@ export function effectFrameAt(comp: Composition, t: number): PresetFrame | undef
   return f;
 }
 
-export const isIdentity = (f: PresetFrame) => f.alpha === 1 && !f.dx && !f.dy && f.scale === 1 && !f.blur && !f.gray && !f.vignette;
+/** True when the frame's built-in fields change nothing (canvas-hook passes not considered). */
+const isPlainFrame = (f: PresetFrame) => f.alpha === 1 && !f.dx && !f.dy && f.scale === 1 && !f.blur && !f.gray && !f.vignette;
+export const isIdentity = (f: PresetFrame) => isPlainFrame(f) && !f.passes?.length;
 
 type Scratch = { canvas: HTMLCanvasElement | OffscreenCanvas };
 const scratch: Scratch = { canvas: undefined as unknown as HTMLCanvasElement };
@@ -35,6 +38,12 @@ function scratchCanvas(w: number, h: number) {
 /** Apply effect frame `f` in place to what is on `ctx` (the main-track frame). */
 export function applyEffectFrame(ctx: CanvasRenderingContext2D, w: number, h: number, f: PresetFrame) {
   if (isIdentity(f)) return;
+  if (!isPlainFrame(f)) applyBuiltIn(ctx, w, h, f);
+  // videoEffect `draw` hooks (V2-FX-MOD) run last, on the finished picture, in effect-layer order.
+  runPasses(ctx, w, h, f.passes);
+}
+
+function applyBuiltIn(ctx: CanvasRenderingContext2D, w: number, h: number, f: PresetFrame) {
   const s = scratchCanvas(w, h);
   const g = s.getContext("2d") as CanvasRenderingContext2D | null;
   if (!g) return;

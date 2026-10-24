@@ -5,7 +5,9 @@ import { describe, expect, it } from "vitest";
 
 const V2 = resolve(__dirname);
 const ALLOWED: Record<string, string[]> = {
-  registry: ["registry"],
+  // Preset modules (V2-FX-MOD) sit under the registry: the registry loads them, they import only registry types.
+  registry: ["registry", "presets"],
+  presets: ["presets", "registry"],
   domain: ["domain", "registry"],
   ports: ["registry", "domain", "ports"],
   engine: ["registry", "domain", "ports", "engine"],
@@ -15,7 +17,7 @@ const ALLOWED: Record<string, string[]> = {
 };
 /** Known violations being fixed in follow-up PRs; must shrink to empty. */
 const KNOWN_VIOLATIONS = new Set<string>();
-const NO_DOM = new Set(["registry", "domain", "ports", "engine"]);
+const NO_DOM = new Set(["registry", "presets", "domain", "ports", "engine"]);
 
 function files(dir: string): string[] {
   return readdirSync(dir).flatMap((n) => {
@@ -53,6 +55,7 @@ describe("v2 architecture", () => {
           expect(rel.startsWith(".."), `${spec}: v2 must not import legacy src`).toBe(false);
           const tLayer = rel.split(/[\\/]/)[0];
           expect(ALLOWED[layer], `${layer} -> ${tLayer} (${spec})`).toContain(tLayer);
+          if (layer === "presets" && tLayer === "registry") expect(rel.replace(/\\/g, "/"), `presets may import only registry/types (no cycle): ${spec}`).toMatch(/^registry\/types(\.ts)?$/);
           if (layer === "ui" && tLayer !== "ui") expect(rel.split(/[\\/]/).length, `ui must import ${tLayer} via its index.ts barrel (${spec})`).toBeLessThanOrEqual(1);
         } else if (NO_DOM.has(layer)) {
           expect(["react", "react-dom"].some((r) => spec === r || spec.startsWith(`${r}/`)), `${layer} must not import ${spec}`).toBe(false);
