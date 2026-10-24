@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "check:tasks": "node scripts/check-tasks-updated.mjs"
+    "check:tasks": "node scripts/check-tasks-updated.mjs",
+    "gen:ai": "UPDATE_AI_GUIDE=1 vitest run src/v2/domain/aiGuide.test.ts"
   },
   "dependencies": {
     "lucide-react": "^0.468.0",

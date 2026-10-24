@@ -198,6 +198,21 @@ Every error and warning carries a JSON path (for example `shots[2].layers[0].end
 
 ## 5. Planner prompt (updated)
 
+**Published guide (V2-SB-114).** The planner material is generated from the registry by `src/v2/domain/storyPrompt.ts` and `src/v2/domain/aiGuide.ts`, and published with the app:
+
+| File | URL |
+|---|---|
+| `public/ai/storyboard-guide.md` | https://ckfun0skf.github.io/dionysus-ai-video-editor/ai/storyboard-guide.md |
+| `public/ai/storyboard-guide.html` | the same guide as a web page (`…/ai/storyboard-guide.html`) |
+| `public/ai/presets.json` | machine-readable preset ids, descriptions, params and defaults, and font ids |
+| `public/llms.txt` | https://ckfun0skf.github.io/dionysus-ai-video-editor/llms.txt |
+
+Run `npm run gen:ai` after changing presets, fonts, the rules or the example; `aiGuide.test.ts` fails while the committed files are stale.
+
+The app offers two prompts (Storyboard → AI prompt):
+- **Short prompt** (default): links to the guide and tells the AI to read it first. An AI that can't open links is told to ask the user for the full prompt instead of guessing the format.
+- **Full prompt**: the guide inlined (FORMAT, PRESETS, RULES 1-12, EXAMPLE), for AIs without web access.
+
 The presets section of the planner prompt is **generated from the registry** (only ids listed there may be used): for each kind, it lists every id with a one-line description and its params with defaults. The rules section becomes:
 
 ```

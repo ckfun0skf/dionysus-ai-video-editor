@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { EXAMPLE_STORYBOARD, story, storyboardSystemPrompt, type StoryDoc } from "../../domain";
+import { EXAMPLE_STORYBOARD, GUIDE_HTML_URL, story, storyboardShortPrompt, storyboardSystemPrompt, type StoryDoc } from "../../domain";
 import { Ic } from "../Icon";
 import { copyText } from "./clipboard";
 
@@ -25,17 +25,29 @@ export function CopyButton({ text, label, primary, testId }: { text: () => strin
   );
 }
 
-/** Step 1: the system prompt for the user's own AI (no AI calls from the app). */
+/**
+ * Step 1: the prompt for the user's own AI (no AI calls from the app). "Short" links to the published guide; "Full"
+ * inlines it for AIs that can't open links (V2-SB-114).
+ */
 export function PromptPanel() {
-  const prompt = useMemo(storyboardSystemPrompt, []);
+  const [kind, setKind] = useState<"short" | "full">("short");
+  const short = useMemo(storyboardShortPrompt, []);
+  const full = useMemo(storyboardSystemPrompt, []);
+  const prompt = kind === "short" ? short : full;
   return (
     <section className="v2-sb-panel" aria-label="AI prompt">
       <p className="v2-sb-lead">Paste this into the chat where you agreed the story (ChatGPT, Gemini, Claude, Grok…). It makes the AI reply with a storyboard JSON that Dionysus can import.</p>
+      <div className="v2-sb-seg" role="radiogroup" aria-label="Prompt length">
+        <button role="radio" aria-checked={kind === "short"} className={kind === "short" ? "on" : ""} data-testid="prompt-short" onClick={() => setKind("short")}><b>Short prompt</b><em>Links to the Dionysus guide</em></button>
+        <button role="radio" aria-checked={kind === "full"} className={kind === "full" ? "on" : ""} data-testid="prompt-full" onClick={() => setKind("full")}><b>Full prompt</b><em>Everything inline, for AIs that can't open links</em></button>
+      </div>
       <div className="v2-sb-actions">
-        <CopyButton text={() => prompt} label="Copy AI prompt" primary testId="copy-prompt" />
+        <CopyButton key={kind} text={() => prompt} label={kind === "short" ? "Copy AI prompt" : "Copy full prompt"} primary testId="copy-prompt" />
         <CopyButton text={() => JSON.stringify(EXAMPLE_STORYBOARD, null, 2)} label="Copy example JSON" />
+        <a className="v2-btn v2-sb-btn" href={GUIDE_HTML_URL} target="_blank" rel="noopener noreferrer" title="Open the storyboard guide the short prompt links to"><Ic g="link" size={16} /> Open guide</a>
       </div>
       <textarea className="v2-sb-code" aria-label="AI system prompt" readOnly value={prompt} rows={14} onFocus={(e) => e.currentTarget.select()} />
+      {kind === "short" && <p className="v2-hint">If your AI says it can't open the link, choose Full prompt and paste that instead.</p>}
     </section>
   );
 }
