@@ -11,6 +11,7 @@ import type { Subtitle } from "../domain/model";
 import { TEXT_SOURCE } from "../domain/model";
 import * as board from "../domain/storyboard";
 import * as storyEdit from "../domain/storyEdit";
+import * as storyRefs from "../domain/storyRefs";
 import { sendStory } from "../domain/storySend";
 import type { StoryDoc } from "../domain/storyJson";
 import { DEFAULT_TEXT, DEFAULT_TEXT_TICKS, textOf, type TextData } from "../domain/text";
@@ -331,3 +332,9 @@ export const duplicateShot = (id: string, copyId: string): Command => ({ label: 
 export const deleteShot = (id: string): Command => ({ label: "Delete shot", apply: (p) => storyEdit.deleteShot(p, id) });
 export const moveShot = (id: string, index: number): Command => ({ label: "Move shot", apply: (p) => storyEdit.moveShot(p, id, index) });
 export const setConnection = (from: string, to: string, patch: storyEdit.ConnectionPatch): Command => ({ label: "Edit connection", apply: (p) => storyEdit.setConnection(p, from, to, patch) });
+
+/** Per-shot references and asset slots (V2-CUT-05, domain/storyRefs). Each is one undo step. */
+export const setRefOverride = (shotId: string, slotId: string, versionId: string | null): Command => ({ label: versionId ? "Pin reference version" : "Unpin reference version", apply: (p) => storyRefs.setRefOverride(p, shotId, slotId, versionId) });
+export const addSlot = (id: string, patch: storyRefs.SlotPatch): Command => ({ label: "Add asset", apply: (p) => storyRefs.addSlot(p, id, patch) });
+export const updateSlot = (id: string, patch: storyRefs.SlotPatch): Command => ({ label: "Edit asset", apply: (p) => storyRefs.updateSlot(p, id, patch) });
+export const deleteSlot = (id: string): Command => ({ label: "Delete asset", apply: (p) => storyRefs.deleteSlot(p, id) });

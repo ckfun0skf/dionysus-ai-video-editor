@@ -13,4 +13,5 @@ export type { StoryDoc, StoryAsset, StoryShot, StoryConnection, StoryIssue, Stor
 export { storyboardSystemPrompt, storyboardShortPrompt, EXAMPLE_STORYBOARD, GUIDE_URL, GUIDE_HTML_URL, PRESETS_URL } from "./storyPrompt";
 export * as board from "./storyboard";
 export * as storyEdit from "./storyEdit";
+export * as storyRefs from "./storyRefs";
 export type { Storyboard, AssetSlot, Shot, VersionInfo, QaCheck, QaResult, Staleness, StoryStatus, ProductionStep, StepState, SendState } from "./storyboard";

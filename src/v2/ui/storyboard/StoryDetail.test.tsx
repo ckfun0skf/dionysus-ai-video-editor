@@ -61,7 +61,7 @@ describe("storyboard detail", () => {
     const d = el.querySelector('[role="dialog"]')!;
     expect(d.getAttribute("aria-label")).toBe("Shot 1 · Climbing the cliff path");
     expect(d.textContent).toContain("Clip prompt");
-    expect(d.textContent).toContain("Assets in this shot");
+    expect(d.textContent).toContain("References");
     const input = d.querySelector('input[type="file"]') as HTMLInputElement;
     expect(input.accept).toBe("video/*");
     await pick(input, new File(["a"], "take1.mp4", { type: "video/mp4" }));

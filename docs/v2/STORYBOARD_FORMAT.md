@@ -207,6 +207,16 @@ After import, shots can be added, edited, duplicated, deleted and reordered on t
 - **Connections:** tap the line between two adjacent shots to set the kind, transition (preset and length) and note.
 - **Timeline links:** clips sent from a shot record the shot id, so duplicated HTML or still shots, which share an asset, are each tracked as placed.
 
+### 4.2 Per-shot references (V2-CUT-05)
+
+A shot's **references** are the assets in its `assets` list plus the assets of its image, video and HTML layers. The clip asset of an HTML or still shot is not a reference: it *is* the clip, so it always follows the version in use.
+
+- **Pins (`refOverrides`):** a shot can pin a reference to one version (`Shot.refOverrides`: slot id → version id, app state only, not part of the import format). Other shots keep following the asset's version in use. A pin to a version that no longer exists, or on the clip asset, is ignored.
+- **What a pin changes:** the shot's inputs record the pinned version when a clip version is added; staleness compares against the pin ("made with a different version of “X” than the one pinned for this shot"), and the transitive "may not match" from an asset only applies while the shot follows it. Linked layer clips on the timeline (`storyLink.anchor` is the shot's clip) use the pinned version and are skipped when another version of the asset is picked. Send places layers with the pinned version.
+- **UI:** the shot details list each reference with the version it uses and a native picker ("Follow asset (vN)" or "Pin vK"). Pinned chips on the board show the pin. Each pin change is one undo step and the note says how many timeline layers changed.
+- **Editing references:** Edit shot has a *Reference assets* list: remove, add an existing asset, or create a new one (name, type, prompt). Saving the shot and creating the new assets is one undo step. Removing a reference drops its pin.
+- **Editing assets:** an asset's details have Edit (name, type, aspect, generate/upload, prompt, *Made from* without cycles, checks, notes) and the board has *Add asset*. Once an asset has versions its type can only change within the same media kind, and the clip asset of a shot keeps its type. Renaming also renames the media-library asset when it still has the old name. Deleting removes the asset from shots, pins and other assets' *Made from*, keeps its versions in the media library, and is blocked (with the reason) while it is a shot's clip or layer.
+
 ## 5. Planner prompt (updated)
 
 **Published guide (V2-SB-114).** The planner material is generated from the registry by `src/v2/domain/storyPrompt.ts` and `src/v2/domain/aiGuide.ts`, and published with the app:

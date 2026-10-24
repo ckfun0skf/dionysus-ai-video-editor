@@ -3,7 +3,8 @@
  * Desktop: the side panel with Cancel / Save (⌘/Ctrl+Enter). A save is one undo step.
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { board, storyEdit, story, type Project, type QaCheck, type Shot } from "../../domain";
+import { board, storyEdit, storyRefs, story, type AssetSlot, type Project, type QaCheck, type Shot } from "../../domain";
+type StoryAssetType = AssetSlot["type"];
 import { getPreset, listPresets, parsePresetRef } from "../../registry";
 import { Ic } from "../Icon";
 import { Sheet } from "../Sheet";
@@ -17,7 +18,7 @@ const RENDERS: { id: Render; label: string; icon: string; hint: string }[] = [
 ];
 
 /** A side panel on desktop, a bottom sheet on phones. */
-function Panel({ mobile, label, onDone, extra, children, className = "" }: { mobile: boolean; label: string; onDone: () => void; extra?: ReactNode; children: ReactNode; className?: string }) {
+export function Panel({ mobile, label, onDone, extra, children, className = "" }: { mobile: boolean; label: string; onDone: () => void; extra?: ReactNode; children: ReactNode; className?: string }) {
   return mobile
     ? <Sheet label={label} onClose={onDone} className={`v2-sb-sheet ${className}`} initial={2} extra={extra}>{children}</Sheet>
     : <aside className={`v2-sb-detail ${className}`} role="dialog" aria-label={label}>{children}</aside>;
@@ -43,8 +44,22 @@ export function ShotEditor({ project, shot, number, isNew, mobile, onSave, onCan
   const [clipSlot, setClipSlot] = useState(shot.clipSlot ?? "");
   const [layers, setLayers] = useState(shot.layers ?? []);
   const [effects, setEffects] = useState(shot.effects ?? []);
+  const [refs, setRefs] = useState(() => shot.slotIds.filter((id) => id !== shot.clipSlot));
+  const [pending, setPending] = useState<{ id: string; patch: storyRefs.SlotPatch }[]>([]);
+  const [adding, setAdding] = useState<{ name: string; type: StoryAssetType; prompt: string }>();
   const titleRef = useRef<HTMLInputElement>(null);
   useEffect(() => { if (isNew && !mobile) titleRef.current?.focus(); }, [isNew, mobile]);
+  /** The board plus assets created in this edit, for names and unique ids. */
+  const withPending = useMemo(() => ({ ...b, slots: { ...b.slots, ...Object.fromEntries(pending.map((x) => [x.id, { id: x.id, name: x.patch.name ?? x.id, type: x.patch.type ?? "image" } as AssetSlot])) } }), [b, pending]);
+  const refName = (id: string) => withPending.slots[id]?.name ?? id;
+  const addable = Object.values(b.slots).filter((x) => !refs.includes(x.id) && x.id !== (render === "ai" ? undefined : clipSlot));
+  const addNew = () => {
+    if (!adding?.name.trim()) return;
+    const id = storyRefs.nextSlotId(withPending, adding.name);
+    setPending([...pending, { id, patch: { name: adding.name.trim(), type: adding.type, prompt: adding.prompt } }]);
+    setRefs([...refs, id]);
+    setAdding(undefined);
+  };
 
   const choices = useMemo(() => (render === "ai" ? [] : storyEdit.clipSlotsFor(b, render)), [b, render]);
   const slotOk = render === "ai" || choices.some((s) => s.id === clipSlot);
@@ -56,6 +71,7 @@ export function ShotEditor({ project, shot, number, isNew, mobile, onSave, onCan
   const patch = (): storyEdit.ShotPatch => ({
     title: title.trim() || (isNew ? "New shot" : shot.title), description, durationSec: n, prompt, camera, dialogue, captions: captions && !!dialogue.trim(),
     qa, layers, effects, render, ...(render !== "ai" ? { clipSlot } : {}),
+    slotIds: refs, ...(pending.length ? { newSlots: pending.filter((x) => refs.includes(x.id)) } : {}),
   });
   const save = () => { if (ok) onSave(patch()); };
   const label = isNew ? `New shot ${number}` : `Edit shot ${number}`;
@@ -100,6 +116,49 @@ export function ShotEditor({ project, shot, number, isNew, mobile, onSave, onCan
         </fieldset>
 
         <label className="v2-sb-field">{render === "ai" ? "Clip prompt" : "Clip prompt (optional)"}<textarea rows={4} value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder={render === "ai" ? "What the AI video should show" : "Notes for making the clip"} /></label>
+        <fieldset className="v2-sb-field">
+          <legend>Reference assets</legend>
+          {refs.length > 0 && (
+            <ul className="v2-sb-editlist" aria-label="Reference assets">
+              {refs.map((id) => {
+                const t = withPending.slots[id]?.type;
+                const pin = !pending.some((x) => x.id === id) && storyRefs.pinLabel(project, shot, id);
+                return (
+                  <li key={id}>
+                    <span className="v2-sb-editlist-text"><Ic g={TYPE_ICON[t ?? "image"] ?? "image"} size={14} /> {refName(id)}{pending.some((x) => x.id === id) ? " · new" : ""}{pin ? ` · pinned ${pin}` : ""}</span>
+                    <button type="button" className="v2-icon v2-sb-icon" aria-label={`Remove reference ${refName(id)}`} onClick={() => setRefs(refs.filter((x) => x !== id))}><Ic g="✕" size={16} /></button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {adding ? (
+            <div className="v2-sb-newref" role="group" aria-label="New asset">
+              <div className="v2-sb-row">
+                <label className="v2-sb-field grow">Name<input autoFocus value={adding.name} onChange={(e) => setAdding({ ...adding, name: e.target.value })} placeholder="e.g. Keeper's coat" maxLength={60}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addNew(); } else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); setAdding(undefined); } }} /></label>
+                <label className="v2-sb-field">Type<select value={adding.type} onChange={(e) => setAdding({ ...adding, type: e.target.value as StoryAssetType })}>{storyRefs.SLOT_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}</select></label>
+              </div>
+              <label className="v2-sb-field">Prompt<textarea rows={2} value={adding.prompt} onChange={(e) => setAdding({ ...adding, prompt: e.target.value })} placeholder="How to generate it (optional)" /></label>
+              <div className="v2-sb-actions">
+                <button type="button" className="v2-btn v2-sb-btn" onClick={() => setAdding(undefined)}>Cancel</button>
+                <button type="button" className="v2-btn v2-sb-btn primary" disabled={!adding.name.trim()} onClick={addNew}><Ic g="+" size={16} /> Add asset</button>
+              </div>
+            </div>
+          ) : (
+            <select className="v2-sb-addref" aria-label="Add a reference asset" value="" onChange={(e) => {
+              const v = e.target.value;
+              if (v === "__new") setAdding({ name: "", type: "image", prompt: "" });
+              else if (v) setRefs([...refs, v]);
+            }}>
+              <option value="">+ Add reference…</option>
+              {addable.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+              <option value="__new">New asset…</option>
+            </select>
+          )}
+          <p className="v2-hint">The characters, places, props or frames you give the AI tool with this shot. Pin a version for this shot from its details.</p>
+        </fieldset>
+
         <label className="v2-sb-field">Description<textarea rows={2} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What happens in this shot" /></label>
         <label className="v2-sb-field">Camera<input value={camera} onChange={(e) => setCamera(e.target.value)} placeholder="e.g. slow push-in, low angle" /></label>
         <label className="v2-sb-field">Dialogue<textarea rows={2} value={dialogue} onChange={(e) => setDialogue(e.target.value)} placeholder="Spoken lines or voice-over" /></label>

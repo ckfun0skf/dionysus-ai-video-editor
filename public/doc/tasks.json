@@ -2085,8 +2085,8 @@
         {
           "id": "V2-CUT-05",
           "title": "References: per-shot reference assets and overrides",
-          "status": "todo",
-          "progress": 0
+          "status": "done",
+          "progress": 100
         },
         {
           "id": "V2-CUT-06",

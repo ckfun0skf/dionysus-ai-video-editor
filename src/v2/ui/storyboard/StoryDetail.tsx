@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { board, type AssetSlot, type MediaKind, type Project, type Shot } from "../../domain";
+import { board, storyRefs, type AssetSlot, type MediaKind, type Project, type Shot } from "../../domain";
 import { cmd, type Command, type Engine } from "../../engine";
 import { importFile } from "../../persistence";
 import type { BlobStore } from "../../ports";
@@ -18,7 +18,7 @@ const fmtDate = (iso: string) => { const d = new Date(iso); return Number.isNaN(
 export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, onClose, onOpen, inline, head, onEdit }: {
   project: Project; target: BoardTarget; thumbs: Record<string, string>; engine: Engine; blobs: BlobStore; mobile: boolean;
   onClose: () => void; onOpen: (t: BoardTarget) => void;
-  /** V2-CUT-02: open the shot editor. */
+  /** V2-CUT-02 / V2-CUT-05: open the shot or asset editor. */
   onEdit?: () => void;
   /** Production wizard: render in place (no sheet / side panel) under `head`. */
   inline?: boolean; head?: ReactNode;
@@ -31,6 +31,8 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
   const [err, setErr] = useState<string>();
   const [model, setModel] = useState("");
   const [swapNote, setSwapNote] = useState<string>();
+  const [refNote, setRefNote] = useState<string>();
+  useEffect(() => { if (!refNote) return; const t = setTimeout(() => setRefNote(undefined), 6000); return () => clearTimeout(t); }, [refNote]);
   useEffect(() => { if (!swapNote) return; const t = setTimeout(() => setSwapNote(undefined), 6000); return () => clearTimeout(t); }, [swapNote]);
   if (!owner) return null;
   const shotNo = (id: string) => b.order.indexOf(id) + 1;
@@ -48,6 +50,24 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
   const lf = slot?.source.type === "lastFrame" ? slot.source.shotId : undefined;
   const lfShot = lf ? b.shots[lf] : undefined;
   const lfVersion = lfShot ? board.selectedOf(project, lfShot) : undefined;
+  /** V2-CUT-05: shots that pin a version of this slot. */
+  const pins = slot ? b.order.flatMap((id) => { const v = board.pinOf(project, b.shots[id], slot.id); return v ? [{ shot: id, version: v }] : []; }) : [];
+  /** Pin (or follow) a reference version for this shot; say what changed on the timeline. */
+  const pin = (slotId: string, versionId: string | null) => {
+    if (!shot) return;
+    const before = engine.getState().project;
+    engine.dispatch(cmd.setRefOverride(shot.id, slotId, versionId));
+    const after = engine.getState().project;
+    const s = after.storyboard?.slots[slotId];
+    if (!s || after === before) return;
+    const aid = s.assetId;
+    const ver = (p: Project) => new Map(Object.values(p.compositions).flatMap((c) => c.tracks.flatMap((t) => t.placements.filter((pl) => pl.source.assetId === aid).map((pl) => [pl.id, pl.source.versionId] as const))));
+    const was = ver(before);
+    const moved = [...ver(after)].filter(([id, v]) => was.get(id) !== v).length;
+    const vNo = (id?: string) => board.versionsOf(after, s).findIndex((v) => v.id === id) + 1;
+    const what = versionId ? `Shot ${shotNo(shot.id)} keeps v${vNo(versionId)} of “${s.name}”` : `Shot ${shotNo(shot.id)} follows “${s.name}” again (v${vNo(board.selectedOf(after, s))})`;
+    setRefNote(`${what}${moved ? ` · ${moved} layer${moved > 1 ? "s" : ""} on the timeline updated` : ""} · Undo to go back`);
+  };
 
   /** Change the version in use; when linked timeline clips change length, say so (V2-SB-R01). */
   const swap = (c: Command) => {
@@ -88,7 +108,7 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
   const body = (
     <div className="v2-sb-detail-body">
       {head}
-      {(inline || !mobile) && <div className="v2-sb-detail-head"><Ic g={icon} size={18} /><h3>{title}</h3>{onEdit && <button className="v2-btn v2-sb-btn" onClick={onEdit} title="Edit title, length, prompt, how the clip is made, checks…"><Ic g="✎" size={16} /> Edit</button>}{!inline && <button className="v2-icon v2-sb-icon" aria-label="Close details" title="Close (Esc)" onClick={onClose}><Ic g="✕" size={18} /></button>}</div>}
+      {(inline || !mobile) && <div className="v2-sb-detail-head"><Ic g={icon} size={18} /><h3>{title}</h3>{onEdit && <button className="v2-btn v2-sb-btn" onClick={onEdit} title={shot ? "Edit title, length, prompt, references, how the clip is made, checks…" : "Edit name, type, prompt, what it is made from, checks…"}><Ic g="✎" size={16} /> Edit</button>}{!inline && <button className="v2-icon v2-sb-icon" aria-label="Close details" title="Close (Esc)" onClick={onClose}><Ic g="✕" size={18} /></button>}</div>}
       {shot && <p className="v2-sb-detail-desc">{shot.durationSec}s · {shot.description}</p>}
       {clipSlot && (
         <p className="v2-sb-cliplink" role="note">
@@ -104,18 +124,20 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
             {versions.map((v, i) => {
               const on = v.id === selected;
               const info = b.versions[v.id];
+              const pinnedIn = slot ? pins.filter((x) => x.version === v.id).map((x) => shotNo(x.shot)) : [];
               return (
                 <li key={v.id}>
                   <button className={`v2-sb-version ${on ? "on" : ""}`} aria-pressed={on} title={on ? undefined : "Use this version"}
                     onClick={() => { if (!on && owner.assetId) swap(cmd.selectStoryVersion(owner.assetId, v.id)); }}>
                     <Thumb src={thumbs[v.id]} icon={icon} count={0} />
-                    <span><b>v{i + 1}{on && <span className="v2-sb-inuse"><Ic g="ok" size={13} /> In use</span>}</b><em>{info?.derivedFrom ? `Frame of shot ${shotNo(info.derivedFrom.shotId)}` : fmtDate(v.createdAt)}</em>{info?.model && <em title="Made with">{info.model}</em>}</span>
+                    <span><b>v{i + 1}{on && <span className="v2-sb-inuse"><Ic g="ok" size={13} /> In use</span>}</b><em>{info?.derivedFrom ? `Frame of shot ${shotNo(info.derivedFrom.shotId)}` : fmtDate(v.createdAt)}</em>{info?.model && <em title="Made with">{info.model}</em>}{pinnedIn.length > 0 && <em className="v2-sb-pinned"><Ic g="pin" size={12} /> Pinned in shot {pinnedIn.join(", ")}</em>}</span>
                   </button>
                 </li>
               );
             })}
           </ul>
         ) : <p className="v2-hint">{lf ? `Nothing yet. Use the last frame of shot ${shotNo(lf)} once it has a clip, or upload an image.` : `Nothing yet. ${slot?.source.type === "upload" ? "Upload your file" : "Generate it in your AI tool with the prompt below"}, then add it here.`}</p>}
+        {slot && pins.length > 0 && versions.length > 1 && <p className="v2-hint">{pins.length > 1 ? "Shots" : "Shot"} {pins.map((x) => shotNo(x.shot)).join(", ")} {pins.length > 1 ? "keep their" : "keeps its"} pinned version when you pick another one here.</p>}
         {shot && board.shotLengthMismatch(project, shot) && <p className="v2-sb-lenline"><LengthWarn project={project} shot={shot} /></p>}
         <div className="v2-sb-actions">
           {lf && (
@@ -143,7 +165,7 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
       )}
       {shot && (shot.camera || shot.dialogue) && <Section title="Direction">{shot.camera && <p className="v2-sb-kv"><b>Camera</b> {shot.camera}</p>}{shot.dialogue && <p className="v2-sb-kv"><b>Dialogue</b> {shot.dialogue}</p>}</Section>}
       {shot && <ShotLayers shot={shot} project={project} onOpen={onOpen} />}
-      {shot && shot.slotIds.length > 0 && <Section title="Assets in this shot"><Chips ids={shot.slotIds} project={project} thumbs={thumbs} onOpen={onOpen} /></Section>}
+      {shot && <ShotRefs shot={shot} project={project} thumbs={thumbs} onOpen={onOpen} onPin={pin} onEdit={onEdit} note={refNote} />}
       {slot && slot.references.length > 0 && <Section title="Made using"><Chips ids={slot.references} project={project} thumbs={thumbs} onOpen={onOpen} /></Section>}
       {slot && <UsedIn slot={slot} project={project} onOpen={onOpen} />}
       {owner.qa.length > 0 && <Checks owner={owner} selected={selected} project={project} engine={engine} />}
@@ -177,6 +199,49 @@ function Chips({ ids, project, thumbs, onOpen }: { ids: string[]; project: Proje
   );
 }
 
+/**
+ * A shot's references (V2-CUT-05): the version each one uses for this shot, with a picker to pin one.
+ * The picker is a native select, so phones get the system wheel / list.
+ */
+function ShotRefs({ shot, project, thumbs, onOpen, onPin, onEdit, note }: { note?: string; shot: Shot; project: Project; thumbs: Record<string, string>; onOpen: (t: BoardTarget) => void; onPin: (slotId: string, versionId: string | null) => void; onEdit?: () => void }) {
+  const b = project.storyboard!;
+  const ids = storyRefs.shotRefIds(b, shot);
+  const layerAssets = new Set((shot.layers ?? []).flatMap((l) => (l.type === "text" ? [] : [l.asset])));
+  if (!ids.length && !onEdit) return null;
+  return (
+    <Section title={ids.length ? `References (${ids.length})` : "References"} extra={onEdit && <button className="v2-linkbtn" onClick={onEdit}>Edit references</button>}>
+      {ids.length ? (
+        <ul className="v2-sb-refs" aria-label="References">
+          {ids.map((id) => {
+            const s = b.slots[id];
+            const vs = board.versionsOf(project, s);
+            const pinned = board.pinOf(project, shot, id);
+            const used = board.refVersionOf(project, shot, id);
+            const no = (v?: string) => vs.findIndex((x) => x.id === v) + 1;
+            const sub = !vs.length ? "Not added yet" : pinned ? `Pinned v${no(pinned)} for this shot` : `Uses v${no(used)} · in use`;
+            return (
+              <li key={id} className={pinned ? "pinned" : ""}>
+                <button className="v2-sb-slot" onClick={() => onOpen({ slot: id })} aria-label={`${s.name}: ${sub}${layerAssets.has(id) ? ", also a layer" : ""}`}>
+                  <Thumb src={used && thumbs[used]} icon={TYPE_ICON[s.type] ?? "image"} count={0} />
+                  <span className="v2-sb-slot-text"><b>{s.name}</b><em>{pinned && <Ic g="pin" size={12} />} {sub}{layerAssets.has(id) ? " · layer" : ""}</em></span>
+                </button>
+                {vs.length > 0 && (
+                  <select className="v2-sb-refpick" aria-label={`Version of ${s.name} for this shot`} value={pinned ?? ""} onChange={(e) => onPin(id, e.target.value || null)}>
+                    <option value="">Follow asset (v{no(board.selectedOf(project, s))})</option>
+                    {vs.map((v, i) => <option key={v.id} value={v.id}>Pin v{i + 1}</option>)}
+                  </select>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      ) : <p className="v2-hint">No reference assets yet. Add the characters, places, props or frames this shot is made from.</p>}
+      {note && <p className="v2-sb-swapnote" role="status"><Ic g="pin" size={14} /> {note}</p>}
+      {ids.some((id) => board.versionsOf(project, b.slots[id]).length > 1) && <p className="v2-hint">Pin a version to keep this shot on it when the asset changes; other shots follow the version in use.</p>}
+    </Section>
+  );
+}
+
 const secs = (a?: number, z?: number) => (a === undefined && z === undefined ? "" : ` · ${a ?? 0}–${z === undefined ? "end" : `${z} s`}`);
 
 /** What "Send to timeline" adds with this shot (v1.1): text and media layers, captions, effects. */
@@ -201,9 +266,9 @@ function ShotLayers({ shot, project, onOpen }: { shot: Shot; project: Project; o
 
 function UsedIn({ slot, project, onOpen }: { slot: AssetSlot; project: Project; onOpen: (t: BoardTarget) => void }) {
   const b = project.storyboard!;
-  const shots = b.order.filter((id) => b.shots[id]?.slotIds.includes(slot.id));
+  const shots = b.order.filter((id) => b.shots[id] && storyRefs.shotRefIds(b, b.shots[id]).includes(slot.id));
   if (!shots.length) return null;
-  return <Section title="Used in"><div className="v2-sb-actions">{shots.map((id) => <button key={id} className="v2-btn v2-sb-btn" onClick={() => onOpen({ shot: id })}><Ic g="▭" size={14} /> Shot {b.order.indexOf(id) + 1}</button>)}</div></Section>;
+  return <Section title="Used in"><div className="v2-sb-actions">{shots.map((id) => { const pin = storyRefs.pinLabel(project, b.shots[id], slot.id); return <button key={id} className="v2-btn v2-sb-btn" onClick={() => onOpen({ shot: id })}><Ic g="▭" size={14} /> Shot {b.order.indexOf(id) + 1}{pin && <span className="v2-sb-pinned"> · <Ic g="pin" size={12} /> {pin}</span>}</button>; })}</div></Section>;
 }
 
 /** QA checklist for the version in use: pass / fail per check, saved with that version (V2-CUT-10). */

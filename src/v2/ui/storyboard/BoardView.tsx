@@ -1,4 +1,4 @@
-import { board, story, storyEdit, type AssetSlot, type Project, type Shot, type Staleness } from "../../domain";
+import { board, story, storyEdit, storyRefs, type AssetSlot, type Project, type Shot, type Staleness } from "../../domain";
 import { getPreset, parsePresetRef } from "../../registry";
 import { Ic } from "../Icon";
 import { useDragReorder } from "./useDragReorder";
@@ -58,6 +58,8 @@ export interface BoardEdit {
   menu: (id: string, at?: { x: number; y: number }) => void;
   remove: (id: string) => void;
   add: () => void;
+  /** V2-CUT-05: start a new asset slot. */
+  addAsset?: () => void;
   connection: (from: string, to: string) => void;
 }
 
@@ -85,15 +87,16 @@ export function BoardView({ project, thumbs, onOpen, openKey, edit, mobile }: { 
     else if (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) { e.preventDefault(); const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); edit.menu(id, { x: r.left + 24, y: r.top + 24 }); }
   };
 
-  const slotChip = (s: AssetSlot) => {
-    const sel = board.selectedOf(project, s);
+  const slotChip = (s: AssetSlot, shot?: Shot) => {
+    const pin = shot && board.pinOf(project, shot, s.id);
+    const sel = pin ?? board.selectedOf(project, s);
     const n = board.versionsOf(project, s).length;
-    const sub = s.source.type === "lastFrame" && !n ? (shotNo(s.source.shotId) ? `Taken from shot ${shotNo(s.source.shotId)}’s clip` : "Taken from a shot’s clip") : versionLabel(project, s, s.source.type === "upload" ? "Upload needed" : "Needs generating");
+    const sub = pin ? `Pinned ${storyRefs.pinLabel(project, shot!, s.id)} here` : s.source.type === "lastFrame" && !n ? (shotNo(s.source.shotId) ? `Taken from shot ${shotNo(s.source.shotId)}’s clip` : "Taken from a shot’s clip") : versionLabel(project, s, s.source.type === "upload" ? "Upload needed" : "Needs generating");
     return (
       <li key={s.id}>
-        <button className={`v2-sb-slot ${status.slots[s.id]?.stale ? "stale" : ""} ${n ? "" : "todo"} ${openKey === s.id ? "open" : ""}`} aria-current={openKey === s.id || undefined} onClick={() => onOpen({ slot: s.id })} aria-label={`${s.name}: ${sub}${status.slots[s.id]?.stale ? ", may not match" : ""}`} title={s.prompt || s.name}>
+        <button className={`v2-sb-slot ${pin ? "pinned" : ""} ${status.slots[s.id]?.stale ? "stale" : ""} ${n ? "" : "todo"} ${openKey === s.id ? "open" : ""}`} aria-current={openKey === s.id || undefined} onClick={() => onOpen({ slot: s.id })} aria-label={`${s.name}: ${sub}${status.slots[s.id]?.stale ? ", may not match" : ""}`} title={s.prompt || s.name}>
           <Thumb src={sel && thumbs[sel]} icon={TYPE_ICON[s.type] ?? "image"} count={n} />
-          <span className="v2-sb-slot-text"><b>{s.name}</b><em>{status.slots[s.id]?.stale ? <Warn st={status.slots[s.id]} /> : sub}</em></span>
+          <span className="v2-sb-slot-text"><b>{s.name}</b><em>{status.slots[s.id]?.stale && !pin ? <Warn st={status.slots[s.id]} /> : <>{pin && <Ic g="pin" size={11} />}{sub}</>}</em></span>
         </button>
       </li>
     );
@@ -138,7 +141,7 @@ export function BoardView({ project, thumbs, onOpen, openKey, edit, mobile }: { 
                 </button>
                 {edit && <button className="v2-icon v2-sb-icon v2-sb-shot-more" aria-label={`Shot ${i + 1} actions`} aria-haspopup="menu" title="Edit, duplicate, move, delete"
                   onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); edit.menu(s.id, mobile ? undefined : { x: r.right - 220, y: r.bottom + 4 }); }}><Ic g="⋯" size={18} /></button>}
-                {s.slotIds.length > 0 && <ul className="v2-sb-slots" aria-label={`Assets for shot ${i + 1}`}>{s.slotIds.map((id) => b.slots[id]).filter(Boolean).map(slotChip)}</ul>}
+                {s.slotIds.length > 0 && <ul className="v2-sb-slots" aria-label={`Assets for shot ${i + 1}`}>{s.slotIds.map((id) => b.slots[id]).filter(Boolean).map((x) => slotChip(x, s))}</ul>}
               </article>
               {next && (edit
                 ? <button className={`v2-sb-conn ${conn?.kind ?? "cut"} ${conn?.transition ? "has-tr" : ""}`} aria-label={`${connLabel}. Edit connection`} title="Edit how this shot leads into the next" onClick={() => edit.connection(s.id, next.id)}>
@@ -152,8 +155,11 @@ export function BoardView({ project, thumbs, onOpen, openKey, edit, mobile }: { 
         })}
       </ol>
       {edit && <button className="v2-sb-addshot" onClick={edit.add} title="Add a shot at the end"><Ic g="+" size={18} /> Add shot</button>}
-      {others.length > 0 && (
-        <section className="v2-sb-others"><h4>Other assets</h4><ul className="v2-sb-slots">{others.map(slotChip)}</ul></section>
+      {(others.length > 0 || edit?.addAsset) && (
+        <section className="v2-sb-others"><h4>Other assets</h4>
+          {others.length > 0 && <ul className="v2-sb-slots">{others.map((x) => slotChip(x))}</ul>}
+          {edit?.addAsset && <button className="v2-btn v2-sb-btn v2-sb-addasset" onClick={edit.addAsset} title="Add a character, place, prop, style or other asset"><Ic g="+" size={16} /> Add asset</button>}
+        </section>
       )}
     </div>
   );
