@@ -31,6 +31,10 @@ import { Splitter } from "./desktop/Splitter";
 import { clampSizes, DEFAULT_SIZES, LIMITS, loadSizes, previewCanvasSize, saveSizes, type PanelSizes } from "./desktop/layout";
 import { readDragItem } from "./desktop/dnd";
 import "./desktop/desktop.css";
+import { ContextMenu, type MenuItem } from "./desktop/ContextMenu";
+import { ShortcutsOverlay } from "./desktop/ShortcutsOverlay";
+import { DesktopTooltips } from "./desktop/Tooltip";
+import { MOD, shuttleLabel, shuttleNext } from "./desktop/shortcuts";
 import { LIBRARY_ITEMS, type LibraryItem, type Sticker } from "./libraryItems";
 import { text as textDomain } from "../domain";
 
@@ -62,6 +66,10 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const [multiMode, setMultiMode] = useState(false);
   const clipboard = useRef<edit.ClipboardItem[]>([]);
   const [hasClip, setHasClip] = useState(false);
+  /** V2-107 desktop: J/K/L shuttle rate (0 = stopped, 1 = normal play), "?" sheet, right-click menu. */
+  const [rate, setRate] = useState(0);
+  const [kbdOpen, setKbdOpen] = useState(false);
+  const [ctx, setCtx] = useState<{ x: number; y: number; placementId?: string; trackId?: string; ticks: number }>();
   const [pps, setPps] = useState(40);
   const [sheet, setSheet] = useState(false);
   const [picker, setPicker] = useState<null | "main" | "overlay" | "audio" | "stickers">(null);
@@ -256,10 +264,55 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   })();
   const del = useCallback((rippleOverride?: boolean) => { if (selectedId) { engine.dispatch(cmd.deleteClips([selectedId], rippleOverride ?? ripple)); setSelectedId(undefined); } }, [engine, selectedId, ripple]);
 
+  const shuttle = (k: "j" | "k" | "l") => {
+    const cur = rate === 0 && player.isPlaying ? 1 : rate;
+    const next = shuttleNext(cur, k);
+    setRate(next);
+    if (next === 1) player.play(); else player.pause();
+  };
+  // Shuttle at any rate other than 1× drives the playhead from a rAF loop (the player has no playback rate).
+  useEffect(() => {
+    if (rate === 0 || rate === 1) return;
+    let raf = 0, last = performance.now();
+    const loop = (now: number) => {
+      const t = player.time + secondsToTicks(((now - last) / 1000) * rate); last = now;
+      const end = player.duration();
+      if (t <= 0 || t >= end) { player.seek(Math.min(Math.max(t, 0), end)); setRate(0); return; }
+      player.seek(t); raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [rate, player]);
+  useEffect(() => { if (!playing && rate === 1) setRate(0); }, [playing, rate]);
+  /** Space / play button: stops a shuttle first; otherwise toggles normal playback. */
+  const playPause = () => { if (rate !== 0 && rate !== 1) { setRate(0); return; } setRate(0); togglePlay(); };
+  const zoomFit = () => { const w = (document.querySelector(".v2-dshell .v2-scroll") as HTMLElement | null)?.clientWidth ?? 800; setPps(clampPps((w - 80) / Math.max(1, duration / 120000))); };
+  /** Alt+←/→: move the selected clip(s) by whole frames on their own track; one undo step. */
+  const nudge = (dt: number) => {
+    const moves = sel.map((id) => findPlacement(comp, id)).filter((f): f is NonNullable<typeof f> => !!f && !!f.track);
+    if (!moves.length) return;
+    const ok = engine.dispatch(moves.map((f) => cmd.movePlacement(f.placement.id, f.track.id, Math.max(0, f.placement.startTicks + dt))), "Nudge clip");
+    if (!ok) setToast("Can't nudge — another clip is in the way");
+  };
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (exporting || projects || (e.target as HTMLElement)?.closest?.("input,textarea,select")) return;
+      if (exporting || projects || kbdOpen || ctx || (e.target as HTMLElement)?.closest?.("input,textarea,select,[role=menu],[role=dialog]")) return;
       const mod = e.metaKey || e.ctrlKey;
+      const k = e.key.toLowerCase();
+      // V2-107 desktop-only keys (mobile keeps its existing map).
+      if (!mobile && !mod) {
+        const fpsTicks = secondsToTicks(1 / project.settings.fps);
+        if (e.key === "?") { e.preventDefault(); setKbdOpen(true); return; }
+        if (k === "j" || k === "k" || k === "l") { e.preventDefault(); shuttle(k); return; }
+        if (e.key === "=" || e.key === "+") { e.preventDefault(); setPps((p) => clampPps(p * 1.5)); return; }
+        if (e.key === "-" || e.key === "_") { e.preventDefault(); setPps((p) => clampPps(p / 1.5)); return; }
+        if (e.key === "Z" && e.shiftKey) { e.preventDefault(); zoomFit(); return; }
+        if (e.key === "Home" || e.key === "End") { e.preventDefault(); setRate(0); player.pause(); seek(e.key === "Home" ? 0 : duration); return; }
+        if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && e.altKey) { e.preventDefault(); nudge((e.key === "ArrowLeft" ? -1 : 1) * (e.shiftKey ? 10 : 1) * fpsTicks); return; }
+        if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && e.shiftKey) { e.preventDefault(); seek(player.time + (e.key === "ArrowLeft" ? -1 : 1) * secondsToTicks(1)); return; }
+        if (e.key === " ") { e.preventDefault(); playPause(); return; }
+      }
       if (mod && e.key.toLowerCase() === "z") { e.preventDefault(); if (e.shiftKey) engine.redo(); else engine.undo(); }
       else if (mod && e.key.toLowerCase() === "e") { e.preventDefault(); openExport(); }
       else if (mod && e.key.toLowerCase() === "y") { e.preventDefault(); engine.redo(); }
@@ -623,21 +676,55 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       {iconBtn("zoom-out", "Zoom out", () => setPps((p) => clampPps(p / 1.5)), { title: "Zoom out (−)" })}
       <input className="v2-zoom" type="range" min={Math.log(4)} max={Math.log(400)} step={0.01} value={Math.log(pps)} aria-label="Timeline zoom" title="Timeline zoom (⌘/Ctrl+scroll)" onChange={(e) => setPps(clampPps(Math.exp(Number(e.target.value))))} />
       {iconBtn("zoom-in", "Zoom in", () => setPps((p) => clampPps(p * 1.5)), { title: "Zoom in (+)" })}
-      {iconBtn("fit", "Zoom to fit", () => { const w = (document.querySelector(".v2-dshell .v2-scroll") as HTMLElement | null)?.clientWidth ?? 800; setPps(clampPps((w - 80) / Math.max(1, duration / 120000))); }, { title: "Fit the whole project in view" })}
+      {iconBtn("fit", "Zoom to fit", zoomFit, { title: "Fit the whole project in view (⇧Z)" })}
     </div>
   );
   const stepFrame = (n: number) => seek(player.time + n * secondsToTicks(1 / fpsNow));
+  const shuttling = rate !== 0 && rate !== 1;
+  const openCtx = (at: { x: number; y: number; placementId?: string; trackId?: string; ticks: number }) => {
+    if (at.placementId && !sel.includes(at.placementId)) selectClip(at.placementId);
+    setCtx(at);
+  };
+  const ctxItems = (): MenuItem[] => {
+    if (!ctx) return [];
+    const k = (s: string) => `${MOD}${MOD === "⌘" ? "" : "+"}${s}`;
+    if (!ctx.placementId) return [
+      { label: "Paste here", icon: "📋", shortcut: k("V"), disabled: !hasClip, onSelect: () => { seek(ctx.ticks); const ids = clipboard.current.map(() => newId("plc")); engine.dispatch(cmd.pasteClips(clipboard.current, Math.round(ctx.ticks), ids)); setSel(ids); } },
+      { label: "Add text here", icon: "T", shortcut: "T", onSelect: () => addTextAt(Math.round(ctx.ticks)) },
+      { label: "Import media…", icon: "⇪", onSelect: () => importDialog() },
+      "sep",
+      { label: "Select all clips", shortcut: k("A"), disabled: !allIds.length, onSelect: () => { setSubId(undefined); setSel(allIds); } },
+    ];
+    const f = findPlacement(comp, ctx.placementId);
+    if (!f) return [];
+    const p = f.placement, t = Math.round(time);
+    const inside = t > p.startTicks && t < p.startTicks + p.durationTicks;
+    const many = sel.length > 1 ? ` ${sel.length} clips` : "";
+    return [
+      { label: "Split at playhead", icon: "✂", shortcut: "S", disabled: !inside || sel.length > 1, onSelect: () => engine.dispatch(cmd.splitPlacement(p.id, t)) },
+      "sep",
+      { label: `Copy${many}`, icon: "⎘", shortcut: k("C"), onSelect: copy },
+      { label: "Paste at playhead", icon: "📋", shortcut: k("V"), disabled: !hasClip, onSelect: paste },
+      { label: `Duplicate${many}`, icon: "⧉", shortcut: k("D"), onSelect: duplicate },
+      ...(p.clipType === "video" && !p.freeze && sel.length === 1 ? [{ label: "Freeze frame", icon: "❄", shortcut: "F", disabled: !inside, onSelect: () => { engine.dispatch(cmd.freezeFrame(p.id, t)); setToast("Freeze frame inserted (3 s)"); } }] : []),
+      ...(p.clipType === "html" && sel.length === 1 ? [{ label: "Edit code…", icon: "✎", onSelect: () => void openCode() }] : []),
+      "sep",
+      { label: `Delete${many}`, icon: "🗑", shortcut: "Del", danger: true, onSelect: () => delSel(false) },
+      { label: "Ripple delete", icon: "🗑", shortcut: "⇧Del", danger: true, onSelect: () => delSel(true) },
+    ];
+  };
   const desktopTransport = (
     <div className="v2-dtransport">
       <span className="v2-time"><b>{formatTimecode(time, fpsNow)}</b> / {formatTimecode(duration, fpsNow)}</span>
       <span className="v2-dtransport-mid">
         {iconBtn("⏮", "Go to start", () => seek(0), { title: "Go to start (Home)" })}
         {iconBtn("step-back", "Previous frame", () => stepFrame(-1), { title: "Previous frame (←)" })}
-        <button className="v2-play" aria-label={playing ? "Pause" : "Play"} title={playing ? "Pause (Space)" : "Play (Space)"} onClick={togglePlay}><Ic g={playing ? "❚❚" : "▶"} /></button>
+        <button className="v2-play" aria-label={playing || shuttling ? "Pause" : "Play"} title={playing || shuttling ? "Pause (Space · K)" : "Play (Space · L)"} onClick={playPause}><Ic g={playing || shuttling ? "❚❚" : "▶"} /></button>
         {iconBtn("step-fwd", "Next frame", () => stepFrame(1), { title: "Next frame (→)" })}
         {iconBtn("⏭", "Go to end", () => seek(duration), { title: "Go to end (End)" })}
       </span>
       <span className="v2-dtransport-end">
+        {shuttling && <span className="v2-shuttle" role="status" aria-label={`Shuttle ${shuttleLabel(rate)}`} title="J/K/L shuttle — K stops">{shuttleLabel(rate)}</span>}
         <span className="v2-ratio" title="Project aspect — change it in the inspector with nothing selected">{project.settings.width}×{project.settings.height}</span>
         {iconBtn("⛶", "Fullscreen", fullscreen, { title: "Fullscreen preview" })}
       </span>
@@ -679,6 +766,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
             <button className="v2-dtool" aria-label="Undo" title="Undo (⌘/Ctrl+Z)" disabled={!canUndo} onClick={() => engine.undo()}><Ic g="↶" size={18} /></button>
             <button className="v2-dtool" aria-label="Redo" title="Redo (⇧⌘Z / Ctrl+Y)" disabled={!canRedo} onClick={() => engine.redo()}><Ic g="↷" size={18} /></button>
           </span>
+          <button className="v2-dtool" aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)" onClick={() => setKbdOpen(true)}><Ic g="keyboard" size={18} /></button>
           <button className="v2-dtool" aria-label={lay.rightOpen ? "Hide inspector" : "Show inspector"} title={lay.rightOpen ? "Hide inspector" : "Show inspector"} aria-pressed={lay.rightOpen} onClick={() => togglePanel("rightOpen")}><Ic g={lay.rightOpen ? "panel-r-close" : "panel-r-open"} size={18} /></button>
           <button className="v2-btn primary v2-export-d" title="Export MP4 (⌘/Ctrl+E)" onClick={openExport}><Ic g="⇪" size={16} /> Export</button>
         </header>
@@ -694,6 +782,9 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           <div className="v2-confirm-actions"><button className="v2-btn" onClick={() => setSubsPick(false)}>Cancel</button></div>
         </div>
       </div>}
+      {!mobile && <DesktopTooltips />}
+      {!mobile && kbdOpen && <ShortcutsOverlay onClose={() => setKbdOpen(false)} />}
+      {!mobile && ctx && <ContextMenu x={ctx.x} y={ctx.y} label={ctx.placementId ? "Clip actions" : "Track actions"} items={ctxItems()} onClose={() => setCtx(undefined)} />}
       {toast && <div className="v2-toast" role="status" onClick={() => setToast(undefined)}>{toast}</div>}
       {mobile ? (
         <>
@@ -740,7 +831,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           <div className="v2-dsplit-h"><Splitter label="Resize timeline" value={lay.timeline} dir="up" min={LIMITS.timeline[0]} max={LIMITS.timeline[1]} onChange={(v) => resize({ timeline: v })} onCommit={commitSizes} onReset={() => { resize({ timeline: DEFAULT_SIZES.timeline }); commitSizes(); }} /></div>
           <section className="v2-timeline-panel v2-dtimeline" aria-label="Timeline">
             {desktopToolbar}
-            <Timeline focus={focusGroup} onFocusGroup={(g) => { setSel([]); setMenu(g && g !== "main" ? g : "root"); }} engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} selectedIds={sel} onToggleSelect={toggleClip} multiMode={multiMode} onSelect={selectClip} peaks={peaks} strips={strips} pps={pps} onZoom={(z) => setPps(clampPps(z))} centered={false} topLane={topLane} ripple={ripple} onTransition={onTransition} onEditSubs={openSubs} onEditLayer={editLayer} onDropData={onDropData} />
+            <Timeline focus={focusGroup} onFocusGroup={(g) => { setSel([]); setMenu(g && g !== "main" ? g : "root"); }} engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} selectedIds={sel} onToggleSelect={toggleClip} multiMode={multiMode} onSelect={selectClip} peaks={peaks} strips={strips} pps={pps} onZoom={(z) => setPps(clampPps(z))} centered={false} topLane={topLane} ripple={ripple} onTransition={onTransition} onEditSubs={openSubs} onEditLayer={editLayer} onDropData={onDropData} onContextMenu={openCtx} />
           </section>
         </div>
       )}

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import { createRoot } from "react-dom/client";
+import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { V2App } from "../V2App";
 import { ITEM_MIME } from "./dnd";
@@ -15,12 +15,14 @@ beforeAll(() => {
   Object.defineProperty(globalThis, "indexedDB", { value: undefined, configurable: true });
 });
 beforeEach(() => { localStorage.clear(); });
-afterEach(() => { document.body.innerHTML = ""; });
+const roots: Root[] = [];
+afterEach(() => { act(() => { roots.splice(0).forEach((r) => r.unmount()); }); document.body.innerHTML = ""; });
 
 async function boot() {
   const el = document.createElement("div");
   document.body.appendChild(el);
-  await act(async () => { createRoot(el).render(<V2App />); });
+  const root = createRoot(el); roots.push(root);
+  await act(async () => { root.render(<V2App />); });
   await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
   const q = <T extends Element = HTMLElement>(s: string) => el.querySelector(s) as T;
   const btn = (label: string, root: ParentNode = el) => Array.from(root.querySelectorAll("button")).find((b) => b.textContent?.trim() === label || b.getAttribute("aria-label") === label) as HTMLButtonElement;
@@ -90,5 +92,63 @@ describe("V2-106 desktop shell", () => {
     expect(JSON.parse(localStorage.getItem(LAYOUT_KEY)!).rightOpen).toBe(false);
     await click(q('[aria-label="Show inspector"]'));
     expect(q(".v2-inspect")).toBeTruthy();
+  });
+
+  it("? opens the shortcuts sheet; Esc closes it", async () => {
+    const { q } = await boot();
+    await act(async () => { window.dispatchEvent(new KeyboardEvent("keydown", { key: "?", bubbles: true })); });
+    const dlg = q('[role="dialog"][aria-label="Keyboard shortcuts"]');
+    expect(dlg.textContent).toContain("Shuttle");
+    await act(async () => { dlg.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
+    expect(q('[aria-label="Keyboard shortcuts"][role="dialog"]')).toBeNull();
+  });
+
+  it("right-click menus: clip actions and empty-track actions", async () => {
+    const { q, el, click } = await boot();
+    const rclick = (t: Element) => act(async () => { t.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 300, clientY: 300 })); });
+    await rclick(q(".v2-dshell .v2-lane[data-track-id]"));
+    const items = () => Array.from(el.querySelectorAll('[role="menuitem"]')).map((b) => b.textContent);
+    expect(items().join("|")).toContain("Add text hereT");
+    await click(Array.from(el.querySelectorAll<HTMLElement>('[role="menuitem"]')).find((b) => b.textContent?.includes("Add text here"))!);
+    expect(q('[role="menu"]')).toBeNull();
+    expect(el.querySelectorAll(".v2-clip.clip-text").length).toBe(1);
+    await rclick(q(".v2-clip.clip-text"));
+    expect(q('[role="menu"]').getAttribute("aria-label")).toBe("Clip actions");
+    expect(items().join("|")).toMatch(/Split at playhead.*Copy.*Duplicate.*Delete/);
+    await act(async () => { q('[role="menu"]').dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
+    expect(q('[role="menu"]')).toBeNull();
+    await rclick(q(".v2-clip.clip-text"));
+    await click(Array.from(el.querySelectorAll<HTMLElement>('[role="menuitem"]')).find((b) => b.textContent?.startsWith("Delete"))!);
+    expect(el.querySelectorAll(".v2-clip.clip-text").length).toBe(0);
+  });
+
+  it("Alt+arrow nudges the selected clip by a frame (undoable); +/- zoom", async () => {
+    const { q, click } = await boot();
+    await click(q('.v2-abtabs [title="Text"]'));
+    await click(q('[aria-label="Add Plain text"]'));
+    const left = () => parseFloat(q<HTMLElement>(".v2-clip.clip-text").style.left);
+    const l0 = left();
+    const key = (key: string, o: KeyboardEventInit = {}) => act(async () => { window.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, ...o })); });
+    await key("ArrowRight", { altKey: true, shiftKey: true });
+    expect(left()).toBeGreaterThan(l0);
+    await click(q('[aria-label="Undo"]'));
+    expect(left()).toBe(l0);
+    const zoom = () => Number(q<HTMLInputElement>('[aria-label="Timeline zoom"]').value);
+    const z0 = zoom();
+    await key("=");
+    expect(zoom()).toBeGreaterThan(z0);
+    await key("-"); await key("-");
+    expect(zoom()).toBeLessThan(z0);
+  });
+
+  it("styled tooltip on hover; the title attribute comes back on leave", async () => {
+    const { q } = await boot();
+    const b = q('[aria-label="Keyboard shortcuts"]');
+    await act(async () => { b.dispatchEvent(new MouseEvent("pointerover", { bubbles: true })); await new Promise((r) => setTimeout(r, 500)); });
+    expect(q('[role="tooltip"]').textContent).toBe("Keyboard shortcuts (?)");
+    expect(b.hasAttribute("title")).toBe(false);
+    await act(async () => { b.dispatchEvent(new MouseEvent("pointerout", { bubbles: true, relatedTarget: document.body })); });
+    expect(q('[role="tooltip"]')).toBeNull();
+    expect(b.getAttribute("title")).toBe("Keyboard shortcuts (?)");
   });
 });

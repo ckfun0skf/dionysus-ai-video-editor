@@ -32,6 +32,8 @@ interface Props {
   pps: number;
   /** V2-106 desktop: browser items (text, stickers, effects, code clips) and OS files dropped at `ticks`. */
   onDropData?: (dt: DataTransfer, ticks: number, trackId?: string) => void;
+  /** V2-107 (desktop): right-click on a clip or an empty lane. */
+  onContextMenu?: (at: { x: number; y: number; placementId?: string; trackId?: string; ticks: number }) => void;
   /** Pinch (touch) or Ctrl/⌘+wheel (trackpad) zoom. */
   onZoom?: (pps: number) => void;
   /** Mobile/CapCut mode: fixed centred playhead, the tracks scroll under it. */
@@ -67,7 +69,7 @@ const HEADER_W = typeof window !== "undefined" && window.innerWidth >= 900 ? 264
 export const TEXT_LANE_H = 32;
 export const SIDE_W = 144;
 
-export function Timeline({ engine, project, time, playing, onSeek, selectedId, selectedIds, onToggleSelect, multiMode, onSelect, pps, onZoom, centered, thumbs, peaks, strips, onAddMedia, sideColumn, timeLabel, topLane, ripple, onTransition, expanded: expandedProp, onExpand, focus, onEditLayer, onEditSubs, onFocusGroup, onDropData }: Props) {
+export function Timeline({ engine, project, time, playing, onSeek, selectedId, selectedIds, onToggleSelect, multiMode, onSelect, pps, onZoom, centered, thumbs, peaks, strips, onAddMedia, sideColumn, timeLabel, topLane, ripple, onTransition, expanded: expandedProp, onExpand, focus, onEditLayer, onEditSubs, onFocusGroup, onDropData, onContextMenu }: Props) {
   const comp = project.compositions[project.rootCompositionId];
   const scrollRef = useRef<HTMLDivElement>(null);
   const [gesture, setGesture] = useState<Gesture>();
@@ -249,6 +251,17 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
     if (assetId) engine.dispatch(cmd.addAssetToTimeline(assetId, at, trackId));
     else onDropData?.(e.dataTransfer, at, trackId);
   };
+  const contextMenu = (e: React.MouseEvent) => {
+    if (centered) { e.preventDefault(); return; }
+    if (!onContextMenu) return;
+    const t = e.target as HTMLElement;
+    const clip = t.closest<HTMLElement>("[data-placement-id]");
+    const lane = t.closest<HTMLElement>(".v2-lane[data-track-id]");
+    if (!clip && !lane) return;
+    e.preventDefault();
+    const r = (lane ?? clip!.parentElement!).getBoundingClientRect();
+    onContextMenu({ x: e.clientX, y: e.clientY, placementId: clip?.dataset.placementId, trackId: lane?.dataset.trackId, ticks: Math.max(0, toTicks(e.clientX - r.left)) });
+  };
   const dragOver = (e: React.DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; };
 
   const main = ops.mainTrack(comp);
@@ -314,7 +327,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
   for (let s = 0; s <= rulerSeconds; s += step) ticks.push(s);
 
   return (
-    <div ref={rootRef} onContextMenu={centered ? (e) => e.preventDefault() : undefined} className={`v2-timeline ${centered ? "is-centered" : ""} ${reorder ? "is-reordering" : ""}`}>
+    <div ref={rootRef} onContextMenu={contextMenu} className={`v2-timeline ${centered ? "is-centered" : ""} ${reorder ? "is-reordering" : ""}`}>
       {!centered && (
         <div className="v2-track-headers">
           <div className="v2-ruler-spacer" />
