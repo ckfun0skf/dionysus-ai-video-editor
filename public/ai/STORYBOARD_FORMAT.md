@@ -68,9 +68,9 @@ Image models also take reference images next to the prompt and number them ("Ima
 
 ```
 References:
-Image 1 (Brass lantern): reference only: the lantern's brass and glass only; do not copy its product-shot framing.
+Image 1 (Blue mug): reference only: the mug's glaze and colour only; do not copy its product-shot framing.
 
-Character sheet of an elderly lighthouse keeper holding a brass storm lantern, …
+Portrait of the hero at a café table holding the blue mug, …
 ```
 
 **`html` assets** are only for animated, 3D or three.js graphics.
@@ -130,9 +130,9 @@ Framing: opens on the start frame at the door, ends on a close-up of Mara at the
 
 ```json
 "keyframe": {
-  "prompt": "References:\nImage 1 (The keeper): reference only: keep this identity (face, body, clothes).\n\nThe keeper by the lantern, lit from below …",
-  "references": ["keeper", { "asset": "lighthouse", "role": "look" }],
-  "qa": ["The keeper's face matches the reference"]
+  "prompt": "References:\nImage 1 (Hero): reference only: keep this identity (face, body, clothes).\n\nThe hero at a café table, both hands around a blue mug …",
+  "references": ["hero", { "asset": "cafe", "role": "look" }],
+  "qa": ["The hero's face matches the reference"]
 }
 ```
 
@@ -326,7 +326,7 @@ AI video models often render fixed lengths (5, 8 or 10 s), so an uploaded shot c
 |---|---|
 | `public/ai/storyboard-guide.md` | `ai/storyboard-guide.md` — the guide the short prompt links to |
 | `public/ai/storyboard-guide.html` | `ai/storyboard-guide.html` — the same guide as a web page |
-| `public/ai/presets.json` | `ai/presets.json` — machine-readable preset ids, descriptions, params and defaults, and font ids |
+| `public/ai/presets.json` | `ai/presets.json` — machine-readable preset ids, categories, descriptions, params and defaults, usage hints, and font ids |
 | `public/ai/STORYBOARD_FORMAT.md` | `ai/STORYBOARD_FORMAT.md` — this specification (copied from `docs/v2/`) |
 | `public/llms.txt` | `llms.txt` |
 
@@ -334,9 +334,15 @@ Run `npm run gen:ai` after changing presets, fonts, the rules or the example; `a
 
 The app offers two prompts (Storyboard → AI prompt):
 - **Short prompt** (default): links to the guide and tells the AI to read it first. An AI that can't open links is told to ask the user for the full prompt instead of guessing the format.
-- **Full prompt**: the guide inlined (FORMAT, PRESETS, RULES 1-14, EXAMPLE), for AIs without web access.
+- **Full prompt**: the guide inlined (HOW IT WORKS, FORMAT, CHOOSING PRESETS, PRESETS, RULES, EXAMPLE), for AIs without web access.
 
-The presets section of the planner prompt is **generated from the registry** (only ids listed there may be used): for each kind, it lists every id with a one-line description and its params with defaults. The rules section becomes:
+**Generic guide (V2-SB-GUIDE-GENERIC).** The guide is story-neutral, so it works for any video:
+- **HOW IT WORKS** explains assets, shots and connections, and how the app turns them into a timeline (generation prompts describe only the picture; text, post camera moves, looks and transitions are done by the editor).
+- **CHOOSING PRESETS** gives generic guidance (choose by purpose, use few transitions and effects, stay consistent, omit params to use the defaults). It names no preset ids.
+- **PRESETS** is **generated from the registry** (only ids listed there may be used): for each kind, presets are grouped by `category` (`[Light]`, `[Motion]` …, in registry order), and each line gives the id, its one-line description, its params with ranges, defaults and units, and the module's optional `ai` hints ("Use for", "Avoid", "Example params"). A new preset module appears here, in `presets.json` and in the pickers without editing the guide.
+- **EXAMPLE** is a short, neutral storyboard ("First Light", 3 shots) that imports with no warnings and shows reusable assets, reference roles, last-frame continuity, `genDurationSec`, a text layer, effects and a transition. The storyboard tests use their own fixture (`src/v2/domain/__fixtures__/lanternKeeper.ts`), so the example can change freely.
+
+**Rule numbers are stable.** Rules are cited by number (here, in user prompts and by other AIs), so `RULE_LIST` in `storyPrompt.ts` is append-only: new rules go at the end, existing rules are never reordered or deleted (rewrite a rule's text to retire it). `aiGuide.test.ts` pins the key order, checks that every `RULE n` this document cites exists and that the list below matches the generated rules. The rules section is:
 
 ```
 RULES
@@ -356,8 +362,8 @@ RULES
 14. Every clip prompt starts with a "References:" block that numbers the images attached to the clip in the order of the shot's "references" (else its "assets"): "Image 1 (<asset name>): …", one line each, saying explicitly whether the image is the START FRAME (or END FRAME) or only a reference, and what to take from it (identity, overall look, or materials and colours only, not its framing or wide view). Then state the framing from the first frame to the last. Set "references" with roles whenever the order or use is not obvious from the asset types.
 15. A transition in "connections" overlaps the two shots, centred on the cut: it adds no time and eats half its length from the end of the "from" shot and half from the start of the "to" shot. It is clamped to half the shorter of the two shots. For example, a 0.8 s transition out of a 2.5 s shot blends the last 0.4 s of that shot with the first 0.4 s of the next, and the total length stays the same; keep transitions short on short shots so their key action isn't covered.
 16. For an "identity" reference prefer a single clean portrait or character image (one view, plain background) over a multi-view character sheet: the sheet's layout (several poses, panels, labels) can leak into the generated frames.
-17. An asset made from other assets lists them in its "references" in attach order, as objects with a "role" when the use is not obvious from the type . Its prompt then starts with the same numbered "References:" block as a clip prompt; for an image, "start-frame" means the base image to edit (there is no end frame).
-18. Keyframe then animate: when the opening composition matters (a character's pose, a precise layout, a hero product shot), give the "ai" shot a "keyframe": { "prompt", "references", "qa" }. The app turns it into an image asset "<shot id>.keyframe" that is made first, then attached to the clip as Image 1, the START FRAME (do not also give the shot a "start-frame" reference). The keyframe prompt describes one still image; the clip prompt then describes only the motion from that frame.
+17. An asset made from other assets lists them in its "references" in attach order, as objects with a "role" when the use is not obvious from the type. Its prompt then starts with the same numbered "References:" block as a clip prompt; for an image, "start-frame" means the base image to edit (there is no end frame). Example: a close-up of the hero holding a mug: "references": [{ "asset": "mug", "role": "detail", "note": "glaze and colour only" }, "hero"], prompt "References:\nImage 1 (Blue mug): reference only: materials, colours and objects only; glaze and colour only.\nImage 2 (Hero): reference only: keep this identity (face, body, clothes).\n\nClose-up of …".
+18. Keyframe then animate: when the opening composition matters (a character's pose, a precise layout, a hero product shot), give the "ai" shot a "keyframe": { "prompt", "references", "qa" }. The app turns it into an image asset "<shot id>.keyframe" that is made first, then attached to the clip as Image 1, the START FRAME (do not also give the shot a "start-frame" reference). The keyframe prompt describes one still image (with its own "References:" block, as for an asset); the clip prompt then describes only the motion from that frame. Example: "keyframe": { "prompt": "References:\nImage 1 (Hero): reference only: keep this identity (face, body, clothes).\n\nThe hero sits at a café table, both hands around a blue mug …", "references": ["hero", "cafe"], "qa": ["The hero's face matches the reference"] }, clip prompt "References:\nImage 1 (Keyframe · …): START FRAME …\n\nShe slowly lifts the mug …".
 ```
 
 ## 6. Decisions, open questions and future work

@@ -5,11 +5,17 @@
   "kinds": {
     "textStyle": {
       "usedIn": "shots[].layers[].textStyle (default \"plain\")",
+      "categories": [
+        "Basic",
+        "Bold",
+        "Light"
+      ],
       "presets": [
         {
           "id": "plain",
           "version": 1,
           "name": "Plain",
+          "category": "Basic",
           "description": "Bold white sans-serif with no decoration; the default.",
           "params": [],
           "data": {
@@ -26,6 +32,7 @@
           "id": "caption",
           "version": 1,
           "name": "Caption",
+          "category": "Basic",
           "description": "Smaller bold white text on a translucent black box; subtitles and lower thirds.",
           "params": [],
           "data": {
@@ -44,6 +51,7 @@
           "id": "outline",
           "version": 1,
           "name": "Outline",
+          "category": "Bold",
           "description": "Yellow Impact letters with a thick black outline; meme or punchy look.",
           "params": [],
           "data": {
@@ -58,6 +66,7 @@
           "id": "neon",
           "version": 1,
           "name": "Neon",
+          "category": "Light",
           "description": "White rounded letters with a pink neon glow and a gentle pulse.",
           "params": [],
           "data": {
@@ -72,6 +81,7 @@
           "id": "pop",
           "version": 1,
           "name": "Pop title",
+          "category": "Bold",
           "description": "Large white Impact title with a hard drop shadow that pops in and shrinks out.",
           "params": [],
           "data": {
@@ -92,6 +102,7 @@
           "id": "typewriter",
           "version": 1,
           "name": "Typewriter",
+          "category": "Basic",
           "description": "Light grey monospace that types itself on.",
           "params": [],
           "data": {
@@ -106,6 +117,7 @@
           "id": "glow",
           "version": 1,
           "name": "Glow",
+          "category": "Light",
           "description": "Italic white serif with a cyan glow that floats softly.",
           "params": [],
           "data": {
@@ -121,6 +133,7 @@
           "id": "echo",
           "version": 1,
           "name": "Echo",
+          "category": "Bold",
           "description": "White Impact letters with pink echo copies that slide up in.",
           "params": [],
           "data": {
@@ -135,11 +148,18 @@
     },
     "textAnimIn": {
       "usedIn": "shots[].layers[].anim.in",
+      "categories": [
+        "Basic",
+        "Bounce",
+        "Type",
+        "Reveal"
+      ],
       "presets": [
         {
           "id": "fade",
           "version": 1,
           "name": "Fade",
+          "category": "Basic",
           "description": "Fades the text in from transparent.",
           "params": []
         },
@@ -147,6 +167,7 @@
           "id": "slide-up",
           "version": 1,
           "name": "Slide up",
+          "category": "Basic",
           "description": "Fades in while sliding up into place from slightly below.",
           "params": [
             {
@@ -183,6 +204,7 @@
           "id": "slide-left",
           "version": 1,
           "name": "Slide left",
+          "category": "Basic",
           "description": "Fades in while sliding left into place from the right.",
           "params": [
             {
@@ -219,6 +241,7 @@
           "id": "pop",
           "version": 1,
           "name": "Pop",
+          "category": "Bounce",
           "description": "Scales up from small with a springy overshoot; lively titles and labels.",
           "params": [
             {
@@ -237,6 +260,7 @@
           "id": "zoom-in",
           "version": 1,
           "name": "Zoom",
+          "category": "Basic",
           "description": "Grows from nothing to full size.",
           "params": []
         },
@@ -244,6 +268,7 @@
           "id": "typewriter",
           "version": 1,
           "name": "Typewriter",
+          "category": "Type",
           "description": "Reveals the text one character at a time.",
           "params": []
         },
@@ -251,6 +276,7 @@
           "id": "wipe",
           "version": 1,
           "name": "Wipe",
+          "category": "Reveal",
           "description": "Reveals the text left to right behind a moving edge.",
           "params": []
         },
@@ -258,6 +284,7 @@
           "id": "blur-in",
           "version": 1,
           "name": "Blur",
+          "category": "Reveal",
           "description": "Fades in from a soft blur to sharp; gentle, cinematic.",
           "params": [
             {
@@ -275,11 +302,16 @@
     },
     "textAnimOut": {
       "usedIn": "shots[].layers[].anim.out",
+      "categories": [
+        "Basic",
+        "Reveal"
+      ],
       "presets": [
         {
           "id": "fade",
           "version": 1,
           "name": "Fade",
+          "category": "Basic",
           "description": "Fades the text out to transparent.",
           "params": []
         },
@@ -287,6 +319,7 @@
           "id": "slide-down",
           "version": 1,
           "name": "Slide down",
+          "category": "Basic",
           "description": "Fades out while sliding down.",
           "params": [
             {
@@ -323,6 +356,7 @@
           "id": "shrink",
           "version": 1,
           "name": "Shrink",
+          "category": "Basic",
           "description": "Shrinks to nothing.",
           "params": []
         },
@@ -330,6 +364,7 @@
           "id": "blur-out",
           "version": 1,
           "name": "Blur",
+          "category": "Reveal",
           "description": "Blurs and fades away.",
           "params": [
             {
@@ -347,6 +382,7 @@
           "id": "wipe-out",
           "version": 1,
           "name": "Wipe",
+          "category": "Reveal",
           "description": "Hides the text right to left behind a moving edge.",
           "params": []
         }
@@ -354,11 +390,15 @@
     },
     "textAnimLoop": {
       "usedIn": "shots[].layers[].anim.loop",
+      "categories": [
+        "Basic"
+      ],
       "presets": [
         {
           "id": "pulse",
           "version": 1,
           "name": "Pulse",
+          "category": "Basic",
           "description": "Gently grows and shrinks in a loop.",
           "params": [
             {
@@ -386,6 +426,7 @@
           "id": "wiggle",
           "version": 1,
           "name": "Wiggle",
+          "category": "Basic",
           "description": "Rocks side to side in a loop; playful.",
           "params": [
             {
@@ -412,6 +453,7 @@
           "id": "float",
           "version": 1,
           "name": "Float",
+          "category": "Basic",
           "description": "Bobs softly up and down in a loop.",
           "params": [
             {
@@ -439,6 +481,7 @@
           "id": "blink",
           "version": 1,
           "name": "Blink",
+          "category": "Basic",
           "description": "Blinks on and off in a loop.",
           "params": [
             {
@@ -456,11 +499,19 @@
     },
     "videoEffect": {
       "usedIn": "shots[].effects[].preset",
+      "categories": [
+        "Basic",
+        "Lens",
+        "Motion",
+        "Color",
+        "Light"
+      ],
       "presets": [
         {
           "id": "fade-in",
           "version": 1,
           "name": "Fade in",
+          "category": "Basic",
           "description": "Fades the picture in from black at the start of the range.",
           "params": [
             {
@@ -479,6 +530,7 @@
           "id": "fade-out",
           "version": 1,
           "name": "Fade out",
+          "category": "Basic",
           "description": "Fades the picture out to black at the end of the range.",
           "params": [
             {
@@ -497,6 +549,7 @@
           "id": "blur",
           "version": 1,
           "name": "Blur",
+          "category": "Lens",
           "description": "Blurs the whole picture.",
           "params": [
             {
@@ -515,6 +568,7 @@
           "id": "ken-burns",
           "version": 1,
           "name": "Zoom",
+          "category": "Motion",
           "description": "Slow zoom and pan across the picture (push-in); brings stills to life.",
           "params": [
             {
@@ -543,6 +597,7 @@
           "id": "shake",
           "version": 1,
           "name": "Shake",
+          "category": "Motion",
           "description": "Handheld camera shake.",
           "params": [
             {
@@ -571,6 +626,7 @@
           "id": "vignette",
           "version": 1,
           "name": "Vignette",
+          "category": "Lens",
           "description": "Darkens the frame edges to focus the centre.",
           "params": [
             {
@@ -589,6 +645,7 @@
           "id": "bw",
           "version": 1,
           "name": "B&W",
+          "category": "Color",
           "description": "Black-and-white (desaturated) picture.",
           "params": [
             {
@@ -607,6 +664,7 @@
           "id": "glow",
           "version": 1,
           "name": "Glow",
+          "category": "Light",
           "description": "Soft bloom: bright areas bleed a gentle halo of light; dreamy, warm or magical scenes.",
           "params": [
             {
@@ -660,11 +718,20 @@
     },
     "transition": {
       "usedIn": "connections[].transition.preset (params.durationSec, default 0.5)",
+      "categories": [
+        "Basic",
+        "Slide",
+        "Wipe",
+        "Zoom",
+        "Blur",
+        "Glitch"
+      ],
       "presets": [
         {
           "id": "crossfade",
           "version": 1,
           "name": "Crossfade",
+          "category": "Basic",
           "description": "The outgoing clip dissolves into the incoming clip.",
           "params": []
         },
@@ -672,6 +739,7 @@
           "id": "dip",
           "version": 1,
           "name": "Dip to black",
+          "category": "Basic",
           "description": "Fades the outgoing clip to black, then up into the incoming clip.",
           "params": []
         },
@@ -679,6 +747,7 @@
           "id": "dip-white",
           "version": 1,
           "name": "Dip to white",
+          "category": "Basic",
           "description": "Fades the outgoing clip to white, then out of white into the incoming clip; dreamy or memory scenes.",
           "params": [
             {
@@ -694,6 +763,7 @@
           "id": "flash",
           "version": 1,
           "name": "Flash",
+          "category": "Basic",
           "description": "A quick bright flash hides the cut; punchy, for beats and reveals.",
           "params": [
             {
@@ -719,6 +789,7 @@
           "id": "push-left",
           "version": 1,
           "name": "Push left",
+          "category": "Slide",
           "description": "The incoming clip pushes the outgoing clip out to the left.",
           "params": [
             {
@@ -757,6 +828,7 @@
           "id": "push-right",
           "version": 1,
           "name": "Push right",
+          "category": "Slide",
           "description": "The incoming clip pushes the outgoing clip out to the right.",
           "params": [
             {
@@ -795,6 +867,7 @@
           "id": "push-up",
           "version": 1,
           "name": "Push up",
+          "category": "Slide",
           "description": "The incoming clip pushes the outgoing clip up and out of frame.",
           "params": [
             {
@@ -833,6 +906,7 @@
           "id": "push-down",
           "version": 1,
           "name": "Push down",
+          "category": "Slide",
           "description": "The incoming clip pushes the outgoing clip down and out of frame.",
           "params": [
             {
@@ -871,6 +945,7 @@
           "id": "whip-left",
           "version": 1,
           "name": "Whip pan",
+          "category": "Slide",
           "description": "A fast push to the left with motion blur, like a whip pan.",
           "params": [
             {
@@ -909,6 +984,7 @@
           "id": "slide-over",
           "version": 1,
           "name": "Slide over",
+          "category": "Slide",
           "description": "The incoming clip slides in from the right over the outgoing clip, which darkens.",
           "params": [
             {
@@ -937,6 +1013,7 @@
           "id": "wipe-right",
           "version": 1,
           "name": "Wipe right",
+          "category": "Wipe",
           "description": "A hard edge sweeps left to right, revealing the incoming clip.",
           "params": [
             {
@@ -965,6 +1042,7 @@
           "id": "wipe-left",
           "version": 1,
           "name": "Wipe left",
+          "category": "Wipe",
           "description": "A hard edge sweeps right to left, revealing the incoming clip.",
           "params": [
             {
@@ -993,6 +1071,7 @@
           "id": "wipe-down",
           "version": 1,
           "name": "Wipe down",
+          "category": "Wipe",
           "description": "A hard edge sweeps top to bottom, revealing the incoming clip.",
           "params": [
             {
@@ -1021,6 +1100,7 @@
           "id": "wipe-up",
           "version": 1,
           "name": "Wipe up",
+          "category": "Wipe",
           "description": "A hard edge sweeps bottom to top, revealing the incoming clip.",
           "params": [
             {
@@ -1049,6 +1129,7 @@
           "id": "iris",
           "version": 1,
           "name": "Circle open",
+          "category": "Wipe",
           "description": "The incoming clip opens from a growing circle in the centre.",
           "params": []
         },
@@ -1056,6 +1137,7 @@
           "id": "zoom-in",
           "version": 1,
           "name": "Zoom in",
+          "category": "Zoom",
           "description": "Rushes forward: the outgoing clip zooms in and the incoming clip continues the push; energetic.",
           "params": [
             {
@@ -1094,6 +1176,7 @@
           "id": "zoom-out",
           "version": 1,
           "name": "Zoom out",
+          "category": "Zoom",
           "description": "Pulls back: the outgoing clip shrinks away and the incoming clip settles in from larger.",
           "params": [
             {
@@ -1132,6 +1215,7 @@
           "id": "spin",
           "version": 1,
           "name": "Spin",
+          "category": "Zoom",
           "description": "The outgoing clip spins away and the incoming clip spins into place; playful.",
           "params": [
             {
@@ -1150,6 +1234,7 @@
           "id": "blur-dissolve",
           "version": 1,
           "name": "Blur dissolve",
+          "category": "Blur",
           "description": "Both clips soften into a blur while they cross-dissolve; smooth and gentle.",
           "params": [
             {
@@ -1168,6 +1253,7 @@
           "id": "defocus",
           "version": 1,
           "name": "Defocus",
+          "category": "Blur",
           "description": "The outgoing clip goes out of focus, then the incoming clip pulls into focus.",
           "params": [
             {
@@ -1196,6 +1282,7 @@
           "id": "glitch",
           "version": 1,
           "name": "Glitch",
+          "category": "Glitch",
           "description": "Digital glitch: picture bands jump sideways around a hard cut; tech, horror, hype.",
           "params": [
             {
@@ -1214,6 +1301,7 @@
           "id": "shake",
           "version": 1,
           "name": "Shake",
+          "category": "Glitch",
           "description": "A camera jolt around a hard cut; impacts and beat drops.",
           "params": [
             {

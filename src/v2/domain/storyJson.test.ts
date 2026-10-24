@@ -1,15 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { EXAMPLE_STORYBOARD, storyboardSystemPrompt, story } from ".";
+import { storyboardSystemPrompt, story } from ".";
+import { LANTERN_KEEPER } from "./__fixtures__/lanternKeeper";
 
-const ex = () => JSON.parse(JSON.stringify(EXAMPLE_STORYBOARD));
+const ex = () => JSON.parse(JSON.stringify(LANTERN_KEEPER));
 const errs = (v: unknown) => { const r = story.validateStoryboard(v); return r.ok ? [] : r.errors.map((e) => `${e.path}: ${e.message}`); };
 
 describe("storyboard JSON", () => {
   it("the bundled example is valid and round-trips", () => {
-    const r = story.parseStoryboard(JSON.stringify(EXAMPLE_STORYBOARD));
+    const r = story.parseStoryboard(JSON.stringify(LANTERN_KEEPER));
     expect(r.ok).toBe(true);
-    if (r.ok) { expect(r.doc).toEqual(EXAMPLE_STORYBOARD); expect(r.warnings).toEqual([]); }
-    expect(story.storySummary(EXAMPLE_STORYBOARD)).toBe("3 shots · 15s · 4 assets (1 last-frame link) · 16 QA checks · 1 layer · 1 effect · 1 transition");
+    if (r.ok) { expect(r.doc).toEqual(LANTERN_KEEPER); expect(r.warnings).toEqual([]); }
+    expect(story.storySummary(LANTERN_KEEPER)).toBe("3 shots · 15s · 4 assets (1 last-frame link) · 16 QA checks · 1 layer · 1 effect · 1 transition");
   });
   it("the system prompt embeds the format and a parseable example", () => {
     const p = storyboardSystemPrompt();
@@ -17,7 +18,7 @@ describe("storyboard JSON", () => {
     expect(story.parseStoryboard(p.slice(p.indexOf("EXAMPLE"))).ok).toBe(true);
   });
   it("extracts JSON from code fences and chat text", () => {
-    const j = JSON.stringify(EXAMPLE_STORYBOARD);
+    const j = JSON.stringify(LANTERN_KEEPER);
     expect(story.parseStoryboard("Here you go:\n```json\n" + j + "\n```\nEnjoy!").ok).toBe(true);
     expect(story.parseStoryboard("Sure! " + j + " Hope it helps").ok).toBe(true);
   });

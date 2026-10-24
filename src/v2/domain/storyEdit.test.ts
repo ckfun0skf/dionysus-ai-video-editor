@@ -2,12 +2,12 @@ import { describe, expect, it } from "vitest";
 import { createProject, type MediaRef, type Project } from "./model";
 import * as board from "./storyboard";
 import * as edit from "./storyEdit";
-import { EXAMPLE_STORYBOARD } from "./storyPrompt";
+import { LANTERN_KEEPER } from "./__fixtures__/lanternKeeper";
 import { validateStoryboard, type StoryDoc } from "./storyJson";
 import { sendStory } from "./storySend";
 
 const parse = (raw: unknown): StoryDoc => { const r = validateStoryboard(raw); if (!r.ok) throw new Error(JSON.stringify(r.errors)); return r.doc; };
-const doc = parse(EXAMPLE_STORYBOARD);
+const doc = parse(LANTERN_KEEPER);
 const img: MediaRef = { blobKey: "b", mime: "image/png", width: 16, height: 9 };
 const vid: MediaRef = { blobKey: "v", mime: "video/mp4", durationTicks: 600_000 };
 let n = 0;

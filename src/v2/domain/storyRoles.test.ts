@@ -3,7 +3,7 @@ import { createProject, type MediaRef, type Project } from "./model";
 import * as board from "./storyboard";
 import * as refs from "./storyRefs";
 import * as edit from "./storyEdit";
-import { EXAMPLE_STORYBOARD } from "./storyPrompt";
+import { LANTERN_KEEPER } from "./__fixtures__/lanternKeeper";
 import { inferReferenceRole, validateStoryboard, type StoryDoc } from "./storyJson";
 
 const base = (shot: Record<string, unknown>, extraAssets: unknown[] = []) => ({
@@ -73,7 +73,7 @@ describe("shots[].references validation (V2-SB-120)", () => {
   });
 
   it("the example storyboard uses references and every clip prompt starts with a References block", () => {
-    const d = parse(EXAMPLE_STORYBOARD);
+    const d = parse(LANTERN_KEEPER);
     expect(d.shots[1].references?.[0]).toEqual({ asset: "s1-end", role: "start-frame" });
     for (const s of d.shots) expect(s.prompt.startsWith("References:\n")).toBe(true);
   });

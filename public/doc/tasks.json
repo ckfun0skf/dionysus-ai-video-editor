@@ -2393,6 +2393,12 @@
           "title": "Modular presets: every effect, transition, text animation, text effect, sticker, text style and font is one file under src/v2/presets/<kind>/<id>.ts (definePreset + typed per-kind helpers), auto-discovered with import.meta.glob and validated at load (bad modules fail tests and the build); the registry, pickers and tiles, generated inspector param controls (ParamSpec), preview and export renderer, storyboard importer, AI guide, presets.json and llms.txt all pick a new file up with no other change; canvas hooks (videoEffect draw, transition paint) with scratch contexts; all 72 built-ins migrated with golden frame tests proving no behaviour change; smoke-render and descriptor-completeness tests (descriptions, param units); npm run new:preset scaffold; docs/v2/ADDING_EFFECTS.md; proven by the new Glow video effect, added as a single file",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-SB-GUIDE-GENERIC",
+          "title": "Generic AI storyboard guide: story-neutral HOW IT WORKS and CHOOSING PRESETS sections; the preset catalogue generated from descriptors and grouped by kind, then category, with each module's ai hints (presets.json gains categories and category); a short neutral example (\"First Light\", 3 shots) that imports with no warnings, with the old example kept as a test fixture; rules keyed and append-only so RULE numbers stay stable, with the STORYBOARD_FORMAT.md copy and citations checked by tests; short and full prompts updated",
+          "status": "done",
+          "progress": 100
         }
       ]
     },
