@@ -2347,6 +2347,12 @@
           "progress": 100
         },
         {
+          "id": "V2-CUT-PROJ",
+          "title": "Project file export/import: <name>.dionysus.zip (manifest with format id/version, app version and a SHA-256 media index; project.json at schema 3.x; every asset version and thumbnail under media/, STORE, deduplicated). Streamed in chunks (desktop Save-as picker, OPFS temp file on phones incl. an iOS worker sync handle, then share sheet/download via saveFile). Import validates, shows progress, verifies every hash, stores media under fresh keys, offers copy or replace (with confirm) on an id clash and explains newer-version files. Project list ⋯ menu (bottom sheet on phones, right-click on desktop) and Import button",
+          "status": "done",
+          "progress": 100
+        },
+        {
           "id": "V2-BUG-EXPORT-BLACK",
           "title": "P0 export fix: video clips exported as black on Android Chrome (audio/images/text fine). Export now decodes video frame-accurately with WebCodecs (mp4box demux + VideoDecoder, edit lists, B-frames, rotation); unsupported files fall back to muted media elements kept in the DOM, awaited per frame with requestVideoFrameCallback, nudged once and verified for a real picture; a clip with no picture stops the export with a message naming it (HEVC advice), partial gaps become export warnings",
           "status": "done",

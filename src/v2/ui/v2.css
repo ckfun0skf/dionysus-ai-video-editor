@@ -207,6 +207,32 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 .v2-project-list .v2-icon, .v2-project-list .v2-btn { min-width: 44px; min-height: 44px; }
 .v2-btn.danger { background: #b4474f; border-color: #b4474f; }
 .v2-undo-bar { margin-top: 8px; display: flex; align-items: center; gap: 8px; color: var(--muted); }
+/* V2-CUT-PROJ: project ⋯ menu, import button, export/import progress dialogs. */
+.v2-projects-head { gap: 6px; flex-wrap: wrap; }
+.v2-projects-head .v2-btn { min-height: 40px; display: inline-flex; align-items: center; gap: 6px; }
+.v2-pmenu { z-index: 71; }
+.v2-pmenu .v2-ic { vertical-align: -3px; margin-right: 6px; }
+.v2-pmenu button { display: flex; align-items: center; }
+.v2-pmenu .is-danger:not(:disabled) { color: #ff8a92; }
+.v2-pmenu-title, .v2-pmenu-cancel { display: none !important; }
+.v2-pfile { z-index: 80; }
+.v2-pfile .v2-modal-card { width: min(92vw, 440px); }
+.v2-pfile-name { margin: -6px 0 10px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.v2-pfile p { overflow-wrap: anywhere; }
+.v2-pfile .v2-progress { margin-top: 6px; }
+.v2-pfile-warn { color: #f0c36a; font-size: 13px; }
+.v2-pfile-err { color: #ff8a92; font-size: 13px; }
+.v2-pfile .v2-modal-actions { flex-wrap: wrap; }
+@media (max-width: 480px) {
+  .v2-projects-head .v2-btn { min-height: 44px; }
+  /* Phones: the ⋯ menu is a bottom sheet (CapCut-style) with the project name and a Cancel row. */
+  .v2-pmenu-backdrop { background: rgba(0,0,0,.45); }
+  .v2-layer-menu.v2-pmenu { left: 0 !important; right: 0; top: auto !important; bottom: 0; width: auto; max-width: none; border-radius: 16px 16px 0 0; padding: 8px 12px calc(12px + env(safe-area-inset-bottom)); }
+  .v2-layer-menu.v2-pmenu button { min-height: 52px; font-size: 16px; }
+  .v2-pmenu-title { display: block !important; padding: 8px 12px 10px; color: var(--muted); font-size: 13px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+  .v2-pmenu-cancel { display: flex !important; justify-content: center; border-top: 1px solid var(--line) !important; border-radius: 0 !important; margin-top: 4px; }
+  .v2-pfile .v2-modal-actions .v2-btn { flex: 1; }
+}
 .v2-projects-btn, .v2-board-btn { min-height: 36px; }
 .v2-board-btn { display: inline-flex; align-items: center; gap: 6px; }
 .v2-mheader .v2-board-btn, .v2-mheader .v2-projects-btn { min-width: 44px; min-height: 44px; display: grid; place-items: center; }

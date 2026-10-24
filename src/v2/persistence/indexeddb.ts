@@ -83,6 +83,11 @@ function readBytes(b: Blob): Promise<ArrayBuffer> {
   return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result as ArrayBuffer); r.onerror = () => rej(r.error); r.readAsArrayBuffer(b); });
 }
 
+/** A Blob as a stream of chunks (records stored before V2-108 hold the Blob itself). */
+async function* blobParts(b: Blob, size: number): AsyncGenerator<Uint8Array> {
+  for (let i = 0; i < b.size; i += size) yield new Uint8Array(await readBytes(b.slice(i, Math.min(b.size, i + size))));
+}
+
 export function isQuotaError(e: unknown): boolean {
   const err = e as { name?: string; message?: string } | undefined;
   return !!err && (err.name === "QuotaExceededError" || /quota|disk.*full|not enough space/i.test(err.message ?? ""));
@@ -147,6 +152,18 @@ export function createIndexedDbStorage(name = DB_NAME, { chunkBytes = CHUNK_BYTE
         return new Blob(parts, { type: v.type });
       },
       delete: async (k) => { await deleteChunks(k); await tx("blobs", "readwrite", (s) => s.delete(k)); },
+      chunks: async (k) => {
+        const v = await tx("blobs", "readonly", (s) => s.get(k));
+        if (v === undefined) return undefined;
+        if (!isManifest(v)) { const b = v as Blob; return Object.assign(blobParts(b, chunkBytes), { size: b.size, type: b.type }); }
+        return Object.assign((async function* () {
+          for (let i = 0; i < v.count; i++) {
+            const part = await tx("chunks", "readonly", (s) => s.get(chunkKey(k, i)));
+            if (!(part instanceof ArrayBuffer)) throw new Error("Stored media is incomplete; re-import the file");
+            yield new Uint8Array(part);
+          }
+        })(), { size: v.size, type: v.type });
+      },
       keys: async () => ((await tx("blobs", "readonly", (s) => s.getAllKeys())) as IDBValidKey[]).map(String),
     },
     lastProjectId: { get: () => localStorage.getItem(LAST_KEY), set: (id) => localStorage.setItem(LAST_KEY, id) },
