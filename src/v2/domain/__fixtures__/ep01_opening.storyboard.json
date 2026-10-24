@@ -132,9 +132,13 @@
       "id": "card-still",
       "name": "Suggestion card still (s03)",
       "type": "image",
-      "prompt": "Photorealistic cinematic still, 35mm film look, soft natural film grain, shallow depth of field, clear golden morning light, low warm sun. Palette: slate blue, sea-glass green, wet concrete grey, with warm human accents of ochre, rust and mustard yellow. Technology is ceramic-white, rounded and silent. Insert, top-down three-quarter view: a second rounded ceramic-white drawer from Mara's flat slid out, a small blank cream card lying in it near the centre of the frame, card face completely clean and empty, sharp focus. Golden morning light. No holograms, no robots, no floating screens, no chrome, no neon, no legible text or signage, no logos, no extra people in the foreground, no watermark-like overlays.",
+      "prompt": "References:\nImage 1 (Mara's flat (N1 room reference)): reference only: materials, colours and objects only; the ceramic-white rounded drawers only, do not reproduce the room or its framing.\nImage 2 (Series look (photoreal, morning)): reference only: overall look (palette, light, texture) only.\n\nPhotorealistic cinematic still, 35mm film look, soft natural film grain, shallow depth of field, clear golden morning light, low warm sun. Palette: slate blue, sea-glass green, wet concrete grey, with warm human accents of ochre, rust and mustard yellow. Technology is ceramic-white, rounded and silent. Insert, top-down three-quarter view: a second rounded ceramic-white drawer from Mara's flat slid out, a small blank cream card lying in it near the centre of the frame, card face completely clean and empty, sharp focus. Golden morning light. No holograms, no robots, no floating screens, no chrome, no neon, no legible text or signage, no logos, no extra people in the foreground, no watermark-like overlays.",
       "references": [
-        "flat",
+        {
+          "asset": "flat",
+          "role": "detail",
+          "note": "the ceramic-white rounded drawers only; do not show the room"
+        },
         "style"
       ],
       "source": "generate",

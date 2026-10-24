@@ -3,7 +3,7 @@
  * Phones: a bottom sheet (✓ saves); desktop: the side panel with Cancel / Save (⌘/Ctrl+Enter). A save is one undo step.
  */
 import { useEffect, useRef, useState } from "react";
-import { board, storyEdit, storyRefs, type AssetSlot, type Project, type QaCheck } from "../../domain";
+import { board, story, storyEdit, storyRefs, type AssetSlot, type Project, type QaCheck } from "../../domain";
 import { Ic } from "../Icon";
 import { Panel } from "./ShotEditor";
 
@@ -20,6 +20,7 @@ export function SlotEditor({ project, slot, isNew, mobile, onSave, onCancel, onD
   const [source, setSource] = useState<"generate" | "upload">(slot.source.type === "upload" ? "upload" : "generate");
   const [prompt, setPrompt] = useState(slot.prompt);
   const [references, setReferences] = useState(slot.references);
+  const [refRoles, setRefRoles] = useState(slot.refRoles ?? {});
   const [qa, setQa] = useState<QaCheck[]>(slot.qa);
   const [notes, setNotes] = useState(slot.notes ?? "");
   const nameRef = useRef<HTMLInputElement>(null);
@@ -38,7 +39,7 @@ export function SlotEditor({ project, slot, isNew, mobile, onSave, onCancel, onD
 
   const save = () => {
     if (!ok) return;
-    onSave({ name, type, aspect: aspect.trim(), prompt, notes, references, qa: qa.filter((q) => q.text.trim()), ...(lastFrame ? {} : { source }) });
+    onSave({ name, type, aspect: aspect.trim(), prompt, notes, references, refRoles, qa: qa.filter((q) => q.text.trim()), ...(lastFrame ? {} : { source }) });
   };
   const label = isNew ? "New asset" : `Edit “${slot.name}”`;
   const onKey = (e: React.KeyboardEvent) => {
@@ -89,7 +90,29 @@ export function SlotEditor({ project, slot, isNew, mobile, onSave, onCancel, onD
             <div className="v2-sb-chips" role="group" aria-label="Made from">
               {choices.map((c) => <button type="button" key={c.id} aria-pressed={references.includes(c.id)} className={references.includes(c.id) ? "on" : ""} onClick={() => toggleRef(c.id)}>{c.name}</button>)}
             </div>
-            <p className="v2-hint">Give these to your AI tool with the prompt. When one changes, this asset is flagged.</p>
+            {references.some((id) => b.slots[id]) && (
+              <ol className="v2-sb-editlist v2-sb-refroles" aria-label="How to use each image">
+                {references.filter((id) => b.slots[id]).map((id, i) => {
+                  const r = b.slots[id];
+                  const auto = storyRefs.ASSET_ROLE_LABEL[storyRefs.inferredAssetRole(r)];
+                  return (
+                    <li key={id}>
+                      <label className="v2-sb-field grow">Image {i + 1} · {r.name}
+                        <select value={refRoles[id]?.role ?? ""} onChange={(e) => {
+                          const role = e.target.value as story.ReferenceRole | "";
+                          const { role: _old, ...rest } = refRoles[id] ?? {};
+                          setRefRoles({ ...refRoles, [id]: role ? { ...rest, role } : rest });
+                        }}>
+                          <option value="">Auto ({auto})</option>
+                          {story.ASSET_REFERENCE_ROLES.map((x) => <option key={x} value={x}>{storyRefs.ASSET_ROLE_LABEL[x]}</option>)}
+                        </select>
+                      </label>
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
+            <p className="v2-hint">Give these to your AI tool with the prompt, in this order. When one changes, this asset is flagged.</p>
           </fieldset>
         )}
 

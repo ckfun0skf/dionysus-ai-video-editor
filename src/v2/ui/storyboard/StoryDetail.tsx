@@ -200,9 +200,9 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
       </Section>
 
       {owner.prompt && (
-        <Section title={shot ? "Clip prompt" : "Prompt"} extra={<CopyButton text={() => (shot ? storyRefs.promptWithReferences(b, shot) : owner.prompt)} label="Copy prompt" testId="copy-clip-prompt" />}>
+        <Section title={shot ? "Clip prompt" : "Prompt"} extra={<CopyButton text={() => (shot ? storyRefs.promptWithReferences(b, shot) : slot ? storyRefs.slotPromptWithReferences(b, slot) : owner.prompt)} label="Copy prompt" testId="copy-clip-prompt" />}>
           <p className="v2-sb-prompt">{owner.prompt}</p>
-          {shot && <AttachOrder shot={shot} project={project} thumbs={thumbs} blobs={blobs} />}
+          {(shot || slot) && <AttachOrder shot={shot} slot={shot ? undefined : slot} project={project} thumbs={thumbs} blobs={blobs} />}
         </Section>
       )}
       {shot && (shot.camera || shot.dialogue) && <Section title="Direction">{shot.camera && <p className="v2-sb-kv"><b>Camera</b> {shot.camera}</p>}{shot.dialogue && <p className="v2-sb-kv"><b>Dialogue</b> {shot.dialogue}</p>}</Section>}
@@ -290,9 +290,12 @@ function ShotRefs({ shot, project, thumbs, onOpen, onPin, onEdit, note }: { note
  * prompt's References block names them, each with the version this shot uses (pins respected), its role and a Save
  * button. Blobs are loaded ahead so Save can open the iOS share sheet within the tap.
  */
-function AttachOrder({ shot, project, thumbs, blobs }: { shot: Shot; project: Project; thumbs: Record<string, string>; blobs: BlobStore }) {
+function AttachOrder({ shot, slot, project, thumbs, blobs }: { shot?: Shot; slot?: AssetSlot; project: Project; thumbs: Record<string, string>; blobs: BlobStore }) {
   const b = project.storyboard!;
-  const rows = storyRefs.attachVersions(project, shot);
+  const owner = (shot ?? slot)!;
+  const rows = storyRefs.attachVersions(project, owner);
+  const labels = shot ? storyRefs.ROLE_LABEL : storyRefs.ASSET_ROLE_LABEL;
+  const filePrefix = shot ? `shot${b.order.indexOf(shot.id) + 1}` : safeName(owner.id);
   const media = (versionId?: string, slotId?: string) => {
     const s = slotId ? b.slots[slotId] : undefined;
     return versionId && s ? board.versionsOf(project, s).find((v) => v.id === versionId)?.media : undefined;
@@ -310,11 +313,11 @@ function AttachOrder({ shot, project, thumbs, blobs }: { shot: Shot; project: Pr
   }, [keys, blobs]);
   useEffect(() => { if (!note) return; const t = setTimeout(() => setNote(undefined), 5000); return () => clearTimeout(t); }, [note]);
   if (!rows.length) return null;
-  const added = !storyRefs.hasReferencesBlock(shot.prompt);
+  const added = !storyRefs.hasReferencesBlock(owner.prompt);
   const save = async (no: number, name: string, key: string, mime: string) => {
     const blob = loaded[key] ?? (await blobs.get(key));
     if (!blob) { setNote("This image's file is missing from this device."); return; }
-    const r = await saveFile(blob, `shot${b.order.indexOf(shot.id) + 1}-image${no}-${safeName(name)}.${extFor(blob.type || mime)}`);
+    const r = await saveFile(blob, `${filePrefix}-image${no}-${safeName(name)}.${extFor(blob.type || mime)}`);
     if (r === "downloaded") setNote(`Image ${no} downloaded`);
   };
   return (
@@ -325,8 +328,8 @@ function AttachOrder({ shot, project, thumbs, blobs }: { shot: Shot; project: Pr
           const s = b.slots[item.slotId];
           const m = media(versionId, item.slotId);
           const vNo = board.versionsOf(project, s).findIndex((v) => v.id === versionId) + 1;
-          const pinned = !!board.pinOf(project, shot, item.slotId);
-          const role = storyRefs.ROLE_LABEL[item.role];
+          const pinned = !!shot && !!board.pinOf(project, shot, item.slotId);
+          const role = labels[item.role];
           return (
             <li key={item.slotId} className={`v2-sb-attach-item role-${item.role}`}>
               <span className="v2-sb-attach-no" aria-hidden>{item.no}</span>
