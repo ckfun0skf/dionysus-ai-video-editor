@@ -156,7 +156,9 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 .v2-insp-row { grid-template-columns: 76px 1fr 44px 28px; }
 /* Blend mode (V2-SB-128) */
 .v2-insp-row.v2-insp-blend { grid-template-columns: 76px 1fr; }
-.v2-insp-blend select { width: 100%; min-height: 32px; background: #2a2a31; color: var(--text, #eee); border: 1px solid var(--line); border-radius: 6px; padding: 0 8px; font-size: 13px; }
+.v2-insp-blend select { -webkit-appearance: none; appearance: none; width: 100%; min-height: 32px; background: #2a2a31 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23e8e8ea' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center; color: var(--text, #eee); border: 1px solid var(--line); border-radius: 6px; padding: 0 28px 0 8px; font-size: 13px; }
+/* Native option lists follow the page colours on Android; keep them readable. */
+.v2-insp-blend option { background: #2a2a31; color: #e8e8ea; }
 .v2-kf { width: 28px; height: 28px; border: none; background: transparent; color: var(--muted, #888); font-size: 12px; border-radius: 6px; cursor: pointer; }
 .v2-kf::after { content: ""; } .v2-kf:hover:not(:disabled) { background: rgba(255,255,255,.08); }
 .v2-kf.is-keyed { color: #c9a227; } .v2-kf.is-on { color: #ffd23f; text-shadow: 0 0 6px rgba(255,210,63,.6); }
