@@ -63,10 +63,11 @@ describe("V2App", () => {
     await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
     const clip = el.querySelector('[data-placement-id="v"]') as HTMLElement;
     await act(async () => { clip.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true })); window.dispatchEvent(new MouseEvent("pointerup")); });
-    const speed = el.querySelector('select[aria-label="Speed"]') as HTMLSelectElement;
-    await act(async () => { speed.value = "2"; speed.dispatchEvent(new Event("change", { bubbles: true })); });
-    expect(el.querySelector('[data-placement-id="v"]')!.textContent).toContain("2×");
     const btn = (label: string) => Array.from(el.querySelectorAll("button")).find((b) => b.textContent?.includes(label)) as HTMLButtonElement;
+    // V2-106: speed lives in the inspector's Speed tab (segmented control).
+    await act(async () => { Array.from(el.querySelectorAll<HTMLButtonElement>('.v2-inspect [role="tab"]')).find((b) => b.textContent === "Speed")!.click(); });
+    await act(async () => { Array.from(el.querySelectorAll<HTMLButtonElement>('[role="radiogroup"][aria-label="Speed"] button')).find((b) => b.textContent === "2×")!.click(); });
+    expect(el.querySelector('[data-placement-id="v"]')!.textContent).toContain("2×");
     await act(async () => { btn("Reverse").click(); });
     expect(el.querySelector('[aria-label="Reversed"]')).toBeTruthy();
     await act(async () => { btn("Freeze").click(); });
@@ -82,7 +83,9 @@ describe("V2App", () => {
     await act(async () => { createRoot(el).render(<V2App />); });
     await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
     const btn = (label: string) => Array.from(el.querySelectorAll("button")).find((b) => b.textContent?.includes(label)) as HTMLButtonElement;
-    await act(async () => { btn("Add text").click(); });
+    // V2-106: text is added from the asset browser's Text tab.
+    await act(async () => { (el.querySelector('.v2-abtabs [title="Text"]') as HTMLButtonElement).click(); });
+    await act(async () => { btn("Default text").click(); });
     expect(el.querySelector(".v2-clip.clip-text")).toBeTruthy();
     await act(async () => { btn("Done").click(); });
     expect(btn("Add subtitle")).toBeUndefined(); // V2-104: replaced by Import SRT + Edit subtitles

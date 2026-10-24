@@ -2057,6 +2057,108 @@
           "title": "Edit subtitles reachable on mobile: Text toolbar + clip toolbar entry, layer picker, 4-control mobile layer row with layout test",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-CUT-01",
+          "title": "Storyboard domain: shots, order/connections, per-shot reference assets, asset/clip prompts, QA checks, frame dependencies (asset = last frame of clip X)",
+          "status": "todo",
+          "progress": 0
+        },
+        {
+          "id": "V2-CUT-02",
+          "title": "Storyboard view (shots list/board, CRUD, reorder)",
+          "status": "todo",
+          "progress": 0
+        },
+        {
+          "id": "V2-CUT-03",
+          "title": "Storyboard node canvas (shot connections)",
+          "status": "todo",
+          "progress": 0
+        },
+        {
+          "id": "V2-CUT-04",
+          "title": "Send storyboard to timeline + clip version picker (choose among ~10 versions)",
+          "status": "todo",
+          "progress": 0
+        },
+        {
+          "id": "V2-CUT-05",
+          "title": "References: per-shot reference assets and overrides",
+          "status": "todo",
+          "progress": 0
+        },
+        {
+          "id": "V2-CUT-06",
+          "title": "Storyboard JSON schema (shots, per-asset prompts/type/aspect/references, per-clip prompts, QA checks) + copyable system prompt, paste-in validation, plan export",
+          "status": "todo",
+          "progress": 0
+        },
+        {
+          "id": "V2-CUT-07",
+          "title": "Guided asset generation wizard: copy prompt, upload into slot, provenance (prompt/model), progress, skip/regenerate as version/reorder",
+          "status": "todo",
+          "progress": 0
+        },
+        {
+          "id": "V2-CUT-08",
+          "title": "Frame-dependency linking: extract last frame from a clip's chosen version as an asset (user-friendly link UI)",
+          "status": "todo",
+          "progress": 0
+        },
+        {
+          "id": "V2-CUT-09",
+          "title": "Version-change warnings: \"may not match\" on downstream assets/clips, propagated transitively",
+          "status": "todo",
+          "progress": 0
+        },
+        {
+          "id": "V2-CUT-10",
+          "title": "QA checklists per asset and per clip",
+          "status": "todo",
+          "progress": 0
+        },
+        {
+          "id": "V2-CUT-11",
+          "title": "Production todo list (step-by-step: assets, clip prompts, clip versions, pick version, QA)",
+          "status": "todo",
+          "progress": 0
+        },
+        {
+          "id": "V2-CUT-12",
+          "title": "Project settings (aspect, fps, background) in v2",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "V2-CUT-13",
+          "title": "Project file export/import (dionysus/3.0 JSON)",
+          "status": "todo",
+          "progress": 0
+        },
+        {
+          "id": "V2-CUT-14",
+          "title": "Nested clips (composition SourceRef, Save-as-Clip, nested render)",
+          "status": "todo",
+          "progress": 0
+        },
+        {
+          "id": "V2-CUT-15",
+          "title": "Default flip: v2 at /, legacy at ?legacy for one release",
+          "status": "todo",
+          "progress": 0
+        },
+        {
+          "id": "V2-CUT-16",
+          "title": "Legacy deletion (62 files ~20k lines, three deps, docs archive)",
+          "status": "todo",
+          "progress": 0
+        },
+        {
+          "id": "V2-106",
+          "title": "Desktop redesign: asset browser tabs, contextual inspector, project settings, resizable persisted panels",
+          "status": "done",
+          "progress": 100
         }
       ]
     },

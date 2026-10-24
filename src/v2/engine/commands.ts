@@ -167,6 +167,21 @@ export const addSubtitle = (s: Subtitle): Command => ({ label: "Add text", apply
 export const updateSubtitle = (id: string, patch: Partial<Omit<Subtitle, "id">>): Command => ({ label: "Edit text", coalesceKey: `sub:${id}`, apply: (p) => withRoot(p, (c) => subs.updateSubtitle(c, id, patch)) });
 export const removeSubtitle = (id: string): Command => ({ label: "Delete text", apply: (p) => withRoot(p, (c) => subs.removeSubtitle(c, id)) });
 export const setSubtitles = (list: Subtitle[], label = "Import subtitles"): Command => ({ label, apply: (p) => withRoot(p, (c) => subs.setSubtitles(c, list)) });
+/** V2-106: project canvas size / frame rate / background. Sizes are clamped even (H.264) and within 16..8192. */
+export type ProjectSettingsPatch = Partial<{ width: number; height: number; fps: number; background: string }>;
+export const setProjectSettings = (patch: ProjectSettingsPatch, label = "Project settings"): Command => ({
+  label,
+  coalesceKey: patch.background !== undefined && Object.keys(patch).length === 1 ? "settings-bg" : undefined,
+  apply: (p) => {
+    const even = (n: number) => { const v = Math.round(Math.min(8192, Math.max(16, n))); return v - (v % 2); };
+    const s = { ...p.settings };
+    if (patch.width !== undefined) s.width = even(patch.width);
+    if (patch.height !== undefined) s.height = even(patch.height);
+    if (patch.fps !== undefined) s.fps = Math.min(120, Math.max(1, Math.round(patch.fps)));
+    if (patch.background !== undefined) { if (!/^#[0-9a-f]{6}$/i.test(patch.background)) throw new Error("background must be #rrggbb"); s.background = patch.background; }
+    return { ...p, settings: s };
+  },
+});
 export const renameProject = (name: string): Command => ({ label: "Rename project", coalesceKey: "rename", apply: (p) => ({ ...p, name }) });
 export const deleteClips = (ids: string[], ripple = false): Command => ({
   label: `${ripple ? "Ripple delete" : "Delete"} ${ids.length > 1 ? `${ids.length} clips` : "clip"}`,

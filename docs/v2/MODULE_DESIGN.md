@@ -17,12 +17,16 @@ Ideas reused from existing docs (all retained as v2 invariants):
 
 ## 2. Goals / Non-goals
 
+Product direction: see [VISION.md](./VISION.md).
+
 **Goals**
 1. Full-featured timeline composer first: video, image, audio/music, subtitles, HTML components (html/css/js, native three.js); transitions later.
 2. A one-stop pipeline: story chat → template-driven JSON → storyboard (shots, references, prompts, QA) → production to-do → timeline.
 3. First-class **versions** for assets and shots (choose among ~10), with provenance and dependency/staleness tracking (incl. *last frame of shot X* as an asset).
 4. Extensible by registries (clip types, effects, importers/exporters, AI providers, QA checkers) so the tool can be published later.
 5. Pure, testable domain core; UI is a thin client of the engine.
+6. External-AI asset flow (owner decision 2026-10-24; the app never calls an AI itself): the app offers a copyable system prompt → the user's own AI returns a **storyboard JSON** (shots, and per shot every asset to generate with its own prompt, type, aspect and references) → the user pastes it back and it is validated against the schema → a **guided wizard** walks asset by asset (show prompt + copy, user generates externally and uploads into the slot, prompt/model recorded in provenance, progress e.g. 5/12; skip, regenerate as a new version, reorder).
+7. Nested composition sources (Clip Assets / Save-as-Clip): `SourceRef { kind: "composition" }` placements rendered by recursing into the nested timeline (planned; owner decision 2026-10-24).
 
 **Non-goals (v2.0)**
 - Cloud sync, multi-user collaboration, accounts (interfaces only).
@@ -170,7 +174,7 @@ interface Placement {
 type SourceRef =
   | { kind: "assetVersion"; assetId: Id<"asset">; versionId: Id<"assetVersion"> }   // pinned
   | { kind: "shotVersion";  shotId: Id<"shot">;   versionId: Id<"shotVersion"> }
-  | { kind: "composition";  compositionId: Id<"composition"> }                     // nested clip
+  | { kind: "composition";  compositionId: Id<"composition"> }                     // nested clip (planned, in v2 scope: owner decision 2026-10-24)
   | { kind: "subtitle";     docId: Id<"subtitleDoc"> }
   | { kind: "html";         componentId: Id<"html"> }
   | { kind: "generated" };                                                          // text/solid

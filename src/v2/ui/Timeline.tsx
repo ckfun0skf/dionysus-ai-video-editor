@@ -30,6 +30,8 @@ interface Props {
   multiMode?: boolean;
   onSelect: (id?: string) => void;
   pps: number;
+  /** V2-106 desktop: browser items (text, stickers, effects, code clips) and OS files dropped at `ticks`. */
+  onDropData?: (dt: DataTransfer, ticks: number, trackId?: string) => void;
   /** Pinch (touch) or Ctrl/⌘+wheel (trackpad) zoom. */
   onZoom?: (pps: number) => void;
   /** Mobile/CapCut mode: fixed centred playhead, the tracks scroll under it. */
@@ -65,7 +67,7 @@ const HEADER_W = typeof window !== "undefined" && window.innerWidth >= 900 ? 264
 export const TEXT_LANE_H = 32;
 export const SIDE_W = 144;
 
-export function Timeline({ engine, project, time, playing, onSeek, selectedId, selectedIds, onToggleSelect, multiMode, onSelect, pps, onZoom, centered, thumbs, peaks, strips, onAddMedia, sideColumn, timeLabel, topLane, ripple, onTransition, expanded: expandedProp, onExpand, focus, onEditLayer, onEditSubs, onFocusGroup }: Props) {
+export function Timeline({ engine, project, time, playing, onSeek, selectedId, selectedIds, onToggleSelect, multiMode, onSelect, pps, onZoom, centered, thumbs, peaks, strips, onAddMedia, sideColumn, timeLabel, topLane, ripple, onTransition, expanded: expandedProp, onExpand, focus, onEditLayer, onEditSubs, onFocusGroup, onDropData }: Props) {
   const comp = project.compositions[project.rootCompositionId];
   const scrollRef = useRef<HTMLDivElement>(null);
   const [gesture, setGesture] = useState<Gesture>();
@@ -238,13 +240,16 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
     window.addEventListener("pointerup", up);
   };
 
-  const onDrop = (e: React.DragEvent, trackId: string) => {
+  const onDrop = (e: React.DragEvent, trackId?: string) => {
+    const lane = trackId ? (e.currentTarget as HTMLElement) : scrollRef.current?.querySelector<HTMLElement>(".v2-lane[data-track-id]");
+    if (!lane) return;
+    e.preventDefault(); e.stopPropagation();
+    const at = Math.max(0, toTicks(e.clientX - lane.getBoundingClientRect().left));
     const assetId = e.dataTransfer.getData("application/x-dionysus-asset");
-    if (!assetId) return;
-    e.preventDefault();
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    engine.dispatch(cmd.addAssetToTimeline(assetId, Math.max(0, toTicks(e.clientX - rect.left)), trackId));
+    if (assetId) engine.dispatch(cmd.addAssetToTimeline(assetId, at, trackId));
+    else onDropData?.(e.dataTransfer, at, trackId);
   };
+  const dragOver = (e: React.DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; };
 
   const main = ops.mainTrack(comp);
   // Keep the selected clip's group open on mobile so its trim handles are reachable.
@@ -323,7 +328,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
           ))(r))}
         </div>
       )}
-      <div className="v2-scroll" ref={scrollRef} onScroll={onScroll} onPointerMove={onPointerMove} onPointerUp={() => onPointerUp()} onPointerCancel={() => { cancelPress(); setGesture(undefined); }}>
+      <div className="v2-scroll" ref={scrollRef} onDragOver={centered ? undefined : dragOver} onDrop={centered ? undefined : (e) => onDrop(e)} onScroll={onScroll} onPointerMove={onPointerMove} onPointerUp={() => onPointerUp()} onPointerCancel={() => { cancelPress(); setGesture(undefined); }}>
         <div className="v2-content" onClick={(e) => { if (centered && e.target === e.currentTarget) exitMode(); }} style={{ width: contentW + pad + padRight, paddingLeft: pad, paddingRight: padRight }}>
           {centered && sideColumn && <div ref={sideRef} className="v2-side-col" data-testid="side-col" onClick={(e) => { if (e.target === e.currentTarget) exitMode(); }} style={{ width: SIDE_W, left: pad - SIDE_W, paddingTop: mainTop }}><div className="v2-side-main">{sideColumn}</div>
             {!expanded && laneTops.map(({ group, top, hasClips }) => (
@@ -365,7 +370,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
             <div key={t.id} className={`v2-lane kind-${t.kind} ${t.muted ? "is-muted" : ""} ${t.hidden ? "is-hidden" : ""} ${layerDrag?.id === t.id ? "is-layer-dragging" : ""}`} data-track-id={t.id} data-group={r.group} style={layerShift(t.id)}
               onPointerDown={(e) => { if (!centered && e.target === e.currentTarget) { onSelect(undefined); scrub(e); } }} onClick={(e) => { if (centered && e.target === e.currentTarget) exitMode(); }}
               onContextMenu={centered ? (e) => e.preventDefault() : undefined}
-              onDragOver={(e) => e.preventDefault()} onDrop={(e) => onDrop(e, t.id)}>
+              onDragOver={dragOver} onDrop={(e) => onDrop(e, t.id)}>
               {centered && t.muted && <span className="v2-lane-label"><Ic g="🔇" /></span>}
               {t.id === main?.id && focus && hiddenRanges(preview, focus).map(({ group, ranges }, i) => ranges.map(([a, b]) => (
                 <span key={`${group}-${a}`} className="v2-hidden-range" data-group={group} aria-hidden title={`${ops.GROUP_LABEL[group]} clips here`} style={{ left: toPx(a), width: Math.max(2, toPx(b - a)), top: 1 + i * 3, background: GROUP_COLOR[group] }} />

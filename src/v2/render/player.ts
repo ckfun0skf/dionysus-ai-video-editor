@@ -166,7 +166,7 @@ export class Player {
     this.boxes = new Map();
     const canvas = this.canvas;
     const ctx = canvas?.getContext("2d");
-    if (canvas && ctx) { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+    if (canvas && ctx) { ctx.fillStyle = this.project.settings.background ?? "#000"; ctx.fillRect(0, 0, canvas.width, canvas.height); }
     // V2-101: effect layers modify only the main-track render; applied once main is drawn, before overlays/text.
     const fx = effectFrameAt(comp, this.time);
     const mainId = mainTrack(comp)?.id;
