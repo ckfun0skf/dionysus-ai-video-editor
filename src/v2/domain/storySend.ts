@@ -14,7 +14,7 @@ import { addTrack, groupOf, insertPlacement, isFree, mainTrack } from "./ops";
 import { SUBTITLE_STYLE } from "./layerStyle";
 import { getPreset, parsePresetRef, type PresetKind } from "../registry";
 import { DEFAULT_TEXT_SIZE, DEFAULT_TRANSITION_SEC, TEXT_LINE_HEIGHT, type StoryBox, type StoryLayer, type StoryMediaLayer, type StoryTextLayer, type StoryTextStyle } from "./storyJson";
-import { pinOf, sendPlan, type Shot, type Storyboard } from "./storyboard";
+import { pinOf, sendPlan, versionSpan, type Shot, type Storyboard } from "./storyboard";
 import { clampToClip, placeOnFreeTrack } from "./storyLinks";
 import { textOf, textStyleData, textStyleFields, type TextData } from "./text";
 import { previousAdjacent, setTransition } from "./transitions";
@@ -88,10 +88,12 @@ const overlay = (comp: Composition) => (t: Track) => t.kind === "video" && group
 const effects = () => (t: Track) => t.kind === "effect";
 
 /** The shot clip placement for a ready shot: html/still shots get the planned shot length, others as dropped from the library. */
-function shotClip(asset: Asset, v: AssetVersion, shot: Shot, at: number): Placement {
+function shotClip(b: Storyboard, asset: Asset, v: AssetVersion, shot: Shot, at: number): Placement {
   const planned = shot.durationSec > 0 ? secondsToTicks(shot.durationSec) : DEFAULT_IMAGE_TICKS;
-  const durationTicks = shot.clipSlot || asset.kind === "html" ? planned : asset.kind === "image" ? DEFAULT_IMAGE_TICKS : v.media.durationTicks ?? DEFAULT_IMAGE_TICKS;
-  return { id: newId("plc"), startTicks: at, durationTicks, sourceInTicks: 0, source: { kind: "assetVersion", assetId: asset.id, versionId: v.id }, clipType: asset.kind, volume: 1, storyShot: shot.id };
+  // A video clip uses its version's trim (V2-SB-121), else the whole clip.
+  const span = !shot.clipSlot && asset.kind === "video" ? versionSpan(b, v) : undefined;
+  const durationTicks = shot.clipSlot || asset.kind === "html" ? planned : asset.kind === "image" ? DEFAULT_IMAGE_TICKS : span?.lenTicks ?? v.media.durationTicks ?? DEFAULT_IMAGE_TICKS;
+  return { id: newId("plc"), startTicks: at, durationTicks, sourceInTicks: span?.inTicks ?? 0, source: { kind: "assetVersion", assetId: asset.id, versionId: v.id }, clipType: asset.kind, volume: 1, storyShot: shot.id };
 }
 
 function mediaLayer(p: Project, b: Storyboard, shot: Shot, l: StoryMediaLayer, start: number, dur: number, anchor: string): Placement | undefined {
@@ -162,7 +164,7 @@ export function sendStory(p: Project): { project: Project; result: SendResult } 
   for (const s of ready) {
     const shot = b.shots[s.shotId], asset = p.assets[s.assetId!], v = selectedVersion(asset);
     if (!v) continue;
-    const clip = shotClip(asset, v, shot, at);
+    const clip = shotClip(b, asset, v, shot, at);
     comp = insertPlacement(comp, tid, clip);
     sent.push({ shot, clip });
     at += clip.durationTicks;

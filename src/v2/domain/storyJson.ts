@@ -68,6 +68,8 @@ export interface StoryShot {
   effects?: StoryEffect[];
   /** V2-SB-120: images to attach, in order, with their roles. Absent = `assets` order with roles inferred from type. */
   references?: StoryReference[];
+  /** V2-SB-121: seconds to generate when the model renders fixed lengths (e.g. 8 for a 5 s shot); the upload is trimmed to `durationSec`. */
+  genDurationSec?: number;
 }
 export interface StoryConnection { from: string; to: string; kind: ConnectionKind; note?: string; transition?: StoryTransition }
 export interface StoryMeta { title: string; logline?: string; synopsis?: string; aspect: string; style?: string; language?: string; textStyles?: Record<string, StoryTextStyle> }
@@ -520,6 +522,12 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
     const references = referencesOf(s.references, `${path}.references`, used);
     const shot: StoryShot = { id, title: str(s.title) || id, description: str(s.description) ?? "", durationSec: dur, prompt, assets: used, qa: strList(s.qa, `${path}.qa`) };
     if (references) shot.references = references;
+    if (s.genDurationSec !== undefined) {
+      const g = num(s.genDurationSec);
+      if (g === undefined || g < 0.5 || g > 120) warn(`${path}.genDurationSec`, `genDurationSec ${JSON.stringify(s.genDurationSec)} is ignored: use seconds between 0.5 and 120.`);
+      else if (Number.isFinite(dur) && g < dur - 1e-9) warn(`${path}.genDurationSec`, `genDurationSec ${fmt(g)} is shorter than durationSec ${fmt(dur)}; it is ignored. Generate at least the shot length.`);
+      else if (!Number.isFinite(dur) || Math.abs(g - dur) > 1e-9) shot.genDurationSec = g;
+    }
     const camera = str(s.camera), dialogue = str(s.dialogue);
     if (camera) shot.camera = camera;
     if (dialogue) shot.dialogue = dialogue;
