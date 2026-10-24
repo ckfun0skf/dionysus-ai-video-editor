@@ -54,8 +54,12 @@ export function StoryboardView({ engine, blobs, onClose, initialOpen, onView }: 
     const ids = (q = engine.getState().project) => ops.mainTrack(q.compositions[q.rootCompositionId])?.placements ?? [];
     const before = new Set(ids().map((x) => x.id));
     engine.dispatch(cmd.sendStoryToTimeline());
-    const first = ids().filter((x) => !before.has(x.id)).sort((a, b) => a.startTicks - b.startTicks)[0];
-    setNote(`Added ${ready} clip${ready > 1 ? "s" : ""} to the end of the timeline${need ? ` · ${need}` : ""}`, first && onView ? { label: "View", run: () => onView(first.id) } : undefined);
+    const added = ids().filter((x) => !before.has(x.id));
+    const first = [...added].sort((a, b) => a.startTicks - b.startTicks)[0];
+    // v1.1: text/media layers, captions and effects sent with the shots (linked to their clip).
+    const anchors = new Set(added.map((x) => x.id)), after = engine.getState().project;
+    const linked = after.compositions[after.rootCompositionId].tracks.flatMap((t) => t.placements).filter((x) => x.storyLink && anchors.has(x.storyLink.anchor)).length;
+    setNote(`Added ${ready} clip${ready > 1 ? "s" : ""}${linked ? ` and ${linked} layer${linked > 1 ? "s" : ""}` : ""} to the end of the timeline${need ? ` · ${need}` : ""}`, first && onView ? { label: "View", run: () => onView(first.id) } : undefined);
   }, [engine, project, onView, setNote]);
   const askReplace = () => setConfirmReplace(true);
   const title = step === "prompt" ? (has ? "AI prompt" : "1 · AI prompt") : step === "import" ? (has ? "Replace storyboard" : "2 · Import JSON") : step === "production" ? "Production" : "Storyboard";

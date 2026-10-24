@@ -62,7 +62,10 @@ export function pasteClips(comp: Composition, items: ClipboardItem[], at: number
     const track = comp.tracks.find((t) => t.id === it.trackId) ?? comp.tracks.find((t) => t.kind === trackKindFor(it.placement.clipType));
     if (!track) continue;
     const id = makeId();
-    comp = insertPlacement(comp, track.id, { ...it.placement, id, startTicks: Math.max(0, at + it.offset) });
+    // A copy is an ordinary clip: it does not follow the storyboard shot the original was sent with.
+    const { storyLink: _link, ...placement } = it.placement;
+    void _link;
+    comp = insertPlacement(comp, track.id, { ...placement, id, startTicks: Math.max(0, at + it.offset) });
     ids.push(id);
   }
   return { comp, ids };

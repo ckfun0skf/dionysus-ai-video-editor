@@ -7,7 +7,8 @@
  */
 import { isStill, newId, type AssetVersion, type MediaKind, type MediaRef, type Placement, type Project } from "./model";
 import { mainTrack } from "./ops";
-import type { StoryAssetType, StoryConnection, StoryDoc, StoryMeta } from "./storyJson";
+import type { ShotRender, StoryAssetType, StoryConnection, StoryDoc, StoryEffect, StoryLayer, StoryMeta } from "./storyJson";
+import { followStoryLinks } from "./storyLinks";
 import { TICKS_PER_SECOND } from "./time";
 
 export interface QaCheck { id: string; text: string }
@@ -28,9 +29,20 @@ export interface AssetSlot {
 export interface Shot {
   id: string; title: string; description: string; durationSec: number; prompt: string;
   slotIds: string[]; qa: QaCheck[]; camera?: string; dialogue?: string;
-  /** Backing video asset holding the clip versions; created on first upload. */
+  /**
+   * Backing asset holding the clip versions; created on first upload. For `html` and `still` shots it is the
+   * `clipSlot`'s asset, so the shot uses whatever version is selected there.
+   */
   assetId?: string;
   skipped?: boolean;
+  /** v1.1: how the clip is made (absent = "ai", a generated video). */
+  render?: Exclude<ShotRender, "ai">;
+  /** v1.1: the html (render html) or image (render still) slot that is the shot's clip. */
+  clipSlot?: string;
+  /** v1.1, kept as written: placed on the timeline by "Send to timeline" (see domain/storySend). */
+  layers?: StoryLayer[];
+  captions?: boolean;
+  effects?: StoryEffect[];
 }
 
 /** Facts about one uploaded version, frozen when it was added. */
@@ -70,9 +82,14 @@ export function storyboardFromDoc(doc: StoryDoc): Storyboard {
     shots[s.id] = {
       id: s.id, title: s.title, description: s.description, durationSec: s.durationSec, prompt: s.prompt,
       slotIds: [...s.assets], qa: qaList(s.id, s.qa), ...(s.camera ? { camera: s.camera } : {}), ...(s.dialogue ? { dialogue: s.dialogue } : {}),
+      ...(s.render && s.render !== "ai" && s.clip && slots[s.clip] ? { render: s.render, clipSlot: s.clip } : {}),
+      ...(s.layers?.length ? { layers: structuredClone(s.layers) } : {}),
+      ...(s.captions ? { captions: true } : {}),
+      ...(s.effects?.length ? { effects: structuredClone(s.effects) } : {}),
     };
+    if (shots[s.id].clipSlot && !shots[s.id].slotIds.includes(shots[s.id].clipSlot!)) shots[s.id].slotIds.push(shots[s.id].clipSlot!);
   }
-  return { format: "dionysus.storyboard/1", meta: { ...doc.meta }, order: doc.shots.map((s) => s.id), shots, slots, connections: doc.connections.map((c) => ({ ...c })), versions: {} };
+  return { format: "dionysus.storyboard/1", meta: structuredClone(doc.meta), order: doc.shots.map((s) => s.id), shots, slots, connections: doc.connections.map((c) => structuredClone(c)), versions: {} };
 }
 
 export function setStoryboard(p: Project, board: Storyboard | undefined): Project {
@@ -91,7 +108,7 @@ export function versionsOf(p: Project, owner: { assetId?: string }): AssetVersio
   return (owner.assetId && p.assets[owner.assetId]?.versions) || [];
 }
 
-export const kindForSlot = (t: StoryAssetType): MediaKind => (t === "video" ? "video" : t === "audio" ? "audio" : "image");
+export const kindForSlot = (t: StoryAssetType): MediaKind => (t === "video" ? "video" : t === "audio" ? "audio" : t === "html" ? "html" : "image");
 
 export type Target = { slot: string } | { shot: string };
 
@@ -102,6 +119,9 @@ export type Target = { slot: string } | { shot: string };
 export function addStoryVersion(p: Project, target: Target, media: MediaRef, opts: { versionId?: string; model?: string; now?: string; derivedFrom?: { shotId: string; versionId: string } } = {}): Project {
   const b = p.storyboard;
   if (!b) return p;
+  // An html or still shot has no clip of its own: its versions live on the clip slot.
+  const clipSlot = "shot" in target ? b.shots[target.shot]?.clipSlot : undefined;
+  if (clipSlot) return addStoryVersion(p, { slot: clipSlot }, media, opts);
   const isSlot = "slot" in target;
   const owner = isSlot ? b.slots[target.slot] : b.shots[target.shot];
   if (!owner) return p;
@@ -127,10 +147,16 @@ export function addStoryVersion(p: Project, target: Target, media: MediaRef, opt
   const board: Storyboard = {
     ...b,
     slots: isSlot ? { ...b.slots, [owner.id]: nextOwner as AssetSlot } : b.slots,
-    shots: isSlot ? b.shots : { ...b.shots, [owner.id]: nextOwner as Shot },
+    shots: isSlot ? withClipAsset(b.shots, owner.id, assetId) : { ...b.shots, [owner.id]: nextOwner as Shot },
     versions: { ...b.versions, [version.id]: info },
   };
   return syncPlacements({ ...p, assets: { ...p.assets, [assetId]: asset }, storyboard: board }, assetId);
+}
+
+/** Point html/still shots whose clip is `slotId` at its backing asset. */
+function withClipAsset(shots: Record<string, Shot>, slotId: string, assetId: string): Record<string, Shot> {
+  if (!Object.values(shots).some((s) => s.clipSlot === slotId && s.assetId !== assetId)) return shots;
+  return Object.fromEntries(Object.entries(shots).map(([id, s]) => [id, s.clipSlot === slotId ? { ...s, assetId } : s]));
 }
 
 /** Select an existing version of a slot/shot backing asset. */
@@ -194,7 +220,7 @@ export function syncPlacements(p: Project, assetId: string): Project {
       }
       return { ...t, placements: pls };
     });
-    if (compChanged) { changed = true; compositions[cid] = { ...c, tracks }; }
+    if (compChanged) { changed = true; compositions[cid] = followStoryLinks(c, { ...c, tracks }); }
   }
   return changed ? { ...p, compositions } : p;
 }
@@ -307,7 +333,8 @@ export function storyStatus(p: Project): StoryStatus {
     visiting.add(id);
     const s = b.shots[id];
     const v = selectedOf(p, s);
-    const reasons = v ? inputsReasons(b.versions[v], s.slotIds) : [];
+    // An html/still shot is exactly its clip slot's selected version.
+    const reasons = s.clipSlot ? [...slot(s.clipSlot).reasons] : v ? inputsReasons(b.versions[v], s.slotIds) : [];
     visiting.delete(id);
     return (out.shots[id] = { stale: reasons.length > 0, reasons });
   };
@@ -329,7 +356,7 @@ export function setStorySkipped(p: Project, target: Target, skipped: boolean): P
 
 /** One row of the production to-do list (V2-CUT-11). */
 export type StepState = "todo" | "blocked" | "check" | "stale" | "done" | "skipped";
-export interface ProductionStep { target: Target; key: string; state: StepState; blockedBy?: string; qaDone: number; qaTotal: number }
+export interface ProductionStep { target: Target; key: string; state: StepState; blockedBy?: string; waitsFor?: string; qaDone: number; qaTotal: number }
 
 /**
  * The production to-do list in a workable order: every asset comes before the shots that use it,
@@ -342,13 +369,13 @@ export function productionSteps(p: Project): ProductionStep[] {
   const status = storyStatus(p);
   const seen = new Set<string>();
   const out: ProductionStep[] = [];
-  const state = (owner: AssetSlot | Shot, st: Staleness | undefined, blockedBy?: string): Omit<ProductionStep, "target" | "key"> => {
+  const state = (owner: AssetSlot | Shot, st: Staleness | undefined, blockedBy?: string, waitsFor?: string): Omit<ProductionStep, "target" | "key"> => {
     const v = selectedOf(p, owner);
     const qa = (v && b.versions[v]?.qa) || {};
     const qaDone = owner.qa.filter((q) => qa[q.id] === "pass").length;
     const base = { qaDone, qaTotal: owner.qa.length };
     if (owner.skipped) return { ...base, state: "skipped" };
-    if (!v) return blockedBy ? { ...base, state: "blocked", blockedBy } : { ...base, state: "todo" };
+    if (!v) return blockedBy ? { ...base, state: "blocked", blockedBy } : waitsFor ? { ...base, state: "blocked", waitsFor } : { ...base, state: "todo" };
     if (st?.stale) return { ...base, state: "stale" };
     return { ...base, state: qaDone < owner.qa.length ? "check" : "done" };
   };
@@ -370,7 +397,9 @@ export function productionSteps(p: Project): ProductionStep[] {
     if (!s || seen.has(`shot:${id}`)) return;
     seen.add(`shot:${id}`);
     s.slotIds.forEach(slot);
-    out.push({ target: { shot: id }, key: `shot:${id}`, ...state(s, status.shots[id]) });
+    // html/still shots: the step is checking the clip slot's version (its upload is the slot's own step).
+    if (s.clipSlot) slot(s.clipSlot);
+    out.push({ target: { shot: id }, key: `shot:${id}`, ...state(s, status.shots[id], undefined, s.clipSlot) });
   };
   b.order.forEach(shot);
   Object.keys(b.slots).forEach(slot);

@@ -3,7 +3,7 @@ import { board, type Project, type ProductionStep, type StepState } from "../../
 import type { Engine } from "../../engine";
 import type { BlobStore } from "../../ports";
 import { Ic } from "../Icon";
-import { type BoardTarget, Thumb, TYPE_ICON } from "./BoardView";
+import { type BoardTarget, shotIcon, Thumb, TYPE_ICON } from "./BoardView";
 import { StoryDetail } from "./StoryDetail";
 
 const LABEL: Record<StepState, string> = { todo: "To do", blocked: "Waiting", check: "Check it", stale: "May not match", done: "Done", skipped: "Skipped" };
@@ -29,8 +29,12 @@ export function ProductionView({ project, thumbs, engine, blobs, mobile }: { pro
       return reason ? `${verb} — ${reason.charAt(0).toUpperCase()}${reason.slice(1)}` : verb;
     }
     if (s.state === "blocked" && s.blockedBy) return `After shot ${b.order.indexOf(s.blockedBy) + 1} has a clip`;
+    if (s.state === "blocked" && s.waitsFor) return `After “${b.slots[s.waitsFor]?.name ?? s.waitsFor}” is added`;
     if (s.state === "check") return `Checks ${s.qaDone}/${s.qaTotal}`;
-    if ("slot" in s.target) { const sl = b.slots[s.target.slot]; return sl.source.type === "lastFrame" ? `Last frame of shot ${b.order.indexOf(sl.source.shotId) + 1}` : sl.source.type === "upload" ? "Upload your file" : `Generate ${sl.type}`; }
+    if ("slot" in s.target) { const sl = b.slots[s.target.slot]; return sl.source.type === "lastFrame" ? `Last frame of shot ${b.order.indexOf(sl.source.shotId) + 1}` : sl.source.type === "upload" ? "Upload your file" : sl.type === "html" ? "Make the HTML and upload it" : `Generate ${sl.type}`; }
+    const sh = b.shots[s.target.shot];
+    if (sh.render === "html") return "Check the HTML clip";
+    if (sh.render === "still") return "Check the still";
     return "Generate the clip";
   };
   const open = (t: BoardTarget) => setCur("slot" in t ? `slot:${t.slot}` : `shot:${t.shot}`);
@@ -51,7 +55,7 @@ export function ProductionView({ project, thumbs, engine, blobs, mobile }: { pro
             <li key={s.key}>
               <button className={`v2-prod-step ${s.state} ${s.key === cur ? "open" : ""}`} aria-current={s.key === cur ? "step" : undefined} onClick={() => setCur(s.key)} title={LABEL[s.state]}>
                 <span className="v2-prod-n">{j + 1}</span>
-                <Thumb src={v && thumbs[v]} icon={"slot" in s.target ? TYPE_ICON[b.slots[s.target.slot].type] ?? "image" : "▭"} count={0} />
+                <Thumb src={v && thumbs[v]} icon={"slot" in s.target ? TYPE_ICON[b.slots[s.target.slot].type] ?? "image" : shotIcon(b.shots[s.target.shot])} count={0} />
                 <span className="v2-prod-text"><b>{name(s)}</b><em>{what(s)}</em>{mobile && <span className={`v2-prod-state-m ${s.state}`}><Ic g={ICON[s.state]} size={12} />{LABEL[s.state]}</span>}</span>
                 {!mobile && <span className={`v2-prod-state ${s.state}`}><Ic g={ICON[s.state]} size={14} /><span>{LABEL[s.state]}</span></span>}
               </button>

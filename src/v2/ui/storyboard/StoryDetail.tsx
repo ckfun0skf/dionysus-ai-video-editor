@@ -5,11 +5,13 @@ import { importFile } from "../../persistence";
 import type { BlobStore } from "../../ports";
 import { Ic } from "../Icon";
 import { Sheet } from "../Sheet";
-import { type BoardTarget, LengthWarn, Thumb, TYPE_ICON, Warn } from "./BoardView";
+import { type BoardTarget, LengthWarn, shotIcon, Thumb, TYPE_ICON, Warn } from "./BoardView";
 import { extractLastFrame } from "./lastFrame";
 import { CopyButton } from "./StoryImport";
 
-const ACCEPT: Partial<Record<MediaKind, string>> = { image: "image/*", video: "video/*", audio: "audio/*" };
+const ACCEPT: Partial<Record<MediaKind, string>> = { image: "image/*", video: "video/*", audio: "audio/*", html: ".html,.htm,text/html" };
+const KIND_NAME: Partial<Record<MediaKind, string>> = { image: "an image", html: "an HTML file", audio: "an audio file", video: "a video file" };
+const kindName = (k: MediaKind) => KIND_NAME[k] ?? `a ${k} file`;
 const fmtDate = (iso: string) => { const d = new Date(iso); return Number.isNaN(+d) ? "" : d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); };
 
 /** Details for one shot or asset slot: versions (pick one), upload, prompt to copy, last-frame extraction. */
@@ -32,13 +34,15 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
   const shotNo = (id: string) => b.order.indexOf(id) + 1;
   const slot = isSlot ? (owner as AssetSlot) : undefined;
   const shot = isSlot ? undefined : (owner as Shot);
-  const kind: MediaKind = slot ? board.kindForSlot(slot.type) : "video";
+  /** html/still shot: its clip is this slot (versions, upload and checks of the clip live there). */
+  const clipSlot = shot?.clipSlot ? b.slots[shot.clipSlot] : undefined;
+  const kind: MediaKind = slot ? board.kindForSlot(slot.type) : clipSlot ? board.kindForSlot(clipSlot.type) : "video";
   const versions = board.versionsOf(project, owner);
   const selected = board.selectedOf(project, owner);
   const status = board.storyStatus(project);
   const st = isSlot ? status.slots[owner.id] : status.shots[owner.id];
   const title = slot ? slot.name : `Shot ${shotNo(owner.id)} · ${shot!.title}`;
-  const icon = slot ? TYPE_ICON[slot.type] ?? "image" : "▭";
+  const icon = slot ? TYPE_ICON[slot.type] ?? "image" : shotIcon(shot!);
   const lf = slot?.source.type === "lastFrame" ? slot.source.shotId : undefined;
   const lfShot = lf ? b.shots[lf] : undefined;
   const lfVersion = lfShot ? board.selectedOf(project, lfShot) : undefined;
@@ -65,7 +69,7 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
     const a = await importFile(f, blobs);
     if (!a) throw new Error("That file type isn't supported.");
     const media = a.versions[0].media;
-    if (a.kind !== kind) { await blobs.delete(media.blobKey).catch(() => undefined); throw new Error(`This needs ${kind === "image" ? "an image" : `a ${kind} file`}, but “${f.name}” is ${a.kind === "image" ? "an image" : `a ${a.kind} file`}.`); }
+    if (a.kind !== kind) { await blobs.delete(media.blobKey).catch(() => undefined); throw new Error(`This needs ${kindName(kind)}, but “${f.name}” is ${kindName(a.kind)}.`); }
     swap(cmd.addStoryVersion(target, media, model.trim() ? { model: model.trim() } : {}));
   });
   const useLastFrame = () => run("Taking the last frame…", async () => {
@@ -84,6 +88,12 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
       {head}
       {(inline || !mobile) && <div className="v2-sb-detail-head"><Ic g={icon} size={18} /><h3>{title}</h3>{!inline && <button className="v2-icon v2-sb-icon" aria-label="Close details" title="Close (Esc)" onClick={onClose}><Ic g="✕" size={18} /></button>}</div>}
       {shot && <p className="v2-sb-detail-desc">{shot.durationSec}s · {shot.description}</p>}
+      {clipSlot && (
+        <p className="v2-sb-cliplink" role="note">
+          <Ic g={TYPE_ICON[clipSlot.type] ?? "image"} size={14} /> {shot!.render === "html" ? "Plays the HTML" : "Shows the still"} “{clipSlot.name}” for {shot!.durationSec} s. Its versions are shared with that asset.{" "}
+          <button className="v2-linkbtn" onClick={() => onOpen({ slot: clipSlot.id })}>Open “{clipSlot.name}”</button>
+        </p>
+      )}
       {st?.stale && <div className="v2-sb-warnbox" role="note"><Warn st={st} /><ul>{st.reasons.map((r) => <li key={r}>{r}</li>)}</ul><p>Upload a new version made with the current assets, or keep this one if it still looks right.</p></div>}
 
       <Section title={versions.length ? `Versions (${versions.length})` : "Versions"}>
@@ -113,7 +123,7 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
           )}
           {!lf && <input className="v2-sb-model" value={model} onChange={(e) => setModel(e.target.value)} placeholder="Made with (optional), e.g. Veo 3" aria-label="AI tool or model used (saved with the upload)" maxLength={60} />}
           <button className={`v2-btn v2-sb-btn ${lf ? "" : "primary"}`} disabled={!!busy} onClick={() => fileRef.current?.click()}>
-            <Ic g="⇪" size={16} /> {versions.length ? "Upload new version" : shot ? "Upload clip" : "Upload"}
+            <Ic g="⇪" size={16} /> {versions.length ? "Upload new version" : clipSlot ? (kind === "html" ? "Upload HTML" : "Upload image") : shot ? "Upload clip" : kind === "html" ? "Upload HTML" : "Upload"}
           </button>
           <input ref={fileRef} type="file" hidden accept={ACCEPT[kind]} aria-label={`Upload ${kind} for ${title}`}
             onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void upload(f); }} />
@@ -130,6 +140,7 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
         </Section>
       )}
       {shot && (shot.camera || shot.dialogue) && <Section title="Direction">{shot.camera && <p className="v2-sb-kv"><b>Camera</b> {shot.camera}</p>}{shot.dialogue && <p className="v2-sb-kv"><b>Dialogue</b> {shot.dialogue}</p>}</Section>}
+      {shot && <ShotLayers shot={shot} project={project} onOpen={onOpen} />}
       {shot && shot.slotIds.length > 0 && <Section title="Assets in this shot"><Chips ids={shot.slotIds} project={project} thumbs={thumbs} onOpen={onOpen} /></Section>}
       {slot && slot.references.length > 0 && <Section title="Made using"><Chips ids={slot.references} project={project} thumbs={thumbs} onOpen={onOpen} /></Section>}
       {slot && <UsedIn slot={slot} project={project} onOpen={onOpen} />}
@@ -161,6 +172,28 @@ function Chips({ ids, project, thumbs, onOpen }: { ids: string[]; project: Proje
         return <li key={s.id}><button className="v2-sb-slot" onClick={() => onOpen({ slot: s.id })}><Thumb src={v && thumbs[v]} icon={TYPE_ICON[s.type] ?? "image"} count={0} /><span className="v2-sb-slot-text"><b>{s.name}</b><em>{board.versionsOf(project, s).length ? `${board.versionsOf(project, s).length} version${board.versionsOf(project, s).length > 1 ? "s" : ""}` : "Not added yet"}</em></span></button></li>;
       })}
     </ul>
+  );
+}
+
+const secs = (a?: number, z?: number) => (a === undefined && z === undefined ? "" : ` · ${a ?? 0}–${z === undefined ? "end" : `${z} s`}`);
+
+/** What "Send to timeline" adds with this shot (v1.1): text and media layers, captions, effects. */
+function ShotLayers({ shot, project, onOpen }: { shot: Shot; project: Project; onOpen: (t: BoardTarget) => void }) {
+  const b = project.storyboard!;
+  const layers = shot.layers ?? [], effects = shot.effects ?? [];
+  if (!layers.length && !effects.length && !shot.captions) return null;
+  return (
+    <Section title="Layers & effects">
+      <ul className="v2-sb-layers">
+        {layers.map((l, i) => l.type === "text"
+          ? <li key={i}><Ic g="T" size={14} /> <span>Text “{l.text.split("\n").join(" / ")}”{l.textStyle ? ` · ${l.textStyle}` : ""}{secs(l.startSec, l.endSec)}</span></li>
+          : <li key={i}><Ic g={TYPE_ICON[l.type] ?? "image"} size={14} /> <span>{l.type === "html" ? "HTML" : l.type === "image" ? "Image" : "Video"} layer{" "}
+              {b.slots[l.asset] ? <button className="v2-linkbtn" onClick={() => onOpen({ slot: l.asset })}>{b.slots[l.asset].name}</button> : l.asset}{secs(l.startSec, l.endSec)}</span></li>)}
+        {shot.captions && <li><Ic g="≡" size={14} /> <span>Captions from the dialogue{shot.dialogue ? "" : " (none written)"}</span></li>}
+        {effects.map((e, i) => <li key={`e${i}`}><Ic g="effect" size={14} /> <span>Effect {e.preset}{secs(e.startSec, e.endSec)}</span></li>)}
+      </ul>
+      <p className="v2-hint">Added with the shot by Send to timeline. They follow the shot when you swap its version.</p>
+    </Section>
   );
 }
 

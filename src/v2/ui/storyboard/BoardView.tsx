@@ -1,10 +1,23 @@
-import { board, type AssetSlot, type Project, type Shot, type Staleness } from "../../domain";
+import { board, story, type AssetSlot, type Project, type Shot, type Staleness } from "../../domain";
+import { getPreset, parsePresetRef } from "../../registry";
 import { Ic } from "../Icon";
 
 export type BoardTarget = { slot: string } | { shot: string };
 
-export const TYPE_ICON: Record<string, string> = { video: "▭", audio: "♫", frame: "link" };
+export const TYPE_ICON: Record<string, string> = { video: "▭", audio: "♫", frame: "link", html: "</>" };
+/** Shot icon by how its clip is made: generated video, an HTML page, or a still. */
+export const shotIcon = (s: Shot) => (s.render === "html" ? "</>" : s.render === "still" ? "image" : "▭");
 const CONN_LABEL: Record<string, string> = { continuity: "Continuity", match: "Match cut", cut: "Cut" };
+
+/** " · Crossfade 0.8 s" for a connection transition (the registry name; unknown presets play as a cut). */
+export function transitionLabel(t: { preset: string; params?: Record<string, number | string> } | undefined): string {
+  if (!t) return "";
+  const r = parsePresetRef(t.preset);
+  const d = r && getPreset("transition", r.id);
+  if (!d) return " · cut (unknown transition)";
+  const sec = typeof t.params?.durationSec === "number" ? t.params.durationSec : story.DEFAULT_TRANSITION_SEC;
+  return ` · ${d.name} ${sec} s`;
+}
 
 /** "2 of 3" for the selected version, or what is still missing. */
 export function versionLabel(p: Project, o: AssetSlot | Shot, empty: string): string {
@@ -86,7 +99,7 @@ export function BoardView({ project, thumbs, onOpen, openKey }: { project: Proje
             <li key={s.id} className="v2-sb-shotwrap">
               <article className={`v2-sb-shot ${status.shots[s.id]?.stale ? "stale" : ""}`} aria-label={`Shot ${i + 1}: ${s.title}`}>
                 <button className={`v2-sb-shot-main ${openKey === s.id ? "open" : ""}`} aria-current={openKey === s.id || undefined} onClick={() => onOpen({ shot: s.id })} title="Open shot: clip prompt, versions and QA">
-                  <Thumb src={sel && thumbs[sel]} icon="▭" count={n} />
+                  <Thumb src={sel && thumbs[sel]} icon={shotIcon(s)} count={n} />
                   <span className="v2-sb-shot-text">
                     <b><span className="v2-sb-no">{i + 1}</span>{s.title}</b>
                     <em>{s.durationSec}s{s.description ? ` · ${s.description}` : ""}</em>
@@ -97,9 +110,9 @@ export function BoardView({ project, thumbs, onOpen, openKey }: { project: Proje
                 {s.slotIds.length > 0 && <ul className="v2-sb-slots" aria-label={`Assets for shot ${i + 1}`}>{s.slotIds.map((id) => b.slots[id]).filter(Boolean).map(slotChip)}</ul>}
               </article>
               {next && (
-                <div className={`v2-sb-conn ${conn?.kind ?? "cut"}`} aria-label={`${CONN_LABEL[conn?.kind ?? "cut"]} to shot ${i + 2}`}>
+                <div className={`v2-sb-conn ${conn?.kind ?? "cut"}`} aria-label={`${CONN_LABEL[conn?.kind ?? "cut"]}${transitionLabel(conn?.transition)} to shot ${i + 2}`}>
                   <span className="v2-sb-conn-line" />
-                  <span className="v2-sb-conn-label">{conn?.kind === "continuity" ? <Ic g="link" size={12} /> : null}{CONN_LABEL[conn?.kind ?? "cut"]}{conn?.note ? ` · ${conn.note}` : ""}</span>
+                  <span className="v2-sb-conn-label">{conn?.kind === "continuity" ? <Ic g="link" size={12} /> : null}{CONN_LABEL[conn?.kind ?? "cut"]}{transitionLabel(conn?.transition)}{conn?.note ? ` · ${conn.note}` : ""}</span>
                 </div>
               )}
             </li>

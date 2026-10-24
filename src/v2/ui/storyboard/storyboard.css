@@ -202,3 +202,9 @@
 .v2-sb-warn .v2-sb-errlink { text-decoration-color: #fbbf2499; }
 .v2-sb-warn li { display: flex; gap: 6px; align-items: baseline; }
 .v2-sb-warn code { overflow-wrap: anywhere; }
+/* v1.1 (V2-SB-113): html/still shots point at their clip asset; layers sent with a shot. */
+.v2-sb-cliplink { margin: 0; font-size: 13px; line-height: 1.5; color: var(--muted); }
+.v2-sb-cliplink .v2-ic { vertical-align: -2px; }
+.v2-sb-layers { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.v2-sb-layers li { display: flex; gap: 6px; align-items: flex-start; overflow-wrap: anywhere; min-width: 0; }
+.v2-sb-layers .v2-ic { color: var(--muted); flex: none; margin-top: 2px; }
