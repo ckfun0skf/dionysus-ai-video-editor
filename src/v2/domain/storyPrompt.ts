@@ -58,7 +58,8 @@ export const GUIDE_KINDS: { kind: PresetKind; title: string; usedIn: string }[] 
 
 const num = (n: number) => String(Math.round(n * 1000) / 1000);
 export function paramText(p: ParamSpec): string {
-  return p.type === "number" ? `${p.key} ${num(p.min)}–${num(p.max)}, default ${num(p.default)}` : `${p.key} (${p.type}), default ${JSON.stringify(p.default)}`;
+  const base = p.type === "number" ? `${p.key} ${num(p.min)}–${num(p.max)}, default ${num(p.default)}` : `${p.key} (${p.type}), default ${JSON.stringify(p.default)}`;
+  return p.description ? `${base} (${p.description.replace(/\.$/, "")})` : base;
 }
 /** The look of a textStyle preset in a few words (font, colour, size), from its `data`. */
 function styleLook(d: PresetDescriptor): string {
@@ -143,6 +144,7 @@ export const RULES = [
   `Use "html" assets and "render": "html" only for animated, 3D or three.js graphics. Plain text is a text layer.`,
   `Transitions go on connections. Post camera moves (push-in etc.) and looks go in the shot's "effects", and the generation prompt then says "static camera".`,
   "Only use preset ids listed in the PRESETS section.",
+  `Preset params use the units noted in brackets in the PRESETS section; "fade-in"/"fade-out" "length" is a fraction (0.05–1) of the effect's time range, not seconds.`,
   `"durationSec" should match what the video model can generate.`,
 ];
 export const rulesSection = () => RULES.map((r, i) => `${i + 1}. ${r}`).join("\n");

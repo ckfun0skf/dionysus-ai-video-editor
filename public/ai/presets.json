@@ -447,6 +447,7 @@
             {
               "key": "length",
               "label": "Length",
+              "description": "fraction of the effect's time range, not seconds; 0.5 fades in over the first half of the range",
               "type": "number",
               "min": 0.05,
               "max": 1,
@@ -464,6 +465,7 @@
             {
               "key": "length",
               "label": "Length",
+              "description": "fraction of the effect's time range, not seconds; 0.5 fades out over the last half of the range",
               "type": "number",
               "min": 0.05,
               "max": 1,
