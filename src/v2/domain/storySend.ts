@@ -19,7 +19,8 @@ import { pinOf, sendPlan, versionSpan, type Shot, type Storyboard } from "./stor
 import { clampToClip, placeOnFreeTrack } from "./storyLinks";
 import { textOf, textStyleData, textStyleFields, type TextData } from "./text";
 import { previousAdjacent, setTransition } from "./transitions";
-import { secondsToTicks } from "./time";
+import { secondsToTicks, TICKS_PER_SECOND } from "./time";
+import { followKeyframes, type MotionEffect } from "./storyFollow";
 
 /** What one send added, for the confirmation note. */
 export interface SendResult { shots: number; layers: number; captions: number; effects: number; transitions: number; skippedLayers: number; audio: number; skippedAudio: number; firstClipId?: string }
@@ -116,21 +117,34 @@ function mediaLayer(p: Project, b: Storyboard, shot: Shot, l: StoryMediaLayer, s
   };
 }
 
+/** Keyframe spacing for layers that follow the shot: linear keys every 0.25 s track any built-in motion closely. */
+const FOLLOW_STEP_TICKS = TICKS_PER_SECOND / 4;
+
 /** Linked layers, captions and effects for one shot clip. */
 function addLinked(p: Project, b: Storyboard, comp: Composition, shot: Shot, clip: Placement, res: SendResult): Composition {
   let c = comp;
   const anchor = clip.id;
+  // V2-SB-126: the shot's motion (effects only move the main-track picture) is baked into layers that follow the shot.
+  const motion: MotionEffect[] = (shot.effects ?? []).flatMap((e) => {
+    const preset = presetId("videoEffect", e.preset);
+    return preset ? [{ preset, params: e.params, ...rangeIn(clip.durationTicks, e.startSec, e.endSec) }] : [];
+  });
+  const follow = (l: StoryLayer, r: { offset: number; duration: number }, t: Partial<Transform> | undefined) =>
+    l.follow === "shot" ? followKeyframes(motion, r.offset, r.duration, { x: t?.x ?? 0, y: t?.y ?? 0, scale: t?.scale ?? 1 }, FOLLOW_STEP_TICKS) : undefined;
   for (const l of shot.layers ?? [] as StoryLayer[]) {
     const r = rangeIn(clip.durationTicks, l.startSec, l.endSec);
     const start = clip.startTicks + r.offset;
     if (l.type === "text") {
       const t = textLayerTransform(l);
-      const pl: Placement = { id: newId("plc"), startTicks: start, durationTicks: r.duration, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "text", text: textLayerData(b, l), ...(t ? { transform: t as Transform } : {}), storyLink: { anchor } };
+      const keyframes = follow(l, r, t);
+      const pl: Placement = { id: newId("plc"), startTicks: start, durationTicks: r.duration, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "text", text: textLayerData(b, l), ...(t ? { transform: t as Transform } : {}), ...(keyframes ? { keyframes } : {}), storyLink: { anchor } };
       c = placeOnFreeTrack(c, pl, plainText());
       res.layers += 1;
     } else {
       const pl = mediaLayer(p, b, shot, l, start, r.duration, anchor);
       if (!pl) { res.skippedLayers += 1; continue; }
+      const keyframes = follow(l, { offset: r.offset, duration: pl.durationTicks }, pl.transform);
+      if (keyframes) pl.keyframes = keyframes;
       c = placeOnFreeTrack(c, pl, overlay(c));
       res.layers += 1;
     }

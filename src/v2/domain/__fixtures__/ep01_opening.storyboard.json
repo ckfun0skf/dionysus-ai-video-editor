@@ -264,7 +264,8 @@
           "anim": {
             "in": "fade",
             "durationSec": 0.6
-          }
+          },
+          "follow": "shot"
         }
       ],
       "effects": [

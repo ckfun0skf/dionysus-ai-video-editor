@@ -3,6 +3,7 @@
  * Pure parse + validate with path-addressed errors. The source of truth is docs/v2/STORYBOARD_FORMAT.md; every
  * warning, fallback and hard error listed in its §4 is implemented here.
  */
+import { effectMoves } from "./storyFollow";
 import { FONTS, getFont, getPreset, listPresets, parsePresetRef, type PresetDescriptor, type PresetKind } from "../registry";
 
 export const STORYBOARD_FORMAT = "dionysus.storyboard/1" as const;
@@ -50,7 +51,13 @@ export interface StoryTextStyle { font?: string; size?: number; color?: string; 
 export interface StoryPoint { x: number; y: number }
 export interface StoryBox { x: number; y: number; width: number; height: number }
 export interface StoryTextAnim { in?: string; out?: string; loop?: string; durationSec?: number }
-interface StoryLayerBase { id: string; startSec: number; endSec: number }
+/**
+ * V2-SB-126: whether a layer stays fixed to the frame (default) or follows the shot's motion: with "shot", the zoom
+ * and pan of the shot's effects (ken-burns etc.) are applied to the layer too, as if it were part of the picture.
+ */
+export const LAYER_FOLLOW = ["frame", "shot"] as const;
+export type LayerFollow = (typeof LAYER_FOLLOW)[number];
+interface StoryLayerBase { id: string; startSec: number; endSec: number; follow?: "shot" }
 export interface StoryTextLayer extends StoryLayerBase {
   type: "text"; text: string; position?: StoryPoint; box?: StoryBox;
   /** Registry `textStyle` id (optionally `id@N`) or a `meta.textStyles` key, kept as written. */
@@ -472,6 +479,11 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
       for (const k of ["blend", "trackMotion"]) if (l[k] !== undefined) warn(`${lp}.${k}`, `"${k}" is not supported yet; it is ignored.`);
       const range = timeRange(l, lp, dur, true);
       const startSec = range.startSec ?? 0, endSec = range.endSec ?? startSec;
+      let follow: "shot" | undefined;
+      if (l.follow !== undefined && l.follow !== "frame") {
+        if (l.follow === "shot") follow = "shot";
+        else warn(`${lp}.follow`, `follow ${JSON.stringify(l.follow)} is ignored: use "frame" (stays put, the default) or "shot" (moves with the shot's zoom and pan).`);
+      }
       if (type === "text") {
         const text = typeof l.text === "string" ? l.text : "";
         if (!text.trim()) err(`${lp}.text`, 'A text layer needs "text".');
@@ -508,7 +520,7 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
           const room = box ? box.width : 1;
           if (w > room * 1.02) warn(`${lp}.text`, box ? `The text is about ${fmt(w)} of the frame wide but the box is ${fmt(box.width)}; it may overflow (text does not wrap). Use a smaller "style.size", a wider box or shorter text.` : `The text is about ${fmt(w)} of the frame wide and may run off screen (text does not wrap). Use a smaller "style.size" or shorter text.`);
         }
-        out.push({ id, type, text, startSec, endSec, ...(position ? { position } : {}), ...(box ? { box } : {}), ...(textStyle ? { textStyle } : {}), ...(style ? { style } : {}), ...(anim ? { anim } : {}) });
+        out.push({ id, type, text, startSec, endSec, ...(position ? { position } : {}), ...(box ? { box } : {}), ...(textStyle ? { textStyle } : {}), ...(style ? { style } : {}), ...(anim ? { anim } : {}), ...(follow ? { follow } : {}) });
       } else {
         const asset = str(l.asset) ?? "";
         const a = assetById.get(asset);
@@ -517,7 +529,7 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
         else if (type === "html" ? a.type !== "html" : type === "video" ? a.type !== "video" : !STILL_ASSET_TYPES.includes(a.type)) err(`${lp}.asset`, `A ${type} layer can't show asset "${asset}" (type ${a.type}); it needs ${type === "html" ? "an html" : type === "video" ? "a video" : "an image"} asset.`);
         if (l.position !== undefined) err(`${lp}.position`, `${type} layers are placed with "box" { x, y, width, height }, not "position".`);
         const box = l.box === undefined ? (l.position === undefined ? (err(`${lp}.box`, `A ${type} layer needs "box" { x, y, width, height }.`), undefined) : undefined) : boxOf(l.box, `${lp}.box`);
-        if (box) out.push({ id, type, asset, startSec, endSec, box });
+        if (box) out.push({ id, type, asset, startSec, endSec, box, ...(follow ? { follow } : {}) });
       }
     });
     return out;
@@ -631,6 +643,12 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
     }
     const effects = effectsOf(s.effects, `${path}.effects`, dur);
     if (effects) shot.effects = effects;
+    // V2-SB-126: a layer that follows the shot needs an effect that moves or zooms the picture while it is on screen.
+    layers?.forEach((l, j) => {
+      if (l.follow !== "shot") return;
+      const moving = (effects ?? []).some((e) => (e.startSec ?? 0) < l.endSec && (e.endSec ?? dur) > l.startSec && effectMoves(e.preset, e.params));
+      if (!moving) warn(`${path}.layers[${j}].follow`, `Layer "${l.id}" follows the shot, but no effect moves or zooms shot "${id}" while it is on screen, so it stays put.`);
+    });
     const keyframe = keyframeOf(s.keyframe, `${path}.keyframe`, id, mode);
     if (keyframe) {
       shot.keyframe = keyframe;
