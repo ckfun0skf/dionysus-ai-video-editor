@@ -5,9 +5,10 @@
  * prompts, QA checks, and per-version facts frozen at upload time (inputs used, QA results, the
  * clip version a last frame came from). Staleness ("may not match") is derived, never stored.
  */
-import { isStill, newId, type AssetVersion, type MediaKind, type MediaRef, type Project } from "./model";
+import { isStill, newId, type AssetVersion, type MediaKind, type MediaRef, type Placement, type Project } from "./model";
 import { mainTrack } from "./ops";
 import type { StoryAssetType, StoryConnection, StoryDoc, StoryMeta } from "./storyJson";
+import { TICKS_PER_SECOND } from "./time";
 
 export interface QaCheck { id: string; text: string }
 export type QaResult = "pass" | "fail";
@@ -92,7 +93,7 @@ export function versionsOf(p: Project, owner: { assetId?: string }): AssetVersio
 
 export const kindForSlot = (t: StoryAssetType): MediaKind => (t === "video" ? "video" : t === "audio" ? "audio" : "image");
 
-type Target = { slot: string } | { shot: string };
+export type Target = { slot: string } | { shot: string };
 
 /**
  * Upload a new version into a slot or shot and select it. Inputs (and the last-frame source for
@@ -165,15 +166,21 @@ export function syncPlacements(p: Project, assetId: string): Project {
       for (let i = 0; i < pls.length; i += 1) {
         const pl = pls[i];
         if (pl.source.assetId !== assetId || pl.source.versionId === v.id) continue;
-        const next = { ...pl, source: { ...pl.source, versionId: v.id } };
+        const { storyTrim, ...rest } = pl;
+        const next: Placement = { ...rest, source: { ...pl.source, versionId: v.id } };
         if (max && !isStill(pl)) {
           const speed = pl.speed ?? 1;
           const prevFull = a.versions.find((x) => x.id === pl.source.versionId)?.media.durationTicks;
-          const untrimmed = !pl.freeze && pl.sourceInTicks === 0 && !!prevFull && Math.abs(pl.durationTicks - Math.floor(prevFull / speed)) <= 1;
+          // A trim remembered from an earlier clamp still applies if the clip was not edited since.
+          const memo = storyTrim && storyTrim.clampedTo === pl.durationTicks && storyTrim.inTicks === pl.sourceInTicks ? storyTrim : undefined;
+          const untrimmed = !memo && !pl.freeze && pl.sourceInTicks === 0 && !!prevFull && Math.abs(pl.durationTicks - Math.floor(prevFull / speed)) <= 1;
           if (next.sourceInTicks >= max) next.sourceInTicks = 0;
           const room = Math.max(1, Math.floor((max - next.sourceInTicks) / speed));
+          const want = memo?.durationTicks ?? pl.durationTicks;
           if (untrimmed) next.durationTicks = room;
-          else if (!pl.freeze && next.durationTicks > room) next.durationTicks = room;
+          else if (pl.freeze) next.durationTicks = pl.durationTicks;
+          else if (want > room) { next.durationTicks = room; next.storyTrim = { durationTicks: want, clampedTo: room, inTicks: next.sourceInTicks }; }
+          else next.durationTicks = want;
           if (t.id !== mainId && next.durationTicks > pl.durationTicks) {
             const after = pls.find((o, j) => j > i && o.startTicks >= pl.startTicks + pl.durationTicks);
             if (after) next.durationTicks = Math.max(pl.durationTicks, Math.min(next.durationTicks, after.startTicks - pl.startTicks));
@@ -190,6 +197,31 @@ export function syncPlacements(p: Project, assetId: string): Project {
     if (compChanged) { changed = true; compositions[cid] = { ...c, tracks }; }
   }
   return changed ? { ...p, compositions } : p;
+}
+
+/** Selected clip length vs the planned shot length, when they differ by more than half a second (V2-SB-R06). */
+export function shotLengthMismatch(p: Project, s: Shot): { actualSec: number; plannedSec: number } | undefined {
+  const v = versionsOf(p, s).find((x) => x.id === selectedOf(p, s));
+  const d = v?.media.durationTicks;
+  if (!d || !s.durationSec) return undefined;
+  const actualSec = d / TICKS_PER_SECOND;
+  return Math.abs(actualSec - s.durationSec) > 0.5 ? { actualSec, plannedSec: s.durationSec } : undefined;
+}
+
+/** The storyboard shot or slot whose asset is `assetId`, with the selected version's number (timeline link chips, V2-SB-R05). */
+export interface StoryLink { target: Target; label: string; versionNo: number; versionCount: number }
+export function storyLinkOf(p: Project, assetId: string): StoryLink | undefined {
+  const b = p.storyboard;
+  if (!b) return undefined;
+  const shot = Object.values(b.shots).find((s) => s.assetId === assetId);
+  const slot = shot ? undefined : Object.values(b.slots).find((s) => s.assetId === assetId);
+  const owner = shot ?? slot;
+  if (!owner) return undefined;
+  const vs = versionsOf(p, owner);
+  const versionNo = vs.findIndex((v) => v.id === selectedOf(p, owner)) + 1;
+  return shot
+    ? { target: { shot: shot.id }, label: `Shot ${b.order.indexOf(shot.id) + 1}`, versionNo, versionCount: vs.length }
+    : { target: { slot: slot!.id }, label: slot!.name, versionNo, versionCount: vs.length };
 }
 
 /** Linked timeline clips of `assetId` whose length differs between two project states (for the swap note). */

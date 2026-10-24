@@ -23,6 +23,14 @@ export function Thumb({ src, icon, count }: { src?: string; icon: string; count:
   );
 }
 
+/** "3s · planned 5s" when the picked clip's length is off the plan by more than half a second (V2-SB-R06). */
+export function LengthWarn({ project, shot }: { project: Project; shot: Shot }) {
+  const m = board.shotLengthMismatch(project, shot);
+  if (!m) return null;
+  const sec = (x: number) => `${Math.round(x * 10) / 10}s`;
+  return <span className="v2-sb-len" title={`The picked clip is ${sec(m.actualSec)} long but the shot is planned at ${sec(m.plannedSec)}. The timeline uses the clip's length.`}><Ic g="⚠" size={12} /> {sec(m.actualSec)} · planned {sec(m.plannedSec)}</span>;
+}
+
 export function Warn({ st }: { st?: Staleness }) {
   if (!st?.stale) return null;
   return <span className="v2-sb-stale" title={`May not match: ${st.reasons.join("; ")}`}><Ic g="⚠" size={13} /> May not match</span>;
@@ -82,7 +90,7 @@ export function BoardView({ project, thumbs, onOpen, openKey }: { project: Proje
                   <span className="v2-sb-shot-text">
                     <b><span className="v2-sb-no">{i + 1}</span>{s.title}</b>
                     <em>{s.durationSec}s{s.description ? ` · ${s.description}` : ""}</em>
-                    <span className="v2-sb-shot-status">{status.shots[s.id]?.stale ? <Warn st={status.shots[s.id]} /> : <>{versionLabel(project, s, "No clip yet")}{placed.has(s.id) && <span className="v2-sb-placed" title="This shot is on the timeline and follows the version you pick"> · On timeline</span>}</>}</span>
+                    <span className="v2-sb-shot-status">{versionLabel(project, s, "No clip yet")}{placed.has(s.id) && <span className="v2-sb-placed" title="This shot is on the timeline and follows the version you pick"> · On timeline</span>}<Warn st={status.shots[s.id]} /><LengthWarn project={project} shot={s} /></span>
                   </span>
                   <Ic g="anim-out" size={16} />
                 </button>

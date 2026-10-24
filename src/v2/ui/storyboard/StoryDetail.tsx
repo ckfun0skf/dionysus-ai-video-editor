@@ -5,7 +5,7 @@ import { importFile } from "../../persistence";
 import type { BlobStore } from "../../ports";
 import { Ic } from "../Icon";
 import { Sheet } from "../Sheet";
-import { type BoardTarget, Thumb, TYPE_ICON, Warn } from "./BoardView";
+import { type BoardTarget, LengthWarn, Thumb, TYPE_ICON, Warn } from "./BoardView";
 import { extractLastFrame } from "./lastFrame";
 import { CopyButton } from "./StoryImport";
 
@@ -104,6 +104,7 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
             })}
           </ul>
         ) : <p className="v2-hint">{lf ? `Nothing yet. Use the last frame of shot ${shotNo(lf)} once it has a clip, or upload an image.` : `Nothing yet. ${slot?.source.type === "upload" ? "Upload your file" : "Generate it in your AI tool with the prompt below"}, then add it here.`}</p>}
+        {shot && board.shotLengthMismatch(project, shot) && <p className="v2-sb-lenline"><LengthWarn project={project} shot={shot} /></p>}
         <div className="v2-sb-actions">
           {lf && (
             <button className="v2-btn primary v2-sb-btn" disabled={!lfVersion || !!busy} onClick={useLastFrame} title={lfVersion ? "Grab the final frame of the selected clip" : `Shot ${shotNo(lf)} needs a clip first`}>

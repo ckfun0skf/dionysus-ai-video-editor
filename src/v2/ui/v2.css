@@ -13,7 +13,11 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 .v2-btn { background: #2a2a31; border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; }
 .v2-btn.primary { background: var(--accent); color: #111 !important; border-color: var(--accent); font-weight: 600; }
 .v2-icon { background: none; border: none; padding: 4px 6px; font-size: 16px; border-radius: 6px; }
-.v2-icon:hover:not(:disabled), .v2-btn:hover { background: #33333b; }
+/* Hover only where a pointer can hover: iOS keeps :hover after a tap (V2-SB-R09). Primary buttons keep their fill. */
+@media (hover: hover) {
+  .v2-icon:hover:not(:disabled), .v2-btn:not(.primary):hover { background: #33333b; }
+  .v2-btn.primary:hover:not(:disabled) { filter: brightness(1.08); }
+}
 .v2-hint { color: var(--muted); font-size: 12px; margin: 8px 0; }
 
 /* Desktop: browser top-left, preview top-right, timeline bottom */
@@ -126,6 +130,8 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 .v2-recovery-actions .v2-btn { min-height: 44px; }
 
 .v2-clip-badge { margin-right: 4px; font-size: 10px; opacity: .85; }
+/* V2-SB-R05: storyboard-linked clip chip */
+.v2-clip-link { display: inline-flex; align-items: center; gap: 2px; padding: 0 4px; border-radius: 6px; background: rgba(167, 139, 250, .35); color: #ede9fe; font-weight: 600; opacity: 1; }
 /* Transform: inspector + on-canvas handles (V2-061) */
 .v2-inspector { padding: 8px; display: flex; flex-direction: column; gap: 2px; min-width: 240px; }
 .v2-insp-row { display: grid; grid-template-columns: 84px 1fr 44px; align-items: center; gap: 6px; min-height: 32px; font-size: 12px; color: var(--muted, #aaa); }

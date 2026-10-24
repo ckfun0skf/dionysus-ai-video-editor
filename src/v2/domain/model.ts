@@ -59,6 +59,11 @@ export interface Placement {
   /** Fade in/out length in ticks: ramps opacity (visual) and volume (audio) from/to 0. */
   fadeInTicks?: number;
   fadeOutTicks?: number;
+  /**
+   * Set when a storyboard version swap shortened a trimmed clip to fit a shorter version: the trimmed
+   * length to restore on a later swap, valid only while the clip is still `clampedTo` long from `inTicks`.
+   */
+  storyTrim?: { durationTicks: number; clampedTo: number; inTicks: number };
   /** Per-property keyframes; `t` is ticks from the clip start. Linear between keys, held outside. */
   keyframes?: Partial<Record<KeyframeProp, Keyframe[]>>;
   /** Transition from the clip that ends where this one starts (see domain/transitions). */

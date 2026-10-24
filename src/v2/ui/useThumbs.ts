@@ -1,23 +1,36 @@
-import { useEffect, useState } from "react";
-import type { Project } from "../domain";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { Asset, Project } from "../domain";
 import type { BlobStore } from "../ports";
+import { drawVideoFrame } from "./frameGrab";
 
-/** First-frame thumbnail (data URL) per asset for filmstrips; images use the image itself. */
+const selected = (a: Asset) => a.versions.find((x) => x.id === a.selectedVersionId) ?? a.versions[0];
+
+/**
+ * First-frame thumbnail (data URL) per asset for filmstrips and the Media panel; images use the image
+ * itself. Cached per version, so a tile follows the asset's selected version (V2-SB-R04).
+ */
 export function useThumbs(project: Project, blobs: BlobStore): Record<string, string> {
-  const [thumbs, setThumbs] = useState<Record<string, string>>({});
+  const [cache, setCache] = useState<Record<string, string>>({});
+  const started = useRef(new Set<string>());
+  const alive = useRef(true);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   useEffect(() => {
-    let alive = true;
     for (const a of Object.values(project.assets)) {
-      if (a.kind === "audio" || a.kind === "html" || thumbs[a.id]) continue;
-      const v = a.versions.find((x) => x.id === a.selectedVersionId) ?? a.versions[0];
-      if (!v) continue;
+      if (a.kind === "audio" || a.kind === "html") continue;
+      const v = selected(a);
+      const key = v && `${a.id}:${v.id}`;
+      if (!v || started.current.has(key)) continue;
+      started.current.add(key);
       void blobs.get(v.media.blobKey).then((b) => b && grab(a.kind, b)).then((url) => {
-        if (alive && url) setThumbs((t) => ({ ...t, [a.id]: url }));
-      }).catch(() => undefined);
+        if (alive.current && url) setCache((t) => ({ ...t, [key]: url }));
+      }).catch(() => started.current.delete(key));
     }
-    return () => { alive = false; };
-  }, [project.assets, blobs]); // eslint-disable-line react-hooks/exhaustive-deps
-  return thumbs;
+  }, [project.assets, blobs]);
+  return useMemo(() => {
+    const out: Record<string, string> = {};
+    for (const a of Object.values(project.assets)) { const v = selected(a); const url = v && cache[`${a.id}:${v.id}`]; if (url) out[a.id] = url; }
+    return out;
+  }, [project.assets, cache]);
 }
 
 export async function grab(kind: string, blob: Blob): Promise<string | undefined> {
@@ -40,7 +53,10 @@ export async function grab(kind: string, blob: Blob): Promise<string | undefined
     if (!w || !h) return undefined;
     const c = document.createElement("canvas");
     c.height = 96; c.width = Math.round((96 * w) / h);
-    c.getContext("2d")?.drawImage(el, 0, 0, c.width, c.height);
+    const g = c.getContext("2d");
+    if (!g) return undefined;
+    if (el instanceof HTMLVideoElement) { if (!(await drawVideoFrame(g, el, c.width, c.height))) return undefined; } // empty frame: keep the placeholder
+    else g.drawImage(el, 0, 0, c.width, c.height);
     return c.toDataURL("image/jpeg", 0.7);
   } finally {
     URL.revokeObjectURL(url);

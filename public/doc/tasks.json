@@ -2223,44 +2223,44 @@
         {
           "id": "V2-SB-R03",
           "title": "Storyboard review P2-1: blank-frame detection in last-frame extraction and video thumbnails (wait a frame after seeking, reject empty grabs with an error)",
-          "status": "todo",
-          "progress": 0
+          "status": "done",
+          "progress": 100
         },
         {
           "id": "V2-SB-R04",
           "title": "Storyboard review P2-2: editor media thumbnails follow the selected version (cache keyed by version)",
-          "status": "todo",
-          "progress": 0
+          "status": "done",
+          "progress": 100
         },
         {
           "id": "V2-SB-R05",
           "title": "Storyboard review P2-3: linked timeline clips show a link + version chip and an 'Open in storyboard' menu item",
-          "status": "todo",
-          "progress": 0
+          "status": "done",
+          "progress": 100
         },
         {
           "id": "V2-SB-R06",
           "title": "Storyboard review P2-4: warn when a clip's length differs from the planned shot length",
-          "status": "todo",
-          "progress": 0
+          "status": "done",
+          "progress": 100
         },
         {
           "id": "V2-SB-R07",
           "title": "Storyboard review P2-5: shot status line shows version, 'On timeline' and 'May not match' together",
-          "status": "todo",
-          "progress": 0
+          "status": "done",
+          "progress": 100
         },
         {
           "id": "V2-SB-R08",
           "title": "Storyboard review P2-6: Production sub-label shows the stale reason (Regenerate — …)",
-          "status": "todo",
-          "progress": 0
+          "status": "done",
+          "progress": 100
         },
         {
           "id": "V2-SB-R09",
           "title": "Storyboard review P2-10: hover rules gated behind @media (hover: hover) (no sticky hover on iOS)",
-          "status": "todo",
-          "progress": 0
+          "status": "done",
+          "progress": 100
         },
         {
           "id": "V2-SB-R10",

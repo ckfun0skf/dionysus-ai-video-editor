@@ -71,6 +71,24 @@ describe("send storyboard to timeline", () => {
     expect([at(id).source.versionId, at(id).durationTicks, at(next).startTicks]).toEqual(["a3", s(3), s(3)]);
   });
 
+  it("a trim shortened by a version swap comes back when a longer version is picked again", () => {
+    const e = setup();
+    e.dispatch(cmd.sendStoryToTimeline());
+    const [id, next] = main(e.getState().project).placements.map((p) => p.id);
+    const at = (pid: string) => main(e.getState().project).placements.find((p) => p.id === pid)!;
+    const s1 = shotAsset(e, "s1");
+    e.dispatch(cmd.trimPlacement(id, "right", s(4), true));
+    e.dispatch(cmd.addStoryVersion({ shot: "s1" }, clip(3), { versionId: "a3" }));
+    expect([at(id).durationTicks, at(next).startTicks]).toEqual([s(3), s(3)]);
+    e.dispatch(cmd.selectStoryVersion(s1, "a1"));
+    expect([at(id).durationTicks, at(next).startTicks, at(id).storyTrim]).toEqual([s(4), s(4), undefined]);
+    // An edit after the clamp wins over the remembered trim.
+    e.dispatch(cmd.selectStoryVersion(s1, "a3"));
+    e.dispatch(cmd.trimPlacement(id, "right", s(2), true));
+    e.dispatch(cmd.selectStoryVersion(s1, "a1"));
+    expect(at(id).durationTicks).toBe(s(2));
+  });
+
   it("on an overlay track a longer version grows only up to the next clip", () => {
     const e = setup();
     e.dispatch(cmd.addStoryVersion({ shot: "s1" }, clip(3), { versionId: "a2" }));
