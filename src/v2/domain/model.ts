@@ -73,6 +73,11 @@ export interface Placement {
   text?: TextData;
   /** Effect clips (`clipType: "effect"`): a `videoEffect` registry preset id and its params. Source is TEXT_SOURCE. */
   effect?: { preset: string; params?: Record<string, number | string> };
+  /**
+   * Storyboard linked item (V2-SB-113): a layer, caption or effect clip sent with a shot. It follows the shot clip
+   * `anchor` on version swaps (see domain/storyLinks). `want` remembers the offset/length before a clamp.
+   */
+  storyLink?: { anchor: string; want?: { offset: number; duration: number; clampedOffset: number; clampedDuration: number } };
 }
 
 /** Placeholder source of text clips: they reference no asset. */

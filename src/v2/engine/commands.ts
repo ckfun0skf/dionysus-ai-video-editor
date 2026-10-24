@@ -10,6 +10,7 @@ import * as transitions from "../domain/transitions";
 import type { Subtitle } from "../domain/model";
 import { TEXT_SOURCE } from "../domain/model";
 import * as board from "../domain/storyboard";
+import { sendStory } from "../domain/storySend";
 import type { StoryDoc } from "../domain/storyJson";
 import { DEFAULT_TEXT, DEFAULT_TEXT_TICKS, textOf, type TextData } from "../domain/text";
 
@@ -256,24 +257,13 @@ export const addAssetsInSequence = (assetIds: string[], startTicks: number, over
   }),
 });
 
-/** Append the storyboard's ready shots, in story order, to the end of the main track. One undo. */
+/**
+ * Append the storyboard's ready shots, in story order, to the end of the main track, with their layers, captions,
+ * effects and transitions (domain/storySend). One undo.
+ */
 export const sendStoryToTimeline = (): Command => ({
   label: "Send to timeline",
-  apply: (p) => withRoot(p, (c) => {
-    let comp = c;
-    let tid = ops.mainTrack(comp)?.id;
-    if (!tid) { tid = newId("trk"); comp = ops.addTrack(comp, "video", tid); }
-    let at = Math.max(0, ...comp.tracks.find((t) => t.id === tid)!.placements.map((x) => x.startTicks + x.durationTicks));
-    for (const s of board.sendPlan(p)) {
-      if (s.state !== "ready") continue;
-      const asset = p.assets[s.assetId!];
-      const version = asset.versions.find((v) => v.id === asset.selectedVersionId) ?? asset.versions[0];
-      const pl = placementForAsset(asset, version, at);
-      comp = ops.insertPlacement(comp, tid, pl);
-      at += pl.durationTicks;
-    }
-    return comp;
-  }),
+  apply: (p) => sendStory(p).project,
 });
 
 export const reorderTrack = (trackId: string, toIndex: number): Command => ({

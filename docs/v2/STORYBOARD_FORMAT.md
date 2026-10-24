@@ -188,13 +188,13 @@ Every error and warning carries a JSON path (for example `shots[2].layers[0].end
 **Mapping notes**
 
 - **Placement:** `box` and `position` map to the layer clip's Transform. Positions are fractions times the frame size. A text `box` maps to the box centre (the text is centred there, sized as in §2.5); a `position` is the centre itself. Media layers fill their `box`.
-- **Transitions:** a connection's transition becomes `transitionIn` on the incoming (`to`) clip.
+- **Transitions:** a connection's transition becomes `transitionIn` on the incoming (`to`) clip, only when the two clips are adjacent on the main track. `params.durationSec` (default 0.5 s) is clamped to half the shorter clip. An unknown transition id is a plain cut.
 - **Effects:** each shot effect becomes an effect-layer clip over the shot's time range (or its sub-range), linked to the shot's clip.
-- **Linked layers:** text, html, image and video layers become clips in the overlay group, linked to the shot's clip, so they move and trim with it (the same mechanism as storyboard send-to-timeline linked clips).
+- **Linked layers:** text layers become text clips in the Text & Stickers group; html, image and video layers become clips in the overlay group, using the selected version of their asset (a layer whose asset has no upload yet is skipped). They are linked to the shot's clip and follow it when its version changes (the same mechanism as storyboard send-to-timeline linked clips). Copies of a linked clip are ordinary clips. An unknown text animation or effect id is dropped (none).
 - **Version swaps:** when the shot's clip is swapped to another version with a different length, linked layers and effects are **clamped** to the clip's new length (ranges are trimmed; ones that would start after the end are shortened to the end), never dropped.
-- **Captions:** `captions: true` writes `dialogue` into the shared subtitle text layer for the shot's range.
-- **Text styles:** `meta.textStyles` entries become project text styles before layers are resolved.
-- **HTML and still clips:** a `render: "html"` or `"still"` shot's clip is rendered from the **selected** version of the `clip` asset (see §2.4).
+- **Captions:** `captions: true` writes `dialogue` into the shared subtitle text layer for the shot's range (a "Subtitles" layer is created when the project has none).
+- **Text styles:** `meta.textStyles` entries are resolved before layers: a text layer's `textStyle` names a `meta.textStyles` key first, then a registry preset, else `plain`; its inline `style` is applied on top.
+- **HTML and still clips:** a `render: "html"` or `"still"` shot's clip is rendered from the **selected** version of the `clip` asset (see §2.4) for the shot's `durationSec`. The shot shares that asset's versions: its production step waits until the asset has one, and uploading to the shot adds a version to the asset.
 
 ## 5. Planner prompt (updated)
 

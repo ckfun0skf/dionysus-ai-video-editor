@@ -2319,8 +2319,8 @@
         {
           "id": "V2-SB-113",
           "title": "Storyboard v1.1 domain: html asset upload slot, production steps by render, linked layers/effects/captions/transitions on send, clamped on version swap",
-          "status": "todo",
-          "progress": 0
+          "status": "done",
+          "progress": 100
         },
         {
           "id": "V2-SB-114",
