@@ -2359,6 +2359,12 @@
           "progress": 100
         },
         {
+          "id": "V2-SB-130",
+          "title": "Per-clip preset params: the transition sheet and the text Animation tab show the picked preset's params (generated from its ParamSpec: sliders, colours), stored per clip (transitionIn.params, animInParams/animOutParams/loopParams), one undo per drag, kept on duration changes, reset when another preset is picked; storyboard transition params beyond durationSec are kept on Send to timeline; new single-file Light leak transition (colour, strength, direction; paint hook, same in preview and export); HTML asset versions get real thumbnails (frame about 1 s in, rendered by the HTML clip runtime with its bound assets) in the board, production view, versions strip, media panel and timeline instead of black placeholders",
+          "status": "done",
+          "progress": 100
+        },
+        {
           "id": "V2-SB-129",
           "title": "Small fixes: favicon added (removes the console 404 for /favicon.ico while editing); honest export format: AAC preferred (several AAC-LC configs tried, then Opus), the dialog names what this browser will write before export (e.g. MP4 (H.264 + AAC), MP4 (H.264 + Opus), WebM (VP9 + Opus)) and the finished file's real codecs, with a note when audio is Opus or silent; storyboard AI tool or model input 44px tall (16px text on touch screens so iOS does not zoom)",
           "status": "done",

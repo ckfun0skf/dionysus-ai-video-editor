@@ -1,5 +1,5 @@
 /** Text clips: a placement with `clipType: "text"` on a text track. Pure data; animation math lives in the preset registry. */
-import { applyPreset, fontStack, getPreset, identityFrame, listPresets, loopPeriod, type PresetFrame } from "../registry";
+import { applyPreset, fontStack, getPreset, identityFrame, listPresets, loopPeriod, type Params, type PresetFrame } from "../registry";
 /** Preset ids from the registry ("none" or undefined = no preset). */
 export type TextAnimIn = string;
 export type TextAnimOut = string;
@@ -31,6 +31,10 @@ export interface TextData {
   animIn?: TextAnimIn;
   animOut?: TextAnimOut;
   loop?: TextAnimLoop;
+  /** Params of the in / out / loop presets (V2-SB-130); missing keys use the defaults. Cleared when another preset is picked. */
+  animInParams?: Params;
+  animOutParams?: Params;
+  loopParams?: Params;
   /** In/out animation length in ticks. */
   animTicks?: number;
 }
@@ -48,10 +52,10 @@ export function textAnimAt(d: TextData, o: number, dur: number): TextAnimState {
   const pin = a > 0 ? Math.min(1, Math.max(0, o / a)) : 1;
   const pout = a > 0 ? Math.min(1, Math.max(0, (dur - o) / a)) : 1;
   let s = identityFrame();
-  s = applyPreset("textAnimIn", d.animIn, pin, s);
-  s = applyPreset("textAnimOut", d.animOut, pout, s);
-  const per = loopPeriod(d.loop) * 120_000;
-  s = applyPreset("textAnimLoop", d.loop, (((o % per) + per) % per) / per, s);
+  s = applyPreset("textAnimIn", d.animIn, pin, s, d.animInParams);
+  s = applyPreset("textAnimOut", d.animOut, pout, s, d.animOutParams);
+  const per = loopPeriod(d.loop, d.loopParams) * 120_000;
+  s = applyPreset("textAnimLoop", d.loop, (((o % per) + per) % per) / per, s, d.loopParams);
   return s;
 }
 

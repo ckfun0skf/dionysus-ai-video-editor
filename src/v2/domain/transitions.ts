@@ -4,7 +4,7 @@
  * span the clips hold their edge frame, so no extra media handles are needed.
  */
 import type { Composition, Placement, Track } from "./model";
-import { applyPreset, getPreset, listPresets, type TransLayer } from "../registry";
+import { applyPreset, getPreset, listPresets, type Params, type TransLayer } from "../registry";
 
 export interface TransitionKind {
   id: string;
@@ -20,19 +20,20 @@ export interface TransitionKind {
   popular: boolean;
 }
 
-/** Transition kind from the preset registry (undefined when the id is unknown). */
-export function transitionKind(id: string): TransitionKind | undefined {
+/** Transition kind from the preset registry (undefined when the id is unknown), with this cut's params (V2-SB-130). */
+export function transitionKind(id: string, params?: Params): TransitionKind | undefined {
   const d = getPreset("transition", id);
   if (!d) return undefined;
   return {
     id, label: d.name, icon: d.preview.icon ?? "⧓", category: d.category, popular: !!(d.data as { popular?: boolean } | undefined)?.popular,
-    mix: (a) => { const f = applyPreset("transition", id, a); return { out: f.mixOut ?? 1, in: f.mixIn ?? 1 }; },
-    look: (a) => { const f = applyPreset("transition", id, a); return { out: f.tOut, in: f.tIn }; },
+    mix: (a) => { const f = applyPreset("transition", id, a, undefined, params); return { out: f.mixOut ?? 1, in: f.mixIn ?? 1 }; },
+    look: (a) => { const f = applyPreset("transition", id, a, undefined, params); return { out: f.tOut, in: f.tIn }; },
   };
 }
 export const transitionKinds = () => listPresets("transition").map((d) => transitionKind(d.id)!);
 export type TransitionId = string;
-export interface Transition { kind: TransitionId; durationTicks: number }
+/** `params` are the preset's own params; omitted on a same-kind update (e.g. a duration drag) they are kept. */
+export interface Transition { kind: TransitionId; durationTicks: number; params?: Params }
 
 export const DEFAULT_TRANSITION_TICKS = 60_000; // 0.5 s
 export const TRANSITION_LENGTHS = [30_000, 60_000, 120_000, 240_000];
@@ -55,7 +56,7 @@ export function trackTransitions(track: Track): ActiveTransition[] {
   for (const p of track.placements) {
     if (!p.transitionIn || track.kind !== "video") continue;
     const prev = previousAdjacent(track, p);
-    const kind = transitionKind(p.transitionIn.kind);
+    const kind = transitionKind(p.transitionIn.kind, p.transitionIn.params);
     if (!prev || !kind) continue;
     const d = Math.min(p.transitionIn.durationTicks, maxTransition(prev, p));
     out.push({ prev, next: p, from: p.startTicks - Math.floor(d / 2), to: p.startTicks + Math.ceil(d / 2), kind });
@@ -63,7 +64,12 @@ export function trackTransitions(track: Track): ActiveTransition[] {
   return out;
 }
 
-/** Set or clear (`t` undefined) the transition into a clip. No-op when there is no adjacent clip before it. */
+const withParams = (t: Transition, params: Params | undefined): Transition => (params && Object.keys(params).length ? { ...t, params: { ...params } } : t);
+
+/**
+ * Set or clear (`t` undefined) the transition into a clip. No-op when there is no adjacent clip before it. Params:
+ * `t.params` when given; otherwise kept when the kind is unchanged and dropped when it changes.
+ */
 export function setTransition(comp: Composition, id: string, t: Transition | undefined): Composition {
   return {
     ...comp,
@@ -73,7 +79,7 @@ export function setTransition(comp: Composition, id: string, t: Transition | und
       return { ...track, placements: track.placements.map((q) => {
         if (q.id !== id) return q;
         const n: Placement = { ...q };
-        if (t) n.transitionIn = { kind: t.kind, durationTicks: Math.max(1, Math.round(t.durationTicks)) };
+        if (t) n.transitionIn = withParams({ kind: t.kind, durationTicks: Math.max(1, Math.round(t.durationTicks)) }, t.params ?? (q.transitionIn?.kind === t.kind ? q.transitionIn.params : undefined));
         else delete n.transitionIn;
         return n;
       }) };
@@ -100,7 +106,7 @@ export function setTransitionAll(comp: Composition, id: string, t: Transition | 
         const prev = previousAdjacent(track, q);
         if (!prev) return q;
         const n: Placement = { ...q };
-        if (t) n.transitionIn = { kind: t.kind, durationTicks: Math.max(1, Math.min(Math.round(t.durationTicks), maxTransition(prev, q))) };
+        if (t) n.transitionIn = withParams({ kind: t.kind, durationTicks: Math.max(1, Math.min(Math.round(t.durationTicks), maxTransition(prev, q))) }, t.params);
         else delete n.transitionIn;
         return n;
       }) };

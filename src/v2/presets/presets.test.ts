@@ -83,6 +83,20 @@ describe("smoke render: every preset on a mock canvas", () => {
   });
 });
 
+describe("light-leak transition (V2-SB-130)", () => {
+  const paints = (p: number, params?: Record<string, number | string>) => {
+    const f = applyPreset("transition", "light-leak", p, identityFrame(), params);
+    return [f.tOut, f.tIn].map((side) => { const { ctx, calls } = mockCtx(160, 90); side?.paint?.({ ctx, w: 160, h: 90, scratch: () => { throw new Error("unused"); } } as never); return calls.filter((c) => c === "fillRect").length; });
+  };
+  it("flares over the visible side only, switches at the midpoint, and is silent at strength 0", () => {
+    expect(paints(0.3)).toEqual([3, 0]);
+    expect(paints(0.7)).toEqual([0, 3]);
+    expect(paints(0.3, { strength: 0 })).toEqual([0, 0]);
+    expect(applyPreset("transition", "light-leak", 0.3, identityFrame()).mixIn).toBe(0);
+    expect(applyPreset("transition", "light-leak", 0.7, identityFrame()).mixIn).toBe(1);
+  });
+});
+
 describe("loader validation", () => {
   const good = (id = "demo"): PresetModule => defineTextEffect({ id, name: "Demo", category: "Test", description: "A demo text effect for tests.", params: [{ key: "size", label: "Size", type: "number", min: 0, max: 1, step: 0.1, default: 0.5, description: "Size as a fraction of the font size." }], frame: (f) => f });
   const load = (m: Record<string, PresetModule | undefined>) => loadPresetModules(Object.fromEntries(Object.entries(m).map(([k, v]) => [k, { default: v }])));

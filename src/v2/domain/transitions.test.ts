@@ -56,4 +56,15 @@ describe("transitions", () => {
     expect(transitionKind("push-left")!.look(1).in?.dx ?? 0).toBeCloseTo(0, 5);
     expect(transitionKind("wipe-right")!.look(0.5).in?.clip).toBeTruthy();
   });
+  it("keeps per-clip params on a same-kind update, drops them on a kind change, and applies them (V2-SB-130)", () => {
+    const c = setTransition(comp(clip("a", 0), clip("b", 2 * T)), "b", { kind: "push-left", durationTicks: T, params: { dirX: 1 } });
+    expect(c.tracks[0].placements[1].transitionIn).toEqual({ kind: "push-left", durationTicks: T, params: { dirX: 1 } });
+    const longer = setTransition(c, "b", { kind: "push-left", durationTicks: 2 * T });
+    expect(longer.tracks[0].placements[1].transitionIn?.params).toEqual({ dirX: 1 });
+    expect(setTransition(c, "b", { kind: "crossfade", durationTicks: T }).tracks[0].placements[1].transitionIn?.params).toBeUndefined();
+    expect(transitionKind("push-left", { dirX: 1 })!.look(0.5)).not.toEqual(transitionKind("push-left")!.look(0.5));
+    expect(trackTransitions(c.tracks[0])[0].kind.look(0.5)).toEqual(transitionKind("push-left", { dirX: 1 })!.look(0.5));
+    const all = setTransitionAll(comp(clip("a", 0), clip("b", 2 * T), clip("c", 4 * T)), "b", { kind: "push-left", durationTicks: T, params: { dirX: 1 } });
+    expect(all.tracks[0].placements.map((q) => q.transitionIn?.params)).toEqual([undefined, { dirX: 1 }, { dirX: 1 }]);
+  });
 });

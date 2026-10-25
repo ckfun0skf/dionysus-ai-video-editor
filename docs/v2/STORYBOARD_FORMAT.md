@@ -221,7 +221,7 @@ Example: `"style": { "color": "#ffffff", "strokeWidth": 0.06, "strokeColor": "#0
 | `from`, `to` | shot id | |
 | `kind` | `"cut"`, `"continuity"` or `"match"` | Unchanged. `continuity` defaults to a cut. |
 | `note?` | string | |
-| `transition?` **(new)** | `{preset:<transition id>, params?:{durationSec?, ...}}` | If missing, the connection is a cut. It is stored on the `to` shot's clip as `transitionIn`. It only applies when `from` and `to` are adjacent (consecutive in `shots` order, which is the main-track order); otherwise the importer warns and treats the connection as a cut. `params.durationSec` defaults to **0.5 s** and is clamped to half the shorter of the two clips. |
+| `transition?` **(new)** | `{preset:<transition id>, params?:{durationSec?, ...}}` | If missing, the connection is a cut. It is stored on the `to` shot's clip as `transitionIn`. It only applies when `from` and `to` are adjacent (consecutive in `shots` order, which is the main-track order); otherwise the importer warns and treats the connection as a cut. `params.durationSec` defaults to **0.5 s** and is clamped to half the shorter of the two clips. Any other `params` are the preset's own (see its descriptor in `/ai/presets.json`, e.g. `light-leak`'s `color` and `strength`); they are kept on the clip and stay editable in the editor (V2-SB-130). |
 
 ### 2.7 `shots[].effects[]`
 
