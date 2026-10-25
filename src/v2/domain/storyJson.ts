@@ -34,6 +34,14 @@ export const DEFAULT_TRANSITION_SEC = 0.5;
 /** Where an asset comes from: generated from its prompt, uploaded by the user, or the LAST FRAME of another shot's clip. */
 export type StoryAssetSource = { type: "generate" } | { type: "upload" } | { type: "lastFrame"; shot: string };
 
+/**
+ * The canonical way to write a source in storyboard JSON (V2-SB-131): plain strings `"generate"` and `"upload"`, an
+ * object only for `{ "type": "lastFrame", "shot" }`. The importer also accepts `{ "type": "generate" }` and
+ * `{ "type": "upload" }` (older files) but never writes them.
+ */
+export type AuthoredAssetSource = "generate" | "upload" | { type: "lastFrame"; shot: string };
+export const authoredSource = (s: StoryAssetSource): AuthoredAssetSource => (s.type === "lastFrame" ? { type: "lastFrame", shot: s.shot } : s.type);
+
 export interface StoryAsset {
   id: string; name: string; type: StoryAssetType; aspect: string;
   /** The assets this one is generated from, in attach order (Image 1, Image 2 …): ids, or objects with a role (V2-SB-123). */
@@ -831,6 +839,11 @@ export function findCycle(graph: Map<string, string[]>): string[] | undefined {
   };
   for (const n of graph.keys()) { const c = visit(n); if (c) return c; }
   return undefined;
+}
+
+/** A StoryDoc as storyboard JSON text in the documented form (sources as authoredSource writes them). */
+export function storyDocJson(doc: StoryDoc): string {
+  return JSON.stringify({ ...doc, assets: doc.assets.map((a) => ({ ...a, source: authoredSource(a.source) })) }, null, 2);
 }
 
 /** One-line summary for the import preview. */

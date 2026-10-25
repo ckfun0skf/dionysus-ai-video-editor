@@ -20,6 +20,7 @@ npm run new:preset -- videoEffect film-burn   # writes src/v2/presets/videoEffec
 # fill in the TODOs (the loader rejects files that still contain TODO)
 npm test                                     # validation, completeness and smoke-render tests cover it automatically
 npm run gen:ai                               # refresh public/ai/* (CI fails if they are stale)
+npm run validate:storyboard -- my.storyboard.json   # import a storyboard JSON with the current presets: ok / errors / warnings + summary
 ```
 
 Kinds: `videoEffect`, `transition`, `textAnimIn`, `textAnimOut`, `textAnimLoop`, `effect` (text effect), `sticker`,

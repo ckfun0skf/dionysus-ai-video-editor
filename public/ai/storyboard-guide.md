@@ -31,7 +31,8 @@ So split the work: generation prompts describe only the picture and its motion; 
       "references"?: (string | { "asset": "<asset id>", "role"?: "start-frame" | "identity" | "look" | "detail", "note"?: string })[],
                                  // other assets to attach when generating this one, IN THIS ORDER (Image 1, Image 2 …); a plain id
                                  // = role from its type; for an image "start-frame" means the base image to edit (no end-frame)
-      "source": "generate" | "upload" | { "type": "lastFrame", "shot": "<shot id>" },   // "html" can't use lastFrame
+      "source": "generate" | "upload" | { "type": "lastFrame", "shot": "<shot id>" },
+                                 // plain strings "generate" / "upload" (default "generate"); an object only for lastFrame; "html" and "audio" can't use lastFrame
       "qa": string[]             // 2-5 concrete yes/no checks to verify the asset by looking
   } ],
   "shots": [ {                   // in playback order
@@ -47,7 +48,8 @@ So split the work: generation prompts describe only the picture and its motion; 
                                  // omitted = "assets" order with roles from the type (frame → start-frame, character → identity,
                                  // style → look, others → detail); at most one "start-frame" and one "end-frame"
       "keyframe"?: { "prompt": string, "references"?: [ "<asset id>" | { "asset", "role"?, "note"? } ], "qa"?: string[] },
-                                 // render "ai" only: the opening still to generate FIRST; the clip animates from it (Image 1, start frame)
+                                 // render "ai" only: the opening still to generate FIRST; the clip animates from it. The clip's images are then
+                                 // Image 1 = the keyframe (start frame), Image 2 … = the shot's "references", then its other "assets" (RULES)
       "camera"?: string,
       "dialogue"?: string,
       "qa": string[],            // 2-5 concrete yes/no checks for the clip
@@ -247,7 +249,7 @@ Fonts — TextStyle "font":
 15. A transition in "connections" overlaps the two shots, centred on the cut: it adds no time and eats half its length from the end of the "from" shot and half from the start of the "to" shot. It is clamped to half the shorter of the two shots. For example, a 0.8 s transition out of a 2.5 s shot blends the last 0.4 s of that shot with the first 0.4 s of the next, and the total length stays the same; keep transitions short on short shots so their key action isn't covered.
 16. For an "identity" reference prefer a single clean portrait or character image (one view, plain background) over a multi-view character sheet: the sheet's layout (several poses, panels, labels) can leak into the generated frames.
 17. An asset made from other assets lists them in its "references" in attach order, as objects with a "role" when the use is not obvious from the type. Its prompt then starts with the same numbered "References:" block as a clip prompt; for an image, "start-frame" means the base image to edit (there is no end frame). Example: a close-up of the hero holding a mug: "references": [{ "asset": "mug", "role": "detail", "note": "glaze and colour only" }, "hero"], prompt "References:\nImage 1 (Blue mug): reference only: materials, colours and objects only; glaze and colour only.\nImage 2 (Hero): reference only: keep this identity (face, body, clothes).\n\nClose-up of …".
-18. Keyframe then animate: when the opening composition matters (a character's pose, a precise layout, a hero product shot), give the "ai" shot a "keyframe": { "prompt", "references", "qa" }. The app turns it into an image asset "<shot id>.keyframe" that is made first, then attached to the clip as Image 1, the START FRAME (do not also give the shot a "start-frame" reference). The keyframe prompt describes one still image (with its own "References:" block, as for an asset); the clip prompt then describes only the motion from that frame. Example: "keyframe": { "prompt": "References:\nImage 1 (Hero): reference only: keep this identity (face, body, clothes).\n\nThe hero sits at a café table, both hands around a blue mug …", "references": ["hero", "cafe"], "qa": ["The hero's face matches the reference"] }, clip prompt "References:\nImage 1 (Keyframe · …): START FRAME …\n\nShe slowly lifts the mug …".
+18. Keyframe then animate: when the opening composition matters (a character's pose, a precise layout, a hero product shot), give the "ai" shot a "keyframe": { "prompt", "references", "qa" }. The app turns it into an image asset "<shot id>.keyframe" named "Keyframe · <shot title>" that is made first. Numbering of the clip's images when a shot has a keyframe: Image 1 is always the keyframe, the START FRAME; Image 2, 3 … are the shot's "references" in their order, then the shot's other "assets" in "assets" order (the numbering without a keyframe, shifted by one). Do not also give the shot a "start-frame": one in "references", or an inferred one (a "frame" or last-frame asset), is attached as details only. The keyframe's own "references" are numbered separately, from Image 1, in the keyframe prompt; they are attached to the clip only if they are also in the shot's "assets" or "references". The keyframe prompt describes one still image (with its own "References:" block, as for an asset); the clip prompt starts with a "References:" block in the clip numbering above and then describes only the motion from that frame. Example: "keyframe": { "prompt": "References:\nImage 1 (Hero): reference only: keep this identity (face, body, clothes).\nImage 2 (Café): reference only: materials, colours and objects only.\n\nThe hero sits at a café table, both hands around a blue mug …", "references": ["hero", "cafe"], "qa": ["The hero's face matches the reference"] } with the shot's "assets": ["hero", "cafe"], clip prompt "References:\nImage 1 (Keyframe · Morning coffee): START FRAME: the clip opens on exactly this image.\nImage 2 (Hero): reference only, not a frame: keep this identity.\nImage 3 (Café): reference only, not a frame: materials and colours only.\n\nShe slowly lifts the mug …".
 19. Audio: put each voiceover, music bed or sound effect in "audio" as a cue on an asset of type "audio" (source "generate" with a prompt for the user's voice/music/sound tool, e.g. the exact voiceover script and voice, or "upload"). "from" is the shot it starts in, "atSec" the offset into that shot, "to" the last shot it plays under. A music bed usually runs "from" the first shot "to" the last with "volume" 0.2-0.4 under speech; a voiceover spans the shots it describes; a sound effect sits at the moment in one shot ("atSec") with no "to". Example: { "asset": "score", "kind": "music", "from": "s1", "to": "s6", "volume": 0.3, "fadeOutSec": 2 }, { "asset": "door-slam", "kind": "sfx", "from": "s4", "atSec": 1.2 }. Do not put spoken lines that the video model renders (shot "dialogue") into a voiceover too.
 20. Layers stay fixed to the frame by default: a shot's video effects (e.g. "ken-burns" zoom and pan) move only the picture, so titles, labels and logos stay put and readable. Give a layer "follow": "shot" only when it belongs to the scene and must move with the picture, e.g. a name tag pinned to a sign or a label on an object while the shot slowly zooms: { "id": "tag", "type": "text", "text": "ROOM 12", "startSec": 0, "endSec": 4, "position": { "x": 0.62, "y": 0.4 }, "follow": "shot" }. It only has an effect when an effect moves or zooms the shot while the layer is on screen.
 21. Keep text readable on any picture: give light text an outline ("strokeWidth" about 0.04-0.08 with a dark "strokeColor"), a soft "shadow", or a "background" box (captions, lower thirds). Use "letterSpacing" (in em) for airy titles, "lineHeight" for multi-line cards, "italic" for emphasis, and a text "effect" with "effectColor" only for stylised titles. Sizes and offsets are fractions of the font size; null removes a style's shadow or background. Example: "style": { "color": "#ffffff", "strokeWidth": 0.06, "strokeColor": "#000000", "shadow": { "color": "#000000", "blur": 0.3, "x": 0, "y": 0.04 } }. Put a look used on several layers into "meta.textStyles" once.
@@ -280,9 +282,7 @@ Fonts — TextStyle "font":
       "aspect": "1:1",
       "prompt": "Portrait of a young woman cyclist, short dark hair, red cycling jacket, grey helmet, plain light background, natural cinematic realism",
       "references": [],
-      "source": {
-        "type": "generate"
-      },
+      "source": "generate",
       "qa": [
         "Red jacket and grey helmet",
         "Face clearly visible",
@@ -296,9 +296,7 @@ Fonts — TextStyle "font":
       "aspect": "16:9",
       "prompt": "Empty winding road up a grassy hill before sunrise, mist in the valley, soft blue-gold sky, natural cinematic realism",
       "references": [],
-      "source": {
-        "type": "generate"
-      },
+      "source": "generate",
       "qa": [
         "Road winds up to the hilltop",
         "No people or vehicles"

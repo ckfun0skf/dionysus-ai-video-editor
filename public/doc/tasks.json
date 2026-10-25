@@ -2359,6 +2359,12 @@
           "progress": 100
         },
         {
+          "id": "V2-SB-131",
+          "title": "Storyboard guide consistency and tooling: \"source\" is written as plain \"generate\" / \"upload\" strings (an object only for lastFrame) in the spec, the guide's FORMAT section, the published example and Copy example JSON (the importer still accepts the object forms; a test checks the example against the documented form); the keyframe rule (RULE 18) and the spec now state the clip's image numbering exactly as the prompt builder does it (Image 1 = the keyframe start frame, then the shot's references in order, then its other assets; the keyframe's own references are numbered separately), checked against attachList by a test; new npm run validate:storyboard -- <file.json> (Vite module runner, so import.meta.glob presets load) prints ok / errors / warnings and a summary (shots, total seconds, assets, layers, effects, transitions, audio cues)",
+          "status": "done",
+          "progress": 100
+        },
+        {
           "id": "V2-SB-130",
           "title": "Per-clip preset params: the transition sheet and the text Animation tab show the picked preset's params (generated from its ParamSpec: sliders, colours), stored per clip (transitionIn.params, animInParams/animOutParams/loopParams), one undo per drag, kept on duration changes, reset when another preset is picked; storyboard transition params beyond durationSec are kept on Send to timeline; new single-file Light leak transition (colour, strength, direction; paint hook, same in preview and export); HTML asset versions get real thumbnails (frame about 1 s in, rendered by the HTML clip runtime with its bound assets) in the board, production view, versions strip, media panel and timeline instead of black placeholders",
           "status": "done",
