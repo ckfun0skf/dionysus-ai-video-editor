@@ -271,4 +271,64 @@ describe("V2App", () => {
       expect(labels()).toEqual(["Add overlay"]);
     } finally { window.matchMedia = mm; }
   });
+
+  // V2-SB-133: a video clip's in point (slip) on desktop (Speed tab) and phone ("In point" tool and sheet).
+  const slipStorage = async () => {
+    const { createMemoryStorage } = await import("../persistence");
+    const { createProject } = await import("../domain");
+    const storage = createMemoryStorage();
+    const p = createProject();
+    p.assets.a = { id: "a", kind: "video", name: "dust.mp4", versions: [{ id: "1", createdAt: "", media: { blobKey: "k", mime: "video/mp4", durationTicks: 1200000 }, provenance: { source: "import", inputs: [] } }] };
+    p.compositions[p.rootCompositionId].tracks[0].placements.push({ id: "v", startTicks: 0, durationTicks: 480000, sourceInTicks: 0, source: { kind: "assetVersion", assetId: "a", versionId: "1" }, clipType: "video" });
+    await storage.projects.save(p);
+    storage.lastProjectId.set(p.id);
+    return storage;
+  };
+  const mountSlip = async () => {
+    const storage = await slipStorage();
+    const el = document.createElement("div"); document.body.appendChild(el);
+    await act(async () => { track(createRoot(el)).render(<V2App openStorage={async () => storage} />); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+    const clip = el.querySelector('[data-placement-id="v"]') as HTMLElement;
+    await act(async () => { clip.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true })); window.dispatchEvent(new MouseEvent("pointerup")); });
+    return el;
+  };
+  const typeIn = async (root: ParentNode, v: string) => {
+    const input = root.querySelector('input[aria-label="In point in seconds"]') as HTMLInputElement;
+    await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, v); input.dispatchEvent(new Event("input", { bubbles: true })); });
+    await act(async () => { input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); });
+  };
+  const readout = (root: ParentNode) => root.querySelector(".v2-inpoint [aria-live]")!.textContent;
+
+  it("in point (desktop): Speed tab slips the clip, clamps to the media and undoes", async () => {
+    const el = await mountSlip();
+    await act(async () => { Array.from(el.querySelectorAll<HTMLButtonElement>('.v2-inspect [role="tab"]')).find((b) => b.textContent === "Speed")!.click(); });
+    const sec = el.querySelector('section[aria-label="In point"]') as HTMLElement;
+    expect(sec).toBeTruthy();
+    expect(readout(sec)).toBe("Plays 0–4 s of 10 s. Length and position stay.");
+    await typeIn(sec, "2.5");
+    expect(readout(el)).toBe("Plays 2.5–6.5 s of 10 s. Length and position stay.");
+    await act(async () => { (el.querySelector('[aria-label="In point 0.1 s later"]') as HTMLButtonElement).click(); });
+    expect(readout(el)).toBe("Plays 2.6–6.6 s of 10 s. Length and position stay.");
+    await typeIn(el, "99");
+    expect(readout(el)).toBe("Plays 6–10 s of 10 s. Length and position stay.");
+    expect((el.querySelector('[aria-label="In point 0.1 s later"]') as HTMLButtonElement).disabled).toBe(true);
+    await act(async () => { (el.querySelector('[aria-label="Undo"]') as HTMLButtonElement).click(); });
+    expect(readout(el)).toBe("Plays 2.6–6.6 s of 10 s. Length and position stay.");
+  });
+
+  it("in point (mobile): the In point tool opens a sheet with the same control", async () => {
+    const mm = window.matchMedia;
+    window.matchMedia = ((q: string) => ({ matches: true, media: q, addEventListener() {}, removeEventListener() {} })) as never;
+    try {
+      const el = await mountSlip();
+      const tool = Array.from(el.querySelectorAll("button")).find((b) => b.textContent?.trim() === "In point") as HTMLButtonElement;
+      expect(tool).toBeTruthy();
+      await act(async () => { tool.click(); });
+      const sheet = document.querySelector('[role="dialog"][aria-label="In point"]') as HTMLElement ?? document.querySelector(".v2-inpoint")!.closest(".v2-msheet-insp") as HTMLElement;
+      expect(sheet).toBeTruthy();
+      await typeIn(sheet, "1");
+      expect(readout(document)).toBe("Plays 1–5 s of 10 s. Length and position stay.");
+    } finally { window.matchMedia = mm; }
+  });
 });

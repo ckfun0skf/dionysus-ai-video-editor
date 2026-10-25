@@ -677,3 +677,11 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 .v2-hp .v2-tp-row input[type=color] { height: 44px; }
 .v2-hp-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
 .v2-hp-actions .v2-btn { min-height: 44px; }
+
+/* V2-SB-133: in point of a video clip (desktop Speed tab and phone sheet); 44px targets on every device. */
+.v2-inpoint { display: grid; gap: 8px; }
+.v2-inpoint-range input { width: 100%; min-height: 44px; accent-color: var(--accent, #4f8cff); }
+.v2-inpoint-row { display: flex; align-items: center; gap: 8px; }
+.v2-inpoint-row .v2-btn { min-width: 44px; min-height: 44px; justify-content: center; }
+.v2-inpoint-num { flex: 1; display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted, #aaa); }
+.v2-inpoint-num input { width: 5.5em; min-height: 44px; font-size: 16px; text-align: right; font-variant-numeric: tabular-nums; }

@@ -32,6 +32,8 @@ export interface AssetSlot {
   keyframeOf?: string;
   /** V2-HTML-PARAMS: html slots: the params the clip should expose (asked for in its Copy prompt, checked on paste). */
   params?: Record<string, HtmlClipParam>;
+  /** V2-SB-133: video slots: the length to generate when its layers need less (uploads are offered a trim). */
+  genDurationSec?: number;
 }
 
 export interface Shot {
@@ -103,6 +105,18 @@ export function normTrim(t: VersionTrim | undefined, durTicks: number | undefine
   return inTicks === 0 && outTicks === durTicks ? undefined : { inTicks, outTicks };
 }
 
+/**
+ * V2-SB-133: how long the video layers showing slot `slotId` are (the longest one, in seconds), or undefined when no
+ * video layer uses it. Uploads of a video asset longer than this are offered a trim to that length.
+ */
+export function slotLayerSec(b: Storyboard | undefined, slotId: string): number | undefined {
+  let best: number | undefined;
+  for (const id of b?.order ?? []) for (const l of b!.shots[id]?.layers ?? []) {
+    if (l.type === "video" && l.asset === slotId) best = Math.max(best ?? 0, l.endSec - l.startSec);
+  }
+  return best;
+}
+
 /** The part of a video version the storyboard uses: its trim, else the whole clip. Undefined for media without a length. */
 export function versionSpan(b: Storyboard | undefined, v: AssetVersion | undefined): { inTicks: number; lenTicks: number } | undefined {
   const d = v?.media.durationTicks;
@@ -142,6 +156,7 @@ export function storyboardFromDoc(doc: StoryDoc): Storyboard {
       source: a.source.type === "lastFrame" ? { type: "lastFrame", shotId: a.source.shot } : { type: a.source.type },
       qa: qaList(a.id, a.qa), ...(a.notes ? { notes: a.notes } : {}),
       ...refRolesOf(a.references), ...(a.params ? { params: structuredClone(a.params) } : {}),
+      ...(a.type === "video" && a.genDurationSec ? { genDurationSec: a.genDurationSec } : {}),
     };
   }
   const shots: Record<string, Shot> = {};
@@ -250,7 +265,8 @@ export function addStoryVersion(p: Project, target: Target, media: MediaRef, opt
   const name = isSlot ? (owner as AssetSlot).name : `${b.order.indexOf(owner.id) + 1}. ${(owner as Shot).title}`;
   const asset = prev ? { ...prev, versions: [...prev.versions, version], selectedVersionId: version.id }
     : { id: assetId, kind: isSlot ? kindForSlot((owner as AssetSlot).type) : ("video" as MediaKind), name, versions: [version], selectedVersionId: version.id };
-  const trim = !isSlot && media.durationTicks ? normTrim(opts.trim, media.durationTicks) : undefined;
+  // V2-SB-121 shot clips, V2-SB-133 video assets (their layers' default in point).
+  const trim = (!isSlot || (owner as AssetSlot).type === "video") && media.durationTicks ? normTrim(opts.trim, media.durationTicks) : undefined;
   const info: VersionInfo = { inputs, ...(derivedFrom ? { derivedFrom } : {}), ...(opts.model ? { model: opts.model } : {}), ...(trim ? { trim } : {}) };
   const nextOwner = { ...owner, assetId, skipped: undefined };
   const board: Storyboard = {
@@ -330,6 +346,9 @@ export function syncPlacements(p: Project, assetId: string, retrim?: { versionId
           const memo = storyTrim && storyTrim.clampedTo === pl.durationTicks && storyTrim.inTicks === pl.sourceInTicks ? storyTrim : undefined;
           const untrimmed = !memo && !pl.freeze && !!prev && pl.sourceInTicks === prev.inTicks && Math.abs(pl.durationTicks - Math.floor(prev.lenTicks / speed)) <= 1;
           if (untrimmed && span) next.sourceInTicks = span.inTicks;
+          // V2-SB-133: a linked layer that starts where the old version's trim started (shorter than the trim, e.g. a 2 s
+          // overlay from a trimmed clip) moves to the new in point and keeps its length.
+          else if (!memo && !pl.freeze && t.id !== mainId && pl.storyLink && prev && span && pl.sourceInTicks === prev.inTicks) next.sourceInTicks = span.inTicks;
           if (next.sourceInTicks >= max) next.sourceInTicks = 0;
           const room = Math.max(1, Math.floor((max - next.sourceInTicks) / speed));
           const want = memo?.durationTicks ?? pl.durationTicks;

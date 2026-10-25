@@ -74,6 +74,8 @@ export interface SlotPatch {
   references?: string[]; source?: "generate" | "upload"; qa?: QaCheck[];
   /** Roles / notes per reference id (V2-SB-123); entries for ids not in the references are dropped. */
   refRoles?: Record<string, AssetRefRole>;
+  /** V2-SB-133: video slots: seconds to generate (0.5–120); null clears it. */
+  genDurationSec?: number | null;
 }
 
 /** A slot id from its name ("Keeper's coat" → keeper-s-coat), unique in the storyboard. */
@@ -132,6 +134,9 @@ function cleanSlot(b: Storyboard, s: AssetSlot, patch: SlotPatch, hasVersions: b
   setRefRoles(n, n.refRoles);
   if (patch.source && s.source.type !== "lastFrame") n.source = { type: patch.source };
   if (patch.qa) n.qa = patch.qa.filter((q) => q.text.trim()).map((q) => ({ id: q.id, text: q.text.trim() }));
+  if (patch.genDurationSec === null) delete n.genDurationSec;
+  else if (patch.genDurationSec !== undefined && Number.isFinite(patch.genDurationSec)) n.genDurationSec = Math.min(120, Math.max(0.5, Math.round(patch.genDurationSec * 10) / 10));
+  if (n.type !== "video") delete n.genDurationSec;
   return n;
 }
 

@@ -255,6 +255,17 @@ export function versionOf(project: Project, ref: SourceRef): AssetVersion | unde
   return project.assets[ref.assetId]?.versions.find((v) => v.id === ref.versionId);
 }
 
+/**
+ * V2-SB-133: the latest source in point of a video clip that still fits its length (media length minus the span the
+ * clip plays), or undefined when the clip has no slip (not video, a freeze frame, or unknown media length).
+ */
+export function sourceInMax(project: Project, p: Placement): number | undefined {
+  if (p.clipType !== "video" || p.freeze) return undefined;
+  const media = versionOf(project, p.source)?.media.durationTicks;
+  if (!media) return undefined;
+  return Math.max(0, media - Math.round(p.durationTicks * (p.speed ?? 1)));
+}
+
 /** Validates structural invariants; returns list of problems (empty = valid). */
 export function validateComposition(comp: Composition): string[] {
   const errors: string[] = [];

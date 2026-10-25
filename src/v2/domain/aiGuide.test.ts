@@ -52,10 +52,10 @@ describe("AI planner guide (V2-SB-114)", () => {
     expect(md).toContain("length 0.05–1, default 0.5 (fraction of the effect's time range, not seconds");
   });
 
-  it("the full prompt inlines the guide with RULES 1-23; the short prompt links to it", () => {
+  it("the full prompt inlines the guide with RULES 1-25; the short prompt links to it", () => {
     const full = storyboardSystemPrompt();
     for (const s of ["FORMAT (", "PRESETS", "RULES", "EXAMPLE", `14. ${RULES[13]}`, "not seconds", "START FRAME", "\"references\"?", "\"genDurationSec\"?", "- crossfade:", "- ken-burns:"]) expect(full).toContain(s);
-    expect(RULES).toHaveLength(24);
+    expect(RULES).toHaveLength(25);
     // V2-SB-128: blend modes: the format lines, the blend catalogue and a rule with an example that imports cleanly.
     expect(full).toContain('"blend"?: "<blend id>", "opacity"?: number (0-1, default 1)');
     expect(full).toContain('Blend modes — shots[].layers[].blend');
@@ -129,6 +129,13 @@ describe("AI planner guide (V2-SB-114)", () => {
     const r = validateStoryboard(EXAMPLE_STORYBOARD);
     expect(r.ok && r.warnings).toEqual([]);
     expect(JSON.stringify(EXAMPLE_STORYBOARD)).toContain('"transition"');
+    // V2-SB-133: a 2 s screen-blend overlay from a 6 s video asset.
+    const flare = EXAMPLE_STORYBOARD.assets.find((a) => a.id === "sun-flare")!;
+    expect(flare).toMatchObject({ type: "video", genDurationSec: 6 });
+    const layer = EXAMPLE_STORYBOARD.shots.flatMap((x) => x.layers ?? []).find((l) => l.type === "video")!;
+    expect(layer).toMatchObject({ asset: "sun-flare", startSec: 0, endSec: 2, inSec: 3, blend: "screen" });
+    expect(exampleStoryboardJson()).toContain('"genDurationSec": 6');
+    expect(exampleStoryboardJson()).toContain('"inSec": 3');
   });
 });
 
@@ -188,10 +195,10 @@ describe("generic storyboard guide (V2-SB-GUIDE-GENERIC)", () => {
 
   it("numbers the rules stably: append-only keys, and every RULE n the spec cites exists", () => {
     // Rule numbers are public (the spec, users, other AIs). Append new keys at the end; never reorder or delete.
-    expect(RULE_LIST.slice(0, 24).map((r) => r.key)).toEqual([
+    expect(RULE_LIST.slice(0, 25).map((r) => r.key)).toEqual([
       "reusable-assets", "standalone-prompts", "last-frame-continuity", "uploads", "qa-checks", "ids", "valid-json", "text-in-layers", "html-only-for-graphics",
       "transitions-and-effects", "known-presets", "param-units", "duration", "references-block", "transition-overlap", "identity-portrait", "asset-references", "keyframe", "audio", "layer-follow", "text-style-extras", "blend-overlays",
-      "html-clip-package", "html-params",
+      "html-clip-package", "html-params", "video-asset-trim",
     ]);
     expect(new Set(RULE_LIST.map((r) => r.key)).size).toBe(RULE_LIST.length);
     RULE_LIST.forEach((r, i) => expect(section("RULES")).toContain(`${i + 1}. ${r.text}`));
@@ -204,6 +211,10 @@ describe("generic storyboard guide (V2-SB-GUIDE-GENERIC)", () => {
     expect(ruleNumber("blend-overlays")).toBe(22);
     expect(ruleNumber("html-clip-package")).toBe(23);
     expect(ruleNumber("html-params")).toBe(24);
+    expect(ruleNumber("video-asset-trim")).toBe(25);
+    // V2-SB-133: video assets used as layers: asset genDurationSec + layer inSec, with the 2 s-from-6 s example.
+    expect(RULES[ruleNumber("video-asset-trim") - 1]).toContain('"genDurationSec": 6');
+    expect(RULES[ruleNumber("video-asset-trim") - 1]).toContain('"inSec": 3');
     expect(RULES[ruleNumber("duration") - 1]).toMatch(/^"durationSec" is how long/);
     // V2-SB-132: montage = consecutive short shots (no new field), in the duration rule and the spec.
     expect(RULES[ruleNumber("duration") - 1]).toContain("Montage (a quick run of glimpses, e.g. three 2 s moments of a journey) needs no special field: write it as consecutive short shots");
