@@ -181,6 +181,9 @@ describe("generic storyboard guide (V2-SB-GUIDE-GENERIC)", () => {
     expect(ruleNumber("blend-overlays")).toBe(22);
     expect(ruleNumber("html-clip-package")).toBe(23);
     expect(RULES[ruleNumber("duration") - 1]).toMatch(/^"durationSec" is how long/);
+    // V2-SB-132: montage = consecutive short shots (no new field), in the duration rule and the spec.
+    expect(RULES[ruleNumber("duration") - 1]).toContain("Montage (a quick run of glimpses, e.g. three 2 s moments of a journey) needs no special field: write it as consecutive short shots");
+    expect(formatDoc).toContain("**Montage (V2-SB-132).** There is no montage field.");
     expect(RULES[ruleNumber("references-block") - 1]).toMatch(/"References:" block/);
     const cited = [...formatDoc.matchAll(/RULES? (\d+)(?:[-–](\d+))?/g)].flatMap((m) => [Number(m[1]), ...(m[2] ? [Number(m[2])] : [])]);
     expect(cited.length).toBeGreaterThan(0);

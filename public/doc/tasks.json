@@ -2359,6 +2359,12 @@
           "progress": 100
         },
         {
+          "id": "V2-SB-132",
+          "title": "Guide: montage guidance with no new field. RULE 13 (duration) and spec §2.4 say a montage is consecutive short shots (e.g. 3 × 2 s), each with its own prompt and QA, joined by plain cuts or very short transitions, genDurationSec when the model can't render that short, consistent style/references, one audio cue spanning the run",
+          "status": "done",
+          "progress": 100
+        },
+        {
           "id": "V2-SB-131",
           "title": "Storyboard guide consistency and tooling: \"source\" is written as plain \"generate\" / \"upload\" strings (an object only for lastFrame) in the spec, the guide's FORMAT section, the published example and Copy example JSON (the importer still accepts the object forms; a test checks the example against the documented form); the keyframe rule (RULE 18) and the spec now state the clip's image numbering exactly as the prompt builder does it (Image 1 = the keyframe start frame, then the shot's references in order, then its other assets; the keyframe's own references are numbered separately), checked against attachList by a test; new npm run validate:storyboard -- <file.json> (Vite module runner, so import.meta.glob presets load) prints ok / errors / warnings and a summary (shots, total seconds, assets, layers, effects, transitions, audio cues)",
           "status": "done",
