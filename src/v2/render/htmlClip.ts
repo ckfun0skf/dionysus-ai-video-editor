@@ -7,6 +7,7 @@ import { readClipConfig, selectedLibraries, vendorUrl, type HtmlLibrary } from "
  * its own clock:
  *   iframe → editor  {type:"dionysus:ready"}                                  (page loaded)
  *   editor → iframe  {type:"dionysus:init", width, height, duration, bindings:{name:{type, blob}}, params?}
+ *   editor → iframe  {type:"dionysus:params", params}                          (V2-HTML-PARAMS: new per-use values; ctx.params = defaults ⊕ params)
  *   editor → iframe  {type:"dionysus:frame", seq, t, duration?}                (t = clip-local seconds)
  *   iframe → editor  {type:"dionysus:frame", seq, bmp}                        (ImageBitmap of its first <canvas>)
  * Contract: `dionysus.clip({ init?(ctx), render(t, ctx) })`; `init` (then document.fonts.ready) is awaited once before the first frame. Legacy
@@ -28,7 +29,7 @@ const xo=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(m,
 const AT=["src","href","poster","data"];const fix=(el)=>{if(!el.getAttribute)return;for(const a of AT){const v=el.getAttribute(a),b=res(v);if(b)el.setAttribute(a,b)}};
 new MutationObserver((ms)=>{for(const m of ms){if(m.type==="attributes")fix(m.target);for(const n of m.addedNodes)if(n.nodeType===1){fix(n);n.querySelectorAll("*").forEach(fix)}}})
 .observe(document,{subtree:true,childList:true,attributes:true,attributeFilter:AT});
-const P={};for(const[k,p]of Object.entries(M.params||{}))if(p&&"default"in p)P[k]=p.default;
+const D={};for(const[k,p]of Object.entries(M.params||{}))if(p&&"default"in p)D[k]=p.default;const P=Object.assign({},D);
 const B={};for(const[n,b]of Object.entries(M.bindings||{}))B[n]={type:b&&b.type,url:null};
 const once=new Map();const memo=(k,f)=>{if(!once.has(k))once.set(k,f());return once.get(k)};
 const urlOf=(n)=>(B[n]&&B[n].url)||res(n)||null;
@@ -44,6 +45,7 @@ window.dionysus={t:0,ctx,manifest:M,onFrame(f){fns.push(f)},clip(d){def=d;if(d&&
 addEventListener("message",async(e)=>{const d=e.data;if(!d||e.source!==parent)return;
 if(d.type==="dionysus:init"){if(d.width)ctx.width=d.width;if(d.height)ctx.height=d.height;if(d.duration>0)ctx.duration=d.duration;
 if(d.params)Object.assign(P,d.params);for(const[n,b]of Object.entries(d.bindings||{})){if(!b||!b.blob)continue;B[n]={type:b.type||(B[n]&&B[n].type),url:URL.createObjectURL(b.blob)}}return}
+if(d.type==="dionysus:params"){for(const k of Object.keys(P))delete P[k];Object.assign(P,D,d.params||{});return}
 if(d.type!=="dionysus:frame")return;
 await start();if(d.duration>0)ctx.duration=d.duration;
 vt=d.t;window.dionysus.t=d.t;ctx.t=d.t;ctx.progress=ctx.duration>0?Math.min(1,Math.max(0,d.t/ctx.duration)):0;
@@ -122,7 +124,11 @@ export class HtmlClipHost {
   frame?: ImageBitmap;
   private shown?: number;
   private want?: number;
-  private inflight?: { seq: number; t: number };
+  private inflight?: { seq: number; t: number; epoch: number };
+  /** Per-use param values last sent (V2-HTML-PARAMS); `epoch` bumps on a change so a frame in flight is redrawn. */
+  private params?: Record<string, unknown>;
+  private paramSig?: string;
+  private epoch = 0;
   private seq = 0;
   private ready = false;
   private waiters = new Set<() => void>();
@@ -136,6 +142,9 @@ export class HtmlClipHost {
     if (type === "dionysus:ready") {
       const go = (init: HtmlClipInit | undefined) => {
         if (init) this.iframe.contentWindow?.postMessage({ type: "dionysus:init", ...init }, "*");
+        const sent = init?.params ? JSON.stringify(init.params) : undefined;
+        if (this.params && this.paramSig !== sent) this.iframe.contentWindow?.postMessage({ type: "dionysus:params", params: this.params }, "*");
+        else if (!this.params && sent) this.paramSig = sent;
         this.ready = true; this.pump();
       };
       // Without an init builder the message is known up front, so the first frame goes out synchronously.
@@ -145,7 +154,8 @@ export class HtmlClipHost {
     if (type !== "dionysus:frame" || seq !== this.inflight?.seq) return;
     if (isValidFrame(bmp)) { this.frame?.close?.(); this.frame = bmp; this.issue = undefined; }
     else { this.issue = "invalid"; if (typeof ImageBitmap !== "undefined" && bmp instanceof ImageBitmap) bmp.close(); }
-    this.shown = this.inflight?.t; this.inflight = undefined;
+    // A frame drawn before the latest params change is shown but not counted, so the same t is drawn again.
+    this.shown = this.inflight?.epoch === this.epoch ? this.inflight.t : undefined; this.inflight = undefined;
     this.onFrame();
     this.pump();
     if (this.settled()) { this.waiters.forEach((w) => w()); this.waiters.clear(); }
@@ -176,6 +186,19 @@ export class HtmlClipHost {
   /** Ask for frame at clip-local seconds `t` (coalesces: only the latest pending request is sent). */
   request(t: number, duration?: number) { this.want = t; if (duration !== undefined) this.duration = duration; this.pump(); }
 
+  /**
+   * Per-use param values (V2-HTML-PARAMS): when they differ from the last ones, the page gets them (ctx.params is
+   * reset to the manifest defaults plus these) and the current frame is drawn again. No reload.
+   */
+  setParams(params: Record<string, unknown>) {
+    const sig = JSON.stringify(params);
+    if (sig === this.paramSig) return;
+    this.paramSig = sig; this.params = params;
+    if (!this.ready) return;
+    this.iframe.contentWindow?.postMessage({ type: "dionysus:params", params }, "*");
+    this.epoch += 1; this.shown = undefined; this.pump();
+  }
+
   settled() { return this.want === undefined || (this.shown === this.want && !this.inflight); }
 
   /**
@@ -193,7 +216,7 @@ export class HtmlClipHost {
 
   private pump() {
     if (!this.ready || this.inflight || this.want === undefined || this.want === this.shown) return;
-    this.inflight = { seq: ++this.seq, t: this.want };
+    this.inflight = { seq: ++this.seq, t: this.want, epoch: this.epoch };
     this.iframe.contentWindow?.postMessage({ type: "dionysus:frame", seq: this.seq, t: this.want, duration: this.duration }, "*");
   }
 

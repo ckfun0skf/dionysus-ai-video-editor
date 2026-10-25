@@ -664,3 +664,16 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
   .v2-html-import textarea, .v2-clip-param input, .v2-clip-param select { font-size: 16px; }
   .v2-clip-param input, .v2-clip-param select { min-height: 44px; }
 }
+/* V2-HTML-PARAMS: text/number/select fields and the boolean switch in ParamControls; the HTML clip params panel. */
+.v2-tp-field { flex: 1; min-width: 0; max-width: 60%; min-height: 44px; box-sizing: border-box; padding: 6px 10px; border: 1px solid #ffffff30; border-radius: 8px; background: #1d1d22; color: inherit; font: inherit; font-size: 16px; }
+.v2-tp-field:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.v2-tp-switch { position: relative; flex: none; width: 52px; min-height: 44px; padding: 0; border: none; background: none; cursor: pointer; }
+.v2-tp-switch > span { position: absolute; left: 2px; right: 2px; top: 50%; height: 28px; transform: translateY(-50%); border-radius: 14px; background: #ffffff30; transition: background .15s; }
+.v2-tp-switch > span::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; transition: transform .15s; }
+.v2-tp-switch[aria-checked=true] > span { background: var(--accent); }
+.v2-tp-switch[aria-checked=true] > span::after { transform: translateX(20px); }
+.v2-hp { display: flex; flex-direction: column; gap: 4px; padding: 4px 0; }
+.v2-hp .v2-tp-row input[type=range] { min-height: 44px; margin: 0; }
+.v2-hp .v2-tp-row input[type=color] { height: 44px; }
+.v2-hp-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+.v2-hp-actions .v2-btn { min-height: 44px; }

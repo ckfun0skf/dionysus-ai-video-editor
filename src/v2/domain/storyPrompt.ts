@@ -27,20 +27,33 @@ export const EXAMPLE_STORYBOARD: StoryDoc = {
   assets: [
     { id: "rider", name: "The rider", type: "character", aspect: "1:1", prompt: "Portrait of a young woman cyclist, short dark hair, red cycling jacket, grey helmet, plain light background, natural cinematic realism", references: [], source: { type: "generate" }, qa: ["Red jacket and grey helmet", "Face clearly visible", "No logos or text"] },
     { id: "hill", name: "Hill road", type: "location", aspect: "16:9", prompt: "Empty winding road up a grassy hill before sunrise, mist in the valley, soft blue-gold sky, natural cinematic realism", references: [], source: { type: "generate" }, qa: ["Road winds up to the hilltop", "No people or vehicles"] },
+    {
+      id: "text-card", name: "Text card", type: "html", aspect: "16:9", prompt: "Elegant animated text card: the words fade up letter by letter in a warm serif over a deep blue-to-black gradient (or over nothing when \"background\" is \"none\"), hold, then fade out over the last 0.5 s. Text centred, or small in the lower left when \"place\" is \"lower-left\". Calm, cinematic, no other graphics.", references: [], source: { type: "generate" }, qa: ["The text is the clip's \"text\" param, fully readable", "Nothing but the text on a transparent background when \"background\" is \"none\""],
+      params: {
+        text: { type: "text", default: "Title", label: "Text" },
+        color: { type: "color", default: "#fff6e0", label: "Text colour" },
+        background: { type: "select", options: ["dark", "none"], default: "dark", label: "Background", description: "dark = full-frame card; none = transparent, for a layer over a shot" },
+        place: { type: "select", options: ["center", "lower-left"], default: "center", label: "Placement" },
+      },
+    },
     { id: "s1-end", name: "Last frame of shot 1", type: "frame", aspect: "16:9", prompt: "", references: [], source: { type: "lastFrame", shot: "s1" }, qa: ["Rider is near the hilltop"] },
   ],
   shots: [
-    { id: "s1", title: "The climb", description: "She climbs the last stretch of the hill road.", durationSec: 4, prompt: "References:\nImage 1 (The rider): reference only, not a frame: keep her face, red jacket and grey helmet.\nImage 2 (Hill road): reference only, not a frame: the road, hill and sky colours; do not copy its framing.\nNo image is the start frame. Framing: side tracking shot, she rides into frame and ends near the hilltop.\n\nThe cyclist in a red jacket pedals hard up a winding hill road before sunrise, mist below, side tracking shot", assets: ["rider", "hill"], qa: ["Rider matches the portrait", "Ends near the hilltop"], camera: "Side tracking shot" },
+    { id: "s1", title: "The climb", description: "She climbs the last stretch of the hill road.", durationSec: 4, prompt: "References:\nImage 1 (The rider): reference only, not a frame: keep her face, red jacket and grey helmet.\nImage 2 (Hill road): reference only, not a frame: the road, hill and sky colours; do not copy its framing.\nNo image is the start frame. Framing: side tracking shot, she rides into frame and ends near the hilltop.\n\nThe cyclist in a red jacket pedals hard up a winding hill road before sunrise, mist below, side tracking shot", assets: ["rider", "hill"], qa: ["Rider matches the portrait", "Ends near the hilltop"], camera: "Side tracking shot",
+      layers: [{ id: "s1-time", type: "html", asset: "text-card", startSec: 0.5, endSec: 3, box: { x: 0, y: 0, width: 1, height: 1 }, params: { text: "5:58 AM", background: "none", place: "lower-left" } }],
+    },
     { id: "s2", title: "The top", description: "She reaches the top and stops.", durationSec: 3, genDurationSec: 5, prompt: "References:\nImage 1 (Last frame of shot 1): START FRAME: the clip opens on exactly this image.\nImage 2 (The rider): reference only, not a frame: keep her face, jacket and helmet.\nFraming: opens on the start frame, ends on a medium shot of her stopping at the top.\n\nContinuing from the first frame: the cyclist reaches the hilltop, stops and looks toward the horizon, breathing hard", assets: ["s1-end", "rider"], references: [{ asset: "s1-end", role: "start-frame" }, { asset: "rider", role: "identity" }], qa: ["First frame matches the end of shot 1", "Same jacket and helmet"] },
     {
       id: "s3", title: "Sunrise", description: "The sun rises over the valley; title card.", durationSec: 4, prompt: "References:\nImage 1 (Hill road): reference only, not a frame: the same hill and valley.\nNo image is the start frame. Framing: one static wide shot.\n\nStatic wide shot from behind the cyclist on the hilltop as the sun rises over the misty valley, clear empty sky in the upper third, no text", assets: ["hill"], qa: ["Sun is rising", "Empty sky in the upper third for the title"], camera: "Static wide shot",
       layers: [{ id: "s3-title", type: "text", text: "FIRST LIGHT", startSec: 1, endSec: 4, position: { x: 0.5, y: 0.25 }, textStyle: "title-card", anim: { in: "fade", out: "fade", durationSec: 0.6 } }],
       effects: [{ preset: "ken-burns", params: { zoom: 0.1 } }, { preset: "glow", params: { strength: 0.4 } }],
     },
+    { id: "s4", title: "End card", description: "Text-only card: the same text card asset with its own words.", durationSec: 2, prompt: "References:\nNo images: this shot is the \"text-card\" HTML clip.\n\nEnd card reading THE END", assets: ["text-card"], qa: ["Reads THE END", "Same look as the time caption in shot 1"], render: "html", clip: "text-card", params: { text: "THE END" } },
   ],
   connections: [
     { from: "s1", to: "s2", kind: "continuity", note: "Shot 2 starts from the last frame of shot 1" },
     { from: "s2", to: "s3", kind: "cut", transition: { preset: "crossfade", params: { durationSec: 0.6 } } },
+    { from: "s3", to: "s4", kind: "cut" },
   ],
 };
 
@@ -102,7 +115,8 @@ const FORMAT_SECTION = () => `{
                                  // = role from its type; for an image "start-frame" means the base image to edit (no end-frame)
       "source": "generate" | "upload" | { "type": "lastFrame", "shot": "<shot id>" },
                                  // plain strings "generate" / "upload" (default "generate"); an object only for lastFrame; "html" and "audio" can't use lastFrame
-      "qa": string[]             // 2-5 concrete yes/no checks to verify the asset by looking
+      "qa": string[],            // 2-5 concrete yes/no checks to verify the asset by looking
+      "params"?: { "<key>": Param }   // "html" only: values the clip exposes, set per use by shots and layers (see RULES)
   } ],
   "shots": [ {                   // in playback order
       "id": string,
@@ -124,6 +138,7 @@ const FORMAT_SECTION = () => `{
       "qa": string[],            // 2-5 concrete yes/no checks for the clip
       "render"?: ${SHOT_RENDERS.map((r) => `"${r}"`).join(" | ")},   // default "ai" (generated clip); "html" = uploaded HTML animation; "still" = an image held on screen
       "clip"?: "<asset id>",     // required for "html" (an html asset) and "still" (an image asset)
+      "params"?: { "<key>": value },   // render "html" only: this shot's values for the clip asset's "params"
       "captions"?: boolean,      // true = show "dialogue" as subtitles over the shot
       "layers"?: Layer[],        // drawn in list order (later = on top)
       "effects"?: [ { "preset": "<video effect id>", "params"?: { ... }, "startSec"?: number, "endSec"?: number } ]   // default: whole shot
@@ -155,7 +170,12 @@ Layer (times in seconds from the shot start, 0 <= startSec < endSec <= durationS
            "blend"?: "<blend id>", "opacity"?: number (0-1, default 1),
            "follow"?: "frame" | "shot" }      // default "frame" (fixed); "shot" = moves with the shot's zoom/pan effects
   Media: { "id": string, "type": "html" | "image" | "video", "asset": "<asset id>", "startSec": number, "endSec": number,
-           "box": { "x", "y", "width", "height" }, "blend"?: "<blend id>", "opacity"?: number (0-1), "follow"?: "frame" | "shot" }
+           "box": { "x", "y", "width", "height" }, "blend"?: "<blend id>", "opacity"?: number (0-1), "follow"?: "frame" | "shot",
+           "params"?: { "<key>": value } }   // "html" layers only: this layer's values for the asset's "params"
+Param (an html asset's exposed value; "default" is required and must be valid):
+  { "type": "text", "default": string } | { "type": "number", "default": number, "min"?: number, "max"?: number, "step"?: number }
+  | { "type": "color", "default": "#rrggbb" } | { "type": "boolean", "default": boolean } | { "type": "select", "options": string[], "default": string }
+  each may add "label"?: string (shown in the editor) and "description"?: string
 TextStyle: { "font"?: "<font id>", "size"?: number (fraction of frame height, 0-1), "color"?: "#rrggbb", "align"?: "left" | "center" | "right", "bold"?: boolean,
              "italic"?: boolean, "letterSpacing"?: number (em, -0.2-1), "lineHeight"?: number (0.8-3),
              "strokeWidth"?: number (outline, fraction of font size, 0-0.3), "strokeColor"?: "#rrggbb",
@@ -212,8 +232,8 @@ export const RULE_LIST: readonly { key: string; text: string }[] = [
   { key: "qa-checks", text: "Every asset and shot gets 2–5 QA checks that a person can verify by looking: identity consistency, key props, framing, artefacts (extra fingers, warped text, watermarks)." },
   { key: "ids", text: `Keep ids short and stable (e.g. "hero", "kitchen", "s1", "s1-end"). Shots are listed in order; "connections" may be omitted for simple hard cuts.` },
   { key: "valid-json", text: "Output valid JSON only: double quotes, no comments, no trailing commas." },
-  { key: "text-in-layers", text: "Every piece of on-screen text (titles, cards, labels, captions) goes into a text layer, never into a generation prompt. Prompts ask for clean, empty surfaces where the text will sit." },
-  { key: "html-only-for-graphics", text: `Use "html" assets and "render": "html" only for animated, 3D or three.js graphics. Plain text is a text layer.` },
+  { key: "text-in-layers", text: "Every piece of on-screen text (titles, cards, labels, captions) goes into a text layer (or the params of a reusable html text card, RULE 24), never into a generation prompt. Prompts ask for clean, empty surfaces where the text will sit." },
+  { key: "html-only-for-graphics", text: `Use "html" assets and "render": "html" only for animated, 3D or three.js graphics. Plain text over a shot is a text layer; a designed title or text-only card is one reusable "html" asset with params (RULE 24).` },
   { key: "transitions-and-effects", text: `Transitions go on connections. Post camera moves (push-in etc.) and looks go in the shot's "effects", and the generation prompt then says "static camera".` },
   { key: "known-presets", text: "Only use preset ids listed in the PRESETS section." },
   { key: "param-units", text: `Preset params use the units noted in brackets in the PRESETS section; "fade-in"/"fade-out" "length" is a fraction (0.05–1) of the effect's time range, not seconds.` },
@@ -228,6 +248,7 @@ export const RULE_LIST: readonly { key: string; text: string }[] = [
   { key: "text-style-extras", text: `Keep text readable on any picture: give light text an outline ("strokeWidth" about 0.04-0.08 with a dark "strokeColor"), a soft "shadow", or a "background" box (captions, lower thirds). Use "letterSpacing" (in em) for airy titles, "lineHeight" for multi-line cards, "italic" for emphasis, and a text "effect" with "effectColor" only for stylised titles. Sizes and offsets are fractions of the font size; null removes a style's shadow or background. Example: "style": { "color": "#ffffff", "strokeWidth": 0.06, "strokeColor": "#000000", "shadow": { "color": "#000000", "blur": 0.3, "x": 0, "y": 0.04 } }. Put a look used on several layers into "meta.textStyles" once.` },
   { key: "blend-overlays", text: `For overlays (light leaks, flares, dust, film grain, paper or ink textures) use an image or video layer with a "blend" mode and, if needed, an "opacity" below 1: "screen" or "add" for elements on black (the black disappears), "multiply" for elements on white (the white disappears), "overlay" or "soft-light" for textures on mid grey. Example: { "id": "leak", "type": "video", "asset": "light-leak", "startSec": 0, "endSec": 3, "box": { "x": 0, "y": 0, "width": 1, "height": 1 }, "blend": "screen", "opacity": 0.7 }. Ask for the overlay asset full-frame on a plain black, white or grey background. Leave "blend" out ("normal") for titles, logos and pictures that should simply cover the shot.` },
   { key: "html-clip-package", text: `An "html" asset's "prompt" is a design brief for the AI that will write the clip, not code: what it shows, how it moves over its length, colours, type and layout. List the media it uses (logos, photos, footage, music) in its "references"; the app copies the brief together with the HTML clip package instructions (format "dionysus.htmlclip/1", spec HTML_CLIP_PACKAGE.md next to this guide), filled in with the asset's size, length, bound assets and allowed libraries, and the user pastes the AI's single .html file back as a version.` },
+  { key: "html-params", text: `Reuse one "html" asset with "params" instead of duplicating it: when shots or layers show the same design with different words, numbers or colours (title cards, text-only cards, chapter and end cards, lower thirds, counters), make ONE html asset, declare what varies in its "params" ({ "<key>": { "type": "text" | "number" | "color" | "boolean" | "select", "default": …, "label"?, "description"? } }, numbers may add "min", "max", "step", a select lists its "options"), and give each use its own values: a text-only shot is { "render": "html", "clip": "<asset id>", "params": { "text": "THE END" } }, a layer over a shot is { "type": "html", "asset": "<asset id>", "box": { "x": 0, "y": 0, "width": 1, "height": 1 }, "params": { "text": "5:58 AM" } }. Omitted keys use the default; a value must match its type (numbers within min–max, a select one of its "options", colours "#rrggbb"). The brief describes the design for any value (long and short text) and names the params; the app tells the clip's AI to expose exactly these params and read them at render time. Keep plain captions over a shot as text layers.` },
 ];
 export const RULES: readonly string[] = RULE_LIST.map((r) => r.text);
 /** 1-based public number of a rule, by key. */

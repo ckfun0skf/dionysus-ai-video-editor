@@ -55,7 +55,7 @@ describe("AI planner guide (V2-SB-114)", () => {
   it("the full prompt inlines the guide with RULES 1-23; the short prompt links to it", () => {
     const full = storyboardSystemPrompt();
     for (const s of ["FORMAT (", "PRESETS", "RULES", "EXAMPLE", `14. ${RULES[13]}`, "not seconds", "START FRAME", "\"references\"?", "\"genDurationSec\"?", "- crossfade:", "- ken-burns:"]) expect(full).toContain(s);
-    expect(RULES).toHaveLength(23);
+    expect(RULES).toHaveLength(24);
     // V2-SB-128: blend modes: the format lines, the blend catalogue and a rule with an example that imports cleanly.
     expect(full).toContain('"blend"?: "<blend id>", "opacity"?: number (0-1, default 1)');
     expect(full).toContain('Blend modes — shots[].layers[].blend');
@@ -100,6 +100,29 @@ describe("AI planner guide (V2-SB-114)", () => {
     expect(full).toContain('"durationSec": 4, "genDurationSec": 6');
     expect(full).not.toContain("match what the video model can generate");
     expect(EXAMPLE_STORYBOARD.shots.some((s) => s.genDurationSec !== undefined && s.genDurationSec > s.durationSec)).toBe(true);
+  });
+
+  it("RULE 24 (V2-HTML-PARAMS): reuse one html asset with params for title and text-only cards; the example does", () => {
+    const rule = RULES[ruleNumber("html-params") - 1];
+    expect(rule).toMatch(/^Reuse one "html" asset with "params" instead of duplicating it/);
+    for (const s of ["title cards", "text-only", '"render": "html"', '"type": "html"', '"params"']) expect(rule).toContain(s);
+    expect(RULES[ruleNumber("text-in-layers") - 1]).toContain("RULE 24");
+    expect(RULES[ruleNumber("html-only-for-graphics") - 1]).toContain("RULE 24");
+    // The rule's own snippets are valid JSON.
+    const shot = JSON.parse(rule.match(/(\{ "render": "html".*?\} \})/)![1]);
+    expect(shot).toMatchObject({ render: "html", params: { text: "THE END" } });
+    const layer = JSON.parse(rule.match(/(\{ "type": "html", "asset".*?"params": \{ "text": "5:58 AM" \} \})/)![1]);
+    expect(layer).toMatchObject({ type: "html", params: { text: "5:58 AM" } });
+    // The example reuses ONE html asset as a text-only shot and as a layer, each with its own values.
+    const ex = EXAMPLE_STORYBOARD;
+    const card = ex.assets.filter((a) => a.type === "html");
+    expect(card).toHaveLength(1);
+    expect(Object.keys(card[0].params ?? {})).toContain("text");
+    expect(ex.shots.find((s) => s.render === "html" && s.clip === card[0].id)?.params?.text).toBe("THE END");
+    expect(ex.shots.flatMap((s) => s.layers ?? []).find((l) => l.type === "html" && l.asset === card[0].id && l.params)).toBeDefined();
+    const full = storyboardSystemPrompt();
+    expect(full).toContain('"params"?: { "<key>": Param }');
+    expect(full).toContain('"params"?: { "<key>": value },   // render "html" only');
   });
 
   it("the example imports with no warnings and uses v1.1 fields", () => {
@@ -165,10 +188,10 @@ describe("generic storyboard guide (V2-SB-GUIDE-GENERIC)", () => {
 
   it("numbers the rules stably: append-only keys, and every RULE n the spec cites exists", () => {
     // Rule numbers are public (the spec, users, other AIs). Append new keys at the end; never reorder or delete.
-    expect(RULE_LIST.slice(0, 23).map((r) => r.key)).toEqual([
+    expect(RULE_LIST.slice(0, 24).map((r) => r.key)).toEqual([
       "reusable-assets", "standalone-prompts", "last-frame-continuity", "uploads", "qa-checks", "ids", "valid-json", "text-in-layers", "html-only-for-graphics",
       "transitions-and-effects", "known-presets", "param-units", "duration", "references-block", "transition-overlap", "identity-portrait", "asset-references", "keyframe", "audio", "layer-follow", "text-style-extras", "blend-overlays",
-      "html-clip-package",
+      "html-clip-package", "html-params",
     ]);
     expect(new Set(RULE_LIST.map((r) => r.key)).size).toBe(RULE_LIST.length);
     RULE_LIST.forEach((r, i) => expect(section("RULES")).toContain(`${i + 1}. ${r.text}`));
@@ -180,6 +203,7 @@ describe("generic storyboard guide (V2-SB-GUIDE-GENERIC)", () => {
     expect(ruleNumber("text-style-extras")).toBe(21);
     expect(ruleNumber("blend-overlays")).toBe(22);
     expect(ruleNumber("html-clip-package")).toBe(23);
+    expect(ruleNumber("html-params")).toBe(24);
     expect(RULES[ruleNumber("duration") - 1]).toMatch(/^"durationSec" is how long/);
     // V2-SB-132: montage = consecutive short shots (no new field), in the duration rule and the spec.
     expect(RULES[ruleNumber("duration") - 1]).toContain("Montage (a quick run of glimpses, e.g. three 2 s moments of a journey) needs no special field: write it as consecutive short shots");

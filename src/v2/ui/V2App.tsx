@@ -26,6 +26,7 @@ import { MediaPicker, type Picked } from "./MediaPicker";
 import { projectMediaList } from "./projectMedia";
 import { libraryFile, stickerFile, stickers } from "./libraryItems";
 import { EffectPicker } from "./EffectPicker";
+import { HtmlParamsPanel } from "./HtmlParamsPanel";
 import { TransitionPicker, cutOf } from "./TransitionPicker";
 import { loadPreviewVh, PanelGrabber, Sheet, SheetDone } from "./Sheet";
 import { useEdgeFade } from "./useEdgeFade";
@@ -105,6 +106,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   /** V2-098: animation sheet; after a pick the sheet shrinks and the preview loops over the clip's time range. */
   const [animOpen, setAnimOpen] = useState(false);
   const [fxOpen, setFxOpen] = useState(false);
+  /** V2-HTML-PARAMS: the mobile sheet with the selected HTML clip's param values. */
+  const [paramsOpen, setParamsOpen] = useState(false);
   /** V2-TL-TRANS: incoming clip of the cut whose transition picker sheet is open (mobile). */
   const [transFor, setTransFor] = useState<string>();
   /** Stop time (ticks) of a junction preview started by the transition picker. */
@@ -594,7 +597,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       ...(selLink ? [tool("board", "Storyboard", () => openStory(selLink.target), "open-story", `Open ${selLink.label} in the storyboard: pick versions there`)] : []),
       tool("✂", "Split", split),
       tool("🗑", ripple ? "Ripple delete" : "Delete", () => del(), "delete", ripple ? "Delete and close the gap" : "Delete"),
-      ...(isHtml ? [tool("</>", "Edit code", () => void openCode(), "edit-code", "Edit HTML, CSS and JS with live preview")] : []),
+      ...(isHtml ? [tool("settings", "Params", () => setParamsOpen(true), "html-params", "This clip's values: text, colours and other params the HTML clip exposes"), tool("</>", "Edit code", () => void openCode(), "edit-code", "Edit HTML, CSS and JS with live preview")] : []),
       ...(isText ? [tool("T", "Edit text", () => setTextOpen(true), "edit-text", "Templates, font, style, effects, animation"), tool("anim", "Animation", () => setAnimOpen(true), "anim", "In, out and loop animations"), tool("≡", "Subtitles", () => openSubs(selected.track.id, selected.placement.id), "subs-list", "Open this layer's subtitle list at this clip")] : []),
       tool("⤧", "Adjust", () => setInspOpen(true), "adjust", "Transform, keyframes and fades"),
       ...(speedSelect ? [tool("⏩", `Speed ${sp!.speed ?? 1}×`, () => setMenu("speed"), "speed", "Playback speed")] : []),
@@ -717,7 +720,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     </>, tabs: [{ id: "text", label: "Text", icon: "T", render: () => <TextPanel engine={engine} placement={effSel} track={selTrack} onAnimPicked={() => setAnimLoop(true)} initialTab="Font" /> }, { ...transform, label: "Transform" }] };
     if (kind === "effect") return { ...base, tabs: [{ id: "effect", label: "Effect", icon: "effect", render: () => <EffectPicker engine={engine} at={time} placement={pl} /> }] };
     if (kind === "audio") return { ...base, tabs: [audioTab, ...(speedSelect ? [speedTab] : [])] };
-    if (kind === "html") return { ...base, actions: <button className="v2-btn v2-btn-sm" title="Edit HTML, CSS and JS with live preview" onClick={() => void openCode()}><Ic g="</>" size={14} /> Edit code</button>, tabs: [transform, ...(transTab ? [transTab] : [])] };
+    if (kind === "html") return { ...base, actions: <button className="v2-btn v2-btn-sm" title="Edit HTML, CSS and JS with live preview" onClick={() => void openCode()}><Ic g="</>" size={14} /> Edit code</button>, tabs: [{ id: "params", label: "Params", icon: "settings", render: () => <HtmlParamsPanel engine={engine} project={project} placement={pl} blobs={storage.blobs} onEditCode={() => void openCode()} /> }, transform, ...(transTab ? [transTab] : [])] };
     if (kind === "image") return { ...base, tabs: [transform, ...(transTab ? [transTab] : [])] };
     return { ...base, tabs: [transform, ...(speedSelect || timeActions.length ? [speedTab] : []), audioTab, ...(transTab ? [transTab] : [])] };
   };
@@ -895,6 +898,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           {textOpen && selected && isText && <Sheet label="Text" className="v2-msheet-insp" snapTo={animLoop ? 0 : undefined} extra={scopeChip || undefined} onClose={closeAnim}><TextPanel engine={engine} placement={effSel} track={selTrack} onAnimPicked={() => setAnimLoop(true)} /></Sheet>}
           {transFor && cutOf(comp, transFor) && <Sheet label="Transitions" head={false} dim={false} className="v2-trans-sheet" onClose={() => setTransFor(undefined)}><TransitionPicker key={transFor} engine={engine} comp={comp} placementId={transFor} thumbs={thumbs} onPreview={previewCut} onToast={setToast} onDone={() => setTransFor(undefined)} /></Sheet>}
           {fxOpen && <Sheet label="Effects" className="v2-msheet-insp" onClose={() => setFxOpen(false)}><EffectPicker engine={engine} at={time} placement={isEffect ? selected!.placement : undefined} onAdded={(id) => setSel([id])} onClose={() => setFxOpen(false)} /></Sheet>}
+          {paramsOpen && selected && isHtml && <Sheet label="Clip params" className="v2-msheet-insp" onClose={() => setParamsOpen(false)}><HtmlParamsPanel engine={engine} project={project} placement={selected.placement} blobs={storage.blobs} onEditCode={() => { setParamsOpen(false); void openCode(); }} /></Sheet>}
           {animOpen && !textOpen && selected && isText && <Sheet label="Animation" className="v2-msheet-insp v2-anim-sheet" snapTo={animLoop ? 0 : undefined} extra={scopeChip || undefined} onClose={closeAnim}><AnimationPicker engine={engine} placement={selected.placement} onPicked={() => setAnimLoop(true)} /></Sheet>}
         </>
       ) : (

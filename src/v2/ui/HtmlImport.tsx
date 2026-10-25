@@ -5,7 +5,7 @@
  * "Add as new version", warnings don't.
  */
 import { useMemo, useState, type DragEvent } from "react";
-import { extractHtml, HTML_CLIP_ZIP_SUFFIX, lintHtmlClip, type BindingType, type HtmlClipIssue } from "../domain";
+import { extractHtml, HTML_CLIP_ZIP_SUFFIX, lintHtmlClip, type BindingType, type HtmlClipIssue, type HtmlClipParam } from "../domain";
 import { CLIP_LIBRARIES } from "../render";
 import { exportHtmlFile, exportHtmlZip, HTML_IMPORT_ACCEPT, importHtmlPackage, packageBaseName } from "./htmlPackage";
 import { saveFile } from "./saveFile";
@@ -56,13 +56,13 @@ const canPaste = () => typeof navigator !== "undefined" && typeof navigator.clip
 const finePointer = () => typeof matchMedia === "function" && matchMedia("(pointer: fine)").matches;
 
 /** Paste box + file picker (+ drop on desktop) with live validation; `onAdd` receives the single-file HTML. */
-export function HtmlImport({ expectBindings, onAdd, busy }: { expectBindings?: Record<string, BindingType>; onAdd: (html: string, name: string) => Promise<void> | void; busy?: boolean }) {
+export function HtmlImport({ expectBindings, expectParams, onAdd, busy }: { expectBindings?: Record<string, BindingType>; expectParams?: Record<string, HtmlClipParam>; onAdd: (html: string, name: string) => Promise<void> | void; busy?: boolean }) {
   const [text, setText] = useState("");
   const [file, setFile] = useState<{ name: string; html: string }>();
   const [err, setErr] = useState("");
   const [drag, setDrag] = useState(false);
   const html = file?.html ?? (text.trim() ? extractHtml(text) ?? "" : "");
-  const lint = useMemo(() => (html ? lintHtmlClip(html, { libs: CLIP_LIBRARIES, expectBindings }) : undefined), [html, expectBindings]);
+  const lint = useMemo(() => (html ? lintHtmlClip(html, { libs: CLIP_LIBRARIES, expectBindings, expectParams }) : undefined), [html, expectBindings, expectParams]);
   const blocked = !text.trim() && !file;
   const notFound = !file && !!text.trim() && !extractHtml(text);
 

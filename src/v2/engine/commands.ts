@@ -57,6 +57,22 @@ export const setEffect = (id: string, patch: { preset?: string; params?: Record<
   apply: (p) => withRoot(p, (c) => ({ ...c, tracks: c.tracks.map((t) => ({ ...t, placements: t.placements.map((pl) => (pl.id === id && pl.clipType === "effect" && pl.effect ? { ...pl, effect: patch.preset ? { preset: patch.preset } : { ...pl.effect, params: { ...pl.effect.params, ...patch.params } } } : pl)) })) })),
 });
 
+/**
+ * Per-use values for an HTML clip's exposed params (V2-HTML-PARAMS). `null` removes an override (back to the clip's
+ * default); `undefined` patch = reset all. Edits to one param inside a gesture (a slider drag, typing) are one undo step.
+ */
+export const setHtmlParams = (id: string, patch: Record<string, number | string | boolean | null> | undefined, label = patch ? "Clip params" : "Reset clip params"): Command => ({
+  label,
+  coalesceKey: patch ? `hp:${id}:${Object.keys(patch).sort().join(",")}` : undefined,
+  apply: (p) => withRoot(p, (c) => ({ ...c, tracks: c.tracks.map((t) => ({ ...t, placements: t.placements.map((pl) => {
+    if (pl.id !== id || pl.clipType !== "html") return pl;
+    const next: Record<string, number | string | boolean> = { ...(patch ? pl.htmlParams : {}) };
+    for (const [k, v] of Object.entries(patch ?? {})) { if (v === null) delete next[k]; else next[k] = v; }
+    const { htmlParams: _drop, ...rest } = pl;
+    return Object.keys(next).length ? { ...rest, htmlParams: next } : rest;
+  }) })) })),
+});
+
 /** Patch a text clip's content/style. Typing into one clip coalesces into one undo step. */
 export const updateText = (id: string, patch: Partial<TextData>, label = "Edit text"): Command => ({
   label,

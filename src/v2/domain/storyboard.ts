@@ -9,6 +9,7 @@ import { isStill, newId, type AssetVersion, type Composition, type MediaKind, ty
 import { mainTrack } from "./ops";
 import { assetRefId, keyframeId, type AssetRefRole, type ReferenceRole, type ShotRender, type StoryAssetRef, type StoryAssetType, type StoryAudio, type StoryConnection, type StoryDoc, type StoryEffect, type StoryLayer, type StoryMeta } from "./storyJson";
 import { followStoryLinks } from "./storyLinks";
+import type { HtmlClipParam, HtmlParamValues } from "./htmlClipPackage";
 import { orderSteps } from "./storySteps";
 import { TICKS_PER_SECOND } from "./time";
 
@@ -29,6 +30,8 @@ export interface AssetSlot {
   skipped?: boolean;
   /** V2-SB-124: this slot is the keyframe of that shot (its clip's start frame, made first). */
   keyframeOf?: string;
+  /** V2-HTML-PARAMS: html slots: the params the clip should expose (asked for in its Copy prompt, checked on paste). */
+  params?: Record<string, HtmlClipParam>;
 }
 
 export interface Shot {
@@ -44,6 +47,8 @@ export interface Shot {
   render?: Exclude<ShotRender, "ai">;
   /** v1.1: the html (render html) or image (render still) slot that is the shot's clip. */
   clipSlot?: string;
+  /** V2-HTML-PARAMS: render html: per-use values for the clip's params; carried to the timeline clip on send. */
+  params?: HtmlParamValues;
   /** The shot's own AI clip asset, kept aside while the shot is made as html or still (V2-CUT-02). */
   ownAssetId?: string;
   /**
@@ -136,7 +141,7 @@ export function storyboardFromDoc(doc: StoryDoc): Storyboard {
       id: a.id, name: a.name, type: a.type, aspect: a.aspect, prompt: a.prompt, references: a.references.map(assetRefId),
       source: a.source.type === "lastFrame" ? { type: "lastFrame", shotId: a.source.shot } : { type: a.source.type },
       qa: qaList(a.id, a.qa), ...(a.notes ? { notes: a.notes } : {}),
-      ...refRolesOf(a.references),
+      ...refRolesOf(a.references), ...(a.params ? { params: structuredClone(a.params) } : {}),
     };
   }
   const shots: Record<string, Shot> = {};
@@ -145,6 +150,7 @@ export function storyboardFromDoc(doc: StoryDoc): Storyboard {
       id: s.id, title: s.title, description: s.description, durationSec: s.durationSec, prompt: s.prompt,
       slotIds: [...s.assets], qa: qaList(s.id, s.qa), ...(s.camera ? { camera: s.camera } : {}), ...(s.dialogue ? { dialogue: s.dialogue } : {}),
       ...(s.render && s.render !== "ai" && s.clip && slots[s.clip] ? { render: s.render, clipSlot: s.clip } : {}),
+      ...(s.render === "html" && s.clip && slots[s.clip] && s.params ? { params: { ...s.params } } : {}),
       ...(s.layers?.length ? { layers: structuredClone(s.layers) } : {}),
       ...(s.captions ? { captions: true } : {}),
       ...(s.effects?.length ? { effects: structuredClone(s.effects) } : {}),

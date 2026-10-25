@@ -3,6 +3,7 @@
  * Ready shots are appended to the main track in story order, each from its selected version:
  * - ai shots use their clip; html and still shots use their clip slot's asset for the planned shot length;
  * - text layers become text clips, html/image/video layers become overlay clips filling their box;
+ * - html shot and layer `params` (V2-HTML-PARAMS) become the clip's per-use param values (`htmlParams`);
  * - `captions: true` writes the dialogue into the shared subtitle layer for the shot's range;
  * - shot effects become effect-layer clips over the shot (or their sub-range);
  * - a connection `transition` becomes `transitionIn` on the `to` clip when the two clips are adjacent;
@@ -98,7 +99,9 @@ function shotClip(b: Storyboard, asset: Asset, v: AssetVersion, shot: Shot, at: 
   // A video clip uses its version's trim (V2-SB-121), else the whole clip.
   const span = !shot.clipSlot && asset.kind === "video" ? versionSpan(b, v) : undefined;
   const durationTicks = shot.clipSlot || asset.kind === "html" ? planned : asset.kind === "image" ? DEFAULT_IMAGE_TICKS : span?.lenTicks ?? v.media.durationTicks ?? DEFAULT_IMAGE_TICKS;
-  return { id: newId("plc"), startTicks: at, durationTicks, sourceInTicks: span?.inTicks ?? 0, source: { kind: "assetVersion", assetId: asset.id, versionId: v.id }, clipType: asset.kind, volume: 1, storyShot: shot.id };
+  // V2-HTML-PARAMS: an html shot's per-use param values go onto its clip (only overrides; defaults come from the clip).
+  const params = asset.kind === "html" && shot.params && Object.keys(shot.params).length ? { htmlParams: { ...shot.params } } : {};
+  return { id: newId("plc"), startTicks: at, durationTicks, sourceInTicks: span?.inTicks ?? 0, source: { kind: "assetVersion", assetId: asset.id, versionId: v.id }, clipType: asset.kind, volume: 1, storyShot: shot.id, ...params };
 }
 
 function mediaLayer(p: Project, b: Storyboard, shot: Shot, l: StoryMediaLayer, start: number, dur: number, anchor: string): Placement | undefined {
@@ -114,6 +117,7 @@ function mediaLayer(p: Project, b: Storyboard, shot: Shot, l: StoryMediaLayer, s
     id: newId("plc"), startTicks: start, durationTicks: max ? Math.min(dur, max) : dur, sourceInTicks: 0,
     source: { kind: "assetVersion", assetId: a.id, versionId: v.id }, clipType: a.kind, volume: 1,
     transform: { ...boxTransform(l.box, mw, mh, p.settings.width, p.settings.height) } as Transform, storyLink: { anchor },
+    ...(a.kind === "html" && l.params && Object.keys(l.params).length ? { htmlParams: { ...l.params } } : {}),
   };
 }
 

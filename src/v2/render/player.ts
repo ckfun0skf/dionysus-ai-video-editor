@@ -5,7 +5,7 @@
  */
 import { activeAt, placeRect, type Placed } from "./frame";
 import { TICKS_PER_SECOND, ticksToSeconds } from "../domain/time";
-import { compositionDuration, fadeAt, versionOf, type Project } from "../domain/model";
+import { compositionDuration, fadeAt, versionOf, type Placement, type Project } from "../domain/model";
 import type { BlobStore } from "../ports/storage";
 import { subtitleAt } from "../domain/subtitles";
 import { drawTextClip } from "./text";
@@ -15,7 +15,7 @@ import { mainTrack } from "../domain/ops";
 import { correctDrift, createClock, type Clock } from "./clock";
 import { HtmlClipHost, isValidFrame, type FrameIssue, type HtmlClipInit } from "./htmlClip";
 import { bindingSignature, resolveClipBindings } from "../domain/htmlClipBindings";
-import { readManifest, type HtmlClipManifest } from "../domain/htmlClipPackage";
+import { readManifest, resolveHtmlParams, type HtmlClipManifest } from "../domain/htmlClipPackage";
 import type { ExportVideoFrames } from "./export/videoFrames";
 import { drawWithLook } from "./transitionDraw";
 import { withBlend } from "./blend";
@@ -46,6 +46,8 @@ export class Player {
   private html = new Map<string, { key: string; host: HtmlClipHost }>();
   /** Manifest per HTML blob, read when its clip first loads (blobs are immutable). */
   private manifests = new Map<string, HtmlClipManifest>();
+  /** Latest per-use param overrides by html placement id (V2-HTML-PARAMS), read when a clip's page initialises. */
+  private htmlOverrides = new Map<string, Placement["htmlParams"]>();
   private raf = 0;
   private playing = false;
   private startClock = 0;
@@ -152,7 +154,8 @@ export class Player {
       const blobs = await Promise.all(binds.map((b) => this.blobs.get(b.blobKey).catch(() => undefined)));
       const bindings: NonNullable<HtmlClipInit["bindings"]> = {};
       binds.forEach((b, i) => { const blob = blobs[i]; if (blob) bindings[b.name] = { type: b.type, blob }; });
-      return { width: w, height: h, bindings };
+      // V2-HTML-PARAMS: the clip's per-use values (defaults ⊕ this placement's overrides) from the first frame on.
+      return { width: w, height: h, bindings, params: resolveHtmlParams(m.params, this.htmlOverrides.get(placementId)) };
     });
     this.html.set(placementId, entry);
     return entry.host;
@@ -229,7 +232,10 @@ export class Player {
       if (!version || track.hidden) continue;
       if (placement.clipType === "html") {
         live.add(placement.id);
+        this.htmlOverrides.set(placement.id, placement.htmlParams);
         const host = this.htmlHost(placement.id, version.media.blobKey, canvas?.width ?? 1280, canvas?.height ?? 720);
+        const known = this.manifests.get(version.media.blobKey);
+        if (known) host.setParams(resolveHtmlParams(known.params, placement.htmlParams));
         host.request(Math.round(ticksToSeconds(sourceTicks) * 1000) / 1000, ticksToSeconds(placement.sourceInTicks + placement.durationTicks * (placement.speed ?? 1)));
         const f = host.frame;
         if (ctx && canvas && isValidFrame(f)) {
