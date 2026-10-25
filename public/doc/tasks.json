@@ -2462,9 +2462,12 @@
         },
         {
           "id": "V2-HTML-PARAMS",
-          "title": "HTML assets expose typed params; per-use values on storyboard shots/layers and timeline clips (inspector Params), RULE 24 html-params",
+          "title": "HTML assets expose typed params; per-use values on storyboard shots/layers and timeline clips (inspector Params), RULE 24 html-params; desktop Reset 44px and dark select on WebKit",
           "status": "done",
-          "progress": 100
+          "progress": 100,
+          "prs": [
+            "https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/219"
+          ]
         }
       ]
     },
