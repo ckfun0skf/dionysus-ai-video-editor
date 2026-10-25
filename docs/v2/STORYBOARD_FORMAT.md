@@ -51,6 +51,7 @@ Notation: `?` = optional. All coordinates are 0-1 fractions of the frame, measur
 | `references?` | (string \| AssetReference)[] | The assets this one is made from, in attach order. A plain asset id, or **(new, V2-SB-123)** an object with a role (§2.3.1). No self-references and no loops. |
 | `source` | `"generate"`, `"upload"` or `{"type": "lastFrame", "shot": "<shot id>"}` | Write `"generate"` and `"upload"` as **plain strings** (V2-SB-131); only a last frame is an object. Omitted = `"generate"`. For compatibility the importer also accepts the object forms of generate and upload (with `"type"` set to `"generate"` or `"upload"`), but the guide, the example and the app never write them. `html` and `audio` assets can't use `lastFrame`. **Future, not v1:** a template source (§6). |
 | `qa` | string[] | 2-5 yes/no checks that can be verified by looking. |
+| `params?` **(new, V2-HTML-PARAMS)** | `{ "<key>": Param }` | `html` assets only: the values the clip exposes, so one asset is reused with different values (§2.3.2, RULE 24). Ignored, with a warning, on other types. |
 
 #### 2.3.1 `assets[].references[]` objects (V2-SB-123)
 
@@ -74,12 +75,32 @@ Image 1 (Blue mug): reference only: the mug's glaze and colour only; do not copy
 Portrait of the hero at a café table holding the blue mug, …
 ```
 
-**`html` assets** are only for animated, 3D or three.js graphics.
+**`html` assets** are only for animated, 3D or three.js graphics, and for designed title or text-only cards reused with params (§2.3.2).
 - The asset is never a file path and never inline HTML. Its `prompt` is a **design brief** for the AI that writes the clip (what it shows, how it moves over its length, colours, type and layout), not code (RULE 23).
 - Media the clip uses (logos, photos, footage, music) are listed in its `references`; they become the clip's bound assets.
 - Guided flow: the app copies the brief together with the **HTML clip package** instructions (format `dionysus.htmlclip/1`, see [HTML_CLIP_PACKAGE.md](HTML_CLIP_PACKAGE.md), published next to this file), filled in with the asset's size, length, bound assets and allowed libraries. The user pastes the AI's single `.html` reply back (or uploads an `.html` or `.dionysus-html.zip` file) and it becomes a new version. Uploads are versioned like images.
 - The app stores the whole HTML document as an asset-version blob. An `html` asset can't use a `lastFrame` source.
 - Per-clip config (length, size, background, libraries, bindings, params) lives inside the HTML, in `<script type="application/json" id="dionysus-clip">`; HTML without it still plays (legacy).
+
+#### 2.3.2 `assets[].params`: exposed values (V2-HTML-PARAMS)
+
+An `html` asset may declare the values its clip exposes, so the planner, the clip's AI and the editor agree on them. One asset then serves every use with its own values: a title card, a text-only shot or a lower third is ONE asset, not one per wording (RULE 24).
+
+```json
+{ "id": "text-card", "name": "Text card", "type": "html", "prompt": "Animated text card …", "source": "generate", "qa": ["…"],
+  "params": {
+    "text":       { "type": "text", "default": "Title", "label": "Text" },
+    "color":      { "type": "color", "default": "#fff6e0", "label": "Text colour" },
+    "size":       { "type": "number", "default": 0.12, "min": 0.04, "max": 0.3, "step": 0.01, "label": "Size" },
+    "background": { "type": "select", "options": ["dark", "none"], "default": "dark" },
+    "shadow":     { "type": "boolean", "default": true }
+  } }
+```
+
+- **Param:** `type` is `"text"`, `"number"`, `"color"`, `"boolean"` or `"select"`; `default` is required and must be valid for the type (a number within `min`–`max`, a `#rrggbb` colour, one of a select's non-empty `options`). `label` and `description` are optional strings shown in the editor. Keys start with a letter and use letters, digits, `_`, `-` or `.`. This is the same shape as the HTML clip manifest's `params` ([HTML_CLIP_PACKAGE.md](HTML_CLIP_PACKAGE.md)).
+- **Uses:** a `render: "html"` shot (§2.4) and an `html` layer (§2.5) give their own values as `"params": { "<key>": value }`. Omitted keys use the default.
+- The **Copy prompt** for the asset lists the declared params and the values the shots and layers use, and tells the clip's AI to declare exactly these params in its manifest and read `ctx.params` in `render()`. When a pasted clip lacks a declared param, or declares it with another type, the check warns (`param-missing`, `param-mismatch`).
+- The **clip's manifest is the source of truth at render time:** values are resolved against the params the selected version actually declares (its defaults, overridden by the use's values). A value for a key the clip doesn't declare is kept but not passed to it.
 
 ### 2.4 `shots[]`
 
@@ -95,6 +116,7 @@ Portrait of the hero at a café table holding the blue mug, …
 | `qa` | string[] | 2-5 visual checks. |
 | `render?` **(new)** | `"ai"`, `"html"` or `"still"` | Default `"ai"`. The production to-do uses this to choose the step: generate a clip, upload or refresh the HTML, or use the still. |
 | `clip?` **(new)** | asset id | Required when `render` is `"html"` (must point to an `html` asset) or `"still"` (must point to an `image` asset). Ignored for `"ai"`, with a warning. The clip renders from the asset's **selected** version (the one the user picked in the asset's version history), not simply the latest upload. |
+| `params?` **(new, V2-HTML-PARAMS)** | `{ "<key>": value }` | `render: "html"` only: this shot's values for the `clip` asset's `params` (§2.3.2), e.g. `{"text": "THE END"}`. Values are strings, numbers or booleans. Ignored, with a warning, for other renders. |
 | `layers?` **(new)** | Layer[] | §2.5 |
 | `captions?` **(new)** | boolean | When `true`, the shot's `dialogue` is rendered into the shared subtitle text layer. Has no effect, and triggers a warning, if there is no `dialogue`. |
 | `effects?` **(new)** | Effect[] | §2.7 |
@@ -196,7 +218,7 @@ Example: `"style": { "color": "#ffffff", "strokeWidth": 0.06, "strokeColor": "#0
 - With `box`, the text is centred in the box. Its size is `style.size` when given; otherwise it is fitted to the box height (`height / (lines × 1.2)`). The box width does not shrink the text.
 - The importer estimates the rendered width from the font's average character width and warns on `<layer>.text` when the text is likely wider than the box (or the frame, for `position`). Use `position`, shorter text or a smaller `size` to fix it.
 
-**HTML layer:** `{id, type:"html", asset:<html asset id>, startSec, endSec, box, follow?, blend?, opacity?}`
+**HTML layer:** `{id, type:"html", asset:<html asset id>, startSec, endSec, box, follow?, blend?, opacity?, params?}`. `params` (V2-HTML-PARAMS) is this layer's values for the asset's `params` (§2.3.2), e.g. `{"text": "5:58 AM", "background": "none"}`; `params` on an image, video or text layer is ignored with a warning.
 
 **Image / video layer:** `{id, type:"image"|"video", asset:<asset id>, startSec, endSec, box, follow?, blend?, opacity?}`. These land in the overlay group above the shot.
 
@@ -336,6 +358,7 @@ Planned as future registry entries, with no schema change needed: `grain`, `colo
 | `id@N` that differs from the current version | Warn and use the current version. Keep `id@N`. |
 | A `meta.textStyles` id that is also a registry `textStyle` id | Warn; the storyboard's own style wins. |
 | Invalid `style` values (`size` outside (0, 1], non-hex `color`, unknown `align`, non-boolean `bold`) | Warn and drop that value. |
+| `params` (V2-HTML-PARAMS) on a non-html asset, a non-html layer or a shot whose `render` isn't `"html"`; a key the asset doesn't declare; a number outside the declared `min`–`max` | Warn. The misplaced `params` and the unknown key are dropped; the number is clamped. Without declared asset `params`, values are kept as written. |
 | Invalid style extras (V2-SB-127): non-boolean `italic`; `letterSpacing`, `lineHeight` or `strokeWidth` out of range; non-hex `strokeColor` or `effectColor`; malformed `shadow` or `background`; unknown `effect` | Warn and drop that value. |
 | Unknown `style` / `meta.textStyles` field | Warn; the field is kept for re-export but has no effect. |
 | Unknown param key, wrong param type, number outside the ParamSpec range | Warn; unknown keys are ignored, wrong types use the default, out-of-range numbers are clamped. |
@@ -365,7 +388,8 @@ Planned as future registry entries, with no schema change needed: `grain`, `colo
 - `endSec <= startSec`, `endSec > durationSec`, a negative `startSec`, or a layer without `startSec`/`endSec`;
 - duplicate layer ids within a shot;
 - an unknown `render` or layer `type`, a layer `asset` of the wrong type, a text layer without `text`, or an effect without `preset`;
-- an `html` asset with a `lastFrame` source, or a generated `html` asset without a `prompt`.
+- an `html` asset with a `lastFrame` source, or a generated `html` asset without a `prompt`;
+- (V2-HTML-PARAMS) an invalid asset `params` declaration (bad key, unknown `type`, a missing or invalid `default`, `min` > `max`, empty select `options`), a shot or layer `params` that isn't an object, a value that isn't a string, number or boolean, or a value of the wrong type for its declared param (a select value not in `options`, a colour that isn't `#rrggbb`).
 
 Every error and warning carries a JSON path (for example `shots[2].layers[0].endSec`) that the import screen highlights in the pasted text.
 
@@ -379,6 +403,7 @@ Every error and warning carries a JSON path (for example `shots[2].layers[0].end
 - **Captions:** `captions: true` writes `dialogue` into the shared subtitle text layer for the shot's range (a "Subtitles" layer is created when the project has none).
 - **Text styles:** `meta.textStyles` entries are resolved before layers: a text layer's `textStyle` names a `meta.textStyles` key first, then a registry preset, else `plain`; its inline `style` is applied on top.
 - **HTML and still clips:** a `render: "html"` or `"still"` shot's clip is rendered from the **selected** version of the `clip` asset (see §2.4) for the shot's `durationSec`. The shot shares that asset's versions: its production step waits until the asset has one, and uploading to the shot adds a version to the asset.
+- **Param values (V2-HTML-PARAMS):** a `render: "html"` shot's `params` and an html layer's `params` become the timeline clip's own param values (`htmlParams`, overrides of the clip's defaults). They survive version swaps and can be changed per clip in the inspector (**Params**).
 
 ### 4.1 Editing on the board (V2-CUT-02)
 
@@ -463,8 +488,8 @@ RULES
 5. Every asset and shot gets 2–5 QA checks that a person can verify by looking: identity consistency, key props, framing, artefacts (extra fingers, warped text, watermarks).
 6. Keep ids short and stable (e.g. "hero", "kitchen", "s1", "s1-end"). Shots are listed in order; "connections" may be omitted for simple hard cuts.
 7. Output valid JSON only: double quotes, no comments, no trailing commas.
-8. Every piece of on-screen text (titles, cards, labels, captions) goes into a text layer, never into a generation prompt. Prompts ask for clean, empty surfaces where the text will sit.
-9. Use "html" assets and "render": "html" only for animated, 3D or three.js graphics. Plain text is a text layer.
+8. Every piece of on-screen text (titles, cards, labels, captions) goes into a text layer (or the params of a reusable html text card, RULE 24), never into a generation prompt. Prompts ask for clean, empty surfaces where the text will sit.
+9. Use "html" assets and "render": "html" only for animated, 3D or three.js graphics. Plain text over a shot is a text layer; a designed title or text-only card is one reusable "html" asset with params (RULE 24).
 10. Transitions go on connections. Post camera moves (push-in etc.) and looks go in the shot's "effects", and the generation prompt then says "static camera".
 11. Only use preset ids listed in the PRESETS section.
 12. Preset params use the units noted in brackets in the PRESETS section; "fade-in"/"fade-out" "length" is a fraction (0.05–1) of the effect's time range, not seconds.
@@ -479,11 +504,12 @@ RULES
 21. Keep text readable on any picture: give light text an outline ("strokeWidth" about 0.04-0.08 with a dark "strokeColor"), a soft "shadow", or a "background" box (captions, lower thirds). Use "letterSpacing" (in em) for airy titles, "lineHeight" for multi-line cards, "italic" for emphasis, and a text "effect" with "effectColor" only for stylised titles. Sizes and offsets are fractions of the font size; null removes a style's shadow or background. Example: "style": { "color": "#ffffff", "strokeWidth": 0.06, "strokeColor": "#000000", "shadow": { "color": "#000000", "blur": 0.3, "x": 0, "y": 0.04 } }. Put a look used on several layers into "meta.textStyles" once.
 22. For overlays (light leaks, flares, dust, film grain, paper or ink textures) use an image or video layer with a "blend" mode and, if needed, an "opacity" below 1: "screen" or "add" for elements on black (the black disappears), "multiply" for elements on white (the white disappears), "overlay" or "soft-light" for textures on mid grey. Example: { "id": "leak", "type": "video", "asset": "light-leak", "startSec": 0, "endSec": 3, "box": { "x": 0, "y": 0, "width": 1, "height": 1 }, "blend": "screen", "opacity": 0.7 }. Ask for the overlay asset full-frame on a plain black, white or grey background. Leave "blend" out ("normal") for titles, logos and pictures that should simply cover the shot.
 23. An "html" asset's "prompt" is a design brief for the AI that will write the clip, not code: what it shows, how it moves over its length, colours, type and layout. List the media it uses (logos, photos, footage, music) in its "references"; the app copies the brief together with the HTML clip package instructions (format "dionysus.htmlclip/1", spec HTML_CLIP_PACKAGE.md next to this guide), filled in with the asset's size, length, bound assets and allowed libraries, and the user pastes the AI's single .html file back as a version.
+24. Reuse one "html" asset with "params" instead of duplicating it: when shots or layers show the same design with different words, numbers or colours (title cards, text-only cards, chapter and end cards, lower thirds, counters), make ONE html asset, declare what varies in its "params" ({ "<key>": { "type": "text" | "number" | "color" | "boolean" | "select", "default": …, "label"?, "description"? } }, numbers may add "min", "max", "step", a select lists its "options"), and give each use its own values: a text-only shot is { "render": "html", "clip": "<asset id>", "params": { "text": "THE END" } }, a layer over a shot is { "type": "html", "asset": "<asset id>", "box": { "x": 0, "y": 0, "width": 1, "height": 1 }, "params": { "text": "5:58 AM" } }. Omitted keys use the default; a value must match its type (numbers within min–max, a select one of its "options", colours "#rrggbb"). The brief describes the design for any value (long and short text) and names the params; the app tells the clip's AI to expose exactly these params and read them at render time. Keep plain captions over a shot as text layers.
 ```
 
 ## 6. Decisions, open questions and future work
 
-- **Template HTML:** asset `source: {type:"template", template, params}` for registered built-in templates. This needs a template registry and a ParamSpec for templates. Not in v1.
+- **Template HTML:** asset `source: {type:"template", template, params}` for registered built-in templates. This needs a template registry. Not in v1. **Resolved in part (V2-HTML-PARAMS):** an `html` asset declares typed `params` and each shot or layer gives its own values (§2.3.2), so one generated or uploaded clip already works as a reusable template.
 - **`trackMotion`** (layers that follow tracked motion inside the clip, e.g. a moving face): semantics are still to be defined. Not in v1. Following the shot's own zoom and pan effects is `follow: "shot"` (§2.5). Layer blend modes shipped in V2-SB-128 (`blend`, `opacity`; §2.5).
 - **Resolved:** `id@N` resolves to the current version with a warning; old render functions are not kept (§3.1).
 - **Resolved:** there is no `meta.minImporter`. A v1.0 build reports the unknown asset type with its path, which is enough.

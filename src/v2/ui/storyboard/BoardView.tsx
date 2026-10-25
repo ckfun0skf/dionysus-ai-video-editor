@@ -2,6 +2,7 @@ import { board, story, storyEdit, storyRefs, type AssetSlot, type Project, type 
 import { getPreset, parsePresetRef } from "../../registry";
 import { Ic } from "../Icon";
 import { useDragReorder } from "./useDragReorder";
+import { paramThumbKey } from "./useVersionThumbs";
 
 export type BoardTarget = { slot: string } | { shot: string };
 
@@ -131,7 +132,7 @@ export function BoardView({ project, thumbs, onOpen, openKey, edit, mobile }: { 
                 <button className={`v2-sb-shot-main ${openKey === s.id ? "open" : ""}`} aria-current={openKey === s.id || undefined} onClick={() => onOpen({ shot: s.id })} onKeyDown={(e) => keys(e, s.id, i)}
                   title={edit ? (mobile ? "Open shot · long-press to move or edit" : "Open shot · drag to reorder · right-click for more · Alt+↑/↓ moves") : "Open shot: clip prompt, versions and QA"}
                   aria-keyshortcuts={edit && !mobile ? "Alt+ArrowUp Alt+ArrowDown Delete" : undefined}>
-                  <Thumb src={sel && thumbs[sel]} icon={shotIcon(s)} count={n} />
+                  <Thumb src={sel && (thumbs[paramThumbKey(sel, s.params)] ?? thumbs[sel])} icon={shotIcon(s)} count={n} />
                   <span className="v2-sb-shot-text">
                     <b><span className="v2-sb-no">{i + 1}</span>{s.title}</b>
                     <em>{s.durationSec}s{s.description ? ` · ${s.description}` : ""}</em>

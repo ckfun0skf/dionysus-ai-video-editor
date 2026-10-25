@@ -4,6 +4,7 @@
  * warning, fallback and hard error listed in its §4 is implemented here.
  */
 import { effectMoves } from "./storyFollow";
+import { checkParamValue, cleanParamDecls, validateParamDecls, type HtmlClipParam, type HtmlParamValues } from "./htmlClipPackage";
 import { FONTS, getFont, getPreset, listPresets, parsePresetRef, type PresetDescriptor, type PresetKind } from "../registry";
 
 export const STORYBOARD_FORMAT = "dionysus.storyboard/1" as const;
@@ -46,6 +47,11 @@ export interface StoryAsset {
   id: string; name: string; type: StoryAssetType; aspect: string;
   /** The assets this one is generated from, in attach order (Image 1, Image 2 …): ids, or objects with a role (V2-SB-123). */
   prompt: string; references: StoryAssetRef[]; source: StoryAssetSource; qa: string[]; notes?: string;
+  /**
+   * V2-HTML-PARAMS: html assets only. The params the clip exposes (same shape as the package manifest's `params`), so
+   * the planner and the HTML generator agree; shots and layers that use the asset set per-use values in `params`.
+   */
+  params?: Record<string, HtmlClipParam>;
 }
 /** How an asset uses one of its references (V2-SB-123). No `role` = inferred from the referenced asset's type. */
 export interface AssetRefRole { role?: ReferenceRole; note?: string }
@@ -84,7 +90,11 @@ export interface StoryTextLayer extends StoryLayerBase {
   /** Registry `textStyle` id (optionally `id@N`) or a `meta.textStyles` key, kept as written. */
   textStyle?: string; style?: StoryTextStyle; anim?: StoryTextAnim;
 }
-export interface StoryMediaLayer extends StoryLayerBase { type: "html" | "image" | "video"; asset: string; box: StoryBox }
+export interface StoryMediaLayer extends StoryLayerBase {
+  type: "html" | "image" | "video"; asset: string; box: StoryBox;
+  /** V2-HTML-PARAMS: html layers only. Per-use values for the asset's params (key → value); the rest keep their defaults. */
+  params?: HtmlParamValues;
+}
 export type StoryLayer = StoryTextLayer | StoryMediaLayer;
 /** A post effect over the shot (or part of it). `preset` is a videoEffect id, kept as written. */
 export interface StoryEffect { preset: string; params?: StoryParams; startSec?: number; endSec?: number }
@@ -100,6 +110,8 @@ export interface StoryShot {
   render?: ShotRender;
   /** html asset (render html) or image asset (render still). Kept but ignored for render ai. */
   clip?: string;
+  /** V2-HTML-PARAMS: render html only. Per-use values for the clip asset's params (e.g. a title card's text). */
+  params?: HtmlParamValues;
   layers?: StoryLayer[];
   captions?: boolean;
   effects?: StoryEffect[];
@@ -512,7 +524,16 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
     if (asp && !ASPECT_RE.test(asp)) err(`${path}.aspect`, `Aspect "${asp}" should look like "16:9".`);
     const name = str(a.name) || id;
     const notes = str(a.notes);
-    assets.push({ id, name, type, aspect: asp || aspect, prompt, references: assetRefsOf(a.references, `${path}.references`), source, qa: strList(a.qa, `${path}.qa`), ...(notes ? { notes } : {}) });
+    let params: Record<string, HtmlClipParam> | undefined;
+    if (a.params !== undefined) {
+      if (type !== "html") warn(`${path}.params`, `Only html assets expose "params"; it is ignored for this ${type || "unknown"} asset.`);
+      else {
+        for (const i of validateParamDecls(a.params)) err(`${path}.params`, i.message);
+        const clean = cleanParamDecls(a.params);
+        if (Object.keys(clean).length) params = clean;
+      }
+    }
+    assets.push({ id, name, type, aspect: asp || aspect, prompt, references: assetRefsOf(a.references, `${path}.references`), source, qa: strList(a.qa, `${path}.qa`), ...(notes ? { notes } : {}), ...(params ? { params } : {}) });
   });
   assets.forEach((a, i) => a.references.map(assetRefId).forEach((r, j) => {
     if (r === a.id) err(`assets[${i}].references[${j}]`, `Asset "${a.id}" can't reference itself.`);
@@ -522,6 +543,30 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
   if (refCycle) err("assets", `Assets reference each other in a loop: ${refCycle.join(" → ")}.`);
   const assetById = new Map(assets.map((a) => [a.id, a]));
   const unknownAsset = (id: string) => `Unknown asset "${id}"${assetIds.size ? ` (assets: ${list([...assetIds], 8)})` : ""}.`;
+
+  /**
+   * V2-HTML-PARAMS: per-use values for html asset `assetId`. Checked against the asset's declared `params` when it
+   * declares any (unknown keys dropped with a warning, wrong types are errors, numbers clamped); otherwise any
+   * number/string/boolean is kept and the clip's own manifest decides at render time.
+   */
+  const htmlParamsOf = (v: unknown, path: string, assetId: string | undefined): HtmlParamValues | undefined => {
+    if (v === undefined) return undefined;
+    if (!isObj(v)) { err(path, '"params" must be an object of values: { "<param>": value }.'); return undefined; }
+    const decls = assetId ? assetById.get(assetId)?.params : undefined;
+    const out: HtmlParamValues = {};
+    for (const [k, val] of Object.entries(v)) {
+      const kp = `${path}.${k}`;
+      if (typeof val !== "number" && typeof val !== "string" && typeof val !== "boolean") { err(kp, `Param "${k}" must be a number, string or true/false.`); continue; }
+      if (!decls) { out[k] = val; continue; }
+      const spec = decls[k];
+      if (!spec) { warn(kp, `Asset "${assetId}" declares no param "${k}" (params: ${Object.keys(decls).join(", ")}); it is ignored.`); continue; }
+      const c = checkParamValue(spec, val);
+      if (c.value === undefined) { err(kp, `Param "${k}" (${spec.type}) ${c.problem}.`); continue; }
+      if (c.clamped) warn(kp, `Param "${k}": ${c.problem}.`);
+      out[k] = c.value;
+    }
+    return Object.keys(out).length ? out : undefined;
+  };
 
   const layersOf = (v: unknown, path: string, dur: number): StoryLayer[] | undefined => {
     if (v === undefined) return undefined;
@@ -551,6 +596,7 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
         else warn(`${lp}.follow`, `follow ${JSON.stringify(l.follow)} is ignored: use "frame" (stays put, the default) or "shot" (moves with the shot's zoom and pan).`);
       }
       if (type === "text") {
+        if (l.params !== undefined) warn(`${lp}.params`, 'Text layers have no "params"; it is ignored. For a reusable styled title, use an html layer with an html asset that exposes params.');
         const text = typeof l.text === "string" ? l.text : "";
         if (!text.trim()) err(`${lp}.text`, 'A text layer needs "text".');
         let position: StoryPoint | undefined, box: StoryBox | undefined;
@@ -595,7 +641,12 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
         else if (type === "html" ? a.type !== "html" : type === "video" ? a.type !== "video" : !STILL_ASSET_TYPES.includes(a.type)) err(`${lp}.asset`, `A ${type} layer can't show asset "${asset}" (type ${a.type}); it needs ${type === "html" ? "an html" : type === "video" ? "a video" : "an image"} asset.`);
         if (l.position !== undefined) err(`${lp}.position`, `${type} layers are placed with "box" { x, y, width, height }, not "position".`);
         const box = l.box === undefined ? (l.position === undefined ? (err(`${lp}.box`, `A ${type} layer needs "box" { x, y, width, height }.`), undefined) : undefined) : boxOf(l.box, `${lp}.box`);
-        if (box) out.push({ id, type, asset, startSec, endSec, box, ...(follow ? { follow } : {}), ...look });
+        let params: HtmlParamValues | undefined;
+        if (l.params !== undefined) {
+          if (type !== "html") warn(`${lp}.params`, `Only html layers take "params"; it is ignored for this ${type} layer.`);
+          else params = htmlParamsOf(l.params, `${lp}.params`, a?.type === "html" ? asset : undefined);
+        }
+        if (box) out.push({ id, type, asset, startSec, endSec, box, ...(follow ? { follow } : {}), ...look, ...(params ? { params } : {}) });
       }
     });
     return out;
@@ -701,6 +752,10 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
       else if (mode === "html" ? a.type !== "html" : a.type !== "image") err(`${path}.clip`, `Render "${mode}" needs ${mode === "html" ? "an html" : "an image"} asset, but "${clip}" is type ${a.type}.`);
     }
     if (clip) shot.clip = clip;
+    if (s.params !== undefined) {
+      if (mode !== "html") warn(`${path}.params`, `"params" only applies to render "html" shots (values for the clip's params); it is ignored here.`);
+      else { const ps = htmlParamsOf(s.params, `${path}.params`, clip && assetById.get(clip)?.type === "html" ? clip : undefined); if (ps) shot.params = ps; }
+    }
     const layers = layersOf(s.layers, `${path}.layers`, dur);
     if (layers) shot.layers = layers;
     if (s.captions !== undefined) {

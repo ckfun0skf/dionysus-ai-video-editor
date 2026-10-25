@@ -32,7 +32,7 @@ The first element of `<head>`:
 | `background` | CSS colour \| `"transparent"` | `"transparent"` = the canvas keeps alpha and is composited over the layers below. |
 | `libs` | string[] | Library ids the page imports (see §4). Absent = detected from the page's imports (legacy). |
 | `bindings` | `{ "<name>": { "type": "image" \| "video" \| "audio", "asset"?: "<asset id>", "label"?, "description"? } }` | Named slots for media from other assets. `asset` is a storyboard asset id or a project asset id (default: the binding name). |
-| `params` | `{ "<key>": { "type", "default", "label"?, "description"?, … } }` | User-editable values: `number` (`min`, `max`, `step`), `color` (`"#rrggbb"`), `text`, `boolean`, `select` (`options`). Edited in the HTML editor; a new version stores the new defaults. |
+| `params` | `{ "<key>": { "type", "default", "label"?, "description"?, … } }` | Exposed values: `number` (`min`, `max`, `step`), `color` (`"#rrggbb"`), `text`, `boolean`, `select` (`options`). `default` is required and must be valid. The clip reads them as `ctx.params.<key>`. **Per use (V2-HTML-PARAMS):** each timeline clip, storyboard shot or layer that uses the clip can give its own values (§3.1), so one clip (say a title card) shows different words in different places. Editing the defaults in the HTML editor saves a new version. |
 | `files` | `{ "<name>": "data:…" }` | Embedded files, used by name (see §3). Legacy manifests call this `assets`; it is read as `files`. |
 
 Unknown fields are kept. JSON inside the tag must escape `</` as `<\/`.
@@ -43,7 +43,7 @@ The page runs in a sandboxed iframe (scripts only, opaque origin, no access to t
 
 <!-- contract:start -->
 - Register the clip once, at the top level of your script: `dionysus.clip({ async init(ctx) { … }, render(t, ctx) { … } })`. `init` (optional) runs once before the first frame; await anything you need there (images, fonts, models). `render(t, ctx)` draws the frame at `t` seconds into the clip and may return a Promise.
-- `ctx` = `{ canvas, t, duration, progress, width, height, params, bindings, asset(name), image(name), video(name), seek(video, sec) }`: `duration` is the clip's length on the timeline in seconds (it can differ from the manifest's `durationSec`), `progress` = t / duration (0–1), `canvas` the page's first `<canvas>` (the captured picture), `width`/`height` the frame size in pixels, `params` the parameter values (manifest defaults or the user's edits), `bindings[name]` = `{ type, url }` for each bound asset (`url` is null when nothing is bound yet: draw a placeholder), `asset(name)` the URL of an embedded file, `image(name)` a Promise of a loaded HTMLImageElement for a binding or file, `video(name)` a Promise of a muted HTMLVideoElement, `seek(video, sec)` a Promise that resolves when that video shows `sec`.
+- `ctx` = `{ canvas, t, duration, progress, width, height, params, bindings, asset(name), image(name), video(name), seek(video, sec) }`: `duration` is the clip's length on the timeline in seconds (it can differ from the manifest's `durationSec`), `progress` = t / duration (0–1), `canvas` the page's first `<canvas>` (the captured picture), `width`/`height` the frame size in pixels, `params` the parameter values (each declared param's default, overridden by the values set where the clip is used: a timeline clip, a storyboard shot or layer; read them in `render`, they can change between frames while the user edits), `bindings[name]` = `{ type, url }` for each bound asset (`url` is null when nothing is bound yet: draw a placeholder), `asset(name)` the URL of an embedded file, `image(name)` a Promise of a loaded HTMLImageElement for a binding or file, `video(name)` a Promise of a muted HTMLVideoElement, `seek(video, sec)` a Promise that resolves when that video shows `sec`.
 - The picture is the page's FIRST `<canvas>`: size it to ctx.width × ctx.height in `init` and draw everything on it (2D or WebGL; for WebGL use `preserveDrawingBuffer: true`). Other DOM and CSS are not captured.
 - Deterministic: every frame is a pure function of t, ctx.params and the bound assets. Frames are requested in any order (scrubbing, export), and the same t must give the same picture. Don't keep animation state between frames, don't use Date.now(), performance.now(), requestAnimationFrame, setTimeout or setInterval for timing, and use a seeded random generator (fixed seed) instead of Math.random().
 - No network: the clip runs in a sandbox with a strict Content-Security-Policy. Only the allowed libraries (listed in the manifest's `libs`, imported by their bare specifier in a `<script type="module">`, e.g. `import * as LIB from "<specifier>"`) are loaded. Embed any other file as a data: URL in the manifest's `files` and refer to it by name. Use system font stacks, or an embedded font with @font-face (the runtime waits for fonts to load before the first frame).
@@ -57,11 +57,20 @@ The page runs in a sandboxed iframe (scripts only, opaque origin, no access to t
 ```
 iframe → editor  { type: "dionysus:ready" }                                       page loaded
 editor → iframe  { type: "dionysus:init", width, height, duration?, bindings: { name: { type, blob } }, params? }
+editor → iframe  { type: "dionysus:params", params }                              new param values (V2-HTML-PARAMS); no reload
 editor → iframe  { type: "dionysus:frame", seq, t, duration? }                    draw frame t
 iframe → editor  { type: "dionysus:frame", seq, bmp }                             ImageBitmap of the first <canvas>
 ```
 
 `init` is awaited before the first frame; a frame that takes more than 4 s in export is reported and the previous frame is kept. In the HTML editor's live preview no init message is sent: `ctx` then uses the manifest's values and bindings are null.
+
+### 3.1 Param values per use (V2-HTML-PARAMS)
+
+`ctx.params` holds, for every param the manifest declares, the **use's value** when it has a valid one, else the manifest `default`:
+
+- **Where values come from:** a timeline clip's own values (inspector → **Params**, saved on the clip as `htmlParams`, overrides only), which a storyboard shot's or html layer's `params` fill on Send to timeline. Preview, thumbnails and export all pass the same values.
+- **Resolution:** against the manifest of the version being played. A value is used when its type matches (numbers are clamped to `min`–`max`, a select value must be in `options`, a colour must be `#rrggbb`); anything else falls back to the default. Values for keys the manifest doesn't declare are kept on the clip but not passed (so swapping to a version that declares them again restores them).
+- **Changes while playing:** when the values change, the editor sends `dionysus:params` and redraws the current frame; the page is not reloaded. Read `ctx.params` inside `render`, not only in `init`, and lay out for any value (long and short text).
 
 **Legacy clips** (no manifest or no `format`) keep working: `dionysus.onFrame((t, ctx) => …)` is called every frame, and `requestAnimationFrame`, `performance.now()` and `Date.now()` are driven from t (Date starts at 2026-01-01T00:00:00Z), and `Math.random()` is seeded. Code that accumulates state between frames can still differ after a seek, which is why new clips use `dionysus.clip`.
 
@@ -94,6 +103,8 @@ Pasting or importing checks the clip and lists the problems. Errors block *Add a
 | `no-canvas` | warning | No `<canvas>`: nothing would be captured |
 | `binding-missing`, `binding-mismatch` | warning | The storyboard asset references media the manifest doesn't bind (or with another type) |
 | `binding-unused` | warning | A declared binding the code never uses |
+| `param-missing`, `param-mismatch` | warning | The storyboard asset declares a param the manifest doesn't (or with another type) (V2-HTML-PARAMS) |
+| `param-unused` | warning | The manifest declares params but the code never reads `params` |
 
 An AI reply is accepted as is: the app takes the largest ` ```html ` code block (or the whole text when it is a document).
 
@@ -103,6 +114,7 @@ In a storyboard ([STORYBOARD_FORMAT.md](STORYBOARD_FORMAT.md), RULE 23) an `"htm
 
 - the manifest to start from: `format`, `name`, `durationSec` (the longest shot or html layer that uses the asset), `width`/`height` from its `aspect` (16:9 → 1920×1080, 9:16 → 1080×1920, 1:1 → 1080×1080, 4:5 → 1080×1350, 21:9 → 2520×1080) and `bindings` named by the referenced asset ids (image, video or audio);
 - where it plays (the shots that use it), the allowed libraries, the determinism and no-network rules;
+- **(V2-HTML-PARAMS)** the asset's declared `params` (storyboard `assets[].params`) with their types and defaults, the values the shots and layers use (up to 6 examples), and the instruction to keep exactly these keys in the manifest, never hard-code the values, and read `ctx.params.<key>` in `render()` (RULE 24);
 - a link to this document (the app's own site), or with *Copy full prompt* the contract and a template inlined;
 - "Reply with ONE html code block".
 
@@ -211,7 +223,7 @@ dionysus.clip({
 ## 9. Decisions and open questions
 
 - **Canvas capture only.** The editor captures the first `<canvas>`; DOM/CSS animation is not rasterised (a sandboxed page can't be screenshotted without a renderer of our own). Pages draw text and images on the canvas.
-- **Params are per version**, not per timeline placement: editing them saves a new version with new defaults. Per-placement values (and keyframing them) are future work.
+- **Param defaults are per version; values are per use** (V2-HTML-PARAMS): the manifest declares the params and their defaults (editing them saves a new version), and each timeline clip stores only its overrides. Keyframing param values over time is future work.
 - **Text is a param**, not a binding; bindings are media (image, video, audio) only. Audio bindings give the clip a URL (e.g. to draw a waveform); the clip's sound is never played — put audio on the timeline.
 - **One script file in the ZIP.** `script.js` is inlined as one script; extra JavaScript modules imported by relative path are not resolved (embed small helpers in `script.js`).
 - **Validation is static** (pattern checks on the source). It catches the common mistakes; it can't prove a page is deterministic.

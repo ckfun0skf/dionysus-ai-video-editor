@@ -108,7 +108,7 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
     if (kind === "html") {
       // A .html or .dionysus-html.zip: convert to the single file and validate before it becomes a version.
       const html = await importHtmlPackage(f);
-      const errors = lintHtmlClip(html, { libs: CLIP_LIBRARIES, expectBindings }).issues.filter((i) => i.level === "error");
+      const errors = lintHtmlClip(html, { libs: CLIP_LIBRARIES, expectBindings, expectParams: htmlSlot?.params }).issues.filter((i) => i.level === "error");
       if (errors.length) throw new Error(`“${f.name}” can't be added: ${errors.map((e) => e.message).join(" ")}`);
       const a = await importFile(new File([html], f.name.replace(/(\.dionysus-html)?\.zip$/i, ".html"), { type: "text/html" }), blobs);
       if (!a) throw new Error("Couldn't store the clip.");
@@ -220,7 +220,7 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
         {htmlSlot && (
           <details className="v2-sb-htmlimport" open={!versions.length}>
             <summary>Paste the AI's reply or import a package</summary>
-            <HtmlImport expectBindings={expectBindings} busy={!!busy} onAdd={(h, n) => addHtml(h, n)} />
+            <HtmlImport expectBindings={expectBindings} expectParams={htmlSlot?.params} busy={!!busy} onAdd={(h, n) => addHtml(h, n)} />
           </details>
         )}
         {lf && !lfVersion && <p className="v2-hint">Shot {shotNo(lf)} needs a clip first. <button className="v2-linkbtn" onClick={() => onOpen({ shot: lf })}>Open shot {shotNo(lf)}</button></p>}
@@ -241,6 +241,13 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
         </span>}>
           <p className="v2-hint">The design brief plus the HTML clip package instructions (dionysus.htmlclip/1: length, size, bound assets, allowed libraries). Paste the AI's reply above. “Full” includes the whole spec, for AIs that can't open links.</p>
           {htmlSlot.prompt && <p className="v2-sb-prompt">{htmlSlot.prompt}</p>}
+          {htmlSlot.params && Object.keys(htmlSlot.params).length > 0 && (
+            <p className="v2-sb-kv" data-testid="v2-sb-html-params"><b>Params</b> {Object.entries(htmlSlot.params).map(([k, d]) => {
+              const v = shot?.params?.[k];
+              return `${d.label || k}: ${JSON.stringify(v ?? d.default)}${v === undefined && shot ? " (default)" : ""}`;
+            }).join(" · ")}</p>
+          )}
+          {!htmlSlot.params && shot?.params && <p className="v2-sb-kv" data-testid="v2-sb-html-params"><b>Params</b> {Object.entries(shot.params).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join(" · ")}</p>}
         </Section>
       )}
       {owner.prompt && !(htmlSlot && slot) && (

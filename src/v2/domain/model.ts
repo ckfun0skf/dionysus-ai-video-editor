@@ -80,6 +80,12 @@ export interface Placement {
   /** Effect clips (`clipType: "effect"`): a `videoEffect` registry preset id and its params. Source is TEXT_SOURCE. */
   effect?: { preset: string; params?: Record<string, number | string> };
   /**
+   * HTML clips (V2-HTML-PARAMS): per-use values for the params the clip's manifest exposes (param key → value). Only
+   * overrides are stored; ctx.params is the manifest defaults with these on top (see resolveHtmlParams). Keys the
+   * current version doesn't declare are kept (a later version may declare them) but not passed to the clip.
+   */
+  htmlParams?: Record<string, number | string | boolean>;
+  /**
    * Storyboard linked item (V2-SB-113): a layer, caption or effect clip sent with a shot. It follows the shot clip
    * `anchor` on version swaps (see domain/storyLinks). `want` remembers the offset/length before a clamp.
    */

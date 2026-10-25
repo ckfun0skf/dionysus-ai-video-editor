@@ -1,4 +1,4 @@
-import { readManifest, resolveClipBindings, type Project } from "../domain";
+import { readManifest, resolveClipBindings, resolveHtmlParams, type Project } from "../domain";
 import type { BlobStore } from "../ports";
 import { HtmlClipHost, type HtmlClipInit } from "../render";
 
@@ -12,14 +12,16 @@ export const htmlThumbTime = (durationSec: number | undefined) => (durationSec &
  * Thumbnail (JPEG data URL) of an HTML clip version (V2-SB-130): the page runs in the same sandboxed runtime the player
  * uses, with its bound assets, and the frame at `htmlThumbTime` is drawn 96 px tall. One page at a time (thumbnails
  * queue), so a board full of HTML versions never opens many iframes at once. Undefined when the page gives no frame.
+ * `params` are per-use overrides (V2-HTML-PARAMS: a shot's title text), merged over the manifest defaults.
  */
-export function grabHtml(blob: Blob, project: Project, blobs: BlobStore, durationSec?: number): Promise<string | undefined> {
-  const run = queue.then(() => renderHtmlThumb(blob, project, blobs, durationSec), () => renderHtmlThumb(blob, project, blobs, durationSec));
+export function grabHtml(blob: Blob, project: Project, blobs: BlobStore, durationSec?: number, params?: Record<string, unknown>): Promise<string | undefined> {
+  const go = () => renderHtmlThumb(blob, project, blobs, durationSec, params);
+  const run = queue.then(go, go);
   queue = run.catch(() => undefined);
   return run;
 }
 
-async function renderHtmlThumb(blob: Blob, project: Project, blobs: BlobStore, durationSec?: number): Promise<string | undefined> {
+async function renderHtmlThumb(blob: Blob, project: Project, blobs: BlobStore, durationSec?: number, params?: Record<string, unknown>): Promise<string | undefined> {
   if (typeof document === "undefined") return undefined;
   const html = await blob.text();
   const m = readManifest(html);
@@ -32,7 +34,7 @@ async function renderHtmlThumb(blob: Blob, project: Project, blobs: BlobStore, d
     const got = await Promise.all(binds.map((b) => blobs.get(b.blobKey).catch(() => undefined)));
     const bindings: NonNullable<HtmlClipInit["bindings"]> = {};
     binds.forEach((b, i) => { const bl = got[i]; if (bl) bindings[b.name] = { type: b.type, blob: bl }; });
-    return { width: w, height: h, ...(dur ? { duration: dur } : {}), bindings };
+    return { width: w, height: h, ...(dur ? { duration: dur } : {}), bindings, params: resolveHtmlParams(m.params, params) };
   });
   try {
     host.request(htmlThumbTime(dur), dur);
