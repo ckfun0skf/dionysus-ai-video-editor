@@ -122,7 +122,7 @@ On the timeline a binding to a storyboard asset id uses that asset's selected ve
 
 ## 7. Template
 
-A minimal complete clip (what *Copy full prompt* includes, with the asset's values):
+A minimal complete clip (what *Copy full prompt* includes, with the asset's values). It has the in-app Code Editor's layout (one `<canvas id="c">`, the base style, one `<script type="module">`), so it opens there in the Script tab (§9):
 
 <!-- template:start -->
 ```html
@@ -222,6 +222,7 @@ dionysus.clip({
 
 ## 9. Decisions and open questions
 
+- **The in-app Code Editor is JS-first** (V2-CODE-EDITOR). Only the canvas is captured, so the editor treats a clip as a script plus data, not as a web page: **Script** (the `<script type="module">` with `dionysus.clip({ init, render })`; the page's canvas is provided), **Params** (add, edit, reorder and remove the manifest's `params`, validated, with the `ctx.params.<key>` to use), **Files** (fonts and images embedded as data: URLs; fonts get generated `@font-face` rules), **Settings** (name, duration, size/aspect, background or transparent, libraries) and **Advanced** (extra CSS and markup, rarely needed). It still stores the one-file package above, unchanged: it writes the template's page — doctype, manifest, `<style>` with the base CSS (`html,body{margin:0;height:100%;overflow:hidden;background:transparent}canvas{display:block;width:100%;height:100%}`), the generated font rules between `/* dionysus:fonts */` and `/* /dionysus:fonts */`, then any extra CSS; `<body><canvas id="c"></canvas>`, any extra markup, and one `<script type="module">` — and reads back files of that shape. Any other page (several scripts, its own page CSS, no canvas: e.g. older or hand-written clips) opens in **Advanced** as full HTML, with a note, and keeps working; params, files and settings are still edited in their tabs. HTML and CSS are only for fonts and those legacy clips. *Load sample* offers *Canvas animation* and *Three.js*; the live preview runs the clip in the same sandbox with the params' defaults, with play and scrub, and shows syntax, runtime and package problems inline. Saving makes a new version (one undo step).
 - **Canvas capture only.** The editor captures the first `<canvas>`; DOM/CSS animation is not rasterised (a sandboxed page can't be screenshotted without a renderer of our own). Pages draw text and images on the canvas.
 - **Param defaults are per version; values are per use** (V2-HTML-PARAMS): the manifest declares the params and their defaults (editing them saves a new version), and each timeline clip stores only its overrides. Keyframing param values over time is future work.
 - **Text is a param**, not a binding; bindings are media (image, video, audio) only. Audio bindings give the clip a URL (e.g. to draw a waveform); the clip's sound is never played — put audio on the timeline.

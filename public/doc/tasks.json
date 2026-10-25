@@ -2498,6 +2498,12 @@
           "title": "Board header icon buttons (Back to editor, Production steps) at least 44x44 on phones",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-CODE-EDITOR",
+          "title": "JS-first Code Editor (Script, Params, Files, Settings, Advanced) replacing the HTML editor, with samples and live preview",
+          "status": "done",
+          "progress": 100
         }
       ]
     },

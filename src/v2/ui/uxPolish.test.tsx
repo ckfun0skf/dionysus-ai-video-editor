@@ -8,7 +8,7 @@ import { V2App } from "./V2App";
 import { fadeEdges } from "./useEdgeFade";
 import { tickUnderLabel } from "./Timeline";
 import { tileFontPx } from "./PresetTile";
-import { ATTACH_ACCEPT } from "./HtmlEditor";
+import { ATTACH_ACCEPT } from "./CodeEditor";
 import { clampMenu } from "./desktop/ContextMenu";
 import { defaultTimeline, loadSizes, LAYOUT_KEY } from "./desktop/layout";
 

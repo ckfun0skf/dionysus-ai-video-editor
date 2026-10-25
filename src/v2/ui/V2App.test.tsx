@@ -252,11 +252,11 @@ describe("V2App", () => {
       await act(async () => { ([...picker.querySelectorAll('[role="tab"]')].find((t) => t.textContent === "Code") as HTMLElement).click(); });
       await act(async () => { ([...picker.querySelectorAll("button")].find((b) => b.textContent?.startsWith("Create")) as HTMLElement).click(); });
       expect(el.querySelector(".v2-picker")).toBeNull();
-      const editor = el.querySelector('[aria-label="HTML clip editor"]')!;
+      const editor = el.querySelector('[aria-label="Code editor"]')!;
       expect(editor).toBeTruthy();
       await act(async () => { ([...editor.querySelectorAll("button")].find((b) => b.textContent === "Add to timeline") as HTMLElement).click(); });
       await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
-      expect(el.querySelector('[aria-label="HTML clip editor"]')).toBeNull();
+      expect(el.querySelector('[aria-label="Code editor"]')).toBeNull();
       expect([...el.querySelectorAll(".v2-clip-name")].some((n) => n.textContent?.includes("Code clip"))).toBe(true);
     } finally { window.matchMedia = mm; if (!text) delete (Blob.prototype as { text?: unknown }).text; }
   });

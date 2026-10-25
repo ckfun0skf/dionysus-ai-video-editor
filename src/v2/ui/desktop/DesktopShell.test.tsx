@@ -48,14 +48,14 @@ describe("V2-106 desktop shell", () => {
     expect(q('[role="tabpanel"]').getAttribute("aria-label")).toBe("Code");
     expect(btn("Upload")).toBeTruthy();
     await click(btn("Create"));
-    const dlg = q('[role="dialog"][aria-label="HTML clip editor"]');
+    const dlg = q('[role="dialog"][aria-label="Code editor"]');
     expect(dlg).toBeTruthy();
     expect(dlg.textContent).toContain("Add to timeline");
     const clips = () => el.querySelectorAll(".v2-clip").length;
     const before = clips();
     await click(btn("Add to timeline", dlg));
     await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
-    expect(q('[aria-label="HTML clip editor"]')).toBeNull();
+    expect(q('[aria-label="Code editor"]')).toBeNull();
     expect(clips()).toBe(before + 1);
     expect(el.querySelector('[aria-label="Code"] .v2-tiles')?.textContent).toContain("Code clip");
     await click(q('[aria-label="Undo"]'));
@@ -67,8 +67,8 @@ describe("V2-106 desktop shell", () => {
     const { q, btn, click, el } = await boot();
     expect(q(".v2-abtab.is-active").textContent).toBe("Code");
     await click(btn("Create"));
-    await click(btn("Cancel", q('[aria-label="HTML clip editor"]')));
-    expect(q('[aria-label="HTML clip editor"]')).toBeNull();
+    await click(btn("Cancel", q('[aria-label="Code editor"]')));
+    expect(q('[aria-label="Code editor"]')).toBeNull();
     expect(el.querySelectorAll(".v2-clip").length).toBe(0);
   });
 
