@@ -2480,6 +2480,12 @@
           "title": "Storyboard: reference other shots' keyframes (<shotId>.keyframe), ambience beds and stings (looping audio), off-screen dialogue lines (RULES 26-28)",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-SB-136",
+          "title": "Asset states (asset@state): per-state prompt and versions, usable anywhere an asset id is; rule 29",
+          "status": "done",
+          "progress": 100
         }
       ]
     },

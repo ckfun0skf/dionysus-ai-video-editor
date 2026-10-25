@@ -35,7 +35,9 @@ So split the work: generation prompts describe only the picture and its motion; 
                                  // plain strings "generate" / "upload" (default "generate"); an object only for lastFrame; "html" and "audio" can't use lastFrame
       "qa": string[],            // 2-5 concrete yes/no checks to verify the asset by looking
       "params"?: { "<key>": Param },  // "html" only: values the clip exposes, set per use by shots and layers (see RULES)
-      "genDurationSec"?: number  // video assets only: the length to generate (0.5-120) when its layers use less; layers pick their part with "inSec"
+      "genDurationSec"?: number, // video assets only: the length to generate (0.5-120) when its layers use less; layers pick their part with "inSec"
+      "states"?: [ { "id": string, "name"?: string, "prompt": string, "references"?: [ … as above ], "source"?: "generate" | "upload", "qa"?: string[] } ]
+                                 // image-like assets only: the same thing in another state (lit, wet, at night …); use it as "<asset id>@<state id>" (RULES)
   } ],
   "shots": [ {                   // in playback order
       "id": string,
@@ -44,7 +46,8 @@ So split the work: generation prompts describe only the picture and its motion; 
       "durationSec": number,     // 0.5–120; how long the shot stays on screen in the final edit, set by the story's pacing (NOT by the video model's limits)
       "genDurationSec"?: number, // only when the video model must render longer (minimum or fixed lengths, e.g. 6/10/15 s): the length to generate; > durationSec; the upload is trimmed to durationSec
       "prompt": string,          // full clip generation prompt; required for render "ai", keep one for "html"/"still" too
-      "assets": string[],        // ids of the assets this clip uses (include "clip" when set); "<shot id>.keyframe" = another shot's keyframe
+      "assets": string[],        // ids of the assets this clip uses (include "clip" when set); "<shot id>.keyframe" = another shot's keyframe;
+                                 // "<asset id>@<state id>" = that asset's state (also in "references", "clip" and layer "asset")
       "references"?: [ { "asset": "<asset id>" | "<shot id>.keyframe", "role": "start-frame" | "end-frame" | "identity" | "look" | "detail", "note"?: string } ],
                                  // the images to attach to the clip generation IN THIS ORDER (Image 1, Image 2 …) and how to use each;
                                  // omitted = "assets" order with roles from the type (frame → start-frame, character → identity,
@@ -244,7 +247,7 @@ Fonts — TextStyle "font":
 - condensed: Narrow sans that fits long lines.
 
 ## RULES
-1. Every recurring character, location, prop and the overall style gets ONE reusable asset with a detailed prompt; shots reference these ids instead of repeating descriptions.
+1. Every recurring character, location, prop and the overall style gets ONE reusable asset with a detailed prompt; shots reference these ids instead of repeating descriptions. When one of them changes during the story (a lamp lit, a coat soaked, a street at night), give that asset "states" (RULE 29) instead of a separate asset.
 2. Write prompts that work on their own (a generator only sees that prompt plus the reference images). Repeat key visual details (clothes, colours, lighting, style) in every prompt.
 3. When a shot must continue seamlessly from the previous one, add an asset with "type": "frame" and "source": { "type": "lastFrame", "shot": "<previous shot id>" }, use it in the next shot's "assets", and mark the connection "continuity". Never make a shot depend on its own last frame or create loops.
 4. Use "source": "upload" for things the user already has (logos, real photos, products).
@@ -276,6 +279,10 @@ Image 2 (Keyframe · The climb): reference only, not a frame: overall look; same
 …".
 27. Background sound that lasts (wind, rain, traffic, room tone, a crowd) is kind "ambience": a bed "from" the first shot it is heard in "to" the last, looped to fill that span ("loop": false plays it once), default volume 0.5 with 1 s fades in and out. Ask for a loopable 20-60 s recording. A short musical hit or whoosh on a moment (a title appearing, a reveal, a cut to black) is kind "sting" at "atSec" in one shot, with no "to". A "sfx" is a one-off sound at one moment too: never give a sound effect a "to" to make it last, it is not looped and stops when the sound ends; use "ambience" instead. Music repeats only with "loop": true. Example: { "asset": "dawn-wind", "kind": "ambience", "from": "s1", "to": "s3" }, { "asset": "title-chime", "kind": "sting", "from": "s3", "atSec": 1 }.
 28. Write a shot's "dialogue" as a list of lines when who speaks matters: { "speaker": "ANNA", "text": "Who's there?" } is said on screen (the video model lip-syncs it); add "offscreen": true for a voice that belongs to the scene but whose speaker is not in frame (behind a door, on the phone, calling from out of shot): nobody in frame moves their lips. It is not a voiceover (narration over the film, an "audio" cue of kind "voiceover"). The app appends a numbered "Dialogue:" block to the clip prompt marking each line on screen (lip-synced) or OFF-SCREEN (heard, not seen); write the clip prompt so the speaker is out of frame and say how the people in frame react. If an off-screen line is recorded separately instead of generated with the clip, also add an "audio" cue of kind "dialogue" "from" that shot with "line" (its 1-based number in the list) and "atSec"; the Dialogue block then tells the model not to voice it. "captions": true shows the lines' words. Example: "dialogue": [{ "speaker": "FRIEND", "text": "You made it!", "offscreen": true }].
+29. When a character, location, prop, style, image or frame appears in more than one state (a lamp off and on, a coat dry and soaked, a street by day and at night, a vase whole and broken), keep ONE asset and add its other looks to its "states": [ { "id", "name"?, "prompt", "references"?, "source"?, "qa"? } ]. Refer to a state as "<asset id>@<state id>" anywhere an asset id goes: a shot's "assets" and "references", a keyframe's or another asset's "references", a still shot's "clip", an image layer's "asset". Each state gets its own prompt, checks and versions; its type and aspect are the asset's (not allowed on video, audio or html assets). The app makes the base asset first and attaches it to the state as Image 1 so it stays the same thing (role "identity" for a character, else from its type); list the base yourself in the state's "references" to choose its role, e.g. "start-frame" to edit the base image. State ids use letters, digits, "_" and "-" only; a state can't use another state of the same asset. Write the state prompt with its own "References:" block and describe only what changes. Use the base id for the default look and "<asset id>@<state id>" only where the state shows; don't list both in one shot unless both appear. Example: asset "hill" with "states": [{ "id": "sunrise", "name": "Sunrise", "prompt": "References:
+Image 1 (Hill road): the base image to edit: keep the road, hill and valley exactly; change only the light.
+
+The same winding hill road as the sun rises …", "references": [{ "asset": "hill", "role": "start-frame", "note": "the same road and hill; only the light changes" }], "qa": ["Same road, hill and valley as the base image"] }], used by shot s3 as "assets": ["hill@sunrise", "s1.keyframe"]. In "References:" blocks a state is named "<asset name> · <state name>", e.g. "Image 1 (Hill road · Sunrise)".
 
 ## EXAMPLE
 ```json
@@ -321,6 +328,24 @@ Image 2 (Keyframe · The climb): reference only, not a frame: overall look; same
       "qa": [
         "Road winds up to the hilltop",
         "No people or vehicles"
+      ],
+      "states": [
+        {
+          "id": "sunrise",
+          "name": "Sunrise",
+          "prompt": "References:\nImage 1 (Hill road): the base image to edit: keep the road, hill and valley exactly; change only the light.\n\nThe same winding hill road as the sun rises over the valley: warm golden light, long soft shadows, the mist starting to lift, natural cinematic realism",
+          "references": [
+            {
+              "asset": "hill",
+              "role": "start-frame",
+              "note": "the same road and hill; only the light changes"
+            }
+          ],
+          "qa": [
+            "Same road, hill and valley as the base image",
+            "Sun rising with warm golden light"
+          ]
+        }
       ]
     },
     {
@@ -510,14 +535,14 @@ Image 2 (Keyframe · The climb): reference only, not a frame: overall look; same
       "title": "Sunrise",
       "description": "The sun rises over the valley; title card.",
       "durationSec": 4,
-      "prompt": "References:\nImage 1 (Hill road): reference only, not a frame: materials, colours and objects only; the same hill and valley.\nImage 2 (Keyframe · The climb): reference only, not a frame: overall look; same pre-dawn palette and mist.\nNo image is the start frame. Framing: one static wide shot.\n\nStatic wide shot from behind the cyclist on the hilltop as the sun rises over the misty valley, clear empty sky in the upper third, no text",
+      "prompt": "References:\nImage 1 (Hill road · Sunrise): reference only, not a frame: materials, colours and objects only; the same hill and valley at sunrise.\nImage 2 (Keyframe · The climb): reference only, not a frame: overall look; same pre-dawn palette and mist.\nNo image is the start frame. Framing: one static wide shot.\n\nStatic wide shot from behind the cyclist on the hilltop as the sun rises over the misty valley, clear empty sky in the upper third, no text",
       "assets": [
-        "hill",
+        "hill@sunrise",
         "s1.keyframe"
       ],
       "references": [
         {
-          "asset": "hill",
+          "asset": "hill@sunrise",
           "role": "detail"
         },
         {

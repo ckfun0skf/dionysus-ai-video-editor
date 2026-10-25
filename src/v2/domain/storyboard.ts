@@ -7,7 +7,7 @@
  */
 import { isStill, newId, type AssetVersion, type Composition, type MediaKind, type MediaRef, type Placement, type Project } from "./model";
 import { mainTrack } from "./ops";
-import { assetRefId, dialogueLines, dialogueText, keyframeId, type StoryDialogueLine, type AssetRefRole, type ReferenceRole, type ShotRender, type StoryAssetRef, type StoryAssetType, type StoryAudio, type StoryConnection, type StoryDoc, type StoryEffect, type StoryLayer, type StoryMeta } from "./storyJson";
+import { assetRefId, dialogueLines, expandAssetStates, dialogueText, keyframeId, type StoryDialogueLine, type AssetRefRole, type ReferenceRole, type ShotRender, type StoryAssetRef, type StoryAssetType, type StoryAudio, type StoryConnection, type StoryDoc, type StoryEffect, type StoryLayer, type StoryMeta } from "./storyJson";
 import { followStoryLinks } from "./storyLinks";
 import type { HtmlClipParam, HtmlParamValues } from "./htmlClipPackage";
 import { orderSteps } from "./storySteps";
@@ -34,6 +34,13 @@ export interface AssetSlot {
   params?: Record<string, HtmlClipParam>;
   /** V2-SB-133: video slots: the length to generate when its layers need less (uploads are offered a trim). */
   genDurationSec?: number;
+  /**
+   * V2-SB-136: this slot is a state of that slot (id "<base>@<state>"): same type, aspect and identity, its own prompt
+   * and versions; the base is attached first when it is generated.
+   */
+  stateOf?: string;
+  /** V2-SB-136: the state's name ("lit"), shown next to the base's name. */
+  stateName?: string;
 }
 
 export interface Shot {
@@ -154,13 +161,14 @@ const qaList = (owner: string, texts: string[]): QaCheck[] => texts.map((text, i
 /** Build a storyboard from a validated StoryDoc (see storyJson.validateStoryboard). */
 export function storyboardFromDoc(doc: StoryDoc): Storyboard {
   const slots: Record<string, AssetSlot> = {};
-  for (const a of doc.assets) {
+  for (const a of expandAssetStates(doc.assets)) {
     slots[a.id] = {
       id: a.id, name: a.name, type: a.type, aspect: a.aspect, prompt: a.prompt, references: a.references.map(assetRefId),
       source: a.source.type === "lastFrame" ? { type: "lastFrame", shotId: a.source.shot } : { type: a.source.type },
       qa: qaList(a.id, a.qa), ...(a.notes ? { notes: a.notes } : {}),
       ...refRolesOf(a.references), ...(a.params ? { params: structuredClone(a.params) } : {}),
       ...(a.type === "video" && a.genDurationSec ? { genDurationSec: a.genDurationSec } : {}),
+      ...(a.stateOf ? { stateOf: a.stateOf, stateName: a.stateName ?? a.state } : {}),
     };
   }
   const shots: Record<string, Shot> = {};

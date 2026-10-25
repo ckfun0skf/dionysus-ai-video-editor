@@ -29,8 +29,11 @@ export function SlotEditor({ project, slot, isNew, mobile, onSave, onCancel, onD
 
   const hasVersions = !isNew && board.versionsOf(project, slot).length > 0;
   const use = isNew ? undefined : storyRefs.slotUse(b, slot.id);
-  const typeLocked = !!use?.clipOf.length;
-  const types = storyRefs.SLOT_TYPES.filter((t) => !hasVersions || board.kindForSlot(t.id) === board.kindForSlot(slot.type));
+  // V2-SB-136: a state keeps its base's type and aspect; an asset with states stays image-like.
+  const stateBase = slot.stateOf ? b.slots[slot.stateOf] : undefined;
+  const hasStates = !isNew && storyRefs.statesOf(b, slot.id).length > 0;
+  const typeLocked = !!use?.clipOf.length || !!stateBase;
+  const types = storyRefs.SLOT_TYPES.filter((t) => (!hasVersions || board.kindForSlot(t.id) === board.kindForSlot(slot.type)) && (!hasStates || story.STATEFUL_ASSET_TYPES.includes(t.id)));
   const choices = storyRefs.referenceChoices(b, slot.id);
   const lastFrame = slot.source.type === "lastFrame" ? slot.source.shotId : undefined;
   const nameOk = !!name.trim();
@@ -70,9 +73,10 @@ export function SlotEditor({ project, slot, isNew, mobile, onSave, onCancel, onD
           <label className="v2-sb-field grow">Type
             <select value={type} disabled={typeLocked} onChange={(e) => setType(e.target.value as AssetSlot["type"])}>{types.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}</select>
           </label>
-          <label className="v2-sb-field len">Aspect<input value={aspect} onChange={(e) => setAspect(e.target.value)} placeholder="16:9" aria-invalid={!aspectOk} inputMode="text" /></label>
+          <label className="v2-sb-field len">Aspect<input value={aspect} onChange={(e) => setAspect(e.target.value)} placeholder="16:9" aria-invalid={!aspectOk} inputMode="text" disabled={!!stateBase} /></label>
         </div>
-        {typeLocked ? <p className="v2-hint">It is the clip of shot {use!.clipOf.map((s) => b.order.indexOf(s) + 1).join(", ")}, so its type stays.</p>
+        {stateBase ? <p className="v2-hint" data-testid="state-editor-note">A state of “{stateBase.name}”: its type and aspect follow that asset, and it is always made from it (Image 1).</p>
+          : typeLocked ? <p className="v2-hint">It is the clip of shot {use!.clipOf.map((s) => b.order.indexOf(s) + 1).join(", ")}, so its type stays.</p>
           : hasVersions && <p className="v2-hint">It has versions, so it can only change to a type of the same media.</p>}
         {!aspectOk && <p className="v2-sb-err" role="alert"><Ic g="alert" size={14} /> Aspect looks like 16:9, 9:16 or 2.39:1.</p>}
         {type === "video" && (
@@ -103,7 +107,7 @@ export function SlotEditor({ project, slot, isNew, mobile, onSave, onCancel, onD
           <fieldset className="v2-sb-field">
             <legend>Made from</legend>
             <div className="v2-sb-chips" role="group" aria-label="Made from">
-              {choices.map((c) => <button type="button" key={c.id} aria-pressed={references.includes(c.id)} className={references.includes(c.id) ? "on" : ""} onClick={() => toggleRef(c.id)}>{c.name}</button>)}
+              {choices.map((c) => <button type="button" key={c.id} aria-pressed={references.includes(c.id)} className={references.includes(c.id) ? "on" : ""} disabled={c.id === stateBase?.id} title={c.id === stateBase?.id ? "A state is always made from its base" : undefined} onClick={() => toggleRef(c.id)}>{c.name}</button>)}
             </div>
             {references.some((id) => b.slots[id]) && (
               <ol className="v2-sb-editlist v2-sb-refroles" aria-label="How to use each image">
