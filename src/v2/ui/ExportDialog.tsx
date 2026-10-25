@@ -1,20 +1,27 @@
 import { useEffect, useRef, useState } from "react";
-import { exportName, exportProject, RESOLUTIONS, type ExportProgress, type ExportResult, type Resolution } from "../render";
+import { exportName, exportProject, formatLabel, formatNote, probeExportFormat, RESOLUTIONS, type ExportFormat, type ExportProgress, type ExportResult, type Resolution } from "../render";
 import type { Project } from "../domain";
 import type { BlobStore } from "../ports";
 import { Ic } from "./Icon";
 
 type Run = typeof exportProject;
+type Probe = typeof probeExportFormat;
 type State = { s: "idle" } | { s: "running"; p: ExportProgress } | { s: "done"; r: ExportResult; url: string } | { s: "error"; msg: string };
 const STAGE = { audio: "Mixing audio…", video: "Rendering frames", finalize: "Finishing file…" };
 
 /** Export progress dialog: pick a size, watch progress, cancel, then download. */
-export function ExportDialog({ project, blobs, res, onRes, onClose, run = exportProject }: { project: Project; blobs: BlobStore; res: Resolution; onRes: (r: Resolution) => void; onClose: () => void; run?: Run }) {
+export function ExportDialog({ project, blobs, res, onRes, onClose, run = exportProject, probe = probeExportFormat }: { project: Project; blobs: BlobStore; res: Resolution; onRes: (r: Resolution) => void; onClose: () => void; run?: Run; /** What this browser will write (V2-SB-129); injectable for tests. */ probe?: Probe }) {
   const [st, setSt] = useState<State>({ s: "idle" });
   const ctl = useRef<AbortController>();
   const busy = st.s === "running";
   const url = st.s === "done" ? st.url : undefined;
+  const [fmt, setFmt] = useState<ExportFormat | null>(null);
   useEffect(() => () => ctl.current?.abort(), []);
+  useEffect(() => {
+    let live = true; setFmt(null);
+    probe(project, res).then((f) => live && setFmt(f), () => live && setFmt(null));
+    return () => { live = false; };
+  }, [probe, project, res]);
   useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
   useEffect(() => {
     const k = (e: KeyboardEvent) => e.key === "Escape" && (busy ? ctl.current?.abort() : onClose());
@@ -39,7 +46,8 @@ export function ExportDialog({ project, blobs, res, onRes, onClose, run = export
           <label className="v2-field">Resolution
             <select aria-label="Export resolution" value={res} onChange={(e) => onRes(e.target.value as Resolution)}>{Object.keys(RESOLUTIONS).map((r) => <option key={r}>{r}</option>)}</select>
           </label>
-          <p className="v2-muted">MP4 (H.264 + AAC) where the browser supports WebCodecs; otherwise WebM, recorded in real time.</p>
+          <p className="v2-muted" data-testid="export-format">{fmt ? `This browser will export ${formatLabel(fmt)}${fmt.ext === "webm" ? ", recorded in real time" : ""}.` : "Checking what this browser can encode…"}</p>
+          {fmt && formatNote(fmt) && <p className="v2-muted">{formatNote(fmt)}</p>}
           <div className="v2-modal-actions"><button className="v2-btn" onClick={onClose}>Cancel</button><button className="v2-btn primary" onClick={() => void start()}>Start export</button></div>
         </>}
         {st.s === "running" && <>
@@ -48,7 +56,7 @@ export function ExportDialog({ project, blobs, res, onRes, onClose, run = export
           <div className="v2-modal-actions"><button className="v2-btn" title="Stop the export (Esc)" onClick={() => ctl.current?.abort()}>Cancel export</button></div>
         </>}
         {st.s === "done" && <>
-          <p role="status">Done — {st.r.ext.toUpperCase()}, {(st.r.blob.size / 1e6).toFixed(1)} MB.</p>
+          <p role="status">Done — {st.r.format ? formatLabel(st.r.format) : st.r.ext.toUpperCase()}, {(st.r.blob.size / 1e6).toFixed(1)} MB.</p>
           {st.r.note && <p className="v2-muted">{st.r.note}</p>}
           {!!st.r.warnings?.length && <div className="v2-warn" role="alert"><b><Ic g="⚠" size={16} /> Some clip frames could not be rendered</b><ul>{st.r.warnings.map((w) => <li key={w}>{w}</li>)}</ul></div>}
           <div className="v2-modal-actions"><button className="v2-btn" onClick={onClose}>Close</button><a className="v2-btn primary" href={st.url} download={exportName(project.name, st.r.ext)}>Download</a></div>

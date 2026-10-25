@@ -1,7 +1,7 @@
 export { Player } from "./player";
 export { activeAt, fitRect, placeRect, type Placed } from "./frame";
 export { AudioClock, wallClock, createClock, correctDrift, type Clock } from "./clock";
-export * from "./export/plan"; export { exportProject, type ExportProgress, type ExportResult } from "./export/encode";
+export * from "./export/plan"; export { exportProject, formatLabel, formatNote, probeExportFormat, type ExportFormat, type ExportProgress, type ExportResult } from "./export/encode";
 export * from "./htmlClip";
 export { boxDistance, hitCandidates, hitTest, inBox, isBackdrop, pickAt } from "./hit";
 export * from "./htmlLibs";
