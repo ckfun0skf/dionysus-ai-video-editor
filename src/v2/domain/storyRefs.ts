@@ -304,10 +304,36 @@ export function referencesBlock(b: Storyboard, shot: Shot): string {
 /** True when a prompt already starts with (or contains a line starting) "References:". */
 export const hasReferencesBlock = (prompt: string) => /^\s*References\s*:/im.test(prompt);
 
-/** The clip prompt to copy: the shot's prompt with the References block prepended unless it already has one. */
+/** True when a prompt already has a line starting "Dialogue:". */
+export const hasDialogueBlock = (prompt: string) => /^\s*Dialogue\s*:/im.test(prompt);
+
+/**
+ * V2-SB-135: the "Dialogue:" block for a shot with dialogue lines: each line with who says it and how. On-screen
+ * lines are spoken in frame with lip-sync; off-screen lines are heard but nobody in frame speaks them (no lip
+ * movement); a line with its own recorded "dialogue" cue is added in the edit, so the clip must stay silent for it.
+ * Empty for plain-text dialogue (the prompt carries it) and no dialogue.
+ */
+export function dialogueBlock(b: Storyboard, shot: Shot): string {
+  if (!shot.lines?.length) return "";
+  const recorded = new Set((b.audio ?? []).filter((c) => c.kind === "dialogue" && c.from === shot.id && c.line).map((c) => c.line!));
+  const rows = shot.lines.map((l, i) => {
+    const who = l.speaker ?? (l.offscreen ? "A voice" : "Someone in frame");
+    const how = recorded.has(i + 1) ? "recorded separately and added in the edit: do not voice it, and no one in frame moves their lips"
+      : l.offscreen ? "OFF-SCREEN: heard, not seen; the speaker is not in frame and no one in frame moves their lips"
+      : "on screen, lip-synced";
+    return `${i + 1}. ${who} (${how}): "${l.text}"`;
+  });
+  return `Dialogue:\n${rows.join("\n")}`;
+}
+
+/**
+ * The clip prompt to copy: the shot's prompt with the References block prepended unless it already has one, and
+ * (V2-SB-135) the Dialogue block appended for dialogue lines unless the prompt already has one.
+ */
 export function promptWithReferences(b: Storyboard, shot: Shot): string {
-  const block = referencesBlock(b, shot);
-  return !block || hasReferencesBlock(shot.prompt) ? shot.prompt : `${block}\n\n${shot.prompt}`;
+  const block = referencesBlock(b, shot), lines = dialogueBlock(b, shot);
+  const body = !lines || hasDialogueBlock(shot.prompt) ? shot.prompt : `${shot.prompt}\n\n${lines}`;
+  return !block || hasReferencesBlock(shot.prompt) ? body : `${block}\n\n${body}`;
 }
 
 /** The media version a shot (pins respected) or an asset (selected versions) uses for each image in its attach list. */

@@ -265,7 +265,7 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
           {(shot || slot) && <AttachOrder shot={shot} slot={shot ? undefined : slot} project={project} thumbs={thumbs} blobs={blobs} />}
         </Section>
       )}
-      {shot && (shot.camera || shot.dialogue) && <Section title="Direction">{shot.camera && <p className="v2-sb-kv"><b>Camera</b> {shot.camera}</p>}{shot.dialogue && <p className="v2-sb-kv"><b>Dialogue</b> {shot.dialogue}</p>}</Section>}
+      {shot && (shot.camera || shot.dialogue) && <Section title="Direction">{shot.camera && <p className="v2-sb-kv"><b>Camera</b> {shot.camera}</p>}{shot.dialogue && !shot.lines?.length && <p className="v2-sb-kv"><b>Dialogue</b> {shot.dialogue}</p>}{shot.lines?.length ? <DialogueLines lines={shot.lines} /> : null}</Section>}
       {shot && <ShotLayers shot={shot} project={project} onOpen={onOpen} />}
       {(shot || slot?.type === "audio") && <AudioCues shotId={shot?.id} assetId={shot ? undefined : slot?.id} project={project} onOpen={onOpen} />}
       {shot && <ShotRefs shot={shot} project={project} thumbs={thumbs} onOpen={onOpen} onPin={pin} onEdit={onEdit} note={refNote} />}
@@ -438,11 +438,24 @@ function ShotLayers({ shot, project, onOpen }: { shot: Shot; project: Project; o
   );
 }
 
-const AUDIO_KIND_LABEL = { voiceover: "Voiceover", music: "Music", sfx: "Sound effect" } as const;
+/** V2-SB-135: a shot's dialogue lines, off-screen ones marked (heard, not seen: no lip-sync). */
+function DialogueLines({ lines }: { lines: NonNullable<Shot["lines"]> }) {
+  return (
+    <div className="v2-sb-kv" data-testid="dialogue-lines"><b>Dialogue</b>
+      <ol className="v2-sb-dialogue">
+        {lines.map((l, i) => (
+          <li key={i}>{l.speaker && <b>{l.speaker}</b>}{l.offscreen && <em className="v2-sb-os" title="Off-screen: heard, not seen; not lip-synced"> (off-screen)</em>}{l.speaker || l.offscreen ? ": " : ""}{l.text}</li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+const AUDIO_KIND_LABEL = { voiceover: "Voiceover", music: "Music", sfx: "Sound effect", ambience: "Ambience", sting: "Sting", dialogue: "Dialogue line" } as const;
 
 /**
  * Audio cues (V2-SB-125) that play under a shot, or that place an audio asset: where they run, volume and fades.
- * Send to timeline puts them on Voiceover, Music and Sound effects layers.
+ * Send to timeline puts them on one audio layer per kind; ambience (and music with `loop`) repeats to fill its span.
  */
 function AudioCues({ shotId, assetId, project, onOpen }: { shotId?: string; assetId?: string; project: Project; onOpen: (t: BoardTarget) => void }) {
   const b = project.storyboard!;
@@ -464,15 +477,17 @@ function AudioCues({ shotId, assetId, project, onOpen }: { shotId?: string; asse
           const len = c.durationSec !== undefined ? ` · ${c.durationSec} s` : "";
           const fi = c.fadeInSec ?? d.fadeInSec, fo = c.fadeOutSec ?? d.fadeOutSec;
           const fades = fi || fo ? ` · fade ${fi} s in, ${fo} s out` : "";
+          const loop = story.audioLoops(c) ? " · loops" : "";
+          const line = c.line ? ` · line ${c.line}` : "";
           const name = b.slots[c.asset]?.name ?? c.asset;
           return (
             <li key={c.id}><Ic g={TYPE_ICON.audio} size={14} /> <span>{AUDIO_KIND_LABEL[c.kind]}{" "}
               {assetId ? <b>{name}</b> : <button className="v2-linkbtn" onClick={() => onOpen({ slot: c.asset })}>{name}</button>}
-              {" "}· {where}{at}{len} · volume {pct(c.volume ?? d.volume)}{fades}</span></li>
+              {" "}· {where}{at}{len}{line} · volume {pct(c.volume ?? d.volume)}{fades}{loop}</span></li>
           );
         })}
       </ul>
-      <p className="v2-hint">{assetId ? "Upload the audio file above. " : ""}Send to timeline adds {cues.length > 1 ? "these" : "this"} on audio layers (Voiceover, Music, Sound effects); change volume and fades there.</p>
+      <p className="v2-hint">{assetId ? "Upload the audio file above. " : ""}Send to timeline adds {cues.length > 1 ? "these" : "this"} on audio layers, one per kind (Voiceover, Music, Ambience …); change volume and fades there.</p>
     </Section>
   );
 }

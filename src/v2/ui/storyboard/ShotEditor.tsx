@@ -168,7 +168,8 @@ export function ShotEditor({ project, shot, number, isNew, mobile, onSave, onCan
 
         <label className="v2-sb-field">Description<textarea rows={2} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What happens in this shot" /></label>
         <label className="v2-sb-field">Camera<input value={camera} onChange={(e) => setCamera(e.target.value)} placeholder="e.g. slow push-in, low angle" /></label>
-        <label className="v2-sb-field">Dialogue<textarea rows={2} value={dialogue} onChange={(e) => setDialogue(e.target.value)} placeholder="Spoken lines or voice-over" /></label>
+        <label className="v2-sb-field">Dialogue<textarea rows={2} value={dialogue} onChange={(e) => setDialogue(e.target.value)} placeholder="Spoken lines. One per line as NAME: words, or NAME (O.S.): words for a voice heard off screen" /></label>
+        {story.hasOffscreenMark(dialogue) && <p className="v2-hint" data-testid="dialogue-offscreen-hint">(O.S.) lines are heard, not seen: the clip prompt tells the model nobody in frame says them (no lip-sync).</p>}
         <label className="v2-sb-check"><input type="checkbox" checked={captions && !!dialogue.trim()} disabled={!dialogue.trim()} onChange={(e) => setCaptions(e.target.checked)} /> Add the dialogue as captions when sent to the timeline</label>
 
         <fieldset className="v2-sb-field">

@@ -7,7 +7,8 @@
  * - `captions: true` writes the dialogue into the shared subtitle layer for the shot's range;
  * - shot effects become effect-layer clips over the shot (or their sub-range);
  * - a connection `transition` becomes `transitionIn` on the `to` clip when the two clips are adjacent;
- * - audio cues (V2-SB-125) go on Voiceover, Music and Sound effects layers with their volume and fades.
+ * - audio cues (V2-SB-125) go on Voiceover, Music, Sound effects, Ambience, Stings and Dialogue layers with their
+ *   volume and fades; music with `loop` and ambience repeat to fill their span (V2-SB-135).
  * Every layer, caption and effect clip is linked to the shot clip (see storyLinks). Unknown preset ids fall back:
  * transition → cut, textStyle → plain, text animations and effects → none.
  */
@@ -15,7 +16,7 @@ import { DEFAULT_IMAGE_TICKS, newId, TEXT_SOURCE, type Asset, type AssetVersion,
 import { addTrack, groupOf, insertPlacement, isFree, mainTrack } from "./ops";
 import { SUBTITLE_STYLE } from "./layerStyle";
 import { getPreset, parsePresetRef, type PresetKind } from "../registry";
-import { AUDIO_DEFAULTS, DEFAULT_TEXT_SIZE, DEFAULT_TRANSITION_SEC, type AudioKind, TEXT_LINE_HEIGHT, type StoryBox, type StoryLayer, type StoryMediaLayer, type StoryTextLayer, type StoryTextStyle } from "./storyJson";
+import { AUDIO_DEFAULTS, audioLoops, DEFAULT_TEXT_SIZE, DEFAULT_TRANSITION_SEC, type AudioKind, TEXT_LINE_HEIGHT, type StoryBox, type StoryLayer, type StoryMediaLayer, type StoryTextLayer, type StoryTextStyle } from "./storyJson";
 import { pinOf, sendPlan, versionSpan, type Shot, type Storyboard } from "./storyboard";
 import { clampToClip, placeOnFreeTrack } from "./storyLinks";
 import { textOf, textStyleData, textStyleFields, type TextData } from "./text";
@@ -27,7 +28,10 @@ import { followKeyframes, type MotionEffect } from "./storyFollow";
 export interface SendResult { shots: number; layers: number; captions: number; effects: number; transitions: number; skippedLayers: number; audio: number; skippedAudio: number; firstClipId?: string }
 
 /** Audio layer names per cue kind (V2-SB-125): one kind per layer, so voice, music and effects mix separately. */
-export const AUDIO_TRACK_NAMES: Record<AudioKind, string> = { voiceover: "Voiceover", music: "Music", sfx: "Sound effects" };
+export const AUDIO_TRACK_NAMES: Record<AudioKind, string> = { voiceover: "Voiceover", music: "Music", sfx: "Sound effects", ambience: "Ambience", sting: "Stings", dialogue: "Dialogue" };
+
+/** The caption text of a shot: its dialogue lines' words (no speaker names or "(O.S.)" marks, V2-SB-135), else its text. */
+export const captionText = (shot: Shot): string => (shot.lines?.length ? shot.lines.map((l) => l.text).join("\n") : shot.dialogue ?? "").trim();
 
 const selectedVersion = (a: Asset): AssetVersion | undefined => a.versions.find((v) => v.id === a.selectedVersionId) ?? a.versions[0];
 
@@ -167,8 +171,8 @@ function addLinked(p: Project, b: Storyboard, comp: Composition, shot: Shot, cli
       res.layers += 1;
     }
   }
-  if (shot.captions && shot.dialogue?.trim()) {
-    const cue: Placement = { id: newId("plc"), startTicks: clip.startTicks, durationTicks: clip.durationTicks, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "text", text: { text: shot.dialogue.trim() } as TextData, storyLink: { anchor } };
+  if (shot.captions && captionText(shot)) {
+    const cue: Placement = { id: newId("plc"), startTicks: clip.startTicks, durationTicks: clip.durationTicks, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "text", text: { text: captionText(shot) } as TextData, storyLink: { anchor } };
     const shared = c.tracks.find((t) => t.kind === "text" && t.layerStyle?.subtitle && isFree(t, cue.startTicks, cue.durationTicks));
     if (shared) c = insertPlacement(c, shared.id, cue);
     else c = placeOnFreeTrack(c, cue, () => false, { name: "Subtitles", layerStyle: SUBTITLE_STYLE });
@@ -188,8 +192,10 @@ function addLinked(p: Project, b: Storyboard, comp: Composition, shot: Shot, cli
 
 /**
  * Audio cues (V2-SB-125) whose `from` shot was sent now. A cue starts `atSec` into that shot's clip and ends at the end
- * of the `to` shot's clip, after `durationSec`, or with the audio, whichever comes first (never looped). A cue that fits
- * inside its first shot is linked to it (it follows the shot); a cue across shots stays where it was placed.
+ * of the `to` shot's clip, after `durationSec`, or with the audio, whichever comes first. A looping cue (music with
+ * `loop`, ambience unless `loop: false`, V2-SB-135) instead repeats the audio back to back until its end (the end of
+ * `from` when it has no `to` or `durationSec`): fade in on the first copy, fade out on the last, which is trimmed.
+ * A cue that fits inside its first shot is linked to it (it follows the shot); a cue across shots stays where it was placed.
  */
 function addAudio(p: Project, b: Storyboard, comp: Composition, sent: { shot: Shot; clip: Placement }[], res: SendResult): Composition {
   let c = comp;
@@ -206,20 +212,30 @@ function addAudio(p: Project, b: Storyboard, comp: Composition, sent: { shot: Sh
     const media = v.media.durationTicks;
     let end = last && last.startTicks >= first.startTicks ? last.startTicks + last.durationTicks : undefined;
     if (cue.durationSec !== undefined) end = Math.min(end ?? Infinity, start + secondsToTicks(cue.durationSec));
-    if (end === undefined) end = media ? start + media : first.startTicks + first.durationTicks;
-    if (media) end = Math.min(end, start + media);
+    const loops = audioLoops(cue) && !!media;
+    if (end === undefined) end = media && !loops ? start + media : first.startTicks + first.durationTicks;
+    if (media && !loops) end = Math.min(end, start + media);
     if (end <= start) { res.skippedAudio += 1; continue; }
-    const dur = end - start, d = AUDIO_DEFAULTS[cue.kind];
-    const fade = (sec: number) => Math.min(dur, Math.max(0, secondsToTicks(sec)));
-    const fadeIn = fade(cue.fadeInSec ?? d.fadeInSec), fadeOut = fade(cue.fadeOutSec ?? d.fadeOutSec);
+    const d = AUDIO_DEFAULTS[cue.kind];
     const inside = end <= first.startTicks + first.durationTicks;
-    const pl: Placement = {
-      id: newId("plc"), startTicks: start, durationTicks: dur, sourceInTicks: 0, source: { kind: "assetVersion", assetId: a.id, versionId: v.id },
-      clipType: "audio", volume: cue.volume ?? d.volume, ...(fadeIn ? { fadeInTicks: fadeIn } : {}), ...(fadeOut ? { fadeOutTicks: fadeOut } : {}),
-      ...(inside ? { storyLink: { anchor: first.id } } : {}),
-    };
     const name = AUDIO_TRACK_NAMES[cue.kind];
-    c = placeOnFreeTrack(c, pl, (t) => t.kind === "audio" && t.name === name, { name });
+    // One placement, or back-to-back copies of the media for a looping cue.
+    const pieces: { at: number; dur: number }[] = [];
+    for (let at = start; at < end; at += loops ? media : end) pieces.push({ at, dur: Math.min(end, loops ? at + media : end) - at });
+    let track: string | undefined;
+    pieces.forEach((x, i) => {
+      const fade = (sec: number) => Math.min(x.dur, Math.max(0, secondsToTicks(sec)));
+      const fadeIn = i === 0 ? fade(cue.fadeInSec ?? d.fadeInSec) : 0, fadeOut = i === pieces.length - 1 ? fade(cue.fadeOutSec ?? d.fadeOutSec) : 0;
+      const pl: Placement = {
+        id: newId("plc"), startTicks: x.at, durationTicks: x.dur, sourceInTicks: 0, source: { kind: "assetVersion", assetId: a.id, versionId: v.id },
+        clipType: "audio", volume: cue.volume ?? d.volume, ...(fadeIn ? { fadeInTicks: fadeIn } : {}), ...(fadeOut ? { fadeOutTicks: fadeOut } : {}),
+        ...(inside ? { storyLink: { anchor: first.id } } : {}),
+      };
+      // Keep the copies of a loop on one layer.
+      const same = track && c.tracks.find((t) => t.id === track && isFree(t, pl.startTicks, pl.durationTicks));
+      if (same) c = insertPlacement(c, same.id, pl);
+      else { c = placeOnFreeTrack(c, pl, (t) => t.kind === "audio" && t.name === name, { name }); track = c.tracks.find((t) => t.placements.some((q) => q.id === pl.id))?.id; }
+    });
     res.audio += 1;
   }
   return c;

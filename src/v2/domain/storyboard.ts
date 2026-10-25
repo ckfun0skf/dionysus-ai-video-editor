@@ -7,7 +7,7 @@
  */
 import { isStill, newId, type AssetVersion, type Composition, type MediaKind, type MediaRef, type Placement, type Project } from "./model";
 import { mainTrack } from "./ops";
-import { assetRefId, keyframeId, type AssetRefRole, type ReferenceRole, type ShotRender, type StoryAssetRef, type StoryAssetType, type StoryAudio, type StoryConnection, type StoryDoc, type StoryEffect, type StoryLayer, type StoryMeta } from "./storyJson";
+import { assetRefId, dialogueLines, dialogueText, keyframeId, type StoryDialogueLine, type AssetRefRole, type ReferenceRole, type ShotRender, type StoryAssetRef, type StoryAssetType, type StoryAudio, type StoryConnection, type StoryDoc, type StoryEffect, type StoryLayer, type StoryMeta } from "./storyJson";
 import { followStoryLinks } from "./storyLinks";
 import type { HtmlClipParam, HtmlParamValues } from "./htmlClipPackage";
 import { orderSteps } from "./storySteps";
@@ -38,7 +38,11 @@ export interface AssetSlot {
 
 export interface Shot {
   id: string; title: string; description: string; durationSec: number; prompt: string;
-  slotIds: string[]; qa: QaCheck[]; camera?: string; dialogue?: string;
+  slotIds: string[]; qa: QaCheck[]; camera?: string;
+  /** The dialogue as text; with `lines`, their editable form ("NAME (O.S.): …" per line, see storyJson.dialogueText). */
+  dialogue?: string;
+  /** V2-SB-135: the dialogue as lines (speaker, text, off-screen), when written as a list. */
+  lines?: StoryDialogueLine[];
   /**
    * Backing asset holding the clip versions; created on first upload. For `html` and `still` shots it is the
    * `clipSlot`'s asset, so the shot uses whatever version is selected there.
@@ -163,7 +167,7 @@ export function storyboardFromDoc(doc: StoryDoc): Storyboard {
   for (const s of doc.shots) {
     shots[s.id] = {
       id: s.id, title: s.title, description: s.description, durationSec: s.durationSec, prompt: s.prompt,
-      slotIds: [...s.assets], qa: qaList(s.id, s.qa), ...(s.camera ? { camera: s.camera } : {}), ...(s.dialogue ? { dialogue: s.dialogue } : {}),
+      slotIds: [...s.assets], qa: qaList(s.id, s.qa), ...(s.camera ? { camera: s.camera } : {}), ...(s.dialogue ? { dialogue: dialogueText(s.dialogue) } : {}), ...(dialogueLines(s.dialogue) ? { lines: structuredClone(dialogueLines(s.dialogue)!) } : {}),
       ...(s.render && s.render !== "ai" && s.clip && slots[s.clip] ? { render: s.render, clipSlot: s.clip } : {}),
       ...(s.render === "html" && s.clip && slots[s.clip] && s.params ? { params: { ...s.params } } : {}),
       ...(s.layers?.length ? { layers: structuredClone(s.layers) } : {}),

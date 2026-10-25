@@ -54,8 +54,8 @@ So split the work: generation prompts describe only the picture and its motion; 
       "durationSec": number,     // 0.5–120; how long the shot stays on screen in the final edit, set by the story's pacing (NOT by the video model's limits)
       "genDurationSec"?: number, // only when the video model must render longer (minimum or fixed lengths, e.g. 6/10/15 s): the length to generate; &gt; durationSec; the upload is trimmed to durationSec
       "prompt": string,          // full clip generation prompt; required for render "ai", keep one for "html"/"still" too
-      "assets": string[],        // ids of the assets this clip uses (include "clip" when set)
-      "references"?: [ { "asset": "&lt;asset id&gt;", "role": "start-frame" | "end-frame" | "identity" | "look" | "detail", "note"?: string } ],
+      "assets": string[],        // ids of the assets this clip uses (include "clip" when set); "&lt;shot id&gt;.keyframe" = another shot's keyframe
+      "references"?: [ { "asset": "&lt;asset id&gt;" | "&lt;shot id&gt;.keyframe", "role": "start-frame" | "end-frame" | "identity" | "look" | "detail", "note"?: string } ],
                                  // the images to attach to the clip generation IN THIS ORDER (Image 1, Image 2 …) and how to use each;
                                  // omitted = "assets" order with roles from the type (frame → start-frame, character → identity,
                                  // style → look, others → detail); at most one "start-frame" and one "end-frame"
@@ -63,12 +63,13 @@ So split the work: generation prompts describe only the picture and its motion; 
                                  // render "ai" only: the opening still to generate FIRST; the clip animates from it. The clip's images are then
                                  // Image 1 = the keyframe (start frame), Image 2 … = the shot's "references", then its other "assets" (RULES)
       "camera"?: string,
-      "dialogue"?: string,
+      "dialogue"?: string | [ string | { "speaker"?: string, "text": string, "offscreen"?: boolean } ],
+                                 // spoken lines; a list marks who says each; "offscreen": true = heard, not seen (no lip-sync; not a voiceover)
       "qa": string[],            // 2-5 concrete yes/no checks for the clip
       "render"?: "ai" | "html" | "still",   // default "ai" (generated clip); "html" = uploaded HTML animation; "still" = an image held on screen
       "clip"?: "&lt;asset id&gt;",     // required for "html" (an html asset) and "still" (an image asset)
       "params"?: { "&lt;key&gt;": value },   // render "html" only: this shot's values for the clip asset's "params"
-      "captions"?: boolean,      // true = show "dialogue" as subtitles over the shot
+      "captions"?: boolean,      // true = show "dialogue" (the lines' text) as subtitles over the shot
       "layers"?: Layer[],        // drawn in list order (later = on top)
       "effects"?: [ { "preset": "&lt;video effect id&gt;", "params"?: { ... }, "startSec"?: number, "endSec"?: number } ]   // default: whole shot
   } ],
@@ -78,14 +79,16 @@ So split the work: generation prompts describe only the picture and its motion; 
       "note"?: string,
       "transition"?: { "preset": "&lt;transition id&gt;", "params"?: { "durationSec"?: number } }   // omitted = cut; default 0.5 s
   } ],
-  "audio"?: [ {                  // voiceover, music beds and sound effects, placed by shot (assets of type "audio")
-      "id"?: string, "asset": "&lt;audio asset id&gt;", "kind": "voiceover" | "music" | "sfx",
+  "audio"?: [ {                  // voiceover, music, ambience beds, sound effects, stings and recorded lines, placed by shot (assets of type "audio")
+      "id"?: string, "asset": "&lt;audio asset id&gt;", "kind": "voiceover" | "music" | "sfx" | "ambience" | "sting" | "dialogue",
       "from": "&lt;shot id&gt;",       // the shot it starts in
       "atSec"?: number,          // seconds into "from" (default 0)
-      "to"?: "&lt;shot id&gt;",        // plays to the end of this shot (same as or after "from"); omitted = the audio's own length
-      "durationSec"?: number,    // stop after this many seconds (with "to": whichever comes first); audio is never looped
-      "volume"?: number,         // 0-1; default music 0.35, voiceover and sfx 1
-      "fadeInSec"?: number, "fadeOutSec"?: number   // default music 1 s each, others 0
+      "to"?: "&lt;shot id&gt;",        // plays to the end of this shot (same as or after "from"); omitted = the audio's own length; not for sting / dialogue
+      "durationSec"?: number,    // stop after this many seconds (with "to": whichever comes first)
+      "loop"?: boolean,          // music and ambience only: repeat to fill the span; default true for ambience, false for music; others never loop
+      "line"?: number,           // dialogue only: the 1-based line of the "from" shot's "dialogue" list this recording is (an off-screen line)
+      "volume"?: number,         // 0-1; default music 0.35, ambience 0.5, sting 0.8, others 1
+      "fadeInSec"?: number, "fadeOutSec"?: number   // default music and ambience 1 s each, others 0
   } ]
 }
 
@@ -268,14 +271,21 @@ Fonts — TextStyle "font":
 15. A transition in "connections" overlaps the two shots, centred on the cut: it adds no time and eats half its length from the end of the "from" shot and half from the start of the "to" shot. It is clamped to half the shorter of the two shots. For example, a 0.8 s transition out of a 2.5 s shot blends the last 0.4 s of that shot with the first 0.4 s of the next, and the total length stays the same; keep transitions short on short shots so their key action isn't covered.
 16. For an "identity" reference prefer a single clean portrait or character image (one view, plain background) over a multi-view character sheet: the sheet's layout (several poses, panels, labels) can leak into the generated frames.
 17. An asset made from other assets lists them in its "references" in attach order, as objects with a "role" when the use is not obvious from the type. Its prompt then starts with the same numbered "References:" block as a clip prompt; for an image, "start-frame" means the base image to edit (there is no end frame). Example: a close-up of the hero holding a mug: "references": [{ "asset": "mug", "role": "detail", "note": "glaze and colour only" }, "hero"], prompt "References:\nImage 1 (Blue mug): reference only: materials, colours and objects only; glaze and colour only.\nImage 2 (Hero): reference only: keep this identity (face, body, clothes).\n\nClose-up of …".
-18. Keyframe then animate: when the opening composition matters (a character's pose, a precise layout, a hero product shot), give the "ai" shot a "keyframe": { "prompt", "references", "qa" }. The app turns it into an image asset "&lt;shot id&gt;.keyframe" named "Keyframe · &lt;shot title&gt;" that is made first. Numbering of the clip's images when a shot has a keyframe: Image 1 is always the keyframe, the START FRAME; Image 2, 3 … are the shot's "references" in their order, then the shot's other "assets" in "assets" order (the numbering without a keyframe, shifted by one). Do not also give the shot a "start-frame": one in "references", or an inferred one (a "frame" or last-frame asset), is attached as details only. The keyframe's own "references" are numbered separately, from Image 1, in the keyframe prompt; they are attached to the clip only if they are also in the shot's "assets" or "references". The keyframe prompt describes one still image (with its own "References:" block, as for an asset); the clip prompt starts with a "References:" block in the clip numbering above and then describes only the motion from that frame. Example: "keyframe": { "prompt": "References:\nImage 1 (Hero): reference only: keep this identity (face, body, clothes).\nImage 2 (Café): reference only: materials, colours and objects only.\n\nThe hero sits at a café table, both hands around a blue mug …", "references": ["hero", "cafe"], "qa": ["The hero's face matches the reference"] } with the shot's "assets": ["hero", "cafe"], clip prompt "References:\nImage 1 (Keyframe · Morning coffee): START FRAME: the clip opens on exactly this image.\nImage 2 (Hero): reference only, not a frame: keep this identity.\nImage 3 (Café): reference only, not a frame: materials and colours only.\n\nShe slowly lifts the mug …".
-19. Audio: put each voiceover, music bed or sound effect in "audio" as a cue on an asset of type "audio" (source "generate" with a prompt for the user's voice/music/sound tool, e.g. the exact voiceover script and voice, or "upload"). "from" is the shot it starts in, "atSec" the offset into that shot, "to" the last shot it plays under. A music bed usually runs "from" the first shot "to" the last with "volume" 0.2-0.4 under speech; a voiceover spans the shots it describes; a sound effect sits at the moment in one shot ("atSec") with no "to". Example: { "asset": "score", "kind": "music", "from": "s1", "to": "s6", "volume": 0.3, "fadeOutSec": 2 }, { "asset": "door-slam", "kind": "sfx", "from": "s4", "atSec": 1.2 }. Do not put spoken lines that the video model renders (shot "dialogue") into a voiceover too.
+18. Keyframe then animate: when the opening composition matters (a character's pose, a precise layout, a hero product shot), give the "ai" shot a "keyframe": { "prompt", "references", "qa" }. The app turns it into an image asset "&lt;shot id&gt;.keyframe" named "Keyframe · &lt;shot title&gt;" that is made first. Numbering of the clip's images when a shot has a keyframe: Image 1 is always the keyframe, the START FRAME; Image 2, 3 … are the shot's "references" in their order, then the shot's other "assets" in "assets" order (the numbering without a keyframe, shifted by one). Do not also give the shot a "start-frame": one in "references", or an inferred one (a "frame" or last-frame asset), is attached as details only. The keyframe's own "references" are numbered separately, from Image 1, in the keyframe prompt; they are attached to the clip only if they are also in the shot's "assets" or "references". Other shots and assets may reference this keyframe as "&lt;shot id&gt;.keyframe" (RULE 26). The keyframe prompt describes one still image (with its own "References:" block, as for an asset); the clip prompt starts with a "References:" block in the clip numbering above and then describes only the motion from that frame. Example: "keyframe": { "prompt": "References:\nImage 1 (Hero): reference only: keep this identity (face, body, clothes).\nImage 2 (Café): reference only: materials, colours and objects only.\n\nThe hero sits at a café table, both hands around a blue mug …", "references": ["hero", "cafe"], "qa": ["The hero's face matches the reference"] } with the shot's "assets": ["hero", "cafe"], clip prompt "References:\nImage 1 (Keyframe · Morning coffee): START FRAME: the clip opens on exactly this image.\nImage 2 (Hero): reference only, not a frame: keep this identity.\nImage 3 (Café): reference only, not a frame: materials and colours only.\n\nShe slowly lifts the mug …".
+19. Audio: put each voiceover, music bed or sound effect in "audio" as a cue on an asset of type "audio" (source "generate" with a prompt for the user's voice/music/sound tool, e.g. the exact voiceover script and voice, or "upload"). "from" is the shot it starts in, "atSec" the offset into that shot, "to" the last shot it plays under. A music bed usually runs "from" the first shot "to" the last with "volume" 0.2-0.4 under speech; a voiceover spans the shots it describes; a sound effect sits at the moment in one shot ("atSec") with no "to". Example: { "asset": "score", "kind": "music", "from": "s1", "to": "s6", "volume": 0.3, "fadeOutSec": 2 }, { "asset": "door-slam", "kind": "sfx", "from": "s4", "atSec": 1.2 }. Background sound under several shots is kind "ambience" and a short musical hit at one moment is a "sting" (RULE 27). Do not put spoken lines that the video model renders (shot "dialogue") into a voiceover too; a voice heard in the scene but not seen is an off-screen dialogue line, not a voiceover (RULE 28).
 20. Layers stay fixed to the frame by default: a shot's video effects (e.g. "ken-burns" zoom and pan) move only the picture, so titles, labels and logos stay put and readable. Give a layer "follow": "shot" only when it belongs to the scene and must move with the picture, e.g. a name tag pinned to a sign or a label on an object while the shot slowly zooms: { "id": "tag", "type": "text", "text": "ROOM 12", "startSec": 0, "endSec": 4, "position": { "x": 0.62, "y": 0.4 }, "follow": "shot" }. It only has an effect when an effect moves or zooms the shot while the layer is on screen.
 21. Keep text readable on any picture: give light text an outline ("strokeWidth" about 0.04-0.08 with a dark "strokeColor"), a soft "shadow", or a "background" box (captions, lower thirds). Use "letterSpacing" (in em) for airy titles, "lineHeight" for multi-line cards, "italic" for emphasis, and a text "effect" with "effectColor" only for stylised titles. Sizes and offsets are fractions of the font size; null removes a style's shadow or background. Example: "style": { "color": "#ffffff", "strokeWidth": 0.06, "strokeColor": "#000000", "shadow": { "color": "#000000", "blur": 0.3, "x": 0, "y": 0.04 } }. Put a look used on several layers into "meta.textStyles" once.
 22. For overlays (light leaks, flares, dust, film grain, paper or ink textures) use an image or video layer with a "blend" mode and, if needed, an "opacity" below 1: "screen" or "add" for elements on black (the black disappears), "multiply" for elements on white (the white disappears), "overlay" or "soft-light" for textures on mid grey. Example: { "id": "leak", "type": "video", "asset": "light-leak", "startSec": 0, "endSec": 3, "box": { "x": 0, "y": 0, "width": 1, "height": 1 }, "blend": "screen", "opacity": 0.7 }. Ask for the overlay asset full-frame on a plain black, white or grey background. Leave "blend" out ("normal") for titles, logos and pictures that should simply cover the shot.
 23. An "html" asset's "prompt" is a design brief for the AI that will write the clip, not code: what it shows, how it moves over its length, colours, type and layout. List the media it uses (logos, photos, footage, music) in its "references"; the app copies the brief together with the HTML clip package instructions (format "dionysus.htmlclip/1", spec HTML_CLIP_PACKAGE.md next to this guide), filled in with the asset's size, length, bound assets and allowed libraries, and the user pastes the AI's single .html file back as a version.
 24. Reuse one "html" asset with "params" instead of duplicating it: when shots or layers show the same design with different words, numbers or colours (title cards, text-only cards, chapter and end cards, lower thirds, counters), make ONE html asset, declare what varies in its "params" ({ "&lt;key&gt;": { "type": "text" | "number" | "color" | "boolean" | "select", "default": …, "label"?, "description"? } }, numbers may add "min", "max", "step", a select lists its "options"), and give each use its own values: a text-only shot is { "render": "html", "clip": "&lt;asset id&gt;", "params": { "text": "THE END" } }, a layer over a shot is { "type": "html", "asset": "&lt;asset id&gt;", "box": { "x": 0, "y": 0, "width": 1, "height": 1 }, "params": { "text": "5:58 AM" } }. Omitted keys use the default; a value must match its type (numbers within min–max, a select one of its "options", colours "#rrggbb"). The brief describes the design for any value (long and short text) and names the params; the app tells the clip's AI to expose exactly these params and read them at render time. Keep plain captions over a shot as text layers.
 25. A "video" asset shown as a layer (a light leak, dust, smoke, a screen insert) is often generated longer than the layer needs, because video models have minimum or fixed lengths. Give the asset "genDurationSec" (the length to generate, 0.5-120, video assets only) and give each video layer "inSec": the second of the clip the layer starts from (default: the part the user picks when uploading, else 0). The layer still lasts endSec - startSec; keep inSec + that length within genDurationSec. One generated clip can feed several layers with different "inSec" values. Example, a 2 s screen-blend overlay cut from a 6 s clip: asset { "id": "dust-leak", "type": "video", "genDurationSec": 6, ... } and layer { "id": "s3-dust", "type": "video", "asset": "dust-leak", "startSec": 0, "endSec": 2, "inSec": 3, "box": { "x": 0, "y": 0, "width": 1, "height": 1 }, "blend": "screen" }. For a shot's own clip use the shot's "genDurationSec" instead (RULE 13).
+26. A shot's keyframe (RULE 18) can be reused: another shot, another keyframe or an asset may list "&lt;shot id&gt;.keyframe" in its "assets" or "references" like an asset id, with any role: "start-frame" to open on exactly that composition (returning to the same set-up), "identity" for a pose or character, "look" for the same light and palette, "detail" for materials and colours only. A plain id is treated like a "frame" asset (a start frame, or details only when the shot already has a start frame or its own keyframe). That shot must have a "keyframe", a shot can't list its own, and there must be no loops (a keyframe made from something that needs it first). The app makes the referenced keyframe first and attaches the version picked for it, named "Keyframe · &lt;shot title&gt;" in the References block. Example: shot s3 { "assets": ["hill", "s1.keyframe"], "references": [{ "asset": "hill", "role": "detail" }, { "asset": "s1.keyframe", "role": "look", "note": "same pre-dawn palette and mist" }] }, clip prompt "References:
+Image 1 (Hill road): reference only, not a frame: materials, colours and objects only.
+Image 2 (Keyframe · The climb): reference only, not a frame: overall look; same pre-dawn palette and mist.
+
+…".
+27. Background sound that lasts (wind, rain, traffic, room tone, a crowd) is kind "ambience": a bed "from" the first shot it is heard in "to" the last, looped to fill that span ("loop": false plays it once), default volume 0.5 with 1 s fades in and out. Ask for a loopable 20-60 s recording. A short musical hit or whoosh on a moment (a title appearing, a reveal, a cut to black) is kind "sting" at "atSec" in one shot, with no "to". A "sfx" is a one-off sound at one moment too: never give a sound effect a "to" to make it last, it is not looped and stops when the sound ends; use "ambience" instead. Music repeats only with "loop": true. Example: { "asset": "dawn-wind", "kind": "ambience", "from": "s1", "to": "s3" }, { "asset": "title-chime", "kind": "sting", "from": "s3", "atSec": 1 }.
+28. Write a shot's "dialogue" as a list of lines when who speaks matters: { "speaker": "ANNA", "text": "Who's there?" } is said on screen (the video model lip-syncs it); add "offscreen": true for a voice that belongs to the scene but whose speaker is not in frame (behind a door, on the phone, calling from out of shot): nobody in frame moves their lips. It is not a voiceover (narration over the film, an "audio" cue of kind "voiceover"). The app appends a numbered "Dialogue:" block to the clip prompt marking each line on screen (lip-synced) or OFF-SCREEN (heard, not seen); write the clip prompt so the speaker is out of frame and say how the people in frame react. If an off-screen line is recorded separately instead of generated with the clip, also add an "audio" cue of kind "dialogue" "from" that shot with "line" (its 1-based number in the list) and "atSec"; the Dialogue block then tells the model not to voice it. "captions": true shows the lines' words. Example: "dialogue": [{ "speaker": "FRIEND", "text": "You made it!", "offscreen": true }].
 
 ## EXAMPLE
 ```json
@@ -382,6 +392,32 @@ Fonts — TextStyle "font":
       ]
     },
     {
+      "id": "dawn-wind",
+      "name": "Dawn wind",
+      "type": "audio",
+      "aspect": "16:9",
+      "prompt": "Loopable 30 s ambience: soft wind across an open grassy hill before sunrise, a few distant birds, no music, no voices",
+      "references": [],
+      "source": "generate",
+      "qa": [
+        "Loops without an audible seam",
+        "No music or voices"
+      ]
+    },
+    {
+      "id": "title-chime",
+      "name": "Title chime",
+      "type": "audio",
+      "aspect": "16:9",
+      "prompt": "A single warm, airy chime with a soft shimmer tail, about 2 s, for a title appearing at sunrise",
+      "references": [],
+      "source": "generate",
+      "qa": [
+        "One clean chime, about 2 s",
+        "No clicks at the start"
+      ]
+    },
+    {
       "id": "s1-end",
       "name": "Last frame of shot 1",
       "type": "frame",
@@ -403,7 +439,7 @@ Fonts — TextStyle "font":
       "title": "The climb",
       "description": "She climbs the last stretch of the hill road.",
       "durationSec": 4,
-      "prompt": "References:\nImage 1 (The rider): reference only, not a frame: keep her face, red jacket and grey helmet.\nImage 2 (Hill road): reference only, not a frame: the road, hill and sky colours; do not copy its framing.\nNo image is the start frame. Framing: side tracking shot, she rides into frame and ends near the hilltop.\n\nThe cyclist in a red jacket pedals hard up a winding hill road before sunrise, mist below, side tracking shot",
+      "prompt": "References:\nImage 1 (Keyframe · The climb): START FRAME: the clip opens on exactly this image.\nImage 2 (The rider): reference only, not a frame: keep her face, red jacket and grey helmet.\nImage 3 (Hill road): reference only, not a frame: the road, hill and sky colours; do not copy its framing.\nFraming: side tracking shot from the start frame, she rides on and ends near the hilltop.\n\nThe cyclist in a red jacket pedals hard up the winding hill road before sunrise, mist below, the camera tracking beside her",
       "assets": [
         "rider",
         "hill"
@@ -413,6 +449,17 @@ Fonts — TextStyle "font":
         "Ends near the hilltop"
       ],
       "camera": "Side tracking shot",
+      "keyframe": {
+        "prompt": "References:\nImage 1 (The rider): reference only: keep this identity (face, body, clothes).\nImage 2 (Hill road): reference only: materials, colours and objects only; do not reproduce its framing or wide view.\n\nSide view of the cyclist in a red jacket and grey helmet riding up a winding hill road before sunrise, mist in the valley below, soft blue-gold pre-dawn light, natural cinematic realism",
+        "references": [
+          "rider",
+          "hill"
+        ],
+        "qa": [
+          "Her face, red jacket and grey helmet match the portrait",
+          "Pre-dawn blue-gold light with mist below"
+        ]
+      },
       "layers": [
         {
           "id": "s1-time",
@@ -440,7 +487,7 @@ Fonts — TextStyle "font":
       "description": "She reaches the top and stops.",
       "durationSec": 3,
       "genDurationSec": 5,
-      "prompt": "References:\nImage 1 (Last frame of shot 1): START FRAME: the clip opens on exactly this image.\nImage 2 (The rider): reference only, not a frame: keep her face, jacket and helmet.\nFraming: opens on the start frame, ends on a medium shot of her stopping at the top.\n\nContinuing from the first frame: the cyclist reaches the hilltop, stops and looks toward the horizon, breathing hard",
+      "prompt": "References:\nImage 1 (Last frame of shot 1): START FRAME: the clip opens on exactly this image.\nImage 2 (The rider): reference only, not a frame: keep her face, jacket and helmet.\nFraming: opens on the start frame, ends on a medium shot of her stopping at the top.\n\nContinuing from the first frame: the cyclist reaches the hilltop, stops and looks toward the horizon, breathing hard; a friend's voice calls from out of frame and she turns toward it, smiling",
       "assets": [
         "s1-end",
         "rider"
@@ -457,7 +504,15 @@ Fonts — TextStyle "font":
       ],
       "qa": [
         "First frame matches the end of shot 1",
-        "Same jacket and helmet"
+        "Same jacket and helmet",
+        "Nobody in frame speaks; she turns toward the voice"
+      ],
+      "dialogue": [
+        {
+          "speaker": "FRIEND",
+          "text": "You made it!",
+          "offscreen": true
+        }
       ]
     },
     {
@@ -465,9 +520,21 @@ Fonts — TextStyle "font":
       "title": "Sunrise",
       "description": "The sun rises over the valley; title card.",
       "durationSec": 4,
-      "prompt": "References:\nImage 1 (Hill road): reference only, not a frame: the same hill and valley.\nNo image is the start frame. Framing: one static wide shot.\n\nStatic wide shot from behind the cyclist on the hilltop as the sun rises over the misty valley, clear empty sky in the upper third, no text",
+      "prompt": "References:\nImage 1 (Hill road): reference only, not a frame: materials, colours and objects only; the same hill and valley.\nImage 2 (Keyframe · The climb): reference only, not a frame: overall look; same pre-dawn palette and mist.\nNo image is the start frame. Framing: one static wide shot.\n\nStatic wide shot from behind the cyclist on the hilltop as the sun rises over the misty valley, clear empty sky in the upper third, no text",
       "assets": [
-        "hill"
+        "hill",
+        "s1.keyframe"
+      ],
+      "references": [
+        {
+          "asset": "hill",
+          "role": "detail"
+        },
+        {
+          "asset": "s1.keyframe",
+          "role": "look",
+          "note": "same pre-dawn palette and mist"
+        }
       ],
       "qa": [
         "Sun is rising",
@@ -566,6 +633,22 @@ Fonts — TextStyle "font":
       "from": "s3",
       "to": "s4",
       "kind": "cut"
+    }
+  ],
+  "audio": [
+    {
+      "id": "wind",
+      "asset": "dawn-wind",
+      "kind": "ambience",
+      "from": "s1",
+      "to": "s3"
+    },
+    {
+      "id": "chime",
+      "asset": "title-chime",
+      "kind": "sting",
+      "from": "s3",
+      "atSec": 1
     }
   ]
 }

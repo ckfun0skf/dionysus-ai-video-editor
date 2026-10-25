@@ -2474,6 +2474,12 @@
           "prs": [
             "https://github.com/ckfun0skf/dionysus-ai-video-editor/pull/219"
           ]
+        },
+        {
+          "id": "V2-SB-135",
+          "title": "Storyboard: reference other shots' keyframes (<shotId>.keyframe), ambience beds and stings (looping audio), off-screen dialogue lines (RULES 26-28)",
+          "status": "done",
+          "progress": 100
         }
       ]
     },

@@ -112,7 +112,12 @@ export interface StoryReference { asset: string; role: ReferenceRole; note?: str
 export interface StoryShot {
   id: string; title: string; description: string; durationSec: number;
   /** Required for `render: "ai"`; may be empty for html and still shots. */
-  prompt: string; assets: string[]; qa: string[]; camera?: string; dialogue?: string;
+  prompt: string; assets: string[]; qa: string[]; camera?: string;
+  /**
+   * Spoken lines: plain text, or (V2-SB-135) a list of lines with a speaker and `offscreen: true` for a voice heard but
+   * not seen (not lip-synced; unlike a voiceover it belongs to the scene). The clip prompt lists list-form lines.
+   */
+  dialogue?: string | StoryDialogueLine[];
   /** Omitted = "ai". */
   render?: ShotRender;
   /** html asset (render html) or image asset (render still). Kept but ignored for render ai. */
@@ -136,24 +141,65 @@ export interface StoryShot {
 export interface StoryKeyframe { prompt: string; references: StoryAssetRef[]; qa: string[] }
 /** The asset id a shot's keyframe gets (V2-SB-124); an asset may not use it. */
 export const keyframeId = (shotId: string) => `${shotId}.keyframe`;
+/** V2-SB-135: the shot whose keyframe `id` names ("s2.keyframe" → "s2"), or undefined when it is not a keyframe id. */
+export const keyframeShotOf = (id: string): string | undefined => (id.endsWith(".keyframe") && id.length > 9 ? id.slice(0, -9) : undefined);
+/** V2-SB-135: one spoken line of a shot. `offscreen` = heard but not seen: nobody in frame speaks it (no lip-sync). */
+export interface StoryDialogueLine { speaker?: string; text: string; offscreen?: boolean }
+/** The lines of a shot's dialogue, or undefined for plain-text dialogue (and none). */
+export const dialogueLines = (d: StoryShot["dialogue"]): StoryDialogueLine[] | undefined => (Array.isArray(d) && d.length ? d : undefined);
+const OS_RE = /\((?:O\.?S\.?|off-?screen)\)/i;
+/** Dialogue lines as editable text: one line each, "SPEAKER (O.S.): text" for an off-screen line (screenplay style). */
+export function dialogueText(d: StoryShot["dialogue"]): string {
+  if (typeof d === "string") return d;
+  return (d ?? []).map((l) => `${l.speaker ?? ""}${l.offscreen ? `${l.speaker ? " " : ""}(O.S.)` : ""}${l.speaker || l.offscreen ? ": " : ""}${l.text}`).join("\n");
+}
+/** True when dialogue text marks an off-screen line ("NAME (O.S.): …"), so it should be kept as lines. */
+export const hasOffscreenMark = (text: string) => text.split("\n").some((l) => OS_RE.test(l.split(":")[0] ?? ""));
+/** Parse `dialogueText` back into lines: "SPEAKER (O.S.): text", "SPEAKER: text" or just "text" per line. */
+export function parseDialogueText(text: string): StoryDialogueLine[] {
+  return text.split("\n").map((l) => l.trim()).filter(Boolean).map((l) => {
+    const m = /^([^:]{0,60}?):\s*(.+)$/.exec(l);
+    if (!m) return { text: l };
+    const head = m[1].trim(), offscreen = OS_RE.test(head), speaker = head.replace(OS_RE, "").trim();
+    if (!speaker && !offscreen) return { text: l };
+    return { ...(speaker ? { speaker } : {}), text: m[2].trim(), ...(offscreen ? { offscreen: true } : {}) };
+  });
+}
 export interface StoryConnection { from: string; to: string; kind: ConnectionKind; note?: string; transition?: StoryTransition }
 export interface StoryMeta { title: string; logline?: string; synopsis?: string; aspect: string; style?: string; language?: string; textStyles?: Record<string, StoryTextStyle> }
 /** V2-SB-125: what an audio cue is for. It sets the defaults (music sits under the picture and fades). */
-export const AUDIO_KINDS = ["voiceover", "music", "sfx"] as const;
+export const AUDIO_KINDS = ["voiceover", "music", "sfx", "ambience", "sting", "dialogue"] as const;
 export type AudioKind = (typeof AUDIO_KINDS)[number];
+/**
+ * V2-SB-135: kinds that play once at one moment of the "from" shot: a sting (a short musical hit) and a recorded
+ * dialogue line. They take no "to".
+ */
+export const ONE_SHOT_AUDIO_KINDS: readonly AudioKind[] = ["sting", "dialogue"];
+/** V2-SB-135: kinds that may loop to fill their span ("loop"); an ambience bed loops unless "loop": false. */
+export const LOOP_AUDIO_KINDS: readonly AudioKind[] = ["music", "ambience"];
+/** Whether a cue repeats its audio to fill its span (V2-SB-135). */
+export const audioLoops = (c: Pick<StoryAudio, "kind" | "loop">) => LOOP_AUDIO_KINDS.includes(c.kind) && (c.loop ?? c.kind === "ambience");
 /** Volume (0–1) and fades (seconds) a cue gets when it does not say. */
 export const AUDIO_DEFAULTS: Record<AudioKind, { volume: number; fadeInSec: number; fadeOutSec: number }> = {
   voiceover: { volume: 1, fadeInSec: 0, fadeOutSec: 0 },
   music: { volume: 0.35, fadeInSec: 1, fadeOutSec: 1 },
   sfx: { volume: 1, fadeInSec: 0, fadeOutSec: 0 },
+  ambience: { volume: 0.5, fadeInSec: 1, fadeOutSec: 1 },
+  sting: { volume: 0.8, fadeInSec: 0, fadeOutSec: 0 },
+  dialogue: { volume: 1, fadeInSec: 0, fadeOutSec: 0 },
 };
 /**
  * V2-SB-125: an audio asset placed in story time. It starts `atSec` into shot `from` and runs to the end of shot `to`
- * (a voiceover or music bed across shots), or for `durationSec`, else for the audio's own length. Never looped.
+ * (a voiceover or music bed across shots), or for `durationSec`, else for the audio's own length. Only music and
+ * ambience loop (V2-SB-135, `audioLoops`); a looping cue without "to" or "durationSec" fills its "from" shot.
  */
 export interface StoryAudio {
   id: string; asset: string; kind: AudioKind; from: string; to?: string;
   atSec?: number; durationSec?: number; volume?: number; fadeInSec?: number; fadeOutSec?: number;
+  /** V2-SB-135: music and ambience only: repeat the audio to fill the span (ambience default true, music false). */
+  loop?: boolean;
+  /** V2-SB-135: dialogue cues only: the 1-based line of the "from" shot's dialogue this recording is. */
+  line?: number;
 }
 export interface StoryDoc { format: typeof STORYBOARD_FORMAT; meta: StoryMeta; assets: StoryAsset[]; shots: StoryShot[]; connections: StoryConnection[]; audio?: StoryAudio[] }
 
@@ -475,6 +521,10 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
   if (Array.isArray(raw.shots) && rawShots.length === 0) err("shots", "Add at least one shot.");
   const shotIds = new Set<string>();
   const shotPre = rawShots.map((s, i) => { const path = `shots[${i}]`; if (!isObj(s)) { err(path, "Each shot must be an object."); return undefined; } return { s, path, id: checkId(s.id, path, shotIds, "shot") }; });
+  /** V2-SB-135: shots with a keyframe (render "ai"), whose "<shot id>.keyframe" other shots and assets may reference. */
+  const kfShots = new Set(shotPre.flatMap((x) => (x && isObj(x.s.keyframe) && (x.s.render === undefined || x.s.render === "ai") ? [x.id] : [])));
+  const isKfRef = (id: string) => { const sid = keyframeShotOf(id); return !!sid && kfShots.has(sid); };
+  let kfRefsUsed = false;
 
   /**
    * assets[].references (V2-SB-123): asset ids, or objects { asset, role?, note? } that say how the image model should
@@ -549,14 +599,24 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
     }
     assets.push({ id, name, type, aspect: asp || aspect, prompt, references: assetRefsOf(a.references, `${path}.references`), source, qa: strList(a.qa, `${path}.qa`), ...(notes ? { notes } : {}), ...(params ? { params } : {}), ...(genDurationSec ? { genDurationSec } : {}) });
   });
+  /** V2-SB-135: why "<shot id>.keyframe" can't be referenced (unknown shot, or the shot has no keyframe), else undefined. */
+  const kfRefProblem = (id: string): string | undefined => {
+    const sid = keyframeShotOf(id);
+    if (!sid || assetIds.has(id) || kfShots.has(sid)) return undefined;
+    return shotIds.has(sid) ? `Shot "${sid}" has no keyframe, so there is no "${id}" to reference. Give shot "${sid}" a "keyframe" (render "ai") or reference another asset.` : `"${id}" names the keyframe of shot "${sid}", but there is no such shot.`;
+  };
+  /** An id a reference may name: an asset, or another shot's keyframe (V2-SB-135). */
+  const refKnown = (id: string) => { if (assetIds.has(id)) return true; if (isKfRef(id)) { kfRefsUsed = true; return true; } return false; };
   assets.forEach((a, i) => a.references.map(assetRefId).forEach((r, j) => {
     if (r === a.id) err(`assets[${i}].references[${j}]`, `Asset "${a.id}" can't reference itself.`);
-    else if (!assetIds.has(r)) err(`assets[${i}].references[${j}]`, `Unknown asset "${r}".`);
+    else if (!refKnown(r)) err(`assets[${i}].references[${j}]`, kfRefProblem(r) ?? `Unknown asset "${r}".`);
   }));
   const refCycle = findCycle(new Map(assets.map((a) => [a.id, a.references.map(assetRefId)])));
   if (refCycle) err("assets", `Assets reference each other in a loop: ${refCycle.join(" → ")}.`);
   const assetById = new Map(assets.map((a) => [a.id, a]));
-  const unknownAsset = (id: string) => `Unknown asset "${id}"${assetIds.size ? ` (assets: ${list([...assetIds], 8)})` : ""}.`;
+  const unknownAsset = (id: string) => kfRefProblem(id) ?? `Unknown asset "${id}"${assetIds.size ? ` (assets: ${list([...assetIds], 8)})` : ""}.`;
+  /** The asset type of a reference: a keyframe reference is a "frame" (V2-SB-135). */
+  const refType = (id: string): StoryAssetType | undefined => assetById.get(id)?.type ?? (isKfRef(id) ? "frame" : undefined);
 
   /**
    * V2-HTML-PARAMS: per-use values for html asset `assetId`. Checked against the asset's declared `params` when it
@@ -697,7 +757,7 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
    * role warns and is used as "detail"; a missing role is inferred from the asset type. Referenced assets missing
    * from the shot's "assets" are added to it, so they count as its inputs.
    */
-  const referencesOf = (v: unknown, path: string, used: string[]): StoryReference[] | undefined => {
+  const referencesOf = (v: unknown, path: string, used: string[], shotId: string): StoryReference[] | undefined => {
     if (v === undefined) return undefined;
     if (!Array.isArray(v)) { err(path, '"references" must be a list like [ { "asset": "<asset id>", "role": "start-frame" } ].'); return undefined; }
     const out: StoryReference[] = [];
@@ -706,11 +766,12 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
       if (!isObj(r)) return err(rp, 'Each reference must be an object { "asset": "<asset id>", "role": "<role>", "note"?: "…" }.');
       const asset = str(r.asset) ?? "";
       if (!asset) return err(`${rp}.asset`, 'A reference needs "asset": the id of the asset to attach.');
-      const a = assetById.get(asset);
-      if (!a) return err(`${rp}.asset`, unknownAsset(asset));
+      const a = assetById.get(asset), type = refType(asset);
+      if (asset === keyframeId(shotId)) return warn(rp, `"${asset}" is this shot's own keyframe, which is always Image 1 (the start frame); the entry is ignored.`);
+      if (!type || !refKnown(asset)) return err(`${rp}.asset`, unknownAsset(asset));
       if (out.some((x) => x.asset === asset)) return warn(rp, `Asset "${asset}" is already in this shot's references; the repeat is ignored.`);
       let role: ReferenceRole;
-      if (r.role === undefined) role = inferReferenceRole(a.type, a.source.type === "lastFrame");
+      if (r.role === undefined) role = inferReferenceRole(type, a?.source.type === "lastFrame");
       else if (REFERENCE_ROLES.includes(str(r.role) as ReferenceRole)) role = str(r.role) as ReferenceRole;
       else { warn(`${rp}.role`, `Unknown role ${JSON.stringify(r.role)}; using "detail". Roles: ${REFERENCE_ROLES.join(", ")}.`); role = "detail"; }
       const note = str(r.note);
@@ -736,8 +797,31 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
     if (!prompt) err(`${path}.prompt`, `Shot "${shotId}" has a keyframe, so it needs a keyframe "prompt" (the still image to generate first).`);
     if (assetIds.has(keyframeId(shotId))) err(path, `Asset id "${keyframeId(shotId)}" is reserved for the keyframe of shot "${shotId}"; rename that asset.`);
     const references = assetRefsOf(v.references, `${path}.references`);
-    references.map(assetRefId).forEach((r, j) => { if (!assetIds.has(r)) err(`${path}.references[${j}]`, unknownAsset(r)); });
+    references.map(assetRefId).forEach((r, j) => {
+      if (r === keyframeId(shotId)) err(`${path}.references[${j}]`, `The keyframe of shot "${shotId}" can't reference itself.`);
+      else if (!refKnown(r)) err(`${path}.references[${j}]`, unknownAsset(r));
+    });
     return { prompt, references, qa: strList(v.qa, `${path}.qa`) };
+  };
+
+  /** shots[].dialogue: text, or (V2-SB-135) a list of lines: text or { "speaker"?, "text", "offscreen"? }. */
+  const dialogueOf = (v: unknown, path: string): StoryShot["dialogue"] => {
+    if (v === undefined) return undefined;
+    if (typeof v === "string") return str(v) || undefined;
+    if (!Array.isArray(v)) { warn(path, 'Should be text, or a list of lines like [ { "speaker": "ANNA", "text": "Who\'s there?", "offscreen": true } ]; it is ignored.'); return undefined; }
+    const lines: StoryDialogueLine[] = [];
+    v.forEach((l, j) => {
+      const lp = `${path}[${j}]`;
+      if (typeof l === "string") { const t = l.replace(/\s+/g, " ").trim(); if (t) lines.push({ text: t }); else warn(lp, "An empty line is ignored."); return; }
+      if (!isObj(l)) return err(lp, 'Each dialogue line must be text or { "speaker"?: "<who>", "text": "<the words>", "offscreen"?: true }.');
+      const text = typeof l.text === "string" ? l.text.replace(/\s+/g, " ").trim() : "";
+      if (!text) return err(`${lp}.text`, 'A dialogue line needs "text": the words spoken.');
+      const speaker = str(l.speaker)?.replace(/[:\n]/g, " ").trim();
+      if (l.offscreen !== undefined && typeof l.offscreen !== "boolean") warn(`${lp}.offscreen`, "offscreen should be true or false; ignoring it (the line is on screen).");
+      for (const k of Object.keys(l)) if (!["speaker", "text", "offscreen"].includes(k)) warn(`${lp}.${k}`, `Unknown dialogue line field "${k}" is ignored. Fields: speaker, text, offscreen.`);
+      lines.push({ ...(speaker ? { speaker } : {}), text, ...(l.offscreen === true ? { offscreen: true } : {}) });
+    });
+    return lines.length ? lines : undefined;
   };
 
   const shots: StoryShot[] = [];
@@ -754,9 +838,13 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
     const mode = render ?? "ai";
     const prompt = str(s.prompt) ?? "";
     if (!prompt && mode === "ai") err(`${path}.prompt`, `Shot "${id}" needs a clip generation "prompt".`);
-    const used = strList(s.assets, `${path}.assets`);
-    used.forEach((a, j) => { if (!assetIds.has(a)) err(`${path}.assets[${j}]`, unknownAsset(a)); });
-    const references = referencesOf(s.references, `${path}.references`, used);
+    const used = strList(s.assets, `${path}.assets`).filter((a, j) => {
+      if (a !== keyframeId(id) || assetIds.has(a)) return true;
+      warn(`${path}.assets[${j}]`, `"${a}" is this shot's own keyframe; it is always attached (Image 1), so the entry is ignored.`);
+      return false;
+    });
+    used.forEach((a, j) => { if (!refKnown(a)) err(`${path}.assets[${j}]`, unknownAsset(a)); });
+    const references = referencesOf(s.references, `${path}.references`, used, id);
     const shot: StoryShot = { id, title: str(s.title) || id, description: str(s.description) ?? "", durationSec: dur, prompt, assets: used, qa: strList(s.qa, `${path}.qa`) };
     if (references) shot.references = references;
     if (s.genDurationSec !== undefined) {
@@ -765,7 +853,7 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
       else if (Number.isFinite(dur) && g < dur - 1e-9) warn(`${path}.genDurationSec`, `genDurationSec ${fmt(g)} is shorter than durationSec ${fmt(dur)}; it is ignored. Generate at least the shot length.`);
       else if (!Number.isFinite(dur) || Math.abs(g - dur) > 1e-9) shot.genDurationSec = g;
     }
-    const camera = str(s.camera), dialogue = str(s.dialogue);
+    const camera = str(s.camera), dialogue = dialogueOf(s.dialogue, `${path}.dialogue`);
     if (camera) shot.camera = camera;
     if (dialogue) shot.dialogue = dialogue;
     if (render) shot.render = render;
@@ -815,6 +903,18 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
   }));
   const depCycle = findCycle(new Map([...deps].map(([k, v]) => [k, v.filter((d) => d !== k)])));
   if (depCycle) err("shots", `Last-frame links form a loop: ${depCycle.join(" → ")}.`);
+  // V2-SB-135: with keyframe references, a loop can also run through keyframes and shots (a keyframe made from an asset
+  // that is made from that keyframe, or from the last frame of a shot that uses it).
+  if (kfRefsUsed && !refCycle && !depCycle) {
+    const g = new Map<string, string[]>();
+    for (const a of assets) g.set(a.id, [...a.references.map(assetRefId), ...(a.source.type === "lastFrame" ? [`shot:${a.source.shot}`] : [])]);
+    for (const s of shots) {
+      if (s.keyframe) g.set(keyframeId(s.id), s.keyframe.references.map(assetRefId));
+      g.set(`shot:${s.id}`, [...s.assets, ...(s.references ?? []).map((r) => r.asset), ...(s.keyframe ? [keyframeId(s.id)] : [])]);
+    }
+    const loop = findCycle(g);
+    if (loop) err("shots", `Keyframe references form a loop: ${loop.map((n) => (n.startsWith("shot:") ? `shot "${n.slice(5)}"` : `"${n}"`)).join(" → ")}. Something can't be made from a picture that needs it first.`);
+  }
   // V2-SB-125: audio cues (voiceover, music beds, sound effects) placed by shot.
   const audio: StoryAudio[] = [];
   if (raw.audio !== undefined && !Array.isArray(raw.audio)) err("audio", '"audio" must be a list of cues.');
@@ -835,7 +935,25 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
     if (c.to !== undefined && !to) { warn(`${path}.to`, `"to" must be a shot id; it is ignored.`); to = undefined; }
     if (to && !shotIds.has(to)) err(`${path}.to`, `Unknown shot "${to}".`);
     else if (to && shotIds.has(from) && (order.get(to) ?? 0) < (order.get(from) ?? 0)) err(`${path}.to`, `Shot "${to}" comes before "${from}"; "to" is the last shot the cue plays under.`);
+    // V2-SB-135: stings and recorded lines are one-offs; a sound effect with "to" is usually a bed in disguise.
+    if (to && kind && ONE_SHOT_AUDIO_KINDS.includes(kind)) { warn(`${path}.to`, `A ${kind} plays once at "atSec" in "from"; "to" is ignored. For a bed across shots use kind "ambience" or "music".`); to = undefined; }
+    else if (to && kind === "sfx") warn(`${path}.to`, `A sound effect plays once from "atSec" and is cut at the end of "${to}"; it is not looped. For a continuous background sound (rain, traffic, room tone) under several shots use kind "ambience".`);
     const cue: StoryAudio = { id, asset, kind: kind ?? "sfx", from, ...(to && to !== from ? { to } : {}) };
+    if (c.loop !== undefined) {
+      if (typeof c.loop !== "boolean") warn(`${path}.loop`, "loop should be true or false; ignoring it.");
+      else if (!LOOP_AUDIO_KINDS.includes(cue.kind)) warn(`${path}.loop`, `Only music and ambience cues loop; "loop" is ignored for a ${cue.kind} cue.`);
+      else cue.loop = c.loop;
+    }
+    if (c.line !== undefined) {
+      const n = num(c.line), lines = dialogueLines(shots.find((s) => s.id === from)?.dialogue);
+      if (cue.kind !== "dialogue") warn(`${path}.line`, `"line" only applies to kind "dialogue" cues; it is ignored.`);
+      else if (n === undefined || !Number.isInteger(n) || n < 1) warn(`${path}.line`, `line ${JSON.stringify(c.line)} is ignored: use the 1-based number of a line in shot "${from}"'s "dialogue" list.`);
+      else if (!lines || n > lines.length) warn(`${path}.line`, `Shot "${from}" has ${lines ? `only ${lines.length} dialogue line${lines.length === 1 ? "" : "s"}` : "no dialogue list"}; "line" ${n} is ignored.`);
+      else {
+        cue.line = n;
+        if (!lines[n - 1].offscreen) warn(`${path}.line`, `Line ${n} of shot "${from}" is on screen, so the video model voices it with lip-sync; a separate recording doubles it. Mark the line "offscreen": true or drop this cue.`);
+      }
+    }
     const sec = (k: "atSec" | "durationSec" | "fadeInSec" | "fadeOutSec", min: number, rule: string) => {
       if (c[k] === undefined) return;
       const n = num(c[k]);
@@ -854,6 +972,7 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
     const fromShot = shots.find((s) => s.id === from);
     if (fromShot && cue.atSec !== undefined && cue.atSec >= fromShot.durationSec) warn(`${path}.atSec`, `atSec ${cue.atSec} is at or past the end of shot "${from}" (${fromShot.durationSec} s); the cue starts later than that shot.`);
     if (cue.to && cue.durationSec !== undefined) warn(`${path}.durationSec`, `The cue has both "to" and "durationSec"; it stops at whichever comes first.`);
+    if (cue.loop && !cue.to && cue.durationSec === undefined) warn(`${path}.loop`, `A looping cue without "to" or "durationSec" fills only shot "${from}"; give "to" (the last shot it plays under).`);
     audio.push(cue);
   });
 

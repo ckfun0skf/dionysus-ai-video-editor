@@ -52,10 +52,10 @@ describe("AI planner guide (V2-SB-114)", () => {
     expect(md).toContain("length 0.05–1, default 0.5 (fraction of the effect's time range, not seconds");
   });
 
-  it("the full prompt inlines the guide with RULES 1-25; the short prompt links to it", () => {
+  it("the full prompt inlines the guide with RULES 1-28; the short prompt links to it", () => {
     const full = storyboardSystemPrompt();
     for (const s of ["FORMAT (", "PRESETS", "RULES", "EXAMPLE", `14. ${RULES[13]}`, "not seconds", "START FRAME", "\"references\"?", "\"genDurationSec\"?", "- crossfade:", "- ken-burns:"]) expect(full).toContain(s);
-    expect(RULES).toHaveLength(25);
+    expect(RULES).toHaveLength(28);
     // V2-SB-128: blend modes: the format lines, the blend catalogue and a rule with an example that imports cleanly.
     expect(full).toContain('"blend"?: "<blend id>", "opacity"?: number (0-1, default 1)');
     expect(full).toContain('Blend modes — shots[].layers[].blend');
@@ -123,6 +123,32 @@ describe("AI planner guide (V2-SB-114)", () => {
     const full = storyboardSystemPrompt();
     expect(full).toContain('"params"?: { "<key>": Param }');
     expect(full).toContain('"params"?: { "<key>": value },   // render "html" only');
+  });
+
+  it("RULES 26-28 (V2-SB-135): keyframe references, ambience and stings, off-screen dialogue; the example uses each", () => {
+    expect(RULE_LIST.slice(25).map((r) => r.key)).toEqual(["keyframe-refs", "audio-ambience-sting", "offscreen-dialogue"]);
+    expect(ruleNumber("keyframe-refs")).toBe(26);
+    expect(ruleNumber("audio-ambience-sting")).toBe(27);
+    expect(ruleNumber("offscreen-dialogue")).toBe(28);
+    const full = storyboardSystemPrompt();
+    for (const k of ["keyframe-refs", "audio-ambience-sting", "offscreen-dialogue"]) expect(full).toContain(`${ruleNumber(k)}. ${RULES[ruleNumber(k) - 1]}`);
+    expect(RULES[ruleNumber("keyframe")- 1]).toContain("(RULE 26)");
+    expect(RULES[ruleNumber("audio") - 1]).toContain("(RULE 27)");
+    expect(RULES[ruleNumber("audio") - 1]).toContain("(RULE 28)");
+    expect(RULES[25]).toContain('{ "asset": "s1.keyframe", "role": "look", "note": "same pre-dawn palette and mist" }');
+    expect(RULES[26]).toMatch(/never give a sound effect a "to"/);
+    const [amb, sting] = JSON.parse(`[${RULES[26].match(/(\{ "asset": "dawn-wind".*?"atSec": 1 \})/)![1]}]`);
+    expect(amb).toMatchObject({ kind: "ambience", to: "s3" });
+    expect(sting).toMatchObject({ kind: "sting", atSec: 1 });
+    expect(JSON.parse(RULES[27].match(/"dialogue": (\[.*?\])\./)![1])).toEqual([{ speaker: "FRIEND", text: "You made it!", offscreen: true }]);
+    expect(full).toContain('"kind": "voiceover" | "music" | "sfx" | "ambience" | "sting" | "dialogue"');
+    expect(full).toContain('"dialogue"?: string | [ string | { "speaker"?: string, "text": string, "offscreen"?: boolean } ]');
+    // The example: s3 reuses s1's keyframe, an ambience bed, a sting and an off-screen line.
+    const ex = EXAMPLE_STORYBOARD;
+    expect(ex.shots.find((s) => s.id === "s3")!.references).toContainEqual({ asset: "s1.keyframe", role: "look", note: "same pre-dawn palette and mist" });
+    expect(ex.audio!.map((c) => c.kind)).toEqual(["ambience", "sting"]);
+    expect(ex.shots.find((s) => s.id === "s2")!.dialogue).toEqual([{ speaker: "FRIEND", text: "You made it!", offscreen: true }]);
+    expect(exampleStoryboardJson()).toContain('"s1.keyframe"');
   });
 
   it("the example imports with no warnings and uses v1.1 fields", () => {

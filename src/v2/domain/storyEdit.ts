@@ -12,7 +12,7 @@
 import type { Project } from "./model";
 import type { AssetSlot, QaCheck, Shot, Storyboard } from "./storyboard";
 import { addSlot, withRefs, type SlotPatch } from "./storyRefs";
-import type { ConnectionKind, StoryConnection, StoryEffect, StoryLayer, StoryTransition } from "./storyJson";
+import { dialogueText, hasOffscreenMark, parseDialogueText, type ConnectionKind, type StoryConnection, type StoryEffect, type StoryLayer, type StoryTransition } from "./storyJson";
 
 export const MIN_SHOT_SEC = 0.5, MAX_SHOT_SEC = 120, DEFAULT_SHOT_SEC = 5;
 /** Shortest layer or effect kept when a shot is shortened (seconds). */
@@ -78,7 +78,12 @@ function renameShotAssets(p: Project, b: Storyboard): Project {
 
 /** Shot fields a user can edit. `render` "ai" clears the clip slot. */
 export interface ShotPatch {
-  title?: string; description?: string; durationSec?: number; prompt?: string; camera?: string; dialogue?: string; captions?: boolean;
+  title?: string; description?: string; durationSec?: number; prompt?: string; camera?: string;
+  /**
+   * The dialogue text. V2-SB-135: a shot with dialogue lines, or text marking a line "NAME (O.S.): …", is kept as
+   * lines (one per text line, "SPEAKER: text" or "SPEAKER (O.S.): text"); otherwise it stays plain text.
+   */
+  dialogue?: string; captions?: boolean;
   qa?: QaCheck[]; layers?: StoryLayer[]; effects?: StoryEffect[];
   render?: "ai" | "html" | "still"; clipSlot?: string;
   /** V2-SB-121: length to generate; null clears it. Ignored (cleared) when not longer than `durationSec`. */
@@ -118,6 +123,10 @@ export function updateShot(p: Project, id: string, patch: ShotPatch): Project {
   const text = (k: "title" | "description" | "prompt") => { if (patch[k] !== undefined) n[k] = k === "title" ? patch[k]!.trim() || s.title : patch[k]!; };
   text("title"); text("description"); text("prompt");
   for (const k of ["camera", "dialogue"] as const) if (patch[k] !== undefined) { const v = patch[k]!.trim(); if (v) n[k] = patch[k]; else delete n[k]; }
+  if (patch.dialogue !== undefined) {
+    const lines = n.dialogue && (s.lines?.length || hasOffscreenMark(n.dialogue)) ? parseDialogueText(n.dialogue) : [];
+    if (lines.length) { n.lines = lines; n.dialogue = dialogueText(lines); } else delete n.lines;
+  }
   if (patch.captions !== undefined) { if (patch.captions) n.captions = true; else delete n.captions; }
   if (patch.qa) n.qa = patch.qa.filter((q) => q.text.trim()).map((q) => ({ id: q.id, text: q.text.trim() }));
   if (patch.layers) { if (patch.layers.length) n.layers = patch.layers; else delete n.layers; }
