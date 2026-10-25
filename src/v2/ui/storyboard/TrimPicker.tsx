@@ -2,6 +2,7 @@
  * V2-SB-121: choose which part of a clip a shot uses. A fixed window as long as the shot slides over a filmstrip of
  * the clip (drag it, tap the strip, or use the slider), with a preview that plays just the window.
  * On upload it also offers keeping the whole clip, which makes the shot that long instead.
+ * V2-SB-133: the same picker trims a video asset's upload to the length its layers use (`subject: "layer"`).
  */
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
@@ -61,9 +62,11 @@ export interface TrimPickerProps {
   /** Upload: keep the whole clip (the shot becomes that long). Adjust: clear the trim. */
   onFull: () => void;
   onCancel: () => void;
+  /** What the window is for: a shot's length (default) or the length of the video layers using an asset (V2-SB-133). */
+  subject?: "shot" | "layer";
 }
 
-export function TrimPicker({ clip, totalSec, windowSec, initialInSec, mode, onTrim, onFull, onCancel }: TrimPickerProps) {
+export function TrimPicker({ clip, totalSec, windowSec, initialInSec, mode, onTrim, onFull, onCancel, subject = "shot" }: TrimPickerProps) {
   const url = useMemo(() => URL.createObjectURL(clip), [clip]);
   useEffect(() => () => URL.revokeObjectURL(url), [url]);
   const win = Math.min(windowSec, totalSec);
@@ -117,7 +120,8 @@ export function TrimPicker({ clip, totalSec, windowSec, initialInSec, mode, onTr
   const [host] = useState<Element>(() => document.querySelector(".v2-app") ?? document.body);
   const upload = mode === "upload";
   const trimming = !upload || choice === "trim";
-  const title = upload ? `This clip is ${fmt(totalSec)}, the shot is planned at ${fmt(windowSec)}` : "Adjust trim";
+  const layer = subject === "layer";
+  const title = upload ? `This clip is ${fmt(totalSec)}, ${layer ? "its layers use" : "the shot is planned at"} ${fmt(windowSec)}` : "Adjust trim";
   return createPortal(
     <div className="v2-modal v2-trim" role="dialog" aria-modal="true" aria-label={upload ? "Trim the upload" : "Adjust trim"} onKeyDown={onKey} onPointerDown={(e) => e.stopPropagation()}>
       <div className="v2-modal-card v2-trim-card" ref={card}>
@@ -148,7 +152,7 @@ export function TrimPicker({ clip, totalSec, windowSec, initialInSec, mode, onTr
               aria-valuetext={`Uses ${fmt(inSec)} to ${fmt(inSec + win)} of ${fmt(totalSec)}`} onChange={(e) => move(Number(e.target.value))} {...(!upload ? { "data-autofocus": true } : {})} />
             <p className="v2-hint v2-trim-read" aria-live="polite">Uses {fmt(inSec)} – {fmt(inSec + win)} of {fmt(totalSec)}</p>
           </>
-        ) : <p className="v2-hint">The whole clip is used and the shot is planned at {fmt(totalSec)} from now on.</p>}
+        ) : <p className="v2-hint">{layer ? "The whole clip is kept; its layers start at 0 s, or at their own in point." : `The whole clip is used and the shot is planned at ${fmt(totalSec)} from now on.`}</p>}
         <div className="v2-modal-actions">
           {!upload && <button type="button" className="v2-btn" onClick={onFull}>Use full clip</button>}
           <button type="button" className="v2-btn" onClick={onCancel}>Cancel</button>

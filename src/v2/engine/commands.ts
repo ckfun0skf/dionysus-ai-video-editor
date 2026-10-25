@@ -1,6 +1,6 @@
 /** Command factories for the MVP timeline. Each wraps a pure domain op. */
 import type { Command } from "./engine";
-import { DEFAULT_EFFECT_TICKS, DEFAULT_IMAGE_TICKS, newId, trackKindFor, type Asset, type AssetVersion, type Composition, type Placement, type Project, type TrackKind, transformOf } from "../domain/model";
+import { DEFAULT_EFFECT_TICKS, DEFAULT_IMAGE_TICKS, findPlacement, newId, sourceInMax, trackKindFor, type Asset, type AssetVersion, type Composition, type Placement, type Project, type TrackKind, transformOf } from "../domain/model";
 import * as ops from "../domain/ops";
 import * as layers from "../domain/layerStyle";
 import * as cueOps from "../domain/subtitleLayer";
@@ -179,6 +179,15 @@ export const setSpeed = (id: string, speed: number): Command => ({ label: `Speed
 export const setTransition = (id: string, t: transitions.Transition | undefined): Command => ({ label: t ? `${(transitions.transitionKind(t.kind)?.label ?? "Transition")} ${t.durationTicks / 120000}s` : "Remove transition", coalesceKey: `transition:${id}`, apply: (p) => withRoot(p, (c) => transitions.setTransition(c, id, t)) });
 /** "Apply to all": the same transition (or none) on every cut of the clip's track, one undo step. */
 export const setTransitionAll = (id: string, t: transitions.Transition | undefined): Command => ({ label: t ? `${(transitions.transitionKind(t.kind)?.label ?? "Transition")} on all cuts` : "Remove all transitions", apply: (p) => withRoot(p, (c) => transitions.setTransitionAll(c, id, t)) });
+/** V2-SB-133: the clip's in point (where it starts in its video), clamped so the clip still fits in the media. */
+export const setSourceIn = (id: string, ticks: number): Command => ({
+  label: "In point", coalesceKey: `sourceIn:${id}`,
+  apply: (p) => {
+    const pl = findPlacement(p.compositions[p.rootCompositionId], id)?.placement;
+    const max = pl ? sourceInMax(p, pl) : undefined;
+    return max === undefined ? p : withRoot(p, (c) => ops.setSourceIn(c, id, ticks, max));
+  },
+});
 export const setBlend = (id: string, blend: string | undefined): Command => ({ label: "Blend mode", coalesceKey: `blend:${id}`, apply: (p) => withRoot(p, (c) => ops.setBlend(c, id, blend)) });
 export const setReverse = (id: string, reverse: boolean): Command => ({ label: reverse ? "Reverse" : "Play forward", apply: (p) => withRoot(p, (c) => ops.setReverse(c, id, reverse)) });
 export const freezeFrame = (id: string, at: number, holdTicks = 3 * 120_000): Command => ({ label: "Freeze frame", apply: (p) => withRoot(p, (c) => ops.freezeFrame(c, id, at, holdTicks)) });

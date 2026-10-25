@@ -236,6 +236,17 @@ export function setSpeed(comp: Composition, placementId: string, speed: number):
   });
 }
 
+/** V2-SB-133: slip a clip's source in point (its start in the media) to `ticks`, clamped to 0..`maxTicks`; length unchanged. */
+export function setSourceIn(comp: Composition, placementId: string, ticks: number, maxTicks: number): Composition {
+  const at = Math.round(Math.max(0, Math.min(maxTicks, ticks)));
+  return mapPlacement(comp, placementId, (p) => {
+    if (p.freeze || p.sourceInTicks === at) return p;
+    const out: Placement = { ...p, sourceInTicks: at };
+    delete out.storyTrim;
+    return out;
+  });
+}
+
 /** Blend mode of a visual clip (a `blend` preset id); undefined or "normal" clears it. */
 export function setBlend(comp: Composition, placementId: string, blend: string | undefined): Composition {
   return mapPlacement(comp, placementId, (p) => {

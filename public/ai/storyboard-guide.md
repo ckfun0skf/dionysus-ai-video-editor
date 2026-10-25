@@ -34,7 +34,8 @@ So split the work: generation prompts describe only the picture and its motion; 
       "source": "generate" | "upload" | { "type": "lastFrame", "shot": "<shot id>" },
                                  // plain strings "generate" / "upload" (default "generate"); an object only for lastFrame; "html" and "audio" can't use lastFrame
       "qa": string[],            // 2-5 concrete yes/no checks to verify the asset by looking
-      "params"?: { "<key>": Param }   // "html" only: values the clip exposes, set per use by shots and layers (see RULES)
+      "params"?: { "<key>": Param },  // "html" only: values the clip exposes, set per use by shots and layers (see RULES)
+      "genDurationSec"?: number  // video assets only: the length to generate (0.5-120) when its layers use less; layers pick their part with "inSec"
   } ],
   "shots": [ {                   // in playback order
       "id": string,
@@ -89,7 +90,8 @@ Layer (times in seconds from the shot start, 0 <= startSec < endSec <= durationS
            "follow"?: "frame" | "shot" }      // default "frame" (fixed); "shot" = moves with the shot's zoom/pan effects
   Media: { "id": string, "type": "html" | "image" | "video", "asset": "<asset id>", "startSec": number, "endSec": number,
            "box": { "x", "y", "width", "height" }, "blend"?: "<blend id>", "opacity"?: number (0-1), "follow"?: "frame" | "shot",
-           "params"?: { "<key>": value } }   // "html" layers only: this layer's values for the asset's "params"
+           "params"?: { "<key>": value },    // "html" layers only: this layer's values for the asset's "params"
+           "inSec"?: number }                  // video only: seconds into the asset's clip where the layer starts (default: the upload's trim, else 0)
 Param (an html asset's exposed value; "default" is required and must be valid):
   { "type": "text", "default": string } | { "type": "number", "default": number, "min"?: number, "max"?: number, "step"?: number }
   | { "type": "color", "default": "#rrggbb" } | { "type": "boolean", "default": boolean } | { "type": "select", "options": string[], "default": string }
@@ -263,6 +265,7 @@ Fonts — TextStyle "font":
 22. For overlays (light leaks, flares, dust, film grain, paper or ink textures) use an image or video layer with a "blend" mode and, if needed, an "opacity" below 1: "screen" or "add" for elements on black (the black disappears), "multiply" for elements on white (the white disappears), "overlay" or "soft-light" for textures on mid grey. Example: { "id": "leak", "type": "video", "asset": "light-leak", "startSec": 0, "endSec": 3, "box": { "x": 0, "y": 0, "width": 1, "height": 1 }, "blend": "screen", "opacity": 0.7 }. Ask for the overlay asset full-frame on a plain black, white or grey background. Leave "blend" out ("normal") for titles, logos and pictures that should simply cover the shot.
 23. An "html" asset's "prompt" is a design brief for the AI that will write the clip, not code: what it shows, how it moves over its length, colours, type and layout. List the media it uses (logos, photos, footage, music) in its "references"; the app copies the brief together with the HTML clip package instructions (format "dionysus.htmlclip/1", spec HTML_CLIP_PACKAGE.md next to this guide), filled in with the asset's size, length, bound assets and allowed libraries, and the user pastes the AI's single .html file back as a version.
 24. Reuse one "html" asset with "params" instead of duplicating it: when shots or layers show the same design with different words, numbers or colours (title cards, text-only cards, chapter and end cards, lower thirds, counters), make ONE html asset, declare what varies in its "params" ({ "<key>": { "type": "text" | "number" | "color" | "boolean" | "select", "default": …, "label"?, "description"? } }, numbers may add "min", "max", "step", a select lists its "options"), and give each use its own values: a text-only shot is { "render": "html", "clip": "<asset id>", "params": { "text": "THE END" } }, a layer over a shot is { "type": "html", "asset": "<asset id>", "box": { "x": 0, "y": 0, "width": 1, "height": 1 }, "params": { "text": "5:58 AM" } }. Omitted keys use the default; a value must match its type (numbers within min–max, a select one of its "options", colours "#rrggbb"). The brief describes the design for any value (long and short text) and names the params; the app tells the clip's AI to expose exactly these params and read them at render time. Keep plain captions over a shot as text layers.
+25. A "video" asset shown as a layer (a light leak, dust, smoke, a screen insert) is often generated longer than the layer needs, because video models have minimum or fixed lengths. Give the asset "genDurationSec" (the length to generate, 0.5-120, video assets only) and give each video layer "inSec": the second of the clip the layer starts from (default: the part the user picks when uploading, else 0). The layer still lasts endSec - startSec; keep inSec + that length within genDurationSec. One generated clip can feed several layers with different "inSec" values. Example, a 2 s screen-blend overlay cut from a 6 s clip: asset { "id": "dust-leak", "type": "video", "genDurationSec": 6, ... } and layer { "id": "s3-dust", "type": "video", "asset": "dust-leak", "startSec": 0, "endSec": 2, "inSec": 3, "box": { "x": 0, "y": 0, "width": 1, "height": 1 }, "blend": "screen" }. For a shot's own clip use the shot's "genDurationSec" instead (RULE 13).
 
 ## EXAMPLE
 ```json
@@ -353,6 +356,20 @@ Fonts — TextStyle "font":
           "label": "Placement"
         }
       }
+    },
+    {
+      "id": "sun-flare",
+      "name": "Sun flare",
+      "type": "video",
+      "aspect": "16:9",
+      "genDurationSec": 6,
+      "prompt": "Warm golden lens flare and soft light leaks drifting slowly across a pure black background, no objects, no text, natural cinematic realism",
+      "references": [],
+      "source": "generate",
+      "qa": [
+        "Background is pure black",
+        "Flare drifts slowly, no hard cuts"
+      ]
     },
     {
       "id": "s1-end",
@@ -448,6 +465,22 @@ Fonts — TextStyle "font":
       ],
       "camera": "Static wide shot",
       "layers": [
+        {
+          "id": "s3-flare",
+          "type": "video",
+          "asset": "sun-flare",
+          "startSec": 0,
+          "endSec": 2,
+          "inSec": 3,
+          "box": {
+            "x": 0,
+            "y": 0,
+            "width": 1,
+            "height": 1
+          },
+          "blend": "screen",
+          "opacity": 0.6
+        },
         {
           "id": "s3-title",
           "type": "text",

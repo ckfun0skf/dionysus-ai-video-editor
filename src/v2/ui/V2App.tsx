@@ -22,6 +22,7 @@ import { downloadSrt, importSrtFile, SubtitleEditor, SubtitleLane } from "./Subt
 import { downloadText, SubtitleList } from "./SubtitleList";
 import { cues as cueLayer } from "../domain";
 import { Ic } from "./Icon";
+import { canSetInPoint, InPointControl } from "./InPoint";
 import { MediaPicker, type Picked } from "./MediaPicker";
 import { projectMediaList } from "./projectMedia";
 import { libraryFile, stickerFile, stickers } from "./libraryItems";
@@ -92,6 +93,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const [fs, setFs] = useState(false);
   const [toast, setToast] = useState<string>();
   const [inspOpen, setInspOpen] = useState(false);
+  /** V2-SB-133: the phone "In point" sheet. */
+  const [inOpen, setInOpen] = useState(false);
   const [textOpen, setTextOpen] = useState(false);
   /** V2-103: text layer being edited as a whole ("Edit all"). */
   const [layerEdit, setLayerEdit] = useState<string>();
@@ -513,6 +516,9 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     { icon: "❄", label: "Freeze", title: "Hold the frame under the playhead for 3 s (F)", run: () => { engine.dispatch(cmd.freezeFrame(sp.id, Math.round(player.time))); setToast("Freeze frame inserted (3 s)"); } },
     { icon: "⟲", label: sp.reverse ? "Play forward" : "Reverse", title: sp.reverse ? "Play this clip forwards again" : "Play this clip backwards (muted)", run: () => engine.dispatch(cmd.setReverse(sp.id, !sp.reverse)) },
   ] : [];
+  /** V2-SB-133: the selected video clip can slip its in point. */
+  const inPointable = !!selected && canSetInPoint(project, selected.placement);
+  useEffect(() => setInOpen(false), [selectedId]);
   const speedSelect = sp && sp.clipType !== "image" && sp.clipType !== "text" && !sp.freeze ? (
     <label className="v2-tool" title="Playback speed — changes the clip's length"><b aria-hidden><Ic g="⏩" /></b>
       <select aria-label="Speed" value={sp.speed ?? 1} onChange={(e) => engine.dispatch(cmd.setSpeed(sp.id, Number(e.target.value)))}>
@@ -601,6 +607,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       ...(isText ? [tool("T", "Edit text", () => setTextOpen(true), "edit-text", "Templates, font, style, effects, animation"), tool("anim", "Animation", () => setAnimOpen(true), "anim", "In, out and loop animations"), tool("≡", "Subtitles", () => openSubs(selected.track.id, selected.placement.id), "subs-list", "Open this layer's subtitle list at this clip")] : []),
       tool("⤧", "Adjust", () => setInspOpen(true), "adjust", "Transform, keyframes and fades"),
       ...(speedSelect ? [tool("⏩", `Speed ${sp!.speed ?? 1}×`, () => setMenu("speed"), "speed", "Playback speed")] : []),
+      ...(inPointable ? [tool("⇤", "In point", () => setInOpen(true), "in-point", "Where the clip starts in its video (slip)")] : []),
       tool("☑", "Select", () => setMultiMode(true), "multi", "Select several clips"),
       ...[...clipActions, ...timeActions, ...linkedAudioActions].map((a) => tool(a.icon, a.label, a.run, a.label, a.title)),
       ...(!["image", "html", "text"].includes(selected.placement.clipType) ? [
@@ -705,6 +712,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       <section aria-label="Speed"><h4>Speed</h4>
         <div className="v2-seg" role="radiogroup" aria-label="Speed">{SPEEDS.map((x) => <button key={x} role="radio" aria-checked={(pl.speed ?? 1) === x} className={`v2-seg-btn ${(pl.speed ?? 1) === x ? "is-active" : ""}`} title={x === 1 ? "Normal speed" : `${x}× — changes the clip's length`} onClick={() => engine.dispatch(cmd.setSpeed(pl.id, x))}>{x}×</button>)}</div>
       </section>
+      {inPointable && <section aria-label="In point"><h4>In point</h4><InPointControl engine={engine} project={project} placement={pl} /></section>}
       {timeActions.length > 0 && <section aria-label="Time"><h4>Time</h4>{actionList(timeActions)}</section>}
     </div> };
     const audioTab: InspectorTab = { id: "audio", label: "Audio", icon: "🔊", render: () => <div className="v2-psettings">
@@ -722,7 +730,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     if (kind === "audio") return { ...base, tabs: [audioTab, ...(speedSelect ? [speedTab] : [])] };
     if (kind === "html") return { ...base, actions: <button className="v2-btn v2-btn-sm" title="Edit HTML, CSS and JS with live preview" onClick={() => void openCode()}><Ic g="</>" size={14} /> Edit code</button>, tabs: [{ id: "params", label: "Params", icon: "settings", render: () => <HtmlParamsPanel engine={engine} project={project} placement={pl} blobs={storage.blobs} onEditCode={() => void openCode()} /> }, transform, ...(transTab ? [transTab] : [])] };
     if (kind === "image") return { ...base, tabs: [transform, ...(transTab ? [transTab] : [])] };
-    return { ...base, tabs: [transform, ...(speedSelect || timeActions.length ? [speedTab] : []), audioTab, ...(transTab ? [transTab] : [])] };
+    return { ...base, tabs: [transform, ...(speedSelect || timeActions.length || inPointable ? [speedTab] : []), audioTab, ...(transTab ? [transTab] : [])] };
   };
   const insp = !mobile ? inspectorTabs() : undefined;
   const iconBtn = (icon: string, label: string, run: () => void, opts: { title?: string; disabled?: boolean; pressed?: boolean; key?: string } = {}) => (
@@ -893,6 +901,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           {!sheet && <div hidden>{browser}</div>}
           {cue && <div className="v2-msub"><SubtitleEditor engine={engine} sub={cue} onDelete={delCue} /></div>}
           {inspOpen && selected && <Sheet label="Adjust" className="v2-msheet-insp" extra={scopeChip || undefined} onClose={() => setInspOpen(false)}><TransformInspector engine={engine} placement={selected.placement} time={time} /></Sheet>}
+          {inOpen && selected && inPointable && <Sheet label="In point" className="v2-msheet-insp" onClose={() => setInOpen(false)}><InPointControl engine={engine} project={project} placement={selected.placement} /></Sheet>}
           {subsTrack && <Sheet label="Edit subtitles" className="v2-msheet-tall" head={false} onClose={() => setSubsEdit(undefined)}><SubtitleList engine={engine} track={subsTrack} time={time} playing={playing} onSeek={seek} desktop={false} name={project.name} focusCue={subsCue} onDone={() => setSubsEdit(undefined)} /></Sheet>}
           {layerTrack && !selected && <Sheet label={`Edit all · ${layerTrack.name}`} className="v2-msheet-insp" onClose={() => setLayerEdit(undefined)}><TextPanel key={layerTrack.id} engine={engine} layer={layerTrack} initialTab="Style" /></Sheet>}
           {textOpen && selected && isText && <Sheet label="Text" className="v2-msheet-insp" snapTo={animLoop ? 0 : undefined} extra={scopeChip || undefined} onClose={closeAnim}><TextPanel engine={engine} placement={effSel} track={selTrack} onAnimPicked={() => setAnimLoop(true)} /></Sheet>}

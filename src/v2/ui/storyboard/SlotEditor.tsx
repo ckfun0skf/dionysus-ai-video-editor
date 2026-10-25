@@ -23,6 +23,7 @@ export function SlotEditor({ project, slot, isNew, mobile, onSave, onCancel, onD
   const [refRoles, setRefRoles] = useState(slot.refRoles ?? {});
   const [qa, setQa] = useState<QaCheck[]>(slot.qa);
   const [notes, setNotes] = useState(slot.notes ?? "");
+  const [gen, setGen] = useState(slot.genDurationSec ? String(slot.genDurationSec) : "");
   const nameRef = useRef<HTMLInputElement>(null);
   useEffect(() => { if (isNew && !mobile) nameRef.current?.focus(); }, [isNew, mobile]);
 
@@ -34,12 +35,16 @@ export function SlotEditor({ project, slot, isNew, mobile, onSave, onCancel, onD
   const lastFrame = slot.source.type === "lastFrame" ? slot.source.shotId : undefined;
   const nameOk = !!name.trim();
   const aspectOk = ASPECT.test(aspect.trim());
-  const ok = nameOk && aspectOk;
+  // V2-SB-133: a video asset's generate length (empty = not set).
+  const genN = Number(gen.trim().replace(",", "."));
+  const genOk = type !== "video" || !gen.trim() || (Number.isFinite(genN) && genN >= 0.5 && genN <= 120);
+  const layerSec = isNew ? undefined : board.slotLayerSec(b, slot.id);
+  const ok = nameOk && aspectOk && genOk;
   const block = isNew ? undefined : storyRefs.slotDeleteBlock(b, slot.id);
 
   const save = () => {
     if (!ok) return;
-    onSave({ name, type, aspect: aspect.trim(), prompt, notes, references, refRoles, qa: qa.filter((q) => q.text.trim()), ...(lastFrame ? {} : { source }) });
+    onSave({ name, type, aspect: aspect.trim(), prompt, notes, references, refRoles, qa: qa.filter((q) => q.text.trim()), ...(lastFrame ? {} : { source }), ...(type === "video" ? { genDurationSec: gen.trim() ? genN : null } : {}) });
   };
   const label = isNew ? "New asset" : `Edit “${slot.name}”`;
   const onKey = (e: React.KeyboardEvent) => {
@@ -70,6 +75,16 @@ export function SlotEditor({ project, slot, isNew, mobile, onSave, onCancel, onD
         {typeLocked ? <p className="v2-hint">It is the clip of shot {use!.clipOf.map((s) => b.order.indexOf(s) + 1).join(", ")}, so its type stays.</p>
           : hasVersions && <p className="v2-hint">It has versions, so it can only change to a type of the same media.</p>}
         {!aspectOk && <p className="v2-sb-err" role="alert"><Ic g="alert" size={14} /> Aspect looks like 16:9, 9:16 or 2.39:1.</p>}
+        {type === "video" && (
+          <>
+            <label className="v2-sb-field len" title="The length to ask the video model for, when its layers use less (e.g. 6 s for a 2 s overlay). Longer uploads are offered a trim.">Generate (s)
+              <input value={gen} onChange={(e) => setGen(e.target.value)} inputMode="decimal" placeholder="any" aria-invalid={!genOk} aria-describedby="v2-sb-slotgen-hint" />
+            </label>
+            {genOk
+              ? <p className="v2-hint" id="v2-sb-slotgen-hint">{layerSec ? `Its layers use ${Math.round(layerSec * 100) / 100} s; pick that part when you upload, or set each layer's in point.` : "The length to generate. A longer upload is offered a trim to the length its layers use."}</p>
+              : <p className="v2-sb-err" id="v2-sb-slotgen-hint" role="alert"><Ic g="alert" size={14} /> Generate length must be 0.5–120 seconds, or empty.</p>}
+          </>
+        )}
 
         {lastFrame
           ? <p className="v2-hint" role="note"><Ic g="link" size={12} /> Taken from the last frame of shot {b.order.indexOf(lastFrame) + 1}.</p>

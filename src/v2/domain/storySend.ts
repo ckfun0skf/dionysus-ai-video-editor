@@ -113,8 +113,13 @@ function mediaLayer(p: Project, b: Storyboard, shot: Shot, l: StoryMediaLayer, s
   if (!a || !v || (a.kind !== "image" && a.kind !== "video" && a.kind !== "html")) return undefined;
   const mw = v.media.width ?? p.settings.width, mh = v.media.height ?? p.settings.height;
   const max = a.kind === "video" ? v.media.durationTicks : undefined;
+  // V2-SB-133: a video layer starts at its inSec, else at its version's trim (set on upload), else at 0; when that
+  // runs past the clip's end it starts earlier so the layer keeps its length.
+  const len = max ? Math.min(dur, max) : dur;
+  const want = max ? (l.inSec !== undefined ? secondsToTicks(l.inSec) : versionSpan(b, v)?.inTicks ?? 0) : 0;
+  const sourceInTicks = max ? Math.max(0, Math.min(want, max - len)) : 0;
   return {
-    id: newId("plc"), startTicks: start, durationTicks: max ? Math.min(dur, max) : dur, sourceInTicks: 0,
+    id: newId("plc"), startTicks: start, durationTicks: len, sourceInTicks,
     source: { kind: "assetVersion", assetId: a.id, versionId: v.id }, clipType: a.kind, volume: 1,
     transform: { ...boxTransform(l.box, mw, mh, p.settings.width, p.settings.height) } as Transform, storyLink: { anchor },
     ...(a.kind === "html" && l.params && Object.keys(l.params).length ? { htmlParams: { ...l.params } } : {}),

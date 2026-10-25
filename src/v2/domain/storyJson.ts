@@ -52,6 +52,11 @@ export interface StoryAsset {
    * the planner and the HTML generator agree; shots and layers that use the asset set per-use values in `params`.
    */
   params?: Record<string, HtmlClipParam>;
+  /**
+   * V2-SB-133: video assets only. The length to ask the video model for (e.g. 6 s) when the layers using it need less;
+   * uploads longer than the longest layer are offered a trim, and each layer can start at its own `inSec`.
+   */
+  genDurationSec?: number;
 }
 /** How an asset uses one of its references (V2-SB-123). No `role` = inferred from the referenced asset's type. */
 export interface AssetRefRole { role?: ReferenceRole; note?: string }
@@ -94,6 +99,8 @@ export interface StoryMediaLayer extends StoryLayerBase {
   type: "html" | "image" | "video"; asset: string; box: StoryBox;
   /** V2-HTML-PARAMS: html layers only. Per-use values for the asset's params (key → value); the rest keep their defaults. */
   params?: HtmlParamValues;
+  /** V2-SB-133: video layers only. Seconds into the clip the layer starts from (absent = the version's trim, else 0). */
+  inSec?: number;
 }
 export type StoryLayer = StoryTextLayer | StoryMediaLayer;
 /** A post effect over the shot (or part of it). `preset` is a videoEffect id, kept as written. */
@@ -533,7 +540,14 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
         if (Object.keys(clean).length) params = clean;
       }
     }
-    assets.push({ id, name, type, aspect: asp || aspect, prompt, references: assetRefsOf(a.references, `${path}.references`), source, qa: strList(a.qa, `${path}.qa`), ...(notes ? { notes } : {}), ...(params ? { params } : {}) });
+    let genDurationSec: number | undefined;
+    if (a.genDurationSec !== undefined) {
+      const g = num(a.genDurationSec);
+      if (type !== "video") warn(`${path}.genDurationSec`, `Only "video" assets have a generate length; genDurationSec on a ${type || "typeless"} asset is ignored.`);
+      else if (g === undefined || g < 0.5 || g > 120) warn(`${path}.genDurationSec`, `genDurationSec ${JSON.stringify(a.genDurationSec)} is ignored: use seconds between 0.5 and 120.`);
+      else genDurationSec = g;
+    }
+    assets.push({ id, name, type, aspect: asp || aspect, prompt, references: assetRefsOf(a.references, `${path}.references`), source, qa: strList(a.qa, `${path}.qa`), ...(notes ? { notes } : {}), ...(params ? { params } : {}), ...(genDurationSec ? { genDurationSec } : {}) });
   });
   assets.forEach((a, i) => a.references.map(assetRefId).forEach((r, j) => {
     if (r === a.id) err(`assets[${i}].references[${j}]`, `Asset "${a.id}" can't reference itself.`);
@@ -597,6 +611,7 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
       }
       if (type === "text") {
         if (l.params !== undefined) warn(`${lp}.params`, 'Text layers have no "params"; it is ignored. For a reusable styled title, use an html layer with an html asset that exposes params.');
+        if (l.inSec !== undefined) warn(`${lp}.inSec`, "Only video layers have an in point; inSec on a text layer is ignored.");
         const text = typeof l.text === "string" ? l.text : "";
         if (!text.trim()) err(`${lp}.text`, 'A text layer needs "text".');
         let position: StoryPoint | undefined, box: StoryBox | undefined;
@@ -646,7 +661,19 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
           if (type !== "html") warn(`${lp}.params`, `Only html layers take "params"; it is ignored for this ${type} layer.`);
           else params = htmlParamsOf(l.params, `${lp}.params`, a?.type === "html" ? asset : undefined);
         }
-        if (box) out.push({ id, type, asset, startSec, endSec, box, ...(follow ? { follow } : {}), ...look, ...(params ? { params } : {}) });
+        // V2-SB-133: where a video layer starts in its clip.
+        let inSec: number | undefined;
+        if (l.inSec !== undefined) {
+          const v = num(l.inSec);
+          if (type !== "video") warn(`${lp}.inSec`, `Only video layers have an in point; inSec on a ${type} layer is ignored.`);
+          else if (v === undefined || v < 0) warn(`${lp}.inSec`, `inSec ${JSON.stringify(l.inSec)} is ignored: use seconds into the clip, 0 or more.`);
+          else {
+            const gen = a?.type === "video" ? a.genDurationSec : undefined;
+            if (gen !== undefined && v + (endSec - startSec) > gen + 1e-9) warn(`${lp}.inSec`, `inSec ${fmt(v)} + the layer's ${fmt(endSec - startSec)} s runs past the ${fmt(gen)} s that asset "${asset}" is generated at; it will start earlier so the layer fits.`);
+            if (v > 0) inSec = v;
+          }
+        }
+        if (box) out.push({ id, type, asset, startSec, endSec, box, ...(inSec !== undefined ? { inSec } : {}), ...(follow ? { follow } : {}), ...look, ...(params ? { params } : {}) });
       }
     });
     return out;

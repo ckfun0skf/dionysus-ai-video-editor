@@ -48,6 +48,11 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
   /** html/still shot: its clip is this slot (versions, upload and checks of the clip live there). */
   const clipSlot = shot?.clipSlot ? b.slots[shot.clipSlot] : undefined;
   const kind: MediaKind = slot ? board.kindForSlot(slot.type) : clipSlot ? board.kindForSlot(clipSlot.type) : "video";
+  /**
+   * The part of a video clip in use: a shot clip's planned length (V2-SB-121), or for a video asset the longest
+   * video layer that shows it (V2-SB-133). Undefined = nothing to trim to.
+   */
+  const trimWin = shot && !clipSlot ? shot.durationSec : slot?.type === "video" ? board.slotLayerSec(b, slot.id) : undefined;
   /** V2-HTML-PKG: the html asset whose package this panel imports, exports and prompts for. */
   const htmlSlot = kind === "html" ? slot ?? clipSlot : undefined;
   const expectBindings = htmlSlot ? Object.fromEntries(slotBindings(b, htmlSlot).map((x) => [x.name, x.type])) : undefined;
@@ -120,7 +125,8 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
     const media = a.versions[0].media;
     if (a.kind !== kind) { await blobs.delete(media.blobKey).catch(() => undefined); throw new Error(`This needs ${kindName(kind)}, but “${f.name}” is ${kindName(a.kind)}.`); }
     // V2-SB-121: a shot clip more than 0.5 s longer than planned: trim it or keep it whole (one undo step either way).
-    if (shot && !clipSlot && kind === "video" && media.durationTicks && media.durationTicks / TICKS_PER_SECOND > shot.durationSec + 0.5) {
+    // V2-SB-133: a video asset longer than the layers using it: the same choice, the window being the layer length.
+    if (trimWin !== undefined && kind === "video" && media.durationTicks && media.durationTicks / TICKS_PER_SECOND > trimWin + 0.5) {
       setTrimFor({ mode: "upload", clip: f, media, model: model.trim() || undefined });
       return;
     }
@@ -132,20 +138,22 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
     setTrimFor({ mode: "adjust", clip: blob, version: v });
   });
   const trimDialog = () => {
-    if (!trimFor || !shot) return null;
+    if (!trimFor || trimWin === undefined) return null;
     const total = (trimFor.mode === "upload" ? trimFor.media.durationTicks : trimFor.version.media.durationTicks) ?? 0;
-    const totalSec = total / TICKS_PER_SECOND, win = Math.min(shot.durationSec, totalSec);
+    const totalSec = total / TICKS_PER_SECOND, win = Math.min(trimWin, totalSec);
+    const subject = shot ? "shot" : "layer";
     const range = (inSec: number) => ({ inTicks: Math.round(inSec * TICKS_PER_SECOND), outTicks: Math.min(total, Math.round((inSec + win) * TICKS_PER_SECOND)) });
     const close = () => setTrimFor(undefined);
     if (trimFor.mode === "upload") {
       const { media, model: m } = trimFor;
-      return <TrimPicker clip={trimFor.clip} totalSec={totalSec} windowSec={shot.durationSec} mode="upload"
-        onTrim={(x) => { close(); swap(cmd.addTrimmedShotVersion(shot.id, media, { trim: range(x), model: m })); }}
-        onFull={() => { close(); swap(cmd.addTrimmedShotVersion(shot.id, media, { keepFullSec: Math.round(totalSec * 100) / 100, model: m })); }}
+      const opts = m ? { model: m } : {};
+      return <TrimPicker clip={trimFor.clip} totalSec={totalSec} windowSec={trimWin} mode="upload" subject={subject}
+        onTrim={(x) => { close(); swap(shot ? cmd.addTrimmedShotVersion(shot.id, media, { trim: range(x), model: m }) : cmd.addStoryVersion(target, media, { ...opts, trim: range(x) })); }}
+        onFull={() => { close(); swap(shot ? cmd.addTrimmedShotVersion(shot.id, media, { keepFullSec: Math.round(totalSec * 100) / 100, model: m }) : cmd.addStoryVersion(target, media, opts)); }}
         onCancel={() => { close(); void blobs.delete(media.blobKey).catch(() => undefined); }} />;
     }
     const v = trimFor.version, t = b.versions[v.id]?.trim;
-    return <TrimPicker clip={trimFor.clip} totalSec={totalSec} windowSec={shot.durationSec} mode="adjust" initialInSec={t ? t.inTicks / TICKS_PER_SECOND : undefined}
+    return <TrimPicker clip={trimFor.clip} totalSec={totalSec} windowSec={trimWin} mode="adjust" subject={subject} initialInSec={t ? t.inTicks / TICKS_PER_SECOND : undefined}
       onTrim={(x) => { close(); if (owner.assetId) swap(cmd.setVersionTrim(owner.assetId, v.id, range(x))); }}
       onFull={() => { close(); if (owner.assetId) swap(cmd.setVersionTrim(owner.assetId, v.id, undefined)); }}
       onCancel={close} />;
@@ -167,6 +175,7 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
     <div className="v2-sb-detail-body">
       {head}
       {(inline || !mobile) && <div className="v2-sb-detail-head"><Ic g={icon} size={18} /><h3>{title}</h3>{onEdit && <button className="v2-btn v2-sb-btn" onClick={onEdit} title={shot ? "Edit title, length, prompt, references, how the clip is made, checks…" : "Edit name, type, prompt, what it is made from, checks…"}><Ic g="✎" size={16} /> Edit</button>}{!inline && <button className="v2-icon v2-sb-icon" aria-label="Close details" title="Close (Esc)" onClick={onClose}><Ic g="✕" size={18} /></button>}</div>}
+      {slot?.type === "video" && (slot.genDurationSec || trimWin !== undefined) && <p className="v2-sb-detail-desc">{slot.genDurationSec ? <span title="Ask the video model for this length">generate {slot.genDurationSec}s</span> : null}{slot.genDurationSec && trimWin !== undefined ? " · " : null}{trimWin !== undefined ? <span title="The longest video layer that shows this asset">layers use {Math.round(trimWin * 100) / 100}s</span> : null}</p>}
       {shot && <p className="v2-sb-detail-desc">{shot.durationSec}s{shot.genDurationSec ? <> · <span title="Ask the video model for this length; the upload is trimmed to the shot length">generate {shot.genDurationSec}s</span></> : null} · {shot.description}</p>}
       {clipSlot && (
         <p className="v2-sb-cliplink" role="note">
@@ -183,10 +192,10 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
               const on = v.id === selected;
               const info = b.versions[v.id];
               const pinnedIn = slot ? pins.filter((x) => x.version === v.id).map((x) => shotNo(x.shot)) : [];
-              // V2-SB-121: shot clips longer than planned (or already trimmed) can be trimmed here.
-              const span = shot && !clipSlot ? board.versionSpan(b, v) : undefined;
+              // V2-SB-121 / V2-SB-133: clips longer than the shot (or a video asset's layers), or already trimmed, can be trimmed here.
+              const span = trimWin !== undefined && kind === "video" ? board.versionSpan(b, v) : undefined;
               const trimmed = span && info?.trim ? span : undefined;
-              const canTrim = !!span && (!!trimmed || (v.media.durationTicks ?? 0) / TICKS_PER_SECOND > shot!.durationSec + 0.5);
+              const canTrim = !!span && (!!trimmed || (v.media.durationTicks ?? 0) / TICKS_PER_SECOND > trimWin! + 0.5);
               const s1 = (t: number) => Math.round(t / 12_000) / 10;
               return (
                 <li key={v.id}>
@@ -196,7 +205,7 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
                     <span><b>v{i + 1}{on && <span className="v2-sb-inuse"><Ic g="ok" size={13} /> In use</span>}</b><em>{info?.derivedFrom ? `Frame of shot ${shotNo(info.derivedFrom.shotId)}` : fmtDate(v.createdAt)}</em>{info?.model && <em title="Made with">{info.model}</em>}{pinnedIn.length > 0 && <em className="v2-sb-pinned"><Ic g="pin" size={12} /> Pinned in shot {pinnedIn.join(", ")}</em>}{trimmed && <em className="v2-sb-trimmed" title="Part of the clip in use"><Ic g="✂" size={12} /> {s1(trimmed.inTicks)}–{s1(trimmed.inTicks + trimmed.lenTicks)} s of {s1(v.media.durationTicks ?? 0)} s</em>}</span>
                   </button>
                   {htmlSlot && <HtmlExportButtons small name={htmlSlot.id} label={`v${i + 1}`} html={() => blobs.get(v.media.blobKey).then((x) => x?.text())} />}
-                  {canTrim && <button className="v2-btn v2-sb-trimbtn" disabled={!!busy} onClick={() => adjustTrim(v)} aria-label={`Adjust trim of v${i + 1}`} title="Choose which part of the clip the shot uses"><Ic g="✂" size={14} /> {trimmed ? "Adjust trim" : "Trim"}</button>}
+                  {canTrim && <button className="v2-btn v2-sb-trimbtn" disabled={!!busy} onClick={() => adjustTrim(v)} aria-label={`Adjust trim of v${i + 1}`} title={shot ? "Choose which part of the clip the shot uses" : "Choose which part of the clip its layers start from"}><Ic g="✂" size={14} /> {trimmed ? "Adjust trim" : "Trim"}</button>}
                 </li>
               );
             })}

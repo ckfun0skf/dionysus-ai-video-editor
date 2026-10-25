@@ -2359,6 +2359,12 @@
           "progress": 100
         },
         {
+          "id": "V2-SB-133",
+          "title": "Storyboard video assets used as layers: assets[].genDurationSec (video only, 0.5-120 s) is the length to generate when layers use less; layers[].inSec (video layers) is where the layer starts in the clip. Uploading a longer clip for such an asset offers a trim (reusing TrimPicker) stored on the version; Send to timeline sets the clip's in point from inSec, else the version's trim, else 0, clamped to fit; the timeline inspector edits a clip's in point (desktop Speed tab, phone In point sheet, 44px targets, one undo per gesture). RULE 25 (video-asset-trim) and the First Light example: a 2 s screen-blend sun flare cut from a 6 s clip; spec §2.3/§2.5/§4, gen:ai output, tests",
+          "status": "done",
+          "progress": 100
+        },
+        {
           "id": "V2-SB-132",
           "title": "Guide: montage guidance with no new field. RULE 13 (duration) and spec §2.4 say a montage is consecutive short shots (e.g. 3 × 2 s), each with its own prompt and QA, joined by plain cuts or very short transitions, genDurationSec when the model can't render that short, consistent style/references, one audio cue spanning the run",
           "status": "done",
