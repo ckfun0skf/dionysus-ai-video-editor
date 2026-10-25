@@ -2492,6 +2492,12 @@
           "title": "Asset states (asset@state): per-state prompt and versions, usable anywhere an asset id is; rule 29",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "V2-SB-137",
+          "title": "Board header icon buttons (Back to editor, Production steps) at least 44x44 on phones",
+          "status": "done",
+          "progress": 100
         }
       ]
     },
