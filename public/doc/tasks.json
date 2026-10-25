@@ -2482,6 +2482,12 @@
           "progress": 100
         },
         {
+          "id": "V2-ADD-MEDIA-TABS",
+          "title": "Add Media picker: Video / Photo / Code / Sticker tabs (Library and Text removed; Text has its own tool). Video and Photo: Upload from the device plus the project's media of that kind (thumbnails, durations); Code: Upload (.html, .htm, .dionysus-html.zip), Create (opens the Code Editor on a new canvas clip with params; nothing is imported until Add to timeline, at the playhead, one undo step) and the project's code clips with real thumbnails; Sticker: system stickers. Desktop asset browser gets the same Video / Photo / Code / Stickers tabs (Code: Upload, Create, project code clips)",
+          "status": "done",
+          "progress": 100
+        },
+        {
           "id": "V2-SB-136",
           "title": "Asset states (asset@state): per-state prompt and versions, usable anywhere an asset id is; rule 29",
           "status": "done",

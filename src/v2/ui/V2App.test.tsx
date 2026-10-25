@@ -236,6 +236,31 @@ describe("V2App", () => {
     } finally { window.matchMedia = mm; }
   });
 
+  it("V2-ADD-MEDIA-TABS mobile: main [+] opens Add Media (Video/Photo/Code/Sticker); Code → Create opens the Code Editor and adds the new clip", async () => {
+    const mm = window.matchMedia;
+    window.matchMedia = ((q: string) => ({ matches: true, media: q, addEventListener() {}, removeEventListener() {} })) as never;
+    const text = Blob.prototype.text;
+    if (!text) Blob.prototype.text = function (this: Blob) { return new Promise<string>((res) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.readAsText(this); }); };
+    try {
+      const el = document.createElement("div");
+      document.body.appendChild(el);
+      await act(async () => { track(createRoot(el)).render(<V2App />); });
+      await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+      await act(async () => { (el.querySelector('[aria-label="Add media to main track"]') as HTMLElement).click(); });
+      const picker = el.querySelector('.v2-picker[aria-label="Add media"]')!;
+      expect([...picker.querySelectorAll('[role="tab"]')].map((t) => t.textContent)).toEqual(["Video", "Photo", "Code", "Sticker"]);
+      await act(async () => { ([...picker.querySelectorAll('[role="tab"]')].find((t) => t.textContent === "Code") as HTMLElement).click(); });
+      await act(async () => { ([...picker.querySelectorAll("button")].find((b) => b.textContent?.startsWith("Create")) as HTMLElement).click(); });
+      expect(el.querySelector(".v2-picker")).toBeNull();
+      const editor = el.querySelector('[aria-label="HTML clip editor"]')!;
+      expect(editor).toBeTruthy();
+      await act(async () => { ([...editor.querySelectorAll("button")].find((b) => b.textContent === "Add to timeline") as HTMLElement).click(); });
+      await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
+      expect(el.querySelector('[aria-label="HTML clip editor"]')).toBeNull();
+      expect([...el.querySelectorAll(".v2-clip-name")].some((n) => n.textContent?.includes("Code clip"))).toBe(true);
+    } finally { window.matchMedia = mm; if (!text) delete (Blob.prototype as { text?: unknown }).text; }
+  });
+
   it("mobile: track controls sit inside the scroll content before t=0 (scroll with clips, never over them); no floating action button", async () => {
     const mm = window.matchMedia;
     window.matchMedia = ((q: string) => ({ matches: true, media: q, addEventListener() {}, removeEventListener() {} })) as never;

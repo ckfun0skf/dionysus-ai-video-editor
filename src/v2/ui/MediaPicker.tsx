@@ -1,20 +1,45 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { LIBRARY_ITEMS, stickers, stickerUrl, type LibraryItem, type Sticker } from "./libraryItems";
+import { Ic } from "./Icon";
+import { HTML_IMPORT_ACCEPT } from "./htmlPackage";
+import { stickers, stickerUrl, type Sticker } from "./libraryItems";
 
-export type Picked = { files: File[]; library: LibraryItem[]; stickers: Sticker[]; assets?: string[] };
-export type PickerTab = Tab;
-type Tab = "project" | "device" | "library" | "stickers";
+export type Picked = { files: File[]; stickers: Sticker[]; assets?: string[] };
+/** V2-ADD-MEDIA-TABS: what the main/overlay [+] adds; "audio" is the Add audio picker's only tab. */
+export type PickerTab = "video" | "photo" | "code" | "stickers" | "audio";
+type Kind = "video" | "image" | "html" | "audio";
 /** A media asset already imported into this project (blob persists in IndexedDB), for re-adding without re-upload. */
-export type ProjectMedia = { id: string; name: string; kind: "video" | "image" | "audio"; thumb?: string; durationTicks?: number; createdAt: string };
-const TAB_LABEL: Record<Tab, string> = { project: "Project media", device: "Device", library: "Library", stickers: "Stickers" };
+export type ProjectMedia = { id: string; name: string; kind: Kind; thumb?: string; durationTicks?: number; createdAt: string };
+
+const TAB: Record<PickerTab, { label: string; icon: string; kind?: Kind; accept?: string; upload?: string; empty?: string }> = {
+  video: { label: "Video", icon: "▭", kind: "video", accept: "video/*", upload: "Videos from this device", empty: "No videos in this project yet." },
+  photo: { label: "Photo", icon: "image", kind: "image", accept: "image/*", upload: "Photos from this device", empty: "No photos in this project yet." },
+  code: { label: "Code", icon: "</>", kind: "html", accept: HTML_IMPORT_ACCEPT, upload: ".html or .dionysus-html.zip", empty: "No code clips yet. Create one, or upload an .html clip." },
+  stickers: { label: "Sticker", icon: "sticker" },
+  audio: { label: "Audio", icon: "♫", kind: "audio", accept: "audio/*", upload: "Music or sounds from this device", empty: "No audio in this project yet." },
+};
+/** Which tab a picked device file belongs to (by MIME type, then extension). */
+export function fileKind(f: File): Kind | undefined {
+  if (f.type.startsWith("video/")) return "video";
+  if (f.type.startsWith("image/")) return "image";
+  if (f.type.startsWith("audio/")) return "audio";
+  if (/\.(html?|zip)$/i.test(f.name) || f.type === "text/html" || /zip/.test(f.type)) return "html";
+  return undefined;
+}
 const fmtDur = (ticks?: number) => { if (!ticks) return ""; const s = Math.round(ticks / 120_000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
 
-/** Full-screen CapCut-style picker: Device (photos/videos) and Library tabs, multi-select, then Add. */
-export function MediaPicker({ title, onAdd, onClose, media: allMedia = [], only, initialTab }: { title: string; onAdd: (p: Picked) => void; onClose: () => void; media?: ProjectMedia[]; /** "audio": Project media + Device only, audio files only. */ only?: "audio"; initialTab?: Tab }) {
-  const media = only === "audio" ? allMedia.filter((m) => m.kind === "audio") : allMedia;
-  const tabs: Tab[] = only === "audio" ? ["project", "device"] : ["project", "device", "library", "stickers"];
-  const [tab, setTab] = useState<Tab>(initialTab ?? (media.length ? "project" : "device"));
-  const recent = useMemo(() => [...media].sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [allMedia, only]); // eslint-disable-line react-hooks/exhaustive-deps
+/**
+ * Full-screen CapCut-style Add Media picker (V2-ADD-MEDIA-TABS): Video / Photo / Code / Sticker tabs. Each media tab
+ * has Upload (from the device) and the project's own media of that kind (thumbnails, durations); Code also has Create
+ * (a new clip in the Code Editor). Multi-select across tabs, numbered in pick order, then Add.
+ */
+export function MediaPicker({ title, onAdd, onClose, media = [], only, initialTab, onCreateCode }: {
+  title: string; onAdd: (p: Picked) => void; onClose: () => void; media?: ProjectMedia[];
+  /** "audio": the audio tab only. */ only?: "audio"; initialTab?: PickerTab;
+  /** Code → Create: open the Code Editor on a new clip (the picker closes). */ onCreateCode?: () => void;
+}) {
+  const tabs: PickerTab[] = only === "audio" ? ["audio"] : ["video", "photo", "code", "stickers"];
+  const [tab, setTab] = useState<PickerTab>(initialTab && tabs.includes(initialTab) ? initialTab : tabs[0]);
+  const recent = useMemo(() => [...media].sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [media]);
   const [files, setFiles] = useState<File[]>([]);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const input = useRef<HTMLInputElement>(null);
@@ -27,61 +52,83 @@ export function MediaPicker({ title, onAdd, onClose, media: allMedia = [], only,
   const count = picked.size;
   const add = () => onAdd({
     files: order.filter((k) => k.startsWith("f")).map((k) => files[Number(k.slice(1, k.indexOf(":")))]).filter(Boolean),
-    library: order.filter((k) => k.startsWith("l:")).map((k) => LIBRARY_ITEMS.find((it) => `l:${it.id}` === k)!).filter(Boolean),
     assets: order.filter((k) => k.startsWith("a:")).map((k) => k.slice(2)),
     stickers: order.filter((k) => k.startsWith("s:")).map((k) => stickers().find((it) => `s:${it.id}` === k)!).filter(Boolean),
   });
   const badge = (k: string) => { const n = order.indexOf(k); return <span className={`v2-pick-badge ${n >= 0 ? "is-on" : ""}`} aria-hidden>{n >= 0 ? n + 1 : ""}</span>; };
+  const spec = TAB[tab];
+  const kind = spec.kind;
+  const onPick = (fs: File[]) => {
+    if (!fs.length) return;
+    const base = files.length;
+    setFiles((cur) => [...cur, ...fs]);
+    setPicked((s) => { const n = new Set(s); fs.forEach((f, i) => n.add(key(f, base + i))); return n; });
+  };
+  const newFiles = kind ? files.map((f, i) => ({ f, i })).filter(({ f }) => (fileKind(f) ?? (kind === "html" ? "html" : undefined)) === kind) : [];
+  const mine = kind ? recent.filter((m) => m.kind === kind) : [];
+  const tile = (m: ProjectMedia) => { const k = `a:${m.id}`; return (
+    <button key={k} className={`v2-pick-tile is-asset kind-${m.kind} ${picked.has(k) ? "is-on" : ""}`} aria-pressed={picked.has(k)} title={m.name} aria-label={m.name} onClick={() => toggle(k)}>
+      {m.thumb ? <img src={m.thumb} alt="" draggable={false} /> : <b aria-hidden><Ic g={TAB[tab].icon} size={26} /></b>}
+      {m.kind !== "image" && m.durationTicks ? <i className="v2-pick-dur">{fmtDur(m.durationTicks)}</i> : null}
+      {m.kind === "html" && <i className="v2-pick-kind" aria-hidden><Ic g="</>" size={12} /></i>}
+      <span className="v2-pick-name">{m.name}</span>
+      {badge(k)}
+    </button>
+  ); };
   return (
     <div className="v2-picker" role="dialog" aria-label={title}>
       <header className="v2-picker-head">
-        <button className="v2-icon-btn" aria-label="Close" title="Close (Esc)" onClick={onClose}>✕</button>
+        <button className="v2-icon-btn" aria-label="Close" title="Close (Esc)" onClick={onClose}><Ic g="✕" /></button>
         <h3>{title}</h3>
         <span />
       </header>
-      <div className="v2-picker-tabs" role="tablist">
-        {tabs.map((t) => (
-          <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? "is-on" : ""} onClick={() => setTab(t)}>{TAB_LABEL[t]}</button>
-        ))}
-      </div>
-      <div className="v2-picker-body">
-        {tab === "project" ? (
-          recent.length === 0 ? <p className="v2-muted v2-picker-empty">{only === "audio" ? "No audio in this project yet. Choose files on the Device tab." : "Nothing imported yet. Media you add to this project shows up here, newest first, so you can re-add it without uploading again."}</p> : (
-            <div className="v2-picker-grid" data-testid="project-media">
-              {recent.map((m) => { const k = `a:${m.id}`; return (
-                <button key={k} className={`v2-pick-tile is-asset ${picked.has(k) ? "is-on" : ""}`} aria-pressed={picked.has(k)} title={m.name} aria-label={m.name} onClick={() => toggle(k)}>
-                  {m.thumb ? <img src={m.thumb} alt="" draggable={false} /> : <b aria-hidden>{m.kind === "audio" ? "♫" : m.kind === "video" ? "▶" : "▣"}</b>}
-                  {m.kind !== "image" && m.durationTicks ? <i className="v2-pick-dur">{fmtDur(m.durationTicks)}</i> : null}
-                  <span className="v2-pick-name">{m.name}</span>
-                  {badge(k)}
-                </button>
-              ); })}
-            </div>
-          )
-        ) : tab === "device" ? (
+      {tabs.length > 1 && (
+        <div className="v2-picker-tabs" role="tablist">
+          {tabs.map((t) => (
+            <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? "is-on" : ""} onClick={() => setTab(t)}>
+              <Ic g={TAB[t].icon} size={18} /><span>{TAB[t].label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="v2-picker-body" role="tabpanel" aria-label={spec.label} data-tab={tab}>
+        {kind ? (
           <>
-            <button className="v2-btn v2-picker-browse" title={only === "audio" ? "Choose audio files from this device" : "Choose photos and videos from this device"} onClick={() => input.current?.click()}>{only === "audio" ? "＋ Choose audio files" : <>＋ Choose photos &amp; videos</>}</button>
-            <input ref={input} type="file" hidden multiple accept={only === "audio" ? "audio/*" : "image/*,video/*"} aria-label={only === "audio" ? "Choose audio files" : "Choose photos and videos"} onChange={(e) => {
-              const fs = [...(e.target.files ?? [])]; e.target.value = "";
-              if (!fs.length) return;
-              const base = files.length;
-              setFiles((cur) => [...cur, ...fs]);
-              setPicked((s) => { const n = new Set(s); fs.forEach((f, i) => n.add(key(f, base + i))); return n; });
-            }} />
-            {files.length === 0 ? <p className="v2-muted v2-picker-empty">{only === "audio" ? "No audio yet. Choose music or sound files from your device." : "No photos or videos yet. Choose some from your device, or switch to Library for HTML and text clips."}</p> : (
-              <div className="v2-picker-grid">
-                {files.map((f, i) => { const k = key(f, i); return (
-                  <button key={k} className={`v2-pick-tile ${picked.has(k) ? "is-on" : ""}`} aria-pressed={picked.has(k)} title={f.name} onClick={() => toggle(k)}>
-                    {f.type.startsWith("video/") ? <video src={urls[i]} muted playsInline preload="metadata" /> : urls[i] ? <img src={urls[i]} alt="" /> : <span className="v2-pick-name">{f.type.startsWith("audio/") ? "♫ " : ""}{f.name}</span>}
-                    {badge(k)}
-                  </button>
-                ); })}
-              </div>
+            <div className="v2-pick-actions">
+              <button className="v2-pick-action" onClick={() => input.current?.click()}>
+                <span className="v2-pick-action-ic"><Ic g="⇪" size={22} /></span>
+                <span><b>Upload</b><small>{spec.upload}</small></span>
+              </button>
+              {tab === "code" && onCreateCode && (
+                <button className="v2-pick-action is-create" onClick={onCreateCode}>
+                  <span className="v2-pick-action-ic"><Ic g="＋" size={22} /></span>
+                  <span><b>Create</b><small>Write a canvas clip in the Code Editor</small></span>
+                </button>
+              )}
+            </div>
+            <input ref={input} type="file" hidden multiple accept={spec.accept} aria-label={`Upload ${spec.label.toLowerCase()}`} onChange={(e) => { const fs = [...(e.target.files ?? [])]; e.target.value = ""; onPick(fs); }} />
+            {newFiles.length > 0 && (
+              <>
+                <h4 className="v2-pick-section">Uploaded</h4>
+                <div className="v2-picker-grid" data-testid="device-media">
+                  {newFiles.map(({ f, i }) => { const k = key(f, i); return (
+                    <button key={k} className={`v2-pick-tile ${picked.has(k) ? "is-on" : ""}`} aria-pressed={picked.has(k)} title={f.name} aria-label={f.name} onClick={() => toggle(k)}>
+                      {f.type.startsWith("video/") ? <video src={urls[i]} muted playsInline preload="metadata" /> : urls[i] ? <img src={urls[i]} alt="" /> : <b aria-hidden><Ic g={spec.icon} size={26} /></b>}
+                      <span className="v2-pick-name">{f.name}</span>
+                      {badge(k)}
+                    </button>
+                  ); })}
+                </div>
+              </>
+            )}
+            <h4 className="v2-pick-section">In this project</h4>
+            {mine.length === 0 ? <p className="v2-muted v2-picker-empty">{spec.empty}</p> : (
+              <div className="v2-picker-grid" data-testid="project-media">{mine.map(tile)}</div>
             )}
           </>
-        ) : tab === "stickers" ? (
+        ) : (
           <>
-            <p className="v2-muted">Stickers go to the Text &amp; Stickers group, above overlays.</p>
+            <p className="v2-muted v2-pick-note">Stickers go to the Text &amp; Stickers group, above overlays.</p>
             <div className="v2-picker-grid">
               {stickers().map((it) => { const k = `s:${it.id}`; return (
                 <button key={k} className={`v2-pick-tile is-sticker ${picked.has(k) ? "is-on" : ""}`} aria-pressed={picked.has(k)} title={it.name} aria-label={it.name} onClick={() => toggle(k)}>
@@ -90,14 +137,6 @@ export function MediaPicker({ title, onAdd, onClose, media: allMedia = [], only,
               ); })}
             </div>
           </>
-        ) : (
-          <div className="v2-picker-grid">
-            {LIBRARY_ITEMS.map((it) => { const k = `l:${it.id}`; return (
-              <button key={k} className={`v2-pick-tile is-lib ${picked.has(k) ? "is-on" : ""}`} aria-pressed={picked.has(k)} title={it.hint} onClick={() => toggle(k)}>
-                <b aria-hidden>{it.icon}</b><span>{it.name}</span>{badge(k)}
-              </button>
-            ); })}
-          </div>
         )}
       </div>
       <footer className="v2-picker-foot">
