@@ -431,6 +431,7 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 .v2-ptile:focus-visible { outline: 2px solid var(--accent, #20d5ec); outline-offset: 2px; }
 .v2-anim .v2-tp-tabs button { min-height: 44px; padding: 0 16px; }
 .v2-anim output { margin-left: auto; margin-right: 8px; color: var(--muted, #aaa); }
+.v2-anim .v2-tp-row input[type=range] { min-height: 44px; margin: 0; }
 .v2-anim-badges { position: absolute; left: 1px; right: 1px; bottom: 1px; display: flex; justify-content: space-between; pointer-events: none; }
 .v2-anim-badge { display: inline-grid; place-items: center; width: 13px; height: 13px; border-radius: 3px; background: rgba(0,0,0,.65); color: #fff; }
 .v2-anim-badges .is-loop { margin: 0 auto; }
@@ -562,6 +563,7 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 .v2-tp-row input[type=color]::-webkit-color-swatch { border: none; border-radius: 5px; box-shadow: inset 0 0 0 1px #0004; }
 .v2-tp-row input[type=color]::-moz-color-swatch { border: none; border-radius: 5px; }
 .v2-tp-row input[type=color]:hover { border-color: var(--accent); }
+@media (pointer: coarse) { .v2-tp-row input[type=color] { height: 44px; } }
 /* P2-4 a toast never covers an open sheet: it moves to the top, above the sheet */
 .v2-app:has(.v2-sheet-backdrop) .v2-toast { top: calc(env(safe-area-inset-top) + 64px); bottom: auto; z-index: 30; box-shadow: 0 4px 16px #0008; }
 /* P2-9 Focus mode lines: 4px with an outline so they read on any clip */
