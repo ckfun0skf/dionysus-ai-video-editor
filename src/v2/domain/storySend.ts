@@ -250,7 +250,9 @@ export function sendStory(p: Project): { project: Project; result: SendResult } 
     const sec = conn.transition!.params?.durationSec;
     const want = secondsToTicks(typeof sec === "number" && sec > 0 ? sec : DEFAULT_TRANSITION_SEC);
     const durationTicks = Math.max(1, Math.min(want, Math.floor(Math.min(prev.durationTicks, to.clip.durationTicks) / 2)));
-    comp = setTransition(comp, to.clip.id, { kind, durationTicks });
+    // V2-SB-130: the transition's own params (everything but durationSec) ride on the clip, editable in the inspector.
+    const { durationSec: _d, ...own } = conn.transition!.params ?? {};
+    comp = setTransition(comp, to.clip.id, { kind, durationTicks, ...(Object.keys(own).length ? { params: own } : {}) });
     result.transitions += 1;
   }
   for (const { shot, clip } of sent) comp = addLinked(p, b, comp, shot, clip, result);

@@ -189,6 +189,14 @@ describe("send to timeline (v1.1)", () => {
     expect(main(g.getState().project).placements.map((x) => x.transitionIn)).toEqual([undefined, undefined]);
   });
 
+  it("transition params other than durationSec are kept on the clip (V2-SB-130)", () => {
+    const e = setup((d) => { d.connections[0].transition = { preset: "light-leak", params: { durationSec: 1, color: "#ffcc00", strength: 0.5 } }; });
+    ready(e);
+    e.dispatch(cmd.sendStoryToTimeline());
+    const [, still] = main(e.getState().project).placements;
+    expect(still.transitionIn).toEqual({ kind: "light-leak", durationTicks: s(1), params: { color: "#ffcc00", strength: 0.5 } });
+  });
+
   it("linked items follow version swaps: clamped to a shorter clip, restored on swap back, one undo each", () => {
     const e = setup((d) => {
       d.shots[0].layers = [{ id: "t1", type: "text", text: "Late", position: { x: 0.5, y: 0.8 }, startSec: 3, endSec: 5 }];

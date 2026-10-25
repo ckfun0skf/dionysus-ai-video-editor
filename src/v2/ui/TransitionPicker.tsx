@@ -9,7 +9,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { cmd, type Engine } from "../engine";
 import { transitions, TICKS_PER_SECOND, type Composition, type Placement, type Track } from "../domain";
 import { drawWithLook } from "../render";
-import { getPreset } from "../registry";
+import { defaultsOf, getPreset } from "../registry";
+import { ParamControls } from "./ParamControls";
 import { drawSample } from "./EffectPicker";
 import { Ic } from "./Icon";
 import { SheetDone } from "./Sheet";
@@ -144,6 +145,7 @@ export function TransitionPicker({ engine, comp, placementId, thumbs, onPreview,
   const cur = next.transitionIn;
   const max = Math.max(MIN_TICKS, transitions.maxTransition(prev, next));
   const dur = cur ? Math.min(cur.durationTicks, max) : Math.min(transitions.DEFAULT_TRANSITION_TICKS, max);
+  const curDesc = cur ? getPreset("transition", cur.kind) : undefined;
   const list = filterKinds(kinds, tab, query, saved, (id) => getPreset("transition", id)?.description ?? "");
   const pick = (id: string) => {
     if (id === "none") { if (cur) engine.dispatch(cmd.setTransition(next.id, undefined)); onPreview?.(next.startTicks, 0); return; }
@@ -158,7 +160,7 @@ export function TransitionPicker({ engine, comp, placementId, thumbs, onPreview,
   };
   const applyAll = () => {
     const cuts = transitions.cutsOnTrack(comp, next.id).length;
-    if (engine.dispatch(cmd.setTransitionAll(next.id, cur ? { kind: cur.kind, durationTicks: dur } : undefined))) onToast?.(cur ? `${transitions.transitionKind(cur.kind)?.label ?? "Transition"} applied to ${cuts === 1 ? "the 1 cut" : `all ${cuts} cuts`} on this track` : `Transitions removed from ${cuts === 1 ? "the 1 cut" : `all ${cuts} cuts`}`);
+    if (engine.dispatch(cmd.setTransitionAll(next.id, cur ? { kind: cur.kind, durationTicks: dur, ...(cur.params ? { params: cur.params } : {}) } : undefined))) onToast?.(cur ? `${transitions.transitionKind(cur.kind)?.label ?? "Transition"} applied to ${cuts === 1 ? "the 1 cut" : `all ${cuts} cuts`} on this track` : `Transitions removed from ${cuts === 1 ? "the 1 cut" : `all ${cuts} cuts`}`);
   };
   const secs = (t: number) => `${(t / TICKS_PER_SECOND).toFixed(1)}s`;
   return (
@@ -185,6 +187,9 @@ export function TransitionPicker({ engine, comp, placementId, thumbs, onPreview,
             onPointerDown={() => engine.beginGesture()} onPointerUp={() => { engine.endGesture(); onPreview?.(next.startTicks, dur); }} onKeyUp={() => onPreview?.(next.startTicks, dur)} onBlur={() => engine.endGesture()}
             onChange={(e) => cur && engine.dispatch(cmd.setTransition(next.id, { kind: cur.kind, durationTicks: Math.min(max, Math.max(MIN_TICKS, Number(e.target.value))) }))} />
         </label>
+        {curDesc && curDesc.params.length > 0 && <ParamControls name={curDesc.name} params={curDesc.params} values={defaultsOf(curDesc, cur!.params)}
+          onBegin={() => engine.beginGesture()} onEnd={() => { engine.endGesture(); onPreview?.(next.startTicks, dur); }}
+          onChange={(k, v) => engine.dispatch(cmd.setTransition(next.id, { kind: cur!.kind, durationTicks: dur, params: { ...cur!.params, [k]: v } }))} />}
         <div className="v2-trans-actions">
           <button className="v2-btn v2-btn-sm" onClick={applyAll} title="Use this transition (or none) on every cut of this track">Apply to all</button>
           <button className={`v2-btn v2-btn-sm ${isSaved ? "is-active" : ""}`} aria-pressed={isSaved} disabled={!cur} onClick={toggleSave} title="Keep this transition on the Saved tab">

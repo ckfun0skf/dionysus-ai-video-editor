@@ -2,12 +2,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Asset, Project } from "../domain";
 import type { BlobStore } from "../ports";
 import { drawVideoFrame } from "./frameGrab";
+import { grabHtml } from "./htmlThumb";
+import { ticksToSeconds } from "../domain";
 
 const selected = (a: Asset) => a.versions.find((x) => x.id === a.selectedVersionId) ?? a.versions[0];
 
 /**
  * First-frame thumbnail (data URL) per asset for filmstrips and the Media panel; images use the image
- * itself. Cached per version, so a tile follows the asset's selected version (V2-SB-R04).
+ * itself, HTML clips a frame about 1 s in (V2-SB-130). Cached per version, so a tile follows the asset's selected version (V2-SB-R04).
  */
 export function useThumbs(project: Project, blobs: BlobStore): Record<string, string> {
   const [cache, setCache] = useState<Record<string, string>>({});
@@ -16,12 +18,13 @@ export function useThumbs(project: Project, blobs: BlobStore): Record<string, st
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   useEffect(() => {
     for (const a of Object.values(project.assets)) {
-      if (a.kind === "audio" || a.kind === "html") continue;
+      if (a.kind === "audio") continue;
       const v = selected(a);
       const key = v && `${a.id}:${v.id}`;
       if (!v || started.current.has(key)) continue;
       started.current.add(key);
-      void blobs.get(v.media.blobKey).then((b) => b && grab(a.kind, b)).then((url) => {
+      const html = (b: Blob) => grabHtml(b, project, blobs, v.media.durationTicks ? ticksToSeconds(v.media.durationTicks) : undefined);
+      void blobs.get(v.media.blobKey).then((b) => b && (a.kind === "html" ? html(b) : grab(a.kind, b))).then((url) => {
         if (alive.current && url) setCache((t) => ({ ...t, [key]: url }));
       }).catch(() => started.current.delete(key));
     }
