@@ -676,7 +676,9 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 .v2-hp .v2-tp-row input[type=range] { min-height: 44px; margin: 0; }
 .v2-hp .v2-tp-row input[type=color] { height: 44px; }
 .v2-hp-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
-.v2-hp-actions .v2-btn { min-height: 44px; }
+.v2-hp-actions .v2-btn, .v2-app.is-desktop .v2-hp-actions .v2-btn { min-height: 44px; }
+/* WebKit draws a light native select; match the dark text fields (V2-HTML-PARAMS). */
+select.v2-tp-field { -webkit-appearance: none; appearance: none; padding-right: 30px; background: #1d1d22 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23e8e8ea' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center; color: var(--text, #eee); }
 
 /* V2-SB-133: in point of a video clip (desktop Speed tab and phone sheet); 44px targets on every device. */
 .v2-inpoint { display: grid; gap: 8px; }
