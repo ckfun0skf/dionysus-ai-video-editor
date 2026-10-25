@@ -13,6 +13,8 @@ beforeAll(() => {
   Element.prototype.setPointerCapture = () => undefined;
   Element.prototype.releasePointerCapture = () => undefined;
   Object.defineProperty(globalThis, "indexedDB", { value: undefined, configurable: true });
+  // jsdom's Blob has no text(); the player reads an HTML clip's source with it.
+  if (!Blob.prototype.text) Blob.prototype.text = function (this: Blob) { return new Promise<string>((res) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.readAsText(this); }); };
 });
 beforeEach(() => { localStorage.clear(); });
 const roots: Root[] = [];
@@ -34,10 +36,40 @@ describe("V2-106 desktop shell", () => {
   it("lays out asset browser, preview, inspector and timeline", async () => {
     const { q, el } = await boot();
     expect(q(".v2-dshell")).toBeTruthy();
-    expect(Array.from(el.querySelectorAll(".v2-abtab")).map((t) => t.textContent)).toEqual(["Media", "Audio", "Text", "Stickers", "Effects", "Templates"]);
+    expect(Array.from(el.querySelectorAll(".v2-abtab")).map((t) => t.textContent)).toEqual(["Video", "Photo", "Code", "Stickers", "Audio", "Text", "Effects"]);
     expect(q('[aria-label="Inspector"]').textContent).toContain("Project");
     expect(el.querySelectorAll('[role="separator"]').length).toBe(3);
-    expect(q(".v2-dropzone").textContent).toContain("Drop media here");
+    expect(q(".v2-dropzone").textContent).toContain("Drop videos here");
+  });
+
+  it("V2-ADD-MEDIA-TABS: Code tab has Upload and Create; Create opens the Code Editor and adds a new clip at the playhead (one undo step)", async () => {
+    const { q, btn, click, el } = await boot();
+    await click(q('.v2-abtabs [title="Code"]'));
+    expect(q('[role="tabpanel"]').getAttribute("aria-label")).toBe("Code");
+    expect(btn("Upload")).toBeTruthy();
+    await click(btn("Create"));
+    const dlg = q('[role="dialog"][aria-label="HTML clip editor"]');
+    expect(dlg).toBeTruthy();
+    expect(dlg.textContent).toContain("Add to timeline");
+    const clips = () => el.querySelectorAll(".v2-clip").length;
+    const before = clips();
+    await click(btn("Add to timeline", dlg));
+    await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
+    expect(q('[aria-label="HTML clip editor"]')).toBeNull();
+    expect(clips()).toBe(before + 1);
+    expect(el.querySelector('[aria-label="Code"] .v2-tiles')?.textContent).toContain("Code clip");
+    await click(q('[aria-label="Undo"]'));
+    expect(clips()).toBe(before);
+  });
+
+  it("V2-ADD-MEDIA-TABS: Create then Cancel adds nothing; an old saved tab id maps to a current tab", async () => {
+    localStorage.setItem("v2.browserTab", "templates");
+    const { q, btn, click, el } = await boot();
+    expect(q(".v2-abtab.is-active").textContent).toBe("Code");
+    await click(btn("Create"));
+    await click(btn("Cancel", q('[aria-label="HTML clip editor"]')));
+    expect(q('[aria-label="HTML clip editor"]')).toBeNull();
+    expect(el.querySelectorAll(".v2-clip").length).toBe(0);
   });
 
   it("project settings: aspect, fps and background are undoable and resize the preview canvas", async () => {

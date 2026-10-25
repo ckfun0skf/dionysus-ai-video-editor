@@ -50,7 +50,7 @@ function LivePreview({ src, loopSec }: { src: string; loopSec?: number }) {
  * CodePen-like editor for an HTML clip: tabs on mobile, split panes on desktop, debounced live preview.
  * Save creates a new asset version (one undo step); Cancel discards.
  */
-export function HtmlEditor({ source, mobile, onSave, onClose }: { source: string; mobile: boolean; onSave: (html: string) => void; onClose: () => void }) {
+export function HtmlEditor({ source, mobile, onSave, onClose, create }: { source: string; mobile: boolean; onSave: (html: string) => void; onClose: () => void; /** A new clip (Add Media → Code → Create): Save adds it to the timeline. */ create?: boolean }) {
   const initial = useMemo(() => splitHtml(source), [source]);
   const [parts, setParts] = useState<HtmlParts>(initial);
   const [pane, setPane] = useState<Pane | "preview">("html");
@@ -70,7 +70,9 @@ export function HtmlEditor({ source, mobile, onSave, onClose }: { source: string
         <span className="v2-code-actions">
           <HtmlExportButtons html={() => joined} name={cfg.name || "clip"} />
           <button className="v2-btn" onClick={onClose}>Cancel</button>
-          <button className="v2-btn is-primary" disabled={!dirty} title={dirty ? "Save as a new version of this clip (undoable)" : "No changes"} onClick={() => onSave(joined)}>Save</button>
+          {create
+            ? <button className="v2-btn is-primary" title="Add this clip to the timeline at the playhead (undoable)" onClick={() => onSave(joined)}>Add to timeline</button>
+            : <button className="v2-btn is-primary" disabled={!dirty} title={dirty ? "Save as a new version of this clip (undoable)" : "No changes"} onClick={() => onSave(joined)}>Save</button>}
         </span>
       </div>
       <ClipSettings cfg={cfg} onChange={setCfg} mobile={mobile} />

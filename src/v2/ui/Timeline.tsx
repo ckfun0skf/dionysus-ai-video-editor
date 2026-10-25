@@ -430,7 +430,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
               })}
               {/* V2-109: CapCut-style add tile trails the last main clip and scrolls with the track (never covers clips). */}
               {centered && onAddMedia && t.id === main?.id && !gesture && !selectedId && !selectedIds?.length && (
-                <button className="v2-main-add" style={{ left: toPx(Math.max(0, ...t.placements.map((p) => p.startTicks + p.durationTicks))) + 12 }} aria-label="Add media to main track" title="Add photos, videos or library items to the main track at the playhead"
+                <button className="v2-main-add" style={{ left: toPx(Math.max(0, ...t.placements.map((p) => p.startTicks + p.durationTicks))) + 12 }} aria-label="Add media to main track" title="Add videos, photos, code clips or stickers to the main track at the playhead"
                   onPointerDown={(e) => e.stopPropagation()} onClick={onAddMedia}><Ic g="+" size={22} /></button>
               )}
               {onTransition && t.kind === "video" && t.placements.filter((p) => transitions.previousAdjacent(t, p)).map((p) => {
