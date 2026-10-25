@@ -24,7 +24,8 @@ export function InPointControl({ engine, project, placement: pl }: { engine: Eng
   const total = max + Math.round(pl.durationTicks * (pl.speed ?? 1));
   const commit = () => {
     const n = Number(text.trim().replace(",", "."));
-    if (Number.isFinite(n)) set(Math.round(n * TICKS_PER_SECOND)); else setText(String(s2(at)));
+    // Only a changed value is an edit: a blur after Undo (or after Enter) must not add a no-op history step.
+    if (Number.isFinite(n) && n !== s2(at)) set(Math.round(n * TICKS_PER_SECOND)); else setText(String(s2(at)));
   };
   const step = (d: number) => set(at + Math.round(d * TICKS_PER_SECOND));
   if (max <= 0) return <p className="v2-abnote">This clip plays its whole video, so there is nothing to slip. Trim it shorter first.</p>;

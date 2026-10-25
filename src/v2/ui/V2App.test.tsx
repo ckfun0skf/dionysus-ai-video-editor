@@ -313,6 +313,8 @@ describe("V2App", () => {
     await typeIn(el, "99");
     expect(readout(el)).toBe("Plays 6–10 s of 10 s. Length and position stay.");
     expect((el.querySelector('[aria-label="In point 0.1 s later"]') as HTMLButtonElement).disabled).toBe(true);
+    // Leaving the field unchanged (as clicking Undo does in a browser) is not an edit, so one Undo still steps back.
+    await act(async () => { (el.querySelector('input[aria-label="In point in seconds"]') as HTMLInputElement).dispatchEvent(new FocusEvent("focusout", { bubbles: true })); });
     await act(async () => { (el.querySelector('[aria-label="Undo"]') as HTMLButtonElement).click(); });
     expect(readout(el)).toBe("Plays 2.6–6.6 s of 10 s. Length and position stay.");
   });
