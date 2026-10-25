@@ -361,3 +361,5 @@ button.v2-sb-conn:focus-visible { outline: 2px solid var(--accent); outline-offs
 @media (pointer: coarse), (max-width: 820px) {
   .v2-sb-kfnote .v2-linkbtn, .v2-sb-layers .v2-linkbtn { display: inline-flex; align-items: center; min-height: 44px; padding: 0 4px; margin: -12px 0; vertical-align: middle; }
 }
+.v2-sb-stateform { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; align-items: center; }
+.v2-sb-stateform .v2-sb-model { flex: 1 1 180px; min-width: 0; }

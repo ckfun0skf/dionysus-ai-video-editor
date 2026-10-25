@@ -378,6 +378,8 @@ export const setConnection = (from: string, to: string, patch: storyEdit.Connect
 export const setRefOverride = (shotId: string, slotId: string, versionId: string | null): Command => ({ label: versionId ? "Pin reference version" : "Unpin reference version", apply: (p) => storyRefs.setRefOverride(p, shotId, slotId, versionId) });
 export const addSlot = (id: string, patch: storyRefs.SlotPatch): Command => ({ label: "Add asset", apply: (p) => storyRefs.addSlot(p, id, patch) });
 export const updateSlot = (id: string, patch: storyRefs.SlotPatch): Command => ({ label: "Edit asset", apply: (p) => storyRefs.updateSlot(p, id, patch) });
+/** V2-SB-136: add a state of asset slot `baseId` (see storyRefs.addState). */
+export const addAssetState = (baseId: string, name: string, prompt?: string): Command => ({ label: "Add state", apply: (p) => storyRefs.addState(p, baseId, name, prompt) });
 export const deleteSlot = (id: string): Command => ({ label: "Delete asset", apply: (p) => storyRefs.deleteSlot(p, id) });
 export const addKeyframe = (shotId: string, slotId: string): Command => ({ label: "Add keyframe", apply: (p) => storyRefs.addKeyframe(p, shotId, slotId) });
 

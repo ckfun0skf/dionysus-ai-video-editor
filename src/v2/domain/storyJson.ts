@@ -57,6 +57,52 @@ export interface StoryAsset {
    * uploads longer than the longest layer are offered a trim, and each layer can start at its own `inSec`.
    */
   genDurationSec?: number;
+  /**
+   * V2-SB-136: the same thing in other states (lit / unlit, before / after, wet / dry). Image-like assets only. Each
+   * state is referenced as "<asset id>@<state id>" anywhere an asset id is allowed, and is made from the base asset.
+   */
+  states?: StoryAssetState[];
+}
+/**
+ * V2-SB-136: one state of an asset: its own prompt, references, checks and versions; same type, aspect and identity as
+ * the base (the base image is attached first unless the state's references already list it).
+ */
+export interface StoryAssetState {
+  id: string; name?: string; prompt: string; references?: StoryAssetRef[];
+  source?: "generate" | "upload"; qa?: string[]; notes?: string;
+}
+/** V2-SB-136: asset types that can have states (the ones made as images). */
+export const STATEFUL_ASSET_TYPES: readonly StoryAssetType[] = ["character", "location", "prop", "style", "image", "frame"];
+/** V2-SB-136: the id a state is referenced by. */
+export const assetStateId = (assetId: string, stateId: string) => `${assetId}@${stateId}`;
+/** V2-SB-136: `{ asset, state }` of a "<asset id>@<state id>" reference, else undefined. */
+export const splitStateId = (id: string): { asset: string; state: string } | undefined => {
+  const i = id.indexOf("@");
+  return i > 0 && i < id.length - 1 ? { asset: id.slice(0, i), state: id.slice(i + 1) } : undefined;
+};
+/** V2-SB-136: the default reference note on a state's base asset. */
+export const stateBaseNote = (name: string) => `the same ${name}: keep exactly what it is and how it looks; change only its state`;
+/** V2-SB-136: a state as a full asset, the way references, production and Send to timeline see it. */
+export interface ExpandedStoryAsset extends StoryAsset { stateOf?: string; state?: string; stateName?: string }
+/**
+ * V2-SB-136: the assets plus one entry per state (after its base): id "<asset>@<state>", name "<Base> · <state>",
+ * the base's type, aspect and params, and the base image attached first (role "identity" for a character).
+ */
+export function expandAssetStates(assets: StoryAsset[]): ExpandedStoryAsset[] {
+  return assets.flatMap((a) => {
+    const { states, ...base } = a;
+    if (!states?.length) return [base];
+    return [base, ...states.map((st): ExpandedStoryAsset => {
+      const refs = st.references ?? [];
+      const hasBase = refs.some((r) => assetRefId(r) === a.id);
+      const baseRef: StoryAssetRef = { asset: a.id, ...(a.type === "character" ? { role: "identity" as const } : {}), note: stateBaseNote(a.name) };
+      return {
+        id: assetStateId(a.id, st.id), name: `${a.name} · ${st.name || st.id}`, type: a.type, aspect: a.aspect, prompt: st.prompt,
+        references: hasBase ? refs : [baseRef, ...refs], source: { type: st.source ?? "generate" }, qa: st.qa ?? [],
+        ...(st.notes ? { notes: st.notes } : {}), ...(a.params ? { params: a.params } : {}), stateOf: a.id, state: st.id, stateName: st.name || st.id,
+      };
+    })];
+  });
 }
 /** How an asset uses one of its references (V2-SB-123). No `role` = inferred from the referenced asset's type. */
 export interface AssetRefRole { role?: ReferenceRole; note?: string }
@@ -558,6 +604,37 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
   const rawAssets = raw.assets === undefined ? [] : Array.isArray(raw.assets) ? raw.assets : (err("assets", '"assets" must be a list.'), []);
   const assetIds = new Set<string>();
   const assets: StoryAsset[] = [];
+  /** Paths of the entries of `allAssets` (assets and their states, see expandAssetStates). */
+  const assetPaths: string[] = [];
+  /**
+   * assets[].states (V2-SB-136): [ { id, name?, prompt, references?, source?, qa?, notes? } ] for image-like assets.
+   * State ids follow the id rules but can't contain "." or "@"; "<asset>@<state>" must be unique.
+   */
+  const statesOf = (v: unknown, path: string, assetId: string, type: StoryAssetType): StoryAssetState[] | undefined => {
+    if (v === undefined) return undefined;
+    if (!Array.isArray(v)) { err(path, '"states" must be a list like [ { "id": "lit", "prompt": "…" } ].'); return undefined; }
+    if (type && !STATEFUL_ASSET_TYPES.includes(type)) { err(path, `Only ${STATEFUL_ASSET_TYPES.join(", ")} assets can have states; make a separate ${type} asset instead.`); return undefined; }
+    const seen = new Set<string>(), out: StoryAssetState[] = [];
+    v.forEach((x, k) => {
+      const sp = `${path}[${k}]`;
+      if (!isObj(x)) return err(sp, 'Each state must be an object { "id": "<state id>", "prompt": "…" }.');
+      const sid = str(x.id) ?? "";
+      if (!sid) return err(`${sp}.id`, 'Each state needs an "id", e.g. "lit"; it is referenced as "<asset id>@<state id>".');
+      if (!ID_RE.test(sid) || sid.includes(".")) return err(`${sp}.id`, `State id "${sid}" may only use letters, digits, "_", "-" (max 48).`);
+      if (seen.has(sid)) return err(`${sp}.id`, `Duplicate state id "${sid}" on asset "${assetId}".`);
+      seen.add(sid);
+      let source: "generate" | "upload" = "generate";
+      if (x.source === "upload") source = "upload";
+      else if (x.source !== undefined && x.source !== "generate") err(`${sp}.source`, 'A state\'s source must be "generate" or "upload".');
+      const prompt = str(x.prompt) ?? "";
+      if (source === "generate" && !prompt) err(`${sp}.prompt`, `State "${assetStateId(assetId, sid)}" is generated, so it needs a "prompt" (what changes from the base).`);
+      for (const key of Object.keys(x)) if (!["id", "name", "prompt", "references", "source", "qa", "notes"].includes(key)) warn(`${sp}.${key}`, `Unknown state field "${key}" is ignored. Fields: id, name, prompt, references, source, qa, notes (type and aspect come from the asset).`);
+      const name = str(x.name), notes = str(x.notes), qa = strList(x.qa, `${sp}.qa`);
+      const references = assetRefsOf(x.references, `${sp}.references`);
+      out.push({ id: sid, ...(name ? { name } : {}), prompt, ...(references.length ? { references } : {}), ...(source === "upload" ? { source } : {}), ...(qa.length ? { qa } : {}), ...(notes ? { notes } : {}) });
+    });
+    return out;
+  };
   rawAssets.forEach((a, i) => {
     const path = `assets[${i}]`;
     if (!isObj(a)) return err(path, "Each asset must be an object.");
@@ -597,8 +674,20 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
       else if (g === undefined || g < 0.5 || g > 120) warn(`${path}.genDurationSec`, `genDurationSec ${JSON.stringify(a.genDurationSec)} is ignored: use seconds between 0.5 and 120.`);
       else genDurationSec = g;
     }
-    assets.push({ id, name, type, aspect: asp || aspect, prompt, references: assetRefsOf(a.references, `${path}.references`), source, qa: strList(a.qa, `${path}.qa`), ...(notes ? { notes } : {}), ...(params ? { params } : {}), ...(genDurationSec ? { genDurationSec } : {}) });
+    const states = statesOf(a.states, `${path}.states`, id, type);
+    assets.push({ id, name, type, aspect: asp || aspect, prompt, references: assetRefsOf(a.references, `${path}.references`), source, qa: strList(a.qa, `${path}.qa`), ...(notes ? { notes } : {}), ...(params ? { params } : {}), ...(genDurationSec ? { genDurationSec } : {}), ...(states?.length ? { states } : {}) });
+    assetPaths.push(path);
+    states?.forEach((_st, k) => assetPaths.push(`${path}.states[${k}]`));
   });
+  // V2-SB-136: states are checked from here on as assets of their own ("<asset>@<state>"), made from their base.
+  const allAssets = expandAssetStates(assets);
+  for (const x of allAssets) if (x.stateOf) assetIds.add(x.id);
+  /** The path of reference `j` of allAssets[i] in the file (a state's added base reference is at index -1). */
+  const refPath = (i: number, j: number) => {
+    const x = allAssets[i], st = x.stateOf ? assets.find((a) => a.id === x.stateOf)?.states?.find((y) => y.id === x.state) : undefined;
+    const off = st && !(st.references ?? []).some((r) => assetRefId(r) === x.stateOf) ? 1 : 0;
+    return j - off < 0 ? assetPaths[i] : `${assetPaths[i]}.references[${j - off}]`;
+  };
   /** V2-SB-135: why "<shot id>.keyframe" can't be referenced (unknown shot, or the shot has no keyframe), else undefined. */
   const kfRefProblem = (id: string): string | undefined => {
     const sid = keyframeShotOf(id);
@@ -607,14 +696,24 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
   };
   /** An id a reference may name: an asset, or another shot's keyframe (V2-SB-135). */
   const refKnown = (id: string) => { if (assetIds.has(id)) return true; if (isKfRef(id)) { kfRefsUsed = true; return true; } return false; };
-  assets.forEach((a, i) => a.references.map(assetRefId).forEach((r, j) => {
-    if (r === a.id) err(`assets[${i}].references[${j}]`, `Asset "${a.id}" can't reference itself.`);
-    else if (!refKnown(r)) err(`assets[${i}].references[${j}]`, kfRefProblem(r) ?? `Unknown asset "${r}".`);
+  /** V2-SB-136: why "<asset>@<state>" can't be referenced (unknown asset, or no such state), else undefined. */
+  const stateRefProblem = (id: string): string | undefined => {
+    const sp = splitStateId(id);
+    if (!sp || assetIds.has(id)) return undefined;
+    const base = assets.find((a) => a.id === sp.asset);
+    if (!base) return `"${id}" names state "${sp.state}" of asset "${sp.asset}", but there is no such asset.`;
+    const names = (base.states ?? []).map((x) => x.id);
+    return `Asset "${sp.asset}" has no state "${sp.state}"${names.length ? ` (states: ${names.join(", ")})` : ""}. Add it to the asset's "states" or reference another one.`;
+  };
+  allAssets.forEach((a, i) => a.references.map(assetRefId).forEach((r, j) => {
+    if (r === a.id) err(refPath(i, j), `Asset "${a.id}" can't reference itself.`);
+    else if (a.stateOf && splitStateId(r)?.asset === a.stateOf) err(refPath(i, j), `State "${a.id}" can't be made from another state of the same asset ("${r}"); it is always made from "${a.stateOf}".`);
+    else if (!refKnown(r)) err(refPath(i, j), kfRefProblem(r) ?? stateRefProblem(r) ?? `Unknown asset "${r}".`);
   }));
-  const refCycle = findCycle(new Map(assets.map((a) => [a.id, a.references.map(assetRefId)])));
+  const refCycle = findCycle(new Map(allAssets.map((a) => [a.id, a.references.map(assetRefId)])));
   if (refCycle) err("assets", `Assets reference each other in a loop: ${refCycle.join(" → ")}.`);
-  const assetById = new Map(assets.map((a) => [a.id, a]));
-  const unknownAsset = (id: string) => kfRefProblem(id) ?? `Unknown asset "${id}"${assetIds.size ? ` (assets: ${list([...assetIds], 8)})` : ""}.`;
+  const assetById = new Map(allAssets.map((a) => [a.id, a as StoryAsset]));
+  const unknownAsset = (id: string) => kfRefProblem(id) ?? stateRefProblem(id) ?? `Unknown asset "${id}"${assetIds.size ? ` (assets: ${list([...assetIds], 8)})` : ""}.`;
   /** The asset type of a reference: a keyframe reference is a "frame" (V2-SB-135). */
   const refType = (id: string): StoryAssetType | undefined => assetById.get(id)?.type ?? (isKfRef(id) ? "frame" : undefined);
 
@@ -977,7 +1076,7 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
   });
 
   const usedBy = (id: string) => audio.some((c) => c.asset === id) || shots.some((s) => s.assets.includes(id) || s.keyframe?.references.some((r) => assetRefId(r) === id) || (s.render && s.render !== "ai" && s.clip === id) || s.layers?.some((l) => l.type !== "text" && l.asset === id));
-  assets.forEach((a, i) => { if (!usedBy(a.id) && !assets.some((b) => b.references.some((r) => assetRefId(r) === a.id))) warn(`assets[${i}]`, `Asset "${a.id}" isn't used by any shot.`); });
+  allAssets.forEach((a, i) => { if (!usedBy(a.id) && !allAssets.some((b) => b.references.some((r) => assetRefId(r) === a.id))) warn(assetPaths[i], a.stateOf ? `State "${a.id}" isn't used by any shot.` : `Asset "${a.id}" isn't used by any shot.`); });
 
   let connections: StoryConnection[] = [];
   if (raw.connections === undefined) {
@@ -1051,13 +1150,14 @@ export function storyDocJson(doc: StoryDoc): string {
 export function storySummary(doc: StoryDoc): string {
   const total = doc.shots.reduce((t, s) => t + s.durationSec, 0);
   const frames = doc.assets.filter((a) => a.source.type === "lastFrame").length;
-  const qa = doc.assets.reduce((t, a) => t + a.qa.length, 0) + doc.shots.reduce((t, s) => t + s.qa.length, 0);
+  const qa = doc.assets.reduce((t, a) => t + a.qa.length + (a.states ?? []).reduce((u, x) => u + (x.qa?.length ?? 0), 0), 0) + doc.shots.reduce((t, s) => t + s.qa.length, 0);
+  const states = doc.assets.reduce((t, a) => t + (a.states?.length ?? 0), 0);
   const n = (k: number, one: string, many = `${one}s`) => `${k} ${k === 1 ? one : many}`;
   const layers = doc.shots.reduce((t, s) => t + (s.layers?.length ?? 0), 0);
   const effects = doc.shots.reduce((t, s) => t + (s.effects?.length ?? 0), 0);
   const transitions = doc.connections.filter((c) => c.transition).length;
   const cues = doc.audio?.length ?? 0;
-  const extra = [layers && n(layers, "layer"), effects && n(effects, "effect"), transitions && n(transitions, "transition"), cues && n(cues, "audio cue")].filter(Boolean);
+  const extra = [states && n(states, "asset state"), layers && n(layers, "layer"), effects && n(effects, "effect"), transitions && n(transitions, "transition"), cues && n(cues, "audio cue")].filter(Boolean);
   return `${n(doc.shots.length, "shot")} · ${Math.round(total * 10) / 10}s · ${n(doc.assets.length, "asset")}${frames ? ` (${n(frames, "last-frame link")})` : ""} · ${n(qa, "QA check")}${extra.length ? ` · ${extra.join(" · ")}` : ""}`;
 }
 

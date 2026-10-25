@@ -11,7 +11,7 @@
  */
 import type { Composition, Project } from "./model";
 import { kindForSlot, pinOf, refVersionOf, selectedOf, versionsOf, type AssetSlot, type QaCheck, type Shot, type ShotReference, type Storyboard } from "./storyboard";
-import { ASSET_REFERENCE_ROLES, inferReferenceRole, STORY_ASSET_TYPES, type AssetRefRole, type ReferenceRole, type StoryAssetType } from "./storyJson";
+import { ASSET_REFERENCE_ROLES, assetStateId, inferReferenceRole, STATEFUL_ASSET_TYPES, stateBaseNote, STORY_ASSET_TYPES, type AssetRefRole, type ReferenceRole, type StoryAssetType } from "./storyJson";
 
 /** Reference slots of a shot: its assets, then its media layers' assets (no clip slot, no duplicates). */
 export function shotRefIds(b: Storyboard, s: Shot): string[] {
@@ -93,7 +93,9 @@ export function referenceChoices(b: Storyboard, id: string): AssetSlot[] {
     seen.add(from);
     return (b.slots[from]?.references ?? []).some((r) => usesId(r, seen));
   };
-  return Object.values(b.slots).filter((s) => s.id !== id && !usesId(s.id));
+  // V2-SB-136: a state is made from its base, never from another state of it.
+  const base = b.slots[id]?.stateOf;
+  return Object.values(b.slots).filter((s) => s.id !== id && !usesId(s.id) && !(base && s.stateOf === base));
 }
 
 /** Where a slot is used: shots listing it, shots showing it as their clip or as a layer, slots made from it. */
@@ -113,18 +115,30 @@ export function slotUse(b: Storyboard, id: string): SlotUse {
 export function slotDeleteBlock(b: Storyboard, id: string): string | undefined {
   const u = slotUse(b, id);
   const no = (s: string) => `shot ${b.order.indexOf(s) + 1}`;
+  const states = statesOf(b, id);
+  if (states.length) return `It has ${states.length > 1 ? "states" : "a state"} (${states.map((x) => x.stateName ?? x.id).join(", ")}). Delete ${states.length > 1 ? "them" : "it"} first.`;
   if (u.clipOf.length) return `It is the clip of ${u.clipOf.map(no).join(", ")}. Switch ${u.clipOf.length > 1 ? "those shots" : "that shot"} to another clip first.`;
   if (u.layerOf.length) return `It is a layer in ${u.layerOf.map(no).join(", ")}. Remove the layer first.`;
   return undefined;
 }
 
+/** V2-SB-136: the states of slot `id` (slots "<id>@<state>"), in board order. */
+export function statesOf(b: Storyboard, id: string): AssetSlot[] {
+  return Object.values(b.slots).filter((x) => x.stateOf === id);
+}
+
 function cleanSlot(b: Storyboard, s: AssetSlot, patch: SlotPatch, hasVersions: boolean): AssetSlot {
   const n: AssetSlot = { ...s };
   if (patch.name !== undefined && patch.name.trim()) n.name = patch.name.trim().slice(0, 80);
+  // V2-SB-136: a state keeps its base's type and aspect, and is always made from the base (attached first).
+  const base = s.stateOf ? b.slots[s.stateOf] : undefined;
+  if (base) patch = { ...patch, type: undefined, aspect: undefined, ...(patch.references ? { references: [base.id, ...patch.references.filter((r) => r !== base.id)] } : {}) };
   // A type change must keep the backing asset's media kind once versions exist, and a clip slot keeps its type.
   if (patch.type && STORY_ASSET_TYPES.includes(patch.type) && patch.type !== s.type) {
     const clip = Object.values(b.shots).some((x) => x.clipSlot === s.id);
-    if (!clip && (!hasVersions || kindForSlot(patch.type) === kindForSlot(s.type))) n.type = patch.type;
+    // V2-SB-136: an asset with states stays image-like.
+    const stateful = statesOf(b, s.id).length > 0 && !STATEFUL_ASSET_TYPES.includes(patch.type);
+    if (!clip && !stateful && (!hasVersions || kindForSlot(patch.type) === kindForSlot(s.type))) n.type = patch.type;
   }
   if (patch.aspect !== undefined && /^\d+(\.\d+)?:\d+(\.\d+)?$/.test(patch.aspect.trim())) n.aspect = patch.aspect.trim();
   if (patch.prompt !== undefined) n.prompt = patch.prompt;
@@ -168,11 +182,57 @@ export function addSlot(p: Project, id: string, patch: SlotPatch): Project {
 export function updateSlot(p: Project, id: string, patch: SlotPatch): Project {
   const b = p.storyboard, s = b?.slots[id];
   if (!b || !s) return p;
-  const n = cleanSlot(b, s, patch, versionsOf(p, s).length > 0);
+  const states = statesOf(b, id);
+  const n = cleanSlot(b, s, patch, versionsOf(p, s).length > 0 || states.some((x) => versionsOf(p, x).length > 0));
   if (JSON.stringify(n) === JSON.stringify(s)) return p;
-  const a = s.assetId ? p.assets[s.assetId] : undefined;
-  const assets = a && a.name === s.name && n.name !== s.name ? { ...p.assets, [a.id]: { ...a, name: n.name } } : p.assets;
-  return { ...p, assets, storyboard: { ...b, slots: { ...b.slots, [id]: n } } };
+  let assets = p.assets;
+  const rename = (slot: AssetSlot, name: string) => { const a = slot.assetId ? assets[slot.assetId] : undefined; if (a && a.name === slot.name && name !== slot.name) assets = { ...assets, [a.id]: { ...a, name } }; };
+  rename(s, n.name);
+  const slots = { ...b.slots, [id]: n };
+  // V2-SB-136: states follow their base's type and aspect, and its name while they still carry it.
+  for (const x of states) {
+    const name = x.name === stateLabel(s.name, x) ? stateLabel(n.name, x) : x.name;
+    if (name === x.name && x.type === n.type && x.aspect === n.aspect) continue;
+    rename(x, name);
+    slots[x.id] = { ...x, name, type: n.type, aspect: n.aspect };
+  }
+  return { ...p, assets, storyboard: { ...b, slots } };
+}
+
+/** V2-SB-136: a state's default name, "<base name> · <state name>". */
+const stateLabel = (baseName: string, x: AssetSlot) => `${baseName} · ${x.stateName ?? x.id.slice(x.id.indexOf("@") + 1)}`;
+
+/** V2-SB-136: why slot `baseId` can't have states, if it can't. */
+export function stateBlock(b: Storyboard, baseId: string): string | undefined {
+  const base = b.slots[baseId];
+  if (!base) return "That asset is gone.";
+  if (base.stateOf) return "A state can't have states of its own; add the state to the base asset.";
+  if (base.keyframeOf) return "A keyframe can't have states.";
+  if (!STATEFUL_ASSET_TYPES.includes(base.type)) return `Only ${STATEFUL_ASSET_TYPES.join(", ")} assets can have states.`;
+  return undefined;
+}
+/** V2-SB-136: the id of a new state named `name` of slot `baseId` ("After rain" → "<baseId>@after-rain"), unique. */
+export function nextStateId(b: Storyboard, baseId: string, name: string): string {
+  const key = name.trim().toLowerCase().normalize("NFKD").replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 32) || "state";
+  for (let i = 1; ; i += 1) { const id = assetStateId(baseId, i > 1 ? `${key}-${i}` : key); if (!b.slots[id]) return id; }
+}
+
+/**
+ * V2-SB-136: add state `name` of slot `baseId` as slot "<baseId>@<key>": same type and aspect, made from the base
+ * (attached first, with a note to keep what it is), its own prompt and versions.
+ */
+export function addState(p: Project, baseId: string, name: string, prompt = ""): Project {
+  name = name.replace(/\s+/g, " ").slice(0, 40);
+  const b = p.storyboard, base = b?.slots[baseId];
+  if (!b || !base || !name.trim() || stateBlock(b, baseId)) return p;
+  const id = nextStateId(b, baseId, name);
+  const slot: AssetSlot = {
+    id, name: `${base.name} · ${name.trim()}`, type: base.type, aspect: base.aspect,
+    prompt: prompt.trim() || `The same ${base.name}, ${name.trim()}.`, references: [baseId],
+    refRoles: { [baseId]: { ...(base.type === "character" ? { role: "identity" as const } : {}), note: stateBaseNote(base.name) } },
+    source: { type: "generate" }, qa: [], stateOf: baseId, stateName: name.trim(), ...(base.params ? { params: structuredClone(base.params) } : {}),
+  };
+  return { ...p, storyboard: { ...b, slots: { ...b.slots, [id]: slot } } };
 }
 
 /** Delete an asset slot: it leaves every shot's and slot's references. Its versions stay in the media library. */

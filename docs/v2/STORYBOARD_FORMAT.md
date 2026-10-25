@@ -53,6 +53,7 @@ Notation: `?` = optional. All coordinates are 0-1 fractions of the frame, measur
 | `qa` | string[] | 2-5 yes/no checks that can be verified by looking. |
 | `params?` **(new, V2-HTML-PARAMS)** | `{ "<key>": Param }` | `html` assets only: the values the clip exposes, so one asset is reused with different values (§2.3.2, RULE 24). Ignored, with a warning, on other types. |
 | `genDurationSec?` | number, 0.5 to 120 | **(new, V2-SB-133)** `video` assets only: the length to generate when the layers using the asset need less (video models have minimum or fixed lengths). Each video layer picks its part with `inSec` (§2.5); an upload longer than the longest layer using the asset is offered a trim (§4.4). On any other type it warns and is ignored. |
+| `states?` **(new, V2-SB-136)** | AssetState[] | `character`, `location`, `prop`, `style`, `image` and `frame` assets only: the same thing in other states (lit, wet, at night, broken), each with its own prompt and versions, referenced as `"<asset id>@<state id>"` (§2.3.3, RULE 29). |
 
 #### 2.3.1 `assets[].references[]` objects (V2-SB-123)
 
@@ -102,6 +103,35 @@ An `html` asset may declare the values its clip exposes, so the planner, the cli
 - **Uses:** a `render: "html"` shot (§2.4) and an `html` layer (§2.5) give their own values as `"params": { "<key>": value }`. Omitted keys use the default.
 - The **Copy prompt** for the asset lists the declared params and the values the shots and layers use, and tells the clip's AI to declare exactly these params in its manifest and read `ctx.params` in `render()`. When a pasted clip lacks a declared param, or declares it with another type, the check warns (`param-missing`, `param-mismatch`).
 - The **clip's manifest is the source of truth at render time:** values are resolved against the params the selected version actually declares (its defaults, overridden by the use's values). A value for a key the clip doesn't declare is kept but not passed to it.
+
+#### 2.3.3 `assets[].states[]`: asset states (V2-SB-136)
+
+When a character, location or prop changes during the story (a lamp off and on, a coat dry and soaked, a street by day and at night), it stays **one asset** and lists its other looks as states. Each state is made from the base asset, so it keeps the same identity, but it has its own prompt, QA checks and versions.
+
+```json
+{ "id": "hill", "name": "Hill road", "type": "location", "prompt": "Empty winding road up a grassy hill before sunrise, …", "source": "generate", "qa": ["…"],
+  "states": [
+    { "id": "sunrise", "name": "Sunrise",
+      "prompt": "References:\nImage 1 (Hill road): the base image to edit: keep the road, hill and valley exactly; change only the light.\n\nThe same winding hill road as the sun rises …",
+      "references": [{ "asset": "hill", "role": "start-frame", "note": "the same road and hill; only the light changes" }],
+      "qa": ["Same road, hill and valley as the base image"] } ] }
+```
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | string | Letters, digits, `_` and `-` (no `.` or `@`), unique within the asset. The state's full id is `"<asset id>@<state id>"`, e.g. `"hill@sunrise"`. |
+| `name?` | string | Shown in the app as `"<asset name> · <state name>"` (default: the state id). |
+| `prompt` | string | Required unless `source` is `"upload"`. Describe what changes; start with a `References:` block (RULE 17). |
+| `references?` | (string \| AssetReference)[] | As for assets (§2.3.1). The base asset is always attached: if the list doesn't name it, the app puts it first as Image 1 (role `identity` for a character, otherwise from its type, with the note "the same <name>: keep exactly what it is and how it looks; change only its state"). Name the base yourself to choose its role, e.g. `start-frame` to edit the base image. A state can't use another state of the same asset. |
+| `source?` | `"generate"` or `"upload"` | Default `"generate"`. Not `lastFrame`. |
+| `qa?` | string[] | Checks for this state. |
+| `notes?` | string | Free text. |
+
+- **Type, aspect and params** are always the base asset's. A state can't have states.
+- **Use:** `"<asset id>@<state id>"` works anywhere an asset id does: a shot's `assets` and `references`, a keyframe's `references`, another asset's (or state's) `references`, a still shot's `clip` and an image layer's `asset`. The base id keeps meaning the default look.
+- **Validation:** `states` on a `video`, `audio` or `html` asset, a state without an `id`, an id with `.` or `@`, a duplicate id, a source other than `"generate"`/`"upload"`, a generated state without a prompt, `"x@y"` naming an unknown asset or a state the asset doesn't have, or a state made from a sibling state: error. An unknown state field or a state no shot uses: warning.
+- **In the app:** a base asset's detail has a **States** section (chips for each state and **Add state**, which creates `"<asset id>@<slug of the name>"` made from the base and opens it). A state's detail says "State of <base>" with **Open base**; its editor keeps the base's type and aspect and always keeps the base in *Made from*. An asset with states can't be deleted until its states are; changing the base's type or aspect changes its states too. Each state has its own versions: *Copy prompt* attaches the base's selected version as its image, and **Send to timeline** and every reference to `"x@y"` use the **state's** selected version.
+- **Export:** the app's board is not written back to JSON; the storyboard file keeps `states` in the authored form above.
 
 ### 2.4 `shots[]`
 
@@ -420,6 +450,7 @@ Planned as future registry entries, with no schema change needed: `grain`, `colo
 | `anim` in + out longer than the layer | Warn. |
 | `transition` between shots that are not adjacent on the main track | Warn and use a cut. Keep the transition on export. |
 | `trackMotion` on a layer | Warn and ignore. |
+| An unknown field on an asset state, or a state no shot, layer or asset uses (V2-SB-136) | Warn; the field is ignored. |
 | Unknown `blend` id, or `opacity` outside 0–1 (V2-SB-128) | Warn; draw normally / ignore the opacity. The blend id is kept for export. |
 | `follow` other than `"frame"` or `"shot"`, or `"shot"` with nothing moving the shot during the layer | Warn and ignore (§2.5). |
 | `captions: true` without `dialogue` | Warn and do nothing. Non-boolean `captions` also warns. |
@@ -441,6 +472,7 @@ Planned as future registry entries, with no schema change needed: `grain`, `colo
 - an `html` asset with a `lastFrame` source, or a generated `html` asset without a `prompt`;
 - (V2-HTML-PARAMS) an invalid asset `params` declaration (bad key, unknown `type`, a missing or invalid `default`, `min` > `max`, empty select `options`), a shot or layer `params` that isn't an object, a value that isn't a string, number or boolean, or a value of the wrong type for its declared param (a select value not in `options`, a colour that isn't `#rrggbb`).
 
+- (V2-SB-136) invalid asset `states` (on a `video`, `audio` or `html` asset; not a list; a state without an id, with `.` or `@` in its id, a duplicate id, a bad `source` or a generated state without a prompt), a `"<asset id>@<state id>"` reference to an unknown asset or state, or a state made from another state of the same asset;
 Every error and warning carries a JSON path (for example `shots[2].layers[0].endSec`) that the import screen highlights in the pasted text.
 
 **Mapping notes**
@@ -532,7 +564,7 @@ The app offers two prompts (Storyboard → AI prompt):
 
 ```
 RULES
-1. Every recurring character, location, prop and the overall style gets ONE reusable asset with a detailed prompt; shots reference these ids instead of repeating descriptions.
+1. Every recurring character, location, prop and the overall style gets ONE reusable asset with a detailed prompt; shots reference these ids instead of repeating descriptions. When one of them changes during the story (a lamp lit, a coat soaked, a street at night), give that asset "states" (RULE 29) instead of a separate asset.
 2. Write prompts that work on their own (a generator only sees that prompt plus the reference images). Repeat key visual details (clothes, colours, lighting, style) in every prompt.
 3. When a shot must continue seamlessly from the previous one, add an asset with "type": "frame" and "source": { "type": "lastFrame", "shot": "<previous shot id>" }, use it in the next shot's "assets", and mark the connection "continuity". Never make a shot depend on its own last frame or create loops.
 4. Use "source": "upload" for things the user already has (logos, real photos, products).
@@ -564,6 +596,10 @@ Image 2 (Keyframe · The climb): reference only, not a frame: overall look; same
 …".
 27. Background sound that lasts (wind, rain, traffic, room tone, a crowd) is kind "ambience": a bed "from" the first shot it is heard in "to" the last, looped to fill that span ("loop": false plays it once), default volume 0.5 with 1 s fades in and out. Ask for a loopable 20-60 s recording. A short musical hit or whoosh on a moment (a title appearing, a reveal, a cut to black) is kind "sting" at "atSec" in one shot, with no "to". A "sfx" is a one-off sound at one moment too: never give a sound effect a "to" to make it last, it is not looped and stops when the sound ends; use "ambience" instead. Music repeats only with "loop": true. Example: { "asset": "dawn-wind", "kind": "ambience", "from": "s1", "to": "s3" }, { "asset": "title-chime", "kind": "sting", "from": "s3", "atSec": 1 }.
 28. Write a shot's "dialogue" as a list of lines when who speaks matters: { "speaker": "ANNA", "text": "Who's there?" } is said on screen (the video model lip-syncs it); add "offscreen": true for a voice that belongs to the scene but whose speaker is not in frame (behind a door, on the phone, calling from out of shot): nobody in frame moves their lips. It is not a voiceover (narration over the film, an "audio" cue of kind "voiceover"). The app appends a numbered "Dialogue:" block to the clip prompt marking each line on screen (lip-synced) or OFF-SCREEN (heard, not seen); write the clip prompt so the speaker is out of frame and say how the people in frame react. If an off-screen line is recorded separately instead of generated with the clip, also add an "audio" cue of kind "dialogue" "from" that shot with "line" (its 1-based number in the list) and "atSec"; the Dialogue block then tells the model not to voice it. "captions": true shows the lines' words. Example: "dialogue": [{ "speaker": "FRIEND", "text": "You made it!", "offscreen": true }].
+29. When a character, location, prop, style, image or frame appears in more than one state (a lamp off and on, a coat dry and soaked, a street by day and at night, a vase whole and broken), keep ONE asset and add its other looks to its "states": [ { "id", "name"?, "prompt", "references"?, "source"?, "qa"? } ]. Refer to a state as "<asset id>@<state id>" anywhere an asset id goes: a shot's "assets" and "references", a keyframe's or another asset's "references", a still shot's "clip", an image layer's "asset". Each state gets its own prompt, checks and versions; its type and aspect are the asset's (not allowed on video, audio or html assets). The app makes the base asset first and attaches it to the state as Image 1 so it stays the same thing (role "identity" for a character, else from its type); list the base yourself in the state's "references" to choose its role, e.g. "start-frame" to edit the base image. State ids use letters, digits, "_" and "-" only; a state can't use another state of the same asset. Write the state prompt with its own "References:" block and describe only what changes. Use the base id for the default look and "<asset id>@<state id>" only where the state shows; don't list both in one shot unless both appear. Example: asset "hill" with "states": [{ "id": "sunrise", "name": "Sunrise", "prompt": "References:
+Image 1 (Hill road): the base image to edit: keep the road, hill and valley exactly; change only the light.
+
+The same winding hill road as the sun rises …", "references": [{ "asset": "hill", "role": "start-frame", "note": "the same road and hill; only the light changes" }], "qa": ["Same road, hill and valley as the base image"] }], used by shot s3 as "assets": ["hill@sunrise", "s1.keyframe"]. In "References:" blocks a state is named "<asset name> · <state name>", e.g. "Image 1 (Hill road · Sunrise)".
 ```
 
 ## 6. Decisions, open questions and future work

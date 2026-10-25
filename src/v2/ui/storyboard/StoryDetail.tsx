@@ -243,6 +243,11 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
         <p className="v2-hint v2-sb-kfnote">Keyframe of shot {shotNo(slot.keyframeOf)}: make this still first; the clip animates from it (Image 1, the start frame).{" "}
           <button className="v2-linkbtn" onClick={() => onOpen({ shot: slot.keyframeOf! })}>Open shot {shotNo(slot.keyframeOf)}</button></p>
       )}
+      {slot?.stateOf && b.slots[slot.stateOf] && (
+        <p className="v2-hint v2-sb-kfnote" data-testid="state-of">State “{slot.stateName ?? slot.id}” of “{b.slots[slot.stateOf].name}”: the same {slot.type}, with its own prompt and versions. The base image is attached first so it stays the same thing.{" "}
+          <button className="v2-linkbtn" onClick={() => onOpen({ slot: slot.stateOf! })}>Open “{b.slots[slot.stateOf].name}”</button></p>
+      )}
+      {slot && !slot.stateOf && !storyRefs.stateBlock(b, slot.id) && <States slot={slot} project={project} thumbs={thumbs} engine={engine} onOpen={onOpen} />}
       {htmlSlot && (
         <Section title={shot ? `HTML clip prompt · ${htmlSlot.name}` : "Prompt"} extra={<span className="v2-sb-copyrow">
           <CopyButton text={() => packagePrompt(false)} label="Copy prompt" testId="copy-html-prompt" />
@@ -523,6 +528,43 @@ function Keyframe({ shot, project, thumbs, engine, onOpen }: { shot: Shot; proje
     <Section title="Keyframe">
       <p className="v2-hint">Make the opening still first, then animate it: you pick the exact first frame before paying for video.</p>
       <div className="v2-sb-actions"><button className="v2-btn v2-sb-btn" data-testid="keyframe-add" onClick={add}><Ic g="image" size={16} /> Add keyframe</button></div>
+    </Section>
+  );
+}
+
+/**
+ * Asset states (V2-SB-136): the same character, place or prop in another state (lit, wet, broken…), each with its own
+ * prompt and versions, made from this asset. Shots and layers use a state like any asset.
+ */
+function States({ slot, project, thumbs, engine, onOpen }: { slot: AssetSlot; project: Project; thumbs: Record<string, string>; engine: Engine; onOpen: (t: BoardTarget) => void }) {
+  const b = project.storyboard!;
+  const [adding, setAdding] = useState(false);
+  const [name, setName] = useState("");
+  const states = storyRefs.statesOf(b, slot.id);
+  const add = () => {
+    if (!name.trim()) return;
+    const id = storyRefs.nextStateId(b, slot.id, name);
+    engine.dispatch(cmd.addAssetState(slot.id, name));
+    setName(""); setAdding(false);
+    if (engine.getState().project.storyboard?.slots[id]) onOpen({ slot: id });
+  };
+  return (
+    <Section title={states.length ? `States (${states.length})` : "States"}>
+      {states.length > 0 ? (
+        <ul className="v2-sb-slots" data-testid="asset-states">
+          {states.map((x) => {
+            const v = board.selectedOf(project, x), n = board.versionsOf(project, x).length;
+            return <li key={x.id}><button className="v2-sb-slot" onClick={() => onOpen({ slot: x.id })} aria-label={`State ${x.stateName ?? x.id}: ${n ? `${n} version${n > 1 ? "s" : ""}` : "not added yet"}`}><Thumb src={v && thumbs[v]} icon={TYPE_ICON[x.type] ?? "image"} count={n} /><span className="v2-sb-slot-text"><b>{x.stateName ?? x.name}</b><em>{x.id}</em></span></button></li>;
+          })}
+        </ul>
+      ) : <p className="v2-hint">The same {slot.type} in another state (lit, wet, broken, older…), made from this image so it stays recognisably the same. Shots use it as “{slot.id}@&lt;state&gt;”.</p>}
+      {adding ? (
+        <form className="v2-sb-stateform" onSubmit={(e) => { e.preventDefault(); add(); }}>
+          <input className="v2-sb-model" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="State name, e.g. lit" aria-label={`Name of the new state of ${slot.name}`} maxLength={40} data-testid="state-name" />
+          <button className="v2-btn primary v2-sb-btn" type="submit" disabled={!name.trim()} data-testid="state-create">Add</button>
+          <button className="v2-btn v2-sb-btn" type="button" onClick={() => { setAdding(false); setName(""); }}>Cancel</button>
+        </form>
+      ) : <div className="v2-sb-actions"><button className="v2-btn v2-sb-btn" data-testid="state-add" onClick={() => setAdding(true)}><Ic g="+" size={16} /> Add state</button></div>}
     </Section>
   );
 }

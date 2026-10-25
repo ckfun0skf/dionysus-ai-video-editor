@@ -52,10 +52,10 @@ describe("AI planner guide (V2-SB-114)", () => {
     expect(md).toContain("length 0.05–1, default 0.5 (fraction of the effect's time range, not seconds");
   });
 
-  it("the full prompt inlines the guide with RULES 1-28; the short prompt links to it", () => {
+  it("the full prompt inlines the guide with RULES 1-29; the short prompt links to it", () => {
     const full = storyboardSystemPrompt();
     for (const s of ["FORMAT (", "PRESETS", "RULES", "EXAMPLE", `14. ${RULES[13]}`, "not seconds", "START FRAME", "\"references\"?", "\"genDurationSec\"?", "- crossfade:", "- ken-burns:"]) expect(full).toContain(s);
-    expect(RULES).toHaveLength(28);
+    expect(RULES).toHaveLength(29);
     // V2-SB-128: blend modes: the format lines, the blend catalogue and a rule with an example that imports cleanly.
     expect(full).toContain('"blend"?: "<blend id>", "opacity"?: number (0-1, default 1)');
     expect(full).toContain('Blend modes — shots[].layers[].blend');
@@ -125,8 +125,27 @@ describe("AI planner guide (V2-SB-114)", () => {
     expect(full).toContain('"params"?: { "<key>": value },   // render "html" only');
   });
 
+  it("RULE 29 (V2-SB-136): asset states; the example uses one and its rule quotes it", () => {
+    expect(RULE_LIST.slice(28).map((r) => r.key)).toEqual(["asset-states"]);
+    expect(ruleNumber("asset-states")).toBe(29);
+    const full = storyboardSystemPrompt();
+    expect(full).toContain(`29. ${RULES[28]}`);
+    expect(RULES[ruleNumber("reusable-assets") - 1]).toContain("(RULE 29)");
+    expect(RULES[28]).toContain('"<asset id>@<state id>"');
+    expect(RULES[28]).toContain('"assets": ["hill@sunrise", "s1.keyframe"]');
+    expect(RULES[28]).toContain('"Image 1 (Hill road · Sunrise)"');
+    const hill = EXAMPLE_STORYBOARD.assets.find((a) => a.id === "hill")!;
+    expect(hill.states?.map((st) => st.id)).toEqual(["sunrise"]);
+    expect(RULES[28]).toContain(JSON.stringify(hill.states![0].references![0]).replace(/,"/g, ', "').replace(/":/g, '": ').replace(/^\{/, "{ ").replace(/\}$/, " }"));
+    const s3 = EXAMPLE_STORYBOARD.shots.find((s) => s.id === "s3")!;
+    expect(s3.assets).toContain("hill@sunrise");
+    expect(s3.prompt).toContain("Image 1 (Hill road · Sunrise)");
+    expect(full).toContain('"states"?: [ { "id": string, "name"?: string, "prompt": string');
+    expect(full).toContain('"<asset id>@<state id>" = that asset\'s state');
+  });
+
   it("RULES 26-28 (V2-SB-135): keyframe references, ambience and stings, off-screen dialogue; the example uses each", () => {
-    expect(RULE_LIST.slice(25).map((r) => r.key)).toEqual(["keyframe-refs", "audio-ambience-sting", "offscreen-dialogue"]);
+    expect(RULE_LIST.slice(25, 28).map((r) => r.key)).toEqual(["keyframe-refs", "audio-ambience-sting", "offscreen-dialogue"]);
     expect(ruleNumber("keyframe-refs")).toBe(26);
     expect(ruleNumber("audio-ambience-sting")).toBe(27);
     expect(ruleNumber("offscreen-dialogue")).toBe(28);
