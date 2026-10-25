@@ -340,6 +340,8 @@ button.v2-sb-conn:focus-visible { outline: 2px solid var(--accent); outline-offs
 .v2-trim-window { position: absolute; top: 0; bottom: 0; border: 3px solid var(--accent); border-radius: 8px; box-sizing: border-box; pointer-events: none; box-shadow: 0 0 0 1px #0008; }
 .v2-trim-range { width: 100%; margin: 10px 0 0; min-height: 32px; accent-color: var(--accent); }
 .v2-trim-read { margin: 4px 0 0; font-variant-numeric: tabular-nums; }
+/* V2-SB-134: the trim dialog keeps 44 px targets on desktop too (desktop .v2-btn is 32 px). */
+.v2-trim-range, .v2-app.is-desktop .v2-trim .v2-btn { min-height: 44px; }
 .v2-sb-versions li { display: flex; flex-direction: column; gap: 4px; }
 .v2-sb-trimbtn { min-height: 32px; font-size: 12px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 0 8px; }
 .v2-sb-trimmed { color: var(--accent) !important; }
