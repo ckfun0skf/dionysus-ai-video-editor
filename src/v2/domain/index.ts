@@ -10,7 +10,7 @@ export * as layers from "./layerStyle";
 export * as cues from "./subtitleLayer";
 export * as story from "./storyJson";
 export type { StoryDoc, StoryAsset, StoryShot, StoryConnection, StoryIssue, StoryParseResult } from "./storyJson";
-export { storyboardSystemPrompt, storyboardShortPrompt, EXAMPLE_STORYBOARD } from "./storyPrompt";
+export { storyboardSystemPrompt, storyboardShortPrompt, EXAMPLE_STORYBOARD, exampleStoryboardJson } from "./storyPrompt";
 export { aiLinks, runtimeAiLinks, runtimeSiteUrl, CONFIGURED_SITE_URL, DEFAULT_SITE_URL, type AiLinks } from "./siteUrl";
 export * as board from "./storyboard";
 export * as storyEdit from "./storyEdit";

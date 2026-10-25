@@ -8,8 +8,10 @@ import { describe, expect, it } from "vitest";
 import { listPresets } from "../registry";
 import { aiGuideFiles, CLIP_DOC_SOURCE, FORMAT_DOC_SOURCE, llmsTxt, presetsJson, storyboardGuideHtml, storyboardGuideMarkdown } from "./aiGuide";
 import { aiLinks, DEFAULT_SITE_URL } from "./siteUrl";
-import { CHOOSING_PRESETS, EXAMPLE_STORYBOARD, GUIDE_KINDS, HOW_IT_WORKS, presetsByCategory, RULE_LIST, RULES, ruleNumber, storyboardShortPrompt, storyboardSystemPrompt } from "./storyPrompt";
-import { validateStoryboard } from "./storyJson";
+import { CHOOSING_PRESETS, EXAMPLE_STORYBOARD, exampleStoryboardJson, GUIDE_KINDS, HOW_IT_WORKS, presetsByCategory, RULE_LIST, RULES, ruleNumber, storyboardShortPrompt, storyboardSystemPrompt } from "./storyPrompt";
+import { parseStoryboard, validateStoryboard, type StoryDoc } from "./storyJson";
+import { storyboardFromDoc } from "./storyboard";
+import { referencesBlock } from "./storyRefs";
 import { HTML_CLIP_CONTRACT, HTML_CLIP_FORMAT, htmlClipTemplate, lintHtmlClip } from "./htmlClipPackage";
 
 const root = resolve(__dirname, "../../..");
@@ -79,7 +81,7 @@ describe("AI planner guide (V2-SB-114)", () => {
     // V2-SB-124: keyframe then animate: the format line, a rule and a worked example.
     expect(full).toContain('"keyframe"?: { "prompt": string, "references"?:');
     expect(full).toContain(`18. ${RULES[17]}`);
-    expect(RULES[17]).toMatch(/Image 1, the START FRAME/);
+    expect(RULES[17]).toMatch(/Image 1 is always the keyframe, the START FRAME/);
     expect(RULES[17]).toContain('"keyframe": { "prompt": "References:');
     // V2-SB-123: asset references can carry roles; the format, a rule and a worked example say so.
     expect(full).toContain('"references"?: (string | { "asset": "<asset id>", "role"?: "start-frame" | "identity" | "look" | "detail", "note"?: string })[]');
@@ -241,5 +243,65 @@ describe("HTML clip package spec (V2-HTML-PKG)", () => {
     expect(clipDoc.toLowerCase()).not.toMatch(/keeper|lantern/);
     expect(formatDoc).toContain("[HTML_CLIP_PACKAGE.md](HTML_CLIP_PACKAGE.md)");
     expect(clipDoc).toContain(`RULE ${ruleNumber("html-clip-package")}`);
+  });
+});
+
+describe("guide consistency (V2-SB-131)", () => {
+  const md = storyboardGuideMarkdown();
+  const exampleText = md.split("## EXAMPLE\n```json\n")[1].split("\n```")[0];
+
+  it("the example writes sources in the documented form: \"generate\" / \"upload\" strings, an object only for lastFrame", () => {
+    expect(md).toContain('"source": "generate" | "upload" | { "type": "lastFrame", "shot": "<shot id>" },');
+    const ex = JSON.parse(exampleText) as { assets: { source: unknown }[] };
+    expect(exampleText).toBe(exampleStoryboardJson());
+    for (const a of ex.assets) {
+      const ok = a.source === "generate" || a.source === "upload" || (typeof a.source === "object" && a.source !== null && Object.keys(a.source).sort().join() === "shot,type" && (a.source as { type: string }).type === "lastFrame");
+      expect(ok, JSON.stringify(a.source)).toBe(true);
+    }
+    expect(ex.assets.some((a) => a.source === "generate")).toBe(true);
+    // No object form of generate/upload anywhere in the guide or the spec.
+    for (const text of [md, formatDoc]) expect(text).not.toMatch(/"type":\s*"(generate|upload)"|type:\s*"(generate|upload)"/);
+    // The published JSON imports to the same doc, with no warnings.
+    const r = parseStoryboard(exampleText);
+    expect(r.ok && r.warnings).toEqual([]);
+    expect(r.ok && r.doc).toEqual(validateStoryboard(EXAMPLE_STORYBOARD).ok && (validateStoryboard(EXAMPLE_STORYBOARD) as { doc: StoryDoc }).doc);
+  });
+
+  it("the importer still accepts the object forms of generate / upload", () => {
+    const doc = JSON.parse(exampleText);
+    doc.assets[0].source = { type: "generate" };
+    doc.assets[1].source = { type: "upload" };
+    const r = parseStoryboard(JSON.stringify(doc));
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.doc.assets.slice(0, 2).map((a) => a.source)).toEqual([{ type: "generate" }, { type: "upload" }]);
+  });
+
+  it("the keyframe rule's numbering is the clip prompt builder's: keyframe Image 1, then references, then other assets", () => {
+    const rule = RULES[ruleNumber("keyframe") - 1];
+    expect(ruleNumber("keyframe")).toBe(18);
+    expect(rule).toContain("Image 1 is always the keyframe, the START FRAME; Image 2, 3 … are the shot's \"references\" in their order, then the shot's other \"assets\" in \"assets\" order");
+    expect(md).toContain('Image 1 = the keyframe (start frame), Image 2 … = the shot\'s "references", then its other "assets"');
+    const r = parseStoryboard(JSON.stringify({
+      format: "dionysus.storyboard/1", meta: { title: "T", aspect: "16:9" },
+      assets: [
+        { id: "hero", name: "Hero", type: "character", prompt: "p", source: "generate", qa: ["a", "b"] },
+        { id: "cafe", name: "Café", type: "location", prompt: "p", source: "generate", qa: ["a", "b"] },
+        { id: "mug", name: "Blue mug", type: "prop", prompt: "p", source: "generate", qa: ["a", "b"] },
+        { id: "plate", name: "Plate", type: "frame", prompt: "p", source: "upload", qa: ["a", "b"] },
+      ],
+      shots: [{ id: "s1", title: "Morning coffee", durationSec: 4, prompt: "She slowly lifts the mug", assets: ["hero", "cafe", "plate"], references: [{ asset: "mug", role: "detail" }], keyframe: { prompt: "p", references: ["hero", "cafe"] }, qa: ["a", "b"] }],
+    }));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const b = storyboardFromDoc(r.doc);
+    const lines = referencesBlock(b, b.shots.s1).split("\n").slice(1);
+    expect(lines.map((l) => l.replace(/: .*$/, ""))).toEqual(["Image 1 (Keyframe · Morning coffee)", "Image 2 (Blue mug)", "Image 3 (Hero)", "Image 4 (Café)", "Image 5 (Plate)"]);
+    expect(lines[0]).toContain("START FRAME");
+    expect(lines[4]).toContain("not a frame"); // an inferred start frame becomes details only
+    // The rule's worked example matches what the app generates for that shot.
+    const example = rule.match(/clip prompt "References:\\n(.*?)\\n\\n/)![1].split("\\n").map((l) => l.replace(/: .*$/, ""));
+    const plain = parseStoryboard(JSON.stringify({ ...JSON.parse(JSON.stringify(r.doc)), shots: [{ ...r.doc.shots[0], assets: ["hero", "cafe"], references: undefined, keyframe: { prompt: "p", references: ["hero", "cafe"] } }], assets: r.doc.assets.filter((a) => a.id === "hero" || a.id === "cafe").map((a) => ({ ...a, source: "generate" })) }));
+    expect(plain.ok).toBe(true);
+    if (plain.ok) { const pb = storyboardFromDoc(plain.doc); expect(referencesBlock(pb, pb.shots.s1).split("\n").slice(1).map((l) => l.replace(/: .*$/, ""))).toEqual(example); }
   });
 });

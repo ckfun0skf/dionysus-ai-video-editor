@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { EXAMPLE_STORYBOARD, runtimeAiLinks, story, storyboardShortPrompt, storyboardSystemPrompt, type StoryDoc } from "../../domain";
+import { exampleStoryboardJson, runtimeAiLinks, story, storyboardShortPrompt, storyboardSystemPrompt, type StoryDoc } from "../../domain";
 import { Ic } from "../Icon";
 import { copyText } from "./clipboard";
 
@@ -45,7 +45,7 @@ export function PromptPanel() {
       </div>
       <div className="v2-sb-actions">
         <CopyButton key={kind} text={() => prompt} label={kind === "short" ? "Copy AI prompt" : "Copy full prompt"} primary testId="copy-prompt" />
-        <CopyButton text={() => JSON.stringify(EXAMPLE_STORYBOARD, null, 2)} label="Copy example JSON" />
+        <CopyButton text={() => exampleStoryboardJson()} label="Copy example JSON" />
         <a className="v2-btn v2-sb-btn" href={links.guideHtml} target="_blank" rel="noopener noreferrer" title="Open the storyboard guide the short prompt links to"><Ic g="link" size={16} /> Open guide</a>
       </div>
       <textarea className="v2-sb-code" aria-label="AI system prompt" readOnly value={prompt} rows={14} onFocus={(e) => e.currentTarget.select()} />
@@ -80,7 +80,7 @@ export function ImportPanel({ onCreate, replacing }: { onCreate?: (doc: StoryDoc
         <button className="v2-btn v2-sb-btn" title="Paste the AI's reply from the clipboard" onClick={() => void paste()}><Ic g="📋" size={16} /> Paste</button>
         <button className="v2-btn v2-sb-btn" title="Import a .json file" onClick={() => input.current?.click()}><Ic g="json" size={16} /> Choose file</button>
         <input ref={input} type="file" accept=".json,application/json,.txt,text/plain" hidden aria-label="Storyboard JSON file" onChange={(e) => { void pick(e.target.files?.[0]); e.target.value = ""; }} />
-        {!text && <button className="v2-btn v2-sb-btn" title="Fill in the example storyboard to see how import works" onClick={() => { setFile(undefined); setText(JSON.stringify(EXAMPLE_STORYBOARD, null, 2)); }}><Ic g="board" size={16} /> Load example</button>}
+        {!text && <button className="v2-btn v2-sb-btn" title="Fill in the example storyboard to see how import works" onClick={() => { setFile(undefined); setText(exampleStoryboardJson()); }}><Ic g="board" size={16} /> Load example</button>}
         {text && <button className="v2-btn v2-sb-btn" title="Clear" onClick={() => { setText(""); setFile(undefined); }}><Ic g="✕" size={16} /> Clear</button>}
       </div>
       <textarea ref={area} className="v2-sb-code" aria-label="Storyboard JSON" placeholder={'Paste the AI\'s reply here — the whole message is fine, Dionysus finds the JSON.\n\n{ "format": "dionysus.storyboard/1", … }'} value={text} rows={10} spellCheck={false} onChange={(e) => { setFile(undefined); setText(e.target.value); }} />

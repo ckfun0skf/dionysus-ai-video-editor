@@ -7,7 +7,7 @@
  * and presets.json can't drift apart (aiGuide.test.ts fails when the published files are stale).
  */
 import { FONTS, listPresets, type ParamSpec, type PresetDescriptor, type PresetKind } from "../registry";
-import { CONNECTION_KINDS, DEFAULT_TRANSITION_SEC, REFERENCE_ROLES, SHOT_RENDERS, STORY_ASSET_TYPES, STORYBOARD_FORMAT, type StoryDoc } from "./storyJson";
+import { CONNECTION_KINDS, DEFAULT_TRANSITION_SEC, REFERENCE_ROLES, SHOT_RENDERS, STORY_ASSET_TYPES, STORYBOARD_FORMAT, storyDocJson, type StoryDoc } from "./storyJson";
 import { runtimeAiLinks, type AiLinks } from "./siteUrl";
 
 /** Spec version the guide describes (the format string stays `dionysus.storyboard/1`). */
@@ -43,6 +43,9 @@ export const EXAMPLE_STORYBOARD: StoryDoc = {
     { from: "s2", to: "s3", kind: "cut", transition: { preset: "crossfade", params: { durationSec: 0.6 } } },
   ],
 };
+
+/** The example as published (guide, full prompt, "Copy example JSON"): sources in the documented form ("generate"). */
+export const exampleStoryboardJson = () => storyDocJson(EXAMPLE_STORYBOARD);
 
 /** Preset kinds a storyboard can name, in guide order, with where each id goes. Stickers are not storyboard fields. */
 export const GUIDE_KINDS: { kind: PresetKind; title: string; usedIn: string }[] = [
@@ -97,7 +100,8 @@ const FORMAT_SECTION = () => `{
       "references"?: (string | { "asset": "<asset id>", "role"?: "start-frame" | "identity" | "look" | "detail", "note"?: string })[],
                                  // other assets to attach when generating this one, IN THIS ORDER (Image 1, Image 2 …); a plain id
                                  // = role from its type; for an image "start-frame" means the base image to edit (no end-frame)
-      "source": "generate" | "upload" | { "type": "lastFrame", "shot": "<shot id>" },   // "html" can't use lastFrame
+      "source": "generate" | "upload" | { "type": "lastFrame", "shot": "<shot id>" },
+                                 // plain strings "generate" / "upload" (default "generate"); an object only for lastFrame; "html" and "audio" can't use lastFrame
       "qa": string[]             // 2-5 concrete yes/no checks to verify the asset by looking
   } ],
   "shots": [ {                   // in playback order
@@ -113,7 +117,8 @@ const FORMAT_SECTION = () => `{
                                  // omitted = "assets" order with roles from the type (frame → start-frame, character → identity,
                                  // style → look, others → detail); at most one "start-frame" and one "end-frame"
       "keyframe"?: { "prompt": string, "references"?: [ "<asset id>" | { "asset", "role"?, "note"? } ], "qa"?: string[] },
-                                 // render "ai" only: the opening still to generate FIRST; the clip animates from it (Image 1, start frame)
+                                 // render "ai" only: the opening still to generate FIRST; the clip animates from it. The clip's images are then
+                                 // Image 1 = the keyframe (start frame), Image 2 … = the shot's "references", then its other "assets" (RULES)
       "camera"?: string,
       "dialogue"?: string,
       "qa": string[],            // 2-5 concrete yes/no checks for the clip
@@ -217,7 +222,7 @@ export const RULE_LIST: readonly { key: string; text: string }[] = [
   { key: "transition-overlap", text: `A transition in "connections" overlaps the two shots, centred on the cut: it adds no time and eats half its length from the end of the "from" shot and half from the start of the "to" shot. It is clamped to half the shorter of the two shots. For example, a 0.8 s transition out of a 2.5 s shot blends the last 0.4 s of that shot with the first 0.4 s of the next, and the total length stays the same; keep transitions short on short shots so their key action isn't covered.` },
   { key: "identity-portrait", text: `For an "identity" reference prefer a single clean portrait or character image (one view, plain background) over a multi-view character sheet: the sheet's layout (several poses, panels, labels) can leak into the generated frames.` },
   { key: "asset-references", text: `An asset made from other assets lists them in its "references" in attach order, as objects with a "role" when the use is not obvious from the type. Its prompt then starts with the same numbered "References:" block as a clip prompt; for an image, "start-frame" means the base image to edit (there is no end frame). Example: a close-up of the hero holding a mug: "references": [{ "asset": "mug", "role": "detail", "note": "glaze and colour only" }, "hero"], prompt "References:\\nImage 1 (Blue mug): reference only: materials, colours and objects only; glaze and colour only.\\nImage 2 (Hero): reference only: keep this identity (face, body, clothes).\\n\\nClose-up of …".` },
-  { key: "keyframe", text: `Keyframe then animate: when the opening composition matters (a character's pose, a precise layout, a hero product shot), give the "ai" shot a "keyframe": { "prompt", "references", "qa" }. The app turns it into an image asset "<shot id>.keyframe" that is made first, then attached to the clip as Image 1, the START FRAME (do not also give the shot a "start-frame" reference). The keyframe prompt describes one still image (with its own "References:" block, as for an asset); the clip prompt then describes only the motion from that frame. Example: "keyframe": { "prompt": "References:\\nImage 1 (Hero): reference only: keep this identity (face, body, clothes).\\n\\nThe hero sits at a café table, both hands around a blue mug …", "references": ["hero", "cafe"], "qa": ["The hero's face matches the reference"] }, clip prompt "References:\\nImage 1 (Keyframe · …): START FRAME …\\n\\nShe slowly lifts the mug …".` },
+  { key: "keyframe", text: `Keyframe then animate: when the opening composition matters (a character's pose, a precise layout, a hero product shot), give the "ai" shot a "keyframe": { "prompt", "references", "qa" }. The app turns it into an image asset "<shot id>.keyframe" named "Keyframe · <shot title>" that is made first. Numbering of the clip's images when a shot has a keyframe: Image 1 is always the keyframe, the START FRAME; Image 2, 3 … are the shot's "references" in their order, then the shot's other "assets" in "assets" order (the numbering without a keyframe, shifted by one). Do not also give the shot a "start-frame": one in "references", or an inferred one (a "frame" or last-frame asset), is attached as details only. The keyframe's own "references" are numbered separately, from Image 1, in the keyframe prompt; they are attached to the clip only if they are also in the shot's "assets" or "references". The keyframe prompt describes one still image (with its own "References:" block, as for an asset); the clip prompt starts with a "References:" block in the clip numbering above and then describes only the motion from that frame. Example: "keyframe": { "prompt": "References:\\nImage 1 (Hero): reference only: keep this identity (face, body, clothes).\\nImage 2 (Café): reference only: materials, colours and objects only.\\n\\nThe hero sits at a café table, both hands around a blue mug …", "references": ["hero", "cafe"], "qa": ["The hero's face matches the reference"] } with the shot's "assets": ["hero", "cafe"], clip prompt "References:\\nImage 1 (Keyframe · Morning coffee): START FRAME: the clip opens on exactly this image.\\nImage 2 (Hero): reference only, not a frame: keep this identity.\\nImage 3 (Café): reference only, not a frame: materials and colours only.\\n\\nShe slowly lifts the mug …".` },
   { key: "audio", text: `Audio: put each voiceover, music bed or sound effect in "audio" as a cue on an asset of type "audio" (source "generate" with a prompt for the user's voice/music/sound tool, e.g. the exact voiceover script and voice, or "upload"). "from" is the shot it starts in, "atSec" the offset into that shot, "to" the last shot it plays under. A music bed usually runs "from" the first shot "to" the last with "volume" 0.2-0.4 under speech; a voiceover spans the shots it describes; a sound effect sits at the moment in one shot ("atSec") with no "to". Example: { "asset": "score", "kind": "music", "from": "s1", "to": "s6", "volume": 0.3, "fadeOutSec": 2 }, { "asset": "door-slam", "kind": "sfx", "from": "s4", "atSec": 1.2 }. Do not put spoken lines that the video model renders (shot "dialogue") into a voiceover too.` },
   { key: "layer-follow", text: `Layers stay fixed to the frame by default: a shot's video effects (e.g. "ken-burns" zoom and pan) move only the picture, so titles, labels and logos stay put and readable. Give a layer "follow": "shot" only when it belongs to the scene and must move with the picture, e.g. a name tag pinned to a sign or a label on an object while the shot slowly zooms: { "id": "tag", "type": "text", "text": "ROOM 12", "startSec": 0, "endSec": 4, "position": { "x": 0.62, "y": 0.4 }, "follow": "shot" }. It only has an effect when an effect moves or zooms the shot while the layer is on screen.` },
   { key: "text-style-extras", text: `Keep text readable on any picture: give light text an outline ("strokeWidth" about 0.04-0.08 with a dark "strokeColor"), a soft "shadow", or a "background" box (captions, lower thirds). Use "letterSpacing" (in em) for airy titles, "lineHeight" for multi-line cards, "italic" for emphasis, and a text "effect" with "effectColor" only for stylised titles. Sizes and offsets are fractions of the font size; null removes a style's shadow or background. Example: "style": { "color": "#ffffff", "strokeWidth": 0.06, "strokeColor": "#000000", "shadow": { "color": "#000000", "blur": 0.3, "x": 0, "y": 0.04 } }. Put a look used on several layers into "meta.textStyles" once.` },
@@ -241,7 +246,7 @@ export function guideSections(heading: (title: string) => string): string {
     `${heading("CHOOSING PRESETS")}\n${CHOOSING_PRESETS}`,
     `${heading("PRESETS")}\n${presetsSection()}`,
     `${heading("RULES")}\n${rulesSection()}`,
-    `${heading("EXAMPLE")}\n\`\`\`json\n${JSON.stringify(EXAMPLE_STORYBOARD, null, 2)}\n\`\`\``,
+    `${heading("EXAMPLE")}\n\`\`\`json\n${exampleStoryboardJson()}\n\`\`\``,
   ].join("\n\n");
 }
 
