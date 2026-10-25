@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { hitCandidates, isBackdrop, pickAt, Player, THREE_TEMPLATE } from "../render";
+import { hitCandidates, isBackdrop, pickAt, Player, readClipConfig } from "../render";
 import { cmd } from "../engine";
 import { importFile } from "../persistence";
 import { board as storyDomain, compositionDuration, edit, layers, ops, transitions, findPlacement, newId, formatTimecode, secondsToTicks, TICKS_PER_SECOND, type Asset } from "../domain";
@@ -25,13 +25,14 @@ import { Ic } from "./Icon";
 import { canSetInPoint, InPointControl } from "./InPoint";
 import { MediaPicker, type Picked } from "./MediaPicker";
 import { projectMediaList } from "./projectMedia";
-import { libraryFile, stickerFile, stickers } from "./libraryItems";
+import { stickerFile, stickers } from "./libraryItems";
+import { newCodeClipHtml } from "./codeSamples";
 import { EffectPicker } from "./EffectPicker";
 import { HtmlParamsPanel } from "./HtmlParamsPanel";
 import { TransitionPicker, cutOf } from "./TransitionPicker";
 import { loadPreviewVh, PanelGrabber, Sheet, SheetDone } from "./Sheet";
 import { useEdgeFade } from "./useEdgeFade";
-import { AssetBrowser, type BrowserTab } from "./desktop/AssetBrowser";
+import { AssetBrowser, browserTab, type BrowserTab } from "./desktop/AssetBrowser";
 import { Inspector, type InspectorTab } from "./desktop/Inspector";
 import { ProjectSettings } from "./desktop/ProjectSettings";
 import { Splitter } from "./desktop/Splitter";
@@ -42,7 +43,7 @@ import { ContextMenu, type MenuItem } from "./desktop/ContextMenu";
 import { ShortcutsOverlay } from "./desktop/ShortcutsOverlay";
 import { DesktopTooltips } from "./desktop/Tooltip";
 import { editPoints, jumpEditPoint, MOD, shuttleLabel, shuttleNext, splitTargets } from "./desktop/shortcuts";
-import { LIBRARY_ITEMS, type LibraryItem, type Sticker } from "./libraryItems";
+import { type Sticker } from "./libraryItems";
 import { text as textDomain } from "../domain";
 
 type Menu = "multi" | "root" | "edit" | "audio" | "speed" | "text" | "effect" | "overlay";
@@ -117,7 +118,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const stopAt = useRef<number>();
   const [animLoop, setAnimLoop] = useState(false);
   const [snapOn, setSnapOn] = useState(true);
-  const [htmlEdit, setHtmlEdit] = useState<{ placementId: string; assetId: string; source: string }>();
+  /** The Code Editor: an existing clip (new version on save), or `create` a new one (Add Media → Code → Create). */
+  const [htmlEdit, setHtmlEdit] = useState<{ placementId?: string; assetId?: string; source: string; create?: "main" | "overlay" }>();
   const [inlineId, setInlineId] = useState<string>();
   const [subId, setSubId] = useState<string>();
   const [ripple, setRippleState] = useState(() => localStorage.getItem("v2.ripple") === "1");
@@ -136,7 +138,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   };
   const commitSizes = () => saveSizes(sizesRef.current);
   const togglePanel = (k: "leftOpen" | "rightOpen") => setSizes((s) => { const n = { ...s, [k]: !s[k] }; saveSizes(n); return n; });
-  const [btab, setBtabState] = useState<BrowserTab>(() => (localStorage.getItem("v2.browserTab") as BrowserTab) || "media");
+  const [btab, setBtabState] = useState<BrowserTab>(() => browserTab(localStorage.getItem("v2.browserTab")));
   const setBtab = (t: BrowserTab) => { setBtabState(t); localStorage.setItem("v2.browserTab", t); };
   const [itab, setItab] = useState<string>();
   const preferTab = useRef<string>();
@@ -309,9 +311,23 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     if (pl && blob) setHtmlEdit({ placementId: pl.id, assetId: pl.source.assetId, source: await blob.text() });
     else setToast("Could not load this clip's code");
   };
+  /** V2-ADD-MEDIA-TABS: Create opens the Code Editor on a new clip; nothing is imported until it is added. */
+  const createCode = (mode: "main" | "overlay" = "main") => { setPicker(null); setSheet(false); setHtmlEdit({ source: newCodeClipHtml(), create: mode }); };
   const saveCode = async (html: string) => {
     if (!htmlEdit) return;
-    const asset = project.assets[htmlEdit.assetId];
+    if (htmlEdit.create) {
+      const name = (readClipConfig(html).name || "Code clip").replace(/[\\/:*?"<>|]+/g, " ").trim() || "Code clip";
+      try {
+        const asset = await importFile(new File([html], `${name}.html`, { type: "text/html" }), storage.blobs);
+        if (!asset) throw new Error("not an HTML clip");
+        const at = Math.round(player.time);
+        if (engine.dispatch([cmd.importAsset(asset), cmd.addAssetsInSequence([asset.id], at, htmlEdit.create === "overlay" ? newId("trk") : undefined)], "Create code clip")) {
+          setHtmlEdit(undefined); setToast("Code clip added (Undo to remove)");
+        }
+      } catch (e) { setToast(`Could not add the clip: ${e instanceof Error ? e.message : "import failed"}`); }
+      return;
+    }
+    const asset = htmlEdit.assetId ? project.assets[htmlEdit.assetId] : undefined;
     const prev = asset?.versions.find((v) => v.id === asset.selectedVersionId) ?? asset?.versions[0];
     if (!asset || !prev) return;
     const id = newId("ver"), blobKey = `${asset.id}/${id}`;
@@ -430,11 +446,11 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     }
     return ids;
   };
-  /** Import picked files + library items, then lay them out from the playhead in one undo step. */
-  const addPicked = async ({ files, library, stickers, assets = [] }: Picked, mode: "main" | "overlay") => {
+  /** Import picked files, re-add project media and stickers, then lay them out from the playhead in one undo step. */
+  const addPicked = async ({ files, stickers, assets = [] }: Picked, mode: "main" | "overlay") => {
     setPicker(null);
     const at = Math.round(player.time);
-    const all = [...files, ...library.map(libraryFile).filter((f): f is File => !!f)];
+    const all = files;
     const ids: string[] = assets.filter((id) => project.assets[id]), stickerIds: string[] = [];
     const stickerFiles = await Promise.all(stickers.map((s) => stickerFile(s).catch(() => undefined)));
     const jobs = [...all.map((f) => ({ f, out: ids })), ...stickerFiles.filter((f): f is File => !!f).map((f) => ({ f, out: stickerIds }))];
@@ -448,7 +464,6 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     }
     const steps = [];
     if (ids.length) steps.push(cmd.addAssetsInSequence(ids, at, mode === "overlay" ? newId("trk") : undefined));
-    if (library.some((l) => l.id === "text")) steps.push(cmd.addTextClip(at, {}));
     if (stickerIds.length) steps.push(cmd.addAssetsInSequence(stickerIds, at, newId("trk"), "text"));
     if (steps.length) engine.dispatch(steps, mode === "overlay" ? "Add overlay" : "Add media");
   };
@@ -466,7 +481,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       <div className="v2-panel-head">
         <strong>Media</strong>
         <button className="v2-btn primary" onClick={() => fileRef.current?.click()}><Ic g="＋" size={16} /> Import</button>
-        <button className="v2-btn" title="Add an HTML clip (example uses three.js) (edit the .html and re-import to change it)" onClick={() => void onFiles([new File([THREE_TEMPLATE], "three-scene.html", { type: "text/html" })])}><Ic g="＋" size={16} /> HTML clip</button>
+        <button className="v2-btn" title="Create a code clip: a canvas script with params, in the Code Editor" onClick={() => createCode()}><Ic g="</>" size={16} /> Code clip</button>
         {mobile && <SheetDone onClick={() => setSheet(false)} />}
       </div>
       {busy > 0 && <p className="v2-hint">Importing {busy}…</p>}
@@ -662,17 +677,11 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     } catch { setToast("Could not add that sticker"); }
   };
   const addEffectAt = (preset: string, at: number) => { const id = newId("plc"); if (engine.dispatch(cmd.addEffectClip(Math.round(at), preset, undefined, id))) setSel([id]); };
-  const addLibraryAt = async (it: LibraryItem, at: number, trackId?: string) => {
-    if (it.id === "text") return addTextAt(at);
-    const f = libraryFile(it);
-    if (f) await importAt([f], Math.round(at), trackId);
-  };
   const onDropData = (dt: DataTransfer, at: number, trackId?: string) => {
     const it = readDragItem(dt);
     if (it?.kind === "text") addTextAt(at, it.template);
     else if (it?.kind === "effect") addEffectAt(it.id, at);
     else if (it?.kind === "sticker") { const st = stickers().find((x) => x.id === it.id); if (st) void addStickerAt(st, at); }
-    else if (it?.kind === "library") { const li = LIBRARY_ITEMS.find((x) => x.id === it.id); if (li) void addLibraryAt(li, at, trackId); }
     else if (dt.files?.length) void importAt(Array.from(dt.files), at, trackId);
   };
   const assetBrowser = (
@@ -680,7 +689,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       onImport={importDialog} onFiles={(fs) => void onFiles(fs)} onAddAsset={addToTimeline} onRemoveAsset={(a) => engine.dispatch(cmd.removeAsset(a.id))}
       onAddText={(tp) => addTextAt(player.time, tp)} onImportSrt={() => srtRef.current?.click()}
       onAddSticker={(st) => void addStickerAt(st, player.time)} onAddEffect={(id) => addEffectAt(id, player.time)}
-      onAddTransition={addTransitionNearPlayhead} onAddLibrary={(it) => void addLibraryAt(it, player.time)} />
+      onAddTransition={addTransitionNearPlayhead} onCreateCode={() => createCode()} />
   );
   useEffect(() => { setItab(preferTab.current); preferTab.current = undefined; }, [selectedId]);
   const fpsNow = project.settings.fps;
@@ -861,7 +870,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       {notice && <RecoveryNotice failure={notice} storage={storage} onDismiss={() => setNotice(undefined)} />}
       {projects && <ProjectsDialog storage={storage} current={project} onOpen={(id) => { setProjects(false); onSwitch(id); }} onRenameCurrent={(n) => engine.dispatch(cmd.renameProject(n))} onClose={() => setProjects(false)} />}
       {exporting && <ExportDialog project={project} blobs={storage.blobs} res={res} onRes={setRes} onClose={() => setExporting(false)} />}
-      {htmlEdit && <HtmlEditor source={htmlEdit.source} mobile={mobile} onSave={(h) => void saveCode(h)} onClose={() => setHtmlEdit(undefined)} />}
+      {htmlEdit && <HtmlEditor key={htmlEdit.create ? "new" : htmlEdit.placementId} source={htmlEdit.source} create={!!htmlEdit.create} mobile={mobile} onSave={(h) => void saveCode(h)} onClose={() => setHtmlEdit(undefined)} />}
       {subsPick && <div className="v2-menu-backdrop v2-confirm-backdrop" onPointerDown={() => setSubsPick(false)}>
         <div className="v2-confirm v2-subs-pick" role="dialog" aria-modal="true" aria-label="Choose a text layer" onPointerDown={(e) => e.stopPropagation()}>
           <h4>Edit subtitles</h4><p>Which text layer?</p>
@@ -896,7 +905,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
             {(activeMenu !== "root" || expanded) && <button className="v2-tool v2-tool-back" aria-label={activeMenu === "root" && expanded ? `Collapse ${ops.GROUP_LABEL[expanded]}` : "Back"} title={activeMenu === "root" && expanded ? `Collapse ${ops.GROUP_LABEL[expanded]}` : "Back"} onClick={back}>‹</button>}
             {mobileTools[activeMenu]}
           </nav>
-          {picker && <MediaPicker media={projectMedia} title={picker === "overlay" ? "Add overlay" : picker === "audio" ? "Add audio" : picker === "stickers" ? "Add stickers" : "Add media"} only={picker === "audio" ? "audio" : undefined} initialTab={picker === "stickers" ? "stickers" : undefined} onClose={() => setPicker(null)} onAdd={(p) => void addPicked(p, picker === "overlay" || picker === "stickers" ? "overlay" : "main")} />}
+          {picker && <MediaPicker media={projectMedia} title={picker === "overlay" ? "Add overlay" : picker === "audio" ? "Add audio" : picker === "stickers" ? "Add stickers" : "Add media"} only={picker === "audio" ? "audio" : undefined} initialTab={picker === "stickers" ? "stickers" : undefined} onClose={() => setPicker(null)} onAdd={(p) => void addPicked(p, picker === "overlay" || picker === "stickers" ? "overlay" : "main")} onCreateCode={picker === "audio" ? undefined : () => createCode(picker === "overlay" ? "overlay" : "main")} />}
           {sheet && <Sheet label="Media" head={false} onClose={() => setSheet(false)}>{browser}</Sheet>}
           {!sheet && <div hidden>{browser}</div>}
           {cue && <div className="v2-msub"><SubtitleEditor engine={engine} sub={cue} onDelete={delCue} /></div>}
