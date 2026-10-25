@@ -11,7 +11,7 @@ import { useMediaPreviews } from "./useMedia";
 import { TransformHandles, TransformInspector } from "./Transform";
 import { TextPanel } from "./TextPanel";
 import { AnimationPicker } from "./AnimationPicker";
-import { HtmlEditor } from "./HtmlEditor";
+import { CodeEditor } from "./CodeEditor";
 import { clipFileFrom } from "./htmlPackage";
 import { ExportDialog } from "./ExportDialog";
 import { ProjectsDialog } from "./Projects";
@@ -870,7 +870,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       {notice && <RecoveryNotice failure={notice} storage={storage} onDismiss={() => setNotice(undefined)} />}
       {projects && <ProjectsDialog storage={storage} current={project} onOpen={(id) => { setProjects(false); onSwitch(id); }} onRenameCurrent={(n) => engine.dispatch(cmd.renameProject(n))} onClose={() => setProjects(false)} />}
       {exporting && <ExportDialog project={project} blobs={storage.blobs} res={res} onRes={setRes} onClose={() => setExporting(false)} />}
-      {htmlEdit && <HtmlEditor key={htmlEdit.create ? "new" : htmlEdit.placementId} source={htmlEdit.source} create={!!htmlEdit.create} mobile={mobile} onSave={(h) => void saveCode(h)} onClose={() => setHtmlEdit(undefined)} />}
+      {htmlEdit && <CodeEditor key={htmlEdit.create ? "new" : htmlEdit.placementId} source={htmlEdit.source} create={!!htmlEdit.create} mobile={mobile} onSave={(h) => void saveCode(h)} onClose={() => setHtmlEdit(undefined)} />}
       {subsPick && <div className="v2-menu-backdrop v2-confirm-backdrop" onPointerDown={() => setSubsPick(false)}>
         <div className="v2-confirm v2-subs-pick" role="dialog" aria-modal="true" aria-label="Choose a text layer" onPointerDown={(e) => e.stopPropagation()}>
           <h4>Edit subtitles</h4><p>Which text layer?</p>
