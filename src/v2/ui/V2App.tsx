@@ -23,6 +23,9 @@ import { downloadText, SubtitleList } from "./SubtitleList";
 import { cues as cueLayer } from "../domain";
 import { Ic } from "./Icon";
 import { canSetInPoint, InPointControl } from "./InPoint";
+import { ClipFrames } from "./ClipFrames";
+import { makeAnalyse, MatchFrames } from "./MatchFrames";
+import { clipRange } from "../domain";
 import { MediaPicker, type Picked } from "./MediaPicker";
 import { projectMediaList } from "./projectMedia";
 import { stickerFile, stickers } from "./libraryItems";
@@ -94,6 +97,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const [fs, setFs] = useState(false);
   const [toast, setToast] = useState<string>();
   const [inspOpen, setInspOpen] = useState(false);
+  const [matchOpen, setMatchOpen] = useState(false);
   /** V2-SB-133: the phone "In point" sheet. */
   const [inOpen, setInOpen] = useState(false);
   const [textOpen, setTextOpen] = useState(false);
@@ -266,6 +270,13 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     if (!ids.length) { setToast("No clip under the playhead to split — move the playhead inside a clip"); return; }
     engine.dispatch(ids.map((id) => cmd.splitPlacement(id, t)), ids.length > 1 ? `Split ${ids.length} clips` : "Split clip");
   };
+  /** P3A-15: trim the clip(s) under the playhead so they start (or end) exactly there; one undo step, ripple-aware. */
+  const trimToPlayhead = (edge: "left" | "right") => {
+    const t = Math.round(player.time), ids = splitTargets(comp, sel, t);
+    if (!ids.length) { setToast("No clip under the playhead to trim — move the playhead inside a clip"); return; }
+    const what = edge === "left" ? "start" : "end";
+    engine.dispatch(ids.map((id) => cmd.trimPlacement(id, edge, t, ripple)), ids.length > 1 ? `Trim ${ids.length} clips' ${what} to playhead` : `Trim ${what} to playhead`);
+  };
   const cut = () => { if (!sel.length) return; clipboard.current = edit.copyClips(comp, sel); setHasClip(true); engine.dispatch(cmd.deleteClips(sel, ripple)); setToast(`Cut ${sel.length} clip${sel.length > 1 ? "s" : ""} — ${MOD} V to paste`); setSel([]); setMultiMode(false); };
   const split = useCallback(() => { if (selectedId) engine.dispatch(cmd.splitPlacement(selectedId, Math.round(player.time))); }, [engine, player, selectedId]);
   // V2-113: tap selection is forgiving — every element has at least a 48px hit box, near-misses
@@ -405,6 +416,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
         if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && e.altKey) { e.preventDefault(); nudge((e.key === "ArrowLeft" ? -1 : 1) * (e.shiftKey ? 10 : 1) * fpsTicks); return; }
         if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && e.shiftKey) { e.preventDefault(); seek(player.time + (e.key === "ArrowLeft" ? -1 : 1) * secondsToTicks(1)); return; }
         if (e.key === " ") { e.preventDefault(); playPause(); return; }
+        if ((k === "q" || k === "w") && !e.altKey && !e.shiftKey) { e.preventDefault(); trimToPlayhead(k === "q" ? "left" : "right"); return; }
       }
       // V2-110: NLE keys — Cmd/Ctrl+B (CapCut) and Cmd/Ctrl+K (Premiere) split at the playhead, Cmd+X cuts, ↑/↓ jump edit points.
       if (mod && (k === "b" || k === "k") && !e.shiftKey && !e.altKey) { e.preventDefault(); splitAtPlayhead(); return; }
@@ -605,6 +617,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const tool = (icon: string, label: string, onClick: () => void, key = label, title?: string) => (
     <button key={key} className="v2-tool" title={title} onClick={onClick}><b aria-hidden><Ic g={icon} /></b><span>{label}</span></button>
   );
+  const pair = sp ? clipRange.matchPair(project, comp, sp.id) : undefined;
   const mobileTools: Record<Menu, JSX.Element[]> = {
     root: [
       tool("✂", "Edit", () => enterMode("edit"), "edit", "Edit the main-track clip under the playhead"),
@@ -623,6 +636,9 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       // Linked storyboard clips: up front so it is visible without scrolling the tool row.
       ...(selLink ? [tool("board", "Storyboard", () => openStory(selLink.target), "open-story", `Open ${selLink.label} in the storyboard: pick versions there`)] : []),
       tool("✂", "Split", split),
+      tool("trim-start", "Trim start", () => trimToPlayhead("left"), "trim-start", "Trim start to playhead: the clip starts here"),
+      tool("trim-end", "Trim end", () => trimToPlayhead("right"), "trim-end", "Trim end to playhead: the clip ends here"),
+      ...(pair ? [tool("match", "Match frames", () => setMatchOpen(true), "match", "Find the most similar frames across this cut and join there")] : []),
       tool("🗑", ripple ? "Ripple delete" : "Delete", () => del(), "delete", ripple ? "Delete and close the gap" : "Delete"),
       ...(isHtml ? [tool("settings", "Params", () => setParamsOpen(true), "html-params", "This clip's values: text, colours and other params the HTML clip exposes"), tool("</>", "Edit code", () => void openCode(), "edit-code", "Edit HTML, CSS and JS with live preview")] : []),
       ...(isText ? [tool("T", "Edit text", () => setTextOpen(true), "edit-text", "Templates, font, style, effects, animation"), tool("anim", "Animation", () => setAnimOpen(true), "anim", "In, out and loop animations"), tool("≡", "Subtitles", () => openSubs(selected.track.id, selected.placement.id), "subs-list", "Open this layer's subtitle list at this clip")] : []),
@@ -722,7 +738,10 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     const pl = selected.placement, kind = pl.clipType;
     const sub = `${formatTimecode(pl.startTicks, fpsNow).slice(0, 8)} · ${(pl.durationTicks / 120000).toFixed(1)}s`;
     const base = { icon: KIND_ICON[kind] ?? "▭", title: clipName(pl), subtitle: sub, onDone: () => setSelectedId(undefined) };
-    const transform: InspectorTab = { id: "basic", label: "Basic", icon: "⤧", render: () => <TransformInspector engine={engine} placement={pl} time={time} /> };
+    const transform: InspectorTab = { id: "basic", label: "Basic", icon: "⤧", render: () => kind === "video" && !pl.freeze ? <>
+      <section className="v2-psettings v2-frames-sec" aria-label="In and out frames"><h4>In / out frames</h4><ClipFrames engine={engine} project={project} placement={pl} /></section>
+      <TransformInspector engine={engine} placement={pl} time={time} />
+    </> : <TransformInspector engine={engine} placement={pl} time={time} /> };
     const speedTab: InspectorTab = { id: "speed", label: "Speed", icon: "⏩", render: () => <div className="v2-psettings">
       <section aria-label="Speed"><h4>Speed</h4>
         <div className="v2-seg" role="radiogroup" aria-label="Speed">{SPEEDS.map((x) => <button key={x} role="radio" aria-checked={(pl.speed ?? 1) === x} className={`v2-seg-btn ${(pl.speed ?? 1) === x ? "is-active" : ""}`} title={x === 1 ? "Normal speed" : `${x}× — changes the clip's length`} onClick={() => engine.dispatch(cmd.setSpeed(pl.id, x))}>{x}×</button>)}</div>
@@ -761,6 +780,10 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       {iconBtn("📋", "Paste", paste, { title: hasClip ? "Paste at the playhead (⌘/Ctrl+V)" : "Copy a clip first", disabled: !hasClip })}
       {iconBtn("❄", "Freeze", () => { if (sp) { engine.dispatch(cmd.freezeFrame(sp.id, Math.round(player.time))); setToast("Freeze frame inserted (3 s)"); } }, { title: "Freeze the frame under the playhead for 3 s (F)", disabled: !(sp && sp.clipType === "video" && !sp.freeze) })}
       <span className="v2-dsep" aria-hidden />
+      <button className="v2-dtool v2-dtool-text" title="Trim start to playhead (Q)" aria-label="Trim start to playhead" onClick={() => trimToPlayhead("left")}><Ic g="trim-start" size={16} /><span>Trim start</span></button>
+      <button className="v2-dtool v2-dtool-text" title="Trim end to playhead (W)" aria-label="Trim end to playhead" onClick={() => trimToPlayhead("right")}><Ic g="trim-end" size={16} /><span>Trim end</span></button>
+      <button className="v2-dtool v2-dtool-text" title={pair ? "Match frames across the cut between these two clips" : "Select a video clip that touches another video clip"} disabled={!pair} onClick={() => setMatchOpen(true)}><Ic g="match" size={16} /><span>Match frames</span></button>
+      <span className="v2-dsep" aria-hidden />
       <button className="v2-dtool v2-dtool-text" title="Add an empty video (overlay) track" onClick={() => engine.dispatch(cmd.addTrack("video"))}><Ic g="▭" size={16} /><span>Video track</span></button>
       <button className="v2-dtool v2-dtool-text" title="Add an empty audio track" onClick={() => engine.dispatch(cmd.addTrack("audio"))}><Ic g="♫" size={16} /><span>Audio track</span></button>
       <span className="v2-spacer" />
@@ -798,6 +821,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     const ctxLink = p.source.assetId ? storyDomain.storyLinkOf(project, p.source.assetId) : undefined;
     return [
       { label: "Split at playhead", icon: "✂", shortcut: "S", disabled: !inside || sel.length > 1, onSelect: () => engine.dispatch(cmd.splitPlacement(p.id, t)) },
+      { label: "Trim start to playhead", icon: "trim-start", shortcut: "Q", disabled: !inside, onSelect: () => trimToPlayhead("left") },
+      { label: "Trim end to playhead", icon: "trim-end", shortcut: "W", disabled: !inside, onSelect: () => trimToPlayhead("right") },
       "sep",
       { label: `Copy${many}`, icon: "⎘", shortcut: k("C"), onSelect: copy },
       { label: `Cut${many}`, icon: "✂", shortcut: k("X"), onSelect: cut },
@@ -885,6 +910,12 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
         </div>
       </div>}
       {!mobile && <DesktopTooltips />}
+      {!mobile && matchOpen && pair && <div className="v2-match-back" onClick={(e) => { if (e.target === e.currentTarget) setMatchOpen(false); }}>
+        <div className="v2-match-dialog" role="dialog" aria-modal="true" aria-label="Match frames" onKeyDown={(e) => { if (e.key === "Escape") setMatchOpen(false); }}>
+          <header><h3>Match frames</h3><button className="v2-icon" aria-label="Close" onClick={() => setMatchOpen(false)}><Ic g="✕" /></button></header>
+          <MatchFrames engine={engine} project={project} a={pair[0]} b={pair[1]} analyse={makeAnalyse(project, loadAssetBlob)} onDone={(m) => { setMatchOpen(false); if (m) setToast(m); }} />
+        </div>
+      </div>}
       {!mobile && kbdOpen && <ShortcutsOverlay onClose={() => setKbdOpen(false)} />}
       {!mobile && ctx && <ContextMenu x={ctx.x} y={ctx.y} label={ctx.placementId ? "Clip actions" : "Track actions"} items={ctxItems()} onClose={() => setCtx(undefined)} />}
       {toast && <div className="v2-toast" role="status" onClick={() => setToast(undefined)}>{toast}</div>}
@@ -893,7 +924,11 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           {preview}
           <div className="v2-mcontrols">
             <button className="v2-icon" aria-label="Fullscreen" onClick={fullscreen}><Ic g="⛶" /></button>
+            <span className="v2-mtransport">
+            <button className="v2-icon v2-mstep" aria-label="Previous frame" title="Previous frame" onClick={() => stepFrame(-1)}><Ic g="step-back" /></button>
             <button className="v2-icon v2-mplay" aria-label={playing ? "Pause" : "Play"} onClick={togglePlay}><Ic g={playing ? "❚❚" : "▶"} /></button>
+            <button className="v2-icon v2-mstep" aria-label="Next frame" title="Next frame" onClick={() => stepFrame(1)}><Ic g="step-fwd" /></button>
+            </span>
             <span className="v2-mundo">
               <button className="v2-icon" aria-label="Undo" disabled={!canUndo} onClick={() => engine.undo()}><Ic g="↶" /></button>
               <button className="v2-icon" aria-label="Redo" disabled={!canRedo} onClick={() => engine.redo()}><Ic g="↷" /></button>
@@ -915,7 +950,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           {sheet && <Sheet label="Media" head={false} onClose={() => setSheet(false)}>{browser}</Sheet>}
           {!sheet && <div hidden>{browser}</div>}
           {cue && <div className="v2-msub"><SubtitleEditor engine={engine} sub={cue} onDelete={delCue} /></div>}
-          {inspOpen && selected && <Sheet label="Adjust" className="v2-msheet-insp" extra={scopeChip || undefined} onClose={() => setInspOpen(false)}><TransformInspector engine={engine} placement={selected.placement} time={time} /></Sheet>}
+          {inspOpen && selected && <Sheet label="Adjust" className="v2-msheet-insp" extra={scopeChip || undefined} onClose={() => setInspOpen(false)}>{selected.placement.clipType === "video" && !selected.placement.freeze && <section className="v2-psettings v2-frames-sec" aria-label="In and out frames"><h4>In / out frames</h4><ClipFrames engine={engine} project={project} placement={selected.placement} /></section>}<TransformInspector engine={engine} placement={selected.placement} time={time} /></Sheet>}
+          {matchOpen && pair && <Sheet label="Match frames" className="v2-msheet-insp" onClose={() => setMatchOpen(false)}><MatchFrames engine={engine} project={project} a={pair[0]} b={pair[1]} analyse={makeAnalyse(project, loadAssetBlob)} onDone={(m) => { setMatchOpen(false); if (m) setToast(m); }} /></Sheet>}
           {inOpen && selected && inPointable && <Sheet label="In point" className="v2-msheet-insp" onClose={() => setInOpen(false)}><InPointControl engine={engine} project={project} placement={selected.placement} /></Sheet>}
           {subsTrack && <Sheet label="Edit subtitles" className="v2-msheet-tall" head={false} onClose={() => setSubsEdit(undefined)}><SubtitleList engine={engine} track={subsTrack} time={time} playing={playing} onSeek={seek} desktop={false} name={project.name} focusCue={subsCue} onDone={() => setSubsEdit(undefined)} /></Sheet>}
           {layerTrack && !selected && <Sheet label={`Edit all · ${layerTrack.name}`} className="v2-msheet-insp" onClose={() => setLayerEdit(undefined)}><TextPanel key={layerTrack.id} engine={engine} layer={layerTrack} initialTab="Style" /></Sheet>}

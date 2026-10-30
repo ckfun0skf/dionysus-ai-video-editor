@@ -6,7 +6,7 @@ export const MIN_DURATION_TICKS = 1200; // 10 ms
 function sortPlacements(ps: Placement[]): Placement[] {
   return [...ps].sort((a, b) => a.startTicks - b.startTicks);
 }
-function mapTrack(comp: Composition, trackId: string, fn: (t: Track) => Track): Composition {
+export function mapTrack(comp: Composition, trackId: string, fn: (t: Track) => Track): Composition {
   return { ...comp, tracks: comp.tracks.map((t) => (t.id === trackId ? fn(t) : t)) };
 }
 
@@ -284,7 +284,7 @@ export function freezeFrame(comp: Composition, placementId: string, atTicks: num
   return mapTrack(next, found.track.id, (t) => ({ ...t, placements: sortPlacements([...t.placements, frozen]) }));
 }
 
-function shiftKeys(k: NonNullable<Placement["keyframes"]>, by: number): Placement["keyframes"] {
+export function shiftKeys(k: NonNullable<Placement["keyframes"]>, by: number): Placement["keyframes"] {
   return Object.fromEntries(Object.entries(k).map(([prop, keys]) => [prop, keys!.map((x) => ({ ...x, t: x.t + by }))]));
 }
 
