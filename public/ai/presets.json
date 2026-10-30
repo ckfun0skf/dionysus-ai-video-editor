@@ -190,6 +190,36 @@
             "effect": "none",
             "size": 0.07
           }
+        },
+        {
+          "id": "sci-fi-caption",
+          "version": 1,
+          "name": "Sci-fi caption",
+          "category": "Film",
+          "description": "Bottom-right location/date stamp (\"Seattle / Year 2027\"): cyan-white Share Tech Mono with a soft glow, decoded from scrambling digits.",
+          "params": [],
+          "data": {
+            "font": "share-tech-mono",
+            "bold": false,
+            "color": "#e6fbff",
+            "size": 0.045,
+            "align": "right",
+            "letterSpacing": 0.12,
+            "effect": "glow",
+            "effectColor": "#20d5ec",
+            "animIn": "typewriter",
+            "animInParams": {
+              "cursor": "0123456789",
+              "blink": 2,
+              "after": "fade",
+              "scramble": 0.25
+            },
+            "animTicks": 180000,
+            "position": {
+              "x": 0.62,
+              "y": 0.9
+            }
+          }
         }
       ]
     },
@@ -390,8 +420,48 @@
           "version": 1,
           "name": "Typewriter",
           "category": "Type",
-          "description": "Reveals the text one character at a time.",
-          "params": []
+          "description": "Reveals the text one character at a time, with an optional cursor (one character = blinking cursor, several = scramble/decode).",
+          "params": [
+            {
+              "key": "cursor",
+              "label": "Cursor",
+              "description": "Cursor characters. Empty = no cursor; one character (| or _) = a cursor after the text; several (0123456789) = each new character shows random ones of these before it resolves (decode effect).",
+              "type": "string",
+              "default": ""
+            },
+            {
+              "key": "blink",
+              "label": "Blink rate",
+              "description": "Cursor blinks per second once typing has finished (0 = solid).",
+              "type": "number",
+              "min": 0,
+              "max": 6,
+              "step": 0.5,
+              "default": 2
+            },
+            {
+              "key": "after",
+              "label": "After typing",
+              "description": "What the cursor does when typing is done: blink = keep blinking, hide = disappear at once, fade = fade out over 0.5 s.",
+              "type": "select",
+              "options": [
+                "blink",
+                "hide",
+                "fade"
+              ],
+              "default": "blink"
+            },
+            {
+              "key": "scramble",
+              "label": "Scramble time",
+              "description": "Seconds each character cycles through the cursor characters before resolving (only with several cursor characters).",
+              "type": "number",
+              "min": 0,
+              "max": 1,
+              "step": 0.05,
+              "default": 0.15
+            }
+          ]
         },
         {
           "id": "wipe",
@@ -1680,6 +1750,26 @@
     {
       "id": "condensed",
       "description": "Narrow sans that fits long lines."
+    },
+    {
+      "id": "orbitron",
+      "description": "Bundled sci-fi display caps, wide and geometric: titles, HUD labels, future dates."
+    },
+    {
+      "id": "share-tech-mono",
+      "description": "Bundled sci-fi monospace: terminals, typewriter captions, location/date stamps."
+    },
+    {
+      "id": "audiowide",
+      "description": "Bundled rounded retro-futuristic display face: logos, racing or arcade titles."
+    },
+    {
+      "id": "rajdhani",
+      "description": "Bundled squared, condensed tech sans: UI overlays, subtitles with a sci-fi feel."
+    },
+    {
+      "id": "exo-2",
+      "description": "Bundled modern techno sans, readable at small sizes: body text, lower thirds."
     }
   ],
   "audioClip": {

@@ -129,7 +129,7 @@ describe("storyboard v1.1: warnings and fallbacks (never reject)", () => {
     expect(warnsOf((d) => { d.shots[0].clip = "bg"; })).toEqual(['shots[0].clip: "clip" only applies to render "html" or "still"; it is ignored for this AI-generated shot.']);
   });
   it("an unknown font warns (falls back to sans)", () => {
-    expect(warnsOf((d) => { d.shots[0].layers = [text({ style: { font: "Helvetica Neue" } })]; })[0]).toMatch(/^shots\[0\]\.layers\[0\]\.style\.font: Unknown font "Helvetica Neue"; using "sans"\. Fonts: sans, serif, mono, impact, rounded, hand, script, condensed\./);
+    expect(warnsOf((d) => { d.shots[0].layers = [text({ style: { font: "Helvetica Neue" } })]; })[0]).toMatch(/^shots\[0\]\.layers\[0\]\.style\.font: Unknown font "Helvetica Neue"; using "sans"\. Fonts: sans, serif, mono, impact, rounded, hand, script, condensed, orbitron, share-tech-mono, audiowide, rajdhani, exo-2\./);
   });
   it("a meta.textStyles id that clashes with a registry style warns and the local one wins", () => {
     const w = warnsOf((d) => { d.meta.textStyles = { caption: { font: "serif" } }; d.shots[0].layers = [text({ textStyle: "caption" })]; });

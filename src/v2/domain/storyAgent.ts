@@ -223,7 +223,7 @@ export const STORY_TOOLS: StoryTool[] = [
   },
   {
     name: "set_shot_layers", title: "Set a shot's layers", readOnly: false,
-    description: "Replace all layers of a shot (text, html, image, video), drawn in order on top. [] removes them.",
+    description: "Replace all layers of a shot (text, html, image, video), drawn in order on top. [] removes them. Text layers may set anim.inParams, e.g. the typewriter cursor { cursor, blink, after: blink|hide|fade, scramble }.",
     inputSchema: obj({ id: str("Shot id."), layers: arr(LAYER, "The layers, in drawing order.") }, ["id", "layers"]),
     edit: (raw, a) => shotEdit(raw, a, (s) => { if (!Array.isArray(a.layers)) return '"layers" must be a list.'; if (a.layers.length) s.layers = clone(a.layers); else delete s.layers; return undefined; }, (s) => `AI: layers of shot ${String(s.id)}`),
   },

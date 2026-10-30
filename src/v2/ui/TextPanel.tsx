@@ -66,11 +66,16 @@ export function TextPanel({ engine, placement, onAnimPicked, initialTab = "Templ
       <div className="v2-tp-body" role="tabpanel" aria-label={tab}>
         {tab === "Templates" && <div className="v2-tp-grid">{T.textTemplates().map((tp) => {
           const s = T.textOf(tp.data);
-          return <button key={tp.id} className="v2-tp-tpl" title={`Apply ${tp.label}`} onClick={() => set(tp.data, `Template ${tp.label}`)}
+          return <button key={tp.id} className="v2-tp-tpl" title={`Apply ${tp.label}`} onClick={() => {
+            // P7-CAPTION: a style with a home position (sci-fi caption: bottom right) also moves the clip there, in one undo step.
+            const pos = layer ? undefined : T.textStylePosition(tp.id);
+            if (pos) engine.dispatch([cmd.updateText(pl.id, tp.data), cmd.setTransform(pl.id, pos)], `Template ${tp.label}`);
+            else set(tp.data, `Template ${tp.label}`);
+          }}
             style={{ fontFamily: s.font, fontWeight: s.bold ? 700 : 400, fontStyle: s.italic ? "italic" : "normal", color: s.effect === "hollow" ? "transparent" : s.color, WebkitTextStroke: s.strokeWidth ? `1px ${s.strokeColor}` : undefined, textShadow: s.effect === "neon" || s.effect === "glow" ? `0 0 6px ${s.effectColor}` : undefined, background: s.background ? s.background.color : undefined }}>{tp.label}</button>;
         })}</div>}
         {tab === "Font" && <>
-          <div className="v2-tp-grid">{T.FONTS.map((f) => <button key={f.label} className={`v2-tp-tpl ${d.font === f.stack ? "is-active" : ""}`} aria-pressed={d.font === f.stack} style={{ fontFamily: f.stack }} onClick={() => set({ font: f.stack }, "Font")}>{f.label}</button>)}</div>
+          <div className="v2-tp-grid">{T.FONTS.map((f) => <button key={f.label} className={`v2-tp-tpl ${d.font === f.stack ? "is-active" : ""}`} aria-pressed={d.font === f.stack} style={{ fontFamily: f.stack }} title={f.description} onClick={() => set({ font: f.stack }, "Font")}>{f.label}{f.bundled && <span className="v2-tp-fontsample" aria-hidden>Year 2027</span>}</button>)}</div>
           <div className="v2-tp-chips">
             <button className={`v2-chip ${d.bold ? "is-active" : ""}`} aria-pressed={!!d.bold} onClick={() => set({ bold: !d.bold })}><b>B</b></button>
             <button className={`v2-chip ${d.italic ? "is-active" : ""}`} aria-pressed={!!d.italic} onClick={() => set({ italic: !d.italic })}><i>I</i></button>

@@ -97,14 +97,14 @@ export interface ExportResult { manifest: ArchiveManifest; bytes: number }
  * Write `project` and its media to `sink` as a project archive. Progress counts media bytes read (both passes).
  * Blobs the browser no longer has are listed in `manifest.missing` instead of failing the export.
  */
-export async function exportProjectArchive(project: Project, blobs: BlobStore, sink: ZipSink, opts: { onProgress?: (p: ArchiveProgress) => void; signal?: AbortSignal; now?: Date; series?: Series } = {}): Promise<ExportResult> {
+export async function exportProjectArchive(project: Project, blobs: BlobStore, sink: ZipSink, opts: { onProgress?: (p: ArchiveProgress) => void; signal?: AbortSignal; now?: Date; series?: Series; /** P7-FONTS: extra raw files (bundled fonts + licences) */ files?: [string, Uint8Array][] } = {}): Promise<ExportResult> {
   const keys = projectMediaKeys(project);
   if (opts.series) for (const [k, m] of seriesArchiveKeys(opts.series)) if (!keys.has(k)) keys.set(k, m);
   const r = await writeArchive(blobs, sink, keys, opts, (media, missing, createdAt): ArchiveManifest => ({
     format: ARCHIVE_FORMAT, formatVersion: ARCHIVE_VERSION, app: { name: "Dionysus", version: APP_VERSION }, schema: project.schema,
     createdAt, project: { id: project.id, name: project.name }, media, missing,
     ...(opts.series ? { series: { id: opts.series.id, name: opts.series.name, assets: Object.keys(opts.series.assets).length } } : {}),
-  }), [["project.json", project], ...(opts.series ? [["series.json", opts.series] as [string, unknown]] : [])]);
+  }), [["project.json", project], ...(opts.series ? [["series.json", opts.series] as [string, unknown]] : []), ...(opts.files ?? [])]);
   return r as ExportResult;
 }
 
@@ -148,7 +148,7 @@ async function writeArchive<M>(blobs: BlobStore, sink: ZipSink, keys: Map<string
   const manifest = manifestOf(media, missing, (opts.now ?? new Date()).toISOString());
   const zip = new ZipWriter(sink, opts.now);
   await zip.addBytes("manifest.json", enc.encode(JSON.stringify(manifest, null, 2)));
-  for (const [name, doc] of docs) await zip.addBytes(name, enc.encode(JSON.stringify(doc)));
+  for (const [name, doc] of docs) await zip.addBytes(name, doc instanceof Uint8Array ? doc : enc.encode(JSON.stringify(doc)));
   // Pass 2: stream each distinct blob into its entry.
   for (const [path, s] of sources) {
     abortIf(opts.signal);

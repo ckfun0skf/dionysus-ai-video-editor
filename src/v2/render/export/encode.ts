@@ -1,4 +1,5 @@
 /** Export: offline frame-by-frame render → WebCodecs H.264 MP4 (AAC, else Opus audio), or a real-time MediaRecorder WebM fallback. */
+import { loadBundledFonts } from "../fonts";
 import { ArrayBufferTarget, Muxer } from "mp4-muxer";
 import type { Project } from "../../domain/model";
 import type { BlobStore } from "../../ports/storage";
@@ -119,6 +120,7 @@ export async function exportProject(project: Project, blobs: BlobStore, o: Expor
   o.onProgress?.({ stage: "audio", done: 0, total: 1 });
   const audio = await mixAudio(audioPlan(project), seconds, blobs, o.signal);
   abortIf(o.signal);
+  await loadBundledFonts(); // P7-FONTS: every exported frame uses the bundled faces, as the preview does
   const canvas = document.createElement("canvas");
   canvas.width = width; canvas.height = height;
   const player = new Player(project, blobs, still);

@@ -60,7 +60,8 @@ export function textLayerData(b: Pick<Storyboard, "meta">, l: StoryTextLayer): T
   const animIn = presetId("textAnimIn", l.anim?.in), animOut = presetId("textAnimOut", l.anim?.out), loop = presetId("textAnimLoop", l.anim?.loop);
   const d: TextData = textOf({ ...base, ...inline, text: l.text, size });
   if (l.box && typeof l.style?.size !== "number") d.lineHeight = TEXT_LINE_HEIGHT;
-  if (animIn) d.animIn = animIn;
+  if (animIn) { if (animIn !== d.animIn) delete d.animInParams; d.animIn = animIn; }
+  if (l.anim?.inParams && d.animIn) d.animInParams = { ...d.animInParams, ...l.anim.inParams };
   if (animOut) d.animOut = animOut;
   if (loop) d.loop = loop;
   if (typeof l.anim?.durationSec === "number" && l.anim.durationSec > 0) d.animTicks = secondsToTicks(l.anim.durationSec);

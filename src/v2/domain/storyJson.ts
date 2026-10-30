@@ -133,7 +133,8 @@ export interface StoryTextStyle {
 }
 export interface StoryPoint { x: number; y: number }
 export interface StoryBox { x: number; y: number; width: number; height: number }
-export interface StoryTextAnim { in?: string; out?: string; loop?: string; durationSec?: number }
+/** `inParams` (P7-TYPE-CURSOR): params of the `in` animation, e.g. the typewriter cursor { cursor, blink, after, scramble }. */
+export interface StoryTextAnim { in?: string; out?: string; loop?: string; durationSec?: number; inParams?: StoryParams }
 /**
  * V2-SB-126: whether a layer stays fixed to the frame (default) or follows the shot's motion: with "shot", the zoom
  * and pan of the shot's effects (ken-burns etc.) are applied to the layer too, as if it were part of the picture.
@@ -577,6 +578,7 @@ export function validateStoryboard(raw: unknown, opts: StoryValidateOptions = {}
       const spec = d.params.find((p) => p.key === k);
       if (!spec) warn(`${path}.${k}`, `"${d.id}" has no param "${k}"; it is ignored.${d.params.length ? ` Params: ${d.params.map((p) => p.key).join(", ")}.` : ""}`);
       else if (spec.type === "number" && (typeof x !== "number" || x < spec.min || x > spec.max)) warn(`${path}.${k}`, typeof x !== "number" ? `Param "${k}" should be a number; using the default ${spec.default}.` : `Param "${k}" = ${x} is outside ${spec.min}–${spec.max}; it will be clamped.`);
+      else if (spec.type === "select" && !spec.options.includes(String(x))) warn(`${path}.${k}`, `Param "${k}" = ${JSON.stringify(x)} is not one of ${spec.options.join(", ")}; using the default ${JSON.stringify(spec.default)}.`);
     }
     return out;
   };
@@ -886,6 +888,11 @@ export function validateStoryboard(raw: unknown, opts: StoryValidateOptions = {}
             anim = {};
             const kinds = { in: "textAnimIn", out: "textAnimOut", loop: "textAnimLoop" } as const;
             for (const k of ["in", "out", "loop"] as const) { const r = presetRef(kinds[k], l.anim[k], `${lp}.anim.${k}`, "no animation"); if (r) anim[k] = r; }
+            if (l.anim.inParams !== undefined) {
+              const ip = paramsOf(l.anim.inParams, `${lp}.anim.inParams`, descriptorOf("textAnimIn", anim.in));
+              if (ip && !anim.in) warn(`${lp}.anim.inParams`, 'inParams need an "in" animation (e.g. "typewriter"); ignoring them.');
+              else if (ip) anim.inParams = ip;
+            }
             if (l.anim.durationSec !== undefined) {
               const d = num(l.anim.durationSec);
               if (d === undefined || d <= 0) warn(`${lp}.anim.durationSec`, `durationSec ${JSON.stringify(l.anim.durationSec)} is ignored: use seconds greater than 0 (default 0.5).`);

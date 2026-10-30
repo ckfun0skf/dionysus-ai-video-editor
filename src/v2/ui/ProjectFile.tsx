@@ -18,6 +18,7 @@ import {
   type ZipSink,
 } from "../persistence";
 import { safeName, saveFile } from "./saveFile";
+import { projectFontFiles } from "../render";
 import { series as S } from "../domain";
 import { seriesStore } from "./series/seriesStore";
 
@@ -121,7 +122,7 @@ export function ExportFileDialog({ load, blobs, fileName, target, onClose }: { l
       if (!project) throw new Error("This project could not be loaded.");
       // P5: an episode bundles the Series assets it uses (series.json + their media).
       const sr = seriesStore.get(project.seriesId);
-      const r = await exportProjectArchive(project, blobs, target.sink, { signal, onProgress: (x) => alive() && setP(x), series: sr && S.seriesForProject(sr, project) });
+      const r = await exportProjectArchive(project, blobs, target.sink, { signal, onProgress: (x) => alive() && setP(x), series: sr && S.seriesForProject(sr, project), files: await projectFontFiles(project) });
       const file = await target.done();
       let saved: string | undefined;
       // Desktop: start the download right away. Phones need a fresh tap for the share sheet, so they get a button.

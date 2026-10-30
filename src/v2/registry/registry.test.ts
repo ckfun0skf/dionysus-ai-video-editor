@@ -53,7 +53,7 @@ describe("preset registry", () => {
   });
   it("textStyle presets carry JSON text data with font ids", () => {
     const ids = listPresets("textStyle").map((d) => d.id);
-    expect(ids).toEqual(["plain", "caption", "outline", "neon", "pop", "typewriter", "glow", "echo", "soft-shadow", "cinematic"]);
+    expect(ids).toEqual(["plain", "caption", "outline", "neon", "pop", "typewriter", "glow", "echo", "soft-shadow", "cinematic", "sci-fi-caption"]);
     for (const d of listPresets("textStyle")) {
       expect(d.type).toBe("none");
       expect(d.data, d.id).toBeTypeOf("object");
@@ -62,7 +62,10 @@ describe("preset registry", () => {
     }
   });
   it("fonts: ids, stacks and fallbacks", () => {
-    expect(FONTS.map((f) => f.id)).toEqual(["sans", "serif", "mono", "impact", "rounded", "hand", "script", "condensed"]);
+    expect(FONTS.map((f) => f.id)).toEqual(["sans", "serif", "mono", "impact", "rounded", "hand", "script", "condensed", "orbitron", "share-tech-mono", "audiowide", "rajdhani", "exo-2"]);
+    // P7-FONTS: the sci-fi faces are bundled (self-hosted woff2 + OFL licence), their family first in the stack.
+    expect(FONTS.filter((f) => f.bundled).map((f) => f.bundled!.family)).toEqual(["Orbitron", "Share Tech Mono", "Audiowide", "Rajdhani", "Exo 2"]);
+    for (const f of FONTS.filter((x) => x.bundled)) expect(f.stack.startsWith(`'${f.bundled!.family}'`)).toBe(true);
     for (const f of FONTS) { expect(fontIdOfStack(fontStack(f.id))).toBe(f.id); expect(f.width).toBeGreaterThan(0.3); expect(f.description).toBeTruthy(); }
     expect(fontStack("nope")).toBe(FONTS[0].stack);
     expect(fontStack("Foo, serif")).toBe("Foo, serif");
@@ -82,5 +85,12 @@ describe("preset registry", () => {
     expect(registerPresets([{ ...base, id: "has space" }, { ...base, id: "v0", version: 0 }, { ...base, id: "v1.5", version: 1.5 }])).toEqual(["has space", "v0", "v1.5"]);
     expect(registerPresets([{ ...base, id: "ok" }])).toEqual([]);
     expect(getPreset("videoEffect", "ok")).toMatchObject({ version: 1, description: "", category: "Other" });
+  });
+});
+
+import { existsSync } from "node:fs";
+describe("bundled font files (P7-FONTS)", () => {
+  it("every bundled woff2 and licence is in public/fonts", () => {
+    for (const f of FONTS.filter((x) => x.bundled)) for (const n of [...f.bundled!.files.map((x) => x.file), f.bundled!.license]) expect(existsSync(`public/fonts/${n}`), n).toBe(true);
   });
 });

@@ -20,7 +20,9 @@ export const PRESET_KINDS: PresetKind[] = ["textAnimIn", "textAnimOut", "textAni
 export type ParamSpec = ParamBase & (
   | { type: "number"; min: number; max: number; step?: number; default: number }
   | { type: "color"; default: string }
-  | { type: "string"; default: string });
+  | { type: "string"; default: string }
+  /** P7-TYPE-CURSOR: one of a fixed list of words (inspector drop-down; storyboard values outside the list warn). */
+  | { type: "select"; options: string[]; default: string });
 interface ParamBase { key: string; label: string; description?: string }
 export type Params = Record<string, number | string>;
 
@@ -79,6 +81,11 @@ export interface PresetFrame {
    * on the composited picture. Not serializable; produced by `applyPreset`, consumed by `applyEffectFrame`.
    */
   passes?: PaintPass[];
+  /**
+   * P7-TYPE-CURSOR: typewriter cursor settings set by the `typewriter` text animation; resolved per frame by
+   * domain/text.ts textAnimAt into `caret` / `display` (glyphs = cursor characters; >1 char = scramble/decode).
+   */
+  cursor?: { glyphs: string; blink: number; after: "blink" | "hide" | "fade"; scramble: number };
 }
 /** 2D context type shared by on-screen, offscreen and export canvases. */
 export type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
@@ -132,6 +139,12 @@ export interface FontDef {
   description: string;
   /** Rough average glyph width in em, used only for the importer's "text may overflow" warning. */
   width: number;
+  /**
+   * P7-FONTS: a bundled font (SIL OFL, self-hosted under public/fonts/, so preview and export never need the network).
+   * `family` is the CSS family the files register as; `files` are woff2 names in public/fonts/ by weight; `license`
+   * is the licence file next to them.
+   */
+  bundled?: { family: string; files: { file: string; weight: 400 | 700 }[]; license: string };
 }
 
 /** One audio effect chain, applied in this order: filters → drive → ring mod → echo → reverb → makeup gain. */

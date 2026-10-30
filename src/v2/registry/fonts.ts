@@ -1,7 +1,8 @@
 /**
  * Curated fonts with stable ids (storyboard `style.font`, textStyle presets), discovered from src/v2/presets/font/
- * (V2-FX-MOD). System stacks only (no network), so preview and export match offline and on iOS Safari. Ids are part
- * of the storyboard format: never rename one.
+ * (V2-FX-MOD). System stacks, plus (P7-FONTS) bundled OFL fonts self-hosted under public/fonts/ (`bundled`, loaded by
+ * render/fonts.ts from the app's own origin, never a third party), so preview and export match offline and on iOS
+ * Safari. Ids are part of the storyboard format: never rename one.
  */
 import { PRESET_FONTS } from "../presets";
 import type { FontDef } from "./types";

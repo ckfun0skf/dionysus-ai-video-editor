@@ -150,6 +150,7 @@ Text styles — shots[].layers[].textStyle (default "plain"):
 - glow: Italic white serif with a cyan glow that floats softly. Look: font serif, colour #ffffff.
 [Film]
 - cinematic: Warm off-white serif, widely letter-spaced, with a soft shadow; film titles and chapter cards. Look: font serif, colour #f5f1e8, size 0.07.
+- sci-fi-caption: Bottom-right location/date stamp ("Seattle / Year 2027"): cyan-white Share Tech Mono with a soft glow, decoded from scrambling digits. Look: font share-tech-mono, colour #e6fbff, size 0.045.
 
 Text effects — shots[].layers[].style.effect and meta.textStyles[].effect, coloured by "effectColor" (default "none"):
 [Light]
@@ -168,7 +169,7 @@ Text animations in — shots[].layers[].anim.in:
 [Bounce]
 - pop: Scales up from small with a springy overshoot; lively titles and labels. Params: overshoot 0–0.5, default 0.12 (Extra size at the middle of the pop, as a fraction of full size (0.12 = 12% larger)).
 [Type]
-- typewriter: Reveals the text one character at a time.
+- typewriter: Reveals the text one character at a time, with an optional cursor (one character = blinking cursor, several = scramble/decode). Params: cursor (string), default "" (Cursor characters. Empty = no cursor; one character (| or _) = a cursor after the text; several (0123456789) = each new character shows random ones of these before it resolves (decode effect)); blink 0–6, default 2 (Cursor blinks per second once typing has finished (0 = solid)); after one of "blink" | "hide" | "fade", default "blink" (What the cursor does when typing is done: blink = keep blinking, hide = disappear at once, fade = fade out over 0.5 s); scramble 0–1, default 0.15 (Seconds each character cycles through the cursor characters before resolving (only with several cursor characters)).
 [Reveal]
 - wipe: Reveals the text left to right behind a moving edge.
 - blur-in: Fades in from a soft blur to sharp; gentle, cinematic. Params: blur 0–30, default 8 (Blur radius in pixels at the hidden end).
@@ -270,6 +271,11 @@ Fonts — TextStyle "font":
 - hand: Casual handwritten marker look.
 - script: Flowing brush script for elegant accents.
 - condensed: Narrow sans that fits long lines.
+- orbitron: Bundled sci-fi display caps, wide and geometric: titles, HUD labels, future dates.
+- share-tech-mono: Bundled sci-fi monospace: terminals, typewriter captions, location/date stamps.
+- audiowide: Bundled rounded retro-futuristic display face: logos, racing or arcade titles.
+- rajdhani: Bundled squared, condensed tech sans: UI overlays, subtitles with a sci-fi feel.
+- exo-2: Bundled modern techno sans, readable at small sizes: body text, lower thirds.
 
 ## RULES
 1. Every recurring character, location, prop and the overall style gets ONE reusable asset with a detailed prompt; shots reference these ids instead of repeating descriptions. When one of them changes during the story (a lamp lit, a coat soaked, a street at night), give that asset "states" (RULE 29) instead of a separate asset.
@@ -323,6 +329,7 @@ The same winding hill road as the sun rises …", "references": [{ "asset": "hil
 42. Series: give a new asset "series": true when later episodes will need it too (a recurring character, the show's main locations, its style). Leave one-off things out (a prop used once, last frames, keyframes). Without a SERIES ASSETS list the project may not be in a series: then define every asset in full; "series": true is still allowed and is applied when the user adds the project to a series.
 43. Series with Dionysus tools (WebMCP): call list_series_assets before adding characters, props, locations or styles; use_series_asset adds one linked to the board; promote_to_series marks a board asset for the Series. Editing a linked asset's definition changes it in every episode, so only do that when the user asks; otherwise ask them to detach it first (Asset → Detach from series).
 44. An effect's "applyTo" picks the picture it changes: "main" (the default) changes only the shot's own clip, under every layer, so titles and overlays stay fixed; "overlay" changes only the shot's image, video and html layers (e.g. shake a sticker or blur a screen insert, leaving the shot still); "all" changes the whole composited frame — the shot, its overlays and its text together — like moving the camera over the finished picture. Use "all" when an overlay frames or keys the shot, e.g. a TV-set overlay with a green-screen hole showing the shot: a push-in with "main" zooms only the picture inside the TV, with "all" the TV and the picture zoom together. Example: "effects": [ { "preset": "ken-burns", "params": { "zoom": 0.15 }, "applyTo": "all" } ]. Layers with "follow": "shot" (RULE 20) follow only "main" effects.
+45. Typewriter cursor: a text layer with "anim": { "in": "typewriter" } can take "inParams": { "cursor", "blink", "after", "scramble" }. "cursor" is the cursor characters: "" (default) = none; one character ("|" or "_") = a cursor right after the typed text; several ("0123456789", "01", "#$%&") = a decode/scramble effect where each new character flickers through random ones of them for "scramble" seconds (0–1, default 0.15) before it resolves. "blink" = cursor blinks per second after typing (0–6, default 2; 0 = solid). "after" = what the cursor does when typing ends: "blink" (default, keep blinking), "hide" or "fade" (fades out over 0.5 s). Typing lasts "anim.durationSec". The scramble is seeded by time, so preview and export match exactly. For a sci-fi location/date caption use the "sci-fi-caption" textStyle (bundled Share Tech Mono, right-aligned, digit scramble) at the bottom right, e.g. { "type": "text", "text": "SEATTLE / YEAR 2027", "position": { "x": 0.62, "y": 0.9 }, "textStyle": "sci-fi-caption", "anim": { "in": "typewriter", "durationSec": 1.5, "inParams": { "cursor": "0123456789", "after": "fade" } } }. Bundled sci-fi fonts (work offline, packed into project files): orbitron, share-tech-mono, audiowide, rajdhani, exo-2.
 
 ## EXAMPLE
 ```json

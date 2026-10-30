@@ -78,6 +78,10 @@ export interface TextStyleData {
   shadow?: { color: string; blur: number; x: number; y: number } | null;
   background?: { color: string; opacity: number } | null;
   effect?: string; effectColor?: string; animIn?: string; animOut?: string; loop?: string;
+  /** P7-CAPTION: params of `animIn` (e.g. the typewriter cursor) and its length in ticks. */
+  animInParams?: Record<string, number | string>; animTicks?: number;
+  /** P7-CAPTION: where a new clip of this style is placed in the editor: text centre, 0..1 of the frame. */
+  position?: { x: number; y: number };
 }
 
 export type PresetModule = TextAnimModule | TextEffectModule | VideoEffectModule | TransitionModule | StickerModule | TextStyleModule | BlendModule | AudioFxModule | FontModule;

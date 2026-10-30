@@ -1070,3 +1070,6 @@ select.v2-tp-field { -webkit-appearance: none; appearance: none; padding-right: 
 .v2-fx-scope-btn:hover { color: var(--text, #fff); }
 .v2-fx-scope-btn.is-active { background: rgba(255,255,255,.14); color: var(--text, #fff); box-shadow: inset 0 0 0 1px var(--accent, #20d5ec); }
 .v2-fx-scope-btn:focus-visible { outline: 2px solid var(--accent, #20d5ec); outline-offset: 1px; }
+
+/* P7-FONTS: bundled font tiles show a sample line in the face itself. */
+.v2-tp-fontsample { display: block; font-size: 11px; opacity: 0.7; letter-spacing: 0.04em; }
