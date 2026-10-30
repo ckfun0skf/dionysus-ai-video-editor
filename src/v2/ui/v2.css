@@ -106,6 +106,7 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 .v2-mcontrols { flex: none; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 4px 10px; background: #000; }
 .v2-mcontrols .v2-icon { font-size: 20px; justify-self: start; }
 .v2-mplay { justify-self: center !important; font-size: 22px !important; }
+.v2-mtransport { justify-self: center; display: flex; align-items: center; gap: 8px; }
 .v2-mundo { justify-self: end; display: flex; gap: 4px; }
 .v2-app.is-mobile .v2-timeline { background: #121212; }
 .v2-time-label { position: absolute; left: 12px; top: 3px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; pointer-events: none; z-index: 7; background: #121212; padding-right: 6px; }
@@ -862,3 +863,31 @@ select.v2-tp-field { -webkit-appearance: none; appearance: none; padding-right: 
 .v2-asset-preview .v2-ce-icon { min-width: 44px; min-height: 44px; }
 .v2-asset-preview .v2-ce-transport input[type=range] { min-height: 44px; }
 .v2-wavestrip { display: block; width: 100%; background: rgba(255,255,255,.05); border-radius: 6px; }
+
+/* P3A-24: in/out frame rows (44 px steppers and fields). */
+.v2-frames { display: grid; gap: 8px; }
+.v2-frames-row { display: grid; grid-template-columns: 2.5em 44px minmax(4em, 1fr) 44px auto; align-items: center; gap: 6px; }
+.v2-frames-label { font-size: 13px; color: var(--muted, #aaa); }
+.v2-frames-row .v2-btn, .v2-app.is-desktop .v2-frames-row .v2-btn { min-width: 44px; min-height: 44px; justify-content: center; padding: 0; }
+.v2-frames-num { min-height: 44px; min-width: 0; font-size: 16px; text-align: center; font-variant-numeric: tabular-nums; }
+.v2-frames-tc { font-variant-numeric: tabular-nums; font-size: 13px; }
+.v2-frames-sec { margin-bottom: 12px; }
+.v2-app .v2-mstep { min-width: 44px; min-height: 44px; }
+/* P3A-23: Match frames. */
+.v2-match { display: grid; gap: 10px; }
+.v2-match-busy { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.v2-match-busy progress { flex: 1; }
+.v2-match-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.v2-match-cand { width: 100%; display: grid; gap: 4px; padding: 8px; border-radius: 10px; border: 1px solid var(--line, #333); background: transparent; color: inherit; font: inherit; cursor: pointer; min-height: 44px; text-align: left; }
+.v2-match-cand.is-active { border-color: var(--accent, #4f8cff); box-shadow: 0 0 0 1px var(--accent, #4f8cff); }
+.v2-match-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.v2-match-pair figure { margin: 0; display: grid; gap: 2px; }
+.v2-match-pair img, .v2-match-ph { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 6px; background: #000; display: block; }
+.v2-match-pair figcaption { font-size: 11px; color: var(--muted, #aaa); font-variant-numeric: tabular-nums; }
+.v2-match-score { font-size: 13px; }
+.v2-match-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.v2-match-actions .v2-btn, .v2-app.is-desktop .v2-match-actions .v2-btn { min-height: 44px; flex: 1; justify-content: center; }
+.v2-match-back { position: fixed; inset: 0; background: #0008; display: grid; place-items: center; z-index: 60; }
+.v2-match-dialog { width: min(560px, 92vw); max-height: 88vh; overflow: auto; background: var(--panel, #1b1b1f); border: 1px solid var(--line, #333); border-radius: 14px; padding: 14px 16px; }
+.v2-match-dialog header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.v2-match-dialog h3 { margin: 0; font-size: 16px; }

@@ -428,3 +428,9 @@ button.v2-sb-conn:focus-visible { outline: 2px solid var(--accent); outline-offs
 .v2-app .v2-sb-detail-body .v2-btn, .v2-app .v2-sb-picker .v2-btn, .v2-app .v2-atrim .v2-btn,
 .v2-app.is-desktop .v2-sb-detail-body .v2-btn, .v2-app.is-desktop .v2-sb-picker .v2-btn, .v2-app.is-desktop .v2-atrim .v2-btn { min-height: 44px; }
 .v2-app .v2-sb-vpreview .v2-ce-icon, .v2-app.is-desktop .v2-sb-vpreview .v2-ce-icon { min-width: 44px; justify-content: center; }
+
+/* P3A: every storyboard tap target is at least 44 px — asset chips, text links in the detail and QA buttons (phone and desktop). */
+.v2-app .v2-sb-slot, .v2-app.is-desktop .v2-sb-slot { min-height: 44px; }
+.v2-app .v2-sb-detail-body .v2-linkbtn, .v2-app.is-desktop .v2-sb-detail-body .v2-linkbtn,
+.v2-app .v2-sb-sheet .v2-linkbtn, .v2-app.is-desktop .v2-sb-detail .v2-linkbtn { display: inline-flex; align-items: center; min-height: 44px; padding: 0 4px; }
+.v2-app .v2-sb-qa-btn, .v2-app.is-desktop .v2-sb-qa-btn { min-height: 44px; }

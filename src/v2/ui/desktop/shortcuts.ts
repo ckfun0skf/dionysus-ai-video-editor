@@ -21,6 +21,8 @@ export const SHORTCUT_GROUPS: { title: string; items: Shortcut[] }[] = [
     { keys: [`${MOD} A`], label: "Select all clips" },
     { keys: ["Alt ←", "Alt →"], label: "Nudge selected clip one frame (⇧ for 10)" },
     { keys: ["F"], label: "Freeze frame" },
+    { keys: ["Q"], label: "Trim start to playhead" },
+    { keys: ["W"], label: "Trim end to playhead" },
     { keys: ["T"], label: "Add text at the playhead" },
     { keys: ["R"], label: "Toggle ripple (shows Ripple on / off)" },
     { keys: ["Esc"], label: "Clear selection / close menus" },
