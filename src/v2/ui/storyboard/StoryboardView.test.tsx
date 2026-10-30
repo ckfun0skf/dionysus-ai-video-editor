@@ -128,14 +128,13 @@ describe("storyboard workspace", () => {
     expect(el.querySelector(".v2-sb-stats")!.textContent).toMatch(/may not match/);
     await act(async () => btn(el, "Undo").click());
     expect(el.querySelector(".v2-sb-shot")!.classList.contains("stale")).toBe(false);
-    await act(async () => btn(el, "Replace storyboard").click());
-    // V2-SB-R12: replacing asks first.
-    expect(el.querySelector('[aria-label="Storyboard JSON"]')).toBeNull();
-    await act(async () => btn(el, "Continue").click());
+    await act(async () => btn(el, "Import revised JSON").click());
     const ta = el.querySelector('[aria-label="Storyboard JSON"]') as HTMLTextAreaElement;
     const other = structuredClone(LANTERN_KEEPER) as unknown as { meta: { title: string } }; other.meta.title = "Second cut";
     await act(async () => setText(ta, JSON.stringify(other)));
-    await act(async () => btn(el, "Replace storyboard").click());
+    expect(el.querySelector('[data-testid="merge-preview"]')!.textContent).toContain("title and settings");
+    await act(async () => btn(el, "Replace instead…").click());
+    await act(async () => btn(el.querySelector('[role="alertdialog"]')!, "Replace").click());
     expect(engine.getState().project.storyboard?.meta.title).toBe("Second cut");
     expect(el.querySelector('[role="status"]')!.textContent).toMatch(/Undo/);
     await act(async () => btn(el, "Undo").click());

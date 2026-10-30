@@ -148,6 +148,11 @@ export interface Storyboard {
   stepOrder?: string[];
   /** V2-SB-125: voiceover, music and sound-effect cues placed by shot; Send to timeline puts them on audio tracks. */
   audio?: StoryAudio[];
+  /**
+   * P2A: what the last Send to timeline placed, as a signature per shot (its layers, captions, effects and params) and
+   * per audio cue, so "Update timeline" redoes only the ones edited since. Not part of the JSON format.
+   */
+  sent?: { shots: Record<string, string>; cues: Record<string, string> };
 }
 
 /** `{ refRoles }` from an asset's object-form references (V2-SB-123), or nothing when none has a role or note. */

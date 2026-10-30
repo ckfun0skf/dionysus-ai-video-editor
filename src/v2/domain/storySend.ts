@@ -17,7 +17,7 @@ import { addTrack, groupOf, insertPlacement, isFree, mainTrack } from "./ops";
 import { SUBTITLE_STYLE } from "./layerStyle";
 import { getPreset, parsePresetRef, type PresetKind } from "../registry";
 import { AUDIO_DEFAULTS, audioLoops, DEFAULT_TEXT_SIZE, DEFAULT_TRANSITION_SEC, type AudioKind, TEXT_LINE_HEIGHT, type StoryBox, type StoryLayer, type StoryMediaLayer, type StoryTextLayer, type StoryTextStyle } from "./storyJson";
-import { pinOf, sendPlan, versionSpan, type Shot, type Storyboard } from "./storyboard";
+import { pinOf, sendPlan, syncPlacements, versionSpan, type Shot, type Storyboard } from "./storyboard";
 import { clampToClip, placeOnFreeTrack } from "./storyLinks";
 import { textOf, textStyleData, textStyleFields, type TextData } from "./text";
 import { previousAdjacent, setTransition } from "./transitions";
@@ -317,5 +317,99 @@ export function sendStory(p: Project): { project: Project; result: SendResult } 
   }
   for (const { shot, clip } of sent) comp = addLinked(p, b, comp, shot, clip, result);
   comp = addAudio(p, b, comp, sent, result);
-  return { project: { ...p, compositions: { ...p.compositions, [p.rootCompositionId]: comp } }, result };
+  return { project: recordSent({ ...p, compositions: { ...p.compositions, [p.rootCompositionId]: comp } }), result };
+}
+
+/** P2A: what a shot sends besides its clip (layers, captions, effects, html params), for change detection. */
+export const shotSignature = (s: Shot): string => JSON.stringify([s.layers ?? [], s.captions ? captionText(s) : "", s.effects ?? [], s.render === "html" ? s.params ?? {} : {}]);
+const cueSignature = (cue: NonNullable<Storyboard["audio"]>[number]): string => JSON.stringify(cue);
+
+/** Record signatures for shots and cues on the timeline; `force` ids are overwritten, others only filled in. */
+function recordSent(p: Project, force: Set<string> = new Set()): Project {
+  const b = p.storyboard;
+  if (!b) return p;
+  const comp = p.compositions[p.rootCompositionId];
+  const shots = { ...b.sent?.shots }, cues = { ...b.sent?.cues };
+  for (const id of shotClips(comp).keys()) if (b.shots[id] && (force.has(id) || !(id in shots))) shots[id] = shotSignature(b.shots[id]);
+  const placed = new Set(comp.tracks.flatMap((t) => t.placements.flatMap((pl) => (pl.storyCue ? [pl.storyCue] : []))));
+  for (const cue of b.audio ?? []) if (placed.has(cue.id) && (force.has(`cue:${cue.id}`) || !(cue.id in cues))) cues[cue.id] = cueSignature(cue);
+  return { ...p, storyboard: { ...b, sent: { shots, cues } } };
+}
+
+const dropPlacements = (c: Composition, drop: (pl: Placement) => boolean): Composition => ({ ...c, tracks: c.tracks.map((t) => (t.placements.some(drop) ? { ...t, placements: t.placements.filter((pl) => !drop(pl)) } : t)) });
+
+/** "Send to timeline" in Update mode adds; this also counts what was refreshed in place. */
+export interface UpdateResult extends SendResult { clips: number; refreshed: number; cues: number }
+
+/** Shots sent before, audio cues edited since, and clips whose shot now uses another asset: what Update would redo. */
+export function updatePlan(p: Project): { clips: string[]; refreshed: string[]; cues: string[] } {
+  const b = p.storyboard, out = { clips: [] as string[], refreshed: [] as string[], cues: [] as string[] };
+  if (!b) return out;
+  const comp = p.compositions[p.rootCompositionId];
+  for (const [id, clip] of shotClips(comp)) {
+    const s = b.shots[id];
+    if (!s || s.skipped) continue;
+    const a = s.assetId ? p.assets[s.assetId] : undefined;
+    if (a && selectedVersion(a) && clip.source.assetId !== a.id) out.clips.push(id);
+    const sig = b.sent?.shots[id];
+    if (sig !== undefined && sig !== shotSignature(s)) out.refreshed.push(id);
+  }
+  const placed = new Set(comp.tracks.flatMap((t) => t.placements.flatMap((pl) => (pl.storyCue ? [pl.storyCue] : []))));
+  for (const cue of b.audio ?? []) { const sig = b.sent?.cues[cue.id]; if (placed.has(cue.id) && sig !== undefined && sig !== cueSignature(cue)) out.cues.push(cue.id); }
+  return out;
+}
+
+/**
+ * P2A "Update timeline": apply only what changed since the last send. Clips whose shot now uses another asset (made as
+ * html or still instead, or re-imported) switch to it in place; shots whose layers, captions, effects or html params
+ * were edited get their linked items rebuilt; edited audio cues are placed again; then new shots and new audio are
+ * appended as before. Replaced clip versions already follow the board (syncPlacements); this re-syncs any that lag.
+ */
+export function updateStory(p: Project): { project: Project; result: UpdateResult } {
+  const b = p.storyboard;
+  const plan = updatePlan(p);
+  const base: UpdateResult = { shots: 0, layers: 0, captions: 0, effects: 0, transitions: 0, skippedLayers: 0, audio: 0, skippedAudio: 0, clips: 0, refreshed: 0, cues: 0 };
+  if (!b) return { project: p, result: base };
+  let q = p;
+  // Re-sync story clips to their selected versions (a version may have been picked while the clip was elsewhere).
+  for (const id of new Set(Object.values(b.shots).map((s) => s.assetId).filter((x): x is string => !!x && !!p.assets[x]))) q = syncPlacements(q, id);
+  let comp = q.compositions[q.rootCompositionId];
+  const clips = shotClips(comp);
+  for (const id of plan.clips) {
+    const s = b.shots[id], a = q.assets[s.assetId!], v = selectedVersion(a)!, old = clips.get(id)!;
+    const { htmlParams: _h, ...rest } = old;
+    const next: Placement = { ...rest, source: { kind: "assetVersion", assetId: a.id, versionId: v.id }, clipType: a.kind, sourceInTicks: 0, ...(a.kind === "html" && s.params && Object.keys(s.params).length ? { htmlParams: { ...s.params } } : {}) };
+    comp = { ...comp, tracks: comp.tracks.map((t) => (t.placements.some((x) => x.id === old.id) ? { ...t, placements: t.placements.map((x) => (x.id === old.id ? next : x)) } : t)) };
+    base.clips += 1;
+  }
+  const res: SendResult = { ...base };
+  for (const id of plan.refreshed) {
+    const s = b.shots[id], clip = shotClips(comp).get(id)!;
+    comp = dropPlacements(comp, (pl) => pl.storyLink?.anchor === clip.id && !pl.storyCue);
+    if (s.render === "html") {
+      const { htmlParams: _h, ...rest } = clip;
+      const next: Placement = { ...rest, ...(s.params && Object.keys(s.params).length ? { htmlParams: { ...s.params } } : {}) };
+      comp = { ...comp, tracks: comp.tracks.map((t) => ({ ...t, placements: t.placements.map((x) => (x.id === clip.id ? next : x)) })) };
+    }
+    comp = addLinked(q, b, comp, s, clip, res);
+  }
+  base.refreshed = plan.refreshed.length;
+  const cueIds = new Set(plan.cues);
+  comp = dropPlacements(comp, (pl) => !!pl.storyCue && cueIds.has(pl.storyCue));
+  q = { ...q, compositions: { ...q.compositions, [q.rootCompositionId]: comp } };
+  const sent = sendStory(q);
+  const r = sent.result;
+  const result: UpdateResult = { ...r, layers: r.layers + res.layers, captions: r.captions + res.captions, effects: r.effects + res.effects, skippedLayers: r.skippedLayers + res.skippedLayers, clips: base.clips, refreshed: base.refreshed, cues: plan.cues.length, audio: r.audio };
+  const force = new Set([...plan.refreshed, ...plan.cues.map((c) => `cue:${c}`)]);
+  return { project: recordSent(sent.project, force), result };
+}
+
+/** P2A "Replace timeline": clear the root timeline and send the whole board again (the caller confirms; Undo restores). */
+export function replaceStory(p: Project): { project: Project; result: SendResult } {
+  const b = p.storyboard;
+  if (!b) return { project: p, result: { shots: 0, layers: 0, captions: 0, effects: 0, transitions: 0, skippedLayers: 0, audio: 0, skippedAudio: 0 } };
+  const comp = p.compositions[p.rootCompositionId];
+  const cleared: Project = { ...p, storyboard: { ...b, sent: undefined }, compositions: { ...p.compositions, [p.rootCompositionId]: { ...comp, tracks: comp.tracks.map((t) => ({ ...t, placements: [] })) } } };
+  const sent = sendStory(cleared);
+  return { project: recordSent(sent.project), result: sent.result };
 }

@@ -2586,6 +2586,24 @@
           "title": "[+] add-track button (44px) at the bottom of the track list in each track-type mode, phone and desktop",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P2A-REIMPORT",
+          "title": "Storyboard re-import: merge revised JSON by id with a preview and confirm",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "P2A-EXPORT",
+          "title": "Storyboard export to dionysus.storyboard/1 JSON (download and copy, round-trips)",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "P2A-SEND-MODES",
+          "title": "Send to timeline: Update (changes since last send) or Replace (clear and rebuild)",
+          "status": "done",
+          "progress": 100
         }
       ]
     }

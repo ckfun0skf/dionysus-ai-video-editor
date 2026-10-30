@@ -52,10 +52,10 @@ describe("AI planner guide (V2-SB-114)", () => {
     expect(md).toContain("length 0.05–1, default 0.5 (fraction of the effect's time range, not seconds");
   });
 
-  it("the full prompt inlines the guide with RULES 1-29; the short prompt links to it", () => {
+  it("the full prompt inlines the guide with RULES 1-30; the short prompt links to it", () => {
     const full = storyboardSystemPrompt();
     for (const s of ["FORMAT (", "PRESETS", "RULES", "EXAMPLE", `14. ${RULES[13]}`, "not seconds", "START FRAME", "\"references\"?", "\"genDurationSec\"?", "- crossfade:", "- ken-burns:"]) expect(full).toContain(s);
-    expect(RULES).toHaveLength(29);
+    expect(RULES).toHaveLength(30);
     // V2-SB-128: blend modes: the format lines, the blend catalogue and a rule with an example that imports cleanly.
     expect(full).toContain('"blend"?: "<blend id>", "opacity"?: number (0-1, default 1)');
     expect(full).toContain('Blend modes — shots[].layers[].blend');
@@ -125,8 +125,16 @@ describe("AI planner guide (V2-SB-114)", () => {
     expect(full).toContain('"params"?: { "<key>": value },   // render "html" only');
   });
 
+  it("RULE 30 (P2A): revised JSON is re-imported by id, so ids stay stable", () => {
+    expect(RULE_LIST.slice(29).map((r) => r.key)).toEqual(["stable-ids-reimport"]);
+    expect(ruleNumber("stable-ids-reimport")).toBe(30);
+    expect(storyboardSystemPrompt()).toContain(`30. ${RULES[29]}`);
+    expect(RULES[29]).toMatch(/re-imports it/);
+    expect(RULES[29]).toMatch(/keep every id stable/);
+  });
+
   it("RULE 29 (V2-SB-136): asset states; the example uses one and its rule quotes it", () => {
-    expect(RULE_LIST.slice(28).map((r) => r.key)).toEqual(["asset-states"]);
+    expect(RULE_LIST.slice(28, 29).map((r) => r.key)).toEqual(["asset-states"]);
     expect(ruleNumber("asset-states")).toBe(29);
     const full = storyboardSystemPrompt();
     expect(full).toContain(`29. ${RULES[28]}`);

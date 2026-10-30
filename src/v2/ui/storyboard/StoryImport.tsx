@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { exampleStoryboardJson, runtimeAiLinks, story, storyboardShortPrompt, storyboardSystemPrompt, type StoryDoc } from "../../domain";
+import { exampleStoryboardJson, roundtrip, runtimeAiLinks, story, storyboardShortPrompt, storyboardSystemPrompt, type DiffItem, type Storyboard, type StoryDiff, type StoryDoc } from "../../domain";
+import { ConfirmDialog } from "../Timeline";
 import { Ic } from "../Icon";
 import { copyText } from "./clipboard";
 
-function downloadJson(doc: StoryDoc) {
-  const url = URL.createObjectURL(new Blob([JSON.stringify(doc, null, 2)], { type: "application/json" }));
+function downloadJson(doc: StoryDoc, text = JSON.stringify(doc, null, 2)) {
+  const url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
   const a = Object.assign(document.createElement("a"), { href: url, download: `${doc.meta.title.replace(/[^\w-]+/g, "-").replace(/^-|-$/g, "").toLowerCase() || "storyboard"}.storyboard.json` });
   a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
@@ -55,8 +56,9 @@ export function PromptPanel() {
 }
 
 /** Step 2: paste or choose a file, validate live, preview, then create. */
-export function ImportPanel({ onCreate, replacing }: { onCreate?: (doc: StoryDoc) => void; replacing?: boolean }) {
+export function ImportPanel({ onCreate, replacing, diffFor, onMerge }: { onCreate?: (doc: StoryDoc) => void; replacing?: boolean; diffFor?: (doc: StoryDoc) => StoryDiff; onMerge?: (doc: StoryDoc, diff: StoryDiff) => void }) {
   const [text, setText] = useState("");
+  const [confirm, setConfirm] = useState<"merge" | "replace">();
   const [file, setFile] = useState<string>();
   const input = useRef<HTMLInputElement>(null);
   const area = useRef<HTMLTextAreaElement>(null);
@@ -72,6 +74,7 @@ export function ImportPanel({ onCreate, replacing }: { onCreate?: (doc: StoryDoc
   };
   const result = useMemo(() => (text.trim() ? story.parseStoryboard(text) : undefined), [text]);
   const locs = useMemo(() => (result ? (result.ok ? result.warnings : result.errors).map((e) => story.locateIssue(text, e)) : []), [result, text]);
+  const diff = useMemo(() => (result?.ok && diffFor ? diffFor(result.doc) : undefined), [result, diffFor]);
   const pick = async (f?: File) => { if (!f) return; setFile(f.name); setText(await readFileText(f)); };
   const paste = async () => { try { const t = await navigator.clipboard.readText(); if (t) { setFile(undefined); setText(t); } } catch { /* permission denied: user can long-press paste */ } };
   return (
@@ -113,10 +116,78 @@ export function ImportPanel({ onCreate, replacing }: { onCreate?: (doc: StoryDoc
           <div className="v2-sb-actions">
             <button className="v2-btn v2-sb-btn" title="Save the checked, normalised storyboard as a .json file" onClick={() => downloadJson(result.doc)}><Ic g="⇩" size={16} /> Download .json</button>
           </div>
-          {onCreate && <button className="v2-btn primary v2-sb-btn" onClick={() => onCreate(result.doc)}>{replacing ? "Replace storyboard" : "Create storyboard"}</button>}
-          {replacing && <p className="v2-hint">Replacing keeps nothing from the current storyboard; Undo brings it back.</p>}
+          {diff && onMerge ? <>
+            <MergePreview diff={diff} />
+            <div className="v2-sb-actions v2-sb-merge-actions">
+              <button className="v2-btn primary v2-sb-btn" data-testid="merge-apply" disabled={diff.same} onClick={() => (diff.assets.removed.length || diff.shots.removed.length ? setConfirm("merge") : onMerge(result.doc, diff))}><Ic g="ok" size={16} /> {diff.same ? "No changes" : "Apply changes"}</button>
+              {onCreate && <button className="v2-btn v2-sb-btn v2-sb-danger" title="Start over from this JSON: drops every upload, pick and check on the board" onClick={() => setConfirm("replace")}><Ic g="json" size={16} /> Replace instead…</button>}
+            </div>
+            <p className="v2-hint">Apply keeps uploads, version picks, trims and checks for every asset and shot whose id is unchanged. Undo reverts it.</p>
+          </> : <>
+            {onCreate && <button className="v2-btn primary v2-sb-btn" onClick={() => onCreate(result.doc)}>{replacing ? "Replace storyboard" : "Create storyboard"}</button>}
+            {replacing && <p className="v2-hint">Replacing keeps nothing from the current storyboard; Undo brings it back.</p>}
+          </>}
         </div>
       )}
+      {confirm === "merge" && result?.ok && diff && onMerge && <ConfirmDialog title="Remove from the storyboard?" confirm="Apply changes"
+        message={`${removedText(diff)} ${diff.assets.removed.length + diff.shots.removed.length > 1 ? "are" : "is"} not in the new JSON and will be removed. Uploaded versions stay in the media library. Undo brings everything back.`}
+        onCancel={() => setConfirm(undefined)} onConfirm={() => { setConfirm(undefined); onMerge(result.doc, diff); }} />}
+      {confirm === "replace" && result?.ok && onCreate && <ConfirmDialog title="Replace the whole storyboard?" confirm="Replace"
+        message="Every shot, asset, version pick and check is replaced by this JSON; nothing is matched by id. Undo brings the current one back."
+        onCancel={() => setConfirm(undefined)} onConfirm={() => { setConfirm(undefined); onCreate(result.doc); }} />}
+    </section>
+  );
+}
+
+const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
+function removedText(d: StoryDiff): string {
+  const parts = [d.shots.removed.length && plural(d.shots.removed.length, "shot"), d.assets.removed.length && plural(d.assets.removed.length, "asset")].filter(Boolean);
+  return parts.join(" and ");
+}
+const FIELD_NAMES: Record<string, string> = { meta: "title and settings", order: "shot order", connections: "connections", audio: "audio cues" };
+
+/** P2A: what a re-import adds, changes and removes, by id (the confirm step before Apply). */
+export function MergePreview({ diff }: { diff: StoryDiff }) {
+  if (diff.same) return <p className="v2-sb-sum" data-testid="merge-same">Same as the current storyboard: nothing to apply.</p>;
+  const group = (kind: "added" | "changed" | "removed", label: string, g: string) => {
+    const items: (DiffItem & { what: string })[] = [...diff.shots[kind].map((x) => ({ ...x, what: "Shot" })), ...diff.assets[kind].map((x) => ({ ...x, what: "Asset" }))];
+    if (!items.length) return null;
+    return (
+      <div className={`v2-sb-diff v2-sb-diff-${kind}`} data-testid={`merge-${kind}`}>
+        <h5><Ic g={g} size={14} /> {label} · {items.length}</h5>
+        <ul>{items.map((x) => (
+          <li key={`${x.what}:${x.id}`}><span className="v2-sb-diff-kind">{x.what}</span> <b>{x.name}</b> <code>{x.id}</code>
+            {x.fields && <span className="v2-muted"> · {x.fields.join(", ")}</span>}
+            {!!x.uploads && <span className="v2-muted"> · {plural(x.uploads, "upload")} stay in the library</span>}</li>
+        ))}</ul>
+      </div>
+    );
+  };
+  return (
+    <div className="v2-sb-merge" data-testid="merge-preview" aria-label="Changes to apply">
+      <h4><Ic g="board" size={16} /> Changes to the current storyboard</h4>
+      {group("added", "New", "+")}
+      {group("changed", "Changed", "✎")}
+      {group("removed", "Removed", "✕")}
+      {diff.other.length > 0 && <p className="v2-sb-sum">Also updated: {diff.other.map((k) => FIELD_NAMES[k] ?? k).join(", ")}.</p>}
+    </div>
+  );
+}
+
+/** P2A: the current board (with every edit) as storyboard JSON, to download or copy back to the AI. */
+export function ExportPanel({ board }: { board: Storyboard }) {
+  const doc = useMemo(() => roundtrip.storyboardToDoc(board), [board]);
+  const text = useMemo(() => story.storyDocJson(doc), [doc]);
+  return (
+    <section className="v2-sb-panel" aria-label="Export storyboard JSON">
+      <p className="v2-sb-lead">This is your storyboard as it is now, edits included, in the same JSON format your AI writes. Give it back to your AI to revise, then import its reply here: assets and shots that keep their ids keep their uploads, picks and checks.</p>
+      <div className="v2-sb-actions v2-sb-export-actions">
+        <button className="v2-btn primary v2-sb-btn" data-testid="export-download" title="Save the storyboard as a .json file" onClick={() => downloadJson(doc, text)}><Ic g="⇩" size={16} /> Download .json</button>
+        <CopyButton text={() => text} label="Copy JSON" testId="export-copy" />
+      </div>
+      <p className="v2-sb-sum">{story.storySummary(doc)}</p>
+      <textarea className="v2-sb-code" aria-label="Storyboard JSON export" readOnly value={text} rows={14} onFocus={(e) => e.currentTarget.select()} />
+      <p className="v2-hint">Uploaded versions, picks and checks stay in Dionysus; they are not part of the JSON.</p>
     </section>
   );
 }

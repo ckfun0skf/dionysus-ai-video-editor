@@ -13,7 +13,9 @@ export type { StoryDoc, StoryAsset, StoryShot, StoryConnection, StoryIssue, Stor
 export { storyboardSystemPrompt, storyboardShortPrompt, EXAMPLE_STORYBOARD, exampleStoryboardJson } from "./storyPrompt";
 export { aiLinks, runtimeAiLinks, runtimeSiteUrl, CONFIGURED_SITE_URL, DEFAULT_SITE_URL, type AiLinks } from "./siteUrl";
 export * as board from "./storyboard";
-export { pendingAudio } from "./storySend";
+export { pendingAudio, updatePlan, shotSignature, type SendResult, type UpdateResult } from "./storySend";
+export * as roundtrip from "./storyRoundtrip";
+export type { StoryDiff, DiffItem } from "./storyRoundtrip";
 export * as storyEdit from "./storyEdit";
 export * as storyRefs from "./storyRefs";
 export * as storySteps from "./storySteps";

@@ -53,18 +53,11 @@ describe("storyboard review P2 (second batch)", () => {
     expect(onView).toHaveBeenCalledWith(placed[0].id);
   });
 
-  it("R12: desktop header has a labelled AI prompt and Replace asks before importing", async () => {
+  it("R12/P2A: desktop header has labelled AI prompt, Export and Import buttons", async () => {
     const el = await mountBoard(setup());
     expect(btn(el, "AI prompt").textContent).toContain("AI prompt");
-    const rep = btn(el, "Replace storyboard");
-    expect(rep.classList.contains("v2-sb-danger")).toBe(true);
-    await act(async () => rep.click());
-    expect(el.querySelector('[aria-label="Storyboard JSON"]')).toBeNull();
-    expect(el.textContent).toContain("Replace this storyboard?");
-    await act(async () => btn(el, "Cancel").click());
-    expect(el.textContent).not.toContain("Replace this storyboard?");
-    await act(async () => btn(el, "Replace storyboard").click());
-    await act(async () => btn(el, "Continue").click());
+    expect(btn(el, "Export JSON").textContent).toContain("Export");
+    await act(async () => btn(el, "Import revised JSON").click());
     expect(el.querySelector('[aria-label="Storyboard JSON"]')).not.toBeNull();
   });
 
@@ -77,9 +70,54 @@ describe("storyboard review P2 (second batch)", () => {
     expect(btn(el, "AI prompt")).toBeUndefined();
     await act(async () => btn(el, "More storyboard actions").click());
     const items = [...el.querySelectorAll('[role="menuitem"]')].map((x) => x.textContent!.trim());
-    expect(items).toEqual(["AI prompt", "Replace storyboard…"]);
+    expect(items).toEqual(["AI prompt", "Export JSON", "Import revised JSON…"]);
     await act(async () => (el.querySelectorAll('[role="menuitem"]')[1] as HTMLButtonElement).click());
-    expect(el.textContent).toContain("Replace this storyboard?");
+    expect(el.querySelector('[aria-label="Storyboard JSON export"]')).not.toBeNull();
+  });
+
+  it("P2A: re-import previews adds, changes and removals and keeps uploads", async () => {
+    const e = setup();
+    const el = await mountBoard(e);
+    await act(async () => btn(el, "Import revised JSON").click());
+    const next = structuredClone(LANTERN_KEEPER) as unknown as { shots: { id: string; title: string }[]; connections?: unknown[] };
+    next.shots[0].title = "Renamed";
+    const gone = next.shots.pop()!; next.connections = [];
+    next.shots.push({ ...structuredClone(gone), id: "s9", title: "Brand new" });
+    await act(async () => setText(el.querySelector('[aria-label="Storyboard JSON"]') as HTMLTextAreaElement, JSON.stringify(next)));
+    expect(el.querySelector('[data-testid="merge-added"]')!.textContent).toContain("Brand new");
+    expect(el.querySelector('[data-testid="merge-changed"]')!.textContent).toContain("Renamed");
+    expect(el.querySelector('[data-testid="merge-removed"]')!.textContent).toContain(gone.title);
+    await act(async () => (el.querySelector('[data-testid="merge-apply"]') as HTMLButtonElement).click());
+    expect(el.textContent).toContain("Remove from the storyboard?");
+    await act(async () => btn(el.querySelector('[role="alertdialog"]')!, "Apply changes").click());
+    const sb = e.getState().project.storyboard!;
+    expect(sb.order).toEqual(["s1", "s2", "s9"]);
+    expect(sb.shots.s1.title).toBe("Renamed");
+    expect(sb.versions.a1).toBeDefined();
+  });
+
+  it("P2A: export offers download and copy of round-trippable JSON", async () => {
+    const e = setup();
+    const el = await mountBoard(e);
+    await act(async () => btn(el, "Export JSON").click());
+    const text = (el.querySelector('[aria-label="Storyboard JSON export"]') as HTMLTextAreaElement).value;
+    const r = story.validateStoryboard(JSON.parse(text));
+    expect(r.ok).toBe(true);
+    expect(el.querySelector('[data-testid="export-download"]')).not.toBeNull();
+    expect(el.querySelector('[data-testid="export-copy"]')).not.toBeNull();
+  });
+
+  it("P2A: a second Send offers Update or Replace (with confirm)", async () => {
+    const e = setup();
+    const el = await mountBoard(e);
+    await act(async () => btn(el, "Send to timeline").click());
+    await act(async () => btn(el, "Send to timeline").click());
+    expect(el.querySelector('[data-testid="send-update"]')!.textContent).toMatch(/up to date/);
+    await act(async () => (el.querySelector('[data-testid="send-replace"]') as HTMLButtonElement).click());
+    expect(el.textContent).toContain("Replace the timeline?");
+    await act(async () => btn(el, "Replace timeline").click());
+    const p = e.getState().project;
+    expect(ops.mainTrack(p.compositions[p.rootCompositionId])!.placements).toHaveLength(1);
   });
 
   it("R10: phone production keeps text states and the nav says the state", async () => {
