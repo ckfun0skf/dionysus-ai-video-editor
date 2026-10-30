@@ -12,6 +12,7 @@ import { TransformHandles, TransformInspector } from "./Transform";
 import { TextPanel } from "./TextPanel";
 import { AnimationPicker } from "./AnimationPicker";
 import { CodeEditor } from "./CodeEditor";
+import { CodeAiWizard } from "./CodeAiWizard";
 import { AudioEditor } from "./AudioEditor";
 import { audioClipAsset, storeAudioClip } from "./audioClipAsset";
 import type { AudioClip } from "../domain";
@@ -365,6 +366,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     else setToast("Could not load this clip's code");
   };
   /** V2-ADD-MEDIA-TABS: Create opens the Code Editor on a new clip; nothing is imported until it is added. */
+  /** P4B: Create code → AI mode wizard (the mode the new clip is added in). */
+  const [codeAi, setCodeAi] = useState<"main" | "overlay">();
   const createCode = (mode: "main" | "overlay" = "main") => { setPicker(null); setSheet(false); setHtmlEdit({ source: newCodeClipHtml(), create: mode }); };
   const saveCode = async (html: string) => {
     if (!htmlEdit) return;
@@ -969,7 +972,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       {projects && <ProjectsDialog storage={storage} current={project} onOpen={(id) => { setProjects(false); onSwitch(id); }} onRenameCurrent={(n) => engine.dispatch(cmd.renameProject(n))} onClose={() => setProjects(false)} />}
       {exporting && <ExportDialog project={project} blobs={storage.blobs} res={res} onRes={setRes} onClose={() => setExporting(false)} />}
       {audioEdit && <AudioEditor key={audioEdit.create ? "new-audio" : audioEdit.placementId} source={audioEdit.source} create={audioEdit.create} mobile={mobile} onSave={saveAudio} onClose={() => setAudioEdit(undefined)} />}
-      {htmlEdit && <CodeEditor key={htmlEdit.create ? "new" : htmlEdit.placementId} source={htmlEdit.source} create={!!htmlEdit.create} mobile={mobile} onSave={(h) => void saveCode(h)} onClose={() => setHtmlEdit(undefined)} />}
+      {codeAi && <CodeAiWizard mobile={mobile} initialRole={codeAi === "overlay" ? "overlay" : "scene"} onClose={() => { setHtmlEdit({ source: newCodeClipHtml(), create: codeAi }); setCodeAi(undefined); }} onImport={(html) => { setHtmlEdit({ source: html, create: codeAi }); setCodeAi(undefined); }} />}
+      {htmlEdit && <CodeEditor key={htmlEdit.create ? "new" : htmlEdit.placementId} source={htmlEdit.source} create={!!htmlEdit.create} mobile={mobile} onAiMode={htmlEdit.create ? () => { setCodeAi(htmlEdit.create); setHtmlEdit(undefined); } : undefined} onSave={(h) => void saveCode(h)} onClose={() => setHtmlEdit(undefined)} />}
       {subsPick && <div className="v2-menu-backdrop v2-confirm-backdrop" onPointerDown={() => setSubsPick(false)}>
         <div className="v2-confirm v2-subs-pick" role="dialog" aria-modal="true" aria-label="Choose a text layer" onPointerDown={(e) => e.stopPropagation()}>
           <h4>Edit subtitles</h4><p>Which text layer?</p>

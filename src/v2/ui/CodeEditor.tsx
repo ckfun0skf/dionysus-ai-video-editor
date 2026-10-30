@@ -570,8 +570,9 @@ function htmlOf(d: Draft): string {
  * Mobile: preview on top, tabs below, full screen. Desktop: tabs on the left, preview and problems on the right.
  * Save creates a new asset version (one undo step); Cancel discards (asking first when there are edits).
  */
-export function CodeEditor({ source, mobile, onSave, onClose, create }: {
+export function CodeEditor({ source, mobile, onSave, onClose, create, onAiMode }: {
   source: string; mobile: boolean; onSave: (html: string) => void; onClose: () => void;
+  /** P4B: open the AI-mode wizard (Create code only). */ onAiMode?: () => void;
   /** A new clip (Add Media → Code → Create): the primary action adds it to the timeline. */ create?: boolean;
 }) {
   const start = useMemo(() => draftOf(source), [source]);
@@ -696,6 +697,7 @@ export function CodeEditor({ source, mobile, onSave, onClose, create }: {
           <b>{m.name || "Code clip"}</b>
           <span className="v2-muted">{create ? "New code clip" : dirty ? "Edited — save makes a new version" : "Code clip"}</span>
         </span>
+        {onAiMode && <button type="button" className="v2-btn v2-ce-samplesbtn v2-ce-aibtn" aria-label="AI mode" title="AI mode: answer a few questions, get a prompt for any AI, import its package" onClick={onAiMode}><Icon g="anim" /><span>AI mode</span></button>}
         <button type="button" className="v2-btn v2-ce-samplesbtn" aria-label="Samples" title="Load a sample" aria-haspopup="dialog" aria-expanded={samples} onClick={() => setSamples(!samples)}>
           <Icon g="template" /><span>Samples</span>
         </button>

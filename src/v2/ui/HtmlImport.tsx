@@ -56,7 +56,7 @@ const canPaste = () => typeof navigator !== "undefined" && typeof navigator.clip
 const finePointer = () => typeof matchMedia === "function" && matchMedia("(pointer: fine)").matches;
 
 /** Paste box + file picker (+ drop on desktop) with live validation; `onAdd` receives the single-file HTML. */
-export function HtmlImport({ expectBindings, expectParams, onAdd, busy }: { expectBindings?: Record<string, BindingType>; expectParams?: Record<string, HtmlClipParam>; onAdd: (html: string, name: string) => Promise<void> | void; busy?: boolean }) {
+export function HtmlImport({ expectBindings, expectParams, onAdd, busy, actionLabel = "Add as new version", actionTitle = "Add this clip as a new version (undoable)", dropHint }: { expectBindings?: Record<string, BindingType>; expectParams?: Record<string, HtmlClipParam>; onAdd: (html: string, name: string) => Promise<void> | void; busy?: boolean; actionLabel?: string; actionTitle?: string; dropHint?: boolean }) {
   const [text, setText] = useState("");
   const [file, setFile] = useState<{ name: string; html: string }>();
   const [err, setErr] = useState("");
@@ -87,6 +87,7 @@ export function HtmlImport({ expectBindings, expectParams, onAdd, busy }: { expe
   return (
     <div className={`v2-html-import ${drag ? "is-drag" : ""}`} data-testid="v2-html-import"
       onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); setDrag(true); } }} onDragLeave={() => setDrag(false)} onDrop={onDrop}>
+      {dropHint && !file && <div className="v2-html-dropzone" aria-hidden><b>Drop the .zip or .html here</b><span>or choose the file the AI gave you</span></div>}
       {file
         ? <div className="v2-html-import-file"><span>Loaded <b>{file.name}</b></span><button className="v2-btn" onClick={() => setFile(undefined)}>Clear</button></div>
         : <textarea aria-label="Paste the AI's reply or the HTML" placeholder={"Paste the AI's reply (the ```html block is picked out) or the HTML itself" + (finePointer() ? ", or drop a .html / .zip file here" : "")}
@@ -97,7 +98,7 @@ export function HtmlImport({ expectBindings, expectParams, onAdd, busy }: { expe
           <input type="file" hidden accept={HTML_IMPORT_ACCEPT} aria-label="Import HTML clip file" onChange={(e) => { void load(e.target.files?.[0]); e.target.value = ""; }} />
         </label>
         <button className="v2-btn is-primary" data-testid="v2-html-import-add" disabled={blocked || !lint?.ok || busy}
-          title={lint && !lint.ok ? "Fix the errors first" : "Add this clip as a new version (undoable)"} onClick={() => void add()}>Add as new version</button>
+          title={lint && !lint.ok ? "Fix the errors first" : actionTitle} onClick={() => void add()}>{actionLabel}</button>
       </div>
       {err && <span role="alert" className="v2-err">{err}</span>}
       {notFound && <span role="alert" className="v2-err">No HTML found: paste the ```html code block or a whole HTML document.</span>}

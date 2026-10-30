@@ -333,6 +333,12 @@ export const HTML_CLIP_CONTRACT = `- Register the clip once, at the top level of
 - No network: the clip runs in a sandbox with a strict Content-Security-Policy. Only the allowed libraries (listed in the manifest's \`libs\`, imported by their bare specifier in a \`<script type="module">\`, e.g. \`import * as LIB from "<specifier>"\`) are loaded. Embed any other file as a data: URL in the manifest's \`files\` and refer to it by name. Use system font stacks, or an embedded font with @font-face (the runtime waits for fonts to load before the first frame).
 - Transparency: with \`"background": "transparent"\`, clear the canvas to transparent (2D: clearRect; WebGL: \`alpha: true\` and a clear colour with alpha 0); the clip is composited over the layers below. Otherwise paint the background colour every frame.`;
 
+/** P4B: the reply instruction of the Code AI-mode prompt (also published in HTML_CLIP_PACKAGE.md §6.1, checked by a test). */
+export const HTML_CLIP_PACKAGE_REPLY = `REPLY FORMAT
+- Reply with a downloadable package: a ZIP (\`<name>${HTML_CLIP_ZIP_SUFFIX}\`) containing \`index.html\` (the manifest in its <head>, or a \`manifest.json\` beside it), \`script.js\` (the module with dionysus.clip), an optional \`style.css\` and any data or image files the clip reads (by name, via ctx.asset(name)).
+- If you can't create files, reply instead with ONE \`\`\`html code block containing the whole self-contained file (embedded files as data: URLs in the manifest's "files").
+- The user imports the .zip or .html in Dionysus (Create code → AI mode → Import), which checks it against the package standard and opens it in the Code Editor.`;
+
 export interface PackagePromptInput {
   /** The design brief (the storyboard asset's prompt). */
   brief: string;
@@ -361,6 +367,8 @@ export interface PackagePromptOptions {
   specUrl: string;
   /** Inline the whole contract and a template instead of only linking to the spec. */
   full?: boolean;
+  /** How the AI replies: one ```html block (default) or, for the Code AI mode (P4B), a .zip package or a single .html file. */
+  reply?: "html" | "package";
 }
 
 /** The manifest the AI is asked to write for this asset. */
@@ -451,6 +459,7 @@ ${input.codeRefs.map((c) => `  - "${c.name}"${c.label ? ` (${c.label})` : ""}${c
 - Deterministic: each frame is a pure function of t, ctx.params and the bindings, in any order. No Date.now, performance.now, requestAnimationFrame, timers or unseeded Math.random.
 - No network: only the allowed libraries; embed other files as data: URLs in the manifest's "files"; system fonts or embedded fonts.
 - If you can't open the spec, don't guess: reply only "I can't open the spec — please paste the full Dionysus HTML clip prompt." (Dionysus → the asset → Copy full prompt).`;
+  if (opts.reply === "package") return `${head}${rules}\n\n${HTML_CLIP_PACKAGE_REPLY}`;
   return `${head}${rules}
 
 Reply with ONE \`\`\`html code block containing the whole file and nothing else. The user pastes it into Dionysus (the asset → Paste the AI's reply), which checks it against the package standard.`;

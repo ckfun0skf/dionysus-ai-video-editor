@@ -2736,6 +2736,30 @@
           "title": "Storyboard source \"json\" for audio with a copyable AI prompt, paste box, guide rule 38, AUDIO_CLIP_FORMAT.md, presets.json and llms.txt",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P4B-1",
+          "title": "Audio editor desktop Sound tab: instrument/SFX chips are 44px touch targets",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "P4B-2",
+          "title": "Create code AI mode: step-by-step wizard (describe, role, params, size, three.js, reference media)",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "P4B-3",
+          "title": "AI mode prompt generated from HTML_CLIP_PACKAGE.md source (package reply, video timing and embedded detections)",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "P4B-4",
+          "title": "AI mode import: zip/html drop zone with validation, preview in Code Editor, save as code asset",
+          "status": "done",
+          "progress": 100
         }
       ]
     }
