@@ -91,6 +91,8 @@ export interface Placement {
    */
   /** Storyboard shot this clip was sent as (V2-CUT-02): lets shots that share a clip asset be sent once each. */
   storyShot?: string;
+  /** Storyboard audio cue this clip was sent as (P1-AUDIO): a cue is placed once, even when its shots were sent earlier. */
+  storyCue?: string;
   storyLink?: { anchor: string; want?: { offset: number; duration: number; clampedOffset: number; clampedDuration: number } };
 }
 

@@ -5,7 +5,7 @@ import * as board from "./storyboard";
 import { deleteShot } from "./storyEdit";
 import { validateStoryboard, type StoryDoc } from "./storyJson";
 import { deleteSlot } from "./storyRefs";
-import { AUDIO_TRACK_NAMES, sendStory } from "./storySend";
+import { AUDIO_TRACK_NAMES, pendingAudio, sendStory } from "./storySend";
 import { TICKS_PER_SECOND } from "./time";
 
 const S = TICKS_PER_SECOND;
@@ -155,5 +155,47 @@ describe("audio cues (V2-SB-125)", () => {
     const doc = parse(raw);
     expect(doc.audio!.map((c) => c.kind).sort()).toEqual(["music", "sfx", "voiceover"]);
     expect(doc.audio!.find((c) => c.kind === "voiceover")).toMatchObject({ from: "s01", to: "s03" });
+  });
+});
+
+describe("audio cues sent after the shots (P1-AUDIO)", () => {
+  const all = [
+    { id: "m", asset: "bed", kind: "music", from: "a", to: "c", loop: true, volume: 0.4 },
+    { id: "amb", asset: "bed", kind: "ambience", from: "b", to: "c", volume: 0.2 },
+    { id: "fx", asset: "slam", kind: "sfx", from: "a", atSec: 1 },
+    { id: "st", asset: "slam", kind: "sting", from: "c", atSec: 0.5, volume: 0.8 },
+    { id: "dl", asset: "vo", kind: "dialogue", from: "b", atSec: 0.5, to: "b" },
+    { id: "vo", asset: "vo", kind: "voiceover", from: "a", to: "b" },
+  ];
+  const audioOf = (p: Project) => p.compositions[p.rootCompositionId].tracks.filter((t) => t.kind === "audio");
+
+  it("lands every cue kind on its audio track when the shots are already on the timeline, exactly once", () => {
+    let p = board.setStoryboard(createProject("s"), board.storyboardFromDoc(parse(base(all))));
+    for (const s of ["a", "b", "c"]) p = up(p, { shot: s }, vid);
+    p = sendStory(p).project; // shots first, no audio uploaded yet
+    expect(audioOf(p).flatMap((t) => t.placements)).toEqual([]);
+    expect(pendingAudio(p)).toEqual([]);
+    p = up(p, { slot: "bed" }, aud(2));
+    p = up(p, { slot: "slam" }, aud(1));
+    p = up(p, { slot: "vo" }, aud(3));
+    expect(pendingAudio(p).sort()).toEqual(["amb", "dl", "fx", "m", "st", "vo"]);
+    const r = sendStory(p);
+    p = r.project;
+    expect(r.result).toMatchObject({ shots: 0, skippedAudio: 0 });
+    const video = p.compositions[p.rootCompositionId].tracks.find((t) => t.kind === "video")!.placements;
+    expect(video).toHaveLength(3);
+    const on = (kind: keyof typeof AUDIO_TRACK_NAMES) => audioOf(p).filter((t) => t.name === AUDIO_TRACK_NAMES[kind]).flatMap((t) => t.placements);
+    for (const k of ["music", "ambience", "sfx", "sting", "dialogue", "voiceover"] as const) expect(on(k).length).toBeGreaterThan(0);
+    expect(on("music").length).toBeGreaterThan(1); // loop repeats the 2 s bed across 15 s
+    expect(on("music").every((x) => x.volume === 0.4 && x.storyCue === "m")).toBe(true);
+    expect(on("ambience")[0]).toMatchObject({ startTicks: video[1].startTicks, volume: 0.2 });
+    expect(on("sfx")[0]).toMatchObject({ startTicks: video[0].startTicks + S, durationTicks: S });
+    expect(on("sting")[0]).toMatchObject({ startTicks: video[2].startTicks + S / 2, volume: 0.8 });
+    expect(on("dialogue")[0]).toMatchObject({ startTicks: video[1].startTicks + S / 2, durationTicks: 3 * S });
+    expect(on("voiceover")[0]).toMatchObject({ startTicks: video[0].startTicks, storyCue: "vo" });
+    expect(pendingAudio(p)).toEqual([]);
+    // Sending again adds nothing.
+    const again = sendStory(p).project;
+    expect(audioOf(again).flatMap((t) => t.placements).length).toBe(audioOf(p).flatMap((t) => t.placements).length);
   });
 });

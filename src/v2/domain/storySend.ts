@@ -199,10 +199,14 @@ function addLinked(p: Project, b: Storyboard, comp: Composition, shot: Shot, cli
  */
 function addAudio(p: Project, b: Storyboard, comp: Composition, sent: { shot: Shot; clip: Placement }[], res: SendResult): Composition {
   let c = comp;
-  const clips = new Map(sent.map((x) => [x.shot.id, x.clip]));
+  // P1-AUDIO: cues are placed once each, against the shot clips sent now or by an earlier send, so audio uploaded
+  // after its shots were sent still lands on the timeline.
+  const clips = shotClips(c);
+  for (const x of sent) clips.set(x.shot.id, x.clip);
+  const done = placedCues(p, b, c);
   for (const cue of b.audio ?? []) {
     const first = clips.get(cue.from);
-    if (!first) continue;
+    if (!first || done.has(cue.id)) continue;
     const slot = b.slots[cue.asset];
     const a = slot?.assetId ? p.assets[slot.assetId] : undefined;
     const v = a && selectedVersion(a);
@@ -229,7 +233,7 @@ function addAudio(p: Project, b: Storyboard, comp: Composition, sent: { shot: Sh
       const pl: Placement = {
         id: newId("plc"), startTicks: x.at, durationTicks: x.dur, sourceInTicks: 0, source: { kind: "assetVersion", assetId: a.id, versionId: v.id },
         clipType: "audio", volume: cue.volume ?? d.volume, ...(fadeIn ? { fadeInTicks: fadeIn } : {}), ...(fadeOut ? { fadeOutTicks: fadeOut } : {}),
-        ...(inside ? { storyLink: { anchor: first.id } } : {}),
+        storyCue: cue.id, ...(inside ? { storyLink: { anchor: first.id } } : {}),
       };
       // Keep the copies of a loop on one layer.
       const same = track && c.tracks.find((t) => t.id === track && isFree(t, pl.startTicks, pl.durationTicks));
@@ -241,22 +245,53 @@ function addAudio(p: Project, b: Storyboard, comp: Composition, sent: { shot: Sh
   return c;
 }
 
+/** Story shot clips on the root composition by shot id (the first one in time when a shot was sent twice). */
+function shotClips(comp: Composition): Map<string, Placement> {
+  const m = new Map<string, Placement>();
+  for (const pl of comp.tracks.flatMap((t) => t.placements).sort((a, b) => a.startTicks - b.startTicks)) if (pl.storyShot && !m.has(pl.storyShot)) m.set(pl.storyShot, pl);
+  return m;
+}
+
+/**
+ * Cue ids already on the timeline: a clip names its cue (`storyCue`), or, for cues sent before P1-AUDIO, an unnamed
+ * audio clip of the cue's asset exists.
+ */
+function placedCues(p: Project, b: Storyboard, comp: Composition): Set<string> {
+  const all = comp.tracks.flatMap((t) => t.placements);
+  const named = new Set(all.flatMap((pl) => (pl.storyCue ? [pl.storyCue] : [])));
+  const loose = new Set(all.filter((pl) => pl.clipType === "audio" && !pl.storyCue).map((pl) => pl.source.assetId));
+  return new Set((b.audio ?? []).filter((cue) => named.has(cue.id) || (!!b.slots[cue.asset]?.assetId && loose.has(b.slots[cue.asset]!.assetId!) && !!p.assets[b.slots[cue.asset]!.assetId!])).map((cue) => cue.id));
+}
+
+/** Audio cues that "Send to timeline" would place now: their asset is uploaded, their first shot is on the timeline or ready, and they are not placed yet. */
+export function pendingAudio(p: Project): string[] {
+  const b = p.storyboard;
+  if (!b?.audio?.length) return [];
+  const comp = p.compositions[p.rootCompositionId];
+  const shots = new Set([...shotClips(comp).keys(), ...sendPlan(p).filter((s) => s.state === "ready").map((s) => s.shotId)]);
+  const done = placedCues(p, b, comp);
+  return b.audio.filter((cue) => {
+    const id = b.slots[cue.asset]?.assetId, a = id ? p.assets[id] : undefined;
+    return !done.has(cue.id) && shots.has(cue.from) && a?.kind === "audio" && a.versions.length > 0;
+  }).map((cue) => cue.id);
+}
+
 /** Append every ready shot to the root composition with its linked items. Returns the project unchanged if none is ready. */
 export function sendStory(p: Project): { project: Project; result: SendResult } {
   const result: SendResult = { shots: 0, layers: 0, captions: 0, effects: 0, transitions: 0, skippedLayers: 0, audio: 0, skippedAudio: 0 };
   const b = p.storyboard;
   const ready = sendPlan(p).filter((s) => s.state === "ready");
-  if (!b || !ready.length) return { project: p, result };
+  if (!b || (!ready.length && !pendingAudio(p).length)) return { project: p, result };
   let comp = p.compositions[p.rootCompositionId];
   let tid = mainTrack(comp)?.id;
-  if (!tid) { tid = newId("trk"); comp = addTrack(comp, "video", tid); }
-  let at = Math.max(0, ...comp.tracks.find((t) => t.id === tid)!.placements.map((x) => x.startTicks + x.durationTicks));
+  if (!tid && ready.length) { tid = newId("trk"); comp = addTrack(comp, "video", tid); }
+  let at = Math.max(0, ...(comp.tracks.find((t) => t.id === tid)?.placements ?? []).map((x) => x.startTicks + x.durationTicks));
   const sent: { shot: Shot; clip: Placement }[] = [];
   for (const s of ready) {
     const shot = b.shots[s.shotId], asset = p.assets[s.assetId!], v = selectedVersion(asset);
     if (!v) continue;
     const clip = shotClip(b, asset, v, shot, at);
-    comp = insertPlacement(comp, tid, clip);
+    comp = insertPlacement(comp, tid!, clip);
     sent.push({ shot, clip });
     at += clip.durationTicks;
   }

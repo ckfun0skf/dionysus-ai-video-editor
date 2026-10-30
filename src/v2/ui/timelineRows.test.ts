@@ -20,7 +20,7 @@ describe("timeline rows", () => {
     const c = comp();
     expect(sig(buildRows(c, true, "overlay")).slice(1, 3)).toEqual(["o1", "o2"]);
     const text = sig(buildRows(c, true, "text"));
-    expect(text.slice(-2)).toEqual(["t1", "s1"]);
+    expect(text.slice(-3)).toEqual(["t1", "s1", "add:text"]); // P1-ADD-TRACK: [+] row last
     expect(text.some((r) => r.startsWith("header"))).toBe(false); // V2-099: no in-timeline group pill on mobile
   });
   it("focused mode shows only main + the active group; hidden groups become range lines", () => {
@@ -59,7 +59,7 @@ describe("effect group (V2-101)", () => {
     const p = e.getState().project; const comp = p.compositions[p.rootCompositionId];
     expect(hiddenRanges(comp, "overlay").find((r) => r.group === "effect")?.ranges).toEqual([[0, 360000]]);
     expect(GROUP_COLOR.effect).toBe("#a855f7");
-    expect(buildRows(comp, true, "effect", "effect").map((r) => `${r.type}:${r.group}`)).toEqual(["track:main", "track:effect"]);
+    expect(buildRows(comp, true, "effect", "effect").map((r) => `${r.type}:${r.group}`)).toEqual(["track:main", "track:effect", "add:effect"]);
     const y = createProject("y");
     expect(buildRows(y.compositions[y.rootCompositionId], true).some((r) => r.group === "effect")).toBe(false);
   });

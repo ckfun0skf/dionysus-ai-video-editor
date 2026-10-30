@@ -385,13 +385,14 @@ Two more cases only warn: `atSec` at or past the end of `from`, and a cue with b
 
 **Board.** A shot's details list the cues that play under it, under **Audio**. Each row gives the kind, the asset (tap it to open it), the shots, the volume and the fades. An audio asset's details list its cues. Audio assets have their own production step and an upload button that accepts audio files.
 
-**Send to timeline.** A cue is placed when its `from` shot is sent:
+**Send to timeline.** A cue is placed when its `from` shot is sent, or on a later send once its `from` shot's clip is already on the timeline (P1-AUDIO): audio uploaded after the shots were sent still lands, and Send to timeline is enabled while such cues wait. Each cue is placed once; its clips remember the cue id, so sending again never duplicates it.
 
-- **Start and end.** It starts `atSec` into that shot's clip. It ends at the earliest of: the end of the `to` shot's clip (when that clip is sent in the same batch), `atSec + durationSec`, and the end of the audio.
+- **Start and end.** It starts `atSec` into that shot's clip. It ends at the earliest of: the end of the `to` shot's clip (when that clip is on the timeline or sent in the same batch), `atSec + durationSec`, and the end of the audio.
 - **Looping (V2-SB-135).** An `ambience` cue (unless `loop: false`) and a `music` cue with `loop: true` are not cut at the end of the audio: copies of the audio are placed back to back on one layer until the cue's end (the end of `from` when it has no `to` or `durationSec`); the last copy is trimmed. The fade-in is on the first copy and the fade-out on the last. All other kinds play once.
 - **Layers, volume and fades.** Each kind goes on its own audio layer: Voiceover, Music, Sound effects, Ambience, Stings or Dialogue. A new layer is added when the existing one is busy. Volume and fades are set on the clip, and you can change them on the timeline.
 - **Linking.** A cue that fits inside its first shot (typically a sound effect) is linked to that shot's clip, so it follows a version swap like other linked items. A cue across shots is placed and not linked.
-- **Skipped cues.** A cue whose asset has no version yet is skipped and counted. Send again after uploading it.
+- **Skipped cues.** A cue whose asset has no version yet is skipped and counted. Send again after uploading it; only the waiting cues are added.
+- **Short clips (P1-SHORT-AUDIO).** A clip shorter than its fades gets its fade-in and fade-out scaled down to fit, so very short sounds still play in preview and export.
 
 **Board edits.**
 

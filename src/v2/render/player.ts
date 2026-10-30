@@ -3,7 +3,7 @@
  * Video/audio elements are slaved to the timeline time with drift correction; audio is routed through a
  * per-element GainNode when an AudioContext is available.
  */
-import { activeAt, placeRect, type Placed } from "./frame";
+import { activeAt, placeRect, upcomingMedia, type Placed } from "./frame";
 import { TICKS_PER_SECOND, ticksToSeconds } from "../domain/time";
 import { compositionDuration, fadeAt, versionOf, type Placement, type Project } from "../domain/model";
 import type { BlobStore } from "../ports/storage";
@@ -19,6 +19,9 @@ import { readManifest, resolveHtmlParams, type HtmlClipManifest } from "../domai
 import type { ExportVideoFrames } from "./export/videoFrames";
 import { drawWithLook } from "./transitionDraw";
 import { withBlend } from "./blend";
+
+/** P1-SHORT-AUDIO: how far ahead of the playhead the player loads audio and video clips (2 s). */
+const PRELOAD_TICKS = 2 * TICKS_PER_SECOND;
 
 type MediaEl = HTMLVideoElement | HTMLAudioElement | HTMLImageElement;
 /** Frame problems found while rendering offline: HTML clip timeouts/invalid frames, video frames with no picture. */
@@ -316,6 +319,18 @@ export class Player {
     if (!fxDone) applyFx();
     const cue = subtitleAt(comp, this.time);
     if (ctx && canvas && cue) drawSubtitle(ctx, canvas.width, canvas.height, cue.text);
+    // P1-SHORT-AUDIO: load media of clips starting soon, so a clip shorter than the load time still plays.
+    if (this.playing && !this.offline) {
+      for (const { placement } of upcomingMedia(comp, this.time, PRELOAD_TICKS)) {
+        if (live.has(placement.id)) continue;
+        const v = versionOf(this.project, placement.source);
+        const src = v && this.url(v.media.blobKey);
+        if (!src) continue;
+        const el = this.element(placement.id, placement.clipType, src);
+        const at = ticksToSeconds(placement.sourceInTicks);
+        if ("pause" in el && el.paused && Math.abs(el.currentTime - at) > 0.02) el.currentTime = at;
+      }
+    }
     for (const [id, el] of this.pool) if (!live.has(id) && "pause" in el && !el.paused) el.pause();
     for (const id of [...this.pool.keys()]) if (!findAny(this.project, id)) this.release(id);
     for (const [id, h] of this.html) if (!findAny(this.project, id)) { h.host.dispose(); this.html.delete(id); }
