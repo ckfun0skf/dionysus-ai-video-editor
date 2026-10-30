@@ -2522,6 +2522,12 @@
           "title": "Typewriter cursor (blink / scramble decode), bundled sci-fi fonts (OFL), sci-fi caption preset",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P8-FONTS",
+          "title": "Bundle OFL fonts Chakra Petch, Oxanium, Saira (self-hosted, picker preview, project export)",
+          "status": "done",
+          "progress": 100
         }
       ]
     },

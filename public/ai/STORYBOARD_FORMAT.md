@@ -487,7 +487,7 @@ This is a snapshot only. **The live list always comes from the registry**, and t
 | effect (text styling) | `glow`, `neon`, `hollow`, `echo`; used in `style.effect` (V2-SB-127) |
 | audioFx | `pa-announcement`, `hall`, `room`, `telephone`, `radio`, `underwater`, `robot`; used in `audio[].fx` (P3B) |
 | blend | `normal`, `screen`, `add`, `lighten`, `multiply`, `darken`, `overlay`, `soft-light`; used in `layers[].blend` (V2-SB-128) |
-| fonts (curated ids, not presets) | `sans`, `serif`, `mono`, `impact`, `rounded`, `hand`, `script`, `condensed` (system fonts), plus the bundled sci-fi fonts **(new, P7)** `orbitron`, `share-tech-mono`, `audiowide`, `rajdhani`, `exo-2`: SIL OFL, self-hosted with the app (public/fonts/, licences next to them), never fetched from a third party, waited for before export and packed into project files (`fonts/`). |
+| fonts (curated ids, not presets) | `sans`, `serif`, `mono`, `impact`, `rounded`, `hand`, `script`, `condensed` (system fonts), plus the bundled sci-fi fonts **(new, P7)** `orbitron`, `share-tech-mono`, `audiowide`, `rajdhani`, `exo-2`, and **(new, P8)** `chakra-petch`, `oxanium`, `saira`: SIL OFL, self-hosted with the app (public/fonts/, licences next to them), never fetched from a third party, waited for before export and packed into project files (`fonts/`). |
 
 Planned as future registry entries, with no schema change needed: `grain`, `colour-grade`, `dip-to-white`, and wipe transitions.
 

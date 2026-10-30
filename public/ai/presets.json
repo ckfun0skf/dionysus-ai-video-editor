@@ -1770,6 +1770,18 @@
     {
       "id": "exo-2",
       "description": "Bundled modern techno sans, readable at small sizes: body text, lower thirds."
+    },
+    {
+      "id": "chakra-petch",
+      "description": "Bundled angular sans with 45° cut corners: military / game HUD titles, captions."
+    },
+    {
+      "id": "oxanium",
+      "description": "Bundled squared sci-fi display face with clipped corners: HUD readouts, titles."
+    },
+    {
+      "id": "saira",
+      "description": "Bundled wide squarish tech sans: bold titles, numbers, sports / military look."
     }
   ],
   "audioClip": {
