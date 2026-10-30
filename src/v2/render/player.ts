@@ -243,8 +243,12 @@ export class Player {
     const canvas = this.canvas;
     const ctx = canvas?.getContext("2d");
     if (canvas && ctx) { ctx.fillStyle = this.project.settings.background ?? "#000"; ctx.fillRect(0, 0, canvas.width, canvas.height); }
-    // V2-101: effect layers modify only the main-track render; applied once main is drawn, before overlays/text.
-    const fx = effectFrameAt(comp, this.time);
+    // V2-101 / P6-FX-SCOPE: "main" effects change the main-track render (applied once main is drawn, before
+    // overlays/text); "overlay" effects change each overlay clip on its own layer before it is composited; "all"
+    // effects change the finished composite (main + overlays + text) at the end, before burned-in subtitles.
+    const fx = effectFrameAt(comp, this.time, "main");
+    const fxOverlay = effectFrameAt(comp, this.time, "overlay");
+    const fxAll = effectFrameAt(comp, this.time, "all");
     const mainId = mainTrack(comp)?.id;
     let fxDone = !fx;
     const applyFx = () => { fxDone = true; if (fx && ctx && canvas) applyEffectFrame(ctx, canvas.width, canvas.height, fx); };
@@ -259,6 +263,15 @@ export class Player {
       }
       const version = versionOf(this.project, placement.source);
       if (!version || track.hidden) continue;
+      // Overlay-scope effects: draw the clip on a transparent layer, apply the effect there, then composite it.
+      const paint = (blend: string | undefined, fn: (dc: CanvasRenderingContext2D) => void) => {
+        if (!ctx || !canvas) return;
+        if (!fxOverlay || track.id === mainId) { withBlend(ctx, blend, () => fn(ctx)); return; }
+        const lc = this.overlayLayer(canvas.width, canvas.height);
+        if (!lc) { withBlend(ctx, blend, () => fn(ctx)); return; }
+        lc.save(); lc.setTransform(1, 0, 0, 1, 0, 0); lc.globalAlpha = 1; lc.globalCompositeOperation = "source-over"; lc.clearRect(0, 0, canvas.width, canvas.height); lc.restore();
+        try { fn(lc); } finally { applyEffectFrame(lc, canvas.width, canvas.height, fxOverlay, true); withBlend(ctx, blend, () => ctx.drawImage(lc.canvas, 0, 0)); }
+      };
       if (placement.clipType === "html") {
         live.add(placement.id);
         this.htmlOverrides.set(placement.id, placement.htmlParams);
@@ -271,7 +284,7 @@ export class Player {
           const r = placeRect(placement, f.width, f.height, canvas.width, canvas.height, this.time);
           this.boxes.set(placement.id, r);
           try { // a detached/closed bitmap must not throw out of draw() and stall preview or export
-            withBlend(ctx, placement.blend, () => drawWithLook(ctx, canvas.width, canvas.height, tfx, (g) => {
+            paint(placement.blend, (dc) => drawWithLook(dc, canvas.width, canvas.height, tfx, (g) => {
               g.save();
               try { g.globalAlpha = r.alpha * (mix ?? 1); g.translate(r.cx, r.cy); g.rotate(r.rot); drawKeyed(g, f, f.width, f.height, r.sx, r.sy, r.sw, r.sh, -r.w / 2, -r.h / 2, r.w, r.h, this.keyOf(placement)); } finally { g.restore(); }
             }));
@@ -285,7 +298,7 @@ export class Player {
         if (ctx && canvas) {
           const r = placeRect(placement, f.width, f.height, canvas.width, canvas.height, this.time);
           this.boxes.set(placement.id, r);
-          withBlend(ctx, placement.blend, () => drawWithLook(ctx, canvas.width, canvas.height, tfx, (g) => {
+          paint(placement.blend, (dc) => drawWithLook(dc, canvas.width, canvas.height, tfx, (g) => {
             g.save(); g.globalAlpha = r.alpha * (mix ?? 1); g.translate(r.cx, r.cy); g.rotate(r.rot);
             drawKeyed(g, f.image, f.width, f.height, r.sx, r.sy, r.sw, r.sh, -r.w / 2, -r.h / 2, r.w, r.h, this.keyOf(placement));
             g.restore();
@@ -334,7 +347,7 @@ export class Player {
         if (w && h && (!(el instanceof HTMLVideoElement) || el.readyState >= 2)) {
           const r = placeRect(placement, w, h, canvas.width, canvas.height, this.time);
           this.boxes.set(placement.id, r);
-          withBlend(ctx, placement.blend, () => drawWithLook(ctx, canvas.width, canvas.height, tfx, (g) => {
+          paint(placement.blend, (dc) => drawWithLook(dc, canvas.width, canvas.height, tfx, (g) => {
             g.save(); g.globalAlpha = r.alpha * (mix ?? 1); g.translate(r.cx, r.cy); g.rotate(r.rot);
             drawKeyed(g, el as CanvasImageSource, w, h, r.sx, r.sy, r.sw, r.sh, -r.w / 2, -r.h / 2, r.w, r.h, this.keyOf(placement));
             g.restore();
@@ -343,6 +356,7 @@ export class Player {
       }
     }
     if (!fxDone) applyFx();
+    if (fxAll && ctx && canvas) applyEffectFrame(ctx, canvas.width, canvas.height, fxAll);
     const cue = subtitleAt(comp, this.time);
     if (ctx && canvas && cue) drawSubtitle(ctx, canvas.width, canvas.height, cue.text);
     // P1-SHORT-AUDIO: load media of clips starting soon, so a clip shorter than the load time still plays.
@@ -361,6 +375,18 @@ export class Player {
     for (const id of [...this.pool.keys()]) if (!findAny(this.project, id)) this.release(id);
     for (const [id, h] of this.html) if (!findAny(this.project, id)) { h.host.dispose(); this.html.delete(id); }
     this.onTime?.(this.time, this.playing);
+  }
+
+  private overlayCtx?: CanvasRenderingContext2D | null;
+  /** Reused transparent layer for overlay-scope effects (P6-FX-SCOPE), sized to the output canvas. */
+  private overlayLayer(w: number, h: number): CanvasRenderingContext2D | null {
+    if (this.overlayCtx === undefined) {
+      const c = typeof document !== "undefined" ? document.createElement("canvas") : null;
+      this.overlayCtx = c ? c.getContext("2d") : null;
+    }
+    const g = this.overlayCtx;
+    if (g && (g.canvas.width !== w || g.canvas.height !== h)) { g.canvas.width = w; g.canvas.height = h; }
+    return g;
   }
 
   /** Resolve once the element presents a new frame after the seek that follows (or after `ms`). */

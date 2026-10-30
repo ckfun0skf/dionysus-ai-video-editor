@@ -61,7 +61,7 @@ export const EXAMPLE_STORYBOARD: StoryDoc = {
         { id: "s3-birds", type: "video", asset: "birds-green", startSec: 0.5, endSec: 3.5, box: { x: 0, y: 0, width: 1, height: 0.6 }, chromaKey: { color: "#00ff00", range: 0.4, spill: 0.6 } },
         { id: "s3-title", type: "text", text: "FIRST LIGHT", startSec: 1, endSec: 4, position: { x: 0.5, y: 0.25 }, textStyle: "title-card", anim: { in: "fade", out: "fade", durationSec: 0.6 } },
       ],
-      effects: [{ preset: "ken-burns", params: { zoom: 0.1 } }, { preset: "glow", params: { strength: 0.4 } }],
+      effects: [{ preset: "ken-burns", params: { zoom: 0.1 } }, { preset: "glow", params: { strength: 0.4 }, applyTo: "all" }],
     },
     { id: "s4", title: "End card", description: "Text-only card: the same text card asset with its own words.", durationSec: 2, prompt: "References:\nNo images: this shot is the \"text-card\" HTML clip.\n\nEnd card reading THE END", assets: ["text-card"], qa: ["Reads THE END", "Same look as the time caption in shot 1"], render: "html", clip: "text-card", params: { text: "THE END" } },
     {
@@ -181,7 +181,7 @@ const FORMAT_SECTION = () => `{
       "params"?: { "<key>": value },   // render "html" only: this shot's values for the clip asset's "params"
       "captions"?: boolean,      // true = show "dialogue" (the lines' text) as subtitles over the shot
       "layers"?: Layer[],        // drawn in list order (later = on top)
-      "effects"?: [ { "preset": "<video effect id>", "params"?: { ... }, "startSec"?: number, "endSec"?: number } ]   // default: whole shot
+      "effects"?: [ { "preset": "<video effect id>", "params"?: { ... }, "startSec"?: number, "endSec"?: number, "applyTo"?: "main" | "overlay" | "all" } ]   // default: whole shot, applyTo "main"
   } ],
   "connections"?: [ {
       "from": "<shot id>", "to": "<shot id>",     // adjacent shots only
@@ -316,6 +316,7 @@ export const RULE_LIST: readonly { key: string; text: string }[] = [
   { key: "series-reuse", text: `Series: when the prompt lists SERIES ASSETS, this video is an episode of a series and those characters, props, locations and styles already exist. Reuse them, never redefine them: in "assets" write only { "id": "<series id>", "seriesRef": "<series id>" } (keep the same id so shots read naturally), then use the id, or "<id>@<state>" for a listed state, in shots, references, layers and other assets' references as usual. Dionysus fills in the name, type, prompt, states, QA and the user's chosen uploads from the Series, and adds Series assets they are made from. Extra fields next to "seriesRef" are ignored (the Series definition wins). A "seriesRef" that isn't in the list is an error, so copy ids exactly.` },
   { key: "series-promote", text: `Series: give a new asset "series": true when later episodes will need it too (a recurring character, the show's main locations, its style). Leave one-off things out (a prop used once, last frames, keyframes). Without a SERIES ASSETS list the project may not be in a series: then define every asset in full; "series": true is still allowed and is applied when the user adds the project to a series.` },
   { key: "series-tools", text: `Series with Dionysus tools (WebMCP): call list_series_assets before adding characters, props, locations or styles; use_series_asset adds one linked to the board; promote_to_series marks a board asset for the Series. Editing a linked asset's definition changes it in every episode, so only do that when the user asks; otherwise ask them to detach it first (Asset → Detach from series).` },
+  { key: "effect-apply-to", text: `An effect's "applyTo" picks the picture it changes: "main" (the default) changes only the shot's own clip, under every layer, so titles and overlays stay fixed; "overlay" changes only the shot's image, video and html layers (e.g. shake a sticker or blur a screen insert, leaving the shot still); "all" changes the whole composited frame — the shot, its overlays and its text together — like moving the camera over the finished picture. Use "all" when an overlay frames or keys the shot, e.g. a TV-set overlay with a green-screen hole showing the shot: a push-in with "main" zooms only the picture inside the TV, with "all" the TV and the picture zoom together. Example: "effects": [ { "preset": "ken-burns", "params": { "zoom": 0.15 }, "applyTo": "all" } ]. Layers with "follow": "shot" (RULE 20) follow only "main" effects.` },
 ];
 export const RULES: readonly string[] = RULE_LIST.map((r) => r.text);
 /** 1-based public number of a rule, by key. */

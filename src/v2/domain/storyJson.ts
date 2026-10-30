@@ -169,7 +169,8 @@ export interface StoryVolumeKey { t: number; v: number }
 export interface StoryAudioFx { preset: string; amount?: number }
 export type StoryLayer = StoryTextLayer | StoryMediaLayer;
 /** A post effect over the shot (or part of it). `preset` is a videoEffect id, kept as written. */
-export interface StoryEffect { preset: string; params?: StoryParams; startSec?: number; endSec?: number }
+/** P6-FX-SCOPE: `applyTo` picks the picture the effect changes: "main" (default), "overlay" or "all" (the composited frame). */
+export interface StoryEffect { preset: string; params?: StoryParams; startSec?: number; endSec?: number; applyTo?: "main" | "overlay" | "all" }
 /** `preset` is a transition id, kept as written; `params.durationSec` defaults to 0.5 s. */
 export interface StoryTransition { preset: string; params?: StoryParams }
 /** One numbered image attached to a clip generation, with how to use it (V2-SB-120). */
@@ -946,7 +947,12 @@ export function validateStoryboard(raw: unknown, opts: StoryValidateOptions = {}
       if (str(e.preset) === undefined || !str(e.preset)) { err(`${ep}.preset`, `An effect needs "preset": one of ${list(listPresets("videoEffect").map((d) => d.id))}.`); return []; }
       const preset = presetRef("videoEffect", e.preset, `${ep}.preset`, "no effect")!;
       const params = paramsOf(e.params, `${ep}.params`, descriptorOf("videoEffect", preset));
-      return [{ preset, ...(params ? { params } : {}), ...timeRange(e, ep, dur, false) }];
+      let applyTo: StoryEffect["applyTo"];
+      if (e.applyTo !== undefined) {
+        if (e.applyTo === "main" || e.applyTo === "overlay" || e.applyTo === "all") applyTo = e.applyTo;
+        else warn(`${ep}.applyTo`, `Unknown applyTo ${JSON.stringify(e.applyTo)}; using "main". Use "main" (main track only), "overlay" (overlay layers only) or "all" (the whole frame).`);
+      }
+      return [{ preset, ...(params ? { params } : {}), ...timeRange(e, ep, dur, false), ...(applyTo ? { applyTo } : {}) }];
     });
   };
 
@@ -1116,7 +1122,7 @@ export function validateStoryboard(raw: unknown, opts: StoryValidateOptions = {}
     // V2-SB-126: a layer that follows the shot needs an effect that moves or zooms the picture while it is on screen.
     layers?.forEach((l, j) => {
       if (l.follow !== "shot") return;
-      const moving = (effects ?? []).some((e) => (e.startSec ?? 0) < l.endSec && (e.endSec ?? dur) > l.startSec && effectMoves(e.preset, e.params));
+      const moving = (effects ?? []).some((e) => (e.applyTo ?? "main") === "main" && (e.startSec ?? 0) < l.endSec && (e.endSec ?? dur) > l.startSec && effectMoves(e.preset, e.params));
       if (!moving) warn(`${path}.layers[${j}].follow`, `Layer "${l.id}" follows the shot, but no effect moves or zooms shot "${id}" while it is on screen, so it stays put.`);
     });
     const keyframe = keyframeOf(s.keyframe, `${path}.keyframe`, id, mode);

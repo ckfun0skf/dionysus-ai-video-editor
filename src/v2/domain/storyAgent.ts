@@ -207,7 +207,7 @@ export const STORY_TOOLS: StoryTool[] = [
   },
   {
     name: "update_shot", title: "Change a shot", readOnly: false,
-    description: "Change fields of a shot (title, description, durationSec, prompt, assets, references, dialogue, camera, qa, keyframe, render, clip, effects, …).",
+    description: "Change fields of a shot (title, description, durationSec, prompt, assets, references, dialogue, camera, qa, keyframe, render, clip, effects (each may set applyTo: main, overlay or all), …).",
     inputSchema: obj({ id: str("Shot id."), patch: patch("shot") }, ["id", "patch"]),
     edit: (raw, a) => shotEdit(raw, a, (s) => applyPatch(s, a.patch), (s) => `AI: edit shot ${String(s.id)}`),
   },

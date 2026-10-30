@@ -91,7 +91,7 @@ export interface Placement {
    */
   audioFx?: { preset: string; amount: number };
   /** Effect clips (`clipType: "effect"`): a `videoEffect` registry preset id and its params. Source is TEXT_SOURCE. */
-  effect?: { preset: string; params?: Record<string, number | string> };
+  effect?: { preset: string; params?: Record<string, number | string>; applyTo?: EffectScope };
   /**
    * HTML clips (V2-HTML-PARAMS): per-use values for the params the clip's manifest exposes (param key → value). Only
    * overrides are stored; ctx.params is the manifest defaults with these on top (see resolveHtmlParams). Keys the
@@ -112,6 +112,15 @@ export interface Placement {
 /** Placeholder source of text clips: they reference no asset. */
 export const TEXT_SOURCE: SourceRef = { kind: "assetVersion", assetId: "", versionId: "" };
 /** Clips that hold one picture (no source time): images and text. */
+/**
+ * P6-FX-SCOPE: which picture an effect clip changes. "main" = the main track only (the default, and what a missing
+ * field means, so older projects render unchanged); "overlay" = each overlay (video/image/HTML) track only; "all" = the
+ * whole composited frame (main + overlays + text), e.g. zooming a TV-frame overlay together with the video keyed into it.
+ */
+export type EffectScope = "main" | "overlay" | "all";
+export const EFFECT_SCOPES: EffectScope[] = ["main", "overlay", "all"];
+export const DEFAULT_EFFECT_SCOPE: EffectScope = "main";
+export const effectScopeOf = (e: { applyTo?: string } | undefined): EffectScope => (EFFECT_SCOPES as string[]).includes(e?.applyTo ?? "") ? (e!.applyTo as EffectScope) : DEFAULT_EFFECT_SCOPE;
 export const isStill = (p: Pick<Placement, "clipType">) => p.clipType === "image" || p.clipType === "text" || p.clipType === "effect";
 /** Default length of a new effect clip. */
 export const DEFAULT_EFFECT_TICKS = 3 * 120_000;

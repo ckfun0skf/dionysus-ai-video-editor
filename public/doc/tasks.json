@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "project": "Dionysus",
-  "updatedAt": "2026-10-29",
+  "updatedAt": "2026-10-23",
   "sourceOfTruth": "public/doc/tasks.json on main (see docs/v2/MODULE_DESIGN.md §14)",
   "statusDefinitions": {
     "done": "Implementation exists and has evidence; release/browser validation may still be pending.",
@@ -2508,6 +2508,12 @@
         {
           "id": "V2-CODE-EDITOR-44",
           "title": "Code Editor: 44px buttons on desktop too (live check)",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "P6-FX-SCOPE",
+          "title": "Effect clips: Apply to main / overlay / all (preview + export, inspector control, storyboard applyTo, rule 44)",
           "status": "done",
           "progress": 100
         }
