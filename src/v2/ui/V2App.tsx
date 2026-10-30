@@ -145,6 +145,12 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const [, setFrame] = useState(0); // bumps on every drawn frame so on-canvas handles track player.boxes
   const thumbs = useThumbs(project, storage.blobs);
   const { peaks, strips } = useMediaPreviews(project, storage.blobs);
+  /** P2C (item 7): the selected version's file of a project asset, for the picker's preview. */
+  const loadAssetBlob = (assetId: string) => {
+    const a = engine.getState().project.assets[assetId];
+    const v = a && (a.versions.find((x) => x.id === a.selectedVersionId) ?? a.versions[a.versions.length - 1]);
+    return v ? storage.blobs.get(v.media.blobKey) : Promise.resolve(undefined);
+  };
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(undefined), 3000); return () => clearTimeout(t); }, [toast]);
   const playerRef = useRef<Player>();
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -905,7 +911,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
             {(activeMenu !== "root" || expanded) && <button className="v2-tool v2-tool-back" aria-label={activeMenu === "root" && expanded ? `Collapse ${ops.GROUP_LABEL[expanded]}` : "Back"} title={activeMenu === "root" && expanded ? `Collapse ${ops.GROUP_LABEL[expanded]}` : "Back"} onClick={back}>‹</button>}
             {mobileTools[activeMenu]}
           </nav>
-          {picker && <MediaPicker media={projectMedia} title={picker === "overlay" ? "Add overlay" : picker === "audio" ? "Add audio" : picker === "stickers" ? "Add stickers" : "Add media"} only={picker === "audio" ? "audio" : undefined} initialTab={picker === "stickers" ? "stickers" : undefined} onClose={() => setPicker(null)} onAdd={(p) => void addPicked(p, picker === "overlay" || picker === "stickers" ? "overlay" : "main")} onCreateCode={picker === "audio" ? undefined : () => createCode(picker === "overlay" ? "overlay" : "main")} />}
+          {picker && <MediaPicker media={projectMedia} title={picker === "overlay" ? "Add overlay" : picker === "audio" ? "Add audio" : picker === "stickers" ? "Add stickers" : "Add media"} only={picker === "audio" ? "audio" : undefined} initialTab={picker === "stickers" ? "stickers" : undefined} onClose={() => setPicker(null)} onAdd={(p) => void addPicked(p, picker === "overlay" || picker === "stickers" ? "overlay" : "main")} onCreateCode={picker === "audio" ? undefined : () => createCode(picker === "overlay" ? "overlay" : "main")} loadMedia={loadAssetBlob} />}
           {sheet && <Sheet label="Media" head={false} onClose={() => setSheet(false)}>{browser}</Sheet>}
           {!sheet && <div hidden>{browser}</div>}
           {cue && <div className="v2-msub"><SubtitleEditor engine={engine} sub={cue} onDelete={delCue} /></div>}

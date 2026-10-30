@@ -842,3 +842,23 @@ select.v2-tp-field { -webkit-appearance: none; appearance: none; padding-right: 
 .v2-add-track:active { transform: scale(0.97); }
 .v2-track-header.v2-add-row, .v2-lane.v2-add-lane { height: 52px; }
 .v2-timeline.is-centered .v2-lane.v2-add-lane { height: 56px; }
+
+/* P2C (item 7): playable asset previews in pickers. */
+.v2-pick-cell { position: relative; }
+.v2-pick-cell > .v2-pick-tile { width: 100%; }
+.v2-pick-peek { position: absolute; top: 4px; left: 4px; width: 44px; height: 44px; border-radius: 22px; border: 0; background: rgba(0,0,0,.6); color: #fff; display: grid; place-items: center; cursor: pointer; z-index: 1; }
+.v2-pick-peek:focus-visible { outline: 2px solid var(--accent, #4fa3ff); }
+.v2-pick-preview { position: absolute; inset: 0; z-index: 2; background: var(--bg, #0b0b0d); display: flex; flex-direction: column; gap: 12px; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); overflow: auto; }
+.v2-pick-preview-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.v2-pick-preview-head .v2-icon-btn { min-width: 44px; min-height: 44px; }
+.v2-pick-preview-foot { display: flex; gap: 8px; justify-content: flex-end; margin-top: auto; }
+.v2-pick-preview-foot .v2-btn { min-height: 44px; padding: 0 18px; }
+.v2-asset-preview { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+.v2-asset-preview video, .v2-asset-preview img { width: 100%; max-height: 52vh; object-fit: contain; background: #000; border-radius: 8px; }
+.v2-asset-preview audio { width: 100%; min-height: 44px; }
+.v2-asset-preview.is-loading { min-height: 120px; display: grid; place-items: center; }
+.v2-asset-preview .v2-ce-preview { width: 100%; }
+.v2-asset-preview .v2-ce-stage { --ce-stage-max: 46vh; margin: 0 auto; }
+.v2-asset-preview .v2-ce-icon { min-width: 44px; min-height: 44px; }
+.v2-asset-preview .v2-ce-transport input[type=range] { min-height: 44px; }
+.v2-wavestrip { display: block; width: 100%; background: rgba(255,255,255,.05); border-radius: 6px; }

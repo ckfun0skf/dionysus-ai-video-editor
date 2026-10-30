@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { AssetPreview } from "./AssetPreview";
 import { Ic } from "./Icon";
 import { HTML_IMPORT_ACCEPT } from "./htmlPackage";
 import { stickers, stickerUrl, type Sticker } from "./libraryItems";
@@ -8,7 +9,7 @@ export type Picked = { files: File[]; stickers: Sticker[]; assets?: string[] };
 export type PickerTab = "video" | "photo" | "code" | "stickers" | "audio";
 type Kind = "video" | "image" | "html" | "audio";
 /** A media asset already imported into this project (blob persists in IndexedDB), for re-adding without re-upload. */
-export type ProjectMedia = { id: string; name: string; kind: Kind; thumb?: string; durationTicks?: number; createdAt: string };
+export type ProjectMedia = { id: string; name: string; kind: Kind; thumb?: string; durationTicks?: number; createdAt: string; width?: number; height?: number };
 
 const TAB: Record<PickerTab, { label: string; icon: string; kind?: Kind; accept?: string; upload?: string; empty?: string }> = {
   video: { label: "Video", icon: "▭", kind: "video", accept: "video/*", upload: "Videos from this device", empty: "No videos in this project yet." },
@@ -32,11 +33,14 @@ const fmtDur = (ticks?: number) => { if (!ticks) return ""; const s = Math.round
  * has Upload (from the device) and the project's own media of that kind (thumbnails, durations); Code also has Create
  * (a new clip in the Code Editor). Multi-select across tabs, numbered in pick order, then Add.
  */
-export function MediaPicker({ title, onAdd, onClose, media = [], only, initialTab, onCreateCode }: {
+export function MediaPicker({ title, onAdd, onClose, media = [], only, initialTab, onCreateCode, loadMedia }: {
   title: string; onAdd: (p: Picked) => void; onClose: () => void; media?: ProjectMedia[];
   /** "audio": the audio tab only. */ only?: "audio"; initialTab?: PickerTab;
   /** Code → Create: open the Code Editor on a new clip (the picker closes). */ onCreateCode?: () => void;
+  /** P2C (item 7): the file of a project asset, for its playable preview (no preview button without it). */
+  loadMedia?: (assetId: string) => Promise<Blob | undefined>;
 }) {
+  const [preview, setPreview] = useState<ProjectMedia>();
   const tabs: PickerTab[] = only === "audio" ? ["audio"] : ["video", "photo", "code", "stickers"];
   const [tab, setTab] = useState<PickerTab>(initialTab && tabs.includes(initialTab) ? initialTab : tabs[0]);
   const recent = useMemo(() => [...media].sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [media]);
@@ -45,7 +49,7 @@ export function MediaPicker({ title, onAdd, onClose, media = [], only, initialTa
   const input = useRef<HTMLInputElement>(null);
   const urls = useMemo(() => files.map((f) => (/^(image|video)\//.test(f.type) ? URL.createObjectURL(f) : "")), [files]);
   useEffect(() => () => urls.forEach((u) => u && URL.revokeObjectURL(u)), [urls]);
-  useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); }; addEventListener("keydown", k); return () => removeEventListener("keydown", k); }, [onClose]);
+  useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === "Escape") { if (preview) setPreview(undefined); else onClose(); } }; addEventListener("keydown", k); return () => removeEventListener("keydown", k); }, [onClose, preview]);
   const key = (f: File, i: number) => `f${i}:${f.name}`;
   const toggle = (k: string) => setPicked((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n; });
   const order = [...picked];
@@ -67,13 +71,16 @@ export function MediaPicker({ title, onAdd, onClose, media = [], only, initialTa
   const newFiles = kind ? files.map((f, i) => ({ f, i })).filter(({ f }) => (fileKind(f) ?? (kind === "html" ? "html" : undefined)) === kind) : [];
   const mine = kind ? recent.filter((m) => m.kind === kind) : [];
   const tile = (m: ProjectMedia) => { const k = `a:${m.id}`; return (
-    <button key={k} className={`v2-pick-tile is-asset kind-${m.kind} ${picked.has(k) ? "is-on" : ""}`} aria-pressed={picked.has(k)} title={m.name} aria-label={m.name} onClick={() => toggle(k)}>
+    <div key={k} className="v2-pick-cell">
+    <button className={`v2-pick-tile is-asset kind-${m.kind} ${picked.has(k) ? "is-on" : ""}`} aria-pressed={picked.has(k)} title={m.name} aria-label={m.name} onClick={() => toggle(k)}>
       {m.thumb ? <img src={m.thumb} alt="" draggable={false} /> : <b aria-hidden><Ic g={TAB[tab].icon} size={26} /></b>}
       {m.kind !== "image" && m.durationTicks ? <i className="v2-pick-dur">{fmtDur(m.durationTicks)}</i> : null}
       {m.kind === "html" && <i className="v2-pick-kind" aria-hidden><Ic g="</>" size={12} /></i>}
       <span className="v2-pick-name">{m.name}</span>
       {badge(k)}
     </button>
+    {loadMedia && <button className="v2-pick-peek" aria-label={`Preview ${m.name}`} title="Preview" onClick={() => setPreview(m)}><Ic g={m.kind === "image" ? "eye" : "▶"} size={16} /></button>}
+    </div>
   ); };
   return (
     <div className="v2-picker" role="dialog" aria-label={title}>
@@ -139,6 +146,16 @@ export function MediaPicker({ title, onAdd, onClose, media = [], only, initialTa
           </>
         )}
       </div>
+      {preview && loadMedia && (
+        <div className="v2-pick-preview" role="dialog" aria-label={`Preview of ${preview.name}`}>
+          <div className="v2-pick-preview-head"><b>{preview.name}</b><button className="v2-icon-btn" aria-label="Close preview" onClick={() => setPreview(undefined)}><Ic g="✕" /></button></div>
+          <AssetPreview kind={preview.kind} name={preview.name} cacheKey={preview.id} load={() => loadMedia(preview.id)} durationSec={preview.durationTicks ? preview.durationTicks / 120_000 : undefined} width={preview.width} height={preview.height} />
+          <div className="v2-pick-preview-foot">
+            <button className="v2-btn" onClick={() => setPreview(undefined)}>Back</button>
+            <button className="v2-btn primary" aria-pressed={picked.has(`a:${preview.id}`)} onClick={() => { toggle(`a:${preview.id}`); setPreview(undefined); }}>{picked.has(`a:${preview.id}`) ? "Unselect" : "Select"}</button>
+          </div>
+        </div>
+      )}
       <footer className="v2-picker-foot">
         <span className="v2-muted">{count ? `${count} selected` : "Select items to add"}</span>
         <button className="v2-btn primary" disabled={!count} onClick={add}>Add{count ? ` (${count})` : ""}</button>
