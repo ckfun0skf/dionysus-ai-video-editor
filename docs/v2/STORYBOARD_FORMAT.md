@@ -536,6 +536,27 @@ AI video models often render fixed lengths (5, 8 or 10 s), so an uploaded shot c
 
 `npm run validate:storyboard -- <file.json>` runs the importer (`parseStoryboard`, the same code as *Import JSON*) on a file and prints `ok` or the errors, then the warnings, each with its path, and a summary: shots, total seconds, assets (by type), layers, effects, transitions and audio cues. It exits with code 1 when the file has errors. The script (`scripts/validate-storyboard.mjs`) loads the importer through Vite's module runner, because the preset registry discovers its modules with `import.meta.glob`, which plain `node` or `tsx` can't run.
 
+### 4.6 Export and re-import (P2A)
+
+**Export.** *Export* (desktop header; the ⋯ menu on phones) writes the current board, with every board edit, as `dionysus.storyboard/1` JSON: **Download .json** saves `<title>.storyboard.json`, **Copy** puts the same text on the clipboard. Asset states, keyframes, a still or HTML shot's `clip`, references and dialogue are written back in their source form, so the export **round-trips**: importing it gives the same board (ids, order, prompts, checks, connections, audio). Uploads, version picks and trims are not part of the format; they stay in the project.
+
+**Re-import (merge by id).** On a board that already exists, *Import revised JSON…* validates the new JSON as usual and then shows what it would do, matched by `id`:
+
+- **New:** assets and shots whose id is not on the board are added.
+- **Changed:** existing ids whose fields differ, listed with the changed fields (prompt, references, checks, length, layers …). Title, settings, shot order, connections and audio changes are listed under "Also updated".
+- **Removed:** ids that are missing from the new JSON. Applying asks to confirm first; their uploaded versions stay in the media library.
+
+**Apply changes** keeps, for every id that still exists, its uploads (versions), picked version, trims, production step order, timeline links and checks (a check whose text is unchanged keeps its id and result). **Replace instead…** (behind a confirm) discards everything and imports the JSON as a new board. Either is one undo step. Because matching is by id, the AI must keep ids stable (RULE 30).
+
+### 4.7 Send modes (P2A)
+
+The first *Send to timeline* places every ready shot and audio cue. Once clips from the board are on the timeline, *Send* asks how to send:
+
+- **Update timeline** applies only what changed since the last send: ready shots that are not placed yet are appended, clips whose picked version changed are swapped in place (keeping position, trim and effects), shots whose text layers, effects or params changed since they were sent are refreshed, edited audio cues are re-placed and new cues are added. Clips you placed or edited by hand are not touched. The dialog summarises what will happen ("up to date" when nothing changed).
+- **Replace timeline…** (danger, behind a confirm) clears the timeline and rebuilds it from the board in story order. Undo brings the previous timeline back.
+
+Both buttons, and every button in the re-import and export panels, are at least 44 px tall.
+
 ## 5. Planner prompt (updated)
 
 **Published guide (V2-SB-114).** The planner material is generated from the registry by `src/v2/domain/storyPrompt.ts` and `src/v2/domain/aiGuide.ts`, and published with the app. Paths are relative to the deployment's site URL (`DIONYSUS_SITE_URL`, see `docs/v2/DEPLOYMENT.md` in the repository):
@@ -601,6 +622,7 @@ Image 2 (Keyframe · The climb): reference only, not a frame: overall look; same
 Image 1 (Hill road): the base image to edit: keep the road, hill and valley exactly; change only the light.
 
 The same winding hill road as the sun rises …", "references": [{ "asset": "hill", "role": "start-frame", "note": "the same road and hill; only the light changes" }], "qa": ["Same road, hill and valley as the base image"] }], used by shot s3 as "assets": ["hill@sunrise", "s1.keyframe"]. In "References:" blocks a state is named "<asset name> · <state name>", e.g. "Image 1 (Hill road · Sunrise)".
+30. When the user sends back a storyboard to revise (exported from the app, format "dionysus.storyboard/1"), return the WHOLE revised storyboard JSON and keep every id stable: an asset, state or shot that stays keeps its exact "id" even when its name, prompt or place in the order changes, new things get new ids, and an id is never reused for something different. The user re-imports it and the app matches it to the board by id: everything with an unchanged id keeps its uploads, picked versions, trims and checks, and anything whose id is missing is removed after the user confirms. Renaming an id therefore throws its work away; only change an id when the thing is really replaced.
 ```
 
 ## 6. Decisions, open questions and future work

@@ -163,6 +163,8 @@
 
 /* Hover styles only where a pointer can hover: iOS keeps :hover after a tap (V2-SB-R09). */
 @media (hover: hover) {
+  .v2-sb-mode:hover { border-color: var(--accent); }
+  .v2-sb-mode.danger:hover { border-color: #f87171; }
   .v2-sb-shotwrap:hover .v2-sb-grip, .v2-prod-item:hover .v2-prod-grip { opacity: 1; }
   button.v2-sb-conn:hover { background: #ffffff08; color: var(--text); }
   .v2-sb-addshot:hover { border-color: var(--accent); color: var(--text); }
@@ -363,3 +365,25 @@ button.v2-sb-conn:focus-visible { outline: 2px solid var(--accent); outline-offs
 }
 .v2-sb-stateform { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; align-items: center; }
 .v2-sb-stateform .v2-sb-model { flex: 1 1 180px; min-width: 0; }
+
+/* P2A: re-import preview, export and Send modes. */
+.v2-sb-merge { align-self: stretch; display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 8px; }
+.v2-sb-diff h5 { margin: 0 0 2px; display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.v2-sb-diff ul { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.v2-sb-diff code { font-size: 11px; color: var(--muted); }
+.v2-sb-diff-kind { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.v2-sb-diff-added h5 { color: #4ade80; }
+.v2-sb-diff-changed h5 { color: #60a5fa; }
+.v2-sb-diff-removed h5 { color: #f87171; }
+.v2-sb-sendmodes { width: min(420px, 92vw); display: flex; flex-direction: column; gap: 10px; }
+.v2-sb-sendmodes h4 { margin: 0; }
+.v2-sb-mode { display: flex; align-items: flex-start; gap: 10px; min-height: 64px; padding: 10px 12px; text-align: left; border-radius: 10px; border: 1px solid var(--line); background: var(--panel-2, rgba(255,255,255,.04)); color: var(--text); cursor: pointer; font: inherit; }
+.v2-sb-mode span { display: flex; flex-direction: column; gap: 2px; }
+.v2-sb-mode em { font-style: normal; font-size: 12px; color: var(--muted); }
+.v2-sb-mode.primary { border-color: var(--accent); }
+.v2-sb-mode.danger b { color: #f87171; }
+.v2-sb-mode:focus-visible { border-color: var(--accent); outline: none; }
+.v2-sb-mode.danger:focus-visible { border-color: #f87171; }
+/* P2A: 44px targets on every viewport for the merge, export and send-mode actions. */
+.v2-sb-merge-actions .v2-btn, .v2-sb-export-actions .v2-btn, .v2-sb-sendmodes .v2-btn, .v2-sb-mode,
+.v2-app.is-desktop .v2-sb-merge-actions .v2-btn, .v2-app.is-desktop .v2-sb-export-actions .v2-btn, .v2-app.is-desktop .v2-sb-sendmodes .v2-btn { min-height: 44px; }

@@ -293,6 +293,7 @@ Image 2 (Keyframe · The climb): reference only, not a frame: overall look; same
 Image 1 (Hill road): the base image to edit: keep the road, hill and valley exactly; change only the light.
 
 The same winding hill road as the sun rises …", "references": [{ "asset": "hill", "role": "start-frame", "note": "the same road and hill; only the light changes" }], "qa": ["Same road, hill and valley as the base image"] }], used by shot s3 as "assets": ["hill@sunrise", "s1.keyframe"]. In "References:" blocks a state is named "&lt;asset name&gt; · &lt;state name&gt;", e.g. "Image 1 (Hill road · Sunrise)".
+30. When the user sends back a storyboard to revise (exported from the app, format "dionysus.storyboard/1"), return the WHOLE revised storyboard JSON and keep every id stable: an asset, state or shot that stays keeps its exact "id" even when its name, prompt or place in the order changes, new things get new ids, and an id is never reused for something different. The user re-imports it and the app matches it to the board by id: everything with an unchanged id keeps its uploads, picked versions, trims and checks, and anything whose id is missing is removed after the user confirms. Renaming an id therefore throws its work away; only change an id when the thing is really replaced.
 
 ## EXAMPLE
 ```json

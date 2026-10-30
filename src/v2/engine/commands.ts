@@ -2,6 +2,7 @@
 import type { Command } from "./engine";
 import { DEFAULT_EFFECT_TICKS, DEFAULT_IMAGE_TICKS, findPlacement, newId, sourceInMax, trackKindFor, type Asset, type AssetVersion, type Composition, type Placement, type Project, type TrackKind, transformOf } from "../domain/model";
 import * as ops from "../domain/ops";
+import { mergeStoryboard } from "../domain/storyRoundtrip";
 import * as layers from "../domain/layerStyle";
 import * as cueOps from "../domain/subtitleLayer";
 import * as subs from "../domain/subtitles";
@@ -13,7 +14,7 @@ import * as board from "../domain/storyboard";
 import * as storyEdit from "../domain/storyEdit";
 import * as storyRefs from "../domain/storyRefs";
 import * as storySteps from "../domain/storySteps";
-import { sendStory } from "../domain/storySend";
+import { replaceStory, sendStory, updateStory } from "../domain/storySend";
 import type { StoryDoc } from "../domain/storyJson";
 import { DEFAULT_TEXT, DEFAULT_TEXT_TICKS, textOf, type TextData } from "../domain/text";
 
@@ -299,6 +300,10 @@ export const sendStoryToTimeline = (): Command => ({
   label: "Send to timeline",
   apply: (p) => sendStory(p).project,
 });
+/** P2A: Send in Update mode: only what changed since the last send (see storySend.updateStory). */
+export const updateStoryTimeline = (): Command => ({ label: "Update timeline", apply: (p) => updateStory(p).project });
+/** P2A: Send in Replace mode: clear the timeline and rebuild it from the board. */
+export const replaceStoryTimeline = (): Command => ({ label: "Replace timeline", apply: (p) => replaceStory(p).project });
 
 export const reorderTrack = (trackId: string, toIndex: number): Command => ({
   label: "Reorder layer",
@@ -351,6 +356,8 @@ export const replaceInLayer = (trackId: string, find: string, repl: string, matc
 
 /** Storyboard (V2-CUT-01): wrappers so storyboard edits are undoable like timeline edits. */
 export const createStoryboard = (doc: StoryDoc): Command => ({ label: "Create storyboard", apply: (p) => board.setStoryboard(p, board.storyboardFromDoc(doc)) });
+/** P2A: re-import a revised document into the current storyboard by id (see storyRoundtrip.mergeStoryboard). */
+export const mergeStoryboardDoc = (doc: StoryDoc): Command => ({ label: "Update storyboard", apply: (p) => board.setStoryboard(p, mergeStoryboard(p, doc)) });
 export const removeStoryboard = (): Command => ({ label: "Remove storyboard", apply: (p) => board.setStoryboard(p, undefined) });
 export const addStoryVersion = (...args: Parameters<typeof board.addStoryVersion> extends [unknown, ...infer R] ? R : never): Command => ({ label: "Upload version", apply: (p) => board.addStoryVersion(p, ...args) });
 export const selectStoryVersion = (assetId: string, versionId: string): Command => ({ label: "Choose version", apply: (p) => board.selectStoryVersion(p, assetId, versionId) });
