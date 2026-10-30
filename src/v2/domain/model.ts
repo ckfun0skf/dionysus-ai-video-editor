@@ -77,6 +77,17 @@ export interface Placement {
    * with the layers under it. Absent = normal.
    */
   blend?: string;
+  /**
+   * P3B-12: chroma key (green screen) for a visual media clip (video, image, html): pixels close to `color` turn
+   * transparent. `range` 0–1 is the tolerance, `spill` 0–1 removes the key colour's tint from the edges. `off` keeps
+   * the settings but draws the clip unkeyed. Rendered by render/chromaKey in preview and export alike.
+   */
+  chromaKey?: ChromaKey;
+  /**
+   * P3B-11: an `audioFx` registry preset (echo, telephone, radio…) on this clip's sound, `amount` 0–1 its intensity.
+   * Built by render/audioFx into the same Web Audio graph in preview and export.
+   */
+  audioFx?: { preset: string; amount: number };
   /** Effect clips (`clipType: "effect"`): a `videoEffect` registry preset id and its params. Source is TEXT_SOURCE. */
   effect?: { preset: string; params?: Record<string, number | string> };
   /**
@@ -103,7 +114,19 @@ export const isStill = (p: Pick<Placement, "clipType">) => p.clipType === "image
 /** Default length of a new effect clip. */
 export const DEFAULT_EFFECT_TICKS = 3 * 120_000;
 
-export type KeyframeProp = "x" | "y" | "scale" | "rotation" | "opacity";
+/** `volume` (P3B-11): the volume envelope, a gain multiplier 0–2 on top of `volume` and the fades (audio and video clips). */
+export type KeyframeProp = "x" | "y" | "scale" | "rotation" | "opacity" | "volume";
+/** The keyed transform properties (everything but the volume envelope). */
+export type TransformKeyProp = Exclude<KeyframeProp, "volume">;
+export interface ChromaKey { color: string; range: number; spill: number; off?: boolean }
+/** Defaults of a new chroma key: pure green, medium tolerance, some spill suppression. */
+export const CHROMA_DEFAULT: ChromaKey = { color: "#00ff00", range: 0.4, spill: 0.5 };
+/** Clips a chroma key can apply to. */
+export const canChromaKey = (p: Pick<Placement, "clipType">) => p.clipType === "video" || p.clipType === "image" || p.clipType === "html";
+/** Clips with sound a volume curve and audio effects can apply to. */
+export const hasSound = (p: Pick<Placement, "clipType">) => p.clipType === "audio" || p.clipType === "video";
+/** 0..2 volume-envelope multiplier at absolute time `t` (1 without keys). */
+export function volumeKeyAt(p: Placement, t: number): number { return evalKeys(p.keyframes?.volume, t - p.startTicks) ?? 1; }
 export interface Keyframe { t: number; v: number }
 
 /** Piecewise-linear value of sorted keys at offset `t`; undefined when there are no keys. */

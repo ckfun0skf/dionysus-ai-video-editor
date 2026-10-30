@@ -12,11 +12,11 @@
  * Every layer, caption and effect clip is linked to the shot clip (see storyLinks). Unknown preset ids fall back:
  * transition → cut, textStyle → plain, text animations and effects → none.
  */
-import { DEFAULT_IMAGE_TICKS, newId, TEXT_SOURCE, type Asset, type AssetVersion, type Composition, type Placement, type Project, type Track, type Transform } from "./model";
+import { CHROMA_DEFAULT, DEFAULT_IMAGE_TICKS, newId, TEXT_SOURCE, type Asset, type AssetVersion, type Composition, type Placement, type Project, type Track, type Transform } from "./model";
 import { addTrack, groupOf, insertPlacement, isFree, mainTrack } from "./ops";
 import { SUBTITLE_STYLE } from "./layerStyle";
 import { getPreset, parsePresetRef, type PresetKind } from "../registry";
-import { AUDIO_DEFAULTS, audioLoops, DEFAULT_TEXT_SIZE, DEFAULT_TRANSITION_SEC, type AudioKind, TEXT_LINE_HEIGHT, type StoryBox, type StoryLayer, type StoryMediaLayer, type StoryTextLayer, type StoryTextStyle } from "./storyJson";
+import { AUDIO_DEFAULTS, audioLoops, DEFAULT_TEXT_SIZE, DEFAULT_TRANSITION_SEC, type AudioKind, type StoryAudio, TEXT_LINE_HEIGHT, type StoryBox, type StoryLayer, type StoryMediaLayer, type StoryTextLayer, type StoryTextStyle } from "./storyJson";
 import { pinOf, sendPlan, syncPlacements, versionSpan, type Shot, type Storyboard } from "./storyboard";
 import { clampToClip, placeOnFreeTrack } from "./storyLinks";
 import { textOf, textStyleData, textStyleFields, type TextData } from "./text";
@@ -127,7 +127,20 @@ function mediaLayer(p: Project, b: Storyboard, shot: Shot, l: StoryMediaLayer, s
     source: { kind: "assetVersion", assetId: a.id, versionId: v.id }, clipType: a.kind, volume: 1,
     transform: { ...boxTransform(l.box, mw, mh, p.settings.width, p.settings.height) } as Transform, storyLink: { anchor },
     ...(a.kind === "html" && l.params && Object.keys(l.params).length ? { htmlParams: { ...l.params } } : {}),
+    ...(l.chromaKey ? { chromaKey: { ...CHROMA_DEFAULT, ...l.chromaKey } } : {}),
   };
+}
+
+/**
+ * P3B-11: a cue's volume curve (keys in cue seconds → clip-offset ticks; a looped copy `offset` ticks into the cue
+ * keeps the curve's timing) and its audio effect (unknown preset ids are left out; the id stays in the storyboard).
+ */
+function cueSound(cue: StoryAudio, offset: number): Pick<Placement, "keyframes" | "audioFx"> {
+  const out: Pick<Placement, "keyframes" | "audioFx"> = {};
+  if (cue.volumeKeys?.length) out.keyframes = { volume: cue.volumeKeys.map((k) => ({ t: secondsToTicks(k.t) - offset, v: k.v })) };
+  const preset = cue.fx && presetId("audioFx", cue.fx.preset);
+  if (preset) out.audioFx = { preset, amount: cue.fx!.amount ?? 1 };
+  return out;
 }
 
 /** V2-SB-128: the layer's blend mode as a placement field (left out for normal or an unknown id). */
@@ -236,6 +249,7 @@ function addAudio(p: Project, b: Storyboard, comp: Composition, sent: { shot: Sh
         id: newId("plc"), startTicks: x.at, durationTicks: x.dur, sourceInTicks: span?.inTicks ?? 0, source: { kind: "assetVersion", assetId: a.id, versionId: v.id },
         clipType: "audio", volume: cue.volume ?? d.volume, ...(fadeIn ? { fadeInTicks: fadeIn } : {}), ...(fadeOut ? { fadeOutTicks: fadeOut } : {}),
         storyCue: cue.id, ...(inside ? { storyLink: { anchor: first.id } } : {}),
+        ...cueSound(cue, x.at - start),
       };
       // Keep the copies of a loop on one layer.
       const same = track && c.tracks.find((t) => t.id === track && isFree(t, pl.startTicks, pl.durationTicks));

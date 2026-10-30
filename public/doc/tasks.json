@@ -2688,6 +2688,30 @@
           "title": "Match frames: in-browser tail/head similarity search, top candidates, pick or auto-apply",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P3B-12",
+          "title": "Chroma key for image, video and HTML overlays (eyedropper, Range, Spill; WebGL/canvas path shared by preview and export)",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "P3B-11",
+          "title": "Audio volume curve: keyframe points over the waveform, drag/add/remove, fade handles",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "P3B-11b",
+          "title": "Audio FX presets (PA announcement, Hall, Room, Telephone, Radio, Underwater, Robot) with intensity; Web Audio preview matches export",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "P3B-AI",
+          "title": "Storyboard spec: layer chromaKey, cue volumeKeys and fx; guide rules 36-37, examples, presets, tests",
+          "status": "done",
+          "progress": 100
         }
       ]
     }

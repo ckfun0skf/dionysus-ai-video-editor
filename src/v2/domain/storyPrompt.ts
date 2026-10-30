@@ -18,7 +18,8 @@ export const FORMAT_REVISION = "1.1";
  * planner usually needs: reusable assets, reference roles, last-frame continuity, genDurationSec, a text layer with a
  * style and animation, a screen-blend video overlay cut from a longer clip (asset genDurationSec + layer inSec,
  * V2-SB-133), video effects and a transition; V2-SB-135: a keyframe reused by another shot ("s1.keyframe"), an
- * ambience bed, a sting and an off-screen dialogue line; V2-SB-136: an asset state ("hill@sunrise"). It must import with no warnings (aiGuide.test.ts).
+ * ambience bed, a sting and an off-screen dialogue line; V2-SB-136: an asset state ("hill@sunrise"); P3B: a chroma-keyed
+ * green-screen overlay, a volume curve that dips the ambience under the title, and a reverb on the sting. It must import with no warnings (aiGuide.test.ts).
  */
 export const EXAMPLE_STORYBOARD: StoryDoc = {
   format: STORYBOARD_FORMAT,
@@ -41,6 +42,7 @@ export const EXAMPLE_STORYBOARD: StoryDoc = {
       },
     },
     { id: "sun-flare", name: "Sun flare", type: "video", aspect: "16:9", genDurationSec: 6, prompt: "Warm golden lens flare and soft light leaks drifting slowly across a pure black background, no objects, no text, natural cinematic realism", references: [], source: { type: "generate" }, qa: ["Background is pure black", "Flare drifts slowly, no hard cuts"] },
+    { id: "birds-green", name: "Birds (green screen)", type: "video", aspect: "16:9", prompt: "A small flock of birds flying left to right across the frame, filmed against a flat, evenly lit pure green (#00ff00) background, no shadows on the green, no other objects, no text", references: [], source: { type: "generate" }, qa: ["Background is one flat, even green", "Birds are sharp, with no green on their edges"] },
     { id: "dawn-wind", name: "Dawn wind", type: "audio", aspect: "16:9", prompt: "Loopable 30 s ambience: soft wind across an open grassy hill before sunrise, a few distant birds, no music, no voices", references: [], source: { type: "generate" }, qa: ["Loops without an audible seam", "No music or voices"] },
     { id: "title-chime", name: "Title chime", type: "audio", aspect: "16:9", prompt: "A single warm, airy chime with a soft shimmer tail, about 2 s, for a title appearing at sunrise", references: [], source: { type: "generate" }, qa: ["One clean chime, about 2 s", "No clicks at the start"] },
   ],
@@ -55,6 +57,7 @@ export const EXAMPLE_STORYBOARD: StoryDoc = {
       id: "s3", title: "Sunrise", description: "The sun rises over the valley; title card.", durationSec: 4, prompt: "References:\nImage 1 (Hill road · Sunrise): reference only, not a frame: materials, colours and objects only; the same hill and valley at sunrise.\nImage 2 (Keyframe · The climb): reference only, not a frame: overall look; same pre-dawn palette and mist.\nNo image is the start frame. Framing: one static wide shot.\n\nStatic wide shot from behind the cyclist on the hilltop as the sun rises over the misty valley, clear empty sky in the upper third, no text", assets: ["hill@sunrise", "s1.keyframe"], references: [{ asset: "hill@sunrise", role: "detail" }, { asset: "s1.keyframe", role: "look", note: "same pre-dawn palette and mist" }], qa: ["Sun is rising", "Empty sky in the upper third for the title"], camera: "Static wide shot",
       layers: [
         { id: "s3-flare", type: "video", asset: "sun-flare", startSec: 0, endSec: 2, inSec: 3, box: { x: 0, y: 0, width: 1, height: 1 }, blend: "screen", opacity: 0.6 },
+        { id: "s3-birds", type: "video", asset: "birds-green", startSec: 0.5, endSec: 3.5, box: { x: 0, y: 0, width: 1, height: 0.6 }, chromaKey: { color: "#00ff00", range: 0.4, spill: 0.6 } },
         { id: "s3-title", type: "text", text: "FIRST LIGHT", startSec: 1, endSec: 4, position: { x: 0.5, y: 0.25 }, textStyle: "title-card", anim: { in: "fade", out: "fade", durationSec: 0.6 } },
       ],
       effects: [{ preset: "ken-burns", params: { zoom: 0.1 } }, { preset: "glow", params: { strength: 0.4 } }],
@@ -73,8 +76,8 @@ export const EXAMPLE_STORYBOARD: StoryDoc = {
     { from: "s4", to: "s5", kind: "cut", transition: { preset: "crossfade", params: { durationSec: 0.5 } } },
   ],
   audio: [
-    { id: "wind", asset: "dawn-wind", kind: "ambience", from: "s1", to: "s3" },
-    { id: "chime", asset: "title-chime", kind: "sting", from: "s3", atSec: 1 },
+    { id: "wind", asset: "dawn-wind", kind: "ambience", from: "s1", to: "s3", volumeKeys: [{ t: 7, v: 1 }, { t: 8, v: 0.4 }, { t: 10, v: 0.4 }, { t: 11, v: 1 }] },
+    { id: "chime", asset: "title-chime", kind: "sting", from: "s3", atSec: 1, fx: { preset: "hall", amount: 0.5 } },
   ],
 };
 
@@ -90,6 +93,7 @@ export const GUIDE_KINDS: { kind: PresetKind; title: string; usedIn: string }[] 
   { kind: "textAnimLoop", title: "Text loops", usedIn: "shots[].layers[].anim.loop" },
   { kind: "videoEffect", title: "Video effects", usedIn: "shots[].effects[].preset" },
   { kind: "blend", title: "Blend modes", usedIn: `shots[].layers[].blend (default "normal"), with "opacity" 0-1 (default 1)` },
+  { kind: "audioFx", title: "Audio effects", usedIn: `audio[].fx.preset, with "amount" 0-1 (default 1)` },
   { kind: "transition", title: "Transitions", usedIn: `connections[].transition.preset (params.durationSec, default ${DEFAULT_TRANSITION_SEC})` },
 ];
 
@@ -190,7 +194,9 @@ const FORMAT_SECTION = () => `{
       "loop"?: boolean,          // music and ambience only: repeat to fill the span; default true for ambience, false for music; others never loop
       "line"?: number,           // dialogue only: the 1-based line of the "from" shot's "dialogue" list this recording is (an off-screen line)
       "volume"?: number,         // 0-1; default music 0.35, ambience 0.5, sting 0.8, others 1
-      "fadeInSec"?: number, "fadeOutSec"?: number   // default music and ambience 1 s each, others 0
+      "fadeInSec"?: number, "fadeOutSec"?: number,  // default music and ambience 1 s each, others 0
+      "volumeKeys"?: [ { "t": number, "v": number } ],   // volume curve: t = seconds from the cue start, v = 0 (silent) to 2, 1 = "volume"; linear between points
+      "fx"?: { "preset": "<audio effect id>", "amount"?: number }   // sound effect (echo, telephone, radio…), amount 0-1 (default 1)
   } ]
 }
 
@@ -206,7 +212,8 @@ Layer (times in seconds from the shot start, 0 <= startSec < endSec <= durationS
   Media: { "id": string, "type": "html" | "image" | "video", "asset": "<asset id>", "startSec": number, "endSec": number,
            "box": { "x", "y", "width", "height" }, "blend"?: "<blend id>", "opacity"?: number (0-1), "follow"?: "frame" | "shot",
            "params"?: { "<key>": value },    // "html" layers only: this layer's values for the asset's "params"
-           "inSec"?: number }                  // video only: seconds into the asset's clip where the layer starts (default: the upload's trim, else 0)
+           "inSec"?: number,                   // video only: seconds into the asset's clip where the layer starts (default: the upload's trim, else 0)
+           "chromaKey"?: { "color": "#rrggbb", "range"?: number, "spill"?: number } }  // green screen: removes "color" (range 0-1 tolerance, default 0.4; spill 0-1 edge clean-up, default 0.5)
 Param (an html asset's exposed value; "default" is required and must be valid):
   { "type": "text", "default": string } | { "type": "number", "default": number, "min"?: number, "max"?: number, "step"?: number }
   | { "type": "color", "default": "#rrggbb" } | { "type": "boolean", "default": boolean } | { "type": "select", "options": string[], "default": string }
@@ -297,6 +304,8 @@ export const RULE_LIST: readonly { key: string; text: string }[] = [
   { key: "html-code-refs", text: `An "html" asset can list other assets in "references" (images such as a logo, a style frame or a character sheet, or other html clips): the app attaches them to the asset's Copy prompt and names each one ("Code references" for html clips), so the AI writing the clip knows what to match or reuse. Html assets can in turn be references of shots and other assets. Keep html briefs focused on the motion and logic: the app asks the code AI to write the work in JavaScript through dionysus.clip (init / render per frame) with a minimal HTML shell (one <canvas>), and full HTML or CSS only when the design truly needs it.` },
   { key: "shot-background", text: `A still shot that is only a colour or gradient with text or graphics on top (a title card, credits, a chapter card) needs no image: give it "render": "still" and "background" instead of "clip": a hex colour like "#000000", or { "type": "linear", "angle": 180, "stops": [ { "color": "#000000" }, { "color": "#1a2a4a" } ] } ("radial" goes from the centre out; 2-8 stops; "at" 0-1 places a stop). Put the words in text layers and graphics in image, video or html layers ("layers", drawn in order on top of the background). Use "clip" or "background", not both. Example: { "id": "s9", "title": "Title", "durationSec": 3, "prompt": "", "assets": [], "render": "still", "background": "#000000", "layers": [ { "id": "t", "type": "text", "text": "PART ONE", "startSec": 0, "endSec": 3, "position": { "x": 0.5, "y": 0.5 } } ], "qa": ["Reads PART ONE"] }.` },
   { key: "lastframe-refs", text: `"<shot id>.lastframe" is the last frame of that shot's clip and can be used anywhere an asset id goes (a shot's "assets" and "references", a keyframe's or an asset's "references") without declaring an asset: the app adds a "frame" asset named "Last frame · <shot title>", takes the frame from the clip version picked for that shot as soon as it is uploaded (and again when a different version is picked or it is trimmed), and attaches it in "references" order. Use it with role "start-frame" for seamless continuity (RULE 3) or "look" / "detail" to match a moment. The shot must be an "ai" shot listed before the one using it, a shot can't use its own last frame, and there must be no loops.` },
+  { key: "chroma-key", text: `To put a person, animal or object over a shot without its background, ask for the asset (image or video) shot in front of a flat, evenly lit pure green (#00ff00) screen — blue (#0000ff) when the subject is green — with no shadows on the screen and no green on the subject, then give its layer "chromaKey": { "color": "#00ff00", "range": 0.4, "spill": 0.5 }. "range" (0-1) is how far from the colour is removed (raise it to about 0.5-0.6 if a green fringe is left; lower it if the subject gets holes), "spill" (0-1) takes the green tint off edges and hair. html layers may be keyed too. Example: { "id": "birds", "type": "video", "asset": "birds-green", "startSec": 0, "endSec": 3, "box": { "x": 0, "y": 0, "width": 1, "height": 0.6 }, "chromaKey": { "color": "#00ff00", "range": 0.4, "spill": 0.6 } }. Use "blend" instead for elements on black or white (RULE 22).` },
+  { key: "audio-shaping", text: `Shape audio cues instead of asking for new recordings: "volumeKeys" is a volume curve over the cue (points { "t": seconds from the cue start, "v": 0-2, 1 = the cue's "volume" }, linear in between, the first and last values hold) — use it to duck music or ambience under a voiceover or title and swell it after, e.g. "volumeKeys": [ { "t": 4, "v": 1 }, { "t": 4.5, "v": 0.3 }, { "t": 9, "v": 0.3 }, { "t": 10, "v": 1 } ]. "fx" adds a sound effect from the audio effects list with an "amount" 0-1: "telephone" for the far side of a phone call, "radio" for broadcasts and walkie-talkies, "pa-announcement" for station or stadium loudspeakers, "hall" or "room" to place a dry voice in a space, "underwater" for muffled sound (underwater, behind a wall), "robot" for machine voices. Example: { "asset": "caller", "kind": "dialogue", "from": "s2", "line": 1, "fx": { "preset": "telephone", "amount": 1 } }. Keep fades ("fadeInSec", "fadeOutSec") for simple starts and ends.` },
 ];
 export const RULES: readonly string[] = RULE_LIST.map((r) => r.text);
 /** 1-based public number of a rule, by key. */

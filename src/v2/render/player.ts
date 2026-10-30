@@ -5,7 +5,9 @@
  */
 import { activeAt, placeRect, upcomingMedia, type Placed } from "./frame";
 import { TICKS_PER_SECOND, ticksToSeconds } from "../domain/time";
-import { compositionDuration, fadeAt, versionOf, type Placement, type Project } from "../domain/model";
+import { drawKeyed } from "./chromaKey";
+import { audioFxData, buildFxChain, fxKey, type FxChain } from "./audioFx";
+import { compositionDuration, fadeAt, volumeKeyAt, versionOf, type Placement, type Project } from "../domain/model";
 import type { BlobStore } from "../ports/storage";
 import { subtitleAt } from "../domain/subtitles";
 import { drawTextClip } from "./text";
@@ -57,6 +59,7 @@ export class Player {
   private clock: Clock;
   private audioCtx?: AudioContext;
   private gains = new Map<HTMLMediaElement, GainNode>();
+  private fxChains = new Map<HTMLMediaElement, { key: string; chain: FxChain }>();
   private startTicks = 0;
   time = 0;
   /** Canvas-space placement of each visual clip in the last drawn frame (for on-canvas handles). */
@@ -72,13 +75,36 @@ export class Player {
   }
   get clockKind() { return this.clock.kind; }
 
-  /** Route a media element through Web Audio (once). Volume then lives on the GainNode. */
-  private gainFor(el: HTMLMediaElement): GainNode | undefined {
+  /**
+   * P3B-12 eyedropper: while set, this clip is drawn without its chroma key so a colour can be sampled from the
+   * preview canvas as the user sees the original picture.
+   */
+  keyBypass: string | null = null;
+  private keyOf(p: Placement) { return p.id === this.keyBypass ? undefined : p.chromaKey; }
+
+  /**
+   * Route a media element through Web Audio (once): element → gain (volume × fades × volume curve) → [audio effect
+   * chain, P3B-11] → speakers. The chain is rebuilt only when the clip's preset or amount changes.
+   */
+  private gainFor(el: HTMLMediaElement, fx?: { preset: string; amount: number }): GainNode | undefined {
     if (!this.audioCtx) return undefined;
     let g = this.gains.get(el);
     if (!g) {
       try { g = this.audioCtx.createGain(); this.audioCtx.createMediaElementSource(el).connect(g).connect(this.audioCtx.destination); this.gains.set(el, g); }
       catch { return undefined; }
+    }
+    const key = fxKey(fx);
+    const cur = this.fxChains.get(el);
+    if ((cur?.key ?? "") !== key) {
+      g.disconnect();
+      cur?.chain.dispose();
+      this.fxChains.delete(el);
+      const data = key ? audioFxData(fx!.preset) : undefined;
+      if (data) {
+        const chain = buildFxChain(this.audioCtx, data, fx!.amount, this.audioCtx.currentTime);
+        g.connect(chain.input); chain.output.connect(this.audioCtx.destination);
+        this.fxChains.set(el, { key, chain });
+      } else g.connect(this.audioCtx.destination);
     }
     return g;
   }
@@ -166,7 +192,7 @@ export class Player {
 
   private release(id: string) {
     const el = this.pool.get(id);
-    if (el && "pause" in el) { el.pause(); el.removeAttribute("src"); el.load(); el.remove(); this.gains.get(el)?.disconnect(); this.gains.delete(el); }
+    if (el && "pause" in el) { el.pause(); el.removeAttribute("src"); el.load(); el.remove(); this.gains.get(el)?.disconnect(); this.gains.delete(el); this.fxChains.get(el)?.chain.dispose(); this.fxChains.delete(el); }
     this.pool.delete(id);
   }
 
@@ -247,7 +273,7 @@ export class Player {
           try { // a detached/closed bitmap must not throw out of draw() and stall preview or export
             withBlend(ctx, placement.blend, () => drawWithLook(ctx, canvas.width, canvas.height, tfx, (g) => {
               g.save();
-              try { g.globalAlpha = r.alpha * (mix ?? 1); g.translate(r.cx, r.cy); g.rotate(r.rot); g.drawImage(f, r.sx, r.sy, r.sw, r.sh, -r.w / 2, -r.h / 2, r.w, r.h); } finally { g.restore(); }
+              try { g.globalAlpha = r.alpha * (mix ?? 1); g.translate(r.cx, r.cy); g.rotate(r.rot); drawKeyed(g, f, f.width, f.height, r.sx, r.sy, r.sw, r.sh, -r.w / 2, -r.h / 2, r.w, r.h, this.keyOf(placement)); } finally { g.restore(); }
             }));
           } catch { host.issue = "invalid"; }
         }
@@ -261,7 +287,7 @@ export class Player {
           this.boxes.set(placement.id, r);
           withBlend(ctx, placement.blend, () => drawWithLook(ctx, canvas.width, canvas.height, tfx, (g) => {
             g.save(); g.globalAlpha = r.alpha * (mix ?? 1); g.translate(r.cx, r.cy); g.rotate(r.rot);
-            g.drawImage(f.image, r.sx, r.sy, r.sw, r.sh, -r.w / 2, -r.h / 2, r.w, r.h);
+            drawKeyed(g, f.image, f.width, f.height, r.sx, r.sy, r.sw, r.sh, -r.w / 2, -r.h / 2, r.w, r.h, this.keyOf(placement));
             g.restore();
           }));
         }
@@ -274,8 +300,8 @@ export class Player {
       if ("pause" in el) {
         const target = ticksToSeconds(sourceTicks);
         el.muted = !!track.muted || !!track.hidden || (placement.clipType === "video" && !!placement.linkedAudio?.muted);
-        const vol = Math.max(0, placement.volume ?? 1) * fadeAt(placement, this.time);
-        const gain = this.gainFor(el);
+        const vol = Math.max(0, placement.volume ?? 1) * fadeAt(placement, this.time) * volumeKeyAt(placement, this.time);
+        const gain = this.gainFor(el, placement.audioFx);
         if (gain) { gain.gain.value = vol; el.volume = 1; } else el.volume = Math.min(1, vol);
         // Reverse and freeze cannot use native playback: hold the element paused and seek it per frame.
         const held = this.time < placement.startTicks || this.time >= placement.startTicks + placement.durationTicks; // transition overhang
@@ -310,7 +336,7 @@ export class Player {
           this.boxes.set(placement.id, r);
           withBlend(ctx, placement.blend, () => drawWithLook(ctx, canvas.width, canvas.height, tfx, (g) => {
             g.save(); g.globalAlpha = r.alpha * (mix ?? 1); g.translate(r.cx, r.cy); g.rotate(r.rot);
-            g.drawImage(el as CanvasImageSource, r.sx, r.sy, r.sw, r.sh, -r.w / 2, -r.h / 2, r.w, r.h);
+            drawKeyed(g, el as CanvasImageSource, w, h, r.sx, r.sy, r.sw, r.sh, -r.w / 2, -r.h / 2, r.w, r.h, this.keyOf(placement));
             g.restore();
           }));
         }

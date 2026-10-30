@@ -6,7 +6,8 @@
  *
  * Only types are imported here, so a module file stays a pure, dependency-free description plus render function.
  */
-import type { FontDef, PaintFn, ParamSpec, PresetAiHints, PresetKind, RenderFn, TransitionPaintFn } from "../registry/types";
+import type { AudioFxData, FontDef, PaintFn, ParamSpec, PresetAiHints, PresetKind, RenderFn, TransitionPaintFn } from "../registry/types";
+export type { AudioFxData };
 
 interface ModuleBase {
   /** Unique within its kind; must equal the file (or folder) name. Never rename a shipped id: storyboards use it. */
@@ -61,6 +62,12 @@ export interface BlendModule extends Omit<ModuleBase, "params" | "type"> { kind:
 /** Composite operations a blend preset may use (all supported by Chrome, Safari/iOS and Firefox canvas). */
 export const BLEND_OPS = ["source-over", "screen", "lighter", "lighten", "multiply", "darken", "overlay", "soft-light", "hard-light", "difference", "color-dodge", "color-burn"] as const;
 export type BlendOp = (typeof BLEND_OPS)[number];
+/**
+ * Audio effect (P3B-11): a sound effect for audio and video clips, described as data (no code) so preview (AudioContext)
+ * and export (OfflineAudioContext) build the very same Web Audio chain (render/audioFx.ts). The clip's `amount` (0–1)
+ * scales it: filters move from "open" to the given cutoff, wet mixes and drive scale linearly.
+ */
+export interface AudioFxModule extends Omit<ModuleBase, "params" | "type"> { kind: "audioFx"; data: AudioFxData }
 /** Curated font (system stacks only, so preview and export match offline). The id must equal the file name. */
 export interface FontModule extends FontDef { kind: "font"; order?: number }
 
@@ -73,7 +80,7 @@ export interface TextStyleData {
   effect?: string; effectColor?: string; animIn?: string; animOut?: string; loop?: string;
 }
 
-export type PresetModule = TextAnimModule | TextEffectModule | VideoEffectModule | TransitionModule | StickerModule | TextStyleModule | BlendModule | FontModule;
+export type PresetModule = TextAnimModule | TextEffectModule | VideoEffectModule | TransitionModule | StickerModule | TextStyleModule | BlendModule | AudioFxModule | FontModule;
 export type ModuleKind = PresetKind | "font";
 
 /** Generic form: `export default definePreset({ kind: "videoEffect", id: "glow", … })`. */
@@ -92,4 +99,5 @@ export const defineTransition = def<TransitionModule>("transition");
 export const defineSticker = def<StickerModule>("sticker");
 export const defineTextStyle = def<TextStyleModule>("textStyle");
 export const defineBlend = def<BlendModule>("blend");
+export const defineAudioFx = def<AudioFxModule>("audioFx");
 export const defineFont = def<FontModule>("font");
