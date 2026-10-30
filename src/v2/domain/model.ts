@@ -16,6 +16,8 @@ export interface MediaRef {
   width?: number;
   height?: number;
   thumbKey?: string;
+  /** Audio made in the Audio editor: blob key of its `dionysus.audioclip/1` JSON (blobKey is the rendered WAV). */
+  specKey?: string;
 }
 
 export interface AssetVersion {

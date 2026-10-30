@@ -6,6 +6,9 @@ import { importFile } from "../../persistence";
 import { CLIP_LIBRARIES } from "../../render";
 import { AssetPreview, blobText, type PreviewKind } from "../AssetPreview";
 import { CodeEditor } from "../CodeEditor";
+import { AudioClipImport, AudioEditor } from "../AudioEditor";
+import { storeAudioClip } from "../audioClipAsset";
+import { audioClipPrompt, newId, type AudioClip } from "../../domain";
 import { htmlParamSpecs } from "../HtmlParamsPanel";
 import { HtmlExportButtons, HtmlImport } from "../HtmlImport";
 import { ParamControls } from "../ParamControls";
@@ -51,6 +54,8 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
   const [peek, setPeek] = useState<string>();
   const [codeFor, setCodeFor] = useState<{ source: string; name: string }>();
   const [audioTrim, setAudioTrim] = useState<{ clip: Blob; version: AssetVersion }>();
+  /** P4A: the Audio editor (source: a version's JSON to edit; none: a new clip). Saving adds a version. */
+  const [audioFor, setAudioFor] = useState<{ source?: string }>();
   const modelList = useId();
   const models = board.usedModels(project);
   useEffect(() => { if (!refNote) return; const t = setTimeout(() => setRefNote(undefined), 6000); return () => clearTimeout(t); }, [refNote]);
@@ -69,6 +74,9 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
   const trimWin = shot && !clipSlot ? shot.durationSec : slot?.type === "video" ? board.slotLayerSec(b, slot.id) : undefined;
   /** V2-HTML-PKG: the html asset whose package this panel imports, exports and prompts for. */
   const htmlSlot = kind === "html" ? slot ?? clipSlot : undefined;
+  /** P4A: an audio asset; "json" ones are written by the user's AI as dionysus.audioclip/1. */
+  const audioSlot = kind === "audio" ? slot : undefined;
+  const jsonAudio = audioSlot?.source.type === "json";
   const expectBindings = htmlSlot ? Object.fromEntries(slotBindings(b, htmlSlot).map((x) => [x.name, x.type])) : undefined;
   const packagePrompt = (full: boolean) => htmlClipPackagePrompt(slotPackageInput(b, htmlSlot!), { libs: CLIP_LIBRARIES, specUrl: runtimeAiLinks().htmlClipSpec, full });
   const versions = board.versionsOf(project, owner);
@@ -116,6 +124,21 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
   const run = async (label: string, fn: () => Promise<void>) => {
     setErr(undefined); setBusy(label);
     try { await fn(); } catch (e) { setErr(e instanceof Error ? e.message : String(e)); } finally { setBusy(undefined); }
+  };
+  /** P4A: render a dionysus.audioclip/1 clip and add it (WAV + JSON) as a new version. */
+  const addAudioClip = (clip: AudioClip) => run("Rendering the audio…", async () => {
+    const media = await storeAudioClip(blobs, clip, newId("ast"), newId("ver"));
+    swap(cmd.addStoryVersion(target, media, model.trim() ? { model: model.trim() } : {}));
+  });
+  const editAudio = (v: AssetVersion) => run("Opening the audio…", async () => {
+    const blob = v.media.specKey ? await blobs.get(v.media.specKey) : undefined;
+    if (!blob) throw new Error("This version's audio JSON is missing from this device.");
+    setAudioFor({ source: await blobText(blob) });
+  });
+  const audioDialog = () => {
+    if (!audioFor) return null;
+    const host = document.querySelector(".v2-app") ?? document.body;
+    return createPortal(<AudioEditor source={audioFor.source} create={!audioFor.source} mobile={mobile} onSave={(c) => { setAudioFor(undefined); void addAudioClip(c); }} onClose={() => setAudioFor(undefined)} />, host);
   };
   /** Add a validated single-file HTML clip as a new version (V2-HTML-PKG). */
   const addHtml = (html: string, name: string) => run("Adding…", async () => {
@@ -263,6 +286,7 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
                   {pv && <span className="v2-sb-vtools">
                     <button className="v2-btn v2-sb-trimbtn" aria-expanded={peek === v.id} aria-label={`${peek === v.id ? "Hide preview of" : "Preview"} v${i + 1}`} onClick={() => setPeek(peek === v.id ? undefined : v.id)}><Ic g={peek === v.id ? "eye-off" : "▶"} size={14} /> {peek === v.id ? "Hide" : "Preview"}</button>
                     {kind === "html" && <button className="v2-btn v2-sb-trimbtn" disabled={!!busy} aria-label={`Edit code of v${i + 1}`} title="Open in the Code Editor; saving adds a new version" onClick={() => editCode(v, `v${i + 1}`)}><Ic g="</>" size={14} /> Edit code</button>}
+                    {kind === "audio" && !!v.media.specKey && <button className="v2-btn v2-sb-trimbtn" disabled={!!busy} aria-label={`Edit audio of v${i + 1}`} title="Open in the Audio editor; saving adds a new version" onClick={() => editAudio(v)}><Ic g="♫" size={14} /> Edit audio</button>}
                     {kind === "audio" && !!v.media.durationTicks && <button className="v2-btn v2-sb-trimbtn" disabled={!!busy} aria-label={`Trim v${i + 1}`} title="Choose the part of the audio to use" onClick={() => trimAudio(v)}><Ic g="✂" size={14} /> {aSpan ? "Adjust trim" : "Trim"}</button>}
                   </span>}
                   {canTrim && <button className="v2-btn v2-sb-trimbtn" disabled={!!busy} onClick={() => adjustTrim(v)} aria-label={`Adjust trim of v${i + 1}`} title={shot ? "Choose which part of the clip the shot uses" : "Choose which part of the clip its layers start from"}><Ic g="✂" size={14} /> {trimmed ? "Adjust trim" : "Trim"}</button>}
@@ -272,7 +296,7 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
           </ul>
         ) : null}
         {(() => { const pi = versions.findIndex((x) => x.id === peek), pvv = versions[pi]; return pvv ? <div className="v2-sb-vpreview"><AssetPreview kind={kind as PreviewKind} name={`${title} v${pi + 1}`} cacheKey={pvv.id} load={() => blobs.get(pvv.media.blobKey)} durationSec={kind === "html" ? (shot?.durationSec ?? (pvv.media.durationTicks ? pvv.media.durationTicks / TICKS_PER_SECOND : undefined)) : pvv.media.durationTicks ? pvv.media.durationTicks / TICKS_PER_SECOND : undefined} width={pvv.media.width ?? project.settings?.width} height={pvv.media.height ?? project.settings?.height} /></div> : null; })()}
-        {versions.length ? null : <p className="v2-hint">{lf ? `Nothing yet. Use the last frame of shot ${shotNo(lf)} once it has a clip, or upload an image.` : `Nothing yet. ${slot?.source.type === "upload" ? "Upload your file" : "Generate it in your AI tool with the prompt below"}, then add it here.`}</p>}
+        {versions.length ? null : <p className="v2-hint">{lf ? `Nothing yet. Use the last frame of shot ${shotNo(lf)} once it has a clip, or upload an image.` : `Nothing yet. ${slot?.source.type === "upload" ? "Upload your file" : jsonAudio ? "Copy the prompt below to your AI and paste its JSON reply, or create it in the Audio editor" : "Generate it in your AI tool with the prompt below"}, then add it here.`}</p>}
         {slot && pins.length > 0 && versions.length > 1 && <p className="v2-hint">{pins.length > 1 ? "Shots" : "Shot"} {pins.map((x) => shotNo(x.shot)).join(", ")} {pins.length > 1 ? "keep their" : "keeps its"} pinned version when you pick another one here.</p>}
         {shot && board.shotLengthMismatch(project, shot) && <p className="v2-sb-lenline"><LengthWarn project={project} shot={shot} /></p>}
         <div className="v2-sb-actions">
@@ -294,6 +318,13 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
           <input ref={fileRef} type="file" hidden accept={ACCEPT[kind]} aria-label={`Upload ${kind} for ${title}`}
             onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void upload(f); }} />
         </div>
+        {audioSlot && (
+          <details className="v2-sb-htmlimport v2-sb-audioimport" open={jsonAudio && !versions.length}>
+            <summary>{jsonAudio ? "Paste the AI's audio JSON" : "Make it in the Audio editor"}</summary>
+            {jsonAudio && <AudioClipImport busy={!!busy} onAdd={(c) => void addAudioClip(c)} />}
+            <button className="v2-btn v2-sb-btn" disabled={!!busy} onClick={() => setAudioFor({})}><Ic g="♫" size={16} /> Create in Audio editor</button>
+          </details>
+        )}
         {htmlSlot && (
           <details className="v2-sb-htmlimport" open={!versions.length}>
             <summary>Paste the AI's reply or import a package</summary>
@@ -329,7 +360,13 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
           )}
         </Section>
       )}
-      {owner.prompt && !(htmlSlot && slot) && (
+      {jsonAudio && audioSlot && (
+        <Section title="Audio JSON prompt" extra={<CopyButton text={() => audioClipPrompt({ name: audioSlot.name, brief: audioSlot.prompt, specUrl: runtimeAiLinks().audioClipSpec })} label="Copy prompt" testId="copy-audio-prompt" />}>
+          <p className="v2-hint">The sound brief plus the dionysus.audioclip/1 format reference and examples, so any AI can reply with JSON that pastes straight in above.</p>
+          {audioSlot.prompt && <p className="v2-sb-prompt">{audioSlot.prompt}</p>}
+        </Section>
+      )}
+      {owner.prompt && !(htmlSlot && slot) && !jsonAudio && (
         <Section title={shot ? "Clip prompt" : "Prompt"} extra={<CopyButton text={() => (shot ? storyRefs.promptWithReferences(b, shot) : slot ? storyRefs.slotPromptWithReferences(b, slot) : owner.prompt)} label="Copy prompt" testId="copy-clip-prompt" />}>
           <p className="v2-sb-prompt">{owner.prompt}</p>
           {(shot || slot) && <AttachOrder shot={shot} slot={shot ? undefined : slot} project={project} thumbs={thumbs} blobs={blobs} />}
@@ -352,6 +389,7 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
       {trimDialog()}
       {audioTrimDialog()}
       {codeDialog()}
+      {audioDialog()}
       {picking && createPortal(<StoryAssetPicker project={project} kind={kind} title={`Add a version · ${title}`} exclude={owner.assetId} thumbs={thumbs} blobs={blobs}
         uploadLabel={`${kindName(kind).replace(/^an? /, "")} from this device`} onUpload={() => { setPicking(false); fileRef.current?.click(); }} onPick={(e) => void pickLibrary(e)} onClose={() => setPicking(false)} />, document.querySelector(".v2-app") ?? document.body)}
     </div>

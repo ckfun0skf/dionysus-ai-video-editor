@@ -2712,6 +2712,30 @@
           "title": "Storyboard spec: layer chromaKey, cue volumeKeys and fx; guide rules 36-37, examples, presets, tests",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P4A-1",
+          "title": "Audio creator: dionysus.audioclip/1 format, deterministic Web Audio renderer and WAV export",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "P4A-2",
+          "title": "Audio editor (templates, step grid/piano roll, SFX designer, preview/loop, undo, JSON import/export) on mobile and desktop",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "P4A-3",
+          "title": "Audio assets store clip JSON per version; Edit audio reopens the editor and saves a new version",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "P4A-4",
+          "title": "Storyboard source \"json\" for audio with a copyable AI prompt, paste box, guide rule 38, AUDIO_CLIP_FORMAT.md, presets.json and llms.txt",
+          "status": "done",
+          "progress": 100
         }
       ]
     }

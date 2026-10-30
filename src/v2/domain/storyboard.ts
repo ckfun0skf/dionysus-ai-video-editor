@@ -15,7 +15,7 @@ import { TICKS_PER_SECOND } from "./time";
 
 export interface QaCheck { id: string; text: string }
 export type QaResult = "pass" | "fail";
-export type SlotSource = { type: "generate" } | { type: "upload" } | { type: "lastFrame"; shotId: string };
+export type SlotSource = { type: "generate" } | { type: "upload" } | { type: "json" } | { type: "lastFrame"; shotId: string };
 
 /** A reference asset the story needs (character sheet, location, last frame of shot X …). */
 export interface AssetSlot {

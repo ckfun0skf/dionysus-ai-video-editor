@@ -19,6 +19,7 @@ describe("site URL (V2-OPS-LINKS)", () => {
       guide: "https://video.example.com/editor/ai/storyboard-guide.md",
       guideHtml: "https://video.example.com/editor/ai/storyboard-guide.html",
       htmlClipSpec: "https://video.example.com/editor/ai/HTML_CLIP_PACKAGE.md",
+      audioClipSpec: "https://video.example.com/editor/ai/AUDIO_CLIP_FORMAT.md",
       presets: "https://video.example.com/editor/ai/presets.json",
       formatDoc: "https://video.example.com/editor/ai/STORYBOARD_FORMAT.md",
       llms: "https://video.example.com/editor/llms.txt",

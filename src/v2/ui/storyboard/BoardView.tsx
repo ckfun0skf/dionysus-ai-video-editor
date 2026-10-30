@@ -92,7 +92,7 @@ export function BoardView({ project, thumbs, onOpen, openKey, edit, mobile }: { 
     const pin = shot && board.pinOf(project, shot, s.id);
     const sel = pin ?? board.selectedOf(project, s);
     const n = board.versionsOf(project, s).length;
-    const sub = pin ? `Pinned ${storyRefs.pinLabel(project, shot!, s.id)} here` : s.source.type === "lastFrame" && !n ? (shotNo(s.source.shotId) ? `Taken from shot ${shotNo(s.source.shotId)}’s clip` : "Taken from a shot’s clip") : versionLabel(project, s, s.source.type === "upload" ? "Upload needed" : "Needs generating");
+    const sub = pin ? `Pinned ${storyRefs.pinLabel(project, shot!, s.id)} here` : s.source.type === "lastFrame" && !n ? (shotNo(s.source.shotId) ? `Taken from shot ${shotNo(s.source.shotId)}’s clip` : "Taken from a shot’s clip") : versionLabel(project, s, s.source.type === "upload" ? "Upload needed" : s.source.type === "json" ? "Needs audio JSON" : "Needs generating");
     return (
       <li key={s.id}>
         <button className={`v2-sb-slot ${pin ? "pinned" : ""} ${status.slots[s.id]?.stale ? "stale" : ""} ${n ? "" : "todo"} ${openKey === s.id ? "open" : ""}`} aria-current={openKey === s.id || undefined} onClick={() => onOpen({ slot: s.id })} aria-label={`${s.name}: ${sub}${status.slots[s.id]?.stale ? ", may not match" : ""}`} title={s.prompt || s.name}>

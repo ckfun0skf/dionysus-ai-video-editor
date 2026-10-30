@@ -15,16 +15,17 @@ const SITE_URL = buildSiteUrl(process.env.DIONYSUS_SITE_URL);
 
 /** What the plugin uses from src/v2/domain/aiGuide.ts (declared here so tsconfig.node does not type-check the app). */
 interface AiGuideModule {
-  aiGuideFiles(site: string, formatDoc: string, clipDoc: string): Record<string, string>;
+  aiGuideFiles(site: string, formatDoc: string, clipDoc: string, audioDoc: string): Record<string, string>;
   FORMAT_DOC_SOURCE: string;
   CLIP_DOC_SOURCE: string;
+  AUDIO_DOC_SOURCE: string;
   PRESET_PROBLEMS: string[];
 }
 
 /**
  * Writes the AI planner files (ai/storyboard-guide.md/.html, ai/presets.json, llms.txt) into the build output,
  * regenerated from the registry for this build's site URL + base, and publishes the format reference next to them
- * (ai/STORYBOARD_FORMAT.md) and the HTML clip package spec (ai/HTML_CLIP_PACKAGE.md). The copies in public/ are the committed defaults for dev and GitHub browsing.
+ * (ai/STORYBOARD_FORMAT.md) and the HTML clip package spec (ai/HTML_CLIP_PACKAGE.md) and the audio clip spec (ai/AUDIO_CLIP_FORMAT.md). The copies in public/ are the committed defaults for dev and GitHub browsing.
  */
 function aiFilesPlugin(): Plugin {
   let outDir = "";
@@ -41,9 +42,9 @@ function aiFilesPlugin(): Plugin {
     async closeBundle() {
       // Loaded through Vite's module runner (not a plain import) so the preset modules' import.meta.glob discovery works.
       const { module } = await runnerImport<AiGuideModule>(resolve(root, "src/v2/domain/aiGuide.ts"), { configFile: false, root, logLevel: "warn" });
-      const { aiGuideFiles, FORMAT_DOC_SOURCE, CLIP_DOC_SOURCE, PRESET_PROBLEMS } = module;
+      const { aiGuideFiles, FORMAT_DOC_SOURCE, CLIP_DOC_SOURCE, AUDIO_DOC_SOURCE, PRESET_PROBLEMS } = module;
       if (PRESET_PROBLEMS.length) throw new Error(`Invalid preset modules:\n  ${PRESET_PROBLEMS.join("\n  ")}`);
-      const files = aiGuideFiles(site, readFileSync(resolve(root, FORMAT_DOC_SOURCE), "utf8"), readFileSync(resolve(root, CLIP_DOC_SOURCE), "utf8"));
+      const files = aiGuideFiles(site, readFileSync(resolve(root, FORMAT_DOC_SOURCE), "utf8"), readFileSync(resolve(root, CLIP_DOC_SOURCE), "utf8"), readFileSync(resolve(root, AUDIO_DOC_SOURCE), "utf8"));
       for (const [rel, content] of Object.entries(files)) {
         const file = resolve(outDir, rel.replace(/^public\//, ""));
         mkdirSync(dirname(file), { recursive: true });

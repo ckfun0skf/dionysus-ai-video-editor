@@ -22,5 +22,7 @@ export * as storyRefs from "./storyRefs";
 export * as storySteps from "./storySteps";
 export type { Storyboard, AssetSlot, Shot, VersionInfo, QaCheck, QaResult, Staleness, StoryStatus, ProductionStep, StepState, SendState } from "./storyboard";
 export * from "./htmlClipPackage";
+export * from "./audioClip";
+export * from "./audioClipPrompt";
 export * from "./htmlClipBindings";
 export * as storyAuto from "./storyAuto";

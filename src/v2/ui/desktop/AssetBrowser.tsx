@@ -35,6 +35,8 @@ export interface BrowserActions {
   onAddTransition: () => void;
   /** Code → Create: open the Code Editor on a new clip. */
   onCreateCode: () => void;
+  /** Audio → Create audio: open the Audio editor on a new clip. */
+  onCreateAudio?: () => void;
 }
 
 /**
@@ -114,7 +116,11 @@ export function AssetBrowser({ project, thumbs, busy, tab, onTab, ...a }: Browse
           <p className="v2-abnote">Code clips draw on a canvas from JavaScript; select one on the timeline and choose Edit code in the inspector.</p>
         </>}
         {tab === "audio" && <>
-          <div className="v2-abhead"><strong>Music & sounds</strong><button className="v2-btn primary" title="Import audio files (or drop them here)" onClick={() => a.onImport("audio/*")}><Ic g="⇪" size={16} /> Import</button></div>
+          <div className="v2-abhead"><strong>Music & sounds</strong></div>
+          <div className="v2-codeactions">
+            <button className="v2-btn" title="Import audio files (or drop them here)" onClick={() => a.onImport("audio/*")}><Ic g="⇪" size={16} /> Import</button>
+            {a.onCreateAudio && <button className="v2-btn primary" title="Make music or sound effects in the Audio editor" onClick={a.onCreateAudio}><Ic g="＋" size={16} /> Create audio</button>}
+          </div>
           {assetGrid(of("audio"), { icon: "♫", title: "No audio yet", body: "Drop MP3, WAV or M4A files here, or click to browse. Audio goes on an audio track.", accept: "audio/*", cta: "Import audio" })}
         </>}
         {tab === "text" && <>

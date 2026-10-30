@@ -6,12 +6,14 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { listPresets } from "../registry";
-import { aiGuideFiles, CLIP_DOC_SOURCE, FORMAT_DOC_SOURCE, llmsTxt, presetsJson, storyboardGuideHtml, storyboardGuideMarkdown } from "./aiGuide";
+import { aiGuideFiles, AUDIO_DOC_SOURCE, CLIP_DOC_SOURCE, FORMAT_DOC_SOURCE, llmsTxt, presetsJson, storyboardGuideHtml, storyboardGuideMarkdown } from "./aiGuide";
 import { aiLinks, DEFAULT_SITE_URL } from "./siteUrl";
 import { CHOOSING_PRESETS, EXAMPLE_STORYBOARD, exampleStoryboardJson, GUIDE_KINDS, HOW_IT_WORKS, presetsByCategory, RULE_LIST, RULES, ruleNumber, storyboardShortPrompt, storyboardSystemPrompt } from "./storyPrompt";
 import { parseStoryboard, validateStoryboard, type StoryDoc } from "./storyJson";
 import { storyboardFromDoc } from "./storyboard";
 import { referencesBlock } from "./storyRefs";
+import { AUDIO_CLIP_REFERENCE, audioClipExamples } from "./audioClipPrompt";
+import { AUDIO_TEMPLATES, parseAudioClip } from "./audioClip";
 import { HTML_CLIP_CONTRACT, HTML_CLIP_FORMAT, htmlClipTemplate, lintHtmlClip } from "./htmlClipPackage";
 
 const root = resolve(__dirname, "../../..");
@@ -29,9 +31,20 @@ if (update) {
   }
   writeFileSync(clipDocPath, clipDoc);
 }
+const audioDocPath = resolve(root, AUDIO_DOC_SOURCE);
+let audioDoc = readFileSync(audioDocPath, "utf8");
+const AUDIO_BLOCKS: Record<string, string> = { reference: AUDIO_CLIP_REFERENCE, examples: audioClipExamples(AUDIO_TEMPLATES.map((t) => t.id)) };
+if (update) {
+  for (const [tag, body] of Object.entries(AUDIO_BLOCKS)) {
+    const old = between(audioDoc, tag) ?? "";
+    const from = old ? `<!-- ${tag}:start -->\n${old}\n<!-- ${tag}:end -->` : `<!-- ${tag}:start -->\n<!-- ${tag}:end -->`;
+    audioDoc = audioDoc.replace(from, `<!-- ${tag}:start -->\n${body}\n<!-- ${tag}:end -->`);
+  }
+  writeFileSync(audioDocPath, audioDoc);
+}
 
 describe("AI planner guide (V2-SB-114)", () => {
-  it.each(Object.entries(aiGuideFiles(DEFAULT_SITE_URL, formatDoc, clipDoc)))("%s is up to date (npm run gen:ai)", (rel, content) => {
+  it.each(Object.entries(aiGuideFiles(DEFAULT_SITE_URL, formatDoc, clipDoc, audioDoc)))("%s is up to date (npm run gen:ai)", (rel, content) => {
     const file = resolve(root, rel);
     if (update) { mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, content); }
     expect(existsSync(file), `${rel} is missing; run npm run gen:ai`).toBe(true);
@@ -55,7 +68,7 @@ describe("AI planner guide (V2-SB-114)", () => {
   it("the full prompt inlines the guide with RULES 1-37; the short prompt links to it", () => {
     const full = storyboardSystemPrompt();
     for (const s of ["FORMAT (", "PRESETS", "RULES", "EXAMPLE", `14. ${RULES[13]}`, "not seconds", "START FRAME", "\"references\"?", "\"genDurationSec\"?", "- crossfade:", "- ken-burns:"]) expect(full).toContain(s);
-    expect(RULES).toHaveLength(37);
+    expect(RULES).toHaveLength(38);
     // V2-SB-128: blend modes: the format lines, the blend catalogue and a rule with an example that imports cleanly.
     expect(full).toContain('"blend"?: "<blend id>", "opacity"?: number (0-1, default 1)');
     expect(full).toContain('Blend modes — shots[].layers[].blend');
@@ -127,7 +140,7 @@ describe("AI planner guide (V2-SB-114)", () => {
 
   it("RULE 30 (P2A): revised JSON is re-imported by id, so ids stay stable", () => {
     expect(RULE_LIST.slice(29, 30).map((r) => r.key)).toEqual(["stable-ids-reimport"]);
-    expect(RULE_LIST.slice(30).map((r) => r.key)).toEqual(["self-contained-prompts", "reference-sheets", "html-code-refs", "shot-background", "lastframe-refs", "chroma-key", "audio-shaping"]);
+    expect(RULE_LIST.slice(30).map((r) => r.key)).toEqual(["self-contained-prompts", "reference-sheets", "html-code-refs", "shot-background", "lastframe-refs", "chroma-key", "audio-shaping", "audio-json"]);
     expect(ruleNumber("stable-ids-reimport")).toBe(30);
     expect(storyboardSystemPrompt()).toContain(`30. ${RULES[29]}`);
     expect(RULES[29]).toMatch(/re-imports it/);
@@ -292,7 +305,7 @@ describe("AI links follow the configured site URL (V2-OPS-LINKS)", () => {
   const SITE = "https://video.example.com/editor/";
 
   it("every generated file links to the given site, and the spec is published next to the guide", () => {
-    const files = aiGuideFiles(SITE, formatDoc, clipDoc);
+    const files = aiGuideFiles(SITE, formatDoc, clipDoc, audioDoc);
     for (const [rel, content] of Object.entries(files)) {
       expect(content, rel).not.toContain("github.io");
       expect(content, rel).not.toContain("github.com");
@@ -307,11 +320,14 @@ describe("AI links follow the configured site URL (V2-OPS-LINKS)", () => {
     expect(files["public/ai/STORYBOARD_FORMAT.md"]).toBe(formatDoc);
     expect(files["public/ai/HTML_CLIP_PACKAGE.md"]).toBe(clipDoc);
     expect(llmsTxt(SITE)).toContain(`(${SITE}ai/HTML_CLIP_PACKAGE.md)`);
+    expect(files["public/ai/AUDIO_CLIP_FORMAT.md"]).toBe(audioDoc);
+    expect(llmsTxt(SITE)).toContain(`(${SITE}ai/AUDIO_CLIP_FORMAT.md)`);
+    expect(JSON.parse(presetsJson(SITE)).audioClip.spec).toBe(`${SITE}ai/AUDIO_CLIP_FORMAT.md`);
   });
 
   it("only the site URL differs between deployments", () => {
-    const def = aiGuideFiles(DEFAULT_SITE_URL, formatDoc, clipDoc);
-    const other = aiGuideFiles(SITE, formatDoc, clipDoc);
+    const def = aiGuideFiles(DEFAULT_SITE_URL, formatDoc, clipDoc, audioDoc);
+    const other = aiGuideFiles(SITE, formatDoc, clipDoc, audioDoc);
     for (const rel of Object.keys(def)) expect(other[rel], rel).toBe(def[rel].split(DEFAULT_SITE_URL).join(SITE));
   });
 
@@ -349,11 +365,11 @@ describe("guide consistency (V2-SB-131)", () => {
   const exampleText = md.split("## EXAMPLE\n```json\n")[1].split("\n```")[0];
 
   it("the example writes sources in the documented form: \"generate\" / \"upload\" strings, an object only for lastFrame", () => {
-    expect(md).toContain('"source": "generate" | "upload" | { "type": "lastFrame", "shot": "<shot id>" },');
+    expect(md).toContain('"source": "generate" | "upload" | "json" | { "type": "lastFrame", "shot": "<shot id>" },');
     const ex = JSON.parse(exampleText) as { assets: { source: unknown }[] };
     expect(exampleText).toBe(exampleStoryboardJson());
     for (const a of ex.assets) {
-      const ok = a.source === "generate" || a.source === "upload" || (typeof a.source === "object" && a.source !== null && Object.keys(a.source).sort().join() === "shot,type" && (a.source as { type: string }).type === "lastFrame");
+      const ok = a.source === "generate" || a.source === "upload" || a.source === "json" || (typeof a.source === "object" && a.source !== null && Object.keys(a.source).sort().join() === "shot,type" && (a.source as { type: string }).type === "lastFrame");
       expect(ok, JSON.stringify(a.source)).toBe(true);
     }
     expect(ex.assets.some((a) => a.source === "generate")).toBe(true);
@@ -401,5 +417,16 @@ describe("guide consistency (V2-SB-131)", () => {
     const plain = parseStoryboard(JSON.stringify({ ...JSON.parse(JSON.stringify(r.doc)), shots: [{ ...r.doc.shots[0], assets: ["hero", "cafe"], references: undefined, keyframe: { prompt: "p", references: ["hero", "cafe"] } }], assets: r.doc.assets.filter((a) => a.id === "hero" || a.id === "cafe").map((a) => ({ ...a, source: "generate" })) }));
     expect(plain.ok).toBe(true);
     if (plain.ok) { const pb = storyboardFromDoc(plain.doc); expect(referencesBlock(pb, pb.shots.s1).split("\n").slice(1).map((l) => l.replace(/: .*$/, ""))).toEqual(example); }
+  });
+});
+
+describe("Audio clip spec (P4A)", () => {
+  it("the doc's generated blocks match the format tables", () => {
+    for (const [tag, body] of Object.entries(AUDIO_BLOCKS)) expect(between(audioDoc, tag), `${tag} block`).toBe(body);
+  });
+  it("every JSON example in the doc parses without errors", () => {
+    const blocks = [...audioDoc.matchAll(/```json\n([\s\S]*?)```/g)].map((m) => m[1]);
+    expect(blocks.length).toBe(AUDIO_TEMPLATES.length);
+    for (const b of blocks) { const r = parseAudioClip(b); expect(r.ok, JSON.stringify(r.issues)).toBe(true); expect(r.issues).toEqual([]); }
   });
 });

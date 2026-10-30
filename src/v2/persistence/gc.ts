@@ -38,7 +38,7 @@ async function run(storage: Storage, { graceMs = GC_GRACE_MS, now = Date.now, on
     try {
       const p = await storage.projects.load(s.id);
       if (!p) { complete = false; continue; }
-      for (const a of Object.values(p.assets ?? {})) for (const v of a.versions) used.add(v.media.blobKey);
+      for (const a of Object.values(p.assets ?? {})) for (const v of a.versions) { used.add(v.media.blobKey); if (v.media.thumbKey) used.add(v.media.thumbKey); if (v.media.specKey) used.add(v.media.specKey); }
     } catch (e) { complete = false; onError?.(e); }
   }
   const marks = await readMarks(storage);

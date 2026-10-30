@@ -12,6 +12,9 @@ import { TransformHandles, TransformInspector } from "./Transform";
 import { TextPanel } from "./TextPanel";
 import { AnimationPicker } from "./AnimationPicker";
 import { CodeEditor } from "./CodeEditor";
+import { AudioEditor } from "./AudioEditor";
+import { audioClipAsset, storeAudioClip } from "./audioClipAsset";
+import type { AudioClip } from "../domain";
 import { clipFileFrom } from "./htmlPackage";
 import { ExportDialog } from "./ExportDialog";
 import { ProjectsDialog } from "./Projects";
@@ -131,6 +134,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const [animLoop, setAnimLoop] = useState(false);
   const [snapOn, setSnapOn] = useState(true);
   /** The Code Editor: an existing clip (new version on save), or `create` a new one (Add Media → Code → Create). */
+  /** P4A-3: the Audio editor (create: a new clip added to the timeline; else a new version of the asset). */
+  const [audioEdit, setAudioEdit] = useState<{ placementId?: string; assetId?: string; source?: string; create?: boolean }>();
   const [htmlEdit, setHtmlEdit] = useState<{ placementId?: string; assetId?: string; source: string; create?: "main" | "overlay" }>();
   const [inlineId, setInlineId] = useState<string>();
   const [subId, setSubId] = useState<string>();
@@ -382,6 +387,30 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     await storage.blobs.put(blobKey, new Blob([html], { type: "text/html" }));
     engine.dispatch(cmd.addAssetVersion(asset.id, { ...prev, id, createdAt: new Date().toISOString(), media: { ...prev.media, blobKey }, provenance: { source: "import", inputs: [] } }, htmlEdit.placementId));
     setHtmlEdit(undefined); setToast("HTML clip updated (Undo to revert)");
+  };
+  const selVersion = selected ? project.assets[selected.placement.source.assetId]?.versions.find((v) => v.id === selected.placement.source.versionId) : undefined;
+  const selAudioSpec = selVersion?.media.specKey;
+  const openAudio = async () => {
+    const pl = selected?.placement;
+    const blob = selAudioSpec ? await storage.blobs.get(selAudioSpec) : undefined;
+    if (pl && blob) setAudioEdit({ placementId: pl.id, assetId: pl.source.assetId, source: await blob.text() });
+    else setToast("Could not load this clip's audio JSON");
+  };
+  const createAudio = () => { setPicker(null); setSheet(false); setAudioEdit({ create: true }); };
+  const saveAudio = async (clip: AudioClip) => {
+    if (!audioEdit) return;
+    if (audioEdit.create) {
+      const asset = await audioClipAsset(storage.blobs, clip);
+      if (engine.dispatch([cmd.importAsset(asset), cmd.addAssetsInSequence([asset.id], Math.round(player.time))], "Create audio")) { setAudioEdit(undefined); setToast("Audio added (Undo to remove)"); }
+      return;
+    }
+    const asset = audioEdit.assetId ? project.assets[audioEdit.assetId] : undefined;
+    const prev = asset?.versions.find((v) => v.id === asset.selectedVersionId) ?? asset?.versions[0];
+    if (!asset || !prev) return;
+    const id = newId("ver");
+    const media = await storeAudioClip(storage.blobs, clip, asset.id, id);
+    engine.dispatch(cmd.addAssetVersion(asset.id, { ...prev, id, createdAt: new Date().toISOString(), media, provenance: { source: "import", inputs: [] } }, audioEdit.placementId));
+    setAudioEdit(undefined); setToast("Audio updated (Undo to revert)");
   };
   const isHtml = selected?.placement.clipType === "html";
   const gizmo = { onDelete: () => del(false), onEdit: () => (isText ? setTextOpen(true) : isHtml ? void openCode() : setInspOpen(true)), onDuplicate: () => duplicateAbove(), onDoubleTap: () => { if (isText) setInlineId(selected!.placement.id); }, onTap: tapAt, otherAt };
@@ -673,6 +702,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       tool("🗑", ripple ? "Ripple delete" : "Delete", () => del(), "delete", ripple ? "Delete and close the gap" : "Delete"),
       ...(isHtml ? [tool("settings", "Params", () => setParamsOpen(true), "html-params", "This clip's values: text, colours and other params the HTML clip exposes"), tool("</>", "Edit code", () => void openCode(), "edit-code", "Edit HTML, CSS and JS with live preview")] : []),
       ...(isText ? [tool("T", "Edit text", () => setTextOpen(true), "edit-text", "Templates, font, style, effects, animation"), tool("anim", "Animation", () => setAnimOpen(true), "anim", "In, out and loop animations"), tool("≡", "Subtitles", () => openSubs(selected.track.id, selected.placement.id), "subs-list", "Open this layer's subtitle list at this clip")] : []),
+      ...(selAudioSpec ? [tool("♫", "Edit audio", () => void openAudio(), "edit-audio", "Open this clip in the Audio editor; saving makes a new version")] : []),
       tool("⤧", "Adjust", () => setInspOpen(true), "adjust", "Transform, keyframes and fades"),
       ...(canChromaKey(selected.placement) ? [tool("chroma", "Chroma key", () => setCkOpen(true), "chroma", "Remove a green or blue screen colour")] : []),
       ...(hasSound(selected.placement) ? [tool("curve", "Volume curve", () => setVcOpen(true), "vcurve", "Volume points over the waveform, and fades"), tool("afx", "Audio FX", () => setAfxOpen(true), "afx", "Echo, telephone, radio, robot…")] : []),
@@ -693,7 +723,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       tool("🗑", "Delete", () => delSel(), "del"),
       ...clipActions.map((a) => tool(a.icon, a.label, a.run, a.label, a.title)),
     ],
-    audio: [tool("＋", "Add audio", () => setPicker("audio"), "add-audio", "Add music or sound from this project or your device")],
+    audio: [tool("＋", "Add audio", () => setPicker("audio"), "add-audio", "Add music or sound from this project or your device"), tool("♫", "Create audio", createAudio, "create-audio", "Make music or sound effects in the Audio editor")],
     speed: sp ? SPEEDS.map((s) => (
       <button key={s} className={`v2-tool ${(sp.speed ?? 1) === s ? "is-active" : ""}`} aria-pressed={(sp.speed ?? 1) === s} onClick={() => engine.dispatch(cmd.setSpeed(sp.id, s))}><b>{s}×</b><span>{s === 1 ? "Normal" : s < 1 ? "Slow" : "Fast"}</span></button>
     )) : [],
@@ -744,7 +774,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       onImport={importDialog} onFiles={(fs) => void onFiles(fs)} onAddAsset={addToTimeline} onRemoveAsset={(a) => engine.dispatch(cmd.removeAsset(a.id))}
       onAddText={(tp) => addTextAt(player.time, tp)} onImportSrt={() => srtRef.current?.click()}
       onAddSticker={(st) => void addStickerAt(st, player.time)} onAddEffect={(id) => addEffectAt(id, player.time)}
-      onAddTransition={addTransitionNearPlayhead} onCreateCode={() => createCode()} />
+      onAddTransition={addTransitionNearPlayhead} onCreateCode={() => createCode()} onCreateAudio={createAudio} />
   );
   useEffect(() => { setItab(preferTab.current); preferTab.current = undefined; }, [selectedId]);
   const fpsNow = project.settings.fps;
@@ -783,6 +813,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       {timeActions.length > 0 && <section aria-label="Time"><h4>Time</h4>{actionList(timeActions)}</section>}
     </div> };
     const audioTab: InspectorTab = { id: "audio", label: "Audio", icon: "🔊", render: () => <div className="v2-psettings">
+      {selAudioSpec && <section aria-label="Audio clip"><h4>Audio clip</h4><button className="v2-btn v2-ae-editbtn" title="Open in the Audio editor; saving makes a new version" onClick={() => void openAudio()}><Ic g="♫" size={16} /> Edit audio</button></section>}
       <section aria-label="Volume"><h4>Volume</h4>{volumeRow(pl)}</section>
       <VolumeCurve engine={engine} placement={pl} time={time} peaks={peaks[mediaKey(pl.source.assetId, pl.source.versionId)]} />
       <AudioFxPanel engine={engine} placement={pl} />
@@ -937,6 +968,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       {notice && <RecoveryNotice failure={notice} storage={storage} onDismiss={() => setNotice(undefined)} />}
       {projects && <ProjectsDialog storage={storage} current={project} onOpen={(id) => { setProjects(false); onSwitch(id); }} onRenameCurrent={(n) => engine.dispatch(cmd.renameProject(n))} onClose={() => setProjects(false)} />}
       {exporting && <ExportDialog project={project} blobs={storage.blobs} res={res} onRes={setRes} onClose={() => setExporting(false)} />}
+      {audioEdit && <AudioEditor key={audioEdit.create ? "new-audio" : audioEdit.placementId} source={audioEdit.source} create={audioEdit.create} mobile={mobile} onSave={saveAudio} onClose={() => setAudioEdit(undefined)} />}
       {htmlEdit && <CodeEditor key={htmlEdit.create ? "new" : htmlEdit.placementId} source={htmlEdit.source} create={!!htmlEdit.create} mobile={mobile} onSave={(h) => void saveCode(h)} onClose={() => setHtmlEdit(undefined)} />}
       {subsPick && <div className="v2-menu-backdrop v2-confirm-backdrop" onPointerDown={() => setSubsPick(false)}>
         <div className="v2-confirm v2-subs-pick" role="dialog" aria-modal="true" aria-label="Choose a text layer" onPointerDown={(e) => e.stopPropagation()}>
@@ -982,7 +1014,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
             {(activeMenu !== "root" || expanded) && <button className="v2-tool v2-tool-back" aria-label={activeMenu === "root" && expanded ? `Collapse ${ops.GROUP_LABEL[expanded]}` : "Back"} title={activeMenu === "root" && expanded ? `Collapse ${ops.GROUP_LABEL[expanded]}` : "Back"} onClick={back}>‹</button>}
             {mobileTools[activeMenu]}
           </nav>
-          {picker && <MediaPicker media={projectMedia} title={picker === "overlay" ? "Add overlay" : picker === "audio" ? "Add audio" : picker === "stickers" ? "Add stickers" : "Add media"} only={picker === "audio" ? "audio" : undefined} initialTab={picker === "stickers" ? "stickers" : undefined} onClose={() => setPicker(null)} onAdd={(p) => void addPicked(p, picker === "overlay" || picker === "stickers" ? "overlay" : "main")} onCreateCode={picker === "audio" ? undefined : () => createCode(picker === "overlay" ? "overlay" : "main")} loadMedia={loadAssetBlob} />}
+          {picker && <MediaPicker media={projectMedia} title={picker === "overlay" ? "Add overlay" : picker === "audio" ? "Add audio" : picker === "stickers" ? "Add stickers" : "Add media"} only={picker === "audio" ? "audio" : undefined} initialTab={picker === "stickers" ? "stickers" : undefined} onClose={() => setPicker(null)} onAdd={(p) => void addPicked(p, picker === "overlay" || picker === "stickers" ? "overlay" : "main")} onCreateCode={picker === "audio" ? undefined : () => createCode(picker === "overlay" ? "overlay" : "main")} onCreateAudio={picker === "audio" ? createAudio : undefined} loadMedia={loadAssetBlob} />}
           {sheet && <Sheet label="Media" head={false} onClose={() => setSheet(false)}>{browser}</Sheet>}
           {!sheet && <div hidden>{browser}</div>}
           {cue && <div className="v2-msub"><SubtitleEditor engine={engine} sub={cue} onDelete={delCue} /></div>}
