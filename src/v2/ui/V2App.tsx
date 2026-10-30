@@ -765,7 +765,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const addTextAt = (at: number, template?: string) => {
     const id = newId("plc");
     const data = template ? textDomain.textStyleData(template) : undefined;
-    if (engine.dispatch(cmd.addTextClip(Math.round(at), data ?? {}, id))) { setSel([id]); setSubId(undefined); }
+    const pos = template ? textDomain.textStylePosition(template) : undefined;
+    if (engine.dispatch(pos ? [cmd.addTextClip(Math.round(at), data ?? {}, id), cmd.setTransform(id, pos)] : cmd.addTextClip(Math.round(at), data ?? {}, id), "Add text")) { setSel([id]); setSubId(undefined); }
   };
   const addStickerAt = async (st: Sticker, at: number) => {
     try {

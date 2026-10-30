@@ -10,6 +10,7 @@ import { audioFxData, buildFxChain, fxKey, type FxChain } from "./audioFx";
 import { compositionDuration, fadeAt, volumeKeyAt, versionOf, type Placement, type Project } from "../domain/model";
 import type { BlobStore } from "../ports/storage";
 import { subtitleAt } from "../domain/subtitles";
+import { loadBundledFonts } from "./fonts";
 import { drawTextClip } from "./text";
 import { effectivePlacement } from "../domain/layerStyle";
 import { applyEffectFrame, effectFrameAt } from "./effects";
@@ -72,7 +73,10 @@ export class Player {
     this.project = project;
     if (clock) this.clock = clock;
     else { const c = createClock(); this.clock = c.clock; this.audioCtx = c.ctx; }
+    // P7-FONTS: redraw once the bundled fonts are ready so the preview swaps the fallback face for the real one.
+    void loadBundledFonts().then(() => { if (!this.disposed && !this.offline && this.canvas) this.draw(); });
   }
+  private disposed = false;
   get clockKind() { return this.clock.kind; }
 
   /**
@@ -477,6 +481,7 @@ export class Player {
   }
 
   dispose() {
+    this.disposed = true;
     this.pause();
     for (const id of [...this.pool.keys()]) this.release(id);
     this.html.forEach((h) => h.host.dispose()); this.html.clear();

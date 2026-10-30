@@ -57,7 +57,7 @@ Generated from the same schema as the storyboard parser (`src/v2/domain/storyAge
 - `add_shot`(shot, after): Add a shot. "after": the shot id to insert after (omit to append at the end; null to insert first). Add a long story in batches of shots.
 - `update_shot`(id, patch): Change fields of a shot (title, description, durationSec, prompt, assets, references, dialogue, camera, qa, keyframe, render, clip, effects (each may set applyTo: main, overlay or all), …).
 - `remove_shot`(id): Remove a shot and its connections. Rejected while a cue, last-frame link or other shot still needs it; change those first.
-- `set_shot_layers`(id, layers): Replace all layers of a shot (text, html, image, video), drawn in order on top. [] removes them.
+- `set_shot_layers`(id, layers): Replace all layers of a shot (text, html, image, video), drawn in order on top. [] removes them. Text layers may set anim.inParams, e.g. the typewriter cursor { cursor, blink, after: blink|hide|fade, scramble }.
 - `set_shot_background`(id, background): Give a still shot a colour or gradient background (sets "render": "still"); null removes it. Use clip or background, not both.
 - `set_shot_params`(id, params, replace): Set the params of an html shot's clip (e.g. a title card's text). Merged into the current values; null removes one; "replace": true replaces them all.
 - `reorder_shots`(id, index, order): Move one shot ("id" + 0-based "index") or give the whole new "order" (every shot id once).

@@ -2516,6 +2516,12 @@
           "title": "Effect clips: Apply to main / overlay / all (preview + export, inspector control, storyboard applyTo, rule 44)",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P7-TYPE-CURSOR",
+          "title": "Typewriter cursor (blink / scramble decode), bundled sci-fi fonts (OFL), sci-fi caption preset",
+          "status": "done",
+          "progress": 100
         }
       ]
     },

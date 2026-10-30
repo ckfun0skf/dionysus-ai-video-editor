@@ -63,7 +63,8 @@ export function paramProblems(params: unknown): string[] {
       if (q.step !== undefined && !(Number.isFinite(q.step) && q.step > 0)) out.push(`${at}: step must be > 0`);
     } else if (q.type === "color") { if (typeof q.default !== "string" || !HEX.test(q.default)) out.push(`${at}: colour default must be #rrggbb`); }
     else if (q.type === "string") { if (typeof q.default !== "string") out.push(`${at}: string default must be a string`); }
-    else out.push(`${at}: type must be number, color or string`);
+    else if (q.type === "select") { if (!Array.isArray(q.options) || !q.options.length || !q.options.every((o) => typeof o === "string") || !q.options.includes(q.default)) out.push(`${at}: select needs string options that include the default`); }
+    else out.push(`${at}: type must be number, color, string or select`);
   }
   return out;
 }
@@ -77,6 +78,7 @@ export function moduleProblems(m: PresetModule | undefined, path: string, fontId
   if (at && (at.kind !== m.kind || at.id !== m.id)) out.push(`file must live at ${m.kind}/${m.id}.ts (found ${at.kind}/${at.id})`);
   if (m.kind === "font") {
     if (!str(m.label) || !str(m.stack) || !str(m.description, 10) || !(m.width > 0 && m.width < 2)) out.push("font needs label, stack, description and a width in em (0..2)");
+    if (m.bundled && (!str(m.bundled.family) || !str(m.bundled.license) || !m.bundled.files?.length || !m.bundled.files.every((f) => /^[a-z0-9-]+\.woff2$/.test(f.file) && (f.weight === 400 || f.weight === 700)) || !m.stack.includes(`'${m.bundled.family}'`))) out.push("bundled font needs a family (quoted first in the stack), a licence file and woff2 files at weight 400/700");
     return out;
   }
   if (!str(m.name)) out.push("name is required");

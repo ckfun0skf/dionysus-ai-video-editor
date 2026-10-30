@@ -46,7 +46,8 @@ describe("preset modules (V2-FX-MOD)", () => {
       expect(d.name.trim(), `${d.kind}/${d.id}`).not.toBe("");
       for (const p of d.params) {
         expect(p.description, `${d.kind}/${d.id}.${p.key}`).toBeTruthy();
-        expect(p.description!, `${d.kind}/${d.id}.${p.key}: say the unit or range`).toMatch(unit);
+        if (p.type === "select") expect(p.options.every((o) => p.description!.includes(o)), `${d.kind}/${d.id}.${p.key}: describe every option`).toBe(true);
+        else expect(p.description!, `${d.kind}/${d.id}.${p.key}: say the unit or range`).toMatch(unit);
       }
     }
   });

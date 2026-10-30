@@ -260,7 +260,7 @@ Layers are drawn in list order: later layers sit on top. There is no `zIndex`. `
 | `position` **or** `box` | `{x,y}` or `{x,y,width,height}` | `position` (preferred) gives the text centre. `box` gives the top-left corner plus size. Give exactly one. See "Text sizing" below. |
 | `textStyle?` | preset id | A registry `textStyle` id or a `meta.textStyles` key. Default `plain`. |
 | `style?` | `{font?, size?, color?, align?, bold?, …extras}` | `font` is a curated font id (§3.2). `size` is a fraction of frame height. `color` is a CSS hex value. `align` is `left`, `center` or `right`. `bold` is a boolean; a numeric weight of 600 or more is accepted and mapped to bold. Extras (V2-SB-127): see "Text style extras" below. |
-| `anim?` | `{in?, out?, loop?, durationSec?}` | Ids of the `textAnimIn`, `textAnimOut` and `textAnimLoop` kinds. `durationSec` applies to in and out. |
+| `anim?` | `{in?, out?, loop?, durationSec?, inParams?}` | Ids of the `textAnimIn`, `textAnimOut` and `textAnimLoop` kinds. `durationSec` applies to in and out. `inParams` **(new, P7)** are params of the `in` animation, checked against its descriptor (unknown keys, out-of-range numbers and unlisted `select` values warn). See "Typewriter cursor" below. |
 | `follow?` | `"frame"` \| `"shot"` | V2-SB-126. Default `"frame"`: the layer stays fixed to the frame. `"shot"`: it moves with the shot's zoom and pan (see "Fixed or following layers" below). |
 | `chromaKey?` **(new, P3B)** | `{ "color": "#rrggbb", "range"?: 0–1, "spill"?: 0–1 }` | Image, video and html layers: removes `color` (green screen). `range` is the tolerance (default 0.4), `spill` removes the colour's tint from edges (default 0.5). Named colours `green` / `blue` are accepted. Keyed on the GPU (WebGL, CPU fallback) in both preview and export. On a text layer, or with a bad colour, it warns and is ignored. See RULE 36. |
 | `blend?`, `opacity?` | blend id, number 0 to 1 | V2-SB-128. How the layer mixes with what is under it (default `normal`), and its opacity (default 1). See "Blend modes and overlays" below. |
@@ -280,6 +280,19 @@ Style resolution: the `textStyle` preset is applied first, then the inline `styl
 | `effect?`, `effectColor?` | text effect id or `"none"`, hex | A registry `effect` (`glow`, `neon`, `hollow`, `echo`), drawn in `effectColor`. `id@N` is accepted; the version is dropped. |
 
 Example: `"style": { "color": "#ffffff", "strokeWidth": 0.06, "strokeColor": "#000000", "shadow": { "color": "#000000", "blur": 0.3, "x": 0, "y": 0.04 } }`.
+
+**Typewriter cursor (P7-TYPE-CURSOR).** With `"anim": { "in": "typewriter" }`, `inParams` sets the cursor. The typing lasts `anim.durationSec`.
+
+| Param | Type | Notes |
+|---|---|---|
+| `cursor` | string, default `""` | `""` = no cursor (the old look). One character (`"\|"`, `"_"`, `"▌"`) = a cursor drawn right after the typed text. Several (`"0123456789"`, `"01"`) = decode/scramble: each new character flickers through random ones of these before it resolves, and the cursor itself cycles through them while typing. |
+| `blink` | number 0–6, default 2 | Cursor blinks per second once typing has finished. 0 = solid. While typing the cursor is solid. |
+| `after` | `"blink"` \| `"hide"` \| `"fade"`, default `"blink"` | After typing: keep blinking, disappear at once, or fade out over 0.5 s. |
+| `scramble` | number 0–1 s, default 0.15 | How long each character scrambles (only with several cursor characters). |
+
+The scramble is deterministic: the random glyph of character *i* changes 30 times a second and depends only on *i* and the clip time, so the preview and every export (any fps) show the same frames. Spaces and line breaks are never scrambled.
+
+Example (a sci-fi location/date caption at the bottom right): `{ "id": "loc", "type": "text", "text": "SEATTLE / YEAR 2027", "startSec": 0.5, "endSec": 4, "position": { "x": 0.62, "y": 0.9 }, "textStyle": "sci-fi-caption", "anim": { "in": "typewriter", "durationSec": 1.5, "inParams": { "cursor": "0123456789", "after": "fade", "scramble": 0.25 } } }`. The `sci-fi-caption` style already carries those `inParams`, so `"textStyle": "sci-fi-caption"` alone gives the same look.
 
 **Text sizing.** Text is a single line per `\n`-separated line; it is **never wrapped**.
 - With `position`, the text is centred on the point. Its size is `style.size`, else the `textStyle` size, else 0.1 of the frame height.
@@ -470,11 +483,11 @@ This is a snapshot only. **The live list always comes from the registry**, and t
 | textAnimLoop | `pulse`, `wiggle`, `float`, `blink` |
 | videoEffect | `fade-in`, `fade-out`, `blur`, `ken-burns` (slow zoom / push-in), `shake`, `vignette`, `bw` |
 | transition | `crossfade`, `dip` (dip to black) |
-| textStyle | `plain`, `caption`, `outline`, `neon`, `pop`, `typewriter`, `glow`, `echo`, `soft-shadow`, `cinematic` |
+| textStyle | `plain`, `caption`, `outline`, `neon`, `pop`, `typewriter`, `glow`, `echo`, `soft-shadow`, `cinematic`, `sci-fi-caption` (P7: bottom-right location/date stamp, Share Tech Mono, digit scramble) |
 | effect (text styling) | `glow`, `neon`, `hollow`, `echo`; used in `style.effect` (V2-SB-127) |
 | audioFx | `pa-announcement`, `hall`, `room`, `telephone`, `radio`, `underwater`, `robot`; used in `audio[].fx` (P3B) |
 | blend | `normal`, `screen`, `add`, `lighten`, `multiply`, `darken`, `overlay`, `soft-light`; used in `layers[].blend` (V2-SB-128) |
-| fonts (curated ids, not presets) | `sans`, `serif`, `mono`, `impact`, `rounded`, `hand`, `script`, `condensed`. No web fonts. |
+| fonts (curated ids, not presets) | `sans`, `serif`, `mono`, `impact`, `rounded`, `hand`, `script`, `condensed` (system fonts), plus the bundled sci-fi fonts **(new, P7)** `orbitron`, `share-tech-mono`, `audiowide`, `rajdhani`, `exo-2`: SIL OFL, self-hosted with the app (public/fonts/, licences next to them), never fetched from a third party, waited for before export and packed into project files (`fonts/`). |
 
 Planned as future registry entries, with no schema change needed: `grain`, `colour-grade`, `dip-to-white`, and wipe transitions.
 
@@ -703,6 +716,7 @@ The same winding hill road as the sun rises …", "references": [{ "asset": "hil
 42. Series: give a new asset "series": true when later episodes will need it too (a recurring character, the show's main locations, its style). Leave one-off things out (a prop used once, last frames, keyframes). Without a SERIES ASSETS list the project may not be in a series: then define every asset in full; "series": true is still allowed and is applied when the user adds the project to a series.
 43. Series with Dionysus tools (WebMCP): call list_series_assets before adding characters, props, locations or styles; use_series_asset adds one linked to the board; promote_to_series marks a board asset for the Series. Editing a linked asset's definition changes it in every episode, so only do that when the user asks; otherwise ask them to detach it first (Asset → Detach from series).
 44. An effect's "applyTo" picks the picture it changes: "main" (the default) changes only the shot's own clip, under every layer, so titles and overlays stay fixed; "overlay" changes only the shot's image, video and html layers (e.g. shake a sticker or blur a screen insert, leaving the shot still); "all" changes the whole composited frame — the shot, its overlays and its text together — like moving the camera over the finished picture. Use "all" when an overlay frames or keys the shot, e.g. a TV-set overlay with a green-screen hole showing the shot: a push-in with "main" zooms only the picture inside the TV, with "all" the TV and the picture zoom together. Example: "effects": [ { "preset": "ken-burns", "params": { "zoom": 0.15 }, "applyTo": "all" } ]. Layers with "follow": "shot" (RULE 20) follow only "main" effects.
+45. Typewriter cursor: a text layer with "anim": { "in": "typewriter" } can take "inParams": { "cursor", "blink", "after", "scramble" }. "cursor" is the cursor characters: "" (default) = none; one character ("|" or "_") = a cursor right after the typed text; several ("0123456789", "01", "#$%&") = a decode/scramble effect where each new character flickers through random ones of them for "scramble" seconds (0–1, default 0.15) before it resolves. "blink" = cursor blinks per second after typing (0–6, default 2; 0 = solid). "after" = what the cursor does when typing ends: "blink" (default, keep blinking), "hide" or "fade" (fades out over 0.5 s). Typing lasts "anim.durationSec". The scramble is seeded by time, so preview and export match exactly. For a sci-fi location/date caption use the "sci-fi-caption" textStyle (bundled Share Tech Mono, right-aligned, digit scramble) at the bottom right, e.g. { "type": "text", "text": "SEATTLE / YEAR 2027", "position": { "x": 0.62, "y": 0.9 }, "textStyle": "sci-fi-caption", "anim": { "in": "typewriter", "durationSec": 1.5, "inParams": { "cursor": "0123456789", "after": "fade" } } }. Bundled sci-fi fonts (work offline, packed into project files): orbitron, share-tech-mono, audiowide, rajdhani, exo-2.
 ```
 
 ## 6. Decisions, open questions and future work

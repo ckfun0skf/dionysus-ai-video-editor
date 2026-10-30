@@ -9,3 +9,4 @@ export { effectFrameAt, applyEffectFrame } from "./effects";
 export { drawWithLook, isPlainLook } from "./transitionDraw";
 export { blendOp, withBlend } from "./blend";
 export * from "./audioClip";
+export { bundledFontUrl, bundledFonts, loadBundledFonts, projectBundledFonts, projectFontFiles } from "./fonts";

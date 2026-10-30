@@ -33,7 +33,7 @@ export function drawTextClip(ctx: CanvasRenderingContext2D, p: Placement, w: num
   ctx.font = fontString(d, px);
   if ("letterSpacing" in ctx) (ctx as unknown as { letterSpacing: string }).letterSpacing = `${(d.letterSpacing ?? 0) * px}px`;
   const all = wrapLines(ctx, d.text || " ", w * 0.9);
-  const shown = wrapLines(ctx, visibleText(d.text, a.chars), w * 0.9);
+  const shown = wrapLines(ctx, a.display ?? visibleText(d.text, a.chars), w * 0.9);
   const bw = Math.max(px * 0.5, ...all.map((l) => ctx.measureText(l).width));
   const pad = d.background ? px * 0.3 : px * 0.1;
   const boxW = bw + pad * 2, boxH = all.length * lh + pad * 2;
@@ -65,6 +65,15 @@ export function drawTextClip(ctx: CanvasRenderingContext2D, p: Placement, w: num
   if (fx.hollow) paint("transparent", { c: d.color, w: Math.max(2, px * 0.06) });
   else if (fx.neon) { paint(ec, { c: ec, w: px * 0.08 }); ctx.shadowBlur = 0; paint("#ffffff"); }
   else paint(d.color, stroke);
+  if (a.caret && a.caret.alpha > 0) {
+    // P7-TYPE-CURSOR: the cursor sits right after the last visible character (the first line when nothing is typed yet).
+    const li = Math.max(0, shown.length - 1), last = shown[li] ?? "", lw = ctx.measureText(last).width;
+    const cx0 = d.align === "left" ? ax + lw : d.align === "right" ? ax : ax + lw / 2;
+    ctx.save(); ctx.globalAlpha = alpha * a.caret.alpha; ctx.textAlign = "left";
+    if (stroke.w > 0 && !fx.hollow) { ctx.lineWidth = stroke.w; ctx.strokeStyle = stroke.c; ctx.strokeText(a.caret.glyph, cx0, y(li)); }
+    ctx.fillStyle = fx.neon || fx.hollow ? ec : d.color; ctx.fillText(a.caret.glyph, cx0, y(li));
+    ctx.restore();
+  }
   ctx.restore();
   return { cx, cy, w: boxW * scale, h: boxH * scale, rot, alpha, sx: 0, sy: 0, sw: boxW, sh: boxH };
 }
