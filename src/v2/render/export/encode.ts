@@ -4,7 +4,8 @@ import type { Project } from "../../domain/model";
 import type { BlobStore } from "../../ports/storage";
 import { Player } from "../player";
 import { ExportVideoFrames } from "./videoFrames";
-import { audioPlan, gainEvents, exportDuration, exportSize, frameTimes, type AudioSegment, type Resolution } from "./plan";
+import { audioFxData, buildFxChain } from "../audioFx";
+import { audioPlan, gainEvents, keyEvents, exportDuration, exportSize, frameTimes, type AudioSegment, type Resolution } from "./plan";
 
 export interface ExportProgress { stage: "audio" | "video" | "finalize"; done: number; total: number }
 /**
@@ -98,7 +99,13 @@ export async function mixAudio(segs: AudioSegment[], seconds: number, blobs: Blo
     const src = ctx.createBufferSource(); src.buffer = buf; src.playbackRate.value = s.rate;
     const g = ctx.createGain(); g.gain.value = s.volume;
     for (const e of gainEvents(s)) { if (e.type === "set") g.gain.setValueAtTime(e.value, e.at); else g.gain.linearRampToValueAtTime(e.value, e.at); }
-    src.connect(g).connect(ctx.destination);
+    // P3B-11: the volume curve on a second gain, then the clip's effect chain (same builder as the preview).
+    const kg = ctx.createGain();
+    for (const e of keyEvents(s)) { if (e.type === "set") kg.gain.setValueAtTime(e.value, e.at); else kg.gain.linearRampToValueAtTime(e.value, e.at); }
+    const fxData = s.fx ? audioFxData(s.fx.preset) : undefined;
+    const chain = fxData ? buildFxChain(ctx, fxData, s.fx!.amount, s.start) : undefined;
+    src.connect(g).connect(kg);
+    if (chain) { kg.connect(chain.input); chain.output.connect(ctx.destination); } else kg.connect(ctx.destination);
     src.start(s.start, s.offset, s.duration * s.rate);
   }
   return ctx.startRendering();

@@ -29,6 +29,10 @@ export interface AudioSegment {
   volume: number;
   fadeIn: number;
   fadeOut: number;
+  /** P3B-11: volume curve keys, seconds from the segment start → gain multiplier 0–2 (absent = flat 1). */
+  keys?: { t: number; v: number }[];
+  /** P3B-11: audio effect preset and amount (absent = dry). */
+  fx?: { preset: string; amount: number };
 }
 
 /**
@@ -54,6 +58,21 @@ export function gainEvents(s: Pick<AudioSegment, "start" | "duration" | "volume"
   return ev;
 }
 
+/**
+ * P3B-11: volume-curve automation for one segment (absolute seconds), matching the preview's evalKeys: the first
+ * key's value holds before it, linear ramps between keys, the last value holds after. Empty without keys.
+ */
+export function keyEvents(s: Pick<AudioSegment, "start" | "keys">): { type: "set" | "ramp"; value: number; at: number }[] {
+  const k = s.keys ?? [];
+  if (!k.length) return [];
+  const at0 = (t: number) => {
+    if (t <= k[0].t) return k[0].v;
+    for (let i = 1; i < k.length; i++) if (t <= k[i].t) return k[i - 1].v + ((k[i].v - k[i - 1].v) * (t - k[i - 1].t)) / (k[i].t - k[i - 1].t || 1);
+    return k[k.length - 1].v;
+  };
+  return [{ type: "set", value: at0(0), at: s.start }, ...k.filter((x) => x.t > 0).map((x) => ({ type: "ramp" as const, value: x.v, at: s.start + x.t }))];
+}
+
 /** Every audible span: audio clips plus video clips' own sound (skips muted, reversed and frozen clips). */
 export function audioPlan(project: Project): AudioSegment[] {
   const comp = project.compositions[project.rootCompositionId];
@@ -67,7 +86,9 @@ export function audioPlan(project: Project): AudioSegment[] {
       if (!v || (p.volume ?? 1) <= 0) continue;
       if (p.durationTicks <= 0) continue;
       const f = fitFades(s(p.durationTicks), s(p.fadeInTicks ?? 0), s(p.fadeOutTicks ?? 0));
-      out.push({ blobKey: v.media.blobKey, start: s(p.startTicks), duration: s(p.durationTicks), offset: s(p.sourceInTicks), rate: p.speed ?? 1, volume: p.volume ?? 1, ...f });
+      out.push({ blobKey: v.media.blobKey, start: s(p.startTicks), duration: s(p.durationTicks), offset: s(p.sourceInTicks), rate: p.speed ?? 1, volume: p.volume ?? 1, ...f,
+        ...(p.keyframes?.volume?.length ? { keys: p.keyframes.volume.map((k) => ({ t: s(k.t), v: k.v })) } : {}),
+        ...(p.audioFx && p.audioFx.amount > 0 ? { fx: { ...p.audioFx } } : {}) });
     }
   }
   return out;

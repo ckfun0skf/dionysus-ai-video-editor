@@ -912,6 +912,93 @@
         }
       ]
     },
+    "audioFx": {
+      "usedIn": "audio[].fx.preset, with \"amount\" 0-1 (default 1)",
+      "categories": [
+        "Echo & reverb",
+        "Character"
+      ],
+      "presets": [
+        {
+          "id": "pa-announcement",
+          "version": 1,
+          "name": "PA announcement",
+          "category": "Echo & reverb",
+          "description": "Public-address loudspeaker in a large space: thin horn tone, slap-back echo and a long tail. Use for station, airport, stadium or school announcements.",
+          "params": [],
+          "ai": {
+            "use": "an announcement over loudspeakers in a big public space",
+            "avoid": "normal narration or dialogue in a small room"
+          }
+        },
+        {
+          "id": "hall",
+          "version": 1,
+          "name": "Hall",
+          "category": "Echo & reverb",
+          "description": "Large hall reverb with a long smooth tail. Use for a church, cathedral, cave, empty warehouse or a dreamy, epic voice.",
+          "params": [],
+          "ai": {
+            "use": "a voice or sound in a very large space, or a dream/flashback feel"
+          }
+        },
+        {
+          "id": "room",
+          "version": 1,
+          "name": "Room",
+          "category": "Echo & reverb",
+          "description": "Small room reverb: a short natural reflection that places a dry recording in an indoor space (office, bedroom, bathroom).",
+          "params": [],
+          "ai": {
+            "use": "a dry voiceover or sound effect should sound like it happens in the room on screen"
+          }
+        },
+        {
+          "id": "telephone",
+          "version": 1,
+          "name": "Telephone",
+          "category": "Character",
+          "description": "Voice heard through a phone: narrow 300–3400 Hz band with slight distortion. Use for the other side of a phone call or a voicemail.",
+          "params": [],
+          "ai": {
+            "use": "a character speaking on the phone or a voicemail"
+          }
+        },
+        {
+          "id": "radio",
+          "version": 1,
+          "name": "Radio",
+          "category": "Character",
+          "description": "Old AM radio or walkie-talkie: band-limited, crunchy and nasal. Use for broadcasts, police/army radio chatter or a vintage feel.",
+          "params": [],
+          "ai": {
+            "use": "a radio broadcast, intercom, walkie-talkie or vintage recording"
+          }
+        },
+        {
+          "id": "underwater",
+          "version": 1,
+          "name": "Muffled / underwater",
+          "category": "Character",
+          "description": "Muffled sound with the highs removed: underwater, behind a wall or door, from the next room, or a character losing consciousness.",
+          "params": [],
+          "ai": {
+            "use": "sound heard underwater, through a wall or door, or a dazed point of view"
+          }
+        },
+        {
+          "id": "robot",
+          "version": 1,
+          "name": "Robot",
+          "category": "Character",
+          "description": "Metallic robot or AI voice: ring modulation and a short resonant comb echo. Use for robots, androids, computer voices and aliens.",
+          "params": [],
+          "ai": {
+            "use": "a robot, android, computer or alien voice"
+          }
+        }
+      ]
+    },
     "transition": {
       "usedIn": "connections[].transition.preset (params.durationSec, default 0.5)",
       "categories": [

@@ -1,5 +1,5 @@
 /** Pure placement operations. All return new Composition objects (no mutation). */
-import { clampTransform, type KeyframeProp, MAX_SPEED, MIN_SPEED, sourceAt, isStill, findPlacement, newId, trackKindFor, transformOf, type Transform, type Composition, type Placement, type Track } from "./model";
+import { canChromaKey, CHROMA_DEFAULT, hasSound, type ChromaKey, clampTransform, type KeyframeProp, MAX_SPEED, MIN_SPEED, sourceAt, isStill, findPlacement, newId, trackKindFor, transformOf, type Transform, type Composition, type Placement, type Track } from "./model";
 
 export const MIN_DURATION_TICKS = 1200; // 10 ms
 
@@ -304,7 +304,7 @@ export function setFades(comp: Composition, placementId: string, fades: { in?: n
 export function setKeyframe(comp: Composition, placementId: string, prop: KeyframeProp, t: number, value: number | null): Composition {
   t = Math.round(t);
   return mapPlacement(comp, placementId, (p) => {
-    if (p.clipType === "audio") return p;
+    if (p.clipType === "audio" && prop !== "volume") return p;
     const keys = (p.keyframes?.[prop] ?? []).filter((k) => Math.abs(k.t - t) > 600); // within 5 ms = same key
     if (value !== null) keys.push({ t, v: value });
     keys.sort((a, b) => a.t - b.t);
@@ -312,6 +312,53 @@ export function setKeyframe(comp: Composition, placementId: string, prop: Keyfra
     if (!keys.length) delete keyframes[prop];
     const out: Placement = { ...p, keyframes };
     if (!Object.keys(keyframes).length) delete out.keyframes;
+    return out;
+  });
+}
+
+/** Volume envelope bounds (P3B-11): 0 = silent, 1 = unchanged, 2 = +6 dB. */
+export const VOLUME_KEY_MAX = 2;
+/**
+ * P3B-11: replace a clip's whole volume envelope (keys at clip offsets in ticks, values 0–2). Keys are clamped into
+ * the clip, sorted and de-duplicated (within 5 ms); an empty list removes the envelope. Sound clips only.
+ */
+export function setVolumeKeys(comp: Composition, placementId: string, keys: { t: number; v: number }[]): Composition {
+  return mapPlacement(comp, placementId, (p) => {
+    if (p.clipType !== "audio" && p.clipType !== "video") return p;
+    const clean: { t: number; v: number }[] = [];
+    for (const k of [...keys].filter((k) => Number.isFinite(k.t) && Number.isFinite(k.v)).sort((a, b) => a.t - b.t)) {
+      const t = Math.round(Math.max(0, Math.min(p.durationTicks, k.t))), v = Math.round(Math.max(0, Math.min(VOLUME_KEY_MAX, k.v)) * 1000) / 1000;
+      if (clean.length && Math.abs(clean[clean.length - 1].t - t) <= 600) clean[clean.length - 1] = { t, v }; else clean.push({ t, v });
+    }
+    const keyframes: NonNullable<Placement["keyframes"]> = { ...p.keyframes, volume: clean };
+    if (!clean.length) delete keyframes.volume;
+    const out: Placement = { ...p, keyframes };
+    if (!Object.keys(keyframes).length) delete out.keyframes;
+    return out;
+  });
+}
+
+/** P3B-12: set (or with null remove) a visual media clip's chroma key; values are clamped and the colour normalised. */
+export function setChromaKey(comp: Composition, placementId: string, key: ChromaKey | null): Composition {
+  return mapPlacement(comp, placementId, (p) => {
+    if (!canChromaKey(p)) return p;
+    const { chromaKey: _old, ...rest } = p;
+    const out: Placement = rest;
+    if (!key) return out;
+    const c = (v: number) => Math.round(Math.max(0, Math.min(1, Number.isFinite(v) ? v : 0)) * 1000) / 1000;
+    const color = /^#[0-9a-f]{6}$/i.test(key.color) ? key.color.toLowerCase() : CHROMA_DEFAULT.color;
+    out.chromaKey = { color, range: c(key.range), spill: c(key.spill), ...(key.off ? { off: true } : {}) };
+    return out;
+  });
+}
+
+/** P3B-11: set (or with null remove) a sound clip's audio effect preset and its amount (0–1). */
+export function setAudioFx(comp: Composition, placementId: string, fx: { preset: string; amount: number } | null): Composition {
+  return mapPlacement(comp, placementId, (p) => {
+    if (!hasSound(p)) return p;
+    const out: Placement = { ...p };
+    if (!fx || !fx.preset || fx.preset === "none") delete out.audioFx;
+    else out.audioFx = { preset: fx.preset, amount: Math.round(Math.max(0, Math.min(1, Number.isFinite(fx.amount) ? fx.amount : 0)) * 100) / 100 };
     return out;
   });
 }

@@ -48,6 +48,9 @@ import { DesktopTooltips } from "./desktop/Tooltip";
 import { editPoints, jumpEditPoint, MOD, shuttleLabel, shuttleNext, splitTargets } from "./desktop/shortcuts";
 import { type Sticker } from "./libraryItems";
 import { text as textDomain } from "../domain";
+import { canChromaKey, CHROMA_DEFAULT, hasSound } from "../domain";
+import { AudioFxPanel, ChromaKeyPanel, VolumeCurve } from "./SoundAndKey";
+import { mediaKey } from "./useMedia";
 
 type Menu = "multi" | "root" | "edit" | "audio" | "speed" | "text" | "effect" | "overlay";
 const SPEEDS = [0.25, 0.5, 1, 1.5, 2, 4];
@@ -100,6 +103,11 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const [matchOpen, setMatchOpen] = useState(false);
   /** V2-SB-133: the phone "In point" sheet. */
   const [inOpen, setInOpen] = useState(false);
+  // P3B: chroma key / volume curve / audio FX sheets (phone) and the eyedropper (the clip id being picked for).
+  const [ckOpen, setCkOpen] = useState(false);
+  const [vcOpen, setVcOpen] = useState(false);
+  const [afxOpen, setAfxOpen] = useState(false);
+  const [eyedrop, setEyedrop] = useState<string>();
   const [textOpen, setTextOpen] = useState(false);
   /** V2-103: text layer being edited as a whole ("Edit all"). */
   const [layerEdit, setLayerEdit] = useState<string>();
@@ -288,8 +296,31 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     const k = c.width / (r.width || 1);
     return { x: (cx - r.left) * k, y: (cy - r.top) * k, k, W: c.width, H: c.height };
   };
+  /**
+   * P3B-12 eyedropper: redraw the frame with this clip's key bypassed, average a 5×5 patch of the preview canvas at
+   * the tap, restore, and set it as the key colour (one undo step).
+   */
+  const sampleKey = (cx: number, cy: number) => {
+    const c = canvasRef.current, id = eyedrop;
+    if (!c || !id) return;
+    const pl = findPlacement(engine.getState().project.compositions[engine.getState().project.rootCompositionId], id)?.placement;
+    const { x, y } = canvasPoint(cx, cy);
+    let hex: string | undefined;
+    try {
+      player.keyBypass = id; player.draw();
+      const d = c.getContext("2d")!.getImageData(Math.max(0, Math.round(x) - 2), Math.max(0, Math.round(y) - 2), 5, 5).data;
+      let r = 0, g = 0, b = 0, n = 0;
+      for (let i = 0; i < d.length; i += 4) if (d[i + 3]) { r += d[i]; g += d[i + 1]; b += d[i + 2]; n++; }
+      if (n) hex = "#" + [r, g, b].map((v) => Math.round(v / n).toString(16).padStart(2, "0")).join("");
+    } catch { /* tainted or no 2D context */ } finally { player.keyBypass = null; player.draw(); }
+    setEyedrop(undefined);
+    if (!hex || !pl) { setToast("Couldn't read a colour there"); return; }
+    engine.dispatch(cmd.setChromaKey(id, { ...(pl.chromaKey ?? CHROMA_DEFAULT), color: hex, off: undefined }));
+    setToast(`Key colour ${hex}`);
+  };
   const tapAt = (cx: number, cy: number, onGizmo = false) => {
     if (!canvasRef.current) return;
+    if (eyedrop) { sampleKey(cx, cy); return; }
     const { x, y, k, W, H } = canvasPoint(cx, cy);
     const prev = lastTap.current;
     const again = !!prev && prev.id === selectedId && Math.hypot(cx - prev.x, cy - prev.y) <= 16;
@@ -643,6 +674,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       ...(isHtml ? [tool("settings", "Params", () => setParamsOpen(true), "html-params", "This clip's values: text, colours and other params the HTML clip exposes"), tool("</>", "Edit code", () => void openCode(), "edit-code", "Edit HTML, CSS and JS with live preview")] : []),
       ...(isText ? [tool("T", "Edit text", () => setTextOpen(true), "edit-text", "Templates, font, style, effects, animation"), tool("anim", "Animation", () => setAnimOpen(true), "anim", "In, out and loop animations"), tool("≡", "Subtitles", () => openSubs(selected.track.id, selected.placement.id), "subs-list", "Open this layer's subtitle list at this clip")] : []),
       tool("⤧", "Adjust", () => setInspOpen(true), "adjust", "Transform, keyframes and fades"),
+      ...(canChromaKey(selected.placement) ? [tool("chroma", "Chroma key", () => setCkOpen(true), "chroma", "Remove a green or blue screen colour")] : []),
+      ...(hasSound(selected.placement) ? [tool("curve", "Volume curve", () => setVcOpen(true), "vcurve", "Volume points over the waveform, and fades"), tool("afx", "Audio FX", () => setAfxOpen(true), "afx", "Echo, telephone, radio, robot…")] : []),
       ...(speedSelect ? [tool("⏩", `Speed ${sp!.speed ?? 1}×`, () => setMenu("speed"), "speed", "Playback speed")] : []),
       ...(inPointable ? [tool("⇤", "In point", () => setInOpen(true), "in-point", "Where the clip starts in its video (slip)")] : []),
       tool("☑", "Select", () => setMultiMode(true), "multi", "Select several clips"),
@@ -751,10 +784,13 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     </div> };
     const audioTab: InspectorTab = { id: "audio", label: "Audio", icon: "🔊", render: () => <div className="v2-psettings">
       <section aria-label="Volume"><h4>Volume</h4>{volumeRow(pl)}</section>
+      <VolumeCurve engine={engine} placement={pl} time={time} peaks={peaks[mediaKey(pl.source.assetId, pl.source.versionId)]} />
+      <AudioFxPanel engine={engine} placement={pl} />
       {kind === "audio" && <TransformInspector engine={engine} placement={pl} time={time} />}
       {linkedAudioActions.length > 0 && <section aria-label="Clip audio"><h4>Clip audio</h4>{actionList(linkedAudioActions)}</section>}
       <section aria-label="Track"><h4>Track</h4>{actionList([{ icon: selected.track.muted ? "🔈" : "🔇", label: selected.track.muted ? "Unmute track" : "Mute track", title: "Silence the whole track", run: () => engine.dispatch(cmd.toggleTrackMute(selected.track.id)) }])}</section>
     </div> };
+    const chromaTab: InspectorTab = { id: "chroma", label: "Chroma key", icon: "chroma", render: () => <ChromaKeyPanel engine={engine} placement={pl} picking={eyedrop === pl.id} onPick={(on) => setEyedrop(on ? pl.id : undefined)} /> };
     const transTab: InspectorTab | undefined = transitionTools ? { id: "transition", label: "Transition", icon: "⧓", render: () => transitionTools } : undefined;
     if (kind === "text") return { ...base, actions: <>
       {selTrack?.layerStyle && <button className="v2-btn v2-btn-sm" title={`Style every clip on ${selTrack.name}`} onClick={() => editLayer(selTrack.id)}><Ic g="layers" size={14} /> Edit all</button>}
@@ -762,9 +798,9 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     </>, tabs: [{ id: "text", label: "Text", icon: "T", render: () => <TextPanel engine={engine} placement={effSel} track={selTrack} onAnimPicked={() => setAnimLoop(true)} initialTab="Font" /> }, { ...transform, label: "Transform" }] };
     if (kind === "effect") return { ...base, tabs: [{ id: "effect", label: "Effect", icon: "effect", render: () => <EffectPicker engine={engine} at={time} placement={pl} /> }] };
     if (kind === "audio") return { ...base, tabs: [audioTab, ...(speedSelect ? [speedTab] : [])] };
-    if (kind === "html") return { ...base, actions: <button className="v2-btn v2-btn-sm" title="Edit HTML, CSS and JS with live preview" onClick={() => void openCode()}><Ic g="</>" size={14} /> Edit code</button>, tabs: [{ id: "params", label: "Params", icon: "settings", render: () => <HtmlParamsPanel engine={engine} project={project} placement={pl} blobs={storage.blobs} onEditCode={() => void openCode()} /> }, transform, ...(transTab ? [transTab] : [])] };
-    if (kind === "image") return { ...base, tabs: [transform, ...(transTab ? [transTab] : [])] };
-    return { ...base, tabs: [transform, ...(speedSelect || timeActions.length || inPointable ? [speedTab] : []), audioTab, ...(transTab ? [transTab] : [])] };
+    if (kind === "html") return { ...base, actions: <button className="v2-btn v2-btn-sm" title="Edit HTML, CSS and JS with live preview" onClick={() => void openCode()}><Ic g="</>" size={14} /> Edit code</button>, tabs: [{ id: "params", label: "Params", icon: "settings", render: () => <HtmlParamsPanel engine={engine} project={project} placement={pl} blobs={storage.blobs} onEditCode={() => void openCode()} /> }, transform, chromaTab, ...(transTab ? [transTab] : [])] };
+    if (kind === "image") return { ...base, tabs: [transform, chromaTab, ...(transTab ? [transTab] : [])] };
+    return { ...base, tabs: [transform, ...(speedSelect || timeActions.length || inPointable ? [speedTab] : []), audioTab, chromaTab, ...(transTab ? [transTab] : [])] };
   };
   const insp = !mobile ? inspectorTabs() : undefined;
   const iconBtn = (icon: string, label: string, run: () => void, opts: { title?: string; disabled?: boolean; pressed?: boolean; key?: string } = {}) => (
@@ -952,6 +988,9 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           {cue && <div className="v2-msub"><SubtitleEditor engine={engine} sub={cue} onDelete={delCue} /></div>}
           {inspOpen && selected && <Sheet label="Adjust" className="v2-msheet-insp" extra={scopeChip || undefined} onClose={() => setInspOpen(false)}>{selected.placement.clipType === "video" && !selected.placement.freeze && <section className="v2-psettings v2-frames-sec" aria-label="In and out frames"><h4>In / out frames</h4><ClipFrames engine={engine} project={project} placement={selected.placement} /></section>}<TransformInspector engine={engine} placement={selected.placement} time={time} /></Sheet>}
           {matchOpen && pair && <Sheet label="Match frames" className="v2-msheet-insp" onClose={() => setMatchOpen(false)}><MatchFrames engine={engine} project={project} a={pair[0]} b={pair[1]} analyse={makeAnalyse(project, loadAssetBlob)} onDone={(m) => { setMatchOpen(false); if (m) setToast(m); }} /></Sheet>}
+          {ckOpen && selected && canChromaKey(selected.placement) && <Sheet label="Chroma key" className="v2-msheet-insp" dim={false} onClose={() => { setCkOpen(false); setEyedrop(undefined); }}><ChromaKeyPanel engine={engine} placement={selected.placement} picking={eyedrop === selected.placement.id} onPick={(on) => setEyedrop(on ? selected.placement.id : undefined)} /></Sheet>}
+          {vcOpen && selected && hasSound(selected.placement) && <Sheet label="Volume curve" className="v2-msheet-insp" onClose={() => setVcOpen(false)}><VolumeCurve engine={engine} placement={selected.placement} time={time} peaks={peaks[mediaKey(selected.placement.source.assetId, selected.placement.source.versionId)]} /></Sheet>}
+          {afxOpen && selected && hasSound(selected.placement) && <Sheet label="Audio FX" className="v2-msheet-insp" onClose={() => setAfxOpen(false)}><AudioFxPanel engine={engine} placement={selected.placement} /></Sheet>}
           {inOpen && selected && inPointable && <Sheet label="In point" className="v2-msheet-insp" onClose={() => setInOpen(false)}><InPointControl engine={engine} project={project} placement={selected.placement} /></Sheet>}
           {subsTrack && <Sheet label="Edit subtitles" className="v2-msheet-tall" head={false} onClose={() => setSubsEdit(undefined)}><SubtitleList engine={engine} track={subsTrack} time={time} playing={playing} onSeek={seek} desktop={false} name={project.name} focusCue={subsCue} onDone={() => setSubsEdit(undefined)} /></Sheet>}
           {layerTrack && !selected && <Sheet label={`Edit all · ${layerTrack.name}`} className="v2-msheet-insp" onClose={() => setLayerEdit(undefined)}><TextPanel key={layerTrack.id} engine={engine} layer={layerTrack} initialTab="Style" /></Sheet>}

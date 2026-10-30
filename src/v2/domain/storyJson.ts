@@ -152,7 +152,15 @@ export interface StoryMediaLayer extends StoryLayerBase {
   params?: HtmlParamValues;
   /** V2-SB-133: video layers only. Seconds into the clip the layer starts from (absent = the version's trim, else 0). */
   inSec?: number;
+  /** P3B-12: green screen: pixels near `color` become transparent (`range` tolerance, `spill` edge clean-up, 0–1). */
+  chromaKey?: StoryChromaKey;
 }
+/** P3B-12: a layer's chroma key. Missing `range` / `spill` take the defaults (0.4 / 0.5). */
+export interface StoryChromaKey { color: string; range?: number; spill?: number }
+/** P3B-11: one point of an audio cue's volume curve: `t` seconds from the cue start, `v` gain multiplier 0–2 (1 = the cue's volume). */
+export interface StoryVolumeKey { t: number; v: number }
+/** P3B-11: an audio cue's sound effect: an `audioFx` registry id and its intensity 0–1 (default 1). */
+export interface StoryAudioFx { preset: string; amount?: number }
 export type StoryLayer = StoryTextLayer | StoryMediaLayer;
 /** A post effect over the shot (or part of it). `preset` is a videoEffect id, kept as written. */
 export interface StoryEffect { preset: string; params?: StoryParams; startSec?: number; endSec?: number }
@@ -271,6 +279,10 @@ export interface StoryAudio {
   loop?: boolean;
   /** V2-SB-135: dialogue cues only: the 1-based line of the "from" shot's dialogue this recording is. */
   line?: number;
+  /** P3B-11: volume curve over the cue (ducking, swells), times from the cue start. */
+  volumeKeys?: StoryVolumeKey[];
+  /** P3B-11: sound effect (echo, telephone, radio…). */
+  fx?: StoryAudioFx;
 }
 export interface StoryDoc { format: typeof STORYBOARD_FORMAT; meta: StoryMeta; assets: StoryAsset[]; shots: StoryShot[]; connections: StoryConnection[]; audio?: StoryAudio[] }
 
@@ -396,7 +408,7 @@ const STYLE_RANGES: Record<string, [number, number, string]> = {
 /** Missing shadow / background fields are filled from these (also the text panel's defaults). */
 export const TEXT_SHADOW_DEFAULT = { color: "#000000", blur: 0.15, x: 0.03, y: 0.03 };
 export const TEXT_BACKGROUND_DEFAULT = { color: "#000000", opacity: 0.6 };
-const KIND_LABEL: Record<PresetKind, string> = { textAnimIn: "in animation", textAnimOut: "out animation", textAnimLoop: "loop animation", effect: "text effect", videoEffect: "effect", transition: "transition", sticker: "sticker", textStyle: "text style", blend: "blend mode" };
+const KIND_LABEL: Record<PresetKind, string> = { textAnimIn: "in animation", textAnimOut: "out animation", textAnimLoop: "loop animation", effect: "text effect", videoEffect: "effect", transition: "transition", sticker: "sticker", textStyle: "text style", blend: "blend mode", audioFx: "audio effect" };
 const list = (xs: string[], max = 12) => `${xs.slice(0, max).join(", ")}${xs.length > max ? ", …" : ""}`;
 const fmt = (n: number) => String(Math.round(n * 1000) / 1000);
 
@@ -782,6 +794,23 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
     return Object.keys(out).length ? out : undefined;
   };
 
+  /** P3B-12: `{ color, range?, spill? }`; a colour name like "green" is accepted. Bad values warn and are dropped. */
+  const chromaKeyOf = (v: unknown, path: string): StoryChromaKey | undefined => {
+    if (!isObj(v)) { warn(path, 'Should be { "color": "#00ff00", "range"?: 0-1, "spill"?: 0-1 }; ignoring it.'); return undefined; }
+    const named: Record<string, string> = { green: "#00ff00", blue: "#0000ff", black: "#000000", white: "#ffffff", magenta: "#ff00ff" };
+    const raw = str(v.color)?.toLowerCase() ?? "";
+    const color = named[raw] ?? (/^#[0-9a-f]{6}$/.test(raw) ? raw : /^#[0-9a-f]{3}$/.test(raw) ? `#${[...raw.slice(1)].map((c) => c + c).join("")}` : undefined);
+    if (!color) { warn(`${path}.color`, `Key colour ${JSON.stringify(v.color ?? "")} is not "#rrggbb" (or green / blue); the chroma key is ignored.`); return undefined; }
+    const out: StoryChromaKey = { color };
+    for (const k of ["range", "spill"] as const) {
+      if (v[k] === undefined) continue;
+      const n = num(v[k]);
+      if (n === undefined || n < 0 || n > 1) warn(`${path}.${k}`, `${k} ${JSON.stringify(v[k])} is ignored: use 0 to 1 (default ${k === "range" ? 0.4 : 0.5}).`);
+      else out[k] = n;
+    }
+    return out;
+  };
+
   const layersOf = (v: unknown, path: string, dur: number): StoryLayer[] | undefined => {
     if (v === undefined) return undefined;
     if (!Array.isArray(v)) { err(path, '"layers" must be a list.'); return undefined; }
@@ -809,6 +838,7 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
         if (l.follow === "shot") follow = "shot";
         else warn(`${lp}.follow`, `follow ${JSON.stringify(l.follow)} is ignored: use "frame" (stays put, the default) or "shot" (moves with the shot's zoom and pan).`);
       }
+      if (type === "text" && l.chromaKey !== undefined) warn(`${lp}.chromaKey`, "Only image, video and html layers can be chroma keyed; it is ignored on a text layer.");
       if (type === "text") {
         if (l.params !== undefined) warn(`${lp}.params`, 'Text layers have no "params"; it is ignored. For a reusable styled title, use an html layer with an html asset that exposes params.');
         if (l.inSec !== undefined) warn(`${lp}.inSec`, "Only video layers have an in point; inSec on a text layer is ignored.");
@@ -873,7 +903,8 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
             if (v > 0) inSec = v;
           }
         }
-        if (box) out.push({ id, type, asset, startSec, endSec, box, ...(inSec !== undefined ? { inSec } : {}), ...(follow ? { follow } : {}), ...look, ...(params ? { params } : {}) });
+        const chromaKey = l.chromaKey === undefined ? undefined : chromaKeyOf(l.chromaKey, `${lp}.chromaKey`);
+        if (box) out.push({ id, type, asset, startSec, endSec, box, ...(inSec !== undefined ? { inSec } : {}), ...(follow ? { follow } : {}), ...look, ...(params ? { params } : {}), ...(chromaKey ? { chromaKey } : {}) });
       }
     });
     return out;
@@ -1146,6 +1177,34 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
       else cue.volume = v;
     }
     const fromShot = shots.find((s) => s.id === from);
+    // P3B-11: volume curve and sound effect.
+    if (c.volumeKeys !== undefined) {
+      if (!Array.isArray(c.volumeKeys)) warn(`${path}.volumeKeys`, '"volumeKeys" must be a list of { "t": seconds from the cue start, "v": 0-2 }; ignoring it.');
+      else {
+        const keys: StoryVolumeKey[] = [];
+        c.volumeKeys.forEach((k, j) => {
+          const t = isObj(k) ? num(k.t) : undefined, v = isObj(k) ? num(k.v) : undefined;
+          if (t === undefined || t < 0 || v === undefined || v < 0 || v > 2) warn(`${path}.volumeKeys[${j}]`, `Each point is { "t": seconds from the cue start (0 or more), "v": 0 (silent) to 2 (double), 1 = the cue's volume }; ${JSON.stringify(k)} is ignored.`);
+          else keys.push({ t, v });
+        });
+        keys.sort((a, b) => a.t - b.t);
+        if (keys.length) cue.volumeKeys = keys;
+      }
+    }
+    if (c.fx !== undefined) {
+      const fx = isObj(c.fx) ? c.fx : typeof c.fx === "string" ? { preset: c.fx } : undefined;
+      if (!fx) warn(`${path}.fx`, 'Should be { "preset": "<audioFx id>", "amount"?: 0-1 }; ignoring it.');
+      else {
+        const preset = presetRef("audioFx", fx.preset, `${path}.fx.preset`, "no effect");
+        let amount: number | undefined;
+        if (fx.amount !== undefined) {
+          const n = num(fx.amount);
+          if (n === undefined || n < 0 || n > 1) warn(`${path}.fx.amount`, `amount ${JSON.stringify(fx.amount)} is ignored: use 0 to 1 (default 1).`);
+          else amount = n;
+        }
+        if (preset) cue.fx = { preset, ...(amount !== undefined ? { amount } : {}) };
+      }
+    }
     if (fromShot && cue.atSec !== undefined && cue.atSec >= fromShot.durationSec) warn(`${path}.atSec`, `atSec ${cue.atSec} is at or past the end of shot "${from}" (${fromShot.durationSec} s); the cue starts later than that shot.`);
     if (cue.to && cue.durationSec !== undefined) warn(`${path}.durationSec`, `The cue has both "to" and "durationSec"; it stops at whichever comes first.`);
     if (cue.loop && !cue.to && cue.durationSec === undefined) warn(`${path}.loop`, `A looping cue without "to" or "durationSec" fills only shot "${from}"; give "to" (the last shot it plays under).`);

@@ -891,3 +891,39 @@ select.v2-tp-field { -webkit-appearance: none; appearance: none; padding-right: 
 .v2-match-dialog { width: min(560px, 92vw); max-height: 88vh; overflow: auto; background: var(--panel, #1b1b1f); border: 1px solid var(--line, #333); border-radius: 14px; padding: 14px 16px; }
 .v2-match-dialog header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
 .v2-match-dialog h3 { margin: 0; font-size: 16px; }
+
+/* ───── P3B: chroma key, volume curve, audio FX (44 px targets everywhere) ───── */
+.v2-chroma .v2-ck-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.v2-switch { position: relative; width: 56px; min-width: 56px; height: 44px; border: 0; background: none; padding: 0; cursor: pointer; }
+.v2-switch i { position: absolute; left: 4px; right: 4px; top: 10px; height: 24px; border-radius: 12px; background: rgba(255,255,255,.22); transition: background .15s; }
+.v2-switch i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: transform .15s; }
+.v2-switch.is-on i { background: #3b82f6; }
+.v2-switch.is-on i::after { transform: translateX(24px); }
+.v2-ck-colour { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+.v2-ck-pick { min-height: 44px; padding: 0 14px; }
+.v2-ck-pick.is-active { background: #3b82f6; color: #fff; }
+.v2-ck-swatch { display: inline-flex; width: 44px; height: 44px; border-radius: 10px; overflow: hidden; border: 1px solid rgba(255,255,255,.3); }
+.v2-ck-swatch input { width: 64px; height: 64px; margin: -10px; border: 0; padding: 0; cursor: pointer; background: none; }
+.v2-ck-hex { width: 96px; min-height: 44px; font: inherit; font-family: ui-monospace, monospace; padding: 0 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,.25); background: rgba(0,0,0,.25); color: inherit; }
+.v2-ck-row { display: grid; grid-template-columns: 76px 1fr 48px; align-items: center; gap: 8px; min-height: 44px; }
+.v2-ck-row input[type=range] { width: 100%; height: 44px; margin: 0; }
+.v2-ck-row output { text-align: right; font-variant-numeric: tabular-nums; }
+.v2-ck-reset, .v2-vc-actions .v2-btn, .v2-afx-btn { min-height: 44px; min-width: 44px; }
+.v2-afx-btn { padding: 0 10px; border-radius: 10px; border: 1px solid rgba(127,127,127,.35); background: rgba(127,127,127,.12); color: inherit; font: inherit; cursor: pointer; }
+.v2-afx-btn.is-active { background: #3b82f6; border-color: #3b82f6; color: #fff; }
+.v2-vcurve section { position: relative; }
+.v2-vc-svg { display: block; width: 100%; border-radius: 8px; background: rgba(0,0,0,.35); touch-action: none; cursor: crosshair; }
+.v2-vc-bar { fill: rgba(140,200,255,.45); }
+.v2-vc-unity { stroke: rgba(255,255,255,.25); stroke-dasharray: 6 6; vector-effect: non-scaling-stroke; }
+.v2-vc-line { fill: none; stroke: #fbbf24; stroke-width: 2.5; vector-effect: non-scaling-stroke; }
+.v2-vc-fade { fill: rgba(0,0,0,.45); }
+.v2-vc-head { stroke: #fff; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.v2-vc-box { position: relative; margin: 0 22px; }
+.v2-vc-points { position: absolute; inset: 0; pointer-events: none; }
+.v2-vc-pt, .v2-vc-fh { position: absolute; width: 44px; height: 44px; margin: -22px 0 0 -22px; padding: 0; border: 0; background: none; pointer-events: auto; touch-action: none; cursor: grab; color: #fbbf24; }
+.v2-vc-pt i { display: block; width: 16px; height: 16px; margin: 14px; border-radius: 50%; background: #fbbf24; border: 2px solid #111; box-sizing: border-box; }
+.v2-vc-pt.is-sel i { background: #fff; box-shadow: 0 0 0 3px #fbbf24; }
+.v2-vc-fh { top: 22px; font-size: 18px; line-height: 44px; text-align: center; cursor: ew-resize; }
+.v2-vc-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.v2-afx-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 6px; margin-bottom: 8px; }
+.v2-app.is-desktop .v2-chroma .v2-btn, .v2-app.is-desktop .v2-vcurve .v2-btn, .v2-app.is-desktop .v2-afx-btn, .v2-app.is-desktop .v2-ck-hex { min-height: 44px; }

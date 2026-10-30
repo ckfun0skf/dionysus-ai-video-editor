@@ -9,7 +9,7 @@ import * as cueOps from "../domain/subtitleLayer";
 import * as subs from "../domain/subtitles";
 import * as edit from "../domain/edit";
 import * as transitions from "../domain/transitions";
-import type { Subtitle } from "../domain/model";
+import type { ChromaKey, Keyframe, Subtitle } from "../domain/model";
 import { TEXT_SOURCE } from "../domain/model";
 import * as board from "../domain/storyboard";
 import * as storyEdit from "../domain/storyEdit";
@@ -207,6 +207,12 @@ export const matchJoin = (aId: string, bId: string, aOut: number, bIn: number): 
   label: "Match frames", apply: (p) => withRoot(p, (c) => clipRange.matchJoin(c, aId, bId, aOut, bIn)),
 });
 export const setBlend = (id: string, blend: string | undefined): Command => ({ label: "Blend mode", coalesceKey: `blend:${id}`, apply: (p) => withRoot(p, (c) => ops.setBlend(c, id, blend)) });
+/** P3B-12: chroma key on a video / image / html clip (null removes it). Slider drags coalesce into one undo step. */
+export const setChromaKey = (id: string, key: ChromaKey | null): Command => ({ label: key ? "Chroma key" : "Remove chroma key", coalesceKey: key ? `chroma:${id}` : undefined, apply: (p) => withRoot(p, (c) => ops.setChromaKey(c, id, key)) });
+/** P3B-11: the whole volume envelope of a sound clip (a drag coalesces into one undo step). */
+export const setVolumeKeys = (id: string, keys: Keyframe[], label = "Volume curve"): Command => ({ label, coalesceKey: `vkeys:${id}`, apply: (p) => withRoot(p, (c) => ops.setVolumeKeys(c, id, keys)) });
+/** P3B-11: an audio effect preset and its amount (null removes it). */
+export const setAudioFx = (id: string, fx: { preset: string; amount: number } | null): Command => ({ label: fx ? "Audio effect" : "Remove audio effect", coalesceKey: fx ? `afx:${id}` : undefined, apply: (p) => withRoot(p, (c) => ops.setAudioFx(c, id, fx)) });
 export const setReverse = (id: string, reverse: boolean): Command => ({ label: reverse ? "Reverse" : "Play forward", apply: (p) => withRoot(p, (c) => ops.setReverse(c, id, reverse)) });
 export const freezeFrame = (id: string, at: number, holdTicks = 3 * 120_000): Command => ({ label: "Freeze frame", apply: (p) => withRoot(p, (c) => ops.freezeFrame(c, id, at, holdTicks)) });
 export const setFades = (id: string, fades: { in?: number; out?: number }): Command => ({ label: "Fade", coalesceKey: `fade:${id}`, apply: (p) => withRoot(p, (c) => ops.setFades(c, id, fades)) });

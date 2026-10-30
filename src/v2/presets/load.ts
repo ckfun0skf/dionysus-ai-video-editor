@@ -3,7 +3,25 @@
  * validating each one. Pure (no import.meta, no DOM) so tests can feed it fake module maps.
  */
 import { identityFrame, PRESET_ID_RE, PRESET_KINDS, type FontDef, type ParamSpec, type PresetDescriptor, type RenderFn, type RenderHooks } from "../registry/types";
-import { BLEND_OPS, type ModuleKind, type PresetModule } from "./define";
+import { BLEND_OPS, type AudioFxData, type ModuleKind, type PresetModule } from "./define";
+
+/** P3B-11: problems in an audioFx chain description (ranges keep the chain stable and audible). */
+export function audioFxProblems(d: AudioFxData | undefined): string[] {
+  if (!d || typeof d !== "object") return ["audioFx needs data"];
+  const out: string[] = [];
+  const inRange = (v: unknown, lo: number, hi: number, name: string) => { if (typeof v !== "number" || !Number.isFinite(v) || v < lo || v > hi) out.push(`${name} must be a number from ${lo} to ${hi}`); };
+  if (d.highpass !== undefined) inRange(d.highpass, 20, 8000, "data.highpass");
+  if (d.lowpass !== undefined) inRange(d.lowpass, 100, 20000, "data.lowpass");
+  if (d.peak) { inRange(d.peak.freq, 50, 10000, "data.peak.freq"); inRange(d.peak.gainDb, -24, 24, "data.peak.gainDb"); if (d.peak.q !== undefined) inRange(d.peak.q, 0.1, 20, "data.peak.q"); }
+  if (d.drive !== undefined) inRange(d.drive, 0, 1, "data.drive");
+  if (d.ringMod) { inRange(d.ringMod.freq, 1, 2000, "data.ringMod.freq"); inRange(d.ringMod.mix, 0, 1, "data.ringMod.mix"); }
+  if (d.echo) { inRange(d.echo.time, 0.005, 2, "data.echo.time"); inRange(d.echo.feedback, 0, 0.95, "data.echo.feedback"); inRange(d.echo.mix, 0, 1, "data.echo.mix"); }
+  if (d.reverb) { inRange(d.reverb.seconds, 0.1, 6, "data.reverb.seconds"); inRange(d.reverb.decay, 0.5, 10, "data.reverb.decay"); inRange(d.reverb.mix, 0, 1, "data.reverb.mix"); if (d.reverb.preDelay !== undefined) inRange(d.reverb.preDelay, 0, 0.5, "data.reverb.preDelay"); }
+  if (d.makeup !== undefined) inRange(d.makeup, 0, 4, "data.makeup");
+  const known = ["highpass", "lowpass", "peak", "drive", "ringMod", "echo", "reverb", "makeup"];
+  for (const k of Object.keys(d)) if (!known.includes(k)) out.push(`unknown data field "${k}" (fields: ${known.join(", ")})`);
+  return out;
+}
 
 export interface LoadedPresets {
   descriptors: PresetDescriptor[];
@@ -86,6 +104,8 @@ export function moduleProblems(m: PresetModule | undefined, path: string, fontId
     else if (m.data.font !== undefined && !fontIds.has(m.data.font)) out.push(`data.font "${m.data.font}" is not a font id`);
   } else if (m.kind === "blend") {
     if (!(BLEND_OPS as readonly string[]).includes(m.op)) out.push(`blend op "${String(m.op)}" must be one of: ${BLEND_OPS.join(", ")}`);
+  } else if (m.kind === "audioFx") {
+    out.push(...audioFxProblems(m.data));
   } else if (m.kind === "videoEffect") {
     if (!isFn(m.frame) && !isFn(m.draw)) out.push("videoEffect needs frame and/or draw");
     if (m.draw !== undefined && !isFn(m.draw)) out.push("draw must be a function");
@@ -125,6 +145,7 @@ export function loadPresetModules(found: Record<string, { default?: PresetModule
     if (m.kind === "sticker") { type = "sticker"; params = [{ key: "svg", label: "SVG", type: "string", default: m.svg, description: "SVG markup of the sticker (200 × 200 viewBox)." }]; }
     else if (m.kind === "textStyle") data = { ...m.data };
     else if (m.kind === "blend") data = { op: m.op };
+    else if (m.kind === "audioFx") data = JSON.parse(JSON.stringify(m.data)) as Record<string, unknown>;
     else {
       type = m.type ?? `${m.kind}/${m.id}`;
       params = m.params ?? [];

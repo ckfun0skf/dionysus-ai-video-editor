@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent as RPE } from "react";
 import { cmd, type Engine } from "../engine";
-import { evalKeys, transformOf, ticksToSeconds, secondsToTicks, type KeyframeProp, type Placement } from "../domain";
+import { evalKeys, transformOf, ticksToSeconds, secondsToTicks, type TransformKeyProp, type Placement } from "../domain";
 import type { Placed } from "../render";
 import { listPresets } from "../registry";
 import { Ic } from "./Icon";
@@ -8,7 +8,7 @@ import { classifyPreview, pinchPatch, TAP_SLOP } from "./gestures";
 import { SNAP_PX, snapMove, snapRotation, snapScale, snapTargets, type Guides, type SnapBox } from "./snap";
 
 type Patch = Parameters<typeof cmd.setTransform>[1];
-const KEYED: KeyframeProp[] = ["x", "y", "scale", "rotation", "opacity"];
+const KEYED: TransformKeyProp[] = ["x", "y", "scale", "rotation", "opacity"];
 
 /** Transform value at absolute time (keyframes applied, fades not). */
 export function valuesAt(p: Placement, time: number) {
@@ -33,7 +33,7 @@ export function TransformInspector({ engine, placement, time }: { engine: Engine
   const offset = time - placement.startTicks;
   const inside = offset >= 0 && offset <= placement.durationTicks;
   const set = (patch: Patch) => applyPatch(engine, placement, time, patch);
-  const row = (label: string, value: number, min: number, max: number, step: number, fmt: (v: number) => string, patch: (v: number) => Patch, prop?: KeyframeProp) => {
+  const row = (label: string, value: number, min: number, max: number, step: number, fmt: (v: number) => string, patch: (v: number) => Patch, prop?: TransformKeyProp) => {
     const keys = prop ? placement.keyframes?.[prop] : undefined;
     const onKey = !!keys?.some((k) => Math.abs(k.t - offset) <= 600);
     return (

@@ -6,10 +6,11 @@
 /**
  * `effect` = text styling (Glow/Neon…); `videoEffect` = effect-layer presets applied to the main-track render (V2-101);
  * `textStyle` = one-tap text looks (formerly TEXT_TEMPLATES): plain data in `data`, no animation of its own;
- * `blend` = how a clip mixes with the layers under it (V2-SB-128): a canvas composite operation in `data.op`.
+ * `blend` = how a clip mixes with the layers under it (V2-SB-128): a canvas composite operation in `data.op`;
+ * `audioFx` = a sound effect on an audio or video clip (P3B-11): a Web Audio chain description in `data`.
  */
-export type PresetKind = "textAnimIn" | "textAnimOut" | "textAnimLoop" | "effect" | "videoEffect" | "transition" | "sticker" | "textStyle" | "blend";
-export const PRESET_KINDS: PresetKind[] = ["textAnimIn", "textAnimOut", "textAnimLoop", "effect", "videoEffect", "transition", "sticker", "textStyle", "blend"];
+export type PresetKind = "textAnimIn" | "textAnimOut" | "textAnimLoop" | "effect" | "videoEffect" | "transition" | "sticker" | "textStyle" | "blend" | "audioFx";
+export const PRESET_KINDS: PresetKind[] = ["textAnimIn", "textAnimOut", "textAnimLoop", "effect", "videoEffect", "transition", "sticker", "textStyle", "blend", "audioFx"];
 
 /**
  * One preset parameter. `description` is an optional plain-English note on what the value means (its unit, or what it
@@ -131,4 +132,24 @@ export interface FontDef {
   description: string;
   /** Rough average glyph width in em, used only for the importer's "text may overflow" warning. */
   width: number;
+}
+
+/** One audio effect chain, applied in this order: filters → drive → ring mod → echo → reverb → makeup gain. */
+export interface AudioFxData {
+  /** High-pass cutoff in Hz at full amount (removes lows: thin phone/radio sound). */
+  highpass?: number;
+  /** Low-pass cutoff in Hz at full amount (removes highs: muffled, underwater, behind a wall). */
+  lowpass?: number;
+  /** Peaking boost: centre frequency (Hz), gain (dB at full amount) and Q. Presence for radio / megaphone. */
+  peak?: { freq: number; gainDb: number; q?: number };
+  /** Soft-clip drive 0–1 at full amount (crunch of a cheap speaker). */
+  drive?: number;
+  /** Ring modulation: carrier frequency in Hz, wet mix 0–1 at full amount (robot voice). */
+  ringMod?: { freq: number; mix: number };
+  /** Feedback echo: delay in seconds (0.005–2), feedback 0–0.95, wet mix 0–1 at full amount. */
+  echo?: { time: number; feedback: number; mix: number };
+  /** Reverb from a deterministic noise impulse: length in seconds (0.1–6), decay curve exponent, wet mix 0–1 at full amount. */
+  reverb?: { seconds: number; decay: number; mix: number; preDelay?: number };
+  /** Output gain multiplier at full amount (compensates level lost in the filters). */
+  makeup?: number;
 }
