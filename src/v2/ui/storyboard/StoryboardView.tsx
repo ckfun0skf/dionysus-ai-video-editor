@@ -7,6 +7,7 @@ import { Ic } from "../Icon";
 import { ConfirmDialog } from "../Timeline";
 import { ContextMenu } from "../desktop/ContextMenu";
 import { useEngineState, useIsMobile } from "../useEditor";
+import { useSeries } from "../series/seriesStore";
 import { haptic } from "../gestures";
 import { BoardView, type BoardEdit, type BoardTarget } from "./BoardView";
 import { ActionSheet, ConnectionEditor, ShotEditor } from "./ShotEditor";
@@ -26,8 +27,9 @@ const NOTE_MS = 3500, NOTE_ACTION_MS = 8000;
 /** Storyboard workspace (V2-M4). Full-screen over the editor so the timeline keeps its state. */
 /** `initialOpen` opens that shot or slot right away (timeline "Open in storyboard"). */
 /** `onView` closes the board and selects that timeline clip (the "View" action after Send). */
-export function StoryboardView({ engine, blobs, onClose, initialOpen, onView }: { engine: Engine; blobs: BlobStore; onClose: () => void; initialOpen?: BoardTarget; onView?: (placementId: string) => void }) {
+export function StoryboardView({ engine, blobs, onClose, initialOpen, onView, onSeries }: { engine: Engine; blobs: BlobStore; onClose: () => void; /** P5: open the Series library. */ onSeries?: () => void; initialOpen?: BoardTarget; onView?: (placementId: string) => void }) {
   const { project, canUndo, canRedo } = useEngineState(engine);
+  const series = useSeries(project.seriesId);
   const thumbs = useVersionThumbs(project, blobs);
   const has = !!project.storyboard;
   const [step, setStep] = useState<Step | undefined>();
@@ -231,12 +233,13 @@ export function StoryboardView({ engine, blobs, onClose, initialOpen, onView }: 
             <button className="v2-btn v2-sb-btn" aria-label="AI prompt" title="Copy the AI prompt again" onClick={() => setStep("prompt")}><Ic g="⎘" size={18} /> <span>AI prompt</span></button>
             <button className="v2-btn v2-sb-btn" aria-label="Export JSON" title="Download or copy this storyboard, with your edits, as storyboard JSON" onClick={() => { setOpen(undefined); setStep("export"); }}><Ic g="⇩" size={18} /> <span>Export</span></button>
             <button className="v2-btn v2-sb-btn" aria-label="Import revised JSON" title="Bring in your AI's revised JSON (whole or in parts): matched by id, previewed before it applies" onClick={askReplace}><Ic g="json" size={18} /> <span>Import…</span></button>
+            {onSeries && <button className="v2-btn v2-sb-btn" aria-label="Series library" title="Shared characters, props, locations and styles for every episode of the series" onClick={onSeries}><Ic g="library" size={18} /> <span>{series ? series.name : "Series"}</span></button>}
             <button className="v2-btn v2-sb-btn" aria-label="AI agent" title="Let an AI agent in this browser edit the storyboard (WebMCP), with an activity log" onClick={() => { setOpen(undefined); setStep("agent"); }}><Ic g="agent" size={18} /> <span>Agent</span></button>
           </>)}
         </>}
       </header>
       <div className="v2-board-body">
-        {step === "production" && has ? <ProductionView project={project} thumbs={thumbs} engine={engine} blobs={blobs} mobile={mobile} onNote={setNote} /> : step === "prompt" ? <PromptPanel /> : step === "import" ? <ImportPanel onCreate={create} replacing={has} diffFor={has ? diffFor : undefined} onMerge={has ? merge : undefined} base={baseDoc} /> : step === "agent" ? <AgentPanel /> : step === "export" && sb ? <ExportPanel board={sb} /> : has ? (
+        {step === "production" && has ? <ProductionView project={project} thumbs={thumbs} engine={engine} blobs={blobs} mobile={mobile} onNote={setNote} /> : step === "prompt" ? <PromptPanel series={series} /> : step === "import" ? <ImportPanel onCreate={create} replacing={has} diffFor={has ? diffFor : undefined} onMerge={has ? merge : undefined} base={baseDoc} series={series} /> : step === "agent" ? <AgentPanel /> : step === "export" && sb ? <ExportPanel board={sb} /> : has ? (
           <BoardView project={project} thumbs={thumbs} onOpen={(t) => { setEditing(undefined); setEditingSlot(undefined); setConn(undefined); setOpen(t); }} openKey={editing?.shot ?? editingSlot?.slot ?? (open && ("slot" in open ? open.slot : open.shot))} edit={boardEdit} mobile={mobile} />
         ) : (
           <div className="v2-sb-empty">
@@ -275,6 +278,7 @@ export function StoryboardView({ engine, blobs, onClose, initialOpen, onView }: 
         { label: "Export JSON", icon: "⇩", onSelect: () => { setOpen(undefined); setStep("export"); } },
         { label: "Import revised JSON…", icon: "json", onSelect: askReplace },
         { label: "AI agent", icon: "agent", onSelect: () => { setOpen(undefined); setStep("agent"); } },
+        ...(onSeries ? [{ label: series ? `Series library · ${series.name}` : "Series library", icon: "library", onSelect: onSeries }] : []),
       ]} />}
       {sendMenu && <SendModes project={project} onUpdate={update} onReplace={() => setConfirmTimeline(true)} onCancel={() => setSendMenu(false)} />}
       {confirmTimeline && <ConfirmDialog title="Replace the timeline?" confirm="Replace timeline"

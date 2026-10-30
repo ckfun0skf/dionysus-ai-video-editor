@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createProject, type Project } from "../domain";
 import type { ProjectSummary, Storage } from "../ports";
 import { Ic } from "./Icon";
+import { SeriesSelect } from "./series/SeriesLibrary";
 import { ExportFileDialog, ImportFileDialog, openExportTarget, projectFileName, type ExportTarget } from "./ProjectFile";
 
 /** Human "updated" label: just now / 5 min ago / 3 h ago / date. */
@@ -28,6 +29,8 @@ export function ProjectsDialog({ storage, current, onOpen, onRenameCurrent, onCl
   const [menu, setMenu] = useState<{ id: string; x: number; y: number }>();
   const [exporting, setExporting] = useState<{ id: string; name: string; target: ExportTarget }>();
   const [importing, setImporting] = useState<File>();
+  /** P5: the Series a new project joins. */
+  const [newSeries, setNewSeries] = useState<string>();
   const input = useRef<HTMLInputElement>(null);
   const picker = useRef<HTMLInputElement>(null);
   const menuEl = useRef<HTMLDivElement>(null);
@@ -54,7 +57,7 @@ export function ProjectsDialog({ storage, current, onOpen, onRenameCurrent, onCl
     if (target) setExporting({ id, name, target });
   };
 
-  const create = async () => { const p = createProject(`Untitled ${new Date().toLocaleDateString()}`); await storage.projects.save(p); onOpen(p.id); };
+  const create = async () => { const p: Project = { ...createProject(`Untitled ${new Date().toLocaleDateString()}`), ...(newSeries ? { seriesId: newSeries } : {}) }; await storage.projects.save(p); onOpen(p.id); };
   const rename = async (id: string, name: string) => {
     setEditing(undefined);
     name = name.trim();
@@ -79,6 +82,7 @@ export function ProjectsDialog({ storage, current, onOpen, onRenameCurrent, onCl
           <button className="v2-btn primary" title="Start an empty project" onClick={() => void create()}><Ic g="＋" size={16} /> New project</button>
           <input ref={picker} type="file" accept=".zip,application/zip,application/x-zip-compressed" hidden aria-label="Project file to import" onChange={(e) => { const f = e.currentTarget.files?.[0]; e.currentTarget.value = ""; if (f) setImporting(f); }} />
         </div>
+        <label className="v2-series-row v2-projects-series"><span>New projects join</span><SeriesSelect value={newSeries} onChange={setNewSeries} label="Series for new projects" /></label>
         {!list ? <p className="v2-muted">Loading…</p> : list.length === 0 ? <p className="v2-empty">No projects yet — create one to start editing.</p> : (
           <ul className="v2-project-list">
             {list.map((p) => (

@@ -2790,6 +2790,36 @@
           "title": "AI agent log Clear button is a 44px target on desktop too",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P5-SERIES",
+          "title": "Series: a shared asset library in local storage; episodes are projects with a seriesId; linked assets sync both ways, detach keeps an episode copy",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "P5-SERIES-UI",
+          "title": "Series picker in New project and Project settings; Series library with previews, type filters and Use in episode; Promote to series (dedupe by id) and Detach; 44px targets",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "P5-SERIES-JSON",
+          "title": "Storyboard JSON series: true and seriesRef, resolved on import with missing refs reported; the copy prompt, guide (rules 41-43) and llms.txt list the Series assets",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "P5-SERIES-MCP",
+          "title": "WebMCP tools list_series_assets, use_series_asset and promote_to_series",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "P5-SERIES-ZIP",
+          "title": "Series zip and episode zip (bundles the Series assets it uses); import reconnects to or creates the Series",
+          "status": "done",
+          "progress": 100
         }
       ]
     }

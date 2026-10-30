@@ -3,6 +3,7 @@
  * Pure parse + validate with path-addressed errors. The source of truth is docs/v2/STORYBOARD_FORMAT.md; every
  * warning, fallback and hard error listed in its §4 is implemented here.
  */
+import { resolveSeriesRefs, usesSeries, type SeriesLike } from "./storySeries";
 import { effectMoves } from "./storyFollow";
 import { checkParamValue, cleanParamDecls, validateParamDecls, type HtmlClipParam, type HtmlParamValues } from "./htmlClipPackage";
 import { FONTS, getFont, getPreset, listPresets, parsePresetRef, type PresetDescriptor, type PresetKind } from "../registry";
@@ -68,6 +69,10 @@ export interface StoryAsset {
    * that has no asset of its own; export leaves it out again (the references keep the id).
    */
   implicit?: true;
+  /** P5: this asset is the project's Series asset with this id (its definition comes from the Series). */
+  seriesRef?: string;
+  /** P5: add this asset to the project's Series when the board is applied. */
+  series?: true;
 }
 /**
  * V2-SB-136: one state of an asset: its own prompt, references, checks and versions; same type, aspect and identity as
@@ -381,7 +386,10 @@ export function jsonSyntaxError(text: string): { pos: number; message: string } 
   return undefined;
 }
 
-export function parseStoryboard(text: string): StoryParseResult {
+/** P5: options for parsing and validating: the project's Series, to resolve "seriesRef" assets against. */
+export interface StoryValidateOptions { series?: SeriesLike }
+
+export function parseStoryboard(text: string, opts: StoryValidateOptions = {}): StoryParseResult {
   const json = extractJson(text);
   if (!json) return { ok: false, errors: [{ path: "", message: "Nothing to import — paste the storyboard JSON or choose a .json file." }], warnings: [] };
   let raw: unknown;
@@ -390,7 +398,7 @@ export function parseStoryboard(text: string): StoryParseResult {
     const where = at ? ` at ${lineCol(json, at.pos)}: ${at.message}` : "";
     return { ok: false, errors: [{ path: "", message: `Not valid JSON${where}. Tip: ask the AI to reply with only the JSON in one code block.`, ...(at ? { at: at.pos } : {}) }], warnings: [] };
   }
-  return validateStoryboard(raw);
+  return validateStoryboard(raw, opts);
 }
 
 type Obj = Record<string, unknown>;
@@ -437,11 +445,19 @@ export function estimateTextWidth(text: string, opts: { font?: string; size: num
   return (widest * opts.size * (opts.bold ? 1.06 : 1)) / aspectRatio(opts.aspect);
 }
 
-export function validateStoryboard(raw: unknown): StoryParseResult {
+export function validateStoryboard(raw: unknown, opts: StoryValidateOptions = {}): StoryParseResult {
   const errors: StoryIssue[] = [], warnings: StoryIssue[] = [];
   const err = (path: string, message: string) => { if (errors.length < MAX_ERRORS) errors.push({ path, message }); };
   const warn = (path: string, message: string) => warnings.push({ path, message });
   if (!isObj(raw)) return { ok: false, errors: [{ path: "", message: "The storyboard must be a JSON object { … }." }], warnings };
+  // P5: "seriesRef" assets take their definition from the project's Series before anything else is checked.
+  if (usesSeries(raw)) {
+    raw = JSON.parse(JSON.stringify(raw)) as Obj;
+    const r = resolveSeriesRefs(raw as Obj, opts.series);
+    r.errors.forEach((e) => err(e.path, e.message));
+    r.warnings.forEach((w) => warn(w.path, w.message));
+  }
+  if (!isObj(raw)) return { ok: false, errors, warnings };
 
   if (raw.format === undefined) warn("format", `Missing "format"; assuming "${STORYBOARD_FORMAT}".`);
   else if (raw.format !== STORYBOARD_FORMAT) err("format", `Unsupported format "${String(raw.format)}" — expected "${STORYBOARD_FORMAT}".`);
@@ -733,7 +749,12 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
     const states = statesOf(a.states, `${path}.states`, id, type);
     if (lastFrameShotOf(id) && shotIds.has(lastFrameShotOf(id)!) && !(source.type === "lastFrame" && source.shot === lastFrameShotOf(id))) err(`${path}.id`, `Asset id "${id}" is reserved for the last frame of shot "${lastFrameShotOf(id)}"; rename the asset (or make it that last frame).`);
     if (keyframeShotOf(id) === undefined && id.endsWith(".background") && shotIds.has(id.slice(0, -11))) err(`${path}.id`, `Asset id "${id}" is reserved for the background of shot "${id.slice(0, -11)}"; rename the asset.`);
-    assets.push({ ...(i >= rawAssets0.length ? { implicit: true as const } : {}), id, name, type, aspect: asp || aspect, prompt, references: assetRefsOf(a.references, `${path}.references`), source, qa: strList(a.qa, `${path}.qa`), ...(notes ? { notes } : {}), ...(params ? { params } : {}), ...(genDurationSec ? { genDurationSec } : {}), ...(states?.length ? { states } : {}) });
+    const seriesRef = str(a.seriesRef);
+    if (a.series !== undefined && a.series !== true && a.series !== false) warn(`${path}.series`, '"series" must be true (add this asset to the project\'s Series) or left out.');
+    const promote = a.series === true && !seriesRef;
+    if (promote && (source.type === "lastFrame" || keyframeShotOf(id))) warn(`${path}.series`, "Last frames and keyframes belong to one episode; this asset is not added to the Series.");
+    const toSeries = promote && source.type !== "lastFrame" && !keyframeShotOf(id);
+    assets.push({ ...(i >= rawAssets0.length ? { implicit: true as const } : {}), ...(seriesRef ? { seriesRef } : {}), ...(toSeries ? { series: true as const } : {}), id, name, type, aspect: asp || aspect, prompt, references: assetRefsOf(a.references, `${path}.references`), source, qa: strList(a.qa, `${path}.qa`), ...(notes ? { notes } : {}), ...(params ? { params } : {}), ...(genDurationSec ? { genDurationSec } : {}), ...(states?.length ? { states } : {}) });
     assetPaths.push(path);
     states?.forEach((_st, k) => assetPaths.push(`${path}.states[${k}]`));
   });

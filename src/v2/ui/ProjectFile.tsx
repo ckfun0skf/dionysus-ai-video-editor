@@ -18,6 +18,8 @@ import {
   type ZipSink,
 } from "../persistence";
 import { safeName, saveFile } from "./saveFile";
+import { series as S } from "../domain";
+import { seriesStore } from "./series/seriesStore";
 
 export const projectFileName = (name: string) => `${safeName(name)}${ARCHIVE_SUFFIX}`;
 const TEMP = "dionysus-export.zip";
@@ -117,7 +119,9 @@ export function ExportFileDialog({ load, blobs, fileName, target, onClose }: { l
     try {
       const project = await load();
       if (!project) throw new Error("This project could not be loaded.");
-      const r = await exportProjectArchive(project, blobs, target.sink, { signal, onProgress: (x) => alive() && setP(x) });
+      // P5: an episode bundles the Series assets it uses (series.json + their media).
+      const sr = seriesStore.get(project.seriesId);
+      const r = await exportProjectArchive(project, blobs, target.sink, { signal, onProgress: (x) => alive() && setP(x), series: sr && S.seriesForProject(sr, project) });
       const file = await target.done();
       let saved: string | undefined;
       // Desktop: start the download right away. Phones need a fresh tap for the share sheet, so they get a button.
@@ -177,7 +181,9 @@ export function ImportFileDialog({ file, storage, current, onOpen, onDone, onClo
   const run = async (a: ArchivePreview, mode: ImportMode) => {
     setS({ phase: "working", a });
     try {
-      const project = await importProjectArchive(storage, a, mode, { signal: job.signal(), onProgress: (x) => job.alive() && setP(x) });
+      // P5: the bundled Series reconnects to the one here (same id) or is added.
+      const project = await importProjectArchive(storage, a, mode, { signal: job.signal(), onProgress: (x) => job.alive() && setP(x),
+        onSeries: (incoming) => { const here = seriesStore.get(incoming.id); seriesStore.put(here ? S.mergeSeries(here, incoming) : incoming); } });
       onDone();
       if (job.alive()) setS({ phase: "done", project, missing: a.manifest.missing.length });
     } catch (e) {
@@ -195,6 +201,7 @@ export function ImportFileDialog({ file, storage, current, onOpen, onDone, onClo
         {s.phase === "checking" && <p className="v2-muted" role="status">Checking the file…</p>}
         {s.phase === "confirm" && <>
           <p><b>{name}</b> · {s.a.manifest.media.length} media file{s.a.manifest.media.length === 1 ? "" : "s"} · {mb(s.a.mediaBytes)}{s.a.manifest.app?.version ? ` · Dionysus ${s.a.manifest.app.version}` : ""}</p>
+          {s.a.series && <p className="v2-muted">Episode of the series “{s.a.series.name}” ({Object.keys(s.a.series.assets).length} series asset(s) included). {seriesStore.get(s.a.series.id) ? "It reconnects to that series here." : "The series is added here."}</p>}
           {s.a.manifest.missing.length > 0 && <p className="v2-pfile-warn">{s.a.manifest.missing.length} media file(s) were missing when this file was made; those clips will show as offline.</p>}
           {s.clash && <p className="v2-pfile-warn">This project is already here as “{s.clash.name}”.{s.clash.current ? " It's open now, so it can only be imported as a copy." : ""}</p>}
         </>}

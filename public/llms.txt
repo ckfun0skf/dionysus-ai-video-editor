@@ -14,6 +14,10 @@ To plan a storyboard for Dionysus, read the storyboard guide first and reply wit
 
 For a long video, don't write one huge JSON: agree an outline first, then reply with part 1 (a complete storyboard with the first batch of shots) and then one part per message ({ "format", "part": { "index", "of", "after" }, "shots", … }, no "meta"); the user imports each part and Dionysus merges it by id. See the guide's rule "long-story-parts".
 
+## Series
+
+A project can be an episode of a Series: a shared library of characters, props, locations and styles. The user's prompt then ends with a SERIES ASSETS list. Reuse those assets by id with { "id": "<id>", "seriesRef": "<id>" } instead of redefining them, and give a new recurring asset "series": true so later episodes can reuse it. See the guide's rules "series-reuse", "series-promote" and "series-tools". With WebMCP, call list_series_assets first.
+
 ## WebMCP tools
 
 When the user turns on agent access (Storyboard → Agent) in a browser with WebMCP, the open Dionysus tab registers these tools. Use them instead of writing JSON; every call is validated by the guide's rules (a rejected call changes nothing) and is one undo step for the user.
@@ -38,6 +42,9 @@ When the user turns on agent access (Storyboard → Agent) in a browser with Web
 - `add_cue`(cue): Add an audio cue (voiceover, music, sfx, ambience, sting, dialogue) that plays from a shot. Gets "audio<n>" as id when you give none.
 - `update_cue`(id, patch): Change fields of an audio cue (from, to, atSec, volume, fades, loop, volumeKeys, fx, …).
 - `remove_cue`(id): Remove an audio cue.
+- `list_series_assets` · read-only: List the shared assets of the Series this project belongs to (id, type, name, short description, states). Reuse them with use_series_asset instead of defining a new character, prop, location or style.
+- `use_series_asset`(id, as): Add a Series asset to the board, linked: its definition, states and uploads come from the Series and stay in sync. Then use its id (or "<id>@<state>") in shots.
+- `promote_to_series`(id): Add a board asset to the project's Series so later episodes can reuse it (sets "series": true; the app adds it with its uploads and links it). If the Series already has that id, the board links to it (dedupe by id).
 - `validate` · read-only: Run the importer's checks on the current storyboard and list its warnings (edits are already checked; this reports what is left to improve).
 - `export_json` · read-only: The whole storyboard as storyboard JSON ("dionysus.storyboard/1"), edits included.
 - `send_to_timeline`: Update the timeline from the storyboard (update mode): adds shots that have a clip and new audio cues, switches changed clips and refreshes shot text; everything else on the timeline stays. Shots without an uploaded clip are skipped.

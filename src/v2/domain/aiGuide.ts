@@ -90,6 +90,10 @@ To plan a storyboard for Dionysus, read the storyboard guide first and reply wit
 
 For a long video, don't write one huge JSON: agree an outline first, then reply with part 1 (a complete storyboard with the first batch of shots) and then one part per message ({ "format", "part": { "index", "of", "after" }, "shots", … }, no "meta"); the user imports each part and Dionysus merges it by id. See the guide's rule "long-story-parts".
 
+## Series
+
+A project can be an episode of a Series: a shared library of characters, props, locations and styles. The user's prompt then ends with a SERIES ASSETS list. Reuse those assets by id with { "id": "<id>", "seriesRef": "<id>" } instead of redefining them, and give a new recurring asset "series": true so later episodes can reuse it. See the guide's rules "series-reuse", "series-promote" and "series-tools". With WebMCP, call list_series_assets first.
+
 ## WebMCP tools
 
 When the user turns on agent access (Storyboard → Agent) in a browser with WebMCP, the open Dionysus tab registers these tools. Use them instead of writing JSON; every call is validated by the guide's rules (a rejected call changes nothing) and is one undo step for the user.

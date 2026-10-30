@@ -5,8 +5,9 @@
  * step; the board re-renders live, the "AI is editing" pill shows, and the call goes into the activity log.
  * Turning access off (or closing the page) unregisters every tool.
  */
-import { board, roundtrip, runtimeAiLinks, storyAgent, storyboardGuideMarkdown, type StoryDoc } from "../../domain";
+import { board, roundtrip, runtimeAiLinks, series, storyAgent, storyboardGuideMarkdown, type StoryDoc } from "../../domain";
 import { cmd, type Engine } from "../../engine";
+import { seriesStore } from "../series/seriesStore";
 
 /** The shape of a WebMCP tool result (MCP content). */
 export interface ToolResponse { content: { type: "text"; text: string }[]; isError?: boolean }
@@ -64,12 +65,14 @@ function log(tool: string, ok: boolean, text: string, changed: boolean) {
 }
 
 const currentDoc = (engine: Engine): StoryDoc | undefined => { const sb = engine.getState().project.storyboard; return sb ? roundtrip.storyboardToDoc(sb) : undefined; };
-const guide = () => storyboardGuideMarkdown(runtimeAiLinks().site);
+/** P5: the open project's Series; get_guide ends with its asset list. */
+const seriesOf = (engine: Engine) => seriesStore.get(engine.getState().project.seriesId);
+const guideFor = (engine: Engine) => () => { const s = seriesOf(engine); return storyboardGuideMarkdown(runtimeAiLinks().site) + (s ? `\n\n## SERIES ASSETS\n\n${series.seriesPromptSection(s)}\n` : ""); };
 
 /** Run one tool call against the engine (also what the WebMCP `execute` callbacks do). */
 export function callAgentTool(engine: Engine, name: string, args: unknown): ToolResponse {
   if (!state.enabled) return { content: [{ type: "text", text: "Agent access is off in Dionysus (Storyboard → AI agent)." }], isError: true };
-  const res = storyAgent.runStoryTool(name, args, currentDoc(engine), { guide });
+  const res = storyAgent.runStoryTool(name, args, currentDoc(engine), { guide: guideFor(engine), series: seriesOf(engine) });
   let text = res.text, changed = false;
   if (res.ok && res.doc) {
     changed = engine.dispatch(cmd.mergeStoryboardDoc(res.doc), res.label);

@@ -23,6 +23,8 @@ import { CopyButton } from "./StoryImport";
 import { AudioTrim } from "./AudioTrim";
 import { StoryAssetPicker, type LibraryEntry } from "./StoryAssetPicker";
 import { TrimPicker } from "./TrimPicker";
+import { series as S } from "../../domain";
+import { seriesStore, useSeries } from "../series/seriesStore";
 
 const ACCEPT: Partial<Record<MediaKind, string>> = { image: "image/*", video: "video/*", audio: "audio/*", html: HTML_IMPORT_ACCEPT };
 const KIND_NAME: Partial<Record<MediaKind, string>> = { image: "an image", html: "an HTML file", audio: "an audio file", video: "a video file" };
@@ -251,6 +253,7 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
     <div className="v2-sb-detail-body">
       {head}
       {(inline || !mobile) && <div className="v2-sb-detail-head"><Ic g={icon} size={18} /><h3>{title}</h3>{onEdit && <button className="v2-btn v2-sb-btn" onClick={onEdit} title={shot ? "Edit title, length, prompt, references, how the clip is made, checks…" : "Edit name, type, prompt, what it is made from, checks…"}><Ic g="✎" size={16} /> Edit</button>}{!inline && <button className="v2-icon v2-sb-icon" aria-label="Close details" title="Close (Esc)" onClick={onClose}><Ic g="✕" size={18} /></button>}</div>}
+      {slot && <SeriesLink project={project} slotId={slot.id} engine={engine} />}
       {slot?.type === "video" && (slot.genDurationSec || trimWin !== undefined) && <p className="v2-sb-detail-desc">{slot.genDurationSec ? <span title="Ask the video model for this length">generate {slot.genDurationSec}s</span> : null}{slot.genDurationSec && trimWin !== undefined ? " · " : null}{trimWin !== undefined ? <span title="The longest video layer that shows this asset">layers use {Math.round(trimWin * 100) / 100}s</span> : null}</p>}
       {shot && <p className="v2-sb-detail-desc">{shot.durationSec}s{shot.genDurationSec ? <> · <span title="Ask the video model for this length; the upload is trimmed to the shot length">generate {shot.genDurationSec}s</span></> : null} · {shot.description}</p>}
       {clipSlot && (
@@ -794,6 +797,32 @@ function LayerParams({ shot, index, slot, project, engine, blobs }: { shot: Shot
       <h5 className="v2-sb-subhead">“{slot.name}” (layer {index + 1})</h5>
       <ParamsBox name={`Layer ${index + 1}`} decls={decls} values={layer.params} engine={engine} testId={`v2-sb-layer-params-${index}`}
         onChange={(k, v) => set({ ...(layer.params ?? {}), [k]: v }, `Layer ${decls[k]?.label || k}`)} onReset={() => set(undefined, "Reset layer params")} />
+    </div>
+  );
+}
+
+/** P5: a board asset's link to the project's Series: linked badge + Detach, or Promote to series (dedupe by id). */
+function SeriesLink({ project, slotId, engine }: { project: Project; slotId: string; engine: Engine }) {
+  const series = useSeries(project.seriesId);
+  const slot = project.storyboard?.slots[slotId];
+  if (!series || !slot || slot.stateOf || slot.implicit || slot.keyframeOf || slot.source.type === "lastFrame") return null;
+  const ref = slot.seriesRef;
+  const promote = () => {
+    const r = S.promoteToSeries(series, engine.getState().project, slotId);
+    if (!r) return;
+    seriesStore.put(r.series);
+    engine.dispatch({ label: "Promote to series", apply: (p) => S.promoteToSeries(series, p, slotId)?.project ?? p });
+  };
+  return (
+    <div className="v2-sb-series" role="note" data-testid="series-link">
+      {ref ? <>
+        <span className="v2-sb-series-badge"><Ic g="library" size={14} /> Linked to “{series.name}”{ref !== slotId ? ` as ${ref}` : ""}</span>
+        <span className="v2-muted">Edits here update every episode.</span>
+        <button className="v2-btn v2-sb-btn" title="Keep this episode's own copy; later series edits no longer reach it" onClick={() => engine.dispatch({ label: "Detach from series", apply: (p) => S.detachFromSeries(p, slotId) })}><Ic g="unlink" size={16} /> Detach from series</button>
+      </> : <>
+        <span className="v2-muted">{series.assets[slotId] ? `“${series.name}” already has “${slotId}”: promoting links to it and adds these versions.` : `Share it with every episode of “${series.name}”.`}</span>
+        <button className="v2-btn v2-sb-btn" onClick={promote}><Ic g="library" size={16} /> Promote to series</button>
+      </>}
     </div>
   );
 }

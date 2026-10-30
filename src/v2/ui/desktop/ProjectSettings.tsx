@@ -1,13 +1,16 @@
 import { cmd, type Engine } from "../../engine";
 import type { Project } from "../../domain";
 import { Ic } from "../Icon";
+import { SeriesSelect } from "../series/SeriesLibrary";
+import { setProjectSeries, useSeries } from "../series/seriesStore";
 import { ASPECTS, aspectOf, BACKGROUNDS, FPS_CHOICES } from "./layout";
 
 /** V2-106: shown in the inspector when nothing is selected. Every change is one undo step. */
-export function ProjectSettings({ engine, project, extra }: { engine: Engine; project: Project; extra?: React.ReactNode }) {
+export function ProjectSettings({ engine, project, extra, onSeries }: { engine: Engine; project: Project; extra?: React.ReactNode; /** P5: open the Series library. */ onSeries?: () => void }) {
   const s = project.settings;
   const aspect = aspectOf(s);
   const bg = s.background ?? "#000000";
+  const series = useSeries(project.seriesId);
   return (
     <div className="v2-psettings">
       <section aria-label="Canvas">
@@ -41,6 +44,12 @@ export function ProjectSettings({ engine, project, extra }: { engine: Engine; pr
           </label>
         </div>
         <p className="v2-abnote">Shows wherever no clip covers the canvas — in the preview and the export.</p>
+      </section>
+      <section aria-label="Series">
+        <h4>Series</h4>
+        <SeriesSelect value={project.seriesId} onChange={(id) => setProjectSeries(engine, id)} label="Project series" />
+        {onSeries && <button className="v2-btn v2-series-open" onClick={onSeries}><Ic g="library" size={16} /> Series library</button>}
+        <p className="v2-abnote">{series ? `Episode of “${series.name}” · ${Object.keys(series.assets).length} shared asset(s).` : "Share characters, props, locations and styles between episodes."}</p>
       </section>
       {extra}
       <p className="v2-empty-hint"><Ic g="⤧" size={14} /> Select a clip on the timeline to edit it here.</p>

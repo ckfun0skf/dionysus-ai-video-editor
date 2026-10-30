@@ -46,6 +46,10 @@ export interface AssetSlot {
    * "background" = a still shot's colour / gradient picture (item 20, `background` holds it). Export leaves these out.
    */
   implicit?: "lastframe" | "background";
+  /** P5: linked to the project's Series asset with this id (base slots only; states follow their base). */
+  seriesRef?: string;
+  /** P5: imported with "series": true; the app adds it to the project's Series and then links it. */
+  seriesPromote?: true;
   /** P2B (item 20): implicit "background" slots: what to draw. */
   background?: StoryBackground;
 }
@@ -204,6 +208,7 @@ export function storyboardFromDoc(doc: StoryDoc): Storyboard {
       qa: qaList(a.id, a.qa), ...(a.notes ? { notes: a.notes } : {}),
       ...refRolesOf(a.references), ...(a.params ? { params: structuredClone(a.params) } : {}),
       ...(a.type === "video" && a.genDurationSec ? { genDurationSec: a.genDurationSec } : {}),
+      ...(a.seriesRef ? { seriesRef: a.seriesRef } : {}), ...(a.series ? { seriesPromote: true as const } : {}),
       ...(a.stateOf ? { stateOf: a.stateOf, stateName: a.stateName ?? a.state } : {}),
       ...(a.implicit ? { implicit: "lastframe" as const } : {}),
     };
