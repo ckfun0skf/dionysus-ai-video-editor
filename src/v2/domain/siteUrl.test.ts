@@ -15,7 +15,7 @@ describe("site URL (V2-OPS-LINKS)", () => {
     const l = aiLinks(runtimeSiteUrl(loc("https://video.example.com/editor/?v2"), "/editor/"));
     expect(l).toEqual({
       site: "https://video.example.com/editor/",
-      app: "https://video.example.com/editor/?v2",
+      app: "https://video.example.com/editor/",
       guide: "https://video.example.com/editor/ai/storyboard-guide.md",
       guideHtml: "https://video.example.com/editor/ai/storyboard-guide.html",
       htmlClipSpec: "https://video.example.com/editor/ai/HTML_CLIP_PACKAGE.md",

@@ -1,4 +1,4 @@
-/** IndexedDB storage for v2 (separate database from the legacy app). */
+/** IndexedDB storage for v2 (its own `dionysus-v2` database). */
 import type { Storage } from "../ports/storage";
 import type { Project } from "../domain/model";
 import { migrateProject } from "./schema";

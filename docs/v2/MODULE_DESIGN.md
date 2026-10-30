@@ -4,7 +4,7 @@
 
 ## 1. Context
 
-The current app is a monolith (`src/App.tsx` ≈3.4k lines, `styles.css` ≈3.5k lines). Its core mistake is treating storyboard, timeline, references and assets as separate state planes with separate mutation paths. Issue #110 and `docs/architecture/UNIFIED_COMPOSITION_MODEL.md` already identify the fix: **one canonical composition engine, one history, command-based editing**. PR #111 (`editorSession*.ts`) moves in that direction inside the legacy shell. v2 makes it the foundation rather than a retrofit.
+The original (v1) app was a monolith (`src/App.tsx` ≈3.4k lines, `styles.css` ≈3.5k lines) that treated storyboard, timeline, references and assets as separate state planes with separate mutation paths. v2 is built on **one canonical composition engine, one history, command-based editing**. The v1 app was removed in V2-DEFAULT; see git history for its sources.
 
 Ideas reused from existing docs (all retained as v2 invariants):
 - **Master Timeline = root Composition**; **Clip Asset Version = reusable Composition**, edited by the same editor.
@@ -74,7 +74,7 @@ Product direction: see [VISION.md](./VISION.md).
 One tree, as it exists today. Planned modules are listed separately and are added only when a feature needs them, so this section never describes files that don't exist.
 
 ```
-src/main.tsx               # entry: ?v2 → lazy import("./v2/main"), otherwise the legacy app
+src/main.tsx               # entry: mounts src/v2/main.tsx (a legacy `?v2` query is ignored)
 src/v2/
   main.tsx                 # mountV2(root)
   architecture.test.ts     # enforces the §3 layering + barrel imports
@@ -287,9 +287,8 @@ PR #111 `editorSession*.ts`: treat as reference for session-state shape (selecti
 
 ## 12. Coexistence & switch-over
 
-1. **Same entry, opt-in by `?v2`:** there's no separate Vite entry. `src/main.tsx` lazy-loads `src/v2/main.tsx` (its own chunk) when the URL has `?v2`; otherwise it mounts the legacy app. The legacy app is unchanged apart from a small "Try new editor (v2)" link.
-2. **Separate storage:** v2 uses its own IndexedDB database (`dionysus-v2`). Legacy data is not imported (no legacy projects exist).
-3. **Switch-over** when the MVP passes the acceptance checklist: v2 becomes the default (no `?v2` needed), and the legacy app and the link are removed in one PR.
+1. **Single app (V2-DEFAULT, done):** `src/main.tsx` mounts `src/v2/main.tsx` unconditionally. The legacy app, its sources, tests and docs were removed; a `?v2` query string from old links is accepted and ignored.
+2. **Separate storage:** v2 uses its own IndexedDB database (`dionysus-v2`). Legacy data is not imported.
 
 ## 13. Testing strategy
 
