@@ -189,7 +189,7 @@ describe("storyboard v1.1: hard errors (path-addressed)", () => {
     expect(errsOf((d) => { d.shots[0].layers = [{ id: "v", type: "video", asset: "bg", startSec: 0, endSec: 1, box: { x: 0, y: 0, width: 1, height: 1 } }]; })[0]).toMatch(/needs a video asset/);
   });
   it("render html or still without clip, and an unknown render", () => {
-    expect(errsOf((d) => { delete d.shots[1].clip; })).toEqual(['shots[1].clip: A render "still" shot needs "clip": the id of an image asset.']);
+    expect(errsOf((d) => { delete d.shots[1].clip; })).toEqual(['shots[1].clip: A render "still" shot needs "clip" (the id of an image asset) or "background" (a colour like "#101820" or a gradient).']);
     expect(errsOf((d) => { delete d.shots[2].clip; })).toEqual(['shots[2].clip: A render "html" shot needs "clip": the id of an html asset.']);
     expect(errsOf((d) => { d.shots[0].render = "3d"; })).toEqual(['shots[0].render: Render "3d" must be one of: ai, html, still.']);
   });

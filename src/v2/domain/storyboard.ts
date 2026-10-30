@@ -7,7 +7,7 @@
  */
 import { isStill, newId, type AssetVersion, type Composition, type MediaKind, type MediaRef, type Placement, type Project } from "./model";
 import { mainTrack } from "./ops";
-import { assetRefId, dialogueLines, expandAssetStates, dialogueText, keyframeId, type StoryDialogueLine, type AssetRefRole, type ReferenceRole, type ShotRender, type StoryAssetRef, type StoryAssetType, type StoryAudio, type StoryConnection, type StoryDoc, type StoryEffect, type StoryLayer, type StoryMeta } from "./storyJson";
+import { assetRefId, dialogueLines, expandAssetStates, dialogueText, keyframeId, type StoryDialogueLine, type AssetRefRole, type ReferenceRole, type ShotRender, type StoryAssetRef, type StoryAssetType, type StoryBackground, backgroundId, type StoryAudio, type StoryConnection, type StoryDoc, type StoryEffect, type StoryLayer, type StoryMeta } from "./storyJson";
 import { followStoryLinks } from "./storyLinks";
 import type { HtmlClipParam, HtmlParamValues } from "./htmlClipPackage";
 import { orderSteps } from "./storySteps";
@@ -41,6 +41,13 @@ export interface AssetSlot {
   stateOf?: string;
   /** V2-SB-136: the state's name ("lit"), shown next to the base's name. */
   stateName?: string;
+  /**
+   * P2B: made by the app, not declared in the document: "lastframe" = a "<shot>.lastframe" reference (item 17);
+   * "background" = a still shot's colour / gradient picture (item 20, `background` holds it). Export leaves these out.
+   */
+  implicit?: "lastframe" | "background";
+  /** P2B (item 20): implicit "background" slots: what to draw. */
+  background?: StoryBackground;
 }
 
 export interface Shot {
@@ -103,6 +110,10 @@ export interface VersionInfo {
   model?: string;
   /** V2-SB-121: the part of a video version the shot uses (source in and out). Absent = the whole clip. */
   trim?: VersionTrim;
+  /** P2B (item 20): background slots: the signature of the background this picture was drawn from. */
+  bg?: string;
+  /** P2B (item 17): last frames: the clip time (s) the frame was taken at when the clip was trimmed short. */
+  lfEnd?: number;
 }
 
 /** Source range of a video version, in ticks (V2-SB-121). */
@@ -174,6 +185,7 @@ export function storyboardFromDoc(doc: StoryDoc): Storyboard {
       ...refRolesOf(a.references), ...(a.params ? { params: structuredClone(a.params) } : {}),
       ...(a.type === "video" && a.genDurationSec ? { genDurationSec: a.genDurationSec } : {}),
       ...(a.stateOf ? { stateOf: a.stateOf, stateName: a.stateName ?? a.state } : {}),
+      ...(a.implicit ? { implicit: "lastframe" as const } : {}),
     };
   }
   const shots: Record<string, Shot> = {};
@@ -189,6 +201,11 @@ export function storyboardFromDoc(doc: StoryDoc): Storyboard {
       ...(s.genDurationSec ? { genDurationSec: s.genDurationSec } : {}),
       ...(s.references?.length ? { references: s.references.map((r) => ({ slotId: r.asset, role: r.role, ...(r.note ? { note: r.note } : {}) })) } : {}),
     };
+    if (s.render === "still" && !s.clip && s.background) {
+      const id = backgroundId(s.id);
+      slots[id] = { id, name: `Background · ${s.title}`, type: "image", aspect: doc.meta.aspect, prompt: "", references: [], source: { type: "generate" }, qa: [], implicit: "background", background: structuredClone(s.background) };
+      Object.assign(shots[s.id], { render: "still", clipSlot: id });
+    }
     if (shots[s.id].clipSlot && !shots[s.id].slotIds.includes(shots[s.id].clipSlot!)) shots[s.id].slotIds.push(shots[s.id].clipSlot!);
     if (s.keyframe) {
       const id = keyframeId(s.id);
@@ -256,7 +273,7 @@ export type Target = { slot: string } | { shot: string };
  * Upload a new version into a slot or shot and select it. Inputs (and the last-frame source for
  * derived slots) are frozen from the current selections so later changes can be detected.
  */
-export function addStoryVersion(p: Project, target: Target, media: MediaRef, opts: { versionId?: string; model?: string; now?: string; derivedFrom?: { shotId: string; versionId: string }; trim?: VersionTrim } = {}): Project {
+export function addStoryVersion(p: Project, target: Target, media: MediaRef, opts: { versionId?: string; model?: string; now?: string; derivedFrom?: { shotId: string; versionId: string }; trim?: VersionTrim; bg?: string; lfEnd?: number } = {}): Project {
   const b = p.storyboard;
   if (!b) return p;
   // An html or still shot has no clip of its own: its versions live on the clip slot.
@@ -284,7 +301,7 @@ export function addStoryVersion(p: Project, target: Target, media: MediaRef, opt
     : { id: assetId, kind: isSlot ? kindForSlot((owner as AssetSlot).type) : ("video" as MediaKind), name, versions: [version], selectedVersionId: version.id };
   // V2-SB-121 shot clips, V2-SB-133 video assets (their layers' default in point).
   const trim = (!isSlot || (owner as AssetSlot).type === "video") && media.durationTicks ? normTrim(opts.trim, media.durationTicks) : undefined;
-  const info: VersionInfo = { inputs, ...(derivedFrom ? { derivedFrom } : {}), ...(opts.model ? { model: opts.model } : {}), ...(trim ? { trim } : {}) };
+  const info: VersionInfo = { inputs, ...(derivedFrom ? { derivedFrom } : {}), ...(opts.model ? { model: opts.model } : {}), ...(trim ? { trim } : {}), ...(opts.bg ? { bg: opts.bg } : {}), ...(opts.lfEnd !== undefined ? { lfEnd: opts.lfEnd } : {}) };
   const nextOwner = { ...owner, assetId, skipped: undefined };
   const board: Storyboard = {
     ...b,

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useStoryAuto } from "./useStoryAuto";
 import { board, ops, pendingAudio, roundtrip, storyEdit, storyRefs, updatePlan, type AssetSlot, type Shot, type StoryDiff, type StoryDoc } from "../../domain";
 import { cmd, type Engine } from "../../engine";
 import type { BlobStore } from "../../ports";
@@ -31,6 +32,8 @@ export function StoryboardView({ engine, blobs, onClose, initialOpen, onView }: 
   const [step, setStep] = useState<Step | undefined>();
   const [note, setNoteState] = useState<Note>();
   const setNote = useCallback((text: string, action?: Note["action"]) => setNoteState({ text, action }), []);
+  // P2B: draw still-shot backgrounds and take last frames of picked clips as soon as they change.
+  useStoryAuto(project, engine, blobs, setNote);
   const [more, setMore] = useState<{ x: number; y: number }>();
   const [sendMenu, setSendMenu] = useState(false);
   const [confirmTimeline, setConfirmTimeline] = useState(false);

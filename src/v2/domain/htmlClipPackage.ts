@@ -349,6 +349,11 @@ export interface PackagePromptInput {
   paramUses?: HtmlParamValues[];
   /** Extra context (e.g. the shot the clip plays in). */
   context?: string;
+  /**
+   * P2B (item 5): other html (code) assets this one references. Their .html is attached as a code reference to reuse
+   * (look, helpers, motion language); they are not loaded at runtime.
+   */
+  codeRefs?: { name: string; label?: string; brief?: string }[];
 }
 export interface PackagePromptOptions {
   libs: readonly ClipLibrary[];
@@ -435,7 +440,10 @@ PACKAGE (${HTML_CLIP_FORMAT})${opts.full ? "" : `\n- Spec: ${opts.specUrl}`}
 - Allowed libraries: ${libs}. List the ones you use in "libs". Nothing else can be loaded.
 - Bindings (media from other assets):
 ${binds}
-${paramLines(input)}`;
+${paramLines(input)}${input.codeRefs?.length ? `
+- Code references (other HTML clips of this film; the user attaches their .html files): reuse their look, helpers and motion language so the clips match. Don't load or embed them at runtime; copy what you need into this file.
+${input.codeRefs.map((c) => `  - "${c.name}"${c.label ? ` (${c.label})` : ""}${c.brief ? `: ${c.brief.replace(/\s+/g, " ").trim().slice(0, 200)}` : ""}`).join("\n")}` : ""}
+- Focus on the JavaScript: keep the HTML a minimal shell (the manifest, one <canvas>, one module script) and do the work in dionysus.clip's init/render with the runtime's ctx. Add more HTML or CSS only when the design truly needs it (only the canvas is captured).`;
   const rules = opts.full
     ? `\n\nRUNTIME CONTRACT\n${HTML_CLIP_CONTRACT}\n\nTEMPLATE (a complete, valid clip to start from)\n\`\`\`html\n${htmlClipTemplate(m)}\`\`\``
     : `\n\nRUNTIME CONTRACT (summary; read the spec first: ${opts.specUrl})

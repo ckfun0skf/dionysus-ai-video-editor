@@ -2604,6 +2604,48 @@
           "title": "Send to timeline: Update (changes since last send) or Replace (clear and rebuild)",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P2B-DL-BUTTON",
+          "title": "Import preview: 44px Download .json button",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "P2B-BACKGROUND",
+          "title": "Still shots: solid or gradient background from the UI and JSON (spec §2.4, RULE 34)",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "P2B-ADD-LAYER",
+          "title": "Shot editor: Add layer (Text / Overlay / Code) with an editable layer list",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "P2B-LASTFRAME",
+          "title": "\"<shot>.lastframe\" references, extracted automatically on upload (RULE 35)",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "P2B-SHEETS",
+          "title": "Guide: multi-angle character and prop reference sheets (RULES 16, 32)",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "P2B-SELF-CONTAINED",
+          "title": "Self-contained prompts with a Consistency block (RULE 31)",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "P2B-HTML-REFS",
+          "title": "HTML assets as references; html prompt focuses on JS via dionysus.clip (RULE 33)",
+          "status": "done",
+          "progress": 100
         }
       ]
     }

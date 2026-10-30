@@ -49,7 +49,7 @@ function shotOut(b: Storyboard, s: Shot): StoryShot {
     id: s.id, title: s.title, description: s.description, durationSec: s.durationSec, prompt: s.prompt, assets, qa: texts(s.qa),
     ...(s.camera ? { camera: s.camera } : {}),
     ...(s.lines?.length ? { dialogue: structuredClone(s.lines) } : s.dialogue ? { dialogue: s.dialogue } : {}),
-    ...(s.render && s.clipSlot ? { render: s.render, clip: s.clipSlot } : {}),
+    ...(s.render && s.clipSlot ? (b.slots[s.clipSlot]?.implicit === "background" ? { render: s.render, background: structuredClone(b.slots[s.clipSlot].background!) } : { render: s.render, clip: s.clipSlot }) : {}),
     ...(s.params && s.render === "html" ? { params: { ...s.params } } : {}),
     ...(s.layers?.length ? { layers: structuredClone(s.layers) } : {}),
     ...(s.captions ? { captions: true } : {}),
@@ -68,6 +68,7 @@ export function storyboardToDoc(b: Storyboard): StoryDoc {
   for (const s of slots) {
     if (s.keyframeOf && b.shots[s.keyframeOf]?.keyframe === s.id) continue;
     if (s.stateOf && b.slots[s.stateOf] && splitStateId(s.id)) continue;
+    if (s.implicit) continue;
     const a = assetOut(s);
     assets.push(a); byId.set(a.id, a);
   }
@@ -105,9 +106,10 @@ export function storyDiff(p: Project, doc: StoryDoc): StoryDiff {
   const b = p.storyboard;
   const old = b ? storyboardToDoc(b) : { meta: {}, assets: [], shots: [], connections: [], audio: undefined };
   const d: StoryDiff = { assets: { added: [], changed: [], removed: [] }, shots: { added: [], changed: [], removed: [] }, other: [], same: true };
-  const oa = new Map(old.assets.map((a) => [a.id, a])), na = new Map(doc.assets.map((a) => [a.id, a]));
+  const oa = new Map(old.assets.map((a) => [a.id, a])), na = new Map(doc.assets.filter((a) => !a.implicit).map((a) => [a.id, a]));
   const slotUploads = (id: string) => uploads(p, ...Object.values(b?.slots ?? {}).filter((s) => s.id === id || s.stateOf === id).map((s) => s.assetId));
   for (const a of doc.assets) {
+    if (a.implicit) continue;
     const o = oa.get(a.id);
     if (!o) d.assets.added.push({ id: a.id, name: a.name });
     else { const f = keysDiff(o, a); if (f.length) d.assets.changed.push({ id: a.id, name: a.name, fields: f }); }

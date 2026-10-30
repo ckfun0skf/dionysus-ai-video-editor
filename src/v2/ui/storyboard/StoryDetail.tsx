@@ -165,10 +165,11 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
     if (!blob) throw new Error("The clip's file is missing from this device.");
     // V2-SB-121: the clip ends where its trim ends.
     const span = board.versionSpan(b, v);
-    const fr = await extractLastFrame(blob, 8000, span && span.inTicks + span.lenTicks < (v.media.durationTicks ?? 0) ? (span.inTicks + span.lenTicks) / TICKS_PER_SECOND : undefined);
+    const endSec = span && span.inTicks + span.lenTicks < (v.media.durationTicks ?? 0) ? (span.inTicks + span.lenTicks) / TICKS_PER_SECOND : undefined;
+    const fr = await extractLastFrame(blob, 8000, endSec);
     const key = `lastframe/${owner.id}/${v.id}/${Date.now()}`;
     await blobs.put(key, fr.blob);
-    engine.dispatch(cmd.addStoryVersion(target, { blobKey: key, mime: "image/png", width: fr.width, height: fr.height }, { derivedFrom: { shotId: lf, versionId: v.id } }));
+    engine.dispatch(cmd.addStoryVersion(target, { blobKey: key, mime: "image/png", width: fr.width, height: fr.height }, { derivedFrom: { shotId: lf, versionId: v.id }, ...(endSec !== undefined ? { lfEnd: endSec } : {}) }));
   });
 
   const body = (
