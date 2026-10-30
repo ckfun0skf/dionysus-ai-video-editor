@@ -190,7 +190,7 @@ export function CodeAiWizard({ mobile, initialRole = "scene", onImport, onClose 
         <div className="v2-cw-step">
           <h2 className="v2-cw-q">Import the AI's package</h2>
           <p className="v2-muted">Choose or drop the .zip or .html, or paste the reply. It's checked against the package standard, then opens in the Code Editor to preview and save.</p>
-          <HtmlImport expectParams={expectParams} dropHint actionLabel="Open in Code Editor" actionTitle="Preview it in the Code Editor, then add it to the timeline" onAdd={(html) => onImport(html)} />
+          <HtmlImport expectParams={expectParams} expectSource="wizard" dropHint actionLabel="Open in Code Editor" actionTitle="Preview it in the Code Editor, then add it to the timeline" onAdd={(html) => onImport(html)} />
         </div>
       );
     }

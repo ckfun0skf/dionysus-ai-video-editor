@@ -227,6 +227,8 @@ export interface LintOptions {
   expectBindings?: Record<string, BindingType>;
   /** Params the storyboard declares for this asset (V2-HTML-PARAMS); missing or differently typed ones are warnings. */
   expectParams?: Record<string, HtmlClipParam>;
+  /** Where expectParams come from, for the warning wording (default "storyboard"; P4C: "wizard" = Code AI mode). */
+  expectSource?: "storyboard" | "wizard";
 }
 export interface LintResult { manifest: HtmlClipManifest; issues: HtmlClipIssue[]; ok: boolean; legacy: boolean }
 
@@ -291,9 +293,11 @@ export function lintHtmlClip(html: string, opts: LintOptions): LintResult {
   for (const n of Object.keys(b)) if (!new RegExp(`["'\`.]${esc(n)}["'\`]?`).test(code)) warn("binding-unused", `Binding "${n}" is declared but the code never uses it (ctx.bindings["${n}"]).`);
   // Params (V2-HTML-PARAMS): the storyboard's declared params must be exposed, and exposed params must be read.
   const ps = isObj(manifest.params) ? manifest.params : {};
+  const where = opts.expectSource === "wizard" ? "in AI mode" : "on the storyboard asset";
+  const lost = opts.expectSource === "wizard" ? "so it can't be tweaked on the timeline" : "so per-shot values for it are ignored";
   for (const [k, spec] of Object.entries(opts.expectParams ?? {})) {
-    if (!ps[k]) warn("param-missing", `Param "${k}" (${spec.type}) is declared on the storyboard asset but not in the manifest "params", so per-shot values for it are ignored.`);
-    else if (ps[k].type !== spec.type) warn("param-mismatch", `Param "${k}" is ${ps[k].type} in the manifest but ${spec.type} on the storyboard asset.`);
+    if (!ps[k]) warn("param-missing", `Param "${k}" (${spec.type}) is declared ${where} but not in the manifest "params", ${lost}.`);
+    else if (ps[k].type !== spec.type) warn("param-mismatch", `Param "${k}" is ${ps[k].type} in the manifest but ${spec.type} ${where}.`);
   }
   if (Object.keys(ps).length && !/\bparams\b/.test(code)) warn("param-unused", `The manifest declares "params" but the code never reads ctx.params, so edits won't change the picture.`);
   return { manifest, issues, ok: !issues.some((i) => i.level === "error"), legacy };

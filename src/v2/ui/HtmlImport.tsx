@@ -56,13 +56,13 @@ const canPaste = () => typeof navigator !== "undefined" && typeof navigator.clip
 const finePointer = () => typeof matchMedia === "function" && matchMedia("(pointer: fine)").matches;
 
 /** Paste box + file picker (+ drop on desktop) with live validation; `onAdd` receives the single-file HTML. */
-export function HtmlImport({ expectBindings, expectParams, onAdd, busy, actionLabel = "Add as new version", actionTitle = "Add this clip as a new version (undoable)", dropHint }: { expectBindings?: Record<string, BindingType>; expectParams?: Record<string, HtmlClipParam>; onAdd: (html: string, name: string) => Promise<void> | void; busy?: boolean; actionLabel?: string; actionTitle?: string; dropHint?: boolean }) {
+export function HtmlImport({ expectBindings, expectParams, expectSource, onAdd, busy, actionLabel = "Add as new version", actionTitle = "Add this clip as a new version (undoable)", dropHint }: { expectBindings?: Record<string, BindingType>; expectParams?: Record<string, HtmlClipParam>; expectSource?: "storyboard" | "wizard"; onAdd: (html: string, name: string) => Promise<void> | void; busy?: boolean; actionLabel?: string; actionTitle?: string; dropHint?: boolean }) {
   const [text, setText] = useState("");
   const [file, setFile] = useState<{ name: string; html: string }>();
   const [err, setErr] = useState("");
   const [drag, setDrag] = useState(false);
   const html = file?.html ?? (text.trim() ? extractHtml(text) ?? "" : "");
-  const lint = useMemo(() => (html ? lintHtmlClip(html, { libs: CLIP_LIBRARIES, expectBindings, expectParams }) : undefined), [html, expectBindings, expectParams]);
+  const lint = useMemo(() => (html ? lintHtmlClip(html, { libs: CLIP_LIBRARIES, expectBindings, expectParams, expectSource }) : undefined), [html, expectBindings, expectParams, expectSource]);
   const blocked = !text.trim() && !file;
   const notFound = !file && !!text.trim() && !extractHtml(text);
 
