@@ -28,6 +28,7 @@ function assetOut(s: AssetSlot): StoryAsset {
     source: s.source.type === "lastFrame" ? { type: "lastFrame", shot: s.source.shotId } : { type: s.source.type },
     qa: texts(s.qa), ...(s.notes ? { notes: s.notes } : {}), ...(s.params ? { params: structuredClone(s.params) } : {}),
     ...(s.type === "video" && s.genDurationSec ? { genDurationSec: s.genDurationSec } : {}),
+    ...(s.seriesRef ? { seriesRef: s.seriesRef } : {}), ...(s.seriesPromote ? { series: true as const } : {}),
   };
 }
 

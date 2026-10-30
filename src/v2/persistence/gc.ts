@@ -12,6 +12,8 @@ export interface GcOptions {
   /** Cross-tab lock (Web Locks). Omitted/unsupported → run unlocked (single-tab browsers). */
   locks?: Locks | null;
   onError?: (e: unknown) => void;
+  /** P5: blobs used outside projects (the Series library); never collected. */
+  extraKeys?: () => Iterable<string>;
 }
 
 /**
@@ -31,8 +33,9 @@ export async function collectUnusedBlobs(storage: Storage, opts: GcOptions = {})
   }
 }
 
-async function run(storage: Storage, { graceMs = GC_GRACE_MS, now = Date.now, onError }: GcOptions): Promise<number> {
+async function run(storage: Storage, { graceMs = GC_GRACE_MS, now = Date.now, onError, extraKeys }: GcOptions): Promise<number> {
   const used = new Set<string>();
+  try { for (const k of extraKeys?.() ?? []) used.add(k); } catch (e) { onError?.(e); return 0; }
   let complete = true;
   for (const s of await storage.projects.list()) {
     try {

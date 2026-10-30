@@ -6,6 +6,7 @@
  * The FORMAT, PRESETS, RULES and EXAMPLE sections are built here from the preset registry, so the guide, the prompts
  * and presets.json can't drift apart (aiGuide.test.ts fails when the published files are stale).
  */
+import { seriesPromptSection, type Series } from "./series";
 import { FONTS, listPresets, type ParamSpec, type PresetDescriptor, type PresetKind } from "../registry";
 import { CONNECTION_KINDS, DEFAULT_TRANSITION_SEC, REFERENCE_ROLES, SHOT_RENDERS, STORY_ASSET_TYPES, STORYBOARD_FORMAT, storyDocJson, type StoryDoc } from "./storyJson";
 import { runtimeAiLinks, type AiLinks } from "./siteUrl";
@@ -147,6 +148,9 @@ const FORMAT_SECTION = () => `{
       "genDurationSec"?: number, // video assets only: the length to generate (0.5-120) when its layers use less; layers pick their part with "inSec"
       "states"?: [ { "id": string, "name"?: string, "prompt": string, "references"?: [ … as above ], "source"?: "generate" | "upload", "qa"?: string[] } ]
                                  // image-like assets only: the same thing in another state (lit, wet, at night …); use it as "<asset id>@<state id>" (RULES)
+      "seriesRef"?: string,      // the id of an asset in the project's Series: write only { "id", "seriesRef" }; the definition, states
+                                 // and uploads come from the Series (RULES)
+      "series"?: true            // add this new asset to the project's Series so later episodes can reuse it
   } ],
   "shots": [ {                   // in playback order
       "id": string,
@@ -309,6 +313,9 @@ export const RULE_LIST: readonly { key: string; text: string }[] = [
   { key: "audio-json", text: `Simple music and sound effects (a chime, a notification, a whoosh, a riser into an impact, a short beat, an ambient pad, wind or rain) can be "source": "json" on an "audio" asset instead of "generate": the user's AI writes a "dionysus.audioclip/1" JSON (spec AUDIO_CLIP_FORMAT.md next to this guide: tempo, tracks of synth notes, drums, noise or generated sfx, with volume, pan, reverb, delay, filter and params) and Dionysus renders it, so it is exact, repeatable and editable in the Audio editor. Its "prompt" is a sound brief (what it sounds like, mood, key or tempo, length). Use "generate" for voices, real recordings and full songs; "json" is for audio assets only.` },
   { key: "long-story-parts", text: `For a long video (more than about 15 shots, or whenever one reply would get very long), work in parts instead of one huge JSON. First agree an outline with the user in plain text: the numbered shot list (id, title, length, one-line beat) and the asset list with ids. Then reply with part 1: a complete storyboard ("format", "meta", every asset you already know, and the first batch of about 8-12 shots). Then reply with one part per message, each a JSON object with "format", a "part" object and only what it adds or changes, and no "meta": { "format": "dionysus.storyboard/1", "part": { "index": 2, "of": 4, "after": "s10" }, "shots": [ …s11 to s20… ], "assets": [ …new or changed assets… ], "audio": [ …cues… ], "connections": [ … ] }. The user imports the parts in order (Storyboard → Import) and Dionysus merges each into the board by id: an asset, shot, cue or connection with an existing id (connections by "from"/"to") is replaced, a new one is added (new shots go after "part.after", else at the end), "part": { "remove": ["s7"] } deletes ids, and "meta" fields, when given, are merged. Each part is checked together with the board, so it may only use assets from an earlier part or itself; keep every id stable and don't repeat unchanged shots.` },
   { key: "web-mcp", text: `If you can call Dionysus tools (WebMCP: get_guide, get_storyboard, create_storyboard, add_shot, update_shot, …) because the user's browser connects you to the open app, edit the board with them instead of writing JSON: call get_storyboard first; create_storyboard when there is none (meta, the assets you know, and the first shot); add each asset before the shots that use it; then add the shots one at a time in story order; make changes with the update_ and set_ tools; call validate at the end and send_to_timeline only when the user asks. Every call is checked by these same rules: a rejected call changes nothing and says why, so fix the arguments and call again. The user sees each change live and can undo it.` },
+  { key: "series-reuse", text: `Series: when the prompt lists SERIES ASSETS, this video is an episode of a series and those characters, props, locations and styles already exist. Reuse them, never redefine them: in "assets" write only { "id": "<series id>", "seriesRef": "<series id>" } (keep the same id so shots read naturally), then use the id, or "<id>@<state>" for a listed state, in shots, references, layers and other assets' references as usual. Dionysus fills in the name, type, prompt, states, QA and the user's chosen uploads from the Series, and adds Series assets they are made from. Extra fields next to "seriesRef" are ignored (the Series definition wins). A "seriesRef" that isn't in the list is an error, so copy ids exactly.` },
+  { key: "series-promote", text: `Series: give a new asset "series": true when later episodes will need it too (a recurring character, the show's main locations, its style). Leave one-off things out (a prop used once, last frames, keyframes). Without a SERIES ASSETS list the project may not be in a series: then define every asset in full; "series": true is still allowed and is applied when the user adds the project to a series.` },
+  { key: "series-tools", text: `Series with Dionysus tools (WebMCP): call list_series_assets before adding characters, props, locations or styles; use_series_asset adds one linked to the board; promote_to_series marks a board asset for the Series. Editing a linked asset's definition changes it in every episode, so only do that when the user asks; otherwise ask them to detach it first (Asset → Detach from series).` },
 ];
 export const RULES: readonly string[] = RULE_LIST.map((r) => r.text);
 /** 1-based public number of a rule, by key. */
@@ -334,21 +341,26 @@ export function guideSections(heading: (title: string) => string): string {
 const ROLE = "You are a storyboard planner for AI video production. We have agreed a story together. Turn it into a production storyboard for the Dionysus video editor. Every prompt you write must stand alone: each asset and clip may be made by a different AI agent or chat that sees only that prompt and its images, so repeat the identity, style and references in each one";
 
 /** Full prompt: the whole guide inlined. Works with any AI, including ones that can't open links. */
-export function storyboardSystemPrompt(): string {
+export function storyboardSystemPrompt(series?: Series): string {
   return `${ROLE} and reply with ONLY one JSON code block in the exact format below — no commentary before or after.
 
 ${guideSections((t) => t)}
-
+${seriesBlock(series)}
 Now write the storyboard JSON for our story.`;
 }
 
+/** P5: the SERIES ASSETS section added to both prompts when the project is an episode of a Series. */
+function seriesBlock(series?: Series): string {
+  return series ? `\nSERIES ASSETS\n${seriesPromptSection(series)}\n` : "";
+}
+
 /** Short prompt: links to the published guide; the AI asks for the full prompt when it can't open links. */
-export function storyboardShortPrompt(links: AiLinks = runtimeAiLinks()): string {
+export function storyboardShortPrompt(links: AiLinks = runtimeAiLinks(), series?: Series): string {
   return `${ROLE}.
 
 1. First read the storyboard guide: ${links.guide}
    It explains how the format works and defines the JSON ("${STORYBOARD_FORMAT}", v${FORMAT_REVISION}), how to choose presets, the preset ids you may use, the numbered rules and an example. Follow it exactly. (Same guide as a web page: ${links.guideHtml} · presets as JSON: ${links.presets})
 2. If you can't open links, don't guess the format. Reply only: "I can't open the guide — please paste the full Dionysus prompt." The user will then paste it (Dionysus → Storyboard → AI prompt → Full prompt).
 3. "durationSec" is the planned on-screen length of the shot in the edit, not what the video model can render. If the model must render longer (e.g. 6 s minimum), keep "durationSec" at the planned length and put the length to generate in "genDurationSec" (e.g. "durationSec": 4, "genDurationSec": 6).
-4. Otherwise reply with ONLY one JSON code block containing the storyboard for our story — no commentary before or after.`;
+4. Otherwise reply with ONLY one JSON code block containing the storyboard for our story — no commentary before or after.${series ? `\n${seriesBlock(series)}` : ""}`;
 }

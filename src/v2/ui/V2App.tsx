@@ -44,6 +44,8 @@ import { useEdgeFade } from "./useEdgeFade";
 import { AssetBrowser, browserTab, type BrowserTab } from "./desktop/AssetBrowser";
 import { Inspector, type InspectorTab } from "./desktop/Inspector";
 import { ProjectSettings } from "./desktop/ProjectSettings";
+import { SeriesLibrary } from "./series/SeriesLibrary";
+import { useSeriesSync } from "./series/seriesStore";
 import { Splitter } from "./desktop/Splitter";
 import { clampSizes, DEFAULT_SIZES, LIMITS, loadSizes, previewCanvasSize, saveSizes, type PanelSizes } from "./desktop/layout";
 import { readDragItem } from "./desktop/dnd";
@@ -76,6 +78,9 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   useEffect(() => connectAgentBridge(engine), [engine]);
   const [notice, setNotice] = useState(recovery);
   const { project, canUndo, canRedo } = useEngineState(engine);
+  // P5: keep the project and its Series in step (both directions).
+  useSeriesSync(engine, project);
+  const [seriesLib, setSeriesLib] = useState(false);
   const mobile = useIsMobile();
   const [previewVh, setPreviewVh] = useState(loadPreviewVh);
   /** Opening a side editor on desktop reveals the inspector if it was hidden. */
@@ -804,7 +809,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     if (subsTrack && !selected) return { icon: "≡", title: "Edit subtitles", subtitle: subsTrack.name, onDone: () => setSubsEdit(undefined), tabs: [{ id: "subs", label: "Subtitles", render: () => <SubtitleList engine={engine} track={subsTrack} time={time} playing={playing} onSeek={seek} desktop name={project.name} focusCue={subsCue} /> }] };
     if (layerTrack && !selected) return { icon: "layers", title: "Edit all", subtitle: layerTrack.name, onDone: () => setLayerEdit(undefined), tabs: [{ id: "layer", label: "Layer style", render: () => <TextPanel key={layerTrack.id} engine={engine} layer={layerTrack} initialTab="Style" /> }] };
     if (cue && !selected) return { icon: "≡", title: "Subtitle", onDone: () => setSubId(undefined), tabs: [{ id: "cue", label: "Subtitle", render: () => <SubtitleEditor engine={engine} sub={cue} onDelete={delCue} /> }] };
-    if (!selected) return { icon: "settings", title: "Project", subtitle: `${project.settings.width}×${project.settings.height} · ${fpsNow} fps`, tabs: [{ id: "project", label: "Project", render: () => <ProjectSettings engine={engine} project={project} extra={textLayers.length ? <section aria-label="Subtitles"><h4>Subtitles</h4>{actionList([{ icon: "≡", label: "Edit subtitles", title: "Edit every subtitle in a list: text, timing, split, merge, find & replace", run: editSubtitles }, { icon: "⇩", label: "Export SRT", title: "Download subtitles as .srt", run: exportSrt }])}</section> : undefined} /> }] };
+    if (!selected) return { icon: "settings", title: "Project", subtitle: `${project.settings.width}×${project.settings.height} · ${fpsNow} fps`, tabs: [{ id: "project", label: "Project", render: () => <ProjectSettings engine={engine} project={project} onSeries={() => setSeriesLib(true)} extra={textLayers.length ? <section aria-label="Subtitles"><h4>Subtitles</h4>{actionList([{ icon: "≡", label: "Edit subtitles", title: "Edit every subtitle in a list: text, timing, split, merge, find & replace", run: editSubtitles }, { icon: "⇩", label: "Export SRT", title: "Download subtitles as .srt", run: exportSrt }])}</section> : undefined} /> }] };
     const pl = selected.placement, kind = pl.clipType;
     const sub = `${formatTimecode(pl.startTicks, fpsNow).slice(0, 8)} · ${(pl.durationTicks / 120000).toFixed(1)}s`;
     const base = { icon: KIND_ICON[kind] ?? "▭", title: clipName(pl), subtitle: sub, onDone: () => setSelectedId(undefined) };
@@ -970,8 +975,9 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           <button className="v2-btn primary v2-export-d" title="Export MP4 (⌘/Ctrl+E)" onClick={openExport}><Ic g="⇪" size={16} /> Export</button>
         </header>
       )}
-      {board && <StoryboardView engine={engine} blobs={storage.blobs} initialOpen={boardOpen} onClose={() => { setBoard(false); setBoardOpen(undefined); }}
+      {board && <StoryboardView engine={engine} blobs={storage.blobs} initialOpen={boardOpen} onSeries={() => setSeriesLib(true)} onClose={() => { setBoard(false); setBoardOpen(undefined); }}
         onView={(id) => { setBoard(false); setBoardOpen(undefined); const pl = ops.mainTrack(engine.getState().project.compositions[engine.getState().project.rootCompositionId])?.placements.find((x) => x.id === id); if (pl) { if (mobile) setMenu("edit"); selectClip(id); seek(pl.startTicks); } }} />}
+      {seriesLib && <SeriesLibrary engine={engine} project={project} storage={storage} onClose={() => setSeriesLib(false)} />}
       <AgentIndicator engine={engine} />
       {notice && <RecoveryNotice failure={notice} storage={storage} onDismiss={() => setNotice(undefined)} />}
       {projects && <ProjectsDialog storage={storage} current={project} onOpen={(id) => { setProjects(false); onSwitch(id); }} onRenameCurrent={(n) => engine.dispatch(cmd.renameProject(n))} onClose={() => setProjects(false)} />}

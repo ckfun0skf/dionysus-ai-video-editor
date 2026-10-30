@@ -8,6 +8,8 @@
  *
  * Pure: no DOM, no engine. The UI (ui/agent/webMcp.ts) applies `doc` as one undoable command and handles `send`.
  */
+import { seriesAssetList, type Series } from "./series";
+import type { StoryValidateOptions } from "./storyJson";
 import {
   AUDIO_KINDS, BACKGROUND_TYPES, CONNECTION_KINDS, LAYER_TYPES, REFERENCE_ROLES, SHOT_RENDERS, STORY_ASSET_TYPES,
   STORYBOARD_FORMAT, extractJson, storyDocJson, storySummary, validateStoryboard,
@@ -67,10 +69,12 @@ const CONNECTION = obj({ from: str("Shot id."), to: str("The next shot id."), ki
 export interface ToolCtx {
   /** The guide markdown served by get_guide (built by the caller from aiGuide, which imports this module). */
   guide: () => string;
+  /** P5: the project's Series (seriesRef assets resolve against it; the Series tools read it). */
+  series?: Series;
 }
 /** A finished call: text for the agent, plus the new doc for mutating tools (apply as one undo step labelled `label`). */
 export interface ToolResult { ok: boolean; text: string; doc?: StoryDoc; label?: string; send?: boolean }
-type Edit = (raw: Raw, args: Obj) => string | { label: string; message: string };
+type Edit = (raw: Raw, args: Obj, ctx: ToolCtx) => string | { label: string; message: string };
 
 export interface StoryTool {
   name: string;
@@ -293,12 +297,49 @@ export const STORY_TOOLS: StoryTool[] = [
     edit: (raw, a) => { const i = findIdx(raw.audio, a.id); if (i < 0) return `No cue "${String(a.id)}".`; raw.audio!.splice(i, 1); if (!raw.audio!.length) delete raw.audio; return { label: `AI: remove cue ${String(a.id)}`, message: `Cue "${String(a.id)}" removed.` }; },
   },
   {
+    name: "list_series_assets", title: "List the Series assets", readOnly: true,
+    description: "List the shared assets of the Series this project belongs to (id, type, name, short description, states). Reuse them with use_series_asset instead of defining a new character, prop, location or style.",
+    inputSchema: obj({}),
+    read: (_r, _a, ctx) => {
+      if (!ctx.series) return { ok: true, text: "This project isn't in a Series. (The user picks one in Project settings → Series.)" };
+      const rows = seriesAssetList(ctx.series);
+      return { ok: true, text: rows.length ? `Series "${ctx.series.name}", ${rows.length} asset(s):\n${rows.map((r) => `- ${r.id} (${r.type}) ${r.name}${r.description ? ` — ${r.description}` : ""}${r.states.length ? ` · states: ${r.states.join(", ")}` : ""}${r.versions ? ` · ${r.versions} version(s)` : ""}`).join("\n")}` : `Series "${ctx.series.name}" has no assets yet.` };
+    },
+  },
+  {
+    name: "use_series_asset", title: "Use a Series asset", readOnly: false,
+    description: 'Add a Series asset to the board, linked: its definition, states and uploads come from the Series and stay in sync. Then use its id (or "<id>@<state>") in shots.',
+    inputSchema: obj({ id: str("Series asset id (see list_series_assets)."), as: str("Board id to use, when it must differ from the Series id (default: the same id).") }, ["id"]),
+    edit: (raw, a, ctx) => {
+      const id = String(a.id ?? ""), as = typeof a.as === "string" && a.as ? a.as : id;
+      if (!ctx.series) return "This project isn't in a Series.";
+      if (!ctx.series.assets[id]) return `The Series has no asset "${id}". Series assets: ${Object.keys(ctx.series.assets).join(", ") || "none"}.`;
+      const i = findIdx(raw.assets, as);
+      if (i >= 0) { if (raw.assets[i].seriesRef === id) return `"${as}" already uses the Series asset "${id}".`; raw.assets[i] = { id: as, seriesRef: id }; }
+      else raw.assets.push({ id: as, seriesRef: id });
+      return { label: `AI: use series asset ${id}`, message: `"${as}" now uses the Series asset "${id}".` };
+    },
+  },
+  {
+    name: "promote_to_series", title: "Add an asset to the Series", readOnly: false,
+    description: "Add a board asset to the project's Series so later episodes can reuse it (sets \"series\": true; the app adds it with its uploads and links it). If the Series already has that id, the board links to it (dedupe by id).",
+    inputSchema: obj({ id: str("Board asset id.") }, ["id"]),
+    edit: (raw, a, ctx) => {
+      const i = findIdx(raw.assets, a.id);
+      if (i < 0) return `No asset "${String(a.id)}".`;
+      if (!ctx.series) return "This project isn't in a Series.";
+      if (raw.assets[i].seriesRef) return `"${String(a.id)}" already uses the Series asset "${String(raw.assets[i].seriesRef)}".`;
+      raw.assets[i].series = true;
+      return { label: `AI: promote ${String(a.id)} to series`, message: `"${String(a.id)}" will be added to the Series "${ctx.series.name}".` };
+    },
+  },
+  {
     name: "validate", title: "Check the storyboard", readOnly: true,
     description: "Run the importer's checks on the current storyboard and list its warnings (edits are already checked; this reports what is left to improve).",
     inputSchema: obj({}),
-    read: (raw) => {
+    read: (raw, _a, ctx) => {
       if (!raw) return { ok: false, text: "No storyboard yet." };
-      const r = validateStoryboard(raw);
+      const r = validateStoryboard(raw, { series: ctx.series });
       return r.ok ? { ok: true, text: r.warnings.length ? `Valid, with ${r.warnings.length} warning(s):\n${issueLines(r.warnings, raw)}` : "Valid, no warnings." } : { ok: false, text: `Invalid:\n${issueLines(r.errors, raw)}` };
     },
   },
@@ -336,9 +377,9 @@ export function runStoryTool(name: string, args: unknown, doc: StoryDoc | undefi
   if (!raw && !tool.creates) return { ok: false, text: "No storyboard yet. Create one with create_storyboard first." };
   const work: Raw = raw ?? { format: STORYBOARD_FORMAT, meta: {}, assets: [], shots: [], connections: [] };
   let out: ReturnType<Edit>;
-  try { out = tool.edit!(work, a); } catch (e) { out = `Bad arguments: ${(e as Error).message}`; }
+  try { out = tool.edit!(work, a, ctx); } catch (e) { out = `Bad arguments: ${(e as Error).message}`; }
   if (typeof out === "string") return { ok: false, text: `Rejected, nothing changed: ${out}` };
-  const r = validateStoryboard(work);
+  const r = validateStoryboard(work, { series: ctx.series });
   if (!r.ok) return { ok: false, text: `Rejected, nothing changed. The storyboard would be invalid:\n${issueLines(r.errors, work)}` };
   const warn = r.warnings.length ? `\n${r.warnings.length} warning(s) on the board (call validate to list them).` : "";
   return { ok: true, text: `${out.message} ${storySummary(r.doc)}.${warn}`, doc: r.doc, label: out.label };
@@ -380,7 +421,7 @@ const mergeById = (base: Obj[], add: unknown, key = (x: Obj) => x.id as unknown,
  * connections match by from/to; "meta" fields are merged. "part.remove": ["id", …] removes shots, assets or cues.
  * The merged storyboard is checked as a whole.
  */
-export function mergeStoryPart(base: StoryDoc, part: Obj): PartResult {
+export function mergeStoryPart(base: StoryDoc, part: Obj, opts: StoryValidateOptions = {}): PartResult {
   const raw = docToRaw(base);
   const p = isObj(part.part) ? part.part : {};
   const errs: StoryIssue[] = [];
@@ -413,15 +454,15 @@ export function mergeStoryPart(base: StoryDoc, part: Obj): PartResult {
   if (raw.audio && !raw.audio.length) delete raw.audio;
   const counts = { shots: Array.isArray(part.shots) ? part.shots.length : 0, assets: Array.isArray(part.assets) ? part.assets.length : 0, audio: Array.isArray(part.audio) ? part.audio.length : 0, connections: Array.isArray(part.connections) ? part.connections.length : 0, removed };
   if (errs.length) return { result: { ok: false, errors: errs, warnings: [] }, counts };
-  const r = validateStoryboard(raw);
+  const r = validateStoryboard(raw, opts);
   if (!r.ok) return { result: { ok: false, errors: r.errors.map((e) => ({ path: e.path && `merged ${namedPath(e.path, raw)}`, message: e.message })), warnings: [] }, counts };
   return { result: r, counts };
 }
 
 /** Parse pasted text as a storyboard part (when there is a board to merge into). Undefined when it is not a part. */
-export function parseStoryPart(text: string, base: StoryDoc | undefined): PartResult | undefined {
+export function parseStoryPart(text: string, base: StoryDoc | undefined, opts: StoryValidateOptions = {}): PartResult | undefined {
   if (!base) return undefined;
   let raw: unknown;
   try { raw = JSON.parse(extractJson(text)); } catch { return undefined; }
-  return isStoryPart(raw) ? mergeStoryPart(base, raw) : undefined;
+  return isStoryPart(raw) ? mergeStoryPart(base, raw, opts) : undefined;
 }

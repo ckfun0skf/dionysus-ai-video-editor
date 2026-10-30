@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { exampleStoryboardJson, roundtrip, runtimeAiLinks, story, storyboardShortPrompt, storyboardSystemPrompt, type DiffItem, type Storyboard, type StoryDiff, type StoryDoc, type StoryParseResult } from "../../domain";
+import { exampleStoryboardJson, roundtrip, runtimeAiLinks, story, storyboardShortPrompt, storyboardSystemPrompt, type DiffItem, type Storyboard, type StoryDiff, type StoryDoc, type StoryParseResult, type Series } from "../../domain";
 import { ConfirmDialog } from "../Timeline";
 import { Ic } from "../Icon";
 import { copyText } from "./clipboard";
@@ -31,12 +31,13 @@ export function CopyButton({ text, label, primary, testId }: { text: () => strin
  * Step 1: the prompt for the user's own AI (no AI calls from the app). "Short" links to the published guide; "Full"
  * inlines it for AIs that can't open links (V2-SB-114).
  */
-export function PromptPanel() {
+export function PromptPanel({ series }: { series?: Series } = {}) {
   const [kind, setKind] = useState<"short" | "full">("short");
   // Links follow the deployment the app runs on (V2-OPS-LINKS), not a hard-coded host.
   const links = useMemo(runtimeAiLinks, []);
-  const short = useMemo(() => storyboardShortPrompt(links), [links]);
-  const full = useMemo(storyboardSystemPrompt, []);
+  // P5: an episode's prompts end with its Series asset list, so the planner reuses the ids.
+  const short = useMemo(() => storyboardShortPrompt(links, series), [links, series]);
+  const full = useMemo(() => storyboardSystemPrompt(series), [series]);
   const prompt = kind === "short" ? short : full;
   return (
     <section className="v2-sb-panel" aria-label="AI prompt">
@@ -45,6 +46,7 @@ export function PromptPanel() {
         <button role="radio" aria-checked={kind === "short"} className={kind === "short" ? "on" : ""} data-testid="prompt-short" onClick={() => setKind("short")}><b>Short prompt</b><em>Links to the Dionysus guide</em></button>
         <button role="radio" aria-checked={kind === "full"} className={kind === "full" ? "on" : ""} data-testid="prompt-full" onClick={() => setKind("full")}><b>Full prompt</b><em>Everything inline, for AIs that can't open links</em></button>
       </div>
+      {series && <p className="v2-hint" data-testid="prompt-series"><Ic g="link" size={14} /> Includes the {Object.keys(series.assets).length} asset{Object.keys(series.assets).length === 1 ? "" : "s"} of the series “{series.name}”, so the AI reuses them by id.</p>}
       <div className="v2-sb-actions">
         <CopyButton key={kind} text={() => prompt} label={kind === "short" ? "Copy AI prompt" : "Copy full prompt"} primary testId="copy-prompt" />
         <CopyButton text={() => exampleStoryboardJson()} label="Copy example JSON" />
@@ -58,7 +60,7 @@ export function PromptPanel() {
 
 /** Step 2: paste or choose a file, validate live, preview, then create. */
 /** P4C: `base` is the current board; JSON that is one part of a storyboard ("part", or no "meta") is merged into it by id. */
-export function ImportPanel({ onCreate, replacing, diffFor, onMerge, base }: { onCreate?: (doc: StoryDoc) => void; replacing?: boolean; diffFor?: (doc: StoryDoc) => StoryDiff; onMerge?: (doc: StoryDoc, diff: StoryDiff) => void; base?: StoryDoc }) {
+export function ImportPanel({ onCreate, replacing, diffFor, onMerge, base, series }: { onCreate?: (doc: StoryDoc) => void; replacing?: boolean; diffFor?: (doc: StoryDoc) => StoryDiff; onMerge?: (doc: StoryDoc, diff: StoryDiff) => void; base?: StoryDoc; series?: Series }) {
   const [text, setText] = useState("");
   const [confirm, setConfirm] = useState<"merge" | "replace">();
   const [file, setFile] = useState<string>();
@@ -74,13 +76,13 @@ export function ImportPanel({ onCreate, replacing, diffFor, onMerge, base }: { o
     const lh = parseFloat(getComputedStyle(ta).lineHeight) || 18;
     ta.scrollTop = Math.max(0, (line - 2) * lh);
   };
-  const part = useMemo(() => (text.trim() ? storyAgent.parseStoryPart(text, base) : undefined), [text, base]);
+  const part = useMemo(() => (text.trim() ? storyAgent.parseStoryPart(text, base, { series }) : undefined), [text, base, series]);
   const result = useMemo((): StoryParseResult | undefined => {
     if (!text.trim()) return undefined;
     if (part) return part.result;
     if (!base && looksLikePart(text)) return { ok: false, warnings: [], errors: [{ path: "", message: 'This JSON is one part of a storyboard (it has "part", or no "meta"). Import the first part, the one with "meta" and the assets, first; then import this part to add its shots.' }] };
-    return story.parseStoryboard(text);
-  }, [text, part, base]);
+    return story.parseStoryboard(text, { series });
+  }, [text, part, base, series]);
   // Paths in a merged part point into the merged board, not the pasted text, so they aren't linked.
   const locs = useMemo(() => (result && !part ? (result.ok ? result.warnings : result.errors).map((e) => story.locateIssue(text, e)) : []), [result, text, part]);
   const diff = useMemo(() => (result?.ok && diffFor ? diffFor(result.doc) : undefined), [result, diffFor]);
@@ -113,6 +115,10 @@ export function ImportPanel({ onCreate, replacing, diffFor, onMerge, base }: { o
           <h4><Ic g="ok" size={16} /> {result.doc.meta.title}</h4>
           {part?.counts && <p className="v2-sb-part" data-testid="story-part">Storyboard part{partLabel(text)}: {partText(part.counts)}, merged into the current board by id. Below is the whole board after the merge.</p>}
           <p className="v2-sb-sum">{story.storySummary(result.doc)}</p>
+          {(() => {
+            const linked = result.doc.assets.filter((a) => a.seriesRef).length, added = result.doc.assets.filter((a) => a.series).length;
+            return linked || added ? <p className="v2-sb-part" data-testid="story-series"><Ic g="link" size={14} /> Series{series ? ` “${series.name}”` : ""}: {[linked && `${linked} linked asset${linked === 1 ? "" : "s"}`, added && `${added} to add${series ? "" : " (when the project joins a series)"}`].filter(Boolean).join(" · ")}</p> : null;
+          })()}
           {result.warnings.length > 0 && <ul className="v2-sb-warn" data-testid="story-warnings">{result.warnings.map((w, i) => {
             const body = <>{w.path && <code>{w.path}</code>} {w.message}</>;
             return <li key={i}><Ic g="⚠" size={14} /> {locs[i] ? <button className="v2-sb-errlink" title="Select this in the JSON" onClick={() => jump(locs[i])}>{body}</button> : body}</li>;

@@ -65,12 +65,27 @@ Generated from the same schema as the storyboard parser (`src/v2/domain/storyAge
 - `add_cue`(cue): Add an audio cue (voiceover, music, sfx, ambience, sting, dialogue) that plays from a shot. Gets "audio<n>" as id when you give none.
 - `update_cue`(id, patch): Change fields of an audio cue (from, to, atSec, volume, fades, loop, volumeKeys, fx, …).
 - `remove_cue`(id): Remove an audio cue.
+- `list_series_assets` · read-only: List the shared assets of the Series this project belongs to (id, type, name, short description, states). Reuse them with use_series_asset instead of defining a new character, prop, location or style.
+- `use_series_asset`(id, as): Add a Series asset to the board, linked: its definition, states and uploads come from the Series and stay in sync. Then use its id (or "<id>@<state>") in shots.
+- `promote_to_series`(id): Add a board asset to the project's Series so later episodes can reuse it (sets "series": true; the app adds it with its uploads and links it). If the Series already has that id, the board links to it (dedupe by id).
 - `validate` · read-only: Run the importer's checks on the current storyboard and list its warnings (edits are already checked; this reports what is left to improve).
 - `export_json` · read-only: The whole storyboard as storyboard JSON ("dionysus.storyboard/1"), edits included.
 - `send_to_timeline`: Update the timeline from the storyboard (update mode): adds shots that have a clip and new audio cues, switches changed clips and refreshes shot text; everything else on the timeline stays. Shots without an uploaded clip are skipped.
 <!-- tools:end -->
 
 Patch tools (`update_*`, `set_shot_params`) merge the given fields; `null` deletes a field. Ids can't be renamed.
+
+## Series (P5)
+
+When the open project is an episode of a Series, the agent sees the Series too:
+
+- `get_guide` ends with the **SERIES ASSETS** list (ids and short descriptions).
+- `list_series_assets` lists them with their states and version counts.
+- `use_series_asset({ id, as? })` adds one to the board, linked: its definition, states and uploads come from the Series and stay in sync.
+- `promote_to_series({ id })` marks a board asset with `"series": true`; the app adds it (with its versions) to the Series and links it. An existing Series asset with that id is reused (dedupe by id).
+- Every mutating call checks `seriesRef` against the Series: a missing id is rejected with the list of Series ids.
+
+Editing a linked asset changes it in every episode. The user can detach it on the board (Asset → Detach from series) to give this episode its own copy.
 
 ## Long stories in parts (no WebMCP)
 

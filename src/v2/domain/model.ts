@@ -224,6 +224,8 @@ export interface Project {
   meta: { createdAt: string; updatedAt: string };
   /** Storyboard workspace (3.1); absent until the user imports one. */
   storyboard?: Storyboard;
+  /** P5: the Series this project is an episode of (Series live in local storage, see domain/series.ts). */
+  seriesId?: string;
 }
 
 /** Default still-image duration when placed on the timeline. */

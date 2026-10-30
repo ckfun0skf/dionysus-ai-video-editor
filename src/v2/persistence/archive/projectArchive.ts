@@ -11,7 +11,8 @@
  * Import verifies the SHA-256 of every media entry before the project is saved, and stores media under fresh keys so
  * an imported copy never shares (or overwrites) blobs with a project already in this browser.
  */
-import { SCHEMA, newId, type Project } from "../../domain/model";
+import { SCHEMA, newId, type Asset, type Project } from "../../domain/model";
+import { parseSeries, type Series } from "../../domain/series";
 import type { BlobStore, Storage } from "../../ports/storage";
 import { SchemaError, migrateProject } from "../schema";
 import { Sha256, crc32 } from "./sha256";
@@ -20,6 +21,9 @@ import { ZipError, ZipWriter, blobChunks, readBlobBytes, readZipIndex, zipEntryB
 export const ARCHIVE_FORMAT = "dionysus.project";
 export const ARCHIVE_VERSION = 1;
 export const ARCHIVE_SUFFIX = ".dionysus.zip";
+/** P5: a whole-Series archive (manifest.json + series.json + media). */
+export const SERIES_ARCHIVE_FORMAT = "dionysus.series";
+export const SERIES_ARCHIVE_SUFFIX = ".dionysus-series.zip";
 /** Replaced at build time from package.json (vite.config `define`). */
 declare const __APP_VERSION__: string | undefined;
 export const APP_VERSION: string = typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : "dev";
@@ -36,6 +40,12 @@ export interface ArchiveManifest {
   media: ArchiveMedia[];
   /** Keys the project referenced but this browser no longer had when the archive was made. */
   missing: string[];
+  /** P5: the episode's Series (series.json holds the Series assets it uses). */
+  series?: { id: string; name: string; assets: number };
+}
+export interface SeriesArchiveManifest extends Omit<ArchiveManifest, "format" | "project" | "series" | "schema"> {
+  format: typeof SERIES_ARCHIVE_FORMAT;
+  series: { id: string; name: string; assets: number };
 }
 
 export interface ArchiveProgress { done: number; total: number }
@@ -55,9 +65,11 @@ function extOf(mime: string) {
 }
 
 /** Every stored blob the project references (all versions, plus thumbnails), with its mime type. */
-export function projectMediaKeys(p: Project): Map<string, string> {
-  const out = new Map<string, string>();
-  for (const a of Object.values(p.assets)) for (const v of a.versions) {
+export function projectMediaKeys(p: Project): Map<string, string> { return assetMediaKeys(Object.values(p.assets)); }
+/** P5: every blob a Series' versions use. */
+export function seriesArchiveKeys(s: Series): Map<string, string> { return assetMediaKeys(Object.values(s.assets).flatMap((a) => Object.values(a.media).map((m) => m.asset))); }
+function assetMediaKeys(assets: Asset[], out = new Map<string, string>()): Map<string, string> {
+  for (const a of assets) for (const v of a.versions) {
     out.set(v.media.blobKey, v.media.mime || "application/octet-stream");
     if (v.media.thumbKey && !out.has(v.media.thumbKey)) out.set(v.media.thumbKey, "image/jpeg");
     if (v.media.specKey && !out.has(v.media.specKey)) out.set(v.media.specKey, "application/json");
@@ -85,8 +97,26 @@ export interface ExportResult { manifest: ArchiveManifest; bytes: number }
  * Write `project` and its media to `sink` as a project archive. Progress counts media bytes read (both passes).
  * Blobs the browser no longer has are listed in `manifest.missing` instead of failing the export.
  */
-export async function exportProjectArchive(project: Project, blobs: BlobStore, sink: ZipSink, opts: { onProgress?: (p: ArchiveProgress) => void; signal?: AbortSignal; now?: Date } = {}): Promise<ExportResult> {
+export async function exportProjectArchive(project: Project, blobs: BlobStore, sink: ZipSink, opts: { onProgress?: (p: ArchiveProgress) => void; signal?: AbortSignal; now?: Date; series?: Series } = {}): Promise<ExportResult> {
   const keys = projectMediaKeys(project);
+  if (opts.series) for (const [k, m] of seriesArchiveKeys(opts.series)) if (!keys.has(k)) keys.set(k, m);
+  const r = await writeArchive(blobs, sink, keys, opts, (media, missing, createdAt): ArchiveManifest => ({
+    format: ARCHIVE_FORMAT, formatVersion: ARCHIVE_VERSION, app: { name: "Dionysus", version: APP_VERSION }, schema: project.schema,
+    createdAt, project: { id: project.id, name: project.name }, media, missing,
+    ...(opts.series ? { series: { id: opts.series.id, name: opts.series.name, assets: Object.keys(opts.series.assets).length } } : {}),
+  }), [["project.json", project], ...(opts.series ? [["series.json", opts.series] as [string, unknown]] : [])]);
+  return r as ExportResult;
+}
+
+/** P5: write a whole Series (definitions, versions and their media) as one zip. */
+export async function exportSeriesArchive(series: Series, blobs: BlobStore, sink: ZipSink, opts: { onProgress?: (p: ArchiveProgress) => void; signal?: AbortSignal; now?: Date } = {}): Promise<{ manifest: SeriesArchiveManifest; bytes: number }> {
+  return writeArchive(blobs, sink, seriesArchiveKeys(series), opts, (media, missing, createdAt): SeriesArchiveManifest => ({
+    format: SERIES_ARCHIVE_FORMAT, formatVersion: ARCHIVE_VERSION, app: { name: "Dionysus", version: APP_VERSION },
+    createdAt, series: { id: series.id, name: series.name, assets: Object.keys(series.assets).length }, media, missing,
+  }), [["series.json", series]]);
+}
+
+async function writeArchive<M>(blobs: BlobStore, sink: ZipSink, keys: Map<string, string>, opts: { onProgress?: (p: ArchiveProgress) => void; signal?: AbortSignal; now?: Date }, manifestOf: (media: ArchiveMedia[], missing: string[], createdAt: string) => M, docs: [string, unknown][]): Promise<{ manifest: M; bytes: number }> {
   const media: ArchiveMedia[] = [];
   const missing: string[] = [];
   const sources = new Map<string, { chunks: () => AsyncIterable<Uint8Array>; size: number; crc: number }>();
@@ -115,13 +145,10 @@ export async function exportProjectArchive(project: Project, blobs: BlobStore, s
     if (!sources.has(path)) { sources.set(path, { chunks: o.src.chunks, size, crc }); }
     else total -= size;
   }
-  const manifest: ArchiveManifest = {
-    format: ARCHIVE_FORMAT, formatVersion: ARCHIVE_VERSION, app: { name: "Dionysus", version: APP_VERSION }, schema: project.schema,
-    createdAt: (opts.now ?? new Date()).toISOString(), project: { id: project.id, name: project.name }, media, missing,
-  };
+  const manifest = manifestOf(media, missing, (opts.now ?? new Date()).toISOString());
   const zip = new ZipWriter(sink, opts.now);
   await zip.addBytes("manifest.json", enc.encode(JSON.stringify(manifest, null, 2)));
-  await zip.addBytes("project.json", enc.encode(JSON.stringify(project)));
+  for (const [name, doc] of docs) await zip.addBytes(name, enc.encode(JSON.stringify(doc)));
   // Pass 2: stream each distinct blob into its entry.
   for (const [path, s] of sources) {
     abortIf(opts.signal);
@@ -141,7 +168,11 @@ export interface ArchivePreview {
   index: Map<string, ZipEntry>;
   /** Total media bytes to verify and store. */
   mediaBytes: number;
+  /** P5: the Series assets an episode uses (series.json), when it is in a Series. */
+  series?: Series;
 }
+/** P5: a Series archive, opened and checked. */
+export interface SeriesArchivePreview { file: Blob; manifest: SeriesArchiveManifest; series: Series; index: Map<string, ZipEntry>; mediaBytes: number }
 
 const schemaNum = (s: string) => { const m = /^dionysus\/(\d+)\.(\d+)$/.exec(s); return m ? Number(m[1]) * 1000 + Number(m[2]) : NaN; };
 const NEWER = "This project file was made by a newer version of Dionysus. Reload the page to update the app, then import it again.";
@@ -155,13 +186,36 @@ async function readJson(file: Blob, index: Map<string, ZipEntry>, name: string):
 
 /** Open and validate an archive without storing anything: format, version, project schema and media listing. */
 export async function readProjectArchive(file: Blob): Promise<ArchivePreview> {
+  const a = await readAnyArchive(file);
+  if ("project" in a) return a;
+  throw new ArchiveError("This is a Dionysus series file. Import it from the Series library.");
+}
+
+/** P5: open either kind of archive: a project (episode) file or a Series file. */
+export async function readAnyArchive(file: Blob): Promise<ArchivePreview | SeriesArchivePreview> {
   let index: Map<string, ZipEntry>;
   try { index = await readZipIndex(file); } catch (e) { throw new ArchiveError(e instanceof Error ? e.message : String(e)); }
-  const m = await readJson(file, index, "manifest.json") as Partial<ArchiveManifest> | null;
-  if (!m || typeof m !== "object" || m.format !== ARCHIVE_FORMAT) throw new ArchiveError("This zip is not a Dionysus project file.");
+  const m = await readJson(file, index, "manifest.json") as Partial<ArchiveManifest> | Partial<SeriesArchiveManifest> | null;
+  if (!m || typeof m !== "object" || (m.format !== ARCHIVE_FORMAT && m.format !== SERIES_ARCHIVE_FORMAT)) throw new ArchiveError("This zip is not a Dionysus project file.");
   if (typeof m.formatVersion !== "number" || m.formatVersion < 1) throw new ArchiveError("The project file's manifest is damaged.");
   if (m.formatVersion > ARCHIVE_VERSION) throw new ArchiveError(`${NEWER} (file format ${m.formatVersion}, this app reads up to ${ARCHIVE_VERSION}${m.app?.version ? `; made by Dionysus ${m.app.version}` : ""})`);
   if (!Array.isArray(m.media) || m.media.some((x) => !x || typeof x.key !== "string" || typeof x.path !== "string" || typeof x.sha256 !== "string" || typeof x.size !== "number")) throw new ArchiveError("The project file's manifest is damaged.");
+  const absentOf = () => [...new Set(m.media!.map((x) => x.path))].filter((p) => !index.has(p));
+  const bytesOf = () => [...new Map(m.media!.map((x) => [x.path, x.size])).values()].reduce((a, b) => a + b, 0);
+  const seriesOf = async (required: boolean): Promise<Series | undefined> => {
+    if (!required && !index.has("series.json")) return undefined;
+    const s = parseSeries(await readJson(file, index, "series.json"));
+    if (!s) throw new ArchiveError("The series in this file can't be read (series.json is damaged).");
+    return s;
+  };
+  if (m.format === SERIES_ARCHIVE_FORMAT) {
+    const series = (await seriesOf(true))!;
+    const listed = new Set([...m.media.map((x) => x.key), ...(Array.isArray(m.missing) ? m.missing : [])]);
+    if ([...seriesArchiveKeys(series).keys()].some((k) => !listed.has(k))) throw new ArchiveError("The series file is damaged: some media files are not listed in its manifest.");
+    const absent = absentOf();
+    if (absent.length) throw new ArchiveError(`The series file is incomplete: ${absent.length} media file(s) are missing (${absent[0]}${absent.length > 1 ? ", …" : ""}).`);
+    return { file, manifest: { missing: [], ...m } as SeriesArchiveManifest, series, index, mediaBytes: bytesOf() };
+  }
   const raw = await readJson(file, index, "project.json") as { schema?: unknown };
   let project: Project;
   try { project = migrateProject(raw); }
@@ -169,13 +223,13 @@ export async function readProjectArchive(file: Blob): Promise<ArchivePreview> {
     if (err instanceof SchemaError && typeof raw?.schema === "string" && schemaNum(raw.schema) > schemaNum(SCHEMA)) throw new ArchiveError(`${NEWER} (project ${raw.schema}, this app reads ${SCHEMA})`);
     throw new ArchiveError(`The project in this file can't be opened: ${err instanceof Error ? err.message : String(err)}`);
   }
+  const series = await seriesOf(false);
   const listed = new Set([...m.media.map((x) => x.key), ...(Array.isArray(m.missing) ? m.missing : [])]);
-  const unlisted = [...projectMediaKeys(project).keys()].filter((k) => !listed.has(k));
+  const unlisted = [...projectMediaKeys(project).keys(), ...(series ? seriesArchiveKeys(series).keys() : [])].filter((k) => !listed.has(k));
   if (unlisted.length) throw new ArchiveError(`The project file is damaged: ${unlisted.length} media file(s) are not listed in its manifest.`);
-  const absent = [...new Set(m.media.map((x) => x.path))].filter((p) => !index.has(p));
+  const absent = absentOf();
   if (absent.length) throw new ArchiveError(`The project file is incomplete: ${absent.length} media file(s) are missing (${absent[0]}${absent.length > 1 ? ", …" : ""}).`);
-  const mediaBytes = [...new Map(m.media.map((x) => [x.path, x.size])).values()].reduce((a, b) => a + b, 0);
-  return { file, manifest: { missing: [], ...m } as ArchiveManifest, project, index, mediaBytes };
+  return { file, manifest: { missing: [], ...m } as ArchiveManifest, project, index, mediaBytes: bytesOf(), ...(series ? { series } : {}) };
 }
 
 export type ImportMode = "new" | "copy" | "replace";
@@ -185,7 +239,37 @@ export type ImportMode = "new" | "copy" | "replace";
  * or a new id and a " (copy)" name ("copy"). Nothing is saved unless every media file verifies; blobs already
  * written are removed on failure or cancel. Returns the saved project.
  */
-export async function importProjectArchive(storage: Storage, a: ArchivePreview, mode: ImportMode, opts: { onProgress?: (p: ArchiveProgress) => void; signal?: AbortSignal; now?: string } = {}): Promise<Project> {
+export async function importProjectArchive(storage: Storage, a: ArchivePreview, mode: ImportMode, opts: { onProgress?: (p: ArchiveProgress) => void; signal?: AbortSignal; now?: string; onSeries?: (s: Series) => void } = {}): Promise<Project> {
+  return storeMedia(storage, a, opts, async (remap) => {
+    const p = structuredClone(a.project);
+    for (const asset of Object.values(p.assets)) remap(asset);
+    const now = opts.now ?? new Date().toISOString();
+    if (mode === "copy") { p.id = newId("proj"); p.name = `${p.name} (copy)`; p.meta = { ...p.meta, createdAt: now }; }
+    p.meta = { ...p.meta, updatedAt: now };
+    // P5: the bundled Series assets, with the same fresh media keys, reconnect to (or create) the Series first.
+    if (a.series) opts.onSeries?.(remapSeries(a.series, remap));
+    await storage.projects.save(p);
+    return p;
+  });
+}
+
+/** P5: verify and store a Series archive's media under fresh keys; returns the Series pointing at them (not saved). */
+export async function importSeriesArchive(storage: Storage, a: SeriesArchivePreview, opts: { onProgress?: (p: ArchiveProgress) => void; signal?: AbortSignal } = {}): Promise<Series> {
+  return storeMedia(storage, a, opts, async (remap) => remapSeries(a.series, remap));
+}
+
+function remapSeries(s: Series, remap: (asset: Asset) => void): Series {
+  const out = structuredClone(s);
+  for (const sa of Object.values(out.assets)) for (const m of Object.values(sa.media)) remap(m.asset);
+  return out;
+}
+
+/**
+ * Verify and store an archive's media under fresh keys, then run `finish` with a function that points an asset's
+ * versions at them. Nothing is kept unless every media file verifies and `finish` succeeds; blobs already written
+ * are removed on failure or cancel.
+ */
+async function storeMedia<T>(storage: Storage, a: { file: Blob; index: Map<string, ZipEntry>; manifest: { media: ArchiveMedia[] }; mediaBytes: number }, opts: { onProgress?: (p: ArchiveProgress) => void; signal?: AbortSignal }, finish: (remap: (asset: Asset) => void) => Promise<T>): Promise<T> {
   const tag = newId("imp");
   const byPath = new Map<string, ArchiveMedia>();
   for (const x of a.manifest.media) if (!byPath.has(x.path)) byPath.set(x.path, x);
@@ -210,19 +294,17 @@ export async function importProjectArchive(storage: Storage, a: ArchivePreview, 
     }
     abortIf(opts.signal);
     const keyMap = new Map(a.manifest.media.map((x) => [x.key, newKeyOf(x.path)]));
-    const p = structuredClone(a.project);
-    for (const asset of Object.values(p.assets)) for (const v of asset.versions) {
-      // Media missing at export keeps a key that can't collide with anything stored here.
-      v.media.blobKey = keyMap.get(v.media.blobKey) ?? `${tag}/missing/${v.media.blobKey}`;
-      if (v.media.thumbKey) { const t = keyMap.get(v.media.thumbKey); if (t) v.media.thumbKey = t; else delete v.media.thumbKey; }
-      if (v.media.specKey) { const t = keyMap.get(v.media.specKey); if (t) v.media.specKey = t; else delete v.media.specKey; }
-    }
-    const now = opts.now ?? new Date().toISOString();
-    if (mode === "copy") { p.id = newId("proj"); p.name = `${p.name} (copy)`; p.meta = { ...p.meta, createdAt: now }; }
-    p.meta = { ...p.meta, updatedAt: now };
-    await storage.projects.save(p);
+    const remap = (asset: Asset) => {
+      for (const v of asset.versions) {
+        // Media missing at export keeps a key that can't collide with anything stored here.
+        v.media.blobKey = keyMap.get(v.media.blobKey) ?? `${tag}/missing/${v.media.blobKey}`;
+        if (v.media.thumbKey) { const t = keyMap.get(v.media.thumbKey); if (t) v.media.thumbKey = t; else delete v.media.thumbKey; }
+        if (v.media.specKey) { const t = keyMap.get(v.media.specKey); if (t) v.media.specKey = t; else delete v.media.specKey; }
+      }
+    };
+    const out = await finish(remap);
     opts.onProgress?.({ done: total, total });
-    return p;
+    return out;
   } catch (e) {
     await Promise.all(written.map((k) => storage.blobs.delete(k).catch(() => undefined)));
     throw e;
