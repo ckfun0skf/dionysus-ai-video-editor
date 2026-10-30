@@ -15,6 +15,7 @@ import { FORMAT_REVISION, GUIDE_KINDS, guideSections, presetsByCategory } from "
 import { aiLinks, DEFAULT_SITE_URL } from "./siteUrl";
 import { DEFAULT_TRANSITION_SEC, STORYBOARD_FORMAT } from "./storyJson";
 import { HTML_CLIP_FORMAT } from "./htmlClipPackage";
+import { AUDIO_CLIP_FORMAT, AUDIO_TEMPLATES, DRUMS, INSTRUMENTS, NOISE_PARAMS, SFX, SFX_PARAMS, SYNTH_PARAMS } from "./audioClip";
 
 const GUIDE_TITLE = `Dionysus storyboard guide (${STORYBOARD_FORMAT}, v${FORMAT_REVISION})`;
 
@@ -60,6 +61,12 @@ export function presetsJson(site = DEFAULT_SITE_URL): string {
     }])),
     transitionDefaultSec: DEFAULT_TRANSITION_SEC,
     fonts: FONTS.map((f) => ({ id: f.id, description: f.description })),
+    audioClip: {
+      format: AUDIO_CLIP_FORMAT, spec: aiLinks(site).audioClipSpec, usedFor: 'audio assets with "source": "json"',
+      instruments: INSTRUMENTS, drums: DRUMS, sfx: SFX,
+      params: { synth: SYNTH_PARAMS, noise: NOISE_PARAMS, sfx: SFX_PARAMS },
+      templates: AUDIO_TEMPLATES.map((t) => ({ id: t.id, name: t.name, description: t.description })),
+    },
   };
   return `${JSON.stringify(doc, null, 2)}\n`;
 }
@@ -82,6 +89,7 @@ To plan a storyboard for Dionysus, read the storyboard guide first and reply wit
 
 - [Format reference](${l.formatDoc}): the full specification, including importer warnings and errors
 - [HTML clip package](${l.htmlClipSpec}): the ${HTML_CLIP_FORMAT} single-file format for "html" assets (manifest, runtime contract, bindings, params, template)
+- [Audio clip format](${l.audioClipSpec}): the ${AUDIO_CLIP_FORMAT} JSON for audio assets with "source": "json" (tempo, tracks, synths, drums, noise, sfx, fx, params, examples)
 - [Open the app](${l.app})
 `;
 }
@@ -90,15 +98,18 @@ To plan a storyboard for Dionysus, read the storyboard guide first and reply wit
 export const FORMAT_DOC_SOURCE = "docs/v2/STORYBOARD_FORMAT.md";
 /** Source of the HTML clip package spec, published as ai/HTML_CLIP_PACKAGE.md (V2-HTML-PKG; html asset prompts link there). */
 export const CLIP_DOC_SOURCE = "docs/v2/HTML_CLIP_PACKAGE.md";
+/** Source of the audio clip spec, published as ai/AUDIO_CLIP_FORMAT.md (P4A; json audio asset prompts link there). */
+export const AUDIO_DOC_SOURCE = "docs/v2/AUDIO_CLIP_FORMAT.md";
 
 /**
  * Repo-relative path → generated content for a site URL (default: DEFAULT_SITE_URL, as committed). Pass the text of
  * FORMAT_DOC_SOURCE to include its published copy (this module does no file I/O; it also runs in the browser).
  */
-export function aiGuideFiles(site = DEFAULT_SITE_URL, formatDoc?: string, clipDoc?: string): Record<string, string> {
+export function aiGuideFiles(site = DEFAULT_SITE_URL, formatDoc?: string, clipDoc?: string, audioDoc?: string): Record<string, string> {
   return {
     ...(formatDoc === undefined ? {} : { "public/ai/STORYBOARD_FORMAT.md": formatDoc }),
     ...(clipDoc === undefined ? {} : { "public/ai/HTML_CLIP_PACKAGE.md": clipDoc }),
+    ...(audioDoc === undefined ? {} : { "public/ai/AUDIO_CLIP_FORMAT.md": audioDoc }),
     "public/ai/storyboard-guide.md": storyboardGuideMarkdown(site),
     "public/ai/storyboard-guide.html": storyboardGuideHtml(site),
     "public/ai/presets.json": presetsJson(site),

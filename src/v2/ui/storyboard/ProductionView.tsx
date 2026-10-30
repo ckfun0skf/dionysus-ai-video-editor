@@ -34,13 +34,13 @@ export function ProductionView({ project, thumbs, engine, blobs, mobile, onNote 
       const isSlot = "slot" in s.target;
       const reason = (isSlot ? status.slots[(s.target as { slot: string }).slot] : status.shots[(s.target as { shot: string }).shot])?.reasons[0];
       const sl = isSlot ? b.slots[(s.target as { slot: string }).slot] : undefined;
-      const verb = !sl ? "Regenerate" : sl.source.type === "lastFrame" ? "Take the frame again" : sl.source.type === "upload" ? "Upload it again" : "Regenerate";
+      const verb = !sl ? "Regenerate" : sl.source.type === "lastFrame" ? "Take the frame again" : sl.source.type === "upload" ? "Upload it again" : sl.source.type === "json" ? "Paste new audio JSON" : "Regenerate";
       return reason ? `${verb} — ${reason.charAt(0).toUpperCase()}${reason.slice(1)}` : verb;
     }
     if (s.state === "blocked" && s.blockedBy) return `After shot ${b.order.indexOf(s.blockedBy) + 1} has a clip`;
     if (s.state === "blocked" && s.waitsFor) return `After “${b.slots[s.waitsFor]?.name ?? s.waitsFor}” is added`;
     if (s.state === "check") return `Checks ${s.qaDone}/${s.qaTotal}`;
-    if ("slot" in s.target) { const sl = b.slots[s.target.slot]; return sl.source.type === "lastFrame" ? `Last frame of shot ${b.order.indexOf(sl.source.shotId) + 1}` : sl.source.type === "upload" ? "Upload your file" : sl.type === "html" ? "Make the HTML and upload it" : `Generate ${sl.type}`; }
+    if ("slot" in s.target) { const sl = b.slots[s.target.slot]; return sl.source.type === "lastFrame" ? `Last frame of shot ${b.order.indexOf(sl.source.shotId) + 1}` : sl.source.type === "upload" ? "Upload your file" : sl.source.type === "json" ? "Paste the audio JSON from your AI" : sl.type === "html" ? "Make the HTML and upload it" : `Generate ${sl.type}`; }
     const sh = b.shots[s.target.shot];
     if (sh.render === "html") return "Check the HTML clip";
     if (sh.render === "still") return "Check the still";

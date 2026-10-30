@@ -1681,5 +1681,369 @@
       "id": "condensed",
       "description": "Narrow sans that fits long lines."
     }
-  ]
+  ],
+  "audioClip": {
+    "format": "dionysus.audioclip/1",
+    "spec": "https://ckfun0skf.github.io/dionysus-ai-video-editor/ai/AUDIO_CLIP_FORMAT.md",
+    "usedFor": "audio assets with \"source\": \"json\"",
+    "instruments": [
+      "piano",
+      "pad",
+      "bass",
+      "pluck",
+      "lead",
+      "drums",
+      "noise",
+      "sfx"
+    ],
+    "drums": [
+      "kick",
+      "snare",
+      "hat",
+      "openhat",
+      "clap",
+      "tom"
+    ],
+    "sfx": [
+      "whoosh",
+      "impact",
+      "riser",
+      "beep",
+      "glitch",
+      "wind",
+      "rain"
+    ],
+    "params": {
+      "synth": [
+        {
+          "key": "attack",
+          "label": "Attack",
+          "min": 0,
+          "max": 2,
+          "step": 0.01,
+          "default": -1,
+          "description": "Seconds to full level (-1 = the instrument's own).",
+          "unit": "s"
+        },
+        {
+          "key": "release",
+          "label": "Release",
+          "min": 0,
+          "max": 4,
+          "step": 0.01,
+          "default": -1,
+          "description": "Seconds to fade after the note (-1 = the instrument's own).",
+          "unit": "s"
+        },
+        {
+          "key": "tone",
+          "label": "Tone",
+          "min": 0,
+          "max": 1,
+          "step": 0.01,
+          "default": 0.6,
+          "description": "Brightness: low-pass cutoff of the voice."
+        },
+        {
+          "key": "detune",
+          "label": "Detune",
+          "min": 0,
+          "max": 50,
+          "step": 1,
+          "default": 8,
+          "description": "Cents between the voice's oscillators (pad, lead).",
+          "unit": "ct"
+        }
+      ],
+      "noise": [
+        {
+          "key": "color",
+          "label": "Colour",
+          "min": 0,
+          "max": 2,
+          "step": 1,
+          "default": 1,
+          "description": "0 white, 1 pink, 2 brown."
+        },
+        {
+          "key": "tone",
+          "label": "Tone",
+          "min": 0,
+          "max": 1,
+          "step": 0.01,
+          "default": 0.5,
+          "description": "Low-pass cutoff (dark to bright)."
+        },
+        {
+          "key": "attack",
+          "label": "Attack",
+          "min": 0,
+          "max": 4,
+          "step": 0.01,
+          "default": 0.2,
+          "description": "Fade-in seconds.",
+          "unit": "s"
+        },
+        {
+          "key": "release",
+          "label": "Release",
+          "min": 0,
+          "max": 4,
+          "step": 0.01,
+          "default": 0.4,
+          "description": "Fade-out seconds.",
+          "unit": "s"
+        }
+      ],
+      "sfx": {
+        "whoosh": [
+          {
+            "key": "tone",
+            "label": "Tone",
+            "min": 0,
+            "max": 1,
+            "step": 0.01,
+            "default": 0.55,
+            "description": "Centre brightness."
+          },
+          {
+            "key": "sweep",
+            "label": "Sweep",
+            "min": 0,
+            "max": 1,
+            "step": 0.01,
+            "default": 0.7,
+            "description": "How far the band moves."
+          },
+          {
+            "key": "peak",
+            "label": "Peak at",
+            "min": 0.1,
+            "max": 0.9,
+            "step": 0.01,
+            "default": 0.6,
+            "description": "Where the loudest point falls (fraction of the event)."
+          }
+        ],
+        "impact": [
+          {
+            "key": "pitch",
+            "label": "Pitch",
+            "min": 30,
+            "max": 200,
+            "step": 1,
+            "default": 60,
+            "description": "Body frequency.",
+            "unit": "Hz"
+          },
+          {
+            "key": "punch",
+            "label": "Punch",
+            "min": 0,
+            "max": 1,
+            "step": 0.01,
+            "default": 0.7,
+            "description": "Noise crack at the hit."
+          },
+          {
+            "key": "tail",
+            "label": "Tail",
+            "min": 0.1,
+            "max": 4,
+            "step": 0.01,
+            "default": 1.2,
+            "description": "Decay seconds.",
+            "unit": "s"
+          }
+        ],
+        "riser": [
+          {
+            "key": "pitch",
+            "label": "Start",
+            "min": 40,
+            "max": 800,
+            "step": 1,
+            "default": 120,
+            "description": "Start frequency.",
+            "unit": "Hz"
+          },
+          {
+            "key": "pitchEnd",
+            "label": "End",
+            "min": 200,
+            "max": 4000,
+            "step": 10,
+            "default": 1600,
+            "description": "End frequency.",
+            "unit": "Hz"
+          },
+          {
+            "key": "noise",
+            "label": "Noise",
+            "min": 0,
+            "max": 1,
+            "step": 0.01,
+            "default": 0.4,
+            "description": "Noise mixed in."
+          }
+        ],
+        "beep": [
+          {
+            "key": "pitch",
+            "label": "Pitch",
+            "min": 200,
+            "max": 3000,
+            "step": 10,
+            "default": 880,
+            "description": "Tone frequency.",
+            "unit": "Hz"
+          },
+          {
+            "key": "count",
+            "label": "Beeps",
+            "min": 1,
+            "max": 6,
+            "step": 1,
+            "default": 2,
+            "description": "Beeps in the event."
+          },
+          {
+            "key": "gap",
+            "label": "Gap",
+            "min": 0.02,
+            "max": 0.5,
+            "step": 0.01,
+            "default": 0.08,
+            "description": "Silence between beeps.",
+            "unit": "s"
+          },
+          {
+            "key": "wave",
+            "label": "Wave",
+            "min": 0,
+            "max": 3,
+            "step": 1,
+            "default": 0,
+            "description": "0 sine, 1 square, 2 triangle, 3 saw."
+          }
+        ],
+        "glitch": [
+          {
+            "key": "density",
+            "label": "Density",
+            "min": 1,
+            "max": 40,
+            "step": 1,
+            "default": 14,
+            "description": "Bursts per second."
+          },
+          {
+            "key": "pitch",
+            "label": "Pitch",
+            "min": 100,
+            "max": 4000,
+            "step": 10,
+            "default": 900,
+            "description": "Mean burst frequency.",
+            "unit": "Hz"
+          },
+          {
+            "key": "chaos",
+            "label": "Chaos",
+            "min": 0,
+            "max": 1,
+            "step": 0.01,
+            "default": 0.6,
+            "description": "Spread of pitch and length."
+          }
+        ],
+        "wind": [
+          {
+            "key": "tone",
+            "label": "Tone",
+            "min": 0,
+            "max": 1,
+            "step": 0.01,
+            "default": 0.35,
+            "description": "Brightness of the gusts."
+          },
+          {
+            "key": "gust",
+            "label": "Gusts",
+            "min": 0,
+            "max": 1,
+            "step": 0.01,
+            "default": 0.5,
+            "description": "How much the level and band move."
+          },
+          {
+            "key": "rate",
+            "label": "Gust rate",
+            "min": 0.05,
+            "max": 2,
+            "step": 0.01,
+            "default": 0.25,
+            "description": "Gusts per second.",
+            "unit": "Hz"
+          }
+        ],
+        "rain": [
+          {
+            "key": "density",
+            "label": "Drops",
+            "min": 0,
+            "max": 1,
+            "step": 0.01,
+            "default": 0.6,
+            "description": "Drop density."
+          },
+          {
+            "key": "tone",
+            "label": "Tone",
+            "min": 0,
+            "max": 1,
+            "step": 0.01,
+            "default": 0.6,
+            "description": "Hiss brightness."
+          },
+          {
+            "key": "hiss",
+            "label": "Hiss",
+            "min": 0,
+            "max": 1,
+            "step": 0.01,
+            "default": 0.5,
+            "description": "Background hiss level."
+          }
+        ]
+      }
+    },
+    "templates": [
+      {
+        "id": "ambient-pad",
+        "name": "Ambient pad",
+        "description": "Slow evolving chords with reverb and soft noise."
+      },
+      {
+        "id": "tension-riser",
+        "name": "Tension riser",
+        "description": "A 4-second riser into an impact."
+      },
+      {
+        "id": "lofi-beat",
+        "name": "Lo-fi beat",
+        "description": "A relaxed 2-bar beat with keys and bass."
+      },
+      {
+        "id": "notification",
+        "name": "Notification",
+        "description": "A short bright two-note chime."
+      },
+      {
+        "id": "whoosh",
+        "name": "Whoosh",
+        "description": "A fast air pass for transitions."
+      }
+    ]
+  }
 }

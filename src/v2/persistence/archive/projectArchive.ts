@@ -60,6 +60,7 @@ export function projectMediaKeys(p: Project): Map<string, string> {
   for (const a of Object.values(p.assets)) for (const v of a.versions) {
     out.set(v.media.blobKey, v.media.mime || "application/octet-stream");
     if (v.media.thumbKey && !out.has(v.media.thumbKey)) out.set(v.media.thumbKey, "image/jpeg");
+    if (v.media.specKey && !out.has(v.media.specKey)) out.set(v.media.specKey, "application/json");
   }
   return out;
 }
@@ -214,6 +215,7 @@ export async function importProjectArchive(storage: Storage, a: ArchivePreview, 
       // Media missing at export keeps a key that can't collide with anything stored here.
       v.media.blobKey = keyMap.get(v.media.blobKey) ?? `${tag}/missing/${v.media.blobKey}`;
       if (v.media.thumbKey) { const t = keyMap.get(v.media.thumbKey); if (t) v.media.thumbKey = t; else delete v.media.thumbKey; }
+      if (v.media.specKey) { const t = keyMap.get(v.media.specKey); if (t) v.media.specKey = t; else delete v.media.specKey; }
     }
     const now = opts.now ?? new Date().toISOString();
     if (mode === "copy") { p.id = newId("proj"); p.name = `${p.name} (copy)`; p.meta = { ...p.meta, createdAt: now }; }

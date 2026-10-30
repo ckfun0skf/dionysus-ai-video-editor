@@ -17,7 +17,7 @@ export function SlotEditor({ project, slot, isNew, mobile, onSave, onCancel, onD
   const [name, setName] = useState(slot.name);
   const [type, setType] = useState(slot.type);
   const [aspect, setAspect] = useState(slot.aspect);
-  const [source, setSource] = useState<"generate" | "upload">(slot.source.type === "upload" ? "upload" : "generate");
+  const [source, setSource] = useState<"generate" | "upload" | "json">(slot.source.type === "upload" ? "upload" : slot.source.type === "json" ? "json" : "generate");
   const [prompt, setPrompt] = useState(slot.prompt);
   const [references, setReferences] = useState(slot.references);
   const [refRoles, setRefRoles] = useState(slot.refRoles ?? {});
@@ -47,7 +47,7 @@ export function SlotEditor({ project, slot, isNew, mobile, onSave, onCancel, onD
 
   const save = () => {
     if (!ok) return;
-    onSave({ name, type, aspect: aspect.trim(), prompt, notes, references, refRoles, qa: qa.filter((q) => q.text.trim()), ...(lastFrame ? {} : { source }), ...(type === "video" ? { genDurationSec: gen.trim() ? genN : null } : {}) });
+    onSave({ name, type, aspect: aspect.trim(), prompt, notes, references, refRoles, qa: qa.filter((q) => q.text.trim()), ...(lastFrame ? {} : { source: source === "json" && type !== "audio" ? "generate" as const : source }), ...(type === "video" ? { genDurationSec: gen.trim() ? genN : null } : {}) });
   };
   const label = isNew ? "New asset" : `Edit “${slot.name}”`;
   const onKey = (e: React.KeyboardEvent) => {
@@ -98,10 +98,11 @@ export function SlotEditor({ project, slot, isNew, mobile, onSave, onCancel, onD
               <div className="v2-sb-seg" role="radiogroup" aria-label="Made by">
                 <button type="button" role="radio" aria-checked={source === "generate"} className={source === "generate" ? "on" : ""} onClick={() => setSource("generate")}><Ic g="anim" size={15} /> Generate</button>
                 <button type="button" role="radio" aria-checked={source === "upload"} className={source === "upload" ? "on" : ""} onClick={() => setSource("upload")}><Ic g="⇪" size={15} /> Upload</button>
+                {type === "audio" && <button type="button" role="radio" aria-checked={source === "json"} className={source === "json" ? "on" : ""} title="Your AI writes a dionysus.audioclip/1 JSON; Dionysus renders it" onClick={() => setSource("json")}><Ic g="♫" size={15} /> Audio JSON</button>}
               </div>
             </fieldset>
           )}
-        <label className="v2-sb-field">{source === "generate" && !lastFrame ? "Prompt" : "Prompt (optional)"}<textarea rows={4} value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="What your AI tool should make" /></label>
+        <label className="v2-sb-field">{source !== "upload" && !lastFrame ? "Prompt" : "Prompt (optional)"}<textarea rows={4} value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="What your AI tool should make" /></label>
 
         {choices.length > 0 && (
           <fieldset className="v2-sb-field">

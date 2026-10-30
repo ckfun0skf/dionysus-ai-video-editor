@@ -33,14 +33,15 @@ export const ASSET_REFERENCE_ROLES: readonly ReferenceRole[] = ["start-frame", "
 export const DEFAULT_TRANSITION_SEC = 0.5;
 
 /** Where an asset comes from: generated from its prompt, uploaded by the user, or the LAST FRAME of another shot's clip. */
-export type StoryAssetSource = { type: "generate" } | { type: "upload" } | { type: "lastFrame"; shot: string };
+/** P4A: `json` (audio only) — the user's AI writes a dionysus.audioclip/1 JSON that Dionysus renders (docs/v2/AUDIO_CLIP_FORMAT.md). */
+export type StoryAssetSource = { type: "generate" } | { type: "upload" } | { type: "json" } | { type: "lastFrame"; shot: string };
 
 /**
  * The canonical way to write a source in storyboard JSON (V2-SB-131): plain strings `"generate"` and `"upload"`, an
  * object only for `{ "type": "lastFrame", "shot" }`. The importer also accepts `{ "type": "generate" }` and
  * `{ "type": "upload" }` (older files) but never writes them.
  */
-export type AuthoredAssetSource = "generate" | "upload" | { type: "lastFrame"; shot: string };
+export type AuthoredAssetSource = "generate" | "upload" | "json" | { type: "lastFrame"; shot: string };
 export const authoredSource = (s: StoryAssetSource): AuthoredAssetSource => (s.type === "lastFrame" ? { type: "lastFrame", shot: s.shot } : s.type);
 
 export interface StoryAsset {
@@ -695,14 +696,19 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
     const src = a.source;
     if (src === undefined || src === "generate" || (isObj(src) && src.type === "generate")) source = { type: "generate" };
     else if (src === "upload" || (isObj(src) && src.type === "upload")) source = { type: "upload" };
+    else if (src === "json" || (isObj(src) && src.type === "json")) {
+      if (type !== "audio") err(`${path}.source`, `Only an audio asset can have source "json" (a dionysus.audioclip/1 clip); "${id}" is ${type}. Use "generate" or "upload".`);
+      source = { type: "json" };
+    }
     else if (isObj(src) && src.type === "lastFrame") {
       const shot = str(src.shot) ?? "";
       if (!shotIds.has(shot)) err(`${path}.source.shot`, shot ? `Unknown shot "${shot}" (shots: ${[...shotIds].join(", ")}).` : 'A lastFrame source needs "shot": the id of the shot whose last frame this is.');
       if (type === "html") err(`${path}.source`, 'An html asset can\'t be a last frame; use "generate" (the user asks their AI for the .html) or "upload".');
       if (type === "audio") err(`${path}.source`, 'An audio asset can\'t be a last frame; use "generate" (the user makes it with their AI voice or music tool) or "upload".');
       source = { type: "lastFrame", shot };
-    } else err(`${path}.source`, 'Source must be "generate", "upload", or { "type": "lastFrame", "shot": "<shot id>" }.');
+    } else err(`${path}.source`, 'Source must be "generate", "upload", "json" (audio only), or { "type": "lastFrame", "shot": "<shot id>" }.');
     const prompt = str(a.prompt) ?? "";
+    if (source.type === "json" && !prompt) err(`${path}.prompt`, `Asset "${id}" is json, so its "prompt" must be a sound brief for the user's AI (what the music or effect sounds like, tempo, length).`);
     if (source.type === "generate" && !prompt) err(`${path}.prompt`, type === "html" ? `Asset "${id}" is html, so its "prompt" must be a design brief for the user's AI (what it shows and how it moves).` : `Asset "${id}" is generated, so it needs a generation "prompt".`);
     const asp = str(a.aspect);
     if (asp && !ASPECT_RE.test(asp)) err(`${path}.aspect`, `Aspect "${asp}" should look like "16:9".`);

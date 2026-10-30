@@ -483,7 +483,7 @@ function SettingsTab({ m, set, mobile, html }: { m: HtmlClipManifest; set: (m: H
 // ---------------------------------------------------------------------------------------------------------------
 // Dialog pieces
 
-function Confirm({ title, body, ok, onOk, onCancel }: { title: string; body: string; ok: string; onOk: () => void; onCancel: () => void }) {
+export function Confirm({ title, body, ok, onOk, onCancel }: { title: string; body: string; ok: string; onOk: () => void; onCancel: () => void }) {
   const okRef = useRef<HTMLButtonElement>(null);
   useEffect(() => { okRef.current?.focus(); }, []);
   return (

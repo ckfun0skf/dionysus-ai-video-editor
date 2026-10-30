@@ -8,3 +8,4 @@ export * from "./htmlLibs";
 export { effectFrameAt, applyEffectFrame } from "./effects";
 export { drawWithLook, isPlainLook } from "./transitionDraw";
 export { blendOp, withBlend } from "./blend";
+export * from "./audioClip";

@@ -33,10 +33,11 @@ const fmtDur = (ticks?: number) => { if (!ticks) return ""; const s = Math.round
  * has Upload (from the device) and the project's own media of that kind (thumbnails, durations); Code also has Create
  * (a new clip in the Code Editor). Multi-select across tabs, numbered in pick order, then Add.
  */
-export function MediaPicker({ title, onAdd, onClose, media = [], only, initialTab, onCreateCode, loadMedia }: {
+export function MediaPicker({ title, onAdd, onClose, media = [], only, initialTab, onCreateCode, onCreateAudio, loadMedia }: {
   title: string; onAdd: (p: Picked) => void; onClose: () => void; media?: ProjectMedia[];
   /** "audio": the audio tab only. */ only?: "audio"; initialTab?: PickerTab;
   /** Code → Create: open the Code Editor on a new clip (the picker closes). */ onCreateCode?: () => void;
+  /** Audio → Create audio: open the Audio editor on a new clip (the picker closes). */ onCreateAudio?: () => void;
   /** P2C (item 7): the file of a project asset, for its playable preview (no preview button without it). */
   loadMedia?: (assetId: string) => Promise<Blob | undefined>;
 }) {
@@ -110,6 +111,12 @@ export function MediaPicker({ title, onAdd, onClose, media = [], only, initialTa
                 <button className="v2-pick-action is-create" onClick={onCreateCode}>
                   <span className="v2-pick-action-ic"><Ic g="＋" size={22} /></span>
                   <span><b>Create</b><small>Write a canvas clip in the Code Editor</small></span>
+                </button>
+              )}
+              {tab === "audio" && onCreateAudio && (
+                <button className="v2-pick-action is-create" onClick={onCreateAudio}>
+                  <span className="v2-pick-action-ic"><Ic g="♫" size={22} /></span>
+                  <span><b>Create Audio</b><small>Make music or sound effects in the Audio editor</small></span>
                 </button>
               )}
             </div>

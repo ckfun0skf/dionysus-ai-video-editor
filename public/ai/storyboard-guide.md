@@ -35,8 +35,8 @@ So split the work: generation prompts describe only the picture and its motion; 
       "references"?: (string | { "asset": "<asset id>", "role"?: "start-frame" | "identity" | "look" | "detail", "note"?: string })[],
                                  // other assets to attach when generating this one, IN THIS ORDER (Image 1, Image 2 …); a plain id
                                  // = role from its type; for an image "start-frame" means the base image to edit (no end-frame)
-      "source": "generate" | "upload" | { "type": "lastFrame", "shot": "<shot id>" },
-                                 // plain strings "generate" / "upload" (default "generate"); an object only for lastFrame; "html" and "audio" can't use lastFrame
+      "source": "generate" | "upload" | "json" | { "type": "lastFrame", "shot": "<shot id>" },
+                                 // plain strings "generate" / "upload" / "json" (default "generate"); an object only for lastFrame; "html" and "audio" can't use lastFrame; "json" is audio only (a dionysus.audioclip/1 clip)
       "qa": string[],            // 2-5 concrete yes/no checks to verify the asset by looking
       "params"?: { "<key>": Param },  // "html" only: values the clip exposes, set per use by shots and layers (see RULES)
       "genDurationSec"?: number, // video assets only: the length to generate (0.5-120) when its layers use less; layers pick their part with "inSec"
@@ -313,6 +313,7 @@ The same winding hill road as the sun rises …", "references": [{ "asset": "hil
 35. "<shot id>.lastframe" is the last frame of that shot's clip and can be used anywhere an asset id goes (a shot's "assets" and "references", a keyframe's or an asset's "references") without declaring an asset: the app adds a "frame" asset named "Last frame · <shot title>", takes the frame from the clip version picked for that shot as soon as it is uploaded (and again when a different version is picked or it is trimmed), and attaches it in "references" order. Use it with role "start-frame" for seamless continuity (RULE 3) or "look" / "detail" to match a moment. The shot must be an "ai" shot listed before the one using it, a shot can't use its own last frame, and there must be no loops.
 36. To put a person, animal or object over a shot without its background, ask for the asset (image or video) shot in front of a flat, evenly lit pure green (#00ff00) screen — blue (#0000ff) when the subject is green — with no shadows on the screen and no green on the subject, then give its layer "chromaKey": { "color": "#00ff00", "range": 0.4, "spill": 0.5 }. "range" (0-1) is how far from the colour is removed (raise it to about 0.5-0.6 if a green fringe is left; lower it if the subject gets holes), "spill" (0-1) takes the green tint off edges and hair. html layers may be keyed too. Example: { "id": "birds", "type": "video", "asset": "birds-green", "startSec": 0, "endSec": 3, "box": { "x": 0, "y": 0, "width": 1, "height": 0.6 }, "chromaKey": { "color": "#00ff00", "range": 0.4, "spill": 0.6 } }. Use "blend" instead for elements on black or white (RULE 22).
 37. Shape audio cues instead of asking for new recordings: "volumeKeys" is a volume curve over the cue (points { "t": seconds from the cue start, "v": 0-2, 1 = the cue's "volume" }, linear in between, the first and last values hold) — use it to duck music or ambience under a voiceover or title and swell it after, e.g. "volumeKeys": [ { "t": 4, "v": 1 }, { "t": 4.5, "v": 0.3 }, { "t": 9, "v": 0.3 }, { "t": 10, "v": 1 } ]. "fx" adds a sound effect from the audio effects list with an "amount" 0-1: "telephone" for the far side of a phone call, "radio" for broadcasts and walkie-talkies, "pa-announcement" for station or stadium loudspeakers, "hall" or "room" to place a dry voice in a space, "underwater" for muffled sound (underwater, behind a wall), "robot" for machine voices. Example: { "asset": "caller", "kind": "dialogue", "from": "s2", "line": 1, "fx": { "preset": "telephone", "amount": 1 } }. Keep fades ("fadeInSec", "fadeOutSec") for simple starts and ends.
+38. Simple music and sound effects (a chime, a notification, a whoosh, a riser into an impact, a short beat, an ambient pad, wind or rain) can be "source": "json" on an "audio" asset instead of "generate": the user's AI writes a "dionysus.audioclip/1" JSON (spec AUDIO_CLIP_FORMAT.md next to this guide: tempo, tracks of synth notes, drums, noise or generated sfx, with volume, pan, reverb, delay, filter and params) and Dionysus renders it, so it is exact, repeatable and editable in the Audio editor. Its "prompt" is a sound brief (what it sounds like, mood, key or tempo, length). Use "generate" for voices, real recordings and full songs; "json" is for audio assets only.
 
 ## EXAMPLE
 ```json
@@ -487,9 +488,9 @@ The same winding hill road as the sun rises …", "references": [{ "asset": "hil
       "name": "Title chime",
       "type": "audio",
       "aspect": "16:9",
-      "prompt": "A single warm, airy chime with a soft shimmer tail, about 2 s, for a title appearing at sunrise",
+      "prompt": "A single warm, airy chime with a soft shimmer tail, about 2 s, for a title appearing at sunrise: bright pluck or piano notes in a major key with reverb",
       "references": [],
-      "source": "generate",
+      "source": "json",
       "qa": [
         "One clean chime, about 2 s",
         "No clicks at the start"

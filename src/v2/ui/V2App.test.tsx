@@ -286,7 +286,7 @@ describe("V2App", () => {
       expect(labels()).toEqual(["Edit", "Audio", "Text", "Effect", "Overlay"]);
       const tap = async (name: string) => { await act(async () => { ([...el.querySelectorAll(".v2-toolbar .v2-tool")].find((b) => b.textContent === name) as HTMLButtonElement).click(); }); };
       await tap("Audio");
-      expect(labels()).toEqual(["Add audio"]);
+      expect(labels()).toEqual(["Add audio", "Create audio"]);
       await act(async () => { (el.querySelector(".v2-tool-back") as HTMLButtonElement).click(); });
       expect(labels()).toEqual(["Edit", "Audio", "Text", "Effect", "Overlay"]);
       await tap("Text");
