@@ -27,3 +27,5 @@ export * from "./audioClipPrompt";
 export * from "./htmlClipBindings";
 export * as storyAuto from "./storyAuto";
 export * from "./codeWizard";
+export * as storyAgent from "./storyAgent";
+export { storyboardGuideMarkdown } from "./aiGuide";

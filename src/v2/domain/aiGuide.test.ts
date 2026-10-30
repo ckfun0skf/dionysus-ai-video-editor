@@ -2,6 +2,7 @@
  * V2-SB-114: the published planner files must match what the registry generates. Run `npm run gen:ai` to refresh them
  * after changing presets, fonts, the rules or the example.
  */
+import { STORY_TOOLS, storyToolsMarkdown } from "./storyAgent";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -44,6 +45,29 @@ if (update) {
   writeFileSync(audioDocPath, audioDoc);
 }
 
+// P4C: the WebMCP doc's tool list is generated from the tool schema.
+const mcpDocPath = resolve(root, "docs/v2/WEB_MCP.md");
+let mcpDoc = readFileSync(mcpDocPath, "utf8");
+const MCP_BLOCKS: Record<string, string> = { tools: storyToolsMarkdown() };
+if (update) {
+  for (const [tag, body] of Object.entries(MCP_BLOCKS)) {
+    const old = between(mcpDoc, tag) ?? "";
+    const from = old ? `<!-- ${tag}:start -->\n${old}\n<!-- ${tag}:end -->` : `<!-- ${tag}:start -->\n<!-- ${tag}:end -->`;
+    mcpDoc = mcpDoc.replace(from, `<!-- ${tag}:start -->\n${body}\n<!-- ${tag}:end -->`);
+  }
+  writeFileSync(mcpDocPath, mcpDoc);
+}
+describe("WebMCP doc (P4C)", () => {
+  it("lists the generated tools", () => {
+    for (const [tag, body] of Object.entries(MCP_BLOCKS)) expect(between(mcpDoc, tag), `${tag} block`).toBe(body);
+  });
+  it("llms.txt describes every tool and the rules exist", () => {
+    const txt = llmsTxt(DEFAULT_SITE_URL);
+    for (const t of STORY_TOOLS) expect(txt).toContain(`\`${t.name}\``);
+    expect(RULE_LIST.map((r) => r.key).slice(-2)).toEqual(["long-story-parts", "web-mcp"]);
+  });
+});
+
 describe("AI planner guide (V2-SB-114)", () => {
   it.each(Object.entries(aiGuideFiles(DEFAULT_SITE_URL, formatDoc, clipDoc, audioDoc)))("%s is up to date (npm run gen:ai)", (rel, content) => {
     const file = resolve(root, rel);
@@ -69,7 +93,7 @@ describe("AI planner guide (V2-SB-114)", () => {
   it("the full prompt inlines the guide with RULES 1-37; the short prompt links to it", () => {
     const full = storyboardSystemPrompt();
     for (const s of ["FORMAT (", "PRESETS", "RULES", "EXAMPLE", `14. ${RULES[13]}`, "not seconds", "START FRAME", "\"references\"?", "\"genDurationSec\"?", "- crossfade:", "- ken-burns:"]) expect(full).toContain(s);
-    expect(RULES).toHaveLength(38);
+    expect(RULES).toHaveLength(40);
     // V2-SB-128: blend modes: the format lines, the blend catalogue and a rule with an example that imports cleanly.
     expect(full).toContain('"blend"?: "<blend id>", "opacity"?: number (0-1, default 1)');
     expect(full).toContain('Blend modes — shots[].layers[].blend');
@@ -141,7 +165,7 @@ describe("AI planner guide (V2-SB-114)", () => {
 
   it("RULE 30 (P2A): revised JSON is re-imported by id, so ids stay stable", () => {
     expect(RULE_LIST.slice(29, 30).map((r) => r.key)).toEqual(["stable-ids-reimport"]);
-    expect(RULE_LIST.slice(30).map((r) => r.key)).toEqual(["self-contained-prompts", "reference-sheets", "html-code-refs", "shot-background", "lastframe-refs", "chroma-key", "audio-shaping", "audio-json"]);
+    expect(RULE_LIST.slice(30).map((r) => r.key)).toEqual(["self-contained-prompts", "reference-sheets", "html-code-refs", "shot-background", "lastframe-refs", "chroma-key", "audio-shaping", "audio-json", "long-story-parts", "web-mcp"]);
     expect(ruleNumber("stable-ids-reimport")).toBe(30);
     expect(storyboardSystemPrompt()).toContain(`30. ${RULES[29]}`);
     expect(RULES[29]).toMatch(/re-imports it/);

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useStoryAuto } from "./useStoryAuto";
 import { board, ops, pendingAudio, roundtrip, storyEdit, storyRefs, updatePlan, type AssetSlot, type Shot, type StoryDiff, type StoryDoc } from "../../domain";
 import { cmd, type Engine } from "../../engine";
@@ -14,10 +14,11 @@ import { SlotEditor } from "./SlotEditor";
 import { StoryDetail } from "./StoryDetail";
 import { ProductionView } from "./ProductionView";
 import { ExportPanel, ImportPanel, PromptPanel } from "./StoryImport";
+import { AgentPanel } from "../agent/AgentPanel";
 import { useVersionThumbs } from "./useVersionThumbs";
 import "./storyboard.css";
 
-type Step = "prompt" | "import" | "export" | "production";
+type Step = "prompt" | "import" | "export" | "production" | "agent";
 /** A short status note; with an action it stays longer so there is time to tap it (V2-SB-R13). */
 type Note = { text: string; action?: { label: string; run: () => void } };
 const NOTE_MS = 3500, NOTE_ACTION_MS = 8000;
@@ -114,6 +115,7 @@ export function StoryboardView({ engine, blobs, onClose, initialOpen, onView }: 
 
   /* V2-CUT-02: board editing. Every change is one undo step; notes say what else changed. */
   const sb = project.storyboard;
+  const baseDoc = useMemo(() => (sb ? roundtrip.storyboardToDoc(sb) : undefined), [sb]);
   const no = (id: string) => (sb ? sb.order.indexOf(id) + 1 : 0);
   const undoAction = { label: "Undo", run: () => engine.undo() };
   const moveTo = (id: string, to: number) => {
@@ -208,7 +210,7 @@ export function StoryboardView({ engine, blobs, onClose, initialOpen, onView }: 
     parts.push("Its versions stay in the media library. Undo brings it back.");
     return parts.join(" ");
   };
-  const title = step === "prompt" ? (has ? "AI prompt" : "1 · AI prompt") : step === "import" ? (has ? "Import revised JSON" : "2 · Import JSON") : step === "export" ? "Export JSON" : step === "production" ? "Production" : "Storyboard";
+  const title = step === "prompt" ? (has ? "AI prompt" : "1 · AI prompt") : step === "import" ? (has ? "Import revised JSON" : "2 · Import JSON") : step === "export" ? "Export JSON" : step === "production" ? "Production" : step === "agent" ? "AI agent" : "Storyboard";
   return (
     <div className="v2-board" role="region" aria-label="Storyboard">
       <header className="v2-board-head">
@@ -222,18 +224,19 @@ export function StoryboardView({ engine, blobs, onClose, initialOpen, onView }: 
           {/* V2-SB-R11: on phones Send is the one labelled primary action; on desktop Production stays primary. */}
           <button className={`v2-btn v2-sb-btn ${mobile ? "primary" : ""}`} aria-label="Send to timeline" title="Add every shot that has a clip to the end of the timeline, in story order. Timeline clips follow the version you pick here." onClick={send}><Ic g="to-timeline" size={18} /> <span>{mobile ? "Send" : "Send to timeline"}</span></button>
           {!step && (mobile ? (
-            <button ref={moreBtn} className="v2-icon v2-sb-icon" aria-label="More storyboard actions" aria-haspopup="menu" aria-expanded={!!more} title="AI prompt, Export JSON, Import revised JSON"
+            <button ref={moreBtn} className="v2-icon v2-sb-icon" aria-label="More storyboard actions" aria-haspopup="menu" aria-expanded={!!more} title="AI prompt, Export JSON, Import revised JSON, AI agent"
               onClick={() => { const r = moreBtn.current!.getBoundingClientRect(); setMore(more ? undefined : { x: r.right - 220, y: r.bottom + 4 }); }}><Ic g="⋯" size={18} /></button>
           ) : <>
             {/* V2-SB-R12: labelled, and Replace is marked destructive and confirmed. */}
             <button className="v2-btn v2-sb-btn" aria-label="AI prompt" title="Copy the AI prompt again" onClick={() => setStep("prompt")}><Ic g="⎘" size={18} /> <span>AI prompt</span></button>
             <button className="v2-btn v2-sb-btn" aria-label="Export JSON" title="Download or copy this storyboard, with your edits, as storyboard JSON" onClick={() => { setOpen(undefined); setStep("export"); }}><Ic g="⇩" size={18} /> <span>Export</span></button>
-            <button className="v2-btn v2-sb-btn" aria-label="Import revised JSON" title="Bring in your AI's revised JSON: matched by id, previewed before it applies" onClick={askReplace}><Ic g="json" size={18} /> <span>Import…</span></button>
+            <button className="v2-btn v2-sb-btn" aria-label="Import revised JSON" title="Bring in your AI's revised JSON (whole or in parts): matched by id, previewed before it applies" onClick={askReplace}><Ic g="json" size={18} /> <span>Import…</span></button>
+            <button className="v2-btn v2-sb-btn" aria-label="AI agent" title="Let an AI agent in this browser edit the storyboard (WebMCP), with an activity log" onClick={() => { setOpen(undefined); setStep("agent"); }}><Ic g="agent" size={18} /> <span>Agent</span></button>
           </>)}
         </>}
       </header>
       <div className="v2-board-body">
-        {step === "production" && has ? <ProductionView project={project} thumbs={thumbs} engine={engine} blobs={blobs} mobile={mobile} onNote={setNote} /> : step === "prompt" ? <PromptPanel /> : step === "import" ? <ImportPanel onCreate={create} replacing={has} diffFor={has ? diffFor : undefined} onMerge={has ? merge : undefined} /> : step === "export" && sb ? <ExportPanel board={sb} /> : has ? (
+        {step === "production" && has ? <ProductionView project={project} thumbs={thumbs} engine={engine} blobs={blobs} mobile={mobile} onNote={setNote} /> : step === "prompt" ? <PromptPanel /> : step === "import" ? <ImportPanel onCreate={create} replacing={has} diffFor={has ? diffFor : undefined} onMerge={has ? merge : undefined} base={baseDoc} /> : step === "agent" ? <AgentPanel /> : step === "export" && sb ? <ExportPanel board={sb} /> : has ? (
           <BoardView project={project} thumbs={thumbs} onOpen={(t) => { setEditing(undefined); setEditingSlot(undefined); setConn(undefined); setOpen(t); }} openKey={editing?.shot ?? editingSlot?.slot ?? (open && ("slot" in open ? open.slot : open.shot))} edit={boardEdit} mobile={mobile} />
         ) : (
           <div className="v2-sb-empty">
@@ -243,6 +246,9 @@ export function StoryboardView({ engine, blobs, onClose, initialOpen, onView }: 
             </button>
             <button className="v2-sb-step" onClick={() => setStep("import")} data-testid="step-import">
               <span className="v2-sb-num">2</span><span><b>Import the storyboard JSON</b><em>Paste the reply or choose a .json file. Problems are listed clearly.</em></span><Ic g="anim-out" size={18} />
+            </button>
+            <button className="v2-sb-step" onClick={() => setStep("agent")} data-testid="step-agent">
+              <span className="v2-sb-num"><Ic g="agent" size={16} /></span><span><b>Or let an AI agent build it</b><em>For agents in this browser that support WebMCP (early preview). Off until you allow it.</em></span><Ic g="anim-out" size={18} />
             </button>
             <p className="v2-hint">Dionysus never calls an AI itself. You generate assets and clips in your own tools and upload them here.</p>
           </div>
@@ -268,6 +274,7 @@ export function StoryboardView({ engine, blobs, onClose, initialOpen, onView }: 
         { label: "AI prompt", icon: "⎘", onSelect: () => setStep("prompt") },
         { label: "Export JSON", icon: "⇩", onSelect: () => { setOpen(undefined); setStep("export"); } },
         { label: "Import revised JSON…", icon: "json", onSelect: askReplace },
+        { label: "AI agent", icon: "agent", onSelect: () => { setOpen(undefined); setStep("agent"); } },
       ]} />}
       {sendMenu && <SendModes project={project} onUpdate={update} onReplace={() => setConfirmTimeline(true)} onCancel={() => setSendMenu(false)} />}
       {confirmTimeline && <ConfirmDialog title="Replace the timeline?" confirm="Replace timeline"

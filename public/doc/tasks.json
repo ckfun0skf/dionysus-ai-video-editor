@@ -2766,6 +2766,24 @@
           "title": "AI mode import: param warnings refer to AI mode, not the storyboard asset",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P4C-2",
+          "title": "WebMCP storyboard tools for AI agents (opt-in toggle, live edits with an 'AI is editing' indicator, undo, activity log)",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "P4C-3",
+          "title": "Chunked storyboard JSON: import merges a part into the existing board; guide rules long-story-parts and web-mcp",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "P4C-4",
+          "title": "Docs: WEB_MCP.md, STORYBOARD_FORMAT §4.8, llms.txt tool list; tests",
+          "status": "done",
+          "progress": 100
         }
       ]
     }

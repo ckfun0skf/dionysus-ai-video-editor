@@ -70,7 +70,7 @@ describe("storyboard review P2 (second batch)", () => {
     expect(btn(el, "AI prompt")).toBeUndefined();
     await act(async () => btn(el, "More storyboard actions").click());
     const items = [...el.querySelectorAll('[role="menuitem"]')].map((x) => x.textContent!.trim());
-    expect(items).toEqual(["AI prompt", "Export JSON", "Import revised JSON…"]);
+    expect(items).toEqual(["AI prompt", "Export JSON", "Import revised JSON…", "AI agent"]);
     await act(async () => (el.querySelectorAll('[role="menuitem"]')[1] as HTMLButtonElement).click());
     expect(el.querySelector('[aria-label="Storyboard JSON export"]')).not.toBeNull();
   });

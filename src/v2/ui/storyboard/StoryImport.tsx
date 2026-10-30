@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { exampleStoryboardJson, roundtrip, runtimeAiLinks, story, storyboardShortPrompt, storyboardSystemPrompt, type DiffItem, type Storyboard, type StoryDiff, type StoryDoc } from "../../domain";
+import { exampleStoryboardJson, roundtrip, runtimeAiLinks, story, storyboardShortPrompt, storyboardSystemPrompt, type DiffItem, type Storyboard, type StoryDiff, type StoryDoc, type StoryParseResult } from "../../domain";
 import { ConfirmDialog } from "../Timeline";
 import { Ic } from "../Icon";
 import { copyText } from "./clipboard";
+import { storyAgent } from "../../domain";
 
 function downloadJson(doc: StoryDoc, text = JSON.stringify({ ...doc, assets: doc.assets.filter((a) => !a.implicit) }, null, 2)) {
   const url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
@@ -56,7 +57,8 @@ export function PromptPanel() {
 }
 
 /** Step 2: paste or choose a file, validate live, preview, then create. */
-export function ImportPanel({ onCreate, replacing, diffFor, onMerge }: { onCreate?: (doc: StoryDoc) => void; replacing?: boolean; diffFor?: (doc: StoryDoc) => StoryDiff; onMerge?: (doc: StoryDoc, diff: StoryDiff) => void }) {
+/** P4C: `base` is the current board; JSON that is one part of a storyboard ("part", or no "meta") is merged into it by id. */
+export function ImportPanel({ onCreate, replacing, diffFor, onMerge, base }: { onCreate?: (doc: StoryDoc) => void; replacing?: boolean; diffFor?: (doc: StoryDoc) => StoryDiff; onMerge?: (doc: StoryDoc, diff: StoryDiff) => void; base?: StoryDoc }) {
   const [text, setText] = useState("");
   const [confirm, setConfirm] = useState<"merge" | "replace">();
   const [file, setFile] = useState<string>();
@@ -72,8 +74,15 @@ export function ImportPanel({ onCreate, replacing, diffFor, onMerge }: { onCreat
     const lh = parseFloat(getComputedStyle(ta).lineHeight) || 18;
     ta.scrollTop = Math.max(0, (line - 2) * lh);
   };
-  const result = useMemo(() => (text.trim() ? story.parseStoryboard(text) : undefined), [text]);
-  const locs = useMemo(() => (result ? (result.ok ? result.warnings : result.errors).map((e) => story.locateIssue(text, e)) : []), [result, text]);
+  const part = useMemo(() => (text.trim() ? storyAgent.parseStoryPart(text, base) : undefined), [text, base]);
+  const result = useMemo((): StoryParseResult | undefined => {
+    if (!text.trim()) return undefined;
+    if (part) return part.result;
+    if (!base && looksLikePart(text)) return { ok: false, warnings: [], errors: [{ path: "", message: 'This JSON is one part of a storyboard (it has "part", or no "meta"). Import the first part, the one with "meta" and the assets, first; then import this part to add its shots.' }] };
+    return story.parseStoryboard(text);
+  }, [text, part, base]);
+  // Paths in a merged part point into the merged board, not the pasted text, so they aren't linked.
+  const locs = useMemo(() => (result && !part ? (result.ok ? result.warnings : result.errors).map((e) => story.locateIssue(text, e)) : []), [result, text, part]);
   const diff = useMemo(() => (result?.ok && diffFor ? diffFor(result.doc) : undefined), [result, diffFor]);
   const pick = async (f?: File) => { if (!f) return; setFile(f.name); setText(await readFileText(f)); };
   const paste = async () => { try { const t = await navigator.clipboard.readText(); if (t) { setFile(undefined); setText(t); } } catch { /* permission denied: user can long-press paste */ } };
@@ -102,6 +111,7 @@ export function ImportPanel({ onCreate, replacing, diffFor, onMerge }: { onCreat
       {result?.ok && (
         <div className="v2-sb-preview" data-testid="story-preview">
           <h4><Ic g="ok" size={16} /> {result.doc.meta.title}</h4>
+          {part?.counts && <p className="v2-sb-part" data-testid="story-part">Storyboard part{partLabel(text)}: {partText(part.counts)}, merged into the current board by id. Below is the whole board after the merge.</p>}
           <p className="v2-sb-sum">{story.storySummary(result.doc)}</p>
           {result.warnings.length > 0 && <ul className="v2-sb-warn" data-testid="story-warnings">{result.warnings.map((w, i) => {
             const body = <>{w.path && <code>{w.path}</code>} {w.message}</>;
@@ -120,7 +130,7 @@ export function ImportPanel({ onCreate, replacing, diffFor, onMerge }: { onCreat
             <MergePreview diff={diff} />
             <div className="v2-sb-actions v2-sb-merge-actions">
               <button className="v2-btn primary v2-sb-btn" data-testid="merge-apply" disabled={diff.same} onClick={() => (diff.assets.removed.length || diff.shots.removed.length ? setConfirm("merge") : onMerge(result.doc, diff))}><Ic g="ok" size={16} /> {diff.same ? "No changes" : "Apply changes"}</button>
-              {onCreate && <button className="v2-btn v2-sb-btn v2-sb-danger" title="Start over from this JSON: drops every upload, pick and check on the board" onClick={() => setConfirm("replace")}><Ic g="json" size={16} /> Replace instead…</button>}
+              {onCreate && !part && <button className="v2-btn v2-sb-btn v2-sb-danger" title="Start over from this JSON: drops every upload, pick and check on the board" onClick={() => setConfirm("replace")}><Ic g="json" size={16} /> Replace instead…</button>}
             </div>
             <p className="v2-hint">Apply keeps uploads, version picks, trims and checks for every asset and shot whose id is unchanged. Undo reverts it.</p>
           </> : <>
@@ -140,6 +150,13 @@ export function ImportPanel({ onCreate, replacing, diffFor, onMerge }: { onCreat
 }
 
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
+function looksLikePart(text: string): boolean { try { return storyAgent.isStoryPart(JSON.parse(story.extractJson(text))); } catch { return false; } }
+function partLabel(text: string): string {
+  try { const p = (JSON.parse(story.extractJson(text)) as { part?: { index?: unknown; of?: unknown } }).part; return typeof p?.index === "number" ? ` ${p.index}${typeof p.of === "number" ? ` of ${p.of}` : ""}` : ""; } catch { return ""; }
+}
+function partText(c: { shots: number; assets: number; audio: number; connections: number; removed: number }): string {
+  return [c.shots && plural(c.shots, "shot"), c.assets && plural(c.assets, "asset"), c.audio && plural(c.audio, "audio cue"), c.connections && plural(c.connections, "connection"), c.removed && `${c.removed} removed`].filter(Boolean).join(", ") || "nothing";
+}
 function removedText(d: StoryDiff): string {
   const parts = [d.shots.removed.length && plural(d.shots.removed.length, "shot"), d.assets.removed.length && plural(d.assets.removed.length, "asset")].filter(Boolean);
   return parts.join(" and ");

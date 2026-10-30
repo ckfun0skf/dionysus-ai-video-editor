@@ -15,6 +15,7 @@ import { FORMAT_REVISION, GUIDE_KINDS, guideSections, presetsByCategory } from "
 import { aiLinks, DEFAULT_SITE_URL } from "./siteUrl";
 import { DEFAULT_TRANSITION_SEC, STORYBOARD_FORMAT } from "./storyJson";
 import { HTML_CLIP_FORMAT } from "./htmlClipPackage";
+import { storyToolsMarkdown } from "./storyAgent";
 import { AUDIO_CLIP_FORMAT, AUDIO_TEMPLATES, DRUMS, INSTRUMENTS, NOISE_PARAMS, SFX, SFX_PARAMS, SYNTH_PARAMS } from "./audioClip";
 
 const GUIDE_TITLE = `Dionysus storyboard guide (${STORYBOARD_FORMAT}, v${FORMAT_REVISION})`;
@@ -84,6 +85,16 @@ To plan a storyboard for Dionysus, read the storyboard guide first and reply wit
 - [Storyboard guide](${l.guide}): the ${STORYBOARD_FORMAT} (v${FORMAT_REVISION}) JSON format and how it becomes a video, how to choose presets, the preset ids you may use (grouped by category), the numbered rules and an example
 - [Storyboard guide as a web page](${l.guideHtml}): the same guide as HTML
 - [Presets](${l.presets}): machine-readable preset ids, categories, descriptions, params with defaults and usage hints
+
+## Long stories
+
+For a long video, don't write one huge JSON: agree an outline first, then reply with part 1 (a complete storyboard with the first batch of shots) and then one part per message ({ "format", "part": { "index", "of", "after" }, "shots", … }, no "meta"); the user imports each part and Dionysus merges it by id. See the guide's rule "long-story-parts".
+
+## WebMCP tools
+
+When the user turns on agent access (Storyboard → Agent) in a browser with WebMCP, the open Dionysus tab registers these tools. Use them instead of writing JSON; every call is validated by the guide's rules (a rejected call changes nothing) and is one undo step for the user.
+
+${storyToolsMarkdown()}
 
 ## Optional
 
