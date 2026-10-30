@@ -75,7 +75,7 @@ So split the work: generation prompts describe only the picture and its motion; 
       "params"?: { "<key>": value },   // render "html" only: this shot's values for the clip asset's "params"
       "captions"?: boolean,      // true = show "dialogue" (the lines' text) as subtitles over the shot
       "layers"?: Layer[],        // drawn in list order (later = on top)
-      "effects"?: [ { "preset": "<video effect id>", "params"?: { ... }, "startSec"?: number, "endSec"?: number } ]   // default: whole shot
+      "effects"?: [ { "preset": "<video effect id>", "params"?: { ... }, "startSec"?: number, "endSec"?: number, "applyTo"?: "main" | "overlay" | "all" } ]   // default: whole shot, applyTo "main"
   } ],
   "connections"?: [ {
       "from": "<shot id>", "to": "<shot id>",     // adjacent shots only
@@ -322,6 +322,7 @@ The same winding hill road as the sun rises …", "references": [{ "asset": "hil
 41. Series: when the prompt lists SERIES ASSETS, this video is an episode of a series and those characters, props, locations and styles already exist. Reuse them, never redefine them: in "assets" write only { "id": "<series id>", "seriesRef": "<series id>" } (keep the same id so shots read naturally), then use the id, or "<id>@<state>" for a listed state, in shots, references, layers and other assets' references as usual. Dionysus fills in the name, type, prompt, states, QA and the user's chosen uploads from the Series, and adds Series assets they are made from. Extra fields next to "seriesRef" are ignored (the Series definition wins). A "seriesRef" that isn't in the list is an error, so copy ids exactly.
 42. Series: give a new asset "series": true when later episodes will need it too (a recurring character, the show's main locations, its style). Leave one-off things out (a prop used once, last frames, keyframes). Without a SERIES ASSETS list the project may not be in a series: then define every asset in full; "series": true is still allowed and is applied when the user adds the project to a series.
 43. Series with Dionysus tools (WebMCP): call list_series_assets before adding characters, props, locations or styles; use_series_asset adds one linked to the board; promote_to_series marks a board asset for the Series. Editing a linked asset's definition changes it in every episode, so only do that when the user asks; otherwise ask them to detach it first (Asset → Detach from series).
+44. An effect's "applyTo" picks the picture it changes: "main" (the default) changes only the shot's own clip, under every layer, so titles and overlays stay fixed; "overlay" changes only the shot's image, video and html layers (e.g. shake a sticker or blur a screen insert, leaving the shot still); "all" changes the whole composited frame — the shot, its overlays and its text together — like moving the camera over the finished picture. Use "all" when an overlay frames or keys the shot, e.g. a TV-set overlay with a green-screen hole showing the shot: a push-in with "main" zooms only the picture inside the TV, with "all" the TV and the picture zoom together. Example: "effects": [ { "preset": "ken-burns", "params": { "zoom": 0.15 }, "applyTo": "all" } ]. Layers with "follow": "shot" (RULE 20) follow only "main" effects.
 
 ## EXAMPLE
 ```json
@@ -682,7 +683,8 @@ The same winding hill road as the sun rises …", "references": [{ "asset": "hil
           "preset": "glow",
           "params": {
             "strength": 0.4
-          }
+          },
+          "applyTo": "all"
         }
       ]
     },

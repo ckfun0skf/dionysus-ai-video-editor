@@ -10,7 +10,7 @@ import * as subs from "../domain/subtitles";
 import * as edit from "../domain/edit";
 import * as transitions from "../domain/transitions";
 import type { ChromaKey, Keyframe, Subtitle } from "../domain/model";
-import { TEXT_SOURCE } from "../domain/model";
+import { DEFAULT_EFFECT_SCOPE, TEXT_SOURCE, type EffectScope } from "../domain/model";
 import * as board from "../domain/storyboard";
 import * as storyEdit from "../domain/storyEdit";
 import * as storyRefs from "../domain/storyRefs";
@@ -52,11 +52,21 @@ export const addEffectClip = (at: number, preset: string, params?: Record<string
   }),
 });
 
+/** P6-FX-SCOPE: set which picture an effect clip changes ("main" is stored as no field, the backward-compatible default). */
+export const setEffectScope = (id: string, applyTo: EffectScope): Command => ({
+  label: applyTo === "all" ? "Effect: apply to all" : applyTo === "overlay" ? "Effect: apply to overlays" : "Effect: apply to main track",
+  apply: (p) => withRoot(p, (c) => ({ ...c, tracks: c.tracks.map((t) => ({ ...t, placements: t.placements.map((pl) => {
+    if (pl.id !== id || pl.clipType !== "effect" || !pl.effect) return pl;
+    const { applyTo: _old, ...rest } = pl.effect;
+    return { ...pl, effect: applyTo === DEFAULT_EFFECT_SCOPE ? rest : { ...rest, applyTo } };
+  }) })) })),
+});
+
 /** V2-101: change an effect clip's preset (params reset) or patch its params. Param drags coalesce. */
 export const setEffect = (id: string, patch: { preset?: string; params?: Record<string, number | string> }, label = patch.preset ? "Change effect" : "Effect settings"): Command => ({
   label,
   coalesceKey: patch.preset ? undefined : `fx:${id}:${Object.keys(patch.params ?? {}).sort().join(",")}`,
-  apply: (p) => withRoot(p, (c) => ({ ...c, tracks: c.tracks.map((t) => ({ ...t, placements: t.placements.map((pl) => (pl.id === id && pl.clipType === "effect" && pl.effect ? { ...pl, effect: patch.preset ? { preset: patch.preset } : { ...pl.effect, params: { ...pl.effect.params, ...patch.params } } } : pl)) })) })),
+  apply: (p) => withRoot(p, (c) => ({ ...c, tracks: c.tracks.map((t) => ({ ...t, placements: t.placements.map((pl) => (pl.id === id && pl.clipType === "effect" && pl.effect ? { ...pl, effect: patch.preset ? { preset: patch.preset, ...(pl.effect.applyTo ? { applyTo: pl.effect.applyTo } : {}) } : { ...pl.effect, params: { ...pl.effect.params, ...patch.params } } } : pl)) })) })),
 });
 
 /**

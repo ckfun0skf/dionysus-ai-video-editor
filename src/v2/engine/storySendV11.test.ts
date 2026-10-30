@@ -139,6 +139,14 @@ describe("send to timeline (v1.1)", () => {
     expect(boxTransform({ x: 0, y: 0, width: 0.2, height: 1 }, 100, 100, 1920, 1080).scale).toBeCloseTo(0.2 / (1080 / 1920));
   });
 
+  it("P6-FX-SCOPE: an effect's applyTo is carried onto its effect clip (main stays implicit)", () => {
+    const e = setup((d) => { d.shots[0].effects = [{ preset: "ken-burns", applyTo: "all" }, { preset: "bw", applyTo: "main" }, { preset: "blur", applyTo: "overlay" }]; });
+    ready(e);
+    e.dispatch(cmd.sendStoryToTimeline());
+    const p = e.getState().project;
+    const fx = linkedTo(p, main(p).placements[0].id).filter((x) => x.clipType === "effect");
+    expect(fx.map((x) => [x.effect?.preset, x.effect?.applyTo])).toEqual(expect.arrayContaining([["ken-burns", "all"], ["bw", undefined], ["blur", "overlay"]]));
+  });
   it("captions go into the shared subtitle layer; effects onto an effect layer; unknown effects are dropped", () => {
     const e = setup((d) => {
       d.shots[0].captions = true;

@@ -2,11 +2,32 @@ import { useEffect, useRef, useState } from "react";
 import { useEdgeFade } from "./useEdgeFade";
 import { ParamControls } from "./ParamControls";
 import { cmd, type Engine } from "../engine";
-import { newId, type Placement } from "../domain";
+import { effectScopeOf, newId, type EffectScope, type Placement } from "../domain";
 import { applyEffectFrame } from "../render";
 import { applyPreset, categories, defaultsOf, getPreset, identityFrame, listPresets } from "../registry";
 
 const CYCLE_MS = 1800;
+
+/** P6-FX-SCOPE: the "Apply to" choices, in display order. */
+const SCOPES: { id: EffectScope; label: string; title: string }[] = [
+  { id: "main", label: "Main", title: "Main track only: overlays and text stay as they are" },
+  { id: "overlay", label: "Overlays", title: "Overlay tracks only: the main track stays as it is" },
+  { id: "all", label: "All", title: "The whole composited frame: main track, overlays and text together" },
+];
+
+/** Segmented "Apply to" control for an effect clip (44px targets on phone and desktop). */
+export function EffectScopeControl({ engine, placement }: { engine: Engine; placement: Placement }) {
+  const cur = effectScopeOf(placement.effect);
+  return (
+    <div className="v2-fx-scope">
+      <span className="v2-fx-scope-label" id={`fxs-${placement.id}`}>Apply to</span>
+      <div className="v2-fx-scope-seg" role="radiogroup" aria-labelledby={`fxs-${placement.id}`}>
+        {SCOPES.map((o) => <button key={o.id} type="button" role="radio" aria-checked={cur === o.id} className={`v2-fx-scope-btn ${cur === o.id ? "is-active" : ""}`} title={o.title}
+          onClick={() => cur !== o.id && engine.dispatch(cmd.setEffectScope(placement.id, o.id))}>{o.label}</button>)}
+      </div>
+    </div>
+  );
+}
 
 /** Procedural sample picture (sky, sun, hills) so tiles preview effects without any media. */
 export function drawSample(g: CanvasRenderingContext2D, w: number, h: number) {
@@ -66,6 +87,7 @@ export function EffectPicker({ engine, at, placement, onAdded, onClose }: { engi
   const vals = d ? defaultsOf(d, placement?.effect?.params) : {};
   return (
     <div className="v2-anim v2-effects">
+      {placement && <EffectScopeControl engine={engine} placement={placement} />}
       <div ref={tabsFade} className="v2-tp-tabs" role="tablist" aria-label="Effect category">
         {["All", ...cats].map((c) => <button key={c} role="tab" aria-selected={c === cat} className={`v2-tp-tab ${c === cat ? "is-active" : ""}`} onClick={() => setCat(c)}>{c}</button>)}
       </div>
@@ -76,7 +98,7 @@ export function EffectPicker({ engine, at, placement, onAdded, onClose }: { engi
       {d && placement && <ParamControls name={d.name} params={d.params} values={vals}
         onBegin={() => engine.beginGesture()} onEnd={() => engine.endGesture()}
         onChange={(key, value) => engine.dispatch(cmd.setEffect(placement.id, { params: { [key]: value } }))} />}
-      {!placement && <p className="v2-empty-hint">Pick an effect — it’s added at the playhead on the Effects layer and changes only the main track.</p>}
+      {!placement && <p className="v2-empty-hint">Pick an effect — it’s added at the playhead on the Effects layer and changes the main track (pick the effect to apply it to overlays or the whole frame instead).</p>}
     </div>
   );
 }

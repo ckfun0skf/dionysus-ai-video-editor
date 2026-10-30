@@ -55,7 +55,7 @@ Generated from the same schema as the storyboard parser (`src/v2/domain/storyAge
 - `add_asset_state`(asset, state): Add another look of an asset (lamp on, coat soaked, street at night), used as "<asset>@<state>".
 - `update_asset_state`(asset, id, patch): Change fields of an asset state (name, prompt, references, qa).
 - `add_shot`(shot, after): Add a shot. "after": the shot id to insert after (omit to append at the end; null to insert first). Add a long story in batches of shots.
-- `update_shot`(id, patch): Change fields of a shot (title, description, durationSec, prompt, assets, references, dialogue, camera, qa, keyframe, render, clip, effects, …).
+- `update_shot`(id, patch): Change fields of a shot (title, description, durationSec, prompt, assets, references, dialogue, camera, qa, keyframe, render, clip, effects (each may set applyTo: main, overlay or all), …).
 - `remove_shot`(id): Remove a shot and its connections. Rejected while a cue, last-frame link or other shot still needs it; change those first.
 - `set_shot_layers`(id, layers): Replace all layers of a shot (text, html, image, video), drawn in order on top. [] removes them.
 - `set_shot_background`(id, background): Give a still shot a colour or gradient background (sets "render": "still"); null removes it. Use clip or background, not both.

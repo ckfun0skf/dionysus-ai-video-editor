@@ -157,7 +157,8 @@ function addLinked(p: Project, b: Storyboard, comp: Composition, shot: Shot, cli
   let c = comp;
   const anchor = clip.id;
   // V2-SB-126: the shot's motion (effects only move the main-track picture) is baked into layers that follow the shot.
-  const motion: MotionEffect[] = (shot.effects ?? []).flatMap((e) => {
+  // P6-FX-SCOPE: only main-track effects move the shot under its layers ("all" moves the layers too; "overlay" only them).
+  const motion: MotionEffect[] = (shot.effects ?? []).filter((e) => (e.applyTo ?? "main") === "main").flatMap((e) => {
     const preset = presetId("videoEffect", e.preset);
     return preset ? [{ preset, params: e.params, ...rangeIn(clip.durationTicks, e.startSec, e.endSec) }] : [];
   });
@@ -196,7 +197,7 @@ function addLinked(p: Project, b: Storyboard, comp: Composition, shot: Shot, cli
     if (!preset) continue;
     const r = rangeIn(clip.durationTicks, e.startSec, e.endSec);
     const params = e.params && Object.keys(e.params).length ? { ...e.params } : undefined;
-    const pl: Placement = { id: newId("plc"), startTicks: clip.startTicks + r.offset, durationTicks: r.duration, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "effect", effect: { preset, ...(params ? { params } : {}) }, storyLink: { anchor } };
+    const pl: Placement = { id: newId("plc"), startTicks: clip.startTicks + r.offset, durationTicks: r.duration, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "effect", effect: { preset, ...(params ? { params } : {}), ...(e.applyTo && e.applyTo !== "main" ? { applyTo: e.applyTo } : {}) }, storyLink: { anchor } };
     c = placeOnFreeTrack(c, pl, effects());
     res.effects += 1;
   }
