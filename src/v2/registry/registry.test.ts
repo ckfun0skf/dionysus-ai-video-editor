@@ -62,9 +62,9 @@ describe("preset registry", () => {
     }
   });
   it("fonts: ids, stacks and fallbacks", () => {
-    expect(FONTS.map((f) => f.id)).toEqual(["sans", "serif", "mono", "impact", "rounded", "hand", "script", "condensed", "orbitron", "share-tech-mono", "audiowide", "rajdhani", "exo-2"]);
+    expect(FONTS.map((f) => f.id)).toEqual(["sans", "serif", "mono", "impact", "rounded", "hand", "script", "condensed", "orbitron", "share-tech-mono", "audiowide", "rajdhani", "exo-2", "chakra-petch", "oxanium", "saira"]);
     // P7-FONTS: the sci-fi faces are bundled (self-hosted woff2 + OFL licence), their family first in the stack.
-    expect(FONTS.filter((f) => f.bundled).map((f) => f.bundled!.family)).toEqual(["Orbitron", "Share Tech Mono", "Audiowide", "Rajdhani", "Exo 2"]);
+    expect(FONTS.filter((f) => f.bundled).map((f) => f.bundled!.family)).toEqual(["Orbitron", "Share Tech Mono", "Audiowide", "Rajdhani", "Exo 2", "Chakra Petch", "Oxanium", "Saira"]);
     for (const f of FONTS.filter((x) => x.bundled)) expect(f.stack.startsWith(`'${f.bundled!.family}'`)).toBe(true);
     for (const f of FONTS) { expect(fontIdOfStack(fontStack(f.id))).toBe(f.id); expect(f.width).toBeGreaterThan(0.3); expect(f.description).toBeTruthy(); }
     expect(fontStack("nope")).toBe(FONTS[0].stack);
