@@ -77,6 +77,18 @@ describe("Code AI mode wizard (P4B)", () => {
     expect(btn("Open in Code Editor").disabled).toBe(true);
     expect(document.querySelector('[data-testid="v2-clip-issues"]')).not.toBeNull();
   });
+  it("param warnings speak about AI mode, not the storyboard", async () => {
+    mount();
+    type(document.querySelector<HTMLTextAreaElement>('[aria-label="Describe the clip"]')!, "x");
+    await click(btn("Next")); await click(btn("Next"));
+    await click(btn("Add parameter"));
+    type(document.querySelector<HTMLInputElement>('[aria-label="Parameter name"]')!, "speed");
+    await click([...document.querySelectorAll<HTMLButtonElement>(".v2-cw-navbtn")].find((b) => b.textContent!.endsWith("Import"))!);
+    type(document.querySelector<HTMLTextAreaElement>('[aria-label="Paste the AI\'s reply or the HTML"]')!, htmlClipTemplate(promptManifest(wizardPackageInput({ ...newWizardAnswers("scene"), description: "x" }), [])));
+    const text = document.querySelector('[data-testid="v2-clip-issues"]')!.textContent!;
+    expect(text).toContain('Param "speed" (number) is declared in AI mode');
+    expect(text).not.toContain("storyboard");
+  });
   it("closes back to the Code Editor", async () => {
     const { onClose } = mount();
     await click(btn("Back to the Code Editor"));

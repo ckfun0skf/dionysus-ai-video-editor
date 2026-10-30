@@ -2760,6 +2760,12 @@
           "title": "AI mode import: zip/html drop zone with validation, preview in Code Editor, save as code asset",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P4C-1",
+          "title": "AI mode import: param warnings refer to AI mode, not the storyboard asset",
+          "status": "done",
+          "progress": 100
         }
       ]
     }
