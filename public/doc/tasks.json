@@ -2784,6 +2784,12 @@
           "title": "Docs: WEB_MCP.md, STORYBOARD_FORMAT §4.8, llms.txt tool list; tests",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P4C-5",
+          "title": "AI agent log Clear button is a 44px target on desktop too",
+          "status": "done",
+          "progress": 100
         }
       ]
     }
