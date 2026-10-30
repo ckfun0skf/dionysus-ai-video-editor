@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "project": "Dionysus",
-  "updatedAt": "2026-10-24",
+  "updatedAt": "2026-10-29",
   "sourceOfTruth": "public/doc/tasks.json on main (see docs/v2/MODULE_DESIGN.md §14)",
   "statusDefinitions": {
     "done": "Implementation exists and has evidence; release/browser validation may still be pending.",
@@ -2559,9 +2559,15 @@
       "tasks": [
         {
           "id": "V2-050",
-          "title": "Default to v2; legacy read-only importer only",
-          "status": "planned",
-          "progress": 0
+          "title": "Default to v2 (legacy importer dropped: no legacy projects exist)",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "V2-DEFAULT",
+          "title": "v2 is the only app; legacy removed",
+          "status": "done",
+          "progress": 100
         }
       ]
     }

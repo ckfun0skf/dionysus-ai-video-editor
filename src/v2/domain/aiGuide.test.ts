@@ -283,11 +283,11 @@ describe("AI links follow the configured site URL (V2-OPS-LINKS)", () => {
       expect(content, rel).not.toContain("github.com");
     }
     const md = storyboardGuideMarkdown(SITE);
-    expect(md).toContain(`(${SITE}?v2)`);
+    expect(md).toContain(`(${SITE})`);
     expect(md).toContain(`Machine-readable presets: ${SITE}ai/presets.json.`);
     expect(md).toContain(`Full format reference: ${SITE}ai/STORYBOARD_FORMAT.md.`);
     expect(JSON.parse(presetsJson(SITE)).guide).toBe(`${SITE}ai/storyboard-guide.md`);
-    for (const p of ["ai/storyboard-guide.md", "ai/storyboard-guide.html", "ai/presets.json", "ai/STORYBOARD_FORMAT.md", "?v2"]) expect(llmsTxt(SITE)).toContain(`(${SITE}${p})`);
+    for (const p of ["ai/storyboard-guide.md", "ai/storyboard-guide.html", "ai/presets.json", "ai/STORYBOARD_FORMAT.md", ""]) expect(llmsTxt(SITE)).toContain(`(${SITE}${p})`);
     expect(storyboardGuideHtml(SITE)).toContain('<link rel="alternate" type="text/markdown" href="storyboard-guide.md">');
     expect(files["public/ai/STORYBOARD_FORMAT.md"]).toBe(formatDoc);
     expect(files["public/ai/HTML_CLIP_PACKAGE.md"]).toBe(clipDoc);

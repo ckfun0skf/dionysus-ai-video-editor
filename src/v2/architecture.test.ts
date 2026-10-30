@@ -52,7 +52,7 @@ describe("v2 architecture", () => {
         if (spec.startsWith(".")) {
           const target = resolve(dirname(file), spec);
           const rel = relative(V2, target);
-          expect(rel.startsWith(".."), `${spec}: v2 must not import legacy src`).toBe(false);
+          expect(rel.startsWith(".."), `${spec}: v2 must stay self-contained under src/v2`).toBe(false);
           const tLayer = rel.split(/[\\/]/)[0];
           expect(ALLOWED[layer], `${layer} -> ${tLayer} (${spec})`).toContain(tLayer);
           if (layer === "presets" && tLayer === "registry") expect(rel.replace(/\\/g, "/"), `presets may import only registry/types (no cycle): ${spec}`).toMatch(/^registry\/types(\.ts)?$/);
