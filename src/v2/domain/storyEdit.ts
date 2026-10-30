@@ -12,7 +12,7 @@
 import type { Project } from "./model";
 import type { AssetSlot, QaCheck, Shot, Storyboard } from "./storyboard";
 import { addSlot, withRefs, type SlotPatch } from "./storyRefs";
-import { dialogueText, hasOffscreenMark, parseDialogueText, type ConnectionKind, type StoryConnection, type StoryEffect, type StoryLayer, type StoryTransition } from "./storyJson";
+import { backgroundId, dialogueText, hasOffscreenMark, parseDialogueText, type ConnectionKind, type StoryConnection, type StoryEffect, type StoryLayer, type StoryTransition, type StoryBackground } from "./storyJson";
 
 export const MIN_SHOT_SEC = 0.5, MAX_SHOT_SEC = 120, DEFAULT_SHOT_SEC = 5;
 /** Shortest layer or effect kept when a shot is shortened (seconds). */
@@ -86,6 +86,11 @@ export interface ShotPatch {
   dialogue?: string; captions?: boolean;
   qa?: QaCheck[]; layers?: StoryLayer[]; effects?: StoryEffect[];
   render?: "ai" | "html" | "still"; clipSlot?: string;
+  /**
+   * P2B (item 20): render "still": show this colour / gradient instead of an image asset (kept in the implicit slot
+   * `backgroundId(shot)`; `clipSlot` is ignored). null = use `clipSlot` again.
+   */
+  background?: StoryBackground | null;
   /** V2-SB-121: length to generate; null clears it. Ignored (cleared) when not longer than `durationSec`. */
   genDurationSec?: number | null;
   /** V2-CUT-05: the shot's reference assets (the clip slot is kept). */
@@ -96,7 +101,7 @@ export interface ShotPatch {
 
 /** Slots that can be the clip of a shot rendered `render` (html: html assets; still: image assets). */
 export function clipSlotsFor(b: Storyboard, render: "html" | "still"): AssetSlot[] {
-  return Object.values(b.slots).filter((s) => (render === "html" ? s.type === "html" : s.type === "image"));
+  return Object.values(b.slots).filter((s) => s.implicit !== "background" && (render === "html" ? s.type === "html" : s.type === "image"));
 }
 
 function blankShot(id: string, init: ShotPatch = {}): Shot {
@@ -138,10 +143,28 @@ export function updateShot(p: Project, id: string, patch: ShotPatch): Project {
     const { layers: _l, effects: _e, ...rest } = n;
     n = { ...rest, ...fitParts(n, n.durationSec) };
   }
-  if (patch.render !== undefined) n = withRender(b, n, patch.render, patch.clipSlot);
-  if (n.refOverrides) n = withRefs(b, n, n.slotIds); // drop pins of references the edit removed
-  if (JSON.stringify(n) === JSON.stringify(s)) return p;
-  return renameShotAssets(p, { ...b, shots: { ...b.shots, [id]: n } });
+  let bb = b;
+  let clip = patch.clipSlot;
+  const stillNow = patch.render === "still" || (patch.render === undefined && s.render === "still");
+  if (stillNow && patch.background) {
+    const bid = backgroundId(id), old = b.slots[bid];
+    const slot: AssetSlot = old?.implicit === "background"
+      ? { ...old, background: structuredClone(patch.background), aspect: b.meta.aspect }
+      : { id: bid, name: `Background · ${n.title}`, type: "image", aspect: b.meta.aspect, prompt: "", references: [], source: { type: "generate" }, qa: [], implicit: "background", background: structuredClone(patch.background) };
+    if (!old || old.implicit === "background") { bb = { ...b, slots: { ...b.slots, [bid]: slot } }; clip = bid; }
+  }
+  if (patch.render !== undefined) n = withRender(bb, n, patch.render, clip);
+  else if (stillNow && clip !== undefined) n = withRender(bb, n, "still", clip);
+  // A background slot no shot shows any more goes away (its drawn pictures stay in the project's media).
+  const bgOld = backgroundId(id);
+  if (bb.slots[bgOld]?.implicit === "background" && n.clipSlot !== bgOld && !Object.values(bb.shots).some((x) => x.id !== id && x.clipSlot === bgOld)) {
+    const { [bgOld]: _gone, ...rest } = bb.slots;
+    bb = { ...bb, slots: rest };
+    n = { ...n, slotIds: n.slotIds.filter((x) => x !== bgOld) };
+  }
+  if (n.refOverrides) n = withRefs(bb, n, n.slotIds); // drop pins of references the edit removed
+  if (JSON.stringify(n) === JSON.stringify(s) && (bb === b || JSON.stringify(bb.slots) === JSON.stringify(b.slots))) return p;
+  return renameShotAssets(p, { ...bb, shots: { ...bb.shots, [id]: n } });
 }
 
 /**
@@ -157,7 +180,8 @@ function withRender(b: Storyboard, s: Shot, render: "ai" | "html" | "still", cli
     return out;
   }
   const slot = clipSlot ? b.slots[clipSlot] : undefined;
-  if (!slot || !clipSlotsFor(b, render).includes(slot)) return s;
+  const own0 = slot?.implicit === "background" && slot.id === backgroundId(s.id) && render === "still";
+  if (!slot || (!own0 && !clipSlotsFor(b, render).includes(slot))) return s;
   const own = s.clipSlot ? ownAssetId : s.assetId;
   const kept = rest.slotIds.filter((x) => x !== s.clipSlot || x === slot.id);
   const out: Shot = { ...rest, render, clipSlot: slot.id, slotIds: kept.includes(slot.id) ? kept : [...kept, slot.id] };

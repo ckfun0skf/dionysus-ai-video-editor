@@ -114,9 +114,12 @@ describe("attach list and References block (V2-SB-120)", () => {
 
   it("prepends the block to the copied prompt unless the prompt already has one", () => {
     const b = fresh(parse(base({}))).storyboard!;
-    expect(refs.promptWithReferences(b, b.shots.b)).toMatch(/^References:\nImage 1 \(Mara's flat\)[\s\S]*\n\nMara opens the window\.$/);
+    expect(refs.promptWithReferences(b, b.shots.b)).toMatch(/^References:\nImage 1 \(Mara's flat\)[\s\S]*\n\nConsistency[^\n]*:\n- Mara's flat \(location, Image 1\): Flat\n- Mara \(character, Image 2\): Mara\n\nMara opens the window\.$/);
     const own = { ...b.shots.b, prompt: "References:\nImage 1 (Mara's flat): detail.\n\nMara opens the window." };
-    expect(refs.promptWithReferences(b, own)).toBe(own.prompt);
+    // P2B: its own References block is kept; the Consistency block goes right after it.
+    expect(refs.promptWithReferences(b, own)).toBe("References:\nImage 1 (Mara's flat): detail.\n\nConsistency (this prompt stands alone and may be generated in another chat or tool; keep these exactly the same as in every other shot):\n- Mara's flat (location, Image 1): Flat\n- Mara (character, Image 2): Mara\n\nMara opens the window.");
+    const mine = { ...own, prompt: `${own.prompt}\n\nConsistency: same as always.` };
+    expect(refs.promptWithReferences(b, mine)).toBe(mine.prompt);
     const none = { ...b.shots.b, slotIds: [] };
     expect(refs.promptWithReferences(b, none)).toBe("Mara opens the window.");
   });

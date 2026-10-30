@@ -52,10 +52,10 @@ describe("AI planner guide (V2-SB-114)", () => {
     expect(md).toContain("length 0.05–1, default 0.5 (fraction of the effect's time range, not seconds");
   });
 
-  it("the full prompt inlines the guide with RULES 1-30; the short prompt links to it", () => {
+  it("the full prompt inlines the guide with RULES 1-35; the short prompt links to it", () => {
     const full = storyboardSystemPrompt();
     for (const s of ["FORMAT (", "PRESETS", "RULES", "EXAMPLE", `14. ${RULES[13]}`, "not seconds", "START FRAME", "\"references\"?", "\"genDurationSec\"?", "- crossfade:", "- ken-burns:"]) expect(full).toContain(s);
-    expect(RULES).toHaveLength(30);
+    expect(RULES).toHaveLength(35);
     // V2-SB-128: blend modes: the format lines, the blend catalogue and a rule with an example that imports cleanly.
     expect(full).toContain('"blend"?: "<blend id>", "opacity"?: number (0-1, default 1)');
     expect(full).toContain('Blend modes — shots[].layers[].blend');
@@ -126,7 +126,8 @@ describe("AI planner guide (V2-SB-114)", () => {
   });
 
   it("RULE 30 (P2A): revised JSON is re-imported by id, so ids stay stable", () => {
-    expect(RULE_LIST.slice(29).map((r) => r.key)).toEqual(["stable-ids-reimport"]);
+    expect(RULE_LIST.slice(29, 30).map((r) => r.key)).toEqual(["stable-ids-reimport"]);
+    expect(RULE_LIST.slice(30).map((r) => r.key)).toEqual(["self-contained-prompts", "reference-sheets", "html-code-refs", "shot-background", "lastframe-refs"]);
     expect(ruleNumber("stable-ids-reimport")).toBe(30);
     expect(storyboardSystemPrompt()).toContain(`30. ${RULES[29]}`);
     expect(RULES[29]).toMatch(/re-imports it/);
@@ -236,14 +237,20 @@ describe("generic storyboard guide (V2-SB-GUIDE-GENERIC)", () => {
     for (const { kind } of GUIDE_KINDS) for (const d of listPresets(kind)) expect(CHOOSING_PRESETS).not.toContain(`"${d.id}"`);
     const ex = EXAMPLE_STORYBOARD;
     expect(JSON.stringify(ex).toLowerCase()).not.toMatch(/keeper|lantern|allotment/);
-    expect(ex.shots.length).toBeLessThanOrEqual(4);
+    expect(ex.shots.length).toBeLessThanOrEqual(5);
     // …but it still shows every part of the format a planner usually needs.
-    expect(ex.assets.some((a) => typeof a.source === "object" && a.source.type === "lastFrame")).toBe(true);
+    expect(ex.shots.some((s) => s.references?.some((r) => r.asset === "s1.lastframe" && r.role === "start-frame"))).toBe(true);
+    // P2B: reference sheets, html asset references, a still with a drawn background, a Consistency paragraph.
+    expect(ex.assets.filter((a) => a.type === "character" || a.type === "prop").every((a) => /reference sheet/i.test(a.prompt))).toBe(true);
+    expect(ex.assets.some((a) => a.type === "prop")).toBe(true);
+    expect(ex.assets.some((a) => a.type === "html" && a.references?.length)).toBe(true);
+    expect(ex.shots.some((s) => s.render === "still" && s.background && !s.clip && s.layers?.length)).toBe(true);
+    expect(ex.shots.some((s) => s.prompt.includes("Consistency (this prompt stands alone)"))).toBe(true);
     expect(ex.connections.some((c) => c.kind === "continuity")).toBe(true);
     expect(ex.shots.some((s) => s.references?.some((r) => r.role === "start-frame"))).toBe(true);
     expect(ex.shots.some((s) => s.layers?.some((l) => l.type === "text" && l.anim))).toBe(true);
     expect(ex.shots.some((s) => s.effects?.length)).toBe(true);
-    expect(ex.shots.every((s) => s.prompt.startsWith("References:"))).toBe(true);
+    expect(ex.shots.filter((s) => !s.background).every((s) => s.prompt.startsWith("References:"))).toBe(true);
   });
 
   it("numbers the rules stably: append-only keys, and every RULE n the spec cites exists", () => {

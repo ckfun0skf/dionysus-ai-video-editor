@@ -4,7 +4,7 @@ import { ConfirmDialog } from "../Timeline";
 import { Ic } from "../Icon";
 import { copyText } from "./clipboard";
 
-function downloadJson(doc: StoryDoc, text = JSON.stringify(doc, null, 2)) {
+function downloadJson(doc: StoryDoc, text = JSON.stringify({ ...doc, assets: doc.assets.filter((a) => !a.implicit) }, null, 2)) {
   const url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
   const a = Object.assign(document.createElement("a"), { href: url, download: `${doc.meta.title.replace(/[^\w-]+/g, "-").replace(/^-|-$/g, "").toLowerCase() || "storyboard"}.storyboard.json` });
   a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
@@ -113,7 +113,7 @@ export function ImportPanel({ onCreate, replacing, diffFor, onMerge }: { onCreat
                 {s.assets.some((a) => result.doc.assets.find((x) => x.id === a)?.source.type === "lastFrame") && <span className="v2-sb-tag"><Ic g="link" size={12} /> last frame</span>}</li>
             ))}
           </ol>
-          <div className="v2-sb-actions">
+          <div className="v2-sb-actions v2-sb-preview-actions">
             <button className="v2-btn v2-sb-btn" title="Save the checked, normalised storyboard as a .json file" onClick={() => downloadJson(result.doc)}><Ic g="⇩" size={16} /> Download .json</button>
           </div>
           {diff && onMerge ? <>

@@ -67,7 +67,10 @@ export function slotPackageInput(b: Storyboard, slot: AssetSlot): PackagePromptI
   const overlay = uses.length > 0 && uses.every((s) => s.clipSlot !== slot.id);
   // V2-HTML-PARAMS: the declared params, and the values the shots/layers use them with (so the design fits them all).
   const paramUses = slot.params ? uses.flatMap((s) => [...(s.clipSlot === slot.id && s.params ? [s.params] : []), ...(s.layers ?? []).flatMap((l) => (l.type === "html" && l.asset === slot.id && l.params ? [l.params] : []))]) : [];
+  // P2B (item 5): referenced html assets are code references (attached .html files), not runtime bindings.
+  const codeRefs = slot.references.flatMap((id) => (b.slots[id]?.type === "html" && id !== slot.id ? [{ name: id, label: b.slots[id].name, brief: b.slots[id].prompt }] : []));
   return {
+    ...(codeRefs.length ? { codeRefs } : {}),
     brief: slot.prompt, name: slot.name, id: slot.id, aspect: slot.aspect, durationSec: slotDurationSec(b, slot.id), bindings: slotBindings(b, slot), context,
     ...(overlay ? { background: "transparent" } : {}), ...(slot.params ? { params: slot.params, ...(paramUses.length ? { paramUses } : {}) } : {}),
   };

@@ -9,12 +9,13 @@ import { getPreset, listPresets, parsePresetRef } from "../../registry";
 import { Ic } from "../Icon";
 import { Sheet } from "../Sheet";
 import { TYPE_ICON } from "./BoardView";
+import { BackgroundEditor, LayersEditor } from "./ShotLayers";
 
 type Render = "ai" | "html" | "still";
 const RENDERS: { id: Render; label: string; icon: string; hint: string }[] = [
   { id: "ai", label: "AI video", icon: "▭", hint: "Generate the clip in your AI tool from the clip prompt." },
   { id: "html", label: "HTML", icon: "</>", hint: "Plays an HTML asset (title cards, charts, UI) for the shot's length." },
-  { id: "still", label: "Still", icon: "image", hint: "Shows an image asset for the shot's length." },
+  { id: "still", label: "Still", icon: "image", hint: "Shows an image asset, or a colour or gradient, for the shot's length." },
 ];
 
 /** A side panel on desktop, a bottom sheet on phones. */
@@ -42,7 +43,11 @@ export function ShotEditor({ project, shot, number, isNew, mobile, onSave, onCan
   const [captions, setCaptions] = useState(!!shot.captions);
   const [qa, setQa] = useState<QaCheck[]>(shot.qa);
   const [render, setRender] = useState<Render>(shot.render ?? "ai");
-  const [clipSlot, setClipSlot] = useState(shot.clipSlot ?? "");
+  const [clipSlot, setClipSlot] = useState(shot.clipSlot && b.slots[shot.clipSlot]?.implicit !== "background" ? shot.clipSlot : "");
+  const bgSlot = shot.clipSlot && b.slots[shot.clipSlot]?.implicit === "background" ? b.slots[shot.clipSlot] : undefined;
+  // P2B (item 20): a still shot shows an image asset or a colour / gradient.
+  const [stillMode, setStillMode] = useState<"image" | "color">(bgSlot ? "color" : "image");
+  const [bg, setBg] = useState<story.StoryBackground>(bgSlot?.background ?? "#000000");
   const [layers, setLayers] = useState(shot.layers ?? []);
   const [effects, setEffects] = useState(shot.effects ?? []);
   const [refs, setRefs] = useState(() => shot.slotIds.filter((id) => id !== shot.clipSlot));
@@ -53,7 +58,7 @@ export function ShotEditor({ project, shot, number, isNew, mobile, onSave, onCan
   /** The board plus assets created in this edit, for names and unique ids. */
   const withPending = useMemo(() => ({ ...b, slots: { ...b.slots, ...Object.fromEntries(pending.map((x) => [x.id, { id: x.id, name: x.patch.name ?? x.id, type: x.patch.type ?? "image" } as AssetSlot])) } }), [b, pending]);
   const refName = (id: string) => withPending.slots[id]?.name ?? id;
-  const addable = Object.values(b.slots).filter((x) => !refs.includes(x.id) && x.id !== (render === "ai" ? undefined : clipSlot));
+  const addable = Object.values(b.slots).filter((x) => !refs.includes(x.id) && x.id !== (render === "ai" ? undefined : clipSlot) && x.implicit !== "background");
   const addNew = () => {
     if (!adding?.name.trim()) return;
     const id = storyRefs.nextSlotId(withPending, adding.name);
@@ -63,7 +68,8 @@ export function ShotEditor({ project, shot, number, isNew, mobile, onSave, onCan
   };
 
   const choices = useMemo(() => (render === "ai" ? [] : storyEdit.clipSlotsFor(b, render)), [b, render]);
-  const slotOk = render === "ai" || choices.some((s) => s.id === clipSlot);
+  const useBg = render === "still" && stillMode === "color";
+  const slotOk = render === "ai" || useBg || choices.some((s) => s.id === clipSlot);
   const n = Number(dur.replace(",", "."));
   const durOk = Number.isFinite(n) && n >= storyEdit.MIN_SHOT_SEC && n <= storyEdit.MAX_SHOT_SEC;
   const past = durOk ? storyEdit.partsPastEnd({ layers, effects }, n) : 0;
@@ -75,7 +81,7 @@ export function ShotEditor({ project, shot, number, isNew, mobile, onSave, onCan
   const patch = (): storyEdit.ShotPatch => ({
     title: title.trim() || (isNew ? "New shot" : shot.title), description, durationSec: n, prompt, camera, dialogue, captions: captions && !!dialogue.trim(),
     ...(render === "ai" ? { genDurationSec: gen.trim() ? g : null } : {}),
-    qa, layers, effects, render, ...(render !== "ai" ? { clipSlot } : {}),
+    qa, layers, effects, render, ...(render !== "ai" ? { clipSlot } : {}), ...(render === "still" ? { background: useBg ? bg : null } : {}),
     slotIds: refs, ...(pending.length ? { newSlots: pending.filter((x) => refs.includes(x.id)) } : {}),
   });
   const save = () => { if (ok) onSave(patch()); };
@@ -114,7 +120,14 @@ export function ShotEditor({ project, shot, number, isNew, mobile, onSave, onCan
             {RENDERS.map((r) => <button type="button" key={r.id} role="radio" aria-checked={render === r.id} className={render === r.id ? "on" : ""} onClick={() => pickRender(r.id)}><Ic g={r.icon} size={15} /> {r.label}</button>)}
           </div>
           <p className="v2-hint">{RENDERS.find((r) => r.id === render)!.hint}</p>
-          {render !== "ai" && (choices.length
+          {render === "still" && (
+            <div className="v2-sb-seg" role="radiogroup" aria-label="Still picture">
+              <button type="button" role="radio" aria-checked={stillMode === "image"} className={stillMode === "image" ? "on" : ""} onClick={() => setStillMode("image")}><Ic g="image" size={15} /> Image asset</button>
+              <button type="button" role="radio" aria-checked={stillMode === "color"} className={stillMode === "color" ? "on" : ""} onClick={() => setStillMode("color")}><Ic g="template" size={15} /> Colour / gradient</button>
+            </div>
+          )}
+          {useBg && <BackgroundEditor value={bg} onChange={setBg} />}
+          {render !== "ai" && !useBg && (choices.length
             ? <label className="v2-sb-field">{render === "html" ? "HTML asset" : "Image asset"}
                 <select value={clipSlot} onChange={(e) => setClipSlot(e.target.value)}>{choices.map((s) => <option key={s.id} value={s.id}>{s.name}{board.versionsOf(project, s).length ? "" : " (no version yet)"}</option>)}</select>
               </label>
@@ -185,26 +198,7 @@ export function ShotEditor({ project, shot, number, isNew, mobile, onSave, onCan
           <button type="button" className="v2-btn v2-sb-btn" onClick={() => setQa([...qa, { id: storyEdit.newCheckId(shot.id, qa), text: "" }])}><Ic g="+" size={16} /> Add check</button>
         </fieldset>
 
-        {(layers.length > 0 || effects.length > 0) && (
-          <fieldset className="v2-sb-field">
-            <legend>Layers & effects</legend>
-            <ul className="v2-sb-editlist">
-              {layers.map((l, i) => (
-                <li key={l.id}>
-                  <span className="v2-sb-editlist-text"><Ic g={l.type === "text" ? "T" : TYPE_ICON[l.type] ?? "image"} size={14} /> {l.type === "text" ? `Text “${l.text.split("\n").join(" / ")}”` : `${l.type === "html" ? "HTML" : l.type === "image" ? "Image" : "Video"} · ${b.slots[l.asset]?.name ?? l.asset}`} · {sec(l.startSec)}–{sec(l.endSec)} s</span>
-                  <button type="button" className="v2-icon v2-sb-icon" aria-label={`Remove layer ${i + 1}`} onClick={() => setLayers(layers.filter((x) => x !== l))}><Ic g="✕" size={16} /></button>
-                </li>
-              ))}
-              {effects.map((e, i) => (
-                <li key={`e${i}`}>
-                  <span className="v2-sb-editlist-text"><Ic g="effect" size={14} /> {effectName(e.preset)}{e.startSec !== undefined || e.endSec !== undefined ? ` · ${sec(e.startSec ?? 0)}–${e.endSec === undefined ? "end" : `${sec(e.endSec)} s`}` : ""}</span>
-                  <button type="button" className="v2-icon v2-sb-icon" aria-label={`Remove effect ${i + 1}`} onClick={() => setEffects(effects.filter((x) => x !== e))}><Ic g="✕" size={16} /></button>
-                </li>
-              ))}
-            </ul>
-            <p className="v2-hint">Removing one here doesn’t touch clips already on the timeline.</p>
-          </fieldset>
-        )}
+        <LayersEditor b={b} layers={layers} effects={effects} dur={n} onLayers={setLayers} onEffects={setEffects} effectName={effectName} />
         {mobile && <button type="submit" className="v2-btn primary v2-sb-btn v2-sb-wide" disabled={!ok}>{isNew ? "Add shot" : "Save"}</button>}
         {onDelete && !isNew && <button type="button" className="v2-btn v2-sb-btn v2-sb-danger v2-sb-wide" onClick={onDelete}><Ic g="🗑" size={16} /> Delete shot</button>}
       </form>

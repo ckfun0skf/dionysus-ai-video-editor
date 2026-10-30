@@ -22,3 +22,4 @@ export * as storySteps from "./storySteps";
 export type { Storyboard, AssetSlot, Shot, VersionInfo, QaCheck, QaResult, Staleness, StoryStatus, ProductionStep, StepState, SendState } from "./storyboard";
 export * from "./htmlClipPackage";
 export * from "./htmlClipBindings";
+export * as storyAuto from "./storyAuto";

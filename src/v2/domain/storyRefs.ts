@@ -355,10 +355,40 @@ export function attachList(b: Storyboard, shot: Shot): AttachItem[] {
 export function referencesBlock(b: Storyboard, shot: Shot): string {
   const items = attachList(b, shot);
   if (!items.length) return "";
-  const lines = items.map((x) => `Image ${x.no} (${b.slots[x.slotId].name}): ${ROLE_USE[x.role]}${x.note ? `. ${x.note.replace(/\.$/, "")}` : ""}.`);
+  const lines = items.map((x) => `Image ${x.no} (${b.slots[x.slotId].name}): ${b.slots[x.slotId].type === "html" ? CODE_REF_USE : ROLE_USE[x.role]}${x.note ? `. ${x.note.replace(/\.$/, "")}` : ""}.`);
   if (!items.some((x) => x.role === "start-frame")) lines.push("No image is the start frame: compose the opening frame from the prompt.");
   if (shot.camera) lines.push(`Framing, first frame to last: ${shot.camera.replace(/\.$/, "")}.`);
   return `References:\n${lines.join("\n")}`;
+}
+
+/**
+ * P2B (item 5): an html (code) asset used as a reference. It has no picture of its own until rendered, so the user
+ * attaches a still of it (or its .html file where the tool accepts files) and the model only matches its design.
+ */
+export const CODE_REF_USE = "CODE (HTML) asset: attach a still of it, or its .html file if the tool accepts files; reference only, not a frame: match its design (type, colours, layout, motion language)";
+
+/** Asset types whose look must stay identical in every clip (P2B item 6): their sheet goes in the Consistency block. */
+const SHEET_TYPES = new Set(["character", "prop", "location", "style"]);
+const clip = (t: string, n = 320) => { const x = t.replace(/\s+/g, " ").trim(); return x.length > n ? `${x.slice(0, n - 1).trimEnd()}…` : x; };
+
+/** True when a prompt already has a line starting "Consistency:". */
+export const hasConsistencyBlock = (prompt: string) => /^\s*Consistency\b[^\n]*:/im.test(prompt);
+
+/**
+ * P2B (item 6): the "Consistency:" block of a clip prompt. Every clip prompt must stand alone (each clip may be made by
+ * a different agent or chat), so it repeats the style bible (meta.style) and the sheet of every attached character,
+ * prop, location and style asset, with the image number it is attached as. Empty when there is nothing to repeat.
+ */
+export function consistencyBlock(b: Storyboard, shot: Shot): string {
+  const lines: string[] = [];
+  if (b.meta.style?.trim()) lines.push(`Style bible: ${clip(b.meta.style, 600)}`);
+  for (const x of attachList(b, shot)) {
+    const s = b.slots[x.slotId];
+    if (!SHEET_TYPES.has(s.type) || !s.prompt.trim()) continue;
+    lines.push(`${s.name} (${s.type}, Image ${x.no}): ${clip(s.prompt)}`);
+  }
+  if (!lines.length) return "";
+  return `Consistency (this prompt stands alone and may be generated in another chat or tool; keep these exactly the same as in every other shot):\n${lines.map((l) => `- ${l}`).join("\n")}`;
 }
 
 /** True when a prompt already starts with (or contains a line starting) "References:". */
@@ -387,13 +417,22 @@ export function dialogueBlock(b: Storyboard, shot: Shot): string {
 }
 
 /**
- * The clip prompt to copy: the shot's prompt with the References block prepended unless it already has one, and
+ * The clip prompt to copy: the shot's prompt with the References block prepended unless it already has one, then
+ * (P2B) the Consistency block unless it has one, and
  * (V2-SB-135) the Dialogue block appended for dialogue lines unless the prompt already has one.
  */
 export function promptWithReferences(b: Storyboard, shot: Shot): string {
   const block = referencesBlock(b, shot), lines = dialogueBlock(b, shot);
+  const cons = hasConsistencyBlock(shot.prompt) ? "" : consistencyBlock(b, shot);
   const body = !lines || hasDialogueBlock(shot.prompt) ? shot.prompt : `${shot.prompt}\n\n${lines}`;
-  return !block || hasReferencesBlock(shot.prompt) ? body : `${block}\n\n${body}`;
+  if (!hasReferencesBlock(shot.prompt)) return [block, cons, body].filter(Boolean).join("\n\n");
+  if (!cons) return body;
+  // The prompt brings its own References block: the Consistency block goes right after it.
+  const at = body.search(/^\s*References\s*:/im);
+  const gap = /\n[ \t]*\n/g;
+  gap.lastIndex = Math.max(0, at);
+  const m = gap.exec(body);
+  return m ? `${body.slice(0, m.index + m[0].length)}${cons}\n\n${body.slice(m.index + m[0].length)}` : `${body.trimEnd()}\n\n${cons}`;
 }
 
 /** The media version a shot (pins respected) or an asset (selected versions) uses for each image in its attach list. */
@@ -443,7 +482,7 @@ export function slotAttachList(b: Storyboard, slot: AssetSlot): AttachItem[] {
 export function slotReferencesBlock(b: Storyboard, slot: AssetSlot): string {
   const items = slotAttachList(b, slot);
   if (!items.length) return "";
-  const lines = items.map((x) => `Image ${x.no} (${b.slots[x.slotId].name}): ${ASSET_ROLE_USE[x.role]}${x.note ? `. ${x.note.replace(/\.$/, "")}` : ""}.`);
+  const lines = items.map((x) => `Image ${x.no} (${b.slots[x.slotId].name}): ${b.slots[x.slotId].type === "html" ? CODE_REF_USE : ASSET_ROLE_USE[x.role]}${x.note ? `. ${x.note.replace(/\.$/, "")}` : ""}.`);
   return `References:\n${lines.join("\n")}`;
 }
 

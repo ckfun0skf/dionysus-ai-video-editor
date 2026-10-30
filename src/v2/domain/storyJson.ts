@@ -62,6 +62,11 @@ export interface StoryAsset {
    * state is referenced as "<asset id>@<state id>" anywhere an asset id is allowed, and is made from the base asset.
    */
   states?: StoryAssetState[];
+  /**
+   * P2B (item 17): not part of the JSON. Set on the "frame" asset the importer adds for a "<shot>.lastframe" reference
+   * that has no asset of its own; export leaves it out again (the references keep the id).
+   */
+  implicit?: true;
 }
 /**
  * V2-SB-136: one state of an asset: its own prompt, references, checks and versions; same type, aspect and identity as
@@ -182,7 +187,27 @@ export interface StoryShot {
    * animates from: it becomes the asset `keyframeId(shot)` and is attached as the clip's "start-frame" (Image 1).
    */
   keyframe?: StoryKeyframe;
+  /**
+   * P2B (item 20): render "still" only, instead of "clip": the shot's picture is a solid colour or a gradient that the
+   * app renders itself (as the image asset `backgroundId(shot)`); layers (a title, an overlay) go on top.
+   */
+  background?: StoryBackground;
 }
+/** P2B: one colour stop of a gradient: "#rrggbb" at `at` (0–1 along the gradient; absent = spread evenly). */
+export interface StoryColorStop { color: string; at?: number }
+/**
+ * P2B (item 20): a still shot's background: a hex colour ("#101820"), or a gradient. Linear gradients run at `angle`
+ * degrees (0 = bottom to top, 90 = left to right, the CSS convention; default 180, top to bottom); radial ones go from
+ * the centre out. 2–8 stops.
+ */
+export type StoryBackground = string | { type: "linear" | "radial"; angle?: number; stops: StoryColorStop[] };
+export const BACKGROUND_TYPES = ["linear", "radial"] as const;
+/** P2B: the image asset id a still shot's background gets; an asset may not use it. */
+export const backgroundId = (shotId: string) => `${shotId}.background`;
+/** P2B (item 17): the id of a shot's clip last frame, usable like an asset id without declaring it ("s3.lastframe"). */
+export const lastFrameId = (shotId: string) => `${shotId}.lastframe`;
+/** P2B: the shot whose last frame `id` names ("s3.lastframe" → "s3"), or undefined. */
+export const lastFrameShotOf = (id: string): string | undefined => (id.endsWith(".lastframe") && id.length > 10 ? id.slice(0, -10) : undefined);
 /** V2-SB-124: the opening still of a shot, generated before its clip. `references` work like an asset's (V2-SB-123). */
 export interface StoryKeyframe { prompt: string; references: StoryAssetRef[]; qa: string[] }
 /** The asset id a shot's keyframe gets (V2-SB-124); an asset may not use it. */
@@ -601,7 +626,20 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
     return refs;
   };
 
-  const rawAssets = raw.assets === undefined ? [] : Array.isArray(raw.assets) ? raw.assets : (err("assets", '"assets" must be a list.'), []);
+  const rawAssets0 = raw.assets === undefined ? [] : Array.isArray(raw.assets) ? raw.assets : (err("assets", '"assets" must be a list.'), []);
+  // P2B (item 17): "<shot>.lastframe" anywhere an asset id goes is that shot's clip last frame. Unless the file declares
+  // an asset with that id, add a "frame" asset taken from the shot's last frame (left out again on export).
+  const declared = new Set(rawAssets0.flatMap((a) => (isObj(a) && typeof a.id === "string" ? [a.id.trim()] : [])));
+  const lfIds = new Set<string>();
+  const scanLf = (v: unknown): void => {
+    if (typeof v === "string") { const sid = lastFrameShotOf(v.trim()); if (sid && shotIds.has(sid) && !declared.has(v.trim())) lfIds.add(v.trim()); }
+    else if (Array.isArray(v)) v.forEach(scanLf);
+    else if (isObj(v)) for (const [k, x] of Object.entries(v)) if (!["prompt", "description", "title", "notes", "text", "qa", "name"].includes(k)) scanLf(x);
+  };
+  scanLf(raw.shots); scanLf(rawAssets0);
+  const shotTitle = (sid: string) => { const x = shotPre.find((y) => y?.id === sid); return (x && str(x.s.title)) || sid; };
+  const implicitLf = [...lfIds];
+  const rawAssets: unknown[] = [...rawAssets0, ...implicitLf.map((id) => ({ id, name: `Last frame · ${shotTitle(lastFrameShotOf(id)!)}`, type: "frame", prompt: "", source: { type: "lastFrame", shot: lastFrameShotOf(id) } }))];
   const assetIds = new Set<string>();
   const assets: StoryAsset[] = [];
   /** Paths of the entries of `allAssets` (assets and their states, see expandAssetStates). */
@@ -675,7 +713,9 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
       else genDurationSec = g;
     }
     const states = statesOf(a.states, `${path}.states`, id, type);
-    assets.push({ id, name, type, aspect: asp || aspect, prompt, references: assetRefsOf(a.references, `${path}.references`), source, qa: strList(a.qa, `${path}.qa`), ...(notes ? { notes } : {}), ...(params ? { params } : {}), ...(genDurationSec ? { genDurationSec } : {}), ...(states?.length ? { states } : {}) });
+    if (lastFrameShotOf(id) && shotIds.has(lastFrameShotOf(id)!) && !(source.type === "lastFrame" && source.shot === lastFrameShotOf(id))) err(`${path}.id`, `Asset id "${id}" is reserved for the last frame of shot "${lastFrameShotOf(id)}"; rename the asset (or make it that last frame).`);
+    if (keyframeShotOf(id) === undefined && id.endsWith(".background") && shotIds.has(id.slice(0, -11))) err(`${path}.id`, `Asset id "${id}" is reserved for the background of shot "${id.slice(0, -11)}"; rename the asset.`);
+    assets.push({ ...(i >= rawAssets0.length ? { implicit: true as const } : {}), id, name, type, aspect: asp || aspect, prompt, references: assetRefsOf(a.references, `${path}.references`), source, qa: strList(a.qa, `${path}.qa`), ...(notes ? { notes } : {}), ...(params ? { params } : {}), ...(genDurationSec ? { genDurationSec } : {}), ...(states?.length ? { states } : {}) });
     assetPaths.push(path);
     states?.forEach((_st, k) => assetPaths.push(`${path}.states[${k}]`));
   });
@@ -713,7 +753,8 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
   const refCycle = findCycle(new Map(allAssets.map((a) => [a.id, a.references.map(assetRefId)])));
   if (refCycle) err("assets", `Assets reference each other in a loop: ${refCycle.join(" → ")}.`);
   const assetById = new Map(allAssets.map((a) => [a.id, a as StoryAsset]));
-  const unknownAsset = (id: string) => kfRefProblem(id) ?? stateRefProblem(id) ?? `Unknown asset "${id}"${assetIds.size ? ` (assets: ${list([...assetIds], 8)})` : ""}.`;
+  const lfProblem = (id: string) => { const sid = lastFrameShotOf(id); return sid && !assetIds.has(id) ? `"${id}" names the last frame of shot "${sid}", but there is no such shot.` : undefined; };
+  const unknownAsset = (id: string) => kfRefProblem(id) ?? stateRefProblem(id) ?? lfProblem(id) ?? `Unknown asset "${id}"${assetIds.size ? ` (assets: ${list([...assetIds], 8)})` : ""}.`;
   /** The asset type of a reference: a keyframe reference is a "frame" (V2-SB-135). */
   const refType = (id: string): StoryAssetType | undefined => assetById.get(id)?.type ?? (isKfRef(id) ? "frame" : undefined);
 
@@ -923,6 +964,37 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
     return lines.length ? lines : undefined;
   };
 
+  /** P2B (item 20): "#rrggbb" or { "type": "linear" | "radial", "angle"?, "stops": [ { "color", "at"? } ] }. */
+  const backgroundOf = (v: unknown, path: string): StoryBackground | undefined => {
+    if (v === undefined) return undefined;
+    const hex = (c: unknown) => typeof c === "string" && HEX_RE.test(c.trim());
+    if (typeof v === "string") { if (hex(v)) return v.trim().toLowerCase(); err(path, `Background ${JSON.stringify(v)} must be a hex colour like "#101820", or a gradient { "type": "linear", "angle": 180, "stops": [ { "color": "#000000" }, { "color": "#1a2a4a" } ] }.`); return undefined; }
+    if (!isObj(v)) { err(path, 'Background must be a hex colour like "#101820" or a gradient object { "type": "linear" | "radial", "angle"?, "stops": [ … ] }.'); return undefined; }
+    const type = str(v.type) as "linear" | "radial";
+    if (!BACKGROUND_TYPES.includes(type)) { err(`${path}.type`, `Gradient type ${JSON.stringify(v.type ?? "")} must be "linear" or "radial".`); return undefined; }
+    if (!Array.isArray(v.stops) || v.stops.length < 2 || v.stops.length > 8) { err(`${path}.stops`, 'A gradient needs 2-8 "stops": [ { "color": "#000000", "at": 0 }, { "color": "#1a2a4a", "at": 1 } ].'); return undefined; }
+    const stops: StoryColorStop[] = [];
+    let bad = false;
+    v.stops.forEach((x, j) => {
+      const sp = `${path}.stops[${j}]`;
+      const c = typeof x === "string" ? x : isObj(x) ? x.color : undefined;
+      if (!hex(c)) { bad = true; return err(sp, 'Each stop needs "color": a hex colour like "#1a2a4a".'); }
+      let at: number | undefined;
+      if (isObj(x) && x.at !== undefined) { at = num(x.at); if (at === undefined || at < 0 || at > 1) { warn(`${sp}.at`, `"at" ${JSON.stringify(x.at)} is ignored: use 0 (start) to 1 (end).`); at = undefined; } }
+      stops.push({ color: (c as string).trim().toLowerCase(), ...(at !== undefined ? { at } : {}) });
+    });
+    if (bad) return undefined;
+    let angle: number | undefined;
+    if (v.angle !== undefined) {
+      const a = num(v.angle);
+      if (type === "radial") warn(`${path}.angle`, 'A radial gradient has no "angle"; it is ignored.');
+      else if (a === undefined) warn(`${path}.angle`, `"angle" ${JSON.stringify(v.angle)} is ignored: use degrees (0 = bottom to top, 90 = left to right, 180 = top to bottom).`);
+      else angle = ((a % 360) + 360) % 360;
+    }
+    for (const k of Object.keys(v)) if (!["type", "angle", "stops"].includes(k)) warn(`${path}.${k}`, `Unknown background field "${k}" is ignored. Fields: type, angle, stops.`);
+    return { type, ...(angle !== undefined ? { angle } : {}), stops };
+  };
+
   const shots: StoryShot[] = [];
   for (const pre of shotPre) {
     if (!pre) continue;
@@ -957,9 +1029,14 @@ export function validateStoryboard(raw: unknown): StoryParseResult {
     if (dialogue) shot.dialogue = dialogue;
     if (render) shot.render = render;
     const clip = s.clip === undefined ? undefined : str(s.clip) ?? "";
+    const background = backgroundOf(s.background, `${path}.background`);
+    if (s.background !== undefined && mode !== "still") warn(`${path}.background`, `"background" only applies to render "still" shots; it is ignored for this render "${mode}" shot.`);
+    else if (background && clip) warn(`${path}.background`, `Shot "${id}" shows the still "${clip}"; its "background" is ignored. Use "clip" or "background", not both.`);
+    else if (background) { shot.background = background; if (assetIds.has(backgroundId(id))) err(`${path}.background`, `Asset id "${backgroundId(id)}" is reserved for this shot's background; rename that asset.`); }
     if (mode === "ai") {
       if (clip !== undefined) warn(`${path}.clip`, `"clip" only applies to render "html" or "still"; it is ignored for this AI-generated shot.`);
-    } else if (!clip) err(`${path}.clip`, `A render "${mode}" shot needs "clip": the id of ${mode === "html" ? "an html" : "an image"} asset.`);
+    } else if (!clip && mode === "still" && background) { /* P2B: the background is the picture */ }
+    else if (!clip) err(`${path}.clip`, mode === "still" ? 'A render "still" shot needs "clip" (the id of an image asset) or "background" (a colour like "#101820" or a gradient).' : `A render "${mode}" shot needs "clip": the id of an html asset.`);
     else {
       const a = assetById.get(clip);
       if (!a) err(`${path}.clip`, unknownAsset(clip));
