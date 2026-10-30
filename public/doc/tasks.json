@@ -2568,6 +2568,24 @@
           "title": "v2 is the only app; legacy removed",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P1-AUDIO",
+          "title": "Storyboard audio cues land on audio tracks via Send to Timeline, including cues uploaded after the shots were sent",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "P1-SHORT-AUDIO",
+          "title": "Very short audio clips play in preview (2 s preload lookahead) and export (fades scaled to fit)",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "P1-ADD-TRACK",
+          "title": "[+] add-track button (44px) at the bottom of the track list in each track-type mode, phone and desktop",
+          "status": "done",
+          "progress": 100
         }
       ]
     }

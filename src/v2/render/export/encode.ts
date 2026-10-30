@@ -4,7 +4,7 @@ import type { Project } from "../../domain/model";
 import type { BlobStore } from "../../ports/storage";
 import { Player } from "../player";
 import { ExportVideoFrames } from "./videoFrames";
-import { audioPlan, exportDuration, exportSize, frameTimes, type AudioSegment, type Resolution } from "./plan";
+import { audioPlan, gainEvents, exportDuration, exportSize, frameTimes, type AudioSegment, type Resolution } from "./plan";
 
 export interface ExportProgress { stage: "audio" | "video" | "finalize"; done: number; total: number }
 /**
@@ -97,8 +97,7 @@ export async function mixAudio(segs: AudioSegment[], seconds: number, blobs: Blo
     if (!buf) continue;
     const src = ctx.createBufferSource(); src.buffer = buf; src.playbackRate.value = s.rate;
     const g = ctx.createGain(); g.gain.value = s.volume;
-    if (s.fadeIn) { g.gain.setValueAtTime(0, s.start); g.gain.linearRampToValueAtTime(s.volume, s.start + s.fadeIn); }
-    if (s.fadeOut) { g.gain.setValueAtTime(s.volume, s.start + s.duration - s.fadeOut); g.gain.linearRampToValueAtTime(0, s.start + s.duration); }
+    for (const e of gainEvents(s)) { if (e.type === "set") g.gain.setValueAtTime(e.value, e.at); else g.gain.linearRampToValueAtTime(e.value, e.at); }
     src.connect(g).connect(ctx.destination);
     src.start(s.start, s.offset, s.duration * s.rate);
   }

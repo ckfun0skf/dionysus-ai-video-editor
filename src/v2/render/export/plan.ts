@@ -31,6 +31,29 @@ export interface AudioSegment {
   fadeOut: number;
 }
 
+/**
+ * P1-SHORT-AUDIO: fades that fit inside a clip. A short clip whose fade-in and fade-out add up to more than its length
+ * gets both scaled down proportionally, so the gain automation stays in time order and the clip is never silenced.
+ */
+export function fitFades(duration: number, fadeIn: number, fadeOut: number): { fadeIn: number; fadeOut: number } {
+  const i = Math.max(0, fadeIn), o = Math.max(0, fadeOut), d = Math.max(0, duration);
+  const k = i + o > d && i + o > 0 ? d / (i + o) : 1;
+  return { fadeIn: i * k, fadeOut: o * k };
+}
+
+/** Gain automation for one segment, in time order: `set` holds a value from `at`, `ramp` reaches it linearly by `at`. */
+export function gainEvents(s: Pick<AudioSegment, "start" | "duration" | "volume" | "fadeIn" | "fadeOut">): { type: "set" | "ramp"; value: number; at: number }[] {
+  const { fadeIn, fadeOut } = fitFades(s.duration, s.fadeIn, s.fadeOut);
+  const end = s.start + s.duration;
+  const ev: { type: "set" | "ramp"; value: number; at: number }[] = [{ type: "set", value: fadeIn ? 0 : s.volume, at: s.start }];
+  if (fadeIn) ev.push({ type: "ramp", value: s.volume, at: s.start + fadeIn });
+  if (fadeOut) {
+    if (end - fadeOut > s.start + fadeIn) ev.push({ type: "set", value: s.volume, at: end - fadeOut });
+    ev.push({ type: "ramp", value: 0, at: end });
+  }
+  return ev;
+}
+
 /** Every audible span: audio clips plus video clips' own sound (skips muted, reversed and frozen clips). */
 export function audioPlan(project: Project): AudioSegment[] {
   const comp = project.compositions[project.rootCompositionId];
@@ -42,7 +65,9 @@ export function audioPlan(project: Project): AudioSegment[] {
       if (p.clipType === "image" || p.clipType === "html" || p.reverse || p.freeze || (p.clipType === "video" && p.linkedAudio?.muted)) continue;
       const v = versionOf(project, p.source);
       if (!v || (p.volume ?? 1) <= 0) continue;
-      out.push({ blobKey: v.media.blobKey, start: s(p.startTicks), duration: s(p.durationTicks), offset: s(p.sourceInTicks), rate: p.speed ?? 1, volume: p.volume ?? 1, fadeIn: s(p.fadeInTicks ?? 0), fadeOut: s(p.fadeOutTicks ?? 0) });
+      if (p.durationTicks <= 0) continue;
+      const f = fitFades(s(p.durationTicks), s(p.fadeInTicks ?? 0), s(p.fadeOutTicks ?? 0));
+      out.push({ blobKey: v.media.blobKey, start: s(p.startTicks), duration: s(p.durationTicks), offset: s(p.sourceInTicks), rate: p.speed ?? 1, volume: p.volume ?? 1, ...f });
     }
   }
   return out;

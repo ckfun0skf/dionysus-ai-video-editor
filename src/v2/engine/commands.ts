@@ -153,6 +153,9 @@ export const trimPlacement = (id: string, edge: "left" | "right", to: number, ri
 export const splitPlacement = (id: string, at: number, newIdValue?: string): Command => ({ label: "Split clip", apply: (p) => withRoot(p, (c) => ops.splitPlacement(c, id, at, newIdValue)) });
 export const deletePlacement = (id: string): Command => ({ label: "Delete clip", apply: (p) => withRoot(p, (c) => ops.deletePlacement(c, id)) });
 export const addTrack = (kind: TrackKind): Command => ({ label: `Add ${kind} track`, apply: (p) => withRoot(p, (c) => ops.addTrack(c, kind)) });
+/** P1-ADD-TRACK: the [+] at the bottom of a track-type mode adds an empty track of that group. */
+export const GROUP_TRACK_KIND: Record<Exclude<ops.TrackGroup, "main">, TrackKind> = { overlay: "video", text: "text", audio: "audio", effect: "effect" };
+export const addGroupTrack = (group: Exclude<ops.TrackGroup, "main">): Command => ({ label: `Add ${ops.GROUP_LABEL[group]} track`, apply: (p) => withRoot(p, (c) => ops.addTrack(c, GROUP_TRACK_KIND[group])) });
 export const toggleTrackMute = (trackId: string): Command => ({
   label: "Toggle mute",
   apply: (p) => withRoot(p, (c) => ({ ...c, tracks: c.tracks.map((t) => (t.id === trackId ? { ...t, muted: !t.muted } : t)) })),

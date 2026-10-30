@@ -111,6 +111,14 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
     return () => { el.removeEventListener("touchstart", ts); el.removeEventListener("touchmove", tm); el.removeEventListener("touchend", te); el.removeEventListener("wheel", wheel); };
   }, []);
   /** Mobile: tapping empty timeline space leaves the current mode (back to root). */
+  // P1-ADD-TRACK: [+] at the bottom of a track-type mode (CapCut-like; 44px touch target, works with touch and mouse).
+  const addBtn = (g: Exclude<ops.TrackGroup, "main">) => (
+    <button type="button" className="v2-add-track" data-group={g} aria-label={`Add ${ops.GROUP_LABEL[g]} track`} title={`Add an empty ${ops.GROUP_LABEL[g]} track`}
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => { e.stopPropagation(); engine.dispatch(cmd.addGroupTrack(g)); if (centered) setExpanded(g); }}>
+      <Ic g="+" size={18} /><span>{g === "text" ? "Add text track" : `Add ${ops.GROUP_LABEL[g].toLowerCase()} track`}</span>
+    </button>
+  );
   const exitMode = () => { if (Date.now() - dragEndAt.current < 400) return; onSelect(undefined); setExpanded(undefined); };
   /** A layer drag ending over empty space fires a click there; it must not count as an exit tap. */
   const dragEndAt = useRef(0);
@@ -339,7 +347,9 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
         <div className="v2-track-headers">
           <div className="v2-ruler-spacer" />
           {topLane && <div className="v2-track-header kind-text"><span>{topLane.label}</span></div>}
-          {rows.map((r) => r.type === "header" ? (onFocusGroup && r.group !== "main" ? <button key={r.key} className={`v2-group-header v2-group-focus ${focus === r.group ? "is-on" : ""}`} data-group={r.group} aria-pressed={focus === r.group} title={focus === r.group ? "Show all layers" : `Focus ${ops.GROUP_LABEL[r.group]}: show only these layers`} onClick={() => onFocusGroup(focus === r.group ? undefined : r.group)}>{ops.GROUP_LABEL[r.group]}<span className="v2-focus-hint">{focus === r.group ? "Show all" : "Focus"}</span></button> : <div key={r.key} className="v2-group-header" data-group={r.group}>{ops.GROUP_LABEL[r.group]}</div>) : r.type === "track" && (({ t }) => (
+          {rows.map((r) => r.type === "header" ? (onFocusGroup && r.group !== "main" ? <button key={r.key} className={`v2-group-header v2-group-focus ${focus === r.group ? "is-on" : ""}`} data-group={r.group} aria-pressed={focus === r.group} title={focus === r.group ? "Show all layers" : `Focus ${ops.GROUP_LABEL[r.group]}: show only these layers`} onClick={() => onFocusGroup(focus === r.group ? undefined : r.group)}>{ops.GROUP_LABEL[r.group]}<span className="v2-focus-hint">{focus === r.group ? "Show all" : "Focus"}</span></button> : <div key={r.key} className="v2-group-header" data-group={r.group}>{ops.GROUP_LABEL[r.group]}</div>) : r.type === "add" ? (
+            <div key={r.key} className="v2-track-header v2-add-row" data-add-group={r.group}>{addBtn(r.group)}</div>
+          ) : r.type === "track" && (({ t }) => (
             <div key={t.id} className={`v2-track-header kind-${t.kind} ${layerDrag?.id === t.id ? "is-layer-dragging" : ""}`} style={layerShift(t.id)}>
               <span>{t.name}</span>
               {t.kind !== "effect" && t.kind !== "text" && <button className="v2-icon" title={t.muted ? "Unmute track" : "Mute track"} aria-label={t.muted ? "Unmute track" : "Mute track"} onClick={() => engine.dispatch(cmd.toggleTrackMute(t.id))}><Ic g={t.muted ? "🔇" : "🔊"} /></button>}
@@ -374,6 +384,8 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
               {centered && <button className="v2-group-back" aria-label={`Collapse ${ops.GROUP_LABEL[r.group]}`} title="Collapse back to one lane" style={{ left: scrollRef.current?.scrollLeft ?? 0 }} onClick={() => { setExpanded(undefined); onSelect(undefined); }}>‹ {ops.GROUP_LABEL[r.group]}</button>}
               {!centered && <span className="v2-group-name">{ops.GROUP_LABEL[r.group]}</span>}
             </div>
+          ) : r.type === "add" ? (
+            <div key={r.key} className="v2-lane v2-add-lane" data-add-group={r.group} onClick={(e) => { if (centered && e.target === e.currentTarget) exitMode(); }}>{centered && addBtn(r.group)}</div>
           ) : r.type === "collapsed" ? (
             <div key={r.key} className={`v2-lane is-collapsed group-${r.group}`} data-group={r.group} aria-label={`${ops.GROUP_LABEL[r.group]} (collapsed)`}
               onPointerDown={(e) => { if (!centered && e.target === e.currentTarget) onSelect(undefined); }} onClick={(e) => { if (centered && e.target === e.currentTarget) exitMode(); }}>
@@ -470,7 +482,9 @@ export function layerSlot(lanes: { top: number; h: number }[], from: number, dy:
 type Row =
   | { type: "header"; key: string; group: ops.TrackGroup }
   | { type: "collapsed"; key: string; group: ops.TrackGroup; placements: Track["placements"] }
-  | { type: "track"; key: string; group: ops.TrackGroup; t: Track };
+  | { type: "track"; key: string; group: ops.TrackGroup; t: Track }
+  /** P1-ADD-TRACK: the [+] row at the bottom of the group in its track-type mode. */
+  | { type: "add"; key: string; group: Exclude<ops.TrackGroup, "main"> };
 
 /**
  * Timeline rows. Mobile: main track first, then one collapsed lane per group (Overlay, Audio, Text & Stickers);
@@ -500,8 +514,10 @@ export function buildRows(comp: Composition, mobile: boolean, expanded?: ops.Tra
     for (const g of ["text", "overlay", "effect", "main", "audio"] as const) {
       if (focus && g !== focus && g !== "main") continue;
       const ts = ops.tracksInGroup(comp, g);
-      if (!ts.length) continue;
+      const add = g !== "main" && focus === g;
+      if (!ts.length && !add) continue;
       rows.push({ type: "header", key: `h-${g}`, group: g }, ...ts.map(track(g)));
+      if (add) rows.push({ type: "add", key: `add-${g}`, group: g });
     }
     return rows;
   }
@@ -514,6 +530,7 @@ export function buildRows(comp: Composition, mobile: boolean, expanded?: ops.Tra
     // V2-099: no in-timeline group header on mobile; exit via empty-space tap or the toolbar ‹.
     if (expanded === g && ts.length) rows.push(...[...ts].reverse().map(track(g)));
     else rows.push({ type: "collapsed", key: `c-${g}`, group: g, placements: ts.flatMap((t) => t.placements).sort((a, b) => a.startTicks - b.startTicks) });
+    if (focus === g || expanded === g) rows.push({ type: "add", key: `add-${g}`, group: g });
   }
   return rows;
 }

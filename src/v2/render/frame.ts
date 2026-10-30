@@ -26,6 +26,19 @@ export function activeAt(comp: Composition, t: number): ActiveLayer[] {
   return out;
 }
 
+/**
+ * P1-SHORT-AUDIO: audio and video clips that start within `aheadTicks` after `t` (on visible, unmuted-or-not tracks).
+ * The player loads their media before they start, so a clip shorter than the media load time still plays.
+ */
+export function upcomingMedia(comp: Composition, t: number, aheadTicks: number): { track: Track; placement: Placement }[] {
+  const out: { track: Track; placement: Placement }[] = [];
+  for (const track of comp.tracks) {
+    if (track.hidden) continue;
+    for (const p of track.placements) if ((p.clipType === "audio" || p.clipType === "video") && p.startTicks > t && p.startTicks <= t + aheadTicks) out.push({ track, placement: p });
+  }
+  return out;
+}
+
 /** Contain-fit a source rect into a destination. */
 export function fitRect(sw: number, sh: number, dw: number, dh: number) {
   const s = Math.min(dw / sw, dh / sh);

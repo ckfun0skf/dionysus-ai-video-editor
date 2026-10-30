@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { board, ops, storyEdit, storyRefs, type AssetSlot, type Shot, type StoryDoc } from "../../domain";
+import { board, ops, pendingAudio, storyEdit, storyRefs, type AssetSlot, type Shot, type StoryDoc } from "../../domain";
 import { cmd, type Engine } from "../../engine";
 import type { BlobStore } from "../../ports";
 import { Ic } from "../Icon";
@@ -61,7 +61,8 @@ export function StoryboardView({ engine, blobs, onClose, initialOpen, onView }: 
     const plan = board.sendPlan(project), count = (st: string) => plan.filter((x) => x.state === st).length;
     const ready = count("ready"), missing = count("missing");
     const placed = count("placed"), need = missing ? `${missing} shot${missing > 1 ? "s" : ""} still need${missing > 1 ? "" : "s"} a clip` : "";
-    if (!ready) { setNote(!placed ? "No clips to send yet — upload a clip for a shot first" : `Already on the timeline — versions you pick here update it${need ? ` · ${need}` : ""}`); return; }
+    const cuesWaiting = pendingAudio(project).length;
+    if (!ready && !cuesWaiting) { setNote(!placed ? "No clips to send yet — upload a clip for a shot first" : `Already on the timeline — versions you pick here update it${need ? ` · ${need}` : ""}`); return; }
     const ids = (q = engine.getState().project) => ops.mainTrack(q.compositions[q.rootCompositionId])?.placements ?? [];
     const audioIds = (q = engine.getState().project) => q.compositions[q.rootCompositionId].tracks.flatMap((t) => (t.kind === "audio" ? t.placements.map((x) => x.id) : []));
     const before = new Set(ids().map((x) => x.id)), audioBefore = new Set(audioIds());
@@ -73,7 +74,7 @@ export function StoryboardView({ engine, blobs, onClose, initialOpen, onView }: 
     const linked = after.compositions[after.rootCompositionId].tracks.flatMap((t) => t.placements).filter((x) => x.storyLink && anchors.has(x.storyLink.anchor) && x.clipType !== "audio").length;
     // V2-SB-125: audio cues (some span shots, so they are not linked).
     const audio = audioIds(after).filter((x) => !audioBefore.has(x)).length;
-    const parts = [`${ready} clip${ready > 1 ? "s" : ""}`, linked && `${linked} layer${linked > 1 ? "s" : ""}`, audio && `${audio} audio cue${audio > 1 ? "s" : ""}`].filter(Boolean);
+    const parts = [ready && `${ready} clip${ready > 1 ? "s" : ""}`, linked && `${linked} layer${linked > 1 ? "s" : ""}`, audio && `${audio} audio cue${audio > 1 ? "s" : ""}`].filter(Boolean);
     const what = parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}` : parts[0];
     setNote(`Added ${what} to the end of the timeline${need ? ` · ${need}` : ""}`, first && onView ? { label: "View", run: () => onView(first.id) } : undefined);
   }, [engine, project, onView, setNote]);

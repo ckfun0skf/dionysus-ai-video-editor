@@ -833,3 +833,12 @@ select.v2-tp-field { -webkit-appearance: none; appearance: none; padding-right: 
 .v2-pick-tile.kind-html { background: radial-gradient(circle at 30% 20%, #20d5ec22, transparent 60%), var(--surface-2, #2a2a2e); }
 .v2-pick-tile.kind-html img { object-fit: contain; background: repeating-conic-gradient(#26262b 0 25%, #1e1e22 0 50%) 0 0/14px 14px; }
 .v2-pick-kind { position: absolute; left: 4px; top: 4px; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 6px; background: rgba(0,0,0,.6); color: #fff; font-style: normal; }
+
+/* P1-ADD-TRACK: [+] at the bottom of the track list in a track-type mode. */
+.v2-add-row { justify-content: flex-start; padding: 0 6px; }
+.v2-add-lane { display: flex; align-items: center; border-bottom-style: dashed; }
+.v2-add-track { position: sticky; left: 8px; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; min-width: 44px; padding: 0 14px; border: 1px dashed var(--line, #3a3a42); border-radius: 10px; background: transparent; color: var(--muted, #aaa); font: 600 13px system-ui; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; white-space: nowrap; }
+.v2-add-track:hover, .v2-add-track:focus-visible { color: var(--text, #eee); border-color: var(--accent, #20d5ec); background: rgba(32, 213, 236, 0.08); }
+.v2-add-track:active { transform: scale(0.97); }
+.v2-track-header.v2-add-row, .v2-lane.v2-add-lane { height: 52px; }
+.v2-timeline.is-centered .v2-lane.v2-add-lane { height: 56px; }
