@@ -1,0 +1,26 @@
+.v2-agent-toggle { display: flex; gap: 12px; align-items: center; min-height: 44px; padding: 10px 12px; border: 1px solid var(--v2-line, #333); border-radius: 10px; cursor: pointer; }
+.v2-agent-toggle input { width: 22px; height: 22px; flex: none; accent-color: var(--v2-accent, #7c5cff); }
+.v2-agent-toggle span { display: flex; flex-direction: column; gap: 2px; }
+.v2-agent-toggle em { font-style: normal; opacity: .75; font-size: 13px; }
+.v2-agent-status { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; line-height: 1.45; margin: 12px 0; }
+.v2-agent-status.is-ok { color: #6fd38f; }
+.v2-agent-status.is-none { opacity: .85; }
+.v2-agent-status code, .v2-agent code { font-size: 12px; overflow-wrap: anywhere; }
+.v2-agent-tools summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; }
+.v2-agent-tools ul { margin: 0; padding-left: 18px; font-size: 13px; display: grid; gap: 6px; }
+.v2-agent-loghead { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; }
+.v2-agent-loghead h4 { margin: 0; }
+.v2-agent-log { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.v2-agent-log li { border-left: 3px solid #666; padding: 4px 8px; font-size: 13px; background: rgba(255,255,255,.03); border-radius: 4px; }
+.v2-agent-log li.is-change { border-color: #7c5cff; }
+.v2-agent-log li.is-error { border-color: #e5484d; }
+.v2-agent-log p { margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; opacity: .85; }
+.v2-agent-when { opacity: .6; font-variant-numeric: tabular-nums; }
+.v2-agent-res { font-size: 12px; opacity: .8; }
+.v2-agent-err { color: #e5484d; }
+.v2-agent-pill { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 8px); left: 50%; transform: translateX(-50%); z-index: 2000; display: flex; align-items: center; gap: 8px; padding: 4px 4px 4px 12px; border-radius: 999px; background: #2b1f5c; color: #fff; box-shadow: 0 4px 16px rgba(0,0,0,.4); font-size: 13px; max-width: calc(100vw - 16px); white-space: nowrap; }
+.v2-agent-pill code { font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
+.v2-agent-dot { width: 8px; height: 8px; border-radius: 50%; background: #9d86ff; animation: v2-agent-pulse 1s ease-in-out infinite; flex: none; }
+.v2-agent-pill-btn { min-height: 44px; min-width: 44px; padding: 0 10px; border: 0; border-radius: 999px; background: rgba(255,255,255,.12); color: inherit; font: inherit; cursor: pointer; }
+@keyframes v2-agent-pulse { 50% { opacity: .3; } }
+@media (prefers-reduced-motion: reduce) { .v2-agent-dot { animation: none; } }

@@ -20,6 +20,8 @@ import { clipFileFrom } from "./htmlPackage";
 import { ExportDialog } from "./ExportDialog";
 import { ProjectsDialog } from "./Projects";
 import { StoryboardView } from "./storyboard/StoryboardView";
+import { connectAgentBridge } from "./agent/webMcp";
+import { AgentIndicator } from "./agent/AgentPanel";
 import type { BoardTarget } from "./storyboard/BoardView";
 import type { Resolution } from "../render";
 import { downloadSrt, importSrtFile, SubtitleEditor, SubtitleLane } from "./Subtitles";
@@ -70,6 +72,8 @@ export function V2App({ openStorage }: { openStorage?: () => Promise<EditorConte
 }
 
 function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwitch: (id: string) => void }) {
+  // P4C: WebMCP storyboard tools, registered only while the user allows agent access and the browser has WebMCP.
+  useEffect(() => connectAgentBridge(engine), [engine]);
   const [notice, setNotice] = useState(recovery);
   const { project, canUndo, canRedo } = useEngineState(engine);
   const mobile = useIsMobile();
@@ -968,6 +972,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       )}
       {board && <StoryboardView engine={engine} blobs={storage.blobs} initialOpen={boardOpen} onClose={() => { setBoard(false); setBoardOpen(undefined); }}
         onView={(id) => { setBoard(false); setBoardOpen(undefined); const pl = ops.mainTrack(engine.getState().project.compositions[engine.getState().project.rootCompositionId])?.placements.find((x) => x.id === id); if (pl) { if (mobile) setMenu("edit"); selectClip(id); seek(pl.startTicks); } }} />}
+      <AgentIndicator engine={engine} />
       {notice && <RecoveryNotice failure={notice} storage={storage} onDismiss={() => setNotice(undefined)} />}
       {projects && <ProjectsDialog storage={storage} current={project} onOpen={(id) => { setProjects(false); onSwitch(id); }} onRenameCurrent={(n) => engine.dispatch(cmd.renameProject(n))} onClose={() => setProjects(false)} />}
       {exporting && <ExportDialog project={project} blobs={storage.blobs} res={res} onRes={setRes} onClose={() => setExporting(false)} />}

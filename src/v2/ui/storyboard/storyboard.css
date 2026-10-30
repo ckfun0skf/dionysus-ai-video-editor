@@ -434,3 +434,4 @@ button.v2-sb-conn:focus-visible { outline: 2px solid var(--accent); outline-offs
 .v2-app .v2-sb-detail-body .v2-linkbtn, .v2-app.is-desktop .v2-sb-detail-body .v2-linkbtn,
 .v2-app .v2-sb-sheet .v2-linkbtn, .v2-app.is-desktop .v2-sb-detail .v2-linkbtn { display: inline-flex; align-items: center; min-height: 44px; padding: 0 4px; }
 .v2-app .v2-sb-qa-btn, .v2-app.is-desktop .v2-sb-qa-btn { min-height: 44px; }
+.v2-sb-part { margin: 4px 0 8px; font-size: 13px; padding: 6px 10px; border-radius: 8px; background: rgba(124,92,255,.14); }
