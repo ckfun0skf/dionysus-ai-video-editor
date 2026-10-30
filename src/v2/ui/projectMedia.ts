@@ -10,7 +10,7 @@ export function projectMediaList(project: Project, thumbs: Record<string, string
     if (a.name.startsWith("sticker-")) continue;
     const v = a.versions.find((x) => x.id === a.selectedVersionId) ?? a.versions[a.versions.length - 1];
     if (!v) continue;
-    out.push({ id: a.id, name: a.name, kind: a.kind, thumb: thumbs[a.id], durationTicks: v.media.durationTicks, createdAt: a.versions[0].createdAt });
+    out.push({ id: a.id, name: a.name, kind: a.kind, thumb: thumbs[a.id], durationTicks: v.media.durationTicks, width: v.media.width, height: v.media.height, createdAt: a.versions[0].createdAt });
   }
   return out.sort((x, y) => y.createdAt.localeCompare(x.createdAt));
 }

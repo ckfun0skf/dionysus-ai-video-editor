@@ -167,7 +167,7 @@ export function scriptLineOf(stack: string, scriptLine: number): number | undefi
  * Live preview in the same sandbox, CSP and runtime as the timeline; params use their defaults. Plays (looping over
  * the clip's length) or shows the scrubbed time.
  */
-const Preview = memo(function Preview({ html, duration, width, height, transparent, background, collapsed, onError, onToggle }: {
+export const HtmlLivePreview = memo(function Preview({ html, duration, width, height, transparent, background, collapsed, onError, onToggle }: {
   html: string; duration: number; width: number; height: number; transparent: boolean; background?: string; collapsed: boolean;
   /** Mobile: show/hide the stage (the transport stays). */ onToggle?: () => void;
   onError: (e: { message: string; line?: number } | null) => void;
@@ -681,7 +681,7 @@ export function CodeEditor({ source, mobile, onSave, onClose, create }: {
 
   const preview = (
     <section className="v2-ce-side" aria-label="Preview">
-      <Preview html={live} duration={duration} width={m.width || 1920} height={m.height || 1080} transparent={transparent} background={m.background}
+      <HtmlLivePreview html={live} duration={duration} width={m.width || 1920} height={m.height || 1080} transparent={transparent} background={m.background}
         collapsed={mobile && !previewOpen} onError={onPreviewError}
         onToggle={mobile ? () => setPreviewOpen((o) => !o) : undefined} />
       {!mobile && <IssueList issues={issues} onJump={goLine} />}

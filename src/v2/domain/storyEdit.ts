@@ -9,6 +9,7 @@
  * - A last-frame asset whose source shot is deleted becomes an upload, keeping its versions.
  * - Layers and effects follow the shot length: shortening a shot clamps them (never drops them).
  */
+import type { HtmlParamValues } from "./htmlClipPackage";
 import type { Project } from "./model";
 import type { AssetSlot, QaCheck, Shot, Storyboard } from "./storyboard";
 import { addSlot, withRefs, type SlotPatch } from "./storyRefs";
@@ -97,6 +98,8 @@ export interface ShotPatch {
   slotIds?: string[];
   /** V2-CUT-05: asset slots created with this edit (same undo step), usually also listed in `slotIds`. */
   newSlots?: { id: string; patch: SlotPatch }[];
+  /** P2C (item 4): render "html": per-use param values (overrides of the clip's defaults); null or {} clears them. */
+  params?: HtmlParamValues | null;
 }
 
 /** Slots that can be the clip of a shot rendered `render` (html: html assets; still: image assets). */
@@ -136,6 +139,7 @@ export function updateShot(p: Project, id: string, patch: ShotPatch): Project {
   if (patch.qa) n.qa = patch.qa.filter((q) => q.text.trim()).map((q) => ({ id: q.id, text: q.text.trim() }));
   if (patch.layers) { if (patch.layers.length) n.layers = patch.layers; else delete n.layers; }
   if (patch.effects) { if (patch.effects.length) n.effects = patch.effects; else delete n.effects; }
+  if (patch.params !== undefined) { if (patch.params && Object.keys(patch.params).length) n.params = { ...patch.params }; else delete n.params; }
   if (patch.durationSec !== undefined && Number.isFinite(patch.durationSec)) n.durationSec = clampSec(patch.durationSec);
   if (patch.genDurationSec !== undefined) { if (patch.genDurationSec && Number.isFinite(patch.genDurationSec)) n.genDurationSec = clampSec(patch.genDurationSec); else delete n.genDurationSec; }
   if (n.genDurationSec !== undefined && n.genDurationSec <= n.durationSec) delete n.genDurationSec;

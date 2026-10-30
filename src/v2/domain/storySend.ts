@@ -213,7 +213,9 @@ function addAudio(p: Project, b: Storyboard, comp: Composition, sent: { shot: Sh
     if (!a || !v || a.kind !== "audio") { res.skippedAudio += 1; continue; }
     const start = first.startTicks + Math.max(0, secondsToTicks(cue.atSec ?? 0));
     const last = cue.to ? clips.get(cue.to) : undefined;
-    const media = v.media.durationTicks;
+    // P2C (item 4): an audio version trimmed in the storyboard plays its trimmed part.
+    const span = versionSpan(b, v);
+    const media = span?.lenTicks ?? v.media.durationTicks;
     let end = last && last.startTicks >= first.startTicks ? last.startTicks + last.durationTicks : undefined;
     if (cue.durationSec !== undefined) end = Math.min(end ?? Infinity, start + secondsToTicks(cue.durationSec));
     const loops = audioLoops(cue) && !!media;
@@ -231,7 +233,7 @@ function addAudio(p: Project, b: Storyboard, comp: Composition, sent: { shot: Sh
       const fade = (sec: number) => Math.min(x.dur, Math.max(0, secondsToTicks(sec)));
       const fadeIn = i === 0 ? fade(cue.fadeInSec ?? d.fadeInSec) : 0, fadeOut = i === pieces.length - 1 ? fade(cue.fadeOutSec ?? d.fadeOutSec) : 0;
       const pl: Placement = {
-        id: newId("plc"), startTicks: x.at, durationTicks: x.dur, sourceInTicks: 0, source: { kind: "assetVersion", assetId: a.id, versionId: v.id },
+        id: newId("plc"), startTicks: x.at, durationTicks: x.dur, sourceInTicks: span?.inTicks ?? 0, source: { kind: "assetVersion", assetId: a.id, versionId: v.id },
         clipType: "audio", volume: cue.volume ?? d.volume, ...(fadeIn ? { fadeInTicks: fadeIn } : {}), ...(fadeOut ? { fadeOutTicks: fadeOut } : {}),
         storyCue: cue.id, ...(inside ? { storyLink: { anchor: first.id } } : {}),
       };

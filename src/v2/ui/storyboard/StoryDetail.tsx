@@ -1,9 +1,14 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { board, htmlClipPackagePrompt, lintHtmlClip, runtimeAiLinks, slotBindings, slotPackageInput, story, storyRefs, TICKS_PER_SECOND, type AssetSlot, type AssetVersion, type MediaKind, type MediaRef, type Project, type Shot } from "../../domain";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { board, cleanParamDecls, htmlClipPackagePrompt, readManifest, resolveHtmlParams, type HtmlClipParam, type HtmlParamValues, lintHtmlClip, runtimeAiLinks, slotBindings, slotPackageInput, story, storyRefs, TICKS_PER_SECOND, type AssetSlot, type AssetVersion, type MediaKind, type MediaRef, type Project, type Shot } from "../../domain";
 import { cmd, type Command, type Engine } from "../../engine";
 import { importFile } from "../../persistence";
 import { CLIP_LIBRARIES } from "../../render";
+import { AssetPreview, blobText, type PreviewKind } from "../AssetPreview";
+import { CodeEditor } from "../CodeEditor";
+import { htmlParamSpecs } from "../HtmlParamsPanel";
 import { HtmlExportButtons, HtmlImport } from "../HtmlImport";
+import { ParamControls } from "../ParamControls";
 import { HTML_IMPORT_ACCEPT, importHtmlPackage } from "../htmlPackage";
 import type { BlobStore } from "../../ports";
 import { Ic } from "../Icon";
@@ -12,6 +17,8 @@ import { Sheet } from "../Sheet";
 import { type BoardTarget, LengthWarn, shotIcon, Thumb, TYPE_ICON, Warn } from "./BoardView";
 import { extractLastFrame } from "./lastFrame";
 import { CopyButton } from "./StoryImport";
+import { AudioTrim } from "./AudioTrim";
+import { StoryAssetPicker, type LibraryEntry } from "./StoryAssetPicker";
 import { TrimPicker } from "./TrimPicker";
 
 const ACCEPT: Partial<Record<MediaKind, string>> = { image: "image/*", video: "video/*", audio: "audio/*", html: HTML_IMPORT_ACCEPT };
@@ -38,7 +45,14 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
   const [swapNote, setSwapNote] = useState<string>();
   const [refNote, setRefNote] = useState<string>();
   /** V2-SB-121: the trim dialog, for a long upload or for "Adjust trim" on a version. */
-  const [trimFor, setTrimFor] = useState<{ mode: "upload"; clip: Blob; media: MediaRef; model?: string } | { mode: "adjust"; clip: Blob; version: AssetVersion }>();
+  const [trimFor, setTrimFor] = useState<{ mode: "upload"; clip: Blob; media: MediaRef; model?: string; shared?: boolean } | { mode: "adjust"; clip: Blob; version: AssetVersion }>();
+  /** P2C: the Add version picker, a version's inline preview, the code being edited, the audio being trimmed. */
+  const [picking, setPicking] = useState(false);
+  const [peek, setPeek] = useState<string>();
+  const [codeFor, setCodeFor] = useState<{ source: string; name: string }>();
+  const [audioTrim, setAudioTrim] = useState<{ clip: Blob; version: AssetVersion }>();
+  const modelList = useId();
+  const models = board.usedModels(project);
   useEffect(() => { if (!refNote) return; const t = setTimeout(() => setRefNote(undefined), 6000); return () => clearTimeout(t); }, [refNote]);
   useEffect(() => { if (!swapNote) return; const t = setTimeout(() => setSwapNote(undefined), 6000); return () => clearTimeout(t); }, [swapNote]);
   if (!owner) return null;
@@ -132,6 +146,44 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
     }
     swap(cmd.addStoryVersion(target, media, model.trim() ? { model: model.trim() } : {}));
   });
+  /** P2C (item 7): add an existing project file (shared, not copied) as a new version. */
+  const pickLibrary = (e: LibraryEntry) => run("Adding…", async () => {
+    setPicking(false);
+    const opts = model.trim() ? { model: model.trim() } : {};
+    if (trimWin !== undefined && kind === "video" && e.media.durationTicks && e.media.durationTicks / TICKS_PER_SECOND > trimWin + 0.5) {
+      const clip = await blobs.get(e.media.blobKey);
+      if (!clip) throw new Error("That file is missing from this device.");
+      setTrimFor({ mode: "upload", clip, media: e.media, model: opts.model, shared: true });
+      return;
+    }
+    swap(cmd.addStoryVersion(target, e.media, opts));
+  });
+  /** P2C (item 4): open a version's HTML in the Code Editor; saving adds a new version. */
+  const editCode = (v: AssetVersion, label: string) => run("Opening the code…", async () => {
+    const blob = await blobs.get(v.media.blobKey);
+    if (!blob) throw new Error("The clip's file is missing from this device.");
+    setCodeFor({ source: await blobText(blob), name: `${htmlSlot?.id ?? "clip"}-${label}` });
+  });
+  /** P2C (item 4): trim an audio version (the part Send to timeline uses). */
+  const trimAudio = (v: AssetVersion) => run("Opening the audio…", async () => {
+    const blob = await blobs.get(v.media.blobKey);
+    if (!blob) throw new Error("The audio file is missing from this device.");
+    setAudioTrim({ clip: blob, version: v });
+  });
+  const audioTrimDialog = () => {
+    if (!audioTrim || !owner.assetId) return null;
+    const v = audioTrim.version, total = v.media.durationTicks ?? 0, t = board.versionSpan(b, v);
+    const close = () => setAudioTrim(undefined);
+    const aid = owner.assetId;
+    return <AudioTrim clip={audioTrim.clip} name={title} totalSec={total / TICKS_PER_SECOND} initial={t ? { inSec: t.inTicks / TICKS_PER_SECOND, outSec: (t.inTicks + t.lenTicks) / TICKS_PER_SECOND } : undefined}
+      onSave={(a, z) => { close(); swap(cmd.setVersionTrim(aid, v.id, { inTicks: Math.round(a * TICKS_PER_SECOND), outTicks: Math.round(z * TICKS_PER_SECOND) })); }}
+      onFull={() => { close(); swap(cmd.setVersionTrim(aid, v.id, undefined)); }} onCancel={close} />;
+  };
+  const codeDialog = () => {
+    if (!codeFor) return null;
+    const host = document.querySelector(".v2-app") ?? document.body;
+    return createPortal(<CodeEditor source={codeFor.source} mobile={mobile} onSave={(h) => { setCodeFor(undefined); void addHtml(h, codeFor.name); }} onClose={() => setCodeFor(undefined)} />, host);
+  };
   const adjustTrim = (v: AssetVersion) => run("Opening the clip…", async () => {
     const blob = await blobs.get(v.media.blobKey);
     if (!blob) throw new Error("The clip's file is missing from this device.");
@@ -150,7 +202,7 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
       return <TrimPicker clip={trimFor.clip} totalSec={totalSec} windowSec={trimWin} mode="upload" subject={subject}
         onTrim={(x) => { close(); swap(shot ? cmd.addTrimmedShotVersion(shot.id, media, { trim: range(x), model: m }) : cmd.addStoryVersion(target, media, { ...opts, trim: range(x) })); }}
         onFull={() => { close(); swap(shot ? cmd.addTrimmedShotVersion(shot.id, media, { keepFullSec: Math.round(totalSec * 100) / 100, model: m }) : cmd.addStoryVersion(target, media, opts)); }}
-        onCancel={() => { close(); void blobs.delete(media.blobKey).catch(() => undefined); }} />;
+        onCancel={() => { close(); if (!trimFor.shared) void blobs.delete(media.blobKey).catch(() => undefined); }} />;
     }
     const v = trimFor.version, t = b.versions[v.id]?.trim;
     return <TrimPicker clip={trimFor.clip} totalSec={totalSec} windowSec={trimWin} mode="adjust" subject={subject} initialInSec={t ? t.inTicks / TICKS_PER_SECOND : undefined}
@@ -198,20 +250,29 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
               const trimmed = span && info?.trim ? span : undefined;
               const canTrim = !!span && (!!trimmed || (v.media.durationTicks ?? 0) / TICKS_PER_SECOND > trimWin! + 0.5);
               const s1 = (t: number) => Math.round(t / 12_000) / 10;
+              const aSpan = kind === "audio" && info?.trim ? board.versionSpan(b, v) : undefined;
+              const pv = (["video", "image", "audio", "html"] as MediaKind[]).includes(kind) ? (kind as PreviewKind) : undefined;
               return (
                 <li key={v.id}>
                   <button className={`v2-sb-version ${on ? "on" : ""}`} aria-pressed={on} title={on ? undefined : "Use this version"}
                     onClick={() => { if (!on && owner.assetId) swap(cmd.selectStoryVersion(owner.assetId, v.id)); }}>
                     <Thumb src={thumbs[v.id]} icon={icon} count={0} />
-                    <span><b>v{i + 1}{on && <span className="v2-sb-inuse"><Ic g="ok" size={13} /> In use</span>}</b><em>{info?.derivedFrom ? `Frame of shot ${shotNo(info.derivedFrom.shotId)}` : fmtDate(v.createdAt)}</em>{info?.model && <em title="Made with">{info.model}</em>}{pinnedIn.length > 0 && <em className="v2-sb-pinned"><Ic g="pin" size={12} /> Pinned in shot {pinnedIn.join(", ")}</em>}{trimmed && <em className="v2-sb-trimmed" title="Part of the clip in use"><Ic g="✂" size={12} /> {s1(trimmed.inTicks)}–{s1(trimmed.inTicks + trimmed.lenTicks)} s of {s1(v.media.durationTicks ?? 0)} s</em>}</span>
+                    <span><b>v{i + 1}{on && <span className="v2-sb-inuse"><Ic g="ok" size={13} /> In use</span>}</b><em>{info?.derivedFrom ? `Frame of shot ${shotNo(info.derivedFrom.shotId)}` : fmtDate(v.createdAt)}</em>{info?.model && <em title="Made with">{info.model}</em>}{pinnedIn.length > 0 && <em className="v2-sb-pinned"><Ic g="pin" size={12} /> Pinned in shot {pinnedIn.join(", ")}</em>}{(trimmed ?? aSpan) && <em className="v2-sb-trimmed" title="Part of the clip in use"><Ic g="✂" size={12} /> {s1((trimmed ?? aSpan)!.inTicks)}–{s1((trimmed ?? aSpan)!.inTicks + (trimmed ?? aSpan)!.lenTicks)} s of {s1(v.media.durationTicks ?? 0)} s</em>}</span>
                   </button>
                   {htmlSlot && <HtmlExportButtons small name={htmlSlot.id} label={`v${i + 1}`} html={() => blobs.get(v.media.blobKey).then((x) => x?.text())} />}
+                  {pv && <span className="v2-sb-vtools">
+                    <button className="v2-btn v2-sb-trimbtn" aria-expanded={peek === v.id} aria-label={`${peek === v.id ? "Hide preview of" : "Preview"} v${i + 1}`} onClick={() => setPeek(peek === v.id ? undefined : v.id)}><Ic g={peek === v.id ? "eye-off" : "▶"} size={14} /> {peek === v.id ? "Hide" : "Preview"}</button>
+                    {kind === "html" && <button className="v2-btn v2-sb-trimbtn" disabled={!!busy} aria-label={`Edit code of v${i + 1}`} title="Open in the Code Editor; saving adds a new version" onClick={() => editCode(v, `v${i + 1}`)}><Ic g="</>" size={14} /> Edit code</button>}
+                    {kind === "audio" && !!v.media.durationTicks && <button className="v2-btn v2-sb-trimbtn" disabled={!!busy} aria-label={`Trim v${i + 1}`} title="Choose the part of the audio to use" onClick={() => trimAudio(v)}><Ic g="✂" size={14} /> {aSpan ? "Adjust trim" : "Trim"}</button>}
+                  </span>}
                   {canTrim && <button className="v2-btn v2-sb-trimbtn" disabled={!!busy} onClick={() => adjustTrim(v)} aria-label={`Adjust trim of v${i + 1}`} title={shot ? "Choose which part of the clip the shot uses" : "Choose which part of the clip its layers start from"}><Ic g="✂" size={14} /> {trimmed ? "Adjust trim" : "Trim"}</button>}
                 </li>
               );
             })}
           </ul>
-        ) : <p className="v2-hint">{lf ? `Nothing yet. Use the last frame of shot ${shotNo(lf)} once it has a clip, or upload an image.` : `Nothing yet. ${slot?.source.type === "upload" ? "Upload your file" : "Generate it in your AI tool with the prompt below"}, then add it here.`}</p>}
+        ) : null}
+        {(() => { const pi = versions.findIndex((x) => x.id === peek), pvv = versions[pi]; return pvv ? <div className="v2-sb-vpreview"><AssetPreview kind={kind as PreviewKind} name={`${title} v${pi + 1}`} cacheKey={pvv.id} load={() => blobs.get(pvv.media.blobKey)} durationSec={kind === "html" ? (shot?.durationSec ?? (pvv.media.durationTicks ? pvv.media.durationTicks / TICKS_PER_SECOND : undefined)) : pvv.media.durationTicks ? pvv.media.durationTicks / TICKS_PER_SECOND : undefined} width={pvv.media.width ?? project.settings?.width} height={pvv.media.height ?? project.settings?.height} /></div> : null; })()}
+        {versions.length ? null : <p className="v2-hint">{lf ? `Nothing yet. Use the last frame of shot ${shotNo(lf)} once it has a clip, or upload an image.` : `Nothing yet. ${slot?.source.type === "upload" ? "Upload your file" : "Generate it in your AI tool with the prompt below"}, then add it here.`}</p>}
         {slot && pins.length > 0 && versions.length > 1 && <p className="v2-hint">{pins.length > 1 ? "Shots" : "Shot"} {pins.map((x) => shotNo(x.shot)).join(", ")} {pins.length > 1 ? "keep their" : "keeps its"} pinned version when you pick another one here.</p>}
         {shot && board.shotLengthMismatch(project, shot) && <p className="v2-sb-lenline"><LengthWarn project={project} shot={shot} /></p>}
         <div className="v2-sb-actions">
@@ -220,9 +281,15 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
               <Ic g="link" size={16} /> Use last frame of shot {shotNo(lf)}
             </button>
           )}
-          {!lf && <input className="v2-sb-model" value={model} onChange={(e) => setModel(e.target.value)} placeholder="Made with (optional), e.g. Veo 3" aria-label="AI tool or model used (saved with the upload)" maxLength={60} />}
-          <button className={`v2-btn v2-sb-btn ${lf ? "" : "primary"}`} disabled={!!busy} onClick={() => fileRef.current?.click()}>
-            <Ic g="⇪" size={16} /> {versions.length ? "Upload new version" : clipSlot ? (kind === "html" ? "Upload HTML" : "Upload image") : shot ? "Upload clip" : kind === "html" ? "Upload HTML" : "Upload"}
+          {!lf && <div className="v2-sb-modelbox">
+            <input className="v2-sb-model" value={model} onChange={(e) => setModel(e.target.value)} placeholder="Made with (optional), e.g. Veo 3" aria-label="AI tool or model used (saved with the upload)" maxLength={60} list={models.length ? modelList : undefined} autoComplete="off" />
+            {models.length > 0 && <datalist id={modelList}>{models.map((m) => <option key={m} value={m} />)}</datalist>}
+            {models.length > 0 && <div className="v2-sb-modelchips" role="group" aria-label="Models used in this project" data-testid="model-chips">
+              {models.slice(0, 6).map((m) => <button key={m} type="button" className={`v2-sb-modelchip ${model.trim().toLowerCase() === m.toLowerCase() ? "on" : ""}`} aria-pressed={model.trim().toLowerCase() === m.toLowerCase()} onClick={() => setModel(model.trim().toLowerCase() === m.toLowerCase() ? "" : m)}>{m}</button>)}
+            </div>}
+          </div>}
+          <button className={`v2-btn v2-sb-btn ${lf ? "" : "primary"}`} disabled={!!busy} onClick={() => setPicking(true)} aria-haspopup="dialog">
+            <Ic g="⇪" size={16} /> {versions.length ? "Add new version" : clipSlot ? (kind === "html" ? "Add HTML" : "Add image") : shot ? "Add clip" : kind === "html" ? "Add HTML" : "Add file"}
           </button>
           <input ref={fileRef} type="file" hidden accept={ACCEPT[kind]} aria-label={`Upload ${kind} for ${title}`}
             onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void upload(f); }} />
@@ -256,13 +323,10 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
         </span>}>
           <p className="v2-hint">The design brief plus the HTML clip package instructions (dionysus.htmlclip/1: length, size, bound assets, allowed libraries). Paste the AI's reply above. “Full” includes the whole spec, for AIs that can't open links.</p>
           {htmlSlot.prompt && <p className="v2-sb-prompt">{htmlSlot.prompt}</p>}
-          {htmlSlot.params && Object.keys(htmlSlot.params).length > 0 && (
-            <p className="v2-sb-kv" data-testid="v2-sb-html-params"><b>Params</b> {Object.entries(htmlSlot.params).map(([k, d]) => {
-              const v = shot?.params?.[k];
-              return `${d.label || k}: ${JSON.stringify(v ?? d.default)}${v === undefined && shot ? " (default)" : ""}`;
-            }).join(" · ")}</p>
+          {shot && <ShotHtmlParams shot={shot} slot={htmlSlot} project={project} engine={engine} blobs={blobs} />}
+          {!shot && htmlSlot.params && Object.keys(htmlSlot.params).length > 0 && (
+            <p className="v2-sb-kv" data-testid="v2-sb-html-params"><b>Params</b> {Object.entries(htmlSlot.params).map(([k, d]) => `${d.label || k}: ${JSON.stringify(d.default)}`).join(" · ")}</p>
           )}
-          {!htmlSlot.params && shot?.params && <p className="v2-sb-kv" data-testid="v2-sb-html-params"><b>Params</b> {Object.entries(shot.params).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join(" · ")}</p>}
         </Section>
       )}
       {owner.prompt && !(htmlSlot && slot) && (
@@ -273,6 +337,7 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
       )}
       {shot && (shot.camera || shot.dialogue) && <Section title="Direction">{shot.camera && <p className="v2-sb-kv"><b>Camera</b> {shot.camera}</p>}{shot.dialogue && !shot.lines?.length && <p className="v2-sb-kv"><b>Dialogue</b> {shot.dialogue}</p>}{shot.lines?.length ? <DialogueLines lines={shot.lines} /> : null}</Section>}
       {shot && <ShotLayers shot={shot} project={project} onOpen={onOpen} />}
+      {shot && <LayerHtmlParams shot={shot} project={project} engine={engine} blobs={blobs} />}
       {(shot || slot?.type === "audio") && <AudioCues shotId={shot?.id} assetId={shot ? undefined : slot?.id} project={project} onOpen={onOpen} />}
       {shot && <ShotRefs shot={shot} project={project} thumbs={thumbs} onOpen={onOpen} onPin={pin} onEdit={onEdit} note={refNote} />}
       {slot && slot.references.length > 0 && <Section title="Made using"><Chips ids={slot.references} project={project} thumbs={thumbs} onOpen={onOpen} /></Section>}
@@ -285,6 +350,10 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
       </div>
       {slot?.notes && <Section title="Notes"><p className="v2-sb-prompt">{slot.notes}</p></Section>}
       {trimDialog()}
+      {audioTrimDialog()}
+      {codeDialog()}
+      {picking && createPortal(<StoryAssetPicker project={project} kind={kind} title={`Add a version · ${title}`} exclude={owner.assetId} thumbs={thumbs} blobs={blobs}
+        uploadLabel={`${kindName(kind).replace(/^an? /, "")} from this device`} onUpload={() => { setPicking(false); fileRef.current?.click(); }} onPick={(e) => void pickLibrary(e)} onClose={() => setPicking(false)} />, document.querySelector(".v2-app") ?? document.body)}
     </div>
   );
   if (inline) return <section className="v2-sb-inline" aria-label={title}>{body}</section>;
@@ -601,5 +670,92 @@ function Checks({ owner, selected, project, engine }: { owner: AssetSlot | Shot;
       </ul>
       {owner.qa.some((q) => res[q.id] === "fail") && <p className="v2-hint">Failed? Generate it again and upload it as a new version — the old one stays here.</p>}
     </Section>
+  );
+}
+
+/** P2C (item 4): an html asset's param declarations: from its brief (`params`), else from the selected version's manifest. */
+function useParamDecls(project: Project, slot: AssetSlot | undefined, blobs: BlobStore): Record<string, HtmlClipParam> | undefined {
+  const a = slot?.assetId ? project.assets[slot.assetId] : undefined;
+  const v = a && board.selectedOf(project, slot!);
+  const key = v ? a.versions.find((x) => x.id === v)?.media.blobKey : undefined;
+  const [fromFile, setFromFile] = useState<{ key: string; params?: Record<string, HtmlClipParam> }>();
+  const declared = slot?.params && Object.keys(slot.params).length ? slot.params : undefined;
+  useEffect(() => {
+    if (declared || !key) return;
+    let live = true;
+    void blobs.get(key).then(async (b) => {
+      let params: Record<string, HtmlClipParam> | undefined;
+      try { params = b ? readManifest(await blobText(b)).params : undefined; } catch { params = undefined; }
+      if (live) setFromFile({ key, params });
+    }).catch(() => undefined);
+    return () => { live = false; };
+  }, [declared, key, blobs]);
+  return declared ?? (fromFile?.key === key ? fromFile?.params : undefined);
+}
+
+/** The param controls of one use of an html asset (its values override the defaults), with Reset. */
+function ParamsBox({ name, decls, values, engine, onChange, onReset, testId }: {
+  name: string; decls: Record<string, HtmlClipParam>; values: HtmlParamValues | undefined; engine: Engine;
+  onChange: (key: string, value: string | number | boolean) => void; onReset: () => void; testId: string;
+}) {
+  const specs = htmlParamSpecs(decls);
+  if (!specs.length) return null;
+  const changed = Object.keys(values ?? {}).some((k) => k in cleanParamDecls(decls));
+  return (
+    <div className="v2-hp v2-sb-params" data-testid={testId}>
+      <ParamControls name={name} params={specs} values={resolveHtmlParams(decls, values ?? {}) as Record<string, number | string | boolean>}
+        onBegin={() => engine.beginGesture()} onEnd={() => engine.endGesture()} onChange={(k, v) => onChange(k, v)} />
+      <div className="v2-hp-actions"><button className="v2-btn v2-sb-btn" disabled={!changed} title="Back to the clip's defaults" onClick={onReset}><Ic g="↶" size={14} /> Reset to defaults</button></div>
+    </div>
+  );
+}
+
+/** P2C (item 4): an html shot's param values, edited in the storyboard (saved on the shot; sent with it). */
+function ShotHtmlParams({ shot, slot, project, engine, blobs }: { shot: Shot; slot: AssetSlot; project: Project; engine: Engine; blobs: BlobStore }) {
+  const decls = useParamDecls(project, slot, blobs);
+  if (!decls || !Object.keys(cleanParamDecls(decls)).length) {
+    return shot.params ? <p className="v2-sb-kv" data-testid="v2-sb-html-params"><b>Params</b> {Object.entries(shot.params).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join(" · ")}</p> : null;
+  }
+  return (
+    <>
+      <h5 className="v2-sb-subhead">Params for this shot</h5>
+      <ParamsBox name="Shot" decls={decls} values={shot.params} engine={engine} testId="v2-sb-html-params"
+        onChange={(k, v) => engine.dispatch(cmd.updateShot(shot.id, { params: { ...(shot.params ?? {}), [k]: v } }, `Shot ${decls[k]?.label || k}`))}
+        onReset={() => engine.dispatch(cmd.updateShot(shot.id, { params: null }, "Reset params"))} />
+    </>
+  );
+}
+
+/** P2C (item 4): the params of the shot's html layers, edited in the storyboard. */
+function LayerHtmlParams({ shot, project, engine, blobs }: { shot: Shot; project: Project; engine: Engine; blobs: BlobStore }) {
+  const b = project.storyboard!;
+  const layers = shot.layers ?? [];
+  const html = layers.map((l, i) => ({ l, i })).filter(({ l }) => l.type === "html" && !!b.slots[(l as { asset: string }).asset]);
+  if (!html.length) return null;
+  return (
+    <Section title="HTML layer params">
+      {html.map(({ l, i }) => <LayerParams key={i} shot={shot} index={i} slot={b.slots[(l as { asset: string }).asset]} project={project} engine={engine} blobs={blobs} />)}
+    </Section>
+  );
+}
+
+function LayerParams({ shot, index, slot, project, engine, blobs }: { shot: Shot; index: number; slot: AssetSlot; project: Project; engine: Engine; blobs: BlobStore }) {
+  const decls = useParamDecls(project, slot, blobs);
+  const layer = shot.layers![index] as { params?: HtmlParamValues };
+  const set = (params: HtmlParamValues | undefined, label: string) => {
+    const layers = shot.layers!.map((x, j) => {
+      if (j !== index) return x;
+      const { params: _old, ...rest } = x as typeof x & { params?: HtmlParamValues };
+      return (params && Object.keys(params).length ? { ...rest, params } : rest) as typeof x;
+    });
+    engine.dispatch(cmd.updateShot(shot.id, { layers }, label));
+  };
+  if (!decls || !Object.keys(cleanParamDecls(decls)).length) return <p className="v2-hint">“{slot.name}” exposes no params.</p>;
+  return (
+    <div className="v2-sb-layerparams">
+      <h5 className="v2-sb-subhead">“{slot.name}” (layer {index + 1})</h5>
+      <ParamsBox name={`Layer ${index + 1}`} decls={decls} values={layer.params} engine={engine} testId={`v2-sb-layer-params-${index}`}
+        onChange={(k, v) => set({ ...(layer.params ?? {}), [k]: v }, `Layer ${decls[k]?.label || k}`)} onReset={() => set(undefined, "Reset layer params")} />
+    </div>
   );
 }

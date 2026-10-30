@@ -2646,6 +2646,24 @@
           "title": "HTML assets as references; html prompt focuses on JS via dionysus.clip (RULE 33)",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P2C-9",
+          "title": "Storyboard: 'Made with' autocompletes models used in the project (datalist + 44px chips)",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "P2C-7",
+          "title": "Asset pickers preview assets (video, audio + waveform, image, live HTML); storyboard Add version picks from the library or uploads",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "P2C-4",
+          "title": "Storyboard: preview and edit HTML (Code Editor → new version) and trim audio without the timeline; HTML shot and layer params editable",
+          "status": "done",
+          "progress": 100
         }
       ]
     }

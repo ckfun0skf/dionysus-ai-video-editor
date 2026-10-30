@@ -402,3 +402,29 @@ button.v2-sb-conn:focus-visible { outline: 2px solid var(--accent); outline-offs
 .v2-sb-layer-fields { display: flex; flex-direction: column; gap: 8px; padding: 4px 6px 8px; }
 .v2-sb-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .v2-sb-addlayer { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* P2C (item 9): "Made with" autocomplete chips. */
+.v2-sb-modelbox { flex: 1 1 100%; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.v2-sb-modelbox .v2-sb-model { flex: none; width: 100%; box-sizing: border-box; }
+.v2-sb-modelchips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.v2-sb-modelchips::-webkit-scrollbar { display: none; }
+.v2-sb-modelchip { flex: none; min-height: 44px; padding: 0 14px; border-radius: 22px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font: inherit; font-size: 13px; cursor: pointer; white-space: nowrap; }
+.v2-sb-modelchip.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 22%, transparent); }
+/* P2C (items 4, 7): version preview / edit code / audio trim, the storyboard picker, html params. */
+.v2-sb-vtools { display: flex; flex-wrap: wrap; gap: 6px; }
+.v2-sb-vtools .v2-sb-trimbtn, .v2-sb-versions .v2-sb-trimbtn { min-height: 44px; padding: 0 12px; }
+.v2-sb-vpreview { flex: 1 1 100%; width: 100%; }
+.v2-sb-picker-preview { margin: 8px 0 4px; }
+.v2-sb-picker .v2-picker-foot .v2-btn { min-height: 44px; padding: 0 18px; }
+.v2-sb-picker .v2-picker-head .v2-icon-btn { min-width: 44px; min-height: 44px; }
+.v2-sb-subhead { margin: 10px 0 4px; font-size: 12px; font-weight: 600; color: var(--muted, #aaa); }
+.v2-sb-params .v2-sb-btn { min-height: 44px; }
+.v2-sb-params input, .v2-sb-params select { min-height: 44px; }
+.v2-atrim-row { display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.v2-atrim-row .v2-trim-range { width: 100%; min-height: 44px; }
+.v2-atrim .v2-modal-actions { flex-wrap: wrap; }
+.v2-atrim .v2-modal-actions .v2-btn { min-height: 44px; }
+/* P2C: every button in the storyboard detail, its pickers and previews is a 44px target, on desktop too. */
+.v2-app .v2-sb-detail-body .v2-btn, .v2-app .v2-sb-picker .v2-btn, .v2-app .v2-atrim .v2-btn,
+.v2-app.is-desktop .v2-sb-detail-body .v2-btn, .v2-app.is-desktop .v2-sb-picker .v2-btn, .v2-app.is-desktop .v2-atrim .v2-btn { min-height: 44px; }
+.v2-app .v2-sb-vpreview .v2-ce-icon, .v2-app.is-desktop .v2-sb-vpreview .v2-ce-icon { min-width: 44px; justify-content: center; }

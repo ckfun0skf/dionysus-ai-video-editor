@@ -140,6 +140,26 @@ export function slotLayerSec(b: Storyboard | undefined, slotId: string): number 
 }
 
 /** The part of a video version the storyboard uses: its trim, else the whole clip. Undefined for media without a length. */
+/**
+ * P2C (item 9): the AI tools / models already named on this project's versions ("Made with"), most used first, then
+ * most recent; case-insensitive duplicates are merged (the latest spelling wins).
+ */
+export function usedModels(p: Project): string[] {
+  const b = p.storyboard;
+  if (!b) return [];
+  const when = new Map<string, string>();
+  for (const a of Object.values(p.assets)) for (const v of a.versions) when.set(v.id, v.createdAt);
+  const m = new Map<string, { name: string; n: number; at: string }>();
+  for (const [id, info] of Object.entries(b.versions)) {
+    const name = info.model?.trim();
+    if (!name) continue;
+    const k = name.toLowerCase(), at = when.get(id) ?? "", cur = m.get(k);
+    if (!cur) m.set(k, { name, n: 1, at });
+    else m.set(k, { name: at >= cur.at ? name : cur.name, n: cur.n + 1, at: at > cur.at ? at : cur.at });
+  }
+  return [...m.values()].sort((x, y) => y.n - x.n || y.at.localeCompare(x.at) || x.name.localeCompare(y.name)).map((x) => x.name);
+}
+
 export function versionSpan(b: Storyboard | undefined, v: AssetVersion | undefined): { inTicks: number; lenTicks: number } | undefined {
   const d = v?.media.durationTicks;
   if (!v || !d) return undefined;
