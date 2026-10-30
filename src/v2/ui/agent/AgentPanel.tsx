@@ -33,7 +33,7 @@ export function AgentPanel() {
       </details>
       <div className="v2-agent-loghead">
         <h4>Activity</h4>
-        <button className="v2-btn v2-sb-btn" disabled={!s.log.length} onClick={() => agentStore.clearLog()}>Clear</button>
+        <button className="v2-btn v2-sb-btn v2-agent-clear" data-testid="agent-clear" disabled={!s.log.length} onClick={() => agentStore.clearLog()}>Clear</button>
       </div>
       {s.log.length ? (
         <ol className="v2-agent-log" data-testid="agent-log" aria-live="polite">

@@ -121,3 +121,12 @@ describe("Import merges a storyboard part (P4C)", () => {
     expect(el.querySelector('[data-testid="story-errors"]')!.textContent).toContain("Import the first part");
   });
 });
+
+describe("agent log Clear button", () => {
+  it("is a 44px touch target on every viewport", async () => {
+    const fs = await import("node:fs");
+    const css = fs.readFileSync("src/v2/ui/agent/agent.css", "utf8");
+    expect(css).toMatch(/\.v2-agent-loghead \.v2-agent-clear \{[^}]*min-height: 44px/);
+    expect(css).not.toMatch(/@media[^{]*\{[^}]*v2-agent-clear/);
+  });
+});
