@@ -120,6 +120,36 @@ In a storyboard ([STORYBOARD_FORMAT.md](STORYBOARD_FORMAT.md), RULE 23) an `"htm
 
 On the timeline a binding to a storyboard asset id uses that asset's selected version; selecting another version reloads the clip.
 
+### 6.1 Code AI mode (P4B)
+
+*Create code → AI mode* is a step-by-step wizard for clips made outside a storyboard. It asks what to make (free text), its role, the params to tweak later (name, type, default), the frame size and duration, whether three.js is needed (the only library), and optional reference media (for example a drone clip). It then builds the prompt from the same source as this document: the brief, the manifest to start from (with the declared params; `background: "transparent"` for overlays and titles), the runtime contract and template (§3, §7), the role guidance and, when a video is attached, the timing and analysis rules below. The user copies it to any AI, attaches the reference files, and imports the reply (a `.zip` or `.html`) in the wizard's last step, which validates it (§5), shows the problems, and opens it in the Code Editor, which saves it as a code asset on the timeline.
+
+When a video is attached, the wizard adds a number param `videoOffset` (default 0). Example: an object-detection HUD that boxes people in drone footage. The AI runs a detector over the video itself and embeds per-frame boxes as `detections.json`; the clip interpolates them by `t + videoOffset` and draws boxes and labels on a transparent canvas.
+
+<!-- aimode:start -->
+Roles:
+
+- **Full-frame scene** — Full-frame scene: the clip is the whole picture on the main track. Paint every pixel every frame (an opaque background) and give it depth and motion over the whole duration.
+- **Overlay on a video** — Overlay on a video: the clip sits on an overlay track above video. Keep the background transparent (clear the canvas every frame) and draw only the graphics; leave the video visible.
+- **Title or text** — Title or text: a title, lower third or text card. Keep text inside the safe area (5% inset), animate it in and out within the duration, size it from ctx.width/ctx.height, and make the text a param when it can change.
+- **Data viz** — Data viz: an animated chart or diagram. Embed the data in the package (a param for small values, or a JSON file / JS constant), animate it from ctx.progress, and label axes and values legibly at the frame size.
+
+```text
+REFERENCE VIDEO (timing and analysis)
+- Timing: in Dionysus the clip is placed on an overlay track at the same start as the video clip, so the overlay's t = 0 is the video's first frame and t runs in seconds of video time. A number param "videoOffset" (seconds, default 0) is the video time at t = 0: look up your data at videoTime = t + ctx.params.videoOffset. Data outside the video's length draws nothing.
+- Analysis: the clip runs with no network and no ML runtime, so do any analysis yourself now (for example run an object detector over the attached video, frame by frame) and embed the RESULTS as data in the package: a file such as "detections.json" (in the ZIP, or as a data: URL in the manifest's "files") loaded in init(), or a JS constant. Use { "fps": <fps you sampled at>, "width": <video width>, "height": <video height>, "frames": [ { "t": seconds, "items": [ { "label": "person", "score": 0-1, "box": [x, y, w, h] } ] } ] }, with boxes normalised to 0–1 of the video frame.
+- Drawing: map normalised boxes to ctx.width × ctx.height, interpolate between the two nearest samples so playback at any frame rate is smooth, and draw only from the data, never from the live video pixels.
+- If you can't open or analyse the video, say so, and still deliver the clip with a small, clearly marked sample data set in the same format so the user can replace it.
+```
+
+```text
+REPLY FORMAT
+- Reply with a downloadable package: a ZIP (`<name>.dionysus-html.zip`) containing `index.html` (the manifest in its <head>, or a `manifest.json` beside it), `script.js` (the module with dionysus.clip), an optional `style.css` and any data or image files the clip reads (by name, via ctx.asset(name)).
+- If you can't create files, reply instead with ONE ```html code block containing the whole self-contained file (embedded files as data: URLs in the manifest's "files").
+- The user imports the .zip or .html in Dionysus (Create code → AI mode → Import), which checks it against the package standard and opens it in the Code Editor.
+```
+<!-- aimode:end -->
+
 ## 7. Template
 
 A minimal complete clip (what *Copy full prompt* includes, with the asset's values). It has the in-app Code Editor's layout (one `<canvas id="c">`, the base style, one `<script type="module">`), so it opens there in the Script tab (§9):

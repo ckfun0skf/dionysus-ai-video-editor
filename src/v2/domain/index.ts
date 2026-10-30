@@ -26,3 +26,4 @@ export * from "./audioClip";
 export * from "./audioClipPrompt";
 export * from "./htmlClipBindings";
 export * as storyAuto from "./storyAuto";
+export * from "./codeWizard";

@@ -14,6 +14,7 @@ import { storyboardFromDoc } from "./storyboard";
 import { referencesBlock } from "./storyRefs";
 import { AUDIO_CLIP_REFERENCE, audioClipExamples } from "./audioClipPrompt";
 import { AUDIO_TEMPLATES, parseAudioClip } from "./audioClip";
+import { CODE_WIZARD_DOC } from "./codeWizard";
 import { HTML_CLIP_CONTRACT, HTML_CLIP_FORMAT, htmlClipTemplate, lintHtmlClip } from "./htmlClipPackage";
 
 const root = resolve(__dirname, "../../..");
@@ -23,7 +24,7 @@ const clipDocPath = resolve(root, CLIP_DOC_SOURCE);
 let clipDoc = readFileSync(clipDocPath, "utf8");
 /** The doc's generated blocks (contract, template) are rewritten by `npm run gen:ai` and checked otherwise. */
 const between = (doc: string, tag: string) => doc.split(`<!-- ${tag}:start -->\n`)[1]?.split(`\n<!-- ${tag}:end -->`)[0];
-const CLIP_BLOCKS: Record<string, string> = { contract: HTML_CLIP_CONTRACT, template: `\`\`\`html\n${htmlClipTemplate()}\`\`\`` };
+const CLIP_BLOCKS: Record<string, string> = { aimode: CODE_WIZARD_DOC, contract: HTML_CLIP_CONTRACT, template: `\`\`\`html\n${htmlClipTemplate()}\`\`\`` };
 if (update) {
   for (const [tag, body] of Object.entries(CLIP_BLOCKS)) {
     const old = between(clipDoc, tag);
