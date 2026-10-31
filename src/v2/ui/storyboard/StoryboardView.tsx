@@ -19,6 +19,7 @@ import { ExportPanel, ImportPanel, PromptPanel } from "./StoryImport";
 import { AgentPanel } from "../agent/AgentPanel";
 import { useVersionThumbs } from "./useVersionThumbs";
 import { SyncSheet } from "../SyncSheet";
+import { PlanInsertSheet } from "./PlanInsertSheet";
 import "./storyboard.css";
 
 type Step = "prompt" | "import" | "export" | "production" | "agent";
@@ -50,6 +51,9 @@ export function StoryboardView({ engine, blobs, onClose, initialOpen, onView, on
   const [editing, setEditing] = useState<{ shot: string; after?: string | null; reuse?: string }>();
   const [conn, setConn] = useState<{ from: string; to: string }>();
   const [shotMenu, setShotMenu] = useState<{ shot: string; at?: { x: number; y: number } }>();
+  /** P21: "Insert shot after" opens a choice (blank shot / Plan with AI); planInsert = the Plan with AI sheet. */
+  const [insertMenu, setInsertMenu] = useState<{ shot: string; at?: { x: number; y: number } }>();
+  const [planInsert, setPlanInsert] = useState<string>();
   const [confirmDelete, setConfirmDelete] = useState<string>();
   // V2-CUT-05: asset slot editing. `slot` absent = a new asset (Save adds it).
   const [editingSlot, setEditingSlot] = useState<{ slot?: string }>();
@@ -57,10 +61,10 @@ export function StoryboardView({ engine, blobs, onClose, initialOpen, onView, on
   useEffect(() => { if (!note) return; const t = setTimeout(() => setNoteState(undefined), note.action ? NOTE_ACTION_MS : NOTE_MS); return () => clearTimeout(t); }, [note]);
   useEffect(() => {
     const k = (e: KeyboardEvent) => { // The mobile Sheet closes itself on Escape; skip it here so one press doesn't also close the board.
-      if (e.key !== "Escape" || e.defaultPrevented || e.target instanceof HTMLTextAreaElement || (e.target instanceof Element && e.target.closest(".v2-sheet-backdrop, .v2-cmenu, .v2-sb-actsheet-backdrop")) || sendMenu || syncOpen || confirmTimeline || confirmDelete || confirmSlotDelete || shotMenu) return;
+      if (e.key !== "Escape" || e.defaultPrevented || e.target instanceof HTMLTextAreaElement || (e.target instanceof Element && e.target.closest(".v2-sheet-backdrop, .v2-cmenu, .v2-sb-actsheet-backdrop")) || sendMenu || syncOpen || confirmTimeline || confirmDelete || confirmSlotDelete || shotMenu || insertMenu || planInsert) return;
       (editing ? setEditing(undefined) : editingSlot ? setEditingSlot(undefined) : conn ? setConn(undefined) : open ? setOpen(undefined) : step ? setStep(undefined) : onClose()); };
     window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k);
-  }, [open, step, onClose, sendMenu, confirmTimeline, confirmDelete, confirmSlotDelete, shotMenu, editing, editingSlot, conn]);
+  }, [open, step, onClose, sendMenu, confirmTimeline, confirmDelete, confirmSlotDelete, shotMenu, insertMenu, planInsert, editing, editingSlot, conn]);
   const create = useCallback((doc: StoryDoc) => {
     setOpen(undefined);
     engine.dispatch(cmd.createStoryboard(doc));
@@ -158,7 +162,7 @@ export function StoryboardView({ engine, blobs, onClose, initialOpen, onView, on
     return [
       { label: "Edit shot", icon: "✎", shortcut: undefined as string | undefined, onSelect: () => { setOpen(undefined); setConn(undefined); setEditingSlot(undefined); setEditing({ shot: id }); } },
       { label: "Duplicate", icon: "⧉", onSelect: () => duplicate(id) },
-      { label: "Insert shot after", icon: "+", onSelect: () => newShot(id) },
+      { label: "Insert shot after", icon: "+", onSelect: () => setInsertMenu({ shot: id, at: shotMenu?.shot === id ? shotMenu.at : undefined }) },
       ...(sb?.shots[id] && !sb.shots[id].render ? [{ label: "New shot using this clip", icon: "⧉", onSelect: () => newShot(id, sb.shots[id].clipSlot ? `slot:${sb.shots[id].clipSlot}` : `shot:${id}`) }] : []),
       { label: "Move up", icon: "↑", shortcut: mobile ? undefined : "Alt+↑", disabled: i <= 0, onSelect: () => moveTo(id, i - 1) },
       { label: "Move down", icon: "↓", shortcut: mobile ? undefined : "Alt+↓", disabled: i >= last, onSelect: () => moveTo(id, i + 1) },
@@ -280,6 +284,18 @@ export function StoryboardView({ engine, blobs, onClose, initialOpen, onView, on
         : <ActionSheet title={`Shot ${no(shotMenu.shot)} · ${sb.shots[shotMenu.shot].title}`} actions={shotActions(shotMenu.shot)} onClose={() => setShotMenu(undefined)} />)}
       {confirmDelete && sb?.shots[confirmDelete] && <ConfirmDialog title={`Delete shot ${no(confirmDelete)} “${sb.shots[confirmDelete].title}”?`} message={deleteMessage(confirmDelete)} confirm="Delete"
         onCancel={() => setConfirmDelete(undefined)} onConfirm={() => { const id = confirmDelete; setConfirmDelete(undefined); remove(id); }} />}
+      {insertMenu && sb?.shots[insertMenu.shot] && (() => {
+        const items = [
+          { label: "Blank shot", icon: "+", onSelect: () => newShot(insertMenu.shot) },
+          { label: "Plan with AI", icon: "effect", onSelect: () => { setOpen(undefined); setEditing(undefined); setEditingSlot(undefined); setConn(undefined); setPlanInsert(insertMenu.shot); } },
+        ];
+        const t = `Insert shot after shot ${no(insertMenu.shot)}`;
+        return insertMenu.at
+          ? <ContextMenu x={insertMenu.at.x} y={insertMenu.at.y} label={t} onClose={() => setInsertMenu(undefined)} items={items} />
+          : <ActionSheet title={t} actions={items} onClose={() => setInsertMenu(undefined)} />;
+      })()}
+      {has && planInsert && sb?.shots[planInsert] && !step && <PlanInsertSheet key={planInsert} engine={engine} project={project} shotId={planInsert} mobile={mobile} series={series}
+        onDone={(m, ids) => { setPlanInsert(undefined); if (m) setNote(m, ids?.length ? { label: "Undo", run: () => engine.undo() } : undefined); }} />}
       {note && <div className="v2-sb-note" role="status"><span>{note.text}</span>{note.action && <button className="v2-sb-note-act" onClick={() => { setNoteState(undefined); note.action!.run(); }}>{note.action.label}</button>}</div>}
       {more && <ContextMenu x={more.x} y={more.y} label="More storyboard actions" onClose={() => setMore(undefined)} items={[
         { label: "AI prompt", icon: "⎘", onSelect: () => setStep("prompt") },

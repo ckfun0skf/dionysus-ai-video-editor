@@ -5,7 +5,7 @@
  * step; the board re-renders live, the "AI is editing" pill shows, and the call goes into the activity log.
  * Turning access off (or closing the page) unregisters every tool.
  */
-import { board, needsPromptItems, timelineReview, roundtrip, syncPlan, runtimeAiLinks, series, storyAgent, storyboardGuideMarkdown, type StoryDoc } from "../../domain";
+import { board, needsPromptItems, timelineReview, roundtrip, syncPlan, runtimeAiLinks, series, storyAgent, storyInsert, storyboardGuideMarkdown, type StoryDoc } from "../../domain";
 import { cmd, type Engine } from "../../engine";
 import { seriesStore } from "../series/seriesStore";
 import type { BlobStore } from "../../ports";
@@ -76,7 +76,7 @@ const guideFor = (engine: Engine) => () => { const s = seriesOf(engine); return 
 /** Run one tool call against the engine (also what the WebMCP `execute` callbacks do). */
 export function callAgentTool(engine: Engine, name: string, args: unknown): TextToolResponse {
   if (!state.enabled) return { content: [{ type: "text", text: "Agent access is off in Dionysus (Storyboard → AI agent)." }], isError: true };
-  const res = storyAgent.runStoryTool(name, args, currentDoc(engine), { guide: guideFor(engine), series: seriesOf(engine) });
+  const res = storyAgent.runStoryTool(name, args, currentDoc(engine), { guide: guideFor(engine), series: seriesOf(engine), generated: storyInsert.generatedIds(engine.getState().project) });
   let text = res.text, changed = false;
   if (res.ok && res.doc) {
     changed = engine.dispatch(cmd.mergeStoryboardDoc(res.doc), res.label);

@@ -501,3 +501,27 @@ button.v2-sb-conn:focus-visible { outline: 2px solid var(--accent); outline-offs
 .v2-sb-stepper > input { width: 72px; min-height: 44px; text-align: center; }
 .v2-sb-field .v2-sb-check { min-height: 44px; margin-top: 6px; }
 .v2-sb-migrated { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* P21 Plan with AI (insert shots) */
+.v2-pi-body { display: flex; flex-direction: column; gap: 12px; }
+.v2-pi-steps { display: flex; gap: 6px; list-style: none; margin: 0; padding: 0; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+.v2-pi-steps li { padding: 4px 8px; border-radius: 999px; border: 1px solid var(--line); }
+.v2-pi-steps li.on { color: var(--text); border-color: var(--accent); }
+.v2-pi-steps li.done { opacity: .7; }
+.v2-pi-prompt { width: 100%; box-sizing: border-box; min-height: 220px; font: 12px/1.4 ui-monospace, monospace; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 8px; resize: vertical; }
+.v2-pi-foot { display: flex; gap: 8px; justify-content: flex-end; position: sticky; bottom: 0; padding: 8px 0 calc(8px + env(safe-area-inset-bottom)); background: var(--panel); }
+.v2-pi .v2-btn, .v2-pi-copyrow .v2-btn { min-height: 44px; min-width: 44px; }
+.v2-pi-foot .v2-btn { flex: 1; max-width: 220px; justify-content: center; }
+.v2-pi-h { margin: 4px 0 0; font-size: 13px; }
+.v2-pi-shots, .v2-pi-assets { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.v2-pi-shots li { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
+.v2-pi-assets li { display: flex; justify-content: space-between; gap: 8px; align-items: center; min-height: 44px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
+.v2-pi-id { color: var(--muted); font-size: 11px; }
+.v2-pi-new, .v2-pi-reused { font-style: normal; font-size: 11px; font-weight: 600; padding: 2px 6px; border-radius: 6px; white-space: nowrap; }
+.v2-pi-new { background: #f59e0b33; color: #fbbf24; }
+.v2-pi-reused { background: #22c55e26; color: #4ade80; }
+.v2-pi-issues { border-radius: 8px; padding: 8px 10px; font-size: 12px; }
+.v2-pi-issues p { margin: 0 0 4px; font-weight: 600; }
+.v2-pi-issues ul { margin: 0; padding-left: 18px; }
+.v2-pi-issues.error { background: #ef444422; color: #fca5a5; }
+.v2-pi-issues.warning { background: #f59e0b1a; color: #fcd34d; }

@@ -2618,6 +2618,12 @@
           "title": "Promote an overlay clip to the main track (replace or insert, before/after mini-timeline, storyboard sync, WebMCP promote_overlay)",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P21-PLAN-INSERT-AI",
+          "title": "Insert shot after > Plan with AI: describe the last shot, copy a planning prompt (neighbouring shots, assets and clips to reuse, guide rules, strict 3.1-insert format), paste and validate the answer with the storyboard validator, preview new vs reused clips, insert in one undo step; bottom sheet on phones; WebMCP plan_insert_shots; AI rule 55",
+          "status": "done",
+          "progress": 100
         }
       ]
     },
