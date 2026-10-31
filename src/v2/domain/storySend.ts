@@ -126,7 +126,7 @@ function mediaLayer(p: Project, b: Storyboard, shot: Shot, l: StoryMediaLayer, s
   return {
     id: newId("plc"), startTicks: start, durationTicks: len, sourceInTicks,
     source: { kind: "assetVersion", assetId: a.id, versionId: v.id }, clipType: a.kind, volume: 1,
-    transform: { ...boxTransform(l.box, mw, mh, p.settings.width, p.settings.height) } as Transform, storyLink: { anchor },
+    transform: { ...boxTransform(l.box, mw, mh, p.settings.width, p.settings.height) } as Transform, storyLink: { anchor }, ...(l.link === false ? {} : { link: { parent: anchor } }),
     ...(a.kind === "html" && l.params && Object.keys(l.params).length ? { htmlParams: { ...l.params } } : {}),
     ...(l.chromaKey ? { chromaKey: { ...CHROMA_DEFAULT, ...l.chromaKey } } : {}),
   };
@@ -172,7 +172,7 @@ function addLinked(p: Project, b: Storyboard, comp: Composition, shot: Shot, cli
       const t0 = textLayerTransform(l);
       const t = l.opacity !== undefined ? { ...t0, opacity: l.opacity } : t0;
       const keyframes = follow(l, r, t);
-      const pl: Placement = { id: newId("plc"), startTicks: start, durationTicks: r.duration, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "text", text: textLayerData(b, l), ...(t ? { transform: t as Transform } : {}), ...(keyframes ? { keyframes } : {}), ...blendOf(l), storyLink: { anchor } };
+      const pl: Placement = { id: newId("plc"), startTicks: start, durationTicks: r.duration, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "text", text: textLayerData(b, l), ...(t ? { transform: t as Transform } : {}), ...(keyframes ? { keyframes } : {}), ...blendOf(l), storyLink: { anchor }, ...(l.link === false ? {} : { link: { parent: anchor } }) };
       c = placeOnFreeTrack(c, pl, plainText());
       res.layers += 1;
     } else {
@@ -187,7 +187,7 @@ function addLinked(p: Project, b: Storyboard, comp: Composition, shot: Shot, cli
     }
   }
   if (shot.captions && captionText(shot)) {
-    const cue: Placement = { id: newId("plc"), startTicks: clip.startTicks, durationTicks: clip.durationTicks, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "text", text: { text: captionText(shot) } as TextData, storyLink: { anchor } };
+    const cue: Placement = { id: newId("plc"), startTicks: clip.startTicks, durationTicks: clip.durationTicks, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "text", text: { text: captionText(shot) } as TextData, storyLink: { anchor }, link: { parent: anchor } };
     const shared = c.tracks.find((t) => t.kind === "text" && t.layerStyle?.subtitle && isFree(t, cue.startTicks, cue.durationTicks));
     if (shared) c = insertPlacement(c, shared.id, cue);
     else c = placeOnFreeTrack(c, cue, () => false, { name: "Subtitles", layerStyle: SUBTITLE_STYLE });
@@ -198,7 +198,7 @@ function addLinked(p: Project, b: Storyboard, comp: Composition, shot: Shot, cli
     if (!preset) continue;
     const r = rangeIn(clip.durationTicks, e.startSec, e.endSec);
     const params = e.params && Object.keys(e.params).length ? { ...e.params } : undefined;
-    const pl: Placement = { id: newId("plc"), startTicks: clip.startTicks + r.offset, durationTicks: r.duration, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "effect", effect: { preset, ...(params ? { params } : {}), ...(e.applyTo && e.applyTo !== "main" ? { applyTo: e.applyTo } : {}) }, storyLink: { anchor } };
+    const pl: Placement = { id: newId("plc"), startTicks: clip.startTicks + r.offset, durationTicks: r.duration, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "effect", effect: { preset, ...(params ? { params } : {}), ...(e.applyTo && e.applyTo !== "main" ? { applyTo: e.applyTo } : {}) }, storyLink: { anchor }, link: { parent: anchor } };
     c = placeOnFreeTrack(c, pl, effects());
     res.effects += 1;
   }
@@ -250,7 +250,7 @@ function addAudio(p: Project, b: Storyboard, comp: Composition, sent: { shot: Sh
       const pl: Placement = {
         id: newId("plc"), startTicks: x.at, durationTicks: x.dur, sourceInTicks: span?.inTicks ?? 0, source: { kind: "assetVersion", assetId: a.id, versionId: v.id },
         clipType: "audio", volume: cue.volume ?? d.volume, ...(fadeIn ? { fadeInTicks: fadeIn } : {}), ...(fadeOut ? { fadeOutTicks: fadeOut } : {}),
-        storyCue: cue.id, ...(inside ? { storyLink: { anchor: first.id } } : {}),
+        storyCue: cue.id, ...(inside ? { storyLink: { anchor: first.id }, ...(cue.link === false ? {} : { link: { parent: first.id } }) } : {}),
         ...cueSound(cue, x.at - start),
       };
       // Keep the copies of a loop on one layer.

@@ -45,6 +45,11 @@ export function ProjectSettings({ engine, project, extra, onSeries }: { engine: 
         </div>
         <p className="v2-abnote">Shows wherever no clip covers the canvas — in the preview and the export.</p>
       </section>
+      <section aria-label="Linking">
+        <h4>Linking</h4>
+        <button className={`v2-btn v2-autolink ${s.autoLink !== false ? "is-active" : ""}`} role="switch" aria-checked={s.autoLink !== false} title="New overlay, text, effect and audio clips link to the main clip under their start, so they move, trim and delete with it"
+          onClick={() => engine.dispatch(cmd.setProjectSettings({ autoLink: s.autoLink === false }, s.autoLink === false ? "Auto-link on" : "Auto-link off"))}>🔗 Auto-link new clips: {s.autoLink !== false ? "On" : "Off"}</button>
+      </section>
       <section aria-label="Series">
         <h4>Series</h4>
         <SeriesSelect value={project.seriesId} onChange={(id) => setProjectSeries(engine, id)} label="Project series" />

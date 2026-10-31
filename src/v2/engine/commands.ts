@@ -1,4 +1,5 @@
 /** Command factories for the MVP timeline. Each wraps a pure domain op. */
+import { setLink } from "../domain/links";
 import type { Command } from "./engine";
 import { DEFAULT_EFFECT_TICKS, DEFAULT_IMAGE_TICKS, findPlacement, newId, sourceInMax, trackKindFor, type Asset, type AssetVersion, type Composition, type Placement, type Project, type TrackKind, transformOf } from "../domain/model";
 import * as ops from "../domain/ops";
@@ -24,7 +25,7 @@ import { DEFAULT_TEXT, DEFAULT_TEXT_TICKS, textOf, type TextData } from "../doma
  * Text clips trim/split/move/duplicate/delete like media clips (they are ordinary placements).
  */
 export const addTextClip = (at: number, data: Partial<TextData> = {}, id = newId("plc")): Command => ({
-  label: "Add text",
+  label: "Add text", autoLink: true,
   apply: (p) => withRoot(p, (c) => {
     const start = Math.max(0, Math.round(at));
     const pl: Placement = { id, startTicks: start, durationTicks: DEFAULT_TEXT_TICKS, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "text", text: textOf(data) };
@@ -40,7 +41,7 @@ export const addTextClip = (at: number, data: Partial<TextData> = {}, id = newId
 
 /** V2-101: add an effect clip at `at` (default length) on the first effect layer with room, else a new layer on top. */
 export const addEffectClip = (at: number, preset: string, params?: Record<string, number | string>, id = newId("plc")): Command => ({
-  label: "Add effect",
+  label: "Add effect", autoLink: true,
   apply: (p) => withRoot(p, (c) => {
     const start = Math.max(0, Math.round(at));
     const pl: Placement = { id, startTicks: start, durationTicks: DEFAULT_EFFECT_TICKS, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "effect", effect: { preset, ...(params ? { params } : {}) } };
@@ -130,7 +131,7 @@ export function placementForAsset(asset: Asset, version: AssetVersion, startTick
 
 /** Add asset to timeline. Uses given track, else first compatible track, else creates one. */
 export const addAssetToTimeline = (assetId: string, startTicks: number, trackId?: string, placementId?: string): Command => ({
-  label: "Add to timeline",
+  label: "Add to timeline", autoLink: true,
   apply: (p) => {
     const asset = p.assets[assetId];
     const version = asset?.versions.find((v) => v.id === asset.selectedVersionId) ?? asset?.versions[0];
@@ -178,7 +179,7 @@ export const setPlacementVolume = (id: string, volume: number): Command => ({
   apply: (p) => withRoot(p, (c) => ({ ...c, tracks: c.tracks.map((t) => ({ ...t, placements: t.placements.map((pl) => (pl.id === id ? { ...pl, volume } : pl)) })) })),
 });
 export const extractAudio = (id: string, mode: "extract" | "duplicate", newIdValue?: string): Command => ({
-  label: mode === "extract" ? "Extract audio" : "Duplicate audio",
+  label: mode === "extract" ? "Extract audio" : "Duplicate audio", autoLink: true,
   apply: (p) => withRoot(p, (c) => ops.extractAudio(c, id, mode, newIdValue)),
 });
 export const setLinkedAudioMuted = (id: string, muted: boolean): Command => ({
@@ -236,7 +237,7 @@ export const updateSubtitle = (id: string, patch: Partial<Omit<Subtitle, "id">>)
 export const removeSubtitle = (id: string): Command => ({ label: "Delete text", apply: (p) => withRoot(p, (c) => subs.removeSubtitle(c, id)) });
 export const setSubtitles = (list: Subtitle[], label = "Import subtitles"): Command => ({ label, apply: (p) => withRoot(p, (c) => subs.setSubtitles(c, list)) });
 /** V2-106: project canvas size / frame rate / background. Sizes are clamped even (H.264) and within 16..8192. */
-export type ProjectSettingsPatch = Partial<{ width: number; height: number; fps: number; background: string }>;
+export type ProjectSettingsPatch = Partial<{ width: number; height: number; fps: number; background: string; autoLink: boolean }>;
 export const setProjectSettings = (patch: ProjectSettingsPatch, label = "Project settings"): Command => ({
   label,
   coalesceKey: patch.background !== undefined && Object.keys(patch).length === 1 ? "settings-bg" : undefined,
@@ -247,6 +248,7 @@ export const setProjectSettings = (patch: ProjectSettingsPatch, label = "Project
     if (patch.height !== undefined) s.height = even(patch.height);
     if (patch.fps !== undefined) s.fps = Math.min(120, Math.max(1, Math.round(patch.fps)));
     if (patch.background !== undefined) { if (!/^#[0-9a-f]{6}$/i.test(patch.background)) throw new Error("background must be #rrggbb"); s.background = patch.background; }
+    if (patch.autoLink !== undefined) { if (patch.autoLink) delete s.autoLink; else s.autoLink = false; }
     return { ...p, settings: s };
   },
 });
@@ -284,7 +286,7 @@ export const addAssetVersion = (assetId: string, version: AssetVersion, placemen
  * its source track, same start/duration so both show at once, nudged by (dx, dy) frame fractions.
  */
 export const duplicateAbove = (id: string, newIdValue: string, dx = 0.02, dy = 0.02, trackIdValue = newId("trk")): Command => ({
-  label: "Duplicate",
+  label: "Duplicate", autoLink: true,
   apply: (p) => withRoot(p, (c) => {
     const ti = c.tracks.findIndex((t) => t.placements.some((pl) => pl.id === id));
     if (ti < 0) return c;
@@ -302,7 +304,7 @@ export const duplicateAbove = (id: string, newIdValue: string, dx = 0.02, dy = 0
  * video track `overlayTrackId` stacked above everything; audio goes to the first audio track.
  */
 export const addAssetsInSequence = (assetIds: string[], startTicks: number, overlayTrackId?: string, group: "overlay" | "text" = "overlay"): Command => ({
-  label: group === "text" ? "Add stickers" : overlayTrackId ? "Add overlay" : "Add media",
+  label: group === "text" ? "Add stickers" : overlayTrackId ? "Add overlay" : "Add media", autoLink: true,
   apply: (p) => withRoot(p, (c) => {
     let comp = c;
     if (overlayTrackId) comp = ops.addTrack(comp, "video", overlayTrackId, group);
@@ -426,3 +428,9 @@ export const addKeyframe = (shotId: string, slotId: string): Command => ({ label
 /** Production step order (V2-CUT-07, domain/storySteps): move step `key` to index `to`, clamped to dependency order. */
 export const moveStep = (key: string, to: number): Command => ({ label: "Move step", apply: (p) => storySteps.moveStep(p, board.productionSteps(p).map((s) => s.key), key, to) });
 export const resetStepOrder = (): Command => ({ label: "Reset step order", apply: (p) => storySteps.resetStepOrder(p) });
+
+/** P9-LINK: link clip `id` to the main clip under its start (`on`), or unlink it. */
+export const setClipLink = (id: string, on: boolean): Command => ({
+  label: on ? "Link to main" : "Unlink from main",
+  apply: (p) => withRoot(p, (c) => setLink(c, id, on)),
+});
