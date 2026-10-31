@@ -109,4 +109,46 @@ describe("P12 timeline tools", () => {
     off();
     expect(gone).toEqual(ALL_AGENT_TOOLS.map((t) => t.name).filter((n) => n !== "get_guide"));
   });
+
+  it("P13: set_clip_props rejects unknown presets, fields and out-of-range values with the reason, changing nothing", async () => {
+    const e = setup();
+    e.dispatch(cmd.addTextClip(s(1), { text: "Hi" }, "t1"));
+    const before = e.getState().project;
+    const bad = async (args: Record<string, unknown>, msg: RegExp) => { const r = await runTimelineTool(e, undefined, "set_clip_props", args); expect(r.ok).toBe(false); expect(r.text).toMatch(msg); expect(e.getState().project).toBe(before); };
+    await bad({ id: "c1", volume: 3 }, /"volume" must be a number from 0 to 2/);
+    await bad({ id: "c1", speed: 0.1 }, /"speed"/);
+    await bad({ id: "c1", transform: { x: 0.1, zoom: 2 } }, /Unknown transform field "zoom"/);
+    await bad({ id: "c1", effect: { preset: "blur" } }, /only applies to effect clips/);
+    await bad({ id: "c1", blend: "nope" }, /Unknown blend "nope"/);
+    await bad({ id: "c1", colour: 1 }, /Unknown property "colour"/);
+    await bad({ id: "c1", text: { text: "x" } }, /only applies to text clips/);
+    await bad({ id: "t1", text: { size: 5 } }, /"text.size"/);
+    await bad({ id: "c1", volume: 1.5, transform: { opacity: 2 } }, /"transform.opacity"/);
+  });
+
+  it("P13: effect presets and params are checked against the registry (blur exists)", async () => {
+    const { clipPropsErrors } = await import("./timelineTools");
+    const { getPreset } = await import("../../registry");
+    const blur = getPreset("videoEffect", "blur")!;
+    expect(blur).toBeTruthy();
+    const fx = { id: "f", clipType: "effect", effect: { preset: "blur" } } as never;
+    expect(clipPropsErrors({ id: "f", effect: { preset: "blur" } }, fx)).toEqual([]);
+    expect(clipPropsErrors({ id: "f", effect: { preset: "blurr" } }, fx).join()).toMatch(/Unknown effect preset "blurr". Use one of: .*blur/);
+    expect(clipPropsErrors({ id: "f", effect: { preset: "blur", params: { nope: 1 } } }, fx).join()).toMatch(/has no param "nope"/);
+    const num = blur.params.find((p) => p.type === "number") as { key: string; max: number } | undefined;
+    if (num) expect(clipPropsErrors({ id: "f", effect: { preset: "blur", params: { [num.key]: num.max + 1 } } }, fx).join()).toMatch(new RegExp(`effect.params.${num.key}`));
+  });
+
+  it("P13: text-off-frame uses the text's full bounds, not just its centre", () => {
+    const e = setup();
+    e.dispatch(cmd.addTextClip(s(1), { text: "A very long headline that runs wide", size: 0.12 }, "t1"));
+    e.dispatch(cmd.setTransform("t1", { x: 0.3 }));
+    e.dispatch(cmd.addTextClip(s(1), { text: "ok", size: 0.05 }, "t2"));
+    e.dispatch(cmd.setTransform("t2", { x: 0.3, y: 0.3 }));
+    const off = timelineReview.reviewLint(e.getState().project).filter((i) => i.kind === "text-off-frame");
+    expect(off.map((i) => i.clip)).toEqual(["t1"]);
+    expect(off[0].message).toMatch(/right edge/);
+    const b = timelineReview.textBounds(findPlacement(root(e.getState().project), "t2")!.placement, 16 / 9);
+    expect(b.right).toBeLessThan(1);
+  });
 });

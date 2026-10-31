@@ -13,7 +13,7 @@
 import type { Composition, Placement, Project } from "./model";
 import { mainTrack } from "./ops";
 import { normTrim, versionSpan, type AssetSlot, type Storyboard } from "./storyboard";
-import { recordSent, captionText } from "./storySend";
+import { boxTransform, recordSent, captionText } from "./storySend";
 import type { StoryAudio, StoryEffect, StoryLayer, StoryMediaLayer, StoryTextLayer } from "./storyJson";
 import { getPreset, parsePresetRef } from "../registry";
 import { TICKS_PER_SECOND } from "./time";
@@ -53,10 +53,26 @@ function effectOf(pl: Placement, start: number, len: number, old: StoryEffect | 
 }
 
 const r3 = (x: number) => Math.round(x * 1000) / 1000;
-/** Approximate layer box (frame fractions) of a clip's transform: centred at x/y offsets, `scale` of the frame. */
-function boxOf(pl: Placement) {
+/**
+ * P13: layer box (frame fractions) of a media clip's transform — the inverse of Send's `boxTransform`: scale 1 is the
+ * medium contain-fit to the frame, centred at the x/y offsets.
+ */
+function boxOf(p: Project, pl: Placement) {
+  const v = p.assets[pl.source.assetId]?.versions.find((x) => x.id === pl.source.versionId);
+  const fw = p.settings.width, fh = p.settings.height, mw = v?.media.width ?? fw, mh = v?.media.height ?? fh;
+  const ma = mw > 0 && mh > 0 ? mw / mh : fw / fh, fa = fw / fh;
+  const fitW = ma >= fa ? 1 : ma / fa, fitH = ma >= fa ? fa / ma : 1;
   const sc = pl.transform?.scale ?? 1, x = pl.transform?.x ?? 0, y = pl.transform?.y ?? 0;
-  return { x: r3(x + 0.5 - sc / 2), y: r3(y + 0.5 - sc / 2), width: r3(sc), height: r3(sc) };
+  const w = sc * fitW, h = sc * fitH;
+  return { x: r3(x + 0.5 - w / 2), y: r3(y + 0.5 - h / 2), width: r3(w), height: r3(h) };
+}
+const near = (a: object | undefined, b: object) => !!a && Object.entries(b).every(([k, v]) => Math.abs(((a as Record<string, number>)[k] ?? NaN) - (v as number)) < 0.002);
+
+/** P13: the shot dialogue after its caption clip's text was edited (per line when the line count still matches). */
+function writeCaption(s: Storyboard["shots"][string], text: string) {
+  const parts = text.split("\n");
+  if (s.lines?.length && s.lines.length === parts.length) s.lines = s.lines.map((l, i) => ({ ...l, text: parts[i] }));
+  else { delete s.lines; s.dialogue = text; }
 }
 
 /** Compute what Sync to Storyboard would change. */
@@ -130,7 +146,7 @@ export function syncPlan(p: Project): SyncPlan {
     return under ? shotOfClip.get(under.id) : undefined;
   };
   const effectsBy = new Map<string, Placement[]>();
-  const layerSeen = new Set<string>(), cueSeen = new Set<string>();
+  const layerSeen = new Set<string>(), cueSeen = new Set<string>(), captionSeen = new Set<string>();
   for (const pl of others.sort((x, y) => x.startTicks - y.startTicks)) {
     const shotId = parentShot(pl);
     if (pl.clipType === "audio") {
@@ -155,8 +171,12 @@ export function syncPlan(p: Project): SyncPlan {
     if (!shotId) continue;
     const clip = clipOfShot.get(shotId)!, s = b.shots[shotId];
     if (pl.clipType === "effect") { if (pl.effect) effectsBy.set(shotId, [...(effectsBy.get(shotId) ?? []), pl]); continue; }
-    if (pl.storyLayer === "captions") continue;
-    if (pl.clipType === "text" && s.captions && pl.storyLink && pl.text?.text === captionText(s)) continue;
+    if (pl.storyLayer === "captions" || (pl.clipType === "text" && s.captions && pl.storyLink && !pl.storyLayer && pl.text?.text === captionText(s))) {
+      captionSeen.add(shotId);
+      const t = (pl.text?.text ?? "").trim();
+      if (s.captions && t && t !== captionText(s)) { writeCaption(s, t); changes.push({ kind: "layer", id: `${shotId}/captions`, label: `Captions of "${s.title}": "${t.slice(0, 40)}"` }); }
+      continue;
+    }
     const startSec = Math.max(0, sec(pl.startTicks - clip.startTicks)), endSec = sec(end(pl) - clip.startTicks);
     const layers = (s.layers ??= []);
     let l = pl.storyLayer ? layers.find((x) => x.id === pl.storyLayer) : undefined;
@@ -166,17 +186,30 @@ export function syncPlan(p: Project): SyncPlan {
     if (l) {
       layerSeen.add(`${shotId}/${l.id}`);
       const next = { ...l, startSec, endSec, ...(l.type === "text" && pl.text ? { text: pl.text.text } : {}), ...(opacity !== undefined && opacity !== 1 ? { opacity } : {}) } as StoryLayer;
+      // P13: write back where the layer is — a media layer's box, a text layer's position (or its box, moved).
+      if (next.type === "text") {
+        const t = next as StoryTextLayer, cx = r3((pl.transform?.x ?? 0) + 0.5), cy = r3((pl.transform?.y ?? 0) + 0.5);
+        if (t.box) { const nb = { ...t.box, x: r3(cx - t.box.width / 2), y: r3(cy - t.box.height / 2) }; if (!near(t.box, nb)) t.box = nb; }
+        else if (t.position || cx !== 0.5 || cy !== 0.5) { const np = { x: cx, y: cy }; if (!near(t.position, np)) t.position = np; }
+      } else if ((next as StoryMediaLayer).box) {
+        // Only when the clip moved / resized from where the layer's box puts it (a box of another aspect than the
+        // medium is contain-fitted by Send, so its box is not the fitted one).
+        const m = next as StoryMediaLayer, v = p.assets[pl.source.assetId]?.versions.find((x) => x.id === pl.source.versionId);
+        const want = boxTransform(m.box, v?.media.width ?? p.settings.width, v?.media.height ?? p.settings.height, p.settings.width, p.settings.height);
+        const tf = { x: pl.transform?.x ?? 0, y: pl.transform?.y ?? 0, scale: pl.transform?.scale ?? 1 };
+        if (!near(tf, { x: want.x ?? 0, y: want.y ?? 0, scale: want.scale ?? 1 })) m.box = boxOf(p, pl);
+      }
       if (opacity === undefined || opacity === 1) delete next.opacity;
       delete next.removedFromTimeline;
       pl.storyLayer = l.id;
-      if (!eq(next, l)) { Object.assign(l, next); if (!next.opacity) delete l.opacity; delete l.removedFromTimeline; changes.push({ kind: "layer", id: `${shotId}/${l.id}`, label: `Layer "${l.id}" of "${s.title}": ${startSec}s–${endSec}s` }); }
+      if (!eq(next, l)) { Object.assign(l, next); if (!next.opacity) delete l.opacity; delete l.removedFromTimeline; changes.push({ kind: "layer", id: `${shotId}/${l.id}`, label: `Layer "${l.id}" of "${s.title}": ${startSec}s–${endSec}s${eq(l.box, (next as StoryMediaLayer).box) && eq((l as StoryTextLayer).position, (next as StoryTextLayer).position) ? "" : ", moved"}` }); }
       continue;
     }
     const id = uniqueId("tl-layer-", (x) => layers.some((y) => y.id === x));
     const base = { id, startSec, endSec, needsPrompt: true as const, ...(opacity !== undefined && opacity !== 1 ? { opacity } : {}) };
     let nl: StoryLayer;
     if (pl.clipType === "text") nl = { ...base, type: "text", text: pl.text?.text ?? "" } as StoryTextLayer;
-    else nl = { ...base, type: pl.clipType === "video" ? "video" : pl.clipType === "html" ? "html" : "image", asset: slotFor(b, p, pl.source.assetId), box: boxOf(pl) } as StoryMediaLayer;
+    else nl = { ...base, type: pl.clipType === "video" ? "video" : pl.clipType === "html" ? "html" : "image", asset: slotFor(b, p, pl.source.assetId), box: boxOf(p, pl) } as StoryMediaLayer;
     layers.push(nl); layerSeen.add(`${shotId}/${id}`); pl.storyLayer = id;
     if (!pl.link) pl.link = { parent: clip.id };
     changes.push({ kind: "newLayer", id: `${shotId}/${id}`, label: `New ${nl.type} layer "${id}" on "${s.title}"`, needsPrompt: true });
@@ -194,6 +227,7 @@ export function syncPlan(p: Project): SyncPlan {
     if (!eq(next, old)) { if (next.length) s.effects = next; else delete s.effects; changes.push({ kind: "effects", id: shotId, label: `Effects of "${s.title}": ${next.length ? next.map((e) => e.preset).join(", ") : "none"}` }); }
     for (const l of s.layers ?? []) if (!layerSeen.has(`${shotId}/${l.id}`) && !l.removedFromTimeline) { l.removedFromTimeline = true; changes.push({ kind: "removedLayer", id: `${shotId}/${l.id}`, label: `Layer "${l.id}" of "${s.title}" removed from timeline (kept)` }); }
     if (s.layers && !s.layers.length) delete s.layers;
+    if (s.captions && captionText(s) && b0.sent?.shots[shotId] !== undefined && !captionSeen.has(shotId)) { s.captions = false; changes.push({ kind: "removedLayer", id: `${shotId}/captions`, label: `Captions of "${s.title}" removed from timeline (dialogue kept, captions off)` }); }
   }
   const placedCues = new Set(others.flatMap((pl) => (pl.storyCue ? [pl.storyCue] : [])));
   for (const c of b.audio ?? []) if (!cueSeen.has(c.id) && !placedCues.has(c.id) && b0.sent?.cues[c.id] !== undefined && !c.removedFromTimeline) { c.removedFromTimeline = true; changes.push({ kind: "removedCue", id: c.id, label: `Audio cue "${c.id}" removed from timeline (kept)` }); }

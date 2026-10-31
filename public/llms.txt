@@ -63,7 +63,7 @@ The same tab also registers tools that read, review and edit the timeline itself
 - `trim_clip`(id, edge, atSec, ripple): Move a clip's left or right edge to atSec on the timeline. ripple: true closes/opens the gap on the main track. One undo step; returns the clip.
 - `split_clip`(id, atSec): Split a clip at atSec (inside it). One undo step; returns both halves.
 - `delete_clip`(ids, ripple): Delete one or more clips (and the layers linked to them). ripple: true closes the gap on the main track. One undo step.
-- `set_clip_props`(id, volume, transform, effect, fades, speed, blend, text): Change a clip in one undo step: volume (0..2), transform { x, y, scale, rotation, opacity } (null resets), effect { preset, params } (preset ids as in get_guide), fades { inSec, outSec }, speed (0.25..4), blend, text (text clips: { text, size, color, … }). Returns the clip.
+- `set_clip_props`(id, volume, transform, effect, fades, speed, blend, text): Change a clip in one undo step: volume (0..2), transform { x, y, scale, rotation, opacity } (null resets), effect { preset, params } (effect clips only; videoEffect preset ids and param ranges as in get_guide), fades { inSec, outSec }, speed (0.25..4), blend, text (text clips only: { text, size, color, … }). Values are never clamped: an unknown preset, param, field or an out-of-range value fails the whole call with the reason and nothing changes. Returns the clip.
 - `add_clip`(assetId, startSec, trackId): Place a project media asset (id from get_timeline's "assets") at startSec, on trackId or the main track / a matching track. One undo step; returns the new clip.
 
 ## Optional

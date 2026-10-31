@@ -1,8 +1,10 @@
 /**
  * P11-VOLUME: the phone toolbar volume control. A tap or a normal horizontal drag works like the plain slider;
  * press and hold (350 ms) then slide up / down to set the volume with a big vertical meter that shows the value.
- * While held, page scroll is blocked (touch-action: none + a non-passive touchmove preventDefault) and the pointer
- * is captured, so the finger can leave the control. The whole hold is one undo step (onBegin / onEnd).
+ * P13: the control is `touch-action: pan-x`, so a horizontal swipe that starts on it still scrolls the toolbar (and
+ * cancels a pending hold); the browser never takes vertical moves, and only after the hold does a vertical slide set
+ * the volume (a non-passive touchmove preventDefault then blocks any scroll and the pointer is captured, so the finger
+ * can leave the control). The whole hold is one undo step (onBegin / onEnd).
  */
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -16,7 +18,7 @@ export function VolumeHold({ value, max = 1, step = 0.05, onChange, onBegin, onE
 }) {
   const [holding, setHolding] = useState<null | { x: number; bottom: number }>(null);
   const ref = useRef<HTMLLabelElement>(null);
-  const st = useRef<{ t?: ReturnType<typeof setTimeout>; y0: number; v0: number; id: number; on: boolean; moved: boolean }>({ y0: 0, v0: 0, id: -1, on: false, moved: false });
+  const st = useRef<{ t?: ReturnType<typeof setTimeout>; x0: number; y0: number; v0: number; id: number; on: boolean; moved: boolean }>({ x0: 0, y0: 0, v0: 0, id: -1, on: false, moved: false });
   const snap = (v: number) => Math.min(max, Math.max(0, Math.round(v / step) * step));
   useEffect(() => {
     const el = ref.current; if (!el) return;
@@ -32,7 +34,7 @@ export function VolumeHold({ value, max = 1, step = 0.05, onChange, onBegin, onE
   const down = (e: React.PointerEvent<HTMLLabelElement>) => {
     if (e.button > 0) return;
     const target = e.currentTarget, id = e.pointerId;
-    st.current = { ...st.current, y0: e.clientY, v0: value, id, moved: false };
+    st.current = { ...st.current, x0: e.clientX, y0: e.clientY, v0: value, id, moved: false };
     st.current.t = setTimeout(() => {
       if (st.current.moved) return;
       st.current.on = true;
@@ -43,7 +45,7 @@ export function VolumeHold({ value, max = 1, step = 0.05, onChange, onBegin, onE
   };
   const move = (e: React.PointerEvent) => {
     const s = st.current;
-    if (!s.on) { if (Math.abs(e.clientY - s.y0) > 8) { s.moved = true; clearTimeout(s.t); } return; }
+    if (!s.on) { if (Math.abs(e.clientY - s.y0) > 8 || Math.abs(e.clientX - s.x0) > 8) { s.moved = true; clearTimeout(s.t); } return; }
     e.preventDefault();
     const v = snap(s.v0 + ((s.y0 - e.clientY) / HOLD_TRAVEL_PX) * max);
     if (v !== value) onChange(v);

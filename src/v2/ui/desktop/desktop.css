@@ -206,3 +206,5 @@ body.v2-resizing-y, body.v2-resizing-y * { cursor: row-resize !important; user-s
 /* V2-ADD-MEDIA-TABS: Code tab — Upload and Create side by side. */
 .v2-codeactions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
 .v2-app.is-desktop .v2-codeactions .v2-btn, .v2-app.is-desktop .v2-abhead .v2-btn { justify-content: center; min-height: 44px; }
+/* P13: storyboard buttons keep the 44px touch target on desktop too (the desktop .v2-btn is 32px). */
+.v2-app.is-desktop .v2-sb-btn { min-height: 44px; }

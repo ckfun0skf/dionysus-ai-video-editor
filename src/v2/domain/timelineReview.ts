@@ -7,6 +7,7 @@ import { compositionDuration, transformOf, versionOf, type Placement, type Proje
 import { mainTrack } from "./ops";
 import { needsPromptItems } from "./storySync";
 import { TICKS_PER_SECOND } from "./time";
+import { textOf } from "./text";
 
 type Schema = Record<string, unknown>;
 export interface TimelineToolDef { name: string; title: string; description: string; inputSchema: Schema; readOnly: boolean }
@@ -41,7 +42,7 @@ export const TIMELINE_TOOLS: TimelineToolDef[] = [
     description: "Delete one or more clips (and the layers linked to them). ripple: true closes the gap on the main track. One undo step.",
     inputSchema: obj({ ids: { type: "array", items: { type: "string" }, description: "Clip ids." }, ripple: { type: "boolean" } }, ["ids"]) },
   { name: "set_clip_props", title: "Set clip properties", readOnly: false,
-    description: "Change a clip in one undo step: volume (0..2), transform { x, y, scale, rotation, opacity } (null resets), effect { preset, params } (preset ids as in get_guide), fades { inSec, outSec }, speed (0.25..4), blend, text (text clips: { text, size, color, … }). Returns the clip.",
+    description: "Change a clip in one undo step: volume (0..2), transform { x, y, scale, rotation, opacity } (null resets), effect { preset, params } (effect clips only; videoEffect preset ids and param ranges as in get_guide), fades { inSec, outSec }, speed (0.25..4), blend, text (text clips only: { text, size, color, … }). Values are never clamped: an unknown preset, param, field or an out-of-range value fails the whole call with the reason and nothing changes. Returns the clip.",
     inputSchema: obj({ id: str("Clip id."), volume: num("0..2 (1 = unchanged)."), transform: { type: ["object", "null"] }, effect: { type: "object" }, fades: { type: "object" }, speed: num("0.25..4."), blend: str("Blend mode id."), text: { type: "object" } }, ["id"]) },
   { name: "add_clip", title: "Add a clip from an asset", readOnly: false,
     description: "Place a project media asset (id from get_timeline's \"assets\") at startSec, on trackId or the main track / a matching track. One undo step; returns the new clip.",
@@ -91,6 +92,22 @@ export function timelineJson(p: Project): Record<string, unknown> {
   };
 }
 
+const r2 = (x: number) => Math.round(x * 100) / 100;
+/** Average glyph advance as a share of the font size (a sans-serif estimate: the model has no font metrics). */
+export const TEXT_ADVANCE = 0.55;
+/**
+ * P13: estimated box of a text clip in frame fractions (0..1 = inside): lines × size × line height high, the longest
+ * line × size × TEXT_ADVANCE wide (size is a share of the frame height), times the clip scale, centred on x/y.
+ */
+export function textBounds(pl: Placement, aspect: number) {
+  const tf = transformOf(pl), d = textOf(pl.text);
+  const lines = d.text.split("\n");
+  const h = lines.length * d.size * (d.lineHeight ?? 1.25) * tf.scale;
+  const w = (Math.max(1, ...lines.map((l) => [...l].length)) * d.size * TEXT_ADVANCE * tf.scale) / aspect;
+  const cx = 0.5 + tf.x, cy = 0.5 + tf.y;
+  return { left: cx - w / 2, right: cx + w / 2, top: cy - h / 2, bottom: cy + h / 2 };
+}
+
 export type LintKind = "needs-prompt" | "removed-from-timeline" | "short-clip" | "gap" | "black-frame" | "unlinked-layer" | "audio-clipping" | "audio-silence" | "text-off-frame" | "missing-asset";
 export interface LintIssue { kind: LintKind; severity: "error" | "warning" | "info"; message: string; atSec?: number; clip?: string; shot?: string }
 
@@ -114,10 +131,10 @@ export function reviewLint(p: Project, o: { minClipSec?: number; hasBlob?: (key:
       else if (o.hasBlob && !o.hasBlob(v.media.blobKey)) out.push({ kind: "missing-asset", severity: "error", clip: pl.id, atSec: at, message: `The media of clip ${pl.id} (${p.assets[pl.source.assetId]?.name ?? "?"}) is missing from this browser.` });
     }
     if (pl.clipType === "text") {
-      const tf = transformOf(pl);
-      // x/y are offsets of the box centre in frame widths/heights from the centre: beyond ±0.5 the centre is off the frame.
-      if (Math.abs(tf.x) > 0.5 || Math.abs(tf.y) > 0.5)
-        out.push({ kind: "text-off-frame", severity: "warning", clip: pl.id, atSec: at, message: `Text ${pl.id} is positioned outside the frame (x ${tf.x}, y ${tf.y}).` });
+      const b = textBounds(pl, p.settings.width / p.settings.height);
+      const out1 = [b.left < -0.001 && "left", b.right > 1.001 && "right", b.top < -0.001 && "top", b.bottom > 1.001 && "bottom"].filter(Boolean);
+      if (out1.length)
+        out.push({ kind: "text-off-frame", severity: "warning", clip: pl.id, atSec: at, message: `Text ${pl.id} runs past the ${out1.join(" and ")} edge of the frame (estimated box ${r2(b.left)}–${r2(b.right)} × ${r2(b.top)}–${r2(b.bottom)} of the frame).` });
     }
   }
   if (main) {
