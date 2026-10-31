@@ -9,6 +9,7 @@
  * Pure: no DOM, no engine. The UI (ui/agent/webMcp.ts) applies `doc` as one undoable command and handles `send`.
  */
 import { seriesAssetList, type Series } from "./series";
+import { applyInsertJson, buildInsertPrompt, insertResultText } from "./storyInsert";
 import type { StoryValidateOptions } from "./storyJson";
 import {
   AUDIO_KINDS, BACKGROUND_TYPES, CONNECTION_KINDS, LAYER_TYPES, REFERENCE_ROLES, SHOT_RENDERS, STORY_ASSET_TYPES,
@@ -77,6 +78,8 @@ export interface ToolCtx {
   guide: () => string;
   /** P5: the project's Series (seriesRef assets resolve against it; the Series tools read it). */
   series?: Series;
+  /** P21: ids of assets / clips that already have a generated or uploaded version (plan_insert_shots marks them). */
+  generated?: ReadonlySet<string>;
 }
 /** A finished call: text for the agent, plus the new doc for mutating tools (apply as one undo step labelled `label`). */
 export interface ToolResult { ok: boolean; text: string; doc?: StoryDoc; label?: string; send?: boolean; sync?: boolean }
@@ -383,6 +386,28 @@ export const STORY_TOOLS: StoryTool[] = [
       }
       for (const c of doc.audio ?? []) if (c.needsPrompt) rows.push(`- audio cue ${c.id} (asset ${c.asset}, shot ${c.from}): write a description`);
       return { ok: true, text: rows.length ? `${rows.length} item(s) need a prompt:\n${rows.join("\n")}` : "Nothing needs a prompt." };
+    },
+  },
+  {
+    name: "plan_insert_shots", title: "Plan shots to insert", readOnly: false,
+    description: 'P21 "Plan with AI" for Insert shot after. Without "insertJson": returns the planning prompt for inserting shots after shot "after" (last-shot description, neighbouring shots, every asset and clip with generated or not, the guide rules and the strict answer format). With "insertJson" ({"schema":"3.1-insert","insertAfter","shots","newAssets","audio"?}): validates it with the importer and inserts the shots after "after" with the new assets, in one undo step; the following shots are renumbered.',
+    inputSchema: obj({
+      after: { type: "string", description: "The shot id to insert after." },
+      lastShotDescription: { type: "string", description: "Short description of that shot (default: its description)." },
+      insertJson: { type: ["string", "object"], description: "The insert answer to apply (omit to get the prompt)." },
+    }, ["after"]),
+    read: (_raw, a, ctx, doc) => {
+      if (!doc) return { ok: false, text: "No storyboard yet." };
+      const after = need(a, "after"); const shot = doc.shots.find((s) => s.id === after);
+      if (!shot) return { ok: false, text: `No shot "${after ?? ""}". Shot ids: ${doc.shots.map((s) => s.id).join(", ")}.` };
+      if (a.insertJson === undefined) {
+        const desc = need(a, "lastShotDescription") ?? shot.description;
+        if (!desc.trim()) return { ok: false, text: `Shot "${after}" has no description: pass "lastShotDescription".` };
+        return { ok: true, text: buildInsertPrompt(doc, shot.id, desc, ctx.generated) };
+      }
+      const text = typeof a.insertJson === "string" ? a.insertJson : JSON.stringify(a.insertJson);
+      const r = applyInsertJson(doc, text, { series: ctx.series, expectAfter: shot.id, generated: ctx.generated });
+      return r.ok ? { ok: true, text: insertResultText(r), doc: r.doc, label: `AI: insert ${r.preview.shots.length} shot(s) after ${shot.id}` } : { ok: false, text: `Rejected, nothing changed. ${insertResultText(r)}` };
     },
   },
 ];
