@@ -1156,3 +1156,12 @@ select.v2-tp-field { -webkit-appearance: none; appearance: none; padding-right: 
 .v2-fv-step { min-width: 44px; min-height: 44px; padding: 0; font-size: 20px; line-height: 1; justify-content: center; }
 .v2-fv-span button, .v2-fv-span .v2-btn.v2-btn-sm { min-height: 44px; }
 .v2-picker-foot .v2-btn.primary { min-height: 44px; }
+
+/* P19: From Video → Upload video */
+.v2-fv-upload { display: grid; gap: 6px; margin-bottom: 12px; }
+.v2-fv-upload .v2-pick-action { min-height: 64px; width: 100%; }
+.v2-fv-upload .v2-pick-action:disabled { opacity: .6; cursor: progress; }
+.v2-fv-hint { margin: 0; font-size: 12px; }
+.v2-fv-progress { display: grid; gap: 4px; font-size: 13px; }
+.v2-fv-progress progress { width: 100%; height: 8px; accent-color: var(--accent, #20d5ec); }
+.v2-fv-msg { margin: 0; padding: 8px 10px; border-radius: 8px; background: rgba(244, 63, 94, .15); color: #fda4af; font-size: 13px; }

@@ -6,7 +6,11 @@ import type { ProjectMedia } from "./MediaPicker";
 import { probeVideoAudio } from "./media";
 
 /** P18: what Add audio → From Video adds: the audio of `assetId` from `inSec` to `outSec`, optionally muting its timeline clips. */
-export type FromVideoPick = { assetId: string; inSec: number; outSec: number; muteOriginal: boolean };
+export type FromVideoPick = { assetId: string; inSec: number; outSec: number; muteOriginal: boolean; /** P19: the video was uploaded audio-only: drop it after a successful extraction. */ discardVideo?: boolean };
+/** P19: result of an Upload video from the From Video tab. */
+export type UploadedVideo = { assetId: string; audio: boolean | undefined } | { error: string };
+/** P19: file types the From Video upload accepts (video/* keeps the iOS photo library picker). */
+export const VIDEO_UPLOAD_ACCEPT = "video/*,video/mp4,video/quicktime,video/webm,.mp4,.mov,.m4v,.webm";
 
 const fmt = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, "0")}`;
 const fmtDur = (ticks?: number) => { if (!ticks) return ""; const s = Math.round(ticks / 120_000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
@@ -16,13 +20,38 @@ const fmtDur = (ticks?: number) => { if (!ticks) return ""; const s = Math.round
  * when the file has no audio track), and for the chosen one a preview with in/out trim and a "Mute original video clip"
  * option when the video is on the timeline. `pick` is lifted so the picker's footer can add it.
  */
-export function FromVideoTab({ videos, loadMedia, onTimeline, pick, onPick, probe = probeVideoAudio }: {
+export function FromVideoTab({ videos, loadMedia, onTimeline, pick, onPick, probe = probeVideoAudio, onUpload, notKept = [] }: {
   videos: ProjectMedia[]; loadMedia?: (assetId: string) => Promise<Blob | undefined>;
   /** Whether the video has clips on the timeline (shows the mute option). */ onTimeline?: (assetId: string) => boolean;
   pick?: FromVideoPick; onPick: (p: FromVideoPick | undefined) => void;
   probe?: (b: Blob) => Promise<boolean | undefined>;
+  /** P19: Upload video: import the file (kept in the library or audio-only) and report its audio track. */
+  onUpload?: (file: File, keep: boolean, progress: (f: number) => void) => Promise<UploadedVideo>;
+  /** P19: uploaded audio-only videos (marked "Audio only" in the list). */ notKept?: string[];
 }) {
   const [audio, setAudio] = useState<Record<string, boolean | undefined>>({});
+  const [keep, setKeep] = useState(true);
+  const [up, setUp] = useState<{ name: string; f: number } | undefined>();
+  const [upMsg, setUpMsg] = useState<string>();
+  const [select, setSelect] = useState<string>();
+  const file = useRef<HTMLInputElement>(null);
+  const upload = async (f: File) => {
+    if (!onUpload) return;
+    setUpMsg(undefined); setUp({ name: f.name, f: 0 });
+    const r = await onUpload(f, keep, (x) => setUp({ name: f.name, f: x })).catch((e: unknown) => ({ error: e instanceof Error ? e.message : "Upload failed" }));
+    setUp(undefined);
+    if ("error" in r) { setUpMsg(`${f.name}: ${r.error}`); return; }
+    setAudio((m) => ({ ...m, [r.assetId]: r.audio }));
+    if (r.audio === false) { setUpMsg("This video has no audio"); return; }
+    setSelect(r.assetId);
+  };
+  useEffect(() => {
+    const v = select && videos.find((x) => x.id === select);
+    if (!v) return;
+    setSelect(undefined);
+    const d = v.durationTicks ? v.durationTicks / 120_000 : 1;
+    onPick({ assetId: v.id, inSec: 0, outSec: Math.round(d * 100) / 100, muteOriginal: false, ...(notKept.includes(v.id) ? { discardVideo: true } : {}) });
+  }, [select, videos, notKept, onPick]);
   useEffect(() => {
     if (!loadMedia) return;
     let live = true;
@@ -42,11 +71,25 @@ export function FromVideoTab({ videos, loadMedia, onTimeline, pick, onPick, prob
     if (audio[v.id] === false) return;
     if (pick?.assetId === v.id) { onPick(undefined); return; }
     const d = v.durationTicks ? v.durationTicks / 120_000 : 1;
-    onPick({ assetId: v.id, inSec: 0, outSec: Math.round(d * 100) / 100, muteOriginal: false });
+    onPick({ assetId: v.id, inSec: 0, outSec: Math.round(d * 100) / 100, muteOriginal: false, ...(notKept.includes(v.id) ? { discardVideo: true } : {}) });
   };
-  if (!videos.length) return <p className="v2-muted v2-picker-empty">No videos in this project yet. Add a video, then take its sound here.</p>;
+  const uploader = onUpload && (
+    <div className="v2-fv-upload">
+      <button className="v2-pick-action" disabled={!!up} onClick={() => file.current?.click()}>
+        <span className="v2-pick-action-ic"><Ic g="⤒" size={22} /></span>
+        <span><b>Upload video</b><small>MP4, MOV or WebM from this device</small></span>
+      </button>
+      <label className="v2-fv-mute v2-fv-keep"><input type="checkbox" checked={keep} onChange={(e) => setKeep(e.target.checked)} /> Keep video in library</label>
+      {!keep && <p className="v2-muted v2-fv-hint">Audio only: the video is removed after its sound is taken.</p>}
+      <input ref={file} type="file" hidden accept={VIDEO_UPLOAD_ACCEPT} aria-label="Upload video" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void upload(f); }} />
+      {up && <div className="v2-fv-progress" role="status" aria-live="polite"><span>Uploading {up.name}… {Math.round(up.f * 100)}%</span><progress max={1} value={up.f} aria-label="Upload progress" /></div>}
+      {upMsg && <p className="v2-fv-msg" role="alert">{upMsg}</p>}
+    </div>
+  );
+  if (!videos.length) return <>{uploader}<p className="v2-muted v2-picker-empty">{onUpload ? "No videos in this project yet. Upload one to take its sound." : "No videos in this project yet. Add a video, then take its sound here."}</p></>;
   return (
     <>
+      {uploader}
       <p className="v2-muted v2-pick-note">Take the sound of a video as a new audio clip at the playhead.</p>
       <div className="v2-picker-grid" data-testid="video-sources">
         {videos.map((v) => { const none = audio[v.id] === false, on = pick?.assetId === v.id; return (
@@ -56,6 +99,7 @@ export function FromVideoTab({ videos, loadMedia, onTimeline, pick, onPick, prob
               {v.thumb ? <img src={v.thumb} alt="" draggable={false} /> : <b aria-hidden><Ic g="▭" size={26} /></b>}
               {v.durationTicks ? <i className="v2-pick-dur">{fmtDur(v.durationTicks)}</i> : null}
               <span className="v2-pick-name">{v.name}</span>
+              {notKept.includes(v.id) && !none && <span className="v2-pick-noaudio">Audio only</span>}
               {none && <span className="v2-pick-noaudio">No audio</span>}
               <span className={`v2-pick-badge ${on ? "is-on" : ""}`} aria-hidden>{on ? "✓" : ""}</span>
             </button>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AssetPreview } from "./AssetPreview";
-import { FromVideoTab, type FromVideoPick } from "./FromVideoTab";
+import { FromVideoTab, type FromVideoPick, type UploadedVideo } from "./FromVideoTab";
 import { Ic } from "./Icon";
 import { HTML_IMPORT_ACCEPT } from "./htmlPackage";
 import { stickers, stickerUrl, type Sticker } from "./libraryItems";
@@ -36,7 +36,7 @@ const fmtDur = (ticks?: number) => { if (!ticks) return ""; const s = Math.round
  * has Upload (from the device) and the project's own media of that kind (thumbnails, durations); Code also has Create
  * (a new clip in the Code Editor). Multi-select across tabs, numbered in pick order, then Add.
  */
-export function MediaPicker({ title, onAdd, onClose, media = [], only, initialTab, onCreateCode, onCreateAudio, loadMedia, onAddFromVideo, onTimeline, probeAudio }: {
+export function MediaPicker({ title, onAdd, onClose, media = [], only, initialTab, onCreateCode, onCreateAudio, loadMedia, onAddFromVideo, onTimeline, probeAudio, onUploadVideo, onDiscardVideo }: {
   title: string; onAdd: (p: Picked) => void; onClose: () => void; media?: ProjectMedia[];
   /** "audio": the audio tab only. */ only?: "audio"; initialTab?: PickerTab;
   /** Code → Create: open the Code Editor on a new clip (the picker closes). */ onCreateCode?: () => void;
@@ -44,6 +44,8 @@ export function MediaPicker({ title, onAdd, onClose, media = [], only, initialTa
   /** P2C (item 7): the file of a project asset, for its playable preview (no preview button without it). */
   loadMedia?: (assetId: string) => Promise<Blob | undefined>;
   /** P18: Add audio → From Video (the tab shows when this is given). */ onAddFromVideo?: (p: FromVideoPick) => void;
+  /** P19: From Video → Upload video (imports the file; `keep` false = audio-only, removed after extraction). */ onUploadVideo?: (file: File, keep: boolean, progress: (f: number) => void) => Promise<UploadedVideo>;
+  /** P19: remove an audio-only upload that was not used. */ onDiscardVideo?: (assetId: string) => void;
   /** P18: audio-track probe for From Video tiles (tests). */ probeAudio?: (b: Blob) => Promise<boolean | undefined>;
   /** P18: whether a video asset has clips on the timeline (offers "Mute original video clip"). */ onTimeline?: (assetId: string) => boolean;
 }) {
@@ -52,18 +54,28 @@ export function MediaPicker({ title, onAdd, onClose, media = [], only, initialTa
   const [tab, setTab] = useState<PickerTab>(initialTab && tabs.includes(initialTab) ? initialTab : tabs[0]);
   const recent = useMemo(() => [...media].sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [media]);
   const [files, setFiles] = useState<File[]>([]);
+  const [notKept, setNotKept] = useState<string[]>([]);
+  const uploadVideo = onUploadVideo && (async (f: File, keep: boolean, progress: (x: number) => void) => {
+    const r = await onUploadVideo(f, keep, progress);
+    if (!("error" in r) && !keep) { if (r.audio === false) onDiscardVideo?.(r.assetId); else setNotKept((n) => [...n, r.assetId]); }
+    return r;
+  });
+  /** P19: drop audio-only uploads that are not being added. */
+  const discardUnused = (keepId?: string) => notKept.filter((id) => id !== keepId).forEach((id) => onDiscardVideo?.(id));
+  const close = () => { discardUnused(); onClose(); };
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [fv, setFv] = useState<FromVideoPick>();
   const videos = useMemo(() => recent.filter((m) => m.kind === "video"), [recent]);
   const input = useRef<HTMLInputElement>(null);
   const urls = useMemo(() => files.map((f) => (/^(image|video)\//.test(f.type) ? URL.createObjectURL(f) : "")), [files]);
   useEffect(() => () => urls.forEach((u) => u && URL.revokeObjectURL(u)), [urls]);
-  useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === "Escape") { if (preview) setPreview(undefined); else onClose(); } }; addEventListener("keydown", k); return () => removeEventListener("keydown", k); }, [onClose, preview]);
+  useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === "Escape") { if (preview) setPreview(undefined); else close(); } }; addEventListener("keydown", k); return () => removeEventListener("keydown", k); }, [onClose, preview, notKept]);
   const key = (f: File, i: number) => `f${i}:${f.name}`;
   const toggle = (k: string) => setPicked((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n; });
   const order = [...picked];
   const count = picked.size;
-  const add = () => onAdd({
+  const add = () => { discardUnused(); addSel(); };
+  const addSel = () => onAdd({
     files: order.filter((k) => k.startsWith("f")).map((k) => files[Number(k.slice(1, k.indexOf(":")))]).filter(Boolean),
     assets: order.filter((k) => k.startsWith("a:")).map((k) => k.slice(2)),
     stickers: order.filter((k) => k.startsWith("s:")).map((k) => stickers().find((it) => `s:${it.id}` === k)!).filter(Boolean),
@@ -94,7 +106,7 @@ export function MediaPicker({ title, onAdd, onClose, media = [], only, initialTa
   return (
     <div className="v2-picker" role="dialog" aria-label={title}>
       <header className="v2-picker-head">
-        <button className="v2-icon-btn" aria-label="Close" title="Close (Esc)" onClick={onClose}><Ic g="✕" /></button>
+        <button className="v2-icon-btn" aria-label="Close" title="Close (Esc)" onClick={close}><Ic g="✕" /></button>
         <h3>{title}</h3>
         <span />
       </header>
@@ -149,7 +161,7 @@ export function MediaPicker({ title, onAdd, onClose, media = [], only, initialTa
             )}
           </>
         ) : tab === "fromVideo" ? (
-          <FromVideoTab videos={videos} loadMedia={loadMedia} onTimeline={onTimeline} pick={fv} onPick={setFv} {...(probeAudio ? { probe: probeAudio } : {})} />
+          <FromVideoTab videos={videos} loadMedia={loadMedia} onTimeline={onTimeline} pick={fv} onPick={setFv} onUpload={uploadVideo} notKept={notKept} {...(probeAudio ? { probe: probeAudio } : {})} />
         ) : (
           <>
             <p className="v2-muted v2-pick-note">Stickers go to the Text &amp; Stickers group, above overlays.</p>
@@ -176,7 +188,7 @@ export function MediaPicker({ title, onAdd, onClose, media = [], only, initialTa
       <footer className="v2-picker-foot">
         {tab === "fromVideo" ? <>
           <span className="v2-muted">{fv ? "Adds at the playhead" : "Choose a video"}</span>
-          <button className="v2-btn primary" disabled={!fv} onClick={() => fv && onAddFromVideo?.(fv)}>Add audio</button>
+          <button className="v2-btn primary" disabled={!fv} onClick={() => { if (!fv) return; discardUnused(fv.assetId); onAddFromVideo?.({ ...fv, ...(notKept.includes(fv.assetId) ? { discardVideo: true } : {}) }); }}>Add audio</button>
         </> : <>
         <span className="v2-muted">{count ? `${count} selected` : "Select items to add"}</span>
         <button className="v2-btn primary" disabled={!count} onClick={add}>Add{count ? ` (${count})` : ""}</button>

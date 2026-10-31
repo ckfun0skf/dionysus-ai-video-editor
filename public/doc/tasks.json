@@ -2594,6 +2594,12 @@
           "title": "Add audio: Audio and From Video tabs. From Video lists project videos (thumbnail, name, duration, No audio when no track is detected) with In/Out trim and preview; Add audio decodes the span to a WAV audio asset (Web Audio, falls back to the video's own sound) with provenance { fromVideo, inSec, outSec }, places it at the playhead, optional Mute original video clip. Storyboard audio cues accept source { fromVideo, inSec, outSec } (RULE 52, validator, WebMCP add_cue/update_cue)",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P19-FROM-VIDEO-UPLOAD",
+          "title": "Add audio > From Video: Upload video action at the top of the list (MP4/MOV/WebM, iOS photo library friendly) with upload progress, reusing the Add media import path. Keep video in library (default on) or audio-only: the uploaded video is auto-selected for trim/preview/Add audio; audio-only uploads are removed after a successful extraction or when not used, but kept (with a toast) when decoding fails and the audio plays from the video file. Videos without an audio track show This video has no audio",
+          "status": "done",
+          "progress": 100
         }
       ]
     },
