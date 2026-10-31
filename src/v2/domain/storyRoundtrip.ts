@@ -56,12 +56,16 @@ function shotOut(b: Storyboard, s: Shot): StoryShot {
   const frameOf = (id: string) => b.slots[id]?.source.type === "frameOf" && b.slots[id]?.implicit === "frameof";
   let assets = s.slotIds.filter((id) => id !== s.keyframe && !frameOf(id));
   // Import appends the clip slot when the shot's assets don't list it; drop it again only from that place.
-  if (s.clipSlot && assets.at(-1) === s.clipSlot) assets = assets.slice(0, -1);
+  if (s.clipSlot && s.render && assets.at(-1) === s.clipSlot) assets = assets.slice(0, -1);
+  // P16: an AI shot playing a shared clip is the clip reference and its in point.
+  const shared = !s.render && s.clipSlot && b.slots[s.clipSlot]?.type === "video";
   const kf = s.keyframe ? b.slots[s.keyframe] : undefined;
   return {
     id: s.id, title: s.title, description: s.description, durationSec: s.durationSec, prompt: s.prompt, assets, qa: texts(s.qa),
     ...(s.camera ? { camera: s.camera } : {}),
     ...(s.lines?.length ? { dialogue: structuredClone(s.lines) } : s.dialogue ? { dialogue: s.dialogue } : {}),
+    ...(shared ? { clip: s.clipSlot, ...(s.clipInSec ? { inSec: s.clipInSec } : {}) } : {}),
+    ...(s.clipAsset && !shared ? { clipAsset: { ...s.clipAsset } } : {}),
     ...(s.render && s.clipSlot ? (b.slots[s.clipSlot]?.implicit === "background" ? { render: s.render, background: structuredClone(b.slots[s.clipSlot].background!) } : { render: s.render, clip: s.clipSlot }) : {}),
     ...(s.params && s.render === "html" ? { params: { ...s.params } } : {}),
     ...(s.layers?.length ? { layers: structuredClone(s.layers) } : {}),

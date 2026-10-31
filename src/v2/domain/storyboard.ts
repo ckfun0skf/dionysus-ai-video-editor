@@ -73,8 +73,15 @@ export interface Shot {
   skipped?: boolean;
   /** v1.1: how the clip is made (absent = "ai", a generated video). */
   render?: Exclude<ShotRender, "ai">;
-  /** v1.1: the html (render html) or image (render still) slot that is the shot's clip. */
+  /**
+   * v1.1: the html (render html) or image (render still) slot that is the shot's clip. P16: for an AI shot (no
+   * `render`), a shared video clip slot the shot plays from `clipInSec` for `durationSec` (schema 3.1 `clip`).
+   */
   clipSlot?: string;
+  /** P16: in point (seconds) into a shared clip slot. */
+  clipInSec?: number;
+  /** P16: id and name of the shot's own (single-use) clip in schema 3.1; `auto` = made automatically. */
+  clipAsset?: { id: string; name: string; auto?: true };
   /** V2-HTML-PARAMS: render html: per-use values for the clip's params; carried to the timeline clip on send. */
   params?: HtmlParamValues;
   /** The shot's own AI clip asset, kept aside while the shot is made as html or still (V2-CUT-02). */
@@ -228,6 +235,9 @@ export function storyboardFromDoc(doc: StoryDoc): Storyboard {
       id: s.id, title: s.title, description: s.description, durationSec: s.durationSec, prompt: s.prompt,
       slotIds: [...s.assets], qa: qaList(s.id, s.qa), ...(s.camera ? { camera: s.camera } : {}), ...(s.dialogue ? { dialogue: dialogueText(s.dialogue) } : {}), ...(dialogueLines(s.dialogue) ? { lines: structuredClone(dialogueLines(s.dialogue)!) } : {}),
       ...(s.render && s.render !== "ai" && s.clip && slots[s.clip] ? { render: s.render, clipSlot: s.clip } : {}),
+      // P16: an AI shot that plays a shared clip (a video asset) from its in point.
+      ...((s.render ?? "ai") === "ai" && s.clip && slots[s.clip]?.type === "video" ? { clipSlot: s.clip, ...(s.inSec ? { clipInSec: s.inSec } : {}) } : {}),
+      ...(s.clipAsset ? { clipAsset: { ...s.clipAsset } } : {}),
       ...(s.render === "html" && s.clip && slots[s.clip] && s.params ? { params: { ...s.params } } : {}),
       ...(s.layers?.length ? { layers: structuredClone(s.layers) } : {}),
       ...(s.captions ? { captions: true } : {}),
@@ -251,7 +261,7 @@ export function storyboardFromDoc(doc: StoryDoc): Storyboard {
       slots[id] = { id, name: `Background · ${s.title}`, type: "image", aspect: doc.meta.aspect, prompt: "", references: [], source: { type: "generate" }, qa: [], implicit: "background", background: structuredClone(s.background) };
       Object.assign(shots[s.id], { render: "still", clipSlot: id });
     }
-    if (shots[s.id].clipSlot && !shots[s.id].slotIds.includes(shots[s.id].clipSlot!)) shots[s.id].slotIds.push(shots[s.id].clipSlot!);
+    if (shots[s.id].clipSlot && shots[s.id].render && !shots[s.id].slotIds.includes(shots[s.id].clipSlot!)) shots[s.id].slotIds.push(shots[s.id].clipSlot!);
     if (s.keyframe) {
       const id = keyframeId(s.id);
       slots[id] = {

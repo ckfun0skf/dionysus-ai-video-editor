@@ -66,7 +66,9 @@ describe("Sync to Storyboard (P10-SYNC)", () => {
     const js = json.shots.find((s: { id: string }) => s.id === nid);
     expect(js.needsPrompt).toBe(true);
     expect(json.shots.find((s: { id: string }) => s.id === "b").removedFromTimeline).toBe(true);
-    js.prompt = "A harbour at dusk"; js.description = "Harbour";
+    // Schema 3.1: the prompt lives on the shot's clip asset.
+    const clip = (json.assets as { id: string; prompt: string }[]).find((a) => a.id === js.clip)!;
+    clip.prompt = "A harbour at dusk"; js.description = "Harbour";
     const merged = mergeStoryboard(r.project, parse(json));
     expect(merged.shots[nid].needsPrompt).toBeUndefined();
     expect(merged.shots[nid].prompt).toBe("A harbour at dusk");
