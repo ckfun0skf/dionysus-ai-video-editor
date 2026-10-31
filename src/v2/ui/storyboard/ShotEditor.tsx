@@ -3,12 +3,12 @@
  * Desktop: the side panel with Cancel / Save (⌘/Ctrl+Enter). A save is one undo step.
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { board, storyEdit, storyRefs, story, type AssetSlot, type Project, type QaCheck, type Shot } from "../../domain";
+import { board, clipSource, storyEdit, storyRefs, story, type AssetSlot, type Project, type QaCheck, type Shot } from "../../domain";
 type StoryAssetType = AssetSlot["type"];
 import { getPreset, listPresets, parsePresetRef } from "../../registry";
 import { Ic } from "../Icon";
 import { Sheet } from "../Sheet";
-import { TYPE_ICON } from "./BoardView";
+import { Thumb, TYPE_ICON } from "./BoardView";
 import { BackgroundEditor, LayersEditor } from "./ShotLayers";
 
 type Render = "ai" | "html" | "still";
@@ -28,8 +28,10 @@ export function Panel({ mobile, label, onDone, extra, children, className = "" }
 const sec = (x: number) => `${Math.round(x * 100) / 100}`;
 const effectName = (id: string) => { const r = parsePresetRef(id); return (r && getPreset("videoEffect", r.id)?.name) || id; };
 
-export function ShotEditor({ project, shot, number, isNew, mobile, onSave, onCancel, onDelete }: {
+export function ShotEditor({ project, shot, number, isNew, mobile, onSave, onCancel, onDelete, thumbs = {}, initialReuse }: {
   project: Project; shot: Shot; number: number; isNew?: boolean; mobile: boolean;
+  /** P17: version thumbnails for the clip picker. */ thumbs?: Record<string, string>;
+  /** P17: open with "Reuse clip" picked and this clip chosen (`slot:<id>` or `shot:<id>`), e.g. from "New shot using this clip". */ initialReuse?: string;
   onSave: (patch: storyEdit.ShotPatch) => void; onCancel: () => void; onDelete?: () => void;
 }) {
   const b = project.storyboard!;
@@ -40,14 +42,25 @@ export function ShotEditor({ project, shot, number, isNew, mobile, onSave, onCan
   /** P16: a shot playing a shared video clip edits that clip's prompt (schema 3.1: prompts live on clips). */
   const sharedClip = !shot.render && shot.clipSlot ? b.slots[shot.clipSlot] : undefined;
   const clipInfo = board.shotClips(project)[shot.id];
-  const affects = board.clipAffects(project, shot.id);
-  const [prompt, setPrompt] = useState(sharedClip ? sharedClip.prompt : shot.prompt);
+  /** P17: Clip source. "New clip" makes the shot's own clip from its prompt; "Reuse clip" plays an existing clip. */
+  const clipList = useMemo(() => clipSource.clipChoices(project, shot.id), [project, shot.id]);
+  const startKey = initialReuse ?? (sharedClip ? `slot:${sharedClip.id}` : "");
+  const [source, setSource] = useState<"own" | "reuse">(startKey ? "reuse" : "own");
+  const [pick, setPick] = useState(startKey);
+  const [confirmReuse, setConfirmReuse] = useState(false);
+  const [makeShared, setMakeShared] = useState(false);
+  const [lenAuto, setLenAuto] = useState(false);
+  const ownHasClip = !isNew && !shot.render && !shot.clipSlot && (!!shot.prompt.trim() || board.versionsOf(project, shot).length > 0);
+  const shareWhy = !isNew ? clipSource.shareBlock(b, shot) : "Save the shot first.";
+  const picked = clipList.find((c) => c.key === pick);
+  const [prompt, setPrompt] = useState(shot.prompt);
   const [inSec, setInSec] = useState(sec(shot.clipInSec ?? 0));
   const [camera, setCamera] = useState(shot.camera ?? "");
   const [dialogue, setDialogue] = useState(shot.dialogue ?? "");
   const [captions, setCaptions] = useState(!!shot.captions);
   const [qa, setQa] = useState<QaCheck[]>(shot.qa);
   const [render, setRender] = useState<Render>(shot.render ?? "ai");
+  const reusing = render === "ai" && source === "reuse";
   const [clipSlot, setClipSlot] = useState(shot.clipSlot && b.slots[shot.clipSlot]?.implicit !== "background" ? shot.clipSlot : "");
   const bgSlot = shot.clipSlot && b.slots[shot.clipSlot]?.implicit === "background" ? b.slots[shot.clipSlot] : undefined;
   // P2B (item 20): a still shot shows an image asset or a colour / gradient.
@@ -80,16 +93,37 @@ export function ShotEditor({ project, shot, number, isNew, mobile, onSave, onCan
   const past = durOk ? storyEdit.partsPastEnd({ layers, effects }, n) : 0;
   const g = Number(gen.replace(",", "."));
   // V2-SB-121: optional length to generate (fixed-length models); empty = the shot length.
-  const genOk = render !== "ai" || !gen.trim() || (Number.isFinite(g) && g <= storyEdit.MAX_SHOT_SEC && (!durOk || g >= n));
-  const ok = durOk && slotOk && genOk;
+  const genOk = render !== "ai" || reusing || !gen.trim() || (Number.isFinite(g) && g <= storyEdit.MAX_SHOT_SEC && (!durOk || g >= n));
+  const pickOk = !reusing || (!!picked && !picked.blocked);
+  const inN = Number(inSec.replace(",", "."));
+  const inOk = !reusing || (Number.isFinite(inN) && inN >= 0);
+  const ok = durOk && slotOk && genOk && pickOk && inOk;
 
   const patch = (): storyEdit.ShotPatch => ({
-    title: title.trim() || (isNew ? "New shot" : shot.title), description, durationSec: n, ...(sharedClip && render === "ai" ? { clipPrompt: prompt, clipInSec: Number(inSec.replace(",", ".")) || 0 } : { prompt }), camera, dialogue, captions: captions && !!dialogue.trim(),
-    ...(render === "ai" ? { genDurationSec: gen.trim() ? g : null } : {}),
+    title: title.trim() || (isNew ? "New shot" : shot.title), description, durationSec: n, ...(reusing ? { clipInSec: inN || 0, ...(picked && picked.key === `slot:${sharedClip?.id}` ? {} : { clipSource: { reuse: pick, inSec: inN || 0 } }) }
+      : render === "ai" && sharedClip ? { clipSource: { own: true as const }, prompt } : render === "ai" && makeShared ? { clipPrompt: prompt, clipSource: { share: true as const } } : { prompt }), camera, dialogue, captions: captions && !!dialogue.trim(),
+    ...(render === "ai" && !reusing ? { genDurationSec: gen.trim() ? g : null } : {}),
     qa, layers, effects, render, ...(render !== "ai" ? { clipSlot } : {}), ...(render === "still" ? { background: useBg ? bg : null } : {}),
     slotIds: refs, ...(pending.length ? { newSlots: pending.filter((x) => refs.includes(x.id)) } : {}),
   });
-  const save = () => { if (ok) onSave(patch()); };
+  const save = () => {
+    if (!ok) return;
+    if (reusing && ownHasClip && !confirmReuse) { setConfirmReuse(true); return; }
+    onSave(patch());
+  };
+  const choose = (key: string) => {
+    setPick(key);
+    const c = clipList.find((x) => x.key === key);
+    if (c?.durationSec && (isNew || lenAuto) && c.durationSec >= storyEdit.MIN_SHOT_SEC) { setDur(sec(Math.min(c.durationSec, storyEdit.MAX_SHOT_SEC))); setLenAuto(true); }
+    setInSec("0");
+  };
+  /** Moving the in point keeps an automatic length inside the clip. */
+  const moveIn = (d: number) => {
+    const v = Math.max(0, Math.round(((Number(inSec.replace(",", ".")) || 0) + d) * 100) / 100);
+    setInSec(sec(v));
+    if (lenAuto && picked?.durationSec && picked.durationSec - v >= storyEdit.MIN_SHOT_SEC) setDur(sec(Math.min(picked.durationSec - v, storyEdit.MAX_SHOT_SEC)));
+  };
+  const step = (set: (v: string) => void, v: string, d: number, min: number) => set(sec(Math.max(min, Math.round(((Number(v.replace(",", ".")) || 0) + d) * 100) / 100)));
   const label = isNew ? `New shot ${number}` : `Edit shot ${number}`;
   const onKey = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); save(); }
@@ -113,7 +147,7 @@ export function ShotEditor({ project, shot, number, isNew, mobile, onSave, onCan
         <div className="v2-sb-row">
           <label className="v2-sb-field grow">Title<input ref={titleRef} value={title} onChange={(e) => setTitle(e.target.value)} placeholder={isNew ? "New shot" : shot.title} maxLength={80} /></label>
           <label className="v2-sb-field len">Length (s)<input value={dur} onChange={(e) => setDur(e.target.value)} inputMode="decimal" aria-invalid={!durOk} aria-describedby="v2-sb-dur-hint" /></label>
-          {render === "ai" && <label className="v2-sb-field len" title="For video models that only make fixed lengths (e.g. 8 s for a 5 s shot). Uploads are trimmed to the shot length.">Generate (s)<input value={gen} onChange={(e) => setGen(e.target.value)} inputMode="decimal" placeholder="same" aria-invalid={!genOk} aria-describedby="v2-sb-gen-hint" /></label>}
+          {render === "ai" && !reusing && <label className="v2-sb-field len" title="For video models that only make fixed lengths (e.g. 8 s for a 5 s shot). Uploads are trimmed to the shot length.">Generate (s)<input value={gen} onChange={(e) => setGen(e.target.value)} inputMode="decimal" placeholder="same" aria-invalid={!genOk} aria-describedby="v2-sb-gen-hint" /></label>}
         </div>
         {!genOk && <p className="v2-sb-err" id="v2-sb-gen-hint" role="alert"><Ic g="alert" size={14} /> Generate length must be at least the shot length and at most {storyEdit.MAX_SHOT_SEC} seconds, or empty.</p>}
         {!durOk && <p className="v2-sb-err" id="v2-sb-dur-hint" role="alert"><Ic g="alert" size={14} /> Length must be {storyEdit.MIN_SHOT_SEC}–{storyEdit.MAX_SHOT_SEC} seconds.</p>}
@@ -124,7 +158,7 @@ export function ShotEditor({ project, shot, number, isNew, mobile, onSave, onCan
           <div className="v2-sb-seg" role="radiogroup" aria-label="Clip made as">
             {RENDERS.map((r) => <button type="button" key={r.id} role="radio" aria-checked={render === r.id} className={render === r.id ? "on" : ""} onClick={() => pickRender(r.id)}><Ic g={r.icon} size={15} /> {r.label}</button>)}
           </div>
-          <p className="v2-hint">{RENDERS.find((r) => r.id === render)!.hint}</p>
+          <p className="v2-hint">{reusing ? "Plays part of an existing AI video clip." : RENDERS.find((r) => r.id === render)!.hint}</p>
           {render === "still" && (
             <div className="v2-sb-seg" role="radiogroup" aria-label="Still picture">
               <button type="button" role="radio" aria-checked={stillMode === "image"} className={stillMode === "image" ? "on" : ""} onClick={() => setStillMode("image")}><Ic g="image" size={15} /> Image asset</button>
@@ -140,9 +174,66 @@ export function ShotEditor({ project, shot, number, isNew, mobile, onSave, onCan
           {render !== "ai" && shot.render === undefined && shot.assetId && <p className="v2-hint">The shot’s AI clip versions are kept; switch back to AI video to use them again.</p>}
         </fieldset>
 
-        {sharedClip && render === "ai" && clipInfo && <label className="v2-sb-field">In point in {clipInfo.label} (s)<input type="text" inputMode="decimal" value={inSec} onChange={(e) => setInSec(e.target.value)} aria-label={`In point in ${clipInfo.label} (seconds)`} /></label>}
-        {sharedClip && render === "ai" && affects && prompt !== sharedClip.prompt && <p className="v2-sb-warnbox v2-sb-clipwarn" role="alert" data-testid="clip-affects"><Ic g="⚠" size={14} /> {affects}</p>}
-        <label className="v2-sb-field">{render === "ai" ? (sharedClip && clipInfo ? `Clip prompt · ${clipInfo.label}${affects ? ` (${affects})` : ""}` : "Clip prompt") : "Clip prompt (optional)"}<textarea rows={4} value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder={render === "ai" ? "What the AI video should show" : "Notes for making the clip"} /></label>
+        {render === "ai" && (
+          <fieldset className="v2-sb-field" data-testid="clip-source">
+            <legend>Clip source</legend>
+            <div className="v2-sb-seg v2-sb-clipsrc" role="radiogroup" aria-label="Clip source">
+              <button type="button" role="radio" aria-checked={source === "own"} className={source === "own" ? "on" : ""} onClick={() => { setSource("own"); setConfirmReuse(false); }}><Ic g="✎" size={15} /> New clip</button>
+              <button type="button" role="radio" aria-checked={source === "reuse"} className={source === "reuse" ? "on" : ""} onClick={() => setSource("reuse")}><Ic g="⧉" size={15} /> Reuse clip</button>
+            </div>
+            <p className="v2-hint">{source === "own" ? "This shot gets its own clip, generated from the clip prompt below." : isNew ? "Use from another shot: this shot plays part of an existing clip, so nothing new is generated." : "This shot plays part of an existing clip, so nothing new is generated."}</p>
+            {source === "own" && sharedClip && clipInfo && <p className="v2-hint" role="note" data-testid="clip-unlink-note">Saving gives this shot its own clip again; {clipInfo.label} stays for the shots that still use it.</p>}
+            {source === "reuse" && (clipList.length
+              ? <ul className="v2-sb-clippick" role="listbox" aria-label="Clips to reuse" data-testid="clip-picker">
+                  {clipList.map((c) => {
+                    const src = thumbs[board.selectedOf(project, c.owner) ?? ""];
+                    return (
+                      <li key={c.key} role="option" aria-selected={pick === c.key} aria-disabled={!!c.blocked}>
+                        <button type="button" className={pick === c.key ? "on" : ""} disabled={!!c.blocked} onClick={() => choose(c.key)} title={c.blocked}>
+                          <Thumb src={src} icon="▭" count={1} />
+                          <span className="v2-sb-clippick-txt">
+                            <b>{c.label}</b> <span>{c.name}</span>
+                            <small>{c.firstShotNo ? `First used in Shot ${c.firstShotNo}` : "Not used by a shot yet"} · <span className={`v2-sb-clipstate ${c.generated ? "done" : "waiting"}`}>{c.generated ? "Generated" : "Not generated"}</span>{c.durationSec ? ` · ${sec(c.durationSec)} s` : ""}</small>
+                            {c.blocked && <small className="v2-sb-err">{c.blocked}</small>}
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              : <p className="v2-sb-err" role="alert"><Ic g="alert" size={14} /> There is no clip to reuse yet. Make a new clip first.</p>)}
+            {reusing && clipList.length > 0 && !picked && <p className="v2-hint" role="note">Pick the clip this shot plays.</p>}
+            {reusing && picked && (
+              <div className="v2-sb-row v2-sb-cliptrim" data-testid="clip-trim">
+                <div className="v2-sb-field"><span>In point in {picked.label} (s)</span>
+                  <div className="v2-sb-stepper">
+                    <button type="button" className="v2-btn v2-sb-btn" aria-label="In point earlier" onClick={() => moveIn(-0.5)}>−</button>
+                    <input type="text" inputMode="decimal" value={inSec} onChange={(e) => setInSec(e.target.value)} aria-label={`In point in ${picked.label} (seconds)`} aria-invalid={!inOk} />
+                    <button type="button" className="v2-btn v2-sb-btn" aria-label="In point later" onClick={() => moveIn(0.5)}>+</button>
+                  </div>
+                </div>
+                <div className="v2-sb-field"><span>Duration (s)</span>
+                  <div className="v2-sb-stepper">
+                    <button type="button" className="v2-btn v2-sb-btn" aria-label="Shorter" onClick={() => { setLenAuto(false); step(setDur, dur, -0.5, storyEdit.MIN_SHOT_SEC); }}>−</button>
+                    <input type="text" inputMode="decimal" value={dur} onChange={(e) => { setLenAuto(false); setDur(e.target.value); }} aria-label="Shot duration (seconds)" aria-invalid={!durOk} />
+                    <button type="button" className="v2-btn v2-sb-btn" aria-label="Longer" onClick={() => { setLenAuto(false); step(setDur, dur, 0.5, storyEdit.MIN_SHOT_SEC); }}>+</button>
+                  </div>
+                </div>
+                {picked.durationSec !== undefined && inOk && durOk && inN + n > picked.durationSec + 0.05 && <p className="v2-hint" role="note"><Ic g="⚠" size={12} /> Plays past the end of {picked.label} ({sec(picked.durationSec)} s).</p>}
+              </div>
+            )}
+            {confirmReuse && (
+              <div className="v2-sb-warnbox" role="alertdialog" aria-label="Replace this shot's clip" data-testid="reuse-confirm">
+                <p><Ic g="⚠" size={14} /> This shot's own clip prompt is removed and the shot plays {picked?.label ?? "the chosen clip"} instead. Its clip versions stay in the media library; Undo brings everything back.</p>
+                <div className="v2-sb-row"><button type="button" className="v2-btn v2-sb-btn" onClick={() => setConfirmReuse(false)}>Keep own clip</button><button type="button" className="v2-btn v2-sb-btn primary" onClick={() => onSave(patch())}>Reuse clip</button></div>
+              </div>
+            )}
+            {source === "own" && !sharedClip && !isNew && (
+              <label className="v2-sb-check" title={shareWhy}><input type="checkbox" checked={makeShared} disabled={!!shareWhy} onChange={(e) => setMakeShared(e.target.checked)} data-testid="make-shareable" /> Make this shot's clip shareable{shareWhy ? ` (${shareWhy})` : " so other shots can reuse it"}</label>
+            )}
+          </fieldset>
+        )}
+        {!reusing && <label className="v2-sb-field">{render === "ai" ? "Clip prompt" : "Clip prompt (optional)"}<textarea rows={4} value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder={render === "ai" ? "What the AI video should show" : "Notes for making the clip"} /></label>}
         <fieldset className="v2-sb-field">
           <legend>Reference assets</legend>
           {refs.length > 0 && (

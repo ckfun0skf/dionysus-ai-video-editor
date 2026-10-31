@@ -21,6 +21,7 @@ export * as roundtrip from "./storyRoundtrip";
 export type { StoryDiff, DiffItem } from "./storyRoundtrip";
 export * as storyEdit from "./storyEdit";
 export * as storyRefs from "./storyRefs";
+export * as clipSource from "./clipSource";
 export * as storySteps from "./storySteps";
 export type { Storyboard, AssetSlot, Shot, VersionInfo, QaCheck, QaResult, Staleness, StoryStatus, ProductionStep, StepState, SendState } from "./storyboard";
 export * from "./htmlClipPackage";

@@ -47,7 +47,7 @@ export function StoryboardView({ engine, blobs, onClose, initialOpen, onView, on
   const [open, setOpen] = useState<BoardTarget | undefined>(initialOpen);
   const mobile = useIsMobile();
   // V2-CUT-02: shot editing. `editing.after` set = a new shot not yet added (Save adds it, one undo step).
-  const [editing, setEditing] = useState<{ shot: string; after?: string | null }>();
+  const [editing, setEditing] = useState<{ shot: string; after?: string | null; reuse?: string }>();
   const [conn, setConn] = useState<{ from: string; to: string }>();
   const [shotMenu, setShotMenu] = useState<{ shot: string; at?: { x: number; y: number } }>();
   const [confirmDelete, setConfirmDelete] = useState<string>();
@@ -133,7 +133,7 @@ export function StoryboardView({ engine, blobs, onClose, initialOpen, onView, on
     const what = lost.map((c) => (c.transition ? "transition" : c.kind === "continuity" ? "continuity link" : c.kind === "match" ? "match cut" : "note")).filter((x, i, a) => a.indexOf(x) === i).join(" and ");
     setNote(`Moved “${sb.shots[id].title}” to shot ${to + 1}${lost.length ? ` · its ${what} with the old neighbour is off until they’re next to each other again` : ""} · Clips already on the timeline keep their place`, undoAction);
   };
-  const newShot = (after?: string) => { setOpen(undefined); setConn(undefined); setEditingSlot(undefined); setEditing({ shot: storyEdit.nextShotId(sb!), after: after ?? (sb!.order.at(-1) ?? null) }); };
+  const newShot = (after?: string, reuse?: string) => { setOpen(undefined); setConn(undefined); setEditingSlot(undefined); setEditing({ shot: storyEdit.nextShotId(sb!), after: after ?? (sb!.order.at(-1) ?? null), ...(reuse ? { reuse } : {}) }); };
   const duplicate = (id: string) => {
     const copy = storyEdit.nextShotId(sb!);
     engine.dispatch(cmd.duplicateShot(id, copy));
@@ -159,6 +159,7 @@ export function StoryboardView({ engine, blobs, onClose, initialOpen, onView, on
       { label: "Edit shot", icon: "✎", shortcut: undefined as string | undefined, onSelect: () => { setOpen(undefined); setConn(undefined); setEditingSlot(undefined); setEditing({ shot: id }); } },
       { label: "Duplicate", icon: "⧉", onSelect: () => duplicate(id) },
       { label: "Insert shot after", icon: "+", onSelect: () => newShot(id) },
+      ...(sb?.shots[id] && !sb.shots[id].render ? [{ label: "New shot using this clip", icon: "⧉", onSelect: () => newShot(id, sb.shots[id].clipSlot ? `slot:${sb.shots[id].clipSlot}` : `shot:${id}`) }] : []),
       { label: "Move up", icon: "↑", shortcut: mobile ? undefined : "Alt+↑", disabled: i <= 0, onSelect: () => moveTo(id, i - 1) },
       { label: "Move down", icon: "↓", shortcut: mobile ? undefined : "Alt+↓", disabled: i >= last, onSelect: () => moveTo(id, i + 1) },
       { label: "Delete shot…", icon: "🗑", shortcut: mobile ? undefined : "Del", danger: true, onSelect: () => setConfirmDelete(id) },
@@ -270,7 +271,7 @@ export function StoryboardView({ engine, blobs, onClose, initialOpen, onView, on
         onSave={saveSlot} onCancel={() => setEditingSlot(undefined)} onDelete={() => setConfirmSlotDelete(editSlot.id)} />}
       {confirmSlotDelete && sb?.slots[confirmSlotDelete] && <ConfirmDialog title={`Delete asset “${sb.slots[confirmSlotDelete].name}”?`} message={slotDeleteMessage(confirmSlotDelete)} confirm="Delete"
         onCancel={() => setConfirmSlotDelete(undefined)} onConfirm={() => { const id = confirmSlotDelete; setConfirmSlotDelete(undefined); removeSlot(id); }} />}
-      {has && editShot && !step && <ShotEditor key={editing!.shot} project={project} shot={editShot} number={isNew ? no(editing!.after ?? "") + 1 : no(editShot.id)} isNew={isNew} mobile={mobile}
+      {has && editShot && !step && <ShotEditor key={editing!.shot} project={project} shot={editShot} number={isNew ? no(editing!.after ?? "") + 1 : no(editShot.id)} isNew={isNew} mobile={mobile} thumbs={thumbs} initialReuse={isNew ? editing!.reuse : undefined}
         onSave={saveShot} onCancel={() => setEditing(undefined)} onDelete={() => setConfirmDelete(editShot.id)} />}
       {has && conn && !step && sb && storyEdit.adjacent(sb, conn.from, conn.to) && <ConnectionEditor project={project} from={conn.from} to={conn.to} mobile={mobile}
         onChange={(patch) => engine.dispatch(cmd.setConnection(conn.from, conn.to, patch))} onClose={() => setConn(undefined)} />}

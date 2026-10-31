@@ -117,7 +117,7 @@ describe("board editing (V2-CUT-02)", () => {
     await click(btn("Shot 1 actions"));
     const sheet = document.querySelector(".v2-sb-actsheet")!;
     expect(sheet).toBeTruthy();
-    expect([...sheet.querySelectorAll("button")].map((b) => b.textContent?.trim())).toEqual(["Edit shot", "Duplicate", "Insert shot after", "Move up", "Move down", "Delete shot…", "Cancel"]);
+    expect([...sheet.querySelectorAll("button")].map((b) => b.textContent?.trim())).toEqual(["Edit shot", "Duplicate", "Insert shot after", "New shot using this clip", "Move up", "Move down", "Delete shot…", "Cancel"]);
     const n = titles(engine).length;
     await click(btn("Duplicate"));
     expect(titles(engine)).toHaveLength(n + 1);
