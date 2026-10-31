@@ -2600,6 +2600,12 @@
           "title": "Add audio > From Video: Upload video action at the top of the list (MP4/MOV/WebM, iOS photo library friendly) with upload progress, reusing the Add media import path. Keep video in library (default on) or audio-only: the uploaded video is auto-selected for trim/preview/Add audio; audio-only uploads are removed after a successful extraction or when not used, but kept (with a toast) when decoding fails and the audio plays from the video file. Videos without an audio track show This video has no audio",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P20-SHEET-SCROLL",
+          "title": "Mobile bottom sheets scroll to their last control (e.g. Adjust > Blend mode for overlay clips) on Android Chrome and iOS Safari: snap heights follow the visual viewport, content pull-ups scroll when the sheet cannot grow, overflow-y auto with overscroll containment, dvh max-height, min-height 0 children, bottom safe-area padding, and sliders use touch-action pan-y so vertical pans scroll while horizontal drags adjust. Audited all 26 Sheet uses and the storyboard action sheet",
+          "status": "done",
+          "progress": 100
         }
       ]
     },

@@ -8,6 +8,23 @@ const HANDLE = ".v2-grabber, .v2-sheet-head, .v2-cuelist-head, .v2-panel-head";
 // Sliders/canvas keep their own gestures; a focused field keeps text selection. An unfocused field is just content (a tap still focuses it).
 const NO_DRAG = "input[type=range], canvas, input:focus, textarea:focus, select:focus, [contenteditable]:focus";
 
+/** P20: the visible viewport height (Android Chrome / iOS Safari toolbars excluded). */
+export function viewportHeight(): number {
+  const v = typeof window !== "undefined" ? window.visualViewport?.height : undefined;
+  return v && v > 0 ? Math.min(v, window.innerHeight || v) : window.innerHeight;
+}
+/** P20: snap heights in px for the visible viewport. */
+export function sheetPoints(snaps: number[]): number[] { const h = viewportHeight(); return snaps.map((f) => Math.round(f * h)); }
+/** P20: false when CSS (max-height) or the backdrop keeps the sheet from getting taller, so a pull-up must scroll the content instead. */
+export function canGrow(el: HTMLElement): boolean {
+  const cs = getComputedStyle(el);
+  const max = parseFloat(cs.maxHeight);
+  const h = el.getBoundingClientRect().height;
+  if (Number.isFinite(max) && h >= max - 2) return false;
+  const room = el.parentElement?.clientHeight;
+  return !(room && h >= room - 2);
+}
+
 /** True when some scroller between `el` and `root` is scrolled away from the top. */
 function scrolledAbove(el: Element | null, root: Element): boolean {
   for (let n: Element | null = el; n; n = n.parentElement) {
@@ -33,7 +50,7 @@ export function Sheet({ onClose, label, className = "", children, head = true, e
   const cur = useRef(initial);
   const closeRef = useRef(onClose); closeRef.current = onClose;
   const suppressClick = useRef(false);
-  const points = () => snaps.map((f) => Math.round(f * window.innerHeight));
+  const points = () => sheetPoints(snaps);
   const drag = useSnapDrag({
     points,
     size: () => ref.current?.getBoundingClientRect().height ?? 0,
@@ -71,7 +88,7 @@ export function Sheet({ onClose, label, className = "", children, head = true, e
         const vertical = Math.abs(dy) > Math.abs(dx);
         const grab = onHandle ? true
           : !vertical ? false
-          : dy < 0 ? size < pts[pts.length - 1] - 2 // pull up: expand the sheet before scrolling content
+          : dy < 0 ? size < pts[pts.length - 1] - 2 && canGrow(el) // pull up: expand the sheet before scrolling content (P20: never when it cannot grow)
           : !scrolledAbove(t.target, el); // pull down at the top of the content: collapse
         t.mode = grab ? "drag" : "native";
         if (grab) drag.begin(t.y0, e.timeStamp || performance.now());
