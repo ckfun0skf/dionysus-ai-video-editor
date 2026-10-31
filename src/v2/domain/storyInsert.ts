@@ -16,7 +16,7 @@ const one = (s: string, max = 140) => { const t = s.replace(/\s+/g, " ").trim();
 /** The guide rules quoted in the insert prompt (by key, in rule order). */
 export const INSERT_RULE_KEYS = [
   "reusable-assets", "standalone-prompts", "last-frame-continuity", "ids", "text-in-layers", "duration", "references-block",
-  "audio", "self-contained-prompts", "frame-of", "clip-centric", "plan-insert-shots",
+  "audio", "self-contained-prompts", "frame-of", "clip-centric", "plan-insert-shots", "screen-insert",
 ] as const;
 
 /** Example answer, also used by the docs and tests. */
@@ -86,6 +86,7 @@ export function buildInsertPrompt(doc: StoryDoc, afterId: string, lastDesc: stri
     `- "character", "location", "prop", "style", "frame": references only (a clip's "assets"/"references"), never a shot's "clip".`,
     `- "audio": only in "audio" cues.`,
     `A shot without "render" is an AI shot, so its "clip" MUST be a "video" asset.`,
+    `Screen insert (an app, website or code on a laptop, phone or TV): the html is the MAIN picture ("render": "html", "clip": "<html asset id>") and the device is a "video" layer on top with "box" and "chromaKey" whose prompt asks for a flat, uniform pure green (#00ff00) screen (RULE 56).`,
     ``,
     `GUIDE RULES:`,
     ...rules,

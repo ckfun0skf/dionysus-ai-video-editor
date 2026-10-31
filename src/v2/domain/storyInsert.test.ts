@@ -162,3 +162,34 @@ describe("P22: error scope (only the insert blocks)", () => {
     expect(p).toContain("- title-card (html");
   });
 });
+
+describe("screen insert (P23, RULE 56)", () => {
+  const studyUi = { id: "study-ui", name: "Study issue UI", type: "html", aspect: "16:9", prompt: "An AI coding assistant panel studying issue #941" };
+  const laptop = { id: "laptop-greenscreen", name: "Laptop (green screen)", type: "video", aspect: "16:9", genDurationSec: 4, prompt: "Locked-off laptop on a desk, the screen a flat, uniform, evenly lit pure green (#00ff00), nothing else green, static camera" };
+  const s43 = { id: "s43", title: "AI reviews the issue", description: "Laptop-screen insert", durationSec: 3, render: "html", clip: "study-ui",
+    layers: [{ id: "s43-laptop", type: "video", asset: "laptop-greenscreen", startSec: 0, endSec: 3, box: { x: 0, y: 0, width: 1, height: 1 }, chromaKey: { color: "#00ff00", range: 0.4, spill: 0.5 } }] };
+  const ins = (shot: unknown) => json({ schema: "3.1-insert", insertAfter: "s2", shots: [shot], newAssets: [studyUi, laptop] });
+
+  it("accepts an html main picture with a chroma-keyed, generated device layer on top", () => {
+    const r = applyInsertJson(doc, ins(s43), { expectAfter: "s2" });
+    if (!r.ok) throw new Error(JSON.stringify(r.errors));
+    const sh = r.doc.shots.find((s) => s.id === "s43")!;
+    expect(sh.render).toBe("html");
+    expect(sh.layers![0]).toMatchObject({ type: "video", asset: "laptop-greenscreen", chromaKey: { color: "#00ff00", range: 0.4, spill: 0.5 } });
+    const raw = rawDoc(r.doc) as { assets: { id: string; prompt?: string }[] };
+    expect(raw.assets.find((a) => a.id === "laptop-greenscreen")?.prompt).toMatch(/pure green/);
+  });
+  it("blocks the ChatGPT form (html clip without render) and the provisional layer without id, type and box", () => {
+    const { render: _r, layers: _l, ...bare } = s43;
+    const a = applyInsertJson(doc, ins(bare), { expectAfter: "s2" });
+    expect(a.ok).toBe(false);
+    if (!a.ok) expect(a.errors.map((e) => e.message).join(" ")).toMatch(/render.*html/);
+    const b = applyInsertJson(doc, ins({ ...s43, layers: [{ asset: "laptop-greenscreen", startSec: 0, endSec: 3, chromaKey: { color: "#00ff00" } }] }), { expectAfter: "s2" });
+    expect(b.ok).toBe(false);
+  });
+  it("the insert prompt explains the screen insert and quotes RULE 56", () => {
+    const p = buildInsertPrompt(doc, "s2", "A laptop shows the app.");
+    expect(p).toContain("Screen insert (an app, website or code");
+    expect(p).toContain("\n56. Screen insert");
+  });
+});

@@ -2630,6 +2630,12 @@
           "title": "Plan with AI fixes: only errors in the inserted shots, new assets, new audio and their connections block Insert; pre-existing board issues are listed in a collapsed 'Existing storyboard issues (not blocking)' section; errors in existing assets an inserted shot uses become warnings; blank AI shots are treated as needsPrompt to-dos; the prompt and rule 55 state where each asset type may go (an AI shot's clip must be a video asset; html via render html or layers); warnings shown above the lists on phones",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P23-SCREEN-INSERT",
+          "title": "Screen insert (RULE 56): an app, website or code on a laptop, phone or TV is a render html shot with the html asset as its clip plus a video or image device layer with box and chromaKey on top; the device prompt asks for a flat, uniform pure green screen; quoted in the main and Plan with AI prompts, spec example, tests for validation, prompts and send to timeline",
+          "status": "done",
+          "progress": 100
         }
       ]
     },
