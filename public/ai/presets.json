@@ -695,6 +695,7 @@
         "Lens",
         "Motion",
         "Color",
+        "Stylize",
         "Light"
       ],
       "presets": [
@@ -850,6 +851,76 @@
               "default": 1
             }
           ]
+        },
+        {
+          "id": "glitch",
+          "version": 1,
+          "name": "Glitch",
+          "category": "Stylize",
+          "description": "Digital glitch: RGB channel split, displaced horizontal slices, scanlines and noise flicker in random bursts.",
+          "params": [
+            {
+              "key": "intensity",
+              "label": "Intensity",
+              "type": "number",
+              "min": 0,
+              "max": 1,
+              "step": 0.05,
+              "default": 0.6,
+              "description": "Overall strength, 0 (off) to 1 (heavy breakup)."
+            },
+            {
+              "key": "frequency",
+              "label": "Frequency",
+              "type": "number",
+              "min": 1,
+              "max": 40,
+              "step": 1,
+              "default": 8,
+              "description": "Burst chances over the whole effect range (a count, not per second); higher = more frequent glitches."
+            },
+            {
+              "key": "rgbShift",
+              "label": "RGB shift",
+              "type": "number",
+              "min": 0,
+              "max": 60,
+              "step": 1,
+              "default": 12,
+              "description": "Largest red/cyan channel offset in pixels at 1080p (scaled to the frame)."
+            },
+            {
+              "key": "slices",
+              "label": "Slices",
+              "type": "number",
+              "min": 0,
+              "max": 24,
+              "step": 1,
+              "default": 8,
+              "description": "Most horizontal bands displaced during a burst (a count, 0 to 24)."
+            },
+            {
+              "key": "seed",
+              "label": "Seed",
+              "type": "number",
+              "min": 1,
+              "max": 999,
+              "step": 1,
+              "default": 1,
+              "description": "Pattern variant, 1 to 999; the same seed always glitches the same way."
+            }
+          ],
+          "ai": {
+            "use": "tech, gaming, cyberpunk, hacking, horror jump moments, music beats, transitions between scenes",
+            "avoid": "calm or emotional scenes; long ranges at high intensity are tiring to watch",
+            "example": {
+              "intensity": 0.7,
+              "frequency": 10,
+              "rgbShift": 16,
+              "slices": 10,
+              "seed": 3
+            }
+          }
         },
         {
           "id": "glow",
