@@ -58,3 +58,32 @@ describe("Sheet header CSS (V2-SB-R02)", () => {
     expect(css).toMatch(/\.v2-sheet-head \{ position: sticky; top: 24px; z-index: 1;/);
   });
 });
+
+describe("P20 sheet scrolling", () => {
+  it("snaps use the visible viewport (Android Chrome / iOS toolbars)", async () => {
+    const { sheetPoints, viewportHeight } = await import("./Sheet");
+    vi.stubGlobal("visualViewport", { height: 600 });
+    expect(viewportHeight()).toBe(Math.min(600, window.innerHeight));
+    expect(sheetPoints([0.5])).toEqual([Math.round(0.5 * Math.min(600, window.innerHeight))]);
+    vi.unstubAllGlobals();
+  });
+  it("a sheet that cannot grow lets content pull-ups scroll instead of dragging", async () => {
+    const { canGrow } = await import("./Sheet");
+    const parent = document.createElement("div"); const el = document.createElement("div"); parent.appendChild(el); document.body.appendChild(parent);
+    Object.defineProperty(parent, "clientHeight", { value: 500, configurable: true });
+    el.getBoundingClientRect = () => ({ height: 499 } as DOMRect);
+    expect(canGrow(el)).toBe(false);
+    el.getBoundingClientRect = () => ({ height: 300 } as DOMRect);
+    expect(canGrow(el)).toBe(true);
+    el.style.maxHeight = "300px";
+    expect(canGrow(el)).toBe(false);
+  });
+  it("CSS: sheets scroll vertically, sliders keep vertical pans, bottom safe area is padded", async () => {
+    const fs = await import("node:fs");
+    const css = fs.readFileSync("src/v2/ui/v2.css", "utf8");
+    const rule = css.slice(css.indexOf("/* P20:"));
+    expect(rule).toMatch(/\.v2-sheet\.is-snap \{[^}]*overflow-y: auto[^}]*overscroll-behavior: contain[^}]*100dvh[^}]*safe-area-inset-bottom/);
+    expect(rule).toMatch(/\.v2-sheet input\[type=range\][^{]*\{ touch-action: pan-y; \}/);
+    expect(rule).toMatch(/min-height: 0/);
+  });
+});
