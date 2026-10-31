@@ -17,6 +17,7 @@ import { ProductionView } from "./ProductionView";
 import { ExportPanel, ImportPanel, PromptPanel } from "./StoryImport";
 import { AgentPanel } from "../agent/AgentPanel";
 import { useVersionThumbs } from "./useVersionThumbs";
+import { SyncSheet } from "../SyncSheet";
 import "./storyboard.css";
 
 type Step = "prompt" | "import" | "export" | "production" | "agent";
@@ -39,6 +40,7 @@ export function StoryboardView({ engine, blobs, onClose, initialOpen, onView, on
   useStoryAuto(project, engine, blobs, setNote);
   const [more, setMore] = useState<{ x: number; y: number }>();
   const [sendMenu, setSendMenu] = useState(false);
+  const [syncOpen, setSyncOpen] = useState(false);
   const [confirmTimeline, setConfirmTimeline] = useState(false);
   const moreBtn = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState<BoardTarget | undefined>(initialOpen);
@@ -54,7 +56,7 @@ export function StoryboardView({ engine, blobs, onClose, initialOpen, onView, on
   useEffect(() => { if (!note) return; const t = setTimeout(() => setNoteState(undefined), note.action ? NOTE_ACTION_MS : NOTE_MS); return () => clearTimeout(t); }, [note]);
   useEffect(() => {
     const k = (e: KeyboardEvent) => { // The mobile Sheet closes itself on Escape; skip it here so one press doesn't also close the board.
-      if (e.key !== "Escape" || e.defaultPrevented || e.target instanceof HTMLTextAreaElement || (e.target instanceof Element && e.target.closest(".v2-sheet-backdrop, .v2-cmenu, .v2-sb-actsheet-backdrop")) || sendMenu || confirmTimeline || confirmDelete || confirmSlotDelete || shotMenu) return;
+      if (e.key !== "Escape" || e.defaultPrevented || e.target instanceof HTMLTextAreaElement || (e.target instanceof Element && e.target.closest(".v2-sheet-backdrop, .v2-cmenu, .v2-sb-actsheet-backdrop")) || sendMenu || syncOpen || confirmTimeline || confirmDelete || confirmSlotDelete || shotMenu) return;
       (editing ? setEditing(undefined) : editingSlot ? setEditingSlot(undefined) : conn ? setConn(undefined) : open ? setOpen(undefined) : step ? setStep(undefined) : onClose()); };
     window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k);
   }, [open, step, onClose, sendMenu, confirmTimeline, confirmDelete, confirmSlotDelete, shotMenu, editing, editingSlot, conn]);
@@ -225,6 +227,7 @@ export function StoryboardView({ engine, blobs, onClose, initialOpen, onView, on
           {!step && <button className={`v2-btn v2-sb-btn ${mobile ? "v2-sb-prod-icon" : "primary"}`} aria-label="Production steps" title="Step-by-step list: generate, upload, pick and check every asset and clip" onClick={() => { setOpen(undefined); setStep("production"); }}><Ic g="todo" size={18} /> <span className="v2-sb-hide-narrow">Production</span></button>}
           {/* V2-SB-R11: on phones Send is the one labelled primary action; on desktop Production stays primary. */}
           <button className={`v2-btn v2-sb-btn ${mobile ? "primary" : ""}`} aria-label="Send to timeline" title="Add every shot that has a clip to the end of the timeline, in story order. Timeline clips follow the version you pick here." onClick={send}><Ic g="to-timeline" size={18} /> <span>{mobile ? "Send" : "Send to timeline"}</span></button>
+          <button className="v2-btn v2-sb-btn v2-sync-btn" aria-label="Sync to Storyboard" title="Sync to Storyboard: write timeline edits back to this board (review first)" onClick={() => setSyncOpen(true)}><Ic g="↶" size={18} /> <span>{mobile ? "Sync" : "Sync from timeline"}</span></button>
           {!step && (mobile ? (
             <button ref={moreBtn} className="v2-icon v2-sb-icon" aria-label="More storyboard actions" aria-haspopup="menu" aria-expanded={!!more} title="AI prompt, Export JSON, Import revised JSON, AI agent"
               onClick={() => { const r = moreBtn.current!.getBoundingClientRect(); setMore(more ? undefined : { x: r.right - 220, y: r.bottom + 4 }); }}><Ic g="⋯" size={18} /></button>
@@ -280,6 +283,7 @@ export function StoryboardView({ engine, blobs, onClose, initialOpen, onView, on
         { label: "AI agent", icon: "agent", onSelect: () => { setOpen(undefined); setStep("agent"); } },
         ...(onSeries ? [{ label: series ? `Series library · ${series.name}` : "Series library", icon: "library", onSelect: onSeries }] : []),
       ]} />}
+      {syncOpen && <SyncSheet engine={engine} project={project} onDone={(m) => { setSyncOpen(false); if (m) setNote(m); }} />}
       {sendMenu && <SendModes project={project} onUpdate={update} onReplace={() => setConfirmTimeline(true)} onCancel={() => setSendMenu(false)} />}
       {confirmTimeline && <ConfirmDialog title="Replace the timeline?" confirm="Replace timeline"
         message="Every clip on the timeline is removed, including clips you added by hand, and the whole board is sent again in story order. Undo brings the current timeline back."

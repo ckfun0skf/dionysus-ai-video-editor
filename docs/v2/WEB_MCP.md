@@ -71,6 +71,8 @@ Generated from the same schema as the storyboard parser (`src/v2/domain/storyAge
 - `validate` · read-only: Run the importer's checks on the current storyboard and list its warnings (edits are already checked; this reports what is left to improve).
 - `export_json` · read-only: The whole storyboard as storyboard JSON ("dionysus.storyboard/1"), edits included.
 - `send_to_timeline`: Update the timeline from the storyboard (update mode): adds shots that have a clip and new audio cues, switches changed clips and refreshes shot text; everything else on the timeline stays. Shots without an uploaded clip are skipped. New layers and in-shot cues are linked to their shot's main clip (moved, trimmed and deleted with it) unless they set link: false.
+- `sync_to_storyboard`: Write timeline edits back to the storyboard (one undo step): clip lengths, order and trims, layers, effects and audio cues of the shots they came from. Timeline clips with no shot become new shots, layers or cues flagged needsPrompt; shots whose clip was removed are kept and flagged removedFromTimeline. Afterwards call list_needs_prompt and fill every item.
+- `list_needs_prompt` · read-only: List the shots, layers and audio cues flagged needsPrompt (made on the timeline by Sync to Storyboard). Fill each: a shot needs a description and a clip generation prompt (update_shot), a layer or cue needs a description (set_shot_layers / update_cue); filling it clears the flag.
 <!-- tools:end -->
 
 Patch tools (`update_*`, `set_shot_params`) merge the given fields; `null` deletes a field. Ids can't be renamed.

@@ -126,7 +126,7 @@ function mediaLayer(p: Project, b: Storyboard, shot: Shot, l: StoryMediaLayer, s
   return {
     id: newId("plc"), startTicks: start, durationTicks: len, sourceInTicks,
     source: { kind: "assetVersion", assetId: a.id, versionId: v.id }, clipType: a.kind, volume: 1,
-    transform: { ...boxTransform(l.box, mw, mh, p.settings.width, p.settings.height) } as Transform, storyLink: { anchor }, ...(l.link === false ? {} : { link: { parent: anchor } }),
+    transform: { ...boxTransform(l.box, mw, mh, p.settings.width, p.settings.height) } as Transform, storyLink: { anchor }, storyLayer: l.id, ...(l.link === false ? {} : { link: { parent: anchor } }),
     ...(a.kind === "html" && l.params && Object.keys(l.params).length ? { htmlParams: { ...l.params } } : {}),
     ...(l.chromaKey ? { chromaKey: { ...CHROMA_DEFAULT, ...l.chromaKey } } : {}),
   };
@@ -165,14 +165,14 @@ function addLinked(p: Project, b: Storyboard, comp: Composition, shot: Shot, cli
   });
   const follow = (l: StoryLayer, r: { offset: number; duration: number }, t: Partial<Transform> | undefined) =>
     l.follow === "shot" ? followKeyframes(motion, r.offset, r.duration, { x: t?.x ?? 0, y: t?.y ?? 0, scale: t?.scale ?? 1 }, FOLLOW_STEP_TICKS) : undefined;
-  for (const l of shot.layers ?? [] as StoryLayer[]) {
+  for (const l of (shot.layers ?? [] as StoryLayer[]).filter((x) => !x.removedFromTimeline)) {
     const r = rangeIn(clip.durationTicks, l.startSec, l.endSec);
     const start = clip.startTicks + r.offset;
     if (l.type === "text") {
       const t0 = textLayerTransform(l);
       const t = l.opacity !== undefined ? { ...t0, opacity: l.opacity } : t0;
       const keyframes = follow(l, r, t);
-      const pl: Placement = { id: newId("plc"), startTicks: start, durationTicks: r.duration, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "text", text: textLayerData(b, l), ...(t ? { transform: t as Transform } : {}), ...(keyframes ? { keyframes } : {}), ...blendOf(l), storyLink: { anchor }, ...(l.link === false ? {} : { link: { parent: anchor } }) };
+      const pl: Placement = { id: newId("plc"), startTicks: start, durationTicks: r.duration, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "text", text: textLayerData(b, l), ...(t ? { transform: t as Transform } : {}), ...(keyframes ? { keyframes } : {}), ...blendOf(l), storyLink: { anchor }, storyLayer: l.id, ...(l.link === false ? {} : { link: { parent: anchor } }) };
       c = placeOnFreeTrack(c, pl, plainText());
       res.layers += 1;
     } else {
@@ -187,7 +187,7 @@ function addLinked(p: Project, b: Storyboard, comp: Composition, shot: Shot, cli
     }
   }
   if (shot.captions && captionText(shot)) {
-    const cue: Placement = { id: newId("plc"), startTicks: clip.startTicks, durationTicks: clip.durationTicks, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "text", text: { text: captionText(shot) } as TextData, storyLink: { anchor }, link: { parent: anchor } };
+    const cue: Placement = { id: newId("plc"), startTicks: clip.startTicks, durationTicks: clip.durationTicks, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "text", text: { text: captionText(shot) } as TextData, storyLink: { anchor }, storyLayer: "captions", link: { parent: anchor } };
     const shared = c.tracks.find((t) => t.kind === "text" && t.layerStyle?.subtitle && isFree(t, cue.startTicks, cue.durationTicks));
     if (shared) c = insertPlacement(c, shared.id, cue);
     else c = placeOnFreeTrack(c, cue, () => false, { name: "Subtitles", layerStyle: SUBTITLE_STYLE });
@@ -220,6 +220,7 @@ function addAudio(p: Project, b: Storyboard, comp: Composition, sent: { shot: Sh
   for (const x of sent) clips.set(x.shot.id, x.clip);
   const done = placedCues(p, b, c);
   for (const cue of b.audio ?? []) {
+    if (cue.removedFromTimeline) continue;
     const first = clips.get(cue.from);
     if (!first || done.has(cue.id)) continue;
     const slot = b.slots[cue.asset];
@@ -290,7 +291,7 @@ export function pendingAudio(p: Project): string[] {
   const done = placedCues(p, b, comp);
   return b.audio.filter((cue) => {
     const id = b.slots[cue.asset]?.assetId, a = id ? p.assets[id] : undefined;
-    return !done.has(cue.id) && shots.has(cue.from) && a?.kind === "audio" && a.versions.length > 0;
+    return !cue.removedFromTimeline && !done.has(cue.id) && shots.has(cue.from) && a?.kind === "audio" && a.versions.length > 0;
   }).map((cue) => cue.id);
 }
 
@@ -343,7 +344,7 @@ export const shotSignature = (s: Shot): string => JSON.stringify([s.layers ?? []
 const cueSignature = (cue: NonNullable<Storyboard["audio"]>[number]): string => JSON.stringify(cue);
 
 /** Record signatures for shots and cues on the timeline; `force` ids are overwritten, others only filled in. */
-function recordSent(p: Project, force: Set<string> = new Set()): Project {
+export function recordSent(p: Project, force: Set<string> = new Set()): Project {
   const b = p.storyboard;
   if (!b) return p;
   const comp = p.compositions[p.rootCompositionId];

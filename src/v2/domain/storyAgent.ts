@@ -73,7 +73,7 @@ export interface ToolCtx {
   series?: Series;
 }
 /** A finished call: text for the agent, plus the new doc for mutating tools (apply as one undo step labelled `label`). */
-export interface ToolResult { ok: boolean; text: string; doc?: StoryDoc; label?: string; send?: boolean }
+export interface ToolResult { ok: boolean; text: string; doc?: StoryDoc; label?: string; send?: boolean; sync?: boolean }
 type Edit = (raw: Raw, args: Obj, ctx: ToolCtx) => string | { label: string; message: string };
 
 export interface StoryTool {
@@ -353,6 +353,26 @@ export const STORY_TOOLS: StoryTool[] = [
     description: "Update the timeline from the storyboard (update mode): adds shots that have a clip and new audio cues, switches changed clips and refreshes shot text; everything else on the timeline stays. Shots without an uploaded clip are skipped. New layers and in-shot cues are linked to their shot's main clip (moved, trimmed and deleted with it) unless they set link: false.",
     inputSchema: obj({}),
   },
+  {
+    name: "sync_to_storyboard", title: "Sync the timeline to the storyboard", readOnly: false,
+    description: "Write timeline edits back to the storyboard (one undo step): clip lengths, order and trims, layers, effects and audio cues of the shots they came from. Timeline clips with no shot become new shots, layers or cues flagged needsPrompt; shots whose clip was removed are kept and flagged removedFromTimeline. Afterwards call list_needs_prompt and fill every item.",
+    inputSchema: obj({}),
+  },
+  {
+    name: "list_needs_prompt", title: "List items that need a prompt", readOnly: true,
+    description: "List the shots, layers and audio cues flagged needsPrompt (made on the timeline by Sync to Storyboard). Fill each: a shot needs a description and a clip generation prompt (update_shot), a layer or cue needs a description (set_shot_layers / update_cue); filling it clears the flag.",
+    inputSchema: obj({}),
+    read: (_r, _a, _c, doc) => {
+      if (!doc) return { ok: false, text: "No storyboard yet." };
+      const rows: string[] = [];
+      for (const s of doc.shots) {
+        if (s.needsPrompt) rows.push(`- shot ${s.id} "${s.title}" (${s.durationSec}s): write description and prompt`);
+        for (const l of s.layers ?? []) if (l.needsPrompt) rows.push(`- layer ${l.id} of shot ${s.id} (${l.type}${l.type === "text" ? ` "${l.text}"` : ` asset ${l.asset}`}, ${l.startSec}–${l.endSec}s): write a description`);
+      }
+      for (const c of doc.audio ?? []) if (c.needsPrompt) rows.push(`- audio cue ${c.id} (asset ${c.asset}, shot ${c.from}): write a description`);
+      return { ok: true, text: rows.length ? `${rows.length} item(s) need a prompt:\n${rows.join("\n")}` : "Nothing needs a prompt." };
+    },
+  },
 ];
 
 const TOOL = new Map(STORY_TOOLS.map((t) => [t.name, t]));
@@ -373,6 +393,7 @@ export function runStoryTool(name: string, args: unknown, doc: StoryDoc | undefi
   const a: Obj = isObj(args) ? args : {};
   const raw = doc ? docToRaw(doc) : undefined;
   if (tool.read) return tool.read(raw, a, ctx, doc);
+  if (name === "sync_to_storyboard") return doc ? { ok: true, text: "Syncing.", sync: true, label: "AI: sync to storyboard" } : { ok: false, text: "No storyboard yet." };
   if (name === "send_to_timeline") return doc ? { ok: true, text: "Sending.", send: true, label: "AI: update timeline" } : { ok: false, text: "No storyboard yet." };
   if (!raw && !tool.creates) return { ok: false, text: "No storyboard yet. Create one with create_storyboard first." };
   const work: Raw = raw ?? { format: STORYBOARD_FORMAT, meta: {}, assets: [], shots: [], connections: [] };

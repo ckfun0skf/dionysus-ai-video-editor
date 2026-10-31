@@ -1081,3 +1081,16 @@ select.v2-tp-field { -webkit-appearance: none; appearance: none; padding-right: 
 .v2-tool.v2-link-tool.is-active b { color: #38bdf8; }
 .v2-link-btn, .v2-autolink { min-height: 44px !important; height: auto !important; width: 100%; justify-content: flex-start; }
 .v2-link-btn.is-active, .v2-autolink.is-active { border-color: #38bdf8; color: #38bdf8; }
+
+/* P10-SYNC: Sync to Storyboard review sheet and flags */
+.v2-sync-sheet { max-width: min(560px, 94vw); }
+.v2-sync-list { list-style: none; margin: 8px 0 12px; padding: 0; max-height: min(50vh, 420px); overflow: auto; display: grid; gap: 6px; }
+.v2-sync-list li { background: #ffffff0d; border-radius: 8px; padding: 8px 10px; font-size: 13px; line-height: 1.35; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.v2-sync-list li[class*="removed"] { color: #fca5a5; }
+.v2-needs-prompt { display: inline-flex; align-items: center; gap: 4px; background: #f59e0b26; color: #fbbf24; border: 1px solid #f59e0b66; border-radius: 999px; padding: 2px 8px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+.v2-removed-tl { display: inline-flex; background: #ef444426; color: #fca5a5; border: 1px solid #ef444466; border-radius: 999px; padding: 2px 8px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+.v2-sync-sheet .v2-confirm-actions .v2-btn, .v2-sync-btn { min-height: 44px; }
+/* Delete toast with inline Undo (44px target) */
+.v2-toast.has-undo { display: flex; align-items: center; gap: 12px; padding: 4px 4px 4px 14px; pointer-events: auto; }
+.v2-toast-undo { min-height: 44px; min-width: 64px; border: 0; border-radius: 6px; background: #38bdf8; color: #04121c; font-weight: 700; font-size: 14px; cursor: pointer; padding: 0 14px; touch-action: manipulation; }
+.v2-sb-shot-text .v2-needs-prompt, .v2-sb-shot-text .v2-removed-tl { align-self: flex-start; justify-self: start; width: fit-content; margin-top: 4px; }

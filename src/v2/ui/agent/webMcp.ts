@@ -5,7 +5,7 @@
  * step; the board re-renders live, the "AI is editing" pill shows, and the call goes into the activity log.
  * Turning access off (or closing the page) unregisters every tool.
  */
-import { board, roundtrip, runtimeAiLinks, series, storyAgent, storyboardGuideMarkdown, type StoryDoc } from "../../domain";
+import { board, needsPromptItems, roundtrip, syncPlan, runtimeAiLinks, series, storyAgent, storyboardGuideMarkdown, type StoryDoc } from "../../domain";
 import { cmd, type Engine } from "../../engine";
 import { seriesStore } from "../series/seriesStore";
 
@@ -77,6 +77,11 @@ export function callAgentTool(engine: Engine, name: string, args: unknown): Tool
   if (res.ok && res.doc) {
     changed = engine.dispatch(cmd.mergeStoryboardDoc(res.doc), res.label);
     if (!changed) text = `No change: the storyboard already looks like that. ${text}`;
+  } else if (res.ok && res.sync) {
+    const plan = syncPlan(engine.getState().project);
+    changed = plan.changes.length > 0 && engine.dispatch(cmd.syncToStoryboard(), res.label);
+    const np = needsPromptItems(engine.getState().project.storyboard).length;
+    text = changed ? `Synced ${plan.changes.length} change(s) to the storyboard:\n${plan.changes.map((c) => `- ${c.label}${c.needsPrompt ? " (needsPrompt)" : ""}`).join("\n")}${np ? `\n${np} item(s) need a prompt: call list_needs_prompt and fill them.` : ""}` : "Nothing to sync: the storyboard already matches the timeline.";
   } else if (res.ok && res.send) {
     const p = engine.getState().project, plan = board.sendPlan(p);
     const placed = plan.some((x) => x.state === "placed"), missing = plan.filter((x) => x.state === "missing").length;

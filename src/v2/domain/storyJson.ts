@@ -145,6 +145,12 @@ interface StoryLayerBase {
   id: string; startSec: number; endSec: number; follow?: "shot";
   /** P9-LINK: `false` = Send to Timeline does not link this layer to its shot's main clip (absent/true = linked). */
   link?: false;
+  /** P10-SYNC: made on the timeline by Sync to Storyboard; the AI must describe it (`description`), which clears the flag. */
+  needsPrompt?: true;
+  /** P10-SYNC: what this layer is for, written by the AI for a `needsPrompt` layer. */
+  description?: string;
+  /** P10-SYNC: its clip was removed from the timeline; kept here, not sent again. */
+  removedFromTimeline?: true;
   /** V2-SB-128: a `blend` registry id (optionally `id@N`), kept as written; absent = normal. */
   blend?: string;
   /** V2-SB-128: 0 (invisible) to 1 (solid, the default). */
@@ -187,6 +193,10 @@ export interface StoryShot {
    * not seen (not lip-synced; unlike a voiceover it belongs to the scene). The clip prompt lists list-form lines.
    */
   dialogue?: string | StoryDialogueLine[];
+  /** P10-SYNC: made from a timeline clip by Sync to Storyboard; the AI must fill `prompt` (and `description`), which clears it. */
+  needsPrompt?: true;
+  /** P10-SYNC: the shot's clip was removed from the timeline; the shot is kept. */
+  removedFromTimeline?: true;
   /** Omitted = "ai". */
   render?: ShotRender;
   /** html asset (render html) or image asset (render still). Kept but ignored for render ai. */
@@ -295,6 +305,10 @@ export interface StoryAudio {
   fx?: StoryAudioFx;
   /** P9-LINK: `false` = not linked to the "from" shot's main clip (absent/true = linked when it fits in that shot). */
   link?: false;
+  /** P10-SYNC: see StoryLayerBase. */
+  needsPrompt?: true;
+  description?: string;
+  removedFromTimeline?: true;
 }
 export interface StoryDoc { format: typeof STORYBOARD_FORMAT; meta: StoryMeta; assets: StoryAsset[]; shots: StoryShot[]; connections: StoryConnection[]; audio?: StoryAudio[] }
 
@@ -304,6 +318,10 @@ export type StoryParseResult =
   | { ok: true; doc: StoryDoc; warnings: StoryIssue[] }
   | { ok: false; errors: StoryIssue[]; warnings: StoryIssue[] };
 
+/** P10-SYNC flags of a layer or cue: `needsPrompt` stays only while there is no `description`. */
+function syncFlags(o: Record<string, unknown>, description: string | undefined): { needsPrompt?: true; description?: string; removedFromTimeline?: true } {
+  return { ...(description ? { description } : {}), ...(o.needsPrompt === true && !description ? { needsPrompt: true as const } : {}), ...(o.removedFromTimeline === true ? { removedFromTimeline: true as const } : {}) };
+}
 const ID_RE = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,47}$/;
 const ASPECT_RE = /^\d+(\.\d+)?:\d+(\.\d+)?$/;
 const MAX_ERRORS = 40;
@@ -869,7 +887,8 @@ export function validateStoryboard(raw: unknown, opts: StoryValidateOptions = {}
         if (l.link === false) link = false;
         else warn(`${lp}.link`, `link ${JSON.stringify(l.link)} is ignored: use false (not linked to the shot's main clip) or leave it out (linked, the default).`);
       }
-      const look = { ...(blend ? { blend } : {}), ...(opacity !== undefined ? { opacity } : {}), ...(link === false ? { link } : {}) };
+      const desc = str(l.description) || undefined;
+      const look = { ...(blend ? { blend } : {}), ...(opacity !== undefined ? { opacity } : {}), ...(link === false ? { link } : {}), ...syncFlags(l, desc) };
       const range = timeRange(l, lp, dur, true);
       const startSec = range.startSec ?? 0, endSec = range.endSec ?? startSec;
       let follow: "shot" | undefined;
@@ -1088,7 +1107,8 @@ export function validateStoryboard(raw: unknown, opts: StoryValidateOptions = {}
     }
     const mode = render ?? "ai";
     const prompt = str(s.prompt) ?? "";
-    if (!prompt && mode === "ai") err(`${path}.prompt`, `Shot "${id}" needs a clip generation "prompt".`);
+    const flagged = s.needsPrompt === true;
+    if (!prompt && mode === "ai") (flagged ? warn : err)(`${path}.prompt`, flagged ? `Shot "${id}" needs a prompt (needsPrompt): describe what it shows and write its clip generation "prompt".` : `Shot "${id}" needs a clip generation "prompt".`);
     const used = strList(s.assets, `${path}.assets`).filter((a, j) => {
       if (a !== keyframeId(id) || assetIds.has(a)) return true;
       warn(`${path}.assets[${j}]`, `"${a}" is this shot's own keyframe; it is always attached (Image 1), so the entry is ignored.`);
@@ -1098,6 +1118,9 @@ export function validateStoryboard(raw: unknown, opts: StoryValidateOptions = {}
     const references = referencesOf(s.references, `${path}.references`, used, id);
     const shot: StoryShot = { id, title: str(s.title) || id, description: str(s.description) ?? "", durationSec: dur, prompt, assets: used, qa: strList(s.qa, `${path}.qa`) };
     if (references) shot.references = references;
+    // P10-SYNC: the flag stays until the prompt is filled.
+    if (flagged && !prompt) shot.needsPrompt = true;
+    if (s.removedFromTimeline === true) shot.removedFromTimeline = true;
     if (s.genDurationSec !== undefined) {
       const g = num(s.genDurationSec);
       if (g === undefined || g < 0.5 || g > 120) warn(`${path}.genDurationSec`, `genDurationSec ${JSON.stringify(s.genDurationSec)} is ignored: use seconds between 0.5 and 120.`);
@@ -1227,6 +1250,7 @@ export function validateStoryboard(raw: unknown, opts: StoryValidateOptions = {}
     }
     const fromShot = shots.find((s) => s.id === from);
     // P3B-11: volume curve and sound effect.
+    Object.assign(cue, syncFlags(c, str(c.description) || undefined));
     if (c.link !== undefined && c.link !== true) {
       if (c.link === false) cue.link = false;
       else warn(`${path}.link`, `link ${JSON.stringify(c.link)} is ignored: use false (not linked to the shot's main clip) or leave it out (linked, the default).`);

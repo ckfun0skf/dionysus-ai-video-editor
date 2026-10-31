@@ -640,6 +640,27 @@ Agents in WebMCP-capable browsers can edit the board with tools instead; each to
 - **Episode zip** (Projects → Export): the usual project archive, plus `series.json` holding only the Series assets the episode uses (and the ones they are made from); their media are bundled.
 - **Import** of either: when a Series with the same id exists here, it is **reconnected** (missing assets are added; for an asset in both the newer definition wins and versions are combined by id); otherwise the Series is **created**. An imported episode belongs to that Series and its linked assets follow it.
 
+### 4.10 Sync to Storyboard (P10-SYNC)
+
+The **Sync to Storyboard** button (timeline toolbar, mobile tool row "Sync board", and "Sync from timeline" on the storyboard) writes timeline edits back to the board after a review sheet listing every change (confirm step; one undo step):
+
+- Shot main clips write back `durationSec`, order, and the version trim; their layers (text/opacity/start/end), effects and audio cues (`atSec`, `durationSec`, `volume`) are updated.
+- A main-track clip with no shot becomes a new shot `shot-tl-N` (empty prompt) with `"needsPrompt": true`. A clip on another track becomes a layer `tl-layer-N` or audio cue `cue-tl-N` of the shot its link parent belongs to, also `"needsPrompt": true`. The board and the sync sheet show "⚠ Needs description / prompt".
+- A shot, layer or cue whose clip was deleted is **not** deleted: it gets `"removedFromTimeline": true` (cleared when the clip comes back).
+- Export JSON carries both flags; re-import merges by id. `needsPrompt` is cleared once a shot has a `prompt` (or a layer/cue has a `description`). RULE 47 tells the AI to fill these items. WebMCP: `sync_to_storyboard`, `list_needs_prompt`.
+
+| Field | On | Meaning |
+|---|---|---|
+| `needsPrompt?` | shot, layer, audio cue | `true` = made from the timeline by Sync; fill `prompt`/`description`. Dropped on import once filled. |
+| `removedFromTimeline?` | shot, layer, audio cue | `true` = its clip was removed from the timeline; kept, skipped by Update timeline for layers/cues. |
+| `description?` | layer, audio cue | Free text describing the item (fills `needsPrompt`). |
+
+Example after a sync:
+
+```json
+{ "id": "shot-tl-1", "title": "Timeline clip 1", "durationSec": 4, "description": "", "prompt": "", "needsPrompt": true }
+```
+
 ## 5. Planner prompt (updated)
 
 **Published guide (V2-SB-114).** The planner material is generated from the registry by `src/v2/domain/storyPrompt.ts` and `src/v2/domain/aiGuide.ts`, and published with the app. Paths are relative to the deployment's site URL (`DIONYSUS_SITE_URL`, see `docs/v2/DEPLOYMENT.md` in the repository):
@@ -722,6 +743,7 @@ The same winding hill road as the sun rises …", "references": [{ "asset": "hil
 44. An effect's "applyTo" picks the picture it changes: "main" (the default) changes only the shot's own clip, under every layer, so titles and overlays stay fixed; "overlay" changes only the shot's image, video and html layers (e.g. shake a sticker or blur a screen insert, leaving the shot still); "all" changes the whole composited frame — the shot, its overlays and its text together — like moving the camera over the finished picture. Use "all" when an overlay frames or keys the shot, e.g. a TV-set overlay with a green-screen hole showing the shot: a push-in with "main" zooms only the picture inside the TV, with "all" the TV and the picture zoom together. Example: "effects": [ { "preset": "ken-burns", "params": { "zoom": 0.15 }, "applyTo": "all" } ]. Layers with "follow": "shot" (RULE 20) follow only "main" effects.
 45. Typewriter cursor: a text layer with "anim": { "in": "typewriter" } can take "inParams": { "cursor", "blink", "after", "scramble" }. "cursor" is the cursor characters: "" (default) = none; one character ("|" or "_") = a cursor right after the typed text; several ("0123456789", "01", "#$%&") = a decode/scramble effect where each new character flickers through random ones of them for "scramble" seconds (0–1, default 0.15) before it resolves. "blink" = cursor blinks per second after typing (0–6, default 2; 0 = solid). "after" = what the cursor does when typing ends: "blink" (default, keep blinking), "hide" or "fade" (fades out over 0.5 s). Typing lasts "anim.durationSec". The scramble is seeded by time, so preview and export match exactly. For a sci-fi location/date caption use the "sci-fi-caption" textStyle (bundled Share Tech Mono, right-aligned, digit scramble) at the bottom right, e.g. { "type": "text", "text": "SEATTLE / YEAR 2027", "position": { "x": 0.62, "y": 0.9 }, "textStyle": "sci-fi-caption", "anim": { "in": "typewriter", "durationSec": 1.5, "inParams": { "cursor": "0123456789", "after": "fade" } } }. Bundled sci-fi fonts (work offline, packed into project files): orbitron, share-tech-mono, audiowide, rajdhani, exo-2.
 46. Link to main: on Send to Timeline every shot layer, caption, effect and audio cue that fits inside its shot is linked to that shot's main clip, so it moves when the shot is moved, reordered or rippled, is cut to fit when the shot is trimmed shorter, goes to the half holding its start when the shot is split, and is deleted with the shot. Write "link": false on a layer or an audio cue to keep it free (e.g. a music bed or a logo that must stay at a fixed time across shot edits); leave "link" out for the default (linked). Only false is meaningful. Example: "layers": [ { "id": "logo", "type": "image", "asset": "logo", "startSec": 0, "endSec": 5, "box": { "x": 0.8, "y": 0.05, "width": 0.15, "height": 0.15 }, "link": false } ]. Audio cues spanning several shots are never linked.
+47. Fill needsPrompt: after the user edits the timeline and presses Sync to Storyboard, clips that came from no shot are added to the storyboard with "needsPrompt": true (shown as "⚠ Needs description / prompt"): a main-track clip becomes a new shot (id "shot-tl-N", empty "prompt"), a clip on another track becomes a layer ("tl-layer-N") or audio cue ("cue-tl-N") of the shot it is linked to. You MUST fill every needsPrompt item when you revise the JSON: give a shot a "description" and a full self-contained "prompt" (describe what the clip shows, keep its id, durationSec and order), give a layer or cue a "description". Filling it clears the flag on re-import; never delete those items and never set needsPrompt yourself. Shots, layers and cues with "removedFromTimeline": true had their clip deleted on the timeline: keep them unchanged unless the user asks to drop them. Example: { "id": "shot-tl-1", "title": "Timeline clip 1", "durationSec": 4, "needsPrompt": true, "description": "", "prompt": "" } becomes { "id": "shot-tl-1", "title": "Harbour at dusk", "durationSec": 4, "description": "Wide shot of Victoria Harbour as the lights come on", "prompt": "Wide static shot of a harbour at dusk, ferries crossing, skyline lights switching on, warm-to-blue sky, 24fps cinematic" }.
 ```
 
 ## 6. Decisions, open questions and future work
