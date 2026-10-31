@@ -39,8 +39,8 @@ When the user turns on agent access (Storyboard → Agent) in a browser with Web
 - `set_shot_params`(id, params, replace): Set the params of an html shot's clip (e.g. a title card's text). Merged into the current values; null removes one; "replace": true replaces them all.
 - `reorder_shots`(id, index, order): Move one shot ("id" + 0-based "index") or give the whole new "order" (every shot id once).
 - `set_connection`(connection, remove): Set the connection between two adjacent shots (kind cut / continuity / match, note, transition). "remove": true deletes it.
-- `add_cue`(cue): Add an audio cue (voiceover, music, sfx, ambience, sting, dialogue) that plays from a shot. Gets "audio<n>" as id when you give none.
-- `update_cue`(id, patch): Change fields of an audio cue (from, to, atSec, volume, fades, loop, volumeKeys, fx, position { azimuth, distance, width? }, pan, positionKeys, …).
+- `add_cue`(cue): Add an audio cue (voiceover, music, sfx, ambience, sting, dialogue) that plays from a shot: an audio "asset", or "source": { "fromVideo", "inSec"?, "outSec"? } to use the sound of a video asset or of a shot's clip. Gets "audio<n>" as id when you give none.
+- `update_cue`(id, patch): Change fields of an audio cue (from, to, atSec, volume, fades, loop, volumeKeys, fx, position { azimuth, distance, width? }, pan, positionKeys, source { fromVideo, inSec?, outSec? }, …).
 - `remove_cue`(id): Remove an audio cue.
 - `list_series_assets` · read-only: List the shared assets of the Series this project belongs to (id, type, name, short description, states). Reuse them with use_series_asset instead of defining a new character, prop, location or style.
 - `use_series_asset`(id, as): Add a Series asset to the board, linked: its definition, states and uploads come from the Series and stay in sync. Then use its id (or "<id>@<state>") in shots.

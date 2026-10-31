@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AssetPreview } from "./AssetPreview";
+import { FromVideoTab, type FromVideoPick } from "./FromVideoTab";
 import { Ic } from "./Icon";
 import { HTML_IMPORT_ACCEPT } from "./htmlPackage";
 import { stickers, stickerUrl, type Sticker } from "./libraryItems";
 
 export type Picked = { files: File[]; stickers: Sticker[]; assets?: string[] };
 /** V2-ADD-MEDIA-TABS: what the main/overlay [+] adds; "audio" is the Add audio picker's only tab. */
-export type PickerTab = "video" | "photo" | "code" | "stickers" | "audio";
+export type PickerTab = "video" | "photo" | "code" | "stickers" | "audio" | "fromVideo";
 type Kind = "video" | "image" | "html" | "audio";
 /** A media asset already imported into this project (blob persists in IndexedDB), for re-adding without re-upload. */
 export type ProjectMedia = { id: string; name: string; kind: Kind; thumb?: string; durationTicks?: number; createdAt: string; width?: number; height?: number };
@@ -17,6 +18,8 @@ const TAB: Record<PickerTab, { label: string; icon: string; kind?: Kind; accept?
   code: { label: "Code", icon: "</>", kind: "html", accept: HTML_IMPORT_ACCEPT, upload: ".html or .dionysus-html.zip", empty: "No code clips yet. Create one, or upload an .html clip." },
   stickers: { label: "Sticker", icon: "sticker" },
   audio: { label: "Audio", icon: "♫", kind: "audio", accept: "audio/*", upload: "Music or sounds from this device", empty: "No audio in this project yet." },
+  /** P18: take the sound of a project video. */
+  fromVideo: { label: "From Video", icon: "▭" },
 };
 /** Which tab a picked device file belongs to (by MIME type, then extension). */
 export function fileKind(f: File): Kind | undefined {
@@ -33,20 +36,25 @@ const fmtDur = (ticks?: number) => { if (!ticks) return ""; const s = Math.round
  * has Upload (from the device) and the project's own media of that kind (thumbnails, durations); Code also has Create
  * (a new clip in the Code Editor). Multi-select across tabs, numbered in pick order, then Add.
  */
-export function MediaPicker({ title, onAdd, onClose, media = [], only, initialTab, onCreateCode, onCreateAudio, loadMedia }: {
+export function MediaPicker({ title, onAdd, onClose, media = [], only, initialTab, onCreateCode, onCreateAudio, loadMedia, onAddFromVideo, onTimeline, probeAudio }: {
   title: string; onAdd: (p: Picked) => void; onClose: () => void; media?: ProjectMedia[];
   /** "audio": the audio tab only. */ only?: "audio"; initialTab?: PickerTab;
   /** Code → Create: open the Code Editor on a new clip (the picker closes). */ onCreateCode?: () => void;
   /** Audio → Create audio: open the Audio editor on a new clip (the picker closes). */ onCreateAudio?: () => void;
   /** P2C (item 7): the file of a project asset, for its playable preview (no preview button without it). */
   loadMedia?: (assetId: string) => Promise<Blob | undefined>;
+  /** P18: Add audio → From Video (the tab shows when this is given). */ onAddFromVideo?: (p: FromVideoPick) => void;
+  /** P18: audio-track probe for From Video tiles (tests). */ probeAudio?: (b: Blob) => Promise<boolean | undefined>;
+  /** P18: whether a video asset has clips on the timeline (offers "Mute original video clip"). */ onTimeline?: (assetId: string) => boolean;
 }) {
   const [preview, setPreview] = useState<ProjectMedia>();
-  const tabs: PickerTab[] = only === "audio" ? ["audio"] : ["video", "photo", "code", "stickers"];
+  const tabs: PickerTab[] = only === "audio" ? (onAddFromVideo ? ["audio", "fromVideo"] : ["audio"]) : ["video", "photo", "code", "stickers"];
   const [tab, setTab] = useState<PickerTab>(initialTab && tabs.includes(initialTab) ? initialTab : tabs[0]);
   const recent = useMemo(() => [...media].sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [media]);
   const [files, setFiles] = useState<File[]>([]);
   const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [fv, setFv] = useState<FromVideoPick>();
+  const videos = useMemo(() => recent.filter((m) => m.kind === "video"), [recent]);
   const input = useRef<HTMLInputElement>(null);
   const urls = useMemo(() => files.map((f) => (/^(image|video)\//.test(f.type) ? URL.createObjectURL(f) : "")), [files]);
   useEffect(() => () => urls.forEach((u) => u && URL.revokeObjectURL(u)), [urls]);
@@ -140,6 +148,8 @@ export function MediaPicker({ title, onAdd, onClose, media = [], only, initialTa
               <div className="v2-picker-grid" data-testid="project-media">{mine.map(tile)}</div>
             )}
           </>
+        ) : tab === "fromVideo" ? (
+          <FromVideoTab videos={videos} loadMedia={loadMedia} onTimeline={onTimeline} pick={fv} onPick={setFv} {...(probeAudio ? { probe: probeAudio } : {})} />
         ) : (
           <>
             <p className="v2-muted v2-pick-note">Stickers go to the Text &amp; Stickers group, above overlays.</p>
@@ -164,8 +174,13 @@ export function MediaPicker({ title, onAdd, onClose, media = [], only, initialTa
         </div>
       )}
       <footer className="v2-picker-foot">
+        {tab === "fromVideo" ? <>
+          <span className="v2-muted">{fv ? "Adds at the playhead" : "Choose a video"}</span>
+          <button className="v2-btn primary" disabled={!fv} onClick={() => fv && onAddFromVideo?.(fv)}>Add audio</button>
+        </> : <>
         <span className="v2-muted">{count ? `${count} selected` : "Select items to add"}</span>
         <button className="v2-btn primary" disabled={!count} onClick={add}>Add{count ? ` (${count})` : ""}</button>
+        </>}
       </footer>
     </div>
   );

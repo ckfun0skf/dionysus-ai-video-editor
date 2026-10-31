@@ -1,4 +1,6 @@
 /** Waveform peaks and filmstrip frames (V2-066). Pure helpers are exported for tests. */
+import { fromVideo as fromVideoDomain } from "../domain";
+import { encodeWav } from "../render";
 export const PEAKS_PER_SECOND = 50;
 export const MAX_DECODE_BYTES = 200 * 1024 * 1024;
 export const FILMSTRIP_FRAMES = 24;
@@ -88,4 +90,38 @@ export async function extractFilmstrip(blob: Blob, count = FILMSTRIP_FRAMES): Pr
     v.removeAttribute("src");
     URL.revokeObjectURL(url);
   }
+}
+
+/** P18: whether a video file has an audio track (head and tail bytes; undefined = can't tell, treated as maybe). */
+export async function probeVideoAudio(blob: Blob): Promise<boolean | undefined> {
+  const HEAD = 4 * 1024 * 1024, TAIL = 4 * 1024 * 1024;
+  const part = async (b: Blob) => new Uint8Array(await b.arrayBuffer());
+  try {
+    if (blob.size <= HEAD + TAIL) return fromVideoDomain.detectAudioTrack(await part(blob));
+    const head = fromVideoDomain.detectAudioTrack(await part(blob.slice(0, HEAD)));
+    if (head) return true;
+    const tail = fromVideoDomain.detectAudioTrack(await part(blob.slice(blob.size - TAIL)));
+    return tail ?? head;
+  } catch { return undefined; }
+}
+
+type OfflineLike = new (channels: number, length: number, rate: number) => OfflineAudioContext;
+/**
+ * P18: decode a video's audio track with Web Audio and cut `inSec`..`outSec` to a WAV. iOS Safari (webkit prefix and
+ * the callback form of decodeAudioData) and Android Chrome decode MP4/AAC; throws when the browser can't decode it.
+ */
+export async function extractAudioWav(blob: Blob, inSec: number, outSec: number): Promise<{ wav: Blob; seconds: number }> {
+  if (blob.size > MAX_DECODE_BYTES) throw new Error("video too large to decode");
+  const g = globalThis as unknown as { OfflineAudioContext?: OfflineLike; webkitOfflineAudioContext?: OfflineLike };
+  const Ctx = g.OfflineAudioContext ?? g.webkitOfflineAudioContext;
+  if (!Ctx) throw new Error("no Web Audio");
+  const ctx = new Ctx(2, 1, 44100);
+  const data = await blob.arrayBuffer();
+  const buf: AudioBuffer = await new Promise((res, rej) => {
+    try { const p = ctx.decodeAudioData(data, res, rej); if (p && typeof (p as Promise<AudioBuffer>).then === "function") (p as Promise<AudioBuffer>).then(res, rej); } catch (e) { rej(e); }
+  });
+  const rate = buf.sampleRate, a = Math.max(0, Math.floor(inSec * rate)), b = Math.min(buf.length, Math.ceil(outSec * rate));
+  if (b <= a) throw new Error("empty audio span");
+  const chans = Array.from({ length: buf.numberOfChannels }, (_, i) => buf.getChannelData(i).slice(a, b));
+  return { wav: encodeWav(chans, rate), seconds: (b - a) / rate };
 }

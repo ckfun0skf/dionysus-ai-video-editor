@@ -98,3 +98,43 @@ describe("V2-ADD-MEDIA-TABS Add Media picker", () => {
     expect(fileKind(new File([], "a.htm", { type: "" }))).toBe("html");
   });
 });
+
+describe("P18 Add audio → From Video", () => {
+  const vids: ProjectMedia[] = [
+    { id: "v1", name: "beach.mp4", kind: "video", thumb: "data:v1", durationTicks: 120_000 * 10, createdAt: "2026-01-02" },
+    { id: "v2", name: "silent.mp4", kind: "video", thumb: "data:v2", durationTicks: 120_000 * 5, createdAt: "2026-01-03" },
+    { id: "a1", name: "song.mp3", kind: "audio", durationTicks: 120_000 * 30, createdAt: "2026-01-05" },
+  ];
+  const flush = async () => { for (let i = 0; i < 5; i += 1) await act(async () => { await Promise.resolve(); }); };
+  it("shows Audio and From Video tabs; no-audio videos are disabled; Add returns the trimmed span and mute choice", async () => {
+    const onAddFromVideo = vi.fn();
+    const blobs: Record<string, Blob> = { v1: new Blob(["1"]), v2: new Blob(["2"]) };
+    const m = mount({ only: "audio", media: vids, onAddFromVideo, onTimeline: (id) => id === "v1",
+      loadMedia: async (id) => blobs[id], probeAudio: async (b) => b === blobs.v1 });
+    expect(m.tabs()).toEqual(["Audio", "From Video"]);
+    expect(m.panel().dataset.tab).toBe("audio");
+    m.tab("From Video");
+    await flush();
+    const grid = m.el.querySelector('[data-testid="video-sources"]')!;
+    expect([...grid.querySelectorAll(".v2-pick-name")].map((x) => x.textContent).sort()).toEqual(["beach.mp4", "silent.mp4"]);
+    const silent = m.btn("silent.mp4, no audio")!;
+    expect(silent.disabled).toBe(true);
+    expect(silent.textContent).toContain("No audio");
+    expect(m.btn("Add audio")!.disabled).toBe(true);
+    act(() => { m.btn("beach.mp4")!.click(); });
+    const inp = m.el.querySelector('input[aria-label="In (seconds)"]') as HTMLInputElement;
+    expect(inp).toBeTruthy();
+    act(() => { m.btn("In later")!.click(); });
+    const mute = [...m.el.querySelectorAll("label")].find((l) => l.textContent?.includes("Mute original video clip"))!.querySelector("input")!;
+    act(() => { mute.click(); });
+    act(() => { m.btn("Add audio")!.click(); });
+    expect(onAddFromVideo).toHaveBeenCalledTimes(1);
+    const p = onAddFromVideo.mock.calls[0][0];
+    expect(p).toMatchObject({ assetId: "v1", outSec: 10, muteOriginal: true });
+    expect(p.inSec).toBeGreaterThan(0);
+  });
+  it("opens on From Video when asked, and has no From Video tab without the handler", () => {
+    expect(mount({ only: "audio", media: vids, onAddFromVideo: vi.fn(), initialTab: "fromVideo" }).panel().dataset.tab).toBe("fromVideo");
+    expect(mount({ only: "audio", media: vids }).tabs()).not.toContain("From Video");
+  });
+});

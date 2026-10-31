@@ -60,12 +60,13 @@ const SHOT = obj({
   layers: arr(LAYER, "Layers on top."), background: BACKGROUND,
 }, ["id", "title", "durationSec"], 'A storyboard shot, schema 3.1 (RULE 51): no "prompt"; add its clip asset first (add_asset, type video) and name it in "clip". See the guide\'s FORMAT section for every field.');
 const CUE = obj({
-  id: id('Cue id (default "audio<n>").'), asset: str("Audio asset id."), kind: en(AUDIO_KINDS, "Cue kind."), from: str("Shot id the cue starts at."), to: str("Shot id it ends at (inclusive)."),
+  id: id('Cue id (default "audio<n>").'), asset: str('Audio asset id (leave out when "source" is given).'),
+  source: { type: "object", description: 'P18: take the sound from a video instead of an audio asset: { fromVideo: "<video asset id or shot id>", inSec?: seconds into the video (default the clip\'s in point, else 0), outSec?: seconds into the video (default its end) }.', properties: { fromVideo: { type: "string" }, inSec: { type: "number" }, outSec: { type: "number" } }, required: ["fromVideo"] }, kind: en(AUDIO_KINDS, "Cue kind."), from: str("Shot id the cue starts at."), to: str("Shot id it ends at (inclusive)."),
   atSec: num("Offset into the from shot."), volume: num("0-2, 1 = as recorded."),
   position: { type: "object", description: "P14: where the sound sits: { azimuth: -180..180 degrees (0 front, -90 left, 90 right, ±180 behind), distance: 0 (at the ear) .. 1 (≈20 m), width?: 0..1 (1 = keep a stereo file's own image) }." },
   pan: num("-1..1 shorthand: azimuth = pan × 90, distance 0."),
   positionKeys: { type: "array", description: "P14: animated position [{ t: seconds from the cue start, azimuth, distance }], linear, shortest way round." },
-}, ["asset", "kind", "from"], "An audio cue on the storyboard.");
+}, ["kind", "from"], 'An audio cue on the storyboard: needs "asset" (an audio asset) or "source" { fromVideo, inSec?, outSec? }.');
 const CONNECTION = obj({ from: str("Shot id."), to: str("The next shot id."), kind: en(CONNECTION_KINDS, "How the shots join."), note: str("Why."), transition: { description: 'A transition preset { "preset", "durationSec"? }; null removes it.' } }, ["from", "to"]);
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -129,7 +130,7 @@ export const STORY_TOOLS: StoryTool[] = [
       if (!key) {
         const shots = raw.shots.map((s) => `${s.id} · ${s.durationSec}s · ${s.render ?? "ai"} · ${s.title}`).join("\n");
         const assets = raw.assets.map((a) => `${a.id} (${a.type}) ${a.name}${Array.isArray(a.states) && a.states.length ? ` · states: ${(a.states as Obj[]).map((s) => s.id).join(", ")}` : ""}`).join("\n");
-        const cues = (raw.audio ?? []).map((c) => `${c.id} · ${c.kind} ${c.asset} ${c.from}${c.to ? `→${c.to}` : ""}`).join("\n");
+        const cues = (raw.audio ?? []).map((c) => `${c.id} · ${c.kind} ${(c as { source?: { fromVideo?: string } }).source ? `from video ${(c as { source?: { fromVideo?: string } }).source?.fromVideo}` : c.asset} ${c.from}${c.to ? `→${c.to}` : ""}`).join("\n");
         return { ok: true, text: `${String(raw.meta?.title ?? "")}\n${storySummary(doc)}\n\nShots (in order):\n${shots}\n\nAssets:\n${assets || "(none)"}\n\nAudio cues:\n${cues || "(none)"}` };
       }
       if (key === "meta") return { ok: true, text: JSON.stringify(raw.meta, null, 2) };
@@ -287,7 +288,7 @@ export const STORY_TOOLS: StoryTool[] = [
   },
   {
     name: "add_cue", title: "Add an audio cue", readOnly: false,
-    description: 'Add an audio cue (voiceover, music, sfx, ambience, sting, dialogue) that plays from a shot. Gets "audio<n>" as id when you give none.',
+    description: 'Add an audio cue (voiceover, music, sfx, ambience, sting, dialogue) that plays from a shot: an audio "asset", or "source": { "fromVideo", "inSec"?, "outSec"? } to use the sound of a video asset or of a shot\'s clip. Gets "audio<n>" as id when you give none.',
     inputSchema: obj({ cue: CUE }, ["cue"]),
     edit: (raw, a) => {
       if (!isObj(a.cue)) return '"cue" must be an object.'; const c = clone(a.cue); c.id ??= nextCueId(raw);
@@ -297,7 +298,7 @@ export const STORY_TOOLS: StoryTool[] = [
   },
   {
     name: "update_cue", title: "Change an audio cue", readOnly: false,
-    description: "Change fields of an audio cue (from, to, atSec, volume, fades, loop, volumeKeys, fx, position { azimuth, distance, width? }, pan, positionKeys, …).",
+    description: "Change fields of an audio cue (from, to, atSec, volume, fades, loop, volumeKeys, fx, position { azimuth, distance, width? }, pan, positionKeys, source { fromVideo, inSec?, outSec? }, …).",
     inputSchema: obj({ id: str("Cue id."), patch: patch("cue") }, ["id", "patch"]),
     edit: (raw, a) => { const i = findIdx(raw.audio, a.id); if (i < 0) return `No cue "${String(a.id)}".`; const e = applyPatch(raw.audio![i], a.patch); return e ?? { label: `AI: edit cue ${String(a.id)}`, message: `Cue "${String(a.id)}" updated.` }; },
   },

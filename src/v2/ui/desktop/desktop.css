@@ -209,3 +209,4 @@ body.v2-resizing-y, body.v2-resizing-y * { cursor: row-resize !important; user-s
 /* P13: storyboard buttons keep the 44px touch target on desktop too (the desktop .v2-btn is 32px). */
 .v2-app.is-desktop .v2-sb-btn { min-height: 44px; }
 .v2-app.is-desktop .v2-sp-row .v2-btn, .v2-app.is-desktop .v2-sp-chips .v2-afx-btn { min-height: 44px; }
+.v2-app.is-desktop .v2-fv-span .v2-btn, .v2-app.is-desktop .v2-picker-foot .v2-btn.primary { min-height: 44px; }

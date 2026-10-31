@@ -448,3 +448,22 @@ export const setClipLink = (id: string, on: boolean): Command => ({
   label: on ? "Link to main" : "Unlink from main",
   apply: (p) => withRoot(p, (c) => setLink(c, id, on)),
 });
+
+/**
+ * P18: Add audio → From Video in one undo step: import the audio asset taken from a video, put its placement on the
+ * first audio track free at its time (else a new one), and optionally mute the source video's clips (`muteClips`).
+ */
+export const addAudioFromVideo = (asset: Asset, placement: Placement, muteClips: string[] = []): Command => ({
+  label: "Add audio from video",
+  apply: (p) => {
+    const next = { ...p, assets: { ...p.assets, [asset.id]: asset } };
+    return withRoot(next, (c) => {
+      let comp = c;
+      let tid = comp.tracks.find((t) => t.kind === "audio" && !t.placements.some((q) => q.startTicks < placement.startTicks + placement.durationTicks && placement.startTicks < q.startTicks + q.durationTicks))?.id;
+      if (!tid) { tid = newId("trk"); comp = ops.addTrack(comp, "audio", tid); }
+      comp = ops.insertPlacement(comp, tid, placement);
+      for (const id of muteClips) comp = ops.setLinkedAudioMuted(comp, id, true);
+      return comp;
+    });
+  },
+});

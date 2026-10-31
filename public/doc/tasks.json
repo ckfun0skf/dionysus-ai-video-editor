@@ -2588,6 +2588,12 @@
           "title": "Shot editor Clip source: New clip (prompt) or Reuse clip (picker with thumbnail, label, first-use shot, state and length; in point and duration steppers). New shot using this clip, confirm before an own clip is replaced, Make this shot's clip shareable, Clip labels in Production steps, one-time schema 3.0 migration notice",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P18-AUDIO-FROM-VIDEO",
+          "title": "Add audio: Audio and From Video tabs. From Video lists project videos (thumbnail, name, duration, No audio when no track is detected) with In/Out trim and preview; Add audio decodes the span to a WAV audio asset (Web Audio, falls back to the video's own sound) with provenance { fromVideo, inSec, outSec }, places it at the playhead, optional Mute original video clip. Storyboard audio cues accept source { fromVideo, inSec, outSec } (RULE 52, validator, WebMCP add_cue/update_cue)",
+          "status": "done",
+          "progress": 100
         }
       ]
     },
