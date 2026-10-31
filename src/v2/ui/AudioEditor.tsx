@@ -9,6 +9,7 @@ import { ClipIssues } from "./HtmlImport";
 import { Ic as Icon } from "./Icon";
 import { saveFile } from "./saveFile";
 import { Sheet } from "./Sheet";
+import { SliderField } from "./SliderField";
 
 /**
  * P4A-3: the Audio editor for `dionysus.audioclip/1` clips (styled like the Code editor). Tracks on a touch step grid
@@ -255,13 +256,7 @@ function EventsEditor({ clip, track, set }: { clip: AudioClip; track: ClipTrack;
 }
 
 function Slider({ label, value, min, max, step, unit, onChange, hint }: { label: string; value: number; min: number; max: number; step: number; unit?: string; onChange: (v: number) => void; hint?: string }) {
-  const shown = step >= 1 ? String(Math.round(value)) : value.toFixed(step >= 0.05 ? 2 : 2);
-  return (
-    <label className="v2-ae-slider" title={hint}>
-      <span className="v2-ae-slabel"><span>{label}</span><output>{shown}{unit ? ` ${unit}` : ""}</output></span>
-      <input type="range" min={min} max={max} step={step} value={value} aria-label={label} onChange={(e) => onChange(Number(e.target.value))} />
-    </label>
-  );
+  return <SliderField className="v2-ae-slider" title={hint} label={label} min={min} max={max} step={step} value={value} unit={unit} onChange={onChange} />;
 }
 
 // ---------------------------------------------------------------------------------------------------------------

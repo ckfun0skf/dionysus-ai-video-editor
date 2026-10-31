@@ -5,6 +5,7 @@ import { text as T, type Placement, type TextData } from "../domain";
 import { defaultsOf, getPreset, listPresets, type PresetKind } from "../registry";
 import { ParamControls } from "./ParamControls";
 import { PresetTile } from "./PresetTile";
+import { SliderField } from "./SliderField";
 
 const TABS: { id: "In" | "Out" | "Loop"; kind: PresetKind; key: "animIn" | "animOut" | "loop"; pkey: "animInParams" | "animOutParams" | "loopParams" }[] = [
   { id: "In", kind: "textAnimIn", key: "animIn", pkey: "animInParams" },
@@ -42,11 +43,8 @@ export function AnimationPicker({ engine, placement, onPicked, onSet }: { engine
         ))}
       </div>
       {tab !== "Loop" && (
-        <label className="v2-tp-row">Duration <output>{durS.toFixed(1)}s</output>
-          <input type="range" aria-label="Animation duration" min={ANIM_MIN_S} max={ANIM_MAX_S} step={0.1} value={durS}
-            onPointerDown={() => engine.beginGesture()} onPointerUp={() => engine.endGesture()} onBlur={() => engine.endGesture()}
-            onChange={(e) => set({ animTicks: Math.round(Number(e.target.value) * TPS) }, "Animation duration")} />
-        </label>
+        <SliderField className="v2-tp-sf" label="Duration" aria="Animation duration" min={ANIM_MIN_S} max={ANIM_MAX_S} step={0.1} value={durS} unit="s"
+          onBegin={() => engine.beginGesture()} onEnd={() => engine.endGesture()} onChange={(x) => set({ animTicks: Math.round(x * TPS) }, "Animation duration")} />
       )}
       {desc && desc.params.length > 0 && <ParamControls name={`${tab} ${desc.name}`} params={desc.params} values={defaultsOf(desc, d[cur.pkey])}
         onBegin={() => engine.beginGesture()} onEnd={() => engine.endGesture()}

@@ -15,6 +15,7 @@ import { drawSample } from "./EffectPicker";
 import { Ic } from "./Icon";
 import { SheetDone } from "./Sheet";
 import { useEdgeFade } from "./useEdgeFade";
+import { SliderField } from "./SliderField";
 
 const FAV_KEY = "v2.transitions.saved";
 const CYCLE_MS = 1700, HOLD_MS = 300;
@@ -162,7 +163,6 @@ export function TransitionPicker({ engine, comp, placementId, thumbs, onPreview,
     const cuts = transitions.cutsOnTrack(comp, next.id).length;
     if (engine.dispatch(cmd.setTransitionAll(next.id, cur ? { kind: cur.kind, durationTicks: dur, ...(cur.params ? { params: cur.params } : {}) } : undefined))) onToast?.(cur ? `${transitions.transitionKind(cur.kind)?.label ?? "Transition"} applied to ${cuts === 1 ? "the 1 cut" : `all ${cuts} cuts`} on this track` : `Transitions removed from ${cuts === 1 ? "the 1 cut" : `all ${cuts} cuts`}`);
   };
-  const secs = (t: number) => `${(t / TICKS_PER_SECOND).toFixed(1)}s`;
   return (
     <div className="v2-anim v2-transpick">
       <div className={`v2-trans-head ${onDone ? "v2-sheet-head" : ""}`}>
@@ -182,11 +182,10 @@ export function TransitionPicker({ engine, comp, placementId, thumbs, onPreview,
       </div>
       {!list.length && <p className="v2-empty-hint">{query ? "No transitions match." : tab === SAVED_TAB ? "Nothing saved yet: pick a transition, then tap Save." : "No transitions here."}</p>}
       <div className="v2-trans-controls">
-        <label className="v2-tp-row" title="How long the transition takes; each clip gives at most half of itself">Duration <output>{secs(cur ? dur : 0)}</output>
-          <input type="range" aria-label="Transition duration" min={MIN_TICKS} max={max} step={Math.round(TICKS_PER_SECOND / 10)} value={dur} disabled={!cur}
-            onPointerDown={() => engine.beginGesture()} onPointerUp={() => { engine.endGesture(); onPreview?.(next.startTicks, dur); }} onKeyUp={() => onPreview?.(next.startTicks, dur)} onBlur={() => engine.endGesture()}
-            onChange={(e) => cur && engine.dispatch(cmd.setTransition(next.id, { kind: cur.kind, durationTicks: Math.min(max, Math.max(MIN_TICKS, Number(e.target.value))) }))} />
-        </label>
+        <SliderField className="v2-tp-sf" title="How long the transition takes; each clip gives at most half of itself" label="Duration" aria="Transition duration"
+          min={MIN_TICKS} max={max} step={Math.round(TICKS_PER_SECOND / 10)} value={dur} disabled={!cur} unit="s" scale={1 / TICKS_PER_SECOND}
+          onBegin={() => engine.beginGesture()} onEnd={() => { engine.endGesture(); onPreview?.(next.startTicks, dur); }}
+          onChange={(v) => { if (cur) engine.dispatch(cmd.setTransition(next.id, { kind: cur.kind, durationTicks: Math.min(max, Math.max(MIN_TICKS, Math.round(v))) })); }} />
         {curDesc && curDesc.params.length > 0 && <ParamControls name={curDesc.name} params={curDesc.params} values={defaultsOf(curDesc, cur!.params)}
           onBegin={() => engine.beginGesture()} onEnd={() => { engine.endGesture(); onPreview?.(next.startTicks, dur); }}
           onChange={(k, v) => engine.dispatch(cmd.setTransition(next.id, { kind: cur!.kind, durationTicks: dur, params: { ...cur!.params, [k]: v } }))} />}

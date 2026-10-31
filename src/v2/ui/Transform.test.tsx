@@ -33,7 +33,7 @@ describe("TransformInspector", () => {
       scale.dispatchEvent(new Event("pointerup", { bubbles: true }));
     });
     expect(transformOf(current()).scale).toBe(0.5);
-    expect(el.textContent).toContain("50%");
+    expect((el.querySelector("input[aria-label=\"Scale value\"]") as HTMLInputElement).value).toBe("50");
     await act(async () => { engine.undo(); });
     expect(current().transform).toBeUndefined();
     await act(async () => { engine.redo(); });
