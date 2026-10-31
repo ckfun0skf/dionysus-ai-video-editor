@@ -20,11 +20,14 @@ export interface MediaRef {
   specKey?: string;
 }
 
+/** P18: an audio version taken from a video's audio track, `inSec`..`outSec` seconds into that video. */
+export interface FromVideo { assetId: string; inSec: number; outSec: number; /** The decode failed, so the audio plays the video file itself. */ referenced?: true }
+
 export interface AssetVersion {
   id: string;
   createdAt: string;
   media: MediaRef;
-  provenance: { source: "import" | "manual-generation" | "provider" | "derived" | "legacy"; promptText?: string; inputs: { assetId: string; versionId: string }[] };
+  provenance: { source: "import" | "manual-generation" | "provider" | "derived" | "legacy"; promptText?: string; inputs: { assetId: string; versionId: string }[]; fromVideo?: FromVideo };
 }
 
 export interface Asset {

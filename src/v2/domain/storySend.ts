@@ -16,7 +16,7 @@ import { CHROMA_DEFAULT, DEFAULT_IMAGE_TICKS, newId, TEXT_SOURCE, type Asset, ty
 import { addTrack, groupOf, insertPlacement, isFree, mainTrack } from "./ops";
 import { SUBTITLE_STYLE } from "./layerStyle";
 import { getPreset, parsePresetRef, type PresetKind } from "../registry";
-import { AUDIO_DEFAULTS, audioLoops, DEFAULT_TEXT_SIZE, DEFAULT_TRANSITION_SEC, type AudioKind, type StoryAudio, TEXT_LINE_HEIGHT, type StoryBox, type StoryLayer, type StoryMediaLayer, type StoryTextLayer, type StoryTextStyle } from "./storyJson";
+import { AUDIO_DEFAULTS, audioLoops, DEFAULT_TEXT_SIZE, DEFAULT_TRANSITION_SEC, type AudioKind, type StoryAudio, type StoryAudioSource, TEXT_LINE_HEIGHT, type StoryBox, type StoryLayer, type StoryMediaLayer, type StoryTextLayer, type StoryTextStyle } from "./storyJson";
 import { pinOf, sendPlan, syncPlacements, versionSpan, type Shot, type Storyboard } from "./storyboard";
 import { clampToClip, placeOnFreeTrack } from "./storyLinks";
 import { textOf, textStyleData, textStyleFields, type TextData } from "./text";
@@ -222,6 +222,25 @@ function addLinked(p: Project, b: Storyboard, comp: Composition, shot: Shot, cli
  * `from` when it has no `to` or `durationSec`): fade in on the first copy, fade out on the last, which is trimmed.
  * A cue that fits inside its first shot is linked to it (it follows the shot); a cue across shots stays where it was placed.
  */
+/** P18: the video a `source.fromVideo` cue takes its sound from: a video slot (asset/clip) or a sent shot's clip, and the span in its file. */
+export function cueVideo(p: Project, b: Storyboard, clips: Map<string, Placement>, src: StoryAudioSource): { asset: Asset; version: AssetVersion; inTicks: number; lenTicks?: number } | undefined {
+  const slot = b.slots[src.fromVideo];
+  let asset: Asset | undefined, version: AssetVersion | undefined, baseIn = 0, baseLen: number | undefined;
+  if (slot?.assetId && p.assets[slot.assetId]?.kind === "video") { asset = p.assets[slot.assetId]; version = selectedVersion(asset); baseLen = version?.media.durationTicks; }
+  else {
+    const clip = clips.get(src.fromVideo);
+    asset = clip ? p.assets[clip.source.assetId] : undefined;
+    version = asset?.versions.find((x) => x.id === clip!.source.versionId);
+    if (clip) { baseIn = clip.sourceInTicks; baseLen = Math.round(clip.durationTicks * (clip.speed ?? 1)); }
+  }
+  if (!asset || !version || asset.kind !== "video") return undefined;
+  const inTicks = src.inSec !== undefined ? secondsToTicks(src.inSec) : baseIn;
+  const endTicks = src.outSec !== undefined ? secondsToTicks(src.outSec) : baseLen !== undefined ? baseIn + baseLen : undefined;
+  const mediaEnd = version.media.durationTicks;
+  const end = endTicks !== undefined && mediaEnd ? Math.min(endTicks, mediaEnd) : endTicks ?? mediaEnd;
+  return { asset, version, inTicks, ...(end !== undefined ? { lenTicks: Math.max(0, end - inTicks) } : {}) };
+}
+
 function addAudio(p: Project, b: Storyboard, comp: Composition, sent: { shot: Shot; clip: Placement }[], res: SendResult): Composition {
   let c = comp;
   // P1-AUDIO: cues are placed once each, against the shot clips sent now or by an earlier send, so audio uploaded
@@ -233,14 +252,16 @@ function addAudio(p: Project, b: Storyboard, comp: Composition, sent: { shot: Sh
     if (cue.removedFromTimeline) continue;
     const first = clips.get(cue.from);
     if (!first || done.has(cue.id)) continue;
-    const slot = b.slots[cue.asset];
-    const a = slot?.assetId ? p.assets[slot.assetId] : undefined;
-    const v = a && selectedVersion(a);
-    if (!a || !v || a.kind !== "audio") { res.skippedAudio += 1; continue; }
+    const fv = cue.source && cueVideo(p, b, clips, cue.source);
+    const slot = cue.source ? undefined : b.slots[cue.asset];
+    const a = fv ? fv.asset : slot?.assetId ? p.assets[slot.assetId] : undefined;
+    const v = fv ? fv.version : a && selectedVersion(a);
+    if (!a || !v || (!fv && a.kind !== "audio")) { res.skippedAudio += 1; continue; }
     const start = first.startTicks + Math.max(0, secondsToTicks(cue.atSec ?? 0));
     const last = cue.to ? clips.get(cue.to) : undefined;
     // P2C (item 4): an audio version trimmed in the storyboard plays its trimmed part.
-    const span = versionSpan(b, v);
+    // P18: a cue from a video plays the video's sound from inSec to outSec (the audio placement references the video).
+    const span = fv ? { inTicks: fv.inTicks, lenTicks: fv.lenTicks } : versionSpan(b, v);
     const media = span?.lenTicks ?? v.media.durationTicks;
     let end = last && last.startTicks >= first.startTicks ? last.startTicks + last.durationTicks : undefined;
     if (cue.durationSec !== undefined) end = Math.min(end ?? Infinity, start + secondsToTicks(cue.durationSec));

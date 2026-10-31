@@ -340,7 +340,11 @@ export const AUDIO_DEFAULTS: Record<AudioKind, { volume: number; fadeInSec: numb
  * (a voiceover or music bed across shots), or for `durationSec`, else for the audio's own length. Only music and
  * ambience loop (V2-SB-135, `audioLoops`); a looping cue without "to" or "durationSec" fills its "from" shot.
  */
+/** P18: a cue whose sound is a video's audio track: a "video" asset (clip) or a shot id (its clip), from inSec to outSec (seconds into the video). */
+export interface StoryAudioSource { fromVideo: string; inSec?: number; outSec?: number }
 export interface StoryAudio {
+  /** P18: "" when the cue has a `source` (its sound comes from a video). */
+  source?: StoryAudioSource;
   id: string; asset: string; kind: AudioKind; from: string; to?: string;
   atSec?: number; durationSec?: number; volume?: number; fadeInSec?: number; fadeOutSec?: number;
   /** V2-SB-135: music and ambience only: repeat the audio to fill the span (ambience default true, music false). */
@@ -1319,8 +1323,28 @@ export function validateStoryboard(raw: unknown, opts: StoryValidateOptions = {}
     if (audio.some((x) => x.id === id)) err(`${path}.id`, `Audio cue id "${id}" is used twice.`);
     const asset = str(c.asset) ?? "";
     const a = assetById.get(asset);
-    if (!a) err(`${path}.asset`, asset ? `Unknown asset "${asset}". Declare it in "assets" with "type": "audio".` : `Each audio cue needs "asset": the id of an audio asset.`);
-    else if (a.type !== "audio") err(`${path}.asset`, `Asset "${asset}" is a ${a.type}; an audio cue needs an asset with "type": "audio".`);
+    // P18: "source": { "fromVideo", "inSec"?, "outSec"? } takes the cue's sound from a video (a video asset/clip or a shot's clip).
+    let source: StoryAudioSource | undefined;
+    if (c.source !== undefined) {
+      const sp = `${path}.source`, sv = isObj(c.source) ? c.source : undefined;
+      const fv = sv ? str(sv.fromVideo) ?? "" : "";
+      const va = assetById.get(fv);
+      if (!sv) err(sp, '"source" must be { "fromVideo": "<video asset or shot id>", "inSec"?, "outSec"? }.');
+      else if (!fv) err(`${sp}.fromVideo`, '"fromVideo" is required: the id of a "video" asset (a clip) or of a shot whose clip has the sound.');
+      else if (va && va.type !== "video") err(`${sp}.fromVideo`, `Asset "${fv}" is a ${va.type}; "fromVideo" needs a "video" asset or a shot id.`);
+      else if (!va && !shotIds.has(fv)) err(`${sp}.fromVideo`, `Unknown video asset or shot "${fv}".`);
+      else {
+        source = { fromVideo: fv };
+        const inS = sv.inSec === undefined ? undefined : num(sv.inSec), outS = sv.outSec === undefined ? undefined : num(sv.outSec);
+        if (sv.inSec !== undefined && (inS === undefined || inS < 0)) warn(`${sp}.inSec`, `inSec ${JSON.stringify(sv.inSec)} is ignored: use seconds into the video, 0 or more.`);
+        else if (inS !== undefined) source.inSec = inS;
+        if (sv.outSec !== undefined && (outS === undefined || outS <= (source.inSec ?? 0))) warn(`${sp}.outSec`, `outSec ${JSON.stringify(sv.outSec)} is ignored: use seconds into the video after inSec (${source.inSec ?? 0}).`);
+        else if (outS !== undefined) source.outSec = outS;
+      }
+      if (asset) warn(`${path}.asset`, `The cue takes its sound from "source.fromVideo"; "asset" "${asset}" is ignored.`);
+    }
+    if (c.source === undefined && !a) err(`${path}.asset`, asset ? `Unknown asset "${asset}". Declare it in "assets" with "type": "audio".` : `Each audio cue needs "asset": the id of an audio asset.`);
+    else if (c.source === undefined && a && a.type !== "audio") err(`${path}.asset`, `Asset "${asset}" is a ${a.type}; an audio cue needs an asset with "type": "audio".`);
     const kind = str(c.kind) as AudioKind | undefined;
     if (!kind || !AUDIO_KINDS.includes(kind)) err(`${path}.kind`, `Kind ${JSON.stringify(c.kind ?? null)} must be one of: ${AUDIO_KINDS.join(", ")}.`);
     const from = str(c.from) ?? "";
@@ -1332,7 +1356,7 @@ export function validateStoryboard(raw: unknown, opts: StoryValidateOptions = {}
     // V2-SB-135: stings and recorded lines are one-offs; a sound effect with "to" is usually a bed in disguise.
     if (to && kind && ONE_SHOT_AUDIO_KINDS.includes(kind)) { warn(`${path}.to`, `A ${kind} plays once at "atSec" in "from"; "to" is ignored. For a bed across shots use kind "ambience" or "music".`); to = undefined; }
     else if (to && kind === "sfx") warn(`${path}.to`, `A sound effect plays once from "atSec" and is cut at the end of "${to}"; it is not looped. For a continuous background sound (rain, traffic, room tone) under several shots use kind "ambience".`);
-    const cue: StoryAudio = { id, asset, kind: kind ?? "sfx", from, ...(to && to !== from ? { to } : {}) };
+    const cue: StoryAudio = { id, asset: c.source !== undefined ? "" : asset, kind: kind ?? "sfx", from, ...(to && to !== from ? { to } : {}), ...(source ? { source } : {}) };
     if (c.loop !== undefined) {
       if (typeof c.loop !== "boolean") warn(`${path}.loop`, "loop should be true or false; ignoring it.");
       else if (!LOOP_AUDIO_KINDS.includes(cue.kind)) warn(`${path}.loop`, `Only music and ambience cues loop; "loop" is ignored for a ${cue.kind} cue.`);
@@ -1429,7 +1453,7 @@ export function validateStoryboard(raw: unknown, opts: StoryValidateOptions = {}
     audio.push(cue);
   });
 
-  const usedBy = (id: string) => audio.some((c) => c.asset === id) || shots.some((s) => s.assets.includes(id) || s.keyframe?.references.some((r) => assetRefId(r) === id) || s.clip === id || s.layers?.some((l) => l.type !== "text" && l.asset === id));
+  const usedBy = (id: string) => audio.some((c) => c.asset === id || c.source?.fromVideo === id) || shots.some((s) => s.assets.includes(id) || s.keyframe?.references.some((r) => assetRefId(r) === id) || s.clip === id || s.layers?.some((l) => l.type !== "text" && l.asset === id));
   allAssets.forEach((a, i) => { if (!usedBy(a.id) && !allAssets.some((b) => b.references.some((r) => assetRefId(r) === a.id))) warn(assetPaths[i], a.stateOf ? `State "${a.id}" isn't used by any shot.` : `Asset "${a.id}" isn't used by any shot.`); });
 
   let connections: StoryConnection[] = [];
@@ -1502,6 +1526,8 @@ export function storyDocJson(doc: StoryDoc): string {
     : { frameOf: r.frameOf, ...(r.atSec !== undefined ? { atSec: r.atSec } : {}), role: frameRefAuthoredRole(r.role), frameDesc: r.frameDesc };
   const shots = doc.shots.map((sh) => sh.references?.some((r) => r.frameOf !== undefined) ? { ...sh, references: sh.references.map(ref) } : sh);
   const assets = doc.assets.map((a) => ({ ...a, source: authoredSource(a.source) }));
+  // P18: a cue taken from a video has no "asset".
+  if (doc.audio?.some((c) => c.source)) doc = { ...doc, audio: doc.audio.map((c) => { if (!c.source) return c; const { asset: _a, ...rest } = c; void _a; return rest as StoryAudio; }) };
   // P16: always written as schema 3.1 (each AI shot names its clip; own clips become automatic clip assets).
   return JSON.stringify(toSchema31({ ...doc, assets, shots: shots as unknown as Record<string, unknown>[] }), null, 2);
 }

@@ -33,6 +33,9 @@ import { ClipFrames } from "./ClipFrames";
 import { makeAnalyse, MatchFrames } from "./MatchFrames";
 import { clipRange, links } from "../domain";
 import { MediaPicker, type Picked } from "./MediaPicker";
+import type { FromVideoPick } from "./FromVideoTab";
+import { extractAudioWav } from "./media";
+import { fromVideo as fromVideoDomain, type MediaRef } from "../domain";
 import { projectMediaList } from "./projectMedia";
 import { stickerFile, stickers } from "./libraryItems";
 import { newCodeClipHtml } from "./codeSamples";
@@ -104,7 +107,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const [ctx, setCtx] = useState<{ x: number; y: number; placementId?: string; trackId?: string; ticks: number }>();
   const [pps, setPps] = useState(40);
   const [sheet, setSheet] = useState(false);
-  const [picker, setPicker] = useState<null | "main" | "overlay" | "audio" | "stickers">(null);
+  const [picker, setPicker] = useState<null | "main" | "overlay" | "audio" | "fromVideo" | "stickers">(null);
   const [busy, setBusy] = useState(0);
   const [menu, setMenu] = useState<Menu>("root");
   /** Mobile: which timeline group is expanded into its layers (the toolbar ‹ collapses it). */
@@ -570,6 +573,30 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     if (stickerIds.length) steps.push(cmd.addAssetsInSequence(stickerIds, at, newId("trk"), "text"));
     if (steps.length) engine.dispatch(steps, mode === "overlay" ? "Add overlay" : "Add media");
   };
+  /** P18: Add audio → From Video: decode the video's audio span to a WAV audio asset (or reference the video's sound when it can't be decoded) at the playhead. */
+  const addFromVideo = async (fv: FromVideoPick) => {
+    setPicker(null);
+    const video = project.assets[fv.assetId];
+    const version = video && (video.versions.find((x) => x.id === video.selectedVersionId) ?? video.versions[video.versions.length - 1]);
+    if (!video || !version) return;
+    const at = Math.round(player.time);
+    const ids = { assetId: newId("ast"), versionId: newId("ver") };
+    setBusy((b) => b + 1);
+    let extracted: MediaRef | undefined;
+    try {
+      const blob = await loadAssetBlob(video.id);
+      if (blob) {
+        const { wav, seconds } = await extractAudioWav(blob, fv.inSec, fv.outSec);
+        const blobKey = `${ids.assetId}/${ids.versionId}`;
+        await storage.blobs.put(blobKey, wav);
+        extracted = { blobKey, mime: "audio/wav", durationTicks: secondsToTicks(seconds) };
+      }
+    } catch { extracted = undefined; } finally { setBusy((b) => b - 1); }
+    const made = fromVideoDomain.audioFromVideo(video, version, fv, extracted, ids);
+    const mute = fv.muteOriginal ? Object.values(project.compositions[project.rootCompositionId].tracks).flatMap((t) => t.placements).filter((q) => q.clipType === "video" && q.source.assetId === video.id).map((q) => q.id) : [];
+    if (engine.dispatch(cmd.addAudioFromVideo(made.asset, fromVideoDomain.audioFromVideoPlacement(made, at), mute))) setToast(extracted ? `Added the audio of ${video.name}` : `Added the sound of ${video.name} (plays from the video file)`);
+  };
+  const videoOnTimeline = (assetId: string) => project.compositions[project.rootCompositionId].tracks.some((t) => t.placements.some((q) => q.clipType === "video" && q.source.assetId === assetId));
   const projectMedia = useMemo(() => projectMediaList(project, thumbs), [project, thumbs]);
   const addToTimeline = (a: Asset) => { engine.dispatch(cmd.addAssetToTimeline(a.id, mobile ? player.time : duration)); if (mobile) setSheet(false); };
 
@@ -760,7 +787,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       tool("🗑", "Delete", () => delSel(), "del"),
       ...clipActions.map((a) => tool(a.icon, a.label, a.run, a.label, a.title)),
     ],
-    audio: [tool("＋", "Add audio", () => setPicker("audio"), "add-audio", "Add music or sound from this project or your device"), tool("♫", "Create audio", createAudio, "create-audio", "Make music or sound effects in the Audio editor")],
+    audio: [tool("＋", "Add audio", () => setPicker("audio"), "add-audio", "Add music or sound from this project or your device, or take the sound of a video"), tool("♫", "Create audio", createAudio, "create-audio", "Make music or sound effects in the Audio editor")],
     speed: sp ? SPEEDS.map((s) => (
       <button key={s} className={`v2-tool ${(sp.speed ?? 1) === s ? "is-active" : ""}`} aria-pressed={(sp.speed ?? 1) === s} onClick={() => engine.dispatch(cmd.setSpeed(sp.id, s))}><b>{s}×</b><span>{s === 1 ? "Normal" : s < 1 ? "Slow" : "Fast"}</span></button>
     )) : [],
@@ -807,12 +834,13 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     else if (it?.kind === "sticker") { const st = stickers().find((x) => x.id === it.id); if (st) void addStickerAt(st, at); }
     else if (dt.files?.length) void importAt(Array.from(dt.files), at, trackId);
   };
+  const pickerEl = picker ? <MediaPicker media={projectMedia} title={picker === "overlay" ? "Add overlay" : picker === "audio" || picker === "fromVideo" ? "Add audio" : picker === "stickers" ? "Add stickers" : "Add media"} only={picker === "audio" || picker === "fromVideo" ? "audio" : undefined} initialTab={picker === "stickers" ? "stickers" : picker === "fromVideo" ? "fromVideo" : undefined} onClose={() => setPicker(null)} onAdd={(p) => void addPicked(p, picker === "overlay" || picker === "stickers" ? "overlay" : "main")} onCreateCode={picker === "audio" || picker === "fromVideo" ? undefined : () => createCode(picker === "overlay" ? "overlay" : "main")} onCreateAudio={picker === "audio" || picker === "fromVideo" ? createAudio : undefined} onAddFromVideo={picker === "audio" || picker === "fromVideo" ? (fv) => void addFromVideo(fv) : undefined} onTimeline={videoOnTimeline} loadMedia={loadAssetBlob} /> : null;
   const assetBrowser = (
     <AssetBrowser project={project} thumbs={thumbs} busy={busy} tab={btab} onTab={setBtab}
       onImport={importDialog} onFiles={(fs) => void onFiles(fs)} onAddAsset={addToTimeline} onRemoveAsset={(a) => engine.dispatch(cmd.removeAsset(a.id))}
       onAddText={(tp) => addTextAt(player.time, tp)} onImportSrt={() => srtRef.current?.click()}
       onAddSticker={(st) => void addStickerAt(st, player.time)} onAddEffect={(id) => addEffectAt(id, player.time)}
-      onAddTransition={addTransitionNearPlayhead} onCreateCode={() => createCode()} onCreateAudio={createAudio} />
+      onAddTransition={addTransitionNearPlayhead} onCreateCode={() => createCode()} onCreateAudio={createAudio} onAudioFromVideo={() => setPicker("fromVideo")} />
   );
   useEffect(() => { setItab(preferTab.current); preferTab.current = undefined; }, [selectedId]);
   const fpsNow = project.settings.fps;
@@ -1061,7 +1089,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
             {(activeMenu !== "root" || expanded) && <button className="v2-tool v2-tool-back" aria-label={activeMenu === "root" && expanded ? `Collapse ${ops.GROUP_LABEL[expanded]}` : "Back"} title={activeMenu === "root" && expanded ? `Collapse ${ops.GROUP_LABEL[expanded]}` : "Back"} onClick={back}>‹</button>}
             {mobileTools[activeMenu]}
           </nav>
-          {picker && <MediaPicker media={projectMedia} title={picker === "overlay" ? "Add overlay" : picker === "audio" ? "Add audio" : picker === "stickers" ? "Add stickers" : "Add media"} only={picker === "audio" ? "audio" : undefined} initialTab={picker === "stickers" ? "stickers" : undefined} onClose={() => setPicker(null)} onAdd={(p) => void addPicked(p, picker === "overlay" || picker === "stickers" ? "overlay" : "main")} onCreateCode={picker === "audio" ? undefined : () => createCode(picker === "overlay" ? "overlay" : "main")} onCreateAudio={picker === "audio" ? createAudio : undefined} loadMedia={loadAssetBlob} />}
+          {pickerEl}
           {sheet && <Sheet label="Media" head={false} onClose={() => setSheet(false)}>{browser}</Sheet>}
           {!sheet && <div hidden>{browser}</div>}
           {cue && <div className="v2-msub"><SubtitleEditor engine={engine} sub={cue} onDelete={delCue} /></div>}
@@ -1084,6 +1112,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
         <div className="v2-dshell" style={{ gridTemplateColumns: `${lay.leftOpen ? lay.left : 0}px ${lay.leftOpen ? 5 : 0}px minmax(0,1fr) ${lay.rightOpen ? 5 : 0}px ${lay.rightOpen ? lay.right : 0}px`, gridTemplateRows: `minmax(0,1fr) 5px ${lay.timeline}px` }}>
           {fileInputs}
           {lay.leftOpen && <div className="v2-dpane v2-dpane-left">{assetBrowser}</div>}
+          {pickerEl}
           {lay.leftOpen && <Splitter label="Resize asset panel" value={lay.left} dir="right" min={LIMITS.left[0]} max={LIMITS.left[1]} onChange={(v) => resize({ left: v })} onCommit={commitSizes} onReset={() => { resize({ left: DEFAULT_SIZES.left }); commitSizes(); }} />}
           <div className="v2-dpane v2-dpane-center">{preview}</div>
           {lay.rightOpen && <Splitter label="Resize inspector" value={lay.right} dir="left" min={LIMITS.right[0]} max={LIMITS.right[1]} onChange={(v) => resize({ right: v })} onCommit={commitSizes} onReset={() => { resize({ right: DEFAULT_SIZES.right }); commitSizes(); }} />}
