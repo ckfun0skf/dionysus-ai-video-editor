@@ -98,3 +98,17 @@ describe("P16 schema 3.1: clip-centric storyboard", () => {
     expect(s3?.durationTicks).toBe(secondsToTicks(3));
   });
 });
+
+describe("P16 ep01 fixture: the committed 3.1 copy is the migration of the 3.0 file", () => {
+  it("3.0 → 3.1 matches __fixtures__/ep01_opening.v31.storyboard.json and imports with no warnings", async () => {
+    const { readFileSync, writeFileSync } = await import("node:fs");
+    const dir = new URL("./__fixtures__/", import.meta.url);
+    const v30text = readFileSync(new URL("ep01_opening.storyboard.json", dir), "utf8");
+    const out = storyDocJson(ok(JSON.parse(v30text))) + "\n";
+    if (process.env.UPDATE_AI_GUIDE) writeFileSync(new URL("ep01_opening.v31.storyboard.json", dir), out);
+    expect(readFileSync(new URL("ep01_opening.v31.storyboard.json", dir), "utf8")).toBe(out);
+    const r = parseStoryboard(out);
+    expect(r.ok && r.warnings).toEqual([]);
+    expect(storyDocJson((r as { doc: StoryDoc }).doc) + "\n").toBe(out);
+  });
+});
