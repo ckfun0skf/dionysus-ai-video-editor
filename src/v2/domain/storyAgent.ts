@@ -53,10 +53,12 @@ const LAYER = obj({ id: id("Layer id, unique in the shot."), type: en(LAYER_TYPE
 const BACKGROUND: Schema = { description: `A hex colour ("#000000") or a gradient { "type": ${BACKGROUND_TYPES.map((t) => `"${t}"`).join(" | ")}, "angle"?, "stops": [{ "color", "at"? }] }. null removes it.` };
 const SHOT = obj({
   id: id("Unique shot id (e.g. s12)."), title: str("Short title."), description: str("What happens."), durationSec: num("Planned on-screen length in seconds."),
-  prompt: str("Clip generation prompt (required for render ai)."), assets: arr(str("Asset id."), "Assets that appear."), qa: arr(str("A check."), "QA checks."),
-  render: en(SHOT_RENDERS, 'How the shot is made (default "ai").'), clip: str("html asset (render html) or image asset (render still)."),
-  layers: arr(LAYER, "Layers on top."), references: arr(REFERENCE, "Images to attach, in order."), background: BACKGROUND,
-}, ["id", "title", "durationSec"], "A storyboard shot (see the guide's FORMAT section for every field).");
+  qa: arr(str("A check."), "Checks of the edit (text, layers, timing); the clip's own checks go on the clip asset."),
+  render: en(SHOT_RENDERS, 'How the shot is made (default "ai").'),
+  clip: str('Schema 3.1: render ai = the video asset (clip) that carries the prompt, references and generation params; the same clip in several shots reuses one generation. html asset (render html) or image asset (render still).'),
+  inSec: num("Seconds into a shared clip where this shot starts playing it (default 0)."),
+  layers: arr(LAYER, "Layers on top."), background: BACKGROUND,
+}, ["id", "title", "durationSec"], 'A storyboard shot, schema 3.1 (RULE 51): no "prompt"; add its clip asset first (add_asset, type video) and name it in "clip". See the guide\'s FORMAT section for every field.');
 const CUE = obj({
   id: id('Cue id (default "audio<n>").'), asset: str("Audio asset id."), kind: en(AUDIO_KINDS, "Cue kind."), from: str("Shot id the cue starts at."), to: str("Shot id it ends at (inclusive)."),
   atSec: num("Offset into the from shot."), volume: num("0-2, 1 = as recorded."),
@@ -210,17 +212,23 @@ export const STORY_TOOLS: StoryTool[] = [
   },
   {
     name: "update_shot", title: "Change a shot", readOnly: false,
-    description: "Change fields of a shot (title, description, durationSec, prompt, assets, references, dialogue, camera, qa, keyframe, render, clip, effects (each may set applyTo: main, overlay or all), …).",
+    description: "Change fields of a shot (title, description, durationSec, clip, inSec, dialogue, qa, render, effects (each may set applyTo: main, overlay or all), …). Schema 3.1: a shot has no prompt; change the prompt, references, camera, keyframe or genDurationSec of its clip with update_asset (a shared clip changes every shot that uses it).",
     inputSchema: obj({ id: str("Shot id."), patch: patch("shot") }, ["id", "patch"]),
     edit: (raw, a) => shotEdit(raw, a, (s) => applyPatch(s, a.patch), (s) => `AI: edit shot ${String(s.id)}`),
   },
   {
     name: "remove_shot", title: "Remove a shot", readOnly: false,
-    description: "Remove a shot and its connections. Rejected while a cue, last-frame link or other shot still needs it; change those first.",
+    description: "Remove a shot, its connections and its own (auto) clip. Rejected while a cue, last-frame link or other shot still needs it; change those first.",
     inputSchema: obj({ id: str("Shot id.") }, ["id"]),
     edit: (raw, a) => {
       const i = findIdx(raw.shots, a.id); if (i < 0) return `No shot "${String(a.id)}".`;
-      raw.shots.splice(i, 1); raw.connections = raw.connections.filter((c) => c.from !== a.id && c.to !== a.id);
+      const [gone] = raw.shots.splice(i, 1); raw.connections = raw.connections.filter((c) => c.from !== a.id && c.to !== a.id);
+      // P16: its own auto clip goes with it (a clip another shot still plays stays).
+      const own = raw.assets.find((x) => x.id === gone.clip && x.auto === true);
+      if (own) {
+        const rest = raw.assets.filter((x) => x !== own);
+        if (!JSON.stringify({ ...raw, assets: rest }).includes(`"${String(own.id)}"`)) raw.assets = rest;
+      }
       return { label: `AI: remove shot ${String(a.id)}`, message: `Shot "${String(a.id)}" removed.` };
     },
   },
@@ -363,7 +371,7 @@ export const STORY_TOOLS: StoryTool[] = [
   },
   {
     name: "list_needs_prompt", title: "List items that need a prompt", readOnly: true,
-    description: "List the shots, layers and audio cues flagged needsPrompt (made on the timeline by Sync to Storyboard). Fill each: a shot needs a description and a clip generation prompt (update_shot), a layer or cue needs a description (set_shot_layers / update_cue); filling it clears the flag.",
+    description: "List the shots, layers and audio cues flagged needsPrompt (made on the timeline by Sync to Storyboard). Fill each: a shot needs a description (update_shot) and a clip generation prompt on its clip asset (update_asset), a layer or cue needs a description (set_shot_layers / update_cue); filling it clears the flag.",
     inputSchema: obj({}),
     read: (_r, _a, _c, doc) => {
       if (!doc) return { ok: false, text: "No storyboard yet." };

@@ -55,8 +55,8 @@ Generated from the same schema as the storyboard parser (`src/v2/domain/storyAge
 - `add_asset_state`(asset, state): Add another look of an asset (lamp on, coat soaked, street at night), used as "<asset>@<state>".
 - `update_asset_state`(asset, id, patch): Change fields of an asset state (name, prompt, references, qa).
 - `add_shot`(shot, after): Add a shot. "after": the shot id to insert after (omit to append at the end; null to insert first). Add a long story in batches of shots.
-- `update_shot`(id, patch): Change fields of a shot (title, description, durationSec, prompt, assets, references, dialogue, camera, qa, keyframe, render, clip, effects (each may set applyTo: main, overlay or all), …).
-- `remove_shot`(id): Remove a shot and its connections. Rejected while a cue, last-frame link or other shot still needs it; change those first.
+- `update_shot`(id, patch): Change fields of a shot (title, description, durationSec, clip, inSec, dialogue, qa, render, effects (each may set applyTo: main, overlay or all), …). Schema 3.1: a shot has no prompt; change the prompt, references, camera, keyframe or genDurationSec of its clip with update_asset (a shared clip changes every shot that uses it).
+- `remove_shot`(id): Remove a shot, its connections and its own (auto) clip. Rejected while a cue, last-frame link or other shot still needs it; change those first.
 - `set_shot_layers`(id, layers): Replace all layers of a shot (text, html, image, video), drawn in order on top. [] removes them. Text layers may set anim.inParams, e.g. the typewriter cursor { cursor, blink, after: blink|hide|fade, scramble }. A layer is linked to its shot's main clip on Send to timeline unless it sets link: false (RULE 46).
 - `set_shot_background`(id, background): Give a still shot a colour or gradient background (sets "render": "still"); null removes it. Use clip or background, not both.
 - `set_shot_params`(id, params, replace): Set the params of an html shot's clip (e.g. a title card's text). Merged into the current values; null removes one; "replace": true replaces them all.
@@ -72,7 +72,7 @@ Generated from the same schema as the storyboard parser (`src/v2/domain/storyAge
 - `export_json` · read-only: The whole storyboard as storyboard JSON ("dionysus.storyboard/1"), edits included.
 - `send_to_timeline`: Update the timeline from the storyboard (update mode): adds shots that have a clip and new audio cues, switches changed clips and refreshes shot text; everything else on the timeline stays. Shots without an uploaded clip are skipped. New layers and in-shot cues are linked to their shot's main clip (moved, trimmed and deleted with it) unless they set link: false.
 - `sync_to_storyboard`: Write timeline edits back to the storyboard (one undo step): clip lengths, order and trims, layers, effects and audio cues of the shots they came from. Timeline clips with no shot become new shots, layers or cues flagged needsPrompt; shots whose clip was removed are kept and flagged removedFromTimeline. Afterwards call list_needs_prompt and fill every item.
-- `list_needs_prompt` · read-only: List the shots, layers and audio cues flagged needsPrompt (made on the timeline by Sync to Storyboard). Fill each: a shot needs a description and a clip generation prompt (update_shot), a layer or cue needs a description (set_shot_layers / update_cue); filling it clears the flag.
+- `list_needs_prompt` · read-only: List the shots, layers and audio cues flagged needsPrompt (made on the timeline by Sync to Storyboard). Fill each: a shot needs a description (update_shot) and a clip generation prompt on its clip asset (update_asset), a layer or cue needs a description (set_shot_layers / update_cue); filling it clears the flag.
 <!-- tools:end -->
 
 Patch tools (`update_*`, `set_shot_params`) merge the given fields; `null` deletes a field. Ids can't be renamed.
@@ -127,11 +127,14 @@ Any chat AI can produce a long storyboard in parts, which you paste into **Story
 ```json
 {
   "format": "dionysus.storyboard/1",
+  "schemaVersion": "3.1",
   "part": { "index": 2, "of": 4, "after": "s10" },
-  "shots": [{ "id": "s11", "title": "…", "durationSec": 5, "prompt": "…", "assets": ["hero"], "qa": ["…", "…"] }],
-  "assets": [],
+  "shots": [{ "id": "s11", "title": "…", "durationSec": 5, "clip": "s11-clip" }],
+  "assets": [{ "id": "s11-clip", "name": "Clip · …", "type": "video", "prompt": "…", "references": ["hero"], "qa": ["…", "…"] }],
   "audio": []
 }
 ```
+
+Schema 3.1 (P16): every tool reads and writes the clip-centric form. A shot has no `prompt`; it names its clip (a `video` asset) in `clip` and may start a shared clip at `inSec`. Edit a clip's prompt, references, camera, keyframe or `genDurationSec` with `update_asset`; a shared clip changes every shot that uses it. `get_storyboard` returns `"schemaVersion": "3.1"`, and a 3.0 board (prompts on shots) is migrated when it is loaded.
 
 Import merges a part into the current board by id: same id → replaced, new id → added (new shots after `part.after`, else at the end), `"part": { "remove": ["s7"] }` deletes, `meta` fields (if any) are merged. The merged board is validated as a whole and shown as a diff before you apply it, and applying is one undo step. The rule `long-story-parts` in the guide tells the AI how to do this. See [STORYBOARD_FORMAT.md §4.8](STORYBOARD_FORMAT.md).

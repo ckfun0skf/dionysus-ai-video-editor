@@ -41,7 +41,8 @@ for (const file of files) {
   const total = d.shots.reduce((t, s) => t + s.durationSec, 0);
   const sum = (f) => d.shots.reduce((t, s) => t + (f(s)?.length ?? 0), 0);
   const lines = [
-    ["format", `${d.format} · ${d.meta.title} · ${d.meta.aspect}`],
+    ["format", `${d.format} · schema ${JSON.parse(text).schemaVersion ?? "3.0 (migrated on import)"} · ${d.meta.title} · ${d.meta.aspect}`],
+    ["clips", (() => { const uses = {}; for (const s of d.shots) if (s.clip && d.assets.some((a) => a.id === s.clip && a.type === "video")) uses[s.clip] = (uses[s.clip] ?? 0) + 1; const shared = Object.values(uses).filter((n) => n > 1).length; return `${d.shots.filter((s) => (s.render ?? "ai") === "ai").length - Object.values(uses).reduce((t, n) => t + n, 0) + Object.keys(uses).length} to generate${shared ? ` (${shared} shared by several shots)` : ""}`; })()],
     ["shots", `${d.shots.length} (${count(d.shots, (s) => s.render ?? "ai")}; ${d.shots.filter((s) => s.keyframe).length} with a keyframe)`],
     ["total seconds", `${Math.round(total * 100) / 100} s on screen${d.shots.some((s) => s.genDurationSec) ? ` (${d.shots.filter((s) => s.genDurationSec).length} shots generate longer via genDurationSec)` : ""}`],
     ["assets", `${d.assets.length}${d.assets.length ? ` (${count(d.assets, (a) => a.type)}; sources: ${count(d.assets, (a) => a.source.type)})` : ""}`],
