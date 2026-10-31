@@ -14,6 +14,7 @@ import { ActionSheet, ConnectionEditor, ShotEditor } from "./ShotEditor";
 import { SlotEditor } from "./SlotEditor";
 import { StoryDetail } from "./StoryDetail";
 import { ProductionView } from "./ProductionView";
+import { PrepareReferences } from "./PrepareReferences";
 import { ExportPanel, ImportPanel, PromptPanel } from "./StoryImport";
 import { AgentPanel } from "../agent/AgentPanel";
 import { useVersionThumbs } from "./useVersionThumbs";
@@ -243,7 +244,10 @@ export function StoryboardView({ engine, blobs, onClose, initialOpen, onView, on
       </header>
       <div className="v2-board-body">
         {step === "production" && has ? <ProductionView project={project} thumbs={thumbs} engine={engine} blobs={blobs} mobile={mobile} onNote={setNote} /> : step === "prompt" ? <PromptPanel series={series} /> : step === "import" ? <ImportPanel onCreate={create} replacing={has} diffFor={has ? diffFor : undefined} onMerge={has ? merge : undefined} base={baseDoc} series={series} /> : step === "agent" ? <AgentPanel /> : step === "export" && sb ? <ExportPanel board={sb} /> : has ? (
-          <BoardView project={project} thumbs={thumbs} onOpen={(t) => { setEditing(undefined); setEditingSlot(undefined); setConn(undefined); setOpen(t); }} openKey={editing?.shot ?? editingSlot?.slot ?? (open && ("slot" in open ? open.slot : open.shot))} edit={boardEdit} mobile={mobile} />
+          <>
+            <PrepareReferences project={project} onOpen={(t) => { setEditing(undefined); setEditingSlot(undefined); setConn(undefined); setOpen(t); }} />
+            <BoardView project={project} thumbs={thumbs} onOpen={(t) => { setEditing(undefined); setEditingSlot(undefined); setConn(undefined); setOpen(t); }} openKey={editing?.shot ?? editingSlot?.slot ?? (open && ("slot" in open ? open.slot : open.shot))} edit={boardEdit} mobile={mobile} />
+          </>
         ) : (
           <div className="v2-sb-empty">
             <div className="v2-sb-hero"><Ic g="board" size={36} /><h3>Plan your video with your own AI</h3><p>Agree the story with your AI, have it write a storyboard JSON, then import it here. Dionysus turns it into shots, the assets each needs, and a step-by-step production list.</p></div>

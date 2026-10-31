@@ -184,7 +184,45 @@ export interface StoryEffect { preset: string; params?: StoryParams; startSec?: 
 /** `preset` is a transition id, kept as written; `params.durationSec` defaults to 0.5 s. */
 export interface StoryTransition { preset: string; params?: StoryParams }
 /** One numbered image attached to a clip generation, with how to use it (V2-SB-120). */
-export interface StoryReference { asset: string; role: ReferenceRole; note?: string }
+export interface StoryReference {
+  asset: string; role: ReferenceRole; note?: string;
+  /**
+   * P15: a frame of another shot's generated clip ({ "frameOf": "<shot id>", "atSec", "role", "frameDesc" }). `asset`
+   * is then the implicit frame slot id (see frameRefId); export writes the authored form back.
+   */
+  frameOf?: string; atSec?: number; frameDesc?: string;
+}
+
+/** P15: authored roles of a frameOf reference: "start" = the clip's start frame, "reference" = a look / detail reference. */
+export const FRAME_REF_ROLES = ["start", "reference"] as const;
+export type FrameRefRole = (typeof FRAME_REF_ROLES)[number];
+export const frameRefRole = (r: FrameRefRole): ReferenceRole => (r === "start" ? "start-frame" : "detail");
+export const frameRefAuthoredRole = (r: ReferenceRole): FrameRefRole => (r === "start-frame" ? "start" : "reference");
+/** P15: the implicit slot holding the frame of shot `source` that shot `target` uses (n = 2, 3 … for more than one). */
+export const frameRefId = (target: string, source: string, n = 1) => `${target}.frameof.${source}${n > 1 ? `-${n}` : ""}`;
+
+const SUBJECT_STOP = new Set(("shot frame camera angle view lens close closeup close-up wide medium start end left right pan tilt dolly move moves movement " +
+  "push pull zoom moment beginning middle second seconds side centre center foreground background top bottom edge part point same this that " +
+  "frame's shot's other another first last next previous source target image reference").split(" "));
+/**
+ * P15: a simple keyword heuristic for frameOf references: the key subjects a frameDesc names (nouns after "the", "a",
+ * "an", "his", "her", "their", "another" …, minus camera vocabulary) that the source shot's prompt / description never
+ * mentions. Plural "s" / "es" are ignored when comparing.
+ */
+export function frameDescMissingSubjects(frameDesc: string, sourceText: string): string[] {
+  const stem = (w: string) => w.toLowerCase().replace(/[’']s$/, "").replace(/(es|s)$/, "");
+  const have = new Set((sourceText.toLowerCase().match(/[a-z][a-z'’-]*/g) ?? []).map(stem));
+  const out: string[] = [];
+  // A one- or two-word phrase after a determiner ("the dog", "the red car"); it is covered when any word appears.
+  const re = /\b(?:the|a|an|his|her|their|its|another|two|three|some)\s+([a-z][a-z-]{2,})(?:\s+([a-z][a-z-]{2,}))?/gi;
+  for (const m of frameDesc.matchAll(re)) {
+    const words = [m[1], m[2]].filter((x): x is string => !!x).map((x) => x.toLowerCase()).filter((x) => !SUBJECT_STOP.has(x));
+    const w = words[0];
+    if (!w || out.includes(w) || words.some((x) => have.has(stem(x)))) continue;
+    out.push(w);
+  }
+  return out;
+}
 export interface StoryShot {
   id: string; title: string; description: string; durationSec: number;
   /** Required for `render: "ai"`; may be empty for html and still shots. */
@@ -1014,6 +1052,38 @@ export function validateStoryboard(raw: unknown, opts: StoryValidateOptions = {}
    * role warns and is used as "detail"; a missing role is inferred from the asset type. Referenced assets missing
    * from the shot's "assets" are added to it, so they count as its inputs.
    */
+  /**
+   * P15: a frameOf reference: a frame of an earlier shot's clip. "frameDesc" is required; the source shot must exist,
+   * be another shot and come earlier in the order (its clip is generated first, so the references can't loop).
+   */
+  const frameRefOf = (r: Record<string, unknown>, rp: string, shotId: string, out: StoryReference[]) => {
+    const src = str(r.frameOf) ?? "";
+    const at = shotPre.findIndex((x) => x?.id === shotId), from = shotPre.findIndex((x) => x?.id === src);
+    if (!src || !shotIds.has(src)) return err(`${rp}.frameOf`, src ? `Unknown shot "${src}" (shots: ${[...shotIds].join(", ")}).` : '"frameOf" needs the id of the shot whose clip the frame is taken from.');
+    if (src === shotId) return err(`${rp}.frameOf`, `Shot "${shotId}" can't use a frame of its own clip.`);
+    if (from > at) return err(`${rp}.frameOf`, `Shot "${shotId}" uses a frame of "${src}", which comes later in the order. The source shot must come first: its clip is generated before the frame can be picked.`);
+    const desc = str(r.frameDesc) ?? "";
+    if (!desc) return err(`${rp}.frameDesc`, 'A frameOf reference needs "frameDesc": the camera framing / angle, who and what is visible and where, where in the source shot\'s camera move the frame sits, and how this shot uses it.');
+    let atSec: number | undefined;
+    if (r.atSec !== undefined) {
+      atSec = num(r.atSec);
+      const dur = num(shotPre[from]?.s.durationSec);
+      if (atSec === undefined || atSec < 0) { warn(`${rp}.atSec`, `"atSec" ${JSON.stringify(r.atSec)} is ignored: use seconds from the start of shot "${src}".`); atSec = undefined; }
+      else if (dur !== undefined && atSec > dur) warn(`${rp}.atSec`, `"atSec" ${atSec} is after the end of shot "${src}" (${dur} s); it is only a hint for the frame picker.`);
+    }
+    let role: ReferenceRole = "detail";
+    const rr = str(r.role);
+    if (rr === undefined) role = "detail";
+    else if ((FRAME_REF_ROLES as readonly string[]).includes(rr)) role = frameRefRole(rr as FrameRefRole);
+    else if (rr === "start-frame" || rr === "detail") role = rr;
+    else warn(`${rp}.role`, `Unknown frameOf role ${JSON.stringify(r.role)}; using "reference". Roles: start, reference.`);
+    const n = out.filter((x) => x.frameOf === src).length + 1;
+    const raw = shotPre[from]?.s;
+    const missing = frameDescMissingSubjects(desc, raw ? `${str(raw.prompt) ?? ""} ${str(raw.description) ?? ""} ${str(raw.title) ?? ""}` : "");
+    if (missing.length) warn(`${rp}.frameDesc`, `The frame description names ${missing.map((m) => `"${m}"`).join(", ")}, but the prompt of shot "${src}" never mentions ${missing.length > 1 ? "them" : "it"}. Check that the source shot really shows ${missing.length > 1 ? "them" : "it"}.`);
+    out.push({ asset: frameRefId(shotId, src, n), role, frameOf: src, ...(atSec !== undefined ? { atSec } : {}), frameDesc: desc });
+  };
+
   const referencesOf = (v: unknown, path: string, used: string[], shotId: string): StoryReference[] | undefined => {
     if (v === undefined) return undefined;
     if (!Array.isArray(v)) { err(path, '"references" must be a list like [ { "asset": "<asset id>", "role": "start-frame" } ].'); return undefined; }
@@ -1021,6 +1091,7 @@ export function validateStoryboard(raw: unknown, opts: StoryValidateOptions = {}
     v.forEach((r, j) => {
       const rp = `${path}[${j}]`;
       if (!isObj(r)) return err(rp, 'Each reference must be an object { "asset": "<asset id>", "role": "<role>", "note"?: "…" }.');
+      if (r.frameOf !== undefined) return frameRefOf(r, rp, shotId, out);
       const asset = str(r.asset) ?? "";
       if (!asset) return err(`${rp}.asset`, 'A reference needs "asset": the id of the asset to attach.');
       const a = assetById.get(asset), type = refType(asset);
@@ -1400,7 +1471,11 @@ export function findCycle(graph: Map<string, string[]>): string[] | undefined {
 
 /** A StoryDoc as storyboard JSON text in the documented form (sources as authoredSource writes them). */
 export function storyDocJson(doc: StoryDoc): string {
-  return JSON.stringify({ ...doc, assets: doc.assets.map((a) => ({ ...a, source: authoredSource(a.source) })) }, null, 2);
+  // P15: frameOf references are written in their authored form (no generated slot id, role "start" / "reference").
+  const ref = (r: StoryReference) => r.frameOf === undefined ? r
+    : { frameOf: r.frameOf, ...(r.atSec !== undefined ? { atSec: r.atSec } : {}), role: frameRefAuthoredRole(r.role), frameDesc: r.frameDesc };
+  const shots = doc.shots.map((sh) => sh.references?.some((r) => r.frameOf !== undefined) ? { ...sh, references: sh.references.map(ref) } : sh);
+  return JSON.stringify({ ...doc, assets: doc.assets.map((a) => ({ ...a, source: authoredSource(a.source) })), shots }, null, 2);
 }
 
 /** One-line summary for the import preview. */

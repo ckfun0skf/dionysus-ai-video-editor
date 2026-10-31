@@ -19,6 +19,7 @@ import { extFor, safeName, saveFile } from "../saveFile";
 import { Sheet } from "../Sheet";
 import { type BoardTarget, LengthWarn, shotIcon, Thumb, TYPE_ICON, Warn } from "./BoardView";
 import { extractLastFrame } from "./lastFrame";
+import { FrameRefBox } from "./FramePicker";
 import { CopyButton } from "./StoryImport";
 import { AudioTrim } from "./AudioTrim";
 import { StoryAssetPicker, type LibraryEntry } from "./StoryAssetPicker";
@@ -262,7 +263,9 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
           <button className="v2-linkbtn" onClick={() => onOpen({ slot: clipSlot.id })}>Open “{clipSlot.name}”</button>
         </p>
       )}
-      {st?.stale && <div className="v2-sb-warnbox" role="note"><Warn st={st} /><ul>{st.reasons.map((r) => <li key={r}>{r}</li>)}</ul><p>Upload a new version made with the current assets, or keep this one if it still looks right.</p></div>}
+      {slot?.source.type === "frameOf" && <FrameRefBox project={project} slotId={slot.id} engine={engine} blobs={blobs} />}
+      {shot && shot.slotIds.filter((id) => b.slots[id]?.source.type === "frameOf").map((id) => <FrameRefBox key={id} project={project} slotId={id} engine={engine} blobs={blobs} compact />)}
+      {st?.stale && st.reasons.some((r) => r !== board.FRAME_CHANGED) && <div className="v2-sb-warnbox" role="note"><Warn st={st} /><ul>{st.reasons.filter((r) => r !== board.FRAME_CHANGED).map((r) => <li key={r}>{r}</li>)}</ul><p>Upload a new version made with the current assets, or keep this one if it still looks right.</p></div>}
 
       <Section title={versions.length ? `Versions (${versions.length})` : "Versions"}>
         {versions.length ? (
@@ -283,7 +286,7 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
                   <button className={`v2-sb-version ${on ? "on" : ""}`} aria-pressed={on} title={on ? undefined : "Use this version"}
                     onClick={() => { if (!on && owner.assetId) swap(cmd.selectStoryVersion(owner.assetId, v.id)); }}>
                     <Thumb src={thumbs[v.id]} icon={icon} count={0} />
-                    <span><b>v{i + 1}{on && <span className="v2-sb-inuse"><Ic g="ok" size={13} /> In use</span>}</b><em>{info?.derivedFrom ? `Frame of shot ${shotNo(info.derivedFrom.shotId)}` : fmtDate(v.createdAt)}</em>{info?.model && <em title="Made with">{info.model}</em>}{pinnedIn.length > 0 && <em className="v2-sb-pinned"><Ic g="pin" size={12} /> Pinned in shot {pinnedIn.join(", ")}</em>}{(trimmed ?? aSpan) && <em className="v2-sb-trimmed" title="Part of the clip in use"><Ic g="✂" size={12} /> {s1((trimmed ?? aSpan)!.inTicks)}–{s1((trimmed ?? aSpan)!.inTicks + (trimmed ?? aSpan)!.lenTicks)} s of {s1(v.media.durationTicks ?? 0)} s</em>}</span>
+                    <span><b>v{i + 1}{on && <span className="v2-sb-inuse"><Ic g="ok" size={13} /> In use</span>}</b><em>{info?.frameRef ? `Frame at ${Math.round(info.frameRef.atSec * 100) / 100} s of shot ${shotNo(info.frameRef.frameOf)}` : info?.derivedFrom ? `Frame of shot ${shotNo(info.derivedFrom.shotId)}` : fmtDate(v.createdAt)}</em>{info?.model && <em title="Made with">{info.model}</em>}{pinnedIn.length > 0 && <em className="v2-sb-pinned"><Ic g="pin" size={12} /> Pinned in shot {pinnedIn.join(", ")}</em>}{(trimmed ?? aSpan) && <em className="v2-sb-trimmed" title="Part of the clip in use"><Ic g="✂" size={12} /> {s1((trimmed ?? aSpan)!.inTicks)}–{s1((trimmed ?? aSpan)!.inTicks + (trimmed ?? aSpan)!.lenTicks)} s of {s1(v.media.durationTicks ?? 0)} s</em>}</span>
                   </button>
                   {htmlSlot && <HtmlExportButtons small name={htmlSlot.id} label={`v${i + 1}`} html={() => blobs.get(v.media.blobKey).then((x) => x?.text())} />}
                   {pv && <span className="v2-sb-vtools">
@@ -299,7 +302,7 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
           </ul>
         ) : null}
         {(() => { const pi = versions.findIndex((x) => x.id === peek), pvv = versions[pi]; return pvv ? <div className="v2-sb-vpreview"><AssetPreview kind={kind as PreviewKind} name={`${title} v${pi + 1}`} cacheKey={pvv.id} load={() => blobs.get(pvv.media.blobKey)} durationSec={kind === "html" ? (shot?.durationSec ?? (pvv.media.durationTicks ? pvv.media.durationTicks / TICKS_PER_SECOND : undefined)) : pvv.media.durationTicks ? pvv.media.durationTicks / TICKS_PER_SECOND : undefined} width={pvv.media.width ?? project.settings?.width} height={pvv.media.height ?? project.settings?.height} /></div> : null; })()}
-        {versions.length ? null : <p className="v2-hint">{lf ? `Nothing yet. Use the last frame of shot ${shotNo(lf)} once it has a clip, or upload an image.` : `Nothing yet. ${slot?.source.type === "upload" ? "Upload your file" : jsonAudio ? "Copy the prompt below to your AI and paste its JSON reply, or create it in the Audio editor" : "Generate it in your AI tool with the prompt below"}, then add it here.`}</p>}
+        {versions.length || slot?.source.type === "frameOf" ? null : <p className="v2-hint">{lf ? `Nothing yet. Use the last frame of shot ${shotNo(lf)} once it has a clip, or upload an image.` : `Nothing yet. ${slot?.source.type === "upload" ? "Upload your file" : jsonAudio ? "Copy the prompt below to your AI and paste its JSON reply, or create it in the Audio editor" : "Generate it in your AI tool with the prompt below"}, then add it here.`}</p>}
         {slot && pins.length > 0 && versions.length > 1 && <p className="v2-hint">{pins.length > 1 ? "Shots" : "Shot"} {pins.map((x) => shotNo(x.shot)).join(", ")} {pins.length > 1 ? "keep their" : "keeps its"} pinned version when you pick another one here.</p>}
         {shot && board.shotLengthMismatch(project, shot) && <p className="v2-sb-lenline"><LengthWarn project={project} shot={shot} /></p>}
         <div className="v2-sb-actions">

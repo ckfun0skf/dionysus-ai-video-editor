@@ -213,7 +213,7 @@ export function duplicateShot(p: Project, id: string, copyId: string): Project {
 /** What deleting a shot changes besides the shot itself (for the confirmation). */
 export function deleteShotEffects(b: Storyboard, id: string): { frames: AssetSlot[]; connections: number } {
   return {
-    frames: Object.values(b.slots).filter((s) => s.source.type === "lastFrame" && s.source.shotId === id),
+    frames: Object.values(b.slots).filter((s) => (s.source.type === "lastFrame" || s.source.type === "frameOf") && s.source.shotId === id),
     connections: b.connections.filter((c) => c.from === id || c.to === id).length,
   };
 }
@@ -225,6 +225,8 @@ export function deleteShot(p: Project, id: string): Project {
   const { [id]: _gone, ...shots } = b.shots;
   const slots = Object.fromEntries(Object.entries(b.slots).map(([k, s]) => {
     if (s.source.type === "lastFrame" && s.source.shotId === id) return [k, { ...s, source: { type: "upload" as const } }];
+    // P15: a frame of the deleted shot stays as a plain uploaded frame asset (its picked versions are kept).
+    if (s.source.type === "frameOf" && s.source.shotId === id) { const { implicit: _i, frameDismissed: _d, ...rest } = s; return [k, { ...rest, source: { type: "upload" as const } }]; }
     if (s.keyframeOf === id) { const { keyframeOf: _k, ...rest } = s; return [k, rest]; } // stays as a plain frame asset
     return [k, s];
   }));

@@ -15,7 +15,9 @@ import { TICKS_PER_SECOND } from "./time";
 
 export interface QaCheck { id: string; text: string }
 export type QaResult = "pass" | "fail";
-export type SlotSource = { type: "generate" } | { type: "upload" } | { type: "json" } | { type: "lastFrame"; shotId: string };
+export type SlotSource = { type: "generate" } | { type: "upload" } | { type: "json" } | { type: "lastFrame"; shotId: string }
+  /** P15: a frame picked from shot `shotId`'s clip (around `atSec`), described by `frameDesc`. */
+  | { type: "frameOf"; shotId: string; atSec?: number; frameDesc: string };
 
 /** A reference asset the story needs (character sheet, location, last frame of shot X …). */
 export interface AssetSlot {
@@ -45,7 +47,9 @@ export interface AssetSlot {
    * P2B: made by the app, not declared in the document: "lastframe" = a "<shot>.lastframe" reference (item 17);
    * "background" = a still shot's colour / gradient picture (item 20, `background` holds it). Export leaves these out.
    */
-  implicit?: "lastframe" | "background";
+  implicit?: "lastframe" | "background" | "frameof";
+  /** P15: frameOf slots: the source clip version whose change warning the user dismissed (a newer change warns again). */
+  frameDismissed?: string;
   /** P5: linked to the project's Series asset with this id (base slots only; states follow their base). */
   seriesRef?: string;
   /** P5: imported with "series": true; the app adds it to the project's Series and then links it. */
@@ -121,6 +125,8 @@ export interface VersionInfo {
   bg?: string;
   /** P2B (item 17): last frames: the clip time (s) the frame was taken at when the clip was trimmed short. */
   lfEnd?: number;
+  /** P15: frameOf slots: the picked frame, with the source clip version it was captured from. */
+  frameRef?: { frameOf: string; atSec: number; sourceVersionId: string };
 }
 
 /** Source range of a video version, in ticks (V2-SB-121). */
@@ -228,8 +234,18 @@ export function storyboardFromDoc(doc: StoryDoc): Storyboard {
       ...(s.needsPrompt ? { needsPrompt: true as const } : {}), ...(s.removedFromTimeline ? { removedFromTimeline: true as const } : {}),
       ...(s.effects?.length ? { effects: structuredClone(s.effects) } : {}),
       ...(s.genDurationSec ? { genDurationSec: s.genDurationSec } : {}),
-      ...(s.references?.length ? { references: s.references.map((r) => ({ slotId: r.asset, role: r.role, ...(r.note ? { note: r.note } : {}) })) } : {}),
+      ...(s.references?.length ? { references: s.references.map((r) => ({ slotId: r.asset, role: r.role, ...(r.note ? { note: r.note } : r.frameDesc ? { note: r.frameDesc } : {}) })) } : {}),
     };
+    // P15: each frameOf reference is an implicit frame slot, an input of the shot made from the source shot's clip.
+    for (const r of s.references ?? []) {
+      if (!r.frameOf || slots[r.asset]) continue;
+      const src = doc.shots.findIndex((x) => x.id === r.frameOf);
+      slots[r.asset] = {
+        id: r.asset, name: `Frame of shot ${src + 1} · ${doc.shots[src]?.title ?? r.frameOf}`, type: "frame", aspect: doc.meta.aspect, prompt: r.frameDesc ?? "", references: [],
+        source: { type: "frameOf", shotId: r.frameOf, ...(r.atSec !== undefined ? { atSec: r.atSec } : {}), frameDesc: r.frameDesc ?? "" }, qa: [], implicit: "frameof",
+      };
+      if (!shots[s.id].slotIds.includes(r.asset)) shots[s.id].slotIds.push(r.asset);
+    }
     if (s.render === "still" && !s.clip && s.background) {
       const id = backgroundId(s.id);
       slots[id] = { id, name: `Background · ${s.title}`, type: "image", aspect: doc.meta.aspect, prompt: "", references: [], source: { type: "generate" }, qa: [], implicit: "background", background: structuredClone(s.background) };
@@ -302,7 +318,7 @@ export type Target = { slot: string } | { shot: string };
  * Upload a new version into a slot or shot and select it. Inputs (and the last-frame source for
  * derived slots) are frozen from the current selections so later changes can be detected.
  */
-export function addStoryVersion(p: Project, target: Target, media: MediaRef, opts: { versionId?: string; model?: string; now?: string; derivedFrom?: { shotId: string; versionId: string }; trim?: VersionTrim; bg?: string; lfEnd?: number } = {}): Project {
+export function addStoryVersion(p: Project, target: Target, media: MediaRef, opts: { versionId?: string; model?: string; now?: string; derivedFrom?: { shotId: string; versionId: string }; trim?: VersionTrim; bg?: string; lfEnd?: number; frameRef?: VersionInfo["frameRef"] } = {}): Project {
   const b = p.storyboard;
   if (!b) return p;
   // An html or still shot has no clip of its own: its versions live on the clip slot.
@@ -313,7 +329,7 @@ export function addStoryVersion(p: Project, target: Target, media: MediaRef, opt
   if (!owner) return p;
   const inputIds = isSlot ? (owner as AssetSlot).references : (owner as Shot).slotIds;
   const inputs = inputIds.flatMap((slotId) => { const s = b.slots[slotId]; const v = s && (isSlot ? selectedOf(p, s) : refVersionOf(p, owner as Shot, slotId)); return v ? [{ slotId, versionId: v }] : []; });
-  let derivedFrom = opts.derivedFrom;
+  let derivedFrom = opts.derivedFrom ?? (opts.frameRef ? { shotId: opts.frameRef.frameOf, versionId: opts.frameRef.sourceVersionId } : undefined);
   if (isSlot && !derivedFrom && (owner as AssetSlot).source.type === "lastFrame") {
     const shotId = ((owner as AssetSlot).source as { shotId: string }).shotId;
     const v = b.shots[shotId] && selectedOf(p, b.shots[shotId]);
@@ -330,7 +346,7 @@ export function addStoryVersion(p: Project, target: Target, media: MediaRef, opt
     : { id: assetId, kind: isSlot ? kindForSlot((owner as AssetSlot).type) : ("video" as MediaKind), name, versions: [version], selectedVersionId: version.id };
   // V2-SB-121 shot clips, V2-SB-133 video assets (their layers' default in point).
   const trim = (!isSlot || (owner as AssetSlot).type === "video") && media.durationTicks ? normTrim(opts.trim, media.durationTicks) : undefined;
-  const info: VersionInfo = { inputs, ...(derivedFrom ? { derivedFrom } : {}), ...(opts.model ? { model: opts.model } : {}), ...(trim ? { trim } : {}), ...(opts.bg ? { bg: opts.bg } : {}), ...(opts.lfEnd !== undefined ? { lfEnd: opts.lfEnd } : {}) };
+  const info: VersionInfo = { inputs, ...(derivedFrom ? { derivedFrom } : {}), ...(opts.model ? { model: opts.model } : {}), ...(trim ? { trim } : {}), ...(opts.bg ? { bg: opts.bg } : {}), ...(opts.lfEnd !== undefined ? { lfEnd: opts.lfEnd } : {}), ...(opts.frameRef ? { frameRef: { ...opts.frameRef } } : {}) };
   const nextOwner = { ...owner, assetId, skipped: undefined };
   const board: Storyboard = {
     ...b,
@@ -541,6 +557,8 @@ export function storyStatus(p: Project): StoryStatus {
         if (cur && info?.derivedFrom && info.derivedFrom.versionId !== cur) reasons.push(`taken from an older version of ${shotLabel(s.source.shotId)}`);
         else if (src && shot(src.id).stale) reasons.push(`${shotLabel(src.id)} may not match`);
       }
+      // P15: a picked frame warns (dismissible per source version) when the source shot's clip changed; never replaced.
+      if (s.source.type === "frameOf" && frameRefState(p, id).state === "changed") reasons.push(FRAME_CHANGED);
       reasons.push(...inputsReasons(info, s.references));
     }
     visiting.delete(id);
@@ -604,7 +622,7 @@ export function productionSteps(p: Project): ProductionStep[] {
     seen.add(`slot:${id}`);
     s.references.forEach(slot);
     let blockedBy: string | undefined;
-    if (s.source.type === "lastFrame") {
+    if (s.source.type === "lastFrame" || s.source.type === "frameOf") {
       shot(s.source.shotId);
       const src = b.shots[s.source.shotId];
       if (src && !selectedOf(p, src)) blockedBy = s.source.shotId;
@@ -628,4 +646,59 @@ export function productionSteps(p: Project): ProductionStep[] {
   if (!b.stepOrder?.length) return out;
   const byKey = new Map(out.map((s) => [s.key, s]));
   return orderSteps(b, out.map((s) => s.key)).map((k) => byKey.get(k)!);
+}
+
+/** P15: the warning a frameOf slot shows when its source shot's clip version is not the one the frame was taken from. */
+export const FRAME_CHANGED = "Source shot changed - frame may be affected";
+
+/**
+ * P15: where a frameOf reference stands. "no-source" = the source shot has no clip yet (generate it first); "pick" =
+ * nothing picked yet; "changed" = the source shot's clip version differs from the one the frame was captured from and
+ * the user has not dismissed that version; "ok" otherwise (including a dismissed change).
+ */
+export interface FrameRefState {
+  state: "no-source" | "pick" | "changed" | "ok";
+  sourceShot: string; atSec?: number; frameDesc: string;
+  /** The source shot's clip version in use now. */
+  currentVersionId?: string;
+  /** The picked frame's version, and the source clip version it was captured from. */
+  frameVersionId?: string; sourceVersionId?: string;
+  /** True when the change was dismissed for the current source version. */
+  dismissed?: boolean;
+}
+export function frameRefState(p: Project, slotId: string): FrameRefState {
+  const b = p.storyboard, s = b?.slots[slotId];
+  if (!b || !s || s.source.type !== "frameOf") return { state: "ok", sourceShot: "", frameDesc: "" };
+  const src = b.shots[s.source.shotId];
+  const base = { sourceShot: s.source.shotId, ...(s.source.atSec !== undefined ? { atSec: s.source.atSec } : {}), frameDesc: s.source.frameDesc };
+  const cur = src ? selectedOf(p, src) : undefined;
+  const fv = selectedOf(p, s), info = fv ? b.versions[fv] : undefined;
+  const used = info?.frameRef?.sourceVersionId ?? info?.derivedFrom?.versionId;
+  const out = { ...base, ...(cur ? { currentVersionId: cur } : {}), ...(fv ? { frameVersionId: fv } : {}), ...(used ? { sourceVersionId: used } : {}) };
+  if (!fv) return { ...out, state: cur ? "pick" : "no-source" };
+  if (cur && used && used !== cur) return s.frameDismissed === cur ? { ...out, state: "ok", dismissed: true } : { ...out, state: "changed" };
+  return { ...out, state: "ok" };
+}
+
+/** P15: dismiss the "source shot changed" warning of a frameOf slot for the source's current version only. */
+export function dismissFrameWarning(p: Project, slotId: string): Project {
+  const b = p.storyboard, s = b?.slots[slotId];
+  const st = frameRefState(p, slotId);
+  if (!b || !s || st.state !== "changed" || !st.currentVersionId) return p;
+  return { ...p, storyboard: { ...b, slots: { ...b.slots, [slotId]: { ...s, frameDismissed: st.currentVersionId } } } };
+}
+
+/** P15: frameOf references still to pick (or to re-check), in production order, for "Prepare references". */
+export function pendingFrameRefs(p: Project): { slotId: string; targetShot: string; st: FrameRefState }[] {
+  const b = p.storyboard;
+  if (!b) return [];
+  return productionSteps(p).flatMap((step) => {
+    if (!("slot" in step.target)) return [];
+    const s = b.slots[step.target.slot];
+    if (s?.source.type !== "frameOf" || s.skipped) return [];
+    const st = frameRefState(p, s.id);
+    if (st.state === "ok") return [];
+    const targetShot = b.order.find((id) => b.shots[id].slotIds.includes(s.id)) ?? "";
+    return [{ slotId: s.id, targetShot, st }];
+  });
 }

@@ -110,7 +110,7 @@ export async function callTimelineAgentTool(engine: Engine, name: string, args: 
   let res;
   try {
     const keys = name === "review_lint" && opts.blobs ? new Set(await opts.blobs.keys()) : undefined;
-    res = await runTimelineTool(engine, opts.source ?? (opts.blobs ? playerFrameSource(opts.blobs) : undefined), name, args, keys ? (k) => keys.has(k) : undefined);
+    res = await runTimelineTool(engine, opts.source ?? (opts.blobs ? playerFrameSource(opts.blobs) : undefined), name, args, keys ? (k) => keys.has(k) : undefined, opts.blobs);
   } catch (e) { res = { ok: false, changed: false, text: `${name} failed: ${(e as Error).message}` }; }
   log(name, res.ok, res.image ? `${res.text} [image]` : res.text, res.changed);
   return { content: [{ type: "text", text: res.text }, ...(res.image ? [{ type: "image" as const, ...res.image }] : [])], ...(res.ok ? {} : { isError: true }) };

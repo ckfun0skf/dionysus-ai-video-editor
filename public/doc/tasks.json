@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "project": "Dionysus",
-  "updatedAt": "2026-10-23",
+  "updatedAt": "2026-10-30",
   "sourceOfTruth": "public/doc/tasks.json on main (see docs/v2/MODULE_DESIGN.md §14)",
   "statusDefinitions": {
     "done": "Implementation exists and has evidence; release/browser validation may still be pending.",
@@ -2562,6 +2562,12 @@
         {
           "id": "P14-SPATIAL",
           "title": "Spatial audio position (stereo/binaural, pad, keys, width)",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "P15-FRAME-REFS",
+          "title": "Shot frame references (frameOf, RULE 50): frame picker, required pick step, source-changed warning with dismiss, Prepare references, capture_shot_frame WebMCP tool",
           "status": "done",
           "progress": 100
         }
