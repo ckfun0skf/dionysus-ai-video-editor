@@ -193,3 +193,27 @@ describe("screen insert (P23, RULE 56)", () => {
     expect(p).toContain("\n56. Screen insert");
   });
 });
+
+describe("insert prompt schema (P24)", () => {
+  const p = buildInsertPrompt(doc, "s2", "The keeper lights the lamp.");
+  it("quotes the exact shot, dialogue, layer, asset and audio fields", () => {
+    expect(p).toContain('"dialogue"?: string | [ string | { "speaker"?: string, "text": string, "offscreen"?: boolean } ]');
+    expect(p).toContain('a dialogue line is {"speaker", "text", "offscreen"}, never "character"');
+    for (const s of ['"shots": [ {', '"clip": "<asset id>"', '"inSec"?: number', '"captions"?: boolean', '"render"?:', '"layers"?: Layer[]',
+      'Layer (times in seconds', 'Media: { "id": string, "type": "html" | "image" | "video"', '"chromaKey"?:', '"audio"?: [ {', '"kind": "voiceover"', '"genDurationSec"?: number']) expect(p).toContain(s);
+    expect(p).not.toContain('"meta": {');
+  });
+  it("the example answer has a dialogue list with speaker, text and offscreen, and a layer with id and type, and is valid", () => {
+    expect(p).toContain('"dialogue":[{"speaker":"KEEPER","text":"Hold on."},{"speaker":"RADIO","text":"Storm front in ten minutes.","offscreen":true}]');
+    const r = applyInsertJson(doc, json(EXAMPLE_INSERT), { expectAfter: "s2" });
+    if (!r.ok) throw new Error(JSON.stringify(r.errors));
+    expect(r.warnings.filter((w) => /Unknown/.test(w.message))).toEqual([]);
+    expect(r.doc.shots.find((s) => s.id === "s2c")!.dialogue).toEqual([{ speaker: "KEEPER", text: "Hold on." }, { speaker: "RADIO", text: "Storm front in ten minutes.", offscreen: true }]);
+  });
+  it("a dialogue line with character is not aliased: it warns and the speaker is not set", () => {
+    const bad = { ...ex(), shots: [{ ...ex().shots[1], dialogue: [{ character: "KEEPER", text: "Hold on." }] }] };
+    const r = applyInsertJson(doc, json(bad), { expectAfter: "s2" });
+    expect(r.warnings.some((w) => w.message.includes('Unknown dialogue line field "character"'))).toBe(true);
+    if (r.ok) expect(JSON.stringify(r.doc.shots.find((s) => s.id === "s2c")!.dialogue)).not.toContain("KEEPER");
+  });
+});

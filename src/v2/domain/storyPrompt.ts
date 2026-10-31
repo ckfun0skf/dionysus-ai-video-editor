@@ -125,7 +125,8 @@ export function presetLine(d: PresetDescriptor): string {
   return `- ${d.id}: ${d.description}${d.kind === "textStyle" ? styleLook(d) : ""}${params}${aiHints(d)}`;
 }
 
-const FORMAT_SECTION = () => `{
+/** The JSON format of a whole storyboard (also quoted, from "assets" on, by the Plan with AI prompt). */
+export const FORMAT_SECTION = () => `{
   "format": "${STORYBOARD_FORMAT}",
   "schemaVersion": "${SCHEMA_VERSION}",   // always "${SCHEMA_VERSION}": the clip-centric schema (RULE 51)
   "meta": {
