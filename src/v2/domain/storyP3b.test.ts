@@ -128,3 +128,27 @@ describe("volume curve and audio effects (P3B-11)", () => {
     expect(get(ops.setAudioFx(fx, id, null))).not.toHaveProperty("audioFx");
   });
 });
+
+describe("screen insert send (P23)", () => {
+  it("puts the html clip on the main track and the keyed device video on an overlay track above it", () => {
+    const raw = { format: "dionysus.storyboard/1", schemaVersion: "3.1", meta: { title: "T", aspect: "16:9" },
+      assets: [
+        { id: "study-ui", name: "UI", type: "html", prompt: "App UI" },
+        { id: "laptop", name: "Laptop", type: "video", prompt: "Laptop with a flat pure green screen" },
+      ],
+      shots: [{ id: "s43", title: "Screen", durationSec: 3, render: "html", clip: "study-ui",
+        layers: [{ id: "lp", type: "video", asset: "laptop", startSec: 0, endSec: 3, box: { x: 0, y: 0, width: 1, height: 1 }, chromaKey: { color: "#00ff00" } }] }] };
+    const ok = parse(raw);
+    let p = board.setStoryboard(createProject("s"), board.storyboardFromDoc(ok.doc));
+    p = up(p, { slot: "laptop" }, vid);
+    p = board.addStoryVersion(p, { slot: "study-ui" }, { blobKey: "h", mime: "text/html", durationTicks: 3 * S }, { versionId: "h1", now: "2026-10-31T00:00:00Z" });
+    const out = sendStory(p).project;
+    const tracks = out.compositions[out.rootCompositionId].tracks.filter((t) => t.kind === "video");
+    const ti = (pred: (x: Placement) => boolean) => tracks.findIndex((t) => t.placements.some(pred));
+    const main = ti((x) => x.clipType === "html"), over = ti((x) => !!x.chromaKey);
+    expect(main).toBeGreaterThanOrEqual(0);
+    expect(over).toBeGreaterThanOrEqual(0);
+    expect(main).not.toBe(over);
+    expect(tracks[over].placements.find((x) => x.chromaKey)!.chromaKey).toEqual({ color: "#00ff00", range: 0.4, spill: 0.5 });
+  });
+});
