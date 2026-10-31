@@ -37,7 +37,12 @@ export function ShotEditor({ project, shot, number, isNew, mobile, onSave, onCan
   const [dur, setDur] = useState(sec(shot.durationSec));
   const [gen, setGen] = useState(shot.genDurationSec ? sec(shot.genDurationSec) : "");
   const [description, setDescription] = useState(shot.description);
-  const [prompt, setPrompt] = useState(shot.prompt);
+  /** P16: a shot playing a shared video clip edits that clip's prompt (schema 3.1: prompts live on clips). */
+  const sharedClip = !shot.render && shot.clipSlot ? b.slots[shot.clipSlot] : undefined;
+  const clipInfo = board.shotClips(project)[shot.id];
+  const affects = board.clipAffects(project, shot.id);
+  const [prompt, setPrompt] = useState(sharedClip ? sharedClip.prompt : shot.prompt);
+  const [inSec, setInSec] = useState(sec(shot.clipInSec ?? 0));
   const [camera, setCamera] = useState(shot.camera ?? "");
   const [dialogue, setDialogue] = useState(shot.dialogue ?? "");
   const [captions, setCaptions] = useState(!!shot.captions);
@@ -79,7 +84,7 @@ export function ShotEditor({ project, shot, number, isNew, mobile, onSave, onCan
   const ok = durOk && slotOk && genOk;
 
   const patch = (): storyEdit.ShotPatch => ({
-    title: title.trim() || (isNew ? "New shot" : shot.title), description, durationSec: n, prompt, camera, dialogue, captions: captions && !!dialogue.trim(),
+    title: title.trim() || (isNew ? "New shot" : shot.title), description, durationSec: n, ...(sharedClip && render === "ai" ? { clipPrompt: prompt, clipInSec: Number(inSec.replace(",", ".")) || 0 } : { prompt }), camera, dialogue, captions: captions && !!dialogue.trim(),
     ...(render === "ai" ? { genDurationSec: gen.trim() ? g : null } : {}),
     qa, layers, effects, render, ...(render !== "ai" ? { clipSlot } : {}), ...(render === "still" ? { background: useBg ? bg : null } : {}),
     slotIds: refs, ...(pending.length ? { newSlots: pending.filter((x) => refs.includes(x.id)) } : {}),
@@ -135,7 +140,9 @@ export function ShotEditor({ project, shot, number, isNew, mobile, onSave, onCan
           {render !== "ai" && shot.render === undefined && shot.assetId && <p className="v2-hint">The shot’s AI clip versions are kept; switch back to AI video to use them again.</p>}
         </fieldset>
 
-        <label className="v2-sb-field">{render === "ai" ? "Clip prompt" : "Clip prompt (optional)"}<textarea rows={4} value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder={render === "ai" ? "What the AI video should show" : "Notes for making the clip"} /></label>
+        {sharedClip && render === "ai" && clipInfo && <label className="v2-sb-field">In point in {clipInfo.label} (s)<input type="text" inputMode="decimal" value={inSec} onChange={(e) => setInSec(e.target.value)} aria-label={`In point in ${clipInfo.label} (seconds)`} /></label>}
+        {sharedClip && render === "ai" && affects && prompt !== sharedClip.prompt && <p className="v2-sb-warnbox v2-sb-clipwarn" role="alert" data-testid="clip-affects"><Ic g="⚠" size={14} /> {affects}</p>}
+        <label className="v2-sb-field">{render === "ai" ? (sharedClip && clipInfo ? `Clip prompt · ${clipInfo.label}${affects ? ` (${affects})` : ""}` : "Clip prompt") : "Clip prompt (optional)"}<textarea rows={4} value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder={render === "ai" ? "What the AI video should show" : "Notes for making the clip"} /></label>
         <fieldset className="v2-sb-field">
           <legend>Reference assets</legend>
           {refs.length > 0 && (

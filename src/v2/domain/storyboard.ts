@@ -753,3 +753,63 @@ export function pendingFrameRefs(p: Project): { slotId: string; targetShot: stri
     return [{ slotId: s.id, targetShot, st }];
   });
 }
+
+/** P16 (schema 3.1): the clip a shot plays, as shown on the shot card. */
+export interface ShotClipInfo {
+  /** "Clip A", "Clip B"… in order of first use. */
+  label: string;
+  /** The shared video slot, or undefined for the shot's own clip. */
+  slotId?: string;
+  inSec: number;
+  endSec: number;
+  /** The shot that generates the clip (its first user in story order). */
+  firstShot: string;
+  /** All shots playing this clip, in story order. */
+  users: string[];
+  /** True when this shot reuses a clip first used by another shot. */
+  reused: boolean;
+  generated: boolean;
+}
+
+const clipLetter = (i: number): string => (i < 26 ? String.fromCharCode(65 + i) : clipLetter(Math.floor(i / 26) - 1) + String.fromCharCode(65 + (i % 26)));
+
+/** "0:03" for 3 s. */
+export function clipTime(sec: number): string {
+  const t = Math.max(0, Math.round(sec));
+  return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`;
+}
+
+/** P16: every AI shot's clip (own or shared), with labels in story order. html/still shots are not clips. */
+export function shotClips(p: Project): Record<string, ShotClipInfo> {
+  const b = p.storyboard;
+  const out: Record<string, ShotClipInfo> = {};
+  if (!b) return out;
+  const keys: string[] = [];
+  const usersOf: Record<string, string[]> = {};
+  for (const id of b.order) {
+    const s = b.shots[id];
+    if (!s || s.render) continue;
+    const key = s.clipSlot && b.slots[s.clipSlot] ? `slot:${s.clipSlot}` : `shot:${id}`;
+    if (!usersOf[key]) { usersOf[key] = []; keys.push(key); }
+    usersOf[key].push(id);
+  }
+  keys.forEach((key, i) => {
+    const users = usersOf[key];
+    const slotId = key.startsWith("slot:") ? key.slice(5) : undefined;
+    const generated = slotId ? versionsOf(p, b.slots[slotId]).length > 0 : versionsOf(p, b.shots[users[0]]).length > 0;
+    for (const id of users) {
+      const s = b.shots[id];
+      const inSec = slotId ? s.clipInSec ?? 0 : 0;
+      out[id] = { label: `Clip ${clipLetter(i)}`, slotId, inSec, endSec: inSec + s.durationSec, firstShot: users[0], users, reused: id !== users[0], generated };
+    }
+  });
+  return out;
+}
+
+/** P16: the warning shown when a clip prompt is edited from a shot, e.g. "Affects Shot 1, Shot 4". Empty for a single-use clip. */
+export function clipAffects(p: Project, shotId: string): string {
+  const c = shotClips(p)[shotId];
+  if (!c || c.users.length < 2) return "";
+  const b = p.storyboard!;
+  return `Affects ${c.users.map((id) => `Shot ${b.order.indexOf(id) + 1}`).join(", ")}`;
+}

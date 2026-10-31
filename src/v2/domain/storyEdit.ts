@@ -100,6 +100,10 @@ export interface ShotPatch {
   newSlots?: { id: string; patch: SlotPatch }[];
   /** P2C (item 4): render "html": per-use param values (overrides of the clip's defaults); null or {} clears them. */
   params?: HtmlParamValues | null;
+  /** P16: the prompt of the shot's shared video clip (schema 3.1 `clip`); it changes every shot that plays the clip. */
+  clipPrompt?: string;
+  /** P16: in point (seconds) into the shot's shared video clip; clamped to 0 or more. */
+  clipInSec?: number;
 }
 
 /** Slots that can be the clip of a shot rendered `render` (html: html assets; still: image assets). */
@@ -159,7 +163,8 @@ export function updateShot(p: Project, id: string, patch: ShotPatch): Project {
       : { id: bid, name: `Background · ${n.title}`, type: "image", aspect: b.meta.aspect, prompt: "", references: [], source: { type: "generate" }, qa: [], implicit: "background", background: structuredClone(patch.background) };
     if (!old || old.implicit === "background") { bb = { ...b, slots: { ...b.slots, [bid]: slot } }; clip = bid; }
   }
-  if (patch.render !== undefined) n = withRender(bb, n, patch.render, clip);
+  // P16: an AI shot stays AI (keeping its shared clip) when the edit sends render "ai" again.
+  if (patch.render !== undefined && !(patch.render === "ai" && !s.render)) n = withRender(bb, n, patch.render, clip);
   else if (stillNow && clip !== undefined) n = withRender(bb, n, "still", clip);
   // A background slot no shot shows any more goes away (its drawn pictures stay in the project's media).
   const bgOld = backgroundId(id);
@@ -167,6 +172,11 @@ export function updateShot(p: Project, id: string, patch: ShotPatch): Project {
     const { [bgOld]: _gone, ...rest } = bb.slots;
     bb = { ...bb, slots: rest };
     n = { ...n, slotIds: n.slotIds.filter((x) => x !== bgOld) };
+  }
+  if (!n.render && n.clipSlot) {
+    if (patch.clipInSec !== undefined && Number.isFinite(patch.clipInSec)) { const v = Math.max(0, Math.round(patch.clipInSec * 100) / 100); if (v) n.clipInSec = v; else delete n.clipInSec; }
+    const cs = bb.slots[n.clipSlot];
+    if (patch.clipPrompt !== undefined && cs && cs.prompt !== patch.clipPrompt) bb = { ...bb, slots: { ...bb.slots, [cs.id]: { ...cs, prompt: patch.clipPrompt } } };
   }
   if (n.refOverrides) n = withRefs(bb, n, n.slotIds); // drop pins of references the edit removed
   if (JSON.stringify(n) === JSON.stringify(s) && (bb === b || JSON.stringify(bb.slots) === JSON.stringify(b.slots))) return p;

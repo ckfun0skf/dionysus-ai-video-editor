@@ -2576,6 +2576,12 @@
           "title": "Shot previews play only the trimmed range of a reused video asset (layer inSec to inSec + duration, looping); shot thumbnails use the frame at inSec; the frame picker limits scrubbing to the source shot's range with a Show full clip toggle",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P16-CLIP-CENTRIC",
+          "title": "Schema 3.1 clip-centric storyboard (RULE 51): prompts, references and versions live on video clip assets; shots reference a clip with inSec; 3.0 import auto-migrates shot prompts into single-use clips; per-clip production steps; shot cards show Clip A with its range, reuse state and trim-only controls; shared prompt edits warn which shots they affect; the small Pick frame button opens the frame picker directly",
+          "status": "done",
+          "progress": 100
         }
       ]
     },

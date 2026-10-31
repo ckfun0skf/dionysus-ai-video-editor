@@ -97,6 +97,7 @@ export function BoardView({ project, thumbs, onOpen, openKey, edit, mobile }: { 
     else if (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) { e.preventDefault(); const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); edit.menu(id, { x: r.left + 24, y: r.top + 24 }); }
   };
 
+  const clips = board.shotClips(project);
   const slotChip = (s: AssetSlot, shot?: Shot) => {
     const pin = shot && board.pinOf(project, shot, s.id);
     const sel = pin ?? board.selectedOf(project, s);
@@ -129,6 +130,7 @@ export function BoardView({ project, thumbs, onOpen, openKey, edit, mobile }: { 
       <ol className="v2-sb-shots" aria-label="Shots">
         {shots.map((s, i) => {
           const n = board.versionsOf(project, s).length;
+          const clip = clips[s.id];
           const next = shots[i + 1];
           const conn = next && storyEdit.connectionBetween(b, s.id, next.id);
           const connText = <>{conn?.kind === "continuity" ? <Ic g="link" size={12} /> : null}{CONN_LABEL[conn?.kind ?? "cut"]}{transitionLabel(conn?.transition)}{conn?.note ? ` · ${conn.note}` : ""}</>;
@@ -144,6 +146,7 @@ export function BoardView({ project, thumbs, onOpen, openKey, edit, mobile }: { 
                   aria-keyshortcuts={edit && !mobile ? "Alt+ArrowUp Alt+ArrowDown Delete" : undefined}>
                   <Thumb src={shotThumb(project, s, thumbs)} icon={shotIcon(s)} count={n} />
                   <span className="v2-sb-shot-text">
+                    {clip && <ClipLine project={project} clip={clip} />}
                     <b><span className="v2-sb-no">{i + 1}</span>{s.title}</b>
                     <em>{s.durationSec}s{s.description ? ` · ${s.description}` : ""}</em>
                     <span className="v2-sb-shot-status">{versionLabel(project, s, "No clip yet")}{placed.has(s.id) && <span className="v2-sb-placed" title="This shot is on the timeline and follows the version you pick"> · On timeline</span>}<Warn st={status.shots[s.id]} /><LengthWarn project={project} shot={s} /></span>
@@ -175,5 +178,20 @@ export function BoardView({ project, thumbs, onOpen, openKey, edit, mobile }: { 
         </section>
       )}
     </div>
+  );
+}
+
+/**
+ * P16: the clip a shot plays, "Clip A · 0:03–0:06". A shot reusing a clip first used elsewhere shows
+ * "Reuses Clip A (generated in Shot 1)" or "Waiting for Shot 1" until that clip is generated.
+ */
+export function ClipLine({ project, clip }: { project: Project; clip: board.ShotClipInfo }) {
+  const no = project.storyboard!.order.indexOf(clip.firstShot) + 1;
+  return (
+    <span className="v2-sb-clipline" data-testid="clip-line">
+      <b>{clip.label} · {board.clipTime(clip.inSec)}–{board.clipTime(clip.endSec)}</b>
+      {clip.reused && <span>Reuses {clip.label} (generated in Shot {no})</span>}
+      {clip.reused && <span className={`v2-sb-clipstate ${clip.generated ? "done" : "waiting"}`}>{clip.generated ? "Generated" : `Waiting for Shot ${no}`}</span>}
+    </span>
   );
 }
