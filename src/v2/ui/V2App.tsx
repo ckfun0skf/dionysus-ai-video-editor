@@ -61,6 +61,8 @@ import { text as textDomain } from "../domain";
 import { canChromaKey, CHROMA_DEFAULT, hasSound } from "../domain";
 import { AudioFxPanel, ChromaKeyPanel, VolumeCurve } from "./SoundAndKey";
 import { mediaKey } from "./useMedia";
+import { SliderField } from "./SliderField";
+import { VolumeHold } from "./VolumeHold";
 
 type Menu = "multi" | "root" | "edit" | "audio" | "speed" | "text" | "effect" | "overlay";
 const SPEEDS = [0.25, 0.5, 1, 1.5, 2, 4];
@@ -745,9 +747,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       tool("☑", "Select", () => setMultiMode(true), "multi", "Select several clips"),
       ...[...clipActions, ...timeActions, ...linkedAudioActions].map((a) => tool(a.icon, a.label, a.run, a.label, a.title)),
       ...(!["image", "html", "text"].includes(selected.placement.clipType) ? [
-        <label key="vol" className="v2-tool v2-volume"><b aria-hidden><Ic g="🔊" /></b>
-          <input type="range" min={0} max={1} step={0.05} value={selected.placement.volume ?? 1} aria-label="Volume" onPointerDown={() => engine.beginGesture()} onPointerUp={() => engine.endGesture()} onBlur={() => engine.endGesture()} onChange={(e) => engine.dispatch(cmd.setPlacementVolume(selected.placement.id, Number(e.target.value)))} />
-        </label>] : []),
+        <VolumeHold key="vol" icon={<Ic g="🔊" />} value={selected.placement.volume ?? 1} onBegin={() => engine.beginGesture()} onEnd={() => engine.endGesture()}
+          onChange={(v) => engine.dispatch(cmd.setPlacementVolume(selected.placement.id, v))} />] : []),
       tool(selected.track.muted ? "🔈" : "🔇", selected.track.muted ? "Unmute track" : "Mute track", () => engine.dispatch(cmd.toggleTrackMute(selected.track.id))),
       ...(hasClip ? [tool(pasteAction.icon, pasteAction.label, paste, "paste", pasteAction.title)] : []),
       rippleToggle, snapToggle,
@@ -816,10 +817,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const clipName = (p: NonNullable<typeof selected>["placement"]) => p.clipType === "text" ? (p.text?.text?.split("\n")[0] || "Text") : p.clipType === "effect" ? `Effect · ${p.effect?.preset ?? ""}` : project.assets[p.source.assetId]?.name ?? p.clipType;
   const KIND_ICON: Record<string, string> = { video: "▭", image: "image", audio: "♫", text: "T", html: "</>", effect: "effect" };
   const volumeRow = (pl: NonNullable<typeof selected>["placement"]) => (
-    <label className="v2-insp-row"><span>Volume</span>
-      <input type="range" min={0} max={1} step={0.05} value={pl.volume ?? 1} aria-label="Volume" onPointerDown={() => engine.beginGesture()} onPointerUp={() => engine.endGesture()} onBlur={() => engine.endGesture()} onChange={(e) => engine.dispatch(cmd.setPlacementVolume(pl.id, Number(e.target.value)))} />
-      <output>{Math.round((pl.volume ?? 1) * 100)}%</output><span />
-    </label>
+    <SliderField className="v2-insp-sf" label="Volume" min={0} max={1} step={0.05} value={pl.volume ?? 1} unit="%" scale={100}
+      onBegin={() => engine.beginGesture()} onEnd={() => engine.endGesture()} onChange={(v) => engine.dispatch(cmd.setPlacementVolume(pl.id, v))} />
   );
   const actionList = (list: { icon: string; label: string; title: string; run: () => void }[]) => (
     <div className="v2-insp-actions">{list.map((a) => <button key={a.label} className="v2-btn" title={a.title} onClick={a.run}><Ic g={a.icon} size={16} /> {a.label}</button>)}</div>

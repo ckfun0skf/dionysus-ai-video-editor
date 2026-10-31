@@ -11,6 +11,7 @@ import { cmd, type Engine } from "../engine";
 import { CHROMA_DEFAULT, evalKeys, TICKS_PER_SECOND, type ChromaKey, type Keyframe, type Placement } from "../domain";
 import { listPresets } from "../registry";
 import type { Peaks } from "./media";
+import { SliderField } from "./SliderField";
 
 const pct = (v: number) => `${Math.round(v * 100)}%`;
 const HEX = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i;
@@ -25,12 +26,8 @@ export function ChromaKeyPanel({ engine, placement: pl, picking, onPick }: { eng
   if (cur.color !== lastColor) { setLast(cur.color); setHex(cur.color); }
   const set = (k: Partial<ChromaKey>) => engine.dispatch(cmd.setChromaKey(pl.id, { ...cur, ...k, off: undefined }));
   const slider = (label: string, prop: "range" | "spill", hint: string) => (
-    <label className="v2-ck-row" title={hint}><span>{label}</span>
-      <input type="range" min={0} max={1} step={0.01} value={cur[prop]} disabled={!on} aria-label={label}
-        onPointerDown={() => engine.beginGesture()} onPointerUp={() => engine.endGesture()} onBlur={() => engine.endGesture()}
-        onChange={(e) => set({ [prop]: Number(e.target.value) })} />
-      <output>{pct(cur[prop])}</output>
-    </label>
+    <SliderField className="v2-ck-sf" title={hint} label={label} min={0} max={1} step={0.01} value={cur[prop]} disabled={!on} unit="%" scale={100}
+      onBegin={() => engine.beginGesture()} onEnd={() => engine.endGesture()} onChange={(v) => set({ [prop]: v })} />
   );
   return (
     <div className="v2-psettings v2-chroma" data-testid="chroma-panel">
@@ -173,12 +170,8 @@ export function AudioFxPanel({ engine, placement: pl }: { engine: Engine; placem
               onClick={() => engine.dispatch(cmd.setAudioFx(pl.id, { preset: d.id, amount: fx?.amount ?? 1 }))}>{d.name}</button>
           ))}
         </div>
-        <label className="v2-ck-row"><span>Intensity</span>
-          <input type="range" min={0} max={1} step={0.01} value={fx?.amount ?? 1} disabled={!fx} aria-label="Effect intensity"
-            onPointerDown={() => engine.beginGesture()} onPointerUp={() => engine.endGesture()} onBlur={() => engine.endGesture()}
-            onChange={(e) => fx && engine.dispatch(cmd.setAudioFx(pl.id, { preset: fx.preset, amount: Number(e.target.value) }))} />
-          <output>{pct(fx?.amount ?? 1)}</output>
-        </label>
+        <SliderField className="v2-ck-sf" label="Intensity" aria="Effect intensity" min={0} max={1} step={0.01} value={fx?.amount ?? 1} disabled={!fx} unit="%" scale={100}
+          onBegin={() => engine.beginGesture()} onEnd={() => engine.endGesture()} onChange={(v) => { if (fx) engine.dispatch(cmd.setAudioFx(pl.id, { preset: fx.preset, amount: v })); }} />
       </section>
     </div>
   );

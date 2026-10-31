@@ -2540,6 +2540,12 @@
           "title": "Sync to Storyboard: write timeline edits back to the board (new shots/layers/cues flagged needsPrompt, removed flagged), review sheet, RULE 47, WebMCP sync_to_storyboard/list_needs_prompt; mobile Project settings; delete toast Undo",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P11-VOLUME-SLIDER",
+          "title": "Mobile press-and-hold volume meter + shared [−] slider [+] numeric SliderField for every inspector slider",
+          "status": "done",
+          "progress": 100
         }
       ]
     },

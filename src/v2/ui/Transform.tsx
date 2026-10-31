@@ -6,6 +6,7 @@ import { listPresets } from "../registry";
 import { Ic } from "./Icon";
 import { classifyPreview, pinchPatch, TAP_SLOP } from "./gestures";
 import { SNAP_PX, snapMove, snapRotation, snapScale, snapTargets, type Guides, type SnapBox } from "./snap";
+import { SliderField } from "./SliderField";
 
 type Patch = Parameters<typeof cmd.setTransform>[1];
 const KEYED: TransformKeyProp[] = ["x", "y", "scale", "rotation", "opacity"];
@@ -33,25 +34,20 @@ export function TransformInspector({ engine, placement, time }: { engine: Engine
   const offset = time - placement.startTicks;
   const inside = offset >= 0 && offset <= placement.durationTicks;
   const set = (patch: Patch) => applyPatch(engine, placement, time, patch);
-  const row = (label: string, value: number, min: number, max: number, step: number, fmt: (v: number) => string, patch: (v: number) => Patch, prop?: TransformKeyProp) => {
+  const row = (label: string, value: number, min: number, max: number, step: number, fmt: { unit: string; scale?: number }, patch: (v: number) => Patch, prop?: TransformKeyProp) => {
     const keys = prop ? placement.keyframes?.[prop] : undefined;
     const onKey = !!keys?.some((k) => Math.abs(k.t - offset) <= 600);
     return (
-    <label className="v2-insp-row" key={label}>
-      <span>{label}</span>
-      <input type="range" min={min} max={max} step={step} value={value} aria-label={label}
-        onPointerDown={() => engine.beginGesture()} onPointerUp={() => engine.endGesture()} onBlur={() => engine.endGesture()}
-        onChange={(e) => set(patch(Number(e.target.value)))} />
-      <output>{fmt(value)}</output>
-      {prop ? <button type="button" className={`v2-kf ${onKey ? "is-on" : keys?.length ? "is-keyed" : ""}`} disabled={!inside} aria-pressed={onKey}
+    <SliderField key={label} className="v2-insp-sf" label={label} value={value} min={min} max={max} step={step} unit={fmt.unit} scale={fmt.scale}
+      onBegin={() => engine.beginGesture()} onEnd={() => engine.endGesture()} onChange={(v) => set(patch(v))}
+      extra={prop ? <button type="button" className={`v2-kf ${onKey ? "is-on" : keys?.length ? "is-keyed" : ""}`} disabled={!inside} aria-pressed={onKey}
         title={onKey ? `Remove ${label} keyframe at playhead` : `Add ${label} keyframe at playhead`} aria-label={`${label} keyframe`}
-        onClick={(e) => { e.preventDefault(); engine.dispatch(cmd.setKeyframe(placement.id, prop, offset, onKey ? null : value)); }}><Ic g="◆" /></button> : <span />}
-    </label>
+        onClick={(e) => { e.preventDefault(); engine.dispatch(cmd.setKeyframe(placement.id, prop, offset, onKey ? null : value)); }}><Ic g="◆" /></button> : undefined} />
     );
   };
-  const pct = (v: number) => `${Math.round(v * 100)}%`;
+  const pct = { unit: "%", scale: 100 };
   const maxFade = Math.min(10, ticksToSeconds(placement.durationTicks));
-  const fade = (label: string, ticks: number | undefined, key: "in" | "out") => row(label, ticksToSeconds(ticks ?? 0), 0, maxFade, 0.05, (v) => `${v.toFixed(1)}s`, (v) => { engine.dispatch(cmd.setFades(placement.id, { [key]: secondsToTicks(v) })); return {}; });
+  const fade = (label: string, ticks: number | undefined, key: "in" | "out") => row(label, ticksToSeconds(ticks ?? 0), 0, maxFade, 0.05, { unit: "s" }, (v) => { engine.dispatch(cmd.setFades(placement.id, { [key]: secondsToTicks(v) })); return {}; });
   const fades = <>{fade("Fade in", placement.fadeInTicks, "in")}{fade("Fade out", placement.fadeOutTicks, "out")}</>;
   if (placement.clipType === "audio") return <section className="v2-inspector" aria-label="Fades"><div className="v2-panel-head"><strong>Fades</strong></div>{fades}</section>;
   return (
@@ -62,7 +58,7 @@ export function TransformInspector({ engine, placement, time }: { engine: Engine
       {row("Position X", t.x, -1, 1, 0.005, pct, (x) => ({ x }), "x")}
       {row("Position Y", t.y, -1, 1, 0.005, pct, (y) => ({ y }), "y")}
       {row("Scale", t.scale, 0.05, 4, 0.01, pct, (scale) => ({ scale }), "scale")}
-      {row("Rotation", t.rotation, -180, 180, 1, (v) => `${Math.round(v)}°`, (rotation) => ({ rotation }), "rotation")}
+      {row("Rotation", t.rotation, -180, 180, 1, { unit: "°" }, (rotation) => ({ rotation }), "rotation")}
       {row("Opacity", t.opacity, 0, 1, 0.01, pct, (opacity) => ({ opacity }), "opacity")}
       <label className="v2-insp-row v2-insp-blend" key="blend" title="How this clip mixes with the layers under it">
         <span>Blend</span>

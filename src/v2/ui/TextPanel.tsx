@@ -6,6 +6,7 @@ import { AnimationPicker } from "./AnimationPicker";
 import { PresetTile } from "./PresetTile";
 import { Ic } from "./Icon";
 import { listPresets, type PresetKind } from "../registry";
+import { SliderField } from "./SliderField";
 
 /** Chip ids for a preset kind, "none" first; labels come from the registry. */
 const presetIds = (k: PresetKind) => ["none", ...listPresets(k).map((d) => d.id)];
@@ -30,19 +31,13 @@ export function TextPanel({ engine, placement, onAnimPicked, initialTab = "Templ
   const set = layer ? setLayer : (patch: Partial<TextData>, label?: string) => engine.dispatch(cmd.updateText(pl.id, patch, label));
   const lt = { x: 0, y: 0, scale: 1, ...ls?.transform };
   const tf = (label: string, key: "x" | "y" | "scale", min: number, max: number, step: number) => (
-    <label className="v2-tp-row">{label}
-      <input type="range" min={min} max={max} step={step} value={lt[key]} aria-label={`Layer ${label}`}
-        onPointerDown={() => engine.beginGesture()} onPointerUp={() => engine.endGesture()} onBlur={() => engine.endGesture()}
-        onChange={(e) => engine.dispatch(cmd.setLayerStyle(layer!.id, { transform: { [key]: Number(e.target.value) } }, `Layer ${label}`))} />
-    </label>
+    <SliderField className="v2-tp-sf" label={label} aria={`Layer ${label}`} min={min} max={max} step={step} value={lt[key]} {...(key === "scale" ? { unit: "%", scale: 100 } : {})}
+      onBegin={() => engine.beginGesture()} onEnd={() => engine.endGesture()} onChange={(v) => engine.dispatch(cmd.setLayerStyle(layer!.id, { transform: { [key]: v } }, `Layer ${label}`))} />
   );
   const custom = !layer && track?.layerStyle && placement ? layers.isCustom(track, track.placements.find((p) => p.id === placement.id) ?? placement) : false;
   const range = (label: string, key: "size" | "letterSpacing" | "lineHeight" | "strokeWidth", min: number, max: number, step: number) => (
-    <label className="v2-tp-row">{label}
-      <input type="range" min={min} max={max} step={step} value={d[key] ?? (key === "lineHeight" ? 1.25 : 0)} aria-label={label}
-        onPointerDown={() => engine.beginGesture()} onPointerUp={() => engine.endGesture()} onBlur={() => engine.endGesture()}
-        onChange={(e) => set({ [key]: Number(e.target.value) })} />
-    </label>
+    <SliderField className="v2-tp-sf" label={label} min={min} max={max} step={step} value={d[key] ?? (key === "lineHeight" ? 1.25 : 0)} {...(key === "lineHeight" ? { unit: "×" } : {})}
+      onBegin={() => engine.beginGesture()} onEnd={() => engine.endGesture()} onChange={(v) => set({ [key]: v })} />
   );
   const color = (label: string, value: string, on: (v: string) => void) => (
     <label className="v2-tp-row v2-tp-color">{label}<span className="v2-color-val"><code>{value.toUpperCase()}</code><input type="color" aria-label={label} value={value} onFocus={() => engine.beginGesture()} onBlur={() => engine.endGesture()} onChange={(e) => on(e.target.value)} /></span></label>

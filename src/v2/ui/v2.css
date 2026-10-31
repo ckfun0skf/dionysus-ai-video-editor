@@ -1094,3 +1094,26 @@ select.v2-tp-field { -webkit-appearance: none; appearance: none; padding-right: 
 .v2-toast.has-undo { display: flex; align-items: center; gap: 12px; padding: 4px 4px 4px 14px; pointer-events: auto; }
 .v2-toast-undo { min-height: 44px; min-width: 64px; border: 0; border-radius: 6px; background: #38bdf8; color: #04121c; font-weight: 700; font-size: 14px; cursor: pointer; padding: 0 14px; touch-action: manipulation; }
 .v2-sb-shot-text .v2-needs-prompt, .v2-sb-shot-text .v2-removed-tl { align-self: flex-start; justify-self: start; width: fit-content; margin-top: 4px; }
+
+/* P11-SLIDER: shared slider field [−] slider [+] [value unit] */
+.v2-sf { display: flex; flex-direction: column; gap: 2px; font-size: 13px; color: var(--muted, #aaa); min-width: 0; }
+.v2-sf-label { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 18px; }
+.v2-sf-row { display: flex; align-items: center; gap: 4px; min-height: 44px; }
+.v2-sf-range { flex: 1; min-width: 60px; min-height: 44px; margin: 0; accent-color: var(--accent, #4f8cff); touch-action: pan-y; }
+.v2-sf-btn { flex: none; width: 44px; height: 44px; border-radius: 10px; border: 1px solid #ffffff22; background: #1d1d22; color: var(--text, #eee); font-size: 20px; line-height: 1; cursor: pointer; touch-action: manipulation; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.v2-sf-btn:disabled { opacity: .4; cursor: default; }
+.v2-sf-btn:active:not(:disabled) { background: #2a2a31; }
+.v2-sf-num { flex: none; display: inline-flex; align-items: center; gap: 2px; height: 44px; padding: 0 6px; border-radius: 10px; border: 1px solid #ffffff22; background: #121215; }
+.v2-sf-num input { width: 4.2em; height: 42px; border: 0; background: transparent; color: var(--text, #eee); font: inherit; font-size: 16px; font-variant-numeric: tabular-nums; text-align: right; padding: 0; outline: none; }
+.v2-sf-num:focus-within { border-color: var(--accent, #4f8cff); }
+.v2-sf-unit { color: var(--muted, #aaa); font-size: 12px; }
+.v2-sf .v2-kf { flex: none; min-width: 44px; min-height: 44px; }
+
+/* P11-VOLUME: press-and-hold volume meter (phone toolbar) */
+.v2-volume { position: relative; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.v2-vol-pop { position: fixed; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #f2f2f4; transform: translateX(-50%); z-index: 1000; width: 84px; padding: 10px 0 12px;
+  display: flex; flex-direction: column; align-items: center; gap: 8px; background: var(--v2-panel, #1d1f24); border: 1px solid rgba(255,255,255,.18);
+  border-radius: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.5); pointer-events: none; }
+.v2-vol-num { font-size: 22px; font-variant-numeric: tabular-nums; }
+.v2-vol-meter { width: 28px; height: 200px; border-radius: 10px; background: rgba(255,255,255,.12); display: flex; align-items: flex-end; overflow: hidden; }
+.v2-vol-fill { width: 100%; background: var(--v2-accent, #6cf); }

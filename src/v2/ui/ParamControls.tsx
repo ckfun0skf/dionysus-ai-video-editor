@@ -1,4 +1,5 @@
 import type { ParamSpec, Params } from "../registry";
+import { SliderField } from "./SliderField";
 
 interface Base { key: string; label: string; description?: string }
 /**
@@ -33,10 +34,8 @@ export function ParamControls<S extends ControlSpec>({ name, params, values, onC
         if (s.type === "number" && s.min !== undefined && s.max !== undefined) {
           const step = s.step ?? 0.01;
           return (
-            <label key={s.key} className="v2-tp-row" title={s.description}>{s.label} <output>{Number(v).toFixed(step >= 1 ? 0 : 2)}</output>
-              <input type="range" aria-label={aria} min={s.min} max={s.max} step={step} value={Number(v)}
-                onPointerDown={onBegin} onPointerUp={onEnd} onBlur={onEnd} onChange={(e) => change(s.key, Number(e.target.value))} />
-            </label>
+            <SliderField key={s.key} className="v2-tp-sf" title={s.description} label={s.label} aria={aria} min={s.min} max={s.max} step={step} value={Number(v)}
+              unit={(s as { unit?: string }).unit} onBegin={onBegin} onEnd={onEnd} onChange={(x) => change(s.key, x)} />
           );
         }
         if (s.type === "number") return (
