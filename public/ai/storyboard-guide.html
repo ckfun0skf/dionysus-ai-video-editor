@@ -68,6 +68,8 @@ So split the work: generation prompts describe only the picture and its motion; 
                                  // "&lt;asset id&gt;@&lt;state id&gt;" = that asset's state (also in "references", "clip" and layer "asset");
                                  // "&lt;shot id&gt;.lastframe" = the last frame of that shot's clip, no asset needed (RULES)
       "references"?: [ { "asset": "&lt;asset id&gt;" | "&lt;shot id&gt;.keyframe", "role": "start-frame" | "end-frame" | "identity" | "look" | "detail", "note"?: string } ],
+                                 // or a frame of an EARLIER shot's clip (RULE 50):
+                                 // { "frameOf": "&lt;earlier shot id&gt;", "atSec"?: number, "role": "start" | "reference", "frameDesc": string }
                                  // the images to attach to the clip generation IN THIS ORDER (Image 1, Image 2 …) and how to use each;
                                  // omitted = "assets" order with roles from the type (frame → start-frame, character → identity,
                                  // style → look, others → detail); at most one "start-frame" and one "end-frame"
@@ -351,6 +353,7 @@ The same winding hill road as the sun rises …", "references": [{ "asset": "hil
 47. Fill needsPrompt: after the user edits the timeline and presses Sync to Storyboard, clips that came from no shot are added to the storyboard with "needsPrompt": true (shown as "⚠ Needs description / prompt"): a main-track clip becomes a new shot (id "shot-tl-N", empty "prompt"), a clip on another track becomes a layer ("tl-layer-N") or audio cue ("cue-tl-N") of the shot it is linked to. You MUST fill every needsPrompt item when you revise the JSON: give a shot a "description" and a full self-contained "prompt" (describe what the clip shows, keep its id, durationSec and order), give a layer or cue a "description". Filling it clears the flag on re-import; never delete those items and never set needsPrompt yourself. Shots, layers and cues with "removedFromTimeline": true had their clip deleted on the timeline: keep them unchanged unless the user asks to drop them. Example: { "id": "shot-tl-1", "title": "Timeline clip 1", "durationSec": 4, "needsPrompt": true, "description": "", "prompt": "" } becomes { "id": "shot-tl-1", "title": "Harbour at dusk", "durationSec": 4, "description": "Wide shot of Victoria Harbour as the lights come on", "prompt": "Wide static shot of a harbour at dusk, ferries crossing, skyline lights switching on, warm-to-blue sky, 24fps cinematic" }.
 48. Review the cut: with WebMCP timeline tools, after editing the timeline (or after send_to_timeline) call get_timeline, then review_lint, and look at contact_sheet (and capture_frame at any time you doubt). Fix every error and warning it lists with move_clip, trim_clip, split_clip, delete_clip, set_clip_props and add_clip (gaps and black frames, very short clips, text off the frame, audio clipping, missing media, layers not linked to a main clip, needsPrompt items), then run review_lint again until only notes you chose to keep are left. Never guess clip ids or times: read them from get_timeline.
 49. Spatial audio: an audio cue (or, with set_clip_props, a clip with sound) can take "position": { "azimuth", "distance", "width"? } — azimuth in degrees, 0 = in front, -90 = left, 90 = right, ±180 = behind; distance 0 (at the ear) to 1 (far, about 20 m), which lowers the level, darkens the tone and adds reverb; "pan" -1..1 is a shorthand (azimuth = pan × 90). "positionKeys" [{ "t", "azimuth", "distance" }] moves the sound (t = seconds from the cue start). Stereo files already carry their own left/right movement: "width" (0-1, default 1) keeps that image while the pair is placed, so do not set width 0 unless you want it mono; mono files are point sources. Leave music centred unless asked. meta "audioOutput": { "mode": "binaural" } is for headphones (front/behind cues, HRTF); "stereo" (default) is for speakers and phones; "environment" "room" (default) or "outdoor" sets the reverb. Omit all of these to keep the sound unchanged.
+50. Frame of another shot: when a shot must start from, or match, a frame INSIDE an earlier shot's clip (not its last frame, RULE 35), e.g. shot 1 is a man at his computer noticing objects on the desk and the camera then pans to reveal a second person, and shot 2 should start from the middle of that move, add to the later shot's "references": { "frameOf": "&lt;earlier shot id&gt;", "atSec": &lt;seconds into that clip&gt;, "role": "start" | "reference", "frameDesc": "…" }. "start" makes the frame the START FRAME of the shot; "reference" attaches it as a reference image only. "frameDesc" is REQUIRED and must say: (1) the camera framing and angle; (2) who or what is visible and where in the frame; (3) where in the source shot's camera move the frame sits (e.g. "midway through the push-in, before the pan"); (4) how this shot uses it. Name the same subjects the source shot's prompt names. The source must be an earlier shot (never the shot itself, never a later one); the user generates the source shot first, then picks the exact frame in the app, so "atSec" is only where the picker starts. Example: "references": [{ "frameOf": "s1", "atSec": 2.5, "role": "start", "frameDesc": "Medium close-up, eye level: the man sits centre-left at the computer looking down at the objects on the desk; midway through shot s1's push-in, before the pan to the second person; used as the start frame of this shot." }].
 
 ## EXAMPLE
 ```json
@@ -626,7 +629,7 @@ The same winding hill road as the sun rises …", "references": [{ "asset": "hil
       "title": "Sunrise",
       "description": "The sun rises over the valley; title card.",
       "durationSec": 4,
-      "prompt": "References:\nImage 1 (Hill road · Sunrise): reference only, not a frame: materials, colours and objects only; the same hill and valley at sunrise.\nImage 2 (Keyframe · The climb): reference only, not a frame: overall look; same pre-dawn palette and mist.\nNo image is the start frame. Framing: one static wide shot.\n\nStatic wide shot from behind the cyclist on the hilltop as the sun rises over the misty valley, clear empty sky in the upper third, no text",
+      "prompt": "References:\nImage 1 (Hill road · Sunrise): reference only, not a frame: materials, colours and objects only; the same hill and valley at sunrise.\nImage 2 (Keyframe · The climb): reference only, not a frame: overall look; same pre-dawn palette and mist.\nImage 3 (Frame of shot 1 · The climb): reference only, not a frame: the same road and mist, picked from shot 1's clip.\nNo image is the start frame. Framing: one static wide shot.\n\nStatic wide shot from behind the cyclist on the hilltop as the sun rises over the misty valley, clear empty sky in the upper third, no text",
       "assets": [
         "hill@sunrise",
         "s1.keyframe"
@@ -640,6 +643,12 @@ The same winding hill road as the sun rises …", "references": [{ "asset": "hil
           "asset": "s1.keyframe",
           "role": "look",
           "note": "same pre-dawn palette and mist"
+        },
+        {
+          "frameOf": "s1",
+          "atSec": 2,
+          "role": "reference",
+          "frameDesc": "Side tracking shot, eye level: the cyclist in the red jacket rides the winding hill road centre frame, mist in the valley below; midway through shot s1's tracking move, before she nears the hilltop; used as a reference so the road and mist match."
         }
       ],
       "qa": [

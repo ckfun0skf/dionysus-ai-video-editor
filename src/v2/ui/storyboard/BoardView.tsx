@@ -92,12 +92,14 @@ export function BoardView({ project, thumbs, onOpen, openKey, edit, mobile }: { 
     const pin = shot && board.pinOf(project, shot, s.id);
     const sel = pin ?? board.selectedOf(project, s);
     const n = board.versionsOf(project, s).length;
-    const sub = pin ? `Pinned ${storyRefs.pinLabel(project, shot!, s.id)} here` : s.source.type === "lastFrame" && !n ? (shotNo(s.source.shotId) ? `Taken from shot ${shotNo(s.source.shotId)}’s clip` : "Taken from a shot’s clip") : versionLabel(project, s, s.source.type === "upload" ? "Upload needed" : s.source.type === "json" ? "Needs audio JSON" : "Needs generating");
+    const fr = s.source.type === "frameOf" ? board.frameRefState(project, s.id) : undefined;
+    const frNo = fr ? shotNo(fr.sourceShot) : 0;
+    const sub = pin ? `Pinned ${storyRefs.pinLabel(project, shot!, s.id)} here` : fr?.state === "pick" ? `Pick frame from Shot ${frNo}` : fr?.state === "no-source" ? `Generate Shot ${frNo} first` : s.source.type === "lastFrame" && !n ? (shotNo(s.source.shotId) ? `Taken from shot ${shotNo(s.source.shotId)}’s clip` : "Taken from a shot’s clip") : versionLabel(project, s, s.source.type === "upload" ? "Upload needed" : s.source.type === "json" ? "Needs audio JSON" : "Needs generating");
     return (
       <li key={s.id}>
         <button className={`v2-sb-slot ${pin ? "pinned" : ""} ${status.slots[s.id]?.stale ? "stale" : ""} ${n ? "" : "todo"} ${openKey === s.id ? "open" : ""}`} aria-current={openKey === s.id || undefined} onClick={() => onOpen({ slot: s.id })} aria-label={`${s.name}: ${sub}${status.slots[s.id]?.stale ? ", may not match" : ""}`} title={s.prompt || s.name}>
           <Thumb src={sel && thumbs[sel]} icon={TYPE_ICON[s.type] ?? "image"} count={n} />
-          <span className="v2-sb-slot-text"><b>{s.name}</b><em>{status.slots[s.id]?.stale && !pin ? <Warn st={status.slots[s.id]} /> : <>{pin && <Ic g="pin" size={11} />}{sub}</>}</em></span>
+          <span className="v2-sb-slot-text"><b>{s.name}</b><em>{fr && (fr.state === "pick" || fr.state === "no-source") ? <span className="v2-frameref-badge" data-testid="frame-badge"><Ic g="⚠" size={11} /> {sub}</span> : status.slots[s.id]?.stale && !pin ? <Warn st={status.slots[s.id]} /> : <>{pin && <Ic g="pin" size={11} />}{sub}</>}</em></span>
         </button>
       </li>
     );

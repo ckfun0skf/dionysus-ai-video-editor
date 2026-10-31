@@ -4,7 +4,8 @@
  * that need decoded media: frame capture / contact sheet (an offline Player, same path as export), black frames and
  * audio clipping / silence (the export audio mix).
  */
-import { audioOutputOf, findPlacement, newId, panToAzimuth, positionErrors, secondsToTicks, timelineReview, type Placement, type Project } from "../../domain";
+import { captureFrameAt, storePickedFrame } from "../storyboard/frameCapture";
+import { audioOutputOf, board, findPlacement, newId, panToAzimuth, positionErrors, secondsToTicks, timelineReview, type Placement, type Project } from "../../domain";
 import { getPreset, listPresets } from "../../registry";
 import { cmd, type Command, type Engine } from "../../engine";
 import type { BlobStore } from "../../ports";
@@ -19,6 +20,8 @@ export interface FrameSource {
   frames(project: Project, ticksList: number[], width: number): Promise<HTMLCanvasElement[]>;
   /** The export audio mix (undefined = no audio). */
   audio(project: Project): Promise<{ channels: Float32Array[]; sampleRate: number } | undefined>;
+  /** P15: grab one frame of a video blob at `sec` as a PNG (default: captureFrameAt; injectable for tests). */
+  videoFrame?(video: Blob, sec: number): Promise<{ blob: Blob; width: number; height: number; atSec: number }>;
   /** Mean luma 0..255 of a frame (default: meanLuma). */
   luma?(c: HTMLCanvasElement): number;
 }
@@ -50,6 +53,14 @@ export function playerFrameSource(blobs: BlobStore): FrameSource {
   };
 }
 
+function blobBase64(b: Blob): Promise<string> {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(String(r.result).replace(/^data:[^,]*,/, ""));
+    r.onerror = () => rej(r.error);
+    r.readAsDataURL(b);
+  });
+}
 const jpeg = (c: HTMLCanvasElement, q = 0.8) => String(c.toDataURL("image/jpeg", q) ?? "").replace(/^data:image\/jpeg;base64,/, "");
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const fmtT = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, "0")}`;
@@ -152,7 +163,7 @@ export function clipPropsErrors(a: Record<string, unknown>, pl: Placement): stri
 const fail = (text: string): TimelineResult => ({ ok: false, text, changed: false });
 const rootOf = (p: Project) => p.compositions[p.rootCompositionId];
 
-export async function runTimelineTool(engine: Engine, source: FrameSource | undefined, name: string, input: unknown, hasBlob?: (key: string) => boolean): Promise<TimelineResult> {
+export async function runTimelineTool(engine: Engine, source: FrameSource | undefined, name: string, input: unknown, hasBlob?: (key: string) => boolean, blobs?: BlobStore): Promise<TimelineResult> {
   const a = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
   const project = () => engine.getState().project;
   const n = (k: string) => (typeof a[k] === "number" && Number.isFinite(a[k]) ? (a[k] as number) : undefined);
@@ -172,6 +183,26 @@ export async function runTimelineTool(engine: Engine, source: FrameSource | unde
       if (!source) return fail("Frame capture isn't available here.");
       const [c] = await source.frames(project(), [secondsToTicks(Math.max(0, t))], clamp(n("maxWidth") ?? 640, 64, 1280));
       return { ok: true, changed: false, text: `Frame at ${t}s (${c.width}×${c.height}).`, image: { data: jpeg(c), mimeType: "image/jpeg" } };
+    }
+    case "capture_shot_frame": {
+      const b = project().storyboard; if (!b) return fail("No storyboard yet.");
+      const target = s("shotId"), from = s("frameOf");
+      const candidates = s("slotId") ? [s("slotId")!] : target && b.shots[target] ? b.shots[target].slotIds.filter((id) => b.slots[id]?.source.type === "frameOf" && (!from || (b.slots[id].source as { shotId: string }).shotId === from)) : [];
+      if (!candidates.length) return fail(target && !b.shots[target] ? `No shot "${target}".` : "No frameOf reference matches. Give the target \"shotId\" (and \"frameOf\" when it has several), or \"slotId\".");
+      if (candidates.length > 1) return fail(`Shot "${target}" has several frame references (${candidates.join(", ")}). Give "frameOf" or "slotId".`);
+      const slotId = candidates[0], slot = b.slots[slotId];
+      if (slot?.source.type !== "frameOf") return fail(`"${slotId}" is not a frameOf reference.`);
+      if (!blobs) return fail("Frame capture isn't available here.");
+      const st = board.frameRefState(project(), slotId);
+      const srcShot = b.shots[st.sourceShot];
+      const v = srcShot && st.currentVersionId ? board.versionsOf(project(), srcShot).find((x) => x.id === st.currentVersionId) : undefined;
+      if (!v) return fail(`Generate shot ${b.order.indexOf(st.sourceShot) + 1} ("${st.sourceShot}") first: it has no clip to take the frame from.`);
+      const video = await blobs.get(v.media.blobKey); if (!video) return fail("The source clip's file is missing from this device.");
+      const fr = await (source?.videoFrame ?? captureFrameAt)(video, n("atSec") ?? st.atSec ?? 0);
+      const { media, frameRef } = await storePickedFrame(blobs, slotId, st.sourceShot, v.id, fr, fr.atSec);
+      const changed = engine.dispatch(cmd.addStoryVersion({ slot: slotId }, media, { frameRef }), name);
+      const data = await blobBase64(fr.blob);
+      return { ok: true, changed, text: JSON.stringify({ slotId, ...frameRef, width: fr.width, height: fr.height, state: board.frameRefState(engine.getState().project, slotId).state }, null, 1), image: { data, mimeType: "image/png" } };
     }
     case "contact_sheet": {
       if (!source) return fail("Frame capture isn't available here.");

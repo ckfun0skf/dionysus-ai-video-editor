@@ -9,7 +9,7 @@
  */
 import type { Project } from "./model";
 import { storyboardFromDoc, type AssetSlot, type QaCheck, type Shot, type Storyboard } from "./storyboard";
-import { splitStateId, stateBaseNote, type StoryAsset, type StoryAssetRef, type StoryAssetState, type StoryDoc, type StoryShot } from "./storyJson";
+import { splitStateId, stateBaseNote, type StoryReference, type StoryAsset, type StoryAssetRef, type StoryAssetState, type StoryDoc, type StoryShot } from "./storyJson";
 
 const refsOut = (slot: AssetSlot, skip?: string): StoryAssetRef[] =>
   slot.references.filter((id) => id !== skip).map((id) => (slot.refRoles?.[id] ? { asset: id, ...structuredClone(slot.refRoles[id]) } : id));
@@ -25,7 +25,7 @@ function autoBaseRef(slot: AssetSlot, base: AssetSlot): boolean {
 function assetOut(s: AssetSlot): StoryAsset {
   return {
     id: s.id, name: s.name, type: s.type, aspect: s.aspect, prompt: s.prompt, references: refsOut(s),
-    source: s.source.type === "lastFrame" ? { type: "lastFrame", shot: s.source.shotId } : { type: s.source.type },
+    source: s.source.type === "lastFrame" ? { type: "lastFrame", shot: s.source.shotId } : s.source.type === "frameOf" ? { type: "upload" } : { type: s.source.type },
     qa: texts(s.qa), ...(s.notes ? { notes: s.notes } : {}), ...(s.params ? { params: structuredClone(s.params) } : {}),
     ...(s.type === "video" && s.genDurationSec ? { genDurationSec: s.genDurationSec } : {}),
     ...(s.seriesRef ? { seriesRef: s.seriesRef } : {}), ...(s.seriesPromote ? { series: true as const } : {}),
@@ -41,8 +41,20 @@ function stateOut(s: AssetSlot, base: AssetSlot): StoryAssetState {
   };
 }
 
+/** A shot reference: P15 frameOf references keep frameOf / atSec / frameDesc (storyDocJson writes their authored form). */
+function refOut(b: Storyboard, r: Shot["references"] extends (infer R)[] | undefined ? R : never): StoryReference {
+  const sl = b.slots[r.slotId];
+  if (sl?.implicit === "frameof" && sl.source.type === "frameOf") {
+    const src = sl.source;
+    return { asset: r.slotId, role: r.role, frameOf: src.shotId, ...(src.atSec !== undefined ? { atSec: src.atSec } : {}), frameDesc: src.frameDesc };
+  }
+  return { asset: r.slotId, role: r.role, ...(r.note ? { note: r.note } : {}) };
+}
+
 function shotOut(b: Storyboard, s: Shot): StoryShot {
-  let assets = s.slotIds.filter((id) => id !== s.keyframe);
+  // P15: frameOf slots are written as their references, never as assets.
+  const frameOf = (id: string) => b.slots[id]?.source.type === "frameOf" && b.slots[id]?.implicit === "frameof";
+  let assets = s.slotIds.filter((id) => id !== s.keyframe && !frameOf(id));
   // Import appends the clip slot when the shot's assets don't list it; drop it again only from that place.
   if (s.clipSlot && assets.at(-1) === s.clipSlot) assets = assets.slice(0, -1);
   const kf = s.keyframe ? b.slots[s.keyframe] : undefined;
@@ -57,7 +69,7 @@ function shotOut(b: Storyboard, s: Shot): StoryShot {
     ...(s.needsPrompt ? { needsPrompt: true as const } : {}), ...(s.removedFromTimeline ? { removedFromTimeline: true as const } : {}),
     ...(s.effects?.length ? { effects: structuredClone(s.effects) } : {}),
     ...(s.genDurationSec ? { genDurationSec: s.genDurationSec } : {}),
-    ...(s.references?.length ? { references: s.references.map((r) => ({ asset: r.slotId, role: r.role, ...(r.note ? { note: r.note } : {}) })) } : {}),
+    ...(s.references?.length ? { references: s.references.map((r) => refOut(b, r)) } : {}),
     ...(kf ? { keyframe: { prompt: kf.prompt, references: refsOut(kf), qa: texts(kf.qa) } } : {}),
   };
 }

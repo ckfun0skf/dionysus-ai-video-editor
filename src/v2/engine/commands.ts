@@ -403,6 +403,8 @@ export const createStoryboard = (doc: StoryDoc): Command => ({ label: "Create st
 /** P2A: re-import a revised document into the current storyboard by id (see storyRoundtrip.mergeStoryboard). */
 export const mergeStoryboardDoc = (doc: StoryDoc): Command => ({ label: "Update storyboard", apply: (p) => board.setStoryboard(p, mergeStoryboard(p, doc)) });
 export const removeStoryboard = (): Command => ({ label: "Remove storyboard", apply: (p) => board.setStoryboard(p, undefined) });
+/** P15: dismiss a frameOf slot's "source shot changed" warning for the source shot's current version only. */
+export const dismissFrameWarning = (slotId: string): Command => ({ label: "Dismiss frame warning", apply: (p) => board.dismissFrameWarning(p, slotId) });
 export const addStoryVersion = (...args: Parameters<typeof board.addStoryVersion> extends [unknown, ...infer R] ? R : never): Command => ({ label: "Upload version", apply: (p) => board.addStoryVersion(p, ...args) });
 export const selectStoryVersion = (assetId: string, versionId: string): Command => ({ label: "Choose version", apply: (p) => board.selectStoryVersion(p, assetId, versionId) });
 /**

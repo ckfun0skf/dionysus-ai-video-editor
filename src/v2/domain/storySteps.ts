@@ -23,7 +23,7 @@ export function stepDeps(b: Storyboard): Map<StepKey, StepKey[]> {
   const deps = new Map<StepKey, StepKey[]>();
   for (const s of Object.values(b.slots)) {
     const need = s.references.filter((r) => b.slots[r]).map(slotKey);
-    if (s.source.type === "lastFrame" && b.shots[s.source.shotId]) need.push(shotKey(s.source.shotId));
+    if ((s.source.type === "lastFrame" || s.source.type === "frameOf") && b.shots[s.source.shotId]) need.push(shotKey(s.source.shotId));
     deps.set(slotKey(s.id), need);
   }
   for (const s of Object.values(b.shots)) {
