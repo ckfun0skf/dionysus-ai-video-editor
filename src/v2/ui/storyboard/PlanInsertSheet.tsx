@@ -25,6 +25,18 @@ function Issues({ list, kind }: { list: StoryIssue[]; kind: "error" | "warning" 
   );
 }
 
+/** P22: problems already on the board; listed for information, never blocking. */
+function Existing({ list }: { list: StoryIssue[] }) {
+  if (!list.length) return null;
+  return (
+    <details className="v2-pi-issues existing" aria-label="Existing storyboard issues">
+      <summary>Existing storyboard issues (not blocking) · {list.length}</summary>
+      <p className="v2-hint">These were already on the board before this insert. Fix them on the board when convenient.</p>
+      <ul>{list.slice(0, 50).map((i, n) => <li key={n}>{i.path && <code>{i.path}</code>} {i.message}</li>)}</ul>
+    </details>
+  );
+}
+
 export function PlanInsertSheet({ engine, project, shotId, mobile, series, onDone }: {
   engine: Engine; project: Project; shotId: string; mobile: boolean; series?: SeriesLike;
   /** Closed; with a message (and the inserted shot ids) after an insert. */ onDone: (msg?: string, inserted?: string[]) => void;
@@ -100,10 +112,12 @@ export function PlanInsertSheet({ engine, project, shotId, mobile, series, onDon
           <label className="v2-sb-field">Paste the AI's answer (JSON)
             <textarea rows={10} value={answer} onChange={(e) => { setAnswer(e.target.value); setChecked(undefined); }} placeholder={'{"schema":"3.1-insert","insertAfter":"' + shotId + '","shots":[…],"newAssets":[…]}'} spellCheck={false} autoCapitalize="off" autoCorrect="off" />
           </label>
-          {checked && !checked.ok && <><Issues list={checked.errors} kind="error" /><Issues list={checked.warnings} kind="warning" /></>}
+          {checked && !checked.ok && <><Issues list={checked.errors} kind="error" /><Issues list={checked.warnings} kind="warning" /><Existing list={checked.existing} /></>}
         </>}
 
         {step === "preview" && checked?.ok && <>
+          <Issues list={checked.warnings} kind="warning" />
+          <Existing list={checked.existing} />
           <h4 className="v2-pi-h">Shots to insert after shot {number}</h4>
           <ul className="v2-pi-shots" aria-label="Shots to insert">
             {checked.preview.shots.map((s, i) => (
@@ -124,7 +138,6 @@ export function PlanInsertSheet({ engine, project, shotId, mobile, series, onDon
             ))}
           </ul>
           {sb.order.length > number && <p className="v2-hint">Shots {number + 1}–{sb.order.length} become {number + 1 + checked.preview.shots.length}–{sb.order.length + checked.preview.shots.length}. One Undo removes the whole insert.</p>}
-          <Issues list={checked.warnings} kind="warning" />
         </>}
         {foot}
       </div>

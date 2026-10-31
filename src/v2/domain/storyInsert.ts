@@ -79,6 +79,14 @@ export function buildInsertPrompt(doc: StoryDoc, afterId: string, lastDesc: stri
     `Reuse existing assets and clips whenever possible: a shot may show another part of an existing clip ("clip" + "inSec"). Only add a new clip (a "video" asset) or other asset to "newAssets" when nothing existing fits, and write a full prompt only for those new items. Never repeat or change existing assets.`,
     `Existing shot ids (do not reuse them for new shots): ${shotIds}.`,
     ``,
+    `ASSET TYPES AND WHERE THEY GO:`,
+    `- "video": a clip. An AI shot (the default render) plays it: "clip": "<video asset id>" (+ "inSec").`,
+    `- "html": an animated graphic or title card. Either a whole shot with "render": "html" and "clip": "<html asset id>", or (usually) an html layer on an AI shot: "layers": [{"type": "html", "asset": "<id>", "startSec", "endSec", ...}].`,
+    `- "image": a still. Either "render": "still" with "clip": "<image asset id>", or an image layer, or a reference of a clip.`,
+    `- "character", "location", "prop", "style", "frame": references only (a clip's "assets"/"references"), never a shot's "clip".`,
+    `- "audio": only in "audio" cues.`,
+    `A shot without "render" is an AI shot, so its "clip" MUST be a "video" asset.`,
+    ``,
     `GUIDE RULES:`,
     ...rules,
     ``,
@@ -97,8 +105,22 @@ export interface InsertPreviewShot { id: string; title: string; clip?: string; d
 export interface InsertPreviewAsset { id: string; name: string; type: string; isNew: boolean; generated: boolean; usedBy: string[] }
 export interface InsertPreview { after: string; shots: InsertPreviewShot[]; assets: InsertPreviewAsset[] }
 export type InsertResult =
-  | { ok: true; doc: StoryDoc; preview: InsertPreview; warnings: StoryIssue[] }
-  | { ok: false; errors: StoryIssue[]; warnings: StoryIssue[] };
+  | { ok: true; doc: StoryDoc; preview: InsertPreview; warnings: StoryIssue[]; existing: StoryIssue[] }
+  | { ok: false; errors: StoryIssue[]; warnings: StoryIssue[]; existing: StoryIssue[] };
+
+/**
+ * P22: a blank AI shot (no prompt, no shared clip) is a valid board state (added with Blank shot, synced from the
+ * timeline, or waiting to be planned). Its 3.1 export has an automatic clip with an empty prompt, which the strict
+ * importer rejects; mark it needsPrompt so the round trip reports it as a to-do, not an error.
+ */
+export function withBlankShotsFlagged(doc: StoryDoc): StoryDoc {
+  let changed = false;
+  const shots = doc.shots.map((s) => {
+    if ((s.render ?? "ai") !== "ai" || s.prompt || s.clip || s.needsPrompt) return s;
+    changed = true; return { ...s, needsPrompt: true as const };
+  });
+  return changed ? { ...doc, shots } : doc;
+}
 
 const key = (i: StoryIssue) => `${i.path}|${i.message}`;
 
@@ -109,13 +131,14 @@ const key = (i: StoryIssue) => `${i.path}|${i.message}`;
  */
 export function applyInsertJson(base: StoryDoc, text: string, opts: StoryValidateOptions & { expectAfter?: string; generated?: ReadonlySet<string> } = {}): InsertResult {
   const errors: StoryIssue[] = [], warnings: StoryIssue[] = [];
-  const fail = (path: string, message: string) => ({ ok: false as const, errors: [...errors, { path, message }], warnings });
+  const existing: StoryIssue[] = [];
+  const fail = (path: string, message: string) => ({ ok: false as const, errors: [...errors, { path, message }], warnings, existing });
   let v: unknown;
   try { v = JSON.parse(extractJson(text)); } catch (e) { return fail("", `Not valid JSON: ${(e as Error).message}`); }
   if (!isObj(v)) return fail("", "Expected a JSON object.");
   if (v.schema !== INSERT_SCHEMA) errors.push({ path: "schema", message: `"schema" must be "${INSERT_SCHEMA}".` });
   const after = str(v.insertAfter);
-  const raw = rawDoc(base), shots = rawShots(raw), assets = rawAssets(raw);
+  const raw = rawDoc(withBlankShotsFlagged(base)), shots = rawShots(raw), assets = rawAssets(raw);
   const shotIds = new Set(shots.map((s) => str(s.id))), assetIds = new Set(assets.map((a) => str(a.id)));
   if (!after) errors.push({ path: "insertAfter", message: `"insertAfter" is missing.` });
   else if (!shotIds.has(after)) errors.push({ path: "insertAfter", message: `Unknown shot "${after}".` });
@@ -134,7 +157,7 @@ export function applyInsertJson(base: StoryDoc, text: string, opts: StoryValidat
     if (!isObj(a)) { errors.push({ path: `newAssets[${i}]`, message: "Expected an object." }); return; }
     if (assetIds.has(str(a.id))) errors.push({ path: `newAssets[${i}].id`, message: `Asset "${str(a.id)}" already exists; reuse it by id instead of listing it in newAssets.` });
   });
-  if (errors.length) return { ok: false, errors, warnings };
+  if (errors.length) return { ok: false, errors, warnings, existing };
 
   const at = shots.findIndex((s) => s.id === after) + 1;
   const merged: Raw = {
@@ -145,33 +168,71 @@ export function applyInsertJson(base: StoryDoc, text: string, opts: StoryValidat
     connections: (Array.isArray(raw.connections) ? raw.connections : []).map((c) => isObj(c) && c.from === after && at < shots.length && c.to === shots[at].id && newShots!.length && isObj(newShots![newShots!.length - 1]) ? { ...c, from: (newShots![newShots!.length - 1] as Raw).id } : c),
     ...(audio!.length || raw.audio ? { audio: [...(Array.isArray(raw.audio) ? raw.audio : []), ...audio!] } : {}),
   };
-  const before = validateStoryboard(raw, opts);
-  const known = new Set(before.warnings.map(key));
-  const res = validateStoryboard(merged, opts);
   // Paths in the merged document point into the full lists; name them by id so the user can find them.
-  const name = (i: StoryIssue): StoryIssue => {
+  const named = (doc: Raw) => (i: StoryIssue): StoryIssue => {
     const m = /^(shots|assets|audio)\[(\d+)\](.*)$/.exec(i.path);
     if (!m) return i;
-    const list = m[1] === "shots" ? merged.shots : m[1] === "assets" ? merged.assets : merged.audio;
-    const item = (list as Raw[])[Number(m[2])];
+    const item = (doc[m[1]] as Raw[] | undefined)?.[Number(m[2])];
     return item && isObj(item) && item.id ? { ...i, path: `${m[1]} "${str(item.id)}"${m[3]}` } : i;
   };
-  const fresh = res.warnings.filter((w) => !known.has(key(w))).map(name);
-  if (!res.ok) return { ok: false, errors: res.errors.map(name), warnings: fresh };
-
+  const before = validateStoryboard(raw, opts);
+  const nb = named(raw);
+  const known = new Set([...before.warnings, ...(before.ok ? [] : before.errors)].map((i) => key(nb(i))));
+  const res = validateStoryboard(merged, opts);
+  const name = named(merged);
   const added = new Set((newAssets as Raw[]).map((a) => str(a.id)));
-  const gen = opts.generated ?? new Set<string>();
-  const out = rawDoc(res.doc), outShots = rawShots(out);
   const newIds = (newShots as Raw[]).map((s) => str(s.id));
+  const newShotSet = new Set(newIds);
+  // Ids the insert refers to (its shots' clips, layers, references; its new assets' references).
+  const mentioned = new Set<string>();
+  const walk = (v: unknown): void => { if (typeof v === "string") mentioned.add(v.split("@")[0]); else if (Array.isArray(v)) v.forEach(walk); else if (isObj(v)) Object.entries(v).forEach(([k, x]) => { if (k !== "prompt" && k !== "description" && k !== "title") walk(x); }); };
+  walk(newShots); walk(newAssets); walk(audio);
+  const baseAudio = Array.isArray(raw.audio) ? raw.audio.length : 0;
+  const mConn = Array.isArray(merged.connections) ? (merged.connections as unknown[]) : [];
+  // Blocking = about the insert; existing = a pre-existing board issue (shown, not blocking).
+  const scope = (i: StoryIssue): "insert" | "existing" | "warn" => {
+    const m = /^(shots|assets) "([^"]+)"/.exec(i.path);
+    if (m) {
+      if (m[1] === "shots") return newShotSet.has(m[2]) ? "insert" : "existing";
+      if (added.has(m[2])) return "insert";
+      return mentioned.has(m[2]) ? "warn" : "existing";
+    }
+    const a = /^audio\[(\d+)\]/.exec(i.path);
+    if (a) return Number(a[1]) >= baseAudio ? "insert" : "existing";
+    const c = /^connections\[(\d+)\]/.exec(i.path);
+    if (c) { const x = mConn[Number(c[1])]; return isObj(x) && (newShotSet.has(str(x.from)) || newShotSet.has(str(x.to))) ? "insert" : "existing"; }
+    return known.has(key(i)) ? "existing" : "insert";
+  };
+  const fresh = res.warnings.map(name).filter((w) => !known.has(key(w)) && scope(w) !== "existing");
+  const blocking: StoryIssue[] = [];
+  if (!res.ok) for (const e of res.errors.map(name)) {
+    const k = scope(e);
+    if (k === "insert") {
+      const t = /must be a video asset, but "[^"]+" is type (html|image)/.exec(e.message);
+      blocking.push(t ? { ...e, message: `${e.message} To show it as the whole shot set "render": "${t[1] === "html" ? "html" : "still"}"; otherwise keep a video clip and add it as ${t[1] === "html" ? "an html" : "an image"} layer.` } : e);
+    }
+    else if (k === "warn") fresh.push({ ...e, message: `${e.message} (an existing asset this insert uses; fix it on the board)` });
+    else existing.push(e);
+  }
+  if (blocking.length) return { ok: false, errors: blocking, warnings: fresh, existing };
+  // With only pre-existing errors left, keep the board's own shots and assets as they are and add the new ones.
+  const p = res.ok ? res.doc : res.partial!;
+  let doc: StoryDoc;
+  {
+    const bs = new Map(base.shots.map((x) => [x.id, x])), ba = new Map(base.assets.map((x) => [x.id, x]));
+    doc = { ...p, shots: p.shots.map((x) => (newShotSet.has(x.id) ? x : bs.get(x.id) ?? x)), assets: p.assets.map((x) => (added.has(x.id) ? x : ba.get(x.id) ?? x)) };
+  }
+  const gen = opts.generated ?? new Set<string>();
+  const out = rawDoc(doc), outShots = rawShots(out);
   const pShots: InsertPreviewShot[] = newIds.map((id) => {
     const s = outShots.find((x) => x.id === id) ?? {};
-    const doc = res.doc.shots.find((x) => x.id === id)!;
+    const sd = doc.shots.find((x) => x.id === id)!;
     const clip = str(s.clip) || undefined;
     return {
-      id, title: doc.title, clip, durationSec: doc.durationSec,
-      layers: (doc.layers ?? []).map((l) => `${l.type}${"text" in l && typeof (l as { text?: unknown }).text === "string" ? ` “${one((l as { text: string }).text, 30)}”` : ""}`),
-      audio: (res.doc.audio ?? []).filter((c) => c.from === id || (c as { shot?: string }).shot === id).map((c) => `${c.id}${c.asset ? ` (${c.asset})` : ""}`),
-      ...(doc.dialogue ? { dialogue: one(dialogueText(doc.dialogue), 120) } : {}),
+      id, title: sd.title, clip, durationSec: sd.durationSec,
+      layers: (sd.layers ?? []).map((l) => `${l.type}${"text" in l && typeof (l as { text?: unknown }).text === "string" ? ` “${one((l as { text: string }).text, 30)}”` : ""}`),
+      audio: (doc.audio ?? []).filter((c) => c.from === id || (c as { shot?: string }).shot === id).map((c) => `${c.id}${c.asset ? ` (${c.asset})` : ""}`),
+      ...(sd.dialogue ? { dialogue: one(dialogueText(sd.dialogue), 120) } : {}),
       clipNew: !!clip && (added.has(clip) || !assetIds.has(clip)),
     };
   });
@@ -191,20 +252,21 @@ export function applyInsertJson(base: StoryDoc, text: string, opts: StoryValidat
     const isNew = added.has(id) || !assetIds.has(id);
     return { id, name: str(a.name) || id, type: str(a.type), isNew, generated: !isNew && gen.has(id), usedBy: [...by] };
   }).sort((a, b) => Number(b.isNew) - Number(a.isNew));
-  return { ok: true, doc: res.doc, preview: { after, shots: pShots, assets: pAssets }, warnings: fresh };
+  return { ok: true, doc, preview: { after, shots: pShots, assets: pAssets }, warnings: fresh, existing };
 }
 
 /** Short text form of an insert result (WebMCP and logs). */
 export function insertResultText(r: InsertResult): string {
   const iss = (l: StoryIssue[]) => l.map((i) => `- ${i.path ? `${i.path}: ` : ""}${i.message}`).join("\n");
-  if (!r.ok) return `Insert JSON has ${r.errors.length} error(s):\n${iss(r.errors)}${r.warnings.length ? `\nWarnings:\n${iss(r.warnings)}` : ""}`;
+  const ex = r.existing.length ? `\nExisting storyboard issues (not blocking):\n${iss(r.existing)}` : "";
+  if (!r.ok) return `Insert JSON has ${r.errors.length} error(s):\n${iss(r.errors)}${r.warnings.length ? `\nWarnings:\n${iss(r.warnings)}` : ""}${ex}`;
   const p = r.preview;
   return [
     `Inserted ${p.shots.length} shot(s) after ${p.after}:`,
     ...p.shots.map((s) => `- ${s.id} "${s.title}": clip ${s.clip ?? "(none)"}${s.clipNew ? " (new, needs generation)" : " (reused)"}, ${s.durationSec}s${s.layers.length ? `, layers: ${s.layers.join(", ")}` : ""}${s.audio.length ? `, audio: ${s.audio.join(", ")}` : ""}`),
     `Assets: ${p.assets.map((a) => `${a.id} ${a.isNew ? "(new, needs generation)" : "(reused)"}`).join(", ") || "none"}.`,
     ...(r.warnings.length ? [`Warnings:\n${iss(r.warnings)}`] : []),
-  ].join("\n");
+  ].join("\n") + ex;
 }
 
 /** Ids (as in the 3.1 document) of the assets and clips that already have a generated or uploaded version. */

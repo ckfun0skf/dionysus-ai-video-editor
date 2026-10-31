@@ -376,7 +376,7 @@ export interface StoryDoc { format: typeof STORYBOARD_FORMAT; meta: StoryMeta; a
 export interface StoryIssue { path: string; message: string; at?: number }
 export type StoryParseResult =
   | { ok: true; doc: StoryDoc; warnings: StoryIssue[] }
-  | { ok: false; errors: StoryIssue[]; warnings: StoryIssue[] };
+  | { ok: false; errors: StoryIssue[]; warnings: StoryIssue[]; partial?: StoryDoc };
 
 /** P10-SYNC flags of a layer or cue: `needsPrompt` stays only while there is no `description`. */
 function syncFlags(o: Record<string, unknown>, description: string | undefined): { needsPrompt?: true; description?: string; removedFromTimeline?: true } {
@@ -1488,7 +1488,8 @@ export function validateStoryboard(raw: unknown, opts: StoryValidateOptions = {}
     connections.push({ from, to, kind, ...(note ? { note } : {}), ...(transition ? { transition } : {}) });
   });
 
-  if (errors.length) return { ok: false, errors, warnings };
+  const built: StoryDoc = { format: STORYBOARD_FORMAT, meta, assets, shots, connections, ...(audio.length ? { audio } : {}) };
+  if (errors.length) return { ok: false, errors, warnings, partial: built };
   return { ok: true, doc: { format: STORYBOARD_FORMAT, meta, assets, shots, connections, ...(audio.length ? { audio } : {}) }, warnings };
 }
 

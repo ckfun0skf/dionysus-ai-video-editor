@@ -97,3 +97,35 @@ describe("Insert shot after → Blank shot", () => {
     expect(document.querySelector('[aria-label^="New shot"], [aria-label*="shot 2"]')).toBeTruthy();
   });
 });
+
+describe("P22: pre-existing board issues do not block Plan with AI", () => {
+  it("shows them in a collapsed non-blocking section and inserts", async () => {
+    phone = true;
+    const messy = structuredClone(doc);
+    messy.assets.push({ ...messy.assets.find((a) => a.id === "keeper")!, id: "news-2", name: "News 2", prompt: "" });
+    messy.shots.push({ id: "s4", title: "Blank", description: "", durationSec: 2, prompt: "", assets: [], qa: [] });
+    const el = document.createElement("div"); document.body.appendChild(el);
+    engine = new Engine(createProject("t"));
+    engine.dispatch(cmd.createStoryboard(messy));
+    await act(async () => createRoot(el).render(<StoryboardView engine={engine} blobs={createMemoryStorage().blobs} onClose={() => {}} />));
+    await click(btn("Shot 4 actions"));
+    await click(btn("Insert shot after"));
+    await click(btn("Plan with AI"));
+    await act(async () => type(area(/^Briefly describe the last shot/), "An empty room."));
+    await click(btn("Continue"));
+    await click(btn("Paste answer"));
+    const ans = { schema: "3.1-insert", insertAfter: "s4", shots: [{ id: "s5", title: "Reaction", description: "x", durationSec: 2, clip: "s2-clip", inSec: 0 }], newAssets: [] };
+    await act(async () => type(area(/^Paste the AI/), JSON.stringify(ans)));
+    await click(btn("Check"));
+    expect(document.querySelector('[aria-label="Errors"]')).toBeNull();
+    const ex = document.querySelector('details[aria-label="Existing storyboard issues"]') as HTMLDetailsElement;
+    expect(ex).toBeTruthy(); expect(ex.open).toBe(false);
+    expect(ex.textContent).toMatch(/Existing storyboard issues \(not blocking\)/);
+    expect(ex.textContent).toMatch(/news-2/);
+    expect(ex.textContent).not.toMatch(/"s4"\.clip/);
+    expect(btn("Insert 1 shot").disabled).toBe(false);
+    await click(btn("Insert 1 shot"));
+    expect(ids()).toEqual(["s1", "s2", "s3", "s4", "s5"]);
+    expect(engine.getState().project.storyboard!.shots["s4"].needsPrompt).toBeFalsy();
+  });
+});

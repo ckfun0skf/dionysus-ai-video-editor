@@ -525,3 +525,6 @@ button.v2-sb-conn:focus-visible { outline: 2px solid var(--accent); outline-offs
 .v2-pi-issues ul { margin: 0; padding-left: 18px; }
 .v2-pi-issues.error { background: #ef444422; color: #fca5a5; }
 .v2-pi-issues.warning { background: #f59e0b1a; color: #fcd34d; }
+.v2-pi-issues.existing { background: var(--panel-2, #ffffff0d); color: var(--muted); border: 1px solid var(--line); }
+.v2-pi-issues.existing summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 600; color: var(--text); }
+.v2-pi-issues code { overflow-wrap: anywhere; }
