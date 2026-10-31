@@ -143,6 +143,8 @@ export const LAYER_FOLLOW = ["frame", "shot"] as const;
 export type LayerFollow = (typeof LAYER_FOLLOW)[number];
 interface StoryLayerBase {
   id: string; startSec: number; endSec: number; follow?: "shot";
+  /** P9-LINK: `false` = Send to Timeline does not link this layer to its shot's main clip (absent/true = linked). */
+  link?: false;
   /** V2-SB-128: a `blend` registry id (optionally `id@N`), kept as written; absent = normal. */
   blend?: string;
   /** V2-SB-128: 0 (invisible) to 1 (solid, the default). */
@@ -291,6 +293,8 @@ export interface StoryAudio {
   volumeKeys?: StoryVolumeKey[];
   /** P3B-11: sound effect (echo, telephone, radio…). */
   fx?: StoryAudioFx;
+  /** P9-LINK: `false` = not linked to the "from" shot's main clip (absent/true = linked when it fits in that shot). */
+  link?: false;
 }
 export interface StoryDoc { format: typeof STORYBOARD_FORMAT; meta: StoryMeta; assets: StoryAsset[]; shots: StoryShot[]; connections: StoryConnection[]; audio?: StoryAudio[] }
 
@@ -860,7 +864,12 @@ export function validateStoryboard(raw: unknown, opts: StoryValidateOptions = {}
         if (o === undefined || o < 0 || o > 1) warn(`${lp}.opacity`, `opacity ${JSON.stringify(l.opacity)} is ignored: use 0 (invisible) to 1 (solid, the default).`);
         else opacity = o;
       }
-      const look = { ...(blend ? { blend } : {}), ...(opacity !== undefined ? { opacity } : {}) };
+      let link: false | undefined;
+      if (l.link !== undefined && l.link !== true) {
+        if (l.link === false) link = false;
+        else warn(`${lp}.link`, `link ${JSON.stringify(l.link)} is ignored: use false (not linked to the shot's main clip) or leave it out (linked, the default).`);
+      }
+      const look = { ...(blend ? { blend } : {}), ...(opacity !== undefined ? { opacity } : {}), ...(link === false ? { link } : {}) };
       const range = timeRange(l, lp, dur, true);
       const startSec = range.startSec ?? 0, endSec = range.endSec ?? startSec;
       let follow: "shot" | undefined;
@@ -1218,6 +1227,10 @@ export function validateStoryboard(raw: unknown, opts: StoryValidateOptions = {}
     }
     const fromShot = shots.find((s) => s.id === from);
     // P3B-11: volume curve and sound effect.
+    if (c.link !== undefined && c.link !== true) {
+      if (c.link === false) cue.link = false;
+      else warn(`${path}.link`, `link ${JSON.stringify(c.link)} is ignored: use false (not linked to the shot's main clip) or leave it out (linked, the default).`);
+    }
     if (c.volumeKeys !== undefined) {
       if (!Array.isArray(c.volumeKeys)) warn(`${path}.volumeKeys`, '"volumeKeys" must be a list of { "t": seconds from the cue start, "v": 0-2 }; ignoring it.');
       else {

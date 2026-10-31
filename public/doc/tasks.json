@@ -2528,6 +2528,12 @@
           "title": "Bundle OFL fonts Chakra Petch, Oxanium, Saira (self-hosted, picker preview, project export)",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P9-LINK-MAIN",
+          "title": "V2 Link to main: linked non-main clips follow, trim, split and delete with their main clip; auto-link setting; storyboard link:false (RULE 46)",
+          "status": "done",
+          "progress": 100
         }
       ]
     },

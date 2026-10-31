@@ -5,8 +5,10 @@
  */
 import type { Project } from "../domain/model";
 import { validateComposition } from "../domain/model";
+import { applyProjectLinks } from "../domain/links";
 
-export type Command = { label: string; apply: (project: Project) => Project; coalesceKey?: string };
+/** `autoLink` (P9-LINK): clips this command creates link to the main clip under their start (if the project setting is on). */
+export type Command = { label: string; apply: (project: Project) => Project; coalesceKey?: string; autoLink?: boolean };
 
 export interface EngineState { project: Project; canUndo: boolean; canRedo: boolean; revision: number }
 
@@ -54,6 +56,8 @@ export class Engine {
       return false;
     }
     if (next === this.project) return false;
+    // P9-LINK: keep "Link to main" clips attached to their parent, in the same undo step.
+    try { next = applyProjectLinks(this.project, next, cmds.some((c) => c.autoLink)); } catch { return false; }
     for (const comp of Object.values(next.compositions)) if (validateComposition(comp).length) return false;
     next = { ...next, meta: { ...next.meta, updatedAt: new Date().toISOString() } };
     const key = cmds.length === 1 ? cmds[0].coalesceKey : undefined;

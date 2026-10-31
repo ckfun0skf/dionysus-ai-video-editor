@@ -1073,3 +1073,11 @@ select.v2-tp-field { -webkit-appearance: none; appearance: none; padding-right: 
 
 /* P7-FONTS: bundled font tiles show a sample line in the face itself. */
 .v2-tp-fontsample { display: block; font-size: 11px; opacity: 0.7; letter-spacing: 0.04em; }
+/* P9-LINK: linked clip connector — a thin bar on the clip's left edge running toward the main track. */
+.v2-link-mark { position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: #38bdf8; pointer-events: none; }
+.v2-link-mark::after { content: ""; position: absolute; left: -1px; width: 7px; height: 7px; border-radius: 50%; background: #38bdf8; box-shadow: 0 0 0 1px rgba(0,0,0,.6); }
+.v2-link-mark.down::after { bottom: -1px; }
+.v2-link-mark.up::after { top: -1px; }
+.v2-tool.v2-link-tool.is-active b { color: #38bdf8; }
+.v2-link-btn, .v2-autolink { min-height: 44px !important; height: auto !important; width: 100%; justify-content: flex-start; }
+.v2-link-btn.is-active, .v2-autolink.is-active { border-color: #38bdf8; color: #38bdf8; }

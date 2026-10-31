@@ -223,7 +223,7 @@ export const STORY_TOOLS: StoryTool[] = [
   },
   {
     name: "set_shot_layers", title: "Set a shot's layers", readOnly: false,
-    description: "Replace all layers of a shot (text, html, image, video), drawn in order on top. [] removes them. Text layers may set anim.inParams, e.g. the typewriter cursor { cursor, blink, after: blink|hide|fade, scramble }.",
+    description: "Replace all layers of a shot (text, html, image, video), drawn in order on top. [] removes them. Text layers may set anim.inParams, e.g. the typewriter cursor { cursor, blink, after: blink|hide|fade, scramble }. A layer is linked to its shot's main clip on Send to timeline unless it sets link: false (RULE 46).",
     inputSchema: obj({ id: str("Shot id."), layers: arr(LAYER, "The layers, in drawing order.") }, ["id", "layers"]),
     edit: (raw, a) => shotEdit(raw, a, (s) => { if (!Array.isArray(a.layers)) return '"layers" must be a list.'; if (a.layers.length) s.layers = clone(a.layers); else delete s.layers; return undefined; }, (s) => `AI: layers of shot ${String(s.id)}`),
   },
@@ -350,7 +350,7 @@ export const STORY_TOOLS: StoryTool[] = [
   },
   {
     name: "send_to_timeline", title: "Update the timeline", readOnly: false,
-    description: "Update the timeline from the storyboard (update mode): adds shots that have a clip and new audio cues, switches changed clips and refreshes shot text; everything else on the timeline stays. Shots without an uploaded clip are skipped.",
+    description: "Update the timeline from the storyboard (update mode): adds shots that have a clip and new audio cues, switches changed clips and refreshes shot text; everything else on the timeline stays. Shots without an uploaded clip are skipped. New layers and in-shot cues are linked to their shot's main clip (moved, trimmed and deleted with it) unless they set link: false.",
     inputSchema: obj({}),
   },
 ];

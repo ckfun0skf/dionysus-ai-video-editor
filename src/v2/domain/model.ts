@@ -106,6 +106,14 @@ export interface Placement {
   storyShot?: string;
   /** Storyboard audio cue this clip was sent as (P1-AUDIO): a cue is placed once, even when its shots were sent earlier. */
   storyCue?: string;
+  /**
+   * P9-LINK "Link to main": this non-main clip (overlay, text, effect, audio) belongs to main-track clip `parent`. Its
+   * offset from the parent start is the clip's own position (derived, never stored twice), and domain/links keeps it on
+   * every edit: the parent moves/ripples/reorders → the clip moves along; parent trimmed → clip cut to the parent's range
+   * (removed when nothing is left); parent split → re-linked to the half holding its start; parent deleted → deleted.
+   * Absent = unlinked (all projects before P9).
+   */
+  link?: { parent: string };
   storyLink?: { anchor: string; want?: { offset: number; duration: number; clampedOffset: number; clampedDuration: number } };
 }
 
@@ -226,7 +234,9 @@ export interface Project {
   id: string;
   name: string;
   /** `background` (V2-106): canvas fill behind every layer, default black. Optional so 3.0 projects stay valid. */
-  settings: { width: number; height: number; fps: number; background?: string };
+  settings: { width: number; height: number; fps: number; background?: string;
+    /** P9-LINK: link new non-main clips to the main clip under their start (absent = on). */
+    autoLink?: boolean };
   rootCompositionId: string;
   assets: Record<string, Asset>;
   compositions: Record<string, Composition>;
