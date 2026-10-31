@@ -8,8 +8,9 @@
  */
 import { seriesPromptSection, type Series } from "./series";
 import { FONTS, listPresets, type ParamSpec, type PresetDescriptor, type PresetKind } from "../registry";
-import { CONNECTION_KINDS, DEFAULT_TRANSITION_SEC, REFERENCE_ROLES, SHOT_RENDERS, STORY_ASSET_TYPES, STORYBOARD_FORMAT, storyDocJson, type StoryDoc } from "./storyJson";
+import { CONNECTION_KINDS, DEFAULT_TRANSITION_SEC, SHOT_RENDERS, STORY_ASSET_TYPES, STORYBOARD_FORMAT, storyDocJson, type StoryDoc } from "./storyJson";
 import { runtimeAiLinks, type AiLinks } from "./siteUrl";
+import { SCHEMA_VERSION } from "./storySchema";
 
 /** Spec version the guide describes (the format string stays `dionysus.storyboard/1`). */
 export const FORMAT_REVISION = "1.1";
@@ -121,9 +122,9 @@ export function presetLine(d: PresetDescriptor): string {
   return `- ${d.id}: ${d.description}${d.kind === "textStyle" ? styleLook(d) : ""}${params}${aiHints(d)}`;
 }
 
-const REFERENCE_ROLES_TXT = REFERENCE_ROLES.map((r) => `"${r}"`).join(" | ");
 const FORMAT_SECTION = () => `{
   "format": "${STORYBOARD_FORMAT}",
+  "schemaVersion": "${SCHEMA_VERSION}",   // always "${SCHEMA_VERSION}": the clip-centric schema (RULE 51)
   "meta": {
     "title": string, "logline"?: string, "synopsis"?: string, "style"?: string, "language"?: string,
     "aspect": "16:9" | "9:16" | "1:1" | "4:5" | "21:9",
@@ -146,38 +147,35 @@ const FORMAT_SECTION = () => `{
                                  // plain strings "generate" / "upload" / "json" (default "generate"); an object only for lastFrame; "html" and "audio" can't use lastFrame; "json" is audio only (a dionysus.audioclip/1 clip)
       "qa": string[],            // 2-5 concrete yes/no checks to verify the asset by looking
       "params"?: { "<key>": Param },  // "html" only: values the clip exposes, set per use by shots and layers (see RULES)
-      "genDurationSec"?: number, // video assets only: the length to generate (0.5-120) when its layers use less; layers pick their part with "inSec"
+      "genDurationSec"?: number, // video assets only: the length to generate (0.5-120) when its shots or layers use less; they pick their part with "inSec"
+                                 // a CLIP = a video asset named by a shot's "clip" (RULE 51); it carries everything that makes the clip:
+                                 // its "prompt" (the full clip generation prompt), "qa" (2-5 checks for the clip), "camera"?: string, and
+                                 // "references"?: [ { "asset": "<asset id>" | "<shot id>.keyframe", "role", "note"? } ] or a frame of an EARLIER shot's clip (RULE 50):
+                                 // { "frameOf": "<earlier shot id>", "atSec"?: number, "role": "start" | "reference", "frameDesc": string };
+                                 // ids may be "<asset id>@<state id>" = that asset's state, "<shot id>.keyframe" or "<shot id>.lastframe" (RULES);
+                                 // the images attach IN THIS ORDER (Image 1, Image 2 …); at most one "start-frame" and one "end-frame"
+                                 // "keyframe"?: { "prompt": string, "references"?: [ "<asset id>" | { "asset", "role"?, "note"? } ], "qa"?: string[] }
+                                 // = the opening still to generate FIRST; the clip animates from it. The clip's images are then
+                                 // Image 1 = the keyframe (start frame), Image 2 … = the clip's "references" (RULE 18)
       "states"?: [ { "id": string, "name"?: string, "prompt": string, "references"?: [ … as above ], "source"?: "generate" | "upload", "qa"?: string[] } ]
                                  // image-like assets only: the same thing in another state (lit, wet, at night …); use it as "<asset id>@<state id>" (RULES)
       "seriesRef"?: string,      // the id of an asset in the project's Series: write only { "id", "seriesRef" }; the definition, states
                                  // and uploads come from the Series (RULES)
       "series"?: true            // add this new asset to the project's Series so later episodes can reuse it
   } ],
-  "shots": [ {                   // in playback order
+  "shots": [ {                   // in playback order. Schema 3.1 (RULE 51): a shot has NO prompt; it plays a clip (a video asset)
       "id": string,
       "title": string,
       "description"?: string,
       "durationSec": number,     // 0.5–120; how long the shot stays on screen in the final edit, set by the story's pacing (NOT by the video model's limits)
-      "genDurationSec"?: number, // only when the video model must render longer (minimum or fixed lengths, e.g. 6/10/15 s): the length to generate; > durationSec; the upload is trimmed to durationSec
-      "prompt": string,          // full clip generation prompt; required for render "ai", keep one for "html"/"still" too
-      "assets": string[],        // ids of the assets this clip uses (include "clip" when set); "<shot id>.keyframe" = another shot's keyframe;
-                                 // "<asset id>@<state id>" = that asset's state (also in "references", "clip" and layer "asset");
-                                 // "<shot id>.lastframe" = the last frame of that shot's clip, no asset needed (RULES)
-      "references"?: [ { "asset": "<asset id>" | "<shot id>.keyframe", "role": ${REFERENCE_ROLES_TXT}, "note"?: string } ],
-                                 // or a frame of an EARLIER shot's clip (RULE 50):
-                                 // { "frameOf": "<earlier shot id>", "atSec"?: number, "role": "start" | "reference", "frameDesc": string }
-                                 // the images to attach to the clip generation IN THIS ORDER (Image 1, Image 2 …) and how to use each;
-                                 // omitted = "assets" order with roles from the type (frame → start-frame, character → identity,
-                                 // style → look, others → detail); at most one "start-frame" and one "end-frame"
-      "keyframe"?: { "prompt": string, "references"?: [ "<asset id>" | { "asset", "role"?, "note"? } ], "qa"?: string[] },
-                                 // render "ai" only: the opening still to generate FIRST; the clip animates from it. The clip's images are then
-                                 // Image 1 = the keyframe (start frame), Image 2 … = the shot's "references", then its other "assets" (RULES)
-      "camera"?: string,
+      "clip": "<asset id>",      // render "ai" (default): the id of its clip, a "video" asset that carries the generation prompt, references, genDurationSec,
+                                 // keyframe, camera and the clip's qa; one clip per shot, or the SAME clip in several shots to reuse one generation;
+                                 // render "html": an html asset; render "still": an image asset (unless "background" is given)
+      "inSec"?: number,          // seconds into a clip that several shots share: where this shot starts playing it (default 0)
       "dialogue"?: string | [ string | { "speaker"?: string, "text": string, "offscreen"?: boolean } ],
                                  // spoken lines; a list marks who says each; "offscreen": true = heard, not seen (no lip-sync; not a voiceover)
-      "qa": string[],            // 2-5 concrete yes/no checks for the clip
+      "qa"?: string[],           // checks of the edit itself (text, layers, timing); the clip's own checks go on the clip asset
       "render"?: ${SHOT_RENDERS.map((r) => `"${r}"`).join(" | ")},   // default "ai" (generated clip); "html" = uploaded HTML animation; "still" = an image held on screen
-      "clip"?: "<asset id>",     // required for "html" (an html asset) and "still" (an image asset, unless "background" is given)
       "background"?: "#rrggbb" | { "type": "linear" | "radial", "angle"?: number, "stops": [ { "color": "#rrggbb", "at"?: number } ] },
                                  // render "still" only, instead of "clip": a solid colour or a gradient the app draws (2-8 stops, "at" 0-1;
                                  // linear "angle" in degrees, 0 = bottom to top, 90 = left to right, default 180 = top to bottom); put titles in "layers"
@@ -260,7 +258,7 @@ export const HOW_IT_WORKS = `Every prompt stands alone. Each asset and each clip
 
 A storyboard is one JSON object with three lists:
 - "assets": everything that must exist before the clips can be made: characters, locations, props, a style frame, uploads, and "frame" assets taken from the last frame of a shot for continuity. Each asset has its own self-contained generation prompt, the other assets it is made from ("references") and QA checks.
-- "shots": the clips of the final edit in playback order. Each has a clip generation prompt, the assets it uses (attached to the generator as numbered images), its on-screen length ("durationSec") and, optionally, text layers and video effects that the editor draws on top.
+- "shots": the clips of the final edit in playback order. Each plays a clip (a "video" asset with the clip generation prompt and the images attached to the generator; several shots may share one clip), its on-screen length ("durationSec") and, optionally, text layers and video effects that the editor draws on top.
 - "connections": what happens between two adjacent shots: a plain cut, continuity from the previous shot's last frame, or a transition preset.
 The user imports the JSON into Dionysus, which checks it and lists every problem with its path. The app then walks the user through generating (with their own AI tools and your prompts) or uploading each asset and clip, in dependency order. Finally the editor assembles the timeline: shots in order, trimmed to "durationSec", with your text layers, effects and transitions applied.
 So split the work: generation prompts describe only the picture and its motion; on-screen text, post camera moves, looks and transitions are done by the editor with presets and stay out of the prompts.`;
@@ -329,6 +327,7 @@ export const RULE_LIST: readonly { key: string; text: string }[] = [
   { key: "review-timeline", text: `Review the cut: with WebMCP timeline tools, after editing the timeline (or after send_to_timeline) call get_timeline, then review_lint, and look at contact_sheet (and capture_frame at any time you doubt). Fix every error and warning it lists with move_clip, trim_clip, split_clip, delete_clip, set_clip_props and add_clip (gaps and black frames, very short clips, text off the frame, audio clipping, missing media, layers not linked to a main clip, needsPrompt items), then run review_lint again until only notes you chose to keep are left. Never guess clip ids or times: read them from get_timeline.` },
   { key: "spatial-audio", text: `Spatial audio: an audio cue (or, with set_clip_props, a clip with sound) can take "position": { "azimuth", "distance", "width"? } — azimuth in degrees, 0 = in front, -90 = left, 90 = right, ±180 = behind; distance 0 (at the ear) to 1 (far, about 20 m), which lowers the level, darkens the tone and adds reverb; "pan" -1..1 is a shorthand (azimuth = pan × 90). "positionKeys" [{ "t", "azimuth", "distance" }] moves the sound (t = seconds from the cue start). Stereo files already carry their own left/right movement: "width" (0-1, default 1) keeps that image while the pair is placed, so do not set width 0 unless you want it mono; mono files are point sources. Leave music centred unless asked. meta "audioOutput": { "mode": "binaural" } is for headphones (front/behind cues, HRTF); "stereo" (default) is for speakers and phones; "environment" "room" (default) or "outdoor" sets the reverb. Omit all of these to keep the sound unchanged.` },
   { key: "frame-of", text: `Frame of another shot: when a shot must start from, or match, a frame INSIDE an earlier shot's clip (not its last frame, RULE 35), e.g. shot 1 is a man at his computer noticing objects on the desk and the camera then pans to reveal a second person, and shot 2 should start from the middle of that move, add to the later shot's "references": { "frameOf": "<earlier shot id>", "atSec": <seconds into that clip>, "role": "start" | "reference", "frameDesc": "…" }. "start" makes the frame the START FRAME of the shot; "reference" attaches it as a reference image only. "frameDesc" is REQUIRED and must say: (1) the camera framing and angle; (2) who or what is visible and where in the frame; (3) where in the source shot's camera move the frame sits (e.g. "midway through the push-in, before the pan"); (4) how this shot uses it. Name the same subjects the source shot's prompt names. The source must be an earlier shot (never the shot itself, never a later one); the user generates the source shot first, then picks the exact frame in the app, so "atSec" is only where the picker starts. Example: "references": [{ "frameOf": "s1", "atSec": 2.5, "role": "start", "frameDesc": "Medium close-up, eye level: the man sits centre-left at the computer looking down at the objects on the desk; midway through shot s1's push-in, before the pan to the second person; used as the start frame of this shot." }].` },
+  { key: "clip-centric", text: `Schema ${SCHEMA_VERSION}, clip-centric: write "schemaVersion": "${SCHEMA_VERSION}" and keep everything that makes a clip on a "video" asset, its clip: the generation "prompt" (with its "References:" block), "references" (including frameOf entries, RULE 50, and "end-frame"), "genDurationSec", "keyframe", "camera" and the clip's "qa". Wherever another rule speaks of a shot's prompt, references, assets, keyframe or genDurationSec, write it on that shot's clip. A shot never has a "prompt": it is { "id", "title", "description", "durationSec", "clip": "<video asset id>", "inSec"? } plus its layers, dialogue, captions, effects and edit checks. Give each AI shot its own clip (id "<shot id>-clip", name "Clip · <shot title>"); to reuse one generation (the same take seen twice, a wide shot cut into two parts) point several shots at the SAME clip and set each one's "inSec" (seconds into the clip) and "durationSec", and give the clip a "genDurationSec" long enough for every part. The first shot that uses a clip generates it; later shots only trim it. Example: "assets": [ { "id": "s1-clip", "name": "Clip · The climb", "type": "video", "prompt": "References:\\nImage 1 (Rider): reference only, not a frame: keep this identity.\\n\\nThe rider climbs the last stretch …", "references": ["rider"], "genDurationSec": 8, "camera": "Side tracking shot", "qa": ["The rider matches the reference"] } ], "shots": [ { "id": "s1", "title": "The climb", "durationSec": 4, "clip": "s1-clip" }, { "id": "s3", "title": "The climb, later", "durationSec": 3, "clip": "s1-clip", "inSec": 5 } ]. A storyboard without "schemaVersion" is 3.0 (prompts on shots); the app migrates it, but never write that form.` },
 ];
 export const RULES: readonly string[] = RULE_LIST.map((r) => r.text);
 /** 1-based public number of a rule, by key. */

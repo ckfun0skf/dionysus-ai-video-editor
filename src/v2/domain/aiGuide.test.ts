@@ -65,7 +65,7 @@ describe("WebMCP doc (P4C)", () => {
   it("llms.txt describes every tool and the rules exist", () => {
     const txt = llmsTxt(DEFAULT_SITE_URL);
     for (const t of STORY_TOOLS) expect(txt).toContain(`\`${t.name}\``);
-    expect(RULE_LIST.map((r) => r.key).slice(-8)).toEqual(["series-tools", "effect-apply-to", "typewriter-cursor", "link-to-main", "fill-needs-prompt", "review-timeline", "spatial-audio", "frame-of"]);
+    expect(RULE_LIST.map((r) => r.key).slice(-8)).toEqual(["effect-apply-to", "typewriter-cursor", "link-to-main", "fill-needs-prompt", "review-timeline", "spatial-audio", "frame-of", "clip-centric"]);
     for (const t of TIMELINE_TOOLS) expect(txt).toContain(`\`${t.name}\``);
   });
 });
@@ -95,7 +95,14 @@ describe("AI planner guide (V2-SB-114)", () => {
   it("the full prompt inlines the guide with RULES 1-37; the short prompt links to it", () => {
     const full = storyboardSystemPrompt();
     for (const s of ["FORMAT (", "PRESETS", "RULES", "EXAMPLE", `14. ${RULES[13]}`, "not seconds", "START FRAME", "\"references\"?", "\"genDurationSec\"?", "- crossfade:", "- ken-burns:"]) expect(full).toContain(s);
-    expect(RULES).toHaveLength(50);
+    expect(RULES).toHaveLength(51);
+    // P16: RULE 51, the clip-centric schema 3.1.
+    expect(full).toContain(`51. ${RULES[50]}`);
+    expect(ruleNumber("clip-centric")).toBe(51);
+    expect(RULES[50]).toContain('"schemaVersion": "3.1"');
+    expect(RULES[50]).toContain('A shot never has a "prompt"');
+    expect(RULES[50]).toContain('"clip": "s1-clip", "inSec": 5');
+    expect(full).toContain('"schemaVersion": "3.1",   // always "3.1"');
     expect(full).toContain(`50. ${RULES[49]}`);
     expect(ruleNumber("frame-of")).toBe(50);
     expect(RULES[49]).toContain('"frameOf": "<earlier shot id>"');
@@ -183,7 +190,7 @@ describe("AI planner guide (V2-SB-114)", () => {
 
   it("RULE 30 (P2A): revised JSON is re-imported by id, so ids stay stable", () => {
     expect(RULE_LIST.slice(29, 30).map((r) => r.key)).toEqual(["stable-ids-reimport"]);
-    expect(RULE_LIST.slice(30).map((r) => r.key)).toEqual(["self-contained-prompts", "reference-sheets", "html-code-refs", "shot-background", "lastframe-refs", "chroma-key", "audio-shaping", "audio-json", "long-story-parts", "web-mcp", "series-reuse", "series-promote", "series-tools", "effect-apply-to", "typewriter-cursor", "link-to-main", "fill-needs-prompt", "review-timeline", "spatial-audio", "frame-of"]);
+    expect(RULE_LIST.slice(30).map((r) => r.key)).toEqual(["self-contained-prompts", "reference-sheets", "html-code-refs", "shot-background", "lastframe-refs", "chroma-key", "audio-shaping", "audio-json", "long-story-parts", "web-mcp", "series-reuse", "series-promote", "series-tools", "effect-apply-to", "typewriter-cursor", "link-to-main", "fill-needs-prompt", "review-timeline", "spatial-audio", "frame-of", "clip-centric"]);
     expect(ruleNumber("typewriter-cursor")).toBe(45);
     // P9-LINK: rule 46 (appended) documents layers[].link / audio[].link = false.
     expect(ruleNumber("link-to-main")).toBe(46);
@@ -449,7 +456,7 @@ describe("guide consistency (V2-SB-131)", () => {
     const rule = RULES[ruleNumber("keyframe") - 1];
     expect(ruleNumber("keyframe")).toBe(18);
     expect(rule).toContain("Image 1 is always the keyframe, the START FRAME; Image 2, 3 … are the shot's \"references\" in their order, then the shot's other \"assets\" in \"assets\" order");
-    expect(md).toContain('Image 1 = the keyframe (start frame), Image 2 … = the shot\'s "references", then its other "assets"');
+    expect(md).toContain('Image 1 = the keyframe (start frame), Image 2 … = the clip\'s "references" (RULE 18)');
     const r = parseStoryboard(JSON.stringify({
       format: "dionysus.storyboard/1", meta: { title: "T", aspect: "16:9" },
       assets: [

@@ -135,3 +135,29 @@ describe("storyboard parts (P4C)", () => {
     expect(parseStoryPart(JSON.stringify({ meta: { title: "x" }, shots: [] }), base)).toBeUndefined();
   });
 });
+
+describe("WebMCP tools on schema 3.1 (P16)", () => {
+  it("get_storyboard returns 3.1; shots share a clip and the clip prompt is edited on the asset", () => {
+    const raw = JSON.parse(run("export_json", {}).text.replace(/^[^{]*/, ""));
+    expect(raw.schemaVersion).toBe("3.1");
+    for (const s of raw.shots) if (!s.render || s.render === "ai") expect(s.prompt).toBeUndefined();
+    // A clip without a keyframe (sharing a keyframed clip is not supported yet).
+    const plain = (id: string) => !raw.assets.find((x: { id: string; keyframe?: unknown }) => x.id === id)?.keyframe;
+    const first = raw.shots.find((s: { clip?: string; render?: string }) => !s.render && s.clip && plain(s.clip));
+    const a = run("add_shot", { shot: { id: "re1", title: "Again", durationSec: 2, clip: first.clip, inSec: 1 } });
+    expect(a.ok, a.text).toBe(true);
+    const b = run("update_asset", { id: first.clip, patch: { prompt: "A new clip prompt" } }, a.doc!);
+    expect(b.ok, b.text).toBe(true);
+    const out = JSON.parse(run("export_json", {}, b.doc!).text.replace(/^[^{]*/, ""));
+    expect(out.assets.find((x: { id: string }) => x.id === first.clip).prompt).toBe("A new clip prompt");
+    expect(out.shots.find((s: { id: string }) => s.id === "re1")).toMatchObject({ clip: first.clip, inSec: 1 });
+  });
+  it("remove_shot drops the shot's own auto clip", () => {
+    const a = run("add_shot", { shot: shot("gone1") });
+    const raw = JSON.parse(run("export_json", {}, a.doc!).text.replace(/^[^{]*/, ""));
+    expect(raw.assets.some((x: { id: string }) => x.id === "gone1-clip")).toBe(true);
+    const r = run("remove_shot", { id: "gone1" }, a.doc!);
+    const after = JSON.parse(run("export_json", {}, r.doc!).text.replace(/^[^{]*/, ""));
+    expect(after.assets.some((x: { id: string }) => x.id === "gone1-clip")).toBe(false);
+  });
+});

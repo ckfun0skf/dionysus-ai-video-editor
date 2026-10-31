@@ -73,8 +73,15 @@ export interface Shot {
   skipped?: boolean;
   /** v1.1: how the clip is made (absent = "ai", a generated video). */
   render?: Exclude<ShotRender, "ai">;
-  /** v1.1: the html (render html) or image (render still) slot that is the shot's clip. */
+  /**
+   * v1.1: the html (render html) or image (render still) slot that is the shot's clip. P16: for an AI shot (no
+   * `render`), a shared video clip slot the shot plays from `clipInSec` for `durationSec` (schema 3.1 `clip`).
+   */
   clipSlot?: string;
+  /** P16: in point (seconds) into a shared clip slot. */
+  clipInSec?: number;
+  /** P16: id and name of the shot's own (single-use) clip in schema 3.1; `auto` = made automatically. */
+  clipAsset?: { id: string; name: string; auto?: true };
   /** V2-HTML-PARAMS: render html: per-use values for the clip's params; carried to the timeline clip on send. */
   params?: HtmlParamValues;
   /** The shot's own AI clip asset, kept aside while the shot is made as html or still (V2-CUT-02). */
@@ -228,6 +235,9 @@ export function storyboardFromDoc(doc: StoryDoc): Storyboard {
       id: s.id, title: s.title, description: s.description, durationSec: s.durationSec, prompt: s.prompt,
       slotIds: [...s.assets], qa: qaList(s.id, s.qa), ...(s.camera ? { camera: s.camera } : {}), ...(s.dialogue ? { dialogue: dialogueText(s.dialogue) } : {}), ...(dialogueLines(s.dialogue) ? { lines: structuredClone(dialogueLines(s.dialogue)!) } : {}),
       ...(s.render && s.render !== "ai" && s.clip && slots[s.clip] ? { render: s.render, clipSlot: s.clip } : {}),
+      // P16: an AI shot that plays a shared clip (a video asset) from its in point.
+      ...((s.render ?? "ai") === "ai" && s.clip && slots[s.clip]?.type === "video" ? { clipSlot: s.clip, ...(s.inSec ? { clipInSec: s.inSec } : {}) } : {}),
+      ...(s.clipAsset ? { clipAsset: { ...s.clipAsset } } : {}),
       ...(s.render === "html" && s.clip && slots[s.clip] && s.params ? { params: { ...s.params } } : {}),
       ...(s.layers?.length ? { layers: structuredClone(s.layers) } : {}),
       ...(s.captions ? { captions: true } : {}),
@@ -251,7 +261,7 @@ export function storyboardFromDoc(doc: StoryDoc): Storyboard {
       slots[id] = { id, name: `Background · ${s.title}`, type: "image", aspect: doc.meta.aspect, prompt: "", references: [], source: { type: "generate" }, qa: [], implicit: "background", background: structuredClone(s.background) };
       Object.assign(shots[s.id], { render: "still", clipSlot: id });
     }
-    if (shots[s.id].clipSlot && !shots[s.id].slotIds.includes(shots[s.id].clipSlot!)) shots[s.id].slotIds.push(shots[s.id].clipSlot!);
+    if (shots[s.id].clipSlot && shots[s.id].render && !shots[s.id].slotIds.includes(shots[s.id].clipSlot!)) shots[s.id].slotIds.push(shots[s.id].clipSlot!);
     if (s.keyframe) {
       const id = keyframeId(s.id);
       slots[id] = {
@@ -493,6 +503,7 @@ export function syncPlacements(p: Project, assetId: string, retrim?: { versionId
 
 /** Selected clip length vs the planned shot length, when they differ by more than half a second (V2-SB-R06). */
 export function shotLengthMismatch(p: Project, s: Shot): { actualSec: number; plannedSec: number } | undefined {
+  if (!s.render && s.clipSlot) return undefined; // P16: a shared clip plays a part (inSec + duration) of a longer take
   const v = versionsOf(p, s).find((x) => x.id === selectedOf(p, s));
   const d = versionSpan(p.storyboard, v)?.lenTicks;
   if (!d || !s.durationSec) return undefined;
@@ -677,6 +688,9 @@ export function productionSteps(p: Project): ProductionStep[] {
     if (s.keyframe) slot(s.keyframe);
     // html/still shots: the step is checking the clip slot's version (its upload is the slot's own step).
     if (s.clipSlot) slot(s.clipSlot);
+    // P16: production iterates per clip. A shot that plays a shared clip has no step of its own: the clip's
+    // slot step (generated once, before its first shot) is the generation step.
+    if (!s.render && s.clipSlot) return;
     out.push({ target: { shot: id }, key: `shot:${id}`, ...state(s, status.shots[id], undefined, s.clipSlot) });
   };
   b.order.forEach(shot);
@@ -739,4 +753,64 @@ export function pendingFrameRefs(p: Project): { slotId: string; targetShot: stri
     const targetShot = b.order.find((id) => b.shots[id].slotIds.includes(s.id)) ?? "";
     return [{ slotId: s.id, targetShot, st }];
   });
+}
+
+/** P16 (schema 3.1): the clip a shot plays, as shown on the shot card. */
+export interface ShotClipInfo {
+  /** "Clip A", "Clip B"… in order of first use. */
+  label: string;
+  /** The shared video slot, or undefined for the shot's own clip. */
+  slotId?: string;
+  inSec: number;
+  endSec: number;
+  /** The shot that generates the clip (its first user in story order). */
+  firstShot: string;
+  /** All shots playing this clip, in story order. */
+  users: string[];
+  /** True when this shot reuses a clip first used by another shot. */
+  reused: boolean;
+  generated: boolean;
+}
+
+const clipLetter = (i: number): string => (i < 26 ? String.fromCharCode(65 + i) : clipLetter(Math.floor(i / 26) - 1) + String.fromCharCode(65 + (i % 26)));
+
+/** "0:03" for 3 s. */
+export function clipTime(sec: number): string {
+  const t = Math.max(0, Math.round(sec));
+  return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`;
+}
+
+/** P16: every AI shot's clip (own or shared), with labels in story order. html/still shots are not clips. */
+export function shotClips(p: Project): Record<string, ShotClipInfo> {
+  const b = p.storyboard;
+  const out: Record<string, ShotClipInfo> = {};
+  if (!b) return out;
+  const keys: string[] = [];
+  const usersOf: Record<string, string[]> = {};
+  for (const id of b.order) {
+    const s = b.shots[id];
+    if (!s || s.render) continue;
+    const key = s.clipSlot && b.slots[s.clipSlot] ? `slot:${s.clipSlot}` : `shot:${id}`;
+    if (!usersOf[key]) { usersOf[key] = []; keys.push(key); }
+    usersOf[key].push(id);
+  }
+  keys.forEach((key, i) => {
+    const users = usersOf[key];
+    const slotId = key.startsWith("slot:") ? key.slice(5) : undefined;
+    const generated = slotId ? versionsOf(p, b.slots[slotId]).length > 0 : versionsOf(p, b.shots[users[0]]).length > 0;
+    for (const id of users) {
+      const s = b.shots[id];
+      const inSec = slotId ? s.clipInSec ?? 0 : 0;
+      out[id] = { label: `Clip ${clipLetter(i)}`, slotId, inSec, endSec: inSec + s.durationSec, firstShot: users[0], users, reused: id !== users[0], generated };
+    }
+  });
+  return out;
+}
+
+/** P16: the warning shown when a clip prompt is edited from a shot, e.g. "Affects Shot 1, Shot 4". Empty for a single-use clip. */
+export function clipAffects(p: Project, shotId: string): string {
+  const c = shotClips(p)[shotId];
+  if (!c || c.users.length < 2) return "";
+  const b = p.storyboard!;
+  return `Affects ${c.users.map((id) => `Shot ${b.order.indexOf(id) + 1}`).join(", ")}`;
 }

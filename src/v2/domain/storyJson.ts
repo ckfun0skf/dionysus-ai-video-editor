@@ -8,6 +8,7 @@ import { effectMoves } from "./storyFollow";
 import { checkParamValue, cleanParamDecls, validateParamDecls, type HtmlClipParam, type HtmlParamValues } from "./htmlClipPackage";
 import { FONTS, getFont, getPreset, listPresets, parsePresetRef, type PresetDescriptor, type PresetKind } from "../registry";
 import { positionErrors } from "./spatial";
+import { normalizeSchema, toSchema31 } from "./storySchema";
 
 export const STORYBOARD_FORMAT = "dionysus.storyboard/1" as const;
 
@@ -227,6 +228,12 @@ export interface StoryShot {
   id: string; title: string; description: string; durationSec: number;
   /** Required for `render: "ai"`; may be empty for html and still shots. */
   prompt: string; assets: string[]; qa: string[]; camera?: string;
+  /**
+   * P16 (schema 3.1): for an AI shot, `clip` names a shared video asset the shot plays from `inSec` (the clip's prompt
+   * and versions are the asset's). A single-use clip is folded into the shot on import; `clipAsset` remembers its id,
+   * name and whether it was made automatically, so export writes it back under the same id.
+   */
+  inSec?: number; clipAsset?: { id: string; name: string; auto?: true };
   /**
    * Spoken lines: plain text, or (V2-SB-135) a list of lines with a speaker and `offscreen: true` for a voice heard but
    * not seen (not lip-synced; unlike a voiceover it belongs to the scene). The clip prompt lists list-form lines.
@@ -523,6 +530,10 @@ export function validateStoryboard(raw: unknown, opts: StoryValidateOptions = {}
   const err = (path: string, message: string) => { if (errors.length < MAX_ERRORS) errors.push({ path, message }); };
   const warn = (path: string, message: string) => warnings.push({ path, message });
   if (!isObj(raw)) return { ok: false, errors: [{ path: "", message: "The storyboard must be a JSON object { … }." }], warnings };
+  // P16: schema 3.1 (clip-centric) is read into the internal form; 3.0 passes through unchanged.
+  const norm = normalizeSchema(raw, warn);
+  raw = norm.raw;
+  const is31 = norm.version === "3.1";
   // P5: "seriesRef" assets take their definition from the project's Series before anything else is checked.
   if (usesSeries(raw)) {
     raw = JSON.parse(JSON.stringify(raw)) as Obj;
@@ -1197,7 +1208,9 @@ export function validateStoryboard(raw: unknown, opts: StoryValidateOptions = {}
     const mode = render ?? "ai";
     const prompt = str(s.prompt) ?? "";
     const flagged = s.needsPrompt === true;
-    if (!prompt && mode === "ai") (flagged ? warn : err)(`${path}.prompt`, flagged ? `Shot "${id}" needs a prompt (needsPrompt): describe what it shows and write its clip generation "prompt".` : `Shot "${id}" needs a clip generation "prompt".`);
+    const sharedClip = is31 && mode === "ai" && s.clip !== undefined;
+    if (!prompt && mode === "ai" && is31 && !sharedClip && !flagged) err(`${path}.clip`, `Shot "${id}" needs "clip": the id of the video asset (its clip) that carries the generation prompt.`);
+    else if (!prompt && mode === "ai" && !sharedClip) (flagged ? warn : err)(`${path}.prompt`, flagged ? `Shot "${id}" needs a prompt (needsPrompt): describe what it shows and write its clip generation "prompt".` : `Shot "${id}" needs a clip generation "prompt".`);
     const used = strList(s.assets, `${path}.assets`).filter((a, j) => {
       if (a !== keyframeId(id) || assetIds.has(a)) return true;
       warn(`${path}.assets[${j}]`, `"${a}" is this shot's own keyframe; it is always attached (Image 1), so the entry is ignored.`);
@@ -1225,7 +1238,20 @@ export function validateStoryboard(raw: unknown, opts: StoryValidateOptions = {}
     if (s.background !== undefined && mode !== "still") warn(`${path}.background`, `"background" only applies to render "still" shots; it is ignored for this render "${mode}" shot.`);
     else if (background && clip) warn(`${path}.background`, `Shot "${id}" shows the still "${clip}"; its "background" is ignored. Use "clip" or "background", not both.`);
     else if (background) { shot.background = background; if (assetIds.has(backgroundId(id))) err(`${path}.background`, `Asset id "${backgroundId(id)}" is reserved for this shot's background; rename that asset.`); }
-    if (mode === "ai") {
+    if (mode === "ai" && sharedClip) {
+      // P16: a shared clip: the shot plays the video asset from inSec for durationSec.
+      const a = clip ? assetById.get(clip) : undefined;
+      if (!clip || !a) err(`${path}.clip`, clip ? unknownAsset(clip) : '"clip" needs the id of a video asset.');
+      else if (a.type !== "video") err(`${path}.clip`, `An AI shot's "clip" must be a video asset, but "${clip}" is type ${a.type}.`);
+      if (s.inSec !== undefined) {
+        const n = num(s.inSec);
+        if (n === undefined || n < 0) warn(`${path}.inSec`, `inSec ${JSON.stringify(s.inSec)} is ignored: use seconds from the start of the clip.`);
+        else if (n > 0) { shot.inSec = n; if (a?.genDurationSec && Number.isFinite(dur) && n + dur > a.genDurationSec + 1e-9) warn(`${path}.inSec`, `inSec ${fmt(n)} + durationSec ${fmt(dur)} runs past the end of clip "${clip}" (${fmt(a.genDurationSec)} s).`); }
+      }
+    } else if (mode === "ai") {
+      if (s.inSec !== undefined && !isObj(s.clipAsset)) warn(`${path}.inSec`, '"inSec" only applies to a shot that plays a shared clip; it is ignored.');
+      else if (num(s.inSec) !== undefined && num(s.inSec)! > 0) shot.inSec = num(s.inSec);
+      if (isObj(s.clipAsset) && str(s.clipAsset.id)) shot.clipAsset = { id: str(s.clipAsset.id)!, name: str(s.clipAsset.name) ?? str(s.clipAsset.id)!, ...(s.clipAsset.auto === true ? { auto: true as const } : {}) };
       if (clip !== undefined) warn(`${path}.clip`, `"clip" only applies to render "html" or "still"; it is ignored for this AI-generated shot.`);
     } else if (!clip && mode === "still" && background) { /* P2B: the background is the picture */ }
     else if (!clip) err(`${path}.clip`, mode === "still" ? 'A render "still" shot needs "clip" (the id of an image asset) or "background" (a colour like "#101820" or a gradient).' : `A render "${mode}" shot needs "clip": the id of an html asset.`);
@@ -1234,7 +1260,7 @@ export function validateStoryboard(raw: unknown, opts: StoryValidateOptions = {}
       if (!a) err(`${path}.clip`, unknownAsset(clip));
       else if (mode === "html" ? a.type !== "html" : a.type !== "image") err(`${path}.clip`, `Render "${mode}" needs ${mode === "html" ? "an html" : "an image"} asset, but "${clip}" is type ${a.type}.`);
     }
-    if (clip) shot.clip = clip;
+    if (clip && !(mode === "ai" && !sharedClip)) shot.clip = clip;
     if (s.params !== undefined) {
       if (mode !== "html") warn(`${path}.params`, `"params" only applies to render "html" shots (values for the clip's params); it is ignored here.`);
       else { const ps = htmlParamsOf(s.params, `${path}.params`, clip && assetById.get(clip)?.type === "html" ? clip : undefined); if (ps) shot.params = ps; }
@@ -1403,7 +1429,7 @@ export function validateStoryboard(raw: unknown, opts: StoryValidateOptions = {}
     audio.push(cue);
   });
 
-  const usedBy = (id: string) => audio.some((c) => c.asset === id) || shots.some((s) => s.assets.includes(id) || s.keyframe?.references.some((r) => assetRefId(r) === id) || (s.render && s.render !== "ai" && s.clip === id) || s.layers?.some((l) => l.type !== "text" && l.asset === id));
+  const usedBy = (id: string) => audio.some((c) => c.asset === id) || shots.some((s) => s.assets.includes(id) || s.keyframe?.references.some((r) => assetRefId(r) === id) || s.clip === id || s.layers?.some((l) => l.type !== "text" && l.asset === id));
   allAssets.forEach((a, i) => { if (!usedBy(a.id) && !allAssets.some((b) => b.references.some((r) => assetRefId(r) === a.id))) warn(assetPaths[i], a.stateOf ? `State "${a.id}" isn't used by any shot.` : `Asset "${a.id}" isn't used by any shot.`); });
 
   let connections: StoryConnection[] = [];
@@ -1475,7 +1501,9 @@ export function storyDocJson(doc: StoryDoc): string {
   const ref = (r: StoryReference) => r.frameOf === undefined ? r
     : { frameOf: r.frameOf, ...(r.atSec !== undefined ? { atSec: r.atSec } : {}), role: frameRefAuthoredRole(r.role), frameDesc: r.frameDesc };
   const shots = doc.shots.map((sh) => sh.references?.some((r) => r.frameOf !== undefined) ? { ...sh, references: sh.references.map(ref) } : sh);
-  return JSON.stringify({ ...doc, assets: doc.assets.map((a) => ({ ...a, source: authoredSource(a.source) })), shots }, null, 2);
+  const assets = doc.assets.map((a) => ({ ...a, source: authoredSource(a.source) }));
+  // P16: always written as schema 3.1 (each AI shot names its clip; own clips become automatic clip assets).
+  return JSON.stringify(toSchema31({ ...doc, assets, shots: shots as unknown as Record<string, unknown>[] }), null, 2);
 }
 
 /** One-line summary for the import preview. */

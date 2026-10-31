@@ -106,6 +106,13 @@ function shotClip(b: Storyboard, asset: Asset, v: AssetVersion, shot: Shot, at: 
   const durationTicks = shot.clipSlot || asset.kind === "html" ? planned : asset.kind === "image" ? DEFAULT_IMAGE_TICKS : span?.lenTicks ?? v.media.durationTicks ?? DEFAULT_IMAGE_TICKS;
   // V2-HTML-PARAMS: an html shot's per-use param values go onto its clip (only overrides; defaults come from the clip).
   const params = asset.kind === "html" && shot.params && Object.keys(shot.params).length ? { htmlParams: { ...shot.params } } : {};
+  // P16: an AI shot that plays a shared clip plays it from its in point for its planned length (inside the media).
+  if (!shot.render && shot.clipSlot && asset.kind === "video") {
+    const len = v.media.durationTicks;
+    const inT = Math.max(0, Math.min(secondsToTicks(shot.clipInSec ?? 0), len ? Math.max(0, len - 1) : Infinity));
+    const dur = len ? Math.max(1, Math.min(planned, len - inT)) : planned;
+    return { id: newId("plc"), startTicks: at, durationTicks: dur, sourceInTicks: inT, source: { kind: "assetVersion", assetId: asset.id, versionId: v.id }, clipType: asset.kind, volume: 1, storyShot: shot.id };
+  }
   return { id: newId("plc"), startTicks: at, durationTicks, sourceInTicks: span?.inTicks ?? 0, source: { kind: "assetVersion", assetId: asset.id, versionId: v.id }, clipType: asset.kind, volume: 1, storyShot: shot.id, ...params };
 }
 

@@ -51,9 +51,13 @@ describe("P15 frameOf references: schema and validation", () => {
   it("exports the authored frameOf form and round-trips", () => {
     const doc = ok(raw([{ frameOf: "s1", atSec: 2, role: "start", frameDesc: DESC2 }]));
     const out = JSON.parse(storyDocJson(storyboardToDoc(board.storyboardFromDoc(doc))));
-    expect(out.shots[1].references).toEqual([{ frameOf: "s1", atSec: 2, role: "start", frameDesc: DESC2 }]);
-    expect(out.shots[1].assets).toEqual([]);
-    expect(out.assets).toEqual([]);
+    // Schema 3.1: the reference lives on the shot's automatic clip asset.
+    expect(out.schemaVersion).toBe("3.1");
+    expect(out.shots[1].clip).toBe("s2-clip");
+    expect(out.shots[1].prompt).toBeUndefined();
+    expect(out.shots[1].references).toBeUndefined();
+    expect(out.assets.map((a: { id: string }) => a.id)).toEqual(["s1-clip", "s2-clip", "s3-clip"].slice(0, out.shots.length));
+    expect(out.assets[1].references).toEqual([{ frameOf: "s1", atSec: 2, role: "start", frameDesc: DESC2 }]);
     expect(ok(out).shots[1].references![0].asset).toBe("s2.frameof.s1");
   });
   it("passes the picked frame to the prompt as the start frame or a reference", () => {
