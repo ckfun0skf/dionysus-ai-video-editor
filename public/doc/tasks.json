@@ -2570,6 +2570,12 @@
           "title": "Shot frame references (frameOf, RULE 50): frame picker, required pick step, source-changed warning with dismiss, Prepare references, capture_shot_frame WebMCP tool",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P15-TRIM-PREVIEW",
+          "title": "Shot previews play only the trimmed range of a reused video asset (layer inSec to inSec + duration, looping); shot thumbnails use the frame at inSec; the frame picker limits scrubbing to the source shot's range with a Show full clip toggle",
+          "status": "done",
+          "progress": 100
         }
       ]
     },

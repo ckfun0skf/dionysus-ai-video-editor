@@ -33,6 +33,7 @@ const kindName = (k: MediaKind) => KIND_NAME[k] ?? `a ${k} file`;
 const fmtDate = (iso: string) => { const d = new Date(iso); return Number.isNaN(+d) ? "" : d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); };
 
 /** Details for one shot or asset slot: versions (pick one), upload, prompt to copy, last-frame extraction. */
+const fmtSec = (x: number) => String(Math.round(x * 100) / 100);
 export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, onClose, onOpen, inline, head, onEdit }: {
   project: Project; target: BoardTarget; thumbs: Record<string, string>; engine: Engine; blobs: BlobStore; mobile: boolean;
   onClose: () => void; onOpen: (t: BoardTarget) => void;
@@ -83,6 +84,9 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
   const expectBindings = htmlSlot ? Object.fromEntries(slotBindings(b, htmlSlot).map((x) => [x.name, x.type])) : undefined;
   const packagePrompt = (full: boolean) => htmlClipPackagePrompt(slotPackageInput(b, htmlSlot!), { libs: CLIP_LIBRARIES, specUrl: runtimeAiLinks().htmlClipSpec, full });
   const versions = board.versionsOf(project, owner);
+  // P15-TRIM-PREVIEW: shot previews play only the part of the clip the shot uses, looping.
+  const reuse = shot && !versions.length ? board.shotPlayRange(project, shot) : undefined;
+  const peekRange = (v: AssetVersion) => { const sp = board.versionSpan(b, v); return sp && b.versions[v.id]?.trim ? { inSec: sp.inTicks / TICKS_PER_SECOND, outSec: (sp.inTicks + sp.lenTicks) / TICKS_PER_SECOND } : undefined; };
   const selected = board.selectedOf(project, owner);
   const status = board.storyStatus(project);
   const st = isSlot ? status.slots[owner.id] : status.shots[owner.id];
@@ -267,6 +271,12 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
       {shot && shot.slotIds.filter((id) => b.slots[id]?.source.type === "frameOf").map((id) => <FrameRefBox key={id} project={project} slotId={id} engine={engine} blobs={blobs} compact />)}
       {st?.stale && st.reasons.some((r) => r !== board.FRAME_CHANGED) && <div className="v2-sb-warnbox" role="note"><Warn st={st} /><ul>{st.reasons.filter((r) => r !== board.FRAME_CHANGED).map((r) => <li key={r}>{r}</li>)}</ul><p>Upload a new version made with the current assets, or keep this one if it still looks right.</p></div>}
 
+      {reuse && (
+        <Section title="Shot preview">
+          <div className="v2-sb-vpreview" data-testid="shot-range-preview"><AssetPreview kind="video" name={`${title} (${b.slots[reuse.slotId!]?.name ?? "video"})`} cacheKey={`${reuse.versionId}@${reuse.inSec}`} load={() => blobs.get(reuse.blobKey)} range={reuse} width={project.settings?.width} height={project.settings?.height} /></div>
+          <p className="v2-hint">Plays {fmtSec(reuse.inSec)}–{fmtSec(reuse.outSec)} s of {b.slots[reuse.slotId!]?.name ?? "the video asset"}, looping: the part this shot's video layer uses.</p>
+        </Section>
+      )}
       <Section title={versions.length ? `Versions (${versions.length})` : "Versions"}>
         {versions.length ? (
           <ul className="v2-sb-versions" aria-label="Versions">
@@ -301,7 +311,7 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
             })}
           </ul>
         ) : null}
-        {(() => { const pi = versions.findIndex((x) => x.id === peek), pvv = versions[pi]; return pvv ? <div className="v2-sb-vpreview"><AssetPreview kind={kind as PreviewKind} name={`${title} v${pi + 1}`} cacheKey={pvv.id} load={() => blobs.get(pvv.media.blobKey)} durationSec={kind === "html" ? (shot?.durationSec ?? (pvv.media.durationTicks ? pvv.media.durationTicks / TICKS_PER_SECOND : undefined)) : pvv.media.durationTicks ? pvv.media.durationTicks / TICKS_PER_SECOND : undefined} width={pvv.media.width ?? project.settings?.width} height={pvv.media.height ?? project.settings?.height} /></div> : null; })()}
+        {(() => { const pi = versions.findIndex((x) => x.id === peek), pvv = versions[pi]; return pvv ? <div className="v2-sb-vpreview"><AssetPreview kind={kind as PreviewKind} name={`${title} v${pi + 1}`} cacheKey={pvv.id} load={() => blobs.get(pvv.media.blobKey)} durationSec={kind === "html" ? (shot?.durationSec ?? (pvv.media.durationTicks ? pvv.media.durationTicks / TICKS_PER_SECOND : undefined)) : pvv.media.durationTicks ? pvv.media.durationTicks / TICKS_PER_SECOND : undefined} width={pvv.media.width ?? project.settings?.width} height={pvv.media.height ?? project.settings?.height} range={shot && kind === "video" ? peekRange(pvv) : undefined} /></div> : null; })()}
         {versions.length || slot?.source.type === "frameOf" ? null : <p className="v2-hint">{lf ? `Nothing yet. Use the last frame of shot ${shotNo(lf)} once it has a clip, or upload an image.` : `Nothing yet. ${slot?.source.type === "upload" ? "Upload your file" : jsonAudio ? "Copy the prompt below to your AI and paste its JSON reply, or create it in the Audio editor" : "Generate it in your AI tool with the prompt below"}, then add it here.`}</p>}
         {slot && pins.length > 0 && versions.length > 1 && <p className="v2-hint">{pins.length > 1 ? "Shots" : "Shot"} {pins.map((x) => shotNo(x.shot)).join(", ")} {pins.length > 1 ? "keep their" : "keeps its"} pinned version when you pick another one here.</p>}
         {shot && board.shotLengthMismatch(project, shot) && <p className="v2-sb-lenline"><LengthWarn project={project} shot={shot} /></p>}

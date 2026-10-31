@@ -29,6 +29,15 @@ export function versionLabel(p: Project, o: AssetSlot | Shot, empty: string): st
   return vs.length === 1 ? "1 version" : `v${i + 1} of ${vs.length}`;
 }
 
+/** P15-TRIM-PREVIEW: a shot's card thumbnail: the frame at its in point, else the version's own thumbnail. */
+export function shotThumb(project: Project, s: Shot, thumbs: Record<string, string>): string | undefined {
+  const sel = board.selectedOf(project, s);
+  const r = board.shotPlayRange(project, s);
+  const at = r && thumbs[board.rangeThumbKey(r.versionId, r.inSec)];
+  if (at) return at;
+  if (sel) return thumbs[paramThumbKey(sel, s.params)] ?? thumbs[sel];
+  return r ? thumbs[r.versionId] : undefined;
+}
 export function Thumb({ src, icon, count }: { src?: string; icon: string; count: number }) {
   return (
     <span className={`v2-sb-thumb ${src ? "" : "empty"}`} style={src ? { backgroundImage: `url(${src})` } : undefined}>
@@ -119,7 +128,6 @@ export function BoardView({ project, thumbs, onOpen, openKey, edit, mobile }: { 
       </div>
       <ol className="v2-sb-shots" aria-label="Shots">
         {shots.map((s, i) => {
-          const sel = board.selectedOf(project, s);
           const n = board.versionsOf(project, s).length;
           const next = shots[i + 1];
           const conn = next && storyEdit.connectionBetween(b, s.id, next.id);
@@ -134,7 +142,7 @@ export function BoardView({ project, thumbs, onOpen, openKey, edit, mobile }: { 
                 <button className={`v2-sb-shot-main ${openKey === s.id ? "open" : ""}`} aria-current={openKey === s.id || undefined} onClick={() => onOpen({ shot: s.id })} onKeyDown={(e) => keys(e, s.id, i)}
                   title={edit ? (mobile ? "Open shot · long-press to move or edit" : "Open shot · drag to reorder · right-click for more · Alt+↑/↓ moves") : "Open shot: clip prompt, versions and QA"}
                   aria-keyshortcuts={edit && !mobile ? "Alt+ArrowUp Alt+ArrowDown Delete" : undefined}>
-                  <Thumb src={sel && (thumbs[paramThumbKey(sel, s.params)] ?? thumbs[sel])} icon={shotIcon(s)} count={n} />
+                  <Thumb src={shotThumb(project, s, thumbs)} icon={shotIcon(s)} count={n} />
                   <span className="v2-sb-shot-text">
                     <b><span className="v2-sb-no">{i + 1}</span>{s.title}</b>
                     <em>{s.durationSec}s{s.description ? ` · ${s.description}` : ""}</em>

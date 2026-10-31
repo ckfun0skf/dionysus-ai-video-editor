@@ -13,10 +13,10 @@ const fmt = (s: number) => `${(Math.round(s * 100) / 100).toFixed(2)} s`;
 const shotNoOf = (p: Project, id: string) => (p.storyboard?.order.indexOf(id) ?? -1) + 1;
 
 /** Thumbnails across a clip, for the picker's strip (best effort: an empty strip still lets you scrub). */
-function useThumbs(url: string | undefined, totalSec: number) {
+function useThumbs(url: string | undefined, lo: number, hi: number) {
   const [frames, setFrames] = useState<string[]>([]);
   useEffect(() => {
-    if (!url || !totalSec) return;
+    if (!url || !(hi > lo)) return;
     let dead = false;
     const el = document.createElement("video");
     el.muted = true; el.playsInline = true; el.preload = "auto"; el.src = url;
@@ -30,7 +30,7 @@ function useThumbs(url: string | undefined, totalSec: number) {
         if (!g) return;
         const out: string[] = [];
         for (let i = 0; i < THUMBS && !dead; i += 1) {
-          el.currentTime = (i * totalSec) / THUMBS;
+          el.currentTime = lo + (i * (hi - lo)) / THUMBS;
           await once("seeked");
           out.push((await drawVideoFrame(g, el, w, h)) ? c.toDataURL("image/jpeg", 0.6) : "");
           if (!dead) setFrames([...out]);
@@ -39,7 +39,7 @@ function useThumbs(url: string | undefined, totalSec: number) {
       finally { el.removeAttribute("src"); el.load(); }
     })();
     return () => { dead = true; };
-  }, [url, totalSec]);
+  }, [url, lo, hi]);
   return frames;
 }
 
@@ -64,7 +64,14 @@ export function FramePicker({ project, slotId, engine, blobs, onClose }: { proje
   const vid = useRef<HTMLVideoElement>(null);
   const card = useRef<HTMLDivElement>(null);
   const [host] = useState<Element>(() => document.querySelector(".v2-app") ?? document.body);
-  const thumbs = useThumbs(url, dur);
+  // P15-TRIM-PREVIEW: by default only the part of the source clip its shot uses can be scrubbed; "Show full clip" lifts it.
+  const used = src && version ? board.shotPlayRange(project, src) : undefined;
+  const range = used && used.versionId === version?.id && (used.inSec > 0.01 || (dur > 0 && used.outSec < dur - 0.05)) ? used : undefined;
+  const [full, setFull] = useState(false);
+  const lo = range && !full ? Math.min(range.inSec, dur) : 0;
+  const hi = range && !full ? Math.min(range.outSec, dur || range.outSec) : dur;
+  const len = Math.max(0, hi - lo);
+  const thumbs = useThumbs(url, lo, dur ? hi : 0);
 
   useEffect(() => {
     if (!version) return;
@@ -80,14 +87,15 @@ export function FramePicker({ project, slotId, engine, blobs, onClose }: { proje
 
   const go = (sec: number) => {
     const el = vid.current; if (!el) return;
-    const x = Math.min(Math.max(0, sec), Math.max(0, (dur || el.duration || 0) - 0.01));
+    const x = Math.min(Math.max(lo, sec), Math.max(lo, (hi || el.duration || 0) - 0.01));
     el.pause(); el.currentTime = x; setT(x);
   };
   const onMeta = () => {
     const el = vid.current; if (!el) return;
     const d = Number.isFinite(el.duration) ? el.duration : 0;
     setDur(d);
-    const at = Math.min(Math.max(0, st.atSec ?? 0), Math.max(0, d - 0.04));
+    const r0 = range && !full ? range.inSec : 0, r1 = range && !full ? Math.min(range.outSec, d) : d;
+    const at = Math.min(Math.max(r0, st.atSec ?? r0), Math.max(r0, r1 - 0.04));
     void seekTo(el, at).then(() => setT(at)).catch(() => undefined);
   };
   const grab = async () => {
@@ -131,17 +139,18 @@ export function FramePicker({ project, slotId, engine, blobs, onClose }: { proje
             </div>
             <div className="v2-framepick-scrub">
               <button className="v2-btn v2-sb-btn" aria-label="Previous frame" title="Previous frame (←)" disabled={!dur} onClick={() => go(t - FRAME_STEP_SEC)}><Ic g="step-back" size={16} /></button>
-              <input type="range" min={0} max={dur || 0} step={FRAME_STEP_SEC} value={t} aria-label="Position in the source clip" aria-valuetext={fmt(t)} disabled={!dur} onChange={(e) => go(Number(e.target.value))} />
+              <input type="range" min={lo} max={hi || 0} step={FRAME_STEP_SEC} value={t} aria-label="Position in the source clip" aria-valuetext={fmt(t)} disabled={!dur} onChange={(e) => go(Number(e.target.value))} />
               <button className="v2-btn v2-sb-btn" aria-label="Next frame" title="Next frame (→)" disabled={!dur} onClick={() => go(t + FRAME_STEP_SEC)}><Ic g="step-fwd" size={16} /></button>
-              <span className="v2-framepick-time" aria-live="polite">{fmt(t)}{dur ? ` / ${fmt(dur)}` : ""}</span>
+              <span className="v2-framepick-time" aria-live="polite">{fmt(t)}{dur ? (range && !full ? ` (used part ${fmt(lo)}–${fmt(hi)})` : ` / ${fmt(dur)}`) : ""}</span>
             </div>
             <div className="v2-framepick-strip" role="group" aria-label="Jump to a point in the clip">
               {Array.from({ length: THUMBS }, (_, i) => {
-                const at = dur ? (i * dur) / THUMBS : 0;
-                return <button key={i} className={`v2-framepick-thumb ${dur && t >= at && t < at + dur / THUMBS ? "on" : ""}`} disabled={!dur} aria-label={`Jump to ${fmt(at)}`} onClick={() => go(at)}>{thumbs[i] ? <img src={thumbs[i]} alt="" draggable={false} /> : <span />}</button>;
+                const at = len ? lo + (i * len) / THUMBS : 0;
+                return <button key={i} className={`v2-framepick-thumb ${len && t >= at && t < at + len / THUMBS ? "on" : ""}`} disabled={!dur} aria-label={`Jump to ${fmt(at)}`} onClick={() => go(at)}>{thumbs[i] ? <img src={thumbs[i]} alt="" draggable={false} /> : <span />}</button>;
               })}
             </div>
-            {st.atSec !== undefined && <p className="v2-hint">The storyboard suggests {fmt(st.atSec)}. <button className="v2-linkbtn" onClick={() => go(st.atSec!)}>Go there</button></p>}
+            {range && <label className="v2-framepick-full"><input type="checkbox" checked={full} onChange={(e) => { setFull(e.target.checked); if (!e.target.checked) go(Math.min(Math.max(range.inSec, t), range.outSec - 0.01)); }} /> Show full clip <span className="v2-hint">(Shot {srcNo} uses {fmt(range.inSec)}–{fmt(range.outSec)})</span></label>}
+            {st.atSec !== undefined && (full || !range || (st.atSec >= lo && st.atSec <= hi)) && <p className="v2-hint">The storyboard suggests {fmt(st.atSec)}. <button className="v2-linkbtn" onClick={() => go(st.atSec!)}>Go there</button></p>}
           </>
         )}
         {err && <p className="v2-sb-err" role="alert">{err}</p>}
