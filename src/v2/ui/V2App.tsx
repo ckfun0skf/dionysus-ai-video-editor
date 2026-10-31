@@ -56,12 +56,14 @@ import { clampSizes, DEFAULT_SIZES, LIMITS, loadSizes, previewCanvasSize, saveSi
 import { readDragItem } from "./desktop/dnd";
 import "./desktop/desktop.css";
 import { ContextMenu, type MenuItem } from "./desktop/ContextMenu";
+import { PromoteSheet } from "./PromoteSheet";
 import { ShortcutsOverlay } from "./desktop/ShortcutsOverlay";
 import { DesktopTooltips } from "./desktop/Tooltip";
 import { editPoints, jumpEditPoint, MOD, shuttleLabel, shuttleNext, splitTargets } from "./desktop/shortcuts";
 import { type Sticker } from "./libraryItems";
 import { text as textDomain } from "../domain";
 import { canChromaKey, CHROMA_DEFAULT, hasSound } from "../domain";
+import { promote } from "../domain";
 import { AudioFxPanel, ChromaKeyPanel, VolumeCurve } from "./SoundAndKey";
 import { SpatialPad } from "./SpatialPad";
 import { mediaKey } from "./useMedia";
@@ -128,6 +130,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const [matchOpen, setMatchOpen] = useState(false);
   /** V2-SB-133: the phone "In point" sheet. */
   const [inOpen, setInOpen] = useState(false);
+  /** P20: clip id whose "Promote to main track" sheet is open. */
+  const [promoteFor, setPromoteFor] = useState<string>();
   // P3B: chroma key / volume curve / audio FX sheets (phone) and the eyedropper (the clip id being picked for).
   const [ckOpen, setCkOpen] = useState(false);
   const [vcOpen, setVcOpen] = useState(false);
@@ -669,6 +673,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const linkActions = selected && !selIsMain ? [selLinked
     ? { icon: "🔗", label: "Unlink", title: "Linked to a main clip: it moves, trims and deletes with it. Tap to unlink", run: () => { engine.dispatch(cmd.setClipLink(selected.placement.id, false)); setToast("Unlinked from the main clip"); } }
     : { icon: "🔗", label: "Link to main", title: "Link to the main clip under this clip's start: it then moves, trims and deletes with it", run: () => setToast(engine.dispatch(cmd.setClipLink(selected.placement.id, true)) ? "Linked to the main clip" : "No main clip under this clip's start to link to") }] : [];
+  // P20: overlay video / image / HTML clips can move onto the main track.
+  const promoteActions = selected && !selIsMain && promote.canPromote(comp, selected.placement.id) ? [{ icon: "⤓", label: "Promote to main", title: "Promote to main track: replace what the main track shows here, or insert it and move later clips", run: () => setPromoteFor(selected.placement.id) }] : [];
   const pasteAction = { icon: "📋", label: "Paste", title: hasClip ? "Paste at the playhead (⌘/Ctrl+V)" : "Copy a clip first", run: paste };
 
   // Linked audio (owned child of a video clip): extract / duplicate / mute-restore. All undoable commands.
@@ -792,6 +798,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       ...(speedSelect ? [tool("⏩", `Speed ${sp!.speed ?? 1}×`, () => setMenu("speed"), "speed", "Playback speed")] : []),
       ...(inPointable ? [tool("⇤", "In point", () => setInOpen(true), "in-point", "Where the clip starts in its video (slip)")] : []),
       ...linkActions.map((a) => linkTool(a)),
+      ...promoteActions.map((a) => tool(a.icon, a.label, a.run, "promote", a.title)),
       tool("☑", "Select", () => setMultiMode(true), "multi", "Select several clips"),
       ...[...clipActions, ...timeActions, ...linkedAudioActions].map((a) => tool(a.icon, a.label, a.run, a.label, a.title)),
       ...(!["image", "html", "text"].includes(selected.placement.clipType) ? [
@@ -884,9 +891,10 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     const pl = selected.placement, kind = pl.clipType;
     const sub = `${formatTimecode(pl.startTicks, fpsNow).slice(0, 8)} · ${(pl.durationTicks / 120000).toFixed(1)}s`;
     const base = { icon: KIND_ICON[kind] ?? "▭", title: clipName(pl), subtitle: sub, onDone: () => setSelectedId(undefined) };
-    const linkSec = linkActions.length ? <section className="v2-psettings v2-link-sec" aria-label="Link to main"><h4>Link to main</h4>
+    const promoteSec = promoteActions.length ? <section className="v2-psettings v2-promote-sec" aria-label="Main track"><h4>Main track</h4><button className="v2-btn v2-link-btn" data-testid="promote-panel" title={promoteActions[0].title} onClick={promoteActions[0].run}>⤓ Promote to main track</button></section> : null;
+    const linkSec = linkActions.length ? <><section className="v2-psettings v2-link-sec" aria-label="Link to main"><h4>Link to main</h4>
       <button className={`v2-btn v2-link-btn ${selLinked ? "is-active" : ""}`} role="switch" aria-checked={!!selLinked} title={linkActions[0].title} onClick={linkActions[0].run}>🔗 {selLinked ? `Linked to ${clipName(findPlacement(comp, selLinked.parent)?.placement ?? pl)}` : "Link to main"}</button>
-    </section> : null;
+    </section>{promoteSec}</> : null;
     const transform: InspectorTab = { id: "basic", label: "Basic", icon: "⤧", render: () => kind === "video" && !pl.freeze && !linkSec ? <>
       <section className="v2-psettings v2-frames-sec" aria-label="In and out frames"><h4>In / out frames</h4><ClipFrames engine={engine} project={project} placement={pl} /></section>
       <TransformInspector engine={engine} placement={pl} time={time} />
@@ -985,6 +993,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       { label: "Paste at playhead", icon: "📋", shortcut: k("V"), disabled: !hasClip, onSelect: paste },
       { label: `Duplicate${many}`, icon: "⧉", shortcut: k("D"), onSelect: duplicate },
       ...(p.clipType === "video" && !p.freeze && sel.length === 1 ? [{ label: "Freeze frame", icon: "❄", shortcut: "F", disabled: !inside, onSelect: () => { engine.dispatch(cmd.freezeFrame(p.id, t)); setToast("Freeze frame inserted (3 s)"); } }] : []),
+      ...(sel.length <= 1 && promote.canPromote(comp, p.id) ? [{ label: "Promote to main track…", icon: "⤓", onSelect: () => setPromoteFor(p.id) }] : []),
       ...(ctxLink && sel.length === 1 ? [{ label: "Open in storyboard", icon: "board", onSelect: () => openStory(ctxLink.target) }] : []),
       ...(p.clipType === "html" && sel.length === 1 ? [{ label: "Edit code…", icon: "✎", onSelect: () => void openCode() }] : []),
       "sep",
@@ -1079,6 +1088,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       {!mobile && kbdOpen && <ShortcutsOverlay onClose={() => setKbdOpen(false)} />}
       {!mobile && ctx && <ContextMenu x={ctx.x} y={ctx.y} label={ctx.placementId ? "Clip actions" : "Track actions"} items={ctxItems()} onClose={() => setCtx(undefined)} />}
       {toast && <div className={`v2-toast ${toastUndo ? "has-undo" : ""}`} role="status" onClick={() => setToast(undefined)}><span>{toast}</span>{toastUndo && <button className="v2-toast-undo" title={`Undo (${MOD} Z)`} onClick={(e) => { e.stopPropagation(); engine.undo(); setToast(undefined); }}>Undo</button>}</div>}
+      {promoteFor && findPlacement(comp, promoteFor) && <PromoteSheet engine={engine} project={project} clipId={promoteFor} onDone={(m) => { setPromoteFor(undefined); if (m) setToast(m); }} />}
       {syncOpen && <SyncSheet engine={engine} project={project} onDone={(m) => { setSyncOpen(false); if (m) setToast(m); }} />}
       {projOpen && <Sheet label="Project settings" className="v2-msheet-insp" onClose={() => setProjOpen(false)}><MobileProjectSettings engine={engine} project={project} onSeries={() => { setProjOpen(false); setSeriesLib(true); }} /></Sheet>}
       {mobile ? (

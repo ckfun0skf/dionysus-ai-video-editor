@@ -5,7 +5,7 @@
  * audio clipping / silence (the export audio mix).
  */
 import { captureFrameAt, storePickedFrame } from "../storyboard/frameCapture";
-import { audioOutputOf, board, findPlacement, newId, panToAzimuth, positionErrors, secondsToTicks, timelineReview, type Placement, type Project } from "../../domain";
+import { audioOutputOf, board, ops, promote, findPlacement, newId, panToAzimuth, positionErrors, secondsToTicks, timelineReview, type Placement, type Project } from "../../domain";
 import { getPreset, listPresets } from "../../registry";
 import { cmd, type Command, type Engine } from "../../engine";
 import type { BlobStore } from "../../ports";
@@ -259,6 +259,20 @@ export async function runTimelineTool(engine: Engine, source: FrameSource | unde
       if (at <= pl.startTicks || at >= pl.startTicks + pl.durationTicks) return fail(`${t}s is not inside clip ${id} (${pl.startTicks / 120000}s–${(pl.startTicks + pl.durationTicks) / 120000}s).`);
       const nid = newId("plc");
       return edit(cmd.splitPlacement(id, at, nid), [id, nid]);
+    }
+    case "promote_overlay": {
+      const id = s("clipId"), comp = rootOf(project());
+      if (!id || !findPlacement(comp, id)) return fail(`No clip "${id ?? ""}". Call get_timeline for clip ids.`);
+      if (!promote.canPromote(comp, id)) return fail(`Clip ${id} is not a video, image or HTML clip on an overlay track.`);
+      const mode = a.mode === undefined ? "replace" : a.mode, position = a.position;
+      if (mode !== "replace" && mode !== "insert") return fail('"mode" must be "replace" or "insert".');
+      if (position !== undefined && position !== "before" && position !== "after") return fail('"position" must be "before" or "after".');
+      const opts = { mode, position, keepTransform: a.keepTransform !== false } as promote.PromoteOptions;
+      const { plan } = promote.promoteOverlay(comp, id, opts);
+      if (plan.inside && !position) return fail(`Clip ${id} starts inside main clip ${plan.inside.id} (${plan.inside.startTicks / 120000}s–${plan.inside.endTicks / 120000}s): call again with position "before" or "after".`);
+      const changed = engine.dispatch(cmd.promoteOverlay(id, opts), name);
+      const main = ops.mainTrack(rootOf(project()));
+      return { ok: true, changed, text: JSON.stringify({ notes: plan.notes, mainTrack: main?.placements.map((x) => clip(x.id)) }, null, 1) };
     }
     case "delete_clip": {
       const ids = Array.isArray(a.ids) ? a.ids.filter((x): x is string => typeof x === "string") : [];

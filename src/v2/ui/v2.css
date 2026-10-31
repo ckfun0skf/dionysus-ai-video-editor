@@ -1173,3 +1173,19 @@ select.v2-tp-field { -webkit-appearance: none; appearance: none; padding-right: 
 /* Sliders adjust on horizontal drags; vertical pans scroll the sheet. */
 .v2-sheet input[type=range], .v2-sb-actsheet input[type=range], .v2-picker input[type=range] { touch-action: pan-y; }
 .v2-sb-actsheet { max-height: 80dvh; overscroll-behavior: contain; }
+
+/* P20 Promote to main track */
+.v2-promote { width: min(560px, 94vw); max-height: 88vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.v2-promote .v2-seg { display: flex; gap: 6px; margin: 4px 0 8px; flex-wrap: wrap; }
+.v2-promote .v2-seg-btn { min-height: 44px; flex: 1 1 0; }
+.v2-promote-help, .v2-promote-pos p { font-size: 13px; color: var(--muted); margin: 0 0 8px; }
+.v2-promote-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+.v2-promote-lbl { width: 48px; font-size: 12px; color: var(--muted); flex: none; }
+.v2-promote-track { position: relative; flex: 1; height: 30px; background: rgba(255,255,255,.05); border-radius: 6px; overflow: hidden; }
+.v2-promote-seg { position: absolute; top: 2px; bottom: 2px; background: #3a5f8f; border: 1px solid rgba(255,255,255,.25); border-radius: 4px; overflow: hidden; display: flex; align-items: center; }
+.v2-promote-seg.is-promoted { background: #c4842b; }
+.v2-promote-seg i { font-style: normal; font-size: 11px; padding: 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.v2-promote-keep { display: flex; align-items: center; gap: 8px; min-height: 44px; font-size: 14px; }
+.v2-promote-keep input { width: 22px; height: 22px; }
+.v2-promote-warn { color: #f0b45a !important; }
+.v2-promote .v2-confirm-actions .v2-btn { min-height: 44px; }

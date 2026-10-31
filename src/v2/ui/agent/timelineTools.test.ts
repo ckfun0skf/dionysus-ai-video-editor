@@ -176,4 +176,24 @@ describe("P14 spatial set_clip_props", () => {
     r = await runTimelineTool(e, undefined, "set_clip_props", { id: "au", position: null, positionKeys: null });
     expect(findPlacement(root(e.getState().project), "au")!.placement.position).toBeUndefined();
   });
+
+  it("P20 promote_overlay: replace splits the main clip; insert inside a clip asks for a position; one undo step", async () => {
+    const e = setup();
+    e.dispatch(cmd.addTrack("video"));
+    const main = (p: Project) => root(p).tracks.filter((t) => t.kind === "video").at(-1)!;
+    const ov = root(e.getState().project).tracks.find((t) => t.kind === "video" && t.id !== main(e.getState().project).id)!;
+    e.dispatch(cmd.addAssetToTimeline("w", s(4), ov.id, "o1"));
+    let r = await runTimelineTool(e, undefined, "promote_overlay", { clipId: "c1" });
+    expect(r.ok).toBe(false);
+    r = await runTimelineTool(e, undefined, "promote_overlay", { clipId: "o1", mode: "insert" });
+    expect(r.ok).toBe(false);
+    expect(r.text).toContain('position "before" or "after"');
+    r = await runTimelineTool(e, undefined, "promote_overlay", { clipId: "o1" });
+    expect(r.ok && r.changed).toBe(true);
+    expect(json(r.text).mainTrack.map((c: { start: number; duration: number }) => [c.start, c.duration])).toEqual([[0, 4], [4, 4], [8, 2]]);
+    e.undo();
+    r = await runTimelineTool(e, undefined, "promote_overlay", { clipId: "o1", mode: "insert", position: "after" });
+    expect(json(r.text).mainTrack.map((c: { id: string; start: number }) => [c.id, c.start])).toEqual([["c1", 0], ["o1", 10]]);
+    expect(ALL_AGENT_TOOLS.some((t) => t.name === "promote_overlay")).toBe(true);
+  });
 });
