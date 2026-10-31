@@ -4,7 +4,7 @@
  * whole revised document, which the app merges in one undo step.
  */
 import { extractJson, storyDocJson, validateStoryboard, type StoryDoc, type StoryIssue, type StoryValidateOptions } from "./storyJson";
-import { RULE_LIST, ruleNumber } from "./storyPrompt";
+import { FORMAT_SECTION, RULE_LIST, ruleNumber } from "./storyPrompt";
 import type { Project } from "./model";
 
 export const INSERT_SCHEMA = "3.1-insert";
@@ -25,13 +25,22 @@ export const EXAMPLE_INSERT = {
   insertAfter: "s2",
   shots: [
     { id: "s2b", title: "Close on the lantern", description: "Close-up: the keeper's hand turns the lantern key.", durationSec: 3, clip: "s2b-clip", inSec: 0 },
-    { id: "s2c", title: "Reaction", description: "The keeper looks up at the sea.", durationSec: 2.5, clip: "s2-clip", inSec: 4 },
+    { id: "s2c", title: "Reaction", description: "The keeper looks up at the sea.", durationSec: 2.5, clip: "s2-clip", inSec: 4,
+      dialogue: [{ speaker: "KEEPER", text: "Hold on." }, { speaker: "RADIO", text: "Storm front in ten minutes.", offscreen: true }], captions: true,
+      layers: [{ id: "s2c-time", type: "text", text: "21:04", startSec: 0, endSec: 2.5, position: { x: 0.85, y: 0.1 } }] },
   ],
   newAssets: [
     { id: "s2b-clip", type: "video", name: "Lantern key close-up", aspect: "16:9", assets: ["keeper", "lantern"],
       prompt: "References: Image 1 = the keeper, Image 2 = the lantern. Close-up of an old hand turning a brass key on the lantern, warm light, slow push-in." },
   ],
 } as const;
+
+/** The 3.1 format from "assets" on (assets, shots, connections, audio, Layer, Param, TextStyle), shared with the main prompt. */
+export function insertSchema(): string {
+  const f = FORMAT_SECTION();
+  const i = f.indexOf('  "assets": [');
+  return i < 0 ? f : `{\n${f.slice(i)}`;
+}
 
 /** The base document in authored 3.1 form (assets with clips, shots naming their clip). */
 export function rawDoc(doc: StoryDoc): Raw { return JSON.parse(storyDocJson(doc)) as Raw; }
@@ -90,6 +99,9 @@ export function buildInsertPrompt(doc: StoryDoc, afterId: string, lastDesc: stri
     ``,
     `GUIDE RULES:`,
     ...rules,
+    ``,
+    `SCHEMA (exact field names; the app ignores unknown fields, so never invent or rename one: a dialogue line is {"speaker", "text", "offscreen"}, never "character", "name" or "line"; a layer always has "id" and "type"; times are "startSec"/"endSec" in seconds from the shot start). Shots, new assets and audio cues use these forms (the storyboard's "meta" is not part of an insert):`,
+    insertSchema(),
     ``,
     `OUTPUT FORMAT: answer with ONE JSON object and nothing else:`,
     `{"schema":"${INSERT_SCHEMA}","insertAfter":"${afterId}","shots":[...],"newAssets":[...]}`,
