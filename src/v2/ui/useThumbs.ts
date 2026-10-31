@@ -36,7 +36,8 @@ export function useThumbs(project: Project, blobs: BlobStore): Record<string, st
   }, [project.assets, cache]);
 }
 
-export async function grab(kind: string, blob: Blob): Promise<string | undefined> {
+/** A small JPEG of an image, or of a video frame at `atSec` (default: about 0.1 s in). */
+export async function grab(kind: string, blob: Blob, atSec?: number): Promise<string | undefined> {
   const url = URL.createObjectURL(blob);
   try {
     const el = kind === "image" ? new Image() : document.createElement("video");
@@ -45,7 +46,7 @@ export async function grab(kind: string, blob: Blob): Promise<string | undefined
       const done = () => { clearTimeout(t); res(); };
       if (el instanceof HTMLVideoElement) {
         el.muted = true; el.preload = "auto";
-        el.onloadeddata = () => { el.currentTime = Math.min(0.1, (el.duration || 1) / 2); };
+        el.onloadeddata = () => { const d = Number.isFinite(el.duration) ? el.duration : 0; el.currentTime = atSec !== undefined && atSec > 0 ? Math.min(atSec, Math.max(0, d - 0.04)) : Math.min(0.1, (d || 1) / 2); };
         el.onseeked = done;
       } else el.onload = done;
       el.onerror = () => { clearTimeout(t); rej(new Error("thumb error")); };

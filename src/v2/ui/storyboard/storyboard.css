@@ -451,6 +451,7 @@ button.v2-sb-conn:focus-visible { outline: 2px solid var(--accent); outline-offs
 .v2-framepick-scrub { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
 .v2-framepick-scrub input[type=range] { flex: 1; min-width: 120px; height: 44px; touch-action: none; }
 .v2-framepick-time { font-variant-numeric: tabular-nums; font-size: 13px; color: var(--muted, #aaa); min-width: 110px; text-align: right; }
+.v2-framepick-full { display: flex; align-items: center; gap: 6px; font-size: 13px; margin: 6px 0; min-height: 32px; }
 .v2-framepick-strip { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; margin-top: 10px; }
 .v2-framepick-thumb { min-height: 44px; padding: 0; border: 2px solid transparent; border-radius: 6px; overflow: hidden; background: #ffffff10; cursor: pointer; }
 .v2-framepick-thumb.on { border-color: var(--accent); }

@@ -75,9 +75,36 @@ export function WaveStrip({ peaks, durSec, height = 56, from, to, at, label = "W
  * P2C (item 7): a playable preview of one asset version: video and audio play (audio with its waveform), images show,
  * HTML (code) clips play live in the same sandbox as the timeline (params at their defaults unless given).
  */
-export function AssetPreview({ kind, load, cacheKey, name, durationSec, width, height }: {
+/** P15-TRIM-PREVIEW: the part of a video a preview plays, looping, in seconds. */
+export interface PlayRange { inSec: number; outSec: number }
+/**
+ * Keeps a playing video inside `r`: before the in point or at/after the out point it seeks back to the in point (and
+ * keeps playing when it was playing, so the range loops). Returns true when it seeked.
+ */
+export function clampToRange(el: HTMLVideoElement, r: PlayRange | undefined): boolean {
+  if (!r || !(r.outSec > r.inSec)) return false;
+  const t = el.currentTime;
+  if (t >= r.inSec - 0.05 && t < r.outSec - 0.01) return false;
+  el.currentTime = r.inSec;
+  return true;
+}
+/** A video preview limited to `range` (looping in it), or the whole clip. Starts at the in point. */
+export function RangeVideo({ src, range, label }: { src?: string; range?: PlayRange; label: string }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  return (
+    <video ref={ref} src={src} controls playsInline preload="metadata" aria-label={label} loop={!range} data-in={range?.inSec} data-out={range?.outSec}
+      onLoadedMetadata={(e) => { if (range) e.currentTarget.currentTime = range.inSec; }}
+      onTimeUpdate={(e) => clampToRange(e.currentTarget, range)}
+      onSeeking={(e) => clampToRange(e.currentTarget, range)}
+      onEnded={(e) => { if (range) { const el = e.currentTarget; el.currentTime = range.inSec; void el.play()?.catch(() => undefined); } }} />
+  );
+}
+
+export function AssetPreview({ kind, load, cacheKey, name, durationSec, width, height, range }: {
   kind: PreviewKind; load: () => Promise<Blob | undefined>; cacheKey: string; name: string;
   durationSec?: number; width?: number; height?: number;
+  /** P15-TRIM-PREVIEW: video only: play just this part, looping. */
+  range?: PlayRange;
 }) {
   const st = usePreviewBlob(load, kind, cacheKey);
   const peaks = usePeaks(kind === "audio" ? st.blob : undefined);
@@ -88,7 +115,7 @@ export function AssetPreview({ kind, load, cacheKey, name, durationSec, width, h
   if (!st.url && st.html === undefined) return <div className="v2-asset-preview is-loading" aria-busy="true"><span className="v2-hint">Loading preview…</span></div>;
   return (
     <div className={`v2-asset-preview kind-${kind}`} data-testid="asset-preview" data-kind={kind}>
-      {kind === "video" && <video src={st.url} controls playsInline preload="metadata" aria-label={`Preview of ${name}`} />}
+      {kind === "video" && (range ? <RangeVideo src={st.url} range={range} label={`Preview of ${name}`} /> : <video src={st.url} controls playsInline preload="metadata" aria-label={`Preview of ${name}`} />)}
       {kind === "image" && <img src={st.url} alt={name} />}
       {kind === "audio" && (
         <>

@@ -281,6 +281,44 @@ export function versionsOf(p: Project, owner: { assetId?: string }): AssetVersio
   return (owner.assetId && p.assets[owner.assetId]?.versions) || [];
 }
 
+/**
+ * P15-TRIM-PREVIEW: the part of a clip a shot actually plays, for its storyboard previews and thumbnail.
+ * - A shot with its own video clip plays that version's trim (the whole clip when untrimmed).
+ * - A shot without its own clip that reuses a video asset through a video layer plays the layer's range of that
+ *   asset: from `inSec` (absent = the version's trim in point, else 0) for the layer's length, i.e. `durationSec`
+ *   for a layer that spans the shot. The range is clamped to the clip's duration.
+ */
+export interface ShotPlayRange { slotId?: string; versionId: string; blobKey: string; inSec: number; outSec: number; fromLayer: boolean }
+export function shotPlayRange(p: Project, shot: Shot | undefined): ShotPlayRange | undefined {
+  const b = p.storyboard;
+  if (!b || !shot) return undefined;
+  const own = selectedOf(p, shot), ownAsset = shot.assetId ? p.assets[shot.assetId] : undefined;
+  const ownV = ownAsset?.versions.find((v) => v.id === own);
+  if (ownV) {
+    if (ownAsset!.kind !== "video") return undefined;
+    const span = versionSpan(b, ownV);
+    if (!span) return undefined;
+    return { versionId: ownV.id, blobKey: ownV.media.blobKey, inSec: span.inTicks / TICKS_PER_SECOND, outSec: (span.inTicks + span.lenTicks) / TICKS_PER_SECOND, fromLayer: false };
+  }
+  for (const l of shot.layers ?? []) {
+    if (l.type !== "video") continue;
+    const slot = b.slots[l.asset];
+    const vid = slot && refVersionOf(p, shot, slot.id);
+    const v = vid ? versionsOf(p, slot).find((x) => x.id === vid) : undefined;
+    const d = v?.media.durationTicks;
+    if (!v || !d) continue;
+    const durSec = d / TICKS_PER_SECOND;
+    const span = versionSpan(b, v)!;
+    const len = Math.max(0, Math.min(shot.durationSec, (l.endSec ?? shot.durationSec) - (l.startSec ?? 0)));
+    const inSec = Math.min(Math.max(0, l.inSec ?? span.inTicks / TICKS_PER_SECOND), Math.max(0, durSec - 0.04));
+    return { slotId: slot.id, versionId: v.id, blobKey: v.media.blobKey, inSec, outSec: Math.min(durSec, inSec + (len || shot.durationSec)), fromLayer: true };
+  }
+  return undefined;
+}
+
+/** Thumbnail key for a version's frame at `sec` (P15-TRIM-PREVIEW: a shot's thumbnail at its in point). */
+export const rangeThumbKey = (versionId: string, sec: number) => (sec > 0 ? `${versionId}@${Math.round(sec * 1000) / 1000}` : versionId);
+
 /** The version a shot pins for reference slot `slotId`, when the pin is valid (V2-CUT-05). */
 export function pinOf(p: Project, shot: Shot | undefined, slotId: string): string | undefined {
   const v = shot?.refOverrides?.[slotId];

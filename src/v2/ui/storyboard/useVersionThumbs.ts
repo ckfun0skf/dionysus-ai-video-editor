@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { Project } from "../../domain";
+import { board, type Project } from "../../domain";
 import type { BlobStore } from "../../ports";
 import { grab } from "../useThumbs";
 import { grabHtml } from "../htmlThumb";
@@ -32,6 +32,17 @@ export function useVersionThumbs(project: Project, blobs: BlobStore): Record<str
           .then((url) => { if (mounted.current && url) setThumbs((t) => ({ ...t, [key]: url })); })
           .catch(() => started.current.delete(key));
       }
+    }
+    // P15-TRIM-PREVIEW: a shot's thumbnail is the frame at its in point (its trim, or a reused asset's layer inSec).
+    for (const shot of Object.values(b.shots)) {
+      const r = board.shotPlayRange(project, shot);
+      if (!r || r.inSec <= 0) continue;
+      const key = board.rangeThumbKey(r.versionId, r.inSec);
+      if (started.current.has(key)) continue;
+      started.current.add(key);
+      void blobs.get(r.blobKey).then((blob) => blob && grab("video", blob, r.inSec))
+        .then((url) => { if (mounted.current && url) setThumbs((t) => ({ ...t, [key]: url })); })
+        .catch(() => started.current.delete(key));
     }
   }, [project.storyboard, project.assets, blobs]);
   return thumbs;
