@@ -12,6 +12,7 @@
 import type { HtmlParamValues } from "./htmlClipPackage";
 import type { Project } from "./model";
 import type { AssetSlot, QaCheck, Shot, Storyboard } from "./storyboard";
+import { setClipSource, type ClipSource } from "./clipSource";
 import { addSlot, withRefs, type SlotPatch } from "./storyRefs";
 import { backgroundId, dialogueText, hasOffscreenMark, parseDialogueText, type ConnectionKind, type StoryConnection, type StoryEffect, type StoryLayer, type StoryTransition, type StoryBackground } from "./storyJson";
 
@@ -100,6 +101,8 @@ export interface ShotPatch {
   newSlots?: { id: string; patch: SlotPatch }[];
   /** P2C (item 4): render "html": per-use param values (overrides of the clip's defaults); null or {} clears them. */
   params?: HtmlParamValues | null;
+  /** P17: switch an AI shot's clip source (own clip, reuse a clip, or share its own clip); applied first. */
+  clipSource?: ClipSource;
   /** P16: the prompt of the shot's shared video clip (schema 3.1 `clip`); it changes every shot that plays the clip. */
   clipPrompt?: string;
   /** P16: in point (seconds) into the shot's shared video clip; clamped to 0 or more. */
@@ -129,6 +132,7 @@ export function addShot(p: Project, id: string, init: ShotPatch = {}, afterId?: 
 /** Apply edits to a shot. Shortening it fits its layers and effects into the new length. */
 export function updateShot(p: Project, id: string, patch: ShotPatch): Project {
   if (!p.storyboard?.shots[id]) return p;
+  if (patch.clipSource) p = setClipSource(p, id, patch.clipSource);
   for (const ns of patch.newSlots ?? []) p = addSlot(p, ns.id, ns.patch);
   const b = p.storyboard!, s = b.shots[id];
   let n: Shot = patch.slotIds ? withRefs(b, s, patch.slotIds) : { ...s };

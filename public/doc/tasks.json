@@ -2582,6 +2582,12 @@
           "title": "Schema 3.1 clip-centric storyboard (RULE 51): prompts, references and versions live on video clip assets; shots reference a clip with inSec; 3.0 import auto-migrates shot prompts into single-use clips; per-clip production steps; shot cards show Clip A with its range, reuse state and trim-only controls; shared prompt edits warn which shots they affect; the small Pick frame button opens the frame picker directly",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P17-CLIP-SOURCE",
+          "title": "Shot editor Clip source: New clip (prompt) or Reuse clip (picker with thumbnail, label, first-use shot, state and length; in point and duration steppers). New shot using this clip, confirm before an own clip is replaced, Make this shot's clip shareable, Clip labels in Production steps, one-time schema 3.0 migration notice",
+          "status": "done",
+          "progress": 100
         }
       ]
     },

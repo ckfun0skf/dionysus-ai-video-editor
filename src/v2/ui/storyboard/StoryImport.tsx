@@ -17,6 +17,9 @@ function readFileText(f: Blob): Promise<string> {
 }
 
 /** Copy button that confirms for 2 s. */
+/** P17: set once the schema 3.0 migration notice was dismissed. */
+export const MIGRATION_NOTICE_KEY = "dionysus.v2.schema30Notice";
+
 export function CopyButton({ text, label, primary, testId }: { text: () => string; label: string; primary?: boolean; testId?: string }) {
   const [state, setState] = useState<"idle" | "ok" | "fail">("idle");
   useEffect(() => { if (state === "idle") return; const t = setTimeout(() => setState("idle"), 2000); return () => clearTimeout(t); }, [state]);
@@ -85,6 +88,13 @@ export function ImportPanel({ onCreate, replacing, diffFor, onMerge, base, serie
   }, [text, part, base, series]);
   // Paths in a merged part point into the merged board, not the pasted text, so they aren't linked.
   const locs = useMemo(() => (result && !part ? (result.ok ? result.warnings : result.errors).map((e) => story.locateIssue(text, e)) : []), [result, text, part]);
+  // P17: a one-time notice that a schema 3.0 file is read and saved in the clip-centric 3.1 form.
+  const legacy = useMemo(() => {
+    if (!result?.ok || part) return false;
+    try { const v = (JSON.parse(text) as { schemaVersion?: unknown }).schemaVersion; return v === undefined || v === "3.0"; } catch { return false; }
+  }, [result, text, part]);
+  const [migSeen, setMigSeen] = useState(() => { try { return localStorage.getItem(MIGRATION_NOTICE_KEY) === "1"; } catch { return false; } });
+  const dismissMig = () => { setMigSeen(true); try { localStorage.setItem(MIGRATION_NOTICE_KEY, "1"); } catch { /* private mode: shown again next time */ } };
   const diff = useMemo(() => (result?.ok && diffFor ? diffFor(result.doc) : undefined), [result, diffFor]);
   const pick = async (f?: File) => { if (!f) return; setFile(f.name); setText(await readFileText(f)); };
   const paste = async () => { try { const t = await navigator.clipboard.readText(); if (t) { setFile(undefined); setText(t); } } catch { /* permission denied: user can long-press paste */ } };
@@ -115,6 +125,12 @@ export function ImportPanel({ onCreate, replacing, diffFor, onMerge, base, serie
           <h4><Ic g="ok" size={16} /> {result.doc.meta.title}</h4>
           {part?.counts && <p className="v2-sb-part" data-testid="story-part">Storyboard part{partLabel(text)}: {partText(part.counts)}, merged into the current board by id. Below is the whole board after the merge.</p>}
           <p className="v2-sb-sum">{story.storySummary(result.doc)}</p>
+          {legacy && !migSeen && (
+            <div className="v2-sb-part v2-sb-migrated" role="status" data-testid="schema-migrated">
+              <span><Ic g="ⓘ" size={14} /> This file uses storyboard schema 3.0. It is converted to schema 3.1, where prompts belong to clips: each AI shot gets its own clip (Clip A, Clip B…), and the next export is saved as 3.1. To play one clip in several shots, edit a shot and choose Reuse clip.</span>
+              <button type="button" className="v2-btn v2-sb-btn" onClick={dismissMig}>Got it</button>
+            </div>
+          )}
           {(() => {
             const linked = result.doc.assets.filter((a) => a.seriesRef).length, added = result.doc.assets.filter((a) => a.series).length;
             return linked || added ? <p className="v2-sb-part" data-testid="story-series"><Ic g="link" size={14} /> Series{series ? ` “${series.name}”` : ""}: {[linked && `${linked} linked asset${linked === 1 ? "" : "s"}`, added && `${added} to add${series ? "" : " (when the project joins a series)"}`].filter(Boolean).join(" · ")}</p> : null;

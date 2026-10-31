@@ -86,20 +86,21 @@ describe("P16 clip-centric shot UI", () => {
     expect(pl.map((x) => x.sourceInTicks)).toContain(6 * T);
   });
 
-  it("editing a shared clip's prompt from a shot warns which shots it affects and changes the clip", async () => {
+  it("editing a reuse shot hides the clip prompt, and Save keeps the link and the in point (P17 regression)", async () => {
     const { el, p } = await mount();
     await open(el, "s3");
     const edit = [...dialog().querySelectorAll("button")].find((b) => b.textContent?.trim().startsWith("Edit"))!;
     await act(async () => edit.click()); await wait();
-    const ta = [...document.querySelectorAll("label")].find((l) => l.textContent?.startsWith("Clip prompt · Clip B"))!.querySelector("textarea")!;
-    expect(ta.value).toBe("Wide shot of the climb.");
-    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
-    await act(async () => { setter.call(ta, "Wide shot, golden hour."); ta.dispatchEvent(new Event("input", { bubbles: true })); });
-    expect(document.querySelector('[data-testid="clip-affects"]')!.textContent).toContain("Affects Shot 2, Shot 3");
+    const reuse = document.querySelector('[role="radiogroup"][aria-label="Clip source"] [aria-checked="true"]')!;
+    expect(reuse.textContent).toContain("Reuse clip");
+    expect([...document.querySelectorAll("label")].some((l) => l.textContent?.startsWith("Clip prompt"))).toBe(false);
+    await act(async () => (document.querySelector('[aria-label="In point later"]') as HTMLButtonElement).click());
     const done = [...document.querySelectorAll("button")].find((b) => /^(Done|Save)$/.test(b.textContent?.trim() ?? ""))!;
+    expect(done.disabled).toBe(false);
     await act(async () => done.click());
-    expect(p().storyboard!.slots.wide.prompt).toBe("Wide shot, golden hour.");
     expect(p().storyboard!.shots.s3.clipSlot).toBe("wide");
+    expect(p().storyboard!.shots.s3.clipInSec).toBe(6.5);
+    expect(p().storyboard!.slots.wide.prompt).toBe("Wide shot of the climb.");
   });
 
   it("the small Pick frame button in shot detail opens the frame picker directly", async () => {

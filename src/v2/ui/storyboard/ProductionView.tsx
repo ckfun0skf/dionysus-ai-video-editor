@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { board, storySteps, type Project, type ProductionStep, type StepState } from "../../domain";
 import { cmd, type Engine } from "../../engine";
 import type { BlobStore } from "../../ports";
@@ -27,7 +27,13 @@ export function ProductionView({ project, thumbs, engine, blobs, mobile, onNote 
   const [cur, setCur] = useState<string | undefined>(() => (mobile ? undefined : (steps.find((s) => !finished(s)) ?? steps[0])?.key));
   const i = steps.findIndex((s) => s.key === cur);
   const step = steps[i];
-  const name = (s: ProductionStep) => ("slot" in s.target ? b.slots[s.target.slot].name : `Shot ${b.order.indexOf(s.target.shot) + 1} · ${b.shots[s.target.shot].title}`);
+  // P17: a shared clip's step is named by its clip label too ("Clip B · Wide street").
+  const clipLabels = useMemo(() => {
+    const info = board.shotClips(project), out: Record<string, string> = {};
+    for (const c of Object.values(info)) if (c.slotId && !out[c.slotId]) out[c.slotId] = c.label;
+    return out;
+  }, [project]);
+  const name = (s: ProductionStep) => ("slot" in s.target ? (clipLabels[s.target.slot] ? `${clipLabels[s.target.slot]} · ` : "") + b.slots[s.target.slot].name : `Shot ${b.order.indexOf(s.target.shot) + 1} · ${b.shots[s.target.shot].title}`);
   const status = board.storyStatus(project);
   const what = (s: ProductionStep) => {
     if (s.state === "stale") { // V2-SB-R08: say what to redo and why, not the original instruction

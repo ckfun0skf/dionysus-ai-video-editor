@@ -483,3 +483,21 @@ button.v2-sb-conn:focus-visible { outline: 2px solid var(--accent); outline-offs
 .v2-sb-clipin { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .v2-sb-clipin .v2-btn { min-height: 44px; min-width: 44px; }
 .v2-sb-clipin input { width: 72px; min-height: 44px; }
+
+/* P17-CLIP-SOURCE: New clip / Reuse clip in the shot editor. */
+.v2-sb-clipsrc > button { min-height: 44px; }
+.v2-sb-clippick { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; max-height: 320px; overflow: auto; }
+.v2-sb-clippick button { width: 100%; min-height: 56px; display: flex; align-items: center; gap: 10px; padding: 6px 8px; text-align: left; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font: inherit; cursor: pointer; }
+.v2-sb-clippick button.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.v2-sb-clippick button:disabled { opacity: .55; cursor: not-allowed; }
+.v2-sb-clippick button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.v2-sb-clippick .v2-sb-thumb { flex: none; width: 64px; height: 40px; }
+.v2-sb-clippick-txt { display: grid; gap: 2px; min-width: 0; font-size: 13px; }
+.v2-sb-clippick-txt > span { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.v2-sb-clippick-txt small { font-size: 12px; color: var(--muted); }
+.v2-sb-cliptrim { flex-wrap: wrap; gap: 12px; margin-top: 8px; }
+.v2-sb-stepper { display: flex; align-items: center; gap: 4px; }
+.v2-sb-stepper > .v2-btn { min-width: 44px; min-height: 44px; }
+.v2-sb-stepper > input { width: 72px; min-height: 44px; text-align: center; }
+.v2-sb-field .v2-sb-check { min-height: 44px; margin-top: 6px; }
+.v2-sb-migrated { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
