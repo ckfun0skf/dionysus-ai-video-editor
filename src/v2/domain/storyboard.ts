@@ -687,6 +687,9 @@ export function productionSteps(p: Project): ProductionStep[] {
     if (s.keyframe) slot(s.keyframe);
     // html/still shots: the step is checking the clip slot's version (its upload is the slot's own step).
     if (s.clipSlot) slot(s.clipSlot);
+    // P16: production iterates per clip. A shot that plays a shared clip has no step of its own: the clip's
+    // slot step (generated once, before its first shot) is the generation step.
+    if (!s.render && s.clipSlot) return;
     out.push({ target: { shot: id }, key: `shot:${id}`, ...state(s, status.shots[id], undefined, s.clipSlot) });
   };
   b.order.forEach(shot);

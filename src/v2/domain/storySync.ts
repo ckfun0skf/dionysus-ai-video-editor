@@ -128,7 +128,14 @@ export function syncPlan(p: Project): SyncPlan {
     const asSent = !s.clipSlot && a0?.kind === "video" && !!v0 && clip.durationTicks === (versionSpan(b0, v0)?.lenTicks ?? v0.media.durationTicks) && (clip.speed ?? 1) === 1;
     if (!asSent && Math.abs(d - s.durationSec) >= 0.01) { changes.push({ kind: "shot", id, label: `"${s.title}" length ${s.durationSec}s → ${d}s` }); s.durationSec = d; }
     const a = p.assets[clip.source.assetId], v = a?.versions.find((x) => x.id === clip.source.versionId), info = b.versions[clip.source.versionId];
-    if (v?.media.durationTicks && info && (a.kind === "video") && !clip.freeze && !clip.reverse) {
+    if (!s.render && s.clipSlot && a?.kind === "video") {
+      // P16: a shot that shares a clip keeps its own in point; the clip's trim belongs to every shot using it.
+      const inSec = Math.round(sec(clip.sourceInTicks) * 100) / 100;
+      if (Math.abs(inSec - (s.clipInSec ?? 0)) >= 0.01) {
+        changes.push({ kind: "shot", id, label: `"${s.title}" clip in point ${s.clipInSec ?? 0}s → ${inSec}s` });
+        if (inSec > 0) s.clipInSec = inSec; else delete s.clipInSec;
+      }
+    } else if (v?.media.durationTicks && info && (a.kind === "video") && !clip.freeze && !clip.reverse) {
       const t = normTrim({ inTicks: clip.sourceInTicks, outTicks: Math.min(v.media.durationTicks, clip.sourceInTicks + Math.round(clip.durationTicks * (clip.speed ?? 1))) }, v.media.durationTicks);
       if (!eq(t, normTrim(info.trim, v.media.durationTicks))) {
         if (t) info.trim = t; else delete info.trim;
