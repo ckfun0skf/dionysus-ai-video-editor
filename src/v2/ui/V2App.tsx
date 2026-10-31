@@ -79,7 +79,7 @@ export function V2App({ openStorage }: { openStorage?: () => Promise<EditorConte
 
 function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwitch: (id: string) => void }) {
   // P4C: WebMCP storyboard tools, registered only while the user allows agent access and the browser has WebMCP.
-  useEffect(() => connectAgentBridge(engine), [engine]);
+  useEffect(() => connectAgentBridge(engine, storage.blobs), [engine, storage.blobs]);
   const [notice, setNotice] = useState(recovery);
   const { project, canUndo, canRedo } = useEngineState(engine);
   // P5: keep the project and its Series in step (both directions).

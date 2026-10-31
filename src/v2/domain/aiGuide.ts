@@ -16,6 +16,7 @@ import { aiLinks, DEFAULT_SITE_URL } from "./siteUrl";
 import { DEFAULT_TRANSITION_SEC, STORYBOARD_FORMAT } from "./storyJson";
 import { HTML_CLIP_FORMAT } from "./htmlClipPackage";
 import { storyToolsMarkdown } from "./storyAgent";
+import { timelineToolsMarkdown } from "./timelineReview";
 import { AUDIO_CLIP_FORMAT, AUDIO_TEMPLATES, DRUMS, INSTRUMENTS, NOISE_PARAMS, SFX, SFX_PARAMS, SYNTH_PARAMS } from "./audioClip";
 
 const GUIDE_TITLE = `Dionysus storyboard guide (${STORYBOARD_FORMAT}, v${FORMAT_REVISION})`;
@@ -99,6 +100,12 @@ A project can be an episode of a Series: a shared library of characters, props, 
 When the user turns on agent access (Storyboard → Agent) in a browser with WebMCP, the open Dionysus tab registers these tools. Use them instead of writing JSON; every call is validated by the guide's rules (a rejected call changes nothing) and is one undo step for the user.
 
 ${storyToolsMarkdown()}
+
+### Timeline review and edit tools
+
+The same tab also registers tools that read, review and edit the timeline itself (times in seconds; each edit is one undo step and returns the clip). See rule "review-timeline".
+
+${timelineToolsMarkdown()}
 
 ## Optional
 

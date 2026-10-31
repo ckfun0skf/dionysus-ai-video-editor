@@ -2546,6 +2546,12 @@
           "title": "Mobile press-and-hold volume meter + shared [−] slider [+] numeric SliderField for every inspector slider",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P12-WEBMCP-REVIEW",
+          "title": "WebMCP timeline review tools: audit, get_timeline, capture_frame, contact_sheet, review_lint, clip edit tools (rule 48)",
+          "status": "done",
+          "progress": 100
         }
       ]
     },

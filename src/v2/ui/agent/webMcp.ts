@@ -5,12 +5,16 @@
  * step; the board re-renders live, the "AI is editing" pill shows, and the call goes into the activity log.
  * Turning access off (or closing the page) unregisters every tool.
  */
-import { board, needsPromptItems, roundtrip, syncPlan, runtimeAiLinks, series, storyAgent, storyboardGuideMarkdown, type StoryDoc } from "../../domain";
+import { board, needsPromptItems, timelineReview, roundtrip, syncPlan, runtimeAiLinks, series, storyAgent, storyboardGuideMarkdown, type StoryDoc } from "../../domain";
 import { cmd, type Engine } from "../../engine";
 import { seriesStore } from "../series/seriesStore";
+import type { BlobStore } from "../../ports";
+import { playerFrameSource, runTimelineTool, type FrameSource, type McpContent } from "./timelineTools";
 
 /** The shape of a WebMCP tool result (MCP content). */
-export interface ToolResponse { content: { type: "text"; text: string }[]; isError?: boolean }
+/** The shape of a WebMCP tool result (MCP content: text, and images for capture_frame / contact_sheet). */
+export interface ToolResponse { content: McpContent[]; isError?: boolean }
+export interface TextToolResponse { content: { type: "text"; text: string }[]; isError?: boolean }
 interface ToolDef {
   name: string; title?: string; description: string; inputSchema: object;
   execute: (input: Record<string, unknown>, client?: unknown) => Promise<ToolResponse>;
@@ -70,7 +74,7 @@ const seriesOf = (engine: Engine) => seriesStore.get(engine.getState().project.s
 const guideFor = (engine: Engine) => () => { const s = seriesOf(engine); return storyboardGuideMarkdown(runtimeAiLinks().site) + (s ? `\n\n## SERIES ASSETS\n\n${series.seriesPromptSection(s)}\n` : ""); };
 
 /** Run one tool call against the engine (also what the WebMCP `execute` callbacks do). */
-export function callAgentTool(engine: Engine, name: string, args: unknown): ToolResponse {
+export function callAgentTool(engine: Engine, name: string, args: unknown): TextToolResponse {
   if (!state.enabled) return { content: [{ type: "text", text: "Agent access is off in Dionysus (Storyboard → AI agent)." }], isError: true };
   const res = storyAgent.runStoryTool(name, args, currentDoc(engine), { guide: guideFor(engine), series: seriesOf(engine) });
   let text = res.text, changed = false;
@@ -94,29 +98,48 @@ export function callAgentTool(engine: Engine, name: string, args: unknown): Tool
   return { content: [{ type: "text", text }], ...(res.ok ? {} : { isError: true }) };
 }
 
+/** P12: every tool the page registers: the storyboard tools, then the timeline review/edit tools. */
+export const ALL_AGENT_TOOLS: { name: string; title: string; description: string; inputSchema: object; readOnly: boolean; timeline?: true }[] = [
+  ...storyAgent.STORY_TOOLS.map((t) => ({ name: t.name, title: t.title, description: t.description, inputSchema: t.inputSchema, readOnly: t.readOnly })),
+  ...timelineReview.TIMELINE_TOOLS.map((t) => ({ ...t, timeline: true as const })),
+];
+
+/** P12: run one timeline tool (async: frame capture and the audio mix decode media). One undo step per edit. */
+export async function callTimelineAgentTool(engine: Engine, name: string, args: unknown, opts: { source?: FrameSource; blobs?: BlobStore } = {}): Promise<ToolResponse> {
+  if (!state.enabled) return { content: [{ type: "text", text: "Agent access is off in Dionysus (Storyboard → AI agent)." }], isError: true };
+  let res;
+  try {
+    const keys = name === "review_lint" && opts.blobs ? new Set(await opts.blobs.keys()) : undefined;
+    res = await runTimelineTool(engine, opts.source ?? (opts.blobs ? playerFrameSource(opts.blobs) : undefined), name, args, keys ? (k) => keys.has(k) : undefined);
+  } catch (e) { res = { ok: false, changed: false, text: `${name} failed: ${(e as Error).message}` }; }
+  log(name, res.ok, res.image ? `${res.text} [image]` : res.text, res.changed);
+  return { content: [{ type: "text", text: res.text }, ...(res.image ? [{ type: "image" as const, ...res.image }] : [])], ...(res.ok ? {} : { isError: true }) };
+}
+
 /** Register every tool on `mc`; the returned function unregisters them. */
-export function registerAgentTools(engine: Engine, mc: ModelContextLike): () => void {
-  const ac = new AbortController(), handles: unknown[] = [];
-  for (const t of storyAgent.STORY_TOOLS) {
+export function registerAgentTools(engine: Engine, mc: ModelContextLike, opts: { source?: FrameSource; blobs?: BlobStore } = {}): () => void {
+  const ac = new AbortController(), handles: { name: string; h: unknown }[] = [];
+  for (const t of ALL_AGENT_TOOLS) {
     const def: ToolDef = {
       name: t.name, title: t.title, description: t.description, inputSchema: t.inputSchema,
       annotations: { readOnlyHint: t.readOnly },
-      execute: async (input) => callAgentTool(engine, t.name, input),
+      execute: async (input) => (t.timeline ? callTimelineAgentTool(engine, t.name, input, opts) : callAgentTool(engine, t.name, input)),
     };
-    try { handles.push(mc.registerTool(def, { signal: ac.signal })); } catch (e) { set({ error: `Couldn't register ${t.name}: ${(e as Error).message}` }); }
+    try { handles.push({ name: t.name, h: mc.registerTool(def, { signal: ac.signal }) }); } catch (e) { set({ error: `Couldn't register ${t.name}: ${(e as Error).message}` }); }
   }
   set({ registered: handles.length });
   return () => {
     ac.abort();
-    for (const [i, h] of handles.entries()) {
-      try { if (h && typeof (h as { unregister?: () => void }).unregister === "function") (h as { unregister: () => void }).unregister(); else mc.unregisterTool?.(storyAgent.STORY_TOOLS[i].name); } catch { /* already gone */ }
+    // By name, not index: a tool that failed to register leaves no handle, so indexes would shift.
+    for (const { name, h } of handles) {
+      try { if (h && typeof (h as { unregister?: () => void }).unregister === "function") (h as { unregister: () => void }).unregister(); else mc.unregisterTool?.(name); } catch { /* already gone */ }
     }
     set({ registered: 0 });
   };
 }
 
 /** Keep the tools registered exactly while access is on and WebMCP exists. Call once per engine (V2App). */
-export function connectAgentBridge(engine: Engine): () => void {
+export function connectAgentBridge(engine: Engine, blobs?: BlobStore): () => void {
   let off: (() => void) | undefined, busy = false;
   const sync = () => {
     if (busy) return;
@@ -126,7 +149,7 @@ export function connectAgentBridge(engine: Engine): () => void {
   const step = () => {
     const { api, mc } = detectModelContext();
     if (api !== state.api) set({ api });
-    if (state.enabled && mc && !off) off = registerAgentTools(engine, mc);
+    if (state.enabled && mc && !off) off = registerAgentTools(engine, mc, { blobs });
     else if ((!state.enabled || !mc) && off) { off(); off = undefined; }
   };
   sync();
