@@ -152,3 +152,28 @@ describe("P12 timeline tools", () => {
     expect(b.right).toBeLessThan(1);
   });
 });
+
+describe("P14 spatial set_clip_props", () => {
+  it("sets position, keys (seconds) and output; rejects bad values and non-sound clips", async () => {
+    const e = setup();
+    e.dispatch(cmd.addAssetToTimeline("a", 0, undefined, "au"));
+    let r = await runTimelineTool(e, undefined, "set_clip_props", { id: "au", position: { azimuth: -90, distance: 0.2, width: 1 }, positionKeys: [{ t: 1, azimuth: 90, distance: 0.5 }], audioOutput: { mode: "binaural" } });
+    expect(r.ok).toBe(true);
+    const pl = findPlacement(root(e.getState().project), "au")!.placement;
+    expect(pl.position).toMatchObject({ azimuth: -90, distance: 0.2 });
+    expect(pl.positionKeys![0].t).toBe(s(1));
+    expect(e.getState().project.settings.audioOutput?.mode).toBe("binaural");
+    const clip = json((await runTimelineTool(e, undefined, "get_timeline", {})).text).tracks.flatMap((t: { clips: { id: string }[] }) => t.clips).find((c: { id: string }) => c.id === "au");
+    expect(clip.positionKeys[0].t).toBe(1);
+    const before = e.getState().project;
+    r = await runTimelineTool(e, undefined, "set_clip_props", { id: "au", position: { azimuth: 500, distance: 0 } });
+    expect(r.ok).toBe(false); expect(e.getState().project).toBe(before);
+    r = await runTimelineTool(e, undefined, "set_clip_props", { id: "au", pan: 3 });
+    expect(r.ok).toBe(false);
+    r = await runTimelineTool(e, undefined, "set_clip_props", { id: "au", pan: -1 });
+    expect(r.ok).toBe(true);
+    expect(findPlacement(root(e.getState().project), "au")!.placement.position).toMatchObject({ azimuth: -90, distance: 0 });
+    r = await runTimelineTool(e, undefined, "set_clip_props", { id: "au", position: null, positionKeys: null });
+    expect(findPlacement(root(e.getState().project), "au")!.placement.position).toBeUndefined();
+  });
+});

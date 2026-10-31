@@ -517,3 +517,7 @@ Whoosh: A fast air pass for transitions.
 Reply with one ```json code block that contains only the clip. Use only the instruments, sfx names, drum names,
 fields and params listed above. Unknown fields are ignored with a warning. An unknown instrument, sfx or drum name is
 an error, and the paste box shows each problem with its path (for example `tracks[1].sfx`).
+
+## P14: spatial position
+
+The audio creator mixes its tracks with their own `pan` into a stereo WAV; it does not apply 3D position itself. Once the rendered clip is on the timeline it can be positioned (Audio tab pad, `set_clip_props` `position`) like any audio clip; its stereo image is kept (`width` 1 by default).

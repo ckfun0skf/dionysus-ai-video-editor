@@ -237,8 +237,11 @@ export const addSubtitle = (s: Subtitle): Command => ({ label: "Add text", apply
 export const updateSubtitle = (id: string, patch: Partial<Omit<Subtitle, "id">>): Command => ({ label: "Edit text", coalesceKey: `sub:${id}`, apply: (p) => withRoot(p, (c) => subs.updateSubtitle(c, id, patch)) });
 export const removeSubtitle = (id: string): Command => ({ label: "Delete text", apply: (p) => withRoot(p, (c) => subs.removeSubtitle(c, id)) });
 export const setSubtitles = (list: Subtitle[], label = "Import subtitles"): Command => ({ label, apply: (p) => withRoot(p, (c) => subs.setSubtitles(c, list)) });
+/** P14-SPATIAL: a sound clip's position / position keys (one undo step; drags coalesce). */
+export const setPosition = (id: string, pos: { azimuth: number; distance: number; width?: number } | null | undefined, keys?: import("../domain").PositionKey[] | null, label = "Sound position"): Command => ({ label, coalesceKey: keys === undefined && pos ? `pos:${id}` : undefined, apply: (p) => withRoot(p, (c) => ops.setPosition(c, id, pos, keys)) });
+export const setTrackPosition = (trackId: string, pos: { azimuth: number; distance: number; width?: number } | null): Command => ({ label: "Track sound position", coalesceKey: pos ? `tpos:${trackId}` : undefined, apply: (p) => withRoot(p, (c) => ops.setTrackPosition(c, trackId, pos)) });
 /** V2-106: project canvas size / frame rate / background. Sizes are clamped even (H.264) and within 16..8192. */
-export type ProjectSettingsPatch = Partial<{ width: number; height: number; fps: number; background: string; autoLink: boolean }>;
+export type ProjectSettingsPatch = Partial<{ width: number; height: number; fps: number; background: string; autoLink: boolean; audioOutput: import("../domain").AudioOutput | null }>;
 export const setProjectSettings = (patch: ProjectSettingsPatch, label = "Project settings"): Command => ({
   label,
   coalesceKey: patch.background !== undefined && Object.keys(patch).length === 1 ? "settings-bg" : undefined,
@@ -249,6 +252,12 @@ export const setProjectSettings = (patch: ProjectSettingsPatch, label = "Project
     if (patch.height !== undefined) s.height = even(patch.height);
     if (patch.fps !== undefined) s.fps = Math.min(120, Math.max(1, Math.round(patch.fps)));
     if (patch.background !== undefined) { if (!/^#[0-9a-f]{6}$/i.test(patch.background)) throw new Error("background must be #rrggbb"); s.background = patch.background; }
+    if (patch.audioOutput !== undefined) {
+      const a = patch.audioOutput;
+      if (a && !["stereo", "binaural"].includes(a.mode)) throw new Error('audioOutput.mode must be "stereo" or "binaural"');
+      if (a?.environment && !["room", "outdoor"].includes(a.environment)) throw new Error('audioOutput.environment must be "room" or "outdoor"');
+      if (!a || (a.mode === "stereo" && (a.environment ?? "room") === "room")) delete s.audioOutput; else s.audioOutput = { mode: a.mode, ...(a.environment && a.environment !== "room" ? { environment: a.environment } : {}) };
+    }
     if (patch.autoLink !== undefined) { if (patch.autoLink) delete s.autoLink; else s.autoLink = false; }
     return { ...p, settings: s };
   },

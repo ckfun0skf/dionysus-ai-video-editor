@@ -77,8 +77,8 @@ export const EXAMPLE_STORYBOARD: StoryDoc = {
     { from: "s4", to: "s5", kind: "cut", transition: { preset: "crossfade", params: { durationSec: 0.5 } } },
   ],
   audio: [
-    { id: "wind", asset: "dawn-wind", kind: "ambience", from: "s1", to: "s3", volumeKeys: [{ t: 7, v: 1 }, { t: 8, v: 0.4 }, { t: 10, v: 0.4 }, { t: 11, v: 1 }] },
-    { id: "chime", asset: "title-chime", kind: "sting", from: "s3", atSec: 1, fx: { preset: "hall", amount: 0.5 } },
+    { id: "wind", asset: "dawn-wind", kind: "ambience", from: "s1", to: "s3", volumeKeys: [{ t: 7, v: 1 }, { t: 8, v: 0.4 }, { t: 10, v: 0.4 }, { t: 11, v: 1 }], positionKeys: [{ t: 0, azimuth: -60, distance: 0.6 }, { t: 10, azimuth: 60, distance: 0.6 }] },
+    { id: "chime", asset: "title-chime", kind: "sting", from: "s3", atSec: 1, fx: { preset: "hall", amount: 0.5 }, position: { azimuth: 0, distance: 0.3 } },
   ],
 };
 
@@ -128,6 +128,7 @@ const FORMAT_SECTION = () => `{
     "title": string, "logline"?: string, "synopsis"?: string, "style"?: string, "language"?: string,
     "aspect": "16:9" | "9:16" | "1:1" | "4:5" | "21:9",
     "textStyles"?: { "<style id>": TextStyle }   // one-off text looks for this storyboard; ids must not clash with preset ids
+    "audioOutput"?: { "mode": "stereo" | "binaural", "environment"?: "room" | "outdoor" }   // spatial audio: stereo (default, speakers) or binaural (headphones); space sets the reverb (default room)
   },
   "assets": [ {
       "id": string,              // short unique id: letters, digits, "_", "-", "."
@@ -201,6 +202,9 @@ const FORMAT_SECTION = () => `{
       "fadeInSec"?: number, "fadeOutSec"?: number,  // default music and ambience 1 s each, others 0
       "volumeKeys"?: [ { "t": number, "v": number } ],   // volume curve: t = seconds from the cue start, v = 0 (silent) to 2, 1 = "volume"; linear between points
       "fx"?: { "preset": "<audio effect id>", "amount"?: number }   // sound effect (echo, telephone, radio…), amount 0-1 (default 1)
+      "position"?: { "azimuth": number, "distance": number, "width"?: number },  // where the sound sits: azimuth degrees 0 front, -90 left, 90 right, ±180 behind; distance 0 (at the ear) to 1 (about 20 m); width 0-1, default 1 = keep a stereo file's own left/right image
+      "pan"?: number,            // shorthand -1 (left) to 1 (right) = azimuth pan × 90, distance 0; "position" wins if both are given
+      "positionKeys"?: [ { "t": number, "azimuth": number, "distance": number } ]   // moving sound: t = seconds from the cue start; linear, the shorter way round
   } ]
 }
 
@@ -321,6 +325,7 @@ export const RULE_LIST: readonly { key: string; text: string }[] = [
   { key: "link-to-main", text: `Link to main: on Send to Timeline every shot layer, caption, effect and audio cue that fits inside its shot is linked to that shot's main clip, so it moves when the shot is moved, reordered or rippled, is cut to fit when the shot is trimmed shorter, goes to the half holding its start when the shot is split, and is deleted with the shot. Write "link": false on a layer or an audio cue to keep it free (e.g. a music bed or a logo that must stay at a fixed time across shot edits); leave "link" out for the default (linked). Only false is meaningful. Example: "layers": [ { "id": "logo", "type": "image", "asset": "logo", "startSec": 0, "endSec": 5, "box": { "x": 0.8, "y": 0.05, "width": 0.15, "height": 0.15 }, "link": false } ]. Audio cues spanning several shots are never linked.` },
   { key: "fill-needs-prompt", text: `Fill needsPrompt: after the user edits the timeline and presses Sync to Storyboard, clips that came from no shot are added to the storyboard with "needsPrompt": true (shown as "⚠ Needs description / prompt"): a main-track clip becomes a new shot (id "shot-tl-N", empty "prompt"), a clip on another track becomes a layer ("tl-layer-N") or audio cue ("cue-tl-N") of the shot it is linked to. You MUST fill every needsPrompt item when you revise the JSON: give a shot a "description" and a full self-contained "prompt" (describe what the clip shows, keep its id, durationSec and order), give a layer or cue a "description". Filling it clears the flag on re-import; never delete those items and never set needsPrompt yourself. Shots, layers and cues with "removedFromTimeline": true had their clip deleted on the timeline: keep them unchanged unless the user asks to drop them. Example: { "id": "shot-tl-1", "title": "Timeline clip 1", "durationSec": 4, "needsPrompt": true, "description": "", "prompt": "" } becomes { "id": "shot-tl-1", "title": "Harbour at dusk", "durationSec": 4, "description": "Wide shot of Victoria Harbour as the lights come on", "prompt": "Wide static shot of a harbour at dusk, ferries crossing, skyline lights switching on, warm-to-blue sky, 24fps cinematic" }.` },
   { key: "review-timeline", text: `Review the cut: with WebMCP timeline tools, after editing the timeline (or after send_to_timeline) call get_timeline, then review_lint, and look at contact_sheet (and capture_frame at any time you doubt). Fix every error and warning it lists with move_clip, trim_clip, split_clip, delete_clip, set_clip_props and add_clip (gaps and black frames, very short clips, text off the frame, audio clipping, missing media, layers not linked to a main clip, needsPrompt items), then run review_lint again until only notes you chose to keep are left. Never guess clip ids or times: read them from get_timeline.` },
+  { key: "spatial-audio", text: `Spatial audio: an audio cue (or, with set_clip_props, a clip with sound) can take "position": { "azimuth", "distance", "width"? } — azimuth in degrees, 0 = in front, -90 = left, 90 = right, ±180 = behind; distance 0 (at the ear) to 1 (far, about 20 m), which lowers the level, darkens the tone and adds reverb; "pan" -1..1 is a shorthand (azimuth = pan × 90). "positionKeys" [{ "t", "azimuth", "distance" }] moves the sound (t = seconds from the cue start). Stereo files already carry their own left/right movement: "width" (0-1, default 1) keeps that image while the pair is placed, so do not set width 0 unless you want it mono; mono files are point sources. Leave music centred unless asked. meta "audioOutput": { "mode": "binaural" } is for headphones (front/behind cues, HRTF); "stereo" (default) is for speakers and phones; "environment" "room" (default) or "outdoor" sets the reverb. Omit all of these to keep the sound unchanged.` },
 ];
 export const RULES: readonly string[] = RULE_LIST.map((r) => r.text);
 /** 1-based public number of a rule, by key. */

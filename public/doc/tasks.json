@@ -2558,6 +2558,12 @@
           "title": "Gap fixes: 44px desktop storyboard buttons + number input, volume pan-x, set_clip_props validation, text bounds lint, agent intro, Sync writes back box/captions",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P14-SPATIAL",
+          "title": "Spatial audio position (stereo/binaural, pad, keys, width)",
+          "status": "done",
+          "progress": 100
         }
       ]
     },

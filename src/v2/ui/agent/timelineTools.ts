@@ -4,7 +4,7 @@
  * that need decoded media: frame capture / contact sheet (an offline Player, same path as export), black frames and
  * audio clipping / silence (the export audio mix).
  */
-import { findPlacement, newId, secondsToTicks, timelineReview, type Placement, type Project } from "../../domain";
+import { audioOutputOf, findPlacement, newId, panToAzimuth, positionErrors, secondsToTicks, timelineReview, type Placement, type Project } from "../../domain";
 import { getPreset, listPresets } from "../../registry";
 import { cmd, type Command, type Engine } from "../../engine";
 import type { BlobStore } from "../../ports";
@@ -43,7 +43,7 @@ export function playerFrameSource(blobs: BlobStore): FrameSource {
     async audio(project) {
       const secs = exportDuration(project), plan = audioPlan(project);
       if (secs <= 0 || !plan.length) return undefined;
-      const buf = await mixAudio(plan, secs, blobs);
+      const buf = await mixAudio(plan, secs, blobs, undefined, audioOutputOf(project));
       if (!buf) return undefined;
       return { channels: Array.from({ length: buf.numberOfChannels }, (_, i) => buf.getChannelData(i)), sampleRate: buf.sampleRate };
     },
@@ -81,7 +81,7 @@ export function audioIssues(a: { channels: Float32Array[]; sampleRate: number })
   return out;
 }
 
-const PROP_KEYS = new Set(["id", "volume", "transform", "effect", "fades", "speed", "blend", "text"]);
+const PROP_KEYS = new Set(["id", "volume", "transform", "effect", "fades", "speed", "blend", "text", "position", "positionKeys", "pan", "trackPosition", "audioOutput"]);
 const TF_RANGE: Record<string, [number, number]> = { x: [-2, 2], y: [-2, 2], scale: [0.05, 10], rotation: [-360, 360], opacity: [0, 1] };
 const numIn = (v: unknown, lo: number, hi: number) => typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi;
 const ids = (k: Parameters<typeof listPresets>[0]) => listPresets(k).map((d) => d.id).join(", ");
@@ -89,7 +89,7 @@ const ids = (k: Parameters<typeof listPresets>[0]) => listPresets(k).map((d) => 
 /** P13: why set_clip_props input is invalid for this clip (empty = valid). Never clamps silently. */
 export function clipPropsErrors(a: Record<string, unknown>, pl: Placement): string[] {
   const e: string[] = [];
-  for (const k of Object.keys(a)) if (!PROP_KEYS.has(k)) e.push(`Unknown property "${k}" (use volume, transform, effect, fades, speed, blend, text).`);
+  for (const k of Object.keys(a)) if (!PROP_KEYS.has(k)) e.push(`Unknown property "${k}" (use volume, transform, effect, fades, speed, blend, text, position, positionKeys, pan, trackPosition, audioOutput).`);
   if ("volume" in a && !numIn(a.volume, 0, 2)) e.push(`"volume" must be a number from 0 to 2 (got ${JSON.stringify(a.volume)}).`);
   if ("speed" in a && !numIn(a.speed, 0.25, 4)) e.push(`"speed" must be a number from 0.25 to 4 (got ${JSON.stringify(a.speed)}).`);
   if ("transform" in a && a.transform !== null) {
@@ -129,6 +129,22 @@ export function clipPropsErrors(a: Record<string, unknown>, pl: Placement): stri
     if (pl.clipType !== "text") e.push(`"text" only applies to text clips (clip ${pl.id} is ${pl.clipType}).`);
     else if (!a.text || typeof a.text !== "object") e.push('"text" must be an object like { text, size, color }.');
     else { const t = a.text as Record<string, unknown>; if ("size" in t && !numIn(t.size, 0.005, 1)) e.push('"text.size" must be a share of the frame height from 0.005 to 1.'); if ("text" in t && typeof t.text !== "string") e.push('"text.text" must be a string.'); }
+  }
+  // P14-SPATIAL: sound position (clips with sound only), track default and project output.
+  const soundy = pl.clipType === "audio" || pl.clipType === "video";
+  for (const k of ["position", "positionKeys", "pan", "trackPosition"]) if (k in a && !soundy) e.push(`"${k}" only applies to clips with sound (clip ${pl.id} is ${pl.clipType}).`);
+  if ("pan" in a && "position" in a) e.push('Give "pan" or "position", not both.');
+  if ("pan" in a && !numIn(a.pan, -1, 1)) e.push(`"pan" must be a number from -1 (left) to 1 (right) (got ${JSON.stringify(a.pan)}).`);
+  if ("position" in a && a.position !== null) e.push(...positionErrors('"position"', a.position));
+  if ("trackPosition" in a && a.trackPosition !== null) e.push(...positionErrors('"trackPosition"', a.trackPosition));
+  if ("positionKeys" in a && a.positionKeys !== null) {
+    if (!Array.isArray(a.positionKeys)) e.push('"positionKeys" must be a list of { t: seconds from the clip start, azimuth, distance } or null.');
+    else a.positionKeys.forEach((k, i) => { e.push(...positionErrors(`"positionKeys[${i}]"`, k, false)); if (!k || typeof k !== "object" || !numIn((k as { t?: unknown }).t, 0, Infinity)) e.push(`"positionKeys[${i}].t" must be seconds from the clip start, 0 or more.`); });
+  }
+  if ("audioOutput" in a) {
+    const o = a.audioOutput as Record<string, unknown> | null;
+    if (!o || typeof o !== "object" || !["stereo", "binaural"].includes(o.mode as string) || Object.keys(o).some((k) => !["mode", "environment"].includes(k)) || (o.environment !== undefined && !["room", "outdoor"].includes(o.environment as string)))
+      e.push('"audioOutput" must be { mode: "stereo" | "binaural", environment?: "room" | "outdoor" } (whole project).');
   }
   return e;
 }
@@ -234,7 +250,12 @@ export async function runTimelineTool(engine: Engine, source: FrameSource | unde
       const sp = n("speed"); if (sp !== undefined) cmds.push(cmd.setSpeed(id, sp));
       if (typeof a.blend === "string") cmds.push(cmd.setBlend(id, a.blend || undefined));
       if (a.text && typeof a.text === "object") cmds.push(cmd.updateText(id, a.text as never));
-      if (!cmds.length) return fail("Give at least one of volume, transform, effect, fades, speed, blend, text.");
+      if (typeof a.pan === "number") cmds.push(cmd.setPosition(id, { azimuth: panToAzimuth(a.pan), distance: 0 }));
+      if ("position" in a || "positionKeys" in a) cmds.push(cmd.setPosition(id, a.position === null ? null : (a.position as never) ?? undefined,
+        a.positionKeys === null ? null : Array.isArray(a.positionKeys) ? (a.positionKeys as { t: number; azimuth: number; distance: number }[]).map((k) => ({ ...k, t: secondsToTicks(k.t) })) : undefined));
+      if ("trackPosition" in a) cmds.push(cmd.setTrackPosition(findPlacement(rootOf(project()), id)!.track.id, a.trackPosition as never));
+      if (a.audioOutput) cmds.push(cmd.setProjectSettings({ audioOutput: a.audioOutput as never }));
+      if (!cmds.length) return fail("Give at least one of volume, transform, effect, fades, speed, blend, text, position, positionKeys, pan, trackPosition, audioOutput.");
       return edit(cmds, id);
     }
     case "add_clip": {

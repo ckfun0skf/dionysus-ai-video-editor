@@ -391,3 +391,27 @@ export function deleteLayer(comp: Composition, trackId: string): Composition {
   if (mainTrack(comp)?.id === trackId || !comp.tracks.some((t) => t.id === trackId)) return comp;
   return { ...comp, tracks: comp.tracks.filter((t) => t.id !== trackId) };
 }
+
+/** P14-SPATIAL: normalise a position (azimuth wrapped, distance/width clamped, rounded). */
+export function cleanPos(v: { azimuth: number; distance: number; width?: number }): import("./spatial").SpatialPos {
+  const r = (x: number, n = 100) => Math.round(x * n) / n;
+  const az = r(((((v.azimuth + 180) % 360) + 360) % 360) - 180, 10);
+  const out: import("./spatial").SpatialPos = { azimuth: az === -180 ? 180 : az, distance: r(Math.max(0, Math.min(1, v.distance))) };
+  if (v.width !== undefined && v.width < 1) out.width = r(Math.max(0, Math.min(1, v.width)));
+  return out;
+}
+/** P14-SPATIAL: set (or clear with null) a sound clip's position and/or keys (undefined = leave as is). */
+export function setPosition(comp: Composition, placementId: string, pos: { azimuth: number; distance: number; width?: number } | null | undefined, keys?: import("./spatial").PositionKey[] | null): Composition {
+  return mapPlacement(comp, placementId, (p) => {
+    if (!hasSound(p)) return p;
+    const out: Placement = { ...p };
+    if (pos === null) delete out.position; else if (pos) out.position = cleanPos(pos);
+    if (keys === null || (keys && !keys.length)) delete out.positionKeys;
+    else if (keys) out.positionKeys = [...keys].map((k) => ({ t: Math.max(0, Math.round(k.t)), ...cleanPos(k) })).map(({ width: _w, ...k }) => k).sort((a, b) => a.t - b.t);
+    return out;
+  });
+}
+/** P14-SPATIAL: a track's default position (null clears). */
+export function setTrackPosition(comp: Composition, trackId: string, pos: { azimuth: number; distance: number; width?: number } | null): Composition {
+  return { ...comp, tracks: comp.tracks.map((t) => { if (t.id !== trackId) return t; const o: Track = { ...t }; if (pos) o.position = cleanPos(pos); else delete o.position; return o; }) };
+}

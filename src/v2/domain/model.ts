@@ -90,6 +90,10 @@ export interface Placement {
    * Built by render/audioFx into the same Web Audio graph in preview and export.
    */
   audioFx?: { preset: string; amount: number };
+  /** P14-SPATIAL: where the sound sits around the listener (see domain/spatial). Absent = centre, unprocessed. */
+  position?: import("./spatial").SpatialPos;
+  /** P14-SPATIAL: animated position, `t` ticks from the clip start, linear (shortest way round), held outside. */
+  positionKeys?: import("./spatial").PositionKey[];
   /** Effect clips (`clipType: "effect"`): a `videoEffect` registry preset id and its params. Source is TEXT_SOURCE. */
   effect?: { preset: string; params?: Record<string, number | string>; applyTo?: EffectScope };
   /**
@@ -217,6 +221,8 @@ export interface Track {
   group?: "overlay" | "text";
   /** V2-103: shared style of a text layer; clips store only overrides (see domain/layerStyle). */
   layerStyle?: import("./layerStyle").LayerStyle;
+  /** P14-SPATIAL: audio tracks: default position of clips without their own. */
+  position?: import("./spatial").SpatialPos;
   placements: Placement[];
 }
 
@@ -238,7 +244,9 @@ export interface Project {
   /** `background` (V2-106): canvas fill behind every layer, default black. Optional so 3.0 projects stay valid. */
   settings: { width: number; height: number; fps: number; background?: string;
     /** P9-LINK: link new non-main clips to the main clip under their start (absent = on). */
-    autoLink?: boolean };
+    autoLink?: boolean;
+    /** P14-SPATIAL: "stereo" (default) or "binaural" (HRTF, for headphones) and the reverb environment. */
+    audioOutput?: import("./spatial").AudioOutput };
   rootCompositionId: string;
   assets: Record<string, Asset>;
   compositions: Record<string, Composition>;

@@ -136,8 +136,11 @@ function mediaLayer(p: Project, b: Storyboard, shot: Shot, l: StoryMediaLayer, s
  * P3B-11: a cue's volume curve (keys in cue seconds → clip-offset ticks; a looped copy `offset` ticks into the cue
  * keeps the curve's timing) and its audio effect (unknown preset ids are left out; the id stays in the storyboard).
  */
-function cueSound(cue: StoryAudio, offset: number): Pick<Placement, "keyframes" | "audioFx"> {
-  const out: Pick<Placement, "keyframes" | "audioFx"> = {};
+function cueSound(cue: StoryAudio, offset: number): Pick<Placement, "keyframes" | "audioFx" | "position" | "positionKeys"> {
+  const out: Pick<Placement, "keyframes" | "audioFx" | "position" | "positionKeys"> = {};
+  // P14-SPATIAL: position and its keys (key times shift with the trimmed start, like volumeKeys).
+  if (cue.position) out.position = { ...cue.position };
+  if (cue.positionKeys?.length) out.positionKeys = cue.positionKeys.map((k) => ({ t: Math.max(0, secondsToTicks(k.t) - offset), azimuth: k.azimuth, distance: k.distance }));
   if (cue.volumeKeys?.length) out.keyframes = { volume: cue.volumeKeys.map((k) => ({ t: secondsToTicks(k.t) - offset, v: k.v })) };
   const preset = cue.fx && presetId("audioFx", cue.fx.preset);
   if (preset) out.audioFx = { preset, amount: cue.fx!.amount ?? 1 };
@@ -336,7 +339,10 @@ export function sendStory(p: Project): { project: Project; result: SendResult } 
   }
   for (const { shot, clip } of sent) comp = addLinked(p, b, comp, shot, clip, result);
   comp = addAudio(p, b, comp, sent, result);
-  return { project: recordSent({ ...p, compositions: { ...p.compositions, [p.rootCompositionId]: comp } }), result };
+  // P14-SPATIAL: the storyboard's meta.audioOutput becomes the project's output mode.
+  const ao = b.meta.audioOutput;
+  const settings = ao ? { ...p.settings, audioOutput: { ...ao } } : p.settings;
+  return { project: recordSent({ ...p, settings, compositions: { ...p.compositions, [p.rootCompositionId]: comp } }), result };
 }
 
 /** P2A: what a shot sends besides its clip (layers, captions, effects, html params), for change detection. */

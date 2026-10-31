@@ -3,6 +3,7 @@
  * the timeline edit and frame capture tools. Pure: the UI (ui/agent/timelineTools) runs the edits through engine
  * commands (one undo step each) and adds the checks that need decoded media (frames, audio).
  */
+import { audioOutputOf } from "./spatial";
 import { compositionDuration, transformOf, versionOf, type Placement, type Project, type Track } from "./model";
 import { mainTrack } from "./ops";
 import { needsPromptItems } from "./storySync";
@@ -42,8 +43,8 @@ export const TIMELINE_TOOLS: TimelineToolDef[] = [
     description: "Delete one or more clips (and the layers linked to them). ripple: true closes the gap on the main track. One undo step.",
     inputSchema: obj({ ids: { type: "array", items: { type: "string" }, description: "Clip ids." }, ripple: { type: "boolean" } }, ["ids"]) },
   { name: "set_clip_props", title: "Set clip properties", readOnly: false,
-    description: "Change a clip in one undo step: volume (0..2), transform { x, y, scale, rotation, opacity } (null resets), effect { preset, params } (effect clips only; videoEffect preset ids and param ranges as in get_guide), fades { inSec, outSec }, speed (0.25..4), blend, text (text clips only: { text, size, color, … }). Values are never clamped: an unknown preset, param, field or an out-of-range value fails the whole call with the reason and nothing changes. Returns the clip.",
-    inputSchema: obj({ id: str("Clip id."), volume: num("0..2 (1 = unchanged)."), transform: { type: ["object", "null"] }, effect: { type: "object" }, fades: { type: "object" }, speed: num("0.25..4."), blend: str("Blend mode id."), text: { type: "object" } }, ["id"]) },
+    description: "Change a clip in one undo step: volume (0..2), transform { x, y, scale, rotation, opacity } (null resets), effect { preset, params } (effect clips only; videoEffect preset ids and param ranges as in get_guide), fades { inSec, outSec }, speed (0.25..4), blend, text (text clips only: { text, size, color, … }); P14 sound position (clips with sound): position { azimuth -180..180 (0 front, -90 left, 90 right, ±180 behind), distance 0..1 (0 at the ear, 1 ≈ 20 m), width? 0..1 (1 keeps a stereo file's own image) } or null (centre, unprocessed), pan -1..1 (shorthand: azimuth = pan × 90), positionKeys [{ t: seconds from the clip start, azimuth, distance }] or null, trackPosition (default for the clip's track) and audioOutput { mode: stereo | binaural, environment?: room | outdoor } (whole project). Values are never clamped: an unknown preset, param, field or an out-of-range value fails the whole call with the reason and nothing changes. Returns the clip.",
+    inputSchema: obj({ id: str("Clip id."), volume: num("0..2 (1 = unchanged)."), transform: { type: ["object", "null"] }, effect: { type: "object" }, fades: { type: "object" }, speed: num("0.25..4."), blend: str("Blend mode id."), text: { type: "object" }, position: { type: ["object", "null"] }, positionKeys: { type: ["array", "null"] }, pan: num("-1..1 shorthand for azimuth = pan × 90."), trackPosition: { type: ["object", "null"] }, audioOutput: { type: "object" } }, ["id"]) },
   { name: "add_clip", title: "Add a clip from an asset", readOnly: false,
     description: "Place a project media asset (id from get_timeline's \"assets\") at startSec, on trackId or the main track / a matching track. One undo step; returns the new clip.",
     inputSchema: obj({ assetId: str("Media asset id."), startSec: num("Start in seconds."), trackId: str("Track id (optional).") }, ["assetId", "startSec"]) },
@@ -73,6 +74,8 @@ export function clipJson(p: Project, pl: Placement, track?: Track): Record<strin
     ...(pl.transform ? { transform: { ...transformOf(pl) } } : {}),
     ...(pl.effect ? { effect: pl.effect } : {}),
     ...(pl.text ? { text: pl.text.text } : {}),
+    ...(pl.position ? { position: pl.position } : {}),
+    ...(pl.positionKeys?.length ? { positionKeys: pl.positionKeys.map((k) => ({ ...k, t: sec(k.t) })) } : {}),
     ...(pl.fadeInTicks || pl.fadeOutTicks ? { fades: { inSec: sec(pl.fadeInTicks ?? 0), outSec: sec(pl.fadeOutTicks ?? 0) } } : {}),
     ...(pl.link ? { linkedTo: pl.link.parent } : {}),
     ...(pl.storyShot ? { storyShot: pl.storyShot } : {}),
@@ -84,9 +87,9 @@ export function clipJson(p: Project, pl: Placement, track?: Track): Record<strin
 export function timelineJson(p: Project): Record<string, unknown> {
   const c = rootOf(p), main = mainTrack(c);
   return {
-    settings: { width: p.settings.width, height: p.settings.height, fps: p.settings.fps },
+    settings: { width: p.settings.width, height: p.settings.height, fps: p.settings.fps, audioOutput: audioOutputOf(p) },
     duration: sec(compositionDuration(c)),
-    tracks: c.tracks.map((t) => ({ id: t.id, kind: t.kind, name: t.name, ...(t.group ? { group: t.group } : {}), ...(t === main ? { main: true } : {}), ...(t.muted ? { muted: true } : {}), ...(t.hidden ? { hidden: true } : {}), clips: t.placements.map((pl) => clipJson(p, pl, t)) })),
+    tracks: c.tracks.map((t) => ({ id: t.id, kind: t.kind, name: t.name, ...(t.group ? { group: t.group } : {}), ...(t === main ? { main: true } : {}), ...(t.muted ? { muted: true } : {}), ...(t.hidden ? { hidden: true } : {}), ...(t.position ? { position: t.position } : {}), clips: t.placements.map((pl) => clipJson(p, pl, t)) })),
     assets: Object.values(p.assets).filter((a) => a.kind !== "text" && a.kind !== "effect").map((a) => ({ id: a.id, kind: a.kind, name: a.name })),
     ...(c.subtitles?.length ? { subtitles: c.subtitles.length } : {}),
   };
