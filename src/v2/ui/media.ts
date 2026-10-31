@@ -125,3 +125,19 @@ export async function extractAudioWav(blob: Blob, inSec: number, outSec: number)
   const chans = Array.from({ length: buf.numberOfChannels }, (_, i) => buf.getChannelData(i).slice(a, b));
   return { wav: encodeWav(chans, rate), seconds: (b - a) / rate };
 }
+
+/** P19: read a picked file in chunks to report upload progress (0-1); returns an in-memory File with the same name and type. */
+export async function readFileWithProgress(f: File, progress: (x: number) => void): Promise<File> {
+  const total = f.size || 1;
+  if (typeof f.stream !== "function") { progress(1); return f; }
+  const reader = f.stream().getReader();
+  const parts: BlobPart[] = [];
+  let got = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    parts.push(value); got += value.byteLength; progress(Math.min(1, got / total));
+  }
+  progress(1);
+  return new File(parts, f.name, { type: f.type, lastModified: f.lastModified });
+}

@@ -33,8 +33,8 @@ import { ClipFrames } from "./ClipFrames";
 import { makeAnalyse, MatchFrames } from "./MatchFrames";
 import { clipRange, links } from "../domain";
 import { MediaPicker, type Picked } from "./MediaPicker";
-import type { FromVideoPick } from "./FromVideoTab";
-import { extractAudioWav } from "./media";
+import type { FromVideoPick, UploadedVideo } from "./FromVideoTab";
+import { extractAudioWav, probeVideoAudio, readFileWithProgress } from "./media";
 import { fromVideo as fromVideoDomain, type MediaRef } from "../domain";
 import { projectMediaList } from "./projectMedia";
 import { stickerFile, stickers } from "./libraryItems";
@@ -594,7 +594,26 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     } catch { extracted = undefined; } finally { setBusy((b) => b - 1); }
     const made = fromVideoDomain.audioFromVideo(video, version, fv, extracted, ids);
     const mute = fv.muteOriginal ? Object.values(project.compositions[project.rootCompositionId].tracks).flatMap((t) => t.placements).filter((q) => q.clipType === "video" && q.source.assetId === video.id).map((q) => q.id) : [];
-    if (engine.dispatch(cmd.addAudioFromVideo(made.asset, fromVideoDomain.audioFromVideoPlacement(made, at), mute))) setToast(extracted ? `Added the audio of ${video.name}` : `Added the sound of ${video.name} (plays from the video file)`);
+    const add = cmd.addAudioFromVideo(made.asset, fromVideoDomain.audioFromVideoPlacement(made, at), mute);
+    // P19: an audio-only upload is removed once its sound is extracted; if decoding failed the audio references it, so it stays.
+    const drop = fv.discardVideo && extracted;
+    if (!engine.dispatch(drop ? [add, cmd.removeAsset(video.id)] : add, "Add audio from video")) return;
+    setToast(drop ? `Added the audio of ${video.name}; the video was not kept` : extracted ? `Added the audio of ${video.name}` : fv.discardVideo ? `Kept ${video.name} in the library: its sound could not be decoded, so the audio plays from the video file` : `Added the sound of ${video.name} (plays from the video file)`);
+  };
+  /** P19: From Video → Upload video: the same import path as Add media (clipFileFrom + importFile), with read progress and an audio-track check. */
+  const uploadFromVideo = async (f: File, _keep: boolean, progress: (x: number) => void): Promise<UploadedVideo> => {
+    if (!/^video\//.test(f.type) && !/\.(mp4|m4v|mov|webm)$/i.test(f.name)) return { error: "Not a video file (MP4, MOV or WebM)" };
+    setBusy((b) => b + 1);
+    try {
+      const read = await readFileWithProgress(f, (x) => progress(x * 0.9));
+      const asset = await importFile(await clipFileFrom(read), storage.blobs);
+      if (!asset || asset.kind !== "video") return { error: "Unsupported video file" };
+      if (!engine.dispatch(cmd.importAsset(asset))) return { error: "Import failed" };
+      progress(0.95);
+      const audio = await probeVideoAudio(read).catch(() => undefined);
+      progress(1);
+      return { assetId: asset.id, audio };
+    } catch (e) { return { error: e instanceof Error ? e.message : "Upload failed" }; } finally { setBusy((b) => b - 1); }
   };
   const videoOnTimeline = (assetId: string) => project.compositions[project.rootCompositionId].tracks.some((t) => t.placements.some((q) => q.clipType === "video" && q.source.assetId === assetId));
   const projectMedia = useMemo(() => projectMediaList(project, thumbs), [project, thumbs]);
@@ -834,7 +853,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     else if (it?.kind === "sticker") { const st = stickers().find((x) => x.id === it.id); if (st) void addStickerAt(st, at); }
     else if (dt.files?.length) void importAt(Array.from(dt.files), at, trackId);
   };
-  const pickerEl = picker ? <MediaPicker media={projectMedia} title={picker === "overlay" ? "Add overlay" : picker === "audio" || picker === "fromVideo" ? "Add audio" : picker === "stickers" ? "Add stickers" : "Add media"} only={picker === "audio" || picker === "fromVideo" ? "audio" : undefined} initialTab={picker === "stickers" ? "stickers" : picker === "fromVideo" ? "fromVideo" : undefined} onClose={() => setPicker(null)} onAdd={(p) => void addPicked(p, picker === "overlay" || picker === "stickers" ? "overlay" : "main")} onCreateCode={picker === "audio" || picker === "fromVideo" ? undefined : () => createCode(picker === "overlay" ? "overlay" : "main")} onCreateAudio={picker === "audio" || picker === "fromVideo" ? createAudio : undefined} onAddFromVideo={picker === "audio" || picker === "fromVideo" ? (fv) => void addFromVideo(fv) : undefined} onTimeline={videoOnTimeline} loadMedia={loadAssetBlob} /> : null;
+  const pickerEl = picker ? <MediaPicker media={projectMedia} title={picker === "overlay" ? "Add overlay" : picker === "audio" || picker === "fromVideo" ? "Add audio" : picker === "stickers" ? "Add stickers" : "Add media"} only={picker === "audio" || picker === "fromVideo" ? "audio" : undefined} initialTab={picker === "stickers" ? "stickers" : picker === "fromVideo" ? "fromVideo" : undefined} onClose={() => setPicker(null)} onAdd={(p) => void addPicked(p, picker === "overlay" || picker === "stickers" ? "overlay" : "main")} onCreateCode={picker === "audio" || picker === "fromVideo" ? undefined : () => createCode(picker === "overlay" ? "overlay" : "main")} onCreateAudio={picker === "audio" || picker === "fromVideo" ? createAudio : undefined} onAddFromVideo={picker === "audio" || picker === "fromVideo" ? (fv) => void addFromVideo(fv) : undefined} onTimeline={videoOnTimeline} onUploadVideo={picker === "audio" || picker === "fromVideo" ? uploadFromVideo : undefined} onDiscardVideo={(id) => engine.dispatch(cmd.removeAsset(id))} loadMedia={loadAssetBlob} /> : null;
   const assetBrowser = (
     <AssetBrowser project={project} thumbs={thumbs} busy={busy} tab={btab} onTab={setBtab}
       onImport={importDialog} onFiles={(fs) => void onFiles(fs)} onAddAsset={addToTimeline} onRemoveAsset={(a) => engine.dispatch(cmd.removeAsset(a.id))}
