@@ -114,6 +114,8 @@ export interface Placement {
    * Absent = unlinked (all projects before P9).
    */
   link?: { parent: string };
+  /** P10-SYNC: storyboard layer id this clip was sent as ("captions" for a caption cue), so Sync to Storyboard writes it back. */
+  storyLayer?: string;
   storyLink?: { anchor: string; want?: { offset: number; duration: number; clampedOffset: number; clampedDuration: number } };
 }
 

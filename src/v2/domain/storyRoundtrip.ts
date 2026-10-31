@@ -54,6 +54,7 @@ function shotOut(b: Storyboard, s: Shot): StoryShot {
     ...(s.params && s.render === "html" ? { params: { ...s.params } } : {}),
     ...(s.layers?.length ? { layers: structuredClone(s.layers) } : {}),
     ...(s.captions ? { captions: true } : {}),
+    ...(s.needsPrompt ? { needsPrompt: true as const } : {}), ...(s.removedFromTimeline ? { removedFromTimeline: true as const } : {}),
     ...(s.effects?.length ? { effects: structuredClone(s.effects) } : {}),
     ...(s.genDurationSec ? { genDurationSec: s.genDurationSec } : {}),
     ...(s.references?.length ? { references: s.references.map((r) => ({ asset: r.slotId, role: r.role, ...(r.note ? { note: r.note } : {}) })) } : {}),

@@ -130,6 +130,8 @@ export function updateShot(p: Project, id: string, patch: ShotPatch): Project {
   let n: Shot = patch.slotIds ? withRefs(b, s, patch.slotIds) : { ...s };
   const text = (k: "title" | "description" | "prompt") => { if (patch[k] !== undefined) n[k] = k === "title" ? patch[k]!.trim() || s.title : patch[k]!; };
   text("title"); text("description"); text("prompt");
+  // P10-SYNC: a shot made from the timeline stops needing a prompt once one is written.
+  if (n.needsPrompt && n.prompt.trim()) delete n.needsPrompt;
   for (const k of ["camera", "dialogue"] as const) if (patch[k] !== undefined) { const v = patch[k]!.trim(); if (v) n[k] = patch[k]; else delete n[k]; }
   if (patch.dialogue !== undefined) {
     const lines = n.dialogue && (s.lines?.length || hasOffscreenMark(n.dialogue)) ? parseDialogueText(n.dialogue) : [];

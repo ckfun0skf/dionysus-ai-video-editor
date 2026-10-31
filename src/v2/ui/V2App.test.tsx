@@ -283,12 +283,16 @@ describe("V2App", () => {
       expect(add.parentElement!.classList.contains("v2-lane")).toBe(true);
       // V2-096: the root toolbar is exactly the five CapCut modes; each mode has ‹ back to root.
       const labels = () => [...el.querySelectorAll(".v2-toolbar .v2-tool span")].map((x) => x.textContent);
-      expect(labels()).toEqual(["Edit", "Audio", "Text", "Effect", "Overlay"]);
+      // P10: after the five modes comes the Project settings tool (auto-link on phones; "Sync board" too when there is a storyboard).
+      expect(labels()).toEqual(["Edit", "Audio", "Text", "Effect", "Overlay", "Project"]);
       const tap = async (name: string) => { await act(async () => { ([...el.querySelectorAll(".v2-toolbar .v2-tool")].find((b) => b.textContent === name) as HTMLButtonElement).click(); }); };
       await tap("Audio");
       expect(labels()).toEqual(["Add audio", "Create audio"]);
       await act(async () => { (el.querySelector(".v2-tool-back") as HTMLButtonElement).click(); });
-      expect(labels()).toEqual(["Edit", "Audio", "Text", "Effect", "Overlay"]);
+      expect(labels()).toEqual(["Edit", "Audio", "Text", "Effect", "Overlay", "Project"]);
+      await tap("Project");
+      expect(document.body.textContent).toMatch(/Auto-link new clips/);
+      await act(async () => { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
       await tap("Text");
       expect(labels()).toEqual(expect.arrayContaining(["Add text", "Stickers", "Import SRT", "Templates"]));
       await act(async () => { (el.querySelector(".v2-tool-back") as HTMLButtonElement).click(); });

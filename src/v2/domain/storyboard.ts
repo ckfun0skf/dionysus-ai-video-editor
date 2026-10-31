@@ -83,6 +83,9 @@ export interface Shot {
   /** v1.1, kept as written: placed on the timeline by "Send to timeline" (see domain/storySend). */
   layers?: StoryLayer[];
   captions?: boolean;
+  /** P10-SYNC: see StoryShot.needsPrompt / removedFromTimeline. */
+  needsPrompt?: true;
+  removedFromTimeline?: true;
   effects?: StoryEffect[];
   /**
    * V2-SB-120: the images to attach to the clip generation, in order ("Image 1" first), with their roles. Absent = the
@@ -222,6 +225,7 @@ export function storyboardFromDoc(doc: StoryDoc): Storyboard {
       ...(s.render === "html" && s.clip && slots[s.clip] && s.params ? { params: { ...s.params } } : {}),
       ...(s.layers?.length ? { layers: structuredClone(s.layers) } : {}),
       ...(s.captions ? { captions: true } : {}),
+      ...(s.needsPrompt ? { needsPrompt: true as const } : {}), ...(s.removedFromTimeline ? { removedFromTimeline: true as const } : {}),
       ...(s.effects?.length ? { effects: structuredClone(s.effects) } : {}),
       ...(s.genDurationSec ? { genDurationSec: s.genDurationSec } : {}),
       ...(s.references?.length ? { references: s.references.map((r) => ({ slotId: r.asset, role: r.role, ...(r.note ? { note: r.note } : {}) })) } : {}),

@@ -137,6 +137,8 @@ export function BoardView({ project, thumbs, onOpen, openKey, edit, mobile }: { 
                     <b><span className="v2-sb-no">{i + 1}</span>{s.title}</b>
                     <em>{s.durationSec}s{s.description ? ` · ${s.description}` : ""}</em>
                     <span className="v2-sb-shot-status">{versionLabel(project, s, "No clip yet")}{placed.has(s.id) && <span className="v2-sb-placed" title="This shot is on the timeline and follows the version you pick"> · On timeline</span>}<Warn st={status.shots[s.id]} /><LengthWarn project={project} shot={s} /></span>
+                    {(s.needsPrompt || s.layers?.some((l) => l.needsPrompt) || project.storyboard?.audio?.some((c) => c.needsPrompt && c.from === s.id)) && <span className="v2-needs-prompt" title="Made on the timeline by Sync to Storyboard: write its description and prompt (or ask your AI)">⚠ Needs description / prompt</span>}
+                    {s.removedFromTimeline && <span className="v2-removed-tl" title="Its clip was removed from the timeline. The shot is kept; Send to timeline puts it back">Removed from timeline</span>}
                   </span>
                   {edit ? <span aria-hidden /> : <Ic g="anim-out" size={16} />}
                 </button>

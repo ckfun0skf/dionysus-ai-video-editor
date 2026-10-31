@@ -17,6 +17,7 @@ import * as storyEdit from "../domain/storyEdit";
 import * as storyRefs from "../domain/storyRefs";
 import * as storySteps from "../domain/storySteps";
 import { replaceStory, sendStory, updateStory } from "../domain/storySend";
+import { syncPlan } from "../domain/storySync";
 import type { StoryDoc } from "../domain/storyJson";
 import { DEFAULT_TEXT, DEFAULT_TEXT_TICKS, textOf, type TextData } from "../domain/text";
 
@@ -332,6 +333,8 @@ export const sendStoryToTimeline = (): Command => ({
   label: "Send to timeline",
   apply: (p) => sendStory(p).project,
 });
+/** P10-SYNC: write timeline edits back to the storyboard (domain/storySync). One undo. */
+export const syncToStoryboard = (): Command => ({ label: "Sync to storyboard", apply: (p) => syncPlan(p).project });
 /** P2A: Send in Update mode: only what changed since the last send (see storySend.updateStory). */
 export const updateStoryTimeline = (): Command => ({ label: "Update timeline", apply: (p) => updateStory(p).project });
 /** P2A: Send in Replace mode: clear the timeline and rebuild it from the board. */

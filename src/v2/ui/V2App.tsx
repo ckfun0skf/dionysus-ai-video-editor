@@ -37,6 +37,8 @@ import { projectMediaList } from "./projectMedia";
 import { stickerFile, stickers } from "./libraryItems";
 import { newCodeClipHtml } from "./codeSamples";
 import { EffectPicker } from "./EffectPicker";
+import { SyncSheet } from "./SyncSheet";
+import { ProjectSettings as MobileProjectSettings } from "./desktop/ProjectSettings";
 import { HtmlParamsPanel } from "./HtmlParamsPanel";
 import { TransitionPicker, cutOf } from "./TransitionPicker";
 import { loadPreviewVh, PanelGrabber, Sheet, SheetDone } from "./Sheet";
@@ -112,6 +114,10 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const openExport = () => { player.pause(); setExporting(true); };
   const [fs, setFs] = useState(false);
   const [toast, setToast] = useState<string>();
+  /** Toast with an inline Undo button (linked-clip delete). */
+  const [toastUndo, setToastUndo] = useState(false);
+  const [syncOpen, setSyncOpen] = useState(false);
+  const [projOpen, setProjOpen] = useState(false);
   const [inspOpen, setInspOpen] = useState(false);
   const [matchOpen, setMatchOpen] = useState(false);
   /** V2-SB-133: the phone "In point" sheet. */
@@ -178,7 +184,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     const v = a && (a.versions.find((x) => x.id === a.selectedVersionId) ?? a.versions[a.versions.length - 1]);
     return v ? storage.blobs.get(v.media.blobKey) : Promise.resolve(undefined);
   };
-  useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(undefined), 3000); return () => clearTimeout(t); }, [toast]);
+  useEffect(() => { if (!toast) { setToastUndo(false); return; } const t = setTimeout(() => setToast(undefined), toastUndo ? 6000 : 3000); return () => clearTimeout(t); }, [toast, toastUndo]);
   const playerRef = useRef<Player>();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -206,7 +212,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   };
   /** P9-LINK: deleting a main clip deletes its linked clips in the same undo step; say so. */
   const linkedGone = (ids: string[]) => { const c = engine.getState().project.compositions[engine.getState().project.rootCompositionId]; return ids.flatMap((id) => links.linkedTo(c, id)).filter((x) => !ids.includes(x.id)).length; };
-  const delToast = (n: number) => { if (n) setToast(`Deleted ${n} linked clip${n > 1 ? "s" : ""} with it — Undo (${MOD} Z) restores`); };
+  const delToast = (n: number) => { if (n) { setToast(`Deleted ${n} linked clip${n > 1 ? "s" : ""} with it`); setToastUndo(true); } };
   const delSel = (rippleOverride?: boolean) => { if (sel.length) { const n = linkedGone(sel); if (engine.dispatch(cmd.deleteClips(sel, rippleOverride ?? ripple))) delToast(n); setSel([]); setMultiMode(false); } };
   /** Junction button: open the transition picker for the cut before clip `id` (sheet on mobile, inspector tab on desktop). */
   const onTransition = (id: string) => {
@@ -709,6 +715,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       tool("T", "Text", () => enterMode("text"), "text", "Text, stickers and subtitles"),
       tool("effect", "Effect", () => enterMode("effect"), "effect", "Effect layers (blur, zoom, B&W…) and transitions"),
       tool("overlay", "Overlay", () => enterMode("overlay"), "overlay", "Photos and videos on layers above the main track"),
+      ...(project.storyboard ? [tool("board", "Sync board", () => setSyncOpen(true), "sync-story", "Sync to Storyboard: write timeline edits back to the storyboard (review first)")] : []),
+      tool("settings", "Project", () => setProjOpen(true), "project-settings", "Project settings: size, frame rate, background, auto-link"),
     ],
     edit: !selected ? [<span key="h" className="v2-tool-hint">Move the playhead over a main-track clip to edit it</span>] : isEffect ? [
       tool("effect", "Effect", () => setFxOpen(true), "fx-edit", "Change the preset or its settings"),
@@ -884,6 +892,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       <span className="v2-dsep" aria-hidden />
       <button className="v2-dtool v2-dtool-text" title="Add an empty video (overlay) track" onClick={() => engine.dispatch(cmd.addTrack("video"))}><Ic g="▭" size={16} /><span>Video track</span></button>
       <button className="v2-dtool v2-dtool-text" title="Add an empty audio track" onClick={() => engine.dispatch(cmd.addTrack("audio"))}><Ic g="♫" size={16} /><span>Audio track</span></button>
+      {project.storyboard && <><span className="v2-dsep" aria-hidden /><button className="v2-dtool v2-dtool-text v2-sync-btn" title="Sync to Storyboard: write timeline edits (length, order, trim, layers, effects, audio) back to the storyboard — review first" onClick={() => setSyncOpen(true)}><Ic g="board" size={16} /><span>Sync to Storyboard</span></button></>}
       <span className="v2-spacer" />
       {sel.length > 1 && <span className="v2-sel-count v2-sel-pill" role="status">{sel.length} selected</span>}
       <button className={`v2-dtool ${ripple ? "is-active" : ""}`} aria-pressed={ripple} aria-label="Ripple" title="Ripple: delete and trim move later clips to close gaps (R)" onClick={() => setRipple(!ripple)}><Ic g="⇤" size={18} /><span className="v2-sr">Ripple {ripple ? "on" : "off"}</span></button>
@@ -1020,7 +1029,9 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       </div>}
       {!mobile && kbdOpen && <ShortcutsOverlay onClose={() => setKbdOpen(false)} />}
       {!mobile && ctx && <ContextMenu x={ctx.x} y={ctx.y} label={ctx.placementId ? "Clip actions" : "Track actions"} items={ctxItems()} onClose={() => setCtx(undefined)} />}
-      {toast && <div className="v2-toast" role="status" onClick={() => setToast(undefined)}>{toast}</div>}
+      {toast && <div className={`v2-toast ${toastUndo ? "has-undo" : ""}`} role="status" onClick={() => setToast(undefined)}><span>{toast}</span>{toastUndo && <button className="v2-toast-undo" title={`Undo (${MOD} Z)`} onClick={(e) => { e.stopPropagation(); engine.undo(); setToast(undefined); }}>Undo</button>}</div>}
+      {syncOpen && <SyncSheet engine={engine} project={project} onDone={(m) => { setSyncOpen(false); if (m) setToast(m); }} />}
+      {projOpen && <Sheet label="Project settings" className="v2-msheet-insp" onClose={() => setProjOpen(false)}><MobileProjectSettings engine={engine} project={project} onSeries={() => { setProjOpen(false); setSeriesLib(true); }} /></Sheet>}
       {mobile ? (
         <>
           {preview}

@@ -2534,6 +2534,12 @@
           "title": "V2 Link to main: linked non-main clips follow, trim, split and delete with their main clip; auto-link setting; storyboard link:false (RULE 46)",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P10-SYNC-STORYBOARD",
+          "title": "Sync to Storyboard: write timeline edits back to the board (new shots/layers/cues flagged needsPrompt, removed flagged), review sheet, RULE 47, WebMCP sync_to_storyboard/list_needs_prompt; mobile Project settings; delete toast Undo",
+          "status": "done",
+          "progress": 100
         }
       ]
     },
