@@ -92,6 +92,19 @@ export function syncPlan(p: Project): SyncPlan {
   for (const pl of mainClips) {
     if (pl.storyShot && b.shots[pl.storyShot] && !seen.has(pl.storyShot)) { seen.add(pl.storyShot); shotOfClip.set(pl.id, pl.storyShot); continue; }
     if (pl.clipType === "text" || pl.clipType === "effect") continue;
+    // P20: a later part of a shot's own take (a split, e.g. around a promoted overlay) continues that shot: a new shot
+    // with the same clip and prompt, its own in point and length, and no needsPrompt.
+    const orig = pl.storyShot && seen.has(pl.storyShot) ? b0.shots[pl.storyShot] : undefined;
+    const first = orig ? mainClips.find((m) => shotOfClip.get(m.id) === orig.id) : undefined;
+    if (orig && first && first.source.assetId === pl.source.assetId && !pl.reverse && !first.reverse && pl.sourceInTicks >= first.sourceInTicks + Math.round(first.durationTicks * (first.speed ?? 1)) - 1200) {
+      const id = uniqueId(`${orig.id}-part-`, (x) => !!b.shots[x]);
+      const copy = structuredClone(orig);
+      delete copy.needsPrompt; delete copy.removedFromTimeline;
+      b.shots[id] = { ...copy, id, title: `${orig.title} (cont.)`, durationSec: clampDur(sec(pl.durationTicks)), ...(orig.clipSlot ? { clipInSec: Math.round(sec(pl.sourceInTicks) * 100) / 100 } : {}) };
+      pl.storyShot = id; seen.add(id); shotOfClip.set(pl.id, id);
+      changes.push({ kind: "newShot", id, label: `New shot "${b.shots[id].title}" continues "${orig.title}" (same clip)` });
+      continue;
+    }
     const id = uniqueId("shot-tl-", (x) => !!b.shots[x]);
     const a = p.assets[pl.source.assetId];
     b.shots[id] = { id, title: a?.name ?? "New shot", description: "", durationSec: clampDur(sec(pl.durationTicks)), prompt: "", slotIds: [], qa: [], ...(a ? { assetId: a.id } : {}), needsPrompt: true };

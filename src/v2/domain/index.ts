@@ -34,6 +34,7 @@ export * as storyAuto from "./storyAuto";
 export * from "./codeWizard";
 export * as storyAgent from "./storyAgent";
 export * as timelineReview from "./timelineReview";
+export * as promote from "./promote";
 export { storyboardGuideMarkdown } from "./aiGuide";
 export * as series from "./series";
 export type { Series, SeriesAsset, SeriesAssetSummary } from "./series";

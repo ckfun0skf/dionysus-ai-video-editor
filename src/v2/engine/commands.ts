@@ -18,6 +18,7 @@ import * as storyRefs from "../domain/storyRefs";
 import * as storySteps from "../domain/storySteps";
 import { replaceStory, sendStory, updateStory } from "../domain/storySend";
 import { syncPlan } from "../domain/storySync";
+import { promoteOverlay as promoteToMain, type PromoteOptions } from "../domain/promote";
 import type { StoryDoc } from "../domain/storyJson";
 import { DEFAULT_TEXT, DEFAULT_TEXT_TICKS, textOf, type TextData } from "../domain/text";
 
@@ -466,4 +467,22 @@ export const addAudioFromVideo = (asset: Asset, placement: Placement, muteClips:
       return comp;
     });
   },
+});
+
+/**
+ * P20: move overlay clip `id` onto the main track (domain/promote): "replace" covers the main track over the clip's
+ * range, "insert" ripples it later. One undo step. The promoted clip maps to a storyboard shot when its asset is a
+ * shot's clip; otherwise Sync to Storyboard makes it a new shot that needs a prompt.
+ */
+export const promoteOverlay = (id: string, opts: PromoteOptions = {}): Command => ({
+  label: "Promote to main track",
+  apply: (p) => withRoot(p, (c) => {
+    const r = promoteToMain(c, id, opts);
+    if (r.plan.mode === "insert" && r.plan.inside && !opts.position) throw new Error(`The clip starts inside main clip ${r.plan.inside.id}: choose position "before" or "after"`);
+    const pl = r.comp.tracks.flatMap((t) => t.placements).find((x) => x.id === id);
+    if (!pl || pl.storyShot) return r.comp;
+    const shot = Object.values(p.storyboard?.shots ?? {}).find((s) => s.assetId && s.assetId === pl.source.assetId);
+    if (!shot) return r.comp;
+    return { ...r.comp, tracks: r.comp.tracks.map((t) => ({ ...t, placements: t.placements.map((x) => (x.id === id ? { ...x, storyShot: shot.id } : x)) })) };
+  }),
 });

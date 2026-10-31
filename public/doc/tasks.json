@@ -2612,6 +2612,12 @@
           "title": "Glitch video effect preset: RGB split, slice displacement, scanlines/noise, jitter bursts; deterministic; AI rule 53",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P20-PROMOTE-OVERLAY",
+          "title": "Promote an overlay clip to the main track (replace or insert, before/after mini-timeline, storyboard sync, WebMCP promote_overlay)",
+          "status": "done",
+          "progress": 100
         }
       ]
     },
