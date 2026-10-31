@@ -96,3 +96,69 @@ describe("plan_insert_shots tool", () => {
     expect(runStoryTool("plan_insert_shots", { after: "s1", insertJson: EXAMPLE_INSERT }, doc, ctx).ok).toBe(false);
   });
 });
+
+describe("P22: error scope (only the insert blocks)", () => {
+  // A board with pre-existing problems that the app allows: a generated asset without a prompt, a text layer that
+  // ends past its (shortened) shot, blank AI shots, and an html title card.
+  const messy = (() => {
+    const raw = structuredClone(LANTERN_KEEPER) as unknown as { assets: Record<string, unknown>[] };
+    raw.assets.push({ id: "title-card", name: "Title card", type: "html", prompt: "Animated title card." });
+    const r = validateStoryboard(raw); if (!r.ok) throw new Error("fixture");
+    const d = structuredClone(r.doc);
+    d.assets.push({ ...d.assets.find((a) => a.id === "keeper")!, id: "news-2", name: "News 2", prompt: "" });
+    const s3 = d.shots.find((s) => s.id === "s3")!;
+    s3.layers = [{ id: "t1", type: "text", text: "Dawn", startSec: 0, endSec: s3.durationSec + 3 } as never];
+    for (const id of ["s4", "s5"]) d.shots.push({ id, title: `Blank ${id}`, description: "", durationSec: 2, prompt: "", assets: [], qa: [] });
+    return d;
+  })();
+  const ins = (o: Record<string, unknown>) => applyInsertJson(messy, json({ ...ex(), insertAfter: "s5", ...o }), { expectAfter: "s5" });
+  const shot = (id: string, extra: Record<string, unknown> = {}) => ({ id, title: id, description: "x", durationSec: 2, clip: "s2-clip", inSec: 0, ...extra });
+
+  it("does not block on pre-existing issues and lists them separately", () => {
+    const r = ins({ shots: [shot("s6")], newAssets: [] });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const paths = r.existing.map((i) => i.path).join("\n");
+    expect(paths).toMatch(/assets "news-2"\.prompt/);
+    expect(paths).toMatch(/shots "s3"\.layers\[0\]\.endSec/);
+    expect(r.warnings.map((w) => w.path).join()).not.toMatch(/news-2|"s3"/);
+    expect(r.doc.shots.map((s) => s.id)).toEqual(["s1", "s2", "s3", "s4", "s5", "s6"]);
+  });
+  it("blank AI shots are a to-do, not an error, and stay unchanged", () => {
+    const r = ins({ shots: [shot("s6")], newAssets: [] });
+    if (!r.ok) throw new Error(JSON.stringify(r.errors));
+    expect([...r.existing, ...r.warnings].some((i) => /"s4"\.clip|"s5"\.clip/.test(i.path))).toBe(false);
+    const s4 = r.doc.shots.find((s) => s.id === "s4")!;
+    expect(s4.needsPrompt).toBeUndefined();
+    expect(s4.prompt).toBe("");
+  });
+  it("still blocks on errors in the inserted shots and new assets", () => {
+    const r = ins({ shots: [shot("s6", { durationSec: 999 })], newAssets: [{ id: "n1", type: "video", name: "N", prompt: "" }] });
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.errors.every((e) => /"s6"|"n1"/.test(e.path))).toBe(true);
+    expect(r.errors.some((e) => /"s6"/.test(e.path))).toBe(true);
+    expect(r.existing.length).toBeGreaterThan(0);
+  });
+  it("an error in an existing asset the insert uses becomes a warning", () => {
+    const r = ins({ shots: [shot("s6", { clip: "s6-clip" })], newAssets: [{ id: "s6-clip", type: "video", name: "C", prompt: "References: Image 1 = news. A desk.", assets: ["news-2"] }] });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.warnings.some((w) => /news-2/.test(w.path) && /existing asset this insert uses/.test(w.message))).toBe(true);
+    expect(r.existing.some((i) => /news-2/.test(i.path))).toBe(false);
+  });
+  it("an html asset as an AI shot's clip is an error with a fix, and render html is accepted", () => {
+    const bad = ins({ shots: [shot("s6", { clip: "title-card" })], newAssets: [] });
+    expect(bad.ok).toBe(false);
+    if (!bad.ok) expect(bad.errors[0].message).toMatch(/is type html\. To show it as the whole shot set "render": "html"/);
+    const good = ins({ shots: [{ id: "s6", title: "Card", description: "x", durationSec: 2, render: "html", clip: "title-card" }], newAssets: [] });
+    expect(good.ok).toBe(true);
+  });
+  it("the prompt lists asset types and says an AI shot's clip must be a video asset", () => {
+    const p = buildInsertPrompt(messy, "s5", "x");
+    expect(p).toContain("ASSET TYPES AND WHERE THEY GO:");
+    expect(p).toContain('A shot without "render" is an AI shot, so its "clip" MUST be a "video" asset.');
+    expect(p).toMatch(/"render": "html"/);
+    expect(p).toContain("- title-card (html");
+  });
+});
