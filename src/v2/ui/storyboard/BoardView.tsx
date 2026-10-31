@@ -98,6 +98,8 @@ export function BoardView({ project, thumbs, onOpen, openKey, edit, mobile }: { 
   };
 
   const clips = board.shotClips(project);
+  // P16: clips are counted once however many shots play them; html/still shots count as their own clip.
+  const clipStats = (() => { const seen = new Map<string, boolean>(); for (const sh of shots) { const c = clips[sh.id]; seen.set(c ? `${c.label}` : sh.id, c ? c.generated : done(sh)); } return { total: seen.size, done: [...seen.values()].filter(Boolean).length }; })();
   const slotChip = (s: AssetSlot, shot?: Shot) => {
     const pin = shot && board.pinOf(project, shot, s.id);
     const sel = pin ?? board.selectedOf(project, s);
@@ -123,7 +125,7 @@ export function BoardView({ project, thumbs, onOpen, openKey, edit, mobile }: { 
         <div className="v2-sb-stats">
           <span>{shots.length} shots · {Math.round(total * 10) / 10}s · {b.meta.aspect}</span>
           <span><Ic g="image-up" size={14} /> Assets {slots.filter(done).length}/{slots.length}</span>
-          <span><Ic g="▭" size={14} /> Clips {shots.filter(done).length}/{shots.length}</span>
+          <span><Ic g="▭" size={14} /> Clips {clipStats.done}/{clipStats.total}</span>
           {staleCount > 0 && <span className="v2-sb-stale"><Ic g="⚠" size={14} /> {staleCount} may not match</span>}
         </div>
       </div>

@@ -503,6 +503,7 @@ export function syncPlacements(p: Project, assetId: string, retrim?: { versionId
 
 /** Selected clip length vs the planned shot length, when they differ by more than half a second (V2-SB-R06). */
 export function shotLengthMismatch(p: Project, s: Shot): { actualSec: number; plannedSec: number } | undefined {
+  if (!s.render && s.clipSlot) return undefined; // P16: a shared clip plays a part (inSec + duration) of a longer take
   const v = versionsOf(p, s).find((x) => x.id === selectedOf(p, s));
   const d = versionSpan(p.storyboard, v)?.lenTicks;
   if (!d || !s.durationSec) return undefined;

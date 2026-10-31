@@ -1429,7 +1429,7 @@ export function validateStoryboard(raw: unknown, opts: StoryValidateOptions = {}
     audio.push(cue);
   });
 
-  const usedBy = (id: string) => audio.some((c) => c.asset === id) || shots.some((s) => s.assets.includes(id) || s.keyframe?.references.some((r) => assetRefId(r) === id) || (s.render && s.render !== "ai" && s.clip === id) || s.layers?.some((l) => l.type !== "text" && l.asset === id));
+  const usedBy = (id: string) => audio.some((c) => c.asset === id) || shots.some((s) => s.assets.includes(id) || s.keyframe?.references.some((r) => assetRefId(r) === id) || s.clip === id || s.layers?.some((l) => l.type !== "text" && l.asset === id));
   allAssets.forEach((a, i) => { if (!usedBy(a.id) && !allAssets.some((b) => b.references.some((r) => assetRefId(r) === a.id))) warn(assetPaths[i], a.stateOf ? `State "${a.id}" isn't used by any shot.` : `Asset "${a.id}" isn't used by any shot.`); });
 
   let connections: StoryConnection[] = [];

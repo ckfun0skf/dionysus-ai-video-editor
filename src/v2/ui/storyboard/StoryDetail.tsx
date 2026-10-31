@@ -267,7 +267,7 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
       {slot && <SeriesLink project={project} slotId={slot.id} engine={engine} />}
       {slot?.type === "video" && (slot.genDurationSec || trimWin !== undefined) && <p className="v2-sb-detail-desc">{slot.genDurationSec ? <span title="Ask the video model for this length">generate {slot.genDurationSec}s</span> : null}{slot.genDurationSec && trimWin !== undefined ? " · " : null}{trimWin !== undefined ? <span title="The longest video layer that shows this asset">layers use {Math.round(trimWin * 100) / 100}s</span> : null}</p>}
       {shot && <p className="v2-sb-detail-desc">{shot.durationSec}s{shot.genDurationSec ? <> · <span title="Ask the video model for this length; the upload is trimmed to the shot length">generate {shot.genDurationSec}s</span></> : null} · {shot.description}</p>}
-      {clipSlot && (
+      {clipSlot && !sharedVideo && (
         <p className="v2-sb-cliplink" role="note">
           <Ic g={TYPE_ICON[clipSlot.type] ?? "image"} size={14} /> {shot!.render === "html" ? "Plays the HTML" : "Shows the still"} “{clipSlot.name}” for {shot!.durationSec} s. Its versions are shared with that asset.{" "}
           <button className="v2-linkbtn" onClick={() => onOpen({ slot: clipSlot.id })}>Open “{clipSlot.name}”</button>
@@ -365,7 +365,7 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
         {err && <p className="v2-sb-err" role="alert"><Ic g="alert" size={14} /> {err}</p>}
       </Section>}
 
-      {shot && !shot.render && <Keyframe shot={shot} project={project} thumbs={thumbs} engine={engine} onOpen={onOpen} />}
+      {shot && !shot.render && !sharedVideo && <Keyframe shot={shot} project={project} thumbs={thumbs} engine={engine} onOpen={onOpen} />}
       {slot?.keyframeOf && b.shots[slot.keyframeOf] && (
         <p className="v2-hint v2-sb-kfnote">Keyframe of shot {shotNo(slot.keyframeOf)}: make this still first; the clip animates from it (Image 1, the start frame).{" "}
           <button className="v2-linkbtn" onClick={() => onOpen({ shot: slot.keyframeOf! })}>Open shot {shotNo(slot.keyframeOf)}</button></p>
