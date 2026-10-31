@@ -25,7 +25,7 @@ When the user turns on agent access (Storyboard → Agent) in a browser with Web
 - `get_guide` · read-only: The Dionysus storyboard guide: how the format becomes a video, every field, the preset ids you may use, the numbered rules and an example. Read it before editing.
 - `get_storyboard`(id) · read-only: Without "id": a summary (title, counts, the shot list with ids, durations and titles, asset ids, cue ids). With "id": the full JSON of that shot, asset ("<asset>@<state>" for a state), audio cue, or "meta" / "connections".
 - `create_storyboard`(meta, assets, shots, audio, connections): Start a new storyboard when there is none: "meta" (title, aspect, style, …), any "assets", and at least one shot. Add the rest with add_shot. Fails if a storyboard exists (edit it instead).
-- `update_meta`(patch): Change storyboard "meta" fields (title, aspect, style, fps, textStyles, …).
+- `update_meta`(patch): Change storyboard "meta" fields (title, aspect, style, fps, textStyles, audioOutput { mode: stereo | binaural, environment?: room | outdoor }, …).
 - `add_asset`(asset): Add an asset (character, location, prop, style, image, frame, video, audio or html).
 - `update_asset`(id, patch): Change fields of an asset (name, prompt, references, qa, aspect, source, states, …).
 - `remove_asset`(id): Remove an asset. Rejected while a shot, layer, cue or other asset still uses it (the error lists where); change those first.
@@ -40,7 +40,7 @@ When the user turns on agent access (Storyboard → Agent) in a browser with Web
 - `reorder_shots`(id, index, order): Move one shot ("id" + 0-based "index") or give the whole new "order" (every shot id once).
 - `set_connection`(connection, remove): Set the connection between two adjacent shots (kind cut / continuity / match, note, transition). "remove": true deletes it.
 - `add_cue`(cue): Add an audio cue (voiceover, music, sfx, ambience, sting, dialogue) that plays from a shot. Gets "audio<n>" as id when you give none.
-- `update_cue`(id, patch): Change fields of an audio cue (from, to, atSec, volume, fades, loop, volumeKeys, fx, …).
+- `update_cue`(id, patch): Change fields of an audio cue (from, to, atSec, volume, fades, loop, volumeKeys, fx, position { azimuth, distance, width? }, pan, positionKeys, …).
 - `remove_cue`(id): Remove an audio cue.
 - `list_series_assets` · read-only: List the shared assets of the Series this project belongs to (id, type, name, short description, states). Reuse them with use_series_asset instead of defining a new character, prop, location or style.
 - `use_series_asset`(id, as): Add a Series asset to the board, linked: its definition, states and uploads come from the Series and stay in sync. Then use its id (or "<id>@<state>") in shots.
@@ -63,7 +63,7 @@ The same tab also registers tools that read, review and edit the timeline itself
 - `trim_clip`(id, edge, atSec, ripple): Move a clip's left or right edge to atSec on the timeline. ripple: true closes/opens the gap on the main track. One undo step; returns the clip.
 - `split_clip`(id, atSec): Split a clip at atSec (inside it). One undo step; returns both halves.
 - `delete_clip`(ids, ripple): Delete one or more clips (and the layers linked to them). ripple: true closes the gap on the main track. One undo step.
-- `set_clip_props`(id, volume, transform, effect, fades, speed, blend, text): Change a clip in one undo step: volume (0..2), transform { x, y, scale, rotation, opacity } (null resets), effect { preset, params } (effect clips only; videoEffect preset ids and param ranges as in get_guide), fades { inSec, outSec }, speed (0.25..4), blend, text (text clips only: { text, size, color, … }). Values are never clamped: an unknown preset, param, field or an out-of-range value fails the whole call with the reason and nothing changes. Returns the clip.
+- `set_clip_props`(id, volume, transform, effect, fades, speed, blend, text, position, positionKeys, pan, trackPosition, audioOutput): Change a clip in one undo step: volume (0..2), transform { x, y, scale, rotation, opacity } (null resets), effect { preset, params } (effect clips only; videoEffect preset ids and param ranges as in get_guide), fades { inSec, outSec }, speed (0.25..4), blend, text (text clips only: { text, size, color, … }); P14 sound position (clips with sound): position { azimuth -180..180 (0 front, -90 left, 90 right, ±180 behind), distance 0..1 (0 at the ear, 1 ≈ 20 m), width? 0..1 (1 keeps a stereo file's own image) } or null (centre, unprocessed), pan -1..1 (shorthand: azimuth = pan × 90), positionKeys [{ t: seconds from the clip start, azimuth, distance }] or null, trackPosition (default for the clip's track) and audioOutput { mode: stereo | binaural, environment?: room | outdoor } (whole project). Values are never clamped: an unknown preset, param, field or an out-of-range value fails the whole call with the reason and nothing changes. Returns the clip.
 - `add_clip`(assetId, startSec, trackId): Place a project media asset (id from get_timeline's "assets") at startSec, on trackId or the main track / a matching track. One undo step; returns the new clip.
 
 ## Optional

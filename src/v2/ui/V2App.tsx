@@ -60,6 +60,7 @@ import { type Sticker } from "./libraryItems";
 import { text as textDomain } from "../domain";
 import { canChromaKey, CHROMA_DEFAULT, hasSound } from "../domain";
 import { AudioFxPanel, ChromaKeyPanel, VolumeCurve } from "./SoundAndKey";
+import { SpatialPad } from "./SpatialPad";
 import { mediaKey } from "./useMedia";
 import { SliderField } from "./SliderField";
 import { VolumeHold } from "./VolumeHold";
@@ -128,6 +129,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const [ckOpen, setCkOpen] = useState(false);
   const [vcOpen, setVcOpen] = useState(false);
   const [afxOpen, setAfxOpen] = useState(false);
+  const [posOpen, setPosOpen] = useState(false);
   const [eyedrop, setEyedrop] = useState<string>();
   const [textOpen, setTextOpen] = useState(false);
   /** V2-103: text layer being edited as a whole ("Edit all"). */
@@ -740,7 +742,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       ...(selAudioSpec ? [tool("♫", "Edit audio", () => void openAudio(), "edit-audio", "Open this clip in the Audio editor; saving makes a new version")] : []),
       tool("⤧", "Adjust", () => setInspOpen(true), "adjust", "Transform, keyframes and fades"),
       ...(canChromaKey(selected.placement) ? [tool("chroma", "Chroma key", () => setCkOpen(true), "chroma", "Remove a green or blue screen colour")] : []),
-      ...(hasSound(selected.placement) ? [tool("curve", "Volume curve", () => setVcOpen(true), "vcurve", "Volume points over the waveform, and fades"), tool("afx", "Audio FX", () => setAfxOpen(true), "afx", "Echo, telephone, radio, robot…")] : []),
+      ...(hasSound(selected.placement) ? [tool("curve", "Volume curve", () => setVcOpen(true), "vcurve", "Volume points over the waveform, and fades"), tool("afx", "Audio FX", () => setAfxOpen(true), "afx", "Echo, telephone, radio, robot…"), tool("spatial", "Position", () => setPosOpen(true), "position", "Where the sound sits: left, right, behind, near or far")] : []),
       ...(speedSelect ? [tool("⏩", `Speed ${sp!.speed ?? 1}×`, () => setMenu("speed"), "speed", "Playback speed")] : []),
       ...(inPointable ? [tool("⇤", "In point", () => setInOpen(true), "in-point", "Where the clip starts in its video (slip)")] : []),
       ...linkActions.map((a) => linkTool(a)),
@@ -855,6 +857,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       <section aria-label="Volume"><h4>Volume</h4>{volumeRow(pl)}</section>
       <VolumeCurve engine={engine} placement={pl} time={time} peaks={peaks[mediaKey(pl.source.assetId, pl.source.versionId)]} />
       <AudioFxPanel engine={engine} placement={pl} />
+      <SpatialPad engine={engine} project={project} placement={pl} track={selected.track} time={time} />
       {kind === "audio" && <TransformInspector engine={engine} placement={pl} time={time} />}
       {linkedAudioActions.length > 0 && <section aria-label="Clip audio"><h4>Clip audio</h4>{actionList(linkedAudioActions)}</section>}
       <section aria-label="Track"><h4>Track</h4>{actionList([{ icon: selected.track.muted ? "🔈" : "🔇", label: selected.track.muted ? "Unmute track" : "Mute track", title: "Silence the whole track", run: () => engine.dispatch(cmd.toggleTrackMute(selected.track.id)) }])}</section>
@@ -1067,6 +1070,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           {ckOpen && selected && canChromaKey(selected.placement) && <Sheet label="Chroma key" className="v2-msheet-insp" dim={false} onClose={() => { setCkOpen(false); setEyedrop(undefined); }}><ChromaKeyPanel engine={engine} placement={selected.placement} picking={eyedrop === selected.placement.id} onPick={(on) => setEyedrop(on ? selected.placement.id : undefined)} /></Sheet>}
           {vcOpen && selected && hasSound(selected.placement) && <Sheet label="Volume curve" className="v2-msheet-insp" onClose={() => setVcOpen(false)}><VolumeCurve engine={engine} placement={selected.placement} time={time} peaks={peaks[mediaKey(selected.placement.source.assetId, selected.placement.source.versionId)]} /></Sheet>}
           {afxOpen && selected && hasSound(selected.placement) && <Sheet label="Audio FX" className="v2-msheet-insp" onClose={() => setAfxOpen(false)}><AudioFxPanel engine={engine} placement={selected.placement} /></Sheet>}
+          {posOpen && selected && hasSound(selected.placement) && <Sheet label="Position" className="v2-msheet-insp" onClose={() => setPosOpen(false)}><SpatialPad engine={engine} project={project} placement={selected.placement} track={selected.track} time={time} /></Sheet>}
           {inOpen && selected && inPointable && <Sheet label="In point" className="v2-msheet-insp" onClose={() => setInOpen(false)}><InPointControl engine={engine} project={project} placement={selected.placement} /></Sheet>}
           {subsTrack && <Sheet label="Edit subtitles" className="v2-msheet-tall" head={false} onClose={() => setSubsEdit(undefined)}><SubtitleList engine={engine} track={subsTrack} time={time} playing={playing} onSeek={seek} desktop={false} name={project.name} focusCue={subsCue} onDone={() => setSubsEdit(undefined)} /></Sheet>}
           {layerTrack && !selected && <Sheet label={`Edit all · ${layerTrack.name}`} className="v2-msheet-insp" onClose={() => setLayerEdit(undefined)}><TextPanel key={layerTrack.id} engine={engine} layer={layerTrack} initialTab="Style" /></Sheet>}

@@ -26,6 +26,7 @@ export type { Storyboard, AssetSlot, Shot, VersionInfo, QaCheck, QaResult, Stale
 export * from "./htmlClipPackage";
 export * from "./audioClip";
 export * from "./audioClipPrompt";
+export * from "./spatial";
 export * from "./htmlClipBindings";
 export * as storyAuto from "./storyAuto";
 export * from "./codeWizard";

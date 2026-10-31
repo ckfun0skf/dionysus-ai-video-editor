@@ -7,6 +7,7 @@ import { resolveSeriesRefs, usesSeries, type SeriesLike } from "./storySeries";
 import { effectMoves } from "./storyFollow";
 import { checkParamValue, cleanParamDecls, validateParamDecls, type HtmlClipParam, type HtmlParamValues } from "./htmlClipPackage";
 import { FONTS, getFont, getPreset, listPresets, parsePresetRef, type PresetDescriptor, type PresetKind } from "../registry";
+import { positionErrors } from "./spatial";
 
 export const STORYBOARD_FORMAT = "dionysus.storyboard/1" as const;
 
@@ -265,7 +266,9 @@ export function parseDialogueText(text: string): StoryDialogueLine[] {
   });
 }
 export interface StoryConnection { from: string; to: string; kind: ConnectionKind; note?: string; transition?: StoryTransition }
-export interface StoryMeta { title: string; logline?: string; synopsis?: string; aspect: string; style?: string; language?: string; textStyles?: Record<string, StoryTextStyle> }
+export interface StoryMeta { title: string; logline?: string; synopsis?: string; aspect: string; style?: string; language?: string; textStyles?: Record<string, StoryTextStyle>;
+  /** P14-SPATIAL: project audio output: "stereo" (default) or "binaural" (headphones, HRTF); environment "room" (default) or "outdoor". */
+  audioOutput?: { mode: "stereo" | "binaural"; environment?: "room" | "outdoor" } }
 /** V2-SB-125: what an audio cue is for. It sets the defaults (music sits under the picture and fades). */
 export const AUDIO_KINDS = ["voiceover", "music", "sfx", "ambience", "sting", "dialogue"] as const;
 export type AudioKind = (typeof AUDIO_KINDS)[number];
@@ -303,6 +306,14 @@ export interface StoryAudio {
   volumeKeys?: StoryVolumeKey[];
   /** P3B-11: sound effect (echo, telephone, radio…). */
   fx?: StoryAudioFx;
+  /**
+   * P14-SPATIAL: where the cue sits around the listener: azimuth degrees (0 front, -90 left, 90 right, ±180 behind),
+   * distance 0 (at the ear) to 1 (≈20 m), width 0-1 (1 = keep a stereo file's own image). `pan` -1..1 is shorthand
+   * (azimuth = pan × 90, distance 0) and is turned into `position` on import.
+   */
+  position?: { azimuth: number; distance: number; width?: number };
+  /** P14-SPATIAL: animated position, t = seconds from the cue start; linear, shortest way round. */
+  positionKeys?: { t: number; azimuth: number; distance: number }[];
   /** P9-LINK: `false` = not linked to the "from" shot's main clip (absent/true = linked when it fits in that shot). */
   link?: false;
   /** P10-SYNC: see StoryLayerBase. */
@@ -571,6 +582,13 @@ export function validateStoryboard(raw: unknown, opts: StoryValidateOptions = {}
       if (st) localStyles[id] = st;
     }
     if (Object.keys(localStyles).length) meta.textStyles = localStyles;
+  }
+  // P14-SPATIAL: project audio output.
+  if (m.audioOutput !== undefined) {
+    const a = m.audioOutput;
+    if (!isObj(a) || !["stereo", "binaural"].includes(a.mode as string) || (a.environment !== undefined && !["room", "outdoor"].includes(a.environment as string)))
+      warn("meta.audioOutput", 'Should be { "mode": "stereo" | "binaural", "environment"?: "room" | "outdoor" }; using stereo, room.');
+    else meta.audioOutput = { mode: a.mode as "stereo" | "binaural", ...(a.environment ? { environment: a.environment as "room" | "outdoor" } : {}) };
   }
 
   /**
@@ -1280,6 +1298,32 @@ export function validateStoryboard(raw: unknown, opts: StoryValidateOptions = {}
           else amount = n;
         }
         if (preset) cue.fx = { preset, ...(amount !== undefined ? { amount } : {}) };
+      }
+    }
+    // P14-SPATIAL: position / pan shorthand / positionKeys (bad values warn and are dropped).
+    if (c.pan !== undefined) {
+      const n = num(c.pan);
+      if (n === undefined || n < -1 || n > 1) warn(`${path}.pan`, `pan ${JSON.stringify(c.pan)} is ignored: use -1 (left) to 1 (right).`);
+      else if (c.position !== undefined) warn(`${path}.pan`, `The cue has both "pan" and "position"; "position" is used.`);
+      else cue.position = { azimuth: Math.round(n * 90 * 10) / 10, distance: 0 };
+    }
+    if (c.position !== undefined) {
+      const errs = positionErrors(`${path}.position`, c.position);
+      if (errs.length) warn(`${path}.position`, `${errs.join(" ")} Ignoring it.`);
+      else { const q = c.position as { azimuth: number; distance: number; width?: number }; cue.position = { azimuth: q.azimuth, distance: q.distance, ...(q.width !== undefined ? { width: q.width } : {}) }; }
+    }
+    if (c.positionKeys !== undefined) {
+      if (!Array.isArray(c.positionKeys)) warn(`${path}.positionKeys`, '"positionKeys" must be a list of { "t": seconds from the cue start, "azimuth", "distance" }; ignoring it.');
+      else {
+        const keys: { t: number; azimuth: number; distance: number }[] = [];
+        c.positionKeys.forEach((k, j) => {
+          const kp = `${path}.positionKeys[${j}]`, t = isObj(k) ? num(k.t) : undefined;
+          const errs = [...(t === undefined || t < 0 ? [`${kp}.t must be seconds from the cue start (0 or more).`] : []), ...positionErrors(kp, k, false)];
+          if (errs.length) warn(kp, `${errs.join(" ")} Ignoring this point.`);
+          else keys.push({ t: t!, azimuth: (k as { azimuth: number }).azimuth, distance: (k as { distance: number }).distance });
+        });
+        keys.sort((a, b) => a.t - b.t);
+        if (keys.length) cue.positionKeys = keys;
       }
     }
     if (fromShot && cue.atSec !== undefined && cue.atSec >= fromShot.durationSec) warn(`${path}.atSec`, `atSec ${cue.atSec} is at or past the end of shot "${from}" (${fromShot.durationSec} s); the cue starts later than that shot.`);

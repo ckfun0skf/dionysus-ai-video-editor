@@ -65,7 +65,7 @@ describe("WebMCP doc (P4C)", () => {
   it("llms.txt describes every tool and the rules exist", () => {
     const txt = llmsTxt(DEFAULT_SITE_URL);
     for (const t of STORY_TOOLS) expect(txt).toContain(`\`${t.name}\``);
-    expect(RULE_LIST.map((r) => r.key).slice(-8)).toEqual(["series-reuse", "series-promote", "series-tools", "effect-apply-to", "typewriter-cursor", "link-to-main", "fill-needs-prompt", "review-timeline"]);
+    expect(RULE_LIST.map((r) => r.key).slice(-8)).toEqual(["series-promote", "series-tools", "effect-apply-to", "typewriter-cursor", "link-to-main", "fill-needs-prompt", "review-timeline", "spatial-audio"]);
     for (const t of TIMELINE_TOOLS) expect(txt).toContain(`\`${t.name}\``);
   });
 });
@@ -95,7 +95,13 @@ describe("AI planner guide (V2-SB-114)", () => {
   it("the full prompt inlines the guide with RULES 1-37; the short prompt links to it", () => {
     const full = storyboardSystemPrompt();
     for (const s of ["FORMAT (", "PRESETS", "RULES", "EXAMPLE", `14. ${RULES[13]}`, "not seconds", "START FRAME", "\"references\"?", "\"genDurationSec\"?", "- crossfade:", "- ken-burns:"]) expect(full).toContain(s);
-    expect(RULES).toHaveLength(48);
+    expect(RULES).toHaveLength(49);
+    // P14-SPATIAL: rule 49 (appended) documents position / pan / positionKeys / width and meta.audioOutput.
+    expect(ruleNumber("spatial-audio")).toBe(49);
+    expect(full).toContain(`49. ${RULES[48]}`);
+    expect(RULES[48]).toContain('"width" (0-1, default 1)');
+    expect(full).toContain('"positionKeys"?: [ { "t": number, "azimuth": number, "distance": number } ]');
+    expect(full).toContain('"audioOutput"?: { "mode": "stereo" | "binaural"');
     // P6-FX-SCOPE: rule 44 (appended) documents shots[].effects[].applyTo.
     expect(full).toContain(`44. ${RULES[43]}`);
     // P7-TYPE-CURSOR: rule 45 (appended) documents layers[].anim.inParams (typewriter cursor) and the sci-fi fonts.
@@ -173,7 +179,7 @@ describe("AI planner guide (V2-SB-114)", () => {
 
   it("RULE 30 (P2A): revised JSON is re-imported by id, so ids stay stable", () => {
     expect(RULE_LIST.slice(29, 30).map((r) => r.key)).toEqual(["stable-ids-reimport"]);
-    expect(RULE_LIST.slice(30).map((r) => r.key)).toEqual(["self-contained-prompts", "reference-sheets", "html-code-refs", "shot-background", "lastframe-refs", "chroma-key", "audio-shaping", "audio-json", "long-story-parts", "web-mcp", "series-reuse", "series-promote", "series-tools", "effect-apply-to", "typewriter-cursor", "link-to-main", "fill-needs-prompt", "review-timeline"]);
+    expect(RULE_LIST.slice(30).map((r) => r.key)).toEqual(["self-contained-prompts", "reference-sheets", "html-code-refs", "shot-background", "lastframe-refs", "chroma-key", "audio-shaping", "audio-json", "long-story-parts", "web-mcp", "series-reuse", "series-promote", "series-tools", "effect-apply-to", "typewriter-cursor", "link-to-main", "fill-needs-prompt", "review-timeline", "spatial-audio"]);
     expect(ruleNumber("typewriter-cursor")).toBe(45);
     // P9-LINK: rule 46 (appended) documents layers[].link / audio[].link = false.
     expect(ruleNumber("link-to-main")).toBe(46);

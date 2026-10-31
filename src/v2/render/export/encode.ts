@@ -6,7 +6,9 @@ import type { BlobStore } from "../../ports/storage";
 import { Player } from "../player";
 import { ExportVideoFrames } from "./videoFrames";
 import { audioFxData, buildFxChain } from "../audioFx";
-import { audioPlan, gainEvents, keyEvents, exportDuration, exportSize, frameTimes, type AudioSegment, type Resolution } from "./plan";
+import { buildSpatial } from "../spatial";
+import { audioOutputOf, type AudioOutput } from "../../domain/spatial";
+import { audioPlan, gainEvents, keyEvents, spatialEvents, exportDuration, exportSize, frameTimes, type AudioSegment, type Resolution } from "./plan";
 
 export interface ExportProgress { stage: "audio" | "video" | "finalize"; done: number; total: number }
 /**
@@ -85,7 +87,7 @@ export async function probeExportFormat(project: Project, res: Resolution): Prom
 }
 
 /** Mix the audio plan offline (decoded sources, speed, volume, fades). */
-export async function mixAudio(segs: AudioSegment[], seconds: number, blobs: BlobStore, signal?: AbortSignal): Promise<AudioBuffer | undefined> {
+export async function mixAudio(segs: AudioSegment[], seconds: number, blobs: BlobStore, signal?: AbortSignal, output: Required<AudioOutput> = { mode: "stereo", environment: "room" }): Promise<AudioBuffer | undefined> {
   if (!segs.length || typeof OfflineAudioContext === "undefined") return undefined;
   const ctx = new OfflineAudioContext(2, Math.max(1, Math.ceil(seconds * RATE)), RATE);
   const decoded = new Map<string, Promise<AudioBuffer | undefined>>();
@@ -106,10 +108,19 @@ export async function mixAudio(segs: AudioSegment[], seconds: number, blobs: Blo
     const fxData = s.fx ? audioFxData(s.fx.preset) : undefined;
     const chain = fxData ? buildFxChain(ctx, fxData, s.fx!.amount, s.start) : undefined;
     src.connect(g).connect(kg);
-    if (chain) { kg.connect(chain.input); chain.output.connect(ctx.destination); } else kg.connect(ctx.destination);
+    // P14-SPATIAL: position stage last (same builder as the preview); absent = straight to the speakers.
+    const dest: AudioNode = s.spatial ? spatialStage(ctx, s, output) : ctx.destination;
+    if (chain) { kg.connect(chain.input); chain.output.connect(dest); } else kg.connect(dest);
     src.start(s.start, s.offset, s.duration * s.rate);
   }
   return ctx.startRendering();
+}
+
+function spatialStage(ctx: BaseAudioContext, s: AudioSegment, output: Required<AudioOutput>): AudioNode {
+  const st = buildSpatial(ctx, output.mode, output.environment);
+  spatialEvents(s).forEach((e, i) => st.set(e.pos, e.at, i ? "ramp" : "set"));
+  st.output.connect(ctx.destination);
+  return st.input;
 }
 
 export async function exportProject(project: Project, blobs: BlobStore, o: ExportOptions): Promise<ExportResult> {
@@ -118,7 +129,7 @@ export async function exportProject(project: Project, blobs: BlobStore, o: Expor
   const seconds = exportDuration(project);
   if (seconds <= 0) throw new Error("The timeline is empty — add a clip first.");
   o.onProgress?.({ stage: "audio", done: 0, total: 1 });
-  const audio = await mixAudio(audioPlan(project), seconds, blobs, o.signal);
+  const audio = await mixAudio(audioPlan(project), seconds, blobs, o.signal, audioOutputOf(project));
   abortIf(o.signal);
   await loadBundledFonts(); // P7-FONTS: every exported frame uses the bundled faces, as the preview does
   const canvas = document.createElement("canvas");

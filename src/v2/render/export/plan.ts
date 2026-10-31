@@ -1,5 +1,6 @@
 /** Pure export planning: output size, frame times and the audio mix (no browser APIs). */
-import { versionOf, compositionDuration, type Project } from "../../domain/model";
+import { versionOf, compositionDuration, type Placement, type Project, type Track } from "../../domain/model";
+import { spatialAt, spatialOf, type PositionKey, type SpatialPos } from "../../domain/spatial";
 import { TICKS_PER_SECOND } from "../../domain/time";
 
 export const RESOLUTIONS = { "720p": 720, "1080p": 1080, "2K": 1440, "4K": 2160 } as const;
@@ -33,6 +34,8 @@ export interface AudioSegment {
   keys?: { t: number; v: number }[];
   /** P3B-11: audio effect preset and amount (absent = dry). */
   fx?: { preset: string; amount: number };
+  /** P14-SPATIAL: position (clip's, else its track's); key `t` in seconds from the segment start. Absent = unprocessed. */
+  spatial?: { base: SpatialPos; keys?: PositionKey[] };
 }
 
 /**
@@ -88,9 +91,25 @@ export function audioPlan(project: Project): AudioSegment[] {
       const f = fitFades(s(p.durationTicks), s(p.fadeInTicks ?? 0), s(p.fadeOutTicks ?? 0));
       out.push({ blobKey: v.media.blobKey, start: s(p.startTicks), duration: s(p.durationTicks), offset: s(p.sourceInTicks), rate: p.speed ?? 1, volume: p.volume ?? 1, ...f,
         ...(p.keyframes?.volume?.length ? { keys: p.keyframes.volume.map((k) => ({ t: s(k.t), v: k.v })) } : {}),
-        ...(p.audioFx && p.audioFx.amount > 0 ? { fx: { ...p.audioFx } } : {}) });
+        ...(p.audioFx && p.audioFx.amount > 0 ? { fx: { ...p.audioFx } } : {}),
+        ...spatialSeg(p, track, s) });
     }
   }
+  return out;
+}
+
+function spatialSeg(p: Placement, track: Track, s: (t: number) => number): Pick<AudioSegment, "spatial"> {
+  const sp = spatialOf(p, track);
+  return sp ? { spatial: { base: sp.base, ...(sp.keys ? { keys: sp.keys.map((k) => ({ ...k, t: s(k.t) })) } : {}) } } : {};
+}
+
+/** P14-SPATIAL: position samples for automation, absolute seconds: one at the start, then every `step` s with keys. */
+export function spatialEvents(seg: Pick<AudioSegment, "start" | "duration" | "spatial">, step = 0.05): { at: number; pos: SpatialPos }[] {
+  const sp = seg.spatial; if (!sp) return [];
+  if (!sp.keys?.length) return [{ at: seg.start, pos: sp.base }];
+  const out: { at: number; pos: SpatialPos }[] = [];
+  const n = Math.max(1, Math.ceil(seg.duration / step));
+  for (let i = 0; i <= n; i++) { const t = Math.min(seg.duration, i * step); out.push({ at: seg.start + t, pos: spatialAt(sp, t) }); }
   return out;
 }
 

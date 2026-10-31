@@ -60,6 +60,9 @@ const SHOT = obj({
 const CUE = obj({
   id: id('Cue id (default "audio<n>").'), asset: str("Audio asset id."), kind: en(AUDIO_KINDS, "Cue kind."), from: str("Shot id the cue starts at."), to: str("Shot id it ends at (inclusive)."),
   atSec: num("Offset into the from shot."), volume: num("0-2, 1 = as recorded."),
+  position: { type: "object", description: "P14: where the sound sits: { azimuth: -180..180 degrees (0 front, -90 left, 90 right, ±180 behind), distance: 0 (at the ear) .. 1 (≈20 m), width?: 0..1 (1 = keep a stereo file's own image) }." },
+  pan: num("-1..1 shorthand: azimuth = pan × 90, distance 0."),
+  positionKeys: { type: "array", description: "P14: animated position [{ t: seconds from the cue start, azimuth, distance }], linear, shortest way round." },
 }, ["asset", "kind", "from"], "An audio cue on the storyboard.");
 const CONNECTION = obj({ from: str("Shot id."), to: str("The next shot id."), kind: en(CONNECTION_KINDS, "How the shots join."), note: str("Why."), transition: { description: 'A transition preset { "preset", "durationSec"? }; null removes it.' } }, ["from", "to"]);
 
@@ -148,7 +151,7 @@ export const STORY_TOOLS: StoryTool[] = [
   },
   {
     name: "update_meta", title: "Update title and settings", readOnly: false,
-    description: 'Change storyboard "meta" fields (title, aspect, style, fps, textStyles, …).',
+    description: 'Change storyboard "meta" fields (title, aspect, style, fps, textStyles, audioOutput { mode: stereo | binaural, environment?: room | outdoor }, …).',
     inputSchema: obj({ patch: patch("meta") }, ["patch"]),
     edit: (raw, a) => { raw.meta ??= {}; const e = applyPatch(raw.meta, a.patch); return e ?? { label: "AI: update storyboard settings", message: "Meta updated." }; },
   },
@@ -286,7 +289,7 @@ export const STORY_TOOLS: StoryTool[] = [
   },
   {
     name: "update_cue", title: "Change an audio cue", readOnly: false,
-    description: "Change fields of an audio cue (from, to, atSec, volume, fades, loop, volumeKeys, fx, …).",
+    description: "Change fields of an audio cue (from, to, atSec, volume, fades, loop, volumeKeys, fx, position { azimuth, distance, width? }, pan, positionKeys, …).",
     inputSchema: obj({ id: str("Cue id."), patch: patch("cue") }, ["id", "patch"]),
     edit: (raw, a) => { const i = findIdx(raw.audio, a.id); if (i < 0) return `No cue "${String(a.id)}".`; const e = applyPatch(raw.audio![i], a.patch); return e ?? { label: `AI: edit cue ${String(a.id)}`, message: `Cue "${String(a.id)}" updated.` }; },
   },

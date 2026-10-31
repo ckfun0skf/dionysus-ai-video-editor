@@ -7,6 +7,8 @@ import { activeAt, placeRect, upcomingMedia, type Placed } from "./frame";
 import { TICKS_PER_SECOND, ticksToSeconds } from "../domain/time";
 import { drawKeyed } from "./chromaKey";
 import { audioFxData, buildFxChain, fxKey, type FxChain } from "./audioFx";
+import { buildSpatial, type SpatialStage } from "./spatial";
+import { audioOutputOf, spatialAt, spatialOf, type AudioEnvironment, type AudioOutputMode } from "../domain/spatial";
 import { compositionDuration, fadeAt, volumeKeyAt, versionOf, type Placement, type Project } from "../domain/model";
 import type { BlobStore } from "../ports/storage";
 import { subtitleAt } from "../domain/subtitles";
@@ -61,6 +63,8 @@ export class Player {
   private audioCtx?: AudioContext;
   private gains = new Map<HTMLMediaElement, GainNode>();
   private fxChains = new Map<HTMLMediaElement, { key: string; chain: FxChain }>();
+  /** P14-SPATIAL: per-element position stage, rebuilt when the output mode/environment changes. */
+  private spatials = new Map<HTMLMediaElement, { key: string; stage: SpatialStage }>();
   private startTicks = 0;
   time = 0;
   /** Canvas-space placement of each visual clip in the last drawn frame (for on-canvas handles). */
@@ -90,7 +94,7 @@ export class Player {
    * Route a media element through Web Audio (once): element → gain (volume × fades × volume curve) → [audio effect
    * chain, P3B-11] → speakers. The chain is rebuilt only when the clip's preset or amount changes.
    */
-  private gainFor(el: HTMLMediaElement, fx?: { preset: string; amount: number }): GainNode | undefined {
+  private gainFor(el: HTMLMediaElement, fx?: { preset: string; amount: number }, spatialKey = ""): GainNode | undefined {
     if (!this.audioCtx) return undefined;
     let g = this.gains.get(el);
     if (!g) {
@@ -98,17 +102,24 @@ export class Player {
       catch { return undefined; }
     }
     const key = fxKey(fx);
-    const cur = this.fxChains.get(el);
-    if ((cur?.key ?? "") !== key) {
+    const cur = this.fxChains.get(el), sp = this.spatials.get(el);
+    if ((cur?.key ?? "") !== key || (sp?.key ?? "") !== spatialKey) {
       g.disconnect();
-      cur?.chain.dispose();
-      this.fxChains.delete(el);
+      cur?.chain.dispose(); this.fxChains.delete(el);
+      sp?.stage.dispose(); this.spatials.delete(el);
+      // P14-SPATIAL: the position stage sits last, as in export.
+      let dest: AudioNode = this.audioCtx.destination;
+      if (spatialKey) {
+        const [mode, env] = spatialKey.split(":") as [AudioOutputMode, AudioEnvironment];
+        const stage = buildSpatial(this.audioCtx, mode, env); stage.output.connect(this.audioCtx.destination);
+        this.spatials.set(el, { key: spatialKey, stage }); dest = stage.input;
+      }
       const data = key ? audioFxData(fx!.preset) : undefined;
       if (data) {
         const chain = buildFxChain(this.audioCtx, data, fx!.amount, this.audioCtx.currentTime);
-        g.connect(chain.input); chain.output.connect(this.audioCtx.destination);
+        g.connect(chain.input); chain.output.connect(dest);
         this.fxChains.set(el, { key, chain });
-      } else g.connect(this.audioCtx.destination);
+      } else g.connect(dest);
     }
     return g;
   }
@@ -196,7 +207,7 @@ export class Player {
 
   private release(id: string) {
     const el = this.pool.get(id);
-    if (el && "pause" in el) { el.pause(); el.removeAttribute("src"); el.load(); el.remove(); this.gains.get(el)?.disconnect(); this.gains.delete(el); this.fxChains.get(el)?.chain.dispose(); this.fxChains.delete(el); }
+    if (el && "pause" in el) { el.pause(); el.removeAttribute("src"); el.load(); el.remove(); this.gains.get(el)?.disconnect(); this.gains.delete(el); this.fxChains.get(el)?.chain.dispose(); this.fxChains.delete(el); this.spatials.get(el)?.stage.dispose(); this.spatials.delete(el); }
     this.pool.delete(id);
   }
 
@@ -318,7 +329,9 @@ export class Player {
         const target = ticksToSeconds(sourceTicks);
         el.muted = !!track.muted || !!track.hidden || (placement.clipType === "video" && !!placement.linkedAudio?.muted);
         const vol = Math.max(0, placement.volume ?? 1) * fadeAt(placement, this.time) * volumeKeyAt(placement, this.time);
-        const gain = this.gainFor(el, placement.audioFx);
+        const sp = spatialOf(placement, track), out = audioOutputOf(this.project);
+        const gain = this.gainFor(el, placement.audioFx, sp ? `${out.mode}:${out.environment}` : "");
+        if (sp && this.audioCtx) this.spatials.get(el)?.stage.set(spatialAt(sp, this.time - placement.startTicks), this.audioCtx.currentTime, "smooth");
         if (gain) { gain.gain.value = vol; el.volume = 1; } else el.volume = Math.min(1, vol);
         // Reverse and freeze cannot use native playback: hold the element paused and seek it per frame.
         const held = this.time < placement.startTicks || this.time >= placement.startTicks + placement.durationTicks; // transition overhang

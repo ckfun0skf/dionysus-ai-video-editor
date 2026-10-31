@@ -1117,3 +1117,21 @@ select.v2-tp-field { -webkit-appearance: none; appearance: none; padding-right: 
 .v2-vol-num { font-size: 22px; font-variant-numeric: tabular-nums; }
 .v2-vol-meter { width: 28px; height: 200px; border-radius: 10px; background: rgba(255,255,255,.12); display: flex; align-items: flex-end; overflow: hidden; }
 .v2-vol-fill { width: 100%; background: var(--v2-accent, #6cf); }
+
+/* P14-SPATIAL: position pad (touch drag never scrolls the page). */
+.v2-sp-wrap { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.v2-sp-pad { width: min(100%, 260px); aspect-ratio: 1; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; cursor: crosshair; border-radius: 12px; outline-offset: 2px; }
+.v2-sp-pad:focus-visible { outline: 2px solid #3b82f6; }
+.v2-sp-bg { fill: rgba(127,127,127,.1); stroke: rgba(127,127,127,.35); stroke-width: .01; }
+.v2-sp-ring { fill: none; stroke: rgba(127,127,127,.3); stroke-width: .008; stroke-dasharray: .03 .03; }
+.v2-sp-axis { stroke: rgba(127,127,127,.2); stroke-width: .006; }
+.v2-sp-lbl { font-size: .085px; fill: currentColor; opacity: .6; text-anchor: middle; }
+.v2-sp-head circle, .v2-sp-head path { fill: rgba(127,127,127,.55); }
+.v2-sp-path { fill: none; stroke: #f59e0b; stroke-width: .018; stroke-linejoin: round; }
+.v2-sp-key { fill: #f59e0b; } .v2-sp-key.is-here { fill: #fff; stroke: #f59e0b; stroke-width: .015; }
+.v2-sp-dot { fill: #3b82f6; stroke: #fff; stroke-width: .02; } .v2-sp-dot.is-off { fill: rgba(127,127,127,.7); }
+.v2-sp-pad.is-drag .v2-sp-dot { r: .095; }
+.v2-sp-chips { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 6px; margin: 8px 0; }
+.v2-sp-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 6px 0; }
+.v2-sp-row .v2-btn { min-height: 44px; min-width: 44px; }
+.v2-sp-k { min-width: 52px; font-size: 12px; opacity: .75; }
