@@ -4,7 +4,8 @@
  * that need decoded media: frame capture / contact sheet (an offline Player, same path as export), black frames and
  * audio clipping / silence (the export audio mix).
  */
-import { findPlacement, newId, secondsToTicks, timelineReview, type Project } from "../../domain";
+import { findPlacement, newId, secondsToTicks, timelineReview, type Placement, type Project } from "../../domain";
+import { getPreset, listPresets } from "../../registry";
 import { cmd, type Command, type Engine } from "../../engine";
 import type { BlobStore } from "../../ports";
 import { ExportVideoFrames, Player, audioPlan, exportDuration, mixAudio } from "../../render";
@@ -78,6 +79,58 @@ export function audioIssues(a: { channels: Float32Array[]; sampleRate: number })
   flush(len);
   for (const t of clipAt.slice(0, 20)) out.push({ kind: "audio-clipping", severity: "warning", atSec: Math.round(t * 10) / 10, message: `Audio clips (peaks at full scale) around ${fmtT(t)}: lower the volume of the clips there.` });
   return out;
+}
+
+const PROP_KEYS = new Set(["id", "volume", "transform", "effect", "fades", "speed", "blend", "text"]);
+const TF_RANGE: Record<string, [number, number]> = { x: [-2, 2], y: [-2, 2], scale: [0.05, 10], rotation: [-360, 360], opacity: [0, 1] };
+const numIn = (v: unknown, lo: number, hi: number) => typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi;
+const ids = (k: Parameters<typeof listPresets>[0]) => listPresets(k).map((d) => d.id).join(", ");
+
+/** P13: why set_clip_props input is invalid for this clip (empty = valid). Never clamps silently. */
+export function clipPropsErrors(a: Record<string, unknown>, pl: Placement): string[] {
+  const e: string[] = [];
+  for (const k of Object.keys(a)) if (!PROP_KEYS.has(k)) e.push(`Unknown property "${k}" (use volume, transform, effect, fades, speed, blend, text).`);
+  if ("volume" in a && !numIn(a.volume, 0, 2)) e.push(`"volume" must be a number from 0 to 2 (got ${JSON.stringify(a.volume)}).`);
+  if ("speed" in a && !numIn(a.speed, 0.25, 4)) e.push(`"speed" must be a number from 0.25 to 4 (got ${JSON.stringify(a.speed)}).`);
+  if ("transform" in a && a.transform !== null) {
+    if (!a.transform || typeof a.transform !== "object") e.push('"transform" must be an object { x, y, scale, rotation, opacity, crop } or null.');
+    else for (const [k, v] of Object.entries(a.transform as Record<string, unknown>)) {
+      if (k === "crop") { if (!v || typeof v !== "object" || Object.entries(v).some(([ck, cv]) => !["l", "t", "r", "b"].includes(ck) || !numIn(cv, 0, 0.95))) e.push('"transform.crop" must be { l, t, r, b } with each 0 to 0.95.'); }
+      else if (!TF_RANGE[k]) e.push(`Unknown transform field "${k}" (use x, y, scale, rotation, opacity, crop).`);
+      else if (!numIn(v, ...TF_RANGE[k])) e.push(`"transform.${k}" must be a number from ${TF_RANGE[k][0]} to ${TF_RANGE[k][1]} (got ${JSON.stringify(v)}).`);
+    }
+  }
+  if ("effect" in a) {
+    const fx = a.effect as { preset?: unknown; params?: unknown } | null;
+    if (pl.clipType !== "effect") e.push(`"effect" only applies to effect clips (clip ${pl.id} is ${pl.clipType}); add an effect clip over it instead.`);
+    else if (!fx || typeof fx !== "object") e.push('"effect" must be { preset, params }.');
+    else {
+      const id = fx.preset === undefined ? pl.effect?.preset : fx.preset;
+      const d = typeof id === "string" ? getPreset("videoEffect", id) : undefined;
+      if (!d) e.push(`Unknown effect preset ${JSON.stringify(fx.preset)}. Use one of: ${ids("videoEffect")}.`);
+      else if (fx.params !== undefined) {
+        if (!fx.params || typeof fx.params !== "object") e.push('"effect.params" must be an object.');
+        else for (const [k, v] of Object.entries(fx.params as Record<string, unknown>)) {
+          const sp = d.params.find((x) => x.key === k);
+          if (!sp) e.push(`Effect "${d.id}" has no param "${k}" (params: ${d.params.map((x) => x.key).join(", ") || "none"}).`);
+          else if (sp.type === "number" && !numIn(v, sp.min, sp.max)) e.push(`"effect.params.${k}" must be a number from ${sp.min} to ${sp.max} (got ${JSON.stringify(v)}).`);
+          else if (sp.type === "select" && !sp.options.includes(v as string)) e.push(`"effect.params.${k}" must be one of ${sp.options.join(", ")}.`);
+          else if ((sp.type === "color" || sp.type === "string") && typeof v !== "string") e.push(`"effect.params.${k}" must be a string.`);
+        }
+      }
+    }
+  }
+  if ("fades" in a) {
+    const f = a.fades as Record<string, unknown> | null;
+    if (!f || typeof f !== "object" || Object.entries(f).some(([k, v]) => !["inSec", "outSec"].includes(k) || !numIn(v, 0, Infinity))) e.push('"fades" must be { inSec, outSec } with seconds of 0 or more.');
+  }
+  if ("blend" in a && !(a.blend === "" || (typeof a.blend === "string" && getPreset("blend", a.blend)))) e.push(`Unknown blend ${JSON.stringify(a.blend)}. Use "" (normal) or one of: ${ids("blend")}.`);
+  if ("text" in a) {
+    if (pl.clipType !== "text") e.push(`"text" only applies to text clips (clip ${pl.id} is ${pl.clipType}).`);
+    else if (!a.text || typeof a.text !== "object") e.push('"text" must be an object like { text, size, color }.');
+    else { const t = a.text as Record<string, unknown>; if ("size" in t && !numIn(t.size, 0.005, 1)) e.push('"text.size" must be a share of the frame height from 0.005 to 1.'); if ("text" in t && typeof t.text !== "string") e.push('"text.text" must be a string.'); }
+  }
+  return e;
 }
 
 const fail = (text: string): TimelineResult => ({ ok: false, text, changed: false });
@@ -169,13 +222,16 @@ export async function runTimelineTool(engine: Engine, source: FrameSource | unde
     }
     case "set_clip_props": {
       const id = needClip(); if (typeof id !== "string") return id;
+      // P13: every value is checked first; one bad value fails the whole call (nothing changes) with the reason.
+      const bad = clipPropsErrors(a, findPlacement(rootOf(project()), id)!.placement);
+      if (bad.length) return fail(`set_clip_props changed nothing: ${bad.join(" ")}`);
       const cmds: Command[] = [];
-      const v = n("volume"); if (v !== undefined) cmds.push(cmd.setPlacementVolume(id, clamp(v, 0, 2)));
+      const v = n("volume"); if (v !== undefined) cmds.push(cmd.setPlacementVolume(id, v));
       if (a.transform === null) cmds.push(cmd.setTransform(id, null));
       else if (a.transform && typeof a.transform === "object") cmds.push(cmd.setTransform(id, a.transform as never));
       if (a.effect && typeof a.effect === "object") cmds.push(cmd.setEffect(id, a.effect as never));
       if (a.fades && typeof a.fades === "object") { const f = a.fades as { inSec?: number; outSec?: number }; cmds.push(cmd.setFades(id, { ...(typeof f.inSec === "number" ? { in: secondsToTicks(f.inSec) } : {}), ...(typeof f.outSec === "number" ? { out: secondsToTicks(f.outSec) } : {}) })); }
-      const sp = n("speed"); if (sp !== undefined) cmds.push(cmd.setSpeed(id, clamp(sp, 0.25, 4)));
+      const sp = n("speed"); if (sp !== undefined) cmds.push(cmd.setSpeed(id, sp));
       if (typeof a.blend === "string") cmds.push(cmd.setBlend(id, a.blend || undefined));
       if (a.text && typeof a.text === "object") cmds.push(cmd.updateText(id, a.text as never));
       if (!cmds.length) return fail("Give at least one of volume, transform, effect, fades, speed, blend, text.");

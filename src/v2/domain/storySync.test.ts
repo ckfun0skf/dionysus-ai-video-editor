@@ -85,6 +85,35 @@ describe("Sync to Storyboard (P10-SYNC)", () => {
     expect(sb.shots.a.layers!.find((x) => x.id === "t1")).toBeDefined();
   });
 
+  it("P13: writes back a moved text layer's position and edited / removed captions", () => {
+    const d = parse({ format: "dionysus.storyboard/1", meta: { title: "T", aspect: "16:9" }, assets: [], shots: [
+      shot("a", { dialogue: "Hello there", captions: true, layers: [{ id: "t1", type: "text", text: "Hi", startSec: 0, endSec: 2, position: { x: 0.5, y: 0.2 } }] }),
+      shot("b", { dialogue: "Bye", captions: true }),
+    ] });
+    let p0: Project = board.setStoryboard(createProject("s"), board.storyboardFromDoc(d));
+    p0 = board.addStoryVersion(p0, { shot: "a" }, vid, { versionId: "v1", now: "2026-10-30T00:00:00Z" });
+    p0 = board.addStoryVersion(p0, { shot: "b" }, vid, { versionId: "v2", now: "2026-10-30T00:00:00Z" });
+    p0 = sendStory(p0).project;
+    expect(syncPlan(p0).changes).toEqual([]);
+    const p = structuredClone(p0);
+    const all = comp(p).tracks.flatMap((t) => t.placements);
+    const t1 = all.find((x) => x.storyLayer === "t1")!;
+    t1.transform = { ...t1.transform!, x: 0.2, y: -0.1 } as never;
+    const caps = all.filter((x) => x.storyLayer === "captions");
+    expect(caps).toHaveLength(2);
+    const capA = caps.find((x) => x.text?.text === "Hello there")!; capA.text = { ...capA.text!, text: "Hello, friend" };
+    const capB = caps.find((x) => x.text?.text === "Bye")!;
+    for (const t of comp(p).tracks) t.placements = t.placements.filter((x) => x !== capB);
+    const r = syncPlan(p);
+    const sa = r.project.storyboard!.shots.a, sb = r.project.storyboard!.shots.b;
+    expect(sa.layers![0]).toMatchObject({ position: { x: 0.7, y: 0.4 } });
+    expect(sa.dialogue).toBe("Hello, friend");
+    expect(sb.captions).toBe(false);
+    expect(sb.dialogue).toBe("Bye");
+    expect(r.changes.map((c) => c.id)).toEqual(expect.arrayContaining(["a/t1", "a/captions", "b/captions"]));
+    expect(syncPlan(r.project).changes).toEqual([]);
+  });
+
   it("is one undo step through the engine", () => {
     const p = structuredClone(sent());
     mains(p)[0].durationTicks = 2 * S;

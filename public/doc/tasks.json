@@ -2552,6 +2552,12 @@
           "title": "WebMCP timeline review tools: audit, get_timeline, capture_frame, contact_sheet, review_lint, clip edit tools (rule 48)",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P13-GAPS",
+          "title": "Gap fixes: 44px desktop storyboard buttons + number input, volume pan-x, set_clip_props validation, text bounds lint, agent intro, Sync writes back box/captions",
+          "status": "done",
+          "progress": 100
         }
       ]
     },

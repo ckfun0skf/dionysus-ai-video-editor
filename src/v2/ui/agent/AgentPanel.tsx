@@ -15,7 +15,7 @@ export function AgentPanel() {
   const native = s.api !== "none";
   return (
     <section className="v2-sb-panel v2-agent" aria-label="AI agent access">
-      <p className="v2-sb-lead">Let an AI agent in this browser build the storyboard step by step through WebMCP tools: add and change assets, shots, layers and audio cues, check the board and update the timeline. Every change is checked by the same rules as Import, shows here live and can be undone.</p>
+      <p className="v2-sb-lead">Let an AI agent in this browser work on this project through WebMCP tools. Storyboard tools: add and change assets, shots, layers and audio cues, check the board and update the timeline. Timeline review and edit tools: read the timeline, look at frames and a contact sheet, run a review lint (gaps, black frames, audio, text off the frame, missing media), then move, trim, split, delete or change clips and add clips from assets. Every change is checked, shows here live and is one undo step.</p>
       <label className="v2-agent-toggle">
         <input type="checkbox" role="switch" data-testid="agent-toggle" checked={s.enabled} onChange={(e) => agentStore.setEnabled(e.target.checked)} />
         <span><b>Allow AI agent access</b><em>{s.enabled ? (native ? `On · ${s.registered} tools available to agents on this page` : "On · waiting for a browser with WebMCP") : "Off · agents can't see or change this project"}</em></span>
