@@ -77,6 +77,30 @@ Generated from the same schema as the storyboard parser (`src/v2/domain/storyAge
 
 Patch tools (`update_*`, `set_shot_params`) merge the given fields; `null` deletes a field. Ids can't be renamed.
 
+## Timeline review and edit tools (P12)
+
+**Audit (October 2026).** Before P12 every WebMCP tool came from `STORY_TOOLS` in `src/v2/domain/storyAgent.ts`, which only edits the *storyboard*. The only ways an agent could touch the timeline were `send_to_timeline` and `sync_to_storyboard`. It couldn't read clip positions, move, trim, split or delete a clip, change a clip's volume, effect or transform, or see a frame. P12 adds the tools below (schemas in `src/v2/domain/timelineReview.ts`, runtime in `src/v2/ui/agent/timelineTools.ts`). The panel's tool list and the activity log include them. Unregistering now goes by tool name, not by index.
+
+- Times are in **seconds**. Clip and track ids come from `get_timeline`.
+- Each edit tool dispatches **one undo step** labelled with the tool name, and returns the changed clip as JSON (`split_clip` returns both halves). Linked layers follow their main clip as they do with a hand edit.
+- `capture_frame` and `contact_sheet` render through the export path (an offline player with exact decoded video frames) and return an MCP **image** (`{ "type": "image", "data": <base64 JPEG>, "mimeType": "image/jpeg" }`) after a text part.
+- `review_lint` runs the model checks (needsPrompt items, shots removed from the timeline, clips shorter than `minClipSec`, gaps on the main track, overlay layers not linked to a main clip, text whose centre is off the frame, media whose asset or stored blob is missing). With `media` (on by default) it also samples about 40 frames for **black frames** and decodes the export audio mix for **clipping** (samples at full scale) and **silence** (under -60 dBFS for 2 s or more).
+
+<!-- timeline-tools:start -->
+- `get_timeline` · read-only: The timeline as JSON: settings (size, fps), duration, and every track (id, kind, group, main) with its clips (id, start/duration/in in seconds, asset, type, volume, effect, transform, text, link parent, storyShot). Times are seconds.
+- `capture_frame`(timeSec, maxWidth) · read-only: Render the composited frame at timeSec exactly as export would and return it as a JPEG image (maxWidth px wide, default 640, at most 1280).
+- `contact_sheet`(count, interval, maxWidth) · read-only: One JPEG grid of frames across the whole timeline, each labelled with its time. Give "count" (frames, default 12, max 36) or "interval" (seconds between frames). Use it to review the cut at a glance.
+- `review_lint`(minClipSec, media) · read-only: List review problems with times and clip ids: storyboard items needing a prompt, shots removed from the timeline, very short clips, gaps and black frames, overlay clips not linked to a main clip, audio clipping or long silence, text off the frame, and missing media. Fix them with the edit tools, then run it again.
+- `move_clip`(id, startSec, trackId): Move a clip to startSec, optionally onto another track (trackId of the same kind). Linked layers move with a main clip. One undo step; returns the clip.
+- `trim_clip`(id, edge, atSec, ripple): Move a clip's left or right edge to atSec on the timeline. ripple: true closes/opens the gap on the main track. One undo step; returns the clip.
+- `split_clip`(id, atSec): Split a clip at atSec (inside it). One undo step; returns both halves.
+- `delete_clip`(ids, ripple): Delete one or more clips (and the layers linked to them). ripple: true closes the gap on the main track. One undo step.
+- `set_clip_props`(id, volume, transform, effect, fades, speed, blend, text): Change a clip in one undo step: volume (0..2), transform { x, y, scale, rotation, opacity } (null resets), effect { preset, params } (preset ids as in get_guide), fades { inSec, outSec }, speed (0.25..4), blend, text (text clips: { text, size, color, … }). Returns the clip.
+- `add_clip`(assetId, startSec, trackId): Place a project media asset (id from get_timeline's "assets") at startSec, on trackId or the main track / a matching track. One undo step; returns the new clip.
+<!-- timeline-tools:end -->
+
+Rule 48 (`review-timeline`) tells an AI to finish a timeline edit with `get_timeline`, then `review_lint` and `contact_sheet`, and to fix what they report.
+
 ## Series (P5)
 
 When the open project is an episode of a Series, the agent sees the Series too:

@@ -1,7 +1,7 @@
 export { Player } from "./player";
 export { activeAt, fitRect, placeRect, type Placed } from "./frame";
 export { AudioClock, wallClock, createClock, correctDrift, type Clock } from "./clock";
-export * from "./export/plan"; export { exportProject, formatLabel, formatNote, probeExportFormat, type ExportFormat, type ExportProgress, type ExportResult } from "./export/encode";
+export * from "./export/plan"; export { exportProject, mixAudio, formatLabel, formatNote, probeExportFormat, type ExportFormat, type ExportProgress, type ExportResult } from "./export/encode";
 export * from "./htmlClip";
 export { boxDistance, hitCandidates, hitTest, inBox, isBackdrop, pickAt } from "./hit";
 export * from "./htmlLibs";
@@ -10,3 +10,4 @@ export { drawWithLook, isPlainLook } from "./transitionDraw";
 export { blendOp, withBlend } from "./blend";
 export * from "./audioClip";
 export { bundledFontUrl, bundledFonts, loadBundledFonts, projectBundledFonts, projectFontFiles } from "./fonts";
+export { ExportVideoFrames } from "./export/videoFrames";

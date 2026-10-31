@@ -51,6 +51,21 @@ When the user turns on agent access (Storyboard → Agent) in a browser with Web
 - `sync_to_storyboard`: Write timeline edits back to the storyboard (one undo step): clip lengths, order and trims, layers, effects and audio cues of the shots they came from. Timeline clips with no shot become new shots, layers or cues flagged needsPrompt; shots whose clip was removed are kept and flagged removedFromTimeline. Afterwards call list_needs_prompt and fill every item.
 - `list_needs_prompt` · read-only: List the shots, layers and audio cues flagged needsPrompt (made on the timeline by Sync to Storyboard). Fill each: a shot needs a description and a clip generation prompt (update_shot), a layer or cue needs a description (set_shot_layers / update_cue); filling it clears the flag.
 
+### Timeline review and edit tools
+
+The same tab also registers tools that read, review and edit the timeline itself (times in seconds; each edit is one undo step and returns the clip). See rule "review-timeline".
+
+- `get_timeline` · read-only: The timeline as JSON: settings (size, fps), duration, and every track (id, kind, group, main) with its clips (id, start/duration/in in seconds, asset, type, volume, effect, transform, text, link parent, storyShot). Times are seconds.
+- `capture_frame`(timeSec, maxWidth) · read-only: Render the composited frame at timeSec exactly as export would and return it as a JPEG image (maxWidth px wide, default 640, at most 1280).
+- `contact_sheet`(count, interval, maxWidth) · read-only: One JPEG grid of frames across the whole timeline, each labelled with its time. Give "count" (frames, default 12, max 36) or "interval" (seconds between frames). Use it to review the cut at a glance.
+- `review_lint`(minClipSec, media) · read-only: List review problems with times and clip ids: storyboard items needing a prompt, shots removed from the timeline, very short clips, gaps and black frames, overlay clips not linked to a main clip, audio clipping or long silence, text off the frame, and missing media. Fix them with the edit tools, then run it again.
+- `move_clip`(id, startSec, trackId): Move a clip to startSec, optionally onto another track (trackId of the same kind). Linked layers move with a main clip. One undo step; returns the clip.
+- `trim_clip`(id, edge, atSec, ripple): Move a clip's left or right edge to atSec on the timeline. ripple: true closes/opens the gap on the main track. One undo step; returns the clip.
+- `split_clip`(id, atSec): Split a clip at atSec (inside it). One undo step; returns both halves.
+- `delete_clip`(ids, ripple): Delete one or more clips (and the layers linked to them). ripple: true closes the gap on the main track. One undo step.
+- `set_clip_props`(id, volume, transform, effect, fades, speed, blend, text): Change a clip in one undo step: volume (0..2), transform { x, y, scale, rotation, opacity } (null resets), effect { preset, params } (preset ids as in get_guide), fades { inSec, outSec }, speed (0.25..4), blend, text (text clips: { text, size, color, … }). Returns the clip.
+- `add_clip`(assetId, startSec, trackId): Place a project media asset (id from get_timeline's "assets") at startSec, on trackId or the main track / a matching track. One undo step; returns the new clip.
+
 ## Optional
 
 - [Format reference](https://ckfun0skf.github.io/dionysus-ai-video-editor/ai/STORYBOARD_FORMAT.md): the full specification, including importer warnings and errors

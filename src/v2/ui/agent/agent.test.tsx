@@ -4,8 +4,7 @@ import { createRoot } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createProject, EXAMPLE_STORYBOARD, story, roundtrip, type StoryDoc } from "../../domain";
 import { cmd, Engine } from "../../engine";
-import { storyAgent } from "../../domain";
-import { agentStore, callAgentTool, connectAgentBridge, type ToolResponse } from "./webMcp";
+import { ALL_AGENT_TOOLS, agentStore, callAgentTool, connectAgentBridge, type ToolResponse } from "./webMcp";
 import { AgentIndicator, AgentPanel } from "./AgentPanel";
 import { ImportPanel } from "../storyboard/StoryImport";
 
@@ -42,12 +41,12 @@ describe("AI agent access (P4C)", () => {
     expect(agentStore.get().enabled).toBe(false);
     expect(registered.size).toBe(0);
     act(() => agentStore.setEnabled(true));
-    expect([...registered.keys()]).toEqual(storyAgent.STORY_TOOLS.map((t) => t.name));
-    expect(agentStore.get().registered).toBe(storyAgent.STORY_TOOLS.length);
+    expect([...registered.keys()]).toEqual(ALL_AGENT_TOOLS.map((t) => t.name));
+    expect(agentStore.get().registered).toBe(ALL_AGENT_TOOLS.length);
     expect(localStorage.getItem("v2.agentAccess")).toBe("1");
     act(() => agentStore.setEnabled(false));
     expect(registered.size).toBe(0);
-    expect(aborted).toBe(storyAgent.STORY_TOOLS.length);
+    expect(aborted).toBe(ALL_AGENT_TOOLS.length);
     stop();
   });
 
@@ -73,7 +72,7 @@ describe("AI agent access (P4C)", () => {
     // A rejected call changes nothing and is logged as rejected.
     await act(async () => { res = await registered.get("update_shot")!.execute({ id: "s1", patch: { assets: ["ghost"] } }); });
     expect(res.isError).toBe(true);
-    expect(res.content[0].text).toContain("Rejected, nothing changed");
+    expect((res.content[0] as { text: string }).text).toContain("Rejected, nothing changed");
     expect(shotIds(e)).toEqual(before);
     expect(el.querySelector(".v2-agent-log li.is-error")).not.toBeNull();
     stop();

@@ -1,9 +1,8 @@
 /** P4C: "AI agent" (WebMCP) panel in the storyboard, and the app-wide "AI is editing" pill. */
 import { useEffect, useSyncExternalStore } from "react";
-import { storyAgent } from "../../domain";
 import type { Engine } from "../../engine";
 import { Ic } from "../Icon";
-import { agentStore, type AgentState } from "./webMcp";
+import { ALL_AGENT_TOOLS, agentStore, type AgentState } from "./webMcp";
 import "./agent.css";
 
 export const useAgentState = (): AgentState => useSyncExternalStore(agentStore.subscribe, agentStore.get);
@@ -28,8 +27,8 @@ export function AgentPanel() {
       </p>
       {s.error && <p className="v2-hint v2-agent-err">{s.error}</p>}
       <details className="v2-agent-tools">
-        <summary>{storyAgent.STORY_TOOLS.length} tools</summary>
-        <ul>{storyAgent.STORY_TOOLS.map((t) => <li key={t.name}><code>{t.name}</code> {t.readOnly && <span className="v2-muted">read-only</span>} <span>{t.description}</span></li>)}</ul>
+        <summary>{ALL_AGENT_TOOLS.length} tools</summary>
+        <ul>{ALL_AGENT_TOOLS.map((t) => <li key={t.name}><code>{t.name}</code> {t.readOnly && <span className="v2-muted">read-only</span>} <span>{t.description}</span></li>)}</ul>
       </details>
       <div className="v2-agent-loghead">
         <h4>Activity</h4>
