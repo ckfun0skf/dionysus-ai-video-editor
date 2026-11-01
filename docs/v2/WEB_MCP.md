@@ -99,12 +99,25 @@ Patch tools (`update_*`, `set_shot_params`) merge the given fields; `null` delet
 - `review_lint`(minClipSec, media) · read-only: List review problems with times and clip ids: storyboard items needing a prompt, shots removed from the timeline, very short clips, gaps and black frames, overlay clips not linked to a main clip, audio clipping or long silence, text off the frame, and missing media. Fix them with the edit tools, then run it again.
 - `move_clip`(id, startSec, trackId): Move a clip to startSec, optionally onto another track (trackId of the same kind). Linked layers move with a main clip. One undo step; returns the clip.
 - `trim_clip`(id, edge, atSec, ripple): Move a clip's left or right edge to atSec on the timeline. ripple: true closes/opens the gap on the main track. One undo step; returns the clip.
+- `slip_clip`(clipId, inSec, moveLinked): Show a different part of the source inside a video, audio or HTML clip: set the source in point to inSec. The clip keeps its timeline position and length; inSec is clamped so the range stays inside the media. moveLinked: true slips linked audio/overlays by the same amount. Images and text cannot slip. One undo step; returns the clip.
+- `replace_clip_asset`(clipId, assetId, onShort): Swap the media of a clip for another asset of the same kind, keeping every other property (position, length, effects, links). The in point is kept when it fits, otherwise moved earlier. If the new source is shorter than the clip, pass onShort: "shorten" (clip ends with the source) or "hold" (keep length, freeze the last frame); without it the call fails and explains. One undo step; returns the clip.
 - `split_clip`(id, atSec): Split a clip at atSec (inside it). One undo step; returns both halves.
 - `delete_clip`(ids, ripple): Delete one or more clips (and the layers linked to them). ripple: true closes the gap on the main track. One undo step.
 - `set_clip_props`(id, volume, transform, effect, fades, speed, blend, text, position, positionKeys, pan, trackPosition, audioOutput): Change a clip in one undo step: volume (0..2), transform { x, y, scale, rotation, opacity } (null resets), effect { preset, params } (effect clips only; videoEffect preset ids and param ranges as in get_guide), fades { inSec, outSec }, speed (0.25..4), blend, text (text clips only: { text, size, color, … }); P14 sound position (clips with sound): position { azimuth -180..180 (0 front, -90 left, 90 right, ±180 behind), distance 0..1 (0 at the ear, 1 ≈ 20 m), width? 0..1 (1 keeps a stereo file's own image) } or null (centre, unprocessed), pan -1..1 (shorthand: azimuth = pan × 90), positionKeys [{ t: seconds from the clip start, azimuth, distance }] or null, trackPosition (default for the clip's track) and audioOutput { mode: stereo | binaural, environment?: room | outdoor } (whole project). Values are never clamped: an unknown preset, param, field or an out-of-range value fails the whole call with the reason and nothing changes. Returns the clip.
 - `promote_overlay`(clipId, mode, position, keepTransform): Move a video, image or HTML clip from an overlay track onto the main track. mode "replace" (default) keeps its time and replaces what the main track shows there: covered main clips are removed, partly covered ones are trimmed, and a clip spanning it is split (the right part continues at the right in point). mode "insert" puts it in at its start and ripples later main clips (and their linked layers) by its duration; if it starts inside a main clip, give position "before" or "after" that clip (the call fails without it). Blend mode and chroma key are dropped; the transform is kept unless keepTransform is false; its audio is kept. One undo step; returns the main track.
 - `add_clip`(assetId, startSec, trackId): Place a project media asset (id from get_timeline's "assets") at startSec, on trackId or the main track / a matching track. One undo step; returns the new clip.
 <!-- timeline-tools:end -->
+
+**Slip and replace (P26, rule 57).** `slip_clip` changes which part of the source a clip shows without moving it or changing its length; `replace_clip_asset` swaps the media and keeps everything else. Examples:
+
+```json
+{ "tool": "slip_clip", "input": { "clipId": "plc_12", "inSec": 4.5 } }
+{ "tool": "slip_clip", "input": { "clipId": "plc_12", "inSec": 4.5, "moveLinked": true } }
+{ "tool": "replace_clip_asset", "input": { "clipId": "plc_12", "assetId": "take-2" } }
+{ "tool": "replace_clip_asset", "input": { "clipId": "plc_12", "assetId": "short-take", "onShort": "hold" } }
+```
+
+When the new source is shorter than the clip and `onShort` is missing, the call fails without changing anything and asks for `"shorten"` or `"hold"`. The same edits are available in the app as **Adjust range** and **Replace asset** in the clip panel (desktop: also right-click, or Alt+drag a clip to slip it).
 
 Rule 48 (`review-timeline`) tells an AI to finish a timeline edit with `get_timeline`, then `review_lint` and `contact_sheet`, and to fix what they report.
 

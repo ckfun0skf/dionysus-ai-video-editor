@@ -1189,3 +1189,46 @@ select.v2-tp-field { -webkit-appearance: none; appearance: none; padding-right: 
 .v2-promote-keep input { width: 22px; height: 22px; }
 .v2-promote-warn { color: #f0b45a !important; }
 .v2-promote .v2-confirm-actions .v2-btn { min-height: 44px; }
+
+/* P26: Adjust range (slip) + Replace asset — mobile bottom sheet, desktop side panel. Every control is ≥ 44 px. */
+.v2-slip { display: grid; gap: 10px; padding: 4px 2px 8px; }
+.v2-slip .v2-btn { min-height: 44px; min-width: 44px; justify-content: center; }
+.v2-slip-preview { position: relative; background: #000; border-radius: 8px; overflow: hidden; aspect-ratio: 16 / 9; max-height: 34vh; display: grid; place-items: center; }
+.v2-slip-preview video { width: 100%; height: 100%; object-fit: contain; }
+.v2-slip-preview audio { display: none; }
+.v2-slip-noprev { color: var(--muted); font-size: 13px; }
+.v2-slip-play { position: absolute; right: 8px; bottom: 8px; background: rgba(0,0,0,.6); }
+.v2-slip-bar { position: relative; height: 56px; border-radius: 6px; overflow: hidden; background: #26262c; touch-action: none; user-select: none; }
+.v2-slip-src { position: absolute; inset: 0; display: flex; }
+.v2-slip-src img { flex: 1 1 0; min-width: 0; height: 100%; object-fit: cover; pointer-events: none; }
+.v2-slip-plain { flex: 1; background: repeating-linear-gradient(90deg, #303038 0 12px, #2a2a31 12px 24px); }
+.v2-slip-shade { position: absolute; top: 0; bottom: 0; background: rgba(0,0,0,.55); pointer-events: none; }
+.v2-slip-box { position: absolute; top: 0; bottom: 0; border: 3px solid var(--accent); border-radius: 6px; box-sizing: border-box; cursor: grab; min-width: 12px; }
+.v2-slip-box:active { cursor: grabbing; }
+.v2-slip-edge { position: absolute; top: 0; bottom: 0; width: 22px; cursor: ew-resize; }
+.v2-slip-edge.is-l { left: -11px; } .v2-slip-edge.is-r { right: -11px; }
+.v2-slip-edge.is-locked { cursor: not-allowed; }
+.v2-slip-edge:not(.is-locked)::after { content: ""; position: absolute; top: 14px; bottom: 14px; left: 8px; width: 6px; border-radius: 3px; background: var(--accent); }
+.v2-slip-row { display: grid; grid-template-columns: 44px 1fr 44px; gap: 8px; align-items: center; }
+.v2-slip-num { display: flex; gap: 6px; align-items: center; justify-content: center; }
+.v2-slip-num input { width: 7em; min-height: 44px; font-size: 16px; text-align: center; background: #222; color: var(--text); border: 1px solid var(--line); border-radius: 6px; }
+.v2-slip-read { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 0; font-variant-numeric: tabular-nums; }
+.v2-slip-read div { display: flex; gap: 6px; } .v2-slip-read dt { color: var(--muted); } .v2-slip-read dd { margin: 0; font-weight: 600; }
+.v2-slip-check { display: flex; align-items: center; gap: 8px; min-height: 44px; flex-wrap: wrap; }
+.v2-slip-check input { width: 22px; height: 22px; accent-color: var(--accent); }
+.v2-slip-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.v2-slip-spacer { flex: 1; }
+.v2-slip-warn { border: 1px solid #e0a43a; background: rgba(224,164,58,.12); border-radius: 8px; padding: 10px; display: grid; gap: 8px; }
+.v2-slip-warn p { margin: 0; }
+.v2-slip-replacing { margin: 0; font-size: 13px; color: var(--text); }
+.v2-slip-picker { display: grid; gap: 10px; }
+.v2-slip-assets { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+.v2-slip-asset { display: grid; gap: 4px; padding: 6px; min-height: 44px; background: #222; border: 1px solid var(--line); border-radius: 8px; color: var(--text); text-align: left; cursor: pointer; }
+.v2-slip-asset img, .v2-slip-asset-ph { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 4px; background: #333; display: grid; place-items: center; color: var(--muted); font-size: 12px; }
+.v2-slip-asset-name { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.v2-slip-asset-dur { font-size: 12px; color: var(--muted); }
+.v2-slip-panel { position: fixed; top: 56px; right: 0; bottom: 0; width: min(420px, 92vw); z-index: 60; background: var(--panel); border-left: 1px solid var(--line); box-shadow: -8px 0 24px rgba(0,0,0,.4); overflow: auto; padding: 0 14px 14px; }
+.v2-slip-panel header { display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; background: var(--panel); z-index: 1; }
+.v2-slip-panel h3 { margin: 12px 0; font-size: 16px; }
+.v2-slip-panel .v2-icon { min-width: 44px; min-height: 44px; }
+.v2-range-sec { margin-bottom: 14px; display: grid; gap: 6px; }

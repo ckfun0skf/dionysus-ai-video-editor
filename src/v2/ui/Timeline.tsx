@@ -4,7 +4,7 @@ import { FilmstripTiles, Waveform } from "./ClipPreview";
 import type { Filmstrip, Peaks } from "./media";
 import { mediaKey } from "./useMedia";
 import { clampPps, haptic, LONG_PRESS_MS, LONG_PRESS_SLOP, pinchZoom, touchDistance } from "./gestures";
-import { board, edit, layers, ops, transitions, compositionDuration, TICKS_PER_SECOND, formatTimecode, type Composition, type Placement, type Project, type Track } from "../domain";
+import { board, edit, findPlacement, slip, layers, ops, transitions, compositionDuration, TICKS_PER_SECOND, formatTimecode, type Composition, type Placement, type Project, type Track } from "../domain";
 import { Ic } from "./Icon";
 import { getPreset } from "../registry";
 
@@ -206,6 +206,18 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
       return;
     }
     onSelect(id);
+    // P26: Alt+drag on the clip body slips it (desktop): the source range moves under the clip, its place and length stay.
+    // Drag right to show later source. One undo step per drag; linked clips stay put.
+    const pl0 = findPlacement(comp, id)?.placement;
+    if (!centered && e.altKey && pl0 && slip.slipKind(pl0)) {
+      e.preventDefault();
+      const in0 = pl0.sourceInTicks, speed = pl0.speed ?? 1;
+      engine.beginGesture();
+      const mv = (ev: PointerEvent) => { engine.dispatch(cmd.slipClip(id, in0 + Math.round(toTicks(ev.clientX - clientX) * speed))); };
+      const up = () => { engine.endGesture(); window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up); };
+      window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up);
+      return;
+    }
     startMove(false);
   };
   const onTrimDown = (e: React.PointerEvent, id: string, edge: "left" | "right", edgeTicks: number) => {

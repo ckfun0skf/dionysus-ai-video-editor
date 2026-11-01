@@ -2,6 +2,7 @@ export * from "./model";
 export * from "./time";
 export * as ops from "./ops";
 export * as clipRange from "./clipRange";
+export * as slip from "./slip";
 export * as links from "./links";
 export * as subs from "./subtitles";
 export * as edit from "./edit";
