@@ -67,7 +67,7 @@ export const REVERB = { room: { seconds: 1.4, decay: 3, level: 0.35 }, outdoor: 
 /**
  * Node settings for a position (stereo mode; binaural uses gain/lowpass/reverb/sideGain and a PannerNode for the mid).
  * mid → L = √2·cos θ, R = √2·sin θ with θ = (pan+1)·π/4, pan = sin(azimuth) (equal power, unity at centre);
- * side → ±width; distance → gain 1/(1+3d), lowpass 20 kHz→2 kHz (log), reverb send; behind → darker (down to ×0.45 cutoff).
+ * side → ±width; distance → gain 1/(1+3d), lowpass 20 kHz→2 kHz (log), reverb send level·d² (0 at distance 0); behind → darker (down to ×0.45 cutoff).
  */
 export function spatialParams(pos: SpatialPos, env: AudioEnvironment = "room") {
   const az = wrapAz(pos.azimuth), d = clamp01(pos.distance), w = clamp01(pos.width ?? 1) * (1 - 0.5 * d);
@@ -77,7 +77,8 @@ export function spatialParams(pos: SpatialPos, env: AudioEnvironment = "room") {
     midL: Math.SQRT2 * Math.cos(th), midR: Math.SQRT2 * Math.sin(th), side: w,
     gain: 1 / (1 + 3 * d),
     lowpass: 20000 * Math.pow(2000 / 20000, d) * (1 - 0.55 * rear),
-    reverb: REVERB[env].level * (0.15 + 0.85 * d),
+    // P25: no room send at the ear (distance 0 is fully dry), growing with the square of distance so near spots stay dry.
+    reverb: REVERB[env].level * d * d,
     metres: 1 + 19 * d,
     xyz: { x: Math.sin((az * Math.PI) / 180), y: 0, z: -Math.cos((az * Math.PI) / 180) },
   };

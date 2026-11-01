@@ -850,7 +850,7 @@ Audio cues (`audio[]`) take optional fields; old boards and projects without the
 
 | Field | Type | Meaning |
 |---|---|---|
-| `position?` | `{ azimuth, distance, width? }` | `azimuth` degrees −180..180: 0 front, −90 left, +90 right, ±180 behind. `distance` **normalised 0..1**: 0 = at the ear, 1 ≈ 20 m (gain 1/(1+3d), lowpass, more reverb, narrower width; behind is also darker). `width` 0..1, default 1. |
+| `position?` | `{ azimuth, distance, width? }` | `azimuth` degrees −180..180: 0 front, −90 left, +90 right, ±180 behind. `distance` **normalised 0..1**: 0 = at the ear, 1 ≈ 20 m (gain 1/(1+3d), lowpass, reverb send that grows with d² and is zero at distance 0, so a sound at the ear is fully dry; narrower width; behind is also darker). `width` 0..1, default 1. |
 | `pan?` | number −1..1 | Shorthand for `{ azimuth: pan × 90, distance: 0 }`. If `position` is also given, `position` wins (warning). |
 | `positionKeys?` | `[{ t, azimuth, distance }]` | Moving sound; `t` seconds from the cue start; linear, azimuth the shorter way round. |
 | `meta.audioOutput?` | `{ mode: "stereo" \| "binaural", environment?: "room" \| "outdoor" }` | Whole-project output. `stereo` (default, speakers/phones): equal-power pan. `binaural` (headphones): HRTF PannerNode, in preview and export. `environment` picks a generated impulse-response reverb (default `room`). |
