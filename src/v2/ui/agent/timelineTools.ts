@@ -5,7 +5,7 @@
  * audio clipping / silence (the export audio mix).
  */
 import { captureFrameAt, storePickedFrame } from "../storyboard/frameCapture";
-import { audioOutputOf, board, ops, promote, findPlacement, newId, panToAzimuth, positionErrors, secondsToTicks, timelineReview, type Placement, type Project } from "../../domain";
+import { audioOutputOf, board, ops, promote, findPlacement, slip, newId, panToAzimuth, positionErrors, secondsToTicks, timelineReview, type Placement, type Project } from "../../domain";
 import { getPreset, listPresets } from "../../registry";
 import { cmd, type Command, type Engine } from "../../engine";
 import type { BlobStore } from "../../ports";
@@ -169,7 +169,7 @@ export async function runTimelineTool(engine: Engine, source: FrameSource | unde
   const n = (k: string) => (typeof a[k] === "number" && Number.isFinite(a[k]) ? (a[k] as number) : undefined);
   const s = (k: string) => (typeof a[k] === "string" && a[k] ? (a[k] as string) : undefined);
   const clip = (id: string) => { const f = findPlacement(rootOf(project()), id); return f && timelineReview.clipJson(project(), f.placement, f.track); };
-  const needClip = (): string | TimelineResult => { const id = s("id"); if (!id || !findPlacement(rootOf(project()), id)) return fail(`No clip "${id ?? ""}". Call get_timeline for clip ids.`); return id; };
+  const needClip = (): string | TimelineResult => { const id = s("id") ?? s("clipId"); if (!id || !findPlacement(rootOf(project()), id)) return fail(`No clip "${id ?? ""}". Call get_timeline for clip ids.`); return id; };
   const edit = (cmds: Command | Command[], id: string | string[]): TimelineResult => {
     const changed = engine.dispatch(cmds, name);
     const ids = Array.isArray(id) ? id : [id];
@@ -250,6 +250,21 @@ export async function runTimelineTool(engine: Engine, source: FrameSource | unde
       const id = needClip(); if (typeof id !== "string") return id;
       const t = n("atSec"), edge = a.edge; if (t === undefined || (edge !== "left" && edge !== "right")) return fail('"edge" (left|right) and "atSec" are required.');
       return edit(cmd.trimPlacement(id, edge, secondsToTicks(t), a.ripple === true), id);
+    }
+    case "slip_clip": {
+      const id = needClip(); if (typeof id !== "string") return id;
+      const t = n("inSec"); if (t === undefined) return fail('"inSec" is required.');
+      const f = findPlacement(rootOf(project()), id)!;
+      if (!slip.slipKind(f.placement)) return fail(`Clip ${id} has no source range to slip (images, text, freeze frames and effects cannot slip).`);
+      return edit(cmd.slipClip(id, secondsToTicks(Math.max(0, t)), a.moveLinked === true), id);
+    }
+    case "replace_clip_asset": {
+      const id = needClip(); if (typeof id !== "string") return id;
+      const assetId = s("assetId"); if (!assetId) return fail('"assetId" is required.');
+      const onShort = a.onShort === "shorten" || a.onShort === "hold" ? a.onShort : undefined;
+      const r = slip.replaceClipAsset(project(), id, assetId, onShort);
+      if (!r.ok) return fail(r.needsChoice ? `${r.error} Call again with onShort: "shorten" (clip ends with the new source) or "hold" (keep the length and freeze the last frame).` : r.error);
+      return edit(cmd.replaceClipAsset(id, assetId, onShort), id);
     }
     case "split_clip": {
       const id = needClip(); if (typeof id !== "string") return id;

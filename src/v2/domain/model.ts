@@ -61,6 +61,11 @@ export interface Placement {
   reverse?: boolean;
   /** Freeze frame: holds the single source frame at sourceInTicks for the whole duration. */
   freeze?: boolean;
+  /**
+   * P26 "Keep length (freeze last frame)": set by Replace asset when the new source is shorter than the clip. Source time
+   * never passes this tick, so the clip keeps its length and holds the source's last frame (audio is silent past the end).
+   */
+  holdEndTicks?: number;
   /** Fade in/out length in ticks: ramps opacity (visual) and volume (audio) from/to 0. */
   fadeInTicks?: number;
   fadeOutTicks?: number;
@@ -194,7 +199,8 @@ export function sourceAt(p: Placement, t: number): number {
   if (p.freeze || isStill(p)) return p.sourceInTicks;
   const s = p.speed ?? 1;
   const o = Math.min(Math.max(0, t - p.startTicks), p.durationTicks);
-  return p.reverse ? p.sourceInTicks + Math.max(0, Math.round((p.durationTicks - o) * s) - 1) : p.sourceInTicks + Math.round(o * s);
+  const at = p.reverse ? p.sourceInTicks + Math.max(0, Math.round((p.durationTicks - o) * s) - 1) : p.sourceInTicks + Math.round(o * s);
+  return p.holdEndTicks !== undefined ? Math.min(at, p.holdEndTicks) : at;
 }
 
 /**

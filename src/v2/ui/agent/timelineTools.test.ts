@@ -197,3 +197,31 @@ describe("P14 spatial set_clip_props", () => {
     expect(ALL_AGENT_TOOLS.some((t) => t.name === "promote_overlay")).toBe(true);
   });
 });
+
+describe("P26 slip_clip / replace_clip_asset", () => {
+  const pl = (e: Engine) => findPlacement(root(e.getState().project), "c1")!.placement;
+  it("slip_clip moves the source window, keeps place and length, one undo step", async () => {
+    const e = setup();
+    e.dispatch(cmd.trimPlacement("c1", "right", s(3)));
+    const r = await runTimelineTool(e, undefined, "slip_clip", { clipId: "c1", inSec: 4 });
+    expect(r.ok && r.changed).toBe(true);
+    expect(pl(e)).toMatchObject({ startTicks: 0, durationTicks: s(3), sourceInTicks: s(4) });
+    await runTimelineTool(e, undefined, "slip_clip", { clipId: "c1", inSec: 99 });
+    expect(pl(e).sourceInTicks).toBe(s(7));
+    e.undo(); e.undo(); expect(pl(e).sourceInTicks).toBe(0);
+    expect((await runTimelineTool(e, undefined, "slip_clip", { clipId: "c1" })).ok).toBe(false);
+  });
+  it("replace_clip_asset asks for onShort when the source is too short", async () => {
+    const e = setup();
+    let r = await runTimelineTool(e, undefined, "replace_clip_asset", { clipId: "c1", assetId: "w" });
+    expect(r.ok).toBe(false); expect(r.text).toContain("onShort");
+    expect((await runTimelineTool(e, undefined, "replace_clip_asset", { clipId: "c1", assetId: "a" })).ok).toBe(false);
+    r = await runTimelineTool(e, undefined, "replace_clip_asset", { clipId: "c1", assetId: "w", onShort: "shorten" });
+    expect(r.ok).toBe(true);
+    expect(pl(e)).toMatchObject({ durationTicks: s(4), source: { assetId: "w" } });
+    e.undo();
+    await runTimelineTool(e, undefined, "replace_clip_asset", { clipId: "c1", assetId: "w", onShort: "hold" });
+    expect(pl(e)).toMatchObject({ durationTicks: s(10), source: { assetId: "w" } });
+    expect(pl(e).holdEndTicks).toBeDefined();
+  });
+});

@@ -2648,6 +2648,12 @@
           "title": "Echo on dry audio effects: the Position stage sent every positioned clip into the 1.4 s room reverb even at distance 0 (send 0.15 x level); the send is now level x distance squared (zero at the ear); regression tests for each audioFx preset's intended delay/reverb, Telephone's band and saturation only, and a dry position stage at the centre",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P26-SLIP-REPLACE",
+          "title": "Adjust range (slip) and Replace asset in one sheet: clip detail button, desktop right-click and Alt+drag; loop preview, filmstrip/waveform window box, frame steps, start field, length lock, linked-clip option, same-kind asset picker with upload and short-source choice (shorten or freeze last frame); one undo step; WebMCP slip_clip / replace_clip_asset; guide rule 57",
+          "status": "done",
+          "progress": 100
         }
       ]
     },

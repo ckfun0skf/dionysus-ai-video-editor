@@ -4,6 +4,7 @@ import type { Command } from "./engine";
 import { DEFAULT_EFFECT_TICKS, DEFAULT_IMAGE_TICKS, findPlacement, newId, sourceInMax, trackKindFor, type Asset, type AssetVersion, type Composition, type Placement, type Project, type TrackKind, transformOf } from "../domain/model";
 import * as ops from "../domain/ops";
 import * as clipRange from "../domain/clipRange";
+import * as slipOps from "../domain/slip";
 import { mergeStoryboard } from "../domain/storyRoundtrip";
 import * as layers from "../domain/layerStyle";
 import * as cueOps from "../domain/subtitleLayer";
@@ -214,6 +215,18 @@ export const setSourceRange = (id: string, inTicks: number, outTicks: number): C
     const media = pl && clipRange.canSetRange(p, pl) ? clipRange.sourceSpan(p, pl).mediaTicks : undefined;
     return media === undefined ? p : withRoot(p, (c) => clipRange.setSourceRange(c, id, inTicks, outTicks, media));
   },
+});
+/** P26 Adjust range: slip a clip's in point (start and length stay); `moveLinked` slips its linked clips too. */
+export const slipClip = (id: string, inTicks: number, moveLinked = false): Command => ({
+  label: "Adjust range", coalesceKey: `slip:${id}`, apply: (p) => slipOps.slipClip(p, id, inTicks, { moveLinked }),
+});
+/** P26 Adjust range with the length unlocked: exact in/out (source ticks); the start stays, the length follows. */
+export const setSlipRange = (id: string, inTicks: number, outTicks: number): Command => ({
+  label: "Adjust range", coalesceKey: `slip:${id}`, apply: (p) => slipOps.setSlipRange(p, id, inTicks, outTicks),
+});
+/** P26 Replace asset: same-kind asset swap that keeps everything else; throws (rejected) when it needs an onShort choice. */
+export const replaceClipAsset = (id: string, assetId: string, onShort?: slipOps.OnShort): Command => ({
+  label: "Replace asset", apply: (p) => { const r = slipOps.replaceClipAsset(p, id, assetId, onShort); if (!r.ok) throw new Error(r.error); return r.project; },
 });
 /** P3A-23: join two adjacent clips at a matched frame pair (A's out, B's in), one undo step. */
 export const matchJoin = (aId: string, bId: string, aOut: number, bIn: number): Command => ({

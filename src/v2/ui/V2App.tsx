@@ -29,6 +29,7 @@ import { downloadText, SubtitleList } from "./SubtitleList";
 import { cues as cueLayer } from "../domain";
 import { Ic } from "./Icon";
 import { canSetInPoint, InPointControl } from "./InPoint";
+import { AdjustRange, canAdjustRange } from "./AdjustRange";
 import { ClipFrames } from "./ClipFrames";
 import { makeAnalyse, MatchFrames } from "./MatchFrames";
 import { clipRange, links } from "../domain";
@@ -128,6 +129,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const [projOpen, setProjOpen] = useState(false);
   const [inspOpen, setInspOpen] = useState(false);
   const [matchOpen, setMatchOpen] = useState(false);
+  /** P26: the "Adjust range" / "Replace asset" sheet (mobile) or side panel (desktop) for one clip. */
+  const [rangeFor, setRangeFor] = useState<{ id: string; picker?: boolean }>();
   /** V2-SB-133: the phone "In point" sheet. */
   const [inOpen, setInOpen] = useState(false);
   /** P20: clip id whose "Promote to main track" sheet is open. */
@@ -694,6 +697,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   ] : [];
   /** V2-SB-133: the selected video clip can slip its in point. */
   const inPointable = !!selected && canSetInPoint(project, selected.placement);
+  const rangeable = !!selected && sel.length <= 1 && canAdjustRange(selected.placement);
   useEffect(() => setInOpen(false), [selectedId]);
   const speedSelect = sp && sp.clipType !== "image" && sp.clipType !== "text" && !sp.freeze ? (
     <label className="v2-tool" title="Playback speed — changes the clip's length"><b aria-hidden><Ic g="⏩" /></b>
@@ -796,6 +800,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       ...(canChromaKey(selected.placement) ? [tool("chroma", "Chroma key", () => setCkOpen(true), "chroma", "Remove a green or blue screen colour")] : []),
       ...(hasSound(selected.placement) ? [tool("curve", "Volume curve", () => setVcOpen(true), "vcurve", "Volume points over the waveform, and fades"), tool("afx", "Audio FX", () => setAfxOpen(true), "afx", "Echo, telephone, radio, robot…"), tool("spatial", "Position", () => setPosOpen(true), "position", "Where the sound sits: left, right, behind, near or far")] : []),
       ...(speedSelect ? [tool("⏩", `Speed ${sp!.speed ?? 1}×`, () => setMenu("speed"), "speed", "Playback speed")] : []),
+      ...(rangeable ? [tool("⇔", "Adjust range", () => setRangeFor({ id: selected!.placement.id }), "adjust-range", "Choose which part of the source this clip plays (slip); its place and length stay"),
+        tool("⇄", "Replace", () => setRangeFor({ id: selected!.placement.id, picker: true }), "replace-asset", "Swap this clip's media for another of the same kind; everything else stays")] : []),
       ...(inPointable ? [tool("⇤", "In point", () => setInOpen(true), "in-point", "Where the clip starts in its video (slip)")] : []),
       ...linkActions.map((a) => linkTool(a)),
       ...promoteActions.map((a) => tool(a.icon, a.label, a.run, "promote", a.title)),
@@ -895,10 +901,13 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     const linkSec = linkActions.length ? <><section className="v2-psettings v2-link-sec" aria-label="Link to main"><h4>Link to main</h4>
       <button className={`v2-btn v2-link-btn ${selLinked ? "is-active" : ""}`} role="switch" aria-checked={!!selLinked} title={linkActions[0].title} onClick={linkActions[0].run}>🔗 {selLinked ? `Linked to ${clipName(findPlacement(comp, selLinked.parent)?.placement ?? pl)}` : "Link to main"}</button>
     </section>{promoteSec}</> : null;
-    const transform: InspectorTab = { id: "basic", label: "Basic", icon: "⤧", render: () => kind === "video" && !pl.freeze && !linkSec ? <>
+    const rangeSec = canAdjustRange(pl) ? <section className="v2-psettings v2-range-sec" aria-label="Source range"><h4>Source range</h4>
+      <div className="v2-insp-actions"><button className="v2-btn" data-testid="adjust-range-btn" title="Choose which part of the source this clip plays (slip); its place and length stay (Alt+drag on the clip)" onClick={() => setRangeFor({ id: pl.id })}>⇔ Adjust range</button>
+      <button className="v2-btn" data-testid="replace-asset-btn" title="Swap this clip's media for another of the same kind; everything else stays" onClick={() => setRangeFor({ id: pl.id, picker: true })}>⇄ Replace asset</button></div></section> : null;
+    const transform: InspectorTab = { id: "basic", label: "Basic", icon: "⤧", render: () => kind === "video" && !pl.freeze && !linkSec ? <>{rangeSec}
       <section className="v2-psettings v2-frames-sec" aria-label="In and out frames"><h4>In / out frames</h4><ClipFrames engine={engine} project={project} placement={pl} /></section>
       <TransformInspector engine={engine} placement={pl} time={time} />
-    </> : <>{linkSec}{kind === "video" && !pl.freeze && <section className="v2-psettings v2-frames-sec" aria-label="In and out frames"><h4>In / out frames</h4><ClipFrames engine={engine} project={project} placement={pl} /></section>}<TransformInspector engine={engine} placement={pl} time={time} /></> };
+    </> : <>{rangeSec}{linkSec}{kind === "video" && !pl.freeze && <section className="v2-psettings v2-frames-sec" aria-label="In and out frames"><h4>In / out frames</h4><ClipFrames engine={engine} project={project} placement={pl} /></section>}<TransformInspector engine={engine} placement={pl} time={time} /></> };
     const speedTab: InspectorTab = { id: "speed", label: "Speed", icon: "⏩", render: () => <div className="v2-psettings">
       <section aria-label="Speed"><h4>Speed</h4>
         <div className="v2-seg" role="radiogroup" aria-label="Speed">{SPEEDS.map((x) => <button key={x} role="radio" aria-checked={(pl.speed ?? 1) === x} className={`v2-seg-btn ${(pl.speed ?? 1) === x ? "is-active" : ""}`} title={x === 1 ? "Normal speed" : `${x}× — changes the clip's length`} onClick={() => engine.dispatch(cmd.setSpeed(pl.id, x))}>{x}×</button>)}</div>
@@ -984,6 +993,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     const many = sel.length > 1 ? ` ${sel.length} clips` : "";
     const ctxLink = p.source.assetId ? storyDomain.storyLinkOf(project, p.source.assetId) : undefined;
     return [
+      ...(canAdjustRange(p) && sel.length <= 1 ? [{ label: "Adjust range…", icon: "⇔", shortcut: "Alt+drag", onSelect: () => { selectClip(p.id); setRangeFor({ id: p.id }); } }, { label: "Replace asset…", icon: "⇄", onSelect: () => { selectClip(p.id); setRangeFor({ id: p.id, picker: true }); } }, "sep" as const] : []),
       { label: "Split at playhead", icon: "✂", shortcut: "S", disabled: !inside || sel.length > 1, onSelect: () => engine.dispatch(cmd.splitPlacement(p.id, t)) },
       { label: "Trim start to playhead", icon: "trim-start", shortcut: "Q", disabled: !inside, onSelect: () => trimToPlayhead("left") },
       { label: "Trim end to playhead", icon: "trim-end", shortcut: "W", disabled: !inside, onSelect: () => trimToPlayhead("right") },
@@ -1085,6 +1095,10 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           <MatchFrames engine={engine} project={project} a={pair[0]} b={pair[1]} analyse={makeAnalyse(project, loadAssetBlob)} onDone={(m) => { setMatchOpen(false); if (m) setToast(m); }} />
         </div>
       </div>}
+      {!mobile && rangeFor && findPlacement(comp, rangeFor.id) && <aside className="v2-slip-panel" role="dialog" aria-label={rangeFor.picker ? "Replace asset" : "Adjust range"} onKeyDown={(e) => { if (e.key === "Escape") setRangeFor(undefined); }}>
+        <header><h3>{rangeFor.picker ? "Replace asset" : "Adjust range"}</h3><button className="v2-icon" aria-label="Close" onClick={() => setRangeFor(undefined)}><Ic g="✕" /></button></header>
+        <AdjustRange key={`${rangeFor.id}:${rangeFor.picker ? 1 : 0}`} engine={engine} project={project} clipId={rangeFor.id} blobs={storage.blobs} peaks={peaks} strips={strips} thumbs={thumbs} startInPicker={rangeFor.picker} onUpload={(fs) => onFiles(fs)} onSeek={seek} onDone={(m) => { setRangeFor(undefined); if (m) setToast(m); }} />
+      </aside>}
       {!mobile && kbdOpen && <ShortcutsOverlay onClose={() => setKbdOpen(false)} />}
       {!mobile && ctx && <ContextMenu x={ctx.x} y={ctx.y} label={ctx.placementId ? "Clip actions" : "Track actions"} items={ctxItems()} onClose={() => setCtx(undefined)} />}
       {toast && <div className={`v2-toast ${toastUndo ? "has-undo" : ""}`} role="status" onClick={() => setToast(undefined)}><span>{toast}</span>{toastUndo && <button className="v2-toast-undo" title={`Undo (${MOD} Z)`} onClick={(e) => { e.stopPropagation(); engine.undo(); setToast(undefined); }}>Undo</button>}</div>}
@@ -1128,6 +1142,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           {vcOpen && selected && hasSound(selected.placement) && <Sheet label="Volume curve" className="v2-msheet-insp" onClose={() => setVcOpen(false)}><VolumeCurve engine={engine} placement={selected.placement} time={time} peaks={peaks[mediaKey(selected.placement.source.assetId, selected.placement.source.versionId)]} /></Sheet>}
           {afxOpen && selected && hasSound(selected.placement) && <Sheet label="Audio FX" className="v2-msheet-insp" onClose={() => setAfxOpen(false)}><AudioFxPanel engine={engine} placement={selected.placement} /></Sheet>}
           {posOpen && selected && hasSound(selected.placement) && <Sheet label="Position" className="v2-msheet-insp" onClose={() => setPosOpen(false)}><SpatialPad engine={engine} project={project} placement={selected.placement} track={selected.track} time={time} /></Sheet>}
+          {rangeFor && findPlacement(comp, rangeFor.id) && <Sheet label={rangeFor.picker ? "Replace asset" : "Adjust range"} className="v2-msheet-insp v2-msheet-slip" onClose={() => setRangeFor(undefined)}><AdjustRange key={`${rangeFor.id}:${rangeFor.picker ? 1 : 0}`} engine={engine} project={project} clipId={rangeFor.id} blobs={storage.blobs} peaks={peaks} strips={strips} thumbs={thumbs} startInPicker={rangeFor.picker} onUpload={(fs) => onFiles(fs)} onSeek={seek} onDone={(m) => { setRangeFor(undefined); if (m) setToast(m); }} /></Sheet>}
           {inOpen && selected && inPointable && <Sheet label="In point" className="v2-msheet-insp" onClose={() => setInOpen(false)}><InPointControl engine={engine} project={project} placement={selected.placement} /></Sheet>}
           {subsTrack && <Sheet label="Edit subtitles" className="v2-msheet-tall" head={false} onClose={() => setSubsEdit(undefined)}><SubtitleList engine={engine} track={subsTrack} time={time} playing={playing} onSeek={seek} desktop={false} name={project.name} focusCue={subsCue} onDone={() => setSubsEdit(undefined)} /></Sheet>}
           {layerTrack && !selected && <Sheet label={`Edit all · ${layerTrack.name}`} className="v2-msheet-insp" onClose={() => setLayerEdit(undefined)}><TextPanel key={layerTrack.id} engine={engine} layer={layerTrack} initialTab="Style" /></Sheet>}
