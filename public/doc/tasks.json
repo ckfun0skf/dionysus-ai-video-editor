@@ -2642,6 +2642,12 @@
           "title": "Plan with AI prompt quotes the exact 3.1 schema (shot, layer, dialogue, asset and audio fields, optional fields marked) shared with the main prompt, names dialogue speaker/text/offscreen (not character), example answer with dialogue and a layer; no silent alias; tests",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P25-FX-ECHO",
+          "title": "Echo on dry audio effects: the Position stage sent every positioned clip into the 1.4 s room reverb even at distance 0 (send 0.15 x level); the send is now level x distance squared (zero at the ear); regression tests for each audioFx preset's intended delay/reverb, Telephone's band and saturation only, and a dry position stage at the centre",
+          "status": "done",
+          "progress": 100
         }
       ]
     },
