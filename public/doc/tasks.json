@@ -2654,6 +2654,12 @@
           "title": "Adjust range (slip) and Replace asset in one sheet: clip detail button, desktop right-click and Alt+drag; loop preview, filmstrip/waveform window box, frame steps, start field, length lock, linked-clip option, same-kind asset picker with upload and short-source choice (shorten or freeze last frame); one undo step; WebMCP slip_clip / replace_clip_asset; guide rule 57",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P27-TIMELINE-GESTURES",
+          "title": "Timeline gestures: a left-edge drag earlier reveals earlier source (ripple keeps the view so the edge follows the pointer, even for the first clip); Overlay/Audio modes auto-select the clip under the playhead like Edit mode; scrolling during playback pauses and resumes ~200 ms after the scroll stops",
+          "status": "done",
+          "progress": 100
         }
       ]
     },
