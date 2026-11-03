@@ -1232,3 +1232,22 @@ select.v2-tp-field { -webkit-appearance: none; appearance: none; padding-right: 
 .v2-slip-panel h3 { margin: 12px 0; font-size: 16px; }
 .v2-slip-panel .v2-icon { min-width: 44px; min-height: 44px; }
 .v2-range-sec { margin-bottom: 14px; display: grid; gap: 6px; }
+/* P27: Adjust range header (✕ Cancel · title · ✓ Apply), Solo/Mix toggle and compact rows: fits a 390×844 phone without scrolling. */
+.v2-slip { gap: 8px; }
+.v2-slip-head { display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; gap: 4px; position: sticky; top: 0; z-index: 2; background: var(--panel, #1b1b20); margin: 0 -2px; }
+.v2-slip-head h3 { margin: 0; font-size: 16px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.v2-slip-hbtn { min-width: 44px; min-height: 44px; font-size: 20px; display: grid; place-items: center; }
+.v2-slip-hbtn.is-ok { color: var(--accent); font-weight: 700; }
+.v2-slip-hbtn:disabled { opacity: .35; }
+.v2-slip-tools { display: flex; align-items: center; gap: 8px; }
+.v2-slip-tools .v2-seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.v2-slip-tools .v2-seg button { min-height: 40px; min-width: 56px; padding: 0 12px; background: transparent; color: var(--muted); border: 0; }
+.v2-slip-tools .v2-seg button.is-on { background: var(--accent); color: #000; font-weight: 600; }
+.v2-slip-replace { white-space: nowrap; }
+.v2-slip-preview { max-height: 24vh; }
+.v2-slip-preview.is-audio, .v2-slip-preview.is-mix { aspect-ratio: auto; background: transparent; display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+.v2-slip-preview.is-audio .v2-slip-play, .v2-slip-preview.is-mix .v2-slip-play { position: static; background: #26262c; }
+.v2-slip-read.is-compact { font-size: 13px; gap: 4px 14px; }
+.v2-slip .v2-slip-check { min-height: 40px; font-size: 14px; }
+.v2-msheet-slip .v2-slip { padding-top: 0; }
+.v2-slip-panel { padding-top: 0; }

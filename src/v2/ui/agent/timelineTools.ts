@@ -262,6 +262,13 @@ export async function runTimelineTool(engine: Engine, source: FrameSource | unde
       const id = needClip(); if (typeof id !== "string") return id;
       const assetId = s("assetId"); if (!assetId) return fail('"assetId" is required.');
       const onShort = a.onShort === "shorten" || a.onShort === "hold" ? a.onShort : undefined;
+      // P27: a storyboard shot's main-track clip gets the asset as a new version of the shot (the timeline follows it).
+      const story = slip.storyTargetOf(project(), id), pick = story && slip.replaceVersion(project(), assetId);
+      if (story && pick) {
+        const want = project().assets[assetId]?.kind, have = project().assets[findPlacement(rootOf(project()), id)!.placement.source.assetId]?.kind;
+        if (want !== have) return fail(`Asset ${assetId} is ${want ?? "missing"}; clip ${id} needs ${have}.`);
+        return edit(cmd.addStoryVersion(story.target, pick.media), id);
+      }
       const r = slip.replaceClipAsset(project(), id, assetId, onShort);
       if (!r.ok) return fail(r.needsChoice ? `${r.error} Call again with onShort: "shorten" (clip ends with the new source) or "hold" (keep the length and freeze the last frame).` : r.error);
       return edit(cmd.replaceClipAsset(id, assetId, onShort), id);
