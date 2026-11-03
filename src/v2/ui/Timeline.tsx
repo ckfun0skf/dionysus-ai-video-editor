@@ -53,12 +53,16 @@ interface Props {
   onTransition?: (id: string) => void;
   /** V2-099: a non-Edit mode (Audio/Text/Effect/Overlay) shows only the main track plus this group. */
   focus?: ops.TrackGroup;
+  /** P27 (centered): pause (false) / resume (true) playback around a user scroll of the timeline. */
+  onPlayback?: (play: boolean) => void;
   topLane?: { label: string; render: (toPx: (t: number) => number, toTicks: (px: number) => number) => ReactNode };
 }
 
 /** Fixed playhead position in centered mode, as a fraction of the viewport width. */
 // V2-111: true centre line, like CapCut.
 const PLAYHEAD_FRAC = 0.5;
+/** P27: quiet period after a scroll before paused playback resumes. */
+export const SCROLL_RESUME_MS = 200;
 /** V2-111: a ruler label at screen x (≈34px wide) would sit under the fixed time readout ending at labelRight → fade it out. */
 export const tickUnderLabel = (x: number, labelRight: number) => x + 34 > 0 && x < labelRight + 4;
 
@@ -74,7 +78,7 @@ export const TEXT_LANE_H = 32;
 export const coarsePointer = () => typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
 export const SIDE_W = 184;
 
-export function Timeline({ engine, project, time, playing, onSeek, selectedId, selectedIds, onToggleSelect, multiMode, onSelect, pps, onZoom, centered, thumbs, peaks, strips, onAddMedia, sideColumn, timeLabel, topLane, ripple, onTransition, expanded: expandedProp, onExpand, focus, onEditLayer, onEditSubs, onFocusGroup, onDropData, onContextMenu }: Props) {
+export function Timeline({ engine, project, time, playing, onSeek, selectedId, selectedIds, onToggleSelect, multiMode, onSelect, pps, onZoom, centered, thumbs, peaks, strips, onAddMedia, sideColumn, timeLabel, topLane, ripple, onTransition, expanded: expandedProp, onExpand, focus, onEditLayer, onEditSubs, onFocusGroup, onDropData, onContextMenu, onPlayback }: Props) {
   const comp = project.compositions[project.rootCompositionId];
   const scrollRef = useRef<HTMLDivElement>(null);
   const [gesture, setGesture] = useState<Gesture>();
@@ -91,6 +95,8 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
   const [reorder, setReorder] = useState<{ id: string; x0: number; x: number; from: number; closing?: boolean }>();
   const [viewW, setViewW] = useState(800);
   const programmatic = useRef(false);
+  const scrollResume = useRef(false);
+  const scrollTimer = useRef<ReturnType<typeof setTimeout>>();
   const press = useRef<{ timer: ReturnType<typeof setTimeout>; x: number; y: number }>();
   const zoomRef = useRef({ pps, onZoom });
   zoomRef.current = { pps, onZoom };
@@ -129,7 +135,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
   const duration = compositionDuration(comp);
   const pad = centered ? Math.max(Math.round(viewW * PLAYHEAD_FRAC), sideColumn ? SIDE_W + 8 : 0) : 0;
   const padRight = centered ? viewW - pad : 0;
-  const contentW = Math.max(toPx(duration) + (centered ? 0 : 400), centered ? 1 : viewW); // V2-111: the ruler/lanes always reach the panel's right edge (viewW is the scroller, headers excluded)
+  const contentW = Math.max(toPx(duration) + (centered ? 0 : 400 + (gesture?.kind === "trim" ? toPx(Math.max(0, gesture.edge0 - gesture.to)) : 0)), centered ? 1 : viewW); // V2-111: the ruler/lanes always reach the panel's right edge (viewW is the scroller, headers excluded)
 
   useLayoutEffect(() => {
     const el = scrollRef.current;
@@ -160,8 +166,15 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
     if (el && el.scrollTop !== scrollTop) setScrollTop(el.scrollTop);
     if (!centered || !el) return;
     if (programmatic.current) { programmatic.current = false; return; }
-    if (!playing) onSeek(Math.max(0, toTicks(el.scrollLeft)));
+    // P27: a user scroll during playback pauses it; playback resumes from the new position once scrolling settles.
+    if (playing && onPlayback) { scrollResume.current = true; onPlayback(false); }
+    if (!playing || scrollResume.current) onSeek(Math.max(0, toTicks(el.scrollLeft)));
+    if (scrollResume.current) {
+      clearTimeout(scrollTimer.current);
+      scrollTimer.current = setTimeout(() => { scrollResume.current = false; onPlayback?.(true); }, SCROLL_RESUME_MS);
+    }
   };
+  useEffect(() => () => clearTimeout(scrollTimer.current), []);
 
   const preview: Composition = useMemo(() => {
     if (!gesture) return comp;
@@ -173,6 +186,24 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
       return (ripple ? edit.rippleTrim : ops.trimPlacement)(comp, gesture.id, gesture.edge, gesture.to, max);
     } catch { return comp; }
   }, [gesture, comp, project.assets, ripple]);
+
+  // P27: a ripple left-edge trim keeps the clip's start and moves later clips. Shift the view by the length change so
+  // the clip's right end stays put on screen and its left edge follows the pointer (it grows toward earlier time).
+  const trimShift = useRef(0);
+  const leftRippleDelta = (() => {
+    if (!gesture || gesture.kind !== "trim" || gesture.edge !== "left" || !ripple) return 0;
+    const a = findPlacement(comp, gesture.id)?.placement, b = findPlacement(preview, gesture.id)?.placement;
+    return a && b ? b.durationTicks - a.durationTicks : 0;
+  })();
+  useLayoutEffect(() => {
+    if (!gesture) { trimShift.current = 0; return; }
+    const d = leftRippleDelta - trimShift.current;
+    if (!d) return;
+    trimShift.current = leftRippleDelta;
+    const el = scrollRef.current;
+    if (centered) onSeek(Math.max(0, time + d));
+    else if (el) el.scrollLeft = Math.max(0, el.scrollLeft + toPx(d));
+  }, [leftRippleDelta, gesture]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const snapThreshold = toTicks(8);
   const trackAt = (x: number, y: number) => (document.elementFromPoint(x, y)?.closest("[data-track-id]") as HTMLElement | null)?.dataset.trackId;

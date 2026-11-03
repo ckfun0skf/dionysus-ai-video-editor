@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { clampPps, classifyPreview, MAX_PPS, MIN_PPS, pinchZoom, TAP_SLOP } from "./gestures";
-import { Timeline } from "./Timeline";
+import { SCROLL_RESUME_MS, Timeline } from "./Timeline";
 import { Engine } from "../engine";
 import { createProject } from "../domain";
 
@@ -68,6 +68,39 @@ describe("Timeline touch gestures", () => {
     const scroll = el.querySelector(".v2-scroll")!;
     act(() => { scroll.dispatchEvent(new WheelEvent("wheel", { deltaY: -100, ctrlKey: true, cancelable: true })); });
     expect(onZoom.mock.calls[0][0]).toBeGreaterThan(40);
+  });
+});
+
+describe("P27 timeline scroll during playback", () => {
+  beforeAll(() => {
+    (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    (globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver = class { observe() {} disconnect() {} };
+  });
+  afterEach(() => vi.useRealTimers());
+  it("pauses on a user scroll, seeks, and resumes after the scroll settles", () => {
+    vi.useFakeTimers();
+    const p = createProject();
+    const engine = new Engine(p);
+    const onSeek = vi.fn(), onPlayback = vi.fn();
+    const el = document.createElement("div");
+    document.body.appendChild(el);
+    const root = createRoot(el);
+    const render = (playing: boolean, time = 0) => act(() => { root.render(<Timeline engine={engine} project={p} time={time} playing={playing} onSeek={onSeek} onSelect={() => {}} pps={40} centered onPlayback={onPlayback} />); });
+    render(true);
+    const scroll = el.querySelector(".v2-scroll") as HTMLElement;
+    scroll.scrollLeft = 80;
+    act(() => { scroll.dispatchEvent(new Event("scroll")); });
+    expect(onPlayback).toHaveBeenLastCalledWith(false);
+    expect(onSeek).toHaveBeenLastCalledWith(2 * 120000);
+    render(false, 2 * 120000);
+    act(() => { vi.advanceTimersByTime(SCROLL_RESUME_MS - 50); });
+    scroll.scrollLeft = 120;
+    act(() => { scroll.dispatchEvent(new Event("scroll")); });
+    act(() => { vi.advanceTimersByTime(SCROLL_RESUME_MS - 50); });
+    expect(onPlayback).toHaveBeenCalledTimes(1);
+    act(() => { vi.advanceTimersByTime(100); });
+    expect(onPlayback).toHaveBeenLastCalledWith(true);
+    expect(onSeek).toHaveBeenLastCalledWith(3 * 120000);
   });
 });
 

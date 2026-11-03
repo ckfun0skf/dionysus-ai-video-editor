@@ -27,13 +27,19 @@ export function deleteMany(comp: Composition, ids: string[], ripple = false): Co
  * Ripple trim: the clip keeps its start, its length changes, and every later clip on the
  * track moves by the same amount (so trimming never leaves a gap and extending pushes clips).
  */
+/** Offset used by rippleTrim so left-edge extensions are not clamped at timeline 0. */
+const RIPPLE_LIFT = 1e12;
+
 export function rippleTrim(comp: Composition, id: string, edge: "left" | "right", toTicks: number, maxSourceTicks?: number): Composition {
   const found = findPlacement(comp, id);
   if (!found) throw new Error(`Unknown placement ${id}`);
   const p = found.placement;
   // Trim in isolation so neighbours don't clamp extension.
-  const solo: Composition = { ...comp, tracks: [{ ...found.track, placements: [p] }] };
-  const trimmed = trimPlacement(solo, id, edge, toTicks, maxSourceTicks).tracks[0].placements[0];
+  // P27: lift the clip far from 0 first, so a left-edge extension is bounded only by the source (not by timeline 0
+  // or the clip's current start). The clip keeps its start; the extra length ripples later clips.
+  const lift = edge === "left" ? RIPPLE_LIFT : 0;
+  const solo: Composition = { ...comp, tracks: [{ ...found.track, placements: [{ ...p, startTicks: p.startTicks + lift }] }] };
+  const trimmed = trimPlacement(solo, id, edge, toTicks + lift, maxSourceTicks).tracks[0].placements[0];
   const delta = trimmed.durationTicks - p.durationTicks;
   if (!delta) return comp;
   const next = { ...trimmed, startTicks: p.startTicks };

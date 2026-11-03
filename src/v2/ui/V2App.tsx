@@ -746,7 +746,15 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     else if (!g && menu !== "root" && menu !== "speed" && menu !== "multi") setMenu("root");
   };
   // Edit mode follows the playhead: scrolling the timeline changes which main-track clip is being edited.
-  useEffect(() => { if (!mobile || menu !== "edit" || multiMode) return; const p = mainAt(time); if (p && p.id !== selectedId) setSel([p.id]); }, [time, menu]); // eslint-disable-line react-hooks/exhaustive-deps
+  // P27: Overlay and Audio modes follow the playhead too: the clip under it on the selected clip's track (else the
+  // group's top-most track) becomes the selection; in a gap the selection clears.
+  useEffect(() => {
+    if (!mobile || multiMode) return;
+    if (menu === "edit") { const p = mainAt(time); if (p && p.id !== selectedId) setSel([p.id]); return; }
+    if (menu !== "overlay" && menu !== "audio") return;
+    const p = ops.clipAtInGroup(comp, menu, time, selected?.track.id);
+    if (p?.id !== selectedId && (p || (selected && ops.groupOf(comp, selected.track) === menu))) setSel(p ? [p.id] : []);
+  }, [time, menu]); // eslint-disable-line react-hooks/exhaustive-deps
   // Tapping a clip enters its mode: main → Edit, otherwise that group's mode (the group is expanded by the timeline).
   useEffect(() => {
     if (!mobile || !selected) return;
@@ -1121,7 +1129,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
             </span>
           </div>
           <PanelGrabber vh={previewVh} onChange={setPreviewVh} target={() => document.querySelector<HTMLElement>(".v2-app.is-mobile .v2-preview")} />
-          <Timeline focus={focusGroup} engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} selectedIds={sel} onToggleSelect={toggleClip} multiMode={multiMode} onSelect={selectClip} peaks={peaks} strips={strips} pps={pps} onZoom={(z) => setPps(clampPps(z))} centered topLane={topLane} ripple={ripple} onTransition={onTransition} onEditSubs={openSubs} onEditLayer={editLayer} expanded={expanded} onExpand={onExpand}
+          <Timeline focus={focusGroup} engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} selectedIds={sel} onToggleSelect={toggleClip} multiMode={multiMode} onSelect={selectClip} peaks={peaks} strips={strips} pps={pps} onZoom={(z) => setPps(clampPps(z))} centered onPlayback={(p) => { stopAt.current = undefined; if (p) player.play(); else player.pause(); }} topLane={topLane} ripple={ripple} onTransition={onTransition} onEditSubs={openSubs} onEditLayer={editLayer} expanded={expanded} onExpand={onExpand}
             thumbs={thumbs} onAddMedia={() => setPicker("main")}
             timeLabel={<><b>{formatTimecode(time, project.settings.fps).slice(0, 5)}</b> / {formatTimecode(duration, project.settings.fps).slice(0, 5)}</>}
             sideColumn={<>

@@ -415,3 +415,11 @@ export function setPosition(comp: Composition, placementId: string, pos: { azimu
 export function setTrackPosition(comp: Composition, trackId: string, pos: { azimuth: number; distance: number; width?: number } | null): Composition {
   return { ...comp, tracks: comp.tracks.map((t) => { if (t.id !== trackId) return t; const o: Track = { ...t }; if (pos) o.position = cleanPos(pos); else delete o.position; return o; }) };
 }
+
+/** P27: the clip spanning `t` in a track group, preferring track `prefer` (then track order). Drives mode auto-select. */
+export function clipAtInGroup(comp: Pick<Composition, "tracks">, g: TrackGroup, t: number, prefer?: string): Placement | undefined {
+  const tracks = comp.tracks.filter((tr) => groupOf(comp, tr) === g);
+  const ordered = [...tracks.filter((tr) => tr.id === prefer), ...tracks.filter((tr) => tr.id !== prefer)];
+  for (const tr of ordered) { const p = tr.placements.find((x) => x.startTicks <= t && t < x.startTicks + x.durationTicks); if (p) return p; }
+  return undefined;
+}
