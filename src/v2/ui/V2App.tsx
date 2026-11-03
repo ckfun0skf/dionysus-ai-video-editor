@@ -8,6 +8,7 @@ import { useEditorBoot, useEngineState, useIsMobile, type EditorContext, type Lo
 import { Timeline } from "./Timeline";
 import { clampPps } from "./gestures";
 import { useThumbs } from "./useThumbs";
+import type { ClipLoad } from "../render";
 import { useMediaPreviews } from "./useMedia";
 import { TransformHandles, TransformInspector } from "./Transform";
 import { TextPanel } from "./TextPanel";
@@ -301,6 +302,9 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   /** P27-PREVIEW-STABILITY: "Loading" badge while the preview waits for media. */
   const [mediaLoading, setMediaLoading] = useState(false);
   useEffect(() => { player.onLoading = setMediaLoading; return () => { player.onLoading = undefined; }; }, [player]);
+  /** P29-CLIP-LOADING: per-clip loading state for the timeline. */
+  const [clipLoads, setClipLoads] = useState<ReadonlyMap<string, ClipLoad>>(() => new Map());
+  useEffect(() => { player.onClipLoads = setClipLoads; return () => { player.onClipLoads = undefined; }; }, [player]);
   /** P27: Adjust range "Mix" shows its draft in the main preview until Apply/Cancel. */
   const [mixDraft, setMixDraft] = useState<Project>();
   useEffect(() => { player.setProject(mixDraft ?? project); }, [player, project, mixDraft]);
@@ -1135,7 +1139,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
             </span>
           </div>
           <PanelGrabber vh={previewVh} onChange={setPreviewVh} target={() => document.querySelector<HTMLElement>(".v2-app.is-mobile .v2-preview")} />
-          <Timeline focus={focusGroup} engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} selectedIds={sel} onToggleSelect={toggleClip} multiMode={multiMode} onSelect={selectClip} peaks={peaks} strips={strips} pps={pps} onZoom={(z) => setPps(clampPps(z))} centered onPlayback={(p) => { stopAt.current = undefined; if (p) player.play(); else player.pause(); }} topLane={topLane} ripple={ripple} onTransition={onTransition} onEditSubs={openSubs} onEditLayer={editLayer} expanded={expanded} onExpand={onExpand}
+          <Timeline focus={focusGroup} engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} selectedIds={sel} onToggleSelect={toggleClip} multiMode={multiMode} onSelect={selectClip} peaks={peaks} strips={strips} loads={clipLoads} pps={pps} onZoom={(z) => setPps(clampPps(z))} centered onPlayback={(p) => { stopAt.current = undefined; if (p) player.play(); else player.pause(); }} topLane={topLane} ripple={ripple} onTransition={onTransition} onEditSubs={openSubs} onEditLayer={editLayer} expanded={expanded} onExpand={onExpand}
             thumbs={thumbs} onAddMedia={() => setPicker("main")}
             timeLabel={<><b>{formatTimecode(time, project.settings.fps).slice(0, 5)}</b> / {formatTimecode(duration, project.settings.fps).slice(0, 5)}</>}
             sideColumn={<>
@@ -1178,7 +1182,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           <div className="v2-dsplit-h"><Splitter label="Resize timeline" value={lay.timeline} dir="up" min={LIMITS.timeline[0]} max={LIMITS.timeline[1]} onChange={(v) => resize({ timeline: v })} onCommit={commitSizes} onReset={() => { resize({ timeline: DEFAULT_SIZES.timeline }); commitSizes(); }} /></div>
           <section className="v2-timeline-panel v2-dtimeline" aria-label="Timeline">
             {desktopToolbar}
-            <Timeline focus={focusGroup} onFocusGroup={(g) => { setSel([]); setMenu(g && g !== "main" ? g : "root"); }} engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} selectedIds={sel} onToggleSelect={toggleClip} multiMode={multiMode} onSelect={selectClip} peaks={peaks} strips={strips} pps={pps} onZoom={(z) => setPps(clampPps(z))} centered={false} topLane={topLane} ripple={ripple} onTransition={onTransition} onEditSubs={openSubs} onEditLayer={editLayer} onDropData={onDropData} onContextMenu={openCtx} />
+            <Timeline focus={focusGroup} onFocusGroup={(g) => { setSel([]); setMenu(g && g !== "main" ? g : "root"); }} engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} selectedIds={sel} onToggleSelect={toggleClip} multiMode={multiMode} onSelect={selectClip} peaks={peaks} strips={strips} loads={clipLoads} thumbs={thumbs} pps={pps} onZoom={(z) => setPps(clampPps(z))} centered={false} topLane={topLane} ripple={ripple} onTransition={onTransition} onEditSubs={openSubs} onEditLayer={editLayer} onDropData={onDropData} onContextMenu={openCtx} />
           </section>
         </div>
       )}

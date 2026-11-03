@@ -2678,6 +2678,12 @@
           "title": "P28: Adjust range sheet fits a 390x844 phone without scrolling (height-limited preview, compact rows, 44px targets)",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P29-CLIP-LOADING",
+          "title": "Per-clip loading bar/spinner on the timeline and reliable clip thumbnails (shared decode queue with retry)",
+          "status": "done",
+          "progress": 100
         }
       ]
     },

@@ -12,3 +12,4 @@ export * from "./audioClip";
 export { bundledFontUrl, bundledFonts, loadBundledFonts, projectBundledFonts, projectFontFiles } from "./fonts";
 export { ExportVideoFrames } from "./export/videoFrames";
 export { buildSpatial, reverbBus, type SpatialStage } from "./spatial";
+export type { ClipLoad } from "./stability";

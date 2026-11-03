@@ -87,7 +87,7 @@ export async function extractFilmstrip(blob: Blob, count = FILMSTRIP_FRAMES): Pr
     }
     return { times, frames, aspect };
   } finally {
-    v.removeAttribute("src");
+    v.removeAttribute("src"); v.load(); // free the decoder now, not at GC
     URL.revokeObjectURL(url);
   }
 }

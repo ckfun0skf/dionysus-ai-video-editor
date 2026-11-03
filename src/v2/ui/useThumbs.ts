@@ -4,6 +4,7 @@ import type { BlobStore } from "../ports";
 import { drawVideoFrame } from "./frameGrab";
 import { grabHtml } from "./htmlThumb";
 import { ticksToSeconds } from "../domain";
+import { decodeQueue, withRetry } from "./decodeQueue";
 
 const selected = (a: Asset) => a.versions.find((x) => x.id === a.selectedVersionId) ?? a.versions[0];
 
@@ -24,9 +25,10 @@ export function useThumbs(project: Project, blobs: BlobStore): Record<string, st
       if (!v || started.current.has(key)) continue;
       started.current.add(key);
       const html = (b: Blob) => grabHtml(b, project, blobs, v.media.durationTicks ? ticksToSeconds(v.media.durationTicks) : undefined);
-      void blobs.get(v.media.blobKey).then((b) => b && (a.kind === "html" ? html(b) : grab(a.kind, b))).then((url) => {
+      // P29: decode through the shared queue and retry; a blank or timed-out frame is retried, not cached as missing.
+      void withRetry(() => decodeQueue.run(async () => { const b = await blobs.get(v.media.blobKey); return b ? (a.kind === "html" ? html(b) : grab(a.kind, b)) : undefined; })).then((url) => {
         if (alive.current && url) setCache((t) => ({ ...t, [key]: url }));
-      }).catch(() => started.current.delete(key));
+      }).catch(() => undefined);
     }
   }, [project.assets, blobs]);
   return useMemo(() => {
@@ -39,8 +41,8 @@ export function useThumbs(project: Project, blobs: BlobStore): Record<string, st
 /** A small JPEG of an image, or of a video frame at `atSec` (default: about 0.1 s in). */
 export async function grab(kind: string, blob: Blob, atSec?: number): Promise<string | undefined> {
   const url = URL.createObjectURL(blob);
+  const el = kind === "image" ? new Image() : document.createElement("video");
   try {
-    const el = kind === "image" ? new Image() : document.createElement("video");
     await new Promise<void>((res, rej) => {
       const t = setTimeout(() => rej(new Error("thumb timeout")), 5000);
       const done = () => { clearTimeout(t); res(); };
@@ -63,6 +65,7 @@ export async function grab(kind: string, blob: Blob, atSec?: number): Promise<st
     else g.drawImage(el, 0, 0, c.width, c.height);
     return c.toDataURL("image/jpeg", 0.7);
   } finally {
+    if (el instanceof HTMLVideoElement) { el.removeAttribute("src"); el.load(); } // free the decoder now, not at GC
     URL.revokeObjectURL(url);
   }
 }
