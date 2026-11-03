@@ -14,7 +14,7 @@
  */
 import { TICKS_PER_SECOND } from "./time";
 import { findPlacement, versionOf, type AssetVersion, type Placement, type Project } from "./model";
-import { MIN_DURATION_TICKS } from "./ops";
+import { MIN_DURATION_TICKS, mainTrack } from "./ops";
 import { setSourceRange } from "./clipRange";
 
 export type SlipKind = "media" | "html";
@@ -180,4 +180,17 @@ export function replaceClipAsset(project: Project, id: string, assetId: string, 
     return out;
   });
   return { ok: true, project: next, plan, notes };
+}
+
+/** P27: the storyboard owner of a main-track clip that came from a shot (its shot, or the shot's clip slot). */
+export function storyTargetOf(project: Project, clipId: string): { target: { shot: string } | { slot: string }; label: string } | undefined {
+  const b = project.storyboard, f = findPlacement(rootOf(project), clipId);
+  if (!b || !f || mainTrack(rootOf(project))?.id !== f.track.id) return undefined;
+  const aid = f.placement.source.assetId;
+  for (const id of b.order) {
+    const sh = b.shots[id]; if (!sh) continue;
+    const slotAsset = sh.clipSlot ? b.slots[sh.clipSlot]?.assetId : undefined;
+    if (sh.assetId === aid || slotAsset === aid) return { target: sh.clipSlot && slotAsset === aid ? { slot: sh.clipSlot } : { shot: id }, label: `Shot ${b.order.indexOf(id) + 1}` };
+  }
+  return undefined;
 }

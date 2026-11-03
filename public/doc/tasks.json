@@ -2660,6 +2660,12 @@
           "title": "Timeline gestures: a left-edge drag earlier reveals earlier source (ripple keeps the view so the edge follows the pointer, even for the first clip); Overlay/Audio modes auto-select the clip under the playhead like Edit mode; scrolling during playback pauses and resumes ~200 ms after the scroll stops",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P27-ADJUST-SHEET",
+          "title": "P27: Adjust range header with Cancel/Apply icons, Solo/Mix preview, Upload in Replace, storyboard shot clips replaced as a new version (UI and WebMCP)",
+          "status": "done",
+          "progress": 100
         }
       ]
     },

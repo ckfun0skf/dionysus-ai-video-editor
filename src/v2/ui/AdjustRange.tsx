@@ -41,7 +41,12 @@ export interface AdjustRangeProps {
   onDone: (message?: string) => void;
   /** Open on the asset picker (the "Replace asset" entry). */
   startInPicker?: boolean;
+  /** P27 Mix preview: show this draft project in the main preview (undefined restores the real one). */
+  onMix?: (draft: Project | undefined) => void;
+  /** P27 Mix preview: play the main preview over [from, to) of the timeline. */
+  onPlayRange?: (from: number, to: number) => void;
 }
+
 
 function useBlobUrl(blobs: BlobStore, key: string | undefined): string | undefined {
   const [url, setUrl] = useState<string>();
@@ -62,6 +67,12 @@ function LoopPreview({ blobs, blobKey, kind, inS, outS }: { blobs: BlobStore; bl
   useEffect(() => { const el = ref.current; if (el && Number.isFinite(inS)) { try { el.currentTime = inS; } catch { /* not loaded yet */ } } }, [inS, url]);
   useEffect(() => { const el = ref.current; if (!el) return; if (playing) void el.play?.()?.catch?.(() => setPlaying(false)); else el.pause?.(); }, [playing, url]);
   const onTime = () => { const el = ref.current; if (el && (el.currentTime >= outS || el.currentTime < inS - 0.05)) el.currentTime = inS; };
+  if (kind === "audio") return (
+    <div className="v2-slip-preview is-audio">
+      <audio ref={ref} src={url} onTimeUpdate={onTime} aria-label="Range preview" />
+      <button type="button" className="v2-btn v2-slip-play" aria-label={playing ? "Pause preview" : "Play preview"} onClick={() => setPlaying(!playing)}>{playing ? "❚❚ Pause" : "▶ Play range"}</button>
+    </div>
+  );
   return (
     <div className="v2-slip-preview">
       {kind === "video"
@@ -117,14 +128,16 @@ function SourceBar({ total, inT, span, locked, strip, peaks, onChange, onCommit 
   );
 }
 
-function AssetPicker({ project, kind, current, thumbs, onPick, onUpload, onBack, kindOf }: { kindOf: (id: string) => string | undefined; project: Project; kind: Asset["kind"]; current: string; thumbs?: Record<string, string>; onPick: (id: string) => void; onUpload?: (files: File[]) => Promise<string[]>; onBack: () => void }) {
+function AssetPicker({ project, kind, current, thumbs, onPick, onUpload, onBack, kindOf, story }: { story?: string; kindOf: (id: string) => string | undefined; project: Project; kind: Asset["kind"]; current: string; thumbs?: Record<string, string>; onPick: (id: string) => void; onUpload?: (files: File[]) => Promise<string[]>; onBack: () => void }) {
   const file = useRef<HTMLInputElement>(null);
   const [note, setNote] = useState<string>();
   const list = Object.values(project.assets).filter((a) => a.kind === kind && a.id !== current && a.versions.length);
   const dur = (a: Asset) => { const v = slip.replaceVersion(project, a.id); return v?.media.durationTicks ? fmt(v.media.durationTicks) : ""; };
   return (
     <div className="v2-slip-picker" role="group" aria-label="Replace asset">
-      <p className="v2-abnote">Choose another {kind} for this clip. Position, length, effects, Adjust, transitions, volume, sound position, keyframes and links stay.</p>
+      <p className="v2-abnote">{story
+        ? <>This clip is {story} of the storyboard: the file you choose becomes a <b>new version</b> of {story} (the timeline follows it; earlier versions stay selectable in the storyboard).</>
+        : <>Choose another {kind} for this clip. Position, length, effects, Adjust, transitions, volume, sound position, keyframes and links stay.</>}</p>
       <div className="v2-slip-assets" role="list">
         {list.length ? list.map((a) => (
           <button key={a.id} type="button" role="listitem" className="v2-slip-asset" onClick={() => onPick(a.id)} aria-label={`Use ${a.name}`}>
@@ -135,8 +148,9 @@ function AssetPicker({ project, kind, current, thumbs, onPick, onUpload, onBack,
       </div>
       {note && <p className="v2-abnote" role="status">{note}</p>}
       <div className="v2-slip-actions">
+        {onUpload && <button type="button" className="v2-btn primary" onClick={() => file.current?.click()}>Upload {kind}…</button>}
+        <span className="v2-slip-spacer" />
         <button type="button" className="v2-btn" onClick={onBack}>Back</button>
-        {onUpload && <button type="button" className="v2-btn" onClick={() => file.current?.click()}>Upload {kind}…</button>}
         <input ref={file} type="file" hidden accept={kind === "audio" ? "audio/*" : kind === "video" ? "video/*" : kind === "html" ? ".html,.htm,text/html,.zip" : "image/*"} aria-label={`Upload ${kind}`}
           onChange={(e) => { const fs = Array.from(e.target.files ?? []); e.target.value = ""; if (!fs.length || !onUpload) return; setNote("Uploading…"); void onUpload(fs).then((ids) => { const id = ids.find((x) => kindOf(x) === kind); if (id) onPick(id); else setNote(`That file isn't ${kind === "audio" ? "an" : "a"} ${kind}; choose a ${kind} file.`); }); }} />
       </div>
@@ -144,7 +158,7 @@ function AssetPicker({ project, kind, current, thumbs, onPick, onUpload, onBack,
   );
 }
 
-export function AdjustRange({ engine, project, clipId, blobs, peaks, strips, thumbs, onUpload, onSeek, onDone, startInPicker }: AdjustRangeProps) {
+export function AdjustRange({ engine, project, clipId, blobs, peaks, strips, thumbs, onUpload, onSeek, onDone, startInPicker, onMix, onPlayRange }: AdjustRangeProps) {
   const orig = findPlacement(root(project), clipId)?.placement;
   const [assetId, setAssetId] = useState(orig?.source.assetId ?? "");
   const [onShort, setOnShort] = useState<slip.OnShort>();
@@ -156,6 +170,9 @@ export function AdjustRange({ engine, project, clipId, blobs, peaks, strips, thu
   const startProject = useRef(project);
   const liveDirty = useRef(0);
   const fps = project.settings.fps;
+  const story = useMemo(() => slip.storyTargetOf(project, clipId), [project, clipId]);
+  /** P27: Solo previews the clip alone in the sheet; Mix shows the composed timeline in the main preview. */
+  const [view, setView] = useState<"solo" | "mix">("solo");
 
   // The draft: the project with the replace applied (when another asset is chosen and its length is settled).
   const replacing = !!orig && assetId !== orig.source.assetId;
@@ -173,11 +190,46 @@ export function AdjustRange({ engine, project, clipId, blobs, peaks, strips, thu
   const baseKey = `${base?.source.assetId}:${base?.source.versionId}:${base?.durationTicks}`;
   useEffect(() => { if (base && !live) { setInT(base.sourceInTicks); setSpan(slip.spanOf(base)); } }, [baseKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const kind0 = orig ? slip.slipKind(orig) : undefined;
+  const mixOn = view === "mix" && !live && !!base;
+  useEffect(() => {
+    if (!mixOn || !onMix) return;
+    const lockedNow = locked || kind0 !== "media";
+    try { onMix(lockedNow ? slip.slipClip(draft, clipId, inT, { moveLinked }) : slip.setSlipRange(draft, clipId, inT, inT + span)); } catch { onMix(draft); }
+  }, [mixOn, draft, inT, span, locked, moveLinked]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!mixOn) onMix?.(undefined); }, [mixOn]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => onMix?.(undefined), []); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!orig || !base) return <p className="v2-abnote">Select a video, audio or HTML clip.</p>;
   const kind = slip.slipKind(orig);
   const assetKind = project.assets[orig.source.assetId]?.kind ?? (orig.clipType as Asset["kind"]);
 
-  if (picking) return <AssetPicker kindOf={(id) => engine.getState().project.assets[id]?.kind} project={project} kind={assetKind} current={orig.source.assetId} thumbs={thumbs} onUpload={onUpload} onBack={() => setPicking(false)} onPick={(id) => { setAssetId(id); setOnShort(undefined); setPicking(false); }} />;
+  // P27: a storyboard shot's main-track clip gets the picked file as a new version of the shot (one undo step).
+  const pickAsVersion = (id: string) => {
+    const a = engine.getState().project.assets[id];
+    const ver = a && slip.replaceVersion(engine.getState().project, id);
+    if (!story || !ver) return false;
+    const ok = engine.dispatch(cmd.addStoryVersion(story.target, ver.media));
+    const after = engine.getState().project, nb = after.storyboard;
+    const own = nb && ("shot" in story.target ? nb.shots[story.target.shot] : nb.slots[story.target.slot]);
+    const n = own?.assetId ? after.assets[own.assetId]?.versions.length : undefined;
+    onDone(ok ? `${story.label}: added as a new version${n ? ` (v${n})` : ""} — earlier versions stay in the storyboard.` : "Couldn't add the version.");
+    return true;
+  };
+  const head = (title: string, onX: () => void, xLabel: string, onOk?: () => void, okDisabled?: boolean) => (
+    <header className="v2-slip-head v2-sheet-head">
+      <button type="button" className="v2-icon v2-slip-hbtn" aria-label={xLabel} title={xLabel} onClick={onX}>✕</button>
+      <h3>{title}</h3>
+      {onOk ? <button type="button" className="v2-icon v2-slip-hbtn is-ok" aria-label="Apply" title="Apply" disabled={okDisabled} onClick={onOk}>✓</button> : <span className="v2-slip-hbtn" aria-hidden />}
+    </header>
+  );
+
+  if (picking) return (
+    <div className="v2-slip is-picking" data-testid="adjust-range">
+      {head(story ? `New version · ${story.label}` : "Replace asset", () => (startInPicker ? onDone() : setPicking(false)), startInPicker ? "Cancel" : "Back")}
+      <AssetPicker story={story?.label} kindOf={(id) => engine.getState().project.assets[id]?.kind} project={project} kind={assetKind} current={orig.source.assetId} thumbs={thumbs} onUpload={onUpload} onBack={() => (startInPicker ? onDone() : setPicking(false))} onPick={(id) => { if (pickAsVersion(id)) return; setAssetId(id); setOnShort(undefined); setPicking(false); }} />
+    </div>
+  );
 
   const v = draft.assets[base.source.assetId]?.versions.find((x) => x.id === base.source.versionId);
   const media = bounds?.mediaTicks ?? (bounds ? bounds.max + span : span);
@@ -218,11 +270,29 @@ export function AdjustRange({ engine, project, clipId, blobs, peaks, strips, thu
     <label className="v2-slip-check"><input type="checkbox" checked={moveLinked} onChange={(e) => setMoveLinked(e.target.checked)} /> Move linked audio/overlays too <span className="v2-abnote">({linked.length} linked)</span></label>
   ) : null;
 
+  const isAudio = orig.clipType === "audio";
+  const mediaKind = kind === "media" && !live;
   return (
     <div className="v2-slip" data-testid="adjust-range">
-      {kind === "media" && !live
-        ? <LoopPreview blobs={blobs} blobKey={v?.media.blobKey} kind={orig.clipType === "audio" ? "audio" : "video"} inS={ticksToSeconds(inT)} outS={ticksToSeconds(outT)} />
-        : <p className="v2-abnote">HTML clip: the preview above shows the new offset as you change it.</p>}
+      {head(replacing ? "Replace asset" : "Adjust range", cancel, "Cancel", apply, needsChoice)}
+      <div className="v2-slip-tools">
+        {mediaKind && (
+          <div className="v2-seg" role="radiogroup" aria-label="Preview">
+            <button type="button" role="radio" aria-checked={view === "solo"} className={view === "solo" ? "is-on" : ""} onClick={() => setView("solo")} title="Preview this clip alone">Solo</button>
+            <button type="button" role="radio" aria-checked={view === "mix"} className={view === "mix" ? "is-on" : ""} onClick={() => { setView("mix"); onSeek?.(base.startTicks); }} title="Preview the whole timeline (all layers) at this clip">Mix</button>
+          </div>
+        )}
+        <span className="v2-slip-spacer" />
+        {!live && <button type="button" className="v2-btn v2-slip-replace" onClick={() => setPicking(true)} title={story ? `Add a new version of ${story.label}` : "Use another file for this clip"}>⇄ {story ? "New version…" : "Replace asset…"}</button>}
+      </div>
+      {!mediaKind
+        ? <p className="v2-abnote">HTML clip: the preview above shows the new offset as you change it.</p>
+        : view === "solo"
+          ? <LoopPreview blobs={blobs} blobKey={v?.media.blobKey} kind={isAudio ? "audio" : "video"} inS={ticksToSeconds(inT)} outS={ticksToSeconds(outT)} />
+          : <div className="v2-slip-preview is-mix">
+              <span className="v2-abnote">Mix: the main preview shows every layer with this range.</span>
+              <button type="button" className="v2-btn v2-slip-play" aria-label="Play mix" onClick={() => onPlayRange?.(base.startTicks, base.startTicks + durNow)}>▶ Play mix</button>
+            </div>}
       {replacing && (
         <p className="v2-slip-replacing" role="status">Replacing with <b>{project.assets[assetId]?.name}</b>{onShort === "hold" ? " · last frame holds" : onShort === "shorten" ? " · clip shortened" : ""}{plan?.shifted && !plan.short ? " · in point moved earlier to fit" : ""}</p>
       )}
@@ -244,7 +314,7 @@ export function AdjustRange({ engine, project, clipId, blobs, peaks, strips, thu
               onChange={(e) => { const n = Number(e.target.value); if (Number.isFinite(n)) setIn(n * TICKS_PER_SECOND); }} /> s</label>
             <button type="button" className="v2-btn" aria-label="One frame later" disabled={inT >= clampIn(Infinity)} onClick={() => setIn(inT + frame)}>+</button>
           </div>
-          <dl className="v2-slip-read" aria-live="polite">
+          <dl className="v2-slip-read is-compact" aria-live="polite">
             <div><dt>In</dt><dd data-testid="slip-in">{fmt(inT)}</dd></div>
             <div><dt>Out</dt><dd data-testid="slip-out">{fmt(outT)}</dd></div>
             <div><dt>Change</dt><dd data-testid="slip-delta">{signed(delta)}</dd></div>
@@ -256,12 +326,6 @@ export function AdjustRange({ engine, project, clipId, blobs, peaks, strips, thu
           {linkedNote}
         </>
       )}
-      <div className="v2-slip-actions">
-        {!live && <button type="button" className="v2-btn" onClick={() => setPicking(true)}>Replace asset…</button>}
-        <span className="v2-slip-spacer" />
-        <button type="button" className="v2-btn" onClick={cancel}>Cancel</button>
-        <button type="button" className="v2-btn primary" disabled={needsChoice} onClick={apply}>Apply</button>
-      </div>
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { hitCandidates, isBackdrop, pickAt, Player, readClipConfig } from "../re
 import { cmd } from "../engine";
 import { importFile } from "../persistence";
 import { board as storyDomain, compositionDuration, edit, layers, ops, transitions, findPlacement, newId, formatTimecode, secondsToTicks, TICKS_PER_SECOND, type Asset } from "../domain";
+import type { Project } from "../domain";
 import { useEditorBoot, useEngineState, useIsMobile, type EditorContext, type LoadFailure } from "./useEditor";
 import { Timeline } from "./Timeline";
 import { clampPps } from "./gestures";
@@ -297,7 +298,9 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const player = playerRef.current;
   useEffect(() => { player.onTime = (t, p) => { if (p && stopAt.current !== undefined && t >= stopAt.current) { stopAt.current = undefined; player.pause(); return; } setTime(t); setPlaying(p); setFrame((f) => f + 1); }; return () => player.dispose(); }, [player]);
   useEffect(() => { player.canvas = canvasRef.current ?? undefined; player.draw(); }, [player, mobile]);
-  useEffect(() => { player.setProject(project); }, [player, project]);
+  /** P27: Adjust range "Mix" shows its draft in the main preview until Apply/Cancel. */
+  const [mixDraft, setMixDraft] = useState<Project>();
+  useEffect(() => { player.setProject(mixDraft ?? project); }, [player, project, mixDraft]);
   useEffect(() => { const live = sel.filter((id) => allIds.includes(id)); if (live.length !== sel.length) setSel(live); });
   useEffect(() => { if (subId && !cue) setSubId(undefined); }, [subId, cue]);
 
@@ -311,6 +314,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     stopAt.current = at + Math.ceil(d / 2) + TICKS_PER_SECOND;
     player.play();
   }, [player]);
+  const playRange = useCallback((from: number, to: number) => { player.pause(); player.seek(from); stopAt.current = to; player.play(); }, [player]);
   const splitAtPlayhead = () => {
     const t = Math.round(player.time), ids = splitTargets(comp, sel, t);
     if (!ids.length) { setToast("No clip under the playhead to split — move the playhead inside a clip"); return; }
@@ -1104,8 +1108,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
         </div>
       </div>}
       {!mobile && rangeFor && findPlacement(comp, rangeFor.id) && <aside className="v2-slip-panel" role="dialog" aria-label={rangeFor.picker ? "Replace asset" : "Adjust range"} onKeyDown={(e) => { if (e.key === "Escape") setRangeFor(undefined); }}>
-        <header><h3>{rangeFor.picker ? "Replace asset" : "Adjust range"}</h3><button className="v2-icon" aria-label="Close" onClick={() => setRangeFor(undefined)}><Ic g="✕" /></button></header>
-        <AdjustRange key={`${rangeFor.id}:${rangeFor.picker ? 1 : 0}`} engine={engine} project={project} clipId={rangeFor.id} blobs={storage.blobs} peaks={peaks} strips={strips} thumbs={thumbs} startInPicker={rangeFor.picker} onUpload={(fs) => onFiles(fs)} onSeek={seek} onDone={(m) => { setRangeFor(undefined); if (m) setToast(m); }} />
+        <AdjustRange key={`${rangeFor.id}:${rangeFor.picker ? 1 : 0}`} engine={engine} project={project} clipId={rangeFor.id} blobs={storage.blobs} peaks={peaks} strips={strips} thumbs={thumbs} startInPicker={rangeFor.picker} onUpload={(fs) => onFiles(fs)} onSeek={seek} onMix={setMixDraft} onPlayRange={playRange} onDone={(m) => { setRangeFor(undefined); if (m) setToast(m); }} />
       </aside>}
       {!mobile && kbdOpen && <ShortcutsOverlay onClose={() => setKbdOpen(false)} />}
       {!mobile && ctx && <ContextMenu x={ctx.x} y={ctx.y} label={ctx.placementId ? "Clip actions" : "Track actions"} items={ctxItems()} onClose={() => setCtx(undefined)} />}
@@ -1150,7 +1153,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           {vcOpen && selected && hasSound(selected.placement) && <Sheet label="Volume curve" className="v2-msheet-insp" onClose={() => setVcOpen(false)}><VolumeCurve engine={engine} placement={selected.placement} time={time} peaks={peaks[mediaKey(selected.placement.source.assetId, selected.placement.source.versionId)]} /></Sheet>}
           {afxOpen && selected && hasSound(selected.placement) && <Sheet label="Audio FX" className="v2-msheet-insp" onClose={() => setAfxOpen(false)}><AudioFxPanel engine={engine} placement={selected.placement} /></Sheet>}
           {posOpen && selected && hasSound(selected.placement) && <Sheet label="Position" className="v2-msheet-insp" onClose={() => setPosOpen(false)}><SpatialPad engine={engine} project={project} placement={selected.placement} track={selected.track} time={time} /></Sheet>}
-          {rangeFor && findPlacement(comp, rangeFor.id) && <Sheet label={rangeFor.picker ? "Replace asset" : "Adjust range"} className="v2-msheet-insp v2-msheet-slip" onClose={() => setRangeFor(undefined)}><AdjustRange key={`${rangeFor.id}:${rangeFor.picker ? 1 : 0}`} engine={engine} project={project} clipId={rangeFor.id} blobs={storage.blobs} peaks={peaks} strips={strips} thumbs={thumbs} startInPicker={rangeFor.picker} onUpload={(fs) => onFiles(fs)} onSeek={seek} onDone={(m) => { setRangeFor(undefined); if (m) setToast(m); }} /></Sheet>}
+          {rangeFor && findPlacement(comp, rangeFor.id) && <Sheet label={rangeFor.picker ? "Replace asset" : "Adjust range"} className="v2-msheet-insp v2-msheet-slip" head={false} snaps={[0.3, 0.62, 0.9]} onClose={() => setRangeFor(undefined)}><AdjustRange key={`${rangeFor.id}:${rangeFor.picker ? 1 : 0}`} engine={engine} project={project} clipId={rangeFor.id} blobs={storage.blobs} peaks={peaks} strips={strips} thumbs={thumbs} startInPicker={rangeFor.picker} onUpload={(fs) => onFiles(fs)} onSeek={seek} onMix={setMixDraft} onPlayRange={playRange} onDone={(m) => { setRangeFor(undefined); if (m) setToast(m); }} /></Sheet>}
           {inOpen && selected && inPointable && <Sheet label="In point" className="v2-msheet-insp" onClose={() => setInOpen(false)}><InPointControl engine={engine} project={project} placement={selected.placement} /></Sheet>}
           {subsTrack && <Sheet label="Edit subtitles" className="v2-msheet-tall" head={false} onClose={() => setSubsEdit(undefined)}><SubtitleList engine={engine} track={subsTrack} time={time} playing={playing} onSeek={seek} desktop={false} name={project.name} focusCue={subsCue} onDone={() => setSubsEdit(undefined)} /></Sheet>}
           {layerTrack && !selected && <Sheet label={`Edit all · ${layerTrack.name}`} className="v2-msheet-insp" onClose={() => setLayerEdit(undefined)}><TextPanel key={layerTrack.id} engine={engine} layer={layerTrack} initialTab="Style" /></Sheet>}

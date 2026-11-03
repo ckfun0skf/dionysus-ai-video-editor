@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createProject, findPlacement, secondsToTicks as s, timelineReview, type Asset, type Project } from "../../domain";
 import { cmd, Engine } from "../../engine";
+import { validateStoryboard, type StoryDoc } from "../../domain/storyJson";
 import { agentStore, ALL_AGENT_TOOLS, callTimelineAgentTool, registerAgentTools } from "./webMcp";
 import { audioIssues, runTimelineTool, type FrameSource } from "./timelineTools";
 
@@ -223,5 +224,26 @@ describe("P26 slip_clip / replace_clip_asset", () => {
     await runTimelineTool(e, undefined, "replace_clip_asset", { clipId: "c1", assetId: "w", onShort: "hold" });
     expect(pl(e)).toMatchObject({ durationTicks: s(10), source: { assetId: "w" } });
     expect(pl(e).holdEndTicks).toBeDefined();
+  });
+});
+
+describe("P27 replace_clip_asset on a storyboard shot clip", () => {
+  it("adds the asset as a new shot version; undo restores", async () => {
+    const r = validateStoryboard({ format: "dionysus.storyboard/1", meta: { title: "T", aspect: "16:9" }, assets: [], shots: [{ id: "s1", title: "One", durationSec: 3, prompt: "p", assets: [], qa: [] }], connections: [] });
+    if (!r.ok) throw new Error("bad doc");
+    const e = new Engine(createProject("t"));
+    e.dispatch(cmd.createStoryboard(r.doc as StoryDoc));
+    e.dispatch(cmd.addStoryVersion({ shot: "s1" }, { blobKey: "k1", mime: "video/mp4", durationTicks: s(3) }, { versionId: "o1" }));
+    e.dispatch(cmd.sendStoryToTimeline());
+    e.dispatch([cmd.importAsset(asset("w", "video", 4)), cmd.importAsset(asset("a", "audio", 4))]);
+    const P = () => e.getState().project, shotAsset = P().storyboard!.shots.s1.assetId!;
+    const id = root(P()).tracks.flatMap(t => t.placements).find(p => p.source.assetId === shotAsset)!.id;
+    expect((await runTimelineTool(e, undefined, "replace_clip_asset", { clipId: id, assetId: "a" })).ok).toBe(false);
+    const res = await runTimelineTool(e, undefined, "replace_clip_asset", { clipId: id, assetId: "w" });
+    expect(res.ok).toBe(true);
+    expect(P().assets[shotAsset].versions).toHaveLength(2);
+    expect(findPlacement(root(P()), id)!.placement.source.assetId).toBe(shotAsset);
+    e.undo();
+    expect(P().assets[shotAsset].versions).toHaveLength(1);
   });
 });
