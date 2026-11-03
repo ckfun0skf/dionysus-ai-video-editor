@@ -1282,3 +1282,9 @@ select.v2-tp-field { -webkit-appearance: none; appearance: none; padding-right: 
 .v2-clip-spin { width: 18px; height: 18px; border: 2px solid rgba(255,255,255,.35); border-top-color: #fff; border-radius: 50%; animation: v2-spin .8s linear infinite; }
 .v2-clip.is-nothumb { background-image: linear-gradient(90deg, rgba(255,255,255,.04) 0%, rgba(255,255,255,.12) 50%, rgba(255,255,255,.04) 100%); background-size: 200% 100%; animation: v2-shimmer 1.4s linear infinite; }
 @keyframes v2-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+
+/* P29-CLIP-TIME: clip-relative time at the playhead and on the Adjust range filmstrip */
+.v2-ph-rel { position: absolute; top: 2px; transform: translateX(6px); z-index: 12; height: 22px; padding: 2px 7px; border: 0; border-radius: 11px; background: rgba(20,20,24,.88); color: var(--accent); font: 600 11px/18px ui-monospace, SFMono-Regular, Menlo, monospace; cursor: pointer; white-space: nowrap; }
+.v2-ph-rel::after { content: ""; position: absolute; inset: -11px -4px; } /* 44px touch target */
+.v2-slip-ph { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.5); z-index: 7; pointer-events: none; }
+.v2-slip-ph > span { position: absolute; top: 2px; left: 50%; transform: translateX(-50%); padding: 0 5px; border-radius: 6px; background: rgba(0,0,0,.8); color: #fff; font: 600 10px/16px ui-monospace, SFMono-Regular, Menlo, monospace; white-space: nowrap; }

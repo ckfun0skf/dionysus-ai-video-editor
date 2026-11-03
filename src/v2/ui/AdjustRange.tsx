@@ -11,6 +11,7 @@
  * - "Replace asset…" picks another asset of the same kind (project library or an upload). A shorter source asks
  *   "Shorten clip" or "Keep length (freeze last frame)" before the draft continues.
  */
+import { clipTimeAt, fmtSec } from "./clipTime";
 import { useEffect, useMemo, useRef, useState, type PointerEvent as RPE } from "react";
 import { cmd, type Command, type Engine } from "../engine";
 import { clipRange, findPlacement, slip, ticksToSeconds, TICKS_PER_SECOND, type Asset, type Placement, type Project } from "../domain";
@@ -27,6 +28,8 @@ const signed = (t: number) => `${t >= 0 ? "+" : "−"}${Math.abs(ticksToSeconds(
 export const canAdjustRange = (p: Placement | undefined): boolean => !!p && !!slip.slipKind(p);
 
 export interface AdjustRangeProps {
+  /** P29-CLIP-TIME: main playhead; its source time is marked on the filmstrip while it is inside the clip. */
+  time?: number;
   engine: Engine;
   project: Project;
   clipId: string;
@@ -85,7 +88,8 @@ function LoopPreview({ blobs, blobKey, kind, inS, outS }: { blobs: BlobStore; bl
 }
 
 /** The whole source with the selected range boxed. Drag the box to slip; edges resize when unlocked. */
-function SourceBar({ total, inT, span, locked, strip, peaks, onChange, onCommit }: {
+function SourceBar({ total, inT, span, locked, strip, peaks, onChange, onCommit, srcAt }: {
+  srcAt?: number;
   total: number; inT: number; span: number; locked: boolean; strip?: Filmstrip; peaks?: Peaks;
   onChange: (inT: number, span: number) => void; onCommit?: () => void;
 }) {
@@ -118,6 +122,7 @@ function SourceBar({ total, inT, span, locked, strip, peaks, onChange, onCommit 
         {frames.length ? frames.map((f, i) => <img key={i} src={f} alt="" draggable={false} />) : peaks ? <Waveform peaks={peaks} p={full} width={w} height={56} kind="audio" /> : <span className="v2-slip-plain" />}
       </div>
       <div className="v2-slip-shade" style={{ left: 0, width: `${left}%` }} />
+      {srcAt !== undefined && total > 0 && <div className="v2-slip-ph" data-testid="slip-playhead" style={{ left: `${Math.min(100, Math.max(0, (srcAt / total) * 100))}%` }}><span>src {fmtSec(srcAt)}</span></div>}
       <div className="v2-slip-shade" style={{ left: `${left + width}%`, right: 0 }} />
       <div className="v2-slip-box" role="slider" tabIndex={0} aria-label="Selected range — drag to slip" aria-valuemin={0} aria-valuemax={Math.round(ticksToSeconds(total - span) * 100) / 100} aria-valuenow={Math.round(ticksToSeconds(inT) * 100) / 100}
         style={{ left: `${left}%`, width: `${width}%` }} onPointerDown={down("move")} data-testid="slip-box">
@@ -158,7 +163,7 @@ function AssetPicker({ project, kind, current, thumbs, onPick, onUpload, onBack,
   );
 }
 
-export function AdjustRange({ engine, project, clipId, blobs, peaks, strips, thumbs, onUpload, onSeek, onDone, startInPicker, onMix, onPlayRange }: AdjustRangeProps) {
+export function AdjustRange({ engine, project, clipId, blobs, peaks, strips, thumbs, onUpload, onSeek, onDone, startInPicker, onMix, onPlayRange, time }: AdjustRangeProps) {
   const orig = findPlacement(root(project), clipId)?.placement;
   const [assetId, setAssetId] = useState(orig?.source.assetId ?? "");
   const [onShort, setOnShort] = useState<slip.OnShort>();
@@ -307,7 +312,8 @@ export function AdjustRange({ engine, project, clipId, blobs, peaks, strips, thu
         </div>
       ) : (
         <>
-          <SourceBar total={total} inT={inT} span={span} locked={locked} strip={strips[mediaKey(base.source.assetId, base.source.versionId)]} peaks={peaks[mediaKey(base.source.assetId, base.source.versionId)]} onChange={onBar} />
+          <SourceBar total={total} inT={inT} span={span} locked={locked} strip={strips[mediaKey(base.source.assetId, base.source.versionId)]} peaks={peaks[mediaKey(base.source.assetId, base.source.versionId)]} onChange={onBar}
+            srcAt={time === undefined ? undefined : clipTimeAt({ ...base, sourceInTicks: inT }, time)?.source} />
           <div className="v2-slip-row" role="group" aria-label="Range start">
             <button type="button" className="v2-btn" aria-label="One frame earlier" disabled={inT <= 0} onClick={() => setIn(inT - frame)}>−</button>
             <label className="v2-slip-num">Start <input type="number" step="0.01" min={0} inputMode="decimal" aria-label="Start in seconds" value={Math.round(ticksToSeconds(inT) * 1000) / 1000}
