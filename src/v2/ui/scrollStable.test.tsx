@@ -26,7 +26,12 @@ describe("Timeline scroll stays monotonic (P30-SCROLL)", () => {
     render(0);
     const scroll = el.querySelector(".v2-scroll") as HTMLElement;
     const seen: number[] = [];
-    const ev = (n: string) => act(() => { scroll.dispatchEvent(new Event(n, { bubbles: true })); });
+    const ev = (n: string) => act(() => {
+      const e = new Event(n, { bubbles: true });
+      const list = n === "touchstart" ? [{ clientX: 100, clientY: 40 }] : [];
+      Object.assign(e, { touches: list, changedTouches: [{ clientX: 100, clientY: 40 }] });
+      scroll.dispatchEvent(e);
+    });
     ev("touchstart");
     let x = 0, stale = 0;
     for (let i = 0; i < 40; i += 1) {
