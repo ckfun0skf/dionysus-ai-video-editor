@@ -82,6 +82,9 @@ export const TEXT_LANE_H = 32;
 export const coarsePointer = () => typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
 export const SIDE_W = 184;
 
+/** P30-SCROLL: the view stays under user control this long after the last user scroll event (covers iOS momentum gaps). */
+export const USER_SCROLL_IDLE_MS = 180;
+
 export function Timeline({ engine, project, time, playing, onSeek, selectedId, selectedIds, onToggleSelect, multiMode, onSelect, pps, onZoom, centered, thumbs, peaks, strips, loads, onAddMedia, sideColumn, timeLabel, topLane, ripple, onTransition, expanded: expandedProp, onExpand, focus, onEditLayer, onEditSubs, onFocusGroup, onDropData, onContextMenu, onPlayback }: Props) {
   const comp = project.compositions[project.rootCompositionId];
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -98,7 +101,10 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
   // CapCut long-press reorder on the main track: clips collapse to square thumbs; drag one to a new slot.
   const [reorder, setReorder] = useState<{ id: string; x0: number; x: number; from: number; closing?: boolean }>();
   const [viewW, setViewW] = useState(800);
-  const programmatic = useRef(false);
+  /** P30-SCROLL: the scrollLeft we last wrote ourselves; a scroll event at another position is the user's. */
+  const programmatic = useRef<number | undefined>(undefined);
+  /** P30-SCROLL: true while the user scrolls (finger down, wheel or momentum), and briefly after; the view then never follows state. */
+  const userScroll = useRef<{ active: boolean; down: boolean; timer?: ReturnType<typeof setTimeout>; seek?: number }>({ active: false, down: false });
   const scrollResume = useRef(false);
   const scrollTimer = useRef<ReturnType<typeof setTimeout>>();
   const press = useRef<{ timer: ReturnType<typeof setTimeout>; x: number; y: number }>();
@@ -154,13 +160,18 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
   useEffect(() => {
     const el = scrollRef.current;
     if (!centered || !el) return;
+    const u = userScroll.current;
+    // State follows the scroll, never the other way round while the user is scrolling (or momentum is running), and
+    // the time we just sought from the scroll (possibly snapped to a frame) does not pull the view back.
+    if (u.active || u.down) return;
+    if (u.seek !== undefined && !playing && Math.abs(time - u.seek) <= TICKS_PER_SECOND / Math.max(1, project.settings.fps)) return;
     const target = toPx(time);
-    if (Math.abs(el.scrollLeft - target) > 1) { programmatic.current = true; el.scrollLeft = target; }
+    if (Math.abs(el.scrollLeft - target) > 1) { programmatic.current = target; el.scrollLeft = target; }
   });
   // Desktop: auto-follow playhead during playback.
   useEffect(() => {
     const el = scrollRef.current;
-    if (centered || !el || !playing) return;
+    if (centered || !el || !playing || userScroll.current.active) return;
     const x = toPx(time);
     if (x > el.scrollLeft + el.clientWidth - HEADER_W - 40) el.scrollLeft = x - 40;
   }, [time, playing, centered]);
@@ -169,16 +180,24 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
     const el = scrollRef.current;
     if (el && el.scrollTop !== scrollTop) setScrollTop(el.scrollTop);
     if (!centered || !el) return;
-    if (programmatic.current) { programmatic.current = false; return; }
+    if (programmatic.current !== undefined && Math.abs(el.scrollLeft - programmatic.current) <= 1) { programmatic.current = undefined; return; }
+    programmatic.current = undefined;
+    markUserScroll();
     // P27: a user scroll during playback pauses it; playback resumes from the new position once scrolling settles.
     if (playing && onPlayback) { scrollResume.current = true; onPlayback(false); }
-    if (!playing || scrollResume.current) onSeek(Math.max(0, toTicks(el.scrollLeft)));
+    if (!playing || scrollResume.current) { const t = Math.max(0, toTicks(el.scrollLeft)); userScroll.current.seek = t; onSeek(t); }
     if (scrollResume.current) {
       clearTimeout(scrollTimer.current);
       scrollTimer.current = setTimeout(() => { scrollResume.current = false; onPlayback?.(true); }, SCROLL_RESUME_MS);
     }
   };
-  useEffect(() => () => clearTimeout(scrollTimer.current), []);
+  useEffect(() => () => { clearTimeout(scrollTimer.current); clearTimeout(userScroll.current.timer); }, []);
+  const markUserScroll = () => {
+    const u = userScroll.current;
+    u.active = true;
+    clearTimeout(u.timer);
+    u.timer = setTimeout(() => { u.active = false; }, USER_SCROLL_IDLE_MS);
+  };
 
   const preview: Composition = useMemo(() => {
     if (!gesture) return comp;
@@ -405,7 +424,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
           ))(r))}
         </div>
       )}
-      <div className="v2-scroll" ref={scrollRef} onDragOver={centered ? undefined : dragOver} onDrop={centered ? undefined : (e) => onDrop(e)} onScroll={onScroll} onPointerMove={onPointerMove} onPointerUp={() => onPointerUp()} onPointerCancel={() => { cancelPress(); setGesture(undefined); }}>
+      <div className="v2-scroll" ref={scrollRef} onDragOver={centered ? undefined : dragOver} onDrop={centered ? undefined : (e) => onDrop(e)} onScroll={onScroll} onWheel={markUserScroll} onTouchStart={() => { userScroll.current.down = true; markUserScroll(); }} onTouchEnd={() => { userScroll.current.down = false; markUserScroll(); }} onTouchCancel={() => { userScroll.current.down = false; markUserScroll(); }} onPointerMove={onPointerMove} onPointerUp={() => onPointerUp()} onPointerCancel={() => { cancelPress(); setGesture(undefined); }}>
         <div className="v2-content" onClick={(e) => { if (centered && e.target === e.currentTarget) exitMode(); }} style={{ width: contentW + pad + padRight, paddingLeft: pad, paddingRight: padRight }}>
           {centered && sideColumn && <div ref={sideRef} className="v2-side-col" data-testid="side-col" onClick={(e) => { if (e.target === e.currentTarget) exitMode(); }} style={{ width: SIDE_W, left: pad - SIDE_W, paddingTop: mainTop }}><div className="v2-side-main">{sideColumn}</div>
             {!expanded && laneTops.map(({ group, top, hasClips }) => (

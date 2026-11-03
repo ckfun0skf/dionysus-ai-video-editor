@@ -45,9 +45,11 @@ export function createClock(): { clock: Clock; ctx?: AudioContext } {
  * Drift correction for a slaved media element. Returns the action to take:
  * hard seek when far off, playbackRate nudge (±5%) when slightly off, otherwise rate 1.
  */
+/** P30-STALL-HYSTERESIS: a playing element is re-seeked only past this drift (s); smaller drift is fixed by rate. */
+export const SEEK_DRIFT_S = 0.3;
 export function correctDrift(elementTime: number, target: number): { seek?: number; rate: number } {
   const drift = elementTime - target;
-  if (Math.abs(drift) > 0.25) return { seek: target, rate: 1 };
+  if (Math.abs(drift) > SEEK_DRIFT_S) return { seek: target, rate: 1 };
   if (Math.abs(drift) > 0.03) return { rate: drift > 0 ? 0.95 : 1.05 };
   return { rate: 1 };
 }
