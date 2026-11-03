@@ -321,7 +321,7 @@ export function AdjustRange({ engine, project, clipId, blobs, peaks, strips, thu
             {!locked && <div><dt>Clip length</dt><dd>{fmt(durNow)}</dd></div>}
           </dl>
           {kind === "media" && !live && (
-            <label className="v2-slip-check"><input type="checkbox" checked={locked} onChange={(e) => { setLocked(e.target.checked); if (e.target.checked) setSpan(slip.spanOf(base)); }} /> Lock clip length <span className="v2-abnote">{locked ? "(edges locked — drag the box)" : "(edges change the clip length; ripple follows your ripple setting)"}</span></label>
+            <label className="v2-slip-check"><input type="checkbox" checked={locked} onChange={(e) => { setLocked(e.target.checked); if (e.target.checked) setSpan(slip.spanOf(base)); }} /> Lock clip length <span className="v2-abnote" title={locked ? "Edges locked: drag the box to slip." : "Edges change the clip length; ripple follows your ripple setting."}>{locked ? "(drag the box)" : "(edges change length)"}</span></label>
           )}
           {linkedNote}
         </>
