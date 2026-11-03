@@ -20,7 +20,9 @@ describe("P27 preview stability", () => {
   });
   it("a seeking or empty element is stalled; an errored one is not", () => {
     expect(mediaStalled({ readyState: 4, seeking: true })).toBe(true);
-    expect(mediaStalled({ readyState: 2, seeking: false })).toBe(true);
+    expect(mediaStalled({ readyState: 1, seeking: false })).toBe(true);
+    expect(mediaStalled({ readyState: 2, seeking: false })).toBe(false); // P30: HAVE_CURRENT_DATA alone does not stall…
+    expect(mediaStalled({ readyState: 2, seeking: false }, true)).toBe(true); // …but a stalled source needs HAVE_FUTURE_DATA
     expect(mediaStalled({ readyState: 4, seeking: false })).toBe(false);
     expect(mediaStalled({ readyState: 0, seeking: false, error: {} })).toBe(false);
   });
@@ -50,5 +52,41 @@ describe("P27 preview stability", () => {
     expect(player.time).toBeGreaterThan(held);
     expect(states).toEqual([true, false]);
     player.dispose();
+  });
+});
+
+describe("P30 stall hysteresis and warm cap", () => {
+  it("brief dips to HAVE_CURRENT_DATA while playing never stall the playhead", async () => {
+    const { BufferGate, mediaStalled, BUFFER_GRACE_MS } = await import("./stability");
+    const gate = new BufferGate();
+    let stalled = false, held = 0;
+    // 60 fps for 5 s; readyState dips to 2 for 100 ms every 500 ms (normal playback near the buffered edge).
+    for (let f = 0; f < 300; f += 1) {
+      const ms = f * (1000 / 60);
+      const readyState = ms % 500 < 100 ? 2 : 4;
+      stalled = mediaStalled({ readyState, seeking: false }, stalled);
+      if (gate.update(ms, stalled)) held += 1;
+    }
+    expect(held).toBe(0);
+    // A real stall (no current frame) for longer than the grace holds, and needs HAVE_FUTURE_DATA to recover.
+    stalled = mediaStalled({ readyState: 1, seeking: false }, false);
+    expect(gate.update(10000, stalled)).toBe(false);
+    expect(gate.update(10000 + BUFFER_GRACE_MS + 1, stalled)).toBe(true);
+    stalled = mediaStalled({ readyState: 2, seeking: false }, stalled);
+    expect(stalled).toBe(true);
+    stalled = mediaStalled({ readyState: 3, seeking: false }, stalled);
+    expect(gate.update(10400, stalled)).toBe(false);
+  });
+  it("small drift is fixed by rate, not by a seek", async () => {
+    const { correctDrift } = await import("./clock");
+    expect(correctDrift(10.2, 10).seek).toBeUndefined();
+    expect(correctDrift(10.35, 10).seek).toBe(10);
+  });
+  it("keeps 16 warm elements on desktops and 6 on phones", async () => {
+    const { idleCap } = await import("./stability");
+    expect(idleCap({ userAgent: "Mozilla/5.0 (Windows NT 10.0) Chrome/130", deviceMemory: 8 })).toBe(16);
+    expect(idleCap({ userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Mobile" })).toBe(6);
+    expect(idleCap({ userAgent: "Mozilla/5.0 (Macintosh) Safari", maxTouchPoints: 5 })).toBe(6);
+    expect(idleCap({ userAgent: "Mozilla/5.0 (X11; Linux) Chrome", deviceMemory: 2 })).toBe(6);
   });
 });

@@ -7,9 +7,18 @@
  */
 
 /** How long a source may be short of data before the player shows "Loading" and holds the playhead (ms). */
-export const BUFFER_GRACE_MS = 250;
+export const BUFFER_GRACE_MS = 300;
 /** Media elements kept loaded that are neither on screen nor about to start. */
 export const MAX_IDLE_MEDIA = 6;
+/** P30-WARM-MEDIA: idle elements kept warm on desktop-class devices (phones keep MAX_IDLE_MEDIA; decoders are scarce there). */
+export const MAX_IDLE_MEDIA_DESKTOP = 16;
+/** Idle cap for this device: 6 on phones/tablets or under 4 GB memory, 16 on desktops. */
+export function idleCap(env: { userAgent?: string; deviceMemory?: number; maxTouchPoints?: number } | undefined = typeof navigator !== "undefined" ? (navigator as never) : undefined): number {
+  if (!env) return MAX_IDLE_MEDIA;
+  const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(env.userAgent ?? "") || (/Macintosh/.test(env.userAgent ?? "") && (env.maxTouchPoints ?? 0) > 1);
+  if (mobile || (env.deviceMemory !== undefined && env.deviceMemory < 4)) return MAX_IDLE_MEDIA;
+  return MAX_IDLE_MEDIA_DESKTOP;
+}
 
 export class BufferGate {
   private since?: number;
@@ -31,9 +40,14 @@ export function idleEvictions(lastUsed: ReadonlyMap<string, number>, keep: Reado
   return idle.slice(0, Math.max(0, idle.length - max)).map(([id]) => id);
 }
 
-/** True when a media element cannot keep playing from its current position yet. */
-export function mediaStalled(el: { readyState: number; seeking: boolean; error?: unknown }): boolean {
-  return !el.error && (el.seeking || el.readyState < 3);
+/**
+ * P30-STALL-HYSTERESIS: true when a playing media element is short of data. A source enters the stalled state only when
+ * it cannot show the current frame (readyState < HAVE_CURRENT_DATA, or seeking); once stalled it must reach
+ * HAVE_FUTURE_DATA to leave it. Brief dips to HAVE_CURRENT_DATA during normal playback therefore never stall.
+ */
+export function mediaStalled(el: { readyState: number; seeking: boolean; error?: unknown }, wasStalled = false): boolean {
+  if (el.error) return false;
+  return el.seeking || el.readyState < (wasStalled ? 3 : 2);
 }
 
 /** P29-CLIP-LOADING: how far a clip's media has loaded. `progress` is undefined when the browser reports no buffered ranges. */

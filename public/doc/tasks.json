@@ -2690,6 +2690,24 @@
           "title": "Clip-relative time: playhead label (+clip / src time, remembered), inspector Clip \u00b7 Source line, source marker in Adjust range",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P30-WARM-MEDIA",
+          "title": "Keep loaded clips warm: adaptive idle-element cap (16 desktop / 6 mobile), first-frame posters, preload while paused",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "P30-STALL-HYSTERESIS",
+          "title": "Stop play/Loading cycling: stall hysteresis (HAVE_CURRENT_DATA to stay, HAVE_FUTURE_DATA to resume, 300 ms grace), no resume seek under 0.3 s drift",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "P30-SCROLL",
+          "title": "Timeline scroll never bounces back: no scrollLeft writes during user scroll or momentum, value-matched programmatic echo",
+          "status": "done",
+          "progress": 100
         }
       ]
     },

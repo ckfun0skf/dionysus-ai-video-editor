@@ -17,14 +17,14 @@ import { drawTextClip } from "./text";
 import { effectivePlacement } from "../domain/layerStyle";
 import { applyEffectFrame, effectFrameAt } from "./effects";
 import { mainTrack } from "../domain/ops";
-import { correctDrift, createClock, type Clock } from "./clock";
+import { correctDrift, createClock, SEEK_DRIFT_S, type Clock } from "./clock";
 import { HtmlClipHost, isValidFrame, type FrameIssue, type HtmlClipInit } from "./htmlClip";
 import { bindingSignature, resolveClipBindings } from "../domain/htmlClipBindings";
 import { readManifest, resolveHtmlParams, type HtmlClipManifest } from "../domain/htmlClipPackage";
 import type { ExportVideoFrames } from "./export/videoFrames";
 import { drawWithLook } from "./transitionDraw";
 import { withBlend } from "./blend";
-import { BufferGate, clipLoadOf, idleEvictions, loadSignature, mediaStalled, type ClipLoad } from "./stability";
+import { BufferGate, clipLoadOf, idleCap, idleEvictions, loadSignature, mediaStalled, type ClipLoad } from "./stability";
 
 /** P1-SHORT-AUDIO: how far ahead of the playhead the player loads audio and video clips (2 s). */
 const PRELOAD_TICKS = 2 * TICKS_PER_SECOND;
@@ -72,6 +72,15 @@ export class Player {
   clipLoads: ReadonlyMap<string, ClipLoad> = new Map();
   onClipLoads?: (loads: ReadonlyMap<string, ClipLoad>) => void;
   private loadSig = "";
+  /** P30-STALL-HYSTERESIS: elements currently counted as stalled (they need HAVE_FUTURE_DATA to recover). */
+  private stalledEls = new WeakSet<HTMLMediaElement>();
+  /** P30-WARM-MEDIA: idle elements kept loaded (6 on phones, 16 on desktops). */
+  private idleCap = idleCap();
+  /** P30-WARM-MEDIA: a small still of each video clip's first frame, drawn while its element (re)loads. */
+  private posters = new Map<string, { img: HTMLCanvasElement; w: number; h: number; at: number }>();
+  /** Time to first drawable frame per clip entry (ms), for diagnostics and tests. */
+  readonly firstFrameMs: { id: string; ms: number; warm: boolean }[] = [];
+  private entered = new Map<string, number>();
   private loadPoll?: ReturnType<typeof setTimeout>;
   private startClock = 0;
   private clock: Clock;
@@ -372,12 +381,16 @@ export class Player {
         if (scrub || this.offline) el.muted = true;
         const speed = placement.speed ?? 1;
         if (holding && !el.paused) el.pause();
-        if (!scrub && (!el.muted || placement.clipType === "video") && mediaStalled(el)) stalled = true;
+        if (!scrub && (!el.muted || placement.clipType === "video")) {
+          const st = mediaStalled(el, this.stalledEls.has(el));
+          if (st) { this.stalledEls.add(el); stalled = true; } else this.stalledEls.delete(el);
+        }
         if (run && scrub) {
           if (!el.paused) el.pause();
           if (Math.abs(el.currentTime - target) > 0.04) el.currentTime = target;
         } else if (run) {
-          if (el.paused) { el.currentTime = target; el.playbackRate = speed; void el.play().catch(() => undefined); }
+          // Resume without a seek unless the element is really off: a seek drops readyState and would stall again.
+          if (el.paused) { if (Math.abs(el.currentTime - target) > SEEK_DRIFT_S) el.currentTime = target; el.playbackRate = speed; void el.play().catch(() => undefined); }
           else {
             const fix = correctDrift(el.currentTime, target);
             if (fix.seek !== undefined) el.currentTime = fix.seek;
@@ -397,7 +410,19 @@ export class Player {
         const w = el instanceof HTMLVideoElement ? el.videoWidth : (el as HTMLImageElement).naturalWidth;
         const h = el instanceof HTMLVideoElement ? el.videoHeight : (el as HTMLImageElement).naturalHeight;
         const drawable = !!(w && h && (!(el instanceof HTMLVideoElement) || el.readyState >= 2));
-        if (!drawable) missing = true;
+        const poster = !drawable ? this.posters.get(placement.id) : undefined;
+        if (el instanceof HTMLVideoElement) this.noteFrame(placement.id, el, drawable, placement.sourceInTicks);
+        if (!drawable && poster && Math.abs(poster.at - ticksToSeconds(sourceTicks)) < 0.5) {
+          // P30-WARM-MEDIA: re-entering a clip whose element was evicted: show its first frame at once.
+          const r = placeRect(placement, poster.w, poster.h, canvas.width, canvas.height, this.time);
+          this.boxes.set(placement.id, r);
+          paint(placement.blend, (dc) => drawWithLook(dc, canvas.width, canvas.height, tfx, (g) => {
+            g.save(); g.globalAlpha = r.alpha * (mix ?? 1); g.translate(r.cx, r.cy); g.rotate(r.rot);
+            const k = poster.img.width / poster.w;
+            drawKeyed(g, poster.img, poster.img.width, poster.img.height, r.sx * k, r.sy * k, r.sw * k, r.sh * k, -r.w / 2, -r.h / 2, r.w, r.h, this.keyOf(placement));
+            g.restore();
+          }));
+        } else if (!drawable) missing = true;
         if (drawable) {
           const r = placeRect(placement, w, h, canvas.width, canvas.height, this.time);
           this.boxes.set(placement.id, r);
@@ -419,8 +444,9 @@ export class Player {
     const cue = subtitleAt(comp, this.time);
     if (ctx && canvas && cue) drawSubtitle(ctx, canvas.width, canvas.height, cue.text);
     // P1-SHORT-AUDIO: load media of clips starting soon, so a clip shorter than the load time still plays.
-    if (this.playing && !this.offline) {
-      for (const { placement } of upcomingMedia(comp, this.time, PRELOAD_TICKS)) {
+    // P30-WARM-MEDIA: while paused also warm clips just before the playhead, so seeking back into one starts at once.
+    if (!this.offline) {
+      for (const { placement } of upcomingMedia(comp, this.playing ? this.time : Math.max(0, this.time - PRELOAD_TICKS), this.playing ? PRELOAD_TICKS : 2 * PRELOAD_TICKS)) {
         if (live.has(placement.id)) continue;
         const v = versionOf(this.project, placement.source);
         const src = v && this.url(v.media.blobKey);
@@ -435,7 +461,7 @@ export class Player {
     if (!this.offline) {
       const keep = new Set(live);
       for (const { placement } of upcomingMedia(comp, this.time, PRELOAD_TICKS)) keep.add(placement.id);
-      for (const id of idleEvictions(this.lastUsed, keep)) { this.release(id); this.lastUsed.delete(id); }
+      for (const id of idleEvictions(this.lastUsed, keep, this.idleCap)) { this.release(id); this.lastUsed.delete(id); }
       this.stalled = stalled;
       const loading = (this.playing && this.gate.buffering) || (!this.playing && missing);
       const sig = loadSignature(loads);
@@ -463,6 +489,17 @@ export class Player {
   }
 
   /** Copy the finished preview frame so a later frame with a missing source can show it instead of black. */
+  /** P30-WARM-MEDIA: keep the clip's first frame as a small still, and record time to first frame per clip entry. */
+  private noteFrame(id: string, el: HTMLVideoElement, drawable: boolean, sourceIn: number) {
+    if (!this.entered.has(id) && !drawable) this.entered.set(id, performance.now());
+    if (drawable && this.entered.has(id)) { this.firstFrameMs.push({ id, ms: Math.round(performance.now() - this.entered.get(id)!), warm: this.posters.has(id) }); this.entered.delete(id); if (this.firstFrameMs.length > 50) this.firstFrameMs.shift(); }
+    const at = ticksToSeconds(sourceIn);
+    if (!drawable || el.seeking || Math.abs(el.currentTime - at) > 0.05 || this.posters.get(id)?.at === at || typeof document === "undefined") return;
+    const w = el.videoWidth, h = el.videoHeight, k = Math.min(1, 480 / w);
+    const img = document.createElement("canvas"); img.width = Math.max(1, Math.round(w * k)); img.height = Math.max(1, Math.round(h * k));
+    try { img.getContext("2d")?.drawImage(el, 0, 0, img.width, img.height); this.posters.set(id, { img, w, h, at }); } catch { /* tainted or not decodable */ }
+  }
+
   private keepFrame(canvas: HTMLCanvasElement) {
     if (this.lastGood === undefined) this.lastGood = typeof document !== "undefined" ? document.createElement("canvas").getContext("2d") : null;
     const g = this.lastGood;
