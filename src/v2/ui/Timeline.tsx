@@ -6,6 +6,7 @@ import { mediaKey } from "./useMedia";
 import { clampPps, haptic, LONG_PRESS_MS, LONG_PRESS_SLOP, pinchZoom, touchDistance } from "./gestures";
 import { board, edit, findPlacement, slip, layers, ops, transitions, compositionDuration, TICKS_PER_SECOND, formatTimecode, type Composition, type Placement, type Project, type Track } from "../domain";
 import { Ic } from "./Icon";
+import { clipTimeAt, relLabel, useRelMode } from "./clipTime";
 import type { ClipLoad } from "../render";
 import { getPreset } from "../registry";
 
@@ -508,6 +509,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
           ))(r))}
           {gesture?.snap !== undefined && (gesture.kind === "trim" || gesture.active) && <div className="v2-snap-line" data-testid="snap-line" style={{ left: pad + toPx(gesture.snap) }} aria-hidden />}
           {!centered && <div className="v2-playhead" style={{ left: toPx(time) }} />}
+          {!centered && <RelTag time={time} placement={selectedId ? findPlacement(comp, selectedId)?.placement : undefined} left={toPx(time)} />}
         </div>
       </div>
       {reorder && main && <ReorderStrip track={main} state={reorder} top={mainTop} root={rootRef.current} thumbs={thumbs}
@@ -516,6 +518,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
       {confirmDel && (() => { const t = comp.tracks.find((x) => x.id === confirmDel); return t ? <ConfirmDialog title="Delete layer?" message={`Delete this layer and its ${t.placements.length} clip${t.placements.length === 1 ? "" : "s"}? You can undo this.`} confirm="Delete"
         onCancel={() => setConfirmDel(undefined)} onConfirm={() => { engine.dispatch(cmd.deleteTrack(t.id)); setConfirmDel(undefined); onSelect(undefined); }} /> : null; })()}
       {centered && <div className="v2-playhead-fixed" style={{ left: pad }} aria-hidden />}
+      {centered && <RelTag time={time} placement={selectedId ? findPlacement(comp, selectedId)?.placement : undefined} left={pad} />}
       {centered && timeLabel && <div ref={labelRef} className="v2-time-label">{timeLabel}</div>}
     </div>
   );
@@ -706,4 +709,14 @@ export function ClipLoadBar({ load }: { load: ClipLoad }) {
   return pct === undefined
     ? <span className="v2-clip-load is-unknown" role="status" aria-label="Loading media"><span className="v2-clip-spin" aria-hidden="true" /></span>
     : <span className="v2-clip-load" role="progressbar" aria-label="Loading media" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}><span className="v2-clip-load-fill" style={{ width: `${pct}%` }} /></span>;
+}
+
+/** P29-CLIP-TIME: small label at the playhead with the time inside the selected clip ("+1.0s"), or its source time ("src 6.0s") after a tap. */
+export function RelTag({ time, placement, left }: { time: number; placement?: Placement; left: number }) {
+  const [mode, toggle] = useRelMode();
+  const c = clipTimeAt(placement, time);
+  if (!c) return null;
+  return <button type="button" className="v2-ph-rel" style={{ left }} data-testid="clip-time-tag" onClick={(e) => { e.stopPropagation(); toggle(); }} onPointerDown={(e) => e.stopPropagation()}
+    title={mode === "src" ? "Source time at the playhead — tap for time within the clip" : "Time within the selected clip — tap for source time"}
+    aria-label={mode === "src" ? `Source time ${relLabel(c, mode).slice(4)}; show clip time` : `Clip time ${relLabel(c, mode).slice(1)}; show source time`}>{relLabel(c, mode)}</button>;
 }

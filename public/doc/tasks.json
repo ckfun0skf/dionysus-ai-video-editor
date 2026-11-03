@@ -2684,6 +2684,12 @@
           "title": "Per-clip loading bar/spinner on the timeline and reliable clip thumbnails (shared decode queue with retry)",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P29-CLIP-TIME",
+          "title": "Clip-relative time: playhead label (+clip / src time, remembered), inspector Clip \u00b7 Source line, source marker in Adjust range",
+          "status": "done",
+          "progress": 100
         }
       ]
     },
