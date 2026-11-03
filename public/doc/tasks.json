@@ -2672,6 +2672,12 @@
           "title": "P27: preview stability with many clips (hold playhead while media buffers, last good frame instead of black, idle media element cap) and a Loading badge",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P28-ADJUST-FIT",
+          "title": "P28: Adjust range sheet fits a 390x844 phone without scrolling (height-limited preview, compact rows, 44px targets)",
+          "status": "done",
+          "progress": 100
         }
       ]
     },
