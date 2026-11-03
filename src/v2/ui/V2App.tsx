@@ -298,6 +298,9 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const player = playerRef.current;
   useEffect(() => { player.onTime = (t, p) => { if (p && stopAt.current !== undefined && t >= stopAt.current) { stopAt.current = undefined; player.pause(); return; } setTime(t); setPlaying(p); setFrame((f) => f + 1); }; return () => player.dispose(); }, [player]);
   useEffect(() => { player.canvas = canvasRef.current ?? undefined; player.draw(); }, [player, mobile]);
+  /** P27-PREVIEW-STABILITY: "Loading" badge while the preview waits for media. */
+  const [mediaLoading, setMediaLoading] = useState(false);
+  useEffect(() => { player.onLoading = setMediaLoading; return () => { player.onLoading = undefined; }; }, [player]);
   /** P27: Adjust range "Mix" shows its draft in the main preview until Apply/Cancel. */
   const [mixDraft, setMixDraft] = useState<Project>();
   useEffect(() => { player.setProject(mixDraft ?? project); }, [player, project, mixDraft]);
@@ -1044,7 +1047,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   useEffect(() => { player.draw(); }, [player, canvasSize.width, canvasSize.height, project.settings.background]);
   const preview = (
     <section className="v2-preview" aria-label="Preview" style={mobile ? { height: `${previewVh}dvh` } : undefined}>
-      <div className="v2-canvas-wrap"><canvas ref={canvasRef} width={canvasSize.width} height={canvasSize.height} onClick={onCanvasTap} title={mobile ? "Tap an element to select it · tap empty space to play/pause" : "Click an element to select it · click empty space to play/pause"} />
+      <div className="v2-canvas-wrap">{mediaLoading && <div className="v2-buffering" role="status" aria-live="polite" data-testid="preview-loading"><span className="v2-buffering-spin" aria-hidden="true" />Loading…</div>}<canvas ref={canvasRef} width={canvasSize.width} height={canvasSize.height} onClick={onCanvasTap} title={mobile ? "Tap an element to select it · tap empty space to play/pause" : "Click an element to select it · click empty space to play/pause"} />
         {visual && player.boxes.get(visual.id) && canvasRef.current && <TransformHandles engine={engine} placement={visual} time={time} box={player.boxes.get(visual.id)!} canvas={canvasRef.current} actions={gizmo} route={layerRoute} snapping={snapOn} others={[...player.boxes].filter(([id]) => id !== visual.id).map(([, b]) => b)} />}
         {inlineEditor}
         {!mobile && visual && scopeChip}
