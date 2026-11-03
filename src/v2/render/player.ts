@@ -24,7 +24,7 @@ import { readManifest, resolveHtmlParams, type HtmlClipManifest } from "../domai
 import type { ExportVideoFrames } from "./export/videoFrames";
 import { drawWithLook } from "./transitionDraw";
 import { withBlend } from "./blend";
-import { BufferGate, idleEvictions, mediaStalled } from "./stability";
+import { BufferGate, clipLoadOf, idleEvictions, loadSignature, mediaStalled, type ClipLoad } from "./stability";
 
 /** P1-SHORT-AUDIO: how far ahead of the playhead the player loads audio and video clips (2 s). */
 const PRELOAD_TICKS = 2 * TICKS_PER_SECOND;
@@ -68,6 +68,11 @@ export class Player {
   /** True while the preview waits for media (shown as a loading badge). */
   loading = false;
   onLoading?: (loading: boolean) => void;
+  /** P29-CLIP-LOADING: clips whose media is still loading (on screen or about to start), with buffered progress when known. */
+  clipLoads: ReadonlyMap<string, ClipLoad> = new Map();
+  onClipLoads?: (loads: ReadonlyMap<string, ClipLoad>) => void;
+  private loadSig = "";
+  private loadPoll?: ReturnType<typeof setTimeout>;
   private startClock = 0;
   private clock: Clock;
   private audioCtx?: AudioContext;
@@ -174,6 +179,8 @@ export class Player {
         m.preload = "auto"; m.src = src; (m as HTMLVideoElement).playsInline = true; m.crossOrigin = "anonymous";
         m.onseeked = () => !this.playing && this.draw();
         m.onloadeddata = () => this.draw();
+        // P29-CLIP-LOADING: keep the timeline's per-clip loading state fresh while paused.
+        m.oncanplay = m.onerror = () => !this.playing && this.draw();
         if (this.offline && kind === "video") {
           m.muted = true;
           this.host ??= Object.assign(document.createElement("div"), { ariaHidden: "true" });
@@ -279,6 +286,7 @@ export class Player {
     const holding = this.playing && this.gate.buffering;
     const run = this.playing && !holding;
     let stalled = false, missing = false;
+    const loads = new Map<string, ClipLoad>();
     if (canvas && ctx) { ctx.fillStyle = this.project.settings.background ?? "#000"; ctx.fillRect(0, 0, canvas.width, canvas.height); }
     // V2-101 / P6-FX-SCOPE: "main" effects change the main-track render (applied once main is drawn, before
     // overlays/text); "overlay" effects change each overlay clip on its own layer before it is composited; "all"
@@ -344,11 +352,13 @@ export class Player {
         continue;
       }
       const src = this.url(version.media.blobKey);
-      if (!src) { if (placement.clipType !== "image") stalled = true; if (placement.clipType !== "audio") missing = true; continue; }
+      if (!src) { loads.set(placement.id, {}); if (placement.clipType !== "image") stalled = true; if (placement.clipType !== "audio") missing = true; continue; }
       live.add(placement.id);
       const el = this.element(placement.id, placement.clipType, src);
       this.lastUsed.set(placement.id, ++this.useCount);
       if ("pause" in el) {
+        const ld = clipLoadOf(el, this.playing);
+        if (ld) loads.set(placement.id, ld);
         const target = ticksToSeconds(sourceTicks);
         el.muted = !!track.muted || !!track.hidden || (placement.clipType === "video" && !!placement.linkedAudio?.muted);
         const vol = Math.max(0, placement.volume ?? 1) * fadeAt(placement, this.time) * volumeKeyAt(placement, this.time);
@@ -416,6 +426,7 @@ export class Player {
         const src = v && this.url(v.media.blobKey);
         if (!src) continue;
         const el = this.element(placement.id, placement.clipType, src);
+        if ("pause" in el) { const ld = clipLoadOf(el, false); if (ld) loads.set(placement.id, ld); }
         const at = ticksToSeconds(placement.sourceInTicks);
         if ("pause" in el && el.paused && Math.abs(el.currentTime - at) > 0.02) el.currentTime = at;
       }
@@ -427,6 +438,11 @@ export class Player {
       for (const id of idleEvictions(this.lastUsed, keep)) { this.release(id); this.lastUsed.delete(id); }
       this.stalled = stalled;
       const loading = (this.playing && this.gate.buffering) || (!this.playing && missing);
+      const sig = loadSignature(loads);
+      if (sig !== this.loadSig) { this.loadSig = sig; this.clipLoads = loads; this.onClipLoads?.(loads); }
+      // While paused nothing else redraws, so poll gently until every visible clip has loaded.
+      if (this.loadPoll) clearTimeout(this.loadPoll);
+      this.loadPoll = !this.playing && loads.size ? setTimeout(() => { this.loadPoll = undefined; this.draw(); }, 500) : undefined;
       if (loading !== this.loading) { this.loading = loading; this.onLoading?.(loading); }
     }
     for (const id of [...this.pool.keys()]) if (!findAny(this.project, id)) this.release(id);

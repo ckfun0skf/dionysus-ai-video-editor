@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Project } from "../domain";
 import type { BlobStore } from "../ports";
 import { decodePeaks, extractFilmstrip, type Filmstrip, type Peaks } from "./media";
+import { decodeQueue, withRetry } from "./decodeQueue";
 
 /** Key for per-asset-version previews. */
 export const mediaKey = (assetId: string, versionId: string) => `${assetId}:${versionId}`;
@@ -24,7 +25,7 @@ export function useMediaPreviews(project: Project, blobs: BlobStore) {
         const blob = blobs.get(v.media.blobKey);
         void blob.then((b) => (b ? decodePeaks(b) : undefined)).catch(() => undefined)
           .then((r) => { if (mounted.current && r) setPeaks((p) => ({ ...p, [key]: r })); });
-        if (a.kind === "video") void blob.then((b) => (b ? extractFilmstrip(b) : undefined)).catch(() => undefined)
+        if (a.kind === "video") void withRetry(() => decodeQueue.run(() => blob.then((b) => (b ? extractFilmstrip(b) : undefined)))).catch(() => undefined)
           .then((r) => { if (mounted.current && r) setStrips((s) => ({ ...s, [key]: r })); });
       }
     }

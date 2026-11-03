@@ -1273,3 +1273,12 @@ select.v2-tp-field { -webkit-appearance: none; appearance: none; padding-right: 
   .v2-slip-preview:not(.is-audio):not(.is-mix) { height: clamp(64px, 12dvh, 120px); }
   .v2-slip-head h3 { font-size: 15px; }
 }
+
+/* P29-CLIP-LOADING: per-clip loading state on the timeline; placeholder while a thumbnail is pending */
+.v2-clip.is-loading > :not(.v2-clip-load) { opacity: .55; }
+.v2-clip-load { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: rgba(255,255,255,.18); z-index: 6; pointer-events: none; }
+.v2-clip-load-fill { display: block; height: 100%; background: var(--accent); transition: width .2s linear; }
+.v2-clip-load.is-unknown { height: 100%; top: 0; background: rgba(0,0,0,.35); display: grid; place-items: center; }
+.v2-clip-spin { width: 18px; height: 18px; border: 2px solid rgba(255,255,255,.35); border-top-color: #fff; border-radius: 50%; animation: v2-spin .8s linear infinite; }
+.v2-clip.is-nothumb { background-image: linear-gradient(90deg, rgba(255,255,255,.04) 0%, rgba(255,255,255,.12) 50%, rgba(255,255,255,.04) 100%); background-size: 200% 100%; animation: v2-shimmer 1.4s linear infinite; }
+@keyframes v2-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }

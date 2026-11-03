@@ -6,6 +6,7 @@ import { mediaKey } from "./useMedia";
 import { clampPps, haptic, LONG_PRESS_MS, LONG_PRESS_SLOP, pinchZoom, touchDistance } from "./gestures";
 import { board, edit, findPlacement, slip, layers, ops, transitions, compositionDuration, TICKS_PER_SECOND, formatTimecode, type Composition, type Placement, type Project, type Track } from "../domain";
 import { Ic } from "./Icon";
+import type { ClipLoad } from "../render";
 import { getPreset } from "../registry";
 
 interface Props {
@@ -43,6 +44,8 @@ interface Props {
   /** Per asset-version waveforms / filmstrips (see useMediaPreviews). */
   peaks?: Record<string, Peaks>;
   strips?: Record<string, Filmstrip>;
+  /** P29-CLIP-LOADING: clips whose media is still loading, with buffered progress (0–1) when the browser reports it. */
+  loads?: ReadonlyMap<string, ClipLoad>;
   onAddMedia?: () => void;
   sideColumn?: ReactNode;
   timeLabel?: ReactNode;
@@ -78,7 +81,7 @@ export const TEXT_LANE_H = 32;
 export const coarsePointer = () => typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
 export const SIDE_W = 184;
 
-export function Timeline({ engine, project, time, playing, onSeek, selectedId, selectedIds, onToggleSelect, multiMode, onSelect, pps, onZoom, centered, thumbs, peaks, strips, onAddMedia, sideColumn, timeLabel, topLane, ripple, onTransition, expanded: expandedProp, onExpand, focus, onEditLayer, onEditSubs, onFocusGroup, onDropData, onContextMenu, onPlayback }: Props) {
+export function Timeline({ engine, project, time, playing, onSeek, selectedId, selectedIds, onToggleSelect, multiMode, onSelect, pps, onZoom, centered, thumbs, peaks, strips, loads, onAddMedia, sideColumn, timeLabel, topLane, ripple, onTransition, expanded: expandedProp, onExpand, focus, onEditLayer, onEditSubs, onFocusGroup, onDropData, onContextMenu, onPlayback }: Props) {
   const comp = project.compositions[project.rootCompositionId];
   const scrollRef = useRef<HTMLDivElement>(null);
   const [gesture, setGesture] = useState<Gesture>();
@@ -456,15 +459,17 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
                 const sel = p.id === selectedId;
                 const inSel = sel || !!selectedIds?.includes(p.id);
                 return (
-                  <div key={p.id} className={`v2-clip clip-${p.clipType} ${inSel ? "is-selected" : ""}`} data-placement-id={p.id}
-                    style={{ left: toPx(p.startTicks), width: Math.max(4, toPx(p.durationTicks)), ...(centered && thumbs?.[p.source.assetId] && p.clipType !== "audio" && !strips?.[mediaKey(p.source.assetId, p.source.versionId)] ? { backgroundImage: `url(${thumbs[p.source.assetId]})` } : {}) }}
+                  <div key={p.id} className={`v2-clip clip-${p.clipType} ${inSel ? "is-selected" : ""} ${loads?.has(p.id) ? "is-loading" : ""} ${needsThumb(p) && !thumbs?.[p.source.assetId] && !strips?.[mediaKey(p.source.assetId, p.source.versionId)] ? "is-nothumb" : ""}`} data-placement-id={p.id}
+                    style={{ left: toPx(p.startTicks), width: Math.max(4, toPx(p.durationTicks)), ...(thumbs?.[p.source.assetId] && p.clipType !== "audio" && !strips?.[mediaKey(p.source.assetId, p.source.versionId)] ? { backgroundImage: `url(${thumbs[p.source.assetId]})` } : {}) }}
                     onPointerDown={(e) => onClipDown(e, p.id, t.id, p.startTicks)} title={p.clipType === "effect" ? `Effect: ${effectName(p)}` : p.clipType === "text" ? p.text?.text : asset?.name}>
                     {(() => {
                       const key = mediaKey(p.source.assetId, p.source.versionId);
                       const w = Math.max(4, toPx(p.durationTicks));
                       const strip = p.clipType === "video" ? strips?.[key] : undefined;
                       const pk = p.clipType !== "image" && !(p.clipType === "video" && (p.linkedAudio?.muted || p.freeze || p.reverse)) ? peaks?.[key] : undefined;
+                      const ld = loads?.get(p.id);
                       return <>
+                        {ld && <ClipLoadBar load={ld} />}
                         {strip && <FilmstripTiles strip={strip} p={p} width={w} pps={pps} />}
                         {pk && <Waveform peaks={pk} p={p} width={w} height={p.clipType === "audio" ? 38 : 14} kind={p.clipType === "audio" ? "audio" : "video"} />}
                       </>;
@@ -691,4 +696,14 @@ function AnimBadges({ p, width }: { p: Placement; width: number }) {
       {b.map((k) => <span key={k} className={`v2-anim-badge is-${k}`} title={BADGE_LABEL[k]}><Ic g={`anim-${k}`} size={9} /></span>)}
     </span>
   );
+}
+
+const needsThumb = (p: Placement) => p.clipType === "video" || p.clipType === "image" || p.clipType === "html";
+
+/** P29-CLIP-LOADING: thin bar at the clip's bottom edge with the loaded share, or a spinner when progress is unknown. */
+export function ClipLoadBar({ load }: { load: ClipLoad }) {
+  const pct = load.progress === undefined ? undefined : Math.round(load.progress * 100);
+  return pct === undefined
+    ? <span className="v2-clip-load is-unknown" role="status" aria-label="Loading media"><span className="v2-clip-spin" aria-hidden="true" /></span>
+    : <span className="v2-clip-load" role="progressbar" aria-label="Loading media" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}><span className="v2-clip-load-fill" style={{ width: `${pct}%` }} /></span>;
 }
