@@ -2666,6 +2666,12 @@
           "title": "P27: Adjust range header with Cancel/Apply icons, Solo/Mix preview, Upload in Replace, storyboard shot clips replaced as a new version (UI and WebMCP)",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P27-PREVIEW-STABILITY",
+          "title": "P27: preview stability with many clips (hold playhead while media buffers, last good frame instead of black, idle media element cap) and a Loading badge",
+          "status": "done",
+          "progress": 100
         }
       ]
     },

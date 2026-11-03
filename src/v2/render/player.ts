@@ -24,6 +24,7 @@ import { readManifest, resolveHtmlParams, type HtmlClipManifest } from "../domai
 import type { ExportVideoFrames } from "./export/videoFrames";
 import { drawWithLook } from "./transitionDraw";
 import { withBlend } from "./blend";
+import { BufferGate, idleEvictions, mediaStalled } from "./stability";
 
 /** P1-SHORT-AUDIO: how far ahead of the playhead the player loads audio and video clips (2 s). */
 const PRELOAD_TICKS = 2 * TICKS_PER_SECOND;
@@ -58,6 +59,15 @@ export class Player {
   private htmlOverrides = new Map<string, Placement["htmlParams"]>();
   private raf = 0;
   private playing = false;
+  /** P27-PREVIEW-STABILITY: playhead hold while a playing source is short of data, idle-element LRU, last good frame. */
+  private gate = new BufferGate();
+  private stalled = false;
+  private lastUsed = new Map<string, number>();
+  private useCount = 0;
+  private lastGood?: CanvasRenderingContext2D | null;
+  /** True while the preview waits for media (shown as a loading badge). */
+  loading = false;
+  onLoading?: (loading: boolean) => void;
   private startClock = 0;
   private clock: Clock;
   private audioCtx?: AudioContext;
@@ -209,6 +219,7 @@ export class Player {
     const el = this.pool.get(id);
     if (el && "pause" in el) { el.pause(); el.removeAttribute("src"); el.load(); el.remove(); this.gains.get(el)?.disconnect(); this.gains.delete(el); this.fxChains.get(el)?.chain.dispose(); this.fxChains.delete(el); this.spatials.get(el)?.stage.dispose(); this.spatials.delete(el); }
     this.pool.delete(id);
+    this.lastUsed.delete(id);
   }
 
   duration() { return compositionDuration(this.project.compositions[this.project.rootCompositionId]); }
@@ -230,6 +241,13 @@ export class Player {
   /** Advance time from the master clock and render (one animation frame). */
   tick() {
     if (!this.playing) return;
+    const now = this.clock.now();
+    if (!this.offline && this.gate.update(now * 1000, this.stalled)) {
+      // Hold the playhead until the media catches up; restart the clock from here afterwards.
+      this.startClock = now; this.startTicks = this.time;
+      this.draw();
+      return;
+    }
     this.time = Math.round(this.startTicks + (this.clock.now() - this.startClock) * TICKS_PER_SECOND);
     if (this.time >= this.duration()) { this.time = this.duration(); this.pause(); return; }
     this.draw();
@@ -237,6 +255,7 @@ export class Player {
 
   pause() {
     this.playing = false;
+    this.gate.reset();
     cancelAnimationFrame(this.raf);
     this.pool.forEach((el) => "pause" in el && el.pause());
     this.onTime?.(this.time, false);
@@ -257,6 +276,9 @@ export class Player {
     this.boxes = new Map();
     const canvas = this.canvas;
     const ctx = canvas?.getContext("2d");
+    const holding = this.playing && this.gate.buffering;
+    const run = this.playing && !holding;
+    let stalled = false, missing = false;
     if (canvas && ctx) { ctx.fillStyle = this.project.settings.background ?? "#000"; ctx.fillRect(0, 0, canvas.width, canvas.height); }
     // V2-101 / P6-FX-SCOPE: "main" effects change the main-track render (applied once main is drawn, before
     // overlays/text); "overlay" effects change each overlay clip on its own layer before it is composited; "all"
@@ -322,9 +344,10 @@ export class Player {
         continue;
       }
       const src = this.url(version.media.blobKey);
-      if (!src) continue;
+      if (!src) { if (placement.clipType !== "image") stalled = true; if (placement.clipType !== "audio") missing = true; continue; }
       live.add(placement.id);
       const el = this.element(placement.id, placement.clipType, src);
+      this.lastUsed.set(placement.id, ++this.useCount);
       if ("pause" in el) {
         const target = ticksToSeconds(sourceTicks);
         el.muted = !!track.muted || !!track.hidden || (placement.clipType === "video" && !!placement.linkedAudio?.muted);
@@ -338,10 +361,12 @@ export class Player {
         const scrub = !!placement.reverse || !!placement.freeze || held;
         if (scrub || this.offline) el.muted = true;
         const speed = placement.speed ?? 1;
-        if (this.playing && scrub) {
+        if (holding && !el.paused) el.pause();
+        if (!scrub && (!el.muted || placement.clipType === "video") && mediaStalled(el)) stalled = true;
+        if (run && scrub) {
           if (!el.paused) el.pause();
           if (Math.abs(el.currentTime - target) > 0.04) el.currentTime = target;
-        } else if (this.playing) {
+        } else if (run) {
           if (el.paused) { el.currentTime = target; el.playbackRate = speed; void el.play().catch(() => undefined); }
           else {
             const fix = correctDrift(el.currentTime, target);
@@ -361,7 +386,9 @@ export class Player {
       if (ctx && canvas && placement.clipType !== "audio") {
         const w = el instanceof HTMLVideoElement ? el.videoWidth : (el as HTMLImageElement).naturalWidth;
         const h = el instanceof HTMLVideoElement ? el.videoHeight : (el as HTMLImageElement).naturalHeight;
-        if (w && h && (!(el instanceof HTMLVideoElement) || el.readyState >= 2)) {
+        const drawable = !!(w && h && (!(el instanceof HTMLVideoElement) || el.readyState >= 2));
+        if (!drawable) missing = true;
+        if (drawable) {
           const r = placeRect(placement, w, h, canvas.width, canvas.height, this.time);
           this.boxes.set(placement.id, r);
           paint(placement.blend, (dc) => drawWithLook(dc, canvas.width, canvas.height, tfx, (g) => {
@@ -373,6 +400,11 @@ export class Player {
       }
     }
     if (!fxDone) applyFx();
+    // A source without a decoded picture yet (seek or first load): show the last complete frame instead of black.
+    if (ctx && canvas && !this.offline) {
+      if (missing && this.lastGood && this.lastGood.canvas.width === canvas.width && this.lastGood.canvas.height === canvas.height) ctx.drawImage(this.lastGood.canvas, 0, 0);
+      else if (!missing) this.keepFrame(canvas);
+    }
     if (fxAll && ctx && canvas) applyEffectFrame(ctx, canvas.width, canvas.height, fxAll);
     const cue = subtitleAt(comp, this.time);
     if (ctx && canvas && cue) drawSubtitle(ctx, canvas.width, canvas.height, cue.text);
@@ -389,6 +421,14 @@ export class Player {
       }
     }
     for (const [id, el] of this.pool) if (!live.has(id) && "pause" in el && !el.paused) el.pause();
+    if (!this.offline) {
+      const keep = new Set(live);
+      for (const { placement } of upcomingMedia(comp, this.time, PRELOAD_TICKS)) keep.add(placement.id);
+      for (const id of idleEvictions(this.lastUsed, keep)) { this.release(id); this.lastUsed.delete(id); }
+      this.stalled = stalled;
+      const loading = (this.playing && this.gate.buffering) || (!this.playing && missing);
+      if (loading !== this.loading) { this.loading = loading; this.onLoading?.(loading); }
+    }
     for (const id of [...this.pool.keys()]) if (!findAny(this.project, id)) this.release(id);
     for (const [id, h] of this.html) if (!findAny(this.project, id)) { h.host.dispose(); this.html.delete(id); }
     this.onTime?.(this.time, this.playing);
@@ -404,6 +444,15 @@ export class Player {
     const g = this.overlayCtx;
     if (g && (g.canvas.width !== w || g.canvas.height !== h)) { g.canvas.width = w; g.canvas.height = h; }
     return g;
+  }
+
+  /** Copy the finished preview frame so a later frame with a missing source can show it instead of black. */
+  private keepFrame(canvas: HTMLCanvasElement) {
+    if (this.lastGood === undefined) this.lastGood = typeof document !== "undefined" ? document.createElement("canvas").getContext("2d") : null;
+    const g = this.lastGood;
+    if (!g) return;
+    if (g.canvas.width !== canvas.width || g.canvas.height !== canvas.height) { g.canvas.width = canvas.width; g.canvas.height = canvas.height; }
+    try { g.drawImage(canvas, 0, 0); } catch { /* tainted or detached: skip */ }
   }
 
   /** Resolve once the element presents a new frame after the seek that follows (or after `ms`). */
