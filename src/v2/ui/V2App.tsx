@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { hitCandidates, isBackdrop, pickAt, Player, readClipConfig } from "../render";
 import { cmd } from "../engine";
 import { importFile } from "../persistence";
-import { board as storyDomain, compositionDuration, edit, layers, ops, transitions, findPlacement, newId, formatTimecode, secondsToTicks, TICKS_PER_SECOND, type Asset } from "../domain";
+import { board as storyDomain, compositionDuration, edit, layers, ops, findPlacement, newId, formatTimecode, secondsToTicks, TICKS_PER_SECOND, type Asset } from "../domain";
 import type { Project } from "../domain";
 import { useEditorBoot, useEngineState, useIsMobile, type EditorContext, type LoadFailure } from "./useEditor";
 import { Timeline } from "./Timeline";
@@ -49,6 +49,7 @@ import { ProjectSettings as MobileProjectSettings } from "./desktop/ProjectSetti
 import { HtmlParamsPanel } from "./HtmlParamsPanel";
 import { TransitionPicker, cutOf } from "./TransitionPicker";
 import { loadPreviewVh, PanelGrabber, Sheet, SheetDone } from "./Sheet";
+import { ActionGrid } from "./ActionGrid";
 import { useEdgeFade } from "./useEdgeFade";
 import { AssetBrowser, browserTab, type BrowserTab } from "./desktop/AssetBrowser";
 import { Inspector, type InspectorTab } from "./desktop/Inspector";
@@ -72,7 +73,6 @@ import { AudioFxPanel, ChromaKeyPanel, VolumeCurve } from "./SoundAndKey";
 import { SpatialPad } from "./SpatialPad";
 import { mediaKey } from "./useMedia";
 import { SliderField } from "./SliderField";
-import { VolumeHold } from "./VolumeHold";
 
 type Menu = "multi" | "root" | "edit" | "audio" | "speed" | "text" | "effect" | "overlay";
 const SPEEDS = [0.25, 0.5, 1, 1.5, 2, 4];
@@ -141,6 +141,9 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   // P3B: chroma key / volume curve / audio FX sheets (phone) and the eyedropper (the clip id being picked for).
   const [ckOpen, setCkOpen] = useState(false);
   const [vcOpen, setVcOpen] = useState(false);
+  /** P32: clip-bar sheets — Trim (start/end), Audio (volume & sound tools), More (everything else). */
+  const [barSheet, setBarSheet] = useState<"trim" | "audio" | "more">();
+  const roomyBar = useIsMobile("(min-width: 440px)");
   const [afxOpen, setAfxOpen] = useState(false);
   const [posOpen, setPosOpen] = useState(false);
   const [eyedrop, setEyedrop] = useState<string>();
@@ -254,9 +257,9 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const topLane = cues.length ? { label: "Text", render: (toPx: (t: number) => number, toTicks: (px: number) => number) => <SubtitleLane engine={engine} list={cues} selectedId={subId} onSelect={selectCue} toPx={toPx} toTicks={toTicks} /> } : undefined;
   const textTools = [
     { icon: "T", label: "Add text", title: "Add a text clip at the playhead (T)", run: addText },
-    { icon: "⇪", label: "Import SRT", title: "Import an .srt file as a new text layer", run: () => srtRef.current?.click() },
-    { icon: "≡", label: "Edit subtitles", title: "Edit every subtitle in a list: text, timing, split, merge, find & replace", run: () => editSubtitles() },
-    { icon: "⇩", label: "Export SRT", title: "Download subtitles as .srt", run: exportSrt },
+    { icon: "⇪", label: "Import", title: "Import an .srt file as a new text layer", run: () => srtRef.current?.click() },
+    { icon: "≡", label: "Subtitles", title: "Edit every subtitle in a list: text, timing, split, merge, find & replace", run: () => editSubtitles() },
+    { icon: "⇩", label: "Export", title: "Download subtitles as .srt", run: exportSrt },
   ];
   // V2-103: controls and gizmo work on the effective placement (layer style merged under the clip's overrides).
   const selTrack = selected?.track;
@@ -670,13 +673,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   );
 
 
-  const rippleToggle = (
-    <button key="ripple" className={`v2-tool ${ripple ? "is-active" : ""}`} aria-pressed={ripple} title="Ripple: delete and trim move later clips to close gaps (R)" onClick={() => setRipple(!ripple)}><b aria-hidden><Ic g="⇤" /></b><span>Ripple {ripple ? "on" : "off"}</span></button>
-  );
 
-  const snapToggle = (
-    <button key="snap" className={`v2-tool ${snapOn ? "is-active" : ""}`} aria-pressed={snapOn} title="Smart snapping and alignment guides in the preview (hold Alt to skip once)" onClick={() => setSnapOn(!snapOn)}><b aria-hidden><Ic g="🧲" /></b><span>Snap {snapOn ? "on" : "off"}</span></button>
-  );
 
   const clipActions = [
     { icon: "⧉", label: "Duplicate", title: "Duplicate onto a new track above, same time (⌘/Ctrl+D duplicates after on the same track)", run: duplicateAbove },
@@ -689,7 +686,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     ? { icon: "🔗", label: "Unlink", title: "Linked to a main clip: it moves, trims and deletes with it. Tap to unlink", run: () => { engine.dispatch(cmd.setClipLink(selected.placement.id, false)); setToast("Unlinked from the main clip"); } }
     : { icon: "🔗", label: "Link to main", title: "Link to the main clip under this clip's start: it then moves, trims and deletes with it", run: () => setToast(engine.dispatch(cmd.setClipLink(selected.placement.id, true)) ? "Linked to the main clip" : "No main clip under this clip's start to link to") }] : [];
   // P20: overlay video / image / HTML clips can move onto the main track.
-  const promoteActions = selected && !selIsMain && promote.canPromote(comp, selected.placement.id) ? [{ icon: "⤓", label: "Promote to main", title: "Promote to main track: replace what the main track shows here, or insert it and move later clips", run: () => setPromoteFor(selected.placement.id) }] : [];
+  const promoteActions = selected && !selIsMain && promote.canPromote(comp, selected.placement.id) ? [{ icon: "to-main", label: "Promote to main", title: "Promote to main track: replace what the main track shows here, or insert it and move later clips", run: () => setPromoteFor(selected.placement.id) }] : [];
   const pasteAction = { icon: "📋", label: "Paste", title: hasClip ? "Paste at the playhead (⌘/Ctrl+V)" : "Copy a clip first", run: paste };
 
   // Linked audio (owned child of a video clip): extract / duplicate / mute-restore. All undoable commands.
@@ -710,7 +707,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   /** V2-SB-133: the selected video clip can slip its in point. */
   const inPointable = !!selected && canSetInPoint(project, selected.placement);
   const rangeable = !!selected && sel.length <= 1 && canAdjustRange(selected.placement);
-  useEffect(() => setInOpen(false), [selectedId]);
+  useEffect(() => { setInOpen(false); setBarSheet(undefined); }, [selectedId]);
   const speedSelect = sp && sp.clipType !== "image" && sp.clipType !== "text" && !sp.freeze ? (
     <label className="v2-tool" title="Playback speed — changes the clip's length"><b aria-hidden><Ic g="⏩" /></b>
       <select aria-label="Speed" value={sp.speed ?? 1} onChange={(e) => engine.dispatch(cmd.setSpeed(sp.id, Number(e.target.value)))}>
@@ -784,10 +781,61 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const tool = (icon: string, label: string, onClick: () => void, key = label, title?: string) => (
     <button key={key} className="v2-tool" title={title} onClick={onClick}><b aria-hidden><Ic g={icon} /></b><span>{label}</span></button>
   );
-  const linkTool = (a: { icon: string; label: string; title: string; run: () => void }) => (
-    <button key="link" className={`v2-tool v2-link-tool ${selLinked ? "is-active" : ""}`} aria-pressed={!!selLinked} title={a.title} onClick={a.run}><b aria-hidden><Ic g={a.icon} /></b><span>{a.label}</span></button>
-  );
   const pair = sp ? clipRange.matchPair(project, comp, sp.id) : undefined;
+  /** P32: one clip-bar action. Labels are short and never change with state; state shows as `active` (background only). */
+  type BarAct = { key: string; icon: string; label: string; title?: string; run: () => void; active?: boolean; danger?: boolean };
+  const barTool = (a: BarAct) => (
+    <button key={a.key} className={`v2-tool ${a.active ? "is-active" : ""} ${a.danger ? "is-danger" : ""}`} data-tool={a.key} title={a.title ?? a.label} aria-label={a.title ? undefined : a.label}
+      aria-pressed={a.active === undefined ? undefined : a.active} onClick={a.run}><b aria-hidden><Ic g={a.icon} /></b><span>{a.label}</span></button>
+  );
+  const clipBar = ((): { edit: BarAct[]; primary: BarAct[]; more: { title: string; items: BarAct[] }[] } => {
+    if (!selected) return { edit: [], primary: [], more: [] };
+    const pl = selected.placement;
+    const A = (key: string, icon: string, label: string, run: () => void, title?: string, active?: boolean): BarAct => ({ key, icon, label, run, title, active });
+    const sound = hasSound(pl) || pl.clipType === "audio";
+    const edit = [
+      A("split", "✂", "Split", split, "Split at the playhead (S)"),
+      A("trim", "trim-start", "Trim", () => setBarSheet("trim"), "Trim start or end to the playhead (Q / W)"),
+      { ...A("delete", "🗑", "Delete", () => del(), ripple ? "Delete and close the gap (ripple is on)" : "Delete"), danger: true },
+    ];
+    const adjust = A("adjust", "⤧", "Adjust", () => setInspOpen(true), "Transform, keyframes and fades");
+    const audio = sound ? A("audio", "🔊", "Audio", () => setBarSheet("audio"), "Volume, mute, volume curve, audio FX and position") : undefined;
+    const speed = speedSelect ? A("speed", "⏩", "Speed", () => setMenu("speed"), `Playback speed (now ${sp!.speed ?? 1}×)`) : undefined;
+    const link = linkActions[0] ? A("link", selLinked ? "unlink" : "link", "Link", linkActions[0].run, linkActions[0].title, !!selLinked) : undefined;
+    const toMain = promoteActions[0] ? A("promote", "to-main", "To main", promoteActions[0].run, promoteActions[0].title) : undefined;
+    const primaryAll = (isEffect ? [A("fx", "effect", "Effect", () => setFxOpen(true), "Change the preset or its settings"), link, adjust]
+      : isText ? [A("style", "T", "Style", () => setTextOpen(true), "Templates, font, style, effects, animation"), A("anim", "anim", "Animate", () => setAnimOpen(true), "In, out and loop animations"), A("subs", "≡", "Subtitles", () => openSubs(selected.track.id, pl.id), "Open this layer's subtitle list at this clip")]
+      : isHtml ? [A("params", "settings", "Params", () => setParamsOpen(true), "This clip's values: text, colours and other params the HTML clip exposes"), A("code", "</>", "Code", () => void openCode(), "Edit HTML, CSS and JS with live preview"), adjust]
+      : pl.clipType === "audio" ? [audio, speed, selAudioSpec ? A("edit-audio", "♫", "Edit", () => void openAudio(), "Open this clip in the Audio editor; saving makes a new version") : adjust]
+      : selIsMain ? [adjust, audio, speed]
+      : [adjust, link, toMain]).filter((a): a is BarAct => !!a);
+    const primary = primaryAll.slice(0, roomyBar ? 3 : 2);
+    const used = new Set(primary.map((a) => a.key));
+    const keep = (xs: (BarAct | undefined | false)[]) => xs.filter((a): a is BarAct => !!a && !used.has(a.key));
+    const more = [
+      { title: "Edit", items: keep([...primaryAll.slice(primary.length),
+        spCut && A("transition", "⧓", "Transition", () => setTransFor(sp!.id), "Pick the transition into this clip"),
+        pair && A("match", "match", "Match", () => setMatchOpen(true), "Find the most similar frames across this cut and join there"),
+        ...timeActions.map((a, i) => A(i ? "reverse" : "freeze", a.icon, i ? "Reverse" : "Freeze", a.run, a.title, i ? !!sp?.reverse : undefined)),
+        A("duplicate", "⧉", "Duplicate", duplicateAbove, clipActions[0].title), A("copy", "⎘", "Copy", copy, clipActions[1].title),
+        hasClip && A("paste", "📋", "Paste", paste, pasteAction.title), A("select", "☑", "Select", () => setMultiMode(true), "Select several clips")]) },
+      { title: "Source", items: keep([
+        selLink && A("storyboard", "board", "Storyboard", () => openStory(selLink.target), `Open ${selLink.label} in the storyboard: pick versions there`),
+        rangeable && A("range", "⇔", "Range", () => setRangeFor({ id: pl.id }), "Choose which part of the source this clip plays (slip); its place and length stay"),
+        rangeable && A("replace", "⇄", "Replace", () => setRangeFor({ id: pl.id, picker: true }), "Swap this clip's media for another of the same kind; everything else stays"),
+        inPointable && A("in-point", "⇤", "In point", () => setInOpen(true), "Where the clip starts in its video (slip)"),
+        canChromaKey(pl) && A("chroma", "chroma", "Chroma", () => setCkOpen(true), "Remove a green or blue screen colour"),
+        isText && A("adjust", "⤧", "Adjust", () => setInspOpen(true), "Transform, keyframes and fades"),
+        !!selAudioSpec && pl.clipType !== "audio" && A("edit-audio", "♫", "Edit audio", () => void openAudio(), "Open this clip in the Audio editor")]) },
+      { title: "Audio", items: keep([audio,
+        ...linkedAudioActions.slice(0, 2).map((a, i) => A(i ? "dup-audio" : "extract", a.icon, i ? "Copy audio" : "Extract", a.run, a.title)),
+        A("mute-track", selected.track.muted ? "🔇" : "🔊", "Mute track", () => engine.dispatch(cmd.toggleTrackMute(selected.track.id)), "Mute or unmute this whole track", !!selected.track.muted)]) },
+      { title: "Layer", items: keep([link, toMain]) },
+      { title: "Timeline", items: [A("ripple", "⇤", "Ripple", () => setRipple(!ripple), "Ripple: delete and trim move later clips to close gaps (R)", ripple), A("snap", "🧲", "Snap", () => setSnapOn(!snapOn), "Smart snapping and alignment guides", snapOn)] },
+    ].filter((g) => g.items.length);
+    return { edit, primary, more };
+  })();
+  const barEdit = clipBar.edit, barPrimary = clipBar.primary;
   const mobileTools: Record<Menu, JSX.Element[]> = {
     root: [
       tool("✂", "Edit", () => enterMode("edit"), "edit", "Edit the main-track clip under the playhead"),
@@ -795,65 +843,35 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       tool("T", "Text", () => enterMode("text"), "text", "Text, stickers and subtitles"),
       tool("effect", "Effect", () => enterMode("effect"), "effect", "Effect layers (blur, zoom, B&W…) and transitions"),
       tool("overlay", "Overlay", () => enterMode("overlay"), "overlay", "Photos and videos on layers above the main track"),
-      ...(project.storyboard ? [tool("board", "Sync board", () => setSyncOpen(true), "sync-story", "Sync to Storyboard: write timeline edits back to the storyboard (review first)")] : []),
+      ...(project.storyboard ? [tool("board", "Sync", () => setSyncOpen(true), "sync-story", "Sync to Storyboard: write timeline edits back to the storyboard (review first)")] : []),
       tool("settings", "Project", () => setProjOpen(true), "project-settings", "Project settings: size, frame rate, background, auto-link"),
     ],
-    edit: !selected ? [<span key="h" className="v2-tool-hint">Move the playhead over a main-track clip to edit it</span>] : isEffect ? [
-      tool("effect", "Effect", () => setFxOpen(true), "fx-edit", "Change the preset or its settings"),
-      tool("✂", "Split", split),
-      tool("🗑", "Delete", () => del(), "delete", "Delete this effect clip"),
-      ...linkActions.map((a) => linkTool(a)),
-      ...clipActions.map((a) => tool(a.icon, a.label, a.run, a.label, a.title)),
-    ] : [
-      ...(spCut ? [tool("⧓", sp!.transitionIn ? (transitions.transitionKind(sp!.transitionIn.kind)?.label ?? "Transition") : "Transition", () => setTransFor(sp!.id), "transition-in", "Pick the transition into this clip")] : []),
-      // Linked storyboard clips: up front so it is visible without scrolling the tool row.
-      ...(selLink ? [tool("board", "Storyboard", () => openStory(selLink.target), "open-story", `Open ${selLink.label} in the storyboard: pick versions there`)] : []),
-      tool("✂", "Split", split),
-      tool("trim-start", "Trim start", () => trimToPlayhead("left"), "trim-start", "Trim start to playhead: the clip starts here"),
-      tool("trim-end", "Trim end", () => trimToPlayhead("right"), "trim-end", "Trim end to playhead: the clip ends here"),
-      ...(pair ? [tool("match", "Match frames", () => setMatchOpen(true), "match", "Find the most similar frames across this cut and join there")] : []),
-      tool("🗑", ripple ? "Ripple delete" : "Delete", () => del(), "delete", ripple ? "Delete and close the gap" : "Delete"),
-      ...(isHtml ? [tool("settings", "Params", () => setParamsOpen(true), "html-params", "This clip's values: text, colours and other params the HTML clip exposes"), tool("</>", "Edit code", () => void openCode(), "edit-code", "Edit HTML, CSS and JS with live preview")] : []),
-      ...(isText ? [tool("T", "Edit text", () => setTextOpen(true), "edit-text", "Templates, font, style, effects, animation"), tool("anim", "Animation", () => setAnimOpen(true), "anim", "In, out and loop animations"), tool("≡", "Subtitles", () => openSubs(selected.track.id, selected.placement.id), "subs-list", "Open this layer's subtitle list at this clip")] : []),
-      ...(selAudioSpec ? [tool("♫", "Edit audio", () => void openAudio(), "edit-audio", "Open this clip in the Audio editor; saving makes a new version")] : []),
-      tool("⤧", "Adjust", () => setInspOpen(true), "adjust", "Transform, keyframes and fades"),
-      ...(canChromaKey(selected.placement) ? [tool("chroma", "Chroma key", () => setCkOpen(true), "chroma", "Remove a green or blue screen colour")] : []),
-      ...(hasSound(selected.placement) ? [tool("curve", "Volume curve", () => setVcOpen(true), "vcurve", "Volume points over the waveform, and fades"), tool("afx", "Audio FX", () => setAfxOpen(true), "afx", "Echo, telephone, radio, robot…"), tool("spatial", "Position", () => setPosOpen(true), "position", "Where the sound sits: left, right, behind, near or far")] : []),
-      ...(speedSelect ? [tool("⏩", `Speed ${sp!.speed ?? 1}×`, () => setMenu("speed"), "speed", "Playback speed")] : []),
-      ...(rangeable ? [tool("⇔", "Adjust range", () => setRangeFor({ id: selected!.placement.id }), "adjust-range", "Choose which part of the source this clip plays (slip); its place and length stay"),
-        tool("⇄", "Replace", () => setRangeFor({ id: selected!.placement.id, picker: true }), "replace-asset", "Swap this clip's media for another of the same kind; everything else stays")] : []),
-      ...(inPointable ? [tool("⇤", "In point", () => setInOpen(true), "in-point", "Where the clip starts in its video (slip)")] : []),
-      ...linkActions.map((a) => linkTool(a)),
-      ...promoteActions.map((a) => tool(a.icon, a.label, a.run, "promote", a.title)),
-      tool("☑", "Select", () => setMultiMode(true), "multi", "Select several clips"),
-      ...[...clipActions, ...timeActions, ...linkedAudioActions].map((a) => tool(a.icon, a.label, a.run, a.label, a.title)),
-      ...(!["image", "html", "text"].includes(selected.placement.clipType) ? [
-        <VolumeHold key="vol" icon={<Ic g="🔊" />} value={selected.placement.volume ?? 1} onBegin={() => engine.beginGesture()} onEnd={() => engine.endGesture()}
-          onChange={(v) => engine.dispatch(cmd.setPlacementVolume(selected.placement.id, v))} />] : []),
-      tool(selected.track.muted ? "🔈" : "🔇", selected.track.muted ? "Unmute track" : "Mute track", () => engine.dispatch(cmd.toggleTrackMute(selected.track.id))),
-      ...(hasClip ? [tool(pasteAction.icon, pasteAction.label, paste, "paste", pasteAction.title)] : []),
-      rippleToggle, snapToggle,
+    edit: !selected ? [<span key="h" className="v2-tool-hint">Move the playhead over a main-track clip to edit it</span>] : [
+      // P32: one layout for every clip type — Edit group · type primaries · More. Fixed cells, short fixed labels.
+      <span key="g-edit" className="v2-tool-group">{barEdit.map(barTool)}</span>,
+      <span key="g-primary" className="v2-tool-group">{barPrimary.map(barTool)}</span>,
+      barTool({ key: "more", icon: "⋯", label: "More", title: "More actions for this clip", run: () => setBarSheet("more") }),
     ],
     multi: [
       <span key="n" className="v2-sel-count" role="status">{sel.length} selected · tap clips</span>,
       tool("🗑", "Delete", () => delSel(), "del"),
       ...clipActions.map((a) => tool(a.icon, a.label, a.run, a.label, a.title)),
     ],
-    audio: [tool("＋", "Add audio", () => setPicker("audio"), "add-audio", "Add music or sound from this project or your device, or take the sound of a video"), tool("♫", "Create audio", createAudio, "create-audio", "Make music or sound effects in the Audio editor")],
+    audio: [tool("＋", "Add", () => setPicker("audio"), "add-audio", "Add music or sound from this project or your device, or take the sound of a video"), tool("♫", "Create", createAudio, "create-audio", "Make music or sound effects in the Audio editor")],
     speed: sp ? SPEEDS.map((s) => (
       <button key={s} className={`v2-tool ${(sp.speed ?? 1) === s ? "is-active" : ""}`} aria-pressed={(sp.speed ?? 1) === s} onClick={() => engine.dispatch(cmd.setSpeed(sp.id, s))}><b>{s}×</b><span>{s === 1 ? "Normal" : s < 1 ? "Slow" : "Fast"}</span></button>
     )) : [],
     text: [
-      tool("T", "Add text", addText, "add-text", "Add a text clip at the playhead"),
+      tool("T", "Add", addText, "add-text", "Add a text clip at the playhead"),
       tool("sticker", "Stickers", () => setPicker("stickers"), "stickers", "Add stickers to the Text & Stickers group"),
       ...textTools.slice(1).map((a) => tool(a.icon, a.label, a.run, a.label, a.title)),
-      tool("template", "Templates", () => { addText(); setTextOpen(true); }, "templates", "Add a text clip and pick a template"),
+      tool("template", "Template", () => { addText(); setTextOpen(true); }, "templates", "Add a text clip and pick a template"),
     ],
     effect: [
-      tool("＋", "Add effect", () => setFxOpen(true), "add-effect", "Add an effect clip at the playhead (changes only the main track)"),
+      tool("＋", "Add", () => setFxOpen(true), "add-effect", "Add an effect clip at the playhead (changes only the main track)"),
       tool("⧓", "Transition", addTransitionNearPlayhead, "transition", "Pick a transition for the cut nearest the playhead"),
     ],
-    overlay: [tool("＋", "Add overlay", () => setPicker("overlay"), "add-overlay", "Add photos, videos or clips on a new layer above, at the playhead")],
+    overlay: [tool("＋", "Add", () => setPicker("overlay"), "add-overlay", "Add photos, videos or clips on a new layer above, at the playhead")],
   };
 
   // ───────────── V2-106 desktop shell ─────────────
@@ -913,18 +931,18 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     if (subsTrack && !selected) return { icon: "≡", title: "Edit subtitles", subtitle: subsTrack.name, onDone: () => setSubsEdit(undefined), tabs: [{ id: "subs", label: "Subtitles", render: () => <SubtitleList engine={engine} track={subsTrack} time={time} playing={playing} onSeek={seek} desktop name={project.name} focusCue={subsCue} /> }] };
     if (layerTrack && !selected) return { icon: "layers", title: "Edit all", subtitle: layerTrack.name, onDone: () => setLayerEdit(undefined), tabs: [{ id: "layer", label: "Layer style", render: () => <TextPanel key={layerTrack.id} engine={engine} layer={layerTrack} initialTab="Style" /> }] };
     if (cue && !selected) return { icon: "≡", title: "Subtitle", onDone: () => setSubId(undefined), tabs: [{ id: "cue", label: "Subtitle", render: () => <SubtitleEditor engine={engine} sub={cue} onDelete={delCue} /> }] };
-    if (!selected) return { icon: "settings", title: "Project", subtitle: `${project.settings.width}×${project.settings.height} · ${fpsNow} fps`, tabs: [{ id: "project", label: "Project", render: () => <ProjectSettings engine={engine} project={project} onSeries={() => setSeriesLib(true)} extra={textLayers.length ? <section aria-label="Subtitles"><h4>Subtitles</h4>{actionList([{ icon: "≡", label: "Edit subtitles", title: "Edit every subtitle in a list: text, timing, split, merge, find & replace", run: editSubtitles }, { icon: "⇩", label: "Export SRT", title: "Download subtitles as .srt", run: exportSrt }])}</section> : undefined} /> }] };
+    if (!selected) return { icon: "settings", title: "Project", subtitle: `${project.settings.width}×${project.settings.height} · ${fpsNow} fps`, tabs: [{ id: "project", label: "Project", render: () => <ProjectSettings engine={engine} project={project} onSeries={() => setSeriesLib(true)} extra={textLayers.length ? <section aria-label="Subtitles"><h4>Subtitles</h4>{actionList([{ icon: "≡", label: "Subtitles", title: "Edit every subtitle in a list: text, timing, split, merge, find & replace", run: editSubtitles }, { icon: "⇩", label: "Export", title: "Download subtitles as .srt", run: exportSrt }])}</section> : undefined} /> }] };
     const pl = selected.placement, kind = pl.clipType;
     const rel = clipTimeAt(pl, time);
     const sub = `${formatTimecode(pl.startTicks, fpsNow).slice(0, 8)} · ${(pl.durationTicks / 120000).toFixed(1)}s${rel ? ` · ${clipTimeText(rel)}` : ""}`;
     const base = { icon: KIND_ICON[kind] ?? "▭", title: clipName(pl), subtitle: sub, onDone: () => setSelectedId(undefined) };
-    const promoteSec = promoteActions.length ? <section className="v2-psettings v2-promote-sec" aria-label="Main track"><h4>Main track</h4><button className="v2-btn v2-link-btn" data-testid="promote-panel" title={promoteActions[0].title} onClick={promoteActions[0].run}>⤓ Promote to main track</button></section> : null;
+    const promoteSec = promoteActions.length ? <section className="v2-psettings v2-promote-sec" aria-label="Main track"><h4>Main track</h4><button className="v2-btn v2-link-btn" data-testid="promote-panel" title={promoteActions[0].title} onClick={promoteActions[0].run}><Ic g="to-main" size={16} /> Promote to main track</button></section> : null;
     const linkSec = linkActions.length ? <><section className="v2-psettings v2-link-sec" aria-label="Link to main"><h4>Link to main</h4>
-      <button className={`v2-btn v2-link-btn ${selLinked ? "is-active" : ""}`} role="switch" aria-checked={!!selLinked} title={linkActions[0].title} onClick={linkActions[0].run}>🔗 {selLinked ? `Linked to ${clipName(findPlacement(comp, selLinked.parent)?.placement ?? pl)}` : "Link to main"}</button>
+      <button className={`v2-btn v2-link-btn ${selLinked ? "is-active" : ""}`} role="switch" aria-checked={!!selLinked} title={linkActions[0].title} onClick={linkActions[0].run}><Ic g={selLinked ? "unlink" : "link"} size={16} /> {selLinked ? `Linked to ${clipName(findPlacement(comp, selLinked.parent)?.placement ?? pl)}` : "Link to main"}</button>
     </section>{promoteSec}</> : null;
     const rangeSec = canAdjustRange(pl) ? <section className="v2-psettings v2-range-sec" aria-label="Source range"><h4>Source range</h4>
-      <div className="v2-insp-actions"><button className="v2-btn" data-testid="adjust-range-btn" title="Choose which part of the source this clip plays (slip); its place and length stay (Alt+drag on the clip)" onClick={() => setRangeFor({ id: pl.id })}>⇔ Adjust range</button>
-      <button className="v2-btn" data-testid="replace-asset-btn" title="Swap this clip's media for another of the same kind; everything else stays" onClick={() => setRangeFor({ id: pl.id, picker: true })}>⇄ Replace asset</button></div></section> : null;
+      <div className="v2-insp-actions"><button className="v2-btn" data-testid="adjust-range-btn" title="Choose which part of the source this clip plays (slip); its place and length stay (Alt+drag on the clip)" onClick={() => setRangeFor({ id: pl.id })}><Ic g="⇔" size={16} /> Adjust range</button>
+      <button className="v2-btn" data-testid="replace-asset-btn" title="Swap this clip's media for another of the same kind; everything else stays" onClick={() => setRangeFor({ id: pl.id, picker: true })}><Ic g="⇄" size={16} /> Replace asset</button></div></section> : null;
     const transform: InspectorTab = { id: "basic", label: "Basic", icon: "⤧", render: () => kind === "video" && !pl.freeze && !linkSec ? <>{rangeSec}
       <section className="v2-psettings v2-frames-sec" aria-label="In and out frames"><h4>In / out frames</h4><ClipFrames engine={engine} project={project} placement={pl} /></section>
       <TransformInspector engine={engine} placement={pl} time={time} />
@@ -1153,6 +1171,21 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
             {mobileTools[activeMenu]}
           </nav>
           {pickerEl}
+          {barSheet && selected && <Sheet label={barSheet === "trim" ? "Trim" : barSheet === "audio" ? "Audio" : "More"} className="v2-msheet-insp v2-bar-sheet" snaps={barSheet === "more" ? [0.3, 0.55, 0.9] : [0.3, 0.42, 0.9]} onClose={() => setBarSheet(undefined)}>
+            {barSheet === "trim" ? <ActionGrid groups={[{ title: "Trim to the playhead", items: [
+              { key: "trim-start", icon: "trim-start", label: "Start", title: "Trim start to playhead: the clip starts here (Q)", run: () => { trimToPlayhead("left"); setBarSheet(undefined); } },
+              { key: "trim-end", icon: "trim-end", label: "End", title: "Trim end to playhead: the clip ends here (W)", run: () => { trimToPlayhead("right"); setBarSheet(undefined); } }] }]} />
+            : barSheet === "audio" ? <div className="v2-audio-sheet">
+              {selected.placement.clipType !== "image" && selected.placement.clipType !== "text" && selected.placement.clipType !== "effect" && volumeRow(selected.placement)}
+              <ActionGrid groups={[{ title: "Sound", items: [
+                ...(selected.placement.clipType === "video" ? [{ key: "mute-clip", icon: selected.placement.linkedAudio?.muted ? "🔇" : "🔊", label: "Mute", title: selected.placement.linkedAudio?.muted ? "Play this clip's own audio again" : "Silence only this clip's own audio", active: !!selected.placement.linkedAudio?.muted, run: () => engine.dispatch(cmd.setLinkedAudioMuted(selected.placement.id, !selected.placement.linkedAudio?.muted)) }] : []),
+                { key: "vcurve", icon: "curve", label: "Curve", title: "Volume points over the waveform, and fades", run: () => { setBarSheet(undefined); setVcOpen(true); } },
+                { key: "afx", icon: "afx", label: "Audio FX", title: "Echo, telephone, radio, robot…", run: () => { setBarSheet(undefined); setAfxOpen(true); } },
+                { key: "position", icon: "spatial", label: "Position", title: "Where the sound sits: left, right, behind, near or far", run: () => { setBarSheet(undefined); setPosOpen(true); } },
+              ] }]} />
+            </div>
+            : <ActionGrid groups={clipBar.more.map((g) => ({ ...g, items: g.items.map((a) => ({ ...a, run: () => { if (a.key !== "ripple" && a.key !== "snap" && a.key !== "mute-track" && a.key !== "reverse") setBarSheet(undefined); a.run(); } })) }))} />}
+          </Sheet>}
           {sheet && <Sheet label="Media" head={false} onClose={() => setSheet(false)}>{browser}</Sheet>}
           {!sheet && <div hidden>{browser}</div>}
           {cue && <div className="v2-msub"><SubtitleEditor engine={engine} sub={cue} onDelete={delCue} /></div>}

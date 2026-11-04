@@ -287,17 +287,21 @@ describe("V2App", () => {
       expect(labels()).toEqual(["Edit", "Audio", "Text", "Effect", "Overlay", "Project"]);
       const tap = async (name: string) => { await act(async () => { ([...el.querySelectorAll(".v2-toolbar .v2-tool")].find((b) => b.textContent === name) as HTMLButtonElement).click(); }); };
       await tap("Audio");
-      expect(labels()).toEqual(["Add audio", "Create audio"]);
+      expect([...el.querySelectorAll(".v2-toolbar .v2-tool b")].every((b) => b.querySelector("svg.v2-ic"))).toBe(true);
+      expect(labels()).toEqual(["Add", "Create"]);
       await act(async () => { (el.querySelector(".v2-tool-back") as HTMLButtonElement).click(); });
       expect(labels()).toEqual(["Edit", "Audio", "Text", "Effect", "Overlay", "Project"]);
       await tap("Project");
       expect(document.body.textContent).toMatch(/Auto-link new clips/);
       await act(async () => { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
       await tap("Text");
-      expect(labels()).toEqual(expect.arrayContaining(["Add text", "Stickers", "Import SRT", "Templates"]));
+      expect([...el.querySelectorAll(".v2-toolbar .v2-tool b")].every((b) => b.querySelector("svg.v2-ic"))).toBe(true);
+      expect(labels()).toEqual(expect.arrayContaining(["Add", "Stickers", "Import", "Subtitles", "Export", "Template"]));
       await act(async () => { (el.querySelector(".v2-tool-back") as HTMLButtonElement).click(); });
       await tap("Overlay");
-      expect(labels()).toEqual(["Add overlay"]);
+      expect(labels()).toEqual(["Add"]);
+      // P32: every bar icon is a monochrome SVG line icon (no emoji / text glyphs).
+      expect([...el.querySelectorAll(".v2-toolbar .v2-tool b")].every((b) => b.querySelector("svg.v2-ic"))).toBe(true);
     } finally { window.matchMedia = mm; }
   });
 
@@ -353,7 +357,8 @@ describe("V2App", () => {
     window.matchMedia = ((q: string) => ({ matches: true, media: q, addEventListener() {}, removeEventListener() {} })) as never;
     try {
       const el = await mountSlip();
-      const tool = Array.from(el.querySelectorAll("button")).find((b) => b.textContent?.trim() === "In point") as HTMLButtonElement;
+      await act(async () => { (el.querySelector('.v2-toolbar [data-tool="more"]') as HTMLButtonElement).click(); });
+      const tool = Array.from(document.querySelectorAll(".v2-agrid-btn")).find((b) => b.textContent?.trim() === "In point") as HTMLButtonElement;
       expect(tool).toBeTruthy();
       await act(async () => { tool.click(); });
       const sheet = document.querySelector('[role="dialog"][aria-label="In point"]') as HTMLElement ?? document.querySelector(".v2-inpoint")!.closest(".v2-msheet-insp") as HTMLElement;
