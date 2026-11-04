@@ -5,7 +5,7 @@
  * audio clipping / silence (the export audio mix).
  */
 import { captureFrameAt, storePickedFrame } from "../storyboard/frameCapture";
-import { audioOutputOf, board, ops, promote, findPlacement, slip, newId, panToAzimuth, positionErrors, secondsToTicks, timelineReview, type Placement, type Project } from "../../domain";
+import { audioOutputOf, board, mergeLayer, ops, promote, findPlacement, slip, newId, panToAzimuth, positionErrors, secondsToTicks, timelineReview, type Placement, type Project } from "../../domain";
 import { getPreset, listPresets } from "../../registry";
 import { cmd, type Command, type Engine } from "../../engine";
 import type { BlobStore } from "../../ports";
@@ -295,6 +295,24 @@ export async function runTimelineTool(engine: Engine, source: FrameSource | unde
       const changed = engine.dispatch(cmd.promoteOverlay(id, opts), name);
       const main = ops.mainTrack(rootOf(project()));
       return { ok: true, changed, text: JSON.stringify({ notes: plan.notes, mainTrack: main?.placements.map((x) => clip(x.id)) }, null, 1) };
+    }
+    case "merge_layer_up": {
+      const id = s("trackId"), comp = rootOf(project()), target = s("targetTrackId");
+      if (!id || !comp.tracks.some((t) => t.id === id)) return fail(`No track "${id ?? ""}". Call get_timeline for track ids.`);
+      let plan: mergeLayer.MergePlan;
+      try { plan = mergeLayer.planMergeUp(comp, id, target); } catch (err) { return fail(err instanceof Error ? err.message : String(err)); }
+      const conflicts = plan.conflicts.map((c) => ({ clipId: c.incomingId, overlaps: c.existingIds, startSec: c.startTicks / 120000, endSec: c.endTicks / 120000 }));
+      const r = a.resolve, ok = (v: unknown) => typeof v === "string" && (mergeLayer.MERGE_RESOLVES as string[]).includes(v);
+      if (r !== undefined && !ok(r) && !(r && typeof r === "object" && !Array.isArray(r) && Object.values(r).every(ok))) return fail(`"resolve" must be one of ${mergeLayer.MERGE_RESOLVES.join(", ")} or { clipId: one of them }.`);
+      const resolve = r as mergeLayer.MergeOptions["resolve"];
+      const missing = plan.conflicts.filter((c) => !(typeof resolve === "string" || (resolve && (resolve as Record<string, string>)[c.incomingId]))).map((c) => c.incomingId);
+      if (a.dryRun === true || missing.length) {
+        const text = JSON.stringify({ source: plan.source.id, target: plan.target.id, conflicts }, null, 1);
+        return a.dryRun === true ? { ok: true, changed: false, text } : fail(`Clips ${missing.join(", ")} overlap clips on ${plan.target.id}: call again with "resolve" (${mergeLayer.MERGE_RESOLVES.join(" | ")}, or per clip). ${text}`);
+      }
+      const changed = engine.dispatch(cmd.mergeLayerUp(id, { targetTrackId: target, resolve }), name);
+      const t = rootOf(project()).tracks.find((x) => x.id === plan.target.id);
+      return { ok: true, changed, text: JSON.stringify({ target: plan.target.id, removed: id, clips: t?.placements.map((x) => clip(x.id)) }, null, 1) };
     }
     case "delete_clip": {
       const ids = Array.isArray(a.ids) ? a.ids.filter((x): x is string => typeof x === "string") : [];

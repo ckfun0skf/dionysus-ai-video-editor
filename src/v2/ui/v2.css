@@ -528,7 +528,7 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 /* V2-094 layer controls + confirm dialog */
 .v2-layer-ctl { display: inline-flex; gap: 2px; flex-shrink: 0; }
 .v2-layer-ctl .v2-icon { min-width: 32px; min-height: 32px; }
-.v2-layer-ctl .is-off { color: var(--accent); }
+.v2-layer-ctl .is-off { background: rgba(255, 255, 255, .14); }
 .v2-danger-icon:hover, .v2-danger-icon:focus-visible { background: rgba(255, 92, 92, .16); }
 .v2-lane.is-hidden .v2-clip { opacity: .35; filter: grayscale(.6); }
 .v2-confirm-backdrop { background: rgba(0,0,0,.5); display: grid; place-items: center; }
@@ -1294,3 +1294,18 @@ select.v2-tp-field { -webkit-appearance: none; appearance: none; padding-right: 
 .v2-agrid-btn.is-active { background: rgba(255,255,255,.18); }
 .v2-audio-sheet { display: flex; flex-direction: column; gap: 8px; padding-top: 4px; }
 .v2-audio-sheet .v2-insp-sf { padding: 0 12px; }
+
+/* P32 Merge up: layer button + conflict dialog (✕ / ✓ head, one row per overlap, segmented choice ≥44px). */
+.v2-layer-ctl .v2-merge-up:disabled { opacity: .35; cursor: default; }
+.v2-merge { width: min(440px, 94vw); max-height: 86vh; display: flex; flex-direction: column; padding: 8px 12px 14px; }
+.v2-merge-head { display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; gap: 4px; margin-bottom: 4px; }
+.v2-merge-head h4 { margin: 0; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.v2-merge-head .v2-icon { min-width: 44px; min-height: 44px; display: grid; place-items: center; }
+.v2-merge-ok { color: var(--text, #e8e8ec); background: rgba(255,255,255,.1); border-radius: 10px; }
+.v2-merge-list { overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+.v2-merge-row { display: flex; flex-direction: column; gap: 6px; }
+.v2-merge-all { padding-bottom: 10px; margin-bottom: 10px; border-bottom: 1px solid var(--line); }
+.v2-merge-what { font-size: 12px; color: var(--muted); } .v2-merge-what b { color: var(--text); font-weight: 600; }
+.v2-merge-seg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.v2-merge-opt { min-height: 44px; padding: 4px; border-radius: 8px; border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.04); color: var(--text, #e8e8ec); font: inherit; font-size: 12px; line-height: 1.15; cursor: pointer; }
+.v2-merge-opt.is-active { background: rgba(255,255,255,.18); border-color: rgba(255,255,255,.28); }

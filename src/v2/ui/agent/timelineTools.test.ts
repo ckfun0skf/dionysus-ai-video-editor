@@ -246,4 +246,32 @@ describe("P27 replace_clip_asset on a storyboard shot clip", () => {
     e.undo();
     expect(P().assets[shotAsset].versions).toHaveLength(1);
   });
+
+  it("P32 merge_layer_up: lists conflicts, needs resolve, dryRun changes nothing, one undo step", async () => {
+    const e = setup();
+    e.dispatch(cmd.addTrack("video")); e.dispatch(cmd.addTrack("video"));
+    const vids = () => root(e.getState().project).tracks.filter((t) => t.kind === "video");
+    const [top, mid] = vids();
+    e.dispatch(cmd.addAssetToTimeline("w", 0, top.id, "a1"));
+    e.dispatch(cmd.addAssetToTimeline("w", s(2), mid.id, "b1"));
+    const n = vids().length;
+    let r = await runTimelineTool(e, undefined, "merge_layer_up", { trackId: "nope" });
+    expect(r.ok).toBe(false);
+    r = await runTimelineTool(e, undefined, "merge_layer_up", { trackId: mid.id });
+    expect(r.ok).toBe(false);
+    expect(r.text).toContain("b1");
+    r = await runTimelineTool(e, undefined, "merge_layer_up", { trackId: mid.id, dryRun: true });
+    expect(r.ok && !r.changed).toBe(true);
+    expect(json(r.text).conflicts[0]).toMatchObject({ clipId: "b1", overlaps: ["a1"] });
+    expect(vids().length).toBe(n);
+    r = await runTimelineTool(e, undefined, "merge_layer_up", { trackId: mid.id, resolve: "bogus" });
+    expect(r.ok).toBe(false);
+    r = await runTimelineTool(e, undefined, "merge_layer_up", { trackId: mid.id, resolve: { b1: "shift" } });
+    expect(r.ok && r.changed).toBe(true);
+    expect(vids().length).toBe(n - 1);
+    expect(json(r.text).clips.map((c: { id: string; start: number }) => [c.id, c.start])).toEqual([["a1", 0], ["b1", 4]]);
+    e.undo();
+    expect(vids().length).toBe(n);
+    expect(ALL_AGENT_TOOLS.some((t) => t.name === "merge_layer_up")).toBe(true);
+  });
 });

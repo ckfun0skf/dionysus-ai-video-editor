@@ -36,6 +36,7 @@ export * from "./codeWizard";
 export * as storyAgent from "./storyAgent";
 export * as timelineReview from "./timelineReview";
 export * as promote from "./promote";
+export * as mergeLayer from "./mergeLayer";
 export * as storyInsert from "./storyInsert";
 export { storyboardGuideMarkdown } from "./aiGuide";
 export * as series from "./series";
