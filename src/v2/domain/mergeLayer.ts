@@ -15,7 +15,7 @@
  *                    overlap (a ripple on the target layer only).
  */
 import type { Composition, Placement, Track } from "./model";
-import { groupOf, type TrackGroup } from "./ops";
+import { groupOf, trimPlacement, type TrackGroup } from "./ops";
 import { effectivePlacement } from "./layerStyle";
 import { cutPart } from "./promote";
 
@@ -123,6 +123,29 @@ export function keepPrimary(l: MergeLayout, primaryId: string, ids: () => string
   return { upper: sortP(cut(l.upper)), incoming: sortP(cut(l.incoming)) };
 }
 
+/** Remove every overlap of `id` by trimming (or splitting) `id` itself; the other clips stay. */
+export function trimThis(l: MergeLayout, id: string, ids: () => string): MergeLayout {
+  const all = [...l.upper, ...l.incoming], me = all.find((p) => p.id === id);
+  if (!me) return l;
+  let parts = [me];
+  for (const o of all) if (o.id !== id) parts = carve(parts, o.startTicks, end(o), ids);
+  const swap = (xs: Placement[]) => (xs.some((p) => p.id === id) ? sortP([...xs.filter((p) => p.id !== id), ...parts]) : xs);
+  return { upper: swap(l.upper), incoming: swap(l.incoming) };
+}
+
+/** Drag a clip edge in the dialog: the same rules as the timeline trim (source bounds, never past a neighbour on its lane). */
+export function trimInLayout(l: MergeLayout, id: string, edge: "left" | "right", toTicks: number, maxSourceTicks?: number): MergeLayout {
+  const lane = l.upper.some((p) => p.id === id) ? "upper" : "incoming";
+  const comp = { id: "merge-lane", durationTicks: 0, tracks: [{ id: "lane", name: "lane", kind: "video", placements: l[lane] }] } as unknown as Composition;
+  return { ...l, [lane]: trimPlacement(comp, id, edge, toTicks, maxSourceTicks).tracks[0].placements };
+}
+
+/** The composition as it would look after the merge with this layout (overlaps allowed: used for the live preview). */
+export function previewLayout(comp: Composition, plan: MergePlan, l: MergeLayout): Composition {
+  const tgt = sortP([...l.upper, ...l.incoming]);
+  return { ...comp, tracks: comp.tracks.filter((t) => t.id !== plan.source.id).map((t) => (t.id === plan.target.id ? { ...t, placements: tgt } : t)) };
+}
+
 export interface MergeOptions { targetTrackId?: string; resolve?: MergeResolve | Record<string, MergeResolve>; ids?: () => string; /** P33: apply this dialog layout instead of `resolve`. */ layout?: MergeLayout }
 export interface MergeResult { comp: Composition; plan: MergePlan; /** Incoming clips dropped because nothing of them fit (trimIncoming). */ dropped: string[] }
 
@@ -135,9 +158,7 @@ export function mergeLayerUp(comp: Composition, trackId: string, opts: MergeOpti
   if (opts.layout) {
     const bad = layoutOverlaps(opts.layout);
     if (bad.length) throw new Error(`${bad.length} overlap(s) left: move or trim clips until none remain`);
-    const tgt = sortP([...opts.layout.upper, ...opts.layout.incoming]);
-    const tracks = comp.tracks.filter((t) => t.id !== plan.source.id).map((t) => (t.id === plan.target.id ? { ...t, placements: tgt } : t));
-    return { comp: { ...comp, tracks }, plan, dropped: plan.source.placements.filter((p) => !opts.layout!.incoming.some((q) => q.id === p.id)).map((p) => p.id) };
+    return { comp: previewLayout(comp, plan, opts.layout), plan, dropped: plan.source.placements.filter((p) => !opts.layout!.incoming.some((q) => q.id === p.id)).map((p) => p.id) };
   }
   let n = 0;
   const ids = opts.ids ?? (() => `${trackId}-m${++n}-${Math.random().toString(36).slice(2, 7)}`);

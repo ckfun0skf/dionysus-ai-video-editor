@@ -3048,6 +3048,12 @@
           "title": "Phone layer list top-down like desktop so Merge up goes into the row visually above; only the top row of a group is disabled; rule 58 / WebMCP wording",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P34-MERGE-DIALOG",
+          "title": "Merge conflict panel: opens on the first overlap with Previous/Next (n of N); dim / yellow / green clip states; timeline clip look (thumbnails, filmstrip), pinch & Ctrl+wheel zoom, drag, edge trim/extend; docked so the real preview shows the merged frame with scrub/play; selection-only Trim this / Trim others",
+          "status": "done",
+          "progress": 100
         }
       ]
     }
