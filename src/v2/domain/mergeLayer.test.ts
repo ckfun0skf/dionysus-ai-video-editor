@@ -3,6 +3,7 @@ import { Engine, cmd } from "../engine";
 import { createProject, type Composition, type Placement } from "./model";
 import * as ops from "./ops";
 import { canMergeUp, mergeLayerUp, mergeTarget, planMergeUp } from "./mergeLayer";
+import * as mergeLayer from "./mergeLayer";
 
 const S = 120000;
 const vid = (id: string, start: number, dur: number): Placement => ({ id, startTicks: start * S, durationTicks: dur * S, sourceInTicks: 0, clipType: "image", source: { kind: "assetVersion", assetId: id, versionId: id } } as Placement);
@@ -94,5 +95,30 @@ describe("merge layer up (P32)", () => {
     expect(comp().tracks.length).toBe(before - 1);
     e.undo();
     expect(comp().tracks.length).toBe(before);
+  });
+});
+
+describe("P33 dialog layout", () => {
+  const P = (id: string, s: number, d: number) => ({ id, clipType: "text", startTicks: s, durationTicks: d, text: { text: id } }) as never;
+  const comp = { id: "r", durationTicks: 0, tracks: [
+    { id: "top", name: "T2", kind: "text", placements: [P("a", 0, 240000)] },
+    { id: "low", name: "T1", kind: "text", placements: [P("b", 120000, 240000)] },
+  ] } as never;
+  const ids = () => "x1";
+  it("overlaps are found, keepPrimary trims the other, moveInLayout clamps at 0", () => {
+    const l = mergeLayer.initialLayout(mergeLayer.planMergeUp(comp, "low"));
+    expect(mergeLayer.layoutOverlaps(l)).toEqual([{ a: "a", b: "b", startTicks: 120000, endTicks: 240000 }]);
+    const kb = mergeLayer.keepPrimary(l, "b", ids);
+    expect(kb.upper.map((p) => [p.startTicks, p.durationTicks])).toEqual([[0, 120000]]);
+    expect(mergeLayer.layoutOverlaps(kb)).toEqual([]);
+    expect(mergeLayer.moveInLayout(l, "b", -5).incoming[0].startTicks).toBe(0);
+  });
+  it("mergeLayerUp applies a clear layout in one step and refuses one with overlaps", () => {
+    const l = mergeLayer.initialLayout(mergeLayer.planMergeUp(comp, "low"));
+    expect(() => mergeLayer.mergeLayerUp(comp, "low", { layout: l })).toThrow(/overlap/);
+    const moved = mergeLayer.moveInLayout(l, "b", 240000);
+    const r = mergeLayer.mergeLayerUp(comp, "low", { layout: moved });
+    expect(r.comp.tracks.map((t) => t.id)).toEqual(["top"]);
+    expect(r.comp.tracks[0].placements.map((p) => [p.id, p.startTicks])).toEqual([["a", 0], ["b", 240000]]);
   });
 });

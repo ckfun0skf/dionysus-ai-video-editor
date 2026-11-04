@@ -6,6 +6,8 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { mergeLayer, type Composition } from "../domain";
 import { LayerControls } from "./Timeline";
 import { MergeDialog } from "./MergeDialog";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 beforeAll(() => { (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true; });
 afterEach(() => { document.body.innerHTML = ""; });
@@ -30,7 +32,7 @@ describe("P32 merge up UI", () => {
     expect(el.querySelector(".v2-merge-up")).toBeNull();
   });
 
-  it("dialog lists each overlap, 'All clips' sets every choice, ✓ applies them; ✕ / Escape cancel", async () => {
+  it("P33 dialog: two lanes, red hatching on overlaps, ✓ disabled until clear; Keep trims the other; drag snaps; ✕ / Escape cancel", async () => {
     const comp: Composition = {
       id: "r", durationTicks: 0, tracks: [
         { id: "top", name: "Text 2", kind: "text", placements: [{ id: "a", clipType: "text", startTicks: 0, durationTicks: 240000, text: { text: "Hello" } } as never] },
@@ -40,22 +42,45 @@ describe("P32 merge up UI", () => {
       ],
     } as never;
     const plan = mergeLayer.planMergeUp(comp, "low");
-    expect(plan.conflicts.length).toBe(2);
     const apply = vi.fn(), cancel = vi.fn();
-    const el = await render(<MergeDialog comp={comp} plan={plan} onApply={apply} onCancel={cancel} />);
-    expect(el.querySelectorAll(".v2-merge-list .v2-merge-row").length).toBe(2);
-    expect(el.textContent).toContain("World");
+    const el = await render(<MergeDialog plan={plan} onApply={apply} onCancel={cancel} />);
+    const upper = el.querySelector('[data-lane="upper"]')!, incoming = el.querySelector('[data-lane="incoming"]')!;
+    expect([...upper.querySelectorAll("[data-clip]")].map((c) => c.getAttribute("data-clip"))).toEqual(["a"]);
+    expect([...incoming.querySelectorAll("[data-clip]")].map((c) => c.getAttribute("data-clip"))).toEqual(["c", "b"]);
+    expect(el.textContent).toContain("Upper · Text 2");
+    expect(upper.querySelectorAll(".v2-merge-hatch").length).toBe(2);
     expect(el.textContent).not.toMatch(/\p{Extended_Pictographic}/u);
-    const row = (id: string) => el.querySelector(`[data-incoming="${id}"]`)!;
-    expect(row("b").querySelector('[aria-checked="true"]')!.textContent).toBe("Move it later");
-    const all = el.querySelector(".v2-merge-all")!;
-    await click([...all.querySelectorAll("button")].find((b) => b.textContent === "Trim existing")!);
-    await click([...row("c").querySelectorAll("button")].find((b) => b.textContent === "Push later")!);
-    await click(el.querySelector('[aria-label="Apply merge"]'));
-    expect(apply).toHaveBeenCalledWith({ b: "trimExisting", c: "pushLater" });
+    const ok = () => el.querySelector<HTMLButtonElement>('[aria-label="Apply merge"]')!;
+    expect(ok().disabled).toBe(true);
+    // Keep "Hello" whole: World and Again are trimmed away under it -> one overlap pair gone each.
+    await click(el.querySelector('.v2-merge-row [data-keep="a"]'));
+    expect(el.querySelectorAll(".v2-merge-hatch").length).toBe(0);
+    expect(ok().disabled).toBe(false);
+    await click(ok());
+    const lay = apply.mock.calls[0][0] as mergeLayer.MergeLayout;
+    expect(lay.upper.map((p) => [p.id, p.startTicks])).toEqual([["a", 0]]);
+    expect(lay.incoming.map((p) => [p.startTicks, p.durationTicks])).toEqual([[240000, 120000]]);
+    // Reset, then drag World right with the pointer: it snaps its start to Hello's end (2.0s).
+    await click(el.querySelector('[aria-label="Reset"]'));
+    expect(ok().disabled).toBe(true);
+    const w = () => el.querySelector<HTMLElement>('[data-clip="b"]')!;
+    const pps = parseFloat(w().style.width) / 2; // World is 2s long
+    const ptr = (type: string, x: number) => act(async () => { w().dispatchEvent(Object.assign(new MouseEvent(type, { bubbles: true, clientX: x }), { pointerId: 1 })); });
+    await ptr("pointerdown", 100); await ptr("pointermove", 100 + pps * 0.97); await ptr("pointerup", 100 + pps * 0.97);
+    expect(parseFloat(w().style.left)).toBeCloseTo(pps * 2, 0);
+    await click(el.querySelector('.v2-merge-row [data-keep="a"]')); // Again still overlaps Hello
+    expect(ok().disabled).toBe(false);
     await click(el.querySelector('[aria-label="Cancel merge"]'));
     await act(async () => { dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })); });
     expect(cancel).toHaveBeenCalledTimes(2);
   });
+
+  it("P33 touch targets: clips, keep buttons, zoom and header are 44px+", () => {
+    const css = readFileSync(resolve(__dirname, "v2.css"), "utf8");
+    for (const sel of [".v2-merge-clip", ".v2-merge-lane", ".v2-merge-hatch"]) expect(css).toMatch(new RegExp(`\\${sel} \\{[^}]*height: 44px`));
+    for (const sel of [".v2-merge-keep", ".v2-merge-tools .v2-icon", ".v2-merge-head .v2-icon"]) expect(css).toMatch(new RegExp(`${sel.replace(/\./g, "\\.")} \\{[^}]*min-height: 44px`));
+    expect(css).toMatch(/repeating-linear-gradient\(45deg, rgba\(239,68,68/);
+  });
+
 
 });

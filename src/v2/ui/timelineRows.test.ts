@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createProject, ops } from "../domain";
+import { createProject, mergeLayer, ops } from "../domain";
 import { GROUP_COLOR, hiddenRanges, layerSlot, buildRows } from "./Timeline";
 
 const comp = () => {
@@ -16,11 +16,11 @@ describe("timeline rows", () => {
     const c = comp();
     expect(sig(buildRows(c, true))).toEqual([ops.mainTrack(c)!.id, "collapsed:overlay", "collapsed:audio", "collapsed:text"]);
   });
-  it("mobile expanded: layers listed bottom-up (lower row draws higher)", () => {
+  it("P33 mobile expanded: layers listed top-down like desktop (top row = top layer, index 0)", () => {
     const c = comp();
-    expect(sig(buildRows(c, true, "overlay")).slice(1, 3)).toEqual(["o1", "o2"]);
+    expect(sig(buildRows(c, true, "overlay")).slice(1, 3)).toEqual(["o2", "o1"]);
     const text = sig(buildRows(c, true, "text"));
-    expect(text.slice(-3)).toEqual(["t1", "s1", "add:text"]); // P1-ADD-TRACK: [+] row last
+    expect(text.slice(-3)).toEqual(["s1", "t1", "add:text"]); // P1-ADD-TRACK: [+] row last
     expect(text.some((r) => r.startsWith("header"))).toBe(false); // V2-099: no in-timeline group pill on mobile
   });
   it("focused mode shows only main + the active group; hidden groups become range lines", () => {
@@ -62,5 +62,16 @@ describe("effect group (V2-101)", () => {
     expect(buildRows(comp, true, "effect", "effect").map((r) => `${r.type}:${r.group}`)).toEqual(["track:main", "track:effect", "add:effect"]);
     const y = createProject("y");
     expect(buildRows(y.compositions[y.rootCompositionId], true).some((r) => r.group === "effect")).toBe(false);
+  });
+  it("P33 merge up = into the row visually directly above, on phone and desktop; only the top row of a group is disabled", () => {
+    let c = comp();
+    c = ops.addTrack(c, "video", "o3");
+    for (const [mobile, focus] of [[true, "overlay"], [false, undefined]] as const) {
+      const rows = buildRows(c, mobile, mobile ? "overlay" : undefined, focus).filter((r) => r.type === "track" && ops.groupOf(c, r.t) === "overlay").map((r) => (r as { t: { id: string } }).t.id);
+      expect(rows.length).toBe(3);
+      expect(mergeLayer.mergeTarget(c, rows[0])).toBeUndefined();
+      for (let k = 1; k < rows.length; k++) expect(mergeLayer.mergeTarget(c, rows[k])?.id).toBe(rows[k - 1]);
+      expect(rows[0]).toBe(c.tracks.find((t) => ops.groupOf(c, t) === "overlay")!.id); // top row = z-order top (index 0)
+    }
   });
 });
