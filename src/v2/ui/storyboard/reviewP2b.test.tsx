@@ -182,10 +182,11 @@ describe("storyboard review P2 (second batch)", () => {
     expect(src).toContain("v2-sb-inuse");
   });
 
-  it("phones: the clip toolbar shows Storyboard before Split for linked clips", () => {
+  it("phones: linked clips lead the More sheet's Source group with Storyboard (P32 bar)", () => {
     const src = readFileSync(resolve(__dirname, "../V2App.tsx"), "utf8");
-    expect(src.indexOf('"open-story"')).toBeGreaterThan(0);
-    expect(src.indexOf('"open-story"')).toBeLessThan(src.lastIndexOf('tool("✂", "Split", split)'));
-    expect(src.indexOf('"open-story"')).toBeLessThan(src.indexOf('tool("☑", "Select"'));
+    const at = src.indexOf('{ title: "Source", items: keep([');
+    expect(at).toBeGreaterThan(0);
+    expect(src.indexOf('A("storyboard"', at)).toBeGreaterThan(at);
+    expect(src.indexOf('A("storyboard"', at)).toBeLessThan(src.indexOf('A("range"', at));
   });
 });

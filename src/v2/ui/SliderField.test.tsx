@@ -3,7 +3,6 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { SliderField, parseNum, snapToStep } from "./SliderField";
-import { VolumeHold, HOLD_MS, HOLD_TRAVEL_PX } from "./VolumeHold";
 
 beforeAll(() => { (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true; });
 afterEach(() => { vi.useRealTimers(); });
@@ -86,35 +85,3 @@ describe("SliderField", () => {
   });
 });
 
-describe("VolumeHold", () => {
-  it("press-and-hold shows the meter and vertical drag sets the volume in one gesture", async () => {
-    vi.useFakeTimers();
-    const el = document.createElement("div"); document.body.appendChild(el);
-    const root = createRoot(el); const calls: number[] = []; const log: string[] = []; let v = 0.5;
-    const render = () => root.render(<VolumeHold value={v} onChange={(x) => { calls.push(x); v = x; render(); }} onBegin={() => log.push("b")} onEnd={() => log.push("e")} />);
-    await act(async () => render());
-    const label = el.querySelector(".v2-volume") as HTMLElement;
-    (label as unknown as { setPointerCapture: () => void }).setPointerCapture = () => {};
-    await act(async () => { label.dispatchEvent(ptr("pointerdown", { clientY: 300 })); vi.advanceTimersByTime(HOLD_MS + 10); });
-    expect(document.querySelector('[data-testid="volume-meter"]')?.textContent).toContain("50%");
-    const tm = new Event("touchmove", { cancelable: true }); label.dispatchEvent(tm);
-    expect(tm.defaultPrevented).toBe(true);
-    await act(async () => { label.dispatchEvent(ptr("pointermove", { clientY: 300 - HOLD_TRAVEL_PX / 4 })); });
-    expect(calls.at(-1)).toBeCloseTo(0.75);
-    expect(document.querySelector('[data-testid="volume-meter"]')?.textContent).toContain("75%");
-    await act(async () => { label.dispatchEvent(ptr("pointerup")); });
-    expect(document.querySelector('[data-testid="volume-meter"]')).toBeNull();
-    expect(log).toEqual(["b", "e"]);
-  });
-  it("a tap does not open the meter or block scroll", async () => {
-    vi.useFakeTimers();
-    const el = document.createElement("div"); document.body.appendChild(el);
-    const root = createRoot(el);
-    await act(async () => root.render(<VolumeHold value={1} onChange={() => {}} />));
-    const label = el.querySelector(".v2-volume") as HTMLElement;
-    await act(async () => { label.dispatchEvent(ptr("pointerdown", { clientY: 10 })); label.dispatchEvent(ptr("pointerup")); vi.advanceTimersByTime(1000); });
-    expect(document.querySelector('[data-testid="volume-meter"]')).toBeNull();
-    const tm = new Event("touchmove", { cancelable: true }); label.dispatchEvent(tm);
-    expect(tm.defaultPrevented).toBe(false);
-  });
-});

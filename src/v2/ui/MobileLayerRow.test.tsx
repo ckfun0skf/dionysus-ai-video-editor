@@ -55,7 +55,7 @@ describe("V2-105 mobile layer row + Edit subtitles entry points", () => {
       const { el, tool, importSrt } = await mount(width);
       await act(async () => { tool("Text")!.click(); });
       await importSrt();
-      await act(async () => { tool("Add text")!.click(); });
+      await act(async () => { tool("Add")!.click(); });
       const side = el.querySelector('[data-testid="side-col"]') as HTMLElement;
       // Column itself is on screen.
       const colLeft = parseFloat(side.style.left);
@@ -85,23 +85,23 @@ describe("V2-105 mobile layer row + Edit subtitles entry points", () => {
     const { el, tool, importSrt } = await mount(412);
     await act(async () => { tool("Text")!.click(); });
     const labels = () => [...el.querySelectorAll(".v2-toolbar .v2-tool span")].map((x) => x.textContent);
-    expect(labels()).toEqual(["Add text", "Stickers", "Import SRT", "Edit subtitles", "Export SRT", "Templates"]);
-    await act(async () => { tool("Edit subtitles")!.click(); });
+    expect(labels()).toEqual(["Add", "Stickers", "Import", "Subtitles", "Export", "Template"]);
+    await act(async () => { tool("Subtitles")!.click(); });
     expect(el.querySelector(".v2-toast")?.textContent).toMatch(/No subtitles yet/);
     await importSrt();
-    await act(async () => { tool("Edit subtitles")!.click(); });
+    await act(async () => { tool("Subtitles")!.click(); });
     expect(el.querySelectorAll(".v2-cue").length).toBe(2);
     await act(async () => { (el.querySelector('[aria-label="Close Edit subtitles"]') as HTMLButtonElement | null)?.click(); });
     await importSrt();
     // V2-111 P2-6: straight after Import SRT, Edit subtitles opens the new layer (no picker detour)…
     const before = el.querySelectorAll(".v2-cue").length;
-    await act(async () => { tool("Edit subtitles")!.click(); });
+    await act(async () => { tool("Subtitles")!.click(); });
     expect(el.querySelector('[aria-label="Choose a text layer"]')).toBeNull();
     expect(el.querySelectorAll(".v2-cue").length).toBe(2);
     expect(before).toBe(0);
     await act(async () => { (el.querySelector('[aria-label="Close Edit subtitles"]') as HTMLButtonElement | null)?.click(); });
     // …after that, with several layers, it asks which one.
-    await act(async () => { tool("Edit subtitles")!.click(); });
+    await act(async () => { tool("Subtitles")!.click(); });
     const pick = el.querySelector('[aria-label="Choose a text layer"]')!;
     expect(pick).toBeTruthy();
     const opts = pick.querySelectorAll(".v2-subs-pick-row");
@@ -120,7 +120,22 @@ describe("V2-105 mobile layer row + Edit subtitles entry points", () => {
     const id = second.dataset.placementId!;
     await act(async () => { second.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true })); window.dispatchEvent(new MouseEvent("pointerup")); });
     const labels = [...el.querySelectorAll(".v2-toolbar .v2-tool span")].map((x) => x.textContent);
-    expect(labels).toEqual(expect.arrayContaining(["Split", "Delete", "Edit text", "Animation", "Subtitles", "Adjust"]));
+    expect(labels).toEqual(["Split", "Trim", "Delete", "Style", "Animate", "Subtitles", "More"]);
+    // P32: fixed-width cells, SVG line icons only; Trim and More open sheets with ≥44px rows.
+    const svgOnly = (sel: string) => [...document.querySelectorAll(sel)].every((b) => b.querySelector("svg.v2-ic"));
+    expect(svgOnly(".v2-toolbar .v2-tool b")).toBe(true);
+    await act(async () => { tool("Trim")!.click(); });
+    expect([...document.querySelectorAll(".v2-agrid-btn span")].map((x) => x.textContent)).toEqual(["Start", "End"]);
+    await act(async () => { (document.querySelector('[aria-label="Close Trim"]') as HTMLButtonElement | null)?.click(); });
+    await act(async () => { tool("More")!.click(); });
+    expect(svgOnly(".v2-agrid-btn b")).toBe(true);
+    const ripple = document.querySelector('.v2-agrid-btn[data-tool="ripple"]') as HTMLButtonElement;
+    const was = ripple.getAttribute("aria-pressed");
+    await act(async () => { ripple.click(); });
+    const now = document.querySelector('.v2-agrid-btn[data-tool="ripple"]')!;
+    expect(now.getAttribute("aria-pressed")).not.toBe(was);
+    expect(now.textContent).toBe("Ripple");
+    await act(async () => { (document.querySelector('[aria-label="Close More"]') as HTMLButtonElement | null)?.click(); });
     await act(async () => { tool("Subtitles")!.click(); });
     const row = el.querySelector(`.v2-cue[data-cue="${id}"]`)!;
     expect(row.classList.contains("is-target")).toBe(true);

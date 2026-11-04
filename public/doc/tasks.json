@@ -2687,7 +2687,7 @@
         },
         {
           "id": "P29-CLIP-TIME",
-          "title": "Clip-relative time: playhead label (+clip / src time, remembered), inspector Clip \u00b7 Source line, source marker in Adjust range",
+          "title": "Clip-relative time: playhead label (+clip / src time, remembered), inspector Clip · Source line, source marker in Adjust range",
           "status": "done",
           "progress": 100
         },
@@ -3016,6 +3016,12 @@
         {
           "id": "P5-SERIES-ZIP",
           "title": "Series zip and episode zip (bundles the Series assets it uses); import reconnects to or creates the Series",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "P32-BAR",
+          "title": "Phone clip bar: Edit · type primaries · More; Trim/Audio/More sheets; fixed short labels; VolumeHold removed; all bar icons monochrome SVG (active = background only)",
           "status": "done",
           "progress": 100
         }
