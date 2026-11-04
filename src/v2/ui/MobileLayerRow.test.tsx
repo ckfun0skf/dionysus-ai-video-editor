@@ -19,6 +19,7 @@ const px = (block: string, prop: string) => { const m = block.match(new RegExp(`
 const BTN = px(rule(".v2-layer-ctl .v2-icon"), "min-width");
 const CTL_GAP = px(rule(".v2-layer-ctl"), "gap");
 const SIDE_RIGHT = px(rule(".v2-layer-side"), "right");
+const getComputedStyleRule = rule;
 
 beforeAll(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -120,22 +121,28 @@ describe("V2-105 mobile layer row + Edit subtitles entry points", () => {
     const id = second.dataset.placementId!;
     await act(async () => { second.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true })); window.dispatchEvent(new MouseEvent("pointerup")); });
     const labels = [...el.querySelectorAll(".v2-toolbar .v2-tool span")].map((x) => x.textContent);
-    expect(labels).toEqual(["Split", "Trim", "Delete", "Style", "Animate", "Subtitles", "More"]);
-    // P32: fixed-width cells, SVG line icons only; Trim and More open sheets with ≥44px rows.
+    // P33: no More button; every tool on one scrollable row, in fixed groups split by thin dividers.
+    const groups = [...el.querySelectorAll(".v2-toolbar .v2-tool-group")].map((g) => [...g.querySelectorAll("[data-tool]")].map((b) => b.getAttribute("data-tool")));
+    expect(groups.slice(0, 2)).toEqual([["split", "trim", "delete"], ["style", "anim", "subs"]]);
+    expect(labels).not.toContain("More");
+    expect(el.querySelector('.v2-toolbar [data-tool="more"]')).toBeNull();
+    expect(el.querySelectorAll(".v2-toolbar .v2-tool-div").length).toBe(groups.length - 1);
+    expect(groups.flat()).toEqual(expect.arrayContaining(["adjust", "duplicate", "copy", "select", "ripple", "snap"]));
+    expect(groups.flat()).not.toContain("volume");
+    expect(new Set(groups.flat()).size).toBe(groups.flat().length);
+    expect(getComputedStyleRule(".v2-toolbar")).toMatch(/overflow-x: auto/);
+    // P32: fixed-width cells, SVG line icons only; Trim opens a sheet with ≥44px rows.
     const svgOnly = (sel: string) => [...document.querySelectorAll(sel)].every((b) => b.querySelector("svg.v2-ic"));
     expect(svgOnly(".v2-toolbar .v2-tool b")).toBe(true);
     await act(async () => { tool("Trim")!.click(); });
     expect([...document.querySelectorAll(".v2-agrid-btn span")].map((x) => x.textContent)).toEqual(["Start", "End"]);
     await act(async () => { (document.querySelector('[aria-label="Close Trim"]') as HTMLButtonElement | null)?.click(); });
-    await act(async () => { tool("More")!.click(); });
-    expect(svgOnly(".v2-agrid-btn b")).toBe(true);
-    const ripple = document.querySelector('.v2-agrid-btn[data-tool="ripple"]') as HTMLButtonElement;
+    const ripple = el.querySelector('.v2-toolbar [data-tool="ripple"]') as HTMLButtonElement;
     const was = ripple.getAttribute("aria-pressed");
     await act(async () => { ripple.click(); });
-    const now = document.querySelector('.v2-agrid-btn[data-tool="ripple"]')!;
+    const now = el.querySelector('.v2-toolbar [data-tool="ripple"]')!;
     expect(now.getAttribute("aria-pressed")).not.toBe(was);
     expect(now.textContent).toBe("Ripple");
-    await act(async () => { (document.querySelector('[aria-label="Close More"]') as HTMLButtonElement | null)?.click(); });
     await act(async () => { tool("Subtitles")!.click(); });
     const row = el.querySelector(`.v2-cue[data-cue="${id}"]`)!;
     expect(row.classList.contains("is-target")).toBe(true);

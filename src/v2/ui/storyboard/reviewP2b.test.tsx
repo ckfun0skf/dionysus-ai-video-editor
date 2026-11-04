@@ -182,9 +182,9 @@ describe("storyboard review P2 (second batch)", () => {
     expect(src).toContain("v2-sb-inuse");
   });
 
-  it("phones: linked clips lead the More sheet's Source group with Storyboard (P32 bar)", () => {
+  it("phones: linked clips lead the bar's source group with Storyboard (P33 bar)", () => {
     const src = readFileSync(resolve(__dirname, "../V2App.tsx"), "utf8");
-    const at = src.indexOf('{ title: "Source", items: keep([');
+    const at = src.indexOf('uniq([\n        selLink && A("storyboard"');
     expect(at).toBeGreaterThan(0);
     expect(src.indexOf('A("storyboard"', at)).toBeGreaterThan(at);
     expect(src.indexOf('A("storyboard"', at)).toBeLessThan(src.indexOf('A("range"', at));

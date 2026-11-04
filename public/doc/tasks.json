@@ -3030,6 +3030,24 @@
           "title": "Merge layer up: layer button (monochrome merge icon, phone + desktop), overlap dialog with per-clip Move later / Trim existing / Trim incoming / Push later, one undo step; WebMCP merge_layer_up; RULE 58",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P33-MERGE-DIALOG",
+          "title": "Merge conflict dialog: two mini timelines (upper / incoming) with red hatched overlaps, drag clips with snapping (touch + mouse), Keep one clip trims the other, zoom/scroll, 44px targets; ✓ disabled until clear, one undo step",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "P33-BAR",
+          "title": "Bottom bar: More button and sheet removed; every tool on one scrollable row in fixed groups split by thin divider lines; volume stays in the Audio sheet",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "P33-LAYER-ORDER",
+          "title": "Phone layer list top-down like desktop so Merge up goes into the row visually above; only the top row of a group is disabled; rule 58 / WebMCP wording",
+          "status": "done",
+          "progress": 100
         }
       ]
     }

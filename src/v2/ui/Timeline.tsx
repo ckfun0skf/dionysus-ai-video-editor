@@ -394,9 +394,8 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
       setLayerDrag(undefined);
       dragEndAt.current = Date.now();
       if (cur.to !== cur.from) {
-        // Visual order → array order (mobile lists a group bottom-up).
-        const n = lanes.length;
-        engine.dispatch(cmd.reorderTrack(id, centered ? n - 1 - cur.to : cur.to));
+        // Visual order = array order (0 = top layer) on phone and desktop.
+        engine.dispatch(cmd.reorderTrack(id, cur.to));
       }
     };
     addEventListener("pointermove", move, { passive: false }); addEventListener("pointerup", up); addEventListener("pointercancel", up); addEventListener("touchmove", block, { passive: false });
@@ -545,8 +544,8 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
         onDrop={(to) => { setReorder((r) => r && { ...r, closing: true }); setTimeout(() => { if (to !== reorder.from) { engine.dispatch(cmd.reorderMain(reorder.id, to)); haptic(10); } setReorder(undefined); }, REORDER_ANIM_MS); }} />}
       {confirmDel && (() => { const t = comp.tracks.find((x) => x.id === confirmDel); return t ? <ConfirmDialog title="Delete layer?" message={`Delete this layer and its ${t.placements.length} clip${t.placements.length === 1 ? "" : "s"}? You can undo this.`} confirm="Delete"
         onCancel={() => setConfirmDel(undefined)} onConfirm={() => { engine.dispatch(cmd.deleteTrack(t.id)); setConfirmDel(undefined); onSelect(undefined); }} /> : null; })()}
-      {mergeFor && <MergeDialog comp={comp} plan={mergeFor} onCancel={() => setMergeFor(undefined)}
-        onApply={(resolve) => { engine.dispatch(cmd.mergeLayerUp(mergeFor.source.id, { resolve })); setMergeFor(undefined); }} />}
+      {mergeFor && <MergeDialog plan={mergeFor} onCancel={() => setMergeFor(undefined)}
+        onApply={(layout) => { engine.dispatch(cmd.mergeLayerUp(mergeFor.source.id, { targetTrackId: mergeFor.target.id, layout })); setMergeFor(undefined); }} />}
       {centered && <div className="v2-playhead-fixed" style={{ left: pad }} aria-hidden />}
       {centered && <RelTag time={time} placement={selectedId ? findPlacement(comp, selectedId)?.placement : undefined} left={pad} />}
       {centered && timeLabel && <div ref={labelRef} className="v2-time-label">{timeLabel}</div>}
@@ -610,7 +609,8 @@ export function buildRows(comp: Composition, mobile: boolean, expanded?: ops.Tra
     // Effect lane appears once the project has effect layers (or in Effect mode).
     if (g === "effect" && !ts.length && focus !== "effect") continue;
     // V2-099: no in-timeline group header on mobile; exit via empty-space tap or the toolbar ‹.
-    if (expanded === g && ts.length) rows.push(...[...ts].reverse().map(track(g)));
+    // P33: same order as desktop and as z-order: the top row of a group is its top layer (array index 0).
+    if (expanded === g && ts.length) rows.push(...ts.map(track(g)));
     else rows.push({ type: "collapsed", key: `c-${g}`, group: g, placements: ts.flatMap((t) => t.placements).sort((a, b) => a.startTicks - b.startTicks) });
     if (focus === g || expanded === g) rows.push({ type: "add", key: `add-${g}`, group: g });
   }

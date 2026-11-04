@@ -142,8 +142,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const [ckOpen, setCkOpen] = useState(false);
   const [vcOpen, setVcOpen] = useState(false);
   /** P32: clip-bar sheets — Trim (start/end), Audio (volume & sound tools), More (everything else). */
-  const [barSheet, setBarSheet] = useState<"trim" | "audio" | "more">();
-  const roomyBar = useIsMobile("(min-width: 440px)");
+  const [barSheet, setBarSheet] = useState<"trim" | "audio">();
   const [afxOpen, setAfxOpen] = useState(false);
   const [posOpen, setPosOpen] = useState(false);
   const [eyedrop, setEyedrop] = useState<string>();
@@ -788,8 +787,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     <button key={a.key} className={`v2-tool ${a.active ? "is-active" : ""} ${a.danger ? "is-danger" : ""}`} data-tool={a.key} title={a.title ?? a.label} aria-label={a.title ? undefined : a.label}
       aria-pressed={a.active === undefined ? undefined : a.active} onClick={a.run}><b aria-hidden><Ic g={a.icon} /></b><span>{a.label}</span></button>
   );
-  const clipBar = ((): { edit: BarAct[]; primary: BarAct[]; more: { title: string; items: BarAct[] }[] } => {
-    if (!selected) return { edit: [], primary: [], more: [] };
+  const clipBar = ((): BarAct[][] => {
+    if (!selected) return [];
     const pl = selected.placement;
     const A = (key: string, icon: string, label: string, run: () => void, title?: string, active?: boolean): BarAct => ({ key, icon, label, run, title, active });
     const sound = hasSound(pl) || pl.clipType === "audio";
@@ -809,33 +808,33 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       : pl.clipType === "audio" ? [audio, speed, selAudioSpec ? A("edit-audio", "♫", "Edit", () => void openAudio(), "Open this clip in the Audio editor; saving makes a new version") : adjust]
       : selIsMain ? [adjust, audio, speed]
       : [adjust, link, toMain]).filter((a): a is BarAct => !!a);
-    const primary = primaryAll.slice(0, roomyBar ? 3 : 2);
-    const used = new Set(primary.map((a) => a.key));
-    const keep = (xs: (BarAct | undefined | false)[]) => xs.filter((a): a is BarAct => !!a && !used.has(a.key));
-    const more = [
-      { title: "Edit", items: keep([...primaryAll.slice(primary.length),
+    // P33: every tool on one scrollable row, in a fixed group order for every clip type; thin dividers between groups.
+    const seen = new Set<string>();
+    const uniq = (xs: (BarAct | undefined | false | null)[]) => xs.filter((a): a is BarAct => !!a && !seen.has(a.key) && !!seen.add(a.key));
+    return [
+      uniq(edit),
+      uniq(primaryAll),
+      uniq([speed,
         spCut && A("transition", "⧓", "Transition", () => setTransFor(sp!.id), "Pick the transition into this clip"),
         pair && A("match", "match", "Match", () => setMatchOpen(true), "Find the most similar frames across this cut and join there"),
-        ...timeActions.map((a, i) => A(i ? "reverse" : "freeze", a.icon, i ? "Reverse" : "Freeze", a.run, a.title, i ? !!sp?.reverse : undefined)),
-        A("duplicate", "⧉", "Duplicate", duplicateAbove, clipActions[0].title), A("copy", "⎘", "Copy", copy, clipActions[1].title),
-        hasClip && A("paste", "📋", "Paste", paste, pasteAction.title), A("select", "☑", "Select", () => setMultiMode(true), "Select several clips")]) },
-      { title: "Source", items: keep([
+        ...timeActions.map((a, i) => A(i ? "reverse" : "freeze", a.icon, i ? "Reverse" : "Freeze", a.run, a.title, i ? !!sp?.reverse : undefined))]),
+      uniq([
         selLink && A("storyboard", "board", "Storyboard", () => openStory(selLink.target), `Open ${selLink.label} in the storyboard: pick versions there`),
         rangeable && A("range", "⇔", "Range", () => setRangeFor({ id: pl.id }), "Choose which part of the source this clip plays (slip); its place and length stay"),
         rangeable && A("replace", "⇄", "Replace", () => setRangeFor({ id: pl.id, picker: true }), "Swap this clip's media for another of the same kind; everything else stays"),
         inPointable && A("in-point", "⇤", "In point", () => setInOpen(true), "Where the clip starts in its video (slip)"),
         canChromaKey(pl) && A("chroma", "chroma", "Chroma", () => setCkOpen(true), "Remove a green or blue screen colour"),
-        isText && A("adjust", "⤧", "Adjust", () => setInspOpen(true), "Transform, keyframes and fades"),
-        !!selAudioSpec && pl.clipType !== "audio" && A("edit-audio", "♫", "Edit audio", () => void openAudio(), "Open this clip in the Audio editor")]) },
-      { title: "Audio", items: keep([audio,
+        isText && adjust,
+        !!selAudioSpec && pl.clipType !== "audio" && A("edit-audio", "♫", "Edit audio", () => void openAudio(), "Open this clip in the Audio editor")]),
+      uniq([audio,
         ...linkedAudioActions.slice(0, 2).map((a, i) => A(i ? "dup-audio" : "extract", a.icon, i ? "Copy audio" : "Extract", a.run, a.title)),
-        A("mute-track", selected.track.muted ? "🔇" : "🔊", "Mute track", () => engine.dispatch(cmd.toggleTrackMute(selected.track.id)), "Mute or unmute this whole track", !!selected.track.muted)]) },
-      { title: "Layer", items: keep([link, toMain]) },
-      { title: "Timeline", items: [A("ripple", "⇤", "Ripple", () => setRipple(!ripple), "Ripple: delete and trim move later clips to close gaps (R)", ripple), A("snap", "🧲", "Snap", () => setSnapOn(!snapOn), "Smart snapping and alignment guides", snapOn)] },
-    ].filter((g) => g.items.length);
-    return { edit, primary, more };
+        A("mute-track", selected.track.muted ? "🔇" : "🔊", "Mute track", () => engine.dispatch(cmd.toggleTrackMute(selected.track.id)), "Mute or unmute this whole track", !!selected.track.muted)]),
+      uniq([link, toMain,
+        A("duplicate", "⧉", "Duplicate", duplicateAbove, clipActions[0].title), A("copy", "⎘", "Copy", copy, clipActions[1].title),
+        hasClip && A("paste", "📋", "Paste", paste, pasteAction.title), A("select", "☑", "Select", () => setMultiMode(true), "Select several clips")]),
+      [A("ripple", "⇤", "Ripple", () => setRipple(!ripple), "Ripple: delete and trim move later clips to close gaps (R)", ripple), A("snap", "🧲", "Snap", () => setSnapOn(!snapOn), "Smart snapping and alignment guides", snapOn)],
+    ].filter((g) => g.length);
   })();
-  const barEdit = clipBar.edit, barPrimary = clipBar.primary;
   const mobileTools: Record<Menu, JSX.Element[]> = {
     root: [
       tool("✂", "Edit", () => enterMode("edit"), "edit", "Edit the main-track clip under the playhead"),
@@ -847,10 +846,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       tool("settings", "Project", () => setProjOpen(true), "project-settings", "Project settings: size, frame rate, background, auto-link"),
     ],
     edit: !selected ? [<span key="h" className="v2-tool-hint">Move the playhead over a main-track clip to edit it</span>] : [
-      // P32: one layout for every clip type — Edit group · type primaries · More. Fixed cells, short fixed labels.
-      <span key="g-edit" className="v2-tool-group">{barEdit.map(barTool)}</span>,
-      <span key="g-primary" className="v2-tool-group">{barPrimary.map(barTool)}</span>,
-      barTool({ key: "more", icon: "⋯", label: "More", title: "More actions for this clip", run: () => setBarSheet("more") }),
+      // P33: Edit | type primaries | timing | source | audio | arrange | timeline — fixed cells, horizontally scrollable.
+      ...clipBar.flatMap((g, i) => [...(i ? [<span key={`div-${i}`} className="v2-tool-div" aria-hidden />] : []), <span key={`g-${i}`} className="v2-tool-group" role="group">{g.map(barTool)}</span>]),
     ],
     multi: [
       <span key="n" className="v2-sel-count" role="status">{sel.length} selected · tap clips</span>,
@@ -1171,11 +1168,11 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
             {mobileTools[activeMenu]}
           </nav>
           {pickerEl}
-          {barSheet && selected && <Sheet label={barSheet === "trim" ? "Trim" : barSheet === "audio" ? "Audio" : "More"} className="v2-msheet-insp v2-bar-sheet" snaps={barSheet === "more" ? [0.3, 0.55, 0.9] : [0.3, 0.42, 0.9]} onClose={() => setBarSheet(undefined)}>
+          {barSheet && selected && <Sheet label={barSheet === "trim" ? "Trim" : "Audio"} className="v2-msheet-insp v2-bar-sheet" snaps={[0.3, 0.42, 0.9]} onClose={() => setBarSheet(undefined)}>
             {barSheet === "trim" ? <ActionGrid groups={[{ title: "Trim to the playhead", items: [
               { key: "trim-start", icon: "trim-start", label: "Start", title: "Trim start to playhead: the clip starts here (Q)", run: () => { trimToPlayhead("left"); setBarSheet(undefined); } },
               { key: "trim-end", icon: "trim-end", label: "End", title: "Trim end to playhead: the clip ends here (W)", run: () => { trimToPlayhead("right"); setBarSheet(undefined); } }] }]} />
-            : barSheet === "audio" ? <div className="v2-audio-sheet">
+            : <div className="v2-audio-sheet">
               {selected.placement.clipType !== "image" && selected.placement.clipType !== "text" && selected.placement.clipType !== "effect" && volumeRow(selected.placement)}
               <ActionGrid groups={[{ title: "Sound", items: [
                 ...(selected.placement.clipType === "video" ? [{ key: "mute-clip", icon: selected.placement.linkedAudio?.muted ? "🔇" : "🔊", label: "Mute", title: selected.placement.linkedAudio?.muted ? "Play this clip's own audio again" : "Silence only this clip's own audio", active: !!selected.placement.linkedAudio?.muted, run: () => engine.dispatch(cmd.setLinkedAudioMuted(selected.placement.id, !selected.placement.linkedAudio?.muted)) }] : []),
@@ -1183,8 +1180,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
                 { key: "afx", icon: "afx", label: "Audio FX", title: "Echo, telephone, radio, robot…", run: () => { setBarSheet(undefined); setAfxOpen(true); } },
                 { key: "position", icon: "spatial", label: "Position", title: "Where the sound sits: left, right, behind, near or far", run: () => { setBarSheet(undefined); setPosOpen(true); } },
               ] }]} />
-            </div>
-            : <ActionGrid groups={clipBar.more.map((g) => ({ ...g, items: g.items.map((a) => ({ ...a, run: () => { if (a.key !== "ripple" && a.key !== "snap" && a.key !== "mute-track" && a.key !== "reverse") setBarSheet(undefined); a.run(); } })) }))} />}
+            </div>}
           </Sheet>}
           {sheet && <Sheet label="Media" head={false} onClose={() => setSheet(false)}>{browser}</Sheet>}
           {!sheet && <div hidden>{browser}</div>}

@@ -357,8 +357,7 @@ describe("V2App", () => {
     window.matchMedia = ((q: string) => ({ matches: true, media: q, addEventListener() {}, removeEventListener() {} })) as never;
     try {
       const el = await mountSlip();
-      await act(async () => { (el.querySelector('.v2-toolbar [data-tool="more"]') as HTMLButtonElement).click(); });
-      const tool = Array.from(document.querySelectorAll(".v2-agrid-btn")).find((b) => b.textContent?.trim() === "In point") as HTMLButtonElement;
+      const tool = el.querySelector('.v2-toolbar [data-tool="in-point"]') as HTMLButtonElement;
       expect(tool).toBeTruthy();
       await act(async () => { tool.click(); });
       const sheet = document.querySelector('[role="dialog"][aria-label="In point"]') as HTMLElement ?? document.querySelector(".v2-inpoint")!.closest(".v2-msheet-insp") as HTMLElement;

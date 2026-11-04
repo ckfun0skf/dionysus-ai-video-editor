@@ -98,8 +98,7 @@ describe("V2-111 mobile scope chip", () => {
     const clip = el.querySelector<HTMLElement>(".v2-clip.clip-text")!;
     await act(async () => { clip.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true })); window.dispatchEvent(new MouseEvent("pointerup")); });
     expect(el.querySelector(".v2-scope-chip"), "no chip floating over the mobile preview").toBeNull();
-    await act(async () => { tool("More")!.click(); });
-    await act(async () => { (document.querySelector('.v2-agrid-btn[data-tool="adjust"]') as HTMLButtonElement).click(); });
+    await act(async () => { (el.querySelector('.v2-toolbar [data-tool="adjust"]') as HTMLButtonElement).click(); });
     const chip = el.querySelector(".v2-sheet-head .v2-scope-chip")!;
     expect(chip).toBeTruthy();
     expect(chip.textContent).toBe("Apply to:This clipAll in layer");
