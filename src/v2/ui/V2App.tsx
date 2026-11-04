@@ -3,7 +3,7 @@ import { hitCandidates, isBackdrop, pickAt, Player, readClipConfig } from "../re
 import { cmd } from "../engine";
 import { importFile } from "../persistence";
 import { board as storyDomain, compositionDuration, edit, layers, ops, findPlacement, newId, formatTimecode, secondsToTicks, TICKS_PER_SECOND, type Asset } from "../domain";
-import type { Project } from "../domain";
+import type { Composition, Project } from "../domain";
 import { useEditorBoot, useEngineState, useIsMobile, type EditorContext, type LoadFailure } from "./useEditor";
 import { Timeline } from "./Timeline";
 import { clampPps } from "./gestures";
@@ -310,11 +310,15 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   useEffect(() => { player.onClipLoads = setClipLoads; return () => { player.onClipLoads = undefined; }; }, [player]);
   /** P27: Adjust range "Mix" shows its draft in the main preview until Apply/Cancel. */
   const [mixDraft, setMixDraft] = useState<Project>();
-  useEffect(() => { player.setProject(mixDraft ?? project); }, [player, project, mixDraft]);
+  const [mergeDraft, setMergeDraft] = useState<Composition>();
+  useEffect(() => {
+    player.setProject(mixDraft ?? (mergeDraft ? { ...project, compositions: { ...project.compositions, [project.rootCompositionId]: mergeDraft } } : project));
+  }, [player, project, mixDraft, mergeDraft]);
   useEffect(() => { const live = sel.filter((id) => allIds.includes(id)); if (live.length !== sel.length) setSel(live); });
   useEffect(() => { if (subId && !cue) setSubId(undefined); }, [subId, cue]);
 
   const seek = useCallback((t: number) => { stopAt.current = undefined; player.seek(t); }, [player]);
+  const mergePlay = useCallback((p: boolean) => { stopAt.current = undefined; if (p) player.play(); else player.pause(); }, [player]);
   const closeAnim = () => { setAnimOpen(false); setTextOpen(false); if (animLoop) { setAnimLoop(false); player.pause(); } };
   const togglePlay = useCallback(() => { stopAt.current = undefined; return player.isPlaying ? player.pause() : player.play(); }, [player]);
   /** V2-TL-TRANS: play the cut at `at` from about 1 s before the transition to 1 s after it, then pause. */
@@ -1156,7 +1160,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
             </span>
           </div>
           <PanelGrabber vh={previewVh} onChange={setPreviewVh} target={() => document.querySelector<HTMLElement>(".v2-app.is-mobile .v2-preview")} />
-          <Timeline focus={focusGroup} engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} selectedIds={sel} onToggleSelect={toggleClip} multiMode={multiMode} onSelect={selectClip} peaks={peaks} strips={strips} loads={clipLoads} pps={pps} onZoom={(z) => setPps(clampPps(z))} centered onPlayback={(p) => { stopAt.current = undefined; if (p) player.play(); else player.pause(); }} topLane={topLane} ripple={ripple} onTransition={onTransition} onEditSubs={openSubs} onEditLayer={editLayer} expanded={expanded} onExpand={onExpand}
+          <Timeline focus={focusGroup} engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} selectedIds={sel} onToggleSelect={toggleClip} multiMode={multiMode} onSelect={selectClip} peaks={peaks} strips={strips} loads={clipLoads} pps={pps} onZoom={(z) => setPps(clampPps(z))} centered onPlayback={(p) => { stopAt.current = undefined; if (p) player.play(); else player.pause(); }} topLane={topLane} ripple={ripple} onTransition={onTransition} onEditSubs={openSubs} onEditLayer={editLayer} onMergeDraft={setMergeDraft} onMergePlay={mergePlay} expanded={expanded} onExpand={onExpand}
             thumbs={thumbs} onAddMedia={() => setPicker("main")}
             timeLabel={<><b>{formatTimecode(time, project.settings.fps).slice(0, 5)}</b> / {formatTimecode(duration, project.settings.fps).slice(0, 5)}</>}
             sideColumn={<>
@@ -1213,7 +1217,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           <div className="v2-dsplit-h"><Splitter label="Resize timeline" value={lay.timeline} dir="up" min={LIMITS.timeline[0]} max={LIMITS.timeline[1]} onChange={(v) => resize({ timeline: v })} onCommit={commitSizes} onReset={() => { resize({ timeline: DEFAULT_SIZES.timeline }); commitSizes(); }} /></div>
           <section className="v2-timeline-panel v2-dtimeline" aria-label="Timeline">
             {desktopToolbar}
-            <Timeline focus={focusGroup} onFocusGroup={(g) => { setSel([]); setMenu(g && g !== "main" ? g : "root"); }} engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} selectedIds={sel} onToggleSelect={toggleClip} multiMode={multiMode} onSelect={selectClip} peaks={peaks} strips={strips} loads={clipLoads} thumbs={thumbs} pps={pps} onZoom={(z) => setPps(clampPps(z))} centered={false} topLane={topLane} ripple={ripple} onTransition={onTransition} onEditSubs={openSubs} onEditLayer={editLayer} onDropData={onDropData} onContextMenu={openCtx} />
+            <Timeline focus={focusGroup} onFocusGroup={(g) => { setSel([]); setMenu(g && g !== "main" ? g : "root"); }} engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} selectedIds={sel} onToggleSelect={toggleClip} multiMode={multiMode} onSelect={selectClip} peaks={peaks} strips={strips} loads={clipLoads} thumbs={thumbs} pps={pps} onZoom={(z) => setPps(clampPps(z))} centered={false} topLane={topLane} ripple={ripple} onTransition={onTransition} onEditSubs={openSubs} onEditLayer={editLayer} onDropData={onDropData} onContextMenu={openCtx} onMergeDraft={setMergeDraft} onMergePlay={mergePlay} />
           </section>
         </div>
       )}

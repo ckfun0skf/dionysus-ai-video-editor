@@ -99,7 +99,7 @@ describe("merge layer up (P32)", () => {
 });
 
 describe("P33 dialog layout", () => {
-  const P = (id: string, s: number, d: number) => ({ id, clipType: "text", startTicks: s, durationTicks: d, text: { text: id } }) as never;
+  const P = (id: string, s: number, d: number) => ({ id, clipType: "text", startTicks: s, durationTicks: d, sourceInTicks: 0, source: { assetId: "", versionId: "" }, text: { text: id } }) as never;
   const comp = { id: "r", durationTicks: 0, tracks: [
     { id: "top", name: "T2", kind: "text", placements: [P("a", 0, 240000)] },
     { id: "low", name: "T1", kind: "text", placements: [P("b", 120000, 240000)] },
@@ -120,5 +120,19 @@ describe("P33 dialog layout", () => {
     const r = mergeLayer.mergeLayerUp(comp, "low", { layout: moved });
     expect(r.comp.tracks.map((t) => t.id)).toEqual(["top"]);
     expect(r.comp.tracks[0].placements.map((p) => [p.id, p.startTicks])).toEqual([["a", 0], ["b", 240000]]);
+  });
+  it("P34 trimThis carves the selected clip around the others; trimInLayout clamps; previewLayout drops the source", () => {
+    const l = mergeLayer.initialLayout(mergeLayer.planMergeUp(comp, "low"));
+    const tb = mergeLayer.trimThis(l, "b", ids);
+    expect(tb.incoming.map((p) => [p.id, p.startTicks, p.durationTicks])).toEqual([["b", 240000, 120000]]);
+    expect(tb.upper[0].durationTicks).toBe(240000);
+    expect(mergeLayer.layoutOverlaps(tb)).toEqual([]);
+    const ext = mergeLayer.trimInLayout(l, "b", "right", 600000, 300000);
+    expect(ext.incoming[0].durationTicks).toBe(300000); // extends only as far as the source allows
+    const cut = mergeLayer.trimInLayout(l, "b", "left", 240000);
+    expect([cut.incoming[0].startTicks, cut.incoming[0].durationTicks]).toEqual([240000, 120000]);
+    const pv = mergeLayer.previewLayout(comp, mergeLayer.planMergeUp(comp, "low"), cut);
+    expect(pv.tracks.map((t) => t.id)).toEqual(["top"]);
+    expect(pv.tracks[0].placements.map((p) => p.id)).toEqual(["a", "b"]);
   });
 });

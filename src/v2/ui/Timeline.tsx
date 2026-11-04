@@ -1,15 +1,14 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { cmd, type Engine } from "../engine";
-import { FilmstripTiles, Waveform } from "./ClipPreview";
 import type { Filmstrip, Peaks } from "./media";
-import { mediaKey } from "./useMedia";
-import { clampPps, haptic, LONG_PRESS_MS, LONG_PRESS_SLOP, pinchZoom, touchDistance } from "./gestures";
-import { board, edit, mergeLayer, findPlacement, slip, layers, ops, transitions, compositionDuration, TICKS_PER_SECOND, formatTimecode, type Composition, type Placement, type Project, type Track } from "../domain";
+import { haptic, LONG_PRESS_MS, LONG_PRESS_SLOP } from "./gestures";
+import { edit, mergeLayer, findPlacement, slip, layers, ops, transitions, compositionDuration, TICKS_PER_SECOND, formatTimecode, type Composition, type Placement, type Project, type Track } from "../domain";
 import { Ic } from "./Icon";
 import { MergeDialog } from "./MergeDialog";
+import { AnimBadges, ClipBody, clipNoThumb, clipThumbStyle, effectName, useTimelineZoom } from "./TimelineClip";
+export { animBadges, ClipLoadBar, effectName } from "./TimelineClip";
 import { clipTimeAt, relLabel, useRelMode } from "./clipTime";
 import type { ClipLoad } from "../render";
-import { getPreset } from "../registry";
 
 interface Props {
   /** V2-103: open the layer-mode text editor ("Edit all") for a text layer. */
@@ -60,6 +59,9 @@ interface Props {
   focus?: ops.TrackGroup;
   /** P27 (centered): pause (false) / resume (true) playback around a user scroll of the timeline. */
   onPlayback?: (play: boolean) => void;
+  /** P34: the merge panel previews its layout as a draft root composition (undefined clears) and drives play/pause. */
+  onMergeDraft?: (c?: Composition) => void;
+  onMergePlay?: (play: boolean) => void;
   topLane?: { label: string; render: (toPx: (t: number) => number, toTicks: (px: number) => number) => ReactNode };
 }
 
@@ -86,7 +88,7 @@ export const SIDE_W = 184;
 /** P30-SCROLL: the view stays under user control this long after the last user scroll event (covers iOS momentum gaps). */
 export const USER_SCROLL_IDLE_MS = 180;
 
-export function Timeline({ engine, project, time, playing, onSeek, selectedId, selectedIds, onToggleSelect, multiMode, onSelect, pps, onZoom, centered, thumbs, peaks, strips, loads, onAddMedia, sideColumn, timeLabel, topLane, ripple, onTransition, expanded: expandedProp, onExpand, focus, onEditLayer, onEditSubs, onFocusGroup, onDropData, onContextMenu, onPlayback }: Props) {
+export function Timeline({ engine, project, time, playing, onSeek, selectedId, selectedIds, onToggleSelect, multiMode, onSelect, pps, onZoom, centered, thumbs, peaks, strips, loads, onAddMedia, sideColumn, timeLabel, topLane, ripple, onTransition, expanded: expandedProp, onExpand, focus, onEditLayer, onEditSubs, onFocusGroup, onDropData, onContextMenu, onPlayback, onMergeDraft, onMergePlay }: Props) {
   const comp = project.compositions[project.rootCompositionId];
   const scrollRef = useRef<HTMLDivElement>(null);
   const [gesture, setGesture] = useState<Gesture>();
@@ -117,24 +119,9 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
   const scrollResume = useRef(false);
   const scrollTimer = useRef<ReturnType<typeof setTimeout>>();
   const press = useRef<{ timer: ReturnType<typeof setTimeout>; x: number; y: number }>();
-  const zoomRef = useRef({ pps, onZoom });
-  zoomRef.current = { pps, onZoom };
 
-  // Pinch-to-zoom (two fingers) and Ctrl/⌘+wheel. Native non-passive listeners so we can stop page zoom.
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    let pinch: { d0: number; pps0: number } | undefined;
-    const ts = (e: TouchEvent) => { if (e.touches.length === 2) { pinch = { d0: touchDistance(e.touches[0], e.touches[1]), pps0: zoomRef.current.pps }; cancelPress(); } };
-    const tm = (e: TouchEvent) => { if (pinch && e.touches.length === 2) { e.preventDefault(); zoomRef.current.onZoom?.(pinchZoom(pinch.pps0, pinch.d0, touchDistance(e.touches[0], e.touches[1]))); } };
-    const te = (e: TouchEvent) => { if (e.touches.length < 2) pinch = undefined; };
-    const wheel = (e: WheelEvent) => { if (!e.ctrlKey && !e.metaKey) return; e.preventDefault(); zoomRef.current.onZoom?.(clampPps(zoomRef.current.pps * Math.exp(-e.deltaY / 200))); };
-    el.addEventListener("touchstart", ts, { passive: true });
-    el.addEventListener("touchmove", tm, { passive: false });
-    el.addEventListener("touchend", te);
-    el.addEventListener("wheel", wheel, { passive: false });
-    return () => { el.removeEventListener("touchstart", ts); el.removeEventListener("touchmove", tm); el.removeEventListener("touchend", te); el.removeEventListener("wheel", wheel); };
-  }, []);
+  // Pinch-to-zoom (two fingers) and Ctrl/⌘+wheel, shared with the merge dialog lanes.
+  useTimelineZoom(scrollRef, pps, onZoom, () => cancelPress());
   /** Mobile: tapping empty timeline space leaves the current mode (back to root). */
   // P1-ADD-TRACK: [+] at the bottom of a track-type mode (CapCut-like; 44px touch target, works with touch and mouse).
   const addBtn = (g: Exclude<ops.TrackGroup, "main">) => (
@@ -483,33 +470,13 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
               )))}
               {t.placements.map((p) => {
                 const asset = project.assets[p.source.assetId];
-                const link = project.storyboard && p.source.assetId ? board.storyLinkOf(project, p.source.assetId) : undefined;
                 const sel = p.id === selectedId;
                 const inSel = sel || !!selectedIds?.includes(p.id);
                 return (
-                  <div key={p.id} className={`v2-clip clip-${p.clipType} ${inSel ? "is-selected" : ""} ${loads?.has(p.id) ? "is-loading" : ""} ${needsThumb(p) && !thumbs?.[p.source.assetId] && !strips?.[mediaKey(p.source.assetId, p.source.versionId)] ? "is-nothumb" : ""}`} data-placement-id={p.id}
-                    style={{ left: toPx(p.startTicks), width: Math.max(4, toPx(p.durationTicks)), ...(thumbs?.[p.source.assetId] && p.clipType !== "audio" && !strips?.[mediaKey(p.source.assetId, p.source.versionId)] ? { backgroundImage: `url(${thumbs[p.source.assetId]})` } : {}) }}
+                  <div key={p.id} className={`v2-clip clip-${p.clipType} ${inSel ? "is-selected" : ""} ${loads?.has(p.id) ? "is-loading" : ""} ${clipNoThumb(p, thumbs, strips) ? "is-nothumb" : ""}`} data-placement-id={p.id}
+                    style={{ left: toPx(p.startTicks), width: Math.max(4, toPx(p.durationTicks)), ...clipThumbStyle(p, thumbs, strips) }}
                     onPointerDown={(e) => onClipDown(e, p.id, t.id, p.startTicks)} title={p.clipType === "effect" ? `Effect: ${effectName(p)}` : p.clipType === "text" ? p.text?.text : asset?.name}>
-                    {(() => {
-                      const key = mediaKey(p.source.assetId, p.source.versionId);
-                      const w = Math.max(4, toPx(p.durationTicks));
-                      const strip = p.clipType === "video" ? strips?.[key] : undefined;
-                      const pk = p.clipType !== "image" && !(p.clipType === "video" && (p.linkedAudio?.muted || p.freeze || p.reverse)) ? peaks?.[key] : undefined;
-                      const ld = loads?.get(p.id);
-                      return <>
-                        {ld && <ClipLoadBar load={ld} />}
-                        {strip && <FilmstripTiles strip={strip} p={p} width={w} pps={pps} />}
-                        {pk && <Waveform peaks={pk} p={p} width={w} height={p.clipType === "audio" ? 38 : 14} kind={p.clipType === "audio" ? "audio" : "video"} />}
-                      </>;
-                    })()}
-                    <span className="v2-clip-name">{link && <span className="v2-clip-badge v2-clip-link" title={`${link.label} on the storyboard: follows the version you pick there (now v${link.versionNo} of ${link.versionCount})`} aria-label={`Storyboard ${link.label}, version ${link.versionNo}`}><Ic g="link" size={11} />v{link.versionNo}</span>}{p.freeze && <span className="v2-clip-badge" title="Freeze frame" aria-label="Freeze frame"><Ic g="❄" /></span>}{p.reverse && <span className="v2-clip-badge" title="Reversed" aria-label="Reversed"><Ic g="⟲" /></span>}{p.speed && p.speed !== 1 && <span className="v2-clip-badge" title={`Speed ${p.speed}×`}>{p.speed}×</span>}{p.linkedAudio?.muted && !p.freeze && <span className="v2-clip-badge" title="Clip audio muted" aria-label="Clip audio muted"><Ic g="🔇" /></span>}{p.clipType === "effect" ? <><Ic g="effect" size={12} /> {effectName(p)}</> : p.clipType === "text" ? <><Ic g="T" size={12} /> {p.text?.text || "Text"}</> : asset?.name ?? "missing media"}</span><AnimBadges p={p} width={Math.max(4, toPx(p.durationTicks))} />
-                    {p.link && t.id !== main?.id && <span className={`v2-link-mark ${t.kind === "audio" ? "up" : "down"}`} aria-label="Linked to main clip" title="Linked to the main clip: moves, trims and deletes with it" />}
-                    {layers.isCustom(t, p) && <span className="v2-custom-dot" title="Custom style: this clip differs from its layer style" aria-label="Custom style" />}
-                    {!!p.fadeInTicks && <span className="v2-fade in" aria-label="Fade in" style={{ width: toPx(p.fadeInTicks) }} />}
-                    {!!p.fadeOutTicks && <span className="v2-fade out" aria-label="Fade out" style={{ width: toPx(p.fadeOutTicks) }} />}
-                    {[...new Set(Object.values(p.keyframes ?? {}).flatMap((ks) => ks!.map((k) => k.t)))].filter((k) => k >= 0 && k <= p.durationTicks).map((k) => (
-                      <span key={k} className="v2-kf-dot" aria-label="Keyframe" style={{ left: toPx(k) }} />
-                    ))}
+                    <ClipBody p={p} track={t} isMain={t.id === main?.id} project={project} pps={pps} strips={strips} peaks={peaks} loads={loads} />
                     {sel && <>
                       <div className="v2-handle left" aria-label="Trim start" onPointerDown={(e) => onTrimDown(e, p.id, "left", p.startTicks)} />
                       <div className="v2-handle right" aria-label="Trim end" onPointerDown={(e) => onTrimDown(e, p.id, "right", p.startTicks + p.durationTicks)} />
@@ -544,7 +511,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
         onDrop={(to) => { setReorder((r) => r && { ...r, closing: true }); setTimeout(() => { if (to !== reorder.from) { engine.dispatch(cmd.reorderMain(reorder.id, to)); haptic(10); } setReorder(undefined); }, REORDER_ANIM_MS); }} />}
       {confirmDel && (() => { const t = comp.tracks.find((x) => x.id === confirmDel); return t ? <ConfirmDialog title="Delete layer?" message={`Delete this layer and its ${t.placements.length} clip${t.placements.length === 1 ? "" : "s"}? You can undo this.`} confirm="Delete"
         onCancel={() => setConfirmDel(undefined)} onConfirm={() => { engine.dispatch(cmd.deleteTrack(t.id)); setConfirmDel(undefined); onSelect(undefined); }} /> : null; })()}
-      {mergeFor && <MergeDialog plan={mergeFor} onCancel={() => setMergeFor(undefined)}
+      {mergeFor && <MergeDialog plan={mergeFor} comp={comp} project={project} thumbs={thumbs} strips={strips} peaks={peaks} time={time} playing={playing} onSeek={onSeek} onPlay={onMergePlay} onDraft={onMergeDraft} onCancel={() => setMergeFor(undefined)}
         onApply={(layout) => { engine.dispatch(cmd.mergeLayerUp(mergeFor.source.id, { targetTrackId: mergeFor.target.id, layout })); setMergeFor(undefined); }} />}
       {centered && <div className="v2-playhead-fixed" style={{ left: pad }} aria-hidden />}
       {centered && <RelTag time={time} placement={selectedId ? findPlacement(comp, selectedId)?.placement : undefined} left={pad} />}
@@ -618,7 +585,6 @@ export function buildRows(comp: Composition, mobile: boolean, expanded?: ops.Tra
 }
 
 /** V2-101: display name of an effect clip's preset. */
-export const effectName = (p: Placement) => getPreset("videoEffect", p.effect?.preset)?.name ?? "Effect";
 const GROUP_ICON: Record<ops.TrackGroup, string> = { main: "image", overlay: "image", audio: "♫", text: "T", effect: "effect" };
 const REORDER_ANIM_MS = 180;
 const SQ = 52, SQ_GAP = 6;
@@ -713,35 +679,6 @@ export function ConfirmDialog({ title, message, confirm, onConfirm, onCancel }: 
 }
 
 /** Which animation badges a clip shows (V2-098). */
-export function animBadges(p: Placement): ("in" | "out" | "loop")[] {
-  const t = p.text;
-  if (!t) return [];
-  const on = (v?: string) => !!v && v !== "none";
-  return [...(on(t.animIn) ? ["in" as const] : []), ...(on(t.animOut) ? ["out" as const] : []), ...(on(t.loop) ? ["loop" as const] : [])];
-}
-const BADGE_LABEL = { in: "In animation", out: "Out animation", loop: "Loop animation" } as const;
-/** In badge at the clip start, Out at the end, Loop in between; on narrow clips they pack into one corner chip. */
-function AnimBadges({ p, width }: { p: Placement; width: number }) {
-  const b = animBadges(p);
-  if (!b.length) return null;
-  const narrow = width < b.length * 16 + 8;
-  return (
-    <span className={`v2-anim-badges ${narrow ? "is-narrow" : ""}`} aria-label={b.map((k) => BADGE_LABEL[k]).join(", ")}>
-      {b.map((k) => <span key={k} className={`v2-anim-badge is-${k}`} title={BADGE_LABEL[k]}><Ic g={`anim-${k}`} size={9} /></span>)}
-    </span>
-  );
-}
-
-const needsThumb = (p: Placement) => p.clipType === "video" || p.clipType === "image" || p.clipType === "html";
-
-/** P29-CLIP-LOADING: thin bar at the clip's bottom edge with the loaded share, or a spinner when progress is unknown. */
-export function ClipLoadBar({ load }: { load: ClipLoad }) {
-  const pct = load.progress === undefined ? undefined : Math.round(load.progress * 100);
-  return pct === undefined
-    ? <span className="v2-clip-load is-unknown" role="status" aria-label="Loading media"><span className="v2-clip-spin" aria-hidden="true" /></span>
-    : <span className="v2-clip-load" role="progressbar" aria-label="Loading media" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}><span className="v2-clip-load-fill" style={{ width: `${pct}%` }} /></span>;
-}
-
 /** P29-CLIP-TIME: small label at the playhead with the time inside the selected clip ("+1.0s"), or its source time ("src 6.0s") after a tap. */
 export function RelTag({ time, placement, left }: { time: number; placement?: Placement; left: number }) {
   const [mode, toggle] = useRelMode();
