@@ -365,7 +365,7 @@ export const STORY_TOOLS: StoryTool[] = [
   },
   {
     name: "send_to_timeline", title: "Update the timeline", readOnly: false,
-    description: "Update the timeline from the storyboard (update mode): adds shots that have a clip and new audio cues, switches changed clips and refreshes shot text; everything else on the timeline stays. Shots without an uploaded clip are skipped. New layers and in-shot cues are linked to their shot's main clip (moved, trimmed and deleted with it) unless they set link: false.",
+    description: "Update the timeline from the storyboard (update mode): adds shots that have a clip and new audio cues, switches changed clips and refreshes shot text; everything else on the timeline stays. Shots without a clip yet go on as placeholders at their planned length (RULE 59), and a shot that now has a clip replaces its placeholder in place. New layers and in-shot cues are linked to their shot's main clip (moved, trimmed and deleted with it) unless they set link: false.",
     inputSchema: obj({}),
   },
   {

@@ -5,7 +5,7 @@ import { haptic, LONG_PRESS_MS, LONG_PRESS_SLOP } from "./gestures";
 import { edit, mergeLayer, findPlacement, slip, layers, ops, transitions, compositionDuration, TICKS_PER_SECOND, formatTimecode, type Composition, type Placement, type Project, type Track } from "../domain";
 import { Ic } from "./Icon";
 import { MergeDialog } from "./MergeDialog";
-import { AnimBadges, ClipBody, clipNoThumb, clipThumbStyle, effectName, useTimelineZoom } from "./TimelineClip";
+import { AnimBadges, ClipBody, clipKindClass, clipNoThumb, clipThumbStyle, effectName, useTimelineZoom } from "./TimelineClip";
 export { animBadges, ClipLoadBar, effectName } from "./TimelineClip";
 import { clipTimeAt, relLabel, useRelMode } from "./clipTime";
 import type { ClipLoad } from "../render";
@@ -473,7 +473,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
                 const sel = p.id === selectedId;
                 const inSel = sel || !!selectedIds?.includes(p.id);
                 return (
-                  <div key={p.id} className={`v2-clip clip-${p.clipType} ${inSel ? "is-selected" : ""} ${loads?.has(p.id) ? "is-loading" : ""} ${clipNoThumb(p, thumbs, strips) ? "is-nothumb" : ""}`} data-placement-id={p.id}
+                  <div key={p.id} className={`v2-clip clip-${p.clipType} ${inSel ? "is-selected" : ""} ${loads?.has(p.id) ? "is-loading" : ""} ${clipNoThumb(p, thumbs, strips) ? "is-nothumb" : ""} ${clipKindClass(p)}`} data-placement-id={p.id}
                     style={{ left: toPx(p.startTicks), width: Math.max(4, toPx(p.durationTicks)), ...clipThumbStyle(p, thumbs, strips) }}
                     onPointerDown={(e) => onClipDown(e, p.id, t.id, p.startTicks)} title={p.clipType === "effect" ? `Effect: ${effectName(p)}` : p.clipType === "text" ? p.text?.text : asset?.name}>
                     <ClipBody p={p} track={t} isMain={t.id === main?.id} project={project} pps={pps} strips={strips} peaks={peaks} loads={loads} />

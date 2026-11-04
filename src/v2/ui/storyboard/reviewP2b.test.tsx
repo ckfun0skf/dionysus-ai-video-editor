@@ -117,7 +117,7 @@ describe("storyboard review P2 (second batch)", () => {
     expect(el.textContent).toContain("Replace the timeline?");
     await act(async () => btn(el, "Replace timeline").click());
     const p = e.getState().project;
-    expect(ops.mainTrack(p.compositions[p.rootCompositionId])!.placements).toHaveLength(1);
+    expect(ops.mainTrack(p.compositions[p.rootCompositionId])!.placements.filter((x) => !x.placeholder)).toHaveLength(1);
   });
 
   it("R10: phone production keeps text states and the nav says the state", async () => {

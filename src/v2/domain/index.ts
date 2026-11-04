@@ -16,7 +16,7 @@ export type { StoryDoc, StoryAsset, StoryShot, StoryConnection, StoryIssue, Stor
 export { storyboardSystemPrompt, storyboardShortPrompt, EXAMPLE_STORYBOARD, exampleStoryboardJson } from "./storyPrompt";
 export { aiLinks, runtimeAiLinks, runtimeSiteUrl, CONFIGURED_SITE_URL, DEFAULT_SITE_URL, type AiLinks } from "./siteUrl";
 export * as board from "./storyboard";
-export { pendingAudio, updatePlan, shotSignature, type SendResult, type UpdateResult } from "./storySend";
+export { pendingAudio, placeholderClips, placeholderLabel, updatePlan, shotSignature, type SendResult, type UpdateResult } from "./storySend";
 export { syncPlan, needsPromptItems, type SyncPlan, type SyncChange } from "./storySync";
 export * as roundtrip from "./storyRoundtrip";
 export type { StoryDiff, DiffItem } from "./storyRoundtrip";

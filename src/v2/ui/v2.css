@@ -1335,3 +1335,11 @@ select.v2-tp-field { -webkit-appearance: none; appearance: none; padding-right: 
 .v2-merge-reset { position: absolute; right: 12px; bottom: calc(10px + env(safe-area-inset-bottom)); min-height: 44px; display: flex; align-items: center; gap: 4px; border: 0; background: none; color: var(--muted); font: inherit; font-size: 12px; }
 .v2-merge-actions ~ .v2-merge-reset { display: none; }
 @media (min-width: 900px) { .v2-merge { border-radius: 14px; margin-bottom: 12px; } }
+
+/* P35: a storyboard shot with no clip yet — neutral hatched card, monochrome icon, label and "Not generated". */
+.v2-clip.is-placeholder,
+.v2-timeline .v2-lane .v2-clip.is-placeholder { background: repeating-linear-gradient(135deg, rgba(255,255,255,.07) 0 6px, rgba(255,255,255,.02) 6px 12px), #1c1d21; border: 1px dashed rgba(255,255,255,.38); color: rgba(255,255,255,.82); box-shadow: none; }
+.v2-clip.is-placeholder.is-selected { border-style: solid; border-color: #fff; }
+.v2-clip-name.v2-ph { display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden; white-space: nowrap; }
+.v2-ph-label { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.v2-ph-state { flex: none; font-size: 10px; padding: 0 4px; border-radius: 3px; border: 1px solid rgba(255,255,255,.35); color: rgba(255,255,255,.7); text-transform: uppercase; letter-spacing: .03em; }

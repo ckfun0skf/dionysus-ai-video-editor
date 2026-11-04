@@ -82,7 +82,7 @@ export function BoardView({ project, thumbs, onOpen, openKey, edit, mobile }: { 
   const used = new Set(shots.flatMap((s) => s.slotIds));
   const others = slots.filter((s) => !used.has(s.id));
   const done = (o: AssetSlot | Shot) => board.versionsOf(project, o).length > 0 || !!o.skipped;
-  const placed = new Set(board.sendPlan(project).filter((x) => x.state === "placed").map((x) => x.shotId));
+  const placed = new Set(board.sendPlan(project).filter((x) => x.state === "placed" && !x.placeholder).map((x) => x.shotId));
   const staleCount = [...Object.values(status.slots), ...Object.values(status.shots)].filter((s) => s.stale).length;
   const total = shots.reduce((t, s) => t + s.durationSec, 0);
   const shotNo = (id: string) => b.order.indexOf(id) + 1;

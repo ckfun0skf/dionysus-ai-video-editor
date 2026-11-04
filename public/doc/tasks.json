@@ -3054,6 +3054,12 @@
           "title": "Merge conflict panel: opens on the first overlap with Previous/Next (n of N); dim / yellow / green clip states; timeline clip look (thumbnails, filmstrip), pinch & Ctrl+wheel zoom, drag, edge trim/extend; docked so the real preview shows the merged frame with scrub/play; selection-only Trim this / Trim others",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P35-SHOT-PLACEHOLDERS",
+          "title": "Storyboard Send/Update/Replace/Sync put a placeholder on the main track for shots with no clip (hatched 'Not generated' card, preview slate, black frame + warning on export); Update or Replace asset fills it in place; get_timeline/review_lint report placeholders; guide rule 59",
+          "status": "done",
+          "progress": 100
         }
       ]
     }

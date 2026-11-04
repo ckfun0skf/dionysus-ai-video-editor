@@ -193,8 +193,8 @@ describe("send to timeline (v1.1)", () => {
     const g = setup((d) => { d.connections[1].transition = { preset: "warp-9" }; d.connections[0].transition = { preset: "dip" }; });
     g.dispatch(cmd.addStoryVersion({ slot: "bg" }, image(), { versionId: "bg1" }));
     g.dispatch(cmd.addStoryVersion({ shot: "s3" }, html(), { versionId: "lg1" }));
-    g.dispatch(cmd.sendStoryToTimeline()); // s1 has no clip: s2 has nothing before it
-    expect(main(g.getState().project).placements.map((x) => x.transitionIn)).toEqual([undefined, undefined]);
+    g.dispatch(cmd.sendStoryToTimeline()); // s1 is a placeholder (P35): no transition into s2 from it
+    expect(main(g.getState().project).placements.map((x) => x.transitionIn)).toEqual([undefined, undefined, undefined]);
   });
 
   it("transition params other than durationSec are kept on the clip (V2-SB-130)", () => {

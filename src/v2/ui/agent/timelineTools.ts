@@ -5,7 +5,7 @@
  * audio clipping / silence (the export audio mix).
  */
 import { captureFrameAt, storePickedFrame } from "../storyboard/frameCapture";
-import { audioOutputOf, board, mergeLayer, ops, promote, findPlacement, slip, newId, panToAzimuth, positionErrors, secondsToTicks, timelineReview, type Placement, type Project } from "../../domain";
+import { audioOutputOf, board, mergeLayer, ops, promote, findPlacement, slip, newId, panToAzimuth, positionErrors, secondsToTicks, TICKS_PER_SECOND, timelineReview, type Placement, type Project } from "../../domain";
 import { getPreset, listPresets } from "../../registry";
 import { cmd, type Command, type Engine } from "../../engine";
 import type { BlobStore } from "../../ports";
@@ -230,7 +230,10 @@ export async function runTimelineTool(engine: Engine, source: FrameSource | unde
           const frames = await source.frames(p, times.map(secondsToTicks), 96);
           let last = -10;
           const lum = source.luma ?? meanLuma;
-          frames.forEach((f, i) => { if (lum(f) < 6 && times[i] - last > step * 1.5) { issues.push({ kind: "black-frame", severity: "warning", atSec: Math.round(times[i] * 100) / 100, message: `Black frame at ${fmtT(times[i])}.` }); last = times[i]; } else if (lum(f) < 6) last = times[i]; });
+          // P35: placeholders are black by design (review_lint already lists them).
+          const holes = rootOf(p).tracks.flatMap((t) => t.placements.filter((x) => x.placeholder)).map((x) => [x.startTicks / TICKS_PER_SECOND, (x.startTicks + x.durationTicks) / TICKS_PER_SECOND] as const);
+          const inHole = (t: number) => holes.some(([a, b]) => t >= a && t < b);
+          frames.forEach((f, i) => { if (inHole(times[i])) return; if (lum(f) < 6 && times[i] - last > step * 1.5) { issues.push({ kind: "black-frame", severity: "warning", atSec: Math.round(times[i] * 100) / 100, message: `Black frame at ${fmtT(times[i])}.` }); last = times[i]; } else if (lum(f) < 6) last = times[i]; });
         }
         try { const au = await source.audio(p); if (au) issues.push(...audioIssues(au)); } catch (e) { issues.push({ kind: "missing-asset", severity: "warning", message: `Couldn't decode the audio mix: ${(e as Error).message}` }); }
       }

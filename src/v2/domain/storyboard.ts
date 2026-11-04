@@ -536,19 +536,23 @@ export function linkedLengthChanges(before: Project, after: Project, assetId: st
 
 /** Shots in story order with whether "Send to timeline" would add them. */
 export type SendState = "ready" | "placed" | "missing" | "skipped";
-export function sendPlan(p: Project): { shotId: string; assetId?: string; state: SendState }[] {
+/** `placeholder` (P35): the shot is on the timeline only as a placeholder clip. */
+export function sendPlan(p: Project): { shotId: string; assetId?: string; state: SendState; placeholder?: boolean }[] {
   const b = p.storyboard;
   if (!b) return [];
   const all = Object.values(p.compositions).flatMap((c) => c.tracks.flatMap((t) => t.placements));
   // A clip sent from the board names its shot; other clips of the asset (placed by hand, or sent before
   // V2-CUT-02) count for every shot showing it. Linked layers never do.
-  const sentAs = new Set(all.flatMap((pl) => (pl.storyShot ? [pl.storyShot] : [])));
+  const sentAs = new Set(all.flatMap((pl) => (pl.storyShot && !pl.placeholder ? [pl.storyShot] : [])));
+  const holds = new Set(all.flatMap((pl) => (pl.storyShot && pl.placeholder ? [pl.storyShot] : [])));
   const loose = new Set(all.filter((pl) => !pl.storyShot && !pl.storyLink).map((pl) => pl.source.assetId));
   return b.order.filter((id) => b.shots[id]).map((id) => {
     const s = b.shots[id];
     const placed = sentAs.has(id) || (!!s.assetId && loose.has(s.assetId));
-    const state: SendState = s.skipped ? "skipped" : !s.assetId || !p.assets[s.assetId] ? "missing" : placed ? "placed" : "ready";
-    return { shotId: id, assetId: s.assetId, state };
+    // P35: a shot only on the timeline as a placeholder is "missing" (no clip yet) or "placed" (Update fills it).
+    const ph = !placed && holds.has(id);
+    const state: SendState = s.skipped ? "skipped" : !s.assetId || !p.assets[s.assetId] ? "missing" : placed || ph ? "placed" : "ready";
+    return ph && state !== "skipped" ? { shotId: id, assetId: s.assetId, state, placeholder: true } : { shotId: id, assetId: s.assetId, state };
   });
 }
 
