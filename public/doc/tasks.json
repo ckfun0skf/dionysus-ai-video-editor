@@ -3024,6 +3024,12 @@
           "title": "Phone clip bar: Edit · type primaries · More; Trim/Audio/More sheets; fixed short labels; VolumeHold removed; all bar icons monochrome SVG (active = background only)",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P32-MERGE",
+          "title": "Merge layer up: layer button (monochrome merge icon, phone + desktop), overlap dialog with per-clip Move later / Trim existing / Trim incoming / Push later, one undo step; WebMCP merge_layer_up; RULE 58",
+          "status": "done",
+          "progress": 100
         }
       ]
     }

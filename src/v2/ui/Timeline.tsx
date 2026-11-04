@@ -4,8 +4,9 @@ import { FilmstripTiles, Waveform } from "./ClipPreview";
 import type { Filmstrip, Peaks } from "./media";
 import { mediaKey } from "./useMedia";
 import { clampPps, haptic, LONG_PRESS_MS, LONG_PRESS_SLOP, pinchZoom, touchDistance } from "./gestures";
-import { board, edit, findPlacement, slip, layers, ops, transitions, compositionDuration, TICKS_PER_SECOND, formatTimecode, type Composition, type Placement, type Project, type Track } from "../domain";
+import { board, edit, mergeLayer, findPlacement, slip, layers, ops, transitions, compositionDuration, TICKS_PER_SECOND, formatTimecode, type Composition, type Placement, type Project, type Track } from "../domain";
 import { Ic } from "./Icon";
+import { MergeDialog } from "./MergeDialog";
 import { clipTimeAt, relLabel, useRelMode } from "./clipTime";
 import type { ClipLoad } from "../render";
 import { getPreset } from "../registry";
@@ -95,6 +96,14 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
   const expanded = onExpand ? expandedProp : expandedInner;
   const setExpanded = onExpand ?? setExpandedInner;
   const [confirmDel, setConfirmDel] = useState<string>();
+  /** P32: merge-up with overlaps waiting for the conflict dialog. */
+  const [mergeFor, setMergeFor] = useState<mergeLayer.MergePlan>();
+  const startMerge = (id: string) => {
+    let plan: mergeLayer.MergePlan;
+    try { plan = mergeLayer.planMergeUp(comp, id); } catch { return; }
+    if (plan.conflicts.length) setMergeFor(plan);
+    else engine.dispatch(cmd.mergeLayerUp(id));
+  };
   /** V2-099: ≡ handle drag reordering a layer inside its group (live placeholder via row shifts). */
   const [layerDrag, setLayerDrag] = useState<LayerDrag>();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -419,7 +428,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
             <div key={t.id} className={`v2-track-header kind-${t.kind} ${layerDrag?.id === t.id ? "is-layer-dragging" : ""}`} style={layerShift(t.id)}>
               <span>{t.name}</span>
               {t.kind !== "effect" && t.kind !== "text" && <button className="v2-icon" title={t.muted ? "Unmute track" : "Mute track"} aria-label={t.muted ? "Unmute track" : "Mute track"} onClick={() => engine.dispatch(cmd.toggleTrackMute(t.id))}><Ic g={t.muted ? "🔇" : "🔊"} /></button>}
-              <LayerControls t={t} isMain={t.id === main?.id} onToggle={() => engine.dispatch(cmd.toggleTrackHidden(t.id))} onDelete={() => setConfirmDel(t.id)} onReorder={(e) => startLayerDrag(e, t.id)} dragging={layerDrag?.id === t.id} onEditAll={onEditLayer && t.kind === "text" && layers.textClipCount(t) > 0 ? () => onEditLayer(t.id) : undefined} onEditSubs={onEditSubs && t.kind === "text" && layers.textClipCount(t) > 0 ? () => onEditSubs(t.id) : undefined} />
+              <LayerControls t={t} isMain={t.id === main?.id} onToggle={() => engine.dispatch(cmd.toggleTrackHidden(t.id))} onDelete={() => setConfirmDel(t.id)} onReorder={(e) => startLayerDrag(e, t.id)} dragging={layerDrag?.id === t.id} onMergeUp={() => startMerge(t.id)} mergeInto={mergeLayer.mergeTarget(comp, t.id)?.name} onEditAll={onEditLayer && t.kind === "text" && layers.textClipCount(t) > 0 ? () => onEditLayer(t.id) : undefined} onEditSubs={onEditSubs && t.kind === "text" && layers.textClipCount(t) > 0 ? () => onEditSubs(t.id) : undefined} />
             </div>
           ))(r))}
         </div>
@@ -435,8 +444,8 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
             ))}
             {expanded && layerTops.map(({ id, top }) => { const t = comp.tracks.find((x) => x.id === id); return t && (
               <div key={id} className="v2-layer-side" data-track-id={id} style={{ top }}>
-                {/* V2-105: the 184px mobile column fits 4 44px controls; "Edit subtitles" lives in the Text toolbar and the clip toolbar instead. */}
-                <LayerControls t={t} isMain={t.id === main?.id} onToggle={() => engine.dispatch(cmd.toggleTrackHidden(t.id))} onDelete={() => setConfirmDel(t.id)} onReorder={(e) => startLayerDrag(e, t.id)} dragging={layerDrag?.id === t.id} onEditAll={onEditLayer && t.kind === "text" && layers.textClipCount(t) > 0 ? () => onEditLayer(t.id) : undefined} />
+                {/* V2-105/P32: the 184px mobile column fits 4 44px controls: merge · reorder · hide · delete. "Edit subtitles" lives in the Text toolbar; "Edit all" is the Style sheet's "Apply to: All in layer". */}
+                <LayerControls t={t} isMain={t.id === main?.id} onToggle={() => engine.dispatch(cmd.toggleTrackHidden(t.id))} onDelete={() => setConfirmDel(t.id)} onReorder={(e) => startLayerDrag(e, t.id)} dragging={layerDrag?.id === t.id} onMergeUp={() => startMerge(t.id)} mergeInto={mergeLayer.mergeTarget(comp, t.id)?.name} />
               </div>); })}
           </div>}
           <div className="v2-ruler" onPointerDown={scrub}>
@@ -536,6 +545,8 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
         onDrop={(to) => { setReorder((r) => r && { ...r, closing: true }); setTimeout(() => { if (to !== reorder.from) { engine.dispatch(cmd.reorderMain(reorder.id, to)); haptic(10); } setReorder(undefined); }, REORDER_ANIM_MS); }} />}
       {confirmDel && (() => { const t = comp.tracks.find((x) => x.id === confirmDel); return t ? <ConfirmDialog title="Delete layer?" message={`Delete this layer and its ${t.placements.length} clip${t.placements.length === 1 ? "" : "s"}? You can undo this.`} confirm="Delete"
         onCancel={() => setConfirmDel(undefined)} onConfirm={() => { engine.dispatch(cmd.deleteTrack(t.id)); setConfirmDel(undefined); onSelect(undefined); }} /> : null; })()}
+      {mergeFor && <MergeDialog comp={comp} plan={mergeFor} onCancel={() => setMergeFor(undefined)}
+        onApply={(resolve) => { engine.dispatch(cmd.mergeLayerUp(mergeFor.source.id, { resolve })); setMergeFor(undefined); }} />}
       {centered && <div className="v2-playhead-fixed" style={{ left: pad }} aria-hidden />}
       {centered && <RelTag time={time} placement={selectedId ? findPlacement(comp, selectedId)?.placement : undefined} left={pad} />}
       {centered && timeLabel && <div ref={labelRef} className="v2-time-label">{timeLabel}</div>}
@@ -674,10 +685,11 @@ function ReorderStrip({ track, state, top, root, thumbs, onMove, onDrop }: { tra
 }
 
 /** Per-layer eye (hide/show) and ✕ (delete, asks first). The main track can be hidden but not deleted. */
-export function LayerControls({ t, isMain, onToggle, onDelete, onReorder, dragging, onEditAll, onEditSubs }: { t: Track; isMain: boolean; onToggle: () => void; onDelete: () => void; onReorder?: (e: React.PointerEvent) => void; dragging?: boolean; onEditAll?: () => void; onEditSubs?: () => void }) {
+export function LayerControls({ t, isMain, onToggle, onDelete, onReorder, dragging, onEditAll, onEditSubs, onMergeUp, mergeInto }: { t: Track; isMain: boolean; onToggle: () => void; onDelete: () => void; onReorder?: (e: React.PointerEvent) => void; dragging?: boolean; onEditAll?: () => void; onEditSubs?: () => void; /** P32: merge into the layer above (undefined target = top of its group: disabled). */ onMergeUp?: () => void; mergeInto?: string }) {
   return <span className="v2-layer-ctl">
     {onEditSubs && <button className="v2-icon v2-edit-subs" aria-label={`Edit subtitles in ${t.name}`} title="Edit subtitles: every line in a list — text, timing, split, merge, find & replace, export SRT" onClick={onEditSubs}><Ic g="≡" size={16} /></button>}
     {onEditAll && <button className="v2-icon v2-edit-all" aria-label={`Edit all clips in ${t.name}`} title="Edit all: style, font, effects, animation and position for every clip on this layer" onClick={onEditAll}><Ic g="layers" size={16} /></button>}
+    {!isMain && onMergeUp && <button className="v2-icon v2-merge-up" disabled={!mergeInto} aria-label={mergeInto ? `Merge ${t.name} up into ${mergeInto}` : `Merge ${t.name} up`} title={mergeInto ? `Merge up: move every clip into ${mergeInto} (the layer above) and remove this layer` : "Top layer of its group: nothing above to merge into"} onClick={onMergeUp}><Ic g="merge" size={16} /></button>}
     {!isMain && onReorder && <button className={`v2-icon v2-drag-handle ${dragging ? "is-dragging" : ""}`} aria-label={`Reorder ${t.name}`} title="Drag up or down to reorder this layer in its group" onPointerDown={onReorder}><Ic g="grip" size={16} /></button>}
     <button className={`v2-icon ${t.hidden ? "is-off" : ""}`} aria-pressed={!!t.hidden} aria-label={t.hidden ? `Show ${t.name}` : `Hide ${t.name}`} title={t.hidden ? "Show layer (included in preview and export)" : "Hide layer (skipped in preview and export)"} onClick={onToggle}><Ic g={t.hidden ? "eye-off" : "eye"} size={16} /></button>
     {!isMain && <button className="v2-icon v2-danger-icon" aria-label={`Delete ${t.name}`} title="Delete layer and its clips" onClick={onDelete}><Ic g="✕" size={16} /></button>}

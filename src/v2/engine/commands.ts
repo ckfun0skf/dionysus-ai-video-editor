@@ -20,6 +20,7 @@ import * as storySteps from "../domain/storySteps";
 import { replaceStory, sendStory, updateStory } from "../domain/storySend";
 import { syncPlan } from "../domain/storySync";
 import { promoteOverlay as promoteToMain, type PromoteOptions } from "../domain/promote";
+import { mergeLayerUp as mergeUp, type MergeOptions } from "../domain/mergeLayer";
 import type { StoryDoc } from "../domain/storyJson";
 import { DEFAULT_TEXT, DEFAULT_TEXT_TICKS, textOf, type TextData } from "../domain/text";
 
@@ -480,6 +481,12 @@ export const addAudioFromVideo = (asset: Asset, placement: Placement, muteClips:
       return comp;
     });
   },
+});
+
+/** P32: merge layer `trackId` into the layer above it in its group (domain/mergeLayer). One undo step. */
+export const mergeLayerUp = (trackId: string, opts: MergeOptions = {}): Command => ({
+  label: "Merge layer up",
+  apply: (p) => withRoot(p, (c) => mergeUp(c, trackId, opts).comp),
 });
 
 /**
