@@ -315,6 +315,14 @@ export class Player {
         if (ctx && canvas && !track.hidden) withBlend(ctx, placement.blend, () => this.boxes.set(placement.id, drawTextClip(ctx, placement, canvas.width, canvas.height, this.time, mix ?? 1)));
         continue;
       }
+      // P35: a storyboard shot with no clip yet: a dark slate with the shot label (preview only; export draws a dark frame).
+      if (placement.placeholder) {
+        if (ctx && canvas && !track.hidden) {
+          if (this.offline) { ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = "#000"; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.restore(); }
+          else drawPlaceholderSlate(ctx, canvas.width, canvas.height, placement.placeholder.label);
+        }
+        continue;
+      }
       const version = versionOf(this.project, placement.source);
       if (!version || track.hidden) continue;
       // Overlay-scope effects: draw the clip on a transparent layer, apply the effect there, then composite it.
@@ -644,5 +652,26 @@ export function drawSubtitle(ctx: CanvasRenderingContext2D, w: number, h: number
     ctx.lineWidth = size * 0.18; ctx.strokeStyle = "rgba(0,0,0,.85)"; ctx.strokeText(l, w / 2, y);
     ctx.fillStyle = "#fff"; ctx.fillText(l, w / 2, y);
   });
+  ctx.restore();
+}
+
+/** P35: preview slate for a placeholder shot: near-black frame, a thin frame line, the shot label and "Not generated". */
+export function drawPlaceholderSlate(ctx: CanvasRenderingContext2D, w: number, h: number, label: string): void {
+  ctx.save();
+  ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over"; ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = "#111214"; ctx.fillRect(0, 0, w, h);
+  const u = Math.max(1, Math.round(Math.min(w, h) / 360));
+  ctx.strokeStyle = "rgba(255,255,255,0.22)"; ctx.lineWidth = 2 * u; ctx.setLineDash([8 * u, 6 * u]);
+  ctx.strokeRect(w * 0.06, h * 0.08, w * 0.88, h * 0.84);
+  ctx.setLineDash([]);
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  const big = Math.round(Math.min(w / 24, h / 12));
+  ctx.fillStyle = "rgba(255,255,255,0.88)"; ctx.font = `600 ${big}px system-ui, sans-serif`;
+  const max = w * 0.8;
+  let text = label;
+  while (text.length > 4 && ctx.measureText(text).width > max) text = `${text.slice(0, -2)}…`;
+  ctx.fillText(text, w / 2, h / 2 - big * 0.4);
+  ctx.fillStyle = "rgba(255,255,255,0.55)"; ctx.font = `500 ${Math.round(big * 0.55)}px system-ui, sans-serif`;
+  ctx.fillText("NOT GENERATED", w / 2, h / 2 + big * 0.75);
   ctx.restore();
 }

@@ -23,23 +23,29 @@ function setup() {
 }
 
 describe("send storyboard to timeline", () => {
-  it("appends shots with clips in story order, skips the rest, one undo", () => {
+  it("sends shots in story order; a shot with no clip becomes a placeholder (P35), one undo", () => {
     const e = setup();
     expect(board.sendPlan(e.getState().project).map((x) => x.state)).toEqual(["ready", "missing", "ready"]);
     e.dispatch(cmd.sendStoryToTimeline());
     const pls = main(e.getState().project).placements;
-    expect(pls.map((p) => [p.source.versionId, p.startTicks, p.durationTicks])).toEqual([["a1", 0, s(5)], ["c1", s(5), s(4)]]);
+    expect(pls.map((p) => [p.source.versionId, p.startTicks, p.durationTicks])).toEqual([["a1", 0, s(5)], ["", s(5), pls[1].durationTicks], ["c1", s(5) + pls[1].durationTicks, s(4)]]);
+    expect(pls[1]).toMatchObject({ storyShot: "s2", clipType: "image", placeholder: { label: expect.stringMatching(/^Shot 2/) } });
     expect(board.sendPlan(e.getState().project).map((x) => x.state)).toEqual(["placed", "missing", "placed"]);
+    expect(board.sendPlan(e.getState().project)[1].placeholder).toBe(true);
     e.undo();
     expect(main(e.getState().project).placements).toHaveLength(0);
   });
 
-  it("sending again only adds new shots, after what is already there", () => {
+  it("sending again adds new shots after what is there; a generated shot replaces its placeholder in place (P35)", () => {
     const e = setup();
     e.dispatch(cmd.sendStoryToTimeline());
     e.dispatch(cmd.addStoryVersion({ shot: "s2" }, clip(6), { versionId: "b1" }));
-    e.dispatch(cmd.sendStoryToTimeline());
-    expect(main(e.getState().project).placements.map((p) => [p.source.versionId, p.startTicks])).toEqual([["a1", 0], ["c1", s(5)], ["b1", s(9)]]);
+    const ph = main(e.getState().project).placements[1];
+    e.dispatch(cmd.updateStoryTimeline());
+    const pls = main(e.getState().project).placements;
+    expect(pls.map((p) => [p.source.versionId, p.startTicks])).toEqual([["a1", 0], ["b1", s(5)], ["c1", s(5) + ph.durationTicks]]);
+    expect(pls[1]).toMatchObject({ id: ph.id, clipType: "video", durationTicks: ph.durationTicks });
+    expect(pls[1].placeholder).toBeUndefined();
   });
 
   it("an untrimmed linked clip takes each version's full length and the main track ripples", () => {
@@ -107,6 +113,6 @@ describe("send storyboard to timeline", () => {
     const e = setup();
     e.dispatch(cmd.setStorySkipped({ shot: "s3" }, true));
     e.dispatch(cmd.sendStoryToTimeline());
-    expect(main(e.getState().project).placements.map((p) => p.source.versionId)).toEqual(["a1"]);
+    expect(main(e.getState().project).placements.map((p) => p.source.versionId)).toEqual(["a1", ""]);
   });
 });

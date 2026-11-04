@@ -132,6 +132,8 @@ export function replaceError(project: Project, id: string, assetId: string): str
   const p = f.placement, a = project.assets[assetId];
   if (p.clipType === "text" || p.clipType === "effect") return `Clip ${id} is a ${p.clipType} clip; it has no asset to replace.`;
   if (!a) return `No asset "${assetId}".`;
+  // P35: a shot placeholder takes any picture asset (video, image or html).
+  if (p.placeholder) return a.kind === "audio" ? `Asset ${assetId} is audio; placeholder ${id} needs a video, image or html clip.` : replaceVersion(project, assetId) ? undefined : `Asset ${assetId} has no version yet.`;
   if (a.kind !== p.clipType) return `Asset ${assetId} is ${a.kind}; clip ${id} is ${p.clipType}. Replace with the same kind (video with video, audio with audio).`;
   if (!replaceVersion(project, assetId)) return `Asset ${assetId} has no version yet.`;
   if (p.source.assetId === assetId && p.source.versionId === replaceVersion(project, assetId)!.id) return `Clip ${id} already uses ${assetId}.`;
@@ -142,7 +144,8 @@ export function replaceError(project: Project, id: string, assetId: string): str
 export function replacePlan(project: Project, id: string, assetId: string): ReplacePlan {
   const p = findPlacement(rootOf(project), id)!.placement;
   const v = replaceVersion(project, assetId);
-  const need = spanOf(p), media = p.clipType === "video" || p.clipType === "audio" || p.clipType === "html" ? v?.media.durationTicks : undefined;
+  const kind = p.placeholder ? project.assets[assetId]?.kind : p.clipType;
+  const need = spanOf(p), media = kind === "video" || kind === "audio" || kind === "html" ? v?.media.durationTicks : undefined;
   if (!media || p.freeze) return { inTicks: media && p.freeze ? Math.min(p.sourceInTicks, Math.max(0, media - 1)) : p.sourceInTicks, mediaTicks: media, needTicks: need, short: false, shifted: false };
   if (p.sourceInTicks + need <= media) return { inTicks: p.sourceInTicks, mediaTicks: media, needTicks: need, short: false, shifted: false };
   const inTicks = Math.max(0, media - need);
@@ -173,6 +176,7 @@ export function replaceClipAsset(project: Project, id: string, assetId: string, 
     if (p.id !== id) return p;
     const out: Placement = { ...p, source: { kind: "assetVersion", assetId, versionId: v.id }, sourceInTicks: plan.inTicks };
     delete out.storyTrim; delete out.holdEndTicks;
+    if (p.placeholder) { delete out.placeholder; out.clipType = project.assets[assetId]!.kind; }
     if (plan.short && plan.mediaTicks) {
       if (onShort === "shorten") { out.durationTicks = Math.max(MIN_DURATION_TICKS, Math.floor(plan.mediaTicks / (p.speed ?? 1))); notes.push(`Clip shortened to ${s2(out.durationTicks)} s.`); }
       else { out.holdEndTicks = holdPoint(plan.mediaTicks); notes.push(`Clip keeps its length; the last frame holds from ${s2(plan.mediaTicks / (p.speed ?? 1))} s into the clip.`); }

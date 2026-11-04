@@ -199,16 +199,17 @@ describe("Send to timeline modes (P2A-SEND-MODES)", () => {
     d.audio = [{ id: "vo1", asset: "vo", kind: "voiceover", from: "s2", volume: 0.5 }];
     p = board.setStoryboard(p, mergeStoryboard(p, d));
     p = up(p, { slot: "poster" }, img);
-    expect(updatePlan(p)).toEqual({ clips: [], refreshed: ["s2"], cues: ["vo1"] });
+    expect(updatePlan(p)).toEqual({ clips: ["s3"], refreshed: ["s2"], cues: ["vo1"] });
     const r = updateStory(p);
     const after = all(r.project);
-    expect(after.filter((x) => x.storyShot).map((x) => x.id).slice(0, 2)).toEqual(clipIds);
+    expect(after.filter((x) => x.storyShot).map((x) => x.id)).toEqual(clipIds); // s3 was a placeholder: replaced in place (P35)
     expect(after.filter((x) => x.storyShot).map((x) => x.storyShot)).toEqual(["s1", "s2", "s3"]);
     const texts = after.filter((x) => x.clipType === "text").map((x) => x.text?.text);
     expect(texts).toContain("Midnight");
     expect(texts).not.toContain("Night");
     expect(after.filter((x) => x.storyCue === "vo1").map((x) => x.volume)).toEqual([0.5]);
-    expect(r.result).toMatchObject({ shots: 1, refreshed: 1, cues: 1 });
+    expect(r.result).toMatchObject({ shots: 0, clips: 1, refreshed: 1, cues: 1 });
+    expect(after.find((x) => x.storyShot === "s3")!.placeholder).toBeUndefined();
     expect(untouched).toBeDefined();
     expect(updatePlan(r.project)).toEqual({ clips: [], refreshed: [], cues: [] });
   });
@@ -231,10 +232,12 @@ describe("Send to timeline modes (P2A-SEND-MODES)", () => {
     p = sendStory(p).project;
     const r = replaceStory(p);
     const shots = all(r.project).filter((x) => x.storyShot);
-    expect(shots.map((x) => x.storyShot)).toEqual(["s1", "s2"]);
+    expect(shots.map((x) => x.storyShot)).toEqual(["s1", "s2", "s3"]);
+    expect(shots[2].placeholder).toBeDefined();
     expect(shots.some((x) => all(p).some((y) => y.id === x.id))).toBe(false);
     expect(all(r.project).filter((x) => x.storyCue)).toHaveLength(1);
-    expect(r.result.shots).toBe(2);
+    expect(r.result.shots).toBe(3);
+    expect(r.result.placeholders).toBe(1);
   });
 });
 

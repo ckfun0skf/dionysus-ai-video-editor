@@ -35,13 +35,16 @@ describe("storyboard workspace", () => {
     const el = await mount();
     await act(async () => engine.dispatch(cmd.createStoryboard(doc)));
     await act(async () => btn(el, "Send to timeline").click());
-    expect(el.querySelector(".v2-sb-note")!.textContent).toMatch(/No clips to send yet/);
+    // P35: shots with no clip yet go on as placeholders.
+    expect(el.querySelector(".v2-sb-note")!.textContent).toMatch(/^Added 3 placeholders and \d+ layers to the end of the timeline · 3 shots still need a clip/);
+    expect(el.querySelectorAll(".v2-sb-placed")).toHaveLength(0);
     const clip: MediaRef = { blobKey: "c", mime: "video/mp4", durationTicks: 1000 };
     await act(async () => engine.dispatch(cmd.addStoryVersion({ shot: "s1" }, clip)));
     await act(async () => btn(el, "Send to timeline").click());
-    expect(el.querySelector(".v2-sb-note")!.textContent).toBe("Added 1 clip to the end of the timeline · 2 shots still need a clip");
+    await act(async () => (el.querySelector('[data-testid="send-update"]') as HTMLButtonElement).click());
+    expect(el.querySelector(".v2-sb-note")!.textContent).toBe("Filled 1 placeholder · 2 shots still need a clip");
     expect(el.querySelectorAll(".v2-sb-placed")).toHaveLength(1);
-    await act(async () => btn(el, "Undo").click());
+    await act(async () => engine.undo());
     expect(el.querySelectorAll(".v2-sb-placed")).toHaveLength(0);
   });
 

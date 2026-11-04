@@ -91,7 +91,7 @@ export function syncPlan(p: Project): SyncPlan {
   const seen = new Set<string>();
   for (const pl of mainClips) {
     if (pl.storyShot && b.shots[pl.storyShot] && !seen.has(pl.storyShot)) { seen.add(pl.storyShot); shotOfClip.set(pl.id, pl.storyShot); continue; }
-    if (pl.clipType === "text" || pl.clipType === "effect") continue;
+    if (pl.clipType === "text" || pl.clipType === "effect" || pl.placeholder) continue; // P35: an orphan placeholder makes no shot
     // P20: a later part of a shot's own take (a split, e.g. around a promoted overlay) continues that shot: a new shot
     // with the same clip and prompt, its own in point and length, and no needsPrompt.
     const orig = pl.storyShot && seen.has(pl.storyShot) ? b0.shots[pl.storyShot] : undefined;

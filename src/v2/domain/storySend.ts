@@ -25,7 +25,7 @@ import { secondsToTicks, TICKS_PER_SECOND } from "./time";
 import { followKeyframes, type MotionEffect } from "./storyFollow";
 
 /** What one send added, for the confirmation note. */
-export interface SendResult { shots: number; layers: number; captions: number; effects: number; transitions: number; skippedLayers: number; audio: number; skippedAudio: number; firstClipId?: string }
+export interface SendResult { shots: number; /** P35: shots sent as placeholders (no clip yet). */ placeholders?: number; layers: number; captions: number; effects: number; transitions: number; skippedLayers: number; audio: number; skippedAudio: number; firstClipId?: string }
 
 /** Audio layer names per cue kind (V2-SB-125): one kind per layer, so voice, music and effects mix separately. */
 export const AUDIO_TRACK_NAMES: Record<AudioKind, string> = { voiceover: "Voiceover", music: "Music", sfx: "Sound effects", ambience: "Ambience", sting: "Stings", dialogue: "Dialogue" };
@@ -115,6 +115,23 @@ function shotClip(b: Storyboard, asset: Asset, v: AssetVersion, shot: Shot, at: 
   }
   return { id: newId("plc"), startTicks: at, durationTicks, sourceInTicks: span?.inTicks ?? 0, source: { kind: "assetVersion", assetId: asset.id, versionId: v.id }, clipType: asset.kind, volume: 1, storyShot: shot.id, ...params };
 }
+
+/** P35: label of a placeholder clip: "Shot n · title" (+ a short description). */
+export function placeholderLabel(b: Storyboard, shot: Shot): string {
+  const n = b.order.indexOf(shot.id) + 1;
+  const desc = (shot.description || "").replace(/\s+/g, " ").trim();
+  const short = desc.length > 48 ? `${desc.slice(0, 47)}…` : desc;
+  return [`Shot ${n}${shot.title ? ` · ${shot.title}` : ""}`, short].filter(Boolean).join(" — ");
+}
+
+/** P35: a placeholder main clip for a shot with no clip yet: the shot's planned length (durationSec, else the default). */
+export function placeholderClip(b: Storyboard, shot: Shot, at: number): Placement {
+  const durationTicks = shot.durationSec > 0 ? secondsToTicks(shot.durationSec) : DEFAULT_IMAGE_TICKS;
+  return { id: newId("plc"), startTicks: at, durationTicks, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "image", volume: 1, storyShot: shot.id, placeholder: { label: placeholderLabel(b, shot) } };
+}
+
+/** P35: placeholder clips on the root composition. */
+export const placeholderClips = (p: Project): Placement[] => p.compositions[p.rootCompositionId]?.tracks.flatMap((t) => t.placements.filter((pl) => !!pl.placeholder)) ?? [];
 
 function mediaLayer(p: Project, b: Storyboard, shot: Shot, l: StoryMediaLayer, start: number, dur: number, anchor: string): Placement | undefined {
   const slot = b.slots[l.asset];
@@ -330,7 +347,8 @@ export function pendingAudio(p: Project): string[] {
 export function sendStory(p: Project): { project: Project; result: SendResult } {
   const result: SendResult = { shots: 0, layers: 0, captions: 0, effects: 0, transitions: 0, skippedLayers: 0, audio: 0, skippedAudio: 0 };
   const b = p.storyboard;
-  const ready = sendPlan(p).filter((s) => s.state === "ready");
+  // P35: shots with no clip yet go on as placeholders (in story order, at their planned length) instead of being skipped.
+  const ready = sendPlan(p).filter((s) => s.state === "ready" || (s.state === "missing" && !s.placeholder));
   if (!b || (!ready.length && !pendingAudio(p).length)) return { project: p, result };
   let comp = p.compositions[p.rootCompositionId];
   let tid = mainTrack(comp)?.id;
@@ -338,9 +356,10 @@ export function sendStory(p: Project): { project: Project; result: SendResult } 
   let at = Math.max(0, ...(comp.tracks.find((t) => t.id === tid)?.placements ?? []).map((x) => x.startTicks + x.durationTicks));
   const sent: { shot: Shot; clip: Placement }[] = [];
   for (const s of ready) {
-    const shot = b.shots[s.shotId], asset = p.assets[s.assetId!], v = selectedVersion(asset);
-    if (!v) continue;
-    const clip = shotClip(b, asset, v, shot, at);
+    const shot = b.shots[s.shotId], asset = s.state === "ready" ? p.assets[s.assetId!] : undefined, v = asset && selectedVersion(asset);
+    if (s.state === "ready" && !v) continue;
+    const clip = asset && v ? shotClip(b, asset, v, shot, at) : placeholderClip(b, shot, at);
+    if (clip.placeholder) result.placeholders = (result.placeholders ?? 0) + 1;
     comp = insertPlacement(comp, tid!, clip);
     sent.push({ shot, clip });
     at += clip.durationTicks;
@@ -430,7 +449,10 @@ export function updateStory(p: Project): { project: Project; result: UpdateResul
   const clips = shotClips(comp);
   for (const id of plan.clips) {
     const s = b.shots[id], a = q.assets[s.assetId!], v = selectedVersion(a)!, old = clips.get(id)!;
-    const { htmlParams: _h, ...rest } = old;
+    const { htmlParams: _h, placeholder: wasPh, ...rest } = old;
+    // P35: a placeholder keeps its place, length and edits; a video shorter than it ends with its media.
+    const len = wasPh && a.kind === "video" ? v.media.durationTicks : undefined;
+    if (len && len < rest.durationTicks) rest.durationTicks = len;
     const next: Placement = { ...rest, source: { kind: "assetVersion", assetId: a.id, versionId: v.id }, clipType: a.kind, sourceInTicks: 0, ...(a.kind === "html" && s.params && Object.keys(s.params).length ? { htmlParams: { ...s.params } } : {}) };
     comp = { ...comp, tracks: comp.tracks.map((t) => (t.placements.some((x) => x.id === old.id) ? { ...t, placements: t.placements.map((x) => (x.id === old.id ? next : x)) } : t)) };
     base.clips += 1;

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { exportName, exportProject, formatLabel, formatNote, probeExportFormat, RESOLUTIONS, type ExportFormat, type ExportProgress, type ExportResult, type Resolution } from "../render";
-import type { Project } from "../domain";
+import { placeholderClips, type Project } from "../domain";
 import type { BlobStore } from "../ports";
 import { Ic } from "./Icon";
 
@@ -37,6 +37,7 @@ export function ExportDialog({ project, blobs, res, onRes, onClose, run = export
       setSt(c.signal.aborted ? { s: "idle" } : { s: "error", msg: e instanceof Error ? e.message : String(e) });
     }
   };
+  const holes = placeholderClips(project);
   const pct = st.s === "running" ? (st.p.stage === "video" ? Math.round((st.p.done / Math.max(1, st.p.total)) * 100) : st.p.stage === "finalize" ? 100 : 0) : 0;
   return (
     <div className="v2-modal" role="dialog" aria-modal="true" aria-label="Export video">
@@ -48,7 +49,8 @@ export function ExportDialog({ project, blobs, res, onRes, onClose, run = export
           </label>
           <p className="v2-muted" data-testid="export-format">{fmt ? `This browser will export ${formatLabel(fmt)}${fmt.ext === "webm" ? ", recorded in real time" : ""}.` : "Checking what this browser can encode…"}</p>
           {fmt && formatNote(fmt) && <p className="v2-muted">{formatNote(fmt)}</p>}
-          <div className="v2-modal-actions"><button className="v2-btn" onClick={onClose}>Cancel</button><button className="v2-btn primary" onClick={() => void start()}>Start export</button></div>
+          {!!holes.length && <div className="v2-warn" role="alert" data-testid="export-placeholders"><b><Ic g="⚠" size={16} /> {holes.length} shot{holes.length === 1 ? " is" : "s are"} not generated yet</b><p>{holes.length === 1 ? "It exports" : "They export"} as a black frame: {holes.slice(0, 3).map((x) => x.placeholder!.label.split(" — ")[0]).join(", ")}{holes.length > 3 ? ` and ${holes.length - 3} more` : ""}. Add the clips on the storyboard and Send to timeline (Update) first, or export anyway.</p></div>}
+          <div className="v2-modal-actions"><button className="v2-btn" onClick={onClose}>Cancel</button><button className="v2-btn primary" onClick={() => void start()}>{holes.length ? "Export anyway" : "Start export"}</button></div>
         </>}
         {st.s === "running" && <>
           <p role="status">{STAGE[st.p.stage]}{st.p.stage === "video" ? ` ${st.p.done} / ${st.p.total}` : ""}</p>

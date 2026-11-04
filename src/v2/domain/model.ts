@@ -66,6 +66,12 @@ export interface Placement {
    * never passes this tick, so the clip keeps its length and holds the source's last frame (audio is silent past the end).
    */
   holdEndTicks?: number;
+  /**
+   * P35: a storyboard shot with no clip yet (`storyShot` names it). Main-track still clip (`clipType: "image"`,
+   * TEXT_SOURCE) at the shot's length; preview draws a dark slate with `label`, export a dark frame (warned first).
+   * Send to Timeline (Update) or Replace asset swaps in the real clip in place and drops this field.
+   */
+  placeholder?: { label: string };
   /** Fade in/out length in ticks: ramps opacity (visual) and volume (audio) from/to 0. */
   fadeInTicks?: number;
   fadeOutTicks?: number;

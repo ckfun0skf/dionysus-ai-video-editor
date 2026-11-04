@@ -941,10 +941,13 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     const linkSec = linkActions.length ? <><section className="v2-psettings v2-link-sec" aria-label="Link to main"><h4>Link to main</h4>
       <button className={`v2-btn v2-link-btn ${selLinked ? "is-active" : ""}`} role="switch" aria-checked={!!selLinked} title={linkActions[0].title} onClick={linkActions[0].run}><Ic g={selLinked ? "unlink" : "link"} size={16} /> {selLinked ? `Linked to ${clipName(findPlacement(comp, selLinked.parent)?.placement ?? pl)}` : "Link to main"}</button>
     </section>{promoteSec}</> : null;
-    const rangeSec = canAdjustRange(pl) ? <section className="v2-psettings v2-range-sec" aria-label="Source range"><h4>Source range</h4>
+    const rangeSec = pl.placeholder ? <section className="v2-psettings v2-range-sec" aria-label="Placeholder"><h4>Not generated</h4>
+      <p className="v2-abnote">{pl.placeholder.label} has no clip yet. Generate it in the storyboard and Update, or fill it now.</p>
+      <div className="v2-insp-actions"><button className="v2-btn" data-testid="replace-asset-btn" title="Fill this placeholder with a video or image; its place and length stay" onClick={() => setRangeFor({ id: pl.id, picker: true })}><Ic g="⇄" size={16} /> Replace asset</button></div></section>
+      : canAdjustRange(pl) ? <section className="v2-psettings v2-range-sec" aria-label="Source range"><h4>Source range</h4>
       <div className="v2-insp-actions"><button className="v2-btn" data-testid="adjust-range-btn" title="Choose which part of the source this clip plays (slip); its place and length stay (Alt+drag on the clip)" onClick={() => setRangeFor({ id: pl.id })}><Ic g="⇔" size={16} /> Adjust range</button>
       <button className="v2-btn" data-testid="replace-asset-btn" title="Swap this clip's media for another of the same kind; everything else stays" onClick={() => setRangeFor({ id: pl.id, picker: true })}><Ic g="⇄" size={16} /> Replace asset</button></div></section> : null;
-    const transform: InspectorTab = { id: "basic", label: "Basic", icon: "⤧", render: () => kind === "video" && !pl.freeze && !linkSec ? <>{rangeSec}
+    const transform: InspectorTab = { id: "basic", label: "Basic", icon: "⤧", render: () => pl.placeholder ? rangeSec : kind === "video" && !pl.freeze && !linkSec ? <>{rangeSec}
       <section className="v2-psettings v2-frames-sec" aria-label="In and out frames"><h4>In / out frames</h4><ClipFrames engine={engine} project={project} placement={pl} /></section>
       <TransformInspector engine={engine} placement={pl} time={time} />
     </> : <>{rangeSec}{linkSec}{kind === "video" && !pl.freeze && <section className="v2-psettings v2-frames-sec" aria-label="In and out frames"><h4>In / out frames</h4><ClipFrames engine={engine} project={project} placement={pl} /></section>}<TransformInspector engine={engine} placement={pl} time={time} /></> };
@@ -1033,6 +1036,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     const many = sel.length > 1 ? ` ${sel.length} clips` : "";
     const ctxLink = p.source.assetId ? storyDomain.storyLinkOf(project, p.source.assetId) : undefined;
     return [
+      ...(p.placeholder && sel.length <= 1 ? [{ label: "Replace asset…", icon: "⇄", onSelect: () => { selectClip(p.id); setRangeFor({ id: p.id, picker: true }); } }, "sep" as const] : []),
       ...(canAdjustRange(p) && sel.length <= 1 ? [{ label: "Adjust range…", icon: "⇔", shortcut: "Alt+drag", onSelect: () => { selectClip(p.id); setRangeFor({ id: p.id }); } }, { label: "Replace asset…", icon: "⇄", onSelect: () => { selectClip(p.id); setRangeFor({ id: p.id, picker: true }); } }, "sep" as const] : []),
       { label: "Split at playhead", icon: "✂", shortcut: "S", disabled: !inside || sel.length > 1, onSelect: () => engine.dispatch(cmd.splitPlacement(p.id, t)) },
       { label: "Trim start to playhead", icon: "trim-start", shortcut: "Q", disabled: !inside, onSelect: () => trimToPlayhead("left") },

@@ -43,7 +43,7 @@ export const TIMELINE_TOOLS: TimelineToolDef[] = [
     description: "Show a different part of the source inside a video, audio or HTML clip: set the source in point to inSec. The clip keeps its timeline position and length; inSec is clamped so the range stays inside the media. moveLinked: true slips linked audio/overlays by the same amount. Images and text cannot slip. One undo step; returns the clip.",
     inputSchema: obj({ clipId: str("Clip id."), inSec: num("New source in point in seconds."), moveLinked: { type: "boolean" } }, ["clipId", "inSec"]) },
   { name: "replace_clip_asset", title: "Replace a clip's asset", readOnly: false,
-    description: "Swap the media of a clip for another asset of the same kind, keeping every other property (position, length, effects, links). The in point is kept when it fits, otherwise moved earlier. If the new source is shorter than the clip, pass onShort: \"shorten\" (clip ends with the source) or \"hold\" (keep length, freeze the last frame); without it the call fails and explains. One undo step; returns the clip. On a main-track clip that came from a storyboard shot, the asset is added as a new version of that shot instead (the clip follows it; earlier versions stay selectable).",
+    description: "Swap the media of a clip for another asset of the same kind, keeping every other property (position, length, effects, links). The in point is kept when it fits, otherwise moved earlier. If the new source is shorter than the clip, pass onShort: \"shorten\" (clip ends with the source) or \"hold\" (keep length, freeze the last frame); without it the call fails and explains. One undo step; returns the clip. On a shot placeholder (get_timeline \"placeholder\": true) any video, image or html asset fills it in place. On a main-track clip that came from a storyboard shot, the asset is added as a new version of that shot instead (the clip follows it; earlier versions stay selectable).",
     inputSchema: obj({ clipId: str("Clip id."), assetId: str("Asset id of the same kind."), onShort: { type: "string", enum: ["shorten", "hold"] } }, ["clipId", "assetId"]) },
   { name: "split_clip", title: "Split a clip", readOnly: false,
     description: "Split a clip at atSec (inside it). One undo step; returns both halves.",
@@ -94,6 +94,7 @@ export function clipJson(p: Project, pl: Placement, track?: Track): Record<strin
     ...(pl.fadeInTicks || pl.fadeOutTicks ? { fades: { inSec: sec(pl.fadeInTicks ?? 0), outSec: sec(pl.fadeOutTicks ?? 0) } } : {}),
     ...(pl.link ? { linkedTo: pl.link.parent } : {}),
     ...(pl.storyShot ? { storyShot: pl.storyShot } : {}),
+    ...(pl.placeholder ? { placeholder: true, label: pl.placeholder.label } : {}),
     ...(pl.storyLayer ? { storyLayer: pl.storyLayer } : {}),
     ...(pl.storyCue ? { storyCue: pl.storyCue } : {}),
   };
@@ -126,7 +127,7 @@ export function textBounds(pl: Placement, aspect: number) {
   return { left: cx - w / 2, right: cx + w / 2, top: cy - h / 2, bottom: cy + h / 2 };
 }
 
-export type LintKind = "needs-prompt" | "removed-from-timeline" | "short-clip" | "gap" | "black-frame" | "unlinked-layer" | "audio-clipping" | "audio-silence" | "text-off-frame" | "missing-asset";
+export type LintKind = "needs-prompt" | "removed-from-timeline" | "short-clip" | "gap" | "black-frame" | "unlinked-layer" | "audio-clipping" | "audio-silence" | "text-off-frame" | "missing-asset" | "placeholder";
 export interface LintIssue { kind: LintKind; severity: "error" | "warning" | "info"; message: string; atSec?: number; clip?: string; shot?: string }
 
 /**
@@ -143,6 +144,10 @@ export function reviewLint(p: Project, o: { minClipSec?: number; hasBlob?: (key:
     const at = sec(pl.startTicks);
     if (pl.durationTicks < min) out.push({ kind: "short-clip", severity: "warning", clip: pl.id, atSec: at, message: `Clip ${pl.id} is only ${sec(pl.durationTicks)}s long.` });
     if (t !== main && t.kind !== "audio" && t.kind !== "effect" && main && main.placements.length && !pl.link) out.push({ kind: "unlinked-layer", severity: "info", clip: pl.id, atSec: at, message: `Layer ${pl.id} on ${t.name} isn't linked to a main clip; it won't follow edits.` });
+    if (pl.placeholder) {
+      out.push({ kind: "placeholder", severity: "warning", clip: pl.id, atSec: at, ...(pl.storyShot ? { shot: pl.storyShot } : {}), message: `${pl.placeholder.label} is a placeholder (${sec(pl.durationTicks)}s): its clip isn't generated yet, so it exports as a black frame. Add the shot's clip, then send_to_timeline (Update) or replace_clip_asset on ${pl.id}.` });
+      continue;
+    }
     if (pl.clipType !== "text" && pl.clipType !== "effect") {
       const v = versionOf(p, pl.source);
       if (!v) out.push({ kind: "missing-asset", severity: "error", clip: pl.id, atSec: at, message: `Clip ${pl.id} points to media that no longer exists.` });

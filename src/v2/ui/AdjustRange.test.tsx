@@ -3,7 +3,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import { createProject, findPlacement, ops, sourceAt, slip, type Asset, type Project } from "../domain";
+import { createProject, findPlacement, ops, sourceAt, slip, TEXT_SOURCE, type Asset, type Placement, type Project } from "../domain";
 import { cmd, Engine } from "../engine";
 import { validateStoryboard, type StoryDoc } from "../domain/storyJson";
 import { secondsToTicks as s } from "../domain/time";
@@ -220,3 +220,26 @@ for (const host of ["phone", "desktop"] as Host[]) {
     });
   });
 }
+
+describe("P35: Replace asset fills a shot placeholder", () => {
+  it("lists video and image assets and fills the placeholder in one undo step", async () => {
+    const e0 = new Engine(createProject("t"));
+    e0.dispatch([cmd.importAsset(asset("v", 10)), cmd.importAsset(asset("i", undefined, "image")), cmd.importAsset(asset("au", 5, "audio"))]);
+    const main = ops.mainTrack(root(e0.getState().project))!.id;
+    e0.dispatch(cmd.addAssetToTimeline("i", 0, main, "P"));
+    const p0 = e0.getState().project, t = root(p0).tracks.find((x) => x.id === main)!;
+    const ph: Placement = { ...t.placements[0], durationTicks: s(4), source: TEXT_SOURCE, placeholder: { label: "Shot 1 · Open" } };
+    const e = new Engine({ ...p0, compositions: { ...p0.compositions, [p0.rootCompositionId]: { ...root(p0), tracks: root(p0).tracks.map((x) => (x.id === main ? { ...x, placements: [ph] } : x)) } } });
+    const { el, done } = await mount(e, "desktop", { picker: true, id: "P" });
+    const names = [...el.querySelectorAll(".v2-slip-asset-name")].map((n) => n.textContent);
+    expect(names).toEqual(["v.mp4", "i.mp4"]);
+    await act(async () => btn(el, "Use v.mp4").click());
+    const after = pl(e, "P");
+    expect(after.placeholder).toBeUndefined();
+    expect(after.clipType).toBe("video");
+    expect(after.durationTicks).toBe(s(4));
+    expect(done[0]).toContain("Placeholder filled");
+    e.undo();
+    expect(pl(e, "P").placeholder?.label).toBe("Shot 1 · Open");
+  });
+});

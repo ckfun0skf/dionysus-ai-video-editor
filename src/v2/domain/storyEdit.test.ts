@@ -86,7 +86,8 @@ describe("storyEdit", () => {
     expect(sb(p).order).toEqual(["a", "a2", "b", "c"]);
     expect(sb(p).shots.a2).toMatchObject({ title: "Open (copy)", render: "html", clipSlot: "card", assetId: sb(p).shots.a.assetId });
     const first = sendStory(p);
-    expect(first.result.shots).toBe(2);
+    expect(first.result.shots).toBe(4);
+    expect(first.result.placeholders).toBe(2);
     expect(board.sendPlan(first.project).filter((s) => s.shotId.startsWith("a")).map((s) => s.state)).toEqual(["placed", "placed"]);
     p = up(p, { shot: "b" });
     p = edit.duplicateShot(p, "b", "b2");

@@ -84,14 +84,15 @@ export function StoryboardView({ engine, blobs, onClose, initialOpen, onView, on
   const update = useCallback(() => {
     setSendMenu(false);
     const plan = board.sendPlan(project), count = (st: string) => plan.filter((x) => x.state === st).length;
-    const ready = count("ready"), missing = count("missing");
-    const placed = count("placed"), need = missing ? `${missing} shot${missing > 1 ? "s" : ""} still need${missing > 1 ? "" : "s"} a clip` : "";
+    const ready = count("ready"), missing = count("missing"), holes = plan.filter((x) => x.state === "missing" && !x.placeholder).length;
+    const placed = count("placed") + plan.filter((x) => x.placeholder).length, need = missing ? `${missing} shot${missing > 1 ? "s" : ""} still need${missing > 1 ? "" : "s"} a clip` : "";
     const cuesWaiting = pendingAudio(project).length;
     const up = updatePlan(project), redo = up.clips.length + up.refreshed.length + up.cues.length;
-    if (!ready && !cuesWaiting && !redo) { setNote(!placed ? "No clips to send yet — upload a clip for a shot first" : `The timeline is up to date — versions you pick here update it${need ? ` · ${need}` : ""}`); return; }
+    if (!ready && !holes && !cuesWaiting && !redo) { setNote(!placed ? "No clips to send yet — upload a clip for a shot first" : `The timeline is up to date — versions you pick here update it${need ? ` · ${need}` : ""}`); return; }
     const ids = (q = engine.getState().project) => ops.mainTrack(q.compositions[q.rootCompositionId])?.placements ?? [];
     const audioIds = (q = engine.getState().project) => q.compositions[q.rootCompositionId].tracks.flatMap((t) => (t.kind === "audio" ? t.placements.map((x) => x.id) : []));
     const before = new Set(ids().map((x) => x.id)), audioBefore = new Set(audioIds());
+    const filled = ids().filter((x) => x.placeholder && x.storyShot && up.clips.includes(x.storyShot)).length, switched = up.clips.length - filled;
     engine.dispatch(placed ? cmd.updateStoryTimeline() : cmd.sendStoryToTimeline());
     const added = ids().filter((x) => !before.has(x.id));
     const first = [...added].sort((a, b) => a.startTicks - b.startTicks)[0];
@@ -102,21 +103,21 @@ export function StoryboardView({ engine, blobs, onClose, initialOpen, onView, on
     const audio = audioIds(after).filter((x) => !audioBefore.has(x)).length;
     const pl = (k: number, w: string) => `${k} ${w}${k > 1 ? "s" : ""}`;
     const join = (xs: (string | 0 | false)[]) => { const p = xs.filter(Boolean) as string[]; return p.length > 1 ? `${p.slice(0, -1).join(", ")} and ${p.at(-1)}` : p[0]; };
-    const addWhat = join([ready && pl(ready, "clip"), linked && pl(linked, "layer"), audio && pl(audio, "audio cue")]);
-    const fixWhat = join([up.clips.length && `switched ${pl(up.clips.length, "clip")}`, up.refreshed.length && `redid the text of ${pl(up.refreshed.length, "shot")}`]);
-    const msg = [addWhat && `Added ${addWhat}${ready ? " to the end of the timeline" : ""}`, fixWhat && (addWhat ? fixWhat : fixWhat[0].toUpperCase() + fixWhat.slice(1))].filter(Boolean).join("; ");
+    const addWhat = join([ready && pl(ready, "clip"), holes && pl(holes, "placeholder"), linked && pl(linked, "layer"), audio && pl(audio, "audio cue")]);
+    const fixWhat = join([filled && `filled ${pl(filled, "placeholder")}`, switched && `switched ${pl(switched, "clip")}`, up.refreshed.length && `redid the text of ${pl(up.refreshed.length, "shot")}`]);
+    const msg = [addWhat && `Added ${addWhat}${ready || holes ? " to the end of the timeline" : ""}`, fixWhat && (addWhat ? fixWhat : fixWhat[0].toUpperCase() + fixWhat.slice(1))].filter(Boolean).join("; ");
     setNote(`${msg}${need ? ` · ${need}` : ""}`, first && onView ? { label: "View", run: () => onView(first.id) } : undefined);
   }, [engine, project, onView, setNote]);
   /** P2A: the first send goes straight through; once shots are on the timeline, choose Update or Replace. */
   const send = useCallback(() => {
-    if (board.sendPlan(project).some((x) => x.state === "placed")) setSendMenu(true); else update();
+    if (board.sendPlan(project).some((x) => x.state === "placed" || x.placeholder)) setSendMenu(true); else update();
   }, [project, update]);
   const replaceTimeline = useCallback(() => {
     setConfirmTimeline(false); setSendMenu(false);
     const before = engine.getState().project;
     engine.dispatch(cmd.replaceStoryTimeline());
     const after = engine.getState().project;
-    if (after === before) { setNote("No clips to send yet — upload a clip for a shot first"); return; }
+    if (after === before) { setNote("No shots to send yet — add a shot first"); return; }
     const shots = after.compositions[after.rootCompositionId].tracks.flatMap((t) => t.placements).filter((x) => x.storyShot).length;
     setNote(`Timeline rebuilt from the board · ${shots} clip${shots === 1 ? "" : "s"}`, { label: "Undo", run: () => engine.undo() });
   }, [engine, setNote]);
@@ -232,7 +233,7 @@ export function StoryboardView({ engine, blobs, onClose, initialOpen, onView, on
           <button className="v2-icon v2-sb-icon" aria-label="Redo" title="Redo" disabled={!canRedo} onClick={() => engine.redo()}><Ic g="↷" size={18} /></button>
           {!step && <button className={`v2-btn v2-sb-btn ${mobile ? "v2-sb-prod-icon" : "primary"}`} aria-label="Production steps" title="Step-by-step list: generate, upload, pick and check every asset and clip" onClick={() => { setOpen(undefined); setStep("production"); }}><Ic g="todo" size={18} /> <span className="v2-sb-hide-narrow">Production</span></button>}
           {/* V2-SB-R11: on phones Send is the one labelled primary action; on desktop Production stays primary. */}
-          <button className={`v2-btn v2-sb-btn ${mobile ? "primary" : ""}`} aria-label="Send to timeline" title="Add every shot that has a clip to the end of the timeline, in story order. Timeline clips follow the version you pick here." onClick={send}><Ic g="to-timeline" size={18} /> <span>{mobile ? "Send" : "Send to timeline"}</span></button>
+          <button className={`v2-btn v2-sb-btn ${mobile ? "primary" : ""}`} aria-label="Send to timeline" title="Add every shot to the end of the timeline, in story order; shots without a clip go in as placeholders. Timeline clips follow the version you pick here." onClick={send}><Ic g="to-timeline" size={18} /> <span>{mobile ? "Send" : "Send to timeline"}</span></button>
           <button className="v2-btn v2-sb-btn v2-sync-btn" aria-label="Sync to Storyboard" title="Sync to Storyboard: write timeline edits back to this board (review first)" onClick={() => setSyncOpen(true)}><Ic g="↶" size={18} /> <span>{mobile ? "Sync" : "Sync from timeline"}</span></button>
           {!step && (mobile ? (
             <button ref={moreBtn} className="v2-icon v2-sb-icon" aria-label="More storyboard actions" aria-haspopup="menu" aria-expanded={!!more} title="AI prompt, Export JSON, Import revised JSON, AI agent"
@@ -318,8 +319,9 @@ function SendModes({ project, onUpdate, onReplace, onCancel }: { project: import
   useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === "Escape") onCancel(); }; addEventListener("keydown", k); return () => removeEventListener("keydown", k); }, [onCancel]);
   const plan = board.sendPlan(project), up = updatePlan(project);
   const ready = plan.filter((x) => x.state === "ready").length, cues = pendingAudio(project).length;
+  const holes = plan.filter((x) => x.state === "missing" && !x.placeholder).length;
   const pl = (k: number, w: string) => `${k} ${w}${k === 1 ? "" : "s"}`;
-  const todo = [ready && `${pl(ready, "new shot")}`, cues && `${pl(cues, "audio cue")}`, up.clips.length && `${pl(up.clips.length, "switched clip")}`, up.refreshed.length && `text of ${pl(up.refreshed.length, "shot")}`, up.cues.length && `${pl(up.cues.length, "edited audio cue")}`].filter(Boolean);
+  const todo = [ready && `${pl(ready, "new shot")}`, holes && `${pl(holes, "placeholder")}`, cues && `${pl(cues, "audio cue")}`, up.clips.length && `${pl(up.clips.length, "switched clip")}`, up.refreshed.length && `text of ${pl(up.refreshed.length, "shot")}`, up.cues.length && `${pl(up.cues.length, "edited audio cue")}`].filter(Boolean);
   return (
     <div className="v2-menu-backdrop v2-confirm-backdrop" onPointerDown={onCancel}>
       <div className="v2-confirm v2-sb-sendmodes" role="dialog" aria-modal="true" aria-label="Send to timeline" onPointerDown={(e) => e.stopPropagation()}>

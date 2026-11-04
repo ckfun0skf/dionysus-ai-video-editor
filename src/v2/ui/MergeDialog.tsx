@@ -3,7 +3,7 @@ import { TICKS_PER_SECOND, mergeLayer, type Composition, type Placement, type Pr
 import type { Filmstrip, Peaks } from "./media";
 import { clampPps } from "./gestures";
 import { Ic } from "./Icon";
-import { ClipBody, clipNoThumb, clipThumbStyle, effectName, useTimelineZoom } from "./TimelineClip";
+import { ClipBody, clipKindClass, clipNoThumb, clipThumbStyle, effectName, useTimelineZoom } from "./TimelineClip";
 
 type MergePlan = mergeLayer.MergePlan; type MergeLayout = mergeLayer.MergeLayout;
 const { initialLayout, layoutOverlaps, moveInLayout, keepPrimary, trimThis, trimInLayout, previewLayout } = mergeLayer;
@@ -132,7 +132,7 @@ export function MergeDialog({ plan, comp, project, thumbs, strips, peaks, time, 
         const state = hot.has(p.id) ? "is-conflict" : involved.current.has(p.id) ? "is-resolved" : "is-dim";
         const isSel = sel === p.id;
         return (
-          <div key={p.id} role="button" tabIndex={0} className={`v2-clip clip-${p.clipType} v2-merge-clip ${state} ${isSel ? "is-selected" : ""} ${clipNoThumb(p, thumbs, strips) ? "is-nothumb" : ""}`} data-clip={p.id} data-state={state.slice(3)}
+          <div key={p.id} role="button" tabIndex={0} className={`v2-clip clip-${p.clipType} v2-merge-clip ${state} ${isSel ? "is-selected" : ""} ${clipNoThumb(p, thumbs, strips) ? "is-nothumb" : ""} ${clipKindClass(p)}`} data-clip={p.id} data-state={state.slice(3)}
             style={{ left: toPx(p.startTicks), width: Math.max(4, toPx(p.durationTicks)), ...clipThumbStyle(p, thumbs, strips) }}
             aria-pressed={isSel} aria-label={`${nameOf(p, project)}, ${sec(p.startTicks)}–${sec(end(p))}${state === "is-conflict" ? ", overlaps" : state === "is-resolved" ? ", resolved" : ""}. Drag to move, arrow keys nudge`}
             onPointerDown={(e) => begin(e, p, "move")} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}

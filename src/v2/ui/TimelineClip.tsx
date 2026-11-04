@@ -13,7 +13,9 @@ import { getPreset } from "../registry";
  * (filmstrip / waveform / name / badges / fades / keyframes), its thumbnail background, and pinch / Ctrl+wheel zoom.
  */
 export const effectName = (p: Placement) => getPreset("videoEffect", p.effect?.preset)?.name ?? "Effect";
-export const needsThumb = (p: Placement) => p.clipType === "video" || p.clipType === "image" || p.clipType === "html";
+export const needsThumb = (p: Placement) => !p.placeholder && (p.clipType === "video" || p.clipType === "image" || p.clipType === "html");
+/** Extra `.v2-clip` classes from what the clip is (P35: a shot placeholder draws as a hatched card). */
+export const clipKindClass = (p: Placement) => (p.placeholder ? "is-placeholder" : "");
 export const clipThumbStyle = (p: Placement, thumbs?: Record<string, string>, strips?: Record<string, Filmstrip>) =>
   thumbs?.[p.source.assetId] && p.clipType !== "audio" && !strips?.[mediaKey(p.source.assetId, p.source.versionId)] ? { backgroundImage: `url(${thumbs[p.source.assetId]})` } : {};
 export const clipNoThumb = (p: Placement, thumbs?: Record<string, string>, strips?: Record<string, Filmstrip>) =>
@@ -42,6 +44,7 @@ export function useTimelineZoom(ref: RefObject<HTMLElement | null>, pps: number,
 /** Everything drawn inside a `.v2-clip` box except the trim handles. */
 export function ClipBody({ p, track, isMain, project, pps, strips, peaks, loads }: { p: Placement; track: Track; isMain: boolean; project: Project; pps: number; strips?: Record<string, Filmstrip>; peaks?: Record<string, Peaks>; loads?: ReadonlyMap<string, ClipLoad> }) {
   const toPx = (t: number) => (t / TICKS_PER_SECOND) * pps;
+  if (p.placeholder) return <PlaceholderBody p={p} />;
   const asset = project.assets[p.source.assetId];
   const link = project.storyboard && p.source.assetId ? board.storyLinkOf(project, p.source.assetId) : undefined;
   return <>
@@ -66,6 +69,15 @@ export function ClipBody({ p, track, isMain, project, pps, strips, peaks, loads 
       <span key={k} className="v2-kf-dot" aria-label="Keyframe" style={{ left: toPx(k) }} />
     ))}
   </>;
+}
+
+/** P35: a storyboard shot with no clip yet: shot label and "Not generated" on a hatched card. */
+function PlaceholderBody({ p }: { p: Placement }) {
+  return (
+    <span className="v2-clip-name v2-ph" title={`${p.placeholder!.label} — not generated yet. Add its clip on the storyboard and Send to timeline (Update), or use Replace asset.`}>
+      <Ic g="board" size={12} /><span className="v2-ph-label">{p.placeholder!.label}</span><span className="v2-ph-state">Not generated</span>
+    </span>
+  );
 }
 
 export function animBadges(p: Placement): ("in" | "out" | "loop")[] {
