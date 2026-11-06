@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { laneRows, MT_ROW_H, TracksLane, type TrackRangeChange } from "./TracksLane";
 import { cmd, type Engine } from "../engine";
 import type { Filmstrip, Peaks } from "./media";
 import { haptic, LONG_PRESS_MS, LONG_PRESS_SLOP } from "./gestures";
@@ -62,6 +63,9 @@ interface Props {
   /** P34: the merge panel previews its layout as a draft root composition (undefined clears) and drives play/pause. */
   onMergeDraft?: (c?: Composition) => void;
   onMergePlay?: (play: boolean) => void;
+  /** P40: open the Track sheet on one tracker (a span on a Tracks lane) / change its range by dragging the span. */
+  onOpenTrack?: (clipId: string, trackId: string) => void;
+  onTrackRange?: (c: TrackRangeChange) => void;
   topLane?: { label: string; render: (toPx: (t: number) => number, toTicks: (px: number) => number) => ReactNode };
 }
 
@@ -88,7 +92,7 @@ export const SIDE_W = 184;
 /** P30-SCROLL: the view stays under user control this long after the last user scroll event (covers iOS momentum gaps). */
 export const USER_SCROLL_IDLE_MS = 180;
 
-export function Timeline({ engine, project, time, playing, onSeek, selectedId, selectedIds, onToggleSelect, multiMode, onSelect, pps, onZoom, centered, thumbs, peaks, strips, loads, onAddMedia, sideColumn, timeLabel, topLane, ripple, onTransition, expanded: expandedProp, onExpand, focus, onEditLayer, onEditSubs, onFocusGroup, onDropData, onContextMenu, onPlayback, onMergeDraft, onMergePlay }: Props) {
+export function Timeline({ engine, project, time, playing, onSeek, selectedId, selectedIds, onToggleSelect, multiMode, onSelect, pps, onZoom, centered, thumbs, peaks, strips, loads, onAddMedia, sideColumn, timeLabel, topLane, ripple, onTransition, expanded: expandedProp, onExpand, focus, onEditLayer, onEditSubs, onFocusGroup, onDropData, onContextMenu, onPlayback, onMergeDraft, onMergePlay, onOpenTrack, onTrackRange }: Props) {
   const comp = project.compositions[project.rootCompositionId];
   const scrollRef = useRef<HTMLDivElement>(null);
   const [gesture, setGesture] = useState<Gesture>();
@@ -410,6 +414,8 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
           {topLane && <div className="v2-track-header kind-text"><span>{topLane.label}</span></div>}
           {rows.map((r) => r.type === "header" ? (onFocusGroup && r.group !== "main" ? <button key={r.key} className={`v2-group-header v2-group-focus ${focus === r.group ? "is-on" : ""}`} data-group={r.group} aria-pressed={focus === r.group} title={focus === r.group ? "Show all layers" : `Focus ${ops.GROUP_LABEL[r.group]}: show only these layers`} onClick={() => onFocusGroup(focus === r.group ? undefined : r.group)}>{ops.GROUP_LABEL[r.group]}<span className="v2-focus-hint">{focus === r.group ? "Show all" : "Focus"}</span></button> : <div key={r.key} className="v2-group-header" data-group={r.group}>{ops.GROUP_LABEL[r.group]}</div>) : r.type === "add" ? (
             <div key={r.key} className="v2-track-header v2-add-row" data-add-group={r.group}>{addBtn(r.group)}</div>
+          ) : r.type === "mtracks" ? (
+            <div key={r.key} className="v2-track-header v2-mtrack-head" style={{ height: Math.max(1, laneRows(r.t)) * MT_ROW_H + 4 }} title="Trackers of this layer's clips (not exported)"><Ic g="track" size={14} /><span>Tracks</span></div>
           ) : r.type === "track" && (({ t }) => (
             <div key={t.id} className={`v2-track-header kind-${t.kind} ${layerDrag?.id === t.id ? "is-layer-dragging" : ""}`} style={layerShift(t.id)}>
               <TrackName engine={engine} track={t} />
@@ -459,6 +465,8 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
                 </button>
               ))}
             </div>
+          ) : r.type === "mtracks" ? (
+            <TracksLane key={r.key} track={r.t} toPx={toPx} pps={pps} onOpen={(c, k) => onOpenTrack?.(c, k)} onRange={onTrackRange} />
           ) : (({ t }) => (
             <div key={t.id} className={`v2-lane kind-${t.kind} ${t.muted ? "is-muted" : ""} ${t.hidden ? "is-hidden" : ""} ${layerDrag?.id === t.id ? "is-layer-dragging" : ""}`} data-track-id={t.id} data-group={r.group} style={layerShift(t.id)}
               onPointerDown={(e) => { if (!centered && e.target === e.currentTarget) { onSelect(undefined); scrub(e); } }} onClick={(e) => { if (centered && e.target === e.currentTarget) exitMode(); }}
@@ -533,6 +541,8 @@ type Row =
   | { type: "header"; key: string; group: ops.TrackGroup }
   | { type: "collapsed"; key: string; group: ops.TrackGroup; placements: Track["placements"] }
   | { type: "track"; key: string; group: ops.TrackGroup; t: Track }
+  /** P40: the Tracks lane under a video track whose clips have trackers (not exported, holds no clips). */
+  | { type: "mtracks"; key: string; group: ops.TrackGroup; t: Track }
   /** P1-ADD-TRACK: the [+] row at the bottom of the group in its track-type mode. */
   | { type: "add"; key: string; group: Exclude<ops.TrackGroup, "main"> };
 
@@ -559,19 +569,20 @@ export function hiddenRanges(comp: Composition, focus?: ops.TrackGroup): { group
 
 export function buildRows(comp: Composition, mobile: boolean, expanded?: ops.TrackGroup, focus?: ops.TrackGroup): Row[] {
   const rows: Row[] = [];
-  const track = (g: ops.TrackGroup) => (t: Track): Row => ({ type: "track", key: t.id, group: g, t });
+  const one = (g: ops.TrackGroup) => (t: Track): Row[] => [{ type: "track", key: t.id, group: g, t }, ...(t.kind === "video" && laneRows(t) ? [{ type: "mtracks" as const, key: `mt-${t.id}`, group: g, t }] : [])];
+  const track = (g: ops.TrackGroup) => (t: Track): Row[] => one(g)(t);
   if (!mobile) {
     for (const g of ["text", "overlay", "effect", "main", "audio"] as const) {
       if (focus && g !== focus && g !== "main") continue;
       const ts = ops.tracksInGroup(comp, g);
       const add = g !== "main" && focus === g;
       if (!ts.length && !add) continue;
-      rows.push({ type: "header", key: `h-${g}`, group: g }, ...ts.map(track(g)));
+      rows.push({ type: "header", key: `h-${g}`, group: g }, ...ts.flatMap(track(g)));
       if (add) rows.push({ type: "add", key: `add-${g}`, group: g });
     }
     return rows;
   }
-  rows.push(...ops.tracksInGroup(comp, "main").map(track("main")));
+  rows.push(...ops.tracksInGroup(comp, "main").flatMap(track("main")));
   for (const g of ["effect", "overlay", "audio", "text"] as const) {
     if (focus && g !== focus) continue;
     const ts = ops.tracksInGroup(comp, g);
@@ -579,7 +590,7 @@ export function buildRows(comp: Composition, mobile: boolean, expanded?: ops.Tra
     if (g === "effect" && !ts.length && focus !== "effect") continue;
     // V2-099: no in-timeline group header on mobile; exit via empty-space tap or the toolbar ‹.
     // P33: same order as desktop and as z-order: the top row of a group is its top layer (array index 0).
-    if (expanded === g && ts.length) rows.push(...ts.map(track(g)));
+    if (expanded === g && ts.length) rows.push(...ts.flatMap(track(g)));
     else rows.push({ type: "collapsed", key: `c-${g}`, group: g, placements: ts.flatMap((t) => t.placements).sort((a, b) => a.startTicks - b.startTicks) });
     if (focus === g || expanded === g) rows.push({ type: "add", key: `add-${g}`, group: g });
   }

@@ -3126,6 +3126,12 @@
           "title": "Motion tracking: host-side region tracker (template matching, not AI segmentation) \u2014 Track sheet (draw box, analyse forward/back with progress, scrub, unstable frames yellow, nudge), follow (text/photo/overlay/code via keyframes), traveling mask, code-clip \"track\" input, WebMCP track_clip / get_track / attach_track / set_track_mask, rule 68",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P40-TRACKS",
+          "title": "Tracker upgrades: play/pause + Space in the Track sheet, scale search (box grows/shrinks), lost frames (found:false, no invented position), several named trackers per clip with In/Out ranges (extend analyses only the new part), editable path overlay, non-exported Tracks lane (spans, yellow weak frames, drag ends/body), WebMCP trackId + set_track_range, get_timeline tracks[]",
+          "status": "done",
+          "progress": 100
         }
       ]
     }

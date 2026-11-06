@@ -2,7 +2,7 @@
  * P39: decode a video clip's frames in the browser (one hidden <video>, seek per sample) and run the host-side region
  * tracker over small grey copies. Only the solved boxes leave this module.
  */
-import { clipRange, TICKS_PER_SECOND, type Box, type MotionTrack, type Placement, type Project, type TrackSample } from "../domain";
+import { clipRange, tracking, TICKS_PER_SECOND, type Box, type MotionTrack, type NamedTrack, type Placement, type Project, type TrackSample } from "../domain";
 import { grey, trackFrames, type Grey } from "../render";
 import { drawVideoFrame } from "./frameGrab";
 
@@ -12,8 +12,9 @@ export const ANALYSIS_W = 320;
 export const MAX_SAMPLES = 600;
 
 /** Frame-aligned source ticks across the clip's source span, at most MAX_SAMPLES. */
-export function trackTicks(project: Project, p: Placement): number[] {
-  const { inTicks, outTicks } = clipRange.sourceSpan(project, p);
+export function trackTicks(project: Project, p: Placement, range?: { from: number; to: number }): number[] {
+  const span = clipRange.sourceSpan(project, p);
+  const inTicks = Math.max(span.inTicks, range?.from ?? -Infinity), outTicks = Math.min(span.outTicks, range?.to ?? Infinity);
   const ft = TICKS_PER_SECOND / project.settings.fps, n = Math.max(1, Math.ceil((outTicks - inTicks) / ft));
   const stride = Math.max(1, Math.ceil(n / MAX_SAMPLES)), out: number[] = [];
   for (let f = 0; f < n; f += stride) out.push(Math.round(inTicks + f * ft));
@@ -42,9 +43,31 @@ export function makeTrackAnalyse(blob: () => Promise<Blob | undefined>): TrackAn
         return grey(g.getImageData(0, 0, w, h).data, w, h);
       };
       const partial: TrackSample[] = [];
-      const toSample = (i: number, s: { box: { x: number; y: number; w: number; h: number }; conf: number; scale: number }): TrackSample => ({ s: ticks[i], x: (s.box.x + s.box.w / 2) / w, y: (s.box.y + s.box.h / 2) / h, w: s.box.w / w, h: s.box.h / h, scale: s.scale, conf: Math.round(s.conf * 100) / 100 });
+      const toSample = (i: number, s: { box: { x: number; y: number; w: number; h: number }; conf: number; scale: number; lost?: boolean }): TrackSample => ({ s: ticks[i], x: (s.box.x + s.box.w / 2) / w, y: (s.box.y + s.box.h / 2) / h, w: s.box.w / w, h: s.box.h / h, scale: Math.round(s.scale * 1000) / 1000, conf: Math.round(s.conf * 100) / 100, ...(s.lost ? { lost: true } : {}) });
       const steps = await trackFrames(ticks.length, start, { x: box.x * w, y: box.y * h, w: box.w * w, h: box.h * h }, frame, (i, s, done) => { partial[i] = toSample(i, s); onProgress(done, partial); }, signal);
       return { srcW, srcH, samples: steps.map((s, i) => (s ? toSample(i, s) : undefined)).filter((s): s is TrackSample => !!s) };
     } finally { v.removeAttribute("src"); v.load(); URL.revokeObjectURL(url); }
   };
+}
+
+/**
+ * P40: set tracker `tr`'s range to [inS, outS). Shrinking drops samples outside; extending analyses only the new part,
+ * seeded from the nearest good box at the old edge (no seed = nothing to grow from: that part stays empty).
+ */
+export async function rangeTrack(analyse: TrackAnalyse, project: Project, p: Placement, tr: NamedTrack, inS: number, outS: number, onProgress?: (done: number, total: number) => void, signal = { cancelled: false }): Promise<NamedTrack> {
+  const missing = tracking.missingRanges(tr, inS, outS);
+  let next = tracking.withRange(tr, inS, outS);
+  const parts = missing.map((m) => ({ m, ticks: trackTicks(project, p, { from: m.from, to: m.to }) })).filter((x) => x.ticks.length);
+  const total = parts.reduce((s, x) => s + x.ticks.length, 0);
+  let base = 0;
+  for (const { m, ticks } of parts) {
+    const before = m.seed.s <= m.from;
+    const all = before ? [m.seed.s, ...ticks] : [...ticks, m.seed.s], start = before ? 0 : all.length - 1;
+    const box: Box = { x: m.seed.x - m.seed.w / 2, y: m.seed.y - m.seed.h / 2, w: m.seed.w, h: m.seed.h };
+    const res = await analyse(all, start, box, (d) => onProgress?.(base + d, total), signal);
+    base += ticks.length;
+    const fresh = res.samples.filter((s) => s.s !== m.seed.s).map((s) => ({ ...s, scale: Math.round(s.scale * m.seed.scale * 1000) / 1000 }));
+    next = { ...next, samples: [...next.samples, ...fresh].sort((a, b) => a.s - b.s) };
+  }
+  return next;
 }

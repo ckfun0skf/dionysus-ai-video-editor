@@ -3,7 +3,7 @@ import { hitCandidates, isBackdrop, pickAt, Player, readClipConfig } from "../re
 import { cmd } from "../engine";
 import { htmlRoleOf, importFile } from "../persistence";
 const withoutRole = <T extends { role?: unknown }>(m: T): Omit<T, "role"> => { const { role: _r, ...rest } = m; return rest; };
-import { tracking, board as storyDomain, compositionDuration, edit, layers, ops, findPlacement, newId, formatTimecode, secondsToTicks, TICKS_PER_SECOND, type Asset } from "../domain";
+import { sourceAt, tracking, board as storyDomain, compositionDuration, edit, layers, ops, findPlacement, newId, formatTimecode, secondsToTicks, TICKS_PER_SECOND, type Asset } from "../domain";
 import type { Composition, Project } from "../domain";
 import { useEditorBoot, useEngineState, useIsMobile, type EditorContext, type LoadFailure } from "./useEditor";
 import { Timeline } from "./Timeline";
@@ -48,6 +48,8 @@ import { stickerFile, stickers } from "./libraryItems";
 import { newCodeClipHtml } from "./codeSamples";
 import { CleanupDialog } from "./CleanupDialog";
 import { TrackSheet } from "./TrackSheet";
+import type { TrackRangeChange } from "./TracksLane";
+import { makeTrackAnalyse, rangeTrack } from "./trackAnalyse";
 import { EffectPicker } from "./EffectPicker";
 import { SyncSheet } from "./SyncSheet";
 import { ProjectSettings as MobileProjectSettings } from "./desktop/ProjectSettings";
@@ -166,7 +168,21 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const [animOpen, setAnimOpen] = useState(false);
   const [fxOpen, setFxOpen] = useState(false);
   const [cleanOpen, setCleanOpen] = useState(false);
-  const [trackOpen, setTrackOpen] = useState(false);
+  /** P40: the Track sheet: `{}` adds a tracker, `{ trackId }` reviews one. */
+  /** P40: a Tracks-lane span was dragged: shrink drops analysis outside, extend analyses only the new part. */
+  const trackRange = async ({ clipId, trackId, start, end }: TrackRangeChange) => {
+    const pl = findPlacement(engine.getState().project.compositions[engine.getState().project.rootCompositionId], clipId)?.placement, tr = pl && tracking.tracksOf(pl).find((t) => t.id === trackId);
+    if (!pl || !tr) return;
+    const inS = sourceAt(pl, start), outS = sourceAt(pl, end - 1) + 1;
+    if (!tracking.missingRanges(tr, inS, outS).length) { engine.dispatch(cmd.commitTrack(clipId, tracking.withRange(tr, inS, outS))); return; }
+    setToast(`${tr.name}: tracking the new part…`);
+    try {
+      const next = await rangeTrack(makeTrackAnalyse(() => loadAssetBlob(pl.source.assetId)), engine.getState().project, pl, tr, inS, outS);
+      engine.dispatch(cmd.commitTrack(clipId, next)); setToast(`${tr.name}: range updated (${next.samples.length} frames)`);
+    } catch (e) { setToast((e as Error).message || "Tracking failed"); }
+  };
+  const openTrack = (clipId: string, trackId: string) => { player.pause(); selectClip(clipId); setTrackOpen({ trackId }); };
+  const [trackOpen, setTrackOpen] = useState<false | { trackId?: string }>(false);
   /** V2-HTML-PARAMS: the mobile sheet with the selected HTML clip's param values. */
   const [paramsOpen, setParamsOpen] = useState(false);
   /** V2-TL-TRANS: incoming clip of the cut whose transition picker sheet is open (mobile). */
@@ -873,7 +889,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
         rangeable && A("range", "⇔", "Range", () => setRangeFor({ id: pl.id }), "Choose which part of the source this clip plays (slip); its place and length stay"),
         rangeable && A("replace", "⇄", "Replace", () => setRangeFor({ id: pl.id, picker: true }), "Swap this clip's media for another of the same kind; everything else stays"),
         inPointable && A("in-point", "⇤", "In point", () => setInOpen(true), "Where the clip starts in its video (slip)"),
-        tracking.canTrack(pl) && A("track", "track", "Track", () => { player.pause(); setTrackOpen(true); }, "Track a region of this clip so text, overlays or code can follow it"),
+        tracking.canTrack(pl) && A("track", "track", "Track", () => { player.pause(); setTrackOpen({}); }, "Add a tracker to this clip so text, overlays or code can follow it"),
         canChromaKey(pl) && A("chroma", "chroma", "Chroma", () => setCkOpen(true), "Remove a green or blue screen colour"),
         isText && adjust,
         !!selAudioSpec && pl.clipType !== "audio" && A("edit-audio", "♫", "Edit audio", () => void openAudio(), "Open this clip in the Audio editor")]),
@@ -1045,7 +1061,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       <span className="v2-dsep" aria-hidden />
       <button className="v2-dtool v2-dtool-text" title="Trim start to playhead (Q)" aria-label="Trim start to playhead" onClick={() => trimToPlayhead("left")}><Ic g="trim-start" size={16} /><span>Trim start</span></button>
       <button className="v2-dtool v2-dtool-text" title="Trim end to playhead (W)" aria-label="Trim end to playhead" onClick={() => trimToPlayhead("right")}><Ic g="trim-end" size={16} /><span>Trim end</span></button>
-      <button className="v2-dtool v2-dtool-text" title={tracking.canTrack(sp) ? "Track a region of this clip (text, overlays and code can follow it)" : "Select a video clip to track"} disabled={!tracking.canTrack(sp)} onClick={() => { player.pause(); setTrackOpen(true); }}><Ic g="track" size={16} /><span>Track</span></button>
+      <button className="v2-dtool v2-dtool-text" title={tracking.canTrack(sp) ? "Track a region of this clip (text, overlays and code can follow it)" : "Select a video clip to track"} disabled={!tracking.canTrack(sp)} onClick={() => { player.pause(); setTrackOpen({}); }}><Ic g="track" size={16} /><span>Track</span></button>
       <button className="v2-dtool v2-dtool-text" title={pair ? "Match frames across the cut between these two clips" : "Select a video clip that touches another video clip"} disabled={!pair} onClick={() => setMatchOpen(true)}><Ic g="match" size={16} /><span>Match frames</span></button>
       <span className="v2-dsep" aria-hidden />
       <button className="v2-dtool v2-dtool-text" title="Add an empty video (overlay) track" onClick={() => engine.dispatch(cmd.addTrack("video"))}><Ic g="▭" size={16} /><span>Video track</span></button>
@@ -1198,7 +1214,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       {promoteFor && findPlacement(comp, promoteFor) && <PromoteSheet engine={engine} project={project} clipId={promoteFor} onDone={(m) => { setPromoteFor(undefined); if (m) setToast(m); }} />}
       {syncOpen && <SyncSheet engine={engine} project={project} onDone={(m) => { setSyncOpen(false); if (m) setToast(m); }} />}
       {trackOpen && selected?.placement && tracking.canTrack(selected?.placement) && <div className="v2-modal-back" onPointerDown={(e) => { if (e.target === e.currentTarget) setTrackOpen(false); }}>
-        <TrackSheet engine={engine} project={project} placement={selected?.placement} time={Math.round(player.time)} loadBlob={loadAssetBlob} onClose={() => setTrackOpen(false)} onDone={(m) => { setTrackOpen(false); setToast(m); }} />
+        <TrackSheet key={`${selected?.placement.id}:${trackOpen.trackId ?? "new"}`} trackId={trackOpen.trackId} engine={engine} project={project} placement={selected?.placement} time={Math.round(player.time)} loadBlob={loadAssetBlob} onClose={() => setTrackOpen(false)} onDone={(m) => { setTrackOpen(false); setToast(m); }} />
       </div>}
       {cleanOpen && <div className="v2-modal-back" onPointerDown={(e) => { if (e.target === e.currentTarget) setCleanOpen(false); }}>
         <CleanupDialog engine={engine} project={project} blobs={storage.blobs} onClose={() => setCleanOpen(false)} onDone={(m) => { setCleanOpen(false); setToast(m); }} />
@@ -1220,7 +1236,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
             </span>
           </div>
           <PanelGrabber vh={previewVh} onChange={setPreviewVh} target={() => document.querySelector<HTMLElement>(".v2-app.is-mobile .v2-preview")} />
-          <Timeline focus={focusGroup} engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} selectedIds={sel} onToggleSelect={toggleClip} multiMode={multiMode} onSelect={selectClip} peaks={peaks} strips={strips} loads={clipLoads} pps={pps} onZoom={(z) => setPps(clampPps(z))} centered onPlayback={(p) => { stopAt.current = undefined; if (p) player.play(); else player.pause(); }} topLane={topLane} ripple={ripple} onTransition={onTransition} onEditSubs={openSubs} onEditLayer={editLayer} onMergeDraft={setMergeDraft} onMergePlay={mergePlay} expanded={expanded} onExpand={onExpand}
+          <Timeline onOpenTrack={openTrack} onTrackRange={(c) => void trackRange(c)} focus={focusGroup} engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} selectedIds={sel} onToggleSelect={toggleClip} multiMode={multiMode} onSelect={selectClip} peaks={peaks} strips={strips} loads={clipLoads} pps={pps} onZoom={(z) => setPps(clampPps(z))} centered onPlayback={(p) => { stopAt.current = undefined; if (p) player.play(); else player.pause(); }} topLane={topLane} ripple={ripple} onTransition={onTransition} onEditSubs={openSubs} onEditLayer={editLayer} onMergeDraft={setMergeDraft} onMergePlay={mergePlay} expanded={expanded} onExpand={onExpand}
             thumbs={thumbs} onAddMedia={() => setPicker("main")}
             timeLabel={<><b>{formatTimecode(time, project.settings.fps).slice(0, 5)}</b> / {formatTimecode(duration, project.settings.fps).slice(0, 5)}</>}
             sideColumn={<>
@@ -1278,7 +1294,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           <div className="v2-dsplit-h"><Splitter label="Resize timeline" value={lay.timeline} dir="up" min={LIMITS.timeline[0]} max={LIMITS.timeline[1]} onChange={(v) => resize({ timeline: v })} onCommit={commitSizes} onReset={() => { resize({ timeline: DEFAULT_SIZES.timeline }); commitSizes(); }} /></div>
           <section className="v2-timeline-panel v2-dtimeline" aria-label="Timeline">
             {desktopToolbar}
-            <Timeline focus={focusGroup} onFocusGroup={(g) => { setSel([]); setMenu(g && g !== "main" ? g : "root"); }} engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} selectedIds={sel} onToggleSelect={toggleClip} multiMode={multiMode} onSelect={selectClip} peaks={peaks} strips={strips} loads={clipLoads} thumbs={thumbs} pps={pps} onZoom={(z) => setPps(clampPps(z))} centered={false} topLane={topLane} ripple={ripple} onTransition={onTransition} onEditSubs={openSubs} onEditLayer={editLayer} onDropData={onDropData} onContextMenu={openCtx} onMergeDraft={setMergeDraft} onMergePlay={mergePlay} />
+            <Timeline onOpenTrack={openTrack} onTrackRange={(c) => void trackRange(c)} focus={focusGroup} onFocusGroup={(g) => { setSel([]); setMenu(g && g !== "main" ? g : "root"); }} engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} selectedIds={sel} onToggleSelect={toggleClip} multiMode={multiMode} onSelect={selectClip} peaks={peaks} strips={strips} loads={clipLoads} thumbs={thumbs} pps={pps} onZoom={(z) => setPps(clampPps(z))} centered={false} topLane={topLane} ripple={ripple} onTransition={onTransition} onEditSubs={openSubs} onEditLayer={editLayer} onDropData={onDropData} onContextMenu={openCtx} onMergeDraft={setMergeDraft} onMergePlay={mergePlay} />
           </section>
         </div>
       )}

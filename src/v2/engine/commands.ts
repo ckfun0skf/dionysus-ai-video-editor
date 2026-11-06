@@ -585,23 +585,26 @@ const editPlacement = (p: Project, id: string, fn: (pl: Placement) => Placement)
   return withRoot(p, (c) => ({ ...c, tracks: c.tracks.map((t) => ({ ...t, placements: t.placements.map((pl) => (pl.id === id ? fn(pl) : pl)) })) }));
 };
 /**
- * P39 Track sheet ✓: store the solved track (or clear it with `undefined`), its mask, and make `followers` follow it
- * (keyframes measured at time `at`). One undo step.
+ * P39/P40 Track sheet ✓: insert or replace tracker `track` on clip `id` (or remove tracker `removeId`), and make
+ * `followers` follow it (keyframes measured at time `at`). One undo step.
  */
-export const commitTrack = (id: string, track: tracking.MotionTrack | undefined, followers: string[] = [], at = 0, opts: { scale?: boolean } = {}): Command => ({
-  label: track ? "Track" : "Remove track",
+export const commitTrack = (id: string, track: tracking.NamedTrack | undefined, followers: string[] = [], at = 0, opts: { scale?: boolean; removeId?: string } = {}): Command => ({
+  label: track ? "Track" : "Remove tracker",
   apply: (p) => {
     let next = editPlacement(p, id, (pl) => {
       if (!tracking.canTrack(pl)) throw new Error("Only video clips can be tracked.");
-      const { motionTrack: _t, ...rest } = pl;
-      return track ? { ...rest, motionTrack: track } : rest;
+      const drop = track?.id ?? opts.removeId;
+      const ts = tracking.tracksOf(pl), i = ts.findIndex((t) => t.id === drop);
+      const list = track ? (i >= 0 ? ts.map((t, k) => (k === i ? track : t)) : [...ts, track]) : ts.filter((t) => t.id !== drop);
+      const { motionTracks: _t, ...rest } = pl;
+      return list.length ? { ...rest, motionTracks: list } : rest;
     });
-    for (const f of followers) next = attachTrack(f, id, at, opts).apply(next);
+    if (track) for (const f of followers) next = attachTrack(f, id, at, opts, track.id).apply(next);
     return next;
   },
 });
-/** P39: make clip `followerId` follow tracked clip `targetId` (bakes x/y/scale/rotation keys; editable afterwards). */
-export const attachTrack = (followerId: string, targetId: string, at: number, opts: { scale?: boolean } = {}): Command => ({
+/** P39/P40: make clip `followerId` follow tracker `trackId` (or the only one) of clip `targetId` (x/y/scale/rotation keys). */
+export const attachTrack = (followerId: string, targetId: string, at: number, opts: { scale?: boolean } = {}, trackId?: string): Command => ({
   label: "Follow track",
   apply: (p) => {
     const c = p.compositions[p.rootCompositionId], target = findPlacement(c, targetId)?.placement, f = findPlacement(c, followerId)?.placement;
@@ -609,17 +612,30 @@ export const attachTrack = (followerId: string, targetId: string, at: number, op
     if (!f) throw new Error(`No clip "${followerId}".`);
     if (f.id === target.id) throw new Error("A clip can't follow itself.");
     if (!tracking.canFollow(f)) throw new Error("Only overlays, photos, text and code clips can follow a track (effects have no position; give a code effect a track input instead).");
-    const keys = tracking.followKeys(p, target, f, at, opts);
+    const tr = tracking.pickTrack(target, trackId);
+    if (typeof tr === "string") throw new Error(tr);
+    const keys = tracking.followKeys(p, target, tr, f, at, opts);
     // Re-attaching replaces earlier follow keys (position, scale, rotation) instead of mixing two tracks.
     return editPlacement(p, followerId, (pl) => { const { x: _x, y: _y, scale: _s, rotation: _r, ...rest } = pl.keyframes ?? {}; return { ...pl, keyframes: { ...rest, ...keys } }; });
   },
 });
-/** P39: traveling mask from the tracked box ("inside" keeps the box, "outside" cuts it out; undefined = off). */
-export const setTrackMask = (id: string, mask: tracking.TrackMask | undefined): Command => ({
+/** P39/P40: traveling mask from a tracker's box ("inside" keeps the box, "outside" cuts it out; undefined = off). */
+export const setTrackMask = (id: string, mask: tracking.TrackMask | undefined, trackId?: string): Command => ({
   label: "Track mask",
-  apply: (p) => editPlacement(p, id, (pl) => {
-    if (!pl.motionTrack) throw new Error("Track this clip first.");
-    const { mask: _m, ...tr } = pl.motionTrack;
-    return { ...pl, motionTrack: mask ? { ...tr, mask } : tr };
-  }),
+  apply: (p) => editTracker(p, id, trackId, (tr) => { const { mask: _m, ...rest } = tr; return mask ? { ...rest, mask } : rest; }),
+});
+/** P40: rename a tracker (1-40 characters). */
+export const renameTracker = (id: string, trackId: string, name: string): Command => ({
+  label: "Rename tracker", coalesceKey: `rename-mt:${id}:${trackId}`,
+  apply: (p) => { const n = name.trim().replace(/\s+/g, " ").slice(0, 40); if (!n) throw new Error("A tracker name can't be empty."); return editTracker(p, id, trackId, (tr) => ({ ...tr, name: n })); },
+});
+/** P40: set a tracker's source range [inS, outS): samples outside are dropped (analyse an extension separately). */
+export const setTrackRange = (id: string, trackId: string, inS: number, outS: number): Command => ({
+  label: "Tracker range",
+  apply: (p) => { if (!(outS > inS)) throw new Error("The range must end after it starts."); return editTracker(p, id, trackId, (tr) => tracking.withRange(tr, Math.round(inS), Math.round(outS))); },
+});
+const editTracker = (p: Project, id: string, trackId: string | undefined, fn: (t: tracking.NamedTrack) => tracking.NamedTrack) => editPlacement(p, id, (pl) => {
+  const tr = tracking.pickTrack(pl, trackId);
+  if (typeof tr === "string") throw new Error(tr);
+  return { ...pl, motionTracks: tracking.tracksOf(pl).map((t) => (t.id === tr.id ? fn(t) : t)) };
 });

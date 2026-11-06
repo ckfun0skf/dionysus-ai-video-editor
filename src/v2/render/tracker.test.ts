@@ -23,3 +23,21 @@ describe("P39 tracker", () => {
     await expect(trackFrames(2, 0, { x: 150, y: 80, w: 20, h: 20 }, async (i) => scene(i))).rejects.toThrow(/inside/);
   });
 });
+
+/** A textured square that shrinks (drone pulling away) then slides out of the bottom of the frame. */
+function away(i: number, w = 200, h = 120): Grey {
+  const px = new Float32Array(w * h);
+  for (let y = 0; y < h; y += 1) for (let x = 0; x < w; x += 1) px[y * w + x] = 40 + ((x * 7 + y * 13) % 17);
+  const size = i < 10 ? Math.round(40 - i * 2) : 20, ox = 80, oy = i < 10 ? 30 : 30 + (i - 9) * 14;
+  for (let y = 0; y < size; y += 1) for (let x = 0; x < size; x += 1) { const yy = oy + y; if (yy < h) px[yy * w + ox + x] = (x * 2 < size) !== (y * 2 < size) ? 240 : 10 + Math.round((x / size) * 80); }
+  return { w, h, px };
+}
+describe("P40 tracker scale + lost", () => {
+  it("shrinks the box with the feature and marks frames lost once it leaves the picture", async () => {
+    const steps = await trackFrames(20, 0, { x: 80, y: 30, w: 40, h: 40 }, async (i) => away(i));
+    expect(steps[9].box.w).toBeLessThan(26);
+    expect(steps[9].box.w).toBeGreaterThan(18);
+    expect(steps[9].lost).toBeFalsy();
+    expect(steps.slice(17).every((s) => s.lost)).toBe(true);
+  });
+});
