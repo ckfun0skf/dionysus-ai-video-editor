@@ -56,7 +56,7 @@ const canPaste = () => typeof navigator !== "undefined" && typeof navigator.clip
 const finePointer = () => typeof matchMedia === "function" && matchMedia("(pointer: fine)").matches;
 
 /** Paste box + file picker (+ drop on desktop) with live validation; `onAdd` receives the single-file HTML. */
-export function HtmlImport({ expectBindings, expectParams, expectSource, onAdd, busy, actionLabel = "Add as new version", actionTitle = "Add this clip as a new version (undoable)", dropHint }: { expectBindings?: Record<string, BindingType>; expectParams?: Record<string, HtmlClipParam>; expectSource?: "storyboard" | "wizard"; onAdd: (html: string, name: string) => Promise<void> | void; busy?: boolean; actionLabel?: string; actionTitle?: string; dropHint?: boolean }) {
+export function HtmlImport({ expectBindings, expectParams, expectSource, onAdd, busy, actionLabel = "Add as new version", actionTitle = "Add this clip as a new version (undoable)", dropHint }: { expectBindings?: Record<string, BindingType>; expectParams?: Record<string, HtmlClipParam>; expectSource?: "storyboard" | "wizard" | "revise"; onAdd: (html: string, name: string) => Promise<void> | void; busy?: boolean; actionLabel?: string; actionTitle?: string; dropHint?: boolean }) {
   const [text, setText] = useState("");
   const [file, setFile] = useState<{ name: string; html: string }>();
   const [err, setErr] = useState("");

@@ -6,6 +6,7 @@ import {
   type CodeClipModel, type ParamRow,
 } from "./codeClip";
 import { CODE_SAMPLES, type CodeSample } from "./codeSamples";
+import { CodeReviseWizard } from "./CodeReviseWizard";
 import { HtmlExportButtons } from "./HtmlImport";
 import { Ic as Icon } from "./Icon";
 import { LibraryPicker } from "./LibraryPicker";
@@ -636,6 +637,8 @@ function htmlOf(d: Draft): string {
  * `dionysus.htmlclip/1` package and reads back files of the shape it writes (others open as raw HTML in Advanced).
  * Mobile: preview on top, tabs below, full screen. Desktop: tabs on the left, preview and problems on the right.
  * Save creates a new asset version (one undo step); Cancel discards (asking first when there are edits).
+ * Revise with AI (an existing clip) uses the same wizard shell as Create code → AI mode: the open package
+ * stays put until a reply is imported, and Save then makes the new version.
  */
 export function CodeEditor({ source, mobile, onSave, onClose, create, onAiMode }: {
   source: string; mobile: boolean; onSave: (html: string) => void; onClose: () => void;
@@ -646,6 +649,7 @@ export function CodeEditor({ source, mobile, onSave, onClose, create, onAiMode }
   const [d, setD] = useState<Draft>(start);
   const [tab, setTab] = useState<Tab>(start.raw !== undefined ? "advanced" : "script");
   const [samples, setSamples] = useState(false);
+  const [revise, setRevise] = useState(false);
   const [confirm, setConfirm] = useState<{ title: string; body: string; ok: string; run: () => void } | null>(null);
   const [previewOpen, setPreviewOpen] = useState(true);
   const [runtimeError, setRuntimeError] = useState<{ message: string; line?: number } | null>(null);
@@ -683,7 +687,7 @@ export function CodeEditor({ source, mobile, onSave, onClose, create, onAiMode }
     setSamples(false);
     ask(`Load "${s.name}"?`, "This replaces the script, params, files and settings you're editing. You can still Cancel the editor afterwards to keep the saved clip.", "Replace", () => { setD(draftFromModel(s.model())); setTab("script"); });
   };
-  const save = () => { if (canSave) onSave(html); };
+  const save = () => { if (canSave && !revise) onSave(html); };
   const close = () => ask("Discard your changes?", "Your edits to this clip will be lost.", "Discard", onClose);
   const goLine = (line: number) => { setTab(d.raw !== undefined ? "advanced" : "script"); setJump({ line, n: Date.now() }); };
   const toRaw = () => setConfirm({
@@ -757,6 +761,17 @@ export function CodeEditor({ source, mobile, onSave, onClose, create, onAiMode }
     </section>
   );
 
+  if (revise && !create) return (
+    <CodeReviseWizard mobile={mobile} html={html} onClose={() => setRevise(false)} onImport={(next) => {
+      const draft = draftOf(next);
+      setD(draft);
+      setTab(draft.raw !== undefined ? "advanced" : "script");
+      setRuntimeError(null);
+      setJump(undefined);
+      setRevise(false);
+    }} />
+  );
+
   return (
     <div className={`v2-code-editor v2-ce ${mobile ? "is-mobile" : ""}`} role="dialog" aria-modal="true" aria-label="Code editor">
       <header className="v2-ce-bar">
@@ -766,6 +781,7 @@ export function CodeEditor({ source, mobile, onSave, onClose, create, onAiMode }
           <span className="v2-muted">{create ? "New code clip" : dirty ? "Edited — save makes a new version" : "Code clip"}</span>
         </span>
         {onAiMode && <button type="button" className="v2-btn v2-ce-samplesbtn v2-ce-aibtn" aria-label="AI mode" title="AI mode: answer a few questions, get a prompt for any AI, import its package" onClick={onAiMode}><Icon g="anim" /><span>AI mode</span></button>}
+        {!create && <button type="button" className="v2-btn v2-ce-samplesbtn v2-ce-revisebtn" aria-label="Revise with AI" title="Revise with AI: describe a change, copy a prompt for any AI, import its package" onClick={() => { setSamples(false); setRevise(true); }}><Icon g="anim" /><span>Revise with AI</span></button>}
         <button type="button" className="v2-btn v2-ce-samplesbtn" aria-label="Samples" title="Load a sample" aria-haspopup="dialog" aria-expanded={samples} onClick={() => setSamples(!samples)}>
           <Icon g="template" /><span>Samples</span>
         </button>

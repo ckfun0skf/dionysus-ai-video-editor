@@ -38,6 +38,7 @@ export * from "./spatial";
 export * from "./htmlClipBindings";
 export * as storyAuto from "./storyAuto";
 export * from "./codeWizard";
+export * from "./codeRevise";
 export * as storyAgent from "./storyAgent";
 export * as timelineReview from "./timelineReview";
 export * as promote from "./promote";

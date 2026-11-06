@@ -110,7 +110,7 @@ ${timelineToolsMarkdown()}
 ## Optional
 
 - [Format reference](${l.formatDoc}): the full specification, including importer warnings and errors
-- [HTML clip package](${l.htmlClipSpec}): the ${HTML_CLIP_FORMAT} single-file format for "html" assets (manifest, runtime contract, bindings, params, template)
+- [HTML clip package](${l.htmlClipSpec}): the ${HTML_CLIP_FORMAT} single-file format for "html" assets (manifest, runtime contract, bindings, params, template). Create code → AI mode writes a new clip from this spec; Code Editor → Revise with AI revises an existing one. Dionysus does not call an AI.
 - [Audio clip format](${l.audioClipSpec}): the ${AUDIO_CLIP_FORMAT} JSON for audio assets with "source": "json" (tempo, tracks, synths, drums, noise, sfx, fx, params, examples)
 - [Open the app](${l.app})
 `;
