@@ -37,10 +37,11 @@ const fmtDur = (ticks?: number) => { if (!ticks) return ""; const s = Math.round
  * has Upload (from the device) and the project's own media of that kind (thumbnails, durations); Code also has Create
  * (a new clip in the Code Editor). Multi-select across tabs, numbered in pick order, then Add.
  */
-export function MediaPicker({ title, onAdd, onClose, media = [], only, initialTab, onCreateCode, onCreateAudio, loadMedia, onAddFromVideo, onTimeline, probeAudio, onUploadVideo, onDiscardVideo, onAddBlank }: {
+export function MediaPicker({ title, onAdd, onClose, media = [], only, initialTab, onCreateCode, onCreateAudio, loadMedia, onAddFromVideo, onTimeline, probeAudio, onUploadVideo, onDiscardVideo, onAddBlank, onCreateAudioAi }: {
   title: string; onAdd: (p: Picked) => void; onClose: () => void; media?: ProjectMedia[];
   /** "audio": the audio tab only. */ only?: "audio"; initialTab?: PickerTab;
   /** P36: Photos → Blank clip (a solid colour), added where this picker adds. */ onAddBlank?: (color: string) => void;
+  /** P36: Audio → Create with AI. */ onCreateAudioAi?: () => void;
   /** Code → Create: open the Code Editor on a new clip (the picker closes). */ onCreateCode?: () => void;
   /** Audio → Create audio: open the Audio editor on a new clip (the picker closes). */ onCreateAudio?: () => void;
   /** P2C (item 7): the file of a project asset, for its playable preview (no preview button without it). */
@@ -139,6 +140,12 @@ export function MediaPicker({ title, onAdd, onClose, media = [], only, initialTa
                 <button className="v2-pick-action is-create" onClick={onCreateAudio}>
                   <span className="v2-pick-action-ic"><Ic g="♫" size={22} /></span>
                   <span><b>Create Audio</b><small>Make music or sound effects in the Audio editor</small></span>
+                </button>
+              )}
+              {tab === "audio" && onCreateAudioAi && (
+                <button className="v2-pick-action is-create" onClick={onCreateAudioAi}>
+                  <span className="v2-pick-action-ic"><Ic g="effect" size={22} /></span>
+                  <span><b>Create with AI</b><small>Describe it, copy a prompt, paste your AI's JSON</small></span>
                 </button>
               )}
             </div>

@@ -4,8 +4,9 @@
  * that need decoded media: frame capture / contact sheet (an offline Player, same path as export), black frames and
  * audio clipping / silence (the export audio mix).
  */
+import { audioClipAsset } from "../audioClipAsset";
 import { captureFrameAt, storePickedFrame } from "../storyboard/frameCapture";
-import { audioOutputOf, board, mergeLayer, ops, promote, findPlacement, slip, subs, newId, panToAzimuth, positionErrors, secondsToTicks, TICKS_PER_SECOND, timelineReview, type Placement, type Project } from "../../domain";
+import { audioOutputOf, board, mergeLayer, ops, promote, findPlacement, slip, subs, newId, audioClipPrompt, parseAudioClip, runtimeAiLinks, panToAzimuth, positionErrors, secondsToTicks, TICKS_PER_SECOND, timelineReview, type Placement, type Project } from "../../domain";
 import { getPreset, listPresets } from "../../registry";
 import { cmd, type Command, type Engine } from "../../engine";
 import type { BlobStore } from "../../ports";
@@ -275,6 +276,21 @@ export async function runTimelineTool(engine: Engine, source: FrameSource | unde
       if (!findPlacement(rootOf(project()), id)!.placement.blank) return fail(`Clip ${id} is not a blank clip.`);
       const color = s("color"); if (!cmd.isHexColor(color)) return fail('"color" must be #rrggbb.');
       return edit(cmd.setBlankColor(id, color), id);
+    }
+    case "audio_prompt": {
+      const brief = s("brief"); if (!brief) return fail('"brief" is required.');
+      const d = n("durationSec");
+      return { ok: true, changed: false, text: audioClipPrompt({ name: s("name") || "Sound", brief, durationSec: d && d > 0 ? d : undefined, specUrl: runtimeAiLinks().audioClipSpec }) };
+    }
+    case "create_audio": {
+      const raw = a.json; if (raw === undefined) return fail('"json" is required.');
+      const r = parseAudioClip(typeof raw === "string" ? raw : JSON.stringify(raw));
+      if (!r.ok) return fail(`Audio clip JSON rejected: ${r.issues.filter((i) => i.level === "error").map((i) => `${i.path ? `${i.path}: ` : ""}${i.message}`).join("; ")}`);
+      if (!blobs) return fail("Audio can only be created in the editor (no media store here).");
+      const asset = await audioClipAsset(blobs, r.clip);
+      const at = Math.max(0, n("atSec") ?? 0);
+      const id = newId("plc");
+      return edit([cmd.importAsset(asset), cmd.addAssetToTimeline(asset.id, secondsToTicks(at), undefined, id)], id);
     }
     case "slip_clip": {
       const id = needClip(); if (typeof id !== "string") return id;

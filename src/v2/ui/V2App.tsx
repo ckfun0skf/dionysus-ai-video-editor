@@ -28,6 +28,7 @@ import { AgentIndicator } from "./agent/AgentPanel";
 import type { BoardTarget } from "./storyboard/BoardView";
 import type { Resolution } from "../render";
 import { BlankColorPicker } from "./BlankClip";
+import { AudioAiSheet } from "./AudioAiSheet";
 import { downloadSrt, importSrtFile, importSrtText, SubtitleImport, SubtitleEditor, SubtitleLane } from "./Subtitles";
 import { downloadText, SubtitleList } from "./SubtitleList";
 import { cues as cueLayer } from "../domain";
@@ -465,6 +466,12 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     const blob = selAudioSpec ? await storage.blobs.get(selAudioSpec) : undefined;
     if (pl && blob) setAudioEdit({ placementId: pl.id, assetId: pl.source.assetId, source: await blob.text() });
     else setToast("Could not load this clip's audio JSON");
+  };
+  const [audioAi, setAudioAi] = useState(false);
+  const openAudioAi = () => { setPicker(null); setSheet(false); setAudioAi(true); };
+  const addAiAudio = async (clip: AudioClip) => {
+    const asset = await audioClipAsset(storage.blobs, clip);
+    if (engine.dispatch([cmd.importAsset(asset), cmd.addAssetsInSequence([asset.id], Math.round(player.time))], "Create audio with AI")) { setAudioAi(false); setToast("Audio added (Undo to remove)"); }
   };
   const createAudio = () => { setPicker(null); setSheet(false); setAudioEdit({ create: true }); };
   const saveAudio = async (clip: AudioClip) => {
@@ -926,13 +933,13 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     else if (it?.kind === "sticker") { const st = stickers().find((x) => x.id === it.id); if (st) void addStickerAt(st, at); }
     else if (dt.files?.length) void importAt(Array.from(dt.files), at, trackId);
   };
-  const pickerEl = picker ? <MediaPicker media={projectMedia} title={picker === "overlay" ? "Add overlay" : picker === "audio" || picker === "fromVideo" ? "Add audio" : picker === "stickers" ? "Add stickers" : "Add media"} only={picker === "audio" || picker === "fromVideo" ? "audio" : undefined} initialTab={picker === "stickers" ? "stickers" : picker === "fromVideo" ? "fromVideo" : undefined} onClose={() => setPicker(null)} onAdd={(p) => void addPicked(p, picker === "overlay" || picker === "stickers" ? "overlay" : "main")} onCreateCode={picker === "audio" || picker === "fromVideo" ? undefined : () => createCode(picker === "overlay" ? "overlay" : "main")} onCreateAudio={picker === "audio" || picker === "fromVideo" ? createAudio : undefined} onAddFromVideo={picker === "audio" || picker === "fromVideo" ? (fv) => void addFromVideo(fv) : undefined} onTimeline={videoOnTimeline} onUploadVideo={picker === "audio" || picker === "fromVideo" ? uploadFromVideo : undefined} onDiscardVideo={(id) => engine.dispatch(cmd.removeAsset(id))} onAddBlank={picker === "audio" || picker === "fromVideo" || picker === "stickers" ? undefined : (c) => addBlank(c, picker === "overlay" ? "overlay" : "main")} loadMedia={loadAssetBlob} /> : null;
+  const pickerEl = picker ? <MediaPicker media={projectMedia} title={picker === "overlay" ? "Add overlay" : picker === "audio" || picker === "fromVideo" ? "Add audio" : picker === "stickers" ? "Add stickers" : "Add media"} only={picker === "audio" || picker === "fromVideo" ? "audio" : undefined} initialTab={picker === "stickers" ? "stickers" : picker === "fromVideo" ? "fromVideo" : undefined} onClose={() => setPicker(null)} onAdd={(p) => void addPicked(p, picker === "overlay" || picker === "stickers" ? "overlay" : "main")} onCreateCode={picker === "audio" || picker === "fromVideo" ? undefined : () => createCode(picker === "overlay" ? "overlay" : "main")} onCreateAudio={picker === "audio" || picker === "fromVideo" ? createAudio : undefined} onCreateAudioAi={picker === "audio" || picker === "fromVideo" ? openAudioAi : undefined} onAddFromVideo={picker === "audio" || picker === "fromVideo" ? (fv) => void addFromVideo(fv) : undefined} onTimeline={videoOnTimeline} onUploadVideo={picker === "audio" || picker === "fromVideo" ? uploadFromVideo : undefined} onDiscardVideo={(id) => engine.dispatch(cmd.removeAsset(id))} onAddBlank={picker === "audio" || picker === "fromVideo" || picker === "stickers" ? undefined : (c) => addBlank(c, picker === "overlay" ? "overlay" : "main")} loadMedia={loadAssetBlob} /> : null;
   const assetBrowser = (
     <AssetBrowser project={project} thumbs={thumbs} busy={busy} tab={btab} onTab={setBtab}
       onImport={importDialog} onFiles={(fs) => void onFiles(fs)} onAddAsset={addToTimeline} onRemoveAsset={(a) => engine.dispatch(cmd.removeAsset(a.id))}
       onAddBlank={addBlank} onAddText={(tp) => addTextAt(player.time, tp)} onImportSrt={() => setSubImport(true)}
       onAddSticker={(st) => void addStickerAt(st, player.time)} onAddEffect={(id) => addEffectAt(id, player.time)}
-      onAddTransition={addTransitionNearPlayhead} onCreateCode={() => createCode()} onCreateAudio={createAudio} onAudioFromVideo={() => setPicker("fromVideo")} />
+      onAddTransition={addTransitionNearPlayhead} onCreateCode={() => createCode()} onCreateAudio={createAudio} onCreateAudioAi={openAudioAi} onAudioFromVideo={() => setPicker("fromVideo")} />
   );
   useEffect(() => { setItab(preferTab.current); preferTab.current = undefined; }, [selectedId]);
   const fpsNow = project.settings.fps;
@@ -1144,6 +1151,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       {notice && <RecoveryNotice failure={notice} storage={storage} onDismiss={() => setNotice(undefined)} />}
       {projects && <ProjectsDialog storage={storage} current={project} onOpen={(id) => { setProjects(false); onSwitch(id); }} onRenameCurrent={(n) => engine.dispatch(cmd.renameProject(n))} onClose={() => setProjects(false)} />}
       {exporting && <ExportDialog project={project} blobs={storage.blobs} res={res} onRes={setRes} onClose={() => setExporting(false)} />}
+      {audioAi && <div className="v2-modal-back" onPointerDown={(e) => { if (e.target === e.currentTarget) setAudioAi(false); }}><AudioAiSheet onAdd={addAiAudio} onClose={() => setAudioAi(false)} /></div>}
       {audioEdit && <AudioEditor key={audioEdit.create ? "new-audio" : audioEdit.placementId} source={audioEdit.source} create={audioEdit.create} mobile={mobile} onSave={saveAudio} onClose={() => setAudioEdit(undefined)} />}
       {codeAi && <CodeAiWizard mobile={mobile} initialRole={codeAi === "overlay" ? "overlay" : "scene"} onClose={() => { setHtmlEdit({ source: newCodeClipHtml(), create: codeAi }); setCodeAi(undefined); }} onImport={(html) => { setHtmlEdit({ source: html, create: codeAi }); setCodeAi(undefined); }} />}
       {htmlEdit && <CodeEditor key={htmlEdit.create ? "new" : htmlEdit.placementId} source={htmlEdit.source} create={!!htmlEdit.create} mobile={mobile} onAiMode={htmlEdit.create ? () => { setCodeAi(htmlEdit.create); setHtmlEdit(undefined); } : undefined} onSave={(h) => void saveCode(h)} onClose={() => setHtmlEdit(undefined)} />}

@@ -302,3 +302,17 @@ describe("P36 add_blank_clip / set_blank_color", () => {
     expect((await runTimelineTool(e, undefined, "add_blank_clip", { track: "main", atSec: 0, color: "black" })).ok).toBe(false);
   });
 });
+
+describe("P36 audio_prompt / create_audio", () => {
+  it("returns the audio clip prompt and rejects invalid JSON without changing anything", async () => {
+    const e = setup();
+    const p = await runTimelineTool(e, undefined, "audio_prompt", { brief: "Soft rain", durationSec: 6 });
+    expect(p.ok).toBe(true);
+    expect(p.text).toContain("dionysus.audioclip/1");
+    expect(p.text).toContain("Soft rain");
+    const before = e.getState().project;
+    const bad = await runTimelineTool(e, undefined, "create_audio", { json: { format: "nope" } });
+    expect(bad.ok).toBe(false);
+    expect(e.getState().project).toBe(before);
+  });
+});

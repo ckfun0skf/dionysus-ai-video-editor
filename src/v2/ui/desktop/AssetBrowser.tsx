@@ -25,6 +25,8 @@ export function browserTab(saved: string | null | undefined): BrowserTab {
 }
 
 export interface BrowserActions {
+  /** P36: Audio → Create with AI (prompt → paste JSON). */
+  onCreateAudioAi?: () => void;
   /** P36: add a blank (solid colour) clip at the playhead. */
   onAddBlank?: (color: string, where: "main" | "overlay") => void;
   onImport: (accept?: string) => void;
@@ -126,6 +128,7 @@ export function AssetBrowser({ project, thumbs, busy, tab, onTab, ...a }: Browse
           <div className="v2-codeactions">
             <button className="v2-btn" title="Import audio files (or drop them here)" onClick={() => a.onImport("audio/*")}><Ic g="⇪" size={16} /> Import</button>
             {a.onCreateAudio && <button className="v2-btn primary" title="Make music or sound effects in the Audio editor" onClick={a.onCreateAudio}><Ic g="＋" size={16} /> Create audio</button>}
+            {a.onCreateAudioAi && <button className="v2-btn" title="Describe a sound, copy a prompt for your AI, paste its JSON reply" onClick={a.onCreateAudioAi}><Ic g="effect" size={16} /> Create with AI</button>}
             {a.onAudioFromVideo && <button className="v2-btn" title="Take the sound of a video in this project" onClick={a.onAudioFromVideo}><Ic g="▭" size={16} /> From video</button>}
           </div>
           {assetGrid(of("audio"), { icon: "♫", title: "No audio yet", body: "Drop MP3, WAV or M4A files here, or click to browse. Audio goes on an audio track.", accept: "audio/*", cta: "Import audio" })}
