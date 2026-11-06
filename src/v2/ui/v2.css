@@ -1413,3 +1413,15 @@ select.v2-tp-field { -webkit-appearance: none; appearance: none; padding-right: 
 .v2-input-rename input { flex: 1; min-height: 44px; font-size: 16px; }
 .v2-track-rename { width: 100%; height: 28px; font-size: 13px; }
 .v2-track-name { background: none; border: 0; color: inherit; font: inherit; padding: 0; cursor: text; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; text-align: left; }
+
+/* P38: Clean up project dialog (same frame as the subtitle import dialog). */
+.v2-cleanup { width: min(560px, 100%); max-height: calc(100dvh - 24px); display: flex; flex-direction: column; gap: 8px; background: var(--panel, #1c1c21); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px 12px; }
+.v2-cleanup-body { overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+.v2-cleanup h4 { margin: 4px 0; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted, #a1a1aa); display: flex; gap: 6px; align-items: baseline; }
+.v2-cleanup-row { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 4px; border-radius: 6px; cursor: pointer; }
+.v2-cleanup-row:hover { background: #2a2a2e; }
+.v2-cleanup-row input { width: 20px; height: 20px; accent-color: var(--accent, #20d5ec); }
+.v2-cleanup-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.v2-cleanup-row small { color: var(--muted, #a1a1aa); }
+.v2-cleanup-foot { margin: 0; font-size: 12px; color: var(--muted, #a1a1aa); }
+.v2-cleanup-open { min-height: 44px; }
