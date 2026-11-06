@@ -357,7 +357,7 @@ describe("P38 set_clip_input / rename_track", () => {
     await run("rename_track", { trackId: audioTrack.id, name: "Score" });
     expect(json((await run("get_timeline", {})).text).tracks.find((t: { id: string }) => t.id === audioTrack.id).name).toBe("Score");
     expect(findPlacement(root(e.getState().project), hc)!.placement.htmlInputs).toEqual({ music: `track:${audioTrack.id}` });
-    expect((await run("set_clip_input", { clipId: hc, input: "music", source: "program" })).text).toMatch(/scene inputs/);
+    expect((await run("set_clip_input", { clipId: hc, input: "music", source: "program" })).text).toMatch(/graphic references/);
     expect((await run("set_clip_input", { clipId: hc, input: "under", source: "au" })).text).toMatch(/No video track or clip/);
     expect((await run("set_clip_input", { clipId: hc, input: "nope", source: "mix" })).text).toMatch(/no input "nope"/);
     expect((await run("set_clip_input", { clipId: hc, input: "music" })).ok).toBe(true);

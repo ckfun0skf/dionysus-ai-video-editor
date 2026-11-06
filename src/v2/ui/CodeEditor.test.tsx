@@ -86,6 +86,20 @@ describe("V2-CODE-EDITOR Code Editor", () => {
     expect(q('[role="tab"] .v2-ce-dot')).toBeTruthy();
   });
 
+  it("P43 Params tab: + Graphic / + Audio / + Tracker add typed references to the manifest inputs; rename and remove", () => {
+    const { btn, click, tab, onSave, q } = mount(newCodeClipHtml());
+    tab("Params");
+    const group = q('[aria-label="Add reference"]')!;
+    expect([...group.querySelectorAll("button")].map((b) => b.textContent?.trim())).toEqual(["Graphic", "Audio", "Tracker"]);
+    click(btn("Graphic", group)); click(btn("Audio", group)); click(btn("Tracker", group)); click(btn("Tracker", group));
+    const refs = q('[aria-label="References"]')!;
+    expect(refs.textContent).toContain("ctx.inputs.target");
+    const name = refs.querySelector('input[aria-label="Name of Tracker reference target2"]') as HTMLInputElement;
+    act(() => { name.focus(); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(name, "drone"); name.blur(); });
+    click(btn("Remove sound"));
+    click(btn("Save"));
+    expect(readManifest(saved(onSave)).inputs).toEqual({ picture: { type: "graphic" }, target: { type: "tracker" }, drone: { type: "tracker" } });
+  });
   it("Params tab: changing a type and editing Choice options keeps the default valid", () => {
     const { btn, click, tab, type, field, onSave } = mount(newCodeClipHtml());
     tab("Params");

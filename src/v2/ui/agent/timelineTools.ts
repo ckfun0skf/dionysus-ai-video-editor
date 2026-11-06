@@ -8,7 +8,7 @@ import { audioClipAsset } from "../audioClipAsset";
 import { blobText } from "../AssetPreview";
 import { bindingRefsOf } from "../CleanupDialog";
 import { captureFrameAt, storePickedFrame } from "../storyboard/frameCapture";
-import { cleanup, DEFAULT_SOURCE, readManifest, resolveSource, versionOf, codePresetId, codeRoleIssue, transitions, audioOutputOf, board, mergeLayer, ops, promote, findPlacement, slip, subs, newId, audioClipPrompt, parseAudioClip, runtimeAiLinks, panToAzimuth, positionErrors, secondsToTicks, TICKS_PER_SECOND, timelineReview, type Placement, type Project } from "../../domain";
+import { cleanup, DEFAULT_SOURCE, INPUT_TYPES, readManifest, resolveSource, versionOf, codePresetId, codeRoleIssue, transitions, audioOutputOf, board, mergeLayer, ops, promote, findPlacement, slip, subs, newId, audioClipPrompt, parseAudioClip, runtimeAiLinks, panToAzimuth, positionErrors, secondsToTicks, TICKS_PER_SECOND, timelineReview, type Placement, type Project } from "../../domain";
 import { getPreset, listPresets } from "../../registry";
 import { tracking, sourceAt, ticksToSeconds, type Box, type MotionTrack, type NamedTrack, type TrackMask } from "../../domain";
 import { makeTrackAnalyse, nearestIndex, rangeTrack, trackTicks } from "../trackAnalyse";
@@ -327,7 +327,7 @@ export async function runTimelineTool(engine: Engine, source: FrameSource | unde
       const input = s("input") ?? "";
       const v = versionOf(project(), pl.source), blob = v && blobs ? await blobs.get(v.media.blobKey).catch(() => undefined) : undefined;
       const decl = blob ? readManifest(await blobText(blob)).inputs?.[input] : undefined;
-      if (!decl || !(["beat", "scene", "track"] as string[]).includes(decl.type)) return fail(`Clip ${id} has no input "${input}". Its manifest "inputs" declares the inputs (type "beat", "scene" or "track").`);
+      if (!decl || !(INPUT_TYPES as readonly string[]).includes(decl.type)) return fail(`Clip ${id} has no input "${input}". Its manifest "inputs" declares the references (type "graphic", "audio" or "tracker").`);
       const raw = s("source");
       if (raw === undefined || raw === "") return edit(cmd.setClipInput(id, input, undefined), id);
       const r = resolveSource(project(), raw, decl.type);

@@ -1493,3 +1493,13 @@ select.v2-tp-field { -webkit-appearance: none; appearance: none; padding-right: 
 .v2-track-layer .v2-track-pt { transform: scale(calc(1 / var(--z, 1))); }
 .v2-track-layer .v2-track-box { border-width: calc(2px / var(--z, 1)); }
 .v2-track-fit { position: absolute; right: 6px; bottom: 6px; z-index: 3; min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; gap: 4px; padding: 0 10px; border-radius: 22px; background: rgba(0,0,0,.6); color: #fff; font-size: 12px; font-variant-numeric: tabular-nums; }
+/* P43: references (Graphic / Audio / Tracker) in the code editor's Params tab */
+.v2-ce-refs { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line, rgba(255,255,255,.12)); }
+.v2-ce-refs-head { margin: 0 0 4px; font-size: 13px; font-weight: 600; }
+.v2-ce-ref .v2-ce-paramhead { gap: 8px; align-items: center; }
+.v2-ce-refname { flex: 1; min-width: 0; min-height: 44px; font: 13px ui-monospace, monospace; background: transparent; color: inherit; border: 1px solid var(--line, rgba(255,255,255,.16)); border-radius: 8px; padding: 0 10px; }
+.v2-ce-ref .v2-ce-chip { display: inline-flex; align-items: center; gap: 4px; }
+.v2-ce-ref .v2-ce-snippet { padding: 0 0 8px; }
+.v2-sb-trackers { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 6px; }
+.v2-sb-trackers li { display: flex; align-items: baseline; gap: 6px; font-size: 13px; }
+.v2-sb-trackers li span { color: var(--muted, #9aa3ad); }

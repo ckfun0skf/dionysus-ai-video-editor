@@ -22,6 +22,7 @@ import { trackTransitions } from "../domain/transitions";
 import type { FrameExtra } from "./htmlClip";
 import { analyzeAudio, beatAt, mixBeats, sceneFrom, SCENE_H, SCENE_W, type AudioFeatures, type BeatSignal, type SceneSignal } from "./signals";
 import { inputSourceOf } from "../domain/codeInputs";
+import { INPUT_TYPES, refType } from "../domain/htmlClipPackage";
 import type { HtmlClipInput } from "../domain/htmlClipPackage";
 import { mainTrack } from "../domain/ops";
 import { correctDrift, createClock, SEEK_DRIFT_S, type Clock } from "./clock";
@@ -644,7 +645,7 @@ export class Player {
     for (const { placement: p } of layers) {
       if (p.clipType !== "html") continue;
       const v = versionOf(this.project, p.source), m = v && this.manifests.get(v.media.blobKey);
-      for (const [name, d] of Object.entries(m?.inputs ?? {})) if (d?.type === "scene") { const s = inputSourceOf(this.project, p, name, "scene"); if (s !== "program") out.add(s); }
+      for (const [name, d] of Object.entries(m?.inputs ?? {})) if (d && refType(d.type) === "graphic") { const s = inputSourceOf(this.project, p, name, "graphic"); if (s !== "program") out.add(s); }
     }
     return out;
   }
@@ -662,10 +663,12 @@ export class Player {
   private inputsFor(p: Placement, decls: Record<string, HtmlClipInput>, canvas: HTMLCanvasElement): Record<string, BeatSignal | SceneSignal | TrackSignal> | undefined {
     const out: Record<string, BeatSignal | SceneSignal | TrackSignal> = {};
     for (const [name, d] of Object.entries(decls)) {
-      if (d?.type === "track") out[name] = trackSignal(this.project, inputSourceOf(this.project, p, name, "track"), this.time);
-      else if (d?.type === "beat") out[name] = this.beatFor(inputSourceOf(this.project, p, name, "beat"));
-      else if (d?.type === "scene") {
-        const s = inputSourceOf(this.project, p, name, "scene");
+      if (!d || !(INPUT_TYPES as readonly string[]).includes(d.type)) continue;
+      const k = refType(d.type);
+      if (k === "tracker") out[name] = trackSignal(this.project, inputSourceOf(this.project, p, name, k), this.time);
+      else if (k === "audio") out[name] = this.beatFor(inputSourceOf(this.project, p, name, k));
+      else {
+        const s = inputSourceOf(this.project, p, name, k);
         const src = s === "program" ? canvas : this.sceneLayers.get(s)?.canvas;
         out[name] = this.sceneFor(`${p.id}:${name}`, src);
       }

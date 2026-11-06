@@ -8,6 +8,7 @@ import { compositionDuration, transformOf, versionOf, type Placement, type Proje
 import { mainTrack } from "./ops";
 import { codeRoleOf } from "./codeRoles";
 import { needsPromptItems } from "./storySync";
+import { missingTrackers } from "./codeInputs";
 import { TICKS_PER_SECOND } from "./time";
 import { textOf } from "./text";
 
@@ -53,7 +54,7 @@ export const TIMELINE_TOOLS: TimelineToolDef[] = [
     description: "Use a code package with \"role\": \"transition\" on the cut into clipId (a main-track clip that starts where another ends). It draws ctx.from (outgoing) and ctx.to (incoming) over ctx.progress 0 → 1. durationSec defaults to 0.5 (each clip gives at most half of itself). A package of another role is rejected. One undo step; returns the clip.",
     inputSchema: obj({ clipId: str("The incoming clip of the cut."), assetId: str("Code package asset id (role transition)."), durationSec: num("Transition length in seconds (default 0.5).") }, ["clipId", "assetId"]) },
   { name: "set_clip_input", title: "Choose where a code clip's input reads from", readOnly: false,
-    description: "A code clip's manifest \"inputs\" are live signals (numbers only): a \"beat\" input gets { rms, peak, bands[8], onset, envelope } of audio, a \"scene\" input { luma, avgColor, motion, histogram[16] } of a picture, a \"track\" input { x, y, width, height, scale, rotation, found } of a clip tracked with track_clip, as ctx.inputs[name]. Choose the source of input on clipId: \"mix\" (beat default: everything you hear) or \"program\" (scene default: the picture under the clip), \"none\" (track default) or \"clip:<id>\" of a tracked clip for a track input, a track name, \"track:<id>\" or \"clip:<id>\". The binding stores the id, so renaming the track keeps it. source omitted = back to the default. One undo step; returns the clip.",
+    description: "A code clip's manifest \"inputs\" are references (numbers only, as ctx.inputs[name]) of three types: \"graphic\" (a picture: { luma, avgColor, motion, histogram[16] }; sources: \"program\" = the picture under the clip (default), a video track name, \"track:<id>\" or \"clip:<id>\" of a main or overlay clip), \"audio\" (a sound: { rms, peak, bands[8], onset, envelope }; sources: \"mix\" = everything you hear (default), an audio-carrying track or clip) and \"tracker\" ({ x, y, width, height, scale, rotation, found }; sources: \"none\" (default), \"clip:<clip id>#<tracker id>\" from get_timeline tracks[], or \"clip:<clip id>#@<tracker name>\" for a tracker the user still has to set (found:false until it exists)). The older type names \"scene\", \"beat\" and \"track\" mean graphic, audio and tracker. Bindings store ids, so renaming a track keeps them. source omitted = back to the default. One undo step; returns the clip.",
     inputSchema: obj({ clipId: str("Code (html) clip id."), input: str("Input name from the clip's manifest."), source: str("mix | program | a track name | track:<id> | clip:<id>; omit to reset.") }, ["clipId", "input"]) },
   { name: "rename_track", title: "Rename a track (layer)", readOnly: false,
     description: "Rename a track (get_timeline lists track ids and names). Names are for people and for set_clip_input; bindings use the id, so nothing breaks. 1-40 characters. One undo step.",
@@ -179,7 +180,7 @@ export function textBounds(pl: Placement, aspect: number) {
   return { left: cx - w / 2, right: cx + w / 2, top: cy - h / 2, bottom: cy + h / 2 };
 }
 
-export type LintKind = "needs-prompt" | "removed-from-timeline" | "short-clip" | "gap" | "black-frame" | "unlinked-layer" | "audio-clipping" | "audio-silence" | "text-off-frame" | "missing-asset" | "placeholder";
+export type LintKind = "needs-prompt" | "removed-from-timeline" | "short-clip" | "gap" | "black-frame" | "unlinked-layer" | "audio-clipping" | "audio-silence" | "text-off-frame" | "missing-asset" | "placeholder" | "needs-tracking";
 export interface LintIssue { kind: LintKind; severity: "error" | "warning" | "info"; message: string; atSec?: number; clip?: string; shot?: string }
 
 /**
@@ -192,6 +193,8 @@ export function reviewLint(p: Project, o: { minClipSec?: number; hasBlob?: (key:
   for (const it of needsPromptItems(p.storyboard)) out.push({ kind: "needs-prompt", severity: "warning", message: it.label, ...(it.shot ? { shot: it.shot } : {}) });
   const sb = p.storyboard;
   for (const id of sb?.order ?? []) if (sb?.shots[id]?.removedFromTimeline) out.push({ kind: "removed-from-timeline", severity: "info", shot: id, message: `Shot "${sb.shots[id].title}" was removed from the timeline (kept on the board).` });
+  // P43: a code clip references a tracker by name that nobody has set yet (like a placeholder: a warning, not a block).
+  for (const m of missingTrackers(p)) out.push({ kind: "needs-tracking", severity: "warning", clip: m.clipId, message: `Clip ${m.clipId} input "${m.input}" follows tracker "${m.name}" on clip ${m.targetId}, which isn't set yet (found:false until then). Select ${m.targetId}, tap Track, draw the box and name the tracker "${m.name}" (or track_clip { clipId: "${m.targetId}", name: "${m.name}", … }).` });
   for (const t of c.tracks) for (const pl of t.placements) {
     const at = sec(pl.startTicks);
     if (pl.durationTicks < min) out.push({ kind: "short-clip", severity: "warning", clip: pl.id, atSec: at, message: `Clip ${pl.id} is only ${sec(pl.durationTicks)}s long.` });

@@ -163,10 +163,22 @@ export interface StoryTextLayer extends StoryLayerBase {
   /** Registry `textStyle` id (optionally `id@N`) or a `meta.textStyles` key, kept as written. */
   textStyle?: string; style?: StoryTextStyle; anim?: StoryTextAnim;
 }
+/**
+ * P43: a code-clip reference in a storyboard. `clip` is "main" (the shot's main clip) or the id of a video layer of
+ * the same shot; omitted = Program (graphic) / Mix (audio). A tracker names a tracker planned in the shot's `trackers`.
+ */
+export type StoryRef = { type: "graphic" | "audio"; clip?: string } | { type: "tracker"; clip: string; track: string };
+/** P43: a tracker the user has to set before the shot's code can follow it (what to box, on which clip, its name). */
+export interface StoryTrackerPlan { name: string; clip: string; target: string }
 export interface StoryMediaLayer extends StoryLayerBase {
   type: "html" | "image" | "video"; asset: string; box: StoryBox;
   /** V2-HTML-PARAMS: html layers only. Per-use values for the asset's params (key → value); the rest keep their defaults. */
   params?: HtmlParamValues;
+  /**
+   * P43: html layers only. References for the clip's manifest inputs (input name → what it reads), written in the
+   * JSON as objects inside "params" (e.g. { "type": "tracker", "clip": "main", "track": "Subject" }).
+   */
+  refs?: Record<string, StoryRef>;
   /** V2-SB-133: video layers only. Seconds into the clip the layer starts from (absent = the version's trim, else 0). */
   inSec?: number;
   /** P3B-12: green screen: pixels near `color` become transparent (`range` tolerance, `spill` edge clean-up, 0–1). */
@@ -249,6 +261,8 @@ export interface StoryShot {
   clip?: string;
   /** V2-HTML-PARAMS: render html only. Per-use values for the clip asset's params (e.g. a title card's text). */
   params?: HtmlParamValues;
+  /** P43: trackers to set on this shot's clips before its code layers can follow something (RULE 69). */
+  trackers?: StoryTrackerPlan[];
   layers?: StoryLayer[];
   captions?: boolean;
   effects?: StoryEffect[];
@@ -905,6 +919,7 @@ export function validateStoryboard(raw: unknown, opts: StoryValidateOptions = {}
     const out: HtmlParamValues = {};
     for (const [k, val] of Object.entries(v)) {
       const kp = `${path}.${k}`;
+      if (isObj(val) && typeof val.type === "string") continue; // P43: a reference — see refsOf
       if (typeof val !== "number" && typeof val !== "string" && typeof val !== "boolean") { err(kp, `Param "${k}" must be a number, string or true/false.`); continue; }
       if (!decls) { out[k] = val; continue; }
       const spec = decls[k];
@@ -915,6 +930,50 @@ export function validateStoryboard(raw: unknown, opts: StoryValidateOptions = {}
       out[k] = c.value;
     }
     return Object.keys(out).length ? out : undefined;
+  };
+
+  /**
+   * P43: references in a layer's "params" (objects with a "type") and in "refs" (the round-trip form). `clips` = the
+   * video layer ids of the shot; `planned` = the shot's planned tracker names. Bad ones warn and are dropped.
+   */
+  let planned: StoryTrackerPlan[] = [];
+  let shotVideoLayers = new Set<string>();
+  const refsOf = (sources: unknown[], path: string, isHtml: boolean): Record<string, StoryRef> | undefined => {
+    const out: Record<string, StoryRef> = {};
+    for (const v of sources) {
+      if (!isObj(v)) continue;
+      for (const [k, r] of Object.entries(v)) {
+        if (!isObj(r) || typeof r.type !== "string") continue;
+        const kp = `${path}.${k}`;
+        if (!isHtml) { warn(kp, "Only html layers take references; it is ignored."); continue; }
+        const t = r.type === "scene" ? "graphic" : r.type === "beat" ? "audio" : r.type === "track" ? "tracker" : r.type;
+        const clip = r.clip === undefined ? undefined : str(r.clip) ?? "";
+        if (clip !== undefined && clip !== "main" && !shotVideoLayers.has(clip)) { warn(`${kp}.clip`, `Reference "${k}": "clip" must be "main" (the shot's clip) or the id of a video layer of this shot; it is ignored.`); continue; }
+        if (t === "graphic" || t === "audio") { out[k] = { type: t, ...(clip ? { clip } : {}) }; continue; }
+        if (t !== "tracker") { warn(`${kp}.type`, `Reference "${k}" has unknown type ${JSON.stringify(r.type)}; use "graphic", "audio" or "tracker".`); continue; }
+        const track = str(r.track)?.trim();
+        if (!track || !clip) { warn(kp, `Tracker reference "${k}" needs "clip" ("main" or a video layer id) and "track" (the tracker's name, planned in the shot's "trackers").`); continue; }
+        if (!planned.some((pl) => pl.name.toLowerCase() === track.toLowerCase() && pl.clip === clip)) warn(`${kp}.track`, `Tracker "${track}" on "${clip}" isn't planned in this shot's "trackers"; add { "name": "${track}", "clip": "${clip}", "target": "<what to draw a box around>" } so the user knows what to track.`);
+        out[k] = { type: "tracker", clip, track };
+      }
+    }
+    return Object.keys(out).length ? out : undefined;
+  };
+  /** P43: a shot's planned trackers. Each one is a "needs tracking" note for the user (a warning, not a block). */
+  const trackersOf = (v: unknown, path: string, shotId: string): StoryTrackerPlan[] => {
+    if (v === undefined) return [];
+    if (!Array.isArray(v)) { warn(path, '"trackers" must be a list of { "name", "clip", "target" }; ignoring it.'); return []; }
+    const out: StoryTrackerPlan[] = [];
+    v.forEach((t, j) => {
+      const tp = `${path}[${j}]`;
+      const name = isObj(t) ? str(t.name)?.trim() : undefined, target = isObj(t) ? str(t.target)?.trim() : undefined, clip = isObj(t) ? str(t.clip) ?? "main" : "main";
+      if (!name || !target) { warn(tp, 'A tracker needs "name" (e.g. "Subject") and "target" (what to draw a box around); ignoring it.'); return; }
+      if (clip !== "main" && !shotVideoLayers.has(clip)) { warn(`${tp}.clip`, `Tracker "${name}": "clip" must be "main" or a video layer id of this shot; ignoring it.`); return; }
+      if (out.some((o) => o.name.toLowerCase() === name.toLowerCase() && o.clip === clip)) { warn(tp, `Tracker "${name}" is listed twice; the second is ignored.`); return; }
+      out.push({ name, clip, target });
+      warn(tp, `Needs tracking: shot "${shotId}" — after sending to the timeline, select ${clip === "main" ? "the shot's clip" : `layer "${clip}"`}, tap Track, draw a box around ${target} and name the tracker "${name}". Until then the code that follows it gets found:false.`);
+    });
+    return out;
   };
 
   /** P3B-12: `{ color, range?, spill? }`; a colour name like "green" is accepted. Bad values warn and are dropped. */
@@ -1021,6 +1080,7 @@ export function validateStoryboard(raw: unknown, opts: StoryValidateOptions = {}
         if (l.position !== undefined) err(`${lp}.position`, `${type} layers are placed with "box" { x, y, width, height }, not "position".`);
         const box = l.box === undefined ? (l.position === undefined ? (err(`${lp}.box`, `A ${type} layer needs "box" { x, y, width, height }.`), undefined) : undefined) : boxOf(l.box, `${lp}.box`);
         let params: HtmlParamValues | undefined;
+        const refs = refsOf([l.params, l.refs], `${lp}.params`, type === "html");
         if (l.params !== undefined) {
           if (type !== "html") warn(`${lp}.params`, `Only html layers take "params"; it is ignored for this ${type} layer.`);
           else params = htmlParamsOf(l.params, `${lp}.params`, a?.type === "html" ? asset : undefined);
@@ -1038,7 +1098,7 @@ export function validateStoryboard(raw: unknown, opts: StoryValidateOptions = {}
           }
         }
         const chromaKey = l.chromaKey === undefined ? undefined : chromaKeyOf(l.chromaKey, `${lp}.chromaKey`);
-        if (box) out.push({ id, type, asset, startSec, endSec, box, ...(inSec !== undefined ? { inSec } : {}), ...(follow ? { follow } : {}), ...look, ...(params ? { params } : {}), ...(chromaKey ? { chromaKey } : {}) });
+        if (box) out.push({ id, type, asset, startSec, endSec, box, ...(inSec !== undefined ? { inSec } : {}), ...(follow ? { follow } : {}), ...look, ...(params ? { params } : {}), ...(refs ? { refs } : {}), ...(chromaKey ? { chromaKey } : {}) });
       }
     });
     return out;
@@ -1269,8 +1329,12 @@ export function validateStoryboard(raw: unknown, opts: StoryValidateOptions = {}
       if (mode !== "html") warn(`${path}.params`, `"params" only applies to render "html" shots (values for the clip's params); it is ignored here.`);
       else { const ps = htmlParamsOf(s.params, `${path}.params`, clip && assetById.get(clip)?.type === "html" ? clip : undefined); if (ps) shot.params = ps; }
     }
+    shotVideoLayers = new Set(Array.isArray(s.layers) ? s.layers.flatMap((l) => (isObj(l) && l.type === "video" && typeof l.id === "string" ? [l.id] : [])) : []);
+    planned = trackersOf(s.trackers, `${path}.trackers`, id);
+    if (planned.length) shot.trackers = planned;
     const layers = layersOf(s.layers, `${path}.layers`, dur);
     if (layers) shot.layers = layers;
+    planned = [];
     if (s.captions !== undefined) {
       if (typeof s.captions !== "boolean") warn(`${path}.captions`, "captions should be true or false; ignoring it.");
       else { shot.captions = s.captions; if (s.captions && !dialogue) warn(`${path}.captions`, `captions is on but shot "${id}" has no "dialogue"; nothing will be captioned.`); }

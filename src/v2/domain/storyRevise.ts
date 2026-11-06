@@ -22,7 +22,7 @@ const list = (raw: Raw, k: string) => (Array.isArray(raw[k]) ? (raw[k] as unknow
 /** The guide rules quoted in revise prompts (by key, in rule order). */
 export const REVISE_RULE_KEYS = [
   "reusable-assets", "standalone-prompts", "last-frame-continuity", "ids", "text-in-layers", "duration", "references-block",
-  "audio", "self-contained-prompts", "frame-of", "clip-centric", "screen-insert", "revise-storyboard", "revise-shot",
+  "audio", "self-contained-prompts", "frame-of", "clip-centric", "screen-insert", "revise-storyboard", "revise-shot", "plan-trackers",
 ] as const;
 
 export const EXAMPLE_REVISE = {

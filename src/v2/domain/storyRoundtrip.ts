@@ -68,6 +68,7 @@ function shotOut(b: Storyboard, s: Shot): StoryShot {
     ...(s.clipAsset && !shared ? { clipAsset: { ...s.clipAsset } } : {}),
     ...(s.render && s.clipSlot ? (b.slots[s.clipSlot]?.implicit === "background" ? { render: s.render, background: structuredClone(b.slots[s.clipSlot].background!) } : { render: s.render, clip: s.clipSlot }) : {}),
     ...(s.params && s.render === "html" ? { params: { ...s.params } } : {}),
+    ...(s.trackers?.length ? { trackers: structuredClone(s.trackers) } : {}),
     ...(s.layers?.length ? { layers: structuredClone(s.layers) } : {}),
     ...(s.captions ? { captions: true } : {}),
     ...(s.needsPrompt ? { needsPrompt: true as const } : {}), ...(s.removedFromTimeline ? { removedFromTimeline: true as const } : {}),

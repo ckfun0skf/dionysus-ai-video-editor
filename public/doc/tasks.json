@@ -3144,6 +3144,12 @@
           "title": "Track sheet preview zoom: pinch (phone), Ctrl/\u2318+wheel or trackpad pinch (desktop) around the cursor, pan by drag/scroll when zoomed, double-tap or Fit resets; nodes keep 44px screen targets; pure CSS transform (no video reload)",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P43-REF-TYPES",
+          "title": "Code clip references as three types \u2014 graphic (Program, main/overlay pictures), audio (Mix, tracks/clips with sound), tracker (clip \u00b7 tracker): + Graphic / + Audio / + Tracker in the code editor's Params tab, typed pickers listing only valid targets, storyboard shot trackers[] + params references by tracker name (needs-tracking warning, binds by name), RULE 69, set_clip_input",
+          "status": "done",
+          "progress": 100
         }
       ]
     }

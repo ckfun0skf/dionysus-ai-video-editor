@@ -49,16 +49,25 @@ export interface HtmlClipManifest {
   bindings?: Record<string, HtmlClipBinding>;
   params?: Record<string, HtmlClipParam>;
   /**
-   * P38: live signals the clip reads as ctx.inputs[name]: "beat" (audio: rms, peak, bands, onset, envelope) or "scene"
-   * (picture: luma, avgColor, motion, histogram) or, P39, "track" (a tracked clip's solved box: x, y, width, height, scale,
-   * rotation, found). Where each comes from is chosen per use (Mix, Program, a track or a clip).
+   * P38/P43: references the clip reads as ctx.inputs[name] (see REF_TYPES). Where each comes from is chosen per use
+   * (Program / Mix, a track or clip, a tracker).
    */
   inputs?: Record<string, HtmlClipInput>;
   /** Embedded files, by relative name → data: URL (src="logo.png", url(font.woff2), fetch("data.json")). */
   files?: Record<string, string>;
 }
-export const INPUT_TYPES = ["beat", "scene", "track"] as const;
+/**
+ * P43: three reference types — "graphic" (a picture: Program, a video track or clip → luma, avgColor, motion,
+ * histogram), "audio" (a sound: Mix, an audio-carrying track or clip → rms, peak, bands, onset, envelope) and
+ * "tracker" (a tracker on a clip → x, y, width, height, scale, rotation, found). The P38/P39 names "scene", "beat" and
+ * "track" are still accepted and mean graphic, audio and tracker.
+ */
+export const REF_TYPES = ["graphic", "audio", "tracker"] as const;
+export type RefType = (typeof REF_TYPES)[number];
+export const INPUT_TYPES = [...REF_TYPES, "scene", "beat", "track"] as const;
 export type InputType = (typeof INPUT_TYPES)[number];
+/** The reference type an input type means ("scene" → "graphic", "beat" → "audio", "track" → "tracker"). */
+export const refType = (t: InputType | string): RefType => (t === "scene" || t === "graphic" ? "graphic" : t === "beat" || t === "audio" ? "audio" : "tracker");
 export interface HtmlClipInput { type: InputType; label?: string; description?: string }
 
 export const CODE_PACKAGE_ROLES = ["clip", "effect", "transition"] as const;
@@ -151,10 +160,10 @@ export function validateManifest(raw: unknown, libs: readonly ClipLibrary[]): Ht
   }
   if (m.params !== undefined) for (const i of validateParamDecls(m.params)) out.push(i);
   if (m.inputs !== undefined) {
-    if (!isObj(m.inputs)) err("inputs", `"inputs" must be an object of name → { "type": "beat" | "scene" | "track" }.`);
+    if (!isObj(m.inputs)) err("inputs", `"inputs" must be an object of name → { "type": "graphic" | "audio" | "tracker" }.`);
     else for (const [k, v] of Object.entries(m.inputs)) {
       if (!NAME_RE.test(k)) err("input-name", `Input name "${k}" must start with a letter or _ and use letters, digits, _ . or -.`);
-      if (!isObj(v) || !(INPUT_TYPES as readonly string[]).includes(String(v.type))) err("input-type", `Input "${k}" needs "type": "beat" (audio signals) or "scene" (picture signals) or "track" (a tracked clip's position).`);
+      if (!isObj(v) || !(INPUT_TYPES as readonly string[]).includes(String(v.type))) err("input-type", `Input "${k}" needs "type": "graphic" (a picture's signals), "audio" (a sound's signals) or "tracker" (a tracker's box).`);
       else if (m.params && k in m.params) err("input-name", `"${k}" is both a param and an input; use different names.`);
     }
   }
@@ -369,7 +378,7 @@ export function sizeForAspect(aspect: string | undefined): { width: number; heig
 
 /** The runtime contract, as published in the spec (docs/v2/HTML_CLIP_PACKAGE.md §3, checked by a test) and inlined in the full prompt. */
 export const HTML_CLIP_CONTRACT = `- Register the clip once, at the top level of your script: \`dionysus.clip({ async init(ctx) { … }, render(t, ctx) { … } })\`. \`init\` (optional) runs once before the first frame; await anything you need there (images, fonts, models). \`render(t, ctx)\` draws the frame at \`t\` seconds into the clip and may return a Promise.
-- \`ctx\` = \`{ canvas, t, duration, progress, width, height, params, bindings, asset(name), image(name), video(name), seek(video, sec) }\`: \`duration\` is the clip's length on the timeline in seconds (it can differ from the manifest's \`durationSec\`), \`progress\` = t / duration (0–1), \`canvas\` the page's first \`<canvas>\` (the captured picture), \`width\`/\`height\` the frame size in pixels, \`params\` the parameter values (each declared param's default, overridden by the values set where the clip is used: a timeline clip, a storyboard shot or layer; read them in \`render\`, they can change between frames while the user edits), \`bindings[name]\` = \`{ type, url }\` for each bound asset (\`url\` is null when nothing is bound yet: draw a placeholder), \`asset(name)\` the URL of an embedded file, \`image(name)\` a Promise of a loaded HTMLImageElement for a binding or file, \`video(name)\` a Promise of a muted HTMLVideoElement, \`seek(video, sec)\` a Promise that resolves when that video shows \`sec\`. Effects (manifest \`"role": "effect"\`) also get \`source\`, the picture under the effect clip this frame; transitions (\`"role": "transition"\`) get \`from\` (outgoing clip), \`to\` (incoming clip) and \`progress\` 0–1 across the cut. They are ImageBitmaps to draw (\`g.drawImage(ctx.source, 0, 0, w, h)\`); draw the full frame. \`inputs[name]\` holds live signals for each manifest input (numbers only, no audio samples or pixels): a \`"beat"\` input is \`{ rms, peak, bands, onset, envelope }\` (0–1; \`bands\` = 8 bands, low to high), a \`"scene"\` input \`{ luma, avgColor: [r, g, b], motion, histogram }\` (0–1; \`histogram\` = 16 luma bins), a \`"track"\` input the box of a clip tracked in the app \`{ x, y, width, height, scale, rotation, found }\` (x/y = box centre and width/height = box size, all 0–1 of the frame; scale vs the first box; rotation in degrees; \`found\` is false while no tracked clip is picked or the match is weak); read them in \`render\` and draw something sensible when they are 0.
+- \`ctx\` = \`{ canvas, t, duration, progress, width, height, params, bindings, asset(name), image(name), video(name), seek(video, sec) }\`: \`duration\` is the clip's length on the timeline in seconds (it can differ from the manifest's \`durationSec\`), \`progress\` = t / duration (0–1), \`canvas\` the page's first \`<canvas>\` (the captured picture), \`width\`/\`height\` the frame size in pixels, \`params\` the parameter values (each declared param's default, overridden by the values set where the clip is used: a timeline clip, a storyboard shot or layer; read them in \`render\`, they can change between frames while the user edits), \`bindings[name]\` = \`{ type, url }\` for each bound asset (\`url\` is null when nothing is bound yet: draw a placeholder), \`asset(name)\` the URL of an embedded file, \`image(name)\` a Promise of a loaded HTMLImageElement for a binding or file, \`video(name)\` a Promise of a muted HTMLVideoElement, \`seek(video, sec)\` a Promise that resolves when that video shows \`sec\`. Effects (manifest \`"role": "effect"\`) also get \`source\`, the picture under the effect clip this frame; transitions (\`"role": "transition"\`) get \`from\` (outgoing clip), \`to\` (incoming clip) and \`progress\` 0–1 across the cut. They are ImageBitmaps to draw (\`g.drawImage(ctx.source, 0, 0, w, h)\`); draw the full frame. \`inputs[name]\` holds live signals for each manifest input (numbers only, no audio samples or pixels): an \`"audio"\` reference is \`{ rms, peak, bands, onset, envelope }\` (0–1; \`bands\` = 8 bands, low to high), a \`"graphic"\` reference \`{ luma, avgColor: [r, g, b], motion, histogram }\` (0–1; \`histogram\` = 16 luma bins), a \`"tracker"\` reference the box of a tracker set in the app \`{ x, y, width, height, scale, rotation, found }\` (x/y = box centre and width/height = box size, all 0–1 of the frame; scale vs the first box; rotation in degrees; \`found\` is false while no tracker is picked or set yet, outside its range, or where the feature is lost or the match is weak; the older names "beat", "scene" and "track" still work); read them in \`render\` and draw something sensible when they are 0.
 - The picture is the page's FIRST \`<canvas>\`: size it to ctx.width × ctx.height in \`init\` and draw everything on it (2D or WebGL; for WebGL use \`preserveDrawingBuffer: true\`). Other DOM and CSS are not captured.
 - Deterministic: every frame is a pure function of t, ctx.params and the bound assets. Frames are requested in any order (scrubbing, export), and the same t must give the same picture. Don't keep animation state between frames, don't use Date.now(), performance.now(), requestAnimationFrame, setTimeout or setInterval for timing, and use a seeded random generator (fixed seed) instead of Math.random().
 - No network: the clip runs in a sandbox with a strict Content-Security-Policy. Only the allowed libraries (listed in the manifest's \`libs\`, imported by their bare specifier in a \`<script type="module">\`, e.g. \`import * as LIB from "<specifier>"\`) are loaded. Embed any other file as a data: URL in the manifest's \`files\` and refer to it by name. Use system font stacks, or an embedded font with @font-face (the runtime waits for fonts to load before the first frame).
