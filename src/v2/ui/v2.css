@@ -1347,3 +1347,15 @@ select.v2-tp-field { -webkit-appearance: none; appearance: none; padding-right: 
 .v2-clip-name.v2-ph { display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden; white-space: nowrap; }
 .v2-ph-label { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .v2-ph-state { flex: none; font-size: 10px; padding: 0 4px; border-radius: 3px; border: 1px solid rgba(255,255,255,.35); color: rgba(255,255,255,.7); text-transform: uppercase; letter-spacing: .03em; }
+
+/* P36: Import subtitles (paste or file) */
+.v2-modal-back { position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,.55); display: grid; place-items: center; padding: 12px; }
+.v2-subimport { width: min(560px, 100%); max-height: calc(100dvh - 24px); display: flex; flex-direction: column; gap: 8px; background: var(--panel, #1c1c21); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px 12px; }
+.v2-subimport-head { display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; }
+.v2-subimport-head h3 { margin: 0; text-align: center; font-size: 15px; }
+.v2-subimport-head .v2-icon-btn { min-width: 44px; min-height: 44px; }
+.v2-subimport-text { min-height: 200px; flex: 1; resize: vertical; font: 13px/1.4 ui-monospace, monospace; background: #111; color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+.v2-subimport-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.v2-subimport-foot > span { flex: 1 1 100%; font-size: 13px; }
+.v2-subimport-foot .v2-btn { min-height: 44px; }
+.v2-sb-picker-paste { padding: 8px 0; }

@@ -1,4 +1,5 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
+import { Ic } from "./Icon";
 import { cmd, type Engine } from "../engine";
 import { newId, secondsToTicks, subs, ticksToSeconds, type Subtitle } from "../domain";
 
@@ -16,6 +17,36 @@ export async function importSrtFile(engine: Engine, file: File): Promise<number>
   const list = subs.parseSrt(await file.text());
   if (list.length) engine.dispatch(cmd.importSrtLayer(list));
   return list.length;
+}
+
+/** P36: import pasted SRT / VTT text as a new text layer (one undo step); returns the cue count. */
+export function importSrtText(engine: Engine, text: string): number {
+  const list = subs.parseSrt(text);
+  if (list.length) engine.dispatch(cmd.importSrtLayer(list));
+  return list.length;
+}
+
+/** P36: Import subtitles — paste SRT/VTT text (live cue count) or choose a file. */
+export function SubtitleImport({ onPasteImport, onChooseFile, onClose }: { onPasteImport: (text: string) => void; onChooseFile: () => void; onClose: () => void }) {
+  const [text, setText] = useState("");
+  const n = text.trim() ? subs.parseSrt(text).length : 0;
+  const canPaste = typeof navigator !== "undefined" && typeof navigator.clipboard?.readText === "function";
+  return (
+    <div className="v2-subimport" role="dialog" aria-label="Import subtitles">
+      <header className="v2-subimport-head">
+        <button className="v2-icon-btn" aria-label="Cancel" title="Cancel (Esc)" onClick={onClose}><Ic g="✕" /></button>
+        <h3>Import subtitles</h3>
+        <button className="v2-icon-btn" aria-label="Import pasted subtitles" title="Import as a new text layer" disabled={!n} onClick={() => onPasteImport(text)}><Ic g="✓" /></button>
+      </header>
+      <textarea className="v2-subimport-text" aria-label="Paste SRT or VTT subtitles" placeholder={"Paste SRT or VTT text, e.g.\n1\n00:00:01,000 --> 00:00:03,000\nHello"} value={text} onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Escape") onClose(); }} />
+      <div className="v2-subimport-foot">
+        <span role="status" className={text.trim() && !n ? "v2-err" : "v2-muted"}>{!text.trim() ? "Nothing pasted yet" : n ? `${n} subtitle${n === 1 ? "" : "s"} found` : "No subtitles found: each needs a 00:00:01,000 --> 00:00:03,000 line"}</span>
+        {canPaste && <button className="v2-btn" onClick={() => void navigator.clipboard.readText().then(setText, () => {})}><Ic g="📋" size={16} /> Paste</button>}
+        <button className="v2-btn" onClick={onChooseFile}><Ic g="⇪" size={16} /> Choose file</button>
+      </div>
+    </div>
+  );
 }
 
 export function downloadSrt(list: Subtitle[], name: string) {

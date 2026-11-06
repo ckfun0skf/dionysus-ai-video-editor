@@ -5,7 +5,7 @@
  * audio clipping / silence (the export audio mix).
  */
 import { captureFrameAt, storePickedFrame } from "../storyboard/frameCapture";
-import { audioOutputOf, board, mergeLayer, ops, promote, findPlacement, slip, newId, panToAzimuth, positionErrors, secondsToTicks, TICKS_PER_SECOND, timelineReview, type Placement, type Project } from "../../domain";
+import { audioOutputOf, board, mergeLayer, ops, promote, findPlacement, slip, subs, newId, panToAzimuth, positionErrors, secondsToTicks, TICKS_PER_SECOND, timelineReview, type Placement, type Project } from "../../domain";
 import { getPreset, listPresets } from "../../registry";
 import { cmd, type Command, type Engine } from "../../engine";
 import type { BlobStore } from "../../ports";
@@ -253,6 +253,13 @@ export async function runTimelineTool(engine: Engine, source: FrameSource | unde
       const id = needClip(); if (typeof id !== "string") return id;
       const t = n("atSec"), edge = a.edge; if (t === undefined || (edge !== "left" && edge !== "right")) return fail('"edge" (left|right) and "atSec" are required.');
       return edit(cmd.trimPlacement(id, edge, secondsToTicks(t), a.ripple === true), id);
+    }
+    case "import_subtitles": {
+      const text = s("text"); if (!text) return fail('"text" is required.');
+      const list = subs.parseSrt(text);
+      if (!list.length) return fail("No subtitles found: each cue needs a 00:00:01,000 --> 00:00:03,000 timing line.");
+      const changed = engine.dispatch(cmd.importSrtLayer(list), "import_subtitles");
+      return { ok: changed, changed, text: JSON.stringify({ imported: list.length }) };
     }
     case "slip_clip": {
       const id = needClip(); if (typeof id !== "string") return id;

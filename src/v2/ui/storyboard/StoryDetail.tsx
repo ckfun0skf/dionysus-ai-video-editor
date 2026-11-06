@@ -435,7 +435,8 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
       {codeDialog()}
       {audioDialog()}
       {picking && createPortal(<StoryAssetPicker project={project} kind={kind} title={`Add a version · ${title}`} exclude={owner.assetId} thumbs={thumbs} blobs={blobs}
-        uploadLabel={`${kindName(kind).replace(/^an? /, "")} from this device`} onUpload={() => { setPicking(false); fileRef.current?.click(); }} onPick={(e) => void pickLibrary(e)} onClose={() => setPicking(false)} />, document.querySelector(".v2-app") ?? document.body)}
+        uploadLabel={`${kindName(kind).replace(/^an? /, "")} from this device`} onUpload={() => { setPicking(false); fileRef.current?.click(); }} onPick={(e) => void pickLibrary(e)} onClose={() => setPicking(false)}
+        onPasteHtml={kind === "html" ? (h, n) => addHtml(h, n) : undefined} expectBindings={expectBindings} expectParams={htmlSlot?.params} />, document.querySelector(".v2-app") ?? document.body)}
     </div>
   );
   if (inline) return <section className="v2-sb-inline" aria-label={title}>{body}</section>;

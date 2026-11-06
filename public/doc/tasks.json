@@ -3066,6 +3066,12 @@
           "title": "Main track: a selected clip's trim handles sit above the cut/transition buttons with a 44px grab area; the cut buttons on its edges step aside (no hit area) so middle clips can be extended either way",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P36-PASTE-IMPORTS",
+          "title": "Paste instead of upload: storyboard Add version for code clips gets 'Paste HTML' (the AI's reply or raw HTML, validated, added as a new version); Text > Import opens 'Import subtitles' with a paste box (live cue count, \u2713 imports a new text layer) or Choose file; WebMCP import_subtitles",
+          "status": "done",
+          "progress": 100
         }
       ]
     }
