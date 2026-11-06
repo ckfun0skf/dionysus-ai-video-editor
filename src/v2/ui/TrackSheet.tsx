@@ -49,7 +49,7 @@ export function TrackSheet({ engine, project, placement, trackId, time, loadBlob
   const [aspect, setAspect] = useState(prev ? prev.srcW / prev.srcH : 16 / 9);
   const signal = useRef({ cancelled: false });
   const video = useRef<HTMLVideoElement>(null), stage = useRef<HTMLDivElement>(null);
-  const drag = useRef<{ x0: number; y0: number; move?: { bx: number; by: number; i: number } }>();
+  const drag = useRef<{ x0: number; y0: number; move?: { bx: number; by: number; i: number }; pan?: { x: number; y: number } }>();
   const cands = useMemo(() => followCandidates(project, placement), [project, placement]);
   // P41: the parent passes a fresh loadBlob on every render; depending on it re-created the blob URL (and reloaded the
   // <video>) on each editor re-render, which made the preview flicker. Read it through a ref; reload only per asset.
@@ -97,21 +97,77 @@ export function TrackSheet({ engine, project, placement, trackId, time, loadBlob
   const shown: Box | undefined = phase === "draw" ? box : cur && !lost ? { x: cur.x - cur.w / 2, y: cur.y - cur.h / 2, w: cur.w, h: cur.h } : undefined;
   const unstable = !!cur && !lost && cur.conf < tracking.UNSTABLE_CONF;
 
-  const at = (e: RPointerEvent) => { const r = stage.current!.getBoundingClientRect(); return { x: clamp01((e.clientX - r.left) / (r.width || 1)), y: clamp01((e.clientY - r.top) / (r.height || 1)) }; };
+  // P42: zoom / pan the preview (pinch, Ctrl/⌘+wheel or trackpad pinch; drag empty area or wheel to pan when zoomed;
+  // double-tap or Fit resets). Pure CSS transform on an inner layer — the <video> is never reloaded or re-seeked.
+  const [zv, setZv] = useState({ z: 1, tx: 0, ty: 0 });
+  const zref = useRef(zv); zref.current = zv;
+  const ptrs = useRef(new Map<number, { x: number; y: number }>());
+  const pinch = useRef<{ d: number; z: number; u: number; v: number } | undefined>();
+  const lastTap = useRef({ t: 0, x: 0, y: 0 });
+  const zoomTo = (z: number, cx: number, cy: number, base = zref.current) => {
+    const r = stage.current?.getBoundingClientRect(); if (!r) return;
+    const W = r.width || 1, H = r.height || 1, nz = Math.min(8, Math.max(1, z));
+    const u = (cx - base.tx) / base.z, v = (cy - base.ty) / base.z;
+    setZv(clampView({ z: nz, tx: cx - u * nz, ty: cy - v * nz }, W, H));
+  };
+  const panBy = (dx: number, dy: number) => { const r = stage.current?.getBoundingClientRect(); if (!r) return; const c = zref.current; setZv(clampView({ ...c, tx: c.tx + dx, ty: c.ty + dy }, r.width || 1, r.height || 1)); };
+  const sr = stage.current?.getBoundingClientRect();
+  const pathViewBox = zv.z === 1 || !sr?.width ? "0 0 1 1" : `${-zv.tx / zv.z / sr.width} ${-zv.ty / zv.z / sr.height} ${1 / zv.z} ${1 / zv.z}`;
+  const fit = () => setZv({ z: 1, tx: 0, ty: 0 });
+  useEffect(() => {
+    const el = stage.current; if (!el) return;
+    const wheel = (e: WheelEvent) => {
+      const r = el.getBoundingClientRect();
+      if (e.ctrlKey || e.metaKey) { e.preventDefault(); zoomTo(zref.current.z * Math.exp(-e.deltaY * 0.01), e.clientX - r.left, e.clientY - r.top); }
+      else if (zref.current.z > 1) { e.preventDefault(); panBy(-e.deltaX, -e.deltaY); }
+    };
+    el.addEventListener("wheel", wheel, { passive: false });
+    return () => el.removeEventListener("wheel", wheel);
+  });
+  /** Pinch bookkeeping; returns true while two fingers are down (the gesture zooms instead of drawing / editing). */
+  const pinchMove = (e: RPointerEvent) => {
+    const m = ptrs.current; if (!m.has(e.pointerId)) return false;
+    m.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (m.size < 2 || !pinch.current) return m.size >= 2;
+    const [a, b] = [...m.values()], r = stage.current!.getBoundingClientRect();
+    const d = Math.hypot(a.x - b.x, a.y - b.y) || 1, cx = (a.x + b.x) / 2 - r.left, cy = (a.y + b.y) / 2 - r.top;
+    const p = pinch.current, nz = Math.min(8, Math.max(1, p.z * d / p.d));
+    setZv(clampView({ z: nz, tx: cx - p.u * nz, ty: cy - p.v * nz }, r.width || 1, r.height || 1));
+    return true;
+  };
+  const at = (e: RPointerEvent) => { const r = stage.current!.getBoundingClientRect(), c = zref.current; return { x: clamp01((e.clientX - r.left - c.tx) / c.z / (r.width || 1)), y: clamp01((e.clientY - r.top - c.ty) / c.z / (r.height || 1)) }; };
+  /** Registers a finger; on the second one starts a pinch (also when the first finger landed on a node). */
+  const pinchStart = (e: RPointerEvent) => {
+    const m = ptrs.current; m.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (m.size !== 2) return false;
+    {
+      const [a, b] = [...m.values()], r = stage.current!.getBoundingClientRect(), c = zref.current;
+      const cx = (a.x + b.x) / 2 - r.left, cy = (a.y + b.y) / 2 - r.top;
+      pinch.current = { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, z: c.z, u: (cx - c.tx) / c.z, v: (cy - c.ty) / c.z };
+      drag.current = undefined; return true;
+    }
+  };
   const down = (e: RPointerEvent) => {
+    if (pinchStart(e)) return;
     if (phase === "busy") return;
+    const lt = lastTap.current, now = e.timeStamp;
+    lastTap.current = { t: now, x: e.clientX, y: e.clientY };
+    if (zref.current.z > 1 && now - lt.t < 320 && Math.hypot(e.clientX - lt.x, e.clientY - lt.y) < 24) { fit(); drag.current = undefined; return; }
     setPlaying(false);
     const p = at(e); (e.target as Element).setPointerCapture?.(e.pointerId);
     if (phase === "review" && shown && cur && p.x >= shown.x && p.x <= shown.x + shown.w && p.y >= shown.y && p.y <= shown.y + shown.h) drag.current = { x0: p.x, y0: p.y, move: { bx: cur.x, by: cur.y, i: idx } };
+    else if (phase !== "draw" && zref.current.z > 1) drag.current = { x0: 0, y0: 0, pan: { x: e.clientX, y: e.clientY } };
     else if (phase === "draw") { if (!inRange) { setError("Move to a frame inside the range (In / Out) to draw the box."); return; } drag.current = { x0: p.x, y0: p.y }; setBox(undefined); }
   };
   const move = (e: RPointerEvent) => {
+    if (pinchMove(e)) return;
     const d = drag.current; if (!d) return;
+    if (d.pan) { panBy(e.clientX - d.pan.x, e.clientY - d.pan.y); d.pan = { x: e.clientX, y: e.clientY }; return; }
     const p = at(e);
     if (d.move) { nudge(d.move.i, d.move.bx + p.x - d.x0, d.move.by + p.y - d.y0); return; }
     setBox({ x: Math.min(d.x0, p.x), y: Math.min(d.y0, p.y), w: Math.abs(p.x - d.x0), h: Math.abs(p.y - d.y0) });
   };
-  const up = () => { drag.current = undefined; };
+  const up = (e?: RPointerEvent) => { if (e) ptrs.current.delete(e.pointerId); if (ptrs.current.size < 2) pinch.current = undefined; drag.current = undefined; };
   /** Move frame i's box centre (a nudge or a path-point drag): marks it manual, trusted and found. */
   const nudge = (i: number, x: number, y: number) => {
     setTrack((t) => {
@@ -171,7 +227,7 @@ export function TrackSheet({ engine, project, placement, trackId, time, loadBlob
     const pts = inR.filter((_, k) => k % every === 0 || k === inR.length - 1).map(([t, i]) => ({ i, q: tracking.sampleAt(view, t) })).filter((p) => p.q && !p.q.lost).map((p) => ({ i: p.i, x: p.q!.x, y: p.q!.y, bad: p.q!.conf < tracking.UNSTABLE_CONF }));
     return { segs, pts };
   }, [view, showPath, phase, ticks, range]);
-  const pointDown = (e: RPointerEvent, i: number, x: number, y: number) => { e.stopPropagation(); setPlaying(false); setIdx(i); (e.target as Element).setPointerCapture?.(e.pointerId); drag.current = { ...at(e), x0: at(e).x, y0: at(e).y, move: { bx: x, by: y, i } }; };
+  const pointDown = (e: RPointerEvent, i: number, x: number, y: number) => { e.stopPropagation(); if (pinchStart(e)) return; setPlaying(false); setIdx(i); (e.target as Element).setPointerCapture?.(e.pointerId); drag.current = { ...at(e), x0: at(e).x, y0: at(e).y, move: { bx: x, by: y, i } }; };
   const badCount = view ? view.samples.filter((q) => q.conf < tracking.UNSTABLE_CONF).length : 0, lostCount = view ? view.samples.filter((q) => q.lost).length : 0;
   const okLabel = phase === "review" ? `Apply ${name || "track"}${follow.size ? ` and ${follow.size} follower${follow.size === 1 ? "" : "s"}` : ""}` : removing ? "Remove tracker" : "Done";
   const sec = (t: number) => `${(Math.max(0, t - ticks[0]) / TICKS_PER_SECOND).toFixed(2)}s`;
@@ -185,16 +241,20 @@ export function TrackSheet({ engine, project, placement, trackId, time, loadBlob
         <button className="v2-icon-btn" aria-label={okLabel} title={okLabel + " (one undo step)"} disabled={phase === "busy" || (phase === "draw" && !removing)} onClick={() => void commit()}><Ic g="✓" /></button>
       </header>
       <div ref={stage} className={`v2-track-stage is-${phase}${mask && phase === "review" ? ` mask-${mask}` : ""}`} style={{ aspectRatio: `${aspect}`, width: `min(100%, calc(48dvh * ${aspect}))` }} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
+        <div className="v2-track-layer" style={{ transform: `translate(${zv.tx}px, ${zv.ty}px) scale(${zv.z})`, ["--z" as string]: zv.z }}>
         <video ref={video} src={url} muted playsInline preload="auto" aria-label="Clip frame" className={ready ? "is-ready" : undefined} onLoadedData={() => setReady(true)} onLoadedMetadata={(e) => { const v = e.currentTarget; if (v.videoWidth && v.videoHeight && !prev) setAspect(v.videoWidth / v.videoHeight); }} />
         {mask === "inside" && phase === "review" && (lost || !inRange) && <div className="v2-track-hide" aria-hidden />}
-        {path.segs.length > 0 && <svg className="v2-track-path" viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden>{path.segs.map((pts, k) => <polyline key={k} points={pts} />)}</svg>}
         {path.pts.map((p) => (
           <button key={p.i} type="button" className={`v2-track-pt${p.i === idx ? " is-cur" : ""}${p.bad ? " is-bad" : ""}`} style={{ left: pct(p.x), top: pct(p.y) }} aria-label={`Path point, frame ${p.i + 1}: drag to move`}
             onPointerDown={(e) => pointDown(e, p.i, p.x, p.y)} onPointerMove={move} onPointerUp={up} onPointerCancel={up}><i /></button>
         ))}
         {shown && shown.w > 0 && <div className={`v2-track-box${unstable ? " is-unstable" : ""}${phase === "review" ? " is-solved" : ""}`} data-testid="track-box" style={{ left: pct(shown.x), top: pct(shown.y), width: pct(shown.w), height: pct(shown.h) }}><i aria-hidden /></div>}
+        </div>
+        {/* path stays outside the scaled layer (crisp lines): its viewBox shows the zoomed window of the frame */}
+        {path.segs.length > 0 && <svg className="v2-track-path" viewBox={pathViewBox} preserveAspectRatio="none" aria-hidden>{path.segs.map((pts, k) => <polyline key={k} points={pts} />)}</svg>}
         {phase === "review" && (lost || !inRange) && <span className="v2-track-flag" role="status">{lost ? "Lost: not found on this frame" : "Outside the range"}</span>}
         {phase === "draw" && !box && <p className="v2-track-tip" aria-hidden>Drag a box around the feature</p>}
+        {zv.z > 1 && <button type="button" className="v2-icon-btn v2-track-fit" aria-label="Fit frame" title="Fit frame (double-tap)" onPointerDown={(e) => e.stopPropagation()} onClick={fit}><Ic g="fit" size={16} /><span>{Math.round(zv.z * 100)}%</span></button>}
       </div>
       <div className="v2-track-scrub">
         <div className="v2-track-strip" aria-hidden>{strip.map((c) => <i key={c.from} className={c.cls} />)}</div>
@@ -239,9 +299,15 @@ export function TrackSheet({ engine, project, placement, trackId, time, loadBlob
             <button type="button" className="v2-btn" onClick={redraw}><Ic g="↶" size={16} /> Redraw box</button>
             {prev && <button type="button" className="v2-btn" onClick={() => { setTrack(undefined); setRemoving(true); setBox(undefined); setPhase("draw"); }}><Ic g="🗑" size={16} /> Remove tracker</button>}
           </div>
-          <p className="v2-muted v2-track-note">Region tracking follows the pixels in the box, growing and shrinking with them; it is not AI subject detection. Where the feature leaves the picture or the match is weak the frame is lost (no position). Works best on high-contrast features.</p>
+          <p className="v2-muted v2-track-note">Region tracking follows the pixels in the box, growing and shrinking with them; it is not AI subject detection. Where the feature leaves the picture or the match is weak the frame is lost (no position). Works best on high-contrast features. Pinch or Ctrl/⌘+scroll to zoom the frame; drag to pan; double-tap to fit.</p>
         </div>
       )}
     </div>
   );
+}
+
+/** Keep a zoomed view covering the stage (no empty margins): z ≥ 1, translate within [size·(1−z), 0]. */
+export function clampView(v: { z: number; tx: number; ty: number }, W: number, H: number) {
+  const z = Math.min(8, Math.max(1, v.z));
+  return { z, tx: Math.min(0, Math.max(W * (1 - z), v.tx)), ty: Math.min(0, Math.max(H * (1 - z), v.ty)) };
 }

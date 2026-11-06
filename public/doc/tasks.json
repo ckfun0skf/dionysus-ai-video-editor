@@ -3138,6 +3138,12 @@
           "title": "Track sheet preview no longer flickers: stable blob URL per asset (no reload on editor re-renders), no re-seek of an unchanged paused frame, video hidden until its first decoded frame",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P42-TRACK-ZOOM",
+          "title": "Track sheet preview zoom: pinch (phone), Ctrl/\u2318+wheel or trackpad pinch (desktop) around the cursor, pan by drag/scroll when zoomed, double-tap or Fit resets; nodes keep 44px screen targets; pure CSS transform (no video reload)",
+          "status": "done",
+          "progress": 100
         }
       ]
     }

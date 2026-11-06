@@ -5,7 +5,7 @@ import { createRoot } from "react-dom/client";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { createProject, findPlacement, secondsToTicks as s, type Asset } from "../domain";
 import { cmd, Engine } from "../engine";
-import { TrackSheet } from "./TrackSheet";
+import { clampView, TrackSheet } from "./TrackSheet";
 import type { TrackAnalyse } from "./trackAnalyse";
 
 beforeAll(() => {
@@ -132,5 +132,39 @@ describe("TrackSheet", () => {
     expect(t.el.querySelector("video")).toBe(v);
     expect(v.classList.contains("is-ready")).toBe(true);
     expect(seeks).toBe(0);
+  });
+  it("P42: Ctrl+wheel zooms around the cursor, drag pans, nodes edit in zoomed coords, double-tap fits; video untouched", async () => {
+    const t = mount(fake);
+    t.ptr("pointerdown", 40, 20); t.ptr("pointermove", 80, 50); t.ptr("pointerup", 80, 50);
+    const track = [...t.el.querySelectorAll("button")].find((b) => b.textContent?.includes("Track"))!;
+    await act(async () => { track.click(); await new Promise((r) => setTimeout(r, 0)); });
+    const v = t.el.querySelector("video")!, stage = t.el.querySelector(".v2-track-stage") as HTMLElement;
+    const layer = () => (t.el.querySelector(".v2-track-layer") as HTMLElement).style.transform;
+    act(() => { stage.dispatchEvent(new WheelEvent("wheel", { bubbles: true, cancelable: true, ctrlKey: true, deltaY: -100, clientX: 40, clientY: 30 })); });
+    const m = /translate\((-?[\d.]+)px, (-?[\d.]+)px\) scale\(([\d.]+)\)/.exec(layer())!.slice(1).map(Number);
+    expect(m[2]).toBeGreaterThan(2);
+    // the frame point under the cursor stays put: (40 - tx) / z == 40
+    expect((40 - m[0]) / m[2]).toBeCloseTo(40, 3); expect((30 - m[1]) / m[2]).toBeCloseTo(30, 3);
+    expect(t.el.querySelector('[aria-label="Fit frame"]')).toBeTruthy();
+    // empty-area drag pans
+    t.ptr("pointerdown", 150, 85); t.ptr("pointermove", 140, 80); t.ptr("pointerup", 140, 80);
+    const m2 = /translate\((-?[\d.]+)px, (-?[\d.]+)px/.exec(layer())!.slice(1).map(Number);
+    expect(m2[0]).toBeCloseTo(m[0] - 10, 3); expect(m2[1]).toBeCloseTo(m[1] - 5, 3);
+    // a path point drag still edits that frame, mapped through the zoom
+    const pt = t.el.querySelector(".v2-track-pt.is-cur") as HTMLElement;
+    const left0 = parseFloat((t.el.querySelector('[data-testid="track-box"]') as HTMLElement).style.left);
+    act(() => { pt.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, clientX: 40, clientY: 30 })); });
+    act(() => { pt.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX: 40 + m[2] * 16, clientY: 30 })); pt.dispatchEvent(new MouseEvent("pointerup", { bubbles: true })); });
+    // 16 frame-px of a 160px stage = 10 % of the frame, regardless of the zoom
+    expect(parseFloat((t.el.querySelector('[data-testid="track-box"]') as HTMLElement).style.left)).toBeCloseTo(left0 + 10, 1);
+    // double-tap fits
+    t.ptr("pointerdown", 150, 85); t.ptr("pointerup", 150, 85); t.ptr("pointerdown", 150, 85); t.ptr("pointerup", 150, 85);
+    expect(layer()).toBe("translate(0px, 0px) scale(1)");
+    expect(t.el.querySelector("video")).toBe(v);
+  });
+  it("P42: clampView keeps the zoomed frame covering the stage", () => {
+    expect(clampView({ z: 0.5, tx: 10, ty: 10 }, 100, 50)).toEqual({ z: 1, tx: 0, ty: 0 });
+    expect(clampView({ z: 2, tx: -500, ty: 5 }, 100, 50)).toEqual({ z: 2, tx: -100, ty: 0 });
+    expect(clampView({ z: 20, tx: 0, ty: 0 }, 100, 50).z).toBe(8);
   });
 });
