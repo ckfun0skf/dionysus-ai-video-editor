@@ -51,15 +51,25 @@ export function TrackSheet({ engine, project, placement, trackId, time, loadBlob
   const video = useRef<HTMLVideoElement>(null), stage = useRef<HTMLDivElement>(null);
   const drag = useRef<{ x0: number; y0: number; move?: { bx: number; by: number; i: number } }>();
   const cands = useMemo(() => followCandidates(project, placement), [project, placement]);
-  const run = useMemo(() => analyse ?? makeTrackAnalyse(() => loadBlob(placement.source.assetId)), [analyse, loadBlob, placement.source.assetId]);
+  // P41: the parent passes a fresh loadBlob on every render; depending on it re-created the blob URL (and reloaded the
+  // <video>) on each editor re-render, which made the preview flicker. Read it through a ref; reload only per asset.
+  const blobRef = useRef(loadBlob); blobRef.current = loadBlob;
+  const [ready, setReady] = useState(false);
+  const run = useMemo(() => analyse ?? makeTrackAnalyse(() => blobRef.current(placement.source.assetId)), [analyse, placement.source.assetId]);
 
   useEffect(() => {
     let off = false, made = "";
-    void loadBlob(placement.source.assetId).then((b) => { if (!off && b) { made = URL.createObjectURL(b); setUrl(made); } }).catch(() => undefined);
+    void blobRef.current(placement.source.assetId).then((b) => { if (!off && b) { made = URL.createObjectURL(b); setUrl(made); } }).catch(() => undefined);
     return () => { off = true; signal.current.cancelled = true; if (made) URL.revokeObjectURL(made); };
-  }, [loadBlob, placement.source.assetId]);
-  // Paused: show the chosen frame. Playing: the video runs and drives the frame index (box, path and mask follow).
-  useEffect(() => { const v = video.current; if (v && url && !playing && ticks[idx] !== undefined) v.currentTime = ticks[idx] / TICKS_PER_SECOND + 0.001; }, [url, idx, ticks, playing]);
+  }, [placement.source.assetId]);
+  // Paused: show the chosen frame — seek only when it actually differs (half a frame), so re-renders never re-seek.
+  // Playing: the video runs and drives the frame index (box, path and mask follow); brief decode gaps keep the last frame.
+  useEffect(() => {
+    const v = video.current;
+    if (!v || !url || playing || ticks[idx] === undefined) return;
+    const t = ticks[idx] / TICKS_PER_SECOND + 0.001;
+    if (Math.abs(v.currentTime - t) > 1 / 60) v.currentTime = t;
+  }, [url, idx, ticks, playing]);
   useEffect(() => {
     const v = video.current;
     if (!playing || !v) return;
@@ -175,7 +185,7 @@ export function TrackSheet({ engine, project, placement, trackId, time, loadBlob
         <button className="v2-icon-btn" aria-label={okLabel} title={okLabel + " (one undo step)"} disabled={phase === "busy" || (phase === "draw" && !removing)} onClick={() => void commit()}><Ic g="✓" /></button>
       </header>
       <div ref={stage} className={`v2-track-stage is-${phase}${mask && phase === "review" ? ` mask-${mask}` : ""}`} style={{ aspectRatio: `${aspect}`, width: `min(100%, calc(48dvh * ${aspect}))` }} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
-        <video ref={video} src={url} muted playsInline preload="auto" aria-label="Clip frame" onLoadedMetadata={(e) => { const v = e.currentTarget; if (v.videoWidth && v.videoHeight && !prev) setAspect(v.videoWidth / v.videoHeight); }} />
+        <video ref={video} src={url} muted playsInline preload="auto" aria-label="Clip frame" className={ready ? "is-ready" : undefined} onLoadedData={() => setReady(true)} onLoadedMetadata={(e) => { const v = e.currentTarget; if (v.videoWidth && v.videoHeight && !prev) setAspect(v.videoWidth / v.videoHeight); }} />
         {mask === "inside" && phase === "review" && (lost || !inRange) && <div className="v2-track-hide" aria-hidden />}
         {path.segs.length > 0 && <svg className="v2-track-path" viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden>{path.segs.map((pts, k) => <polyline key={k} points={pts} />)}</svg>}
         {path.pts.map((p) => (

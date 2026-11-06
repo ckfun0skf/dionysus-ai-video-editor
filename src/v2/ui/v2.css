@@ -1433,6 +1433,7 @@ select.v2-tp-field { -webkit-appearance: none; appearance: none; padding-right: 
 .v2-track-stage { position: relative; margin: 0 auto; background: #000; border-radius: 8px; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
 .v2-track-stage.is-draw { cursor: crosshair; }
 .v2-track-stage video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; pointer-events: none; }
+.v2-track-stage video:not(.is-ready) { opacity: 0; } /* P41: no empty/half-loaded flash before the first decoded frame */
 .v2-track-box { position: absolute; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.6); border-radius: 2px; pointer-events: none; }
 .v2-track-box.is-solved { border-color: var(--accent, #20d5ec); }
 .v2-track-box.is-unstable { border-color: #facc15; border-style: dashed; }
