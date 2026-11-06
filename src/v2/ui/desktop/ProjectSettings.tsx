@@ -6,7 +6,7 @@ import { setProjectSeries, useSeries } from "../series/seriesStore";
 import { ASPECTS, aspectOf, BACKGROUNDS, FPS_CHOICES } from "./layout";
 
 /** V2-106: shown in the inspector when nothing is selected. Every change is one undo step. */
-export function ProjectSettings({ engine, project, extra, onSeries }: { engine: Engine; project: Project; extra?: React.ReactNode; /** P5: open the Series library. */ onSeries?: () => void }) {
+export function ProjectSettings({ engine, project, extra, onSeries, onCleanup }: { engine: Engine; project: Project; extra?: React.ReactNode; /** P5: open the Series library. */ onSeries?: () => void; /** P38: open Clean up project. */ onCleanup?: () => void }) {
   const s = project.settings;
   const aspect = aspectOf(s);
   const bg = s.background ?? "#000000";
@@ -56,6 +56,11 @@ export function ProjectSettings({ engine, project, extra, onSeries }: { engine: 
         {onSeries && <button className="v2-btn v2-series-open" onClick={onSeries}><Ic g="library" size={16} /> Series library</button>}
         <p className="v2-abnote">{series ? `Episode of “${series.name}” · ${Object.keys(series.assets).length} shared asset(s).` : "Share characters, props, locations and styles between episodes."}</p>
       </section>
+      {onCleanup && <section aria-label="Storage">
+        <h4>Storage</h4>
+        <button className="v2-btn v2-cleanup-open" onClick={onCleanup}><Ic g="🗑" size={16} /> Clean up project…</button>
+        <p className="v2-abnote">Remove media nothing uses and old versions you no longer need (one undo step).</p>
+      </section>}
       {extra}
       <p className="v2-empty-hint"><Ic g="⤧" size={14} /> Select a clip on the timeline to edit it here.</p>
     </div>

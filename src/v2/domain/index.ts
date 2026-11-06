@@ -29,6 +29,7 @@ export type { Storyboard, AssetSlot, Shot, VersionInfo, QaCheck, QaResult, Stale
 export * from "./htmlClipPackage";
 export * from "./codeRoles";
 export * from "./codeInputs";
+export * as cleanup from "./cleanup";
 export * from "./audioClip";
 export * from "./audioClipPrompt";
 export * from "./spatial";

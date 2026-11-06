@@ -12,6 +12,7 @@ import * as subs from "../domain/subtitles";
 import * as edit from "../domain/edit";
 import * as transitions from "../domain/transitions";
 import { codeAssetOf, codeRoleIssue } from "../domain/codeRoles";
+import * as cleanupOps from "../domain/cleanup";
 /** P38: throw when a "code:<assetId>" preset/kind names an asset of another role. */
 const needRole = (p: Project, preset: string | undefined, want: "effect" | "transition") => { const a = codeAssetOf(preset); const e = a ? codeRoleIssue(p, a, want) : undefined; if (e) throw new Error(e); };
 import type { ChromaKey, Keyframe, Subtitle } from "../domain/model";
@@ -137,6 +138,12 @@ export const setClipInput = (id: string, name: string, source: string | undefine
     const { htmlInputs: _drop, ...rest } = pl;
     return Object.keys(next).length ? { ...rest, htmlInputs: next } : rest;
   }) })) })),
+});
+
+/** P38: Clean up project — remove unused media and old versions (only those the plan lists). One undo step. */
+export const cleanupProject = (assetIds: string[], versions: { assetId: string; versionId: string }[], bindingRefs: string[] = []): Command => ({
+  label: "Clean up project",
+  apply: (p) => cleanupOps.applyCleanup(p, assetIds, versions, bindingRefs),
 });
 
 /** P38: rename a track (layer). Bindings keep working: they store the track id. */

@@ -365,3 +365,17 @@ describe("P38 set_clip_input / rename_track", () => {
     expect((await run("rename_track", { trackId: audioTrack.id, name: " " })).ok).toBe(false);
   });
 });
+
+describe("P38 list_unused_assets / delete_assets", () => {
+  it("lists unused media, deletes it in one undo step and refuses what is in use", async () => {
+    const e = setup();
+    const list = json((await runTimelineTool(e, undefined, "list_unused_assets", {})).text);
+    expect(list.unused.map((u: { assetId: string }) => u.assetId).sort()).toEqual(["a", "w"]);
+    expect((await runTimelineTool(e, undefined, "delete_assets", { assetIds: ["v"] })).text).toMatch(/Not removable/);
+    const r = await runTimelineTool(e, undefined, "delete_assets", { assetIds: ["w", "a"] });
+    expect(r.ok).toBe(true);
+    expect(Object.keys(e.getState().project.assets)).toEqual(["v"]);
+    e.undo();
+    expect(Object.keys(e.getState().project.assets).sort()).toEqual(["a", "v", "w"]);
+  });
+});

@@ -46,6 +46,7 @@ import { fromVideo as fromVideoDomain, type MediaRef } from "../domain";
 import { projectMediaList } from "./projectMedia";
 import { stickerFile, stickers } from "./libraryItems";
 import { newCodeClipHtml } from "./codeSamples";
+import { CleanupDialog } from "./CleanupDialog";
 import { EffectPicker } from "./EffectPicker";
 import { SyncSheet } from "./SyncSheet";
 import { ProjectSettings as MobileProjectSettings } from "./desktop/ProjectSettings";
@@ -163,6 +164,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   /** V2-098: animation sheet; after a pick the sheet shrinks and the preview loops over the clip's time range. */
   const [animOpen, setAnimOpen] = useState(false);
   const [fxOpen, setFxOpen] = useState(false);
+  const [cleanOpen, setCleanOpen] = useState(false);
   /** V2-HTML-PARAMS: the mobile sheet with the selected HTML clip's param values. */
   const [paramsOpen, setParamsOpen] = useState(false);
   /** V2-TL-TRANS: incoming clip of the cut whose transition picker sheet is open (mobile). */
@@ -685,6 +687,9 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const fileInputs = (
     <>
       <input ref={fileRef} type="file" hidden multiple accept="video/*,image/*,audio/*,.html,.htm,text/html,.zip,application/zip" onChange={(e) => { void onFiles(e.target.files); e.target.value = ""; }} />
+      {cleanOpen && <div className="v2-modal-back" onPointerDown={(e) => { if (e.target === e.currentTarget) setCleanOpen(false); }}>
+        <CleanupDialog engine={engine} project={project} blobs={storage.blobs} onClose={() => setCleanOpen(false)} onDone={(m) => { setCleanOpen(false); setToast(m); }} />
+      </div>}
       {subImport && <div className="v2-modal-back" onPointerDown={(e) => { if (e.target === e.currentTarget) setSubImport(false); }}>
         <SubtitleImport onPasteImport={onSubPaste} onChooseFile={() => srtRef.current?.click()} onClose={() => setSubImport(false)} />
       </div>}
@@ -974,7 +979,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     if (subsTrack && !selected) return { icon: "≡", title: "Edit subtitles", subtitle: subsTrack.name, onDone: () => setSubsEdit(undefined), tabs: [{ id: "subs", label: "Subtitles", render: () => <SubtitleList engine={engine} track={subsTrack} time={time} playing={playing} onSeek={seek} desktop name={project.name} focusCue={subsCue} /> }] };
     if (layerTrack && !selected) return { icon: "layers", title: "Edit all", subtitle: layerTrack.name, onDone: () => setLayerEdit(undefined), tabs: [{ id: "layer", label: "Layer style", render: () => <TextPanel key={layerTrack.id} engine={engine} layer={layerTrack} initialTab="Style" /> }] };
     if (cue && !selected) return { icon: "≡", title: "Subtitle", onDone: () => setSubId(undefined), tabs: [{ id: "cue", label: "Subtitle", render: () => <SubtitleEditor engine={engine} sub={cue} onDelete={delCue} /> }] };
-    if (!selected) return { icon: "settings", title: "Project", subtitle: `${project.settings.width}×${project.settings.height} · ${fpsNow} fps`, tabs: [{ id: "project", label: "Project", render: () => <ProjectSettings engine={engine} project={project} onSeries={() => setSeriesLib(true)} extra={textLayers.length ? <section aria-label="Subtitles"><h4>Subtitles</h4>{actionList([{ icon: "≡", label: "Subtitles", title: "Edit every subtitle in a list: text, timing, split, merge, find & replace", run: editSubtitles }, { icon: "⇩", label: "Export", title: "Download subtitles as .srt", run: exportSrt }])}</section> : undefined} /> }] };
+    if (!selected) return { icon: "settings", title: "Project", subtitle: `${project.settings.width}×${project.settings.height} · ${fpsNow} fps`, tabs: [{ id: "project", label: "Project", render: () => <ProjectSettings engine={engine} project={project} onSeries={() => setSeriesLib(true)} onCleanup={() => setCleanOpen(true)} extra={textLayers.length ? <section aria-label="Subtitles"><h4>Subtitles</h4>{actionList([{ icon: "≡", label: "Subtitles", title: "Edit every subtitle in a list: text, timing, split, merge, find & replace", run: editSubtitles }, { icon: "⇩", label: "Export", title: "Download subtitles as .srt", run: exportSrt }])}</section> : undefined} /> }] };
     const pl = selected.placement, kind = pl.clipType;
     const rel = clipTimeAt(pl, time);
     const sub = `${formatTimecode(pl.startTicks, fpsNow).slice(0, 8)} · ${(pl.durationTicks / 120000).toFixed(1)}s${rel ? ` · ${clipTimeText(rel)}` : ""}`;
@@ -1191,7 +1196,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       {toast && <div className={`v2-toast ${toastUndo ? "has-undo" : ""}`} role="status" onClick={() => setToast(undefined)}><span>{toast}</span>{toastUndo && <button className="v2-toast-undo" title={`Undo (${MOD} Z)`} onClick={(e) => { e.stopPropagation(); engine.undo(); setToast(undefined); }}>Undo</button>}</div>}
       {promoteFor && findPlacement(comp, promoteFor) && <PromoteSheet engine={engine} project={project} clipId={promoteFor} onDone={(m) => { setPromoteFor(undefined); if (m) setToast(m); }} />}
       {syncOpen && <SyncSheet engine={engine} project={project} onDone={(m) => { setSyncOpen(false); if (m) setToast(m); }} />}
-      {projOpen && <Sheet label="Project settings" className="v2-msheet-insp" onClose={() => setProjOpen(false)}><MobileProjectSettings engine={engine} project={project} onSeries={() => { setProjOpen(false); setSeriesLib(true); }} /></Sheet>}
+      {projOpen && <Sheet label="Project settings" className="v2-msheet-insp" onClose={() => setProjOpen(false)}><MobileProjectSettings engine={engine} project={project} onSeries={() => { setProjOpen(false); setSeriesLib(true); }} onCleanup={() => { setProjOpen(false); setCleanOpen(true); }} /></Sheet>}
       {mobile ? (
         <>
           {preview}

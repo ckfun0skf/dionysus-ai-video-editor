@@ -3114,6 +3114,12 @@
           "title": "Code clip inputs: manifest inputs (beat / scene) \u2192 ctx.inputs with computed signals only (beat: rms, peak, 8 bands, onset, envelope from a once-per-file 60 Hz analysis; scene: luma, avgColor, motion, 16-bin histogram from a 32x18 thumbnail; no samples, pixels or frame API); Params \u2192 Inputs Reference list (Mix / Program, tracks, clips); user-renameable layers (desktop double-click, or in the list) with id-based bindings; WebMCP set_clip_input / rename_track; guide rule 66",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P38-CLEANUP",
+          "title": "Clean up project (Project settings \u2192 Storage): unused media checked by default, old versions unchecked, sizes and space freed, \u2713 removes in one undo step (files freed by the next start's storage clean-up); WebMCP list_unused_assets / delete_assets; guide rule 67",
+          "status": "done",
+          "progress": 100
         }
       ]
     }

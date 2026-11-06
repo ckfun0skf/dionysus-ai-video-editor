@@ -6,8 +6,9 @@
  */
 import { audioClipAsset } from "../audioClipAsset";
 import { blobText } from "../AssetPreview";
+import { bindingRefsOf } from "../CleanupDialog";
 import { captureFrameAt, storePickedFrame } from "../storyboard/frameCapture";
-import { DEFAULT_SOURCE, readManifest, resolveSource, versionOf, codePresetId, codeRoleIssue, transitions, audioOutputOf, board, mergeLayer, ops, promote, findPlacement, slip, subs, newId, audioClipPrompt, parseAudioClip, runtimeAiLinks, panToAzimuth, positionErrors, secondsToTicks, TICKS_PER_SECOND, timelineReview, type Placement, type Project } from "../../domain";
+import { cleanup, DEFAULT_SOURCE, readManifest, resolveSource, versionOf, codePresetId, codeRoleIssue, transitions, audioOutputOf, board, mergeLayer, ops, promote, findPlacement, slip, subs, newId, audioClipPrompt, parseAudioClip, runtimeAiLinks, panToAzimuth, positionErrors, secondsToTicks, TICKS_PER_SECOND, timelineReview, type Placement, type Project } from "../../domain";
 import { getPreset, listPresets } from "../../registry";
 import { cmd, type Command, type Engine } from "../../engine";
 import type { BlobStore } from "../../ports";
@@ -315,6 +316,22 @@ export async function runTimelineTool(engine: Engine, source: FrameSource | unde
       if (!name || name.length > 40) return fail('"name" must be 1-40 characters.');
       if (!engine.dispatch(cmd.renameTrack(tid, name), "rename_track")) return fail("Could not rename the track.");
       return { ok: true, changed: true, text: JSON.stringify({ track: { id: tid, name } }) };
+    }
+    case "list_unused_assets": {
+      const plan = cleanup.cleanupPlan(project(), blobs ? await bindingRefsOf(project(), blobs) : []);
+      return { ok: true, changed: false, text: JSON.stringify({ unused: plan.unused.map((u) => ({ assetId: u.assetId, name: u.name, kind: u.kind })), oldVersions: plan.oldVersions.map((o) => ({ assetId: o.assetId, versionId: o.versionId, name: o.name, version: o.index + 1, createdAt: o.createdAt })) }) };
+    }
+    case "delete_assets": {
+      const ids = Array.isArray(a.assetIds) ? a.assetIds.filter((x): x is string => typeof x === "string") : [];
+      const vs = Array.isArray(a.versions) ? a.versions.filter((x): x is { assetId: string; versionId: string } => !!x && typeof x === "object" && typeof (x as { assetId?: unknown }).assetId === "string" && typeof (x as { versionId?: unknown }).versionId === "string") : [];
+      if (!ids.length && !vs.length) return fail('Pass "assetIds" and/or "versions" from list_unused_assets.');
+      const refs = blobs ? await bindingRefsOf(project(), blobs) : [];
+      const plan = cleanup.cleanupPlan(project(), refs);
+      const badA = ids.filter((id) => !plan.unused.some((u) => u.assetId === id));
+      const badV = vs.filter((v) => !plan.oldVersions.some((o) => o.assetId === v.assetId && o.versionId === v.versionId));
+      if (badA.length || badV.length) return fail(`Not removable (missing, in use, or the selected version): ${[...badA, ...badV.map((v) => `${v.assetId}/${v.versionId}`)].join(", ")}. Call list_unused_assets.`);
+      if (!engine.dispatch(cmd.cleanupProject(ids, vs, refs), "delete_assets")) return fail("Nothing was removed.");
+      return { ok: true, changed: true, text: JSON.stringify({ removedAssets: ids.length, removedVersions: vs.length }) };
     }
     case "set_blank_color": {
       const id = needClip(); if (typeof id !== "string") return id;
