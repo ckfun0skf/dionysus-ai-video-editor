@@ -84,14 +84,14 @@ export function syncPlan(p: Project): SyncPlan {
   let comp: Composition = structuredClone(p.compositions[p.rootCompositionId]);
   const main = mainTrack(comp);
   const mainClips = [...(main?.placements ?? [])].sort((x, y) => x.startTicks - y.startTicks);
-  const others = comp.tracks.filter((t) => t !== main).flatMap((t) => t.placements);
+  const others = comp.tracks.filter((t) => t !== main).flatMap((t) => t.placements).filter((pl) => !pl.blank); // P36: blank clips stay timeline-only
 
   // 1. Main clips → shots (existing or new).
   const shotOfClip = new Map<string, string>();
   const seen = new Set<string>();
   for (const pl of mainClips) {
     if (pl.storyShot && b.shots[pl.storyShot] && !seen.has(pl.storyShot)) { seen.add(pl.storyShot); shotOfClip.set(pl.id, pl.storyShot); continue; }
-    if (pl.clipType === "text" || pl.clipType === "effect" || pl.placeholder) continue; // P35: an orphan placeholder makes no shot
+    if (pl.clipType === "text" || pl.clipType === "effect" || pl.placeholder || pl.blank) continue; // P35/P36: an orphan placeholder or a blank clip makes no shot
     // P20: a later part of a shot's own take (a split, e.g. around a promoted overlay) continues that shot: a new shot
     // with the same clip and prompt, its own in point and length, and no needsPrompt.
     const orig = pl.storyShot && seen.has(pl.storyShot) ? b0.shots[pl.storyShot] : undefined;
@@ -148,10 +148,12 @@ export function syncPlan(p: Project): SyncPlan {
         changes.push({ kind: "shot", id, label: `"${s.title}" clip in point ${s.clipInSec ?? 0}s → ${inSec}s` });
         if (inSec > 0) s.clipInSec = inSec; else delete s.clipInSec;
       }
-    } else if (v?.media.durationTicks && info && (a.kind === "video") && !clip.freeze && !clip.reverse) {
+    } else if (v?.media.durationTicks && (a.kind === "video") && !clip.freeze && !clip.reverse) {
       const t = normTrim({ inTicks: clip.sourceInTicks, outTicks: Math.min(v.media.durationTicks, clip.sourceInTicks + Math.round(clip.durationTicks * (clip.speed ?? 1))) }, v.media.durationTicks);
-      if (!eq(t, normTrim(info.trim, v.media.durationTicks))) {
-        if (t) info.trim = t; else delete info.trim;
+      if (!eq(t, normTrim(info?.trim, v.media.durationTicks))) {
+        // P36: a version with no storyboard record yet (added on the timeline) still takes the trim, so the shot previews it.
+        const rec = info ?? (b.versions[clip.source.versionId] = { inputs: [] });
+        if (t) rec.trim = t; else delete rec.trim;
         changes.push({ kind: "trim", id, label: `"${s.title}" trim ${t ? `${sec(t.inTicks)}s–${sec(t.outTicks)}s` : "cleared"}` });
       }
     }

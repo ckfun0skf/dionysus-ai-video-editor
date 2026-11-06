@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AssetPreview } from "./AssetPreview";
 import { FromVideoTab, type FromVideoPick, type UploadedVideo } from "./FromVideoTab";
+import { BlankAdd } from "./BlankClip";
 import { Ic } from "./Icon";
 import { HTML_IMPORT_ACCEPT } from "./htmlPackage";
 import { stickers, stickerUrl, type Sticker } from "./libraryItems";
@@ -36,9 +37,10 @@ const fmtDur = (ticks?: number) => { if (!ticks) return ""; const s = Math.round
  * has Upload (from the device) and the project's own media of that kind (thumbnails, durations); Code also has Create
  * (a new clip in the Code Editor). Multi-select across tabs, numbered in pick order, then Add.
  */
-export function MediaPicker({ title, onAdd, onClose, media = [], only, initialTab, onCreateCode, onCreateAudio, loadMedia, onAddFromVideo, onTimeline, probeAudio, onUploadVideo, onDiscardVideo }: {
+export function MediaPicker({ title, onAdd, onClose, media = [], only, initialTab, onCreateCode, onCreateAudio, loadMedia, onAddFromVideo, onTimeline, probeAudio, onUploadVideo, onDiscardVideo, onAddBlank }: {
   title: string; onAdd: (p: Picked) => void; onClose: () => void; media?: ProjectMedia[];
   /** "audio": the audio tab only. */ only?: "audio"; initialTab?: PickerTab;
+  /** P36: Photos → Blank clip (a solid colour), added where this picker adds. */ onAddBlank?: (color: string) => void;
   /** Code → Create: open the Code Editor on a new clip (the picker closes). */ onCreateCode?: () => void;
   /** Audio → Create audio: open the Audio editor on a new clip (the picker closes). */ onCreateAudio?: () => void;
   /** P2C (item 7): the file of a project asset, for its playable preview (no preview button without it). */
@@ -140,6 +142,7 @@ export function MediaPicker({ title, onAdd, onClose, media = [], only, initialTa
                 </button>
               )}
             </div>
+            {tab === "photo" && onAddBlank && <BlankAdd targets={[{ label: "Add blank", title: "Add a solid colour clip at the playhead", run: onAddBlank }]} />}
             <input ref={input} type="file" hidden multiple accept={spec.accept} aria-label={`Upload ${spec.label.toLowerCase()}`} onChange={(e) => { const fs = [...(e.target.files ?? [])]; e.target.value = ""; onPick(fs); }} />
             {newFiles.length > 0 && (
               <>

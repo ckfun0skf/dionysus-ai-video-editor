@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { formatTimecode, text as T, type Asset, type Project } from "../../domain";
 import { applyEffectFrame } from "../../render";
 import { applyPreset, identityFrame, listPresets } from "../../registry";
+import { BlankAdd } from "../BlankClip";
 import { Ic } from "../Icon";
 import { HTML_IMPORT_ACCEPT } from "../htmlPackage";
 import { stickers, stickerUrl, type Sticker } from "../libraryItems";
@@ -24,6 +25,8 @@ export function browserTab(saved: string | null | undefined): BrowserTab {
 }
 
 export interface BrowserActions {
+  /** P36: add a blank (solid colour) clip at the playhead. */
+  onAddBlank?: (color: string, where: "main" | "overlay") => void;
   onImport: (accept?: string) => void;
   onFiles: (files: File[]) => void;
   onAddAsset: (a: Asset) => void;
@@ -106,6 +109,7 @@ export function AssetBrowser({ project, thumbs, busy, tab, onTab, ...a }: Browse
           <div className="v2-abhead"><strong>Photos</strong><button className="v2-btn primary" title="Upload photos (or drop files here)" onClick={() => a.onImport("image/*")}><Ic g="⇪" size={16} /> Upload</button></div>
           {busy > 0 && <p className="v2-hint" role="status">Importing {busy}…</p>}
           {assetGrid(of("image"), { icon: "image", title: "Drop photos here", body: "JPG, PNG, WebP or GIF — or click to browse. Then drag onto the timeline or click a tile to add it.", accept: "image/*", cta: "Upload photos" })}
+          {a.onAddBlank && <BlankAdd targets={[{ label: "Main track", title: "Add a blank clip to the main track at the playhead", run: (c) => a.onAddBlank!(c, "main") }, { label: "Overlay", title: "Add a blank clip on an overlay layer at the playhead", run: (c) => a.onAddBlank!(c, "overlay") }]} />}
         </>}
         {tab === "code" && <>
           <div className="v2-abhead"><strong>Code clips</strong></div>

@@ -92,7 +92,10 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
   const sharedVideo = shot && !shot.render && clipSlot ? clipSlot : undefined;
   // P15-TRIM-PREVIEW: shot previews play only the part of the clip the shot uses, looping.
   const reuse = shot && !versions.length ? board.shotPlayRange(project, shot) : undefined;
-  const peekRange = (v: AssetVersion) => { const sp = board.versionSpan(b, v); return sp && b.versions[v.id]?.trim ? { inSec: sp.inTicks / TICKS_PER_SECOND, outSec: (sp.inTicks + sp.lenTicks) / TICKS_PER_SECOND } : undefined; };
+  const peekRange = (v: AssetVersion) => {
+    // P36: a shot that plays a shared clip previews its own part of it (clipInSec for durationSec).
+    if (sharedVideo && shot) { const d = (v.media.durationTicks ?? 0) / TICKS_PER_SECOND, i = Math.min(shot.clipInSec ?? 0, Math.max(0, d - 0.04)); return d ? { inSec: i, outSec: Math.min(d, i + shot.durationSec) } : undefined; }
+    const sp = board.versionSpan(b, v); return sp && b.versions[v.id]?.trim ? { inSec: sp.inTicks / TICKS_PER_SECOND, outSec: (sp.inTicks + sp.lenTicks) / TICKS_PER_SECOND } : undefined; };
   const selected = board.selectedOf(project, owner);
   const status = board.storyStatus(project);
   const st = isSlot ? status.slots[owner.id] : status.shots[owner.id];

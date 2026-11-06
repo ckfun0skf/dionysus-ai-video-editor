@@ -1359,3 +1359,14 @@ select.v2-tp-field { -webkit-appearance: none; appearance: none; padding-right: 
 .v2-subimport-foot > span { flex: 1 1 100%; font-size: 13px; }
 .v2-subimport-foot .v2-btn { min-height: 44px; }
 .v2-sb-picker-paste { padding: 8px 0; }
+/* P36: blank (solid colour) clips */
+.v2-blank-colors { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.v2-blank-swatch, .v2-blank-custom { position: relative; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 10px; border: 1px solid transparent; background: none; padding: 0; cursor: pointer; color: var(--text); }
+.v2-blank-swatch > span { width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--line); }
+.v2-blank-swatch.is-on { border-color: var(--accent); }
+.v2-blank-custom input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+.v2-blank-add { padding: 8px 0; }
+.v2-blank-add-btns { display: flex; gap: 8px; margin-top: 6px; }
+.v2-blank-add-btns .v2-btn { min-height: 44px; flex: 1; }
+.v2-blank-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(255,255,255,.5); background: var(--blank, currentColor); vertical-align: -2px; margin-right: 4px; }
+.v2-clip.is-blank .v2-blank-body { color: #fff; mix-blend-mode: difference; }

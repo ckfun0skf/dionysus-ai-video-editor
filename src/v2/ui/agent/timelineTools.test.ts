@@ -290,3 +290,15 @@ describe("P36 import_subtitles", () => {
     expect(bad.text).toMatch(/No subtitles found/);
   });
 });
+
+describe("P36 add_blank_clip / set_blank_color", () => {
+  it("adds a blank clip, reports it in get_timeline, recolours it, and rejects bad colours", async () => {
+    const e = setup();
+    const r = await runTimelineTool(e, undefined, "add_blank_clip", { track: "overlay", atSec: 1, color: "#00ff00", durationSec: 2 });
+    expect(r.ok).toBe(true);
+    const id = root(e.getState().project).tracks.flatMap((t) => t.placements).find((x) => x.blank)!.id;
+    expect((await runTimelineTool(e, undefined, "set_blank_color", { clipId: id, color: "#000000" })).ok).toBe(true);
+    expect((await runTimelineTool(e, undefined, "set_blank_color", { clipId: "c1", color: "#000000" })).text).toMatch(/not a blank clip/);
+    expect((await runTimelineTool(e, undefined, "add_blank_clip", { track: "main", atSec: 0, color: "black" })).ok).toBe(false);
+  });
+});

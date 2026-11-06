@@ -72,6 +72,11 @@ export interface Placement {
    * Send to Timeline (Update) or Replace asset swaps in the real clip in place and drops this field.
    */
   placeholder?: { label: string };
+  /**
+   * P36 blank clip: a solid colour (`#rrggbb`) still clip on the main track or an overlay (`clipType: "image"`,
+   * TEXT_SOURCE). Fills the frame (its transform and opacity apply like a photo's); no media, no thumbnail.
+   */
+  blank?: { color: string };
   /** Fade in/out length in ticks: ramps opacity (visual) and volume (audio) from/to 0. */
   fadeInTicks?: number;
   fadeOutTicks?: number;
