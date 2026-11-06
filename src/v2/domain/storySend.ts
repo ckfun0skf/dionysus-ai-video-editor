@@ -192,6 +192,7 @@ function addLinked(p: Project, b: Storyboard, comp: Composition, shot: Shot, cli
   });
   const follow = (l: StoryLayer, r: { offset: number; duration: number }, t: Partial<Transform> | undefined) =>
     l.follow === "shot" ? followKeyframes(motion, r.offset, r.duration, { x: t?.x ?? 0, y: t?.y ?? 0, scale: t?.scale ?? 1 }, FOLLOW_STEP_TICKS) : undefined;
+  const placedLayer = new Map<string, string>(), withRefs: { id: string; refs: NonNullable<StoryMediaLayer["refs"]> }[] = [];
   for (const l of (shot.layers ?? [] as StoryLayer[]).filter((x) => !x.removedFromTimeline)) {
     const r = rangeIn(clip.durationTicks, l.startSec, l.endSec);
     const start = clip.startTicks + r.offset;
@@ -210,8 +211,21 @@ function addLinked(p: Project, b: Storyboard, comp: Composition, shot: Shot, cli
       const keyframes = follow(l, { offset: r.offset, duration: pl.durationTicks }, pl.transform);
       if (keyframes) pl.keyframes = keyframes;
       c = placeOnFreeTrack(c, pl, overlay(c));
+      placedLayer.set(l.id, pl.id);
+      if (l.refs && pl.clipType === "html") withRefs.push({ id: pl.id, refs: l.refs });
       res.layers += 1;
     }
+  }
+  // P43: references → code-clip input bindings. "main" = this shot's clip, a layer id = that layer's clip; a tracker
+  // is bound by name ("clip:<id>#@<name>") and resolves once the user sets a tracker with that name.
+  for (const w of withRefs) {
+    const inputs: Record<string, string> = {};
+    for (const [name, r] of Object.entries(w.refs)) {
+      const target = r.clip === undefined ? undefined : r.clip === "main" ? anchor : placedLayer.get(r.clip);
+      if (r.type === "tracker") { if (target) inputs[name] = `clip:${target}#@${r.track}`; }
+      else if (target) inputs[name] = `clip:${target}`;
+    }
+    if (Object.keys(inputs).length) c = { ...c, tracks: c.tracks.map((t) => ({ ...t, placements: t.placements.map((x) => (x.id === w.id ? { ...x, htmlInputs: { ...x.htmlInputs, ...inputs } } : x)) })) };
   }
   if (shot.captions && captionText(shot)) {
     const cue: Placement = { id: newId("plc"), startTicks: clip.startTicks, durationTicks: clip.durationTicks, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "text", text: { text: captionText(shot) } as TextData, storyLink: { anchor }, storyLayer: "captions", link: { parent: anchor } };

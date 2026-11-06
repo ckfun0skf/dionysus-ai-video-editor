@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { HTML_CLIP_ASPECTS, HTML_CLIP_FORMAT, MAX_CLIP_SEC, PARAM_TYPES, lintHtmlClip, sizeForAspect, type HtmlClipIssue, type HtmlClipManifest, type HtmlClipParam, type ParamType } from "../domain";
+import { HTML_CLIP_ASPECTS, HTML_CLIP_FORMAT, MAX_CLIP_SEC, PARAM_TYPES, lintHtmlClip, sizeForAspect, type HtmlClipIssue, type HtmlClipManifest, type HtmlClipParam, type ParamType, REF_TYPES, refType, type RefType, type HtmlClipInput } from "../domain";
 import { CLIP_LIBRARIES, HTML_SANDBOX, selectedLibraries, withRuntime } from "../render";
 import {
   FONT_EXT, IMAGE_EXT, DEFAULT_FOR, fontFamily, freeKey, generateClip, generateRaw, paramRows, paramSnippet, parseClip, retype, rowsToParams, syntaxCheck, validateRows,
@@ -373,7 +373,52 @@ function ParamCard({ row, index, count, issues, open, onToggle, onChange, onMove
   );
 }
 
-function ParamsTab({ rows, setRows, issues }: { rows: ParamRow[]; setRows: (r: ParamRow[]) => void; issues: Map<string, HtmlClipIssue[]> }) {
+const REF_LABEL: Record<RefType, string> = { graphic: "Graphic", audio: "Audio", tracker: "Tracker" };
+const REF_HINT: Record<RefType, string> = { graphic: "luma, avgColor, motion, histogram", audio: "rms, peak, bands, onset, envelope", tracker: "x, y, width, height, scale, rotation, found" };
+const REF_KEY: Record<RefType, string> = { graphic: "picture", audio: "sound", tracker: "target" };
+
+/**
+ * P43: references (manifest `inputs`) — Graphic, Audio and Tracker. Each use picks what it reads in the clip's
+ * Params → Inputs (only valid targets are listed); the script reads ctx.inputs.<name>.
+ */
+function RefsSection({ inputs, setInputs, taken }: { inputs: Record<string, HtmlClipInput>; setInputs: (i: Record<string, HtmlClipInput> | undefined) => void; taken: string[] }) {
+  const names = Object.keys(inputs);
+  const add = (t: RefType) => {
+    let k = REF_KEY[t], n = 2;
+    while (names.includes(k) || taken.includes(k)) k = `${REF_KEY[t]}${n++}`;
+    setInputs({ ...inputs, [k]: { type: t } });
+  };
+  const rename = (from: string, to: string) => {
+    if (!to || to === from || names.includes(to)) return;
+    setInputs(Object.fromEntries(Object.entries(inputs).map(([k, v]) => [k === from ? to : k, v])));
+  };
+  const remove = (k: string) => { const next = { ...inputs }; delete next[k]; setInputs(Object.keys(next).length ? next : undefined); };
+  return (
+    <section className="v2-ce-refs" aria-label="References">
+      <h4 className="v2-ce-refs-head">References</h4>
+      <p className="v2-ce-hint">A reference reads part of the edit each frame — a picture, a sound or a tracker. Where it reads from is picked where the clip is used (Params → Inputs). The script gets numbers only: <code>ctx.inputs.&lt;name&gt;</code>.</p>
+      {names.length > 0 && <ul className="v2-ce-params">{names.map((k) => {
+        const t = refType(inputs[k].type);
+        return (
+          <li key={k} className="v2-ce-param v2-ce-ref">
+            <div className="v2-ce-paramhead">
+              <input className="v2-ce-refname" aria-label={`Name of ${REF_LABEL[t]} reference ${k}`} defaultValue={k} spellCheck={false} autoCapitalize="off" autoCorrect="off"
+                onBlur={(e) => rename(k, e.target.value.trim())} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
+              <span className="v2-ce-chip"><Icon g={t === "graphic" ? "eye" : t === "audio" ? "♫" : "track"} /> {REF_LABEL[t]}</span>
+              <button type="button" className="v2-btn v2-ce-icon" aria-label={`Remove ${k}`} onClick={() => remove(k)}><Icon g="🗑" /></button>
+            </div>
+            <div className="v2-ce-snippet"><code>{`ctx.inputs.${k} // ${REF_HINT[t]}`}</code><Copy text={`ctx.inputs.${k}`} /></div>
+          </li>
+        );
+      })}</ul>}
+      <div className="v2-ce-addparam" role="group" aria-label="Add reference">
+        {REF_TYPES.map((t) => <button key={t} type="button" className="v2-btn" onClick={() => add(t)}><Icon g="+" /> {REF_LABEL[t]}</button>)}
+      </div>
+    </section>
+  );
+}
+
+function ParamsTab({ rows, setRows, issues, inputs, setInputs }: { rows: ParamRow[]; setRows: (r: ParamRow[]) => void; issues: Map<string, HtmlClipIssue[]>; inputs: Record<string, HtmlClipInput>; setInputs: (i: Record<string, HtmlClipInput> | undefined) => void }) {
   const [open, setOpen] = useState<string | undefined>(undefined);
   const add = (type: ParamType) => {
     const key = freeKey(rows, type === "color" ? "color" : type === "text" ? "title" : type === "boolean" ? "enabled" : type === "select" ? "style" : "amount");
@@ -397,6 +442,7 @@ function ParamsTab({ rows, setRows, issues }: { rows: ParamRow[]; setRows: (r: P
       <div className="v2-ce-addparam" role="group" aria-label="Add param">
         {PARAM_TYPES.map((t) => <button key={t} type="button" className="v2-btn" onClick={() => add(t)}><Icon g="+" /> {TYPE_LABEL[t]}</button>)}
       </div>
+      <RefsSection inputs={inputs} setInputs={setInputs} taken={rows.map((r) => r.key)} />
     </div>
   );
 }
@@ -656,7 +702,7 @@ export function CodeEditor({ source, mobile, onSave, onClose, create, onAiMode }
   const duration = m.durationSec && m.durationSec > 0 ? m.durationSec : 5;
   const transparent = !m.background || m.background === "transparent";
   const fileCount = Object.keys(m.files ?? {}).length;
-  const badge = (t: Tab) => t === "params" ? (d.rows.length || "") : t === "files" ? (fileCount || "") : "";
+  const badge = (t: Tab) => t === "params" ? (d.rows.length + Object.keys(d.manifest.inputs ?? {}).length || "") : t === "files" ? (fileCount || "") : "";
   const tabError = (t: Tab) => (t === "params" && paramErrors > 0) || (t === (d.raw !== undefined ? "advanced" : "script") && errorLines.size > 0);
 
   const panel: ReactNode = (() => {
@@ -678,7 +724,8 @@ export function CodeEditor({ source, mobile, onSave, onClose, create, onAiMode }
             <CodeArea label="Script" value={d.script} onChange={(script) => setD((x) => ({ ...x, script }))} touch={touch} errorLines={errorLines} jump={jump} />
           </div>
         );
-      case "params": return <ParamsTab rows={d.rows} setRows={(rows) => setD((x) => ({ ...x, rows }))} issues={rowIssues} />;
+      case "params": return <ParamsTab rows={d.rows} setRows={(rows) => setD((x) => ({ ...x, rows }))} issues={rowIssues}
+        inputs={d.manifest.inputs ?? {}} setInputs={(inputs) => setD((x) => ({ ...x, manifest: { ...x.manifest, inputs } }))} />;
       case "files": return <FilesTab files={m.files ?? {}} onChange={(files) => setManifest({ ...m, files })} />;
       case "settings": return <SettingsTab m={m} set={setManifest} mobile={mobile} html={() => html} />;
       case "advanced":

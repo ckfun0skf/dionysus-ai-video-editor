@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { ParamControls, type ControlSpec } from "./ParamControls";
 import { cmd, type Engine } from "../engine";
-import { cleanParamDecls, inputSourceOf, readManifest, resolveHtmlParams, sourceChoices, sourceLabel, type HtmlClipInput, type HtmlClipParam, type Placement, type Project } from "../domain";
+import { cleanParamDecls, INPUT_TYPES, inputSourceOf, namedTracker, pendingTracker, refType, type RefType, readManifest, resolveHtmlParams, sourceChoices, sourceLabel, type HtmlClipInput, type HtmlClipParam, type Placement, type Project } from "../domain";
 import type { BlobStore } from "../ports";
 import { Ic } from "./Icon";
 
@@ -42,7 +42,7 @@ export function HtmlParamsPanel({ engine, project, placement, blobs, onEditCode 
   const specs = htmlParamSpecs(decls.params);
   const overrides = placement.htmlParams ?? {};
   const changed = Object.keys(overrides).some((k) => specs.some((s) => s.key === k));
-  const inputs = Object.entries(decls.inputs ?? {}).filter(([, d]) => d && (d.type === "beat" || d.type === "scene" || d.type === "track"));
+  const inputs = Object.entries(decls.inputs ?? {}).filter(([, d]) => d && (INPUT_TYPES as readonly string[]).includes(d.type));
   const inputsEl = inputs.length > 0 && <ClipInputs engine={engine} project={project} placement={placement} inputs={inputs} />;
   if (!specs.length && inputsEl) return <div className="v2-hp" data-testid="v2-html-params">{inputsEl}</div>;
   if (!specs.length) return (
@@ -69,6 +69,9 @@ export function HtmlParamsPanel({ engine, project, placement, blobs, onEditCode 
  * P38: the clip's inputs (manifest `inputs`) and where each reads from. A tap on the source opens the Reference list:
  * Mix / Program, each track (renameable here, the binding keeps the track id) and its clips. One undo step per change.
  */
+const REF_LABEL: Record<RefType, string> = { graphic: "Graphic reference · luma, colour, motion", audio: "Audio reference · rms, bands, onset", tracker: "Tracker reference · x, y, size, found" };
+const REF_ICON: Record<RefType, string> = { graphic: "eye", audio: "♫", tracker: "track" };
+
 function ClipInputs({ engine, project, placement, inputs }: { engine: Engine; project: Project; placement: Placement; inputs: [string, HtmlClipInput][] }) {
   const [open, setOpen] = useState<string>();
   const [rename, setRename] = useState<{ id: string; name: string }>();
@@ -76,14 +79,16 @@ function ClipInputs({ engine, project, placement, inputs }: { engine: Engine; pr
     <section className="v2-inputs" aria-label="Inputs">
       <h4 className="v2-inputs-head">Inputs</h4>
       {inputs.map(([name, d]) => {
-        const cur = inputSourceOf(project, placement, name, d.type);
+        const raw = placement.htmlInputs?.[name], k = refType(d.type);
+        // P43: a tracker named by the storyboard but not set yet stays shown as "<clip> · <name> (not set yet)".
+        const cur = raw && pendingTracker(raw) && !namedTracker(project, raw) ? raw : inputSourceOf(project, placement, name, d.type);
         const label = d.label || name;
         return (
           <div key={name} className="v2-input">
             <div className="v2-input-row">
-              <span className="v2-input-name"><b>{label}</b><small>{d.type === "beat" ? "Beat · rms, bands, onset" : d.type === "track" ? "Track · x, y, size" : "Scene · luma, colour, motion"}</small></span>
+              <span className="v2-input-name"><b>{label}</b><small>{REF_LABEL[k]}</small></span>
               <button type="button" className="v2-btn v2-input-src" aria-expanded={open === name} aria-label={`${label} reads from ${sourceLabel(project, cur)}`} onClick={() => { setOpen(open === name ? undefined : name); setRename(undefined); }}>
-                <Ic g={d.type === "beat" ? "♫" : d.type === "track" ? "track" : "eye"} size={16} /> <span>{sourceLabel(project, cur)}</span> <Ic g="▾" size={14} />
+                <Ic g={REF_ICON[k]} size={16} /> <span>{sourceLabel(project, cur)}</span> <Ic g="▾" size={14} />
               </button>
             </div>
             {open === name && (
@@ -98,7 +103,7 @@ function ClipInputs({ engine, project, placement, inputs }: { engine: Engine; pr
                   <div key={c.source} className={`v2-input-opt kind-${c.kind}`}>
                     <button type="button" role="radio" aria-checked={cur === c.source} className={cur === c.source ? "is-active" : ""}
                       onClick={() => { if (cur !== c.source) engine.dispatch(cmd.setClipInput(placement.id, name, c.kind === "mix" || c.kind === "program" || c.kind === "none" ? undefined : c.source)); setOpen(undefined); }}>
-                      <Ic g={cur === c.source ? "✓" : c.kind === "track" ? "layers" : c.kind === "clip" ? "▭" : d.type === "beat" ? "♫" : d.type === "track" ? "track" : "eye"} size={16} /> <span>{c.label}</span>
+                      <Ic g={cur === c.source ? "✓" : c.kind === "track" ? "layers" : c.kind === "clip" ? "▭" : REF_ICON[k]} size={16} /> <span>{c.label}</span>
                     </button>
                     {c.kind === "track" && <button type="button" className="v2-icon" aria-label={`Rename ${c.label}`} title="Rename layer" onClick={() => setRename({ id: c.trackId!, name: c.label })}><Ic g="✎" size={16} /></button>}
                   </div>
@@ -108,7 +113,7 @@ function ClipInputs({ engine, project, placement, inputs }: { engine: Engine; pr
           </div>
         );
       })}
-      <p className="v2-hint">The clip gets numbers only (no audio or pixels): beat = rms, peak, 8 bands, onset, envelope; scene = luma, average colour, motion, histogram.</p>
+      <p className="v2-hint">The clip gets numbers only (no audio or pixels): graphic = luma, average colour, motion, histogram; audio = rms, peak, 8 bands, onset, envelope; tracker = the box (x, y, size, found).</p>
     </section>
   );
 }

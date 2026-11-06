@@ -84,6 +84,8 @@ export interface Shot {
   clipAsset?: { id: string; name: string; auto?: true };
   /** V2-HTML-PARAMS: render html: per-use values for the clip's params; carried to the timeline clip on send. */
   params?: HtmlParamValues;
+  /** P43: trackers the user has to set (what to box, on which clip, the name code layers reference). */
+  trackers?: import("./storyJson").StoryTrackerPlan[];
   /** The shot's own AI clip asset, kept aside while the shot is made as html or still (V2-CUT-02). */
   ownAssetId?: string;
   /**
@@ -239,6 +241,7 @@ export function storyboardFromDoc(doc: StoryDoc): Storyboard {
       ...((s.render ?? "ai") === "ai" && s.clip && slots[s.clip]?.type === "video" ? { clipSlot: s.clip, ...(s.inSec ? { clipInSec: s.inSec } : {}) } : {}),
       ...(s.clipAsset ? { clipAsset: { ...s.clipAsset } } : {}),
       ...(s.render === "html" && s.clip && slots[s.clip] && s.params ? { params: { ...s.params } } : {}),
+      ...(s.trackers?.length ? { trackers: structuredClone(s.trackers) } : {}),
       ...(s.layers?.length ? { layers: structuredClone(s.layers) } : {}),
       ...(s.captions ? { captions: true } : {}),
       ...(s.needsPrompt ? { needsPrompt: true as const } : {}), ...(s.removedFromTimeline ? { removedFromTimeline: true as const } : {}),

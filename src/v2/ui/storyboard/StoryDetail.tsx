@@ -418,6 +418,12 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
           {(shot || slot) && <AttachOrder shot={shot} slot={shot ? undefined : slot} project={project} thumbs={thumbs} blobs={blobs} />}
         </Section>
       ))}
+      {shot?.trackers?.length ? (
+        <Section title="Needs tracking">
+          <p className="v2-hint">Code layers in this shot follow these trackers. After sending, select the clip, tap Track, draw the box and use this name.</p>
+          <ul className="v2-sb-trackers">{shot.trackers.map((t) => <li key={`${t.clip}:${t.name}`}><Ic g="track" size={16} /> <b>{t.name}</b> <span>— box {t.target} on {t.clip === "main" ? "the shot's clip" : `layer ${t.clip}`}</span></li>)}</ul>
+        </Section>
+      ) : null}
       {shot && (shot.camera || shot.dialogue) && <Section title="Direction">{shot.camera && <p className="v2-sb-kv"><b>Camera</b> {shot.camera}</p>}{shot.dialogue && !shot.lines?.length && <p className="v2-sb-kv"><b>Dialogue</b> {shot.dialogue}</p>}{shot.lines?.length ? <DialogueLines lines={shot.lines} /> : null}</Section>}
       {shot && <ShotLayers shot={shot} project={project} onOpen={onOpen} />}
       {shot && <LayerHtmlParams shot={shot} project={project} engine={engine} blobs={blobs} />}

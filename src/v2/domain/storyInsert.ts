@@ -16,7 +16,7 @@ const one = (s: string, max = 140) => { const t = s.replace(/\s+/g, " ").trim();
 /** The guide rules quoted in the insert prompt (by key, in rule order). */
 export const INSERT_RULE_KEYS = [
   "reusable-assets", "standalone-prompts", "last-frame-continuity", "ids", "text-in-layers", "duration", "references-block",
-  "audio", "self-contained-prompts", "frame-of", "clip-centric", "plan-insert-shots", "screen-insert",
+  "audio", "self-contained-prompts", "frame-of", "clip-centric", "plan-insert-shots", "screen-insert", "plan-trackers",
 ] as const;
 
 /** Example answer, also used by the docs and tests. */
