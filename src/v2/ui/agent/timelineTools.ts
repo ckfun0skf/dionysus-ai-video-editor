@@ -261,6 +261,21 @@ export async function runTimelineTool(engine: Engine, source: FrameSource | unde
       const changed = engine.dispatch(cmd.importSrtLayer(list), "import_subtitles");
       return { ok: changed, changed, text: JSON.stringify({ imported: list.length }) };
     }
+    case "add_blank_clip": {
+      const where = a.track === "main" || a.track === "overlay" ? a.track : undefined;
+      if (!where) return fail('"track" must be "main" or "overlay".');
+      const at = n("atSec"); if (at === undefined) return fail('"atSec" is required.');
+      const color = s("color"); if (!cmd.isHexColor(color)) return fail('"color" must be #rrggbb, e.g. "#000000".');
+      const d = n("durationSec"); if (d !== undefined && !(d > 0)) return fail('"durationSec" must be more than 0.');
+      const id = newId("plc");
+      return edit(cmd.addBlankClip(secondsToTicks(Math.max(0, at)), color, where, d !== undefined ? secondsToTicks(d) : undefined, id), id);
+    }
+    case "set_blank_color": {
+      const id = needClip(); if (typeof id !== "string") return id;
+      if (!findPlacement(rootOf(project()), id)!.placement.blank) return fail(`Clip ${id} is not a blank clip.`);
+      const color = s("color"); if (!cmd.isHexColor(color)) return fail('"color" must be #rrggbb.');
+      return edit(cmd.setBlankColor(id, color), id);
+    }
     case "slip_clip": {
       const id = needClip(); if (typeof id !== "string") return id;
       const t = n("inSec"); if (t === undefined) return fail('"inSec" is required.');

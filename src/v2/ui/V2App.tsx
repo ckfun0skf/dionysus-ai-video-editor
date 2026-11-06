@@ -27,6 +27,7 @@ import { connectAgentBridge } from "./agent/webMcp";
 import { AgentIndicator } from "./agent/AgentPanel";
 import type { BoardTarget } from "./storyboard/BoardView";
 import type { Resolution } from "../render";
+import { BlankColorPicker } from "./BlankClip";
 import { downloadSrt, importSrtFile, importSrtText, SubtitleImport, SubtitleEditor, SubtitleLane } from "./Subtitles";
 import { downloadText, SubtitleList } from "./SubtitleList";
 import { cues as cueLayer } from "../domain";
@@ -142,7 +143,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const [ckOpen, setCkOpen] = useState(false);
   const [vcOpen, setVcOpen] = useState(false);
   /** P32: clip-bar sheets — Trim (start/end), Audio (volume & sound tools), More (everything else). */
-  const [barSheet, setBarSheet] = useState<"trim" | "audio">();
+  const [barSheet, setBarSheet] = useState<"trim" | "audio" | "colour">();
   const [afxOpen, setAfxOpen] = useState(false);
   const [posOpen, setPosOpen] = useState(false);
   const [eyedrop, setEyedrop] = useState<string>();
@@ -429,6 +430,11 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   /** V2-ADD-MEDIA-TABS: Create opens the Code Editor on a new clip; nothing is imported until it is added. */
   /** P4B: Create code → AI mode wizard (the mode the new clip is added in). */
   const [codeAi, setCodeAi] = useState<"main" | "overlay">();
+  const addBlank = (color: string, where: "main" | "overlay") => {
+    const id = newId("plc");
+    if (engine.dispatch(cmd.addBlankClip(Math.round(player.time), color, where, undefined, id))) { setSel([id]); setSubId(undefined); }
+    setPicker(null); setSheet(false);
+  };
   const createCode = (mode: "main" | "overlay" = "main") => { setPicker(null); setSheet(false); setHtmlEdit({ source: newCodeClipHtml(), create: mode }); };
   const saveCode = async (html: string) => {
     if (!htmlEdit) return;
@@ -820,7 +826,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     const speed = speedSelect ? A("speed", "⏩", "Speed", () => setMenu("speed"), `Playback speed (now ${sp!.speed ?? 1}×)`) : undefined;
     const link = linkActions[0] ? A("link", selLinked ? "unlink" : "link", "Link", linkActions[0].run, linkActions[0].title, !!selLinked) : undefined;
     const toMain = promoteActions[0] ? A("promote", "to-main", "To main", promoteActions[0].run, promoteActions[0].title) : undefined;
-    const primaryAll = (isEffect ? [A("fx", "effect", "Effect", () => setFxOpen(true), "Change the preset or its settings"), link, adjust]
+    const colour = pl.blank ? A("colour", "palette", "Colour", () => setBarSheet("colour"), "Change this blank clip's colour") : undefined;
+    const primaryAll = (pl.blank ? [colour, adjust, link, toMain] : isEffect ? [A("fx", "effect", "Effect", () => setFxOpen(true), "Change the preset or its settings"), link, adjust]
       : isText ? [A("style", "T", "Style", () => setTextOpen(true), "Templates, font, style, effects, animation"), A("anim", "anim", "Animate", () => setAnimOpen(true), "In, out and loop animations"), A("subs", "≡", "Subtitles", () => openSubs(selected.track.id, pl.id), "Open this layer's subtitle list at this clip")]
       : isHtml ? [A("params", "settings", "Params", () => setParamsOpen(true), "This clip's values: text, colours and other params the HTML clip exposes"), A("code", "</>", "Code", () => void openCode(), "Edit HTML, CSS and JS with live preview"), adjust]
       : pl.clipType === "audio" ? [audio, speed, selAudioSpec ? A("edit-audio", "♫", "Edit", () => void openAudio(), "Open this clip in the Audio editor; saving makes a new version") : adjust]
@@ -919,11 +926,11 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     else if (it?.kind === "sticker") { const st = stickers().find((x) => x.id === it.id); if (st) void addStickerAt(st, at); }
     else if (dt.files?.length) void importAt(Array.from(dt.files), at, trackId);
   };
-  const pickerEl = picker ? <MediaPicker media={projectMedia} title={picker === "overlay" ? "Add overlay" : picker === "audio" || picker === "fromVideo" ? "Add audio" : picker === "stickers" ? "Add stickers" : "Add media"} only={picker === "audio" || picker === "fromVideo" ? "audio" : undefined} initialTab={picker === "stickers" ? "stickers" : picker === "fromVideo" ? "fromVideo" : undefined} onClose={() => setPicker(null)} onAdd={(p) => void addPicked(p, picker === "overlay" || picker === "stickers" ? "overlay" : "main")} onCreateCode={picker === "audio" || picker === "fromVideo" ? undefined : () => createCode(picker === "overlay" ? "overlay" : "main")} onCreateAudio={picker === "audio" || picker === "fromVideo" ? createAudio : undefined} onAddFromVideo={picker === "audio" || picker === "fromVideo" ? (fv) => void addFromVideo(fv) : undefined} onTimeline={videoOnTimeline} onUploadVideo={picker === "audio" || picker === "fromVideo" ? uploadFromVideo : undefined} onDiscardVideo={(id) => engine.dispatch(cmd.removeAsset(id))} loadMedia={loadAssetBlob} /> : null;
+  const pickerEl = picker ? <MediaPicker media={projectMedia} title={picker === "overlay" ? "Add overlay" : picker === "audio" || picker === "fromVideo" ? "Add audio" : picker === "stickers" ? "Add stickers" : "Add media"} only={picker === "audio" || picker === "fromVideo" ? "audio" : undefined} initialTab={picker === "stickers" ? "stickers" : picker === "fromVideo" ? "fromVideo" : undefined} onClose={() => setPicker(null)} onAdd={(p) => void addPicked(p, picker === "overlay" || picker === "stickers" ? "overlay" : "main")} onCreateCode={picker === "audio" || picker === "fromVideo" ? undefined : () => createCode(picker === "overlay" ? "overlay" : "main")} onCreateAudio={picker === "audio" || picker === "fromVideo" ? createAudio : undefined} onAddFromVideo={picker === "audio" || picker === "fromVideo" ? (fv) => void addFromVideo(fv) : undefined} onTimeline={videoOnTimeline} onUploadVideo={picker === "audio" || picker === "fromVideo" ? uploadFromVideo : undefined} onDiscardVideo={(id) => engine.dispatch(cmd.removeAsset(id))} onAddBlank={picker === "audio" || picker === "fromVideo" || picker === "stickers" ? undefined : (c) => addBlank(c, picker === "overlay" ? "overlay" : "main")} loadMedia={loadAssetBlob} /> : null;
   const assetBrowser = (
     <AssetBrowser project={project} thumbs={thumbs} busy={busy} tab={btab} onTab={setBtab}
       onImport={importDialog} onFiles={(fs) => void onFiles(fs)} onAddAsset={addToTimeline} onRemoveAsset={(a) => engine.dispatch(cmd.removeAsset(a.id))}
-      onAddText={(tp) => addTextAt(player.time, tp)} onImportSrt={() => setSubImport(true)}
+      onAddBlank={addBlank} onAddText={(tp) => addTextAt(player.time, tp)} onImportSrt={() => setSubImport(true)}
       onAddSticker={(st) => void addStickerAt(st, player.time)} onAddEffect={(id) => addEffectAt(id, player.time)}
       onAddTransition={addTransitionNearPlayhead} onCreateCode={() => createCode()} onCreateAudio={createAudio} onAudioFromVideo={() => setPicker("fromVideo")} />
   );
@@ -992,6 +999,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     if (kind === "effect") return { ...base, tabs: [{ id: "effect", label: "Effect", icon: "effect", render: () => <>{linkSec}<EffectPicker engine={engine} at={time} placement={pl} /></> }] };
     if (kind === "audio") return { ...base, tabs: [audioTab, ...(speedSelect ? [speedTab] : [])] };
     if (kind === "html") return { ...base, actions: <button className="v2-btn v2-btn-sm" title="Edit HTML, CSS and JS with live preview" onClick={() => void openCode()}><Ic g="</>" size={14} /> Edit code</button>, tabs: [{ id: "params", label: "Params", icon: "settings", render: () => <HtmlParamsPanel engine={engine} project={project} placement={pl} blobs={storage.blobs} onEditCode={() => void openCode()} /> }, transform, chromaTab, ...(transTab ? [transTab] : [])] };
+    if (pl.blank) return { ...base, tabs: [{ id: "colour", label: "Colour", icon: "palette", render: () => <div className="v2-psettings"><section aria-label="Colour"><h4>Colour</h4><BlankColorPicker value={pl.blank!.color} onChange={(c) => engine.dispatch(cmd.setBlankColor(pl.id, c))} /></section></div> }, transform, ...(transTab ? [transTab] : [])] };
     if (kind === "image") return { ...base, tabs: [transform, chromaTab, ...(transTab ? [transTab] : [])] };
     return { ...base, tabs: [transform, ...(speedSelect || timeActions.length || inPointable ? [speedTab] : []), audioTab, chromaTab, ...(transTab ? [transTab] : [])] };
   };
@@ -1190,8 +1198,9 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
             {mobileTools[activeMenu]}
           </nav>
           {pickerEl}
-          {barSheet && selected && <Sheet label={barSheet === "trim" ? "Trim" : "Audio"} className="v2-msheet-insp v2-bar-sheet" snaps={[0.3, 0.42, 0.9]} onClose={() => setBarSheet(undefined)}>
-            {barSheet === "trim" ? <ActionGrid groups={[{ title: "Trim to the playhead", items: [
+          {barSheet && selected && <Sheet label={barSheet === "trim" ? "Trim" : barSheet === "colour" ? "Colour" : "Audio"} className="v2-msheet-insp v2-bar-sheet" snaps={[0.3, 0.42, 0.9]} onClose={() => setBarSheet(undefined)}>
+            {barSheet === "colour" ? (selected.placement.blank ? <BlankColorPicker value={selected.placement.blank.color} onChange={(c) => engine.dispatch(cmd.setBlankColor(selected.placement.id, c))} /> : null)
+            : barSheet === "trim" ? <ActionGrid groups={[{ title: "Trim to the playhead", items: [
               { key: "trim-start", icon: "trim-start", label: "Start", title: "Trim start to playhead: the clip starts here (Q)", run: () => { trimToPlayhead("left"); setBarSheet(undefined); } },
               { key: "trim-end", icon: "trim-end", label: "End", title: "Trim end to playhead: the clip ends here (W)", run: () => { trimToPlayhead("right"); setBarSheet(undefined); } }] }]} />
             : <div className="v2-audio-sheet">

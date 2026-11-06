@@ -3072,6 +3072,12 @@
           "title": "Paste instead of upload: storyboard Add version for code clips gets 'Paste HTML' (the AI's reply or raw HTML, validated, added as a new version); Text > Import opens 'Import subtitles' with a paste box (live cue count, \u2713 imports a new text layer) or Choose file; WebMCP import_subtitles",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P36-BLANK-TRIM",
+          "title": "Blank clips: Photos > Blank clip (8 swatches + any colour; Main track / Overlay) adds a solid colour clip at the playhead; Colour tab (desktop) / Colour bar tool (phone); WebMCP add_blank_clip / set_blank_color; guide rule 60. Sync to Storyboard writes the timeline trim even for a version with no storyboard record, and shared-clip shots preview only their own part (clipInSec for durationSec)",
+          "status": "done",
+          "progress": 100
         }
       ]
     }

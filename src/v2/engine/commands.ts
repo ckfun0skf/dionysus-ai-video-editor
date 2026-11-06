@@ -43,6 +43,40 @@ export const addTextClip = (at: number, data: Partial<TextData> = {}, id = newId
   }),
 });
 
+export const BLANK_TICKS = 3 * 120_000;
+export const isHexColor = (c: unknown): c is string => typeof c === "string" && /^#[0-9a-f]{6}$/i.test(c);
+/**
+ * P36: add a blank (solid colour) clip at `at`. "main" inserts it on the main track; "overlay" puts it on the first
+ * overlay layer with room, else a new overlay layer on top.
+ */
+export const addBlankClip = (at: number, color: string, where: "main" | "overlay" = "main", durationTicks = BLANK_TICKS, id = newId("plc")): Command => ({
+  label: "Add blank clip", autoLink: where === "overlay",
+  apply: (p) => withRoot(p, (c) => {
+    if (!isHexColor(color)) throw new Error("blank colour must be #rrggbb");
+    const start = Math.max(0, Math.round(at)), len = Math.max(1, Math.round(durationTicks));
+    const pl: Placement = { id, startTicks: start, durationTicks: len, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "image", blank: { color: color.toLowerCase() } };
+    let comp = c;
+    const main = ops.mainTrack(comp);
+    if (where === "main") {
+      let tid = main?.id;
+      if (!tid) { tid = newId("trk"); comp = ops.addTrack(comp, "video", tid); }
+      return ops.insertPlacement(comp, tid, pl);
+    }
+    const fits = (t: Composition["tracks"][number]) => t.placements.every((o) => o.startTicks >= start + len || o.startTicks + o.durationTicks <= start);
+    let track = comp.tracks.find((t) => t.kind === "video" && t.id !== main?.id && fits(t));
+    if (!track) { const tid = newId("trk"); comp = ops.addTrack(comp, "video", tid); track = comp.tracks.find((t) => t.id === tid)!; }
+    return ops.insertPlacement(comp, track.id, pl);
+  }),
+});
+/** P36: change a blank clip's colour (one undo step). */
+export const setBlankColor = (id: string, color: string): Command => ({
+  label: "Blank colour",
+  apply: (p) => withRoot(p, (c) => {
+    if (!isHexColor(color)) throw new Error("blank colour must be #rrggbb");
+    return { ...c, tracks: c.tracks.map((t) => ({ ...t, placements: t.placements.map((pl) => (pl.id === id && pl.blank ? { ...pl, blank: { color: color.toLowerCase() } } : pl)) })) };
+  }),
+});
+
 /** V2-101: add an effect clip at `at` (default length) on the first effect layer with room, else a new layer on top. */
 export const addEffectClip = (at: number, preset: string, params?: Record<string, number | string>, id = newId("plc")): Command => ({
   label: "Add effect", autoLink: true,

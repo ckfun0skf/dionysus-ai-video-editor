@@ -323,8 +323,8 @@ export class Player {
         }
         continue;
       }
-      const version = versionOf(this.project, placement.source);
-      if (!version || track.hidden) continue;
+      const version = placement.blank ? undefined : versionOf(this.project, placement.source);
+      if ((!version && !placement.blank) || track.hidden) continue;
       // Overlay-scope effects: draw the clip on a transparent layer, apply the effect there, then composite it.
       const paint = (blend: string | undefined, fn: (dc: CanvasRenderingContext2D) => void) => {
         if (!ctx || !canvas) return;
@@ -334,6 +334,18 @@ export class Player {
         lc.save(); lc.setTransform(1, 0, 0, 1, 0, 0); lc.globalAlpha = 1; lc.globalCompositeOperation = "source-over"; lc.clearRect(0, 0, canvas.width, canvas.height); lc.restore();
         try { fn(lc); } finally { applyEffectFrame(lc, canvas.width, canvas.height, fxOverlay, true); withBlend(ctx, blend, () => ctx.drawImage(lc.canvas, 0, 0)); }
       };
+      // P36: blank clip — a solid colour filling the frame, placed and faded like a photo of the frame's size.
+      if (placement.blank) {
+        if (ctx && canvas) {
+          const r = placeRect(placement, canvas.width, canvas.height, canvas.width, canvas.height, this.time);
+          this.boxes.set(placement.id, r);
+          paint(placement.blend, (dc) => drawWithLook(dc, canvas.width, canvas.height, tfx, (g) => {
+            g.save(); g.globalAlpha = r.alpha * (mix ?? 1); g.translate(r.cx, r.cy); g.rotate(r.rot); g.fillStyle = placement.blank!.color; g.fillRect(-r.w / 2, -r.h / 2, r.w, r.h); g.restore();
+          }));
+        }
+        continue;
+      }
+      if (!version) continue;
       if (placement.clipType === "html") {
         live.add(placement.id);
         this.htmlOverrides.set(placement.id, placement.htmlParams);

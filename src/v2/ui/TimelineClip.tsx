@@ -13,10 +13,11 @@ import { getPreset } from "../registry";
  * (filmstrip / waveform / name / badges / fades / keyframes), its thumbnail background, and pinch / Ctrl+wheel zoom.
  */
 export const effectName = (p: Placement) => getPreset("videoEffect", p.effect?.preset)?.name ?? "Effect";
-export const needsThumb = (p: Placement) => !p.placeholder && (p.clipType === "video" || p.clipType === "image" || p.clipType === "html");
+export const needsThumb = (p: Placement) => !p.placeholder && !p.blank && (p.clipType === "video" || p.clipType === "image" || p.clipType === "html");
 /** Extra `.v2-clip` classes from what the clip is (P35: a shot placeholder draws as a hatched card). */
-export const clipKindClass = (p: Placement) => (p.placeholder ? "is-placeholder" : "");
+export const clipKindClass = (p: Placement) => (p.placeholder ? "is-placeholder" : p.blank ? "is-blank" : "");
 export const clipThumbStyle = (p: Placement, thumbs?: Record<string, string>, strips?: Record<string, Filmstrip>) =>
+  p.blank ? { background: p.blank.color } :
   thumbs?.[p.source.assetId] && p.clipType !== "audio" && !strips?.[mediaKey(p.source.assetId, p.source.versionId)] ? { backgroundImage: `url(${thumbs[p.source.assetId]})` } : {};
 export const clipNoThumb = (p: Placement, thumbs?: Record<string, string>, strips?: Record<string, Filmstrip>) =>
   needsThumb(p) && !thumbs?.[p.source.assetId] && !strips?.[mediaKey(p.source.assetId, p.source.versionId)];
@@ -45,6 +46,7 @@ export function useTimelineZoom(ref: RefObject<HTMLElement | null>, pps: number,
 export function ClipBody({ p, track, isMain, project, pps, strips, peaks, loads }: { p: Placement; track: Track; isMain: boolean; project: Project; pps: number; strips?: Record<string, Filmstrip>; peaks?: Record<string, Peaks>; loads?: ReadonlyMap<string, ClipLoad> }) {
   const toPx = (t: number) => (t / TICKS_PER_SECOND) * pps;
   if (p.placeholder) return <PlaceholderBody p={p} />;
+  if (p.blank) return <span className="v2-clip-name v2-blank-body" style={{ ["--blank" as string]: p.blank.color }}><span className="v2-blank-dot" aria-hidden />Blank</span>;
   const asset = project.assets[p.source.assetId];
   const link = project.storyboard && p.source.assetId ? board.storyLinkOf(project, p.source.assetId) : undefined;
   return <>
