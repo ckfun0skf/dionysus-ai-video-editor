@@ -3078,6 +3078,12 @@
           "title": "Blank clips: Photos > Blank clip (8 swatches + any colour; Main track / Overlay) adds a solid colour clip at the playhead; Colour tab (desktop) / Colour bar tool (phone); WebMCP add_blank_clip / set_blank_color; guide rule 60. Sync to Storyboard writes the timeline trim even for a version with no storyboard record, and shared-clip shots preview only their own part (clipInSec for durationSec)",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P36-MATCH-FRAMES",
+          "title": "Match frames: option chips (Keep current + each match with its frame pair and score) over ONE mini timeline of A's last 2 s and B's first 2 s; what the option cuts away is boxed in red with hatching and the length; looping preview of the join (A's last second, then B from its new in point); Apply option n / Keep current",
+          "status": "done",
+          "progress": 100
         }
       ]
     }
