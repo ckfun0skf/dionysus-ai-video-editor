@@ -14,8 +14,17 @@ import { Sheet } from "./Sheet";
 /** V2-111: what an HTML clip can attach (so iOS offers Photos/Files rather than a generic picker). */
 export const ATTACH_ACCEPT = "image/*,video/*,audio/*,.svg,.json,.csv,.txt,.js,.mjs,.css,.glb,.gltf,.bin,.woff,.woff2,.ttf,.otf";
 /** What the Files tab offers: images and fonts (anything else can still be attached from Advanced → Other files). */
-export const CODE_FILE_ACCEPT = "image/*,.svg,.woff,.woff2,.ttf,.otf";
-const MAX_FILE = 15 * 1024 * 1024;
+export const CODE_FILE_ACCEPT = "image/*,.svg,.woff,.woff2,.ttf,.otf,.glb,.gltf,.bin,.hdr";
+/** Files above this still embed, with a warning: they make the project and every export heavier. */
+const WARN_FILE = 15 * 1024 * 1024;
+const MAX_FILE = 60 * 1024 * 1024;
+/** MIME for 3D files the browser reports as empty or octet-stream, so the clip's loaders see the right type. */
+const MODEL_MIME: Record<string, string> = { glb: "model/gltf-binary", gltf: "model/gltf+json", bin: "application/octet-stream", hdr: "image/vnd.radiance" };
+export const MODEL_EXT = /\.(glb|gltf|bin|hdr)$/i;
+export function withModelMime(name: string, data: string): string {
+  const m = MODEL_MIME[name.split(".").pop()!.toLowerCase()];
+  return m ? data.replace(/^data:[^;,]*/, `data:${m}`) : data;
+}
 
 type Tab = "script" | "params" | "files" | "settings" | "advanced";
 const TABS: { id: Tab; label: string }[] = [
@@ -401,31 +410,33 @@ function FilesTab({ files, onChange }: { files: Record<string, string>; onChange
   const names = Object.keys(files);
   const attach = async (list: FileList | null) => {
     setMsg("");
-    const next = { ...files };
+    const next = { ...files }, notes: string[] = [];
     for (const f of Array.from(list ?? [])) {
-      if (f.size > MAX_FILE) { setMsg(`${f.name} is larger than 15 MB.`); continue; }
-      try { next[f.name.replace(/[^\w.-]+/g, "-")] = await readData(f); } catch { setMsg(`Couldn't read ${f.name}.`); }
+      if (f.size > MAX_FILE) { notes.push(`${f.name} is larger than 60 MB and wasn't added.`); continue; }
+      if (f.size > WARN_FILE) notes.push(`${f.name} is ${fmtBytes(f.size)}: large files slow saving and export.`);
+      try { next[f.name.replace(/[^\w.-]+/g, "-")] = withModelMime(f.name, await readData(f)); } catch { notes.push(`Couldn't read ${f.name}.`); }
     }
+    setMsg(notes.join(" "));
     onChange(next);
   };
   const remove = (n: string) => { const next = { ...files }; delete next[n]; onChange(Object.keys(next).length ? next : undefined); };
   return (
     <div className="v2-ce-panel" data-testid="v2-ce-files">
-      <p className="v2-ce-hint">Fonts and images are embedded in the clip. Fonts get an <code>@font-face</code> rule automatically; images load with <code>await ctx.image("name")</code>.</p>
-      <input ref={input} type="file" multiple hidden accept={CODE_FILE_ACCEPT} aria-label="Add fonts or images" onChange={(e) => { void attach(e.target.files); e.target.value = ""; }} />
-      <button type="button" className="v2-btn primary v2-ce-addfile" onClick={() => input.current?.click()}><Icon g="⇪" /> Add font or image</button>
+      <p className="v2-ce-hint">Fonts, images and 3D models are embedded in the clip. Fonts get an <code>@font-face</code> rule automatically; images load with <code>await ctx.image("name")</code>; a <code>.glb</code> loads with three.js GLTFLoader from <code>ctx.asset("name")</code>.</p>
+      <input ref={input} type="file" multiple hidden accept={CODE_FILE_ACCEPT} aria-label="Add files" onChange={(e) => { void attach(e.target.files); e.target.value = ""; }} />
+      <button type="button" className="v2-btn primary v2-ce-addfile" onClick={() => input.current?.click()}><Icon g="⇪" /> Add files</button>
       {msg && <p className="v2-ce-error" role="alert">{msg}</p>}
       {names.length === 0 && <p className="v2-muted v2-ce-empty">No files yet.</p>}
       <ul className="v2-ce-files">
         {names.map((n) => {
-          const font = FONT_EXT.test(n), image = IMAGE_EXT.test(n) || files[n].startsWith("data:image/");
-          const snippet = font ? `await document.fonts.load('48px "${fontFamily(n)}"'); g.font = '48px "${fontFamily(n)}"';` : image ? `const img = await ctx.image(${JSON.stringify(n)});` : `await ctx.asset(${JSON.stringify(n)})`;
+          const model = MODEL_EXT.test(n), font = FONT_EXT.test(n), image = !model && (IMAGE_EXT.test(n) || files[n].startsWith("data:image/"));
+          const snippet = font ? `await document.fonts.load('48px "${fontFamily(n)}"'); g.font = '48px "${fontFamily(n)}"';` : image ? `const img = await ctx.image(${JSON.stringify(n)});` : model && /\.(glb|gltf)$/i.test(n) ? `const gltf = await new GLTFLoader().loadAsync(ctx.asset(${JSON.stringify(n)}));` : `await ctx.asset(${JSON.stringify(n)})`;
           return (
             <li key={n} className="v2-ce-file">
-              <span className="v2-ce-thumb" aria-hidden>{image ? <img src={files[n]} alt="" /> : font ? "Aa" : "…"}</span>
+              <span className="v2-ce-thumb" aria-hidden>{image ? <img src={files[n]} alt="" /> : font ? "Aa" : model ? "3D" : "…"}</span>
               <span className="v2-ce-fileinfo">
                 <b>{n}</b>
-                <span className="v2-muted">{font ? `Font "${fontFamily(n)}"` : image ? "Image" : "File"} · {fmtBytes(dataBytes(files[n]))}</span>
+                <span className="v2-muted">{font ? `Font "${fontFamily(n)}"` : image ? "Image" : model ? "3D file" : "File"} · {fmtBytes(dataBytes(files[n]))}</span>
                 <code>{snippet}</code>
               </span>
               <Copy text={snippet} />

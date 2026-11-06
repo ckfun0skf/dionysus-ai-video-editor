@@ -94,7 +94,7 @@ export function wizardPackageInput(a: CodeWizardAnswers): PackagePromptInput {
   const refs = a.refs.length
     ? `REFERENCE MEDIA (the user attaches these files to this chat; they are for you to look at or analyse, not loaded by the clip)\n${a.refs.map(fmtRef).join("\n")}`
     : "";
-  const context = [`ROLE\n${CODE_ROLE_GUIDE[a.role]}`, a.three ? "Use three.js (WebGL) for this clip: import * as THREE from \"three\", list \"three\" in \"libs\", render to ctx.canvas with preserveDrawingBuffer: true, and set the camera and every animated value from t (no clock or mixer state)." : "Use the 2D canvas API; no libraries.", refs, a.refs.some((r) => r.kind === "video") ? CODE_VIDEO_GUIDE : ""].filter(Boolean).join("\n\n");
+  const context = [`ROLE\n${CODE_ROLE_GUIDE[a.role]}`, a.three ? "Use three.js (WebGL) for this clip: import * as THREE from \"three\", list \"three\" in \"libs\", render to ctx.canvas with preserveDrawingBuffer: true, and set the camera and every animated value from t (no clock or mixer state). For a 3D model the user attaches (.glb), also list \"three-gltf\" in \"libs\" and load it in init with const gltf = await new GLTFLoader().loadAsync(ctx.asset(\"model.glb\")) (import { GLTFLoader } from \"three/addons/loaders/GLTFLoader.js\"); pose its animation with mixer.setTime(t)." : "Use the 2D canvas API; no libraries.", refs, a.refs.some((r) => r.kind === "video") ? CODE_VIDEO_GUIDE : ""].filter(Boolean).join("\n\n");
   return {
     brief: a.description,
     name: a.description.trim().split(/[.\n]/)[0].slice(0, 48) || "Code clip",
@@ -108,7 +108,7 @@ export function wizardPackageInput(a: CodeWizardAnswers): PackagePromptInput {
 
 /** The AI-mode prompt: the package prompt (full contract and template inlined, plus the spec link) asking for a .zip or .html. */
 export function codeWizardPrompt(a: CodeWizardAnswers, opts: { libs: readonly ClipLibrary[]; specUrl: string }): string {
-  const libs = a.three ? opts.libs.filter((l) => l.id === "three") : [];
+  const libs = a.three ? opts.libs.filter((l) => l.id === "three" || l.id === "three-gltf") : [];
   const p = htmlClipPackagePrompt(wizardPackageInput(a), { libs, specUrl: opts.specUrl, full: true, reply: "package" });
   return p.replace(`PACKAGE (${HTML_CLIP_FORMAT})`, `PACKAGE (${HTML_CLIP_FORMAT})\n- Spec: ${opts.specUrl}`);
 }
