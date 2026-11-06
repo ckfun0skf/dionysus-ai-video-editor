@@ -96,28 +96,38 @@ describe("P3A-23 frame scoring", () => {
 });
 
 describe("P3A-23 MatchFrames panel", () => {
-  it("shows candidate pairs side by side with scores; Apply sets A's out and B's in; Auto-apply best uses the top pair", async () => {
+  it("P36: options are chips over one mini timeline; the parts each option cuts away are boxed in red; Keep current changes nothing", async () => {
     const e = setup();
     const analyse: Analyse = async () => [
       { aTicks: s(9), bTicks: s(0.5), score: 0.93, aThumb: "data:a", bThumb: "data:b" },
       { aTicks: s(8.5), bTicks: s(1), score: 0.81 },
     ];
-    let done = "";
-    const el = await mount(() => { const { project } = useEngineState(e); const c = root(project); return <MatchFrames engine={e} project={project} a={findPlacement(c, "A")!.placement} b={findPlacement(c, "B")!.placement} analyse={analyse} onDone={(m) => { done = m ?? ""; }} />; });
+    let done: string | undefined = "x";
+    const el = await mount(() => { const { project } = useEngineState(e); const c = root(project); return <MatchFrames engine={e} project={project} a={findPlacement(c, "A")!.placement} b={findPlacement(c, "B")!.placement} analyse={analyse} onDone={(m) => { done = m; }} />; });
     await act(() => wait());
-    const cands = el.querySelectorAll('[role="radio"]');
-    expect(cands.length).toBe(2);
-    expect(cands[0].textContent).toContain("93%");
-    expect(cands[0].querySelectorAll("img").length).toBe(2);
-    expect(cands[0].textContent).toContain("A out 270 · 00:09:00");
-    await act(async () => (cands[1] as HTMLElement).click());
-    await act(async () => btn(el, "Apply pair 2").click());
+    const chips = el.querySelectorAll('[role="radio"]');
+    expect(chips.length).toBe(3);
+    expect(chips[0].textContent).toContain("Keep current");
+    expect(chips[1].textContent).toContain("Option 1 · 93% best");
+    expect(chips[1].getAttribute("aria-checked")).toBe("true");
+    expect(chips[1].querySelectorAll("img").length).toBe(2);
+    // Option 1 cuts the end of A (after frame 9 s) and the first 0.5 s of B, each boxed in red on ONE timeline.
+    expect(el.querySelectorAll(".v2-match-tl").length).toBe(1);
+    expect(el.querySelector('[data-testid="chop-a"]')!.textContent).toBe("−0.97s");
+    expect(el.querySelector('[data-testid="chop-b"]')!.textContent).toBe("−0.50s");
+    await act(async () => (chips[2] as HTMLElement).click());
+    expect(el.querySelector('[data-testid="chop-b"]')!.textContent).toBe("−1.00s");
+    await act(async () => btn(el, "Apply option 2").click());
     expect(pl(e, "A").durationTicks).toBe(s(8.5) + F);
     expect(pl(e, "B")).toMatchObject({ startTicks: s(8.5) + F, sourceInTicks: s(1) });
     expect(done).toContain("81%");
     await act(async () => { e.undo(); });
-    await act(async () => btn(el, "Auto-apply best").click());
-    expect(pl(e, "B")).toMatchObject({ startTicks: s(9) + F, sourceInTicks: s(0.5) });
+    await act(async () => (chips[0] as HTMLElement).click());
+    expect(el.querySelector('[data-testid="chop-a"]')).toBeNull();
+    expect(el.querySelector('[data-testid="chop-b"]')).toBeNull();
+    await act(async () => btn(el, "Keep current cut").click());
+    expect(pl(e, "B")).toMatchObject({ startTicks: s(10), sourceInTicks: 0 });
+    expect(done).toBeUndefined();
   });
   it("reports a read error instead of hanging", async () => {
     const e = setup();
