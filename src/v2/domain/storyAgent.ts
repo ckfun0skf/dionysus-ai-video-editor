@@ -9,6 +9,7 @@
  * Pure: no DOM, no engine. The UI (ui/agent/webMcp.ts) applies `doc` as one undoable command and handles `send`.
  */
 import { seriesAssetList, type Series } from "./series";
+import { applyReviseJson, buildRevisePrompt, reviseResultText } from "./storyRevise";
 import { applyInsertJson, buildInsertPrompt, insertResultText } from "./storyInsert";
 import type { StoryValidateOptions } from "./storyJson";
 import {
@@ -408,6 +409,28 @@ export const STORY_TOOLS: StoryTool[] = [
       const text = typeof a.insertJson === "string" ? a.insertJson : JSON.stringify(a.insertJson);
       const r = applyInsertJson(doc, text, { series: ctx.series, expectAfter: shot.id, generated: ctx.generated });
       return r.ok ? { ok: true, text: insertResultText(r), doc: r.doc, label: `AI: insert ${r.preview.shots.length} shot(s) after ${shot.id}` } : { ok: false, text: `Rejected, nothing changed. ${insertResultText(r)}` };
+    },
+  },
+  {
+    name: "revise_storyboard", title: "Revise the storyboard (or one shot) with AI", readOnly: false,
+    description: 'P36 "Revise with AI" / "Edit with AI". Without "reviseJson": returns the revise prompt for the problem in "brief" (whole storyboard, or only shot "shotId"), with the guide rules and the strict answer format. With "reviseJson" ({"schema":"3.1-revise","shots","add","remove","assets","newAssets","audio"?}, or with "shotId" {"schema":"3.1-shot-revise","shotId","shot","assets","newAssets"}): validates it (only what it changes or adds can block; existing board issues are listed, not blocking) and merges it by id in one undo step. Generated assets keep their versions; removed shots leave their timeline clips in place.',
+    inputSchema: obj({
+      brief: { type: "string", description: "Short description of the problem to fix (needed for the prompt)." },
+      shotId: { type: "string", description: "Revise only this shot (Edit with AI)." },
+      reviseJson: { type: ["string", "object"], description: "The revise answer to apply (omit to get the prompt)." },
+    }, []),
+    read: (_raw, a, ctx, doc) => {
+      if (!doc) return { ok: false, text: "No storyboard yet." };
+      const shotId = need(a, "shotId");
+      if (shotId && !doc.shots.some((s) => s.id === shotId)) return { ok: false, text: `No shot "${shotId}". Shot ids: ${doc.shots.map((s) => s.id).join(", ")}.` };
+      if (a.reviseJson === undefined) {
+        const brief = need(a, "brief");
+        if (!brief?.trim()) return { ok: false, text: `Pass "brief": a short description of what to fix.` };
+        return { ok: true, text: buildRevisePrompt(doc, brief, ctx.generated, shotId) };
+      }
+      const text = typeof a.reviseJson === "string" ? a.reviseJson : JSON.stringify(a.reviseJson);
+      const r = applyReviseJson(doc, text, { series: ctx.series, shotId, generated: ctx.generated });
+      return r.ok ? { ok: true, text: reviseResultText(r), doc: r.doc, label: shotId ? `AI: edit shot ${shotId}` : "AI: revise storyboard" } : { ok: false, text: `Rejected, nothing changed. ${reviseResultText(r)}` };
     },
   },
 ];

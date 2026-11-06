@@ -15,7 +15,7 @@ const STEPS: { id: Step; label: string }[] = [
   { id: "describe", label: "Describe" }, { id: "prompt", label: "Prompt" }, { id: "paste", label: "Paste" }, { id: "preview", label: "Preview" },
 ];
 
-function Issues({ list, kind }: { list: StoryIssue[]; kind: "error" | "warning" }) {
+export function Issues({ list, kind }: { list: StoryIssue[]; kind: "error" | "warning" }) {
   if (!list.length) return null;
   return (
     <div className={`v2-pi-issues ${kind}`} role={kind === "error" ? "alert" : "note"} aria-label={kind === "error" ? "Errors" : "Warnings"}>
@@ -26,7 +26,7 @@ function Issues({ list, kind }: { list: StoryIssue[]; kind: "error" | "warning" 
 }
 
 /** P22: problems already on the board; listed for information, never blocking. */
-function Existing({ list }: { list: StoryIssue[] }) {
+export function Existing({ list }: { list: StoryIssue[] }) {
   if (!list.length) return null;
   return (
     <details className="v2-pi-issues existing" aria-label="Existing storyboard issues">

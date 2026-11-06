@@ -3084,6 +3084,12 @@
           "title": "Match frames: option chips (Keep current + each match with its frame pair and score) over ONE mini timeline of A's last 2 s and B's first 2 s; what the option cuts away is boxed in red with hatching and the length; looping preview of the join (A's last second, then B from its new in point); Apply option n / Keep current",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P36-REVISE-AI",
+          "title": "Revise with AI (storyboard header / More menu) and Edit with AI (shot \u22ef menu): describe the problem \u2192 copy prompt \u2192 paste {\"schema\":\"3.1-revise\"} or {\"schema\":\"3.1-shot-revise\"} \u2192 preview (changed / new / removed shots, changed and new assets, regenerate notes) \u2192 Apply in one undo step; only what the answer changes blocks; generated assets keep their versions; removed shots leave their timeline clips; WebMCP revise_storyboard; guide rules 61\u201362",
+          "status": "done",
+          "progress": 100
         }
       ]
     }

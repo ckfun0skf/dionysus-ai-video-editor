@@ -20,6 +20,7 @@ import { AgentPanel } from "../agent/AgentPanel";
 import { useVersionThumbs } from "./useVersionThumbs";
 import { SyncSheet } from "../SyncSheet";
 import { PlanInsertSheet } from "./PlanInsertSheet";
+import { ReviseSheet } from "./ReviseSheet";
 import "./storyboard.css";
 
 type Step = "prompt" | "import" | "export" | "production" | "agent";
@@ -54,6 +55,9 @@ export function StoryboardView({ engine, blobs, onClose, initialOpen, onView, on
   /** P21: "Insert shot after" opens a choice (blank shot / Plan with AI); planInsert = the Plan with AI sheet. */
   const [insertMenu, setInsertMenu] = useState<{ shot: string; at?: { x: number; y: number } }>();
   const [planInsert, setPlanInsert] = useState<string>();
+  /** P36: Revise with AI ("" = whole storyboard) / Edit with AI (a shot id). */
+  const [revise, setRevise] = useState<string>();
+  const closeOthers = () => { setOpen(undefined); setEditing(undefined); setEditingSlot(undefined); setConn(undefined); setPlanInsert(undefined); };
   const [confirmDelete, setConfirmDelete] = useState<string>();
   // V2-CUT-05: asset slot editing. `slot` absent = a new asset (Save adds it).
   const [editingSlot, setEditingSlot] = useState<{ slot?: string }>();
@@ -162,6 +166,7 @@ export function StoryboardView({ engine, blobs, onClose, initialOpen, onView, on
     const i = no(id) - 1, last = (sb?.order.length ?? 0) - 1;
     return [
       { label: "Edit shot", icon: "✎", shortcut: undefined as string | undefined, onSelect: () => { setOpen(undefined); setConn(undefined); setEditingSlot(undefined); setEditing({ shot: id }); } },
+      { label: "Edit with AI", icon: "effect", onSelect: () => { closeOthers(); setRevise(id); } },
       { label: "Duplicate", icon: "⧉", onSelect: () => duplicate(id) },
       { label: "Insert shot after", icon: "+", onSelect: () => setInsertMenu({ shot: id, at: shotMenu?.shot === id ? shotMenu.at : undefined }) },
       ...(sb?.shots[id] && !sb.shots[id].render ? [{ label: "New shot using this clip", icon: "⧉", onSelect: () => newShot(id, sb.shots[id].clipSlot ? `slot:${sb.shots[id].clipSlot}` : `shot:${id}`) }] : []),
@@ -240,6 +245,7 @@ export function StoryboardView({ engine, blobs, onClose, initialOpen, onView, on
               onClick={() => { const r = moreBtn.current!.getBoundingClientRect(); setMore(more ? undefined : { x: r.right - 220, y: r.bottom + 4 }); }}><Ic g="⋯" size={18} /></button>
           ) : <>
             {/* V2-SB-R12: labelled, and Replace is marked destructive and confirmed. */}
+            <button className="v2-btn v2-sb-btn" aria-label="Revise with AI" title="Describe a problem; your AI revises the storyboard and you paste its JSON back" onClick={() => { closeOthers(); setRevise(""); }}><Ic g="effect" size={18} /> <span>Revise with AI</span></button>
             <button className="v2-btn v2-sb-btn" aria-label="AI prompt" title="Copy the AI prompt again" onClick={() => setStep("prompt")}><Ic g="⎘" size={18} /> <span>AI prompt</span></button>
             <button className="v2-btn v2-sb-btn" aria-label="Export JSON" title="Download or copy this storyboard, with your edits, as storyboard JSON" onClick={() => { setOpen(undefined); setStep("export"); }}><Ic g="⇩" size={18} /> <span>Export</span></button>
             <button className="v2-btn v2-sb-btn" aria-label="Import revised JSON" title="Bring in your AI's revised JSON (whole or in parts): matched by id, previewed before it applies" onClick={askReplace}><Ic g="json" size={18} /> <span>Import…</span></button>
@@ -295,10 +301,13 @@ export function StoryboardView({ engine, blobs, onClose, initialOpen, onView, on
           ? <ContextMenu x={insertMenu.at.x} y={insertMenu.at.y} label={t} onClose={() => setInsertMenu(undefined)} items={items} />
           : <ActionSheet title={t} actions={items} onClose={() => setInsertMenu(undefined)} />;
       })()}
+      {has && revise !== undefined && !step && <ReviseSheet key={`rev-${revise}`} engine={engine} project={project} shotId={revise || undefined} mobile={mobile} series={series}
+        onDone={(m, changed) => { setRevise(undefined); if (m) setNote(m, changed ? { label: "Undo", run: () => engine.undo() } : undefined); }} />}
       {has && planInsert && sb?.shots[planInsert] && !step && <PlanInsertSheet key={planInsert} engine={engine} project={project} shotId={planInsert} mobile={mobile} series={series}
         onDone={(m, ids) => { setPlanInsert(undefined); if (m) setNote(m, ids?.length ? { label: "Undo", run: () => engine.undo() } : undefined); }} />}
       {note && <div className="v2-sb-note" role="status"><span>{note.text}</span>{note.action && <button className="v2-sb-note-act" onClick={() => { setNoteState(undefined); note.action!.run(); }}>{note.action.label}</button>}</div>}
       {more && <ContextMenu x={more.x} y={more.y} label="More storyboard actions" onClose={() => setMore(undefined)} items={[
+        { label: "Revise with AI", icon: "effect", onSelect: () => { closeOthers(); setRevise(""); } },
         { label: "AI prompt", icon: "⎘", onSelect: () => setStep("prompt") },
         { label: "Export JSON", icon: "⇩", onSelect: () => { setOpen(undefined); setStep("export"); } },
         { label: "Import revised JSON…", icon: "json", onSelect: askReplace },
