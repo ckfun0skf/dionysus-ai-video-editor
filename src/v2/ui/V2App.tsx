@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { hitCandidates, isBackdrop, pickAt, Player, readClipConfig } from "../render";
 import { cmd } from "../engine";
-import { importFile } from "../persistence";
+import { htmlRoleOf, importFile } from "../persistence";
+const withoutRole = <T extends { role?: unknown }>(m: T): Omit<T, "role"> => { const { role: _r, ...rest } = m; return rest; };
 import { board as storyDomain, compositionDuration, edit, layers, ops, findPlacement, newId, formatTimecode, secondsToTicks, TICKS_PER_SECOND, type Asset } from "../domain";
 import type { Composition, Project } from "../domain";
 import { useEditorBoot, useEngineState, useIsMobile, type EditorContext, type LoadFailure } from "./useEditor";
@@ -70,7 +71,7 @@ import { editPoints, jumpEditPoint, MOD, shuttleLabel, shuttleNext, splitTargets
 import { type Sticker } from "./libraryItems";
 import { text as textDomain } from "../domain";
 import { canChromaKey, CHROMA_DEFAULT, hasSound } from "../domain";
-import { promote } from "../domain";
+import { codePresetId, codeRoleOf, promote } from "../domain";
 import { AudioFxPanel, ChromaKeyPanel, VolumeCurve } from "./SoundAndKey";
 import { SpatialPad } from "./SpatialPad";
 import { mediaKey } from "./useMedia";
@@ -428,6 +429,13 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     if (pl && blob) setHtmlEdit({ placementId: pl.id, assetId: pl.source.assetId, source: await blob.text() });
     else setToast("Could not load this clip's code");
   };
+  /** P38: edit a code effect's package (a new version of the asset; every clip using it follows the selected version). */
+  const editCodeAsset = async (assetId: string) => {
+    const a = project.assets[assetId];
+    const ver = a?.versions.find((v) => v.id === a.selectedVersionId) ?? a?.versions[0];
+    const blob = ver && (await storage.blobs.get(ver.media.blobKey));
+    if (blob) { setFxOpen(false); setHtmlEdit({ assetId, source: await blob.text() }); } else setToast("Could not load this effect's code");
+  };
   /** V2-ADD-MEDIA-TABS: Create opens the Code Editor on a new clip; nothing is imported until it is added. */
   /** P4B: Create code → AI mode wizard (the mode the new clip is added in). */
   const [codeAi, setCodeAi] = useState<"main" | "overlay">();
@@ -437,6 +445,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     setPicker(null); setSheet(false);
   };
   const createCode = (mode: "main" | "overlay" = "main") => { setPicker(null); setSheet(false); setHtmlEdit({ source: newCodeClipHtml(), create: mode }); };
+  /** P38: Effects / Transitions → Custom (code) → New: the editor opens on a starter whose manifest role routes the save. */
+  const createCodeRole = (role: "effect" | "transition") => { setFxOpen(false); setTransFor(undefined); setHtmlEdit({ source: newCodeClipHtml(role), create: "main" }); };
   const saveCode = async (html: string) => {
     if (!htmlEdit) return;
     if (htmlEdit.create) {
@@ -445,6 +455,10 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
         const asset = await importFile(new File([html], `${name}.html`, { type: "text/html" }), storage.blobs);
         if (!asset) throw new Error("not an HTML clip");
         const at = Math.round(player.time);
+        const role = htmlRoleOf(html);
+        // P38: an effect package becomes an effect clip at the playhead; a transition package waits in Transitions → Custom (code).
+        if (role === "effect") { if (engine.dispatch([cmd.importAsset(asset), cmd.addEffectClip(at, codePresetId(asset.id))], "Create code effect")) { setHtmlEdit(undefined); setToast("Code effect added on the Effects layer (Undo to remove)"); } return; }
+        if (role === "transition") { if (engine.dispatch(cmd.importAsset(asset), "Create code transition")) { setHtmlEdit(undefined); setToast("Code transition saved: tap a cut → Transitions → Custom (code)"); } return; }
         if (engine.dispatch([cmd.importAsset(asset), cmd.addAssetsInSequence([asset.id], at, htmlEdit.create === "overlay" ? newId("trk") : undefined)], "Create code clip")) {
           setHtmlEdit(undefined); setToast("Code clip added (Undo to remove)");
         }
@@ -456,7 +470,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     if (!asset || !prev) return;
     const id = newId("ver"), blobKey = `${asset.id}/${id}`;
     await storage.blobs.put(blobKey, new Blob([html], { type: "text/html" }));
-    engine.dispatch(cmd.addAssetVersion(asset.id, { ...prev, id, createdAt: new Date().toISOString(), media: { ...prev.media, blobKey }, provenance: { source: "import", inputs: [] } }, htmlEdit.placementId));
+    engine.dispatch(cmd.addAssetVersion(asset.id, { ...prev, id, createdAt: new Date().toISOString(), media: { ...withoutRole(prev.media), blobKey, ...(htmlRoleOf(html) ? { role: htmlRoleOf(html) } : {}) }, provenance: { source: "import", inputs: [] } }, htmlEdit.placementId));
     setHtmlEdit(undefined); setToast("HTML clip updated (Undo to revert)");
   };
   const selVersion = selected ? project.assets[selected.placement.source.assetId]?.versions.find((v) => v.id === selected.placement.source.versionId) : undefined;
@@ -688,7 +702,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       {busy > 0 && <p className="v2-hint">Importing {busy}…</p>}
       {Object.values(project.assets).length === 0 && <p className="v2-hint">Import video, image, audio or HTML files, then {mobile ? "tap" : "drag or click"} + to add them to the timeline.</p>}
       <ul className="v2-assets">
-        {Object.values(project.assets).map((a) => (
+        {Object.values(project.assets).filter((a) => codeRoleOf(a) === "clip").map((a) => (
           <li key={a.id} draggable onDragStart={(e) => e.dataTransfer.setData("application/x-dionysus-asset", a.id)} className={`v2-asset kind-${a.kind}`}>
             <AssetThumb asset={a} engineBlobs={storage.blobs} />
             <span className="v2-asset-name" title={a.name}>{a.name}</span>
@@ -749,7 +763,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   /** The selected clip starts a cut, so it can have a transition in. */
   const spCut = sp ? cutOf(comp, sp.id) : undefined;
   const transitionTools = sp && spCut ? (
-    <TransitionPicker key={sp.id} engine={engine} comp={comp} placementId={sp.id} thumbs={thumbs} onPreview={previewCut} onToast={setToast} />
+    <TransitionPicker key={sp.id} engine={engine} comp={comp} placementId={sp.id} thumbs={thumbs} onPreview={previewCut} onToast={setToast} onNewCode={() => createCodeRole("transition")} />
   ) : null;
 
 
@@ -1003,7 +1017,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       {selTrack?.layerStyle && <button className="v2-btn v2-btn-sm" title={`Style every clip on ${selTrack.name}`} onClick={() => editLayer(selTrack.id)}><Ic g="layers" size={14} /> Edit all</button>}
       <button className="v2-btn v2-btn-sm" title="Open this layer's subtitle list at this clip" onClick={() => openSubs(selected.track.id, pl.id)}><Ic g="≡" size={14} /> Subtitles</button>
     </>, tabs: [{ id: "text", label: "Text", icon: "T", render: () => <>{linkSec}<TextPanel engine={engine} placement={effSel} track={selTrack} onAnimPicked={() => setAnimLoop(true)} initialTab="Font" /></> }, { ...transform, label: "Transform" }] };
-    if (kind === "effect") return { ...base, tabs: [{ id: "effect", label: "Effect", icon: "effect", render: () => <>{linkSec}<EffectPicker engine={engine} at={time} placement={pl} /></> }] };
+    if (kind === "effect") return { ...base, tabs: [{ id: "effect", label: "Effect", icon: "effect", render: () => <>{linkSec}<EffectPicker engine={engine} at={time} placement={pl} onNewCode={() => createCodeRole("effect")} onEditCode={(id) => void editCodeAsset(id)} /></> }] };
     if (kind === "audio") return { ...base, tabs: [audioTab, ...(speedSelect ? [speedTab] : [])] };
     if (kind === "html") return { ...base, actions: <button className="v2-btn v2-btn-sm" title="Edit HTML, CSS and JS with live preview" onClick={() => void openCode()}><Ic g="</>" size={14} /> Edit code</button>, tabs: [{ id: "params", label: "Params", icon: "settings", render: () => <HtmlParamsPanel engine={engine} project={project} placement={pl} blobs={storage.blobs} onEditCode={() => void openCode()} /> }, transform, chromaTab, ...(transTab ? [transTab] : [])] };
     if (pl.blank) return { ...base, tabs: [{ id: "colour", label: "Colour", icon: "palette", render: () => <div className="v2-psettings"><section aria-label="Colour"><h4>Colour</h4><BlankColorPicker value={pl.blank!.color} onChange={(c) => engine.dispatch(cmd.setBlankColor(pl.id, c))} /></section></div> }, transform, ...(transTab ? [transTab] : [])] };
@@ -1235,8 +1249,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           {subsTrack && <Sheet label="Edit subtitles" className="v2-msheet-tall" head={false} onClose={() => setSubsEdit(undefined)}><SubtitleList engine={engine} track={subsTrack} time={time} playing={playing} onSeek={seek} desktop={false} name={project.name} focusCue={subsCue} onDone={() => setSubsEdit(undefined)} /></Sheet>}
           {layerTrack && !selected && <Sheet label={`Edit all · ${layerTrack.name}`} className="v2-msheet-insp" onClose={() => setLayerEdit(undefined)}><TextPanel key={layerTrack.id} engine={engine} layer={layerTrack} initialTab="Style" /></Sheet>}
           {textOpen && selected && isText && <Sheet label="Text" className="v2-msheet-insp" snapTo={animLoop ? 0 : undefined} extra={scopeChip || undefined} onClose={closeAnim}><TextPanel engine={engine} placement={effSel} track={selTrack} onAnimPicked={() => setAnimLoop(true)} /></Sheet>}
-          {transFor && cutOf(comp, transFor) && <Sheet label="Transitions" head={false} dim={false} className="v2-trans-sheet" onClose={() => setTransFor(undefined)}><TransitionPicker key={transFor} engine={engine} comp={comp} placementId={transFor} thumbs={thumbs} onPreview={previewCut} onToast={setToast} onDone={() => setTransFor(undefined)} /></Sheet>}
-          {fxOpen && <Sheet label="Effects" className="v2-msheet-insp" onClose={() => setFxOpen(false)}><EffectPicker engine={engine} at={time} placement={isEffect ? selected!.placement : undefined} onAdded={(id) => setSel([id])} onClose={() => setFxOpen(false)} /></Sheet>}
+          {transFor && cutOf(comp, transFor) && <Sheet label="Transitions" head={false} dim={false} className="v2-trans-sheet" onClose={() => setTransFor(undefined)}><TransitionPicker key={transFor} engine={engine} comp={comp} placementId={transFor} thumbs={thumbs} onPreview={previewCut} onToast={setToast} onNewCode={() => createCodeRole("transition")} onDone={() => setTransFor(undefined)} /></Sheet>}
+          {fxOpen && <Sheet label="Effects" className="v2-msheet-insp" onClose={() => setFxOpen(false)}><EffectPicker engine={engine} at={time} placement={isEffect ? selected!.placement : undefined} onAdded={(id) => setSel([id])} onClose={() => setFxOpen(false)} onNewCode={() => createCodeRole("effect")} onEditCode={(id) => void editCodeAsset(id)} /></Sheet>}
           {paramsOpen && selected && isHtml && <Sheet label="Clip params" className="v2-msheet-insp" onClose={() => setParamsOpen(false)}><HtmlParamsPanel engine={engine} project={project} placement={selected.placement} blobs={storage.blobs} onEditCode={() => { setParamsOpen(false); void openCode(); }} /></Sheet>}
           {animOpen && !textOpen && selected && isText && <Sheet label="Animation" className="v2-msheet-insp v2-anim-sheet" snapTo={animLoop ? 0 : undefined} extra={scopeChip || undefined} onClose={closeAnim}><AnimationPicker engine={engine} placement={selected.placement} onPicked={() => setAnimLoop(true)} /></Sheet>}
         </>

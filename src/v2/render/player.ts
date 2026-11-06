@@ -15,7 +15,9 @@ import { subtitleAt } from "../domain/subtitles";
 import { loadBundledFonts } from "./fonts";
 import { drawTextClip } from "./text";
 import { effectivePlacement } from "../domain/layerStyle";
-import { applyEffectFrame, effectFrameAt } from "./effects";
+import { applyEffectFrame, codeEffectsAt, effectFrameAt } from "./effects";
+import { trackTransitions } from "../domain/transitions";
+import type { FrameExtra } from "./htmlClip";
 import { mainTrack } from "../domain/ops";
 import { correctDrift, createClock, SEEK_DRIFT_S, type Clock } from "./clock";
 import { HtmlClipHost, isValidFrame, type FrameIssue, type HtmlClipInit } from "./htmlClip";
@@ -304,8 +306,25 @@ export class Player {
     const fxOverlay = effectFrameAt(comp, this.time, "overlay");
     const fxAll = effectFrameAt(comp, this.time, "all");
     const mainId = mainTrack(comp)?.id;
-    let fxDone = !fx;
-    const applyFx = () => { fxDone = true; if (fx && ctx && canvas) applyEffectFrame(ctx, canvas.width, canvas.height, fx); };
+    // P38: code effects (ctx.source) and a code transition on the main track (ctx.from / ctx.to, captured on two layers).
+    const bitmaps = typeof createImageBitmap === "function" && !!canvas && !!ctx;
+    const codeFx = bitmaps ? codeEffectsAt(comp, this.time, "main") : [];
+    const codeFxAll = bitmaps ? codeEffectsAt(comp, this.time, "all") : [];
+    const mainT = mainTrack(comp);
+    const codeTr = bitmaps && mainT ? trackTransitions(mainT).find((x) => x.code && this.time >= x.from && this.time < x.to) : undefined;
+    const capA = codeTr ? this.captureLayer(0, canvas!.width, canvas!.height) : null, capB = codeTr ? this.captureLayer(1, canvas!.width, canvas!.height) : null;
+    let fxDone = !fx && !codeFx.length && !codeTr;
+    const applyFx = () => {
+      fxDone = true;
+      if (!ctx || !canvas) return;
+      if (codeTr && capA && capB) {
+        const span = Math.max(1, codeTr.to - codeTr.from), a = capA.canvas, b = capB.canvas;
+        this.runCode(`${codeTr.next.id}#tr`, codeTr.code!, codeTr.next.transitionIn?.params, ticksToSeconds(this.time - codeTr.from), ticksToSeconds(span), live, ctx, canvas,
+          async () => { const [from, to] = await Promise.all([createImageBitmap(a), createImageBitmap(b)]); return { data: { from, to, progress: Math.min(1, Math.max(0, (this.time - codeTr.from) / span)) }, transfer: [from, to] }; });
+      }
+      for (const e of codeFx) this.runCode(e.placement.id, e.assetId, e.placement.effect?.params, ticksToSeconds(this.time - e.placement.startTicks), ticksToSeconds(e.placement.durationTicks), live, ctx, canvas, this.sourceOf(canvas));
+      if (fx) applyEffectFrame(ctx, canvas.width, canvas.height, fx);
+    };
     for (const { track, placement: raw, sourceTicks, mix, tfx } of layers) {
       if (raw.clipType === "effect") continue;
       // V2-103: text clips render with their layer style merged under their own overrides (preview and export alike).
@@ -328,7 +347,12 @@ export class Player {
       // Overlay-scope effects: draw the clip on a transparent layer, apply the effect there, then composite it.
       const paint = (blend: string | undefined, fn: (dc: CanvasRenderingContext2D) => void) => {
         if (!ctx || !canvas) return;
-        if (!fxOverlay || track.id === mainId) { withBlend(ctx, blend, () => fn(ctx)); return; }
+        if (!fxOverlay || track.id === mainId) {
+          withBlend(ctx, blend, () => fn(ctx));
+          const cap = codeTr && track.id === mainId ? (placement.id === codeTr.prev.id ? capA : placement.id === codeTr.next.id ? capB : null) : null;
+          if (cap) withBlend(cap, blend, () => fn(cap));
+          return;
+        }
         const lc = this.overlayLayer(canvas.width, canvas.height);
         if (!lc) { withBlend(ctx, blend, () => fn(ctx)); return; }
         lc.save(); lc.setTransform(1, 0, 0, 1, 0, 0); lc.globalAlpha = 1; lc.globalCompositeOperation = "source-over"; lc.clearRect(0, 0, canvas.width, canvas.height); lc.restore();
@@ -460,6 +484,7 @@ export class Player {
       if (missing && this.lastGood && this.lastGood.canvas.width === canvas.width && this.lastGood.canvas.height === canvas.height) ctx.drawImage(this.lastGood.canvas, 0, 0);
       else if (!missing) this.keepFrame(canvas);
     }
+    if (ctx && canvas) for (const e of codeFxAll) this.runCode(e.placement.id, e.assetId, e.placement.effect?.params, ticksToSeconds(this.time - e.placement.startTicks), ticksToSeconds(e.placement.durationTicks), live, ctx, canvas, this.sourceOf(canvas));
     if (fxAll && ctx && canvas) applyEffectFrame(ctx, canvas.width, canvas.height, fxAll);
     const cue = subtitleAt(comp, this.time);
     if (ctx && canvas && cue) drawSubtitle(ctx, canvas.width, canvas.height, cue.text);
@@ -492,12 +517,48 @@ export class Player {
       if (loading !== this.loading) { this.loading = loading; this.onLoading?.(loading); }
     }
     for (const id of [...this.pool.keys()]) if (!findAny(this.project, id)) this.release(id);
-    for (const [id, h] of this.html) if (!findAny(this.project, id)) { h.host.dispose(); this.html.delete(id); }
+    for (const [id, h] of this.html) if (!findAny(this.project, id.split("#")[0]) || (id.includes("#") && !live.has(id))) { h.host.dispose(); this.html.delete(id); }
     this.onTime?.(this.time, this.playing);
   }
 
   private overlayCtx?: CanvasRenderingContext2D | null;
   /** Reused transparent layer for overlay-scope effects (P6-FX-SCOPE), sized to the output canvas. */
+  private captures: (CanvasRenderingContext2D | null)[] = [];
+  /** P38: a cleared layer that receives one side of a code transition (0 = outgoing, 1 = incoming). */
+  private captureLayer(i: number, w: number, h: number): CanvasRenderingContext2D | null {
+    if (this.captures[i] === undefined) { const c = typeof document !== "undefined" ? document.createElement("canvas") : null; this.captures[i] = c ? c.getContext("2d") : null; }
+    const g = this.captures[i];
+    if (!g) return null;
+    if (g.canvas.width !== w || g.canvas.height !== h) { g.canvas.width = w; g.canvas.height = h; }
+    g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = "source-over"; g.fillStyle = this.project.settings.background ?? "#000"; g.fillRect(0, 0, w, h); g.restore();
+    return g;
+  }
+
+  /** P38: the picture drawn so far, as ctx.source for a code effect (copied now, sent when ready). */
+  private sourceOf(canvas: HTMLCanvasElement) {
+    return async (): Promise<FrameExtra> => { const source = await createImageBitmap(canvas); return { data: { source }, transfer: [source] }; };
+  }
+
+  /**
+   * P38: run a code package (effect or transition) for this frame and draw its last frame over the whole picture.
+   * Export asks for a fresh frame every pass, so the package always sees the finished source.
+   */
+  private runCode(key: string, assetId: string, params: Record<string, number | string> | undefined, t: number, dur: number, live: Set<string>, ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, extra: () => Promise<FrameExtra>) {
+    const a = this.project.assets[assetId];
+    const v = a?.versions.find((x) => x.id === a.selectedVersionId) ?? a?.versions[0];
+    if (!a || a.kind !== "html" || !v) return;
+    live.add(key);
+    this.htmlOverrides.set(key, params);
+    const host = this.htmlHost(key, v.media.blobKey, canvas.width, canvas.height);
+    const known = this.manifests.get(v.media.blobKey);
+    if (known) host.setParams(resolveHtmlParams(known.params, params));
+    const at = Math.round(t * 1000) / 1000;
+    if (this.offline || host.wants(at)) { const extraNow = extra(); host.request(at, dur, () => extraNow, this.offline); } // copied now, before more is drawn
+    else host.request(at, dur);
+    const f = host.frame;
+    if (isValidFrame(f)) { try { ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.drawImage(f, 0, 0, canvas.width, canvas.height); ctx.restore(); } catch { host.issue = "invalid"; } }
+  }
+
   private overlayLayer(w: number, h: number): CanvasRenderingContext2D | null {
     if (this.overlayCtx === undefined) {
       const c = typeof document !== "undefined" ? document.createElement("canvas") : null;

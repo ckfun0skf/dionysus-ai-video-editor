@@ -44,8 +44,64 @@ export const NEW_CODE_MANIFEST: HtmlClipManifest = {
 
 export const newCodeModel = (): CodeClipModel => ({ manifest: structuredClone(NEW_CODE_MANIFEST), script: NEW_CODE_SCRIPT, css: "", markup: "" });
 
-/** A complete package: the manifest, the standard canvas page and the script. */
-export const newCodeClipHtml = (): string => generateClip(newCodeModel());
+/** P38: starter effect: draws ctx.source (the picture under the effect clip) with a moving colour split. */
+export const NEW_EFFECT_SCRIPT = `// An effect: ctx.source is the picture under the effect clip, this frame. Draw the changed picture.
+let g;
+dionysus.clip({
+  init(ctx) {
+    ctx.canvas.width = ctx.width;
+    ctx.canvas.height = ctx.height;
+    g = ctx.canvas.getContext("2d");
+  },
+  render(t, ctx) {
+    const { width: w, height: h, params: p } = ctx;
+    g.clearRect(0, 0, w, h);
+    if (!ctx.source) return;
+    const s = w * p.amount * 0.01 * Math.sin(t * p.speed);
+    g.drawImage(ctx.source, 0, 0, w, h);
+    g.globalCompositeOperation = "lighter";
+    g.globalAlpha = 0.5;
+    g.drawImage(ctx.source, s, 0, w, h);
+    g.drawImage(ctx.source, -s, 0, w, h);
+    g.globalAlpha = 1;
+    g.globalCompositeOperation = "source-over";
+  },
+});
+`;
+
+/** P38: starter transition: a circle opens from ctx.from (outgoing) to ctx.to (incoming) over ctx.progress. */
+export const NEW_TRANSITION_SCRIPT = `// A transition: ctx.from is the outgoing clip, ctx.to the incoming one, ctx.progress goes 0 → 1.
+let g;
+dionysus.clip({
+  init(ctx) {
+    ctx.canvas.width = ctx.width;
+    ctx.canvas.height = ctx.height;
+    g = ctx.canvas.getContext("2d");
+  },
+  render(t, ctx) {
+    const { width: w, height: h, progress: a } = ctx;
+    g.clearRect(0, 0, w, h);
+    if (ctx.from) g.drawImage(ctx.from, 0, 0, w, h);
+    if (!ctx.to) return;
+    const e = a * a * (3 - 2 * a);
+    g.save();
+    g.beginPath();
+    g.arc(w / 2, h / 2, (Math.hypot(w, h) / 2) * e, 0, Math.PI * 2);
+    g.clip();
+    g.drawImage(ctx.to, 0, 0, w, h);
+    g.restore();
+  },
+});
+`;
+
+const roleModel = (role: "effect" | "transition"): CodeClipModel => ({
+  manifest: { format: HTML_CLIP_FORMAT, name: role === "effect" ? "Code effect" : "Code transition", role, durationSec: role === "effect" ? 3 : 1, width: 1920, height: 1080, aspect: "16:9", background: "#000000", libs: [],
+    ...(role === "effect" ? { params: { amount: { type: "number", default: 1.5, min: 0, max: 6, step: 0.1, label: "Amount" }, speed: { type: "number", default: 6, min: 0, max: 20, step: 0.5, label: "Speed" } } } : {}) },
+  script: role === "effect" ? NEW_EFFECT_SCRIPT : NEW_TRANSITION_SCRIPT, css: "", markup: "",
+});
+
+/** A complete package: the manifest, the standard canvas page and the script (P38: an effect or transition starter). */
+export const newCodeClipHtml = (role: "clip" | "effect" | "transition" = "clip"): string => generateClip(role === "clip" ? newCodeModel() : roleModel(role));
 
 const CANVAS_SCRIPT = `// Canvas animation: bars that rise in a wave, with a title. Every frame is a pure function of t and ctx.params.
 let g;

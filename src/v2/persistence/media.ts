@@ -1,6 +1,13 @@
 /** Import a user file as an Asset: store blob, probe duration/dimensions. */
 import { newId, type Asset, type MediaKind } from "../domain/model";
 import { secondsToTicks } from "../domain/time";
+import { readManifest } from "../domain/htmlClipPackage";
+
+/** P38: an html package's role for MediaRef.role ("clip" = none). */
+export function htmlRoleOf(html: string): "effect" | "transition" | undefined {
+  const r = readManifest(html).role;
+  return r === "effect" || r === "transition" ? r : undefined;
+}
 import type { BlobStore } from "../ports/storage";
 
 export function mediaKindOf(file: { type: string; name: string }): MediaKind | undefined {
@@ -62,9 +69,10 @@ export async function importFile(file: File, blobs: BlobStore, probe = probeMedi
     const mime = mimeOf(file);
     // Storage chunks the bytes itself (V2-108); retyping only matters when the picker gave no type.
     await blobs.put(blobKey, mime === file.type ? file : new Blob([file], { type: mime }));
+    const role = kind === "html" ? htmlRoleOf(await file.text()) : undefined;
     return {
       id, kind, name: file.name, selectedVersionId: versionId,
-      versions: [{ id: versionId, createdAt: new Date().toISOString(), media: { blobKey, mime, ...info }, provenance: { source: "import", inputs: [] } }],
+      versions: [{ id: versionId, createdAt: new Date().toISOString(), media: { blobKey, mime, ...info, ...(role ? { role } : {}) }, provenance: { source: "import", inputs: [] } }],
     };
   } finally {
     URL.revokeObjectURL(url);

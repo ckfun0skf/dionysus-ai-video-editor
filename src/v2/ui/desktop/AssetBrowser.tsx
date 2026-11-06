@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { formatTimecode, text as T, type Asset, type Project } from "../../domain";
+import { codeRoleOf, formatTimecode, text as T, type Asset, type Project } from "../../domain";
 import { applyEffectFrame } from "../../render";
 import { applyPreset, identityFrame, listPresets } from "../../registry";
 import { BlankAdd } from "../BlankClip";
@@ -55,7 +55,7 @@ export function AssetBrowser({ project, thumbs, busy, tab, onTab, ...a }: Browse
   project: Project; thumbs: Record<string, string>; busy: number; tab: BrowserTab; onTab: (t: BrowserTab) => void;
 }) {
   const [over, setOver] = useState(false);
-  const assets = Object.values(project.assets).filter((x) => !x.name.startsWith("sticker-"));
+  const assets = Object.values(project.assets).filter((x) => !x.name.startsWith("sticker-") && codeRoleOf(x) === "clip");
   const of = (k: Asset["kind"]) => assets.filter((x) => x.kind === k);
   const drop = {
     onDragOver: (e: React.DragEvent) => { if (hasFiles(e.dataTransfer)) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; setOver(true); } },

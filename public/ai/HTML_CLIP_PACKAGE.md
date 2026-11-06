@@ -26,6 +26,7 @@ The first element of `<head>`:
 | `format` | `"dionysus.htmlclip/1"` | Required for a conforming package. Missing = a legacy clip (accepted with a warning). |
 | `name` | string | Display and file name. |
 | `description` | string | Optional. |
+| `role` | string | `"clip"` (default), `"effect"` or `"transition"` (§3.2). Where a package is used must match its role. |
 | `durationSec` | number (0–600] | Intended length. On the timeline the clip's own length wins (`ctx.duration`). |
 | `width`, `height` | integer px (16–8192) | Intended frame size. The clip renders at the output size (`ctx.width`, `ctx.height`). |
 | `aspect` | `"16:9"` \| `"9:16"` \| `"1:1"` \| `"4:5"` \| `"21:9"` | Optional. |
@@ -43,7 +44,7 @@ The page runs in a sandboxed iframe (scripts only, opaque origin, no access to t
 
 <!-- contract:start -->
 - Register the clip once, at the top level of your script: `dionysus.clip({ async init(ctx) { … }, render(t, ctx) { … } })`. `init` (optional) runs once before the first frame; await anything you need there (images, fonts, models). `render(t, ctx)` draws the frame at `t` seconds into the clip and may return a Promise.
-- `ctx` = `{ canvas, t, duration, progress, width, height, params, bindings, asset(name), image(name), video(name), seek(video, sec) }`: `duration` is the clip's length on the timeline in seconds (it can differ from the manifest's `durationSec`), `progress` = t / duration (0–1), `canvas` the page's first `<canvas>` (the captured picture), `width`/`height` the frame size in pixels, `params` the parameter values (each declared param's default, overridden by the values set where the clip is used: a timeline clip, a storyboard shot or layer; read them in `render`, they can change between frames while the user edits), `bindings[name]` = `{ type, url }` for each bound asset (`url` is null when nothing is bound yet: draw a placeholder), `asset(name)` the URL of an embedded file, `image(name)` a Promise of a loaded HTMLImageElement for a binding or file, `video(name)` a Promise of a muted HTMLVideoElement, `seek(video, sec)` a Promise that resolves when that video shows `sec`.
+- `ctx` = `{ canvas, t, duration, progress, width, height, params, bindings, asset(name), image(name), video(name), seek(video, sec) }`: `duration` is the clip's length on the timeline in seconds (it can differ from the manifest's `durationSec`), `progress` = t / duration (0–1), `canvas` the page's first `<canvas>` (the captured picture), `width`/`height` the frame size in pixels, `params` the parameter values (each declared param's default, overridden by the values set where the clip is used: a timeline clip, a storyboard shot or layer; read them in `render`, they can change between frames while the user edits), `bindings[name]` = `{ type, url }` for each bound asset (`url` is null when nothing is bound yet: draw a placeholder), `asset(name)` the URL of an embedded file, `image(name)` a Promise of a loaded HTMLImageElement for a binding or file, `video(name)` a Promise of a muted HTMLVideoElement, `seek(video, sec)` a Promise that resolves when that video shows `sec`. Effects (manifest `"role": "effect"`) also get `source`, the picture under the effect clip this frame; transitions (`"role": "transition"`) get `from` (outgoing clip), `to` (incoming clip) and `progress` 0–1 across the cut. They are ImageBitmaps to draw (`g.drawImage(ctx.source, 0, 0, w, h)`); draw the full frame.
 - The picture is the page's FIRST `<canvas>`: size it to ctx.width × ctx.height in `init` and draw everything on it (2D or WebGL; for WebGL use `preserveDrawingBuffer: true`). Other DOM and CSS are not captured.
 - Deterministic: every frame is a pure function of t, ctx.params and the bound assets. Frames are requested in any order (scrubbing, export), and the same t must give the same picture. Don't keep animation state between frames, don't use Date.now(), performance.now(), requestAnimationFrame, setTimeout or setInterval for timing, and use a seeded random generator (fixed seed) instead of Math.random().
 - No network: the clip runs in a sandbox with a strict Content-Security-Policy. Only the allowed libraries (listed in the manifest's `libs`, imported by their bare specifier in a `<script type="module">`, e.g. `import * as LIB from "<specifier>"`) are loaded. Embed any other file as a data: URL in the manifest's `files` and refer to it by name. Use system font stacks, or an embedded font with @font-face (the runtime waits for fonts to load before the first frame).
@@ -58,11 +59,21 @@ The page runs in a sandboxed iframe (scripts only, opaque origin, no access to t
 iframe → editor  { type: "dionysus:ready" }                                       page loaded
 editor → iframe  { type: "dionysus:init", width, height, duration?, bindings: { name: { type, blob } }, params? }
 editor → iframe  { type: "dionysus:params", params }                              new param values (V2-HTML-PARAMS); no reload
-editor → iframe  { type: "dionysus:frame", seq, t, duration? }                    draw frame t
+editor → iframe  { type: "dionysus:frame", seq, t, duration?, source?, from?, to?, progress? }  draw frame t (P38 pictures for effects/transitions)
 iframe → editor  { type: "dionysus:frame", seq, bmp }                             ImageBitmap of the first <canvas>
 ```
 
 `init` is awaited before the first frame; a frame that takes more than 4 s in export is reported and the previous frame is kept. In the HTML editor's live preview no init message is sent: `ctx` then uses the manifest's values and bindings are null.
+
+### 3.2 Effects and transitions (P38)
+
+A package's manifest `role` says how it is used:
+
+- **`"clip"`** (default): a clip on a video track (main or overlay).
+- **`"effect"`**: an effect clip on the Effects layer runs it (Effects → **Custom (code)**). Each frame `ctx.source` is the picture under it: the main track (Apply to **Main**) or the finished frame (**All**). Draw the changed picture on the full canvas. Its `params` are edited like any effect's.
+- **`"transition"`**: a cut runs it (Transitions → **Custom (code)**). Each frame `ctx.from` is the outgoing clip's picture, `ctx.to` the incoming clip's and `ctx.progress` goes 0 → 1 across the transition. At 0 show only `from`, at 1 only `to`.
+
+Using a package in the wrong place is an error (`role-mismatch`): an effect or transition can't be added to a track, and a clip can't be picked as an effect or transition. An effect that never reads `ctx.source`, or a transition that doesn't read both `ctx.from` and `ctx.to`, gets a warning. These pictures run through the sandbox every frame, so preview may lag a frame and export is slower. Clips get only these pictures; there is no pixel-reading API.
 
 ### 3.1 Param values per use (V2-HTML-PARAMS)
 
@@ -98,6 +109,8 @@ Pasting or importing checks the clip and lists the problems. Errors block *Add a
 | `network` | error | An `http(s)://` or `//` URL in `src`/`href`, `import`, `fetch`, CSS `url()`/`@import`, or Google Fonts |
 | `lib-unknown` | error | A library id or bare import that is not in the registry |
 | `lib-undeclared` | error | The page imports a registry library its `libs` doesn't list |
+| `role-mismatch` | error | The package's `role` doesn't match where it is used (§3.2) |
+| `effect-source`, `transition-sides` | warning | An effect never reads `ctx.source`; a transition doesn't read `ctx.from` and `ctx.to` |
 | `manifest-missing`, `format-missing` | warning | A legacy clip |
 | `render-missing` | warning | No `dionysus.clip(`, `dionysus.onFrame(` or `requestAnimationFrame(`: the clip won't animate |
 | `render-legacy` | warning | Animates with requestAnimationFrame only |
@@ -136,6 +149,8 @@ Roles:
 - **Overlay on a video** — Overlay on a video: the clip sits on an overlay track above video. Keep the background transparent (clear the canvas every frame) and draw only the graphics; leave the video visible.
 - **Title or text** — Title or text: a title, lower third or text card. Keep text inside the safe area (5% inset), animate it in and out within the duration, size it from ctx.width/ctx.height, and make the text a param when it can change.
 - **Data viz** — Data viz: an animated chart or diagram. Embed the data in the package (a param for small values, or a JSON file / JS constant), animate it from ctx.progress, and label axes and values legibly at the frame size.
+- **Effect** — Effect: the package changes the picture under an effect clip. Set "role": "effect" in the manifest. Each frame ctx.source is that picture (an ImageBitmap of the main track, or the whole frame); draw it changed on the full canvas (an opaque result), using t and ctx.progress for motion. Never read pixels back with getImageData; use canvas compositing, filters or WebGL.
+- **Transition** — Transition: the package draws a cut between two clips. Set "role": "transition" in the manifest. Each frame ctx.from is the outgoing clip's picture, ctx.to the incoming one (ImageBitmaps) and ctx.progress goes 0 → 1 over the transition; at 0 show only ctx.from, at 1 only ctx.to. Keep it short (durationSec about 0.5-2).
 
 ```text
 REFERENCE VIDEO (timing and analysis)

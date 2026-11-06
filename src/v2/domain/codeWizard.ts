@@ -6,14 +6,16 @@ import {
   type ClipLibrary, type HtmlClipIssue, type HtmlClipParam, type PackagePromptInput, type ParamType,
 } from "./htmlClipPackage";
 
-export const CODE_ROLES = ["scene", "overlay", "title", "dataviz"] as const;
+export const CODE_ROLES = ["scene", "overlay", "title", "dataviz", "effect", "transition"] as const;
 export type CodeRole = (typeof CODE_ROLES)[number];
-export const CODE_ROLE_LABEL: Record<CodeRole, string> = { scene: "Full-frame scene", overlay: "Overlay on a video", title: "Title or text", dataviz: "Data viz" };
+export const CODE_ROLE_LABEL: Record<CodeRole, string> = { scene: "Full-frame scene", overlay: "Overlay on a video", title: "Title or text", dataviz: "Data viz", effect: "Effect", transition: "Transition" };
 /** Role guidance, inlined in the prompt and published in the spec. */
 export const CODE_ROLE_GUIDE: Record<CodeRole, string> = {
   scene: "Full-frame scene: the clip is the whole picture on the main track. Paint every pixel every frame (an opaque background) and give it depth and motion over the whole duration.",
   overlay: "Overlay on a video: the clip sits on an overlay track above video. Keep the background transparent (clear the canvas every frame) and draw only the graphics; leave the video visible.",
   title: "Title or text: a title, lower third or text card. Keep text inside the safe area (5% inset), animate it in and out within the duration, size it from ctx.width/ctx.height, and make the text a param when it can change.",
+  effect: "Effect: the package changes the picture under an effect clip. Set \"role\": \"effect\" in the manifest. Each frame ctx.source is that picture (an ImageBitmap of the main track, or the whole frame); draw it changed on the full canvas (an opaque result), using t and ctx.progress for motion. Never read pixels back with getImageData; use canvas compositing, filters or WebGL.",
+  transition: "Transition: the package draws a cut between two clips. Set \"role\": \"transition\" in the manifest. Each frame ctx.from is the outgoing clip's picture, ctx.to the incoming one (ImageBitmaps) and ctx.progress goes 0 → 1 over the transition; at 0 show only ctx.from, at 1 only ctx.to. Keep it short (durationSec about 0.5-2).",
   dataviz: "Data viz: an animated chart or diagram. Embed the data in the package (a param for small values, or a JSON file / JS constant), animate it from ctx.progress, and label axes and values legibly at the frame size.",
 };
 
@@ -102,6 +104,7 @@ export function wizardPackageInput(a: CodeWizardAnswers): PackagePromptInput {
     aspect: a.aspect,
     background: transparent ? "transparent" : "#000000",
     params: wizardParams(a),
+    ...(a.role === "effect" || a.role === "transition" ? { role: a.role } : {}),
     context,
   };
 }

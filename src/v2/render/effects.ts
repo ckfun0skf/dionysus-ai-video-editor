@@ -4,7 +4,8 @@
  * "overlay" = each overlay track's own layer before it is composited, "all" = the finished composite (main + overlays
  * + text). Preview and export share this path (Player.draw).
  */
-import { effectScopeOf, type Composition, type EffectScope } from "../domain/model";
+import { effectScopeOf, type Composition, type EffectScope, type Placement } from "../domain/model";
+import { codeAssetOf } from "../domain/codeRoles";
 import { applyPreset, identityFrame, type PresetFrame } from "../registry";
 import { runPasses } from "./paintScratch";
 
@@ -15,12 +16,31 @@ export function effectFrameAt(comp: Composition, t: number, scope: EffectScope =
     const tr = comp.tracks[i];
     if (tr.kind !== "effect" || tr.hidden) continue;
     for (const p of tr.placements) {
-      if (!p.effect || effectScopeOf(p.effect) !== scope || t < p.startTicks || t >= p.startTicks + p.durationTicks) continue;
+      if (!p.effect || codeAssetOf(p.effect.preset) || effectScopeOf(p.effect) !== scope || t < p.startTicks || t >= p.startTicks + p.durationTicks) continue;
       const prog = p.durationTicks > 1 ? (t - p.startTicks) / (p.durationTicks - 1) : 1;
       f = applyPreset("videoEffect", p.effect.preset, prog, f ?? identityFrame(), p.effect.params);
     }
   }
   return f;
+}
+
+/**
+ * P38: code effects live at t for a scope ("overlay" runs as "main": a code effect sees one picture), bottom layer
+ * first, with their 0..1 progress.
+ */
+export function codeEffectsAt(comp: Composition, t: number, scope: "main" | "all"): { placement: Placement; assetId: string; progress: number }[] {
+  const out: { placement: Placement; assetId: string; progress: number }[] = [];
+  for (let i = comp.tracks.length - 1; i >= 0; i -= 1) {
+    const tr = comp.tracks[i];
+    if (tr.kind !== "effect" || tr.hidden) continue;
+    for (const p of tr.placements) {
+      const assetId = codeAssetOf(p.effect?.preset);
+      if (!assetId || t < p.startTicks || t >= p.startTicks + p.durationTicks) continue;
+      if ((effectScopeOf(p.effect) === "all") !== (scope === "all")) continue;
+      out.push({ placement: p, assetId, progress: p.durationTicks > 1 ? (t - p.startTicks) / (p.durationTicks - 1) : 1 });
+    }
+  }
+  return out;
 }
 
 /** True when the frame's built-in fields change nothing (canvas-hook passes not considered). */

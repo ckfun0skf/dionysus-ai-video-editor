@@ -18,6 +18,8 @@ export interface MediaRef {
   thumbKey?: string;
   /** Audio made in the Audio editor: blob key of its `dionysus.audioclip/1` JSON (blobKey is the rendered WAV). */
   specKey?: string;
+  /** P38: a code package (html) made as an effect or a transition (its manifest "role"); absent = a clip. */
+  role?: "effect" | "transition";
 }
 
 /** P18: an audio version taken from a video's audio track, `inSec`..`outSec` seconds into that video. */

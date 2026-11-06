@@ -11,6 +11,9 @@ import * as cueOps from "../domain/subtitleLayer";
 import * as subs from "../domain/subtitles";
 import * as edit from "../domain/edit";
 import * as transitions from "../domain/transitions";
+import { codeAssetOf, codeRoleIssue } from "../domain/codeRoles";
+/** P38: throw when a "code:<assetId>" preset/kind names an asset of another role. */
+const needRole = (p: Project, preset: string | undefined, want: "effect" | "transition") => { const a = codeAssetOf(preset); const e = a ? codeRoleIssue(p, a, want) : undefined; if (e) throw new Error(e); };
 import type { ChromaKey, Keyframe, Subtitle } from "../domain/model";
 import { DEFAULT_EFFECT_SCOPE, TEXT_SOURCE, type EffectScope } from "../domain/model";
 import * as board from "../domain/storyboard";
@@ -80,7 +83,7 @@ export const setBlankColor = (id: string, color: string): Command => ({
 /** V2-101: add an effect clip at `at` (default length) on the first effect layer with room, else a new layer on top. */
 export const addEffectClip = (at: number, preset: string, params?: Record<string, number | string>, id = newId("plc")): Command => ({
   label: "Add effect", autoLink: true,
-  apply: (p) => withRoot(p, (c) => {
+  apply: (p) => { needRole(p, preset, "effect"); return withRoot(p, (c) => {
     const start = Math.max(0, Math.round(at));
     const pl: Placement = { id, startTicks: start, durationTicks: DEFAULT_EFFECT_TICKS, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "effect", effect: { preset, ...(params ? { params } : {}) } };
     const fits = (t: Composition["tracks"][number]) => t.placements.every((o) => o.startTicks >= start + pl.durationTicks || o.startTicks + o.durationTicks <= start);
@@ -88,7 +91,7 @@ export const addEffectClip = (at: number, preset: string, params?: Record<string
     let track = comp.tracks.find((t) => t.kind === "effect" && fits(t));
     if (!track) { const tid = newId("trk"); comp = ops.addTrack(comp, "effect", tid); track = comp.tracks.find((t) => t.id === tid)!; }
     return ops.insertPlacement(comp, track.id, pl);
-  }),
+  }); },
 });
 
 /** P6-FX-SCOPE: set which picture an effect clip changes ("main" is stored as no field, the backward-compatible default). */
@@ -105,7 +108,7 @@ export const setEffectScope = (id: string, applyTo: EffectScope): Command => ({
 export const setEffect = (id: string, patch: { preset?: string; params?: Record<string, number | string> }, label = patch.preset ? "Change effect" : "Effect settings"): Command => ({
   label,
   coalesceKey: patch.preset ? undefined : `fx:${id}:${Object.keys(patch.params ?? {}).sort().join(",")}`,
-  apply: (p) => withRoot(p, (c) => ({ ...c, tracks: c.tracks.map((t) => ({ ...t, placements: t.placements.map((pl) => (pl.id === id && pl.clipType === "effect" && pl.effect ? { ...pl, effect: patch.preset ? { preset: patch.preset, ...(pl.effect.applyTo ? { applyTo: pl.effect.applyTo } : {}) } : { ...pl.effect, params: { ...pl.effect.params, ...patch.params } } } : pl)) })) })),
+  apply: (p) => { needRole(p, patch.preset, "effect"); return withRoot(p, (c) => ({ ...c, tracks: c.tracks.map((t) => ({ ...t, placements: t.placements.map((pl) => (pl.id === id && pl.clipType === "effect" && pl.effect ? { ...pl, effect: patch.preset ? { preset: patch.preset, ...(pl.effect.applyTo ? { applyTo: pl.effect.applyTo } : {}) } : { ...pl.effect, params: { ...pl.effect.params, ...patch.params } } } : pl)) })) })); },
 });
 
 /**
@@ -174,6 +177,7 @@ export const addAssetToTimeline = (assetId: string, startTicks: number, trackId?
     const asset = p.assets[assetId];
     const version = asset?.versions.find((v) => v.id === asset.selectedVersionId) ?? asset?.versions[0];
     if (!asset || !version) throw new Error("asset missing");
+    const roleErr = codeRoleIssue(p, assetId, "clip"); if (roleErr) throw new Error(roleErr);
     const kind: TrackKind = trackKindFor(asset.kind);
     return withRoot(p, (c) => {
       let comp = c;
@@ -230,9 +234,9 @@ export const setTransform = (id: string, patch: Parameters<typeof ops.setTransfo
   apply: (p) => withRoot(p, (c) => ops.setTransform(c, id, patch)),
 });
 export const setSpeed = (id: string, speed: number): Command => ({ label: `Speed ${speed}×`, coalesceKey: `speed:${id}`, apply: (p) => withRoot(p, (c) => ops.setSpeed(c, id, speed)) });
-export const setTransition = (id: string, t: transitions.Transition | undefined): Command => ({ label: t ? `${(transitions.transitionKind(t.kind)?.label ?? "Transition")} ${t.durationTicks / 120000}s` : "Remove transition", coalesceKey: `transition:${id}`, apply: (p) => withRoot(p, (c) => transitions.setTransition(c, id, t)) });
+export const setTransition = (id: string, t: transitions.Transition | undefined): Command => ({ label: t ? `${(transitions.transitionKind(t.kind)?.label ?? "Transition")} ${t.durationTicks / 120000}s` : "Remove transition", coalesceKey: `transition:${id}`, apply: (p) => { needRole(p, t?.kind, "transition"); return withRoot(p, (c) => transitions.setTransition(c, id, t)); } });
 /** "Apply to all": the same transition (or none) on every cut of the clip's track, one undo step. */
-export const setTransitionAll = (id: string, t: transitions.Transition | undefined): Command => ({ label: t ? `${(transitions.transitionKind(t.kind)?.label ?? "Transition")} on all cuts` : "Remove all transitions", apply: (p) => withRoot(p, (c) => transitions.setTransitionAll(c, id, t)) });
+export const setTransitionAll = (id: string, t: transitions.Transition | undefined): Command => ({ label: t ? `${(transitions.transitionKind(t.kind)?.label ?? "Transition")} on all cuts` : "Remove all transitions", apply: (p) => { needRole(p, t?.kind, "transition"); return withRoot(p, (c) => transitions.setTransitionAll(c, id, t)); } });
 /** V2-SB-133: the clip's in point (where it starts in its video), clamped so the clip still fits in the media. */
 export const setSourceIn = (id: string, ticks: number): Command => ({
   label: "In point", coalesceKey: `sourceIn:${id}`,
@@ -372,6 +376,7 @@ export const addAssetsInSequence = (assetIds: string[], startTicks: number, over
       const asset = p.assets[id];
       const version = asset?.versions.find((v) => v.id === asset.selectedVersionId) ?? asset?.versions[0];
       if (!asset || !version) throw new Error("asset missing");
+      const roleErr = codeRoleIssue(p, id, "clip"); if (roleErr) throw new Error(roleErr);
       const kind: TrackKind = trackKindFor(asset.kind);
       let tid = (kind === "video" ? (overlayTrackId ? comp.tracks.find((t) => t.id === overlayTrackId) : ops.mainTrack(comp)) : comp.tracks.find((t) => t.kind === kind))?.id;
       if (!tid) { tid = newId("trk"); comp = ops.addTrack(comp, kind, tid); }

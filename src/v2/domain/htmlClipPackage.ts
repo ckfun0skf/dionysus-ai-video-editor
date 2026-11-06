@@ -39,6 +39,11 @@ export interface HtmlClipManifest {
   aspect?: string;
   /** CSS colour, or "transparent" when the canvas keeps an alpha channel. Informational for the editor. */
   background?: string;
+  /**
+   * What the package is (P38): "clip" (default) plays on a video track; "effect" changes the picture under an effect
+   * clip (it reads ctx.source each frame); "transition" draws a cut between two clips (ctx.from, ctx.to, ctx.progress).
+   */
+  role?: CodePackageRole;
   /** Library ids from the registry (render/htmlLibs.ts). Absent = detected from the page's imports. */
   libs?: string[];
   bindings?: Record<string, HtmlClipBinding>;
@@ -46,6 +51,8 @@ export interface HtmlClipManifest {
   /** Embedded files, by relative name → data: URL (src="logo.png", url(font.woff2), fetch("data.json")). */
   files?: Record<string, string>;
 }
+export const CODE_PACKAGE_ROLES = ["clip", "effect", "transition"] as const;
+export type CodePackageRole = (typeof CODE_PACKAGE_ROLES)[number];
 /** A library a clip may import (the registry's public part). */
 export interface ClipLibrary { id: string; name: string; version: string; specifier: string; legacy?: RegExp }
 
@@ -77,7 +84,7 @@ export function readManifest(html: string): HtmlClipManifest {
   try { return parseManifest(JSON.parse(t)); } catch { return {}; }
 }
 
-const KEY_ORDER: (keyof HtmlClipManifest)[] = ["format", "name", "description", "durationSec", "width", "height", "aspect", "background", "libs", "bindings", "params", "files"];
+const KEY_ORDER: (keyof HtmlClipManifest)[] = ["format", "name", "description", "role", "durationSec", "width", "height", "aspect", "background", "libs", "bindings", "params", "files"];
 
 /** Canonical key order, no empty fields. Keeps unknown keys (after the known ones) for forward compatibility. */
 export function canonicalManifest(m: HtmlClipManifest): HtmlClipManifest {
@@ -112,6 +119,7 @@ export function validateManifest(raw: unknown, libs: readonly ClipLibrary[]): Ht
   if (m.format === undefined) warn("format-missing", `The manifest has no "format"; it is treated as "${HTML_CLIP_FORMAT}".`);
   else if (m.format !== HTML_CLIP_FORMAT) err("format", `Unknown "format" "${String(m.format)}"; this app reads "${HTML_CLIP_FORMAT}".`);
   if (m.name !== undefined && typeof m.name !== "string") err("name", `"name" must be a string.`);
+  if (m.role !== undefined && !(CODE_PACKAGE_ROLES as readonly string[]).includes(m.role)) err("role", `"role" must be one of ${CODE_PACKAGE_ROLES.map((r) => `"${r}"`).join(", ")}.`);
   if (m.durationSec !== undefined && !(typeof m.durationSec === "number" && m.durationSec > 0 && m.durationSec <= MAX_CLIP_SEC)) err("duration", `"durationSec" must be a number of seconds between 0 and ${MAX_CLIP_SEC}.`);
   for (const k of ["width", "height"] as const) {
     const v = m[k];
@@ -229,6 +237,15 @@ export interface LintOptions {
   expectParams?: Record<string, HtmlClipParam>;
   /** Where expectParams come from, for the warning wording (default "storyboard"; P4C: "wizard" = Code AI mode). */
   expectSource?: "storyboard" | "wizard";
+  /** P38: where the package is being used ("clip" on a track, an "effect" clip, or a "transition"); another role is an error. */
+  expectRole?: CodePackageRole;
+}
+
+export const CODE_ROLE_NAME: Record<CodePackageRole, string> = { clip: "a clip", effect: "an effect", transition: "a transition" };
+/** Role mismatch message, or undefined when the package fits where it is used (no "role" = a clip). */
+export function roleMismatch(role: CodePackageRole | undefined, want: CodePackageRole): string | undefined {
+  const r = role ?? "clip";
+  return r === want ? undefined : `This code package is ${CODE_ROLE_NAME[r]} ("role": "${r}"), so it can't be used as ${CODE_ROLE_NAME[want]}. ${want === "clip" ? "Add it from Effects or Transitions → Custom (code) instead" : `Set "role": "${want}" in its manifest`}.`;
 }
 export interface LintResult { manifest: HtmlClipManifest; issues: HtmlClipIssue[]; ok: boolean; legacy: boolean }
 
@@ -252,6 +269,9 @@ export function lintHtmlClip(html: string, opts: LintOptions): LintResult {
     try { raw = JSON.parse(t); } catch (e) { err("manifest-json", `The manifest is not valid JSON: ${e instanceof Error ? e.message : String(e)}.`); }
     if (raw !== undefined) { issues.push(...validateManifest(raw, opts.libs)); manifest = parseManifest(raw); legacy = manifest.format === undefined; }
   }
+  if (opts.expectRole) { const mm = roleMismatch(manifest.role, opts.expectRole); if (mm) err("role-mismatch", mm); }
+  if (manifest.role === "effect" && !/ctx\.source\b/.test(html)) warn("effect-source", `An effect should draw ctx.source (the picture under the effect clip) every frame.`);
+  if (manifest.role === "transition" && !(/ctx\.from\b/.test(html) && /ctx\.to\b/.test(html))) warn("transition-sides", `A transition should draw ctx.from (outgoing clip) and ctx.to (incoming clip) from ctx.progress (0 → 1).`);
   const code = stripComments(html.replace(MANIFEST_RE, "").replace(/data:[^"'()\s]+/g, "data:"));
   // Runtime contract: something must draw frame t.
   const api = /\bdionysus\s*\.\s*(clip|onFrame)\s*\(/.test(code);
@@ -331,7 +351,7 @@ export function sizeForAspect(aspect: string | undefined): { width: number; heig
 
 /** The runtime contract, as published in the spec (docs/v2/HTML_CLIP_PACKAGE.md §3, checked by a test) and inlined in the full prompt. */
 export const HTML_CLIP_CONTRACT = `- Register the clip once, at the top level of your script: \`dionysus.clip({ async init(ctx) { … }, render(t, ctx) { … } })\`. \`init\` (optional) runs once before the first frame; await anything you need there (images, fonts, models). \`render(t, ctx)\` draws the frame at \`t\` seconds into the clip and may return a Promise.
-- \`ctx\` = \`{ canvas, t, duration, progress, width, height, params, bindings, asset(name), image(name), video(name), seek(video, sec) }\`: \`duration\` is the clip's length on the timeline in seconds (it can differ from the manifest's \`durationSec\`), \`progress\` = t / duration (0–1), \`canvas\` the page's first \`<canvas>\` (the captured picture), \`width\`/\`height\` the frame size in pixels, \`params\` the parameter values (each declared param's default, overridden by the values set where the clip is used: a timeline clip, a storyboard shot or layer; read them in \`render\`, they can change between frames while the user edits), \`bindings[name]\` = \`{ type, url }\` for each bound asset (\`url\` is null when nothing is bound yet: draw a placeholder), \`asset(name)\` the URL of an embedded file, \`image(name)\` a Promise of a loaded HTMLImageElement for a binding or file, \`video(name)\` a Promise of a muted HTMLVideoElement, \`seek(video, sec)\` a Promise that resolves when that video shows \`sec\`.
+- \`ctx\` = \`{ canvas, t, duration, progress, width, height, params, bindings, asset(name), image(name), video(name), seek(video, sec) }\`: \`duration\` is the clip's length on the timeline in seconds (it can differ from the manifest's \`durationSec\`), \`progress\` = t / duration (0–1), \`canvas\` the page's first \`<canvas>\` (the captured picture), \`width\`/\`height\` the frame size in pixels, \`params\` the parameter values (each declared param's default, overridden by the values set where the clip is used: a timeline clip, a storyboard shot or layer; read them in \`render\`, they can change between frames while the user edits), \`bindings[name]\` = \`{ type, url }\` for each bound asset (\`url\` is null when nothing is bound yet: draw a placeholder), \`asset(name)\` the URL of an embedded file, \`image(name)\` a Promise of a loaded HTMLImageElement for a binding or file, \`video(name)\` a Promise of a muted HTMLVideoElement, \`seek(video, sec)\` a Promise that resolves when that video shows \`sec\`. Effects (manifest \`"role": "effect"\`) also get \`source\`, the picture under the effect clip this frame; transitions (\`"role": "transition"\`) get \`from\` (outgoing clip), \`to\` (incoming clip) and \`progress\` 0–1 across the cut. They are ImageBitmaps to draw (\`g.drawImage(ctx.source, 0, 0, w, h)\`); draw the full frame.
 - The picture is the page's FIRST \`<canvas>\`: size it to ctx.width × ctx.height in \`init\` and draw everything on it (2D or WebGL; for WebGL use \`preserveDrawingBuffer: true\`). Other DOM and CSS are not captured.
 - Deterministic: every frame is a pure function of t, ctx.params and the bound assets. Frames are requested in any order (scrubbing, export), and the same t must give the same picture. Don't keep animation state between frames, don't use Date.now(), performance.now(), requestAnimationFrame, setTimeout or setInterval for timing, and use a seeded random generator (fixed seed) instead of Math.random().
 - No network: the clip runs in a sandbox with a strict Content-Security-Policy. Only the allowed libraries (listed in the manifest's \`libs\`, imported by their bare specifier in a \`<script type="module">\`, e.g. \`import * as LIB from "<specifier>"\`) are loaded. Embed any other file as a data: URL in the manifest's \`files\` and refer to it by name. Use system font stacks, or an embedded font with @font-face (the runtime waits for fonts to load before the first frame).
@@ -357,6 +377,8 @@ export interface PackagePromptInput {
   params?: Record<string, HtmlClipParam>;
   /** Example per-use values from the shots/layers that use this asset (shown in the prompt so the design fits them). */
   paramUses?: HtmlParamValues[];
+  /** P38: "effect" or "transition" packages (absent = a clip). */
+  role?: CodePackageRole;
   /** Extra context (e.g. the shot the clip plays in). */
   context?: string;
   /**
@@ -381,6 +403,7 @@ export function promptManifest(input: PackagePromptInput, libs: readonly ClipLib
   return canonicalManifest({
     format: HTML_CLIP_FORMAT,
     name: input.name,
+    ...(input.role && input.role !== "clip" ? { role: input.role } : {}),
     durationSec: input.durationSec,
     ...size,
     aspect: input.aspect,

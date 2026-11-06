@@ -7,7 +7,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cmd, type Engine } from "../engine";
-import { transitions, TICKS_PER_SECOND, type Composition, type Placement, type Track } from "../domain";
+import { codeAssetOf, codeAssetsOfRole, codePresetId, ops, transitions, TICKS_PER_SECOND, type Composition, type Placement, type Track } from "../domain";
 import { drawWithLook } from "../render";
 import { defaultsOf, getPreset } from "../registry";
 import { ParamControls } from "./ParamControls";
@@ -125,19 +125,27 @@ function TransitionTile({ id, label, active, a, b, onPick }: { id: string; label
   );
 }
 
-export function TransitionPicker({ engine, comp, placementId, thumbs, onPreview, onDone, onToast }: {
+export function TransitionPicker({ engine, comp, placementId, thumbs, onPreview, onDone, onToast, onNewCode }: {
   engine: Engine; comp: Composition; placementId: string; thumbs: Record<string, string>;
   /** Play the cut: from about 1 s before to 1 s after the junction at `at` (ticks) with a `durationTicks` transition. */
   onPreview?: (at: number, durationTicks: number) => void;
   /** Present on mobile: renders the header ✓. */ onDone?: () => void;
   onToast?: (msg: string) => void;
+  /** P38: open the Code editor on a transition starter (Custom (code) → New). */ onNewCode?: () => void;
 }) {
   const tabsFade = useEdgeFade<HTMLDivElement>();
   const cut = cutOf(comp, placementId);
-  const kinds = useMemo(() => transitions.transitionKinds(), []);
-  const cats = useMemo(() => [...new Set(kinds.map((k) => k.category))], [kinds]);
+  const project = engine.getState().project;
+  // Code transitions run on main-track cuts only (the player captures both sides of that cut).
+  const onMain = cutOf(comp, placementId)?.track.id === ops.mainTrack(comp)?.id;
+  const codeAssets = onMain ? codeAssetsOfRole(project, "transition") : [];
+  const codeSig = codeAssets.map((a) => `${a.id}:${a.name}`).join("|");
+  const builtIn = useMemo(() => transitions.transitionKinds(), []);
+  // P38: code packages made as transitions, under their own tab, named after the asset.
+  const kinds = useMemo(() => [...builtIn, ...codeAssets.map((a) => ({ ...transitions.transitionKind(codePresetId(a.id))!, label: a.name.replace(/\.html?$/i, "") }))], [builtIn, codeSig]); // eslint-disable-line react-hooks/exhaustive-deps
+  const cats = useMemo(() => [...new Set([...builtIn.map((k) => k.category), ...(onMain ? [transitions.CODE_CATEGORY] : [])])], [builtIn, onMain]);
   const [saved, setSaved] = useState<string[]>(loadSaved);
-  const [tab, setTab] = useState<string>(POPULAR_TAB);
+  const [tab, setTab] = useState<string>(() => (codeAssetOf(cutOf(comp, placementId)?.next.transitionIn?.kind) ? transitions.CODE_CATEGORY : POPULAR_TAB));
   const [query, setQuery] = useState("");
   const a = usePic(cut ? thumbs[cut.prev.source.assetId] : undefined);
   const b = usePic(cut ? thumbs[cut.next.source.assetId] : undefined);
@@ -179,8 +187,13 @@ export function TransitionPicker({ engine, comp, placementId, thumbs, onPreview,
       <div className="v2-ptiles v2-ttiles" role="radiogroup" aria-label="Transitions">
         <TransitionTile id="none" label="None" active={!cur} a={a} b={b} onPick={() => pick("none")} />
         {list.map((k) => <TransitionTile key={k.id} id={k.id} label={k.label} active={cur?.kind === k.id} a={a} b={b} onPick={() => pick(k.id)} />)}
+        {!query && tab === transitions.CODE_CATEGORY && onNewCode && (
+          <button type="button" className="v2-ptile v2-ttile v2-codetile is-new" aria-label="New code transition" title="Write a transition in code (ctx.from, ctx.to, ctx.progress)" onClick={onNewCode}>
+            <span className="v2-codetile-art" aria-hidden><Ic g="+" size={28} /></span><span>New code transition</span>
+          </button>
+        )}
       </div>
-      {!list.length && <p className="v2-empty-hint">{query ? "No transitions match." : tab === SAVED_TAB ? "Nothing saved yet: pick a transition, then tap Save." : "No transitions here."}</p>}
+      {!list.length && <p className="v2-empty-hint">{query ? "No transitions match." : tab === SAVED_TAB ? "Nothing saved yet: pick a transition, then tap Save." : tab === transitions.CODE_CATEGORY ? "Code transitions are code packages with \"role\": \"transition\": they draw ctx.from (outgoing) and ctx.to (incoming) from ctx.progress." : "No transitions here."}</p>}
       <div className="v2-trans-controls">
         <SliderField className="v2-tp-sf" title="How long the transition takes; each clip gives at most half of itself" label="Duration" aria="Transition duration"
           min={MIN_TICKS} max={max} step={Math.round(TICKS_PER_SECOND / 10)} value={dur} disabled={!cur} unit="s" scale={1 / TICKS_PER_SECOND}

@@ -316,3 +316,25 @@ describe("P36 audio_prompt / create_audio", () => {
     expect(e.getState().project).toBe(before);
   });
 });
+
+describe("P38 add_code_effect / set_code_transition", () => {
+  const code = (id: string, role?: "effect" | "transition"): Asset => { const a = asset(id, "html"); if (role) a.versions[0].media.role = role; return a; };
+  it("adds a code effect and a code transition, lists roles, and rejects packages of another role", async () => {
+    const e = setup();
+    e.dispatch([cmd.importAsset(code("fx", "effect")), cmd.importAsset(code("tr", "transition")), cmd.importAsset(code("plain"))]);
+    e.dispatch(cmd.addAssetToTimeline("w", s(10), undefined, "c2"));
+    const t = json((await runTimelineTool(e, undefined, "get_timeline", {})).text);
+    expect(t.assets.find((a: { id: string }) => a.id === "fx").role).toBe("effect");
+    expect(t.assets.find((a: { id: string }) => a.id === "plain").role).toBeUndefined();
+    const r = await runTimelineTool(e, undefined, "add_code_effect", { assetId: "fx", atSec: 1, durationSec: 2, applyTo: "all" });
+    expect(r.ok).toBe(true);
+    const fxClip = root(e.getState().project).tracks.flatMap((x) => x.placements).find((x) => x.effect?.preset === "code:fx")!;
+    expect(fxClip).toMatchObject({ startTicks: s(1), durationTicks: s(2), effect: { applyTo: "all" } });
+    expect((await runTimelineTool(e, undefined, "add_code_effect", { assetId: "plain", atSec: 0 })).text).toMatch(/is a clip/);
+    const tr = await runTimelineTool(e, undefined, "set_code_transition", { clipId: "c2", assetId: "tr", durationSec: 1 });
+    expect(tr.ok).toBe(true);
+    expect(findPlacement(root(e.getState().project), "c2")!.placement.transitionIn).toEqual({ kind: "code:tr", durationTicks: s(1) });
+    expect((await runTimelineTool(e, undefined, "set_code_transition", { clipId: "c2", assetId: "fx" })).text).toMatch(/is an effect/);
+    expect((await runTimelineTool(e, undefined, "set_code_transition", { clipId: "c1", assetId: "tr" })).text).toMatch(/doesn't start a cut/);
+  });
+});
