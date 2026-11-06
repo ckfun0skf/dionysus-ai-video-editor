@@ -33,9 +33,28 @@ describe("shot placeholder UI (P35)", () => {
     const el = render(<ExportDialog project={withPh()} blobs={createMemoryStorage().blobs} res="720p" onRes={() => undefined} onClose={() => undefined} probe={() => new Promise(() => undefined)} />);
     const warn = el.querySelector('[data-testid="export-placeholders"]')!;
     expect(warn.textContent).toContain("1 shot is not generated yet");
-    expect(warn.textContent).toContain("black frame: Shot 2 · Lamp");
+    expect(warn.textContent).toContain("nothing to write");
+    expect(warn.textContent).toContain("Shot 2 · Lamp");
     expect([...el.querySelectorAll("button")].some((b) => b.textContent === "Export anyway")).toBe(true);
     const plain = render(<ExportDialog project={createProject("x")} blobs={createMemoryStorage().blobs} res="720p" onRes={() => undefined} onClose={() => undefined} probe={() => new Promise(() => undefined)} />);
     expect(plain.querySelector('[data-testid="export-placeholders"]')).toBeNull();
+  });
+
+  it("export warns that a middle hole is black and a trailing hole is omitted", () => {
+    const T = 120_000;
+    const p = createProject("cut"), c = p.compositions[p.rootCompositionId];
+    const t = c.tracks.find((x) => x.kind === "video")!;
+    const gen: Placement = { id: "g1", startTicks: 0, durationTicks: 2 * T, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "video", volume: 1 };
+    const mid: Placement = { id: "m1", startTicks: 2 * T, durationTicks: 2 * T, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "image", volume: 1, placeholder: { label: "Shot 2 · Mid — hole" } };
+    const later: Placement = { id: "g2", startTicks: 4 * T, durationTicks: 2 * T, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "video", volume: 1 };
+    const tail: Placement = { id: "t1", startTicks: 6 * T, durationTicks: 3 * T, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "image", volume: 1, placeholder: { label: "Shot 4 · Tail — later" } };
+    const project: Project = { ...p, compositions: { ...p.compositions, [c.id]: { ...c, tracks: c.tracks.map((x) => (x === t ? { ...t, placements: [gen, mid, later, tail] } : x)) } } };
+    const el = render(<ExportDialog project={project} blobs={createMemoryStorage().blobs} res="720p" onRes={() => undefined} onClose={() => undefined} probe={() => new Promise(() => undefined)} />);
+    const warn = el.querySelector('[data-testid="export-placeholders"]')!.textContent!;
+    expect(warn).toContain("2 shots are not generated yet");
+    expect(warn).toContain("black frame");
+    expect(warn).toContain("Shot 2 · Mid");
+    expect(warn).toContain("omits");
+    expect(warn).toContain("Shot 4 · Tail");
   });
 });

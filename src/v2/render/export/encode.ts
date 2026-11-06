@@ -8,7 +8,7 @@ import { ExportVideoFrames } from "./videoFrames";
 import { audioFxData, buildFxChain } from "../audioFx";
 import { buildSpatial } from "../spatial";
 import { audioOutputOf, type AudioOutput } from "../../domain/spatial";
-import { audioPlan, gainEvents, keyEvents, spatialEvents, exportDuration, exportSize, frameTimes, type AudioSegment, type Resolution } from "./plan";
+import { audioPlan, gainEvents, keyEvents, spatialEvents, exportDuration, exportEndTicks, exportSize, frameTimes, type AudioSegment, type Resolution } from "./plan";
 
 export interface ExportProgress { stage: "audio" | "video" | "finalize"; done: number; total: number }
 /**
@@ -142,8 +142,8 @@ export async function exportProject(project: Project, blobs: BlobStore, o: Expor
   try {
     const avc = o.forceWebm ? undefined : await pickAvc(width, height, fps);
     const r = avc
-      ? await toMp4(player, canvas, avc, audio, frameTimes(Math.round(seconds * 120_000), fps), fps, o, check)
-      : await toWebm(player, canvas, audio, frameTimes(Math.round(seconds * 120_000), fps), fps, o, check);
+      ? await toMp4(player, canvas, avc, audio, frameTimes(exportEndTicks(project), fps), fps, o, check)
+      : await toWebm(player, canvas, audio, frameTimes(exportEndTicks(project), fps), fps, o, check);
     const warnings = frameWarnings(project, player.frameIssues, player.videoStats);
     return warnings.length ? { ...r, warnings } : r;
   } finally { player.dispose(); }

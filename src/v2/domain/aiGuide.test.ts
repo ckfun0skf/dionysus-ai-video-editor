@@ -143,7 +143,7 @@ describe("AI planner guide (V2-SB-114)", () => {
     // P35: RULE 59, shot placeholders (shots without a clip send as placeholders; Update / replace_clip_asset fill them).
     expect(ruleNumber("shot-placeholders")).toBe(59);
     expect(full).toContain(`59. ${RULES[58]}`);
-    for (const x of ['"placeholder": true', '"label"', "review_lint", '"placeholder" warning', "black frame", "Not generated", "replace_clip_asset { clipId, assetId }", "send_to_timeline", "in place", "durationSec"]) expect(RULES[58]).toContain(x);
+    for (const x of ['"placeholder": true', '"label"', "review_lint", '"placeholder" warning', "black frame", "Not generated", "last generated frame", "replace_clip_asset { clipId, assetId }", "send_to_timeline", "in place", "durationSec"]) expect(RULES[58]).toContain(x);
     // P26: RULE 57, slip_clip / replace_clip_asset (Adjust range + Replace asset).
     expect(ruleNumber("slip-replace")).toBe(57);
     expect(ruleNumber("merge-layer-up")).toBe(58);
