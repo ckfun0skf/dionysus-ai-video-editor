@@ -3060,6 +3060,12 @@
           "title": "Storyboard Send/Update/Replace/Sync put a placeholder on the main track for shots with no clip (hatched 'Not generated' card, preview slate, black frame + warning on export); Update or Replace asset fills it in place; get_timeline/review_lint report placeholders; guide rule 59",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P36-EDGE-HANDLES",
+          "title": "Main track: a selected clip's trim handles sit above the cut/transition buttons with a 44px grab area; the cut buttons on its edges step aside (no hit area) so middle clips can be extended either way",
+          "status": "done",
+          "progress": 100
         }
       ]
     }

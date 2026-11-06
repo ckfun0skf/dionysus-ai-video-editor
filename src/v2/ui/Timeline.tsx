@@ -491,8 +491,10 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
               )}
               {onTransition && t.kind === "video" && t.placements.filter((p) => transitions.previousAdjacent(t, p)).map((p) => {
                 const tr = p.transitionIn, kind = tr && transitions.transitionKind(tr.kind);
+                // P36: on a selected clip's own edges the trim handles win; the cut button steps aside (no hit area) until deselected.
+                const underHandle = !!selectedId && (p.id === selectedId || transitions.previousAdjacent(t, p)?.id === selectedId);
                 return (
-                  <button key={`tr-${p.id}`} className={`v2-trans ${tr ? "has-trans" : ""} ${tr && p.id === selectedId ? "is-selected" : ""}`} style={{ left: toPx(p.startTicks) }}
+                  <button key={`tr-${p.id}`} className={`v2-trans ${tr ? "has-trans" : ""} ${underHandle ? "is-under-handle" : ""} ${tr && p.id === selectedId ? "is-selected" : ""}`} style={{ left: toPx(p.startTicks) }}
                     aria-label={tr ? `${kind?.label ?? "Transition"} ${tr.durationTicks / TICKS_PER_SECOND}s` : "Add transition"} title={tr ? `${kind?.label ?? "Transition"}: tap to change` : "Add a transition at this cut"}
                     onPointerDown={(e) => e.stopPropagation()} onClick={() => onTransition(p.id)}>
                     <Ic g={tr ? "⧓" : "cut"} size={14} />

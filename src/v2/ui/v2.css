@@ -187,7 +187,10 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 .v2-wave.wave-audio { top: 0; bottom: auto; }
 .v2-wave.wave-video { background: linear-gradient(transparent, rgba(0,0,0,.45)); }
 .v2-clip-name { z-index: 1; text-shadow: 0 1px 2px #000; }
-.v2-clip .v2-fade, .v2-clip .v2-kf-dot, .v2-clip .v2-handle { z-index: 2; }
+.v2-clip .v2-fade, .v2-clip .v2-kf-dot { z-index: 2; }
+.v2-clip .v2-handle { z-index: 5; }
+/* P36: 44px-wide trim grab area that reaches outside the clip, so a middle clip's edges are easy to catch. */
+.v2-handle::before { content: ""; position: absolute; top: 0; bottom: 0; left: -16px; right: -16px; }
 .v2-modal { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.6); display: grid; place-items: center; }
 .v2-modal-card { width: min(92vw, 420px); background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; box-shadow: 0 12px 32px rgba(0,0,0,.6); }
 .v2-modal-card h2 { margin: 0 0 12px; font-size: 16px; }
@@ -244,6 +247,7 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 .v2-trans { position: absolute; top: 50%; z-index: 4; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%; border: 1px solid var(--line); background: #2a2a31; color: var(--muted); font-size: 12px; line-height: 1; padding: 0; opacity: .55; transition: opacity .12s, transform .12s; }
 .v2-trans::before { content: ""; position: absolute; inset: -11px; } /* 44px touch target */
 .v2-trans:hover, .v2-trans:focus-visible { opacity: 1; transform: scale(1.15); color: var(--text); border-color: var(--accent); }
+.v2-trans.is-under-handle { pointer-events: none; opacity: .3; top: 100%; margin-top: -24px; }
 .v2-trans.has-trans { opacity: 1; background: var(--accent); color: #111; border-color: var(--accent); }
 .v2-trans.is-selected { box-shadow: 0 0 0 3px rgba(90,209,200,.45); }
 .v2-trans-tools { display: inline-flex; align-items: center; gap: 2px; padding: 0 6px; border-right: 1px solid var(--line); }
