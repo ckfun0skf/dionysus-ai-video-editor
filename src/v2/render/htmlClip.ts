@@ -49,6 +49,8 @@ if(d.type==="dionysus:params"){for(const k of Object.keys(P))delete P[k];Object.
 if(d.type!=="dionysus:frame")return;
 await start();if(d.duration>0)ctx.duration=d.duration;
 vt=d.t;window.dionysus.t=d.t;ctx.t=d.t;ctx.progress=ctx.duration>0?Math.min(1,Math.max(0,d.t/ctx.duration)):0;
+for(const k of ["source","from","to"])if(k in d){const o=ctx[k];if(o&&o!==d[k]&&o.close)o.close();ctx[k]=d[k]}
+if(typeof d.progress==="number")ctx.progress=d.progress;if(d.inputs)ctx.inputs=d.inputs;
 try{const cbs=[...q.values()];q.clear();for(const cb of cbs)cb(vnow());
 for(const f of fns){const r=f(d.t,ctx);if(r&&r.then)await r}}catch(err){console.error(err)}
 const c=document.querySelector("canvas");let bmp=null;if(c&&c.width&&c.height){try{bmp=await createImageBitmap(c)}catch(_){}}
@@ -118,6 +120,8 @@ export interface HtmlClipInit {
   params?: Record<string, unknown>;
 }
 
+export interface FrameExtra { data: Record<string, unknown>; transfer?: Transferable[] }
+
 /** One iframe per placement; keeps the last delivered frame and requests at most one at a time. */
 export class HtmlClipHost {
   readonly iframe: HTMLIFrameElement;
@@ -183,8 +187,28 @@ export class HtmlClipHost {
     });
   }
 
-  /** Ask for frame at clip-local seconds `t` (coalesces: only the latest pending request is sent). */
-  request(t: number, duration?: number) { this.want = t; if (duration !== undefined) this.duration = duration; this.pump(); }
+  /** Extra frame fields (P38: ctx.source / from / to as ImageBitmaps, progress; P38 inputs) and their transferables. */
+  private extra?: FrameExtra;
+  private preparing = 0;
+
+  /**
+   * Ask for frame at clip-local seconds `t` (coalesces: only the latest pending request is sent). `extra` (code effects
+   * and transitions) builds the pictures the frame reads; with `fresh` the same t is drawn again with new pictures.
+   */
+  request(t: number, duration?: number, extra?: () => Promise<FrameExtra>, fresh = false) {
+    if (duration !== undefined) this.duration = duration;
+    if (extra && (fresh || t !== this.want || this.shown !== t)) {
+      const n = ++this.preparing;
+      this.want = t; this.shown = undefined;
+      void extra().catch((): FrameExtra => ({ data: {} })).then((x) => {
+        if (n !== this.preparing) { for (const b of x.transfer ?? []) (b as ImageBitmap).close?.(); return; }
+        for (const b of this.extra?.transfer ?? []) (b as ImageBitmap).close?.();
+        this.extra = x; this.preparing = 0; this.pump();
+      });
+      return;
+    }
+    this.want = t; this.pump();
+  }
 
   /**
    * Per-use param values (V2-HTML-PARAMS): when they differ from the last ones, the page gets them (ctx.params is
@@ -199,7 +223,10 @@ export class HtmlClipHost {
     this.epoch += 1; this.shown = undefined; this.pump();
   }
 
-  settled() { return this.want === undefined || (this.shown === this.want && !this.inflight); }
+  /** P38: whether a request for `t` would draw a new frame (so its pictures are worth copying). */
+  wants(t: number) { return !this.preparing && !this.inflight && (t !== this.want || this.shown !== t); }
+
+  settled() { return this.want === undefined || (this.shown === this.want && !this.inflight && !this.preparing); }
 
   /**
    * Resolves when the requested frame has arrived, or after `ms` so export never hangs on a broken page.
@@ -215,9 +242,10 @@ export class HtmlClipHost {
   }
 
   private pump() {
-    if (!this.ready || this.inflight || this.want === undefined || this.want === this.shown) return;
+    if (!this.ready || this.inflight || this.preparing || this.want === undefined || this.want === this.shown) return;
     this.inflight = { seq: ++this.seq, t: this.want, epoch: this.epoch };
-    this.iframe.contentWindow?.postMessage({ type: "dionysus:frame", seq: this.seq, t: this.want, duration: this.duration }, "*");
+    const x = this.extra; this.extra = undefined;
+    this.iframe.contentWindow?.postMessage({ type: "dionysus:frame", seq: this.seq, t: this.want, duration: this.duration, ...x?.data }, "*", x?.transfer ?? []);
   }
 
   dispose() {

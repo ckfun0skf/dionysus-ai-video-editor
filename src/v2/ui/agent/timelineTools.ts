@@ -6,7 +6,7 @@
  */
 import { audioClipAsset } from "../audioClipAsset";
 import { captureFrameAt, storePickedFrame } from "../storyboard/frameCapture";
-import { audioOutputOf, board, mergeLayer, ops, promote, findPlacement, slip, subs, newId, audioClipPrompt, parseAudioClip, runtimeAiLinks, panToAzimuth, positionErrors, secondsToTicks, TICKS_PER_SECOND, timelineReview, type Placement, type Project } from "../../domain";
+import { codePresetId, codeRoleIssue, transitions, audioOutputOf, board, mergeLayer, ops, promote, findPlacement, slip, subs, newId, audioClipPrompt, parseAudioClip, runtimeAiLinks, panToAzimuth, positionErrors, secondsToTicks, TICKS_PER_SECOND, timelineReview, type Placement, type Project } from "../../domain";
 import { getPreset, listPresets } from "../../registry";
 import { cmd, type Command, type Engine } from "../../engine";
 import type { BlobStore } from "../../ports";
@@ -270,6 +270,29 @@ export async function runTimelineTool(engine: Engine, source: FrameSource | unde
       const d = n("durationSec"); if (d !== undefined && !(d > 0)) return fail('"durationSec" must be more than 0.');
       const id = newId("plc");
       return edit(cmd.addBlankClip(secondsToTicks(Math.max(0, at)), color, where, d !== undefined ? secondsToTicks(d) : undefined, id), id);
+    }
+    case "add_code_effect": {
+      const assetId = s("assetId") ?? "";
+      const bad = codeRoleIssue(project(), assetId, "effect"); if (bad) return fail(bad);
+      const at = n("atSec"); if (at === undefined) return fail('"atSec" is required.');
+      const d = n("durationSec"); if (d !== undefined && !(d > 0)) return fail('"durationSec" must be more than 0.');
+      const scope = s("applyTo"); if (scope !== undefined && scope !== "main" && scope !== "all") return fail('"applyTo" must be "main" or "all".');
+      const id = newId("plc");
+      const start = secondsToTicks(Math.max(0, at));
+      const cmds: Command[] = [cmd.addEffectClip(start, codePresetId(assetId), undefined, id)];
+      if (d !== undefined) cmds.push(cmd.trimPlacement(id, "right", start + secondsToTicks(d)));
+      if (scope === "all") cmds.push(cmd.setEffectScope(id, "all"));
+      return edit(cmds, id);
+    }
+    case "set_code_transition": {
+      const id = needClip(); if (typeof id !== "string") return id;
+      const assetId = s("assetId") ?? "";
+      const bad = codeRoleIssue(project(), assetId, "transition"); if (bad) return fail(bad);
+      const root = rootOf(project()), hit = findPlacement(root, id)!;
+      if (hit.track.id !== ops.mainTrack(root)?.id) return fail(`Code transitions run on main-track cuts; clip ${id} is on another track.`);
+      if (!transitions.previousAdjacent(hit.track, hit.placement)) return fail(`Clip ${id} doesn't start a cut: no clip on the main track ends where it starts.`);
+      const d = n("durationSec"); if (d !== undefined && !(d > 0)) return fail('"durationSec" must be more than 0.');
+      return edit(cmd.setTransition(id, { kind: codePresetId(assetId), durationTicks: secondsToTicks(d ?? 0.5) }), id);
     }
     case "set_blank_color": {
       const id = needClip(); if (typeof id !== "string") return id;

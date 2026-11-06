@@ -5,6 +5,7 @@
  */
 import type { Composition, Placement, Track } from "./model";
 import { applyPreset, getPreset, listPresets, type Params, type TransLayer } from "../registry";
+import { codeAssetOf } from "./codeRoles";
 
 export interface TransitionKind {
   id: string;
@@ -22,6 +23,8 @@ export interface TransitionKind {
 
 /** Transition kind from the preset registry (undefined when the id is unknown), with this cut's params (V2-SB-130). */
 export function transitionKind(id: string, params?: Params): TransitionKind | undefined {
+  // P38: a code transition ("code:<assetId>") is drawn by its package; both sides are drawn fully (captured as ctx.from / ctx.to) and its frame covers them.
+  if (codeAssetOf(id)) return { id, label: "Custom (code)", icon: "</>", category: CODE_CATEGORY, popular: false, mix: () => ({ out: 1, in: 1 }), look: () => ({}) };
   const d = getPreset("transition", id);
   if (!d) return undefined;
   return {
@@ -32,6 +35,7 @@ export function transitionKind(id: string, params?: Params): TransitionKind | un
 }
 export const transitionKinds = () => listPresets("transition").map((d) => transitionKind(d.id)!);
 export type TransitionId = string;
+export const CODE_CATEGORY = "Custom (code)";
 /** `params` are the preset's own params; omitted on a same-kind update (e.g. a duration drag) they are kept. */
 export interface Transition { kind: TransitionId; durationTicks: number; params?: Params }
 
@@ -48,7 +52,7 @@ export function maxTransition(prev: Placement, p: Placement) {
   return Math.min(prev.durationTicks, p.durationTicks);
 }
 
-export interface ActiveTransition { prev: Placement; next: Placement; from: number; to: number; kind: TransitionKind }
+export interface ActiveTransition { prev: Placement; next: Placement; from: number; to: number; kind: TransitionKind; /** P38: the code package drawing it. */ code?: string }
 
 /** Transitions on a track that are live (still adjacent), clamped to the clips' lengths. */
 export function trackTransitions(track: Track): ActiveTransition[] {
@@ -59,7 +63,8 @@ export function trackTransitions(track: Track): ActiveTransition[] {
     const kind = transitionKind(p.transitionIn.kind, p.transitionIn.params);
     if (!prev || !kind) continue;
     const d = Math.min(p.transitionIn.durationTicks, maxTransition(prev, p));
-    out.push({ prev, next: p, from: p.startTicks - Math.floor(d / 2), to: p.startTicks + Math.ceil(d / 2), kind });
+    const code = codeAssetOf(p.transitionIn.kind);
+    out.push({ prev, next: p, from: p.startTicks - Math.floor(d / 2), to: p.startTicks + Math.ceil(d / 2), kind, ...(code ? { code } : {}) });
   }
   return out;
 }

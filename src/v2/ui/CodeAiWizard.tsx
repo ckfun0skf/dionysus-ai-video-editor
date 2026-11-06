@@ -21,7 +21,7 @@ const STEPS = [
   { id: "import", label: "Import" },
 ] as const;
 type StepId = (typeof STEPS)[number]["id"];
-const ROLE_ICON: Record<CodeRole, string> = { scene: "▣", overlay: "◫", title: "T", dataviz: "▤" };
+const ROLE_ICON: Record<CodeRole, string> = { scene: "▣", overlay: "◫", title: "T", dataviz: "▤", effect: "◐", transition: "⇄" };
 const EXAMPLES = [
   "A TensorFlow-style object-detection HUD that boxes every person in my drone footage, with a label and confidence score",
   "A neon lower third with a name and a role that slides in and out",

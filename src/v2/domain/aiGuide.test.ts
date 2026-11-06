@@ -65,7 +65,7 @@ describe("WebMCP doc (P4C)", () => {
   it("llms.txt describes every tool and the rules exist", () => {
     const txt = llmsTxt(DEFAULT_SITE_URL);
     for (const t of STORY_TOOLS) expect(txt).toContain(`\`${t.name}\``);
-    expect(RULE_LIST.map((r) => r.key).slice(-10)).toEqual(["spatial-audio", "frame-of", "clip-centric", "audio-from-video", "glitch-effect", "promote-overlay", "plan-insert-shots", "screen-insert", "slip-replace", "merge-layer-up", "shot-placeholders", "blank-clips", "revise-storyboard", "revise-shot", "audio-create-ai", "code-3d-models"].slice(-10));
+    expect(RULE_LIST.map((r) => r.key).slice(-10)).toEqual(["spatial-audio", "frame-of", "clip-centric", "audio-from-video", "glitch-effect", "promote-overlay", "plan-insert-shots", "screen-insert", "slip-replace", "merge-layer-up", "shot-placeholders", "blank-clips", "revise-storyboard", "revise-shot", "audio-create-ai", "code-3d-models", "code-roles"].slice(-10));
     for (const t of TIMELINE_TOOLS) expect(txt).toContain(`\`${t.name}\``);
   });
 });
@@ -95,7 +95,7 @@ describe("AI planner guide (V2-SB-114)", () => {
   it("the full prompt inlines the guide with RULES 1-37; the short prompt links to it", () => {
     const full = storyboardSystemPrompt();
     for (const s of ["FORMAT (", "PRESETS", "RULES", "EXAMPLE", `14. ${RULES[13]}`, "not seconds", "START FRAME", "\"references\"?", "\"genDurationSec\"?", "- crossfade:", "- ken-burns:"]) expect(full).toContain(s);
-    expect(RULES).toHaveLength(64);
+    expect(RULES).toHaveLength(65);
     // P36: RULE 60 (blank-clips).
     expect(ruleNumber("blank-clips")).toBe(60);
     expect(full).toContain(`60. ${RULES[59]}`);
@@ -116,6 +116,10 @@ describe("AI planner guide (V2-SB-114)", () => {
     expect(ruleNumber("code-3d-models")).toBe(64);
     expect(full).toContain(`64. ${RULES[63]}`);
     for (const x of ["data:model/gltf-binary;base64", "\"three-gltf\"", "GLTFLoader", "Add files", "15 MB"]) expect(RULES[63]).toContain(x);
+    // P36: RULE 65 (code-roles).
+    expect(ruleNumber("code-roles")).toBe(65);
+    expect(full).toContain(`65. ${RULES[64]}`);
+    for (const x of ["\"role\": \"clip\"", "ctx.source", "ctx.from", "Custom (code)", "add_code_effect { assetId, atSec, durationSec?, applyTo? }", "set_code_transition { clipId, assetId, durationSec? }", "role-mismatch"]) expect(RULES[64]).toContain(x);
     // P35: RULE 59, shot placeholders (shots without a clip send as placeholders; Update / replace_clip_asset fill them).
     expect(ruleNumber("shot-placeholders")).toBe(59);
     expect(full).toContain(`59. ${RULES[58]}`);
@@ -236,7 +240,7 @@ describe("AI planner guide (V2-SB-114)", () => {
 
   it("RULE 30 (P2A): revised JSON is re-imported by id, so ids stay stable", () => {
     expect(RULE_LIST.slice(29, 30).map((r) => r.key)).toEqual(["stable-ids-reimport"]);
-    expect(RULE_LIST.slice(30).map((r) => r.key)).toEqual(["self-contained-prompts", "reference-sheets", "html-code-refs", "shot-background", "lastframe-refs", "chroma-key", "audio-shaping", "audio-json", "long-story-parts", "web-mcp", "series-reuse", "series-promote", "series-tools", "effect-apply-to", "typewriter-cursor", "link-to-main", "fill-needs-prompt", "review-timeline", "spatial-audio", "frame-of", "clip-centric", "audio-from-video", "glitch-effect", "promote-overlay", "plan-insert-shots", "screen-insert", "slip-replace", "merge-layer-up", "shot-placeholders", "blank-clips", "revise-storyboard", "revise-shot", "audio-create-ai", "code-3d-models"]);
+    expect(RULE_LIST.slice(30).map((r) => r.key)).toEqual(["self-contained-prompts", "reference-sheets", "html-code-refs", "shot-background", "lastframe-refs", "chroma-key", "audio-shaping", "audio-json", "long-story-parts", "web-mcp", "series-reuse", "series-promote", "series-tools", "effect-apply-to", "typewriter-cursor", "link-to-main", "fill-needs-prompt", "review-timeline", "spatial-audio", "frame-of", "clip-centric", "audio-from-video", "glitch-effect", "promote-overlay", "plan-insert-shots", "screen-insert", "slip-replace", "merge-layer-up", "shot-placeholders", "blank-clips", "revise-storyboard", "revise-shot", "audio-create-ai", "code-3d-models", "code-roles"]);
     expect(ruleNumber("typewriter-cursor")).toBe(45);
     // P9-LINK: rule 46 (appended) documents layers[].link / audio[].link = false.
     expect(ruleNumber("link-to-main")).toBe(46);

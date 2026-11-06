@@ -459,6 +459,16 @@ function SettingsTab({ m, set, mobile, html }: { m: HtmlClipManifest; set: (m: H
     <div className="v2-ce-panel v2-ce-settings" data-testid="v2-ce-settings">
       <label className="v2-ce-field v2-ce-wide"><span>Name</span><input type="text" value={m.name ?? ""} placeholder="Code clip" onChange={(e) => set({ ...m, name: e.target.value || undefined })} /></label>
       <label className="v2-ce-field v2-ce-wide"><span>Description</span><input type="text" value={m.description ?? ""} placeholder="What the clip shows (optional)" onChange={(e) => set({ ...m, description: e.target.value || undefined })} /></label>
+      <fieldset className="v2-ce-field v2-ce-wide">
+        <legend>Use as</legend>
+        <div className="v2-ce-seg" role="radiogroup" aria-label="Use as">
+          {(["clip", "effect", "transition"] as const).map((r) => (
+            <button key={r} type="button" role="radio" aria-checked={(m.role ?? "clip") === r} className={`v2-btn ${(m.role ?? "clip") === r ? "is-active" : ""}`}
+              title={r === "clip" ? "A clip on a video track" : r === "effect" ? "An effect: draws ctx.source, the picture under the effect clip" : "A transition: draws ctx.from and ctx.to over ctx.progress"}
+              onClick={() => set(r === "clip" ? { ...m, role: undefined } : { ...m, role: r })}>{r === "clip" ? "Clip" : r === "effect" ? "Effect" : "Transition"}</button>
+          ))}
+        </div>
+      </fieldset>
       <NumField label="Duration (s)" value={m.durationSec} min={0.1} max={MAX_CLIP_SEC} step={0.5} onChange={(v) => set({ ...m, durationSec: v })} />
       <fieldset className="v2-ce-field v2-ce-wide">
         <legend>Size</legend>

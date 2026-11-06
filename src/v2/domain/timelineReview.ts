@@ -6,6 +6,7 @@
 import { audioOutputOf } from "./spatial";
 import { compositionDuration, transformOf, versionOf, type Placement, type Project, type Track } from "./model";
 import { mainTrack } from "./ops";
+import { codeRoleOf } from "./codeRoles";
 import { needsPromptItems } from "./storySync";
 import { TICKS_PER_SECOND } from "./time";
 import { textOf } from "./text";
@@ -45,6 +46,12 @@ export const TIMELINE_TOOLS: TimelineToolDef[] = [
   { name: "add_blank_clip", title: "Add a blank (solid colour) clip", readOnly: false,
     description: "Add a solid colour clip at atSec: track \"main\" inserts it on the main track (later clips move up like any insert), \"overlay\" puts it on the first overlay layer with room (else a new one). color is #rrggbb; durationSec defaults to 3. To change the colour later call set_blank_color. One undo step; returns the clip.",
     inputSchema: obj({ track: { type: "string", enum: ["main", "overlay"] }, atSec: num("Timeline start in seconds."), color: str("#rrggbb"), durationSec: num("Length in seconds (default 3).") }, ["track", "atSec", "color"]) },
+  { name: "add_code_effect", title: "Add a code effect", readOnly: false,
+    description: "Add an effect clip that runs a code package with \"role\": \"effect\" (get_timeline lists it under assets with \"role\": \"effect\") from atSec for durationSec (default 3) on the Effects layer. applyTo \"main\" (default) changes the main track before overlays and text; \"all\" changes the finished frame. Each frame the package gets that picture as ctx.source. A package of another role is rejected. One undo step; returns the clip.",
+    inputSchema: obj({ assetId: str("Code package asset id (role effect)."), atSec: num("Timeline start in seconds."), durationSec: num("Length in seconds (default 3)."), applyTo: { type: "string", enum: ["main", "all"] } }, ["assetId", "atSec"]) },
+  { name: "set_code_transition", title: "Use a code transition on a cut", readOnly: false,
+    description: "Use a code package with \"role\": \"transition\" on the cut into clipId (a main-track clip that starts where another ends). It draws ctx.from (outgoing) and ctx.to (incoming) over ctx.progress 0 → 1. durationSec defaults to 0.5 (each clip gives at most half of itself). A package of another role is rejected. One undo step; returns the clip.",
+    inputSchema: obj({ clipId: str("The incoming clip of the cut."), assetId: str("Code package asset id (role transition)."), durationSec: num("Transition length in seconds (default 0.5).") }, ["clipId", "assetId"]) },
   { name: "set_blank_color", title: "Change a blank clip's colour", readOnly: false,
     description: "Set the colour (#rrggbb) of a blank clip (get_timeline shows \"blank\": \"#rrggbb\" on it). One undo step; returns the clip.",
     inputSchema: obj({ clipId: str("Blank clip id."), color: str("#rrggbb") }, ["clipId", "color"]) },
@@ -122,7 +129,7 @@ export function timelineJson(p: Project): Record<string, unknown> {
     settings: { width: p.settings.width, height: p.settings.height, fps: p.settings.fps, audioOutput: audioOutputOf(p) },
     duration: sec(compositionDuration(c)),
     tracks: c.tracks.map((t) => ({ id: t.id, kind: t.kind, name: t.name, ...(t.group ? { group: t.group } : {}), ...(t === main ? { main: true } : {}), ...(t.muted ? { muted: true } : {}), ...(t.hidden ? { hidden: true } : {}), ...(t.position ? { position: t.position } : {}), clips: t.placements.map((pl) => clipJson(p, pl, t)) })),
-    assets: Object.values(p.assets).filter((a) => a.kind !== "text" && a.kind !== "effect").map((a) => ({ id: a.id, kind: a.kind, name: a.name })),
+    assets: Object.values(p.assets).filter((a) => a.kind !== "text" && a.kind !== "effect").map((a) => ({ id: a.id, kind: a.kind, name: a.name, ...(codeRoleOf(a) !== "clip" ? { role: codeRoleOf(a) } : {}) })),
     ...(c.subtitles?.length ? { subtitles: c.subtitles.length } : {}),
   };
 }

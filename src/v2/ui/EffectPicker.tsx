@@ -2,7 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { useEdgeFade } from "./useEdgeFade";
 import { ParamControls } from "./ParamControls";
 import { cmd, type Engine } from "../engine";
-import { effectScopeOf, newId, type EffectScope, type Placement } from "../domain";
+import { codeAssetOf, codeAssetsOfRole, codePresetId, effectScopeOf, newId, type EffectScope, type Placement } from "../domain";
+import { Ic } from "./Icon";
+
+/** P38: the picker's tab for code packages made as effects. */
+export const CODE_TAB = "Custom (code)";
 import { applyEffectFrame } from "../render";
 import { applyPreset, categories, defaultsOf, getPreset, identityFrame, listPresets } from "../registry";
 
@@ -18,11 +22,12 @@ const SCOPES: { id: EffectScope; label: string; title: string }[] = [
 /** Segmented "Apply to" control for an effect clip (44px targets on phone and desktop). */
 export function EffectScopeControl({ engine, placement }: { engine: Engine; placement: Placement }) {
   const cur = effectScopeOf(placement.effect);
+  const code = !!codeAssetOf(placement.effect?.preset); // a code effect sees one picture: main track or the whole frame
   return (
     <div className="v2-fx-scope">
       <span className="v2-fx-scope-label" id={`fxs-${placement.id}`}>Apply to</span>
       <div className="v2-fx-scope-seg" role="radiogroup" aria-labelledby={`fxs-${placement.id}`}>
-        {SCOPES.map((o) => <button key={o.id} type="button" role="radio" aria-checked={cur === o.id} className={`v2-fx-scope-btn ${cur === o.id ? "is-active" : ""}`} title={o.title}
+        {SCOPES.filter((o) => !code || o.id !== "overlay").map((o) => <button key={o.id} type="button" role="radio" aria-checked={cur === o.id} className={`v2-fx-scope-btn ${cur === o.id ? "is-active" : ""}`} title={o.title}
           onClick={() => cur !== o.id && engine.dispatch(cmd.setEffectScope(placement.id, o.id))}>{o.label}</button>)}
       </div>
     </div>
@@ -66,12 +71,18 @@ function EffectTile({ id, label, active, onPick }: { id: string; label: string; 
  * V2-101 effect picker. Without `placement`: a pick adds an effect clip at the playhead (default length).
  * With `placement` (an effect clip): a pick changes its preset; None deletes the clip; sliders edit params.
  */
-export function EffectPicker({ engine, at, placement, onAdded, onClose }: { engine: Engine; at: number; placement?: Placement; onAdded?: (id: string) => void; onClose?: () => void }) {
+export function EffectPicker({ engine, at, placement, onAdded, onClose, onNewCode, onEditCode }: {
+  engine: Engine; at: number; placement?: Placement; onAdded?: (id: string) => void; onClose?: () => void;
+  /** P38: open the Code editor on an effect starter. */ onNewCode?: () => void;
+  /** P38: open the Code editor on this code effect's package. */ onEditCode?: (assetId: string) => void;
+}) {
   const tabsFade = useEdgeFade<HTMLDivElement>();
   const cats = categories("videoEffect");
-  const [cat, setCat] = useState<string>("All");
   const cur = placement?.effect?.preset;
-  const list = listPresets("videoEffect").filter((d) => cat === "All" || d.category === cat);
+  const curCode = codeAssetOf(cur);
+  const [cat, setCat] = useState<string>(curCode ? CODE_TAB : "All");
+  const codeList = codeAssetsOfRole(engine.getState().project, "effect");
+  const list = cat === CODE_TAB ? [] : listPresets("videoEffect").filter((d) => cat === "All" || d.category === cat);
   const pick = (id: string) => {
     if (placement) {
       if (id === "none") { engine.dispatch(cmd.deletePlacement(placement.id)); onClose?.(); }
@@ -89,12 +100,24 @@ export function EffectPicker({ engine, at, placement, onAdded, onClose }: { engi
     <div className="v2-anim v2-effects">
       {placement && <EffectScopeControl engine={engine} placement={placement} />}
       <div ref={tabsFade} className="v2-tp-tabs" role="tablist" aria-label="Effect category">
-        {["All", ...cats].map((c) => <button key={c} role="tab" aria-selected={c === cat} className={`v2-tp-tab ${c === cat ? "is-active" : ""}`} onClick={() => setCat(c)}>{c}</button>)}
+        {["All", ...cats, CODE_TAB].map((c) => <button key={c} role="tab" aria-selected={c === cat} className={`v2-tp-tab ${c === cat ? "is-active" : ""}`} onClick={() => setCat(c)}>{c}</button>)}
       </div>
       <div className="v2-ptiles" role="radiogroup" aria-label="Effects">
         <EffectTile id="none" label="None" active={!!placement && !cur} onPick={() => pick("none")} />
         {list.map((p) => <EffectTile key={p.id} id={p.id} label={p.name} active={cur === p.id} onPick={() => pick(p.id)} />)}
+        {cat === CODE_TAB && codeList.map((a) => (
+          <button key={a.id} type="button" className={`v2-ptile v2-codetile ${cur === codePresetId(a.id) ? "is-active" : ""}`} role="radio" aria-checked={cur === codePresetId(a.id)} aria-label={a.name} title={`${a.name}: tap to apply`} onClick={() => pick(codePresetId(a.id))}>
+            <span className="v2-codetile-art" aria-hidden><Ic g="</>" size={28} /></span><span>{a.name.replace(/\.html?$/i, "")}</span>
+          </button>
+        ))}
+        {cat === CODE_TAB && onNewCode && (
+          <button type="button" className="v2-ptile v2-codetile is-new" aria-label="New code effect" title="Write an effect in code (it reads ctx.source)" onClick={onNewCode}>
+            <span className="v2-codetile-art" aria-hidden><Ic g="+" size={28} /></span><span>New code effect</span>
+          </button>
+        )}
       </div>
+      {cat === CODE_TAB && !codeList.length && <p className="v2-empty-hint">Code effects are code packages with "role": "effect": each frame they get the picture under the effect clip as ctx.source and draw the changed picture.</p>}
+      {curCode && placement && onEditCode && <button type="button" className="v2-btn v2-codetile-edit" onClick={() => onEditCode(curCode)}><Ic g="</>" size={16} /> Edit code</button>}
       {d && placement && <ParamControls name={d.name} params={d.params} values={vals}
         onBegin={() => engine.beginGesture()} onEnd={() => engine.endGesture()}
         onChange={(key, value) => engine.dispatch(cmd.setEffect(placement.id, { params: { [key]: value } }))} />}
