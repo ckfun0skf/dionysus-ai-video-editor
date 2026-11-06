@@ -123,7 +123,7 @@ export interface AssetRefRole { role?: ReferenceRole; note?: string }
 export type StoryAssetRef = string | ({ asset: string } & AssetRefRole);
 /** The asset id of an `assets[].references` entry. */
 export const assetRefId = (r: StoryAssetRef): string => (typeof r === "string" ? r : r.asset);
-export type StoryParams = Record<string, number | string>;
+export type StoryParams = Record<string, number | string | boolean>;
 /** Text look: same keys as a text layer `style`. Extra keys are kept and passed through. */
 export interface StoryTextStyle {
   font?: string; size?: number; color?: string; align?: (typeof TEXT_ALIGNS)[number]; bold?: boolean;
@@ -135,7 +135,7 @@ export interface StoryTextStyle {
 }
 export interface StoryPoint { x: number; y: number }
 export interface StoryBox { x: number; y: number; width: number; height: number }
-/** `inParams` (P7-TYPE-CURSOR): params of the `in` animation, e.g. the typewriter cursor { cursor, blink, after, scramble }. */
+/** `inParams` (P7-TYPE-CURSOR / P45): params of the `in` animation, e.g. the typewriter cursor { cursor, blink, after, scramble, includeBreaks }. */
 export interface StoryTextAnim { in?: string; out?: string; loop?: string; durationSec?: number; inParams?: StoryParams }
 /**
  * V2-SB-126: whether a layer stays fixed to the frame (default) or follows the shot's motion: with "shot", the zoom
@@ -676,16 +676,17 @@ export function validateStoryboard(raw: unknown, opts: StoryValidateOptions = {}
   /** Preset params: keys from the descriptor's ParamSpec (plus `extra` keys). Unknown keys and out-of-range numbers warn. */
   const paramsOf = (v: unknown, path: string, d: PresetDescriptor | undefined, extra: string[] = []): StoryParams | undefined => {
     if (v === undefined) return undefined;
-    if (!isObj(v)) { warn(path, "Params should be an object of numbers or strings; ignoring them."); return undefined; }
+    if (!isObj(v)) { warn(path, "Params should be an object of numbers, strings or true/false; ignoring them."); return undefined; }
     const out: StoryParams = {};
     for (const [k, x] of Object.entries(v)) {
-      if (typeof x !== "number" && typeof x !== "string") { warn(`${path}.${k}`, `Param "${k}" should be a number or a string; ignoring it.`); continue; }
+      if (typeof x !== "number" && typeof x !== "string" && typeof x !== "boolean") { warn(`${path}.${k}`, `Param "${k}" should be a number, a string or true/false; ignoring it.`); continue; }
       out[k] = x;
       if (!d || extra.includes(k)) continue;
       const spec = d.params.find((p) => p.key === k);
       if (!spec) warn(`${path}.${k}`, `"${d.id}" has no param "${k}"; it is ignored.${d.params.length ? ` Params: ${d.params.map((p) => p.key).join(", ")}.` : ""}`);
       else if (spec.type === "number" && (typeof x !== "number" || x < spec.min || x > spec.max)) warn(`${path}.${k}`, typeof x !== "number" ? `Param "${k}" should be a number; using the default ${spec.default}.` : `Param "${k}" = ${x} is outside ${spec.min}–${spec.max}; it will be clamped.`);
       else if (spec.type === "select" && !spec.options.includes(String(x))) warn(`${path}.${k}`, `Param "${k}" = ${JSON.stringify(x)} is not one of ${spec.options.join(", ")}; using the default ${JSON.stringify(spec.default)}.`);
+      else if (spec.type === "boolean" && typeof x !== "boolean") warn(`${path}.${k}`, `Param "${k}" should be true or false; using the default ${spec.default}.`);
     }
     return out;
   };

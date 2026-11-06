@@ -417,10 +417,10 @@
         },
         {
           "id": "typewriter",
-          "version": 1,
+          "version": 2,
           "name": "Typewriter",
           "category": "Type",
-          "description": "Reveals the text one character at a time, with an optional cursor (one character = blinking cursor, several = scramble/decode).",
+          "description": "Reveals the text one character at a time, with an optional cursor (one character = blinking cursor, several = scramble/decode). Newlines skip the typing clock unless Include line breaks is on.",
           "params": [
             {
               "key": "cursor",
@@ -460,6 +460,13 @@
               "max": 1,
               "step": 0.05,
               "default": 0.15
+            },
+            {
+              "key": "includeBreaks",
+              "label": "Include line breaks",
+              "description": "true/false. false (default) = newlines in the text appear at once and do not take typing time, scramble, or a caret pause; true = each newline is a typing slot (old behaviour).",
+              "type": "boolean",
+              "default": false
             }
           ]
         },

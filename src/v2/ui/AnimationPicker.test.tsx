@@ -6,8 +6,8 @@ import { Engine, cmd } from "../engine";
 import { createProject, findPlacement } from "../domain/model";
 import { textAnimAt } from "../domain/text";
 import { listPresets } from "../registry";
-import { AnimationPicker } from "./AnimationPicker";
-import { tileProgress } from "./PresetTile";
+import { ANIM_MAX_S, AnimationPicker } from "./AnimationPicker";
+import { tileCycle, tileProgress } from "./PresetTile";
 import { animBadges } from "./Timeline";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -71,6 +71,45 @@ describe("AnimationPicker", () => {
     expect(tileProgress("textAnimIn", 0)).toBe(0); expect(tileProgress("textAnimIn", 0.9)).toBe(1);
     expect(tileProgress("textAnimOut", 0)).toBe(1); expect(tileProgress("textAnimOut", 0.9)).toBe(0);
     expect(tileProgress("textAnimLoop", 0.5)).toBe(0.5);
+  });
+  it("selected tile cycle uses Duration then a hold beat (P45)", () => {
+    expect(ANIM_MAX_S).toBe(8);
+    const c = tileCycle("textAnimIn", 1.2);
+    expect(c.durationSec).toBeCloseTo(1.2);
+    expect(c.cycleMs).toBeCloseTo(1200 + 400);
+    expect(c.playFrac).toBeCloseTo(1200 / 1600);
+    expect(tileProgress("textAnimIn", 0.5, c.playFrac)).toBeCloseTo(0.5 / c.playFrac > 1 ? 1 : 0.5 / c.playFrac);
+    expect(tileCycle("textAnimIn").cycleMs).toBe(1600);
+  });
+  it("Fit duration sets animTicks to slotCount × scramble; Include line breaks is a switch (P45)", async () => {
+    const e = new Engine(createProject("t"));
+    e.dispatch(cmd.addTextClip(0, { text: "AB\nCD" }, "a"));
+    const get = () => { const p = e.getState().project; return findPlacement(p.compositions[p.rootCompositionId], "a")!.placement; };
+    const el = document.createElement("div"); document.body.appendChild(el);
+    const root = createRoot(el);
+    const render = () => act(async () => { root.render(<AnimationPicker engine={e} placement={get()} />); });
+    await render();
+    await act(async () => { (el.querySelector('[aria-label="Typewriter"]') as HTMLButtonElement).click(); });
+    await render();
+    expect(el.querySelector('[aria-label="Fit duration"]')).toBeNull(); // no scramble glyphs yet
+    const cursor = el.querySelector('[aria-label="In Typewriter Cursor"]') as HTMLInputElement;
+    await act(async () => { const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!; set.call(cursor, "01"); cursor.dispatchEvent(new Event("input", { bubbles: true })); });
+    await render();
+    const scramble = el.querySelector('[aria-label="In Typewriter Scramble time"]') as HTMLInputElement;
+    await act(async () => { const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!; set.call(scramble, "0.2"); scramble.dispatchEvent(new Event("input", { bubbles: true })); });
+    await render();
+    const fit = el.querySelector('[aria-label="Fit duration"]') as HTMLButtonElement;
+    expect(fit).toBeTruthy();
+    await act(async () => { fit.click(); });
+    expect(get().text!.animTicks).toBe(Math.round(0.8 * 120_000)); // 4 letters × 0.2 (newline excluded)
+    const br = el.querySelector('[aria-label="In Typewriter Include line breaks"]') as HTMLButtonElement;
+    expect(br.getAttribute("aria-checked")).toBe("false");
+    await act(async () => { br.click(); });
+    await render();
+    expect(get().text!.animInParams?.includeBreaks).toBe(true);
+    await act(async () => { (el.querySelector('[aria-label="Fit duration"]') as HTMLButtonElement).click(); });
+    expect(get().text!.animTicks).toBe(Math.round(1.0 * 120_000)); // 5 slots × 0.2
+    root.unmount();
   });
   it("timeline badges reflect applied animations", () => {
     expect(animBadges({ text: { animIn: "fade", animOut: "none", loop: "pulse" } } as never)).toEqual(["in", "loop"]);
