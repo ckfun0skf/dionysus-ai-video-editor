@@ -64,22 +64,95 @@ export const CURSOR_FADE_SEC = 0.5;
 /** Scramble glyphs change this many times per second (frame-rate independent, so every export fps matches). */
 export const SCRAMBLE_RATE = 30;
 
+/** A line-break unit (`\n`, `\r`, or collapsed `\r\n`). */
+export function isLineBreakUnit(ch: string): boolean {
+  return ch === "\n" || ch === "\r" || ch === "\r\n";
+}
+
 /**
- * P7-TYPE-CURSOR: resolve the typewriter cursor at clip offset `o` (ticks); typing runs over the first `a` ticks.
+ * Code points of `text` with `\r\n` collapsed to one unit. Used for typewriter pacing so a Windows newline is one
+ * break, not two slots.
+ */
+export function typeUnits(text: string): string[] {
+  const cs = [...text], out: string[] = [];
+  for (let i = 0; i < cs.length; i++) {
+    if (cs[i] === "\r" && cs[i + 1] === "\n") { out.push("\r\n"); i++; }
+    else out.push(cs[i]);
+  }
+  return out;
+}
+
+/** How many typewriter slots `text` consumes (`includeBreaks` false = newlines do not count). */
+export function typingSlotCount(text: string, includeBreaks = false): number {
+  const u = typeUnits(text);
+  return includeBreaks ? u.length : u.filter((ch) => !isLineBreakUnit(ch)).length;
+}
+
+/**
+ * Duration (seconds) so each scramble finishes before the next character starts: `slotCount × scramble`.
+ * Clamped to the animation slider range by the caller.
+ */
+export function typewriterFitDurationSec(text: string, scramble: number, includeBreaks = false): number {
+  const n = typingSlotCount(text, includeBreaks);
+  const s = Math.max(0, scramble);
+  return n > 0 && s > 0 ? n * s : 0;
+}
+
+/**
+ * Visible part of the text for a typewriter progress 0..1 (whole characters, never splits a surrogate pair).
+ * P45: by default newlines are not typing slots — they appear as soon as every prior slot is typed (no duration,
+ * scramble, or caret pause on the break). Pass `includeBreaks: true` for the old behaviour.
+ */
+export function visibleText(text: string, chars: number, includeBreaks = false): string {
+  const units = typeUnits(text);
+  const p = Math.min(1, Math.max(0, chars));
+  if (includeBreaks) return units.slice(0, Math.round(units.length * p)).map((ch) => (isLineBreakUnit(ch) ? "\n" : ch)).join("");
+  const n = units.reduce((c, ch) => c + (isLineBreakUnit(ch) ? 0 : 1), 0);
+  const shown = Math.round(n * p);
+  let slot = 0, out = "";
+  for (const ch of units) {
+    if (isLineBreakUnit(ch)) {
+      if (shown >= slot) out += "\n";
+      else break;
+    } else if (slot < shown) { out += ch; slot++; }
+    else break;
+  }
+  return out;
+}
+
+/**
+ * P7-TYPE-CURSOR / P45: resolve the typewriter cursor at clip offset `o` (ticks); typing runs over the first `a` ticks.
  * While typing the cursor is solid; afterwards it blinks (`blink` per second, 0 = solid), hides or fades out. With
  * several cursor characters every newly typed character shows random ones for `scramble` seconds before resolving.
+ * Pacing uses the effective slot list (`includeBreaks` false = newlines excluded).
  */
-export function resolveCursor(text: string, s: PresetFrame, o: number, a: number): Pick<TextAnimState, "display" | "caret"> {
+export function resolveCursor(text: string, s: PresetFrame, o: number, a: number, includeBreaks = false): Pick<TextAnimState, "display" | "caret"> {
   const c = s.cursor;
   if (!c || !c.glyphs) return {};
-  const glyphs = [...c.glyphs], cs = [...text], n = cs.length;
+  const glyphs = [...c.glyphs], units = typeUnits(text);
+  const slots = includeBreaks ? units.map((_, i) => i) : units.map((_, i) => i).filter((i) => !isLineBreakUnit(units[i]));
+  const n = slots.length;
   const shown = Math.round(n * Math.min(1, Math.max(0, s.chars)));
   const tick = Math.floor((o / 120_000) * SCRAMBLE_RATE);
   const pick = (i: number) => glyphs[Math.floor(hash01(i, tick) * glyphs.length)];
   let display: string | undefined;
   if (glyphs.length > 1 && c.scramble > 0 && n > 0) {
     const sc = c.scramble * 120_000;
-    const out = cs.slice(0, shown).map((ch, i) => (/\s/.test(ch) || o >= (a * (i + 0.5)) / n + sc ? ch : pick(i)));
+    let si = 0;
+    const out: string[] = [];
+    for (let ui = 0; ui < units.length; ui++) {
+      const ch = units[ui];
+      if (!includeBreaks && isLineBreakUnit(ch)) {
+        if (shown >= si) out.push("\n");
+        else break;
+        continue;
+      }
+      if (si >= shown) break;
+      const raw = isLineBreakUnit(ch) ? "\n" : ch;
+      const resolved = /\s/.test(raw) || o >= (a * (si + 0.5)) / n + sc;
+      out.push(resolved ? raw : pick(si));
+      si++;
+    }
     display = out.join("");
   }
   let alpha = 1;
@@ -101,13 +174,13 @@ export function textAnimAt(d: TextData, o: number, dur: number): TextAnimState {
   s = applyPreset("textAnimOut", d.animOut, pout, s, d.animOutParams);
   const per = loopPeriod(d.loop, d.loopParams) * 120_000;
   s = applyPreset("textAnimLoop", d.loop, (((o % per) + per) % per) / per, s, d.loopParams);
-  return s.cursor ? { ...s, ...resolveCursor(d.text, s, o, a) } : s;
-}
-
-/** Visible part of the text for a typewriter progress 0..1 (whole characters, never splits a surrogate pair). */
-export function visibleText(text: string, chars: number): string {
-  const cs = [...text];
-  return cs.slice(0, Math.round(cs.length * Math.min(1, Math.max(0, chars)))).join("");
+  const includeBreaks = d.animInParams?.includeBreaks === true;
+  const revealed = s.chars < 1 - 1e-9 ? visibleText(d.text, s.chars, includeBreaks) : undefined;
+  if (s.cursor) {
+    const r = resolveCursor(d.text, s, o, a, includeBreaks);
+    return { ...s, ...r, ...(r.display === undefined && revealed !== undefined ? { display: revealed } : {}) };
+  }
+  return revealed !== undefined ? { ...s, display: revealed } : s;
 }
 
 /** Curated fonts with stable ids live in the registry (registry/fonts.ts); text clips store the CSS stack. */

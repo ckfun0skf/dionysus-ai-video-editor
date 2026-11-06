@@ -17,7 +17,7 @@ const finiteFrame = (f: PresetFrame) => {
   }
 };
 const paramSets = (d: PresetDescriptor) => {
-  const at = (pick: (p: ParamSpec) => number | string) => Object.fromEntries(d.params.map((p) => [p.key, pick(p)]));
+  const at = (pick: (p: ParamSpec) => number | string | boolean) => Object.fromEntries(d.params.map((p) => [p.key, pick(p)]));
   return [undefined, at((p) => (p.type === "number" ? p.min ?? p.default : p.default)), at((p) => (p.type === "number" ? p.max ?? p.default : p.default))];
 };
 

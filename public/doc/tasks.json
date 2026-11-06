@@ -3156,6 +3156,12 @@
           "title": "Code Editor → Revise with AI (existing HTML clip, effect or transition): describe the change, embed the HTML in the prompt or attach it as a file, copy a prompt built from the HTML clip package contract, import the reply into the Code Editor (Save makes a new version). No timeline context-menu or inspector entry",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P45-TYPE-BREAKS",
+          "title": "Typewriter: newlines skip typing by default (Include line breaks checkbox), Fit duration = slotCount × scramble, Duration slider max 8 s, selected animation tile previews with user Duration + params (scramble/caret)",
+          "status": "done",
+          "progress": 100
         }
       ]
     }

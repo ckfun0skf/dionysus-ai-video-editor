@@ -22,9 +22,11 @@ export type ParamSpec = ParamBase & (
   | { type: "color"; default: string }
   | { type: "string"; default: string }
   /** P7-TYPE-CURSOR: one of a fixed list of words (inspector drop-down; storyboard values outside the list warn). */
-  | { type: "select"; options: string[]; default: string });
+  | { type: "select"; options: string[]; default: string }
+  /** P45-TYPE-BREAKS: checkbox (inspector switch; storyboard true/false). */
+  | { type: "boolean"; default: boolean });
 interface ParamBase { key: string; label: string; description?: string }
-export type Params = Record<string, number | string>;
+export type Params = Record<string, number | string | boolean>;
 
 export interface PresetDescriptor {
   id: string;

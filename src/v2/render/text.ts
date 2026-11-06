@@ -33,7 +33,8 @@ export function drawTextClip(ctx: CanvasRenderingContext2D, p: Placement, w: num
   ctx.font = fontString(d, px);
   if ("letterSpacing" in ctx) (ctx as unknown as { letterSpacing: string }).letterSpacing = `${(d.letterSpacing ?? 0) * px}px`;
   const all = wrapLines(ctx, d.text || " ", w * 0.9);
-  const shown = wrapLines(ctx, a.display ?? visibleText(d.text, a.chars), w * 0.9);
+  const includeBreaks = d.animInParams?.includeBreaks === true;
+  const shown = wrapLines(ctx, a.display ?? visibleText(d.text, a.chars, includeBreaks), w * 0.9);
   const bw = Math.max(px * 0.5, ...all.map((l) => ctx.measureText(l).width));
   const pad = d.background ? px * 0.3 : px * 0.1;
   const boxW = bw + pad * 2, boxH = all.length * lh + pad * 2;

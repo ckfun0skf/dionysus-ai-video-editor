@@ -64,7 +64,8 @@ export function paramProblems(params: unknown): string[] {
     } else if (q.type === "color") { if (typeof q.default !== "string" || !HEX.test(q.default)) out.push(`${at}: colour default must be #rrggbb`); }
     else if (q.type === "string") { if (typeof q.default !== "string") out.push(`${at}: string default must be a string`); }
     else if (q.type === "select") { if (!Array.isArray(q.options) || !q.options.length || !q.options.every((o) => typeof o === "string") || !q.options.includes(q.default)) out.push(`${at}: select needs string options that include the default`); }
-    else out.push(`${at}: type must be number, color, string or select`);
+    else if (q.type === "boolean") { if (typeof q.default !== "boolean") out.push(`${at}: boolean default must be true or false`); }
+    else out.push(`${at}: type must be number, color, string, select or boolean`);
   }
   return out;
 }

@@ -92,7 +92,7 @@ export interface Placement {
   /** Transition from the clip that ends where this one starts (see domain/transitions). */
   /** `kind` is a transition preset id from the registry. */
   /** `params`: the transition preset's own params (V2-SB-130), only those changed from the descriptor defaults. */
-  transitionIn?: { kind: string; durationTicks: number; params?: Record<string, number | string> };
+  transitionIn?: { kind: string; durationTicks: number; params?: Record<string, number | string | boolean> };
   /** Text clips (`clipType: "text"`): content and style. Their `source` is TEXT_SOURCE (no media). */
   text?: TextData;
   /**
@@ -116,7 +116,7 @@ export interface Placement {
   /** P14-SPATIAL: animated position, `t` ticks from the clip start, linear (shortest way round), held outside. */
   positionKeys?: import("./spatial").PositionKey[];
   /** Effect clips (`clipType: "effect"`): a `videoEffect` registry preset id and its params. Source is TEXT_SOURCE. */
-  effect?: { preset: string; params?: Record<string, number | string>; applyTo?: EffectScope };
+  effect?: { preset: string; params?: Record<string, number | string | boolean>; applyTo?: EffectScope };
   /**
    * HTML clips (V2-HTML-PARAMS): per-use values for the params the clip's manifest exposes (param key → value). Only
    * overrides are stored; ctx.params is the manifest defaults with these on top (see resolveHtmlParams). Keys the
