@@ -38,6 +38,7 @@ export * as timelineReview from "./timelineReview";
 export * as promote from "./promote";
 export * as mergeLayer from "./mergeLayer";
 export * as storyInsert from "./storyInsert";
+export * as storyRevise from "./storyRevise";
 export { storyboardGuideMarkdown } from "./aiGuide";
 export * as series from "./series";
 export type { Series, SeriesAsset, SeriesAssetSummary } from "./series";
