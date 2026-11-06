@@ -1,5 +1,5 @@
 /** Pure export planning: output size, frame times and the audio mix (no browser APIs). */
-import { versionOf, compositionDuration, type Placement, type Project, type Track } from "../../domain/model";
+import { versionOf, compositionDuration, type Composition, type Placement, type Project, type Track } from "../../domain/model";
 import { spatialAt, spatialOf, type PositionKey, type SpatialPos } from "../../domain/spatial";
 import { TICKS_PER_SECOND } from "../../domain/time";
 
@@ -113,7 +113,68 @@ export function spatialEvents(seg: Pick<AudioSegment, "start" | "duration" | "sp
   return out;
 }
 
-export const exportDuration = (p: Project) => compositionDuration(p.compositions[p.rootCompositionId]) / TICKS_PER_SECOND;
+/**
+ * Whether a clip contributes to export length (P48): placeholders do not, and neither do clips linked to a placeholder
+ * (the layers and audio of an ungenerated shot). A blank clip does count — it is intentional colour, not a hole.
+ */
+export function countsTowardExport(comp: Composition, pl: Placement): boolean {
+  if (pl.placeholder) return false;
+  const a = pl.storyLink?.anchor;
+  if (!a) return true;
+  for (const t of comp.tracks) {
+    const anchor = t.placements.find((x) => x.id === a);
+    if (anchor) return !anchor.placeholder;
+  }
+  return true;
+}
+
+/** Last tick of the exported file: the end of the last generated clip. Trailing placeholders are dropped. */
+export function exportEndTicks(project: Project): number {
+  const comp = project.compositions[project.rootCompositionId];
+  if (!comp) return 0;
+  if (!comp.tracks.some((t) => t.placements.some((pl) => pl.placeholder))) return compositionDuration(comp);
+  let end = 0;
+  for (const t of comp.tracks) for (const pl of t.placements) {
+    if (countsTowardExport(comp, pl)) end = Math.max(end, pl.startTicks + pl.durationTicks);
+  }
+  return end;
+}
+
+export const exportDuration = (p: Project) => exportEndTicks(p) / TICKS_PER_SECOND;
+
+/** Placeholders still inside the exported span (middle) vs those after the last generated frame (omitted). */
+export function classifyPlaceholders(project: Project): { middle: Placement[]; trailing: Placement[] } {
+  const end = exportEndTicks(project);
+  const holes = project.compositions[project.rootCompositionId]?.tracks.flatMap((t) => t.placements.filter((pl) => !!pl.placeholder)) ?? [];
+  return { middle: holes.filter((pl) => pl.startTicks < end), trailing: holes.filter((pl) => pl.startTicks >= end) };
+}
+
+function placeholderNames(list: Placement[]): string {
+  return `${list.slice(0, 3).map((x) => x.placeholder!.label.split(" — ")[0]).join(", ")}${list.length > 3 ? ` and ${list.length - 3} more` : ""}`;
+}
+
+/** Export-dialog copy when the timeline still has ungenerated shots (P48). */
+export function exportPlaceholderWarning(project: Project): { title: string; body: string } | undefined {
+  const { middle, trailing } = classifyPlaceholders(project);
+  const n = middle.length + trailing.length;
+  if (!n) return undefined;
+  const title = `${n} shot${n === 1 ? " is" : "s are"} not generated yet`;
+  const bits: string[] = [];
+  if (middle.length) {
+    const asBlack = middle.length === 1 ? "a black frame" : "black frames";
+    bits.push(trailing.length
+      ? `${middle.length} in the middle export as ${asBlack}: ${placeholderNames(middle)}.`
+      : `${middle.length === 1 ? "It exports" : "They export"} as ${asBlack}: ${placeholderNames(middle)}.`);
+  }
+  if (trailing.length) {
+    const empty = exportEndTicks(project) <= 0;
+    if (empty) bits.push(`${trailing.length === 1 ? "It is" : "They are"} not generated yet, so export has nothing to write: ${placeholderNames(trailing)}.`);
+    else bits.push(`${trailing.length === 1 ? "It comes" : `${trailing.length} come`} after the last generated frame, so export omits ${trailing.length === 1 ? "it" : "them"}: ${placeholderNames(trailing)}.`);
+  }
+  bits.push("Add the clips on the storyboard and Send to timeline (Update) first, or export anyway.");
+  return { title, body: bits.join(" ") };
+}
+
 
 /** Safe download name from the project title. */
 export const exportName = (name: string, ext: string) => `${name.trim().replace(/[^\w\- ]+/g, "").replace(/\s+/g, "-") || "dionysus-export"}.${ext}`;

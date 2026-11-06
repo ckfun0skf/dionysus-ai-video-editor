@@ -3175,6 +3175,12 @@
           "status": "done",
           "progress": 100
         }
+        {
+          "id": "P48-EXPORT-TRIM-PLACEHOLDERS",
+          "title": "Export drops ungenerated (placeholder) clips after the last generated frame and renders middle placeholders as black; dialog warns which shots are omitted vs black; RULE 59",
+          "status": "done",
+          "progress": 100
+        }
       ]
     }
   ],
