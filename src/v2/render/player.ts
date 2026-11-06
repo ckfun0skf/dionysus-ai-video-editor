@@ -568,7 +568,7 @@ export class Player {
    * P38: run a code package (effect or transition) for this frame and draw its last frame over the whole picture.
    * Export asks for a fresh frame every pass, so the package always sees the finished source.
    */
-  private runCode(key: string, assetId: string, params: Record<string, number | string> | undefined, t: number, dur: number, live: Set<string>, ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, extra: () => Promise<FrameExtra>) {
+  private runCode(key: string, assetId: string, params: Record<string, number | string | boolean> | undefined, t: number, dur: number, live: Set<string>, ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, extra: () => Promise<FrameExtra>) {
     const a = this.project.assets[assetId];
     const v = a?.versions.find((x) => x.id === a.selectedVersionId) ?? a?.versions[0];
     if (!a || a.kind !== "html" || !v) return;

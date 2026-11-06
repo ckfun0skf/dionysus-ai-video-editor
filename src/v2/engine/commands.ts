@@ -107,7 +107,7 @@ export const setEffectScope = (id: string, applyTo: EffectScope): Command => ({
 });
 
 /** V2-101: change an effect clip's preset (params reset) or patch its params. Param drags coalesce. */
-export const setEffect = (id: string, patch: { preset?: string; params?: Record<string, number | string> }, label = patch.preset ? "Change effect" : "Effect settings"): Command => ({
+export const setEffect = (id: string, patch: { preset?: string; params?: Record<string, number | string | boolean> }, label = patch.preset ? "Change effect" : "Effect settings"): Command => ({
   label,
   coalesceKey: patch.preset ? undefined : `fx:${id}:${Object.keys(patch.params ?? {}).sort().join(",")}`,
   apply: (p) => { needRole(p, patch.preset, "effect"); return withRoot(p, (c) => ({ ...c, tracks: c.tracks.map((t) => ({ ...t, placements: t.placements.map((pl) => (pl.id === id && pl.clipType === "effect" && pl.effect ? { ...pl, effect: patch.preset ? { preset: patch.preset, ...(pl.effect.applyTo ? { applyTo: pl.effect.applyTo } : {}) } : { ...pl.effect, params: { ...pl.effect.params, ...patch.params } } } : pl)) })) })); },

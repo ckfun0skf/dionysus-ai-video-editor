@@ -12,7 +12,7 @@ export const shotIcon = (s: Shot) => (s.render === "html" ? "</>" : s.render ===
 const CONN_LABEL: Record<string, string> = { continuity: "Continuity", match: "Match cut", cut: "Cut" };
 
 /** " · Crossfade 0.8 s" for a connection transition (the registry name; unknown presets play as a cut). */
-export function transitionLabel(t: { preset: string; params?: Record<string, number | string> } | undefined): string {
+export function transitionLabel(t: { preset: string; params?: Record<string, number | string | boolean> } | undefined): string {
   if (!t) return "";
   const r = parsePresetRef(t.preset);
   const d = r && getPreset("transition", r.id);
