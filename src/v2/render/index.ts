@@ -13,3 +13,4 @@ export { bundledFontUrl, bundledFonts, loadBundledFonts, projectBundledFonts, pr
 export { ExportVideoFrames } from "./export/videoFrames";
 export { buildSpatial, reverbBus, type SpatialStage } from "./spatial";
 export type { ClipLoad } from "./stability";
+export { grey, trackFrames, type Grey } from "./tracker";
