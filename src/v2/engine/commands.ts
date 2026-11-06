@@ -13,6 +13,7 @@ import * as edit from "../domain/edit";
 import * as transitions from "../domain/transitions";
 import { codeAssetOf, codeRoleIssue } from "../domain/codeRoles";
 import * as cleanupOps from "../domain/cleanup";
+import * as tracking from "../domain/tracking";
 /** P38: throw when a "code:<assetId>" preset/kind names an asset of another role. */
 const needRole = (p: Project, preset: string | undefined, want: "effect" | "transition") => { const a = codeAssetOf(preset); const e = a ? codeRoleIssue(p, a, want) : undefined; if (e) throw new Error(e); };
 import type { ChromaKey, Keyframe, Subtitle } from "../domain/model";
@@ -575,5 +576,50 @@ export const promoteOverlay = (id: string, opts: PromoteOptions = {}): Command =
     const shot = Object.values(p.storyboard?.shots ?? {}).find((s) => s.assetId && s.assetId === pl.source.assetId);
     if (!shot) return r.comp;
     return { ...r.comp, tracks: r.comp.tracks.map((t) => ({ ...t, placements: t.placements.map((x) => (x.id === id ? { ...x, storyShot: shot.id } : x)) })) };
+  }),
+});
+
+/** P39: replace one placement through `fn` (throws when missing). */
+const editPlacement = (p: Project, id: string, fn: (pl: Placement) => Placement) => {
+  if (!findPlacement(p.compositions[p.rootCompositionId], id)) throw new Error(`No clip "${id}".`);
+  return withRoot(p, (c) => ({ ...c, tracks: c.tracks.map((t) => ({ ...t, placements: t.placements.map((pl) => (pl.id === id ? fn(pl) : pl)) })) }));
+};
+/**
+ * P39 Track sheet ✓: store the solved track (or clear it with `undefined`), its mask, and make `followers` follow it
+ * (keyframes measured at time `at`). One undo step.
+ */
+export const commitTrack = (id: string, track: tracking.MotionTrack | undefined, followers: string[] = [], at = 0, opts: { scale?: boolean } = {}): Command => ({
+  label: track ? "Track" : "Remove track",
+  apply: (p) => {
+    let next = editPlacement(p, id, (pl) => {
+      if (!tracking.canTrack(pl)) throw new Error("Only video clips can be tracked.");
+      const { motionTrack: _t, ...rest } = pl;
+      return track ? { ...rest, motionTrack: track } : rest;
+    });
+    for (const f of followers) next = attachTrack(f, id, at, opts).apply(next);
+    return next;
+  },
+});
+/** P39: make clip `followerId` follow tracked clip `targetId` (bakes x/y/scale/rotation keys; editable afterwards). */
+export const attachTrack = (followerId: string, targetId: string, at: number, opts: { scale?: boolean } = {}): Command => ({
+  label: "Follow track",
+  apply: (p) => {
+    const c = p.compositions[p.rootCompositionId], target = findPlacement(c, targetId)?.placement, f = findPlacement(c, followerId)?.placement;
+    if (!target) throw new Error(`No clip "${targetId}".`);
+    if (!f) throw new Error(`No clip "${followerId}".`);
+    if (f.id === target.id) throw new Error("A clip can't follow itself.");
+    if (!tracking.canFollow(f)) throw new Error("Only overlays, photos, text and code clips can follow a track (effects have no position; give a code effect a track input instead).");
+    const keys = tracking.followKeys(p, target, f, at, opts);
+    // Re-attaching replaces earlier follow keys (position, scale, rotation) instead of mixing two tracks.
+    return editPlacement(p, followerId, (pl) => { const { x: _x, y: _y, scale: _s, rotation: _r, ...rest } = pl.keyframes ?? {}; return { ...pl, keyframes: { ...rest, ...keys } }; });
+  },
+});
+/** P39: traveling mask from the tracked box ("inside" keeps the box, "outside" cuts it out; undefined = off). */
+export const setTrackMask = (id: string, mask: tracking.TrackMask | undefined): Command => ({
+  label: "Track mask",
+  apply: (p) => editPlacement(p, id, (pl) => {
+    if (!pl.motionTrack) throw new Error("Track this clip first.");
+    const { mask: _m, ...tr } = pl.motionTrack;
+    return { ...pl, motionTrack: mask ? { ...tr, mask } : tr };
   }),
 });

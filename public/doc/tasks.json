@@ -3120,6 +3120,12 @@
           "title": "Clean up project (Project settings \u2192 Storage): unused media checked by default, old versions unchecked, sizes and space freed, \u2713 removes in one undo step (files freed by the next start's storage clean-up); WebMCP list_unused_assets / delete_assets; guide rule 67",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P39-TRACK",
+          "title": "Motion tracking: host-side region tracker (template matching, not AI segmentation) \u2014 Track sheet (draw box, analyse forward/back with progress, scrub, unstable frames yellow, nudge), follow (text/photo/overlay/code via keyframes), traveling mask, code-clip \"track\" input, WebMCP track_clip / get_track / attach_track / set_track_mask, rule 68",
+          "status": "done",
+          "progress": 100
         }
       ]
     }

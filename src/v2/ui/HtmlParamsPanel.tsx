@@ -42,7 +42,7 @@ export function HtmlParamsPanel({ engine, project, placement, blobs, onEditCode 
   const specs = htmlParamSpecs(decls.params);
   const overrides = placement.htmlParams ?? {};
   const changed = Object.keys(overrides).some((k) => specs.some((s) => s.key === k));
-  const inputs = Object.entries(decls.inputs ?? {}).filter(([, d]) => d && (d.type === "beat" || d.type === "scene"));
+  const inputs = Object.entries(decls.inputs ?? {}).filter(([, d]) => d && (d.type === "beat" || d.type === "scene" || d.type === "track"));
   const inputsEl = inputs.length > 0 && <ClipInputs engine={engine} project={project} placement={placement} inputs={inputs} />;
   if (!specs.length && inputsEl) return <div className="v2-hp" data-testid="v2-html-params">{inputsEl}</div>;
   if (!specs.length) return (
@@ -81,9 +81,9 @@ function ClipInputs({ engine, project, placement, inputs }: { engine: Engine; pr
         return (
           <div key={name} className="v2-input">
             <div className="v2-input-row">
-              <span className="v2-input-name"><b>{label}</b><small>{d.type === "beat" ? "Beat · rms, bands, onset" : "Scene · luma, colour, motion"}</small></span>
+              <span className="v2-input-name"><b>{label}</b><small>{d.type === "beat" ? "Beat · rms, bands, onset" : d.type === "track" ? "Track · x, y, size" : "Scene · luma, colour, motion"}</small></span>
               <button type="button" className="v2-btn v2-input-src" aria-expanded={open === name} aria-label={`${label} reads from ${sourceLabel(project, cur)}`} onClick={() => { setOpen(open === name ? undefined : name); setRename(undefined); }}>
-                <Ic g={d.type === "beat" ? "♫" : "eye"} size={16} /> <span>{sourceLabel(project, cur)}</span> <Ic g="▾" size={14} />
+                <Ic g={d.type === "beat" ? "♫" : d.type === "track" ? "track" : "eye"} size={16} /> <span>{sourceLabel(project, cur)}</span> <Ic g="▾" size={14} />
               </button>
             </div>
             {open === name && (
@@ -97,8 +97,8 @@ function ClipInputs({ engine, project, placement, inputs }: { engine: Engine; pr
                 ) : (
                   <div key={c.source} className={`v2-input-opt kind-${c.kind}`}>
                     <button type="button" role="radio" aria-checked={cur === c.source} className={cur === c.source ? "is-active" : ""}
-                      onClick={() => { if (cur !== c.source) engine.dispatch(cmd.setClipInput(placement.id, name, c.kind === "mix" || c.kind === "program" ? undefined : c.source)); setOpen(undefined); }}>
-                      <Ic g={cur === c.source ? "✓" : c.kind === "track" ? "layers" : c.kind === "clip" ? "▭" : d.type === "beat" ? "♫" : "eye"} size={16} /> <span>{c.label}</span>
+                      onClick={() => { if (cur !== c.source) engine.dispatch(cmd.setClipInput(placement.id, name, c.kind === "mix" || c.kind === "program" || c.kind === "none" ? undefined : c.source)); setOpen(undefined); }}>
+                      <Ic g={cur === c.source ? "✓" : c.kind === "track" ? "layers" : c.kind === "clip" ? "▭" : d.type === "beat" ? "♫" : d.type === "track" ? "track" : "eye"} size={16} /> <span>{c.label}</span>
                     </button>
                     {c.kind === "track" && <button type="button" className="v2-icon" aria-label={`Rename ${c.label}`} title="Rename layer" onClick={() => setRename({ id: c.trackId!, name: c.label })}><Ic g="✎" size={16} /></button>}
                   </div>

@@ -4,7 +4,7 @@ import { createProject, findPlacement, secondsToTicks as s, timelineReview, type
 import { cmd, Engine } from "../../engine";
 import { validateStoryboard, type StoryDoc } from "../../domain/storyJson";
 import { agentStore, ALL_AGENT_TOOLS, callTimelineAgentTool, registerAgentTools } from "./webMcp";
-import { audioIssues, runTimelineTool, type FrameSource } from "./timelineTools";
+import { audioIssues, runTimelineTool, trackAnalyser, type FrameSource } from "./timelineTools";
 
 function asset(id: string, kind: Asset["kind"], seconds?: number): Asset {
   return { id, kind, name: id, selectedVersionId: `${id}_v1`, versions: [{ id: `${id}_v1`, createdAt: "", media: { blobKey: id, mime: "x", durationTicks: seconds ? s(seconds) : undefined }, provenance: { source: "import", inputs: [] } }] };
@@ -377,5 +377,42 @@ describe("P38 list_unused_assets / delete_assets", () => {
     expect(Object.keys(e.getState().project.assets)).toEqual(["v"]);
     e.undo();
     expect(Object.keys(e.getState().project.assets).sort()).toEqual(["a", "v", "w"]);
+  });
+});
+
+describe("P39 track_clip / get_track / attach_track / set_track_mask", () => {
+  it("tracks a region with the host analyser, makes a text clip follow, masks, and is one undo step each", async () => {
+    const e = setup();
+    e.dispatch(cmd.addTextClip(0, { text: "Hi" }, "t1"));
+    const store = new Map<string, Blob>([["v", new Blob(["x"])]]);
+    const blobs = { get: async (k: string) => store.get(k), put: async () => undefined, delete: async () => undefined, has: async (k: string) => store.has(k), keys: async () => [...store.keys()] } as unknown as Parameters<typeof runTimelineTool>[5];
+    const orig = trackAnalyser.make;
+    let seen: { start: number; n: number } | undefined;
+    trackAnalyser.make = () => async (ticks, start, box) => { seen = { start, n: ticks.length }; return { srcW: 1920, srcH: 1080, samples: ticks.map((t, i) => ({ s: t, x: box.x + box.w / 2 + i * 0.001, y: 0.5, w: box.w, h: box.h, scale: 1, conf: i === 3 ? 0.3 : 0.95 })) }; };
+    try {
+      const run = (name: string, args: object) => runTimelineTool(e, undefined, name, args, undefined, blobs);
+      expect((await run("track_clip", { clipId: "c1", region: { x: 0.9, y: 0.1, w: 0.3, h: 0.2 } })).text).toMatch(/inside the frame/);
+      expect((await run("track_clip", { clipId: "t1", region: { x: 0.1, y: 0.1, w: 0.2, h: 0.2 } })).text).toMatch(/not a video clip/);
+      const r = await run("track_clip", { clipId: "c1", region: { x: 0.4, y: 0.4, w: 0.2, h: 0.2 }, atSec: 2, followers: ["t1"], mask: "inside" });
+      expect(r.ok).toBe(true);
+      const out = json(r.text);
+      expect(out).toMatchObject({ tracked: "c1", unstable: 1, followers: ["t1"], mask: "inside" });
+      expect(seen!.start).toBe(60); // 2 s at 30 fps
+      const pl = (id: string) => findPlacement(root(e.getState().project), id)!.placement;
+      expect(pl("c1").motionTrack!.mask).toBe("inside");
+      expect(pl("t1").keyframes!.x!.length).toBeGreaterThan(1);
+      const g = json((await run("get_track", { clipId: "c1", everySec: 1 })).text);
+      expect(g.positions[0]).toMatchObject({ t: 0, y: 0.5 });
+      expect(json((await run("get_timeline", {})).text).tracks.flatMap((t: { clips: { id: string }[] }) => t.clips).find((c: { id: string }) => c.id === "c1").tracked).toEqual({ frames: seen!.n, mask: "inside" });
+      e.undo();
+      expect(pl("c1").motionTrack).toBeUndefined();
+      expect(pl("t1").keyframes?.x).toBeUndefined();
+      e.redo();
+      expect((await run("set_track_mask", { clipId: "c1", mask: "off" })).ok).toBe(true);
+      expect(pl("c1").motionTrack!.mask).toBeUndefined();
+      expect((await run("attach_track", { clipId: "t1", targetId: "c1", scale: false })).ok).toBe(true);
+      expect(pl("t1").keyframes!.scale).toBeUndefined();
+      expect((await run("attach_track", { clipId: "c1", targetId: "c1" })).text).toMatch(/itself/);
+    } finally { trackAnalyser.make = orig; }
   });
 });

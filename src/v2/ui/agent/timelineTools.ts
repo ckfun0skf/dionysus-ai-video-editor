@@ -10,6 +10,21 @@ import { bindingRefsOf } from "../CleanupDialog";
 import { captureFrameAt, storePickedFrame } from "../storyboard/frameCapture";
 import { cleanup, DEFAULT_SOURCE, readManifest, resolveSource, versionOf, codePresetId, codeRoleIssue, transitions, audioOutputOf, board, mergeLayer, ops, promote, findPlacement, slip, subs, newId, audioClipPrompt, parseAudioClip, runtimeAiLinks, panToAzimuth, positionErrors, secondsToTicks, TICKS_PER_SECOND, timelineReview, type Placement, type Project } from "../../domain";
 import { getPreset, listPresets } from "../../registry";
+import { tracking, sourceAt, ticksToSeconds, type Box, type MotionTrack, type TrackMask } from "../../domain";
+import { makeTrackAnalyse, nearestIndex, trackTicks } from "../trackAnalyse";
+
+/** P39: the analyser track_clip uses (tests swap it; jsdom can't decode video). */
+export const trackAnalyser = { make: makeTrackAnalyse };
+/** Tracked positions of clip `id` on the canvas every `every` seconds. */
+function trackRows(p: Project, id: string, every: number) {
+  const pl = findPlacement(p.compositions[p.rootCompositionId], id)!.placement, out: Record<string, number>[] = [];
+  const step = Math.max(1, Math.round(every * TICKS_PER_SECOND)), r = (v: number) => Math.round(v * 1000) / 1000;
+  for (let t = pl.startTicks; t < pl.startTicks + pl.durationTicks; t += step) {
+    const q = tracking.trackPosAt(p, pl, t); if (!q) break;
+    out.push({ t: r(ticksToSeconds(t)), x: r(q.x + 0.5), y: r(q.y + 0.5), width: r(q.width), height: r(q.height), scale: r(q.scale), conf: q.conf });
+  }
+  return out;
+}
 import { cmd, type Command, type Engine } from "../../engine";
 import type { BlobStore } from "../../ports";
 import { ExportVideoFrames, Player, audioPlan, exportDuration, mixAudio } from "../../render";
@@ -303,7 +318,7 @@ export async function runTimelineTool(engine: Engine, source: FrameSource | unde
       const input = s("input") ?? "";
       const v = versionOf(project(), pl.source), blob = v && blobs ? await blobs.get(v.media.blobKey).catch(() => undefined) : undefined;
       const decl = blob ? readManifest(await blobText(blob)).inputs?.[input] : undefined;
-      if (!decl || (decl.type !== "beat" && decl.type !== "scene")) return fail(`Clip ${id} has no input "${input}". Its manifest "inputs" declares the inputs (type "beat" or "scene").`);
+      if (!decl || !(["beat", "scene", "track"] as string[]).includes(decl.type)) return fail(`Clip ${id} has no input "${input}". Its manifest "inputs" declares the inputs (type "beat", "scene" or "track").`);
       const raw = s("source");
       if (raw === undefined || raw === "") return edit(cmd.setClipInput(id, input, undefined), id);
       const r = resolveSource(project(), raw, decl.type);
@@ -316,6 +331,51 @@ export async function runTimelineTool(engine: Engine, source: FrameSource | unde
       if (!name || name.length > 40) return fail('"name" must be 1-40 characters.');
       if (!engine.dispatch(cmd.renameTrack(tid, name), "rename_track")) return fail("Could not rename the track.");
       return { ok: true, changed: true, text: JSON.stringify({ track: { id: tid, name } }) };
+    }
+    case "track_clip": {
+      const id = needClip(); if (typeof id !== "string") return id;
+      const pl = findPlacement(rootOf(project()), id)!.placement;
+      if (!tracking.canTrack(pl)) return fail(`Clip ${id} is not a video clip (only video clips can be tracked; not freeze frames).`);
+      const r = a.region as Partial<Box> | undefined, bad = tracking.boxIssue(r);
+      if (bad) return fail(bad);
+      const mask = s("mask"); if (mask && mask !== "inside" && mask !== "outside") return fail('"mask" must be "inside" or "outside".');
+      const followers = Array.isArray(a.followers) ? a.followers.map(String) : [];
+      for (const f of followers) { const fp = findPlacement(rootOf(project()), f)?.placement; if (!fp) return fail(`No clip "${f}".`); if (!tracking.canFollow(fp)) return fail(`Clip ${f} can't follow (only text, photo, overlay and code clips).`); }
+      const v = versionOf(project(), pl.source);
+      if (!blobs || !v) return fail("Tracking needs the clip's video on this device.");
+      const at = n("atSec") !== undefined ? secondsToTicks(n("atSec")!) : pl.startTicks;
+      if (at < pl.startTicks || at >= pl.startTicks + pl.durationTicks) return fail('"atSec" must be inside the clip.');
+      const ticks = trackTicks(project(), pl), start = nearestIndex(ticks, sourceAt(pl, at));
+      let tr: MotionTrack;
+      try { tr = await trackAnalyser.make(() => blobs.get(v.media.blobKey))(ticks, start, r as Box, () => undefined, { cancelled: false }); } catch (e) { return fail((e as Error).message || "Tracking failed."); }
+      if (mask) tr = { ...tr, mask: mask as TrackMask };
+      const res = edit(cmd.commitTrack(id, tr, followers, at), [id, ...followers]);
+      if (!res.ok) return res;
+      const unstable = tr.samples.filter((x) => x.conf < tracking.UNSTABLE_CONF).length;
+      return { ...res, text: JSON.stringify({ tracked: id, frames: tr.samples.length, unstable, followers, mask: mask ?? null, positions: trackRows(project(), id, 1).slice(0, 8) }) };
+    }
+    case "get_track": {
+      const id = needClip(); if (typeof id !== "string") return id;
+      if (!findPlacement(rootOf(project()), id)!.placement.motionTrack) return fail(`Clip ${id} has no track. Use track_clip first.`);
+      const every = n("everySec") ?? 0.5; if (!(every >= 0.04)) return fail('"everySec" must be at least 0.04.');
+      return { ok: true, changed: false, text: JSON.stringify({ clipId: id, positions: trackRows(project(), id, every) }) };
+    }
+    case "attach_track": {
+      const id = needClip(); if (typeof id !== "string") return id;
+      const tid = s("targetId") ?? "", target = findPlacement(rootOf(project()), tid)?.placement;
+      if (!target?.motionTrack) return fail(`Clip "${tid}" has no track. Use track_clip on it first.`);
+      const f = findPlacement(rootOf(project()), id)!.placement;
+      if (f.id === tid) return fail("A clip can't follow itself.");
+      if (!tracking.canFollow(f)) return fail(`Clip ${id} can't follow (only text, photo, overlay and code clips; give a code effect a "track" input instead).`);
+      if (f.startTicks >= target.startTicks + target.durationTicks || target.startTicks >= f.startTicks + f.durationTicks) return fail(`Clip ${id} must overlap ${tid} in time.`);
+      const at = n("atSec") !== undefined ? secondsToTicks(n("atSec")!) : Math.max(target.startTicks, f.startTicks);
+      return edit(cmd.attachTrack(id, tid, at, { scale: a.scale !== false }), id);
+    }
+    case "set_track_mask": {
+      const id = needClip(); if (typeof id !== "string") return id;
+      const m = s("mask"); if (m !== "inside" && m !== "outside" && m !== "off") return fail('"mask" must be "inside", "outside" or "off".');
+      if (!findPlacement(rootOf(project()), id)!.placement.motionTrack) return fail(`Clip ${id} has no track. Use track_clip first.`);
+      return edit(cmd.setTrackMask(id, m === "off" ? undefined : m), id);
     }
     case "list_unused_assets": {
       const plan = cleanup.cleanupPlan(project(), blobs ? await bindingRefsOf(project(), blobs) : []);

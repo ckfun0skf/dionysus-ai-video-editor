@@ -5,9 +5,10 @@
  */
 import type { Composition, Placement, Project, Track } from "./model";
 import type { InputType } from "./htmlClipPackage";
+import { trackedClips } from "./tracking";
 
-export const DEFAULT_SOURCE: Record<InputType, string> = { beat: "mix", scene: "program" };
-export interface SourceChoice { source: string; label: string; kind: "mix" | "program" | "track" | "clip"; trackId?: string }
+export const DEFAULT_SOURCE: Record<InputType, string> = { beat: "mix", scene: "program", track: "none" };
+export interface SourceChoice { source: string; label: string; kind: "mix" | "program" | "none" | "track" | "clip"; trackId?: string }
 
 const root = (p: Project): Composition => p.compositions[p.rootCompositionId];
 const hearable = (t: Track) => t.kind === "audio" || t.kind === "video";
@@ -22,6 +23,7 @@ export function inputSourceOf(p: Project, pl: Placement, name: string, type: Inp
 
 /** Everything a beat or scene input can read, in display order: the default, then each track and its clips. */
 export function sourceChoices(p: Project, type: InputType, self?: string): SourceChoice[] {
+  if (type === "track") return [{ source: "none", label: "None", kind: "none" }, ...trackedClips(p).filter((c) => c.id !== self).map((c) => ({ source: `clip:${c.id}`, label: `${clipName(p, c)} (tracked)`, kind: "clip" as const, trackId: root(p).tracks.find((t) => t.placements.includes(c))?.id }))];
   const out: SourceChoice[] = [{ source: DEFAULT_SOURCE[type], label: type === "beat" ? "Mix" : "Program", kind: type === "beat" ? "mix" : "program" }];
   for (const t of root(p).tracks) {
     if (!(type === "beat" ? hearable(t) : visible(t))) continue;
@@ -40,6 +42,7 @@ export function sourceChoices(p: Project, type: InputType, self?: string): Sourc
 export function sourceLabel(p: Project, source: string): string {
   if (source === "mix") return "Mix";
   if (source === "program") return "Program";
+  if (source === "none") return "None";
   const [k, id] = [source.slice(0, source.indexOf(":")), source.slice(source.indexOf(":") + 1)];
   const c = root(p);
   if (k === "track") return c.tracks.find((t) => t.id === id)?.name ?? "Missing track";
@@ -50,8 +53,8 @@ export function sourceLabel(p: Project, source: string): string {
 /** Why `source` can't feed a `type` input, else undefined. */
 export function sourceIssue(p: Project, source: string, type: InputType): string | undefined {
   if (source === DEFAULT_SOURCE[type]) return undefined;
-  if (source === "mix" || source === "program") return `"${source}" is for ${source === "mix" ? "beat" : "scene"} inputs.`;
-  return sourceChoices(p, type).some((c) => c.source === source) ? undefined : `No ${type === "beat" ? "track or clip with sound" : "video track or clip"} "${source}".`;
+  if (source === "none" || source === "mix" || source === "program") return `"${source}" is for ${source === "mix" ? "beat" : source === "none" ? "track" : "scene"} inputs.`;
+  return sourceChoices(p, type).some((c) => c.source === source) ? undefined : `No ${what(type)} "${source}".`;
 }
 
 /**
@@ -60,12 +63,15 @@ export function sourceIssue(p: Project, source: string, type: InputType): string
  */
 export function resolveSource(p: Project, raw: string, type: InputType): { source: string } | { error: string } {
   const v = raw.trim(), low = v.toLowerCase();
-  if (low === "mix" || low === "program") { const e = sourceIssue(p, low, type); return e ? { error: e } : { source: low }; }
+  if (low === "mix" || low === "program" || low === "none") { const e = sourceIssue(p, low, type); return e ? { error: e } : { source: low }; }
   const choices = sourceChoices(p, type);
   const direct = choices.find((c) => c.source === v || c.source === `track:${v}` || c.source === `clip:${v}`);
   if (direct) return { source: direct.source };
   const named = choices.filter((c) => c.kind === "track" && c.label.toLowerCase() === low);
   if (named.length === 1) return { source: named[0].source };
   if (named.length > 1) return { error: `Several tracks are named "${v}"; pass "track:<id>" (get_timeline lists track ids) or rename one with rename_track.` };
-  return { error: `No ${type === "beat" ? "track or clip with sound" : "video track or clip"} matches "${v}". Use "${DEFAULT_SOURCE[type]}", a track name, "track:<id>" or "clip:<id>".` };
+  if (type === "track") return { error: `No tracked clip matches "${v}". Use "none" or "clip:<id>" of a clip tracked with track_clip.` };
+  return { error: `No ${what(type)} matches "${v}". Use "${DEFAULT_SOURCE[type]}", a track name, "track:<id>" or "clip:<id>".` };
 }
+
+const what = (type: InputType) => (type === "beat" ? "track or clip with sound" : type === "track" ? "tracked clip" : "video track or clip");

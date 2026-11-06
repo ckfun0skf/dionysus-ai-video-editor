@@ -6,6 +6,8 @@
 import { activeAt, placeRect, upcomingMedia, type Placed } from "./frame";
 import { TICKS_PER_SECOND, ticksToSeconds } from "../domain/time";
 import { drawKeyed } from "./chromaKey";
+import { applyTrackMask } from "./trackMask";
+import { trackSignal, type TrackSignal } from "../domain/tracking";
 import { audioFxData, buildFxChain, fxKey, type FxChain } from "./audioFx";
 import { buildSpatial, type SpatialStage } from "./spatial";
 import { audioOutputOf, spatialAt, spatialOf, type AudioEnvironment, type AudioOutputMode } from "../domain/spatial";
@@ -418,6 +420,7 @@ export class Player {
           this.boxes.set(placement.id, r);
           paint(placement.blend, (dc) => drawWithLook(dc, canvas.width, canvas.height, tfx, (g) => {
             g.save(); g.globalAlpha = r.alpha * (mix ?? 1); g.translate(r.cx, r.cy); g.rotate(r.rot);
+            applyTrackMask(g, placement, f.width, f.height, r, sourceTicks);
             drawKeyed(g, f.image, f.width, f.height, r.sx, r.sy, r.sw, r.sh, -r.w / 2, -r.h / 2, r.w, r.h, this.keyOf(placement));
             g.restore();
           }));
@@ -492,6 +495,7 @@ export class Player {
           this.boxes.set(placement.id, r);
           paint(placement.blend, (dc) => drawWithLook(dc, canvas.width, canvas.height, tfx, (g) => {
             g.save(); g.globalAlpha = r.alpha * (mix ?? 1); g.translate(r.cx, r.cy); g.rotate(r.rot);
+            applyTrackMask(g, placement, w, h, r, sourceTicks);
             drawKeyed(g, el as CanvasImageSource, w, h, r.sx, r.sy, r.sw, r.sh, -r.w / 2, -r.h / 2, r.w, r.h, this.keyOf(placement));
             g.restore();
           }));
@@ -655,10 +659,11 @@ export class Player {
   }
 
   /** ctx.inputs for one html clip at the current time: numbers only (BeatSignal / SceneSignal per input). */
-  private inputsFor(p: Placement, decls: Record<string, HtmlClipInput>, canvas: HTMLCanvasElement): Record<string, BeatSignal | SceneSignal> | undefined {
-    const out: Record<string, BeatSignal | SceneSignal> = {};
+  private inputsFor(p: Placement, decls: Record<string, HtmlClipInput>, canvas: HTMLCanvasElement): Record<string, BeatSignal | SceneSignal | TrackSignal> | undefined {
+    const out: Record<string, BeatSignal | SceneSignal | TrackSignal> = {};
     for (const [name, d] of Object.entries(decls)) {
-      if (d?.type === "beat") out[name] = this.beatFor(inputSourceOf(this.project, p, name, "beat"));
+      if (d?.type === "track") out[name] = trackSignal(this.project, inputSourceOf(this.project, p, name, "track"), this.time);
+      else if (d?.type === "beat") out[name] = this.beatFor(inputSourceOf(this.project, p, name, "beat"));
       else if (d?.type === "scene") {
         const s = inputSourceOf(this.project, p, name, "scene");
         const src = s === "program" ? canvas : this.sceneLayers.get(s)?.canvas;

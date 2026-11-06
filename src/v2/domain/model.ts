@@ -128,6 +128,8 @@ export interface Placement {
    * scene), "track:<trackId>" or "clip:<placementId>". Ids, not names, so renaming a track keeps the binding.
    */
   htmlInputs?: Record<string, string>;
+  /** P39: host-side region track of a video clip (see domain/tracking): one box per analysed source frame, optional mask. */
+  motionTrack?: import("./tracking").MotionTrack;
   /**
    * Storyboard linked item (V2-SB-113): a layer, caption or effect clip sent with a shot. It follows the shot clip
    * `anchor` on version swaps (see domain/storyLinks). `want` remembers the offset/length before a clamp.
