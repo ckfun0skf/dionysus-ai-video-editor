@@ -18,6 +18,9 @@ import { effectivePlacement } from "../domain/layerStyle";
 import { applyEffectFrame, codeEffectsAt, effectFrameAt } from "./effects";
 import { trackTransitions } from "../domain/transitions";
 import type { FrameExtra } from "./htmlClip";
+import { analyzeAudio, beatAt, mixBeats, sceneFrom, SCENE_H, SCENE_W, type AudioFeatures, type BeatSignal, type SceneSignal } from "./signals";
+import { inputSourceOf } from "../domain/codeInputs";
+import type { HtmlClipInput } from "../domain/htmlClipPackage";
 import { mainTrack } from "../domain/ops";
 import { correctDrift, createClock, SEEK_DRIFT_S, type Clock } from "./clock";
 import { HtmlClipHost, isValidFrame, type FrameIssue, type HtmlClipInit } from "./htmlClip";
@@ -314,6 +317,10 @@ export class Player {
     const codeTr = bitmaps && mainT ? trackTransitions(mainT).find((x) => x.code && this.time >= x.from && this.time < x.to) : undefined;
     const capA = codeTr ? this.captureLayer(0, canvas!.width, canvas!.height) : null, capB = codeTr ? this.captureLayer(1, canvas!.width, canvas!.height) : null;
     let fxDone = !fx && !codeFx.length && !codeTr;
+    // P38: scene inputs bound to a track or clip: those clips are also painted on a capture layer (cleared at its first
+    // paint this frame, so a layer drawn later than the reading clip shows its previous frame).
+    const sceneKeys = this.sceneKeys(layers);
+    const painted = new Set<string>();
     const applyFx = () => {
       fxDone = true;
       if (!ctx || !canvas) return;
@@ -347,6 +354,12 @@ export class Player {
       // Overlay-scope effects: draw the clip on a transparent layer, apply the effect there, then composite it.
       const paint = (blend: string | undefined, fn: (dc: CanvasRenderingContext2D) => void) => {
         if (!ctx || !canvas) return;
+        for (const key of sceneKeys.size ? [`clip:${placement.id}`, `track:${track.id}`] : []) {
+          if (!sceneKeys.has(key)) continue;
+          const g = this.sceneLayer(key, canvas.width, canvas.height, !painted.has(key));
+          painted.add(key);
+          if (g) withBlend(g, blend, () => fn(g));
+        }
         if (!fxOverlay || track.id === mainId) {
           withBlend(ctx, blend, () => fn(ctx));
           const cap = codeTr && track.id === mainId ? (placement.id === codeTr.prev.id ? capA : placement.id === codeTr.next.id ? capB : null) : null;
@@ -376,7 +389,14 @@ export class Player {
         const host = this.htmlHost(placement.id, version.media.blobKey, canvas?.width ?? 1280, canvas?.height ?? 720);
         const known = this.manifests.get(version.media.blobKey);
         if (known) host.setParams(resolveHtmlParams(known.params, placement.htmlParams));
-        host.request(Math.round(ticksToSeconds(sourceTicks) * 1000) / 1000, ticksToSeconds(placement.sourceInTicks + placement.durationTicks * (placement.speed ?? 1)));
+        const at = Math.round(ticksToSeconds(sourceTicks) * 1000) / 1000, dur = ticksToSeconds(placement.sourceInTicks + placement.durationTicks * (placement.speed ?? 1));
+        const ins = known?.inputs && canvas ? this.inputsFor(placement, known.inputs, canvas) : undefined;
+        if (ins) {
+          // P38: computed signals only (numbers); a change at the same t (an analysis finished) draws the frame again.
+          const sig = JSON.stringify(ins), fresh = sig !== this.inputSig.get(placement.id);
+          this.inputSig.set(placement.id, sig);
+          host.request(at, dur, () => Promise.resolve({ data: { inputs: ins } }), fresh);
+        } else host.request(at, dur);
         const f = host.frame;
         if (ctx && canvas && isValidFrame(f)) {
           const r = placeRect(placement, f.width, f.height, canvas.width, canvas.height, this.time);
@@ -603,6 +623,103 @@ export class Player {
     await Promise.all([...this.pool.values()].map((el) => settle(el)));
     await Promise.all([...this.pendingFrame.values()]);
     await Promise.all([...this.html.values()].map((h) => h.host.settle()));
+    if (this.analyses.size) { await Promise.all(this.analyses.values()); this.draw(); await Promise.all([...this.html.values()].map((h) => h.host.settle())); }
+  }
+
+  // ---- P38: computed input signals for code clips ----
+  private features = new Map<string, AudioFeatures | null>();
+  private analyses = new Map<string, Promise<void>>();
+  private sceneLayers = new Map<string, CanvasRenderingContext2D | null>();
+  private thumbCtx?: CanvasRenderingContext2D | null;
+  private scenePrev = new Map<string, { t: number; cur: Uint8ClampedArray; prev?: Uint8ClampedArray }>();
+  private inputSig = new Map<string, string>();
+
+  /** Capture keys ("track:<id>" / "clip:<id>") that scene inputs of the html clips live now read. */
+  private sceneKeys(layers: ReturnType<typeof activeAt>): Set<string> {
+    const out = new Set<string>();
+    for (const { placement: p } of layers) {
+      if (p.clipType !== "html") continue;
+      const v = versionOf(this.project, p.source), m = v && this.manifests.get(v.media.blobKey);
+      for (const [name, d] of Object.entries(m?.inputs ?? {})) if (d?.type === "scene") { const s = inputSourceOf(this.project, p, name, "scene"); if (s !== "program") out.add(s); }
+    }
+    return out;
+  }
+
+  private sceneLayer(key: string, w: number, h: number, clear: boolean): CanvasRenderingContext2D | null {
+    if (!this.sceneLayers.has(key)) { const c = typeof document !== "undefined" ? document.createElement("canvas") : null; this.sceneLayers.set(key, c ? c.getContext("2d") : null); }
+    const g = this.sceneLayers.get(key)!;
+    if (!g) return null;
+    if (g.canvas.width !== w || g.canvas.height !== h) { g.canvas.width = w; g.canvas.height = h; }
+    if (clear) { g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, w, h); g.restore(); }
+    return g;
+  }
+
+  /** ctx.inputs for one html clip at the current time: numbers only (BeatSignal / SceneSignal per input). */
+  private inputsFor(p: Placement, decls: Record<string, HtmlClipInput>, canvas: HTMLCanvasElement): Record<string, BeatSignal | SceneSignal> | undefined {
+    const out: Record<string, BeatSignal | SceneSignal> = {};
+    for (const [name, d] of Object.entries(decls)) {
+      if (d?.type === "beat") out[name] = this.beatFor(inputSourceOf(this.project, p, name, "beat"));
+      else if (d?.type === "scene") {
+        const s = inputSourceOf(this.project, p, name, "scene");
+        const src = s === "program" ? canvas : this.sceneLayers.get(s)?.canvas;
+        out[name] = this.sceneFor(`${p.id}:${name}`, src);
+      }
+    }
+    return Object.keys(out).length ? out : undefined;
+  }
+
+  private sceneFor(key: string, src: CanvasImageSource | undefined): SceneSignal {
+    if (this.thumbCtx === undefined) { const c = typeof document !== "undefined" ? document.createElement("canvas") : null; if (c) { c.width = SCENE_W; c.height = SCENE_H; } this.thumbCtx = c ? c.getContext("2d", { willReadFrequently: true }) as CanvasRenderingContext2D | null : null; }
+    const g = this.thumbCtx;
+    if (!g || !src) return sceneFrom(new Uint8ClampedArray(0));
+    let px: Uint8ClampedArray;
+    try { g.clearRect(0, 0, SCENE_W, SCENE_H); g.drawImage(src, 0, 0, SCENE_W, SCENE_H); px = g.getImageData(0, 0, SCENE_W, SCENE_H).data; } catch { return sceneFrom(new Uint8ClampedArray(0)); }
+    const st = this.scenePrev.get(key);
+    // Motion compares with the frame drawn at the previous time (a redraw of the same time keeps its value).
+    const prev = st && st.t === this.time ? st.prev : st?.cur;
+    this.scenePrev.set(key, { t: this.time, cur: px, prev });
+    return sceneFrom(px, prev);
+  }
+
+  /** Beat signal of a source at the current time: the Mix, one track, or one clip (their audio files are analysed once). */
+  private beatFor(source: string): BeatSignal {
+    const comp = this.project.compositions[this.project.rootCompositionId];
+    const kind = source.slice(0, source.indexOf(":")), id = source.slice(source.indexOf(":") + 1);
+    const parts: { beat: BeatSignal; gain: number }[] = [];
+    for (const t of comp.tracks) {
+      if (t.hidden || t.muted || (t.kind !== "audio" && t.kind !== "video")) continue;
+      if (kind === "track" && t.id !== id) continue;
+      for (const p of t.placements) {
+        if (kind === "clip" && p.id !== id) continue;
+        if (this.time < p.startTicks || this.time >= p.startTicks + p.durationTicks) continue;
+        if (p.clipType !== "audio" && !(p.clipType === "video" && !p.linkedAudio?.muted)) continue;
+        const v = versionOf(this.project, p.source);
+        const f = v && this.featuresOf(v.media.blobKey);
+        if (!f) continue;
+        const sec = ticksToSeconds(p.sourceInTicks + (this.time - p.startTicks) * (p.speed ?? 1));
+        parts.push({ beat: beatAt(f, sec), gain: Math.max(0, p.volume ?? 1) * fadeAt(p, this.time) });
+      }
+    }
+    return mixBeats(parts);
+  }
+
+  private featuresOf(blobKey: string): AudioFeatures | undefined {
+    if (this.features.has(blobKey)) return this.features.get(blobKey) ?? undefined;
+    if (!this.analyses.has(blobKey)) {
+      const job = (async () => {
+        const g = globalThis as unknown as { OfflineAudioContext?: new (c: number, l: number, r: number) => OfflineAudioContext; webkitOfflineAudioContext?: new (c: number, l: number, r: number) => OfflineAudioContext };
+        const Ctx = g.OfflineAudioContext ?? g.webkitOfflineAudioContext;
+        const blob = await this.blobs.get(blobKey).catch(() => undefined);
+        if (!Ctx || !blob || blob.size > 300 * 1024 * 1024) return null;
+        const data = await blob.arrayBuffer();
+        const buf: AudioBuffer = await new Promise((res, rej) => { try { const p = new Ctx(1, 1, 44100).decodeAudioData(data, res, rej); if (p && typeof (p as Promise<AudioBuffer>).then === "function") (p as Promise<AudioBuffer>).then(res, rej); } catch (e) { rej(e); } });
+        const mono = new Float32Array(buf.length);
+        for (let c = 0; c < buf.numberOfChannels; c += 1) { const ch = buf.getChannelData(c); for (let i = 0; i < mono.length; i += 1) mono[i] += ch[i] / buf.numberOfChannels; }
+        return analyzeAudio(mono, buf.sampleRate);
+      })().catch(() => null).then((f) => { this.features.set(blobKey, f); this.analyses.delete(blobKey); if (!this.playing && !this.offline) this.draw(); });
+      this.analyses.set(blobKey, job);
+    }
+    return undefined;
   }
 
   /** True when the element has a decoded picture the canvas can draw (a transparent probe means it has none). */

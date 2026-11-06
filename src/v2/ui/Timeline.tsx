@@ -412,7 +412,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
             <div key={r.key} className="v2-track-header v2-add-row" data-add-group={r.group}>{addBtn(r.group)}</div>
           ) : r.type === "track" && (({ t }) => (
             <div key={t.id} className={`v2-track-header kind-${t.kind} ${layerDrag?.id === t.id ? "is-layer-dragging" : ""}`} style={layerShift(t.id)}>
-              <span>{t.name}</span>
+              <TrackName engine={engine} track={t} />
               {t.kind !== "effect" && t.kind !== "text" && <button className="v2-icon" title={t.muted ? "Unmute track" : "Mute track"} aria-label={t.muted ? "Unmute track" : "Mute track"} onClick={() => engine.dispatch(cmd.toggleTrackMute(t.id))}><Ic g={t.muted ? "🔇" : "🔊"} /></button>}
               <LayerControls t={t} isMain={t.id === main?.id} onToggle={() => engine.dispatch(cmd.toggleTrackHidden(t.id))} onDelete={() => setConfirmDel(t.id)} onReorder={(e) => startLayerDrag(e, t.id)} dragging={layerDrag?.id === t.id} onMergeUp={() => startMerge(t.id)} mergeInto={mergeLayer.mergeTarget(comp, t.id)?.name} onEditAll={onEditLayer && t.kind === "text" && layers.textClipCount(t) > 0 ? () => onEditLayer(t.id) : undefined} onEditSubs={onEditSubs && t.kind === "text" && layers.textClipCount(t) > 0 ? () => onEditSubs(t.id) : undefined} />
             </div>
@@ -653,6 +653,14 @@ function ReorderStrip({ track, state, top, root, thumbs, onMove, onDrop }: { tra
 }
 
 /** Per-layer eye (hide/show) and ✕ (delete, asks first). The main track can be hidden but not deleted. */
+/** P38: a layer's name in the desktop header; double-click (or Enter) to rename. Bindings use the id, so they keep working. */
+function TrackName({ engine, track }: { engine: Engine; track: Track }) {
+  const [edit, setEdit] = useState<string>();
+  if (edit === undefined) return <button type="button" className="v2-track-name" title="Double-click to rename" aria-label={`${track.name}: rename layer`} onDoubleClick={() => setEdit(track.name)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); setEdit(track.name); } }}>{track.name}</button>;
+  const done = (save: boolean) => { if (save && edit.trim() && edit.trim() !== track.name) engine.dispatch(cmd.renameTrack(track.id, edit)); setEdit(undefined); };
+  return <input className="v2-track-rename" autoFocus aria-label="Layer name" value={edit} maxLength={40} onChange={(e) => setEdit(e.target.value)} onBlur={() => done(true)} onKeyDown={(e) => { if (e.key === "Enter") done(true); if (e.key === "Escape") done(false); }} />;
+}
+
 export function LayerControls({ t, isMain, onToggle, onDelete, onReorder, dragging, onEditAll, onEditSubs, onMergeUp, mergeInto }: { t: Track; isMain: boolean; onToggle: () => void; onDelete: () => void; onReorder?: (e: React.PointerEvent) => void; dragging?: boolean; onEditAll?: () => void; onEditSubs?: () => void; /** P32: merge into the layer above (undefined target = top of its group: disabled). */ onMergeUp?: () => void; mergeInto?: string }) {
   return <span className="v2-layer-ctl">
     {onEditSubs && <button className="v2-icon v2-edit-subs" aria-label={`Edit subtitles in ${t.name}`} title="Edit subtitles: every line in a list — text, timing, split, merge, find & replace, export SRT" onClick={onEditSubs}><Ic g="≡" size={16} /></button>}

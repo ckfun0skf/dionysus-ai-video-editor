@@ -28,6 +28,7 @@ export * as storySteps from "./storySteps";
 export type { Storyboard, AssetSlot, Shot, VersionInfo, QaCheck, QaResult, Staleness, StoryStatus, ProductionStep, StepState, SendState } from "./storyboard";
 export * from "./htmlClipPackage";
 export * from "./codeRoles";
+export * from "./codeInputs";
 export * from "./audioClip";
 export * from "./audioClipPrompt";
 export * from "./spatial";

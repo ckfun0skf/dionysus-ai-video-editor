@@ -26,6 +26,7 @@ The first element of `<head>`:
 | `format` | `"dionysus.htmlclip/1"` | Required for a conforming package. Missing = a legacy clip (accepted with a warning). |
 | `name` | string | Display and file name. |
 | `description` | string | Optional. |
+| `inputs` | object | Live signals the clip reads as `ctx.inputs[name]` (§3.3): name → `{ "type": "beat" \| "scene", "label"?, "description"? }`. |
 | `role` | string | `"clip"` (default), `"effect"` or `"transition"` (§3.2). Where a package is used must match its role. |
 | `durationSec` | number (0–600] | Intended length. On the timeline the clip's own length wins (`ctx.duration`). |
 | `width`, `height` | integer px (16–8192) | Intended frame size. The clip renders at the output size (`ctx.width`, `ctx.height`). |
@@ -44,7 +45,7 @@ The page runs in a sandboxed iframe (scripts only, opaque origin, no access to t
 
 <!-- contract:start -->
 - Register the clip once, at the top level of your script: `dionysus.clip({ async init(ctx) { … }, render(t, ctx) { … } })`. `init` (optional) runs once before the first frame; await anything you need there (images, fonts, models). `render(t, ctx)` draws the frame at `t` seconds into the clip and may return a Promise.
-- `ctx` = `{ canvas, t, duration, progress, width, height, params, bindings, asset(name), image(name), video(name), seek(video, sec) }`: `duration` is the clip's length on the timeline in seconds (it can differ from the manifest's `durationSec`), `progress` = t / duration (0–1), `canvas` the page's first `<canvas>` (the captured picture), `width`/`height` the frame size in pixels, `params` the parameter values (each declared param's default, overridden by the values set where the clip is used: a timeline clip, a storyboard shot or layer; read them in `render`, they can change between frames while the user edits), `bindings[name]` = `{ type, url }` for each bound asset (`url` is null when nothing is bound yet: draw a placeholder), `asset(name)` the URL of an embedded file, `image(name)` a Promise of a loaded HTMLImageElement for a binding or file, `video(name)` a Promise of a muted HTMLVideoElement, `seek(video, sec)` a Promise that resolves when that video shows `sec`. Effects (manifest `"role": "effect"`) also get `source`, the picture under the effect clip this frame; transitions (`"role": "transition"`) get `from` (outgoing clip), `to` (incoming clip) and `progress` 0–1 across the cut. They are ImageBitmaps to draw (`g.drawImage(ctx.source, 0, 0, w, h)`); draw the full frame.
+- `ctx` = `{ canvas, t, duration, progress, width, height, params, bindings, asset(name), image(name), video(name), seek(video, sec) }`: `duration` is the clip's length on the timeline in seconds (it can differ from the manifest's `durationSec`), `progress` = t / duration (0–1), `canvas` the page's first `<canvas>` (the captured picture), `width`/`height` the frame size in pixels, `params` the parameter values (each declared param's default, overridden by the values set where the clip is used: a timeline clip, a storyboard shot or layer; read them in `render`, they can change between frames while the user edits), `bindings[name]` = `{ type, url }` for each bound asset (`url` is null when nothing is bound yet: draw a placeholder), `asset(name)` the URL of an embedded file, `image(name)` a Promise of a loaded HTMLImageElement for a binding or file, `video(name)` a Promise of a muted HTMLVideoElement, `seek(video, sec)` a Promise that resolves when that video shows `sec`. Effects (manifest `"role": "effect"`) also get `source`, the picture under the effect clip this frame; transitions (`"role": "transition"`) get `from` (outgoing clip), `to` (incoming clip) and `progress` 0–1 across the cut. They are ImageBitmaps to draw (`g.drawImage(ctx.source, 0, 0, w, h)`); draw the full frame. `inputs[name]` holds live signals for each manifest input (numbers only, no audio samples or pixels): a `"beat"` input is `{ rms, peak, bands, onset, envelope }` (0–1; `bands` = 8 bands, low to high), a `"scene"` input `{ luma, avgColor: [r, g, b], motion, histogram }` (0–1; `histogram` = 16 luma bins); read them in `render` and draw something sensible when they are 0.
 - The picture is the page's FIRST `<canvas>`: size it to ctx.width × ctx.height in `init` and draw everything on it (2D or WebGL; for WebGL use `preserveDrawingBuffer: true`). Other DOM and CSS are not captured.
 - Deterministic: every frame is a pure function of t, ctx.params and the bound assets. Frames are requested in any order (scrubbing, export), and the same t must give the same picture. Don't keep animation state between frames, don't use Date.now(), performance.now(), requestAnimationFrame, setTimeout or setInterval for timing, and use a seeded random generator (fixed seed) instead of Math.random().
 - No network: the clip runs in a sandbox with a strict Content-Security-Policy. Only the allowed libraries (listed in the manifest's `libs`, imported by their bare specifier in a `<script type="module">`, e.g. `import * as LIB from "<specifier>"`) are loaded. Embed any other file as a data: URL in the manifest's `files` and refer to it by name. Use system font stacks, or an embedded font with @font-face (the runtime waits for fonts to load before the first frame).
@@ -59,7 +60,7 @@ The page runs in a sandboxed iframe (scripts only, opaque origin, no access to t
 iframe → editor  { type: "dionysus:ready" }                                       page loaded
 editor → iframe  { type: "dionysus:init", width, height, duration?, bindings: { name: { type, blob } }, params? }
 editor → iframe  { type: "dionysus:params", params }                              new param values (V2-HTML-PARAMS); no reload
-editor → iframe  { type: "dionysus:frame", seq, t, duration?, source?, from?, to?, progress? }  draw frame t (P38 pictures for effects/transitions)
+editor → iframe  { type: "dionysus:frame", seq, t, duration?, source?, from?, to?, progress?, inputs? }  draw frame t (P38 pictures for effects/transitions)
 iframe → editor  { type: "dionysus:frame", seq, bmp }                             ImageBitmap of the first <canvas>
 ```
 
@@ -74,6 +75,15 @@ A package's manifest `role` says how it is used:
 - **`"transition"`**: a cut runs it (Transitions → **Custom (code)**). Each frame `ctx.from` is the outgoing clip's picture, `ctx.to` the incoming clip's and `ctx.progress` goes 0 → 1 across the transition. At 0 show only `from`, at 1 only `to`.
 
 Using a package in the wrong place is an error (`role-mismatch`): an effect or transition can't be added to a track, and a clip can't be picked as an effect or transition. An effect that never reads `ctx.source`, or a transition that doesn't read both `ctx.from` and `ctx.to`, gets a warning. These pictures run through the sandbox every frame, so preview may lag a frame and export is slower. Clips get only these pictures; there is no pixel-reading API.
+
+### 3.3 Inputs: beat and scene signals (P38)
+
+A clip can react to the edit around it. Declare inputs in the manifest, e.g. `"inputs": { "music": { "type": "beat", "label": "Music" }, "under": { "type": "scene" } }`, and read `ctx.inputs.music.onset` in `render`. The clip gets **numbers only**, computed by the editor:
+
+- **beat**: `rms`, `peak`, `bands` (8 values, sub-bass to air), `onset` (a hit, 0–1) and `envelope` (rms with a slow release). Audio files are analysed once at 60 values per second, so preview and export match.
+- **scene**: `luma`, `avgColor` `[r, g, b]`, `motion` (change from the previous frame) and `histogram` (16 luma bins), from a small thumbnail of the picture.
+
+Where each input reads from is set per use: in the clip's **Params** tab → **Inputs**, tap the source to open the Reference list: **Mix** (beat default: everything you hear) or **Program** (scene default: the picture under the clip), a track, or one clip. Tracks can be renamed there (or by double-clicking a layer name on desktop); the binding stores the track id, so a rename never breaks it. A layer drawn above the clip is read from its previous frame. There is no raw audio, pixel or frame API.
 
 ### 3.1 Param values per use (V2-HTML-PARAMS)
 

@@ -127,6 +127,31 @@ export const setHtmlParams = (id: string, patch: Record<string, number | string 
   }) })) })),
 });
 
+/** P38: bind (or with undefined, reset to the default) where an HTML clip's input reads from. One undo step. */
+export const setClipInput = (id: string, name: string, source: string | undefined): Command => ({
+  label: source ? "Clip input" : "Reset clip input",
+  apply: (p) => withRoot(p, (c) => ({ ...c, tracks: c.tracks.map((t) => ({ ...t, placements: t.placements.map((pl) => {
+    if (pl.id !== id || pl.clipType !== "html") return pl;
+    const next = { ...pl.htmlInputs };
+    if (source) next[name] = source; else delete next[name];
+    const { htmlInputs: _drop, ...rest } = pl;
+    return Object.keys(next).length ? { ...rest, htmlInputs: next } : rest;
+  }) })) })),
+});
+
+/** P38: rename a track (layer). Bindings keep working: they store the track id. */
+export const renameTrack = (trackId: string, name: string): Command => ({
+  label: "Rename layer", coalesceKey: `rename:${trackId}`,
+  apply: (p) => {
+    const n = name.trim().replace(/\s+/g, " ").slice(0, 40);
+    if (!n) throw new Error("A layer name can't be empty.");
+    return withRoot(p, (c) => {
+      if (!c.tracks.some((t) => t.id === trackId)) throw new Error(`No track "${trackId}".`);
+      return { ...c, tracks: c.tracks.map((t) => (t.id === trackId ? { ...t, name: n } : t)) };
+    });
+  },
+});
+
 /** Patch a text clip's content/style. Typing into one clip coalesces into one undo step. */
 export const updateText = (id: string, patch: Partial<TextData>, label = "Edit text"): Command => ({
   label,

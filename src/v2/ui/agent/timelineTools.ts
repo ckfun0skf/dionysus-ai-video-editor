@@ -5,8 +5,9 @@
  * audio clipping / silence (the export audio mix).
  */
 import { audioClipAsset } from "../audioClipAsset";
+import { blobText } from "../AssetPreview";
 import { captureFrameAt, storePickedFrame } from "../storyboard/frameCapture";
-import { codePresetId, codeRoleIssue, transitions, audioOutputOf, board, mergeLayer, ops, promote, findPlacement, slip, subs, newId, audioClipPrompt, parseAudioClip, runtimeAiLinks, panToAzimuth, positionErrors, secondsToTicks, TICKS_PER_SECOND, timelineReview, type Placement, type Project } from "../../domain";
+import { DEFAULT_SOURCE, readManifest, resolveSource, versionOf, codePresetId, codeRoleIssue, transitions, audioOutputOf, board, mergeLayer, ops, promote, findPlacement, slip, subs, newId, audioClipPrompt, parseAudioClip, runtimeAiLinks, panToAzimuth, positionErrors, secondsToTicks, TICKS_PER_SECOND, timelineReview, type Placement, type Project } from "../../domain";
 import { getPreset, listPresets } from "../../registry";
 import { cmd, type Command, type Engine } from "../../engine";
 import type { BlobStore } from "../../ports";
@@ -293,6 +294,27 @@ export async function runTimelineTool(engine: Engine, source: FrameSource | unde
       if (!transitions.previousAdjacent(hit.track, hit.placement)) return fail(`Clip ${id} doesn't start a cut: no clip on the main track ends where it starts.`);
       const d = n("durationSec"); if (d !== undefined && !(d > 0)) return fail('"durationSec" must be more than 0.');
       return edit(cmd.setTransition(id, { kind: codePresetId(assetId), durationTicks: secondsToTicks(d ?? 0.5) }), id);
+    }
+    case "set_clip_input": {
+      const id = needClip(); if (typeof id !== "string") return id;
+      const pl = findPlacement(rootOf(project()), id)!.placement;
+      if (pl.clipType !== "html") return fail(`Clip ${id} is not a code (html) clip.`);
+      const input = s("input") ?? "";
+      const v = versionOf(project(), pl.source), blob = v && blobs ? await blobs.get(v.media.blobKey).catch(() => undefined) : undefined;
+      const decl = blob ? readManifest(await blobText(blob)).inputs?.[input] : undefined;
+      if (!decl || (decl.type !== "beat" && decl.type !== "scene")) return fail(`Clip ${id} has no input "${input}". Its manifest "inputs" declares the inputs (type "beat" or "scene").`);
+      const raw = s("source");
+      if (raw === undefined || raw === "") return edit(cmd.setClipInput(id, input, undefined), id);
+      const r = resolveSource(project(), raw, decl.type);
+      if ("error" in r) return fail(r.error);
+      return edit(cmd.setClipInput(id, input, r.source === DEFAULT_SOURCE[decl.type] ? undefined : r.source), id);
+    }
+    case "rename_track": {
+      const tid = s("trackId") ?? "", name = (s("name") ?? "").trim();
+      if (!rootOf(project()).tracks.some((t) => t.id === tid)) return fail(`No track "${tid}". Call get_timeline for track ids.`);
+      if (!name || name.length > 40) return fail('"name" must be 1-40 characters.');
+      if (!engine.dispatch(cmd.renameTrack(tid, name), "rename_track")) return fail("Could not rename the track.");
+      return { ok: true, changed: true, text: JSON.stringify({ track: { id: tid, name } }) };
     }
     case "set_blank_color": {
       const id = needClip(); if (typeof id !== "string") return id;
