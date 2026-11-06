@@ -1379,3 +1379,9 @@ select.v2-tp-field { -webkit-appearance: none; appearance: none; padding-right: 
 .v2-blank-add-btns .v2-btn { min-height: 44px; flex: 1; }
 .v2-blank-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(255,255,255,.5); background: var(--blank, currentColor); vertical-align: -2px; margin-right: 4px; }
 .v2-clip.is-blank .v2-blank-body { color: #fff; mix-blend-mode: difference; }
+
+/* P36: Create audio with AI */
+.v2-audioai .v2-sb-field { display: grid; gap: 4px; font-size: 13px; }
+.v2-audioai .v2-sb-field input, .v2-audioai .v2-sb-field textarea { min-height: 44px; box-sizing: border-box; width: 100%; background: #111; color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 8px; font: inherit; }
+.v2-audioai .v2-pi-steps { display: flex; gap: 12px; list-style: none; margin: 0; padding: 0; font-size: 12px; color: var(--muted); }
+.v2-audioai .v2-pi-steps .on { color: var(--text); font-weight: 600; }

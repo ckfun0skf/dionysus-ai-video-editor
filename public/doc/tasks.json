@@ -3090,6 +3090,12 @@
           "title": "Revise with AI (storyboard header / More menu) and Edit with AI (shot \u22ef menu): describe the problem \u2192 copy prompt \u2192 paste {\"schema\":\"3.1-revise\"} or {\"schema\":\"3.1-shot-revise\"} \u2192 preview (changed / new / removed shots, changed and new assets, regenerate notes) \u2192 Apply in one undo step; only what the answer changes blocks; generated assets keep their versions; removed shots leave their timeline clips; WebMCP revise_storyboard; guide rules 61\u201362",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P36-AUDIO-AI",
+          "title": "Audio \u2192 Create with AI (phone Add audio picker and desktop Audio panel): describe \u2192 Copy prompt \u2192 paste the AI's dionysus.audioclip/1 JSON \u2192 Add to timeline (one undo step); WebMCP audio_prompt / create_audio; guide rule 63",
+          "status": "done",
+          "progress": 100
         }
       ]
     }
