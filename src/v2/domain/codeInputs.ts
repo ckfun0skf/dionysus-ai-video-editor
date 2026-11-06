@@ -5,7 +5,7 @@
  */
 import type { Composition, Placement, Project, Track } from "./model";
 import type { InputType } from "./htmlClipPackage";
-import { trackedClips } from "./tracking";
+import { parseTrackSource, trackedClips, tracksOf } from "./tracking";
 
 export const DEFAULT_SOURCE: Record<InputType, string> = { beat: "mix", scene: "program", track: "none" };
 export interface SourceChoice { source: string; label: string; kind: "mix" | "program" | "none" | "track" | "clip"; trackId?: string }
@@ -23,7 +23,7 @@ export function inputSourceOf(p: Project, pl: Placement, name: string, type: Inp
 
 /** Everything a beat or scene input can read, in display order: the default, then each track and its clips. */
 export function sourceChoices(p: Project, type: InputType, self?: string): SourceChoice[] {
-  if (type === "track") return [{ source: "none", label: "None", kind: "none" }, ...trackedClips(p).filter((c) => c.id !== self).map((c) => ({ source: `clip:${c.id}`, label: `${clipName(p, c)} (tracked)`, kind: "clip" as const, trackId: root(p).tracks.find((t) => t.placements.includes(c))?.id }))];
+  if (type === "track") return [{ source: "none", label: "None", kind: "none" }, ...trackedClips(p).filter((c) => c.id !== self).flatMap((c) => tracksOf(c).map((tr) => ({ source: `clip:${c.id}#${tr.id}`, label: `${clipName(p, c)} · ${tr.name}`, kind: "clip" as const, trackId: root(p).tracks.find((t) => t.placements.includes(c))?.id })))];
   const out: SourceChoice[] = [{ source: DEFAULT_SOURCE[type], label: type === "beat" ? "Mix" : "Program", kind: type === "beat" ? "mix" : "program" }];
   for (const t of root(p).tracks) {
     if (!(type === "beat" ? hearable(t) : visible(t))) continue;
@@ -46,6 +46,8 @@ export function sourceLabel(p: Project, source: string): string {
   const [k, id] = [source.slice(0, source.indexOf(":")), source.slice(source.indexOf(":") + 1)];
   const c = root(p);
   if (k === "track") return c.tracks.find((t) => t.id === id)?.name ?? "Missing track";
+  const mt = parseTrackSource(source);
+  if (mt?.trackId) { const pl = c.tracks.flatMap((t) => t.placements).find((x) => x.id === mt.clipId), tr = pl && tracksOf(pl).find((x) => x.id === mt.trackId); return pl && tr ? `${clipName(p, pl)} · ${tr.name}` : "Missing tracker"; }
   const pl = c.tracks.flatMap((t) => t.placements).find((x) => x.id === id);
   return pl ? clipName(p, pl) : "Missing clip";
 }
@@ -70,7 +72,13 @@ export function resolveSource(p: Project, raw: string, type: InputType): { sourc
   const named = choices.filter((c) => c.kind === "track" && c.label.toLowerCase() === low);
   if (named.length === 1) return { source: named[0].source };
   if (named.length > 1) return { error: `Several tracks are named "${v}"; pass "track:<id>" (get_timeline lists track ids) or rename one with rename_track.` };
-  if (type === "track") return { error: `No tracked clip matches "${v}". Use "none" or "clip:<id>" of a clip tracked with track_clip.` };
+  if (type === "track") {
+    const ref = parseTrackSource(v.startsWith("clip:") ? v : `clip:${v}`), pl = ref && root(p).tracks.flatMap((t) => t.placements).find((x) => x.id === ref.clipId);
+    const ts = pl ? tracksOf(pl) : [];
+    if (ts.length > 1 && !ref?.trackId) return { error: `Clip ${ref!.clipId} has ${ts.length} trackers: pass "clip:${ref!.clipId}#<trackId>" (${ts.map((t) => `${t.id} "${t.name}"`).join(", ")}).` };
+    if (ts.length === 1 && !ref?.trackId) return { source: `clip:${ref!.clipId}#${ts[0].id}` };
+    return { error: `No tracked clip matches "${v}". Use "none" or "clip:<clip id>#<tracker id>" (get_timeline lists trackers on a clip).` };
+  }
   return { error: `No ${what(type)} matches "${v}". Use "${DEFAULT_SOURCE[type]}", a track name, "track:<id>" or "clip:<id>".` };
 }
 

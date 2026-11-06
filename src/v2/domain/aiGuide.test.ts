@@ -131,7 +131,7 @@ describe("AI planner guide (V2-SB-114)", () => {
     // P36: RULE 68 (motion-tracking).
     expect(ruleNumber("motion-tracking")).toBe(68);
     expect(full).toContain(`68. ${RULES[67]}`);
-    for (const x of ["track_clip", "region: { x, y, w, h }", "not AI subject segmentation", "attach_track", "set_track_mask", "get_track", "{ \"type\": \"track\" }", "{ x, y, width, height, scale, rotation, found }", "never pixels"]) expect(RULES[67]).toContain(x);
+    for (const x of ["track_clip", "region: { x, y, w, h }", "not AI subject segmentation", "attach_track", "set_track_mask", "get_track", "{ \"type\": \"track\" }", "{ x, y, width, height, scale, rotation, found }", "never pixels", "set_track_range", "#<trackId>", "found:false", "scale search"]) expect(RULES[67]).toContain(x);
     // P35: RULE 59, shot placeholders (shots without a clip send as placeholders; Update / replace_clip_asset fill them).
     expect(ruleNumber("shot-placeholders")).toBe(59);
     expect(full).toContain(`59. ${RULES[58]}`);

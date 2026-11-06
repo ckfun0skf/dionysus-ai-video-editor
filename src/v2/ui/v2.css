@@ -1453,3 +1453,37 @@ select.v2-tp-field { -webkit-appearance: none; appearance: none; padding-right: 
 .v2-track-out .v2-cleanup-row input { width: 20px; height: 20px; accent-color: var(--accent, #20d5ec); }
 .v2-track-note { font-size: 12px; margin: 8px 0 0; }
 @media (max-width: 600px) { .v2-modal-back:has(> .v2-track) { padding: 0; align-items: end; } .v2-track { border-radius: 14px 14px 0 0; max-height: 100dvh; } }
+
+/* P40 Track sheet: name, play, range, path; Tracks lane */
+.v2-track-name { min-height: 44px; min-width: 0; text-align: center; font: 600 15px/1 inherit; background: transparent; color: inherit; border: 1px solid transparent; border-radius: 8px; padding: 0 8px; }
+.v2-track-name:focus, .v2-track-name:hover { border-color: var(--line); outline: none; }
+.v2-track-ctl { flex-wrap: nowrap; }
+.v2-track-ctl input[type=range] { flex: 1; }
+.v2-track-play { min-width: 44px; min-height: 44px; border: 1px solid var(--line); background: transparent; color: inherit; border-radius: 22px; display: grid; place-items: center; cursor: pointer; }
+.v2-track-play:disabled { opacity: .35; }
+.v2-track-inout .v2-btn { min-height: 44px; font-variant-numeric: tabular-nums; }
+.v2-track-check { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 8px; cursor: pointer; margin-left: auto; }
+.v2-track-check input { width: 20px; height: 20px; accent-color: var(--accent, #20d5ec); }
+.v2-track-range { position: relative; height: 4px; margin-top: 2px; background: #2a2a2e; border-radius: 2px; }
+.v2-track-range b { position: absolute; top: 0; bottom: 0; background: #e5e5e5; border-radius: 2px; }
+.v2-track-strip i.is-ok { background: var(--accent, #20d5ec); opacity: .55; }
+.v2-track-strip i.is-out { background: #2a2a2e; opacity: 1; }
+.v2-track-strip i:not([class]), .v2-track-strip i[class=""] { background: #3a3a40; opacity: 1; }
+.v2-track-path { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.v2-track-path polyline { fill: none; stroke: #fff; stroke-width: 1.5; vector-effect: non-scaling-stroke; opacity: .85; filter: drop-shadow(0 0 1px #000); }
+.v2-track-pt { position: absolute; width: 44px; height: 44px; margin: -22px 0 0 -22px; padding: 0; border: 0; background: transparent; display: grid; place-items: center; cursor: grab; touch-action: none; z-index: 2; }
+.v2-track-pt i { width: 8px; height: 8px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.7); }
+.v2-track-pt.is-bad i { background: #facc15; }
+.v2-track-pt.is-cur i { width: 12px; height: 12px; background: var(--accent, #20d5ec); }
+.v2-track-stage.mask-inside .v2-track-box.is-solved { box-shadow: 0 0 0 9999px rgba(0,0,0,.72); }
+.v2-track-stage.mask-outside .v2-track-box.is-solved { background: rgba(0,0,0,.72); }
+.v2-track-hide { position: absolute; inset: 0; background: rgba(0,0,0,.72); pointer-events: none; }
+.v2-track-flag { position: absolute; left: 8px; top: 8px; padding: 4px 8px; border-radius: 6px; font-size: 12px; background: rgba(0,0,0,.7); color: #facc15; border: 1px solid #facc15; pointer-events: none; }
+.v2-timeline { --mt-ok: rgba(32,213,236,.35); --mt-bad: rgba(250,204,21,.55); }
+.v2-mtrack-lane { position: relative; box-sizing: border-box; border-bottom: 1px solid #1f1f25; background: repeating-linear-gradient(90deg, transparent 0 11px, rgba(255,255,255,.025) 11px 12px), #111114; }
+.v2-mtrack-head { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted, #a1a1aa); padding-left: 10px; }
+.v2-mtrack { position: absolute; height: 18px; box-sizing: border-box; border: 1px solid rgba(255,255,255,.35); border-radius: 4px; display: flex; align-items: center; cursor: pointer; touch-action: none; user-select: none; -webkit-user-select: none; overflow: hidden; }
+.v2-mtrack:focus-visible, .v2-mtrack.is-selected { outline: 2px solid #fff; }
+.v2-mtrack-name { flex: 1; min-width: 0; padding: 0 4px; font-size: 10px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 1px 2px #000; pointer-events: none; }
+.v2-mtrack-h { flex: 0 0 10px; align-self: stretch; cursor: ew-resize; background: rgba(255,255,255,.18); position: relative; }
+.v2-mtrack-h::after { content: ""; position: absolute; inset: -13px -8px; } /* ≥ 36–44px touch target around the 10px grip */

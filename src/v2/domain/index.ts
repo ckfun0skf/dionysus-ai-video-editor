@@ -30,7 +30,7 @@ export * from "./htmlClipPackage";
 export * from "./codeRoles";
 export * from "./codeInputs";
 export * as tracking from "./tracking";
-export type { MotionTrack, TrackSample, TrackMask, TrackPos, Box, TrackSignal } from "./tracking";
+export type { MotionTrack, NamedTrack, TrackSample, TrackMask, TrackPos, Box, TrackSignal } from "./tracking";
 export * as cleanup from "./cleanup";
 export * from "./audioClip";
 export * from "./audioClipPrompt";
