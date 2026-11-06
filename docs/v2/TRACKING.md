@@ -25,7 +25,10 @@ trims and slips keep it aligned); `samples` = `{ s, x, y, w, h, scale, conf, man
 2. Sheet (✕ = no change, ✓ = one undo step): ▶/❚❚ plays the clip in the sheet (Space toggles) with the following box,
    path and mask preview; the frame slider scrubs. **In / Out** set the range from the current frame (the bar under the
    strip shows it). Drag a box on a frame inside the range → **Track** (progress shown).
-3. Review: the strip shows quality (cyan ok, yellow unstable / lost, dark outside the range). **Path** (checkbox, on
+3. Zoom (P42): pinch on a phone, Ctrl/⌘+scroll or a trackpad pinch on desktop — zooms around the fingers / cursor
+   (up to 8×). When zoomed, drag the empty frame (or scroll) to pan; double-tap or **Fit** (shows the zoom %) resets.
+   Points and the box edge keep a 44px screen-size grab target; the video is never reloaded by zooming.
+4. Review: the strip shows quality (cyan ok, yellow unstable / lost, dark outside the range). **Path** (checkbox, on
    by default) draws the box-centre trajectory; drag any point (or the box) to move that frame — it becomes a trusted,
    manual frame. Lost frames show "Lost" and no box.
 4. **Follow**: text, photo, overlay or code clips keep their offset from the box; with *Scale with the box* they

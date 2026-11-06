@@ -1488,3 +1488,8 @@ select.v2-tp-field { -webkit-appearance: none; appearance: none; padding-right: 
 .v2-mtrack-name { flex: 1; min-width: 0; padding: 0 4px; font-size: 10px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 1px 2px #000; pointer-events: none; }
 .v2-mtrack-h { flex: 0 0 10px; align-self: stretch; cursor: ew-resize; background: rgba(255,255,255,.18); position: relative; }
 .v2-mtrack-h::after { content: ""; position: absolute; inset: -13px -8px; } /* ≥ 36–44px touch target around the 10px grip */
+/* P42: zoomable Track preview — inner layer scales; points / box border stay screen-size */
+.v2-track-layer { position: absolute; inset: 0; transform-origin: 0 0; }
+.v2-track-layer .v2-track-pt { transform: scale(calc(1 / var(--z, 1))); }
+.v2-track-layer .v2-track-box { border-width: calc(2px / var(--z, 1)); }
+.v2-track-fit { position: absolute; right: 6px; bottom: 6px; z-index: 3; min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; gap: 4px; padding: 0 10px; border-radius: 22px; background: rgba(0,0,0,.6); color: #fff; font-size: 12px; font-variant-numeric: tabular-nums; }
