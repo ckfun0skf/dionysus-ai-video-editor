@@ -3162,6 +3162,12 @@
           "title": "Typewriter: newlines skip typing by default (Include line breaks checkbox), Fit duration = slotCount × scramble, Duration slider max 8 s, selected animation tile previews with user Duration + params (scramble/caret)",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P46-TYPE-STABLE-ALIGN",
+          "title": "Typewriter (and chars-reveal): layout from full wrapped text, reveal LTR in place so center/right align does not re-center the growing prefix; caret follows last glyph",
+          "status": "done",
+          "progress": 100
         }
       ]
     }
