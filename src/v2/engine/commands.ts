@@ -484,6 +484,11 @@ export const deleteCue = (id: string): Command => ({ label: "Delete subtitle", a
 export const splitCue = (id: string, pos: number, newId: string): Command => ({ label: "Split subtitle", apply: (p) => withRoot(p, (c) => cueOps.splitCue(c, id, pos, newId)) });
 export const mergeCueNext = (id: string): Command => ({ label: "Merge subtitles", apply: (p) => withRoot(p, (c) => cueOps.mergeNext(c, id)) });
 export const replaceInLayer = (trackId: string, find: string, repl: string, matchCase = false): Command => ({ label: "Replace in subtitles", apply: (p) => withRoot(p, (c) => cueOps.replaceAll(c, trackId, find, repl, matchCase)) });
+export const setCueWords = (id: string, words: { text: string; atSec: number }[]): Command => ({ label: "Edit word timings", coalesceKey: `cuewords:${id}`, apply: (p) => withRoot(p, (c) => cueOps.setCueWords(c, id, words)) });
+export const evenSplitCueWords = (id: string): Command => ({ label: "Even-split word timings", apply: (p) => withRoot(p, (c) => cueOps.evenSplitCueWords(c, id)) });
+export const applyWordHighlight = (id: string, params?: Record<string, number | string | boolean>): Command => ({ label: "Word highlight captions", apply: (p) => withRoot(p, (c) => cueOps.applyWordHighlight(c, id, params)) });
+export const expandWordPop = (id: string, entrance = "pop"): Command => ({ label: "Word pop captions", apply: (p) => withRoot(p, (c) => cueOps.expandWordPop(c, id, entrance)) });
+
 
 /** Storyboard (V2-CUT-01): wrappers so storyboard edits are undoable like timeline edits. */
 export const createStoryboard = (doc: StoryDoc): Command => ({ label: "Create storyboard", apply: (p) => board.setStoryboard(p, board.storyboardFromDoc(doc)) });

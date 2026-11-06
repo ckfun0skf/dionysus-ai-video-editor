@@ -8,6 +8,7 @@ import { cmd, type Engine } from "../engine";
 import { cues as cueOps, newId, type Track } from "../domain";
 import { Ic } from "./Icon";
 import { SheetDone } from "./Sheet";
+import { WordTimingEditor } from "./WordTimingEditor";
 
 export function downloadText(text: string, name: string) {
   const url = URL.createObjectURL(new Blob([text], { type: "application/x-subrip" }));
@@ -23,7 +24,7 @@ function Tc({ value, label, onCommit }: { value: number; label: string; onCommit
     onChange={(e) => setDraft(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commit(); (e.target as HTMLInputElement).blur(); } if (e.key === "Escape") setDraft(undefined); }} />;
 }
 
-export function SubtitleList({ engine, track, time, playing, onSeek, desktop, name, focusCue, onDone }: { engine: Engine; track: Track; time: number; playing: boolean; onSeek: (t: number) => void; desktop: boolean; name: string; focusCue?: string; onDone?: () => void }) {
+export function SubtitleList({ engine, track, time, playing, onSeek, onTogglePlay, desktop, name, focusCue, onDone }: { engine: Engine; track: Track; time: number; playing: boolean; onSeek: (t: number) => void; onTogglePlay?: () => void; desktop: boolean; name: string; focusCue?: string; onDone?: () => void }) {
   const list = cueOps.cuesOf(track);
   const active = cueOps.activeCue(track, time);
   const rowsRef = useRef<HTMLDivElement>(null);
@@ -87,6 +88,10 @@ export function SubtitleList({ engine, track, time, playing, onSeek, desktop, na
               onSelect={(e) => { caret.current[c.id] = (e.target as HTMLTextAreaElement).selectionStart; }}
               onChange={(e) => { caret.current[c.id] = e.target.selectionStart; engine.dispatch(cmd.setCueText(c.id, e.target.value)); }}
               onKeyDown={(e) => { if (desktop && e.key === "Enter" && !e.shiftKey) { e.preventDefault(); const nx = list[i + 1]; if (nx) focusRow(nx.id); else (e.target as HTMLTextAreaElement).blur(); } }} />
+            {(() => {
+              const pl = track.placements.find((p) => p.id === c.id);
+              return pl ? <WordTimingEditor engine={engine} placement={pl} time={time} playing={playing} onSeek={onSeek} onTogglePlay={onTogglePlay} desktop={desktop} /> : null;
+            })()}
             <div className="v2-cue-ops">
               <button className="v2-icon" aria-label={`Add subtitle after ${i + 1}`} title="Add a subtitle after this one" onClick={() => addAfter(c.id)}><Ic g="＋" size={16} /></button>
               <button className="v2-icon" aria-label={`Split subtitle ${i + 1} at cursor`} title="Split at the text cursor (time divides by characters)" onPointerDown={(e) => e.preventDefault()} onClick={() => split(c.id)}><Ic g="✂" size={16} /></button>

@@ -113,6 +113,15 @@ export const TIMELINE_TOOLS: TimelineToolDef[] = [
   { name: "add_clip", title: "Add a clip from an asset", readOnly: false,
     description: "Place a project media asset (id from get_timeline's \"assets\") at startSec, on trackId or the main track / a matching track. One undo step; returns the new clip.",
     inputSchema: obj({ assetId: str("Media asset id."), startSec: num("Start in seconds."), trackId: str("Track id (optional).") }, ["assetId", "startSec"]) },
+  { name: "even_split_words", title: "Even-split caption word timings", readOnly: false,
+    description: "P47: invent evenly spaced word timings for a text/caption clip from its text and length (whitespace words, or characters for CJK). One undo step; returns the clip with words[].",
+    inputSchema: obj({ clipId: str("Text clip id.") }, ["clipId"]) },
+  { name: "set_caption_words", title: "Set caption word timings", readOnly: false,
+    description: "P47: set words [{ text, atSec }] on a text clip (seconds from the clip start; clamped in order). Pass mode \"word-highlight\" to keep one cue with karaoke highlighting, or \"word-pop\" to expand into one short clip per word (entrance pop|fade|slide-up). One undo step.",
+    inputSchema: obj({ clipId: str("Text clip id."), words: { type: "array", items: obj({ text: str("Word token."), atSec: num("Seconds from clip start.") }, ["text", "atSec"]), description: "Word timings." }, mode: { type: "string", enum: ["word-highlight", "word-pop", "keep"] }, entrance: { type: "string", enum: ["pop", "fade", "slide-up"] } }, ["clipId", "words"]) },
+  { name: "word_align_prompt", title: "Prompt to align caption words with AI", readOnly: true,
+    description: "P47: returns a copy-paste prompt that asks an external AI for word timings JSON for the caption clip (Dionysus does not call an AI). Optional audioClipId adds that clip's duration to the prompt. Paste the reply into set_caption_words.",
+    inputSchema: obj({ clipId: str("Text clip id."), audioClipId: str("Optional narration/dialogue audio or video clip id.") }, ["clipId"]) },
 ];
 
 export const TIMELINE_TOOL_NAMES = new Set(TIMELINE_TOOLS.map((t) => t.name));

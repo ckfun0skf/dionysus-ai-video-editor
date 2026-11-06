@@ -3,7 +3,11 @@
  * every op is pure and keeps the clip's own style overrides. Cues never overlap and are ≥ 100 ms.
  */
 import type { Composition, Placement, Subtitle, Track } from "./model";
+import { newId } from "./model";
 import { formatSrt } from "./subtitles";
+import { clampWordTimes, evenSplitWords, scaleWordTimes, type WordTiming } from "./wordTiming";
+import type { TextData } from "./text";
+import { textOf } from "./text";
 
 const TPS = 120_000;
 export const MIN_CUE = TPS / 10;
@@ -40,7 +44,17 @@ export function setCueTimes(comp: Composition, id: string, start: number, end: n
   let s = Math.max(lo, Math.round(start)); let e = Math.min(hi, Math.round(end));
   if (e - s < MIN_CUE) { if (s + MIN_CUE <= hi) e = s + MIN_CUE; else { e = hi; s = Math.max(lo, e - MIN_CUE); } }
   if (e - s < MIN_CUE) return comp;
-  return onTrack(comp, t.id, (tr) => tr.placements.map((p) => (p.id === id ? { ...p, startTicks: s, durationTicks: e - s } : p)));
+  return onTrack(comp, t.id, (tr) => tr.placements.map((p) => {
+    if (p.id !== id) return p;
+    const prev = p.durationTicks;
+    const next = { ...p, startTicks: s, durationTicks: e - s };
+    const words = (p.text as { words?: { text: string; atSec: number }[] } | undefined)?.words;
+    if (words?.length && prev > 0 && prev !== next.durationTicks) {
+      const scaled = scaleWordTimes(words, prev / TPS, next.durationTicks / TPS);
+      next.text = { ...(p.text ?? {}), words: scaled } as Placement["text"];
+    }
+    return next;
+  }));
 }
 
 /** New empty cue right after `id` (up to 2 s, shortened to fit before the next cue). Unchanged if no room. */
@@ -113,4 +127,61 @@ export function parseTc(s: string): number | undefined {
   const [h, mi] = parts.length === 2 ? parts : [0, parts[0] ?? 0];
   const sec = h * 3600 + mi * 60 + Number(m[3]);
   return Number.isFinite(sec) ? Math.round(sec * TPS) : undefined;
+}
+
+
+/** P47: replace word timings on a text cue (clamped into the cue length). */
+export function setCueWords(comp: Composition, id: string, words: WordTiming[]): Composition {
+  const t = trackOf(comp, id); if (!t) return comp;
+  const p = t.placements.find((x) => x.id === id); if (!p || p.clipType !== "text") return comp;
+  const clamped = clampWordTimes(words, p.durationTicks / TPS);
+  return onTrack(comp, t.id, (tr) => tr.placements.map((x) => (x.id === id ? { ...x, text: { ...textOf(x.text), words: clamped } } : x)));
+}
+
+/** P47: Even split — invent timings from the cue text and length. */
+export function evenSplitCueWords(comp: Composition, id: string): Composition {
+  const t = trackOf(comp, id); if (!t) return comp;
+  const p = t.placements.find((x) => x.id === id); if (!p || p.clipType !== "text") return comp;
+  const d = textOf(p.text);
+  return setCueWords(comp, id, evenSplitWords(d.text, p.durationTicks / TPS));
+}
+
+const ENTRANCES = new Set(["pop", "fade", "slide-up"]);
+
+/**
+ * P47 word-pop: replace one cue with one short text clip per word (same style), each using `entrance` as animIn.
+ * Word timings become the clip starts; the last word runs to the original cue end. Gaps shorter than MIN_CUE are merged forward.
+ */
+export function expandWordPop(comp: Composition, id: string, entrance = "pop"): Composition {
+  const t = trackOf(comp, id); if (!t) return comp;
+  const p = t.placements.find((x) => x.id === id); if (!p || p.clipType !== "text") return comp;
+  const d = textOf(p.text);
+  let words = d.words?.length ? clampWordTimes(d.words, p.durationTicks / TPS) : evenSplitWords(d.text, p.durationTicks / TPS);
+  if (!words.length) return comp;
+  const ent = ENTRANCES.has(entrance) ? entrance : "pop";
+  const { keyframes: _k, text: _t, ...base } = p;
+  const clips: Placement[] = [];
+  for (let i = 0; i < words.length; i++) {
+    const startOff = Math.round(words[i].atSec * TPS);
+    const endOff = i + 1 < words.length ? Math.round(words[i + 1].atSec * TPS) : p.durationTicks;
+    let dur = endOff - startOff;
+    if (dur < MIN_CUE) dur = MIN_CUE;
+    // Don't overrun the original cue (or the next word start).
+    const maxEnd = i + 1 < words.length ? Math.round(words[i + 1].atSec * TPS) : p.durationTicks;
+    if (startOff + dur > maxEnd && maxEnd - startOff >= MIN_CUE) dur = maxEnd - startOff;
+    if (startOff >= p.durationTicks) break;
+    const td: TextData = { ...d, text: words[i].text, animIn: ent, animOut: undefined, loop: undefined, words: undefined, animInParams: undefined, animTicks: Math.min(60_000, Math.max(12_000, Math.floor(dur / 2))) };
+    clips.push({ ...base, id: i === 0 ? id : newId("plc"), startTicks: p.startTicks + startOff, durationTicks: Math.min(dur, p.durationTicks - startOff), text: td });
+  }
+  if (!clips.length) return comp;
+  return onTrack(comp, t.id, (tr) => [...tr.placements.filter((x) => x.id !== id), ...clips]);
+}
+
+/** P47: apply word-highlight mode on one cue (keeps one clip; ensures words exist). */
+export function applyWordHighlight(comp: Composition, id: string, params?: Record<string, number | string | boolean>): Composition {
+  const t = trackOf(comp, id); if (!t) return comp;
+  const p = t.placements.find((x) => x.id === id); if (!p || p.clipType !== "text") return comp;
+  const d = textOf(p.text);
+  const words = d.words?.length ? d.words : evenSplitWords(d.text, p.durationTicks / TPS);
+  return onTrack(comp, t.id, (tr) => tr.placements.map((x) => (x.id === id ? { ...x, text: { ...d, words, animIn: "word-highlight", animInParams: { ...(params ?? d.animInParams ?? {}) } } } : x)));
 }

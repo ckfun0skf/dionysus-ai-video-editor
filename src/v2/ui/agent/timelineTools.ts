@@ -8,7 +8,7 @@ import { audioClipAsset } from "../audioClipAsset";
 import { blobText } from "../AssetPreview";
 import { bindingRefsOf } from "../CleanupDialog";
 import { captureFrameAt, storePickedFrame } from "../storyboard/frameCapture";
-import { cleanup, DEFAULT_SOURCE, INPUT_TYPES, readManifest, resolveSource, versionOf, codePresetId, codeRoleIssue, transitions, audioOutputOf, board, mergeLayer, ops, promote, findPlacement, slip, subs, newId, audioClipPrompt, parseAudioClip, runtimeAiLinks, panToAzimuth, positionErrors, secondsToTicks, TICKS_PER_SECOND, timelineReview, type Placement, type Project } from "../../domain";
+import { cleanup, DEFAULT_SOURCE, INPUT_TYPES, readManifest, resolveSource, versionOf, codePresetId, codeRoleIssue, transitions, audioOutputOf, board, mergeLayer, ops, promote, findPlacement, slip, subs, newId, audioClipPrompt, parseAudioClip, runtimeAiLinks, panToAzimuth, positionErrors, secondsToTicks, TICKS_PER_SECOND, timelineReview, text as T, words as W, type Placement, type Project } from "../../domain";
 import { getPreset, listPresets } from "../../registry";
 import { tracking, sourceAt, ticksToSeconds, type Box, type MotionTrack, type NamedTrack, type TrackMask } from "../../domain";
 import { makeTrackAnalyse, nearestIndex, rangeTrack, trackTicks } from "../trackAnalyse";
@@ -552,6 +552,43 @@ export async function runTimelineTool(engine: Engine, source: FrameSource | unde
       const pid = newId("plc");
       const r = edit(cmd.addAssetToTimeline(assetId, secondsToTicks(Math.max(0, t)), tr, pid), pid);
       return r.changed ? r : fail(`Couldn't place ${assetId} there.`);
+    }
+    case "even_split_words": {
+      const id = needClip(); if (typeof id !== "string") return id;
+      const pl = findPlacement(rootOf(project()), id)!.placement;
+      if (pl.clipType !== "text") return fail(`Clip ${id} is not a text clip.`);
+      return edit(cmd.evenSplitCueWords(id), id);
+    }
+    case "set_caption_words": {
+      const id = needClip(); if (typeof id !== "string") return id;
+      const pl = findPlacement(rootOf(project()), id)!.placement;
+      if (pl.clipType !== "text") return fail(`Clip ${id} is not a text clip.`);
+      const raw = a.words;
+      if (!Array.isArray(raw) || !raw.length) return fail('"words" must be a non-empty array of { text, atSec }.');
+      const parsed = W.parseWordsJson(JSON.stringify({ words: raw }));
+      if (!parsed.ok) return fail(parsed.error);
+      const mode = typeof a.mode === "string" ? a.mode : "keep";
+      const entrance = typeof a.entrance === "string" ? a.entrance : "pop";
+      const cmds: Command[] = [cmd.setCueWords(id, parsed.words)];
+      if (mode === "word-highlight") cmds.push(cmd.applyWordHighlight(id));
+      else if (mode === "word-pop") cmds.push(cmd.expandWordPop(id, entrance));
+      return edit(cmds, id);
+    }
+    case "word_align_prompt": {
+      const id = needClip(); if (typeof id !== "string") return id;
+      const pl = findPlacement(rootOf(project()), id)!.placement;
+      if (pl.clipType !== "text") return fail(`Clip ${id} is not a text clip.`);
+      const d = T.textOf(pl.text);
+      let audioDurationSec: number | undefined, audioName: string | undefined;
+      const aid = typeof a.audioClipId === "string" ? a.audioClipId : undefined;
+      if (aid) {
+        const ap = findPlacement(rootOf(project()), aid)?.placement;
+        if (!ap) return fail(`No audio clip "${aid}".`);
+        audioDurationSec = ap.durationTicks / TICKS_PER_SECOND;
+        audioName = aid;
+      }
+      const prompt = W.wordAlignPrompt({ text: d.text, cueDurationSec: pl.durationTicks / TICKS_PER_SECOND, audioDurationSec, audioName });
+      return { ok: true, changed: false, text: prompt };
     }
   }
   return fail(`Unknown tool ${name}.`);

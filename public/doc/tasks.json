@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "project": "Dionysus",
-  "updatedAt": "2026-10-30",
+  "updatedAt": "2026-11-06",
   "sourceOfTruth": "public/doc/tasks.json on main (see docs/v2/MODULE_DESIGN.md §14)",
   "statusDefinitions": {
     "done": "Implementation exists and has evidence; release/browser validation may still be pending.",
@@ -3069,7 +3069,7 @@
         },
         {
           "id": "P36-PASTE-IMPORTS",
-          "title": "Paste instead of upload: storyboard Add version for code clips gets 'Paste HTML' (the AI's reply or raw HTML, validated, added as a new version); Text > Import opens 'Import subtitles' with a paste box (live cue count, \u2713 imports a new text layer) or Choose file; WebMCP import_subtitles",
+          "title": "Paste instead of upload: storyboard Add version for code clips gets 'Paste HTML' (the AI's reply or raw HTML, validated, added as a new version); Text > Import opens 'Import subtitles' with a paste box (live cue count, ✓ imports a new text layer) or Choose file; WebMCP import_subtitles",
           "status": "done",
           "progress": 100
         },
@@ -3087,43 +3087,43 @@
         },
         {
           "id": "P36-REVISE-AI",
-          "title": "Revise with AI (storyboard header / More menu) and Edit with AI (shot \u22ef menu): describe the problem \u2192 copy prompt \u2192 paste {\"schema\":\"3.1-revise\"} or {\"schema\":\"3.1-shot-revise\"} \u2192 preview (changed / new / removed shots, changed and new assets, regenerate notes) \u2192 Apply in one undo step; only what the answer changes blocks; generated assets keep their versions; removed shots leave their timeline clips; WebMCP revise_storyboard; guide rules 61\u201362",
+          "title": "Revise with AI (storyboard header / More menu) and Edit with AI (shot ⋯ menu): describe the problem → copy prompt → paste {\"schema\":\"3.1-revise\"} or {\"schema\":\"3.1-shot-revise\"} → preview (changed / new / removed shots, changed and new assets, regenerate notes) → Apply in one undo step; only what the answer changes blocks; generated assets keep their versions; removed shots leave their timeline clips; WebMCP revise_storyboard; guide rules 61–62",
           "status": "done",
           "progress": 100
         },
         {
           "id": "P36-AUDIO-AI",
-          "title": "Audio \u2192 Create with AI (phone Add audio picker and desktop Audio panel): describe \u2192 Copy prompt \u2192 paste the AI's dionysus.audioclip/1 JSON \u2192 Add to timeline (one undo step); WebMCP audio_prompt / create_audio; guide rule 63",
+          "title": "Audio → Create with AI (phone Add audio picker and desktop Audio panel): describe → Copy prompt → paste the AI's dionysus.audioclip/1 JSON → Add to timeline (one undo step); WebMCP audio_prompt / create_audio; guide rule 63",
           "status": "done",
           "progress": 100
         },
         {
           "id": "P38-CODE-3D",
-          "title": "Code editor Files \u2192 Add files accepts .glb/.gltf/.bin/.hdr (glb stored as data:model/gltf-binary;base64; >15 MB warns, >60 MB refused); vendored three.js GLTFLoader 0.160.0 (MIT, SRI) as lib three-gltf, which brings three; guide rule 64",
+          "title": "Code editor Files → Add files accepts .glb/.gltf/.bin/.hdr (glb stored as data:model/gltf-binary;base64; >15 MB warns, >60 MB refused); vendored three.js GLTFLoader 0.160.0 (MIT, SRI) as lib three-gltf, which brings three; guide rule 64",
           "status": "done",
           "progress": 100
         },
         {
           "id": "P38-CODE-ROLES",
-          "title": "Code packages as effects and transitions: manifest role clip|effect|transition (role-mismatch error, effect-source / transition-sides warnings); Effects and Transitions \u2192 Custom (code) with New code effect / transition starters and Edit code; ctx.source for effects, ctx.from / ctx.to / progress for main-track cuts (rendered in the sandbox every frame, preview and export); effect/transition packages kept out of main/overlay add; Code editor Settings \u2192 Use as; AI wizard Effect / Transition roles; WebMCP add_code_effect / set_code_transition; guide rule 65",
+          "title": "Code packages as effects and transitions: manifest role clip|effect|transition (role-mismatch error, effect-source / transition-sides warnings); Effects and Transitions → Custom (code) with New code effect / transition starters and Edit code; ctx.source for effects, ctx.from / ctx.to / progress for main-track cuts (rendered in the sandbox every frame, preview and export); effect/transition packages kept out of main/overlay add; Code editor Settings → Use as; AI wizard Effect / Transition roles; WebMCP add_code_effect / set_code_transition; guide rule 65",
           "status": "done",
           "progress": 100
         },
         {
           "id": "P38-CODE-INPUTS",
-          "title": "Code clip inputs: manifest inputs (beat / scene) \u2192 ctx.inputs with computed signals only (beat: rms, peak, 8 bands, onset, envelope from a once-per-file 60 Hz analysis; scene: luma, avgColor, motion, 16-bin histogram from a 32x18 thumbnail; no samples, pixels or frame API); Params \u2192 Inputs Reference list (Mix / Program, tracks, clips); user-renameable layers (desktop double-click, or in the list) with id-based bindings; WebMCP set_clip_input / rename_track; guide rule 66",
+          "title": "Code clip inputs: manifest inputs (beat / scene) → ctx.inputs with computed signals only (beat: rms, peak, 8 bands, onset, envelope from a once-per-file 60 Hz analysis; scene: luma, avgColor, motion, 16-bin histogram from a 32x18 thumbnail; no samples, pixels or frame API); Params → Inputs Reference list (Mix / Program, tracks, clips); user-renameable layers (desktop double-click, or in the list) with id-based bindings; WebMCP set_clip_input / rename_track; guide rule 66",
           "status": "done",
           "progress": 100
         },
         {
           "id": "P38-CLEANUP",
-          "title": "Clean up project (Project settings \u2192 Storage): unused media checked by default, old versions unchecked, sizes and space freed, \u2713 removes in one undo step (files freed by the next start's storage clean-up); WebMCP list_unused_assets / delete_assets; guide rule 67",
+          "title": "Clean up project (Project settings → Storage): unused media checked by default, old versions unchecked, sizes and space freed, ✓ removes in one undo step (files freed by the next start's storage clean-up); WebMCP list_unused_assets / delete_assets; guide rule 67",
           "status": "done",
           "progress": 100
         },
         {
           "id": "P39-TRACK",
-          "title": "Motion tracking: host-side region tracker (template matching, not AI segmentation) \u2014 Track sheet (draw box, analyse forward/back with progress, scrub, unstable frames yellow, nudge), follow (text/photo/overlay/code via keyframes), traveling mask, code-clip \"track\" input, WebMCP track_clip / get_track / attach_track / set_track_mask, rule 68",
+          "title": "Motion tracking: host-side region tracker (template matching, not AI segmentation) — Track sheet (draw box, analyse forward/back with progress, scrub, unstable frames yellow, nudge), follow (text/photo/overlay/code via keyframes), traveling mask, code-clip \"track\" input, WebMCP track_clip / get_track / attach_track / set_track_mask, rule 68",
           "status": "done",
           "progress": 100
         },
@@ -3141,13 +3141,13 @@
         },
         {
           "id": "P42-TRACK-ZOOM",
-          "title": "Track sheet preview zoom: pinch (phone), Ctrl/\u2318+wheel or trackpad pinch (desktop) around the cursor, pan by drag/scroll when zoomed, double-tap or Fit resets; nodes keep 44px screen targets; pure CSS transform (no video reload)",
+          "title": "Track sheet preview zoom: pinch (phone), Ctrl/⌘+wheel or trackpad pinch (desktop) around the cursor, pan by drag/scroll when zoomed, double-tap or Fit resets; nodes keep 44px screen targets; pure CSS transform (no video reload)",
           "status": "done",
           "progress": 100
         },
         {
           "id": "P43-REF-TYPES",
-          "title": "Code clip references as three types \u2014 graphic (Program, main/overlay pictures), audio (Mix, tracks/clips with sound), tracker (clip \u00b7 tracker): + Graphic / + Audio / + Tracker in the code editor's Params tab, typed pickers listing only valid targets, storyboard shot trackers[] + params references by tracker name (needs-tracking warning, binds by name), RULE 69, set_clip_input",
+          "title": "Code clip references as three types — graphic (Program, main/overlay pictures), audio (Mix, tracks/clips with sound), tracker (clip · tracker): + Graphic / + Audio / + Tracker in the code editor's Params tab, typed pickers listing only valid targets, storyboard shot trackers[] + params references by tracker name (needs-tracking warning, binds by name), RULE 69, set_clip_input",
           "status": "done",
           "progress": 100
         },
@@ -3166,6 +3166,12 @@
         {
           "id": "P46-TYPE-STABLE-ALIGN",
           "title": "Typewriter (and chars-reveal): layout from full wrapped text, reveal LTR in place so center/right align does not re-center the growing prefix; caret follows last glyph",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "P47-CAPTION-WORDS",
+          "title": "Caption word timings: word-pop (one clip per word / word SRT) and word-highlight (one cue, karaoke colour); shared words[{text,atSec}]; Even split + Align with AI (copy-prompt/paste); Edit subtitles word chips + draggable timing ruler + nudge + play/pause with live preview; storyboard/WebMCP/guide RULE 70",
           "status": "done",
           "progress": 100
         }

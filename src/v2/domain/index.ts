@@ -11,6 +11,8 @@ export * as text from "./text";
 export type { TextData } from "./text";
 export * as layers from "./layerStyle";
 export * as cues from "./subtitleLayer";
+export * as words from "./wordTiming";
+export type { WordTiming, WordPhase } from "./wordTiming";
 export * as story from "./storyJson";
 export type { StoryDoc, StoryAsset, StoryShot, StoryConnection, StoryIssue, StoryParseResult } from "./storyJson";
 export { storyboardSystemPrompt, storyboardShortPrompt, EXAMPLE_STORYBOARD, exampleStoryboardJson } from "./storyPrompt";

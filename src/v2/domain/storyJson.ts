@@ -162,6 +162,8 @@ export interface StoryTextLayer extends StoryLayerBase {
   type: "text"; text: string; position?: StoryPoint; box?: StoryBox;
   /** Registry `textStyle` id (optionally `id@N`) or a `meta.textStyles` key, kept as written. */
   textStyle?: string; style?: StoryTextStyle; anim?: StoryTextAnim;
+  /** P47: word timings for word-highlight / word-pop (seconds from layer start). */
+  words?: StoryWordTiming[];
 }
 /**
  * P43: a code-clip reference in a storyboard. `clip` is "main" (the shot's main clip) or the id of a video layer of
@@ -303,7 +305,9 @@ export const keyframeId = (shotId: string) => `${shotId}.keyframe`;
 /** V2-SB-135: the shot whose keyframe `id` names ("s2.keyframe" → "s2"), or undefined when it is not a keyframe id. */
 export const keyframeShotOf = (id: string): string | undefined => (id.endsWith(".keyframe") && id.length > 9 ? id.slice(0, -9) : undefined);
 /** V2-SB-135: one spoken line of a shot. `offscreen` = heard but not seen: nobody in frame speaks it (no lip-sync). */
-export interface StoryDialogueLine { speaker?: string; text: string; offscreen?: boolean }
+/** P47: one caption word and its time (seconds from the cue start). */
+export interface StoryWordTiming { text: string; atSec: number }
+export interface StoryDialogueLine { speaker?: string; text: string; offscreen?: boolean; /** P47: word timings for captions (copied onto the caption clip / word-pop split). */ words?: StoryWordTiming[] }
 /** The lines of a shot's dialogue, or undefined for plain-text dialogue (and none). */
 export const dialogueLines = (d: StoryShot["dialogue"]): StoryDialogueLine[] | undefined => (Array.isArray(d) && d.length ? d : undefined);
 const OS_RE = /\((?:O\.?S\.?|off-?screen)\)/i;
@@ -1071,7 +1075,8 @@ export function validateStoryboard(raw: unknown, opts: StoryValidateOptions = {}
           const room = box ? box.width : 1;
           if (w > room * 1.02) warn(`${lp}.text`, box ? `The text is about ${fmt(w)} of the frame wide but the box is ${fmt(box.width)}; it may overflow (text does not wrap). Use a smaller "style.size", a wider box or shorter text.` : `The text is about ${fmt(w)} of the frame wide and may run off screen (text does not wrap). Use a smaller "style.size" or shorter text.`);
         }
-        out.push({ id, type, text, startSec, endSec, ...(position ? { position } : {}), ...(box ? { box } : {}), ...(textStyle ? { textStyle } : {}), ...(style ? { style } : {}), ...(anim ? { anim } : {}), ...(follow ? { follow } : {}), ...look });
+        const words = wordsOf(l.words, `${lp}.words`);
+        out.push({ id, type, text, startSec, endSec, ...(position ? { position } : {}), ...(box ? { box } : {}), ...(textStyle ? { textStyle } : {}), ...(style ? { style } : {}), ...(anim ? { anim } : {}), ...(words ? { words } : {}), ...(follow ? { follow } : {}), ...look });
       } else {
         const asset = str(l.asset) ?? "";
         const a = assetById.get(asset);
@@ -1208,6 +1213,24 @@ export function validateStoryboard(raw: unknown, opts: StoryValidateOptions = {}
     return { prompt, references, qa: strList(v.qa, `${path}.qa`) };
   };
 
+  /** P47: parse [{ "text", "atSec" }, …] for caption word timings. */
+  const wordsOf = (v: unknown, path: string): StoryWordTiming[] | undefined => {
+    if (v === undefined) return undefined;
+    if (!Array.isArray(v)) { warn(path, 'Should be a list of { "text", "atSec" }; ignoring it.'); return undefined; }
+    const out: StoryWordTiming[] = [];
+    v.forEach((row, j) => {
+      const wp = `${path}[${j}]`;
+      if (!isObj(row)) { warn(wp, 'Each word must be { "text", "atSec" }; ignoring it.'); return; }
+      const text = typeof row.text === "string" ? row.text.trim() : "";
+      const at = num(row.atSec);
+      if (!text) { warn(`${wp}.text`, 'Needs non-empty "text"; ignoring this word.'); return; }
+      if (at === undefined || at < 0) { warn(`${wp}.atSec`, `"atSec" must be seconds ≥ 0; ignoring this word.`); return; }
+      for (const k of Object.keys(row)) if (!["text", "atSec"].includes(k)) warn(`${wp}.${k}`, `Unknown word field "${k}" is ignored.`);
+      out.push({ text, atSec: at });
+    });
+    return out.length ? out : undefined;
+  };
+
   /** shots[].dialogue: text, or (V2-SB-135) a list of lines: text or { "speaker"?, "text", "offscreen"? }. */
   const dialogueOf = (v: unknown, path: string): StoryShot["dialogue"] => {
     if (v === undefined) return undefined;
@@ -1222,8 +1245,9 @@ export function validateStoryboard(raw: unknown, opts: StoryValidateOptions = {}
       if (!text) return err(`${lp}.text`, 'A dialogue line needs "text": the words spoken.');
       const speaker = str(l.speaker)?.replace(/[:\n]/g, " ").trim();
       if (l.offscreen !== undefined && typeof l.offscreen !== "boolean") warn(`${lp}.offscreen`, "offscreen should be true or false; ignoring it (the line is on screen).");
-      for (const k of Object.keys(l)) if (!["speaker", "text", "offscreen"].includes(k)) warn(`${lp}.${k}`, `Unknown dialogue line field "${k}" is ignored. Fields: speaker, text, offscreen.`);
-      lines.push({ ...(speaker ? { speaker } : {}), text, ...(l.offscreen === true ? { offscreen: true } : {}) });
+      const words = wordsOf(l.words, `${lp}.words`);
+      for (const k of Object.keys(l)) if (!["speaker", "text", "offscreen", "words"].includes(k)) warn(`${lp}.${k}`, `Unknown dialogue line field "${k}" is ignored. Fields: speaker, text, offscreen, words.`);
+      lines.push({ ...(speaker ? { speaker } : {}), text, ...(l.offscreen === true ? { offscreen: true } : {}), ...(words ? { words } : {}) });
     });
     return lines.length ? lines : undefined;
   };

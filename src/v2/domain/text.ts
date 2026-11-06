@@ -37,6 +37,11 @@ export interface TextData {
   loopParams?: Params;
   /** In/out animation length in ticks. */
   animTicks?: number;
+  /**
+   * P47: word-level caption timings (seconds from the clip start). Used by word-highlight (one cue) and as the
+   * source timings when expanding word-pop into one short clip per word. Stretching the cue scales these.
+   */
+  words?: { text: string; atSec: number }[];
 }
 
 export const DEFAULT_TEXT: TextData = { text: "Text", font: "system-ui, sans-serif", size: 0.1, bold: true, color: "#ffffff", align: "center", strokeWidth: 0, strokeColor: "#000000" };

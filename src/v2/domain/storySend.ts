@@ -23,6 +23,7 @@ import { textOf, textStyleData, textStyleFields, type TextData } from "./text";
 import { previousAdjacent, setTransition } from "./transitions";
 import { secondsToTicks, TICKS_PER_SECOND } from "./time";
 import { followKeyframes, type MotionEffect } from "./storyFollow";
+import { evenSplitCueWords, expandWordPop } from "./subtitleLayer";
 
 /** What one send added, for the confirmation note. */
 export interface SendResult { shots: number; /** P35: shots sent as placeholders (no clip yet). */ placeholders?: number; layers: number; captions: number; effects: number; transitions: number; skippedLayers: number; audio: number; skippedAudio: number; firstClipId?: string }
@@ -65,6 +66,7 @@ export function textLayerData(b: Pick<Storyboard, "meta">, l: StoryTextLayer): T
   if (animOut) d.animOut = animOut;
   if (loop) d.loop = loop;
   if (typeof l.anim?.durationSec === "number" && l.anim.durationSec > 0) d.animTicks = secondsToTicks(l.anim.durationSec);
+  if (l.words?.length) d.words = l.words.map((w) => ({ text: w.text, atSec: w.atSec }));
   return d;
 }
 
@@ -200,8 +202,15 @@ function addLinked(p: Project, b: Storyboard, comp: Composition, shot: Shot, cli
       const t0 = textLayerTransform(l);
       const t = l.opacity !== undefined ? { ...t0, opacity: l.opacity } : t0;
       const keyframes = follow(l, r, t);
-      const pl: Placement = { id: newId("plc"), startTicks: start, durationTicks: r.duration, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "text", text: textLayerData(b, l), ...(t ? { transform: t as Transform } : {}), ...(keyframes ? { keyframes } : {}), ...blendOf(l), storyLink: { anchor }, storyLayer: l.id, ...(l.link === false ? {} : { link: { parent: anchor } }) };
+      const td = textLayerData(b, l);
+      const pl: Placement = { id: newId("plc"), startTicks: start, durationTicks: r.duration, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "text", text: td, ...(t ? { transform: t as Transform } : {}), ...(keyframes ? { keyframes } : {}), ...blendOf(l), storyLink: { anchor }, storyLayer: l.id, ...(l.link === false ? {} : { link: { parent: anchor } }) };
       c = placeOnFreeTrack(c, pl, plainText());
+      if (td.animIn === "word-pop") {
+        const entrance = typeof td.animInParams?.entrance === "string" ? String(td.animInParams.entrance) : "pop";
+        c = expandWordPop(c, pl.id, entrance);
+      } else if (td.animIn === "word-highlight" && !td.words?.length) {
+        c = evenSplitCueWords(c, pl.id);
+      }
       res.layers += 1;
     } else {
       const pl = mediaLayer(p, b, shot, l, start, r.duration, anchor);
@@ -228,7 +237,9 @@ function addLinked(p: Project, b: Storyboard, comp: Composition, shot: Shot, cli
     if (Object.keys(inputs).length) c = { ...c, tracks: c.tracks.map((t) => ({ ...t, placements: t.placements.map((x) => (x.id === w.id ? { ...x, htmlInputs: { ...x.htmlInputs, ...inputs } } : x)) })) };
   }
   if (shot.captions && captionText(shot)) {
-    const cue: Placement = { id: newId("plc"), startTicks: clip.startTicks, durationTicks: clip.durationTicks, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "text", text: { text: captionText(shot) } as TextData, storyLink: { anchor }, storyLayer: "captions", link: { parent: anchor } };
+    const captionWords = (shot.lines ?? []).flatMap((l) => l.words ?? []);
+    const textData = { text: captionText(shot), ...(captionWords.length ? { words: captionWords.map((w) => ({ text: w.text, atSec: w.atSec })), animIn: "word-highlight" } : {}) } as TextData;
+    const cue: Placement = { id: newId("plc"), startTicks: clip.startTicks, durationTicks: clip.durationTicks, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "text", text: textData, storyLink: { anchor }, storyLayer: "captions", link: { parent: anchor } };
     const shared = c.tracks.find((t) => t.kind === "text" && t.layerStyle?.subtitle && isFree(t, cue.startTicks, cue.durationTicks));
     if (shared) c = insertPlacement(c, shared.id, cue);
     else c = placeOnFreeTrack(c, cue, () => false, { name: "Subtitles", layerStyle: SUBTITLE_STYLE });

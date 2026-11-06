@@ -88,6 +88,8 @@ export interface PresetFrame {
    * domain/text.ts textAnimAt into `caret` / `display` (glyphs = cursor characters; >1 char = scramble/decode).
    */
   cursor?: { glyphs: string; blink: number; after: "blink" | "hide" | "fade"; scramble: number };
+  /** P47: word-highlight style resolved by the word-highlight textAnimIn preset; consumed by drawTextClip. */
+  wordHighlight?: { pendingOpacity: number; highlightColor: string; currentScale: number };
 }
 /** 2D context type shared by on-screen, offscreen and export canvases. */
 export type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;

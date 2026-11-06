@@ -303,7 +303,8 @@
         "Basic",
         "Bounce",
         "Type",
-        "Reveal"
+        "Reveal",
+        "Captions"
       ],
       "presets": [
         {
@@ -495,6 +496,71 @@
               "default": 8
             }
           ]
+        },
+        {
+          "id": "word-highlight",
+          "version": 1,
+          "name": "Word highlight",
+          "category": "Captions",
+          "description": "Keeps the whole caption visible and emphasises each word in time (pending dim, current colour, spoken normal). Needs word timings on the clip (Even split or Align with AI).",
+          "params": [
+            {
+              "key": "pendingOpacity",
+              "label": "Pending opacity",
+              "description": "Opacity of words not yet spoken (0–1). Spoken words use the clip colour at full opacity.",
+              "type": "number",
+              "min": 0.1,
+              "max": 1,
+              "step": 0.05,
+              "default": 0.4
+            },
+            {
+              "key": "highlightColor",
+              "label": "Highlight colour",
+              "description": "Fill colour of the word that is current (CSS #rrggbb).",
+              "type": "color",
+              "default": "#20d5ec"
+            },
+            {
+              "key": "currentScale",
+              "label": "Current scale",
+              "description": "Extra size of the current word as a fraction (0.08 = 8% larger).",
+              "type": "number",
+              "min": 0,
+              "max": 0.3,
+              "step": 0.01,
+              "default": 0.08
+            }
+          ],
+          "ai": {
+            "use": "Karaoke-style captions: the whole line is on screen and each word lights up with the narration.",
+            "avoid": "Titles that should pop on one word at a time — use word-pop instead."
+          }
+        },
+        {
+          "id": "word-pop",
+          "version": 1,
+          "name": "Word pop",
+          "category": "Captions",
+          "description": "Splits the caption into one short clip per word (word SRT) so each word pops (or fades / slides) in at its time. Needs word timings; Even split creates them. After apply, each word clip uses the chosen entrance animation.",
+          "params": [
+            {
+              "key": "entrance",
+              "label": "Entrance",
+              "description": "Animation each word clip uses: pop (default), fade, or slide-up.",
+              "type": "select",
+              "options": [
+                "pop",
+                "fade",
+                "slide-up"
+              ],
+              "default": "pop"
+            }
+          ],
+          "ai": {
+            "use": "Captions where each word appears on its own (CapCut-style word SRT / popup).",
+            "avoid": "When the whole sentence must stay visible while words change colour — use word-highlight."
+          }
         }
       ]
     },
