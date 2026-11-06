@@ -113,4 +113,24 @@ describe("TrackSheet", () => {
     expect(seen[0].first).toBe(s(1) - 4000); // seeded from the old last frame, then only new frames
     expect(t.pl().motionTracks![0].outS).toBeGreaterThan(s(1.6));
   });
+  it("P41: editor re-renders (fresh loadBlob, new project/time) keep the same video src and don't re-seek a paused frame", async () => {
+    URL.createObjectURL = vi.fn(() => "blob:one"); URL.revokeObjectURL = vi.fn();
+    const t = mount(fake);
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    const v = t.el.querySelector("video") as HTMLVideoElement;
+    expect(v.getAttribute("src")).toBe("blob:one");
+    expect(v.classList.contains("is-ready")).toBe(false);
+    act(() => { v.dispatchEvent(new Event("loadeddata")); });
+    expect(v.classList.contains("is-ready")).toBe(true);
+    let seeks = 0;
+    let cur = v.currentTime;
+    Object.defineProperty(v, "currentTime", { configurable: true, get: () => cur, set: (x: number) => { seeks++; cur = x; } });
+    for (let i = 0; i < 5; i++) { t.render(); await act(async () => { await new Promise((r) => setTimeout(r, 0)); }); }
+    expect(URL.createObjectURL).toHaveBeenCalledTimes(1);
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+    expect(v.getAttribute("src")).toBe("blob:one");
+    expect(t.el.querySelector("video")).toBe(v);
+    expect(v.classList.contains("is-ready")).toBe(true);
+    expect(seeks).toBe(0);
+  });
 });

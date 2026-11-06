@@ -3132,6 +3132,12 @@
           "title": "Tracker upgrades: play/pause + Space in the Track sheet, scale search (box grows/shrinks), lost frames (found:false, no invented position), several named trackers per clip with In/Out ranges (extend analyses only the new part), editable path overlay, non-exported Tracks lane (spans, yellow weak frames, drag ends/body), WebMCP trackId + set_track_range, get_timeline tracks[]",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P41-TRACK-FLICKER",
+          "title": "Track sheet preview no longer flickers: stable blob URL per asset (no reload on editor re-renders), no re-seek of an unchanged paused frame, video hidden until its first decoded frame",
+          "status": "done",
+          "progress": 100
         }
       ]
     }
