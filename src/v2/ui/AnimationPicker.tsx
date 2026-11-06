@@ -33,7 +33,27 @@ export function AnimationPicker({ engine, placement, onPicked, onSet }: { engine
   const value = d[cur.key] ?? "none";
   const desc = getPreset(cur.kind, value);
   // A new pick starts from the new preset's defaults (only clear when there is something to clear).
-  const pick = (id: string, label: string) => set({ [cur.key]: id, ...(d[cur.pkey] ? { [cur.pkey]: undefined } : {}) }, label);
+  // P47: Captions presets apply as modes — word-highlight keeps one cue; word-pop expands to word clips.
+  const pick = (id: string, label: string) => {
+    if (tab === "In" && id === "word-highlight" && !onSet) {
+      engine.dispatch(cmd.applyWordHighlight(placement.id));
+      onPicked?.();
+      return;
+    }
+    if (tab === "In" && id === "word-pop" && !onSet) {
+      const entrance = typeof d.animInParams?.entrance === "string" ? d.animInParams.entrance : "pop";
+      engine.dispatch(cmd.expandWordPop(placement.id, entrance));
+      onPicked?.();
+      return;
+    }
+    if (tab === "In" && (id === "word-highlight" || id === "word-pop") && onSet) {
+      // Edit all: set the mode + default params on the layer style; timings stay per-clip.
+      onSet({ animIn: id, animInParams: id === "word-highlight" ? { pendingOpacity: 0.4, highlightColor: "#20d5ec", currentScale: 0.08 } : { entrance: "pop" } }, label);
+      onPicked?.();
+      return;
+    }
+    set({ [cur.key]: id, ...(d[cur.pkey] ? { [cur.pkey]: undefined } : {}) }, label);
+  };
   const halfClipS = placement.durationTicks / 2 / TPS;
   const durS = Math.min((d.animTicks ?? 60_000) / TPS, halfClipS, ANIM_MAX_S);
   const params = desc ? defaultsOf(desc, d[cur.pkey]) : {};

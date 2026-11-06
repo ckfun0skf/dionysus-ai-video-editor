@@ -3,6 +3,7 @@ import { useEdgeFade } from "./useEdgeFade";
 import { cmd, type Engine } from "../engine";
 import { layers, text as T, type Placement, type TextData, type Track } from "../domain";
 import { AnimationPicker } from "./AnimationPicker";
+import { WordTimingEditor } from "./WordTimingEditor";
 import { PresetTile } from "./PresetTile";
 import { Ic } from "./Icon";
 import { listPresets, type PresetKind } from "../registry";
@@ -21,7 +22,7 @@ export type Tab = (typeof TABS)[number];
  * `track` (clip mode) = the clip's layer, for the "custom" dot and "Reset to layer style".
  * `placement` must be the effective placement (layers.effectivePlacement) so the controls show what renders.
  */
-export function TextPanel({ engine, placement, onAnimPicked, initialTab = "Templates", layer, track }: { engine: Engine; placement?: Placement; onAnimPicked?: () => void; initialTab?: Tab; layer?: Track; track?: Track }) {
+export function TextPanel({ engine, placement, onAnimPicked, initialTab = "Templates", layer, track, time = 0, playing = false, onSeek, onTogglePlay }: { engine: Engine; placement?: Placement; onAnimPicked?: () => void; initialTab?: Tab; layer?: Track; track?: Track; time?: number; playing?: boolean; onSeek?: (t: number) => void; onTogglePlay?: () => void }) {
   const tabsFade = useEdgeFade<HTMLDivElement>();
   const [tab, setTab] = useState<Tab>(initialTab);
   const ls = layer?.layerStyle;
@@ -55,6 +56,9 @@ export function TextPanel({ engine, placement, onAnimPicked, initialTab = "Templ
         <button className="v2-btn" disabled={!custom} title="Drop this clip's own style so it matches the rest of the layer (undoable)" onClick={() => engine.dispatch(cmd.resetToLayerStyle(pl.id))}>Reset to layer style</button>
       </div>}
       {!layer && <textarea className="v2-tp-text" aria-label="Text content" value={d.text} rows={2} onFocus={() => engine.beginGesture()} onBlur={() => engine.endGesture()} onChange={(e) => set({ text: e.target.value }, "Type text")} />}
+      {!layer && placement && onSeek && (
+        <WordTimingEditor engine={engine} placement={placement} time={time} playing={playing} onSeek={onSeek} onTogglePlay={onTogglePlay} desktop />
+      )}
       <div ref={tabsFade} className="v2-tp-tabs" role="tablist">
         {TABS.map((t) => <button key={t} role="tab" aria-selected={t === tab} className={`v2-tp-tab ${t === tab ? "is-active" : ""}`} onClick={() => setTab(t)}>{t}</button>)}
       </div>
