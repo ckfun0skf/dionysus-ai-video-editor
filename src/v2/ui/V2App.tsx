@@ -27,7 +27,7 @@ import { connectAgentBridge } from "./agent/webMcp";
 import { AgentIndicator } from "./agent/AgentPanel";
 import type { BoardTarget } from "./storyboard/BoardView";
 import type { Resolution } from "../render";
-import { downloadSrt, importSrtFile, SubtitleEditor, SubtitleLane } from "./Subtitles";
+import { downloadSrt, importSrtFile, importSrtText, SubtitleImport, SubtitleEditor, SubtitleLane } from "./Subtitles";
 import { downloadText, SubtitleList } from "./SubtitleList";
 import { cues as cueLayer } from "../domain";
 import { Ic } from "./Icon";
@@ -177,6 +177,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const [ripple, setRippleState] = useState(() => localStorage.getItem("v2.ripple") === "1");
   const setRipple = (on: boolean) => { setRippleState(on); localStorage.setItem("v2.ripple", on ? "1" : "0"); setToast(on ? "Ripple on: delete and trim close gaps" : "Ripple off"); };
   const srtRef = useRef<HTMLInputElement>(null);
+  const [subImport, setSubImport] = useState(false);
   /** V2-106 desktop shell: panel sizes (persisted), browser tab, inspector tab. */
   const [sizes, setSizes] = useState<PanelSizes>(() => loadSizes(undefined, window.innerHeight));
   const sizesRef = useRef(sizes); sizesRef.current = sizes;
@@ -242,7 +243,17 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const selectCue = (id?: string) => { setSubId(id); if (id) setSelectedId(undefined); };
   const addText = () => { const id = newId("plc"); if (engine.dispatch(cmd.addTextClip(Math.round(player.time), {}, id))) { setSel([id]); setSubId(undefined); } };
   const delCue = () => { if (subId) { engine.dispatch(cmd.removeSubtitle(subId)); setSubId(undefined); } };
+  const onSubPaste = (text: string) => {
+    const rootOf = () => { const p = engine.getState().project; return p.compositions[p.rootCompositionId]; };
+    const before = new Set(rootOf().tracks.map((t) => t.id));
+    const n = importSrtText(engine, text);
+    const added = rootOf().tracks.find((t) => !before.has(t.id) && t.kind === "text");
+    if (added) setSrtLayer(added.id);
+    setSubImport(false);
+    setToast(`Imported ${n} subtitles (Undo to revert)`);
+  };
   const onSrt = async (f?: File) => {
+    setSubImport(false);
     if (!f) return;
     const rootOf = () => { const p = engine.getState().project; return p.compositions[p.rootCompositionId]; };
     const before = new Set(rootOf().tracks.map((t) => t.id));
@@ -256,7 +267,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const topLane = cues.length ? { label: "Text", render: (toPx: (t: number) => number, toTicks: (px: number) => number) => <SubtitleLane engine={engine} list={cues} selectedId={subId} onSelect={selectCue} toPx={toPx} toTicks={toTicks} /> } : undefined;
   const textTools = [
     { icon: "T", label: "Add text", title: "Add a text clip at the playhead (T)", run: addText },
-    { icon: "⇪", label: "Import", title: "Import an .srt file as a new text layer", run: () => srtRef.current?.click() },
+    { icon: "⇪", label: "Import", title: "Paste or choose .srt / .vtt subtitles as a new text layer", run: () => setSubImport(true) },
     { icon: "≡", label: "Subtitles", title: "Edit every subtitle in a list: text, timing, split, merge, find & replace", run: () => editSubtitles() },
     { icon: "⇩", label: "Export", title: "Download subtitles as .srt", run: exportSrt },
   ];
@@ -647,6 +658,9 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const fileInputs = (
     <>
       <input ref={fileRef} type="file" hidden multiple accept="video/*,image/*,audio/*,.html,.htm,text/html,.zip,application/zip" onChange={(e) => { void onFiles(e.target.files); e.target.value = ""; }} />
+      {subImport && <div className="v2-modal-back" onPointerDown={(e) => { if (e.target === e.currentTarget) setSubImport(false); }}>
+        <SubtitleImport onPasteImport={onSubPaste} onChooseFile={() => srtRef.current?.click()} onClose={() => setSubImport(false)} />
+      </div>}
       <input ref={srtRef} type="file" hidden accept=".srt,.vtt,text/plain" aria-label="Import SRT file" onChange={(e) => { void onSrt(e.target.files?.[0]); e.target.value = ""; }} />
     </>
   );
@@ -909,7 +923,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const assetBrowser = (
     <AssetBrowser project={project} thumbs={thumbs} busy={busy} tab={btab} onTab={setBtab}
       onImport={importDialog} onFiles={(fs) => void onFiles(fs)} onAddAsset={addToTimeline} onRemoveAsset={(a) => engine.dispatch(cmd.removeAsset(a.id))}
-      onAddText={(tp) => addTextAt(player.time, tp)} onImportSrt={() => srtRef.current?.click()}
+      onAddText={(tp) => addTextAt(player.time, tp)} onImportSrt={() => setSubImport(true)}
       onAddSticker={(st) => void addStickerAt(st, player.time)} onAddEffect={(id) => addEffectAt(id, player.time)}
       onAddTransition={addTransitionNearPlayhead} onCreateCode={() => createCode()} onCreateAudio={createAudio} onAudioFromVideo={() => setPicker("fromVideo")} />
   );

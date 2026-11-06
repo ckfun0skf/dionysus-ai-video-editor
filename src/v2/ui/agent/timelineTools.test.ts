@@ -275,3 +275,18 @@ describe("P27 replace_clip_asset on a storyboard shot clip", () => {
     expect(ALL_AGENT_TOOLS.some((t) => t.name === "merge_layer_up")).toBe(true);
   });
 });
+
+describe("P36 import_subtitles", () => {
+  it("adds pasted SRT as one text layer in one undo step, and explains text with no cues", async () => {
+    const e = setup(), n0 = root(e.getState().project).tracks.length;
+    const r = await runTimelineTool(e, undefined, "import_subtitles", { text: "1\n00:00:01,000 --> 00:00:02,000\nHi\n\n2\n00:00:03,000 --> 00:00:04,000\nBye\n" });
+    expect(r.ok).toBe(true);
+    expect(json(r.text)).toEqual({ imported: 2 });
+    expect(root(e.getState().project).tracks.length).toBe(n0 + 1);
+    e.undo();
+    expect(root(e.getState().project).tracks.length).toBe(n0);
+    const bad = await runTimelineTool(e, undefined, "import_subtitles", { text: "hello" });
+    expect(bad.ok).toBe(false);
+    expect(bad.text).toMatch(/No subtitles found/);
+  });
+});

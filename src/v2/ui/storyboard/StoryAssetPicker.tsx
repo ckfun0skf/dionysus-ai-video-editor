@@ -3,6 +3,8 @@ import { TICKS_PER_SECOND, type MediaKind, type MediaRef, type Project } from ".
 import type { BlobStore } from "../../ports";
 import { AssetPreview, type PreviewKind } from "../AssetPreview";
 import { Ic } from "../Icon";
+import { HtmlImport } from "../HtmlImport";
+import type { BindingType, HtmlClipParam } from "../../domain";
 
 const ICON: Record<PreviewKind, string> = { video: "▭", image: "image", audio: "♫", html: "</>" };
 const fmtDur = (ticks?: number) => { if (!ticks) return ""; const s = Math.round(ticks / TICKS_PER_SECOND); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
@@ -28,12 +30,15 @@ export function libraryEntries(project: Project, kind: MediaKind, exclude: strin
  * existing asset or version from this project's library, with a playable preview of the one selected. The chosen
  * file is shared (not copied) and becomes a new version of the shot or asset.
  */
-export function StoryAssetPicker({ project, kind, title, exclude, thumbs, blobs, uploadLabel, onUpload, onPick, onClose }: {
+export function StoryAssetPicker({ project, kind, title, exclude, thumbs, blobs, uploadLabel, onUpload, onPick, onClose, onPasteHtml, expectBindings, expectParams }: {
   project: Project; kind: MediaKind; title: string; exclude?: string; thumbs: Record<string, string>; blobs: BlobStore;
   uploadLabel: string; /** Open the device file chooser (the panel's own file input). */ onUpload: () => void; onPick: (e: LibraryEntry) => void; onClose: () => void;
+  /** P36: code clips can also be pasted (the AI's reply or raw HTML) as the new version. */
+  onPasteHtml?: (html: string, name: string) => Promise<void> | void; expectBindings?: Record<string, BindingType>; expectParams?: Record<string, HtmlClipParam>;
 }) {
   const entries = useMemo(() => libraryEntries(project, kind, exclude, thumbs), [project, kind, exclude, thumbs]);
   const [sel, setSel] = useState<string>();
+  const [pasting, setPasting] = useState(false);
   const cur = entries.find((e) => e.key === sel);
   const pk = (["video", "image", "audio", "html"].includes(kind) ? kind : "image") as PreviewKind;
   useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); }; addEventListener("keydown", k); return () => removeEventListener("keydown", k); }, [onClose]);
@@ -50,7 +55,18 @@ export function StoryAssetPicker({ project, kind, title, exclude, thumbs, blobs,
             <span className="v2-pick-action-ic"><Ic g="⇪" size={22} /></span>
             <span><b>Upload new</b><small>{uploadLabel}</small></span>
           </button>
+          {kind === "html" && onPasteHtml && (
+            <button className={`v2-pick-action ${pasting ? "is-on" : ""}`} aria-expanded={pasting} onClick={() => setPasting(!pasting)} data-testid="sb-picker-paste">
+              <span className="v2-pick-action-ic"><Ic g="📋" size={22} /></span>
+              <span><b>Paste HTML</b><small>The AI's reply or the HTML itself</small></span>
+            </button>
+          )}
         </div>
+        {pasting && onPasteHtml && (
+          <section className="v2-sb-picker-paste" aria-label="Paste HTML">
+            <HtmlImport expectBindings={expectBindings} expectParams={expectParams} expectSource="storyboard" onAdd={async (h, n) => { await onPasteHtml(h, n); onClose(); }} />
+          </section>
+        )}
         {cur && (
           <section className="v2-sb-picker-preview" aria-label="Preview">
             <AssetPreview kind={pk} name={`${cur.name}${cur.label ? ` ${cur.label}` : ""}`} cacheKey={cur.key} load={() => blobs.get(cur.media.blobKey)}
