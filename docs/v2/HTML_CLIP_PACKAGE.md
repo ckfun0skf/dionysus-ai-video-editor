@@ -183,6 +183,31 @@ REPLY FORMAT
 ```
 <!-- aimode:end -->
 
+### 6.2 Revise with AI (P44)
+
+*Code Editor → Revise with AI* revises a clip that already exists. It works for a timeline clip and for an effect or transition package, because both open in the same Code Editor. The button is only in that editor: not on the timeline context menu, and not in the inspector or the storyboard. The wizard uses the same shell as §6.1 (step list, progress, Back / Next).
+
+1. **Describe** — what should change. The wizard does not ask again for role, parameters, size, duration or three.js; those come from the current manifest.
+2. **Mode** — how the current HTML reaches the external AI:
+   - *Embed HTML in prompt* — the prompt contains the whole file. One *Copy prompt*.
+   - *Attach HTML to AI* — the prompt names the file (`<clip name>.html`, the same name *Export .html* downloads, for example `Code clip` → `Code-clip.html`) and includes the package rules and the change request, not the HTML. The step offers *Export .html*, *Export .zip* and *Copy HTML*.
+   Embed is selected when the package is at most 32,768 characters; Attach is selected when it is longer (embedded images and fonts). The user can switch.
+3. **Prompt** — copy the prompt. Dionysus does not call an AI. Attach mode also downloads or copies the HTML to attach in the chat.
+4. **Import** — choose or drop the `.zip` or `.html`, or paste the reply. Validation is §5. A missing or retyped param from the current manifest is a warning, and so is a missing binding. *Open in Code Editor* loads the result for preview. **Save** makes a new version (one undo). Closing the wizard without importing leaves the editor as it was.
+
+The prompt is built from the same source as §6.1: the change request, the current manifest (name, role, duration, frame, background, libraries, params, inputs including the legacy names scene / beat / track, bindings), the runtime contract (§3) and the reply format in §6.1. It tells the AI to keep what works, to keep param keys unless the request adds, removes or changes one, and to reply with a complete package, not a diff.
+
+<!-- revise:start -->
+```text
+REVISE
+- Keep what already works. Change only what the change request asks for.
+- Keep every param key, type and default unless the change request adds, removes or changes one. The timeline stores values by those keys.
+- Keep bindings and inputs unless the change request changes them. Input types are graphic, audio and tracker; the legacy names scene, beat and track mean graphic, audio and tracker.
+- Reply with a complete dionysus.htmlclip/1 package, not a diff, patch or snippet.
+- The user imports the .zip or .html (or pastes the reply) in Dionysus (Code Editor → Revise with AI → Import), which checks it against the package standard and opens it in the Code Editor. Saving there makes a new version.
+```
+<!-- revise:end -->
+
 ## 7. Template
 
 A minimal complete clip (what *Copy full prompt* includes, with the asset's values). It has the in-app Code Editor's layout (one `<canvas id="c">`, the base style, one `<script type="module">`), so it opens there in the Script tab (§9):
@@ -285,7 +310,7 @@ dionysus.clip({
 
 ## 9. Decisions and open questions
 
-- **The in-app Code Editor is JS-first** (V2-CODE-EDITOR). Only the canvas is captured, so the editor treats a clip as a script plus data, not as a web page: **Script** (the `<script type="module">` with `dionysus.clip({ init, render })`; the page's canvas is provided), **Params** (add, edit, reorder and remove the manifest's `params`, validated, with the `ctx.params.<key>` to use), **Files** (fonts and images embedded as data: URLs; fonts get generated `@font-face` rules), **Settings** (name, duration, size/aspect, background or transparent, libraries) and **Advanced** (extra CSS and markup, rarely needed). It still stores the one-file package above, unchanged: it writes the template's page — doctype, manifest, `<style>` with the base CSS (`html,body{margin:0;height:100%;overflow:hidden;background:transparent}canvas{display:block;width:100%;height:100%}`), the generated font rules between `/* dionysus:fonts */` and `/* /dionysus:fonts */`, then any extra CSS; `<body><canvas id="c"></canvas>`, any extra markup, and one `<script type="module">` — and reads back files of that shape. Any other page (several scripts, its own page CSS, no canvas: e.g. older or hand-written clips) opens in **Advanced** as full HTML, with a note, and keeps working; params, files and settings are still edited in their tabs. HTML and CSS are only for fonts and those legacy clips. *Load sample* offers *Canvas animation* and *Three.js*; the live preview runs the clip in the same sandbox with the params' defaults, with play and scrub, and shows syntax, runtime and package problems inline. Saving makes a new version (one undo step).
+- **The in-app Code Editor is JS-first** (V2-CODE-EDITOR). Only the canvas is captured, so the editor treats a clip as a script plus data, not as a web page: **Script** (the `<script type="module">` with `dionysus.clip({ init, render })`; the page's canvas is provided), **Params** (add, edit, reorder and remove the manifest's `params`, validated, with the `ctx.params.<key>` to use), **Files** (fonts and images embedded as data: URLs; fonts get generated `@font-face` rules), **Settings** (name, duration, size/aspect, background or transparent, libraries) and **Advanced** (extra CSS and markup, rarely needed). It still stores the one-file package above, unchanged: it writes the template's page — doctype, manifest, `<style>` with the base CSS (`html,body{margin:0;height:100%;overflow:hidden;background:transparent}canvas{display:block;width:100%;height:100%}`), the generated font rules between `/* dionysus:fonts */` and `/* /dionysus:fonts */`, then any extra CSS; `<body><canvas id="c"></canvas>`, any extra markup, and one `<script type="module">` — and reads back files of that shape. Any other page (several scripts, its own page CSS, no canvas: e.g. older or hand-written clips) opens in **Advanced** as full HTML, with a note, and keeps working; params, files and settings are still edited in their tabs. HTML and CSS are only for fonts and those legacy clips. *Load sample* offers *Canvas animation* and *Three.js*; the live preview runs the clip in the same sandbox with the params' defaults, with play and scrub, and shows syntax, runtime and package problems inline. Saving makes a new version (one undo step). *Revise with AI* (§6.2) is in the header when editing an existing clip.
 - **Canvas capture only.** The editor captures the first `<canvas>`; DOM/CSS animation is not rasterised (a sandboxed page can't be screenshotted without a renderer of our own). Pages draw text and images on the canvas.
 - **Param defaults are per version; values are per use** (V2-HTML-PARAMS): the manifest declares the params and their defaults (editing them saves a new version), and each timeline clip stores only its overrides. Keyframing param values over time is future work.
 - **Text is a param**, not a binding; bindings are media (image, video, audio) only. Audio bindings give the clip a URL (e.g. to draw a waveform); the clip's sound is never played — put audio on the timeline.

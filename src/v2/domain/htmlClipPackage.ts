@@ -262,8 +262,8 @@ export interface LintOptions {
   expectBindings?: Record<string, BindingType>;
   /** Params the storyboard declares for this asset (V2-HTML-PARAMS); missing or differently typed ones are warnings. */
   expectParams?: Record<string, HtmlClipParam>;
-  /** Where expectParams come from, for the warning wording (default "storyboard"; P4C: "wizard" = Code AI mode). */
-  expectSource?: "storyboard" | "wizard";
+  /** Where expectParams come from, for the warning wording (default "storyboard"; P4C: "wizard" = Code AI mode; P44: "revise" = the clip open in the Code Editor). */
+  expectSource?: "storyboard" | "wizard" | "revise";
   /** P38: where the package is being used ("clip" on a track, an "effect" clip, or a "transition"); another role is an error. */
   expectRole?: CodePackageRole;
 }
@@ -340,8 +340,8 @@ export function lintHtmlClip(html: string, opts: LintOptions): LintResult {
   for (const n of Object.keys(b)) if (!new RegExp(`["'\`.]${esc(n)}["'\`]?`).test(code)) warn("binding-unused", `Binding "${n}" is declared but the code never uses it (ctx.bindings["${n}"]).`);
   // Params (V2-HTML-PARAMS): the storyboard's declared params must be exposed, and exposed params must be read.
   const ps = isObj(manifest.params) ? manifest.params : {};
-  const where = opts.expectSource === "wizard" ? "in AI mode" : "on the storyboard asset";
-  const lost = opts.expectSource === "wizard" ? "so it can't be tweaked on the timeline" : "so per-shot values for it are ignored";
+  const where = opts.expectSource === "wizard" ? "in AI mode" : opts.expectSource === "revise" ? "on the current clip" : "on the storyboard asset";
+  const lost = opts.expectSource === "wizard" ? "so it can't be tweaked on the timeline" : opts.expectSource === "revise" ? "so values already set for it on the timeline are dropped" : "so per-shot values for it are ignored";
   for (const [k, spec] of Object.entries(opts.expectParams ?? {})) {
     if (!ps[k]) warn("param-missing", `Param "${k}" (${spec.type}) is declared ${where} but not in the manifest "params", ${lost}.`);
     else if (ps[k].type !== spec.type) warn("param-mismatch", `Param "${k}" is ${ps[k].type} in the manifest but ${spec.type} ${where}.`);

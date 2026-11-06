@@ -6,6 +6,7 @@ import {
   newWizardAnswers, runtimeAiLinks, wizardIssues, wizardParams, type CodeRole, type CodeWizardAnswers, type ParamType, type WizardParam, type WizardRef,
 } from "../domain";
 import { CLIP_LIBRARIES } from "../render";
+import { CodeWizardShell } from "./CodeWizardShell";
 import { HtmlImport } from "./HtmlImport";
 import { Ic as Icon } from "./Icon";
 import { CopyButton } from "./storyboard/StoryImport";
@@ -62,13 +63,10 @@ export function CodeAiWizard({ mobile, initialRole = "scene", onImport, onClose 
   const [step, setStep] = useState<StepId>("describe");
   const [probing, setProbing] = useState(false);
   const set = (p: Partial<CodeWizardAnswers>) => setA((x) => ({ ...x, ...p }));
-  const idx = STEPS.findIndex((s) => s.id === step);
   const issues = useMemo(() => wizardIssues(a), [a]);
-  const stepIssues = issues.filter((i) => i.step === step);
-  const blockedFrom = (i: number) => issues.some((x) => STEPS.findIndex((s) => s.id === x.step) < i);
   const prompt = () => codeWizardPrompt(a, { libs: CLIP_LIBRARIES, specUrl: runtimeAiLinks().htmlClipSpec });
-  const go = (i: number) => { if (i >= 0 && i < STEPS.length && !blockedFrom(i)) setStep(STEPS[i].id); };
   const expectParams = useMemo(() => wizardParams(a), [a]);
+  const nextLabel = step === "import" ? undefined : step === "refs" ? "Build prompt" : step === "prompt" ? "I have the reply" : "Next";
 
   const setParam = (i: number, p: Partial<WizardParam>) => set({ params: a.params.map((x, j) => (j === i ? { ...x, ...p } : x)) });
   const addRef = async (files: FileList | null) => {
@@ -196,43 +194,9 @@ export function CodeAiWizard({ mobile, initialRole = "scene", onImport, onClose 
     }
   })();
 
-  const last = idx === STEPS.length - 1;
-  const nextBlocked = stepIssues.length > 0 || (!last && blockedFrom(idx + 1));
   return (
-    <div className={`v2-code-editor v2-ce v2-cw ${mobile ? "is-mobile" : ""}`} role="dialog" aria-modal="true" aria-label="Code AI mode">
-      <header className="v2-ce-bar">
-        <button type="button" className="v2-btn v2-ce-icon" aria-label="Back to the Code Editor" title="Back to the Code Editor" onClick={onClose}><Icon g="✕" /></button>
-        <span className="v2-ce-title">
-          <b>AI mode</b>
-          <span className="v2-muted">Step {idx + 1} of {STEPS.length} · {STEPS[idx].label}</span>
-        </span>
-      </header>
-      {mobile && <div className="v2-cw-progress" role="progressbar" aria-label="Progress" aria-valuemin={1} aria-valuemax={STEPS.length} aria-valuenow={idx + 1}><span style={{ width: `${((idx + 1) / STEPS.length) * 100}%` }} /></div>}
-      <div className="v2-cw-main">
-        {!mobile && (
-          <nav className="v2-cw-nav" aria-label="Steps">
-            <ol>
-              {STEPS.map((s, i) => (
-                <li key={s.id}>
-                  <button type="button" className={`v2-cw-navbtn ${s.id === step ? "is-active" : ""} ${i < idx ? "is-done" : ""}`} aria-current={s.id === step ? "step" : undefined} disabled={blockedFrom(i)} onClick={() => go(i)}>
-                    <span className="v2-cw-num" aria-hidden>{i < idx ? "✓" : i + 1}</span>{s.label}
-                  </button>
-                </li>
-              ))}
-            </ol>
-          </nav>
-        )}
-        <section className="v2-cw-body">
-          {body}
-          {stepIssues.length > 0 && step !== "describe" && <ul className="v2-cw-issues" role="alert">{stepIssues.map((i, k) => <li key={k}>{i.message}</li>)}</ul>}
-        </section>
-      </div>
-      <footer className="v2-cw-foot">
-        <button type="button" className="v2-btn" disabled={idx === 0} onClick={() => go(idx - 1)}>Back</button>
-        <span className="v2-ae-spacer" />
-        {(step === "params" || step === "refs") && <button type="button" className="v2-btn" onClick={() => go(idx + 1)} disabled={nextBlocked}>Skip</button>}
-        {!last && <button type="button" className="v2-btn primary" disabled={nextBlocked} onClick={() => go(idx + 1)}>{step === "refs" ? "Build prompt" : step === "prompt" ? "I have the reply" : "Next"}</button>}
-      </footer>
-    </div>
+    <CodeWizardShell mobile={mobile} ariaLabel="Code AI mode" title="AI mode" steps={STEPS} step={step} onStep={(id) => setStep(id as StepId)} issues={issues} quietSteps={["describe"]} onClose={onClose} nextLabel={nextLabel} showSkip={step === "params" || step === "refs"}>
+      {body}
+    </CodeWizardShell>
   );
 }

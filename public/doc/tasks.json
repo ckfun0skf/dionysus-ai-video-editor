@@ -3150,6 +3150,12 @@
           "title": "Code clip references as three types \u2014 graphic (Program, main/overlay pictures), audio (Mix, tracks/clips with sound), tracker (clip \u00b7 tracker): + Graphic / + Audio / + Tracker in the code editor's Params tab, typed pickers listing only valid targets, storyboard shot trackers[] + params references by tracker name (needs-tracking warning, binds by name), RULE 69, set_clip_input",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P44-CODE-REVISE",
+          "title": "Code Editor → Revise with AI (existing HTML clip, effect or transition): describe the change, embed the HTML in the prompt or attach it as a file, copy a prompt built from the HTML clip package contract, import the reply into the Code Editor (Save makes a new version). No timeline context-menu or inspector entry",
+          "status": "done",
+          "progress": 100
         }
       ]
     }
