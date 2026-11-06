@@ -338,3 +338,30 @@ describe("P38 add_code_effect / set_code_transition", () => {
     expect((await runTimelineTool(e, undefined, "set_code_transition", { clipId: "c1", assetId: "tr" })).text).toMatch(/doesn't start a cut/);
   });
 });
+
+describe("P38 set_clip_input / rename_track", () => {
+  it("binds an input by track name to the track id, survives a rename, resets, and rejects bad sources", async () => {
+    const e = setup();
+    const html = `<script type="application/json" id="dionysus-clip">${JSON.stringify({ format: "dionysus.htmlclip/1", inputs: { music: { type: "beat" }, under: { type: "scene" } } })}</script><canvas></canvas>`;
+    const store = new Map<string, Blob>([["h", new Blob([html], { type: "text/html" })]]);
+    const blobs = { get: async (k: string) => store.get(k), put: async () => undefined, delete: async () => undefined, has: async (k: string) => store.has(k), keys: async () => [...store.keys()] } as unknown as Parameters<typeof runTimelineTool>[5];
+    e.dispatch([cmd.importAsset(asset("h", "html", 4)), cmd.addAssetToTimeline("a", 0, undefined, "au")]);
+    e.dispatch(cmd.addAssetsInSequence(["h"], 0, "trkO"));
+    const hc = root(e.getState().project).tracks.flatMap((t) => t.placements).find((p) => p.clipType === "html")!.id;
+    const audioTrack = root(e.getState().project).tracks.find((t) => t.kind === "audio")!;
+    const run = (name: string, args: object) => runTimelineTool(e, undefined, name, args, undefined, blobs);
+    expect((await run("rename_track", { trackId: audioTrack.id, name: "Music bed" })).ok).toBe(true);
+    const r = await run("set_clip_input", { clipId: hc, input: "music", source: "music bed" });
+    expect(r.ok).toBe(true);
+    expect(findPlacement(root(e.getState().project), hc)!.placement.htmlInputs).toEqual({ music: `track:${audioTrack.id}` });
+    await run("rename_track", { trackId: audioTrack.id, name: "Score" });
+    expect(json((await run("get_timeline", {})).text).tracks.find((t: { id: string }) => t.id === audioTrack.id).name).toBe("Score");
+    expect(findPlacement(root(e.getState().project), hc)!.placement.htmlInputs).toEqual({ music: `track:${audioTrack.id}` });
+    expect((await run("set_clip_input", { clipId: hc, input: "music", source: "program" })).text).toMatch(/scene inputs/);
+    expect((await run("set_clip_input", { clipId: hc, input: "under", source: "au" })).text).toMatch(/No video track or clip/);
+    expect((await run("set_clip_input", { clipId: hc, input: "nope", source: "mix" })).text).toMatch(/no input "nope"/);
+    expect((await run("set_clip_input", { clipId: hc, input: "music" })).ok).toBe(true);
+    expect(findPlacement(root(e.getState().project), hc)!.placement.htmlInputs).toBeUndefined();
+    expect((await run("rename_track", { trackId: audioTrack.id, name: " " })).ok).toBe(false);
+  });
+});

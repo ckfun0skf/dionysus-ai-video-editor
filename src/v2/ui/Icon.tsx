@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { Palette } from "lucide-react";
+import { ChevronDown, Palette } from "lucide-react";
 import { ChevronLeft, ChevronRight, MoveHorizontal, Replace, ArrowRightToLine, Library, Unlink, Bot, AudioWaveform, Headphones, Pipette, ScanSearch, Spline } from "lucide-react";
 import {
   Clapperboard, Ellipsis, FileJson, Link2, CircleCheck, CircleAlert, ListTodo, ImageUp, RefreshCw,
@@ -20,7 +20,7 @@ export const ICONS: Record<string, LucideIcon> = {
   "⏩": Gauge, "✂": Scissors, "＋": Plus, "+": Plus, "－": Minus, "▭": Film, "♫": Music, "▤": AudioLines, "⤢": Search, "⤧": SlidersHorizontal,
   "☑": ListChecks, T: Type, "⇪": Upload, "⇩": Download, "⛶": Maximize, "☰": Menu, "◆": Diamond, "⧓": Blend, "⚠": TriangleAlert, "</>": Code2,
   "image": Image, "effect": Sparkles, "overlay": PictureInPicture2, "sticker": Sticker, "template": LayoutTemplate, "anim": Wand2, "grip": Menu, "prev": ChevronLeft, "next": ChevronRight, "anim-in": ArrowLeft, "anim-out": ArrowRight, "anim-loop": Repeat, "eye": Eye, "layers": Layers, "eye-off": EyeOff, "zoom-in": ZoomIn, "panel-close": PanelLeftClose, "panel-open": PanelLeftOpen, "panel-r-close": PanelRightClose, "panel-r-open": PanelRightOpen, "⏭": SkipForward, "step-back": StepBack, "step-fwd": StepForward, "keyboard": Keyboard, "settings": Settings2, "fit": Shrink, "zoom-out": ZoomOut, "↑": ArrowUp, "↓": ArrowDown, "grip-v": GripVertical, "pin": Pin, "to-top": ArrowUpToLine, "to-bottom": ArrowDownToLine, bookmark: Bookmark, bookmarked: BookmarkCheck, cut: SeparatorVertical, "trim-start": ArrowRightToLine, "trim-end": ArrowLeftToLine, "match": ScanSearch, chroma: Pipette, curve: Spline, afx: AudioWaveform, spatial: Headphones,
-  palette: Palette, "⇔": MoveHorizontal, "⇄": Replace, "🔗": Link2, "to-main": ArrowDownToLine,
+  palette: Palette, "▾": ChevronDown, "⇔": MoveHorizontal, "⇄": Replace, "🔗": Link2, "to-main": ArrowDownToLine,
 };
 
 /**

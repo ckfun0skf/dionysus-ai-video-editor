@@ -124,6 +124,11 @@ export interface Placement {
    */
   htmlParams?: Record<string, number | string | boolean>;
   /**
+   * P38: where each manifest input of an HTML clip reads from, by input name: "mix" / "program" (the defaults for beat /
+   * scene), "track:<trackId>" or "clip:<placementId>". Ids, not names, so renaming a track keeps the binding.
+   */
+  htmlInputs?: Record<string, string>;
+  /**
    * Storyboard linked item (V2-SB-113): a layer, caption or effect clip sent with a shot. It follows the shot clip
    * `anchor` on version swaps (see domain/storyLinks). `want` remembers the offset/length before a clamp.
    */
