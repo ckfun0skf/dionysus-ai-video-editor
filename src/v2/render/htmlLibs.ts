@@ -14,6 +14,8 @@ export interface HtmlLibrary {
   path: string;
   integrity: string;
   license?: string;
+  /** Other libraries this one imports (added to the import map with it). */
+  requires?: string[];
   /** Old CDN URLs that should resolve to this pinned copy. */
   legacy?: RegExp;
 }
@@ -25,6 +27,12 @@ export const HTML_LIBRARIES: readonly HtmlLibrary[] = [
     integrity: "sha384-8/hf5tabFfIo0BPku31TKUvGIKpWGYaMwNtlSNqNyZzXgZCMd4lnOGWbJElML9dv",
     license: "vendor/three-LICENSE.txt",
     legacy: /https:\/\/unpkg\.com\/three@[\d.]+\/build\/three\.module(?:\.min)?\.js/g,
+  },
+  {
+    id: "three-gltf", name: "three.js GLTFLoader", version: "0.160.0", specifier: "three/addons/loaders/GLTFLoader.js",
+    path: "vendor/three-gltfloader-0.160.0.min.js",
+    integrity: "sha384-CJm0vO/DGUkk4fKdYWNiP3C2QMSSknk2JIH62UKZbdsg8raAjWLjXd7c5SRD+brF",
+    license: "vendor/three-LICENSE.txt", requires: ["three"],
   },
 ];
 
@@ -60,4 +68,8 @@ export function writeClipConfig(html: string, cfg: ClipConfig): string {
 export const CLIP_LIBRARIES: readonly ClipLibrary[] = HTML_LIBRARIES.map(({ id, name, version, specifier, legacy }) => ({ id, name, version, specifier, legacy }));
 
 /** Selected libraries: the explicit selection, else whatever the page imports. */
-export const selectedLibraries = (html: string): HtmlLibrary[] => (readClipConfig(html).libs ?? detectLibraries(html)).map(libById).filter((l): l is HtmlLibrary => !!l);
+export const selectedLibraries = (html: string): HtmlLibrary[] => {
+  const ids = readClipConfig(html).libs ?? detectLibraries(html);
+  const all = [...ids.flatMap((id) => libById(id)?.requires ?? []), ...ids];
+  return [...new Set(all)].map(libById).filter((l): l is HtmlLibrary => !!l);
+};

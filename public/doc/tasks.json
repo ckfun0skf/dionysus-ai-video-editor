@@ -3096,6 +3096,12 @@
           "title": "Audio \u2192 Create with AI (phone Add audio picker and desktop Audio panel): describe \u2192 Copy prompt \u2192 paste the AI's dionysus.audioclip/1 JSON \u2192 Add to timeline (one undo step); WebMCP audio_prompt / create_audio; guide rule 63",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P38-CODE-3D",
+          "title": "Code editor Files \u2192 Add files accepts .glb/.gltf/.bin/.hdr (glb stored as data:model/gltf-binary;base64; >15 MB warns, >60 MB refused); vendored three.js GLTFLoader 0.160.0 (MIT, SRI) as lib three-gltf, which brings three; guide rule 64",
+          "status": "done",
+          "progress": 100
         }
       ]
     }
