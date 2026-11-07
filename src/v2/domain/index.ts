@@ -32,6 +32,8 @@ export * from "./htmlClipPackage";
 export * from "./codeRoles";
 export * from "./codeInputs";
 export * as tracking from "./tracking";
+export * as masking from "./mask";
+export type { ClipMask, MaskShape, MaskNode, MaskKeys } from "./mask";
 export type { MotionTrack, NamedTrack, TrackSample, TrackMask, TrackPos, Box, TrackSignal } from "./tracking";
 export * as cleanup from "./cleanup";
 export * from "./audioClip";

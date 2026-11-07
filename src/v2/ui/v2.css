@@ -1535,3 +1535,15 @@ select.v2-tp-field { -webkit-appearance: none; appearance: none; padding-right: 
 .v2-word-at { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; color: var(--muted); font-size: 13px; }
 .v2-word-at input { width: 72px; min-height: 44px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--line); background: #0e0e11; color: var(--text); font-variant-numeric: tabular-nums; }
 .v2-words.is-desktop .v2-word-chip { min-height: 44px; }
+
+/* P49 Mask sheet. Handles stay 44px on screen (counter-scaled while zoomed, same as the Track sheet). */
+.v2-mask h3 { margin: 0; font-size: 16px; font-weight: 600; }
+.v2-mask-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.v2-mask .v2-track-stage video, .v2-mask .v2-track-stage img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; opacity: 0; pointer-events: none; }
+.v2-mask-shape { position: absolute; border: 1.5px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.55); pointer-events: none; }
+.v2-mask-shape.is-ellipse { border-radius: 50%; }
+.v2-mask-crop { position: absolute; box-shadow: 0 0 0 9999px rgba(0,0,0,.45); border: 1px dashed rgba(255,255,255,.7); pointer-events: none; }
+.v2-mask-pt.is-handle i { width: 10px; height: 10px; border-radius: 0; background: transparent; border: 1.5px solid #fff; }
+.v2-mask .v2-seg button { min-height: 44px; }
+.v2-mask select { min-height: 44px; background: transparent; color: inherit; border: 1px solid var(--line); border-radius: 8px; padding: 0 8px; }
+.v2-mask .v2-btn { min-height: 44px; }

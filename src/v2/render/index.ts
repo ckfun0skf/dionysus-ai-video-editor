@@ -1,4 +1,5 @@
 export { Player } from "./player";
+export { multiplyMask, paintClip } from "./clipMask";
 export { activeAt, fitRect, placeRect, type Placed } from "./frame";
 export { AudioClock, wallClock, createClock, correctDrift, type Clock } from "./clock";
 export * from "./export/plan"; export { exportProject, mixAudio, formatLabel, formatNote, probeExportFormat, type ExportFormat, type ExportProgress, type ExportResult } from "./export/encode";

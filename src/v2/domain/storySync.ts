@@ -15,6 +15,7 @@ import { mainTrack } from "./ops";
 import { normTrim, versionSpan, type AssetSlot, type Storyboard } from "./storyboard";
 import { boxTransform, recordSent, captionText } from "./storySend";
 import type { StoryAudio, StoryEffect, StoryLayer, StoryMediaLayer, StoryTextLayer } from "./storyJson";
+import { maskToJson, type ClipMask } from "./mask";
 import { getPreset, parsePresetRef } from "../registry";
 import { TICKS_PER_SECOND } from "./time";
 
@@ -25,6 +26,7 @@ export interface SyncPlan { project: Project; changes: SyncChange[] }
 const sec = (t: number) => Math.round((t / TICKS_PER_SECOND) * 100) / 100;
 const end = (p: Placement) => p.startTicks + p.durationTicks;
 const eq = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+const maskKey = (m?: ClipMask) => JSON.stringify(m ? maskToJson(m) : null);
 const clampDur = (s: number) => Math.min(120, Math.max(0.5, s));
 
 function uniqueId(base: string, taken: (id: string) => boolean): string {
@@ -133,6 +135,10 @@ export function syncPlan(p: Project): SyncPlan {
       continue;
     }
     if (s.removedFromTimeline) { delete s.removedFromTimeline; changes.push({ kind: "shot", id, label: `"${s.title}" is back on the timeline` }); }
+    if (maskKey(clip.mask) !== maskKey(s.mask)) {
+      if (clip.mask) s.mask = structuredClone(clip.mask); else delete s.mask;
+      if (!isNew) changes.push({ kind: "shot", id, label: `Mask of "${s.title}"` });
+    }
     if (isNew) continue;
     const d = clampDur(sec(clip.durationTicks));
     // A video clip still at the length Send placed it (its version's trim, else the whole clip) was not edited:
@@ -222,6 +228,9 @@ export function syncPlan(p: Project): SyncPlan {
         if (!near(tf, { x: want.x ?? 0, y: want.y ?? 0, scale: want.scale ?? 1 })) m.box = boxOf(p, pl);
       }
       if (opacity === undefined || opacity === 1) delete next.opacity;
+      if (next.type !== "text") {
+        if (pl.mask) (next as StoryMediaLayer).mask = structuredClone(pl.mask); else delete (next as StoryMediaLayer).mask;
+      }
       delete next.removedFromTimeline;
       pl.storyLayer = l.id;
       if (!eq(next, l)) { Object.assign(l, next); if (!next.opacity) delete l.opacity; delete l.removedFromTimeline; changes.push({ kind: "layer", id: `${shotId}/${l.id}`, label: `Layer "${l.id}" of "${s.title}": ${startSec}s–${endSec}s${eq(l.box, (next as StoryMediaLayer).box) && eq((l as StoryTextLayer).position, (next as StoryTextLayer).position) ? "" : ", moved"}` }); }
@@ -231,7 +240,7 @@ export function syncPlan(p: Project): SyncPlan {
     const base = { id, startSec, endSec, needsPrompt: true as const, ...(opacity !== undefined && opacity !== 1 ? { opacity } : {}) };
     let nl: StoryLayer;
     if (pl.clipType === "text") nl = { ...base, type: "text", text: pl.text?.text ?? "" } as StoryTextLayer;
-    else nl = { ...base, type: pl.clipType === "video" ? "video" : pl.clipType === "html" ? "html" : "image", asset: slotFor(b, p, pl.source.assetId), box: boxOf(p, pl) } as StoryMediaLayer;
+    else nl = { ...base, type: pl.clipType === "video" ? "video" : pl.clipType === "html" ? "html" : "image", asset: slotFor(b, p, pl.source.assetId), box: boxOf(p, pl), ...(pl.mask ? { mask: structuredClone(pl.mask) } : {}) } as StoryMediaLayer;
     layers.push(nl); layerSeen.add(`${shotId}/${id}`); pl.storyLayer = id;
     if (!pl.link) pl.link = { parent: clip.id };
     changes.push({ kind: "newLayer", id: `${shotId}/${id}`, label: `New ${nl.type} layer "${id}" on "${s.title}"`, needsPrompt: true });

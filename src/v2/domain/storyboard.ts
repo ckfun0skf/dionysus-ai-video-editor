@@ -86,6 +86,8 @@ export interface Shot {
   params?: HtmlParamValues;
   /** P43: trackers the user has to set (what to box, on which clip, the name code layers reference). */
   trackers?: import("./storyJson").StoryTrackerPlan[];
+  /** P49: mask of the shot's own picture, in source fractions (key times in ticks). */
+  mask?: import("./mask").ClipMask;
   /** The shot's own AI clip asset, kept aside while the shot is made as html or still (V2-CUT-02). */
   ownAssetId?: string;
   /**
@@ -242,6 +244,7 @@ export function storyboardFromDoc(doc: StoryDoc): Storyboard {
       ...(s.clipAsset ? { clipAsset: { ...s.clipAsset } } : {}),
       ...(s.render === "html" && s.clip && slots[s.clip] && s.params ? { params: { ...s.params } } : {}),
       ...(s.trackers?.length ? { trackers: structuredClone(s.trackers) } : {}),
+      ...(s.mask ? { mask: structuredClone(s.mask) } : {}),
       ...(s.layers?.length ? { layers: structuredClone(s.layers) } : {}),
       ...(s.captions ? { captions: true } : {}),
       ...(s.needsPrompt ? { needsPrompt: true as const } : {}), ...(s.removedFromTimeline ? { removedFromTimeline: true as const } : {}),

@@ -10,7 +10,7 @@ import { bindingRefsOf } from "../CleanupDialog";
 import { captureFrameAt, storePickedFrame } from "../storyboard/frameCapture";
 import { cleanup, DEFAULT_SOURCE, INPUT_TYPES, readManifest, resolveSource, versionOf, codePresetId, codeRoleIssue, transitions, audioOutputOf, board, mergeLayer, ops, promote, findPlacement, slip, subs, newId, audioClipPrompt, parseAudioClip, runtimeAiLinks, panToAzimuth, positionErrors, secondsToTicks, TICKS_PER_SECOND, timelineReview, text as T, words as W, type Placement, type Project } from "../../domain";
 import { getPreset, listPresets } from "../../registry";
-import { tracking, sourceAt, ticksToSeconds, type Box, type MotionTrack, type NamedTrack, type TrackMask } from "../../domain";
+import { tracking, sourceAt, ticksToSeconds, masking, type Box, type MotionTrack, type NamedTrack, type TrackMask } from "../../domain";
 import { makeTrackAnalyse, nearestIndex, rangeTrack, trackTicks } from "../trackAnalyse";
 
 /** P39: the analyser track_clip uses (tests swap it; jsdom can't decode video). */
@@ -573,6 +573,21 @@ export async function runTimelineTool(engine: Engine, source: FrameSource | unde
       if (mode === "word-highlight") cmds.push(cmd.applyWordHighlight(id));
       else if (mode === "word-pop") cmds.push(cmd.expandWordPop(id, entrance));
       return edit(cmds, id);
+    }
+    case "set_clip_mask": {
+      const id = needClip(); if (typeof id !== "string") return id;
+      const pl = findPlacement(rootOf(project()), id)!.placement;
+      if (!masking.canMask(pl)) return fail(`Clip ${id} cannot be masked (only image, video and HTML picture clips).`);
+      const parsed = masking.parseMask(a.mask, "mask");
+      if (!parsed.ok || !parsed.mask) return fail(parsed.issues.map((i) => i.message).join(" ") || "The mask is not valid.");
+      const warn = parsed.issues.filter((i) => i.level === "warning").map((i) => i.message);
+      const res = edit(cmd.setClipMask(id, parsed.mask), id);
+      return res.ok ? { ...res, text: warn.length ? `${res.text}\n${warn.join(" ")}` : res.text } : res;
+    }
+    case "clear_clip_mask": {
+      const id = needClip(); if (typeof id !== "string") return id;
+      if (!findPlacement(rootOf(project()), id)!.placement.mask) return fail(`Clip ${id} has no visibility mask.`);
+      return edit(cmd.setClipMask(id, null), id);
     }
     case "word_align_prompt": {
       const id = needClip(); if (typeof id !== "string") return id;

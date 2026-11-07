@@ -14,6 +14,7 @@ import * as transitions from "../domain/transitions";
 import { codeAssetOf, codeRoleIssue } from "../domain/codeRoles";
 import * as cleanupOps from "../domain/cleanup";
 import * as tracking from "../domain/tracking";
+import { canMask, maskErrors, type ClipMask } from "../domain/mask";
 /** P38: throw when a "code:<assetId>" preset/kind names an asset of another role. */
 const needRole = (p: Project, preset: string | undefined, want: "effect" | "transition") => { const a = codeAssetOf(preset); const e = a ? codeRoleIssue(p, a, want) : undefined; if (e) throw new Error(e); };
 import type { ChromaKey, Keyframe, Subtitle } from "../domain/model";
@@ -624,6 +625,18 @@ export const attachTrack = (followerId: string, targetId: string, at: number, op
     return editPlacement(p, followerId, (pl) => { const { x: _x, y: _y, scale: _s, rotation: _r, ...rest } = pl.keyframes ?? {}; return { ...pl, keyframes: { ...rest, ...keys } }; });
   },
 });
+/** P49: set or clear a clip visibility mask. One undo step. `null` removes it. */
+export const setClipMask = (id: string, mask: ClipMask | null): Command => ({
+  label: mask ? "Mask" : "Remove mask",
+  apply: (p) => editPlacement(p, id, (pl) => {
+    if (!canMask(pl)) throw new Error("Only image, video and HTML picture clips can be masked.");
+    if (!mask) { const { mask: _m, ...rest } = pl; return rest; }
+    const bad = maskErrors(mask);
+    if (bad.length) throw new Error(bad[0]);
+    return { ...pl, mask };
+  }),
+});
+
 /** P39/P40: traveling mask from a tracker's box ("inside" keeps the box, "outside" cuts it out; undefined = off). */
 export const setTrackMask = (id: string, mask: tracking.TrackMask | undefined, trackId?: string): Command => ({
   label: "Track mask",
