@@ -35,7 +35,16 @@ export function MergeUpIcon({ size = 20, className }: { size?: number; className
 }
 
 /** Keys drawn by our own SVGs (same style as lucide). */
-export const CUSTOM_ICONS: Record<string, (p: { size?: number; className?: string }) => JSX.Element> = { merge: MergeUpIcon };
+/** P49: a rounded window — the clip-mask tool. Same stroke as the other icons. */
+export function MaskIcon({ size = 20, className }: { size?: number; className?: string }) {
+  return <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75}
+    strokeLinecap="round" strokeLinejoin="round" aria-hidden className={`v2-ic ${className ?? ""}`} data-icon="mask">
+    <rect x="3.5" y="5" width="17" height="14" rx="3" />
+    <circle cx="14.5" cy="12" r="3.25" />
+  </svg>;
+}
+
+export const CUSTOM_ICONS: Record<string, (p: { size?: number; className?: string }) => JSX.Element> = { merge: MergeUpIcon, mask: MaskIcon };
 
 export function Ic({ g, size = 20, className }: { g: string; size?: number; className?: string }) {
   const K = CUSTOM_ICONS[g];

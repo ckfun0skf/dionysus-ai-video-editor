@@ -6,7 +6,8 @@
 import { activeAt, placeRect, upcomingMedia, type Placed } from "./frame";
 import { TICKS_PER_SECOND, ticksToSeconds } from "../domain/time";
 import { drawKeyed } from "./chromaKey";
-import { applyTrackMask } from "./trackMask";
+import { paintClip } from "./clipMask";
+import type { ClipMask } from "../domain/mask";
 import { trackSignal, type TrackSignal } from "../domain/tracking";
 import { audioFxData, buildFxChain, fxKey, type FxChain } from "./audioFx";
 import { buildSpatial, type SpatialStage } from "./spatial";
@@ -121,6 +122,15 @@ export class Player {
    */
   keyBypass: string | null = null;
   private keyOf(p: Placement) { return p.id === this.keyBypass ? undefined : p.chromaKey; }
+  /**
+   * P49: while the Mask sheet is open, draw this clip with the draft mask (undefined = bypass / removed).
+   * Export builds its own Player and never sets this, so editing chrome and uncommitted drafts are not exported.
+   */
+  maskPreview: { id: string; mask?: ClipMask } | null = null;
+  private maskFor(p: Placement): ClipMask | undefined { return this.maskPreview?.id === p.id ? this.maskPreview.mask : p.mask; }
+  private blit(g: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, placement: Placement, srcW: number, srcH: number, r: Placed, sourceTicks: number, draw: (g: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D) => void) {
+    paintClip(g, placement, this.maskFor(placement), srcW, srcH, r, sourceTicks, this.time - placement.startTicks, draw);
+  }
 
   /**
    * Route a media element through Web Audio (once): element → gain (volume × fades × volume curve) → [audio effect
@@ -380,7 +390,9 @@ export class Player {
           const r = placeRect(placement, canvas.width, canvas.height, canvas.width, canvas.height, this.time);
           this.boxes.set(placement.id, r);
           paint(placement.blend, (dc) => drawWithLook(dc, canvas.width, canvas.height, tfx, (g) => {
-            g.save(); g.globalAlpha = r.alpha * (mix ?? 1); g.translate(r.cx, r.cy); g.rotate(r.rot); g.fillStyle = placement.blank!.color; g.fillRect(-r.w / 2, -r.h / 2, r.w, r.h); g.restore();
+            g.save(); g.globalAlpha = r.alpha * (mix ?? 1); g.translate(r.cx, r.cy); g.rotate(r.rot);
+            this.blit(g, placement, canvas.width, canvas.height, r, sourceTicks, (gg) => { gg.fillStyle = placement.blank!.color; gg.fillRect(-r.w / 2, -r.h / 2, r.w, r.h); });
+            g.restore();
           }));
         }
         continue;
@@ -407,7 +419,10 @@ export class Player {
           try { // a detached/closed bitmap must not throw out of draw() and stall preview or export
             paint(placement.blend, (dc) => drawWithLook(dc, canvas.width, canvas.height, tfx, (g) => {
               g.save();
-              try { g.globalAlpha = r.alpha * (mix ?? 1); g.translate(r.cx, r.cy); g.rotate(r.rot); drawKeyed(g, f, f.width, f.height, r.sx, r.sy, r.sw, r.sh, -r.w / 2, -r.h / 2, r.w, r.h, this.keyOf(placement)); } finally { g.restore(); }
+              try {
+                g.globalAlpha = r.alpha * (mix ?? 1); g.translate(r.cx, r.cy); g.rotate(r.rot);
+                this.blit(g, placement, f.width, f.height, r, sourceTicks, (gg) => drawKeyed(gg, f, f.width, f.height, r.sx, r.sy, r.sw, r.sh, -r.w / 2, -r.h / 2, r.w, r.h, this.keyOf(placement)));
+              } finally { g.restore(); }
             }));
           } catch { host.issue = "invalid"; }
         }
@@ -421,8 +436,7 @@ export class Player {
           this.boxes.set(placement.id, r);
           paint(placement.blend, (dc) => drawWithLook(dc, canvas.width, canvas.height, tfx, (g) => {
             g.save(); g.globalAlpha = r.alpha * (mix ?? 1); g.translate(r.cx, r.cy); g.rotate(r.rot);
-            applyTrackMask(g, placement, f.width, f.height, r, sourceTicks);
-            drawKeyed(g, f.image, f.width, f.height, r.sx, r.sy, r.sw, r.sh, -r.w / 2, -r.h / 2, r.w, r.h, this.keyOf(placement));
+            this.blit(g, placement, f.width, f.height, r, sourceTicks, (gg) => drawKeyed(gg, f.image, f.width, f.height, r.sx, r.sy, r.sw, r.sh, -r.w / 2, -r.h / 2, r.w, r.h, this.keyOf(placement)));
             g.restore();
           }));
         }
@@ -487,7 +501,7 @@ export class Player {
           paint(placement.blend, (dc) => drawWithLook(dc, canvas.width, canvas.height, tfx, (g) => {
             g.save(); g.globalAlpha = r.alpha * (mix ?? 1); g.translate(r.cx, r.cy); g.rotate(r.rot);
             const k = poster.img.width / poster.w;
-            drawKeyed(g, poster.img, poster.img.width, poster.img.height, r.sx * k, r.sy * k, r.sw * k, r.sh * k, -r.w / 2, -r.h / 2, r.w, r.h, this.keyOf(placement));
+            this.blit(g, placement, poster.w, poster.h, r, sourceTicks, (gg) => drawKeyed(gg, poster.img, poster.img.width, poster.img.height, r.sx * k, r.sy * k, r.sw * k, r.sh * k, -r.w / 2, -r.h / 2, r.w, r.h, this.keyOf(placement)));
             g.restore();
           }));
         } else if (!drawable) missing = true;
@@ -496,8 +510,7 @@ export class Player {
           this.boxes.set(placement.id, r);
           paint(placement.blend, (dc) => drawWithLook(dc, canvas.width, canvas.height, tfx, (g) => {
             g.save(); g.globalAlpha = r.alpha * (mix ?? 1); g.translate(r.cx, r.cy); g.rotate(r.rot);
-            applyTrackMask(g, placement, w, h, r, sourceTicks);
-            drawKeyed(g, el as CanvasImageSource, w, h, r.sx, r.sy, r.sw, r.sh, -r.w / 2, -r.h / 2, r.w, r.h, this.keyOf(placement));
+            this.blit(g, placement, w, h, r, sourceTicks, (gg) => drawKeyed(gg, el as CanvasImageSource, w, h, r.sx, r.sy, r.sw, r.sh, -r.w / 2, -r.h / 2, r.w, r.h, this.keyOf(placement)));
             g.restore();
           }));
         }

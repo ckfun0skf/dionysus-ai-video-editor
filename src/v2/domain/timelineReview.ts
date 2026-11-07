@@ -11,6 +11,7 @@ import { needsPromptItems } from "./storySync";
 import { missingTrackers } from "./codeInputs";
 import { TICKS_PER_SECOND } from "./time";
 import { textOf } from "./text";
+import { maskToJson } from "./mask";
 
 type Schema = Record<string, unknown>;
 export interface TimelineToolDef { name: string; title: string; description: string; inputSchema: Schema; readOnly: boolean }
@@ -21,7 +22,7 @@ const obj = (properties: Record<string, Schema>, required: string[] = []): Schem
 
 export const TIMELINE_TOOLS: TimelineToolDef[] = [
   { name: "get_timeline", title: "Read the timeline", readOnly: true,
-    description: "The timeline as JSON: settings (size, fps), duration, and every track (id, kind, group, main) with its clips (id, start/duration/in in seconds, asset, type, volume, effect, transform, text, link parent, storyShot). Times are seconds.",
+    description: "The timeline as JSON: settings (size, fps), duration, and every track (id, kind, group, main) with its clips (id, start/duration/in in seconds, asset, type, volume, effect, transform, text, link parent, storyShot, mask). Times are seconds. mask, when present, is a clip visibility mask (source-picture fractions; key times in seconds) — not an effect limit and not a tracker box mask (that stays on tracks[].mask).",
     inputSchema: obj({}) },
   { name: "capture_frame", title: "Capture a frame", readOnly: true,
     description: "Render the composited frame at timeSec exactly as export would and return it as a JPEG image (maxWidth px wide, default 640, at most 1280).",
@@ -119,6 +120,12 @@ export const TIMELINE_TOOLS: TimelineToolDef[] = [
   { name: "set_caption_words", title: "Set caption word timings", readOnly: false,
     description: "P47: set words [{ text, atSec }] on a text clip (seconds from the clip start; clamped in order). Pass mode \"word-highlight\" to keep one cue with karaoke highlighting, or \"word-pop\" to expand into one short clip per word (entrance pop|fade|slide-up). One undo step.",
     inputSchema: obj({ clipId: str("Text clip id."), words: { type: "array", items: obj({ text: str("Word token."), atSec: num("Seconds from clip start.") }, ["text", "atSec"]), description: "Word timings." }, mode: { type: "string", enum: ["word-highlight", "word-pop", "keep"] }, entrance: { type: "string", enum: ["pop", "fade", "slide-up"] } }, ["clipId", "words"]) },
+  { name: "set_clip_mask", title: "Mask a clip's picture", readOnly: false,
+    description: "P49: set a visibility mask on an image, video or HTML clip (not text, not an effect). The mask multiplies that clip's alpha. It does not limit an effect such as blur (use applyTo for effect scope) and it does not change a tracker's box mask (set_track_mask). shape is rect, ellipse, linear (a split; rotation 0 keeps the top half), band (a strip / mirror bar of width w) or path. Coordinates are fractions of the source picture from the top-left, not of the frame. rect/ellipse: x,y centre, w,h size, rotation degrees clockwise, rect radius 0-0.5 of the smaller side. path: nodes [{ id, x, y, in?: {x,y}, out?: {x,y} }] with at least 3 points (closed; handles are Bezier offsets). feather 0-0.5 and expand -0.5 to 0.5 are fractions of the shorter side. invert and enabled (false bypasses). track is the name or id of a tracker on this same clip; lost and out-of-range frames hold the last found position and never invent one. keys and nodeKeys animate numbers (t in seconds from the clip start); path keys are by node id, so adding or deleting a point does not renumber the others. A bad or unclosed path is rejected and nothing changes. One undo step; returns the clip.",
+    inputSchema: obj({ clipId: str("Image, video or HTML clip id."), mask: { type: "object", description: "Mask object. See the description. Pass clear_clip_mask to remove it." } }, ["clipId", "mask"]) },
+  { name: "clear_clip_mask", title: "Remove a clip's visibility mask", readOnly: false,
+    description: "P49: remove the visibility mask from a clip (the tracker box mask, if any, stays). One undo step; returns the clip.",
+    inputSchema: obj({ clipId: str("Clip id.") }, ["clipId"]) },
   { name: "word_align_prompt", title: "Prompt to align caption words with AI", readOnly: true,
     description: "P47: returns a copy-paste prompt that asks an external AI for word timings JSON for the caption clip (Dionysus does not call an AI). Optional audioClipId adds that clip's duration to the prompt. Paste the reply into set_caption_words.",
     inputSchema: obj({ clipId: str("Text clip id."), audioClipId: str("Optional narration/dialogue audio or video clip id.") }, ["clipId"]) },
@@ -156,6 +163,7 @@ export function clipJson(p: Project, pl: Placement, track?: Track): Record<strin
     ...(pl.placeholder ? { placeholder: true, label: pl.placeholder.label } : {}),
     ...(pl.blank ? { blank: pl.blank.color } : {}),
     ...(pl.motionTracks?.length ? { tracks: pl.motionTracks.map((t) => ({ id: t.id, name: t.name, sourceInSec: sec(t.inS), sourceOutSec: sec(t.outS), frames: t.samples.length, lost: t.samples.filter((x) => x.lost).length, ...(t.mask ? { mask: t.mask } : {}) })) } : {}),
+    ...(pl.mask ? { mask: maskToJson(pl.mask) } : {}),
     ...(pl.htmlInputs ? { inputs: pl.htmlInputs } : {}),
     ...(pl.storyLayer ? { storyLayer: pl.storyLayer } : {}),
     ...(pl.storyCue ? { storyCue: pl.storyCue } : {}),

@@ -113,9 +113,9 @@ function shotClip(b: Storyboard, asset: Asset, v: AssetVersion, shot: Shot, at: 
     const len = v.media.durationTicks;
     const inT = Math.max(0, Math.min(secondsToTicks(shot.clipInSec ?? 0), len ? Math.max(0, len - 1) : Infinity));
     const dur = len ? Math.max(1, Math.min(planned, len - inT)) : planned;
-    return { id: newId("plc"), startTicks: at, durationTicks: dur, sourceInTicks: inT, source: { kind: "assetVersion", assetId: asset.id, versionId: v.id }, clipType: asset.kind, volume: 1, storyShot: shot.id };
+    return { id: newId("plc"), startTicks: at, durationTicks: dur, sourceInTicks: inT, source: { kind: "assetVersion", assetId: asset.id, versionId: v.id }, clipType: asset.kind, volume: 1, storyShot: shot.id, ...(shot.mask ? { mask: structuredClone(shot.mask) } : {}) };
   }
-  return { id: newId("plc"), startTicks: at, durationTicks, sourceInTicks: span?.inTicks ?? 0, source: { kind: "assetVersion", assetId: asset.id, versionId: v.id }, clipType: asset.kind, volume: 1, storyShot: shot.id, ...params };
+  return { id: newId("plc"), startTicks: at, durationTicks, sourceInTicks: span?.inTicks ?? 0, source: { kind: "assetVersion", assetId: asset.id, versionId: v.id }, clipType: asset.kind, volume: 1, storyShot: shot.id, ...params, ...(shot.mask ? { mask: structuredClone(shot.mask) } : {}) };
 }
 
 /** P35: label of a placeholder clip: "Shot n · title" (+ a short description). */
@@ -129,7 +129,7 @@ export function placeholderLabel(b: Storyboard, shot: Shot): string {
 /** P35: a placeholder main clip for a shot with no clip yet: the shot's planned length (durationSec, else the default). */
 export function placeholderClip(b: Storyboard, shot: Shot, at: number): Placement {
   const durationTicks = shot.durationSec > 0 ? secondsToTicks(shot.durationSec) : DEFAULT_IMAGE_TICKS;
-  return { id: newId("plc"), startTicks: at, durationTicks, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "image", volume: 1, storyShot: shot.id, placeholder: { label: placeholderLabel(b, shot) } };
+  return { id: newId("plc"), startTicks: at, durationTicks, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "image", volume: 1, storyShot: shot.id, placeholder: { label: placeholderLabel(b, shot) }, ...(shot.mask ? { mask: structuredClone(shot.mask) } : {}) };
 }
 
 /** P35: placeholder clips on the root composition. */
@@ -155,6 +155,7 @@ function mediaLayer(p: Project, b: Storyboard, shot: Shot, l: StoryMediaLayer, s
     transform: { ...boxTransform(l.box, mw, mh, p.settings.width, p.settings.height) } as Transform, storyLink: { anchor }, storyLayer: l.id, ...(l.link === false ? {} : { link: { parent: anchor } }),
     ...(a.kind === "html" && l.params && Object.keys(l.params).length ? { htmlParams: { ...l.params } } : {}),
     ...(l.chromaKey ? { chromaKey: { ...CHROMA_DEFAULT, ...l.chromaKey } } : {}),
+    ...(l.mask ? { mask: structuredClone(l.mask) } : {}),
   };
 }
 
@@ -418,7 +419,7 @@ export function sendStory(p: Project): { project: Project; result: SendResult } 
 }
 
 /** P2A: what a shot sends besides its clip (layers, captions, effects, html params), for change detection. */
-export const shotSignature = (s: Shot): string => JSON.stringify([s.layers ?? [], s.captions ? captionText(s) : "", s.effects ?? [], s.render === "html" ? s.params ?? {} : {}]);
+export const shotSignature = (s: Shot): string => JSON.stringify([s.layers ?? [], s.mask ?? null, s.captions ? captionText(s) : "", s.effects ?? [], s.render === "html" ? s.params ?? {} : {}]);
 const cueSignature = (cue: NonNullable<Storyboard["audio"]>[number]): string => JSON.stringify(cue);
 
 /** Record signatures for shots and cues on the timeline; `force` ids are overwritten, others only filled in. */
@@ -491,6 +492,11 @@ export function updateStory(p: Project): { project: Project; result: UpdateResul
       const next: Placement = { ...rest, ...(s.params && Object.keys(s.params).length ? { htmlParams: { ...s.params } } : {}) };
       comp = { ...comp, tracks: comp.tracks.map((t) => ({ ...t, placements: t.placements.map((x) => (x.id === clip.id ? next : x)) })) };
     }
+    comp = { ...comp, tracks: comp.tracks.map((t) => ({ ...t, placements: t.placements.map((x) => {
+      if (x.id !== clip.id) return x;
+      if (!s.mask) { const { mask: _m, ...rest } = x; return rest; }
+      return { ...x, mask: structuredClone(s.mask) };
+    }) })) };
     comp = addLinked(q, b, comp, s, clip, res);
   }
   base.refreshed = plan.refreshed.length;

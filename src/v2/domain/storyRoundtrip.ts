@@ -9,7 +9,16 @@
  */
 import type { Project } from "./model";
 import { storyboardFromDoc, type AssetSlot, type QaCheck, type Shot, type Storyboard } from "./storyboard";
-import { splitStateId, stateBaseNote, type StoryReference, type StoryAsset, type StoryAssetRef, type StoryAssetState, type StoryDoc, type StoryShot } from "./storyJson";
+import { splitStateId, stateBaseNote, type StoryReference, type StoryAsset, type StoryAssetRef, type StoryAssetState, type StoryDoc, type StoryLayer, type StoryMediaLayer, type StoryShot } from "./storyJson";
+import { maskToJson, type ClipMask } from "./mask";
+
+/** Key times are ticks in memory and seconds in the JSON. */
+const exportLayer = (l: StoryLayer): StoryLayer => {
+  if (l.type === "text" || !l.mask) return structuredClone(l);
+  const copy = structuredClone(l) as StoryMediaLayer;
+  copy.mask = maskToJson(l.mask) as unknown as ClipMask;
+  return copy;
+};
 
 const refsOut = (slot: AssetSlot, skip?: string): StoryAssetRef[] =>
   slot.references.filter((id) => id !== skip).map((id) => (slot.refRoles?.[id] ? { asset: id, ...structuredClone(slot.refRoles[id]) } : id));
@@ -69,7 +78,8 @@ function shotOut(b: Storyboard, s: Shot): StoryShot {
     ...(s.render && s.clipSlot ? (b.slots[s.clipSlot]?.implicit === "background" ? { render: s.render, background: structuredClone(b.slots[s.clipSlot].background!) } : { render: s.render, clip: s.clipSlot }) : {}),
     ...(s.params && s.render === "html" ? { params: { ...s.params } } : {}),
     ...(s.trackers?.length ? { trackers: structuredClone(s.trackers) } : {}),
-    ...(s.layers?.length ? { layers: structuredClone(s.layers) } : {}),
+    ...(s.mask ? { mask: maskToJson(s.mask) as unknown as ClipMask } : {}),
+    ...(s.layers?.length ? { layers: s.layers.map(exportLayer) } : {}),
     ...(s.captions ? { captions: true } : {}),
     ...(s.needsPrompt ? { needsPrompt: true as const } : {}), ...(s.removedFromTimeline ? { removedFromTimeline: true as const } : {}),
     ...(s.effects?.length ? { effects: structuredClone(s.effects) } : {}),

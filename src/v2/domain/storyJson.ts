@@ -9,6 +9,7 @@ import { checkParamValue, cleanParamDecls, validateParamDecls, type HtmlClipPara
 import { FONTS, getFont, getPreset, listPresets, parsePresetRef, type PresetDescriptor, type PresetKind } from "../registry";
 import { positionErrors } from "./spatial";
 import { normalizeSchema, toSchema31 } from "./storySchema";
+import { parseMask, type ClipMask } from "./mask";
 
 export const STORYBOARD_FORMAT = "dionysus.storyboard/1" as const;
 
@@ -185,6 +186,8 @@ export interface StoryMediaLayer extends StoryLayerBase {
   inSec?: number;
   /** P3B-12: green screen: pixels near `color` become transparent (`range` tolerance, `spill` edge clean-up, 0–1). */
   chromaKey?: StoryChromaKey;
+  /** P49: visibility mask in source-picture fractions. Key times are ticks (seconds in the JSON; parseMask converts). */
+  mask?: ClipMask;
 }
 /** P3B-12: a layer's chroma key. Missing `range` / `spill` take the defaults (0.4 / 0.5). */
 export interface StoryChromaKey { color: string; range?: number; spill?: number }
@@ -265,6 +268,8 @@ export interface StoryShot {
   params?: HtmlParamValues;
   /** P43: trackers to set on this shot's clips before its code layers can follow something (RULE 69). */
   trackers?: StoryTrackerPlan[];
+  /** P49: visibility mask of the shot's own picture (source fractions). Not an effect limit. */
+  mask?: ClipMask;
   layers?: StoryLayer[];
   captions?: boolean;
   effects?: StoryEffect[];
@@ -998,6 +1003,15 @@ export function validateStoryboard(raw: unknown, opts: StoryValidateOptions = {}
     return out;
   };
 
+  /** P49: a clip visibility mask. A bad mask is dropped with a warning; the rest of the storyboard still imports. */
+  const maskOf = (v: unknown, path: string, where: string): ClipMask | undefined => {
+    if (v === undefined) return undefined;
+    const parsed = parseMask(v, path);
+    for (const issue of parsed.issues) warn(issue.path, issue.message);
+    if (!parsed.ok || !parsed.mask) { if (!parsed.issues.length) warn(path, `The mask on ${where} was ignored.`); return undefined; }
+    return parsed.mask;
+  };
+
   const layersOf = (v: unknown, path: string, dur: number): StoryLayer[] | undefined => {
     if (v === undefined) return undefined;
     if (!Array.isArray(v)) { err(path, '"layers" must be a list.'); return undefined; }
@@ -1032,6 +1046,7 @@ export function validateStoryboard(raw: unknown, opts: StoryValidateOptions = {}
         else warn(`${lp}.follow`, `follow ${JSON.stringify(l.follow)} is ignored: use "frame" (stays put, the default) or "shot" (moves with the shot's zoom and pan).`);
       }
       if (type === "text" && l.chromaKey !== undefined) warn(`${lp}.chromaKey`, "Only image, video and html layers can be chroma keyed; it is ignored on a text layer.");
+      if (type === "text" && l.mask !== undefined) warn(`${lp}.mask`, "A mask hides part of a picture. Text layers cannot be masked; it is ignored.");
       if (type === "text") {
         if (l.params !== undefined) warn(`${lp}.params`, 'Text layers have no "params"; it is ignored. For a reusable styled title, use an html layer with an html asset that exposes params.');
         if (l.inSec !== undefined) warn(`${lp}.inSec`, "Only video layers have an in point; inSec on a text layer is ignored.");
@@ -1104,7 +1119,8 @@ export function validateStoryboard(raw: unknown, opts: StoryValidateOptions = {}
           }
         }
         const chromaKey = l.chromaKey === undefined ? undefined : chromaKeyOf(l.chromaKey, `${lp}.chromaKey`);
-        if (box) out.push({ id, type, asset, startSec, endSec, box, ...(inSec !== undefined ? { inSec } : {}), ...(follow ? { follow } : {}), ...look, ...(params ? { params } : {}), ...(refs ? { refs } : {}), ...(chromaKey ? { chromaKey } : {}) });
+        const mask = maskOf(l.mask, `${lp}.mask`, `layer "${id}"`);
+        if (box) out.push({ id, type, asset, startSec, endSec, box, ...(inSec !== undefined ? { inSec } : {}), ...(follow ? { follow } : {}), ...look, ...(params ? { params } : {}), ...(refs ? { refs } : {}), ...(chromaKey ? { chromaKey } : {}), ...(mask ? { mask } : {}) });
       }
     });
     return out;
@@ -1359,6 +1375,8 @@ export function validateStoryboard(raw: unknown, opts: StoryValidateOptions = {}
     if (planned.length) shot.trackers = planned;
     const layers = layersOf(s.layers, `${path}.layers`, dur);
     if (layers) shot.layers = layers;
+    const shotMask = maskOf(s.mask, `${path}.mask`, `shot "${id}"`);
+    if (shotMask) shot.mask = shotMask;
     planned = [];
     if (s.captions !== undefined) {
       if (typeof s.captions !== "boolean") warn(`${path}.captions`, "captions should be true or false; ignoring it.");

@@ -1,5 +1,6 @@
 /** Schema 3.0 domain model (MVP subset). Pure data; see docs/v2/MODULE_DESIGN.md §5. */
 import type { TextData } from "./text";
+import type { ClipMask } from "./mask";
 import type { Storyboard } from "./storyboard";
 /** 3.1 (V2-CUT-01): optional `storyboard`. Older schemas upgrade via persistence/schema MIGRATIONS. */
 export const SCHEMA = "dionysus/3.1" as const;
@@ -130,6 +131,11 @@ export interface Placement {
   htmlInputs?: Record<string, string>;
   /** P39/P40: host-side trackers of a video clip (see domain/tracking), each named, with its own source range, boxes and mask. */
   motionTracks?: import("./tracking").NamedTrack[];
+  /**
+   * P49: visibility mask for an image, video or HTML clip. Coordinates are fractions of the source picture.
+   * Absent = the whole clip. `enabled: false` keeps the shape but does not mask. See domain/mask.
+   */
+  mask?: ClipMask;
   /**
    * Storyboard linked item (V2-SB-113): a layer, caption or effect clip sent with a shot. It follows the shot clip
    * `anchor` on version swaps (see domain/storyLinks). `want` remembers the offset/length before a clamp.

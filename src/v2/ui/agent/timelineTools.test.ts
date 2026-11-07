@@ -429,3 +429,22 @@ describe("P39/P40 track_clip / get_track / attach_track / set_track_mask / set_t
     } finally { trackAnalyser.make = orig; }
   });
 });
+
+describe("P49 set_clip_mask / clear_clip_mask", () => {
+  it("sets a shape, rejects a bad path, reports the mask, and clears it without touching a tracker mask", async () => {
+    const e = setup();
+    const run = (name: string, args: object) => runTimelineTool(e, undefined, name, args);
+    const pl = () => findPlacement(root(e.getState().project), "c1")!.placement;
+    expect((await run("set_clip_mask", { clipId: "c1", mask: { shape: "path", nodes: [{ id: "a", x: 0, y: 0 }] } })).ok).toBe(false);
+    expect(pl().mask).toBeUndefined();
+    const set = await run("set_clip_mask", { clipId: "c1", mask: { shape: "ellipse", x: 0.5, y: 0.4, w: 0.3, h: 0.5, feather: 0.04, invert: true } });
+    expect(set.ok).toBe(true);
+    expect(pl().mask).toMatchObject({ shape: "ellipse", feather: 0.04, invert: true });
+    const tl = json((await run("get_timeline", {})).text).tracks.flatMap((t: { clips: { id: string; mask?: { shape: string } }[] }) => t.clips).find((c: { id: string }) => c.id === "c1");
+    expect(tl.mask).toMatchObject({ shape: "ellipse", feather: 0.04 });
+    expect((await run("clear_clip_mask", { clipId: "c1" })).ok).toBe(true);
+    expect(pl().mask).toBeUndefined();
+    expect(e.undo()).toBe(true);
+    expect(pl().mask?.shape).toBe("ellipse");
+  });
+});

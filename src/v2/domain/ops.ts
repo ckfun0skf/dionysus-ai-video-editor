@@ -1,5 +1,6 @@
 /** Pure placement operations. All return new Composition objects (no mutation). */
 import { canChromaKey, CHROMA_DEFAULT, hasSound, type ChromaKey, clampTransform, type KeyframeProp, MAX_SPEED, MIN_SPEED, sourceAt, isStill, findPlacement, newId, trackKindFor, transformOf, type Transform, type Composition, type Placement, type Track } from "./model";
+import { shiftMaskKeys } from "./mask";
 
 export const MIN_DURATION_TICKS = 1200; // 10 ms
 
@@ -155,6 +156,7 @@ export function splitPlacement(comp: Composition, placementId: string, atTicks: 
   const right: Placement = { ...p, id: newIdValue, startTicks: atTicks, durationTicks: p.durationTicks - offset, sourceInTicks: isStill(p) ? 0 : hold || p.reverse ? p.sourceInTicks : p.sourceInTicks + cut };
   if (p.fadeInTicks) delete right.fadeInTicks;
   if (p.keyframes) right.keyframes = shiftKeys(p.keyframes, -offset);
+  if (p.mask) right.mask = shiftMaskKeys(p.mask, -offset);
   return mapTrack(comp, found.track.id, (t) => ({ ...t, placements: sortPlacements(t.placements.flatMap((o) => (o.id === p.id ? [left, right] : [o]))) }));
 }
 

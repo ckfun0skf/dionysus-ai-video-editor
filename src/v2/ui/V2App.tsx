@@ -3,7 +3,7 @@ import { hitCandidates, isBackdrop, pickAt, Player, readClipConfig } from "../re
 import { cmd } from "../engine";
 import { htmlRoleOf, importFile } from "../persistence";
 const withoutRole = <T extends { role?: unknown }>(m: T): Omit<T, "role"> => { const { role: _r, ...rest } = m; return rest; };
-import { sourceAt, tracking, board as storyDomain, compositionDuration, edit, layers, ops, findPlacement, newId, formatTimecode, secondsToTicks, TICKS_PER_SECOND, type Asset } from "../domain";
+import { sourceAt, tracking, masking, board as storyDomain, compositionDuration, edit, layers, ops, findPlacement, newId, formatTimecode, secondsToTicks, TICKS_PER_SECOND, type Asset } from "../domain";
 import type { Composition, Project } from "../domain";
 import { useEditorBoot, useEngineState, useIsMobile, type EditorContext, type LoadFailure } from "./useEditor";
 import { Timeline } from "./Timeline";
@@ -48,6 +48,7 @@ import { stickerFile, stickers } from "./libraryItems";
 import { newCodeClipHtml } from "./codeSamples";
 import { CleanupDialog } from "./CleanupDialog";
 import { TrackSheet } from "./TrackSheet";
+import { MaskSheet } from "./MaskSheet";
 import type { TrackRangeChange } from "./TracksLane";
 import { makeTrackAnalyse, rangeTrack } from "./trackAnalyse";
 import { EffectPicker } from "./EffectPicker";
@@ -183,6 +184,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   };
   const openTrack = (clipId: string, trackId: string) => { player.pause(); selectClip(clipId); setTrackOpen({ trackId }); };
   const [trackOpen, setTrackOpen] = useState<false | { trackId?: string }>(false);
+  /** P49: the Mask sheet (shape and freeform). The draft is previewed, not stored, until ✓. */
+  const [maskOpen, setMaskOpen] = useState(false);
   /** V2-HTML-PARAMS: the mobile sheet with the selected HTML clip's param values. */
   const [paramsOpen, setParamsOpen] = useState(false);
   /** V2-TL-TRANS: incoming clip of the cut whose transition picker sheet is open (mobile). */
@@ -890,6 +893,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
         rangeable && A("replace", "⇄", "Replace", () => setRangeFor({ id: pl.id, picker: true }), "Swap this clip's media for another of the same kind; everything else stays"),
         inPointable && A("in-point", "⇤", "In point", () => setInOpen(true), "Where the clip starts in its video (slip)"),
         tracking.canTrack(pl) && A("track", "track", "Track", () => { player.pause(); setTrackOpen({}); }, "Add a tracker to this clip so text, overlays or code can follow it"),
+        masking.canMask(pl) && A("mask", "mask", "Mask", () => { player.pause(); setMaskOpen(true); }, "Hide part of this picture with a shape or a freeform path"),
         canChromaKey(pl) && A("chroma", "chroma", "Chroma", () => setCkOpen(true), "Remove a green or blue screen colour"),
         isText && adjust,
         !!selAudioSpec && pl.clipType !== "audio" && A("edit-audio", "♫", "Edit audio", () => void openAudio(), "Open this clip in the Audio editor")]),
@@ -1062,6 +1066,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       <button className="v2-dtool v2-dtool-text" title="Trim start to playhead (Q)" aria-label="Trim start to playhead" onClick={() => trimToPlayhead("left")}><Ic g="trim-start" size={16} /><span>Trim start</span></button>
       <button className="v2-dtool v2-dtool-text" title="Trim end to playhead (W)" aria-label="Trim end to playhead" onClick={() => trimToPlayhead("right")}><Ic g="trim-end" size={16} /><span>Trim end</span></button>
       <button className="v2-dtool v2-dtool-text" title={tracking.canTrack(sp) ? "Track a region of this clip (text, overlays and code can follow it)" : "Select a video clip to track"} disabled={!tracking.canTrack(sp)} onClick={() => { player.pause(); setTrackOpen({}); }}><Ic g="track" size={16} /><span>Track</span></button>
+      <button className="v2-dtool v2-dtool-text" title={sp && masking.canMask(sp) ? "Mask this picture: shapes or an editable freeform path" : "Select an image, video or HTML clip to mask"} disabled={!(sp && masking.canMask(sp))} onClick={() => { player.pause(); setMaskOpen(true); }}><Ic g="mask" size={16} /><span>Mask</span></button>
       <button className="v2-dtool v2-dtool-text" title={pair ? "Match frames across the cut between these two clips" : "Select a video clip that touches another video clip"} disabled={!pair} onClick={() => setMatchOpen(true)}><Ic g="match" size={16} /><span>Match frames</span></button>
       <span className="v2-dsep" aria-hidden />
       <button className="v2-dtool v2-dtool-text" title="Add an empty video (overlay) track" onClick={() => engine.dispatch(cmd.addTrack("video"))}><Ic g="▭" size={16} /><span>Video track</span></button>
@@ -1213,6 +1218,13 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       {toast && <div className={`v2-toast ${toastUndo ? "has-undo" : ""}`} role="status" onClick={() => setToast(undefined)}><span>{toast}</span>{toastUndo && <button className="v2-toast-undo" title={`Undo (${MOD} Z)`} onClick={(e) => { e.stopPropagation(); engine.undo(); setToast(undefined); }}>Undo</button>}</div>}
       {promoteFor && findPlacement(comp, promoteFor) && <PromoteSheet engine={engine} project={project} clipId={promoteFor} onDone={(m) => { setPromoteFor(undefined); if (m) setToast(m); }} />}
       {syncOpen && <SyncSheet engine={engine} project={project} onDone={(m) => { setSyncOpen(false); if (m) setToast(m); }} />}
+      {maskOpen && selected?.placement && masking.canMask(selected.placement) && <div className="v2-modal-back" onPointerDown={(e) => { if (e.target === e.currentTarget) { player.maskPreview = null; player.draw(); setMaskOpen(false); } }}>
+        <MaskSheet key={selected.placement.id} engine={engine} project={project} placement={selected.placement} time={Math.round(player.time)} loadBlob={loadAssetBlob}
+          onPreview={(m) => { player.maskPreview = { id: selected.placement!.id, mask: m }; player.draw(); }}
+          onSeek={seek}
+          onClose={() => { player.maskPreview = null; player.draw(); setMaskOpen(false); }}
+          onDone={(m) => { player.maskPreview = null; player.draw(); setMaskOpen(false); setToast(m); }} />
+      </div>}
       {trackOpen && selected?.placement && tracking.canTrack(selected?.placement) && <div className="v2-modal-back" onPointerDown={(e) => { if (e.target === e.currentTarget) setTrackOpen(false); }}>
         <TrackSheet key={`${selected?.placement.id}:${trackOpen.trackId ?? "new"}`} trackId={trackOpen.trackId} engine={engine} project={project} placement={selected?.placement} time={Math.round(player.time)} loadBlob={loadAssetBlob} onClose={() => setTrackOpen(false)} onDone={(m) => { setTrackOpen(false); setToast(m); }} />
       </div>}
