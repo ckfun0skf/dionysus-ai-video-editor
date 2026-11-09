@@ -150,7 +150,7 @@ export function AssetBrowser({ project, thumbs, busy, tab, onTab, ...a }: Browse
             ))}
           </ul>
           <div className="v2-abhead"><strong>Subtitles</strong></div>
-          <button className="v2-btn v2-wide" title="Import an .srt file as a new text layer" onClick={a.onImportSrt}><Ic g="⇪" size={16} /> Import SRT</button>
+          <button className="v2-btn v2-wide" title="Paste or choose an .srt / .vtt file as a new text layer" onClick={a.onImportSrt}><Ic g="srt-in" size={16} /> Import SRT</button>
         </>}
         {tab === "stickers" && <ul className="v2-tiles v2-tiles-sq" aria-label="Stickers">
           {stickers().map((s) => (

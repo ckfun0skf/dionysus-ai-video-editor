@@ -296,7 +296,7 @@ describe("V2App", () => {
       await act(async () => { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
       await tap("Text");
       expect([...el.querySelectorAll(".v2-toolbar .v2-tool b")].every((b) => b.querySelector("svg.v2-ic"))).toBe(true);
-      expect(labels()).toEqual(expect.arrayContaining(["Add", "Stickers", "Import", "Subtitles", "Export", "Template"]));
+      expect(labels()).toEqual(expect.arrayContaining(["Add", "Stickers", "Import SRT", "Subtitles", "Export SRT", "Template"]));
       await act(async () => { (el.querySelector(".v2-tool-back") as HTMLButtonElement).click(); });
       await tap("Overlay");
       expect(labels()).toEqual(["Add"]);

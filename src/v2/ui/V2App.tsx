@@ -276,7 +276,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     const added = rootOf().tracks.find((t) => !before.has(t.id) && t.kind === "text");
     if (added) setSrtLayer(added.id);
     setSubImport(false);
-    setToast(`Imported ${n} subtitles (Undo to revert)`);
+    setToast(`Imported ${n} subtitle${n === 1 ? "" : "s"} (Undo to revert)`);
   };
   const onSrt = async (f?: File) => {
     setSubImport(false);
@@ -286,16 +286,17 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     const n = await importSrtFile(engine, f);
     const added = rootOf().tracks.find((t) => !before.has(t.id) && t.kind === "text");
     if (added) setSrtLayer(added.id);
-    setToast(n ? `Imported ${n} subtitles (Undo to revert)` : `${f.name}: no subtitles found`);
+    setToast(n ? `Imported ${n} subtitle${n === 1 ? "" : "s"} (Undo to revert)` : `${f.name}: no subtitles found`);
   };
   const subLayer = comp.tracks.find((t) => t.kind === "text" && t.layerStyle?.subtitle && t.placements.length) ?? comp.tracks.find((t) => t.kind === "text" && t.placements.some((p) => p.clipType === "text"));
   const exportSrt = () => (subLayer ? downloadText(cueLayer.layerToSrt(subLayer), project.name) : cues.length ? downloadSrt(cues, project.name) : setToast("No subtitles to export — import an SRT or add text first"));
   const topLane = cues.length ? { label: "Text", render: (toPx: (t: number) => number, toTicks: (px: number) => number) => <SubtitleLane engine={engine} list={cues} selectedId={subId} onSelect={selectCue} toPx={toPx} toTicks={toTicks} /> } : undefined;
+  const openSubImport = () => { setSheet(false); setSubsEdit(undefined); setSubImport(true); };
   const textTools = [
     { icon: "T", label: "Add text", title: "Add a text clip at the playhead (T)", run: addText },
-    { icon: "⇪", label: "Import", title: "Paste or choose .srt / .vtt subtitles as a new text layer", run: () => setSubImport(true) },
+    { icon: "srt-in", label: "Import SRT", title: "Paste SRT or VTT text, or choose a file, as a new text layer", run: openSubImport },
     { icon: "≡", label: "Subtitles", title: "Edit every subtitle in a list: text, timing, split, merge, find & replace", run: () => editSubtitles() },
-    { icon: "⇩", label: "Export", title: "Download subtitles as .srt", run: exportSrt },
+    { icon: "srt-out", label: "Export SRT", title: "Download subtitles as an .srt file", run: exportSrt },
   ];
   // V2-103: controls and gizmo work on the effective placement (layer style merged under the clip's overrides).
   const selTrack = selected?.track;
@@ -705,6 +706,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const projectMedia = useMemo(() => projectMediaList(project, thumbs), [project, thumbs]);
   const addToTimeline = (a: Asset) => { engine.dispatch(cmd.addAssetToTimeline(a.id, mobile ? player.time : duration)); if (mobile) setSheet(false); };
 
+  // One mount, at the app root (see the render below). On mobile the Media browser is wrapped in
+  // [hidden] while its sheet is closed; a dialog or file input inside that wrapper cannot be shown.
   const fileInputs = (
     <>
       <input ref={fileRef} type="file" hidden multiple accept="video/*,image/*,audio/*,.html,.htm,text/html,.zip,application/zip" onChange={(e) => { void onFiles(e.target.files); e.target.value = ""; }} />
@@ -735,7 +738,6 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           </li>
         ))}
       </ul>
-      {fileInputs}
     </section>
   );
 
@@ -846,7 +848,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     onTransition(p.id);
   };
   const tool = (icon: string, label: string, onClick: () => void, key = label, title?: string) => (
-    <button key={key} className="v2-tool" title={title} onClick={onClick}><b aria-hidden><Ic g={icon} /></b><span>{label}</span></button>
+    <button key={key} className={`v2-tool${label.length > 9 ? " v2-tool-wide" : ""}`} title={title} onClick={onClick}><b aria-hidden><Ic g={icon} /></b><span>{label}</span></button>
   );
   const pair = sp ? clipRange.matchPair(project, comp, sp.id) : undefined;
   /** P32: one clip-bar action. Labels are short and never change with state; state shows as `active` (background only). */
@@ -976,7 +978,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const assetBrowser = (
     <AssetBrowser project={project} thumbs={thumbs} busy={busy} tab={btab} onTab={setBtab}
       onImport={importDialog} onFiles={(fs) => void onFiles(fs)} onAddAsset={addToTimeline} onRemoveAsset={(a) => engine.dispatch(cmd.removeAsset(a.id))}
-      onAddBlank={addBlank} onAddText={(tp) => addTextAt(player.time, tp)} onImportSrt={() => setSubImport(true)}
+      onAddBlank={addBlank} onAddText={(tp) => addTextAt(player.time, tp)} onImportSrt={openSubImport}
       onAddSticker={(st) => void addStickerAt(st, player.time)} onAddEffect={(id) => addEffectAt(id, player.time)}
       onAddTransition={addTransitionNearPlayhead} onCreateCode={() => createCode()} onCreateAudio={createAudio} onCreateAudioAi={openAudioAi} onAudioFromVideo={() => setPicker("fromVideo")} />
   );
@@ -996,10 +998,10 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       <p className="v2-sel-count" role="status">{sel.length} selected</p>
       {actionList([{ icon: "🗑", label: ripple ? "Ripple delete all" : "Delete all", title: "Delete every selected clip (Del)", run: () => delSel() }, ...clipActions.map((a) => ({ ...a, label: `${a.label} all` }))])}
       <p className="v2-abnote">Shift-click clips on the timeline to add or remove them from the selection.</p></div> }] };
-    if (subsTrack && !selected) return { icon: "≡", title: "Edit subtitles", subtitle: subsTrack.name, onDone: () => setSubsEdit(undefined), tabs: [{ id: "subs", label: "Subtitles", render: () => <SubtitleList engine={engine} track={subsTrack} time={time} playing={playing} onSeek={seek} onTogglePlay={togglePlay} desktop name={project.name} focusCue={subsCue} /> }] };
+    if (subsTrack && !selected) return { icon: "≡", title: "Edit subtitles", subtitle: subsTrack.name, onDone: () => setSubsEdit(undefined), tabs: [{ id: "subs", label: "Subtitles", render: () => <SubtitleList engine={engine} track={subsTrack} time={time} playing={playing} onSeek={seek} onTogglePlay={togglePlay} desktop name={project.name} focusCue={subsCue} onImport={openSubImport} /> }] };
     if (layerTrack && !selected) return { icon: "layers", title: "Edit all", subtitle: layerTrack.name, onDone: () => setLayerEdit(undefined), tabs: [{ id: "layer", label: "Layer style", render: () => <TextPanel key={layerTrack.id} engine={engine} layer={layerTrack} initialTab="Style" /> }] };
     if (cue && !selected) return { icon: "≡", title: "Subtitle", onDone: () => setSubId(undefined), tabs: [{ id: "cue", label: "Subtitle", render: () => <SubtitleEditor engine={engine} sub={cue} onDelete={delCue} /> }] };
-    if (!selected) return { icon: "settings", title: "Project", subtitle: `${project.settings.width}×${project.settings.height} · ${fpsNow} fps`, tabs: [{ id: "project", label: "Project", render: () => <ProjectSettings engine={engine} project={project} onSeries={() => setSeriesLib(true)} onCleanup={() => setCleanOpen(true)} extra={textLayers.length ? <section aria-label="Subtitles"><h4>Subtitles</h4>{actionList([{ icon: "≡", label: "Subtitles", title: "Edit every subtitle in a list: text, timing, split, merge, find & replace", run: editSubtitles }, { icon: "⇩", label: "Export", title: "Download subtitles as .srt", run: exportSrt }])}</section> : undefined} /> }] };
+    if (!selected) return { icon: "settings", title: "Project", subtitle: `${project.settings.width}×${project.settings.height} · ${fpsNow} fps`, tabs: [{ id: "project", label: "Project", render: () => <ProjectSettings engine={engine} project={project} onSeries={() => setSeriesLib(true)} onCleanup={() => setCleanOpen(true)} extra={textLayers.length ? <section aria-label="Subtitles"><h4>Subtitles</h4>{actionList([{ icon: "≡", label: "Subtitles", title: "Edit every subtitle in a list: text, timing, split, merge, find & replace", run: editSubtitles }, { icon: "srt-out", label: "Export SRT", title: "Download subtitles as an .srt file", run: exportSrt }])}</section> : undefined} /> }] };
     const pl = selected.placement, kind = pl.clipType;
     const rel = clipTimeAt(pl, time);
     const sub = `${formatTimecode(pl.startTicks, fpsNow).slice(0, 8)} · ${(pl.durationTicks / 120000).toFixed(1)}s${rel ? ` · ${clipTimeText(rel)}` : ""}`;
@@ -1156,6 +1158,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   );
   return (
     <div className={`v2-app ${mobile ? "is-mobile" : "is-desktop"} ${fs ? "is-fs" : ""}`}>
+      {fileInputs}
       {mobile ? (
         <header className="v2-header v2-mheader">
           <a className="v2-icon v2-close" href={window.location.pathname} aria-label="Close (back to classic editor)"><Ic g="✕" /></a>
@@ -1165,7 +1168,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           <select className="v2-res" aria-label="Export resolution" value={res} onChange={(e) => setRes(e.target.value as Resolution)}>
             {["720p", "1080p", "2K", "4K"].map((r) => <option key={r}>{r}</option>)}
           </select>
-          <button className="v2-export" title="Export MP4 (⌘/Ctrl+E)" onClick={openExport}>Export</button>
+          <button className="v2-export" aria-label="Export MP4" title="Export MP4 (⌘/Ctrl+E)" onClick={openExport}><Ic g="film" size={16} /> Export</button>
         </header>
       ) : (
         <header className="v2-header v2-dheader">
@@ -1182,7 +1185,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           </span>
           <button className="v2-dtool" aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)" onClick={() => setKbdOpen(true)}><Ic g="keyboard" size={18} /></button>
           <button className="v2-dtool" aria-label={lay.rightOpen ? "Hide inspector" : "Show inspector"} title={lay.rightOpen ? "Hide inspector" : "Show inspector"} aria-pressed={lay.rightOpen} onClick={() => togglePanel("rightOpen")}><Ic g={lay.rightOpen ? "panel-r-close" : "panel-r-open"} size={18} /></button>
-          <button className="v2-btn primary v2-export-d" title="Export MP4 (⌘/Ctrl+E)" onClick={openExport}><Ic g="⇪" size={16} /> Export</button>
+          <button className="v2-btn primary v2-export-d" aria-label="Export MP4" title="Export MP4 (⌘/Ctrl+E)" onClick={openExport}><Ic g="film" size={16} /> Export MP4</button>
         </header>
       )}
       {board && <StoryboardView engine={engine} blobs={storage.blobs} initialOpen={boardOpen} onSeries={() => setSeriesLib(true)} onClose={() => { setBoard(false); setBoardOpen(undefined); }}
@@ -1286,7 +1289,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           {posOpen && selected && hasSound(selected.placement) && <Sheet label="Position" className="v2-msheet-insp" onClose={() => setPosOpen(false)}><SpatialPad engine={engine} project={project} placement={selected.placement} track={selected.track} time={time} /></Sheet>}
           {rangeFor && findPlacement(comp, rangeFor.id) && <Sheet label={rangeFor.picker ? "Replace asset" : "Adjust range"} className="v2-msheet-insp v2-msheet-slip" head={false} snaps={[0.3, 0.62, 0.9]} onClose={() => setRangeFor(undefined)}><AdjustRange key={`${rangeFor.id}:${rangeFor.picker ? 1 : 0}`} engine={engine} project={project} clipId={rangeFor.id} blobs={storage.blobs} peaks={peaks} strips={strips} thumbs={thumbs} startInPicker={rangeFor.picker} onUpload={(fs) => onFiles(fs)} onSeek={seek} onMix={setMixDraft} onPlayRange={playRange} time={time} onDone={(m) => { setRangeFor(undefined); if (m) setToast(m); }} /></Sheet>}
           {inOpen && selected && inPointable && <Sheet label="In point" className="v2-msheet-insp" onClose={() => setInOpen(false)}><InPointControl engine={engine} project={project} placement={selected.placement} /></Sheet>}
-          {subsTrack && <Sheet label="Edit subtitles" className="v2-msheet-tall" head={false} onClose={() => setSubsEdit(undefined)}><SubtitleList engine={engine} track={subsTrack} time={time} playing={playing} onSeek={seek} onTogglePlay={togglePlay} desktop={false} name={project.name} focusCue={subsCue} onDone={() => setSubsEdit(undefined)} /></Sheet>}
+          {subsTrack && <Sheet label="Edit subtitles" className="v2-msheet-tall" head={false} onClose={() => setSubsEdit(undefined)}><SubtitleList engine={engine} track={subsTrack} time={time} playing={playing} onSeek={seek} onTogglePlay={togglePlay} desktop={false} name={project.name} focusCue={subsCue} onDone={() => setSubsEdit(undefined)} onImport={openSubImport} /></Sheet>}
           {layerTrack && !selected && <Sheet label={`Edit all · ${layerTrack.name}`} className="v2-msheet-insp" onClose={() => setLayerEdit(undefined)}><TextPanel key={layerTrack.id} engine={engine} layer={layerTrack} initialTab="Style" /></Sheet>}
           {textOpen && selected && isText && <Sheet label="Text" className="v2-msheet-insp" snapTo={animLoop ? 0 : undefined} extra={scopeChip || undefined} onClose={closeAnim}><TextPanel engine={engine} placement={effSel} track={selTrack} onAnimPicked={() => setAnimLoop(true)} time={time} playing={playing} onSeek={seek} onTogglePlay={togglePlay} /></Sheet>}
           {transFor && cutOf(comp, transFor) && <Sheet label="Transitions" head={false} dim={false} className="v2-trans-sheet" onClose={() => setTransFor(undefined)}><TransitionPicker key={transFor} engine={engine} comp={comp} placementId={transFor} thumbs={thumbs} onPreview={previewCut} onToast={setToast} onNewCode={() => createCodeRole("transition")} onDone={() => setTransFor(undefined)} /></Sheet>}
@@ -1296,7 +1299,6 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
         </>
       ) : (
         <div className="v2-dshell" style={{ gridTemplateColumns: `${lay.leftOpen ? lay.left : 0}px ${lay.leftOpen ? 5 : 0}px minmax(0,1fr) ${lay.rightOpen ? 5 : 0}px ${lay.rightOpen ? lay.right : 0}px`, gridTemplateRows: `minmax(0,1fr) 5px ${lay.timeline}px` }}>
-          {fileInputs}
           {lay.leftOpen && <div className="v2-dpane v2-dpane-left">{assetBrowser}</div>}
           {pickerEl}
           {lay.leftOpen && <Splitter label="Resize asset panel" value={lay.left} dir="right" min={LIMITS.left[0]} max={LIMITS.left[1]} onChange={(v) => resize({ left: v })} onCommit={commitSizes} onReset={() => { resize({ left: DEFAULT_SIZES.left }); commitSizes(); }} />}

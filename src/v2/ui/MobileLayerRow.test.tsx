@@ -86,7 +86,7 @@ describe("V2-105 mobile layer row + Edit subtitles entry points", () => {
     const { el, tool, importSrt } = await mount(412);
     await act(async () => { tool("Text")!.click(); });
     const labels = () => [...el.querySelectorAll(".v2-toolbar .v2-tool span")].map((x) => x.textContent);
-    expect(labels()).toEqual(["Add", "Stickers", "Import", "Subtitles", "Export", "Template"]);
+    expect(labels()).toEqual(["Add", "Stickers", "Import SRT", "Subtitles", "Export SRT", "Template"]);
     await act(async () => { tool("Subtitles")!.click(); });
     expect(el.querySelector(".v2-toast")?.textContent).toMatch(/No subtitles yet/);
     await importSrt();

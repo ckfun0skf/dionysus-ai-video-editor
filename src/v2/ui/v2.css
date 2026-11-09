@@ -97,7 +97,7 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 .v2-close { color: var(--text); text-decoration: none; font-size: 22px; }
 .v2-spacer { flex: 1; }
 .v2-res { background: #1e1e22; color: var(--text); border: none; border-radius: 8px; padding: 7px 10px; font: 600 14px system-ui; }
-.v2-export { background: var(--accent); color: #041418 !important; border: none; border-radius: 8px; padding: 8px 18px; font: 700 15px system-ui !important; }
+.v2-export { display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; background: var(--accent); color: #041418 !important; border: none; border-radius: 8px; padding: 8px 14px; font: 700 15px system-ui !important; }
 .v2-app.is-mobile .v2-preview { height: 45dvh; background: #000; }
 .v2-app.is-mobile .v2-canvas-wrap { background: #000; }
 .v2-app.is-fs .v2-preview { position: fixed; inset: 0; height: auto; z-index: 30; }
@@ -757,6 +757,9 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 .v2-trans:not(.has-trans) { opacity: .9; border-radius: 5px; width: 18px; margin-left: -9px; background: #f4f4f5; color: #111; border-color: #f4f4f5; }
 .v2-trans:not(.has-trans)::before { inset: -11px -13px; }
 .v2-empty-hint { color: var(--muted); font-size: 13px; text-align: center; margin: 8px 0; }
+.v2-empty-hint.v2-cue-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.v2-cue-empty p { margin: 0; }
+.v2-app .v2-cuelist .v2-cue-empty .v2-btn { min-height: 44px; display: inline-flex; align-items: center; gap: 6px; }
 
 /* Touch targets (V2-SB-124 follow-up): the sheet grabber's tap area is 44px tall on touch screens; the visible bar stays
    40×4. The sticky header below it moves down by the same amount. */
@@ -1300,6 +1303,8 @@ select.v2-tp-field { -webkit-appearance: none; appearance: none; padding-right: 
 .v2-toolbar .v2-tool-group { scroll-snap-align: start; }
 .v2-toolbar .v2-tool { flex: none; width: 52px; min-width: 52px; padding: 6px 2px; min-height: 52px; color: var(--text, #e8e8ec); }
 .v2-toolbar .v2-tool span { max-width: 50px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.v2-toolbar .v2-tool.v2-tool-wide { width: auto; min-width: 84px; padding-inline: 6px; }
+.v2-toolbar .v2-tool.v2-tool-wide span { max-width: none; }
 .v2-toolbar .v2-tool.is-danger:hover { background: rgba(255,255,255,.08); }
 .v2-toolbar .v2-tool-back { flex: none; width: 44px; }
 .v2-agrid { display: flex; flex-direction: column; gap: 12px; padding: 4px 12px 16px; }
@@ -1368,10 +1373,11 @@ select.v2-tp-field { -webkit-appearance: none; appearance: none; padding-right: 
 .v2-subimport-head .v2-icon-btn { min-width: 44px; min-height: 44px; border: 0; background: transparent; color: inherit; border-radius: 8px; cursor: pointer; display: grid; place-items: center; }
 .v2-subimport-head .v2-icon-btn:hover:not(:disabled) { background: var(--surface-2, #2a2a2e); }
 .v2-subimport-head .v2-icon-btn:disabled { opacity: .35; cursor: default; }
+.v2-subimport-label { font-weight: 600; font-size: 13px; }
 .v2-subimport-text { min-height: 200px; flex: 1; resize: vertical; font: 13px/1.4 ui-monospace, monospace; background: #111; color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
 .v2-subimport-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .v2-subimport-foot > span { flex: 1 1 100%; font-size: 13px; }
-.v2-subimport-foot .v2-btn { min-height: 44px; }
+.v2-subimport-foot .v2-btn { min-height: 44px; display: inline-flex; align-items: center; gap: 6px; }
 .v2-sb-picker-paste { padding: 8px 0; }
 /* P36: blank (solid colour) clips */
 .v2-blank-colors { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
