@@ -16,6 +16,7 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent as RPE } from "
 import { cmd, type Command, type Engine } from "../engine";
 import { clipRange, findPlacement, slip, ticksToSeconds, TICKS_PER_SECOND, type Asset, type Placement, type Project } from "../domain";
 import type { BlobStore } from "../ports";
+import { Ic } from "./Icon";
 import { Waveform } from "./ClipPreview";
 import { mediaKey } from "./useMedia";
 import { nearestFrame, type Filmstrip, type Peaks } from "./media";
@@ -133,16 +134,18 @@ function SourceBar({ total, inT, span, locked, strip, peaks, onChange, onCommit,
   );
 }
 
-function AssetPicker({ visual, project, kind, current, thumbs, onPick, onUpload, onBack, kindOf, story }: { visual?: boolean; story?: string; kindOf: (id: string) => string | undefined; project: Project; kind: Asset["kind"]; current: string; thumbs?: Record<string, string>; onPick: (id: string) => void; onUpload?: (files: File[]) => Promise<string[]>; onBack: () => void }) {
+function AssetPicker({ visual, project, kind, current, thumbs, onPick, onUpload, onBack, kindOf, story, label = "Replace asset" }: { visual?: boolean; story?: string; label?: string; kindOf: (id: string) => string | undefined; project: Project; kind: Asset["kind"]; current: string; thumbs?: Record<string, string>; onPick: (id: string) => void; onUpload?: (files: File[]) => Promise<string[]>; onBack: () => void }) {
   const file = useRef<HTMLInputElement>(null);
   const [note, setNote] = useState<string>();
   const list = Object.values(project.assets).filter((a) => (visual ? a.kind !== "audio" : a.kind === kind) && a.id !== current && a.versions.length);
   const dur = (a: Asset) => { const v = slip.replaceVersion(project, a.id); return v?.media.durationTicks ? fmt(v.media.durationTicks) : ""; };
   return (
-    <div className="v2-slip-picker" role="group" aria-label="Replace asset">
-      <p className="v2-abnote">{story
+    <div className="v2-slip-picker" role="group" aria-label={label} data-testid="asset-picker">
+      <p className="v2-abnote">{visual
+        ? <>Choose a video, image or code clip, or upload one. It fills this placeholder in place; its position, length and linked layers stay.</>
+        : story
         ? <>This clip is {story} of the storyboard: the file you choose becomes a <b>new version</b> of {story} (the timeline follows it; earlier versions stay selectable in the storyboard).</>
-        : <>Choose another {kind} for this clip. Position, length, effects, Adjust, transitions, volume, sound position, keyframes and links stay.</>}</p>
+        : <>Choose another {kind} for this clip, or upload one. Position, length, effects, Adjust, transitions, volume, sound position, keyframes and links stay.</>}</p>
       <div className="v2-slip-assets" role="list">
         {list.length ? list.map((a) => (
           <button key={a.id} type="button" role="listitem" className="v2-slip-asset" onClick={() => onPick(a.id)} aria-label={`Use ${a.name}`}>
@@ -153,10 +156,10 @@ function AssetPicker({ visual, project, kind, current, thumbs, onPick, onUpload,
       </div>
       {note && <p className="v2-abnote" role="status">{note}</p>}
       <div className="v2-slip-actions">
-        {onUpload && <button type="button" className="v2-btn primary" onClick={() => file.current?.click()}>Upload {visual ? "media" : kind}…</button>}
+        {onUpload && <button type="button" className="v2-btn primary" data-testid="asset-upload" onClick={() => file.current?.click()}><Ic g="⇪" size={16} /> Upload {visual ? "media" : kind}…</button>}
         <span className="v2-slip-spacer" />
         <button type="button" className="v2-btn" onClick={onBack}>Back</button>
-        <input ref={file} type="file" hidden accept={visual ? "video/*,image/*" : kind === "audio" ? "audio/*" : kind === "video" ? "video/*" : kind === "html" ? ".html,.htm,text/html,.zip" : "image/*"} aria-label={`Upload ${kind}`}
+        <input ref={file} type="file" hidden accept={visual ? "video/*,image/*,.html,.htm,text/html,.zip" : kind === "audio" ? "audio/*" : kind === "video" ? "video/*" : kind === "html" ? ".html,.htm,text/html,.zip" : "image/*"} aria-label={`Upload ${visual ? "media" : kind}`}
           onChange={(e) => { const fs = Array.from(e.target.files ?? []); e.target.value = ""; if (!fs.length || !onUpload) return; setNote("Uploading…"); void onUpload(fs).then((ids) => { const id = ids.find((x) => (visual ? !!kindOf(x) && kindOf(x) !== "audio" : kindOf(x) === kind)); if (id) onPick(id); else setNote(`That file isn't ${kind === "audio" ? "an" : "a"} ${kind}; choose a ${kind} file.`); }); }} />
       </div>
     </div>
@@ -213,7 +216,7 @@ export function AdjustRange({ engine, project, clipId, blobs, peaks, strips, thu
         <button type="button" className="v2-icon v2-slip-hbtn" aria-label="Cancel" title="Cancel" onClick={() => onDone()}>✕</button>
         <h3>Fill placeholder</h3><span className="v2-slip-hbtn" aria-hidden />
       </header>
-      <AssetPicker visual kindOf={(id) => engine.getState().project.assets[id]?.kind} project={project} kind="video" current="" thumbs={thumbs} onUpload={onUpload} onBack={() => onDone()}
+      <AssetPicker visual label="Fill placeholder" kindOf={(id) => engine.getState().project.assets[id]?.kind} project={project} kind="video" current="" thumbs={thumbs} onUpload={onUpload} onBack={() => onDone()}
         onPick={(id) => { const ok = engine.dispatch(cmd.replaceClipAsset(clipId, id, "shorten"), "Fill placeholder"); onDone(ok ? `Placeholder filled with ${engine.getState().project.assets[id]?.name ?? "the asset"}.` : "Couldn't fill the placeholder."); }} />
     </div>
   );

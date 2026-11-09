@@ -544,6 +544,18 @@ export async function runTimelineTool(engine: Engine, source: FrameSource | unde
       if (!cmds.length) return fail("Give at least one of volume, transform, effect, fades, speed, blend, text, position, positionKeys, pan, trackPosition, audioOutput.");
       return edit(cmds, id);
     }
+    case "insert_clip_after": {
+      const assetId = s("assetId"), afterId = s("afterClipId"), p0 = project();
+      if (!assetId || !p0.assets[assetId]) return fail(`No media asset "${assetId ?? ""}". Asset ids: ${Object.keys(p0.assets).join(", ") || "none"}.`);
+      const kind = p0.assets[assetId].kind;
+      if (kind !== "video" && kind !== "image" && kind !== "html") return fail(`insert_clip_after places a video, image or html asset on the main track, not ${kind}.`);
+      const roleErr = codeRoleIssue(p0, assetId, "clip"); if (roleErr) return fail(roleErr);
+      if (!afterId) return fail('"afterClipId" is required (a main-track clip id from get_timeline).');
+      const root = rootOf(p0), found = findPlacement(root, afterId), main = ops.mainTrack(root);
+      if (!found || !main || found.track.id !== main.id) return fail(`"${afterId}" is not a clip on the main track.`);
+      const id = newId("plc");
+      return edit(cmd.insertClipAfter({ at: found.placement.startTicks + found.placement.durationTicks, main: [assetId] }, [id]), id);
+    }
     case "add_clip": {
       const assetId = s("assetId"), t = n("startSec"), p = project();
       if (!assetId || !p.assets[assetId]) return fail(`No media asset "${assetId ?? ""}". Asset ids: ${Object.keys(p.assets).join(", ")}.`);

@@ -3,7 +3,7 @@ import { hitCandidates, isBackdrop, pickAt, Player, readClipConfig } from "../re
 import { cmd } from "../engine";
 import { htmlRoleOf, importFile } from "../persistence";
 const withoutRole = <T extends { role?: unknown }>(m: T): Omit<T, "role"> => { const { role: _r, ...rest } = m; return rest; };
-import { sourceAt, tracking, masking, board as storyDomain, compositionDuration, edit, layers, ops, findPlacement, newId, formatTimecode, secondsToTicks, TICKS_PER_SECOND, type Asset } from "../domain";
+import { sourceAt, tracking, masking, board as storyDomain, chain, compositionDuration, edit, layers, ops, findPlacement, newId, formatTimecode, secondsToTicks, TICKS_PER_SECOND, type Asset } from "../domain";
 import type { Composition, Project } from "../domain";
 import { useEditorBoot, useEngineState, useIsMobile, type EditorContext, type LoadFailure } from "./useEditor";
 import { Timeline } from "./Timeline";
@@ -36,6 +36,7 @@ import { cues as cueLayer } from "../domain";
 import { Ic } from "./Icon";
 import { canSetInPoint, InPointControl } from "./InPoint";
 import { AdjustRange, canAdjustRange } from "./AdjustRange";
+import { PastePlaceDialog } from "./PastePlaceDialog";
 import { ClipFrames } from "./ClipFrames";
 import { makeAnalyse, MatchFrames } from "./MatchFrames";
 import { clipRange, links } from "../domain";
@@ -115,13 +116,17 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const [multiMode, setMultiMode] = useState(false);
   const clipboard = useRef<edit.ClipboardItem[]>([]);
   const [hasClip, setHasClip] = useState(false);
+  /** P51: paste asks where to land; null means the dialog is closed. */
+  const [pasteAsk, setPasteAsk] = useState(false);
+  /** Ticks captured when "Insert new clip after" opens, so the picker stays aimed at that cut. */
+  const insertAt = useRef(0);
   /** V2-107 desktop: J/K/L shuttle rate (0 = stopped, 1 = normal play), "?" sheet, right-click menu. */
   const [rate, setRate] = useState(0);
   const [kbdOpen, setKbdOpen] = useState(false);
   const [ctx, setCtx] = useState<{ x: number; y: number; placementId?: string; trackId?: string; ticks: number }>();
   const [pps, setPps] = useState(40);
   const [sheet, setSheet] = useState(false);
-  const [picker, setPicker] = useState<null | "main" | "overlay" | "audio" | "fromVideo" | "stickers">(null);
+  const [picker, setPicker] = useState<null | "main" | "overlay" | "audio" | "fromVideo" | "stickers" | "insert">(null);
   const [busy, setBusy] = useState(0);
   const [menu, setMenu] = useState<Menu>("root");
   /** Mobile: which timeline group is expanded into its layers (the toolbar ‹ collapses it). */
@@ -197,7 +202,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   /** The Code Editor: an existing clip (new version on save), or `create` a new one (Add Media → Code → Create). */
   /** P4A-3: the Audio editor (create: a new clip added to the timeline; else a new version of the asset). */
   const [audioEdit, setAudioEdit] = useState<{ placementId?: string; assetId?: string; source?: string; create?: boolean }>();
-  const [htmlEdit, setHtmlEdit] = useState<{ placementId?: string; assetId?: string; source: string; create?: "main" | "overlay" }>();
+  const [htmlEdit, setHtmlEdit] = useState<{ placementId?: string; assetId?: string; source: string; create?: "main" | "overlay" | "insert" }>();
   const [inlineId, setInlineId] = useState<string>();
   const [subId, setSubId] = useState<string>();
   const [ripple, setRippleState] = useState(() => localStorage.getItem("v2.ripple") === "1");
@@ -245,9 +250,16 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const copy = () => { if (!sel.length) return; clipboard.current = edit.copyClips(comp, sel); setHasClip(true); setToast(`Copied ${sel.length} clip${sel.length > 1 ? "s" : ""}`); };
   const paste = () => {
     if (!clipboard.current.length) { setToast("Nothing to paste — copy a clip first"); return; }
+    setPasteAsk(true);
+  };
+  /** P51: one undo step. Cancel never reaches here. "after" is refused when there is no current clip. */
+  const commitPaste = (where: "after" | "end") => {
+    setPasteAsk(false);
+    const opts = { selectedIds: sel, time: Math.round(player.time) };
+    const at = chain.pasteOrigin(comp, where, opts);
+    if (at === undefined) { setToast("No current clip — select a main-track clip, or move the playhead onto one"); return; }
     const ids = clipboard.current.map(() => newId("plc"));
-    engine.dispatch(cmd.pasteClips(clipboard.current, Math.round(player.time), ids));
-    setSel(ids);
+    if (engine.dispatch(cmd.pasteClips(clipboard.current, at, ids, true), "Paste clip")) setSel(ids);
   };
   const duplicate = () => { if (!sel.length) return; const ids = sel.map(() => newId("plc")); engine.dispatch(cmd.duplicateClips(sel, ids)); setSel(ids); };
   /** Preview duplicate: copy on a new track right above, same time, nudged ~20px, copy selected. */
@@ -468,7 +480,13 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     if (engine.dispatch(cmd.addBlankClip(Math.round(player.time), color, where, undefined, id))) { setSel([id]); setSubId(undefined); }
     setPicker(null); setSheet(false);
   };
-  const createCode = (mode: "main" | "overlay" = "main") => { setPicker(null); setSheet(false); setHtmlEdit({ source: newCodeClipHtml(), create: mode }); };
+  /** P51: a blank clip at the cut "Insert after" was opened on. Later main clips ripple. One undo step. */
+  const insertBlank = (color: string) => {
+    const id = newId("plc");
+    if (engine.dispatch(cmd.insertBlankAfter(insertAt.current, color, id))) { setSel([id]); setSubId(undefined); setToast("Blank clip inserted after the current clip"); }
+    setPicker(null); setSheet(false);
+  };
+  const createCode = (mode: "main" | "overlay" | "insert" = "main") => { setPicker(null); setSheet(false); setHtmlEdit({ source: newCodeClipHtml(), create: mode }); };
   /** P38: Effects / Transitions → Custom (code) → New: the editor opens on a starter whose manifest role routes the save. */
   const createCodeRole = (role: "effect" | "transition") => { setFxOpen(false); setTransFor(undefined); setHtmlEdit({ source: newCodeClipHtml(role), create: "main" }); };
   const saveCode = async (html: string) => {
@@ -478,13 +496,14 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       try {
         const asset = await importFile(new File([html], `${name}.html`, { type: "text/html" }), storage.blobs);
         if (!asset) throw new Error("not an HTML clip");
-        const at = Math.round(player.time);
+        const at = htmlEdit.create === "insert" ? insertAt.current : Math.round(player.time);
         const role = htmlRoleOf(html);
         // P38: an effect package becomes an effect clip at the playhead; a transition package waits in Transitions → Custom (code).
         if (role === "effect") { if (engine.dispatch([cmd.importAsset(asset), cmd.addEffectClip(at, codePresetId(asset.id))], "Create code effect")) { setHtmlEdit(undefined); setToast("Code effect added on the Effects layer (Undo to remove)"); } return; }
         if (role === "transition") { if (engine.dispatch(cmd.importAsset(asset), "Create code transition")) { setHtmlEdit(undefined); setToast("Code transition saved: tap a cut → Transitions → Custom (code)"); } return; }
-        if (engine.dispatch([cmd.importAsset(asset), cmd.addAssetsInSequence([asset.id], at, htmlEdit.create === "overlay" ? newId("trk") : undefined)], "Create code clip")) {
-          setHtmlEdit(undefined); setToast("Code clip added (Undo to remove)");
+        const place = htmlEdit.create === "insert" ? cmd.insertClipAfter({ at, main: [asset.id] }, [newId("plc")]) : cmd.addAssetsInSequence([asset.id], at, htmlEdit.create === "overlay" ? newId("trk") : undefined);
+        if (engine.dispatch([cmd.importAsset(asset), place], htmlEdit.create === "insert" ? "Insert clip after" : "Create code clip")) {
+          setHtmlEdit(undefined); setToast(htmlEdit.create === "insert" ? "Code clip inserted after the current clip (Undo to remove)" : "Code clip added (Undo to remove)");
         }
       } catch (e) { setToast(`Could not add the clip: ${e instanceof Error ? e.message : "import failed"}`); }
       return;
@@ -574,7 +593,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (exporting || projects || kbdOpen || ctx || (e.target as HTMLElement)?.closest?.("input,textarea,select,[contenteditable=true],[role=menu],[role=dialog]")) return;
+      if (exporting || projects || kbdOpen || ctx || pasteAsk || (e.target as HTMLElement)?.closest?.("input,textarea,select,[contenteditable=true],[role=menu],[role=dialog]")) return;
       const mod = e.metaKey || e.ctrlKey;
       const k = e.key.toLowerCase();
       // Storyboard open: the timeline is hidden, so only undo/redo pass through (never Delete/Space on hidden clips).
@@ -638,6 +657,46 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       } finally { setBusy((b) => b - 1); }
     }
     return ids;
+  };
+  /**
+   * P51: current main-track clip for insert / paste. See domain/chain.ts.
+   * Selected main clip, else the clip under the playhead, else the nearest one that already ended.
+   */
+  const chainPoint = () => ({ selectedIds: sel, time: Math.round(player.time) });
+  const canInsert = chain.insertAfterTicks(comp, chainPoint()) !== undefined;
+  const openInsert = (afterId?: string) => {
+    const found = afterId ? findPlacement(comp, afterId) : undefined;
+    const onMain = found && ops.mainTrack(comp)?.id === found.track.id;
+    const at = onMain ? found.placement.startTicks + found.placement.durationTicks : chain.insertAfterTicks(comp, chainPoint());
+    if (at === undefined) { setToast("Select a main-track clip, or move the playhead onto one, to insert after it"); return; }
+    insertAt.current = at;
+    setPicker("insert");
+  };
+  /** Import picked files and insert them after the clip Insert was opened on. One undo step. */
+  const addInserted = async ({ files, stickers: stickerPicks, assets = [] }: Picked) => {
+    setPicker(null);
+    const at = insertAt.current;
+    const mainIds: string[] = assets.filter((id) => project.assets[id] && project.assets[id].kind !== "audio");
+    const stickerIds: string[] = [];
+    const imported: Asset[] = [];
+    const stickerFiles = await Promise.all(stickerPicks.map((s) => stickerFile(s).catch(() => undefined)));
+    const jobs = [...files.map((f) => ({ f, bucket: "main" as const })), ...stickerFiles.filter((f): f is File => !!f).map((f) => ({ f, bucket: "text" as const }))];
+    setBusy((b) => b + jobs.length);
+    for (const { f, bucket } of jobs) {
+      try {
+        const asset = await importFile(await clipFileFrom(f), storage.blobs);
+        if (!asset) { setToast(`${f.name}: unsupported file type`); continue; }
+        imported.push(asset);
+        (bucket === "text" ? stickerIds : mainIds).push(asset.id);
+      } catch (e) { setToast(`${f.name}: ${e instanceof Error ? e.message : "import failed"}`); }
+      finally { setBusy((b) => b - 1); }
+    }
+    const ids = [...mainIds, ...stickerIds].map(() => newId("plc"));
+    const steps = [...imported.map((a) => cmd.importAsset(a))];
+    if (mainIds.length || stickerIds.length) steps.push(cmd.insertClipAfter({ at, main: mainIds, text: stickerIds }, ids));
+    if (!steps.length) return;
+    if (engine.dispatch(steps, "Insert clip after")) { setSel(ids.slice(0, mainIds.length || 1)); setToast("Inserted after the current clip"); }
+    else setToast("Couldn't insert that clip");
   };
   /** Import picked files, re-add project media and stickers, then lay them out from the playhead in one undo step. */
   const addPicked = async ({ files, stickers, assets = [] }: Picked, mode: "main" | "overlay") => {
@@ -746,7 +805,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
 
   const clipActions = [
     { icon: "⧉", label: "Duplicate", title: "Duplicate onto a new track above, same time (⌘/Ctrl+D duplicates after on the same track)", run: duplicateAbove },
-    { icon: "⎘", label: "Copy", title: "Copy (⌘/Ctrl+C) — paste at the playhead with ⌘/Ctrl+V", run: copy },
+    { icon: "⎘", label: "Copy", title: "Copy (⌘/Ctrl+C) — ⌘/Ctrl+V asks where to paste", run: copy },
   ];
   // P9-LINK: "Link to main" for non-main clips (overlay, text, effect, audio).
   const selIsMain = !!selected && ops.mainTrack(comp)?.id === selected.track.id;
@@ -756,7 +815,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     : { icon: "🔗", label: "Link to main", title: "Link to the main clip under this clip's start: it then moves, trims and deletes with it", run: () => setToast(engine.dispatch(cmd.setClipLink(selected.placement.id, true)) ? "Linked to the main clip" : "No main clip under this clip's start to link to") }] : [];
   // P20: overlay video / image / HTML clips can move onto the main track.
   const promoteActions = selected && !selIsMain && promote.canPromote(comp, selected.placement.id) ? [{ icon: "to-main", label: "Promote to main", title: "Promote to main track: replace what the main track shows here, or insert it and move later clips", run: () => setPromoteFor(selected.placement.id) }] : [];
-  const pasteAction = { icon: "📋", label: "Paste", title: hasClip ? "Paste at the playhead (⌘/Ctrl+V)" : "Copy a clip first", run: paste };
+  const pasteAction = { icon: "📋", label: "Paste", title: hasClip ? "Paste: insert after the current clip, or at the end of the current chain (⌘/Ctrl+V)" : "Copy a clip first", run: paste };
 
   // Linked audio (owned child of a video clip): extract / duplicate / mute-restore. All undoable commands.
   const linkedAudioActions = selected && selected.placement.clipType === "video" ? [
@@ -891,8 +950,9 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
         ...timeActions.map((a, i) => A(i ? "reverse" : "freeze", a.icon, i ? "Reverse" : "Freeze", a.run, a.title, i ? !!sp?.reverse : undefined))]),
       uniq([
         selLink && A("storyboard", "board", "Storyboard", () => openStory(selLink.target), `Open ${selLink.label} in the storyboard: pick versions there`),
+        pl.placeholder && A("fill", "⇄", "Fill", () => setRangeFor({ id: pl.id, picker: true }), "Fill this placeholder: pick a video, image or code clip, or upload one. The upload is applied in the same step"),
         rangeable && A("range", "⇔", "Range", () => setRangeFor({ id: pl.id }), "Choose which part of the source this clip plays (slip); its place and length stay"),
-        rangeable && A("replace", "⇄", "Replace", () => setRangeFor({ id: pl.id, picker: true }), "Swap this clip's media for another of the same kind; everything else stays"),
+        rangeable && A("replace", "⇄", "Replace", () => setRangeFor({ id: pl.id, picker: true }), "Swap this clip's media for another of the same kind. Upload a file in the picker and it is selected there"),
         inPointable && A("in-point", "⇤", "In point", () => setInOpen(true), "Where the clip starts in its video (slip)"),
         tracking.canTrack(pl) && A("track", "track", "Track", () => { player.pause(); setTrackOpen({}); }, "Add a tracker to this clip so text, overlays or code can follow it"),
         masking.canMask(pl) && A("mask", "mask", "Mask", () => { player.pause(); setMaskOpen(true); }, "Hide part of this picture with a shape or a freeform path"),
@@ -904,7 +964,9 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
         A("mute-track", selected.track.muted ? "🔇" : "🔊", "Mute track", () => engine.dispatch(cmd.toggleTrackMute(selected.track.id)), "Mute or unmute this whole track", !!selected.track.muted)]),
       uniq([link, toMain,
         A("duplicate", "⧉", "Duplicate", duplicateAbove, clipActions[0].title), A("copy", "⎘", "Copy", copy, clipActions[1].title),
-        hasClip && A("paste", "📋", "Paste", paste, pasteAction.title), A("select", "☑", "Select", () => setMultiMode(true), "Select several clips")]),
+        hasClip && A("paste", "📋", "Paste", paste, pasteAction.title),
+        canInsert && A("insert-after", "＋", "Insert", () => openInsert(), "Insert a new clip after the current clip. Later clips move later; linked layers stay with their clips"),
+        A("select", "☑", "Select", () => setMultiMode(true), "Select several clips")]),
       [A("ripple", "⇤", "Ripple", () => setRipple(!ripple), "Ripple: delete and trim move later clips to close gaps (R)", ripple), A("snap", "🧲", "Snap", () => setSnapOn(!snapOn), "Smart snapping and alignment guides", snapOn)],
     ].filter((g) => g.length);
   })();
@@ -918,7 +980,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       ...(project.storyboard ? [tool("board", "Sync", () => setSyncOpen(true), "sync-story", "Sync to Storyboard: write timeline edits back to the storyboard (review first)")] : []),
       tool("settings", "Project", () => setProjOpen(true), "project-settings", "Project settings: size, frame rate, background, auto-link"),
     ],
-    edit: !selected ? [<span key="h" className="v2-tool-hint">Move the playhead over a main-track clip to edit it</span>] : [
+    edit: !selected ? [<span key="h" className="v2-tool-hint">Move the playhead over a main-track clip to edit it</span>, ...(canInsert ? [tool("＋", "Insert", () => openInsert(), "insert-after", "Insert a new clip after the current clip. Later clips move later; linked layers stay with their clips")] : [])] : [
       // P33: Edit | type primaries | timing | source | audio | arrange | timeline — fixed cells, horizontally scrollable.
       ...clipBar.flatMap((g, i) => [...(i ? [<span key={`div-${i}`} className="v2-tool-div" aria-hidden />] : []), <span key={`g-${i}`} className="v2-tool-group" role="group">{g.map(barTool)}</span>]),
     ],
@@ -974,7 +1036,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     else if (it?.kind === "sticker") { const st = stickers().find((x) => x.id === it.id); if (st) void addStickerAt(st, at); }
     else if (dt.files?.length) void importAt(Array.from(dt.files), at, trackId);
   };
-  const pickerEl = picker ? <MediaPicker media={projectMedia} title={picker === "overlay" ? "Add overlay" : picker === "audio" || picker === "fromVideo" ? "Add audio" : picker === "stickers" ? "Add stickers" : "Add media"} only={picker === "audio" || picker === "fromVideo" ? "audio" : undefined} initialTab={picker === "stickers" ? "stickers" : picker === "fromVideo" ? "fromVideo" : undefined} onClose={() => setPicker(null)} onAdd={(p) => void addPicked(p, picker === "overlay" || picker === "stickers" ? "overlay" : "main")} onCreateCode={picker === "audio" || picker === "fromVideo" ? undefined : () => createCode(picker === "overlay" ? "overlay" : "main")} onCreateAudio={picker === "audio" || picker === "fromVideo" ? createAudio : undefined} onCreateAudioAi={picker === "audio" || picker === "fromVideo" ? openAudioAi : undefined} onAddFromVideo={picker === "audio" || picker === "fromVideo" ? (fv) => void addFromVideo(fv) : undefined} onTimeline={videoOnTimeline} onUploadVideo={picker === "audio" || picker === "fromVideo" ? uploadFromVideo : undefined} onDiscardVideo={(id) => engine.dispatch(cmd.removeAsset(id))} onAddBlank={picker === "audio" || picker === "fromVideo" || picker === "stickers" ? undefined : (c) => addBlank(c, picker === "overlay" ? "overlay" : "main")} loadMedia={loadAssetBlob} /> : null;
+  const inserting = picker === "insert";
+  const pickerEl = picker ? <MediaPicker media={projectMedia} title={inserting ? "Insert after current clip" : picker === "overlay" ? "Add overlay" : picker === "audio" || picker === "fromVideo" ? "Add audio" : picker === "stickers" ? "Add stickers" : "Add media"} lead={inserting ? "The new clip goes just after the current clip. Later clips move later, and linked layers and subtitles stay with the clips they belong to. Upload a file and it is selected here — then Insert." : undefined} confirmLabel={inserting ? "Insert" : "Add"} only={picker === "audio" || picker === "fromVideo" ? "audio" : undefined} initialTab={picker === "stickers" ? "stickers" : picker === "fromVideo" ? "fromVideo" : undefined} onClose={() => setPicker(null)} onAdd={(p) => void (inserting ? addInserted(p) : addPicked(p, picker === "overlay" || picker === "stickers" ? "overlay" : "main"))} onCreateCode={picker === "audio" || picker === "fromVideo" ? undefined : () => createCode(inserting ? "insert" : picker === "overlay" ? "overlay" : "main")} onCreateAudio={picker === "audio" || picker === "fromVideo" ? createAudio : undefined} onCreateAudioAi={picker === "audio" || picker === "fromVideo" ? openAudioAi : undefined} onAddFromVideo={picker === "audio" || picker === "fromVideo" ? (fv) => void addFromVideo(fv) : undefined} onTimeline={videoOnTimeline} onUploadVideo={picker === "audio" || picker === "fromVideo" ? uploadFromVideo : undefined} onDiscardVideo={(id) => engine.dispatch(cmd.removeAsset(id))} onAddBlank={picker === "audio" || picker === "fromVideo" || picker === "stickers" ? undefined : inserting ? insertBlank : (c) => addBlank(c, picker === "overlay" ? "overlay" : "main")} loadMedia={loadAssetBlob} /> : null;
   const assetBrowser = (
     <AssetBrowser project={project} thumbs={thumbs} busy={busy} tab={btab} onTab={setBtab}
       onImport={importDialog} onFiles={(fs) => void onFiles(fs)} onAddAsset={addToTimeline} onRemoveAsset={(a) => engine.dispatch(cmd.removeAsset(a.id))}
@@ -1012,10 +1075,10 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     </section>{promoteSec}</> : null;
     const rangeSec = pl.placeholder ? <section className="v2-psettings v2-range-sec" aria-label="Placeholder"><h4>Not generated</h4>
       <p className="v2-abnote">{pl.placeholder.label} has no clip yet. Generate it in the storyboard and Update, or fill it now.</p>
-      <div className="v2-insp-actions"><button className="v2-btn" data-testid="replace-asset-btn" title="Fill this placeholder with a video or image; its place and length stay" onClick={() => setRangeFor({ id: pl.id, picker: true })}><Ic g="⇄" size={16} /> Replace asset</button></div></section>
+      <div className="v2-insp-actions"><button className="v2-btn" data-testid="replace-asset-btn" title="Fill this placeholder with a video, image or code clip, or upload one. The upload is applied in the same step" onClick={() => setRangeFor({ id: pl.id, picker: true })}><Ic g="⇄" size={16} /> Fill placeholder</button></div></section>
       : canAdjustRange(pl) ? <section className="v2-psettings v2-range-sec" aria-label="Source range"><h4>Source range</h4>
       <div className="v2-insp-actions"><button className="v2-btn" data-testid="adjust-range-btn" title="Choose which part of the source this clip plays (slip); its place and length stay (Alt+drag on the clip)" onClick={() => setRangeFor({ id: pl.id })}><Ic g="⇔" size={16} /> Adjust range</button>
-      <button className="v2-btn" data-testid="replace-asset-btn" title="Swap this clip's media for another of the same kind; everything else stays" onClick={() => setRangeFor({ id: pl.id, picker: true })}><Ic g="⇄" size={16} /> Replace asset</button></div></section> : null;
+      <button className="v2-btn" data-testid="replace-asset-btn" title="Swap this clip's media for another of the same kind. The picker can upload a file and select it in the same step" onClick={() => setRangeFor({ id: pl.id, picker: true })}><Ic g="⇄" size={16} /> Replace asset</button></div></section> : null;
     const transform: InspectorTab = { id: "basic", label: "Basic", icon: "⤧", render: () => pl.placeholder ? rangeSec : kind === "video" && !pl.freeze && !linkSec ? <>{rangeSec}
       <section className="v2-psettings v2-frames-sec" aria-label="In and out frames"><h4>In / out frames</h4><ClipFrames engine={engine} project={project} placement={pl} /></section>
       <TransformInspector engine={engine} placement={pl} time={time} />
@@ -1062,7 +1125,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       {iconBtn("🗑", ripple ? "Ripple delete" : "Delete", () => delSel(), { title: ripple ? "Delete and close the gap (Del)" : "Delete (Del) · Shift+Del ripple delete", disabled: !anySel, key: "del" })}
       {iconBtn("⧉", "Duplicate", duplicateAbove, { title: "Duplicate (⌘/Ctrl+D)", disabled: !anySel })}
       {iconBtn("⎘", "Copy", copy, { title: "Copy (⌘/Ctrl+C)", disabled: !anySel })}
-      {iconBtn("📋", "Paste", paste, { title: hasClip ? "Paste at the playhead (⌘/Ctrl+V)" : "Copy a clip first", disabled: !hasClip })}
+      {iconBtn("📋", "Paste", paste, { title: hasClip ? "Paste: insert after the current clip, or at the end of the current chain (⌘/Ctrl+V)" : "Copy a clip first", disabled: !hasClip })}
+      <button className="v2-dtool v2-dtool-text" data-testid="insert-after" aria-label="Insert new clip after current clip" title="Insert a new clip after the current clip (selected main clip, else the clip under the playhead). Later clips move later; linked layers stay with their clips" disabled={!canInsert} onClick={() => openInsert()}><Ic g="＋" size={16} /><span>Insert after</span></button>
       {iconBtn("❄", "Freeze", () => { if (sp) { engine.dispatch(cmd.freezeFrame(sp.id, Math.round(player.time))); setToast("Freeze frame inserted (3 s)"); } }, { title: "Freeze the frame under the playhead for 3 s (F)", disabled: !(sp && sp.clipType === "video" && !sp.freeze) })}
       <span className="v2-dsep" aria-hidden />
       <button className="v2-dtool v2-dtool-text" title="Trim start to playhead (Q)" aria-label="Trim start to playhead" onClick={() => trimToPlayhead("left")}><Ic g="trim-start" size={16} /><span>Trim start</span></button>
@@ -1095,7 +1159,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     if (!ctx) return [];
     const k = (s: string) => `${MOD}${MOD === "⌘" ? "" : "+"}${s}`;
     if (!ctx.placementId) return [
-      { label: "Paste here", icon: "📋", shortcut: k("V"), disabled: !hasClip, onSelect: () => { seek(ctx.ticks); const ids = clipboard.current.map(() => newId("plc")); engine.dispatch(cmd.pasteClips(clipboard.current, Math.round(ctx.ticks), ids)); setSel(ids); } },
+      { label: "Paste…", icon: "📋", shortcut: k("V"), disabled: !hasClip, onSelect: paste },
+      { label: "Insert new clip after current clip", icon: "＋", disabled: !canInsert, onSelect: () => openInsert() },
       { label: "Add text here", icon: "T", shortcut: "T", onSelect: () => addTextAt(Math.round(ctx.ticks)) },
       { label: "Import media…", icon: "⇪", onSelect: () => importDialog() },
       "sep",
@@ -1108,7 +1173,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     const many = sel.length > 1 ? ` ${sel.length} clips` : "";
     const ctxLink = p.source.assetId ? storyDomain.storyLinkOf(project, p.source.assetId) : undefined;
     return [
-      ...(p.placeholder && sel.length <= 1 ? [{ label: "Replace asset…", icon: "⇄", onSelect: () => { selectClip(p.id); setRangeFor({ id: p.id, picker: true }); } }, "sep" as const] : []),
+      ...(p.placeholder && sel.length <= 1 ? [{ label: "Fill placeholder…", icon: "⇄", onSelect: () => { selectClip(p.id); setRangeFor({ id: p.id, picker: true }); } }, "sep" as const] : []),
+      ...(ops.mainTrack(comp)?.id === f.track.id && sel.length <= 1 ? [{ label: "Insert new clip after", icon: "＋", onSelect: () => openInsert(p.id) }, "sep" as const] : []),
       ...(canAdjustRange(p) && sel.length <= 1 ? [{ label: "Adjust range…", icon: "⇔", shortcut: "Alt+drag", onSelect: () => { selectClip(p.id); setRangeFor({ id: p.id }); } }, { label: "Replace asset…", icon: "⇄", onSelect: () => { selectClip(p.id); setRangeFor({ id: p.id, picker: true }); } }, "sep" as const] : []),
       { label: "Split at playhead", icon: "✂", shortcut: "S", disabled: !inside || sel.length > 1, onSelect: () => engine.dispatch(cmd.splitPlacement(p.id, t)) },
       { label: "Trim start to playhead", icon: "trim-start", shortcut: "Q", disabled: !inside, onSelect: () => trimToPlayhead("left") },
@@ -1116,7 +1182,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       "sep",
       { label: `Copy${many}`, icon: "⎘", shortcut: k("C"), onSelect: copy },
       { label: `Cut${many}`, icon: "✂", shortcut: k("X"), onSelect: cut },
-      { label: "Paste at playhead", icon: "📋", shortcut: k("V"), disabled: !hasClip, onSelect: paste },
+      { label: "Paste…", icon: "📋", shortcut: k("V"), disabled: !hasClip, onSelect: paste },
       { label: `Duplicate${many}`, icon: "⧉", shortcut: k("D"), onSelect: duplicate },
       ...(p.clipType === "video" && !p.freeze && sel.length === 1 ? [{ label: "Freeze frame", icon: "❄", shortcut: "F", disabled: !inside, onSelect: () => { engine.dispatch(cmd.freezeFrame(p.id, t)); setToast("Freeze frame inserted (3 s)"); } }] : []),
       ...(sel.length <= 1 && promote.canPromote(comp, p.id) ? [{ label: "Promote to main track…", icon: "⤓", onSelect: () => setPromoteFor(p.id) }] : []),
@@ -1159,6 +1225,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   return (
     <div className={`v2-app ${mobile ? "is-mobile" : "is-desktop"} ${fs ? "is-fs" : ""}`}>
       {fileInputs}
+      {pasteAsk && <PastePlaceDialog canAfter={chain.insertAfterTicks(comp, { selectedIds: sel, time: Math.round(player.time) }) !== undefined} onChoose={commitPaste} onCancel={() => setPasteAsk(false)} />}
       {mobile ? (
         <header className="v2-header v2-mheader">
           <a className="v2-icon v2-close" href={window.location.pathname} aria-label="Close (back to classic editor)"><Ic g="✕" /></a>
@@ -1198,7 +1265,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       {audioAi && <div className="v2-modal-back" onPointerDown={(e) => { if (e.target === e.currentTarget) setAudioAi(false); }}><AudioAiSheet onAdd={addAiAudio} onClose={() => setAudioAi(false)} /></div>}
       {audioEdit && <AudioEditor key={audioEdit.create ? "new-audio" : audioEdit.placementId} source={audioEdit.source} create={audioEdit.create} mobile={mobile} onSave={saveAudio} onClose={() => setAudioEdit(undefined)} />}
       {codeAi && <CodeAiWizard mobile={mobile} initialRole={codeAi === "overlay" ? "overlay" : "scene"} onClose={() => { setHtmlEdit({ source: newCodeClipHtml(), create: codeAi }); setCodeAi(undefined); }} onImport={(html) => { setHtmlEdit({ source: html, create: codeAi }); setCodeAi(undefined); }} />}
-      {htmlEdit && <CodeEditor key={htmlEdit.create ? "new" : htmlEdit.placementId} source={htmlEdit.source} create={!!htmlEdit.create} mobile={mobile} onAiMode={htmlEdit.create ? () => { setCodeAi(htmlEdit.create); setHtmlEdit(undefined); } : undefined} onSave={(h) => void saveCode(h)} onClose={() => setHtmlEdit(undefined)} />}
+      {htmlEdit && <CodeEditor key={htmlEdit.create ? "new" : htmlEdit.placementId} source={htmlEdit.source} create={!!htmlEdit.create} mobile={mobile} onAiMode={htmlEdit.create === "main" || htmlEdit.create === "overlay" ? () => { setCodeAi(htmlEdit.create === "overlay" ? "overlay" : "main"); setHtmlEdit(undefined); } : undefined} onSave={(h) => void saveCode(h)} onClose={() => setHtmlEdit(undefined)} />}
       {subsPick && <div className="v2-menu-backdrop v2-confirm-backdrop" onPointerDown={() => setSubsPick(false)}>
         <div className="v2-confirm v2-subs-pick" role="dialog" aria-modal="true" aria-label="Choose a text layer" onPointerDown={(e) => e.stopPropagation()}>
           <h4>Edit subtitles</h4><p>Which text layer?</p>
@@ -1213,7 +1280,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           <MatchFrames engine={engine} project={project} a={pair[0]} b={pair[1]} analyse={makeAnalyse(project, loadAssetBlob)} loadMedia={loadAssetBlob} onDone={(m) => { setMatchOpen(false); if (m) setToast(m); }} />
         </div>
       </div>}
-      {!mobile && rangeFor && findPlacement(comp, rangeFor.id) && <aside className="v2-slip-panel" role="dialog" aria-label={rangeFor.picker ? "Replace asset" : "Adjust range"} onKeyDown={(e) => { if (e.key === "Escape") setRangeFor(undefined); }}>
+      {!mobile && rangeFor && findPlacement(comp, rangeFor.id) && <aside className="v2-slip-panel" role="dialog" aria-label={findPlacement(comp, rangeFor.id)?.placement.placeholder && rangeFor.picker ? "Fill placeholder" : rangeFor.picker ? "Replace asset" : "Adjust range"} onKeyDown={(e) => { if (e.key === "Escape") setRangeFor(undefined); }}>
         <AdjustRange key={`${rangeFor.id}:${rangeFor.picker ? 1 : 0}`} engine={engine} project={project} clipId={rangeFor.id} blobs={storage.blobs} peaks={peaks} strips={strips} thumbs={thumbs} startInPicker={rangeFor.picker} onUpload={(fs) => onFiles(fs)} onSeek={seek} onMix={setMixDraft} onPlayRange={playRange} time={time} onDone={(m) => { setRangeFor(undefined); if (m) setToast(m); }} />
       </aside>}
       {!mobile && kbdOpen && <ShortcutsOverlay onClose={() => setKbdOpen(false)} />}
@@ -1287,7 +1354,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           {vcOpen && selected && hasSound(selected.placement) && <Sheet label="Volume curve" className="v2-msheet-insp" onClose={() => setVcOpen(false)}><VolumeCurve engine={engine} placement={selected.placement} time={time} peaks={peaks[mediaKey(selected.placement.source.assetId, selected.placement.source.versionId)]} /></Sheet>}
           {afxOpen && selected && hasSound(selected.placement) && <Sheet label="Audio FX" className="v2-msheet-insp" onClose={() => setAfxOpen(false)}><AudioFxPanel engine={engine} placement={selected.placement} /></Sheet>}
           {posOpen && selected && hasSound(selected.placement) && <Sheet label="Position" className="v2-msheet-insp" onClose={() => setPosOpen(false)}><SpatialPad engine={engine} project={project} placement={selected.placement} track={selected.track} time={time} /></Sheet>}
-          {rangeFor && findPlacement(comp, rangeFor.id) && <Sheet label={rangeFor.picker ? "Replace asset" : "Adjust range"} className="v2-msheet-insp v2-msheet-slip" head={false} snaps={[0.3, 0.62, 0.9]} onClose={() => setRangeFor(undefined)}><AdjustRange key={`${rangeFor.id}:${rangeFor.picker ? 1 : 0}`} engine={engine} project={project} clipId={rangeFor.id} blobs={storage.blobs} peaks={peaks} strips={strips} thumbs={thumbs} startInPicker={rangeFor.picker} onUpload={(fs) => onFiles(fs)} onSeek={seek} onMix={setMixDraft} onPlayRange={playRange} time={time} onDone={(m) => { setRangeFor(undefined); if (m) setToast(m); }} /></Sheet>}
+          {rangeFor && findPlacement(comp, rangeFor.id) && <Sheet label={findPlacement(comp, rangeFor.id)?.placement.placeholder && rangeFor.picker ? "Fill placeholder" : rangeFor.picker ? "Replace asset" : "Adjust range"} className="v2-msheet-insp v2-msheet-slip" head={false} snaps={[0.3, 0.62, 0.9]} onClose={() => setRangeFor(undefined)}><AdjustRange key={`${rangeFor.id}:${rangeFor.picker ? 1 : 0}`} engine={engine} project={project} clipId={rangeFor.id} blobs={storage.blobs} peaks={peaks} strips={strips} thumbs={thumbs} startInPicker={rangeFor.picker} onUpload={(fs) => onFiles(fs)} onSeek={seek} onMix={setMixDraft} onPlayRange={playRange} time={time} onDone={(m) => { setRangeFor(undefined); if (m) setToast(m); }} /></Sheet>}
           {inOpen && selected && inPointable && <Sheet label="In point" className="v2-msheet-insp" onClose={() => setInOpen(false)}><InPointControl engine={engine} project={project} placement={selected.placement} /></Sheet>}
           {subsTrack && <Sheet label="Edit subtitles" className="v2-msheet-tall" head={false} onClose={() => setSubsEdit(undefined)}><SubtitleList engine={engine} track={subsTrack} time={time} playing={playing} onSeek={seek} onTogglePlay={togglePlay} desktop={false} name={project.name} focusCue={subsCue} onDone={() => setSubsEdit(undefined)} onImport={openSubImport} /></Sheet>}
           {layerTrack && !selected && <Sheet label={`Edit all · ${layerTrack.name}`} className="v2-msheet-insp" onClose={() => setLayerEdit(undefined)}><TextPanel key={layerTrack.id} engine={engine} layer={layerTrack} initialTab="Style" /></Sheet>}

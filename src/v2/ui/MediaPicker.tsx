@@ -37,8 +37,10 @@ const fmtDur = (ticks?: number) => { if (!ticks) return ""; const s = Math.round
  * has Upload (from the device) and the project's own media of that kind (thumbnails, durations); Code also has Create
  * (a new clip in the Code Editor). Multi-select across tabs, numbered in pick order, then Add.
  */
-export function MediaPicker({ title, onAdd, onClose, media = [], only, initialTab, onCreateCode, onCreateAudio, loadMedia, onAddFromVideo, onTimeline, probeAudio, onUploadVideo, onDiscardVideo, onAddBlank, onCreateAudioAi }: {
+export function MediaPicker({ title, onAdd, onClose, media = [], only, initialTab, onCreateCode, onCreateAudio, loadMedia, onAddFromVideo, onTimeline, probeAudio, onUploadVideo, onDiscardVideo, onAddBlank, onCreateAudioAi, lead, confirmLabel = "Add" }: {
   title: string; onAdd: (p: Picked) => void; onClose: () => void; media?: ProjectMedia[];
+  /** Shown under the title (insert-after explains the ripple). */ lead?: string;
+  /** Footer button. Defaults to "Add". */ confirmLabel?: string;
   /** "audio": the audio tab only. */ only?: "audio"; initialTab?: PickerTab;
   /** P36: Photos → Blank clip (a solid colour), added where this picker adds. */ onAddBlank?: (color: string) => void;
   /** P36: Audio → Create with AI. */ onCreateAudioAi?: () => void;
@@ -107,7 +109,7 @@ export function MediaPicker({ title, onAdd, onClose, media = [], only, initialTa
     </div>
   ); };
   return (
-    <div className="v2-picker" role="dialog" aria-label={title}>
+    <div className="v2-picker" role="dialog" aria-label={title} data-testid="media-picker">
       <header className="v2-picker-head">
         <button className="v2-icon-btn" aria-label="Close" title="Close (Esc)" onClick={close}><Ic g="✕" /></button>
         <h3>{title}</h3>
@@ -122,6 +124,7 @@ export function MediaPicker({ title, onAdd, onClose, media = [], only, initialTa
           ))}
         </div>
       )}
+      {lead && <p className="v2-picker-lead">{lead}</p>}
       <div className="v2-picker-body" role="tabpanel" aria-label={spec.label} data-tab={tab}>
         {kind ? (
           <>
@@ -201,7 +204,7 @@ export function MediaPicker({ title, onAdd, onClose, media = [], only, initialTa
           <button className="v2-btn primary" disabled={!fv} onClick={() => { if (!fv) return; discardUnused(fv.assetId); onAddFromVideo?.({ ...fv, ...(notKept.includes(fv.assetId) ? { discardVideo: true } : {}) }); }}>Add audio</button>
         </> : <>
         <span className="v2-muted">{count ? `${count} selected` : "Select items to add"}</span>
-        <button className="v2-btn primary" disabled={!count} onClick={add}>Add{count ? ` (${count})` : ""}</button>
+        <button className="v2-btn primary" disabled={!count} onClick={add}>{confirmLabel}{count ? ` (${count})` : ""}</button>
         </>}
       </footer>
     </div>

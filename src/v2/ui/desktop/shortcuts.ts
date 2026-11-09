@@ -16,7 +16,7 @@ export const SHORTCUT_GROUPS: { title: string; items: Shortcut[] }[] = [
   { title: "Editing", items: [
     { keys: ["S", `${MOD} B`, `${MOD} K`], label: "Split at the playhead (selected clips, else the main-track clip)" },
     { keys: ["Del"], label: "Delete selection (⇧ Del: ripple delete)" },
-    { keys: [`${MOD} C`, `${MOD} X`, `${MOD} V`], label: "Copy / cut / paste at the playhead" },
+    { keys: [`${MOD} C`, `${MOD} X`, `${MOD} V`], label: "Copy / cut / paste (paste asks: after the current clip, or the end of the chain)" },
     { keys: [`${MOD} D`], label: "Duplicate selection" },
     { keys: [`${MOD} A`], label: "Select all clips" },
     { keys: ["Alt ←", "Alt →"], label: "Nudge selected clip one frame (⇧ for 10)" },

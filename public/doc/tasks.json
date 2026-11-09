@@ -3192,6 +3192,12 @@
           "title": "Mobile Text > Import SRT opens the paste dialog while the Media sheet is closed (dialog and file input mounted once at the app root, not inside the hidden Media browser). Toolbar labels Import SRT and Export SRT use distinct line icons from Export MP4 (film). The paste box is always visible and does not need clipboard permission. An empty subtitle list offers Import SRT.",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P51-ASSET-UPLOAD-INSERT-PASTE",
+          "title": "Fill placeholder and Replace asset reuse the asset picker and apply an upload in the same step. Insert new clip after the current main-track clip (selected main clip, else the clip under the playhead, else the nearest main clip that already ended) ripples later clips; linked layers and subtitles keep their offset. Paste asks Insert after current clip or At the end of the current chain (the contiguous run; no current clip means the start); Cancel changes nothing; one undo step. WebMCP insert_clip_after; guide rule 72.",
+          "status": "done",
+          "progress": 100
         }
       ]
     }
