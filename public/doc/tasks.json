@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "project": "Dionysus",
-  "updatedAt": "2026-11-06",
+  "updatedAt": "2026-11-09",
   "sourceOfTruth": "public/doc/tasks.json on main (see docs/v2/MODULE_DESIGN.md §14)",
   "statusDefinitions": {
     "done": "Implementation exists and has evidence; release/browser validation may still be pending.",
@@ -3069,7 +3069,7 @@
         },
         {
           "id": "P36-PASTE-IMPORTS",
-          "title": "Paste instead of upload: storyboard Add version for code clips gets 'Paste HTML' (the AI's reply or raw HTML, validated, added as a new version); Text > Import opens 'Import subtitles' with a paste box (live cue count, ✓ imports a new text layer) or Choose file; WebMCP import_subtitles",
+          "title": "Paste instead of upload: storyboard Add version for code clips gets 'Paste HTML' (the AI's reply or raw HTML, validated, added as a new version); Text > Import SRT opens 'Import SRT' with a paste box (live cue count, ✓ imports a new text layer) or Choose file; WebMCP import_subtitles",
           "status": "done",
           "progress": 100
         },
@@ -3184,6 +3184,12 @@
         {
           "id": "P49-CLIP-MASK",
           "title": "Clip visibility masks: rectangle (rounded), ellipse, linear split and band, plus editable closed Bézier paths (move, add, delete nodes and handles). Feather, expand/contract, invert, bypass, reset, remove. Source-space coordinates, one undo per session, shared preview/export raster without canvas.filter. Optional tracker follow (hold on lost). Storyboard, WebMCP set_clip_mask/clear_clip_mask, RULE 71. Effect-region blur deferred.",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "P50-SUBTITLE-IMPORT-MOBILE",
+          "title": "Mobile Text > Import SRT opens the paste dialog while the Media sheet is closed (dialog and file input mounted once at the app root, not inside the hidden Media browser). Toolbar labels Import SRT and Export SRT use distinct line icons from Export MP4 (film). The paste box is always visible and does not need clipboard permission. An empty subtitle list offers Import SRT.",
           "status": "done",
           "progress": 100
         }

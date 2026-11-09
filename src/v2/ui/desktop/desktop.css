@@ -92,6 +92,7 @@ body.v2-resizing-y, body.v2-resizing-y * { cursor: row-resize !important; user-s
 .v2-abhead:not(:first-child) { margin-top: 18px; }
 .v2-abnote { color: var(--d-faint); font-size: 12px; margin: 8px 0; line-height: 1.4; }
 .v2-wide { width: 100%; justify-content: center; }
+.v2-app.is-desktop .v2-abrowser .v2-wide { min-height: 44px; }
 .v2-dropzone { width: 100%; display: grid; justify-items: center; gap: 8px; padding: 28px 16px; border: 1.5px dashed #3a3a44; border-radius: 12px; background: var(--d-panel-2); color: var(--d-muted) !important; text-align: center; line-height: 1.4; transition: border-color .12s, background .12s; }
 .v2-dropzone:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, var(--d-panel-2)); }
 .v2-dropzone strong { color: var(--d-text); font-size: 14px; }

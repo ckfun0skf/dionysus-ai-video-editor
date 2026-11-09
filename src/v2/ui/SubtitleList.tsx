@@ -24,7 +24,7 @@ function Tc({ value, label, onCommit }: { value: number; label: string; onCommit
     onChange={(e) => setDraft(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commit(); (e.target as HTMLInputElement).blur(); } if (e.key === "Escape") setDraft(undefined); }} />;
 }
 
-export function SubtitleList({ engine, track, time, playing, onSeek, onTogglePlay, desktop, name, focusCue, onDone }: { engine: Engine; track: Track; time: number; playing: boolean; onSeek: (t: number) => void; onTogglePlay?: () => void; desktop: boolean; name: string; focusCue?: string; onDone?: () => void }) {
+export function SubtitleList({ engine, track, time, playing, onSeek, onTogglePlay, desktop, name, focusCue, onDone, onImport }: { engine: Engine; track: Track; time: number; playing: boolean; onSeek: (t: number) => void; onTogglePlay?: () => void; desktop: boolean; name: string; focusCue?: string; onDone?: () => void; /** Open Import SRT (paste or file) as a new text layer. */ onImport?: () => void }) {
   const list = cueOps.cuesOf(track);
   const active = cueOps.activeCue(track, time);
   const rowsRef = useRef<HTMLDivElement>(null);
@@ -63,7 +63,7 @@ export function SubtitleList({ engine, track, time, playing, onSeek, onTogglePla
           <button className="v2-icon" aria-label="Undo" title="Undo (⌘/Ctrl+Z)" disabled={!engine.getState().canUndo} onPointerDown={(e) => e.preventDefault()} onClick={() => { (document.activeElement as HTMLElement | null)?.blur?.(); engine.undo(); }}><Ic g="↶" size={18} /></button>
           <button className="v2-icon" aria-label="Redo" title="Redo (⇧⌘/Ctrl+Shift+Z)" disabled={!engine.getState().canRedo} onClick={() => engine.redo()}><Ic g="↷" size={18} /></button>
           <button className={`v2-icon ${frOpen ? "is-on" : ""}`} aria-pressed={frOpen} aria-label="Find and replace" title="Find & replace in every subtitle on this layer" onClick={() => setFrOpen(!frOpen)}><Ic g="⤢" size={18} /></button>
-          <button className="v2-icon v2-cue-export" aria-label="Export SRT" title="Download this layer as an .srt file" disabled={!list.length} onClick={() => downloadText(cueOps.layerToSrt(track), name)}><Ic g="⇩" size={18} /></button>
+          <button className="v2-icon v2-cue-export" aria-label="Export SRT" title="Download this layer as an .srt file" disabled={!list.length} onClick={() => downloadText(cueOps.layerToSrt(track), name)}><Ic g="srt-out" size={18} /></button>
           {onDone && <SheetDone onClick={onDone} />}
         </span>
       </div>
@@ -73,7 +73,7 @@ export function SubtitleList({ engine, track, time, playing, onSeek, onTogglePla
         <button className="v2-btn" disabled={!matches} title={matches ? `Replace all ${matches}` : "No matches"} onClick={replaceAll}>Replace all{find ? ` (${matches})` : ""}</button>
       </div>}
       {msg && <p className="v2-cue-msg" role="status" onClick={() => setMsg(undefined)}>{msg}</p>}
-      {!list.length && <p className="v2-empty-hint">No subtitles on this layer yet. Import an SRT file or add text.</p>}
+      {!list.length && <div className="v2-empty-hint v2-cue-empty"><p>No subtitles on this layer yet. Paste an SRT or VTT, or add text.</p>{onImport && <button type="button" className="v2-btn" onClick={onImport}><Ic g="srt-in" size={16} /> Import SRT</button>}</div>}
       <div className="v2-cuerows" ref={rowsRef}>
         {list.map((c, i) => (
           <div key={c.id} data-cue={c.id} className={`v2-cue ${c.id === active ? "is-active" : ""} ${c.id === target ? "is-target" : ""}`} onPointerDown={(e) => { setTarget(undefined); if (!(e.target as HTMLElement).closest("button,input")) onSeek(c.startTicks); }}>

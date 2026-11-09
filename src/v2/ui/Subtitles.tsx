@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { Ic } from "./Icon";
 import { cmd, type Engine } from "../engine";
 import { newId, secondsToTicks, subs, ticksToSeconds, type Subtitle } from "../domain";
@@ -26,24 +26,28 @@ export function importSrtText(engine: Engine, text: string): number {
   return list.length;
 }
 
-/** P36: Import subtitles — paste SRT/VTT text (live cue count) or choose a file. */
+/** P36 / P50: Import SRT — the paste box is always shown (no clipboard permission). Choose file is optional. */
 export function SubtitleImport({ onPasteImport, onChooseFile, onClose }: { onPasteImport: (text: string) => void; onChooseFile: () => void; onClose: () => void }) {
+  const fieldId = useId();
   const [text, setText] = useState("");
   const n = text.trim() ? subs.parseSrt(text).length : 0;
   const canPaste = typeof navigator !== "undefined" && typeof navigator.clipboard?.readText === "function";
+  const confirm = () => { if (n) onPasteImport(text); };
   return (
-    <div className="v2-subimport" role="dialog" aria-label="Import subtitles">
+    <div className="v2-subimport" role="dialog" aria-modal="true" aria-label="Import SRT">
       <header className="v2-subimport-head">
-        <button className="v2-icon-btn" aria-label="Cancel" title="Cancel (Esc)" onClick={onClose}><Ic g="✕" /></button>
-        <h3>Import subtitles</h3>
-        <button className="v2-icon-btn" aria-label="Import pasted subtitles" title="Import as a new text layer" disabled={!n} onClick={() => onPasteImport(text)}><Ic g="✓" /></button>
+        <button type="button" className="v2-icon-btn" aria-label="Cancel" title="Cancel (Esc)" onClick={onClose}><Ic g="✕" /></button>
+        <h3>Import SRT</h3>
+        <button type="button" className="v2-icon-btn" aria-label="Import pasted subtitles" title="Import the pasted text as a new text layer" disabled={!n} onClick={confirm}><Ic g="✓" /></button>
       </header>
-      <textarea className="v2-subimport-text" aria-label="Paste SRT or VTT subtitles" placeholder={"Paste SRT or VTT text, e.g.\n1\n00:00:01,000 --> 00:00:03,000\nHello"} value={text} onChange={(e) => setText(e.target.value)}
+      <label className="v2-subimport-label" htmlFor={fieldId}>Paste SRT or VTT</label>
+      <textarea id={fieldId} className="v2-subimport-text" aria-label="Paste SRT or VTT subtitles" placeholder={"1\n00:00:01,000 --> 00:00:03,000\nHello"} value={text} onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Escape") onClose(); }} />
       <div className="v2-subimport-foot">
-        <span role="status" className={text.trim() && !n ? "v2-err" : "v2-muted"}>{!text.trim() ? "Nothing pasted yet" : n ? `${n} subtitle${n === 1 ? "" : "s"} found` : "No subtitles found: each needs a 00:00:01,000 --> 00:00:03,000 line"}</span>
-        {canPaste && <button className="v2-btn" onClick={() => void navigator.clipboard.readText().then(setText, () => {})}><Ic g="📋" size={16} /> Paste</button>}
-        <button className="v2-btn" onClick={onChooseFile}><Ic g="⇪" size={16} /> Choose file</button>
+        <span role="status" className={text.trim() && !n ? "v2-err" : "v2-muted"}>{!text.trim() ? "Paste or type into the box above. Clipboard permission is not required." : n ? `${n} subtitle${n === 1 ? "" : "s"} found` : "No subtitles found: each needs a 00:00:01,000 --> 00:00:03,000 line"}</span>
+        {canPaste && <button type="button" className="v2-btn" onClick={() => void navigator.clipboard.readText().then(setText, () => {})}><Ic g="📋" size={16} /> Paste from clipboard</button>}
+        <button type="button" className="v2-btn" onClick={onChooseFile}><Ic g="srt-in" size={16} /> Choose file</button>
+        <button type="button" className="v2-btn primary" title="Import the pasted text as a new text layer" disabled={!n} onClick={confirm}><Ic g="srt-in" size={16} /> Import</button>
       </div>
     </div>
   );
