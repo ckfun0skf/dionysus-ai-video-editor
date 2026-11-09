@@ -6,6 +6,7 @@ export * as slip from "./slip";
 export * as links from "./links";
 export * as subs from "./subtitles";
 export * as edit from "./edit";
+export * as chain from "./chain";
 export * as transitions from "./transitions";
 export * as text from "./text";
 export type { TextData } from "./text";

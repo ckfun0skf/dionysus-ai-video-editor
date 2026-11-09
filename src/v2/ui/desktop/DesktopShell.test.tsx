@@ -194,6 +194,8 @@ describe("V2-106 desktop shell", () => {
     expect(clips()).toBe(0);
     expect(toast()).toMatch(/^Cut 1 clip/);
     await key("v", { ctrlKey: true });
+    expect(q('[data-testid="paste-place"]')).toBeTruthy();
+    await click(q('[data-testid="paste-place"] button.primary'));
     expect(clips()).toBe(1);
   });
 

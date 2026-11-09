@@ -242,4 +242,47 @@ describe("P35: Replace asset fills a shot placeholder", () => {
     e.undo();
     expect(pl(e, "P").placeholder?.label).toBe("Shot 1 · Open");
   });
+
+  it("uploading a new asset fills the placeholder in the same step, one undo", async () => {
+    const e0 = new Engine(createProject("t"));
+    e0.dispatch(cmd.importAsset(asset("i", undefined, "image")));
+    const main = ops.mainTrack(root(e0.getState().project))!.id;
+    e0.dispatch(cmd.addAssetToTimeline("i", 0, main, "P"));
+    const p0 = e0.getState().project, t = root(p0).tracks.find((x) => x.id === main)!;
+    const ph: Placement = { ...t.placements[0], durationTicks: s(4), source: TEXT_SOURCE, placeholder: { label: "Shot 1 · Open" } };
+    const e = new Engine({ ...p0, compositions: { ...p0.compositions, [p0.rootCompositionId]: { ...root(p0), tracks: root(p0).tracks.map((x) => (x.id === main ? { ...x, placements: [ph] } : x)) } } });
+    const { el, done } = await mount(e, "phone", { picker: true, id: "P", onUpload: async () => { e.dispatch(cmd.importAsset(asset("up", 6))); return ["up"]; } });
+    expect(el.querySelector('[data-testid="asset-picker"]')?.getAttribute("aria-label")).toBe("Fill placeholder");
+    expect(el.querySelector('[data-testid="asset-upload"]')).toBeTruthy();
+    const input = el.querySelector('input[type="file"]') as HTMLInputElement;
+    Object.defineProperty(input, "files", { value: [new File(["x"], "up.mp4", { type: "video/mp4" })], configurable: true });
+    await act(async () => { input.dispatchEvent(new Event("change", { bubbles: true })); await wait(); });
+    expect(pl(e, "P").placeholder).toBeUndefined();
+    expect(pl(e, "P").source).toMatchObject({ assetId: "up" });
+    expect(pl(e, "P").clipType).toBe("video");
+    expect(done[0]).toContain("Placeholder filled");
+    e.undo();
+    expect(pl(e, "P").placeholder?.label).toBe("Shot 1 · Open");
+    // The upload itself is a separate undo (the file joins the library, then the fill uses it).
+    e.undo();
+    expect(e.getState().project.assets.up).toBeUndefined();
+  });
+});
+
+describe("P51: Replace asset accepts an upload in the same picker", () => {
+  it("selects the uploaded file as the replacement and Apply swaps the clip in one undo step", async () => {
+    const e = setup();
+    const { el } = await mount(e, "desktop", { picker: true, onUpload: async () => { e.dispatch(cmd.importAsset(asset("up", 10))); return ["up"]; } });
+    expect(el.querySelector('[data-testid="asset-upload"]')!.textContent).toMatch(/Upload/);
+    const input = el.querySelector('input[type="file"]') as HTMLInputElement;
+    Object.defineProperty(input, "files", { value: [new File(["x"], "up.mp4", { type: "video/mp4" })], configurable: true });
+    await act(async () => { input.dispatchEvent(new Event("change", { bubbles: true })); await wait(); });
+    expect(el.textContent).toContain("up.mp4");
+    expect(pl(e, "A").source.assetId).toBe("v");
+    await act(async () => btn(el, "Apply").click());
+    expect(pl(e, "A").source).toMatchObject({ assetId: "up" });
+    expect(pl(e, "A").durationTicks).toBe(s(3));
+    e.undo();
+    expect(pl(e, "A").source.assetId).toBe("v");
+  });
 });

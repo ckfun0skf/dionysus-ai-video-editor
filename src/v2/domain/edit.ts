@@ -1,6 +1,7 @@
 /** Multi-clip editing: ripple delete/trim, duplicate, copy/paste. Pure; returns new Compositions. */
+import { pasteRipple, type RippleItem } from "./chain";
 import { findPlacement, newId, trackKindFor, type Composition, type Placement, type TrackKind } from "./model";
-import { insertPlacement, trimPlacement } from "./ops";
+import { addTrack, insertPlacement, trimPlacement } from "./ops";
 
 const end = (p: Placement) => p.startTicks + p.durationTicks;
 
@@ -61,19 +62,35 @@ export function copyClips(comp: Composition, ids: string[]): ClipboardItem[] {
   return items.map((f) => ({ trackId: f.track.id, kind: f.track.kind, offset: f.placement.startTicks - t0, placement: f.placement }));
 }
 
-/** Paste at `at` on the original tracks (or the first track of the right kind). Overlaps slide to the next free slot. Returns new ids. */
-export function pasteClips(comp: Composition, items: ClipboardItem[], at: number, makeId = () => newId("plc")): { comp: Composition; ids: string[] } {
+/**
+ * Paste at `at` on the original tracks (or the first track of the right kind). Without `ripple`, overlaps slide to
+ * the next free slot. With `ripple`, clips that start at or after the pasted block move later by the block's span
+ * (see domain/chain.ts). Returns new ids.
+ */
+export function pasteClips(comp: Composition, items: ClipboardItem[], at: number, makeId = () => newId("plc"), ripple = false): { comp: Composition; ids: string[] } {
   const ids: string[] = [];
+  const before = comp;
+  const resolved: RippleItem[] = [];
   for (const it of [...items].sort((a, b) => a.offset - b.offset)) {
-    const track = comp.tracks.find((t) => t.id === it.trackId) ?? comp.tracks.find((t) => t.kind === trackKindFor(it.placement.clipType));
-    if (!track) continue;
+    let track = comp.tracks.find((t) => t.id === it.trackId) ?? comp.tracks.find((t) => t.kind === trackKindFor(it.placement.clipType));
+    if (!track && !ripple) continue;
     const id = makeId();
+    if (!track) {
+      const kind: TrackKind = trackKindFor(it.placement.clipType);
+      const tid = `trk_${id}`;
+      comp = addTrack(comp, kind, tid);
+      track = comp.tracks.find((t) => t.id === tid);
+      if (!track) continue;
+    }
     // A copy is an ordinary clip: it does not follow the storyboard shot the original was sent with.
     const { storyLink: _link, ...placement } = it.placement;
     void _link;
-    comp = insertPlacement(comp, track.id, { ...placement, id, startTicks: Math.max(0, at + it.offset) });
+    const placed: Placement = { ...placement, id, startTicks: Math.max(0, Math.round(at + it.offset)) };
+    if (ripple) resolved.push({ trackId: track.id, placement: placed });
+    else comp = insertPlacement(comp, track.id, placed);
     ids.push(id);
   }
+  if (ripple && resolved.length) comp = pasteRipple(comp, resolved, before);
   return { comp, ids };
 }
 

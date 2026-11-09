@@ -167,6 +167,7 @@ describe("V2App", () => {
     await act(async () => { btn("Copy").click(); });
     await act(async () => { btn("Done").click(); });
     await act(async () => { btn("Paste").click(); });
+    await act(async () => { btn("At the end of the current chain").click(); });
     expect(clips()).toBe(4);
     await act(async () => { btn("Delete").click(); });
     expect(clips()).toBe(2);

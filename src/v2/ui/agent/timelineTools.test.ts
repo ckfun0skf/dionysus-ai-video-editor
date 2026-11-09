@@ -430,6 +430,31 @@ describe("P39/P40 track_clip / get_track / attach_track / set_track_mask / set_t
   });
 });
 
+describe("P51 insert_clip_after", () => {
+  it("inserts after a main clip, ripples a linked subtitle, and is one undo step", async () => {
+    const e = setup();
+    e.dispatch(cmd.trimPlacement("c1", "right", s(4)));
+    e.dispatch(cmd.addAssetToTimeline("w", s(4), undefined, "c2"));
+    e.dispatch(cmd.addTextClip(s(4), { text: "cap" }, "sub"));
+    const sub = () => findPlacement(root(e.getState().project), "sub")!.placement;
+    expect(sub().link).toEqual({ parent: "c2" });
+    const bad = await runTimelineTool(e, undefined, "insert_clip_after", { assetId: "a" });
+    expect(bad.ok).toBe(false);
+    expect((await runTimelineTool(e, undefined, "insert_clip_after", { assetId: "a", afterClipId: "c1" })).text).toMatch(/main track/);
+    const r = await runTimelineTool(e, undefined, "insert_clip_after", { assetId: "w", afterClipId: "c1" });
+    expect(r.ok && r.changed).toBe(true);
+    const clip = json(r.text);
+    expect(clip).toMatchObject({ asset: "w", start: 4, duration: 4 });
+    expect(findPlacement(root(e.getState().project), "c2")!.placement.startTicks).toBe(s(8));
+    expect(sub().startTicks).toBe(s(8));
+    expect(sub().link).toEqual({ parent: "c2" });
+    e.undo();
+    expect(findPlacement(root(e.getState().project), "c2")!.placement.startTicks).toBe(s(4));
+    expect(sub().startTicks).toBe(s(4));
+    expect(findPlacement(root(e.getState().project), clip.id)).toBeUndefined();
+  });
+});
+
 describe("P49 set_clip_mask / clear_clip_mask", () => {
   it("sets a shape, rejects a bad path, reports the mask, and clears it without touching a tracker mask", async () => {
     const e = setup();

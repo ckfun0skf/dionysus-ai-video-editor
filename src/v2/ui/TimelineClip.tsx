@@ -76,7 +76,7 @@ export function ClipBody({ p, track, isMain, project, pps, strips, peaks, loads 
 /** P35: a storyboard shot with no clip yet: shot label and "Not generated" on a hatched card. */
 function PlaceholderBody({ p }: { p: Placement }) {
   return (
-    <span className="v2-clip-name v2-ph" title={`${p.placeholder!.label} — not generated yet. Add its clip on the storyboard and Send to timeline (Update), or use Replace asset.`}>
+    <span className="v2-clip-name v2-ph" title={`${p.placeholder!.label} — not generated yet. Add its clip on the storyboard and Send to timeline (Update), or Fill placeholder (pick or upload a clip).`}>
       <Ic g="board" size={12} /><span className="v2-ph-label">{p.placeholder!.label}</span><span className="v2-ph-state">Not generated</span>
     </span>
   );
