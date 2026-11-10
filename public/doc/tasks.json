@@ -3204,6 +3204,12 @@
           "title": "Mobile clip toolbar: back control stays visible at the left (outside the horizontal scroller); scroll-snap removed so the row can reach the last item and stay there. Ripple toggle sits next to Delete (Delete still uses the current ripple setting; desktop shortcuts unchanged). Paste dialog adds At the playhead (no ripple, disabled if the gap on the chosen track is occupied) and a track picker (compatible tracks plus New track). WebMCP paste_clips; guide rule 72.",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P53-CODE-ATTACH-DROP",
+          "title": "Code Editor file attachments accept drag-and-drop of one or more files (same types, 60 MB limit and 15 MB warning as Add files) onto the Files tab or anywhere on the editor; unsupported types are reported and skipped. A monochrome drop highlight uses a depth counter so entering a child does not flicker. The existing picker stays. Revise with AI / Code AI import already accepted a dropped .html/.zip (flicker fixed). Code AI Reference media also accepts dropped video/image. Mobile keeps the picker and hides the drop hint. Overlay drop does not navigate the browser. Guide rule 64.",
+          "status": "done",
+          "progress": 100
         }
       ]
     }

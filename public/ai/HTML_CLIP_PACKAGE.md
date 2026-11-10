@@ -109,7 +109,7 @@ Only libraries from the app's registry can be loaded; each is self-hosted and pi
 | `three` | three.js 0.160.0 | `import * as THREE from "three"` |
 | `three-gltf` | three.js GLTFLoader 0.160.0 (needs `three`) | `import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js"` |
 
-**3D models.** Embed a `.glb` (or a `.gltf` with its `.bin`, and `.hdr` environment maps) in `files` as a data: URL (`data:model/gltf-binary;base64,…` for `.glb`) and list `"libs": ["three", "three-gltf"]`. Load it in `init` with `const gltf = await new GLTFLoader().loadAsync(ctx.asset("model.glb"))`; files a `.gltf` refers to by name resolve to the embedded copies. Pose any animation from t (`mixer.setTime(t)`), never from a clock. In the Code editor, Files → **Add files** accepts fonts, images, `.glb`, `.gltf`, `.bin` and `.hdr`; files over 15 MB are added with a warning (they make the project and every export heavier).
+**3D models.** Embed a `.glb` (or a `.gltf` with its `.bin`, and `.hdr` environment maps) in `files` as a data: URL (`data:model/gltf-binary;base64,…` for `.glb`) and list `"libs": ["three", "three-gltf"]`. Load it in `init` with `const gltf = await new GLTFLoader().loadAsync(ctx.asset("model.glb"))`; files a `.gltf` refers to by name resolve to the embedded copies. Pose any animation from t (`mixer.setTime(t)`), never from a clock. In the Code editor, Files → **Add files** (or dropping them onto the Files tab or the editor) accepts fonts, images, `.glb`, `.gltf`, `.bin` and `.hdr`; files over 15 MB are added with a warning (they make the project and every export heavier).
 
 Old CDN URLs of a registry library (e.g. unpkg three.js) are mapped to the pinned copy with a warning. Anything else (other CDNs, Google Fonts, APIs) is blocked.
 

@@ -7,6 +7,7 @@ import {
 } from "../domain";
 import { CLIP_LIBRARIES } from "../render";
 import { CodeWizardShell } from "./CodeWizardShell";
+import { fileMatchesAccept, useFileDrag } from "./fileDrop";
 import { HtmlImport } from "./HtmlImport";
 import { Ic as Icon } from "./Icon";
 import { CopyButton } from "./storyboard/StoryImport";
@@ -62,15 +63,20 @@ export function CodeAiWizard({ mobile, initialRole = "scene", onImport, onClose 
   const [a, setA] = useState<CodeWizardAnswers>(() => newWizardAnswers(initialRole));
   const [step, setStep] = useState<StepId>("describe");
   const [probing, setProbing] = useState(false);
+  const [refMsg, setRefMsg] = useState("");
   const set = (p: Partial<CodeWizardAnswers>) => setA((x) => ({ ...x, ...p }));
   const issues = useMemo(() => wizardIssues(a), [a]);
   const prompt = () => codeWizardPrompt(a, { libs: CLIP_LIBRARIES, specUrl: runtimeAiLinks().htmlClipSpec });
   const expectParams = useMemo(() => wizardParams(a), [a]);
   const nextLabel = step === "import" ? undefined : step === "refs" ? "Build prompt" : step === "prompt" ? "I have the reply" : "Next";
+  const refDrop = useFileDrag((files) => { void addRef(files); });
 
   const setParam = (i: number, p: Partial<WizardParam>) => set({ params: a.params.map((x, j) => (j === i ? { ...x, ...p } : x)) });
   const addRef = async (files: FileList | null) => {
-    const list = [...(files ?? [])].filter((f) => f.type.startsWith("video/") || f.type.startsWith("image/"));
+    const incoming = [...(files ?? [])];
+    const list = incoming.filter((f) => fileMatchesAccept(f, "video/*,image/*"));
+    const skipped = incoming.filter((f) => !fileMatchesAccept(f, "video/*,image/*"));
+    setRefMsg(skipped.length ? skipped.map((f) => `${f.name} isn't a supported type and wasn't added.`).join(" ") : "");
     if (!list.length) return;
     setProbing(true);
     const refs: WizardRef[] = [];
@@ -159,9 +165,13 @@ export function CodeAiWizard({ mobile, initialRole = "scene", onImport, onClose 
         </div>
       );
       case "refs": return (
-        <div className="v2-cw-step">
+        <div className={`v2-cw-step ${refDrop.over ? "is-drag" : ""}`} data-testid="v2-cw-refs" {...refDrop.handlers}>
           <h2 className="v2-cw-q">Reference media (optional)</h2>
           <p className="v2-muted">Attach the same files to your AI chat. For a video the prompt explains how the overlay is timed against it, and asks the AI to embed its analysis (e.g. per-frame boxes) as data in the package.</p>
+          <div className="v2-ce-dropzone" data-testid="v2-cw-ref-dropzone">
+            <b>Drop video or image here</b>
+            <span>or choose reference media</span>
+          </div>
           <ul className="v2-cw-refs">
             {a.refs.map((r, i) => (
               <li key={i} className="v2-cw-ref">
@@ -174,6 +184,7 @@ export function CodeAiWizard({ mobile, initialRole = "scene", onImport, onClose 
           <label className="v2-btn v2-cw-add">{probing ? "Reading…" : <><Icon g="＋" /> Add video or image</>}
             <input type="file" hidden multiple accept="video/*,image/*" aria-label="Add reference media" onChange={(e) => { void addRef(e.target.files); e.target.value = ""; }} />
           </label>
+          {refMsg && <p className="v2-ce-error" role="alert">{refMsg}</p>}
         </div>
       );
       case "prompt": return (

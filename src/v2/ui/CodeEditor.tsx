@@ -11,6 +11,7 @@ import { HtmlExportButtons } from "./HtmlImport";
 import { Ic as Icon } from "./Icon";
 import { LibraryPicker } from "./LibraryPicker";
 import { Sheet } from "./Sheet";
+import { fileMatchesAccept, useFileDrag } from "./fileDrop";
 
 /** V2-111: what an HTML clip can attach (so iOS offers Photos/Files rather than a generic picker). */
 export const ATTACH_ACCEPT = "image/*,video/*,audio/*,.svg,.json,.csv,.txt,.js,.mjs,.css,.glb,.gltf,.bin,.woff,.woff2,.ttf,.otf";
@@ -40,6 +41,21 @@ const readData = (f: File) => new Promise<string>((res, rej) => { const r = new 
 const fmtTime = (t: number) => `${Math.floor(t / 60)}:${(t % 60).toFixed(1).padStart(4, "0")}`;
 const dataBytes = (d: string) => Math.round((d.length - d.indexOf(",") - 1) * 0.75);
 const fmtBytes = (n: number) => n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${Math.round(n / 1024)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`;
+export const fileKey = (name: string) => name.replace(/[^\w.-]+/g, "-");
+
+/** Embed picked or dropped files the same way as Files → Add files (type, size, name sanitise). */
+export async function readAttachedFiles(list: ArrayLike<File>, current: Record<string, string>, accept = CODE_FILE_ACCEPT): Promise<{ next: Record<string, string>; notes: string[] }> {
+  const next = { ...current };
+  const notes: string[] = [];
+  for (const f of Array.from(list)) {
+    if (!fileMatchesAccept(f, accept)) { notes.push(`${f.name} isn't a supported type and wasn't added.`); continue; }
+    if (f.size > MAX_FILE) { notes.push(`${f.name} is larger than 60 MB and wasn't added.`); continue; }
+    if (f.size > WARN_FILE) notes.push(`${f.name} is ${fmtBytes(f.size)}: large files slow saving and export.`);
+    try { next[fileKey(f.name)] = withModelMime(f.name, await readData(f)); }
+    catch { notes.push(`Couldn't read ${f.name}.`); }
+  }
+  return { next, notes };
+}
 
 /** The manifest the editor starts from: libraries made explicit (legacy CDN tags count) and the format stamped. */
 function startManifest(source: string, m: HtmlClipManifest): HtmlClipManifest {
@@ -451,27 +467,25 @@ function ParamsTab({ rows, setRows, issues, inputs, setInputs }: { rows: ParamRo
 // ---------------------------------------------------------------------------------------------------------------
 // Files tab
 
-function FilesTab({ files, onChange }: { files: Record<string, string>; onChange: (f: Record<string, string> | undefined) => void }) {
+function FilesTab({ files, onChange, msg, onAttach, drag }: {
+  files: Record<string, string>;
+  onChange: (f: Record<string, string> | undefined) => void;
+  msg: string;
+  onAttach: (list: FileList | null) => void;
+  drag?: boolean;
+}) {
   const input = useRef<HTMLInputElement>(null);
-  const [msg, setMsg] = useState("");
   const names = Object.keys(files);
-  const attach = async (list: FileList | null) => {
-    setMsg("");
-    const next = { ...files }, notes: string[] = [];
-    for (const f of Array.from(list ?? [])) {
-      if (f.size > MAX_FILE) { notes.push(`${f.name} is larger than 60 MB and wasn't added.`); continue; }
-      if (f.size > WARN_FILE) notes.push(`${f.name} is ${fmtBytes(f.size)}: large files slow saving and export.`);
-      try { next[f.name.replace(/[^\w.-]+/g, "-")] = withModelMime(f.name, await readData(f)); } catch { notes.push(`Couldn't read ${f.name}.`); }
-    }
-    setMsg(notes.join(" "));
-    onChange(next);
-  };
   const remove = (n: string) => { const next = { ...files }; delete next[n]; onChange(Object.keys(next).length ? next : undefined); };
   return (
-    <div className="v2-ce-panel" data-testid="v2-ce-files">
+    <div className={`v2-ce-panel${drag ? " is-drag" : ""}`} data-testid="v2-ce-files">
       <p className="v2-ce-hint">Fonts, images and 3D models are embedded in the clip. Fonts get an <code>@font-face</code> rule automatically; images load with <code>await ctx.image("name")</code>; a <code>.glb</code> loads with three.js GLTFLoader from <code>ctx.asset("name")</code>.</p>
-      <input ref={input} type="file" multiple hidden accept={CODE_FILE_ACCEPT} aria-label="Add files" onChange={(e) => { void attach(e.target.files); e.target.value = ""; }} />
-      <button type="button" className="v2-btn primary v2-ce-addfile" onClick={() => input.current?.click()}><Icon g="⇪" /> Add files</button>
+      <div className="v2-ce-dropzone" data-testid="v2-ce-dropzone">
+        <b>Drop files here</b>
+        <span>Fonts, images and 3D models — or choose them</span>
+        <input ref={input} type="file" multiple hidden accept={CODE_FILE_ACCEPT} aria-label="Add files" onChange={(e) => { onAttach(e.target.files); e.target.value = ""; }} />
+        <button type="button" className="v2-btn primary v2-ce-addfile" onClick={() => input.current?.click()}><Icon g="⇪" /> Add files</button>
+      </div>
       {msg && <p className="v2-ce-error" role="alert">{msg}</p>}
       {names.length === 0 && <p className="v2-muted v2-ce-empty">No files yet.</p>}
       <ul className="v2-ce-files">
@@ -682,6 +696,20 @@ export function CodeEditor({ source, mobile, onSave, onClose, create, onAiMode }
 
   const onPreviewError = useCallback((e: { message: string; line?: number } | null) => setRuntimeError((prev) => (e === null ? null : prev ?? e)), []);
   const setManifest = (manifest: HtmlClipManifest) => setD((x) => ({ ...x, manifest }));
+  const [fileMsg, setFileMsg] = useState("");
+  const filesRef = useRef<Record<string, string>>({});
+  filesRef.current = d.manifest.files ?? {};
+  const attachFiles = useCallback((list: FileList | null) => {
+    void (async () => {
+      const { next, notes } = await readAttachedFiles(list ?? [], filesRef.current);
+      filesRef.current = next;
+      setD((x) => ({ ...x, manifest: { ...x.manifest, files: Object.keys(next).length ? next : undefined } }));
+      setFileMsg(notes.join(" "));
+      setTab("files");
+    })();
+  }, []);
+  const fileDrop = useFileDrag((files) => attachFiles(files));
+  const fileDrag = fileDrop.over;
   const ask = (title: string, body: string, ok: string, run: () => void) => (dirty ? setConfirm({ title, body, ok, run }) : run());
   const loadSample = (s: CodeSample) => {
     setSamples(false);
@@ -730,7 +758,7 @@ export function CodeEditor({ source, mobile, onSave, onClose, create, onAiMode }
         );
       case "params": return <ParamsTab rows={d.rows} setRows={(rows) => setD((x) => ({ ...x, rows }))} issues={rowIssues}
         inputs={d.manifest.inputs ?? {}} setInputs={(inputs) => setD((x) => ({ ...x, manifest: { ...x.manifest, inputs } }))} />;
-      case "files": return <FilesTab files={m.files ?? {}} onChange={(files) => setManifest({ ...m, files })} />;
+      case "files": return <FilesTab files={m.files ?? {}} onChange={(files) => setManifest({ ...m, files })} msg={fileMsg} onAttach={attachFiles} drag={fileDrag} />;
       case "settings": return <SettingsTab m={m} set={setManifest} mobile={mobile} html={() => html} />;
       case "advanced":
         if (d.raw !== undefined) return (
@@ -773,7 +801,8 @@ export function CodeEditor({ source, mobile, onSave, onClose, create, onAiMode }
   );
 
   return (
-    <div className={`v2-code-editor v2-ce ${mobile ? "is-mobile" : ""}`} role="dialog" aria-modal="true" aria-label="Code editor">
+    <div className={`v2-code-editor v2-ce ${mobile ? "is-mobile" : ""} ${fileDrag ? "is-drag" : ""} ${tab === "files" ? "is-files" : ""}`} role="dialog" aria-modal="true" aria-label="Code editor" {...fileDrop.handlers}>
+      {!mobile && fileDrag && tab !== "files" && <div className="v2-ce-dropveil" data-testid="v2-ce-dropveil" aria-hidden><b>Drop to add files</b><span>Fonts, images and 3D models</span></div>}
       <header className="v2-ce-bar">
         {mobile && <button type="button" className="v2-btn v2-ce-icon" aria-label="Cancel" title="Cancel" onClick={close}><Icon g="✕" /></button>}
         <span className="v2-ce-title">

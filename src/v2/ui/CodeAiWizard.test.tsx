@@ -94,6 +94,24 @@ describe("Code AI mode wizard (P4B)", () => {
     await click(btn("Back to the Code Editor"));
     expect(onClose).toHaveBeenCalled();
   });
+  it("P53: dropping reference media attaches it and rejects an unsupported type", async () => {
+    mount();
+    type(document.querySelector<HTMLTextAreaElement>('[aria-label="Describe the clip"]')!, "x");
+    await click([...document.querySelectorAll<HTMLButtonElement>(".v2-cw-navbtn")].find((b) => b.textContent?.includes("Reference"))!);
+    const zone = document.querySelector('[data-testid="v2-cw-refs"]')!;
+    expect(zone).toBeTruthy();
+    const fire = (type: string, files: File[] = []) => {
+      const ev = new Event(type, { bubbles: true, cancelable: true });
+      Object.assign(ev, { dataTransfer: { types: ["Files"], files, dropEffect: "none" } });
+      zone.dispatchEvent(ev);
+    };
+    await act(async () => { fire("drop", [new File(["x"], "ref.png", { type: "image/png" })]); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    expect(document.querySelector(".v2-cw-ref")!.textContent).toContain("ref.png");
+    await act(async () => { fire("drop", [new File(["%PDF"], "brief.pdf", { type: "application/pdf" })]); });
+    expect(document.querySelector('[role="alert"]')!.textContent).toMatch(/brief\.pdf isn't a supported type/);
+    expect([...document.querySelectorAll(".v2-cw-ref")].map((n) => n.textContent)).toHaveLength(1);
+  });
   it("Create code shows an AI mode button; editing an existing clip does not", async () => {
     const onAiMode = vi.fn();
     host = document.createElement("div"); document.body.append(host); root = createRoot(host);

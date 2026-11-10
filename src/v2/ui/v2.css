@@ -415,6 +415,13 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 .v2-ce-addparam { display: flex; flex-wrap: wrap; gap: 6px; }
 /* Files */
 .v2-ce-addfile { align-self: flex-start; }
+.v2-ce-dropzone { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 22px 12px; border: 2px dashed #3a3a44; border-radius: 12px; color: #ddd; text-align: center; }
+.v2-ce-dropzone > span { color: var(--muted, #8b8b96); font-size: 13px; }
+.v2-ce-dropzone .v2-ce-addfile { align-self: center; }
+.v2-ce-panel.is-drag .v2-ce-dropzone, .v2-ce.is-drag .v2-ce-dropzone, .v2-cw-step.is-drag .v2-ce-dropzone { border-color: #d0d0d6; background: rgba(255,255,255,.06); }
+.v2-ce.is-mobile .v2-ce-dropzone > b, .v2-ce.is-mobile .v2-ce-dropzone > span { display: none; }
+.v2-ce-dropveil { position: absolute; inset: 0; z-index: 8; display: grid; place-items: center; align-content: center; gap: 6px; background: rgba(12,12,14,.72); color: #eee; pointer-events: none; text-align: center; }
+.v2-ce-dropveil span { color: #b8b8c0; font-size: 13px; }
 .v2-ce-files { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .v2-ce-file { display: flex; align-items: center; gap: 10px; padding: 8px; border: 1px solid var(--line, #2c2c33); border-radius: 10px; background: #17171c; }
 .v2-ce-thumb { flex: none; width: 52px; height: 52px; border-radius: 8px; overflow: hidden; display: grid; place-items: center; background: repeating-conic-gradient(#2a2a30 0% 25%, #1c1c21 0% 50%) 50% / 12px 12px; font: 600 20px Georgia, serif; }
@@ -778,7 +785,7 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 
 /* V2-HTML-PKG: HTML clip package import / export / validation */
 .v2-html-import { display: grid; gap: 8px; padding: 8px; border: 1px dashed var(--line); border-radius: 10px; }
-.v2-html-import.is-drag { border-color: #5ad1c8; background: #5ad1c814; }
+.v2-html-import.is-drag { border-color: #d0d0d6; background: rgba(255,255,255,.06); }
 .v2-html-import textarea { width: 100%; box-sizing: border-box; min-height: 96px; resize: vertical; font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text); background: #1b1b20; border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
 .v2-html-import-file { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; }
 .v2-html-import-actions { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -1054,7 +1061,7 @@ select.v2-tp-field { -webkit-appearance: none; appearance: none; padding-right: 
 .v2-cw-progress span { display: block; height: 100%; background: var(--accent, #20d5ec); transition: width .2s; }
 .v2-html-dropzone { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 22px 12px; border: 2px dashed #3a3a44; border-radius: 12px; color: #ddd; text-align: center; }
 .v2-html-dropzone span { color: var(--muted, #8b8b96); font-size: 13px; }
-.v2-html-import.is-drag .v2-html-dropzone { border-color: var(--accent, #20d5ec); background: rgba(32, 213, 236, .06); }
+.v2-html-import.is-drag .v2-html-dropzone { border-color: #d0d0d6; background: rgba(255,255,255,.06); }
 .v2-cw .v2-html-import .v2-btn { min-height: 44px; }
 .v2-ce-aibtn { min-height: 44px; }
 
