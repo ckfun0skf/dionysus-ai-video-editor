@@ -9,6 +9,7 @@ import { CODE_SAMPLES, type CodeSample } from "./codeSamples";
 import { CodeReviseWizard } from "./CodeReviseWizard";
 import { HtmlExportButtons } from "./HtmlImport";
 import { CodeClipPreview } from "./CodeClipPreview";
+import { CodeFilePreview } from "./CodeFilePreview";
 import type { MixUnderlayFn } from "./codeClipMix";
 import { Ic as Icon } from "./Icon";
 import { LibraryPicker } from "./LibraryPicker";
@@ -383,19 +384,25 @@ function ParamsTab({ rows, setRows, issues, inputs, setInputs }: { rows: ParamRo
 // ---------------------------------------------------------------------------------------------------------------
 // Files tab
 
-function FilesTab({ files, onChange, msg, onAttach, drag }: {
+function FilesTab({ files, onChange, msg, onAttach, drag, mobile }: {
   files: Record<string, string>;
   onChange: (f: Record<string, string> | undefined) => void;
   msg: string;
   onAttach: (list: FileList | null) => void;
   drag?: boolean;
+  mobile: boolean;
 }) {
   const input = useRef<HTMLInputElement>(null);
   const names = Object.keys(files);
-  const remove = (n: string) => { const next = { ...files }; delete next[n]; onChange(Object.keys(next).length ? next : undefined); };
+  const [preview, setPreview] = useState<string>();
+  const remove = (n: string) => {
+    const next = { ...files }; delete next[n];
+    if (preview === n) setPreview(undefined);
+    onChange(Object.keys(next).length ? next : undefined);
+  };
   return (
     <div className={`v2-ce-panel${drag ? " is-drag" : ""}`} data-testid="v2-ce-files">
-      <p className="v2-ce-hint">Fonts, images and 3D models are embedded in the clip. Fonts get an <code>@font-face</code> rule automatically; images load with <code>await ctx.image("name")</code>; a <code>.glb</code> loads with three.js GLTFLoader from <code>ctx.asset("name")</code>.</p>
+      <p className="v2-ce-hint">Fonts, images and 3D models are embedded in the clip. Fonts get an <code>@font-face</code> rule automatically; images load with <code>await ctx.image("name")</code>; a <code>.glb</code> loads with three.js GLTFLoader from <code>ctx.asset("name")</code>. Tap a file to preview it.</p>
       <div className="v2-ce-dropzone" data-testid="v2-ce-dropzone">
         <b>Drop files here</b>
         <span>Fonts, images and 3D models — or choose them</span>
@@ -410,18 +417,23 @@ function FilesTab({ files, onChange, msg, onAttach, drag }: {
           const snippet = font ? `await document.fonts.load('48px "${fontFamily(n)}"'); g.font = '48px "${fontFamily(n)}"';` : image ? `const img = await ctx.image(${JSON.stringify(n)});` : model && /\.(glb|gltf)$/i.test(n) ? `const gltf = await new GLTFLoader().loadAsync(ctx.asset(${JSON.stringify(n)}));` : `await ctx.asset(${JSON.stringify(n)})`;
           return (
             <li key={n} className="v2-ce-file">
-              <span className="v2-ce-thumb" aria-hidden>{image ? <img src={files[n]} alt="" /> : font ? "Aa" : model ? "3D" : "…"}</span>
-              <span className="v2-ce-fileinfo">
-                <b>{n}</b>
-                <span className="v2-muted">{font ? `Font "${fontFamily(n)}"` : image ? "Image" : model ? "3D file" : "File"} · {fmtBytes(dataBytes(files[n]))}</span>
-                <code>{snippet}</code>
-              </span>
+              <button type="button" className="v2-ce-fileopen" aria-label={`Preview ${n}`} onClick={() => setPreview(n)}>
+                <span className="v2-ce-thumb" aria-hidden>{image ? <img src={files[n]} alt="" /> : font ? "Aa" : model ? "3D" : "…"}</span>
+                <span className="v2-ce-fileinfo">
+                  <b>{n}</b>
+                  <span className="v2-muted">{font ? `Font "${fontFamily(n)}"` : image ? "Image" : model ? "3D file" : "File"} · {fmtBytes(dataBytes(files[n]))}</span>
+                  <code>{snippet}</code>
+                </span>
+              </button>
               <Copy text={snippet} />
               <button type="button" className="v2-btn v2-ce-icon" aria-label={`Remove ${n}`} onClick={() => remove(n)}><Icon g="🗑" /></button>
             </li>
           );
         })}
       </ul>
+      {preview && files[preview] && (
+        <CodeFilePreview name={preview} data={files[preview]} files={files} names={names} mobile={mobile} onClose={() => setPreview(undefined)} onShow={setPreview} />
+      )}
     </div>
   );
 }
@@ -679,7 +691,7 @@ export function CodeEditor({ source, mobile, onSave, onClose, create, onAiMode, 
         );
       case "params": return <ParamsTab rows={d.rows} setRows={(rows) => setD((x) => ({ ...x, rows }))} issues={rowIssues}
         inputs={d.manifest.inputs ?? {}} setInputs={(inputs) => setD((x) => ({ ...x, manifest: { ...x.manifest, inputs } }))} />;
-      case "files": return <FilesTab files={m.files ?? {}} onChange={(files) => setManifest({ ...m, files })} msg={fileMsg} onAttach={attachFiles} drag={fileDrag} />;
+      case "files": return <FilesTab files={m.files ?? {}} onChange={(files) => setManifest({ ...m, files })} msg={fileMsg} onAttach={attachFiles} drag={fileDrag} mobile={mobile} />;
       case "settings": return <SettingsTab m={m} set={setManifest} mobile={mobile} html={() => html} />;
       case "advanced":
         if (d.raw !== undefined) return (

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "project": "Dionysus",
-  "updatedAt": "2026-11-09",
+  "updatedAt": "2026-11-10",
   "sourceOfTruth": "public/doc/tasks.json on main (see docs/v2/MODULE_DESIGN.md §14)",
   "statusDefinitions": {
     "done": "Implementation exists and has evidence; release/browser validation may still be pending.",
@@ -3226,6 +3226,12 @@
         {
           "id": "P56-BUILD-INFO",
           "title": "Project picker header ⋯ shows this build: short commit SHA (7 chars, tap to copy, ≥44px monochrome row), build time in the viewer's local time, and the GitHub Actions run number when present. Values are injected at build time (vite define __BUILD_SHA__ / __BUILD_TIME__ / __BUILD_RUN__) from GITHUB_SHA and GITHUB_RUN_NUMBER, else git rev-parse HEAD, else \"dev\"; no workflow changes and no per-commit edits. dist/build.json writes the same fields.",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "P57-CODE-FILE-PREVIEW",
+          "title": "Code Editor Files list: tap a file to preview it (sheet on mobile, modal on desktop). Images (SVG as <img>) fit-to-view with dimensions; video/audio use native controls; GLB/glTF open an interactive three.js viewer (orbit, pinch/scroll zoom, reset, auto-frame, lighting, mesh/triangle counts) with .gltf externals resolved against other attached files; text/json/js/css/html are read-only; anything else shows name, size and MIME. Always name/size/type, close, Esc, ≥44px targets, monochrome icons; object URLs revoked on close; load errors show a message.",
           "status": "done",
           "progress": 100
         }

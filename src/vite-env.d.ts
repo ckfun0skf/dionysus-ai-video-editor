@@ -6,3 +6,6 @@ declare const __BUILD_SHA__: string;
 declare const __BUILD_TIME__: string;
 /** GitHub Actions run number, or "" when built outside Actions. */
 declare const __BUILD_RUN__: string;
+
+declare module "three";
+declare module "three/addons/loaders/GLTFLoader.js";
