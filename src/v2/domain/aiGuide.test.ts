@@ -142,7 +142,7 @@ describe("AI planner guide (V2-SB-114)", () => {
     expect(ruleNumber("insert-after-clip")).toBe(72);
     expect(full).toContain(`71. ${RULES[70]}`);
     expect(full).toContain(`72. ${RULES[71]}`);
-    for (const x of ["insert_clip_after { assetId, afterClipId }", "current clip", "current chain", "Insert after current clip", "At the end of the current chain", "one undo step", "link.parent"]) expect(RULES[71]).toContain(x);
+    for (const x of ["insert_clip_after { assetId, afterClipId }", "current clip", "current chain", "Insert after current clip", "At the end of the current chain", "At the playhead", "paste_clips", "one undo step", "link.parent"]) expect(RULES[71]).toContain(x);
     for (const x of ["set_clip_mask", "clear_clip_mask", "not an effect limit", "node id", "feather", "ellipse"]) expect(RULES[70]).toContain(x);
     for (const x of ["word-highlight", "word-pop", "words", "even-split", "word_align_prompt", "set_caption_words"]) expect(RULES[69]).toContain(x);
     for (const x of ["\"trackers\"", "\"target\"", "{ \"type\": \"tracker\", \"clip\": \"main\", \"track\": \"Subject\" }", "needs tracking", "a warning, not an error", "needs-tracking", "found:false", "Never invent positions"]) expect(RULES[68]).toContain(x);

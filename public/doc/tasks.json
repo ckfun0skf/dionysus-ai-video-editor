@@ -3198,6 +3198,12 @@
           "title": "Fill placeholder and Replace asset reuse the asset picker and apply an upload in the same step. Insert new clip after the current main-track clip (selected main clip, else the clip under the playhead, else the nearest main clip that already ended) ripples later clips; linked layers and subtitles keep their offset. Paste asks Insert after current clip or At the end of the current chain (the contiguous run; no current clip means the start); Cancel changes nothing; one undo step. WebMCP insert_clip_after; guide rule 72.",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P52-MOBILE-TOOLBAR-RIPPLE-PASTE",
+          "title": "Mobile clip toolbar: back control stays visible at the left (outside the horizontal scroller); scroll-snap removed so the row can reach the last item and stay there. Ripple toggle sits next to Delete (Delete still uses the current ripple setting; desktop shortcuts unchanged). Paste dialog adds At the playhead (no ripple, disabled if the gap on the chosen track is occupied) and a track picker (compatible tracks plus New track). WebMCP paste_clips; guide rule 72.",
+          "status": "done",
+          "progress": 100
         }
       ]
     }

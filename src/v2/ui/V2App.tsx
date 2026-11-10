@@ -116,8 +116,9 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const [multiMode, setMultiMode] = useState(false);
   const clipboard = useRef<edit.ClipboardItem[]>([]);
   const [hasClip, setHasClip] = useState(false);
-  /** P51: paste asks where to land; null means the dialog is closed. */
+  /** P51/P52: paste asks where to land and which track; false means the dialog is closed. */
   const [pasteAsk, setPasteAsk] = useState(false);
+  const [pasteTrack, setPasteTrack] = useState(chain.NEW_PASTE_TRACK);
   /** Ticks captured when "Insert new clip after" opens, so the picker stays aimed at that cut. */
   const insertAt = useRef(0);
   /** V2-107 desktop: J/K/L shuttle rate (0 = stopped, 1 = normal play), "?" sheet, right-click menu. */
@@ -250,16 +251,24 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const copy = () => { if (!sel.length) return; clipboard.current = edit.copyClips(comp, sel); setHasClip(true); setToast(`Copied ${sel.length} clip${sel.length > 1 ? "s" : ""}`); };
   const paste = () => {
     if (!clipboard.current.length) { setToast("Nothing to paste — copy a clip first"); return; }
+    setPasteTrack(chain.defaultPasteTrackId(comp, clipboard.current));
     setPasteAsk(true);
   };
-  /** P51: one undo step. Cancel never reaches here. "after" is refused when there is no current clip. */
-  const commitPaste = (where: "after" | "end") => {
+  /** P51/P52: one undo step. Cancel never reaches here. "after" is refused when there is no current clip. */
+  const commitPaste = (where: chain.PasteWhere) => {
     setPasteAsk(false);
     const opts = { selectedIds: sel, time: Math.round(player.time) };
     const at = chain.pasteOrigin(comp, where, opts);
     if (at === undefined) { setToast("No current clip — select a main-track clip, or move the playhead onto one"); return; }
     const ids = clipboard.current.map(() => newId("plc"));
-    if (engine.dispatch(cmd.pasteClips(clipboard.current, at, ids, true), "Paste clip")) setSel(ids);
+    const target = pasteTrack === chain.NEW_PASTE_TRACK ? { newTrack: true as const } : { trackId: pasteTrack };
+    const exact = where === "playhead";
+    if (exact && chain.pasteOverlaps(comp, clipboard.current, at, target)) {
+      setToast("Can't paste at the playhead: a clip is already there");
+      return;
+    }
+    if (engine.dispatch(cmd.pasteClips(clipboard.current, at, ids, !exact, { target, exact }), "Paste clip")) setSel(ids);
+    else if (exact) setToast("Can't paste at the playhead: a clip is already there");
   };
   const duplicate = () => { if (!sel.length) return; const ids = sel.map(() => newId("plc")); engine.dispatch(cmd.duplicateClips(sel, ids)); setSel(ids); };
   /** Preview duplicate: copy on a new track right above, same time, nudged ~20px, copy selected. */
@@ -815,7 +824,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     : { icon: "🔗", label: "Link to main", title: "Link to the main clip under this clip's start: it then moves, trims and deletes with it", run: () => setToast(engine.dispatch(cmd.setClipLink(selected.placement.id, true)) ? "Linked to the main clip" : "No main clip under this clip's start to link to") }] : [];
   // P20: overlay video / image / HTML clips can move onto the main track.
   const promoteActions = selected && !selIsMain && promote.canPromote(comp, selected.placement.id) ? [{ icon: "to-main", label: "Promote to main", title: "Promote to main track: replace what the main track shows here, or insert it and move later clips", run: () => setPromoteFor(selected.placement.id) }] : [];
-  const pasteAction = { icon: "📋", label: "Paste", title: hasClip ? "Paste: insert after the current clip, or at the end of the current chain (⌘/Ctrl+V)" : "Copy a clip first", run: paste };
+  const pasteAction = { icon: "📋", label: "Paste", title: hasClip ? "Paste: after the current clip, at the end of the current chain, or at the playhead on a chosen track (⌘/Ctrl+V)" : "Copy a clip first", run: paste };
 
   // Linked audio (owned child of a video clip): extract / duplicate / mute-restore. All undoable commands.
   const linkedAudioActions = selected && selected.placement.clipType === "video" ? [
@@ -924,7 +933,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     const edit = [
       A("split", "✂", "Split", split, "Split at the playhead (S)"),
       A("trim", "trim-start", "Trim", () => setBarSheet("trim"), "Trim start or end to the playhead (Q / W)"),
-      { ...A("delete", "🗑", "Delete", () => del(), ripple ? "Delete and close the gap (ripple is on)" : "Delete"), danger: true },
+      { ...A("delete", "🗑", "Delete", () => del(), ripple ? "Delete and close the gap (ripple is on)" : "Delete and leave a gap (ripple is off)"), danger: true },
+      A("ripple", "⇤", "Ripple", () => setRipple(!ripple), "Ripple: delete and trim move later clips to close gaps (R)", ripple),
     ];
     const adjust = A("adjust", "⤧", "Adjust", () => setInspOpen(true), "Transform, keyframes and fades");
     const audio = sound ? A("audio", "🔊", "Audio", () => setBarSheet("audio"), "Volume, mute, volume curve, audio FX and position") : undefined;
@@ -967,7 +977,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
         hasClip && A("paste", "📋", "Paste", paste, pasteAction.title),
         canInsert && A("insert-after", "＋", "Insert", () => openInsert(), "Insert a new clip after the current clip. Later clips move later; linked layers stay with their clips"),
         A("select", "☑", "Select", () => setMultiMode(true), "Select several clips")]),
-      [A("ripple", "⇤", "Ripple", () => setRipple(!ripple), "Ripple: delete and trim move later clips to close gaps (R)", ripple), A("snap", "🧲", "Snap", () => setSnapOn(!snapOn), "Smart snapping and alignment guides", snapOn)],
+      [A("snap", "🧲", "Snap", () => setSnapOn(!snapOn), "Smart snapping and alignment guides", snapOn)],
     ].filter((g) => g.length);
   })();
   const mobileTools: Record<Menu, JSX.Element[]> = {
@@ -1125,7 +1135,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       {iconBtn("🗑", ripple ? "Ripple delete" : "Delete", () => delSel(), { title: ripple ? "Delete and close the gap (Del)" : "Delete (Del) · Shift+Del ripple delete", disabled: !anySel, key: "del" })}
       {iconBtn("⧉", "Duplicate", duplicateAbove, { title: "Duplicate (⌘/Ctrl+D)", disabled: !anySel })}
       {iconBtn("⎘", "Copy", copy, { title: "Copy (⌘/Ctrl+C)", disabled: !anySel })}
-      {iconBtn("📋", "Paste", paste, { title: hasClip ? "Paste: insert after the current clip, or at the end of the current chain (⌘/Ctrl+V)" : "Copy a clip first", disabled: !hasClip })}
+      {iconBtn("📋", "Paste", paste, { title: hasClip ? "Paste: after the current clip, at the end of the current chain, or at the playhead on a chosen track (⌘/Ctrl+V)" : "Copy a clip first", disabled: !hasClip })}
       <button className="v2-dtool v2-dtool-text" data-testid="insert-after" aria-label="Insert new clip after current clip" title="Insert a new clip after the current clip (selected main clip, else the clip under the playhead). Later clips move later; linked layers stay with their clips" disabled={!canInsert} onClick={() => openInsert()}><Ic g="＋" size={16} /><span>Insert after</span></button>
       {iconBtn("❄", "Freeze", () => { if (sp) { engine.dispatch(cmd.freezeFrame(sp.id, Math.round(player.time))); setToast("Freeze frame inserted (3 s)"); } }, { title: "Freeze the frame under the playhead for 3 s (F)", disabled: !(sp && sp.clipType === "video" && !sp.freeze) })}
       <span className="v2-dsep" aria-hidden />
@@ -1225,7 +1235,15 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   return (
     <div className={`v2-app ${mobile ? "is-mobile" : "is-desktop"} ${fs ? "is-fs" : ""}`}>
       {fileInputs}
-      {pasteAsk && <PastePlaceDialog canAfter={chain.insertAfterTicks(comp, { selectedIds: sel, time: Math.round(player.time) }) !== undefined} onChoose={commitPaste} onCancel={() => setPasteAsk(false)} />}
+      {pasteAsk && (() => {
+        const t = Math.round(player.time);
+        const target = pasteTrack === chain.NEW_PASTE_TRACK ? { newTrack: true as const } : { trackId: pasteTrack };
+        const canPlayhead = !chain.pasteOverlaps(comp, clipboard.current, t, target);
+        return <PastePlaceDialog canAfter={chain.insertAfterTicks(comp, { selectedIds: sel, time: t }) !== undefined} canPlayhead={canPlayhead}
+          playheadTitle={canPlayhead ? "Place it at the playhead without moving other clips" : "A clip already occupies the playhead on this track — choose another place or another track"}
+          tracks={chain.pasteTrackOptions(comp, clipboard.current)} trackId={pasteTrack} onTrackChange={setPasteTrack}
+          newTrackLabel={chain.newPasteTrackLabel(comp, clipboard.current)} onChoose={commitPaste} onCancel={() => setPasteAsk(false)} />;
+      })()}
       {mobile ? (
         <header className="v2-header v2-mheader">
           <a className="v2-icon v2-close" href={window.location.pathname} aria-label="Close (back to classic editor)"><Ic g="✕" /></a>
@@ -1325,9 +1343,9 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
               {firstVideoTrack && <button className="v2-side-btn" onClick={() => engine.dispatch(cmd.toggleTrackMute(firstVideoTrack.id))}><b aria-hidden><Ic g={firstVideoTrack.muted ? "🔇" : "🔊"} /></b><span>{firstVideoTrack.muted ? "Unmute clip audio" : "Mute clip audio"}</span></button>}
               <button className="v2-side-btn v2-cover" onClick={() => seek(0)} style={firstClip && thumbs[firstClip.source.assetId] ? { backgroundImage: `url(${thumbs[firstClip.source.assetId]})` } : undefined}><span>Cover</span></button>
             </>} />
-          <nav ref={toolbarFade} className="v2-toolbar" aria-label={selected ? "Clip actions" : "Timeline actions"}>
+          <nav className="v2-toolbar" aria-label={selected ? "Clip actions" : "Timeline actions"}>
             {(activeMenu !== "root" || expanded) && <button className="v2-tool v2-tool-back" aria-label={activeMenu === "root" && expanded ? `Collapse ${ops.GROUP_LABEL[expanded]}` : "Back"} title={activeMenu === "root" && expanded ? `Collapse ${ops.GROUP_LABEL[expanded]}` : "Back"} onClick={back}>‹</button>}
-            {mobileTools[activeMenu]}
+            <div ref={toolbarFade} className="v2-toolbar-scroll" data-testid="toolbar-scroll">{mobileTools[activeMenu]}</div>
           </nav>
           {pickerEl}
           {barSheet && selected && <Sheet label={barSheet === "trim" ? "Trim" : barSheet === "colour" ? "Colour" : "Audio"} className="v2-msheet-insp v2-bar-sheet" snaps={[0.3, 0.42, 0.9]} onClose={() => setBarSheet(undefined)}>

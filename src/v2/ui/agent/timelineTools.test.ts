@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createProject, findPlacement, secondsToTicks as s, timelineReview, type Asset, type Project } from "../../domain";
+import { createProject, findPlacement, ops, secondsToTicks as s, timelineReview, type Asset, type Project } from "../../domain";
 import { cmd, Engine } from "../../engine";
 import { validateStoryboard, type StoryDoc } from "../../domain/storyJson";
 import { agentStore, ALL_AGENT_TOOLS, callTimelineAgentTool, registerAgentTools } from "./webMcp";
@@ -452,6 +452,29 @@ describe("P51 insert_clip_after", () => {
     expect(findPlacement(root(e.getState().project), "c2")!.placement.startTicks).toBe(s(4));
     expect(sub().startTicks).toBe(s(4));
     expect(findPlacement(root(e.getState().project), clip.id)).toBeUndefined();
+  });
+});
+
+describe("P52 paste_clips", () => {
+  it("pastes at the playhead into a gap, refuses overlap, and can target a new overlay", async () => {
+    const e = setup();
+    e.dispatch(cmd.trimPlacement("c1", "right", s(4)));
+    const run = (args: object) => runTimelineTool(e, undefined, "paste_clips", args);
+    expect((await run({ clipIds: ["c1"], where: "playhead" })).ok).toBe(false);
+    const gap = await run({ clipIds: ["c1"], where: "playhead", playheadSec: 6 });
+    expect(gap.ok && gap.changed).toBe(true);
+    const copy = json(gap.text);
+    expect(copy).toMatchObject({ start: 6, duration: 4, asset: "v" });
+    expect(findPlacement(root(e.getState().project), "c1")!.placement.startTicks).toBe(0);
+    expect(e.undo()).toBe(true);
+    expect(findPlacement(root(e.getState().project), copy.id)).toBeUndefined();
+    expect((await run({ clipIds: ["c1"], where: "playhead", playheadSec: 1 })).ok).toBe(false);
+    const neu = await run({ clipIds: ["c1"], where: "playhead", playheadSec: 0, trackId: "new" });
+    expect(neu.ok && neu.changed).toBe(true);
+    const placed = findPlacement(root(e.getState().project), json(neu.text).id)!;
+    expect(ops.groupOf(root(e.getState().project), placed.track)).toBe("overlay");
+    expect(placed.placement.startTicks).toBe(0);
+    expect(findPlacement(root(e.getState().project), "c1")!.placement.startTicks).toBe(0);
   });
 });
 
