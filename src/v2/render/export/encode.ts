@@ -248,18 +248,24 @@ export function stopOnBlankVideo(project: Project, player: Pick<Player, "videoSt
   }
 }
 
-/** One line per clip whose frames timed out, were rejected (HTML clips) or had no picture (video clips). */
-export function frameWarnings(project: Project, issues: { placementId: string; t: number; issue: "timeout" | "invalid" | "blank" }[], videoStats?: Player["videoStats"]): string[] {
-  const by = new Map<string, { timeout: number; invalid: number; blank: number; first: number }>();
+/** One line per clip whose frames timed out, were rejected, failed to load an attached file (HTML clips) or had no picture (video clips). */
+export function frameWarnings(project: Project, issues: { placementId: string; t: number; issue: "timeout" | "invalid" | "blank" | "asset"; detail?: string }[], videoStats?: Player["videoStats"]): string[] {
+  const by = new Map<string, { timeout: number; invalid: number; blank: number; asset: number; first: number; details: string[] }>();
   for (const i of issues) {
-    const e = by.get(i.placementId) ?? { timeout: 0, invalid: 0, blank: 0, first: i.t };
-    e[i.issue] += 1; e.first = Math.min(e.first, i.t);
+    const e = by.get(i.placementId) ?? { timeout: 0, invalid: 0, blank: 0, asset: 0, first: i.t, details: [] };
+    if (i.issue === "asset") { e.asset += 1; if (i.detail) e.details.push(i.detail); }
+    else e[i.issue] += 1;
+    e.first = Math.min(e.first, i.t);
     by.set(i.placementId, e);
   }
   return [...by].map(([id, e]) => {
     const name = clipName(project, id, e.blank ? "Video clip" : "HTML clip").name;
     const s = (n: number) => (n > 1 ? "s" : "");
-    const what = [e.timeout && `${e.timeout} frame${s(e.timeout)} timed out (4 s)`, e.invalid && `${e.invalid} invalid frame${s(e.invalid)}`, e.blank && `${e.blank} frame${s(e.blank)} had no picture${videoStats?.get(id)?.detail ? ` (${videoStats.get(id)!.detail})` : ""}`].filter(Boolean).join(", ");
+    const assetWhat = e.asset ? (e.details[0] || "an attached file could not be loaded") : "";
+    const what = [e.timeout && `${e.timeout} frame${s(e.timeout)} timed out (4 s)`, e.invalid && `${e.invalid} invalid frame${s(e.invalid)}`, e.blank && `${e.blank} frame${s(e.blank)} had no picture${videoStats?.get(id)?.detail ? ` (${videoStats.get(id)!.detail})` : ""}`, assetWhat].filter(Boolean).join(", ");
+    if (e.asset && !e.timeout && !e.invalid && !e.blank) {
+      return `${name}: ${what} The clip used its fallback instead of failing the export silently.`;
+    }
     return `${name}: ${what}, first at ${(e.first / 120_000).toFixed(2)} s. ${e.blank ? "Those frames show what is underneath the clip." : "Those frames reuse the last good image (or are blank)."}`;
   });
 }

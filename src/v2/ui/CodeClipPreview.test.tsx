@@ -83,4 +83,23 @@ describe("P54 CodeClipPreview (shared storyboard / editor preview)", () => {
     expect(seen.length).toBeGreaterThan(0);
     expect(el.querySelector('[data-testid="v2-ce-mix-canvas"]')).not.toBeNull();
   });
+
+  it("surfaces dionysus:asset-error so Mix preview shows attached-file failures", async () => {
+    const seen: { message: string }[] = [];
+    const el = document.createElement("div");
+    document.body.appendChild(el);
+    await act(async () => {
+      createRoot(el).render(
+        <CodeClipPreview html={HTML} duration={2} width={320} height={180} transparent={false} collapsed={false} onError={(e) => { if (e) seen.push(e); }} />,
+      );
+    });
+    const iframe = el.querySelector("iframe") as HTMLIFrameElement;
+    await act(async () => {
+      window.dispatchEvent(new MessageEvent("message", {
+        data: { type: "dionysus:asset-error", messages: ["Couldn't load attached file \"model.glb\"."] },
+        source: iframe.contentWindow,
+      }));
+    });
+    expect(seen).toEqual([{ message: "Couldn't load attached file \"model.glb\"." }]);
+  });
 });

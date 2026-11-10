@@ -10,21 +10,31 @@ import { readClipConfig, selectedLibraries, vendorUrl, type HtmlLibrary } from "
  *   editor → iframe  {type:"dionysus:params", params}                          (V2-HTML-PARAMS: new per-use values; ctx.params = defaults ⊕ params)
  *   editor → iframe  {type:"dionysus:frame", seq, t, duration?}                (t = clip-local seconds)
  *   iframe → editor  {type:"dionysus:frame", seq, bmp}                        (ImageBitmap of its first <canvas>)
- * Contract: `dionysus.clip({ init?(ctx), render(t, ctx) })`; `init` (then document.fonts.ready) is awaited once before the first frame. Legacy
- * pages may use `dionysus.onFrame((t, ctx) => …)` OR plain requestAnimationFrame / performance.now / Date.now, which
- * the shim drives from t. Math.random is seeded so export is deterministic. Embedded files and bound assets resolve
- * by name to blob: URLs. The live preview (storyboard and Code Editor) sends init/params with the use's values so ctx.params matches preview and export.
+ *   iframe → editor  {type:"dionysus:asset-error", messages}                  (an embedded file failed to decode or load)
+ * Contract: `dionysus.clip({ init?(ctx), render(t, ctx) })`; `init`, document.fonts.ready, and in-flight attached-file
+ * fetches are awaited before a frame is captured. Legacy pages may use `dionysus.onFrame((t, ctx) => …)` OR plain
+ * requestAnimationFrame / performance.now / Date.now, which the shim drives from t. Math.random is seeded so export is
+ * deterministic. Embedded files and bound assets resolve by name to blob: URLs, including when a loader calls fetch()
+ * with a Request (the name is taken from Request.url). The live preview (storyboard and Code Editor) sends init/params
+ * with the use's values so ctx.params matches preview and export.
  */
 export const HTML_RUNTIME_JS = `const fns=[],q=new Map();let vt=0,rid=0,s=0x2f6b1d3,def=null,boot=null;const E=1767225600000;
 const vnow=()=>vt*1000;performance.now=vnow;const OD=Date;
 window.Date=class extends OD{constructor(...a){a.length?super(...a):super(E+vnow())}static now(){return E+vnow()}};
 window.requestAnimationFrame=(cb)=>{q.set(++rid,cb);return rid};window.cancelAnimationFrame=(i)=>{q.delete(i)};
 Math.random=()=>{s=s+0x6D2B79F5|0;let t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296};
-const A={};for(const[n,d]of Object.entries(M.files||{})){const m=/^data:([^;,]*)(;base64)?,([\\s\\S]*)$/.exec(d);if(!m)continue;
-const raw=m[2]?atob(m[3]):decodeURIComponent(m[3]);const u=new Uint8Array(raw.length);for(let i=0;i<raw.length;i++)u[i]=raw.charCodeAt(i);
-A[n]=URL.createObjectURL(new Blob([u],{type:m[1]||"application/octet-stream"}))}
-const res=(n)=>typeof n==="string"?A[n.replace(/^\\.\\//,"")]:undefined;
-const of=window.fetch;window.fetch=(i,o)=>of(res(i)||i,o);
+const A={},issues=[],pending=[],seen={};const note=(m)=>{if(m&&!seen[m]){seen[m]=1;issues.push(m)}};
+for(const[n,d]of Object.entries(M.files||{})){const m=/^data:([^,]*?),([\\s\\S]*)$/.exec(d);if(!m){note("Couldn't decode attached file \\""+n+"\\".");continue}
+try{const raw=/;base64/i.test(m[1])?atob(m[2]):decodeURIComponent(m[2]);const u=new Uint8Array(raw.length);for(let i=0;i<raw.length;i++)u[i]=raw.charCodeAt(i);
+const mime=(m[1].split(";")[0]||"").trim()||"application/octet-stream";A[n]=URL.createObjectURL(new Blob([u],{type:mime}))}catch(err){note("Couldn't decode attached file \\""+n+"\\".")}}
+const keyOf=(n)=>typeof n==="string"?n:(n&&typeof n.url==="string"?n.url:"");
+const baseName=(s)=>{const x=String(s).split("?")[0].split("#")[0];let p=x.split("/").pop()||x;try{p=decodeURIComponent(p)}catch(_){}return p};
+const fileOf=(n)=>{if(typeof n!=="string"||!n)return;const s=n.replace(/^\\.\\//,"");if(A[s])return A[s];const b=baseName(s);if(b&&A[b])return A[b]};
+const res=(n)=>fileOf(keyOf(n));
+const of=window.fetch.bind(window);window.fetch=function(i,o){const raw=keyOf(i),mapped=fileOf(raw),hit=!!mapped||Object.values(A).indexOf(raw)>=0;
+let label=baseName(raw);if(hit){const target=mapped||raw;for(const n in A)if(A[n]===target)label=n}
+const p=of(mapped||i,o);if(hit){const tracked=Promise.resolve(p).then(function(r){if(!r||r.ok===false)note("Couldn't load attached file \\""+label+"\\".");return r},function(){note("Couldn't load attached file \\""+label+"\\".")});
+pending.push(tracked.catch(function(){}))}return p};
 const xo=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(m,u,...r){return xo.call(this,m,res(u)||u,...r)};
 const AT=["src","href","poster","data"];const fix=(el)=>{if(!el.getAttribute)return;for(const a of AT){const v=el.getAttribute(a),b=res(v);if(b)el.setAttribute(a,b)}};
 new MutationObserver((ms)=>{for(const m of ms){if(m.type==="attributes")fix(m.target);for(const n of m.addedNodes)if(n.nodeType===1){fix(n);n.querySelectorAll("*").forEach(fix)}}})
@@ -40,7 +50,9 @@ video:(n)=>memo("v:"+n,()=>{const u=urlOf(n);if(!u)return Promise.resolve(null);
 return new Promise((ok,no)=>{v.onloadeddata=()=>ok(v);v.onerror=()=>no(new Error("video "+n))})}),
 seek:(v,sec)=>new Promise((ok)=>{if(!v)return ok(v);const x=Math.max(0,Math.min(sec,(v.duration||sec)-0.001));if(Math.abs(v.currentTime-x)<0.0005&&v.readyState>=2)return ok(v);
 const to=setTimeout(()=>ok(v),3000);v.addEventListener("seeked",()=>{clearTimeout(to);ok(v)},{once:true});v.currentTime=x})};
-const start=()=>boot||(boot=(async()=>{try{if(def&&def.init)await def.init(ctx)}finally{if(document.fonts)await document.fonts.ready}})().catch((e)=>console.error(e)));
+const flushIssues=()=>{if(!issues.length)return;try{parent.postMessage({type:"dionysus:asset-error",messages:issues.splice(0)},"*")}catch(_){}};
+const waitAssets=async()=>{for(let i=0;i<32;i++){const n=pending.length;if(n)await Promise.all(pending);await Promise.resolve();if(pending.length===n)return}};
+const start=()=>boot||(boot=(async()=>{try{if(def&&def.init)await def.init(ctx)}finally{if(document.fonts)await document.fonts.ready}await waitAssets();flushIssues()})().catch((e)=>console.error(e)));
 window.dionysus={t:0,ctx,manifest:M,onFrame(f){fns.push(f)},clip(d){def=d;if(d&&d.render)fns.push((t,c)=>d.render(t,c))},asset:urlOf};
 addEventListener("message",async(e)=>{const d=e.data;if(!d||e.source!==parent)return;
 if(d.type==="dionysus:init"){if(d.width)ctx.width=d.width;if(d.height)ctx.height=d.height;if(d.duration>0)ctx.duration=d.duration;
@@ -52,7 +64,7 @@ vt=d.t;window.dionysus.t=d.t;ctx.t=d.t;ctx.progress=ctx.duration>0?Math.min(1,Ma
 for(const k of ["source","from","to"])if(k in d){const o=ctx[k];if(o&&o!==d[k]&&o.close)o.close();ctx[k]=d[k]}
 if(typeof d.progress==="number")ctx.progress=d.progress;if(d.inputs)ctx.inputs=d.inputs;
 try{const cbs=[...q.values()];q.clear();for(const cb of cbs)cb(vnow());
-for(const f of fns){const r=f(d.t,ctx);if(r&&r.then)await r}}catch(err){console.error(err)}
+for(const f of fns){const r=f(d.t,ctx);if(r&&r.then)await r}await waitAssets();flushIssues()}catch(err){console.error(err)}
 const c=document.querySelector("canvas");let bmp=null;if(c&&c.width&&c.height){try{bmp=await createImageBitmap(c)}catch(_){}}
 parent.postMessage({type:"dionysus:frame",seq:d.seq,bmp},"*",bmp?[bmp]:[])});
 addEventListener("load",()=>parent.postMessage({type:"dionysus:ready"},"*"));`;
@@ -138,11 +150,17 @@ export class HtmlClipHost {
   private waiters = new Set<() => void>();
   /** Problem with the most recently delivered frame (cleared by a good frame). */
   issue?: FrameIssue;
+  /** Embedded files that failed to decode or load (reported once per message from the page). */
+  assetErrors: string[] = [];
   private onMsg = (e: MessageEvent) => {
     if (e.source !== this.iframe.contentWindow) return;
     const d: unknown = e.data;
     if (!d || typeof d !== "object") return;
-    const { type, seq, bmp } = d as { type?: unknown; seq?: unknown; bmp?: unknown };
+    const { type, seq, bmp, messages } = d as { type?: unknown; seq?: unknown; bmp?: unknown; messages?: unknown };
+    if (type === "dionysus:asset-error") {
+      if (Array.isArray(messages)) for (const m of messages) if (m != null && String(m)) this.assetErrors.push(String(m));
+      return;
+    }
     if (type === "dionysus:ready") {
       const go = (init: HtmlClipInit | undefined) => {
         if (init) this.iframe.contentWindow?.postMessage({ type: "dionysus:init", ...init }, "*");

@@ -3216,6 +3216,12 @@
           "title": "Storyboard and timeline Code Editor share one html preview: it renders with the clip's actual JSON params (defaults ⊕ shot/layer/htmlParams, graphic/audio/tracker inputs resolved like the timeline when Mix can see underneath) and updates live when params change. A Mix toggle (≥44px, monochrome blend icon, off by default) composites the clip over the underlying main/overlay clips at the same time with the same layer order, opacity and blend as preview/export.",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P55-EXPORT-CODE-ATTACHMENTS",
+          "title": "HTML/code clip export resolves attached binary files (GLB and other files in the manifest) the same way live preview does: fetch() of a string or a Request (including a path rewritten against the parent page URL, as three.js FileLoader does) maps to the file's blob URL. Export waits for init, fonts, and in-flight attached-file fetches before capturing a frame. A failed decode or load posts dionysus:asset-error and the export dialog shows the message instead of silently using the clip's fallback.",
+          "status": "done",
+          "progress": 100
         }
       ]
     }
