@@ -14,6 +14,9 @@
  *
  * "Insert after current clip" is the current clip's end. "At the end of the current chain" is that run's end.
  * With no current clip, the chain end is 0 (the start of the timeline).
+ * "At the playhead" places the clipboard at `time` without rippling, and only when every receiving track has a
+ * free gap that fits (including a newly created track). If anything would overlap, that option is disabled rather
+ * than silently rippling or sliding later.
  *
  * Ripple: every clip on the receiving track that starts at or after the insert point moves later by the inserted
  * span, so an existing gap keeps its length. Linked layers and subtitles (`link.parent`, including captions sent
@@ -21,7 +24,7 @@
  * delete and promote-insert. A layer with no link stays put.
  */
 import { trackKindFor, type Composition, type Placement, type Track, type TrackKind } from "./model";
-import { addTrack, groupOf, mainTrack } from "./ops";
+import { addTrack, groupOf, mainTrack, type TrackGroup } from "./ops";
 
 const end = (p: Placement) => p.startTicks + p.durationTicks;
 /** Clips this close (ticks) still belong to the same chain. */
@@ -75,9 +78,15 @@ export function chainEndTicks(comp: Composition, opts: ChainPoint = {}): number 
   return chainOf(comp, cur.id)?.endTicks ?? end(cur);
 }
 
-export type PasteWhere = "after" | "end";
+export type PasteWhere = "after" | "end" | "playhead";
+/** Sentinel select value / WebMCP trackId for "create a new compatible layer". */
+export const NEW_PASTE_TRACK = "new";
+export type PasteTarget = { trackId?: string; newTrack?: boolean };
+export type PasteItem = { trackId: string; kind: TrackKind; placement: Placement; offset?: number };
+
 /** Paste origin for a placement choice. "after" is undefined when there is no current clip (the dialog disables it). */
 export function pasteOrigin(comp: Composition, where: PasteWhere, opts: ChainPoint = {}): number | undefined {
+  if (where === "playhead") return Math.max(0, Math.round(opts.time ?? 0));
   return where === "after" ? insertAfterTicks(comp, opts) : chainEndTicks(comp, opts);
 }
 
@@ -185,4 +194,136 @@ export function placeTextGroup(comp: Composition, placements: Placement[], mainS
     } else cur = placeBeside(cur, prefer.id, pl, shiftOf);
   }
   return cur;
+}
+
+/** Destination group a clipboard item prefers. Video that is not a sticker can go on main or overlay; a new video track is always an overlay. */
+export function pasteItemGroup(comp: Composition, it: PasteItem): TrackGroup {
+  if (it.kind === "audio" || it.placement.clipType === "audio") return "audio";
+  if (it.kind === "effect" || it.placement.clipType === "effect") return "effect";
+  if (it.kind === "text" || it.placement.clipType === "text") return "text";
+  const orig = comp.tracks.find((t) => t.id === it.trackId);
+  if (orig && groupOf(comp, orig) === "text") return "text";
+  return "overlay";
+}
+
+export function clipFitsTrack(comp: Composition, it: PasteItem, track: Track): boolean {
+  if (trackKindFor(it.placement.clipType) !== track.kind) return false;
+  const g = pasteItemGroup(comp, it);
+  const tg = groupOf(comp, track);
+  if (g === "audio" || g === "effect" || g === "text") return tg === g;
+  return tg === "main" || tg === "overlay";
+}
+
+export function compatiblePasteTracks(comp: Composition, items: PasteItem[]): Track[] {
+  if (!items.length) return [];
+  const primary = items[0];
+  return comp.tracks.filter((t) => clipFitsTrack(comp, primary, t));
+}
+
+export function pasteTrackOptions(comp: Composition, items: PasteItem[]): { id: string; label: string }[] {
+  return compatiblePasteTracks(comp, items).map((t) => {
+    const g = groupOf(comp, t);
+    return { id: t.id, label: g === "main" ? (t.name === "Main" ? "Main" : `Main · ${t.name}`) : t.name };
+  });
+}
+
+export function defaultPasteTrackId(comp: Composition, items: PasteItem[]): string {
+  const opts = compatiblePasteTracks(comp, items);
+  const orig = items[0]?.trackId;
+  if (orig && opts.some((t) => t.id === orig)) return orig;
+  return opts[0]?.id ?? NEW_PASTE_TRACK;
+}
+
+export function newPasteTrackLabel(comp: Composition, items: PasteItem[]): string {
+  if (!items.length) return "New track";
+  const g = pasteItemGroup(comp, items[0]);
+  if (g === "text") return "New text track";
+  if (g === "audio") return "New audio track";
+  if (g === "effect") return "New effect track";
+  return "New overlay track";
+}
+
+/** True when [start, start+duration) overlaps any clip on `track`. */
+export function trackBusyAt(track: Track, start: number, duration: number): boolean {
+  return track.placements.some((p) => overlaps(start, start + duration, p.startTicks, end(p)));
+}
+
+function samePasteFamily(comp: Composition, it: PasteItem, primary: PasteItem): boolean {
+  return pasteItemGroup(comp, it) === pasteItemGroup(comp, primary) && trackKindFor(it.placement.clipType) === trackKindFor(primary.placement.clipType);
+}
+
+/** Remap items that fit `target.trackId`; others keep their original track. */
+export function mapPasteItems<T extends PasteItem>(comp: Composition, items: T[], target?: PasteTarget): T[] {
+  if (!target?.trackId || target.trackId === NEW_PASTE_TRACK) return items;
+  const track = comp.tracks.find((t) => t.id === target.trackId);
+  if (!track) return items;
+  return items.map((it) => (clipFitsTrack(comp, it, track) ? { ...it, trackId: track.id, kind: track.kind } : it));
+}
+
+/** Create a layer matching the primary clipboard item (overlay for ordinary video, never a second main). */
+export function addPasteTrack(comp: Composition, items: PasteItem[], id: string): Composition {
+  if (!items.length) return comp;
+  const primary = items[0];
+  const kind = trackKindFor(primary.placement.clipType);
+  const g = pasteItemGroup(comp, primary);
+  if (kind === "video" && g === "text") return addTrack(comp, "video", id, "text");
+  return addTrack(comp, kind, id);
+}
+
+/** Apply a chosen track (or a new one). `target.trackId` on `newTrack` is the id to create. */
+export function applyPasteTarget<T extends PasteItem>(comp: Composition, items: T[], target?: PasteTarget): { comp: Composition; items: T[] } {
+  if (!target?.newTrack && !target?.trackId) return { comp, items };
+  if (target.newTrack) {
+    const tid = target.trackId && target.trackId !== NEW_PASTE_TRACK ? target.trackId : `trk_paste_${items[0]?.placement.id ?? "x"}`;
+    const next = comp.tracks.some((t) => t.id === tid) ? comp : addPasteTrack(comp, items, tid);
+    return { comp: next, items: mapPasteItems(next, items, { trackId: tid }) };
+  }
+  return { comp, items: mapPasteItems(comp, items, target) };
+}
+
+/**
+ * True when placing `items` at `at` would overlap an existing clip, or two remapped items would overlap each
+ * other. A new track is treated as empty. Used to enable or disable "At the playhead".
+ */
+export function pasteOverlaps(comp: Composition, items: Array<PasteItem & { offset: number }>, at: number, target?: PasteTarget): boolean {
+  let mapped = items;
+  const phantom = "__new__";
+  if (target?.newTrack) {
+    const primary = items[0];
+    mapped = items.map((it) => (primary && samePasteFamily(comp, it, primary) ? { ...it, trackId: phantom } : it));
+  } else if (target?.trackId) {
+    const track = comp.tracks.find((t) => t.id === target.trackId);
+    if (!track) return true;
+    mapped = items.map((it) => (clipFitsTrack(comp, it, track) ? { ...it, trackId: track.id } : it));
+  }
+  const byTrack = new Map<string, typeof mapped>();
+  for (const it of mapped) {
+    const list = byTrack.get(it.trackId) ?? [];
+    list.push(it);
+    byTrack.set(it.trackId, list);
+  }
+  for (const [tid, group] of byTrack) {
+    for (let i = 0; i < group.length; i += 1) {
+      const a0 = Math.max(0, Math.round(at + group[i].offset));
+      const a1 = a0 + group[i].placement.durationTicks;
+      for (let j = i + 1; j < group.length; j += 1) {
+        const b0 = Math.max(0, Math.round(at + group[j].offset));
+        const b1 = b0 + group[j].placement.durationTicks;
+        if (overlaps(a0, a1, b0, b1)) return true;
+      }
+      if (tid === phantom) continue;
+      const track = comp.tracks.find((t) => t.id === tid);
+      if (track && trackBusyAt(track, a0, group[i].placement.durationTicks)) return true;
+    }
+  }
+  return false;
+}
+
+/** Place `pl` at the time it already carries. Throws when the slot is occupied (playhead paste must not slide). */
+export function placeExact(comp: Composition, trackId: string, pl: Placement): Composition {
+  const track = comp.tracks.find((t) => t.id === trackId);
+  if (!track) throw new Error(`Unknown track ${trackId}`);
+  if (trackKindFor(pl.clipType) !== track.kind) throw new Error(`Cannot place ${pl.clipType} on ${track.kind} track`);
+  if (trackBusyAt(track, pl.startTicks, pl.durationTicks)) throw new Error("Can't paste here: a clip overlaps the playhead.");
+  return put(comp, trackId, pl);
 }

@@ -1,7 +1,7 @@
 /** Multi-clip editing: ripple delete/trim, duplicate, copy/paste. Pure; returns new Compositions. */
-import { pasteRipple, type RippleItem } from "./chain";
+import { NEW_PASTE_TRACK, applyPasteTarget, pasteRipple, placeExact, rippleInsert, type PasteTarget, type RippleItem } from "./chain";
 import { findPlacement, newId, trackKindFor, type Composition, type Placement, type TrackKind } from "./model";
-import { addTrack, insertPlacement, trimPlacement } from "./ops";
+import { addTrack, insertPlacement, mainTrack, trimPlacement } from "./ops";
 
 const end = (p: Placement) => p.startTicks + p.durationTicks;
 
@@ -62,12 +62,18 @@ export function copyClips(comp: Composition, ids: string[]): ClipboardItem[] {
   return items.map((f) => ({ trackId: f.track.id, kind: f.track.kind, offset: f.placement.startTicks - t0, placement: f.placement }));
 }
 
+export type PasteOpts = { target?: PasteTarget; exact?: boolean };
+
 /**
  * Paste at `at` on the original tracks (or the first track of the right kind). Without `ripple`, overlaps slide to
- * the next free slot. With `ripple`, clips that start at or after the pasted block move later by the block's span
- * (see domain/chain.ts). Returns new ids.
+ * the next free slot unless `opts.exact` is set (playhead paste: place exactly or throw). With `ripple`, clips that
+ * start at or after the pasted block move later by the block's span (see domain/chain.ts). `opts.target` remaps
+ * compatible items onto a chosen track or a new layer. Returns new ids.
  */
-export function pasteClips(comp: Composition, items: ClipboardItem[], at: number, makeId = () => newId("plc"), ripple = false): { comp: Composition; ids: string[] } {
+export function pasteClips(comp: Composition, items: ClipboardItem[], at: number, makeId = () => newId("plc"), ripple = false, opts?: PasteOpts): { comp: Composition; ids: string[] } {
+  const applied = applyPasteTarget(comp, items, opts?.target);
+  comp = applied.comp;
+  items = applied.items;
   const ids: string[] = [];
   const before = comp;
   const resolved: RippleItem[] = [];
@@ -86,11 +92,23 @@ export function pasteClips(comp: Composition, items: ClipboardItem[], at: number
     const { storyLink: _link, ...placement } = it.placement;
     void _link;
     const placed: Placement = { ...placement, id, startTicks: Math.max(0, Math.round(at + it.offset)) };
-    if (ripple) resolved.push({ trackId: track.id, placement: placed });
+    if (opts?.exact) { comp = placeExact(comp, track.id, placed); }
+    else if (ripple) resolved.push({ trackId: track.id, placement: placed });
     else comp = insertPlacement(comp, track.id, placed);
     ids.push(id);
   }
-  if (ripple && resolved.length) comp = pasteRipple(comp, resolved, before);
+  if (ripple && resolved.length) {
+    const chosen = opts?.target?.newTrack ? (opts.target.trackId && opts.target.trackId !== NEW_PASTE_TRACK ? opts.target.trackId : items[0]?.trackId) : opts?.target?.trackId;
+    const mainId = mainTrack(before)?.id;
+    if (chosen && chosen !== mainId) {
+      const onDest = resolved.filter((i) => i.trackId === chosen);
+      const rest = resolved.filter((i) => i.trackId !== chosen);
+      if (onDest.length) comp = rippleInsert(comp, chosen, onDest.map((i) => i.placement));
+      if (rest.length) comp = pasteRipple(comp, rest, before);
+    } else {
+      comp = pasteRipple(comp, resolved, before);
+    }
+  }
   return { comp, ids };
 }
 

@@ -128,3 +128,51 @@ describe("paste placement", () => {
     expect(at(e, "T")).toBe(2);
   });
 });
+
+describe("P52 paste at the playhead and onto a chosen track", () => {
+  it("places a copy at the playhead in a free gap without rippling, and reports overlap otherwise", () => {
+    const e = setup();
+    const c0 = root(e.getState().project);
+    const items = edit.copyClips(c0, ["A"]);
+    expect(chain.pasteOrigin(c0, "playhead", { time: 5 * S })).toBe(5 * S);
+    expect(chain.pasteOverlaps(c0, items, 5 * S)).toBe(false);
+    expect(chain.pasteOverlaps(c0, items, 1 * S)).toBe(true);
+    expect(e.dispatch(cmd.pasteClips(items, 5 * S, ["G"], false, { exact: true }), "Paste clip")).toBe(true);
+    expect(at(e, "G")).toBe(5);
+    expect(at(e, "A")).toBe(0);
+    expect(at(e, "B")).toBe(2);
+    expect(at(e, "C")).toBe(8);
+    expect(findPlacement(root(e.getState().project), "G")!.track.id).toBe(ops.mainTrack(root(e.getState().project))!.id);
+    expect(e.dispatch(cmd.pasteClips(items, 1 * S, ["X"], false, { exact: true }))).toBe(false);
+    expect(findPlacement(root(e.getState().project), "X")).toBeUndefined();
+    expect(e.undo()).toBe(true);
+    expect(findPlacement(root(e.getState().project), "G")).toBeUndefined();
+    expect(at(e, "C")).toBe(8);
+  });
+
+  it("pastes onto a chosen overlay track or a new overlay without moving main clips", () => {
+    const e = setup();
+    expect(e.dispatch(cmd.addTrack("video"))).toBe(true);
+    const c0 = root(e.getState().project);
+    const overlay = c0.tracks.find((t) => ops.groupOf(c0, t) === "overlay")!;
+    expect(overlay).toBeTruthy();
+    const items = edit.copyClips(c0, ["A"]);
+    expect(chain.pasteTrackOptions(c0, items).map((t) => t.id)).toEqual(expect.arrayContaining([ops.mainTrack(c0)!.id, overlay.id]));
+    expect(chain.pasteOverlaps(c0, items, 5 * S, { trackId: overlay.id })).toBe(false);
+    expect(e.dispatch(cmd.pasteClips(items, 5 * S, ["O"], false, { target: { trackId: overlay.id }, exact: true }))).toBe(true);
+    const placed = findPlacement(root(e.getState().project), "O")!;
+    expect(placed.track.id).toBe(overlay.id);
+    expect(placed.placement.startTicks).toBe(5 * S);
+    expect(at(e, "A")).toBe(0);
+    expect(at(e, "B")).toBe(2);
+    expect(at(e, "C")).toBe(8);
+    expect(e.undo()).toBe(true);
+    expect(e.dispatch(cmd.pasteClips(items, 3 * S, ["N"], false, { target: { newTrack: true, trackId: "trk_N" }, exact: true }))).toBe(true);
+    const neu = findPlacement(root(e.getState().project), "N")!;
+    expect(neu.track.id).toBe("trk_N");
+    expect(ops.groupOf(root(e.getState().project), neu.track)).toBe("overlay");
+    expect(neu.placement.startTicks).toBe(3 * S);
+    expect(at(e, "A")).toBe(0);
+    expect(at(e, "C")).toBe(8);
+  });
+});

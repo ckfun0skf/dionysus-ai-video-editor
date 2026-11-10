@@ -123,14 +123,18 @@ describe("V2-105 mobile layer row + Edit subtitles entry points", () => {
     const labels = [...el.querySelectorAll(".v2-toolbar .v2-tool span")].map((x) => x.textContent);
     // P33: no More button; every tool on one scrollable row, in fixed groups split by thin dividers.
     const groups = [...el.querySelectorAll(".v2-toolbar .v2-tool-group")].map((g) => [...g.querySelectorAll("[data-tool]")].map((b) => b.getAttribute("data-tool")));
-    expect(groups.slice(0, 2)).toEqual([["split", "trim", "delete"], ["style", "anim", "subs"]]);
+    expect(groups.slice(0, 2)).toEqual([["split", "trim", "delete", "ripple"], ["style", "anim", "subs"]]);
     expect(labels).not.toContain("More");
     expect(el.querySelector('.v2-toolbar [data-tool="more"]')).toBeNull();
     expect(el.querySelectorAll(".v2-toolbar .v2-tool-div").length).toBe(groups.length - 1);
     expect(groups.flat()).toEqual(expect.arrayContaining(["adjust", "duplicate", "copy", "select", "ripple", "snap"]));
     expect(groups.flat()).not.toContain("volume");
     expect(new Set(groups.flat()).size).toBe(groups.flat().length);
-    expect(getComputedStyleRule(".v2-toolbar")).toMatch(/overflow-x: auto/);
+    expect(getComputedStyleRule(".v2-toolbar-scroll")).toMatch(/overflow-x: auto/);
+    expect(getComputedStyleRule(".v2-toolbar-scroll")).not.toMatch(/scroll-snap/);
+    expect(css).not.toMatch(/scroll-snap-type/);
+    expect(groups[0]?.indexOf("ripple")).toBe(groups[0]!.indexOf("delete") + 1);
+    expect(groups[groups.length - 1]).toEqual(["snap"]);
     // P32: fixed-width cells, SVG line icons only; Trim opens a sheet with ≥44px rows.
     const svgOnly = (sel: string) => [...document.querySelectorAll(sel)].every((b) => b.querySelector("svg.v2-ic"));
     expect(svgOnly(".v2-toolbar .v2-tool b")).toBe(true);
@@ -147,6 +151,29 @@ describe("V2-105 mobile layer row + Edit subtitles entry points", () => {
     const row = el.querySelector(`.v2-cue[data-cue="${id}"]`)!;
     expect(row.classList.contains("is-target")).toBe(true);
     expect(el.querySelectorAll(".v2-cue").length).toBe(2);
+  });
+
+  it("P52: the back button stays outside the scroller and scrolling the tools does not reset on re-render", async () => {
+    const { el, tool, importSrt } = await mount(390);
+    await act(async () => { tool("Text")!.click(); });
+    await importSrt();
+    const clip = el.querySelector<HTMLElement>(".v2-clip.clip-text")!;
+    await act(async () => { clip.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true })); window.dispatchEvent(new MouseEvent("pointerup")); });
+    const back = el.querySelector(".v2-tool-back") as HTMLButtonElement;
+    const scroll = el.querySelector('[data-testid="toolbar-scroll"]') as HTMLElement;
+    expect(back).toBeTruthy();
+    expect(scroll).toBeTruthy();
+    expect(scroll.contains(back)).toBe(false);
+    expect(back.parentElement).toBe(el.querySelector(".v2-toolbar"));
+    expect(back.getAttribute("aria-label")).toBe("Back");
+    scroll.scrollLeft = 180;
+    expect(scroll.scrollLeft).toBe(180);
+    await act(async () => { (el.querySelector('.v2-toolbar [data-tool="ripple"]') as HTMLButtonElement).click(); });
+    const scroll2 = el.querySelector('[data-testid="toolbar-scroll"]') as HTMLElement;
+    expect(scroll2).toBe(scroll);
+    expect(scroll2.scrollLeft).toBe(180);
+    scroll2.scrollLeft = 240;
+    expect(scroll2.scrollLeft).toBe(240);
   });
 });
 

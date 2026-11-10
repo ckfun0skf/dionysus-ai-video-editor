@@ -8,7 +8,8 @@ import { audioClipAsset } from "../audioClipAsset";
 import { blobText } from "../AssetPreview";
 import { bindingRefsOf } from "../CleanupDialog";
 import { captureFrameAt, storePickedFrame } from "../storyboard/frameCapture";
-import { cleanup, DEFAULT_SOURCE, INPUT_TYPES, readManifest, resolveSource, versionOf, codePresetId, codeRoleIssue, transitions, audioOutputOf, board, mergeLayer, ops, promote, findPlacement, slip, subs, newId, audioClipPrompt, parseAudioClip, runtimeAiLinks, panToAzimuth, positionErrors, secondsToTicks, TICKS_PER_SECOND, timelineReview, text as T, words as W, type Placement, type Project } from "../../domain";
+import { cleanup, DEFAULT_SOURCE, INPUT_TYPES, readManifest, resolveSource, versionOf, codePresetId, codeRoleIssue, transitions, audioOutputOf, board, chain, edit as editDomain, mergeLayer, ops, promote, findPlacement, slip, subs, newId, audioClipPrompt, parseAudioClip, runtimeAiLinks, panToAzimuth, positionErrors, secondsToTicks, TICKS_PER_SECOND, timelineReview, text as T, words as W, type Placement, type Project } from "../../domain";
+
 import { getPreset, listPresets } from "../../registry";
 import { tracking, sourceAt, ticksToSeconds, masking, type Box, type MotionTrack, type NamedTrack, type TrackMask } from "../../domain";
 import { makeTrackAnalyse, nearestIndex, rangeTrack, trackTicks } from "../trackAnalyse";
@@ -555,6 +556,40 @@ export async function runTimelineTool(engine: Engine, source: FrameSource | unde
       if (!found || !main || found.track.id !== main.id) return fail(`"${afterId}" is not a clip on the main track.`);
       const id = newId("plc");
       return edit(cmd.insertClipAfter({ at: found.placement.startTicks + found.placement.durationTicks, main: [assetId] }, [id]), id);
+    }
+    case "paste_clips": {
+      const ids = Array.isArray(a.clipIds) ? a.clipIds.filter((x): x is string => typeof x === "string" && !!x) : [];
+      const missing = ids.filter((x) => !findPlacement(rootOf(project()), x));
+      if (!ids.length || missing.length) return fail(`No clip ${missing.join(", ") || "given"}. Call get_timeline for clip ids.`);
+      const where = s("where");
+      if (where !== "after" && where !== "end" && where !== "playhead") return fail('"where" must be "after", "end" or "playhead".');
+      const root = rootOf(project());
+      const items = editDomain.copyClips(root, ids);
+      if (!items.length) return fail("Nothing to paste.");
+      const afterId = s("afterClipId");
+      if (afterId) {
+        const found = findPlacement(root, afterId), main = ops.mainTrack(root);
+        if (!found || !main || found.track.id !== main.id) return fail(`"${afterId}" is not a clip on the main track.`);
+      }
+      const point = { selectedIds: afterId ? [afterId] : ids, time: where === "playhead" ? secondsToTicks(n("playheadSec") ?? 0) : 0 };
+      if (where === "playhead" && n("playheadSec") === undefined) return fail('"playheadSec" is required when where is "playhead".');
+      if (where === "playhead") point.time = secondsToTicks(n("playheadSec")!);
+      else if (afterId) {
+        const found = findPlacement(root, afterId)!;
+        point.time = found.placement.startTicks;
+      }
+      const at = chain.pasteOrigin(root, where, point);
+      if (at === undefined) return fail("No current clip — pass afterClipId (a main-track clip id from get_timeline).");
+      const rawTrack = s("trackId");
+      let target: { trackId?: string; newTrack?: boolean } | undefined;
+      if (rawTrack === chain.NEW_PASTE_TRACK) target = { newTrack: true };
+      else if (rawTrack) {
+        if (!root.tracks.some((t) => t.id === rawTrack)) return fail(`No track "${rawTrack}".`);
+        target = { trackId: rawTrack };
+      }
+      if (where === "playhead" && chain.pasteOverlaps(root, items, at, target)) return fail("Can't paste at the playhead: a clip already occupies that gap on the receiving track.");
+      const newIds = items.map(() => newId("plc"));
+      return edit(cmd.pasteClips(items, at, newIds, where !== "playhead", { target, exact: where === "playhead" }), newIds);
     }
     case "add_clip": {
       const assetId = s("assetId"), t = n("startSec"), p = project();
