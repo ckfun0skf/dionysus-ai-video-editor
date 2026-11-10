@@ -5,6 +5,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { createProject } from "../domain";
 import { createMemoryStorage, readBlobBytes } from "../persistence";
 import { ago } from "./Projects";
+import { BUILD_INFO, formatBuildTime } from "./buildInfo";
 import { V2App } from "./V2App";
 
 beforeAll(() => {
@@ -127,5 +128,36 @@ describe("project list", () => {
     expect(im.querySelector('[role="alert"]')!.textContent).toMatch(/not a zip/);
     await act(async () => btn(im, "Close").click());
     expect(el.querySelector('[aria-label="Import project file"]')).toBeNull();
+  });
+
+  it("shows this build in the picker ⋯ menu and copies the SHA", async () => {
+    let copied = "";
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async (s: string) => { copied = s; } } });
+    const storage = createMemoryStorage();
+    const el = document.createElement("div"); document.body.appendChild(el);
+    await act(async () => createRoot(el).render(<V2App openStorage={async () => storage} />));
+    await wait();
+    await act(async () => btn(el, "Projects").click()); await wait();
+    const dlg = el.querySelector('[aria-label="Projects"][role="dialog"]')!;
+    const trigger = dlg.querySelector('[data-testid="v2-projects-build"]') as HTMLButtonElement;
+    expect(trigger).toBeTruthy();
+    expect(trigger.getAttribute("aria-label")).toBe("Build info");
+    await act(async () => trigger.click());
+    const menu = el.querySelector('[role="menu"][aria-label="Build info"]')!;
+    expect(menu).toBeTruthy();
+    const shaBtn = menu.querySelector('[data-testid="v2-build-sha"]') as HTMLButtonElement;
+    expect(shaBtn.className).toMatch(/v2-build-sha/);
+    expect(shaBtn.textContent).toContain(BUILD_INFO.shortSha);
+    if (BUILD_INFO.time) {
+      expect(menu.querySelector('[data-testid="v2-build-time"]')!.textContent).toBe(formatBuildTime(BUILD_INFO.time));
+    }
+    if (BUILD_INFO.run) {
+      expect(menu.querySelector('[data-testid="v2-build-run"]')!.textContent).toBe(`Run #${BUILD_INFO.run}`);
+    } else {
+      expect(menu.querySelector('[data-testid="v2-build-run"]')).toBeNull();
+    }
+    await act(async () => shaBtn.click());
+    expect(copied).toBe(BUILD_INFO.sha);
+    expect(shaBtn.textContent).toContain("Copied");
   });
 });

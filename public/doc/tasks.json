@@ -3222,6 +3222,12 @@
           "title": "HTML/code clip export resolves attached binary files (GLB and other files in the manifest) the same way live preview does: fetch() of a string or a Request (including a path rewritten against the parent page URL, as three.js FileLoader does) maps to the file's blob URL. Export waits for init, fonts, and in-flight attached-file fetches before capturing a frame. A failed decode or load posts dionysus:asset-error and the export dialog shows the message instead of silently using the clip's fallback.",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P56-BUILD-INFO",
+          "title": "Project picker header ⋯ shows this build: short commit SHA (7 chars, tap to copy, ≥44px monochrome row), build time in the viewer's local time, and the GitHub Actions run number when present. Values are injected at build time (vite define __BUILD_SHA__ / __BUILD_TIME__ / __BUILD_RUN__) from GITHUB_SHA and GITHUB_RUN_NUMBER, else git rev-parse HEAD, else \"dev\"; no workflow changes and no per-commit edits. dist/build.json writes the same fields.",
+          "status": "done",
+          "progress": 100
         }
       ]
     }
