@@ -4,6 +4,7 @@ import type { ProjectSummary, Storage } from "../ports";
 import { Ic } from "./Icon";
 import { SeriesSelect } from "./series/SeriesLibrary";
 import { ExportFileDialog, ImportFileDialog, openExportTarget, projectFileName, type ExportTarget } from "./ProjectFile";
+import { BUILD_INFO, formatBuildTime } from "./buildInfo";
 
 /** Human "updated" label: just now / 5 min ago / 3 h ago / date. */
 export function ago(iso: string, now = Date.now()) {
@@ -19,7 +20,8 @@ interface Props { storage: Storage; current: Project; onOpen: (id: string) => vo
 
 /**
  * Project list: new / open / import, and per project (⋯ menu, or right-click on desktop) export project file / rename /
- * delete. The open project can't be deleted; deletes are undoable.
+ * delete. The open project can't be deleted; deletes are undoable. The header ⋯ shows this build's SHA (tap to copy),
+ * time (viewer's local timezone) and GitHub run number when the app was built on Actions.
  */
 export function ProjectsDialog({ storage, current, onOpen, onRenameCurrent, onClose }: Props) {
   const [list, setList] = useState<ProjectSummary[]>();
@@ -29,12 +31,15 @@ export function ProjectsDialog({ storage, current, onOpen, onRenameCurrent, onCl
   const [menu, setMenu] = useState<{ id: string; x: number; y: number }>();
   const [exporting, setExporting] = useState<{ id: string; name: string; target: ExportTarget }>();
   const [importing, setImporting] = useState<File>();
+  const [about, setAbout] = useState<{ x: number; y: number }>();
+  const [copied, setCopied] = useState(false);
   /** P5: the Series a new project joins. */
   const [newSeries, setNewSeries] = useState<string>();
   const input = useRef<HTMLInputElement>(null);
   const picker = useRef<HTMLInputElement>(null);
   const menuEl = useRef<HTMLDivElement>(null);
-  const busy = !!(menu || exporting || importing);
+  const aboutEl = useRef<HTMLDivElement>(null);
+  const busy = !!(menu || about || exporting || importing);
   const refresh = async () => {
     const all = await storage.projects.list();
     // The open project may not be autosaved yet: show its live name/time.
@@ -44,12 +49,13 @@ export function ProjectsDialog({ storage, current, onOpen, onRenameCurrent, onCl
   useEffect(() => { void refresh(); }, [current.name]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { input.current?.select(); }, [editing]);
   useEffect(() => {
-    const k = (e: KeyboardEvent) => { if (e.key !== "Escape" || editing || exporting || importing) return; if (menu) setMenu(undefined); else onClose(); };
+    const k = (e: KeyboardEvent) => { if (e.key !== "Escape" || editing || exporting || importing) return; if (menu) setMenu(undefined); else if (about) setAbout(undefined); else onClose(); };
     window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k);
-  }, [editing, onClose, menu, exporting, importing]);
+  }, [editing, onClose, menu, about, exporting, importing]);
   useEffect(() => { menuEl.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus(); }, [menu]);
+  useEffect(() => { aboutEl.current?.querySelector<HTMLButtonElement>("button")?.focus(); }, [about]);
 
-  const openMenu = (id: string, x: number, y: number) => setMenu({ id, x: Math.max(8, Math.min(x, window.innerWidth - 218)), y: Math.max(8, Math.min(y, window.innerHeight - 160)) });
+  const openMenu = (id: string, x: number, y: number) => { setAbout(undefined); setMenu({ id, x: Math.max(8, Math.min(x, window.innerWidth - 218)), y: Math.max(8, Math.min(y, window.innerHeight - 160)) }); };
   /** Export runs from the tap itself: the desktop save picker must open before anything else is awaited. */
   const exportProject = async (id: string, name: string) => {
     setMenu(undefined);
@@ -77,7 +83,15 @@ export function ProjectsDialog({ storage, current, onOpen, onRenameCurrent, onCl
   return (
     <div className="v2-modal" role="dialog" aria-modal="true" aria-label="Projects">
       <div className="v2-modal-card v2-projects">
-        <div className="v2-panel-head v2-projects-head"><h2>Projects</h2><span className="v2-spacer" />
+        <div className="v2-panel-head v2-projects-head"><h2>Projects</h2>
+          <button className="v2-icon v2-project-build" aria-label="Build info" title="Build info" aria-haspopup="menu" aria-expanded={!!about} data-testid="v2-projects-build"
+            onClick={(e) => {
+              const r = e.currentTarget.getBoundingClientRect();
+              setMenu(undefined);
+              setCopied(false);
+              setAbout(about ? undefined : { x: Math.max(8, Math.min(r.right - 210, window.innerWidth - 218)), y: Math.max(8, Math.min(r.bottom + 4, window.innerHeight - 180)) });
+            }}><Ic g="⋯" /></button>
+          <span className="v2-spacer" />
           <button className="v2-btn" title="Import a .dionysus.zip project file" onClick={() => picker.current?.click()}><Ic g="⇪" size={16} /> Import</button>
           <button className="v2-btn primary" title="Start an empty project" onClick={() => void create()}><Ic g="＋" size={16} /> New project</button>
           <input ref={picker} type="file" accept=".zip,application/zip,application/x-zip-compressed" hidden aria-label="Project file to import" onChange={(e) => { const f = e.currentTarget.files?.[0]; e.currentTarget.value = ""; if (f) setImporting(f); }} />
@@ -119,6 +133,23 @@ export function ProjectsDialog({ storage, current, onOpen, onRenameCurrent, onCl
             </div>
           </div>;
         })()}
+        {about && (
+          <div className="v2-menu-backdrop v2-pmenu-backdrop" onPointerDown={() => setAbout(undefined)} onContextMenu={(e) => { e.preventDefault(); setAbout(undefined); }}>
+            <div ref={aboutEl} className="v2-layer-menu v2-pmenu v2-build-menu" role="menu" aria-label="Build info" style={{ left: about.x, top: about.y }} onPointerDown={(e) => e.stopPropagation()}>
+              <div className="v2-pmenu-title">This build</div>
+              <div className="v2-build-heading">This build</div>
+              <button type="button" role="menuitem" className="v2-build-sha" data-testid="v2-build-sha" aria-label={`Copy commit ${BUILD_INFO.shortSha}`}
+                onClick={() => {
+                  void navigator.clipboard?.writeText(BUILD_INFO.sha).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1200); }, () => undefined);
+                }}>
+                <Ic g="⎘" size={16} /><span>{copied ? "Copied" : BUILD_INFO.shortSha}</span>
+              </button>
+              {!!BUILD_INFO.time && <div className="v2-build-meta" data-testid="v2-build-time">{formatBuildTime(BUILD_INFO.time)}</div>}
+              {!!BUILD_INFO.run && <div className="v2-build-meta" data-testid="v2-build-run">Run #{BUILD_INFO.run}</div>}
+              <button type="button" role="menuitem" className="v2-pmenu-cancel" onClick={() => setAbout(undefined)}>Close</button>
+            </div>
+          </div>
+        )}
         {exporting && <ExportFileDialog fileName={projectFileName(exporting.name)} target={exporting.target} blobs={storage.blobs}
           load={async () => (exporting.id === current.id ? current : storage.projects.load(exporting.id))} onClose={() => setExporting(undefined)} />}
         {importing && <ImportFileDialog file={importing} storage={storage} current={current} onDone={() => void refresh()} onOpen={(id) => { setImporting(undefined); onOpen(id); }} onClose={() => setImporting(undefined)} />}

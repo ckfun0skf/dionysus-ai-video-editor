@@ -1,8 +1,10 @@
 import { defineConfig, runnerImport, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
+import { execSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { buildSiteUrl } from "./src/v2/domain/siteUrl";
+import { readBuildStamp } from "./src/v2/buildStamp";
 
 const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8")) as { version: string };
 
@@ -12,6 +14,8 @@ const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), 
  * the GitHub Pages project site (DEFAULT_SITE_URL) is used. `--base` on the CLI still overrides the path.
  */
 const SITE_URL = buildSiteUrl(process.env.DIONYSUS_SITE_URL);
+/** P56: SHA / time / run baked into the UI. Actions sets GITHUB_SHA and GITHUB_RUN_NUMBER automatically. */
+const BUILD = readBuildStamp(process.env, () => execSync("git rev-parse HEAD", { encoding: "utf8" }));
 
 /** What the plugin uses from src/v2/domain/aiGuide.ts (declared here so tsconfig.node does not type-check the app). */
 interface AiGuideModule {
@@ -40,6 +44,7 @@ function aiFilesPlugin(): Plugin {
       site = buildSiteUrl(process.env.DIONYSUS_SITE_URL, c.base);
     },
     async closeBundle() {
+      writeFileSync(resolve(outDir, "build.json"), `${JSON.stringify({ sha: BUILD.sha, time: BUILD.time, run: BUILD.run })}\n`);
       // Loaded through Vite's module runner (not a plain import) so the preset modules' import.meta.glob discovery works.
       const { module } = await runnerImport<AiGuideModule>(resolve(root, "src/v2/domain/aiGuide.ts"), { configFile: false, root, logLevel: "warn" });
       const { aiGuideFiles, FORMAT_DOC_SOURCE, CLIP_DOC_SOURCE, AUDIO_DOC_SOURCE, PRESET_PROBLEMS } = module;
@@ -64,6 +69,9 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(pkg.version),
     // Public site the in-app AI prompt falls back to on localhost/LAN, where an outside AI can't open links.
     __DIONYSUS_SITE_URL__: JSON.stringify(SITE_URL),
+    __BUILD_SHA__: JSON.stringify(BUILD.sha),
+    __BUILD_TIME__: JSON.stringify(BUILD.time),
+    __BUILD_RUN__: JSON.stringify(BUILD.run),
   },
   server: {
     host: "0.0.0.0",

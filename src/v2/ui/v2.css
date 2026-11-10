@@ -217,6 +217,12 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 /* V2-CUT-PROJ: project ⋯ menu, import button, export/import progress dialogs. */
 .v2-projects-head { gap: 6px; flex-wrap: wrap; }
 .v2-projects-head .v2-btn { min-height: 40px; display: inline-flex; align-items: center; gap: 6px; }
+.v2-projects-head .v2-project-build { min-width: 44px; min-height: 44px; display: grid; place-items: center; color: var(--text, #e8e8ec); }
+.v2-build-menu { min-width: 210px; }
+.v2-build-heading { padding: 8px 12px 4px; color: var(--muted); font-size: 12px; }
+.v2-build-sha { min-height: 44px; color: inherit; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.v2-build-sha .v2-ic { color: inherit; }
+.v2-build-meta { min-height: 44px; display: flex; align-items: center; padding: 0 12px; color: var(--muted); font-size: 13px; }
 .v2-pmenu { z-index: 71; }
 .v2-pmenu .v2-ic { vertical-align: -3px; margin-right: 6px; }
 .v2-pmenu button { display: flex; align-items: center; }
@@ -232,6 +238,7 @@ html, body, #root { margin: 0; height: 100%; background: #111; }
 .v2-pfile .v2-modal-actions { flex-wrap: wrap; }
 @media (max-width: 480px) {
   .v2-projects-head .v2-btn { min-height: 44px; }
+  .v2-build-heading { display: none; }
   /* Phones: the ⋯ menu is a bottom sheet (CapCut-style) with the project name and a Cancel row. */
   .v2-pmenu-backdrop { background: rgba(0,0,0,.45); }
   .v2-layer-menu.v2-pmenu { left: 0 !important; right: 0; top: auto !important; bottom: 0; width: auto; max-width: none; border-radius: 16px 16px 0 0; padding: 8px 12px calc(12px + env(safe-area-inset-bottom)); }
