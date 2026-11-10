@@ -1,7 +1,7 @@
 /** Command factories for the MVP timeline. Each wraps a pure domain op. */
 import { setLink } from "../domain/links";
 import type { Command } from "./engine";
-import { DEFAULT_EFFECT_TICKS, DEFAULT_IMAGE_TICKS, findPlacement, newId, sourceInMax, trackKindFor, type Asset, type AssetVersion, type Composition, type Placement, type Project, type TrackKind, transformOf } from "../domain/model";
+import { DEFAULT_EFFECT_TICKS, DEFAULT_IMAGE_TICKS, findPlacement, newId, sourceInMax, trackKindFor, type Asset, type AssetVersion, type Composition, type MediaRef, type Placement, type Project, type TrackKind, transformOf } from "../domain/model";
 import * as ops from "../domain/ops";
 import * as clipRange from "../domain/clipRange";
 import * as slipOps from "../domain/slip";
@@ -14,6 +14,7 @@ import * as chain from "../domain/chain";
 import * as transitions from "../domain/transitions";
 import { codeAssetOf, codeRoleIssue } from "../domain/codeRoles";
 import * as cleanupOps from "../domain/cleanup";
+import * as clipVersion from "../domain/clipVersion";
 import * as tracking from "../domain/tracking";
 import { canMask, maskErrors, type ClipMask } from "../domain/mask";
 /** P38: throw when a "code:<assetId>" preset/kind names an asset of another role. */
@@ -302,6 +303,20 @@ export const setSlipRange = (id: string, inTicks: number, outTicks: number): Com
 export const replaceClipAsset = (id: string, assetId: string, onShort?: slipOps.OnShort): Command => ({
   label: "Replace asset", apply: (p) => { const r = slipOps.replaceClipAsset(p, id, assetId, onShort); if (!r.ok) throw new Error(r.error); return r.project; },
 });
+/** P58: pin one clip to a version of its asset (`null` = follow the storyboard's current version). */
+export const setClipVersion = (clipId: string, versionId: string | null): Command => ({
+  label: versionId ? "Set clip version" : "Follow storyboard",
+  apply: (p) => clipVersion.setClipVersion(p, clipId, versionId).project,
+});
+/** P58: add a new shot version from a timeline clip and pin it to that clip only. */
+export const addStoryVersionFromClip = (clipId: string, media: MediaRef, opts: { versionId?: string; fit?: clipVersion.FitChoice; inSec?: number; ripple?: boolean } = {}): Command => ({
+  label: "Add version",
+  apply: (p) => {
+    const r = clipVersion.addStoryVersionFromClip(p, clipId, media, opts);
+    if (!r.ok) throw new Error(r.error);
+    return r.project;
+  },
+});
 /** P3A-23: join two adjacent clips at a matched frame pair (A's out, B's in), one undo step. */
 export const matchJoin = (aId: string, bId: string, aOut: number, bIn: number): Command => ({
   label: "Match frames", apply: (p) => withRoot(p, (c) => clipRange.matchJoin(c, aId, bId, aOut, bIn)),
@@ -570,6 +585,11 @@ export const removeStoryboard = (): Command => ({ label: "Remove storyboard", ap
 /** P15: dismiss a frameOf slot's "source shot changed" warning for the source shot's current version only. */
 export const dismissFrameWarning = (slotId: string): Command => ({ label: "Dismiss frame warning", apply: (p) => board.dismissFrameWarning(p, slotId) });
 export const addStoryVersion = (...args: Parameters<typeof board.addStoryVersion> extends [unknown, ...infer R] ? R : never): Command => ({ label: "Upload version", apply: (p) => board.addStoryVersion(p, ...args) });
+/** P58: remove one version of an asset; clips that used it switch to `fallbackId` (or the current / newest remaining). */
+export const deleteAssetVersion = (assetId: string, versionId: string, fallbackId?: string): Command => ({
+  label: "Delete version",
+  apply: (p) => clipVersion.deleteAssetVersion(p, assetId, versionId, fallbackId),
+});
 export const selectStoryVersion = (assetId: string, versionId: string): Command => ({ label: "Choose version", apply: (p) => board.selectStoryVersion(p, assetId, versionId) });
 /**
  * V2-SB-121: upload a shot clip longer than planned, either trimmed (`trim`) or kept whole (`keepFullSec` extends

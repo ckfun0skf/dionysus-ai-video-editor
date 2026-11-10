@@ -8,7 +8,7 @@ import { audioClipAsset } from "../audioClipAsset";
 import { blobText } from "../AssetPreview";
 import { bindingRefsOf } from "../CleanupDialog";
 import { captureFrameAt, storePickedFrame } from "../storyboard/frameCapture";
-import { cleanup, DEFAULT_SOURCE, INPUT_TYPES, readManifest, resolveSource, versionOf, codePresetId, codeRoleIssue, transitions, audioOutputOf, board, chain, edit as editDomain, mergeLayer, ops, promote, findPlacement, slip, subs, newId, audioClipPrompt, parseAudioClip, runtimeAiLinks, panToAzimuth, positionErrors, secondsToTicks, TICKS_PER_SECOND, timelineReview, text as T, words as W, type Placement, type Project } from "../../domain";
+import { cleanup, clipVersion, DEFAULT_SOURCE, INPUT_TYPES, readManifest, resolveSource, versionOf, codePresetId, codeRoleIssue, transitions, audioOutputOf, board, chain, edit as editDomain, mergeLayer, ops, promote, findPlacement, slip, subs, newId, audioClipPrompt, parseAudioClip, runtimeAiLinks, panToAzimuth, positionErrors, secondsToTicks, TICKS_PER_SECOND, timelineReview, text as T, words as W, type Placement, type Project } from "../../domain";
 
 import { getPreset, listPresets } from "../../registry";
 import { tracking, sourceAt, ticksToSeconds, masking, type Box, type MotionTrack, type NamedTrack, type TrackMask } from "../../domain";
@@ -464,12 +464,18 @@ export async function runTimelineTool(engine: Engine, source: FrameSource | unde
       const id = needClip(); if (typeof id !== "string") return id;
       const assetId = s("assetId"); if (!assetId) return fail('"assetId" is required.');
       const onShort = a.onShort === "shorten" || a.onShort === "hold" ? a.onShort : undefined;
-      // P27: a storyboard shot's main-track clip gets the asset as a new version of the shot (the timeline follows it).
+      const fit = a.fit === "trim" || a.fit === "full" ? a.fit : undefined;
+      const inSec = n("inSec");
+      const ripple = a.ripple === true;
+      // P58: a storyboard shot's main-track clip gets the asset as a new version pinned to this clip.
       const story = slip.storyTargetOf(project(), id), pick = story && slip.replaceVersion(project(), assetId);
       if (story && pick) {
         const want = project().assets[assetId]?.kind, have = project().assets[findPlacement(rootOf(project()), id)!.placement.source.assetId]?.kind;
         if (want !== have) return fail(`Asset ${assetId} is ${want ?? "missing"}; clip ${id} needs ${have}.`);
-        return edit(cmd.addStoryVersion(story.target, pick.media), id);
+        const r = clipVersion.addStoryVersionFromClip(project(), id, pick.media, { fit, inSec, ripple });
+        if (!r.ok) return fail(r.error);
+        const res = edit(cmd.addStoryVersionFromClip(id, pick.media, { fit, inSec, ripple }), id);
+        return r.note ? { ...res, text: `${res.text}\n${r.note}` } : res;
       }
       const r = slip.replaceClipAsset(project(), id, assetId, onShort);
       if (!r.ok) return fail(r.needsChoice ? `${r.error} Call again with onShort: "shorten" (clip ends with the new source) or "hold" (keep the length and freeze the last frame).` : r.error);
@@ -635,6 +641,23 @@ export async function runTimelineTool(engine: Engine, source: FrameSource | unde
       const id = needClip(); if (typeof id !== "string") return id;
       if (!findPlacement(rootOf(project()), id)!.placement.mask) return fail(`Clip ${id} has no visibility mask.`);
       return edit(cmd.setClipMask(id, null), id);
+    }
+    case "set_clip_version": {
+      const id = needClip(); if (typeof id !== "string") return id;
+      if (!("versionId" in a)) return fail('"versionId" is required (a version id, or null to follow the storyboard).');
+      const versionId: string | null = a.versionId === null || a.versionId === "" ? null : typeof a.versionId === "string" ? a.versionId : "";
+      if (versionId === "") return fail('"versionId" must be a version id or null.');
+      try { clipVersion.setClipVersion(project(), id, versionId); } catch (err) { return fail(err instanceof Error ? err.message : String(err)); }
+      return edit(cmd.setClipVersion(id, versionId), id);
+    }
+    case "delete_version": {
+      const assetId = s("assetId"); if (!assetId) return fail('"assetId" is required.');
+      const versionId = s("versionId"); if (!versionId) return fail('"versionId" is required.');
+      const plan = clipVersion.versionDeletePlan(project(), assetId, versionId);
+      if (!plan.ok) return fail(plan.error);
+      const fallback = s("fallbackVersionId");
+      const changed = engine.dispatch(cmd.deleteAssetVersion(assetId, versionId, fallback), name);
+      return { ok: true, changed, text: JSON.stringify({ deleted: versionId, fallback: fallback && project().assets[assetId]?.versions.some((v) => v.id === fallback) ? fallback : plan.fallbackId, affected: plan.affected, mediaRemoved: plan.dropKeys.length > 0 }, null, 1) };
     }
     case "word_align_prompt": {
       const id = needClip(); if (typeof id !== "string") return id;

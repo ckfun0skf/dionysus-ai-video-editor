@@ -1599,3 +1599,14 @@ select.v2-tp-field { -webkit-appearance: none; appearance: none; padding-right: 
 .v2-mask .v2-seg button { min-height: 44px; }
 .v2-mask select { min-height: 44px; background: transparent; color: inherit; border: 1px solid var(--line); border-radius: 8px; padding: 0 8px; }
 .v2-mask .v2-btn { min-height: 44px; }
+
+/* P58: per-clip version picker */
+.v2-cver { display: grid; gap: 8px; }
+.v2-cver-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: stretch; }
+.v2-cver-item { min-height: 44px; justify-content: flex-start; text-align: left; }
+.v2-cver-item.is-on { border-color: var(--accent); background: rgba(120,180,255,.12); }
+.v2-cver-del { min-height: 44px; min-width: 44px; }
+.v2-cver-warn, .v2-cver-confirm { border: 1px solid #e0a43a; background: rgba(224,164,58,.12); border-radius: 8px; padding: 10px; display: grid; gap: 8px; }
+.v2-cver-confirm p, .v2-cver-warn { margin: 0; }
+.v2-cver-confirm ul { margin: 0; padding-left: 1.2em; }
+.v2-cver-sec { margin-bottom: 14px; display: grid; gap: 6px; }

@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { board, cleanParamDecls, htmlClipPackagePrompt, readManifest, resolveHtmlParams, type HtmlClipParam, type HtmlParamValues, lintHtmlClip, runtimeAiLinks, slotBindings, slotPackageInput, story, storyRefs, TICKS_PER_SECOND, type AssetSlot, type AssetVersion, type MediaKind, type MediaRef, type Project, type Shot } from "../../domain";
+import { board, cleanParamDecls, clipVersion, htmlClipPackagePrompt, readManifest, resolveHtmlParams, type HtmlClipParam, type HtmlParamValues, lintHtmlClip, runtimeAiLinks, slotBindings, slotPackageInput, story, storyRefs, TICKS_PER_SECOND, type AssetSlot, type AssetVersion, type MediaKind, type MediaRef, type Project, type Shot } from "../../domain";
 import { cmd, type Command, type Engine } from "../../engine";
 import { importFile } from "../../persistence";
 import { CLIP_LIBRARIES } from "../../render";
@@ -26,6 +26,7 @@ import { CopyButton } from "./StoryImport";
 import { AudioTrim } from "./AudioTrim";
 import { StoryAssetPicker, type LibraryEntry } from "./StoryAssetPicker";
 import { TrimPicker } from "./TrimPicker";
+import { VersionDeleteConfirm } from "../ClipVersionPicker";
 import { series as S } from "../../domain";
 import { seriesStore, useSeries } from "../series/seriesStore";
 
@@ -64,6 +65,7 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, player, mo
   const [audioTrim, setAudioTrim] = useState<{ clip: Blob; version: AssetVersion }>();
   /** P4A: the Audio editor (source: a version's JSON to edit; none: a new clip). Saving adds a version. */
   const [audioFor, setAudioFor] = useState<{ source?: string }>();
+  const [deleteAsk, setDeleteAsk] = useState<{ versionId: string; plan: Extract<ReturnType<typeof clipVersion.versionDeletePlan>, { ok: true }> }>();
   const modelList = useId();
   const models = board.usedModels(project);
   useEffect(() => { if (!refNote) return; const t = setTimeout(() => setRefNote(undefined), 6000); return () => clearTimeout(t); }, [refNote]);
@@ -326,12 +328,28 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, player, mo
                     {kind === "audio" && !!v.media.durationTicks && <button className="v2-btn v2-sb-trimbtn" disabled={!!busy} aria-label={`Trim v${i + 1}`} title="Choose the part of the audio to use" onClick={() => trimAudio(v)}><Ic g="✂" size={14} /> {aSpan ? "Adjust trim" : "Trim"}</button>}
                   </span>}
                   {canTrim && <button className="v2-btn v2-sb-trimbtn" disabled={!!busy} onClick={() => adjustTrim(v)} aria-label={`Adjust trim of v${i + 1}`} title={shot ? "Choose which part of the clip the shot uses" : "Choose which part of the clip its layers start from"}><Ic g="✂" size={14} /> {trimmed ? "Adjust trim" : "Trim"}</button>}
+                  {owner.assetId && <button className="v2-btn v2-sb-trimbtn" data-testid={`story-version-delete-${v.id}`} disabled={!!busy || versions.length <= 1}
+                    aria-label={`Delete v${i + 1}`} title={versions.length <= 1 ? "Cannot delete the last remaining version" : "Remove this version from the project"}
+                    onClick={() => {
+                      const plan = clipVersion.versionDeletePlan(project, owner.assetId!, v.id);
+                      if (!plan.ok) { setErr(plan.error); return; }
+                      setDeleteAsk({ versionId: v.id, plan });
+                    }}><Ic g="🗑" size={14} /> Delete</button>}
                 </li>
               );
             })}
           </ul>
         ) : null}
         {(() => { const pi = versions.findIndex((x) => x.id === peek), pvv = versions[pi]; return pvv ? <div className="v2-sb-vpreview"><AssetPreview kind={kind as PreviewKind} name={`${title} v${pi + 1}`} cacheKey={pvv.id} load={() => blobs.get(pvv.media.blobKey)} durationSec={kind === "html" ? (shot?.durationSec ?? (pvv.media.durationTicks ? pvv.media.durationTicks / TICKS_PER_SECOND : undefined)) : pvv.media.durationTicks ? pvv.media.durationTicks / TICKS_PER_SECOND : undefined} width={pvv.media.width ?? project.settings?.width} height={pvv.media.height ?? project.settings?.height} range={shot && kind === "video" ? peekRange(pvv) : undefined} params={kind === "html" ? htmlParams : undefined} mixUnderlay={kind === "html" ? htmlMix : undefined} mixPlacement={kind === "html" ? htmlPl : undefined} /></div> : null; })()}
+        {deleteAsk && owner.assetId && (
+          <VersionDeleteConfirm
+            plan={deleteAsk.plan}
+            versionLabel={`v${versions.findIndex((x) => x.id === deleteAsk.versionId) + 1}`}
+            fallbackLabel={`v${versions.findIndex((x) => x.id === deleteAsk.plan.fallbackId) + 1}`}
+            onConfirm={() => { engine.dispatch(cmd.deleteAssetVersion(owner.assetId!, deleteAsk.versionId)); setDeleteAsk(undefined); }}
+            onCancel={() => setDeleteAsk(undefined)}
+          />
+        )}
         {versions.length || slot?.source.type === "frameOf" ? null : <p className="v2-hint">{lf ? `Nothing yet. Use the last frame of shot ${shotNo(lf)} once it has a clip, or upload an image.` : `Nothing yet. ${slot?.source.type === "upload" ? "Upload your file" : jsonAudio ? "Copy the prompt below to your AI and paste its JSON reply, or create it in the Audio editor" : "Generate it in your AI tool with the prompt below"}, then add it here.`}</p>}
         {slot && pins.length > 0 && versions.length > 1 && <p className="v2-hint">{pins.length > 1 ? "Shots" : "Shot"} {pins.map((x) => shotNo(x.shot)).join(", ")} {pins.length > 1 ? "keep their" : "keeps its"} pinned version when you pick another one here.</p>}
         {shot && board.shotLengthMismatch(project, shot) && <p className="v2-sb-lenline"><LengthWarn project={project} shot={shot} /></p>}

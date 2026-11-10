@@ -155,6 +155,12 @@ export interface Placement {
   /** P10-SYNC: storyboard layer id this clip was sent as ("captions" for a caption cue), so Sync to Storyboard writes it back. */
   storyLayer?: string;
   storyLink?: { anchor: string; want?: { offset: number; duration: number; clampedOffset: number; clampedDuration: number } };
+  /**
+   * P58: pin this clip to one version of its asset. Present = stay on that version when the storyboard
+   * current version changes (split halves / pasted copies of the same shot pick independently). Absent =
+   * follow `asset.selectedVersionId`. A pin to a version that no longer exists falls back to the current version.
+   */
+  versionId?: string;
 }
 
 /** Placeholder source of text clips: they reference no asset. */
