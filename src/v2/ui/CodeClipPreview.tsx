@@ -81,7 +81,7 @@ export function useHtmlClipPreview({
     onErrorRef.current(null);
     const onMsg = (e: MessageEvent) => {
       if (e.source !== frame.current?.contentWindow || !e.data || typeof e.data !== "object") return;
-      const d = e.data as { type?: string; bmp?: ImageBitmap; message?: string; stack?: string };
+      const d = e.data as { type?: string; bmp?: ImageBitmap; message?: string; stack?: string; messages?: unknown };
       if (d.type === "dionysus:ready") {
         ready.current = true;
         frame.current?.contentWindow?.postMessage({
@@ -97,6 +97,10 @@ export function useHtmlClipPreview({
       }
       if (d.type === "dionysus:error") {
         onErrorRef.current({ message: String(d.message ?? "Error"), line: scriptLineOf(String(d.stack ?? ""), scriptLine) });
+      }
+      if (d.type === "dionysus:asset-error") {
+        const text = Array.isArray(d.messages) ? d.messages.map(String).filter(Boolean).join(" ") : "";
+        if (text) onErrorRef.current({ message: text });
       }
     };
     addEventListener("message", onMsg);

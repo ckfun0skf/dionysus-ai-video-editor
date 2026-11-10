@@ -39,8 +39,8 @@ import { BufferGate, clipLoadOf, idleCap, idleEvictions, loadSignature, mediaSta
 const PRELOAD_TICKS = 2 * TICKS_PER_SECOND;
 
 type MediaEl = HTMLVideoElement | HTMLAudioElement | HTMLImageElement;
-/** Frame problems found while rendering offline: HTML clip timeouts/invalid frames, video frames with no picture. */
-export type RenderIssue = FrameIssue | "blank";
+/** Frame problems found while rendering offline: HTML clip timeouts/invalid frames, attached-file failures, video frames with no picture. */
+export type RenderIssue = FrameIssue | "blank" | "asset";
 type RVFCVideo = HTMLVideoElement & { requestVideoFrameCallback?: (cb: () => void) => number; cancelVideoFrameCallback?: (id: number) => void };
 
 export class Player {
@@ -48,7 +48,8 @@ export class Player {
   private resolvedUrls = new Map<string, string>();
   private pool = new Map<string, MediaEl>();
   /** HTML clip frames that timed out or were rejected during renderAt (export reports these). */
-  frameIssues: { placementId: string; t: number; issue: RenderIssue }[] = [];
+  frameIssues: { placementId: string; t: number; issue: RenderIssue; detail?: string }[] = [];
+  private notedAssets = new Set<string>();
   /**
    * Export mode. Video clips are decoded frame-accurately with WebCodecs (`exportVideo`); clips it can't handle
    * fall back to media elements kept in the DOM (Android/iOS don't decode frames for detached, never-played
@@ -822,6 +823,10 @@ export class Player {
       if (!live.has(id)) continue;
       const issue: FrameIssue | undefined = !h.host.settled() ? "timeout" : h.host.issue;
       if (issue) this.frameIssues.push({ placementId: id, t: this.time, issue });
+      if (h.host.assetErrors.length && !this.notedAssets.has(id)) {
+        this.notedAssets.add(id);
+        this.frameIssues.push({ placementId: id, t: this.time, issue: "asset", detail: [...new Set(h.host.assetErrors)].join(" ") });
+      }
     }
   }
 

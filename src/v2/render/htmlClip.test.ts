@@ -198,5 +198,101 @@ describe("html clips", () => {
     const w = frameWarnings(p, [{ placementId: "x", t: 240000, issue: "timeout" }, { placementId: "x", t: 120000, issue: "timeout" }, { placementId: "x", t: 360000, issue: "invalid" }]);
     expect(w).toEqual(["scene.html: 2 frames timed out (4 s), 1 invalid frame, first at 1.00 s. Those frames reuse the last good image (or are blank)."]);
     expect(frameWarnings(p, [])).toEqual([]);
+    expect(frameWarnings(p, [{ placementId: "x", t: 0, issue: "asset", detail: "Couldn't load attached file \"model.glb\"." }])).toEqual([
+      "scene.html: Couldn't load attached file \"model.glb\". The clip used its fallback instead of failing the export silently.",
+    ]);
+  });
+
+  it("decodes an attached binary, remaps fetch(Request) to its blob URL, and waits before the first frame", async () => {
+    const bytes = Uint8Array.from([0x67, 0x6c, 0x54, 0x46, 0x02, 0x00, 0x00, 0x00]);
+    const dataUrl = `data:model/gltf-binary;base64,${Buffer.from(bytes).toString("base64")}`;
+    const created: Blob[] = [];
+    const origCreate = URL.createObjectURL.bind(URL);
+    const spy = vi.spyOn(URL, "createObjectURL").mockImplementation((obj: Blob | MediaSource) => {
+      if (obj instanceof Blob) created.push(obj);
+      return origCreate(obj);
+    });
+    try {
+      let release!: () => void;
+      const gate = new Promise<void>((r) => { release = r; });
+      const inner: string[] = [];
+      const w: Record<string, unknown> = {};
+      const msgs: unknown[] = [];
+      let listener: ((e: unknown) => void) | undefined;
+      const parent = { postMessage: (m: unknown) => msgs.push(m) };
+      class MO { observe() {} }
+      class XHR {} (XHR.prototype as unknown as { open: () => void }).open = () => {};
+      w.fetch = async (input: RequestInfo) => {
+        const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
+        inner.push(url);
+        await gate;
+        return new Response(bytes, { status: 200, headers: { "Content-Type": "model/gltf-binary" } });
+      };
+      const parts: Uint8Array[] = [];
+      class CaptureBlob extends Blob {
+        constructor(init: BlobPart[] = [], opts?: BlobPropertyBag) {
+          super(init, opts);
+          const first = init[0];
+          if (first instanceof Uint8Array) parts.push(first);
+        }
+      }
+      const fn = new Function("window", "performance", "Date", "Math", "addEventListener", "parent", "document", "MutationObserver", "XMLHttpRequest", "URL", "Blob", "atob", "createImageBitmap",
+        `const M=${JSON.stringify({ files: { "model.glb": dataUrl } })};${HTML_RUNTIME_JS}`);
+      fn(w, { now: () => 0 }, Date, Object.create(Math), (ev: string, f: (e: unknown) => void) => { if (ev === "message") listener = f; }, parent, { querySelector: () => null }, MO, XHR, URL, CaptureBlob, atob, undefined);
+      expect(created[0]?.type).toBe("model/gltf-binary");
+      expect(parts[0]).toBeDefined();
+      expect([...parts[0]!]).toEqual([...bytes]);
+
+      let rendered = false;
+      (w.dionysus as { clip: (d: object) => void }).clip({
+        init: async (ctx: { asset: (n: string) => string | null }) => {
+          expect(ctx.asset("model.glb")?.startsWith("blob:")).toBe(true);
+          // Fire-and-forget, like three.js loader.load: the runtime must wait before render.
+          void (w.fetch as typeof fetch)(new Request("https://parent.example/app/model.glb"));
+        },
+        render: () => { rendered = true; },
+      });
+      const post = async (data: object) => { await listener!({ data, source: parent }); };
+      await post({ type: "dionysus:init", width: 64, height: 64 });
+      const frame = post({ type: "dionysus:frame", seq: 1, t: 0 });
+      for (let i = 0; i < 20 && !inner.length; i++) await tick();
+      expect(inner).toHaveLength(1);
+      expect(inner[0].startsWith("blob:")).toBe(true);
+      expect(rendered).toBe(false);
+      release();
+      await frame;
+      expect(rendered).toBe(true);
+    } finally { spy.mockRestore(); }
+  });
+
+  it("reports a failed attached-file load instead of failing silently", async () => {
+    const dataUrl = "data:model/gltf-binary;base64,AAAA";
+    const w: Record<string, unknown> = {};
+    const msgs: unknown[] = [];
+    let listener: ((e: unknown) => void) | undefined;
+    const parent = { postMessage: (m: unknown) => msgs.push(m) };
+    class MO { observe() {} }
+    class XHR {} (XHR.prototype as unknown as { open: () => void }).open = () => {};
+    w.fetch = async () => new Response("missing", { status: 404, statusText: "Not Found" });
+    const fn = new Function("window", "performance", "Date", "Math", "addEventListener", "parent", "document", "MutationObserver", "XMLHttpRequest", "URL", "Blob", "atob", "createImageBitmap",
+      `const M=${JSON.stringify({ files: { "model.glb": dataUrl } })};${HTML_RUNTIME_JS}`);
+    fn(w, { now: () => 0 }, Date, Object.create(Math), (ev: string, f: (e: unknown) => void) => { if (ev === "message") listener = f; }, parent, { querySelector: () => null }, MO, XHR, URL, Blob, atob, undefined);
+    (w.dionysus as { clip: (d: object) => void }).clip({
+      init: async () => { await (w.fetch as typeof fetch)("model.glb"); },
+      render: () => undefined,
+    });
+    const post = async (data: object) => { await listener!({ data, source: parent }); };
+    await post({ type: "dionysus:init", width: 64, height: 64 });
+    await post({ type: "dionysus:frame", seq: 1, t: 0 });
+    expect(msgs.filter((m) => (m as { type: string }).type === "dionysus:asset-error")).toEqual([
+      { type: "dionysus:asset-error", messages: ["Couldn't load attached file \"model.glb\"."] },
+    ]);
+
+    const host = new HtmlClipHost(Promise.resolve("<canvas></canvas>"), 64, 64, () => undefined);
+    await tick();
+    const win = host.iframe.contentWindow!;
+    window.dispatchEvent(new MessageEvent("message", { data: { type: "dionysus:asset-error", messages: ["Couldn't load attached file \"model.glb\"."] }, source: win }));
+    expect(host.assetErrors).toEqual(["Couldn't load attached file \"model.glb\"."]);
+    host.dispose();
   });
 });
