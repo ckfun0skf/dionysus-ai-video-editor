@@ -1,6 +1,7 @@
 // Shared chrome for Code AI mode (P4B) and Revise with AI (P44): the same step nav, progress and footer.
 import type { ReactNode } from "react";
 import { Ic as Icon } from "./Icon";
+import { preventFileNav } from "./fileDrop";
 
 export interface WizardStep { id: string; label: string }
 
@@ -28,7 +29,7 @@ export function CodeWizardShell({ mobile, ariaLabel, title, steps, step, onStep,
   const nextBlocked = stepIssues.length > 0 || (!last && blockedFrom(idx + 1));
   const quiet = quietSteps?.includes(step);
   return (
-    <div className={`v2-code-editor v2-ce v2-cw ${mobile ? "is-mobile" : ""}`} role="dialog" aria-modal="true" aria-label={ariaLabel}>
+    <div className={`v2-code-editor v2-ce v2-cw ${mobile ? "is-mobile" : ""}`} role="dialog" aria-modal="true" aria-label={ariaLabel} {...preventFileNav}>
       <header className="v2-ce-bar">
         <button type="button" className="v2-btn v2-ce-icon" aria-label="Back to the Code Editor" title="Back to the Code Editor" onClick={onClose}><Icon g="✕" /></button>
         <span className="v2-ce-title">

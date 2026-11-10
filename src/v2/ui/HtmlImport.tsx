@@ -4,11 +4,12 @@
  * chosen (phones: the system picker) or, on desktop, dropped on the box. Validation runs as you type; errors block
  * "Add as new version", warnings don't.
  */
-import { useMemo, useState, type DragEvent } from "react";
+import { useMemo, useState } from "react";
 import { extractHtml, HTML_CLIP_ZIP_SUFFIX, lintHtmlClip, type BindingType, type HtmlClipIssue, type HtmlClipParam } from "../domain";
 import { CLIP_LIBRARIES } from "../render";
 import { exportHtmlFile, exportHtmlZip, HTML_IMPORT_ACCEPT, importHtmlPackage, packageBaseName } from "./htmlPackage";
 import { saveFile } from "./saveFile";
+import { useFileDrag } from "./fileDrop";
 
 /** Errors first, then warnings; each with its code for the spec's table. */
 export function ClipIssues({ issues, testId = "v2-clip-issues" }: { issues: readonly HtmlClipIssue[]; testId?: string }) {
@@ -60,7 +61,8 @@ export function HtmlImport({ expectBindings, expectParams, expectSource, onAdd, 
   const [text, setText] = useState("");
   const [file, setFile] = useState<{ name: string; html: string }>();
   const [err, setErr] = useState("");
-  const [drag, setDrag] = useState(false);
+  const fileDrop = useFileDrag((files) => { void load(files[0]); });
+  const drag = fileDrop.over;
   const html = file?.html ?? (text.trim() ? extractHtml(text) ?? "" : "");
   const lint = useMemo(() => (html ? lintHtmlClip(html, { libs: CLIP_LIBRARIES, expectBindings, expectParams, expectSource }) : undefined), [html, expectBindings, expectParams, expectSource]);
   const blocked = !text.trim() && !file;
@@ -77,7 +79,6 @@ export function HtmlImport({ expectBindings, expectParams, expectSource, onAdd, 
     try { const t = await navigator.clipboard.readText(); setFile(undefined); setText(t); if (!t.trim()) setErr("The clipboard is empty."); }
     catch { setErr("Couldn't read the clipboard; long-press the box and paste instead."); }
   };
-  const onDrop = (e: DragEvent) => { e.preventDefault(); setDrag(false); void load(e.dataTransfer.files?.[0]); };
   const add = async () => {
     if (!lint?.ok) return;
     await onAdd(html, file?.name.replace(/(\.dionysus-html)?\.(zip|html?)$/i, "") || lint.manifest.name || "clip");
@@ -85,8 +86,7 @@ export function HtmlImport({ expectBindings, expectParams, expectSource, onAdd, 
   };
 
   return (
-    <div className={`v2-html-import ${drag ? "is-drag" : ""}`} data-testid="v2-html-import"
-      onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); setDrag(true); } }} onDragLeave={() => setDrag(false)} onDrop={onDrop}>
+    <div className={`v2-html-import ${drag ? "is-drag" : ""}`} data-testid="v2-html-import" {...fileDrop.handlers}>
       {dropHint && !file && <div className="v2-html-dropzone" aria-hidden><b>Drop the .zip or .html here</b><span>or choose the file the AI gave you</span></div>}
       {file
         ? <div className="v2-html-import-file"><span>Loaded <b>{file.name}</b></span><button className="v2-btn" onClick={() => setFile(undefined)}>Clear</button></div>

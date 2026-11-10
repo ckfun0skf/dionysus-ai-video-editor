@@ -83,6 +83,28 @@ describe("HtmlImport (V2-HTML-PKG)", () => {
     await pick(el.querySelector('input[type="file"]') as HTMLInputElement, new File(["%PDF"], "brief.pdf", { type: "application/pdf" }));
     expect(el.querySelector('[role="alert"]')!.textContent).toMatch(/brief\.pdf is not an HTML clip/);
   });
+
+  it("P53: dropping a package attaches it, and drag highlight survives a child enter", async () => {
+    const { el } = await mount();
+    const box = el.querySelector('[data-testid="v2-html-import"]')!;
+    const fire = (target: Element, type: string, files: File[] = []) => {
+      const ev = new Event(type, { bubbles: true, cancelable: true });
+      Object.assign(ev, { dataTransfer: { types: ["Files"], files, dropEffect: "none" } });
+      act(() => { target.dispatchEvent(ev); });
+    };
+    fire(box, "dragenter");
+    expect(box.classList.contains("is-drag")).toBe(true);
+    fire(box.querySelector("textarea")!, "dragenter");
+    expect(box.classList.contains("is-drag")).toBe(true);
+    fire(box.querySelector("textarea")!, "dragleave");
+    expect(box.classList.contains("is-drag")).toBe(true);
+    fire(box, "dragleave");
+    expect(box.classList.contains("is-drag")).toBe(false);
+    const zip = new File([await exportHtmlZip(htmlClipTemplate())], "title.dionysus-html.zip", { type: "application/zip" });
+    fire(box, "drop", [zip]);
+    await wait();
+    expect(el.textContent).toContain("Loaded title.dionysus-html.zip");
+  });
 });
 
 describe("storyboard html asset: package prompts and paste-back (V2-HTML-PKG)", () => {

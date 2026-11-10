@@ -218,3 +218,64 @@ describe("V2-CODE-EDITOR preview errors", () => {
     expect(doc).toContain('type:"dionysus:error"');
   });
 });
+
+describe("P53 Code Editor file drop", () => {
+  const fire = (el: Element, type: string, files: File[] = []) => {
+    const ev = new Event(type, { bubbles: true, cancelable: true });
+    Object.assign(ev, { dataTransfer: { types: ["Files"], files, dropEffect: "none" } });
+    el.dispatchEvent(ev);
+    return ev;
+  };
+  const wait = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+
+  it("dropping a supported file on the editor attaches it on the Files tab", async () => {
+    const { q, tab, onSave, btn, click } = mount(newCodeClipHtml());
+    tab("Files");
+    expect(q('[data-testid="v2-ce-dropzone"]')!.textContent).toMatch(/Drop files here/);
+    expect(q('button.v2-ce-addfile')!.textContent).toContain("Add files");
+    const dialog = q('[role="dialog"][aria-label="Code editor"]')!;
+    const file = new File([new Uint8Array([1, 2, 3, 4])], "logo.png", { type: "image/png" });
+    await act(async () => { fire(dialog, "drop", [file]); });
+    await wait();
+    expect(q('[data-testid="v2-ce-files"]')!.textContent).toContain("logo.png");
+    click(btn("Save"));
+    expect(readManifest(saved(onSave)).files!["logo.png"]).toMatch(/^data:image\/png;base64,/);
+  });
+
+  it("rejects an unsupported type and keeps the picker", async () => {
+    const { q } = mount(newCodeClipHtml());
+    const dialog = q('[role="dialog"][aria-label="Code editor"]')!;
+    const pdf = new File(["%PDF"], "brief.pdf", { type: "application/pdf" });
+    await act(async () => { fire(dialog, "drop", [pdf]); });
+    await wait();
+    expect(q('[data-testid="v2-ce-files"]')).toBeTruthy();
+    expect(q('[role="alert"]')!.textContent).toMatch(/brief\.pdf isn't a supported type and wasn't added/);
+    expect(q(".v2-ce-file")).toBeNull();
+    expect(q('input[aria-label="Add files"]')!.getAttribute("accept")).toBeTruthy();
+  });
+
+  it("shows a drag highlight that survives entering a child and clears on leave", () => {
+    const { q } = mount(newCodeClipHtml());
+    const dialog = q('[role="dialog"][aria-label="Code editor"]')!;
+    act(() => { fire(dialog, "dragenter"); });
+    expect(dialog.classList.contains("is-drag")).toBe(true);
+    expect(q('[data-testid="v2-ce-dropveil"]')).toBeTruthy();
+    act(() => { fire(dialog.querySelector(".v2-ce-bar")!, "dragenter"); });
+    expect(dialog.classList.contains("is-drag")).toBe(true);
+    act(() => { fire(dialog.querySelector(".v2-ce-bar")!, "dragleave"); });
+    expect(dialog.classList.contains("is-drag")).toBe(true);
+    act(() => { fire(dialog, "dragleave"); });
+    expect(dialog.classList.contains("is-drag")).toBe(false);
+    expect(q('[data-testid="v2-ce-dropveil"]')).toBeNull();
+  });
+
+  it("mobile keeps the file picker and hides the drop hint", () => {
+    const { q, tab } = mount(newCodeClipHtml(), { mobile: true });
+    tab("Files");
+    expect(q('[data-testid="v2-ce-dropzone"]')).toBeTruthy();
+    expect(q('button.v2-ce-addfile')).toBeTruthy();
+    expect(q('input[aria-label="Add files"]')).toBeTruthy();
+    expect(q('.v2-ce.is-mobile')).toBeTruthy();
+  });
+});
+
