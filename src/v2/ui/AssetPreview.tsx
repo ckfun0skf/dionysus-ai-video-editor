@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { HtmlLivePreview } from "./CodeEditor";
+import { CodeClipPreview } from "./CodeClipPreview";
+import type { MixUnderlayFn } from "./codeClipMix";
+import type { Placement } from "../domain";
 import { Ic } from "./Icon";
 import { decodePeaks, type Peaks } from "./media";
 
@@ -73,7 +75,7 @@ export function WaveStrip({ peaks, durSec, height = 56, from, to, at, label = "W
 
 /**
  * P2C (item 7): a playable preview of one asset version: video and audio play (audio with its waveform), images show,
- * HTML (code) clips play live in the same sandbox as the timeline (params at their defaults unless given).
+ * HTML (code) clips play live in the same sandbox as the timeline (per-use params when given; Mix composites over the clips underneath).
  */
 /** P15-TRIM-PREVIEW: the part of a video a preview plays, looping, in seconds. */
 export interface PlayRange { inSec: number; outSec: number }
@@ -100,11 +102,15 @@ export function RangeVideo({ src, range, label }: { src?: string; range?: PlayRa
   );
 }
 
-export function AssetPreview({ kind, load, cacheKey, name, durationSec, width, height, range }: {
+export function AssetPreview({ kind, load, cacheKey, name, durationSec, width, height, range, params, mixUnderlay, mixPlacement }: {
   kind: PreviewKind; load: () => Promise<Blob | undefined>; cacheKey: string; name: string;
   durationSec?: number; width?: number; height?: number;
   /** P15-TRIM-PREVIEW: video only: play just this part, looping. */
   range?: PlayRange;
+  /** P54: per-use param values (shot / layer / clip) applied live to an html preview. */
+  params?: Record<string, unknown>;
+  mixUnderlay?: MixUnderlayFn;
+  mixPlacement?: Placement;
 }) {
   const st = usePreviewBlob(load, kind, cacheKey);
   const peaks = usePeaks(kind === "audio" ? st.blob : undefined);
@@ -126,7 +132,8 @@ export function AssetPreview({ kind, load, cacheKey, name, durationSec, width, h
         </>
       )}
       {kind === "html" && st.html !== undefined && (
-        <HtmlLivePreview html={st.html} duration={Math.max(0.5, durationSec ?? 5)} width={width || 1920} height={height || 1080} transparent={false} collapsed={false} onError={noop} />
+        <CodeClipPreview html={st.html} duration={Math.max(0.5, durationSec ?? 5)} width={width || 1920} height={height || 1080} transparent={false} collapsed={false} onError={noop}
+          params={params} mixUnderlay={mixUnderlay} mixPlacement={mixPlacement} />
       )}
     </div>
   );

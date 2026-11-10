@@ -16,6 +16,7 @@ import { TransformHandles, TransformInspector } from "./Transform";
 import { TextPanel } from "./TextPanel";
 import { AnimationPicker } from "./AnimationPicker";
 import { CodeEditor } from "./CodeEditor";
+import { mixFromPlayer } from "./codeClipMix";
 import { CodeAiWizard } from "./CodeAiWizard";
 import { AudioEditor } from "./AudioEditor";
 import { audioClipAsset, storeAudioClip } from "./audioClipAsset";
@@ -1273,7 +1274,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           <button className="v2-btn primary v2-export-d" aria-label="Export MP4" title="Export MP4 (⌘/Ctrl+E)" onClick={openExport}><Ic g="film" size={16} /> Export MP4</button>
         </header>
       )}
-      {board && <StoryboardView engine={engine} blobs={storage.blobs} initialOpen={boardOpen} onSeries={() => setSeriesLib(true)} onClose={() => { setBoard(false); setBoardOpen(undefined); }}
+      {board && <StoryboardView engine={engine} blobs={storage.blobs} player={player} initialOpen={boardOpen} onSeries={() => setSeriesLib(true)} onClose={() => { setBoard(false); setBoardOpen(undefined); }}
         onView={(id) => { setBoard(false); setBoardOpen(undefined); const pl = ops.mainTrack(engine.getState().project.compositions[engine.getState().project.rootCompositionId])?.placements.find((x) => x.id === id); if (pl) { if (mobile) setMenu("edit"); selectClip(id); seek(pl.startTicks); } }} />}
       {seriesLib && <SeriesLibrary engine={engine} project={project} storage={storage} onClose={() => setSeriesLib(false)} />}
       <AgentIndicator engine={engine} />
@@ -1283,7 +1284,10 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       {audioAi && <div className="v2-modal-back" onPointerDown={(e) => { if (e.target === e.currentTarget) setAudioAi(false); }}><AudioAiSheet onAdd={addAiAudio} onClose={() => setAudioAi(false)} /></div>}
       {audioEdit && <AudioEditor key={audioEdit.create ? "new-audio" : audioEdit.placementId} source={audioEdit.source} create={audioEdit.create} mobile={mobile} onSave={saveAudio} onClose={() => setAudioEdit(undefined)} />}
       {codeAi && <CodeAiWizard mobile={mobile} initialRole={codeAi === "overlay" ? "overlay" : "scene"} onClose={() => { setHtmlEdit({ source: newCodeClipHtml(), create: codeAi }); setCodeAi(undefined); }} onImport={(html) => { setHtmlEdit({ source: html, create: codeAi }); setCodeAi(undefined); }} />}
-      {htmlEdit && <CodeEditor key={htmlEdit.create ? "new" : htmlEdit.placementId} source={htmlEdit.source} create={!!htmlEdit.create} mobile={mobile} onAiMode={htmlEdit.create === "main" || htmlEdit.create === "overlay" ? () => { setCodeAi(htmlEdit.create === "overlay" ? "overlay" : "main"); setHtmlEdit(undefined); } : undefined} onSave={(h) => void saveCode(h)} onClose={() => setHtmlEdit(undefined)} />}
+      {htmlEdit && (() => {
+        const editPl = htmlEdit.placementId ? findPlacement(comp, htmlEdit.placementId)?.placement : undefined;
+        return <CodeEditor key={htmlEdit.create ? "new" : htmlEdit.placementId} source={htmlEdit.source} create={!!htmlEdit.create} mobile={mobile} previewParams={editPl?.htmlParams} mixUnderlay={editPl ? (t) => mixFromPlayer(player, editPl, t) : undefined} mixPlacement={editPl} onAiMode={htmlEdit.create === "main" || htmlEdit.create === "overlay" ? () => { setCodeAi(htmlEdit.create === "overlay" ? "overlay" : "main"); setHtmlEdit(undefined); } : undefined} onSave={(h) => void saveCode(h)} onClose={() => setHtmlEdit(undefined)} />;
+      })()}
       {subsPick && <div className="v2-menu-backdrop v2-confirm-backdrop" onPointerDown={() => setSubsPick(false)}>
         <div className="v2-confirm v2-subs-pick" role="dialog" aria-modal="true" aria-label="Choose a text layer" onPointerDown={(e) => e.stopPropagation()}>
           <h4>Edit subtitles</h4><p>Which text layer?</p>

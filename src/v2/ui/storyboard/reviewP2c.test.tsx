@@ -117,6 +117,10 @@ describe("storyboard P2C", () => {
     await act(async () => btn(el, "Preview v1").click());
     for (let i = 0; i < 5; i++) await act(wait);
     expect(el.querySelector('[data-testid="asset-preview"][data-kind="html"] iframe')).not.toBeNull();
+    const mix = el.querySelector('[data-testid="v2-ce-mix"]') as HTMLButtonElement;
+    expect(mix).not.toBeNull();
+    expect(mix.getAttribute("aria-pressed")).toBe("false");
+    expect(mix.className).toMatch(/v2-ce-icon/);
     await act(async () => btn(el, "Edit code of v1").click());
     await act(wait);
     expect(document.querySelector(".v2-ce")).not.toBeNull();

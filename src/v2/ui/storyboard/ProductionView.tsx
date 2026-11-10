@@ -3,6 +3,7 @@ import { board, storySteps, type Project, type ProductionStep, type StepState } 
 import { cmd, type Engine } from "../../engine";
 import type { BlobStore } from "../../ports";
 import { Ic } from "../Icon";
+import type { Player } from "../../render";
 import { ContextMenu } from "../desktop/ContextMenu";
 import { haptic } from "../gestures";
 import { type BoardTarget, shotIcon, Thumb, TYPE_ICON } from "./BoardView";
@@ -20,7 +21,7 @@ type NoteFn = (text: string, action?: { label: string; run: () => void }) => voi
  * Production to-do list (V2-CUT-11): every asset and clip in a workable order, one step at a time.
  * V2-CUT-07: steps can be reordered (drag, long-press on a phone, Alt+↑/↓, menu), always within dependency order.
  */
-export function ProductionView({ project, thumbs, engine, blobs, mobile, onNote }: { project: Project; thumbs: Record<string, string>; engine: Engine; blobs: BlobStore; mobile: boolean; onNote?: NoteFn }) {
+export function ProductionView({ project, thumbs, engine, blobs, player, mobile, onNote }: { project: Project; thumbs: Record<string, string>; engine: Engine; blobs: BlobStore; player?: Player; mobile: boolean; onNote?: NoteFn }) {
   const b = project.storyboard!;
   const steps = board.productionSteps(project);
   const done = steps.filter(finished).length;
@@ -146,7 +147,7 @@ export function ProductionView({ project, thumbs, engine, blobs, mobile, onNote 
       {menu && keys.includes(menu.key) && (menu.at
         ? <ContextMenu x={menu.at.x} y={menu.at.y} label={`Step ${keys.indexOf(menu.key) + 1} actions`} onClose={() => setMenu(undefined)} items={actions(menu.key).flatMap((a, n) => (n === 1 || n === 5 ? ["sep" as const, a] : [a]))} />
         : <ActionSheet title={`Step ${keys.indexOf(menu.key) + 1} · ${stepName(menu.key)}`} actions={actions(menu.key)} onClose={() => setMenu(undefined)} />)}
-      {step && <StoryDetail key={step.key} inline head={nav} project={project} target={step.target} thumbs={thumbs} engine={engine} blobs={blobs} mobile={mobile} onClose={() => setCur(undefined)} onOpen={open} />}
+      {step && <StoryDetail key={step.key} inline head={nav} project={project} target={step.target} thumbs={thumbs} engine={engine} blobs={blobs} player={player} mobile={mobile} onClose={() => setCur(undefined)} onOpen={open} />}
     </div>
   );
 }

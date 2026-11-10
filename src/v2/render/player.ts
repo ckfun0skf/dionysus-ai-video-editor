@@ -12,7 +12,7 @@ import { trackSignal, type TrackSignal } from "../domain/tracking";
 import { audioFxData, buildFxChain, fxKey, type FxChain } from "./audioFx";
 import { buildSpatial, type SpatialStage } from "./spatial";
 import { audioOutputOf, spatialAt, spatialOf, type AudioEnvironment, type AudioOutputMode } from "../domain/spatial";
-import { compositionDuration, fadeAt, volumeKeyAt, versionOf, type Placement, type Project } from "../domain/model";
+import { compositionDuration, fadeAt, findPlacement, volumeKeyAt, versionOf, type Placement, type Project } from "../domain/model";
 import type { BlobStore } from "../ports/storage";
 import { subtitleAt } from "../domain/subtitles";
 import { loadBundledFonts } from "./fonts";
@@ -102,6 +102,8 @@ export class Player {
   time = 0;
   /** Canvas-space placement of each visual clip in the last drawn frame (for on-canvas handles). */
   boxes = new Map<string, Placed>();
+  /** When set, draw() skips these placements (Mix preview captures everything under a clip). */
+  private skipIds?: ReadonlySet<string>;
   project: Project;
   canvas?: HTMLCanvasElement;
   onTime?: (t: number, playing: boolean) => void;
@@ -302,6 +304,44 @@ export class Player {
     this.draw();
   }
 
+  /**
+   * P54: render the composition at `atTicks` (default: current time) onto an offscreen canvas, omitting
+   * `placementId` so a Mix preview can composite that clip's own live frame on top. Does not move the
+   * playhead. If `atTicks` differs from the current time and the player is paused, media is seeked for
+   * the capture and then restored by redrawing the on-screen canvas.
+   */
+  snapshotWithout(placementId: string, atTicks?: number): { image: HTMLCanvasElement; inputs?: Record<string, unknown> } | undefined {
+    const src = this.canvas;
+    if (!src) return undefined;
+    const canvas = document.createElement("canvas");
+    canvas.width = src.width;
+    canvas.height = src.height;
+    const saveCanvas = this.canvas, saveTime = this.time, saveSkip = this.skipIds, saveBoxes = this.boxes;
+    const want = atTicks === undefined ? this.time : Math.max(0, Math.round(atTicks));
+    const timeChanged = want !== this.time;
+    // While playing, keep the playhead: seeking every Mix frame would hitch audible/visible media.
+    const captureAt = this.playing ? this.time : want;
+    this.canvas = canvas;
+    this.skipIds = new Set([placementId]);
+    if (!this.playing) this.time = captureAt;
+    try {
+      this.draw();
+      const comp = this.project.compositions[this.project.rootCompositionId];
+      const found = findPlacement(comp, placementId);
+      const pl = found ? effectivePlacement(found.track, found.placement) : undefined;
+      const ver = pl && !pl.blank ? versionOf(this.project, pl.source) : undefined;
+      const known = ver && this.manifests.get(ver.media.blobKey);
+      const inputs = pl && known?.inputs ? this.inputsFor(pl, known.inputs, canvas) : undefined;
+      return { image: canvas, ...(inputs ? { inputs } : {}) };
+    } finally {
+      this.canvas = saveCanvas;
+      this.time = saveTime;
+      this.skipIds = saveSkip;
+      this.boxes = saveBoxes;
+      if (timeChanged && !this.playing && saveCanvas) this.draw();
+    }
+  }
+
   /** Render current frame and sync media elements. */
   draw() {
     const comp = this.project.compositions[this.project.rootCompositionId];
@@ -350,6 +390,7 @@ export class Player {
       // V2-103: text clips render with their layer style merged under their own overrides (preview and export alike).
       const placement = effectivePlacement(track, raw);
       if (!fxDone && track.id !== mainId && track.kind !== "audio") applyFx();
+      if (this.skipIds?.has(raw.id) || this.skipIds?.has(placement.id)) continue;
       if (placement.clipType === "text") {
         if (ctx && canvas && !track.hidden) withBlend(ctx, placement.blend, () => this.boxes.set(placement.id, drawTextClip(ctx, placement, canvas.width, canvas.height, this.time, mix ?? 1)));
         continue;
