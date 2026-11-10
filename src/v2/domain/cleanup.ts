@@ -21,7 +21,7 @@ const keysOf = (v: AssetVersion) => [v.media.blobKey, ...(v.media.thumbKey ? [v.
 export function cleanupPlan(p: Project, bindingRefs: Iterable<string> = []): CleanupPlan {
   const used = new Set<string>(), usedVersions = new Set<string>();
   for (const c of Object.values(p.compositions)) for (const t of c.tracks) for (const pl of t.placements) {
-    used.add(pl.source.assetId); usedVersions.add(pl.source.versionId);
+    used.add(pl.source.assetId); usedVersions.add(pl.source.versionId); if (pl.versionId) usedVersions.add(pl.versionId);
     const fx = codeAssetOf(pl.effect?.preset), tr = codeAssetOf(pl.transitionIn?.kind);
     if (fx) used.add(fx);
     if (tr) used.add(tr);

@@ -239,7 +239,8 @@ describe("P27 replace_clip_asset on a storyboard shot clip", () => {
     const P = () => e.getState().project, shotAsset = P().storyboard!.shots.s1.assetId!;
     const id = root(P()).tracks.flatMap(t => t.placements).find(p => p.source.assetId === shotAsset)!.id;
     expect((await runTimelineTool(e, undefined, "replace_clip_asset", { clipId: id, assetId: "a" })).ok).toBe(false);
-    const res = await runTimelineTool(e, undefined, "replace_clip_asset", { clipId: id, assetId: "w" });
+    expect((await runTimelineTool(e, undefined, "replace_clip_asset", { clipId: id, assetId: "w" })).ok).toBe(false);
+    const res = await runTimelineTool(e, undefined, "replace_clip_asset", { clipId: id, assetId: "w", fit: "full" });
     expect(res.ok).toBe(true);
     expect(P().assets[shotAsset].versions).toHaveLength(2);
     expect(findPlacement(root(P()), id)!.placement.source.assetId).toBe(shotAsset);
@@ -494,5 +495,58 @@ describe("P49 set_clip_mask / clear_clip_mask", () => {
     expect(pl().mask).toBeUndefined();
     expect(e.undo()).toBe(true);
     expect(pl().mask?.shape).toBe("ellipse");
+  });
+});
+
+
+describe("P58 set_clip_version / delete_version / replace fit", () => {
+  async function shotEngine() {
+    const r = validateStoryboard({ format: "dionysus.storyboard/1", meta: { title: "T", aspect: "16:9" }, assets: [], shots: [{ id: "s1", title: "One", durationSec: 3, prompt: "p", assets: [], qa: [] }], connections: [] });
+    if (!r.ok) throw new Error("bad doc");
+    const e = new Engine(createProject("t"));
+    e.dispatch(cmd.createStoryboard(r.doc as StoryDoc));
+    e.dispatch(cmd.addStoryVersion({ shot: "s1" }, { blobKey: "k1", mime: "video/mp4", durationTicks: s(3) }, { versionId: "o1" }));
+    e.dispatch(cmd.sendStoryToTimeline());
+    e.dispatch(cmd.importAsset(asset("w", "video", 6)));
+    return e;
+  }
+  it("replace_clip_asset with fit trim pins only the edited half", async () => {
+    const e = await shotEngine();
+    const id = ops.mainTrack(root(e.getState().project))!.placements[0].id;
+    e.dispatch(cmd.splitPlacement(id, s(1.5), "B"));
+    const res = await runTimelineTool(e, undefined, "replace_clip_asset", { clipId: id, assetId: "w", fit: "trim", inSec: 2 });
+    expect(res.ok).toBe(true);
+    const A = findPlacement(root(e.getState().project), id)!.placement;
+    const B = findPlacement(root(e.getState().project), "B")!.placement;
+    expect(A.source.versionId).not.toBe("o1");
+    expect(A.versionId).toBe(A.source.versionId);
+    expect(A.sourceInTicks).toBe(s(2));
+    expect(A.durationTicks).toBe(s(1.5));
+    expect(B.source.versionId).toBe("o1");
+  });
+  it("set_clip_version follows the board when versionId is null", async () => {
+    const e = await shotEngine();
+    const id = ops.mainTrack(root(e.getState().project))!.placements[0].id;
+    e.dispatch(cmd.addStoryVersionFromClip(id, { blobKey: "k2", mime: "video/mp4", durationTicks: s(3) }, { versionId: "o2" }));
+    const r = await runTimelineTool(e, undefined, "set_clip_version", { clipId: id, versionId: null });
+    expect(r.ok).toBe(true);
+    expect(findPlacement(root(e.getState().project), id)!.placement.versionId).toBeUndefined();
+  });
+  it("delete_version refuses the last take and reports clips when it can delete", async () => {
+    const e = await shotEngine();
+    const P = () => e.getState().project;
+    const shotAsset = P().storyboard!.shots.s1.assetId!;
+    const id = ops.mainTrack(root(P()))!.placements[0].id;
+    expect((await runTimelineTool(e, undefined, "delete_version", { assetId: shotAsset, versionId: "o1" })).ok).toBe(false);
+    e.dispatch(cmd.splitPlacement(id, s(1.5), "B"));
+    e.dispatch(cmd.addStoryVersionFromClip(id, { blobKey: "k2", mime: "video/mp4", durationTicks: s(3) }, { versionId: "o2", fit: "trim" }));
+    const r = await runTimelineTool(e, undefined, "delete_version", { assetId: shotAsset, versionId: "o1" });
+    expect(r.ok).toBe(true);
+    const body = json(r.text);
+    expect(body.deleted).toBe("o1");
+    expect(body.affected.some((c: { clipId: string }) => c.clipId === "B")).toBe(true);
+    expect(P().assets[shotAsset].versions.map((v) => v.id)).toEqual(["o2"]);
+    e.undo();
+    expect(P().assets[shotAsset].versions.map((v) => v.id)).toEqual(["o1", "o2"]);
   });
 });

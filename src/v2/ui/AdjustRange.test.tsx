@@ -42,13 +42,13 @@ const typeIn = (input: HTMLInputElement, v: string) => { Object.getOwnPropertyDe
 const ptr = (el: Element, type: string, x: number) => el.dispatchEvent(new MouseEvent(type, { bubbles: true, clientX: x }));
 
 type Host = "phone" | "desktop";
-async function mount(e: Engine, host: Host, opts: { picker?: boolean; id?: string; onMix?: (p: Project | undefined) => void; onUpload?: (fs: File[]) => Promise<string[]> } = {}) {
+async function mount(e: Engine, host: Host, opts: { picker?: boolean; id?: string; onMix?: (p: Project | undefined) => void; onUpload?: (fs: File[]) => Promise<string[]>; ripple?: boolean } = {}) {
   const done: (string | undefined)[] = [];
   const el = document.createElement("div"); el.className = `v2-app ${host === "phone" ? "is-mobile" : "is-desktop"}`; document.body.appendChild(el);
   const r = createRoot(el); roots.push(r);
   function App() {
     const { project } = useEngineState(e);
-    const body = <AdjustRange engine={e} project={project} clipId={opts.id ?? "A"} blobs={blobs} peaks={{}} strips={{}} startInPicker={opts.picker} onMix={opts.onMix} onUpload={opts.onUpload} onDone={(m) => done.push(m)} />;
+    const body = <AdjustRange engine={e} project={project} clipId={opts.id ?? "A"} blobs={blobs} peaks={{}} strips={{}} startInPicker={opts.picker} ripple={opts.ripple} onMix={opts.onMix} onUpload={opts.onUpload} onDone={(m) => done.push(m)} />;
     return host === "phone" ? <Sheet label="Adjust range" onClose={() => undefined}>{body}</Sheet> : <aside className="v2-slip-panel">{body}</aside>;
   }
   await act(async () => r.render(<App />));
@@ -284,5 +284,73 @@ describe("P51: Replace asset accepts an upload in the same picker", () => {
     expect(pl(e, "A").durationTicks).toBe(s(3));
     e.undo();
     expect(pl(e, "A").source.assetId).toBe("v");
+  });
+});
+
+
+function storyEngine() {
+  const r = validateStoryboard({ format: "dionysus.storyboard/1", meta: { title: "T", aspect: "16:9" }, assets: [], shots: [{ id: "s1", title: "One", durationSec: 3, prompt: "p", assets: [], qa: [] }], connections: [] });
+  if (!r.ok) throw new Error("bad doc");
+  const e = new Engine(createProject("t"));
+  e.dispatch(cmd.createStoryboard(r.doc as StoryDoc));
+  e.dispatch(cmd.addStoryVersion({ shot: "s1" }, { blobKey: "k1", mime: "video/mp4", durationTicks: s(3) }, { versionId: "o1" }));
+  e.dispatch(cmd.sendStoryToTimeline());
+  return e;
+}
+
+describe("P58: story Replace length choice and upload", () => {
+  it("Replace picker still shows Upload and equal-length upload adds a version for this clip", async () => {
+    const e = storyEngine();
+    const P = () => e.getState().project, shotAsset = P().storyboard!.shots.s1.assetId!;
+    const id = ops.mainTrack(root(P()))!.placements[0].id;
+    const { el, done } = await mount(e, "desktop", { id, picker: true, onUpload: async () => { e.dispatch(cmd.importAsset(asset("up", 3))); return ["up"]; } });
+    expect(el.querySelector('[data-testid="asset-upload"]')).toBeTruthy();
+    const input = el.querySelector('input[type="file"]') as HTMLInputElement;
+    Object.defineProperty(input, "files", { value: [new File(["x"], "n.mp4", { type: "video/mp4" })], configurable: true });
+    await act(async () => { input.dispatchEvent(new Event("change", { bubbles: true })); await wait(); });
+    expect(P().assets[shotAsset].versions).toHaveLength(2);
+    expect(findPlacement(root(P()), id)!.placement.versionId).toBe(P().assets[shotAsset].selectedVersionId);
+    expect(done[0]).toMatch(/new version/);
+  });
+
+  it("a longer take shows trim vs full; trim keeps the shot length and uses the in-point", async () => {
+    const e = storyEngine();
+    const id = ops.mainTrack(root(e.getState().project))!.placements[0].id;
+    e.dispatch(cmd.importAsset(asset("up", 6)));
+    const { el, done } = await mount(e, "desktop", { id, picker: true });
+    await act(async () => btn(el, "Use up.mp4").click());
+    expect(el.querySelector('[data-testid="adjust-range-fit"]')).toBeTruthy();
+    expect(el.querySelector('[data-testid="fit-longer-note"]')!.textContent).toMatch(/6\.00 s/);
+    const slider = el.querySelector('[data-testid="fit-in-slider"]') as HTMLInputElement;
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(slider, "1.5");
+    await act(async () => slider.dispatchEvent(new Event("input", { bubbles: true })));
+    await act(async () => btn(el, "Trim to shot length").click());
+    expect(pl(e, id)).toMatchObject({ durationTicks: s(3), sourceInTicks: s(1.5) });
+    expect(done[0]).toMatch(/new version/);
+  });
+
+  it("keep full length grows the clip and ripples later clips when ripple is on", async () => {
+    const e = storyEngine();
+    const id = ops.mainTrack(root(e.getState().project))!.placements[0].id;
+    e.dispatch(cmd.splitPlacement(id, s(1.5), "B"));
+    e.dispatch(cmd.importAsset(asset("up", 6)));
+    const { el } = await mount(e, "phone", { id, picker: true, ripple: true });
+    await act(async () => btn(el, "Use up.mp4").click());
+    expect(el.querySelector('[data-testid="fit-full-block"]')!.textContent).toMatch(/ripple is on/);
+    await act(async () => btn(el, "Keep full length").click());
+    expect(pl(e, id).durationTicks).toBe(s(6));
+    expect(pl(e, "B").startTicks).toBe(s(6));
+    expect(pl(e, "B").source.versionId).toBe("o1");
+  });
+
+  it("a shorter take notes it visibly and leaves a gap when ripple is off", async () => {
+    const e = storyEngine();
+    const id = ops.mainTrack(root(e.getState().project))!.placements[0].id;
+    e.dispatch(cmd.importAsset(asset("up", 1)));
+    const { el, done } = await mount(e, "desktop", { id, picker: true, ripple: false });
+    await act(async () => btn(el, "Use up.mp4").click());
+    expect(done[0]).toMatch(/shorter/);
+    expect(done[0]).toMatch(/gap/);
+    expect(pl(e, id).durationTicks).toBe(s(1));
   });
 });

@@ -18,6 +18,7 @@ import { SUBTITLE_STYLE } from "./layerStyle";
 import { getPreset, parsePresetRef, type PresetKind } from "../registry";
 import { AUDIO_DEFAULTS, audioLoops, DEFAULT_TEXT_SIZE, DEFAULT_TRANSITION_SEC, type AudioKind, type StoryAudio, type StoryAudioSource, TEXT_LINE_HEIGHT, type StoryBox, type StoryLayer, type StoryMediaLayer, type StoryTextLayer, type StoryTextStyle } from "./storyJson";
 import { pinOf, sendPlan, syncPlacements, versionSpan, type Shot, type Storyboard } from "./storyboard";
+import { repairStalePins } from "./clipVersion";
 import { clampToClip, placeOnFreeTrack } from "./storyLinks";
 import { textOf, textStyleData, textStyleFields, type TextData } from "./text";
 import { previousAdjacent, setTransition } from "./transitions";
@@ -469,13 +470,16 @@ export function updateStory(p: Project): { project: Project; result: UpdateResul
   const base: UpdateResult = { shots: 0, layers: 0, captions: 0, effects: 0, transitions: 0, skippedLayers: 0, audio: 0, skippedAudio: 0, clips: 0, refreshed: 0, cues: 0 };
   if (!b) return { project: p, result: base };
   let q = p;
+  // P58: pins to deleted versions fall back to the current version before the usual resync.
+  q = repairStalePins(q).project;
   // Re-sync story clips to their selected versions (a version may have been picked while the clip was elsewhere).
+  // Clips pinned to another existing version are left alone (see syncPlacements).
   for (const id of new Set(Object.values(b.shots).map((s) => s.assetId).filter((x): x is string => !!x && !!p.assets[x]))) q = syncPlacements(q, id);
   let comp = q.compositions[q.rootCompositionId];
   const clips = shotClips(comp);
   for (const id of plan.clips) {
     const s = b.shots[id], a = q.assets[s.assetId!], v = selectedVersion(a)!, old = clips.get(id)!;
-    const { htmlParams: _h, placeholder: wasPh, ...rest } = old;
+    const { htmlParams: _h, placeholder: wasPh, versionId: _pin, ...rest } = old;
     // P35: a placeholder keeps its place, length and edits; a video shorter than it ends with its media.
     const len = wasPh && a.kind === "video" ? v.media.durationTicks : undefined;
     if (len && len < rest.durationTicks) rest.durationTicks = len;

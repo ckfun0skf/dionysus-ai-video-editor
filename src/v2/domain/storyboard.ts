@@ -372,7 +372,7 @@ export type Target = { slot: string } | { shot: string };
  * Upload a new version into a slot or shot and select it. Inputs (and the last-frame source for
  * derived slots) are frozen from the current selections so later changes can be detected.
  */
-export function addStoryVersion(p: Project, target: Target, media: MediaRef, opts: { versionId?: string; model?: string; now?: string; derivedFrom?: { shotId: string; versionId: string }; trim?: VersionTrim; bg?: string; lfEnd?: number; frameRef?: VersionInfo["frameRef"] } = {}): Project {
+export function addStoryVersion(p: Project, target: Target, media: MediaRef, opts: { versionId?: string; model?: string; now?: string; derivedFrom?: { shotId: string; versionId: string }; trim?: VersionTrim; bg?: string; lfEnd?: number; frameRef?: VersionInfo["frameRef"]; sync?: boolean } = {}): Project {
   const b = p.storyboard;
   if (!b) return p;
   // An html or still shot has no clip of its own: its versions live on the clip slot.
@@ -408,7 +408,8 @@ export function addStoryVersion(p: Project, target: Target, media: MediaRef, opt
     shots: isSlot ? withClipAsset(b.shots, owner.id, assetId) : { ...b.shots, [owner.id]: nextOwner as Shot },
     versions: { ...b.versions, [version.id]: info },
   };
-  return syncPlacements({ ...p, assets: { ...p.assets, [assetId]: asset }, storyboard: board }, assetId);
+  const next = { ...p, assets: { ...p.assets, [assetId]: asset }, storyboard: board };
+  return opts.sync === false ? next : syncPlacements(next, assetId);
 }
 
 /** Point html/still shots whose clip is `slotId` at its backing asset. */
@@ -449,6 +450,9 @@ export function setVersionTrim(p: Project, assetId: string, versionId: string, t
  * - A trimmed clip keeps its trims, clamped to the new media.
  * - On the main track, later clips ripple by the length change (no gap, no overlap). On other
  *   tracks a longer clip only grows up to the next clip.
+ * - P58: a clip with `placement.versionId` pinned to another (still existing) version is left alone so
+ *   split halves / pasted copies can stay on their own take. A pin to a missing version is dropped
+ *   and the clip follows the current version again.
  */
 export function syncPlacements(p: Project, assetId: string, retrim?: { versionId: string; before: { inTicks: number; lenTicks: number } }): Project {
   const a = p.assets[assetId];
@@ -456,7 +460,9 @@ export function syncPlacements(p: Project, assetId: string, retrim?: { versionId
   if (!v) return p;
   const max = v.media.durationTicks;
   const span = versionSpan(p.storyboard, v);
-  const stale = (pl: Placement) => pl.source.assetId === assetId && (pl.source.versionId !== v.id || retrim?.versionId === v.id);
+  const pinValid = (pl: Placement) => !!pl.versionId && a.versions.some((x) => x.id === pl.versionId);
+  const pinnedToOther = (pl: Placement) => pl.source.assetId === assetId && pinValid(pl) && pl.versionId !== v.id;
+  const stale = (pl: Placement) => pl.source.assetId === assetId && !pinnedToOther(pl) && (pl.source.versionId !== v.id || retrim?.versionId === v.id);
   let changed = false;
   const compositions = { ...p.compositions };
   for (const [cid, c] of Object.entries(p.compositions)) {
@@ -472,6 +478,8 @@ export function syncPlacements(p: Project, assetId: string, retrim?: { versionId
         if (!stale(pl) || pinned.has(pl.id)) continue;
         const { storyTrim, ...rest } = pl;
         const next: Placement = { ...rest, source: { ...pl.source, versionId: v.id } };
+        // Drop a pin to a version that no longer exists so this clip follows again.
+        if (next.versionId && !a.versions.some((x) => x.id === next.versionId)) delete next.versionId;
         if (max && !isStill(pl)) {
           const speed = pl.speed ?? 1;
           const prev = pl.source.versionId === v.id && retrim ? retrim.before : versionSpan(p.storyboard, a.versions.find((x) => x.id === pl.source.versionId));

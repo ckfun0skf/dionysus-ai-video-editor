@@ -3234,6 +3234,12 @@
           "title": "Code Editor Files list: tap a file to preview it (sheet on mobile, modal on desktop). Images (SVG as <img>) fit-to-view with dimensions; video/audio use native controls; GLB/glTF open an interactive three.js viewer (orbit, pinch/scroll zoom, reset, auto-frame, lighting, mesh/triangle counts) with .gltf externals resolved against other attached files; text/json/js/css/html are read-only; anything else shows name, size and MIME. Always name/size/type, close, Esc, ≥44px targets, monochrome icons; object URLs revoked on close; load errors show a message.",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P58-CLIP-VERSION-PIN",
+          "title": "Per-clip version pin for storyboard-linked timeline clips (split/copy halves pick independently; adding a version from one clip pins only that clip; resync keeps pins; Follow storyboard unpins). Main-track Replace on a shot clip adds a new version of that shot: upload in the picker; a longer take asks trim (in-point scrub, default 0) or keep full length (respects ripple); a shorter take notes it and keeps gap/ripple behaviour. Delete old versions from the storyboard list and the clip picker, with confirmation listing affected clips and the fallback version; cannot delete the last version; one undo; unreferenced media is dropped. WebMCP: set_clip_version, delete_version, replace_clip_asset fit/inSec.",
+          "status": "done",
+          "progress": 100
         }
       ]
     }

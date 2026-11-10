@@ -14,7 +14,7 @@
 import { clipTimeAt, fmtSec } from "./clipTime";
 import { useEffect, useMemo, useRef, useState, type PointerEvent as RPE } from "react";
 import { cmd, type Command, type Engine } from "../engine";
-import { clipRange, findPlacement, slip, ticksToSeconds, TICKS_PER_SECOND, type Asset, type Placement, type Project } from "../domain";
+import { clipRange, findPlacement, slip, ticksToSeconds, TICKS_PER_SECOND, type Asset, type MediaRef, type Placement, type Project } from "../domain";
 import type { BlobStore } from "../ports";
 import { Ic } from "./Icon";
 import { Waveform } from "./ClipPreview";
@@ -27,6 +27,10 @@ const signed = (t: number) => `${t >= 0 ? "+" : "−"}${Math.abs(ticksToSeconds(
 
 /** Whether the selected clip offers Adjust range (video, audio, HTML; not stills, text or freeze frames). */
 export const canAdjustRange = (p: Placement | undefined): boolean => !!p && !!slip.slipKind(p);
+
+/** P58: Replace (and upload) is offered on video, audio, HTML and stills, including placeholders. */
+export const canReplaceAsset = (p: Placement | undefined): boolean =>
+  !!p && !p.freeze && (!!p.placeholder || p.clipType === "video" || p.clipType === "audio" || p.clipType === "html" || p.clipType === "image");
 
 export interface AdjustRangeProps {
   /** P29-CLIP-TIME: main playhead; its source time is marked on the filmstrip while it is inside the clip. */
@@ -45,6 +49,8 @@ export interface AdjustRangeProps {
   onDone: (message?: string) => void;
   /** Open on the asset picker (the "Replace asset" entry). */
   startInPicker?: boolean;
+  /** P58: when a longer take is kept in full, later clips move if ripple is on. */
+  ripple?: boolean;
   /** P27 Mix preview: show this draft project in the main preview (undefined restores the real one). */
   onMix?: (draft: Project | undefined) => void;
   /** P27 Mix preview: play the main preview over [from, to) of the timeline. */
@@ -144,7 +150,7 @@ function AssetPicker({ visual, project, kind, current, thumbs, onPick, onUpload,
       <p className="v2-abnote">{visual
         ? <>Choose a video, image or code clip, or upload one. It fills this placeholder in place; its position, length and linked layers stay.</>
         : story
-        ? <>This clip is {story} of the storyboard: the file you choose becomes a <b>new version</b> of {story} (the timeline follows it; earlier versions stay selectable in the storyboard).</>
+        ? <>This clip is {story} of the storyboard: the file you choose becomes a <b>new version</b> of {story} and applies to this clip only (other copies of the shot stay as they are). If the file is longer than the shot, you can trim it or keep its full length.</>
         : <>Choose another {kind} for this clip, or upload one. Position, length, effects, Adjust, transitions, volume, sound position, keyframes and links stay.</>}</p>
       <div className="v2-slip-assets" role="list">
         {list.length ? list.map((a) => (
@@ -166,11 +172,13 @@ function AssetPicker({ visual, project, kind, current, thumbs, onPick, onUpload,
   );
 }
 
-export function AdjustRange({ engine, project, clipId, blobs, peaks, strips, thumbs, onUpload, onSeek, onDone, startInPicker, onMix, onPlayRange, time }: AdjustRangeProps) {
+export function AdjustRange({ engine, project, clipId, blobs, peaks, strips, thumbs, onUpload, onSeek, onDone, startInPicker, onMix, onPlayRange, time, ripple = false }: AdjustRangeProps) {
   const orig = findPlacement(root(project), clipId)?.placement;
   const [assetId, setAssetId] = useState(orig?.source.assetId ?? "");
   const [onShort, setOnShort] = useState<slip.OnShort>();
   const [picking, setPicking] = useState(!!startInPicker);
+  const [pendingFit, setPendingFit] = useState<{ media: MediaRef; name: string } | null>(null);
+  const [fitInT, setFitInT] = useState(0);
   const [locked, setLocked] = useState(true);
   const linked = orig ? root(project).tracks.flatMap((t) => t.placements).filter((p) => p.link?.parent === clipId) : [];
   const [moveLinked, setMoveLinked] = useState(linked.length > 0);
@@ -223,17 +231,35 @@ export function AdjustRange({ engine, project, clipId, blobs, peaks, strips, thu
   const kind = slip.slipKind(orig);
   const assetKind = project.assets[orig.source.assetId]?.kind ?? (orig.clipType as Asset["kind"]);
 
-  // P27: a storyboard shot's main-track clip gets the picked file as a new version of the shot (one undo step).
-  const pickAsVersion = (id: string) => {
-    const a = engine.getState().project.assets[id];
-    const ver = a && slip.replaceVersion(engine.getState().project, id);
-    if (!story || !ver) return false;
-    const ok = engine.dispatch(cmd.addStoryVersion(story.target, ver.media));
+  // P58: a storyboard shot's main-track clip gets the picked file as a new version pinned to THIS clip.
+  const applyStoryVersion = (media: MediaRef, opts: { fit?: "trim" | "full"; inSec?: number } = {}) => {
+    if (!story || !orig) return false;
+    const shorter = !!media.durationTicks && media.durationTicks < orig.durationTicks - 1;
+    const ok = engine.dispatch(cmd.addStoryVersionFromClip(clipId, media, { fit: opts.fit, inSec: opts.inSec, ripple }));
     const after = engine.getState().project, nb = after.storyboard;
     const own = nb && ("shot" in story.target ? nb.shots[story.target.shot] : nb.slots[story.target.slot]);
     const n = own?.assetId ? after.assets[own.assetId]?.versions.length : undefined;
-    onDone(ok ? `${story.label}: added as a new version${n ? ` (v${n})` : ""} — earlier versions stay in the storyboard.` : "Couldn't add the version.");
+    const note = !ok ? "Couldn't add the version."
+      : shorter
+        ? (ripple
+          ? `This take is shorter (${fmt(media.durationTicks!)} vs ${fmt(orig.durationTicks)}). The clip was shortened and later clips moved up.`
+          : `This take is shorter (${fmt(media.durationTicks!)} vs ${fmt(orig.durationTicks)}). The clip was shortened; a gap was left.`) + ` Added as a new version of ${story.label} for this clip.`
+        : `${story.label}: added as a new version${n ? ` (v${n})` : ""} for this clip — other clips of the shot stay as they are.`;
+    onDone(note);
     return true;
+  };
+  const pickAsVersion = (id: string) => {
+    const a = engine.getState().project.assets[id];
+    const ver = a && slip.replaceVersion(engine.getState().project, id);
+    if (!story || !ver || !orig) return false;
+    const mediaTicks = ver.media.durationTicks ?? 0;
+    if (mediaTicks > orig.durationTicks + 1) {
+      setPendingFit({ media: ver.media, name: a.name });
+      setFitInT(0);
+      setPicking(false);
+      return true;
+    }
+    return applyStoryVersion(ver.media);
   };
   const head = (title: string, onX: () => void, xLabel: string, onOk?: () => void, okDisabled?: boolean) => (
     <header className="v2-slip-head v2-sheet-head">
@@ -243,10 +269,44 @@ export function AdjustRange({ engine, project, clipId, blobs, peaks, strips, thu
     </header>
   );
 
-  if (picking) return (
+  if (pendingFit) {
+    const clipTicks = orig.durationTicks;
+    const mediaTicks = pendingFit.media.durationTicks ?? clipTicks;
+    const maxIn = Math.max(0, mediaTicks - clipTicks);
+    const inS = ticksToSeconds(fitInT);
+    const previewKind = orig.clipType === "audio" ? "audio" as const : "video" as const;
+    return (
+      <div className="v2-slip" data-testid="adjust-range-fit">
+        {head("This take is longer", () => { setPendingFit(null); setPicking(true); }, "Back")}
+        <p className="v2-abnote" data-testid="fit-longer-note">The new take is {fmt(mediaTicks)} long; this shot/clip is {fmt(clipTicks)}.</p>
+        <div className="v2-slip-warn" data-testid="fit-trim-block">
+          <p><b>Trim to shot length</b> — pick which segment to keep (starts at the beginning by default).</p>
+          <LoopPreview blobs={blobs} blobKey={pendingFit.media.blobKey} kind={previewKind} inS={inS} outS={inS + ticksToSeconds(clipTicks)} />
+          <label className="v2-slip-num">In point <input type="range" data-testid="fit-in-slider" min={0} max={ticksToSeconds(maxIn)} step={0.01} value={inS} aria-label="In point in seconds"
+            onChange={(e) => { const n = Number(e.target.value); if (Number.isFinite(n)) setFitInT(Math.round(n * TICKS_PER_SECOND)); }} /> <span data-testid="fit-in-label">{fmt(fitInT)}</span></label>
+          <button type="button" className="v2-btn primary" data-testid="fit-trim" onClick={() => applyStoryVersion(pendingFit.media, { fit: "trim", inSec: ticksToSeconds(fitInT) })}>Trim to shot length</button>
+        </div>
+        <div className="v2-slip-warn" data-testid="fit-full-block">
+          <p><b>Keep full length</b> — {ripple ? "later clips will move to make room (ripple is on)." : "later clips stay where they are (ripple is off)."}</p>
+          <button type="button" className="v2-btn" data-testid="fit-full" onClick={() => applyStoryVersion(pendingFit.media, { fit: "full" })}>Keep full length</button>
+        </div>
+      </div>
+    );
+  }
+
+  const closePicker = () => (startInPicker || !slip.slipKind(orig) ? onDone() : setPicking(false));
+  if (picking || !slip.slipKind(orig)) return (
     <div className="v2-slip is-picking" data-testid="adjust-range">
-      {head(story ? `New version · ${story.label}` : "Replace asset", () => (startInPicker ? onDone() : setPicking(false)), startInPicker ? "Cancel" : "Back")}
-      <AssetPicker story={story?.label} kindOf={(id) => engine.getState().project.assets[id]?.kind} project={project} kind={assetKind} current={orig.source.assetId} thumbs={thumbs} onUpload={onUpload} onBack={() => (startInPicker ? onDone() : setPicking(false))} onPick={(id) => { if (pickAsVersion(id)) return; setAssetId(id); setOnShort(undefined); setPicking(false); }} />
+      {head(story ? `New version · ${story.label}` : "Replace asset", closePicker, startInPicker || !slip.slipKind(orig) ? "Cancel" : "Back")}
+      <AssetPicker story={story?.label} kindOf={(id) => engine.getState().project.assets[id]?.kind} project={project} kind={assetKind} current={orig.source.assetId} thumbs={thumbs} onUpload={onUpload} onBack={closePicker} onPick={(id) => {
+        if (pickAsVersion(id)) return;
+        if (!slip.slipKind(orig)) {
+          const ok = engine.dispatch(cmd.replaceClipAsset(clipId, id, "shorten"), "Replace asset");
+          onDone(ok ? `Asset replaced with ${engine.getState().project.assets[id]?.name ?? "the asset"}.` : "Couldn't replace the asset.");
+          return;
+        }
+        setAssetId(id); setOnShort(undefined); setPicking(false);
+      }} />
     </div>
   );
 
