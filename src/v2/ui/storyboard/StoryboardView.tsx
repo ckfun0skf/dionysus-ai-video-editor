@@ -4,6 +4,7 @@ import { board, ops, pendingAudio, roundtrip, storyEdit, storyRefs, updatePlan, 
 import { cmd, type Engine } from "../../engine";
 import type { BlobStore } from "../../ports";
 import { Ic } from "../Icon";
+import type { Player } from "../../render";
 import { ConfirmDialog } from "../Timeline";
 import { ContextMenu } from "../desktop/ContextMenu";
 import { useEngineState, useIsMobile } from "../useEditor";
@@ -31,7 +32,7 @@ const NOTE_MS = 3500, NOTE_ACTION_MS = 8000;
 /** Storyboard workspace (V2-M4). Full-screen over the editor so the timeline keeps its state. */
 /** `initialOpen` opens that shot or slot right away (timeline "Open in storyboard"). */
 /** `onView` closes the board and selects that timeline clip (the "View" action after Send). */
-export function StoryboardView({ engine, blobs, onClose, initialOpen, onView, onSeries }: { engine: Engine; blobs: BlobStore; onClose: () => void; /** P5: open the Series library. */ onSeries?: () => void; initialOpen?: BoardTarget; onView?: (placementId: string) => void }) {
+export function StoryboardView({ engine, blobs, player, onClose, initialOpen, onView, onSeries }: { engine: Engine; blobs: BlobStore; player?: Player; onClose: () => void; /** P5: open the Series library. */ onSeries?: () => void; initialOpen?: BoardTarget; onView?: (placementId: string) => void }) {
   const { project, canUndo, canRedo } = useEngineState(engine);
   const series = useSeries(project.seriesId);
   const thumbs = useVersionThumbs(project, blobs);
@@ -255,7 +256,7 @@ export function StoryboardView({ engine, blobs, onClose, initialOpen, onView, on
         </>}
       </header>
       <div className="v2-board-body">
-        {step === "production" && has ? <ProductionView project={project} thumbs={thumbs} engine={engine} blobs={blobs} mobile={mobile} onNote={setNote} /> : step === "prompt" ? <PromptPanel series={series} /> : step === "import" ? <ImportPanel onCreate={create} replacing={has} diffFor={has ? diffFor : undefined} onMerge={has ? merge : undefined} base={baseDoc} series={series} /> : step === "agent" ? <AgentPanel /> : step === "export" && sb ? <ExportPanel board={sb} /> : has ? (
+        {step === "production" && has ? <ProductionView project={project} thumbs={thumbs} engine={engine} blobs={blobs} player={player} mobile={mobile} onNote={setNote} /> : step === "prompt" ? <PromptPanel series={series} /> : step === "import" ? <ImportPanel onCreate={create} replacing={has} diffFor={has ? diffFor : undefined} onMerge={has ? merge : undefined} base={baseDoc} series={series} /> : step === "agent" ? <AgentPanel /> : step === "export" && sb ? <ExportPanel board={sb} /> : has ? (
           <>
             <PrepareReferences project={project} onOpen={(t) => { setEditing(undefined); setEditingSlot(undefined); setConn(undefined); setOpen(t); }} />
             <BoardView project={project} thumbs={thumbs} onOpen={(t) => { setEditing(undefined); setEditingSlot(undefined); setConn(undefined); setOpen(t); }} openKey={editing?.shot ?? editingSlot?.slot ?? (open && ("slot" in open ? open.slot : open.shot))} edit={boardEdit} mobile={mobile} />
@@ -276,7 +277,7 @@ export function StoryboardView({ engine, blobs, onClose, initialOpen, onView, on
           </div>
         )}
       </div>
-      {has && open && !step && !editing && !editingSlot && !conn && <StoryDetail project={project} target={open} thumbs={thumbs} engine={engine} blobs={blobs} mobile={mobile} onClose={() => setOpen(undefined)} onOpen={setOpen}
+      {has && open && !step && !editing && !editingSlot && !conn && <StoryDetail project={project} target={open} thumbs={thumbs} engine={engine} blobs={blobs} player={player} mobile={mobile} onClose={() => setOpen(undefined)} onOpen={setOpen}
         onEdit={"shot" in open ? () => setEditing({ shot: open.shot }) : () => setEditingSlot({ slot: open.slot })} />}
       {has && editSlot && !step && !editing && <SlotEditor key={editingSlot!.slot ?? "new"} project={project} slot={editSlot} isNew={!editingSlot!.slot} mobile={mobile}
         onSave={saveSlot} onCancel={() => setEditingSlot(undefined)} onDelete={() => setConfirmSlotDelete(editSlot.id)} />}

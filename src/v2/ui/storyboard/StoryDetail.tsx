@@ -6,6 +6,7 @@ import { importFile } from "../../persistence";
 import { CLIP_LIBRARIES } from "../../render";
 import { AssetPreview, blobText, type PreviewKind } from "../AssetPreview";
 import { CodeEditor } from "../CodeEditor";
+import { htmlPlacementOf, htmlPreviewParams, mixFromPlayer } from "../codeClipMix";
 import { AudioClipImport, AudioEditor } from "../AudioEditor";
 import { storeAudioClip } from "../audioClipAsset";
 import { audioClipPrompt, newId, type AudioClip } from "../../domain";
@@ -15,6 +16,7 @@ import { ParamControls } from "../ParamControls";
 import { HTML_IMPORT_ACCEPT, importHtmlPackage } from "../htmlPackage";
 import type { BlobStore } from "../../ports";
 import { Ic } from "../Icon";
+import type { Player } from "../../render";
 import { extFor, safeName, saveFile } from "../saveFile";
 import { Sheet } from "../Sheet";
 import { type BoardTarget, ClipLine, LengthWarn, shotIcon, Thumb, TYPE_ICON, Warn } from "./BoardView";
@@ -34,8 +36,8 @@ const fmtDate = (iso: string) => { const d = new Date(iso); return Number.isNaN(
 
 /** Details for one shot or asset slot: versions (pick one), upload, prompt to copy, last-frame extraction. */
 const fmtSec = (x: number) => String(Math.round(x * 100) / 100);
-export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, onClose, onOpen, inline, head, onEdit }: {
-  project: Project; target: BoardTarget; thumbs: Record<string, string>; engine: Engine; blobs: BlobStore; mobile: boolean;
+export function StoryDetail({ project, target, thumbs, engine, blobs, player, mobile, onClose, onOpen, inline, head, onEdit }: {
+  project: Project; target: BoardTarget; thumbs: Record<string, string>; engine: Engine; blobs: BlobStore; player?: Player; mobile: boolean;
   onClose: () => void; onOpen: (t: BoardTarget) => void;
   /** V2-CUT-02 / V2-CUT-05: open the shot or asset editor. */
   onEdit?: () => void;
@@ -80,6 +82,9 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
   const trimWin = shot && !clipSlot ? shot.durationSec : slot?.type === "video" ? board.slotLayerSec(b, slot.id) : undefined;
   /** V2-HTML-PKG: the html asset whose package this panel imports, exports and prompts for. */
   const htmlSlot = kind === "html" ? slot ?? clipSlot : undefined;
+  const htmlParams = kind === "html" ? htmlPreviewParams(project, { shot, slot: htmlSlot }) : undefined;
+  const htmlPl = kind === "html" ? htmlPlacementOf(project, { shotId: shot?.id, assetId: htmlSlot?.assetId ?? (kind === "html" ? owner.assetId : undefined) }) : undefined;
+  const htmlMix = player && htmlPl ? (t: number) => mixFromPlayer(player, htmlPl, t) : undefined;
   /** P4A: an audio asset; "json" ones are written by the user's AI as dionysus.audioclip/1. */
   const audioSlot = kind === "audio" ? slot : undefined;
   const jsonAudio = audioSlot?.source.type === "json";
@@ -221,7 +226,7 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
   const codeDialog = () => {
     if (!codeFor) return null;
     const host = document.querySelector(".v2-app") ?? document.body;
-    return createPortal(<CodeEditor source={codeFor.source} mobile={mobile} onSave={(h) => { setCodeFor(undefined); void addHtml(h, codeFor.name); }} onClose={() => setCodeFor(undefined)} />, host);
+    return createPortal(<CodeEditor source={codeFor.source} mobile={mobile} previewParams={htmlParams} mixUnderlay={htmlMix} mixPlacement={htmlPl} onSave={(h) => { setCodeFor(undefined); void addHtml(h, codeFor.name); }} onClose={() => setCodeFor(undefined)} />, host);
   };
   const adjustTrim = (v: AssetVersion) => run("Opening the clip…", async () => {
     const blob = await blobs.get(v.media.blobKey);
@@ -326,7 +331,7 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, mobile, on
             })}
           </ul>
         ) : null}
-        {(() => { const pi = versions.findIndex((x) => x.id === peek), pvv = versions[pi]; return pvv ? <div className="v2-sb-vpreview"><AssetPreview kind={kind as PreviewKind} name={`${title} v${pi + 1}`} cacheKey={pvv.id} load={() => blobs.get(pvv.media.blobKey)} durationSec={kind === "html" ? (shot?.durationSec ?? (pvv.media.durationTicks ? pvv.media.durationTicks / TICKS_PER_SECOND : undefined)) : pvv.media.durationTicks ? pvv.media.durationTicks / TICKS_PER_SECOND : undefined} width={pvv.media.width ?? project.settings?.width} height={pvv.media.height ?? project.settings?.height} range={shot && kind === "video" ? peekRange(pvv) : undefined} /></div> : null; })()}
+        {(() => { const pi = versions.findIndex((x) => x.id === peek), pvv = versions[pi]; return pvv ? <div className="v2-sb-vpreview"><AssetPreview kind={kind as PreviewKind} name={`${title} v${pi + 1}`} cacheKey={pvv.id} load={() => blobs.get(pvv.media.blobKey)} durationSec={kind === "html" ? (shot?.durationSec ?? (pvv.media.durationTicks ? pvv.media.durationTicks / TICKS_PER_SECOND : undefined)) : pvv.media.durationTicks ? pvv.media.durationTicks / TICKS_PER_SECOND : undefined} width={pvv.media.width ?? project.settings?.width} height={pvv.media.height ?? project.settings?.height} range={shot && kind === "video" ? peekRange(pvv) : undefined} params={kind === "html" ? htmlParams : undefined} mixUnderlay={kind === "html" ? htmlMix : undefined} mixPlacement={kind === "html" ? htmlPl : undefined} /></div> : null; })()}
         {versions.length || slot?.source.type === "frameOf" ? null : <p className="v2-hint">{lf ? `Nothing yet. Use the last frame of shot ${shotNo(lf)} once it has a clip, or upload an image.` : `Nothing yet. ${slot?.source.type === "upload" ? "Upload your file" : jsonAudio ? "Copy the prompt below to your AI and paste its JSON reply, or create it in the Audio editor" : "Generate it in your AI tool with the prompt below"}, then add it here.`}</p>}
         {slot && pins.length > 0 && versions.length > 1 && <p className="v2-hint">{pins.length > 1 ? "Shots" : "Shot"} {pins.map((x) => shotNo(x.shot)).join(", ")} {pins.length > 1 ? "keep their" : "keeps its"} pinned version when you pick another one here.</p>}
         {shot && board.shotLengthMismatch(project, shot) && <p className="v2-sb-lenline"><LengthWarn project={project} shot={shot} /></p>}

@@ -13,7 +13,7 @@ import { readClipConfig, selectedLibraries, vendorUrl, type HtmlLibrary } from "
  * Contract: `dionysus.clip({ init?(ctx), render(t, ctx) })`; `init` (then document.fonts.ready) is awaited once before the first frame. Legacy
  * pages may use `dionysus.onFrame((t, ctx) => …)` OR plain requestAnimationFrame / performance.now / Date.now, which
  * the shim drives from t. Math.random is seeded so export is deterministic. Embedded files and bound assets resolve
- * by name to blob: URLs. Without an init message (the editor's live preview) the manifest's values are used.
+ * by name to blob: URLs. The live preview (storyboard and Code Editor) sends init/params with the use's values so ctx.params matches preview and export.
  */
 export const HTML_RUNTIME_JS = `const fns=[],q=new Map();let vt=0,rid=0,s=0x2f6b1d3,def=null,boot=null;const E=1767225600000;
 const vnow=()=>vt*1000;performance.now=vnow;const OD=Date;

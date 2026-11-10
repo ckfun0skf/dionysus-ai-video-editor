@@ -1,6 +1,6 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { HTML_CLIP_ASPECTS, HTML_CLIP_FORMAT, MAX_CLIP_SEC, PARAM_TYPES, lintHtmlClip, sizeForAspect, type HtmlClipIssue, type HtmlClipManifest, type HtmlClipParam, type ParamType, REF_TYPES, refType, type RefType, type HtmlClipInput } from "../domain";
-import { CLIP_LIBRARIES, HTML_SANDBOX, selectedLibraries, withRuntime } from "../render";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { HTML_CLIP_ASPECTS, HTML_CLIP_FORMAT, MAX_CLIP_SEC, PARAM_TYPES, lintHtmlClip, resolveHtmlParams, sizeForAspect, type HtmlClipIssue, type HtmlClipManifest, type HtmlClipParam, type HtmlParamValues, type ParamType, REF_TYPES, refType, type RefType, type HtmlClipInput } from "../domain";
+import { CLIP_LIBRARIES, selectedLibraries } from "../render";
 import {
   FONT_EXT, IMAGE_EXT, DEFAULT_FOR, fontFamily, freeKey, generateClip, generateRaw, paramRows, paramSnippet, parseClip, retype, rowsToParams, syntaxCheck, validateRows,
   type CodeClipModel, type ParamRow,
@@ -8,6 +8,8 @@ import {
 import { CODE_SAMPLES, type CodeSample } from "./codeSamples";
 import { CodeReviseWizard } from "./CodeReviseWizard";
 import { HtmlExportButtons } from "./HtmlImport";
+import { CodeClipPreview } from "./CodeClipPreview";
+import type { MixUnderlayFn } from "./codeClipMix";
 import { Ic as Icon } from "./Icon";
 import { LibraryPicker } from "./LibraryPicker";
 import { Sheet } from "./Sheet";
@@ -38,7 +40,6 @@ const TYPE_LABEL: Record<ParamType, string> = { number: "Number", color: "Colour
 export interface EditorIssue { level: "error" | "warning"; message: string; source: "syntax" | "runtime" | "package"; line?: number; code?: string }
 
 const readData = (f: File) => new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = () => rej(r.error); r.readAsDataURL(f); });
-const fmtTime = (t: number) => `${Math.floor(t / 60)}:${(t % 60).toFixed(1).padStart(4, "0")}`;
 const dataBytes = (d: string) => Math.round((d.length - d.indexOf(",") - 1) * 0.75);
 const fmtBytes = (n: number) => n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${Math.round(n / 1024)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`;
 export const fileKey = (name: string) => name.replace(/[^\w.-]+/g, "-");
@@ -163,94 +164,9 @@ export function CodeArea({ label, value, onChange, touch, errorLines, jump, minR
 }
 
 // ---------------------------------------------------------------------------------------------------------------
-// Preview
+// Preview (shared with the storyboard via CodeClipPreview)
 
-/** Forwards the clip's errors (window errors, rejections and the runtime's console.error) to the editor. */
-const REPORTER = `<script>(()=>{const post=(m,s)=>{try{parent.postMessage({type:"dionysus:error",message:String(m),stack:String(s||"")},"*")}catch(_){}};`
-  + `addEventListener("error",(e)=>post(e.message,(e.error&&e.error.stack)||(e.lineno?"about:srcdoc:"+e.lineno+":"+e.colno:"")));`
-  + `addEventListener("unhandledrejection",(e)=>{const r=e.reason;post(r&&r.message||r,r&&r.stack)});`
-  + `const ce=console.error.bind(console);console.error=(...a)=>{const x=a.find((v)=>v instanceof Error);post(x?x.message:a.map(String).join(" "),x&&x.stack);ce(...a)}})()</script>`;
-
-/** The preview document and the doc line where the clip's module script starts (to map error lines back). */
-export function previewDoc(html: string): { doc: string; scriptLine: number } {
-  const page = withRuntime(html);
-  const m = /^\s*<!doctype[^>]*>/i.exec(page);
-  const doc = m ? m[0] + REPORTER + page.slice(m[0].length) : REPORTER + page;
-  const at = doc.lastIndexOf('<script type="module">');
-  return { doc, scriptLine: at < 0 ? -1 : doc.slice(0, at).split("\n").length };
-}
-
-/** A runtime error's line in the Script tab, from its stack (about:srcdoc:LINE:COL), when it points into the script. */
-export function scriptLineOf(stack: string, scriptLine: number): number | undefined {
-  if (scriptLine < 0) return undefined;
-  const m = /about:srcdoc:(\d+):\d+/.exec(stack);
-  if (!m) return undefined;
-  const l = Number(m[1]) - scriptLine;
-  return l >= 1 ? l : undefined;
-}
-
-/**
- * Live preview in the same sandbox, CSP and runtime as the timeline; params use their defaults. Plays (looping over
- * the clip's length) or shows the scrubbed time.
- */
-export const HtmlLivePreview = memo(function Preview({ html, duration, width, height, transparent, background, collapsed, onError, onToggle }: {
-  html: string; duration: number; width: number; height: number; transparent: boolean; background?: string; collapsed: boolean;
-  /** Mobile: show/hide the stage (the transport stays). */ onToggle?: () => void;
-  onError: (e: { message: string; line?: number } | null) => void;
-}) {
-  const frame = useRef<HTMLIFrameElement>(null);
-  const [playing, setPlaying] = useState(true);
-  const [t, setT] = useState(0);
-  const tRef = useRef(0);
-  const seq = useRef(0);
-  const { doc, scriptLine } = useMemo(() => previewDoc(html), [html]);
-  // Frames go out only after the page's "ready" (its module script has run and registered the clip): the runtime boots
-  // (runs init) on the first frame, so an earlier frame would skip init.
-  const ready = useRef(false);
-  const post = useCallback((time: number) => { if (ready.current) frame.current?.contentWindow?.postMessage({ type: "dionysus:frame", seq: ++seq.current, t: time, duration }, "*"); }, [duration]);
-  useLayoutEffect(() => { ready.current = false; }, [doc]);
-  useEffect(() => {
-    onError(null);
-    const onMsg = (e: MessageEvent) => {
-      if (e.source !== frame.current?.contentWindow || !e.data || typeof e.data !== "object") return;
-      const d = e.data as { type?: string; bmp?: ImageBitmap; message?: string; stack?: string };
-      d.bmp?.close?.();
-      if (d.type === "dionysus:ready") { ready.current = true; post(tRef.current); }
-      if (d.type === "dionysus:error") onError({ message: String(d.message ?? "Error"), line: scriptLineOf(String(d.stack ?? ""), scriptLine) });
-    };
-    addEventListener("message", onMsg);
-    return () => removeEventListener("message", onMsg);
-  }, [doc, scriptLine, post, onError]);
-  useEffect(() => {
-    if (!playing) { post(tRef.current); return; }
-    let raf = 0, last = performance.now();
-    const tick = (now: number) => {
-      const len = Math.max(0.1, duration);
-      tRef.current = (tRef.current + Math.max(0, now - last) / 1000) % len;
-      last = now;
-      setT(tRef.current);
-      post(tRef.current);
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [playing, duration, doc, post]);
-  const scrub = (v: number) => { setPlaying(false); tRef.current = v; setT(v); post(v); };
-  return (
-    <div className="v2-ce-preview">
-      <div className={`v2-ce-stage ${transparent ? "is-transparent" : ""}`} hidden={collapsed}
-        style={{ aspectRatio: `${width} / ${height}`, width: `min(100%, calc(var(--ce-stage-max) * ${(width / Math.max(1, height)).toFixed(4)}))`, background: transparent ? undefined : background }}>
-        <iframe ref={frame} title="Live preview" sandbox={HTML_SANDBOX} srcDoc={doc} />
-      </div>
-      <div className="v2-ce-transport">
-        <button type="button" className="v2-btn v2-ce-icon" aria-label={playing ? "Pause preview" : "Play preview"} onClick={() => setPlaying(!playing)}><Icon g={playing ? "❚❚" : "▶"} /></button>
-        <input type="range" aria-label="Preview time" min={0} max={duration} step={0.01} value={Math.min(t, duration)} onChange={(e) => scrub(Number(e.target.value))} />
-        <span className="v2-ce-time" aria-live="off">{fmtTime(t)} / {fmtTime(duration)}</span>
-        {onToggle && <button type="button" className="v2-btn v2-ce-icon" aria-label={collapsed ? "Show preview" : "Hide preview"} aria-expanded={!collapsed} onClick={onToggle}><Icon g={collapsed ? "eye" : "eye-off"} /></button>}
-      </div>
-    </div>
-  );
-});
+export { previewDoc, scriptLineOf, HtmlLivePreview, CodeClipPreview } from "./CodeClipPreview";
 
 // ---------------------------------------------------------------------------------------------------------------
 // Small inputs
@@ -654,10 +570,14 @@ function htmlOf(d: Draft): string {
  * Revise with AI (an existing clip) uses the same wizard shell as Create code → AI mode: the open package
  * stays put until a reply is imported, and Save then makes the new version.
  */
-export function CodeEditor({ source, mobile, onSave, onClose, create, onAiMode }: {
+export function CodeEditor({ source, mobile, onSave, onClose, create, onAiMode, previewParams, mixUnderlay, mixPlacement }: {
   source: string; mobile: boolean; onSave: (html: string) => void; onClose: () => void;
   /** P4B: open the AI-mode wizard (Create code only). */ onAiMode?: () => void;
   /** A new clip (Add Media → Code → Create): the primary action adds it to the timeline. */ create?: boolean;
+  /** Per-use overrides (placement.htmlParams or a shot's params) applied live on top of the draft defaults. */
+  previewParams?: HtmlParamValues;
+  mixUnderlay?: MixUnderlayFn;
+  mixPlacement?: import("../domain").Placement;
 }) {
   const start = useMemo(() => draftOf(source), [source]);
   const [d, setD] = useState<Draft>(start);
@@ -731,6 +651,7 @@ export function CodeEditor({ source, mobile, onSave, onClose, create, onAiMode }
   });
 
   const m = d.manifest;
+  const previewValues = useMemo(() => resolveHtmlParams(rowsToParams(d.rows), previewParams), [d.rows, previewParams]);
   const duration = m.durationSec && m.durationSec > 0 ? m.durationSec : 5;
   const transparent = !m.background || m.background === "transparent";
   const fileCount = Object.keys(m.files ?? {}).length;
@@ -782,8 +703,9 @@ export function CodeEditor({ source, mobile, onSave, onClose, create, onAiMode }
 
   const preview = (
     <section className="v2-ce-side" aria-label="Preview">
-      <HtmlLivePreview html={live} duration={duration} width={m.width || 1920} height={m.height || 1080} transparent={transparent} background={m.background}
+      <CodeClipPreview html={live} duration={duration} width={m.width || 1920} height={m.height || 1080} transparent={transparent} background={m.background}
         collapsed={mobile && !previewOpen} onError={onPreviewError}
+        params={previewValues} mixUnderlay={mixUnderlay} mixPlacement={mixPlacement}
         onToggle={mobile ? () => setPreviewOpen((o) => !o) : undefined} />
       {!mobile && <IssueList issues={issues} onJump={goLine} />}
     </section>

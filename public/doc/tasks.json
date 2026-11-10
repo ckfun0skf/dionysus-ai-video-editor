@@ -3210,6 +3210,12 @@
           "title": "Code Editor file attachments accept drag-and-drop of one or more files (same types, 60 MB limit and 15 MB warning as Add files) onto the Files tab or anywhere on the editor; unsupported types are reported and skipped. A monochrome drop highlight uses a depth counter so entering a child does not flicker. The existing picker stays. Revise with AI / Code AI import already accepted a dropped .html/.zip (flicker fixed). Code AI Reference media also accepts dropped video/image. Mobile keeps the picker and hides the drop hint. Overlay drop does not navigate the browser. Guide rule 64.",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P54-CODE-PREVIEW-PARAMS-MIX",
+          "title": "Storyboard and timeline Code Editor share one html preview: it renders with the clip's actual JSON params (defaults ⊕ shot/layer/htmlParams, graphic/audio/tracker inputs resolved like the timeline when Mix can see underneath) and updates live when params change. A Mix toggle (≥44px, monochrome blend icon, off by default) composites the clip over the underlying main/overlay clips at the same time with the same layer order, opacity and blend as preview/export.",
+          "status": "done",
+          "progress": 100
         }
       ]
     }
