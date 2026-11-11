@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createProject, findPlacement, type MediaRef, type Project } from "./model";
+import { createProject, findPlacement, versionOfPlacement, type MediaRef, type Project } from "./model";
 import * as board from "./storyboard";
 import { sendStory, updateStory } from "./storySend";
 import { validateStoryboard } from "./storyJson";
@@ -192,5 +192,100 @@ describe("P58 delete version", () => {
     expect(plan.ok).toBe(true);
     if (!plan.ok) return;
     expect(plan.dropKeys).not.toContain("k1");
+  });
+});
+
+
+function standaloneHtml(pin = true): Project {
+  let p = createProject("t");
+  const ver = (id: string, key: string) => ({
+    id, createdAt: "2020-01-01T00:00:00Z", media: { blobKey: key, mime: "text/html" },
+    provenance: { source: "import" as const, inputs: [] },
+  });
+  p = { ...p, assets: { ...p.assets, html: { id: "html", name: "viz", kind: "html", versions: [ver("v1", "old.html")], selectedVersionId: "v1" } } };
+  const c = p.compositions[p.rootCompositionId];
+  const mk = (id: string, start: number) => ({
+    id, startTicks: start, durationTicks: s(3), sourceInTicks: 0,
+    source: { kind: "assetVersion" as const, assetId: "html", versionId: "v1" },
+    clipType: "html" as const, ...(pin ? { versionId: "v1" } : {}),
+  });
+  const tracks = c.tracks.map((t, i) => i === 0 ? { ...t, placements: [mk("A", 0), mk("B", s(3))] } : t);
+  return { ...p, compositions: { ...p.compositions, [c.id]: { ...c, tracks } } };
+}
+
+describe("P59 version save mode and preview pin", () => {
+  it("saving a new take from a pinned HTML clip previews that take; the sibling stays on the old one", () => {
+    let p = standaloneHtml(true);
+    expect(versionOfPlacement(p, pl(p, "A"))?.media.blobKey).toBe("old.html");
+    const r = cv.applyMediaFromClip(p, "A", { blobKey: "new.html", mime: "text/html" }, { versionId: "v2", mode: "new" });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    p = r.project;
+    expect(p.assets.html.versions.map((v) => v.id)).toEqual(["v1", "v2"]);
+    expect(p.assets.html.selectedVersionId).toBe("v2");
+    expect(pl(p, "A").versionId).toBe("v2");
+    expect(versionOfPlacement(p, pl(p, "A"))?.id).toBe("v2");
+    expect(versionOfPlacement(p, pl(p, "A"))?.media.blobKey).toBe("new.html");
+    expect(pl(p, "B").versionId).toBe("v1");
+    expect(versionOfPlacement(p, pl(p, "B"))?.id).toBe("v1");
+    expect(versionOfPlacement(p, pl(p, "B"))?.media.blobKey).toBe("old.html");
+    expect(p.settings.versionSaveMode).toBeUndefined();
+  });
+
+  it("replace current version keeps the id, updates the blob, notes other clips, and drops the old key", () => {
+    let { p, clipId: A, assetId } = withShot();
+    p = splitAt(p, A, s(1.5), "B");
+    const before = p.assets[assetId].versions.find((v) => v.id === "v1")!;
+    const r = cv.applyMediaFromClip(p, A, media("k-new", 1.5, "k-new"), { mode: "replace" });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.mode).toBe("replace");
+    expect(r.otherCount).toBe(1);
+    expect(r.note).toMatch(/1 other clip/);
+    expect(r.dropKeys).toContain("k1");
+    p = r.project;
+    const after = p.assets[assetId].versions.find((v) => v.id === "v1")!;
+    expect(after.id).toBe(before.id);
+    expect(after.media.blobKey).toBe("k-new");
+    expect(versionOfPlacement(p, pl(p, A))?.media.blobKey).toBe("k-new");
+    expect(versionOfPlacement(p, pl(p, "B"))?.media.blobKey).toBe("k-new");
+    expect(p.settings.versionSaveMode).toBe("replace");
+  });
+
+  it("does not drop a blob still used by another version", () => {
+    let { p, clipId: A, assetId } = withShot();
+    p = (cv.addStoryVersionFromClip(p, A, media("k1", 3, "k1"), { versionId: "v2" }) as { ok: true; project: Project }).project;
+    const r = cv.replaceCurrentVersion(p, A, media("k1", 3, "k1"));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.dropKeys ?? []).not.toContain("k1");
+    expect(p.assets[assetId].versions[0].media.blobKey).toBe("k1");
+  });
+
+  it("replace of a longer take without fit asks, then trim and full apply", () => {
+    const { p, clipId } = withShot(3);
+    const need = cv.replaceCurrentVersion(p, clipId, media("long", 8, "long"));
+    expect(need.ok).toBe(false);
+    if (need.ok) return;
+    expect(need.error).toMatch(/fit/);
+    const trimmed = cv.replaceCurrentVersion(p, clipId, media("long", 8, "long"), { fit: "trim", inSec: 2 });
+    expect(trimmed.ok).toBe(true);
+    if (!trimmed.ok) return;
+    expect(pl(trimmed.project, clipId).durationTicks).toBe(s(3));
+    expect(pl(trimmed.project, clipId).sourceInTicks).toBe(s(2));
+    const full = cv.replaceCurrentVersion(p, clipId, media("long", 8, "long"), { fit: "full" });
+    expect(full.ok).toBe(true);
+    if (!full.ok) return;
+    expect(pl(full.project, clipId).durationTicks).toBe(s(8));
+  });
+
+  it("a snapshot of the project before replace still holds the old media (undo)", () => {
+    const { p, clipId, assetId } = withShot();
+    const snap = p;
+    const r = cv.replaceCurrentVersion(p, clipId, media("k-new", 3, "k-new"));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.project.assets[assetId].versions[0].media.blobKey).toBe("k-new");
+    expect(snap.assets[assetId].versions[0].media.blobKey).toBe("k1");
   });
 });

@@ -549,4 +549,15 @@ describe("P58 set_clip_version / delete_version / replace fit", () => {
     e.undo();
     expect(P().assets[shotAsset].versions.map((v) => v.id)).toEqual(["o1", "o2"]);
   });
+  it("replace_clip_asset mode replace overwrites the current take", async () => {
+    const e = await shotEngine();
+    const id = ops.mainTrack(root(e.getState().project))!.placements[0].id;
+    const assetId = e.getState().project.storyboard!.shots.s1.assetId!;
+    const res = await runTimelineTool(e, undefined, "replace_clip_asset", { clipId: id, assetId: "w", mode: "replace", fit: "trim" });
+    expect(res.ok).toBe(true);
+    const P = e.getState().project;
+    expect(P.assets[assetId].versions.map((v) => v.id)).toEqual(["o1"]);
+    expect(P.assets[assetId].versions[0].media.blobKey).toBe(P.assets.w.versions[0].media.blobKey);
+    expect(P.settings.versionSaveMode).toBe("replace");
+  });
 });

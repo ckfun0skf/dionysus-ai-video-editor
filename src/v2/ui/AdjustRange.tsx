@@ -14,9 +14,10 @@
 import { clipTimeAt, fmtSec } from "./clipTime";
 import { useEffect, useMemo, useRef, useState, type PointerEvent as RPE } from "react";
 import { cmd, type Command, type Engine } from "../engine";
-import { clipRange, findPlacement, slip, ticksToSeconds, TICKS_PER_SECOND, type Asset, type MediaRef, type Placement, type Project } from "../domain";
+import { clipRange, clipVersion, findPlacement, slip, ticksToSeconds, TICKS_PER_SECOND, versionOfPlacement, type Asset, type MediaRef, type Placement, type Project } from "../domain";
 import type { BlobStore } from "../ports";
 import { Ic } from "./Icon";
+import { VersionSaveModeChoice } from "./VersionSaveMode";
 import { Waveform } from "./ClipPreview";
 import { mediaKey } from "./useMedia";
 import { nearestFrame, type Filmstrip, type Peaks } from "./media";
@@ -178,6 +179,7 @@ export function AdjustRange({ engine, project, clipId, blobs, peaks, strips, thu
   const [onShort, setOnShort] = useState<slip.OnShort>();
   const [picking, setPicking] = useState(!!startInPicker);
   const [pendingFit, setPendingFit] = useState<{ media: MediaRef; name: string } | null>(null);
+  const [saveMode, setSaveMode] = useState<clipVersion.VersionSaveMode>(() => clipVersion.versionSaveModeOf(project));
   const [fitInT, setFitInT] = useState(0);
   const [locked, setLocked] = useState(true);
   const linked = orig ? root(project).tracks.flatMap((t) => t.placements).filter((p) => p.link?.parent === clipId) : [];
@@ -235,16 +237,19 @@ export function AdjustRange({ engine, project, clipId, blobs, peaks, strips, thu
   const applyStoryVersion = (media: MediaRef, opts: { fit?: "trim" | "full"; inSec?: number } = {}) => {
     if (!story || !orig) return false;
     const shorter = !!media.durationTicks && media.durationTicks < orig.durationTicks - 1;
-    const ok = engine.dispatch(cmd.addStoryVersionFromClip(clipId, media, { fit: opts.fit, inSec: opts.inSec, ripple }));
+    const ok = engine.dispatch(cmd.addStoryVersionFromClip(clipId, media, { fit: opts.fit, inSec: opts.inSec, ripple, mode: saveMode }));
     const after = engine.getState().project, nb = after.storyboard;
     const own = nb && ("shot" in story.target ? nb.shots[story.target.shot] : nb.slots[story.target.slot]);
     const n = own?.assetId ? after.assets[own.assetId]?.versions.length : undefined;
-    const note = !ok ? "Couldn't add the version."
+    const replaced = saveMode === "replace";
+    const note = !ok ? (replaced ? "Couldn't replace the version." : "Couldn't add the version.")
       : shorter
         ? (ripple
           ? `This take is shorter (${fmt(media.durationTicks!)} vs ${fmt(orig.durationTicks)}). The clip was shortened and later clips moved up.`
-          : `This take is shorter (${fmt(media.durationTicks!)} vs ${fmt(orig.durationTicks)}). The clip was shortened; a gap was left.`) + ` Added as a new version of ${story.label} for this clip.`
-        : `${story.label}: added as a new version${n ? ` (v${n})` : ""} for this clip — other clips of the shot stay as they are.`;
+          : `This take is shorter (${fmt(media.durationTicks!)} vs ${fmt(orig.durationTicks)}). The clip was shortened; a gap was left.`) + (replaced ? ` Replaced the current version of ${story.label}.` : ` Added as a new version of ${story.label} for this clip.`)
+        : replaced
+          ? `${story.label}: replaced the current version in place.`
+          : `${story.label}: added as a new version${n ? ` (v${n})` : ""} for this clip — other clips of the shot stay as they are.`;
     onDone(note);
     return true;
   };
@@ -279,6 +284,12 @@ export function AdjustRange({ engine, project, clipId, blobs, peaks, strips, thu
       <div className="v2-slip" data-testid="adjust-range-fit">
         {head("This take is longer", () => { setPendingFit(null); setPicking(true); }, "Back")}
         <p className="v2-abnote" data-testid="fit-longer-note">The new take is {fmt(mediaTicks)} long; this shot/clip is {fmt(clipTicks)}.</p>
+        {story && !!project.assets[orig.source.assetId]?.versions.length && (
+          <VersionSaveModeChoice mode={saveMode} onChange={setSaveMode} otherCount={(() => {
+            const shown = versionOfPlacement(project, orig);
+            return shown ? clipVersion.clipsShowingVersion(project, orig.source.assetId, shown.id).filter((pl) => pl.id !== clipId).length : 0;
+          })()} />
+        )}
         <div className="v2-slip-warn" data-testid="fit-trim-block">
           <p><b>Trim to shot length</b> — pick which segment to keep (starts at the beginning by default).</p>
           <LoopPreview blobs={blobs} blobKey={pendingFit.media.blobKey} kind={previewKind} inS={inS} outS={inS + ticksToSeconds(clipTicks)} />
@@ -297,7 +308,13 @@ export function AdjustRange({ engine, project, clipId, blobs, peaks, strips, thu
   const closePicker = () => (startInPicker || !slip.slipKind(orig) ? onDone() : setPicking(false));
   if (picking || !slip.slipKind(orig)) return (
     <div className="v2-slip is-picking" data-testid="adjust-range">
-      {head(story ? `New version · ${story.label}` : "Replace asset", closePicker, startInPicker || !slip.slipKind(orig) ? "Cancel" : "Back")}
+      {head(story ? (saveMode === "replace" ? `Replace version · ${story.label}` : `New version · ${story.label}`) : "Replace asset", closePicker, startInPicker || !slip.slipKind(orig) ? "Cancel" : "Back")}
+      {story && !!project.assets[orig.source.assetId]?.versions.length && (
+        <VersionSaveModeChoice mode={saveMode} onChange={setSaveMode} otherCount={(() => {
+          const shown = versionOfPlacement(project, orig);
+          return shown ? clipVersion.clipsShowingVersion(project, orig.source.assetId, shown.id).filter((pl) => pl.id !== clipId).length : 0;
+        })()} />
+      )}
       <AssetPicker story={story?.label} kindOf={(id) => engine.getState().project.assets[id]?.kind} project={project} kind={assetKind} current={orig.source.assetId} thumbs={thumbs} onUpload={onUpload} onBack={closePicker} onPick={(id) => {
         if (pickAsVersion(id)) return;
         if (!slip.slipKind(orig)) {

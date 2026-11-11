@@ -38,6 +38,7 @@ export type { ClipMask, MaskShape, MaskNode, MaskKeys } from "./mask";
 export type { MotionTrack, NamedTrack, TrackSample, TrackMask, TrackPos, Box, TrackSignal } from "./tracking";
 export * as cleanup from "./cleanup";
 export * as clipVersion from "./clipVersion";
+export type { VersionSaveMode, FitChoice, ApplyMediaOpts, ApplyMediaResult } from "./clipVersion";
 export * from "./audioClip";
 export * from "./audioClipPrompt";
 export * from "./spatial";

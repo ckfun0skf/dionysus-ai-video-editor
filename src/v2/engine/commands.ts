@@ -309,10 +309,10 @@ export const setClipVersion = (clipId: string, versionId: string | null): Comman
   apply: (p) => clipVersion.setClipVersion(p, clipId, versionId).project,
 });
 /** P58: add a new shot version from a timeline clip and pin it to that clip only. */
-export const addStoryVersionFromClip = (clipId: string, media: MediaRef, opts: { versionId?: string; fit?: clipVersion.FitChoice; inSec?: number; ripple?: boolean } = {}): Command => ({
-  label: "Add version",
+export const addStoryVersionFromClip = (clipId: string, media: MediaRef, opts: clipVersion.ApplyMediaOpts = {}): Command => ({
+  label: opts.mode === "replace" ? "Replace current version" : "Add version",
   apply: (p) => {
-    const r = clipVersion.addStoryVersionFromClip(p, clipId, media, opts);
+    const r = clipVersion.applyMediaFromClip(p, clipId, media, opts);
     if (!r.ok) throw new Error(r.error);
     return r.project;
   },
@@ -344,7 +344,7 @@ export const setSubtitles = (list: Subtitle[], label = "Import subtitles"): Comm
 export const setPosition = (id: string, pos: { azimuth: number; distance: number; width?: number } | null | undefined, keys?: import("../domain").PositionKey[] | null, label = "Sound position"): Command => ({ label, coalesceKey: keys === undefined && pos ? `pos:${id}` : undefined, apply: (p) => withRoot(p, (c) => ops.setPosition(c, id, pos, keys)) });
 export const setTrackPosition = (trackId: string, pos: { azimuth: number; distance: number; width?: number } | null): Command => ({ label: "Track sound position", coalesceKey: pos ? `tpos:${trackId}` : undefined, apply: (p) => withRoot(p, (c) => ops.setTrackPosition(c, trackId, pos)) });
 /** V2-106: project canvas size / frame rate / background. Sizes are clamped even (H.264) and within 16..8192. */
-export type ProjectSettingsPatch = Partial<{ width: number; height: number; fps: number; background: string; autoLink: boolean; audioOutput: import("../domain").AudioOutput | null }>;
+export type ProjectSettingsPatch = Partial<{ width: number; height: number; fps: number; background: string; autoLink: boolean; audioOutput: import("../domain").AudioOutput | null; versionSaveMode: clipVersion.VersionSaveMode }>;
 export const setProjectSettings = (patch: ProjectSettingsPatch, label = "Project settings"): Command => ({
   label,
   coalesceKey: patch.background !== undefined && Object.keys(patch).length === 1 ? "settings-bg" : undefined,
@@ -362,6 +362,10 @@ export const setProjectSettings = (patch: ProjectSettingsPatch, label = "Project
       if (!a || (a.mode === "stereo" && (a.environment ?? "room") === "room")) delete s.audioOutput; else s.audioOutput = { mode: a.mode, ...(a.environment && a.environment !== "room" ? { environment: a.environment } : {}) };
     }
     if (patch.autoLink !== undefined) { if (patch.autoLink) delete s.autoLink; else s.autoLink = false; }
+    if (patch.versionSaveMode !== undefined) {
+      if (patch.versionSaveMode !== "new" && patch.versionSaveMode !== "replace") throw new Error('versionSaveMode must be "new" or "replace"');
+      if (patch.versionSaveMode === "replace") s.versionSaveMode = "replace"; else delete s.versionSaveMode;
+    }
     return { ...p, settings: s };
   },
 });
@@ -451,16 +455,26 @@ export const duplicateClips = (ids: string[], newIds: string[]): Command => ({
   apply: (p) => withRoot(p, (c) => edit.duplicateClips(c, ids, idFeed(newIds)).comp),
 });
 
-/** Add a new version to an asset, select it, and point one placement at it (e.g. after editing an HTML clip). Undo restores both. */
-export const addAssetVersion = (assetId: string, version: AssetVersion, placementId?: string): Command => ({
-  label: "Edit HTML clip",
+/** Add a new version to an asset, select it, and pin one placement at it (e.g. after editing an HTML clip). Undo restores both. */
+export const addAssetVersion = (assetId: string, version: AssetVersion, placementId?: string, opts: { mode?: clipVersion.VersionSaveMode } = {}): Command => ({
+  label: opts.mode === "replace" ? "Replace current version" : "Edit HTML clip",
   apply: (p) => {
+    if (placementId) {
+      const r = clipVersion.applyMediaFromClip(p, placementId, version.media, { mode: opts.mode ?? "new", versionId: version.id, seed: version, remember: true });
+      if (!r.ok) throw new Error(r.error);
+      return r.project;
+    }
     const a = p.assets[assetId];
     if (!a) return p;
+    if (opts.mode === "replace") {
+      const vid = a.selectedVersionId ?? a.versions.at(-1)?.id;
+      if (!vid) return p;
+      const r = clipVersion.replaceAssetVersion(p, assetId, vid, version.media, { remember: true });
+      if (!r.ok) throw new Error(r.error);
+      return r.project;
+    }
     const assets = { ...p.assets, [assetId]: { ...a, versions: [...a.versions, version], selectedVersionId: version.id } };
-    const next = { ...p, assets };
-    if (!placementId) return next;
-    return withRoot(next, (c) => ({ ...c, tracks: c.tracks.map((t) => ({ ...t, placements: t.placements.map((pl) => (pl.id === placementId ? { ...pl, source: { ...pl.source, versionId: version.id } } : pl)) })) }));
+    return { ...p, assets };
   },
 });
 
@@ -584,7 +598,17 @@ export const mergeStoryboardDoc = (doc: StoryDoc): Command => ({ label: "Update 
 export const removeStoryboard = (): Command => ({ label: "Remove storyboard", apply: (p) => board.setStoryboard(p, undefined) });
 /** P15: dismiss a frameOf slot's "source shot changed" warning for the source shot's current version only. */
 export const dismissFrameWarning = (slotId: string): Command => ({ label: "Dismiss frame warning", apply: (p) => board.dismissFrameWarning(p, slotId) });
-export const addStoryVersion = (...args: Parameters<typeof board.addStoryVersion> extends [unknown, ...infer R] ? R : never): Command => ({ label: "Upload version", apply: (p) => board.addStoryVersion(p, ...args) });
+export const addStoryVersion = (target: Parameters<typeof board.addStoryVersion>[1], media: Parameters<typeof board.addStoryVersion>[2], opts: Parameters<typeof board.addStoryVersion>[3] & { mode?: clipVersion.VersionSaveMode } = {}): Command => ({
+  label: opts.mode === "replace" ? "Replace current version" : "Upload version",
+  apply: (p) => {
+    if (opts.mode === "replace") {
+      const r = clipVersion.replaceStoryTarget(p, target, media, opts);
+      if (!r.ok) throw new Error(r.error);
+      return r.project;
+    }
+    return board.addStoryVersion(p, target, media, opts);
+  },
+});
 /** P58: remove one version of an asset; clips that used it switch to `fallbackId` (or the current / newest remaining). */
 export const deleteAssetVersion = (assetId: string, versionId: string, fallbackId?: string): Command => ({
   label: "Delete version",
@@ -595,10 +619,15 @@ export const selectStoryVersion = (assetId: string, versionId: string): Command 
  * V2-SB-121: upload a shot clip longer than planned, either trimmed (`trim`) or kept whole (`keepFullSec` extends
  * the shot's planned length). One undo step.
  */
-export const addTrimmedShotVersion = (shotId: string, media: Parameters<typeof board.addStoryVersion>[2], opts: { trim?: board.VersionTrim; keepFullSec?: number; versionId?: string; model?: string } = {}): Command => ({
-  label: opts.trim ? "Upload trimmed version" : "Upload version",
+export const addTrimmedShotVersion = (shotId: string, media: Parameters<typeof board.addStoryVersion>[2], opts: { trim?: board.VersionTrim; keepFullSec?: number; versionId?: string; model?: string; mode?: clipVersion.VersionSaveMode } = {}): Command => ({
+  label: opts.mode === "replace" ? "Replace current version" : opts.trim ? "Upload trimmed version" : "Upload version",
   apply: (p) => {
     const next = opts.keepFullSec ? storyEdit.updateShot(p, shotId, { durationSec: opts.keepFullSec }) : p;
+    if (opts.mode === "replace") {
+      const r = clipVersion.replaceStoryTarget(next, { shot: shotId }, media, { versionId: opts.versionId, model: opts.model, trim: opts.trim, remember: true });
+      if (!r.ok) throw new Error(r.error);
+      return r.project;
+    }
     return board.addStoryVersion(next, { shot: shotId }, media, { versionId: opts.versionId, model: opts.model, trim: opts.trim });
   },
 });

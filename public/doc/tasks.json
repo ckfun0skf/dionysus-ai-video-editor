@@ -3240,6 +3240,12 @@
           "title": "Per-clip version pin for storyboard-linked timeline clips (split/copy halves pick independently; adding a version from one clip pins only that clip; resync keeps pins; Follow storyboard unpins). Main-track Replace on a shot clip adds a new version of that shot: upload in the picker; a longer take asks trim (in-point scrub, default 0) or keep full length (respects ripple); a shorter take notes it and keeps gap/ripple behaviour. Delete old versions from the storyboard list and the clip picker, with confirmation listing affected clips and the fallback version; cannot delete the last version; one undo; unreferenced media is dropped. WebMCP: set_clip_version, delete_version, replace_clip_asset fit/inSec.",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P59-VERSION-SAVE-MODE",
+          "title": "Choose Save as new version or Replace current version when uploading/creating a take (video, image, or code). A take added from a clip is immediately what that clip previews (pin + versionOfPlacement). Replace overwrites the current take in place (other clips on it update; note the count; last choice remembered on the project). Code editor Save menu, storyboard upload, timeline Replace, WebMCP mode new|replace. Brand logo in the header (opens Projects) and SVG favicon. Mobile fullscreen preview player: tap overlay, double-tap ±5s, orientation lock or CSS-rotate fallback.",
+          "status": "done",
+          "progress": 100
         }
       ]
     }

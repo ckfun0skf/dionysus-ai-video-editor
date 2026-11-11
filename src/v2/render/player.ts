@@ -12,7 +12,7 @@ import { trackSignal, type TrackSignal } from "../domain/tracking";
 import { audioFxData, buildFxChain, fxKey, type FxChain } from "./audioFx";
 import { buildSpatial, type SpatialStage } from "./spatial";
 import { audioOutputOf, spatialAt, spatialOf, type AudioEnvironment, type AudioOutputMode } from "../domain/spatial";
-import { compositionDuration, fadeAt, findPlacement, volumeKeyAt, versionOf, type Placement, type Project } from "../domain/model";
+import { compositionDuration, fadeAt, findPlacement, volumeKeyAt, versionOfPlacement, type Placement, type Project } from "../domain/model";
 import type { BlobStore } from "../ports/storage";
 import { subtitleAt } from "../domain/subtitles";
 import { loadBundledFonts } from "./fonts";
@@ -63,6 +63,8 @@ export class Player {
   private pendingFrame = new Map<HTMLVideoElement, Promise<void>>();
   private probe?: CanvasRenderingContext2D | null;
   private html = new Map<string, { key: string; host: HtmlClipHost }>();
+  /** P59: local fullscreen mute (does not edit the project). */
+  previewMute = false;
   /** Manifest per HTML blob, read when its clip first loads (blobs are immutable). */
   private manifests = new Map<string, HtmlClipManifest>();
   /** Latest per-use param overrides by html placement id (V2-HTML-PARAMS), read when a clip's page initialises. */
@@ -234,7 +236,8 @@ export class Player {
     const sizeKey = `${blobKey}@${w}x${h}`;
     const key = known ? `${sizeKey}|${bindingSignature(resolveClipBindings(this.project, known))}` : undefined;
     const hit = this.html.get(placementId);
-    if (hit && (hit.key === key || (!key && hit.key.startsWith(`${sizeKey}|`)))) return hit.host;
+    // Only reuse the iframe when it was built for this blobKey (a new take must reload even before the manifest is known).
+    if (hit && hit.key.startsWith(`${blobKey}@`) && (hit.key === key || (!key && hit.key.startsWith(`${sizeKey}`)))) return hit.host;
     hit?.host.dispose();
     const entry = { key: key ?? `${sizeKey}|?`, host: undefined as unknown as HtmlClipHost };
     entry.host = new HtmlClipHost(this.blobs.get(blobKey).then((b) => b?.text()), w, h, () => { if (!this.playing) this.draw(); }, async (html): Promise<HtmlClipInit> => {
@@ -330,7 +333,7 @@ export class Player {
       const comp = this.project.compositions[this.project.rootCompositionId];
       const found = findPlacement(comp, placementId);
       const pl = found ? effectivePlacement(found.track, found.placement) : undefined;
-      const ver = pl && !pl.blank ? versionOf(this.project, pl.source) : undefined;
+      const ver = pl && !pl.blank ? versionOfPlacement(this.project, pl) : undefined;
       const known = ver && this.manifests.get(ver.media.blobKey);
       const inputs = pl && known?.inputs ? this.inputsFor(pl, known.inputs, canvas) : undefined;
       return { image: canvas, ...(inputs ? { inputs } : {}) };
@@ -404,7 +407,7 @@ export class Player {
         }
         continue;
       }
-      const version = placement.blank ? undefined : versionOf(this.project, placement.source);
+      const version = placement.blank ? undefined : versionOfPlacement(this.project, placement);
       if ((!version && !placement.blank) || track.hidden) continue;
       // Overlay-scope effects: draw the clip on a transparent layer, apply the effect there, then composite it.
       const paint = (blend: string | undefined, fn: (dc: CanvasRenderingContext2D) => void) => {
@@ -493,7 +496,7 @@ export class Player {
         const ld = clipLoadOf(el, this.playing);
         if (ld) loads.set(placement.id, ld);
         const target = ticksToSeconds(sourceTicks);
-        el.muted = !!track.muted || !!track.hidden || (placement.clipType === "video" && !!placement.linkedAudio?.muted);
+        el.muted = this.previewMute || !!track.muted || !!track.hidden || (placement.clipType === "video" && !!placement.linkedAudio?.muted);
         const vol = Math.max(0, placement.volume ?? 1) * fadeAt(placement, this.time) * volumeKeyAt(placement, this.time);
         const sp = spatialOf(placement, track), out = audioOutputOf(this.project);
         const gain = this.gainFor(el, placement.audioFx, sp ? `${out.mode}:${out.environment}` : "");
@@ -573,7 +576,7 @@ export class Player {
     if (!this.offline) {
       for (const { placement } of upcomingMedia(comp, this.playing ? this.time : Math.max(0, this.time - PRELOAD_TICKS), this.playing ? PRELOAD_TICKS : 2 * PRELOAD_TICKS)) {
         if (live.has(placement.id)) continue;
-        const v = versionOf(this.project, placement.source);
+        const v = versionOfPlacement(this.project, placement);
         const src = v && this.url(v.media.blobKey);
         if (!src) continue;
         const el = this.element(placement.id, placement.clipType, src);
@@ -699,7 +702,7 @@ export class Player {
     const out = new Set<string>();
     for (const { placement: p } of layers) {
       if (p.clipType !== "html") continue;
-      const v = versionOf(this.project, p.source), m = v && this.manifests.get(v.media.blobKey);
+      const v = versionOfPlacement(this.project, p), m = v && this.manifests.get(v.media.blobKey);
       for (const [name, d] of Object.entries(m?.inputs ?? {})) if (d && refType(d.type) === "graphic") { const s = inputSourceOf(this.project, p, name, "graphic"); if (s !== "program") out.add(s); }
     }
     return out;
@@ -756,7 +759,7 @@ export class Player {
         if (kind === "clip" && p.id !== id) continue;
         if (this.time < p.startTicks || this.time >= p.startTicks + p.durationTicks) continue;
         if (p.clipType !== "audio" && !(p.clipType === "video" && !p.linkedAudio?.muted)) continue;
-        const v = versionOf(this.project, p.source);
+        const v = versionOfPlacement(this.project, p);
         const f = v && this.featuresOf(v.media.blobKey);
         if (!f) continue;
         const sec = ticksToSeconds(p.sourceInTicks + (this.time - p.startTicks) * (p.speed ?? 1));
@@ -808,7 +811,7 @@ export class Player {
     if (this.exportVideo) {
       const on = new Set<string>();
       for (const l of videos) {
-        const v = versionOf(this.project, l.placement.source);
+        const v = versionOfPlacement(this.project, l.placement);
         if (!v) continue;
         on.add(l.placement.id);
         await this.exportVideo.prepare(l.placement.id, v.media.blobKey, ticksToSeconds(l.sourceTicks));
@@ -835,7 +838,7 @@ export class Player {
     let redraw = false;
     const bad: string[] = [];
     for (const { placement: p, sourceTicks } of videos) {
-      if (this.exportVideo?.handles(p.id) || !versionOf(this.project, p.source)) continue;
+      if (this.exportVideo?.handles(p.id) || !versionOfPlacement(this.project, p)) continue;
       const st = this.videoStats.get(p.id) ?? { frames: 0, blank: 0 };
       this.videoStats.set(p.id, st);
       st.frames += 1;

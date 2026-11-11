@@ -287,7 +287,9 @@ export interface Project {
     /** P9-LINK: link new non-main clips to the main clip under their start (absent = on). */
     autoLink?: boolean;
     /** P14-SPATIAL: "stereo" (default) or "binaural" (HRTF, for headphones) and the reverb environment. */
-    audioOutput?: import("./spatial").AudioOutput };
+    audioOutput?: import("./spatial").AudioOutput;
+    /** P59: last chosen version save mode (absent = "new"). */
+    versionSaveMode?: "new" | "replace" };
   rootCompositionId: string;
   assets: Record<string, Asset>;
   compositions: Record<string, Composition>;
@@ -352,6 +354,19 @@ export function findPlacement(comp: Composition, placementId: string): { track: 
 
 export function versionOf(project: Project, ref: SourceRef): AssetVersion | undefined {
   return project.assets[ref.assetId]?.versions.find((v) => v.id === ref.versionId);
+}
+
+/**
+ * P59: the version this placement should display — a valid per-clip pin (P58), otherwise the
+ * asset's selected version, otherwise source.versionId. Preview, thumbnail and export use this
+ * so a take added from a clip is what that clip shows.
+ */
+export function versionOfPlacement(project: Project, pl: Placement): AssetVersion | undefined {
+  const a = project.assets[pl.source.assetId];
+  if (!a) return undefined;
+  const pinned = pl.versionId && a.versions.some((v) => v.id === pl.versionId) ? pl.versionId : undefined;
+  const id = pinned ?? a.selectedVersionId ?? a.versions.at(-1)?.id ?? pl.source.versionId;
+  return a.versions.find((v) => v.id === id);
 }
 
 /**

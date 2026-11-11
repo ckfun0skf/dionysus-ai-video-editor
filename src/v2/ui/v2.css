@@ -1610,3 +1610,75 @@ select.v2-tp-field { -webkit-appearance: none; appearance: none; padding-right: 
 .v2-cver-confirm p, .v2-cver-warn { margin: 0; }
 .v2-cver-confirm ul { margin: 0; padding-left: 1.2em; }
 .v2-cver-sec { margin-bottom: 14px; display: grid; gap: 6px; }
+
+/* P59: brand mark — ≥44px target, not a chrome push-button look */
+.v2-brand {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px; padding: 8px; margin: 0; flex: none;
+  border: 0; background: transparent; color: inherit; cursor: pointer;
+  border-radius: 10px;
+}
+.v2-brand:hover, .v2-brand:focus-visible { background: color-mix(in srgb, currentColor 12%, transparent); }
+.v2-brand svg { display: block; width: 24px; height: 24px; }
+
+/* P59: version save mode */
+.v2-vsave { display: flex; flex-direction: column; gap: 8px; margin: 8px 0; }
+.v2-vsave-opts { display: flex; flex-direction: column; gap: 8px; }
+@media (min-width: 720px) {
+  .v2-vsave-opts { flex-direction: row; }
+}
+.v2-vsave-opt {
+  flex: 1; text-align: left; padding: 10px 12px; min-height: 44px;
+  border: 1px solid var(--line); border-radius: 10px; background: transparent; color: inherit; cursor: pointer;
+}
+.v2-vsave-opt.is-on { border-color: var(--accent, currentColor); background: rgba(120,180,255,.12); }
+.v2-vsave-opt:disabled { opacity: .45; cursor: not-allowed; }
+.v2-vsave-opt b { display: block; }
+.v2-vsave-opt span { display: block; font-size: 12px; opacity: .75; margin-top: 4px; }
+.v2-vsave-note { margin: 0; font-size: 13px; opacity: .8; }
+
+.v2-save-split { position: relative; display: inline-flex; align-items: stretch; }
+.v2-save-caret { padding-inline: 8px; min-width: 36px; }
+.v2-save-menu {
+  position: absolute; right: 0; top: calc(100% + 4px); z-index: 6;
+  display: flex; flex-direction: column; min-width: 220px;
+  background: var(--panel, #1c1c1e); border: 1px solid var(--line); border-radius: 10px; padding: 4px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 35%);
+}
+.v2-save-menu button {
+  text-align: left; min-height: 44px; padding: 8px 12px; border: 0; background: transparent; color: inherit; cursor: pointer; border-radius: 8px;
+}
+.v2-save-menu button:hover { background: color-mix(in srgb, currentColor 10%, transparent); }
+
+/* P59: mobile fullscreen preview player */
+.v2-fs { position: absolute; inset: 0; z-index: 4; touch-action: manipulation; color: #fff; }
+.v2-fs-ui {
+  position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: space-between;
+  padding: calc(8px + env(safe-area-inset-top, 0px)) calc(8px + env(safe-area-inset-right, 0px)) calc(8px + env(safe-area-inset-bottom, 0px)) calc(8px + env(safe-area-inset-left, 0px));
+  background: linear-gradient(to bottom, rgb(0 0 0 / 45%), transparent 28%, transparent 72%, rgb(0 0 0 / 55%));
+  opacity: 0; pointer-events: none; transition: opacity .2s ease;
+}
+.v2-fs-ui.is-on { opacity: 1; pointer-events: auto; }
+.v2-fs-top, .v2-fs-bottom { display: flex; align-items: center; gap: 8px; }
+.v2-fs-top { justify-content: space-between; }
+.v2-fs-top-end { display: flex; gap: 4px; }
+.v2-fs-btn, .v2-fs-play {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 44px; min-height: 44px; padding: 0; border: 0; border-radius: 999px;
+  background: rgb(0 0 0 / 35%); color: #fff; cursor: pointer;
+}
+.v2-fs-play { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 72px; height: 72px; }
+.v2-fs-bottom { margin-top: auto; }
+.v2-fs-time { font-variant-numeric: tabular-nums; font-size: 12px; color: #fff; min-width: 4.5em; }
+.v2-fs-scrub { flex: 1; min-height: 44px; accent-color: #fff; }
+.v2-fs-skip {
+  position: absolute; left: 50%; top: 28%; transform: translate(-50%, -50%);
+  padding: 8px 14px; border-radius: 999px; background: rgb(0 0 0 / 55%); color: #fff; font-weight: 600;
+  pointer-events: none;
+}
+.v2-canvas-wrap.is-fs-rotate {
+  position: fixed; top: 50%; left: 50%;
+  width: 100dvh; height: 100dvw;
+  transform: translate(-50%, -50%) rotate(90deg);
+  z-index: 31;
+}

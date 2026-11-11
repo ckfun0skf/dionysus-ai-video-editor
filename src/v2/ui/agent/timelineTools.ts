@@ -467,14 +467,24 @@ export async function runTimelineTool(engine: Engine, source: FrameSource | unde
       const fit = a.fit === "trim" || a.fit === "full" ? a.fit : undefined;
       const inSec = n("inSec");
       const ripple = a.ripple === true;
-      // P58: a storyboard shot's main-track clip gets the asset as a new version pinned to this clip.
+      const mode = a.mode === "replace" || a.mode === "new" ? a.mode : undefined;
+      // P58/P59: a storyboard shot's main-track clip gets the asset as a new (or replaced) version pinned to this clip.
       const story = slip.storyTargetOf(project(), id), pick = story && slip.replaceVersion(project(), assetId);
       if (story && pick) {
         const want = project().assets[assetId]?.kind, have = project().assets[findPlacement(rootOf(project()), id)!.placement.source.assetId]?.kind;
         if (want !== have) return fail(`Asset ${assetId} is ${want ?? "missing"}; clip ${id} needs ${have}.`);
-        const r = clipVersion.addStoryVersionFromClip(project(), id, pick.media, { fit, inSec, ripple });
+        const applyOpts: clipVersion.ApplyMediaOpts = { fit, inSec, ripple, mode: mode ?? "new" };
+        const r = clipVersion.applyMediaFromClip(project(), id, pick.media, applyOpts);
         if (!r.ok) return fail(r.error);
-        const res = edit(cmd.addStoryVersionFromClip(id, pick.media, { fit, inSec, ripple }), id);
+        const res = edit(cmd.addStoryVersionFromClip(id, pick.media, applyOpts), id);
+        return r.note ? { ...res, text: `${res.text}\n${r.note}` } : res;
+      }
+      if (mode) {
+        const media = slip.replaceVersion(project(), assetId)?.media;
+        if (!media) return fail(`Asset ${assetId} has no media to apply.`);
+        const r = clipVersion.applyMediaFromClip(project(), id, media, { fit, inSec, ripple, mode });
+        if (!r.ok) return fail(r.error);
+        const res = edit(cmd.addStoryVersionFromClip(id, media, { fit, inSec, ripple, mode }), id);
         return r.note ? { ...res, text: `${res.text}\n${r.note}` } : res;
       }
       const r = slip.replaceClipAsset(project(), id, assetId, onShort);
