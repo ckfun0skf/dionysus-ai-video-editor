@@ -1,12 +1,13 @@
 /** Canvas renderer for text clips (preview and export share it). */
-import { transformAt, type Placement } from "../domain/model";
+import { transformAt, type Placement, type Track } from "../domain/model";
 import { applyPreset } from "../registry";
 import { textAnimAt, textOf, visibleText, type TextData } from "../domain/text";
+import { resolveCaption, resolveWordHighlightPaint, wordsForCaption } from "../domain/captionStyle";
 import { wordCharRanges, wordIndexAt, wordPhaseAt, type WordTiming } from "../domain/wordTiming";
 import type { Placed } from "./frame";
 
-export function fontString(d: TextData, px: number): string {
-  return `${d.italic ? "italic " : ""}${d.bold ? 700 : 400} ${px}px ${d.font}`;
+export function fontString(d: TextData, px: number, weight?: number): string {
+  return `${d.italic ? "italic " : ""}${weight ?? (d.bold ? 700 : 400)} ${px}px ${d.font}`;
 }
 
 /** Wrap paragraphs to `maxW` using the context's current font. */
@@ -139,10 +140,13 @@ export function lineStartOffsets(fullText: string, lines: string[]): number[] {
 }
 
 /** Draw a text clip at time `t`; returns its on-canvas box (for selection and handles). */
-export function drawTextClip(ctx: CanvasRenderingContext2D, p: Placement, w: number, h: number, t: number, mix = 1): Placed {
+export function drawTextClip(ctx: CanvasRenderingContext2D, p: Placement, w: number, h: number, t: number, mix = 1, track?: Track): Placed {
   const d = textOf(p.text);
   const tr = transformAt(p, t);
-  const a = textAnimAt(d, t - p.startTicks, p.durationTicks);
+  const resolved = resolveCaption(track, p);
+  const captionWords = resolved.mode === "word-highlight" ? wordsForCaption(p) : d.words;
+  const drawAsHighlight = resolved.mode === "word-highlight" && !!captionWords?.length;
+  const a = textAnimAt(drawAsHighlight && d.animIn !== "word-highlight" ? { ...d, animIn: "word-highlight" } : d, t - p.startTicks, p.durationTicks);
   const px = Math.max(1, d.size * h);
   const lh = px * (d.lineHeight ?? 1.25);
   ctx.save();
@@ -150,7 +154,7 @@ export function drawTextClip(ctx: CanvasRenderingContext2D, p: Placement, w: num
   if ("letterSpacing" in ctx) (ctx as unknown as { letterSpacing: string }).letterSpacing = `${(d.letterSpacing ?? 0) * px}px`;
   const all = wrapLines(ctx, d.text || " ", w * 0.9);
   const includeBreaks = d.animInParams?.includeBreaks === true;
-  const highlight = d.animIn === "word-highlight" && a.wordHighlight && d.words?.length;
+  const highlight = drawAsHighlight;
   // P46: layout from the full wrapped lines; map the reveal onto them (never re-wrap a partial string).
   const revealed = a.display ?? visibleText(d.text, a.chars, includeBreaks);
   const shown = highlight || (a.chars >= 1 - 1e-9 && a.display === undefined) ? all : revealOntoLines(all, revealed);
@@ -181,32 +185,33 @@ export function drawTextClip(ctx: CanvasRenderingContext2D, p: Placement, w: num
     if (fill !== "transparent") { ctx.fillStyle = fill; ctx.fillText(text, x + dx, yy + dy); }
   };
 
-  if (highlight && a.wordHighlight) {
+  if (highlight && captionWords?.length) {
     const tSec = (t - p.startTicks) / 120_000;
     const starts = lineStartOffsets(d.text || " ", all);
-    const wh = a.wordHighlight;
+    const styles = resolveWordHighlightPaint(resolved.highlight, resolved.followsTrack ? undefined : d.animInParams, d);
     for (let i = 0; i < shown.length; i++) {
-      const runs = highlightRunsForLine(d.text || " ", shown[i], starts[i] ?? 0, d.words!, tSec);
+      const runs = highlightRunsForLine(d.text || " ", shown[i], starts[i] ?? 0, captionWords, tSec);
       let x = lineX(i);
       const yy = y(i);
       for (const run of runs) {
-        const pending = run.phase === "pending";
-        const current = run.phase === "current";
-        const fill = current ? wh.highlightColor : d.color;
-        const runAlpha = alpha * (pending ? wh.pendingOpacity : 1);
+        const phase = run.phase === "current" || run.phase === "spoken" || run.phase === "pending" ? run.phase : "pending";
+        const st = styles[phase];
         ctx.save();
-        ctx.globalAlpha = runAlpha;
-        if (current && wh.currentScale > 0) {
+        ctx.font = fontString(d, px, st.weight);
+        ctx.globalAlpha = alpha * st.opacity;
+        if (st.scale) {
           const mid = x + ctx.measureText(run.text).width / 2;
           ctx.translate(mid, yy);
-          ctx.scale(1 + wh.currentScale, 1 + wh.currentScale);
+          ctx.scale(1 + st.scale, 1 + st.scale);
           ctx.translate(-mid, -yy);
         }
         if (d.shadow) { ctx.shadowColor = d.shadow.color; ctx.shadowBlur = d.shadow.blur * px; ctx.shadowOffsetX = d.shadow.x * px; ctx.shadowOffsetY = d.shadow.y * px; }
-        if (fx.hollow) paintLine("transparent", { c: fill, w: Math.max(2, px * 0.06) }, 0, 0, run.text, x, yy);
-        else paintLine(fill, stroke.w > 0 ? stroke : undefined, 0, 0, run.text, x, yy);
+        if (fx.hollow) paintLine("transparent", { c: st.color, w: Math.max(2, px * 0.06) }, 0, 0, run.text, x, yy);
+        else paintLine(st.color, stroke.w > 0 ? stroke : undefined, 0, 0, run.text, x, yy);
         ctx.restore();
+        ctx.font = fontString(d, px, st.weight);
         x += ctx.measureText(run.text).width;
+        ctx.font = fontString(d, px);
       }
     }
   } else {

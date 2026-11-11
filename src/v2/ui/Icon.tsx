@@ -44,7 +44,40 @@ export function MaskIcon({ size = 20, className }: { size?: number; className?: 
   </svg>;
 }
 
-export const CUSTOM_ICONS: Record<string, (p: { size?: number; className?: string }) => JSX.Element> = { merge: MergeUpIcon, mask: MaskIcon };
+/** P60: Caption style (a subtitle bar with a middle word marked). */
+export function CaptionStyleIcon({ size = 20, className }: { size?: number; className?: string }) {
+  return <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75}
+    strokeLinecap="round" strokeLinejoin="round" aria-hidden className={`v2-ic ${className ?? ""}`} data-icon="caption-style">
+    <rect x="3.5" y="6.5" width="17" height="11" rx="2.5" />
+    <path d="M7 13h2.5" /><path d="M10.75 11v4" /><path d="M14.5 13h2.5" />
+  </svg>;
+}
+/** P60: word-highlight — three marks, the middle one emphasised. */
+export function WordHighlightIcon({ size = 20, className }: { size?: number; className?: string }) {
+  return <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75}
+    strokeLinecap="round" strokeLinejoin="round" aria-hidden className={`v2-ic ${className ?? ""}`} data-icon="word-highlight">
+    <path d="M4 15h4" /><path d="M10 8v9" /><path d="M16 15h4" />
+  </svg>;
+}
+/** P60: word-pop — one word lifting off the line. */
+export function WordPopIcon({ size = 20, className }: { size?: number; className?: string }) {
+  return <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75}
+    strokeLinecap="round" strokeLinejoin="round" aria-hidden className={`v2-ic ${className ?? ""}`} data-icon="word-pop">
+    <path d="M5 17h14" /><rect x="8" y="5.5" width="8" height="7" rx="1.5" /><path d="M12 12.5V17" />
+  </svg>;
+}
+/** P60: no caption style — plain letters. */
+export function CaptionNoneIcon({ size = 20, className }: { size?: number; className?: string }) {
+  return <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75}
+    strokeLinecap="round" strokeLinejoin="round" aria-hidden className={`v2-ic ${className ?? ""}`} data-icon="caption-none">
+    <path d="M7 17l4.5-10L16 17" /><path d="M8.6 13.5h6.8" />
+  </svg>;
+}
+
+export const CUSTOM_ICONS: Record<string, (p: { size?: number; className?: string }) => JSX.Element> = {
+  merge: MergeUpIcon, mask: MaskIcon,
+  "caption-style": CaptionStyleIcon, "word-highlight": WordHighlightIcon, "word-pop": WordPopIcon, "caption-none": CaptionNoneIcon,
+};
 
 export function Ic({ g, size = 20, className }: { g: string; size?: number; className?: string }) {
   const K = CUSTOM_ICONS[g];

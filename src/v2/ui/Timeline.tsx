@@ -17,6 +17,8 @@ interface Props {
   /** Desktop: click a group header to focus that group (only its layers shown; others become lines on the main track). */
   onFocusGroup?: (g?: ops.TrackGroup) => void;
   onEditLayer?: (trackId: string) => void;
+  /** P60: open Caption style for a text/subtitle track. */
+  onEditCaption?: (trackId: string) => void;
   /** Mobile: the expanded group (lifted so the bottom toolbar's ‹ can collapse it). */
   expanded?: ops.TrackGroup;
   onExpand?: (g: ops.TrackGroup | undefined) => void;
@@ -92,7 +94,7 @@ export const SIDE_W = 184;
 /** P30-SCROLL: the view stays under user control this long after the last user scroll event (covers iOS momentum gaps). */
 export const USER_SCROLL_IDLE_MS = 180;
 
-export function Timeline({ engine, project, time, playing, onSeek, selectedId, selectedIds, onToggleSelect, multiMode, onSelect, pps, onZoom, centered, thumbs, peaks, strips, loads, onAddMedia, sideColumn, timeLabel, topLane, ripple, onTransition, expanded: expandedProp, onExpand, focus, onEditLayer, onEditSubs, onFocusGroup, onDropData, onContextMenu, onPlayback, onMergeDraft, onMergePlay, onOpenTrack, onTrackRange }: Props) {
+export function Timeline({ engine, project, time, playing, onSeek, selectedId, selectedIds, onToggleSelect, multiMode, onSelect, pps, onZoom, centered, thumbs, peaks, strips, loads, onAddMedia, sideColumn, timeLabel, topLane, ripple, onTransition, expanded: expandedProp, onExpand, focus, onEditLayer, onEditSubs, onEditCaption, onFocusGroup, onDropData, onContextMenu, onPlayback, onMergeDraft, onMergePlay, onOpenTrack, onTrackRange }: Props) {
   const comp = project.compositions[project.rootCompositionId];
   const scrollRef = useRef<HTMLDivElement>(null);
   const [gesture, setGesture] = useState<Gesture>();
@@ -420,7 +422,7 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
             <div key={t.id} className={`v2-track-header kind-${t.kind} ${layerDrag?.id === t.id ? "is-layer-dragging" : ""}`} style={layerShift(t.id)}>
               <TrackName engine={engine} track={t} />
               {t.kind !== "effect" && t.kind !== "text" && <button className="v2-icon" title={t.muted ? "Unmute track" : "Mute track"} aria-label={t.muted ? "Unmute track" : "Mute track"} onClick={() => engine.dispatch(cmd.toggleTrackMute(t.id))}><Ic g={t.muted ? "🔇" : "🔊"} /></button>}
-              <LayerControls t={t} isMain={t.id === main?.id} onToggle={() => engine.dispatch(cmd.toggleTrackHidden(t.id))} onDelete={() => setConfirmDel(t.id)} onReorder={(e) => startLayerDrag(e, t.id)} dragging={layerDrag?.id === t.id} onMergeUp={() => startMerge(t.id)} mergeInto={mergeLayer.mergeTarget(comp, t.id)?.name} onEditAll={onEditLayer && t.kind === "text" && layers.textClipCount(t) > 0 ? () => onEditLayer(t.id) : undefined} onEditSubs={onEditSubs && t.kind === "text" && layers.textClipCount(t) > 0 ? () => onEditSubs(t.id) : undefined} />
+              <LayerControls t={t} isMain={t.id === main?.id} onToggle={() => engine.dispatch(cmd.toggleTrackHidden(t.id))} onDelete={() => setConfirmDel(t.id)} onReorder={(e) => startLayerDrag(e, t.id)} dragging={layerDrag?.id === t.id} onMergeUp={() => startMerge(t.id)} mergeInto={mergeLayer.mergeTarget(comp, t.id)?.name} onEditCaption={onEditCaption && t.kind === "text" ? () => onEditCaption(t.id) : undefined} onEditAll={onEditLayer && t.kind === "text" && layers.textClipCount(t) > 0 ? () => onEditLayer(t.id) : undefined} onEditSubs={onEditSubs && t.kind === "text" && layers.textClipCount(t) > 0 ? () => onEditSubs(t.id) : undefined} />
             </div>
           ))(r))}
         </div>
@@ -672,8 +674,9 @@ function TrackName({ engine, track }: { engine: Engine; track: Track }) {
   return <input className="v2-track-rename" autoFocus aria-label="Layer name" value={edit} maxLength={40} onChange={(e) => setEdit(e.target.value)} onBlur={() => done(true)} onKeyDown={(e) => { if (e.key === "Enter") done(true); if (e.key === "Escape") done(false); }} />;
 }
 
-export function LayerControls({ t, isMain, onToggle, onDelete, onReorder, dragging, onEditAll, onEditSubs, onMergeUp, mergeInto }: { t: Track; isMain: boolean; onToggle: () => void; onDelete: () => void; onReorder?: (e: React.PointerEvent) => void; dragging?: boolean; onEditAll?: () => void; onEditSubs?: () => void; /** P32: merge into the layer above (undefined target = top of its group: disabled). */ onMergeUp?: () => void; mergeInto?: string }) {
+export function LayerControls({ t, isMain, onToggle, onDelete, onReorder, dragging, onEditAll, onEditSubs, onEditCaption, onMergeUp, mergeInto }: { t: Track; isMain: boolean; onToggle: () => void; onDelete: () => void; onReorder?: (e: React.PointerEvent) => void; dragging?: boolean; onEditAll?: () => void; onEditSubs?: () => void; onEditCaption?: () => void; /** P32: merge into the layer above (undefined target = top of its group: disabled). */ onMergeUp?: () => void; mergeInto?: string }) {
   return <span className="v2-layer-ctl">
+    {onEditCaption && <button className="v2-icon v2-caption-style-btn" data-testid="caption-style-btn" aria-label={`Caption style for ${t.name}`} title="Caption style: none, word highlight or word pop for every clip on this track" onClick={onEditCaption}><Ic g="caption-style" size={16} /></button>}
     {onEditSubs && <button className="v2-icon v2-edit-subs" aria-label={`Edit subtitles in ${t.name}`} title="Edit subtitles: every line in a list — text, timing, split, merge, find & replace, export SRT" onClick={onEditSubs}><Ic g="≡" size={16} /></button>}
     {onEditAll && <button className="v2-icon v2-edit-all" aria-label={`Edit all clips in ${t.name}`} title="Edit all: style, font, effects, animation and position for every clip on this layer" onClick={onEditAll}><Ic g="layers" size={16} /></button>}
     {!isMain && onMergeUp && <button className="v2-icon v2-merge-up" disabled={!mergeInto} aria-label={mergeInto ? `Merge ${t.name} up into ${mergeInto}` : `Merge ${t.name} up`} title={mergeInto ? `Merge up: move every clip into ${mergeInto} (the layer above) and remove this layer` : "Top layer of its group: nothing above to merge into"} onClick={onMergeUp}><Ic g="merge" size={16} /></button>}

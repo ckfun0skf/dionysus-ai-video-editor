@@ -88,8 +88,17 @@ export interface PresetFrame {
    * domain/text.ts textAnimAt into `caret` / `display` (glyphs = cursor characters; >1 char = scramble/decode).
    */
   cursor?: { glyphs: string; blink: number; after: "blink" | "hide" | "fade"; scramble: number };
-  /** P47: word-highlight style resolved by the word-highlight textAnimIn preset; consumed by drawTextClip. */
-  wordHighlight?: { pendingOpacity: number; highlightColor: string; currentScale: number };
+  /**
+   * P47/P60: word-highlight style resolved by the word-highlight textAnimIn preset (and by track caption
+   * style); consumed by drawTextClip. Legacy pendingOpacity/highlightColor/currentScale stay so older
+   * frames still paint; pending/current/spoken is the P60 three-state look.
+   */
+  wordHighlight?: {
+    pendingOpacity: number; highlightColor: string; currentScale: number;
+    pending?: { color?: string; opacity: number; scale: number; weight?: number };
+    current?: { color?: string; opacity: number; scale: number; weight?: number };
+    spoken?: { color?: string; opacity: number; scale: number; weight?: number };
+  };
 }
 /** 2D context type shared by on-screen, offscreen and export canvases. */
 export type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;

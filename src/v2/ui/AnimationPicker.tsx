@@ -36,13 +36,13 @@ export function AnimationPicker({ engine, placement, onPicked, onSet }: { engine
   // P47: Captions presets apply as modes — word-highlight keeps one cue; word-pop expands to word clips.
   const pick = (id: string, label: string) => {
     if (tab === "In" && id === "word-highlight" && !onSet) {
-      engine.dispatch(cmd.applyWordHighlight(placement.id));
+      engine.dispatch([cmd.setClipCaptionOverride(placement.id, true), cmd.applyWordHighlight(placement.id)], label);
       onPicked?.();
       return;
     }
     if (tab === "In" && id === "word-pop" && !onSet) {
       const entrance = typeof d.animInParams?.entrance === "string" ? d.animInParams.entrance : "pop";
-      engine.dispatch(cmd.expandWordPop(placement.id, entrance));
+      engine.dispatch([cmd.setClipCaptionOverride(placement.id, true), cmd.expandWordPop(placement.id, entrance)], label);
       onPicked?.();
       return;
     }
@@ -52,7 +52,7 @@ export function AnimationPicker({ engine, placement, onPicked, onSet }: { engine
       onPicked?.();
       return;
     }
-    set({ [cur.key]: id, ...(d[cur.pkey] ? { [cur.pkey]: undefined } : {}) }, label);
+    set({ [cur.key]: id, ...(d[cur.pkey] ? { [cur.pkey]: undefined } : {}), ...(tab === "In" && !onSet ? { captionOverride: true } : {}) }, label);
   };
   const halfClipS = placement.durationTicks / 2 / TPS;
   const durS = Math.min((d.animTicks ?? 60_000) / TPS, halfClipS, ANIM_MAX_S);

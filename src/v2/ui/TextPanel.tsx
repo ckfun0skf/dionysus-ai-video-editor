@@ -55,6 +55,10 @@ export function TextPanel({ engine, placement, onAnimPicked, initialTab = "Templ
         {custom ? <><span className="v2-custom-dot" aria-hidden /> Custom style on this clip</> : <>Follows layer style <b>{track.name}</b></>}
         <button className="v2-btn" disabled={!custom} title="Drop this clip's own style so it matches the rest of the layer (undoable)" onClick={() => engine.dispatch(cmd.resetToLayerStyle(pl.id))}>Reset to layer style</button>
       </div>}
+      {!layer && track?.captionStyle && <div className="v2-tp-layerhead">
+        {pl.text?.captionOverride ? <>This clip overrides the track Caption style</> : <>Follows track Caption style <b>{track.captionStyle.mode === "none" ? "None" : track.captionStyle.mode === "word-pop" ? "Word pop" : "Word highlight"}</b></>}
+        <button className="v2-btn" disabled={!pl.text?.captionOverride} data-testid="use-track-caption-style" title="Drop this clip's own caption style so it follows the track again" onClick={() => engine.dispatch(cmd.resetClipCaptionStyle(pl.id))}>Use track style</button>
+      </div>}
       {!layer && <textarea className="v2-tp-text" aria-label="Text content" value={d.text} rows={2} onFocus={() => engine.beginGesture()} onBlur={() => engine.endGesture()} onChange={(e) => set({ text: e.target.value }, "Type text")} />}
       {!layer && placement && onSeek && (
         <WordTimingEditor engine={engine} placement={placement} time={time} playing={playing} onSeek={onSeek} onTogglePlay={onTogglePlay} desktop />

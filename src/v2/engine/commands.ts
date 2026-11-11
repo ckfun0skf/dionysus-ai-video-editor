@@ -8,6 +8,8 @@ import * as slipOps from "../domain/slip";
 import { mergeStoryboard } from "../domain/storyRoundtrip";
 import * as layers from "../domain/layerStyle";
 import * as cueOps from "../domain/subtitleLayer";
+import * as captions from "../domain/captionStyle";
+import type { CaptionStyle } from "../domain/captionStyle";
 import * as subs from "../domain/subtitles";
 import * as edit from "../domain/edit";
 import * as chain from "../domain/chain";
@@ -560,11 +562,16 @@ export const importSrtLayer = (list: Subtitle[], trackId = newId("trk")): Comman
   label: "Import subtitles",
   apply: (p) => withRoot(p, (c) => {
     if (!list.length) return c;
+    const placements: Placement[] = list.map((s) => ({ id: newId("plc"), startTicks: s.startTicks, durationTicks: s.durationTicks, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "text", text: { text: s.text } as TextData }));
+    const existing = c.tracks.find((t) => t.id === trackId && t.kind === "text");
+    if (existing) {
+      const next = { ...c, tracks: c.tracks.map((t) => (t.id === trackId ? { ...t, placements: [...t.placements, ...placements].sort((a, b) => a.startTicks - b.startTicks) } : t)) };
+      return captions.applyTrackCaptionMode(next, trackId);
+    }
     let comp = ops.addTrack(c, "text", trackId);
     const tr = comp.tracks.find((t) => t.id === trackId)!;
-    const placements: Placement[] = list.map((s) => ({ id: newId("plc"), startTicks: s.startTicks, durationTicks: s.durationTicks, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "text", text: { text: s.text } as TextData }));
     comp = { ...comp, tracks: comp.tracks.map((t) => (t === tr ? { ...t, name: "Subtitles", layerStyle: layers.SUBTITLE_STYLE, placements: [...placements].sort((a, b) => a.startTicks - b.startTicks) } : t)) };
-    return comp;
+    return captions.applyTrackCaptionMode(comp, trackId);
   }),
 });
 
@@ -589,6 +596,21 @@ export const setCueWords = (id: string, words: { text: string; atSec: number }[]
 export const evenSplitCueWords = (id: string): Command => ({ label: "Even-split word timings", apply: (p) => withRoot(p, (c) => cueOps.evenSplitCueWords(c, id)) });
 export const applyWordHighlight = (id: string, params?: Record<string, number | string | boolean>): Command => ({ label: "Word highlight captions", apply: (p) => withRoot(p, (c) => cueOps.applyWordHighlight(c, id, params)) });
 export const expandWordPop = (id: string, entrance = "pop"): Command => ({ label: "Word pop captions", apply: (p) => withRoot(p, (c) => cueOps.expandWordPop(c, id, entrance)) });
+
+/** P60: set a text track's Caption style and apply it to every non-overridden clip (one undo). */
+export const setTrackCaptionStyle = (trackId: string, style: CaptionStyle, label = "Caption style"): Command => ({
+  label,
+  coalesceKey: `caption:${trackId}:${style.mode}`,
+  apply: (p) => withRoot(p, (c) => captions.setTrackCaptionStyle(c, trackId, style)),
+});
+/** P60: drop a clip's caption override so it follows the track again. */
+export const resetClipCaptionStyle = (id: string): Command => ({ label: "Use track caption style", apply: (p) => withRoot(p, (c) => captions.resetClipCaptionStyle(c, id)) });
+export const setClipCaptionOverride = (id: string, on: boolean): Command => ({ label: on ? "Override track caption style" : "Use track caption style", apply: (p) => withRoot(p, (c) => on ? captions.setClipCaptionOverride(c, id, true) : captions.resetClipCaptionStyle(c, id)) });
+/** P60: apply word timings to every listed cue on a track (one undo). */
+export const setTrackCaptionWords = (trackId: string, updates: { id: string; words: { text: string; atSec: number }[] }[]): Command => ({
+  label: "Align all caption words",
+  apply: (p) => withRoot(p, (c) => captions.setTrackCaptionWords(c, trackId, updates)),
+});
 
 
 /** Storyboard (V2-CUT-01): wrappers so storyboard edits are undoable like timeline edits. */

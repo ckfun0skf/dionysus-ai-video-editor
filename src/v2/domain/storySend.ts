@@ -243,8 +243,12 @@ function addLinked(p: Project, b: Storyboard, comp: Composition, shot: Shot, cli
     const textData = { text: captionText(shot), ...(captionWords.length ? { words: captionWords.map((w) => ({ text: w.text, atSec: w.atSec })), animIn: "word-highlight" } : {}) } as TextData;
     const cue: Placement = { id: newId("plc"), startTicks: clip.startTicks, durationTicks: clip.durationTicks, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "text", text: textData, storyLink: { anchor }, storyLayer: "captions", link: { parent: anchor } };
     const shared = c.tracks.find((t) => t.kind === "text" && t.layerStyle?.subtitle && isFree(t, cue.startTicks, cue.durationTicks));
-    if (shared) c = insertPlacement(c, shared.id, cue);
-    else c = placeOnFreeTrack(c, cue, () => false, { name: "Subtitles", layerStyle: SUBTITLE_STYLE });
+    if (shared) {
+      if (b.captionStyle) c = { ...c, tracks: c.tracks.map((t) => (t.id === shared.id ? { ...t, captionStyle: b.captionStyle } : t)) };
+      c = insertPlacement(c, shared.id, cue);
+    } else {
+      c = placeOnFreeTrack(c, cue, () => false, { name: "Subtitles", layerStyle: SUBTITLE_STYLE, ...(b.captionStyle ? { captionStyle: b.captionStyle } : {}) });
+    }
     res.captions += 1;
   }
   for (const e of shot.effects ?? []) {

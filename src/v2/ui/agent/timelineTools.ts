@@ -8,7 +8,7 @@ import { audioClipAsset } from "../audioClipAsset";
 import { blobText } from "../AssetPreview";
 import { bindingRefsOf } from "../CleanupDialog";
 import { captureFrameAt, storePickedFrame } from "../storyboard/frameCapture";
-import { cleanup, clipVersion, DEFAULT_SOURCE, INPUT_TYPES, readManifest, resolveSource, versionOf, codePresetId, codeRoleIssue, transitions, audioOutputOf, board, chain, edit as editDomain, mergeLayer, ops, promote, findPlacement, slip, subs, newId, audioClipPrompt, parseAudioClip, runtimeAiLinks, panToAzimuth, positionErrors, secondsToTicks, TICKS_PER_SECOND, timelineReview, text as T, words as W, type Placement, type Project } from "../../domain";
+import { captions, cleanup, clipVersion, DEFAULT_SOURCE, INPUT_TYPES, readManifest, resolveSource, versionOf, codePresetId, codeRoleIssue, transitions, audioOutputOf, board, chain, edit as editDomain, mergeLayer, ops, promote, findPlacement, slip, subs, newId, audioClipPrompt, parseAudioClip, runtimeAiLinks, panToAzimuth, positionErrors, secondsToTicks, TICKS_PER_SECOND, timelineReview, text as T, words as W, type Placement, type Project } from "../../domain";
 
 import { getPreset, listPresets } from "../../registry";
 import { tracking, sourceAt, ticksToSeconds, masking, type Box, type MotionTrack, type NamedTrack, type TrackMask } from "../../domain";
@@ -286,8 +286,10 @@ export async function runTimelineTool(engine: Engine, source: FrameSource | unde
       const text = s("text"); if (!text) return fail('"text" is required.');
       const list = subs.parseSrt(text);
       if (!list.length) return fail("No subtitles found: each cue needs a 00:00:01,000 --> 00:00:03,000 timing line.");
-      const changed = engine.dispatch(cmd.importSrtLayer(list), "import_subtitles");
-      return { ok: changed, changed, text: JSON.stringify({ imported: list.length }) };
+      const dest = s("trackId");
+      if (dest && !rootOf(project()).tracks.some((t) => t.id === dest && t.kind === "text")) return fail(`No text track "${dest}".`);
+      const changed = engine.dispatch(cmd.importSrtLayer(list, dest), "import_subtitles");
+      return { ok: changed, changed, text: JSON.stringify({ imported: list.length, ...(dest ? { trackId: dest } : {}) }) };
     }
     case "add_blank_clip": {
       const where = a.track === "main" || a.track === "overlay" ? a.track : undefined;
@@ -684,6 +686,48 @@ export async function runTimelineTool(engine: Engine, source: FrameSource | unde
       }
       const prompt = W.wordAlignPrompt({ text: d.text, cueDurationSec: pl.durationTicks / TICKS_PER_SECOND, audioDurationSec, audioName });
       return { ok: true, changed: false, text: prompt };
+    }
+    case "set_track_caption_style": {
+      const trackId = s("trackId"); if (!trackId) return fail('"trackId" is required.');
+      const tr = rootOf(project()).tracks.find((t) => t.id === trackId);
+      if (!tr) return fail(`No track "${trackId}".`);
+      if (tr.kind !== "text") return fail(`Track ${trackId} is a ${tr.kind} track; Caption style is for text/subtitle tracks.`);
+      const parsed = captions.parseCaptionStyle({ mode: a.mode, highlight: a.highlight, entrance: a.entrance });
+      if (!parsed.ok) return fail(parsed.error);
+      if (!parsed.value) return fail('"mode" must be none, word-highlight or word-pop.');
+      const changed = engine.dispatch(cmd.setTrackCaptionStyle(trackId, parsed.value), name);
+      const next = rootOf(project()).tracks.find((t) => t.id === trackId);
+      return { ok: true, changed, text: JSON.stringify({ trackId, captionStyle: next?.captionStyle ?? parsed.value, clips: next?.placements.filter((p) => p.clipType === "text").length ?? 0 }, null, 1) };
+    }
+    case "track_word_align_prompt": {
+      const trackId = s("trackId"); if (!trackId) return fail('"trackId" is required.');
+      const tr = rootOf(project()).tracks.find((t) => t.id === trackId);
+      if (!tr) return fail(`No track "${trackId}".`);
+      if (tr.kind !== "text") return fail(`Track ${trackId} is a ${tr.kind} track; Caption style is for text/subtitle tracks.`);
+      const cueList = captions.trackCaptionCues(tr);
+      if (!cueList.length) return fail(`Track ${trackId} has no caption clips.`);
+      let audioDurationSec: number | undefined, audioName: string | undefined;
+      const aid = typeof a.audioClipId === "string" ? a.audioClipId : undefined;
+      if (aid) {
+        const ap = findPlacement(rootOf(project()), aid)?.placement;
+        if (!ap) return fail(`No audio clip "${aid}".`);
+        audioDurationSec = ap.durationTicks / TICKS_PER_SECOND;
+        audioName = aid;
+      }
+      return { ok: true, changed: false, text: captions.trackWordAlignPrompt({ cues: cueList, audioDurationSec, audioName }) };
+    }
+    case "set_track_caption_words": {
+      const trackId = s("trackId"); if (!trackId) return fail('"trackId" is required.');
+      const tr = rootOf(project()).tracks.find((t) => t.id === trackId);
+      if (!tr) return fail(`No track "${trackId}".`);
+      if (tr.kind !== "text") return fail(`Track ${trackId} is a ${tr.kind} track; Caption style is for text/subtitle tracks.`);
+      const rawJson = typeof a.json === "string" ? a.json : a.cues !== undefined ? JSON.stringify({ cues: a.cues }) : "";
+      const parsed = captions.parseTrackWordsJson(rawJson);
+      if (!parsed.ok) return fail(parsed.error);
+      const matched = captions.matchTrackWordUpdates(tr, parsed.cues);
+      if (!matched.ok) return fail(matched.error);
+      const changed = engine.dispatch(cmd.setTrackCaptionWords(trackId, matched.updates), name);
+      return { ok: true, changed, text: JSON.stringify({ trackId, cues: matched.updates.map((u) => ({ id: u.id, words: u.words.length })) }, null, 1) };
     }
   }
   return fail(`Unknown tool ${name}.`);

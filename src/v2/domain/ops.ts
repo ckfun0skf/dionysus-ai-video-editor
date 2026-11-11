@@ -1,6 +1,7 @@
 /** Pure placement operations. All return new Composition objects (no mutation). */
 import { canChromaKey, CHROMA_DEFAULT, hasSound, type ChromaKey, clampTransform, type KeyframeProp, MAX_SPEED, MIN_SPEED, sourceAt, isStill, findPlacement, newId, trackKindFor, transformOf, type Transform, type Composition, type Placement, type Track } from "./model";
 import { shiftMaskKeys } from "./mask";
+import { applyCaptionAfterInsert, prepareCaptionPlacement } from "./captionStyle";
 
 export const MIN_DURATION_TICKS = 1200; // 10 ms
 
@@ -84,9 +85,12 @@ export function insertPlacement(comp: Composition, trackId: string, placement: P
   const track = comp.tracks.find((t) => t.id === trackId);
   if (!track) throw new Error(`Unknown track ${trackId}`);
   if (trackKindFor(placement.clipType) !== track.kind) throw new Error(`Cannot place ${placement.clipType} on ${track.kind} track`);
-  placement = { ...placement, startTicks: Math.max(0, Math.round(placement.startTicks)), durationTicks: Math.round(placement.durationTicks), sourceInTicks: Math.round(placement.sourceInTicks) };
-  const start = firstFreeStart(track, placement.startTicks, placement.durationTicks);
-  return mapTrack(comp, trackId, (t) => ({ ...t, placements: sortPlacements([...t.placements, { ...placement, startTicks: start }]) }));
+  let nextPl = placement.clipType === "text" ? prepareCaptionPlacement(track, placement) : placement;
+  nextPl = { ...nextPl, startTicks: Math.max(0, Math.round(nextPl.startTicks)), durationTicks: Math.round(nextPl.durationTicks), sourceInTicks: Math.round(nextPl.sourceInTicks) };
+  const start = firstFreeStart(track, nextPl.startTicks, nextPl.durationTicks);
+  const inserted = { ...nextPl, startTicks: start };
+  const next = mapTrack(comp, trackId, (t) => ({ ...t, placements: sortPlacements([...t.placements, inserted]) }));
+  return inserted.clipType === "text" ? applyCaptionAfterInsert(next, trackId, inserted.id) : next;
 }
 
 /** Move a placement to a (possibly different) track and start. Rejects overlaps by pushing to the next free slot. */
