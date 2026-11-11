@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111318">
+  <meta name="description" content="Local, in-browser speech-to-text proof of concept for Dionysus.">
+  <title>Speech-to-Text POC — Dionysus</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background:#111318; color:#e8eaf0; }
+    * { box-sizing:border-box; }
+    body { margin:0; padding:32px 18px 56px; }
+    main { width:min(920px,100%); margin:0 auto; }
+    h1 { margin:0 0 8px; font-size:clamp(25px,4vw,34px); letter-spacing:-.04em; }
+    .intro { color:#a6adbb; margin:0 0 26px; line-height:1.55; }
+    .panel { background:#1a1e27; border:1px solid #303746; border-radius:14px; padding:20px; margin:16px 0; }
+    h2 { margin:0 0 16px; font-size:16px; }
+    label { display:block; color:#cbd1dc; font-size:13px; margin-bottom:8px; }
+    input[type=file], select, textarea { width:100%; border:1px solid #3b4352; background:#11151c; color:#e8eaf0; border-radius:9px; padding:11px 12px; font:inherit; }
+    input[type=file] { padding:10px; }
+    textarea { min-height:300px; resize:vertical; font:13px/1.55 ui-monospace, SFMono-Regular, Consolas, monospace; }
+    .row { display:flex; gap:12px; align-items:end; flex-wrap:wrap; }
+    .row > div { flex:1 1 190px; }
+    button { border:1px solid #59657a; border-radius:9px; padding:10px 15px; background:#293449; color:#fff; font:600 14px inherit; cursor:pointer; }
+    button.primary { background:#526de5; border-color:#7185f0; }
+    button:disabled { opacity:.45; cursor:not-allowed; }
+    .actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:14px; }
+    .status { color:#b7c1d2; font-size:13px; line-height:1.5; margin-top:12px; min-height:20px; white-space:pre-wrap; }
+    .muted { color:#929bad; font-size:12px; line-height:1.5; }
+    .meter { height:7px; background:#303746; border-radius:99px; overflow:hidden; margin-top:12px; }
+    .meter > div { height:100%; width:0; background:#7185f0; transition:width .2s; }
+    video, audio { display:block; width:100%; max-height:340px; margin-top:14px; }
+    .pill { display:inline-block; border:1px solid #424b5d; border-radius:99px; padding:3px 8px; color:#c6cede; font-size:11px; margin-right:5px; }
+    a { color:#a9b8ff; }
+    @media (max-width:600px) { body { padding:24px 12px 40px; } .panel { padding:15px; } }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Speech-to-Text POC</h1>
+  <p class="intro">Transcribe an audio file or a video's audio track into SRT subtitles. Inference runs in this browser tab; no audio is uploaded to a Dionysus server or sent to a transcription API.</p>
+
+  <section class="panel">
+    <h2>1. Choose media</h2>
+    <label for="mediaFile">Audio or video file</label>
+    <input id="mediaFile" type="file" accept="audio/*,video/*">
+    <div id="preview"></div>
+    <p class="muted">The browser decodes the selected file locally before transcription. Supported formats depend on the codecs available in your browser. Very long or high-resolution files may require substantial memory.</p>
+  </section>
+
+  <section class="panel">
+    <h2>2. Transcription settings</h2>
+    <div class="row">
+      <div>
+        <label for="language">Language</label>
+        <select id="language">
+          <option value="auto">Auto-detect</option>
+          <option value="english">English</option>
+          <option value="chinese">Chinese (Mandarin / written Chinese)</option>
+        </select>
+      </div>
+      <div>
+        <label>Execution backend</label>
+        <div id="backend" class="status" style="margin:0">Checking browser capabilities…</div>
+      </div>
+    </div>
+    <div class="actions">
+      <button id="transcribe" class="primary" disabled>Transcribe locally</button>
+    </div>
+    <div class="meter"><div id="progressBar"></div></div>
+    <div id="status" class="status" role="status" aria-live="polite">Choose a file to begin.</div>
+  </section>
+
+  <section class="panel">
+    <h2>3. SRT output</h2>
+    <label for="srtOutput">Editable subtitle text</label>
+    <textarea id="srtOutput" spellcheck="false" placeholder="Your SRT subtitles will appear here…"></textarea>
+    <div class="actions">
+      <button id="copySrt">Copy SRT</button>
+      <button id="downloadSrt">Download .srt</button>
+    </div>
+  </section>
+
+  <p class="muted"><span class="pill">Local inference</span><span class="pill">Whisper Tiny</span><span class="pill">WebGPU / WASM</span><br>
+  The model and JavaScript runtime are downloaded from public CDNs / Hugging Face on first use and may be cached by the browser. This is not a fully offline first launch. Do not close the tab while a transcription is running.</p>
+</main>
+
+<script type="module">
+  const MODEL_ID = 'onnx-community/whisper-tiny';
+  const mediaInput = document.querySelector('#mediaFile');
+  const preview = document.querySelector('#preview');
+  const transcribeButton = document.querySelector('#transcribe');
+  const statusEl = document.querySelector('#status');
+  const backendEl = document.querySelector('#backend');
+  const progressBar = document.querySelector('#progressBar');
+  const srtOutput = document.querySelector('#srtOutput');
+  const languageSelect = document.querySelector('#language');
+  let selectedFile = null;
+  let selectedBackend = 'wasm';
+  let pipelinePromise = null;
+  let mediaUrl = null;
+
+  function setStatus(message) { statusEl.textContent = message; }
+  function setProgress(value) {
+    const bounded = Math.max(0, Math.min(100, Number(value) || 0));
+    progressBar.style.width = bounded + '%';
+  }
+
+  async function detectBackend() {
+    if (!('gpu' in navigator)) {
+      backendEl.textContent = 'WebGPU unavailable — WASM CPU fallback';
+      return;
+    }
+    try {
+      const adapter = await navigator.gpu.requestAdapter();
+      if (adapter) {
+        selectedBackend = 'webgpu';
+        const info = adapter.info ? await adapter.info : null;
+        backendEl.textContent = 'WebGPU available' + (info?.description ? ' · ' + info.description : '') + ' (will try GPU first)';
+      } else {
+        backendEl.textContent = 'No WebGPU adapter — WASM CPU fallback';
+      }
+    } catch (error) {
+      backendEl.textContent = 'WebGPU unavailable — WASM CPU fallback';
+    }
+  }
+
+  mediaInput.addEventListener('change', () => {
+    selectedFile = mediaInput.files?.[0] || null;
+    transcribeButton.disabled = !selectedFile;
+    srtOutput.value = '';
+    preview.replaceChildren();
+    if (mediaUrl) URL.revokeObjectURL(mediaUrl);
+    mediaUrl = selectedFile ? URL.createObjectURL(selectedFile) : null;
+    if (!selectedFile) return;
+    const isVideo = selectedFile.type.startsWith('video/');
+    const element = document.createElement(isVideo ? 'video' : 'audio');
+    element.controls = true;
+    element.preload = 'metadata';
+    element.src = mediaUrl;
+    preview.append(element);
+    setStatus('Selected: ' + selectedFile.name + ' (' + (selectedFile.size / 1024 / 1024).toFixed(1) + ' MB).');
+    setProgress(0);
+  });
+
+  async function getTranscriber(device) {
+    const { pipeline, env } = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.2');
+    env.useBrowserCache = true;
+    env.allowLocalModels = false;
+    env.allowRemoteModels = true;
+    return pipeline('automatic-speech-recognition', MODEL_ID, {
+      device,
+      dtype: device === 'webgpu' ? 'fp32' : 'q8',
+      progress_callback: (event) => {
+        if (event.status === 'progress' && Number.isFinite(event.progress)) {
+          setStatus('Downloading / loading model: ' + event.file + ' · ' + Math.round(event.progress) + '%');
+          setProgress(event.progress * 0.35);
+        } else if (event.status) {
+          setStatus('Model: ' + event.status + (event.file ? ' · ' + event.file : ''));
+        }
+      }
+    });
+  }
+
+  async function decodeTo16k(file) {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) throw new Error('Web Audio API is not supported by this browser.');
+    const context = new AudioContextClass();
+    try {
+      const buffer = await file.arrayBuffer();
+      const decoded = await context.decodeAudioData(buffer);
+      const frames = Math.ceil(decoded.duration * 16000);
+      const offline = new OfflineAudioContext(1, frames, 16000);
+      const source = offline.createBufferSource();
+      source.buffer = decoded;
+      source.connect(offline.destination);
+      source.start(0);
+      const rendered = await offline.startRendering();
+      return { audio: rendered.getChannelData(0), duration: decoded.duration };
+    } finally {
+      await context.close();
+    }
+  }
+
+  function formatTimestamp(seconds) {
+    const safe = Math.max(0, Number(seconds) || 0);
+    const totalMs = Math.round(safe * 1000);
+    const hours = Math.floor(totalMs / 3600000);
+    const minutes = Math.floor((totalMs % 3600000) / 60000);
+    const secs = Math.floor((totalMs % 60000) / 1000);
+    const ms = totalMs % 1000;
+    return [hours, minutes, secs].map(n => String(n).padStart(2, '0')).join(':') + ',' + String(ms).padStart(3, '0');
+  }
+
+  function toSrt(result, duration) {
+    const chunks = Array.isArray(result.chunks) ? result.chunks : [];
+    if (!chunks.length) {
+      const text = (result.text || '').trim();
+      return text ? '1\n' + formatTimestamp(0) + ' --> ' + formatTimestamp(duration) + '\n' + text + '\n' : '';
+    }
+    return chunks.map((chunk, index) => {
+      const [start, end] = chunk.timestamp || [null, null];
+      const safeStart = Number.isFinite(start) ? start : (index ? chunks[index - 1].timestamp?.[1] || 0 : 0);
+      const safeEnd = Number.isFinite(end) ? end : duration;
+      const text = (chunk.text || '').trim();
+      return (index + 1) + '\n' + formatTimestamp(safeStart) + ' --> ' + formatTimestamp(Math.max(safeStart, safeEnd)) + '\n' + text;
+    }).filter(Boolean).join('\n\n') + '\n';
+  }
+
+  transcribeButton.addEventListener('click', async () => {
+    if (!selectedFile) return;
+    transcribeButton.disabled = true;
+    setProgress(0);
+    setStatus('Preparing local audio…');
+    try {
+      const { audio, duration } = await decodeTo16k(selectedFile);
+      setStatus('Audio decoded (' + Math.round(duration) + ' seconds). Loading Whisper Tiny…');
+      setProgress(35);
+
+      let transcriber;
+      if (!pipelinePromise) {
+        pipelinePromise = getTranscriber(selectedBackend).catch(async (error) => {
+          if (selectedBackend !== 'webgpu') throw error;
+          selectedBackend = 'wasm';
+          backendEl.textContent = 'WebGPU failed to initialise — using WASM CPU';
+          setStatus('WebGPU initialisation failed. Falling back to WASM…');
+          return getTranscriber('wasm');
+        });
+      }
+      transcriber = await pipelinePromise;
+      const language = languageSelect.value;
+      const options = {
+        chunk_length_s: 30,
+        stride_length_s: 5,
+        return_timestamps: true
+      };
+      if (language !== 'auto') options.language = language;
+      const result = await transcriber({ raw: audio, sampling_rate: 16000 }, {
+        ...options,
+        callback_function: (data) => {
+          if (data?.progress !== undefined) {
+            setProgress(35 + Math.min(1, data.progress) * 60);
+          }
+        }
+      });
+      srtOutput.value = toSrt(result, duration);
+      setProgress(100);
+      setStatus('Done. ' + (result.chunks?.length || 1) + ' subtitle segment(s) generated. Audio was processed in this browser.');
+    } catch (error) {
+      console.error(error);
+      setStatus('Transcription failed: ' + (error?.message || String(error)) + '\nCheck browser support, network access for the first model download, and available memory.');
+    } finally {
+      transcribeButton.disabled = !selectedFile;
+    }
+  });
+
+  document.querySelector('#copySrt').addEventListener('click', async () => {
+    if (!srtOutput.value) return;
+    try {
+      await navigator.clipboard.writeText(srtOutput.value);
+      setStatus('SRT copied to clipboard.');
+    } catch {
+      srtOutput.select();
+      setStatus('Clipboard access was blocked. Select the text and copy it manually.');
+    }
+  });
+
+  document.querySelector('#downloadSrt').addEventListener('click', () => {
+    if (!srtOutput.value) return;
+    const blob = new Blob([srtOutput.value], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const baseName = (selectedFile?.name || 'transcription').replace(/\.[^.]+$/, '');
+    link.href = url;
+    link.download = baseName + '.srt';
+    link.click();
+    URL.revokeObjectURL(url);
+  });
+
+  detectBackend();
+</script>
+</body>
+</html>
