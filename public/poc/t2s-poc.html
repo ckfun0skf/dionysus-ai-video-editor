@@ -132,36 +132,7 @@
       <div class="actions"><button id="downloadAss" class="primary" disabled>Download Karaoke .ass</button><button id="downloadKtvSrt" disabled>Download aligned .srt</button></div>
     </section>
   </div>
-\n  </div>
-  <div id="karaokePanel" hidden>
-    <section class="panel">
-      <h2>1. Load existing subtitles and audio</h2>
-      <div class="row">
-        <div><label for="ktvSrtFile">Existing SRT file</label><input id="ktvSrtFile" type="file" accept=".srt,.txt"></div>
-        <div><label for="ktvAudioFile">Audio file</label><input id="ktvAudioFile" type="file" accept="audio/*"></div>
-      </div>
-      <div id="ktvAudioPreview"></div>
-      <p class="muted">Uses local Whisper word timestamps as acoustic anchors and matches them against your SRT. This is model-assisted alignment, not a dedicated phoneme-level forced aligner. Results depend on the subtitle text matching the spoken audio.</p>
-    </section>
-    <section class="panel">
-      <h2>2. Align subtitle timing</h2>
-      <div class="row">
-        <div><label for="ktvLanguage">Spoken language</label><select id="ktvLanguage"><option value="auto">Auto-detect</option><option value="english">English</option><option value="chinese">Chinese</option></select></div>
-        <div><label for="ktvGranularity">Karaoke unit</label><select id="ktvGranularity"><option value="word">Word (English) / character (Chinese)</option><option value="char">Character</option></select></div>
-      </div>
-      <div class="actions"><button id="alignKtv" class="primary" disabled>Run alignment</button></div>
-      <div id="ktvStatus" class="status" role="status" aria-live="polite">Load an SRT and audio file to begin.</div>
-      <div class="meter"><div id="ktvProgress"></div></div>
-    </section>
-    <section class="panel">
-      <h2>3. Preview and adjust sentence timing</h2>
-      <audio id="ktvPlayer" controls></audio>
-      <div id="ktvPreview" class="karaoke-preview">Your karaoke subtitle preview will appear here.</div>
-      <p class="muted">Play the audio to preview word highlighting. Adjust each sentence's start/end below; its word timings shift with the sentence.</p>
-      <div id="ktvSentences" class="sentence-list"></div>
-      <div class="actions"><button id="downloadAss" class="primary" disabled>Download Karaoke .ass</button><button id="downloadKtvSrt" disabled>Download aligned .srt</button></div>
-    </section>
-  </div>
+
   <p class="muted"><span class="pill">Local inference</span><span class="pill">Whisper Tiny</span><span class="pill">WebGPU / WASM</span><br>
   The model and JavaScript runtime are downloaded from public CDNs / Hugging Face on first use and may be cached by the browser. This is not a fully offline first launch. Do not close the tab while a transcription is running.</p>
 </main>
@@ -447,7 +418,8 @@
   function downloadText(name,data,type){const u=URL.createObjectURL(new Blob([data],{type})),a=document.createElement('a');a.href=u;a.download=name;a.click();URL.revokeObjectURL(u);}
   downloadAssButton.addEventListener('click',()=>downloadText('karaoke.ass',makeAss(),'text/plain;charset=utf-8'));
   downloadKtvSrtButton.addEventListener('click',()=>downloadText('aligned.srt',makeSrt(),'text/plain;charset=utf-8'));
-\n  detectBackend();
+
+  detectBackend();
 </script>
 </body>
 </html>
