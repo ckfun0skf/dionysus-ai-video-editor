@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { HTML_CLIP_ASPECTS, HTML_CLIP_FORMAT, MAX_CLIP_SEC, PARAM_TYPES, lintHtmlClip, resolveHtmlParams, sizeForAspect, type HtmlClipIssue, type HtmlClipManifest, type HtmlClipParam, type HtmlParamValues, type ParamType, REF_TYPES, refType, type RefType, type HtmlClipInput } from "../domain";
+import { HTML_CLIP_ASPECTS, HTML_CLIP_FORMAT, MAX_CLIP_SEC, PARAM_TYPES, lintHtmlClip, resolveHtmlParams, sizeForAspect, type HtmlClipIssue, type HtmlClipManifest, type HtmlClipParam, type HtmlParamValues, type ParamType, REF_TYPES, refType, type RefType, type HtmlClipInput, type VersionSaveMode } from "../domain";
 import { CLIP_LIBRARIES, selectedLibraries } from "../render";
 import {
   FONT_EXT, IMAGE_EXT, DEFAULT_FOR, fontFamily, freeKey, generateClip, generateRaw, paramRows, paramSnippet, parseClip, retype, rowsToParams, syntaxCheck, validateRows,
@@ -582,8 +582,9 @@ function htmlOf(d: Draft): string {
  * Revise with AI (an existing clip) uses the same wizard shell as Create code → AI mode: the open package
  * stays put until a reply is imported, and Save then makes the new version.
  */
-export function CodeEditor({ source, mobile, onSave, onClose, create, onAiMode, previewParams, mixUnderlay, mixPlacement }: {
-  source: string; mobile: boolean; onSave: (html: string) => void; onClose: () => void;
+export function CodeEditor({ source, mobile, onSave, onClose, create, onAiMode, previewParams, mixUnderlay, mixPlacement, defaultSaveMode = "new" }: {
+  source: string; mobile: boolean; onSave: (html: string, mode?: VersionSaveMode) => void; onClose: () => void;
+  /** P59: last-used save mode for this project (Save menu default). */ defaultSaveMode?: VersionSaveMode;
   /** P4B: open the AI-mode wizard (Create code only). */ onAiMode?: () => void;
   /** A new clip (Add Media → Code → Create): the primary action adds it to the timeline. */ create?: boolean;
   /** Per-use overrides (placement.htmlParams or a shot's params) applied live on top of the draft defaults. */
@@ -647,7 +648,9 @@ export function CodeEditor({ source, mobile, onSave, onClose, create, onAiMode, 
     setSamples(false);
     ask(`Load "${s.name}"?`, "This replaces the script, params, files and settings you're editing. You can still Cancel the editor afterwards to keep the saved clip.", "Replace", () => { setD(draftFromModel(s.model())); setTab("script"); });
   };
-  const save = () => { if (canSave && !revise) onSave(html); };
+  const [saveMode, setSaveMode] = useState<VersionSaveMode>(defaultSaveMode);
+  const [saveOpen, setSaveOpen] = useState(false);
+  const save = (mode: VersionSaveMode = saveMode) => { if (canSave && !revise) { setSaveMode(mode); onSave(html, mode); } };
   const close = () => ask("Discard your changes?", "Your edits to this clip will be lost.", "Discard", onClose);
   const goLine = (line: number) => { setTab(d.raw !== undefined ? "advanced" : "script"); setJump({ line, n: Date.now() }); };
   const toRaw = () => setConfirm({
@@ -741,7 +744,7 @@ export function CodeEditor({ source, mobile, onSave, onClose, create, onAiMode, 
         {mobile && <button type="button" className="v2-btn v2-ce-icon" aria-label="Cancel" title="Cancel" onClick={close}><Icon g="✕" /></button>}
         <span className="v2-ce-title">
           <b>{m.name || "Code clip"}</b>
-          <span className="v2-muted">{create ? "New code clip" : dirty ? "Edited — save makes a new version" : "Code clip"}</span>
+          <span className="v2-muted">{create ? "New code clip" : dirty ? "Edited — choose how to save" : "Code clip"}</span>
         </span>
         {onAiMode && <button type="button" className="v2-btn v2-ce-samplesbtn v2-ce-aibtn" aria-label="AI mode" title="AI mode: answer a few questions, get a prompt for any AI, import its package" onClick={onAiMode}><Icon g="anim" /><span>AI mode</span></button>}
         {!create && <button type="button" className="v2-btn v2-ce-samplesbtn v2-ce-revisebtn" aria-label="Revise with AI" title="Revise with AI: describe a change, copy a prompt for any AI, import its package" onClick={() => { setSamples(false); setRevise(true); }}><Icon g="anim" /><span>Revise with AI</span></button>}
@@ -750,8 +753,19 @@ export function CodeEditor({ source, mobile, onSave, onClose, create, onAiMode, 
         </button>
         {!mobile && <button type="button" className="v2-btn" onClick={close}>Cancel</button>}
         {create
-          ? <button type="button" className="v2-btn primary" disabled={!canSave} title={blocked ? "Fix the params first" : "Add this clip to the timeline at the playhead (undoable)"} onClick={save}>Add to timeline</button>
-          : <button type="button" className="v2-btn primary" disabled={!canSave} title={blocked ? "Fix the params first" : dirty ? "Save as a new version of this clip (undoable)" : "No changes"} onClick={save}>Save</button>}
+          ? <button type="button" className="v2-btn primary" disabled={!canSave} title={blocked ? "Fix the params first" : "Add this clip to the timeline at the playhead (undoable)"} onClick={() => save()}>Add to timeline</button>
+          : (
+            <span className="v2-save-split">
+              <button type="button" className="v2-btn primary" disabled={!canSave} title={blocked ? "Fix the params first" : dirty ? (saveMode === "replace" ? "Overwrite the current version (undoable)" : "Save as a new version of this clip (undoable)") : "No changes"} onClick={() => save()}>Save</button>
+              <button type="button" className="v2-btn primary v2-save-caret" disabled={!canSave} aria-label="Save options" aria-haspopup="menu" aria-expanded={saveOpen} data-testid="code-save-caret" onClick={() => setSaveOpen((o) => !o)}>▾</button>
+              {saveOpen && (
+                <div className="v2-save-menu" role="menu" data-testid="code-save-menu">
+                  <button type="button" role="menuitem" data-testid="code-save-new" onClick={() => { setSaveOpen(false); save("new"); }}>Save as new version</button>
+                  <button type="button" role="menuitem" data-testid="code-save-replace" onClick={() => { setSaveOpen(false); save("replace"); }}>Update current version</button>
+                </div>
+              )}
+            </span>
+          )}
         {samples && !mobile && (
           <div className="v2-ce-popover" role="dialog" aria-label="Load sample">
             <SampleList onPick={loadSample} />

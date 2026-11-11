@@ -4,11 +4,11 @@
  * asset's `selectedVersionId` (the storyboard's current version). Split and copy keep the field
  * because they clone the placement. Optional on schema 3.1 — no migration.
  */
-import { findPlacement, isStill, type MediaRef, type Placement, type Project } from "./model";
+import { findPlacement, isStill, newId, type AssetVersion, type MediaRef, type Placement, type Project } from "./model";
 import { TICKS_PER_SECOND } from "./time";
 import { MIN_DURATION_TICKS, mainTrack } from "./ops";
 import { storyTargetOf } from "./slip";
-import { addStoryVersion } from "./storyboard";
+import { addStoryVersion, setVersionTrim, type VersionTrim } from "./storyboard";
 
 const rootOf = (p: Project) => p.compositions[p.rootCompositionId];
 const sec = (t: number) => Math.round((t / TICKS_PER_SECOND) * 100) / 100;
@@ -147,9 +147,55 @@ export function repairStalePins(p: Project): { project: Project; warnings: { cli
 }
 
 export type FitChoice = "trim" | "full";
+export type VersionSaveMode = "new" | "replace";
 
-export function addStoryVersionFromClip(p: Project, clipId: string, media: MediaRef, opts: { versionId?: string; fit?: FitChoice; inSec?: number; ripple?: boolean } = {}):
-  { ok: true; project: Project; note?: string } | { ok: false; error: string; needsFit?: boolean; mediaTicks?: number; clipTicks?: number } {
+export function versionSaveModeOf(p: Project): VersionSaveMode {
+  return p.settings.versionSaveMode === "replace" ? "replace" : "new";
+}
+
+export type ApplyMediaOpts = { versionId?: string; fit?: FitChoice; inSec?: number; ripple?: boolean; mode?: VersionSaveMode; seed?: AssetVersion; remember?: boolean };
+
+export type ApplyMediaResult =
+  | { ok: true; project: Project; note?: string; dropKeys?: string[]; otherCount?: number; mode: VersionSaveMode }
+  | { ok: false; error: string; needsFit?: boolean; mediaTicks?: number; clipTicks?: number };
+
+function withSaveMode(p: Project, mode: VersionSaveMode | undefined, remember: boolean | undefined): Project {
+  if (remember === false || !mode) return p;
+  const s = { ...p.settings };
+  if (mode === "replace") s.versionSaveMode = "replace";
+  else delete s.versionSaveMode;
+  return { ...p, settings: s };
+}
+
+function projectHasKey(p: Project, key: string): boolean {
+  for (const a of Object.values(p.assets)) {
+    for (const v of a.versions) {
+      if (v.media.blobKey === key || v.media.thumbKey === key || v.media.specKey === key) return true;
+    }
+  }
+  return false;
+}
+
+function fitGate(clipTicks: number, mediaTicks: number | undefined, fit?: FitChoice):
+  | { ok: true; longer: boolean; shorter: boolean }
+  | { ok: false; error: string; needsFit: true; mediaTicks: number; clipTicks: number } {
+  const longer = !!mediaTicks && mediaTicks > clipTicks + 1;
+  const shorter = !!mediaTicks && mediaTicks < clipTicks - 1;
+  if (longer && !fit) {
+    return {
+      ok: false, needsFit: true, mediaTicks: mediaTicks!, clipTicks,
+      error: `The new take is ${sec(mediaTicks!)} s but this shot/clip is ${sec(clipTicks)} s: pass fit "trim" (keep the shot length; inSec picks the start, default 0) or "full" (use the whole take; later clips move when ripple is on).`,
+    };
+  }
+  return { ok: true, longer, shorter };
+}
+
+export function clipsShowingVersion(p: Project, assetId: string, versionId: string): Placement[] {
+  return placementsOfAsset(p, assetId).filter((pl) => resolvedVersionId(p, pl).versionId === versionId);
+}
+
+export function addStoryVersionFromClip(p: Project, clipId: string, media: MediaRef, opts: ApplyMediaOpts = {}): ApplyMediaResult {
+  if (opts.mode === "replace") return replaceCurrentVersion(p, clipId, media, opts);
   const story = storyTargetOf(p, clipId);
   const f = findPlacement(rootOf(p), clipId);
   if (!f) return { ok: false, error: `No clip "${clipId}".` };
@@ -202,12 +248,12 @@ export function addStoryVersionFromClip(p: Project, clipId: string, media: Media
     const note = opts.ripple
       ? `This take is shorter (${sec(mediaTicks)} s vs ${sec(clipTicks)} s). The clip was shortened and later clips moved up.`
       : `This take is shorter (${sec(mediaTicks)} s vs ${sec(clipTicks)} s). The clip was shortened; a gap was left.`;
-    return { ok: true, project: next, note };
+    return { ok: true, project: withSaveMode(next, "new", opts.remember), note, mode: "new" };
   } else {
     // Equal length (or no media duration): keep this clip's in-point and length.
     next = applyVersionToClip(next, clipId, newVid, { durationTicks: clipTicks, sourceInTicks: clip.sourceInTicks });
   }
-  return { ok: true, project: next };
+  return { ok: true, project: withSaveMode(next, "new", opts.remember), mode: "new" };
 }
 
 export interface VersionDeleteAffected { clipId: string; label: string; pinned: boolean; toVersionId: string }
@@ -271,4 +317,128 @@ export function deleteAssetVersion(p: Project, assetId: string, versionId: strin
     next = { ...next, storyboard: { ...next.storyboard, versions: rest } };
   }
   return next;
+}
+
+function applyFitToClip(p: Project, clipId: string, versionId: string, clip: Placement, media: MediaRef, opts: ApplyMediaOpts): { project: Project; note?: string } {
+  const mediaTicks = media.durationTicks;
+  const clipTicks = clip.durationTicks;
+  const shorter = !!mediaTicks && mediaTicks < clipTicks - 1;
+  let next = mapClip(p, clipId, (x) => ({ ...x, versionId }));
+  if (opts.fit === "trim") {
+    const inTicks = Math.round(Math.max(0, opts.inSec ?? 0) * TICKS_PER_SECOND);
+    next = applyVersionToClip(next, clipId, versionId, { durationTicks: clipTicks, sourceInTicks: inTicks, ripple: false });
+    return { project: next };
+  }
+  if (opts.fit === "full" && mediaTicks) {
+    next = applyVersionToClip(next, clipId, versionId, { durationTicks: mediaTicks, sourceInTicks: 0, ripple: !!opts.ripple });
+    return { project: next };
+  }
+  if (shorter && mediaTicks) {
+    next = applyVersionToClip(next, clipId, versionId, { durationTicks: mediaTicks, sourceInTicks: 0, ripple: !!opts.ripple });
+    const note = opts.ripple
+      ? `This take is shorter (${sec(mediaTicks)} s vs ${sec(clipTicks)} s). The clip was shortened and later clips moved up.`
+      : `This take is shorter (${sec(mediaTicks)} s vs ${sec(clipTicks)} s). The clip was shortened; a gap was left.`;
+    return { project: next, note };
+  }
+  next = applyVersionToClip(next, clipId, versionId, { durationTicks: clipTicks, sourceInTicks: clip.sourceInTicks });
+  return { project: next };
+}
+
+/** Overwrite the media of the take this clip is currently showing. Other clips on that take see the change. */
+export function replaceCurrentVersion(p: Project, clipId: string, media: MediaRef, opts: ApplyMediaOpts = {}): ApplyMediaResult {
+  const f = findPlacement(rootOf(p), clipId);
+  if (!f) return { ok: false, error: `No clip "${clipId}".` };
+  const shown = resolvedVersionId(p, f.placement).versionId;
+  if (!shown) return { ok: false, error: `Clip ${clipId} has no version to replace.` };
+  const gate = fitGate(f.placement.durationTicks, media.durationTicks, opts.fit);
+  if (!gate.ok) return gate;
+  const r = replaceAssetVersion(p, f.placement.source.assetId, shown, media, { remember: false, clampOthers: true });
+  if (!r.ok) return r;
+  const fitted = applyFitToClip(r.project, clipId, shown, f.placement, media, opts);
+  const others = Math.max(0, (r.otherCount ?? 0) - 1);
+  const extra = others > 0
+    ? (others === 1 ? " 1 other clip uses this take and will show the update." : ` ${others} other clips use this take and will show the update.`)
+    : "";
+  const note = `${fitted.note ? `${fitted.note} ` : ""}Replaced the current version.${extra}`;
+  return { ok: true, project: withSaveMode(fitted.project, "replace", opts.remember), note, dropKeys: r.dropKeys, otherCount: others, mode: "replace" };
+}
+
+export function replaceAssetVersion(p: Project, assetId: string, versionId: string, media: MediaRef, opts: { remember?: boolean; clampOthers?: boolean } = {}): ApplyMediaResult {
+  const a = p.assets[assetId];
+  const v = a?.versions.find((x) => x.id === versionId);
+  if (!a || !v) return { ok: false, error: `No version "${versionId}" on asset ${assetId}.` };
+  const oldKeys = keysOfVersion(p, assetId, versionId);
+  const nextV: AssetVersion = { ...v, media, provenance: { source: "import", inputs: v.provenance?.inputs ?? [] } };
+  let next: Project = { ...p, assets: { ...p.assets, [assetId]: { ...a, versions: a.versions.map((x) => (x.id === versionId ? nextV : x)) } } };
+  const showing = clipsShowingVersion(next, assetId, versionId);
+  if (opts.clampOthers !== false) {
+    for (const pl of showing) next = applyVersionToClip(next, pl.id, versionId);
+  }
+  const dropKeys = oldKeys.filter((k) => !projectHasKey(next, k));
+  return { ok: true, project: withSaveMode(next, "replace", opts.remember), dropKeys, otherCount: showing.length, mode: "replace" };
+}
+
+/** Storyboard upload with mode replace: overwrite the selected take, or add the first version. */
+export function replaceStoryTarget(p: Project, target: import("./storyboard").Target, media: MediaRef, opts: ApplyMediaOpts & { model?: string; sync?: boolean; trim?: VersionTrim; derivedFrom?: { shotId: string; versionId: string }; lfEnd?: number; bg?: string } = {}): ApplyMediaResult {
+  const b = p.storyboard;
+  if (!b) return { ok: false, error: "No storyboard." };
+  const clipSlot = "shot" in target ? b.shots[target.shot]?.clipSlot : undefined;
+  if (clipSlot) return replaceStoryTarget(p, { slot: clipSlot }, media, opts);
+  const owner = "slot" in target ? b.slots[target.slot] : b.shots[target.shot];
+  if (!owner?.assetId || !p.assets[owner.assetId]?.versions.length) {
+    const project = withSaveMode(addStoryVersion(p, target, media, { versionId: opts.versionId, model: opts.model, trim: opts.trim, derivedFrom: opts.derivedFrom, lfEnd: opts.lfEnd, bg: opts.bg }), "replace", opts.remember);
+    return { ok: true, project, mode: "replace", note: "Saved as the first version." };
+  }
+  const a = p.assets[owner.assetId];
+  const vid = a.selectedVersionId ?? a.versions.at(-1)!.id;
+  const r = replaceAssetVersion(p, a.id, vid, media, { remember: opts.remember });
+  if (!r.ok) return r;
+  let project = r.project;
+  const sb = project.storyboard!;
+  const info = { ...(sb.versions[vid] ?? {}) };
+  if (opts.model) info.model = opts.model;
+  if (opts.derivedFrom) info.derivedFrom = opts.derivedFrom;
+  if (opts.lfEnd !== undefined) info.lfEnd = opts.lfEnd;
+  if (opts.bg) info.bg = opts.bg;
+  project = { ...project, storyboard: { ...sb, versions: { ...sb.versions, [vid]: info } } };
+  if (opts.trim) project = setVersionTrim(project, a.id, vid, opts.trim);
+  return { ...r, project };
+}
+
+export function addAssetVersionFromClip(p: Project, clipId: string, media: MediaRef, opts: ApplyMediaOpts = {}): ApplyMediaResult {
+  if (opts.mode === "replace") return replaceCurrentVersion(p, clipId, media, opts);
+  const f = findPlacement(rootOf(p), clipId);
+  if (!f) return { ok: false, error: `No clip "${clipId}".` };
+  const asset = p.assets[f.placement.source.assetId];
+  if (!asset) return { ok: false, error: `Clip ${clipId} has no versioned asset.` };
+  const gate = fitGate(f.placement.durationTicks, media.durationTicks, opts.fit);
+  if (!gate.ok) return gate;
+  const version: AssetVersion = opts.seed ?? {
+    id: opts.versionId ?? newId("ver"),
+    createdAt: new Date().toISOString(),
+    media,
+    provenance: { source: "import", inputs: [] },
+  };
+  const siblings = placementsOfAsset(p, asset.id).filter((pl) => pl.id !== clipId).map((s) => ({
+    id: s.id, shown: s.source.versionId, pin: s.versionId, sourceInTicks: s.sourceInTicks, durationTicks: s.durationTicks,
+  }));
+  let next: Project = {
+    ...p,
+    assets: { ...p.assets, [asset.id]: { ...asset, versions: [...asset.versions, version], selectedVersionId: version.id } },
+  };
+  for (const s of siblings) {
+    const pinTo = s.pin ?? s.shown;
+    if (!pinTo) continue;
+    next = setClipVersion(next, s.id, pinTo).project;
+    next = applyVersionToClip(next, s.id, pinTo, { sourceInTicks: s.sourceInTicks, durationTicks: s.durationTicks });
+  }
+  const fitted = applyFitToClip(next, clipId, version.id, f.placement, media, opts);
+  return { ok: true, project: withSaveMode(fitted.project, "new", opts.remember), note: fitted.note, mode: "new" };
+}
+
+/** Add or replace a take from a timeline clip (storyboard-linked or standalone). */
+export function applyMediaFromClip(p: Project, clipId: string, media: MediaRef, opts: ApplyMediaOpts = {}): ApplyMediaResult {
+  if (opts.mode === "replace") return replaceCurrentVersion(p, clipId, media, opts);
+  if (storyTargetOf(p, clipId)) return addStoryVersionFromClip(p, clipId, media, { ...opts, mode: "new" });
+  return addAssetVersionFromClip(p, clipId, media, { ...opts, mode: "new" });
 }

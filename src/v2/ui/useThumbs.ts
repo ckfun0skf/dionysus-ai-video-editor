@@ -21,7 +21,7 @@ export function useThumbs(project: Project, blobs: BlobStore): Record<string, st
     for (const a of Object.values(project.assets)) {
       if (a.kind === "audio") continue;
       const v = selected(a);
-      const key = v && `${a.id}:${v.id}`;
+      const key = v && `${a.id}:${v.id}:${v.media.blobKey}`;
       if (!v || started.current.has(key)) continue;
       started.current.add(key);
       const html = (b: Blob) => grabHtml(b, project, blobs, v.media.durationTicks ? ticksToSeconds(v.media.durationTicks) : undefined);
@@ -33,7 +33,7 @@ export function useThumbs(project: Project, blobs: BlobStore): Record<string, st
   }, [project.assets, blobs]);
   return useMemo(() => {
     const out: Record<string, string> = {};
-    for (const a of Object.values(project.assets)) { const v = selected(a); const url = v && cache[`${a.id}:${v.id}`]; if (url) out[a.id] = url; }
+    for (const a of Object.values(project.assets)) { const v = selected(a); const url = v && cache[`${a.id}:${v.id}:${v.media.blobKey}`]; if (url) out[a.id] = url; }
     return out;
   }, [project.assets, cache]);
 }

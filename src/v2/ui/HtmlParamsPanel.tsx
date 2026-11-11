@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { ParamControls, type ControlSpec } from "./ParamControls";
 import { cmd, type Engine } from "../engine";
-import { cleanParamDecls, INPUT_TYPES, inputSourceOf, namedTracker, pendingTracker, refType, type RefType, readManifest, resolveHtmlParams, sourceChoices, sourceLabel, type HtmlClipInput, type HtmlClipParam, type Placement, type Project } from "../domain";
+import { versionOfPlacement, cleanParamDecls, INPUT_TYPES, inputSourceOf, namedTracker, pendingTracker, refType, type RefType, readManifest, resolveHtmlParams, sourceChoices, sourceLabel, type HtmlClipInput, type HtmlClipParam, type Placement, type Project } from "../domain";
 import type { BlobStore } from "../ports";
 import { Ic } from "./Icon";
 
@@ -25,7 +25,7 @@ export function htmlParamSpecs(decls: Record<string, HtmlClipParam> | undefined)
 export function HtmlParamsPanel({ engine, project, placement, blobs, onEditCode }: {
   engine: Engine; project: Project; placement: Placement; blobs: BlobStore; onEditCode?: () => void;
 }) {
-  const ver = project.assets[placement.source.assetId]?.versions.find((v) => v.id === placement.source.versionId);
+  const ver = versionOfPlacement(project, placement);
   const blobKey = ver?.media.blobKey;
   const [decls, setDecls] = useState<{ key: string; params?: Record<string, HtmlClipParam>; inputs?: Record<string, HtmlClipInput> }>();
   useEffect(() => {

@@ -3,7 +3,7 @@ import { hitCandidates, isBackdrop, pickAt, Player, readClipConfig } from "../re
 import { cmd } from "../engine";
 import { htmlRoleOf, importFile } from "../persistence";
 const withoutRole = <T extends { role?: unknown }>(m: T): Omit<T, "role"> => { const { role: _r, ...rest } = m; return rest; };
-import { sourceAt, tracking, masking, board as storyDomain, chain, compositionDuration, edit, layers, ops, findPlacement, newId, formatTimecode, secondsToTicks, TICKS_PER_SECOND, type Asset } from "../domain";
+import { sourceAt, tracking, masking, board as storyDomain, chain, compositionDuration, edit, layers, ops, findPlacement, newId, formatTimecode, secondsToTicks, TICKS_PER_SECOND, versionOfPlacement, clipVersion, type Asset } from "../domain";
 import type { Composition, Project } from "../domain";
 import { useEditorBoot, useEngineState, useIsMobile, type EditorContext, type LoadFailure } from "./useEditor";
 import { Timeline } from "./Timeline";
@@ -38,6 +38,9 @@ import { Ic } from "./Icon";
 import { canSetInPoint, InPointControl } from "./InPoint";
 import { AdjustRange, canAdjustRange, canReplaceAsset } from "./AdjustRange";
 import { ClipVersionPicker } from "./ClipVersionPicker";
+import { BrandLogo } from "./BrandLogo";
+import { PreviewFsControls } from "./PreviewFsControls";
+import { canLockOrientation, needsCssRotate, preferredPreviewOrient, previewOrientFallback, toggleOrient, type PreviewOrient } from "./previewOrient";
 import { PastePlaceDialog } from "./PastePlaceDialog";
 import { ClipFrames } from "./ClipFrames";
 import { makeAnalyse, MatchFrames } from "./MatchFrames";
@@ -141,6 +144,9 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const [boardOpen, setBoardOpen] = useState<BoardTarget>(); // shot or slot to open with the board ("Open in storyboard")
   const openExport = () => { player.pause(); setExporting(true); };
   const [fs, setFs] = useState(false);
+  const [docFs, setDocFs] = useState(false);
+  const [fsOrient, setFsOrient] = useState<PreviewOrient>(() => preferredPreviewOrient(project.settings.width, project.settings.height));
+  const [previewMute, setPreviewMute] = useState(false);
   const [toast, setToast] = useState<string>();
   /** Toast with an inline Undo button (linked-clip delete). */
   const [toastUndo, setToastUndo] = useState(false);
@@ -217,7 +223,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const [sizes, setSizes] = useState<PanelSizes>(() => loadSizes(undefined, window.innerHeight));
   const sizesRef = useRef(sizes); sizesRef.current = sizes;
   const [vp, setVp] = useState(() => ({ w: window.innerWidth, h: window.innerHeight }));
-  useEffect(() => { const r = () => setVp({ w: window.innerWidth, h: window.innerHeight }); window.addEventListener("resize", r); return () => window.removeEventListener("resize", r); }, []);
+  useEffect(() => { const r = () => setVp({ w: window.innerWidth, h: window.innerHeight }); window.addEventListener("resize", r); window.addEventListener("orientationchange", r); return () => { window.removeEventListener("resize", r); window.removeEventListener("orientationchange", r); }; }, []);
   const lay = clampSizes(sizes, vp.w, vp.h);
   const resize = (patch: Partial<PanelSizes>) => {
     // Update the ref synchronously so a keyboard step can commit (persist) in the same tick.
@@ -363,6 +369,20 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   if (!playerRef.current) playerRef.current = new Player(project, storage.blobs);
   const player = playerRef.current;
   useEffect(() => { player.onTime = (t, p) => { if (p && stopAt.current !== undefined && t >= stopAt.current) { stopAt.current = undefined; player.pause(); return; } setTime(t); setPlaying(p); setFrame((f) => f + 1); }; return () => player.dispose(); }, [player]);
+  useEffect(() => { player.previewMute = previewMute; }, [player, previewMute]);
+  useEffect(() => {
+    const onFs = () => {
+      const on = !!document.fullscreenElement;
+      setDocFs(on);
+      if (!on) {
+        setFs(false);
+        try { screen.orientation.unlock(); } catch { /* unsupported */ }
+      }
+    };
+    document.addEventListener("fullscreenchange", onFs);
+    return () => document.removeEventListener("fullscreenchange", onFs);
+  }, []);
+  const fsActive = fs || docFs;
   useEffect(() => { player.canvas = canvasRef.current ?? undefined; player.draw(); }, [player, mobile]);
   /** P27-PREVIEW-STABILITY: "Loading" badge while the preview waits for media. */
   const [mediaLoading, setMediaLoading] = useState(false);
@@ -449,7 +469,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     lastTap.current = { x: cx, y: cy, id };
     if (id) { if (id !== selectedId || sel.length !== 1) { setSel([id]); setSubId(undefined); } }
     else if (selectedId) setSelectedId(undefined);
-    else togglePlay();
+    else if (!(mobile && (fs || document.fullscreenElement))) togglePlay();
   };
   const otherAt = (cx: number, cy: number) => {
     if (!canvasRef.current) return undefined;
@@ -472,7 +492,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   useEffect(() => { if (wasLooping.current && !loopClip) { player.pause(); setAnimLoop(false); } wasLooping.current = !!loopClip; }, [loopClip, player]);
   const openCode = async () => {
     const pl = selected?.placement;
-    const ver = pl && project.assets[pl.source.assetId]?.versions.find((v) => v.id === pl.source.versionId);
+    const ver = pl ? versionOfPlacement(project, pl) : undefined;
     const blob = ver && (await storage.blobs.get(ver.media.blobKey));
     if (pl && blob) setHtmlEdit({ placementId: pl.id, assetId: pl.source.assetId, source: await blob.text() });
     else setToast("Could not load this clip's code");
@@ -501,7 +521,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const createCode = (mode: "main" | "overlay" | "insert" = "main") => { setPicker(null); setSheet(false); setHtmlEdit({ source: newCodeClipHtml(), create: mode }); };
   /** P38: Effects / Transitions → Custom (code) → New: the editor opens on a starter whose manifest role routes the save. */
   const createCodeRole = (role: "effect" | "transition") => { setFxOpen(false); setTransFor(undefined); setHtmlEdit({ source: newCodeClipHtml(role), create: "main" }); };
-  const saveCode = async (html: string) => {
+  const saveCode = async (html: string, saveMode?: clipVersion.VersionSaveMode) => {
     if (!htmlEdit) return;
     if (htmlEdit.create) {
       const name = (readClipConfig(html).name || "Code clip").replace(/[\\/:*?"<>|]+/g, " ").trim() || "Code clip";
@@ -525,10 +545,11 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     if (!asset || !prev) return;
     const id = newId("ver"), blobKey = `${asset.id}/${id}`;
     await storage.blobs.put(blobKey, new Blob([html], { type: "text/html" }));
-    engine.dispatch(cmd.addAssetVersion(asset.id, { ...prev, id, createdAt: new Date().toISOString(), media: { ...withoutRole(prev.media), blobKey, ...(htmlRoleOf(html) ? { role: htmlRoleOf(html) } : {}) }, provenance: { source: "import", inputs: [] } }, htmlEdit.placementId));
-    setHtmlEdit(undefined); setToast("HTML clip updated (Undo to revert)");
+    const mode = saveMode === "replace" ? "replace" : "new";
+    engine.dispatch(cmd.addAssetVersion(asset.id, { ...prev, id, createdAt: new Date().toISOString(), media: { ...withoutRole(prev.media), blobKey, ...(htmlRoleOf(html) ? { role: htmlRoleOf(html) } : {}) }, provenance: { source: "import", inputs: [] } }, htmlEdit.placementId, { mode }));
+    setHtmlEdit(undefined); setToast(mode === "replace" ? "HTML clip updated in place (Undo to revert)" : "HTML clip updated (Undo to revert)");
   };
-  const selVersion = selected ? project.assets[selected.placement.source.assetId]?.versions.find((v) => v.id === selected.placement.source.versionId) : undefined;
+  const selVersion = selected ? versionOfPlacement(project, selected.placement) : undefined;
   const selAudioSpec = selVersion?.media.specKey;
   const openAudio = async () => {
     const pl = selected?.placement;
@@ -555,7 +576,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     if (!asset || !prev) return;
     const id = newId("ver");
     const media = await storeAudioClip(storage.blobs, clip, asset.id, id);
-    engine.dispatch(cmd.addAssetVersion(asset.id, { ...prev, id, createdAt: new Date().toISOString(), media, provenance: { source: "import", inputs: [] } }, audioEdit.placementId));
+    engine.dispatch(cmd.addAssetVersion(asset.id, { ...prev, id, createdAt: new Date().toISOString(), media, provenance: { source: "import", inputs: [] } }, audioEdit.placementId, { mode: clipVersion.versionSaveModeOf(project) }));
     setAudioEdit(undefined); setToast("Audio updated (Undo to revert)");
   };
   const isHtml = selected?.placement.clipType === "html";
@@ -620,7 +641,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
         if (e.key === "Z" && e.shiftKey) { e.preventDefault(); zoomFit(); return; }
         if (e.key === "Home" || e.key === "End") { e.preventDefault(); setRate(0); player.pause(); seek(e.key === "Home" ? 0 : duration); return; }
         if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && e.altKey) { e.preventDefault(); nudge((e.key === "ArrowLeft" ? -1 : 1) * (e.shiftKey ? 10 : 1) * fpsTicks); return; }
-        if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && e.shiftKey) { e.preventDefault(); seek(player.time + (e.key === "ArrowLeft" ? -1 : 1) * secondsToTicks(1)); return; }
+        if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && e.shiftKey) { e.preventDefault(); seek(player.time + (e.key === "ArrowLeft" ? -1 : 1) * secondsToTicks(document.fullscreenElement || fs ? 5 : 1)); return; }
         if (e.key === " ") { e.preventDefault(); playPause(); return; }
         if ((k === "q" || k === "w") && !e.altKey && !e.shiftKey) { e.preventDefault(); trimToPlayhead(k === "q" ? "left" : "right"); return; }
       }
@@ -868,11 +889,30 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
 
   const firstVideoTrack = ops.mainTrack(comp);
   const firstClip = firstVideoTrack?.placements[0];
+  const preferredFsOrient = preferredPreviewOrient(project.settings.width, project.settings.height);
   const fullscreen = () => {
     const el = canvasRef.current?.parentElement;
-    if (document.fullscreenElement) void document.exitFullscreen();
-    else if (el?.requestFullscreen) void el.requestFullscreen().catch(() => setFs((f) => !f));
-    else setFs((f) => !f);
+    const prefer = preferredFsOrient;
+    const lockIfWeCan = () => {
+      setFsOrient(prefer);
+      if (canLockOrientation()) void (screen.orientation as ScreenOrientation & { lock: (o: PreviewOrient) => Promise<void> }).lock(prefer).catch(() => undefined);
+    };
+    if (document.fullscreenElement) {
+      void document.exitFullscreen();
+      try { screen.orientation.unlock(); } catch { /* unsupported */ }
+      return;
+    }
+    if (fs) {
+      setFs(false);
+      try { screen.orientation.unlock(); } catch { /* unsupported */ }
+      return;
+    }
+    if (el?.requestFullscreen) {
+      void el.requestFullscreen().then(() => { setDocFs(true); lockIfWeCan(); }).catch(() => { setFs(true); lockIfWeCan(); });
+    } else {
+      setFs(true);
+      lockIfWeCan();
+    }
   };
   const focusGroup = menu === "audio" || menu === "text" || menu === "overlay" || menu === "effect" ? menu : undefined;
   const activeMenu: Menu = multiMode || sel.length > 1 ? "multi" : selected ? (menu === "speed" ? "speed" : "edit") : menu === "speed" ? "root" : cue ? "text" : menu;
@@ -1234,16 +1274,25 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   useEffect(() => { player.draw(); }, [player, canvasSize.width, canvasSize.height, project.settings.background]);
   const preview = (
     <section className="v2-preview" aria-label="Preview" style={mobile ? { height: `${previewVh}dvh` } : undefined}>
-      <div className="v2-canvas-wrap">{mediaLoading && <div className="v2-buffering" role="status" aria-live="polite" data-testid="preview-loading"><span className="v2-buffering-spin" aria-hidden="true" />Loading…</div>}<canvas ref={canvasRef} width={canvasSize.width} height={canvasSize.height} onClick={onCanvasTap} title={mobile ? "Tap an element to select it · tap empty space to play/pause" : "Click an element to select it · click empty space to play/pause"} />
+      <div className={`v2-canvas-wrap${mobile && fsActive && previewOrientFallback() === "css-rotate" && needsCssRotate(fsOrient, vp.w, vp.h) ? " is-fs-rotate" : ""}`}>{mediaLoading && <div className="v2-buffering" role="status" aria-live="polite" data-testid="preview-loading"><span className="v2-buffering-spin" aria-hidden="true" />Loading…</div>}<canvas ref={canvasRef} width={canvasSize.width} height={canvasSize.height} onClick={onCanvasTap} title={mobile ? "Tap an element to select it · tap empty space to play/pause" : "Click an element to select it · click empty space to play/pause"} />
         {visual && player.boxes.get(visual.id) && canvasRef.current && <TransformHandles engine={engine} placement={visual} time={time} box={player.boxes.get(visual.id)!} canvas={canvasRef.current} actions={gizmo} route={layerRoute} snapping={snapOn} others={[...player.boxes].filter(([id]) => id !== visual.id).map(([, b]) => b)} />}
         {inlineEditor}
         {!mobile && visual && scopeChip}
+        {mobile && fsActive && (
+          <PreviewFsControls playing={playing} timeTicks={time} durationTicks={duration} fps={project.settings.fps} muted={previewMute} orient={fsOrient}
+            onTogglePlay={togglePlay} onSeek={seek} onExit={fullscreen} onMute={() => setPreviewMute((m) => !m)}
+            onOrient={() => {
+              const next = toggleOrient(fsOrient);
+              setFsOrient(next);
+              if (canLockOrientation()) void (screen.orientation as ScreenOrientation & { lock: (o: PreviewOrient) => Promise<void> }).lock(next).catch(() => undefined);
+            }} />
+        )}
       </div>
       {!mobile && desktopTransport}
     </section>
   );
   return (
-    <div className={`v2-app ${mobile ? "is-mobile" : "is-desktop"} ${fs ? "is-fs" : ""}`}>
+    <div className={`v2-app ${mobile ? "is-mobile" : "is-desktop"} ${fsActive ? "is-fs" : ""}`}>
       {fileInputs}
       {pasteAsk && (() => {
         const t = Math.round(player.time);
@@ -1256,7 +1305,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       })()}
       {mobile ? (
         <header className="v2-header v2-mheader">
-          <a className="v2-icon v2-close" href={window.location.pathname} aria-label="Close (back to classic editor)"><Ic g="✕" /></a>
+          <button type="button" className="v2-brand" aria-label="Dionysus" title="Dionysus — Projects" onClick={() => setProjects(true)}><BrandLogo /></button>
           <button className="v2-icon v2-projects-btn" aria-label="Projects" title="Projects: new, open, rename, delete, export, import" onClick={() => setProjects(true)}><Ic g="☰" /></button>
           <button className="v2-icon v2-board-btn" aria-label="Storyboard" title="Storyboard: plan shots with your own AI" onClick={() => { player.pause(); setBoard(true); }}><Ic g="board" /></button>
           <span className="v2-spacer" />
@@ -1267,7 +1316,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
         </header>
       ) : (
         <header className="v2-header v2-dheader">
-          <a className="v2-back" href={window.location.pathname} title="Back to classic editor">‹ Classic</a>
+          <button type="button" className="v2-brand v2-brand-d" aria-label="Dionysus" title="Dionysus — Projects" onClick={() => setProjects(true)}><BrandLogo /></button>
           <button className="v2-dtool" aria-label={lay.leftOpen ? "Hide asset panel" : "Show asset panel"} title={lay.leftOpen ? "Hide asset panel" : "Show asset panel"} aria-pressed={lay.leftOpen} onClick={() => togglePanel("leftOpen")}><Ic g={lay.leftOpen ? "panel-close" : "panel-open"} size={18} /></button>
           <button className="v2-btn v2-projects-btn" aria-label="Projects" title="Projects: new, open, rename, delete, export, import" onClick={() => setProjects(true)}><Ic g="☰" size={16} /> Projects</button>
           <button className="v2-btn v2-board-btn" aria-label="Storyboard" title="Storyboard: plan shots with your own AI, import its JSON" onClick={() => { player.pause(); setBoard(true); }}><Ic g="board" size={16} /> Storyboard</button>
@@ -1295,7 +1344,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       {codeAi && <CodeAiWizard mobile={mobile} initialRole={codeAi === "overlay" ? "overlay" : "scene"} onClose={() => { setHtmlEdit({ source: newCodeClipHtml(), create: codeAi }); setCodeAi(undefined); }} onImport={(html) => { setHtmlEdit({ source: html, create: codeAi }); setCodeAi(undefined); }} />}
       {htmlEdit && (() => {
         const editPl = htmlEdit.placementId ? findPlacement(comp, htmlEdit.placementId)?.placement : undefined;
-        return <CodeEditor key={htmlEdit.create ? "new" : htmlEdit.placementId} source={htmlEdit.source} create={!!htmlEdit.create} mobile={mobile} previewParams={editPl?.htmlParams} mixUnderlay={editPl ? (t) => mixFromPlayer(player, editPl, t) : undefined} mixPlacement={editPl} onAiMode={htmlEdit.create === "main" || htmlEdit.create === "overlay" ? () => { setCodeAi(htmlEdit.create === "overlay" ? "overlay" : "main"); setHtmlEdit(undefined); } : undefined} onSave={(h) => void saveCode(h)} onClose={() => setHtmlEdit(undefined)} />;
+        return <CodeEditor key={htmlEdit.create ? "new" : htmlEdit.placementId} source={htmlEdit.source} create={!!htmlEdit.create} mobile={mobile} previewParams={editPl?.htmlParams} mixUnderlay={editPl ? (t) => mixFromPlayer(player, editPl, t) : undefined} mixPlacement={editPl} onAiMode={htmlEdit.create === "main" || htmlEdit.create === "overlay" ? () => { setCodeAi(htmlEdit.create === "overlay" ? "overlay" : "main"); setHtmlEdit(undefined); } : undefined} defaultSaveMode={clipVersion.versionSaveModeOf(project)} onSave={(h, mode) => void saveCode(h, mode)} onClose={() => setHtmlEdit(undefined)} />;
       })()}
       {subsPick && <div className="v2-menu-backdrop v2-confirm-backdrop" onPointerDown={() => setSubsPick(false)}>
         <div className="v2-confirm v2-subs-pick" role="dialog" aria-modal="true" aria-label="Choose a text layer" onPointerDown={(e) => e.stopPropagation()}>
