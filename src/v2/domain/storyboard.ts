@@ -203,6 +203,8 @@ export interface Storyboard {
   stepOrder?: string[];
   /** V2-SB-125: voiceover, music and sound-effect cues placed by shot; Send to timeline puts them on audio tracks. */
   audio?: StoryAudio[];
+  /** P60: caption style for the shared Subtitles track created by Send (`captions: true`). */
+  captionStyle?: import("./captionStyle").CaptionStyle;
   /**
    * P2A: what the last Send to timeline placed, as a signature per shot (its layers, captions, effects and params) and
    * per audio cue, so "Update timeline" redoes only the ones edited since. Not part of the JSON format.
@@ -278,7 +280,7 @@ export function storyboardFromDoc(doc: StoryDoc): Storyboard {
       shots[s.id].slotIds.unshift(id);
     }
   }
-  return { format: "dionysus.storyboard/1", meta: structuredClone(doc.meta), order: doc.shots.map((s) => s.id), shots, slots, connections: doc.connections.map((c) => structuredClone(c)), versions: {}, ...(doc.audio?.length ? { audio: structuredClone(doc.audio) } : {}) };
+  return { format: "dionysus.storyboard/1", meta: structuredClone(doc.meta), order: doc.shots.map((s) => s.id), shots, slots, connections: doc.connections.map((c) => structuredClone(c)), versions: {}, ...(doc.audio?.length ? { audio: structuredClone(doc.audio) } : {}), ...(doc.captionStyle ? { captionStyle: structuredClone(doc.captionStyle) } : {}) };
 }
 
 export function setStoryboard(p: Project, board: Storyboard | undefined): Project {

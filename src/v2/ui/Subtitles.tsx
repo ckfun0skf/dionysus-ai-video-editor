@@ -13,16 +13,16 @@ export function addCueAt(engine: Engine, time: number): string | undefined {
   return engine.getState().project === before ? undefined : id;
 }
 
-export async function importSrtFile(engine: Engine, file: File): Promise<number> {
+export async function importSrtFile(engine: Engine, file: File, trackId?: string): Promise<number> {
   const list = subs.parseSrt(await file.text());
-  if (list.length) engine.dispatch(cmd.importSrtLayer(list));
+  if (list.length) engine.dispatch(cmd.importSrtLayer(list, trackId));
   return list.length;
 }
 
-/** P36: import pasted SRT / VTT text as a new text layer (one undo step); returns the cue count. */
-export function importSrtText(engine: Engine, text: string): number {
+/** P36: import pasted SRT / VTT text as a new text layer (or onto trackId); returns the cue count. */
+export function importSrtText(engine: Engine, text: string, trackId?: string): number {
   const list = subs.parseSrt(text);
-  if (list.length) engine.dispatch(cmd.importSrtLayer(list));
+  if (list.length) engine.dispatch(cmd.importSrtLayer(list, trackId));
   return list.length;
 }
 

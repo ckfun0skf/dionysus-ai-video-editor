@@ -42,6 +42,11 @@ export interface TextData {
    * source timings when expanding word-pop into one short clip per word. Stretching the cue scales these.
    */
   words?: { text: string; atSec: number }[];
+  /**
+   * P60: when true this clip does not follow its track's captionStyle (the animation picker or a
+   * clip-level caption choice wins). Absent / false = follow the track when it has a caption style.
+   */
+  captionOverride?: boolean;
 }
 
 export const DEFAULT_TEXT: TextData = { text: "Text", font: "system-ui, sans-serif", size: 0.1, bold: true, color: "#ffffff", align: "center", strokeWidth: 0, strokeColor: "#000000" };

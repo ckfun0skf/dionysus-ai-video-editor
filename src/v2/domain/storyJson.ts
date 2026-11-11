@@ -4,6 +4,7 @@
  * warning, fallback and hard error listed in its §4 is implemented here.
  */
 import { resolveSeriesRefs, usesSeries, type SeriesLike } from "./storySeries";
+import { parseCaptionStyle } from "./captionStyle";
 import { effectMoves } from "./storyFollow";
 import { checkParamValue, cleanParamDecls, validateParamDecls, type HtmlClipParam, type HtmlParamValues } from "./htmlClipPackage";
 import { FONTS, getFont, getPreset, listPresets, parsePresetRef, type PresetDescriptor, type PresetKind } from "../registry";
@@ -393,7 +394,7 @@ export interface StoryAudio {
   description?: string;
   removedFromTimeline?: true;
 }
-export interface StoryDoc { format: typeof STORYBOARD_FORMAT; meta: StoryMeta; assets: StoryAsset[]; shots: StoryShot[]; connections: StoryConnection[]; audio?: StoryAudio[] }
+export interface StoryDoc { format: typeof STORYBOARD_FORMAT; meta: StoryMeta; assets: StoryAsset[]; shots: StoryShot[]; connections: StoryConnection[]; audio?: StoryAudio[]; /** P60: Caption style for the shared Subtitles track (Send copies it onto the track). */ captionStyle?: import("./captionStyle").CaptionStyle }
 
 /** `at`: character offset in the extracted JSON, for syntax errors that have no path. */
 export interface StoryIssue { path: string; message: string; at?: number }
@@ -1595,9 +1596,17 @@ export function validateStoryboard(raw: unknown, opts: StoryValidateOptions = {}
     connections.push({ from, to, kind, ...(note ? { note } : {}), ...(transition ? { transition } : {}) });
   });
 
-  const built: StoryDoc = { format: STORYBOARD_FORMAT, meta, assets, shots, connections, ...(audio.length ? { audio } : {}) };
+  let captionStyle: import("./captionStyle").CaptionStyle | undefined;
+  if (raw.captionStyle !== undefined) {
+    const parsed = parseCaptionStyle(raw.captionStyle);
+    if (!parsed.ok) warn("captionStyle", parsed.error + " Ignoring it.");
+    else captionStyle = parsed.value;
+  }
+
+  const extras = { ...(audio.length ? { audio } : {}), ...(captionStyle ? { captionStyle } : {}) };
+  const built: StoryDoc = { format: STORYBOARD_FORMAT, meta, assets, shots, connections, ...extras };
   if (errors.length) return { ok: false, errors, warnings, partial: built };
-  return { ok: true, doc: { format: STORYBOARD_FORMAT, meta, assets, shots, connections, ...(audio.length ? { audio } : {}) }, warnings };
+  return { ok: true, doc: { format: STORYBOARD_FORMAT, meta, assets, shots, connections, ...extras }, warnings };
 }
 
 /**

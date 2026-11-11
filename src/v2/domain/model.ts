@@ -264,6 +264,8 @@ export interface Track {
   layerStyle?: import("./layerStyle").LayerStyle;
   /** P14-SPATIAL: audio tracks: default position of clips without their own. */
   position?: import("./spatial").SpatialPos;
+  /** P60: caption mode for a text/subtitle track (absent = none; old projects load unchanged). */
+  captionStyle?: import("./captionStyle").CaptionStyle;
   placements: Placement[];
 }
 

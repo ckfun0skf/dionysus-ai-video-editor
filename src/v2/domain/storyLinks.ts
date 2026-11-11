@@ -6,6 +6,7 @@
  */
 import type { Composition, Placement, Track } from "./model";
 import { addTrack, groupOf, isFree, mainTrack } from "./ops";
+import { applyCaptionAfterInsert, prepareCaptionPlacement } from "./captionStyle";
 
 /** Shortest linked item kept after a clamp (0.1 s). */
 export const MIN_LINKED_TICKS = 12_000;
@@ -71,5 +72,7 @@ export function placeOnFreeTrack(comp: Composition, pl: Placement, fits: (t: Tra
     track = c.tracks.find((t) => t.id === id)!;
   }
   const tid = track.id;
-  return { ...c, tracks: c.tracks.map((t) => (t.id === tid ? { ...t, placements: [...t.placements, pl].sort((a, b) => a.startTicks - b.startTicks) } : t)) };
+  const placed = pl.clipType === "text" ? prepareCaptionPlacement(track, pl) : pl;
+  const next = { ...c, tracks: c.tracks.map((t) => (t.id === tid ? { ...t, placements: [...t.placements, placed].sort((a, b) => a.startTicks - b.startTicks) } : t)) };
+  return placed.clipType === "text" ? applyCaptionAfterInsert(next, tid, placed.id) : next;
 }

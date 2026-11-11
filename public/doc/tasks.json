@@ -3246,6 +3246,12 @@
           "title": "Choose Save as new version or Replace current version when uploading/creating a take (video, image, or code). A take added from a clip is immediately what that clip previews (pin + versionOfPlacement). Replace overwrites the current take in place (other clips on it update; note the count; last choice remembered on the project). Code editor Save menu, storyboard upload, timeline Replace, WebMCP mode new|replace. Brand logo in the header (opens Projects) and SVG favicon. Mobile fullscreen preview player: tap overlay, double-tap ±5s, orientation lock or CSS-rotate fallback.",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P60-TRACK-CAPTION-STYLE",
+          "title": "Track-level Caption style on subtitle/text tracks (none | word-highlight | word-pop) applies to every clip including later adds and SRT import/paste; optional track.captionStyle (schema stays dionysus/3.1). Clips without words even-split (spaces / CJK by char). Clip override wins, with Use track style reset. Align all with AI: one prompt for every cue, one JSON back, one undo. Word-highlight has pending/current/spoken styles (colour, opacity, scale, weight) with previous defaults; preview and export match. WebMCP set_track_caption_style, track_word_align_prompt, set_track_caption_words; AI rule 76; storyboard captionStyle.",
+          "status": "done",
+          "progress": 100
         }
       ]
     }

@@ -14,6 +14,8 @@ export * as layers from "./layerStyle";
 export * as cues from "./subtitleLayer";
 export * as words from "./wordTiming";
 export type { WordTiming, WordPhase } from "./wordTiming";
+export * as captions from "./captionStyle";
+export type { CaptionMode, CaptionStyle, CaptionEntrance, WordHighlightStyles, WordPhaseStyle, ResolvedCaption } from "./captionStyle";
 export * as story from "./storyJson";
 export type { StoryDoc, StoryAsset, StoryShot, StoryConnection, StoryIssue, StoryParseResult } from "./storyJson";
 export { storyboardSystemPrompt, storyboardShortPrompt, EXAMPLE_STORYBOARD, exampleStoryboardJson } from "./storyPrompt";

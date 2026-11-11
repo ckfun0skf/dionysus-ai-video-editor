@@ -396,7 +396,7 @@ export class Player {
       if (!fxDone && track.id !== mainId && track.kind !== "audio") applyFx();
       if (this.skipIds?.has(raw.id) || this.skipIds?.has(placement.id)) continue;
       if (placement.clipType === "text") {
-        if (ctx && canvas && !track.hidden) withBlend(ctx, placement.blend, () => this.boxes.set(placement.id, drawTextClip(ctx, placement, canvas.width, canvas.height, this.time, mix ?? 1)));
+        if (ctx && canvas && !track.hidden) withBlend(ctx, placement.blend, () => this.boxes.set(placement.id, drawTextClip(ctx, placement, canvas.width, canvas.height, this.time, mix ?? 1, track)));
         continue;
       }
       // P35: a storyboard shot with no clip yet: a dark slate with the shot label (preview only; export draws a dark frame).

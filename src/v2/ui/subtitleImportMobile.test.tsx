@@ -54,7 +54,7 @@ describe("P50 mobile subtitle import", () => {
 
     await act(async () => { tool("Text")!.click(); });
     const labels = [...el.querySelectorAll(".v2-toolbar .v2-tool span")].map((x) => x.textContent);
-    expect(labels).toEqual(["Add", "Stickers", "Import SRT", "Subtitles", "Export SRT", "Template"]);
+    expect(labels).toEqual(["Add", "Stickers", "Import SRT", "Subtitles", "Captions", "Export SRT", "Template"]);
     const icon = (name: string) => tool(name)!.querySelector("svg")!.getAttribute("data-icon");
     expect(icon("Import SRT")).toBe("srt-in");
     expect(icon("Export SRT")).toBe("srt-out");

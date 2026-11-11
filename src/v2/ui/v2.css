@@ -1682,3 +1682,26 @@ select.v2-tp-field { -webkit-appearance: none; appearance: none; padding-right: 
   transform: translate(-50%, -50%) rotate(90deg);
   z-index: 31;
 }
+
+/* P60: track Caption style panel (desktop inspector + mobile sheet). Hits are ≥44px. */
+.v2-caption-style { display: flex; flex-direction: column; gap: 10px; padding: 4px 2px 12px; }
+.v2-caption-lead { margin: 0; font-size: 13px; color: var(--v2-muted, #a1a1aa); }
+.v2-caption-lead b { color: var(--v2-text, #fafafa); }
+.v2-caption-modes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.v2-caption-mode { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 72px; padding: 8px 6px; border: 1px solid var(--line, #2a2a32); border-radius: 10px; background: #121217; color: var(--text, #fafafa); cursor: pointer; font: inherit; font-size: 12px; }
+.v2-caption-mode.is-active { border-color: var(--text, #fafafa); background: #1a1a20; }
+.v2-caption-mode:focus-visible { outline: 2px solid var(--text, #fafafa); outline-offset: 2px; }
+.v2-caption-hint { margin: 0; font-size: 12px; color: var(--v2-muted, #a1a1aa); }
+.v2-caption-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; min-height: 44px; }
+.v2-caption-row select { min-height: 44px; min-width: 140px; background: #0e0e11; color: var(--text); border: 1px solid var(--line, #2a2a32); border-radius: 8px; padding: 0 10px; }
+.v2-caption-phases { display: flex; flex-direction: column; gap: 12px; }
+.v2-caption-phase { border: 1px solid var(--line, #2a2a32); border-radius: 10px; padding: 10px; background: #121217; display: flex; flex-direction: column; gap: 8px; }
+.v2-caption-phase header { display: flex; align-items: baseline; gap: 8px; }
+.v2-caption-phase header strong { font-size: 14px; }
+.v2-caption-phase header span { font-size: 12px; color: var(--v2-muted, #a1a1aa); }
+.v2-caption-inherit { min-height: 44px; align-self: flex-start; }
+.v2-caption-clip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px; border-radius: 10px; background: #121217; border: 1px solid var(--line, #2a2a32); font-size: 13px; }
+.v2-caption-clip .v2-btn { min-height: 44px; margin-left: auto; }
+.v2-caption-align h4 { margin: 8px 0 0; font-size: 14px; }
+.v2-layer-ctl .v2-caption-style-btn { min-width: 44px; min-height: 44px; }
+.v2-app.is-desktop .v2-layer-ctl .v2-caption-style-btn { min-width: 44px; min-height: 44px; }

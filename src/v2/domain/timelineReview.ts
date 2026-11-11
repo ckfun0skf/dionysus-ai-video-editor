@@ -43,8 +43,8 @@ export const TIMELINE_TOOLS: TimelineToolDef[] = [
     description: "Move a clip's left or right edge to atSec on the timeline. ripple: true closes/opens the gap on the main track. One undo step; returns the clip.",
     inputSchema: obj({ id: str("Clip id."), edge: { type: "string", enum: ["left", "right"] }, atSec: num("New edge time in seconds."), ripple: { type: "boolean" } }, ["id", "edge", "atSec"]) },
   { name: "import_subtitles", title: "Import subtitles from SRT/VTT text", readOnly: false,
-    description: "Add pasted SRT or WebVTT text as a new subtitle text layer (each cue a text clip). Cues need a 00:00:01,000 --> 00:00:03,000 timing line. One undo step; returns the number of cues.",
-    inputSchema: obj({ text: str("The SRT or VTT text.") }, ["text"]) },
+    description: "Add pasted SRT or WebVTT text as subtitle cues (each cue a text clip). Without trackId a new subtitle layer is created; with trackId the cues are pasted onto that existing text track and inherit its Caption style. Cues need a 00:00:01,000 --> 00:00:03,000 timing line. One undo step; returns the number of cues.",
+    inputSchema: obj({ text: str("The SRT or VTT text."), trackId: str("Optional existing text track id to paste onto.") }, ["text"]) },
   { name: "add_blank_clip", title: "Add a blank (solid colour) clip", readOnly: false,
     description: "Add a solid colour clip at atSec: track \"main\" inserts it on the main track (later clips move up like any insert), \"overlay\" puts it on the first overlay layer with room (else a new one). color is #rrggbb; durationSec defaults to 3. To change the colour later call set_blank_color. One undo step; returns the clip.",
     inputSchema: obj({ track: { type: "string", enum: ["main", "overlay"] }, atSec: num("Timeline start in seconds."), color: str("#rrggbb"), durationSec: num("Length in seconds (default 3).") }, ["track", "atSec", "color"]) },
@@ -141,6 +141,15 @@ export const TIMELINE_TOOLS: TimelineToolDef[] = [
   { name: "word_align_prompt", title: "Prompt to align caption words with AI", readOnly: true,
     description: "P47: returns a copy-paste prompt that asks an external AI for word timings JSON for the caption clip (Dionysus does not call an AI). Optional audioClipId adds that clip's duration to the prompt. Paste the reply into set_caption_words.",
     inputSchema: obj({ clipId: str("Text clip id."), audioClipId: str("Optional narration/dialogue audio or video clip id.") }, ["clipId"]) },
+  { name: "set_track_caption_style", title: "Set a track's Caption style", readOnly: false,
+    description: "P60: set the Caption style of a text/subtitle track to none, word-highlight or word-pop. The style applies to every clip on that track (including clips added later and SRT imported or pasted onto it). Clips without words get an even split (spaces → words; CJK → characters). word-pop expands each cue into one short clip per word (entrance pop|fade|slide-up). highlight is optional { pending, current, spoken } each { color (#rrggbb), opacity 0–1, scale, weight 100–900 }; defaults match the previous look (pending opacity 0.4, current #20d5ec and scale +0.08, spoken = the clip colour). Preview and export use the same styles. Clips with a caption override are left alone. One undo step.",
+    inputSchema: obj({ trackId: str("Text or subtitle track id."), mode: { type: "string", enum: ["none", "word-highlight", "word-pop"] }, highlight: { type: "object", description: "Optional pending/current/spoken styles: each { color, opacity, scale, weight }." }, entrance: { type: "string", enum: ["pop", "fade", "slide-up"] } }, ["trackId", "mode"]) },
+  { name: "track_word_align_prompt", title: "Prompt to align every caption on a track with AI", readOnly: true,
+    description: "P60: returns one copy-paste prompt that lists every cue on the text track (id, text, start/end). Dionysus does not call an AI. Paste the reply (one JSON object covering all cues) into set_track_caption_words.",
+    inputSchema: obj({ trackId: str("Text or subtitle track id."), audioClipId: str("Optional narration/dialogue audio or video clip id.") }, ["trackId"]) },
+  { name: "set_track_caption_words", title: "Set word timings for every cue on a track", readOnly: false,
+    description: "P60: apply word timings to every caption on a text track in one undo step. Pass cues [{ id, words: [{ text, atSec }] }] matching every clip on the track, or json as the pasted AI reply (a { cues: [...] } object or a map of cue id → words). Times are seconds from each cue start and are clamped in order. Invalid JSON or a reply that skips a cue changes nothing.",
+    inputSchema: obj({ trackId: str("Text or subtitle track id."), cues: { type: "array", items: obj({ id: str("Cue clip id."), words: { type: "array", items: obj({ text: str("Word token."), atSec: num("Seconds from cue start.") }, ["text", "atSec"]) } }, ["id", "words"]), description: "One entry per cue." }, json: str("Optional pasted JSON covering all cues (alternative to cues).") }, ["trackId"]) },
 ];
 
 export const TIMELINE_TOOL_NAMES = new Set(TIMELINE_TOOLS.map((t) => t.name));
@@ -189,7 +198,7 @@ export function timelineJson(p: Project): Record<string, unknown> {
   return {
     settings: { width: p.settings.width, height: p.settings.height, fps: p.settings.fps, audioOutput: audioOutputOf(p) },
     duration: sec(compositionDuration(c)),
-    tracks: c.tracks.map((t) => ({ id: t.id, kind: t.kind, name: t.name, ...(t.group ? { group: t.group } : {}), ...(t === main ? { main: true } : {}), ...(t.muted ? { muted: true } : {}), ...(t.hidden ? { hidden: true } : {}), ...(t.position ? { position: t.position } : {}), clips: t.placements.map((pl) => clipJson(p, pl, t)) })),
+    tracks: c.tracks.map((t) => ({ id: t.id, kind: t.kind, name: t.name, ...(t.group ? { group: t.group } : {}), ...(t === main ? { main: true } : {}), ...(t.muted ? { muted: true } : {}), ...(t.hidden ? { hidden: true } : {}), ...(t.position ? { position: t.position } : {}), ...(t.captionStyle ? { captionStyle: t.captionStyle } : {}), clips: t.placements.map((pl) => clipJson(p, pl, t)) })),
     assets: Object.values(p.assets).filter((a) => a.kind !== "text" && a.kind !== "effect").map((a) => ({ id: a.id, kind: a.kind, name: a.name, ...(codeRoleOf(a) !== "clip" ? { role: codeRoleOf(a) } : {}) })),
     ...(c.subtitles?.length ? { subtitles: c.subtitles.length } : {}),
   };
