@@ -205,6 +205,7 @@
       if (!blob.size) throw new Error('No audio data was captured from the video.');
       return blob;
     } finally {
+      if (recorder.state !== 'inactive') recorder.stop();
       video.pause();
       video.controls = true;
       sourceStream.getTracks().forEach(track => track.stop());
