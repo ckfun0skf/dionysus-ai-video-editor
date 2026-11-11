@@ -286,7 +286,7 @@
         return_timestamps: true
       };
       if (language !== 'auto') options.language = language;
-      const result = await transcriber({ raw: audio, sampling_rate: 16000 }, {
+      const result = await transcriber(audio, {
         ...options,
         callback_function: (data) => {
           if (data?.progress !== undefined) {
