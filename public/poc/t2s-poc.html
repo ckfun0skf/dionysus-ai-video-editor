@@ -32,7 +32,22 @@
     video, audio { display:block; width:100%; max-height:340px; margin-top:14px; }
     .pill { display:inline-block; border:1px solid #424b5d; border-radius:99px; padding:3px 8px; color:#c6cede; font-size:11px; margin-right:5px; }
     a { color:#a9b8ff; }
-    @media (max-width:600px) { body { padding:24px 12px 40px; } .panel { padding:15px; } }
+
+    .tabs{display:flex;gap:8px;border-bottom:1px solid #303746;margin:18px 0 22px}
+    .tab{background:transparent;border:1px solid transparent;color:#aeb7c7;border-radius:9px 9px 0 0}
+    .tab[aria-selected="true"]{background:#252d3d;border-color:#46516a;color:#fff}
+    [hidden]{display:none!important}
+    .sentence-list{display:grid;gap:10px;margin-top:16px}
+    .sentence{border:1px solid #394355;border-radius:10px;padding:12px;display:grid;gap:10px}
+    .sentence.active{border-color:#7185f0;background:#20283a}
+    .sentence-head{display:flex;justify-content:space-between;gap:10px;align-items:center}
+    .time-fields{display:flex;gap:8px;flex-wrap:wrap}
+    .time-fields label{flex:1 1 110px;margin:0}
+    .time-fields input{width:100%;margin-top:5px;border:1px solid #3b4352;background:#11151c;color:#e8eaf0;border-radius:7px;padding:8px}
+    .karaoke-preview{background:#0b0e14;border:1px solid #303746;border-radius:10px;padding:22px 14px;min-height:94px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:clamp(19px,3vw,28px);line-height:1.5;overflow-wrap:anywhere}
+    .ktv-token{color:#778196}.ktv-token.done{color:#f5d66b}.ktv-token.current{color:#fff18a;text-shadow:0 0 14px #e8c64c88}
+    .small-button{padding:7px 10px;font-size:12px}
+\n    @media (max-width:600px) { body { padding:24px 12px 40px; } .panel { padding:15px; } }
   </style>
 </head>
 <body>
@@ -81,7 +96,38 @@
     </div>
   </section>
 
-  <p class="muted"><span class="pill">Local inference</span><span class="pill">Whisper Tiny</span><span class="pill">WebGPU / WASM</span><br>
+
+  </div>
+  <div id="karaokePanel" hidden>
+    <section class="panel">
+      <h2>1. Load existing subtitles and audio</h2>
+      <div class="row">
+        <div><label for="ktvSrtFile">Existing SRT file</label><input id="ktvSrtFile" type="file" accept=".srt,.txt"></div>
+        <div><label for="ktvAudioFile">Audio file</label><input id="ktvAudioFile" type="file" accept="audio/*"></div>
+      </div>
+      <div id="ktvAudioPreview"></div>
+      <p class="muted">Uses local Whisper word timestamps as acoustic anchors and matches them against your SRT. This is model-assisted alignment, not a dedicated phoneme-level forced aligner. Results depend on the subtitle text matching the spoken audio.</p>
+    </section>
+    <section class="panel">
+      <h2>2. Align subtitle timing</h2>
+      <div class="row">
+        <div><label for="ktvLanguage">Spoken language</label><select id="ktvLanguage"><option value="auto">Auto-detect</option><option value="english">English</option><option value="chinese">Chinese</option></select></div>
+        <div><label for="ktvGranularity">Karaoke unit</label><select id="ktvGranularity"><option value="word">Word (English) / character (Chinese)</option><option value="char">Character</option></select></div>
+      </div>
+      <div class="actions"><button id="alignKtv" class="primary" disabled>Run alignment</button></div>
+      <div id="ktvStatus" class="status" role="status" aria-live="polite">Load an SRT and audio file to begin.</div>
+      <div class="meter"><div id="ktvProgress"></div></div>
+    </section>
+    <section class="panel">
+      <h2>3. Preview and adjust sentence timing</h2>
+      <audio id="ktvPlayer" controls></audio>
+      <div id="ktvPreview" class="karaoke-preview">Your karaoke subtitle preview will appear here.</div>
+      <p class="muted">Play the audio to preview word highlighting. Adjust each sentence's start/end below; its word timings shift with the sentence.</p>
+      <div id="ktvSentences" class="sentence-list"></div>
+      <div class="actions"><button id="downloadAss" class="primary" disabled>Download Karaoke .ass</button><button id="downloadKtvSrt" disabled>Download aligned .srt</button></div>
+    </section>
+  </div>
+\n  <p class="muted"><span class="pill">Local inference</span><span class="pill">Whisper Tiny</span><span class="pill">WebGPU / WASM</span><br>
   The model and JavaScript runtime are downloaded from public CDNs / Hugging Face on first use and may be cached by the browser. This is not a fully offline first launch. Do not close the tab while a transcription is running.</p>
 </main>
 
@@ -328,7 +374,40 @@
     URL.revokeObjectURL(url);
   });
 
-  detectBackend();
+
+  const $ = s => document.querySelector(s);
+  const tabTranscribe=$('#tabTranscribe'), tabKaraoke=$('#tabKaraoke');
+  const transcribePanel=$('#transcribePanel'), karaokePanel=$('#karaokePanel');
+  const ktvSrtFile=$('#ktvSrtFile'), ktvAudioFile=$('#ktvAudioFile');
+  const ktvAudioPreview=$('#ktvAudioPreview'), alignKtvButton=$('#alignKtv');
+  const ktvStatus=$('#ktvStatus'), ktvProgress=$('#ktvProgress'), ktvPlayer=$('#ktvPlayer');
+  const ktvPreview=$('#ktvPreview'), ktvSentences=$('#ktvSentences');
+  const downloadAssButton=$('#downloadAss'), downloadKtvSrtButton=$('#downloadKtvSrt');
+  let ktvAudioUrl=null, ktvRows=[];
+  function switchTab(k){transcribePanel.hidden=k;karaokePanel.hidden=!k;tabTranscribe.setAttribute('aria-selected',String(!k));tabKaraoke.setAttribute('aria-selected',String(k));}
+  tabTranscribe.addEventListener('click',()=>switchTab(false));tabKaraoke.addEventListener('click',()=>switchTab(true));
+  function parseSrtTime(v){const m=v.trim().match(/^(?:(\d+):)?(\d{2}):(\d{2})[,.](\d{1,3})$/);return m?Number(m[1]||0)*3600+Number(m[2])*60+Number(m[3])+Number((m[4]+'00').slice(0,3))/1000:NaN;}
+  function parseSrt(t){return t.replace(/^\uFEFF/,'').replace(/\r/g,'').trim().split(/\n\s*\n/).flatMap(b=>{const l=b.split('\n'),i=l.findIndex(x=>x.includes('-->'));if(i<0)return[];const p=l[i].split('-->'),start=parseSrtTime(p[0]),end=parseSrtTime(p[1]),text=l.slice(i+1).join(' ').trim();return Number.isFinite(start)&&Number.isFinite(end)&&text?[{start,end:Math.max(start+.05,end),text,tokens:[]}]:[];});}
+  function splitTokens(t,lang,gran){return gran==='char'||lang==='chinese'?Array.from(t).filter(x=>!/^\s+$/.test(x)):(t.match(/[\p{L}\p{N}]+(?:['’][\p{L}]+)?|[^\p{L}\p{N}\s]/gu)||[]);}
+  function norm(t){return t.toLocaleLowerCase().normalize('NFKC').replace(/[^\p{L}\p{N}]/gu,'');}
+  function expandChunks(chunks,lang){const out=[];for(const ch of chunks||[]){const [s,e]=ch.timestamp||[];if(!Number.isFinite(s)||!Number.isFinite(e)||e<=s)continue;const parts=splitTokens((ch.text||'').trim(),lang,'word').filter(x=>norm(x));if(!parts.length)continue;const w=parts.map(x=>Math.max(1,Array.from(x).length)),sum=w.reduce((a,b)=>a+b,0);let cur=s;parts.forEach((p,i)=>{const end=i===parts.length-1?e:cur+(e-s)*w[i]/sum;out.push({text:p,norm:norm(p),start:cur,end});cur=end;});}return out;}
+  function alignLine(tokens,units,lo,hi,ref){const found=[];for(const t of tokens){const n=norm(t);let at=-1;for(let j=ref.i;j<Math.min(units.length,ref.i+14);j++){if(n&& (units[j].norm===n||(n.length>2&&units[j].norm.length>2&&(units[j].norm.includes(n)||n.includes(units[j].norm))))){at=j;break;}}if(at>=0){found.push(units[at]);ref.i=at+1;}else found.push(null);}
+    const anchors=found.map((u,i)=>u?{i,s:u.start,e:u.end}:null).filter(Boolean);
+    return found.map((u,i)=>{if(u)return{text:tokens[i],start:u.start,end:u.end};const a=[...anchors].reverse().find(x=>x.i<i),b=anchors.find(x=>x.i>i),left=a?a.e:lo,right=b?b.s:hi,span=Math.max(.02,right-left),den=(b?b.i-i:tokens.length-i)+(a?i-a.i: i+1)-1,step=span/Math.max(1,den),start=left+step*(a?i-a.i-1:0);return{text:tokens[i],start,end:Math.max(start+.02,start+step)};});}
+  function assEscape(t){return String(t).replace(/\\/g,'\\\\').replace(/{/g,'\\{').replace(/}/g,'\\}').replace(/\n/g,'\\N');}
+  function assTime(s){const n=Math.max(0,Math.round(s*100));return Math.floor(n/360000)+':'+String(Math.floor(n/6000)%60).padStart(2,'0')+':'+String(Math.floor(n/100)%60).padStart(2,'0')+'.'+String(n%100).padStart(2,'0');}
+  function makeAss(){const h='[Script Info]\nScriptType: v4.00+\nPlayResX: 1920\nPlayResY: 1080\nWrapStyle: 2\n\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\nStyle: Default,Arial,54,&H00FFFFFF,&H0000D7FF,&H00000000,&H80000000,1,0,1,3,1,2,80,80,70,1\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n';return h+ktvRows.map(r=>'Dialogue: 0,'+assTime(r.start)+','+assTime(r.end)+',Default,,0,0,0,,'+r.tokens.map(t=>'{\\k'+Math.max(1,Math.round((t.end-t.start)*100))+'}'+assEscape(t.text)).join(' ')).join('\n')+'\n';}
+  function makeSrt(){return ktvRows.map((r,i)=>(i+1)+'\n'+formatTimestamp(r.start)+' --> '+formatTimestamp(r.end)+'\n'+r.text).join('\n\n')+'\n';}
+  function renderControls(){ktvSentences.replaceChildren();ktvRows.forEach((r,i)=>{const card=document.createElement('div');card.className='sentence';const head=document.createElement('div');head.className='sentence-head';const title=document.createElement('strong');title.textContent='Sentence '+(i+1);const seek=document.createElement('button');seek.className='small-button';seek.textContent='Preview';seek.addEventListener('click',()=>{ktvPlayer.currentTime=r.start;ktvPlayer.play();});head.append(title,seek);const txt=document.createElement('div');txt.textContent=r.text;const fields=document.createElement('div');fields.className='time-fields';['start','end'].forEach(k=>{const label=document.createElement('label');label.textContent=k==='start'?'Start (seconds)':'End (seconds)';const input=document.createElement('input');input.type='number';input.step='.01';input.min='0';input.value=r[k].toFixed(2);input.addEventListener('change',()=>{const v=Math.max(0,Number(input.value)||0),delta=v-r[k];r[k]=v;r.tokens.forEach(t=>{t.start=Math.max(r.start,t.start+delta);t.end=Math.max(t.start+.01,t.end+delta);});if(r.end<=r.start)r.end=r.start+.05;renderControls();renderPreview(ktvPlayer.currentTime);});label.append(input);fields.append(label);});card.append(head,txt,fields);ktvSentences.append(card);});}
+  function renderPreview(time){const ix=ktvRows.findIndex(r=>time>=r.start&&time<=r.end);ktvSentences.querySelectorAll('.sentence').forEach((e,i)=>e.classList.toggle('active',i===ix));ktvPreview.replaceChildren();if(ix<0){ktvPreview.textContent='…';return;}ktvRows[ix].tokens.forEach(t=>{const s=document.createElement('span');s.className='ktv-token';if(time>=t.end)s.classList.add('done');else if(time>=t.start)s.classList.add('current');s.textContent=t.text+' ';ktvPreview.append(s);});}
+  ktvSrtFile.addEventListener('change',async()=>{const f=ktvSrtFile.files?.[0];if(!f)return;try{ktvRows=parseSrt(await f.text());if(!ktvRows.length)throw Error('No valid SRT subtitle blocks found.');ktvStatus.textContent=ktvRows.length+' subtitle lines loaded. Choose the matching audio.';renderControls();alignKtvButton.disabled=!ktvAudioFile.files?.[0];}catch(e){ktvStatus.textContent=e.message;}});
+  ktvAudioFile.addEventListener('change',()=>{const f=ktvAudioFile.files?.[0];if(!f)return;if(ktvAudioUrl)URL.revokeObjectURL(ktvAudioUrl);ktvAudioUrl=URL.createObjectURL(f);const a=document.createElement('audio');a.controls=true;a.src=ktvAudioUrl;ktvAudioPreview.replaceChildren(a);ktvPlayer.src=ktvAudioUrl;alignKtvButton.disabled=!ktvRows.length;});
+  ktvPlayer.addEventListener('timeupdate',()=>renderPreview(ktvPlayer.currentTime));
+  alignKtvButton.addEventListener('click',async()=>{const f=ktvAudioFile.files?.[0];if(!f||!ktvRows.length)return;alignKtvButton.disabled=true;ktvStatus.textContent='Decoding audio…';ktvProgress.style.width='5%';try{const {audio}=await decodeTo16k(f);ktvStatus.textContent='Loading local speech model…';ktvProgress.style.width='25%';if(!pipelinePromise)pipelinePromise=getTranscriber(selectedBackend).catch(async e=>{if(selectedBackend!=='webgpu')throw e;selectedBackend='wasm';backendEl.textContent='WebGPU init failed — using WASM';return getTranscriber('wasm');});const tr=await pipelinePromise,lang=$('#ktvLanguage').value;const result=await tr(audio,{chunk_length_s:30,stride_length_s:5,return_timestamps:'word',...(lang!=='auto'?{language:lang}:{}),callback_function:d=>{if(d?.progress!==undefined)ktvProgress.style.width=(25+Math.min(1,d.progress)*65)+'%';}});const units=expandChunks(result.chunks,lang);if(!units.length)throw Error('No usable word timestamps returned. Try a shorter audio file.');const gran=$('#ktvGranularity').value,ref={i:0};ktvRows.forEach(r=>{r.tokens=alignLine(splitTokens(r.text,lang,gran),units,r.start,r.end,ref);const ts=r.tokens.filter(t=>t.end>t.start);if(ts.length){r.start=Math.min(r.start,ts[0].start);r.end=Math.max(r.end,ts[ts.length-1].end);}});renderControls();renderPreview(ktvPlayer.currentTime);downloadAssButton.disabled=false;downloadKtvSrtButton.disabled=false;ktvProgress.style.width='100%';ktvStatus.textContent='Alignment finished. Review text matches and sentence boundaries before export.';}catch(e){console.error(e);ktvStatus.textContent='Alignment failed: '+(e?.message||String(e));}finally{alignKtvButton.disabled=false;}});
+  function downloadText(name,data,type){const u=URL.createObjectURL(new Blob([data],{type})),a=document.createElement('a');a.href=u;a.download=name;a.click();URL.revokeObjectURL(u);}
+  downloadAssButton.addEventListener('click',()=>downloadText('karaoke.ass',makeAss(),'text/plain;charset=utf-8'));
+  downloadKtvSrtButton.addEventListener('click',()=>downloadText('aligned.srt',makeSrt(),'text/plain;charset=utf-8'));
+\n  detectBackend();
 </script>
 </body>
 </html>
