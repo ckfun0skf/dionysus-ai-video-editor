@@ -45,7 +45,7 @@
     <label for="mediaFile">Audio or video file</label>
     <input id="mediaFile" type="file" accept="audio/*,video/*">
     <div id="preview"></div>
-    <p class="muted">The browser decodes the selected file locally before transcription. Supported formats depend on the codecs available in your browser. Very long or high-resolution files may require substantial memory.</p>
+    <p class="muted">Audio files are decoded locally. For video, the browser records its audio track during real-time playback before transcription (keep this tab open). Video audio capture depends on browser support; Chrome is recommended. Very long files may require substantial memory.</p>
   </section>
 
   <section class="panel">
@@ -162,12 +162,62 @@
     });
   }
 
+  async function recordVideoAudio(file) {
+    const video = preview.querySelector('video');
+    if (!video) throw new Error('Video preview is unavailable.');
+    const capture = video.captureStream || video.mozCaptureStream;
+    if (!capture) throw new Error('This browser cannot capture a video audio track. Try Chrome or extract the audio track to an audio file first.');
+    if (video.readyState < 1) {
+      await new Promise((resolve, reject) => {
+        video.addEventListener('loadedmetadata', resolve, { once: true });
+        video.addEventListener('error', () => reject(new Error('The video could not be opened by this browser.')), { once: true });
+      });
+    }
+    video.pause();
+    video.currentTime = 0;
+    await new Promise(resolve => {
+      if (video.readyState >= 2) resolve();
+      else video.addEventListener('canplay', resolve, { once: true });
+    });
+    const sourceStream = capture.call(video);
+    const audioTracks = sourceStream.getAudioTracks();
+    if (!audioTracks.length) throw new Error('No audio track was detected in this video.');
+    const audioStream = new MediaStream(audioTracks);
+    const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'].find(type => MediaRecorder.isTypeSupported(type));
+    const recorder = mimeType ? new MediaRecorder(audioStream, { mimeType }) : new MediaRecorder(audioStream);
+    const parts = [];
+    const recording = new Promise((resolve, reject) => {
+      recorder.addEventListener('dataavailable', event => {
+        if (event.data?.size) parts.push(event.data);
+      });
+      recorder.addEventListener('error', event => reject(event.error || new Error('Video audio recording failed.')), { once: true });
+      recorder.addEventListener('stop', () => resolve(new Blob(parts, { type: recorder.mimeType || 'audio/webm' })), { once: true });
+      video.addEventListener('ended', () => {
+        if (recorder.state !== 'inactive') recorder.stop();
+      }, { once: true });
+    });
+    video.controls = false;
+    recorder.start(1000);
+    try {
+      await video.play();
+      setStatus('Extracting the video audio track in real time… Keep this tab open until playback finishes.');
+      const blob = await recording;
+      if (!blob.size) throw new Error('No audio data was captured from the video.');
+      return blob;
+    } finally {
+      video.pause();
+      video.controls = true;
+      sourceStream.getTracks().forEach(track => track.stop());
+    }
+  }
+
   async function decodeTo16k(file) {
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     if (!AudioContextClass) throw new Error('Web Audio API is not supported by this browser.');
     const context = new AudioContextClass();
     try {
-      const buffer = await file.arrayBuffer();
+      const audioBlob = file.type.startsWith('video/') ? await recordVideoAudio(file) : file;
+      const buffer = await audioBlob.arrayBuffer();
       const decoded = await context.decodeAudioData(buffer);
       const frames = Math.ceil(decoded.duration * 16000);
       const offline = new OfflineAudioContext(1, frames, 16000);
