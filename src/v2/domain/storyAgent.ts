@@ -17,6 +17,7 @@ import {
   STORYBOARD_FORMAT, extractJson, storyDocJson, storySummary, validateStoryboard,
   type StoryDoc, type StoryIssue, type StoryParseResult,
 } from "./storyJson";
+import { SCHEMA_VERSION } from "./storySchema";
 
 type Obj = Record<string, unknown>;
 type Raw = Obj & { meta?: Obj; assets: Obj[]; shots: Obj[]; connections: Obj[]; audio?: Obj[] };
@@ -456,7 +457,9 @@ export function runStoryTool(name: string, args: unknown, doc: StoryDoc | undefi
   if (name === "sync_to_storyboard") return doc ? { ok: true, text: "Syncing.", sync: true, label: "AI: sync to storyboard" } : { ok: false, text: "No storyboard yet." };
   if (name === "send_to_timeline") return doc ? { ok: true, text: "Sending.", send: true, label: "AI: update timeline" } : { ok: false, text: "No storyboard yet." };
   if (!raw && !tool.creates) return { ok: false, text: "No storyboard yet. Create one with create_storyboard first." };
-  const work: Raw = raw ?? { format: STORYBOARD_FORMAT, meta: {}, assets: [], shots: [], connections: [] };
+  // A new board is clip-centric 3.1 (RULE 51), like every board export writes; without the version the validator
+  // reads it as 3.0 and rejects shots that name a clip.
+  const work: Raw = raw ?? { format: STORYBOARD_FORMAT, schemaVersion: SCHEMA_VERSION, meta: {}, assets: [], shots: [], connections: [] };
   let out: ReturnType<Edit>;
   try { out = tool.edit!(work, a, ctx); } catch (e) { out = `Bad arguments: ${(e as Error).message}`; }
   if (typeof out === "string") return { ok: false, text: `Rejected, nothing changed: ${out}` };

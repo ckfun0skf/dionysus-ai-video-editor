@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "project": "Dionysus",
-  "updatedAt": "2026-11-10",
+  "updatedAt": "2026-11-12",
   "sourceOfTruth": "public/doc/tasks.json on main (see docs/v2/MODULE_DESIGN.md §14)",
   "statusDefinitions": {
     "done": "Implementation exists and has evidence; release/browser validation may still be pending.",
@@ -3250,6 +3250,12 @@
         {
           "id": "P60-TRACK-CAPTION-STYLE",
           "title": "Track-level Caption style on subtitle/text tracks (none | word-highlight | word-pop) applies to every clip including later adds and SRT import/paste; optional track.captionStyle (schema stays dionysus/3.1). Clips without words even-split (spaces / CJK by char). Clip override wins, with Use track style reset. Align all with AI: one prompt for every cue, one JSON back, one undo. Word-highlight has pending/current/spoken styles (colour, opacity, scale, weight) with previous defaults; preview and export match. WebMCP set_track_caption_style, track_word_align_prompt, set_track_caption_words; AI rule 76; storyboard captionStyle.",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "P61-CREATE-STORYBOARD-SCHEMA",
+          "title": "Fix WebMCP create_storyboard: a new board now starts as schemaVersion 3.1 (clip-centric, RULE 51), so shots that name a clip (a video asset) are accepted instead of being rejected with \"needs a clip generation prompt\" (the empty board had no schemaVersion and was validated as 3.0). Regression test in storyAgent.test.ts.",
           "status": "done",
           "progress": 100
         }
