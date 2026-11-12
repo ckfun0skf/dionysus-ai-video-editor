@@ -152,6 +152,18 @@ describe("WebMCP tools on schema 3.1 (P16)", () => {
     expect(out.assets.find((x: { id: string }) => x.id === first.clip).prompt).toBe("A new clip prompt");
     expect(out.shots.find((s: { id: string }) => s.id === "re1")).toMatchObject({ clip: first.clip, inSec: 1 });
   });
+
+  it("create_storyboard makes a 3.1 board, so a shot can name its clip", () => {
+    const clip = { id: "s1-clip", name: "Clip · Boat", type: "video", source: "upload", prompt: "A toy boat circles a lagoon", qa: ["a", "b"] };
+    const c = run("create_storyboard", { meta: { title: "New", aspect: "16:9" }, assets: [clip], shots: [{ id: "s1", title: "Boat", durationSec: 5, clip: "s1-clip" }] }, null);
+    expect(c.ok, c.text).toBe(true);
+    const out = JSON.parse(run("export_json", {}, c.doc!).text.replace(/^[^{]*/, ""));
+    expect(out.schemaVersion).toBe("3.1");
+    expect(out.shots[0].clip).toBe("s1-clip");
+    expect(out.assets.find((x: { id: string }) => x.id === "s1-clip").prompt).toBe("A toy boat circles a lagoon");
+    const more = run("add_shot", { shot: { id: "s2", title: "Again", durationSec: 2, clip: "s1-clip", inSec: 1 } }, c.doc!);
+    expect(more.ok, more.text).toBe(true);
+  });
   it("remove_shot drops the shot's own auto clip", () => {
     const a = run("add_shot", { shot: shot("gone1") });
     const raw = JSON.parse(run("export_json", {}, a.doc!).text.replace(/^[^{]*/, ""));
