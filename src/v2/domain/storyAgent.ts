@@ -84,7 +84,10 @@ export interface ToolCtx {
   generated?: ReadonlySet<string>;
 }
 /** A finished call: text for the agent, plus the new doc for mutating tools (apply as one undo step labelled `label`). */
-export interface ToolResult { ok: boolean; text: string; doc?: StoryDoc; label?: string; send?: boolean; sync?: boolean }
+/** P62: how send_to_timeline applies the board: "update" (default), "relayout" (update, then re-time clips in place) or "replace" (clear and send again). */
+export const SEND_MODES = ["update", "relayout", "replace"] as const;
+export type SendMode = (typeof SEND_MODES)[number];
+export interface ToolResult { ok: boolean; text: string; doc?: StoryDoc; label?: string; send?: boolean; sendMode?: SendMode; sync?: boolean }
 type Edit = (raw: Raw, args: Obj, ctx: ToolCtx) => string | { label: string; message: string };
 
 export interface StoryTool {
@@ -367,8 +370,8 @@ export const STORY_TOOLS: StoryTool[] = [
   },
   {
     name: "send_to_timeline", title: "Update the timeline", readOnly: false,
-    description: "Update the timeline from the storyboard (update mode): adds shots that have a clip and new audio cues, switches changed clips and refreshes shot text; everything else on the timeline stays. Shots without a clip yet go on as placeholders at their planned length (RULE 59), and a shot that now has a clip replaces its placeholder in place. New layers and in-shot cues are linked to their shot's main clip (moved, trimmed and deleted with it) unless they set link: false.",
-    inputSchema: obj({}),
+    description: "Update the timeline from the storyboard (mode \"update\", the default): adds shots that have a clip and new audio cues, switches changed clips and refreshes shot text; everything else on the timeline stays. Shots without a clip yet go on as placeholders at their planned length (RULE 59), and a shot that now has a clip replaces its placeholder in place. New layers and in-shot cues are linked to their shot's main clip (moved, trimmed and deleted with it) unless they set link: false. Update does not change the length of clips already placed: after changing shot durationSec (e.g. new voice files) use mode \"relayout\" (P62, RULE 77): it updates, then gives every shot clip the length Send would give it now, packs the main track again (gaps kept), re-places the layers, captions and effects of shots whose length changed and every story audio cue at the board's offsets, and keeps the clips' own edits (volume, effects, transform, transitions, pins). Mode \"replace\" clears the timeline and sends the whole board again (manual timeline edits are lost; Undo restores). One undo step; returns counts.",
+    inputSchema: obj({ mode: en(SEND_MODES, 'How to apply the board: "update" (default), "relayout" or "replace".') }),
   },
   {
     name: "sync_to_storyboard", title: "Sync the timeline to the storyboard", readOnly: false,
@@ -455,7 +458,13 @@ export function runStoryTool(name: string, args: unknown, doc: StoryDoc | undefi
   const raw = doc ? docToRaw(doc) : undefined;
   if (tool.read) return tool.read(raw, a, ctx, doc);
   if (name === "sync_to_storyboard") return doc ? { ok: true, text: "Syncing.", sync: true, label: "AI: sync to storyboard" } : { ok: false, text: "No storyboard yet." };
-  if (name === "send_to_timeline") return doc ? { ok: true, text: "Sending.", send: true, label: "AI: update timeline" } : { ok: false, text: "No storyboard yet." };
+  if (name === "send_to_timeline") {
+    if (!doc) return { ok: false, text: "No storyboard yet." };
+    const mode = a.mode === undefined ? "update" : a.mode;
+    if (!(SEND_MODES as readonly unknown[]).includes(mode)) return { ok: false, text: `"mode" must be one of ${SEND_MODES.join(", ")}.` };
+    const m = mode as SendMode;
+    return { ok: true, text: "Sending.", send: true, sendMode: m, label: m === "relayout" ? "AI: re-lay timeline" : m === "replace" ? "AI: replace timeline" : "AI: update timeline" };
+  }
   if (!raw && !tool.creates) return { ok: false, text: "No storyboard yet. Create one with create_storyboard first." };
   // A new board is clip-centric 3.1 (RULE 51), like every board export writes; without the version the validator
   // reads it as 3.0 and rejects shots that name a clip.

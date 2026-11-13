@@ -19,7 +19,7 @@ import { getPreset, parsePresetRef, type PresetKind } from "../registry";
 import { AUDIO_DEFAULTS, audioLoops, DEFAULT_TEXT_SIZE, DEFAULT_TRANSITION_SEC, type AudioKind, type StoryAudio, type StoryAudioSource, TEXT_LINE_HEIGHT, type StoryBox, type StoryLayer, type StoryMediaLayer, type StoryTextLayer, type StoryTextStyle } from "./storyJson";
 import { pinOf, sendPlan, syncPlacements, versionSpan, type Shot, type Storyboard } from "./storyboard";
 import { repairStalePins } from "./clipVersion";
-import { clampToClip, placeOnFreeTrack } from "./storyLinks";
+import { clampToClip, followStoryLinks, placeOnFreeTrack } from "./storyLinks";
 import { textOf, textStyleData, textStyleFields, type TextData } from "./text";
 import { previousAdjacent, setTransition } from "./transitions";
 import { secondsToTicks, TICKS_PER_SECOND } from "./time";
@@ -101,22 +101,33 @@ const plainText = () => (t: Track) => t.kind === "text" && !t.layerStyle;
 const overlay = (comp: Composition) => (t: Track) => t.kind === "video" && groupOf(comp, t) === "overlay";
 const effects = () => (t: Track) => t.kind === "effect";
 
-/** The shot clip placement for a ready shot: html/still shots get the planned shot length, others as dropped from the library. */
-function shotClip(b: Storyboard, asset: Asset, v: AssetVersion, shot: Shot, at: number): Placement {
-  const planned = shot.durationSec > 0 ? secondsToTicks(shot.durationSec) : DEFAULT_IMAGE_TICKS;
-  // A video clip uses its version's trim (V2-SB-121), else the whole clip.
-  const span = !shot.clipSlot && asset.kind === "video" ? versionSpan(b, v) : undefined;
-  const durationTicks = shot.clipSlot || asset.kind === "html" ? planned : asset.kind === "image" ? DEFAULT_IMAGE_TICKS : span?.lenTicks ?? v.media.durationTicks ?? DEFAULT_IMAGE_TICKS;
-  // V2-HTML-PARAMS: an html shot's per-use param values go onto its clip (only overrides; defaults come from the clip).
-  const params = asset.kind === "html" && shot.params && Object.keys(shot.params).length ? { htmlParams: { ...shot.params } } : {};
+/** A shot's planned length in ticks (its durationSec, else the default still length). */
+const plannedTicks = (shot: Shot): number => (shot.durationSec > 0 ? secondsToTicks(shot.durationSec) : DEFAULT_IMAGE_TICKS);
+
+/**
+ * The length and in point a shot's clip gets on the timeline: html/still shots and shots that play a shared clip use
+ * the planned shot length; other video clips use their version's trim (V2-SB-121), else the whole clip.
+ */
+export function shotClipSpan(b: Storyboard, asset: Asset, v: AssetVersion, shot: Shot): { durationTicks: number; sourceInTicks: number } {
+  const planned = plannedTicks(shot);
   // P16: an AI shot that plays a shared clip plays it from its in point for its planned length (inside the media).
   if (!shot.render && shot.clipSlot && asset.kind === "video") {
     const len = v.media.durationTicks;
     const inT = Math.max(0, Math.min(secondsToTicks(shot.clipInSec ?? 0), len ? Math.max(0, len - 1) : Infinity));
-    const dur = len ? Math.max(1, Math.min(planned, len - inT)) : planned;
-    return { id: newId("plc"), startTicks: at, durationTicks: dur, sourceInTicks: inT, source: { kind: "assetVersion", assetId: asset.id, versionId: v.id }, clipType: asset.kind, volume: 1, storyShot: shot.id, ...(shot.mask ? { mask: structuredClone(shot.mask) } : {}) };
+    return { durationTicks: len ? Math.max(1, Math.min(planned, len - inT)) : planned, sourceInTicks: inT };
   }
-  return { id: newId("plc"), startTicks: at, durationTicks, sourceInTicks: span?.inTicks ?? 0, source: { kind: "assetVersion", assetId: asset.id, versionId: v.id }, clipType: asset.kind, volume: 1, storyShot: shot.id, ...params, ...(shot.mask ? { mask: structuredClone(shot.mask) } : {}) };
+  const span = !shot.clipSlot && asset.kind === "video" ? versionSpan(b, v) : undefined;
+  const durationTicks = shot.clipSlot || asset.kind === "html" ? planned : asset.kind === "image" ? DEFAULT_IMAGE_TICKS : span?.lenTicks ?? v.media.durationTicks ?? DEFAULT_IMAGE_TICKS;
+  return { durationTicks, sourceInTicks: span?.inTicks ?? 0 };
+}
+
+/** The shot clip placement for a ready shot: html/still shots get the planned shot length, others as dropped from the library. */
+function shotClip(b: Storyboard, asset: Asset, v: AssetVersion, shot: Shot, at: number): Placement {
+  const { durationTicks, sourceInTicks } = shotClipSpan(b, asset, v, shot);
+  // V2-HTML-PARAMS: an html shot's per-use param values go onto its clip (only overrides; defaults come from the clip).
+  const params = asset.kind === "html" && shot.params && Object.keys(shot.params).length ? { htmlParams: { ...shot.params } } : {};
+  const shared = !shot.render && shot.clipSlot && asset.kind === "video";
+  return { id: newId("plc"), startTicks: at, durationTicks, sourceInTicks, source: { kind: "assetVersion", assetId: asset.id, versionId: v.id }, clipType: asset.kind, volume: 1, storyShot: shot.id, ...(shared ? {} : params), ...(shot.mask ? { mask: structuredClone(shot.mask) } : {}) };
 }
 
 /** P35: label of a placeholder clip: "Shot n · title" (+ a short description). */
@@ -129,7 +140,7 @@ export function placeholderLabel(b: Storyboard, shot: Shot): string {
 
 /** P35: a placeholder main clip for a shot with no clip yet: the shot's planned length (durationSec, else the default). */
 export function placeholderClip(b: Storyboard, shot: Shot, at: number): Placement {
-  const durationTicks = shot.durationSec > 0 ? secondsToTicks(shot.durationSec) : DEFAULT_IMAGE_TICKS;
+  const durationTicks = plannedTicks(shot);
   return { id: newId("plc"), startTicks: at, durationTicks, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "image", volume: 1, storyShot: shot.id, placeholder: { label: placeholderLabel(b, shot) }, ...(shot.mask ? { mask: structuredClone(shot.mask) } : {}) };
 }
 
@@ -526,4 +537,103 @@ export function replaceStory(p: Project): { project: Project; result: SendResult
   const cleared: Project = { ...p, storyboard: { ...b, sent: undefined }, compositions: { ...p.compositions, [p.rootCompositionId]: { ...comp, tracks: comp.tracks.map((t) => ({ ...t, placements: [] })) } } };
   const sent = sendStory(cleared);
   return { project: recordSent(sent.project), result: sent.result };
+}
+
+/** P62: what a relayout changed, for the agent's reply. */
+export interface RelayoutResult { shots: number; resized: number; moved: number; layers: number; captions: number; effects: number; cues: number; update?: UpdateResult }
+
+/**
+ * P62 (#312) "Re-lay the timeline": re-apply the storyboard's timing to the clips already on the timeline, in place.
+ * Each shot's main clip gets the length (and in point) Send would give it now (planned durationSec for html, still and
+ * shared-clip shots; the version's trim or media length for other video clips), the main track is packed again in its
+ * current order (gaps kept), and everything else on the clip stays (volume, effects, transform, transition, pins).
+ * Shots whose clip changed length get their layers, captions and effects placed again at the board's timings; shots
+ * that only moved keep their linked items (they follow). Every story audio cue is placed again at its board offsets
+ * (a cue volume the user changed on the timeline is kept while the board's cue volume is unchanged).
+ * With `update` (the default) Update runs first, so new shots, switched clips and new cues are included.
+ */
+export function relayoutStory(p0: Project, opts: { update?: boolean } = {}): { project: Project; result: RelayoutResult } {
+  const result: RelayoutResult = { shots: 0, resized: 0, moved: 0, layers: 0, captions: 0, effects: 0, cues: 0 };
+  let p = p0;
+  if (opts.update !== false && p.storyboard) { const u = updateStory(p); p = u.project; result.update = u.result; }
+  const b = p.storyboard;
+  if (!b) return { project: p0, result };
+  const comp0 = p.compositions[p.rootCompositionId];
+  const main = mainTrack(comp0);
+  if (!main) return { project: p, result };
+  const firsts = new Set([...shotClips(comp0).values()].map((x) => x.id));
+  // Counts and rebuilds compare with the timeline before the call (Update may already have re-synced a take).
+  const orig = new Map(p0.compositions[p0.rootCompositionId]?.tracks.flatMap((t) => t.placements).map((x) => [x.id, x] as const) ?? []);
+  const sorted = [...main.placements].sort((x, y) => x.startTicks - y.startTicks);
+  let cursor = sorted[0]?.startTicks ?? 0, prevEnd = cursor;
+  const resized = new Set<string>();
+  const laid: Placement[] = [];
+  for (const pl of sorted) {
+    const gap = Math.max(0, pl.startTicks - prevEnd);
+    prevEnd = Math.max(prevEnd, pl.startTicks + pl.durationTicks);
+    let durationTicks = pl.durationTicks, sourceInTicks = pl.sourceInTicks;
+    const shot = pl.storyShot && firsts.has(pl.id) ? b.shots[pl.storyShot] : undefined;
+    if (shot) result.shots += 1;
+    if (shot && (pl.speed ?? 1) === 1) {
+      if (pl.placeholder) durationTicks = plannedTicks(shot);
+      else {
+        const a = p.assets[pl.source.assetId], v = a?.versions.find((x) => x.id === pl.source.versionId);
+        if (a && v) ({ durationTicks, sourceInTicks } = shotClipSpan(b, a, v, shot));
+      }
+    }
+    const startTicks = cursor + gap;
+    cursor = startTicks + durationTicks;
+    const next: Placement = { ...pl, startTicks, durationTicks, sourceInTicks };
+    if (next.fadeInTicks && next.fadeInTicks > durationTicks) next.fadeInTicks = durationTicks;
+    if (next.fadeOutTicks && next.fadeOutTicks > durationTicks) next.fadeOutTicks = durationTicks;
+    // A transition stays on its clip, clamped to half the shorter of the two clips when they still touch.
+    const prev = laid[laid.length - 1];
+    if (next.transitionIn && prev && prev.startTicks + prev.durationTicks === startTicks) {
+      const max = Math.max(1, Math.floor(Math.min(prev.durationTicks, durationTicks) / 2));
+      if (next.transitionIn.durationTicks > max) next.transitionIn = { ...next.transitionIn, durationTicks: max };
+    }
+    const o = orig.get(pl.id) ?? pl;
+    if (durationTicks !== o.durationTicks || sourceInTicks !== o.sourceInTicks) { resized.add(pl.id); if (shot) result.resized += 1; }
+    else if (startTicks !== o.startTicks && shot) result.moved += 1;
+    laid.push(next);
+  }
+  let comp: Composition = { ...comp0, tracks: comp0.tracks.map((t) => (t.id === main.id ? { ...t, placements: laid } : t)) };
+  // Linked items of clips that only moved follow them (offsets kept); resized shots are re-placed from the board below.
+  comp = followStoryLinks(comp0, comp);
+  const res: SendResult = { shots: 0, layers: 0, captions: 0, effects: 0, transitions: 0, skippedLayers: 0, audio: 0, skippedAudio: 0 };
+  const force = new Set<string>();
+  for (const pl of laid) {
+    if (!resized.has(pl.id) || !pl.storyShot || !firsts.has(pl.id)) continue;
+    const shot = b.shots[pl.storyShot];
+    if (!shot) continue;
+    comp = dropPlacements(comp, (x) => x.storyLink?.anchor === pl.id && !x.storyCue);
+    comp = addLinked(p, b, comp, shot, pl, res);
+    force.add(shot.id);
+  }
+  result.layers = res.layers; result.captions = res.captions; result.effects = res.effects;
+  // Every placed story cue goes on again at the board's offsets against the re-laid clips.
+  const all = comp.tracks.flatMap((t) => t.placements);
+  const oldVol = new Map<string, number | undefined>();
+  for (const pl of [...all].sort((x, y) => x.startTicks - y.startTicks)) if (pl.storyCue && !oldVol.has(pl.storyCue)) oldVol.set(pl.storyCue, pl.volume);
+  const cues = (b.audio ?? []).filter((cue) => oldVol.has(cue.id));
+  if (cues.length) {
+    const ids = new Set(cues.map((c) => c.id));
+    comp = dropPlacements(comp, (x) => !!x.storyCue && ids.has(x.storyCue));
+    const q: Project = { ...p, compositions: { ...p.compositions, [p.rootCompositionId]: comp } };
+    comp = addAudio(q, b, comp, [], res);
+    // Keep a volume the user set on the timeline unless the board's cue volume changed since it was sent.
+    const keep = new Map<string, number>();
+    for (const cue of cues) {
+      const was = oldVol.get(cue.id), sentRaw = b.sent?.cues[cue.id];
+      let sentVol: number | undefined;
+      try { sentVol = sentRaw ? (JSON.parse(sentRaw) as StoryAudio).volume : undefined; } catch { sentVol = undefined; }
+      const boardVol = cue.volume ?? AUDIO_DEFAULTS[cue.kind].volume;
+      if (was !== undefined && sentVol === cue.volume && was !== boardVol) keep.set(cue.id, was);
+    }
+    if (keep.size) comp = { ...comp, tracks: comp.tracks.map((t) => ({ ...t, placements: t.placements.map((x) => (x.storyCue && keep.has(x.storyCue) ? { ...x, volume: keep.get(x.storyCue) } : x)) })) };
+    result.cues = cues.length;
+    for (const c of cues) force.add(`cue:${c.id}`);
+  }
+  const project = recordSent({ ...p, compositions: { ...p.compositions, [p.rootCompositionId]: comp } }, force);
+  return { project, result };
 }

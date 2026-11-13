@@ -66,7 +66,7 @@ describe("WebMCP doc (P4C)", () => {
   it("llms.txt describes every tool and the rules exist", () => {
     const txt = llmsTxt(DEFAULT_SITE_URL);
     for (const t of STORY_TOOLS) expect(txt).toContain(`\`${t.name}\``);
-    expect(RULE_LIST.map((r) => r.key).slice(-10)).toEqual(["spatial-audio", "frame-of", "clip-centric", "audio-from-video", "glitch-effect", "promote-overlay", "plan-insert-shots", "screen-insert", "slip-replace", "merge-layer-up", "shot-placeholders", "blank-clips", "revise-storyboard", "revise-shot", "audio-create-ai", "code-3d-models", "code-roles", "code-inputs", "project-cleanup", "motion-tracking", "plan-trackers", "word-captions", "clip-mask", "insert-after-clip", "clip-version-pin", "delete-shot-version", "version-save-mode", "track-caption-style"].slice(-10));
+    expect(RULE_LIST.map((r) => r.key).slice(-10)).toEqual(["spatial-audio", "frame-of", "clip-centric", "audio-from-video", "glitch-effect", "promote-overlay", "plan-insert-shots", "screen-insert", "slip-replace", "merge-layer-up", "shot-placeholders", "blank-clips", "revise-storyboard", "revise-shot", "audio-create-ai", "code-3d-models", "code-roles", "code-inputs", "project-cleanup", "motion-tracking", "plan-trackers", "word-captions", "clip-mask", "insert-after-clip", "clip-version-pin", "delete-shot-version", "version-save-mode", "track-caption-style", "agent-media-attach"].slice(-10));
     for (const t of TIMELINE_TOOLS) expect(txt).toContain(`\`${t.name}\``);
   });
 });
@@ -96,7 +96,7 @@ describe("AI planner guide (V2-SB-114)", () => {
   it("the full prompt inlines the guide with the numbered rules; the short prompt links to it", () => {
     const full = storyboardSystemPrompt();
     for (const s of ["FORMAT (", "PRESETS", "RULES", "EXAMPLE", `14. ${RULES[13]}`, "not seconds", "START FRAME", "\"references\"?", "\"genDurationSec\"?", "- crossfade:", "- ken-burns:"]) expect(full).toContain(s);
-    expect(RULES).toHaveLength(76);
+    expect(RULES).toHaveLength(77);
     // P36: RULE 60 (blank-clips).
     expect(ruleNumber("blank-clips")).toBe(60);
     expect(full).toContain(`60. ${RULES[59]}`);
@@ -150,6 +150,9 @@ describe("AI planner guide (V2-SB-114)", () => {
     expect(full).toContain(`75. ${RULES[74]}`);
     expect(ruleNumber("track-caption-style")).toBe(76);
     expect(full).toContain(`76. ${RULES[75]}`);
+    expect(ruleNumber("agent-media-attach")).toBe(77);
+    expect(full).toContain(`77. ${RULES[76]}`);
+    for (const x of ["attach_asset_version", "attach_asset_versions", "import_storyboard", 'mode: "relayout"', "Access-Control-Allow-Private-Network: true", "ONE undo step", "replace: true", "{shotId}"]) expect(RULES[76]).toContain(x);
     for (const x of ["set_track_caption_style", "track_word_align_prompt", "set_track_caption_words", "Caption style", "pending", "spoken", "Use track style", "Align all"]) expect(RULES[75]).toContain(x);
     for (const x of ["insert_clip_after { assetId, afterClipId }", "current clip", "current chain", "Insert after current clip", "At the end of the current chain", "At the playhead", "paste_clips", "one undo step", "link.parent"]) expect(RULES[71]).toContain(x);
     for (const x of ["set_clip_version { clipId, versionId }", "Follow storyboard", 'fit "trim"', 'or "full"', "THAT clip only", "inSec"]) expect(RULES[72]).toContain(x);
@@ -278,7 +281,7 @@ describe("AI planner guide (V2-SB-114)", () => {
 
   it("RULE 30 (P2A): revised JSON is re-imported by id, so ids stay stable", () => {
     expect(RULE_LIST.slice(29, 30).map((r) => r.key)).toEqual(["stable-ids-reimport"]);
-    expect(RULE_LIST.slice(30).map((r) => r.key)).toEqual(["self-contained-prompts", "reference-sheets", "html-code-refs", "shot-background", "lastframe-refs", "chroma-key", "audio-shaping", "audio-json", "long-story-parts", "web-mcp", "series-reuse", "series-promote", "series-tools", "effect-apply-to", "typewriter-cursor", "link-to-main", "fill-needs-prompt", "review-timeline", "spatial-audio", "frame-of", "clip-centric", "audio-from-video", "glitch-effect", "promote-overlay", "plan-insert-shots", "screen-insert", "slip-replace", "merge-layer-up", "shot-placeholders", "blank-clips", "revise-storyboard", "revise-shot", "audio-create-ai", "code-3d-models", "code-roles", "code-inputs", "project-cleanup", "motion-tracking", "plan-trackers", "word-captions", "clip-mask", "insert-after-clip", "clip-version-pin", "delete-shot-version", "version-save-mode", "track-caption-style"]);
+    expect(RULE_LIST.slice(30).map((r) => r.key)).toEqual(["self-contained-prompts", "reference-sheets", "html-code-refs", "shot-background", "lastframe-refs", "chroma-key", "audio-shaping", "audio-json", "long-story-parts", "web-mcp", "series-reuse", "series-promote", "series-tools", "effect-apply-to", "typewriter-cursor", "link-to-main", "fill-needs-prompt", "review-timeline", "spatial-audio", "frame-of", "clip-centric", "audio-from-video", "glitch-effect", "promote-overlay", "plan-insert-shots", "screen-insert", "slip-replace", "merge-layer-up", "shot-placeholders", "blank-clips", "revise-storyboard", "revise-shot", "audio-create-ai", "code-3d-models", "code-roles", "code-inputs", "project-cleanup", "motion-tracking", "plan-trackers", "word-captions", "clip-mask", "insert-after-clip", "clip-version-pin", "delete-shot-version", "version-save-mode", "track-caption-style", "agent-media-attach"]);
     expect(ruleNumber("typewriter-cursor")).toBe(45);
     // P9-LINK: rule 46 (appended) documents layers[].link / audio[].link = false.
     expect(ruleNumber("link-to-main")).toBe(46);

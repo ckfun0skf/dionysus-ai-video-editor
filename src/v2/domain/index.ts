@@ -21,7 +21,7 @@ export type { StoryDoc, StoryAsset, StoryShot, StoryConnection, StoryIssue, Stor
 export { storyboardSystemPrompt, storyboardShortPrompt, EXAMPLE_STORYBOARD, exampleStoryboardJson } from "./storyPrompt";
 export { aiLinks, runtimeAiLinks, runtimeSiteUrl, CONFIGURED_SITE_URL, DEFAULT_SITE_URL, type AiLinks } from "./siteUrl";
 export * as board from "./storyboard";
-export { pendingAudio, placeholderClips, placeholderLabel, updatePlan, shotSignature, type SendResult, type UpdateResult } from "./storySend";
+export { pendingAudio, placeholderClips, placeholderLabel, updatePlan, shotSignature, relayoutStory, type RelayoutResult, type SendResult, type UpdateResult } from "./storySend";
 export { syncPlan, needsPromptItems, type SyncPlan, type SyncChange } from "./storySync";
 export * as roundtrip from "./storyRoundtrip";
 export type { StoryDiff, DiffItem } from "./storyRoundtrip";
@@ -50,6 +50,7 @@ export * from "./codeWizard";
 export * from "./codeRevise";
 export * as storyAgent from "./storyAgent";
 export * as timelineReview from "./timelineReview";
+export * as agentMedia from "./agentMedia";
 export * as promote from "./promote";
 export * as mergeLayer from "./mergeLayer";
 export * as storyInsert from "./storyInsert";

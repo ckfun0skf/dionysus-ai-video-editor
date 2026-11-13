@@ -35,6 +35,7 @@ function rangeOfArgs(a: Record<string, unknown>, pl: Placement, def?: { start: n
   return { from: Math.max(pl.startTicks, from), to: Math.min(pl.startTicks + pl.durationTicks, to) };
 }
 import { cmd, type Command, type Engine } from "../../engine";
+import { runAttachTool, runImportStoryboard, type MediaIO } from "./mediaTools";
 import type { BlobStore } from "../../ports";
 import { ExportVideoFrames, Player, audioPlan, exportDuration, mixAudio } from "../../render";
 
@@ -190,7 +191,7 @@ export function clipPropsErrors(a: Record<string, unknown>, pl: Placement): stri
 const fail = (text: string): TimelineResult => ({ ok: false, text, changed: false });
 const rootOf = (p: Project) => p.compositions[p.rootCompositionId];
 
-export async function runTimelineTool(engine: Engine, source: FrameSource | undefined, name: string, input: unknown, hasBlob?: (key: string) => boolean, blobs?: BlobStore): Promise<TimelineResult> {
+export async function runTimelineTool(engine: Engine, source: FrameSource | undefined, name: string, input: unknown, hasBlob?: (key: string) => boolean, blobs?: BlobStore, io?: MediaIO): Promise<TimelineResult> {
   const a = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
   const project = () => engine.getState().project;
   const n = (k: string) => (typeof a[k] === "number" && Number.isFinite(a[k]) ? (a[k] as number) : undefined);
@@ -206,6 +207,9 @@ export async function runTimelineTool(engine: Engine, source: FrameSource | unde
   };
   switch (name) {
     case "get_timeline": return { ok: true, changed: false, text: JSON.stringify(timelineReview.timelineJson(project()), null, 1) };
+    // P62 (#312): media and storyboard JSON from URLs, without driving the UI.
+    case "attach_asset_version": case "attach_asset_versions": return runAttachTool(engine, blobs, name, a, io);
+    case "import_storyboard": return runImportStoryboard(engine, a, io);
     case "capture_frame": {
       const t = n("timeSec"); if (t === undefined) return fail('"timeSec" is required.');
       if (!source) return fail("Frame capture isn't available here.");
