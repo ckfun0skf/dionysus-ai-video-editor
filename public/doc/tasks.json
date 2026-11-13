@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "project": "Dionysus",
-  "updatedAt": "2026-11-12",
+  "updatedAt": "2026-11-13",
   "sourceOfTruth": "public/doc/tasks.json on main (see docs/v2/MODULE_DESIGN.md §14)",
   "statusDefinitions": {
     "done": "Implementation exists and has evidence; release/browser validation may still be pending.",
@@ -3256,6 +3256,12 @@
         {
           "id": "P61-CREATE-STORYBOARD-SCHEMA",
           "title": "Fix WebMCP create_storyboard: a new board now starts as schemaVersion 3.1 (clip-centric, RULE 51), so shots that name a clip (a video asset) are accepted instead of being rejected with \"needs a clip generation prompt\" (the empty board had no schemaVersion and was validated as 3.0). Regression test in storyAgent.test.ts.",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "P62-MCP-ATTACH-MEDIA",
+          "title": "WebMCP media and re-timing for agents (#312, rule 77): attach_asset_version / attach_asset_versions fetch files from https: or local http URLs (or inline HTML / data: URLs), validate them like a manual upload (HTML clip lint, media decode) and add versions to storyboard assets or shots (batch by items or {assetId}/{shotId} pattern, one undo step, one result per item); import_storyboard loads JSON (inline or URL) into an existing project (create, replace by id keeping uploads, start over, or merge a part); send_to_timeline mode \"relayout\" re-times placed clips from the board in place (planned lengths, packed main track, linked layers and audio cues re-placed, clip props kept) and mode \"replace\". Docs (WEB_MCP.md: CORS and Access-Control-Allow-Private-Network), public/ai regenerated, tests. Schema stays dionysus/3.1. Uses P62 because P61 is the create_storyboard schema fix.",
           "status": "done",
           "progress": 100
         }

@@ -5,7 +5,7 @@
  * step; the board re-renders live, the "AI is editing" pill shows, and the call goes into the activity log.
  * Turning access off (or closing the page) unregisters every tool.
  */
-import { board, needsPromptItems, timelineReview, roundtrip, syncPlan, runtimeAiLinks, series, storyAgent, storyInsert, storyboardGuideMarkdown, type StoryDoc } from "../../domain";
+import { board, needsPromptItems, relayoutStory, timelineReview, roundtrip, syncPlan, runtimeAiLinks, series, storyAgent, storyInsert, storyboardGuideMarkdown, type StoryDoc } from "../../domain";
 import { cmd, type Engine } from "../../engine";
 import { seriesStore } from "../series/seriesStore";
 import type { BlobStore } from "../../ports";
@@ -86,6 +86,16 @@ export function callAgentTool(engine: Engine, name: string, args: unknown): Text
     changed = plan.changes.length > 0 && engine.dispatch(cmd.syncToStoryboard(), res.label);
     const np = needsPromptItems(engine.getState().project.storyboard).length;
     text = changed ? `Synced ${plan.changes.length} change(s) to the storyboard:\n${plan.changes.map((c) => `- ${c.label}${c.needsPrompt ? " (needsPrompt)" : ""}`).join("\n")}${np ? `\n${np} item(s) need a prompt: call list_needs_prompt and fill them.` : ""}` : "Nothing to sync: the storyboard already matches the timeline.";
+  } else if (res.ok && res.send && res.sendMode === "relayout") {
+    // P62 (#312): update, then re-time the clips already on the timeline from the board (one undo step).
+    const r = relayoutStory(engine.getState().project).result;
+    changed = engine.dispatch(cmd.relayoutStoryTimeline(), res.label);
+    text = changed ? JSON.stringify({ mode: "relayout", shots: r.shots, resized: r.resized, moved: r.moved, layers: r.layers, captions: r.captions, effects: r.effects, cues: r.cues, ...(r.update ? { added: r.update.shots, switched: r.update.clips, refreshed: r.update.refreshed, newCues: r.update.audio } : {}) }, null, 1)
+      : "Nothing to re-lay: the timeline already matches the storyboard's timing.";
+  } else if (res.ok && res.send && res.sendMode === "replace") {
+    changed = engine.dispatch(cmd.replaceStoryTimeline(), res.label);
+    const after = board.sendPlan(engine.getState().project).filter((x) => x.state === "placed").length;
+    text = changed ? `Timeline replaced: ${after} shot${after === 1 ? "" : "s"} on the timeline (Undo restores the old timeline).` : "Nothing to send.";
   } else if (res.ok && res.send) {
     const p = engine.getState().project, plan = board.sendPlan(p);
     const placed = plan.some((x) => x.state === "placed"), missing = plan.filter((x) => x.state === "missing").length;

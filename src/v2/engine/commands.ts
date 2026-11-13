@@ -27,7 +27,7 @@ import * as board from "../domain/storyboard";
 import * as storyEdit from "../domain/storyEdit";
 import * as storyRefs from "../domain/storyRefs";
 import * as storySteps from "../domain/storySteps";
-import { replaceStory, sendStory, updateStory } from "../domain/storySend";
+import { relayoutStory, replaceStory, sendStory, updateStory } from "../domain/storySend";
 import { syncPlan } from "../domain/storySync";
 import { promoteOverlay as promoteToMain, type PromoteOptions } from "../domain/promote";
 import { mergeLayerUp as mergeUp, type MergeOptions } from "../domain/mergeLayer";
@@ -538,6 +538,8 @@ export const syncToStoryboard = (): Command => ({ label: "Sync to storyboard", a
 export const updateStoryTimeline = (): Command => ({ label: "Update timeline", apply: (p) => updateStory(p).project });
 /** P2A: Send in Replace mode: clear the timeline and rebuild it from the board. */
 export const replaceStoryTimeline = (): Command => ({ label: "Replace timeline", apply: (p) => replaceStory(p).project });
+/** P62 (#312): Update, then re-apply the storyboard timing to the clips already on the timeline (see storySend.relayoutStory). */
+export const relayoutStoryTimeline = (): Command => ({ label: "Re-lay timeline", apply: (p) => relayoutStory(p).project });
 
 export const reorderTrack = (trackId: string, toIndex: number): Command => ({
   label: "Reorder layer",

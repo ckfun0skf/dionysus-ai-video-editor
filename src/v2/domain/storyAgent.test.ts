@@ -89,6 +89,11 @@ describe("WebMCP storyboard tools (P4C)", () => {
     expect(JSON.parse(run("export_json", {}).text).format).toBe("dionysus.storyboard/1");
     expect(run("send_to_timeline", {}).send).toBe(true);
     expect(run("send_to_timeline", {}, null).ok).toBe(false);
+    // P62 (#312): modes.
+    expect(run("send_to_timeline", {}).sendMode).toBe("update");
+    expect(run("send_to_timeline", { mode: "relayout" })).toMatchObject({ ok: true, send: true, sendMode: "relayout" });
+    expect(run("send_to_timeline", { mode: "replace" }).sendMode).toBe("replace");
+    expect(run("send_to_timeline", { mode: "rebuild" })).toMatchObject({ ok: false });
   });
 
   it("creates a storyboard only when there is none", () => {
