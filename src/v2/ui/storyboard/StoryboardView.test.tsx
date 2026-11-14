@@ -48,6 +48,19 @@ describe("storyboard workspace", () => {
     expect(el.querySelectorAll(".v2-sb-placed")).toHaveLength(0);
   });
 
+  it("P63: Update puts a shot added later at its place in the story", async () => {
+    const el = await mount();
+    await act(async () => engine.dispatch(cmd.createStoryboard(doc)));
+    await act(async () => btn(el, "Send to timeline").click());
+    const first = { ...doc.shots[0], id: "s0", title: "Cold open" };
+    await act(async () => engine.dispatch(cmd.mergeStoryboardDoc({ ...doc, shots: [first, ...doc.shots], connections: [] })));
+    await act(async () => btn(el, "Send to timeline").click());
+    await act(async () => (el.querySelector('[data-testid="send-update"]') as HTMLButtonElement).click());
+    expect(el.querySelector(".v2-sb-note")!.textContent).toMatch(/^Added 1 placeholder.* to the timeline in story order/);
+    const p = engine.getState().project, main = p.compositions[p.rootCompositionId].tracks.find((t) => t.kind === "video")!.placements;
+    expect([...main].sort((a, b) => a.startTicks - b.startTicks)[0].storyShot).toBe("s0");
+  });
+
   it("copies the short AI prompt, and the full prompt when chosen", async () => {
     const writeText = vi.fn(async () => {});
     Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });

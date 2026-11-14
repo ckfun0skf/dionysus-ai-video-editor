@@ -223,4 +223,22 @@ describe("send_to_timeline modes (P62)", () => {
     expect(lengths()).toEqual([4, 5]);
     expect(callAgentTool(e, "send_to_timeline", { mode: "nope" }).isError).toBe(true);
   });
+  it("P63 (#314): a shot added by import_storyboard goes in at its story position with its clip's version", async () => {
+    const e = setup(), blobs = memBlobs();
+    await runAttachTool(e, blobs, "attach_asset_versions", { items: [{ shotId: "a", url: "https://f.example/a.mp4" }, { shotId: "b", text: CLIP }] }, io({ "/a.mp4": ["video/mp4", "v"] }, 5));
+    callAgentTool(e, "send_to_timeline", {});
+    const next = { ...DOC, shots: [{ id: "h0", title: "h0", description: "", durationSec: 2.25, render: "html", clip: "card", assets: [], qa: [] }, ...DOC.shots] };
+    expect(json((await runImportStoryboard(e, { json: next, replace: true })).text)).toMatchObject({ added: { shots: 1 } });
+    const r = callAgentTool(e, "send_to_timeline", { mode: "relayout" });
+    expect(json(r.content[0].text)).toMatchObject({ mode: "relayout", inserted: ["h0"] });
+    expect(json(r.content[0].text).placeholderShots).toBeUndefined();
+    const p = e.getState().project, clips = p.compositions[p.rootCompositionId].tracks.find((t) => t.kind === "video")!.placements.slice().sort((x, y) => x.startTicks - y.startTicks);
+    expect(clips.map((x) => [x.storyShot, x.startTicks / S])).toEqual([["h0", 0], ["a", 2.25], ["b", 7.25]]);
+    expect(clips[0]).toMatchObject({ clipType: "html", source: { assetId: p.storyboard!.slots.card.assetId } });
+    // Update mode names what it did, too.
+    callAgentTool(e, "add_shot", { shot: { id: "z", title: "z", description: "", durationSec: 1, render: "html", clip: "card", assets: [], qa: [] }, after: "h0" });
+    const u = callAgentTool(e, "send_to_timeline", {});
+    expect(u.content[0].text).toMatch(/Inserted in story order: z\./);
+  });
+
 });

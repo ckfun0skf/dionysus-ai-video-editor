@@ -5,7 +5,7 @@
  * step; the board re-renders live, the "AI is editing" pill shows, and the call goes into the activity log.
  * Turning access off (or closing the page) unregisters every tool.
  */
-import { board, needsPromptItems, relayoutStory, timelineReview, roundtrip, syncPlan, runtimeAiLinks, series, storyAgent, storyInsert, storyboardGuideMarkdown, type StoryDoc } from "../../domain";
+import { board, needsPromptItems, relayoutStory, sendStory, updateStory, timelineReview, roundtrip, syncPlan, runtimeAiLinks, series, storyAgent, storyInsert, storyboardGuideMarkdown, type StoryDoc } from "../../domain";
 import { cmd, type Engine } from "../../engine";
 import { seriesStore } from "../series/seriesStore";
 import type { BlobStore } from "../../ports";
@@ -90,7 +90,7 @@ export function callAgentTool(engine: Engine, name: string, args: unknown): Text
     // P62 (#312): update, then re-time the clips already on the timeline from the board (one undo step).
     const r = relayoutStory(engine.getState().project).result;
     changed = engine.dispatch(cmd.relayoutStoryTimeline(), res.label);
-    text = changed ? JSON.stringify({ mode: "relayout", shots: r.shots, resized: r.resized, moved: r.moved, layers: r.layers, captions: r.captions, effects: r.effects, cues: r.cues, ...(r.update ? { added: r.update.shots, switched: r.update.clips, refreshed: r.update.refreshed, newCues: r.update.audio } : {}) }, null, 1)
+    text = changed ? JSON.stringify({ mode: "relayout", shots: r.shots, resized: r.resized, moved: r.moved, layers: r.layers, captions: r.captions, effects: r.effects, cues: r.cues, ...(r.update ? { added: r.update.shots, switched: r.update.clips, refreshed: r.update.refreshed, newCues: r.update.audio, ...placedShots(r.update) } : {}) }, null, 1)
       : "Nothing to re-lay: the timeline already matches the storyboard's timing.";
   } else if (res.ok && res.send && res.sendMode === "replace") {
     changed = engine.dispatch(cmd.replaceStoryTimeline(), res.label);
@@ -99,14 +99,22 @@ export function callAgentTool(engine: Engine, name: string, args: unknown): Text
   } else if (res.ok && res.send) {
     const p = engine.getState().project, plan = board.sendPlan(p);
     const placed = plan.some((x) => x.state === "placed"), missing = plan.filter((x) => x.state === "missing").length;
+    const sr = placed ? updateStory(p).result : sendStory(p).result;
     changed = engine.dispatch(placed ? cmd.updateStoryTimeline() : cmd.sendStoryToTimeline(), res.label);
     const after = board.sendPlan(engine.getState().project).filter((x) => x.state === "placed").length;
-    text = changed ? `Timeline updated: ${after} shot${after === 1 ? "" : "s"} on the timeline.${missing ? ` ${missing} shot${missing === 1 ? " has" : "s have"} no clip yet (the user uploads clips in Production).` : ""}`
+    const where = placedShots(sr), list = (ids?: string[]) => ids!.join(", ");
+    const detail = `${where.inserted ? ` Inserted in story order: ${list(where.inserted)}.` : ""}${where.appended && placed ? ` Added after the last clip: ${list(where.appended)}.` : ""}${where.placeholderShots ? ` Placeholders (no clip yet): ${list(where.placeholderShots)}.` : ""}`;
+    text = changed ? `Timeline updated: ${after} shot${after === 1 ? "" : "s"} on the timeline.${detail}${missing ? ` ${missing} shot${missing === 1 ? " has" : "s have"} no clip yet (the user uploads clips in Production).` : ""}`
       : `Nothing to send: ${after ? "the timeline is up to date" : "no shot has a clip yet (the user uploads clips in Production)"}.`;
   }
   log(name, res.ok, text, changed);
   return { content: [{ type: "text", text }], ...(res.ok ? {} : { isError: true }) };
 }
+
+/** P63 (#314): which shots a send placed in story order, added at the end, or left as placeholders (only non-empty lists). */
+const placedShots = (r: { inserted?: string[]; appended?: string[]; placeholderShots?: string[] }) => ({
+  ...(r.inserted?.length ? { inserted: r.inserted } : {}), ...(r.appended?.length ? { appended: r.appended } : {}), ...(r.placeholderShots?.length ? { placeholderShots: r.placeholderShots } : {}),
+});
 
 /** P12: every tool the page registers: the storyboard tools, then the timeline review/edit tools. */
 export const ALL_AGENT_TOOLS: { name: string; title: string; description: string; inputSchema: object; readOnly: boolean; timeline?: true }[] = [
