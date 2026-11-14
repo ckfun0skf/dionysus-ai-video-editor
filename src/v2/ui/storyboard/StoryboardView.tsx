@@ -110,7 +110,7 @@ export function StoryboardView({ engine, blobs, player, onClose, initialOpen, on
     const join = (xs: (string | 0 | false)[]) => { const p = xs.filter(Boolean) as string[]; return p.length > 1 ? `${p.slice(0, -1).join(", ")} and ${p.at(-1)}` : p[0]; };
     const addWhat = join([ready && pl(ready, "clip"), holes && pl(holes, "placeholder"), linked && pl(linked, "layer"), audio && pl(audio, "audio cue")]);
     const fixWhat = join([filled && `filled ${pl(filled, "placeholder")}`, switched && `switched ${pl(switched, "clip")}`, up.refreshed.length && `redid the text of ${pl(up.refreshed.length, "shot")}`]);
-    const msg = [addWhat && `Added ${addWhat}${ready || holes ? " to the end of the timeline" : ""}`, fixWhat && (addWhat ? fixWhat : fixWhat[0].toUpperCase() + fixWhat.slice(1))].filter(Boolean).join("; ");
+    const msg = [addWhat && `Added ${addWhat}${ready || holes ? (placed ? " to the timeline in story order" : " to the end of the timeline") : ""}`, fixWhat && (addWhat ? fixWhat : fixWhat[0].toUpperCase() + fixWhat.slice(1))].filter(Boolean).join("; ");
     setNote(`${msg}${need ? ` · ${need}` : ""}`, first && onView ? { label: "View", run: () => onView(first.id) } : undefined);
   }, [engine, project, onView, setNote]);
   /** P2A: the first send goes straight through; once shots are on the timeline, choose Update or Replace. */
@@ -239,7 +239,7 @@ export function StoryboardView({ engine, blobs, player, onClose, initialOpen, on
           <button className="v2-icon v2-sb-icon" aria-label="Redo" title="Redo" disabled={!canRedo} onClick={() => engine.redo()}><Ic g="↷" size={18} /></button>
           {!step && <button className={`v2-btn v2-sb-btn ${mobile ? "v2-sb-prod-icon" : "primary"}`} aria-label="Production steps" title="Step-by-step list: generate, upload, pick and check every asset and clip" onClick={() => { setOpen(undefined); setStep("production"); }}><Ic g="todo" size={18} /> <span className="v2-sb-hide-narrow">Production</span></button>}
           {/* V2-SB-R11: on phones Send is the one labelled primary action; on desktop Production stays primary. */}
-          <button className={`v2-btn v2-sb-btn ${mobile ? "primary" : ""}`} aria-label="Send to timeline" title="Add every shot to the end of the timeline, in story order; shots without a clip go in as placeholders. Timeline clips follow the version you pick here." onClick={send}><Ic g="to-timeline" size={18} /> <span>{mobile ? "Send" : "Send to timeline"}</span></button>
+          <button className={`v2-btn v2-sb-btn ${mobile ? "primary" : ""}`} aria-label="Send to timeline" title="Add every shot to the timeline in story order (a first send goes after the last clip; shots added later go in at their place in the story); shots without a clip go in as placeholders. Timeline clips follow the version you pick here." onClick={send}><Ic g="to-timeline" size={18} /> <span>{mobile ? "Send" : "Send to timeline"}</span></button>
           <button className="v2-btn v2-sb-btn v2-sync-btn" aria-label="Sync to Storyboard" title="Sync to Storyboard: write timeline edits back to this board (review first)" onClick={() => setSyncOpen(true)}><Ic g="↶" size={18} /> <span>{mobile ? "Sync" : "Sync from timeline"}</span></button>
           {!step && (mobile ? (
             <button ref={moreBtn} className="v2-icon v2-sb-icon" aria-label="More storyboard actions" aria-haspopup="menu" aria-expanded={!!more} title="AI prompt, Export JSON, Import revised JSON, AI agent"

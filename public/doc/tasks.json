@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "project": "Dionysus",
-  "updatedAt": "2026-11-13",
+  "updatedAt": "2026-11-14",
   "sourceOfTruth": "public/doc/tasks.json on main (see docs/v2/MODULE_DESIGN.md §14)",
   "statusDefinitions": {
     "done": "Implementation exists and has evidence; release/browser validation may still be pending.",
@@ -3262,6 +3262,12 @@
         {
           "id": "P62-MCP-ATTACH-MEDIA",
           "title": "WebMCP media and re-timing for agents (#312, rule 77): attach_asset_version / attach_asset_versions fetch files from https: or local http URLs (or inline HTML / data: URLs), validate them like a manual upload (HTML clip lint, media decode) and add versions to storyboard assets or shots (batch by items or {assetId}/{shotId} pattern, one undo step, one result per item); import_storyboard loads JSON (inline or URL) into an existing project (create, replace by id keeping uploads, start over, or merge a part); send_to_timeline mode \"relayout\" re-times placed clips from the board in place (planned lengths, packed main track, linked layers and audio cues re-placed, clip props kept) and mode \"replace\". Docs (WEB_MCP.md: CORS and Access-Control-Allow-Private-Network), public/ai regenerated, tests. Schema stays dionysus/3.1. Uses P62 because P61 is the create_storyboard schema fix.",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "P63-STORY-ORDER-INSERT",
+          "title": "New shots on a sent timeline go in story order (#314, rule 78): Update / send_to_timeline (update and relayout) insert a shot added to the board before the next shot already on the timeline, moving later main-track clips up (linked layers follow, spanning story cues move too) instead of appending it at the end; a new shot whose clip asset already has a version (re-import / part / add_shot) uses it instead of a placeholder (mergeStoryboard now links new clip shots). Send results and the WebMCP reply list inserted, appended and placeholder shots; the storyboard note says \"in story order\". Tests, docs and public/ai regenerated. Schema unchanged (dionysus/3.1).",
           "status": "done",
           "progress": 100
         }

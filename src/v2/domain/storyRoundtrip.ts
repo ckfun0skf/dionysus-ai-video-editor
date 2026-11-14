@@ -201,7 +201,8 @@ export function mergeStoryboard(p: Project, doc: StoryDoc): Storyboard {
   const shots: Record<string, Shot> = {};
   for (const [id, s] of Object.entries(fresh.shots)) {
     const o = old.shots[id];
-    if (!o) { shots[id] = s; continue; }
+    // P63 (#314): a new shot made from a clip asset that already has an upload uses it (like shots imported with it).
+    if (!o) { const a = s.clipSlot ? slots[s.clipSlot]?.assetId : undefined; shots[id] = a ? { ...s, assetId: a } : s; continue; }
     // The shot's own (AI clip) asset: kept aside in ownAssetId while it is made from a clip slot.
     const own = o.clipSlot ? o.ownAssetId : o.assetId;
     const pins = Object.fromEntries(Object.entries(o.refOverrides ?? {}).filter(([k]) => slots[k] && s.slotIds.includes(k)));

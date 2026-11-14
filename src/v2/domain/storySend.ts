@@ -27,7 +27,7 @@ import { followKeyframes, type MotionEffect } from "./storyFollow";
 import { evenSplitCueWords, expandWordPop } from "./subtitleLayer";
 
 /** What one send added, for the confirmation note. */
-export interface SendResult { shots: number; /** P35: shots sent as placeholders (no clip yet). */ placeholders?: number; layers: number; captions: number; effects: number; transitions: number; skippedLayers: number; audio: number; skippedAudio: number; firstClipId?: string }
+export interface SendResult { shots: number; /** P35: shots sent as placeholders (no clip yet). */ placeholders?: number; /** P63: shots placed among clips already on the timeline (story order, later clips moved up). */ inserted?: string[]; /** P63: shots added after the last clip. */ appended?: string[]; /** P63: shots sent as placeholders. */ placeholderShots?: string[]; layers: number; captions: number; effects: number; transitions: number; skippedLayers: number; audio: number; skippedAudio: number; firstClipId?: string }
 
 /** Audio layer names per cue kind (V2-SB-125): one kind per layer, so voice, music and effects mix separately. */
 export const AUDIO_TRACK_NAMES: Record<AudioKind, string> = { voiceover: "Voiceover", music: "Music", sfx: "Sound effects", ambience: "Ambience", sting: "Stings", dialogue: "Dialogue" };
@@ -386,6 +386,32 @@ export function pendingAudio(p: Project): string[] {
 }
 
 /** Append every ready shot to the root composition with its linked items. Returns the project unchanged if none is ready. */
+/**
+ * P63 (#314): where a new shot goes when other shots of the story are already on the main track: the start of the
+ * first clip of the next shot in story order that is placed. Undefined when no later shot is placed (append).
+ */
+function insertPointFor(comp: Composition, trackId: string, b: Storyboard, shotId: string): number | undefined {
+  const main = comp.tracks.find((t) => t.id === trackId);
+  if (!main?.placements.length) return undefined;
+  const starts = new Map<string, number>();
+  for (const pl of main.placements) if (pl.storyShot && !(starts.get(pl.storyShot)! <= pl.startTicks)) starts.set(pl.storyShot, pl.startTicks);
+  const i = b.order.indexOf(shotId);
+  if (i < 0) return undefined;
+  for (const id of b.order.slice(i + 1)) { const t = starts.get(id); if (t !== undefined) return t; }
+  return undefined;
+}
+
+/**
+ * Make room for an inserted shot: main-track clips at or after `at` move later by `by`, and so do story audio cues
+ * that are not linked to a clip (cues that span shots) and start at or after `at`. Linked items follow their clip.
+ */
+function shiftAfter(comp: Composition, trackId: string, at: number, by: number): Composition {
+  return { ...comp, tracks: comp.tracks.map((t) => {
+    const move = (pl: Placement) => pl.startTicks >= at && (t.id === trackId || (!!pl.storyCue && !pl.storyLink));
+    return t.placements.some(move) ? { ...t, placements: t.placements.map((pl) => (move(pl) ? { ...pl, startTicks: pl.startTicks + by } : pl)) } : t;
+  }) };
+}
+
 export function sendStory(p: Project): { project: Project; result: SendResult } {
   const result: SendResult = { shots: 0, layers: 0, captions: 0, effects: 0, transitions: 0, skippedLayers: 0, audio: 0, skippedAudio: 0 };
   const b = p.storyboard;
@@ -397,15 +423,24 @@ export function sendStory(p: Project): { project: Project; result: SendResult } 
   if (!tid && ready.length) { tid = newId("trk"); comp = addTrack(comp, "video", tid); }
   let at = Math.max(0, ...(comp.tracks.find((t) => t.id === tid)?.placements ?? []).map((x) => x.startTicks + x.durationTicks));
   const sent: { shot: Shot; clip: Placement }[] = [];
+  const comp0 = comp;
   for (const s of ready) {
     const shot = b.shots[s.shotId], asset = s.state === "ready" ? p.assets[s.assetId!] : undefined, v = asset && selectedVersion(asset);
     if (s.state === "ready" && !v) continue;
-    const clip = asset && v ? shotClip(b, asset, v, shot, at) : placeholderClip(b, shot, at);
-    if (clip.placeholder) result.placeholders = (result.placeholders ?? 0) + 1;
+    // P63 (#314): a shot whose later neighbour in the story is already on the timeline goes in before it (later
+    // clips move up); otherwise it is added after the last clip, as before.
+    const before = insertPointFor(comp, tid!, b, shot.id);
+    const startAt = before ?? at;
+    const clip = asset && v ? shotClip(b, asset, v, shot, startAt) : placeholderClip(b, shot, startAt);
+    if (clip.placeholder) { result.placeholders = (result.placeholders ?? 0) + 1; (result.placeholderShots ??= []).push(shot.id); }
+    if (before !== undefined) { comp = shiftAfter(comp, tid!, before, clip.durationTicks); (result.inserted ??= []).push(shot.id); }
+    else (result.appended ??= []).push(shot.id);
     comp = insertPlacement(comp, tid!, clip);
     sent.push({ shot, clip });
     at += clip.durationTicks;
   }
+  // Items linked to clips that moved up follow them (offsets kept).
+  if (result.inserted) comp = followStoryLinks(comp0, comp);
   result.shots = sent.length;
   result.firstClipId = sent[0]?.clip.id;
   // Transitions: on the `to` clip, only when the `from` shot's clip ends exactly where it starts. Clamped to half the shorter clip.
