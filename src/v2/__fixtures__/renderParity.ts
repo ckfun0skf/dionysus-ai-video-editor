@@ -3,7 +3,8 @@
  * (blank, placeholder, image, video, html, text with animations, word-highlight and word-pop caption tracks, masks,
  * transforms and keyframes, blend, fades, chroma key, a hidden layer, main / overlay / all effects, transitions and a
  * burned-in subtitle). Used by `render/renderParity.test.ts` (draw-call log in jsdom) and by the out-of-repo Chrome
- * pixel comparison described in the P67 PR. Media blobs are referenced by key (`img1`, `vid1`, `html1`); the jsdom
+ * pixel comparison described in the P67/P68 PRs. Media blobs are referenced by key (`img1`, `vid1`, `html1`, `html2` (a
+ * three.js clip with an embedded .glb), `aud1`); the jsdom
  * test leaves them out, the browser harness stores real files under those keys.
  */
 import { createProject, TICKS_PER_SECOND, type Asset, type Placement, type Project } from "../domain";
@@ -14,7 +15,7 @@ const S = TICKS_PER_SECOND;
 export const RENDER_PARITY_SIZE = { width: 320, height: 180 };
 /** Frame times (seconds) that cover every clip, transition and effect window. */
 // Main track after ripple: red 0–2, green 2–4 (crossfade in), placeholder 4–5, image 5–8, video 8–12 (push-left in), html 12–15.
-export const RENDER_PARITY_TIMES = [0, 0.4, 1.25, 1.8, 1.9, 2.0, 2.1, 2.6, 3.3, 4.5, 5.2, 6.5, 7.5, 7.9, 8.0, 8.1, 9.0, 10.5, 12.25, 13.5, 14.75];
+export const RENDER_PARITY_TIMES = [0, 0.4, 1.25, 1.8, 1.9, 2.0, 2.1, 2.6, 3.3, 4.5, 5.2, 6.5, 7.5, 7.9, 8.0, 8.1, 9.0, 9.6, 10.5, 12.25, 13.5, 14.0, 14.75];
 
 const asset = (id: string, kind: Asset["kind"], blobKey: string, mime: string, extra: Partial<Asset["versions"][number]["media"]> = {}): Asset => ({
   id, kind, name: id, selectedVersionId: "v1",
@@ -50,6 +51,17 @@ export function renderParityProject(): Project {
   run(cmd.addBlankClip(5 * S, "#ffffff", "overlay", 2 * S, "o-white"));
   run(cmd.setClipMask("o-white", { ...defaultMaskFor("rect"), w: 0.5, h: 0.5, invert: true }));
   run(cmd.setChromaKey("o-white", { color: "#ffffff", range: 0.3, spill: 0.5 }));
+  // P68: a reversed video overlay (element scrub path in preview), a code clip with an embedded GLB on the overlay, and
+  // a music clip on an audio track (element sync, no picture).
+  const overlayId = e.getState().project.compositions[e.getState().project.rootCompositionId].tracks.find((t) => t.placements.some((p) => p.id === "o-blue"))!.id;
+  run(cmd.importAsset(asset("a-glb", "html", "html2", "text/html")));
+  run(cmd.importAsset(asset("a-aud", "audio", "aud1", "audio/wav", { durationTicks: 4 * S })));
+  run(cmd.addAssetToTimeline("a-vid", 9 * S, overlayId, "o-vid"));
+  run(cmd.setTransform("o-vid", { scale: 0.4, x: 0.25, y: -0.2 }));
+  run(cmd.setReverse("o-vid", true));
+  run(cmd.addAssetToTimeline("a-glb", 13.25 * S, overlayId, "o-glb"));
+  run(cmd.setTransform("o-glb", { scale: 0.5, x: -0.2 }));
+  run(cmd.addAssetToTimeline("a-aud", 0, undefined, "a-music"));
   // A hidden overlay layer: nothing of it may be drawn.
   run(cmd.addBlankClip(0, "#ff00ff", "overlay", 9 * S, "o-hidden"));
   const hiddenTrack = e.getState().project.compositions[e.getState().project.rootCompositionId].tracks.find((t) => t.placements.some((p) => p.id === "o-hidden"))!;

@@ -6,8 +6,10 @@
  * Any change to what is drawn, in which order, with which state (alpha, transform, composite, filter, font, colours)
  * changes a hash. Regenerate only for an intended look change: UPDATE_RENDER_GOLDEN=1 npx vitest run src/v2/render/renderParity.test.ts
  *
- * jsdom has no real canvas: a recording 2D context stands in. Media (image/video/html) blobs are absent here, so
- * those clips take their "not loaded yet" path; the PR's Chrome pixel comparison covers them with real files.
+ * jsdom has no real canvas: a recording 2D context stands in. Since P68 the image, video and audio blobs are present
+ * and jsdom's media elements are stubbed as loaded (64×36, ready, paused), so the media renderers draw and sync
+ * their elements; html clips need a real browser (their sandboxed iframe never answers here), so the PR's Chrome
+ * pixel comparison covers them with real files.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
@@ -89,6 +91,20 @@ type Golden = Record<string, { calls: number; hash: string }>;
 describe("P67 render parity: Player draw calls equal the pre-P67 golden", () => {
   const contexts = new WeakMap<HTMLCanvasElement, CanvasRenderingContext2D>();
   beforeAll(() => {
+    // Media stand-ins: every element is "loaded" with a 64×36 picture; playback calls are no-ops.
+    const def = (proto: object, props: Record<string, unknown>) => { for (const [k, v] of Object.entries(props)) Object.defineProperty(proto, k, { configurable: true, get: () => v, set: () => undefined }); };
+    def(HTMLImageElement.prototype, { naturalWidth: 64, naturalHeight: 36, complete: true });
+    def(HTMLVideoElement.prototype, { videoWidth: 64, videoHeight: 36 });
+    def(HTMLMediaElement.prototype, { readyState: 4, paused: true, seeking: false, error: null });
+    const times = new WeakMap<object, number>();
+    Object.defineProperty(HTMLMediaElement.prototype, "currentTime", { configurable: true, get() { return times.get(this) ?? 0; }, set(v: number) { times.set(this, v); log.push(`media.currentTime=${fmt(v)}`); } });
+    Object.defineProperty(HTMLMediaElement.prototype, "buffered", { configurable: true, get: () => ({ length: 1, start: () => 0, end: () => 999 }) });
+    HTMLMediaElement.prototype.play = function () { log.push("media.play()"); return Promise.resolve(); };
+    HTMLMediaElement.prototype.pause = function () { log.push("media.pause()"); };
+    HTMLMediaElement.prototype.load = function () { /* no network in jsdom */ };
+    let n = 0;
+    (URL as unknown as { createObjectURL: (b: Blob) => string }).createObjectURL = () => `blob:parity/${n++}`;
+    (URL as unknown as { revokeObjectURL: (u: string) => void }).revokeObjectURL = () => undefined;
     vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(function (this: HTMLCanvasElement) {
       if (!contexts.has(this)) contexts.set(this, recorder(this));
       return contexts.get(this)! as never;
@@ -98,9 +114,11 @@ describe("P67 render parity: Player draw calls equal the pre-P67 golden", () => 
 
   const results: Golden = {};
   for (const mode of ["preview", "export"] as const) {
-    it(`${mode}: every fixture time draws exactly as before`, () => {
+    it(`${mode}: every fixture time draws exactly as before`, async () => {
       const project = renderParityProject();
-      const player = new Player(project, createMemoryStorage().blobs, { kind: "wall", now: () => 0 } as never);
+      const store = createMemoryStorage();
+      for (const [key, type] of [["img1", "image/png"], ["vid1", "video/webm"], ["aud1", "audio/wav"]]) await store.blobs.put(key, new Blob([key], { type }));
+      const player = new Player(project, store.blobs, { kind: "wall", now: () => 0 } as never);
       player.offline = mode === "export";
       const canvas = document.createElement("canvas");
       canvas.width = RENDER_PARITY_SIZE.width; canvas.height = RENDER_PARITY_SIZE.height;
@@ -108,6 +126,9 @@ describe("P67 render parity: Player draw calls equal the pre-P67 golden", () => 
       const golden: Golden = !UPDATE && existsSync(GOLDEN) ? JSON.parse(readFileSync(GOLDEN, "utf8")) : {};
       for (const t of RENDER_PARITY_TIMES) {
         player.time = Math.round(t * 120_000);
+        // First draw asks for the media URLs; let them resolve (and the redraw they trigger), then record a settled frame.
+        player.draw();
+        for (let i = 0; i < 3; i++) await new Promise((r) => setTimeout(r, 0));
         log.length = 0;
         player.draw();
         const key = `${mode}@${t}`;
@@ -123,7 +144,7 @@ describe("P67 render parity: Player draw calls equal the pre-P67 golden", () => 
     const p = renderParityProject();
     const all = p.compositions[p.rootCompositionId].tracks.flatMap((t) => t.placements);
     const kinds = new Set(all.map((x) => (x.placeholder ? "placeholder" : x.blank ? "blank" : x.clipType)));
-    expect([...kinds].sort()).toEqual(["blank", "effect", "html", "image", "placeholder", "text", "video"]);
+    expect([...kinds].sort()).toEqual(["audio", "blank", "effect", "html", "image", "placeholder", "text", "video"]);
     expect(all.some((x) => x.mask) && all.some((x) => x.transitionIn) && all.some((x) => x.chromaKey) && all.some((x) => x.blend)).toBe(true);
     expect(p.compositions[p.rootCompositionId].tracks.map((t) => t.captionStyle?.mode).filter(Boolean).sort()).toEqual(["word-highlight", "word-pop"]);
   });
