@@ -2,10 +2,11 @@
 
 One folder per clip type. Design, decisions and the phased plan: `docs/v2/CLIP_PLUGIN_ARCHITECTURE.md`.
 
-**Status (P66, Phase 1 step 1.2):** the domain predicates (`trackKindFor`, `isStill`, `canChromaKey`, `hasSound`,
-`canSetRange`, `slipKind`, …) and the export audio plan read this registry. Rendering, timeline, inspector, storyboard
-and agent tools still use the `clipType` checks listed in §2 of the design doc; steps 1.3–1.8 move them here one
-surface at a time, with no behaviour change.
+**Status (P67, Phase 1 step 1.3a):** the domain predicates (`trackKindFor`, `isStill`, `canChromaKey`, `hasSound`,
+`canSetRange`, `slipKind`, …) and the export audio plan read this registry (P66). Text, placeholder and blank clips
+draw through their `render.ts` (P67), in preview and export alike. Video, image, audio and html still draw inline in
+`render/player.ts` (step 1.3b); timeline, inspector, storyboard and agent tools still use the `clipType` checks
+listed in §2 of the design doc (steps 1.4–1.8).
 
 ```
 clipTypes/
@@ -15,6 +16,8 @@ clipTypes/
   load.ts       registers discovered modules, collects problems
   index.ts      import.meta.glob("./*/core.ts"), CLIP_TYPES, CLIP_TYPE_PROBLEMS, variantOf(p), clipTypeOf(p)
   <id>/core.ts  video, image, audio, text, html, effect, placeholder, blank, unknown
+  <id>/render.ts  text, placeholder, blank (P67): default export { id, draw(host) }; discovered by
+                  src/v2/render/clipRenderers.ts. Render-layer code: canvas and render helpers allowed.
 ```
 
 ## Rules

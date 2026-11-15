@@ -3288,6 +3288,12 @@
           "title": "Clip type plugins Phase 1 step 1.2 (no behaviour change): the domain predicates read the clip type registry instead of switching on clipType: trackKindFor (coreOf), isStill (caps.still), canChromaKey (caps.keyable), hasSound (caps.sound), sourceSpan/canSetRange and slipKind (caps.sourceTime), setVolumeKeys (hasSound), pasteItemGroup (trackKindFor); export audioPlan skips types with caps.sound false (unknown ids keep today's path until step 1.8). domain and render may import clipTypes (architecture test). parity.test.ts now also compares every delegating predicate and audioPlan with the frozen pre-P66 code over 54 clip shapes, so it is not circular. variantOf caches the variant list (hot path).",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P67-CLIP-RENDERERS-STATELESS",
+          "title": "Clip type plugins Phase 1 step 1.3, first half (1.3a, no behaviour change): render/clipRenderers.ts discovers clipTypes/*/render.ts (ClipRenderer { id, draw(host) }, ClipDrawHost with the player's paint/blit, clipRendererFor by variant, CLIP_RENDERER_PROBLEMS); text, placeholder (P35 slate / black in export) and blank (P36) now draw through clipTypes/<id>/render.ts in preview and export (renderAt) alike. Placeholder outranks blank when both flags are set (as the player drew it). Architecture test: clipTypes/<id>/render.ts is render-layer code. New render/renderParity.test.ts hashes every 2D-canvas call for a fixture project covering every clip type, masks, blend, fades, keyframes, chroma key, hidden layer, main/overlay/all effects, crossfade and push transitions, word-highlight and word-pop captions and a burned-in subtitle, in preview and export at 21 times, against a golden recorded on the pre-P67 code. Html, video, image and audio rendering move in the second half (1.3b).",
+          "status": "done",
+          "progress": 100
         }
       ]
     }

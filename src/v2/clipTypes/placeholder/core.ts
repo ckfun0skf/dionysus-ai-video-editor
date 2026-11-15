@@ -5,6 +5,6 @@ export default defineClipType({
   id: "placeholder",
   description: "A storyboard shot with no clip yet: a labelled slate in preview, a dark frame in export (warned first).",
   trackKind: "video",
-  variant: { of: "image", field: "placeholder" },
+  variant: { of: "image", field: "placeholder", priority: 1 },
   caps: { sourceTime: false, still: true, sound: false, visual: true, keyable: true, thumb: false, asset: "none" },
 });
