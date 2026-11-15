@@ -3282,6 +3282,12 @@
           "title": "Clip type plugins Phase 1 step 1.1 (no behaviour change): src/v2/clipTypes/ registry skeleton (types.ts, define.ts, registry.ts, load.ts, glob discovery in index.ts, variantOf/clipTypeOf, CLIP_TYPE_PROBLEMS) with a core.ts per built-in (video, image, audio, text, html, effect, placeholder, blank, unknown) holding trackKind and caps only; nothing in the app reads it yet. New clipTypes layer in architecture.test.ts (no DOM, domain only via import type). parity.test.ts pins every core's trackKind/caps to today's trackKindFor, isStill, hasSound, canChromaKey, needsThumb and canSetRange. CLIP_PLUGIN_ARCHITECTURE.md is Accepted with the owner's decisions recorded; DEVELOPER_HANDOFF.md and MODULE_DESIGN.md updated.",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P66-CLIP-TYPES-DOMAIN",
+          "title": "Clip type plugins Phase 1 step 1.2 (no behaviour change): the domain predicates read the clip type registry instead of switching on clipType: trackKindFor (coreOf), isStill (caps.still), canChromaKey (caps.keyable), hasSound (caps.sound), sourceSpan/canSetRange and slipKind (caps.sourceTime), setVolumeKeys (hasSound), pasteItemGroup (trackKindFor); export audioPlan skips types with caps.sound false (unknown ids keep today's path until step 1.8). domain and render may import clipTypes (architecture test). parity.test.ts now also compares every delegating predicate and audioPlan with the frozen pre-P66 code over 54 clip shapes, so it is not circular. variantOf caches the variant list (hot path).",
+          "status": "done",
+          "progress": 100
         }
       ]
     }

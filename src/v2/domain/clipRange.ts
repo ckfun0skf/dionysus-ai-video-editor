@@ -9,6 +9,7 @@ import { TICKS_PER_SECOND } from "./time";
 import { findPlacement, versionOf } from "./model";
 import { MIN_DURATION_TICKS, mapTrack, shiftKeys } from "./ops";
 import type { Composition, Placement, Project } from "./model";
+import { clipTypeOf } from "../clipTypes";
 
 export const frameTicks = (fps: number) => TICKS_PER_SECOND / fps;
 /** The frame that contains `ticks` (half-tick tolerance so frame starts round-trip exactly). */
@@ -17,12 +18,12 @@ export const frameToTicks = (frame: number, fps: number) => Math.round(frame * f
 
 /** Source span of a clip: [inTicks, outTicks) in source time, and its media length (undefined for stills). */
 export function sourceSpan(project: Project, p: Placement): { inTicks: number; outTicks: number; mediaTicks?: number } {
-  const media = p.clipType === "video" || p.clipType === "audio" ? versionOf(project, p.source)?.media.durationTicks : undefined;
+  const media = clipTypeOf(p).caps.sourceTime ? versionOf(project, p.source)?.media.durationTicks : undefined;
   return { inTicks: p.sourceInTicks, outTicks: p.sourceInTicks + Math.round(p.durationTicks * (p.speed ?? 1)), mediaTicks: media };
 }
 
 /** Whether in/out frames can be set: a forward, non-freeze video (or audio) clip with known media length. */
-export const canSetRange = (project: Project, p: Placement) => (p.clipType === "video" || p.clipType === "audio") && !p.freeze && !p.reverse && !!sourceSpan(project, p).mediaTicks;
+export const canSetRange = (project: Project, p: Placement) => clipTypeOf(p).caps.sourceTime && !p.freeze && !p.reverse && !!sourceSpan(project, p).mediaTicks;
 
 function nextStartOnTrack(comp: Composition, p: Placement, trackId: string): number {
   const t = comp.tracks.find((x) => x.id === trackId)!;

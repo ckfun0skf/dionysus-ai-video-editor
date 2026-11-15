@@ -2,12 +2,12 @@
  * Clip type plugins (P65, Phase 1 step 1.1 of docs/v2/CLIP_PLUGIN_ARCHITECTURE.md): the **core** part of a clip type
  * (pure data, no DOM). One folder per type, `src/v2/clipTypes/<id>/core.ts`, default-exporting `defineClipType({…})`.
  *
- * Step 1.1 only has `trackKind` and `caps`; nothing in the app reads them yet. Later Phase 1 steps add the rest of the
+ * The core has only `trackKind` and `caps` so far (the domain predicates read them since P66). Later steps add the rest of the
  * interface sketched in the design doc (§3: data schema, duration rules, storyboard mapping, agent tools and rules,
  * validation) and the render/ui parts, and move today's `clipType` switches onto the registry one surface at a time.
  *
- * Only `import type` from `domain` is allowed here (architecture test), so `domain` can use the registry later
- * without a runtime import cycle.
+ * Only `import type` from `domain` is allowed here (architecture test), so `domain` can use the registry without a
+ * runtime import cycle.
  */
 import type { MediaKind, Placement, TrackKind } from "../domain/model";
 
