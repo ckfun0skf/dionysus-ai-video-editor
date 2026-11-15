@@ -2,6 +2,7 @@
 import { versionOf, compositionDuration, type Composition, type Placement, type Project, type Track } from "../../domain/model";
 import { spatialAt, spatialOf, type PositionKey, type SpatialPos } from "../../domain/spatial";
 import { TICKS_PER_SECOND } from "../../domain/time";
+import { CLIP_TYPES, variantOf } from "../../clipTypes";
 
 export const RESOLUTIONS = { "720p": 720, "1080p": 1080, "2K": 1440, "4K": 2160 } as const;
 export type Resolution = keyof typeof RESOLUTIONS;
@@ -84,7 +85,10 @@ export function audioPlan(project: Project): AudioSegment[] {
   for (const track of comp.tracks) {
     if (track.muted || track.hidden) continue;
     for (const p of track.placements) {
-      if (p.clipType === "image" || p.clipType === "html" || p.reverse || p.freeze || (p.clipType === "video" && p.linkedAudio?.muted)) continue;
+      // P66: silent clip types (caps.sound false) are skipped. A type this build does not know keeps today's path
+      // (mixed when it has media); step 1.8 of docs/v2/CLIP_PLUGIN_ARCHITECTURE.md decides unknown types.
+      const core = CLIP_TYPES.core(variantOf(p));
+      if ((core && !core.caps.sound) || p.reverse || p.freeze || (p.linkedAudio?.muted && p.clipType === "video")) continue;
       const v = versionOf(project, p.source);
       if (!v || (p.volume ?? 1) <= 0) continue;
       if (p.durationTicks <= 0) continue;

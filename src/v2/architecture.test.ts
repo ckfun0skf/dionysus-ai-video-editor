@@ -8,13 +8,14 @@ const ALLOWED: Record<string, string[]> = {
   // Preset modules (V2-FX-MOD) sit under the registry: the registry loads them, they import only registry types.
   registry: ["registry", "presets"],
   presets: ["presets", "registry"],
-  domain: ["domain", "registry"],
+  // P66: domain predicates read the clip type registry (clipTypes imports domain only as types, so no runtime cycle).
+  domain: ["domain", "registry", "clipTypes"],
   // Clip type cores (P65, docs/v2/CLIP_PLUGIN_ARCHITECTURE.md): pure data; `domain` only through `import type`.
   clipTypes: ["clipTypes", "domain", "registry"],
   ports: ["registry", "domain", "ports"],
   engine: ["registry", "domain", "ports", "engine"],
   persistence: ["registry", "domain", "ports", "persistence"],
-  render: ["registry", "domain", "ports", "render"],
+  render: ["registry", "domain", "ports", "render", "clipTypes"],
   ui: ["domain", "ports", "engine", "persistence", "render", "registry", "ui"],
 };
 /** Known violations being fixed in follow-up PRs; must shrink to empty. */

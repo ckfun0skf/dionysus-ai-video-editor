@@ -330,7 +330,7 @@ export const VOLUME_KEY_MAX = 2;
  */
 export function setVolumeKeys(comp: Composition, placementId: string, keys: { t: number; v: number }[]): Composition {
   return mapPlacement(comp, placementId, (p) => {
-    if (p.clipType !== "audio" && p.clipType !== "video") return p;
+    if (!hasSound(p)) return p;
     const clean: { t: number; v: number }[] = [];
     for (const k of [...keys].filter((k) => Number.isFinite(k.t) && Number.isFinite(k.v)).sort((a, b) => a.t - b.t)) {
       const t = Math.round(Math.max(0, Math.min(p.durationTicks, k.t))), v = Math.round(Math.max(0, Math.min(VOLUME_KEY_MAX, k.v)) * 1000) / 1000;

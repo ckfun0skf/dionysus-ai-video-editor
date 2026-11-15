@@ -38,7 +38,7 @@ src/v2/
   engine/        Engine (undo history; one dispatch = one undo step) and commands.ts (Command factories)
   persistence/   IndexedDB/memory stores, media import (media.ts), schema migrations, project archive
   ports/         storage interfaces (BlobStore, …)
-  clipTypes/     clip type registry (P65+): one folder per type with core.ts (trackKind, caps); see its README.md
+  clipTypes/     clip type registry (P65+): one folder per type with core.ts (trackKind, caps); domain predicates read it (P66)
   registry/      preset registry (effects, transitions, text animations, stickers, blends, audio fx, fonts)
   presets/       one file per preset, auto-discovered (docs/v2/ADDING_EFFECTS.md)
   render/        Player (preview AND export compositor), htmlClip.ts (sandboxed HTML clip host), text, effects,
@@ -92,9 +92,9 @@ required checks.
 1. `git fetch` and branch from the latest `origin/main` (e.g. `p66-short-name`).
 2. Implement with tests. Keep PRs small (MODULE_DESIGN §14 targets < 400 changed lines; feature PRs here are often
    larger, but split refactors).
-3. **`public/doc/tasks.json`:** add one entry per PR with the next free P-number: `{ "id": "P66-SHORT-NAME", "title":
+3. **`public/doc/tasks.json`:** add one entry per PR with the next free P-number: `{ "id": "P67-SHORT-NAME", "title":
    "<what and why, one paragraph>", "status": "done", "progress": 100 }` appended after the latest entry (the latest is
-   `P65-CLIP-TYPES-SKELETON`; the next is **P66**). Bump `updatedAt`. Edit the file surgically (insert text); do not
+   `P66-CLIP-TYPES-DOMAIN`; the next is **P67**). Bump `updatedAt`. Edit the file surgically (insert text); do not
    re-serialise the whole JSON. `scripts/check-tasks-updated.mjs` fails a PR that changes `src/` without it. If an id
    is already taken, use the next number and say so in the PR.
 4. **AI guide rule:** append to `RULE_LIST` in `src/v2/domain/storyPrompt.ts` (append-only; numbers are positions;
@@ -110,7 +110,7 @@ required checks.
 6. Run `npm run gen:ai` after changing rules, tools or presets, and commit the regenerated files (tests fail if they are
    stale).
 7. `npx tsc -b && npx vitest run && npx vite build`.
-8. Commit in English; PR title `P66: …`; body says what, why, tests, and `Fixes #N` (or `Refs #N` if partial), plus
+8. Commit in English; PR title `P67: …`; body says what, why, tests, and `Fixes #N` (or `Refs #N` if partial), plus
    what was not verified. Push, open the PR, wait for `build` on the head SHA. Do not merge.
 
 ## 7. UI conventions
@@ -139,7 +139,7 @@ required checks.
 | `docs/v2/CLIP_PLUGIN_ARCHITECTURE.md` | clip type plugins: accepted design, decisions, Phase 1 progress |
 | `public/doc/tasks.json` | every task and its status |
 
-## 9. Recent history (P47–P65)
+## 9. Recent history (P47–P66)
 
 | Id | PR | One line |
 |---|---|---|
@@ -161,7 +161,8 @@ required checks.
 | P62 | #313 | WebMCP `attach_asset_version(s)` from URLs, `import_storyboard`, `send_to_timeline` modes `relayout`/`replace` (RULE 77). |
 | P63 | #315 | New shots on a sent timeline go in story order and use their shared clip's version (RULE 78). |
 | P64 | #316 | Docs only: clip type plugin architecture proposal and this handoff. |
-| P65 | — | Clip type plugins Phase 1 step 1.1: `src/v2/clipTypes/` registry, core caps, parity test (no behaviour change). |
+| P65 | #317 | Clip type plugins Phase 1 step 1.1: `src/v2/clipTypes/` registry, core caps, parity test (no behaviour change). |
+| P66 | — | Step 1.2: domain predicates and export audio plan read the clip type registry (no behaviour change). |
 
 ## 10. Known unverified areas
 
@@ -187,11 +188,12 @@ change, each merged on green CI) is under way:
 - **1.1 done (P65):** `src/v2/clipTypes/` with `types.ts`, `registry.ts`, `load.ts`, glob discovery in `index.ts`,
   `variantOf`/`clipTypeOf`, and a `core.ts` per built-in (video, image, audio, text, html, effect, placeholder,
   blank, unknown) with `trackKind` and `caps` only. `clipTypes/parity.test.ts` pins every cap to today's predicates.
-  Nothing in the app reads the registry yet.
-- **Next, 1.2:** make `trackKindFor`, `isStill`, `hasSound`, `canChromaKey` (`model.ts`), `canSetRange`
-  (`clipRange.ts`), `needsThumb` and the `ops.ts`/`slip.ts`/`chain.ts` checks read `clipTypeOf(p).caps`, and
-  `audioPlan` use `caps.sound`. That step lets `domain` import `clipTypes` (add it to `ALLOWED.domain` in
-  `architecture.test.ts`); the parity test must keep passing unchanged.
+- **1.2 done (P66):** `trackKindFor`, `isStill`, `canChromaKey`, `hasSound` (`model.ts`), `sourceSpan`/`canSetRange`
+  (`clipRange.ts`), `slipKind` (`slip.ts`), `setVolumeKeys` (`ops.ts`), `pasteItemGroup` (`chain.ts`) and export
+  `audioPlan` read `clipTypeOf(p)` / `coreOf(kind)`. `domain` and `render` may import `clipTypes`. The parity test
+  also compares them with the frozen pre-P66 implementations, so it is not circular.
+- **Next, 1.3:** move the per-type draw code out of `render/player.ts` into `clipTypes/<type>/render.ts` (see the
+  design doc table); prove it with player snapshot tests and a pixel comparison at fixed times.
 
 Until Phase 1 is finished, add new behaviour the existing way and note in the PR which switch points you touched, so
 the later steps can move them.

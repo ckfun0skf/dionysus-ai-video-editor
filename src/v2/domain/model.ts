@@ -2,6 +2,7 @@
 import type { TextData } from "./text";
 import type { ClipMask } from "./mask";
 import type { Storyboard } from "./storyboard";
+import { clipTypeOf, coreOf } from "../clipTypes";
 /** 3.1 (V2-CUT-01): optional `storyboard`. Older schemas upgrade via persistence/schema MIGRATIONS. */
 export const SCHEMA = "dionysus/3.1" as const;
 
@@ -175,7 +176,8 @@ export type EffectScope = "main" | "overlay" | "all";
 export const EFFECT_SCOPES: EffectScope[] = ["main", "overlay", "all"];
 export const DEFAULT_EFFECT_SCOPE: EffectScope = "main";
 export const effectScopeOf = (e: { applyTo?: string } | undefined): EffectScope => (EFFECT_SCOPES as string[]).includes(e?.applyTo ?? "") ? (e!.applyTo as EffectScope) : DEFAULT_EFFECT_SCOPE;
-export const isStill = (p: Pick<Placement, "clipType">) => p.clipType === "image" || p.clipType === "text" || p.clipType === "effect";
+/** Holds one source frame (image, text, effect; source in stays 0). P66: from the clip type registry (`caps.still`). */
+export const isStill = (p: Pick<Placement, "clipType">) => clipTypeOf(p).caps.still;
 /** Default length of a new effect clip. */
 export const DEFAULT_EFFECT_TICKS = 3 * 120_000;
 
@@ -186,10 +188,10 @@ export type TransformKeyProp = Exclude<KeyframeProp, "volume">;
 export interface ChromaKey { color: string; range: number; spill: number; off?: boolean }
 /** Defaults of a new chroma key: pure green, medium tolerance, some spill suppression. */
 export const CHROMA_DEFAULT: ChromaKey = { color: "#00ff00", range: 0.4, spill: 0.5 };
-/** Clips a chroma key can apply to. */
-export const canChromaKey = (p: Pick<Placement, "clipType">) => p.clipType === "video" || p.clipType === "image" || p.clipType === "html";
-/** Clips with sound a volume curve and audio effects can apply to. */
-export const hasSound = (p: Pick<Placement, "clipType">) => p.clipType === "audio" || p.clipType === "video";
+/** Clips a chroma key can apply to (video, image, html). P66: `caps.keyable`. */
+export const canChromaKey = (p: Pick<Placement, "clipType">) => clipTypeOf(p).caps.keyable;
+/** Clips with sound a volume curve and audio effects can apply to (audio, video). P66: `caps.sound`. */
+export const hasSound = (p: Pick<Placement, "clipType">) => clipTypeOf(p).caps.sound;
 /** 0..2 volume-envelope multiplier at absolute time `t` (1 without keys). */
 export function volumeKeyAt(p: Placement, t: number): number { return evalKeys(p.keyframes?.volume, t - p.startTicks) ?? 1; }
 export interface Keyframe { t: number; v: number }
@@ -335,8 +337,9 @@ export function createProject(name = "Untitled project", now = new Date().toISOS
   };
 }
 
+/** The track kind that holds a clip type (P66: the registry's `trackKind`; unknown types go on video tracks). */
 export function trackKindFor(kind: MediaKind): TrackKind {
-  return kind === "audio" ? "audio" : kind === "text" ? "text" : kind === "effect" ? "effect" : "video";
+  return coreOf(kind).trackKind;
 }
 
 export function compositionDuration(comp: Composition): number {

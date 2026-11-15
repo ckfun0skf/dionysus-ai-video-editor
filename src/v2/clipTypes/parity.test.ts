@@ -6,8 +6,10 @@
  */
 import { describe, expect, it } from "vitest";
 import { CLIP_TYPES, clipTypeOf } from ".";
-import { canChromaKey, createProject, hasSound, isStill, TEXT_SOURCE, trackKindFor, type MediaKind, type Placement, type Project } from "../domain";
-import { canSetRange } from "../domain/clipRange";
+import { canChromaKey, createProject, hasSound, isStill, TEXT_SOURCE, trackKindFor, versionOf, type MediaKind, type Placement, type Project, type Track } from "../domain";
+import { canSetRange, sourceSpan } from "../domain/clipRange";
+import { slipKind } from "../domain/slip";
+import { audioPlan } from "../render/export/plan";
 import { mediaKindOf } from "../persistence/media";
 import { needsThumb } from "../ui/TimelineClip";
 
@@ -51,4 +53,61 @@ describe("clip type parity with today's predicates (P65)", () => {
     });
   }
   it("covers every MediaKind", () => { for (const k of KINDS) expect(CLIP_TYPES.core(k)?.id).toBe(k); });
+});
+
+/**
+ * P66 (step 1.2): the domain predicates and the export audio plan now read the registry, so comparing them with the
+ * cores above alone would be circular. These are the pre-P66 implementations, frozen verbatim; the delegating code
+ * must answer exactly as they did for every clip shape.
+ */
+const LEGACY = {
+  trackKindFor: (kind: string) => (kind === "audio" ? "audio" : kind === "text" ? "text" : kind === "effect" ? "effect" : "video"),
+  isStill: (p: Placement) => p.clipType === "image" || p.clipType === "text" || p.clipType === "effect",
+  canChromaKey: (p: Placement) => p.clipType === "video" || p.clipType === "image" || p.clipType === "html",
+  hasSound: (p: Placement) => p.clipType === "audio" || p.clipType === "video",
+  sourceTimeKind: (p: Placement) => p.clipType === "video" || p.clipType === "audio",
+  slipKind: (p: Placement) => (p.freeze ? undefined : p.clipType === "video" || p.clipType === "audio" ? "media" : p.clipType === "html" ? "html" : undefined),
+  audioSkip: (p: Placement) => p.clipType === "image" || p.clipType === "html" || !!p.reverse || !!p.freeze || (p.clipType === "video" && !!p.linkedAudio?.muted),
+};
+
+describe("delegating predicates equal the pre-P66 code (P66)", () => {
+  const { project, clips } = fixture();
+  const shapes: Placement[] = [];
+  for (const p of Object.values(clips)) {
+    shapes.push(p, { ...p, freeze: true }, { ...p, reverse: true }, { ...p, speed: 2 }, { ...p, linkedAudio: { muted: true } });
+    // Same clip without a known media length (canSetRange needs one).
+    shapes.push({ ...p, source: TEXT_SOURCE });
+  }
+  it("trackKindFor for every MediaKind and an unknown id", () => {
+    for (const k of [...KINDS, "scene", "unknown", ""]) expect(trackKindFor(k as MediaKind), k).toBe(LEGACY.trackKindFor(k));
+  });
+  it(`isStill, canChromaKey, hasSound, canSetRange, sourceSpan, slipKind (${shapes.length} clip shapes)`, () => {
+    for (const p of shapes) {
+      const label = `${p.id} ${JSON.stringify({ freeze: !!p.freeze, reverse: !!p.reverse, src: p.source.assetId })}`;
+      expect(isStill(p), label).toBe(LEGACY.isStill(p));
+      expect(canChromaKey(p), label).toBe(LEGACY.canChromaKey(p));
+      expect(hasSound(p), label).toBe(LEGACY.hasSound(p));
+      const media = LEGACY.sourceTimeKind(p) ? versionOf(project, p.source)?.media.durationTicks : undefined;
+      expect(sourceSpan(project, p).mediaTicks, label).toBe(media);
+      expect(canSetRange(project, p), label).toBe(LEGACY.sourceTimeKind(p) && !p.freeze && !p.reverse && !!media);
+      expect(slipKind(p), label).toBe(LEGACY.slipKind(p));
+    }
+  });
+  it("audioPlan mixes exactly the clips the pre-P66 filter mixed", () => {
+    const tracks: Track[] = [
+      { id: "tv", kind: "video", name: "tv", placements: [] },
+      { id: "ta", kind: "audio", name: "ta", placements: [] },
+      { id: "tt", kind: "text", name: "tt", placements: [] },
+      { id: "te", kind: "effect", name: "te", placements: [] },
+    ];
+    shapes.forEach((p, i) => {
+      const t = tracks.find((x) => x.kind === LEGACY.trackKindFor(p.clipType))!;
+      t.placements.push({ ...p, id: `s${i}`, startTicks: i * 120_000 });
+    });
+    const proj: Project = { ...project, compositions: { ...project.compositions, [project.rootCompositionId]: { ...project.compositions[project.rootCompositionId], tracks } } };
+    const mixed = audioPlan(proj).map((seg) => seg.start);
+    const expected = tracks.flatMap((t) => t.placements).filter((p) => !LEGACY.audioSkip(p) && !!versionOf(proj, p.source) && (p.volume ?? 1) > 0 && p.durationTicks > 0).map((p) => p.startTicks / 120_000).sort((a, b) => a - b);
+    expect([...mixed].sort((a, b) => a - b)).toEqual(expected);
+    expect(mixed.length).toBeGreaterThan(3);
+  });
 });

@@ -14,6 +14,7 @@
  */
 import { TICKS_PER_SECOND } from "./time";
 import { findPlacement, versionOf, type AssetVersion, type Placement, type Project } from "./model";
+import { clipTypeOf } from "../clipTypes";
 import { MIN_DURATION_TICKS, mainTrack } from "./ops";
 import { setSourceRange } from "./clipRange";
 
@@ -29,7 +30,7 @@ export const spanOf = (p: Placement) => Math.round(p.durationTicks * (p.speed ??
 /** How a clip slips: video/audio inside their media, HTML its time offset; undefined for stills, text, effects and freeze frames. */
 export function slipKind(p: Placement): SlipKind | undefined {
   if (p.freeze) return undefined;
-  if (p.clipType === "video" || p.clipType === "audio") return "media";
+  if (clipTypeOf(p).caps.sourceTime) return "media";
   if (p.clipType === "html") return "html";
   return undefined;
 }

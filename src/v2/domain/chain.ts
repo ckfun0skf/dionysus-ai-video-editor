@@ -198,9 +198,10 @@ export function placeTextGroup(comp: Composition, placements: Placement[], mainS
 
 /** Destination group a clipboard item prefers. Video that is not a sticker can go on main or overlay; a new video track is always an overlay. */
 export function pasteItemGroup(comp: Composition, it: PasteItem): TrackGroup {
-  if (it.kind === "audio" || it.placement.clipType === "audio") return "audio";
-  if (it.kind === "effect" || it.placement.clipType === "effect") return "effect";
-  if (it.kind === "text" || it.placement.clipType === "text") return "text";
+  const kind = trackKindFor(it.placement.clipType);
+  if (it.kind === "audio" || kind === "audio") return "audio";
+  if (it.kind === "effect" || kind === "effect") return "effect";
+  if (it.kind === "text" || kind === "text") return "text";
   const orig = comp.tracks.find((t) => t.id === it.trackId);
   if (orig && groupOf(comp, orig) === "text") return "text";
   return "overlay";

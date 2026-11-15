@@ -2,9 +2,10 @@
 
 One folder per clip type. Design, decisions and the phased plan: `docs/v2/CLIP_PLUGIN_ARCHITECTURE.md`.
 
-**Status (P65, Phase 1 step 1.1):** the registry exists, but the app does not read it yet. Today's behaviour still comes
-from the `clipType` checks listed in §2 of the design doc. The later Phase 1 steps move those checks here one surface at
-a time, with no behaviour change.
+**Status (P66, Phase 1 step 1.2):** the domain predicates (`trackKindFor`, `isStill`, `canChromaKey`, `hasSound`,
+`canSetRange`, `slipKind`, …) and the export audio plan read this registry. Rendering, timeline, inspector, storyboard
+and agent tools still use the `clipType` checks listed in §2 of the design doc; steps 1.3–1.8 move them here one
+surface at a time, with no behaviour change.
 
 ```
 clipTypes/
