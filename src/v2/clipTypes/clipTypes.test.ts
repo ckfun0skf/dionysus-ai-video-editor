@@ -67,6 +67,8 @@ describe("clip type registry (P65)", () => {
     expect(variantOf({ clipType: "image", placeholder: { label: "Shot 1" } })).toBe("placeholder");
     expect(variantOf({ clipType: "image", blank: { color: "#000000" } })).toBe("blank");
     expect(variantOf({ clipType: "video", blank: { color: "#000000" } })).toBe("video");
+    // P67: both flags (never produced by the app) resolve to the placeholder, as the player always drew it.
+    expect(variantOf({ clipType: "image", blank: { color: "#000000" }, placeholder: { label: "x" } })).toBe("placeholder");
     expect(clipTypeOf({ clipType: "text" }).id).toBe("text");
     expect(clipTypeOf({ clipType: "scene" as never }).id).toBe(UNKNOWN_CLIP_TYPE);
   });

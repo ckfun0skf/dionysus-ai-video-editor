@@ -16,7 +16,7 @@ import { compositionDuration, fadeAt, findPlacement, volumeKeyAt, versionOfPlace
 import type { BlobStore } from "../ports/storage";
 import { subtitleAt } from "../domain/subtitles";
 import { loadBundledFonts } from "./fonts";
-import { drawTextClip } from "./text";
+import { clipRendererFor, type ClipDrawHost } from "./clipRenderers";
 import { effectivePlacement } from "../domain/layerStyle";
 import { applyEffectFrame, codeEffectsAt, effectFrameAt } from "./effects";
 import { trackTransitions } from "../domain/transitions";
@@ -395,20 +395,6 @@ export class Player {
       const placement = effectivePlacement(track, raw);
       if (!fxDone && track.id !== mainId && track.kind !== "audio") applyFx();
       if (this.skipIds?.has(raw.id) || this.skipIds?.has(placement.id)) continue;
-      if (placement.clipType === "text") {
-        if (ctx && canvas && !track.hidden) withBlend(ctx, placement.blend, () => this.boxes.set(placement.id, drawTextClip(ctx, placement, canvas.width, canvas.height, this.time, mix ?? 1, track)));
-        continue;
-      }
-      // P35: a storyboard shot with no clip yet: a dark slate with the shot label (preview only; export draws a dark frame).
-      if (placement.placeholder) {
-        if (ctx && canvas && !track.hidden) {
-          if (this.offline) { ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = "#000"; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.restore(); }
-          else drawPlaceholderSlate(ctx, canvas.width, canvas.height, placement.placeholder.label);
-        }
-        continue;
-      }
-      const version = placement.blank ? undefined : versionOfPlacement(this.project, placement);
-      if ((!version && !placement.blank) || track.hidden) continue;
       // Overlay-scope effects: draw the clip on a transparent layer, apply the effect there, then composite it.
       const paint = (blend: string | undefined, fn: (dc: CanvasRenderingContext2D) => void) => {
         if (!ctx || !canvas) return;
@@ -429,20 +415,22 @@ export class Player {
         lc.save(); lc.setTransform(1, 0, 0, 1, 0, 0); lc.globalAlpha = 1; lc.globalCompositeOperation = "source-over"; lc.clearRect(0, 0, canvas.width, canvas.height); lc.restore();
         try { fn(lc); } finally { applyEffectFrame(lc, canvas.width, canvas.height, fxOverlay, true); withBlend(ctx, blend, () => ctx.drawImage(lc.canvas, 0, 0)); }
       };
-      // P36: blank clip — a solid colour filling the frame, placed and faded like a photo of the frame's size.
-      if (placement.blank) {
-        if (ctx && canvas) {
-          const r = placeRect(placement, canvas.width, canvas.height, canvas.width, canvas.height, this.time);
-          this.boxes.set(placement.id, r);
-          paint(placement.blend, (dc) => drawWithLook(dc, canvas.width, canvas.height, tfx, (g) => {
-            g.save(); g.globalAlpha = r.alpha * (mix ?? 1); g.translate(r.cx, r.cy); g.rotate(r.rot);
-            this.blit(g, placement, canvas.width, canvas.height, r, sourceTicks, (gg) => { gg.fillStyle = placement.blank!.color; gg.fillRect(-r.w / 2, -r.h / 2, r.w, r.h); });
-            g.restore();
-          }));
+      // P67: clip types with a renderer module (clipTypes/<id>/render.ts: text, placeholder, blank so far) draw through it.
+      const renderer = clipRendererFor(placement);
+      if (renderer) {
+        if (ctx && canvas && !track.hidden) {
+          const host: ClipDrawHost = {
+            g: ctx, width: canvas.width, height: canvas.height, time: this.time, offline: this.offline, track, placement, sourceTicks, mix, tfx,
+            setBox: (r) => { this.boxes.set(placement.id, r); },
+            paint,
+            blit: (g, srcW, srcH, r, fn) => this.blit(g, placement, srcW, srcH, r, sourceTicks, fn),
+          };
+          renderer.draw(host);
         }
         continue;
       }
-      if (!version) continue;
+      const version = versionOfPlacement(this.project, placement);
+      if (!version || track.hidden) continue;
       if (placement.clipType === "html") {
         live.add(placement.id);
         this.htmlOverrides.set(placement.id, placement.htmlParams);
@@ -915,23 +903,5 @@ export function drawSubtitle(ctx: CanvasRenderingContext2D, w: number, h: number
   ctx.restore();
 }
 
-/** P35: preview slate for a placeholder shot: near-black frame, a thin frame line, the shot label and "Not generated". */
-export function drawPlaceholderSlate(ctx: CanvasRenderingContext2D, w: number, h: number, label: string): void {
-  ctx.save();
-  ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over"; ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.fillStyle = "#111214"; ctx.fillRect(0, 0, w, h);
-  const u = Math.max(1, Math.round(Math.min(w, h) / 360));
-  ctx.strokeStyle = "rgba(255,255,255,0.22)"; ctx.lineWidth = 2 * u; ctx.setLineDash([8 * u, 6 * u]);
-  ctx.strokeRect(w * 0.06, h * 0.08, w * 0.88, h * 0.84);
-  ctx.setLineDash([]);
-  ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  const big = Math.round(Math.min(w / 24, h / 12));
-  ctx.fillStyle = "rgba(255,255,255,0.88)"; ctx.font = `600 ${big}px system-ui, sans-serif`;
-  const max = w * 0.8;
-  let text = label;
-  while (text.length > 4 && ctx.measureText(text).width > max) text = `${text.slice(0, -2)}…`;
-  ctx.fillText(text, w / 2, h / 2 - big * 0.4);
-  ctx.fillStyle = "rgba(255,255,255,0.55)"; ctx.font = `500 ${Math.round(big * 0.55)}px system-ui, sans-serif`;
-  ctx.fillText("NOT GENERATED", w / 2, h / 2 + big * 0.75);
-  ctx.restore();
-}
+/** P35: preview slate for a placeholder shot; moved to the placeholder clip renderer in P67 (re-exported for existing imports). */
+export { drawPlaceholderSlate } from "../clipTypes/placeholder/render";

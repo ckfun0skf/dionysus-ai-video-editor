@@ -38,6 +38,8 @@ export interface ClipVariant {
   of: MediaKind;
   /** The Placement field that marks the variant (truthy = this variant). */
   field: keyof Placement;
+  /** When several variant flags are set, the highest priority wins (default 0). Placeholder outranks blank, as the player always drew it. */
+  priority?: number;
 }
 
 export interface ClipTypeCore {

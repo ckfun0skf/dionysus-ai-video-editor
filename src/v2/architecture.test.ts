@@ -12,6 +12,8 @@ const ALLOWED: Record<string, string[]> = {
   domain: ["domain", "registry", "clipTypes"],
   // Clip type cores (P65, docs/v2/CLIP_PLUGIN_ARCHITECTURE.md): pure data; `domain` only through `import type`.
   clipTypes: ["clipTypes", "domain", "registry"],
+  // P67: a clip type's renderer (clipTypes/<id>/render.ts) is render-layer code: it may use the canvas and render helpers.
+  "clipTypes/render": ["clipTypes", "domain", "registry", "render"],
   ports: ["registry", "domain", "ports"],
   engine: ["registry", "domain", "ports", "engine"],
   persistence: ["registry", "domain", "ports", "persistence"],
@@ -36,7 +38,10 @@ export function importSpecs(src: string): string[] {
   const re = /\b(?:import|export)\s+(?:type\s+)?[^"'`;]*?\bfrom\s*["']([^"']+)["']|\bimport\s*["']([^"']+)["']|\bimport\s*\(\s*["']([^"']+)["']\s*\)/g;
   return [...code.matchAll(re)].map((m) => m[1] ?? m[2] ?? m[3]);
 }
-const layerOf = (file: string) => relative(V2, file).split(/[\\/]/)[0];
+const layerOf = (file: string) => {
+  const parts = relative(V2, file).split(/[\\/]/);
+  return parts[0] === "clipTypes" && parts.length === 3 && parts[2] === "render.ts" ? "clipTypes/render" : parts[0];
+};
 
 describe("v2 architecture", () => {
   const all = files(V2).filter((f) => layerOf(f) in ALLOWED);

@@ -23,7 +23,7 @@ let variants: ClipTypeCore[] = [];
 let variantsFor = -1;
 function variantList(): ClipTypeCore[] {
   const all = CLIP_TYPES.list();
-  if (all.length !== variantsFor) { variants = all.filter((c) => c.variant); variantsFor = all.length; }
+  if (all.length !== variantsFor) { variants = all.filter((c) => c.variant).sort((a, b) => (b.variant!.priority ?? 0) - (a.variant!.priority ?? 0)); variantsFor = all.length; }
   return variants;
 }
 

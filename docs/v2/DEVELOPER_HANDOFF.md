@@ -38,7 +38,7 @@ src/v2/
   engine/        Engine (undo history; one dispatch = one undo step) and commands.ts (Command factories)
   persistence/   IndexedDB/memory stores, media import (media.ts), schema migrations, project archive
   ports/         storage interfaces (BlobStore, …)
-  clipTypes/     clip type registry (P65+): one folder per type with core.ts (trackKind, caps); domain predicates read it (P66)
+  clipTypes/     clip type registry (P65+): one folder per type with core.ts (trackKind, caps); domain predicates read it (P66); render.ts renderers (P67)
   registry/      preset registry (effects, transitions, text animations, stickers, blends, audio fx, fonts)
   presets/       one file per preset, auto-discovered (docs/v2/ADDING_EFFECTS.md)
   render/        Player (preview AND export compositor), htmlClip.ts (sandboxed HTML clip host), text, effects,
@@ -92,9 +92,9 @@ required checks.
 1. `git fetch` and branch from the latest `origin/main` (e.g. `p66-short-name`).
 2. Implement with tests. Keep PRs small (MODULE_DESIGN §14 targets < 400 changed lines; feature PRs here are often
    larger, but split refactors).
-3. **`public/doc/tasks.json`:** add one entry per PR with the next free P-number: `{ "id": "P67-SHORT-NAME", "title":
+3. **`public/doc/tasks.json`:** add one entry per PR with the next free P-number: `{ "id": "P68-SHORT-NAME", "title":
    "<what and why, one paragraph>", "status": "done", "progress": 100 }` appended after the latest entry (the latest is
-   `P66-CLIP-TYPES-DOMAIN`; the next is **P67**). Bump `updatedAt`. Edit the file surgically (insert text); do not
+   `P67-CLIP-RENDERERS-STATELESS`; the next is **P68**). Bump `updatedAt`. Edit the file surgically (insert text); do not
    re-serialise the whole JSON. `scripts/check-tasks-updated.mjs` fails a PR that changes `src/` without it. If an id
    is already taken, use the next number and say so in the PR.
 4. **AI guide rule:** append to `RULE_LIST` in `src/v2/domain/storyPrompt.ts` (append-only; numbers are positions;
@@ -110,7 +110,7 @@ required checks.
 6. Run `npm run gen:ai` after changing rules, tools or presets, and commit the regenerated files (tests fail if they are
    stale).
 7. `npx tsc -b && npx vitest run && npx vite build`.
-8. Commit in English; PR title `P67: …`; body says what, why, tests, and `Fixes #N` (or `Refs #N` if partial), plus
+8. Commit in English; PR title `P68: …`; body says what, why, tests, and `Fixes #N` (or `Refs #N` if partial), plus
    what was not verified. Push, open the PR, wait for `build` on the head SHA. Do not merge.
 
 ## 7. UI conventions
@@ -139,7 +139,7 @@ required checks.
 | `docs/v2/CLIP_PLUGIN_ARCHITECTURE.md` | clip type plugins: accepted design, decisions, Phase 1 progress |
 | `public/doc/tasks.json` | every task and its status |
 
-## 9. Recent history (P47–P66)
+## 9. Recent history (P47–P67)
 
 | Id | PR | One line |
 |---|---|---|
@@ -162,7 +162,8 @@ required checks.
 | P63 | #315 | New shots on a sent timeline go in story order and use their shared clip's version (RULE 78). |
 | P64 | #316 | Docs only: clip type plugin architecture proposal and this handoff. |
 | P65 | #317 | Clip type plugins Phase 1 step 1.1: `src/v2/clipTypes/` registry, core caps, parity test (no behaviour change). |
-| P66 | — | Step 1.2: domain predicates and export audio plan read the clip type registry (no behaviour change). |
+| P66 | #318 | Step 1.2: domain predicates and export audio plan read the clip type registry (no behaviour change). |
+| P67 | — | Step 1.3a: text, placeholder and blank renderers move to `clipTypes/<id>/render.ts`; canvas-call golden + Chrome pixel parity. |
 
 ## 10. Known unverified areas
 
@@ -192,8 +193,13 @@ change, each merged on green CI) is under way:
   (`clipRange.ts`), `slipKind` (`slip.ts`), `setVolumeKeys` (`ops.ts`), `pasteItemGroup` (`chain.ts`) and export
   `audioPlan` read `clipTypeOf(p)` / `coreOf(kind)`. `domain` and `render` may import `clipTypes`. The parity test
   also compares them with the frozen pre-P66 implementations, so it is not circular.
-- **Next, 1.3:** move the per-type draw code out of `render/player.ts` into `clipTypes/<type>/render.ts` (see the
-  design doc table); prove it with player snapshot tests and a pixel comparison at fixed times.
+- **1.3a done (P67):** `render/clipRenderers.ts` discovers `clipTypes/*/render.ts`; text, placeholder and blank draw
+  through them (`ClipDrawHost` gives them the player's `paint` / `blit`). `render/renderParity.test.ts` hashes every
+  canvas call for the fixture `src/v2/__fixtures__/renderParity.ts` against a golden recorded before the move; run
+  with `RENDER_PARITY_DUMP=<dir>` to get per-frame call logs when it fails. Only regenerate the golden
+  (`UPDATE_RENDER_GOLDEN=1`) for an intended look change, and say so in the PR.
+- **Next, 1.3b:** html, video, image and audio element sync out of `player.ts` (the stateful renderers). Check them
+  with the same golden plus a real-browser pixel comparison (see the P67 PR for the harness approach).
 
 Until Phase 1 is finished, add new behaviour the existing way and note in the PR which switch points you touched, so
 the later steps can move them.
