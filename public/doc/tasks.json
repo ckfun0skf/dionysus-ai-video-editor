@@ -3276,6 +3276,12 @@
           "title": "Docs only, no code change: docs/v2/CLIP_PLUGIN_ARCHITECTURE.md proposes clip types as plugins (ClipTypePlugin interface split into core/render/ui parts, a ClipTypeRegistry, the current hard-coded switch points with file paths, built-ins moved to src/v2/clipTypes/<type>/, unknown-type handling, Phase 1 zero-behaviour-change refactor in eight PR-sized steps, Phase 2 deterministic three.js scene clip with JSON events and auto-generated WebMCP tools, Phase 3 sandboxed third-party plugins, open questions). docs/v2/DEVELOPER_HANDOFF.md onboards a new developer bot (layout, commands, CI, PR workflow, AI-definable rule, UI conventions, forbidden files, docs index, P47-P64 history, unverified areas).",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P65-CLIP-TYPES-SKELETON",
+          "title": "Clip type plugins Phase 1 step 1.1 (no behaviour change): src/v2/clipTypes/ registry skeleton (types.ts, define.ts, registry.ts, load.ts, glob discovery in index.ts, variantOf/clipTypeOf, CLIP_TYPE_PROBLEMS) with a core.ts per built-in (video, image, audio, text, html, effect, placeholder, blank, unknown) holding trackKind and caps only; nothing in the app reads it yet. New clipTypes layer in architecture.test.ts (no DOM, domain only via import type). parity.test.ts pins every core's trackKind/caps to today's trackKindFor, isStill, hasSound, canChromaKey, needsThumb and canSetRange. CLIP_PLUGIN_ARCHITECTURE.md is Accepted with the owner's decisions recorded; DEVELOPER_HANDOFF.md and MODULE_DESIGN.md updated.",
+          "status": "done",
+          "progress": 100
         }
       ]
     }
