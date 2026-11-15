@@ -10,6 +10,7 @@ The app lives in `src/v2` and is served at the site root (a `?v2` query string f
 - [Vision](docs/v2/VISION.md)
 - [Storyboard format](docs/v2/STORYBOARD_FORMAT.md) and [HTML clip package](docs/v2/HTML_CLIP_PACKAGE.md)
 - [Adding effects](docs/v2/ADDING_EFFECTS.md) and [Deployment](docs/v2/DEPLOYMENT.md)
+- [Developer handoff](docs/v2/DEVELOPER_HANDOFF.md) and [Clip plugin architecture (proposed)](docs/v2/CLIP_PLUGIN_ARCHITECTURE.md)
 
 ## Task tracking
 
