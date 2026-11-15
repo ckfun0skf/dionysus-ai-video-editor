@@ -1,7 +1,22 @@
-# Clip type plugins — architecture proposal
+# Clip type plugins — architecture
 
-**Status: Proposed** (P64, design only; no code has changed). Written against `main` at `36c37b14` (after P63).
-Owner decisions needed: see [§9 Open questions](#9-open-questions).
+**Status: Accepted** (proposed in P64, accepted 2026-11-15; Phase 1 started in P65). Written against `main` at
+`36c37b14` (after P63). Decisions: see [§0](#0-decisions). Progress: see [§7 Phase 1](#phase-1--registry-with-zero-behaviour-change).
+
+## 0. Decisions
+
+Accepted by the owner on 2026-11-15 (the answers to the §9 open questions):
+
+| # | Question | Decision |
+|---|---|---|
+| 1 | Scene rendering | The scene clip renders **inside the existing sandboxed HTML clip host** (`render/htmlClip.ts`); no in-process WebGL path. |
+| 2 | Where scene data lives | An **asset version** (a JSON blob, versionable, works with storyboard slots and Replace), plus per-use overrides on the placement. |
+| 3 | New type ids | As this doc proposes: the type id is stored in **`Placement.clipType`** (built-ins keep their ids; the `MediaKind` union stays for built-ins and a branded `PluginClipType` string is added for others); a new type's own data lives in the optional **`Placement.plugin`** field. Older builds treat the clip as an unknown type (§6). |
+| 4 | Custom scene functions | **Declarative only** in Phase 2 (GLB animation, material, visibility, state tables); user JavaScript only with Phase 3 sandboxed plugins. |
+| 5 | Storyboard `render: "scene"` / asset type `scene` | Not decided yet; decide before Phase 2 starts. |
+| 6 | Per-object sub-tracks | **Late in Phase 2**, after the scene clip, events and WebMCP tools work. |
+| 7 | Third-party plugins | **Deferred to Phase 3**; trust and sources are decided then. |
+| 8 | Phase 1 size | The **eight small PRs** of §7, one at a time, each merged on green CI. |
 
 ## 1. Why
 
@@ -95,10 +110,12 @@ export interface ClipTypeCore<Data = unknown> {
   trackKind: TrackKind;
   /** Capabilities replace the scattered predicates (isStill, hasSound, canChromaKey, needsThumb …). */
   caps: {
-    sourceTime: boolean;      // has media time: trim/slip/speed/reverse (video, audio)
-    sound: boolean;           // volume, audio fx, spatial, export audio mix
+    sourceTime: boolean;      // has media time: trim/slip/speed/reverse (video, audio) — canSetRange
+    still: boolean;           // holds one source frame; source in stays 0 (image, text, effect) — isStill
+    sound: boolean;           // volume, audio fx, spatial, export audio mix — hasSound
     visual: boolean;          // drawn on the canvas (transform, blend, mask, chroma if `keyable`)
-    keyable?: boolean;
+    keyable: boolean;         // chroma key applies — canChromaKey
+    thumb: boolean;           // timeline thumbnail — needsThumb
     asset: "media" | "none";  // reads a project asset version (video/image/audio/html) or carries its own data (text/effect/scene)
   };
   /** JSON Schema of the type's own placement data (validated on load, import and agent edits). */
@@ -228,7 +245,8 @@ How each surface uses it:
 | AI guide | `RULE_LIST` | stays append-only and numbered; plugin rules are appended in registry order with stable keys (built-in rules keep their numbers 1–78) |
 
 The architecture test gets a `clipTypes` layer: `core.ts` may import `domain`/`registry` (no DOM), `render.ts` may also
-import `render`, `ui.tsx` may also import `ui`. `ui` keeps importing other layers through their `index.ts` barrels.
+import `render`, `ui.tsx` may also import `ui`. Since P65 the layer exists with core files only: no DOM, and `domain`
+only through `import type`, so `domain` can read the registry in step 1.2 without a runtime import cycle. `ui` keeps importing other layers through their `index.ts` barrels.
 
 ## 5. Built-ins as plugins
 
@@ -276,7 +294,7 @@ Each step is one PR with its own `tasks.json` entry, CI `build` green, and no ch
 
 | Step | PR content | Proof of "no change" |
 |---|---|---|
-| 1.1 | `src/v2/clipTypes/` skeleton: `types.ts`, `registry`, discovery, architecture-test layer rules, `README.md`; **core** modules for video, image, audio, text, html, effect, placeholder, blank, unknown with `trackKind` and `caps` only. Nothing calls them yet. | Parity test: for every built-in id, `caps`/`trackKind` equal today's `trackKindFor`, `isStill`, `hasSound`, `canChromaKey`, `needsThumb`, `canSetRange`. |
+| 1.1 ✅ P65 | `src/v2/clipTypes/` skeleton: `types.ts`, `registry`, discovery, architecture-test layer rules, `README.md`; **core** modules for video, image, audio, text, html, effect, placeholder, blank, unknown with `trackKind` and `caps` only. Nothing calls them yet. | Parity test: for every built-in id, `caps`/`trackKind` equal today's `trackKindFor`, `isStill`, `hasSound`, `canChromaKey`, `needsThumb`, `canSetRange`. Done in P65: `clipTypes/parity.test.ts`; caps gained `still` and `thumb` so every predicate has a cap. |
 | 1.2 | Domain predicates delegate to the registry (`model.ts`, `clipRange.ts`, `ops.ts`, `slip.ts`, `chain.ts`); `audioPlan` uses `caps.sound`. | Full test suite; `audioPlan` tests; parity test stays. |
 | 1.3 | Renderers: move the per-type draw code out of `player.ts` into `clipTypes/<type>/render.ts` (text → `drawTextClip`, placeholder, blank, html → `HtmlClipHost`, media elements). The player keeps the host logic and calls `load/prepare/draw`. | `player.snapshot.test.ts`, `htmlClip.test.ts`, `stability.test.ts`, export tests; a pixel comparison of a fixture project rendered before/after with `renderAt` at fixed times. |
 | 1.4 | Timeline and thumbnails: `TimelineClip.tsx`, `Timeline.tsx`, `useThumbs.ts`, `useMedia.ts` use `ui(id)`. | UI tests; screenshots at 390 and 1440 before/after. |
@@ -382,6 +400,8 @@ video/audio/text/effect. Undo stays one engine dispatch per edit. The storyboard
 `dionysus.storyboard/1` (schema 3.1), and projects stay `dionysus/3.1`.
 
 ## 9. Open questions
+
+Answered on 2026-11-15; see [§0 Decisions](#0-decisions). Kept for the record.
 
 1. **Scene rendering:** run the scene clip in the sandboxed HTML clip host (recommended: safe, export already proven)
    or in-process WebGL in the player (faster, simpler debugging, but a new export path)?

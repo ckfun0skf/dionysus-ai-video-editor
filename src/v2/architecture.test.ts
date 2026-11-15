@@ -9,6 +9,8 @@ const ALLOWED: Record<string, string[]> = {
   registry: ["registry", "presets"],
   presets: ["presets", "registry"],
   domain: ["domain", "registry"],
+  // Clip type cores (P65, docs/v2/CLIP_PLUGIN_ARCHITECTURE.md): pure data; `domain` only through `import type`.
+  clipTypes: ["clipTypes", "domain", "registry"],
   ports: ["registry", "domain", "ports"],
   engine: ["registry", "domain", "ports", "engine"],
   persistence: ["registry", "domain", "ports", "persistence"],
@@ -17,7 +19,9 @@ const ALLOWED: Record<string, string[]> = {
 };
 /** Known violations being fixed in follow-up PRs; must shrink to empty. */
 const KNOWN_VIOLATIONS = new Set<string>();
-const NO_DOM = new Set(["registry", "presets", "domain", "ports", "engine"]);
+const NO_DOM = new Set(["registry", "presets", "domain", "ports", "engine", "clipTypes"]);
+/** Matches a value (non-type) import or re-export from the domain layer, which clipTypes must not have. */
+export const VALUE_DOMAIN_IMPORT = /\b(?:import|export)\s+(?!type\b)[^"'`;]*?\bfrom\s*["'](?:\.\.\/)+domain(?:\/[^"']*)?["']/;
 
 function files(dir: string): string[] {
   return readdirSync(dir).flatMap((n) => {
@@ -42,6 +46,13 @@ describe("v2 architecture", () => {
       'export { f } from "./f";', 'import "./side";', "import './side2'", 'await import("./dyn");', '// import "./commented";',
     ].join("\n"))).toEqual(["./a", "../b", "./t", "./e", "./f", "./side", "./side2", "./dyn"]);
   });
+  it("clipTypes domain-import check allows only type imports", () => {
+    expect(VALUE_DOMAIN_IMPORT.test('import type { Placement } from "../domain/model";')).toBe(false);
+    expect(VALUE_DOMAIN_IMPORT.test('import type { Placement } from "../../domain";')).toBe(false);
+    expect(VALUE_DOMAIN_IMPORT.test('import { TEXT_SOURCE } from "../domain/model";')).toBe(true);
+    expect(VALUE_DOMAIN_IMPORT.test('import { ops } from "../../domain";')).toBe(true);
+    expect(VALUE_DOMAIN_IMPORT.test('export { x } from "../domain/model";')).toBe(true);
+  });
   for (const file of all) {
     const layer = layerOf(file);
     const name = relative(V2, file).replace(/\\/g, "/");
@@ -61,6 +72,7 @@ describe("v2 architecture", () => {
           expect(["react", "react-dom"].some((r) => spec === r || spec.startsWith(`${r}/`)), `${layer} must not import ${spec}`).toBe(false);
         }
       }
+      if (layer === "clipTypes") expect(VALUE_DOMAIN_IMPORT.test(src.replace(/\/\*[\s\S]*?\*\/|(^|[^:"'`])\/\/.*$/gm, "$1")), "clipTypes may import domain only with `import type` (no runtime cycle)").toBe(false);
       if (NO_DOM.has(layer)) expect(/\b(document|window|indexedDB|HTMLElement)\b/.test(src.replace(/\/\/.*|\/\*[\s\S]*?\*\//g, "")), `${layer} must not use DOM globals`).toBe(false);
     });
   }
