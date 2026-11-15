@@ -191,7 +191,7 @@ All registries share `createRegistry<T extends { id: string }>()` with `register
 
 | Registry | Contract (abridged) |
 |---|---|
-| `clipTypes` | `{ id, trackKinds, propsSchema, defaultDuration(src), renderLayer(ctx,t), audioNode?(ctx), inspector?: React.FC }` |
+| `clipTypes` | `{ id, trackKinds, propsSchema, defaultDuration(src), renderLayer(ctx,t), audioNode?(ctx), inspector?: React.FC }` (not built yet; detailed proposal in [CLIP_PLUGIN_ARCHITECTURE.md](CLIP_PLUGIN_ARCHITECTURE.md), P64) |
 | `trackTypes` | `{ id, accepts(clipType), renderOrder }` |
 | `effects` / `transitions` | `{ id, params, apply(gpuCtx, inputs, t) }` (stub in v2.0) |
 | `importers` / `exporters` | `{ id, accept(file|json), import(...) → Command[] }` / `{ id, export(project, opts) → Blob }` (story JSON, SRT/VTT, MP4/WebM, project zip) |

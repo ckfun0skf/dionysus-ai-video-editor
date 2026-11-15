@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "project": "Dionysus",
-  "updatedAt": "2026-11-14",
+  "updatedAt": "2026-11-15",
   "sourceOfTruth": "public/doc/tasks.json on main (see docs/v2/MODULE_DESIGN.md §14)",
   "statusDefinitions": {
     "done": "Implementation exists and has evidence; release/browser validation may still be pending.",
@@ -3268,6 +3268,12 @@
         {
           "id": "P63-STORY-ORDER-INSERT",
           "title": "New shots on a sent timeline go in story order (#314, rule 78): Update / send_to_timeline (update and relayout) insert a shot added to the board before the next shot already on the timeline, moving later main-track clips up (linked layers follow, spanning story cues move too) instead of appending it at the end; a new shot whose clip asset already has a version (re-import / part / add_shot) uses it instead of a placeholder (mergeStoryboard now links new clip shots). Send results and the WebMCP reply list inserted, appended and placeholder shots; the storyboard note says \"in story order\". Tests, docs and public/ai regenerated. Schema unchanged (dionysus/3.1).",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "P64-CLIP-PLUGIN-DESIGN",
+          "title": "Docs only, no code change: docs/v2/CLIP_PLUGIN_ARCHITECTURE.md proposes clip types as plugins (ClipTypePlugin interface split into core/render/ui parts, a ClipTypeRegistry, the current hard-coded switch points with file paths, built-ins moved to src/v2/clipTypes/<type>/, unknown-type handling, Phase 1 zero-behaviour-change refactor in eight PR-sized steps, Phase 2 deterministic three.js scene clip with JSON events and auto-generated WebMCP tools, Phase 3 sandboxed third-party plugins, open questions). docs/v2/DEVELOPER_HANDOFF.md onboards a new developer bot (layout, commands, CI, PR workflow, AI-definable rule, UI conventions, forbidden files, docs index, P47-P64 history, unverified areas).",
           "status": "done",
           "progress": 100
         }
