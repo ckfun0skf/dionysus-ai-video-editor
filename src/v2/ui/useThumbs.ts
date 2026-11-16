@@ -5,6 +5,7 @@ import { drawVideoFrame } from "./frameGrab";
 import { grabHtml } from "./htmlThumb";
 import { ticksToSeconds } from "../domain";
 import { decodeQueue, withRetry } from "./decodeQueue";
+import { assetUi } from "./clipTypeUi";
 
 const selected = (a: Asset) => a.versions.find((x) => x.id === a.selectedVersionId) ?? a.versions[0];
 
@@ -19,14 +20,15 @@ export function useThumbs(project: Project, blobs: BlobStore): Record<string, st
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   useEffect(() => {
     for (const a of Object.values(project.assets)) {
-      if (a.kind === "audio") continue;
+      const mode = assetUi(a.kind).assetThumb; // P69: per clip type (audio: none, html: rendered page, else a frame)
+      if (mode === "none") continue;
       const v = selected(a);
       const key = v && `${a.id}:${v.id}:${v.media.blobKey}`;
       if (!v || started.current.has(key)) continue;
       started.current.add(key);
       const html = (b: Blob) => grabHtml(b, project, blobs, v.media.durationTicks ? ticksToSeconds(v.media.durationTicks) : undefined);
       // P29: decode through the shared queue and retry; a blank or timed-out frame is retried, not cached as missing.
-      void withRetry(() => decodeQueue.run(async () => { const b = await blobs.get(v.media.blobKey); return b ? (a.kind === "html" ? html(b) : grab(a.kind, b)) : undefined; })).then((url) => {
+      void withRetry(() => decodeQueue.run(async () => { const b = await blobs.get(v.media.blobKey); return b ? (mode === "html" ? html(b) : grab(a.kind, b)) : undefined; })).then((url) => {
         if (alive.current && url) setCache((t) => ({ ...t, [key]: url }));
       }).catch(() => undefined);
     }

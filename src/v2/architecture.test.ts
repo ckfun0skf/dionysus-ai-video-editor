@@ -14,11 +14,14 @@ const ALLOWED: Record<string, string[]> = {
   clipTypes: ["clipTypes", "domain", "registry"],
   // P67: a clip type's renderer (clipTypes/<id>/render.ts) is render-layer code: it may use the canvas and render helpers.
   "clipTypes/render": ["clipTypes", "domain", "registry", "render"],
+  // P69: a clip type's timeline UI (clipTypes/<id>/ui.tsx) is ui-layer code: React and ui helpers allowed.
+  "clipTypes/ui": ["clipTypes", "domain", "registry", "render", "ui"],
   ports: ["registry", "domain", "ports"],
   engine: ["registry", "domain", "ports", "engine"],
   persistence: ["registry", "domain", "ports", "persistence"],
   render: ["registry", "domain", "ports", "render", "clipTypes"],
-  ui: ["domain", "ports", "engine", "persistence", "render", "registry", "ui"],
+  // P69: ui reads the clip type registry through the clipTypes/index.ts barrel (ui/clipTypeUi.tsx globs the ui.tsx modules).
+  ui: ["domain", "ports", "engine", "persistence", "render", "registry", "ui", "clipTypes"],
 };
 /** Known violations being fixed in follow-up PRs; must shrink to empty. */
 const KNOWN_VIOLATIONS = new Set<string>();
@@ -40,7 +43,9 @@ export function importSpecs(src: string): string[] {
 }
 const layerOf = (file: string) => {
   const parts = relative(V2, file).split(/[\\/]/);
-  return parts[0] === "clipTypes" && parts.length === 3 && parts[2] === "render.ts" ? "clipTypes/render" : parts[0];
+  if (parts[0] === "clipTypes" && parts.length === 3 && parts[2] === "render.ts") return "clipTypes/render";
+  if (parts[0] === "clipTypes" && parts.length === 3 && parts[2] === "ui.tsx") return "clipTypes/ui";
+  return parts[0];
 };
 
 describe("v2 architecture", () => {
