@@ -223,6 +223,12 @@ change, each merged on green CI) is under way:
   `clipType` switch in `inspectorTabs()` are gone. `ui/inspectorParity.test.tsx` snapshots the desktop inspector (each
   tab), the context menu and the phone toolbar and sheets for every clip type selected
   (`INSPECTOR_PARITY_DUMP=<dir>`; `UPDATE_INSPECTOR_GOLDEN=1` only for an intended change). Same known edge as P69.
+- **Decision recorded in P70 (owner, 2026-11-15; no behaviour change yet):** placeholder becomes a **cross-type clip
+  state**, not an `image` variant/plugin. Any clip type can be a placeholder (a slot without an asset that knows its
+  intended type, so pickers can filter assets). Player, timeline and export check `placeholder` first and use one
+  shared slate renderer before plugin lookup; plugins never handle placeholders. `blank` stays a small plugin
+  (`image` variant). No schema change. Implement it in **step 1.8** together with unknown-type handling
+  (CLIP_PLUGIN_ARCHITECTURE §0 decision 9, §5, §7 row 1.8). Until then, do not add placeholder logic to other plugins.
 - **Next, 1.6:** storyboard (slot kinds, shot editor and Send to timeline) → clip type plugins; check with the
   storyboard tests and screenshots.
 
