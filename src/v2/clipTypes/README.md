@@ -17,7 +17,8 @@ asset version holds a `dionysus.scene/1` document (`domain/scene.ts`, `docs/v2/S
 sandboxed HTML clip host (`render/scenePage.ts`, reached through `host.media.sceneHost` / `sceneDoc`), with the pure
 `stateAt(doc, t)` sent to the page every frame. Since P75 (step 2.2) it also draws GLB models from the document's
 `files` and poses their animations with `mixer.setTime` from `t` (`domain/glb.ts` reads clip and node names). Since
-P76 (step 2.3) it has its own timeline editor (`ui/SceneEditor.tsx`, pure operations in `domain/sceneEdit.ts`).
+P76 (step 2.3) it has its own timeline editor (`ui/SceneEditor.tsx`, pure operations in `domain/sceneEdit.ts`), and since
+P77 (step 2.4) its blocks are dragged and resized to retime events (`domain/sceneRetime.ts`).
 
 ```
 clipTypes/

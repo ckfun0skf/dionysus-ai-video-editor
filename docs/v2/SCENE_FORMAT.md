@@ -139,7 +139,7 @@ has one `AnimationMixer`; every frame stops all actions (the rest pose), resets 
 one's weight and its time scale to its local time, and calls `mixer.setTime(1)`, never `mixer.update(delta)`. So a
 frame depends only on the document and `t`, in preview, export and any seek order.
 
-## Editing (P76)
+## Editing (P76, P77)
 
 A scene clip has its own timeline editor: **Edit scene** in the clip's Scene tab or **Edit scene…** in its menu on
 desktop (it takes the timeline panel's place), the **Scene** tool on the phone (a full-screen sheet with the preview at
@@ -153,7 +153,17 @@ edited; renaming an object updates its events and every `lookAt` aimed at it; de
 adds one version for the editing session (later edits update it), **Replace current** overwrites the version the clip
 shows. The editor writes plain `dionysus.scene/1`; times are rounded to the millisecond.
 
+**Retiming (P77).** Drag a block to move its event (`at`); drag the selected block's start or end handle to change when
+it starts (its end stays) or its `dur`. On touch, tap a block first, then drag it or its handles (a swipe over an
+unselected block scrolls). Edges snap to the playhead, other events' starts and ends, the clip's in and out points and
+whole frames of the project; the magnet button turns snapping off (Alt flips it during a drag). Times stay inside the
+clip's range on the scene clock, or where the event already was. Drop a block on another object's track to give the
+event to that object; it is refused, with the reason shown, when that object has no such call or the arguments don't
+hold there (camera events stay on the Scene track). The preview follows the drag; releasing stores it as one edit (one
+undo step, same version rules); Esc cancels. Arrow keys move a focused block or handle by one frame (Shift: ten).
+Dragging along the ruler scrubs the playhead.
+
 ## Not yet (later Phase 2 steps)
 
-Dragging event blocks to retime and resize them in the scene editor (2.4), WebMCP tools and an AI guide rule (2.5),
-storyboard `render: "scene"` and asset type `scene` (2.6, decision 5). The step table was renumbered in P76.
+WebMCP tools and an AI guide rule (2.5), storyboard `render: "scene"` and asset type `scene` (2.6, decision 5). The
+step table was renumbered in P76.
