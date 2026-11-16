@@ -1,8 +1,9 @@
 # Clip type plugins — architecture
 
 **Status: Accepted** (proposed in P64, accepted 2026-11-15; Phase 1 started in P65 and is **done** since P73; Phase 2
-waits for open question 5). Written against `main` at
-`36c37b14` (after P63). Decisions: see [§0](#0-decisions). Progress: see [§7 Phase 1](#phase-1--registry-with-zero-behaviour-change).
+started in P74 after decision 5 was accepted, step table in [§7 Phase 2](#phase-2--deterministic-threejs-scene-clip)).
+Written against `main` at `36c37b14` (after P63). Decisions: see [§0](#0-decisions). Progress: see
+[§7 Phase 1](#phase-1--registry-with-zero-behaviour-change).
 
 ## 0. Decisions
 
@@ -14,7 +15,7 @@ Accepted by the owner on 2026-11-15 (the answers to the §9 open questions):
 | 2 | Where scene data lives | An **asset version** (a JSON blob, versionable, works with storyboard slots and Replace), plus per-use overrides on the placement. |
 | 3 | New type ids | As this doc proposes: the type id is stored in **`Placement.clipType`** (built-ins keep their ids; the `MediaKind` union stays for built-ins and a branded `PluginClipType` string is added for others); a new type's own data lives in the optional **`Placement.plugin`** field. Older builds treat the clip as an unknown type (§6). |
 | 4 | Custom scene functions | **Declarative only** in Phase 2 (GLB animation, material, visibility, state tables); user JavaScript only with Phase 3 sandboxed plugins. |
-| 5 | Storyboard `render: "scene"` / asset type `scene` | Not decided yet; decide before Phase 2 starts. |
+| 5 | Storyboard `render: "scene"` / asset type `scene` (accepted 2026-11-15, recorded in P74) | **Yes, as recommended:** a storyboard may mark a shot `render: "scene"` and use a `scene` asset type. Both are **optional values within `dionysus/3.1`** (and `dionysus.storyboard/1`); **no version bump**. Older builds reject such a storyboard on import, as with any new optional value; storyboards without them are unchanged. Implemented in step **2.5**. |
 | 6 | Per-object sub-tracks | **Late in Phase 2**, after the scene clip, events and WebMCP tools work. |
 | 7 | Third-party plugins | **Deferred to Phase 3**; trust and sources are decided then. |
 | 8 | Phase 1 size | The **eight small PRs** of §7, one at a time, each merged on green CI. |
@@ -398,7 +399,7 @@ in `Placement.plugin.data`):
   `moveTo` and `position` are the same property; `lookAt` and `rotation` are the same property.
 - **Validation.** Unknown object ids, functions, params, overlapping tweens of one property (warning), negative times,
   missing models: errors and warnings with JSON paths, like the storyboard importer.
-- **Rendering.** Two options (see Open questions). Recommended: run the scene in the existing sandboxed HTML clip host
+- **Rendering** (decision 1: the sandboxed HTML clip host). The options were: run the scene in the existing sandboxed HTML clip host
   with a built-in runtime page (three.js and GLTFLoader are already vendored in `render/htmlLibs.ts`, GLB files already
   resolve from the manifest after P55, determinism and export already work). The other option is an in-process
   WebGL canvas in the player.
@@ -406,14 +407,22 @@ in `Placement.plugin.data`):
   `list_scene_objects { clipId }` → objects, base and custom functions with param schemas, events;
   `add_scene_event { clipId, event }` (validated, one undo step); later `update_scene_event`, `remove_scene_event`,
   `set_scene_object`. Plus one AI guide rule describing the event model and the conflict rule.
-- **Storyboard.** A storyboard asset type `scene` and shot `render: "scene"` (optional values). Send uses the planned
-  `durationSec`. Older builds reject the unknown value; this needs owner approval (Open question 5).
+- **Storyboard.** A storyboard asset type `scene` and shot `render: "scene"` (optional values within schema 3.1, no
+  version bump; decision 5, accepted). Send uses the planned `durationSec`. Older builds reject the new values.
 - **Later.** Per-object sub-tracks on the timeline (like the motion-tracker lanes in `Timeline.tsx`), with draggable
   event blocks that write back to `events`.
 
-Phase 2 PRs: scene format + pure `stateAt` + validator (domain, fully unit-tested) → renderer + export parity test
-(render the same `t` twice, in different orders) → inspector (objects list, event list, params) → agent tools + rule →
-storyboard mapping → sub-tracks.
+Phase 2 is split into small PRs like Phase 1: one step per PR, its own `tasks.json` entry, CI `build` green, merged
+before the next starts. Existing clip types must not change in any step (their parity goldens stay byte-identical).
+
+| Step | PR content | Proof |
+|---|---|---|
+| 2.1 ✅ P74 | The **`scene` clip type** (`clipTypes/scene/` core, render, ui, following `ADDING_CLIP_TYPES.md`; `"scene"` added to `MediaKind`). **Document schema + validation** `domain/scene.ts` (`dionysus.scene/1`: world background / camera / lights; objects with primitive shapes and the base properties position, rotation, scale, visible, opacity, colour; declarative custom functions with typed params, `set` and `states`; events `{ at, obj, call, args, dur, ease }`; errors and warnings with JSON paths). **Pure evaluator** `stateAt(doc, t)` (stable sort, tween from the value at the event's start, last-started wins, lookAt, camera). **Rendering** in the sandboxed HTML clip host: the built-in page `render/scenePage.ts` (pinned three.js) gets `stateAt` for each frame as `ctx.inputs.scene` (`ClipMediaHost.sceneHost` / `sceneDoc`; export waits for the document). Code → **3D scene** adds a sample scene (`addSceneClip`, one undo step); read-only **Scene** inspector tab (objects, events, problems). Reference: [`SCENE_FORMAT.md`](SCENE_FORMAT.md). No WebMCP tools, AI rules or storyboard mapping yet (gen:ai unchanged). | `domain/scene.test.ts` (validation paths, set/tween/ease, conflict and tie rules, custom functions, lookAt, camera, invalid input skipped, seek in any order gives identical states, a `stateAt` golden of 151 frames); `ui/sceneClip.test.tsx` (caps, track check, save/load, renderer requests, loading and broken documents, page CSP and escaping, UI entry, scene placeholder, Scene tab, one undo step). Existing goldens (render, timeline, inspector, agent, placeholder, story mapping) unchanged. In the PR: Chrome check of the real Player: 50 frames rendered in export mode forward, in export mode shuffled, and in preview mode backwards are pixel-identical, and a real 720p MP4 export has no frame warnings. |
+| 2.2 P75 | **GLB models and animation:** model files embedded in the scene asset (a `files` map like HTML clip packages), the vendored GLTFLoader, one `AnimationMixer` per model driven by `mixer.setTime(localT)` from the latest `play` / state event (looped or clamped, cross-fades from `t`); custom functions gain `animation` (clip by param value) and child-node show/hide; missing models warn and draw a box. | Unit tests for the clip-time rules; Chrome pixel check preview vs export and seek order with a real animated GLB (closes the P55/P57 unverified area). |
+| 2.3 P76 | **Inspector editing:** objects (base properties), the event list (add, edit, delete, reorder; ease and duration), custom-function args; desktop tab and phone sheet; each edit is one undo step and writes a new asset version (or a per-use override in `Placement.plugin.data`, decision 2). | Panel tests, version / undo tests, 390 and 1440 screenshots, 44 px touch targets. |
+| 2.4 P77 | **Agent tools and rule** through `core.agent`: `list_scene_objects`, `add_scene_event`, `update_scene_event`, `remove_scene_event`, `set_scene_object` (validated with the scene validator, one undo step each) and one AI guide rule (event model and conflict rule); `get_timeline` scene fields. | Agent tests; `gen:ai` diff limited to the new tools and rule (intended). |
+| 2.5 P78 | **Storyboard** (decision 5): asset type `scene` and shot `render: "scene"` (optional values in 3.1); `core.story` for scene (Send uses the planned `durationSec`, Update, Sync); storyboard validator, `STORYBOARD_FORMAT.md` and the AI guide. | Storyboard tests; the story-mapping golden unchanged for existing slot types. |
+| 2.6 P79 | **Per-object sub-tracks** on the timeline (like the motion-tracker lanes in `Timeline.tsx`, decision 6): one lane per object under the scene clip, event blocks draggable in time and length, written back to `events` (one undo step each). | Timeline tests; 390 and 1440 screenshots. |
 
 ### Phase 3 — third-party clip types
 
