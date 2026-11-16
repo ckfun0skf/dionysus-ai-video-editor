@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 /**
  * P76 (Phase 2 step 2.3): the scene editor. Tracks and blocks come from the scene; selecting a block or a track opens
- * its form; every committed edit stores the scene as a version and is ONE undo step; "New version" makes one version
- * per editing session, "Replace current" overwrites the shown version; the preview gets the stored scene at once and
- * keeps the clip's page when only events or properties changed.
+ * its form; every committed edit is ONE step of the editor's own undo (P80: nothing is stored until Save, which
+ * replaces the current version or adds a new one as ONE project undo step); the preview shows the unsaved scene at
+ * once and keeps the clip's page when only events or properties changed.
  */
 import { describe, expect, it, vi } from "vitest";
 import { act } from "react";
@@ -14,6 +14,7 @@ import { clipRendererFor, type ClipFrameHost } from "../render/clipRenderers";
 import { SceneEditor, type SceneSel } from "./SceneEditor";
 import { ScenePanel } from "./ScenePanel";
 import { cachedSceneDoc, sceneAsset } from "./sceneAsset";
+import { memorySceneDrafts } from "./sceneDrafts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const S = 120_000;
@@ -34,9 +35,10 @@ async function open(opts: { mobile?: boolean; initialSel?: SceneSel; time?: numb
   const el = document.createElement("div"); document.body.appendChild(el);
   const root = createRoot(el);
   const primed: [string, SceneDoc][] = [];
+  const previews: [string, SceneDoc | undefined][] = [];
   const seeks: number[] = [];
   let closed = 0;
-  const draw = () => { const p = e.getState().project; root.render(<SceneEditor engine={e} project={p} placement={clip(p)} blobs={blobs as never} mobile={!!opts.mobile} time={opts.time ?? 0} playing={false} onSeek={(t) => seeks.push(t)} onTogglePlay={() => undefined} onClose={() => { closed++; }} onPrime={(k, d) => primed.push([k, d])} initialSel={opts.initialSel} />); };
+  const draw = () => { const p = e.getState().project; root.render(<SceneEditor engine={e} project={p} placement={clip(p)} blobs={blobs as never} mobile={!!opts.mobile} time={opts.time ?? 0} playing={false} onSeek={(t) => seeks.push(t)} onTogglePlay={() => undefined} onClose={() => { closed++; }} onPrime={(k, d) => primed.push([k, d])} onPreview={(k, d) => previews.push([k, d])} initialSel={opts.initialSel} drafts={memorySceneDrafts()} />); };
   const unsub = e.subscribe(draw);
   await act(async () => draw()); await settle();
   const q = <T extends Element = HTMLElement>(sel: string) => el.querySelector<T & Element>(sel) as unknown as T;
@@ -56,7 +58,11 @@ async function open(opts: { mobile?: boolean; initialSel?: SceneSel; time?: numb
   };
   const click = async (b: Element) => { await act(async () => { (b as HTMLElement).click(); }); await settle(); };
   const done = () => { unsub(); act(() => root.unmount()); el.remove(); };
-  return { e, blobs, asset, el, q, button, field, typeIn, choose, click, primed, seeks, closed: () => closed, done };
+  /** The editor's scene: the unsaved work the preview shows, else the stored scene. */
+  const work = () => previews.at(-1)?.[1] ?? shownDoc(e.getState().project);
+  const undo = () => click(button(/^Undo$/));
+  const save = async (choice: "replace" | "new") => { await click(button(/^Save$/)); await click(el.querySelector(`[data-choice="${choice}"]`)!); };
+  return { e, blobs, asset, el, q, button, field, typeIn, choose, click, primed, previews, seeks, closed: () => closed, done, work, undo, save };
 }
 
 describe("P76 scene editor", () => {
@@ -73,45 +79,57 @@ describe("P76 scene editor", () => {
     t.done();
   });
 
-  it("New version: the first edit adds one version, later edits in the session update it; each edit is one undo step", async () => {
+  it("edits stay in the editor (one step of its own undo each); Save as new version stores ONE version in ONE project undo step", async () => {
     const t = await open();
-    const v0 = t.asset.versions[0].id;
+    const v0 = t.asset.versions[0].id, p0 = t.e.getState().project;
     await t.click(t.button(/^ball\.moveTo at 0\.5s/));
     expect(t.q('[data-testid="event-form"]').textContent).toMatch(/ball\.moveTo/);
     await t.typeIn(t.field("At (s)"), "1.2");
-    let p = t.e.getState().project;
-    expect(p.assets[t.asset.id].versions).toHaveLength(2);
-    expect(shownDoc(p).events![1]).toMatchObject({ at: 1.2, call: "moveTo" });
-    expect(t.primed.at(-1)![1]).toBe(shownDoc(p));
+    expect(t.work().events![1]).toMatchObject({ at: 1.2, call: "moveTo" });
     await t.typeIn(t.field("Duration (s)"), "0.5");
     await t.choose(t.field("Ease"), "outBack");
+    let p = t.e.getState().project;
+    expect(p.assets[t.asset.id].versions).toHaveLength(1); // nothing stored yet
+    expect(p).toBe(p0); // the project is untouched (no project undo step)
+    expect(t.work().events![1]).toMatchObject({ at: 1.2, dur: 0.5, ease: "outBack" });
+    expect(t.el.querySelector(".v2-sed-ver")!.textContent).toBe("v1 · edited");
+    // The editor's undo / redo: three gestures, three steps.
+    await t.undo();
+    expect(t.work().events![1]).toMatchObject({ at: 1.2, dur: 0.5, ease: "inOutCubic" });
+    await t.click(t.button(/^Redo$/));
+    expect(t.work().events![1]).toMatchObject({ ease: "outBack" });
+    await t.save("new");
     p = t.e.getState().project;
     expect(p.assets[t.asset.id].versions).toHaveLength(2);
     expect(shownDoc(p).events![1]).toMatchObject({ at: 1.2, dur: 0.5, ease: "outBack" });
-    expect(p.settings.versionSaveMode).toBeUndefined();
-    // Three gestures, three undo steps.
-    t.e.undo(); await settle();
-    expect(shownDoc(t.e.getState().project).events![1]).toMatchObject({ at: 1.2, dur: 0.5, ease: "inOutCubic" });
-    t.e.undo(); await settle();
-    expect(shownDoc(t.e.getState().project).events![1]).toMatchObject({ at: 1.2, dur: 1.5 });
+    expect(t.primed.at(-1)![1]).toBe(shownDoc(p));
+    expect(p.settings.versionSaveMode ?? "new").toBe("new");
+    expect(t.el.querySelector(".v2-sed-ver")!.textContent).toBe("v2");
+    expect(t.el.querySelector('[role="status"]')!.textContent).toMatch(/Saved as v2/);
+    expect(t.button(/^Save$/).hasAttribute("disabled")).toBe(true);
+    // One project undo removes the save.
     t.e.undo(); await settle();
     p = t.e.getState().project;
     expect(p.assets[t.asset.id].versions.map((v) => v.id)).toEqual([v0]);
     expect(shownDoc(p)).toEqual(SAMPLE_SCENE);
-    expect(t.el.querySelector(".v2-sed-ver")!.textContent).toBe("v1");
     t.done();
   });
 
-  it("Replace current overwrites the shown version (no new version); undo puts the old scene back", async () => {
+  it("Save → Replace current overwrites the shown version (no new version); one project undo puts the old scene back", async () => {
     const t = await open({ initialSel: { kind: "object", id: "cube" } });
-    await t.click(t.button(/^Replace current$/));
     const key0 = t.asset.versions[0].media.blobKey;
     const x = t.el.querySelectorAll<HTMLInputElement>('[data-testid="object-form"] .v2-sed-vec')[0].querySelector("input")!;
     await t.typeIn(x, "-2");
+    const y = t.el.querySelectorAll<HTMLInputElement>('[data-testid="object-form"] .v2-sed-vec')[0].querySelectorAll("input")[1];
+    await t.typeIn(y, "1");
+    await t.click(t.button(/^Save$/));
+    const box = t.q('[aria-label="Save scene"]');
+    expect(box.textContent).toMatch(/Replace current.*Overwrite v1.*Save as new version.*add v2/s);
+    await t.click(box.querySelector('[data-choice="replace"]')!);
     const p = t.e.getState().project;
     expect(p.assets[t.asset.id].versions).toHaveLength(1);
     expect(p.assets[t.asset.id].versions[0].media.blobKey).not.toBe(key0);
-    expect(shownDoc(p).objects[2].position).toEqual([-2, 0.4, -0.5]);
+    expect(shownDoc(p).objects[2].position).toEqual([-2, 1, -0.5]);
     expect(p.settings.versionSaveMode).toBe("replace");
     t.e.undo(); await settle();
     expect(t.e.getState().project.assets[t.asset.id].versions[0].media.blobKey).toBe(key0);
@@ -122,31 +140,31 @@ describe("P76 scene editor", () => {
     const t = await open({ time: 1.5 * S });
     await t.click(t.button(/^Add object$/));
     await t.click([...t.el.querySelectorAll('[role="menuitem"]')].find((b) => /torus/i.test(b.textContent ?? ""))!);
-    let d = shownDoc(t.e.getState().project);
+    let d = t.work();
     expect(d.objects.at(-1)).toMatchObject({ id: "torus", shape: "torus" });
     expect(t.q('[data-testid="object-form"]').textContent).toMatch(/torus/);
     await t.click(t.button(/^Add event to torus$/));
-    d = shownDoc(t.e.getState().project);
+    d = t.work();
     expect(d.events!.at(-1)).toMatchObject({ at: 1.5, obj: "torus", call: "moveTo", dur: 1 });
     expect(t.q('[data-testid="event-form"]').textContent).toMatch(/torus\.moveTo/);
     await t.choose(t.field("Call"), "color");
-    expect(shownDoc(t.e.getState().project).events!.at(-1)).toMatchObject({ call: "color", args: { value: expect.stringMatching(/^#/) } });
+    expect(t.work().events!.at(-1)).toMatchObject({ call: "color", args: { value: expect.stringMatching(/^#/) } });
     await t.click(t.button(/^Delete$/));
-    expect(shownDoc(t.e.getState().project).events).toHaveLength(6);
+    expect(t.work().events).toHaveLength(6);
     await t.click(t.button(/^ball$/));
     await t.typeIn(t.field("Id"), "orb");
-    d = shownDoc(t.e.getState().project);
+    d = t.work();
     expect(d.objects[1].id).toBe("orb");
     expect(d.events!.filter((e) => e.obj === "orb").map((e) => e.call)).toEqual(["moveTo", "setMood"]);
     await t.click(t.button(/^Delete object$/));
-    d = shownDoc(t.e.getState().project);
+    d = t.work();
     expect(d.objects.map((o) => o.id)).toEqual(["floor", "cube", "sign", "torus"]);
     expect(t.el.querySelector('[role="status"]')!.textContent).toMatch(/Deleted “orb” and 2 events/);
-    // One version for the whole session; six undo steps (add, add event, call, delete event, rename, delete object).
-    expect(t.e.getState().project.assets[t.asset.id].versions).toHaveLength(2);
-    for (let i = 0; i < 6; i++) t.e.undo();
-    await settle();
-    expect(shownDoc(t.e.getState().project)).toEqual(SAMPLE_SCENE);
+    // Nothing stored; six steps of the editor's undo (add, add event, call, delete event, rename, delete object).
+    expect(t.e.getState().project.assets[t.asset.id].versions).toHaveLength(1);
+    for (let i = 0; i < 6; i++) await t.undo();
+    expect(t.work()).toEqual(SAMPLE_SCENE);
+    expect(t.button(/^Undo$/).hasAttribute("disabled")).toBe(true);
     t.done();
   });
 

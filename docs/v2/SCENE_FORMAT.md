@@ -139,7 +139,7 @@ has one `AnimationMixer`; every frame stops all actions (the rest pose), resets 
 one's weight and its time scale to its local time, and calls `mixer.setTime(1)`, never `mixer.update(delta)`. So a
 frame depends only on the document and `t`, in preview, export and any seek order.
 
-## Editing (P76, P77)
+## Editing (P76, P77, P80)
 
 A scene clip has its own timeline editor: **Edit scene** in the clip's Scene tab or **Edit scene…** in its menu on
 desktop (it takes the timeline panel's place), the **Scene** tool on the phone (a full-screen sheet with the preview at
@@ -149,9 +149,28 @@ a track name to edit the object's base fields (id, name, shape, size, colour, po
 opacity; for models the animation from 0 s and the parts shown) or the scene (name, `durationSec`, background, camera
 start, lights). New events take the value the object has at that time, so adding one changes nothing until it is
 edited; renaming an object updates its events and every `lookAt` aimed at it; deleting one removes its events and the
-`lookAt` events aimed at it. Each edit is one undo step and is saved as a version of the scene asset: **New version**
-adds one version for the editing session (later edits update it), **Replace current** overwrites the version the clip
-shows. The editor writes plain `dionysus.scene/1`; times are rounded to the millisecond.
+`lookAt` events aimed at it. The editor writes plain `dionysus.scene/1`; times are rounded to the millisecond.
+
+**Save and Cancel (P80).** The editor works on its own copy of the scene: each edit is one step of the editor's own
+**Undo / Redo** (in its header; Ctrl/Cmd+Z, Ctrl+Y or Shift+Ctrl/Cmd+Z), the preview shows the unsaved scene at once,
+and nothing reaches the project until **Save** (Ctrl/Cmd+S). Save asks how to keep it: **Replace current** overwrites
+the version the clip shows (other clips showing it change too) or **Save as new version** adds one and points the clip
+at it; the choice used last is the default and is remembered for the project. A save is **one** project undo step.
+**Cancel**, the **X** or **Esc** close the editor; with unsaved changes they ask first (**Discard** throws them away).
+Unsaved work is kept as a **draft on this device** (IndexedDB `dionysus-scene-drafts`, one per project and clip, with
+the version it was made from), written shortly after each edit and at once when the page is hidden or closed. When the
+editor opens and finds a draft that differs from the scene, it offers **Restore** or **Discard draft**; a draft made
+from another version (the clip shows another one now, or that version was replaced) says so and can only be saved as
+a new version. If the clip's scene changes from outside while the editor has unsaved changes (an AI agent's edit, the
+version picker, a project undo), a banner says so: the unsaved work is kept and Save can only add a new version, or
+**Load the new scene** drops it and shows the new one. Without unsaved changes the editor simply follows the clip.
+
+**Phone layout (P80).** Like the main timeline: the header has the X (Cancel), Undo / Redo and Save; the preview is
+at the top and the tracks below it; a bottom toolbar (44 px targets, line icons) holds the actions for the selection,
+and a section opens in a bottom sheet: the scene (Add object, Scene, Camera, Lights), an object (Properties, Animation
+for models, Add event, Delete) or an event (Timing, Values, Go to, Duplicate, Delete), with Back to return to the
+scene. Esc closes an open sheet first. On desktop the side panel shows the whole form, with Cancel and Save in the
+header.
 
 **Retiming (P77).** Drag a block to move its event (`at`); drag the selected block's start or end handle to change when
 it starts (its end stays) or its `dur`. On touch, tap a block first, then drag it or its handles (a swipe over an
@@ -160,7 +179,7 @@ whole frames of the project; the magnet button turns snapping off (Alt flips it 
 clip's range on the scene clock, or where the event already was. Drop a block on another object's track to give the
 event to that object; it is refused, with the reason shown, when that object has no such call or the arguments don't
 hold there (camera events stay on the Scene track). The preview follows the drag; releasing stores it as one edit (one
-undo step, same version rules); Esc cancels. Arrow keys move a focused block or handle by one frame (Shift: ten).
+step of the editor's undo; since P80 nothing is stored until Save); Esc cancels. Arrow keys move a focused block or handle by one frame (Shift: ten).
 Dragging along the ruler scrubs the playhead.
 
 ## Agent tools (P78)
@@ -190,7 +209,7 @@ lists the valid objects, calls or arguments. Each edit (or batch) is one undo st
 **Saving (P79: no version per call).** Edits are saved under the version-save rules (`mode`: `new` or `replace`; an
 explicit mode is remembered for the project):
 
-- **`new` (the default)** works like the scene editor's session. The agent's first edit of a clip adds a new version
+- **`new` (the default)** is an editing session. The agent's first edit of a clip adds a new version
   (`create_scene_clip` counts as the first: its version is the session's); later edits of the **same clip** update
   that version in place, each still its own undo step. The session ends, so the next edit adds a version again, when
   the agent edits another scene clip, passes `newVersion: true` (e.g. to keep a checkpoint before a big change), the

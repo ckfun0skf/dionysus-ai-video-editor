@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "project": "Dionysus",
-  "updatedAt": "2026-11-15",
+  "updatedAt": "2026-11-16",
   "sourceOfTruth": "public/doc/tasks.json on main (see docs/v2/MODULE_DESIGN.md §14)",
   "statusDefinitions": {
     "done": "Implementation exists and has evidence; release/browser validation may still be pending.",
@@ -3364,6 +3364,12 @@
         {
           "id": "P79-STORYBOARD-SCENE",
           "title": "Clip type plugins Phase 2 step 2.6, the last Phase 2 step (docs/v2/CLIP_PLUGIN_ARCHITECTURE.md section 7, decision 5): storyboard asset type \"scene\" and shot render \"scene\" as optional values within dionysus/3.1. The storyboard validator accepts them (a render scene shot's clip must be a scene asset; an optional inline scene on a scene asset is checked with the scene validator); Send to timeline, Update and Re-lay place scene clips, or a placeholder whose intended type is scene while the scene has no version (core.story.shotRender); Sync to Storyboard maps main-track scene clips back to render scene shots; attach_asset_version(s) accept scenes (JSON text, a scene object or a .json URL) and import_storyboard and the Import screen store inline scenes as versions in the same undo step; the storyboard UI shows the 3D scene render with the Box icon. Also two P78 gaps, so agents don't create one version per call: in mode new the agent's edits of one scene clip coalesce into one session version (a new version on the first edit, later edits update it until another scene clip is edited, newVersion true, the clip shows another version or 10 minutes pass), and the batch tool apply_scene_edits runs a list of edits as one undo step and one version (all or nothing); add_scene_object and set_scene_object take a GLB from an https, localhost or same-site URL with the attach_asset_version fetch rules. AI guide rules 9 and 79 extended (no renumbering), SCENE_FORMAT.md, STORYBOARD_FORMAT.md, the design doc (Phase 2 complete) and the developer handoff (next phase and known limits) updated; gen:ai regenerated.",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "P80-SCENE-EDITOR-SAVE",
+          "title": "Scene editor Save / Cancel and phone layout (owner feedback after Phase 2, items 1 and 2; docs/v2/SCENE_FORMAT.md Editing): the scene editor works on its own copy of the scene with its own undo / redo instead of storing a version and a project undo step per edit; the header has Save (Ctrl/Cmd+S), which asks Replace current or Save as new version (one project undo step, the last choice first) and Cancel / X / Esc, which ask before discarding unsaved changes; unsaved work is autosaved as a draft on the device (IndexedDB dionysus-scene-drafts, per project and clip, with the version it was made from) and offered back with Restore / Discard draft the next time the editor opens (a draft from another version can only be saved as a new version); a change from outside while editing (an AI agent, the version picker, undo) shows a banner and Save then adds a new version; on the phone the layout follows the main timeline: header Save, the tracks, and a bottom context toolbar (44 px, line icons) for the scene, the selected object or event whose buttons open the form sections in bottom sheets; desktop keeps the side panel. Tests: ui/sceneEditorSave.test.tsx; the P76 / P77 editor tests rewritten for the editor's undo and Save.",
           "status": "done",
           "progress": 100
         }

@@ -1730,13 +1730,11 @@ select.v2-tp-field { -webkit-appearance: none; appearance: none; padding-right: 
 .v2-scene-editor.is-desk { flex: 1; height: 100%; }
 .v2-scene-editor.is-phone { position: fixed; inset: 0; z-index: 70; height: 100dvh; padding-bottom: env(safe-area-inset-bottom); }
 .v2-sed-head, .v2-sed-bar { flex: none; display: flex; align-items: center; gap: 6px; padding: 0 8px; min-height: 48px; border-bottom: 1px solid var(--line); }
+.v2-scene-editor:focus { outline: none; }
 .v2-sed-head { flex-wrap: wrap; }
 .v2-sed-title { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40%; }
 .v2-sed-ver { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .v2-app .v2-scene-editor button.v2-icon { min-width: 44px; min-height: 44px; display: inline-grid; place-items: center; }
-.v2-sed-mode { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-.v2-sed-mode button { min-height: 44px; padding: 0 12px; border: none; background: none; color: var(--muted); font: 13px/1 system-ui; }
-.v2-sed-mode button.is-on { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--text); }
 .v2-sed-time { font-variant-numeric: tabular-nums; font-size: 13px; color: var(--muted); }
 .v2-sed-errs { display: inline-flex; align-items: center; gap: 4px; color: #ff8a7a; font-size: 13px; }
 .v2-app .v2-scene-editor button.v2-btn { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 12px; }
@@ -1810,9 +1808,31 @@ select.v2-tp-field { -webkit-appearance: none; appearance: none; padding-right: 
 .v2-app .v2-scene-editor .v2-btn.v2-sed-danger { color: #ff8a7a; }
 .v2-sed-mirror { flex: none; display: flex; justify-content: center; background: #000; height: 26dvh; }
 .v2-sed-mirror canvas { height: 100%; width: auto; max-width: 100%; object-fit: contain; }
-/* Phone: tracks over the form, both scroll; the header wraps the save mode onto its own row. */
-.v2-scene-editor.is-phone .v2-sed-body { grid-template-columns: 1fr; grid-template-rows: minmax(140px, 38%) minmax(0, 1fr); }
-.v2-scene-editor.is-phone .v2-sed-panel { border-left: none; border-top: 1px solid var(--line); }
-.v2-scene-editor.is-phone .v2-sed-mode { order: 10; flex: 1 0 100%; margin-bottom: 6px; }
-.v2-scene-editor.is-phone .v2-sed-mode button { flex: 1; }
-.v2-scene-editor.is-phone .v2-sed-title { max-width: 46%; }
+/* P80: Save / Cancel in the header, the external-change banner and the Save / restore choices. */
+.v2-sed-head { flex-wrap: nowrap; }
+.v2-app .v2-scene-editor button.v2-btn.v2-sed-save { flex: none; }
+.v2-app .v2-scene-editor button.v2-btn.v2-sed-save:disabled { opacity: .45; }
+.v2-sed-banner { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; padding: 6px 10px; font-size: 13px; background: #ffd27a1a; border-bottom: 1px solid #ffd27a55; color: var(--text); }
+.v2-sed-banner span { flex: 1 1 220px; }
+.v2-sed-choices { display: grid; gap: 8px; max-width: 420px; }
+.v2-sed-choice { display: grid; gap: 4px; text-align: left; min-height: 56px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: #ffffff08; color: var(--text); font: 13px/1.35 system-ui; cursor: pointer; }
+.v2-sed-choice b { font-size: 14px; }
+.v2-sed-choice span { color: var(--muted); }
+.v2-sed-choice:hover:not(:disabled), .v2-sed-choice:focus-visible { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); outline: none; }
+.v2-sed-choice:disabled { opacity: .45; cursor: not-allowed; }
+/* Phone: header, preview, transport, tracks; the context toolbar at the bottom opens a section in a sheet. */
+.v2-scene-editor.is-phone .v2-sed-body { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr); }
+.v2-scene-editor.is-phone .v2-sed-title { max-width: 38%; }
+.v2-scene-editor.is-phone .v2-sed-head { gap: 2px; padding: 0 4px; }
+.v2-sed-note { flex: none; margin: 0; padding: 4px 12px; border-top: 1px solid var(--line); }
+/* P80: the editor's context toolbar has a fixed height so its sheets open above it and its tools stay in reach. */
+.v2-sed-ctx { height: 66px; box-sizing: border-box; padding-bottom: 6px; }
+.v2-sed-ctx .v2-tool { width: auto; min-width: 64px; min-height: 48px; padding: 6px 8px; flex-direction: column; justify-content: center; gap: 2px; color: var(--text); font-size: 11px; }
+.v2-sed-ctx .v2-tool span { max-width: none; }
+.v2-scene-editor.is-phone .v2-sheet-backdrop { bottom: calc(66px + env(safe-area-inset-bottom)); }
+.v2-scene-editor.is-phone .v2-sheet { padding-bottom: 16px; border-bottom: 1px solid var(--line); }
+.v2-sed-ctx .v2-tool.is-on { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.v2-sed-ctx .v2-tool.v2-sed-danger, .v2-sed-ctx .v2-tool.v2-sed-danger b { color: #ff8a7a; }
+.v2-sed-ctx .v2-tool-back { min-width: 44px; }
+.v2-sed-sheet .v2-sed-addmenu { position: static; min-width: 0; border: none; padding: 0; background: none; box-shadow: none; }
+.v2-sed-sheet .v2-sed-form { padding: 0 4px 12px; }
