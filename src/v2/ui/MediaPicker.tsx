@@ -37,7 +37,7 @@ const fmtDur = (ticks?: number) => { if (!ticks) return ""; const s = Math.round
  * has Upload (from the device) and the project's own media of that kind (thumbnails, durations); Code also has Create
  * (a new clip in the Code Editor). Multi-select across tabs, numbered in pick order, then Add.
  */
-export function MediaPicker({ title, onAdd, onClose, media = [], only, initialTab, onCreateCode, onCreateAudio, loadMedia, onAddFromVideo, onTimeline, probeAudio, onUploadVideo, onDiscardVideo, onAddBlank, onCreateAudioAi, lead, confirmLabel = "Add" }: {
+export function MediaPicker({ title, onAdd, onClose, media = [], only, initialTab, onCreateCode, onCreateScene, onCreateAudio, loadMedia, onAddFromVideo, onTimeline, probeAudio, onUploadVideo, onDiscardVideo, onAddBlank, onCreateAudioAi, lead, confirmLabel = "Add" }: {
   title: string; onAdd: (p: Picked) => void; onClose: () => void; media?: ProjectMedia[];
   /** Shown under the title (insert-after explains the ripple). */ lead?: string;
   /** Footer button. Defaults to "Add". */ confirmLabel?: string;
@@ -45,6 +45,7 @@ export function MediaPicker({ title, onAdd, onClose, media = [], only, initialTa
   /** P36: Photos → Blank clip (a solid colour), added where this picker adds. */ onAddBlank?: (color: string) => void;
   /** P36: Audio → Create with AI. */ onCreateAudioAi?: () => void;
   /** Code → Create: open the Code Editor on a new clip (the picker closes). */ onCreateCode?: () => void;
+  /** P74: Code → 3D scene: add a sample 3D scene clip at the playhead (the picker closes). */ onCreateScene?: () => void;
   /** Audio → Create audio: open the Audio editor on a new clip (the picker closes). */ onCreateAudio?: () => void;
   /** P2C (item 7): the file of a project asset, for its playable preview (no preview button without it). */
   loadMedia?: (assetId: string) => Promise<Blob | undefined>;
@@ -137,6 +138,12 @@ export function MediaPicker({ title, onAdd, onClose, media = [], only, initialTa
                 <button className="v2-pick-action is-create" onClick={onCreateCode}>
                   <span className="v2-pick-action-ic"><Ic g="＋" size={22} /></span>
                   <span><b>Create</b><small>Write a canvas clip in the Code Editor</small></span>
+                </button>
+              )}
+              {tab === "code" && onCreateScene && (
+                <button className="v2-pick-action is-create" onClick={onCreateScene}>
+                  <span className="v2-pick-action-ic"><Ic g="scene" size={22} /></span>
+                  <span><b>3D scene</b><small>Objects, camera and timed events, rendered with three.js</small></span>
                 </button>
               )}
               {tab === "audio" && onCreateAudio && (

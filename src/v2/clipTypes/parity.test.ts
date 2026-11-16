@@ -28,7 +28,9 @@ function fixture(): { project: Project; clips: Record<string, Placement> } {
   for (const k of KINDS) clips[k] = base(k, k, k !== "text" && k !== "effect");
   clips.placeholder = { ...base("placeholder", "image", false), placeholder: { label: "Shot 1" } };
   clips.blank = { ...base("blank", "image", false), blank: { color: "#112233" } };
-  clips.unknown = base("unknown", "scene" as MediaKind, true);
+  clips.unknown = base("unknown", "hologram" as MediaKind, true);
+  // P74: the first Phase 2 type (it has no pre-P66 behaviour, so the P66 comparison below leaves it out).
+  clips.scene = base("scene", "scene", true);
   return { project, clips };
 }
 
@@ -49,7 +51,8 @@ describe("clip type parity with today's predicates (P65)", () => {
       // Drawn as a picture: everything on a video or text track.
       expect(core.caps.visual).toBe(core.trackKind === "video" || core.trackKind === "text");
       // Reads an asset version: the importable kinds (mediaKindOf), never a variant (TEXT_SOURCE) or an unknown id.
-      const importable = MEDIA_FILES.some((f) => mediaKindOf(f) === core.id);
+      // P74: a scene reads an asset version (its JSON document) but is made in the editor, not imported from a file.
+      const importable = MEDIA_FILES.some((f) => mediaKindOf(f) === core.id) || core.id === "scene";
       expect(core.caps.asset).toBe(importable ? "media" : "none");
     });
   }
@@ -74,13 +77,13 @@ const LEGACY = {
 describe("delegating predicates equal the pre-P66 code (P66)", () => {
   const { project, clips } = fixture();
   const shapes: Placement[] = [];
-  for (const p of Object.values(clips)) {
+  for (const p of Object.values(clips).filter((c) => c.clipType !== "scene")) {
     shapes.push(p, { ...p, freeze: true }, { ...p, reverse: true }, { ...p, speed: 2 }, { ...p, linkedAudio: { muted: true } });
     // Same clip without a known media length (canSetRange needs one).
     shapes.push({ ...p, source: TEXT_SOURCE });
   }
   it("trackKindFor for every MediaKind and an unknown id", () => {
-    for (const k of [...KINDS, "scene", "unknown", ""]) expect(trackKindFor(k as MediaKind), k).toBe(LEGACY.trackKindFor(k));
+    for (const k of [...KINDS, "hologram", "unknown", ""]) expect(trackKindFor(k as MediaKind), k).toBe(LEGACY.trackKindFor(k));
   });
   it(`isStill, canChromaKey, hasSound, canSetRange, sourceSpan, slipKind (${shapes.length} clip shapes)`, () => {
     for (const p of shapes) {

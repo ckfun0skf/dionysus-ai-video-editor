@@ -21,7 +21,7 @@ export type WaveKind = "audio" | "video";
 
 /** Inspector tabs the host can show (P70). Optional ones appear only when they apply: `speed` (speed, time tools or
  * in point available), `transition` (the clip starts a cut). `label` renames a tab (text shows Basic as "Transform"). */
-export type InspectorTabId = "basic" | "speed" | "audio" | "chroma" | "transition" | "text" | "effect" | "params" | "colour" | "unknown";
+export type InspectorTabId = "basic" | "speed" | "audio" | "chroma" | "transition" | "text" | "effect" | "params" | "colour" | "unknown" | "scene";
 export type InspectorTabRef = InspectorTabId | { id: InspectorTabId; label: string };
 /** Buttons in the desktop inspector header (P70); `edit-all` only for a clip on a styled text layer. */
 export type InspectorActionId = "edit-all" | "caption-style" | "subtitles" | "edit-code";

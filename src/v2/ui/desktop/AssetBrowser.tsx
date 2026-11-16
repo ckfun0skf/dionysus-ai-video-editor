@@ -40,6 +40,8 @@ export interface BrowserActions {
   onAddTransition: () => void;
   /** Code → Create: open the Code Editor on a new clip. */
   onCreateCode: () => void;
+  /** P74: Code → 3D scene: add a sample 3D scene clip at the playhead. */
+  onCreateScene?: () => void;
   /** Audio → Create audio: open the Audio editor on a new clip. */
   onCreateAudio?: () => void;
   /** P18: Audio → From video: open Add audio on its From Video tab. */
@@ -79,7 +81,7 @@ export function AssetBrowser({ project, thumbs, busy, tab, onTab, ...a }: Browse
             <li key={x.id} className={`v2-tile kind-${x.kind}`} draggable onDragStart={(e) => { e.dataTransfer.setData(ASSET_MIME, x.id); e.dataTransfer.effectAllowed = "copy"; }}>
               <button className="v2-tile-main" title={`${x.name} — click to add to the end of the timeline, or drag onto a track`} aria-label={`Add ${x.name} to timeline`} onClick={() => a.onAddAsset(x)}>
                 <span className="v2-tile-thumb" style={thumbs[x.id] ? { backgroundImage: `url(${thumbs[x.id]})` } : undefined}>
-                  {!thumbs[x.id] && <Ic g={x.kind === "audio" ? "♫" : x.kind === "html" ? "</>" : x.kind === "image" ? "image" : "▭"} size={22} />}
+                  {!thumbs[x.id] && <Ic g={x.kind === "audio" ? "♫" : x.kind === "html" ? "</>" : x.kind === "image" ? "image" : x.kind === "scene" ? "scene" : "▭"} size={22} />}
                   {d ? <em className="v2-tile-dur">{formatTimecode(d, fps).slice(0, 5)}</em> : null}
                   <span className="v2-tile-add" aria-hidden><Ic g="＋" size={16} /></span>
                 </span>
@@ -118,10 +120,12 @@ export function AssetBrowser({ project, thumbs, busy, tab, onTab, ...a }: Browse
           <div className="v2-codeactions">
             <button className="v2-btn" title="Upload an .html, .htm or .dionysus-html.zip clip" onClick={() => a.onImport(HTML_IMPORT_ACCEPT)}><Ic g="⇪" size={16} /> Upload</button>
             <button className="v2-btn primary" title="Write a new canvas clip in the Code Editor" onClick={a.onCreateCode}><Ic g="＋" size={16} /> Create</button>
+            {a.onCreateScene && <button className="v2-btn" title="Add a 3D scene clip at the playhead: objects, camera and timed events as JSON, rendered with three.js" onClick={a.onCreateScene}><Ic g="scene" size={16} /> 3D scene</button>}
           </div>
           {busy > 0 && <p className="v2-hint" role="status">Importing {busy}…</p>}
           {of("html").length ? assetGrid(of("html"), { icon: "</>", title: "Code clips", body: "", cta: "" }) : <p className="v2-abnote">No code clips yet. Create one (a canvas script with params), or upload an .html clip.</p>}
           <p className="v2-abnote">Code clips draw on a canvas from JavaScript; select one on the timeline and choose Edit code in the inspector.</p>
+          {of("scene").length > 0 && <><div className="v2-abhead"><strong>3D scenes</strong></div>{assetGrid(of("scene"), { icon: "scene", title: "3D scenes", body: "", cta: "" })}</>}
         </>}
         {tab === "audio" && <>
           <div className="v2-abhead"><strong>Music & sounds</strong></div>
