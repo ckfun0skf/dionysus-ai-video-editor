@@ -49,7 +49,7 @@ This is close to the scene a new clip starts with (Code → **3D scene**).
 | `durationSec` | number > 0 | suggested clip length when the scene is added (the clip length is free, like a code clip) |
 | `world.background` | `"#rrggbb"` | default `#101018` |
 | `world.camera` | `{ fov, position, lookAt }` | degrees 1–179 (default 40), `[x, y, z]` (default `[0, 1.6, 6]`), `[x, y, z]` (default `[0, 1, 0]`) |
-| `world.lights[]` | `{ type, color, intensity, position }` | `type`: `ambient`, `hemisphere`, `directional`, `point`; no lights = a hemisphere and a directional light |
+| `world.lights[]` | `{ id?, type, color, intensity, position }` | `type`: `ambient`, `hemisphere`, `directional`, `point`; no lights = a hemisphere and a directional light. `id` (optional, P81b) names a light: letters, digits, `_`, `-`, unique among objects and lights, not `camera`. Lights are static: no events animate them (an event naming a light is an error) |
 | `objects[]` | object | see below |
 | `events[]` | `{ at, obj, call, args, dur, ease }` | see below |
 | `files` | `{ "<name>": "data:…" }` | embedded files (P75): GLB models as data: URLs, stored in the scene asset's version like an HTML clip package |
@@ -139,15 +139,17 @@ has one `AnimationMixer`; every frame stops all actions (the rest pose), resets 
 one's weight and its time scale to its local time, and calls `mixer.setTime(1)`, never `mixer.update(delta)`. So a
 frame depends only on the document and `t`, in preview, export and any seek order.
 
-## Editing (P76, P77, P80, P81a)
+## Editing (P76, P77, P80, P81a, P81b)
 
 A scene clip has its own timeline editor: **Edit scene** in the clip's Scene tab or **Edit scene…** in its menu on
 desktop (it takes the timeline panel's place), the **Scene** tool on the phone (a full-screen sheet with the preview at
-the top). The scene/camera track comes first, then one track per object; each event is a block labelled with its call
-(blocks that overlap in time stack in rows). Select a block to edit its call, `at`, `dur`, `ease` and arguments; select
-a track name to edit the object's base fields (id, name, shape, size, colour, position, rotation, scale, visible,
-opacity; for models the animation from 0 s and the parts shown) or the scene (name, `durationSec`, background, camera
-start, lights). New events take the value the object has at that time, so adding one changes nothing until it is
+the top). The tracks (P81b): **Scene** (scene-wide settings only, no events), **Camera** (the camera's moves), one track
+per object, then one per light (lights are static, so their tracks never hold events); each event is a block labelled
+with its call (blocks that overlap in time stack in rows). Select a block to edit its call, `at`, `dur`, `ease` and
+arguments; select a track name to edit the object's base fields (id, name, shape, size, colour, position, rotation,
+scale, visible, opacity; for models the animation from 0 s and the parts shown), the scene (name, `durationSec`,
+background, the list of lights and Add light), the camera (field of view, position and look-at point at 0 s, and
+adding a camera move) or a light (optional id, type, colour, intensity, position). New events take the value the object has at that time, so adding one changes nothing until it is
 edited; renaming an object updates its events and every `lookAt` aimed at it; deleting one removes its events and the
 `lookAt` events aimed at it. The editor writes plain `dionysus.scene/1`; times are rounded to the millisecond.
 
@@ -167,9 +169,10 @@ version picker, a project undo), a banner says so: the unsaved work is kept and 
 
 **Phone layout (P80).** Like the main timeline: the header has the X (Cancel), Undo / Redo and Save; the preview is
 at the top and the tracks below it; a bottom toolbar (44 px targets, line icons) holds the actions for the selection,
-and a section opens in a bottom sheet: the scene (Add object, Scene, Camera, Lights), an object (Properties, Animation
-for models, Add event, Delete) or an event (Timing, Values, Go to, Duplicate, Delete), with Back to return to the
-scene. Esc closes an open sheet first. On desktop the side panel shows the whole form, with Cancel and Save in the
+and a section opens in a bottom sheet: the scene (Add object, Scene, Camera, Lights), the camera (Start, Add event, and
+Move / Aim, which open the Edit view on its position or its look-at point), a light (Light, Move for directional and
+point lights, Delete), an object (Properties, Animation for models, Add event, Delete) or an event (Timing, Values, Go
+to, Duplicate, Delete), with Back to return to the scene. Esc closes an open sheet first. On desktop the side panel shows the whole form, with Cancel and Save in the
 header.
 
 **Retiming (P77).** Drag a block to move its event (`at`); drag the selected block's start or end handle to change when
@@ -178,13 +181,14 @@ unselected block scrolls). Edges snap to the playhead, other events' starts and 
 whole frames of the project; the magnet button turns snapping off (Alt flips it during a drag). Times stay inside the
 clip's range on the scene clock, or where the event already was. Drop a block on another object's track to give the
 event to that object; it is refused, with the reason shown, when that object has no such call or the arguments don't
-hold there (camera events stay on the Scene track). The preview follows the drag; releasing stores it as one edit (one
+hold there (camera events stay on the Camera track; the Scene and light tracks take no events). The preview follows the drag; releasing stores it as one edit (one
 step of the editor's undo; since P80 nothing is stored until Save); Esc cancels. Arrow keys move a focused block or handle by one frame (Shift: ten).
 Dragging along the ruler scrubs the playhead.
 
 **Edit view (P81a).** The editor's toolbar switches the preview between **Camera view** (the shot as the clip renders
 and exports it; "Shot" on the phone) and **Edit view**: the same scene page, in a second sandboxed frame, in editor
-mode, with a free orbit camera (it starts a step back from the scene camera; **Reset view** returns there), a ground
+mode, with a free orbit camera (since P81b it starts above and to one side of the scene camera, framing the camera and
+what it looks at; **Reset view** returns there), a ground
 grid and move / rotate / scale gizmos. On desktop it is drawn over the program preview; on the phone it takes the
 mirrored preview's place and is taller. Click or tap an object to select it (empty space selects the scene). Mouse:
 drag to orbit, right-drag to pan, wheel to zoom. Touch: one finger on a gizmo handle drags it, elsewhere it orbits;
@@ -200,9 +204,21 @@ editor's undo, and nothing is stored until Save. It writes in exactly one place:
   or a new tween is added from the end of the previous one (or from 0 s) to the playhead (an instant event at 0 s);
 - else the object's own start value (`position`, `rotation`, `scale`; a uniform scale is written as one number).
 
-Values are rounded to 1/1000 and Esc cancels a drag. The camera and lights are not objects in the Edit view yet
-(P81b). The view's page is built from the same scene as the clip's page (only the frame part differs) and is never used
-for export.
+Values are rounded to 1/1000 and Esc cancels a drag. A rotation keeps whole turns: the gizmo reads angles back in
+(−180°, 180°], so each one is put next to the angle the drag started from (a 15° turn from 360° is written as 375°,
+not 15°). The view's page is built from the same scene as the clip's page (only the frame part differs) and is never
+used for export.
+
+**The camera and lights in the Edit view (P81b).** The scene camera is drawn as a small camera with its frustum (the
+clip's aspect, out to its look-at distance) and a yellow look-at point joined to it by a dashed line; each directional
+and point light is a handle with its three.js helper (ambient and hemisphere lights light from everywhere, so they have
+no handle: select them on their track). Tap the camera, its look-at point or a light handle to select it; selecting the
+camera from its track, the chips **Move camera** / **Move look-at point** choose which one the gizmo moves. They only
+move (no rotate or scale). A drag of the camera follows the rules above with the camera's calls: the selected camera
+`moveTo` / `position` event (or `lookAt` for the look-at point; an object target becomes a point), else with Auto-key a
+camera key ending at the playhead, else `world.camera.position` / `world.camera.lookAt`. A light's drag always sets its
+`position` (lights don't animate; a scene on the default lights gets them written out first). A light's colour,
+intensity and position are sent with the state, so moving one does not rebuild the view's page.
 
 ## Agent tools (P78)
 
@@ -213,7 +229,7 @@ the schemas) and AI guide RULE 79:
 |---|---|
 | `create_scene_clip` | Adds a scene clip on the main track (at `atSec`, or after the last clip) from a scene object / JSON text, or an empty scene. |
 | `get_scene` | The clip's scene (embedded files shortened), its version, clip range and problems. |
-| `list_scene_objects` | Objects with the calls each takes (base, model, own functions) and their arguments; the camera's calls; events by index. |
+| `list_scene_objects` | Objects with the calls each takes (base, model, own functions) and their arguments; the camera's start values and calls; the lights (index, optional id; `defaultLights` when the scene sets none); events by index. |
 | `add_scene_object` | A shape, a `.glb` file (`{ name, dataUrl }`, or since P79 `{ url, name? }`) or a model already in `files`; `id`, `size` and other fields. |
 | `set_scene_object` | Rename (references follow) or set fields (`null` removes one; `functions` replaces the map); since P79 `file` makes the object that model. |
 | `remove_scene_object` | Removes an object and its events. |
@@ -222,6 +238,7 @@ the schemas) and AI guide RULE 79:
 | `retime_scene_event` | Moves an event (`at` or `shiftSec`) and / or changes `dur`. |
 | `remove_scene_event` | Removes an event by index. |
 | `set_scene_world` | Name, planned length, background, camera start and lights (`null` = the defaults). |
+| `set_scene_light` (P81b) | One light by `id` or index: `id` (`null` removes it), `type`, `color`, `intensity`, `position`; omit `light` to add one, `remove: true` to delete it. |
 | `apply_scene_edits` (P79) | A list of the edits above (`{ tool, …its fields }`, at most 200) applied in order as **one** undo step and one save. All or nothing: if one is refused nothing changes and the error names it (`edits[2] (add_scene_event): …`). |
 
 Every edit is checked with the validator: one that would add an error is refused and changes nothing, and the message

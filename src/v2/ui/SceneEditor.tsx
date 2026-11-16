@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import {
   addSceneEvent, addSceneLight, moveEventProblem, moveSceneEventTo, retimeSceneEvent, sceneSnapTargets, addSceneModel, addSceneObject, callTweens, clipVersion, duplicateSceneEvent, isVec3, modelAnimations, modelNodes,
   applyGizmo, gizmoModeOfProp, gizmoPropOfCall, gizmoTargetLabel, gizmoViewTime, stateAt, type GizmoValue, type SceneState,
+  GIZMO_CAMERA_TARGET, gizmoLightId, gizmoLightIndex, gizmoMovesOnly, lightHasPosition, lightIdProblem, sceneLightLabel, type SceneLight,
   objectIdProblem, parseScene, removeSceneEvent, removeSceneLight, removeSceneObject, renameSceneObject, roundSec, SCENE_CAMERA, SCENE_EASES,
   SCENE_LIGHTS, SCENE_LOOPS, SCENE_SHAPES, sceneCallArgs, sceneCalls, sceneCameraBase, sceneLights, sceneSpan, sceneTracks, setSceneEventArg,
   setSceneEventCall, sourceAt, ticksToSeconds, TICKS_PER_SECOND, updateSceneEvent, updateSceneLight, updateSceneObject, updateSceneWorld,
@@ -19,8 +20,11 @@ import { SceneEditView, type EditDragPhase, type EditViewApi, type EditViewOpts 
 import { Sheet } from "./Sheet";
 import { ConfirmDialog } from "./Timeline";
 
-/** What the side panel edits: the scene (world, camera, lights), one object, or one event (by index). */
-export type SceneSel = { kind: "scene" } | { kind: "object"; id: string } | { kind: "event"; index: number };
+/**
+ * What the side panel edits: the scene (name, length, background, the list of lights), the camera (P81b), one light
+ * (P81b, by index in the drawn list), one object, or one event (by index).
+ */
+export type SceneSel = { kind: "scene" } | { kind: "camera" } | { kind: "light"; index: number } | { kind: "object"; id: string } | { kind: "event"; index: number };
 
 export interface SceneEditorProps {
   engine: Engine;
@@ -67,6 +71,10 @@ interface Draft { doc: SceneDoc; index: number; edge: RetimeEdge; at: number; du
  * preview shows the unsaved scene at once and Save stores it (P80: Replace current or Save as new version, ONE
  * project undo step), with device drafts, Cancel and the phone context toolbar.
  *
+ * P81b: the Scene track holds scene-wide settings only; the camera has its own Camera track (its moves) and, like the
+ * lights (one track each, no events: lights are static), is selected from its track or in the Edit view, where it
+ * shows its frustum and look-at point and a light shows a helper; their gizmos only move (position, look-at point).
+ *
  * P81a: the preview has a Camera view (the clip as it renders) and an Edit view (SceneEditView: the same scene page in
  * editor mode with an orbit camera, a grid and move / rotate / scale gizmos). A gizmo drag writes the selected event's
  * end value, or with Auto-key a key ending at the playhead, or the object's start value (domain/sceneGizmo.ts), as ONE
@@ -100,21 +108,27 @@ export function SceneEditor(props: SceneEditorProps) {
   /** P81a: the preview mode, the gizmo settings, and the values of a gizmo drag in progress. */
   const [view, setView] = useState<"camera" | "edit">("camera");
   const [gz, setGz] = useState<EditViewOpts & { autoKey: boolean }>({ mode: "translate", axis: "free", snap: false, autoKey: false });
-  const gzOpts = useMemo<EditViewOpts>(() => ({ mode: gz.mode, axis: gz.axis, snap: gz.snap }), [gz.mode, gz.axis, gz.snap]);
+  const gzOptsBase = useMemo<EditViewOpts>(() => ({ mode: gz.mode, axis: gz.axis, snap: gz.snap }), [gz.mode, gz.axis, gz.snap]);
   const [gzLive, setGzLive] = useState<{ id: string; value: GizmoValue }>();
+  /** P81b: with the camera selected, whether the gizmo moves its position or its look-at point. */
+  const [camPart, setCamPart] = useState<"position" | "target">("position");
+  /** P81b: the dragged value when the drag started (rotations are unwrapped next to it). */
+  const gzFrom = useRef<GizmoValue>();
   const viewApi = useRef<EditViewApi | null>(null);
+  const gzOptsMoves = useMemo<EditViewOpts>(() => ({ mode: "translate", axis: gz.axis, snap: gz.snap }), [gz.axis, gz.snap]);
   const gzMoved = useRef(false);
   const viewState = useRef<{ doc: SceneDoc; at: number; s: SceneState }>();
   const fileInput = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
-  const selKey = sel.kind === "event" ? `e${sel.index}` : sel.kind === "object" ? `o${sel.id}` : "s";
+  const selKey = sel.kind === "event" ? `e${sel.index}` : sel.kind === "object" ? `o${sel.id}` : sel.kind === "light" ? `l${sel.index}` : sel.kind === "camera" ? "c" : "s";
   useEffect(() => { if (panelRef.current) panelRef.current.scrollTop = 0; }, [selKey]);
   // P80 (phone): a new selection keeps a matching sheet open (e.g. Add event → the new event's Timing), else closes it.
   useEffect(() => {
     setPart((x) => {
       if (!x) return x;
-      const ok: Part[] = sel.kind === "event" ? ["timing", "args"] : sel.kind === "object" ? ["props", "model", "addEvent"] : ["scene", "camera", "lights", "add"];
-      return ok.includes(x) ? x : sel.kind === "event" ? "timing" : sel.kind === "object" ? "props" : undefined;
+      const ok: Part[] = sel.kind === "event" ? ["timing", "args"] : sel.kind === "object" ? ["props", "model", "addEvent"] : sel.kind === "camera" ? ["camera", "addEvent"]
+        : sel.kind === "light" ? ["light"] : ["scene", "lights", "add"];
+      return ok.includes(x) ? x : sel.kind === "event" ? "timing" : sel.kind === "object" ? "props" : sel.kind === "light" ? "light" : sel.kind === "camera" ? "camera" : undefined;
     });
   }, [selKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -167,9 +181,10 @@ export function SceneEditor(props: SceneEditorProps) {
   useEffect(() => {
     if (sel.kind !== "event") return;
     const e = workRef.current?.doc.events?.[sel.index];
+    if (e?.obj === SCENE_CAMERA) { if (e.call !== "fov") setCamPart(e.call === "lookAt" ? "target" : "position"); return; }
     const p = e ? gizmoPropOfCall(e.call) : undefined;
     if (p) setGz((g) => (g.mode === gizmoModeOfProp[p] ? g : { ...g, mode: gizmoModeOfProp[p] }));
-  }, [selKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selKey, !!work]); // eslint-disable-line react-hooks/exhaustive-deps
   /** Save can't overwrite: the draft was made from another version, or the scene changed outside the editor. */
   const newOnly = !!work && (work.outside || work.restoredFrom !== undefined);
   const issues = useMemo(() => (doc ? validateScene(doc) : []), [doc]);
@@ -440,11 +455,14 @@ export function SceneEditor(props: SceneEditorProps) {
   const step = pps >= 80 ? 0.5 : pps >= 40 ? 1 : 2;
   for (let s = 0; s <= span + 1e-9; s += step) ticks.push(Math.round(s * 1000) / 1000);
   const selObj = sel.kind === "object" ? doc.objects.find((o) => o.id === sel.id) : undefined;
-  const pickTrack = (t: SceneTrack) => setSel(t.kind === "camera" ? { kind: "scene" } : t.kind === "missing" ? { kind: "scene" } : { kind: "object", id: t.id });
+  const pickTrack = (t: SceneTrack) => setSel(t.kind === "camera" ? { kind: "camera" } : t.kind === "light" ? { kind: "light", index: t.light ?? 0 } : t.kind === "scene" || t.kind === "missing" ? { kind: "scene" } : { kind: "object", id: t.id });
+  /** P81b: only the camera and objects have events (the Scene track is settings, lights are static). */
+  const animatable = (t: SceneTrack) => t.kind === "camera" || t.kind === "shape" || t.kind === "model";
   const addEventOn = (t: SceneTrack) => {
-    const call = t.kind === "camera" ? "moveTo" : "moveTo";
+    const call = "moveTo";
     void edit(`add ${call}`, (d) => { const r = addSceneEvent(d, t.id, call, atNow, 1); return { doc: r.doc, sel: { kind: "event", index: r.index } }; });
   };
+  const trackIcon = (t: SceneTrack) => (t.kind === "camera" ? "camera" : t.kind === "light" ? "light" : t.kind === "scene" ? "settings" : t.kind === "missing" ? "⚠" : "scene");
 
   const tracksEl = (
     <div ref={tracksRef} className={`v2-sed-tracks ${draft ? "is-dragging" : ""}`} role="group" aria-label="Scene tracks">
@@ -462,16 +480,18 @@ export function SceneEditor(props: SceneEditorProps) {
           </div>
         </div>
         {tracks.map((t) => {
-          const on = (sel.kind === "object" && sel.id === t.id) || (sel.kind === "scene" && t.kind === "camera");
+          const on = (sel.kind === "object" && sel.id === t.id) || (sel.kind === "scene" && t.kind === "scene") || (sel.kind === "camera" && t.kind === "camera")
+            || (sel.kind === "light" && t.kind === "light" && sel.index === t.light);
           const drop = draft?.target === t.id && t.id ? (draft.problem ? "is-nodrop" : "is-drop") : "";
           return <div key={t.id || "missing"} className={`v2-sed-track kind-${t.kind} ${on ? "is-sel" : ""} ${drop}`} style={{ height: t.rows * LANE + 4 }}>
             <div className="v2-sed-thead" style={{ width: LABEL_W(mobile) }}>
               <button type="button" className="v2-sed-tname" aria-pressed={on} title={`${t.label} · ${t.detail}`} onClick={() => pickTrack(t)}>
-                <Ic g={t.kind === "camera" ? "camera" : t.kind === "missing" ? "⚠" : "scene"} size={16} /><span>{t.label}</span>
+                <Ic g={trackIcon(t)} size={16} /><span>{t.label}</span>
               </button>
-              {t.kind !== "missing" && <button type="button" className="v2-icon v2-sed-tadd" aria-label={`Add event to ${t.label}`} title={`Add an event to ${t.label} at the playhead`} onClick={() => addEventOn(t)}><Ic g="＋" size={16} /></button>}
+              {animatable(t) && <button type="button" className="v2-icon v2-sed-tadd" aria-label={`Add event to ${t.label}`} title={`Add an event to ${t.label} at the playhead`} onClick={() => addEventOn(t)}><Ic g="＋" size={16} /></button>}
             </div>
-            <div className="v2-sed-lane" data-track={t.id} style={{ width }}>
+            <div className="v2-sed-lane" data-track={animatable(t) ? t.id : undefined} style={{ width }}>
+              {(t.kind === "scene" || t.kind === "light") && <span className="v2-sed-lanehint">{t.kind === "scene" ? "Scene settings (no events)" : `${t.detail} · static (no events)`}</span>}
               <span className="v2-sed-out" style={{ left: 0, width: Math.max(0, inSec * pps) }} />
               <span className="v2-sed-out" style={{ left: outSec * pps, width: Math.max(0, width - outSec * pps) }} />
               {t.blocks.map((b) => {
@@ -503,10 +523,13 @@ export function SceneEditor(props: SceneEditorProps) {
   );
 
   const selEventNow = sel.kind === "event" ? doc.events?.[sel.index] : undefined;
+  const selLight: SceneLight | undefined = sel.kind === "light" ? sceneLights(doc).lights[sel.index] : undefined;
   const form = (pt?: Part) => sel.kind === "event" && selEventNow
-    ? <EventForm key={`e${sel.index}`} doc={doc} index={sel.index} ev={selEventNow} issues={issues} edit={edit} part={pt} onSeek={() => seekLocal(selEventNow.at)} onDeleted={() => setSel(selEventNow.obj === SCENE_CAMERA ? { kind: "scene" } : { kind: "object", id: selEventNow.obj })} atNow={atNow} />
+    ? <EventForm key={`e${sel.index}`} doc={doc} index={sel.index} ev={selEventNow} issues={issues} edit={edit} part={pt} onSeek={() => seekLocal(selEventNow.at)} onDeleted={() => setSel(selEventNow.obj === SCENE_CAMERA ? { kind: "camera" } : { kind: "object", id: selEventNow.obj })} atNow={atNow} />
     : sel.kind === "object" && selObj ? <ObjectForm key={`o${selObj.id}`} doc={doc} obj={selObj} issues={issues} edit={edit} part={pt} atNow={atNow} />
-      : <SceneForm doc={doc} edit={edit} part={pt} />;
+      : sel.kind === "camera" ? <CameraForm doc={doc} issues={issues} edit={edit} part={pt} atNow={atNow} />
+        : sel.kind === "light" && selLight ? <LightForm key={`l${sel.index}`} doc={doc} index={sel.index} light={selLight} issues={issues} edit={edit} part={pt} onDeleted={() => setSel({ kind: "scene" })} />
+          : <SceneForm doc={doc} edit={edit} part={pt} onPickLight={(i) => setSel({ kind: "light", index: i })} onPickCamera={() => setSel({ kind: "camera" })} />;
   const panel = (
     <div ref={panelRef} className="v2-sed-panel" aria-label="Edit selection">
       {form()}
@@ -542,41 +565,70 @@ export function SceneEditor(props: SceneEditorProps) {
   );
 
   // P81a: the Edit view with its floating chip bar (gizmo mode, axis, snap, Auto-key, reset view).
-  const gzObjId = sel.kind === "object" ? sel.id : sel.kind === "event" ? selEventNow?.obj : undefined;
-  const gzSel = gzObjId && gzObjId !== SCENE_CAMERA && doc.objects.some((o) => o.id === gzObjId) ? gzObjId : undefined;
+  // P81b: the camera (its position or look-at point, by camPart) and lights with a position are gizmo targets too.
+  const camId = camPart === "target" ? GIZMO_CAMERA_TARGET : SCENE_CAMERA;
+  const gzObjId = sel.kind === "object" ? sel.id : sel.kind === "camera" ? camId : sel.kind === "light" ? gizmoLightId(sel.index)
+    : sel.kind === "event" ? (selEventNow?.obj === SCENE_CAMERA ? camId : selEventNow?.obj) : undefined;
+  const gzSel = !gzObjId ? undefined : gzObjId === SCENE_CAMERA || gzObjId === GIZMO_CAMERA_TARGET ? gzObjId
+    : gizmoLightIndex(gzObjId) !== undefined ? (selLight && lightHasPosition(selLight) ? gzObjId : undefined)
+      : doc.objects.some((o) => o.id === gzObjId) ? gzObjId : undefined;
+  const movesOnly = !!gzSel && gizmoMovesOnly(gzSel);
+  const gzMode = movesOnly ? "translate" as const : gz.mode;
   const gzO = { selEvent: sel.kind === "event" ? sel.index : undefined, autoKey: gz.autoKey, at: atNow };
   const editDoc = draft?.doc ?? doc;
-  const viewAt = gizmoViewTime(editDoc, gzSel, gz.mode, gzO);
+  const viewAt = gizmoViewTime(editDoc, gzSel, gzMode, gzO);
+  const gzOpts = gzMode === gz.mode ? gzOptsBase : gzOptsMoves;
   if (!viewState.current || viewState.current.doc !== editDoc || viewState.current.at !== viewAt) viewState.current = { doc: editDoc, at: viewAt, s: stateAt(editDoc, viewAt) };
   const onGizmo = (phase: EditDragPhase, id: string, value: GizmoValue) => {
+    if (phase === "start") gzFrom.current = value;
     if (phase === "start" || phase === "move") { gzMoved.current = phase === "move"; setGzLive({ id, value }); return; }
     setGzLive(undefined);
     if (phase === "cancel") { setNote("Drag cancelled."); return; }
     // A press on a handle that never moved (a tap on the gizmo) changes nothing: no undo step, no "edited".
     if (!gzMoved.current) return;
     gzMoved.current = false;
-    const mode = gz.mode, o = gzO;
-    void edit(`${mode === "translate" ? "move" : mode} ${id}`, (d) => { const r = applyGizmo(d, id, mode, value, o); return { doc: r.doc, note: r.note }; });
+    const mode = gizmoMovesOnly(id) ? "translate" : gz.mode, o = { ...gzO, from: gzFrom.current };
+    const what = id === GIZMO_CAMERA_TARGET ? "camera target" : gizmoLightIndex(id) !== undefined ? "light" : id;
+    void edit(`${mode === "translate" ? "move" : mode} ${what}`, (d) => { const r = applyGizmo(d, id, mode, value, o); return { doc: r.doc, note: r.note }; });
   };
   const onPick = (id: string | null) => {
     if (!id) { setSel({ kind: "scene" }); return; }
+    if (id === SCENE_CAMERA || id === GIZMO_CAMERA_TARGET) {
+      const part = id === GIZMO_CAMERA_TARGET ? "target" : "position";
+      setCamPart(part);
+      // A selected camera event stays selected when it moves the part that was picked.
+      const keep = sel.kind === "event" && selEventNow?.obj === SCENE_CAMERA && (selEventNow.call === "lookAt") === (part === "target");
+      if (!keep) setSel({ kind: "camera" });
+      return;
+    }
+    const li = gizmoLightIndex(id);
+    if (li !== undefined) { setSel({ kind: "light", index: li }); return; }
     if (gzSel !== id || sel.kind !== "event") setSel({ kind: "object", id });
   };
-  const gzChip = (label: string, icon: string, on: boolean, run: () => void, title = label, text = !mobile) =>
-    <button type="button" className={`v2-sed-chip${on ? " is-on" : ""}`} aria-pressed={on} aria-label={label} title={title} onClick={run}><Ic g={icon} size={18} />{text && <span>{label}</span>}</button>;
+  const gzChip = (label: string, icon: string, on: boolean, run: () => void, title = label, text = !mobile, disabled = false) =>
+    <button type="button" className={`v2-sed-chip${on ? " is-on" : ""}`} aria-pressed={on} aria-label={label} title={title} disabled={disabled} onClick={run}><Ic g={icon} size={18} />{text && <span>{label}</span>}</button>;
+  const editLights = sceneLights(editDoc).lights;
+  const aspect = project.settings.width > 0 && project.settings.height > 0 ? project.settings.width / project.settings.height : 16 / 9;
   const fmtV = (v: Vec3) => v.map((x) => +x.toFixed(2)).join(", ");
   const gzInfo = gzLive
-    ? `${gz.mode === "translate" ? "Position" : gz.mode === "rotate" ? "Rotation°" : "Scale"} ${fmtV(gzLive.value[gz.mode === "translate" ? "position" : gz.mode === "rotate" ? "rotation" : "scale"])}`
-    : gzSel ? `Drag writes ${gizmoTargetLabel(doc, gzSel, gz.mode, gzO)}${viewAt !== atNow ? ` · showing ${viewAt}s` : ""}`
+    ? `${gzLive.id === GIZMO_CAMERA_TARGET ? "Look-at point" : gzMode === "translate" ? "Position" : gzMode === "rotate" ? "Rotation°" : "Scale"} ${fmtV(gzMode === "rotate" && gzFrom.current
+      ? gzLive.value.rotation.map((x, k) => x + 360 * Math.round((gzFrom.current!.rotation[k] - x) / 360)) as Vec3
+      : gzLive.value[gzMode === "translate" ? "position" : gzMode === "rotate" ? "rotation" : "scale"])}`
+    : gzSel ? `Drag writes ${gizmoTargetLabel(doc, gzSel, gzMode, gzO)}${viewAt !== atNow ? ` · showing ${viewAt}s` : ""}`
+      : sel.kind === "light" ? `${selLight ? sceneLightLabel(selLight, sel.index) : "This light"} is ${selLight?.type ?? "a"} light: it lights from everywhere, so it has nothing to move`
       : mobile ? "Tap an object to select it · one finger orbits · two fingers pan and zoom" : "Click an object to select it · drag to orbit · right-drag to pan · wheel to zoom";
   const editView = view === "edit" && (
     <div className="v2-sed-editview" data-testid="scene-edit-view">
-      <SceneEditView doc={editDoc} state={viewState.current.s} sel={gzSel} opts={gzOpts} touch={mobile} onPick={onPick} onDrag={onGizmo} api={viewApi} />
-      <div className="v2-sed-chips is-modes" role="toolbar" aria-label="Gizmo">
-        {gzChip("Move", "move3d", gz.mode === "translate", () => setGz((g) => ({ ...g, mode: "translate" })), "Move (W)", false)}
-        {gzChip("Rotate", "rotate3d", gz.mode === "rotate", () => setGz((g) => ({ ...g, mode: "rotate" })), "Rotate (E)", false)}
-        {gzChip("Scale", "scale3d", gz.mode === "scale", () => setGz((g) => ({ ...g, mode: "scale" })), "Scale (R)", false)}
-      </div>
+      <SceneEditView doc={editDoc} state={viewState.current.s} sel={gzSel} opts={gzOpts} touch={mobile} onPick={onPick} onDrag={onGizmo} api={viewApi}
+        lights={editLights} aspect={aspect} />
+      {gzSel === SCENE_CAMERA || gzSel === GIZMO_CAMERA_TARGET ? <div className="v2-sed-chips is-modes" role="toolbar" aria-label="Camera gizmo">
+        {gzChip("Move camera", "camera", camPart === "position", () => setCamPart("position"), "Move the camera (its position)", false)}
+        {gzChip("Move look-at point", "track", camPart === "target", () => setCamPart("target"), "Move the point the camera looks at", false)}
+      </div> : <div className="v2-sed-chips is-modes" role="toolbar" aria-label="Gizmo">
+        {gzChip("Move", "move3d", gzMode === "translate", () => setGz((g) => ({ ...g, mode: "translate" })), "Move (W)", false)}
+        {gzChip("Rotate", "rotate3d", gzMode === "rotate", () => setGz((g) => ({ ...g, mode: "rotate" })), movesOnly ? "Lights can only be moved" : "Rotate (E)", false, movesOnly)}
+        {gzChip("Scale", "scale3d", gzMode === "scale", () => setGz((g) => ({ ...g, mode: "scale" })), movesOnly ? "Lights can only be moved" : "Scale (R)", false, movesOnly)}
+      </div>}
       <div className="v2-sed-chips is-opts" role="toolbar" aria-label="Gizmo options">
         <div className="v2-sed-axes" role="group" aria-label="Axis">
           {(["x", "y", "z", "free"] as const).map((a) => <button key={a} type="button" className={`v2-sed-chip is-axis is-${a}${gz.axis === a ? " is-on" : ""}`} aria-pressed={gz.axis === a}
@@ -584,7 +636,7 @@ export function SceneEditor(props: SceneEditorProps) {
         </div>
         {gzChip("Snap", "🧲", gz.snap, () => setGz((g) => ({ ...g, snap: !g.snap })), "Snap: 0.25 units, 15°, 0.1 scale steps")}
         {gzChip("Auto-key", "key", gz.autoKey, () => setGz((g) => ({ ...g, autoKey: !g.autoKey })), "Auto-key: a drag adds or updates an event that ends at the playhead (else it changes the start value)")}
-        {gzChip("Reset view", "focus", false, () => viewApi.current?.home(), "Back to the scene camera's view")}
+        {gzChip("Reset view", "focus", false, () => viewApi.current?.home(), "Back to the starting view: the scene camera and what it looks at")}
       </div>
       <p className="v2-sed-gzinfo" role="status" data-testid="scene-gizmo-info">{gzInfo}</p>
     </div>
@@ -600,20 +652,29 @@ export function SceneEditor(props: SceneEditorProps) {
     ...(sceneCallArgs(doc, selEventNow.obj, selEventNow.call).length ? [ctxTool("⤧", "Values", () => open("args"), { on: part === "args", title: "The call's arguments (where it moves to, its value…)" })] : []),
     ctxTool("⇤", "Go to", () => seekLocal(selEventNow.at), { title: "Move the playhead to this event" }),
     ctxTool("⧉", "Duplicate", () => void edit("duplicate event", (d) => { const r = duplicateSceneEvent(d, sel.index); return { doc: r.doc, sel: { kind: "event", index: r.index } }; })),
-    ctxTool("🗑", "Delete", () => { const back: SceneSel = selEventNow.obj === SCENE_CAMERA ? { kind: "scene" } : { kind: "object", id: selEventNow.obj }; const i = sel.index; void edit("delete event", (d) => removeSceneEvent(d, i)); setSel(back); }, { danger: true, title: "Delete this event" }),
+    ctxTool("🗑", "Delete", () => { const back: SceneSel = selEventNow.obj === SCENE_CAMERA ? { kind: "camera" } : { kind: "object", id: selEventNow.obj }; const i = sel.index; void edit("delete event", (d) => removeSceneEvent(d, i)); setSel(back); }, { danger: true, title: "Delete this event" }),
   ] : sel.kind === "object" && selObj ? [
     ctxTool("⤧", "Properties", () => open("props"), { on: part === "props", title: "Id, shape, size, colour, position, rotation, scale, visibility" }),
     ...(typeof selObj.model === "string" ? [ctxTool("anim-loop", "Animation", () => open("model"), { on: part === "model", title: "The model's animation and parts from 0 s" })] : []),
     ctxTool("◆", "Add event", () => open("addEvent"), { on: part === "addEvent", title: `Add an event at the playhead (${atNow}s)` }),
     ctxTool("🗑", "Delete", () => { const id = selObj.id; void edit("delete object", (d) => { const r = removeSceneObject(d, id); return { doc: r.doc, sel: { kind: "scene" }, note: `Deleted “${id}”${r.removedEvents ? ` and ${r.removedEvents} event${r.removedEvents === 1 ? "" : "s"}` : ""}.` }; }); }, { danger: true, title: "Delete this object and its events" }),
+  ] : sel.kind === "camera" ? [
+    ctxTool("camera", "Start", () => open("camera"), { on: part === "camera", title: "The camera at 0 s: field of view, position, look-at point" }),
+    ctxTool("◆", "Add event", () => open("addEvent"), { on: part === "addEvent", title: `Add a camera move at the playhead (${atNow}s)` }),
+    ctxTool("move3d", "Move", () => { setCamPart("position"); setView("edit"); }, { on: view === "edit" && camPart === "position", title: "Move the camera in the Edit view" }),
+    ctxTool("track", "Aim", () => { setCamPart("target"); setView("edit"); }, { on: view === "edit" && camPart === "target", title: "Move the point the camera looks at in the Edit view" }),
+  ] : sel.kind === "light" && selLight ? [
+    ctxTool("light", "Light", () => open("light"), { on: part === "light", title: "Id, type, colour, intensity, position" }),
+    ...(lightHasPosition(selLight) ? [ctxTool("move3d", "Move", () => setView("edit"), { on: view === "edit", title: "Move it in the Edit view" })] : []),
+    ctxTool("🗑", "Delete", () => { const i = sel.index; void edit("delete light", (d) => removeSceneLight(d, i)); setSel({ kind: "scene" }); }, { danger: true, title: "Delete this light" }),
   ] : [
     ctxTool("＋", "Add object", () => open("add"), { on: part === "add", title: "Add a shape or a GLB model" }),
     ctxTool("settings", "Scene", () => open("scene"), { on: part === "scene", title: "Name, planned length, background" }),
-    ctxTool("camera", "Camera", () => open("camera"), { on: part === "camera", title: "The camera at 0 s" }),
+    ctxTool("camera", "Camera", () => setSel({ kind: "camera" }), { title: "Select the camera" }),
     ctxTool("light", "Lights", () => open("lights"), { on: part === "lights", title: "Lights" }),
   ];
   const ctxBar = (
-    <nav className="v2-toolbar v2-sed-ctx" aria-label={sel.kind === "event" ? "Event actions" : sel.kind === "object" ? "Object actions" : "Scene actions"}>
+    <nav className="v2-toolbar v2-sed-ctx" aria-label={sel.kind === "event" ? "Event actions" : sel.kind === "object" ? "Object actions" : sel.kind === "camera" ? "Camera actions" : sel.kind === "light" ? "Light actions" : "Scene actions"}>
       {sel.kind !== "scene" && <button type="button" className="v2-tool v2-tool-back" aria-label="Back to the scene" title="Back to the scene" onClick={() => { setSel({ kind: "scene" }); setPart(undefined); }}><b aria-hidden><Ic g="anim-in" /></b></button>}
       <div className="v2-toolbar-scroll">{ctxTools}</div>
     </nav>
@@ -690,8 +751,8 @@ const MAX_UNDO = 200;
 /** P80: autosave delay after the last edit. */
 export const DRAFT_DELAY_MS = 600;
 /** P80 (phone): the form sections the context toolbar opens in a sheet. */
-export type Part = "add" | "scene" | "camera" | "lights" | "props" | "model" | "addEvent" | "timing" | "args";
-const PART_LABEL: Record<Part, string> = { add: "Add object", scene: "Scene", camera: "Camera at 0 s", lights: "Lights", props: "Properties", model: "Animation", addEvent: "Add event", timing: "Timing", args: "Values" };
+export type Part = "add" | "scene" | "camera" | "lights" | "light" | "props" | "model" | "addEvent" | "timing" | "args";
+const PART_LABEL: Record<Part, string> = { add: "Add object", scene: "Scene", camera: "Camera at 0 s", lights: "Lights", light: "Light", props: "Properties", model: "Animation", addEvent: "Add event", timing: "Timing", args: "Values" };
 
 function draftNote(d: SceneDraft, work: Work | undefined, versions: { id: string }[]): string {
   if (!work || d.baseBlobKey === work.baseKey) return "You closed the editor without saving. Restore the draft to keep working on it, or discard it.";
@@ -737,36 +798,78 @@ function Problems({ list }: { list: SceneIssue[] }) {
 
 // ---------------------------------------------------------------- forms
 
-function SceneForm({ doc, edit, part }: { doc: SceneDoc; edit: Edit; part?: Part }) {
+function SceneForm({ doc, edit, part, onPickLight, onPickCamera }: { doc: SceneDoc; edit: Edit; part?: Part; onPickLight: (i: number) => void; onPickCamera: () => void }) {
   const base = sceneCameraBase(doc);
   const { lights, defaults } = sceneLights(doc);
   const all = !part;
   return <div className="v2-sed-form" data-testid="scene-form">
-    {all && <h4><Ic g="camera" size={16} /> Scene</h4>}
+    {all && <h4><Ic g="settings" size={16} /> Scene</h4>}
     {(all || part === "scene") && <>
       <TextField label="Name" value={doc.name ?? ""} onCommit={(v) => edit("rename scene", (d) => ({ ...d, name: v || undefined }) as SceneDoc)} />
       <NumField label="Planned length (s)" value={doc.durationSec} min={0.1} step={0.5} optional onCommit={(v) => edit("planned length", (d) => (v === undefined ? (({ durationSec: _x, ...r }) => (void _x, r as SceneDoc))(d) : { ...d, durationSec: v }))} />
       <ColorField label="Background" value={base.background} onCommit={(v) => edit("background", (d) => updateSceneWorld(d, { background: v }))} />
     </>}
+    {(all || part === "lights") && <>
+      {all ? <h5><Ic g="light" size={14} /> Lights {defaults && <small>(default lighting)</small>}</h5> : defaults && <p className="v2-abnote">Default lighting: change or add a light to set your own.</p>}
+      <div className="v2-sed-picklist" role="list" aria-label="Lights">
+        {lights.map((l, i) => <button key={i} type="button" role="listitem" className="v2-btn v2-sed-pick" onClick={() => onPickLight(i)} title="Edit this light">
+          <Ic g="light" size={16} /> <span>{sceneLightLabel(l, i)}</span> <small>{l.type}</small></button>)}
+      </div>
+      <button type="button" className="v2-btn" onClick={() => void edit("add light", (d) => { const n = sceneLights(d).lights.length; return { doc: addSceneLight(d), sel: { kind: "light", index: n } }; })}><Ic g="＋" size={16} /> Add light</button>
+    </>}
+    {all && <>
+      <h5><Ic g="camera" size={14} /> Camera</h5>
+      <button type="button" className="v2-btn v2-sed-pick" onClick={onPickCamera}><Ic g="camera" size={16} /> <span>Camera</span> <small>{base.fov}° · at {base.position.join(", ")}</small></button>
+      <p className="v2-abnote">Tap a track name to edit the camera, a light or an object, or a block to edit an event. Camera moves are events on the Camera track (＋).</p>
+    </>}
+  </div>;
+}
+
+/** P81b: the camera: its start values (world.camera) and adding a camera move. */
+function CameraForm({ doc, issues, edit, part, atNow }: { doc: SceneDoc; issues: SceneIssue[]; edit: Edit; part?: Part; atNow: number }) {
+  const base = sceneCameraBase(doc);
+  const all = !part;
+  const calls = sceneCalls(doc, SCENE_CAMERA);
+  const [call, setCall] = useState("moveTo");
+  return <div className="v2-sed-form" data-testid="camera-form">
+    {all && <h4><Ic g="camera" size={16} /> Camera</h4>}
     {(all || part === "camera") && <>
-      {all && <h5>Camera at 0 s</h5>}
+      {all && <h5>At 0 s</h5>}
       <NumField label="Field of view (°)" value={base.fov} min={2} max={178} step={1} onCommit={(v) => edit("camera fov", (d) => updateSceneWorld(d, { camera: { fov: v } }))} />
       <Vec3Field label="Position" value={base.position} onCommit={(v) => edit("camera position", (d) => updateSceneWorld(d, { camera: { position: v } }))} />
       <Vec3Field label="Looks at" value={base.lookAt} onCommit={(v) => edit("camera target", (d) => updateSceneWorld(d, { camera: { lookAt: v } }))} />
-      {part === "camera" && <p className="v2-abnote">Camera moves over time are events on the Camera track (＋ on its header).</p>}
+      <Problems list={issuesAt(issues, "world.camera")} />
+      <p className="v2-abnote">In the Edit view, drag the camera or its look-at point (the yellow dot). With no camera event selected a drag changes these start values; with Auto-key it adds or updates a camera move ending at the playhead.</p>
     </>}
-    {(all || part === "lights") && <>
-      {all ? <h5><Ic g="light" size={14} /> Lights {defaults && <small>(default lighting)</small>}</h5> : defaults && <p className="v2-abnote">Default lighting: change or add a light to set your own.</p>}
-      {lights.map((l, i) => <fieldset key={i} className="v2-sed-light"><legend>Light {i + 1}</legend>
-        <SelectField label="Type" value={l.type} options={[...SCENE_LIGHTS]} onCommit={(v) => edit("light type", (d) => updateSceneLight(d, i, { type: v as SceneLightType }))} />
-        <ColorField label="Colour" value={l.color ?? "#ffffff"} onCommit={(v) => edit("light colour", (d) => updateSceneLight(d, i, { color: v }))} />
-        <NumField label="Intensity" value={l.intensity ?? 1} min={0} step={0.1} onCommit={(v) => edit("light intensity", (d) => updateSceneLight(d, i, { intensity: v }))} />
-        {(l.type === "directional" || l.type === "point") && <Vec3Field label="Position" value={l.position ?? [0, 3, 2]} onCommit={(v) => edit("light position", (d) => updateSceneLight(d, i, { position: v }))} />}
-        <button type="button" className="v2-btn v2-sed-danger" onClick={() => void edit("delete light", (d) => removeSceneLight(d, i))}><Ic g="🗑" size={16} /> Delete light</button>
-      </fieldset>)}
-      <button type="button" className="v2-btn" onClick={() => void edit("add light", (d) => addSceneLight(d))}><Ic g="＋" size={16} /> Add light</button>
+    {(all || part === "addEvent") && <>
+      <h5>Add a camera move at {atNow}s</h5>
+      <div className="v2-sed-row">
+        <select aria-label="Call" value={call} onChange={(e) => setCall(e.target.value)}>{calls.map((c) => <option key={c.call} value={c.call} title={c.description}>{c.call}</option>)}</select>
+        <button type="button" className="v2-btn" onClick={() => void edit(`add ${call}`, (d) => { const r = addSceneEvent(d, SCENE_CAMERA, call, atNow, 1); return { doc: r.doc, sel: { kind: "event", index: r.index } }; })}><Ic g="＋" size={16} /> Add event</button>
+      </div>
     </>}
-    {all && <p className="v2-abnote">Tap a track name to edit an object, or a block to edit an event. Camera moves are events on this track (＋).</p>}
+  </div>;
+}
+
+/** P81b: one light (by index in the drawn list): id, type, colour, intensity, position. Lights are static. */
+function LightForm({ doc, index: i, light: l, issues, edit, part, onDeleted }: { doc: SceneDoc; index: number; light: SceneLight; issues: SceneIssue[]; edit: Edit; part?: Part; onDeleted: () => void }) {
+  const all = !part;
+  const { defaults } = sceneLights(doc);
+  const [idErr, setIdErr] = useState<string>();
+  return <div className="v2-sed-form" data-testid="light-form">
+    {all && <h4><Ic g="light" size={16} /> {sceneLightLabel(l, i)} <small>{l.type} light</small></h4>}
+    {defaults && <p className="v2-abnote">Default lighting: a change here writes the default lights into the scene first.</p>}
+    <TextField label="Id" value={l.id ?? ""} error={idErr} onCommit={(v) => {
+      const why = lightIdProblem(doc, i, v); setIdErr(why);
+      if (!why && v !== (l.id ?? "")) void edit("light id", (d) => updateSceneLight(d, i, { id: v || undefined }));
+    }} />
+    <SelectField label="Type" value={l.type} options={[...SCENE_LIGHTS]} onCommit={(v) => edit("light type", (d) => updateSceneLight(d, i, { type: v as SceneLightType }))} />
+    <ColorField label="Colour" value={l.color ?? "#ffffff"} onCommit={(v) => edit("light colour", (d) => updateSceneLight(d, i, { color: v }))} />
+    <NumField label="Intensity" value={l.intensity ?? 1} min={0} step={0.1} onCommit={(v) => edit("light intensity", (d) => updateSceneLight(d, i, { intensity: v }))} />
+    {lightHasPosition(l) && <Vec3Field label="Position" value={l.position ?? [0, 3, 2]} onCommit={(v) => edit("light position", (d) => updateSceneLight(d, i, { position: v }))} />}
+    <p className="v2-abnote">{lightHasPosition(l) ? "Drag it in the Edit view to move it. " : "An ambient or hemisphere light lights from everywhere, so it has no position. "}Lights are static: no events animate them.</p>
+    <Problems list={defaults ? [] : issuesAt(issues, `world.lights[${i}]`)} />
+    {all && <button type="button" className="v2-btn v2-sed-danger" onClick={() => { void edit("delete light", (d) => removeSceneLight(d, i)); onDeleted(); }}><Ic g="🗑" size={16} /> Delete light</button>}
   </div>;
 }
 

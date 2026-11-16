@@ -66,10 +66,10 @@ async function open(opts: { mobile?: boolean; initialSel?: SceneSel; time?: numb
 }
 
 describe("P76 scene editor", () => {
-  it("draws the scene/camera track first, one track per object, and events as blocks labelled with their call", async () => {
+  it("draws the Scene and Camera tracks first, one track per object and per light, and events as blocks labelled with their call", async () => {
     const t = await open();
     const names = [...t.el.querySelectorAll(".v2-sed-tname span")].map((x) => x.textContent);
-    expect(names).toEqual(["Scene", "floor", "ball", "cube", "sign"]);
+    expect(names).toEqual(["Scene", "Camera", "floor", "ball", "cube", "sign", "Light 1", "Light 2"]); // P81b: Scene settings, Camera, objects, lights
     const blocks = [...t.el.querySelectorAll(".v2-sed-block")].map((b) => b.textContent);
     expect(blocks).toEqual(["moveTo", "moveTo", "setMood", "rotation", "opacity", "visible"]);
     expect(t.q('[data-testid="scene-form"]')).toBeTruthy();
@@ -205,5 +205,57 @@ describe("P76 scene editor", () => {
     frame();
     expect(requests).toEqual([{ t: 1, fresh: false }, { t: 1, fresh: false }, { t: 1, fresh: true }]);
     expect(stateAt(doc, 1).objects[1].position).toEqual([-1.6, 0.5, 0]);
+  });
+});
+
+describe("P81b scene editor: the camera and lights as their own tracks", () => {
+  it("the Scene track has no events and edits name, length, background and the lights list; the Camera track holds the camera moves", async () => {
+    const t = await open();
+    const track = (name: string) => [...t.el.querySelectorAll<HTMLElement>(".v2-sed-track")].find((x) => x.querySelector(".v2-sed-tname span")?.textContent === name)!;
+    expect(track("Scene").querySelectorAll(".v2-sed-block")).toHaveLength(0);
+    expect(track("Scene").querySelector(".v2-sed-tadd")).toBeNull();
+    expect(track("Scene").querySelector(".v2-sed-lane")!.hasAttribute("data-track")).toBe(false); // never a drop target
+    expect(track("Camera").querySelectorAll(".v2-sed-block")).toHaveLength(1);
+    expect(t.button(/^Camera\.moveTo at 2\.5s for 2s$/)).toBeTruthy();
+    expect(track("Light 2").querySelector(".v2-sed-tadd")).toBeNull();
+    expect(track("Light 2").textContent).toMatch(/directional light · static \(no events\)/);
+    const form = t.q('[data-testid="scene-form"]');
+    expect(form.textContent).toMatch(/Background/);
+    expect(form.textContent).not.toMatch(/Field of view/);
+    // The camera's own form: start values and a camera move at the playhead.
+    await t.click(track("Camera").querySelector(".v2-sed-tname")!);
+    expect(t.q('[data-testid="camera-form"]').textContent).toMatch(/Field of view/);
+    await t.typeIn(t.field("Field of view (°)"), "50");
+    expect(t.work().world!.camera!.fov).toBe(50);
+    await t.click(t.button(/^Add event$/));
+    expect(t.work().events!.at(-1)).toMatchObject({ obj: "camera", call: "moveTo", at: 0, dur: 1 });
+    expect(t.q('[data-testid="event-form"]')).toBeTruthy();
+    // Deleting a camera event goes back to the camera.
+    await t.click(t.button(/^Delete$/));
+    expect(t.q('[data-testid="camera-form"]')).toBeTruthy();
+    t.done();
+  });
+
+  it("a light is selected from its track or the scene's list; its id is optional and checked; Add light selects the new one", async () => {
+    const t = await open();
+    await t.click([...t.el.querySelectorAll<HTMLElement>(".v2-sed-pick")].find((b) => /Light 2/.test(b.textContent ?? ""))!);
+    const form = () => t.q('[data-testid="light-form"]');
+    expect(form().textContent).toMatch(/Light 2 directional light/);
+    expect(form().textContent).toMatch(/Lights are static/);
+    await t.typeIn(t.field("Id"), "ball");
+    expect(form().textContent).toMatch(/"ball" is the id of an object/);
+    expect(t.work().world!.lights![1].id).toBeUndefined();
+    await t.typeIn(t.field("Id"), "key");
+    expect(t.work().world!.lights![1]).toEqual({ id: "key", type: "directional", position: [3, 5, 2], intensity: 1.6 });
+    expect([...t.el.querySelectorAll(".v2-sed-tname span")].map((x) => x.textContent).at(-1)).toBe("key");
+    await t.typeIn(t.field("Id"), "");
+    expect(t.work().world!.lights![1].id).toBeUndefined();
+    await t.click(t.button(/^Delete light$/));
+    expect(t.work().world!.lights).toHaveLength(1);
+    expect(t.q('[data-testid="scene-form"]')).toBeTruthy();
+    await t.click(t.button(/^Add light$/));
+    expect(t.work().world!.lights).toHaveLength(2);
+    expect(form().textContent).toMatch(/Light 2 point light/);
+    t.done();
   });
 });

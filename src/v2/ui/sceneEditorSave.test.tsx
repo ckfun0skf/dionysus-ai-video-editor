@@ -219,13 +219,17 @@ describe("P80 scene editor: phone layout", () => {
     expect(tools()).toEqual(["Add object", "Scene", "Camera", "Lights"]);
     // The body is above the toolbar, which comes after the tracks.
     expect(t.el.querySelector(".v2-sed-body")!.compareDocumentPosition(bar()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    await t.click(t.button(/^Camera$/));
+    // P81b: Camera selects the camera (its own actions); Start opens its start values.
+    await t.click(bar().querySelector<HTMLElement>(".v2-toolbar-scroll .v2-tool[title='Select the camera']")!);
+    expect(tools()).toEqual(["Start", "Add event", "Move", "Aim"]);
+    await t.click(t.button(/^Start$/));
     let sheet = t.dialog("Camera at 0 s")!;
     expect(sheet.classList).toContain("v2-sheet");
     expect(sheet.textContent).toMatch(/Position/);
     expect(sheet.textContent).not.toMatch(/Background/); // only the camera section
-    await t.click(t.button(/^Camera$/)); // tap again: closes
+    await t.click(t.button(/^Start$/)); // tap again: closes
     expect(t.dialog("Camera at 0 s")).toBeNull();
+    await t.click(t.button(/^Back to the scene$/));
     await t.click(t.button(/^Add object$/));
     await t.click([...t.dialog("Add object")!.querySelectorAll('[role="menuitem"]')].find((b) => /torus/i.test(b.textContent ?? ""))!);
     expect(t.dialog("Add object")).toBeNull();

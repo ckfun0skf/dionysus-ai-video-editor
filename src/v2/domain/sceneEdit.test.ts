@@ -153,18 +153,21 @@ describe("scene edit: events (P76)", () => {
 });
 
 describe("scene tracks (P76)", () => {
-  it("one track per object after the scene/camera track; overlapping blocks stack in rows; unknown objects get their own track", () => {
+  it("P81b: the Scene track (no events), the Camera track, one per object, one per light, then unknown objects; overlapping blocks stack in rows", () => {
     const d = freeze({ ...structuredClone(SAMPLE_SCENE), events: [...SAMPLE_SCENE.events!, { at: 1, obj: "ball", call: "opacity", args: { value: 0.5 } }, { at: 1, obj: "ghost", call: "moveTo", args: { position: [0, 0, 0] } }] } as SceneDoc);
     const t = sceneTracks(d, 0.4);
-    expect(t.map((x) => [x.id, x.kind, x.rows])).toEqual([["camera", "camera", 1], ["floor", "shape", 1], ["ball", "shape", 2], ["cube", "shape", 1], ["sign", "shape", 1], ["", "missing", 1]]);
-    expect(t[2].blocks).toEqual([
+    expect(t.map((x) => [x.id, x.kind, x.rows])).toEqual([["#scene", "scene", 1], ["camera", "camera", 1], ["floor", "shape", 1], ["ball", "shape", 2], ["cube", "shape", 1], ["sign", "shape", 1],
+      ["#light-0", "light", 1], ["#light-1", "light", 1], ["", "missing", 1]]);
+    expect(t.filter((x) => x.kind === "light").map((x) => [x.label, x.detail, x.light])).toEqual([["Light 1", "hemisphere light", 0], ["Light 2", "directional light", 1]]);
+    expect(t[0].blocks).toEqual([]);
+    expect(t[3].blocks).toEqual([
       { index: 1, at: 0.5, dur: 1.5, end: 2, call: "moveTo", row: 0 },
       { index: 6, at: 1, dur: 0, end: 1, call: "opacity", row: 1 },
       { index: 2, at: 2, dur: 0.4, end: 2.4, call: "setMood", row: 0 },
     ]);
-    expect(t[4].blocks.map((b) => b.row)).toEqual([0, 0]);
-    expect(sceneTracks(d, 1)[4].blocks.map((b) => b.row)).toEqual([0, 1]);
-    expect(t[0].blocks.map((b) => b.call)).toEqual(["moveTo"]);
+    expect(t[5].blocks.map((b) => b.row)).toEqual([0, 0]);
+    expect(sceneTracks(d, 1)[5].blocks.map((b) => b.row)).toEqual([0, 1]);
+    expect(t[1].blocks.map((b) => b.call)).toEqual(["moveTo"]);
     expect(sceneSpan(d)).toBe(5);
     expect(sceneSpan(d, 7)).toBe(7);
   });
@@ -182,5 +185,34 @@ describe("scene tracks (P76)", () => {
     // Same key ⇒ the page reads the same: it only takes lights and id / shape / size / model from the embedded scene.
     const strip = (x: SceneDoc) => scenePage({ format: x.format, world: { lights: x.world?.lights }, objects: x.objects.map((o) => ({ id: o.id, shape: o.shape, size: o.size, model: o.model })), files: x.files });
     expect(strip(updateSceneObject(d, "ball", { position: [0, 2, 0] }))).toBe(strip(d));
+  });
+});
+
+describe("P81b light ids", () => {
+  it("are optional, unique among objects and lights, never \"camera\"; events can't name a light", async () => {
+    const { lightIdProblem, sceneLightIndex, sceneLightLabel, objectIdProblem, addSceneObject } = await import(".");
+    const d = freeze(structuredClone(SAMPLE_SCENE) as SceneDoc);
+    const named = updateSceneLight(d, 1, { id: "key" });
+    expect(named.world!.lights![1]).toEqual({ id: "key", type: "directional", position: [3, 5, 2], intensity: 1.6 });
+    expect(validateScene(named).filter((i) => i.level === "error")).toEqual([]);
+    expect(sceneLightIndex(named, "key")).toBe(1);
+    expect(sceneLightIndex(named, 0)).toBe(0);
+    expect(sceneLightIndex(named, "nope")).toBeUndefined();
+    expect(sceneLightLabel(named.world!.lights![1], 1)).toBe("key");
+    expect(lightIdProblem(named, 0, "key")).toMatch(/another light/);
+    expect(lightIdProblem(named, 0, "ball")).toMatch(/an object/);
+    expect(lightIdProblem(named, 0, "camera")).toMatch(/reserved/);
+    expect(lightIdProblem(named, 0, "2x")).toMatch(/start with a letter/);
+    expect(lightIdProblem(named, 1, "key")).toBeUndefined();
+    expect(objectIdProblem(named, "ball", "key")).toMatch(/a light/);
+    expect(addSceneObject(updateSceneLight(d, 1, { id: "box" }), "box").id).toBe("box-2");
+    const bad = (raw: unknown) => validateScene(raw).filter((i) => i.level === "error").map((i) => `${i.path}: ${i.message}`);
+    const lights = (ls: unknown[]) => ({ ...structuredClone(SAMPLE_SCENE), world: { lights: ls } });
+    expect(bad(lights([{ type: "point", id: "a" }, { type: "point", id: "a" }]))).toEqual(['world.lights[1].id: "a" is used twice.']);
+    expect(bad(lights([{ type: "point", id: "camera" }]))).toEqual(['world.lights[0].id: "camera" is reserved for the camera.']);
+    expect(bad(lights([{ type: "point", id: 3 }]))[0]).toMatch(/^world.lights\[0\].id: must start with a letter/);
+    expect(bad(lights([{ type: "point", id: "ball" }]))).toEqual(['objects[1].id: "ball" is the id of a light (world.lights[0]).']);
+    expect(bad({ ...lights([{ type: "point", id: "key" }]), events: [{ at: 0, obj: "key", call: "moveTo", args: { position: [0, 0, 0] } }] }))
+      .toEqual(['events[0].obj: "key" is a light; lights are static (no events animate them).']);
   });
 });

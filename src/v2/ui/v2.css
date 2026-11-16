@@ -1857,3 +1857,13 @@ select.v2-tp-field { -webkit-appearance: none; appearance: none; padding-right: 
 .v2-sed-chip.is-axis { padding: 0 8px; font-weight: 600; }
 .v2-sed-chip.is-x { color: #ff8080; } .v2-sed-chip.is-y { color: #86e386; } .v2-sed-chip.is-z { color: #86afff; }
 .v2-sed-gzinfo { position: absolute; z-index: 1; top: 10px; left: 64px; right: 10px; margin: 0; text-align: right; pointer-events: none; font: 12px/1.35 system-ui; color: #e6e6ea; text-shadow: 0 1px 2px #000, 0 0 6px #000; }
+
+/* P81b: Scene track (settings), Camera track, light tracks; the scene's light list; disabled gizmo chips. */
+.v2-sed-track.kind-scene .v2-sed-tname { color: var(--muted); }
+.v2-sed-track.kind-scene .v2-sed-lane, .v2-sed-track.kind-light .v2-sed-lane { background: repeating-linear-gradient(135deg, transparent 0 10px, rgba(255,255,255,.025) 10px 20px); }
+.v2-sed-lanehint { position: sticky; left: 8px; display: inline-flex; align-items: center; height: 44px; padding: 0 8px; font-size: 12px; color: var(--muted); white-space: nowrap; pointer-events: none; }
+.v2-sed-picklist { display: grid; gap: 6px; }
+.v2-sed-pick { justify-content: flex-start; min-height: 44px; text-align: left; }
+.v2-sed-pick span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.v2-sed-pick small { color: var(--muted); }
+.v2-sed-chip:disabled { opacity: .38; cursor: not-allowed; }

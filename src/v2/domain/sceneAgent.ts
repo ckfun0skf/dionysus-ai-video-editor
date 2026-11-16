@@ -10,11 +10,11 @@
  */
 import {
   addSceneModel, SCENE_BASE_FUNCTIONS, SCENE_CAMERA, SCENE_CAMERA_FUNCTIONS, SCENE_EASES, SCENE_FORMAT, SCENE_LIGHTS, SCENE_SHAPES,
-  SCENE_MIME, sortedEvents, validateScene, type SceneDoc, type SceneEvent, type SceneIssue, type SceneLight, type SceneObject, type SceneShape,
+  SCENE_MIME, isVec3, sortedEvents, validateScene, type SceneDoc, type SceneEvent, type SceneIssue, type SceneLight, type SceneObject, type SceneShape,
 } from "./scene";
 import {
-  addSceneObject, callTweens, defaultCallArgs, removeSceneEvent, removeSceneObject, renameSceneObject, roundSec, sceneCallArgs, sceneCalls,
-  updateSceneObject, updateSceneWorld, type SceneArgField,
+  addSceneLight, addSceneObject, callTweens, defaultCallArgs, lightIdProblem, removeSceneEvent, removeSceneLight, removeSceneObject, renameSceneObject,
+  roundSec, sceneCallArgs, sceneCalls, sceneCameraBase, sceneLightIndex, sceneLights, updateSceneLight, updateSceneObject, updateSceneWorld, type SceneArgField,
 } from "./sceneEdit";
 import { moveSceneEventTo } from "./sceneRetime";
 import type { AssetVersion } from "./model";
@@ -25,7 +25,7 @@ export const sceneMediaRef = (blobKey: string): AssetVersion["media"] => ({ blob
 /** The tools that change a scene (the others read it). */
 export const SCENE_EDIT_TOOLS = [
   "add_scene_object", "set_scene_object", "remove_scene_object", "add_scene_event", "update_scene_event", "retime_scene_event",
-  "remove_scene_event", "set_scene_world",
+  "remove_scene_event", "set_scene_world", "set_scene_light",
 ] as const;
 export type SceneEditTool = (typeof SCENE_EDIT_TOOLS)[number];
 export const isSceneEditTool = (n: string): n is SceneEditTool => (SCENE_EDIT_TOOLS as readonly string[]).includes(n);
@@ -62,6 +62,7 @@ const argList = (fields: SceneArgField[]) => (fields.length ? fields.map((f) => 
 function needObject(doc: SceneDoc, id: unknown, camera = false): string | undefined {
   if (typeof id !== "string" || !id) return `Name an object. Objects: ${(camera ? sceneObjectIds(doc) : sceneObjectIds(doc).slice(1)).join(", ") || "none yet (add_scene_object)"}.`;
   if (id === SCENE_CAMERA) return camera ? undefined : `"camera" is not an object here; use set_scene_world for the camera's start, events for its moves.`;
+  if (sceneLights(doc).lights.some((l) => l.id === id)) return `"${id}" is a light. Lights are static (no events); change it with set_scene_light.`;
   if (!objectsOf(doc).some((o) => isObj(o) && o.id === id)) return `No object "${id}". Objects: ${sceneObjectIds(doc).join(", ")}. Add one with add_scene_object.`;
   return undefined;
 }
@@ -294,6 +295,39 @@ export function applySceneTool(name: SceneEditTool, doc: SceneDoc, a: Record<str
       }
       return done(doc, d, { world: d.world ?? {}, name: d.name, durationSec: d.durationSec }, ["world", "durationSec", "name"]);
     }
+    case "set_scene_light": {
+      // P81b: one light by id or index (omit "light" to add one); lights are static, so this sets its start for good.
+      const { lights, defaults } = sceneLights(doc);
+      const listing = () => `Lights: ${lights.map((l, k) => (l.id ? `${k} ("${l.id}", ${l.type})` : `${k} (${l.type})`)).join(", ")}${defaults ? " — the default lights; changing one writes them into the scene" : ""}.`;
+      let d = doc, i: number;
+      if (a.light === undefined || a.light === null) {
+        if (a.remove === true) return fail(`Name the light to remove ("light": its id or index). ${listing()}`);
+        const type = a.type ?? "point";
+        if (!(SCENE_LIGHTS as readonly unknown[]).includes(type)) return fail(`"type" must be one of ${SCENE_LIGHTS.join(", ")}.`);
+        d = addSceneLight(d, { type: type as SceneLight["type"], color: "#ffffff", intensity: 1, ...(type === "point" || type === "directional" ? { position: [0, 3, 2] as [number, number, number] } : {}) });
+        i = lights.length;
+      } else {
+        const k = sceneLightIndex(doc, a.light);
+        if (k === undefined) return fail(`No light ${JSON.stringify(a.light)}. ${listing()}`);
+        i = k;
+      }
+      if (a.remove === true) return done(doc, removeSceneLight(d, i), { removed: lights[i], note: "Later lights moved down one index." }, ["world"]);
+      const patch: Partial<SceneLight> = {};
+      if (a.id !== undefined) {
+        if (a.id === null || a.id === "") patch.id = undefined;
+        else if (typeof a.id !== "string") return fail('"id" must be text (or null to remove it).');
+        else { const why = lightIdProblem(d, i, a.id); if (why) return fail(`"id": ${why}`); patch.id = a.id; }
+      }
+      if (a.type !== undefined) { if (!(SCENE_LIGHTS as readonly unknown[]).includes(a.type)) return fail(`"type" must be one of ${SCENE_LIGHTS.join(", ")}.`); patch.type = a.type as SceneLight["type"]; }
+      if (a.color !== undefined) { if (typeof a.color !== "string") return fail('"color" must be "#rrggbb".'); patch.color = a.color; }
+      if (a.intensity !== undefined) { if (!numOk(a.intensity) || a.intensity < 0) return fail('"intensity" must be a number ≥ 0.'); patch.intensity = a.intensity; }
+      if (a.position !== undefined) {
+        if (a.position !== null && !isVec3(a.position)) return fail('"position" must be [x, y, z] (directional and point lights), or null.');
+        patch.position = a.position === null ? undefined : a.position;
+      }
+      d = updateSceneLight(d, i, patch);
+      return done(doc, d, { lightIndex: i, light: sceneLights(d).lights[i] }, [`world.lights[${i}]`]);
+    }
   }
 }
 
@@ -327,7 +361,10 @@ export function sceneObjectsForAgent(doc: SceneDoc) {
       const { functions, ...fields } = o;
       return { ...fields, ...(functions ? { functions: Object.keys(functions) } : {}), calls: calls(o.id) };
     }),
-    camera: { calls: calls(SCENE_CAMERA) },
+    // P81b: the camera's start values and the lights (index, optional id) as drawn.
+    camera: { start: (({ background: _b, ...c }) => (void _b, c))(sceneCameraBase(doc)), calls: calls(SCENE_CAMERA) },
+    lights: sceneLights(doc).lights.map((l, index) => ({ index, ...l })),
+    defaultLights: sceneLights(doc).defaults,
     events: sortedEvents(doc).map(({ e, i }) => ({ index: i, ...e })),
     eases: [...SCENE_EASES],
     baseCalls: Object.keys(SCENE_BASE_FUNCTIONS),

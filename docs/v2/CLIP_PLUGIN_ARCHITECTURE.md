@@ -464,9 +464,13 @@ preview's Camera view / Edit view toggle: the Edit view is a second instance of 
 camera, grid, TransformControls, pick by tap; drag values are posted back), a drag writes the selected move / rotate /
 scale event's end value, or with Auto-key a key ending at the playhead, or the object's start value, as one step of the
 editor's undo (`domain/sceneGizmo.ts`); touch gets larger handles and a floating chip bar. OrbitControls and
-TransformControls are vendored as editor-only libraries (not offered to clips). **P81b** (next): the camera and lights
-as selectable objects with helpers in the Edit view (lights selectable and movable only, no light animation).
-**P82**: Script objects (raw three.js code, with templates as starting points).
+TransformControls are vendored as editor-only libraries (not offered to clips). **P81b** (done): the camera has its own
+track (the Scene track keeps scene-wide settings) and, with the lights (optional `id` in `dionysus.scene/1`, one track
+each, static: no light events), is selected from its track or in the Edit view, which draws the camera's frustum and
+look-at point and each directional / point light's helper; their gizmos only move (camera position or look-at point by
+the same event / Auto-key / start-value rules; a light's position), and rotate drags keep whole turns. Agents get
+`set_scene_light` and the camera start and lights in `list_scene_objects`. **P82** (next): Script objects (raw three.js
+code, with templates as starting points).
 
 ### Phase 3 — third-party clip types
 

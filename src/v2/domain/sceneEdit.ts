@@ -3,8 +3,8 @@
  * `dionysus.scene/1` scene, used by the scene editor (ui/SceneEditor.tsx). Every function returns a new scene and
  * leaves its input untouched; the UI stores the result as a scene version (one undo step per gesture).
  *
- * Also the read models the editor draws: `sceneTracks` (one track per object plus the scene/camera track, with the
- * events as blocks stacked into rows where they overlap), the calls an object offers (`sceneCalls`) and the argument
+ * Also the read models the editor draws: `sceneTracks` (P81b: the Scene track for scene-wide settings, the Camera
+ * track, one track per object and one per light, with the events as blocks stacked into rows where they overlap), the calls an object offers (`sceneCalls`) and the argument
  * fields of a call (`sceneCallArgs`), with defaults taken from the evaluated state at the event's time.
  */
 import { cleanParamDecls, type HtmlClipParam } from "./htmlClipPackage";
@@ -34,7 +34,7 @@ function clean<T extends object>(o: T): T {
 /** A free object id from `stem` ("box", "box-2", …); never the camera's. */
 export function freeObjectId(doc: SceneDoc, stem: string): string {
   const base = (/^[A-Za-z]/.test(stem) ? stem : `obj-${stem}`).replace(/[^A-Za-z0-9_-]/g, "-").slice(0, 48) || "obj";
-  const taken = new Set(objectsOf(doc).map((o) => (isObj(o) ? o.id : "")));
+  const taken = new Set([...objectsOf(doc).map((o) => (isObj(o) ? o.id : "")), ...lightIdsOf(doc)]);
   let id = base;
   for (let n = 2; taken.has(id) || id === SCENE_CAMERA; n++) id = `${base}-${n}`;
   return id;
@@ -76,6 +76,7 @@ export function objectIdProblem(doc: SceneDoc, id: string, next: string): string
   if (!ID_RE.test(next)) return "Ids start with a letter and use letters, digits, \"_\" or \"-\" (up to 64).";
   if (next === SCENE_CAMERA) return `"${SCENE_CAMERA}" is reserved for the camera.`;
   if (next !== id && objectsOf(doc).some((o) => isObj(o) && o.id === next)) return `"${next}" is already used.`;
+  if (lightIdsOf(doc).includes(next)) return `"${next}" is the id of a light.`;
   return undefined;
 }
 
@@ -134,6 +135,8 @@ export function updateSceneWorld(doc: SceneDoc, patch: { background?: string; ca
 }
 
 const lightsOf = (doc: SceneDoc): SceneLight[] => (isObj(doc.world) && Array.isArray(doc.world.lights) ? doc.world.lights : []);
+/** P81b: the ids lights have (lights may have none). */
+const lightIdsOf = (doc: SceneDoc): string[] => lightsOf(doc).flatMap((l) => (isObj(l) && typeof l.id === "string" ? [l.id] : []));
 const withLights = (doc: SceneDoc, lights: SceneLight[]): SceneDoc => ({ ...doc, world: { ...(isObj(doc.world) ? doc.world : {}), lights } });
 
 /** The lights the scene is drawn with (its own, or the defaults when it has none). */
@@ -155,6 +158,30 @@ export function updateSceneLight(doc: SceneDoc, i: number, patch: Partial<SceneL
   if (JSON.stringify(next) === JSON.stringify(lights[i]) && lightsOf(doc).length) return doc;
   return withLights(doc, lights.map((l, k) => (k === i ? next : l)));
 }
+
+/** P81b: why `next` can't be the id of light `i` ("" removes the id, always fine). */
+export function lightIdProblem(doc: SceneDoc, i: number, next: string): string | undefined {
+  if (next === "") return undefined;
+  if (!ID_RE.test(next)) return "Ids start with a letter and use letters, digits, \"_\" or \"-\" (up to 64).";
+  if (next === SCENE_CAMERA) return `"${SCENE_CAMERA}" is reserved for the camera.`;
+  if (objectsOf(doc).some((o) => isObj(o) && o.id === next)) return `"${next}" is the id of an object.`;
+  if (sceneLights(doc).lights.some((l, k) => k !== i && l.id === next)) return `"${next}" is already used by another light.`;
+  return undefined;
+}
+
+/** P81b: the index of a light named by its id or its index in the drawn list (undefined when there is none). */
+export function sceneLightIndex(doc: SceneDoc, ref: unknown): number | undefined {
+  const { lights } = sceneLights(doc);
+  if (typeof ref === "number") return Number.isInteger(ref) && ref >= 0 && ref < lights.length ? ref : undefined;
+  if (typeof ref !== "string" || !ref) return undefined;
+  const i = lights.findIndex((l) => l.id === ref);
+  return i < 0 ? undefined : i;
+}
+
+/** P81b: how the editor names light `i`: its id, else "Light n". */
+export const sceneLightLabel = (l: SceneLight, i: number): string => l.id || `Light ${i + 1}`;
+/** P81b: lights with a position the Edit view can move (ambient and hemisphere light comes from everywhere). */
+export const lightHasPosition = (l: Pick<SceneLight, "type">): boolean => l.type === "directional" || l.type === "point";
 
 /** Remove light `i`; removing the last one leaves an empty list, which draws the default lights. */
 export function removeSceneLight(doc: SceneDoc, i: number): SceneDoc {
@@ -328,20 +355,33 @@ export function duplicateSceneEvent(doc: SceneDoc, i: number): { doc: SceneDoc; 
 
 /** An event drawn as a block on its object's track; `row` stacks blocks that overlap in time. */
 export interface SceneBlock { index: number; at: number; dur: number; end: number; call: string; row: number }
-export interface SceneTrack { id: string; label: string; kind: "camera" | "shape" | "model" | "missing"; detail: string; rows: number; blocks: SceneBlock[] }
+export interface SceneTrack {
+  /** The object id (`camera` for the camera; "#scene", "#light-<i>" and "" (unknown objects) never take events). */
+  id: string; label: string; kind: "scene" | "camera" | "shape" | "model" | "light" | "missing"; detail: string; rows: number; blocks: SceneBlock[];
+  /** P81b: a light track's index in the drawn lights. */
+  light?: number;
+}
+/** P81b: the Scene track's id (scene-wide settings; no events). */
+export const SCENE_TRACK = "#scene";
 
 /**
- * The tracks of the scene editor: the scene/camera track first, then one per object in order, then one for events
+ * The tracks of the scene editor. P81b: the Scene track (name, length, background, lights; no events), the Camera
+ * track (its moves), one per object in order, one per light (lights are static: no events), then one for events
  * that name an object that doesn't exist. Blocks are sorted by time; a block with no duration takes `minSec` of room
  * when stacking, so labels don't overlap.
  */
 export function sceneTracks(doc: SceneDoc, minSec = 0.4): SceneTrack[] {
-  const tracks: SceneTrack[] = [{ id: SCENE_CAMERA, label: "Scene", kind: "camera", detail: "camera, background, lights", rows: 1, blocks: [] }];
+  const tracks: SceneTrack[] = [
+    { id: SCENE_TRACK, label: "Scene", kind: "scene", detail: "name, length, background, lights", rows: 1, blocks: [] },
+    { id: SCENE_CAMERA, label: "Camera", kind: "camera", detail: "position, look-at point, field of view", rows: 1, blocks: [] },
+  ];
   for (const o of objectsOf(doc)) {
     if (!isObj(o) || typeof o.id !== "string") continue;
     tracks.push({ id: o.id, label: typeof o.name === "string" && o.name ? o.name : o.id, kind: typeof o.model === "string" ? "model" : "shape", detail: typeof o.model === "string" ? o.model : o.shape ?? "box", rows: 1, blocks: [] });
   }
   const byId = new Map(tracks.map((t) => [t.id, t]));
+  const { lights, defaults } = sceneLights(doc);
+  lights.forEach((l, i) => tracks.push({ id: `#light-${i}`, label: sceneLightLabel(l, i), kind: "light", detail: `${l.type} light${defaults ? " (default)" : ""}`, rows: 1, blocks: [], light: i }));
   let missing: SceneTrack | undefined;
   eventsOf(doc).forEach((e, index) => {
     if (!isObj(e) || typeof e.at !== "number" || !Number.isFinite(e.at)) return;
