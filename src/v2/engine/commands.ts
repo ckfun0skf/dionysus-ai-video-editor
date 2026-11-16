@@ -477,11 +477,11 @@ export const duplicateClips = (ids: string[], newIds: string[]): Command => ({
 });
 
 /** Add a new version to an asset, select it, and pin one placement at it (e.g. after editing an HTML clip). Undo restores both. */
-export const addAssetVersion = (assetId: string, version: AssetVersion, placementId?: string, opts: { mode?: clipVersion.VersionSaveMode; label?: string } = {}): Command => ({
+export const addAssetVersion = (assetId: string, version: AssetVersion, placementId?: string, opts: { mode?: clipVersion.VersionSaveMode; label?: string; remember?: boolean } = {}): Command => ({
   label: opts.label ?? (opts.mode === "replace" ? "Replace current version" : "Edit HTML clip"),
   apply: (p) => {
     if (placementId) {
-      const r = clipVersion.applyMediaFromClip(p, placementId, version.media, { mode: opts.mode ?? "new", versionId: version.id, seed: version, remember: true });
+      const r = clipVersion.applyMediaFromClip(p, placementId, version.media, { mode: opts.mode ?? "new", versionId: version.id, seed: version, remember: opts.remember ?? true });
       if (!r.ok) throw new Error(r.error);
       return r.project;
     }
@@ -490,7 +490,7 @@ export const addAssetVersion = (assetId: string, version: AssetVersion, placemen
     if (opts.mode === "replace") {
       const vid = a.selectedVersionId ?? a.versions.at(-1)?.id;
       if (!vid) return p;
-      const r = clipVersion.replaceAssetVersion(p, assetId, vid, version.media, { remember: true });
+      const r = clipVersion.replaceAssetVersion(p, assetId, vid, version.media, { remember: opts.remember ?? true });
       if (!r.ok) throw new Error(r.error);
       return r.project;
     }

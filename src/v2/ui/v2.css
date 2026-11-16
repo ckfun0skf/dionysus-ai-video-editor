@@ -1723,3 +1723,75 @@ select.v2-tp-field { -webkit-appearance: none; appearance: none; padding-right: 
 .v2-scene-panel h4 small { font-weight: 400; opacity: .6; margin-left: 4px; }
 .v2-app .v2-scene-panel .v2-btn.v2-scene-add { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px; margin-top: 8px; }
 .v2-scene-anims { opacity: .7; }
+
+/* P76: scene editor — a scene clip's own timeline (desktop: in place of the timeline; phone: full screen). */
+.v2-app .v2-scene-panel .v2-btn.v2-scene-edit { margin: 0 0 10px; width: 100%; justify-content: center; }
+.v2-scene-editor { display: flex; flex-direction: column; min-height: 0; background: var(--panel); color: var(--text); }
+.v2-scene-editor.is-desk { flex: 1; height: 100%; }
+.v2-scene-editor.is-phone { position: fixed; inset: 0; z-index: 70; height: 100dvh; padding-bottom: env(safe-area-inset-bottom); }
+.v2-sed-head, .v2-sed-bar { flex: none; display: flex; align-items: center; gap: 6px; padding: 0 8px; min-height: 48px; border-bottom: 1px solid var(--line); }
+.v2-sed-head { flex-wrap: wrap; }
+.v2-sed-title { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40%; }
+.v2-sed-ver { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.v2-app .v2-scene-editor button.v2-icon { min-width: 44px; min-height: 44px; display: inline-grid; place-items: center; }
+.v2-sed-mode { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.v2-sed-mode button { min-height: 44px; padding: 0 12px; border: none; background: none; color: var(--muted); font: 13px/1 system-ui; }
+.v2-sed-mode button.is-on { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--text); }
+.v2-sed-time { font-variant-numeric: tabular-nums; font-size: 13px; color: var(--muted); }
+.v2-sed-errs { display: inline-flex; align-items: center; gap: 4px; color: #ff8a7a; font-size: 13px; }
+.v2-app .v2-scene-editor button.v2-btn { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 12px; }
+.v2-sed-addwrap { position: relative; }
+.v2-sed-addmenu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 5; display: grid; min-width: 180px; padding: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.45); }
+.v2-sed-addmenu button { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 10px; border: none; border-radius: 6px; background: none; color: var(--text); font: 14px/1 system-ui; text-align: left; }
+.v2-sed-addmenu button:hover { background: #ffffff10; }
+.v2-sed-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 340px; }
+.v2-sed-tracks { min-width: 0; min-height: 0; overflow: auto; position: relative; }
+.v2-sed-grid { position: relative; min-height: 100%; }
+.v2-sed-ruler { position: sticky; top: 0; z-index: 3; display: flex; height: 44px; background: var(--panel); border-bottom: 1px solid var(--line); }
+.v2-sed-corner { position: sticky; left: 0; z-index: 4; flex: none; display: flex; align-items: center; background: var(--panel); border-right: 1px solid var(--line); }
+.v2-sed-scale { position: relative; flex: none; height: 100%; cursor: pointer; touch-action: pan-x; }
+.v2-sed-tick { position: absolute; bottom: 0; height: 8px; border-left: 1px solid #ffffff30; font-size: 11px; color: var(--muted); padding-left: 3px; line-height: 1; }
+.v2-sed-tick.is-major { height: 22px; border-left-color: #ffffff60; }
+.v2-sed-out { position: absolute; top: 0; bottom: 0; background: repeating-linear-gradient(135deg, #00000040 0 6px, transparent 6px 12px); pointer-events: none; }
+.v2-sed-track { display: flex; border-bottom: 1px solid var(--line); }
+.v2-sed-track.is-sel .v2-sed-thead { background: color-mix(in srgb, var(--accent) 12%, var(--panel)); }
+.v2-sed-thead { position: sticky; left: 0; z-index: 2; flex: none; display: flex; align-items: flex-start; background: var(--panel); border-right: 1px solid var(--line); }
+.v2-sed-tname { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 6px 0 8px; border: none; background: none; color: var(--text); font: 13px/1.1 system-ui; text-align: left; }
+.v2-sed-tname span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.v2-sed-track.kind-camera .v2-sed-tname { color: var(--accent); }
+.v2-sed-track.kind-missing .v2-sed-tname { color: #ffd27a; }
+.v2-sed-lane { position: relative; flex: none; }
+.v2-sed-block { position: absolute; height: 44px; display: flex; align-items: center; padding: 0 8px; border: 1px solid #ffffff2a; border-radius: 6px; background: #2b3a4a; color: var(--text); font: 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; text-align: left; }
+.v2-sed-block span { overflow: hidden; text-overflow: ellipsis; }
+.v2-sed-block.is-instant { background: #2f2f3a; border-style: dashed; }
+.v2-sed-block.is-sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; background: color-mix(in srgb, var(--accent) 22%, #1f2a33); }
+.v2-sed-block.is-bad { border-color: #ff8a7a; }
+.v2-sed-playhead { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--accent); pointer-events: none; z-index: 2; }
+.v2-sed-panel { min-height: 0; overflow: auto; border-left: 1px solid var(--line); padding: 8px 12px 16px; }
+.v2-sed-form { display: grid; gap: 8px; }
+.v2-sed-form h4 { display: flex; align-items: center; gap: 6px; margin: 4px 0; font-size: 14px; }
+.v2-sed-form h4 small, .v2-sed-form h5 small { font-weight: 400; color: var(--muted); }
+.v2-sed-form h5 { display: flex; align-items: center; gap: 6px; margin: 8px 0 0; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.v2-sed-field { display: grid; grid-template-columns: 112px minmax(0, 1fr); align-items: center; gap: 8px; font-size: 13px; }
+.v2-sed-field > span { color: var(--muted); }
+.v2-sed-field input:not([type=checkbox]), .v2-sed-field select, .v2-sed-row select { min-height: 44px; width: 100%; box-sizing: border-box; padding: 0 8px; border: 1px solid var(--line); border-radius: 6px; background: #0000002a; color: var(--text); font: 14px system-ui; }
+.v2-sed-field input[type=color] { padding: 2px; }
+.v2-sed-ferr { grid-column: 2; color: #ff8a7a; font-size: 12px; font-style: normal; }
+.v2-sed-check { grid-template-columns: 44px 1fr; min-height: 44px; }
+.v2-sed-check input { width: 22px; height: 22px; justify-self: center; accent-color: var(--accent); }
+.v2-sed-vec, .v2-sed-light, .v2-sed-nodes { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px 8px; margin: 0; display: grid; gap: 6px; }
+.v2-sed-vec { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.v2-sed-vec legend, .v2-sed-light legend, .v2-sed-nodes legend { font-size: 12px; color: var(--muted); padding: 0 4px; }
+.v2-sed-vec .v2-sed-field { grid-template-columns: 14px minmax(0, 1fr); gap: 4px; }
+.v2-sed-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.v2-sed-row > .v2-sed-field { flex: 1 1 180px; }
+.v2-sed-row select { flex: 1 1 120px; width: auto; }
+.v2-app .v2-scene-editor .v2-btn.v2-sed-danger { color: #ff8a7a; }
+.v2-sed-mirror { flex: none; display: flex; justify-content: center; background: #000; height: 26dvh; }
+.v2-sed-mirror canvas { height: 100%; width: auto; max-width: 100%; object-fit: contain; }
+/* Phone: tracks over the form, both scroll; the header wraps the save mode onto its own row. */
+.v2-scene-editor.is-phone .v2-sed-body { grid-template-columns: 1fr; grid-template-rows: minmax(140px, 38%) minmax(0, 1fr); }
+.v2-scene-editor.is-phone .v2-sed-panel { border-left: none; border-top: 1px solid var(--line); }
+.v2-scene-editor.is-phone .v2-sed-mode { order: 10; flex: 1 0 100%; margin-bottom: 6px; }
+.v2-scene-editor.is-phone .v2-sed-mode button { flex: 1; }
+.v2-scene-editor.is-phone .v2-sed-title { max-width: 46%; }

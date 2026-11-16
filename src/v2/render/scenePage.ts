@@ -166,3 +166,28 @@ ${SCENE_RUNTIME_JS}</script></body></html>
   const used = files && typeof files === "object" ? Object.fromEntries(Object.entries(files).filter(([, d]) => typeof d === "string")) : {};
   return writeManifest(page, { libs: ["three", "three-gltf"], files: used });
 }
+
+/**
+ * P76: what the page is built from. The page reads only the lights and each object's id, shape, size and model from
+ * the embedded scene (everything else arrives per frame as state), plus the model files; two scenes with the same key
+ * get the same page, so the player keeps a scene clip's page across edits of events and properties and just draws
+ * the frame again (no reload). Files are keyed by name, length and a hash of their text.
+ */
+const pageKeys = new WeakMap<SceneDoc, string>();
+export function scenePageKey(doc: SceneDoc | undefined): string {
+  if (!doc) return "none";
+  const hit = pageKeys.get(doc);
+  if (hit !== undefined) return hit;
+  const lights = doc.world && typeof doc.world === "object" ? doc.world.lights : undefined;
+  const objects = (Array.isArray(doc.objects) ? doc.objects : []).map((o) => (o && typeof o === "object" ? [o.id, o.shape, o.size, o.model] : null));
+  const files = doc.files && typeof doc.files === "object" ? Object.entries(doc.files).map(([n, d]) => [n, typeof d === "string" ? `${d.length}:${hashText(d)}` : null]) : [];
+  const key = JSON.stringify([lights ?? null, objects, files]);
+  pageKeys.set(doc, key);
+  return key;
+}
+/** FNV-1a over the text (32-bit, hex). */
+function hashText(s: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+  return (h >>> 0).toString(16);
+}

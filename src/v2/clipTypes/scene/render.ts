@@ -4,7 +4,7 @@ import { placeRect } from "../../render/frame";
 import { isValidFrame } from "../../render/htmlClip";
 import { drawBlackFrame, drawSlate } from "../../render/placeholderSlate";
 import { drawWithLook } from "../../render/transitionDraw";
-import { stateAt } from "../../domain/scene";
+import { stateAt, type SceneDoc } from "../../domain/scene";
 import { ticksToSeconds } from "../../domain/time";
 
 /**
@@ -12,6 +12,8 @@ import { ticksToSeconds } from "../../domain/time";
  * the clip's sandboxed scene page (render/scenePage.ts) as `ctx.inputs.scene`; the page renders it with three.js and
  * returns the frame, which is placed like a code clip's. A document that can't be read shows a slate (black in export).
  */
+/** The scene each page last drew (P76). */
+const shownDoc = new WeakMap<object, SceneDoc>();
 const scene: ClipRenderer = {
   id: "scene",
   frame(h) {
@@ -30,7 +32,10 @@ const scene: ClipRenderer = {
     const at = Math.round(ticksToSeconds(sourceTicks) * 1000) / 1000;
     const dur = ticksToSeconds(placement.sourceInTicks + placement.durationTicks * (placement.speed ?? 1));
     const state = stateAt(doc, at);
-    host.request(at, dur, () => Promise.resolve({ data: { inputs: { scene: state } } }));
+    // P76: a page kept across an edit (same page key) draws the same time again for the edited scene.
+    const fresh = shownDoc.has(host) && shownDoc.get(host) !== doc;
+    shownDoc.set(host, doc);
+    host.request(at, dur, () => Promise.resolve({ data: { inputs: { scene: state } } }), fresh);
     const f = host.frame;
     if (ctx && canvas && isValidFrame(f)) {
       const r = placeRect(placement, f.width, f.height, canvas.width, canvas.height, h.time);
