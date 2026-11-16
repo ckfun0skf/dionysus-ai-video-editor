@@ -1,7 +1,7 @@
 /** Command factories for the MVP timeline. Each wraps a pure domain op. */
 import { setLink } from "../domain/links";
 import type { Command } from "./engine";
-import { DEFAULT_EFFECT_TICKS, DEFAULT_IMAGE_TICKS, findPlacement, newId, sourceInMax, trackKindFor, type Asset, type AssetVersion, type Composition, type MediaRef, type Placement, type Project, type TrackKind, transformOf } from "../domain/model";
+import { DEFAULT_EFFECT_TICKS, DEFAULT_IMAGE_TICKS, findPlacement, hasSound, newId, sourceInMax, trackKindFor, type Asset, type AssetVersion, type Composition, type MediaRef, type Placement, type Project, type TrackKind, transformOf } from "../domain/model";
 import * as ops from "../domain/ops";
 import * as clipRange from "../domain/clipRange";
 import * as slipOps from "../domain/slip";
@@ -204,9 +204,11 @@ export function placementForAsset(asset: Asset, version: AssetVersion, startTick
     sourceInTicks: 0,
     source: { kind: "assetVersion", assetId: asset.id, versionId: version.id },
     clipType: asset.kind,
-    volume: 1,
+    // P75: the types from before the registry keep volume 1 as always; a newer type gets it only if it has sound.
+    ...(LEGACY_VOLUME_KINDS.has(asset.kind) || hasSound({ clipType: asset.kind }) ? { volume: 1 } : {}),
   };
 }
+const LEGACY_VOLUME_KINDS: ReadonlySet<string> = new Set(["video", "image", "audio", "html", "text", "effect"]);
 
 /**
  * P74: add a scene asset's clip at `at` on the main track with an explicit length (a scene renders from time alone, so
@@ -220,8 +222,7 @@ export const addSceneClip = (assetId: string, at: number, durationTicks: number,
     if (!asset || !version || asset.kind !== "scene") throw new Error("scene asset missing");
     const main = ops.mainTrack(c);
     if (!main) throw new Error("no main track");
-    const { volume: _v, ...pl } = placementForAsset(asset, version, Math.max(0, Math.round(at)));
-    void _v;
+    const pl = placementForAsset(asset, version, Math.max(0, Math.round(at)));
     return ops.insertPlacement(c, main.id, { ...pl, id, durationTicks: Math.max(1, Math.round(durationTicks)) });
   }),
 });
@@ -476,8 +477,8 @@ export const duplicateClips = (ids: string[], newIds: string[]): Command => ({
 });
 
 /** Add a new version to an asset, select it, and pin one placement at it (e.g. after editing an HTML clip). Undo restores both. */
-export const addAssetVersion = (assetId: string, version: AssetVersion, placementId?: string, opts: { mode?: clipVersion.VersionSaveMode } = {}): Command => ({
-  label: opts.mode === "replace" ? "Replace current version" : "Edit HTML clip",
+export const addAssetVersion = (assetId: string, version: AssetVersion, placementId?: string, opts: { mode?: clipVersion.VersionSaveMode; label?: string } = {}): Command => ({
+  label: opts.label ?? (opts.mode === "replace" ? "Replace current version" : "Edit HTML clip"),
   apply: (p) => {
     if (placementId) {
       const r = clipVersion.applyMediaFromClip(p, placementId, version.media, { mode: opts.mode ?? "new", versionId: version.id, seed: version, remember: true });

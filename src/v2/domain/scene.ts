@@ -12,8 +12,15 @@
  * conflict. `moveTo` and `position` are the same property; `lookAt` and `rotation` are the same property.
  * Custom functions are declarative (decision 4): typed params plus a `set` map and/or a `states` table that name base
  * properties; a call expands into those properties and tweens like a base call.
+ *
+ * GLB models (P75, step 2.2): an object with `model` names a file of the document's `files` map (data: URLs, like an
+ * HTML clip package). Its animation is one more property: `animation` on the object (from 0 s), the base functions
+ * `play` / `stop`, or `animation` in a custom function's row. The evaluator gives, per model object, the clips that
+ * play at `t` with their local time (`(t - at) × speed + from`, unwrapped: the page loops or clamps it with the clip's
+ * length) and weight (a cross-fade over `fade` seconds is computed from `t` too). Nothing is carried between frames.
  */
 import { checkParamValue, cleanParamDecls, validateParamDecls, type HtmlClipParam, type HtmlParamValue } from "./htmlClipPackage";
+import { glbInfoOfDataUrl } from "./glb";
 
 export const SCENE_FORMAT = "dionysus.scene/1" as const;
 /** MIME type of a scene asset version's blob. */
@@ -36,11 +43,24 @@ export interface SceneProps { position: Vec3; rotation: Vec3; scale: Vec3; visib
 export type ScenePropName = keyof SceneProps;
 export const SCENE_PROPS: readonly ScenePropName[] = ["position", "rotation", "scale", "visible", "opacity", "color"];
 
+/** How a model's animation clip repeats: `repeat` (default), `once` (holds the last pose) or `pingpong`. */
+export type SceneLoop = "repeat" | "once" | "pingpong";
+export const SCENE_LOOPS: readonly SceneLoop[] = ["repeat", "once", "pingpong"];
+/** A GLB animation clip to play: by name (as in the file), with speed (≥ 0), loop mode and start offset (seconds). */
+export interface SceneAnimation { clip: string; speed?: number; loop?: SceneLoop; from?: number }
+/** One clip playing at `t` (per model object): its unwrapped local time in seconds and its blend weight (0–1). */
+export interface SceneAnimState { clip: string; time: number; loop: SceneLoop; weight: number }
+
+/**
+ * A function row may also set `animation` (a clip name, "$param" or { clip, speed, loop, from }; it fades over the
+ * event's `dur`) and `nodes` (model parts by node name → shown or hidden; switches at `at`).
+ */
+export type SceneRowKey = ScenePropName | "animation" | "nodes";
 /** A declarative custom function: typed params; `set` maps properties to constants or "$param"; `states` picks a row by a param's value. */
 export interface SceneFunction {
   params?: Record<string, HtmlClipParam>;
-  set?: Partial<Record<ScenePropName, unknown>>;
-  states?: { param: string; table: Record<string, Partial<Record<ScenePropName, unknown>>> };
+  set?: Partial<Record<SceneRowKey, unknown>>;
+  states?: { param: string; table: Record<string, Partial<Record<SceneRowKey, unknown>>> };
   description?: string;
 }
 
@@ -49,8 +69,16 @@ export interface SceneObject {
   /** Primitive shape (default box). `size`: box [w,h,d] or one number; sphere radius; cylinder/cone [radius, height]; torus [radius, tube]; plane [w,h]. */
   shape?: SceneShape;
   size?: number | number[];
-  /** A GLB model by file name: not drawn before step 2.2 (the object is drawn as its shape, with a warning). */
+  /**
+   * A GLB model: the name of a file in the document's `files` (P75). With a number `size` the model is scaled so its
+   * largest side is `size` units, centred on x/z and standing on y = 0; without, it keeps the file's units. A missing
+   * or broken file draws the object's shape (a box by default) with a warning.
+   */
   model?: string;
+  /** The model's animation from 0 s: a clip name or { clip, speed, loop, from }. */
+  animation?: string | SceneAnimation;
+  /** Parts of the model shown (true) or hidden (false) from 0 s, by node name; unnamed parts keep the file's setting. */
+  nodes?: Record<string, boolean>;
   name?: string;
   color?: string;
   position?: Vec3;
@@ -75,12 +103,14 @@ export interface SceneDoc {
   world?: SceneWorld;
   objects: SceneObject[];
   events?: SceneEvent[];
+  /** Embedded files by name (P75): GLB models as data: URLs, stored in the scene asset's version like an HTML clip package. */
+  files?: Record<string, string>;
 }
 
 export interface SceneIssue { level: "error" | "warning"; path: string; message: string }
 
 /** The base functions every object has, with the property each writes. */
-export const SCENE_BASE_FUNCTIONS: Record<string, { prop: ScenePropName | "target" | "fov"; arg: string; description: string }> = {
+export const SCENE_BASE_FUNCTIONS: Record<string, { prop: SceneRowKey | "target" | "fov"; arg: string; description: string }> = {
   position: { prop: "position", arg: "value", description: "Move to [x, y, z] (a tween with dur)." },
   moveTo: { prop: "position", arg: "position", description: "Same as position; the argument is named position." },
   rotation: { prop: "rotation", arg: "value", description: "Rotate to [x, y, z] degrees." },
@@ -88,7 +118,10 @@ export const SCENE_BASE_FUNCTIONS: Record<string, { prop: ScenePropName | "targe
   scale: { prop: "scale", arg: "value", description: "Scale to a number or [x, y, z]." },
   visible: { prop: "visible", arg: "value", description: "Show (true) or hide (false). Never tweens." },
   opacity: { prop: "opacity", arg: "value", description: "Opacity 0–1." },
-  color: { prop: "color", arg: "value", description: "Material colour \"#rrggbb\"." },
+  color: { prop: "color", arg: "value", description: "Material colour \"#rrggbb\" (shapes only; a model keeps its own materials)." },
+  play: { prop: "animation", arg: "clip", description: "Models: play an animation clip by name; optional speed, loop (repeat/once/pingpong), from (s) and fade (s, else dur)." },
+  stop: { prop: "animation", arg: "fade", description: "Models: stop the animation (back to the rest pose), fading over fade (s, else dur)." },
+  nodes: { prop: "nodes", arg: "value", description: "Models: show or hide parts by node name, e.g. { \"Hat\": false }. Never tweens." },
 };
 /** Functions of the reserved `camera` object. */
 export const SCENE_CAMERA_FUNCTIONS: Record<string, { prop: "position" | "target" | "fov"; arg: string }> = {
@@ -137,6 +170,38 @@ function propProblem(prop: ScenePropName, v: unknown): string | undefined {
   }
 }
 
+/** A clip name or { clip, speed, loop, from } as a normalised animation, or a problem. */
+function animOf(v: unknown): { anim?: Required<SceneAnimation>; problem?: string } {
+  const spec = typeof v === "string" ? { clip: v } : v;
+  if (!isObj(spec) || typeof spec.clip !== "string" || !spec.clip) return { problem: "must be a clip name or { \"clip\": name, \"speed\", \"loop\", \"from\" }" };
+  if (spec.speed !== undefined && !(num(spec.speed) && spec.speed >= 0)) return { problem: "has a speed that is not a number ≥ 0" };
+  if (spec.loop !== undefined && !(SCENE_LOOPS as readonly string[]).includes(String(spec.loop))) return { problem: `has a loop that is not one of ${SCENE_LOOPS.join(", ")}` };
+  if (spec.from !== undefined && !(num(spec.from) && spec.from >= 0)) return { problem: "has a from that is not a number of seconds ≥ 0" };
+  return { anim: { clip: spec.clip, speed: num(spec.speed) ? spec.speed : 1, loop: (spec.loop as SceneLoop | undefined) ?? "repeat", from: num(spec.from) ? spec.from : 0 } };
+}
+const nodesProblem = (v: unknown): string | undefined =>
+  isObj(v) && Object.keys(v).length > 0 && Object.values(v).every((x) => typeof x === "boolean") ? undefined : "must be an object of node name → true or false";
+const rowProblem = (k: SceneRowKey, v: unknown): string | undefined => (k === "animation" ? animOf(v).problem : k === "nodes" ? nodesProblem(v) : propProblem(k, v));
+const ROW_KEYS: readonly string[] = [...SCENE_PROPS, "animation", "nodes"];
+const MODEL_KEYS: readonly string[] = ["animation", "nodes"];
+const FILE_RE = /^[A-Za-z0-9][A-Za-z0-9 _.()-]{0,127}$/;
+
+/** Animation clip names of a model object's GLB (undefined when the file is missing or not a readable GLB). */
+export function modelAnimations(doc: Pick<SceneDoc, "files">, model: string | undefined): string[] | undefined {
+  const url = model && isObj(doc.files) ? doc.files[model] : undefined;
+  return typeof url === "string" ? glbInfoOfDataUrl(url)?.animations.map((a) => a.name) : undefined;
+}
+/** Node names of a model object's GLB (undefined when unknown). */
+function modelNodes(doc: Pick<SceneDoc, "files">, model: string | undefined): string[] | undefined {
+  const url = model && isObj(doc.files) ? doc.files[model] : undefined;
+  return typeof url === "string" ? glbInfoOfDataUrl(url)?.nodeNames : undefined;
+}
+/** Warn when a model's GLB is readable and has no node of a name. */
+function nodeWarnings(doc: SceneDoc, model: string, v: unknown, path: string, warn: (path: string, m: string) => void) {
+  const names = modelNodes(doc, model);
+  if (names && isObj(v)) for (const k of Object.keys(v)) if (!names.includes(k)) warn(`${path}.${k}`, `"${model}" has no node "${k}".`);
+}
+
 const sizeOk = (shape: SceneShape, v: unknown): boolean => {
   if (num(v)) return v > 0;
   if (!Array.isArray(v) || !v.every((x) => num(x) && x > 0)) return false;
@@ -158,6 +223,14 @@ export function validateScene(raw: unknown): SceneIssue[] {
   if (raw.format !== SCENE_FORMAT) err("format", `"format" must be "${SCENE_FORMAT}".`);
   if (raw.name !== undefined && typeof raw.name !== "string") err("name", "\"name\" must be a string.");
   if (raw.durationSec !== undefined && !(num(raw.durationSec) && raw.durationSec > 0)) err("durationSec", "\"durationSec\" must be a number above 0.");
+  const files = isObj(raw.files) ? raw.files : {};
+  if (raw.files !== undefined) {
+    if (!isObj(raw.files)) err("files", "\"files\" must be an object of file name → data: URL.");
+    else for (const [n, d] of Object.entries(raw.files)) {
+      if (!FILE_RE.test(n)) err(`files.${n}`, "File names use letters, digits, spaces, \"_\", \"-\", \".\" and brackets.");
+      if (typeof d !== "string" || !/^data:[^,]*,/.test(d)) err(`files.${n}`, "must be a data: URL.");
+    }
+  }
   // world
   if (raw.world !== undefined) {
     const w = raw.world;
@@ -199,29 +272,50 @@ export function validateScene(raw: unknown): SceneIssue[] {
     const shape = (o.shape ?? "box") as SceneShape;
     if (!SCENE_SHAPES.includes(shape)) err(`${p}.shape`, `must be one of ${SCENE_SHAPES.map((x) => `"${x}"`).join(", ")}.`);
     else if (o.size !== undefined && !sizeOk(shape, o.size)) err(`${p}.size`, `has the wrong form for a ${shape}.`);
+    const fallback = SCENE_SHAPES.includes(shape) ? shape : "box";
     if (o.model !== undefined) {
       if (typeof o.model !== "string" || !o.model) err(`${p}.model`, "must be a file name.");
-      else warn(`${p}.model`, `GLB models are drawn from a later version; "${o.model}" is shown as a ${SCENE_SHAPES.includes(shape) ? shape : "box"} for now.`);
+      else if (typeof files[o.model] !== "string") warn(`${p}.model`, `"${o.model}" is not in "files"; the object is drawn as a ${fallback}.`);
+      else if (!/\.(glb|gltf)$/i.test(o.model)) warn(`${p}.model`, `"${o.model}" is not a .glb or .gltf file; it may not load (then a ${fallback} is drawn).`);
+      else if (/\.glb$/i.test(o.model) && !glbInfoOfDataUrl(files[o.model] as string)) warn(`${p}.model`, `"${o.model}" is not a readable GLB; the object is drawn as a ${fallback}.`);
+    }
+    if (o.animation !== undefined) {
+      const a = animOf(o.animation);
+      if (a.problem) err(`${p}.animation`, `${a.problem}.`);
+      else if (typeof o.model !== "string") err(`${p}.animation`, "only a model object (with \"model\") has animations.");
+      else clipWarning(raw as unknown as SceneDoc, o.model, a.anim!.clip, `${p}.animation`, warn);
+    }
+    if (o.nodes !== undefined) {
+      const why = nodesProblem(o.nodes);
+      if (why) err(`${p}.nodes`, `${why}.`);
+      else if (typeof o.model !== "string") err(`${p}.nodes`, "only a model object (with \"model\") has nodes.");
+      else nodeWarnings(raw as unknown as SceneDoc, o.model, o.nodes, `${p}.nodes`, warn);
     }
     if (o.name !== undefined && typeof o.name !== "string") err(`${p}.name`, "must be a string.");
     for (const prop of SCENE_PROPS) if (o[prop] !== undefined) { const why = propProblem(prop, o[prop]); if (why) err(`${p}.${prop}`, `${why}.`); }
     if (o.functions !== undefined) {
       if (!isObj(o.functions)) err(`${p}.functions`, "must be an object of function name → { params, set, states }.");
-      else for (const [fn, f] of Object.entries(o.functions)) validateFunction(f, fn, `${p}.functions.${fn}`, err);
+      else for (const [fn, f] of Object.entries(o.functions)) validateFunction(f, fn, `${p}.functions.${fn}`, err, typeof o.model === "string" ? o.model : undefined, raw as unknown as SceneDoc, warn);
     }
   });
   // events
   if (raw.events !== undefined) {
     if (!Array.isArray(raw.events)) err("events", "\"events\" must be a list.");
     else {
-      raw.events.forEach((e, i) => validateEvent(e, `events[${i}]`, objects, err));
+      raw.events.forEach((e, i) => validateEvent(e, `events[${i}]`, objects, err, raw as unknown as SceneDoc, warn));
       overlapWarnings(raw as unknown as SceneDoc, warn);
     }
   }
   return out;
 }
 
-function validateFunction(f: unknown, name: string, p: string, err: (path: string, m: string) => void) {
+/** Warn when a model's GLB is readable and has no clip of that name. */
+function clipWarning(doc: SceneDoc, model: string, clip: string, path: string, warn: (path: string, m: string) => void) {
+  const names = modelAnimations(doc, model);
+  if (names && !names.includes(clip)) warn(path, names.length ? `"${model}" has no animation "${clip}" (it has ${names.map((n) => `"${n}"`).join(", ")}).` : `"${model}" has no animations.`);
+}
+
+function validateFunction(f: unknown, name: string, p: string, err: (path: string, m: string) => void, model?: string, doc?: SceneDoc, warn?: (path: string, m: string) => void) {
   if (!ID_RE.test(name)) err(p, `Function name "${name}" must start with a letter and use letters, digits, "_" or "-".`);
   if (SCENE_BASE_FUNCTIONS[name]) err(p, `"${name}" is a base function; pick another name.`);
   if (!isObj(f)) { err(p, "must be an object { params, set, states }."); return; }
@@ -231,9 +325,13 @@ function validateFunction(f: unknown, name: string, p: string, err: (path: strin
   const checkRow = (row: unknown, rp: string) => {
     if (!isObj(row)) { err(rp, "must be an object of property → value."); return; }
     for (const [k, v] of Object.entries(row)) {
-      if (!(SCENE_PROPS as readonly string[]).includes(k)) { err(`${rp}.${k}`, `is not a property (${SCENE_PROPS.join(", ")}).`); continue; }
+      if (!ROW_KEYS.includes(k)) { err(`${rp}.${k}`, `is not a property (${ROW_KEYS.join(", ")}).`); continue; }
+      if (MODEL_KEYS.includes(k) && !model) { err(`${rp}.${k}`, `only a model object (with "model") has ${k === "nodes" ? "nodes" : "animations"}.`); continue; }
+      if (k === "nodes" && typeof v === "string") { err(`${rp}.${k}`, "must be an object of node name → true or false (not a param)."); continue; }
       if (typeof v === "string" && v.startsWith("$")) { if (!decls[v.slice(1)]) err(`${rp}.${k}`, `names an undeclared param "${v.slice(1)}".`); continue; }
-      const why = propProblem(k as ScenePropName, v); if (why) err(`${rp}.${k}`, `${why}.`);
+      const why = rowProblem(k as SceneRowKey, v); if (why) { err(`${rp}.${k}`, `${why}.`); continue; }
+      if (k === "animation" && model && doc && warn) clipWarning(doc, model, animOf(v).anim!.clip, `${rp}.${k}`, warn);
+      if (k === "nodes" && model && doc && warn) nodeWarnings(doc, model, v, `${rp}.${k}`, warn);
     }
   };
   if (f.set !== undefined) checkRow(f.set, `${p}.set`);
@@ -254,7 +352,7 @@ function validateFunction(f: unknown, name: string, p: string, err: (path: strin
   if (f.description !== undefined && typeof f.description !== "string") err(`${p}.description`, "must be a string.");
 }
 
-function validateEvent(e: unknown, p: string, objects: Map<string, Record<string, unknown>>, err: (path: string, m: string) => void) {
+function validateEvent(e: unknown, p: string, objects: Map<string, Record<string, unknown>>, err: (path: string, m: string) => void, doc: SceneDoc, warn: (path: string, m: string) => void) {
   if (!isObj(e)) { err(p, "must be an object { at, obj, call, args, dur, ease }."); return; }
   if (!num(e.at) || e.at < 0) err(`${p}.at`, "must be a number of seconds ≥ 0.");
   if (e.dur !== undefined && !(num(e.dur) && e.dur >= 0)) err(`${p}.dur`, "must be a number of seconds ≥ 0.");
@@ -278,6 +376,19 @@ function validateEvent(e: unknown, p: string, objects: Map<string, Record<string
   if (base) {
     const v = args[base.arg] ?? (base.arg === "position" ? args.value : undefined);
     if (e.call === "lookAt") { if (!isVec3(v) && !(typeof v === "string" && objects.has(v) && v !== e.obj)) err(`${p}.args.target`, "must be another object id or [x, y, z]."); }
+    else if (base.prop === "nodes") {
+      if (typeof o.model !== "string") { err(`${p}.call`, `"${e.obj}" has no model, so it has no nodes.`); return; }
+      const why = nodesProblem(v); if (why) err(`${p}.args.value`, `${why}.`); else nodeWarnings(doc, o.model, v, `${p}.args.value`, warn);
+    }
+    else if (base.prop === "animation") {
+      if (typeof o.model !== "string") { err(`${p}.call`, `"${e.obj}" has no model, so it can't ${e.call} an animation.`); return; }
+      if (args.fade !== undefined && !(num(args.fade) && args.fade >= 0)) err(`${p}.args.fade`, "must be a number of seconds ≥ 0.");
+      if (e.call === "play") {
+        const a = animOf({ clip: args.clip, speed: args.speed, loop: args.loop, from: args.from });
+        if (a.problem) err(`${p}.args`, `${a.problem}.`);
+        else clipWarning(doc, o.model, a.anim!.clip, `${p}.args.clip`, warn);
+      }
+    }
     else { const why = propProblem(base.prop as ScenePropName, v); if (why) err(`${p}.args.${base.arg}`, `${why}.`); }
     return;
   }
@@ -316,7 +427,13 @@ export function parseScene(text: string): { doc?: SceneDoc; issues: SceneIssue[]
 
 // ---------------------------------------------------------------- evaluation
 
-export interface SceneObjectState extends SceneProps { id: string }
+export interface SceneObjectState extends SceneProps {
+  id: string;
+  /** Model objects only (P75): the clips playing at `t`, a fading-out one first; empty = rest pose. */
+  animation?: SceneAnimState[];
+  /** Model objects with `nodes` set somewhere (P75): parts shown or hidden at `t`, by node name. */
+  nodes?: Record<string, boolean>;
+}
 export interface SceneState {
   t: number;
   background: string;
@@ -335,7 +452,8 @@ export function sortedEvents(doc: Pick<SceneDoc, "events">): { e: SceneEvent; i:
 const objOf = (doc: SceneDoc, id: string) => (Array.isArray(doc.objects) ? doc.objects : []).find((o) => isObj(o) && o.id === id);
 
 /** Property → target value for one event on an object (only values that pass the property check). `lookAt` is resolved later. */
-function eventTargets(doc: SceneDoc, e: SceneEvent): Partial<Record<ScenePropName, unknown>> & { lookAt?: unknown } {
+type Targets = Partial<Record<ScenePropName, unknown>> & { lookAt?: unknown; animation?: { anim: Required<SceneAnimation> | null; fade?: number }; nodes?: Record<string, boolean> };
+function eventTargets(doc: SceneDoc, e: SceneEvent): Targets {
   const o = objOf(doc, e.obj);
   if (!o || typeof e.call !== "string") return {};
   const args = isObj(e.args) ? e.args : {};
@@ -343,6 +461,14 @@ function eventTargets(doc: SceneDoc, e: SceneEvent): Partial<Record<ScenePropNam
   if (base) {
     const v = args[base.arg] ?? (base.arg === "position" ? args.value : undefined);
     if (e.call === "lookAt") return isVec3(v) || (typeof v === "string" && v !== e.obj && objOf(doc, v)) ? { lookAt: v } : {};
+    if (base.prop === "nodes") return typeof o.model === "string" && !nodesProblem(v) ? { nodes: v as Record<string, boolean> } : {};
+    if (base.prop === "animation") {
+      if (typeof o.model !== "string") return {};
+      const fade = num(args.fade) && args.fade >= 0 ? args.fade : undefined;
+      if (e.call === "stop") return { animation: { anim: null, fade } };
+      const a = animOf({ clip: args.clip, speed: args.speed, loop: args.loop, from: args.from }).anim;
+      return a ? { animation: { anim: a, fade } } : {};
+    }
     return propProblem(base.prop as ScenePropName, v) ? {} : { [base.prop]: v };
   }
   const f = isObj(o.functions) ? o.functions[e.call] : undefined;
@@ -353,12 +479,14 @@ function eventTargets(doc: SceneDoc, e: SceneEvent): Partial<Record<ScenePropNam
     const c = args[k] === undefined ? undefined : checkParamValue(d, args[k]);
     vals[k] = c?.value ?? d.default;
   }
-  const out: Partial<Record<ScenePropName, unknown>> = {};
+  const out: Targets = {};
   const apply = (row: unknown) => {
     if (!isObj(row)) return;
     for (const [k, raw] of Object.entries(row)) {
-      if (!(SCENE_PROPS as readonly string[]).includes(k)) continue;
+      if (!ROW_KEYS.includes(k)) continue;
       const v = typeof raw === "string" && raw.startsWith("$") ? vals[raw.slice(1)] : raw;
+      if (k === "animation") { const a = typeof o.model === "string" ? animOf(v).anim : undefined; if (a) out.animation = { anim: a }; continue; }
+      if (k === "nodes") { if (typeof o.model === "string" && !nodesProblem(raw)) out.nodes = { ...out.nodes, ...(raw as Record<string, boolean>) }; continue; }
       if (!propProblem(k as ScenePropName, v)) out[k as ScenePropName] = v;
     }
   };
@@ -428,7 +556,8 @@ const objBase = (o: SceneObject): SceneProps => ({
 });
 
 /** Per object and property, its segments (and the camera's), built once per document. */
-interface Plan { props: Map<string, Map<string, Seg[]>> }
+interface AnimSeg { at: number; fade: number; ease: (x: number) => number; anim: Required<SceneAnimation> | null }
+interface Plan { props: Map<string, Map<string, Seg[]>>; anims: Map<string, AnimSeg[]>; nodes: Map<string, { at: number; nodes: Record<string, boolean> }[]> }
 const plans = new WeakMap<SceneDoc, Plan>();
 function planOf(doc: SceneDoc): Plan {
   const hit = plans.get(doc);
@@ -439,6 +568,8 @@ function planOf(doc: SceneDoc): Plan {
     let l = m.get(prop); if (!l) m.set(prop, (l = []));
     l.push(seg);
   };
+  const anims = new Map<string, AnimSeg[]>();
+  const nodes = new Map<string, { at: number; nodes: Record<string, boolean> }[]>();
   for (const { e } of sortedEvents(doc)) {
     const dur = num(e.dur) && e.dur > 0 ? e.dur : 0;
     const ease = SCENE_EASE[(e.ease ?? "linear") as SceneEase] ?? SCENE_EASE.linear;
@@ -453,13 +584,41 @@ function planOf(doc: SceneDoc): Plan {
     }
     const targets = eventTargets(doc, e);
     for (const [k, v] of Object.entries(targets)) {
-      if (k === "lookAt") push(e.obj, "rotation", { at: e.at, dur, ease, to: { lookAt: v as Vec3 | string, obj: e.obj } });
+      if (k === "animation") {
+        const a = v as { anim: Required<SceneAnimation> | null; fade?: number };
+        let l = anims.get(e.obj); if (!l) anims.set(e.obj, (l = []));
+        l.push({ at: e.at, fade: a.fade ?? dur, ease, anim: a.anim });
+      }
+      else if (k === "nodes") { let l = nodes.get(e.obj); if (!l) nodes.set(e.obj, (l = [])); l.push({ at: e.at, nodes: v as Record<string, boolean> }); }
+      else if (k === "lookAt") push(e.obj, "rotation", { at: e.at, dur, ease, to: { lookAt: v as Vec3 | string, obj: e.obj } });
       else push(e.obj, k, { at: e.at, dur, ease, to: k === "scale" ? vec3Of(v as number | Vec3) : (v as Val) });
     }
   }
-  const plan = { props };
+  const plan = { props, anims, nodes };
   plans.set(doc, plan);
   return plan;
+}
+
+/**
+ * The clips a model plays at `t`. The latest `play` / `stop` (or function row) with `at <= t` decides; while its fade
+ * runs, the one before it keeps playing (its own time going on) with weight 1 − k, k = ease((t − at) / fade).
+ * Only those two take part: a fade that starts during another fade fades from the earlier event's clip.
+ */
+function animationAt(o: SceneObject, segs: AnimSeg[], t: number): SceneAnimState[] {
+  const base = o.animation === undefined ? null : animOf(o.animation).anim ?? null;
+  const all: AnimSeg[] = [{ at: 0, fade: 0, ease: SCENE_EASE.linear, anim: base }, ...segs];
+  let i = 0;
+  while (i + 1 < all.length && all[i + 1].at <= t) i++;
+  const out: SceneAnimState[] = [];
+  const run = (s: AnimSeg, w: number) => {
+    if (s.anim && w > 0) out.push({ clip: s.anim.clip, time: Math.max(0, t - s.at) * s.anim.speed + s.anim.from, loop: s.anim.loop, weight: w });
+  };
+  const cur = all[i];
+  if (i > 0 && cur.fade > 0 && t < cur.at + cur.fade) {
+    const k = Math.min(1, Math.max(0, cur.ease((t - cur.at) / cur.fade)));
+    run(all[i - 1], 1 - k); run(cur, k);
+  } else run(cur, 1);
+  return out;
 }
 
 /**
@@ -491,7 +650,17 @@ export function stateAt(doc: SceneDoc, t: number): SceneState {
         return to;
       }) as SceneProps[K];
     };
-    return { id: o.id, position: prop("position"), rotation: prop("rotation"), scale: prop("scale"), visible: prop("visible"), opacity: prop("opacity"), color: prop("color") };
+    const out: SceneObjectState = { id: o.id, position: prop("position"), rotation: prop("rotation"), scale: prop("scale"), visible: prop("visible"), opacity: prop("opacity"), color: prop("color") };
+    if (typeof o.model === "string" && o.model) {
+      out.animation = animationAt(o, plan.anims.get(o.id) ?? [], time);
+      const ev = plan.nodes.get(o.id) ?? [];
+      if (ev.length || (isObj(o.nodes) && !nodesProblem(o.nodes))) {
+        let n: Record<string, boolean> = isObj(o.nodes) && !nodesProblem(o.nodes) ? { ...o.nodes } : {};
+        for (const x of ev) if (x.at <= time) n = { ...n, ...x.nodes };
+        out.nodes = n;
+      }
+    }
+    return out;
   });
   const w = isObj(doc.world) ? doc.world : {};
   const c = isObj(w.camera) ? w.camera : {};
@@ -511,9 +680,12 @@ export function stateAt(doc: SceneDoc, t: number): SceneState {
 }
 
 /** A short summary for the inspector and agents: objects with their functions, and the events in time order. */
-export function sceneSummary(doc: SceneDoc): { objects: { id: string; shape: string; functions: string[] }[]; events: { i: number; at: number; obj: string; call: string; dur?: number }[] } {
+export function sceneSummary(doc: SceneDoc): { objects: { id: string; shape: string; functions: string[]; animations?: string[] }[]; events: { i: number; at: number; obj: string; call: string; dur?: number }[] } {
   const objects = (Array.isArray(doc.objects) ? doc.objects : []).filter((o) => isObj(o) && typeof o.id === "string")
-    .map((o) => ({ id: o.id, shape: o.model ? `model ${o.model}` : o.shape ?? "box", functions: isObj(o.functions) ? Object.keys(o.functions) : [] }));
+    .map((o) => {
+      const anims = typeof o.model === "string" ? modelAnimations(doc, o.model) : undefined;
+      return { id: o.id, shape: o.model ? `model ${o.model}` : o.shape ?? "box", functions: isObj(o.functions) ? Object.keys(o.functions) : [], ...(anims ? { animations: anims } : {}) };
+    });
   const events = sortedEvents(doc).map(({ e, i }) => ({ i, at: e.at, obj: String(e.obj), call: String(e.call), ...(num(e.dur) && e.dur > 0 ? { dur: e.dur } : {}) }));
   return { objects, events };
 }
@@ -552,3 +724,29 @@ export const SAMPLE_SCENE: SceneDoc = {
     { at: 3.8, obj: "sign", call: "visible", args: { value: false } },
   ],
 };
+
+/**
+ * P75: the document with a GLB model added: the file under a free name in `files` and a new object that shows it
+ * (fitted to `size` units, standing on the floor in front, beside earlier models) playing its first animation, if any.
+ * Pure: returns a new document and the new object's id.
+ */
+export function addSceneModel(doc: SceneDoc, fileName: string, dataUrl: string, size = 1.6): { doc: SceneDoc; id: string } {
+  const files = { ...(isObj(doc.files) ? doc.files : {}) };
+  const clean = fileName.replace(/[^A-Za-z0-9 _.()-]/g, "_").replace(/^[^A-Za-z0-9]+/, "") || "model.glb";
+  const ext = /\.[^.]+$/.exec(clean)?.[0] ?? "";
+  const stem = clean.slice(0, clean.length - ext.length).slice(0, 100) || "model";
+  let name = `${stem}${ext}`;
+  for (let n = 2; files[name] !== undefined && files[name] !== dataUrl; n++) name = `${stem}-${n}${ext}`;
+  files[name] = dataUrl;
+  const objects = Array.isArray(doc.objects) ? doc.objects : [];
+  const taken = new Set(objects.map((o) => (isObj(o) ? o.id : "")));
+  const idStem = (/^[A-Za-z]/.test(stem) ? stem : `model-${stem}`).replace(/[^A-Za-z0-9_-]/g, "-").slice(0, 48) || "model";
+  let id = idStem;
+  for (let n = 2; taken.has(id) || id === SCENE_CAMERA; n++) id = `${idStem}-${n}`;
+  const first = glbInfoOfDataUrl(dataUrl)?.animations[0]?.name;
+  // Side by side in front of the camera: the n-th model at x = 0, -1.2, 1.2, -2.4, 2.4, then again.
+  const n = objects.filter((o) => isObj(o) && typeof o.model === "string").length % 5;
+  const x = [0, -1.2, 1.2, -2.4, 2.4][n];
+  const obj: SceneObject = { id, model: name, size, position: [x, 0, 0.6], ...(first ? { animation: first } : {}) };
+  return { doc: { ...doc, files, objects: [...objects, obj] }, id };
+}

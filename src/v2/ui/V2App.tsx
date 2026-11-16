@@ -210,6 +210,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const [maskOpen, setMaskOpen] = useState(false);
   /** V2-HTML-PARAMS: the mobile sheet with the selected HTML clip's param values. */
   const [paramsOpen, setParamsOpen] = useState(false);
+  const [sceneOpen, setSceneOpen] = useState(false);
   /** V2-TL-TRANS: incoming clip of the cut whose transition picker sheet is open (mobile). */
   const [transFor, setTransFor] = useState<string>();
   /** Stop time (ticks) of a junction preview started by the transition picker. */
@@ -1041,6 +1042,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       params: A("params", "settings", "Params", () => setParamsOpen(true), "This clip's values: text, colours and other params the HTML clip exposes"),
       code: A("code", "</>", "Code", () => void openCode(), "Edit HTML, CSS and JS with live preview"),
       "edit-audio": selAudioSpec ? A("edit-audio", "♫", "Edit", () => void openAudio(), "Open this clip in the Audio editor; saving makes a new version") : undefined,
+      scene: A("scene", "scene", "Scene", () => setSceneOpen(true), "This 3D scene's objects, models, animations and events"),
     };
     const pick = (r: ToolRef) => (Array.isArray(r) ? r.map((x) => tools[x]).find((a) => !!a) : tools[r]);
     const primaryAll = (selIsMain ? u.toolbarMain : u.toolbar).map(pick).filter((a): a is BarAct => !!a);
@@ -1224,7 +1226,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       unknown: { id: "unknown", label: "Clip", icon: "⚠", render: () => <div className="v2-psettings"><section aria-label="Unknown clip type" data-testid="unknown-clip-type"><h4>Unknown clip type</h4>
         <p className="v2-abnote">This clip&apos;s type “{pl.clipType}” is not in this version of the editor, so it can&apos;t be shown or edited here. Its data is kept as is: you can move, trim, split or delete it, and it plays again in a version that has this type. It shows as a slate and exports as a black frame without sound.</p></section></div> },
       // P74: a 3D scene clip's objects, events and problems (read-only in step 2.1).
-      scene: { id: "scene", label: "Scene", icon: "scene", render: () => <ScenePanel project={project} placement={pl} blobs={storage.blobs} /> },
+      scene: { id: "scene", label: "Scene", icon: "scene", render: () => <ScenePanel project={project} placement={pl} blobs={storage.blobs} engine={engine} /> },
       colour: { id: "colour", label: "Colour", icon: "palette", render: () => <div className="v2-psettings"><section aria-label="Colour"><h4>Colour</h4><BlankColorPicker value={pl.blank!.color} onChange={(c) => engine.dispatch(cmd.setBlankColor(pl.id, c))} /></section></div> },
     };
     const tabs = u.inspectorTabs.map((r) => (typeof r === "string" ? tabsById[r] : tabsById[r.id] && { ...tabsById[r.id]!, label: r.label })).filter((t): t is InspectorTab => !!t);
@@ -1507,6 +1509,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           {textOpen && selected && isText && <Sheet label="Text" className="v2-msheet-insp" snapTo={animLoop ? 0 : undefined} extra={scopeChip || undefined} onClose={closeAnim}><TextPanel engine={engine} placement={effSel} track={selTrack} onAnimPicked={() => setAnimLoop(true)} time={time} playing={playing} onSeek={seek} onTogglePlay={togglePlay} /></Sheet>}
           {transFor && cutOf(comp, transFor) && <Sheet label="Transitions" head={false} dim={false} className="v2-trans-sheet" onClose={() => setTransFor(undefined)}><TransitionPicker key={transFor} engine={engine} comp={comp} placementId={transFor} thumbs={thumbs} onPreview={previewCut} onToast={setToast} onNewCode={() => createCodeRole("transition")} onDone={() => setTransFor(undefined)} /></Sheet>}
           {fxOpen && <Sheet label="Effects" className="v2-msheet-insp" onClose={() => setFxOpen(false)}><EffectPicker engine={engine} at={time} placement={isEffect ? selected!.placement : undefined} onAdded={(id) => setSel([id])} onClose={() => setFxOpen(false)} onNewCode={() => createCodeRole("effect")} onEditCode={(id) => void editCodeAsset(id)} /></Sheet>}
+          {sceneOpen && selected && selected.placement.clipType === "scene" && <Sheet label="Scene" className="v2-msheet-insp" onClose={() => setSceneOpen(false)}><ScenePanel project={project} placement={selected.placement} blobs={storage.blobs} engine={engine} /></Sheet>}
           {paramsOpen && selected && isHtml && <Sheet label="Clip params" className="v2-msheet-insp" onClose={() => setParamsOpen(false)}><HtmlParamsPanel engine={engine} project={project} placement={selected.placement} blobs={storage.blobs} onEditCode={() => { setParamsOpen(false); void openCode(); }} /></Sheet>}
           {animOpen && !textOpen && selected && isText && <Sheet label="Animation" className="v2-msheet-insp v2-anim-sheet" snapTo={animLoop ? 0 : undefined} extra={scopeChip || undefined} onClose={closeAnim}><AnimationPicker engine={engine} placement={selected.placement} onPicked={() => setAnimLoop(true)} /></Sheet>}
         </>

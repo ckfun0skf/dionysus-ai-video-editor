@@ -132,7 +132,9 @@ describe("P74 scene clip type", () => {
     const u = clipUi(pl);
     expect(u).toMatchObject({ id: "scene", icon: "scene", kindClass: "is-scene", inspectorIcon: "scene", speed: false, volume: false, assetThumb: "none" });
     expect(u.inspectorTabs).toEqual(["scene", "basic", "chroma", "transition"]);
-    expect(u.toolbarMain).toEqual(["adjust"]);
+    // P75: Scene first on the phone toolbar, so the panel is reachable at 390 px.
+    expect(u.toolbarMain).toEqual(["scene", "adjust"]);
+    expect(u.toolbar).toEqual(["scene", "adjust", "link", "to-main"]);
   });
 
   it("a scene placeholder draws the host slate and Fill offers only scenes", () => {

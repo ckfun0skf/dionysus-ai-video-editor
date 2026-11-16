@@ -15,7 +15,8 @@ not register loads, keeps its data and shows as a slate (§6 of the design doc).
 **Phase 2 (P74, step 2.1):** `scene/` is the first type built on the registry: a deterministic three.js scene whose
 asset version holds a `dionysus.scene/1` document (`domain/scene.ts`, `docs/v2/SCENE_FORMAT.md`). It renders in the
 sandboxed HTML clip host (`render/scenePage.ts`, reached through `host.media.sceneHost` / `sceneDoc`), with the pure
-`stateAt(doc, t)` sent to the page every frame.
+`stateAt(doc, t)` sent to the page every frame. Since P75 (step 2.2) it also draws GLB models from the document's
+`files` and poses their animations with `mixer.setTime` from `t` (`domain/glb.ts` reads clip and node names).
 
 ```
 clipTypes/

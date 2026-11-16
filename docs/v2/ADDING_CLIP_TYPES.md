@@ -42,7 +42,7 @@ You do **not** write any of this per type:
    |---|---|---|
    | `sourceTime` | has media time: trim / slip / speed / reverse / in-out frames | video, audio |
    | `still` | one source frame: source in stays 0 on trim and split | image, text, effect, blank |
-   | `sound` | volume, volume keys, audio FX, mixed in export | video, audio |
+   | `sound` | volume, volume keys, audio FX, mixed in export (a new type without it gets no `volume` when added, P75) | video, audio |
    | `visual` | drawn on the canvas | video, image, html, text, blank |
    | `keyable` | chroma key applies | video, image, html, blank |
    | `thumb` | needs a thumbnail on the timeline | video, image, html |

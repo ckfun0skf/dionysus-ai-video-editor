@@ -9,7 +9,7 @@ import { stickers, stickerUrl, type Sticker } from "./libraryItems";
 export type Picked = { files: File[]; stickers: Sticker[]; assets?: string[] };
 /** V2-ADD-MEDIA-TABS: what the main/overlay [+] adds; "audio" is the Add audio picker's only tab. */
 export type PickerTab = "video" | "photo" | "code" | "stickers" | "audio" | "fromVideo";
-type Kind = "video" | "image" | "html" | "audio";
+type Kind = "video" | "image" | "html" | "audio" | "scene";
 /** A media asset already imported into this project (blob persists in IndexedDB), for re-adding without re-upload. */
 export type ProjectMedia = { id: string; name: string; kind: Kind; thumb?: string; durationTicks?: number; createdAt: string; width?: number; height?: number };
 
@@ -96,17 +96,18 @@ export function MediaPicker({ title, onAdd, onClose, media = [], only, initialTa
     setPicked((s) => { const n = new Set(s); fs.forEach((f, i) => n.add(key(f, base + i))); return n; });
   };
   const newFiles = kind ? files.map((f, i) => ({ f, i })).filter(({ f }) => (fileKind(f) ?? (kind === "html" ? "html" : undefined)) === kind) : [];
-  const mine = kind ? recent.filter((m) => m.kind === kind) : [];
+  // P75: the Code tab also lists the project's 3D scenes.
+  const mine = kind ? recent.filter((m) => m.kind === kind || (kind === "html" && m.kind === "scene")) : [];
   const tile = (m: ProjectMedia) => { const k = `a:${m.id}`; return (
     <div key={k} className="v2-pick-cell">
     <button className={`v2-pick-tile is-asset kind-${m.kind} ${picked.has(k) ? "is-on" : ""}`} aria-pressed={picked.has(k)} title={m.name} aria-label={m.name} onClick={() => toggle(k)}>
-      {m.thumb ? <img src={m.thumb} alt="" draggable={false} /> : <b aria-hidden><Ic g={TAB[tab].icon} size={26} /></b>}
+      {m.thumb ? <img src={m.thumb} alt="" draggable={false} /> : <b aria-hidden><Ic g={m.kind === "scene" ? "scene" : TAB[tab].icon} size={26} /></b>}
       {m.kind !== "image" && m.durationTicks ? <i className="v2-pick-dur">{fmtDur(m.durationTicks)}</i> : null}
       {m.kind === "html" && <i className="v2-pick-kind" aria-hidden><Ic g="</>" size={12} /></i>}
       <span className="v2-pick-name">{m.name}</span>
       {badge(k)}
     </button>
-    {loadMedia && <button className="v2-pick-peek" aria-label={`Preview ${m.name}`} title="Preview" onClick={() => setPreview(m)}><Ic g={m.kind === "image" ? "eye" : "▶"} size={16} /></button>}
+    {loadMedia && m.kind !== "scene" && <button className="v2-pick-peek" aria-label={`Preview ${m.name}`} title="Preview" onClick={() => setPreview(m)}><Ic g={m.kind === "image" ? "eye" : "▶"} size={16} /></button>}
     </div>
   ); };
   return (
@@ -195,7 +196,7 @@ export function MediaPicker({ title, onAdd, onClose, media = [], only, initialTa
           </>
         )}
       </div>
-      {preview && loadMedia && (
+      {preview && preview.kind !== "scene" && loadMedia && (
         <div className="v2-pick-preview" role="dialog" aria-label={`Preview of ${preview.name}`}>
           <div className="v2-pick-preview-head"><b>{preview.name}</b><button className="v2-icon-btn" aria-label="Close preview" onClick={() => setPreview(undefined)}><Ic g="✕" /></button></div>
           <AssetPreview kind={preview.kind} name={preview.name} cacheKey={preview.id} load={() => loadMedia(preview.id)} durationSec={preview.durationTicks ? preview.durationTicks / 120_000 : undefined} width={preview.width} height={preview.height} />

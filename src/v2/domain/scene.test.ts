@@ -78,7 +78,7 @@ describe("dionysus.scene/1 validation (P74)", () => {
     expect(at("events[6].args.target")).toMatch(/another object/);
     expect(at("events[7].call")).toMatch(/camera has no function "zoom"/);
     expect(at("events[9]", "warning")).toMatch(/still changes a\.position.*later event wins/);
-    expect(at("objects[2].model", "warning")).toMatch(/later version/);
+    expect(at("objects[2].model", "warning")).toMatch(/not in "files".*drawn as a box/);
   });
 });
 

@@ -1,4 +1,5 @@
 import type { SceneDoc } from "../domain/scene";
+import { writeManifest } from "../domain/htmlClipPackage";
 
 /**
  * The built-in runtime page of the `scene` clip type (P74, Phase 2 step 2.1; decision 1). It runs in the same
@@ -38,15 +39,80 @@ const geometry = (o) => {
     default: { const [w, h, d] = sizeOf(o, 3, [1, 1, 1]); return new THREE.BoxGeometry(w, h, d); }
   }
 };
-const meshes = new Map();
-for (const o of Array.isArray(doc.objects) ? doc.objects : []) {
-  if (!o || typeof o.id !== "string") continue;
-  const m = new THREE.Mesh(geometry(o), new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.55, metalness: 0.1, side: o.shape === "plane" ? THREE.DoubleSide : THREE.FrontSide }));
+// Each object is one node: its shape's mesh, or (P75) a group holding its loaded GLB. "mats" are the materials its
+// opacity applies to, with the material's own opacity and transparency; "tint" = the shape's colour applies.
+const nodes = new Map();
+const objects = (Array.isArray(doc.objects) ? doc.objects : []).filter((o) => o && typeof o.id === "string");
+for (const o of objects) {
+  const mat = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.55, metalness: 0.1, side: o.shape === "plane" ? THREE.DoubleSide : THREE.FrontSide });
+  const m = new THREE.Mesh(geometry(o), mat);
   m.rotation.order = "XYZ";
-  scene.add(m); meshes.set(o.id, m);
+  scene.add(m); nodes.set(o.id, { node: m, tint: true, mats: [{ m: mat, opacity: 1, transparent: false }] });
+}
+const LOOP = { once: THREE.LoopOnce, pingpong: THREE.LoopPingPong };
+// P75: load each model object's GLB (an attached file of the scene) before the first frame; a missing or broken file
+// keeps the shape. One AnimationMixer per model; the clips by name.
+async function loadModels(ctx) {
+  const list = objects.filter((o) => typeof o.model === "string" && o.model);
+  if (!list.length) return;
+  // A variable specifier: only pages with models list the loader in their manifest (a quoted import would be detected).
+  const GLTF = "three/addons/loaders/GLTFLoader.js";
+  const { GLTFLoader } = await import(GLTF);
+  const loader = new GLTFLoader();
+  for (const o of list) {
+    const url = ctx.asset(o.model);
+    if (!url) continue;
+    let gltf;
+    try { gltf = await loader.loadAsync(url); } catch (e) { console.error(e); continue; }
+    const root = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+    if (!root) continue;
+    const group = new THREE.Group(); group.rotation.order = "XYZ";
+    const inner = new THREE.Group(); inner.add(root); group.add(inner);
+    if (typeof o.size === "number" && o.size > 0) {
+      const box = new THREE.Box3().setFromObject(root), size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
+      const k = o.size / Math.max(size.x, size.y, size.z, 1e-6);
+      inner.scale.setScalar(k); inner.position.set(-c.x * k, -box.min.y * k, -c.z * k);
+    }
+    const mats = [];
+    root.traverse((n) => {
+      if (!n.isMesh) return;
+      n.frustumCulled = false;
+      const own = Array.isArray(n.material) ? n.material.map((x) => x.clone()) : n.material.clone();
+      n.material = own;
+      for (const x of Array.isArray(own) ? own : [own]) mats.push({ m: x, opacity: x.opacity, transparent: x.transparent });
+    });
+    const old = nodes.get(o.id);
+    scene.remove(old.node); old.node.geometry.dispose(); old.node.material.dispose();
+    scene.add(group);
+    const clips = new Map((gltf.animations || []).map((a) => [a.name, a]));
+    // Parts by node name with the file's own visibility, so a frame can put back what it doesn't set.
+    const parts = new Map();
+    root.traverse((n) => { if (n.name && !parts.has(n.name)) parts.set(n.name, { n, visible: n.visible }); });
+    nodes.set(o.id, { node: group, tint: false, mats, mixer: new THREE.AnimationMixer(root), clips, parts });
+  }
+}
+// The pose for this frame from the clips the evaluator sends: every action is reset and the mixer is set to 1 s with
+// each action's time scale = its local time, so each clip lands on its own time; mixer.setTime, never update(delta).
+// Stopping all actions first restores the rest pose, so a frame never depends on the one before.
+function pose(n, anims) {
+  if (!n.mixer) return;
+  n.mixer.stopAllAction();
+  for (const a of anims || []) {
+    const clip = n.clips.get(a.clip);
+    if (!clip || !(a.weight > 0)) continue;
+    const act = n.mixer.clipAction(clip);
+    act.reset();
+    act.setLoop(LOOP[a.loop] || THREE.LoopRepeat, Infinity);
+    act.clampWhenFinished = true;
+    act.setEffectiveWeight(a.weight);
+    act.setEffectiveTimeScale(Math.max(0, a.time));
+    act.play();
+  }
+  n.mixer.setTime(1);
 }
 const D = Math.PI / 180;
 dionysus.clip({
+  init: loadModels,
   render(t, ctx) {
     const s = ctx.inputs && ctx.inputs.scene;
     if (!s) return;
@@ -58,30 +124,45 @@ dionysus.clip({
     camera.lookAt(s.camera.target[0], s.camera.target[1], s.camera.target[2]);
     camera.updateProjectionMatrix();
     for (const o of s.objects) {
-      const m = meshes.get(o.id); if (!m) continue;
+      const n = nodes.get(o.id); if (!n) continue;
+      const m = n.node;
       m.position.set(o.position[0], o.position[1], o.position[2]);
       m.rotation.set(o.rotation[0] * D, o.rotation[1] * D, o.rotation[2] * D);
       m.scale.set(o.scale[0], o.scale[1], o.scale[2]);
       m.visible = o.visible && o.opacity > 0;
-      m.material.color.set(o.color);
-      // Switching transparent changes the shader (OPAQUE define): recompile so a frame never depends on the previous one.
-      const tr = o.opacity < 1;
-      if (m.material.transparent !== tr) { m.material.transparent = tr; m.material.depthWrite = !tr; m.material.needsUpdate = true; }
-      m.material.opacity = o.opacity;
+      if (n.tint) n.mats[0].m.color.set(o.color);
+      for (const x of n.mats) {
+        // Switching transparent changes the shader (OPAQUE define): recompile so a frame never depends on the previous one.
+        const tr = x.transparent || o.opacity < 1;
+        if (x.m.transparent !== tr) { x.m.transparent = tr; x.m.depthWrite = !tr; x.m.needsUpdate = true; }
+        x.m.opacity = x.opacity * o.opacity;
+      }
+      pose(n, o.animation);
+      if (n.parts) for (const [name, x] of n.parts) x.n.visible = o.nodes && name in o.nodes ? !!o.nodes[name] : x.visible;
     }
     renderer.render(scene, camera);
   },
 });
 `;
 
-/** The runtime page for one scene document (the HTML clip host adds the CSP, import map and time shim). */
+/**
+ * The runtime page for one scene document (the HTML clip host adds the CSP, import map and time shim). P75: the
+ * document's `files` (GLB models) go into the page's clip manifest instead of the embedded JSON, so the host's runtime
+ * serves them as blob: URLs (`ctx.asset(name)`, as for code clips since P55), and GLTFLoader is added to the page's
+ * libraries only when an object has a model.
+ */
 export function scenePage(doc: SceneDoc | undefined): string {
-  const json = JSON.stringify(doc ?? { format: "dionysus.scene/1", objects: [] }).replace(/</g, "\\u003c");
-  return `<!doctype html>
+  const { files, ...rest } = doc ?? { format: "dionysus.scene/1" as const, objects: [] };
+  const json = JSON.stringify(rest).replace(/</g, "\\u003c");
+  const page = `<!doctype html>
 <html><head><meta charset="utf-8"><style>html,body{margin:0;height:100%;background:#000;overflow:hidden}canvas{display:block;width:100%;height:100%}</style></head>
 <body><canvas id="c"></canvas>
 <script type="application/json" id="dionysus-scene">${json}</script>
 <script type="module">
 ${SCENE_RUNTIME_JS}</script></body></html>
 `;
+  const models = (Array.isArray(rest.objects) ? rest.objects : []).some((o) => o && typeof o.model === "string" && o.model);
+  if (!models) return page;
+  const used = files && typeof files === "object" ? Object.fromEntries(Object.entries(files).filter(([, d]) => typeof d === "string")) : {};
+  return writeManifest(page, { libs: ["three", "three-gltf"], files: used });
 }
