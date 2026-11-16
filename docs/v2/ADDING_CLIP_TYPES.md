@@ -1,9 +1,10 @@
 # Adding a clip type
 
-A **clip type** is what a timeline clip *is*: video, image, audio, text, html, effect, blank. Each type lives in one
+A **clip type** is what a timeline clip *is*: video, image, audio, text, html, effect, blank, scene. Each type lives in one
 folder, `src/v2/clipTypes/<id>/`, with up to three files. The editor finds them with `import.meta.glob`; there is no
 list to edit for the registry, the renderer table or the UI table. Design and decisions:
-[`CLIP_PLUGIN_ARCHITECTURE.md`](CLIP_PLUGIN_ARCHITECTURE.md) (Phase 1, done in P65–P73).
+[`CLIP_PLUGIN_ARCHITECTURE.md`](CLIP_PLUGIN_ARCHITECTURE.md) (Phase 1, done in P65–P73). A real type built this way:
+`clipTypes/scene/` (P74, Phase 2), with its data format in [`SCENE_FORMAT.md`](SCENE_FORMAT.md).
 
 | File | Layer | What it is | Who reads it |
 |---|---|---|---|
@@ -55,7 +56,9 @@ You do **not** write any of this per type:
    - `draw(host)` — stateless, called for each frame with a canvas (text, blank). Use `host.setBox`, `host.paint`
      (scene capture, overlay-scope effects, blend) and `host.blit` (mask and crop) so host features keep working.
    - `frame(host)` — stateful, called every frame for a clip with an asset version even without a canvas (video,
-     image, html, audio: elements and iframes live in the Player's pools behind `host.media`).
+     image, html, audio, scene: elements and iframes live in the Player's pools behind `host.media`). A type that
+     renders a page in the sandboxed HTML clip host gets its own host method there, as `scene` does with
+     `host.media.sceneHost` / `sceneDoc` (the Player owns the iframe's lifetime and export waits for it).
 
    Branch on `host.offline` only where export is meant to look different.
 4. **Write `ui.tsx`** (optional), default-exporting a `ClipTypeUi`: timeline `name`, `icon`, `kindClass`, `body`,
@@ -73,7 +76,9 @@ You do **not** write any of this per type:
    `render/clipRenderers.test.ts` and `ui/clipTypeUi.test.tsx`, and the "covers every clip type" test of
    `render/renderParity.test.ts`. Add a clip of the type to `src/v2/__fixtures__/renderParity.ts` and
    `timelineParity.ts` and re-record those goldens on purpose (`UPDATE_RENDER_GOLDEN=1`, `UPDATE_TIMELINE_GOLDEN=1`,
-   `UPDATE_INSPECTOR_GOLDEN=1`); the diff must show only the new clip.
+   `UPDATE_INSPECTOR_GOLDEN=1`); the diff must show only the new clip. If the new clip cannot be drawn in jsdom
+   (WebGL, as for `scene`), leave those fixtures and goldens unchanged and cover the type with its own tests plus a
+   Chrome check in the PR (P74).
 7. **Check:** `npx tsc -b --noEmit`, `npx vitest run`, `npm run build`, and `npm run gen:ai`. `gen:ai` changes only if
    you added agent tools or rules (then commit the regenerated `public/ai/*`, `public/llms.txt`,
    `docs/v2/WEB_MCP.md`). Look at the clip in the app at 390 and 1440 wide: timeline, inspector, preview and an export.

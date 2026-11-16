@@ -38,7 +38,7 @@ src/v2/
   engine/        Engine (undo history; one dispatch = one undo step) and commands.ts (Command factories)
   persistence/   IndexedDB/memory stores, media import (media.ts), schema migrations, project archive
   ports/         storage interfaces (BlobStore, …)
-  clipTypes/     clip type registry (P65+): one folder per type with core.ts (trackKind, caps; storyboard mapping and file import since P71; agent tools/rules/checks since P72); domain predicates read it (P66); render.ts renderers (P67, P68); ui.tsx timeline UI (P69), inspector/toolbar/menus (P70); state.ts placeholder state and unknown-type handling (P73); how to add a type: docs/v2/ADDING_CLIP_TYPES.md
+  clipTypes/     clip type registry (P65+): one folder per type with core.ts (trackKind, caps; storyboard mapping and file import since P71; agent tools/rules/checks since P72); domain predicates read it (P66); render.ts renderers (P67, P68); ui.tsx timeline UI (P69), inspector/toolbar/menus (P70); state.ts placeholder state and unknown-type handling (P73); scene/ the 3D scene type (P74, docs/v2/SCENE_FORMAT.md); how to add a type: docs/v2/ADDING_CLIP_TYPES.md
   registry/      preset registry (effects, transitions, text animations, stickers, blends, audio fx, fonts)
   presets/       one file per preset, auto-discovered (docs/v2/ADDING_EFFECTS.md)
   render/        Player (preview AND export compositor), htmlClip.ts (sandboxed HTML clip host), text, effects,
@@ -92,9 +92,9 @@ required checks.
 1. `git fetch` and branch from the latest `origin/main` (e.g. `p66-short-name`).
 2. Implement with tests. Keep PRs small (MODULE_DESIGN §14 targets < 400 changed lines; feature PRs here are often
    larger, but split refactors).
-3. **`public/doc/tasks.json`:** add one entry per PR with the next free P-number: `{ "id": "P74-SHORT-NAME", "title":
+3. **`public/doc/tasks.json`:** add one entry per PR with the next free P-number: `{ "id": "P75-SHORT-NAME", "title":
    "<what and why, one paragraph>", "status": "done", "progress": 100 }` appended after the latest entry (the latest is
-   `P73-CLIP-STATE`; the next is **P74**). Bump `updatedAt`. Edit the file surgically (insert text); do not
+   `P74-SCENE-CLIP`; the next is **P75**). Bump `updatedAt`. Edit the file surgically (insert text); do not
    re-serialise the whole JSON. `scripts/check-tasks-updated.mjs` fails a PR that changes `src/` without it. If an id
    is already taken, use the next number and say so in the PR.
 4. **AI guide rule:** append to `RULE_LIST` in `src/v2/domain/storyPrompt.ts` (append-only; numbers are positions;
@@ -110,7 +110,7 @@ required checks.
 6. Run `npm run gen:ai` after changing rules, tools or presets, and commit the regenerated files (tests fail if they are
    stale).
 7. `npx tsc -b && npx vitest run && npx vite build`.
-8. Commit in English; PR title `P73: …`; body says what, why, tests, and `Fixes #N` (or `Refs #N` if partial), plus
+8. Commit in English; PR title `P75: …`; body says what, why, tests, and `Fixes #N` (or `Refs #N` if partial), plus
    what was not verified. Push, open the PR, wait for `build` on the head SHA. Do not merge.
 
 ## 7. UI conventions
@@ -136,11 +136,12 @@ required checks.
 | `docs/v2/ADDING_EFFECTS.md` | adding presets (effects, transitions, text animations, …) |
 | `docs/v2/MASKING.md`, `docs/v2/TRACKING.md` | clip masks (P49), motion tracking (P39/P40) |
 | `docs/v2/DEPLOYMENT.md` | hosting, `DIONYSUS_SITE_URL`, base path |
-| `docs/v2/CLIP_PLUGIN_ARCHITECTURE.md` | clip type plugins: accepted design, decisions, Phase 1 progress |
+| `docs/v2/CLIP_PLUGIN_ARCHITECTURE.md` | clip type plugins: accepted design, decisions, Phase 1 (done) and the Phase 2 step table |
 | `docs/v2/ADDING_CLIP_TYPES.md` | adding a clip type step by step, with a worked example (P73) |
+| `docs/v2/SCENE_FORMAT.md` | 3D scene clips: `dionysus.scene/1` objects, events, custom functions, rendering (P74) |
 | `public/doc/tasks.json` | every task and its status |
 
-## 9. Recent history (P47–P73)
+## 9. Recent history (P47–P74)
 
 | Id | PR | One line |
 |---|---|---|
@@ -170,7 +171,8 @@ required checks.
 | P70 | #322 | Step 1.5: inspector icon/title/tabs/header buttons, mobile toolbar, context menu and sheets read `clipTypes/<id>/ui.tsx` (host-owned tab/tool/action ids); inspector/toolbar/menu DOM golden for every clip type, legacy-switch parity, 390/1440 screenshot parity. |
 | P71 | #323 | Step 1.6: storyboard mapping (`kindForSlot`, Send lengths, Sync slot/layer types, video takes, html params) and file import (`mediaKindOf`, `mimeOf`) read `core.story` / `core.accepts`; frozen-switch parity and a Send/Update/Sync golden recorded before the move. |
 | P72 | #324 | Step 1.7: WebMCP tools, AI guide rules and `get_timeline` fields can come from `core.agent` (built-ins add none; `gen:ai` byte-identical); per-type checks of the timeline tools read `agent.clipTools` / `agent.props` / `caps.sound`; compact hash golden recorded before the move. |
-| P73 | — | Step 1.8, the last of Phase 1: placeholder is a cross-type clip state handled by the host before any plugin (`clipTypes/state.ts`, shared slate `render/placeholderSlate.ts`, `PLACEHOLDER_UI`; `clipTypes/placeholder/` retired; Fill filters by the intended type); unknown clip types load, keep their data, draw a slate, export black and silent after a warning, have an info-only inspector and `unknown: true` in `get_timeline`; `docs/v2/ADDING_CLIP_TYPES.md`. Image placeholders and blank unchanged (golden recorded before the move). |
+| P73 | #325 | Step 1.8, the last of Phase 1: placeholder is a cross-type clip state handled by the host before any plugin (`clipTypes/state.ts`, shared slate `render/placeholderSlate.ts`, `PLACEHOLDER_UI`; `clipTypes/placeholder/` retired; Fill filters by the intended type); unknown clip types load, keep their data, draw a slate, export black and silent after a warning, have an info-only inspector and `unknown: true` in `get_timeline`; `docs/v2/ADDING_CLIP_TYPES.md`. Image placeholders and blank unchanged (golden recorded before the move). |
+| P74 | — | Phase 2 step 2.1 (decision 5 accepted: storyboard `render: "scene"` / asset type `scene` as optional values in 3.1, no version bump; Phase 2 step table added): the `scene` clip type (`clipTypes/scene/`), `dionysus.scene/1` schema and validation and the pure evaluator `stateAt` (`domain/scene.ts`), rendering in the sandboxed HTML clip host from `t` only (`render/scenePage.ts`), Code → 3D scene, read-only Scene inspector tab; `docs/v2/SCENE_FORMAT.md`. Existing goldens unchanged; preview, export and seek order pixel-identical in Chrome. |
 
 ## 10. Known unverified areas
 
@@ -268,9 +270,27 @@ change, each merged on green CI) is **complete** (P65–P73):
   `PLACEHOLDER_PARITY_DUMP=<dir>`, `UPDATE_PLACEHOLDER_GOLDEN=1`) pins the image placeholder and blank; the timeline,
   inspector and agent goldens changed only for the fixture's unknown clip. `ui/clipTypeState.test.tsx` covers a
   placeholder of every type and the unknown round trip; `ui/addingClipTypes.test.tsx` checks the guide's example.
-- **Next: Phase 2** (deterministic three.js `scene` clip, §7), **pending open question 5** (§0 decision 5: may the
-  storyboard get `render: "scene"` / asset type `scene` within schema 3.1, knowing older builds reject such a
-  storyboard?). Ask the owner before starting it. New clip types follow `docs/v2/ADDING_CLIP_TYPES.md`.
+
+**Phase 2** (deterministic three.js `scene` clip, §7 of the design doc) started in P74. **Decision 5 is accepted**
+(2026-11-15, as recommended): a storyboard may mark a shot `render: "scene"` and use a `scene` asset type, both optional
+values within `dionysus/3.1`, no version bump; it is implemented in step 2.5. Phase 2 has its own step table (§7):
+2.1 scene type + schema + evaluator + rendering (P74), 2.2 GLB models and animation, 2.3 inspector editing, 2.4 agent
+tools and AI rule, 2.5 storyboard mapping, 2.6 per-object sub-tracks; one small PR per step, each merged on green CI.
+
+- **2.1 done (P74):** `clipTypes/scene/` (core: video track, `asset: "media"`, no sound / source time / thumbnail;
+  render: `frame(host)`; ui: cube icon, Scene tab, no speed or volume). `domain/scene.ts`: `validateScene` /
+  `parseScene` (errors and warnings with JSON paths), `stateAt(doc, t)` (pure; stable sort by `at`, tweens start from
+  the value at their own start, last-started wins, lookAt resolved at the event's end, camera position / lookAt /
+  fov), `sceneSummary`, `SAMPLE_SCENE`. `render/scenePage.ts`: the built-in three.js page; the Player's `sceneHost` /
+  `sceneDoc` (`ClipMediaHost`) build it in the HTML clip host and export waits for the document (`settleAll`). The
+  renderer sends `stateAt` as `ctx.inputs.scene` each frame, so the page has no clock. A document that can't be read
+  shows a slate (black in export). `cmd.addSceneClip`, Code → 3D scene (desktop asset panel, phone Add media and Media
+  sheet), `ui/ScenePanel.tsx` (read-only). Tests: `domain/scene.test.ts` (with a `stateAt` golden,
+  `UPDATE_SCENE_GOLDEN=1`), `ui/sceneClip.test.tsx`. Every existing golden unchanged. Tests that used `"scene"` as an
+  unregistered id now use `"hologram"`. The render parity fixture does not include a scene clip on purpose (jsdom has
+  no WebGL; the Chrome check in the PR covers it).
+- **Next: step 2.2 (P75)**, GLB models and animation (`mixer.setTime` from `t`). New clip types follow
+  `docs/v2/ADDING_CLIP_TYPES.md`; the scene format is `docs/v2/SCENE_FORMAT.md`.
 
 ## 12. Working habits that avoid repeat mistakes
 
