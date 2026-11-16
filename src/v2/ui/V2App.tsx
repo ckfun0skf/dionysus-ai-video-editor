@@ -87,6 +87,7 @@ import { codePresetId, codeRoleOf, promote } from "../domain";
 import { AudioFxPanel, ChromaKeyPanel, VolumeCurve } from "./SoundAndKey";
 import { SpatialPad } from "./SpatialPad";
 import { mediaKey } from "./useMedia";
+import { clipUi, type InspectorActionId, type InspectorTabId, type ToolId, type ToolRef } from "./clipTypeUi";
 import { SliderField } from "./SliderField";
 
 type Menu = "multi" | "root" | "edit" | "audio" | "speed" | "text" | "effect" | "overlay";
@@ -505,8 +506,10 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     return hitCandidates(player.boxes, x, y, { min: 48 * k, skip: (id, b) => id === selectedId || isBackdrop(b, W, H) })[0];
   };
   const onCanvasTap = (e: React.MouseEvent<HTMLCanvasElement>) => tapAt(e.clientX, e.clientY);
-  const isText = selected?.placement.clipType === "text";
-  const isEffect = selected?.placement.clipType === "effect";
+  // P70: what differs per clip type comes from its clipTypes/<id>/ui.tsx.
+  const selUi = selected ? clipUi(selected.placement) : undefined;
+  const isText = selUi?.editor === "text";
+  const isEffect = selUi?.editor === "effect";
   const selLink = selected?.placement.source.assetId ? storyDomain.storyLinkOf(project, selected.placement.source.assetId) : undefined;
   const openStory = (t: BoardTarget) => { player.pause(); setBoardOpen(t); setBoard(true); };
   const loopClip = (mobile ? animOpen || textOpen : true) && animLoop && isText ? selected!.placement : undefined;
@@ -607,7 +610,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     engine.dispatch(cmd.addAssetVersion(asset.id, { ...prev, id, createdAt: new Date().toISOString(), media, provenance: { source: "import", inputs: [] } }, audioEdit.placementId, { mode: clipVersion.versionSaveModeOf(project) }));
     setAudioEdit(undefined); setToast("Audio updated (Undo to revert)");
   };
-  const isHtml = selected?.placement.clipType === "html";
+  const isHtml = selUi?.editor === "code";
   const gizmo = { onDelete: () => del(false), onEdit: () => (isText ? setTextOpen(true) : isHtml ? void openCode() : setInspOpen(true)), onDuplicate: () => duplicateAbove(), onDoubleTap: () => { if (isText) setInlineId(selected!.placement.id); }, onTap: tapAt, otherAt };
   const inlineBox = inlineId && selected?.placement.id === inlineId ? player.boxes.get(inlineId) : undefined;
   const inlineEditor = inlineBox && canvasRef.current && (() => {
@@ -879,7 +882,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const pasteAction = { icon: "📋", label: "Paste", title: hasClip ? "Paste: after the current clip, at the end of the current chain, or at the playhead on a chosen track (⌘/Ctrl+V)" : "Copy a clip first", run: paste };
 
   // Linked audio (owned child of a video clip): extract / duplicate / mute-restore. All undoable commands.
-  const linkedAudioActions = selected && selected.placement.clipType === "video" ? [
+  const linkedAudioActions = selected && selUi?.linkedAudio ? [
     { icon: "⤓", label: "Extract audio", title: "Move this clip's audio to an audio track (mutes the clip's own audio)", run: () => { engine.dispatch(cmd.extractAudio(selected.placement.id, "extract")); setToast("Audio extracted to an audio track"); } },
     { icon: "⧉", label: "Duplicate audio", title: "Copy this clip's audio to an audio track (keeps the clip's own audio)", run: () => { engine.dispatch(cmd.extractAudio(selected.placement.id, "duplicate")); setToast("Audio duplicated to an audio track"); } },
     selected.placement.linkedAudio?.muted
@@ -889,7 +892,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
 
   // Speed / reverse / freeze (video only; freeze clips are held frames so only reverse/speed are hidden).
   const sp = selected?.placement;
-  const timeActions = sp && sp.clipType === "video" && !sp.freeze ? [
+  const timeActions = sp && selUi?.timeTools && !sp.freeze ? [
     { icon: "❄", label: "Freeze", title: "Hold the frame under the playhead for 3 s (F)", run: () => { engine.dispatch(cmd.freezeFrame(sp.id, Math.round(player.time))); setToast("Freeze frame inserted (3 s)"); } },
     { icon: "⟲", label: sp.reverse ? "Play forward" : "Reverse", title: sp.reverse ? "Play this clip forwards again" : "Play this clip backwards (muted)", run: () => engine.dispatch(cmd.setReverse(sp.id, !sp.reverse)) },
   ] : [];
@@ -899,7 +902,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const replaceable = !!selected && sel.length <= 1 && canReplaceAsset(selected.placement);
   const versionable = !!selected && sel.length <= 1 && !!project.assets[selected.placement.source.assetId]?.versions.length;
   useEffect(() => { setInOpen(false); setBarSheet(undefined); }, [selectedId]);
-  const speedSelect = sp && sp.clipType !== "image" && sp.clipType !== "text" && !sp.freeze ? (
+  const speedSelect = sp && selUi?.speed && !sp.freeze ? (
     <label className="v2-tool" title="Playback speed — changes the clip's length"><b aria-hidden><Ic g="⏩" /></b>
       <select aria-label="Speed" value={sp.speed ?? 1} onChange={(e) => engine.dispatch(cmd.setSpeed(sp.id, Number(e.target.value)))}>
         {SPEEDS.map((s) => <option key={s} value={s}>{s}×</option>)}
@@ -1002,7 +1005,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     if (!selected) return [];
     const pl = selected.placement;
     const A = (key: string, icon: string, label: string, run: () => void, title?: string, active?: boolean): BarAct => ({ key, icon, label, run, title, active });
-    const sound = hasSound(pl) || pl.clipType === "audio";
+    const sound = hasSound(pl);
     const edit = [
       A("split", "✂", "Split", split, "Split at the playhead (S)"),
       A("trim", "trim-start", "Trim", () => setBarSheet("trim"), "Trim start or end to the playhead (Q / W)"),
@@ -1014,13 +1017,21 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     const speed = speedSelect ? A("speed", "⏩", "Speed", () => setMenu("speed"), `Playback speed (now ${sp!.speed ?? 1}×)`) : undefined;
     const link = linkActions[0] ? A("link", selLinked ? "unlink" : "link", "Link", linkActions[0].run, linkActions[0].title, !!selLinked) : undefined;
     const toMain = promoteActions[0] ? A("promote", "to-main", "To main", promoteActions[0].run, promoteActions[0].title) : undefined;
-    const colour = pl.blank ? A("colour", "palette", "Colour", () => setBarSheet("colour"), "Change this blank clip's colour") : undefined;
-    const primaryAll = (pl.blank ? [colour, adjust, link, toMain] : isEffect ? [A("fx", "effect", "Effect", () => setFxOpen(true), "Change the preset or its settings"), link, adjust]
-      : isText ? [A("style", "T", "Style", () => setTextOpen(true), "Templates, font, style, effects, animation"), A("anim", "anim", "Animate", () => setAnimOpen(true), "In, out and loop animations"), A("subs", "≡", "Subtitles", () => openSubs(selected.track.id, pl.id), "Open this layer's subtitle list at this clip")]
-      : isHtml ? [A("params", "settings", "Params", () => setParamsOpen(true), "This clip's values: text, colours and other params the HTML clip exposes"), A("code", "</>", "Code", () => void openCode(), "Edit HTML, CSS and JS with live preview"), adjust]
-      : pl.clipType === "audio" ? [audio, speed, selAudioSpec ? A("edit-audio", "♫", "Edit", () => void openAudio(), "Open this clip in the Audio editor; saving makes a new version") : adjust]
-      : selIsMain ? [adjust, audio, speed]
-      : [adjust, link, toMain]).filter((a): a is BarAct => !!a);
+    // P70: the type's primary tools (clipTypes/<id>/ui.tsx `toolbar` / `toolbarMain`), picked from the host's tools.
+    const u = clipUi(pl);
+    const tools: Record<ToolId, BarAct | undefined> = {
+      adjust, audio, speed, link, "to-main": toMain,
+      colour: A("colour", "palette", "Colour", () => setBarSheet("colour"), "Change this blank clip's colour"),
+      fx: A("fx", "effect", "Effect", () => setFxOpen(true), "Change the preset or its settings"),
+      style: A("style", "T", "Style", () => setTextOpen(true), "Templates, font, style, effects, animation"),
+      anim: A("anim", "anim", "Animate", () => setAnimOpen(true), "In, out and loop animations"),
+      subs: A("subs", "≡", "Subtitles", () => openSubs(selected.track.id, pl.id), "Open this layer's subtitle list at this clip"),
+      params: A("params", "settings", "Params", () => setParamsOpen(true), "This clip's values: text, colours and other params the HTML clip exposes"),
+      code: A("code", "</>", "Code", () => void openCode(), "Edit HTML, CSS and JS with live preview"),
+      "edit-audio": selAudioSpec ? A("edit-audio", "♫", "Edit", () => void openAudio(), "Open this clip in the Audio editor; saving makes a new version") : undefined,
+    };
+    const pick = (r: ToolRef) => (Array.isArray(r) ? r.map((x) => tools[x]).find((a) => !!a) : tools[r]);
+    const primaryAll = (selIsMain ? u.toolbarMain : u.toolbar).map(pick).filter((a): a is BarAct => !!a);
     // P33: every tool on one scrollable row, in a fixed group order for every clip type; thin dividers between groups.
     const seen = new Set<string>();
     const uniq = (xs: (BarAct | undefined | false | null)[]) => xs.filter((a): a is BarAct => !!a && !seen.has(a.key) && !!seen.add(a.key));
@@ -1033,7 +1044,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
         ...timeActions.map((a, i) => A(i ? "reverse" : "freeze", a.icon, i ? "Reverse" : "Freeze", a.run, a.title, i ? !!sp?.reverse : undefined))]),
       uniq([
         selLink && A("storyboard", "board", "Storyboard", () => openStory(selLink.target), `Open ${selLink.label} in the storyboard: pick versions there`),
-        pl.placeholder && A("fill", "⇄", "Fill", () => setRangeFor({ id: pl.id, picker: true }), "Fill this placeholder: pick a video, image or code clip, or upload one. The upload is applied in the same step"),
+        u.extraTools.includes("fill") && A("fill", "⇄", "Fill", () => setRangeFor({ id: pl.id, picker: true }), "Fill this placeholder: pick a video, image or code clip, or upload one. The upload is applied in the same step"),
         rangeable && A("range", "⇔", "Range", () => setRangeFor({ id: pl.id }), "Choose which part of the source this clip plays (slip); its place and length stay"),
         replaceable && A("replace", "⇄", "Replace", () => setRangeFor({ id: pl.id, picker: true }), "Swap this clip's media for another of the same kind, or add a new shot version. Upload a file in the picker"),
         versionable && A("version", "pin", "Version", () => setVerOpen(true), "Pick which take this clip uses, or follow the storyboard"),
@@ -1041,8 +1052,9 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
         tracking.canTrack(pl) && A("track", "track", "Track", () => { player.pause(); setTrackOpen({}); }, "Add a tracker to this clip so text, overlays or code can follow it"),
         masking.canMask(pl) && A("mask", "mask", "Mask", () => { player.pause(); setMaskOpen(true); }, "Hide part of this picture with a shape or a freeform path"),
         canChromaKey(pl) && A("chroma", "chroma", "Chroma", () => setCkOpen(true), "Remove a green or blue screen colour"),
-        isText && adjust,
-        !!selAudioSpec && pl.clipType !== "audio" && A("edit-audio", "♫", "Edit audio", () => void openAudio(), "Open this clip in the Audio editor")]),
+        u.extraTools.includes("adjust") && adjust,
+        // An audio clip already shows "Edit" (same key) among its primary tools, so this one is skipped there.
+        !!selAudioSpec && A("edit-audio", "♫", "Edit audio", () => void openAudio(), "Open this clip in the Audio editor")]),
       uniq([audio,
         ...linkedAudioActions.slice(0, 2).map((a, i) => A(i ? "dup-audio" : "extract", a.icon, i ? "Copy audio" : "Extract", a.run, a.title)),
         A("mute-track", selected.track.muted ? "🔇" : "🔊", "Mute track", () => engine.dispatch(cmd.toggleTrackMute(selected.track.id)), "Mute or unmute this whole track", !!selected.track.muted)]),
@@ -1131,8 +1143,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   );
   useEffect(() => { setItab(preferTab.current); preferTab.current = undefined; }, [selectedId]);
   const fpsNow = project.settings.fps;
-  const clipName = (p: NonNullable<typeof selected>["placement"]) => p.clipType === "text" ? (p.text?.text?.split("\n")[0] || "Text") : p.clipType === "effect" ? `Effect · ${p.effect?.preset ?? ""}` : project.assets[p.source.assetId]?.name ?? p.clipType;
-  const KIND_ICON: Record<string, string> = { video: "▭", image: "image", audio: "♫", text: "T", html: "</>", effect: "effect" };
+  const clipName = (p: NonNullable<typeof selected>["placement"]) => clipUi(p).inspectorTitle(p, project);
   const volumeRow = (pl: NonNullable<typeof selected>["placement"]) => (
     <SliderField className="v2-insp-sf" label="Volume" min={0} max={1} step={0.05} value={pl.volume ?? 1} unit="%" scale={100}
       onBegin={() => engine.beginGesture()} onEnd={() => engine.endGesture()} onChange={(v) => engine.dispatch(cmd.setPlacementVolume(pl.id, v))} />
@@ -1150,10 +1161,10 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     if (layerTrack && !selected) return { icon: "layers", title: "Edit all", subtitle: layerTrack.name, onDone: () => setLayerEdit(undefined), tabs: [{ id: "layer", label: "Layer style", render: () => <TextPanel key={layerTrack.id} engine={engine} layer={layerTrack} initialTab="Style" /> }] };
     if (cue && !selected) return { icon: "≡", title: "Subtitle", onDone: () => setSubId(undefined), tabs: [{ id: "cue", label: "Subtitle", render: () => <SubtitleEditor engine={engine} sub={cue} onDelete={delCue} /> }] };
     if (!selected) return { icon: "settings", title: "Project", subtitle: `${project.settings.width}×${project.settings.height} · ${fpsNow} fps`, tabs: [{ id: "project", label: "Project", render: () => <ProjectSettings engine={engine} project={project} onSeries={() => setSeriesLib(true)} onCleanup={() => setCleanOpen(true)} extra={textLayers.length ? <section aria-label="Subtitles"><h4>Subtitles</h4>{actionList([{ icon: "≡", label: "Subtitles", title: "Edit every subtitle in a list: text, timing, split, merge, find & replace", run: editSubtitles }, { icon: "srt-out", label: "Export SRT", title: "Download subtitles as an .srt file", run: exportSrt }])}</section> : undefined} /> }] };
-    const pl = selected.placement, kind = pl.clipType;
+    const pl = selected.placement, u = clipUi(pl);
     const rel = clipTimeAt(pl, time);
     const sub = `${formatTimecode(pl.startTicks, fpsNow).slice(0, 8)} · ${(pl.durationTicks / 120000).toFixed(1)}s${rel ? ` · ${clipTimeText(rel)}` : ""}`;
-    const base = { icon: KIND_ICON[kind] ?? "▭", title: clipName(pl), subtitle: sub, onDone: () => setSelectedId(undefined) };
+    const base = { icon: u.inspectorIcon, title: clipName(pl), subtitle: sub, onDone: () => setSelectedId(undefined) };
     const promoteSec = promoteActions.length ? <section className="v2-psettings v2-promote-sec" aria-label="Main track"><h4>Main track</h4><button className="v2-btn v2-link-btn" data-testid="promote-panel" title={promoteActions[0].title} onClick={promoteActions[0].run}><Ic g="to-main" size={16} /> Promote to main track</button></section> : null;
     const linkSec = linkActions.length ? <><section className="v2-psettings v2-link-sec" aria-label="Link to main"><h4>Link to main</h4>
       <button className={`v2-btn v2-link-btn ${selLinked ? "is-active" : ""}`} role="switch" aria-checked={!!selLinked} title={linkActions[0].title} onClick={linkActions[0].run}><Ic g={selLinked ? "unlink" : "link"} size={16} /> {selLinked ? `Linked to ${clipName(findPlacement(comp, selLinked.parent)?.placement ?? pl)}` : "Link to main"}</button>
@@ -1167,10 +1178,10 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     const versionSec = project.assets[pl.source.assetId]?.versions.length ? <section className="v2-psettings v2-cver-sec" aria-label="Clip version"><h4>Version</h4>
       <p className="v2-abnote">This clip can stay on its own take, or follow the storyboard&apos;s current version.</p>
       <ClipVersionPicker engine={engine} project={project} clipId={pl.id} onToast={setToast} /></section> : null;
-    const transform: InspectorTab = { id: "basic", label: "Basic", icon: "⤧", render: () => pl.placeholder ? rangeSec : kind === "video" && !pl.freeze && !linkSec ? <>{rangeSec}{versionSec}
+    const transform: InspectorTab = { id: "basic", label: "Basic", icon: "⤧", render: () => pl.placeholder ? rangeSec : u.inOutFrames && !pl.freeze && !linkSec ? <>{rangeSec}{versionSec}
       <section className="v2-psettings v2-frames-sec" aria-label="In and out frames"><h4>In / out frames</h4><ClipFrames engine={engine} project={project} placement={pl} /></section>
       <TransformInspector engine={engine} placement={pl} time={time} />
-    </> : <>{rangeSec}{versionSec}{linkSec}{kind === "video" && !pl.freeze && <section className="v2-psettings v2-frames-sec" aria-label="In and out frames"><h4>In / out frames</h4><ClipFrames engine={engine} project={project} placement={pl} /></section>}<TransformInspector engine={engine} placement={pl} time={time} /></> };
+    </> : <>{rangeSec}{versionSec}{linkSec}{u.inOutFrames && !pl.freeze && <section className="v2-psettings v2-frames-sec" aria-label="In and out frames"><h4>In / out frames</h4><ClipFrames engine={engine} project={project} placement={pl} /></section>}<TransformInspector engine={engine} placement={pl} time={time} /></> };
     const speedTab: InspectorTab = { id: "speed", label: "Speed", icon: "⏩", render: () => <div className="v2-psettings">
       <section aria-label="Speed"><h4>Speed</h4>
         <div className="v2-seg" role="radiogroup" aria-label="Speed">{SPEEDS.map((x) => <button key={x} role="radio" aria-checked={(pl.speed ?? 1) === x} className={`v2-seg-btn ${(pl.speed ?? 1) === x ? "is-active" : ""}`} title={x === 1 ? "Normal speed" : `${x}× — changes the clip's length`} onClick={() => engine.dispatch(cmd.setSpeed(pl.id, x))}>{x}×</button>)}</div>
@@ -1185,23 +1196,29 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       <VolumeCurve engine={engine} placement={pl} time={time} peaks={peaks[mediaKey(pl.source.assetId, pl.source.versionId)]} />
       <AudioFxPanel engine={engine} placement={pl} />
       <SpatialPad engine={engine} project={project} placement={pl} track={selected.track} time={time} />
-      {kind === "audio" && <TransformInspector engine={engine} placement={pl} time={time} />}
+      {u.transformInAudioTab && <TransformInspector engine={engine} placement={pl} time={time} />}
       {linkedAudioActions.length > 0 && <section aria-label="Clip audio"><h4>Clip audio</h4>{actionList(linkedAudioActions)}</section>}
       <section aria-label="Track"><h4>Track</h4>{actionList([{ icon: selected.track.muted ? "🔈" : "🔇", label: selected.track.muted ? "Unmute track" : "Mute track", title: "Silence the whole track", run: () => engine.dispatch(cmd.toggleTrackMute(selected.track.id)) }])}</section>
     </div> };
     const chromaTab: InspectorTab = { id: "chroma", label: "Chroma key", icon: "chroma", render: () => <ChromaKeyPanel engine={engine} placement={pl} picking={eyedrop === pl.id} onPick={(on) => setEyedrop(on ? pl.id : undefined)} /> };
     const transTab: InspectorTab | undefined = transitionTools ? { id: "transition", label: "Transition", icon: "⧓", render: () => transitionTools } : undefined;
-    if (kind === "text") return { ...base, actions: <>
-      {selTrack?.layerStyle && <button className="v2-btn v2-btn-sm" title={`Style every clip on ${selTrack.name}`} onClick={() => editLayer(selTrack.id)}><Ic g="layers" size={14} /> Edit all</button>}
-      <button className="v2-btn v2-btn-sm" title="Caption style for every clip on this track" onClick={() => editCaption(selected.track.id, pl.id)}><Ic g="caption-style" size={14} /> Caption style</button>
-      <button className="v2-btn v2-btn-sm" title="Open this layer's subtitle list at this clip" onClick={() => openSubs(selected.track.id, pl.id)}><Ic g="≡" size={14} /> Subtitles</button>
-    </>, tabs: [{ id: "text", label: "Text", icon: "T", render: () => <>{linkSec}<TextPanel engine={engine} placement={effSel} track={selTrack} onAnimPicked={() => setAnimLoop(true)} initialTab="Font" time={time} playing={playing} onSeek={seek} onTogglePlay={togglePlay} /></> }, { ...transform, label: "Transform" }] };
-    if (kind === "effect") return { ...base, tabs: [{ id: "effect", label: "Effect", icon: "effect", render: () => <>{linkSec}<EffectPicker engine={engine} at={time} placement={pl} onNewCode={() => createCodeRole("effect")} onEditCode={(id) => void editCodeAsset(id)} /></> }] };
-    if (kind === "audio") return { ...base, tabs: [audioTab, ...(speedSelect ? [speedTab] : [])] };
-    if (kind === "html") return { ...base, actions: <button className="v2-btn v2-btn-sm" title="Edit HTML, CSS and JS with live preview" onClick={() => void openCode()}><Ic g="</>" size={14} /> Edit code</button>, tabs: [{ id: "params", label: "Params", icon: "settings", render: () => <HtmlParamsPanel engine={engine} project={project} placement={pl} blobs={storage.blobs} onEditCode={() => void openCode()} /> }, transform, chromaTab, ...(transTab ? [transTab] : [])] };
-    if (pl.blank) return { ...base, tabs: [{ id: "colour", label: "Colour", icon: "palette", render: () => <div className="v2-psettings"><section aria-label="Colour"><h4>Colour</h4><BlankColorPicker value={pl.blank!.color} onChange={(c) => engine.dispatch(cmd.setBlankColor(pl.id, c))} /></section></div> }, transform, ...(transTab ? [transTab] : [])] };
-    if (kind === "image") return { ...base, tabs: [transform, chromaTab, ...(transTab ? [transTab] : [])] };
-    return { ...base, tabs: [transform, ...(speedSelect || timeActions.length || inPointable ? [speedTab] : []), audioTab, chromaTab, ...(transTab ? [transTab] : [])] };
+    // P70: the type's tabs and header buttons (clipTypes/<id>/ui.tsx), picked from the host's panels.
+    const tabsById: Record<InspectorTabId, InspectorTab | undefined> = {
+      basic: transform, speed: speedSelect || timeActions.length || inPointable ? speedTab : undefined, audio: audioTab, chroma: chromaTab, transition: transTab,
+      text: { id: "text", label: "Text", icon: "T", render: () => <>{linkSec}<TextPanel engine={engine} placement={effSel} track={selTrack} onAnimPicked={() => setAnimLoop(true)} initialTab="Font" time={time} playing={playing} onSeek={seek} onTogglePlay={togglePlay} /></> },
+      effect: { id: "effect", label: "Effect", icon: "effect", render: () => <>{linkSec}<EffectPicker engine={engine} at={time} placement={pl} onNewCode={() => createCodeRole("effect")} onEditCode={(id) => void editCodeAsset(id)} /></> },
+      params: { id: "params", label: "Params", icon: "settings", render: () => <HtmlParamsPanel engine={engine} project={project} placement={pl} blobs={storage.blobs} onEditCode={() => void openCode()} /> },
+      colour: { id: "colour", label: "Colour", icon: "palette", render: () => <div className="v2-psettings"><section aria-label="Colour"><h4>Colour</h4><BlankColorPicker value={pl.blank!.color} onChange={(c) => engine.dispatch(cmd.setBlankColor(pl.id, c))} /></section></div> },
+    };
+    const tabs = u.inspectorTabs.map((r) => (typeof r === "string" ? tabsById[r] : tabsById[r.id] && { ...tabsById[r.id]!, label: r.label })).filter((t): t is InspectorTab => !!t);
+    const actionsById: Record<InspectorActionId, JSX.Element | undefined | false> = {
+      "edit-all": selTrack?.layerStyle && <button key="edit-all" className="v2-btn v2-btn-sm" title={`Style every clip on ${selTrack.name}`} onClick={() => editLayer(selTrack.id)}><Ic g="layers" size={14} /> Edit all</button>,
+      "caption-style": <button key="caption-style" className="v2-btn v2-btn-sm" title="Caption style for every clip on this track" onClick={() => editCaption(selected.track.id, pl.id)}><Ic g="caption-style" size={14} /> Caption style</button>,
+      subtitles: <button key="subtitles" className="v2-btn v2-btn-sm" title="Open this layer's subtitle list at this clip" onClick={() => openSubs(selected.track.id, pl.id)}><Ic g="≡" size={14} /> Subtitles</button>,
+      "edit-code": <button key="edit-code" className="v2-btn v2-btn-sm" title="Edit HTML, CSS and JS with live preview" onClick={() => void openCode()}><Ic g="</>" size={14} /> Edit code</button>,
+    };
+    const acts = u.inspectorActions.map((id) => actionsById[id]).filter((a): a is JSX.Element => !!a);
+    return { ...base, ...(u.inspectorActions.length ? { actions: <>{acts}</> } : {}), tabs };
   };
   const insp = !mobile ? inspectorTabs() : undefined;
   const iconBtn = (icon: string, label: string, run: () => void, opts: { title?: string; disabled?: boolean; pressed?: boolean; key?: string } = {}) => (
@@ -1216,7 +1233,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       {iconBtn("⎘", "Copy", copy, { title: "Copy (⌘/Ctrl+C)", disabled: !anySel })}
       {iconBtn("📋", "Paste", paste, { title: hasClip ? "Paste: after the current clip, at the end of the current chain, or at the playhead on a chosen track (⌘/Ctrl+V)" : "Copy a clip first", disabled: !hasClip })}
       <button className="v2-dtool v2-dtool-text" data-testid="insert-after" aria-label="Insert new clip after current clip" title="Insert a new clip after the current clip (selected main clip, else the clip under the playhead). Later clips move later; linked layers stay with their clips" disabled={!canInsert} onClick={() => openInsert()}><Ic g="＋" size={16} /><span>Insert after</span></button>
-      {iconBtn("❄", "Freeze", () => { if (sp) { engine.dispatch(cmd.freezeFrame(sp.id, Math.round(player.time))); setToast("Freeze frame inserted (3 s)"); } }, { title: "Freeze the frame under the playhead for 3 s (F)", disabled: !(sp && sp.clipType === "video" && !sp.freeze) })}
+      {iconBtn("❄", "Freeze", () => { if (sp) { engine.dispatch(cmd.freezeFrame(sp.id, Math.round(player.time))); setToast("Freeze frame inserted (3 s)"); } }, { title: "Freeze the frame under the playhead for 3 s (F)", disabled: !(sp && selUi?.timeTools && !sp.freeze) })}
       <span className="v2-dsep" aria-hidden />
       <button className="v2-dtool v2-dtool-text" title="Trim start to playhead (Q)" aria-label="Trim start to playhead" onClick={() => trimToPlayhead("left")}><Ic g="trim-start" size={16} /><span>Trim start</span></button>
       <button className="v2-dtool v2-dtool-text" title="Trim end to playhead (W)" aria-label="Trim end to playhead" onClick={() => trimToPlayhead("right")}><Ic g="trim-end" size={16} /><span>Trim end</span></button>
@@ -1262,7 +1279,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     const many = sel.length > 1 ? ` ${sel.length} clips` : "";
     const ctxLink = p.source.assetId ? storyDomain.storyLinkOf(project, p.source.assetId) : undefined;
     return [
-      ...(p.placeholder && sel.length <= 1 ? [{ label: "Fill placeholder…", icon: "⇄", onSelect: () => { selectClip(p.id); setRangeFor({ id: p.id, picker: true }); } }, "sep" as const] : []),
+      ...(clipUi(p).extraTools.includes("fill") && sel.length <= 1 ? [{ label: "Fill placeholder…", icon: "⇄", onSelect: () => { selectClip(p.id); setRangeFor({ id: p.id, picker: true }); } }, "sep" as const] : []),
       ...(ops.mainTrack(comp)?.id === f.track.id && sel.length <= 1 ? [{ label: "Insert new clip after", icon: "＋", onSelect: () => openInsert(p.id) }, "sep" as const] : []),
       ...(canAdjustRange(p) && sel.length <= 1 ? [{ label: "Adjust range…", icon: "⇔", shortcut: "Alt+drag", onSelect: () => { selectClip(p.id); setRangeFor({ id: p.id }); } }] : []),
       ...(canReplaceAsset(p) && sel.length <= 1 ? [{ label: "Replace asset…", icon: "⇄", onSelect: () => { selectClip(p.id); setRangeFor({ id: p.id, picker: true }); } }, "sep" as const] : []),
@@ -1274,10 +1291,10 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       { label: `Cut${many}`, icon: "✂", shortcut: k("X"), onSelect: cut },
       { label: "Paste…", icon: "📋", shortcut: k("V"), disabled: !hasClip, onSelect: paste },
       { label: `Duplicate${many}`, icon: "⧉", shortcut: k("D"), onSelect: duplicate },
-      ...(p.clipType === "video" && !p.freeze && sel.length === 1 ? [{ label: "Freeze frame", icon: "❄", shortcut: "F", disabled: !inside, onSelect: () => { engine.dispatch(cmd.freezeFrame(p.id, t)); setToast("Freeze frame inserted (3 s)"); } }] : []),
+      ...(clipUi(p).timeTools && !p.freeze && sel.length === 1 ? [{ label: "Freeze frame", icon: "❄", shortcut: "F", disabled: !inside, onSelect: () => { engine.dispatch(cmd.freezeFrame(p.id, t)); setToast("Freeze frame inserted (3 s)"); } }] : []),
       ...(sel.length <= 1 && promote.canPromote(comp, p.id) ? [{ label: "Promote to main track…", icon: "⤓", onSelect: () => setPromoteFor(p.id) }] : []),
       ...(ctxLink && sel.length === 1 ? [{ label: "Open in storyboard", icon: "board", onSelect: () => openStory(ctxLink.target) }] : []),
-      ...(p.clipType === "html" && sel.length === 1 ? [{ label: "Edit code…", icon: "✎", onSelect: () => void openCode() }] : []),
+      ...(clipUi(p).editor === "code" && sel.length === 1 ? [{ label: "Edit code…", icon: "✎", onSelect: () => void openCode() }] : []),
       "sep",
       { label: `Delete${many}`, icon: "🗑", shortcut: "Del", danger: true, onSelect: () => delSel(false) },
       { label: "Ripple delete", icon: "🗑", shortcut: "⇧Del", danger: true, onSelect: () => delSel(true) },
@@ -1446,9 +1463,9 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
               { key: "trim-start", icon: "trim-start", label: "Start", title: "Trim start to playhead: the clip starts here (Q)", run: () => { trimToPlayhead("left"); setBarSheet(undefined); } },
               { key: "trim-end", icon: "trim-end", label: "End", title: "Trim end to playhead: the clip ends here (W)", run: () => { trimToPlayhead("right"); setBarSheet(undefined); } }] }]} />
             : <div className="v2-audio-sheet">
-              {selected.placement.clipType !== "image" && selected.placement.clipType !== "text" && selected.placement.clipType !== "effect" && volumeRow(selected.placement)}
+              {clipUi(selected.placement).volume && volumeRow(selected.placement)}
               <ActionGrid groups={[{ title: "Sound", items: [
-                ...(selected.placement.clipType === "video" ? [{ key: "mute-clip", icon: selected.placement.linkedAudio?.muted ? "🔇" : "🔊", label: "Mute", title: selected.placement.linkedAudio?.muted ? "Play this clip's own audio again" : "Silence only this clip's own audio", active: !!selected.placement.linkedAudio?.muted, run: () => engine.dispatch(cmd.setLinkedAudioMuted(selected.placement.id, !selected.placement.linkedAudio?.muted)) }] : []),
+                ...(clipUi(selected.placement).linkedAudio ? [{ key: "mute-clip", icon: selected.placement.linkedAudio?.muted ? "🔇" : "🔊", label: "Mute", title: selected.placement.linkedAudio?.muted ? "Play this clip's own audio again" : "Silence only this clip's own audio", active: !!selected.placement.linkedAudio?.muted, run: () => engine.dispatch(cmd.setLinkedAudioMuted(selected.placement.id, !selected.placement.linkedAudio?.muted)) }] : []),
                 { key: "vcurve", icon: "curve", label: "Curve", title: "Volume points over the waveform, and fades", run: () => { setBarSheet(undefined); setVcOpen(true); } },
                 { key: "afx", icon: "afx", label: "Audio FX", title: "Echo, telephone, radio, robot…", run: () => { setBarSheet(undefined); setAfxOpen(true); } },
                 { key: "position", icon: "spatial", label: "Position", title: "Where the sound sits: left, right, behind, near or far", run: () => { setBarSheet(undefined); setPosOpen(true); } },
@@ -1458,7 +1475,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           {sheet && <Sheet label="Media" head={false} onClose={() => setSheet(false)}>{browser}</Sheet>}
           {!sheet && <div hidden>{browser}</div>}
           {cue && <div className="v2-msub"><SubtitleEditor engine={engine} sub={cue} onDelete={delCue} /></div>}
-          {inspOpen && selected && <Sheet label="Adjust" className="v2-msheet-insp" extra={scopeChip || undefined} onClose={() => setInspOpen(false)}>{selected.placement.clipType === "video" && !selected.placement.freeze && <section className="v2-psettings v2-frames-sec" aria-label="In and out frames"><h4>In / out frames</h4><ClipFrames engine={engine} project={project} placement={selected.placement} /></section>}<TransformInspector engine={engine} placement={selected.placement} time={time} /></Sheet>}
+          {inspOpen && selected && <Sheet label="Adjust" className="v2-msheet-insp" extra={scopeChip || undefined} onClose={() => setInspOpen(false)}>{clipUi(selected.placement).inOutFrames && !selected.placement.freeze && <section className="v2-psettings v2-frames-sec" aria-label="In and out frames"><h4>In / out frames</h4><ClipFrames engine={engine} project={project} placement={selected.placement} /></section>}<TransformInspector engine={engine} placement={selected.placement} time={time} /></Sheet>}
           {matchOpen && pair && <Sheet label="Match frames" className="v2-msheet-insp" onClose={() => setMatchOpen(false)}><MatchFrames engine={engine} project={project} a={pair[0]} b={pair[1]} analyse={makeAnalyse(project, loadAssetBlob)} loadMedia={loadAssetBlob} onDone={(m) => { setMatchOpen(false); if (m) setToast(m); }} /></Sheet>}
           {ckOpen && selected && canChromaKey(selected.placement) && <Sheet label="Chroma key" className="v2-msheet-insp" dim={false} onClose={() => { setCkOpen(false); setEyedrop(undefined); }}><ChromaKeyPanel engine={engine} placement={selected.placement} picking={eyedrop === selected.placement.id} onPick={(on) => setEyedrop(on ? selected.placement.id : undefined)} /></Sheet>}
           {vcOpen && selected && hasSound(selected.placement) && <Sheet label="Volume curve" className="v2-msheet-insp" onClose={() => setVcOpen(false)}><VolumeCurve engine={engine} placement={selected.placement} time={time} peaks={peaks[mediaKey(selected.placement.source.assetId, selected.placement.source.versionId)]} /></Sheet>}

@@ -5,6 +5,12 @@ import { Ic } from "../../ui/Icon";
 const placeholder: ClipTypeUi = {
   id: "placeholder",
   kindClass: "is-placeholder",
+  // Stored as an image clip: the image inspector and tools, plus Fill.
+  inspectorIcon: "image",
+  inspectorTabs: ["basic", "chroma", "transition"],
+  extraTools: ["fill"],
+  speed: false,
+  volume: false,
   // A placeholder that also carries a blank flag keeps the blank colour behind its card, as before P69.
   background: (p) => (p.blank ? { background: p.blank.color } : undefined),
   body: (p) => (

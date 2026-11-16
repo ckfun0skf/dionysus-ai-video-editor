@@ -2,11 +2,12 @@
 
 One folder per clip type. Design, decisions and the phased plan: `docs/v2/CLIP_PLUGIN_ARCHITECTURE.md`.
 
-**Status (P69, Phase 1 step 1.4):** the domain predicates (`trackKindFor`, `isStill`, `canChromaKey`, `hasSound`,
+**Status (P70, Phase 1 step 1.5):** the domain predicates (`trackKindFor`, `isStill`, `canChromaKey`, `hasSound`,
 `canSetRange`, `slipKind`, …) and the export audio plan read this registry (P66). Every drawn type renders through
 its `render.ts`, in preview and export alike: text, placeholder and blank (P67), html, video, image, audio and the
-unknown fallback (P68). The timeline clip look and asset thumbnails/previews come from `ui.tsx` (P69). Inspector,
-toolbar, storyboard and agent tools still use the `clipType` checks listed in §2 of the design doc (steps 1.5–1.8).
+unknown fallback (P68). The timeline clip look and asset thumbnails/previews come from `ui.tsx` (P69), and so do the
+inspector tabs, mobile toolbar and context menu (P70). Storyboard and agent tools still use the `clipType` checks
+listed in §2 of the design doc (steps 1.6–1.8).
 
 ```
 clipTypes/
@@ -22,7 +23,9 @@ clipTypes/
                   render/mediaClip.ts). Discovered by src/v2/render/clipRenderers.ts. Render-layer code: canvas and
                   render helpers allowed.
   <id>/ui.tsx   video, image, audio, html, text, effect, placeholder, blank (P69): default export ClipTypeUi
-                (declarative timeline fields: name, icon, body, background, filmstrip, waveform, assetThumb, …);
+                (declarative timeline fields: name, icon, body, background, filmstrip, waveform, assetThumb, …;
+                P70 inspector/toolbar fields: inspectorTabs, inspectorActions, toolbar, editor, speed, volume, …
+                naming host-owned tabs, tools and actions);
                 discovered by src/v2/ui/clipTypeUi.tsx, missing fields and unknown ids take DEFAULT_CLIP_UI.
                 UI-layer code: React and ui helpers allowed.
 ```
