@@ -13,7 +13,7 @@ import { TICKS_PER_SECOND } from "./time";
 import { textOf } from "./text";
 import { maskToJson } from "./mask";
 import { STORY_ASSET_TYPES } from "./storyJson";
-import { clipTypeAgentTools, clipTypeDescribe } from "../clipTypes";
+import { clipTypeAgentTools, clipTypeDescribe, isKnownClipType } from "../clipTypes";
 
 type Schema = Record<string, unknown>;
 export interface TimelineToolDef { name: string; title: string; description: string; inputSchema: Schema; readOnly: boolean }
@@ -198,6 +198,8 @@ export function clipJson(p: Project, pl: Placement, track?: Track): Record<strin
     ...(pl.versionId ? { pinnedVersion: pl.versionId } : {}),
     ...(pl.placeholder ? { placeholder: true, label: pl.placeholder.label } : {}),
     ...(pl.blank ? { blank: pl.blank.color } : {}),
+    // P73 (§6): a clip type this build does not register (kept as is, drawn as a slate, exports black and silent).
+    ...(!isKnownClipType(pl.clipType) ? { unknown: true } : {}),
     ...(pl.motionTracks?.length ? { tracks: pl.motionTracks.map((t) => ({ id: t.id, name: t.name, sourceInSec: sec(t.inS), sourceOutSec: sec(t.outS), frames: t.samples.length, lost: t.samples.filter((x) => x.lost).length, ...(t.mask ? { mask: t.mask } : {}) })) } : {}),
     ...(pl.mask ? { mask: maskToJson(pl.mask) } : {}),
     ...(pl.htmlInputs ? { inputs: pl.htmlInputs } : {}),

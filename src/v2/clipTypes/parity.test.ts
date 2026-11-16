@@ -34,8 +34,9 @@ function fixture(): { project: Project; clips: Record<string, Placement> } {
 
 describe("clip type parity with today's predicates (P65)", () => {
   const { project, clips } = fixture();
-  it("has a fixture clip for every registered type", () => expect(Object.keys(clips).sort()).toEqual(CLIP_TYPES.list().map((c) => c.id).sort()));
-  for (const core of CLIP_TYPES.list()) {
+  // P73: the placeholder is a host clip state (clipTypes/state.ts), no longer a registered type; its fixture clip stays.
+  it("has a fixture clip for every registered type and the placeholder state", () => expect(Object.keys(clips).sort()).toEqual([...CLIP_TYPES.list().map((c) => c.id), "placeholder"].sort()));
+  for (const core of [...CLIP_TYPES.list(), clipTypeOf(clips.placeholder)]) {
     it(`${core.id}: trackKind and caps match trackKindFor, isStill, hasSound, canChromaKey, needsThumb, canSetRange`, () => {
       const p = clips[core.id];
       expect(clipTypeOf(p).id).toBe(core.id);
@@ -106,7 +107,9 @@ describe("delegating predicates equal the pre-P66 code (P66)", () => {
     });
     const proj: Project = { ...project, compositions: { ...project.compositions, [project.rootCompositionId]: { ...project.compositions[project.rootCompositionId], tracks } } };
     const mixed = audioPlan(proj).map((seg) => seg.start);
-    const expected = tracks.flatMap((t) => t.placements).filter((p) => !LEGACY.audioSkip(p) && !!versionOf(proj, p.source) && (p.volume ?? 1) > 0 && p.durationTicks > 0).map((p) => p.startTicks / 120_000).sort((a, b) => a - b);
+    // P73 (§6, intended): a clip type this build does not know is no longer mixed (it exports as a black frame and silence, warned first).
+    const known = (p: Placement) => !!CLIP_TYPES.core(p.clipType);
+    const expected = tracks.flatMap((t) => t.placements).filter((p) => known(p) && !LEGACY.audioSkip(p) && !!versionOf(proj, p.source) && (p.volume ?? 1) > 0 && p.durationTicks > 0).map((p) => p.startTicks / 120_000).sort((a, b) => a - b);
     expect([...mixed].sort((a, b) => a - b)).toEqual(expected);
     expect(mixed.length).toBeGreaterThan(3);
   });

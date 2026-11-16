@@ -6,17 +6,22 @@
  * previews (P69); in the inspector its icon, title, tabs and header actions, on the mobile clip toolbar its primary
  * tools, and which shared tools, sheets and menu items apply (P70). Fields are declarative (decision Q4): tabs, tools
  * and actions are ids of panels and buttons the editor host owns (`V2App.tsx`). Anything a type leaves out takes
- * `DEFAULT_CLIP_UI` (a plain media clip named after its asset), and so does a `clipType` this build does not register.
+ * `DEFAULT_CLIP_UI` (a plain media clip named after its asset).
+ *
+ * P73 (step 1.8, decision 9): the host owns two entries no plugin provides. A placeholder of any type gets
+ * `placeholderUi` (the P35 hatched card, checked before any type lookup), and a `clipType` this build does not register
+ * gets `UNKNOWN_CLIP_UI` (a card naming the missing type and a read-only inspector tab).
  */
 import type { CSSProperties, ReactNode } from "react";
 import type { MediaKind, Placement, Project } from "../domain";
-import { CLIP_TYPES, variantOf } from "../clipTypes";
+import { CLIP_TYPES, coreOf, isKnownClipType, isPlaceholder, variantOf } from "../clipTypes";
+import { Ic } from "./Icon";
 
 export type WaveKind = "audio" | "video";
 
 /** Inspector tabs the host can show (P70). Optional ones appear only when they apply: `speed` (speed, time tools or
  * in point available), `transition` (the clip starts a cut). `label` renames a tab (text shows Basic as "Transform"). */
-export type InspectorTabId = "basic" | "speed" | "audio" | "chroma" | "transition" | "text" | "effect" | "params" | "colour";
+export type InspectorTabId = "basic" | "speed" | "audio" | "chroma" | "transition" | "text" | "effect" | "params" | "colour" | "unknown";
 export type InspectorTabRef = InspectorTabId | { id: InspectorTabId; label: string };
 /** Buttons in the desktop inspector header (P70); `edit-all` only for a clip on a styled text layer. */
 export type InspectorActionId = "edit-all" | "caption-style" | "subtitles" | "edit-code";
@@ -137,7 +142,74 @@ export const { uis: CLIP_TYPE_UIS, problems: CLIP_TYPE_UI_PROBLEMS } = loadClipT
 export const CLIP_TYPE_UI_PATHS = Object.keys(found);
 if (CLIP_TYPE_UI_PROBLEMS.length) console.error(`[clipTypeUi] ${CLIP_TYPE_UI_PROBLEMS.length} invalid clip type UI module(s):\n  ${CLIP_TYPE_UI_PROBLEMS.join("\n  ")}`);
 
-/** The timeline UI for a placement (its variant first; unknown types get the default). */
-export const clipUi = (p: Placement): ResolvedClipTypeUi => CLIP_TYPE_UIS.get(variantOf(p)) ?? DEFAULT_CLIP_UI;
+/**
+ * P35 / P73: the placeholder card and inspector, for a placeholder of any type: the shot label and "Not generated" on a
+ * hatched card, the Basic tab (its Fill section), chroma key when the intended type is keyable, Fill when the intended
+ * type reads an asset. For the image placeholder Send makes, exactly the pre-P73 `clipTypes/placeholder/ui.tsx`.
+ */
+export const PLACEHOLDER_UI: ResolvedClipTypeUi = {
+  ...DEFAULT_CLIP_UI,
+  id: "placeholder",
+  kindClass: "is-placeholder",
+  inspectorIcon: "image",
+  inspectorTabs: ["basic", "chroma", "transition"],
+  extraTools: ["fill"],
+  speed: false,
+  volume: false,
+  // A placeholder that also carries a blank flag keeps the blank colour behind its card, as before P69.
+  background: (p) => (p.blank ? { background: p.blank.color } : undefined),
+  body: (p) => (
+    <span className="v2-clip-name v2-ph" title={`${p.placeholder!.label} — not generated yet. Add its clip on the storyboard and Send to timeline (Update), or Fill placeholder (pick or upload a clip).`}>
+      <Ic g="board" size={12} /><span className="v2-ph-label">{p.placeholder!.label}</span><span className="v2-ph-state">Not generated</span>
+    </span>
+  ),
+};
+const placeholderUis = new Map<string, ResolvedClipTypeUi>([["image", PLACEHOLDER_UI]]);
+/** The placeholder UI for a placeholder whose intended type is `clipType` (cached per type). */
+export function placeholderUi(clipType: string): ResolvedClipTypeUi {
+  let u = placeholderUis.get(clipType);
+  if (!u) {
+    const core = coreOf(clipType);
+    u = {
+      ...PLACEHOLDER_UI,
+      inspectorIcon: (isKnownClipType(clipType) && CLIP_TYPE_UIS.get(clipType)?.inspectorIcon) || PLACEHOLDER_UI.inspectorIcon,
+      inspectorTabs: core.caps.keyable ? PLACEHOLDER_UI.inspectorTabs : ["basic", "transition"],
+      extraTools: core.caps.asset === "media" ? ["fill"] : [],
+    };
+    placeholderUis.set(clipType, u);
+  }
+  return u;
+}
+
+/** P73 (§6): a clip of a type this build does not register: a card naming the type; only moving, trimming and deleting. */
+export const UNKNOWN_CLIP_UI: ResolvedClipTypeUi = {
+  ...DEFAULT_CLIP_UI,
+  id: "unknown",
+  kindClass: "is-unknown",
+  name: (p) => `Unknown type “${p.clipType}”`,
+  thumbBackground: false,
+  waveform: () => undefined,
+  assetThumb: "none",
+  assetPreviews: { peaks: false, filmstrip: false },
+  inspectorIcon: "⚠",
+  inspectorTitle: (p) => `Unknown clip type “${p.clipType}”`,
+  inspectorTabs: ["unknown"],
+  toolbar: ["link", "to-main"],
+  toolbarMain: [],
+  speed: false,
+  volume: false,
+  body: (p) => (
+    <span className="v2-clip-name v2-ph v2-unknown" title={`This clip's type “${p.clipType}” is not in this version of the editor. Its data is kept as is; it shows as a slate and exports as a black frame.`}>
+      <Ic g="⚠" size={12} /><span className="v2-ph-label">{p.clipType}</span><span className="v2-ph-state">Unknown type</span>
+    </span>
+  ),
+};
+
+/** The timeline UI for a placement: a placeholder first (any type), then its variant or type; unknown types get UNKNOWN_CLIP_UI. */
+export const clipUi = (p: Placement): ResolvedClipTypeUi => {
+  if (isPlaceholder(p)) return placeholderUi(p.clipType);
+  const id = variantOf(p);
+  return CLIP_TYPE_UIS.get(id) ?? (isKnownClipType(id) ? DEFAULT_CLIP_UI : UNKNOWN_CLIP_UI);
+};
 /** The UI for an asset kind (thumbnails and previews of the Media panel and timeline). */
 export const assetUi = (kind: MediaKind | string): ResolvedClipTypeUi => CLIP_TYPE_UIS.get(kind) ?? DEFAULT_CLIP_UI;

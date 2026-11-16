@@ -2,7 +2,7 @@
 import { versionOf, compositionDuration, type Composition, type Placement, type Project, type Track } from "../../domain/model";
 import { spatialAt, spatialOf, type PositionKey, type SpatialPos } from "../../domain/spatial";
 import { TICKS_PER_SECOND } from "../../domain/time";
-import { CLIP_TYPES, variantOf } from "../../clipTypes";
+import { clipTypeOf, isKnownClipType } from "../../clipTypes";
 
 export const RESOLUTIONS = { "720p": 720, "1080p": 1080, "2K": 1440, "4K": 2160 } as const;
 export type Resolution = keyof typeof RESOLUTIONS;
@@ -85,10 +85,9 @@ export function audioPlan(project: Project): AudioSegment[] {
   for (const track of comp.tracks) {
     if (track.muted || track.hidden) continue;
     for (const p of track.placements) {
-      // P66: silent clip types (caps.sound false) are skipped. A type this build does not know keeps today's path
-      // (mixed when it has media); step 1.8 of docs/v2/CLIP_PLUGIN_ARCHITECTURE.md decides unknown types.
-      const core = CLIP_TYPES.core(variantOf(p));
-      if ((core && !core.caps.sound) || p.reverse || p.freeze || (p.linkedAudio?.muted && p.clipType === "video")) continue;
+      // P66: silent clip types (caps.sound false) are skipped. P73: so are placeholders of any type (the host state core)
+      // and a type this build does not know (the unknown core is silent; it exports as a black frame, warned first).
+      if (!clipTypeOf(p).caps.sound || p.reverse || p.freeze || (p.linkedAudio?.muted && p.clipType === "video")) continue;
       const v = versionOf(project, p.source);
       if (!v || (p.volume ?? 1) <= 0) continue;
       if (p.durationTicks <= 0) continue;
@@ -179,6 +178,23 @@ export function exportPlaceholderWarning(project: Project): { title: string; bod
   return { title, body: bits.join(" ") };
 }
 
+/** P73 (§6 of docs/v2/CLIP_PLUGIN_ARCHITECTURE.md): clips of a type this build does not register, on visible tracks. */
+export function unknownTypeClips(project: Project): Placement[] {
+  const comp = project.compositions[project.rootCompositionId];
+  return comp?.tracks.filter((t) => !t.hidden).flatMap((t) => t.placements.filter((pl) => !isKnownClipType(pl.clipType))) ?? [];
+}
+
+/** Export-dialog copy when the timeline has clips of an unknown type: they export as black frames and silence. */
+export function exportUnknownTypeWarning(project: Project): { title: string; body: string } | undefined {
+  const list = unknownTypeClips(project);
+  if (!list.length) return undefined;
+  const types = [...new Set(list.map((p) => p.clipType))];
+  const named = types.slice(0, 3).map((t) => `“${t}”`).join(", ") + (types.length > 3 ? ` and ${types.length - 3} more` : "");
+  return {
+    title: `${list.length} clip${list.length === 1 ? " has a type" : "s have types"} this version can't play`,
+    body: `${list.length === 1 ? "It exports" : "They export"} as black frames without sound: clip type ${named}. Their data is kept; open the project in a version that has ${types.length === 1 ? "this type" : "these types"}, or export anyway.`,
+  };
+}
 
 /** Safe download name from the project title. */
 export const exportName = (name: string, ext: string) => `${name.trim().replace(/[^\w\- ]+/g, "").replace(/\s+/g, "-") || "dionysus-export"}.${ext}`;

@@ -7,7 +7,7 @@ import type { ClipTypeCore } from "./types";
 import { DEFAULT_CLIP_STORY, kindForSlotType, storyOf } from "./story";
 import { STORY_ASSET_TYPES } from "../domain/storyJson";
 
-const BUILT_INS = ["audio", "blank", "effect", "html", "image", "placeholder", "text", "unknown", "video"];
+const BUILT_INS = ["audio", "blank", "effect", "html", "image", "text", "unknown", "video"];
 const ok = (over: Partial<ClipTypeCore> = {}): ClipTypeCore => defineClipType({
   id: "demo", description: "A demo.", trackKind: "video",
   caps: { sourceTime: false, still: false, sound: false, visual: true, keyable: false, thumb: false, asset: "none" }, ...over,
@@ -64,13 +64,16 @@ describe("clip type registry (P65)", () => {
     expect(problems.join("\n")).toMatch(/ghost: variant of unregistered type "image"/);
   });
 
-  it("variantOf / clipTypeOf resolve placeholder and blank variants and unknown ids", () => {
+  it("variantOf resolves the blank variant; clipTypeOf checks the placeholder state first; unknown ids", () => {
     expect(variantOf({ clipType: "image" })).toBe("image");
-    expect(variantOf({ clipType: "image", placeholder: { label: "Shot 1" } })).toBe("placeholder");
+    // P73 (decision 9): a placeholder is a clip state, not a variant: variantOf no longer returns it.
+    expect(variantOf({ clipType: "image", placeholder: { label: "Shot 1" } })).toBe("image");
+    expect(clipTypeOf({ clipType: "image", placeholder: { label: "Shot 1" } }).id).toBe("placeholder");
     expect(variantOf({ clipType: "image", blank: { color: "#000000" } })).toBe("blank");
     expect(variantOf({ clipType: "video", blank: { color: "#000000" } })).toBe("video");
-    // P67: both flags (never produced by the app) resolve to the placeholder, as the player always drew it.
-    expect(variantOf({ clipType: "image", blank: { color: "#000000" }, placeholder: { label: "x" } })).toBe("placeholder");
+    // P67: both flags (never produced by the app) behave as the placeholder, as the player always drew it (P73: clipTypeOf checks the state first).
+    expect(variantOf({ clipType: "image", blank: { color: "#000000" }, placeholder: { label: "x" } })).toBe("blank");
+    expect(clipTypeOf({ clipType: "image", blank: { color: "#000000" }, placeholder: { label: "x" } }).id).toBe("placeholder");
     expect(clipTypeOf({ clipType: "text" }).id).toBe("text");
     expect(clipTypeOf({ clipType: "scene" as never }).id).toBe(UNKNOWN_CLIP_TYPE);
   });

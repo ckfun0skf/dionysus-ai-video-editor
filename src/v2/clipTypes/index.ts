@@ -7,6 +7,7 @@
  */
 import { loadClipTypeModules } from "./load";
 import type { ClipTypeCore } from "./types";
+import { isPlaceholder, placeholderCore } from "./state";
 import type { Placement } from "../domain/model";
 
 const found = import.meta.glob<{ default?: ClipTypeCore }>("./*/core.ts", { eager: true });
@@ -27,7 +28,10 @@ function variantList(): ClipTypeCore[] {
   return variants;
 }
 
-/** The effective type id of a placement: a registered variant whose flag is set (placeholder, blank), else `clipType`. */
+/**
+ * The effective type id of a placement: a registered variant whose flag is set (blank), else `clipType`. Since P73 a
+ * placeholder is a clip state (./state.ts), not a variant: check `isPlaceholder` first, as `clipTypeOf` does.
+ */
 export function variantOf(p: Pick<Placement, "clipType"> & Partial<Placement>): string {
   for (const c of variantList()) if (c.variant!.of === p.clipType && p[c.variant!.field]) return c.id;
   return p.clipType;
@@ -38,13 +42,20 @@ export function coreOf(clipType: string): ClipTypeCore {
   return CLIP_TYPES.core(clipType) ?? CLIP_TYPES.core(UNKNOWN_CLIP_TYPE)!;
 }
 
-/** The core for a placement (its variant first); unknown ids get the `unknown` core. */
+/**
+ * The core for a placement: a placeholder (any type) gets the host's placeholder state core (P73, decision 9), else its
+ * variant, else its stored type; unknown ids get the `unknown` core.
+ */
 export function clipTypeOf(p: Pick<Placement, "clipType"> & Partial<Placement>): ClipTypeCore {
-  return coreOf(variantOf(p));
+  return isPlaceholder(p) ? placeholderCore(coreOf(p.clipType)) : coreOf(variantOf(p));
 }
+
+/** Is `clipType` registered in this build? (Unknown ids keep their data and draw the unknown-type slate, §6.) */
+export const isKnownClipType = (clipType: string): boolean => !!CLIP_TYPES.core(clipType) && clipType !== UNKNOWN_CLIP_TYPE;
 
 export { defineClipType } from "./define";
 export { checkClipType, createClipTypeRegistry, type ClipTypeRegistry } from "./registry";
 export type { ClipAccepts, ClipAgent, ClipAgentApi, ClipAgentResult, ClipAgentToolDef, ClipCaps, ClipStory, ClipTypeCore, ClipTypeDef, ClipVariant } from "./types";
 export { DEFAULT_CLIP_STORY, kindForFile, kindForSlotType, mimeForFile, storyOf } from "./story";
+export { PLACEHOLDER_STATE, isPlaceholder, placeholderAccepts, placeholderCaps, placeholderCore } from "./state";
 export { agentToolOwner, clipPropFits, clipToolFits, clipTypeAgentRules, clipTypeAgentTools, clipTypeDescribe } from "./agent";

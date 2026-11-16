@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { assetUi, checkClipTypeUi, CLIP_TYPE_UI_PATHS, CLIP_TYPE_UI_PROBLEMS, CLIP_TYPE_UIS, clipUi, DEFAULT_CLIP_UI, loadClipTypeUis, type ClipTypeUi, type ResolvedClipTypeUi } from "./clipTypeUi";
+import { assetUi, checkClipTypeUi, CLIP_TYPE_UI_PATHS, CLIP_TYPE_UI_PROBLEMS, CLIP_TYPE_UIS, clipUi, DEFAULT_CLIP_UI, loadClipTypeUis, UNKNOWN_CLIP_UI, type ClipTypeUi, type ResolvedClipTypeUi } from "./clipTypeUi";
 import { clipDisplayName, clipKindClass, clipThumbStyle, needsThumb } from "./TimelineClip";
 import { effectName } from "./effectName";
 import { Ic } from "./Icon";
 import { createProject, TEXT_SOURCE, type MediaKind, type Placement, type Project } from "../domain";
 import type { Filmstrip } from "./media";
+import { isKnownClipType } from "../clipTypes";
 
 /** Frozen pre-P69 switches (TimelineClip.tsx, Timeline.tsx, useThumbs.ts, useMedia.ts), so the parity check is not circular. */
 const LEGACY = {
@@ -78,12 +79,14 @@ function shapes(): Placement[] {
 describe("P69 clip type UI table", () => {
   it("discovers the UI modules with no problems", () => {
     expect(CLIP_TYPE_UI_PROBLEMS).toEqual([]);
-    const ids = ["audio", "blank", "effect", "html", "image", "placeholder", "text", "video"];
+    // P73: the placeholder card is host code (PLACEHOLDER_UI), no longer a clip type UI module.
+    const ids = ["audio", "blank", "effect", "html", "image", "text", "video"];
     expect([...CLIP_TYPE_UIS.keys()].sort()).toEqual(ids);
     expect(CLIP_TYPE_UI_PATHS.sort()).toEqual(ids.map((id) => `../clipTypes/${id}/ui.tsx`));
   });
-  it("falls back to the default UI for unknown types and asset kinds", () => {
-    expect(clipUi({ clipType: "scene3d" } as unknown as Placement)).toBe(DEFAULT_CLIP_UI);
+  it("unknown types get the host's unknown-type UI; unknown asset kinds the default", () => {
+    // P73 (§6, intended): before P73 an unknown type took DEFAULT_CLIP_UI (a plain media clip).
+    expect(clipUi({ clipType: "scene3d" } as unknown as Placement)).toBe(UNKNOWN_CLIP_UI);
     expect(assetUi("scene3d")).toBe(DEFAULT_CLIP_UI);
     expect(clipUi({ clipType: "image", blank: { color: "#000000" } } as Placement).id).toBe("blank");
   });
@@ -103,7 +106,8 @@ describe("P69 clip type UI table", () => {
     const project = createProject("t");
     project.assets.a = { id: "a", kind: "video", name: "clip.mp4", versions: [], selectedVersionId: "v" };
     const thumbs = { a: "data:t" };
-    for (const p of shapes()) {
+    // P73 (§6): unknown types intentionally leave the pre-P69 rules (UNKNOWN_CLIP_UI; see clipTypeState.test.tsx).
+    for (const p of shapes().filter((x) => isKnownClipType(x.clipType))) {
       const tag = `${p.clipType}${p.placeholder ? "+ph" : ""}${p.blank ? "+blank" : ""}${JSON.stringify([p.reverse, p.freeze, p.linkedAudio, p.speed, p.text, p.effect])}`;
       const u = clipUi(p);
       expect(needsThumb(p), tag).toBe(LEGACY.needsThumb(p));
@@ -154,7 +158,7 @@ describe("P70 inspector, toolbar and menu fields", () => {
     const project = createProject("t");
     project.assets.a = { id: "a", kind: "video", name: "clip.mp4", versions: [], selectedVersionId: "v" };
     const both = (p: Placement) => !!(p.placeholder && p.blank); // never created by the app (accepted edge, as in P67/P69)
-    for (const p of shapes().filter((x) => !both(x))) {
+    for (const p of shapes().filter((x) => !both(x) && isKnownClipType(x.clipType))) {
       const tag = `${p.clipType}${p.placeholder ? "+ph" : ""}${p.blank ? "+blank" : ""}${JSON.stringify([p.reverse, p.freeze, p.linkedAudio, p.speed, p.text, p.effect])}`;
       const u = clipUi(p);
       expect(u.editor, tag).toBe(LEGACY70.editor(p));

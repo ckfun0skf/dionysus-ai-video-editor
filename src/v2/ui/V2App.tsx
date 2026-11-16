@@ -1208,6 +1208,9 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       text: { id: "text", label: "Text", icon: "T", render: () => <>{linkSec}<TextPanel engine={engine} placement={effSel} track={selTrack} onAnimPicked={() => setAnimLoop(true)} initialTab="Font" time={time} playing={playing} onSeek={seek} onTogglePlay={togglePlay} /></> },
       effect: { id: "effect", label: "Effect", icon: "effect", render: () => <>{linkSec}<EffectPicker engine={engine} at={time} placement={pl} onNewCode={() => createCodeRole("effect")} onEditCode={(id) => void editCodeAsset(id)} /></> },
       params: { id: "params", label: "Params", icon: "settings", render: () => <HtmlParamsPanel engine={engine} project={project} placement={pl} blobs={storage.blobs} onEditCode={() => void openCode()} /> },
+      // P73 (§6): a clip type this build does not register: say so, keep its data; no editors that could misread it.
+      unknown: { id: "unknown", label: "Clip", icon: "⚠", render: () => <div className="v2-psettings"><section aria-label="Unknown clip type" data-testid="unknown-clip-type"><h4>Unknown clip type</h4>
+        <p className="v2-abnote">This clip&apos;s type “{pl.clipType}” is not in this version of the editor, so it can&apos;t be shown or edited here. Its data is kept as is: you can move, trim, split or delete it, and it plays again in a version that has this type. It shows as a slate and exports as a black frame without sound.</p></section></div> },
       colour: { id: "colour", label: "Colour", icon: "palette", render: () => <div className="v2-psettings"><section aria-label="Colour"><h4>Colour</h4><BlankColorPicker value={pl.blank!.color} onChange={(c) => engine.dispatch(cmd.setBlankColor(pl.id, c))} /></section></div> },
     };
     const tabs = u.inspectorTabs.map((r) => (typeof r === "string" ? tabsById[r] : tabsById[r.id] && { ...tabsById[r.id]!, label: r.label })).filter((t): t is InspectorTab => !!t);

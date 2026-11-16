@@ -1407,6 +1407,10 @@ select.v2-tp-field { -webkit-appearance: none; appearance: none; padding-right: 
 .v2-clip.is-placeholder,
 .v2-timeline .v2-lane .v2-clip.is-placeholder { background: repeating-linear-gradient(135deg, rgba(255,255,255,.07) 0 6px, rgba(255,255,255,.02) 6px 12px), #1c1d21; border: 1px dashed rgba(255,255,255,.38); color: rgba(255,255,255,.82); box-shadow: none; }
 .v2-clip.is-placeholder.is-selected { border-style: solid; border-color: #fff; }
+/* P73: a clip of a type this build does not register: the placeholder card with an amber edge. */
+.v2-clip.is-unknown,
+.v2-timeline .v2-lane .v2-clip.is-unknown { background: repeating-linear-gradient(135deg, rgba(255,190,60,.10) 0 6px, rgba(255,190,60,.03) 6px 12px), #1c1d21; border: 1px dashed rgba(255,190,60,.7); color: rgba(255,255,255,.85); box-shadow: none; }
+.v2-clip.is-unknown.is-selected { border-style: solid; border-color: #ffc23c; }
 .v2-clip-name.v2-ph { display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden; white-space: nowrap; }
 .v2-ph-label { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .v2-ph-state { flex: none; font-size: 10px; padding: 0 4px; border-radius: 3px; border: 1px solid rgba(255,255,255,.35); color: rgba(255,255,255,.7); text-transform: uppercase; letter-spacing: .03em; }

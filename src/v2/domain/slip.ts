@@ -14,7 +14,7 @@
  */
 import { TICKS_PER_SECOND } from "./time";
 import { findPlacement, versionOf, type AssetVersion, type Placement, type Project } from "./model";
-import { clipTypeOf } from "../clipTypes";
+import { clipTypeOf, placeholderAccepts } from "../clipTypes";
 import { MIN_DURATION_TICKS, mainTrack } from "./ops";
 import { setSourceRange } from "./clipRange";
 
@@ -133,8 +133,9 @@ export function replaceError(project: Project, id: string, assetId: string): str
   const p = f.placement, a = project.assets[assetId];
   if (p.clipType === "text" || p.clipType === "effect") return `Clip ${id} is a ${p.clipType} clip; it has no asset to replace.`;
   if (!a) return `No asset "${assetId}".`;
-  // P35: a shot placeholder takes any picture asset (video, image or html).
-  if (p.placeholder) return a.kind === "audio" ? `Asset ${assetId} is audio; placeholder ${id} needs a video, image or html clip.` : replaceVersion(project, assetId) ? undefined : `Asset ${assetId} has no version yet.`;
+  // P35: the image placeholder Send makes takes any picture asset (video, image or html); P73: a placeholder of another
+  // type takes its own kind (clipTypes/state.ts `placeholderAccepts`).
+  if (p.placeholder) return !placeholderAccepts(p.clipType)(a.kind) ? `Asset ${assetId} is ${a.kind}; placeholder ${id} needs ${p.clipType === "image" ? "a video, image or html" : `a${/^[aeiou]/.test(p.clipType) ? "n" : ""} ${p.clipType}`} clip.` : replaceVersion(project, assetId) ? undefined : `Asset ${assetId} has no version yet.`;
   if (a.kind !== p.clipType) return `Asset ${assetId} is ${a.kind}; clip ${id} is ${p.clipType}. Replace with the same kind (video with video, audio with audio).`;
   if (!replaceVersion(project, assetId)) return `Asset ${assetId} has no version yet.`;
   if (p.source.assetId === assetId && p.source.versionId === replaceVersion(project, assetId)!.id) return `Clip ${id} already uses ${assetId}.`;
