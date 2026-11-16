@@ -45,4 +45,5 @@ export function clipTypeOf(p: Pick<Placement, "clipType"> & Partial<Placement>):
 
 export { defineClipType } from "./define";
 export { checkClipType, createClipTypeRegistry, type ClipTypeRegistry } from "./registry";
-export type { ClipCaps, ClipTypeCore, ClipTypeDef, ClipVariant } from "./types";
+export type { ClipAccepts, ClipCaps, ClipStory, ClipTypeCore, ClipTypeDef, ClipVariant } from "./types";
+export { DEFAULT_CLIP_STORY, kindForFile, kindForSlotType, mimeForFile, storyOf } from "./story";

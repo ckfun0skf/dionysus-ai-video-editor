@@ -18,6 +18,7 @@ import { syncPlan } from "./storySync";
 import { mainTrack } from "./ops";
 import { secondsToTicks as s } from "./time";
 import { mediaKindOf, mimeOf } from "../persistence/media";
+import { storyOf } from "../clipTypes";
 
 const GOLDEN = join(__dirname, "__golden__", "storyMappingParity.json");
 
@@ -51,6 +52,18 @@ const FILES = MIMES.flatMap((type) => NAMES.map((name) => ({ type, name })));
 describe("P71 storyboard mapping and media-kind detection: frozen pre-P71 switches", () => {
   it("kindForSlot for every storyboard asset type (and unknown strings)", () => {
     for (const t of SLOT_SHAPES) expect(board.kindForSlot(t as never), t).toBe(LEGACY.kindForSlot(t));
+  });
+  it("the per-kind storyboard switches of storySend.ts / storySync.ts (P71: core `story`)", () => {
+    for (const k of ["video", "image", "audio", "html", "text", "effect", "scene3d", "placeholder", "blank", "unknown", ""]) {
+      const st = storyOf(k);
+      // storySync slotFor and new-layer type; storySend mediaLayer, length rules, takes (video) and html params.
+      expect(st.slotType, k).toBe(k === "video" ? "video" : k === "audio" ? "audio" : k === "html" ? "html" : "image");
+      expect(st.layerType, k).toBe(k === "video" ? "video" : k === "html" ? "html" : "image");
+      expect(st.layer, k).toBe(k === "image" || k === "video" || k === "html");
+      expect(st.sendLength, k).toBe(k === "html" ? "planned" : k === "image" ? "still" : "media");
+      expect(st.takes, k).toBe(k === "video");
+      expect(st.params, k).toBe(k === "html");
+    }
   });
   it(`mediaKindOf and mimeOf for ${FILES.length} file shapes`, () => {
     for (const f of FILES) {

@@ -19,6 +19,18 @@ export function checkClipType(c: unknown): string[] {
     if (t.caps.asset !== "media" && t.caps.asset !== "none") out.push('caps.asset must be "media" or "none"');
   }
   if (t.variant && (typeof t.variant.of !== "string" || typeof t.variant.field !== "string")) out.push("variant needs `of` and `field`");
+  if (t.accepts !== undefined) {
+    const a = t.accepts as Partial<NonNullable<ClipTypeCore["accepts"]>>;
+    if (!Array.isArray(a.ext) || a.ext.some((e) => typeof e !== "string" || e !== e.toLowerCase() || e.startsWith("."))) out.push("accepts.ext must be lower-case extensions without the dot");
+    if (!a.mimeByExt || typeof a.mimeByExt !== "object") out.push("accepts.mimeByExt is required");
+  }
+  if (t.story !== undefined) {
+    const st = t.story as Partial<NonNullable<ClipTypeCore["story"]>>;
+    if (!Array.isArray(st.assetTypes)) out.push("story.assetTypes must be an array");
+    if (!["planned", "still", "media"].includes(st.sendLength as string)) out.push('story.sendLength must be "planned", "still" or "media"');
+    if (!["video", "image", "html"].includes(st.layerType as string)) out.push('story.layerType must be "video", "image" or "html"');
+    for (const k of ["layer", "takes", "params"] as const) if (typeof st[k] !== "boolean") out.push(`story.${k} must be a boolean`);
+  }
   return out;
 }
 

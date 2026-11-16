@@ -2,6 +2,7 @@
 import { newId, type Asset, type MediaKind } from "../domain/model";
 import { secondsToTicks } from "../domain/time";
 import { readManifest } from "../domain/htmlClipPackage";
+import { kindForFile, mimeForFile } from "../clipTypes";
 
 /** P38: an html package's role for MediaRef.role ("clip" = none). */
 export function htmlRoleOf(html: string): "effect" | "transition" | undefined {
@@ -10,23 +11,14 @@ export function htmlRoleOf(html: string): "effect" | "transition" | undefined {
 }
 import type { BlobStore } from "../ports/storage";
 
+/** The asset kind of an imported file (P71: the clip type cores' `accepts`: MIME type first, then extension). */
 export function mediaKindOf(file: { type: string; name: string }): MediaKind | undefined {
-  if (file.type.startsWith("video/")) return "video";
-  if (file.type.startsWith("image/")) return "image";
-  if (file.type.startsWith("audio/")) return "audio";
-  if (file.type === "text/html") return "html";
-  const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
-  if (["mp4", "webm", "mov", "m4v"].includes(ext)) return "video";
-  if (["png", "jpg", "jpeg", "gif", "webp"].includes(ext)) return "image";
-  if (["mp3", "wav", "m4a", "aac", "ogg", "flac"].includes(ext)) return "audio";
-  if (["html", "htm"].includes(ext)) return "html";
-  return undefined;
+  return kindForFile(file);
 }
 
-const MIME_BY_EXT: Record<string, string> = { mov: "video/quicktime", mp4: "video/mp4", m4v: "video/mp4", webm: "video/webm", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", heic: "image/heic", mp3: "audio/mpeg", wav: "audio/wav", m4a: "audio/mp4", aac: "audio/aac", ogg: "audio/ogg", flac: "audio/flac", html: "text/html", htm: "text/html" };
 /** The file's MIME type, or one guessed from the extension (iOS picker files sometimes arrive with an empty type). */
 export function mimeOf(file: { type: string; name: string }): string {
-  return file.type || MIME_BY_EXT[file.name.split(".").pop()?.toLowerCase() ?? ""] || "";
+  return mimeForFile(file);
 }
 
 export async function probeMedia(kind: MediaKind, url: string): Promise<{ durationTicks?: number; width?: number; height?: number }> {

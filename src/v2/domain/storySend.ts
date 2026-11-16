@@ -25,6 +25,7 @@ import { previousAdjacent, setTransition } from "./transitions";
 import { secondsToTicks, TICKS_PER_SECOND } from "./time";
 import { followKeyframes, type MotionEffect } from "./storyFollow";
 import { evenSplitCueWords, expandWordPop } from "./subtitleLayer";
+import { storyOf } from "../clipTypes";
 
 /** What one send added, for the confirmation note. */
 export interface SendResult { shots: number; /** P35: shots sent as placeholders (no clip yet). */ placeholders?: number; /** P63: shots placed among clips already on the timeline (story order, later clips moved up). */ inserted?: string[]; /** P63: shots added after the last clip. */ appended?: string[]; /** P63: shots sent as placeholders. */ placeholderShots?: string[]; layers: number; captions: number; effects: number; transitions: number; skippedLayers: number; audio: number; skippedAudio: number; firstClipId?: string }
@@ -110,14 +111,16 @@ const plannedTicks = (shot: Shot): number => (shot.durationSec > 0 ? secondsToTi
  */
 export function shotClipSpan(b: Storyboard, asset: Asset, v: AssetVersion, shot: Shot): { durationTicks: number; sourceInTicks: number } {
   const planned = plannedTicks(shot);
+  // P71: the length rules come from the asset kind's clip type (`story.sendLength`, `story.takes`).
+  const st = storyOf(asset.kind);
   // P16: an AI shot that plays a shared clip plays it from its in point for its planned length (inside the media).
-  if (!shot.render && shot.clipSlot && asset.kind === "video") {
+  if (!shot.render && shot.clipSlot && st.takes) {
     const len = v.media.durationTicks;
     const inT = Math.max(0, Math.min(secondsToTicks(shot.clipInSec ?? 0), len ? Math.max(0, len - 1) : Infinity));
     return { durationTicks: len ? Math.max(1, Math.min(planned, len - inT)) : planned, sourceInTicks: inT };
   }
-  const span = !shot.clipSlot && asset.kind === "video" ? versionSpan(b, v) : undefined;
-  const durationTicks = shot.clipSlot || asset.kind === "html" ? planned : asset.kind === "image" ? DEFAULT_IMAGE_TICKS : span?.lenTicks ?? v.media.durationTicks ?? DEFAULT_IMAGE_TICKS;
+  const span = !shot.clipSlot && st.takes ? versionSpan(b, v) : undefined;
+  const durationTicks = shot.clipSlot || st.sendLength === "planned" ? planned : st.sendLength === "still" ? DEFAULT_IMAGE_TICKS : span?.lenTicks ?? v.media.durationTicks ?? DEFAULT_IMAGE_TICKS;
   return { durationTicks, sourceInTicks: span?.inTicks ?? 0 };
 }
 
@@ -125,8 +128,9 @@ export function shotClipSpan(b: Storyboard, asset: Asset, v: AssetVersion, shot:
 function shotClip(b: Storyboard, asset: Asset, v: AssetVersion, shot: Shot, at: number): Placement {
   const { durationTicks, sourceInTicks } = shotClipSpan(b, asset, v, shot);
   // V2-HTML-PARAMS: an html shot's per-use param values go onto its clip (only overrides; defaults come from the clip).
-  const params = asset.kind === "html" && shot.params && Object.keys(shot.params).length ? { htmlParams: { ...shot.params } } : {};
-  const shared = !shot.render && shot.clipSlot && asset.kind === "video";
+  const st = storyOf(asset.kind);
+  const params = st.params && shot.params && Object.keys(shot.params).length ? { htmlParams: { ...shot.params } } : {};
+  const shared = !shot.render && shot.clipSlot && st.takes;
   return { id: newId("plc"), startTicks: at, durationTicks, sourceInTicks, source: { kind: "assetVersion", assetId: asset.id, versionId: v.id }, clipType: asset.kind, volume: 1, storyShot: shot.id, ...(shared ? {} : params), ...(shot.mask ? { mask: structuredClone(shot.mask) } : {}) };
 }
 
@@ -153,9 +157,10 @@ function mediaLayer(p: Project, b: Storyboard, shot: Shot, l: StoryMediaLayer, s
   // A version pinned for this shot wins over the slot's selected one (V2-CUT-05).
   const pin = pinOf(p, shot, l.asset);
   const v = a && ((pin && a.versions.find((x) => x.id === pin)) || selectedVersion(a));
-  if (!a || !v || (a.kind !== "image" && a.kind !== "video" && a.kind !== "html")) return undefined;
+  const st = a ? storyOf(a.kind) : undefined;
+  if (!a || !v || !st?.layer) return undefined;
   const mw = v.media.width ?? p.settings.width, mh = v.media.height ?? p.settings.height;
-  const max = a.kind === "video" ? v.media.durationTicks : undefined;
+  const max = st.takes ? v.media.durationTicks : undefined;
   // V2-SB-133: a video layer starts at its inSec, else at its version's trim (set on upload), else at 0; when that
   // runs past the clip's end it starts earlier so the layer keeps its length.
   const len = max ? Math.min(dur, max) : dur;
@@ -165,7 +170,7 @@ function mediaLayer(p: Project, b: Storyboard, shot: Shot, l: StoryMediaLayer, s
     id: newId("plc"), startTicks: start, durationTicks: len, sourceInTicks,
     source: { kind: "assetVersion", assetId: a.id, versionId: v.id }, clipType: a.kind, volume: 1,
     transform: { ...boxTransform(l.box, mw, mh, p.settings.width, p.settings.height) } as Transform, storyLink: { anchor }, storyLayer: l.id, ...(l.link === false ? {} : { link: { parent: anchor } }),
-    ...(a.kind === "html" && l.params && Object.keys(l.params).length ? { htmlParams: { ...l.params } } : {}),
+    ...(st.params && l.params && Object.keys(l.params).length ? { htmlParams: { ...l.params } } : {}),
     ...(l.chromaKey ? { chromaKey: { ...CHROMA_DEFAULT, ...l.chromaKey } } : {}),
     ...(l.mask ? { mask: structuredClone(l.mask) } : {}),
   };
@@ -531,9 +536,10 @@ export function updateStory(p: Project): { project: Project; result: UpdateResul
     const s = b.shots[id], a = q.assets[s.assetId!], v = selectedVersion(a)!, old = clips.get(id)!;
     const { htmlParams: _h, placeholder: wasPh, versionId: _pin, ...rest } = old;
     // P35: a placeholder keeps its place, length and edits; a video shorter than it ends with its media.
-    const len = wasPh && a.kind === "video" ? v.media.durationTicks : undefined;
+    const st = storyOf(a.kind);
+    const len = wasPh && st.takes ? v.media.durationTicks : undefined;
     if (len && len < rest.durationTicks) rest.durationTicks = len;
-    const next: Placement = { ...rest, source: { kind: "assetVersion", assetId: a.id, versionId: v.id }, clipType: a.kind, sourceInTicks: 0, ...(a.kind === "html" && s.params && Object.keys(s.params).length ? { htmlParams: { ...s.params } } : {}) };
+    const next: Placement = { ...rest, source: { kind: "assetVersion", assetId: a.id, versionId: v.id }, clipType: a.kind, sourceInTicks: 0, ...(st.params && s.params && Object.keys(s.params).length ? { htmlParams: { ...s.params } } : {}) };
     comp = { ...comp, tracks: comp.tracks.map((t) => (t.placements.some((x) => x.id === old.id) ? { ...t, placements: t.placements.map((x) => (x.id === old.id ? next : x)) } : t)) };
     base.clips += 1;
   }

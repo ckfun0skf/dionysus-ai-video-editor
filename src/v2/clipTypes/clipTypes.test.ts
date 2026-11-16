@@ -4,6 +4,8 @@ import { join } from "node:path";
 import { CLIP_TYPE_MODULE_PATHS, CLIP_TYPE_PROBLEMS, CLIP_TYPES, UNKNOWN_CLIP_TYPE, checkClipType, clipTypeOf, createClipTypeRegistry, defineClipType, variantOf } from ".";
 import { loadClipTypeModules } from "./load";
 import type { ClipTypeCore } from "./types";
+import { DEFAULT_CLIP_STORY, kindForSlotType, storyOf } from "./story";
+import { STORY_ASSET_TYPES } from "../domain/storyJson";
 
 const BUILT_INS = ["audio", "blank", "effect", "html", "image", "placeholder", "text", "unknown", "video"];
 const ok = (over: Partial<ClipTypeCore> = {}): ClipTypeCore => defineClipType({
@@ -71,5 +73,32 @@ describe("clip type registry (P65)", () => {
     expect(variantOf({ clipType: "image", blank: { color: "#000000" }, placeholder: { label: "x" } })).toBe("placeholder");
     expect(clipTypeOf({ clipType: "text" }).id).toBe("text");
     expect(clipTypeOf({ clipType: "scene" as never }).id).toBe(UNKNOWN_CLIP_TYPE);
+  });
+});
+
+describe("storyboard mapping and file import in the cores (P71)", () => {
+  const cores = () => CLIP_TYPES.list();
+  it("accepts lists do not overlap, so the old MIME-then-extension order cannot matter", () => {
+    const seen = new Map<string, string>();
+    for (const c of cores()) if (c.accepts) {
+      for (const k of [...(c.accepts.mimePrefix ? [`prefix:${c.accepts.mimePrefix}`] : []), ...(c.accepts.mime ?? []).map((m) => `mime:${m}`), ...c.accepts.ext.map((e) => `ext:${e}`), ...Object.keys(c.accepts.mimeByExt).map((e) => `guess:${e}`)]) {
+        expect(seen.get(k), `${k} in ${c.id} and ${seen.get(k)}`).toBeUndefined();
+        seen.set(k, c.id);
+      }
+      for (const e of c.accepts.ext) expect(c.accepts.mimeByExt[e], `${c.id} ${e}`).toBeTruthy();
+    }
+    for (const a of cores().filter((c) => c.accepts?.mimePrefix)) for (const b of cores().filter((c) => c !== a && c.accepts?.mimePrefix)) expect(a.accepts!.mimePrefix!.startsWith(b.accepts!.mimePrefix!)).toBe(false);
+  });
+  it("every storyboard asset type maps to exactly one kind, with one fallback", () => {
+    expect(cores().filter((c) => c.story?.slotFallback).map((c) => c.id)).toEqual(["image"]);
+    for (const t of STORY_ASSET_TYPES) expect(cores().filter((c) => c.story?.assetTypes.includes(t)).length, t).toBe(1);
+    expect(kindForSlotType("not-a-type")).toBe("image");
+  });
+  it("types without a story mapping use the default; checkClipType validates the new fields", () => {
+    for (const id of ["text", "effect", "placeholder", "blank", "unknown", "scene3d"]) expect(storyOf(id), id).toBe(DEFAULT_CLIP_STORY);
+    const base = { id: "x", version: 1, description: "x", trackKind: "video", caps: { sourceTime: false, still: false, sound: false, visual: true, keyable: false, thumb: false, asset: "none" } };
+    expect(checkClipType({ ...base, accepts: { ext: [".MP4"] } }).join()).toMatch(/accepts.ext.*accepts.mimeByExt/);
+    expect(checkClipType({ ...base, story: { assetTypes: [], sendLength: "x", layerType: "audio", layer: 1 } }).join()).toMatch(/sendLength.*layerType.*story.layer/);
+    expect(checkClipType({ ...base, story: { ...DEFAULT_CLIP_STORY } })).toEqual([]);
   });
 });
