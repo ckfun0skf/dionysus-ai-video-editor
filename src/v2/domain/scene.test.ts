@@ -200,7 +200,9 @@ describe("stateAt golden (P74)", () => {
   const GOLDEN = resolve(__dirname, "__golden__/sceneState.json");
   const fnv = (s: string) => { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(16).padStart(8, "0"); };
   it("the sample scene's 151 frame states match the golden", () => {
-    const frames = Array.from({ length: 151 }, (_, i) => JSON.stringify(stateAt(SAMPLE_SCENE, i / 30)));
+    // Rounded to 1e-6: Math.sin/pow/atan2 may differ in the last ulp between Node/V8 versions (local 24 vs CI 20).
+    const round = (_k: string, v: unknown) => (typeof v === "number" ? Math.round(v * 1e6) / 1e6 + 0 : v);
+    const frames = Array.from({ length: 151 }, (_, i) => JSON.stringify(stateAt(SAMPLE_SCENE, i / 30), round));
     const got = { frames: frames.length, all: fnv(frames.join("\n")), at0: fnv(frames[0]), at75: fnv(frames[75]), at150: fnv(frames[150]) };
     if (process.env.UPDATE_SCENE_GOLDEN) writeFileSync(GOLDEN, `${JSON.stringify(got, null, 1)}\n`);
     expect(got).toEqual(JSON.parse(readFileSync(GOLDEN, "utf8")));
