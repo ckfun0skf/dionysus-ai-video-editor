@@ -92,9 +92,9 @@ required checks.
 1. `git fetch` and branch from the latest `origin/main` (e.g. `p66-short-name`).
 2. Implement with tests. Keep PRs small (MODULE_DESIGN §14 targets < 400 changed lines; feature PRs here are often
    larger, but split refactors).
-3. **`public/doc/tasks.json`:** add one entry per PR with the next free P-number: `{ "id": "P77-SHORT-NAME", "title":
+3. **`public/doc/tasks.json`:** add one entry per PR with the next free P-number: `{ "id": "P78-SHORT-NAME", "title":
    "<what and why, one paragraph>", "status": "done", "progress": 100 }` appended after the latest entry (the latest is
-   `P76-SCENE-EDITOR`; the next is **P77**). Bump `updatedAt`. Edit the file surgically (insert text); do not
+   `P77-SCENE-RETIME`; the next is **P78**). Bump `updatedAt`. Edit the file surgically (insert text); do not
    re-serialise the whole JSON. `scripts/check-tasks-updated.mjs` fails a PR that changes `src/` without it. If an id
    is already taken, use the next number and say so in the PR.
 4. **AI guide rule:** append to `RULE_LIST` in `src/v2/domain/storyPrompt.ts` (append-only; numbers are positions;
@@ -110,7 +110,7 @@ required checks.
 6. Run `npm run gen:ai` after changing rules, tools or presets, and commit the regenerated files (tests fail if they are
    stale).
 7. `npx tsc -b && npx vitest run && npx vite build`.
-8. Commit in English; PR title `P77: …`; body says what, why, tests, and `Fixes #N` (or `Refs #N` if partial), plus
+8. Commit in English; PR title `P78: …`; body says what, why, tests, and `Fixes #N` (or `Refs #N` if partial), plus
    what was not verified. Push, open the PR, wait for `build` on the head SHA. Do not merge.
 
 ## 7. UI conventions
@@ -141,7 +141,7 @@ required checks.
 | `docs/v2/SCENE_FORMAT.md` | 3D scene clips: `dionysus.scene/1` objects, events, custom functions, rendering (P74), GLB models and animation (P75), the scene editor (P76) |
 | `public/doc/tasks.json` | every task and its status |
 
-## 9. Recent history (P47–P76)
+## 9. Recent history (P47–P77)
 
 | Id | PR | One line |
 |---|---|---|
@@ -174,7 +174,8 @@ required checks.
 | P73 | #325 | Step 1.8, the last of Phase 1: placeholder is a cross-type clip state handled by the host before any plugin (`clipTypes/state.ts`, shared slate `render/placeholderSlate.ts`, `PLACEHOLDER_UI`; `clipTypes/placeholder/` retired; Fill filters by the intended type); unknown clip types load, keep their data, draw a slate, export black and silent after a warning, have an info-only inspector and `unknown: true` in `get_timeline`; `docs/v2/ADDING_CLIP_TYPES.md`. Image placeholders and blank unchanged (golden recorded before the move). |
 | P74 | #326 | Phase 2 step 2.1 (decision 5 accepted: storyboard `render: "scene"` / asset type `scene` as optional values in 3.1, no version bump; Phase 2 step table added): the `scene` clip type (`clipTypes/scene/`), `dionysus.scene/1` schema and validation and the pure evaluator `stateAt` (`domain/scene.ts`), rendering in the sandboxed HTML clip host from `t` only (`render/scenePage.ts`), Code → 3D scene, read-only Scene inspector tab; `docs/v2/SCENE_FORMAT.md`. Existing goldens unchanged; preview, export and seek order pixel-identical in Chrome. |
 | P75 | #327 | Phase 2 step 2.2: GLB models in scene clips (`files` map of data: URLs, `model`, fit by `size`), animation as a property (object `animation`, `play` / `stop`, function rows; speed, repeat / once / pingpong, start offset, cross-fades from `t`) and node show/hide (`nodes`); the page loads models with the vendored GLTFLoader through its clip manifest and poses them with `mixer.setTime` per frame (no `update(delta)`); `domain/glb.ts`; Scene tab Add GLB model. P74 gaps: Scene sheet on phones, scenes in the picker's Code tab, no `volume` on scene clips. Existing goldens unchanged; Chrome parity with a real skinned GLB (Fox). |
-| P76 | — | Phase 2 step 2.3 (owner-confirmed scene editor UX, split in two; step table renumbered): a scene clip's own timeline editor (`ui/SceneEditor.tsx`; desktop: in place of the timeline panel, from Edit scene / the clip menu; phone: full-screen sheet from the Scene tool with a mirrored preview), one track per object plus the scene/camera track, blocks labelled with their call (read-only on the tracks, select to edit), side-panel forms for event call / time / duration / ease / args, object base properties, scene, camera and lights; add / duplicate / delete events, add / delete objects. Pure operations in `domain/sceneEdit.ts`. One undo step per committed edit, saved as a scene version under the version-save rules; the player keeps the clip's page across event and property edits (`scenePageKey`, `primeSceneDoc`) so the preview updates at once. Existing goldens unchanged. |
+| P76 | #328 | Phase 2 step 2.3 (owner-confirmed scene editor UX, split in two; step table renumbered): a scene clip's own timeline editor (`ui/SceneEditor.tsx`; desktop: in place of the timeline panel, from Edit scene / the clip menu; phone: full-screen sheet from the Scene tool with a mirrored preview), one track per object plus the scene/camera track, blocks labelled with their call (read-only on the tracks, select to edit), side-panel forms for event call / time / duration / ease / args, object base properties, scene, camera and lights; add / duplicate / delete events, add / delete objects. Pure operations in `domain/sceneEdit.ts`. One undo step per committed edit, saved as a scene version under the version-save rules; the player keeps the clip's page across event and property edits (`scenePageKey`, `primeSceneDoc`) so the preview updates at once. Existing goldens unchanged. |
+| P77 | — | Phase 2 step 2.4: drag and resize retiming in the scene editor (`domain/sceneRetime.ts`; move / start / end handles, mouse, pen and touch with 44 px handles; snapping to the playhead, other events, clip in / out and whole frames with a toggle and Alt; clamped to the clip range; drop on another object's track when the call fits; live preview via `Player.previewSceneDoc`; one undo step per drag under the version-save rules; Esc cancels), ruler scrubbing synced with the player, arrow-key nudges; Esc in fields reverts first; desktop editor ≥ 440 px. Existing goldens unchanged. |
 
 ## 10. Known unverified areas
 
@@ -332,9 +333,24 @@ storyboard to 2.6 (design doc §7, the note under the table, and decision 6).
   object id / shape / size / model and files), so event and property edits keep the page and the scene renderer asks
   for the same time again (`fresh`); structural edits rebuild it. Tests: `domain/sceneEdit.test.ts`,
   `ui/sceneEditor.test.tsx`.
-- **Next: step 2.4 (P77)**, drag and resize retiming of blocks on the scene editor's tracks (one undo step per drag via
-  a coalesced gesture: `engine.beginGesture` / `coalesceKey`; `updateSceneEvent` already rounds times). New
-  clip types follow `docs/v2/ADDING_CLIP_TYPES.md`; the scene format is `docs/v2/SCENE_FORMAT.md`.
+- **2.4 done (P77):** drag / resize retiming in `ui/SceneEditor.tsx` over the pure `domain/sceneRetime.ts`
+  (`retimeSceneEvent(doc, i, "move" | "start" | "end", deltaSec, { min, max, snap, tol, fps })`, `sceneSnapTargets`,
+  `moveSceneEventTo` / `moveEventProblem`). A drag keeps the scene it started from and applies one op with the total
+  offset on every move (no step-by-step drift); the tracks draw the result (`Draft` state, the dragged block stays in
+  its own track so pointer events keep their target, the drop track is highlighted) and `onPreview` →
+  `Player.previewSceneDoc(blobKey, doc)` shows it live (it swaps the doc for that blob key and puts the stored one back
+  with `undefined`; the page is kept because only events change). Release = one `edit()` (one dispatch, one undo step,
+  version-save rules unchanged), then the preview is restored for the old key. No engine gesture is needed because
+  nothing is dispatched during the drag. Window listeners (pointermove / up / cancel, Esc in the capture phase) so a
+  re-render can't lose the drag; on touch only the selected block (`touch-action: none`) and the 44 px handles drag.
+  Snapping tolerance 8 px; snap targets: other events, playhead, 0, clip in / out, then whole frames
+  (`project.settings.fps`). The tracks auto-scroll near their edges once the pointer has moved half a lane that way.
+  Ruler scrub (window listeners, `seekLocal`). Arrow-key nudges to the next whole frame. Esc in a field reverts typed
+  text first; the desktop editor row is at least 440 px (`SCENE_EDITOR_MIN_H`, the splitter value is kept). Tests:
+  `domain/sceneRetime.test.ts`, `ui/sceneEditorRetime.test.tsx`.
+- **Next: step 2.5 (P78)**, agent tools and the AI rule through `core.agent` (reuse `domain/sceneEdit.ts` and
+  `domain/sceneRetime.ts`; `gen:ai` diff limited to the new tools and rule). New clip types follow
+  `docs/v2/ADDING_CLIP_TYPES.md`; the scene format is `docs/v2/SCENE_FORMAT.md`.
 
 ## 12. Working habits that avoid repeat mistakes
 
