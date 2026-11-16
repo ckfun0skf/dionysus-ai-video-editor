@@ -1,6 +1,7 @@
 # Clip type plugins — architecture
 
-**Status: Accepted** (proposed in P64, accepted 2026-11-15; Phase 1 started in P65). Written against `main` at
+**Status: Accepted** (proposed in P64, accepted 2026-11-15; Phase 1 started in P65 and is **done** since P73; Phase 2
+waits for open question 5). Written against `main` at
 `36c37b14` (after P63). Decisions: see [§0](#0-decisions). Progress: see [§7 Phase 1](#phase-1--registry-with-zero-behaviour-change).
 
 ## 0. Decisions
@@ -17,7 +18,7 @@ Accepted by the owner on 2026-11-15 (the answers to the §9 open questions):
 | 6 | Per-object sub-tracks | **Late in Phase 2**, after the scene clip, events and WebMCP tools work. |
 | 7 | Third-party plugins | **Deferred to Phase 3**; trust and sources are decided then. |
 | 8 | Phase 1 size | The **eight small PRs** of §7, one at a time, each merged on green CI. |
-| 9 | Placeholder (recorded in P70, 2026-11-15) | A placeholder is a **cross-type clip state**, not an `image` variant or plugin. Any clip type can be a placeholder: a slot with no asset yet that knows its intended type, so asset pickers can filter by it. The player, timeline and export check `placeholder` **first** and use one shared slate renderer before any plugin lookup; plugins never handle placeholders. `blank` stays a small plugin (`image` variant). No schema change. Implemented in **step 1.8**, together with unknown-type handling (§6). Until then the P65–P70 `placeholder` variant modules stay as they are (no behaviour change). |
+| 9 | Placeholder (recorded in P70, 2026-11-15) | A placeholder is a **cross-type clip state**, not an `image` variant or plugin. Any clip type can be a placeholder: a slot with no asset yet that knows its intended type, so asset pickers can filter by it. The player, timeline and export check `placeholder` **first** and use one shared slate renderer before any plugin lookup; plugins never handle placeholders. `blank` stays a small plugin (`image` variant). No schema change. Implemented in **step 1.8** (P73), together with unknown-type handling (§6): `clipTypes/state.ts`, `render/placeholderSlate.ts`, `PLACEHOLDER_UI` in `ui/clipTypeUi.tsx`; `clipTypes/placeholder/` is gone. |
 
 ## 1. Why
 
@@ -274,20 +275,24 @@ src/v2/clipTypes/
   text/    …          # drawTextClip, captions, layer styles, word timings stay where they are and are called from here
   html/    …          # HtmlClipHost, params, inputs, libs, manifest lint
   effect/  …          # effect clips (no draw: they feed render/effects.ts; caps.visual = false)
-  placeholder/ …      # P35 slate (preview) / black (export); clipType "image" + `placeholder` flag (until 1.8: decision 9)
+  state.ts            # P73: the placeholder clip STATE (any type; decision 9): isPlaceholder, placeholderCore, placeholderAccepts
   blank/   …          # P36 solid colour; stays clipType "image" + `blank` flag
   unknown/ …          # fallback for ids this build doesn't know
 ```
 
-`placeholder` and `blank` are **variants** of `image`, not new `clipType` values, so saved projects do not change.
-The registry resolves the effective plugin with `variantOf(p)`: `p.placeholder → "placeholder"`, `p.blank → "blank"`,
-else `p.clipType`.
+`blank` is a **variant** of `image`, not a new `clipType` value, so saved projects do not change. The registry resolves
+the effective plugin with `variantOf(p)`: `p.blank → "blank"` (on an image clip), else `p.clipType`.
 
-**Planned change (decision 9, step 1.8):** `placeholder` stops being a variant/plugin and becomes a clip **state** that
-any type can be in. The player, timeline and export test `p.placeholder` before the registry lookup and draw the one
-shared slate (preview) / black frame (export); `variantOf` then only resolves `blank`. The placeholder keeps its
-intended `clipType` (for example `video` or a scene type) so Fill / Replace pickers can filter assets by type. Saved
-projects keep the same fields (`placeholder` flag, `clipType`, `TEXT_SOURCE`); no schema change.
+**Placeholder (decision 9, done in step 1.8 / P73):** a placeholder is a clip **state** that any type can be in, not a
+variant or plugin. `clipTypeOf(p)` returns the host's placeholder state core first (`clipTypes/state.ts`: no media, no
+sound, a still; drawn and keyable when the intended type is; the intended type's `trackKind`). `clipRendererFor(p)`
+returns the shared slate renderer (`render/placeholderSlate.ts`: the P35 slate in preview, black in export; nothing for
+audio and effect placeholders) and `clipUi(p)` the host's `PLACEHOLDER_UI` (the hatched card, the Fill section) before
+any plugin lookup; export classification and the P48 warning were already flag-based. The placeholder keeps its
+intended `clipType`, so Fill filters assets by it (`placeholderAccepts`): the image placeholder Send to timeline makes
+takes any picture (video, image, html) as since P35; a `video`, `audio` or `html` placeholder only its own kind; Fill is
+not offered for types without assets (text, effect, unknown). Saved projects keep the same fields (`placeholder`,
+`clipType`, `TEXT_SOURCE`); no schema change, and Send still writes image placeholders.
 
 ## 6. Unknown types
 
@@ -302,6 +307,15 @@ A project can contain a clip type this build does not know (a newer build, a thi
 - **Edit:** move, trim, delete, copy and undo work; type-specific panels are hidden; the inspector says which plugin is
   missing.
 - **Agent:** `get_timeline` reports `type: "<id>", unknown: true`; type-specific tools refuse with a clear message.
+- **Audio:** the unknown core has `caps.sound: false`, so export does not mix it (before P73 an unknown clip with media
+  was mixed).
+
+Done in P73: `isKnownClipType` (`clipTypes/index.ts`); `validateComposition` skips the track check for unknown ids;
+`clipTypes/unknown/render.ts` draws the shared slate ("Unknown clip type “<id>”", "NEEDS A NEWER VERSION") in preview,
+black in export, nothing on an audio track; `exportUnknownTypeWarning` in the export dialog; `UNKNOWN_CLIP_UI` (an
+amber card naming the type, one read-only inspector tab `unknown`, no speed / volume / type tools; move, trim, split,
+delete, link and undo still work); `clipJson` adds `unknown: true`. Load and save already kept every field (the stores
+write the placement object as is); `ui/clipTypeState.test.tsx` round-trips it through IndexedDB.
 - **Schema:** stays `dionysus/3.1`. New optional fields only (`Placement.plugin`, and storyboard fields from §7 Phase 2).
   Older builds ignore them; that is the same rule as every P-feature so far.
 
@@ -321,7 +335,7 @@ Each step is one PR with its own `tasks.json` entry, CI `build` green, and no ch
 | 1.5 ✅ P70 | Inspector, toolbar and menus: `V2App.tsx` `inspectorTabs()`, `KIND_ICON`, `clipName`, mobile toolbar, context menu and sheets read `clipUi(p)`. Plugins list host-owned ids (tabs `basic`/`speed`/`audio`/`chroma`/`transition`/`text`/`effect`/`params`/`colour`, header actions, toolbar tools, with `ToolRef` arrays for "first that applies") plus flags (`editor`, `speed`, `volume`, `timeTools`, `inOutFrames`, `linkedAudio`, `transformInAudioTab`); the panels stay in `V2App.tsx`. Parity: `ui/inspectorParity.test.tsx` DOM golden for every clip type selected (desktop inspector tabs and context menu, phone toolbar and sheets), frozen-switch test in `ui/clipTypeUi.test.tsx`, 390/1440 screenshots. | `V2App.test.tsx`, inspector tests; screenshots. |
 | 1.6 ✅ P71 | Storyboard: `kindForSlot`, `shotClip`/`shotClipSpan` length rules, `storySync` layer types, `persistence/media.ts` `mediaKindOf` → `core.story`, `core.duration`, `core.accepts`. Shipped as `core.story` (`assetTypes`, `slotFallback`, `slotType`, `layerType`, `layer`, `sendLength` "planned" / "still" / "media" (this is the sketch's `duration.send`), `takes`, `params`; `DEFAULT_CLIP_STORY` for types without it) and `core.accepts` (`mimePrefix`, `mime`, `ext`, `mimeByExt`), read through `clipTypes/story.ts` (`storyOf`, `kindForSlotType`, `kindForFile`, `mimeForFile`). Also moved: `mediaLayer` (which kinds can be layers), Update's placeholder fill and html params, Sync's video-take checks, `mimeOf`. Not moved: the storyboard JSON validator's asset-type rules, `cueVideo` and the audio-cue checks. Parity: `domain/storyMappingParity.test.ts` (frozen switches + Send/Update/Sync golden recorded before the move). | Storyboard tests (`storySend*`, `storySync`, `storyRelayout`, `storySendOrder`, …). |
 | 1.7 ✅ P72 | WebMCP: `ALL_AGENT_TOOLS` and `clipJson` include plugin contributions; per-type checks in `timelineTools.ts` move to the plugins' `agent.run`. Built-ins add no new tools in this phase. Shipped as `core.agent` (`clipTypes/agent.ts`): `tools` + `run(name, input, api)` (appended to `TIMELINE_TOOLS`; `api.project()`, `api.edit(label, apply)` = one undo step), `rules` (appended after the built-in `RULE_LIST`), `describe` (extra `clipJson` fields), and the declarative per-type checks `clipTools` / `props` (Q4) instead of moving the built-in tool code into `run`; the sound-position check reads `caps.sound`. Built-ins contribute no tools, rules or fields. Parity: `ui/agent/agentParity.test.ts` (hash golden recorded before the move) and `gen:ai` byte-identical. | `npm run gen:ai` produces **no diff** in `public/ai/*`, `public/llms.txt`, `docs/v2/WEB_MCP.md`; agent tests. |
-| 1.8 | Unknown-type handling (§6) + `docs/v2/ADDING_CLIP_TYPES.md`. **Placeholder as a cross-type state** (decision 9): player, timeline and export check `placeholder` first and use one shared slate renderer (the unknown-type slate shares it) before plugin lookup; remove the `placeholder` variant from `variantOf` and retire `clipTypes/placeholder/` (its slate, timeline card, Fill tool and export classification move to shared host code); any `clipType` may carry `placeholder`, and Fill / Replace pickers filter assets by that type. `blank` stays an `image` variant plugin. No schema change. | New tests: load/save round trip keeps unknown data; render draws the slate; export warns; a placeholder of every type (video, image, audio, html, text, unknown) draws the shared slate in preview and black in export, shows the timeline card and filters the picker; existing image placeholders unchanged (render, timeline and inspector goldens). |
+| 1.8 ✅ P73 | Unknown-type handling (§6) + `docs/v2/ADDING_CLIP_TYPES.md`. **Placeholder as a cross-type state** (decision 9): player, timeline and export check `placeholder` first and use one shared slate renderer (the unknown-type slate shares it) before plugin lookup; remove the `placeholder` variant from `variantOf` and retire `clipTypes/placeholder/` (its slate, timeline card, Fill tool and export classification move to shared host code); any `clipType` may carry `placeholder`, and Fill / Replace pickers filter assets by that type. `blank` stays an `image` variant plugin. No schema change. | New tests: load/save round trip keeps unknown data; render draws the slate; export warns; a placeholder of every type (video, image, audio, html, text, unknown) draws the shared slate in preview and black in export, shows the timeline card and filters the picker; existing image placeholders unchanged (render, timeline and inspector goldens). Done in P73: `ui/placeholderParity.test.tsx` (hash golden recorded on the pre-P73 code: predicates and caps, UI entry and card markup, canvas calls in preview and export, export length / classification / warning / audio plan, `get_timeline` JSON, `review_lint`, Fill with every asset kind, for 8 placeholder and blank shapes) unchanged; `render/renderParity.test.ts` unchanged; the timeline, inspector and agent goldens changed only for the fixture's unknown-type clip (intended, §6); `ui/clipTypeState.test.tsx` covers every type and the unknown round trip. **Phase 1 is complete.** |
 
 Test strategy for the whole phase: the full suite must pass at every step; the parity test and the "gen:ai has no
 diff" check are added in 1.1 and kept; snapshot/pixel tests for the player; screenshots of the timeline and

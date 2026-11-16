@@ -38,7 +38,7 @@ src/v2/
   engine/        Engine (undo history; one dispatch = one undo step) and commands.ts (Command factories)
   persistence/   IndexedDB/memory stores, media import (media.ts), schema migrations, project archive
   ports/         storage interfaces (BlobStore, …)
-  clipTypes/     clip type registry (P65+): one folder per type with core.ts (trackKind, caps; storyboard mapping and file import since P71; agent tools/rules/checks since P72); domain predicates read it (P66); render.ts renderers (P67, P68); ui.tsx timeline UI (P69), inspector/toolbar/menus (P70)
+  clipTypes/     clip type registry (P65+): one folder per type with core.ts (trackKind, caps; storyboard mapping and file import since P71; agent tools/rules/checks since P72); domain predicates read it (P66); render.ts renderers (P67, P68); ui.tsx timeline UI (P69), inspector/toolbar/menus (P70); state.ts placeholder state and unknown-type handling (P73); how to add a type: docs/v2/ADDING_CLIP_TYPES.md
   registry/      preset registry (effects, transitions, text animations, stickers, blends, audio fx, fonts)
   presets/       one file per preset, auto-discovered (docs/v2/ADDING_EFFECTS.md)
   render/        Player (preview AND export compositor), htmlClip.ts (sandboxed HTML clip host), text, effects,
@@ -92,9 +92,9 @@ required checks.
 1. `git fetch` and branch from the latest `origin/main` (e.g. `p66-short-name`).
 2. Implement with tests. Keep PRs small (MODULE_DESIGN §14 targets < 400 changed lines; feature PRs here are often
    larger, but split refactors).
-3. **`public/doc/tasks.json`:** add one entry per PR with the next free P-number: `{ "id": "P73-SHORT-NAME", "title":
+3. **`public/doc/tasks.json`:** add one entry per PR with the next free P-number: `{ "id": "P74-SHORT-NAME", "title":
    "<what and why, one paragraph>", "status": "done", "progress": 100 }` appended after the latest entry (the latest is
-   `P72-CLIP-AGENT`; the next is **P73**). Bump `updatedAt`. Edit the file surgically (insert text); do not
+   `P73-CLIP-STATE`; the next is **P74**). Bump `updatedAt`. Edit the file surgically (insert text); do not
    re-serialise the whole JSON. `scripts/check-tasks-updated.mjs` fails a PR that changes `src/` without it. If an id
    is already taken, use the next number and say so in the PR.
 4. **AI guide rule:** append to `RULE_LIST` in `src/v2/domain/storyPrompt.ts` (append-only; numbers are positions;
@@ -137,9 +137,10 @@ required checks.
 | `docs/v2/MASKING.md`, `docs/v2/TRACKING.md` | clip masks (P49), motion tracking (P39/P40) |
 | `docs/v2/DEPLOYMENT.md` | hosting, `DIONYSUS_SITE_URL`, base path |
 | `docs/v2/CLIP_PLUGIN_ARCHITECTURE.md` | clip type plugins: accepted design, decisions, Phase 1 progress |
+| `docs/v2/ADDING_CLIP_TYPES.md` | adding a clip type step by step, with a worked example (P73) |
 | `public/doc/tasks.json` | every task and its status |
 
-## 9. Recent history (P47–P72)
+## 9. Recent history (P47–P73)
 
 | Id | PR | One line |
 |---|---|---|
@@ -168,7 +169,8 @@ required checks.
 | P69 | #321 | Step 1.4: timeline clip look and asset thumbnails/previews read `clipTypes/<id>/ui.tsx` (`ui/clipTypeUi.tsx`); markup golden, legacy-helper parity, 390/1440 screenshot parity. |
 | P70 | #322 | Step 1.5: inspector icon/title/tabs/header buttons, mobile toolbar, context menu and sheets read `clipTypes/<id>/ui.tsx` (host-owned tab/tool/action ids); inspector/toolbar/menu DOM golden for every clip type, legacy-switch parity, 390/1440 screenshot parity. |
 | P71 | #323 | Step 1.6: storyboard mapping (`kindForSlot`, Send lengths, Sync slot/layer types, video takes, html params) and file import (`mediaKindOf`, `mimeOf`) read `core.story` / `core.accepts`; frozen-switch parity and a Send/Update/Sync golden recorded before the move. |
-| P72 | — | Step 1.7: WebMCP tools, AI guide rules and `get_timeline` fields can come from `core.agent` (built-ins add none; `gen:ai` byte-identical); per-type checks of the timeline tools read `agent.clipTools` / `agent.props` / `caps.sound`; compact hash golden recorded before the move. |
+| P72 | #324 | Step 1.7: WebMCP tools, AI guide rules and `get_timeline` fields can come from `core.agent` (built-ins add none; `gen:ai` byte-identical); per-type checks of the timeline tools read `agent.clipTools` / `agent.props` / `caps.sound`; compact hash golden recorded before the move. |
+| P73 | — | Step 1.8, the last of Phase 1: placeholder is a cross-type clip state handled by the host before any plugin (`clipTypes/state.ts`, shared slate `render/placeholderSlate.ts`, `PLACEHOLDER_UI`; `clipTypes/placeholder/` retired; Fill filters by the intended type); unknown clip types load, keep their data, draw a slate, export black and silent after a warning, have an info-only inspector and `unknown: true` in `get_timeline`; `docs/v2/ADDING_CLIP_TYPES.md`. Image placeholders and blank unchanged (golden recorded before the move). |
 
 ## 10. Known unverified areas
 
@@ -189,8 +191,8 @@ These have unit tests but were never checked end to end on real devices or with 
 
 ## 11. Where the plugin architecture stands
 
-`docs/v2/CLIP_PLUGIN_ARCHITECTURE.md` is **Accepted** (decisions in its §0). Phase 1 (eight small PRs, zero behaviour
-change, each merged on green CI) is under way:
+`docs/v2/CLIP_PLUGIN_ARCHITECTURE.md` is **Accepted** (decisions in its §0). Phase 1 (small PRs, zero behaviour
+change, each merged on green CI) is **complete** (P65–P73):
 
 - **1.1 done (P65):** `src/v2/clipTypes/` with `types.ts`, `registry.ts`, `load.ts`, glob discovery in `index.ts`,
   `variantOf`/`clipTypeOf`, and a `core.ts` per built-in (video, image, audio, text, html, effect, placeholder,
@@ -253,11 +255,22 @@ change, each merged on green CI) is under way:
   per-field `clipJson` output stays in `timelineReview.ts` (moving it would reorder JSON keys). `ui/agent/
   agentParity.test.ts` hashes the tool lists, schemas, rules, guide tool section, `get_timeline` / clip JSON and
   every per-type check on every clip of the parity fixture (`AGENT_PARITY_DUMP=<dir>`, `UPDATE_AGENT_GOLDEN=1`).
-- **Next, 1.8:** unknown-type handling (§6), `docs/v2/ADDING_CLIP_TYPES.md`, and placeholder as a cross-type state
-  (decision 9); check with the round-trip, render, export and timeline tests and the existing goldens.
-
-Until Phase 1 is finished, add new behaviour the existing way and note in the PR which switch points you touched, so
-the later steps can move them.
+- **1.8 done (P73):** placeholder is a cross-type clip **state** (decision 9). `clipTypes/state.ts` has
+  `isPlaceholder`, `placeholderCore` (the old placeholder caps; the intended type's track kind) and
+  `placeholderAccepts`; `clipTypeOf(p)`, `clipRendererFor(p)` (shared slate `render/placeholderSlate.ts`) and
+  `clipUi(p)` (`PLACEHOLDER_UI` / `placeholderUi(type)` in `ui/clipTypeUi.tsx`) check it before any plugin;
+  `variantOf` resolves only `blank`; `clipTypes/placeholder/` is gone. Fill filters by the intended type (the image
+  placeholder Send makes still takes any non-audio asset; a video / audio / html placeholder only its kind). Unknown
+  types (§6): `isKnownClipType`; `validateComposition` accepts them on any track; `clipTypes/unknown/render.ts` draws
+  the slate "Unknown clip type “<id>”" (black in export, nothing on audio tracks); not mixed in export;
+  `exportUnknownTypeWarning` in the export dialog; `UNKNOWN_CLIP_UI` (amber card, one info tab `unknown`, no type
+  tools); `clipJson` adds `unknown: true`. `ui/placeholderParity.test.tsx` (golden recorded on the pre-P73 code,
+  `PLACEHOLDER_PARITY_DUMP=<dir>`, `UPDATE_PLACEHOLDER_GOLDEN=1`) pins the image placeholder and blank; the timeline,
+  inspector and agent goldens changed only for the fixture's unknown clip. `ui/clipTypeState.test.tsx` covers a
+  placeholder of every type and the unknown round trip; `ui/addingClipTypes.test.tsx` checks the guide's example.
+- **Next: Phase 2** (deterministic three.js `scene` clip, §7), **pending open question 5** (§0 decision 5: may the
+  storyboard get `render: "scene"` / asset type `scene` within schema 3.1, knowing older builds reject such a
+  storyboard?). Ask the owner before starting it. New clip types follow `docs/v2/ADDING_CLIP_TYPES.md`.
 
 ## 12. Working habits that avoid repeat mistakes
 
