@@ -6,9 +6,9 @@ import { paramThumbKey } from "./useVersionThumbs";
 
 export type BoardTarget = { slot: string } | { shot: string };
 
-export const TYPE_ICON: Record<string, string> = { video: "▭", audio: "♫", frame: "link", html: "</>" };
-/** Shot icon by how its clip is made: generated video, an HTML page, or a still. */
-export const shotIcon = (s: Shot) => (s.render === "html" ? "</>" : s.render === "still" ? "image" : "▭");
+export const TYPE_ICON: Record<string, string> = { video: "▭", audio: "♫", frame: "link", html: "</>", scene: "scene" };
+/** Shot icon by how its clip is made: generated video, an HTML page, a still, or a 3D scene (P79: the Box icon). */
+export const shotIcon = (s: Shot) => (s.render === "html" ? "</>" : s.render === "still" ? "image" : s.render === "scene" ? "scene" : "▭");
 const CONN_LABEL: Record<string, string> = { continuity: "Continuity", match: "Match cut", cut: "Cut" };
 
 /** " · Crossfade 0.8 s" for a connection transition (the registry name; unknown presets play as a cut). */

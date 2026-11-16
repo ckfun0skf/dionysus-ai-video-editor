@@ -110,6 +110,16 @@ export function syncPlan(p: Project): SyncPlan {
     }
     const id = uniqueId("shot-tl-", (x) => !!b.shots[x]);
     const a = p.assets[pl.source.assetId];
+    // P79: a clip of a type that plays shots of a render (a 3D scene) becomes such a shot: its asset is the clip slot,
+    // so the shot needs no prompt.
+    const render = a ? storyOf(a.kind).shotRender : undefined;
+    if (render && a) {
+      const slot = slotFor(b, p, a.id);
+      b.shots[id] = { id, title: a.name || "New shot", description: "", durationSec: clampDur(sec(pl.durationTicks)), prompt: "", slotIds: [slot], qa: [], assetId: a.id, render, clipSlot: slot };
+      pl.storyShot = id; seen.add(id); shotOfClip.set(pl.id, id);
+      changes.push({ kind: "newShot", id, label: `New ${render} shot "${b.shots[id].title}" from the timeline` });
+      continue;
+    }
     b.shots[id] = { id, title: a?.name ?? "New shot", description: "", durationSec: clampDur(sec(pl.durationTicks)), prompt: "", slotIds: [], qa: [], ...(a ? { assetId: a.id } : {}), needsPrompt: true };
     pl.storyShot = id; seen.add(id); shotOfClip.set(pl.id, id);
     changes.push({ kind: "newShot", id, label: `New shot "${b.shots[id].title}" from the timeline`, needsPrompt: true });
@@ -201,6 +211,8 @@ export function syncPlan(p: Project): SyncPlan {
     if (!shotId) continue;
     const clip = clipOfShot.get(shotId)!, s = b.shots[shotId];
     if (pl.clipType === "effect") { if (pl.effect) effectsBy.set(shotId, [...(effectsBy.get(shotId) ?? []), pl]); continue; }
+    // P79: a clip type that plays whole shots but has no storyboard layer (a 3D scene) stays timeline-only as an overlay.
+    if (storyOf(pl.clipType).shotRender && !storyOf(pl.clipType).layer) continue;
     if (pl.storyLayer === "captions" || (pl.clipType === "text" && s.captions && pl.storyLink && !pl.storyLayer && pl.text?.text === captionText(s))) {
       captionSeen.add(shotId);
       const t = (pl.text?.text ?? "").trim();

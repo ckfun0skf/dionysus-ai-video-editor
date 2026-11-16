@@ -210,7 +210,7 @@ export async function runTimelineTool(engine: Engine, source: FrameSource | unde
     case "get_timeline": return { ok: true, changed: false, text: JSON.stringify(timelineReview.timelineJson(project()), null, 1) };
     // P62 (#312): media and storyboard JSON from URLs, without driving the UI.
     case "attach_asset_version": case "attach_asset_versions": return runAttachTool(engine, blobs, name, a, io);
-    case "import_storyboard": return runImportStoryboard(engine, a, io);
+    case "import_storyboard": return runImportStoryboard(engine, a, io, blobs);
     case "capture_frame": {
       const t = n("timeSec"); if (t === undefined) return fail('"timeSec" is required.');
       if (!source) return fail("Frame capture isn't available here.");

@@ -48,8 +48,9 @@ const patch = (what: string): Schema => ({ type: "object", description: `Fields 
 const REFERENCE = obj({ asset: str('Asset id, "<asset>@<state>" or "<shot>.lastframe".'), role: en(REFERENCE_ROLES, "How the image is used."), note: str("What to take from it.") }, ["asset"]);
 const STATE = obj({ id: id("State id, unique in its asset."), name: str("Display name."), prompt: str("What changes from the base look."), references: arr(REFERENCE, "Images to attach."), qa: arr(str("A check."), "QA checks.") }, ["id"], 'An asset state (another look of the same asset), referred to as "<asset id>@<state id>".');
 const ASSET = obj({
-  id: id("Unique asset id."), type: en(STORY_ASSET_TYPES, "Asset type."), name: str("Display name."), prompt: str("Generation prompt (or design / sound brief for html and json audio)."),
-  source: { description: '"generate" (default), "upload", "json" (audio), "code" (html), or { "type": "lastFrame", "shot": "<id>" }.' },
+  id: id("Unique asset id."), type: en(STORY_ASSET_TYPES, "Asset type."), name: str("Display name."), prompt: str("Generation prompt (or design / sound brief for html and json audio, scene brief for a 3D scene)."),
+  source: { description: '"generate" (default), "upload", "json" (audio), "code" (html), or { "type": "lastFrame", "shot": "<id>" } (not for scene).' },
+  scene: { type: "object", description: "Optional inline dionysus.scene/1 scene for a scene asset. Stored as a version only by import_storyboard and the Import screen; with these edit tools use attach_asset_version instead." },
   aspect: str('e.g. "16:9".'), references: arr(REFERENCE, "Images to attach."), qa: arr(str("A check."), "QA checks."), states: arr(STATE, "Other looks of this asset."),
 }, ["id", "type", "name"], "A storyboard asset (see the guide's FORMAT section for every field).");
 const LAYER = obj({ id: id("Layer id, unique in the shot."), type: en(LAYER_TYPES, "Layer type."), startSec: num("Start, seconds into the shot."), endSec: num("End, seconds into the shot.") }, ["id", "type", "startSec", "endSec"], "A layer drawn over the shot (text, html, image or video), as in the guide.");
@@ -151,7 +152,7 @@ export const STORY_TOOLS: StoryTool[] = [
   },
   {
     name: "create_storyboard", title: "Create a storyboard", readOnly: false, creates: true,
-    description: 'Start a new storyboard when there is none: "meta" (title, aspect, style, …), any "assets", and at least one shot. Add the rest with add_shot. Fails if a storyboard exists (edit it instead).',
+    description: 'Start a new storyboard when there is none: "meta" (title, aspect, style, …), any "assets", and at least one shot. Add the rest with add_shot. A shot that is a 3D scene (objects, camera and lights moving over time) uses render "scene" with "clip" set to a "scene" asset whose prompt is the scene brief; attach the scene with attach_asset_version. Fails if a storyboard exists (edit it instead).',
     inputSchema: obj({ meta: obj({ title: str("Video title.") }, ["title"], "The storyboard meta, as in the guide."), assets: arr(ASSET, "Assets."), shots: arr(SHOT, "At least one shot."), audio: arr(CUE, "Audio cues."), connections: arr(CONNECTION, "Connections.") }, ["meta", "shots"]),
     edit: (raw, a) => {
       if (raw.shots.length) return "A storyboard already exists. Edit it with the other tools (or the user can replace it from Import).";

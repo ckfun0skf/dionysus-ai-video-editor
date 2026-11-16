@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useStoryAuto } from "./useStoryAuto";
 import { board, ops, pendingAudio, roundtrip, storyEdit, storyRefs, updatePlan, type AssetSlot, type Shot, type StoryDiff, type StoryDoc } from "../../domain";
-import { cmd, type Engine } from "../../engine";
+import { cmd, type Command, type Engine } from "../../engine";
+import { inlineSceneStep, withInlineScenes } from "./inlineScenes";
 import type { BlobStore } from "../../ports";
 import { Ic } from "../Icon";
 import type { Player } from "../../render";
@@ -70,20 +71,28 @@ export function StoryboardView({ engine, blobs, player, onClose, initialOpen, on
       (editing ? setEditing(undefined) : editingSlot ? setEditingSlot(undefined) : conn ? setConn(undefined) : open ? setOpen(undefined) : step ? setStep(undefined) : onClose()); };
     window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k);
   }, [open, step, onClose, sendMenu, confirmTimeline, confirmDelete, confirmSlotDelete, shotMenu, insertMenu, planInsert, editing, editingSlot, conn]);
+  /** P79: dispatch an import; inline scenes ("scene" on scene assets) are stored first and added in the same undo step. */
+  const importWith = useCallback((c: Command, doc: StoryDoc, then: () => void) => {
+    if (!doc.assets.some((x) => x.type === "scene" && x.scene)) { engine.dispatch(c); then(); return; }
+    void inlineSceneStep(engine.getState().project, doc, blobs).then((st) => { engine.dispatch(withInlineScenes(c, st)); then(); }, (e: Error) => setNote(`Couldn't store the inline scenes: ${e.message}`));
+  }, [engine, blobs, setNote]);
   const create = useCallback((doc: StoryDoc) => {
     setOpen(undefined);
-    engine.dispatch(cmd.createStoryboard(doc));
-    setStep(undefined);
-    setNote(has ? "Storyboard replaced — Undo to get the old one back" : `“${doc.meta.title}” is ready`);
-  }, [engine, has, setNote]);
+    importWith(cmd.createStoryboard(doc), doc, () => {
+      setStep(undefined);
+      setNote(has ? "Storyboard replaced — Undo to get the old one back" : `“${doc.meta.title}” is ready`);
+    });
+  }, [importWith, has, setNote]);
   const merge = useCallback((doc: StoryDoc, d: StoryDiff) => {
     setOpen(undefined);
-    engine.dispatch(cmd.mergeStoryboardDoc(doc));
+    importWith(cmd.mergeStoryboardDoc(doc), doc, () => mergeNote(d));
+  }, [importWith]);
+  const mergeNote = (d: StoryDiff) => {
     setStep(undefined);
     const n = (g: "added" | "changed" | "removed") => d.shots[g].length + d.assets[g].length;
     const parts = [n("added") && `${n("added")} new`, n("changed") && `${n("changed")} changed`, n("removed") && `${n("removed")} removed`].filter(Boolean);
     setNote(`Storyboard updated${parts.length ? ` · ${parts.join(", ")}` : ""}`, { label: "Undo", run: () => engine.undo() });
-  }, [engine, setNote]);
+  };
   const diffFor = useCallback((doc: StoryDoc) => roundtrip.storyDiff(project, doc), [project]);
   /** P2A Update mode: only what changed since the last send (new shots and audio, switched clips, edited text). */
   const update = useCallback(() => {

@@ -130,6 +130,13 @@ export interface ClipStory {
   takes: boolean;
   /** Shot and layer `params` become the clip's `htmlParams` (html). */
   params: boolean;
+  /**
+   * P79: shots with this `render` play clips of this type (scene: render "scene"). Send places a placeholder of this
+   * type (the intended type) for such a shot with no version yet, and Sync writes a main-track clip of this type that
+   * has no shot back as a shot with this render and the clip's asset as its clip. Overlay clips of a type with a
+   * `shotRender` and no `layer` stay timeline-only (there is no such storyboard layer).
+   */
+  shotRender?: "scene";
 }
 
 /** Input for `defineClipType`: `version` may be omitted (1). */

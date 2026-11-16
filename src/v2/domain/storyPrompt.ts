@@ -144,14 +144,16 @@ export const FORMAT_SECTION = () => `{
       "prompt": string,          // full, self-contained image/video generation prompt (required when source is "generate");
                                  // character and prop assets: a multi-angle reference sheet (turnaround);
                                  // for "html": a design brief for the AI that writes the clip as one .html file (see RULES);
-                                 // an html asset's "references" are listed in its prompt for the code AI (images, other html clips)
+                                 // an html asset's "references" are listed in its prompt for the code AI (images, other html clips);
+                                 // for "scene": a scene brief (objects, camera, what moves when) for the AI that writes the dionysus.scene/1 JSON
       "references"?: (string | { "asset": "<asset id>", "role"?: "start-frame" | "identity" | "look" | "detail", "note"?: string })[],
                                  // other assets to attach when generating this one, IN THIS ORDER (Image 1, Image 2 …); a plain id
                                  // = role from its type; for an image "start-frame" means the base image to edit (no end-frame)
       "source": "generate" | "upload" | "json" | { "type": "lastFrame", "shot": "<shot id>" },
-                                 // plain strings "generate" / "upload" / "json" (default "generate"); an object only for lastFrame; "html" and "audio" can't use lastFrame; "json" is audio only (a dionysus.audioclip/1 clip)
+                                 // plain strings "generate" / "upload" / "json" (default "generate"); an object only for lastFrame; "html", "audio" and "scene" can't use lastFrame; "json" is audio only (a dionysus.audioclip/1 clip)
       "qa": string[],            // 2-5 concrete yes/no checks to verify the asset by looking
       "params"?: { "<key>": Param },  // "html" only: values the clip exposes, set per use by shots and layers (see RULES)
+      "scene"?: { … },           // "scene" only: the dionysus.scene/1 scene inline (objects, world, events); import stores it as the asset's first version
       "genDurationSec"?: number, // video assets only: the length to generate (0.5-120) when its shots or layers use less; they pick their part with "inSec"
                                  // a CLIP = a video asset named by a shot's "clip" (RULE 51); it carries everything that makes the clip:
                                  // its "prompt" (the full clip generation prompt), "qa" (2-5 checks for the clip), "camera"?: string, and
@@ -175,12 +177,12 @@ export const FORMAT_SECTION = () => `{
       "durationSec": number,     // 0.5–120; how long the shot stays on screen in the final edit, set by the story's pacing (NOT by the video model's limits)
       "clip": "<asset id>",      // render "ai" (default): the id of its clip, a "video" asset that carries the generation prompt, references, genDurationSec,
                                  // keyframe, camera and the clip's qa; one clip per shot, or the SAME clip in several shots to reuse one generation;
-                                 // render "html": an html asset; render "still": an image asset (unless "background" is given)
+                                 // render "html": an html asset; render "still": an image asset (unless "background" is given); render "scene": a scene asset
       "inSec"?: number,          // seconds into a clip that several shots share: where this shot starts playing it (default 0)
       "dialogue"?: string | [ string | { "speaker"?: string, "text": string, "offscreen"?: boolean } ],
                                  // spoken lines; a list marks who says each; "offscreen": true = heard, not seen (no lip-sync; not a voiceover)
       "qa"?: string[],           // checks of the edit itself (text, layers, timing); the clip's own checks go on the clip asset
-      "render"?: ${SHOT_RENDERS.map((r) => `"${r}"`).join(" | ")},   // default "ai" (generated clip); "html" = uploaded HTML animation; "still" = an image held on screen
+      "render"?: ${SHOT_RENDERS.map((r) => `"${r}"`).join(" | ")},   // default "ai" (generated clip); "html" = uploaded HTML animation; "still" = an image held on screen; "scene" = a 3D scene asset
       "background"?: "#rrggbb" | { "type": "linear" | "radial", "angle"?: number, "stops": [ { "color": "#rrggbb", "at"?: number } ] },
                                  // render "still" only, instead of "clip": a solid colour or a gradient the app draws (2-8 stops, "at" 0-1;
                                  // linear "angle" in degrees, 0 = bottom to top, 90 = left to right, default 180 = top to bottom); put titles in "layers"
@@ -302,7 +304,7 @@ export const RULE_LIST: readonly { key: string; text: string }[] = [
   { key: "ids", text: `Keep ids short and stable (e.g. "hero", "kitchen", "s1", "s1-end"). Shots are listed in order; "connections" may be omitted for simple hard cuts.` },
   { key: "valid-json", text: "Output valid JSON only: double quotes, no comments, no trailing commas." },
   { key: "text-in-layers", text: "Every piece of on-screen text (titles, cards, labels, captions) goes into a text layer (or the params of a reusable html text card, RULE 24), never into a generation prompt. Prompts ask for clean, empty surfaces where the text will sit." },
-  { key: "html-only-for-graphics", text: `Use "html" assets and "render": "html" only for animated, 3D or three.js graphics. Plain text over a shot is a text layer; a designed title or text-only card is one reusable "html" asset with params (RULE 24).` },
+  { key: "html-only-for-graphics", text: `Use "html" assets and "render": "html" only for animated, 3D or three.js graphics. Plain text over a shot is a text layer; a designed title or text-only card is one reusable "html" asset with params (RULE 24). For objects, a camera and lights moving on a timeline (product spins, diagrams in space, a GLB character playing an animation) prefer a "scene" asset with "render": "scene" (the 3D scene clip rule).` },
   { key: "transitions-and-effects", text: `Transitions go on connections. Post camera moves (push-in etc.) and looks go in the shot's "effects", and the generation prompt then says "static camera".` },
   { key: "known-presets", text: "Only use preset ids listed in the PRESETS section." },
   { key: "param-units", text: `Preset params use the units noted in brackets in the PRESETS section; "fade-in"/"fade-out" "length" is a fraction (0.05–1) of the effect's time range, not seconds.` },

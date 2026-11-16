@@ -92,9 +92,9 @@ required checks.
 1. `git fetch` and branch from the latest `origin/main` (e.g. `p66-short-name`).
 2. Implement with tests. Keep PRs small (MODULE_DESIGN §14 targets < 400 changed lines; feature PRs here are often
    larger, but split refactors).
-3. **`public/doc/tasks.json`:** add one entry per PR with the next free P-number: `{ "id": "P79-SHORT-NAME", "title":
+3. **`public/doc/tasks.json`:** add one entry per PR with the next free P-number: `{ "id": "P80-SHORT-NAME", "title":
    "<what and why, one paragraph>", "status": "done", "progress": 100 }` appended after the latest entry (the latest is
-   `P78-SCENE-AGENT`; the next is **P79**). Bump `updatedAt`. Edit the file surgically (insert text); do not
+   `P79-STORYBOARD-SCENE`; the next is **P80**). Bump `updatedAt`. Edit the file surgically (insert text); do not
    re-serialise the whole JSON. `scripts/check-tasks-updated.mjs` fails a PR that changes `src/` without it. If an id
    is already taken, use the next number and say so in the PR.
 4. **AI guide rule:** append to `RULE_LIST` in `src/v2/domain/storyPrompt.ts` (append-only; numbers are positions;
@@ -113,7 +113,7 @@ required checks.
 6. Run `npm run gen:ai` after changing rules, tools or presets, and commit the regenerated files (tests fail if they are
    stale).
 7. `npx tsc -b && npx vitest run && npx vite build`.
-8. Commit in English; PR title `P79: …`; body says what, why, tests, and `Fixes #N` (or `Refs #N` if partial), plus
+8. Commit in English; PR title `P80: …`; body says what, why, tests, and `Fixes #N` (or `Refs #N` if partial), plus
    what was not verified. Push, open the PR, wait for `build` on the head SHA. Do not merge.
 
 ## 7. UI conventions
@@ -141,10 +141,10 @@ required checks.
 | `docs/v2/DEPLOYMENT.md` | hosting, `DIONYSUS_SITE_URL`, base path |
 | `docs/v2/CLIP_PLUGIN_ARCHITECTURE.md` | clip type plugins: accepted design, decisions, Phase 1 (done) and the Phase 2 step table |
 | `docs/v2/ADDING_CLIP_TYPES.md` | adding a clip type step by step, with a worked example (P73) |
-| `docs/v2/SCENE_FORMAT.md` | 3D scene clips: `dionysus.scene/1` objects, events, custom functions, rendering (P74), GLB models and animation (P75), the scene editor (P76) |
+| `docs/v2/SCENE_FORMAT.md` | 3D scene clips: `dionysus.scene/1` objects, events, custom functions, rendering (P74), GLB models and animation (P75), the scene editor (P76, P77), agent tools (P78; saving session, batch and GLB URLs P79), storyboards (P79) |
 | `public/doc/tasks.json` | every task and its status |
 
-## 9. Recent history (P47–P78)
+## 9. Recent history (P47–P79)
 
 | Id | PR | One line |
 |---|---|---|
@@ -179,7 +179,8 @@ required checks.
 | P75 | #327 | Phase 2 step 2.2: GLB models in scene clips (`files` map of data: URLs, `model`, fit by `size`), animation as a property (object `animation`, `play` / `stop`, function rows; speed, repeat / once / pingpong, start offset, cross-fades from `t`) and node show/hide (`nodes`); the page loads models with the vendored GLTFLoader through its clip manifest and poses them with `mixer.setTime` per frame (no `update(delta)`); `domain/glb.ts`; Scene tab Add GLB model. P74 gaps: Scene sheet on phones, scenes in the picker's Code tab, no `volume` on scene clips. Existing goldens unchanged; Chrome parity with a real skinned GLB (Fox). |
 | P76 | #328 | Phase 2 step 2.3 (owner-confirmed scene editor UX, split in two; step table renumbered): a scene clip's own timeline editor (`ui/SceneEditor.tsx`; desktop: in place of the timeline panel, from Edit scene / the clip menu; phone: full-screen sheet from the Scene tool with a mirrored preview), one track per object plus the scene/camera track, blocks labelled with their call (read-only on the tracks, select to edit), side-panel forms for event call / time / duration / ease / args, object base properties, scene, camera and lights; add / duplicate / delete events, add / delete objects. Pure operations in `domain/sceneEdit.ts`. One undo step per committed edit, saved as a scene version under the version-save rules; the player keeps the clip's page across event and property edits (`scenePageKey`, `primeSceneDoc`) so the preview updates at once. Existing goldens unchanged. |
 | P77 | #329 | Phase 2 step 2.4: drag and resize retiming in the scene editor (`domain/sceneRetime.ts`; move / start / end handles, mouse, pen and touch with 44 px handles; snapping to the playhead, other events, clip in / out and whole frames with a toggle and Alt; clamped to the clip range; drop on another object's track when the call fits; live preview via `Player.previewSceneDoc`; one undo step per drag under the version-save rules; Esc cancels), ruler scrubbing synced with the player, arrow-key nudges; Esc in fields reverts first; desktop editor ≥ 440 px. Existing goldens unchanged. |
-| P78 | — | Phase 2 step 2.5: scene agent tools and AI guide RULE 79 (`scene-clips`), contributed through the scene core's `core.agent` (the first type that adds tools): `create_scene_clip`, `get_scene`, `list_scene_objects`, `add_scene_object`, `set_scene_object`, `remove_scene_object`, `add_scene_event`, `update_scene_event`, `retime_scene_event`, `remove_scene_event`, `set_scene_world`. Pure ops in `domain/sceneAgent.ts` (refuse edits that add validation errors; errors list valid objects, calls and args); runner `clipTypes/scene/agent.ts` loaded with `import()` (new `clipTypes/agent` layer); `ClipAgentApi.blobs`; one undo step per edit under the version-save rules (`mode` new / replace). `gen:ai` diff = the new tools and rule only; agent golden: only tool / rule hashes. |
+| P78 | #330 | Phase 2 step 2.5: scene agent tools and AI guide RULE 79 (`scene-clips`), contributed through the scene core's `core.agent` (the first type that adds tools): `create_scene_clip`, `get_scene`, `list_scene_objects`, `add_scene_object`, `set_scene_object`, `remove_scene_object`, `add_scene_event`, `update_scene_event`, `retime_scene_event`, `remove_scene_event`, `set_scene_world`. Pure ops in `domain/sceneAgent.ts` (refuse edits that add validation errors; errors list valid objects, calls and args); runner `clipTypes/scene/agent.ts` loaded with `import()` (new `clipTypes/agent` layer); `ClipAgentApi.blobs`; one undo step per edit under the version-save rules (`mode` new / replace). `gen:ai` diff = the new tools and rule only; agent golden: only tool / rule hashes. |
+| P79 | — | Phase 2 step 2.6, the last of Phase 2: storyboard asset type `scene` and shot `render: "scene"` (optional values in 3.1, decision 5): validator (inline `scene` checked with the scene validator), Send / Update / Re-lay place scene clips or a placeholder of intended type `scene` (`core.story.shotRender`), Sync maps main-track scene clips to render scene shots, `attach_asset_version(s)` take scenes, `import_storyboard` / the Import screen store inline scenes in the import's undo step, Box icon and **3D scene** render in the storyboard UI. P78 gaps: agent edits in mode `new` coalesce into one session version (`newVersion: true` starts another), batch tool `apply_scene_edits` (one undo step, one version, all or nothing), GLB from a URL in `add_scene_object` / `set_scene_object`. Rule 9 and rule 79 texts extended (no renumbering). |
 
 ## 10. Known unverified areas
 
@@ -283,7 +284,7 @@ change, each merged on green CI) is **complete** (P65–P73):
 
 **Phase 2** (deterministic three.js `scene` clip, §7 of the design doc) started in P74. **Decision 5 is accepted**
 (2026-11-15, as recommended): a storyboard may mark a shot `render: "scene"` and use a `scene` asset type, both optional
-values within `dionysus/3.1`, no version bump; it is implemented in step 2.6. Phase 2 has its own step table (§7):
+values within `dionysus/3.1`, no version bump; it is implemented in step 2.6 (P79). **Phase 2 is complete since P79.** Phase 2 has its own step table (§7):
 2.1 scene type + schema + evaluator + rendering (P74), 2.2 GLB models and animation (P75), 2.3 scene editor part 1 (P76:
 own timeline per scene clip, forms, read-only tracks with selection), 2.4 scene editor part 2 (P77: drag / resize
 retiming), 2.5 agent tools and AI rule (P78), 2.6 storyboard mapping (P79); one small PR per step, each merged on green
@@ -361,13 +362,55 @@ storyboard to 2.6 (design doc §7, the note under the table, and decision 6).
   adds a validation error is refused; `newSceneFromInput`, `sceneForAgent` shortens data URLs,
   `sceneObjectsForAgent` lists calls with arg hints). Each edit stores a new blob and makes one `api.edit` through
   `clipVersion.applyMediaFromClip` (`mode` from the input, else the project's; an explicit mode is remembered).
-  Each mutating call in mode `new` adds a version (no batch tool). `get_timeline` has no scene fields (`get_scene`
+  (P78 added a version per mutating call in mode `new`; P79 replaced that with the agent session and added
+  `apply_scene_edits`, see 2.6.) `get_timeline` has no scene fields (`get_scene`
   covers it). Event indexes are array positions. Tests: `domain/sceneAgent.test.ts`,
   `ui/agent/sceneAgentTools.test.ts`, `ui/agent/clipTypeAgent.test.ts`.
-- **Next: step 2.6 (P79)**, the storyboard mapping (decision 5): asset type `scene` and shot `render: "scene"`
-  (optional values in 3.1), `core.story` for scene, the storyboard validator, `STORYBOARD_FORMAT.md` and the AI
-  guide. New clip types follow
-  `docs/v2/ADDING_CLIP_TYPES.md`; the scene format is `docs/v2/SCENE_FORMAT.md`.
+- **2.6 done (P79), Phase 2 complete:** the storyboard mapping (decision 5). `domain/storyJson.ts`: `"scene"` in
+  `STORY_ASSET_TYPES`, `"scene"` in `SHOT_RENDERS` (a render scene shot's `clip` must be a scene asset), an optional
+  inline `StoryAsset.scene` validated with `validateScene` (paths `assets[i].scene.<path>`), no `lastFrame` for scene
+  assets, a generated one needs a prompt (scene brief) unless `scene` is given. `storyRefs.SLOT_TYPES` has `scene`
+  (its length is checked at load). The scene core's `story` = `{ assetTypes: ["scene"], slotType: "scene",
+  sendLength: "planned", takes: false, layer: false, shotRender: "scene" }`; `ClipStory.shotRender` (new, optional)
+  is what `storySend.placeholderClip` uses for the placeholder's intended type (only scene declares it, so html / still
+  placeholders stay `image` and the story-mapping golden is unchanged) and what `storySync` uses to turn a main-track
+  clip of that kind into a render shot with its own clip slot (no `needsPrompt`). Overlay scene clips are skipped by
+  Sync. UI: `ShotEditor` render **3D scene**, Box icon on the board (`BoardView` `TYPE_ICON` / `shotIcon`), shot
+  detail upload of a scene `.json` (`ui/sceneAsset.ts` `readSceneInput` / `storeSceneMedia`), production label.
+  Agent: `attach_asset_version(s)` take `text` / `scene` / a `.json` URL for scene assets (`ui/agent/mediaTools.ts`
+  `prepare`, "Scene rejected: …"); `import_storyboard` (and the Import screen, `StoryboardView` `importWith`) store
+  inline scenes through `ui/storyboard/inlineScenes.ts` `inlineSceneStep` in the import's dispatch (one undo step;
+  equal scenes skipped; without a media store the import fails). The P78 gaps: `clipTypes/scene/agent.ts` keeps a
+  module-level session `{ assetId, clipId, versionId, at }` (`SCENE_SESSION_MS` 10 min, `resetSceneAgentSession()`
+  for tests); in mode `new` an edit of the session's clip whose shown version is the session's version saves with
+  `{ mode: "replace", remember: false }`; `newVersion: true` forces a new one. `apply_scene_edits` →
+  `domain/sceneAgent.ts` `applySceneEdits` (all or nothing, at most 200). `file: { url }` is resolved by `resolveFile`
+  (`agentMedia.checkAgentUrl` with the page origin, `fetch` without credentials, `.glb` name, glTF magic, 64 MB) into a
+  data URL before the pure operation. Rule texts: rule 9 (`html-only-for-graphics`) gained a sentence pointing at
+  render scene and rule 79 (`scene-clips`) gained saving / batch / URL / storyboard paragraphs; no rule was added
+  (a new built-in would renumber 79). Tests: `engine/storyScene.test.ts`, `ui/agent/sceneP79.test.ts`.
+
+**Next phase: Phase 3, third-party clip types** (design doc §7 Phase 3): a plugin package (`dionysus.cliptype/1`
+manifest + sandboxed renderer page speaking the HTML clip frame protocol), host-validated tool calls forwarded to the
+sandbox, per-project loading with consent and a lock (id, version, content hash), projects that keep working without
+the plugin. Start with a design PR for the manifest and the loader before code, like Phase 1 and 2. New clip types
+follow `docs/v2/ADDING_CLIP_TYPES.md`; the scene format is `docs/v2/SCENE_FORMAT.md`.
+
+**Backlog and known limits after Phase 2** (candidates for small PRs before or during Phase 3):
+
+- Scene clips on overlay tracks are not synced to the storyboard (a storyboard has no scene layer type); a scene
+  layer type would need `LAYER_TYPES` and Send / Sync support.
+- Inline `scene` on a storyboard asset is stored only by `import_storyboard` and the Import screen; the storyboard
+  edit tools (`create_storyboard`, `add_asset`, `update_asset`) keep it in the JSON but don't store a version.
+- The agent's scene session lives in the page (module state): a reload or a second tab starts a new one; the timeout
+  is fixed at 10 minutes. A coalesced edit replaces the session version in place, so other clips pinned to that same
+  version (split halves, copies) change with it, as with Replace current.
+- GLB from a URL: at most 64 MB, the server must send CORS headers for the site (and Private Network Access headers
+  for a local server from the public site); tested with a mocked fetch only.
+- `get_timeline` still has no scene fields (`get_scene` covers them).
+- Code clips that animate a GLB with their own clock are still unverified for preview vs export (scene clips are
+  covered since P75).
+- A new built-in AI rule takes number 79 and moves `scene-clips` to 80 (see §6.4).
 
 ## 12. Working habits that avoid repeat mistakes
 

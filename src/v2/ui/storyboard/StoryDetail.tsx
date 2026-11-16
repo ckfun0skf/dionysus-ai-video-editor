@@ -9,6 +9,7 @@ import { CodeEditor } from "../CodeEditor";
 import { htmlPlacementOf, htmlPreviewParams, mixFromPlayer } from "../codeClipMix";
 import { AudioClipImport, AudioEditor } from "../AudioEditor";
 import { storeAudioClip } from "../audioClipAsset";
+import { readSceneInput, storeSceneMedia } from "../sceneAsset";
 import { audioClipPrompt, newId, type AudioClip } from "../../domain";
 import { htmlParamSpecs } from "../HtmlParamsPanel";
 import { HtmlExportButtons, HtmlImport } from "../HtmlImport";
@@ -31,8 +32,8 @@ import { VersionSaveModeChoice } from "../VersionSaveMode";
 import { series as S } from "../../domain";
 import { seriesStore, useSeries } from "../series/seriesStore";
 
-const ACCEPT: Partial<Record<MediaKind, string>> = { image: "image/*", video: "video/*", audio: "audio/*", html: HTML_IMPORT_ACCEPT };
-const KIND_NAME: Partial<Record<MediaKind, string>> = { image: "an image", html: "an HTML file", audio: "an audio file", video: "a video file" };
+const ACCEPT: Partial<Record<MediaKind, string>> = { image: "image/*", video: "video/*", audio: "audio/*", html: HTML_IMPORT_ACCEPT, scene: ".json,application/json,application/vnd.dionysus.scene+json" };
+const KIND_NAME: Partial<Record<MediaKind, string>> = { image: "an image", html: "an HTML file", audio: "an audio file", video: "a video file", scene: "a 3D scene (.json)" };
 const kindName = (k: MediaKind) => KIND_NAME[k] ?? `a ${k} file`;
 const fmtDate = (iso: string) => { const d = new Date(iso); return Number.isNaN(+d) ? "" : d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); };
 
@@ -175,6 +176,13 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, player, mo
     swap(cmd.addStoryVersion(target, a.versions[0].media, versionOpts({ ...(model.trim() ? { model: model.trim() } : {}), ...(mode ? { mode } : {}) })));
   });
   const upload = (f: File) => run("Adding…", async () => {
+    if (kind === "scene") {
+      // P79: a dionysus.scene/1 .json file, validated before it becomes a version.
+      const r = readSceneInput(await blobText(f));
+      if ("error" in r) throw new Error(`“${f.name}” can't be added: ${r.error}`);
+      swap(cmd.addStoryVersion(target, await storeSceneMedia(blobs, r.doc), versionOpts(model.trim() ? { model: model.trim() } : {})));
+      return;
+    }
     if (kind === "html") {
       // A .html or .dionysus-html.zip: convert to the single file and validate before it becomes a version.
       const html = await importHtmlPackage(f);
@@ -284,7 +292,7 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, player, mo
       {shot && <p className="v2-sb-detail-desc">{shot.durationSec}s{shot.genDurationSec ? <> · <span title="Ask the video model for this length; the upload is trimmed to the shot length">generate {shot.genDurationSec}s</span></> : null} · {shot.description}</p>}
       {clipSlot && !sharedVideo && (
         <p className="v2-sb-cliplink" role="note">
-          <Ic g={TYPE_ICON[clipSlot.type] ?? "image"} size={14} /> {shot!.render === "html" ? "Plays the HTML" : "Shows the still"} “{clipSlot.name}” for {shot!.durationSec} s. Its versions are shared with that asset.{" "}
+          <Ic g={TYPE_ICON[clipSlot.type] ?? "image"} size={14} /> {shot!.render === "html" ? "Plays the HTML" : shot!.render === "scene" ? "Plays the 3D scene" : "Shows the still"} “{clipSlot.name}” for {shot!.durationSec} s. Its versions are shared with that asset.{" "}
           <button className="v2-linkbtn" onClick={() => onOpen({ slot: clipSlot.id })}>Open “{clipSlot.name}”</button>
         </p>
       )}

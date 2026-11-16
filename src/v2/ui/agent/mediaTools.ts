@@ -7,13 +7,15 @@
  *   kept) or start over, or merge a storyboard part.
  * Bytes never pass through the tool call: the page fetches the URL itself (CORS and Private Network Access apply).
  */
-import { agentMedia, board, lintHtmlClip, newId, roundtrip, slotBindings, story, storyAgent, TICKS_PER_SECOND, type MediaKind, type MediaRef, type Project } from "../../domain";
+import { agentMedia, board, lintHtmlClip, newId, roundtrip, slotBindings, story, storyAgent, TICKS_PER_SECOND, type MediaKind, type MediaRef, type Project, type StoryDoc } from "../../domain";
 import { cmd, type Command, type Engine } from "../../engine";
 import { importFile, probeMedia } from "../../persistence";
 import type { BlobStore } from "../../ports";
 import { CLIP_LIBRARIES } from "../../render";
 import { importHtmlPackage } from "../htmlPackage";
 import { seriesStore } from "../series/seriesStore";
+import { readSceneInput, storeSceneMedia } from "../sceneAsset";
+import { inlineSceneStep, withInlineScenes } from "../storyboard/inlineScenes";
 
 /** Injectable I/O (tests): the page's fetch, the media probe and the page origin. */
 export interface MediaIO { fetch?: (url: string) => Promise<Response>; probe?: typeof probeMedia; origin?: string }
@@ -48,10 +50,27 @@ async function prepare(p: Project, blobs: BlobStore, item: agentMedia.AttachItem
   if (!t.ok) return { ...out, error: t.error };
   const { kind, label } = t.value;
   const sources = [item.url, item.path, item.text, item.dataUrl].filter((x) => typeof x === "string" && x).length;
-  if (sources !== 1) return { ...out, error: 'Give exactly one of "url", "path" (with baseUrl), "text" (HTML) or "dataUrl".' };
+  if (sources !== 1) return { ...out, error: 'Give exactly one of "url", "path" (with baseUrl), "text" (HTML, or a scene\'s JSON) or "dataUrl".' };
   let file: File | string;
+  if (kind === "scene") {
+    // P79: a dionysus.scene/1 scene (JSON text, or a .json from a URL / data: URL), validated before it is stored.
+    let text: string;
+    if (item.text !== undefined) text = item.text;
+    else {
+      if (item.path && !base && !item.dataUrl) return { ...out, error: '"path" needs "baseUrl" (or pass a full "url").' };
+      const f = item.dataUrl ? await fetchFile(item.dataUrl, io, kind, label, { data: true }) : await fetchFile((item.url ?? item.path)!, io, kind, label, { base: item.path ? base : undefined });
+      if (typeof f === "string") return { ...out, error: f };
+      text = await f.text();
+    }
+    out.bytes = text.length;
+    const r = readSceneInput(text);
+    if ("error" in r) return { ...out, error: `Scene rejected: ${r.error}` };
+    out.warnings.push(...r.warnings);
+    out.media = await storeSceneMedia(blobs, r.doc);
+    return out;
+  }
   if (item.text !== undefined) {
-    if (kind !== "html") return { ...out, error: `"text" is for HTML clips; ${label} takes ${kind}. Pass "url" or "dataUrl".` };
+    if (kind !== "html") return { ...out, error: `"text" is for HTML clips and scenes; ${label} takes ${kind}. Pass "url" or "dataUrl".` };
     file = new File([item.text], agentMedia.fileNameFor(undefined, "html", label), { type: "text/html" });
   } else if (item.dataUrl) file = await fetchFile(item.dataUrl, io, kind, label, { data: true });
   else if (item.path && !base) return { ...out, error: '"path" needs "baseUrl" (or pass a full "url").' };
@@ -142,7 +161,9 @@ const pickItem = (o: Record<string, unknown>, d: Record<string, unknown> = {}): 
   const s = (k: string) => (typeof o[k] === "string" && o[k] ? (o[k] as string) : typeof d[k] === "string" && d[k] ? (d[k] as string) : undefined);
   const mc = typeof o.makeCurrent === "boolean" ? o.makeCurrent : typeof d.makeCurrent === "boolean" ? d.makeCurrent : undefined;
   const mode = s("mode");
-  return { assetId: s("assetId"), shotId: s("shotId"), url: s("url"), path: s("path"), text: typeof o.text === "string" ? o.text : undefined, dataUrl: s("dataUrl"), name: s("name"), ...(mc !== undefined ? { makeCurrent: mc } : {}), ...(mode === "replace" || mode === "new" ? { mode } : {}) };
+  // P79: a scene may also come as an object ("scene"); it travels as its JSON text.
+  const text = typeof o.text === "string" ? o.text : o.scene && typeof o.scene === "object" ? JSON.stringify(o.scene) : undefined;
+  return { assetId: s("assetId"), shotId: s("shotId"), url: s("url"), path: s("path"), text, dataUrl: s("dataUrl"), name: s("name"), ...(mc !== undefined ? { makeCurrent: mc } : {}), ...(mode === "replace" || mode === "new" ? { mode } : {}) };
 };
 
 /** attach_asset_version / attach_asset_versions. */
@@ -181,8 +202,8 @@ export async function runAttachTool(engine: Engine, blobs: BlobStore | undefined
   return { ok: added > 0, changed, text: JSON.stringify({ added, failed: results.length - added, results }, null, 1) };
 }
 
-/** import_storyboard: create, replace (by id, uploads kept), start over, or merge a part. One undo step. */
-export async function runImportStoryboard(engine: Engine, a: Record<string, unknown>, io: MediaIO = {}): Promise<Result> {
+/** import_storyboard: create, replace (by id, uploads kept), start over, or merge a part. One undo step (P79: inline scenes included). */
+export async function runImportStoryboard(engine: Engine, a: Record<string, unknown>, io: MediaIO = {}, blobs?: BlobStore): Promise<Result> {
   let text: string;
   if (typeof a.json === "string") text = a.json;
   else if (a.json && typeof a.json === "object") text = JSON.stringify(a.json);
@@ -196,25 +217,36 @@ export async function runImportStoryboard(engine: Engine, a: Record<string, unkn
   const base = p.storyboard ? roundtrip.storyboardToDoc(p.storyboard) : undefined;
   const part = storyAgent.parseStoryPart(text, base, { series: seriesOf });
   const lines = (errs: { path?: string; message: string }[]) => errs.slice(0, 30).map((e) => `- ${e.path ? `${e.path}: ` : ""}${e.message}`).join("\n") + (errs.length > 30 ? `\n- … and ${errs.length - 30} more` : "");
+  // P79: inline scenes ("scene" on scene assets) become versions of their assets in the same undo step.
+  const scenesOf = async (doc: StoryDoc) => {
+    if (!doc.assets.some((x) => x.type === "scene" && x.scene)) return { step: { stored: [] as string[], same: [] as string[] } as Awaited<ReturnType<typeof inlineSceneStep>> };
+    if (!blobs) return { error: "This storyboard has inline scenes; storing them needs the project's media store (open the project in the app)." };
+    return { step: await inlineSceneStep(p, doc, blobs) };
+  };
+  const sceneNote = (st: { stored: string[]; same: string[] }) => ({ ...(st.stored.length ? { scenesStored: st.stored } : {}), ...(st.same.length ? { scenesUnchanged: st.same } : {}) });
   if (part) {
     if (!part.result.ok) return fail(`Storyboard part rejected, nothing changed:\n${lines(part.result.errors)}`);
-    const changed = engine.dispatch(cmd.mergeStoryboardDoc(part.result.doc), "AI: import storyboard part");
-    return { ok: true, changed, text: JSON.stringify({ mode: "part", ...part.counts, warnings: part.result.warnings.length }, null, 1) };
+    const sc = await scenesOf(part.result.doc);
+    if ("error" in sc) return fail(sc.error!);
+    const changed = engine.dispatch(withInlineScenes(cmd.mergeStoryboardDoc(part.result.doc), sc.step), "AI: import storyboard part");
+    return { ok: true, changed, text: JSON.stringify({ mode: "part", ...part.counts, warnings: part.result.warnings.length, ...sceneNote(sc.step) }, null, 1) };
   }
   const r = story.parseStoryboard(text, { series: seriesOf });
   if (!r.ok) return fail(`Storyboard rejected, nothing changed:\n${lines(r.errors)}`);
   const summary = { shots: r.doc.shots.length, assets: r.doc.assets.length, warnings: r.warnings.length, ...(r.warnings.length ? { firstWarnings: r.warnings.slice(0, 5).map((w) => `${w.path ? `${w.path}: ` : ""}${w.message}`) } : {}) };
+  if (p.storyboard && a.replace !== true) return fail('A storyboard already exists. Pass "replace": true to replace it (uploads are kept for matching asset and shot ids), or send a storyboard part to merge.');
+  const sc = await scenesOf(r.doc);
+  if ("error" in sc) return fail(sc.error!);
   if (!p.storyboard) {
-    const changed = engine.dispatch(cmd.createStoryboard(r.doc), "AI: import storyboard");
-    return { ok: true, changed, text: JSON.stringify({ mode: "created", ...summary }, null, 1) };
+    const changed = engine.dispatch(withInlineScenes(cmd.createStoryboard(r.doc), sc.step), "AI: import storyboard");
+    return { ok: true, changed, text: JSON.stringify({ mode: "created", ...summary, ...sceneNote(sc.step) }, null, 1) };
   }
-  if (a.replace !== true) return fail('A storyboard already exists. Pass "replace": true to replace it (uploads are kept for matching asset and shot ids), or send a storyboard part to merge.');
   if (a.keepUploads === false) {
-    const changed = engine.dispatch(cmd.createStoryboard(r.doc), "AI: replace storyboard");
-    return { ok: true, changed, text: JSON.stringify({ mode: "replaced", keepUploads: false, ...summary }, null, 1) };
+    const changed = engine.dispatch(withInlineScenes(cmd.createStoryboard(r.doc), sc.step), "AI: replace storyboard");
+    return { ok: true, changed, text: JSON.stringify({ mode: "replaced", keepUploads: false, ...summary, ...sceneNote(sc.step) }, null, 1) };
   }
   const d = roundtrip.storyDiff(p, r.doc);
-  const changed = engine.dispatch(cmd.mergeStoryboardDoc(r.doc), "AI: replace storyboard");
+  const changed = engine.dispatch(withInlineScenes(cmd.mergeStoryboardDoc(r.doc), sc.step), "AI: replace storyboard");
   const n = (g: "added" | "changed" | "removed") => ({ shots: d.shots[g].length, assets: d.assets[g].length });
-  return { ok: true, changed, text: JSON.stringify({ mode: "replaced", keepUploads: true, ...summary, added: n("added"), changed: n("changed"), removed: n("removed"), other: d.other }, null, 1) };
+  return { ok: true, changed, text: JSON.stringify({ mode: "replaced", keepUploads: true, ...summary, added: n("added"), changed: n("changed"), removed: n("removed"), other: d.other, ...sceneNote(sc.step) }, null, 1) };
 }

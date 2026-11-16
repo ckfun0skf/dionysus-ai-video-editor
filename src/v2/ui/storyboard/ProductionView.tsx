@@ -51,6 +51,7 @@ export function ProductionView({ project, thumbs, engine, blobs, player, mobile,
     const sh = b.shots[s.target.shot];
     if (sh.render === "html") return "Check the HTML clip";
     if (sh.render === "still") return "Check the still";
+    if (sh.render === "scene") return "Check the 3D scene";
     return "Generate the clip";
   };
   const open = (t: BoardTarget) => setCur("slot" in t ? `slot:${t.slot}` : `shot:${t.shot}`);

@@ -51,7 +51,8 @@ const FILES = MIMES.flatMap((type) => NAMES.map((name) => ({ type, name })));
 
 describe("P71 storyboard mapping and media-kind detection: frozen pre-P71 switches", () => {
   it("kindForSlot for every storyboard asset type (and unknown strings)", () => {
-    for (const t of SLOT_SHAPES) expect(board.kindForSlot(t as never), t).toBe(LEGACY.kindForSlot(t));
+    // P79 (intended): the new asset type "scene" holds scene assets; every other shape maps as before.
+    for (const t of SLOT_SHAPES) expect(board.kindForSlot(t as never), t).toBe(t === "scene" ? "scene" : LEGACY.kindForSlot(t));
   });
   it("the per-kind storyboard switches of storySend.ts / storySync.ts (P71: core `story`)", () => {
     for (const k of ["video", "image", "audio", "html", "text", "effect", "scene3d", "placeholder", "blank", "unknown", ""]) {
@@ -211,7 +212,8 @@ function scenarios(): Record<string, unknown> {
 describe("P71 storyboard mapping golden (recorded before the move)", () => {
   it("Send, Update and Sync produce the same project and storyboard", () => {
     const got = scenarios();
-    expect(SHOT_RENDERS).toEqual(["ai", "html", "still"]);
+    // P79 adds render "scene" (storyScene.test.ts); this golden's board has no scene shots, so it is unchanged.
+    expect(SHOT_RENDERS).toEqual(["ai", "html", "still", "scene"]);
     if (process.env.UPDATE_STORY_GOLDEN || !existsSync(GOLDEN)) writeFileSync(GOLDEN, JSON.stringify(got, null, 1) + "\n");
     const want = JSON.parse(readFileSync(GOLDEN, "utf8"));
     for (const k of Object.keys(want)) expect(got[k], k).toEqual(want[k]);
