@@ -38,7 +38,7 @@ src/v2/
   engine/        Engine (undo history; one dispatch = one undo step) and commands.ts (Command factories)
   persistence/   IndexedDB/memory stores, media import (media.ts), schema migrations, project archive
   ports/         storage interfaces (BlobStore, …)
-  clipTypes/     clip type registry (P65+): one folder per type with core.ts (trackKind, caps; storyboard mapping and file import since P71; agent tools/rules/checks since P72); domain predicates read it (P66); render.ts renderers (P67, P68); ui.tsx timeline UI (P69), inspector/toolbar/menus (P70); state.ts placeholder state and unknown-type handling (P73); scene/ the 3D scene type (P74, docs/v2/SCENE_FORMAT.md); how to add a type: docs/v2/ADDING_CLIP_TYPES.md
+  clipTypes/     clip type registry (P65+): one folder per type with core.ts (trackKind, caps; storyboard mapping and file import since P71; agent tools/rules/checks since P72); domain predicates read it (P66); render.ts renderers (P67, P68); ui.tsx timeline UI (P69), inspector/toolbar/menus (P70); state.ts placeholder state and unknown-type handling (P73); scene/ the 3D scene type (P74; GLB models and animation P75; docs/v2/SCENE_FORMAT.md); how to add a type: docs/v2/ADDING_CLIP_TYPES.md
   registry/      preset registry (effects, transitions, text animations, stickers, blends, audio fx, fonts)
   presets/       one file per preset, auto-discovered (docs/v2/ADDING_EFFECTS.md)
   render/        Player (preview AND export compositor), htmlClip.ts (sandboxed HTML clip host), text, effects,
@@ -92,9 +92,9 @@ required checks.
 1. `git fetch` and branch from the latest `origin/main` (e.g. `p66-short-name`).
 2. Implement with tests. Keep PRs small (MODULE_DESIGN §14 targets < 400 changed lines; feature PRs here are often
    larger, but split refactors).
-3. **`public/doc/tasks.json`:** add one entry per PR with the next free P-number: `{ "id": "P75-SHORT-NAME", "title":
+3. **`public/doc/tasks.json`:** add one entry per PR with the next free P-number: `{ "id": "P76-SHORT-NAME", "title":
    "<what and why, one paragraph>", "status": "done", "progress": 100 }` appended after the latest entry (the latest is
-   `P74-SCENE-CLIP`; the next is **P75**). Bump `updatedAt`. Edit the file surgically (insert text); do not
+   `P75-SCENE-GLB`; the next is **P76**). Bump `updatedAt`. Edit the file surgically (insert text); do not
    re-serialise the whole JSON. `scripts/check-tasks-updated.mjs` fails a PR that changes `src/` without it. If an id
    is already taken, use the next number and say so in the PR.
 4. **AI guide rule:** append to `RULE_LIST` in `src/v2/domain/storyPrompt.ts` (append-only; numbers are positions;
@@ -138,10 +138,10 @@ required checks.
 | `docs/v2/DEPLOYMENT.md` | hosting, `DIONYSUS_SITE_URL`, base path |
 | `docs/v2/CLIP_PLUGIN_ARCHITECTURE.md` | clip type plugins: accepted design, decisions, Phase 1 (done) and the Phase 2 step table |
 | `docs/v2/ADDING_CLIP_TYPES.md` | adding a clip type step by step, with a worked example (P73) |
-| `docs/v2/SCENE_FORMAT.md` | 3D scene clips: `dionysus.scene/1` objects, events, custom functions, rendering (P74) |
+| `docs/v2/SCENE_FORMAT.md` | 3D scene clips: `dionysus.scene/1` objects, events, custom functions, rendering (P74), GLB models and animation (P75) |
 | `public/doc/tasks.json` | every task and its status |
 
-## 9. Recent history (P47–P74)
+## 9. Recent history (P47–P75)
 
 | Id | PR | One line |
 |---|---|---|
@@ -172,7 +172,8 @@ required checks.
 | P71 | #323 | Step 1.6: storyboard mapping (`kindForSlot`, Send lengths, Sync slot/layer types, video takes, html params) and file import (`mediaKindOf`, `mimeOf`) read `core.story` / `core.accepts`; frozen-switch parity and a Send/Update/Sync golden recorded before the move. |
 | P72 | #324 | Step 1.7: WebMCP tools, AI guide rules and `get_timeline` fields can come from `core.agent` (built-ins add none; `gen:ai` byte-identical); per-type checks of the timeline tools read `agent.clipTools` / `agent.props` / `caps.sound`; compact hash golden recorded before the move. |
 | P73 | #325 | Step 1.8, the last of Phase 1: placeholder is a cross-type clip state handled by the host before any plugin (`clipTypes/state.ts`, shared slate `render/placeholderSlate.ts`, `PLACEHOLDER_UI`; `clipTypes/placeholder/` retired; Fill filters by the intended type); unknown clip types load, keep their data, draw a slate, export black and silent after a warning, have an info-only inspector and `unknown: true` in `get_timeline`; `docs/v2/ADDING_CLIP_TYPES.md`. Image placeholders and blank unchanged (golden recorded before the move). |
-| P74 | — | Phase 2 step 2.1 (decision 5 accepted: storyboard `render: "scene"` / asset type `scene` as optional values in 3.1, no version bump; Phase 2 step table added): the `scene` clip type (`clipTypes/scene/`), `dionysus.scene/1` schema and validation and the pure evaluator `stateAt` (`domain/scene.ts`), rendering in the sandboxed HTML clip host from `t` only (`render/scenePage.ts`), Code → 3D scene, read-only Scene inspector tab; `docs/v2/SCENE_FORMAT.md`. Existing goldens unchanged; preview, export and seek order pixel-identical in Chrome. |
+| P74 | #326 | Phase 2 step 2.1 (decision 5 accepted: storyboard `render: "scene"` / asset type `scene` as optional values in 3.1, no version bump; Phase 2 step table added): the `scene` clip type (`clipTypes/scene/`), `dionysus.scene/1` schema and validation and the pure evaluator `stateAt` (`domain/scene.ts`), rendering in the sandboxed HTML clip host from `t` only (`render/scenePage.ts`), Code → 3D scene, read-only Scene inspector tab; `docs/v2/SCENE_FORMAT.md`. Existing goldens unchanged; preview, export and seek order pixel-identical in Chrome. |
+| P75 | — | Phase 2 step 2.2: GLB models in scene clips (`files` map of data: URLs, `model`, fit by `size`), animation as a property (object `animation`, `play` / `stop`, function rows; speed, repeat / once / pingpong, start offset, cross-fades from `t`) and node show/hide (`nodes`); the page loads models with the vendored GLTFLoader through its clip manifest and poses them with `mixer.setTime` per frame (no `update(delta)`); `domain/glb.ts`; Scene tab Add GLB model. P74 gaps: Scene sheet on phones, scenes in the picker's Code tab, no `volume` on scene clips. Existing goldens unchanged; Chrome parity with a real skinned GLB (Fox). |
 
 ## 10. Known unverified areas
 
@@ -182,7 +183,10 @@ These have unit tests but were never checked end to end on real devices or with 
   device emulation only.
 - **GLB / three.js export comparison** (P55, P57): no frame-by-frame comparison of preview vs exported MP4 for a code
   clip that loads a real GLB with animation. (P68 compared a GLB clip's export frames before and after the renderer
-  move, which proves no change, not preview-vs-MP4 equality.)
+  move, which proves no change, not preview-vs-MP4 equality.) For **scene clips** this is closed by P75: with a real
+  skinned, textured GLB (Khronos Fox) the Player's export-mode and preview-mode frames are pixel-identical in any
+  seek order. Code clips that animate a GLB with their own clock are still unverified (their determinism is the
+  clip author's).
 - **Live WebMCP client sessions** (P12 onwards, P62, P63): tools are tested by calling them directly; no long session
   with a real browser agent client has been recorded since P62.
 - **Local file server CORS / Private Network Access** (P62): `attach_asset_version(s)` and `import_storyboard` with
@@ -274,7 +278,7 @@ change, each merged on green CI) is **complete** (P65–P73):
 **Phase 2** (deterministic three.js `scene` clip, §7 of the design doc) started in P74. **Decision 5 is accepted**
 (2026-11-15, as recommended): a storyboard may mark a shot `render: "scene"` and use a `scene` asset type, both optional
 values within `dionysus/3.1`, no version bump; it is implemented in step 2.5. Phase 2 has its own step table (§7):
-2.1 scene type + schema + evaluator + rendering (P74), 2.2 GLB models and animation, 2.3 inspector editing, 2.4 agent
+2.1 scene type + schema + evaluator + rendering (P74), 2.2 GLB models and animation (P75), 2.3 inspector editing, 2.4 agent
 tools and AI rule, 2.5 storyboard mapping, 2.6 per-object sub-tracks; one small PR per step, each merged on green CI.
 
 - **2.1 done (P74):** `clipTypes/scene/` (core: video track, `asset: "media"`, no sound / source time / thumbnail;
@@ -289,8 +293,25 @@ tools and AI rule, 2.5 storyboard mapping, 2.6 per-object sub-tracks; one small 
   `UPDATE_SCENE_GOLDEN=1`), `ui/sceneClip.test.tsx`. Every existing golden unchanged. Tests that used `"scene"` as an
   unregistered id now use `"hologram"`. The render parity fixture does not include a scene clip on purpose (jsdom has
   no WebGL; the Chrome check in the PR covers it).
-- **Next: step 2.2 (P75)**, GLB models and animation (`mixer.setTime` from `t`). New clip types follow
-  `docs/v2/ADDING_CLIP_TYPES.md`; the scene format is `docs/v2/SCENE_FORMAT.md`.
+- **2.2 done (P75):** a scene's `files` map (GLB models as data: URLs in the scene asset's version) and model objects
+  (`model`, a number `size` fits the model, standing on y = 0). Animation is a property: object `animation` (from 0 s),
+  `play { clip, speed, loop, from, fade }` / `stop { fade }` and `animation` in function rows (fade = the event's `dur`);
+  `stateAt` gives each model the clips playing at `t` with unwrapped local time and weight (a fade keeps the previous
+  clip running with 1 − k). `nodes` (object, `nodes` call, rows) shows or hides parts by node name; it never tweens.
+  `domain/glb.ts` (`glbInfo`: clip names and lengths from the accessor `max`, node names) feeds validation (unknown
+  clip / node → warning; missing or broken file → warning, the shape is drawn) and the Scene tab.
+  `render/scenePage.ts` writes the files and `libs: ["three", "three-gltf"]` into the page's clip manifest only when
+  a model exists (shape-only scenes render exactly as before: 50/50 frames identical to `main` in Chrome), loads models in `init` (before the first frame, so export waits), clones their materials (opacity per
+  object; a model keeps its own colours) and poses each frame: `stopAllAction` (rest pose), every playing action
+  `reset()`, weight, time scale = local time, then `mixer.setTime(1)`. Scene tab: **Add GLB model**
+  (`addSceneModel` + `ui/sceneAsset.ts` `sceneVersion`, `cmd.addAssetVersion` with a label; one undo step) and each
+  model's clip list. P74 gaps fixed: `scene` tool first on the phone clip toolbar (sheet with the same panel), scene
+  assets in the picker's Code tab (`projectMediaList`), and `placementForAsset` gives `volume` only to the pre-registry
+  types or a type with sound. Tests: `domain/sceneModel.test.ts` (golden `__golden__/sceneModelState.json`, numbers
+  rounded to 1e-6, `UPDATE_SCENE_GOLDEN=1`), `ui/sceneModelUi.test.tsx`. Fixture GLB: `ui/cubeGlb.ts`
+  `makeAnimatedGlb()` (Bot / Body / Head / Arm; Wave, Spin, Bounce).
+- **Next: step 2.3 (P76)**, inspector editing (objects, events, custom-function args; one undo step per edit). New
+  clip types follow `docs/v2/ADDING_CLIP_TYPES.md`; the scene format is `docs/v2/SCENE_FORMAT.md`.
 
 ## 12. Working habits that avoid repeat mistakes
 

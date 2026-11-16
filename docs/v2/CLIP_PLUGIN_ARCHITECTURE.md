@@ -1,7 +1,8 @@
 # Clip type plugins — architecture
 
 **Status: Accepted** (proposed in P64, accepted 2026-11-15; Phase 1 started in P65 and is **done** since P73; Phase 2
-started in P74 after decision 5 was accepted, step table in [§7 Phase 2](#phase-2--deterministic-threejs-scene-clip)).
+started in P74 after decision 5 was accepted, step table in [§7 Phase 2](#phase-2--deterministic-threejs-scene-clip);
+steps 2.1 (P74) and 2.2 (P75) are done).
 Written against `main` at `36c37b14` (after P63). Decisions: see [§0](#0-decisions). Progress: see
 [§7 Phase 1](#phase-1--registry-with-zero-behaviour-change).
 
@@ -367,9 +368,10 @@ in `Placement.plugin.data`):
   "world": { "background": "#101018", "camera": { "fov": 40, "position": [0, 1.6, 6], "lookAt": [0, 1, 0] },
              "lights": [{ "type": "hemisphere", "intensity": 1.2 }, { "type": "directional", "position": [3, 5, 2] }] },
   "objects": [
-    { "id": "robot", "model": "robot.glb", "position": [0, 0, 0], "scale": 1,
+    { "id": "robot", "model": "robot.glb", "size": 1.6, "position": [0, 0, 0], "animation": "Idle",
       "functions": { "setState": { "params": { "state": { "type": "select", "options": ["idle", "wave", "walk"], "default": "idle" } },
-                                   "animation": { "idle": "Idle", "wave": "Wave", "walk": "Walk" } } } },
+                                   "states": { "param": "state", "table": { "idle": { "animation": "Idle" }, "wave": { "animation": "Wave" },
+                                                                            "walk": { "animation": { "clip": "Walk", "speed": 1.2 } } } } } } },
     { "id": "sign", "box": [2, 1, 0.1], "color": "#ffcc00", "position": [2, 1, -1] }
   ],
   "events": [
@@ -391,9 +393,13 @@ in `Placement.plugin.data`):
   object property folds the events with `at <= t`. A tween starts from the value the property has at its own `at`
   (computed the same way) and ends at its target at `at + dur`. No state is carried from the previous frame, so any
   `t` in any order gives the same frame.
-- **GLB animation.** Each object with a model has one `AnimationMixer`. The active clip and its local time are derived
-  from the latest `setState`/`play` event (`localT = t - event.at`, looped or clamped per clip) and applied with
-  `mixer.setTime(localT)`, never with `mixer.update(delta)`. Cross-fades, if any, are also computed from `t`.
+- **GLB animation** (done in P75). Each object with a model has one `AnimationMixer`. The active clip and its local time are derived
+  from the latest `play` / `stop` / function-row event (`localT = (t - event.at) × speed + from`, looped, ping-ponged or
+  clamped per clip) and applied with `mixer.setTime`, never with `mixer.update(delta)`: every action is reset, its time
+  scale is set to its local time and the mixer is set to 1 s, so each clip lands on its own time. Cross-fades (`fade`,
+  else the event's `dur`) are computed from `t` too: the clip before keeps playing with weight 1 − k. Model files live
+  in the document's `files` map (data: URLs) and reach the page through its clip manifest, as attached files of code
+  clips do (P55).
 - **Conflict rule.** For the same object and property, the event that started last (largest `at`, then array order)
   wins from its start; an earlier tween still running is cut at that moment. Different properties never conflict.
   `moveTo` and `position` are the same property; `lookAt` and `rotation` are the same property.
@@ -418,7 +424,7 @@ before the next starts. Existing clip types must not change in any step (their p
 | Step | PR content | Proof |
 |---|---|---|
 | 2.1 ✅ P74 | The **`scene` clip type** (`clipTypes/scene/` core, render, ui, following `ADDING_CLIP_TYPES.md`; `"scene"` added to `MediaKind`). **Document schema + validation** `domain/scene.ts` (`dionysus.scene/1`: world background / camera / lights; objects with primitive shapes and the base properties position, rotation, scale, visible, opacity, colour; declarative custom functions with typed params, `set` and `states`; events `{ at, obj, call, args, dur, ease }`; errors and warnings with JSON paths). **Pure evaluator** `stateAt(doc, t)` (stable sort, tween from the value at the event's start, last-started wins, lookAt, camera). **Rendering** in the sandboxed HTML clip host: the built-in page `render/scenePage.ts` (pinned three.js) gets `stateAt` for each frame as `ctx.inputs.scene` (`ClipMediaHost.sceneHost` / `sceneDoc`; export waits for the document). Code → **3D scene** adds a sample scene (`addSceneClip`, one undo step); read-only **Scene** inspector tab (objects, events, problems). Reference: [`SCENE_FORMAT.md`](SCENE_FORMAT.md). No WebMCP tools, AI rules or storyboard mapping yet (gen:ai unchanged). | `domain/scene.test.ts` (validation paths, set/tween/ease, conflict and tie rules, custom functions, lookAt, camera, invalid input skipped, seek in any order gives identical states, a `stateAt` golden of 151 frames); `ui/sceneClip.test.tsx` (caps, track check, save/load, renderer requests, loading and broken documents, page CSP and escaping, UI entry, scene placeholder, Scene tab, one undo step). Existing goldens (render, timeline, inspector, agent, placeholder, story mapping) unchanged. In the PR: Chrome check of the real Player: 50 frames rendered in export mode forward, in export mode shuffled, and in preview mode backwards are pixel-identical, and a real 720p MP4 export has no frame warnings. |
-| 2.2 P75 | **GLB models and animation:** model files embedded in the scene asset (a `files` map like HTML clip packages), the vendored GLTFLoader, one `AnimationMixer` per model driven by `mixer.setTime(localT)` from the latest `play` / state event (looped or clamped, cross-fades from `t`); custom functions gain `animation` (clip by param value) and child-node show/hide; missing models warn and draw a box. | Unit tests for the clip-time rules; Chrome pixel check preview vs export and seek order with a real animated GLB (closes the P55/P57 unverified area). |
+| 2.2 ✅ P75 | **GLB models and animation:** model files embedded in the scene asset (a `files` map like HTML clip packages; `model` names one, a number `size` fits it), the vendored GLTFLoader, one `AnimationMixer` per model driven by `mixer.setTime` from the latest `play` / `stop` / state event (repeat, once or pingpong, speed, start offset, cross-fades from `t`); object `animation` from 0 s; custom function rows gain `animation` (clip by param value) and `nodes` (child-node show/hide; also the `nodes` call and object `nodes`); missing or broken models warn and draw the shape. `domain/glb.ts` reads clip names, lengths and node names for validation and the Scene tab, which gains **Add GLB model** (a new scene version, one undo step). Also the P74 gaps: Scene on the phone clip toolbar (a sheet), scenes in the picker's Code tab, no `volume` on scene clips. | `domain/sceneModel.test.ts` (glbInfo, validation paths, clip time / speed / loop / fade rules, rows, nodes, seek order, addSceneModel, page manifest, a rounded `stateAt` golden of 241 frames) and `ui/sceneModelUi.test.tsx`. Existing goldens unchanged (the P74 scene golden too). In the PR: Chrome check with an animated test robot and the Khronos Fox sample (skinned, textured): 50 frames in export mode forward and shuffled and in preview mode backwards are pixel-identical and identical again in a second browser launch; a real 720p MP4 export has no frame warnings; shape-only scenes render pixel-identical to `main` (closes the P55/P57 unverified area for scene clips). |
 | 2.3 P76 | **Inspector editing:** objects (base properties), the event list (add, edit, delete, reorder; ease and duration), custom-function args; desktop tab and phone sheet; each edit is one undo step and writes a new asset version (or a per-use override in `Placement.plugin.data`, decision 2). | Panel tests, version / undo tests, 390 and 1440 screenshots, 44 px touch targets. |
 | 2.4 P77 | **Agent tools and rule** through `core.agent`: `list_scene_objects`, `add_scene_event`, `update_scene_event`, `remove_scene_event`, `set_scene_object` (validated with the scene validator, one undo step each) and one AI guide rule (event model and conflict rule); `get_timeline` scene fields. | Agent tests; `gen:ai` diff limited to the new tools and rule (intended). |
 | 2.5 P78 | **Storyboard** (decision 5): asset type `scene` and shot `render: "scene"` (optional values in 3.1); `core.story` for scene (Send uses the planned `durationSec`, Update, Sync); storyboard validator, `STORYBOARD_FORMAT.md` and the AI guide. | Storyboard tests; the story-mapping golden unchanged for existing slot types. |
