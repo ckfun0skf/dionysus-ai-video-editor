@@ -11,7 +11,8 @@ import { writeManifest } from "../domain/htmlClipPackage";
  * (the P38 inputs field of `dionysus:frame`), and the page applies it and renders. So a frame depends only on the
  * document and `t`.
  */
-export const SCENE_RUNTIME_JS = `import * as THREE from "three";
+/** P81a: the part shared with the Edit view page: renderer, world, lights, objects, models and poses (no frame loop). */
+export const SCENE_BUILD_JS = `import * as THREE from "three";
 const doc = JSON.parse(document.getElementById("dionysus-scene").textContent);
 const canvas = document.getElementById("c");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true, alpha: false });
@@ -111,7 +112,9 @@ function pose(n, anims) {
   n.mixer.setTime(1);
 }
 const D = Math.PI / 180;
-dionysus.clip({
+`;
+/** The frame part: draw the state the editor sends for each time, from the scene's camera. */
+const SCENE_CLIP_JS = `dionysus.clip({
   init: loadModels,
   render(t, ctx) {
     const s = ctx.inputs && ctx.inputs.scene;
@@ -144,6 +147,7 @@ dionysus.clip({
   },
 });
 `;
+export const SCENE_RUNTIME_JS = SCENE_BUILD_JS + SCENE_CLIP_JS;
 
 /**
  * The runtime page for one scene document (the HTML clip host adds the CSP, import map and time shim). P75: the

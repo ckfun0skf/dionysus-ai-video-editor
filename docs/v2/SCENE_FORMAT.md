@@ -139,7 +139,7 @@ has one `AnimationMixer`; every frame stops all actions (the rest pose), resets 
 one's weight and its time scale to its local time, and calls `mixer.setTime(1)`, never `mixer.update(delta)`. So a
 frame depends only on the document and `t`, in preview, export and any seek order.
 
-## Editing (P76, P77, P80)
+## Editing (P76, P77, P80, P81a)
 
 A scene clip has its own timeline editor: **Edit scene** in the clip's Scene tab or **Edit scene…** in its menu on
 desktop (it takes the timeline panel's place), the **Scene** tool on the phone (a full-screen sheet with the preview at
@@ -181,6 +181,28 @@ event to that object; it is refused, with the reason shown, when that object has
 hold there (camera events stay on the Scene track). The preview follows the drag; releasing stores it as one edit (one
 step of the editor's undo; since P80 nothing is stored until Save); Esc cancels. Arrow keys move a focused block or handle by one frame (Shift: ten).
 Dragging along the ruler scrubs the playhead.
+
+**Edit view (P81a).** The editor's toolbar switches the preview between **Camera view** (the shot as the clip renders
+and exports it; "Shot" on the phone) and **Edit view**: the same scene page, in a second sandboxed frame, in editor
+mode, with a free orbit camera (it starts a step back from the scene camera; **Reset view** returns there), a ground
+grid and move / rotate / scale gizmos. On desktop it is drawn over the program preview; on the phone it takes the
+mirrored preview's place and is taller. Click or tap an object to select it (empty space selects the scene). Mouse:
+drag to orbit, right-drag to pan, wheel to zoom. Touch: one finger on a gizmo handle drags it, elsewhere it orbits;
+two fingers pan and zoom; the handles are larger. A floating chip bar holds **Move / Rotate / Scale** (also W / E /
+R), the axis (**X / Y / Z / Free**), **Snap** (0.25 units, 15°, 0.1 scale steps), **Auto-key** and **Reset view**; a
+line at the top says where the next drag writes and shows the live values while dragging. A drag is one step of the
+editor's undo, and nothing is stored until Save. It writes in exactly one place:
+
+- the **selected event**, when it is on that object and sets the dragged property (`moveTo` / `position`, `rotation`,
+  `scale`): its end value. The Edit view then shows the scene at that event's end, so the object is drawn where the
+  drag puts it. Selecting such an event picks the matching gizmo;
+- else, with **Auto-key** on, a key that ends at the playhead: the event of that property that ends there is updated,
+  or a new tween is added from the end of the previous one (or from 0 s) to the playhead (an instant event at 0 s);
+- else the object's own start value (`position`, `rotation`, `scale`; a uniform scale is written as one number).
+
+Values are rounded to 1/1000 and Esc cancels a drag. The camera and lights are not objects in the Edit view yet
+(P81b). The view's page is built from the same scene as the clip's page (only the frame part differs) and is never used
+for export.
 
 ## Agent tools (P78)
 

@@ -92,9 +92,9 @@ required checks.
 1. `git fetch` and branch from the latest `origin/main` (e.g. `p66-short-name`).
 2. Implement with tests. Keep PRs small (MODULE_DESIGN §14 targets < 400 changed lines; feature PRs here are often
    larger, but split refactors).
-3. **`public/doc/tasks.json`:** add one entry per PR with the next free P-number: `{ "id": "P81-SHORT-NAME", "title":
+3. **`public/doc/tasks.json`:** add one entry per PR with the next free P-number: `{ "id": "P81B-SHORT-NAME", "title":
    "<what and why, one paragraph>", "status": "done", "progress": 100 }` appended after the latest entry (the latest is
-   `P80-SCENE-EDITOR-SAVE`; the next is **P81**). Bump `updatedAt`. Edit the file surgically (insert text); do not
+   `P81A-SCENE-EDIT-VIEW`; the next is **P81b**, then P82). Bump `updatedAt`. Edit the file surgically (insert text); do not
    re-serialise the whole JSON. `scripts/check-tasks-updated.mjs` fails a PR that changes `src/` without it. If an id
    is already taken, use the next number and say so in the PR.
 4. **AI guide rule:** append to `RULE_LIST` in `src/v2/domain/storyPrompt.ts` (append-only; numbers are positions;
@@ -113,7 +113,7 @@ required checks.
 6. Run `npm run gen:ai` after changing rules, tools or presets, and commit the regenerated files (tests fail if they are
    stale).
 7. `npx tsc -b && npx vitest run && npx vite build`.
-8. Commit in English; PR title `P81: …`; body says what, why, tests, and `Fixes #N` (or `Refs #N` if partial), plus
+8. Commit in English; PR title `P81b: …`; body says what, why, tests, and `Fixes #N` (or `Refs #N` if partial), plus
    what was not verified. Push, open the PR, wait for `build` on the head SHA. Do not merge.
 
 ## 7. UI conventions
@@ -141,10 +141,10 @@ required checks.
 | `docs/v2/DEPLOYMENT.md` | hosting, `DIONYSUS_SITE_URL`, base path |
 | `docs/v2/CLIP_PLUGIN_ARCHITECTURE.md` | clip type plugins: accepted design, decisions, Phase 1 (done) and the Phase 2 step table |
 | `docs/v2/ADDING_CLIP_TYPES.md` | adding a clip type step by step, with a worked example (P73) |
-| `docs/v2/SCENE_FORMAT.md` | 3D scene clips: `dionysus.scene/1` objects, events, custom functions, rendering (P74), GLB models and animation (P75), the scene editor (P76, P77; Save / Cancel, drafts and the phone toolbar P80), agent tools (P78; saving session, batch and GLB URLs P79), storyboards (P79) |
+| `docs/v2/SCENE_FORMAT.md` | 3D scene clips: `dionysus.scene/1` objects, events, custom functions, rendering (P74), GLB models and animation (P75), the scene editor (P76, P77; Save / Cancel, drafts and the phone toolbar P80; Edit view and gizmos P81a), agent tools (P78; saving session, batch and GLB URLs P79), storyboards (P79) |
 | `public/doc/tasks.json` | every task and its status |
 
-## 9. Recent history (P47–P80)
+## 9. Recent history (P47–P81a)
 
 | Id | PR | One line |
 |---|---|---|
@@ -181,7 +181,8 @@ required checks.
 | P77 | #329 | Phase 2 step 2.4: drag and resize retiming in the scene editor (`domain/sceneRetime.ts`; move / start / end handles, mouse, pen and touch with 44 px handles; snapping to the playhead, other events, clip in / out and whole frames with a toggle and Alt; clamped to the clip range; drop on another object's track when the call fits; live preview via `Player.previewSceneDoc`; one undo step per drag under the version-save rules; Esc cancels), ruler scrubbing synced with the player, arrow-key nudges; Esc in fields reverts first; desktop editor ≥ 440 px. Existing goldens unchanged. |
 | P78 | #330 | Phase 2 step 2.5: scene agent tools and AI guide RULE 79 (`scene-clips`), contributed through the scene core's `core.agent` (the first type that adds tools): `create_scene_clip`, `get_scene`, `list_scene_objects`, `add_scene_object`, `set_scene_object`, `remove_scene_object`, `add_scene_event`, `update_scene_event`, `retime_scene_event`, `remove_scene_event`, `set_scene_world`. Pure ops in `domain/sceneAgent.ts` (refuse edits that add validation errors; errors list valid objects, calls and args); runner `clipTypes/scene/agent.ts` loaded with `import()` (new `clipTypes/agent` layer); `ClipAgentApi.blobs`; one undo step per edit under the version-save rules (`mode` new / replace). `gen:ai` diff = the new tools and rule only; agent golden: only tool / rule hashes. |
 | P79 | #331 | Phase 2 step 2.6, the last of Phase 2: storyboard asset type `scene` and shot `render: "scene"` (optional values in 3.1, decision 5): validator (inline `scene` checked with the scene validator), Send / Update / Re-lay place scene clips or a placeholder of intended type `scene` (`core.story.shotRender`), Sync maps main-track scene clips to render scene shots, `attach_asset_version(s)` take scenes, `import_storyboard` / the Import screen store inline scenes in the import's undo step, Box icon and **3D scene** render in the storyboard UI. P78 gaps: agent edits in mode `new` coalesce into one session version (`newVersion: true` starts another), batch tool `apply_scene_edits` (one undo step, one version, all or nothing), GLB from a URL in `add_scene_object` / `set_scene_object`. Rule 9 and rule 79 texts extended (no renumbering). |
-| P80 | — | Scene editor Save / Cancel and phone layout (owner feedback after Phase 2): the editor edits its own copy with its own undo / redo; Save asks Replace current or Save as new version (one project undo step); Cancel / X / Esc ask before discarding unsaved changes; unsaved work is autosaved as a device draft (IndexedDB, per project and clip, with its base version) and offered back on the next open (a draft from another version saves as a new version); an outside change while editing shows a banner; phone: a bottom context toolbar for the selection whose buttons open form sections in sheets, header Save. Existing goldens unchanged. |
+| P80 | #332 | Scene editor Save / Cancel and phone layout (owner feedback after Phase 2): the editor edits its own copy with its own undo / redo; Save asks Replace current or Save as new version (one project undo step); Cancel / X / Esc ask before discarding unsaved changes; unsaved work is autosaved as a device draft (IndexedDB, per project and clip, with its base version) and offered back on the next open (a draft from another version saves as a new version); an outside change while editing shows a banner; phone: a bottom context toolbar for the selection whose buttons open form sections in sheets, header Save. Existing goldens unchanged. |
+| P81a | — | Scene editor Edit view (owner feedback item 4, first half): a Camera view / Edit view toggle for the preview; the Edit view is a second sandboxed instance of the scene page in editor mode (orbit camera, grid, TransformControls move / rotate / scale, tap to pick, live drag values posted back); a drag writes the selected move / rotate / scale event's end value, or with Auto-key a key ending at the playhead, or the object's start value, as one step of the editor's undo; touch: larger handles, a floating chip bar (mode, axis X / Y / Z / Free, Snap, Auto-key, Reset view), one finger drags a handle or orbits, two fingers pan and zoom. OrbitControls / TransformControls vendored as editor-only libraries. Existing goldens unchanged. |
 
 ## 10. Known unverified areas
 
@@ -392,7 +393,8 @@ storyboard to 2.6 (design doc §7, the note under the table, and decision 6).
   (a new built-in would renumber 79). Tests: `engine/storyScene.test.ts`, `ui/agent/sceneP79.test.ts`.
 
 - **Scene editor follow-ups (owner feedback, 2026-11-16; design doc note under the Phase 2 table).** P80 Save /
-  Cancel and the phone layout (done), P81 preview gizmos and the camera as an object (next), P82 Script objects.
+  Cancel and the phone layout (done), P81a the Edit view with gizmos (done), P81b the camera and lights as objects in
+  the Edit view (next; lights only selectable / movable), P82 Script objects (raw three.js code plus templates).
 - **P80 done:** `ui/SceneEditor.tsx` keeps a `Work` copy (`doc`, `saved`, its own `past` / `future`, at most 200
   steps, base blob key and version); `edit()` only changes it, the preview gets the unsaved scene through
   `onPreview` (`Player.previewSceneDoc`), and **Save** (`ChoiceDialog`: `data-choice="replace" | "new"`, the last mode
@@ -405,6 +407,17 @@ storyboard to 2.6 (design doc §7, the note under the table, and decision 6).
   with `Part` sections (`SceneForm` / `ObjectForm` / `EventForm` take `part`) in `Sheet`s. Agent tools still save
   directly (P79 session). Tests: `ui/sceneEditorSave.test.tsx`; the P76 / P77 editor tests now check the editor's undo
   and Save instead of a version per edit.
+- **P81a done:** the preview toggle (`view` state; Camera view = the player, Edit view = `ui/SceneEditView.tsx`,
+  portalled into the preview's `.v2-canvas-wrap` through the `viewHost` prop on desktop, in place of the `Mirror` on
+  the phone). The page is `render/sceneEditPage.ts`: `SCENE_BUILD_JS` (split out of `SCENE_RUNTIME_JS`, which is
+  byte-identical) + `SCENE_EDIT_JS` (OrbitControls, GridHelper, TransformControls, BoxHelper outline, raycast pick,
+  render on demand: the HTML runtime's virtual clock is never advanced there). Messages `scene-edit:*` (see the
+  file); the view rebuilds the page only when `scenePageKey` changes. Drags: `domain/sceneGizmo.ts` (`gizmoTarget`,
+  `applyGizmo`, `gizmoViewTime`, `gizmoTargetLabel`); the end of a drag is one `edit()`. Libraries:
+  `three-orbit` and `three-transform` in `render/htmlLibs.ts` with `editorOnly: true` (left out of
+  `CLIP_HTML_LIBRARIES` / `CLIP_LIBRARIES`, the picker and detection). Tests: `domain/sceneGizmo.test.ts`,
+  `render/sceneEditPage.test.ts`, `ui/sceneEditView.test.tsx` (the page's messages played by hand; the page itself
+  was checked in Chrome).
 
 **Next phase: Phase 3, third-party clip types** (design doc §7 Phase 3): a plugin package (`dionysus.cliptype/1`
 manifest + sandboxed renderer page speaking the HTML clip frame protocol), host-validated tool calls forwarded to the
@@ -426,6 +439,9 @@ follow `docs/v2/ADDING_CLIP_TYPES.md`; the scene format is `docs/v2/SCENE_FORMAT
 - `get_timeline` still has no scene fields (`get_scene` covers them).
 - Code clips that animate a GLB with their own clock are still unverified for preview vs export (scene clips are
   covered since P75).
+- The Edit view's three.js page is only exercised in Chrome (screenshots and a scripted pick and drag in the PR), not
+  in unit tests (jsdom has no WebGL). Rotations read back from the gizmo are Euler XYZ, so a value such as 360° can
+  come back as an equivalent angle (0°) after a rotate drag.
 - Scene drafts are per device and browser (IndexedDB), not synced; a draft for a clip that was deleted stays until
   that project and clip id are opened again. The agent tools don't see the editor's unsaved work.
 - A new built-in AI rule takes number 79 and moves `scene-clips` to 80 (see §6.4).

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { HTML_LIBRARIES } from "../render";
+import { CLIP_HTML_LIBRARIES as HTML_LIBRARIES } from "../render";
 import { Sheet } from "./Sheet";
 
 export const filterLibraries = (q: string) => {

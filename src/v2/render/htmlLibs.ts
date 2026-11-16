@@ -18,6 +18,11 @@ export interface HtmlLibrary {
   requires?: string[];
   /** Old CDN URLs that should resolve to this pinned copy. */
   legacy?: RegExp;
+  /**
+   * P81a: used only by the editor's own pages (the scene editor's Edit view), never offered to clips: not in the
+   * library picker, AI prompts or lint (`CLIP_LIBRARIES`), and not detected from a clip's imports.
+   */
+  editorOnly?: boolean;
 }
 
 export const HTML_LIBRARIES: readonly HtmlLibrary[] = [
@@ -34,7 +39,21 @@ export const HTML_LIBRARIES: readonly HtmlLibrary[] = [
     integrity: "sha384-CJm0vO/DGUkk4fKdYWNiP3C2QMSSknk2JIH62UKZbdsg8raAjWLjXd7c5SRD+brF",
     license: "vendor/three-LICENSE.txt", requires: ["three"],
   },
+  {
+    id: "three-orbit", name: "three.js OrbitControls", version: "0.160.0", specifier: "three/addons/controls/OrbitControls.js",
+    path: "vendor/three-orbitcontrols-0.160.0.min.js",
+    integrity: "sha384-D6Ehm3+hurK4RNnZn7TjHzbLjpbh5hOLORy/oy2ceBH7PR7vB0LBpXaN4EnmTzo+",
+    license: "vendor/three-LICENSE.txt", requires: ["three"], editorOnly: true,
+  },
+  {
+    id: "three-transform", name: "three.js TransformControls", version: "0.160.0", specifier: "three/addons/controls/TransformControls.js",
+    path: "vendor/three-transformcontrols-0.160.0.min.js",
+    integrity: "sha384-eTFVsxJY1p7fgdmLfbs9JB68HV0aNf4Rs2Xwn7OWVC6kYdALETgIFi/4VymLpfMe",
+    license: "vendor/three-LICENSE.txt", requires: ["three"], editorOnly: true,
+  },
 ];
+/** The libraries clips may use (the editor-only ones left out). */
+export const CLIP_HTML_LIBRARIES: readonly HtmlLibrary[] = HTML_LIBRARIES.filter((l) => !l.editorOnly);
 
 export const libById = (id: string) => HTML_LIBRARIES.find((l) => l.id === id);
 
@@ -47,7 +66,7 @@ const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /** Libraries a page uses when it has no explicit selection: any registry specifier it imports (or legacy URL). */
 export function detectLibraries(html: string): string[] {
-  return HTML_LIBRARIES.filter((l) => new RegExp(`(?:from|import)\\s*\\(?\\s*["']${esc(l.specifier)}["']`).test(html) || (l.legacy && new RegExp(l.legacy.source).test(html))).map((l) => l.id);
+  return CLIP_HTML_LIBRARIES.filter((l) => new RegExp(`(?:from|import)\\s*\\(?\\s*["']${esc(l.specifier)}["']`).test(html) || (l.legacy && new RegExp(l.legacy.source).test(html))).map((l) => l.id);
 }
 
 /**
@@ -65,7 +84,7 @@ export function writeClipConfig(html: string, cfg: ClipConfig): string {
 }
 
 /** The registry's public part, for validation and AI prompts (domain code never sees vendor paths). */
-export const CLIP_LIBRARIES: readonly ClipLibrary[] = HTML_LIBRARIES.map(({ id, name, version, specifier, legacy }) => ({ id, name, version, specifier, legacy }));
+export const CLIP_LIBRARIES: readonly ClipLibrary[] = CLIP_HTML_LIBRARIES.map(({ id, name, version, specifier, legacy }) => ({ id, name, version, specifier, legacy }));
 
 /** Selected libraries: the explicit selection, else whatever the page imports. */
 export const selectedLibraries = (html: string): HtmlLibrary[] => {

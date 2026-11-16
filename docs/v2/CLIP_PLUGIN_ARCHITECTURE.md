@@ -459,8 +459,14 @@ Save / Cancel instead of saving every edit: the editor keeps its own copy with i
 current or Save as new version (one project undo step), closing with unsaved changes asks first, unsaved work is a
 device draft offered back next time, an outside change while editing shows a banner; and the phone layout follows the
 main timeline (a bottom toolbar for the selection whose buttons open form sections in sheets). This replaces P76's
-"one undo step and one stored version per gesture". **P81** (next): 3D controls in the preview (move / rotate /
-scale gizmos) and the camera as an object with an edit view. **P82**: Script objects.
+"one undo step and one stored version per gesture". **P81** is split in two (owner-accepted): **P81a** (done) the
+preview's Camera view / Edit view toggle: the Edit view is a second instance of the scene page in editor mode (orbit
+camera, grid, TransformControls, pick by tap; drag values are posted back), a drag writes the selected move / rotate /
+scale event's end value, or with Auto-key a key ending at the playhead, or the object's start value, as one step of the
+editor's undo (`domain/sceneGizmo.ts`); touch gets larger handles and a floating chip bar. OrbitControls and
+TransformControls are vendored as editor-only libraries (not offered to clips). **P81b** (next): the camera and lights
+as selectable objects with helpers in the Edit view (lights selectable and movable only, no light animation).
+**P82**: Script objects (raw three.js code, with templates as starting points).
 
 ### Phase 3 — third-party clip types
 
