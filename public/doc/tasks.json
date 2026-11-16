@@ -3294,6 +3294,12 @@
           "title": "Clip type plugins Phase 1 step 1.3, first half (1.3a, no behaviour change): render/clipRenderers.ts discovers clipTypes/*/render.ts (ClipRenderer { id, draw(host) }, ClipDrawHost with the player's paint/blit, clipRendererFor by variant, CLIP_RENDERER_PROBLEMS); text, placeholder (P35 slate / black in export) and blank (P36) now draw through clipTypes/<id>/render.ts in preview and export (renderAt) alike. Placeholder outranks blank when both flags are set (as the player drew it). Architecture test: clipTypes/<id>/render.ts is render-layer code. New render/renderParity.test.ts hashes every 2D-canvas call for a fixture project covering every clip type, masks, blend, fades, keyframes, chroma key, hidden layer, main/overlay/all effects, crossfade and push transitions, word-highlight and word-pop captions and a burned-in subtitle, in preview and export at 21 times, against a golden recorded on the pre-P67 code. Html, video, image and audio rendering move in the second half (1.3b).",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P68-CLIP-RENDERERS-MEDIA",
+          "title": "Clip type plugins Phase 1 step 1.3b (no behaviour change): html, video, image and audio now render through clipTypes/<id>/render.ts with a stateful frame(host) (ClipRenderer has exactly one of draw / frame), called every frame for a clip with an asset version on a visible track, with or without a canvas. ClipFrameHost adds the asset version, the per-frame state (live, loads, stalled, missing, holding, run; replaces the old draw() locals) and ClipMediaHost, through which the Player lends its pools (blob URLs, media elements, gains/audio fx/spatial stages, posters, HTML clip iframes, manifests, param overrides, computed inputs, WebCodecs export frames). The shared element path (URL, pool, volume, scrub/play/drift correction, export seeks, poster, picture) moved verbatim to render/mediaClip.ts; video keeps its export WebCodecs branch; an unregistered clipType uses clipTypes/unknown/render.ts (today's element path, until step 1.8). The render parity fixture gained an audio clip, a reversed video overlay and a three.js code clip with an embedded .glb, and the jsdom parity test now stubs media elements as loaded so the golden (re-recorded on the pre-P68 code) covers image/video drawing and element sync; it is identical after the move.",
+          "status": "done",
+          "progress": 100
         }
       ]
     }

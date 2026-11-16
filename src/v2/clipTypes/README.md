@@ -2,11 +2,11 @@
 
 One folder per clip type. Design, decisions and the phased plan: `docs/v2/CLIP_PLUGIN_ARCHITECTURE.md`.
 
-**Status (P67, Phase 1 step 1.3a):** the domain predicates (`trackKindFor`, `isStill`, `canChromaKey`, `hasSound`,
-`canSetRange`, `slipKind`, …) and the export audio plan read this registry (P66). Text, placeholder and blank clips
-draw through their `render.ts` (P67), in preview and export alike. Video, image, audio and html still draw inline in
-`render/player.ts` (step 1.3b); timeline, inspector, storyboard and agent tools still use the `clipType` checks
-listed in §2 of the design doc (steps 1.4–1.8).
+**Status (P68, Phase 1 step 1.3b):** the domain predicates (`trackKindFor`, `isStill`, `canChromaKey`, `hasSound`,
+`canSetRange`, `slipKind`, …) and the export audio plan read this registry (P66). Every drawn type renders through
+its `render.ts`, in preview and export alike: text, placeholder and blank (P67), html, video, image, audio and the
+unknown fallback (P68). Timeline, inspector, storyboard and agent tools still use the `clipType` checks listed in §2
+of the design doc (steps 1.4–1.8).
 
 ```
 clipTypes/
@@ -16,8 +16,11 @@ clipTypes/
   load.ts       registers discovered modules, collects problems
   index.ts      import.meta.glob("./*/core.ts"), CLIP_TYPES, CLIP_TYPE_PROBLEMS, variantOf(p), clipTypeOf(p)
   <id>/core.ts  video, image, audio, text, html, effect, placeholder, blank, unknown
-  <id>/render.ts  text, placeholder, blank (P67): default export { id, draw(host) }; discovered by
-                  src/v2/render/clipRenderers.ts. Render-layer code: canvas and render helpers allowed.
+  <id>/render.ts  text, placeholder, blank (P67): default export { id, draw(host) } (stateless, canvas only);
+                  html, video, image, audio, unknown (P68): { id, frame(host) } (stateful: every frame for a visible
+                  clip with an asset version, via the Player's pools in host.media; shared element path in
+                  render/mediaClip.ts). Discovered by src/v2/render/clipRenderers.ts. Render-layer code: canvas and
+                  render helpers allowed.
 ```
 
 ## Rules
