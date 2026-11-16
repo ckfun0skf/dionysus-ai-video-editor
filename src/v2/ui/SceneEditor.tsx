@@ -12,6 +12,9 @@ import type { BlobStore } from "../ports";
 import { readAttachedFiles } from "./CodeEditor";
 import { Ic } from "./Icon";
 import { cachedSceneDoc, rememberSceneDoc, sceneVersion } from "./sceneAsset";
+import { sceneDraftKey, sceneDrafts, type SceneDraft, type SceneDraftStore } from "./sceneDrafts";
+import { Sheet } from "./Sheet";
+import { ConfirmDialog } from "./Timeline";
 
 /** What the side panel edits: the scene (world, camera, lights), one object, or one event (by index). */
 export type SceneSel = { kind: "scene" } | { kind: "object"; id: string } | { kind: "event"; index: number };
@@ -36,6 +39,8 @@ export interface SceneEditorProps {
   mirror?: () => HTMLCanvasElement | null | undefined;
   /** Start with this selection (tests, deep links). */
   initialSel?: SceneSel;
+  /** P80: where unsaved drafts are kept (default: this device's IndexedDB). */
+  drafts?: SceneDraftStore;
 }
 
 const LANE = 48;
@@ -69,21 +74,32 @@ interface Draft { doc: SceneDoc; index: number; edge: RetimeEdge; at: number; du
  */
 export function SceneEditor(props: SceneEditorProps) {
   const { engine, project, placement, blobs, mobile, time, playing, onSeek, onTogglePlay, onClose, onPrime, onPreview, mirror } = props;
+  const drafts = props.drafts ?? sceneDrafts();
   const version = versionOfPlacement(project, placement);
   const blobKey = version?.media.blobKey;
+  const asset = project.assets[placement.source.assetId];
   const [loaded, setLoaded] = useState<{ key: string; doc?: SceneDoc; error?: string }>();
   const [sel, setSel] = useState<SceneSel>(props.initialSel ?? { kind: "scene" });
-  const [mode, setMode] = useState<clipVersion.VersionSaveMode>(() => clipVersion.versionSaveModeOf(project));
   const [note, setNote] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState(false);
   const [pps, setPps] = useState(mobile ? 64 : 96);
-  const session = useRef<string | undefined>(undefined);
-  const queue = useRef<Promise<void>>(Promise.resolve());
+  /** P80: which dialog is open: the Save choice, the discard confirmation, or the draft restore prompt. */
+  const [dialog, setDialog] = useState<"save" | "discard" | { restore: SceneDraft }>();
+  /** P80 (phone): the form section open in the bottom sheet. */
+  const [part, setPart] = useState<Part>();
   const fileInput = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const selKey = sel.kind === "event" ? `e${sel.index}` : sel.kind === "object" ? `o${sel.id}` : "s";
   useEffect(() => { if (panelRef.current) panelRef.current.scrollTop = 0; }, [selKey]);
+  // P80 (phone): a new selection keeps a matching sheet open (e.g. Add event → the new event's Timing), else closes it.
+  useEffect(() => {
+    setPart((x) => {
+      if (!x) return x;
+      const ok: Part[] = sel.kind === "event" ? ["timing", "args"] : sel.kind === "object" ? ["props", "model", "addEvent"] : ["scene", "camera", "lights", "add"];
+      return ok.includes(x) ? x : sel.kind === "event" ? "timing" : sel.kind === "object" ? "props" : undefined;
+    });
+  }, [selKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!blobKey || cachedSceneDoc(blobKey)) return;
@@ -95,9 +111,45 @@ export function SceneEditor(props: SceneEditorProps) {
     }, () => { if (live) setLoaded({ key: blobKey, error: "The scene file could not be loaded." }); });
     return () => { live = false; };
   }, [blobKey, blobs]);
-  const doc = cachedSceneDoc(blobKey) ?? (loaded && loaded.key === blobKey ? loaded.doc : undefined);
+  /** The scene the clip shows now (stored). */
+  const stored = cachedSceneDoc(blobKey) ?? (loaded && loaded.key === blobKey ? loaded.doc : undefined);
+
+  // P80: the editor works on its own copy of the scene with its own undo / redo; nothing reaches the project until
+  // Save (one undo step there). `saved` is the scene as last saved (or loaded), so `dirty` means unsaved changes.
+  const [work, setWork] = useState<Work>();
+  // `put` is the only writer, so the ref always holds the newest work even when React renders an older state first
+  // (a save's project update renders synchronously before the editor's own update).
+  const workRef = useRef(work);
+  const put = (w: Work | undefined) => { workRef.current = w; setWork(w); };
+  /** Blob keys this editor saved (so the clip moving to them is not a change from outside). */
+  const ours = useRef(new Set<string>());
+  const [draftChecked, setDraftChecked] = useState(false);
+  const dkey = sceneDraftKey(project.id, placement.id);
+  useEffect(() => {
+    if (!stored || !blobKey || !version) return;
+    const w = workRef.current;
+    if (!w) {
+      put({ doc: stored, saved: stored, past: [], future: [], baseKey: blobKey, baseVersionId: version.id });
+      void drafts.get(dkey).then((d) => {
+        if (d && JSON.stringify(d.doc) !== JSON.stringify(stored)) setDialog({ restore: d });
+        else { if (d) void drafts.delete(dkey); setDraftChecked(true); }
+      }, () => setDraftChecked(true));
+      return;
+    }
+    if (w.baseKey === blobKey) return;
+    if (ours.current.has(blobKey)) { put({ ...w, baseKey: blobKey, baseVersionId: version.id }); return; }
+    // The clip shows another scene now (an AI agent, the version picker, a project undo): follow it when nothing is
+    // unsaved, else keep the work and say so (Save can then only add a new version).
+    if (w.doc === w.saved) put({ doc: stored, saved: stored, past: [], future: [], baseKey: blobKey, baseVersionId: version.id });
+    else put({ ...w, outside: true });
+  }, [stored, blobKey, version?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const doc = work?.doc;
+  const dirty = !!work && work.doc !== work.saved;
+  /** Save can't overwrite: the draft was made from another version, or the scene changed outside the editor. */
+  const newOnly = !!work && (work.outside || work.restoredFrom !== undefined);
   const issues = useMemo(() => (doc ? validateScene(doc) : []), [doc]);
-  // P77: while a block is dragged the tracks draw the drag's result; the forms keep showing the stored scene.
+  // P77: while a block is dragged the tracks draw the drag's result; the forms keep showing the editor's scene.
   const [snapOn, setSnapOn] = useState(true);
   const [draft, setDraft] = useState<Draft>();
   const drag = useRef<Drag | undefined>(undefined);
@@ -106,6 +158,34 @@ export function SceneEditor(props: SceneEditorProps) {
   useEffect(() => () => drag.current?.stop(false), []);
   const viewDoc = draft?.doc ?? doc;
   const tracks = useMemo(() => (viewDoc ? sceneTracks(viewDoc, 46 / pps) : []), [viewDoc, pps]);
+  /** What the preview should show for the clip's scene: the unsaved work, or the stored scene (`undefined`). */
+  const shownDoc = () => { const w = workRef.current; return w && w.doc !== w.saved ? w.doc : undefined; };
+  useEffect(() => {
+    if (!blobKey || !dirty) return;
+    preview.current?.(blobKey, doc);
+    return () => preview.current?.(blobKey, undefined);
+  }, [blobKey, doc, dirty]);
+
+  // P80: autosave unsaved work as a draft on this device (debounced, and at once when the page is hidden).
+  const flush = useRef<() => void>(() => undefined);
+  useEffect(() => {
+    if (!draftChecked || !work || !version) return;
+    if (!dirty) { void drafts.delete(dkey).catch(() => undefined); flush.current = () => undefined; return; }
+    const rec: SceneDraft = { key: dkey, projectId: project.id, clipId: placement.id, assetId: placement.source.assetId,
+      baseVersionId: work.restoredFrom?.versionId ?? work.baseVersionId, baseBlobKey: work.restoredFrom?.blobKey ?? work.baseKey, doc: work.doc, savedAt: new Date().toISOString() };
+    let done = false;
+    const save = () => { if (done) return; done = true; void drafts.put(rec).catch(() => setNote("Couldn't keep a draft on this device (storage full?). Save to keep your changes.")); };
+    flush.current = save;
+    const t = setTimeout(save, DRAFT_DELAY_MS);
+    return () => clearTimeout(t);
+  }, [work, draftChecked]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const now = () => flush.current();
+    const vis = () => { if (document.visibilityState === "hidden") now(); };
+    window.addEventListener("pagehide", now);
+    document.addEventListener("visibilitychange", vis);
+    return () => { window.removeEventListener("pagehide", now); document.removeEventListener("visibilitychange", vis); now(); };
+  }, []);
 
   // Scene-local time of the playhead and the clip's range on the scene's clock.
   const speed = placement.speed ?? 1;
@@ -119,34 +199,65 @@ export function SceneEditor(props: SceneEditorProps) {
     onSeek(Math.round(Math.min(placement.startTicks + placement.durationTicks - 1, Math.max(placement.startTicks, t))));
   };
 
-  /** One gesture: apply `fn` to the scene the clip shows now, store it, dispatch one undo step. */
-  const edit = (label: string, fn: (d: SceneDoc) => { doc: SceneDoc; sel?: SceneSel; note?: string } | SceneDoc) => {
-    queue.current = queue.current.then(async () => {
-      const p = engine.getState().project;
-      const pl = p.compositions[p.rootCompositionId] ? findClip(p, placement.id) : undefined;
-      const v = pl ? versionOfPlacement(p, pl) : undefined;
-      const asset = pl ? p.assets[pl.source.assetId] : undefined;
-      const cur = cachedSceneDoc(v?.media.blobKey);
-      if (!pl || !v || !asset || !cur) return;
-      const out = fn(cur);
-      const r = "format" in out ? { doc: out as SceneDoc } : out;
-      if (r.doc === cur) { if (r.note) setNote(r.note); return; }
-      setBusy(true);
-      try {
-        const next = await sceneVersion(blobs, asset, r.doc);
-        onPrime?.(next.media.blobKey, r.doc);
-        const own = mode === "new" && session.current === v.id;
-        const m: clipVersion.VersionSaveMode = mode === "replace" || own ? "replace" : "new";
-        if (engine.dispatch(cmd.addAssetVersion(asset.id, next, pl.id, { mode: m, label: `Scene: ${label}`, remember: !own }))) {
-          if (m === "new") session.current = next.id;
-          if (r.sel) setSel(r.sel);
-          setNote(r.note);
-        }
-      } catch (e) { setNote(`Couldn't save the edit: ${e instanceof Error ? e.message : "failed"}`); }
-      finally { setBusy(false); }
-    });
-    return queue.current;
+  /** One edit of the editor's scene: one step of the editor's undo (nothing is stored until Save). */
+  const edit: Edit = (label, fn) => {
+    const w = workRef.current;
+    if (!w) return Promise.resolve();
+    const out = fn(w.doc);
+    const r = "format" in out ? { doc: out as SceneDoc } : out;
+    if (r.doc === w.doc) { if (r.note) setNote(r.note); return Promise.resolve(); }
+    put({ ...w, doc: r.doc, past: [...w.past, { doc: w.doc, label }].slice(-MAX_UNDO), future: [] });
+    if (r.sel) setSel(r.sel);
+    setNote(r.note);
+    return Promise.resolve();
   };
+  const undo = () => {
+    const w = workRef.current, last = w?.past.at(-1);
+    if (!w || !last) return;
+    put({ ...w, doc: last.doc, past: w.past.slice(0, -1), future: [{ doc: w.doc, label: last.label }, ...w.future] });
+    setNote(`Undid ${last.label}.`);
+  };
+  const redo = () => {
+    const w = workRef.current, next = w?.future[0];
+    if (!w || !next) return;
+    put({ ...w, doc: next.doc, past: [...w.past, { doc: w.doc, label: next.label }], future: w.future.slice(1) });
+    setNote(`Redid ${next.label}.`);
+  };
+
+  /** P80: Save: store the editor's scene and point the clip at it, ONE project undo step. */
+  const save = async (mode: clipVersion.VersionSaveMode) => {
+    const w = workRef.current;
+    const p = engine.getState().project;
+    const pl = findClip(p, placement.id);
+    const a = pl ? p.assets[pl.source.assetId] : undefined;
+    if (!w || !pl || !a) return;
+    const m: clipVersion.VersionSaveMode = newOnly ? "new" : mode;
+    setBusy(true);
+    try {
+      const next = await sceneVersion(blobs, a, w.doc);
+      onPrime?.(next.media.blobKey, w.doc);
+      ours.current.add(next.media.blobKey);
+      if (!engine.dispatch(cmd.addAssetVersion(a.id, next, pl.id, { mode: m, label: m === "replace" ? "Scene: replace current version" : "Scene: save as new version", remember: true }))) { setNote("The scene could not be saved."); return; }
+      const after = engine.getState().project, v = versionOfPlacement(after, findClip(after, placement.id)!);
+      put({ ...w, saved: w.doc, baseKey: next.media.blobKey, baseVersionId: v?.id ?? next.id, outside: undefined, restoredFrom: undefined });
+      void drafts.delete(dkey).catch(() => undefined);
+      const n = after.assets[a.id]?.versions.findIndex((x) => x.id === v?.id) ?? -1;
+      setNote(m === "replace" ? `Saved: replaced v${n + 1}.` : `Saved as v${n + 1}.`);
+    } catch (e) { setNote(`Couldn't save: ${e instanceof Error ? e.message : "failed"}`); }
+    finally { setBusy(false); }
+  };
+  /** Close (X, Cancel, Esc): asks first when there are unsaved changes. */
+  const requestClose = () => { if (drag.current) return; if (dirty) setDialog("discard"); else onClose(); };
+  const discard = () => { flush.current = () => undefined; void drafts.delete(dkey).catch(() => undefined); setDialog(undefined); onClose(); };
+  const restore = (d: SceneDraft) => {
+    const w = workRef.current;
+    setDialog(undefined); setDraftChecked(true);
+    if (!w) return;
+    const same = d.baseBlobKey === w.baseKey;
+    put({ ...w, doc: d.doc, past: [{ doc: w.doc, label: "restore draft" }], future: [], ...(same ? {} : { restoredFrom: { versionId: d.baseVersionId, blobKey: d.baseBlobKey } }) });
+    setNote(same ? "Draft restored. Save to keep it." : "Draft restored. It was made from another version, so Save adds a new version.");
+  };
+  const dropDraft = () => { setDialog(undefined); setDraftChecked(true); void drafts.delete(dkey).catch(() => undefined); };
 
   const addModel = async (files: FileList | null) => {
     if (!files?.length) return;
@@ -157,23 +268,26 @@ export function SceneEditor(props: SceneEditorProps) {
     await edit("add 3D model", (d) => { const r = addSceneModel(d, name, data); return { doc: r.doc, sel: { kind: "object", id: r.id }, note: [`Added “${r.id}” (${name}).`, ...notes].join(" ") }; });
   };
 
-  const versions = project.assets[placement.source.assetId]?.versions ?? [];
+  const versions = asset?.versions ?? [];
   const vIndex = version ? versions.findIndex((x) => x.id === version.id) + 1 : 0;
   const errors = issues.filter((i) => i.level === "error").length;
   const header = (
     <header className="v2-sed-head">
-      <button type="button" className="v2-icon v2-sed-close" aria-label={mobile ? "Close scene editor" : "Done"} title="Close the scene editor (Esc)" onClick={onClose}><Ic g={mobile ? "✕" : "✓"} size={20} /></button>
-      <strong className="v2-sed-title"><Ic g="scene" size={16} /> {doc?.name || project.assets[placement.source.assetId]?.name || "3D scene"}</strong>
-      <span className="v2-sed-ver" title="The scene version this clip shows">v{vIndex || "?"}{busy ? " · saving…" : ""}</span>
+      <button type="button" className="v2-icon v2-sed-close" aria-label="Close scene editor" title={dirty ? "Close (asks before discarding unsaved changes) · Esc" : "Close the scene editor (Esc)"} onClick={requestClose}><Ic g="✕" size={20} /></button>
+      <strong className="v2-sed-title"><Ic g="scene" size={16} /> {doc?.name || asset?.name || "3D scene"}</strong>
+      <span className="v2-sed-ver" title="The scene version this clip shows">v{vIndex || "?"}{dirty ? " · edited" : ""}{busy ? " · saving…" : ""}</span>
       <span className="v2-spacer" />
-      <div className="v2-sed-mode" role="radiogroup" aria-label="How edits are saved">
-        <button type="button" role="radio" aria-checked={mode === "new"} className={mode === "new" ? "is-on" : ""} title="Keep the current version: the first edit makes a new version, later edits in this editor update it" onClick={() => { setMode("new"); session.current = undefined; }}>New version</button>
-        <button type="button" role="radio" aria-checked={mode === "replace"} className={mode === "replace" ? "is-on" : ""} title="Overwrite the version this clip shows (other clips using it update)" onClick={() => setMode("replace")}>Replace current</button>
-      </div>
-      <button type="button" className="v2-icon" aria-label="Undo" title="Undo" disabled={!engine.getState().canUndo} onClick={() => engine.undo()}><Ic g="↶" size={18} /></button>
-      <button type="button" className="v2-icon" aria-label="Redo" title="Redo" disabled={!engine.getState().canRedo} onClick={() => engine.redo()}><Ic g="↷" size={18} /></button>
+      <button type="button" className="v2-icon" aria-label="Undo" title={work?.past.length ? `Undo ${work.past.at(-1)!.label}` : "Undo"} disabled={!work?.past.length} onClick={undo}><Ic g="↶" size={18} /></button>
+      <button type="button" className="v2-icon" aria-label="Redo" title={work?.future.length ? `Redo ${work.future[0].label}` : "Redo"} disabled={!work?.future.length} onClick={redo}><Ic g="↷" size={18} /></button>
+      {!mobile && <button type="button" className="v2-btn v2-sed-cancel" onClick={requestClose} title="Close without saving (asks first when something changed)">Cancel</button>}
+      <button type="button" className="v2-btn primary v2-sed-save" disabled={!dirty || busy} onClick={() => setDialog("save")} title="Save the scene: replace the current version or add a new one"><Ic g="✓" size={16} /> Save</button>
     </header>
   );
+
+  // The editor takes the focus when its scene is ready, so its keys (Esc, Ctrl+S, Ctrl+Z) work before anything is clicked.
+  const rootRef = useRef<HTMLDivElement>(null);
+  const ready = !!doc;
+  useEffect(() => { if (ready && !rootRef.current?.contains(document.activeElement)) rootRef.current?.focus({ preventScroll: true }); }, [ready]);
 
   if (!doc) {
     const err = loaded?.key === blobKey ? loaded?.error : undefined;
@@ -254,7 +368,7 @@ export function SceneEditor(props: SceneEditorProps) {
       cancelAnimationFrame(g.raf);
       if (drag.current === g) drag.current = undefined;
       const apply = g.apply;
-      const done = () => { preview.current?.(key, undefined); setDraft(undefined); };
+      const done = () => { preview.current?.(key, shownDoc()); setDraft(undefined); };
       if (commit && apply) void save(g.label, (d) => apply(d)).finally(done);
       else done();
     };
@@ -301,7 +415,6 @@ export function SceneEditor(props: SceneEditorProps) {
   const ticks: number[] = [];
   const step = pps >= 80 ? 0.5 : pps >= 40 ? 1 : 2;
   for (let s = 0; s <= span + 1e-9; s += step) ticks.push(Math.round(s * 1000) / 1000);
-  const selEvent = sel.kind === "event" ? doc.events?.[sel.index] : undefined;
   const selObj = sel.kind === "object" ? doc.objects.find((o) => o.id === sel.id) : undefined;
   const pickTrack = (t: SceneTrack) => setSel(t.kind === "camera" ? { kind: "scene" } : t.kind === "missing" ? { kind: "scene" } : { kind: "object", id: t.id });
   const addEventOn = (t: SceneTrack) => {
@@ -365,15 +478,24 @@ export function SceneEditor(props: SceneEditorProps) {
     </div>
   );
 
+  const selEventNow = sel.kind === "event" ? doc.events?.[sel.index] : undefined;
+  const form = (pt?: Part) => sel.kind === "event" && selEventNow
+    ? <EventForm key={`e${sel.index}`} doc={doc} index={sel.index} ev={selEventNow} issues={issues} edit={edit} part={pt} onSeek={() => seekLocal(selEventNow.at)} onDeleted={() => setSel(selEventNow.obj === SCENE_CAMERA ? { kind: "scene" } : { kind: "object", id: selEventNow.obj })} atNow={atNow} />
+    : sel.kind === "object" && selObj ? <ObjectForm key={`o${selObj.id}`} doc={doc} obj={selObj} issues={issues} edit={edit} part={pt} atNow={atNow} />
+      : <SceneForm doc={doc} edit={edit} part={pt} />;
   const panel = (
     <div ref={panelRef} className="v2-sed-panel" aria-label="Edit selection">
-      {sel.kind === "event" && selEvent ? <EventForm key={`e${sel.index}`} doc={doc} index={sel.index} ev={selEvent} issues={issues} edit={edit} onSeek={() => seekLocal(selEvent.at)} onDeleted={() => setSel(selEvent.obj === SCENE_CAMERA ? { kind: "scene" } : { kind: "object", id: selEvent.obj })} atNow={atNow} />
-        : sel.kind === "object" && selObj ? <ObjectForm key={`o${selObj.id}`} doc={doc} obj={selObj} issues={issues} edit={edit} atNow={atNow} />
-          : <SceneForm doc={doc} edit={edit} />}
+      {form()}
       {note && <p className="v2-abnote" role="status">{note}</p>}
     </div>
   );
 
+  const addMenu = (
+    <div className="v2-sed-addmenu" role="menu" aria-label="Add object">
+      {SCENE_SHAPES.map((s) => <button key={s} type="button" role="menuitem" onClick={() => { setAdding(false); setPart(undefined); void edit(`add ${s}`, (d) => { const r = addSceneObject(d, s); return { doc: r.doc, sel: { kind: "object", id: r.id } }; }); }}><Ic g="scene" size={16} /> {s[0].toUpperCase() + s.slice(1)}</button>)}
+      <button type="button" role="menuitem" onClick={() => { setAdding(false); setPart(undefined); fileInput.current?.click(); }}><Ic g="⇪" size={16} /> GLB model…</button>
+    </div>
+  );
   const toolbar = (
     <div className="v2-sed-bar">
       <button type="button" className="v2-icon v2-sed-play" aria-label={playing ? "Pause" : "Play"} title={playing ? "Pause" : "Play"} onClick={onTogglePlay}><Ic g={playing ? "❚❚" : "▶"} size={18} /></button>
@@ -383,32 +505,135 @@ export function SceneEditor(props: SceneEditorProps) {
         ?? `${draft.at}s${draft.dur ? ` → ${+(draft.at + draft.dur).toFixed(3)}s` : ""}${draft.snappedTo !== undefined ? " · snapped" : ""}${draft.target ? ` · to ${draft.target}` : ""}`}</span>}
       <span className="v2-spacer" />
       {errors > 0 && <span className="v2-sed-errs" title="Problems in the scene (select an item to see its own)"><Ic g="⚠" size={14} /> {errors}</span>}
-      <div className="v2-sed-addwrap">
+      {!mobile && <div className="v2-sed-addwrap">
         <button type="button" className="v2-btn v2-sed-addobj" aria-expanded={adding} onClick={() => setAdding((x) => !x)}><Ic g="＋" size={16} /> Add object</button>
-        {adding && <div className="v2-sed-addmenu" role="menu" aria-label="Add object">
-          {SCENE_SHAPES.map((s) => <button key={s} type="button" role="menuitem" onClick={() => { setAdding(false); void edit(`add ${s}`, (d) => { const r = addSceneObject(d, s); return { doc: r.doc, sel: { kind: "object", id: r.id } }; }); }}><Ic g="scene" size={16} /> {s[0].toUpperCase() + s.slice(1)}</button>)}
-          <button type="button" role="menuitem" onClick={() => { setAdding(false); fileInput.current?.click(); }}><Ic g="⇪" size={16} /> GLB model…</button>
-        </div>}
-        <input ref={fileInput} type="file" accept=".glb,model/gltf-binary" hidden data-testid="scene-editor-model-input" onChange={(e) => void addModel(e.currentTarget.files)} />
-      </div>
+        {adding && addMenu}
+      </div>}
+      <input ref={fileInput} type="file" accept=".glb,model/gltf-binary" hidden data-testid="scene-editor-model-input" onChange={(e) => void addModel(e.currentTarget.files)} />
     </div>
   );
 
+  // P80 (phone): context actions for the selection, like the main timeline's bottom toolbar; a section opens in a sheet.
+  const ctxTool = (icon: string, label: string, run: () => void, opts: { on?: boolean; danger?: boolean; title?: string } = {}) =>
+    <button key={label} type="button" className={`v2-tool${opts.on ? " is-on" : ""}${opts.danger ? " v2-sed-danger" : ""}`} aria-pressed={opts.on} title={opts.title ?? label} onClick={run}><b aria-hidden><Ic g={icon} /></b><span>{label}</span></button>;
+  const open = (pt: Part) => setPart((x) => (x === pt ? undefined : pt));
+  const ctxTools: JSX.Element[] = sel.kind === "event" && selEventNow ? [
+    ctxTool("⇔", "Timing", () => open("timing"), { on: part === "timing", title: "Call, start, duration and ease" }),
+    ...(sceneCallArgs(doc, selEventNow.obj, selEventNow.call).length ? [ctxTool("⤧", "Values", () => open("args"), { on: part === "args", title: "The call's arguments (where it moves to, its value…)" })] : []),
+    ctxTool("⇤", "Go to", () => seekLocal(selEventNow.at), { title: "Move the playhead to this event" }),
+    ctxTool("⧉", "Duplicate", () => void edit("duplicate event", (d) => { const r = duplicateSceneEvent(d, sel.index); return { doc: r.doc, sel: { kind: "event", index: r.index } }; })),
+    ctxTool("🗑", "Delete", () => { const back: SceneSel = selEventNow.obj === SCENE_CAMERA ? { kind: "scene" } : { kind: "object", id: selEventNow.obj }; const i = sel.index; void edit("delete event", (d) => removeSceneEvent(d, i)); setSel(back); }, { danger: true, title: "Delete this event" }),
+  ] : sel.kind === "object" && selObj ? [
+    ctxTool("⤧", "Properties", () => open("props"), { on: part === "props", title: "Id, shape, size, colour, position, rotation, scale, visibility" }),
+    ...(typeof selObj.model === "string" ? [ctxTool("anim-loop", "Animation", () => open("model"), { on: part === "model", title: "The model's animation and parts from 0 s" })] : []),
+    ctxTool("◆", "Add event", () => open("addEvent"), { on: part === "addEvent", title: `Add an event at the playhead (${atNow}s)` }),
+    ctxTool("🗑", "Delete", () => { const id = selObj.id; void edit("delete object", (d) => { const r = removeSceneObject(d, id); return { doc: r.doc, sel: { kind: "scene" }, note: `Deleted “${id}”${r.removedEvents ? ` and ${r.removedEvents} event${r.removedEvents === 1 ? "" : "s"}` : ""}.` }; }); }, { danger: true, title: "Delete this object and its events" }),
+  ] : [
+    ctxTool("＋", "Add object", () => open("add"), { on: part === "add", title: "Add a shape or a GLB model" }),
+    ctxTool("settings", "Scene", () => open("scene"), { on: part === "scene", title: "Name, planned length, background" }),
+    ctxTool("camera", "Camera", () => open("camera"), { on: part === "camera", title: "The camera at 0 s" }),
+    ctxTool("light", "Lights", () => open("lights"), { on: part === "lights", title: "Lights" }),
+  ];
+  const ctxBar = (
+    <nav className="v2-toolbar v2-sed-ctx" aria-label={sel.kind === "event" ? "Event actions" : sel.kind === "object" ? "Object actions" : "Scene actions"}>
+      {sel.kind !== "scene" && <button type="button" className="v2-tool v2-tool-back" aria-label="Back to the scene" title="Back to the scene" onClick={() => { setSel({ kind: "scene" }); setPart(undefined); }}><b aria-hidden><Ic g="anim-in" /></b></button>}
+      <div className="v2-toolbar-scroll">{ctxTools}</div>
+    </nav>
+  );
+  const partSheet = mobile && part && (part === "add"
+    ? <Sheet label="Add object" className="v2-msheet-insp v2-sed-sheet" snaps={[0.45, 0.7]} initial={0} onClose={() => setPart(undefined)}>{addMenu}</Sheet>
+    : <Sheet label={PART_LABEL[part]} className="v2-msheet-insp v2-sed-sheet" snaps={[0.45, 0.7, 0.9]} initial={0} onClose={() => setPart(undefined)}>{form(part)}</Sheet>);
+
+  const lastMode = clipVersion.versionSaveModeOf(engine.getState().project);
+  const nextNo = versions.length + 1;
+  const dialogs = <>
+    {dialog === "save" && <ChoiceDialog title="Save scene" onCancel={() => setDialog(undefined)} note={newOnly ? (work?.outside ? "The clip shows a scene changed outside the editor, so your changes are saved as a new version." : "Your restored draft was made from another version, so it is saved as a new version.") : undefined}
+      choices={[
+        { id: "replace", title: "Replace current", text: `Overwrite v${vIndex}. Other clips using v${vIndex} update too.`, disabled: newOnly, focus: lastMode === "replace" && !newOnly, run: () => { setDialog(undefined); void save("replace"); } },
+        { id: "new", title: "Save as new version", text: `Keep v${vIndex} and add v${nextNo}; this clip shows v${nextNo}.`, focus: lastMode !== "replace" || newOnly, run: () => { setDialog(undefined); void save("new"); } },
+      ]} />}
+    {dialog === "discard" && <ConfirmDialog title="Discard unsaved changes?" message="The edits you made to this scene since the last save will be lost." confirm="Discard" onCancel={() => setDialog(undefined)} onConfirm={discard} />}
+    {dialog && typeof dialog === "object" && <ChoiceDialog title="Restore unsaved changes?" onCancel={dropDraft} cancelLabel="Discard draft"
+      note={draftNote(dialog.restore, work, versions)}
+      choices={[{ id: "restore", title: "Restore", text: `Continue the draft kept on this device (${new Date(dialog.restore.savedAt).toLocaleString()}).`, focus: true, run: () => restore(dialog.restore) }]} />}
+  </>;
+  const banner = work?.outside && <p className="v2-sed-banner" role="status" data-testid="scene-outside">
+    <Ic g="alert" size={16} /> <span>This scene was changed outside the editor (for example by an AI agent). Your unsaved changes are kept; Save adds them as a new version.</span>
+    <button type="button" className="v2-btn" onClick={() => { if (stored && blobKey && version) put({ doc: stored, saved: stored, past: [], future: [], baseKey: blobKey, baseVersionId: version.id }); setNote("Loaded the scene the clip shows now."); }}>Load the new scene</button>
+  </p>;
+
   return (
-    <div className={`v2-scene-editor ${mobile ? "is-phone" : "is-desk"}`} role="dialog" aria-label="Scene editor" data-testid="scene-editor" onKeyDown={(e) => {
+    <div ref={rootRef} tabIndex={-1} className={`v2-scene-editor ${mobile ? "is-phone" : "is-desk"}`} role="dialog" aria-label="Scene editor" data-testid="scene-editor" onKeyDown={(e) => {
       // Inside the editor the app's shortcuts are off (it is a dialog); these few work here, never in a field.
-      // Esc: a field with typed changes reverts them first (it stops the key); otherwise it closes the editor.
-      if (e.key === "Escape") { if (!drag.current) { e.preventDefault(); onClose(); } return; }
-      if ((e.target as HTMLElement).closest?.("input,select,textarea")) return;
+      // Esc: a field with typed changes reverts them first (it stops the key); otherwise it closes the editor (asking
+      // first when there are unsaved changes).
+      if (dialog) return;
+      if (e.key === "Escape") { if (!drag.current) { e.preventDefault(); if (part) setPart(undefined); else requestClose(); } return; }
       const mod = e.metaKey || e.ctrlKey, k = e.key.toLowerCase();
-      if (mod && (k === "z" || k === "y")) { e.preventDefault(); if (k === "y" || e.shiftKey) engine.redo(); else engine.undo(); }
+      if (mod && k === "s") { e.preventDefault(); if (dirty) setDialog("save"); return; }
+      if ((e.target as HTMLElement).closest?.("input,select,textarea")) return;
+      if (mod && (k === "z" || k === "y")) { e.preventDefault(); if (k === "y" || e.shiftKey) redo(); else undo(); }
       else if (e.key === " " && !mod) { e.preventDefault(); onTogglePlay(); }
       else if ((e.key === "Delete" || e.key === "Backspace") && sel.kind === "event") { e.preventDefault(); const i = sel.index; void edit("delete event", (d) => removeSceneEvent(d, i)); setSel({ kind: "scene" }); }
     }}>
       {header}
+      {banner}
       {mobile && mirror && <Mirror source={mirror} />}
       {toolbar}
-      <div className="v2-sed-body">{tracksEl}{panel}</div>
+      {mobile ? <>
+        <div className="v2-sed-body">{tracksEl}</div>
+        {note && <p className="v2-abnote v2-sed-note" role="status">{note}</p>}
+        {ctxBar}
+        {partSheet}
+      </> : <div className="v2-sed-body">{tracksEl}{panel}</div>}
+      {dialogs}
+    </div>
+  );
+}
+
+/** P80: the editor's working copy: the scene, its own undo / redo, and the scene as last saved. */
+interface Work {
+  doc: SceneDoc;
+  saved: SceneDoc;
+  past: { doc: SceneDoc; label: string }[];
+  future: { doc: SceneDoc; label: string }[];
+  /** The stored scene the work started from (the clip's blob key and version when loaded or last saved). */
+  baseKey: string;
+  baseVersionId: string;
+  /** The clip moved to a scene changed outside the editor while there were unsaved changes. */
+  outside?: boolean;
+  /** A restored draft made from another stored scene than the clip shows. */
+  restoredFrom?: { versionId: string; blobKey: string };
+}
+const MAX_UNDO = 200;
+/** P80: autosave delay after the last edit. */
+export const DRAFT_DELAY_MS = 600;
+/** P80 (phone): the form sections the context toolbar opens in a sheet. */
+export type Part = "add" | "scene" | "camera" | "lights" | "props" | "model" | "addEvent" | "timing" | "args";
+const PART_LABEL: Record<Part, string> = { add: "Add object", scene: "Scene", camera: "Camera at 0 s", lights: "Lights", props: "Properties", model: "Animation", addEvent: "Add event", timing: "Timing", args: "Values" };
+
+function draftNote(d: SceneDraft, work: Work | undefined, versions: { id: string }[]): string {
+  if (!work || d.baseBlobKey === work.baseKey) return "You closed the editor without saving. Restore the draft to keep working on it, or discard it.";
+  const n = versions.findIndex((v) => v.id === d.baseVersionId) + 1;
+  const cur = versions.findIndex((v) => v.id === work.baseVersionId) + 1;
+  const from = n ? (d.baseVersionId === work.baseVersionId ? `v${n}, which was replaced since` : `v${n}`) : "a version that no longer exists";
+  return `This draft was made from ${from}; the clip shows v${cur || "?"} now. Restoring keeps the draft, and Save adds it as a new version.`;
+}
+
+/** P80: a small modal with large choices (Save: replace or new version; restore a draft). */
+function ChoiceDialog({ title, choices, note, onCancel, cancelLabel = "Cancel" }: {
+  title: string; note?: string; onCancel: () => void; cancelLabel?: string;
+  choices: { id: string; title: string; text: string; disabled?: boolean; focus?: boolean; run: () => void }[];
+}) {
+  useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === "Escape") { e.preventDefault(); onCancel(); } }; addEventListener("keydown", k); return () => removeEventListener("keydown", k); }, [onCancel]);
+  return (
+    <div className="v2-menu-backdrop v2-confirm-backdrop" onPointerDown={onCancel}>
+      <div className="v2-confirm v2-sed-choices" role="alertdialog" aria-modal="true" aria-label={title} onPointerDown={(e) => e.stopPropagation()}>
+        <h4>{title}</h4>
+        {note && <p>{note}</p>}
+        {choices.map((c) => <button key={c.id} type="button" className="v2-sed-choice" data-choice={c.id} disabled={c.disabled} autoFocus={c.focus} onClick={c.run}><b>{c.title}</b><span>{c.text}</span></button>)}
+        <div className="v2-confirm-actions"><button type="button" className="v2-btn" onClick={onCancel}>{cancelLabel}</button></div>
+      </div>
     </div>
   );
 }
@@ -431,32 +656,41 @@ function Problems({ list }: { list: SceneIssue[] }) {
 
 // ---------------------------------------------------------------- forms
 
-function SceneForm({ doc, edit }: { doc: SceneDoc; edit: Edit }) {
+function SceneForm({ doc, edit, part }: { doc: SceneDoc; edit: Edit; part?: Part }) {
   const base = sceneCameraBase(doc);
   const { lights, defaults } = sceneLights(doc);
+  const all = !part;
   return <div className="v2-sed-form" data-testid="scene-form">
-    <h4><Ic g="camera" size={16} /> Scene</h4>
-    <TextField label="Name" value={doc.name ?? ""} onCommit={(v) => edit("rename scene", (d) => ({ ...d, name: v || undefined }) as SceneDoc)} />
-    <NumField label="Planned length (s)" value={doc.durationSec} min={0.1} step={0.5} optional onCommit={(v) => edit("planned length", (d) => (v === undefined ? (({ durationSec: _x, ...r }) => (void _x, r as SceneDoc))(d) : { ...d, durationSec: v }))} />
-    <ColorField label="Background" value={base.background} onCommit={(v) => edit("background", (d) => updateSceneWorld(d, { background: v }))} />
-    <h5>Camera at 0 s</h5>
-    <NumField label="Field of view (°)" value={base.fov} min={2} max={178} step={1} onCommit={(v) => edit("camera fov", (d) => updateSceneWorld(d, { camera: { fov: v } }))} />
-    <Vec3Field label="Position" value={base.position} onCommit={(v) => edit("camera position", (d) => updateSceneWorld(d, { camera: { position: v } }))} />
-    <Vec3Field label="Looks at" value={base.lookAt} onCommit={(v) => edit("camera target", (d) => updateSceneWorld(d, { camera: { lookAt: v } }))} />
-    <h5><Ic g="light" size={14} /> Lights {defaults && <small>(default lighting)</small>}</h5>
-    {lights.map((l, i) => <fieldset key={i} className="v2-sed-light"><legend>Light {i + 1}</legend>
-      <SelectField label="Type" value={l.type} options={[...SCENE_LIGHTS]} onCommit={(v) => edit("light type", (d) => updateSceneLight(d, i, { type: v as SceneLightType }))} />
-      <ColorField label="Colour" value={l.color ?? "#ffffff"} onCommit={(v) => edit("light colour", (d) => updateSceneLight(d, i, { color: v }))} />
-      <NumField label="Intensity" value={l.intensity ?? 1} min={0} step={0.1} onCommit={(v) => edit("light intensity", (d) => updateSceneLight(d, i, { intensity: v }))} />
-      {(l.type === "directional" || l.type === "point") && <Vec3Field label="Position" value={l.position ?? [0, 3, 2]} onCommit={(v) => edit("light position", (d) => updateSceneLight(d, i, { position: v }))} />}
-      <button type="button" className="v2-btn v2-sed-danger" onClick={() => void edit("delete light", (d) => removeSceneLight(d, i))}><Ic g="🗑" size={16} /> Delete light</button>
-    </fieldset>)}
-    <button type="button" className="v2-btn" onClick={() => void edit("add light", (d) => addSceneLight(d))}><Ic g="＋" size={16} /> Add light</button>
-    <p className="v2-abnote">Tap a track name to edit an object, or a block to edit an event. Camera moves are events on this track (＋).</p>
+    {all && <h4><Ic g="camera" size={16} /> Scene</h4>}
+    {(all || part === "scene") && <>
+      <TextField label="Name" value={doc.name ?? ""} onCommit={(v) => edit("rename scene", (d) => ({ ...d, name: v || undefined }) as SceneDoc)} />
+      <NumField label="Planned length (s)" value={doc.durationSec} min={0.1} step={0.5} optional onCommit={(v) => edit("planned length", (d) => (v === undefined ? (({ durationSec: _x, ...r }) => (void _x, r as SceneDoc))(d) : { ...d, durationSec: v }))} />
+      <ColorField label="Background" value={base.background} onCommit={(v) => edit("background", (d) => updateSceneWorld(d, { background: v }))} />
+    </>}
+    {(all || part === "camera") && <>
+      {all && <h5>Camera at 0 s</h5>}
+      <NumField label="Field of view (°)" value={base.fov} min={2} max={178} step={1} onCommit={(v) => edit("camera fov", (d) => updateSceneWorld(d, { camera: { fov: v } }))} />
+      <Vec3Field label="Position" value={base.position} onCommit={(v) => edit("camera position", (d) => updateSceneWorld(d, { camera: { position: v } }))} />
+      <Vec3Field label="Looks at" value={base.lookAt} onCommit={(v) => edit("camera target", (d) => updateSceneWorld(d, { camera: { lookAt: v } }))} />
+      {part === "camera" && <p className="v2-abnote">Camera moves over time are events on the Camera track (＋ on its header).</p>}
+    </>}
+    {(all || part === "lights") && <>
+      {all ? <h5><Ic g="light" size={14} /> Lights {defaults && <small>(default lighting)</small>}</h5> : defaults && <p className="v2-abnote">Default lighting: change or add a light to set your own.</p>}
+      {lights.map((l, i) => <fieldset key={i} className="v2-sed-light"><legend>Light {i + 1}</legend>
+        <SelectField label="Type" value={l.type} options={[...SCENE_LIGHTS]} onCommit={(v) => edit("light type", (d) => updateSceneLight(d, i, { type: v as SceneLightType }))} />
+        <ColorField label="Colour" value={l.color ?? "#ffffff"} onCommit={(v) => edit("light colour", (d) => updateSceneLight(d, i, { color: v }))} />
+        <NumField label="Intensity" value={l.intensity ?? 1} min={0} step={0.1} onCommit={(v) => edit("light intensity", (d) => updateSceneLight(d, i, { intensity: v }))} />
+        {(l.type === "directional" || l.type === "point") && <Vec3Field label="Position" value={l.position ?? [0, 3, 2]} onCommit={(v) => edit("light position", (d) => updateSceneLight(d, i, { position: v }))} />}
+        <button type="button" className="v2-btn v2-sed-danger" onClick={() => void edit("delete light", (d) => removeSceneLight(d, i))}><Ic g="🗑" size={16} /> Delete light</button>
+      </fieldset>)}
+      <button type="button" className="v2-btn" onClick={() => void edit("add light", (d) => addSceneLight(d))}><Ic g="＋" size={16} /> Add light</button>
+    </>}
+    {all && <p className="v2-abnote">Tap a track name to edit an object, or a block to edit an event. Camera moves are events on this track (＋).</p>}
   </div>;
 }
 
-function ObjectForm({ doc, obj, issues, edit, atNow }: { doc: SceneDoc; obj: SceneObject; issues: SceneIssue[]; edit: Edit; atNow: number }) {
+function ObjectForm({ doc, obj, issues, edit, atNow, part }: { doc: SceneDoc; obj: SceneObject; issues: SceneIssue[]; edit: Edit; atNow: number; part?: Part }) {
+  const all = !part;
   const k = doc.objects.indexOf(obj);
   const model = typeof obj.model === "string";
   const anims = model ? modelAnimations(doc, obj.model) : undefined;
@@ -468,22 +702,24 @@ function ObjectForm({ doc, obj, issues, edit, atNow }: { doc: SceneDoc; obj: Sce
   const anim = typeof obj.animation === "string" ? { clip: obj.animation } : obj.animation;
   const scale = obj.scale === undefined ? 1 : obj.scale;
   return <div className="v2-sed-form" data-testid="object-form">
-    <h4><Ic g="scene" size={16} /> {obj.name || obj.id} <small>{model ? `model ${obj.model}` : obj.shape ?? "box"}</small></h4>
-    <TextField label="Id" value={obj.id} error={idErr} onCommit={(v) => {
-      const why = objectIdProblem(doc, obj.id, v); setIdErr(why);
-      if (!why && v !== obj.id) void edit("rename object", (d) => { const r = renameSceneObject(d, obj.id, v); return { doc: r.doc, sel: { kind: "object", id: v } }; });
-    }} />
-    <TextField label="Name" value={obj.name ?? ""} onCommit={(v) => set("object name", { name: v || undefined })} />
-    {!model && <SelectField label="Shape" value={obj.shape ?? "box"} options={[...SCENE_SHAPES]} onCommit={(v) => set("shape", { shape: v as SceneShape })} />}
-    <ListField label={model ? "Fit size" : "Size"} value={obj.size} hint={model ? "largest side, units" : "one number or a list"} onCommit={(v) => set("size", { size: v })} />
-    {!model && <ColorField label="Colour" value={obj.color ?? "#cccccc"} onCommit={(v) => set("colour", { color: v })} />}
-    <Vec3Field label="Position" value={obj.position ?? [0, 0, 0]} onCommit={(v) => set("position", { position: v })} />
-    <Vec3Field label="Rotation (°)" value={obj.rotation ?? [0, 0, 0]} onCommit={(v) => set("rotation", { rotation: v })} />
-    <ListField label="Scale" value={scale} hint="one number or x, y, z" onCommit={(v) => set("scale", { scale: v === undefined ? undefined : Array.isArray(v) ? (v.length === 3 ? v as Vec3 : v[0]) : v })} />
-    <CheckField label="Visible" value={obj.visible !== false} onCommit={(v) => set(v ? "show" : "hide", { visible: v ? undefined : false })} />
-    <NumField label="Opacity" value={obj.opacity ?? 1} min={0} max={1} step={0.05} onCommit={(v) => set("opacity", { opacity: v === 1 ? undefined : v })} />
-    {model && <>
-      <h5>Animation from 0 s</h5>
+    {all && <h4><Ic g="scene" size={16} /> {obj.name || obj.id} <small>{model ? `model ${obj.model}` : obj.shape ?? "box"}</small></h4>}
+    {(all || part === "props") && <>
+      <TextField label="Id" value={obj.id} error={idErr} onCommit={(v) => {
+        const why = objectIdProblem(doc, obj.id, v); setIdErr(why);
+        if (!why && v !== obj.id) void edit("rename object", (d) => { const r = renameSceneObject(d, obj.id, v); return { doc: r.doc, sel: { kind: "object", id: v } }; });
+      }} />
+      <TextField label="Name" value={obj.name ?? ""} onCommit={(v) => set("object name", { name: v || undefined })} />
+      {!model && <SelectField label="Shape" value={obj.shape ?? "box"} options={[...SCENE_SHAPES]} onCommit={(v) => set("shape", { shape: v as SceneShape })} />}
+      <ListField label={model ? "Fit size" : "Size"} value={obj.size} hint={model ? "largest side, units" : "one number or a list"} onCommit={(v) => set("size", { size: v })} />
+      {!model && <ColorField label="Colour" value={obj.color ?? "#cccccc"} onCommit={(v) => set("colour", { color: v })} />}
+      <Vec3Field label="Position" value={obj.position ?? [0, 0, 0]} onCommit={(v) => set("position", { position: v })} />
+      <Vec3Field label="Rotation (°)" value={obj.rotation ?? [0, 0, 0]} onCommit={(v) => set("rotation", { rotation: v })} />
+      <ListField label="Scale" value={scale} hint="one number or x, y, z" onCommit={(v) => set("scale", { scale: v === undefined ? undefined : Array.isArray(v) ? (v.length === 3 ? v as Vec3 : v[0]) : v })} />
+      <CheckField label="Visible" value={obj.visible !== false} onCommit={(v) => set(v ? "show" : "hide", { visible: v ? undefined : false })} />
+      <NumField label="Opacity" value={obj.opacity ?? 1} min={0} max={1} step={0.05} onCommit={(v) => set("opacity", { opacity: v === 1 ? undefined : v })} />
+    </>}
+    {model && (all || part === "model") && <>
+      {all && <h5>Animation from 0 s</h5>}
       <SelectField label="Clip" value={anim?.clip ?? ""} options={["", ...(anims ?? (anim ? [anim.clip] : []))]} labels={{ "": "None (rest pose)" }} onCommit={(v) => set("animation", { animation: v ? (anim && typeof obj.animation === "object" ? { ...anim, clip: v } : v) : undefined })} />
       {anim && <>
         <NumField label="Speed" value={anim.speed ?? 1} min={0} step={0.1} onCommit={(v) => set("animation speed", { animation: { ...anim, speed: v } })} />
@@ -491,17 +727,20 @@ function ObjectForm({ doc, obj, issues, edit, atNow }: { doc: SceneDoc; obj: Sce
       </>}
       {nodes && nodes.length > 0 && <NodesField label="Parts shown from 0 s" nodes={nodes} value={obj.nodes ?? {}} onCommit={(v) => set("parts", { nodes: Object.keys(v).length ? v : undefined })} />}
     </>}
-    <Problems list={issuesAt(issues, `objects[${k}]`)} />
-    <h5>Add event at {atNow}s</h5>
-    <div className="v2-sed-row">
-      <select aria-label="Call" value={call} onChange={(e) => setCall(e.target.value)}>{calls.map((c) => <option key={c.call} value={c.call} title={c.description}>{c.call}</option>)}</select>
-      <button type="button" className="v2-btn" onClick={() => void edit(`add ${call}`, (d) => { const r = addSceneEvent(d, obj.id, call, atNow, callTweens(d, obj.id, call) ? 1 : undefined); return { doc: r.doc, sel: { kind: "event", index: r.index } }; })}><Ic g="＋" size={16} /> Add event</button>
-    </div>
-    <button type="button" className="v2-btn v2-sed-danger" onClick={() => void edit("delete object", (d) => { const r = removeSceneObject(d, obj.id); return { doc: r.doc, sel: { kind: "scene" }, note: `Deleted “${obj.id}”${r.removedEvents ? ` and ${r.removedEvents} event${r.removedEvents === 1 ? "" : "s"}` : ""}.` }; })}><Ic g="🗑" size={16} /> Delete object</button>
+    {(all || part === "props") && <Problems list={issuesAt(issues, `objects[${k}]`)} />}
+    {(all || part === "addEvent") && <>
+      <h5>Add event at {atNow}s</h5>
+      <div className="v2-sed-row">
+        <select aria-label="Call" value={call} onChange={(e) => setCall(e.target.value)}>{calls.map((c) => <option key={c.call} value={c.call} title={c.description}>{c.call}</option>)}</select>
+        <button type="button" className="v2-btn" onClick={() => void edit(`add ${call}`, (d) => { const r = addSceneEvent(d, obj.id, call, atNow, callTweens(d, obj.id, call) ? 1 : undefined); return { doc: r.doc, sel: { kind: "event", index: r.index } }; })}><Ic g="＋" size={16} /> Add event</button>
+      </div>
+    </>}
+    {all && <button type="button" className="v2-btn v2-sed-danger" onClick={() => void edit("delete object", (d) => { const r = removeSceneObject(d, obj.id); return { doc: r.doc, sel: { kind: "scene" }, note: `Deleted “${obj.id}”${r.removedEvents ? ` and ${r.removedEvents} event${r.removedEvents === 1 ? "" : "s"}` : ""}.` }; })}><Ic g="🗑" size={16} /> Delete object</button>}
   </div>;
 }
 
-function EventForm({ doc, index, ev, issues, edit, onSeek, onDeleted, atNow }: { doc: SceneDoc; index: number; ev: SceneEvent; issues: SceneIssue[]; edit: Edit; onSeek: () => void; onDeleted: () => void; atNow: number }) {
+function EventForm({ doc, index, ev, issues, edit, onSeek, onDeleted, atNow, part }: { doc: SceneDoc; index: number; ev: SceneEvent; issues: SceneIssue[]; edit: Edit; onSeek: () => void; onDeleted: () => void; atNow: number; part?: Part }) {
+  const all = !part;
   const calls = sceneCalls(doc, ev.obj);
   const known = calls.some((c) => c.call === ev.call);
   const fields = sceneCallArgs(doc, ev.obj, ev.call);
@@ -510,22 +749,24 @@ function EventForm({ doc, index, ev, issues, edit, onSeek, onDeleted, atNow }: {
   const desc = calls.find((c) => c.call === ev.call)?.description;
   const objIds = doc.objects.map((o) => o.id).filter((id) => id !== ev.obj);
   return <div className="v2-sed-form" data-testid="event-form">
-    <h4><code>{ev.obj}.{ev.call}</code> <small>event {index + 1}</small></h4>
-    {desc && <p className="v2-abnote">{desc}</p>}
-    <SelectField label="Call" value={ev.call} options={known ? calls.map((c) => c.call) : [ev.call, ...calls.map((c) => c.call)]} onCommit={(v) => edit(`call ${v}`, (d) => setSceneEventCall(d, index, v))} />
-    <div className="v2-sed-row">
-      <NumField label="At (s)" value={ev.at} min={0} step={0.1} onCommit={(v) => edit("event time", (d) => updateSceneEvent(d, index, { at: v ?? 0 }))} />
-      <button type="button" className="v2-btn" title="Move this event to the playhead" onClick={() => void edit("event time", (d) => updateSceneEvent(d, index, { at: atNow }))}>At playhead</button>
-    </div>
-    {tweens && <NumField label="Duration (s)" value={ev.dur} min={0} step={0.1} optional onCommit={(v) => edit("event duration", (d) => updateSceneEvent(d, index, { dur: v }))} />}
-    {tweens && (ev.dur ?? 0) > 0 && <SelectField label="Ease" value={ev.ease ?? "linear"} options={[...SCENE_EASES]} onCommit={(v) => edit("ease", (d) => updateSceneEvent(d, index, { ease: v === "linear" ? undefined : v as SceneEase }))} />}
-    {fields.map((f) => <ArgField key={f.name} field={f} value={args[f.name] ?? (f.name === "position" ? args.value : undefined)} objIds={objIds} onCommit={(v) => edit(`${ev.call} ${f.label.toLowerCase()}`, (d) => setSceneEventArg(d, index, f.name, v))} />)}
+    {all && <h4><code>{ev.obj}.{ev.call}</code> <small>event {index + 1}</small></h4>}
+    {(all || part === "timing") && <>
+      {desc && <p className="v2-abnote">{desc}</p>}
+      <SelectField label="Call" value={ev.call} options={known ? calls.map((c) => c.call) : [ev.call, ...calls.map((c) => c.call)]} onCommit={(v) => edit(`call ${v}`, (d) => setSceneEventCall(d, index, v))} />
+      <div className="v2-sed-row">
+        <NumField label="At (s)" value={ev.at} min={0} step={0.1} onCommit={(v) => edit("event time", (d) => updateSceneEvent(d, index, { at: v ?? 0 }))} />
+        <button type="button" className="v2-btn" title="Move this event to the playhead" onClick={() => void edit("event time", (d) => updateSceneEvent(d, index, { at: atNow }))}>At playhead</button>
+      </div>
+      {tweens && <NumField label="Duration (s)" value={ev.dur} min={0} step={0.1} optional onCommit={(v) => edit("event duration", (d) => updateSceneEvent(d, index, { dur: v }))} />}
+      {tweens && (ev.dur ?? 0) > 0 && <SelectField label="Ease" value={ev.ease ?? "linear"} options={[...SCENE_EASES]} onCommit={(v) => edit("ease", (d) => updateSceneEvent(d, index, { ease: v === "linear" ? undefined : v as SceneEase }))} />}
+    </>}
+    {(all || part === "args") && fields.map((f) => <ArgField key={f.name} field={f} value={args[f.name] ?? (f.name === "position" ? args.value : undefined)} objIds={objIds} onCommit={(v) => edit(`${ev.call} ${f.label.toLowerCase()}`, (d) => setSceneEventArg(d, index, f.name, v))} />)}
     <Problems list={issuesAt(issues, `events[${index}]`)} />
-    <div className="v2-sed-row">
+    {all && <div className="v2-sed-row">
       <button type="button" className="v2-btn" onClick={onSeek}><Ic g="⇤" size={16} /> Go to</button>
       <button type="button" className="v2-btn" onClick={() => void edit("duplicate event", (d) => { const r = duplicateSceneEvent(d, index); return { doc: r.doc, sel: { kind: "event", index: r.index } }; })}><Ic g="⧉" size={16} /> Duplicate</button>
       <button type="button" className="v2-btn v2-sed-danger" onClick={() => { void edit("delete event", (d) => removeSceneEvent(d, index)); onDeleted(); }}><Ic g="🗑" size={16} /> Delete</button>
-    </div>
+    </div>}
   </div>;
 }
 

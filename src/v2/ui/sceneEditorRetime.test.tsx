@@ -2,7 +2,7 @@
 /**
  * P77 (Phase 2 step 2.4): retiming in the scene editor. Dragging a block moves its event, the selected block's edge
  * handles change its start or length; the tracks and the preview follow the drag live without touching the project,
- * and the release is ONE undo step stored by the version rules. Esc cancels; snapping lands on the playhead; touch
+ * and the release is ONE step of the editor's undo (P80: nothing is stored until Save). Esc cancels; snapping lands on the playhead; touch
  * needs a selected block; a drop on another object's track gives the event to it; the ruler scrubs; arrow keys nudge.
  */
 import { describe, expect, it } from "vitest";
@@ -12,6 +12,7 @@ import { createProject, SAMPLE_SCENE, versionOfPlacement, type Project, type Sce
 import { Engine, cmd } from "../engine";
 import { SceneEditor, type SceneSel } from "./SceneEditor";
 import { cachedSceneDoc, sceneAsset } from "./sceneAsset";
+import { memorySceneDrafts } from "./sceneDrafts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const S = 120_000;
@@ -43,7 +44,7 @@ async function open(opts: { mobile?: boolean; initialSel?: SceneSel; time?: numb
   const previews: [string, SceneDoc | undefined][] = [];
   const seeks: number[] = [];
   let closed = 0;
-  const draw = () => { const p = e.getState().project; root.render(<SceneEditor engine={e} project={p} placement={clip(p)} blobs={blobs as never} mobile={!!opts.mobile} time={opts.time ?? 0} playing={false} onSeek={(t) => seeks.push(t)} onTogglePlay={() => undefined} onClose={() => { closed++; }} onPreview={(k, d) => previews.push([k, d])} initialSel={opts.initialSel} />); };
+  const draw = () => { const p = e.getState().project; root.render(<SceneEditor engine={e} project={p} placement={clip(p)} blobs={blobs as never} mobile={!!opts.mobile} time={opts.time ?? 0} playing={false} onSeek={(t) => seeks.push(t)} onTogglePlay={() => undefined} onClose={() => { closed++; }} onPreview={(k, d) => previews.push([k, d])} initialSel={opts.initialSel} drafts={memorySceneDrafts()} />); };
   const unsub = e.subscribe(draw);
   await act(async () => draw()); await settle();
   const byLabel = (re: RegExp) => [...el.querySelectorAll<HTMLElement>("[aria-label]")].find((b) => re.test(b.getAttribute("aria-label")!))!;
@@ -61,7 +62,10 @@ async function open(opts: { mobile?: boolean; initialSel?: SceneSel; time?: numb
     return during;
   };
   const done = () => { unsub(); act(() => root.unmount()); el.remove(); };
-  return { e, asset, el, byLabel, versions, drag, previews, seeks, closed: () => closed, done };
+  /** P80: the editor's scene (the preview shows unsaved work; with none, the stored scene). */
+  const work = () => previews.at(-1)?.[1] ?? shownDoc(e.getState().project);
+  const undo = async () => { await act(async () => byLabel(/^Undo$/).click()); await settle(); };
+  return { e, asset, el, byLabel, versions, drag, previews, seeks, closed: () => closed, done, work, undo };
 }
 
 describe("P77 scene editor retiming", () => {
@@ -74,12 +78,13 @@ describe("P77 scene editor retiming", () => {
     const live = t.previews.filter(([, d]) => d).at(-1)!;
     expect(live[0]).toBe(key0);
     expect(live[1]!.events![1]).toMatchObject({ at: 1, dur: 1.5 });
-    expect(t.previews.at(-1)).toEqual([key0, undefined]); // the stored scene is put back after the release
-    expect(t.versions()).toBe(2);
-    expect(shownDoc(t.e.getState().project).events![1]).toMatchObject({ at: 1, dur: 1.5, obj: "ball" });
+    expect(t.previews.at(-1)![1]!.events![1]).toMatchObject({ at: 1, dur: 1.5 }); // the preview keeps the unsaved result
+    expect(t.versions()).toBe(1); // P80: stored only on Save
+    expect(t.work().events![1]).toMatchObject({ at: 1, dur: 1.5, obj: "ball" });
     expect(t.byLabel(/^ball\.moveTo at 1s for 1\.5s$/).getAttribute("aria-pressed")).toBe("true");
-    t.e.undo(); await settle();
-    expect(shownDoc(t.e.getState().project)).toEqual(SAMPLE_SCENE);
+    await t.undo();
+    expect(t.work()).toEqual(SAMPLE_SCENE);
+    expect(t.previews.at(-1)).toEqual([key0, undefined]); // nothing unsaved: the stored scene is shown again
     t.done();
   });
 
@@ -88,17 +93,16 @@ describe("P77 scene editor retiming", () => {
     const end = t.byLabel(/^End of ball\.moveTo$/);
     expect(end.getAttribute("role")).toBe("slider");
     await t.drag(end, -0.5 * PPS, { alt: true });
-    expect(shownDoc(t.e.getState().project).events![1]).toMatchObject({ at: 0.5, dur: 1 });
+    expect(t.work().events![1]).toMatchObject({ at: 0.5, dur: 1 });
     await t.drag(t.byLabel(/^Start of ball\.moveTo$/), 0.25 * PPS, { alt: true });
-    expect(shownDoc(t.e.getState().project).events![1]).toMatchObject({ at: 0.75, dur: 0.75 });
+    expect(t.work().events![1]).toMatchObject({ at: 0.75, dur: 0.75 });
     await act(async () => { t.byLabel(/^ball\.moveTo at 0\.75s/).dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })); });
     await settle();
-    expect(shownDoc(t.e.getState().project).events![1]).toMatchObject({ at: 0.767, dur: 0.75 }); // frame 23 at 30 fps
-    // Same session ("New version"): one version; three gestures, three undo steps.
-    expect(t.versions()).toBe(2);
-    for (let i = 0; i < 3; i++) t.e.undo();
-    await settle();
-    expect(shownDoc(t.e.getState().project)).toEqual(SAMPLE_SCENE);
+    expect(t.work().events![1]).toMatchObject({ at: 0.767, dur: 0.75 }); // frame 23 at 30 fps
+    // Nothing stored; three gestures, three steps of the editor's undo.
+    expect(t.versions()).toBe(1);
+    for (let i = 0; i < 3; i++) await t.undo();
+    expect(t.work()).toEqual(SAMPLE_SCENE);
     t.done();
   });
 
@@ -107,17 +111,17 @@ describe("P77 scene editor retiming", () => {
     const during = await t.drag(t.byLabel(/^ball\.moveTo at 0\.5s/), 66);
     expect(during.guide).toBe(true);
     expect(during.status).toMatch(/snapped/);
-    expect(shownDoc(t.e.getState().project).events![1]).toMatchObject({ at: 1.2 });
+    expect(t.work().events![1]).toMatchObject({ at: 1.2 });
     // Far past the clip's end: the event ends at 5 s.
     await t.drag(t.byLabel(/^ball\.moveTo at 1\.2s/), 20 * PPS);
-    expect(shownDoc(t.e.getState().project).events![1]).toMatchObject({ at: 3.5, dur: 1.5 });
+    expect(t.work().events![1]).toMatchObject({ at: 3.5, dur: 1.5 });
     const n = t.versions(), undo = t.e.getState().canUndo;
-    const before = shownDoc(t.e.getState().project);
+    const before = t.work();
     await t.drag(t.byLabel(/^ball\.moveTo at 3\.5s/), -PPS, { end: "esc" });
-    expect(shownDoc(t.e.getState().project)).toBe(before);
+    expect(t.work()).toBe(before);
     expect(t.versions()).toBe(n);
     expect(t.e.getState().canUndo).toBe(undo);
-    expect(t.previews.at(-1)![1]).toBeUndefined();
+    expect(t.previews.at(-1)![1]).toBe(before); // the preview is back to the editor's scene
     expect(t.closed()).toBe(0); // Esc ended the drag, not the editor
     t.done();
   });
@@ -128,7 +132,7 @@ describe("P77 scene editor retiming", () => {
     expect(t.versions()).toBe(1);
     await act(async () => t.byLabel(/^ball\.moveTo at 0\.5s/).click());
     await t.drag(t.byLabel(/^ball\.moveTo at 0\.5s/), 64, { touch: true, alt: true }); // phone zoom 64 px/s
-    expect(shownDoc(t.e.getState().project).events![1]).toMatchObject({ at: 1.5 });
+    expect(t.work().events![1]).toMatchObject({ at: 1.5 });
     t.done();
   });
 
@@ -139,14 +143,14 @@ describe("P77 scene editor retiming", () => {
     for (const [id, top] of Object.entries(rows)) lane(id).getBoundingClientRect = () => ({ top, bottom: top + 48, height: 48, left: 0, right: 500, width: 500, x: 0, y: top, toJSON: () => ({}) });
     const during = await t.drag(t.byLabel(/^ball\.moveTo at 0\.5s/), 0, { y: 170 });
     expect(during.status).toMatch(/to cube/);
-    expect(shownDoc(t.e.getState().project).events![1]).toMatchObject({ obj: "cube", call: "moveTo", at: 0.5 });
+    expect(t.work().events![1]).toMatchObject({ obj: "cube", call: "moveTo", at: 0.5 });
     expect(t.byLabel(/^cube\.moveTo at 0\.5s/)).toBeTruthy();
     // setMood is ball's own function: the sign has none, so the drop is refused and nothing changes.
     const n = t.versions();
     const refused = await t.drag(t.byLabel(/^ball\.setMood/), 0, { y: 220 });
     expect(refused.status).toMatch(/no setMood/);
     expect(t.versions()).toBe(n);
-    expect(shownDoc(t.e.getState().project).events![2]).toMatchObject({ obj: "ball" });
+    expect(t.work().events![2]).toMatchObject({ obj: "ball" });
     t.done();
   });
 

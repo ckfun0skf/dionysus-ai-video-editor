@@ -5,7 +5,7 @@
  * (domain/sceneAgent.ts; refused edits change nothing), store the new scene as a blob and make ONE undo step that
  * points the clip at it through the version-save rules (`clipVersion.applyMediaFromClip`, mode new or replace).
  *
- * P79: no version per call. In mode "new" the agent works in an editing session like the scene editor's: the first
+ * P79: no version per call. In mode "new" the agent works in an editing session (P80: the editor saves on Save): the first
  * edit of a clip adds a version and later edits of the same clip update that version (one undo step each) until
  * another scene clip is edited, the call passes `newVersion: true`, the clip shows another version (the user picked
  * one, undo, the editor), or SCENE_SESSION_MS pass without an edit. create_scene_clip opens a session on its first

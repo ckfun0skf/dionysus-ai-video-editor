@@ -425,10 +425,13 @@ in `Placement.plugin.data`):
   shots; Send uses the planned `durationSec` and, while the scene has no version, a placeholder whose intended type
   is `scene` (`core.story.shotRender`). A scene asset may carry its scene inline (`"scene": { … }`), stored as a
   version by `import_storyboard` and the Import screen. Older builds reject the new values.
-- **Editing (P76, P77).** A scene clip has its own timeline editor: one track per object plus a scene/camera track,
-  events as blocks labelled with their call; selecting one edits it in a side panel. Every edit is one undo step and
-  is saved into the scene asset version under the version-save rules. Since P77 blocks are dragged to retime them
-  and resized from their edges (one undo step per drag; see the split note below the table).
+- **Editing (P76, P77, P80).** A scene clip has its own timeline editor: one track per object plus a scene/camera track,
+  events as blocks labelled with their call; selecting one edits it in a side panel. Since P77 blocks are dragged to
+  retime them and resized from their edges (see the split note below the table). Since P80 (owner feedback) the
+  editor works on its own copy with its own undo / redo and an explicit **Save** (Replace current or Save as new
+  version, one project undo step) / **Cancel** (asks before discarding); unsaved work is kept as a device draft and
+  offered back; an outside change while editing shows a banner; on the phone the selection's actions are a bottom
+  toolbar whose buttons open the form sections in sheets, like the main timeline.
 
 Phase 2 is split into small PRs like Phase 1: one step per PR, its own `tasks.json` entry, CI `build` green, merged
 before the next starts. Existing clip types must not change in any step (their parity goldens stay byte-identical).
@@ -450,6 +453,14 @@ editor with the object list, the property and event forms, add / delete, and a r
 **2.4 (P77)** adds drag and resize retiming on those tracks. The former 2.6 (sub-tracks under the clip on the main
 timeline) is dropped: the tracks live in the scene editor. Agent tools and the AI rule moved from 2.4 to **2.5
 (P78)**, the storyboard mapping from 2.5 to **2.6 (P79)**.
+
+**Scene editor follow-ups after Phase 2 (owner feedback, 2026-11-16).** Four items, one small PR each: **P80** (done)
+Save / Cancel instead of saving every edit: the editor keeps its own copy with its own undo / redo, Save asks Replace
+current or Save as new version (one project undo step), closing with unsaved changes asks first, unsaved work is a
+device draft offered back next time, an outside change while editing shows a banner; and the phone layout follows the
+main timeline (a bottom toolbar for the selection whose buttons open form sections in sheets). This replaces P76's
+"one undo step and one stored version per gesture". **P81** (next): 3D controls in the preview (move / rotate /
+scale gizmos) and the camera as an object with an edit view. **P82**: Script objects.
 
 ### Phase 3 — third-party clip types
 
