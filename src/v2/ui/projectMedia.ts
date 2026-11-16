@@ -1,12 +1,12 @@
 import { codeRoleOf, type Project } from "../domain";
 import type { ProjectMedia } from "./MediaPicker";
 
-/** Every video/image/HTML (code)/audio asset imported into the project (even if no clip uses it any more), newest first.
+/** Every video/image/HTML (code)/audio/3D scene asset in the project (even if no clip uses it any more), newest first.
  * Built-in stickers are excluded: they live in the Sticker tab. */
 export function projectMediaList(project: Project, thumbs: Record<string, string> = {}): ProjectMedia[] {
   const out: ProjectMedia[] = [];
   for (const a of Object.values(project.assets)) {
-    if (a.kind !== "video" && a.kind !== "image" && a.kind !== "audio" && a.kind !== "html") continue;
+    if (a.kind !== "video" && a.kind !== "image" && a.kind !== "audio" && a.kind !== "html" && a.kind !== "scene") continue;
     if (a.name.startsWith("sticker-")) continue;
     if (codeRoleOf(a) !== "clip") continue; // P38: code effects/transitions live in Effects / Transitions → Custom (code)
     const v = a.versions.find((x) => x.id === a.selectedVersionId) ?? a.versions[a.versions.length - 1];

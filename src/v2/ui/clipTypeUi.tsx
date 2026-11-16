@@ -26,7 +26,7 @@ export type InspectorTabRef = InspectorTabId | { id: InspectorTabId; label: stri
 /** Buttons in the desktop inspector header (P70); `edit-all` only for a clip on a styled text layer. */
 export type InspectorActionId = "edit-all" | "caption-style" | "subtitles" | "edit-code";
 /** Primary tools on the mobile clip toolbar (P70); a nested list is "the first of these that applies". */
-export type ToolId = "adjust" | "audio" | "speed" | "link" | "to-main" | "colour" | "fx" | "style" | "anim" | "subs" | "params" | "code" | "edit-audio";
+export type ToolId = "adjust" | "audio" | "speed" | "link" | "to-main" | "colour" | "fx" | "style" | "anim" | "subs" | "params" | "code" | "edit-audio" | "scene";
 export type ToolRef = ToolId | ToolId[];
 
 export interface ClipTypeUi {

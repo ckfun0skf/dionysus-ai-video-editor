@@ -1721,3 +1721,5 @@ select.v2-tp-field { -webkit-appearance: none; appearance: none; padding-right: 
 .v2-scene-issues li.is-error { color: #ff8a7a; }
 .v2-scene-issues li.is-warning { color: #ffd27a; }
 .v2-scene-panel h4 small { font-weight: 400; opacity: .6; margin-left: 4px; }
+.v2-app .v2-scene-panel .v2-btn.v2-scene-add { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px; margin-top: 8px; }
+.v2-scene-anims { opacity: .7; }

@@ -1,4 +1,4 @@
-import { newId, SCENE_MIME, type Asset, type SceneDoc } from "../domain";
+import { newId, SCENE_MIME, type Asset, type AssetVersion, type SceneDoc } from "../domain";
 
 type BlobPut = { put(key: string, blob: Blob): Promise<void> };
 
@@ -6,5 +6,15 @@ type BlobPut = { put(key: string, blob: Blob): Promise<void> };
 export async function sceneAsset(blobs: BlobPut, doc: SceneDoc, name = doc.name || "3D scene"): Promise<Asset> {
   const id = newId("ast"), versionId = newId("ver"), blobKey = `${id}/${versionId}`;
   await blobs.put(blobKey, new Blob([JSON.stringify(doc, null, 2)], { type: SCENE_MIME }));
-  return { id, kind: "scene", name, selectedVersionId: versionId, versions: [{ id: versionId, createdAt: new Date().toISOString(), media: { blobKey, mime: SCENE_MIME, width: 1920, height: 1080 }, provenance: { source: "import", inputs: [] } }] };
+  return { id, kind: "scene", name, selectedVersionId: versionId, versions: [{ id: versionId, createdAt: new Date().toISOString(), media: sceneMedia(blobKey), provenance: { source: "import", inputs: [] } }] };
+}
+
+/** A scene version's media: the JSON blob at 1920×1080. No `durationTicks`: a scene's length is free (like a code clip's). */
+export const sceneMedia = (blobKey: string): AssetVersion["media"] => ({ blobKey, mime: SCENE_MIME, width: 1920, height: 1080 });
+
+/** P75: store a changed scene document as a new version of `asset` (the caller dispatches `cmd.addAssetVersion`). */
+export async function sceneVersion(blobs: BlobPut, asset: Asset, doc: SceneDoc): Promise<AssetVersion> {
+  const id = newId("ver"), blobKey = `${asset.id}/${id}`;
+  await blobs.put(blobKey, new Blob([JSON.stringify(doc, null, 2)], { type: SCENE_MIME }));
+  return { id, createdAt: new Date().toISOString(), media: sceneMedia(blobKey), provenance: { source: "import", inputs: [] } };
 }
