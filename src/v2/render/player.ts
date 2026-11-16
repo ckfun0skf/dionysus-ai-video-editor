@@ -444,7 +444,8 @@ export class Player {
         lc.save(); lc.setTransform(1, 0, 0, 1, 0, 0); lc.globalAlpha = 1; lc.globalCompositeOperation = "source-over"; lc.clearRect(0, 0, canvas.width, canvas.height); lc.restore();
         try { fn(lc); } finally { applyEffectFrame(lc, canvas.width, canvas.height, fxOverlay, true); withBlend(ctx, blend, () => ctx.drawImage(lc.canvas, 0, 0)); }
       };
-      // P67: stateless clip types (clipTypes/<id>/render.ts `draw`: text, placeholder, blank) draw through their renderer.
+      // P67: stateless clip types (clipTypes/<id>/render.ts `draw`: text, blank, the unknown-type slate) and, before any
+      // plugin (P73), the shared placeholder slate draw through their renderer.
       const renderer = clipRendererFor(placement);
       if (renderer?.draw) {
         if (ctx && canvas && !track.hidden) {
@@ -460,7 +461,7 @@ export class Player {
       }
       const version = versionOfPlacement(this.project, placement);
       if (!version || track.hidden) continue;
-      // P68: html, video, image, audio (and an unknown clipType) run every frame through their stateful renderer.
+      // P68: html, video, image and audio run every frame through their stateful renderer.
       renderer?.frame?.({
         g: ctx, canvas, time: this.time, offline: this.offline, track, placement, version, sourceTicks, mix, tfx,
         setBox: (r) => { this.boxes.set(placement.id, r); },
@@ -823,5 +824,5 @@ export function drawSubtitle(ctx: CanvasRenderingContext2D, w: number, h: number
   ctx.restore();
 }
 
-/** P35: preview slate for a placeholder shot; moved to the placeholder clip renderer in P67 (re-exported for existing imports). */
-export { drawPlaceholderSlate } from "../clipTypes/placeholder/render";
+/** P35: preview slate for a placeholder shot; since P73 shared host code in render/placeholderSlate.ts (re-exported for existing imports). */
+export { drawPlaceholderSlate } from "./placeholderSlate";

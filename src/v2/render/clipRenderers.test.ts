@@ -1,23 +1,27 @@
 import { describe, expect, it } from "vitest";
 import { CLIP_RENDERER_PATHS, CLIP_RENDERER_PROBLEMS, CLIP_RENDERERS, checkClipRenderer, clipRendererFor, loadClipRenderers, type ClipRenderer } from "./clipRenderers";
 import { TEXT_SOURCE, type Placement } from "../domain/model";
+import { PLACEHOLDER_RENDERER } from "./placeholderSlate";
 
 const pl = (over: Partial<Placement>): Placement => ({ id: "p", startTicks: 0, durationTicks: 1, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "image", ...over });
 
 describe("P67/P68 clip renderer table", () => {
   it("discovers the moved renderers with no problems", () => {
     expect(CLIP_RENDERER_PROBLEMS).toEqual([]);
-    const ids = ["audio", "blank", "html", "image", "placeholder", "text", "unknown", "video"];
+    // P73: the placeholder slate is shared host code (render/placeholderSlate.ts), no longer a clip type renderer.
+    const ids = ["audio", "blank", "html", "image", "text", "unknown", "video"];
     expect([...CLIP_RENDERERS.keys()].sort()).toEqual(ids);
     expect(CLIP_RENDERER_PATHS.sort()).toEqual(ids.map((id) => `../clipTypes/${id}/render.ts`));
   });
   it("stateless types draw, media and code types run per frame", () => {
-    for (const id of ["blank", "placeholder", "text"]) expect([typeof CLIP_RENDERERS.get(id)!.draw, typeof CLIP_RENDERERS.get(id)!.frame]).toEqual(["function", "undefined"]);
-    for (const id of ["audio", "html", "image", "unknown", "video"]) expect([typeof CLIP_RENDERERS.get(id)!.draw, typeof CLIP_RENDERERS.get(id)!.frame]).toEqual(["undefined", "function"]);
+    for (const id of ["blank", "text", "unknown"]) expect([typeof CLIP_RENDERERS.get(id)!.draw, typeof CLIP_RENDERERS.get(id)!.frame]).toEqual(["function", "undefined"]);
+    for (const id of ["audio", "html", "image", "video"]) expect([typeof CLIP_RENDERERS.get(id)!.draw, typeof CLIP_RENDERERS.get(id)!.frame]).toEqual(["undefined", "function"]);
   });
   it("picks the renderer by variant, unknown for unregistered types, none for effects", () => {
     expect(clipRendererFor(pl({ clipType: "text" }))?.id).toBe("text");
     expect(clipRendererFor(pl({ placeholder: { label: "x" } }))?.id).toBe("placeholder");
+    // P73: a placeholder of any type gets the host slate before any plugin lookup.
+    for (const t of ["image", "video", "audio", "html", "text", "effect", "scene3d"] as const) expect(clipRendererFor(pl({ clipType: t as Placement["clipType"], placeholder: { label: "x" } }))).toBe(PLACEHOLDER_RENDERER);
     expect(clipRendererFor(pl({ blank: { color: "#000000" } }))?.id).toBe("blank");
     for (const t of ["image", "video", "audio", "html"] as const) expect(clipRendererFor(pl({ clipType: t }))?.id).toBe(t);
     expect(clipRendererFor(pl({ clipType: "scene3d" as Placement["clipType"] }))?.id).toBe("unknown");

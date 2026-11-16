@@ -141,7 +141,7 @@ function SourceBar({ total, inT, span, locked, strip, peaks, onChange, onCommit,
   );
 }
 
-function AssetPicker({ visual, project, kind, current, thumbs, onPick, onUpload, onBack, kindOf, story, label = "Replace asset" }: { visual?: boolean; story?: string; label?: string; kindOf: (id: string) => string | undefined; project: Project; kind: Asset["kind"]; current: string; thumbs?: Record<string, string>; onPick: (id: string) => void; onUpload?: (files: File[]) => Promise<string[]>; onBack: () => void }) {
+function AssetPicker({ visual, fill, project, kind, current, thumbs, onPick, onUpload, onBack, kindOf, story, label = "Replace asset" }: { visual?: boolean; fill?: boolean; story?: string; label?: string; kindOf: (id: string) => string | undefined; project: Project; kind: Asset["kind"]; current: string; thumbs?: Record<string, string>; onPick: (id: string) => void; onUpload?: (files: File[]) => Promise<string[]>; onBack: () => void }) {
   const file = useRef<HTMLInputElement>(null);
   const [note, setNote] = useState<string>();
   const list = Object.values(project.assets).filter((a) => (visual ? a.kind !== "audio" : a.kind === kind) && a.id !== current && a.versions.length);
@@ -150,6 +150,8 @@ function AssetPicker({ visual, project, kind, current, thumbs, onPick, onUpload,
     <div className="v2-slip-picker" role="group" aria-label={label} data-testid="asset-picker">
       <p className="v2-abnote">{visual
         ? <>Choose a video, image or code clip, or upload one. It fills this placeholder in place; its position, length and linked layers stay.</>
+        : fill
+        ? <>Choose a{/^[aeiou]/.test(kind) ? "n" : ""} {kind} clip, or upload one. It fills this placeholder in place; its position, length and linked layers stay.</>
         : story
         ? <>This clip is {story} of the storyboard: the file you choose becomes a <b>new version</b> of {story} and applies to this clip only (other copies of the shot stay as they are). If the file is longer than the shot, you can trim it or keep its full length.</>
         : <>Choose another {kind} for this clip, or upload one. Position, length, effects, Adjust, transitions, volume, sound position, keyframes and links stay.</>}</p>
@@ -219,14 +221,15 @@ export function AdjustRange({ engine, project, clipId, blobs, peaks, strips, thu
   useEffect(() => () => onMix?.(undefined), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!orig || !base) return <p className="v2-abnote">Select a video, audio or HTML clip.</p>;
-  // P35: a shot placeholder takes any visual asset straight away (one undo step); its place and length stay unless the file is shorter.
+  // P35: a shot placeholder takes an asset straight away (P73: the image placeholder Send makes any visual asset, a
+  // placeholder of another type only its own kind, as `slip.replaceError` checks) (one undo step); its place and length stay unless the file is shorter.
   if (orig.placeholder) return (
     <div className="v2-slip is-picking" data-testid="adjust-range">
       <header className="v2-slip-head v2-sheet-head">
         <button type="button" className="v2-icon v2-slip-hbtn" aria-label="Cancel" title="Cancel" onClick={() => onDone()}>✕</button>
         <h3>Fill placeholder</h3><span className="v2-slip-hbtn" aria-hidden />
       </header>
-      <AssetPicker visual label="Fill placeholder" kindOf={(id) => engine.getState().project.assets[id]?.kind} project={project} kind="video" current="" thumbs={thumbs} onUpload={onUpload} onBack={() => onDone()}
+      <AssetPicker visual={orig.clipType === "image"} fill label="Fill placeholder" kindOf={(id) => engine.getState().project.assets[id]?.kind} project={project} kind={orig.clipType === "image" ? "video" : (orig.clipType as Asset["kind"])} current="" thumbs={thumbs} onUpload={onUpload} onBack={() => onDone()}
         onPick={(id) => { const ok = engine.dispatch(cmd.replaceClipAsset(clipId, id, "shorten"), "Fill placeholder"); onDone(ok ? `Placeholder filled with ${engine.getState().project.assets[id]?.name ?? "the asset"}.` : "Couldn't fill the placeholder."); }} />
     </div>
   );

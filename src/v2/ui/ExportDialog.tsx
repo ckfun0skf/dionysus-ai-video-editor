@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { exportName, exportPlaceholderWarning, exportProject, formatLabel, formatNote, probeExportFormat, RESOLUTIONS, type ExportFormat, type ExportProgress, type ExportResult, type Resolution } from "../render";
+import { exportName, exportPlaceholderWarning, exportProject, exportUnknownTypeWarning, formatLabel, formatNote, probeExportFormat, RESOLUTIONS, type ExportFormat, type ExportProgress, type ExportResult, type Resolution } from "../render";
 import type { Project } from "../domain";
 import type { BlobStore } from "../ports";
 import { Ic } from "./Icon";
@@ -38,6 +38,7 @@ export function ExportDialog({ project, blobs, res, onRes, onClose, run = export
     }
   };
   const phWarn = exportPlaceholderWarning(project);
+  const unkWarn = exportUnknownTypeWarning(project);
   const pct = st.s === "running" ? (st.p.stage === "video" ? Math.round((st.p.done / Math.max(1, st.p.total)) * 100) : st.p.stage === "finalize" ? 100 : 0) : 0;
   return (
     <div className="v2-modal" role="dialog" aria-modal="true" aria-label="Export video">
@@ -50,7 +51,8 @@ export function ExportDialog({ project, blobs, res, onRes, onClose, run = export
           <p className="v2-muted" data-testid="export-format">{fmt ? `This browser will export ${formatLabel(fmt)}${fmt.ext === "webm" ? ", recorded in real time" : ""}.` : "Checking what this browser can encode…"}</p>
           {fmt && formatNote(fmt) && <p className="v2-muted">{formatNote(fmt)}</p>}
           {phWarn && <div className="v2-warn" role="alert" data-testid="export-placeholders"><b><Ic g="⚠" size={16} /> {phWarn.title}</b><p>{phWarn.body}</p></div>}
-          <div className="v2-modal-actions"><button className="v2-btn" onClick={onClose}>Cancel</button><button className="v2-btn primary" onClick={() => void start()}>{phWarn ? "Export anyway" : "Start export"}</button></div>
+          {unkWarn && <div className="v2-warn" role="alert" data-testid="export-unknown-types"><b><Ic g="⚠" size={16} /> {unkWarn.title}</b><p>{unkWarn.body}</p></div>}
+          <div className="v2-modal-actions"><button className="v2-btn" onClick={onClose}>Cancel</button><button className="v2-btn primary" onClick={() => void start()}>{phWarn || unkWarn ? "Export anyway" : "Start export"}</button></div>
         </>}
         {st.s === "running" && <>
           <p role="status">{STAGE[st.p.stage]}{st.p.stage === "video" ? ` ${st.p.done} / ${st.p.total}` : ""}</p>

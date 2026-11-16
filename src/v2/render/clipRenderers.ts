@@ -1,21 +1,23 @@
 /// <reference types="vite/client" />
 /**
  * Clip renderers (P67, docs/v2/CLIP_PLUGIN_ARCHITECTURE.md Phase 1 step 1.3). Each `src/v2/clipTypes/<id>/render.ts`
- * default-exports a `ClipRenderer` for one clip type (the variant id for placeholder / blank). The Player asks this
+ * default-exports a `ClipRenderer` for one clip type (the variant id for blank). A placeholder of any type is drawn by
+ * the host slate (render/placeholderSlate.ts, P73) before any plugin lookup. The Player asks this
  * table first and keeps the shared host work: layer order, effects and their scopes, transitions, scene capture
  * layers, blend, the clip box, the hidden-track rule, and the media/HTML element pools. Preview and export both
  * draw through `Player.draw()` (export via `renderAt`), so a renderer runs identically in both; it may branch on
  * `host.offline` only where the look is meant to differ (the placeholder slate is black in export).
  *
- * P67 moved text, placeholder and blank (stateless `draw`). P68 moved html, video, image and audio, plus the fallback
- * for an unknown `clipType` (stateful `frame`: they keep media elements, iframes and load state in the Player's pools,
+ * P67 moved text, placeholder and blank (stateless `draw`; P73 moved the placeholder into shared host code and made
+ * the unknown-type fallback a stateless slate). P68 moved html, video, image and audio (stateful `frame`: they keep media elements, iframes and load state in the Player's pools,
  * reached through `host.media`, and run every frame for a visible clip even without a canvas, e.g. to keep audio in
  * sync).
  */
 import type { AssetVersion, Placement, Project, Track } from "../domain/model";
 import type { HtmlClipInput, HtmlClipManifest } from "../domain/htmlClipPackage";
 import type { TrackSignal } from "../domain/tracking";
-import { CLIP_TYPES, UNKNOWN_CLIP_TYPE, variantOf } from "../clipTypes";
+import { CLIP_TYPES, UNKNOWN_CLIP_TYPE, isPlaceholder, variantOf } from "../clipTypes";
+import { PLACEHOLDER_RENDERER } from "./placeholderSlate";
 import type { ActiveLayer, Placed } from "./frame";
 import type { ClipLoad } from "./stability";
 import type { HtmlClipHost } from "./htmlClip";
@@ -146,10 +148,12 @@ export const CLIP_RENDERER_PATHS = Object.keys(found);
 if (CLIP_RENDERER_PROBLEMS.length) console.error(`[clipRenderers] ${CLIP_RENDERER_PROBLEMS.length} invalid renderer module(s):\n  ${CLIP_RENDERER_PROBLEMS.join("\n  ")}`);
 
 /**
- * The renderer for a placement: its variant first, then the `unknown` renderer for a `clipType` this build does not
+ * The renderer for a placement: a placeholder of any type gets the host slate first (P73, decision 9; plugins never
+ * draw placeholders), then its variant, then the `unknown` renderer for a `clipType` this build does not
  * register. Undefined only for a registered type without a renderer (effect: applied by the Player, never drawn).
  */
 export const clipRendererFor = (p: Placement): ClipRenderer | undefined => {
+  if (isPlaceholder(p)) return PLACEHOLDER_RENDERER;
   const id = variantOf(p);
   return CLIP_RENDERERS.get(id) ?? (CLIP_TYPES.core(id) ? undefined : CLIP_RENDERERS.get(UNKNOWN_CLIP_TYPE));
 };

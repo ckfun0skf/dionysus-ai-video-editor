@@ -2,7 +2,7 @@
 import type { TextData } from "./text";
 import type { ClipMask } from "./mask";
 import type { Storyboard } from "./storyboard";
-import { clipTypeOf, coreOf } from "../clipTypes";
+import { clipTypeOf, coreOf, isKnownClipType } from "../clipTypes";
 /** 3.1 (V2-CUT-01): optional `storyboard`. Older schemas upgrade via persistence/schema MIGRATIONS. */
 export const SCHEMA = "dionysus/3.1" as const;
 
@@ -395,7 +395,8 @@ export function validateComposition(comp: Composition): string[] {
       if (p.durationTicks <= 0) errors.push(`${p.id}: non-positive duration`);
       if (p.startTicks < 0) errors.push(`${p.id}: negative start`);
       if (p.sourceInTicks < 0) errors.push(`${p.id}: negative source in`);
-      if (trackKindFor(p.clipType) !== t.kind) errors.push(`${p.id}: ${p.clipType} on ${t.kind} track`);
+      // P73 (§6): a clipType this build does not register may sit on any track (a newer build put it there); it is kept as is.
+      if (isKnownClipType(p.clipType) && trackKindFor(p.clipType) !== t.kind) errors.push(`${p.id}: ${p.clipType} on ${t.kind} track`);
       const next = sorted[i + 1];
       if (next && p.startTicks + p.durationTicks > next.startTicks) errors.push(`${p.id} overlaps ${next.id}`);
     });
