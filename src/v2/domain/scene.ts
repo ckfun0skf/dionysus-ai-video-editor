@@ -192,7 +192,7 @@ export function modelAnimations(doc: Pick<SceneDoc, "files">, model: string | un
   return typeof url === "string" ? glbInfoOfDataUrl(url)?.animations.map((a) => a.name) : undefined;
 }
 /** Node names of a model object's GLB (undefined when unknown). */
-function modelNodes(doc: Pick<SceneDoc, "files">, model: string | undefined): string[] | undefined {
+export function modelNodes(doc: Pick<SceneDoc, "files">, model: string | undefined): string[] | undefined {
   const url = model && isObj(doc.files) ? doc.files[model] : undefined;
   return typeof url === "string" ? glbInfoOfDataUrl(url)?.nodeNames : undefined;
 }
