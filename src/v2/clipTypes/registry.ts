@@ -24,6 +24,13 @@ export function checkClipType(c: unknown): string[] {
     if (!Array.isArray(a.ext) || a.ext.some((e) => typeof e !== "string" || e !== e.toLowerCase() || e.startsWith("."))) out.push("accepts.ext must be lower-case extensions without the dot");
     if (!a.mimeByExt || typeof a.mimeByExt !== "object") out.push("accepts.mimeByExt is required");
   }
+  if (t.agent !== undefined) {
+    const ag = t.agent as Partial<NonNullable<ClipTypeCore["agent"]>>;
+    if (ag.tools !== undefined && (!Array.isArray(ag.tools) || ag.tools.some((x) => !x || typeof x.name !== "string" || !/^[a-z][a-z0-9_]*$/.test(x.name)))) out.push("agent.tools need snake_case names");
+    if (ag.tools?.length && typeof ag.run !== "function") out.push("agent.tools need agent.run");
+    if (ag.rules !== undefined && (!Array.isArray(ag.rules) || ag.rules.some((r) => !r || typeof r.key !== "string" || typeof r.text !== "string"))) out.push("agent.rules must be { key, text }");
+    for (const k of ["clipTools", "props"] as const) if (ag[k] !== undefined && (!Array.isArray(ag[k]) || ag[k]!.some((x) => typeof x !== "string"))) out.push(`agent.${k} must be a list of names`);
+  }
   if (t.story !== undefined) {
     const st = t.story as Partial<NonNullable<ClipTypeCore["story"]>>;
     if (!Array.isArray(st.assetTypes)) out.push("story.assetTypes must be an array");

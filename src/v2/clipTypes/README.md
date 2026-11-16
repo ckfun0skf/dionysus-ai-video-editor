@@ -2,17 +2,20 @@
 
 One folder per clip type. Design, decisions and the phased plan: `docs/v2/CLIP_PLUGIN_ARCHITECTURE.md`.
 
-**Status (P71, Phase 1 step 1.6):** the domain predicates (`trackKindFor`, `isStill`, `canChromaKey`, `hasSound`,
+**Status (P72, Phase 1 step 1.7):** the domain predicates (`trackKindFor`, `isStill`, `canChromaKey`, `hasSound`,
 `canSetRange`, `slipKind`, …) and the export audio plan read this registry (P66). Every drawn type renders through
 its `render.ts`, in preview and export alike: text, placeholder and blank (P67), html, video, image, audio and the
 unknown fallback (P68). The timeline clip look and asset thumbnails/previews come from `ui.tsx` (P69), and so do the
 inspector tabs, mobile toolbar and context menu (P70). Storyboard mapping and file import read `core.story` and
-`core.accepts` (P71). Agent tools still use the `clipType` checks listed in §2 of the design doc (steps 1.7–1.8).
+`core.accepts` (P71). The agent surface reads `core.agent`: contributed WebMCP tools, AI guide rules and
+`get_timeline` fields, and the per-type tool checks `clipTools` / `props` (P72). Unknown-type handling is step 1.8.
 
 ```
 clipTypes/
-  types.ts      ClipTypeCore, ClipCaps, ClipVariant, ClipAccepts, ClipStory (P71)
+  types.ts      ClipTypeCore, ClipCaps, ClipVariant, ClipAccepts, ClipStory (P71), ClipAgent (P72)
   story.ts      storyOf(kind), kindForSlotType(t), kindForFile(file), mimeForFile(file), DEFAULT_CLIP_STORY (P71)
+  agent.ts      clipTypeAgentTools(), clipTypeAgentRules(), agentToolOwner(name), clipTypeDescribe(p), clipToolFits,
+                clipPropFits (P72)
   define.ts     defineClipType({…}) — the default export of every core.ts
   registry.ts   createClipTypeRegistry(), checkClipType()
   load.ts       registers discovered modules, collects problems
