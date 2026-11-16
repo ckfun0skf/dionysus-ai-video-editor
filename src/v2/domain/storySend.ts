@@ -25,7 +25,7 @@ import { previousAdjacent, setTransition } from "./transitions";
 import { secondsToTicks, TICKS_PER_SECOND } from "./time";
 import { followKeyframes, type MotionEffect } from "./storyFollow";
 import { evenSplitCueWords, expandWordPop } from "./subtitleLayer";
-import { storyOf } from "../clipTypes";
+import { CLIP_TYPES, storyOf } from "../clipTypes";
 
 /** What one send added, for the confirmation note. */
 export interface SendResult { shots: number; /** P35: shots sent as placeholders (no clip yet). */ placeholders?: number; /** P63: shots placed among clips already on the timeline (story order, later clips moved up). */ inserted?: string[]; /** P63: shots added after the last clip. */ appended?: string[]; /** P63: shots sent as placeholders. */ placeholderShots?: string[]; layers: number; captions: number; effects: number; transitions: number; skippedLayers: number; audio: number; skippedAudio: number; firstClipId?: string }
@@ -142,10 +142,15 @@ export function placeholderLabel(b: Storyboard, shot: Shot): string {
   return [`Shot ${n}${shot.title ? ` · ${shot.title}` : ""}`, short].filter(Boolean).join(" — ");
 }
 
-/** P35: a placeholder main clip for a shot with no clip yet: the shot's planned length (durationSec, else the default). */
+/**
+ * P35: a placeholder main clip for a shot with no clip yet: the shot's planned length (durationSec, else the default).
+ * P79: its `clipType` is the intended type when a clip type plays shots of this render (`story.shotRender`: a render
+ * "scene" shot gets a scene placeholder); otherwise "image", as since P35.
+ */
 export function placeholderClip(b: Storyboard, shot: Shot, at: number): Placement {
   const durationTicks = plannedTicks(shot);
-  return { id: newId("plc"), startTicks: at, durationTicks, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "image", volume: 1, storyShot: shot.id, placeholder: { label: placeholderLabel(b, shot) }, ...(shot.mask ? { mask: structuredClone(shot.mask) } : {}) };
+  const intended = shot.render ? CLIP_TYPES.list().find((c) => c.story?.shotRender === shot.render)?.id : undefined;
+  return { id: newId("plc"), startTicks: at, durationTicks, sourceInTicks: 0, source: TEXT_SOURCE, clipType: (intended ?? "image") as Placement["clipType"], volume: 1, storyShot: shot.id, placeholder: { label: placeholderLabel(b, shot) }, ...(shot.mask ? { mask: structuredClone(shot.mask) } : {}) };
 }
 
 /** P35: placeholder clips on the root composition. */

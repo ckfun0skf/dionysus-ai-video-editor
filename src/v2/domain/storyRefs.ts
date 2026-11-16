@@ -65,7 +65,7 @@ function relinkLayers(p: Project, shotId: string, slot: AssetSlot): Project {
 /** Asset types with labels, in the order the pickers show them. */
 export const SLOT_TYPES: { id: StoryAssetType; label: string }[] = [
   { id: "character", label: "Character" }, { id: "location", label: "Location" }, { id: "prop", label: "Prop" }, { id: "style", label: "Style" },
-  { id: "image", label: "Image" }, { id: "frame", label: "Frame" }, { id: "video", label: "Video" }, { id: "audio", label: "Audio" }, { id: "html", label: "HTML" },
+  { id: "image", label: "Image" }, { id: "frame", label: "Frame" }, { id: "video", label: "Video" }, { id: "audio", label: "Audio" }, { id: "html", label: "HTML" }, { id: "scene", label: "3D scene" },
 ];
 if (SLOT_TYPES.length !== STORY_ASSET_TYPES.length) throw new Error("SLOT_TYPES out of sync");
 

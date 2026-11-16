@@ -49,7 +49,9 @@ You do **not** write any of this per type:
    | `asset` | `"media"` reads a project asset version; `"none"` carries its own data | — |
 
    Optional: `accepts` (which imported files become assets of this kind), `story` (storyboard slot and Send / Sync
-   rules, default `DEFAULT_CLIP_STORY`), `agent` (WebMCP tools with `run`, AI guide rules, extra `get_timeline`
+   rules, default `DEFAULT_CLIP_STORY`; since P79 `story.shotRender` names a storyboard shot render the type plays,
+   which makes it the placeholder type for such shots and lets Sync turn its main-track clips into such shots, as
+   the scene type does for `render: "scene"`), `agent` (WebMCP tools with `run`, AI guide rules, extra `get_timeline`
    fields, and which built-in tools / `set_clip_props` keys only fit this type). Bump `version` when the look or
    behaviour of existing data changes.
 3. **Write `render.ts`**, default-exporting a `ClipRenderer` with `id` and exactly one of:

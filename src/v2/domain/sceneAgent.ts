@@ -177,6 +177,15 @@ export function applySceneTool(name: SceneEditTool, doc: SceneDoc, a: Record<str
         if (r.error) return fail(`"rename": ${r.error}`);
         d = r.doc; id = a.rename;
       }
+      if (a.file !== undefined) {
+        // P79: give the object a GLB model file (added to the scene's files; the object becomes that model).
+        const file = a.file;
+        if (!isObj(file) || typeof file.name !== "string" || typeof file.dataUrl !== "string" || !/^data:/.test(file.dataUrl)) return fail('"file" must be { name: "robot.glb", dataUrl: "data:model/gltf-binary;base64,…" } or { url }.');
+        if (!/\.glb$/i.test(file.name)) return fail("Only .glb models can be added (a binary glTF in one file).");
+        d = { ...d, files: { ...(isObj(d.files) ? d.files : {}), [file.name]: file.dataUrl } };
+        const cur = objectsOf(d).find((o) => o.id === id);
+        d = updateSceneObject(d, id, { model: file.name, shape: undefined, ...(cur?.model ? {} : { size: 1.6 }) });
+      }
       if (a.props !== undefined && !isObj(a.props)) return fail(`"props" must be an object of fields: ${OBJECT_KEYS.join(", ")}.`);
       const p = objectPatch(isObj(a.props) ? a.props : {});
       if ("error" in p) return fail(p.error);
@@ -325,3 +334,27 @@ export function sceneObjectsForAgent(doc: SceneDoc) {
     cameraCalls: Object.keys(SCENE_CAMERA_FUNCTIONS),
   };
 }
+
+/**
+ * P79: apply_scene_edits — run several edits in order on one scene, all or nothing: the first refused edit refuses the
+ * batch (its index in the message) and nothing changes. The caller stores the result as ONE version in ONE undo step.
+ */
+export function applySceneEdits(doc: SceneDoc, edits: unknown): { ok: true; doc: SceneDoc; results: Record<string, unknown>[]; warnings: string[] } | { ok: false; error: string } {
+  if (!Array.isArray(edits) || !edits.length) return { ok: false, error: `"edits" must be a non-empty list of { tool, …that tool's arguments } (tools: ${SCENE_EDIT_TOOLS.join(", ")}).` };
+  if (edits.length > MAX_SCENE_EDITS) return { ok: false, error: `At most ${MAX_SCENE_EDITS} edits per call (got ${edits.length}). Split the list.` };
+  let d = doc;
+  const results: Record<string, unknown>[] = [], warnings: string[] = [];
+  for (let i = 0; i < edits.length; i++) {
+    const e = edits[i];
+    const tool = isObj(e) ? e.tool : undefined;
+    if (typeof tool !== "string" || !isSceneEditTool(tool)) return { ok: false, error: `edits[${i}]: "tool" must be one of ${SCENE_EDIT_TOOLS.join(", ")}. Nothing changed.` };
+    const r = applySceneTool(tool, d, e as Record<string, unknown>);
+    if (!r.ok) return { ok: false, error: `edits[${i}] (${tool}): ${r.error} Nothing changed.` };
+    d = r.doc;
+    results.push({ index: i, tool, ...r.info });
+    for (const w of r.warnings) if (!warnings.includes(w)) warnings.push(w);
+  }
+  return { ok: true, doc: d, results, warnings };
+}
+/** P79: the most edits apply_scene_edits takes in one call. */
+export const MAX_SCENE_EDITS = 200;

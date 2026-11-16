@@ -87,7 +87,7 @@ export interface ShotPatch {
    */
   dialogue?: string; captions?: boolean;
   qa?: QaCheck[]; layers?: StoryLayer[]; effects?: StoryEffect[];
-  render?: "ai" | "html" | "still"; clipSlot?: string;
+  render?: "ai" | "html" | "still" | "scene"; clipSlot?: string;
   /**
    * P2B (item 20): render "still": show this colour / gradient instead of an image asset (kept in the implicit slot
    * `backgroundId(shot)`; `clipSlot` is ignored). null = use `clipSlot` again.
@@ -109,9 +109,10 @@ export interface ShotPatch {
   clipInSec?: number;
 }
 
-/** Slots that can be the clip of a shot rendered `render` (html: html assets; still: image assets). */
-export function clipSlotsFor(b: Storyboard, render: "html" | "still"): AssetSlot[] {
-  return Object.values(b.slots).filter((s) => s.implicit !== "background" && (render === "html" ? s.type === "html" : s.type === "image"));
+/** Slots that can be the clip of a shot rendered `render` (html: html assets; still: image assets; scene: scene assets, P79). */
+export function clipSlotsFor(b: Storyboard, render: "html" | "still" | "scene"): AssetSlot[] {
+  const want = render === "html" ? "html" : render === "scene" ? "scene" : "image";
+  return Object.values(b.slots).filter((s) => s.implicit !== "background" && s.type === want);
 }
 
 function blankShot(id: string, init: ShotPatch = {}): Shot {
@@ -191,7 +192,7 @@ export function updateShot(p: Project, id: string, patch: ShotPatch): Project {
  * Switch how a shot's clip is made. An ai shot's own clip asset is kept aside (`ownAssetId`) while the shot shows a
  * slot, so switching back restores its versions. The clip slot is added to the shot's assets.
  */
-function withRender(b: Storyboard, s: Shot, render: "ai" | "html" | "still", clipSlot?: string): Shot {
+function withRender(b: Storyboard, s: Shot, render: "ai" | "html" | "still" | "scene", clipSlot?: string): Shot {
   const { render: _r, clipSlot: _c, ownAssetId, ...rest } = s;
   if (render === "ai") {
     const own = s.clipSlot ? ownAssetId : s.assetId;

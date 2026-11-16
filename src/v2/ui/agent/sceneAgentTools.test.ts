@@ -11,8 +11,9 @@ import type { BlobStore } from "../../ports";
 import { bytesToDataUrl, makeAnimatedGlb } from "../cubeGlb";
 import { agentStore, ALL_AGENT_TOOLS, registerAgentTools, type ToolResponse } from "./webMcp";
 import { runTimelineTool } from "./timelineTools";
+import { resetSceneAgentSession } from "../../clipTypes/scene/agent";
 
-const SCENE_TOOLS = ["create_scene_clip", "get_scene", "list_scene_objects", "add_scene_object", "set_scene_object", "remove_scene_object", "add_scene_event", "update_scene_event", "retime_scene_event", "remove_scene_event", "set_scene_world"];
+const SCENE_TOOLS = ["create_scene_clip", "get_scene", "list_scene_objects", "add_scene_object", "set_scene_object", "remove_scene_object", "add_scene_event", "update_scene_event", "retime_scene_event", "remove_scene_event", "set_scene_world", "apply_scene_edits"];
 const READ_ONLY = new Set(["get_scene", "list_scene_objects"]);
 
 const readBlob = (b: Blob) => new Promise<string>((res) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.readAsText(b); });
@@ -48,7 +49,7 @@ const sceneOf = async (p: Project, blobs: BlobStore, clipId: string): Promise<Sc
 };
 const sceneAsset = (p: Project) => Object.values(p.assets).find((a) => a.kind === "scene")!;
 
-beforeEach(() => { localStorage.clear(); agentStore.reset(); agentStore.setEnabled(true); });
+beforeEach(() => { localStorage.clear(); agentStore.reset(); agentStore.setEnabled(true); resetSceneAgentSession(); });
 afterEach(() => agentStore.reset());
 
 describe("P78 scene agent tools through WebMCP", () => {
@@ -111,25 +112,28 @@ describe("P78 scene agent tools through WebMCP", () => {
     expect(listed.json.objects.map((o: { id: string }) => o.id)).toEqual(["floor", "ball", "bot"]);
     expect(listed.json.objects[2].calls.map((c: { call: string }) => c.call)).toEqual(expect.arrayContaining(["play", "stop"]));
     const got = await call("get_scene", { clipId });
-    expect(got.json).toMatchObject({ clipId, version: { number: steps.length + 1, of: steps.length + 1 }, clipSec: { start: 4, length: 3 }, problems: [] });
+    // P79: one agent session, so all the edits updated the clip's first version (no version per call).
+    expect(got.json).toMatchObject({ clipId, version: { number: 1, of: 1 }, clipSec: { start: 4, length: 3 }, problems: [] });
     expect(got.json.scene.files["bot.glb"]).toMatch(/^<data:model\/gltf-binary/);
     expect(agentStore.get().log[0]).toMatchObject({ tool: "get_scene", ok: true, changed: false });
   });
 
-  it("saves through the version rules: a new version by default, replace in place with mode replace (remembered)", async () => {
+  it("saves through the version rules: one session version in mode new, newVersion starts another, replace in place with mode replace (remembered)", async () => {
     const e = setup(), blobs = memBlobs(), { call } = host(e, blobs);
     const clipId = (await call("create_scene_clip", { scene: SAMPLE_SCENE })).json.clip.id;
     expect(sceneAsset(e.getState().project).versions).toHaveLength(1);
     const n = await call("add_scene_object", { clipId, shape: "box", id: "a" });
-    expect(n.json.version).toMatchObject({ number: 2, of: 2, mode: "new" });
+    expect(n.json.version).toMatchObject({ number: 1, of: 1, mode: "new", saved: "updated this session's version" });
+    const n2 = await call("add_scene_object", { clipId, shape: "box", id: "a2", newVersion: true });
+    expect(n2.json.version).toMatchObject({ number: 2, of: 2, mode: "new", saved: "new version" });
     expect(e.getState().project.settings.versionSaveMode).toBeUndefined();
     const r = await call("add_scene_object", { clipId, shape: "box", id: "b", mode: "replace" });
-    expect(r.json.version).toMatchObject({ number: 2, of: 2, mode: "replace" });
+    expect(r.json.version).toMatchObject({ number: 2, of: 2, mode: "replace", saved: "replaced the shown version" });
     expect(e.getState().project.settings.versionSaveMode).toBe("replace");
     const r2 = await call("add_scene_object", { clipId, shape: "box", id: "c" });
     expect(r2.json.version).toMatchObject({ of: 2, mode: "replace" });
-    expect((await sceneOf(e.getState().project, blobs, clipId)).objects.map((o) => o.id).slice(-3)).toEqual(["a", "b", "c"]);
-    e.undo(); e.undo(); e.undo();
+    expect((await sceneOf(e.getState().project, blobs, clipId)).objects.map((o) => o.id).slice(-4)).toEqual(["a", "a2", "b", "c"]);
+    e.undo(); e.undo(); e.undo(); e.undo();
     expect(sceneAsset(e.getState().project).versions).toHaveLength(1);
     expect((await sceneOf(e.getState().project, blobs, clipId)).objects).toHaveLength(SAMPLE_SCENE.objects.length);
   });

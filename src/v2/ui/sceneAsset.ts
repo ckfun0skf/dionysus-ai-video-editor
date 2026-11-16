@@ -1,4 +1,4 @@
-import { newId, SCENE_MIME, sceneMediaRef, type Asset, type AssetVersion, type SceneDoc } from "../domain";
+import { newId, newSceneFromInput, SCENE_MIME, sceneMediaRef, type Asset, type AssetVersion, type MediaRef, type SceneDoc } from "../domain";
 
 type BlobPut = { put(key: string, blob: Blob): Promise<void> };
 
@@ -30,3 +30,20 @@ export function rememberSceneDoc(blobKey: string, doc: SceneDoc) {
   while (docs.size > 24) docs.delete(docs.keys().next().value as string);
 }
 export const cachedSceneDoc = (blobKey: string | undefined): SceneDoc | undefined => (blobKey ? docs.get(blobKey) : undefined);
+
+/**
+ * P79: read a dionysus.scene/1 scene from JSON text or an object (storyboard uploads, attach_asset_version, inline
+ * storyboard scenes): the format is filled in when missing; an invalid scene is refused with its problems.
+ */
+export function readSceneInput(input: unknown): { doc: SceneDoc; warnings: string[] } | { error: string } {
+  const r = newSceneFromInput(input);
+  return "error" in r ? { error: r.error } : { doc: r.doc, warnings: r.warnings };
+}
+
+/** P79: store a scene as a new blob (key `<owner>/<version id>`) and return its media; the caller adds the version. */
+export async function storeSceneMedia(blobs: BlobPut, doc: SceneDoc, owner = newId("ast"), versionId = newId("ver")): Promise<MediaRef> {
+  const blobKey = `${owner}/${versionId}`;
+  await blobs.put(blobKey, new Blob([JSON.stringify(doc, null, 2)], { type: SCENE_MIME }));
+  rememberSceneDoc(blobKey, doc);
+  return sceneMedia(blobKey);
+}

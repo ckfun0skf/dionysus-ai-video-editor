@@ -126,7 +126,7 @@ describe("storyboard v1.1: warnings and fallbacks (never reject)", () => {
     expect(warnsOf((d) => { d.shots[0].captions = true; })).toEqual(['shots[0].captions: captions is on but shot "s1" has no "dialogue"; nothing will be captioned.']);
   });
   it("clip on an ai shot warns and is ignored", () => {
-    expect(warnsOf((d) => { d.shots[0].clip = "bg"; })).toEqual(['shots[0].clip: "clip" only applies to render "html" or "still"; it is ignored for this AI-generated shot.']);
+    expect(warnsOf((d) => { d.shots[0].clip = "bg"; })).toEqual(['shots[0].clip: "clip" only applies to render "html", "still" or "scene"; it is ignored for this AI-generated shot.']);
   });
   it("an unknown font warns (falls back to sans)", () => {
     expect(warnsOf((d) => { d.shots[0].layers = [text({ style: { font: "Helvetica Neue" } })]; })[0]).toMatch(/^shots\[0\]\.layers\[0\]\.style\.font: Unknown font "Helvetica Neue"; using "sans"\. Fonts: sans, serif, mono, impact, rounded, hand, script, condensed, orbitron, share-tech-mono, audiowide, rajdhani, exo-2, chakra-petch, oxanium, saira\./);
@@ -191,7 +191,7 @@ describe("storyboard v1.1: hard errors (path-addressed)", () => {
   it("render html or still without clip, and an unknown render", () => {
     expect(errsOf((d) => { delete d.shots[1].clip; })).toEqual(['shots[1].clip: A render "still" shot needs "clip" (the id of an image asset) or "background" (a colour like "#101820" or a gradient).']);
     expect(errsOf((d) => { delete d.shots[2].clip; })).toEqual(['shots[2].clip: A render "html" shot needs "clip": the id of an html asset.']);
-    expect(errsOf((d) => { d.shots[0].render = "3d"; })).toEqual(['shots[0].render: Render "3d" must be one of: ai, html, still.']);
+    expect(errsOf((d) => { d.shots[0].render = "3d"; })).toEqual(['shots[0].render: Render "3d" must be one of: ai, html, still, scene.']);
   });
   it("a text layer with both or neither of position and box; media layers require box", () => {
     expect(errsOf((d) => { d.shots[0].layers = [text({ box: { x: 0, y: 0, width: 1, height: 1 } })]; })).toEqual(['shots[0].layers[0]: Give either "position" (text centre) or "box" (text area), not both.']);

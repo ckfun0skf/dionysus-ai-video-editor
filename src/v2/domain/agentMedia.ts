@@ -87,7 +87,7 @@ export function expandAttachPattern(p: Project, pattern: string, opts: { type?: 
 
 /** A file name for fetched bytes: the URL's last path segment, else `<label>.<ext>`. */
 export function fileNameFor(url: string | undefined, kind: MediaKind, label: string): string {
-  const ext = kind === "html" ? "html" : kind === "audio" ? "mp3" : kind === "video" ? "mp4" : "png";
+  const ext = kind === "html" ? "html" : kind === "audio" ? "mp3" : kind === "video" ? "mp4" : kind === "scene" ? "json" : "png";
   if (url && !url.startsWith("data:")) {
     try { const last = decodeURIComponent(new URL(url).pathname.split("/").pop() ?? ""); if (/\.[a-z0-9]{2,5}$/i.test(last)) return last; } catch { /* fall through */ }
   }

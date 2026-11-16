@@ -11,11 +11,12 @@ import { Sheet } from "../Sheet";
 import { Thumb, TYPE_ICON } from "./BoardView";
 import { BackgroundEditor, LayersEditor } from "./ShotLayers";
 
-type Render = "ai" | "html" | "still";
+type Render = "ai" | "html" | "still" | "scene";
 const RENDERS: { id: Render; label: string; icon: string; hint: string }[] = [
   { id: "ai", label: "AI video", icon: "▭", hint: "Generate the clip in your AI tool from the clip prompt." },
   { id: "html", label: "HTML", icon: "</>", hint: "Plays an HTML asset (title cards, charts, UI) for the shot's length." },
   { id: "still", label: "Still", icon: "image", hint: "Shows an image asset, or a colour or gradient, for the shot's length." },
+  { id: "scene", label: "3D scene", icon: "scene", hint: "Plays a 3D scene asset (objects, camera and timed events) for the shot's length." },
 ];
 
 /** A side panel on desktop, a bottom sheet on phones. */
@@ -167,10 +168,10 @@ export function ShotEditor({ project, shot, number, isNew, mobile, onSave, onCan
           )}
           {useBg && <BackgroundEditor value={bg} onChange={setBg} />}
           {render !== "ai" && !useBg && (choices.length
-            ? <label className="v2-sb-field">{render === "html" ? "HTML asset" : "Image asset"}
+            ? <label className="v2-sb-field">{render === "html" ? "HTML asset" : render === "scene" ? "3D scene asset" : "Image asset"}
                 <select value={clipSlot} onChange={(e) => setClipSlot(e.target.value)}>{choices.map((s) => <option key={s.id} value={s.id}>{s.name}{board.versionsOf(project, s).length ? "" : " (no version yet)"}</option>)}</select>
               </label>
-            : <p className="v2-sb-err" role="alert"><Ic g="alert" size={14} /> This storyboard has no {render === "html" ? "HTML" : "image"} asset to use yet.</p>)}
+            : <p className="v2-sb-err" role="alert"><Ic g="alert" size={14} /> This storyboard has no {render === "html" ? "HTML" : render === "scene" ? "3D scene" : "image"} asset to use yet.</p>)}
           {render !== "ai" && shot.render === undefined && shot.assetId && <p className="v2-hint">The shot’s AI clip versions are kept; switch back to AI video to use them again.</p>}
         </fieldset>
 

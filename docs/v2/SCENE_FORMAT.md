@@ -173,20 +173,54 @@ the schemas) and AI guide RULE 79:
 | `create_scene_clip` | Adds a scene clip on the main track (at `atSec`, or after the last clip) from a scene object / JSON text, or an empty scene. |
 | `get_scene` | The clip's scene (embedded files shortened), its version, clip range and problems. |
 | `list_scene_objects` | Objects with the calls each takes (base, model, own functions) and their arguments; the camera's calls; events by index. |
-| `add_scene_object` | A shape, a `.glb` file (`{ name, dataUrl }`) or a model already in `files`; `id`, `size` and other fields. |
-| `set_scene_object` | Rename (references follow) or set fields (`null` removes one; `functions` replaces the map). |
+| `add_scene_object` | A shape, a `.glb` file (`{ name, dataUrl }`, or since P79 `{ url, name? }`) or a model already in `files`; `id`, `size` and other fields. |
+| `set_scene_object` | Rename (references follow) or set fields (`null` removes one; `functions` replaces the map); since P79 `file` makes the object that model. |
 | `remove_scene_object` | Removes an object and its events. |
 | `add_scene_event` | Adds `{ at, obj, call, args, dur, ease }`; missing arguments are filled with the value at that time. |
 | `update_scene_event` | Changes an event by index: time, `dur` / `ease` (`null` removes), call (args reset), args (merged), object. |
 | `retime_scene_event` | Moves an event (`at` or `shiftSec`) and / or changes `dur`. |
 | `remove_scene_event` | Removes an event by index. |
 | `set_scene_world` | Name, planned length, background, camera start and lights (`null` = the defaults). |
+| `apply_scene_edits` (P79) | A list of the edits above (`{ tool, …its fields }`, at most 200) applied in order as **one** undo step and one save. All or nothing: if one is refused nothing changes and the error names it (`edits[2] (add_scene_event): …`). |
 
 Every edit is checked with the validator: one that would add an error is refused and changes nothing, and the message
-lists the valid objects, calls or arguments. Each edit is one undo step and is saved as a scene version under the
-version-save rules (`mode`: `new` adds a version, `replace` overwrites the shown one; an explicit mode is remembered).
-Event indexes are positions in `events` (not time order); the player sorts by time.
+lists the valid objects, calls or arguments. Each edit (or batch) is one undo step. Event indexes are positions in
+`events` (not time order); the player sorts by time.
 
-## Not yet (later Phase 2 steps)
+**Saving (P79: no version per call).** Edits are saved under the version-save rules (`mode`: `new` or `replace`; an
+explicit mode is remembered for the project):
 
-Storyboard `render: "scene"` and asset type `scene` (2.6, P79, decision 5). The step table was renumbered in P76.
+- **`new` (the default)** works like the scene editor's session. The agent's first edit of a clip adds a new version
+  (`create_scene_clip` counts as the first: its version is the session's); later edits of the **same clip** update
+  that version in place, each still its own undo step. The session ends, so the next edit adds a version again, when
+  the agent edits another scene clip, passes `newVersion: true` (e.g. to keep a checkpoint before a big change), the
+  clip shows another version (the user picked one, undo went past the session's first edit, or the editor saved one),
+  or 10 minutes pass without an edit. The reply's `version.saved` says what happened: `new version`,
+  `updated this session's version` or `replaced the shown version`.
+- **`replace`** always overwrites the version the clip shows.
+
+The session lives in the page (a reload starts a new one). Prefer `apply_scene_edits` for a planned set of changes:
+one step to undo and one save.
+
+**GLB models from a URL (P79).** `add_scene_object` and `set_scene_object` (also inside `apply_scene_edits`) take
+`file: { url, name? }` besides `{ name, dataUrl }`. The URL rules are those of `attach_asset_version`: `https:`, or
+`http:` on `localhost` / `127.0.0.1` / `[::1]`, or this site; fetched without credentials, so the server must allow
+this site with CORS. The name (from `name` or the URL's last path part) must end in `.glb`, the bytes must be a binary
+glTF (they start with `glTF`) and at most 64 MB. The file is embedded in the scene's `files` like an uploaded one.
+
+## Storyboards (P79)
+
+A storyboard can plan a 3D scene shot (decision 5; optional values within `dionysus/3.1`, see
+[`STORYBOARD_FORMAT.md`](STORYBOARD_FORMAT.md)): an asset of type `"scene"` (its `prompt` is the scene brief) and a
+shot with `"render": "scene"` and `"clip": "<that asset>"`. The scene asset's versions are `dionysus.scene/1` files;
+the shot plays the selected one for its planned `durationSec`. Until the asset has a version, Send to timeline places
+a placeholder whose intended type is `scene`; Update fills it. A scene clip added on the main track is mapped back by
+Sync to Storyboard as a render scene shot. Ways to give the asset a scene:
+
+- the shot detail's upload (a `.json` file);
+- `attach_asset_version(s)` with `text` (the JSON), `scene` (an object) or a `url` / `path` / `dataUrl` of a `.json`;
+- an inline `"scene": { … }` on the asset in the storyboard JSON, stored as a version by `import_storyboard` and the
+  Import screen in the import's undo step (not stored again when it equals the current version). The storyboard edit
+  tools (`create_storyboard`, `add_asset`, …) keep the field in the JSON but don't store it; use `attach_asset_version`.
+
+Scene clips on overlay tracks stay timeline-only (a storyboard has no scene layers).
