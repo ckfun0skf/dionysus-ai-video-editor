@@ -6,7 +6,8 @@ import { haptic, LONG_PRESS_MS, LONG_PRESS_SLOP } from "./gestures";
 import { edit, mergeLayer, findPlacement, slip, layers, ops, transitions, compositionDuration, TICKS_PER_SECOND, formatTimecode, type Composition, type Placement, type Project, type Track } from "../domain";
 import { Ic } from "./Icon";
 import { MergeDialog } from "./MergeDialog";
-import { AnimBadges, ClipBody, clipKindClass, clipNoThumb, clipThumbStyle, effectName, useTimelineZoom } from "./TimelineClip";
+import { AnimBadges, ClipBody, clipDisplayName, clipKindClass, clipNoThumb, clipThumbStyle, useTimelineZoom } from "./TimelineClip";
+import { clipUi } from "./clipTypeUi";
 export { animBadges, ClipLoadBar, effectName } from "./TimelineClip";
 import { clipTimeAt, relLabel, useRelMode } from "./clipTime";
 import type { ClipLoad } from "../render";
@@ -458,14 +459,14 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
           ) : r.type === "collapsed" ? (
             <div key={r.key} className={`v2-lane is-collapsed group-${r.group}`} data-group={r.group} aria-label={`${ops.GROUP_LABEL[r.group]} (collapsed)`}
               onPointerDown={(e) => { if (!centered && e.target === e.currentTarget) onSelect(undefined); }} onClick={(e) => { if (centered && e.target === e.currentTarget) exitMode(); }}>
-              {r.placements.map((p) => (
+              {r.placements.map((p) => { const u = clipUi(p), name = clipDisplayName(p, project); return (
                 <button key={p.id} className={`v2-clip clip-${p.clipType} ${p.id === selectedId ? "is-selected" : ""}`} data-placement-id={p.id}
-                  style={{ left: toPx(p.startTicks), width: Math.max(4, toPx(p.durationTicks)), ...(thumbs?.[p.source.assetId] && p.clipType !== "audio" ? { backgroundImage: `url(${thumbs[p.source.assetId]})` } : {}) }}
-                  title={`${p.clipType === "effect" ? effectName(p) : p.clipType === "text" ? p.text?.text : project.assets[p.source.assetId]?.name ?? ""} — tap to open ${ops.GROUP_LABEL[r.group]} layers`}
+                  style={{ left: toPx(p.startTicks), width: Math.max(4, toPx(p.durationTicks)), ...(thumbs?.[p.source.assetId] && u.thumbBackground ? { backgroundImage: `url(${thumbs[p.source.assetId]})` } : {}) }}
+                  title={`${u.icon ? name : name ?? ""} — tap to open ${ops.GROUP_LABEL[r.group]} layers`}
                   onPointerDown={(e) => e.stopPropagation()} onClick={() => { setExpanded(r.group); onSelect(p.id); }}>
-                  <span className="v2-clip-name">{p.clipType === "effect" ? <><Ic g="effect" size={12} /> {effectName(p)}</> : p.clipType === "text" ? <><Ic g="T" size={12} /> {p.text?.text || "Text"}</> : project.assets[p.source.assetId]?.name}</span><AnimBadges p={p} width={Math.max(4, toPx(p.durationTicks))} />
+                  <span className="v2-clip-name">{u.icon ? <><Ic g={u.icon} size={12} /> {u.emptyName ? name || u.emptyName : name}</> : name}</span><AnimBadges p={p} width={Math.max(4, toPx(p.durationTicks))} />
                 </button>
-              ))}
+              ); })}
             </div>
           ) : r.type === "mtracks" ? (
             <TracksLane key={r.key} track={r.t} toPx={toPx} pps={pps} onOpen={(c, k) => onOpenTrack?.(c, k)} onRange={onTrackRange} />
@@ -479,13 +480,13 @@ export function Timeline({ engine, project, time, playing, onSeek, selectedId, s
                 <span key={`${group}-${a}`} className="v2-hidden-range" data-group={group} aria-hidden title={`${ops.GROUP_LABEL[group]} clips here`} style={{ left: toPx(a), width: Math.max(2, toPx(b - a)), top: 2 + i * 5, background: GROUP_COLOR[group] }} />
               )))}
               {t.placements.map((p) => {
-                const asset = project.assets[p.source.assetId];
+                const u = clipUi(p), name = clipDisplayName(p, project);
                 const sel = p.id === selectedId;
                 const inSel = sel || !!selectedIds?.includes(p.id);
                 return (
                   <div key={p.id} className={`v2-clip clip-${p.clipType} ${inSel ? "is-selected" : ""} ${loads?.has(p.id) ? "is-loading" : ""} ${clipNoThumb(p, thumbs, strips) ? "is-nothumb" : ""} ${clipKindClass(p)}`} data-placement-id={p.id}
                     style={{ left: toPx(p.startTicks), width: Math.max(4, toPx(p.durationTicks)), ...clipThumbStyle(p, thumbs, strips) }}
-                    onPointerDown={(e) => onClipDown(e, p.id, t.id, p.startTicks)} title={p.clipType === "effect" ? `Effect: ${effectName(p)}` : p.clipType === "text" ? p.text?.text : asset?.name}>
+                    onPointerDown={(e) => onClipDown(e, p.id, t.id, p.startTicks)} title={u.titlePrefix ? `${u.titlePrefix}${name}` : name}>
                     <ClipBody p={p} track={t} isMain={t.id === main?.id} project={project} pps={pps} strips={strips} peaks={peaks} loads={loads} />
                     {sel && <>
                       <div className="v2-handle left" aria-label="Trim start" onPointerDown={(e) => onTrimDown(e, p.id, "left", p.startTicks)} />

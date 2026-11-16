@@ -38,7 +38,7 @@ src/v2/
   engine/        Engine (undo history; one dispatch = one undo step) and commands.ts (Command factories)
   persistence/   IndexedDB/memory stores, media import (media.ts), schema migrations, project archive
   ports/         storage interfaces (BlobStore, …)
-  clipTypes/     clip type registry (P65+): one folder per type with core.ts (trackKind, caps); domain predicates read it (P66); render.ts renderers (P67, P68)
+  clipTypes/     clip type registry (P65+): one folder per type with core.ts (trackKind, caps); domain predicates read it (P66); render.ts renderers (P67, P68); ui.tsx timeline UI (P69)
   registry/      preset registry (effects, transitions, text animations, stickers, blends, audio fx, fonts)
   presets/       one file per preset, auto-discovered (docs/v2/ADDING_EFFECTS.md)
   render/        Player (preview AND export compositor), htmlClip.ts (sandboxed HTML clip host), text, effects,
@@ -92,9 +92,9 @@ required checks.
 1. `git fetch` and branch from the latest `origin/main` (e.g. `p66-short-name`).
 2. Implement with tests. Keep PRs small (MODULE_DESIGN §14 targets < 400 changed lines; feature PRs here are often
    larger, but split refactors).
-3. **`public/doc/tasks.json`:** add one entry per PR with the next free P-number: `{ "id": "P69-SHORT-NAME", "title":
+3. **`public/doc/tasks.json`:** add one entry per PR with the next free P-number: `{ "id": "P70-SHORT-NAME", "title":
    "<what and why, one paragraph>", "status": "done", "progress": 100 }` appended after the latest entry (the latest is
-   `P68-CLIP-RENDERERS-MEDIA`; the next is **P69**). Bump `updatedAt`. Edit the file surgically (insert text); do not
+   `P69-CLIP-UI-TIMELINE`; the next is **P70**). Bump `updatedAt`. Edit the file surgically (insert text); do not
    re-serialise the whole JSON. `scripts/check-tasks-updated.mjs` fails a PR that changes `src/` without it. If an id
    is already taken, use the next number and say so in the PR.
 4. **AI guide rule:** append to `RULE_LIST` in `src/v2/domain/storyPrompt.ts` (append-only; numbers are positions;
@@ -110,7 +110,7 @@ required checks.
 6. Run `npm run gen:ai` after changing rules, tools or presets, and commit the regenerated files (tests fail if they are
    stale).
 7. `npx tsc -b && npx vitest run && npx vite build`.
-8. Commit in English; PR title `P69: …`; body says what, why, tests, and `Fixes #N` (or `Refs #N` if partial), plus
+8. Commit in English; PR title `P70: …`; body says what, why, tests, and `Fixes #N` (or `Refs #N` if partial), plus
    what was not verified. Push, open the PR, wait for `build` on the head SHA. Do not merge.
 
 ## 7. UI conventions
@@ -139,7 +139,7 @@ required checks.
 | `docs/v2/CLIP_PLUGIN_ARCHITECTURE.md` | clip type plugins: accepted design, decisions, Phase 1 progress |
 | `public/doc/tasks.json` | every task and its status |
 
-## 9. Recent history (P47–P68)
+## 9. Recent history (P47–P69)
 
 | Id | PR | One line |
 |---|---|---|
@@ -164,7 +164,8 @@ required checks.
 | P65 | #317 | Clip type plugins Phase 1 step 1.1: `src/v2/clipTypes/` registry, core caps, parity test (no behaviour change). |
 | P66 | #318 | Step 1.2: domain predicates and export audio plan read the clip type registry (no behaviour change). |
 | P67 | #319 | Step 1.3a: text, placeholder and blank renderers move to `clipTypes/<id>/render.ts`; canvas-call golden + Chrome pixel parity. |
-| P68 | — | Step 1.3b: html, video, image and audio renderers move to `clipTypes/<id>/render.ts` (`frame(host)`, shared `render/mediaClip.ts`); golden + Chrome pixel + export frame parity incl. a GLB clip. |
+| P68 | #320 | Step 1.3b: html, video, image and audio renderers move to `clipTypes/<id>/render.ts` (`frame(host)`, shared `render/mediaClip.ts`); golden + Chrome pixel + export frame parity incl. a GLB clip. |
+| P69 | — | Step 1.4: timeline clip look and asset thumbnails/previews read `clipTypes/<id>/ui.tsx` (`ui/clipTypeUi.tsx`); markup golden, legacy-helper parity, 390/1440 screenshot parity. |
 
 ## 10. Known unverified areas
 
@@ -207,8 +208,15 @@ change, each merged on green CI) is under way:
   locals of `draw()`. The shared element path is `render/mediaClip.ts`; an unregistered `clipType` uses
   `clipTypes/unknown/render.ts` (today's element path, until 1.8). The parity fixture now has audio, a reversed video
   overlay and a GLB code clip, and the jsdom test stubs media elements as loaded.
-- **Next, 1.4:** timeline and thumbnails (`TimelineClip.tsx`, `Timeline.tsx`, `useThumbs.ts`, `useMedia.ts`) read a
-  per-type `ui(id)`; check with UI tests and 390/1440 screenshots before and after.
+- **1.4 done (P69):** the timeline (`TimelineClip.tsx`, `Timeline.tsx`, `MergeDialog.tsx` through the shared helpers)
+  and asset thumbnails/previews (`useThumbs.ts`, `useMedia.ts`) read `clipUi(p)` / `assetUi(kind)` from
+  `ui/clipTypeUi.tsx`, which discovers `clipTypes/*/ui.tsx` (declarative fields; `DEFAULT_CLIP_UI` = a plain media clip
+  named after its asset, also used for unknown ids). `ui/timelineParity.test.tsx` hashes the timeline markup of a
+  fixture with every type (`TIMELINE_PARITY_DUMP=<dir>` writes it; `UPDATE_TIMELINE_GOLDEN=1` only for an intended
+  change). Known edge, as in P67: a non-image clip carrying a `placeholder` / `blank` flag (the app never makes one) is
+  now shown as its own type.
+- **Next, 1.5:** inspector, toolbar and menus (`V2App.tsx` `inspectorTabs()`, `KIND_ICON`, `clipName`, mobile toolbar,
+  context menu) → `ClipTypeUi`; check with `V2App.test.tsx`, inspector tests and 390/1440 screenshots.
 
 Until Phase 1 is finished, add new behaviour the existing way and note in the PR which switch points you touched, so
 the later steps can move them.
