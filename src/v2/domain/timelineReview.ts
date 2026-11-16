@@ -13,6 +13,7 @@ import { TICKS_PER_SECOND } from "./time";
 import { textOf } from "./text";
 import { maskToJson } from "./mask";
 import { STORY_ASSET_TYPES } from "./storyJson";
+import { clipTypeAgentTools, clipTypeDescribe } from "../clipTypes";
 
 type Schema = Record<string, unknown>;
 export interface TimelineToolDef { name: string; title: string; description: string; inputSchema: Schema; readOnly: boolean }
@@ -160,6 +161,8 @@ export const TIMELINE_TOOLS: TimelineToolDef[] = [
   { name: "import_storyboard", title: "Import storyboard JSON", readOnly: false,
     description: "P62: load storyboard JSON (\"dionysus.storyboard/1\") into the project without the Import screen, checked by the importer like a pasted file. Give json (the storyboard as an object or text) or url (fetched by the page; same URL rules as attach_asset_version). With no storyboard it creates one. When one exists, pass replace: true: the board becomes the imported JSON, matched by id, so assets and shots that keep their ids keep their uploaded versions and trims (ids missing from the JSON leave the board; their files stay in the media library); keepUploads: false starts over instead. A storyboard part (\"part\", or no \"meta\") is merged into the current board by id without replace. Invalid JSON changes nothing and returns the error list. One undo step. Then call send_to_timeline (mode \"relayout\" to re-time clips already placed).",
     inputSchema: obj({ json: { type: ["object", "string"], description: "The storyboard JSON (object or text)." }, url: str("URL of the storyboard JSON."), replace: { type: "boolean", description: "Replace the current storyboard (required when one exists)." }, keepUploads: { type: "boolean", description: "With replace: keep uploads for matching ids (default true); false starts over." } }) },
+  // P72: tools contributed by clip type cores (`agent.tools`; none from the built-ins).
+  ...clipTypeAgentTools().map((t) => ({ ...t, inputSchema: t.inputSchema as Schema })),
 ];
 
 export const TIMELINE_TOOL_NAMES = new Set(TIMELINE_TOOLS.map((t) => t.name));
@@ -200,6 +203,8 @@ export function clipJson(p: Project, pl: Placement, track?: Track): Record<strin
     ...(pl.htmlInputs ? { inputs: pl.htmlInputs } : {}),
     ...(pl.storyLayer ? { storyLayer: pl.storyLayer } : {}),
     ...(pl.storyCue ? { storyCue: pl.storyCue } : {}),
+    // P72: fields the clip's type adds (`agent.describe`; none from the built-ins).
+    ...clipTypeDescribe(pl, p),
   };
 }
 

@@ -7,4 +7,5 @@ export default defineClipType({
   trackKind: "video",
   variant: { of: "image", field: "blank" },
   caps: { sourceTime: false, still: true, sound: false, visual: true, keyable: true, thumb: false, asset: "none" },
+  agent: { clipTools: ["set_blank_color"] },
 });

@@ -9,7 +9,7 @@
  * Only `import type` from `domain` is allowed here (architecture test), so `domain` can use the registry without a
  * runtime import cycle.
  */
-import type { MediaKind, Placement, TrackKind } from "../domain/model";
+import type { MediaKind, Placement, Project, TrackKind } from "../domain/model";
 import type { StoryAssetType } from "../domain/storyJson";
 
 /** What a clip type can do. These replace the scattered predicates; the parity test pins each one to today's code. */
@@ -59,6 +59,34 @@ export interface ClipTypeCore {
   accepts?: ClipAccepts;
   /** P71: storyboard mapping (slot types, Send lengths, Sync layer and slot types). Omitted = `DEFAULT_CLIP_STORY`. */
   story?: ClipStory;
+  /** P72: what the type adds to the agent surface (WebMCP tools, AI guide rules, get_timeline fields) and which host tools and properties are its own. */
+  agent?: ClipAgent;
+}
+
+/** P72: a WebMCP tool a clip type contributes (registered after the built-in tools and listed by gen:ai). */
+export interface ClipAgentToolDef { name: string; title: string; description: string; inputSchema: Record<string, unknown>; readOnly: boolean }
+/** P72: what a contributed tool may use: read the project and make one undoable edit (a pure project → project step). */
+export interface ClipAgentApi {
+  project(): Project;
+  /** One undo step; false when nothing changed. */
+  edit(label: string, apply: (p: Project) => Project): boolean;
+}
+export interface ClipAgentResult { ok: boolean; changed: boolean; text: string }
+
+/** P72: a clip type's agent surface. Built-ins contribute no tools or rules in Phase 1 (gen:ai stays byte-identical). */
+export interface ClipAgent {
+  /** New WebMCP tools (appended to TIMELINE_TOOLS, so the guide and WEB_MCP.md list them). Needs `run`. */
+  tools?: ClipAgentToolDef[];
+  /** Runs one of `tools`. */
+  run?(name: string, input: Record<string, unknown>, api: ClipAgentApi): ClipAgentResult | Promise<ClipAgentResult>;
+  /** AI guide rules appended after the built-in RULE_LIST (numbers are positions, so only ever append). */
+  rules?: { key: string; text: string }[];
+  /** Extra get_timeline / get_clip fields for a clip of this type (appended after the common ones). */
+  describe?(p: Placement, project: Project): Record<string, unknown>;
+  /** Built-in timeline tools that only work on clips of this type (others are refused with the tool's message). */
+  clipTools?: string[];
+  /** set_clip_props keys that only apply to clips of this type. */
+  props?: string[];
 }
 
 /**

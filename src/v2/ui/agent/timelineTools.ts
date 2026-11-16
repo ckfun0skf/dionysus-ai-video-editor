@@ -35,6 +35,7 @@ function rangeOfArgs(a: Record<string, unknown>, pl: Placement, def?: { start: n
   return { from: Math.max(pl.startTicks, from), to: Math.min(pl.startTicks + pl.durationTicks, to) };
 }
 import { cmd, type Command, type Engine } from "../../engine";
+import { agentToolOwner, clipPropFits, clipToolFits, clipTypeOf } from "../../clipTypes";
 import { runAttachTool, runImportStoryboard, type MediaIO } from "./mediaTools";
 import type { BlobStore } from "../../ports";
 import { ExportVideoFrames, Player, audioPlan, exportDuration, mixAudio } from "../../render";
@@ -141,7 +142,7 @@ export function clipPropsErrors(a: Record<string, unknown>, pl: Placement): stri
   }
   if ("effect" in a) {
     const fx = a.effect as { preset?: unknown; params?: unknown } | null;
-    if (pl.clipType !== "effect") e.push(`"effect" only applies to effect clips (clip ${pl.id} is ${pl.clipType}); add an effect clip over it instead.`);
+    if (!clipPropFits(pl, "effect")) e.push(`"effect" only applies to effect clips (clip ${pl.id} is ${pl.clipType}); add an effect clip over it instead.`);
     else if (!fx || typeof fx !== "object") e.push('"effect" must be { preset, params }.');
     else {
       const id = fx.preset === undefined ? pl.effect?.preset : fx.preset;
@@ -165,12 +166,12 @@ export function clipPropsErrors(a: Record<string, unknown>, pl: Placement): stri
   }
   if ("blend" in a && !(a.blend === "" || (typeof a.blend === "string" && getPreset("blend", a.blend)))) e.push(`Unknown blend ${JSON.stringify(a.blend)}. Use "" (normal) or one of: ${ids("blend")}.`);
   if ("text" in a) {
-    if (pl.clipType !== "text") e.push(`"text" only applies to text clips (clip ${pl.id} is ${pl.clipType}).`);
+    if (!clipPropFits(pl, "text")) e.push(`"text" only applies to text clips (clip ${pl.id} is ${pl.clipType}).`);
     else if (!a.text || typeof a.text !== "object") e.push('"text" must be an object like { text, size, color }.');
     else { const t = a.text as Record<string, unknown>; if ("size" in t && !numIn(t.size, 0.005, 1)) e.push('"text.size" must be a share of the frame height from 0.005 to 1.'); if ("text" in t && typeof t.text !== "string") e.push('"text.text" must be a string.'); }
   }
   // P14-SPATIAL: sound position (clips with sound only), track default and project output.
-  const soundy = pl.clipType === "audio" || pl.clipType === "video";
+  const soundy = clipTypeOf(pl).caps.sound;
   for (const k of ["position", "positionKeys", "pan", "trackPosition"]) if (k in a && !soundy) e.push(`"${k}" only applies to clips with sound (clip ${pl.id} is ${pl.clipType}).`);
   if ("pan" in a && "position" in a) e.push('Give "pan" or "position", not both.');
   if ("pan" in a && !numIn(a.pan, -1, 1)) e.push(`"pan" must be a number from -1 (left) to 1 (right) (got ${JSON.stringify(a.pan)}).`);
@@ -330,7 +331,7 @@ export async function runTimelineTool(engine: Engine, source: FrameSource | unde
     case "set_clip_input": {
       const id = needClip(); if (typeof id !== "string") return id;
       const pl = findPlacement(rootOf(project()), id)!.placement;
-      if (pl.clipType !== "html") return fail(`Clip ${id} is not a code (html) clip.`);
+      if (!clipToolFits(pl, name)) return fail(`Clip ${id} is not a code (html) clip.`);
       const input = s("input") ?? "";
       const v = versionOf(project(), pl.source), blob = v && blobs ? await blobs.get(v.media.blobKey).catch(() => undefined) : undefined;
       const decl = blob ? readManifest(await blobText(blob)).inputs?.[input] : undefined;
@@ -440,7 +441,7 @@ export async function runTimelineTool(engine: Engine, source: FrameSource | unde
     }
     case "set_blank_color": {
       const id = needClip(); if (typeof id !== "string") return id;
-      if (!findPlacement(rootOf(project()), id)!.placement.blank) return fail(`Clip ${id} is not a blank clip.`);
+      if (!clipToolFits(findPlacement(rootOf(project()), id)!.placement, name)) return fail(`Clip ${id} is not a blank clip.`);
       const color = s("color"); if (!cmd.isHexColor(color)) return fail('"color" must be #rrggbb.');
       return edit(cmd.setBlankColor(id, color), id);
     }
@@ -625,13 +626,13 @@ export async function runTimelineTool(engine: Engine, source: FrameSource | unde
     case "even_split_words": {
       const id = needClip(); if (typeof id !== "string") return id;
       const pl = findPlacement(rootOf(project()), id)!.placement;
-      if (pl.clipType !== "text") return fail(`Clip ${id} is not a text clip.`);
+      if (!clipToolFits(pl, name)) return fail(`Clip ${id} is not a text clip.`);
       return edit(cmd.evenSplitCueWords(id), id);
     }
     case "set_caption_words": {
       const id = needClip(); if (typeof id !== "string") return id;
       const pl = findPlacement(rootOf(project()), id)!.placement;
-      if (pl.clipType !== "text") return fail(`Clip ${id} is not a text clip.`);
+      if (!clipToolFits(pl, name)) return fail(`Clip ${id} is not a text clip.`);
       const raw = a.words;
       if (!Array.isArray(raw) || !raw.length) return fail('"words" must be a non-empty array of { text, atSec }.');
       const parsed = W.parseWordsJson(JSON.stringify({ words: raw }));
@@ -678,7 +679,7 @@ export async function runTimelineTool(engine: Engine, source: FrameSource | unde
     case "word_align_prompt": {
       const id = needClip(); if (typeof id !== "string") return id;
       const pl = findPlacement(rootOf(project()), id)!.placement;
-      if (pl.clipType !== "text") return fail(`Clip ${id} is not a text clip.`);
+      if (!clipToolFits(pl, name)) return fail(`Clip ${id} is not a text clip.`);
       const d = T.textOf(pl.text);
       let audioDurationSec: number | undefined, audioName: string | undefined;
       const aid = typeof a.audioClipId === "string" ? a.audioClipId : undefined;
@@ -734,5 +735,8 @@ export async function runTimelineTool(engine: Engine, source: FrameSource | unde
       return { ok: true, changed, text: JSON.stringify({ trackId, cues: matched.updates.map((u) => ({ id: u.id, words: u.words.length })) }, null, 1) };
     }
   }
+  // P72: a tool contributed by a clip type core runs through its `agent.run` (one undo step per edit).
+  const owner = agentToolOwner(name);
+  if (owner?.agent?.run) return owner.agent.run(name, a, { project, edit: (label, apply) => engine.dispatch({ label, apply }, name) });
   return fail(`Unknown tool ${name}.`);
 }

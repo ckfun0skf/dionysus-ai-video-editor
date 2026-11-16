@@ -7,4 +7,5 @@ export default defineClipType({
   caps: { sourceTime: false, still: false, sound: false, visual: true, keyable: true, thumb: true, asset: "media" },
   accepts: { mime: ["text/html"], ext: ["html", "htm"], mimeByExt: { html: "text/html", htm: "text/html" } },
   story: { assetTypes: ["html"], slotType: "html", layerType: "html", layer: true, sendLength: "planned", takes: false, params: true },
+  agent: { clipTools: ["set_clip_input"] },
 });

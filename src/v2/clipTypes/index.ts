@@ -45,5 +45,6 @@ export function clipTypeOf(p: Pick<Placement, "clipType"> & Partial<Placement>):
 
 export { defineClipType } from "./define";
 export { checkClipType, createClipTypeRegistry, type ClipTypeRegistry } from "./registry";
-export type { ClipAccepts, ClipCaps, ClipStory, ClipTypeCore, ClipTypeDef, ClipVariant } from "./types";
+export type { ClipAccepts, ClipAgent, ClipAgentApi, ClipAgentResult, ClipAgentToolDef, ClipCaps, ClipStory, ClipTypeCore, ClipTypeDef, ClipVariant } from "./types";
 export { DEFAULT_CLIP_STORY, kindForFile, kindForSlotType, mimeForFile, storyOf } from "./story";
+export { agentToolOwner, clipPropFits, clipToolFits, clipTypeAgentRules, clipTypeAgentTools, clipTypeDescribe } from "./agent";
