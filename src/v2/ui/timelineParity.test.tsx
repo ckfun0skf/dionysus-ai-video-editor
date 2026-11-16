@@ -12,27 +12,13 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 import { Timeline } from "./Timeline";
-import { Engine, cmd } from "../engine";
-import { ops, type Placement, type Project } from "../domain";
-import { renderParityProject } from "../__fixtures__/renderParity";
+import { Engine } from "../engine";
+import { ops, type Project } from "../domain";
+import { timelineParityProject } from "../__fixtures__/timelineParity";
 import type { Filmstrip, Peaks } from "./media";
 import type { ClipLoad } from "../render";
 
 const GOLDEN = join(__dirname, "__golden__", "timelineParity.json");
-
-export function timelineParityProject(): Project {
-  const e = new Engine(renderParityProject());
-  e.dispatch(cmd.setSpeed("m-vid", 2));
-  e.dispatch(cmd.setLinkedAudioMuted("m-vid", true));
-  const p = structuredClone(e.getState().project);
-  const comp = p.compositions[p.rootCompositionId];
-  const overlay = comp.tracks.find((t) => t.placements.some((x) => x.id === "o-blue"))!;
-  const vid = comp.tracks.flatMap((t) => t.placements).find((x) => x.id === "m-vid")!;
-  // A frozen video and a clip of a type this build does not register.
-  overlay.placements.push({ ...structuredClone(vid), id: "o-freeze", startTicks: 17 * 120_000, durationTicks: 120_000, freeze: true, speed: undefined, linkedAudio: undefined, transitionIn: undefined });
-  overlay.placements.push({ ...structuredClone(vid), id: "o-unknown", startTicks: 19 * 120_000, durationTicks: 120_000, clipType: "scene3d" as Placement["clipType"], transitionIn: undefined, speed: undefined, linkedAudio: undefined });
-  return p;
-}
 
 function previews(p: Project) {
   const thumbs: Record<string, string> = {};
