@@ -1,5 +1,14 @@
 import type { ClipTypeUi } from "../../ui/clipTypeUi";
 
 /** Code clip: its thumbnail is a rendered frame of the page (V2-SB-130); no peaks or filmstrip. */
-const html: ClipTypeUi = { id: "html", assetThumb: "html", assetPreviews: { peaks: false, filmstrip: false } };
+const html: ClipTypeUi = {
+  id: "html",
+  assetThumb: "html",
+  assetPreviews: { peaks: false, filmstrip: false },
+  inspectorIcon: "</>",
+  inspectorTabs: ["params", "basic", "chroma", "transition"],
+  inspectorActions: ["edit-code"],
+  toolbar: ["params", "code", "adjust"],
+  editor: "code",
+};
 export default html;

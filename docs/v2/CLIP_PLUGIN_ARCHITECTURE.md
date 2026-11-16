@@ -17,6 +17,7 @@ Accepted by the owner on 2026-11-15 (the answers to the §9 open questions):
 | 6 | Per-object sub-tracks | **Late in Phase 2**, after the scene clip, events and WebMCP tools work. |
 | 7 | Third-party plugins | **Deferred to Phase 3**; trust and sources are decided then. |
 | 8 | Phase 1 size | The **eight small PRs** of §7, one at a time, each merged on green CI. |
+| 9 | Placeholder (recorded in P70, 2026-11-15) | A placeholder is a **cross-type clip state**, not an `image` variant or plugin. Any clip type can be a placeholder: a slot with no asset yet that knows its intended type, so asset pickers can filter by it. The player, timeline and export check `placeholder` **first** and use one shared slate renderer before any plugin lookup; plugins never handle placeholders. `blank` stays a small plugin (`image` variant). No schema change. Implemented in **step 1.8**, together with unknown-type handling (§6). Until then the P65–P70 `placeholder` variant modules stay as they are (no behaviour change). |
 
 ## 1. Why
 
@@ -195,9 +196,11 @@ export interface ClipInstance<Data = unknown> {
   dispose(): void;
 }
 
-// src/v2/clipTypes/ui.tsx (ui layer, optional). Built in P69 for the timeline part as ui/clipTypeUi.tsx; the fields
-// below other than label/icon/strip (inspector, toolbar) come in 1.5. The timeline fields that shipped: name, icon,
-// emptyName, titlePrefix, kindClass, body, background, thumbBackground, filmstrip, waveform, assetThumb, assetPreviews.
+// src/v2/clipTypes/ui.tsx (ui layer, optional). Built as ui/clipTypeUi.tsx, declarative (Q4). Timeline fields (P69):
+// name, icon, emptyName, titlePrefix, kindClass, body, background, thumbBackground, filmstrip, waveform, assetThumb,
+// assetPreviews. Inspector/toolbar fields (P70): inspectorIcon, inspectorTitle, inspectorTabs, inspectorActions,
+// toolbar, toolbarMain, extraTools, editor, speed, volume, timeTools, inOutFrames, linkedAudio, transformInAudioTab;
+// they name host-owned tabs/tools/actions instead of the inspectorTabs()/toolbarActions() functions sketched below.
 export interface ClipTypeUi {
   id: string;
   icon: string;                            // key into ui/Icon.tsx ICONS (monochrome lucide line icons)
@@ -271,7 +274,7 @@ src/v2/clipTypes/
   text/    …          # drawTextClip, captions, layer styles, word timings stay where they are and are called from here
   html/    …          # HtmlClipHost, params, inputs, libs, manifest lint
   effect/  …          # effect clips (no draw: they feed render/effects.ts; caps.visual = false)
-  placeholder/ …      # P35 slate (preview) / black (export); stays clipType "image" + `placeholder` flag
+  placeholder/ …      # P35 slate (preview) / black (export); clipType "image" + `placeholder` flag (until 1.8: decision 9)
   blank/   …          # P36 solid colour; stays clipType "image" + `blank` flag
   unknown/ …          # fallback for ids this build doesn't know
 ```
@@ -279,6 +282,12 @@ src/v2/clipTypes/
 `placeholder` and `blank` are **variants** of `image`, not new `clipType` values, so saved projects do not change.
 The registry resolves the effective plugin with `variantOf(p)`: `p.placeholder → "placeholder"`, `p.blank → "blank"`,
 else `p.clipType`.
+
+**Planned change (decision 9, step 1.8):** `placeholder` stops being a variant/plugin and becomes a clip **state** that
+any type can be in. The player, timeline and export test `p.placeholder` before the registry lookup and draw the one
+shared slate (preview) / black frame (export); `variantOf` then only resolves `blank`. The placeholder keeps its
+intended `clipType` (for example `video` or a scene type) so Fill / Replace pickers can filter assets by type. Saved
+projects keep the same fields (`placeholder` flag, `clipType`, `TEXT_SOURCE`); no schema change.
 
 ## 6. Unknown types
 
@@ -309,10 +318,10 @@ Each step is one PR with its own `tasks.json` entry, CI `build` green, and no ch
 | 1.3a ✅ P67 | Renderer table `render/clipRenderers.ts` (glob of `clipTypes/*/render.ts`, `ClipDrawHost`, `clipRendererFor`); **text, placeholder and blank** draw through `clipTypes/<id>/render.ts`. The player keeps the host logic (layers, effects and scopes, transitions, scene capture, blend, boxes) and passes it in as `paint` / `blit`. | `render/renderParity.test.ts`: every 2D-canvas call for a fixture project (`src/v2/__fixtures__/renderParity.ts`), preview and export, 21 times each, hashed against a golden recorded on the pre-P67 code. In the PR: Chrome pixel comparison of the same fixture with real image, video and html files (42 frames), plus the real exporter's 450 encoder-input frames, main vs branch: all identical. |
 | 1.3b ✅ P68 | The stateful renderers: **html** (`HtmlClipHost`, manifests, params, inputs), **video** (export WebCodecs frames, else the element path) and **image**, plus **audio** element sync, in `clipTypes/<id>/render.ts` as `frame(host)`; the shared element path (URL, pool, volume/fx/spatial, scrub/play/drift, export seeks, posters) is `render/mediaClip.ts`. An unregistered `clipType` gets `clipTypes/unknown/render.ts`, which keeps today's element path until 1.8. The pools stay in the Player behind `ClipMediaHost`; the `load → instance { prepare, draw, dispose }` part of §3 is left for Phase 2, where third-party types need it. | The fixture gained an audio clip, a reversed video overlay and a three.js clip with an embedded `.glb`; jsdom media elements are stubbed as loaded so the golden (re-recorded on the pre-P68 code) covers the image/video draw and element sync calls: identical after the move. In the PR: Chrome pixel comparison (46 frames incl. the GLB clip) and the real exporter's 488 encoder-input frames, pre-P68 vs branch: all identical. |
 | 1.4 ✅ P69 | Timeline and thumbnails: `TimelineClip.tsx`, `Timeline.tsx`, `useThumbs.ts`, `useMedia.ts` use the UI table `ui/clipTypeUi.tsx` (glob of `clipTypes/*/ui.tsx`, `clipUi(p)` by variant, `assetUi(kind)`, `DEFAULT_CLIP_UI` for anything a type leaves out and for unknown ids). The `ClipTypeUi` fields are declarative (Q4): `name`, `icon`, `emptyName`, `titlePrefix`, `kindClass`, `body`, `background`, `thumbBackground`, `filmstrip`, `waveform`, `assetThumb`, `assetPreviews`; `needsThumb` reads `caps.thumb`. Architecture: `clipTypes/<id>/ui.tsx` is ui-layer code; `ui` may import the `clipTypes` barrel. The trim limit for image assets in `Timeline.tsx` is edit behaviour, not display, and stays for a later step. | `ui/timelineParity.test.tsx`: the timeline markup of a fixture with every type (thumbnails, filmstrips, waveforms, load bars) on desktop and phone (collapsed and each group expanded), hashed against a golden recorded before the move; `ui/clipTypeUi.test.tsx` compares every helper with frozen pre-P69 copies over 42 clip shapes and every asset kind. In the PR: 20 Chrome screenshots of the real app at 390 and 1440 wide (plus tall, scrolled and expanded/selected states), main vs branch: byte-identical. |
-| 1.5 | Inspector, toolbar and menus: `V2App.tsx` `inspectorTabs()`, `KIND_ICON`, `clipName`, mobile toolbar, context menu → `ui(id)`. This also shrinks `V2App.tsx` (1,534 lines). | `V2App.test.tsx`, inspector tests; screenshots. |
+| 1.5 ✅ P70 | Inspector, toolbar and menus: `V2App.tsx` `inspectorTabs()`, `KIND_ICON`, `clipName`, mobile toolbar, context menu and sheets read `clipUi(p)`. Plugins list host-owned ids (tabs `basic`/`speed`/`audio`/`chroma`/`transition`/`text`/`effect`/`params`/`colour`, header actions, toolbar tools, with `ToolRef` arrays for "first that applies") plus flags (`editor`, `speed`, `volume`, `timeTools`, `inOutFrames`, `linkedAudio`, `transformInAudioTab`); the panels stay in `V2App.tsx`. Parity: `ui/inspectorParity.test.tsx` DOM golden for every clip type selected (desktop inspector tabs and context menu, phone toolbar and sheets), frozen-switch test in `ui/clipTypeUi.test.tsx`, 390/1440 screenshots. | `V2App.test.tsx`, inspector tests; screenshots. |
 | 1.6 | Storyboard: `kindForSlot`, `shotClip`/`shotClipSpan` length rules, `storySync` layer types, `persistence/media.ts` `mediaKindOf` → `core.story`, `core.duration`, `core.accepts`. | Storyboard tests (`storySend*`, `storySync`, `storyRelayout`, `storySendOrder`, …). |
 | 1.7 | WebMCP: `ALL_AGENT_TOOLS` and `clipJson` include plugin contributions; per-type checks in `timelineTools.ts` move to the plugins' `agent.run`. Built-ins add no new tools in this phase. | `npm run gen:ai` produces **no diff** in `public/ai/*`, `public/llms.txt`, `docs/v2/WEB_MCP.md`; agent tests. |
-| 1.8 | Unknown-type handling (§6) + `docs/v2/ADDING_CLIP_TYPES.md`. | New tests: load/save round trip keeps unknown data; render draws the slate; export warns. |
+| 1.8 | Unknown-type handling (§6) + `docs/v2/ADDING_CLIP_TYPES.md`. **Placeholder as a cross-type state** (decision 9): player, timeline and export check `placeholder` first and use one shared slate renderer (the unknown-type slate shares it) before plugin lookup; remove the `placeholder` variant from `variantOf` and retire `clipTypes/placeholder/` (its slate, timeline card, Fill tool and export classification move to shared host code); any `clipType` may carry `placeholder`, and Fill / Replace pickers filter assets by that type. `blank` stays an `image` variant plugin. No schema change. | New tests: load/save round trip keeps unknown data; render draws the slate; export warns; a placeholder of every type (video, image, audio, html, text, unknown) draws the shared slate in preview and black in export, shows the timeline card and filters the picker; existing image placeholders unchanged (render, timeline and inspector goldens). |
 
 Test strategy for the whole phase: the full suite must pass at every step; the parity test and the "gen:ai has no
 diff" check are added in 1.1 and kept; snapshot/pixel tests for the player; screenshots of the timeline and

@@ -1,16 +1,28 @@
 /// <reference types="vite/client" />
 /**
- * Clip type UI table (P69, docs/v2/CLIP_PLUGIN_ARCHITECTURE.md Phase 1 step 1.4). Each optional
- * `src/v2/clipTypes/<id>/ui.tsx` default-exports a `ClipTypeUi` with what the timeline shows for that type: its name,
- * icon, card body, background, filmstrip / waveform strips, and how its asset gets a thumbnail and previews. Fields
- * are declarative (decision Q4); anything a type leaves out takes `DEFAULT_CLIP_UI` (a plain media clip named after
- * its asset), and so does a `clipType` this build does not register.
+ * Clip type UI table (P69/P70, docs/v2/CLIP_PLUGIN_ARCHITECTURE.md Phase 1 steps 1.4–1.5). Each optional
+ * `src/v2/clipTypes/<id>/ui.tsx` default-exports a `ClipTypeUi` with what the editor shows for that type: on the
+ * timeline its name, icon, card body, background, filmstrip / waveform strips, and how its asset gets a thumbnail and
+ * previews (P69); in the inspector its icon, title, tabs and header actions, on the mobile clip toolbar its primary
+ * tools, and which shared tools, sheets and menu items apply (P70). Fields are declarative (decision Q4): tabs, tools
+ * and actions are ids of panels and buttons the editor host owns (`V2App.tsx`). Anything a type leaves out takes
+ * `DEFAULT_CLIP_UI` (a plain media clip named after its asset), and so does a `clipType` this build does not register.
  */
 import type { CSSProperties, ReactNode } from "react";
 import type { MediaKind, Placement, Project } from "../domain";
 import { CLIP_TYPES, variantOf } from "../clipTypes";
 
 export type WaveKind = "audio" | "video";
+
+/** Inspector tabs the host can show (P70). Optional ones appear only when they apply: `speed` (speed, time tools or
+ * in point available), `transition` (the clip starts a cut). `label` renames a tab (text shows Basic as "Transform"). */
+export type InspectorTabId = "basic" | "speed" | "audio" | "chroma" | "transition" | "text" | "effect" | "params" | "colour";
+export type InspectorTabRef = InspectorTabId | { id: InspectorTabId; label: string };
+/** Buttons in the desktop inspector header (P70); `edit-all` only for a clip on a styled text layer. */
+export type InspectorActionId = "edit-all" | "caption-style" | "subtitles" | "edit-code";
+/** Primary tools on the mobile clip toolbar (P70); a nested list is "the first of these that applies". */
+export type ToolId = "adjust" | "audio" | "speed" | "link" | "to-main" | "colour" | "fx" | "style" | "anim" | "subs" | "params" | "code" | "edit-audio";
+export type ToolRef = ToolId | ToolId[];
 
 export interface ClipTypeUi {
   /** The clip type id (folder name). */
@@ -38,9 +50,38 @@ export interface ClipTypeUi {
   assetThumb?: "frame" | "html" | "none";
   /** Which per-version previews are computed for an asset of this kind (default: peaks only). */
   assetPreviews?: { peaks: boolean; filmstrip: boolean };
+  // ---- P70: inspector, toolbar, sheets and menus ----
+  /** Inspector header icon (default "▭") and title (default: the asset's name, else the clip type id). */
+  inspectorIcon?: string;
+  inspectorTitle?(p: Placement, project: Project): string;
+  /** Inspector tabs in order (default: basic, speed, audio, chroma, transition). */
+  inspectorTabs?: InspectorTabRef[];
+  /** Inspector header buttons (default none). */
+  inspectorActions?: InspectorActionId[];
+  /** Mobile clip toolbar primary tools: on an overlay / other track (default adjust, link, to-main) and on the main
+   * track (default adjust, audio, speed; a type that sets only `toolbar` uses it on both). */
+  toolbar?: ToolRef[];
+  toolbarMain?: ToolRef[];
+  /** Extra tools this type adds to the shared groups: `fill` (placeholder), `adjust` next to the source tools (text). */
+  extraTools?: ("fill" | "adjust")[];
+  /** The type-specific data editor: text panel, effect picker or code editor (gizmo edit, sheets). */
+  editor?: "text" | "effect" | "code";
+  /** Playback speed applies (default true). */
+  speed?: boolean;
+  /** Volume slider in the audio sheet (default true). */
+  volume?: boolean;
+  /** Freeze frame and reverse (toolbar, Speed tab, context menu). */
+  timeTools?: boolean;
+  /** In / out frame strip in the Basic tab and the Adjust sheet. */
+  inOutFrames?: boolean;
+  /** The clip owns linked audio: extract, duplicate, mute clip audio. */
+  linkedAudio?: boolean;
+  /** Fades and keyframes live in the Audio tab (the type has no Basic tab). */
+  transformInAudioTab?: boolean;
 }
 
-export type ResolvedClipTypeUi = Required<Omit<ClipTypeUi, "body" | "background" | "icon" | "emptyName" | "titlePrefix" | "kindClass">> & Pick<ClipTypeUi, "body" | "background" | "icon" | "emptyName" | "titlePrefix" | "kindClass">;
+type Optional = "body" | "background" | "icon" | "emptyName" | "titlePrefix" | "kindClass" | "editor";
+export type ResolvedClipTypeUi = Required<Omit<ClipTypeUi, Optional>> & Pick<ClipTypeUi, Optional>;
 
 /** A plain media clip: named after its asset, thumbnail background, a waveform when there are peaks. */
 export const DEFAULT_CLIP_UI: ResolvedClipTypeUi = {
@@ -51,6 +92,19 @@ export const DEFAULT_CLIP_UI: ResolvedClipTypeUi = {
   waveform: () => "video",
   assetThumb: "frame",
   assetPreviews: { peaks: true, filmstrip: false },
+  inspectorIcon: "▭",
+  inspectorTitle: (p, project) => project.assets[p.source.assetId]?.name ?? p.clipType,
+  inspectorTabs: ["basic", "speed", "audio", "chroma", "transition"],
+  inspectorActions: [],
+  toolbar: ["adjust", "link", "to-main"],
+  toolbarMain: ["adjust", "audio", "speed"],
+  extraTools: [],
+  speed: true,
+  volume: true,
+  timeTools: false,
+  inOutFrames: false,
+  linkedAudio: false,
+  transformInAudioTab: false,
 };
 
 /** Problems with one UI module (empty = valid). */
@@ -60,7 +114,7 @@ export function checkClipTypeUi(u: unknown, folder: string): string[] {
   const out: string[] = [];
   if (x.id !== folder) out.push(`id "${String(x.id)}" must equal its folder name "${folder}"`);
   if (typeof x.id === "string" && !CLIP_TYPES.core(x.id)) out.push(`no clip type "${x.id}" is registered (add clipTypes/${x.id}/core.ts)`);
-  for (const k of ["name", "body", "background", "waveform"] as const) if (x[k] !== undefined && typeof x[k] !== "function") out.push(`${k} must be a function`);
+  for (const k of ["name", "body", "background", "waveform", "inspectorTitle"] as const) if (x[k] !== undefined && typeof x[k] !== "function") out.push(`${k} must be a function`);
   if (x.assetThumb !== undefined && !["frame", "html", "none"].includes(x.assetThumb)) out.push(`assetThumb must be "frame", "html" or "none"`);
   return out;
 }
@@ -72,7 +126,8 @@ export function loadClipTypeUis(found: Record<string, { default?: ClipTypeUi }>)
     const folder = path.split("/").at(-2) ?? "";
     const issues = checkClipTypeUi(mod.default, folder);
     if (issues.length) { problems.push(...issues.map((i) => `${path}: ${i}`)); continue; }
-    uis.set(folder, { ...DEFAULT_CLIP_UI, ...mod.default! });
+    const m = mod.default!;
+    uis.set(folder, { ...DEFAULT_CLIP_UI, ...m, toolbarMain: m.toolbarMain ?? m.toolbar ?? DEFAULT_CLIP_UI.toolbarMain });
   }
   return { uis, problems };
 }
