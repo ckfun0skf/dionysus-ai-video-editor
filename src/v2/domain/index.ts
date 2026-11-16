@@ -61,3 +61,4 @@ export type { Series, SeriesAsset, SeriesAssetSummary } from "./series";
 export type { SeriesLike } from "./storySeries";
 export * from "./scene";
 export * from "./glb";
+export * from "./sceneEdit";

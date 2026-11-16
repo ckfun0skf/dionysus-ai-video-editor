@@ -10,9 +10,9 @@ import { sceneVersion } from "./sceneAsset";
  * The Scene tab of a 3D scene clip (P74; a sheet from the phone clip toolbar since P75): the objects with their
  * functions (and, for GLB models, their animation clips), the events in time order, and any problems the validator
  * found (with JSON paths). P75: "Add GLB model" embeds a .glb in the scene (a new version of the scene asset, one undo
- * step) and adds an object that plays its first animation. Full editing comes with the inspector step (2.3).
+ * step) and adds an object that plays its first animation. P76: "Edit scene" opens the scene editor (ui/SceneEditor.tsx).
  */
-export function ScenePanel({ project, placement, blobs, engine }: { project: Project; placement: Placement; blobs: BlobStore; engine?: Engine }) {
+export function ScenePanel({ project, placement, blobs, engine, onEdit }: { project: Project; placement: Placement; blobs: BlobStore; engine?: Engine; onEdit?: () => void }) {
   const blobKey = versionOfPlacement(project, placement)?.media.blobKey;
   const [read, setRead] = useState<{ key: string; doc?: SceneDoc; issues: SceneIssue[] }>();
   const [note, setNote] = useState<string>();
@@ -46,6 +46,7 @@ export function ScenePanel({ project, placement, blobs, engine }: { project: Pro
     finally { setBusy(false); if (input.current) input.current.value = ""; }
   };
   return <div className="v2-psettings v2-scene-panel" data-testid="scene-panel">
+    {onEdit && <button type="button" className="v2-btn primary v2-scene-add v2-scene-edit" title="Open this scene's own timeline: one track per object, events as blocks, forms for every value (each edit is one undo step)" onClick={onEdit}><Ic g="✎" size={16} /> Edit scene</button>}
     {sum && <section aria-label="Scene objects"><h4>Objects <small>{sum.objects.length}</small></h4>
       <ul className="v2-scene-list">{sum.objects.map((o) => <li key={o.id}><code>{o.id}</code> <span>{o.shape}</span>{o.functions.length > 0 && <small> · {o.functions.join(", ")}</small>}
         {o.animations && <small className="v2-scene-anims"> · {o.animations.length ? `animations: ${o.animations.join(", ")}` : "no animations"}</small>}</li>)}</ul>
@@ -60,7 +61,7 @@ export function ScenePanel({ project, placement, blobs, engine }: { project: Pro
         : <p className="v2-abnote">No events: the scene holds still.</p>}</section>}
     {(errors.length > 0 || warnings.length > 0) && <section aria-label="Scene problems"><h4>Problems</h4>
       <ul className="v2-scene-list v2-scene-issues">{[...errors, ...warnings].map((i, n) => <li key={n} className={`is-${i.level}`}>{i.path && <code>{i.path}</code>} {i.message}</li>)}</ul></section>}
-    <p className="v2-abnote">Every frame is computed from the scene&apos;s JSON and the time alone (models and their animations too), so preview and export match. Full editing comes later.</p>
+    <p className="v2-abnote">Every frame is computed from the scene&apos;s JSON and the time alone (models and their animations too), so preview and export match. Edit scene opens its own timeline with a track per object.</p>
   </div>;
 }
 

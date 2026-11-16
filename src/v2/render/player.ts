@@ -30,7 +30,7 @@ import { HtmlClipHost, isValidFrame, type FrameIssue, type HtmlClipInit } from "
 import { bindingSignature, resolveClipBindings } from "../domain/htmlClipBindings";
 import { readManifest, resolveHtmlParams, type HtmlClipManifest } from "../domain/htmlClipPackage";
 import { parseScene, type SceneDoc } from "../domain/scene";
-import { scenePage } from "./scenePage";
+import { scenePage, scenePageKey } from "./scenePage";
 import type { ExportVideoFrames } from "./export/videoFrames";
 import { withBlend } from "./blend";
 import { BufferGate, clipLoadOf, idleCap, idleEvictions, loadSignature, type ClipLoad } from "./stability";
@@ -268,13 +268,27 @@ export class Player {
     return e.doc;
   }
 
+  /**
+   * P76: the scene editor hands over a scene it just stored under `blobKey`, so the preview shows the edit at once
+   * (no blob read; with the same page key the clip's page is kept and the frame is drawn again).
+   */
+  primeSceneDoc(blobKey: string, doc: SceneDoc) {
+    if (this.sceneDocs.get(blobKey)?.doc) return;
+    this.sceneDocs.set(blobKey, { doc, ready: Promise.resolve() });
+    if (!this.playing) this.draw();
+  }
+
   /** P74: the sandboxed iframe of a scene clip: the built-in scene page (render/scenePage.ts) for this document. */
   private sceneHost(placementId: string, blobKey: string, w: number, h: number): HtmlClipHost {
-    const key = `scene:${blobKey}@${w}x${h}`;
-    const hit = this.html.get(placementId);
-    if (hit?.key === key) return hit.host;
-    hit?.host.dispose();
+    // P76: keyed by what the page is built from (scenePageKey) once the scene is known, so an edit of events or
+    // properties keeps the page and only draws the frame again; a new structure (objects, shapes, models, lights) reloads.
+    // A page started while its scene was loading was built from that scene: it takes the page key once it is known.
     const doc = this.sceneDoc(blobKey);
+    const pending = `scene-loading:${blobKey}@${w}x${h}`;
+    const key = doc ? `scene:${scenePageKey(doc)}@${w}x${h}` : pending;
+    const hit = this.html.get(placementId);
+    if (hit && (hit.key === key || (doc && hit.key === pending))) { hit.key = key; return hit.host; }
+    hit?.host.dispose();
     const page = (doc !== undefined ? Promise.resolve(doc) : this.sceneDocs.get(blobKey)!.ready.then(() => this.sceneDocs.get(blobKey)?.doc)).then((d) => scenePage(d ?? undefined));
     const entry = { key, host: new HtmlClipHost(page, w, h, () => { if (!this.playing) this.draw(); }) };
     this.html.set(placementId, entry);

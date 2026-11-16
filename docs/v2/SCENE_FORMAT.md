@@ -139,7 +139,21 @@ has one `AnimationMixer`; every frame stops all actions (the rest pose), resets 
 one's weight and its time scale to its local time, and calls `mixer.setTime(1)`, never `mixer.update(delta)`. So a
 frame depends only on the document and `t`, in preview, export and any seek order.
 
+## Editing (P76)
+
+A scene clip has its own timeline editor: **Edit scene** in the clip's Scene tab or **Edit scene…** in its menu on
+desktop (it takes the timeline panel's place), the **Scene** tool on the phone (a full-screen sheet with the preview at
+the top). The scene/camera track comes first, then one track per object; each event is a block labelled with its call
+(blocks that overlap in time stack in rows). Select a block to edit its call, `at`, `dur`, `ease` and arguments; select
+a track name to edit the object's base fields (id, name, shape, size, colour, position, rotation, scale, visible,
+opacity; for models the animation from 0 s and the parts shown) or the scene (name, `durationSec`, background, camera
+start, lights). New events take the value the object has at that time, so adding one changes nothing until it is
+edited; renaming an object updates its events and every `lookAt` aimed at it; deleting one removes its events and the
+`lookAt` events aimed at it. Each edit is one undo step and is saved as a version of the scene asset: **New version**
+adds one version for the editing session (later edits update it), **Replace current** overwrites the version the clip
+shows. The editor writes plain `dionysus.scene/1`; times are rounded to the millisecond.
+
 ## Not yet (later Phase 2 steps)
 
-Editing in the inspector (2.3), WebMCP tools and an AI guide rule (2.4),
-storyboard `render: "scene"` and asset type `scene` (2.5, decision 5), per-object sub-tracks on the timeline (2.6).
+Dragging event blocks to retime and resize them in the scene editor (2.4), WebMCP tools and an AI guide rule (2.5),
+storyboard `render: "scene"` and asset type `scene` (2.6, decision 5). The step table was renumbered in P76.

@@ -16,7 +16,8 @@ not register loads, keeps its data and shows as a slate (§6 of the design doc).
 asset version holds a `dionysus.scene/1` document (`domain/scene.ts`, `docs/v2/SCENE_FORMAT.md`). It renders in the
 sandboxed HTML clip host (`render/scenePage.ts`, reached through `host.media.sceneHost` / `sceneDoc`), with the pure
 `stateAt(doc, t)` sent to the page every frame. Since P75 (step 2.2) it also draws GLB models from the document's
-`files` and poses their animations with `mixer.setTime` from `t` (`domain/glb.ts` reads clip and node names).
+`files` and poses their animations with `mixer.setTime` from `t` (`domain/glb.ts` reads clip and node names). Since
+P76 (step 2.3) it has its own timeline editor (`ui/SceneEditor.tsx`, pure operations in `domain/sceneEdit.ts`).
 
 ```
 clipTypes/

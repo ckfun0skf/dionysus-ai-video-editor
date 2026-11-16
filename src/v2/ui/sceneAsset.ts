@@ -16,5 +16,17 @@ export const sceneMedia = (blobKey: string): AssetVersion["media"] => ({ blobKey
 export async function sceneVersion(blobs: BlobPut, asset: Asset, doc: SceneDoc): Promise<AssetVersion> {
   const id = newId("ver"), blobKey = `${asset.id}/${id}`;
   await blobs.put(blobKey, new Blob([JSON.stringify(doc, null, 2)], { type: SCENE_MIME }));
+  rememberSceneDoc(blobKey, doc);
   return { id, createdAt: new Date().toISOString(), media: sceneMedia(blobKey), provenance: { source: "import", inputs: [] } };
 }
+
+/**
+ * P76: scenes the editor has read or written, by blob key (the newest 24), so a stored edit, an undo or a redo shows
+ * at once without reading the blob again. Blobs under a key never change, so a cached scene is never stale.
+ */
+const docs = new Map<string, SceneDoc>();
+export function rememberSceneDoc(blobKey: string, doc: SceneDoc) {
+  docs.delete(blobKey); docs.set(blobKey, doc);
+  while (docs.size > 24) docs.delete(docs.keys().next().value as string);
+}
+export const cachedSceneDoc = (blobKey: string | undefined): SceneDoc | undefined => (blobKey ? docs.get(blobKey) : undefined);

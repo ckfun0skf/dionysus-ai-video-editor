@@ -92,9 +92,9 @@ required checks.
 1. `git fetch` and branch from the latest `origin/main` (e.g. `p66-short-name`).
 2. Implement with tests. Keep PRs small (MODULE_DESIGN §14 targets < 400 changed lines; feature PRs here are often
    larger, but split refactors).
-3. **`public/doc/tasks.json`:** add one entry per PR with the next free P-number: `{ "id": "P76-SHORT-NAME", "title":
+3. **`public/doc/tasks.json`:** add one entry per PR with the next free P-number: `{ "id": "P77-SHORT-NAME", "title":
    "<what and why, one paragraph>", "status": "done", "progress": 100 }` appended after the latest entry (the latest is
-   `P75-SCENE-GLB`; the next is **P76**). Bump `updatedAt`. Edit the file surgically (insert text); do not
+   `P76-SCENE-EDITOR`; the next is **P77**). Bump `updatedAt`. Edit the file surgically (insert text); do not
    re-serialise the whole JSON. `scripts/check-tasks-updated.mjs` fails a PR that changes `src/` without it. If an id
    is already taken, use the next number and say so in the PR.
 4. **AI guide rule:** append to `RULE_LIST` in `src/v2/domain/storyPrompt.ts` (append-only; numbers are positions;
@@ -110,7 +110,7 @@ required checks.
 6. Run `npm run gen:ai` after changing rules, tools or presets, and commit the regenerated files (tests fail if they are
    stale).
 7. `npx tsc -b && npx vitest run && npx vite build`.
-8. Commit in English; PR title `P75: …`; body says what, why, tests, and `Fixes #N` (or `Refs #N` if partial), plus
+8. Commit in English; PR title `P77: …`; body says what, why, tests, and `Fixes #N` (or `Refs #N` if partial), plus
    what was not verified. Push, open the PR, wait for `build` on the head SHA. Do not merge.
 
 ## 7. UI conventions
@@ -138,10 +138,10 @@ required checks.
 | `docs/v2/DEPLOYMENT.md` | hosting, `DIONYSUS_SITE_URL`, base path |
 | `docs/v2/CLIP_PLUGIN_ARCHITECTURE.md` | clip type plugins: accepted design, decisions, Phase 1 (done) and the Phase 2 step table |
 | `docs/v2/ADDING_CLIP_TYPES.md` | adding a clip type step by step, with a worked example (P73) |
-| `docs/v2/SCENE_FORMAT.md` | 3D scene clips: `dionysus.scene/1` objects, events, custom functions, rendering (P74), GLB models and animation (P75) |
+| `docs/v2/SCENE_FORMAT.md` | 3D scene clips: `dionysus.scene/1` objects, events, custom functions, rendering (P74), GLB models and animation (P75), the scene editor (P76) |
 | `public/doc/tasks.json` | every task and its status |
 
-## 9. Recent history (P47–P75)
+## 9. Recent history (P47–P76)
 
 | Id | PR | One line |
 |---|---|---|
@@ -173,7 +173,8 @@ required checks.
 | P72 | #324 | Step 1.7: WebMCP tools, AI guide rules and `get_timeline` fields can come from `core.agent` (built-ins add none; `gen:ai` byte-identical); per-type checks of the timeline tools read `agent.clipTools` / `agent.props` / `caps.sound`; compact hash golden recorded before the move. |
 | P73 | #325 | Step 1.8, the last of Phase 1: placeholder is a cross-type clip state handled by the host before any plugin (`clipTypes/state.ts`, shared slate `render/placeholderSlate.ts`, `PLACEHOLDER_UI`; `clipTypes/placeholder/` retired; Fill filters by the intended type); unknown clip types load, keep their data, draw a slate, export black and silent after a warning, have an info-only inspector and `unknown: true` in `get_timeline`; `docs/v2/ADDING_CLIP_TYPES.md`. Image placeholders and blank unchanged (golden recorded before the move). |
 | P74 | #326 | Phase 2 step 2.1 (decision 5 accepted: storyboard `render: "scene"` / asset type `scene` as optional values in 3.1, no version bump; Phase 2 step table added): the `scene` clip type (`clipTypes/scene/`), `dionysus.scene/1` schema and validation and the pure evaluator `stateAt` (`domain/scene.ts`), rendering in the sandboxed HTML clip host from `t` only (`render/scenePage.ts`), Code → 3D scene, read-only Scene inspector tab; `docs/v2/SCENE_FORMAT.md`. Existing goldens unchanged; preview, export and seek order pixel-identical in Chrome. |
-| P75 | — | Phase 2 step 2.2: GLB models in scene clips (`files` map of data: URLs, `model`, fit by `size`), animation as a property (object `animation`, `play` / `stop`, function rows; speed, repeat / once / pingpong, start offset, cross-fades from `t`) and node show/hide (`nodes`); the page loads models with the vendored GLTFLoader through its clip manifest and poses them with `mixer.setTime` per frame (no `update(delta)`); `domain/glb.ts`; Scene tab Add GLB model. P74 gaps: Scene sheet on phones, scenes in the picker's Code tab, no `volume` on scene clips. Existing goldens unchanged; Chrome parity with a real skinned GLB (Fox). |
+| P75 | #327 | Phase 2 step 2.2: GLB models in scene clips (`files` map of data: URLs, `model`, fit by `size`), animation as a property (object `animation`, `play` / `stop`, function rows; speed, repeat / once / pingpong, start offset, cross-fades from `t`) and node show/hide (`nodes`); the page loads models with the vendored GLTFLoader through its clip manifest and poses them with `mixer.setTime` per frame (no `update(delta)`); `domain/glb.ts`; Scene tab Add GLB model. P74 gaps: Scene sheet on phones, scenes in the picker's Code tab, no `volume` on scene clips. Existing goldens unchanged; Chrome parity with a real skinned GLB (Fox). |
+| P76 | — | Phase 2 step 2.3 (owner-confirmed scene editor UX, split in two; step table renumbered): a scene clip's own timeline editor (`ui/SceneEditor.tsx`; desktop: in place of the timeline panel, from Edit scene / the clip menu; phone: full-screen sheet from the Scene tool with a mirrored preview), one track per object plus the scene/camera track, blocks labelled with their call (read-only on the tracks, select to edit), side-panel forms for event call / time / duration / ease / args, object base properties, scene, camera and lights; add / duplicate / delete events, add / delete objects. Pure operations in `domain/sceneEdit.ts`. One undo step per committed edit, saved as a scene version under the version-save rules; the player keeps the clip's page across event and property edits (`scenePageKey`, `primeSceneDoc`) so the preview updates at once. Existing goldens unchanged. |
 
 ## 10. Known unverified areas
 
@@ -277,9 +278,14 @@ change, each merged on green CI) is **complete** (P65–P73):
 
 **Phase 2** (deterministic three.js `scene` clip, §7 of the design doc) started in P74. **Decision 5 is accepted**
 (2026-11-15, as recommended): a storyboard may mark a shot `render: "scene"` and use a `scene` asset type, both optional
-values within `dionysus/3.1`, no version bump; it is implemented in step 2.5. Phase 2 has its own step table (§7):
-2.1 scene type + schema + evaluator + rendering (P74), 2.2 GLB models and animation (P75), 2.3 inspector editing, 2.4 agent
-tools and AI rule, 2.5 storyboard mapping, 2.6 per-object sub-tracks; one small PR per step, each merged on green CI.
+values within `dionysus/3.1`, no version bump; it is implemented in step 2.6. Phase 2 has its own step table (§7):
+2.1 scene type + schema + evaluator + rendering (P74), 2.2 GLB models and animation (P75), 2.3 scene editor part 1 (P76:
+own timeline per scene clip, forms, read-only tracks with selection), 2.4 scene editor part 2 (P77: drag / resize
+retiming), 2.5 agent tools and AI rule (P78), 2.6 storyboard mapping (P79); one small PR per step, each merged on green
+CI. **Renumbered in P76:** the owner confirmed the editor UX (own timeline, tracks per object, blocks by call, drag to
+retime and resize, side panel, one undo step per gesture, version-save rules) and allowed a split; the former 2.6
+(sub-tracks under the clip on the main timeline) is folded into 2.3 / 2.4, so agent tools moved to 2.5 and the
+storyboard to 2.6 (design doc §7, the note under the table, and decision 6).
 
 - **2.1 done (P74):** `clipTypes/scene/` (core: video track, `asset: "media"`, no sound / source time / thumbnail;
   render: `frame(host)`; ui: cube icon, Scene tab, no speed or volume). `domain/scene.ts`: `validateScene` /
@@ -310,7 +316,24 @@ tools and AI rule, 2.5 storyboard mapping, 2.6 per-object sub-tracks; one small 
   types or a type with sound. Tests: `domain/sceneModel.test.ts` (golden `__golden__/sceneModelState.json`, numbers
   rounded to 1e-6, `UPDATE_SCENE_GOLDEN=1`), `ui/sceneModelUi.test.tsx`. Fixture GLB: `ui/cubeGlb.ts`
   `makeAnimatedGlb()` (Bot / Body / Head / Arm; Wave, Spin, Bounce).
-- **Next: step 2.3 (P76)**, inspector editing (objects, events, custom-function args; one undo step per edit). New
+- **2.3 done (P76):** `ui/SceneEditor.tsx`, opened by `V2App` state `sceneEdit` (desktop: Scene tab **Edit scene** or
+  the clip menu **Edit scene…**, rendered in the timeline panel in place of the timeline; phone: the **Scene** clip tool,
+  a full-screen sheet whose preview mirrors the player canvas). Tracks from `sceneTracks` (scene/camera first, one per
+  object, unknown objects last; overlapping blocks stack in rows; blocks ≥ 44 px), a scene-time ruler that seeks the
+  player, zoom, Add object (shapes, GLB). Side panel: `SceneForm` (name, planned length, background, camera start,
+  lights; adding a light to a default-lit scene writes the defaults first), `ObjectForm` (id rename with references,
+  base properties, model animation and parts, add event, delete), `EventForm` (call, at, duration, ease, args from
+  `sceneCallArgs`, duplicate, delete, go to). Fields commit on blur / Enter / change (colour on the native `change`),
+  so one gesture = one `engine.dispatch` = one undo step. Saving: `edit()` applies a pure `domain/sceneEdit.ts`
+  operation to the scene the clip shows, stores it with `sceneVersion` and dispatches `cmd.addAssetVersion` (new
+  `remember` option): **New version** adds a version on the first edit of the session and replaces that version for
+  later edits (not remembered as the project's save mode); **Replace current** replaces the shown version. Preview:
+  `Player.primeSceneDoc` + `ui/sceneAsset.ts` scene cache; `sceneHost` keys the page by `scenePageKey` (lights and
+  object id / shape / size / model and files), so event and property edits keep the page and the scene renderer asks
+  for the same time again (`fresh`); structural edits rebuild it. Tests: `domain/sceneEdit.test.ts`,
+  `ui/sceneEditor.test.tsx`.
+- **Next: step 2.4 (P77)**, drag and resize retiming of blocks on the scene editor's tracks (one undo step per drag via
+  a coalesced gesture: `engine.beginGesture` / `coalesceKey`; `updateSceneEvent` already rounds times). New
   clip types follow `docs/v2/ADDING_CLIP_TYPES.md`; the scene format is `docs/v2/SCENE_FORMAT.md`.
 
 ## 12. Working habits that avoid repeat mistakes
