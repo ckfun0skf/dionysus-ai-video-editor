@@ -1,6 +1,6 @@
 import type { SceneDoc } from "../domain/scene";
 import { writeManifest } from "../domain/htmlClipPackage";
-import { SCENE_BUILD_JS } from "./scenePage";
+import { SCENE_BUILD_JS, scenePageKey } from "./scenePage";
 
 /**
  * P81a: the scene editor's Edit view page. A second instance of the scene clip's page (render/scenePage.ts: the same
@@ -9,13 +9,19 @@ import { SCENE_BUILD_JS } from "./scenePage";
  * interactive, so it renders on demand (on a state, a camera move or a gizmo move), not per timeline frame, and it is
  * never used for export.
  *
+ * P81b: the scene camera is drawn as a small camera with its frustum (to the look-at distance) and a yellow look-at
+ * point, and each directional / point light as a handle with its three.js helper; all of them are picked and moved
+ * like objects (ids `camera`, `camera:target`, `light:<index>`). Light values (colour, intensity, position) arrive with
+ * the state, so moving a light does not rebuild the page.
+ *
  * Messages (both ways checked by the window they come from; the editor also checks every value):
  *   page → editor  {type:"scene-edit:ready"}                                 (models loaded, listening)
- *   editor → page  {type:"scene-edit:state", state?, sel?, opts?}            (stateAt for the shown time; selected id or null;
- *                                                                              opts {mode, axis "x"|"y"|"z"|"free", snap, touch})
+ *   editor → page  {type:"scene-edit:state", state?, sel?, opts?, lights?}   (stateAt for the shown time; selected id or null;
+ *                                                                              opts {mode, axis "x"|"y"|"z"|"free", snap, touch,
+ *                                                                              aspect}; lights as drawn)
  *   editor → page  {type:"scene-edit:home"}                                  (back to the scene camera's view)
  *   editor → page  {type:"scene-edit:cancel"}                                (Esc in the editor: cancel the drag)
- *   page → editor  {type:"scene-edit:pick", id}                              (tapped object id, or null for empty space)
+ *   page → editor  {type:"scene-edit:pick", id}                              (tapped id, or null for empty space)
  *   page → editor  {type:"scene-edit:drag", phase, id, value}                (phase start | move | end | cancel; value
  *                                                                              {position, rotation (deg, XYZ), scale})
  */
@@ -33,8 +39,48 @@ scene.add(grid);
 const tc = new TransformControls(view, canvas);
 scene.add(tc);
 const outline = new THREE.BoxHelper(undefined, 0x5ad1c8); outline.visible = false; scene.add(outline);
+// P81b: the scene camera as a small body (+Z towards its look-at point), its frustum and look-at point; light handles.
+const shot = new THREE.PerspectiveCamera(40, 16 / 9, 0.1, 1);
+const shotHelper = new THREE.CameraHelper(shot); scene.add(shotHelper);
+const rigMat = new THREE.MeshBasicMaterial({ color: 0xdcdce4 });
+const rig = new THREE.Group();
+rig.add(new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.18, 0.22), rigMat));
+const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.08, 0.12, 20), rigMat); lens.rotation.x = Math.PI / 2; lens.position.z = 0.16; rig.add(lens);
+rig.userData.sceneId = "camera"; scene.add(rig);
+const aim = new THREE.Mesh(new THREE.SphereGeometry(0.08, 20, 12), new THREE.MeshBasicMaterial({ color: 0xffd166 }));
+aim.userData.sceneId = "camera:target"; scene.add(aim);
+const aimLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 0, 1)]), new THREE.LineDashedMaterial({ color: 0xffd166, dashSize: 0.12, gapSize: 0.08 }));
+scene.add(aimLine);
+function syncRig() {
+  shot.position.copy(rig.position); shot.lookAt(aim.position);
+  const d = Math.max(0.3, rig.position.distanceTo(aim.position));
+  shot.near = Math.min(0.1, d / 10); shot.far = d; shot.updateProjectionMatrix(); shot.updateMatrixWorld(); shotHelper.update();
+  rig.lookAt(aim.position);
+  aimLine.geometry.setFromPoints([rig.position, aim.position]); aimLine.computeLineDistances();
+}
+const lightNodes = scene.children.filter((c) => c.isLight);
+const handles = lightNodes.map((L, i) => {
+  if (!(L.isDirectionalLight || L.isPointLight)) return null;
+  const h = new THREE.Mesh(new THREE.SphereGeometry(0.11, 20, 12), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+  h.userData.sceneId = "light:" + i; h.position.copy(L.position); scene.add(h);
+  const helper = L.isPointLight ? new THREE.PointLightHelper(L, 0.3) : new THREE.DirectionalLightHelper(L, 0.5);
+  scene.add(helper);
+  return { L, h, helper };
+});
+function syncLight(x) { x.L.position.copy(x.h.position); x.L.updateMatrixWorld(); x.helper.update(); }
+function applyLights(list) {
+  lightNodes.forEach((L, i) => {
+    const l = list[i]; if (!l) return;
+    const k = typeof l.intensity === "number" ? l.intensity : 1;
+    L.color.set(l.color || "#ffffff"); L.intensity = L.isPointLight ? k * 10 : k;
+    const x = handles[i]; if (!x) return;
+    if (Array.isArray(l.position) && !(dragging && tc.object === x.h)) x.h.position.fromArray(l.position);
+    x.h.material.color.copy(L.color); syncLight(x);
+  });
+}
+const extra = (id) => (id === "camera" ? rig : id === "camera:target" ? aim : (handles.find((x) => x && x.h.userData.sceneId === id) || {}).h);
 let st = null, sel = null, homed = false, dragging = false, cancelled = false, gestureDragged = false;
-const opts = { mode: "translate", axis: "free", snap: false, touch: false };
+const opts = { mode: "translate", axis: "free", snap: false, touch: false, aspect: 16 / 9 };
 const post = (m) => parent.postMessage(m, "*");
 const r3 = (x) => Math.round(x * 1000) / 1000;
 const valueOf = (n) => ({ position: n.position.toArray().map(r3), rotation: [n.rotation.x / D, n.rotation.y / D, n.rotation.z / D].map(r3), scale: n.scale.toArray().map(r3) });
@@ -43,12 +89,18 @@ function draw() { if (outline.visible) outline.update(); renderer.render(scene, 
 function home() {
   if (!st) return;
   const p = new THREE.Vector3().fromArray(st.camera.position), t = new THREE.Vector3().fromArray(st.camera.target);
-  // A step back from the scene camera, so its frame and what is just outside it are in view.
-  view.position.copy(t).add(p.sub(t).multiplyScalar(1.35));
-  orbit.target.copy(t); view.updateProjectionMatrix(); orbit.update();
+  // P81b: above and to one side of the scene camera, aimed between it and its look-at point, so the camera (with its
+  // frustum) and what it looks at are both in view.
+  const dir = p.clone().sub(t), len = dir.length() || 1;
+  const c = t.clone().add(dir.clone().multiplyScalar(0.5));
+  view.position.copy(c).add(dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), 30 * D).multiplyScalar(1.7)).add(new THREE.Vector3(0, len * 0.55, 0));
+  orbit.target.copy(c); view.updateProjectionMatrix(); orbit.update();
 }
 function apply(s) {
   scene.background = new THREE.Color(s.background);
+  if (!(dragging && tc.object === rig)) rig.position.fromArray(s.camera.position);
+  if (!(dragging && tc.object === aim)) aim.position.fromArray(s.camera.target);
+  shot.fov = s.camera.fov; shot.aspect = opts.aspect || 16 / 9; syncRig();
   for (const o of s.objects) {
     const n = nodes.get(o.id); if (!n) continue;
     const m = n.node;
@@ -77,9 +129,9 @@ function setOpts() {
 }
 function setSel(id) {
   if (dragging) return;
-  const n = typeof id === "string" ? nodes.get(id) : undefined;
+  const n = typeof id === "string" ? (nodes.get(id) || {}).node || extra(id) : undefined;
   sel = n ? id : null;
-  if (n) { tc.attach(n.node); outline.setFromObject(n.node); outline.visible = true; } else { tc.detach(); outline.visible = false; }
+  if (n) { tc.attach(n); outline.setFromObject(n); outline.visible = true; } else { tc.detach(); outline.visible = false; }
 }
 function cancel() { if (!dragging) return; cancelled = true; tc.reset(); tc.pointerUp({ button: 0 }); }
 orbit.addEventListener("change", draw);
@@ -90,7 +142,12 @@ tc.addEventListener("dragging-changed", (e) => {
   if (e.value) { dragging = true; cancelled = false; gestureDragged = true; post({ type: "scene-edit:drag", phase: "start", id: sel, value: valueOf(n) }); }
   else { dragging = false; post({ type: "scene-edit:drag", phase: cancelled ? "cancel" : "end", id: sel, value: valueOf(n) }); cancelled = false; if (st) { apply(st); draw(); } }
 });
-tc.addEventListener("objectChange", () => { if (dragging && !cancelled && tc.object && sel) post({ type: "scene-edit:drag", phase: "move", id: sel, value: valueOf(tc.object) }); });
+tc.addEventListener("objectChange", () => {
+  const n = tc.object; if (!n) return;
+  if (n === rig || n === aim) syncRig();
+  const x = handles.find((x) => x && x.h === n); if (x) syncLight(x);
+  if (dragging && !cancelled && sel) post({ type: "scene-edit:drag", phase: "move", id: sel, value: valueOf(n) });
+});
 addEventListener("keydown", (e) => { if (e.key === "Escape" && dragging) { e.preventDefault(); cancel(); } });
 // Tap / click to pick: one pointer, under 6 px of movement, and no gizmo drag during the gesture.
 const ray = new THREE.Raycaster(), active = new Set();
@@ -102,7 +159,7 @@ const up = (e) => {
   if (!t || gestureDragged || e.type === "pointercancel" || Math.hypot(e.clientX - t.x, e.clientY - t.y) > 6) return;
   const r = canvas.getBoundingClientRect();
   ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), view);
-  const roots = [...nodes.values()].map((n) => n.node).filter((m) => m.visible);
+  const roots = [...[...nodes.values()].map((n) => n.node).filter((m) => m.visible), rig, aim, ...handles.filter(Boolean).map((x) => x.h)];
   const hit = ray.intersectObjects(roots, true)[0];
   let id = null;
   for (let o = hit && hit.object; o; o = o.parent) if (o.userData.sceneId) { id = o.userData.sceneId; break; }
@@ -114,6 +171,7 @@ addEventListener("message", (e) => {
   const d = e.data; if (!d || e.source !== parent) return;
   if (d.type === "scene-edit:state") {
     if (d.opts) { Object.assign(opts, d.opts); setOpts(); }
+    if (Array.isArray(d.lights)) applyLights(d.lights);
     if (d.state) { st = d.state; apply(st); if (!homed) { home(); homed = true; } }
     if ("sel" in d) setSel(d.sel);
     draw();
@@ -125,6 +183,22 @@ for (const [id, n] of nodes) n.node.userData.sceneId = id;
 setOpts(); size();
 post({ type: "scene-edit:ready" });
 `;
+
+/**
+ * P81b: what the Edit view page is built from: like `scenePageKey`, but only the lights' types count (their colour,
+ * intensity and position arrive with the state), so dragging a light never rebuilds the page.
+ */
+const editKeys = new WeakMap<SceneDoc, string>();
+export function sceneEditPageKey(doc: SceneDoc | undefined): string {
+  if (!doc) return "none";
+  const hit = editKeys.get(doc);
+  if (hit !== undefined) return hit;
+  const w = doc.world && typeof doc.world === "object" ? doc.world : {};
+  const lights = Array.isArray(w.lights) ? w.lights.map((l) => (l && typeof l === "object" ? { type: l.type } : l)) : w.lights;
+  const key = scenePageKey({ ...doc, world: { ...w, lights } as typeof w });
+  editKeys.set(doc, key);
+  return key;
+}
 
 /** The Edit view page for one scene (the HTML clip host adds the CSP, import map and runtime). */
 export function sceneEditPage(doc: SceneDoc | undefined): string {

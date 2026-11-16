@@ -75,7 +75,7 @@ describe("P81a scene editor: Edit view", () => {
     expect(f.srcdoc).toContain("Content-Security-Policy");
     const s = t.lastState();
     expect(s.sel).toBeNull();
-    expect(s.opts).toEqual({ mode: "translate", axis: "free", snap: false, touch: false });
+    expect(s.opts).toEqual({ mode: "translate", axis: "free", snap: false, touch: false, aspect: 16 / 9 });
     expect(s.state.objects.map((o) => o.id)).toEqual(["floor", "ball", "cube", "sign"]);
     expect(t.info()).toMatch(/Click an object to select it/);
     // Back to the Camera view: the page goes away.
@@ -164,7 +164,7 @@ describe("P81a scene editor: Edit view", () => {
     expect(t.work().events!.at(-1)!.args).toEqual({ position: [0, 3, -1.5] });
     await t.click(t.button(/^Y axis only$/));
     await t.click(t.button(/^Snap$/));
-    expect(t.lastState().opts).toEqual({ mode: "translate", axis: "y", snap: true, touch: false });
+    expect(t.lastState().opts).toEqual({ mode: "translate", axis: "y", snap: true, touch: false, aspect: 16 / 9 });
     await t.key("e"); expect(t.lastState().opts.mode).toBe("rotate");
     await t.key("r"); expect(t.lastState().opts.mode).toBe("scale");
     await t.key("w"); expect(t.lastState().opts.mode).toBe("translate");
@@ -193,6 +193,78 @@ describe("P81a scene editor: Edit view", () => {
     expect(t.el.querySelector('[data-testid="scene-edit-view"]')).toBeTruthy();
     expect(t.lastState().opts.touch).toBe(true);
     expect(t.info()).toMatch(/one finger orbits · two fingers pan and zoom/);
+    t.done();
+  });
+});
+
+describe("P81b Edit view: the camera, its look-at point and lights", () => {
+  it("the camera is picked and moved: its start position, its look-at point, or the selected camera move (Auto-key too)", async () => {
+    const t = await open({ time: 1 * S });
+    await t.editView();
+    await t.fromPage({ type: "scene-edit:pick", id: "camera" });
+    expect(t.el.querySelector('[data-testid="camera-form"]')).toBeTruthy();
+    expect(t.lastState().sel).toBe("camera");
+    expect(t.info()).toBe("Drag writes the camera's start position");
+    expect(t.button(/^Move camera$/).getAttribute("aria-pressed")).toBe("true");
+    expect(t.button(/^Rotate$/)).toBeUndefined(); // the camera's chips: its position or its look-at point
+    await t.drag("camera", val([0.5, 2, 7]));
+    expect(t.work().world!.camera).toEqual({ fov: 40, position: [0.5, 2, 7], lookAt: [0, 0.8, 0] });
+    expect(t.button(/^Undo$/).getAttribute("title")).toBe("Undo move camera");
+    await t.click(t.button(/^Move look-at point$/));
+    expect(t.lastState().sel).toBe("camera:target");
+    expect(t.lastState().opts.mode).toBe("translate");
+    await t.drag("camera:target", val([0, 1, -1]));
+    expect(t.work().world!.camera!.lookAt).toEqual([0, 1, -1]);
+    // Picking the body again moves the position; with a camera move selected the drag writes its end.
+    await t.click(t.button(/^Camera\.moveTo at 2\.5s/));
+    expect(t.lastState().sel).toBe("camera");
+    expect(t.info()).toBe("Drag writes camera.moveTo at 2.5s (its end) · showing 4.5s");
+    await t.drag("camera", val([2, 2, 4]));
+    expect(t.work().events![3].args).toEqual({ position: [2, 2, 4] });
+    // Auto-key with the camera selected: a camera move ending at the playhead.
+    await t.click(t.button(/^Camera$/)); // the Camera track (picking the body would keep the camera move selected)
+    expect(t.el.querySelector('[data-testid="camera-form"]')).toBeTruthy();
+    await t.click(t.button(/^Auto-key$/));
+    expect(t.info()).toBe("Drag writes new camera.moveTo ending at 1s");
+    await t.drag("camera", val([1, 1, 5]));
+    expect(t.work().events!.at(-1)).toMatchObject({ at: 0, dur: 1, obj: "camera", call: "moveTo", args: { position: [1, 1, 5] } });
+    t.done();
+  });
+
+  it("lights: the page gets their values; one with a position is picked and moved (never keyed); rotate / scale are off", async () => {
+    const t = await open();
+    await t.editView();
+    const lights = () => (t.sent.filter((m) => m.type === "scene-edit:state").at(-1) as { lights: unknown[] }).lights;
+    expect(lights()).toEqual(SAMPLE_SCENE.world!.lights);
+    await t.fromPage({ type: "scene-edit:pick", id: "light:0" }); // a hemisphere light has no handle: ignored
+    expect(t.el.querySelector('[data-testid="light-form"]')).toBeNull();
+    await t.fromPage({ type: "scene-edit:pick", id: "light:1" });
+    expect(t.el.querySelector('[data-testid="light-form"]')).toBeTruthy();
+    expect(t.lastState().sel).toBe("light:1");
+    expect((t.button(/^Rotate$/) as HTMLButtonElement).disabled).toBe(true);
+    await t.click(t.button(/^Auto-key$/));
+    expect(t.info()).toBe("Drag writes Light 2's position (lights don't animate)");
+    const frameSrc = t.frame().srcdoc;
+    await t.drag("light:1", val([1, 4, 2]));
+    expect(t.work().world!.lights![1]).toEqual({ type: "directional", position: [1, 4, 2], intensity: 1.6 });
+    expect(t.work().events).toHaveLength(SAMPLE_SCENE.events!.length);
+    expect((lights()[1] as { position: number[] }).position).toEqual([1, 4, 2]);
+    expect(t.frame().srcdoc).toBe(frameSrc); // the page is not rebuilt for a light's new position
+    // The hemisphere light, chosen from its track: nothing to move.
+    await t.click([...t.el.querySelectorAll<HTMLElement>(".v2-sed-tname")].find((b) => b.textContent === "Light 1")!);
+    expect(t.lastState().sel).toBeNull();
+    expect(t.info()).toMatch(/Light 1 is hemisphere light: it lights from everywhere/);
+    t.done();
+  });
+
+  it("a rotate drag keeps whole turns: from 360° a 15° turn is 375°, not 15°", async () => {
+    const t = await open({ initialSel: { kind: "event", index: 0 } }); // cube.rotation to [0, 360, 0]
+    await t.editView();
+    await t.fromPage({ type: "scene-edit:drag", phase: "start", id: "cube", value: val([1.4, 0.4, -0.5], [0, 360, 0]) });
+    await t.fromPage({ type: "scene-edit:drag", phase: "move", id: "cube", value: val([1.4, 0.4, -0.5], [0, 15, 0]) });
+    expect(t.info()).toBe("Rotation° 0, 375, 0");
+    await t.fromPage({ type: "scene-edit:drag", phase: "end", id: "cube", value: val([1.4, 0.4, -0.5], [0, 15, 0]) });
+    expect(t.work().events![0].args).toEqual({ value: [0, 375, 0] });
     t.done();
   });
 });

@@ -78,11 +78,73 @@ describe("P81a gizmo: where a drag writes", () => {
     expect(r.doc.objects[2].scale).toEqual([1, 2, 1]);
   });
 
-  it("refuses the camera and unknown objects; an unchanged value keeps the same scene", () => {
+  it("refuses what can't be dragged that way and unknown objects; an unchanged value keeps the same scene", () => {
     const d = sample();
-    expect(applyGizmo(d, "camera", "translate", val([0, 0, 0]), { autoKey: false, at: 0 }).doc).toBe(d);
+    expect(applyGizmo(d, "camera", "rotate", val([0, 0, 0]), { autoKey: false, at: 0 }).doc).toBe(d); // the camera only moves
+    expect(applyGizmo(d, "light:0", "translate", val([0, 0, 0]), { autoKey: false, at: 0 }).doc).toBe(d); // a hemisphere light has no position
     expect(applyGizmo(d, "nope", "translate", val([0, 0, 0]), { autoKey: false, at: 0 }).doc).toBe(d);
     expect(applyGizmo(d, "cube", "translate", val([1.4, 0.4, -0.5]), { autoKey: false, at: 0 }).doc).toBe(d);
     expect(applyGizmo(d, "ball", "translate", val([0.2, 0.5, 0.8]), { selEvent: 1, autoKey: false, at: 0 }).doc).toBe(d);
+  });
+});
+
+describe("P81b gizmo: camera, look-at point and lights; rotations unwrapped", () => {
+  it("the camera's position: its start value, the selected camera move, or an Auto-key", () => {
+    const d = sample();
+    const base = applyGizmo(d, "camera", "translate", val([0.5, 2, 7.0004]), { autoKey: false, at: 1 });
+    expect(base.doc.world!.camera).toEqual({ fov: 40, position: [0.5, 2, 7], lookAt: [0, 0.8, 0] });
+    expect(base.note).toBe("Moved the camera (its start position).");
+    expect(gizmoTargetLabel(d, "camera", "translate", { autoKey: false, at: 1 })).toBe("the camera's start position");
+    // Event 3 is camera.moveTo 2.5 s → 4.5 s.
+    const ev = applyGizmo(d, "camera", "translate", val([2, 2, 4]), { selEvent: 3, autoKey: false, at: 0 });
+    expect(ev.doc.events![3].args).toEqual({ position: [2, 2, 4] });
+    expect(ev.doc.world).toBe(d.world);
+    expect(gizmoViewTime(d, "camera", "translate", { selEvent: 3, autoKey: false, at: 0 })).toBe(4.5);
+    // Auto-key at 1 s: a new camera.moveTo from 0 s; at 4.5 s the existing move is updated.
+    const add = applyGizmo(d, "camera", "translate", val([1, 1, 5]), { autoKey: true, at: 1 });
+    expect(add.doc.events!.at(-1)).toMatchObject({ at: 0, dur: 1, obj: "camera", call: "moveTo", args: { position: [1, 1, 5] } });
+    const upd = applyGizmo(d, "camera", "translate", val([1, 1, 5]), { autoKey: true, at: 4.5 });
+    expect(upd.index).toBe(3);
+    // Rotate or scale never write the camera; an object event selected doesn't count for it.
+    expect(gizmoTarget(d, "camera", "translate", { selEvent: 1, autoKey: false, at: 0 })).toEqual({ kind: "base" });
+    for (const x of [base, ev, add, upd]) expect(errors(x.doc)).toEqual([]);
+  });
+
+  it("the camera's look-at point: world.camera.lookAt or a camera lookAt event (an object target becomes a point)", () => {
+    const d = sample();
+    const base = applyGizmo(d, "camera:target", "translate", val([0, 1, -1]), { autoKey: false, at: 0 });
+    expect(base.doc.world!.camera!.lookAt).toEqual([0, 1, -1]);
+    expect(base.note).toBe("Moved the camera's look-at point (its start look-at point).");
+    const withLook = freeze({ ...structuredClone(SAMPLE_SCENE), events: [...structuredClone(SAMPLE_SCENE.events!), { at: 1, obj: "camera", call: "lookAt", args: { target: "ball" }, dur: 1 }] } as SceneDoc);
+    const i = withLook.events!.length - 1;
+    const r = applyGizmo(withLook, "camera:target", "translate", val([1, 1, 1]), { selEvent: i, autoKey: false, at: 0 });
+    expect(r.doc.events![i].args).toEqual({ target: [1, 1, 1] });
+    expect(r.note).toMatch(/aimed at “ball”; now a point/);
+    // Selecting the camera.moveTo doesn't make a target drag write it.
+    expect(gizmoTarget(withLook, "camera:target", "translate", { selEvent: 3, autoKey: false, at: 0 })).toEqual({ kind: "base" });
+    expect(applyGizmo(d, "camera:target", "translate", val([0, 0, 0]), { autoKey: true, at: 2 }).doc.events!.at(-1)).toMatchObject({ obj: "camera", call: "lookAt", at: 0, dur: 2, args: { target: [0, 0, 0] } });
+    expect(errors(r.doc)).toEqual([]);
+  });
+
+  it("a light with a position: always its position (lights are static), defaults written out first", () => {
+    const d = sample();
+    const r = applyGizmo(d, "light:1", "translate", val([1, 4, 2]), { autoKey: true, at: 2 });
+    expect(r.doc.world!.lights).toEqual([{ type: "hemisphere", intensity: 1.1 }, { type: "directional", position: [1, 4, 2], intensity: 1.6 }]);
+    expect(r.doc.events).toBe(d.events);
+    expect(r.note).toBe("Moved “Light 2” (its start position).");
+    expect(gizmoTargetLabel(d, "light:1", "translate", { autoKey: true, at: 2 })).toBe("Light 2's position (lights don't animate)");
+    const bare = freeze({ format: "dionysus.scene/1", objects: [] } as SceneDoc);
+    const def = applyGizmo(bare, "light:1", "translate", val([0, 2, 0]), { autoKey: false, at: 0 });
+    expect(def.doc.world!.lights).toEqual([{ type: "hemisphere", intensity: 1 }, { type: "directional", position: [0, 2, 0], intensity: 1.5 }]);
+    expect(applyGizmo(d, "light:1", "rotate", val([0, 0, 0]), { autoKey: false, at: 0 }).doc).toBe(d);
+  });
+
+  it("rotations come back next to where the drag started: 360° + 10° stays 370°", () => {
+    expect(gizmoArg("rotation", val([0, 0, 0], [0, 10, 0]), val([0, 0, 0], [0, 360, 0]))).toEqual([0, 370, 0]);
+    expect(gizmoArg("rotation", val([0, 0, 0], [-170, 0, 179]), val([0, 0, 0], [180, 0, -180]))).toEqual([190, 0, -181]);
+    expect(gizmoArg("rotation", val([0, 0, 0], [0, 10, 0]))).toEqual([0, 10, 0]);
+    // Event 0 is cube.rotation to [0, 360, 0]: a small drag from there keeps the full turn.
+    const r = applyGizmo(sample(), "cube", "rotate", val([1.4, 0.4, -0.5], [0, 15, 0]), { selEvent: 0, autoKey: false, at: 0, from: val([1.4, 0.4, -0.5], [0, 360, 0]) });
+    expect(r.doc.events![0].args).toEqual({ value: [0, 375, 0] });
   });
 });

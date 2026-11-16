@@ -34,7 +34,11 @@ export const SCENE_SHAPES: readonly SceneShape[] = ["box", "sphere", "cylinder",
 export type SceneLightType = "ambient" | "hemisphere" | "directional" | "point";
 export const SCENE_LIGHTS: readonly SceneLightType[] = ["ambient", "hemisphere", "directional", "point"];
 
-export interface SceneLight { type: SceneLightType; color?: string; intensity?: number; position?: Vec3 }
+/**
+ * A light. P81b: an optional `id` names it (unique among objects and lights, not "camera") so the editor and agents can
+ * refer to it; lights are static (no events animate them).
+ */
+export interface SceneLight { id?: string; type: SceneLightType; color?: string; intensity?: number; position?: Vec3 }
 export interface SceneCamera { fov?: number; position?: Vec3; lookAt?: Vec3 }
 export interface SceneWorld { background?: string; camera?: SceneCamera; lights?: SceneLight[] }
 
@@ -232,6 +236,7 @@ export function validateScene(raw: unknown): SceneIssue[] {
     }
   }
   // world
+  const lightIds = new Map<string, number>();
   if (raw.world !== undefined) {
     const w = raw.world;
     if (!isObj(w)) err("world", "\"world\" must be an object.");
@@ -254,6 +259,12 @@ export function validateScene(raw: unknown): SceneIssue[] {
           if (l.color !== undefined && !isSceneColor(l.color)) err(`${p}.color`, "must be a colour like \"#ffffff\".");
           if (l.intensity !== undefined && !(num(l.intensity) && l.intensity >= 0)) err(`${p}.intensity`, "must be a number ≥ 0.");
           if (l.position !== undefined && !isVec3(l.position)) err(`${p}.position`, "must be [x, y, z] numbers.");
+          if (l.id !== undefined) {
+            if (typeof l.id !== "string" || !ID_RE.test(l.id)) err(`${p}.id`, "must start with a letter and use letters, digits, \"_\" or \"-\".");
+            else if (l.id === SCENE_CAMERA) err(`${p}.id`, `"${SCENE_CAMERA}" is reserved for the camera.`);
+            else if (lightIds.has(l.id)) err(`${p}.id`, `"${l.id}" is used twice.`);
+            else lightIds.set(l.id, i);
+          }
         });
       }
     }
@@ -268,7 +279,11 @@ export function validateScene(raw: unknown): SceneIssue[] {
     if (typeof id !== "string" || !ID_RE.test(id)) err(`${p}.id`, "needs an \"id\" that starts with a letter and uses letters, digits, \"_\" or \"-\".");
     else if (id === SCENE_CAMERA) err(`${p}.id`, `"${SCENE_CAMERA}" is reserved for the camera.`);
     else if (objects.has(id)) err(`${p}.id`, `"${id}" is used twice.`);
-    else objects.set(id, o);
+    else {
+      // An object with a light's id is an error, but it is still an object (its events are checked as usual).
+      if (lightIds.has(id)) err(`${p}.id`, `"${id}" is the id of a light (world.lights[${lightIds.get(id)}]).`);
+      objects.set(id, o);
+    }
     const shape = (o.shape ?? "box") as SceneShape;
     if (!SCENE_SHAPES.includes(shape)) err(`${p}.shape`, `must be one of ${SCENE_SHAPES.map((x) => `"${x}"`).join(", ")}.`);
     else if (o.size !== undefined && !sizeOk(shape, o.size)) err(`${p}.size`, `has the wrong form for a ${shape}.`);
@@ -371,7 +386,11 @@ function validateEvent(e: unknown, p: string, objects: Map<string, Record<string
     return;
   }
   const o = objects.get(e.obj);
-  if (!o) { err(`${p}.obj`, `There is no object "${e.obj}".`); return; }
+  if (!o) {
+    const lights = isObj(doc.world) && Array.isArray(doc.world.lights) ? doc.world.lights : [];
+    err(`${p}.obj`, lights.some((l) => isObj(l) && l.id === e.obj) ? `"${e.obj}" is a light; lights are static (no events animate them).` : `There is no object "${e.obj}".`);
+    return;
+  }
   const base = SCENE_BASE_FUNCTIONS[e.call];
   if (base) {
     const v = args[base.arg] ?? (base.arg === "position" ? args.value : undefined);

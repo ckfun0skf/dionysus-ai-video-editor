@@ -139,3 +139,35 @@ describe("scene agent: world, new scenes, read models (P78)", () => {
     expect(sceneObjectsForAgent(withFile).objects.at(-1)!.calls.map((c) => c.call)).toContain("play");
   });
 });
+
+describe("scene agent: lights and the camera (P81b)", () => {
+  it("set_scene_light changes one light by id or index, adds one, removes one; ids are checked; lights take no events", () => {
+    const d = sample();
+    const named = ok(applySceneTool("set_scene_light", d, { light: 1, id: "key", intensity: 2 }));
+    expect(named.doc.world!.lights![1]).toEqual({ id: "key", type: "directional", position: [3, 5, 2], intensity: 2 });
+    expect(named.info).toMatchObject({ lightIndex: 1 });
+    const moved = ok(applySceneTool("set_scene_light", freeze(named.doc), { light: "key", position: [1, 4, 0], color: "#ffeecc" }));
+    expect(moved.doc.world!.lights![1]).toMatchObject({ id: "key", position: [1, 4, 0], color: "#ffeecc" });
+    const added = ok(applySceneTool("set_scene_light", d, { type: "point", id: "rim" }));
+    expect(added.doc.world!.lights![2]).toEqual({ id: "rim", type: "point", color: "#ffffff", intensity: 1, position: [0, 3, 2] });
+    expect(ok(applySceneTool("set_scene_light", freeze(named.doc), { light: "key", remove: true })).doc.world!.lights).toHaveLength(1);
+    expect(ok(applySceneTool("set_scene_light", freeze(named.doc), { light: "key", id: null })).doc.world!.lights![1].id).toBeUndefined();
+    expect(err(applySceneTool("set_scene_light", d, { light: "nope" }))).toMatch(/No light "nope". Lights: 0 \(hemisphere\), 1 \(directional\)/);
+    expect(err(applySceneTool("set_scene_light", d, { light: 0, id: "ball" }))).toMatch(/"id": "ball" is the id of an object/);
+    expect(err(applySceneTool("set_scene_light", d, { light: 0, type: "laser" }))).toMatch(/"type" must be one of/);
+    expect(err(applySceneTool("set_scene_light", d, { light: 0, position: [1, 2] }))).toMatch(/"position" must be \[x, y, z\]/);
+    // A scene on the default lights gets them written out first.
+    const bare = freeze({ format: "dionysus.scene/1", objects: [] } as SceneDoc);
+    expect(ok(applySceneTool("set_scene_light", bare, { light: 1, position: [0, 6, 0] })).doc.world!.lights).toEqual([{ type: "hemisphere", intensity: 1 }, { type: "directional", position: [0, 6, 0], intensity: 1.5 }]);
+    // An event on a light is refused with a pointer to set_scene_light.
+    expect(err(applySceneTool("add_scene_event", freeze(named.doc), { event: { at: 0, obj: "key", call: "moveTo", args: { position: [0, 0, 0] } } }))).toMatch(/"key" is a light. Lights are static/);
+  });
+
+  it("list_scene_objects lists the camera's start and the lights with their index and id", () => {
+    const v = sceneObjectsForAgent(ok(applySceneTool("set_scene_light", sample(), { light: 1, id: "key" })).doc);
+    expect(v.camera.start).toEqual({ fov: 40, position: [0, 1.6, 6], lookAt: [0, 0.8, 0] });
+    expect(v.lights).toEqual([{ index: 0, type: "hemisphere", intensity: 1.1 }, { index: 1, id: "key", type: "directional", position: [3, 5, 2], intensity: 1.6 }]);
+    expect(v.defaultLights).toBe(false);
+    expect(sceneObjectsForAgent({ format: "dionysus.scene/1", objects: [] } as SceneDoc).defaultLights).toBe(true);
+  });
+});
