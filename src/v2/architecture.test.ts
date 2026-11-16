@@ -18,7 +18,8 @@ const ALLOWED: Record<string, string[]> = {
   "clipTypes/ui": ["clipTypes", "domain", "registry", "render", "ui"],
   ports: ["registry", "domain", "ports"],
   engine: ["registry", "domain", "ports", "engine"],
-  persistence: ["registry", "domain", "ports", "persistence"],
+  // P71: file import reads the clip type cores (`accepts`) through the clipTypes barrel.
+  persistence: ["registry", "domain", "ports", "persistence", "clipTypes"],
   render: ["registry", "domain", "ports", "render", "clipTypes"],
   // P69: ui reads the clip type registry through the clipTypes/index.ts barrel (ui/clipTypeUi.tsx globs the ui.tsx modules).
   ui: ["domain", "ports", "engine", "persistence", "render", "registry", "ui", "clipTypes"],

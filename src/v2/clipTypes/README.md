@@ -2,21 +2,23 @@
 
 One folder per clip type. Design, decisions and the phased plan: `docs/v2/CLIP_PLUGIN_ARCHITECTURE.md`.
 
-**Status (P70, Phase 1 step 1.5):** the domain predicates (`trackKindFor`, `isStill`, `canChromaKey`, `hasSound`,
+**Status (P71, Phase 1 step 1.6):** the domain predicates (`trackKindFor`, `isStill`, `canChromaKey`, `hasSound`,
 `canSetRange`, `slipKind`, …) and the export audio plan read this registry (P66). Every drawn type renders through
 its `render.ts`, in preview and export alike: text, placeholder and blank (P67), html, video, image, audio and the
 unknown fallback (P68). The timeline clip look and asset thumbnails/previews come from `ui.tsx` (P69), and so do the
-inspector tabs, mobile toolbar and context menu (P70). Storyboard and agent tools still use the `clipType` checks
-listed in §2 of the design doc (steps 1.6–1.8).
+inspector tabs, mobile toolbar and context menu (P70). Storyboard mapping and file import read `core.story` and
+`core.accepts` (P71). Agent tools still use the `clipType` checks listed in §2 of the design doc (steps 1.7–1.8).
 
 ```
 clipTypes/
-  types.ts      ClipTypeCore, ClipCaps, ClipVariant
+  types.ts      ClipTypeCore, ClipCaps, ClipVariant, ClipAccepts, ClipStory (P71)
+  story.ts      storyOf(kind), kindForSlotType(t), kindForFile(file), mimeForFile(file), DEFAULT_CLIP_STORY (P71)
   define.ts     defineClipType({…}) — the default export of every core.ts
   registry.ts   createClipTypeRegistry(), checkClipType()
   load.ts       registers discovered modules, collects problems
   index.ts      import.meta.glob("./*/core.ts"), CLIP_TYPES, CLIP_TYPE_PROBLEMS, variantOf(p), clipTypeOf(p)
-  <id>/core.ts  video, image, audio, text, html, effect, placeholder, blank, unknown
+  <id>/core.ts  video, image, audio, text, html, effect, placeholder, blank, unknown (video, image, audio and html
+                also declare `accepts` and `story`, P71)
   <id>/render.ts  text, placeholder, blank (P67): default export { id, draw(host) } (stateless, canvas only);
                   html, video, image, audio, unknown (P68): { id, frame(host) } (stateful: every frame for a visible
                   clip with an asset version, via the Player's pools in host.media; shared element path in

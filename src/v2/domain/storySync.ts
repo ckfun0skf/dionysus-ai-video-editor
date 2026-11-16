@@ -18,6 +18,7 @@ import type { StoryAudio, StoryEffect, StoryLayer, StoryMediaLayer, StoryTextLay
 import { maskToJson, type ClipMask } from "./mask";
 import { getPreset, parsePresetRef } from "../registry";
 import { TICKS_PER_SECOND } from "./time";
+import { storyOf } from "../clipTypes";
 
 export type SyncChangeKind = "shot" | "newShot" | "removedShot" | "layer" | "newLayer" | "removedLayer" | "effects" | "cue" | "newCue" | "removedCue" | "order" | "trim";
 export interface SyncChange { kind: SyncChangeKind; id: string; label: string; needsPrompt?: boolean }
@@ -38,7 +39,7 @@ function slotFor(b: Storyboard, p: Project, assetId: string): string {
   const hit = Object.values(b.slots).find((s) => s.assetId === assetId && !s.keyframeOf);
   if (hit) return hit.id;
   const a = p.assets[assetId];
-  const type: AssetSlot["type"] = a?.kind === "video" ? "video" : a?.kind === "audio" ? "audio" : a?.kind === "html" ? "html" : "image";
+  const type: AssetSlot["type"] = storyOf(a?.kind ?? "").slotType; // P71: the clip type's `story.slotType`
   const id = uniqueId("tl-asset-", (x) => !!b.slots[x]);
   b.slots[id] = { id, name: a?.name ?? id, type, aspect: b.meta.aspect, prompt: "", references: [], source: { type: "upload" }, qa: [], assetId };
   return id;
@@ -144,17 +145,18 @@ export function syncPlan(p: Project): SyncPlan {
     // A video clip still at the length Send placed it (its version's trim, else the whole clip) was not edited:
     // keep the planned durationSec (Send places video shots at their clip length, not durationSec).
     const a0 = p.assets[clip.source.assetId], v0 = a0?.versions.find((x) => x.id === clip.source.versionId);
-    const asSent = !s.clipSlot && a0?.kind === "video" && !!v0 && clip.durationTicks === (versionSpan(b0, v0)?.lenTicks ?? v0.media.durationTicks) && (clip.speed ?? 1) === 1;
+    const asSent = !s.clipSlot && !!a0 && storyOf(a0.kind).takes && !!v0 && clip.durationTicks === (versionSpan(b0, v0)?.lenTicks ?? v0.media.durationTicks) && (clip.speed ?? 1) === 1;
     if (!asSent && Math.abs(d - s.durationSec) >= 0.01) { changes.push({ kind: "shot", id, label: `"${s.title}" length ${s.durationSec}s → ${d}s` }); s.durationSec = d; }
     const a = p.assets[clip.source.assetId], v = a?.versions.find((x) => x.id === clip.source.versionId), info = b.versions[clip.source.versionId];
-    if (!s.render && s.clipSlot && a?.kind === "video") {
+    const takes = !!a && storyOf(a.kind).takes;
+    if (!s.render && s.clipSlot && takes) {
       // P16: a shot that shares a clip keeps its own in point; the clip's trim belongs to every shot using it.
       const inSec = Math.round(sec(clip.sourceInTicks) * 100) / 100;
       if (Math.abs(inSec - (s.clipInSec ?? 0)) >= 0.01) {
         changes.push({ kind: "shot", id, label: `"${s.title}" clip in point ${s.clipInSec ?? 0}s → ${inSec}s` });
         if (inSec > 0) s.clipInSec = inSec; else delete s.clipInSec;
       }
-    } else if (v?.media.durationTicks && (a.kind === "video") && !clip.freeze && !clip.reverse) {
+    } else if (v?.media.durationTicks && takes && !clip.freeze && !clip.reverse) {
       const t = normTrim({ inTicks: clip.sourceInTicks, outTicks: Math.min(v.media.durationTicks, clip.sourceInTicks + Math.round(clip.durationTicks * (clip.speed ?? 1))) }, v.media.durationTicks);
       if (!eq(t, normTrim(info?.trim, v.media.durationTicks))) {
         // P36: a version with no storyboard record yet (added on the timeline) still takes the trim, so the shot previews it.
@@ -240,7 +242,7 @@ export function syncPlan(p: Project): SyncPlan {
     const base = { id, startSec, endSec, needsPrompt: true as const, ...(opacity !== undefined && opacity !== 1 ? { opacity } : {}) };
     let nl: StoryLayer;
     if (pl.clipType === "text") nl = { ...base, type: "text", text: pl.text?.text ?? "" } as StoryTextLayer;
-    else nl = { ...base, type: pl.clipType === "video" ? "video" : pl.clipType === "html" ? "html" : "image", asset: slotFor(b, p, pl.source.assetId), box: boxOf(p, pl), ...(pl.mask ? { mask: structuredClone(pl.mask) } : {}) } as StoryMediaLayer;
+    else nl = { ...base, type: storyOf(pl.clipType).layerType, asset: slotFor(b, p, pl.source.assetId), box: boxOf(p, pl), ...(pl.mask ? { mask: structuredClone(pl.mask) } : {}) } as StoryMediaLayer;
     layers.push(nl); layerSeen.add(`${shotId}/${id}`); pl.storyLayer = id;
     if (!pl.link) pl.link = { parent: clip.id };
     changes.push({ kind: "newLayer", id: `${shotId}/${id}`, label: `New ${nl.type} layer "${id}" on "${s.title}"`, needsPrompt: true });

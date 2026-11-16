@@ -38,7 +38,7 @@ src/v2/
   engine/        Engine (undo history; one dispatch = one undo step) and commands.ts (Command factories)
   persistence/   IndexedDB/memory stores, media import (media.ts), schema migrations, project archive
   ports/         storage interfaces (BlobStore, …)
-  clipTypes/     clip type registry (P65+): one folder per type with core.ts (trackKind, caps); domain predicates read it (P66); render.ts renderers (P67, P68); ui.tsx timeline UI (P69), inspector/toolbar/menus (P70)
+  clipTypes/     clip type registry (P65+): one folder per type with core.ts (trackKind, caps; storyboard mapping and file import since P71); domain predicates read it (P66); render.ts renderers (P67, P68); ui.tsx timeline UI (P69), inspector/toolbar/menus (P70)
   registry/      preset registry (effects, transitions, text animations, stickers, blends, audio fx, fonts)
   presets/       one file per preset, auto-discovered (docs/v2/ADDING_EFFECTS.md)
   render/        Player (preview AND export compositor), htmlClip.ts (sandboxed HTML clip host), text, effects,
@@ -92,9 +92,9 @@ required checks.
 1. `git fetch` and branch from the latest `origin/main` (e.g. `p66-short-name`).
 2. Implement with tests. Keep PRs small (MODULE_DESIGN §14 targets < 400 changed lines; feature PRs here are often
    larger, but split refactors).
-3. **`public/doc/tasks.json`:** add one entry per PR with the next free P-number: `{ "id": "P71-SHORT-NAME", "title":
+3. **`public/doc/tasks.json`:** add one entry per PR with the next free P-number: `{ "id": "P72-SHORT-NAME", "title":
    "<what and why, one paragraph>", "status": "done", "progress": 100 }` appended after the latest entry (the latest is
-   `P70-CLIP-UI-INSPECTOR`; the next is **P71**). Bump `updatedAt`. Edit the file surgically (insert text); do not
+   `P71-CLIP-STORY-MAPPING`; the next is **P72**). Bump `updatedAt`. Edit the file surgically (insert text); do not
    re-serialise the whole JSON. `scripts/check-tasks-updated.mjs` fails a PR that changes `src/` without it. If an id
    is already taken, use the next number and say so in the PR.
 4. **AI guide rule:** append to `RULE_LIST` in `src/v2/domain/storyPrompt.ts` (append-only; numbers are positions;
@@ -110,7 +110,7 @@ required checks.
 6. Run `npm run gen:ai` after changing rules, tools or presets, and commit the regenerated files (tests fail if they are
    stale).
 7. `npx tsc -b && npx vitest run && npx vite build`.
-8. Commit in English; PR title `P71: …`; body says what, why, tests, and `Fixes #N` (or `Refs #N` if partial), plus
+8. Commit in English; PR title `P72: …`; body says what, why, tests, and `Fixes #N` (or `Refs #N` if partial), plus
    what was not verified. Push, open the PR, wait for `build` on the head SHA. Do not merge.
 
 ## 7. UI conventions
@@ -139,7 +139,7 @@ required checks.
 | `docs/v2/CLIP_PLUGIN_ARCHITECTURE.md` | clip type plugins: accepted design, decisions, Phase 1 progress |
 | `public/doc/tasks.json` | every task and its status |
 
-## 9. Recent history (P47–P70)
+## 9. Recent history (P47–P71)
 
 | Id | PR | One line |
 |---|---|---|
@@ -166,7 +166,8 @@ required checks.
 | P67 | #319 | Step 1.3a: text, placeholder and blank renderers move to `clipTypes/<id>/render.ts`; canvas-call golden + Chrome pixel parity. |
 | P68 | #320 | Step 1.3b: html, video, image and audio renderers move to `clipTypes/<id>/render.ts` (`frame(host)`, shared `render/mediaClip.ts`); golden + Chrome pixel + export frame parity incl. a GLB clip. |
 | P69 | #321 | Step 1.4: timeline clip look and asset thumbnails/previews read `clipTypes/<id>/ui.tsx` (`ui/clipTypeUi.tsx`); markup golden, legacy-helper parity, 390/1440 screenshot parity. |
-| P70 | — | Step 1.5: inspector icon/title/tabs/header buttons, mobile toolbar, context menu and sheets read `clipTypes/<id>/ui.tsx` (host-owned tab/tool/action ids); inspector/toolbar/menu DOM golden for every clip type, legacy-switch parity, 390/1440 screenshot parity. |
+| P70 | #322 | Step 1.5: inspector icon/title/tabs/header buttons, mobile toolbar, context menu and sheets read `clipTypes/<id>/ui.tsx` (host-owned tab/tool/action ids); inspector/toolbar/menu DOM golden for every clip type, legacy-switch parity, 390/1440 screenshot parity. |
+| P71 | — | Step 1.6: storyboard mapping (`kindForSlot`, Send lengths, Sync slot/layer types, video takes, html params) and file import (`mediaKindOf`, `mimeOf`) read `core.story` / `core.accepts`; frozen-switch parity and a Send/Update/Sync golden recorded before the move. |
 
 ## 10. Known unverified areas
 
@@ -229,8 +230,19 @@ change, each merged on green CI) is under way:
   shared slate renderer before plugin lookup; plugins never handle placeholders. `blank` stays a small plugin
   (`image` variant). No schema change. Implement it in **step 1.8** together with unknown-type handling
   (CLIP_PLUGIN_ARCHITECTURE §0 decision 9, §5, §7 row 1.8). Until then, do not add placeholder logic to other plugins.
-- **Next, 1.6:** storyboard (slot kinds, shot editor and Send to timeline) → clip type plugins; check with the
-  storyboard tests and screenshots.
+- **1.6 done (P71):** storyboard mapping and media-kind detection read the clip type cores. `core.story`
+  (`assetTypes`, `slotFallback`, `slotType`, `layerType`, `layer`, `sendLength`, `takes`, `params`; types without it
+  use `DEFAULT_CLIP_STORY`) replaces `kindForSlot`'s switch, the `shotClipSpan` / `shotClip` / `mediaLayer` / Update
+  kind checks in `storySend.ts` and the slot type, layer type and video-take checks in `storySync.ts`.
+  `core.accepts` (`mimePrefix`, `mime`, `ext`, `mimeByExt`) replaces the lists in `persistence/media.ts`
+  `mediaKindOf` / `mimeOf` (persistence may now import the `clipTypes` barrel). Helpers: `clipTypes/story.ts`
+  (`storyOf`, `kindForSlotType`, `kindForFile`, `mimeForFile`). `domain/storyMappingParity.test.ts` compares frozen
+  pre-P71 switches over every slot type, 870 file shapes and every kind, and a golden of Send, Update and Sync over
+  shots and layers of every asset kind (`UPDATE_STORY_GOLDEN=1` only for an intended change). Left for later: the
+  storyboard JSON validator's asset-type rules (`storyJson.ts`), `cueVideo` (audio taken from a video file) and the
+  audio-cue checks.
+- **Next, 1.7:** WebMCP (`ALL_AGENT_TOOLS`, `clipJson`, per-type checks in `timelineTools.ts`) → plugins' `agent`;
+  check with `npm run gen:ai` (no diff) and the agent tests.
 
 Until Phase 1 is finished, add new behaviour the existing way and note in the PR which switch points you touched, so
 the later steps can move them.

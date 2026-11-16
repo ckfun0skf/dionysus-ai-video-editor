@@ -7,6 +7,7 @@
  */
 import { isStill, newId, type AssetVersion, type Composition, type MediaKind, type MediaRef, type Placement, type Project } from "./model";
 import { mainTrack } from "./ops";
+import { kindForSlotType } from "../clipTypes";
 import { assetRefId, dialogueLines, expandAssetStates, dialogueText, keyframeId, type StoryDialogueLine, type AssetRefRole, type ReferenceRole, type ShotRender, type StoryAssetRef, type StoryAssetType, type StoryBackground, backgroundId, type StoryAudio, type StoryConnection, type StoryDoc, type StoryEffect, type StoryLayer, type StoryMeta } from "./storyJson";
 import { followStoryLinks } from "./storyLinks";
 import type { HtmlClipParam, HtmlParamValues } from "./htmlClipPackage";
@@ -366,7 +367,8 @@ export function pinnedLayers(p: Project, c: Composition, assetId: string): Map<s
   return out;
 }
 
-export const kindForSlot = (t: StoryAssetType): MediaKind => (t === "video" ? "video" : t === "audio" ? "audio" : t === "html" ? "html" : "image");
+/** The asset kind a slot type holds (P71: `story.assetTypes` of the clip type cores; others are image stills). */
+export const kindForSlot = (t: StoryAssetType): MediaKind => kindForSlotType(t);
 
 export type Target = { slot: string } | { shot: string };
 
