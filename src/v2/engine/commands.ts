@@ -208,6 +208,24 @@ export function placementForAsset(asset: Asset, version: AssetVersion, startTick
   };
 }
 
+/**
+ * P74: add a scene asset's clip at `at` on the main track with an explicit length (a scene renders from time alone, so
+ * its length is free like a code clip's; the document's `durationSec` is the suggestion).
+ */
+export const addSceneClip = (assetId: string, at: number, durationTicks: number, id = newId("plc")): Command => ({
+  label: "Add 3D scene", autoLink: true,
+  apply: (p) => withRoot(p, (c) => {
+    const asset = p.assets[assetId];
+    const version = asset?.versions.find((v) => v.id === asset.selectedVersionId) ?? asset?.versions[0];
+    if (!asset || !version || asset.kind !== "scene") throw new Error("scene asset missing");
+    const main = ops.mainTrack(c);
+    if (!main) throw new Error("no main track");
+    const { volume: _v, ...pl } = placementForAsset(asset, version, Math.max(0, Math.round(at)));
+    void _v;
+    return ops.insertPlacement(c, main.id, { ...pl, id, durationTicks: Math.max(1, Math.round(durationTicks)) });
+  }),
+});
+
 /** Add asset to timeline. Uses given track, else first compatible track, else creates one. */
 export const addAssetToTimeline = (assetId: string, startTicks: number, trackId?: string, placementId?: string): Command => ({
   label: "Add to timeline", autoLink: true,

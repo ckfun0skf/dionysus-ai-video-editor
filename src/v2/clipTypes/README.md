@@ -12,6 +12,11 @@ inspector tabs, mobile toolbar and context menu (P70). Storyboard mapping and fi
 clip **state** any type can have (`state.ts`, checked before any type; decision 9), and a `clipType` this build does
 not register loads, keeps its data and shows as a slate (§6 of the design doc).
 
+**Phase 2 (P74, step 2.1):** `scene/` is the first type built on the registry: a deterministic three.js scene whose
+asset version holds a `dionysus.scene/1` document (`domain/scene.ts`, `docs/v2/SCENE_FORMAT.md`). It renders in the
+sandboxed HTML clip host (`render/scenePage.ts`, reached through `host.media.sceneHost` / `sceneDoc`), with the pure
+`stateAt(doc, t)` sent to the page every frame.
+
 ```
 clipTypes/
   types.ts      ClipTypeCore, ClipCaps, ClipVariant, ClipAccepts, ClipStory (P71), ClipAgent (P72)
@@ -24,14 +29,14 @@ clipTypes/
   state.ts      the placeholder clip state (P73): isPlaceholder(p), placeholderCore(core), placeholderCaps, placeholderAccepts
   index.ts      import.meta.glob("./*/core.ts"), CLIP_TYPES, CLIP_TYPE_PROBLEMS, variantOf(p) (blank), clipTypeOf(p)
                 (placeholder state first), coreOf(id), isKnownClipType(id)
-  <id>/core.ts  video, image, audio, text, html, effect, blank, unknown (video, image, audio and html
+  <id>/core.ts  video, image, audio, text, html, effect, blank, scene (P74), unknown (video, image, audio and html
                 also declare `accepts` and `story`, P71)
   <id>/render.ts  text, blank (P67), unknown (P73 slate): default export { id, draw(host) } (stateless, canvas only);
-                  html, video, image, audio (P68): { id, frame(host) } (stateful: every frame for a visible
+                  html, video, image, audio (P68), scene (P74): { id, frame(host) } (stateful: every frame for a visible
                   clip with an asset version, via the Player's pools in host.media; shared element path in
                   render/mediaClip.ts). Discovered by src/v2/render/clipRenderers.ts. Render-layer code: canvas and
                   render helpers allowed.
-  <id>/ui.tsx   video, image, audio, html, text, effect, blank (P69): default export ClipTypeUi
+  <id>/ui.tsx   video, image, audio, html, text, effect, blank (P69), scene (P74): default export ClipTypeUi
                 (declarative timeline fields: name, icon, body, background, filmstrip, waveform, assetThumb, …;
                 P70 inspector/toolbar fields: inspectorTabs, inspectorActions, toolbar, editor, speed, volume, …
                 naming host-owned tabs, tools and actions);

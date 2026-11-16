@@ -59,3 +59,4 @@ export { storyboardGuideMarkdown } from "./aiGuide";
 export * as series from "./series";
 export type { Series, SeriesAsset, SeriesAssetSummary } from "./series";
 export type { SeriesLike } from "./storySeries";
+export * from "./scene";

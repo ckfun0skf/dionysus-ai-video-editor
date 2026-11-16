@@ -7,7 +7,7 @@ import { clipTypeOf, coreOf, isKnownClipType } from "../clipTypes";
 export const SCHEMA = "dionysus/3.1" as const;
 
 /** `html`: a sandboxed HTML page (libraries opt-in via render/htmlLibs) rendered per frame from clip time (see render/htmlClip). */
-export type MediaKind = "video" | "image" | "audio" | "html" | "text" | "effect";
+export type MediaKind = "video" | "image" | "audio" | "html" | "text" | "effect" | "scene";
 /** `effect` tracks hold effect clips (V2-101): time ranges that apply a registry preset to the main-track render. */
 export type TrackKind = "video" | "audio" | "text" | "effect";
 

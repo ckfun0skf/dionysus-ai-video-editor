@@ -7,7 +7,7 @@ import type { ClipTypeCore } from "./types";
 import { DEFAULT_CLIP_STORY, kindForSlotType, storyOf } from "./story";
 import { STORY_ASSET_TYPES } from "../domain/storyJson";
 
-const BUILT_INS = ["audio", "blank", "effect", "html", "image", "text", "unknown", "video"];
+const BUILT_INS = ["audio", "blank", "effect", "html", "image", "scene", "text", "unknown", "video"];
 const ok = (over: Partial<ClipTypeCore> = {}): ClipTypeCore => defineClipType({
   id: "demo", description: "A demo.", trackKind: "video",
   caps: { sourceTime: false, still: false, sound: false, visual: true, keyable: false, thumb: false, asset: "none" }, ...over,
@@ -75,7 +75,9 @@ describe("clip type registry (P65)", () => {
     expect(variantOf({ clipType: "image", blank: { color: "#000000" }, placeholder: { label: "x" } })).toBe("blank");
     expect(clipTypeOf({ clipType: "image", blank: { color: "#000000" }, placeholder: { label: "x" } }).id).toBe("placeholder");
     expect(clipTypeOf({ clipType: "text" }).id).toBe("text");
-    expect(clipTypeOf({ clipType: "scene" as never }).id).toBe(UNKNOWN_CLIP_TYPE);
+    expect(clipTypeOf({ clipType: "hologram" as never }).id).toBe(UNKNOWN_CLIP_TYPE);
+    // P74: "scene" is registered now (it was the stand-in unknown id before).
+    expect(clipTypeOf({ clipType: "scene" }).id).toBe("scene");
   });
 });
 

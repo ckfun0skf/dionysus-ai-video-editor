@@ -1709,3 +1709,15 @@ select.v2-tp-field { -webkit-appearance: none; appearance: none; padding-right: 
 .v2-caption-align h4 { margin: 8px 0 0; font-size: 14px; }
 .v2-layer-ctl .v2-caption-style-btn { min-width: 44px; min-height: 44px; }
 .v2-app.is-desktop .v2-layer-ctl .v2-caption-style-btn { min-width: 44px; min-height: 44px; }
+
+/* P74: 3D scene clips — a quiet monochrome card with a faint grid (no thumbnail yet), and the read-only Scene tab. */
+.v2-clip.is-scene,
+.v2-timeline .v2-lane .v2-clip.is-scene { background: linear-gradient(rgba(255,255,255,.06) 1px, transparent 1px) 0 0 / 12px 12px, linear-gradient(90deg, rgba(255,255,255,.06) 1px, transparent 1px) 0 0 / 12px 12px, #24262c; color: rgba(255,255,255,.9); }
+.v2-scene-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 13px; }
+.v2-scene-list li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; padding: 2px 0; }
+.v2-scene-list code { font-size: 12px; }
+.v2-scene-list small { opacity: .7; }
+.v2-scene-at { font-variant-numeric: tabular-nums; opacity: .7; min-width: 3.5em; }
+.v2-scene-issues li.is-error { color: #ff8a7a; }
+.v2-scene-issues li.is-warning { color: #ffd27a; }
+.v2-scene-panel h4 small { font-weight: 400; opacity: .6; margin-left: 4px; }

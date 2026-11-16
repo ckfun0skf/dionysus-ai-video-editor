@@ -29,6 +29,8 @@ import { createClock, type Clock } from "./clock";
 import { HtmlClipHost, isValidFrame, type FrameIssue, type HtmlClipInit } from "./htmlClip";
 import { bindingSignature, resolveClipBindings } from "../domain/htmlClipBindings";
 import { readManifest, resolveHtmlParams, type HtmlClipManifest } from "../domain/htmlClipPackage";
+import { parseScene, type SceneDoc } from "../domain/scene";
+import { scenePage } from "./scenePage";
 import type { ExportVideoFrames } from "./export/videoFrames";
 import { withBlend } from "./blend";
 import { BufferGate, clipLoadOf, idleCap, idleEvictions, loadSignature, type ClipLoad } from "./stability";
@@ -253,6 +255,32 @@ export class Player {
     return entry.host;
   }
 
+  /** P74: scene documents by blob key (undefined while loading, null when unreadable); export waits for `ready`. */
+  private sceneDocs = new Map<string, { doc: SceneDoc | null | undefined; ready: Promise<void> }>();
+  private sceneDoc(blobKey: string): SceneDoc | null | undefined {
+    let e = this.sceneDocs.get(blobKey);
+    if (!e) {
+      const entry: { doc: SceneDoc | null | undefined; ready: Promise<void> } = { doc: undefined, ready: Promise.resolve() };
+      entry.ready = this.blobs.get(blobKey).then((b) => b?.text()).then((t) => { entry.doc = t == null ? null : parseScene(t).doc ?? null; }, () => { entry.doc = null; })
+        .then(() => { if (!this.playing) this.draw(); });
+      this.sceneDocs.set(blobKey, (e = entry));
+    }
+    return e.doc;
+  }
+
+  /** P74: the sandboxed iframe of a scene clip: the built-in scene page (render/scenePage.ts) for this document. */
+  private sceneHost(placementId: string, blobKey: string, w: number, h: number): HtmlClipHost {
+    const key = `scene:${blobKey}@${w}x${h}`;
+    const hit = this.html.get(placementId);
+    if (hit?.key === key) return hit.host;
+    hit?.host.dispose();
+    const doc = this.sceneDoc(blobKey);
+    const page = (doc !== undefined ? Promise.resolve(doc) : this.sceneDocs.get(blobKey)!.ready.then(() => this.sceneDocs.get(blobKey)?.doc)).then((d) => scenePage(d ?? undefined));
+    const entry = { key, host: new HtmlClipHost(page, w, h, () => { if (!this.playing) this.draw(); }) };
+    this.html.set(placementId, entry);
+    return entry.host;
+  }
+
   private release(id: string) {
     const el = this.pool.get(id);
     if (el && "pause" in el) { el.pause(); el.removeAttribute("src"); el.load(); el.remove(); this.gains.get(el)?.disconnect(); this.gains.delete(el); this.fxChains.get(el)?.chain.dispose(); this.fxChains.delete(el); this.spatials.get(el)?.stage.dispose(); this.spatials.delete(el); }
@@ -367,6 +395,8 @@ export class Player {
       noteFrame: (id, el, drawable, sourceIn) => this.noteFrame(id, el, drawable, sourceIn),
       armFrame: (el) => this.armFrame(el),
       htmlHost: (id, blobKey, w, h) => this.htmlHost(id, blobKey, w, h),
+      sceneHost: (id, blobKey, w, h) => this.sceneHost(id, blobKey, w, h),
+      sceneDoc: (blobKey) => this.sceneDoc(blobKey),
       manifest: (blobKey) => this.manifests.get(blobKey),
       setHtmlOverride: (id, params) => { this.htmlOverrides.set(id, params); },
       inputsFor: (p, decls, canvas) => this.inputsFor(p, decls, canvas),
@@ -594,6 +624,7 @@ export class Player {
     await Promise.all(this.urls.values());
     await Promise.all([...this.pool.values()].map((el) => settle(el)));
     await Promise.all([...this.pendingFrame.values()]);
+    if (this.sceneDocs.size) await Promise.all([...this.sceneDocs.values()].map((e) => e.ready));
     await Promise.all([...this.html.values()].map((h) => h.host.settle()));
     if (this.analyses.size) { await Promise.all(this.analyses.values()); this.draw(); await Promise.all([...this.html.values()].map((h) => h.host.settle())); }
   }

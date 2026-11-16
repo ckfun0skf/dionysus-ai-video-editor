@@ -80,7 +80,7 @@ describe("P69 clip type UI table", () => {
   it("discovers the UI modules with no problems", () => {
     expect(CLIP_TYPE_UI_PROBLEMS).toEqual([]);
     // P73: the placeholder card is host code (PLACEHOLDER_UI), no longer a clip type UI module.
-    const ids = ["audio", "blank", "effect", "html", "image", "text", "video"];
+    const ids = ["audio", "blank", "effect", "html", "image", "scene", "text", "video"];
     expect([...CLIP_TYPE_UIS.keys()].sort()).toEqual(ids);
     expect(CLIP_TYPE_UI_PATHS.sort()).toEqual(ids.map((id) => `../clipTypes/${id}/ui.tsx`));
   });
@@ -94,7 +94,7 @@ describe("P69 clip type UI table", () => {
     expect(checkClipTypeUi({ id: "video" }, "video")).toEqual([]);
     expect(checkClipTypeUi(undefined, "video")[0]).toMatch(/no default export/);
     expect(checkClipTypeUi({ id: "vid" }, "video").join()).toMatch(/must equal its folder name/);
-    expect(checkClipTypeUi({ id: "scene" }, "scene").join()).toMatch(/no clip type "scene"/);
+    expect(checkClipTypeUi({ id: "hologram" }, "hologram").join()).toMatch(/no clip type "hologram"/);
     expect(checkClipTypeUi({ id: "video", name: "x" }, "video").join()).toMatch(/name must be a function/);
     expect(checkClipTypeUi({ id: "video", assetThumb: "gif" }, "video").join()).toMatch(/assetThumb/);
     const { uis, problems } = loadClipTypeUis({ "../clipTypes/video/ui.tsx": { default: { id: "video" } as ClipTypeUi }, "../clipTypes/x/ui.tsx": {} });

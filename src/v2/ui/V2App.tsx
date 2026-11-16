@@ -3,7 +3,7 @@ import { hitCandidates, isBackdrop, pickAt, Player, readClipConfig } from "../re
 import { cmd } from "../engine";
 import { htmlRoleOf, importFile } from "../persistence";
 const withoutRole = <T extends { role?: unknown }>(m: T): Omit<T, "role"> => { const { role: _r, ...rest } = m; return rest; };
-import { sourceAt, tracking, masking, board as storyDomain, chain, compositionDuration, edit, layers, ops, findPlacement, newId, formatTimecode, secondsToTicks, TICKS_PER_SECOND, versionOfPlacement, clipVersion, type Asset } from "../domain";
+import { sourceAt, tracking, masking, board as storyDomain, chain, compositionDuration, edit, layers, ops, findPlacement, newId, formatTimecode, secondsToTicks, TICKS_PER_SECOND, versionOfPlacement, clipVersion, SAMPLE_SCENE, type Asset } from "../domain";
 import type { Composition, Project } from "../domain";
 import { useEditorBoot, useEngineState, useIsMobile, type EditorContext, type LoadFailure } from "./useEditor";
 import { Timeline } from "./Timeline";
@@ -53,6 +53,8 @@ import { fromVideo as fromVideoDomain, type MediaRef } from "../domain";
 import { projectMediaList } from "./projectMedia";
 import { stickerFile, stickers } from "./libraryItems";
 import { newCodeClipHtml } from "./codeSamples";
+import { ScenePanel } from "./ScenePanel";
+import { sceneAsset } from "./sceneAsset";
 import { CleanupDialog } from "./CleanupDialog";
 import { TrackSheet } from "./TrackSheet";
 import { MaskSheet } from "./MaskSheet";
@@ -549,6 +551,15 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     if (engine.dispatch(cmd.insertBlankAfter(insertAt.current, color, id))) { setSel([id]); setSubId(undefined); setToast("Blank clip inserted after the current clip"); }
     setPicker(null); setSheet(false);
   };
+  /** P74: a new 3D scene clip (the sample scene) at the playhead on the main track. One undo step. */
+  const createScene = async () => {
+    setPicker(null); setSheet(false);
+    try {
+      const asset = await sceneAsset(storage.blobs, SAMPLE_SCENE);
+      const id = newId("plc");
+      if (engine.dispatch([cmd.importAsset(asset), cmd.addSceneClip(asset.id, Math.round(player.time), secondsToTicks(SAMPLE_SCENE.durationSec ?? 5), id)], "Add 3D scene")) { setSel([id]); setSubId(undefined); setToast("3D scene added (Undo to remove)"); }
+    } catch (e) { setToast(`Could not add the scene: ${e instanceof Error ? e.message : "failed"}`); }
+  };
   const createCode = (mode: "main" | "overlay" | "insert" = "main") => { setPicker(null); setSheet(false); setHtmlEdit({ source: newCodeClipHtml(), create: mode }); };
   /** P38: Effects / Transitions → Custom (code) → New: the editor opens on a starter whose manifest role routes the save. */
   const createCodeRole = (role: "effect" | "transition") => { setFxOpen(false); setTransFor(undefined); setHtmlEdit({ source: newCodeClipHtml(role), create: "main" }); };
@@ -846,6 +857,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
         <strong>Media</strong>
         <button className="v2-btn primary" onClick={() => fileRef.current?.click()}><Ic g="＋" size={16} /> Import</button>
         <button className="v2-btn" title="Create a code clip: a canvas script with params, in the Code Editor" onClick={() => createCode()}><Ic g="</>" size={16} /> Code clip</button>
+        <button className="v2-btn" title="Add a 3D scene clip at the playhead: objects, camera and timed events as JSON, rendered with three.js" onClick={() => void createScene()}><Ic g="scene" size={16} /> 3D scene</button>
         {mobile && <SheetDone onClick={() => setSheet(false)} />}
       </div>
       {busy > 0 && <p className="v2-hint">Importing {busy}…</p>}
@@ -1133,13 +1145,13 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     else if (dt.files?.length) void importAt(Array.from(dt.files), at, trackId);
   };
   const inserting = picker === "insert";
-  const pickerEl = picker ? <MediaPicker media={projectMedia} title={inserting ? "Insert after current clip" : picker === "overlay" ? "Add overlay" : picker === "audio" || picker === "fromVideo" ? "Add audio" : picker === "stickers" ? "Add stickers" : "Add media"} lead={inserting ? "The new clip goes just after the current clip. Later clips move later, and linked layers and subtitles stay with the clips they belong to. Upload a file and it is selected here — then Insert." : undefined} confirmLabel={inserting ? "Insert" : "Add"} only={picker === "audio" || picker === "fromVideo" ? "audio" : undefined} initialTab={picker === "stickers" ? "stickers" : picker === "fromVideo" ? "fromVideo" : undefined} onClose={() => setPicker(null)} onAdd={(p) => void (inserting ? addInserted(p) : addPicked(p, picker === "overlay" || picker === "stickers" ? "overlay" : "main"))} onCreateCode={picker === "audio" || picker === "fromVideo" ? undefined : () => createCode(inserting ? "insert" : picker === "overlay" ? "overlay" : "main")} onCreateAudio={picker === "audio" || picker === "fromVideo" ? createAudio : undefined} onCreateAudioAi={picker === "audio" || picker === "fromVideo" ? openAudioAi : undefined} onAddFromVideo={picker === "audio" || picker === "fromVideo" ? (fv) => void addFromVideo(fv) : undefined} onTimeline={videoOnTimeline} onUploadVideo={picker === "audio" || picker === "fromVideo" ? uploadFromVideo : undefined} onDiscardVideo={(id) => engine.dispatch(cmd.removeAsset(id))} onAddBlank={picker === "audio" || picker === "fromVideo" || picker === "stickers" ? undefined : inserting ? insertBlank : (c) => addBlank(c, picker === "overlay" ? "overlay" : "main")} loadMedia={loadAssetBlob} /> : null;
+  const pickerEl = picker ? <MediaPicker media={projectMedia} title={inserting ? "Insert after current clip" : picker === "overlay" ? "Add overlay" : picker === "audio" || picker === "fromVideo" ? "Add audio" : picker === "stickers" ? "Add stickers" : "Add media"} lead={inserting ? "The new clip goes just after the current clip. Later clips move later, and linked layers and subtitles stay with the clips they belong to. Upload a file and it is selected here — then Insert." : undefined} confirmLabel={inserting ? "Insert" : "Add"} only={picker === "audio" || picker === "fromVideo" ? "audio" : undefined} initialTab={picker === "stickers" ? "stickers" : picker === "fromVideo" ? "fromVideo" : undefined} onClose={() => setPicker(null)} onAdd={(p) => void (inserting ? addInserted(p) : addPicked(p, picker === "overlay" || picker === "stickers" ? "overlay" : "main"))} onCreateCode={picker === "audio" || picker === "fromVideo" ? undefined : () => createCode(inserting ? "insert" : picker === "overlay" ? "overlay" : "main")} onCreateScene={picker === "audio" || picker === "fromVideo" || picker === "overlay" || inserting ? undefined : () => void createScene()} onCreateAudio={picker === "audio" || picker === "fromVideo" ? createAudio : undefined} onCreateAudioAi={picker === "audio" || picker === "fromVideo" ? openAudioAi : undefined} onAddFromVideo={picker === "audio" || picker === "fromVideo" ? (fv) => void addFromVideo(fv) : undefined} onTimeline={videoOnTimeline} onUploadVideo={picker === "audio" || picker === "fromVideo" ? uploadFromVideo : undefined} onDiscardVideo={(id) => engine.dispatch(cmd.removeAsset(id))} onAddBlank={picker === "audio" || picker === "fromVideo" || picker === "stickers" ? undefined : inserting ? insertBlank : (c) => addBlank(c, picker === "overlay" ? "overlay" : "main")} loadMedia={loadAssetBlob} /> : null;
   const assetBrowser = (
     <AssetBrowser project={project} thumbs={thumbs} busy={busy} tab={btab} onTab={setBtab}
       onImport={importDialog} onFiles={(fs) => void onFiles(fs)} onAddAsset={addToTimeline} onRemoveAsset={(a) => engine.dispatch(cmd.removeAsset(a.id))}
       onAddBlank={addBlank} onAddText={(tp) => addTextAt(player.time, tp)} onImportSrt={openSubImport}
       onAddSticker={(st) => void addStickerAt(st, player.time)} onAddEffect={(id) => addEffectAt(id, player.time)}
-      onAddTransition={addTransitionNearPlayhead} onCreateCode={() => createCode()} onCreateAudio={createAudio} onCreateAudioAi={openAudioAi} onAudioFromVideo={() => setPicker("fromVideo")} />
+      onAddTransition={addTransitionNearPlayhead} onCreateCode={() => createCode()} onCreateScene={() => void createScene()} onCreateAudio={createAudio} onCreateAudioAi={openAudioAi} onAudioFromVideo={() => setPicker("fromVideo")} />
   );
   useEffect(() => { setItab(preferTab.current); preferTab.current = undefined; }, [selectedId]);
   const fpsNow = project.settings.fps;
@@ -1211,6 +1223,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       // P73 (§6): a clip type this build does not register: say so, keep its data; no editors that could misread it.
       unknown: { id: "unknown", label: "Clip", icon: "⚠", render: () => <div className="v2-psettings"><section aria-label="Unknown clip type" data-testid="unknown-clip-type"><h4>Unknown clip type</h4>
         <p className="v2-abnote">This clip&apos;s type “{pl.clipType}” is not in this version of the editor, so it can&apos;t be shown or edited here. Its data is kept as is: you can move, trim, split or delete it, and it plays again in a version that has this type. It shows as a slate and exports as a black frame without sound.</p></section></div> },
+      // P74: a 3D scene clip's objects, events and problems (read-only in step 2.1).
+      scene: { id: "scene", label: "Scene", icon: "scene", render: () => <ScenePanel project={project} placement={pl} blobs={storage.blobs} /> },
       colour: { id: "colour", label: "Colour", icon: "palette", render: () => <div className="v2-psettings"><section aria-label="Colour"><h4>Colour</h4><BlankColorPicker value={pl.blank!.color} onChange={(c) => engine.dispatch(cmd.setBlankColor(pl.id, c))} /></section></div> },
     };
     const tabs = u.inspectorTabs.map((r) => (typeof r === "string" ? tabsById[r] : tabsById[r.id] && { ...tabsById[r.id]!, label: r.label })).filter((t): t is InspectorTab => !!t);
