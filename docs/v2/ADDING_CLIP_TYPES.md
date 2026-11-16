@@ -70,7 +70,8 @@ You do **not** write any of this per type:
 5. **Give users a way to make one.** The registry does not create clips. Add a command in `src/v2/engine/commands.ts`
    (see `addBlankClip`: build the `Placement`, insert it with `ops.insertPlacement`), then a button or menu entry, and
    an agent tool if the AI should add it (`core.agent.tools` + `run`, which uses `api.edit(label, apply)` for one undo
-   step). For a type that reads assets, `accepts` makes imports and the asset picker work.
+   step, and `api.blobs` to read or store media). A `run` that needs the domain at runtime lives in `<id>/agent.ts` and
+   is loaded with `import("./agent")` (see `scene/`, P78). For a type that reads assets, `accepts` makes imports and the asset picker work.
 6. **Update the lists that pin the built-ins** (they fail with a clear diff): `BUILT_INS` in
    `clipTypes/clipTypes.test.ts`, the fixture in `clipTypes/parity.test.ts` (one clip per registered type), the ids in
    `render/clipRenderers.test.ts` and `ui/clipTypeUi.test.tsx`, and the "covers every clip type" test of

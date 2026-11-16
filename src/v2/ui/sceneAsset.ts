@@ -1,4 +1,4 @@
-import { newId, SCENE_MIME, type Asset, type AssetVersion, type SceneDoc } from "../domain";
+import { newId, SCENE_MIME, sceneMediaRef, type Asset, type AssetVersion, type SceneDoc } from "../domain";
 
 type BlobPut = { put(key: string, blob: Blob): Promise<void> };
 
@@ -10,7 +10,7 @@ export async function sceneAsset(blobs: BlobPut, doc: SceneDoc, name = doc.name 
 }
 
 /** A scene version's media: the JSON blob at 1920×1080. No `durationTicks`: a scene's length is free (like a code clip's). */
-export const sceneMedia = (blobKey: string): AssetVersion["media"] => ({ blobKey, mime: SCENE_MIME, width: 1920, height: 1080 });
+export const sceneMedia = sceneMediaRef;
 
 /** P75: store a changed scene document as a new version of `asset` (the caller dispatches `cmd.addAssetVersion`). */
 export async function sceneVersion(blobs: BlobPut, asset: Asset, doc: SceneDoc): Promise<AssetVersion> {

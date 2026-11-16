@@ -1,0 +1,79 @@
+/**
+ * P78 (Phase 2 step 2.5): the scene clip type's WebMCP tools and AI guide rule, as data (the core lists them; the
+ * lazily loaded ./agent.ts runs them over the pure operations in domain/sceneAgent.ts). Names follow the design doc
+ * (§7 Phase 2: list_scene_objects, add_scene_event, update_scene_event, remove_scene_event, set_scene_object) plus the
+ * other edits the scene editor offers.
+ */
+import type { ClipAgentToolDef } from "../types";
+
+type Schema = Record<string, unknown>;
+const str = (description: string): Schema => ({ type: "string", description });
+const num = (description: string): Schema => ({ type: "number", description });
+const obj = (properties: Record<string, Schema>, required: string[] = [], open = false): Schema => ({ type: "object", properties, ...(required.length ? { required } : {}), additionalProperties: open });
+const vec3 = (description: string): Schema => ({ type: "array", items: { type: "number" }, minItems: 3, maxItems: 3, description });
+const clipId = str("Id of a 3D scene clip (get_timeline lists it with type \"scene\").");
+const mode: Schema = { type: "string", enum: ["new", "replace"], description: "How the edit is saved: new adds a scene version pinned to this clip, replace overwrites the version it shows (other clips showing it change too). Default: the project's version save mode (new unless the user chose Replace current)." };
+const props = obj({
+  name: str("Label shown in the editor."),
+  shape: { type: "string", enum: ["box", "sphere", "cylinder", "cone", "torus", "plane"] },
+  size: { description: "box: number or [w, h, d]; sphere: radius; cylinder / cone: [radius, height]; torus: [radius, tube]; plane: [w, h]; model: largest side in units." },
+  color: str("\"#rrggbb\" (shapes; a model keeps its own materials)."),
+  position: vec3("[x, y, z] in units (y up; the floor is y = 0)."),
+  rotation: vec3("[x, y, z] degrees."),
+  scale: { description: "Number or [x, y, z]." },
+  visible: { type: "boolean" },
+  opacity: num("0..1."),
+  model: str("A file name in the scene's files (GLB)."),
+  animation: { description: "Models: the clip playing from 0 s, a name or { clip, speed?, loop?: repeat | once | pingpong, from? }." },
+  nodes: { type: "object", description: "Models: parts shown (true) or hidden (false) from 0 s by node name." },
+  functions: { type: "object", description: "Custom functions by name: { params: { name: { type, default, options?, min?, max? } }, set: { prop: value | \"$param\" }, states: { param, table }, description }. Replaces the whole map." },
+}, [], false);
+const event = obj({
+  at: num("Start in scene seconds (0 = the scene's start)."),
+  obj: str("Object id, or \"camera\"."),
+  call: str("A base call (position, moveTo, rotation, lookAt, scale, visible, opacity, color; models also play, stop, nodes), a camera call (position, moveTo, lookAt, fov) or one of the object's own functions."),
+  args: { type: "object", description: "The call's arguments (list_scene_objects gives each call's names and types). Missing ones take the value at `at`." },
+  dur: num("Seconds the change takes (a tween); leave out for an instant change. Ignored by calls that never tween (visible, nodes)."),
+  ease: { type: "string", enum: ["linear", "in", "out", "inOut", "inCubic", "outCubic", "inOutCubic", "inQuad", "outQuad", "inOutQuad", "inOutSine", "outBack"] },
+}, ["at", "obj", "call"]);
+
+export const SCENE_AGENT_TOOLS: ClipAgentToolDef[] = [
+  { name: "create_scene_clip", title: "Add a 3D scene clip", readOnly: false,
+    description: "Add a 3D scene clip on the main track (one undo step): a new scene asset holding `scene` (a dionysus.scene/1 object or JSON text, validated; errors refuse it) or an empty scene with a camera and default lights. Default length: the scene's durationSec, else 5 s; default start: the end of the main track. Returns the clip; then build it with add_scene_object and add_scene_event.",
+    inputSchema: obj({ scene: { description: "Optional dionysus.scene/1 scene (object or JSON text)." }, name: str("Asset name (default the scene's name or \"3D scene\")."), atSec: num("Start on the timeline in seconds (default: after the last main-track clip)."), durationSec: num("Clip length in seconds.") }) },
+  { name: "get_scene", title: "Read a 3D scene", readOnly: true,
+    description: "The scene a 3D scene clip shows (its dionysus.scene/1 JSON, embedded files shortened to their size), its version and the validator's problems (errors and warnings with JSON paths).",
+    inputSchema: obj({ clipId }, ["clipId"]) },
+  { name: "list_scene_objects", title: "List a 3D scene's objects, calls and events", readOnly: true,
+    description: "Every object of a 3D scene clip with its fields and the calls it offers (base calls, model calls, its own functions) with each argument's name and type, the camera's calls, and the events with their indices (sorted by time) — what add_scene_event and update_scene_event accept.",
+    inputSchema: obj({ clipId }, ["clipId"]) },
+  { name: "add_scene_object", title: "Add an object to a 3D scene", readOnly: false,
+    description: "Add a primitive (shape box | sphere | cylinder | cone | torus | plane) or a GLB model (file { name, dataUrl } adds the file, or model names a file already in the scene) with an optional id and fields. One undo step; saved as a scene version (mode). Returns the object id.",
+    inputSchema: obj({ clipId, shape: { type: "string", enum: ["box", "sphere", "cylinder", "cone", "torus", "plane"] }, id: str("Object id (letters, digits, - and _; starts with a letter). Default: from the shape or file."), file: obj({ name: str("File name ending .glb."), dataUrl: str("data:model/gltf-binary;base64,… URL.") }, ["name", "dataUrl"]), model: str("A file already in the scene."), size: { description: "Size (see props.size); for a model the largest side (default 1.6)." }, props, mode }, ["clipId"]) },
+  { name: "set_scene_object", title: "Change a 3D scene object", readOnly: false,
+    description: "Change an object's base fields (props: name, shape, size, color, position, rotation, scale, visible, opacity, model, animation, nodes, functions; null removes a field) and/or rename it (rename: new id; its events and lookAt targets follow). These are the values from 0 s; use events for changes over time. One undo step; saved as a scene version (mode).",
+    inputSchema: obj({ clipId, objectId: str("The object's id."), rename: str("New id."), props, mode }, ["clipId", "objectId"]) },
+  { name: "remove_scene_object", title: "Remove a 3D scene object", readOnly: false,
+    description: "Remove an object, its events and the lookAt events aimed at it (an unused model file goes too). One undo step; saved as a scene version (mode).",
+    inputSchema: obj({ clipId, objectId: str("The object's id."), mode }, ["clipId", "objectId"]) },
+  { name: "add_scene_event", title: "Add an event to a 3D scene", readOnly: false,
+    description: "Add a timed event { at, obj, call, args?, dur?, ease? } (validated: unknown objects, calls or arguments are refused with the valid ones listed; missing arguments take the value at `at`). One undo step; saved as a scene version (mode). Returns its index.",
+    inputSchema: obj({ clipId, event, mode }, ["clipId", "event"]) },
+  { name: "update_scene_event", title: "Change a 3D scene event", readOnly: false,
+    description: "Change event `index`: at, dur (null removes), ease (null removes), call (its arguments reset to the defaults, then args apply), args (merged; a null value removes one), obj (give it to another object that has the same call). One undo step; saved as a scene version (mode).",
+    inputSchema: obj({ clipId, index: num("Event index (list_scene_objects)."), at: num("New start (scene seconds)."), dur: { description: "Seconds, or null." }, ease: { description: "An ease name, or null." }, call: str("New call."), args: { type: "object", description: "Arguments to set (merged)." }, obj: str("Another object id."), mode }, ["clipId", "index"]) },
+  { name: "retime_scene_event", title: "Move or resize a 3D scene event", readOnly: false,
+    description: "Retime event `index`: at (new start) or shiftSec (move by seconds, negative = earlier), and/or dur (new length; 0 = instant). Starts stay ≥ 0. One undo step; saved as a scene version (mode).",
+    inputSchema: obj({ clipId, index: num("Event index."), at: num("New start (scene seconds)."), shiftSec: num("Move by this many seconds."), dur: num("New length in seconds."), mode }, ["clipId", "index"]) },
+  { name: "remove_scene_event", title: "Remove a 3D scene event", readOnly: false,
+    description: "Remove event `index` (later events move down one index). One undo step; saved as a scene version (mode).",
+    inputSchema: obj({ clipId, index: num("Event index."), mode }, ["clipId", "index"]) },
+  { name: "set_scene_world", title: "Set a 3D scene's world, camera start and lights", readOnly: false,
+    description: "Set the scene's name, planned length (durationSec), background \"#rrggbb\", the camera's start { fov, position, lookAt } (camera moves are events on obj \"camera\") and lights (a list of { type: ambient | hemisphere | directional | point, color?, intensity?, position? } replacing the old list; null = default lights). One undo step; saved as a scene version (mode).",
+    inputSchema: obj({ clipId, name: str("Scene name."), durationSec: num("Planned length in seconds."), background: str("\"#rrggbb\"."), camera: obj({ fov: num("Degrees."), position: vec3("[x, y, z]."), lookAt: vec3("[x, y, z].") }), lights: { description: "List of lights, or null." }, mode }, ["clipId"]) },
+];
+
+export const SCENE_AGENT_RULES = [{
+  key: "scene-clips",
+  text: "3D scene clips (P78): a \"scene\" clip shows a dionysus.scene/1 scene rendered with three.js from time alone (the same frame in preview, export and any seek order). The scene has world (background, camera start { fov, position, lookAt }, lights), objects (id, primitive shape box | sphere | cylinder | cone | torus | plane or a GLB model from its files; base fields position [x, y, z] with y up and the floor at y = 0, rotation in degrees, scale, color \"#rrggbb\", opacity, visible) and a deterministic event timeline: each event is { at, obj, call, args, dur?, ease? } in scene seconds. Base calls set one property: position / moveTo, rotation, lookAt (an object id or a point), scale, opacity, color, visible (instant); a tween runs from the value at its own start over dur with ease; when two events change the same property, the one that started last wins. The camera is obj \"camera\" with position / moveTo, lookAt and fov. Objects may declare custom functions (typed params; set maps properties to values or \"$param\"; states picks a row by a param) and are called like base calls. A GLB model plays its animations with play { clip, speed?, loop: repeat | once | pingpong, from?, fade? } and stop { fade? } (fade defaults to dur), shows or hides parts with nodes; its animation is posed from time, never from the previous frame. Tools: create_scene_clip, then get_scene / list_scene_objects to read (calls, argument names and types, event indices), add_scene_object, set_scene_object, remove_scene_object, add_scene_event, update_scene_event, retime_scene_event, remove_scene_event and set_scene_world; each call is one undo step saved as a scene version (mode new or replace, default the project's choice) and an invalid edit is refused with the valid objects, calls or arguments listed. Good practice: set the camera and lights first, keep objects near the origin and in view, give tweens a dur and an ease, keep events inside the clip's length, prefer a few clear moves over many tiny ones, check get_scene's problems after building, and capture_frame to look at the result.",
+}];

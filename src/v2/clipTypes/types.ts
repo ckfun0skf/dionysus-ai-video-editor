@@ -70,10 +70,15 @@ export interface ClipAgentApi {
   project(): Project;
   /** One undo step; false when nothing changed. */
   edit(label: string, apply: (p: Project) => Project): boolean;
+  /**
+   * P78: the project's media store, when the host has one (WebMCP in the app does), for types whose data lives in an
+   * asset version's blob (a scene): read it, and write a new version's blob before `edit` points the clip at it.
+   */
+  blobs?: { get(key: string): Promise<Blob | undefined>; put(key: string, blob: Blob): Promise<void> };
 }
 export interface ClipAgentResult { ok: boolean; changed: boolean; text: string }
 
-/** P72: a clip type's agent surface. Built-ins contribute no tools or rules in Phase 1 (gen:ai stays byte-identical). */
+/** P72: a clip type's agent surface. Built-ins contributed no tools or rules in Phase 1; the scene type (P78) is the first that does. */
 export interface ClipAgent {
   /** New WebMCP tools (appended to TIMELINE_TOOLS, so the guide and WEB_MCP.md list them). Needs `run`. */
   tools?: ClipAgentToolDef[];

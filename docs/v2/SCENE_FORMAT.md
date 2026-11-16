@@ -163,7 +163,30 @@ hold there (camera events stay on the Scene track). The preview follows the drag
 undo step, same version rules); Esc cancels. Arrow keys move a focused block or handle by one frame (Shift: ten).
 Dragging along the ruler scrubs the playhead.
 
+## Agent tools (P78)
+
+Agents edit scene clips through WebMCP tools contributed by the scene clip type (see [`WEB_MCP.md`](WEB_MCP.md) for
+the schemas) and AI guide RULE 79:
+
+| Tool | What it does |
+|---|---|
+| `create_scene_clip` | Adds a scene clip on the main track (at `atSec`, or after the last clip) from a scene object / JSON text, or an empty scene. |
+| `get_scene` | The clip's scene (embedded files shortened), its version, clip range and problems. |
+| `list_scene_objects` | Objects with the calls each takes (base, model, own functions) and their arguments; the camera's calls; events by index. |
+| `add_scene_object` | A shape, a `.glb` file (`{ name, dataUrl }`) or a model already in `files`; `id`, `size` and other fields. |
+| `set_scene_object` | Rename (references follow) or set fields (`null` removes one; `functions` replaces the map). |
+| `remove_scene_object` | Removes an object and its events. |
+| `add_scene_event` | Adds `{ at, obj, call, args, dur, ease }`; missing arguments are filled with the value at that time. |
+| `update_scene_event` | Changes an event by index: time, `dur` / `ease` (`null` removes), call (args reset), args (merged), object. |
+| `retime_scene_event` | Moves an event (`at` or `shiftSec`) and / or changes `dur`. |
+| `remove_scene_event` | Removes an event by index. |
+| `set_scene_world` | Name, planned length, background, camera start and lights (`null` = the defaults). |
+
+Every edit is checked with the validator: one that would add an error is refused and changes nothing, and the message
+lists the valid objects, calls or arguments. Each edit is one undo step and is saved as a scene version under the
+version-save rules (`mode`: `new` adds a version, `replace` overwrites the shown one; an explicit mode is remembered).
+Event indexes are positions in `events` (not time order); the player sorts by time.
+
 ## Not yet (later Phase 2 steps)
 
-WebMCP tools and an AI guide rule (2.5), storyboard `render: "scene"` and asset type `scene` (2.6, decision 5). The
-step table was renumbered in P76.
+Storyboard `render: "scene"` and asset type `scene` (2.6, P79, decision 5). The step table was renumbered in P76.

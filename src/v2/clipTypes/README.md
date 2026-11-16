@@ -18,7 +18,10 @@ sandboxed HTML clip host (`render/scenePage.ts`, reached through `host.media.sce
 `stateAt(doc, t)` sent to the page every frame. Since P75 (step 2.2) it also draws GLB models from the document's
 `files` and poses their animations with `mixer.setTime` from `t` (`domain/glb.ts` reads clip and node names). Since
 P76 (step 2.3) it has its own timeline editor (`ui/SceneEditor.tsx`, pure operations in `domain/sceneEdit.ts`), and since
-P77 (step 2.4) its blocks are dragged and resized to retime events (`domain/sceneRetime.ts`).
+P77 (step 2.4) its blocks are dragged and resized to retime events (`domain/sceneRetime.ts`). Since P78 (step 2.5) it
+is the first type that contributes WebMCP tools and an AI guide rule through `core.agent`: the declarations are in
+`scene/agentDefs.ts`, the runner `scene/agent.ts` is loaded lazily (`import()`) and the pure operations are in
+`domain/sceneAgent.ts`.
 
 ```
 clipTypes/
@@ -46,6 +49,9 @@ clipTypes/
                 discovered by src/v2/ui/clipTypeUi.tsx, missing fields take DEFAULT_CLIP_UI; placeholders get the host's
                 PLACEHOLDER_UI and unknown ids UNKNOWN_CLIP_UI (P73).
                 UI-layer code: React and ui helpers allowed.
+  <id>/agent.ts runner for the type's contributed agent tools (scene, P78). Layer `clipTypes/agent`: may use the
+                domain at runtime, no DOM; the core loads it only through `import("./agent")` (a static import would
+                close the load cycle domain → registry → core → domain).
 ```
 
 ## Rules
@@ -56,7 +62,8 @@ clipTypes/
 - A **placeholder** is not a type: any clip with `placement.placeholder` is one, and the host handles it before any
   type (`state.ts`, `render/placeholderSlate.ts`, `PLACEHOLDER_UI`). Types never handle placeholders.
 - `core.ts` is pure data: no DOM, no React, and `domain` only through `import type` (enforced by
-  `src/v2/architecture.test.ts`).
+  `src/v2/architecture.test.ts`). Tool runners that need the domain at runtime go in `<id>/agent.ts`, loaded with
+  `import()` from `core.agent.run` (P78; also enforced there).
 - `caps` must keep answering exactly what today's predicates answer. `parity.test.ts` checks every type against
   `trackKindFor`, `isStill`, `hasSound`, `canChromaKey`, `needsThumb` and `canSetRange`. If a parity case fails, the
   change in behaviour is a bug, not a test to update.
