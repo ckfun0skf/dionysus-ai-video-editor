@@ -16,6 +16,8 @@ const ALLOWED: Record<string, string[]> = {
   "clipTypes/render": ["clipTypes", "domain", "registry", "render"],
   // P69: a clip type's timeline UI (clipTypes/<id>/ui.tsx) is ui-layer code: React and ui helpers allowed.
   "clipTypes/ui": ["clipTypes", "domain", "registry", "render", "ui"],
+  // P78: a clip type's agent runner (clipTypes/<id>/agent.ts) uses the domain at runtime; its core loads it lazily.
+  "clipTypes/agent": ["clipTypes", "domain", "registry"],
   ports: ["registry", "domain", "ports"],
   engine: ["registry", "domain", "ports", "engine"],
   // P71: file import reads the clip type cores (`accepts`) through the clipTypes barrel.
@@ -26,9 +28,12 @@ const ALLOWED: Record<string, string[]> = {
 };
 /** Known violations being fixed in follow-up PRs; must shrink to empty. */
 const KNOWN_VIOLATIONS = new Set<string>();
-const NO_DOM = new Set(["registry", "presets", "domain", "ports", "engine", "clipTypes"]);
+const NO_DOM = new Set(["registry", "presets", "domain", "ports", "engine", "clipTypes", "clipTypes/agent"]);
 /** Matches a value (non-type) import or re-export from the domain layer, which clipTypes must not have. */
 export const VALUE_DOMAIN_IMPORT = /\b(?:import|export)\s+(?!type\b)[^"'`;]*?\bfrom\s*["'](?:\.\.\/)+domain(?:\/[^"']*)?["']/;
+
+/** A static (non-type) import of a sibling `./agent` module. */
+export const STATIC_AGENT_IMPORT = /\b(?:import|export)\s+(?!type\b)[^"'`;()]*?\bfrom\s*["']\.\/agent(?:\.ts)?["']|\bimport\s*["']\.\/agent(?:\.ts)?["']/;
 
 function files(dir: string): string[] {
   return readdirSync(dir).flatMap((n) => {
@@ -46,6 +51,7 @@ const layerOf = (file: string) => {
   const parts = relative(V2, file).split(/[\\/]/);
   if (parts[0] === "clipTypes" && parts.length === 3 && parts[2] === "render.ts") return "clipTypes/render";
   if (parts[0] === "clipTypes" && parts.length === 3 && parts[2] === "ui.tsx") return "clipTypes/ui";
+  if (parts[0] === "clipTypes" && parts.length === 3 && parts[2] === "agent.ts") return "clipTypes/agent";
   return parts[0];
 };
 
@@ -57,6 +63,13 @@ describe("v2 architecture", () => {
       'import a from "./a";', 'import { b,\n c } from "../b";', 'import type { T } from "./t";', 'export * from "./e";',
       'export { f } from "./f";', 'import "./side";', "import './side2'", 'await import("./dyn");', '// import "./commented";',
     ].join("\n"))).toEqual(["./a", "../b", "./t", "./e", "./f", "./side", "./side2", "./dyn"]);
+  });
+  it("a clip type loads its agent runner only with import()", () => {
+    expect(STATIC_AGENT_IMPORT.test('import { runSceneTool } from "./agent";')).toBe(true);
+    expect(STATIC_AGENT_IMPORT.test('import "./agent";')).toBe(true);
+    expect(STATIC_AGENT_IMPORT.test('run: () => import("./agent").then((m) => m.run())')).toBe(false);
+    expect(STATIC_AGENT_IMPORT.test('import type { X } from "./agent";')).toBe(false);
+    expect(STATIC_AGENT_IMPORT.test('import { SCENE_AGENT_TOOLS } from "./agentDefs";')).toBe(false);
   });
   it("clipTypes domain-import check allows only type imports", () => {
     expect(VALUE_DOMAIN_IMPORT.test('import type { Placement } from "../domain/model";')).toBe(false);
@@ -85,6 +98,8 @@ describe("v2 architecture", () => {
         }
       }
       if (layer === "clipTypes") expect(VALUE_DOMAIN_IMPORT.test(src.replace(/\/\*[\s\S]*?\*\/|(^|[^:"'`])\/\/.*$/gm, "$1")), "clipTypes may import domain only with `import type` (no runtime cycle)").toBe(false);
+      // P78: a type's agent runner uses the domain at runtime, so its core (and anything else in the type) loads it with import() only.
+      if (layer === "clipTypes" && name.split("/").length === 3) expect(STATIC_AGENT_IMPORT.test(src.replace(/\/\*[\s\S]*?\*\/|(^|[^:"'`])\/\/.*$/gm, "$1")), "load ./agent with import() (it uses the domain at runtime)").toBe(false);
       if (NO_DOM.has(layer)) expect(/\b(document|window|indexedDB|HTMLElement)\b/.test(src.replace(/\/\/.*|\/\*[\s\S]*?\*\//g, "")), `${layer} must not use DOM globals`).toBe(false);
     });
   }

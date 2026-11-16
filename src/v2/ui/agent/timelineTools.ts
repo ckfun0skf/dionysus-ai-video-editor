@@ -737,6 +737,6 @@ export async function runTimelineTool(engine: Engine, source: FrameSource | unde
   }
   // P72: a tool contributed by a clip type core runs through its `agent.run` (one undo step per edit).
   const owner = agentToolOwner(name);
-  if (owner?.agent?.run) return owner.agent.run(name, a, { project, edit: (label, apply) => engine.dispatch({ label, apply }, name) });
+  if (owner?.agent?.run) return owner.agent.run(name, a, { project, edit: (label, apply) => engine.dispatch({ label, apply }, name), ...(blobs ? { blobs } : {}) });
   return fail(`Unknown tool ${name}.`);
 }
