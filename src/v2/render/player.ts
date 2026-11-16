@@ -3,20 +3,19 @@
  * Video/audio elements are slaved to the timeline time with drift correction; audio is routed through a
  * per-element GainNode when an AudioContext is available.
  */
-import { activeAt, placeRect, upcomingMedia, type Placed } from "./frame";
+import { activeAt, upcomingMedia, type Placed } from "./frame";
 import { TICKS_PER_SECOND, ticksToSeconds } from "../domain/time";
-import { drawKeyed } from "./chromaKey";
 import { paintClip } from "./clipMask";
 import type { ClipMask } from "../domain/mask";
 import { trackSignal, type TrackSignal } from "../domain/tracking";
 import { audioFxData, buildFxChain, fxKey, type FxChain } from "./audioFx";
 import { buildSpatial, type SpatialStage } from "./spatial";
-import { audioOutputOf, spatialAt, spatialOf, type AudioEnvironment, type AudioOutputMode } from "../domain/spatial";
-import { compositionDuration, fadeAt, findPlacement, volumeKeyAt, versionOfPlacement, type Placement, type Project } from "../domain/model";
+import type { AudioEnvironment, AudioOutputMode } from "../domain/spatial";
+import { compositionDuration, fadeAt, findPlacement, versionOfPlacement, type Placement, type Project } from "../domain/model";
 import type { BlobStore } from "../ports/storage";
 import { subtitleAt } from "../domain/subtitles";
 import { loadBundledFonts } from "./fonts";
-import { clipRendererFor, type ClipDrawHost } from "./clipRenderers";
+import { clipRendererFor, type ClipDrawHost, type ClipFrameState, type ClipMediaHost } from "./clipRenderers";
 import { effectivePlacement } from "../domain/layerStyle";
 import { applyEffectFrame, codeEffectsAt, effectFrameAt } from "./effects";
 import { trackTransitions } from "../domain/transitions";
@@ -26,14 +25,13 @@ import { inputSourceOf } from "../domain/codeInputs";
 import { INPUT_TYPES, refType } from "../domain/htmlClipPackage";
 import type { HtmlClipInput } from "../domain/htmlClipPackage";
 import { mainTrack } from "../domain/ops";
-import { correctDrift, createClock, SEEK_DRIFT_S, type Clock } from "./clock";
+import { createClock, type Clock } from "./clock";
 import { HtmlClipHost, isValidFrame, type FrameIssue, type HtmlClipInit } from "./htmlClip";
 import { bindingSignature, resolveClipBindings } from "../domain/htmlClipBindings";
 import { readManifest, resolveHtmlParams, type HtmlClipManifest } from "../domain/htmlClipPackage";
 import type { ExportVideoFrames } from "./export/videoFrames";
-import { drawWithLook } from "./transitionDraw";
 import { withBlend } from "./blend";
-import { BufferGate, clipLoadOf, idleCap, idleEvictions, loadSignature, mediaStalled, type ClipLoad } from "./stability";
+import { BufferGate, clipLoadOf, idleCap, idleEvictions, loadSignature, type ClipLoad } from "./stability";
 
 /** P1-SHORT-AUDIO: how far ahead of the playhead the player loads audio and video clips (2 s). */
 const PRELOAD_TICKS = 2 * TICKS_PER_SECOND;
@@ -346,6 +344,37 @@ export class Player {
     }
   }
 
+  /** P68: the pools and services the stateful clip renderers (html, video, image, audio) use. */
+  private media?: ClipMediaHost;
+  private mediaHost(): ClipMediaHost {
+    if (this.media) return this.media;
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
+    const self = this;
+    this.media = {
+      get playing() { return self.playing; },
+      get previewMute() { return self.previewMute; },
+      get project() { return self.project; },
+      get audioCtx() { return self.audioCtx; },
+      get exportVideo() { return self.exportVideo; },
+      keyOf: (p) => this.keyOf(p),
+      url: (blobKey) => this.url(blobKey),
+      element: (id, kind, src) => this.element(id, kind, src),
+      touch: (id) => { this.lastUsed.set(id, ++this.useCount); },
+      gainFor: (el, fx, spatialKey) => this.gainFor(el, fx, spatialKey),
+      spatialStage: (el) => this.spatials.get(el)?.stage,
+      stalledEls: this.stalledEls,
+      poster: (id) => this.posters.get(id),
+      noteFrame: (id, el, drawable, sourceIn) => this.noteFrame(id, el, drawable, sourceIn),
+      armFrame: (el) => this.armFrame(el),
+      htmlHost: (id, blobKey, w, h) => this.htmlHost(id, blobKey, w, h),
+      manifest: (blobKey) => this.manifests.get(blobKey),
+      setHtmlOverride: (id, params) => { this.htmlOverrides.set(id, params); },
+      inputsFor: (p, decls, canvas) => this.inputsFor(p, decls, canvas),
+      inputSig: this.inputSig,
+    };
+    return this.media;
+  }
+
   /** Render current frame and sync media elements. */
   draw() {
     const comp = this.project.compositions[this.project.rootCompositionId];
@@ -356,8 +385,8 @@ export class Player {
     const ctx = canvas?.getContext("2d");
     const holding = this.playing && this.gate.buffering;
     const run = this.playing && !holding;
-    let stalled = false, missing = false;
-    const loads = new Map<string, ClipLoad>();
+    const st: ClipFrameState = { live, loads: new Map<string, ClipLoad>(), stalled: false, missing: false, holding, run };
+    const loads = st.loads;
     if (canvas && ctx) { ctx.fillStyle = this.project.settings.background ?? "#000"; ctx.fillRect(0, 0, canvas.width, canvas.height); }
     // V2-101 / P6-FX-SCOPE: "main" effects change the main-track render (applied once main is drawn, before
     // overlays/text); "overlay" effects change each overlay clip on its own layer before it is composited; "all"
@@ -415,9 +444,9 @@ export class Player {
         lc.save(); lc.setTransform(1, 0, 0, 1, 0, 0); lc.globalAlpha = 1; lc.globalCompositeOperation = "source-over"; lc.clearRect(0, 0, canvas.width, canvas.height); lc.restore();
         try { fn(lc); } finally { applyEffectFrame(lc, canvas.width, canvas.height, fxOverlay, true); withBlend(ctx, blend, () => ctx.drawImage(lc.canvas, 0, 0)); }
       };
-      // P67: clip types with a renderer module (clipTypes/<id>/render.ts: text, placeholder, blank so far) draw through it.
+      // P67: stateless clip types (clipTypes/<id>/render.ts `draw`: text, placeholder, blank) draw through their renderer.
       const renderer = clipRendererFor(placement);
-      if (renderer) {
+      if (renderer?.draw) {
         if (ctx && canvas && !track.hidden) {
           const host: ClipDrawHost = {
             g: ctx, width: canvas.width, height: canvas.height, time: this.time, offline: this.offline, track, placement, sourceTicks, mix, tfx,
@@ -431,129 +460,20 @@ export class Player {
       }
       const version = versionOfPlacement(this.project, placement);
       if (!version || track.hidden) continue;
-      if (placement.clipType === "html") {
-        live.add(placement.id);
-        this.htmlOverrides.set(placement.id, placement.htmlParams);
-        const host = this.htmlHost(placement.id, version.media.blobKey, canvas?.width ?? 1280, canvas?.height ?? 720);
-        const known = this.manifests.get(version.media.blobKey);
-        if (known) host.setParams(resolveHtmlParams(known.params, placement.htmlParams));
-        const at = Math.round(ticksToSeconds(sourceTicks) * 1000) / 1000, dur = ticksToSeconds(placement.sourceInTicks + placement.durationTicks * (placement.speed ?? 1));
-        const ins = known?.inputs && canvas ? this.inputsFor(placement, known.inputs, canvas) : undefined;
-        if (ins) {
-          // P38: computed signals only (numbers); a change at the same t (an analysis finished) draws the frame again.
-          const sig = JSON.stringify(ins), fresh = sig !== this.inputSig.get(placement.id);
-          this.inputSig.set(placement.id, sig);
-          host.request(at, dur, () => Promise.resolve({ data: { inputs: ins } }), fresh);
-        } else host.request(at, dur);
-        const f = host.frame;
-        if (ctx && canvas && isValidFrame(f)) {
-          const r = placeRect(placement, f.width, f.height, canvas.width, canvas.height, this.time);
-          this.boxes.set(placement.id, r);
-          try { // a detached/closed bitmap must not throw out of draw() and stall preview or export
-            paint(placement.blend, (dc) => drawWithLook(dc, canvas.width, canvas.height, tfx, (g) => {
-              g.save();
-              try {
-                g.globalAlpha = r.alpha * (mix ?? 1); g.translate(r.cx, r.cy); g.rotate(r.rot);
-                this.blit(g, placement, f.width, f.height, r, sourceTicks, (gg) => drawKeyed(gg, f, f.width, f.height, r.sx, r.sy, r.sw, r.sh, -r.w / 2, -r.h / 2, r.w, r.h, this.keyOf(placement)));
-              } finally { g.restore(); }
-            }));
-          } catch { host.issue = "invalid"; }
-        }
-        continue;
-      }
-      if (placement.clipType === "video" && this.exportVideo?.handles(placement.id)) {
-        live.add(placement.id);
-        const f = this.exportVideo.frame(placement.id)!;
-        if (ctx && canvas) {
-          const r = placeRect(placement, f.width, f.height, canvas.width, canvas.height, this.time);
-          this.boxes.set(placement.id, r);
-          paint(placement.blend, (dc) => drawWithLook(dc, canvas.width, canvas.height, tfx, (g) => {
-            g.save(); g.globalAlpha = r.alpha * (mix ?? 1); g.translate(r.cx, r.cy); g.rotate(r.rot);
-            this.blit(g, placement, f.width, f.height, r, sourceTicks, (gg) => drawKeyed(gg, f.image, f.width, f.height, r.sx, r.sy, r.sw, r.sh, -r.w / 2, -r.h / 2, r.w, r.h, this.keyOf(placement)));
-            g.restore();
-          }));
-        }
-        continue;
-      }
-      const src = this.url(version.media.blobKey);
-      if (!src) { loads.set(placement.id, {}); if (placement.clipType !== "image") stalled = true; if (placement.clipType !== "audio") missing = true; continue; }
-      live.add(placement.id);
-      const el = this.element(placement.id, placement.clipType, src);
-      this.lastUsed.set(placement.id, ++this.useCount);
-      if ("pause" in el) {
-        const ld = clipLoadOf(el, this.playing);
-        if (ld) loads.set(placement.id, ld);
-        const target = ticksToSeconds(sourceTicks);
-        el.muted = this.previewMute || !!track.muted || !!track.hidden || (placement.clipType === "video" && !!placement.linkedAudio?.muted);
-        const vol = Math.max(0, placement.volume ?? 1) * fadeAt(placement, this.time) * volumeKeyAt(placement, this.time);
-        const sp = spatialOf(placement, track), out = audioOutputOf(this.project);
-        const gain = this.gainFor(el, placement.audioFx, sp ? `${out.mode}:${out.environment}` : "");
-        if (sp && this.audioCtx) this.spatials.get(el)?.stage.set(spatialAt(sp, this.time - placement.startTicks), this.audioCtx.currentTime, "smooth");
-        if (gain) { gain.gain.value = vol; el.volume = 1; } else el.volume = Math.min(1, vol);
-        // Reverse and freeze cannot use native playback: hold the element paused and seek it per frame.
-        const held = this.time < placement.startTicks || this.time >= placement.startTicks + placement.durationTicks; // transition overhang
-        const scrub = !!placement.reverse || !!placement.freeze || held;
-        if (scrub || this.offline) el.muted = true;
-        const speed = placement.speed ?? 1;
-        if (holding && !el.paused) el.pause();
-        if (!scrub && (!el.muted || placement.clipType === "video")) {
-          const st = mediaStalled(el, this.stalledEls.has(el));
-          if (st) { this.stalledEls.add(el); stalled = true; } else this.stalledEls.delete(el);
-        }
-        if (run && scrub) {
-          if (!el.paused) el.pause();
-          if (Math.abs(el.currentTime - target) > 0.04) el.currentTime = target;
-        } else if (run) {
-          // Resume without a seek unless the element is really off: a seek drops readyState and would stall again.
-          if (el.paused) { if (Math.abs(el.currentTime - target) > SEEK_DRIFT_S) el.currentTime = target; el.playbackRate = speed; void el.play().catch(() => undefined); }
-          else {
-            const fix = correctDrift(el.currentTime, target);
-            if (fix.seek !== undefined) el.currentTime = fix.seek;
-            if (el.playbackRate !== fix.rate * speed) el.playbackRate = fix.rate * speed;
-          }
-        } else {
-          if (!el.paused) el.pause();
-          if (this.offline && el instanceof HTMLVideoElement) {
-            // Export: every output frame needs its own exact source frame. Nudge 2 ms past the frame
-            // boundary so float rounding cannot land on the previous frame, and never skip a seek.
-            const exact = target + 0.002;
-            if (Math.abs(el.currentTime - exact) > 0.0005) { this.armFrame(el); el.currentTime = exact; }
-          } else if (Math.abs(el.currentTime - target) > 0.02) el.currentTime = target;
-        }
-      }
-      if (ctx && canvas && placement.clipType !== "audio") {
-        const w = el instanceof HTMLVideoElement ? el.videoWidth : (el as HTMLImageElement).naturalWidth;
-        const h = el instanceof HTMLVideoElement ? el.videoHeight : (el as HTMLImageElement).naturalHeight;
-        const drawable = !!(w && h && (!(el instanceof HTMLVideoElement) || el.readyState >= 2));
-        const poster = !drawable ? this.posters.get(placement.id) : undefined;
-        if (el instanceof HTMLVideoElement) this.noteFrame(placement.id, el, drawable, placement.sourceInTicks);
-        if (!drawable && poster && Math.abs(poster.at - ticksToSeconds(sourceTicks)) < 0.5) {
-          // P30-WARM-MEDIA: re-entering a clip whose element was evicted: show its first frame at once.
-          const r = placeRect(placement, poster.w, poster.h, canvas.width, canvas.height, this.time);
-          this.boxes.set(placement.id, r);
-          paint(placement.blend, (dc) => drawWithLook(dc, canvas.width, canvas.height, tfx, (g) => {
-            g.save(); g.globalAlpha = r.alpha * (mix ?? 1); g.translate(r.cx, r.cy); g.rotate(r.rot);
-            const k = poster.img.width / poster.w;
-            this.blit(g, placement, poster.w, poster.h, r, sourceTicks, (gg) => drawKeyed(gg, poster.img, poster.img.width, poster.img.height, r.sx * k, r.sy * k, r.sw * k, r.sh * k, -r.w / 2, -r.h / 2, r.w, r.h, this.keyOf(placement)));
-            g.restore();
-          }));
-        } else if (!drawable) missing = true;
-        if (drawable) {
-          const r = placeRect(placement, w, h, canvas.width, canvas.height, this.time);
-          this.boxes.set(placement.id, r);
-          paint(placement.blend, (dc) => drawWithLook(dc, canvas.width, canvas.height, tfx, (g) => {
-            g.save(); g.globalAlpha = r.alpha * (mix ?? 1); g.translate(r.cx, r.cy); g.rotate(r.rot);
-            this.blit(g, placement, w, h, r, sourceTicks, (gg) => drawKeyed(gg, el as CanvasImageSource, w, h, r.sx, r.sy, r.sw, r.sh, -r.w / 2, -r.h / 2, r.w, r.h, this.keyOf(placement)));
-            g.restore();
-          }));
-        }
-      }
+      // P68: html, video, image, audio (and an unknown clipType) run every frame through their stateful renderer.
+      renderer?.frame?.({
+        g: ctx, canvas, time: this.time, offline: this.offline, track, placement, version, sourceTicks, mix, tfx,
+        setBox: (r) => { this.boxes.set(placement.id, r); },
+        paint,
+        blit: (g, srcW, srcH, r, fn) => this.blit(g, placement, srcW, srcH, r, sourceTicks, fn),
+        frame: st, media: this.mediaHost(),
+      });
     }
     if (!fxDone) applyFx();
     // A source without a decoded picture yet (seek or first load): show the last complete frame instead of black.
     if (ctx && canvas && !this.offline) {
-      if (missing && this.lastGood && this.lastGood.canvas.width === canvas.width && this.lastGood.canvas.height === canvas.height) ctx.drawImage(this.lastGood.canvas, 0, 0);
-      else if (!missing) this.keepFrame(canvas);
+      if (st.missing && this.lastGood && this.lastGood.canvas.width === canvas.width && this.lastGood.canvas.height === canvas.height) ctx.drawImage(this.lastGood.canvas, 0, 0);
+      else if (!st.missing) this.keepFrame(canvas);
     }
     if (ctx && canvas) for (const e of codeFxAll) this.runCode(e.placement.id, e.assetId, e.placement.effect?.params, ticksToSeconds(this.time - e.placement.startTicks), ticksToSeconds(e.placement.durationTicks), live, ctx, canvas, this.sourceOf(canvas));
     if (fxAll && ctx && canvas) applyEffectFrame(ctx, canvas.width, canvas.height, fxAll);
@@ -578,8 +498,8 @@ export class Player {
       const keep = new Set(live);
       for (const { placement } of upcomingMedia(comp, this.time, PRELOAD_TICKS)) keep.add(placement.id);
       for (const id of idleEvictions(this.lastUsed, keep, this.idleCap)) { this.release(id); this.lastUsed.delete(id); }
-      this.stalled = stalled;
-      const loading = (this.playing && this.gate.buffering) || (!this.playing && missing);
+      this.stalled = st.stalled;
+      const loading = (this.playing && this.gate.buffering) || (!this.playing && st.missing);
       const sig = loadSignature(loads);
       if (sig !== this.loadSig) { this.loadSig = sig; this.clipLoads = loads; this.onClipLoads?.(loads); }
       // While paused nothing else redraws, so poll gently until every visible clip has loaded.

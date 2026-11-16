@@ -38,7 +38,7 @@ src/v2/
   engine/        Engine (undo history; one dispatch = one undo step) and commands.ts (Command factories)
   persistence/   IndexedDB/memory stores, media import (media.ts), schema migrations, project archive
   ports/         storage interfaces (BlobStore, …)
-  clipTypes/     clip type registry (P65+): one folder per type with core.ts (trackKind, caps); domain predicates read it (P66); render.ts renderers (P67)
+  clipTypes/     clip type registry (P65+): one folder per type with core.ts (trackKind, caps); domain predicates read it (P66); render.ts renderers (P67, P68)
   registry/      preset registry (effects, transitions, text animations, stickers, blends, audio fx, fonts)
   presets/       one file per preset, auto-discovered (docs/v2/ADDING_EFFECTS.md)
   render/        Player (preview AND export compositor), htmlClip.ts (sandboxed HTML clip host), text, effects,
@@ -92,9 +92,9 @@ required checks.
 1. `git fetch` and branch from the latest `origin/main` (e.g. `p66-short-name`).
 2. Implement with tests. Keep PRs small (MODULE_DESIGN §14 targets < 400 changed lines; feature PRs here are often
    larger, but split refactors).
-3. **`public/doc/tasks.json`:** add one entry per PR with the next free P-number: `{ "id": "P68-SHORT-NAME", "title":
+3. **`public/doc/tasks.json`:** add one entry per PR with the next free P-number: `{ "id": "P69-SHORT-NAME", "title":
    "<what and why, one paragraph>", "status": "done", "progress": 100 }` appended after the latest entry (the latest is
-   `P67-CLIP-RENDERERS-STATELESS`; the next is **P68**). Bump `updatedAt`. Edit the file surgically (insert text); do not
+   `P68-CLIP-RENDERERS-MEDIA`; the next is **P69**). Bump `updatedAt`. Edit the file surgically (insert text); do not
    re-serialise the whole JSON. `scripts/check-tasks-updated.mjs` fails a PR that changes `src/` without it. If an id
    is already taken, use the next number and say so in the PR.
 4. **AI guide rule:** append to `RULE_LIST` in `src/v2/domain/storyPrompt.ts` (append-only; numbers are positions;
@@ -110,7 +110,7 @@ required checks.
 6. Run `npm run gen:ai` after changing rules, tools or presets, and commit the regenerated files (tests fail if they are
    stale).
 7. `npx tsc -b && npx vitest run && npx vite build`.
-8. Commit in English; PR title `P68: …`; body says what, why, tests, and `Fixes #N` (or `Refs #N` if partial), plus
+8. Commit in English; PR title `P69: …`; body says what, why, tests, and `Fixes #N` (or `Refs #N` if partial), plus
    what was not verified. Push, open the PR, wait for `build` on the head SHA. Do not merge.
 
 ## 7. UI conventions
@@ -139,7 +139,7 @@ required checks.
 | `docs/v2/CLIP_PLUGIN_ARCHITECTURE.md` | clip type plugins: accepted design, decisions, Phase 1 progress |
 | `public/doc/tasks.json` | every task and its status |
 
-## 9. Recent history (P47–P67)
+## 9. Recent history (P47–P68)
 
 | Id | PR | One line |
 |---|---|---|
@@ -163,7 +163,8 @@ required checks.
 | P64 | #316 | Docs only: clip type plugin architecture proposal and this handoff. |
 | P65 | #317 | Clip type plugins Phase 1 step 1.1: `src/v2/clipTypes/` registry, core caps, parity test (no behaviour change). |
 | P66 | #318 | Step 1.2: domain predicates and export audio plan read the clip type registry (no behaviour change). |
-| P67 | — | Step 1.3a: text, placeholder and blank renderers move to `clipTypes/<id>/render.ts`; canvas-call golden + Chrome pixel parity. |
+| P67 | #319 | Step 1.3a: text, placeholder and blank renderers move to `clipTypes/<id>/render.ts`; canvas-call golden + Chrome pixel parity. |
+| P68 | — | Step 1.3b: html, video, image and audio renderers move to `clipTypes/<id>/render.ts` (`frame(host)`, shared `render/mediaClip.ts`); golden + Chrome pixel + export frame parity incl. a GLB clip. |
 
 ## 10. Known unverified areas
 
@@ -172,7 +173,8 @@ These have unit tests but were never checked end to end on real devices or with 
 - **iPhone Safari fullscreen and orientation** (P59): the CSS-rotate fallback and controls were tested in Chrome
   device emulation only.
 - **GLB / three.js export comparison** (P55, P57): no frame-by-frame comparison of preview vs exported MP4 for a code
-  clip that loads a real GLB with animation.
+  clip that loads a real GLB with animation. (P68 compared a GLB clip's export frames before and after the renderer
+  move, which proves no change, not preview-vs-MP4 equality.)
 - **Live WebMCP client sessions** (P12 onwards, P62, P63): tools are tested by calling them directly; no long session
   with a real browser agent client has been recorded since P62.
 - **Local file server CORS / Private Network Access** (P62): `attach_asset_version(s)` and `import_storyboard` with
@@ -198,8 +200,15 @@ change, each merged on green CI) is under way:
   canvas call for the fixture `src/v2/__fixtures__/renderParity.ts` against a golden recorded before the move; run
   with `RENDER_PARITY_DUMP=<dir>` to get per-frame call logs when it fails. Only regenerate the golden
   (`UPDATE_RENDER_GOLDEN=1`) for an intended look change, and say so in the PR.
-- **Next, 1.3b:** html, video, image and audio element sync out of `player.ts` (the stateful renderers). Check them
-  with the same golden plus a real-browser pixel comparison (see the P67 PR for the harness approach).
+- **1.3b done (P68):** html, video, image and audio render through `clipTypes/<id>/render.ts` with `frame(host)`
+  (called every frame for a visible clip with an asset version, with or without a canvas, so audio stays in sync).
+  The Player still owns the pools (media elements, iframes, gains, posters, WebCodecs export frames) and lends them
+  through `ClipMediaHost`; the per-frame `ClipFrameState` (`live`, `loads`, `stalled`, `missing`) replaces the old
+  locals of `draw()`. The shared element path is `render/mediaClip.ts`; an unregistered `clipType` uses
+  `clipTypes/unknown/render.ts` (today's element path, until 1.8). The parity fixture now has audio, a reversed video
+  overlay and a GLB code clip, and the jsdom test stubs media elements as loaded.
+- **Next, 1.4:** timeline and thumbnails (`TimelineClip.tsx`, `Timeline.tsx`, `useThumbs.ts`, `useMedia.ts`) read a
+  per-type `ui(id)`; check with UI tests and 390/1440 screenshots before and after.
 
 Until Phase 1 is finished, add new behaviour the existing way and note in the PR which switch points you touched, so
 the later steps can move them.
