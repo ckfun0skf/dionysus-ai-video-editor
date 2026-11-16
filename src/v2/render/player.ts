@@ -278,6 +278,24 @@ export class Player {
     if (!this.playing) this.draw();
   }
 
+  /**
+   * P77: while a block is dragged in the scene editor, draw `doc` for `blobKey` instead of the stored scene (the page
+   * is kept when only events moved, so the frame follows the drag live); `undefined` puts the stored scene back.
+   */
+  previewSceneDoc(blobKey: string, doc: SceneDoc | undefined) {
+    if (doc) {
+      if (!this.scenePreviews.has(blobKey)) this.scenePreviews.set(blobKey, this.sceneDocs.get(blobKey));
+      this.sceneDocs.set(blobKey, { doc, ready: Promise.resolve() });
+    } else {
+      if (!this.scenePreviews.has(blobKey)) return;
+      const was = this.scenePreviews.get(blobKey);
+      this.scenePreviews.delete(blobKey);
+      if (was) this.sceneDocs.set(blobKey, was); else this.sceneDocs.delete(blobKey);
+    }
+    if (!this.playing) this.draw();
+  }
+  private scenePreviews = new Map<string, { doc: SceneDoc | null | undefined; ready: Promise<void> } | undefined>();
+
   /** P74: the sandboxed iframe of a scene clip: the built-in scene page (render/scenePage.ts) for this document. */
   private sceneHost(placementId: string, blobKey: string, w: number, h: number): HtmlClipHost {
     // P76: keyed by what the page is built from (scenePageKey) once the scene is known, so an edit of events or

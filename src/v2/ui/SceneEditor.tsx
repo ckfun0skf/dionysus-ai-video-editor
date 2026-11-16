@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import {
-  addSceneEvent, addSceneLight, addSceneModel, addSceneObject, callTweens, clipVersion, duplicateSceneEvent, isVec3, modelAnimations, modelNodes,
+  addSceneEvent, addSceneLight, moveEventProblem, moveSceneEventTo, retimeSceneEvent, sceneSnapTargets, addSceneModel, addSceneObject, callTweens, clipVersion, duplicateSceneEvent, isVec3, modelAnimations, modelNodes,
   objectIdProblem, parseScene, removeSceneEvent, removeSceneLight, removeSceneObject, renameSceneObject, roundSec, SCENE_CAMERA, SCENE_EASES,
   SCENE_LIGHTS, SCENE_LOOPS, SCENE_SHAPES, sceneCallArgs, sceneCalls, sceneCameraBase, sceneLights, sceneSpan, sceneTracks, setSceneEventArg,
   setSceneEventCall, sourceAt, ticksToSeconds, TICKS_PER_SECOND, updateSceneEvent, updateSceneLight, updateSceneObject, updateSceneWorld,
   validateScene, versionOfPlacement, type Placement, type Project, type SceneArgField, type SceneDoc, type SceneEase, type SceneEvent,
-  type SceneIssue, type SceneLightType, type SceneObject, type SceneShape, type SceneTrack, type Vec3,
+  type SceneIssue, type SceneLightType, type SceneObject, type SceneShape, type SceneTrack, type Vec3, type RetimeEdge, type RetimeOptions,
 } from "../domain";
 import { cmd, type Engine } from "../engine";
 import type { BlobStore } from "../ports";
@@ -30,6 +30,8 @@ export interface SceneEditorProps {
   onClose: () => void;
   /** Hand a stored scene to the player so the preview shows it at once. */
   onPrime?: (blobKey: string, doc: SceneDoc) => void;
+  /** P77: draw this scene for `blobKey` while a block is dragged (`undefined` puts the stored one back). */
+  onPreview?: (blobKey: string, doc: SceneDoc | undefined) => void;
   /** Phone: the program preview canvas, mirrored at the top of the full-screen editor. */
   mirror?: () => HTMLCanvasElement | null | undefined;
   /** Start with this selection (tests, deep links). */
@@ -37,6 +39,12 @@ export interface SceneEditorProps {
 }
 
 const LANE = 48;
+/** P77: a block narrower than this gets its resize handles outside its edges, so its middle stays draggable. */
+const HANDLES_INSIDE = 44 * 3;
+
+/** P77: a drag in progress (kept in a ref; the pure result is in `Draft` state). */
+interface Drag { index: number; edge: RetimeEdge; x: number; y: number; pointerId: number; live: boolean; raf: number; label: string; apply?: (d: SceneDoc) => SceneDoc; stop: (commit: boolean) => void }
+interface Draft { doc: SceneDoc; index: number; edge: RetimeEdge; at: number; dur: number; snappedTo?: number; target?: string; problem?: string }
 
 /**
  * The scene editor (P76, Phase 2 step 2.3): a scene clip's own timeline, opened from the clip (a panel in place of
@@ -48,11 +56,19 @@ const LANE = 48;
  * Every committed edit (a field on blur / Enter / change, a button) is one gesture: the edited scene is stored as a
  * scene version and dispatched as ONE undo step, so the preview shows it at once. Saving follows the version-save
  * rules: "New version" makes one new version on the first edit of this editing session and the later edits of the
- * session update that version; "Replace current" overwrites the version the clip shows. Dragging blocks to retime
- * them is step 2.4 (P77).
+ * session update that version; "Replace current" overwrites the version the clip shows.
+ *
+ * P77 (step 2.4): blocks are dragged to retime them (mouse, pen and touch; on touch the block is selected first, so a
+ * swipe over the tracks still scrolls), and the selected block's edge handles change its start or length. A drag
+ * works on the scene it started from: every move applies one pure retime (domain/sceneRetime.ts) to it, the tracks
+ * draw the result and the preview shows it live (`onPreview`); the release stores it as ONE undo step through the same
+ * version rules, Esc or a cancelled pointer puts everything back. Edges snap to the playhead, other events and whole
+ * frames (the magnet toggle, or hold Alt to flip it for one drag); times stay inside the clip's range on the scene
+ * clock. Dropping a block on another object's track gives the event to that object when it has the same call. The
+ * ruler scrubs the playhead (the main player follows). Arrow keys nudge the focused block or handle by a frame.
  */
 export function SceneEditor(props: SceneEditorProps) {
-  const { engine, project, placement, blobs, mobile, time, playing, onSeek, onTogglePlay, onClose, onPrime, mirror } = props;
+  const { engine, project, placement, blobs, mobile, time, playing, onSeek, onTogglePlay, onClose, onPrime, onPreview, mirror } = props;
   const version = versionOfPlacement(project, placement);
   const blobKey = version?.media.blobKey;
   const [loaded, setLoaded] = useState<{ key: string; doc?: SceneDoc; error?: string }>();
@@ -81,7 +97,15 @@ export function SceneEditor(props: SceneEditorProps) {
   }, [blobKey, blobs]);
   const doc = cachedSceneDoc(blobKey) ?? (loaded && loaded.key === blobKey ? loaded.doc : undefined);
   const issues = useMemo(() => (doc ? validateScene(doc) : []), [doc]);
-  const tracks = useMemo(() => (doc ? sceneTracks(doc, 46 / pps) : []), [doc, pps]);
+  // P77: while a block is dragged the tracks draw the drag's result; the forms keep showing the stored scene.
+  const [snapOn, setSnapOn] = useState(true);
+  const [draft, setDraft] = useState<Draft>();
+  const drag = useRef<Drag | undefined>(undefined);
+  const tracksRef = useRef<HTMLDivElement>(null);
+  const preview = useRef(onPreview); preview.current = onPreview;
+  useEffect(() => () => drag.current?.stop(false), []);
+  const viewDoc = draft?.doc ?? doc;
+  const tracks = useMemo(() => (viewDoc ? sceneTracks(viewDoc, 46 / pps) : []), [viewDoc, pps]);
 
   // Scene-local time of the playhead and the clip's range on the scene's clock.
   const speed = placement.speed ?? 1;
@@ -156,7 +180,123 @@ export function SceneEditor(props: SceneEditorProps) {
     return <div className={`v2-scene-editor ${mobile ? "is-phone" : "is-desk"}`} role="dialog" aria-label="Scene editor">{header}<p className="v2-abnote">{err ?? "Loading scene…"}</p></div>;
   }
 
-  const span = sceneSpan(doc, outSec) + 1;
+  const fps = project.settings.fps > 0 ? project.settings.fps : 30;
+  const retimeOpts = (index: number, snapping: boolean, base: SceneDoc): RetimeOptions => ({
+    min: 0, max: outSec, fps, ...(snapping ? { snap: sceneSnapTargets(base, index, [0, localSec, inSec, outSec]), tol: 8 / pps } : {}),
+  });
+  const trackAt = (y: number): string | undefined => {
+    for (const el of tracksRef.current?.querySelectorAll<HTMLElement>("[data-track]") ?? []) {
+      const r = el.getBoundingClientRect();
+      if (el.dataset.track && r.height && y >= r.top && y < r.bottom) return el.dataset.track;
+    }
+    return undefined;
+  };
+  const edgeLabel = (edge: RetimeEdge) => (edge === "move" ? "move event" : edge === "start" ? "event start" : "event length");
+
+  /** P77: start dragging block `index` (its body moves it, a handle moves one edge). */
+  const startDrag = (e: ReactPointerEvent<HTMLElement>, index: number, edge: RetimeEdge) => {
+    if (e.button !== 0 || !doc || !blobKey || drag.current) return;
+    const touch = e.pointerType === "touch" || e.pointerType === "pen";
+    if (touch && edge === "move" && !(sel.kind === "event" && sel.index === index)) return; // swipe scrolls; a tap selects
+    if (edge !== "move") e.preventDefault();
+    e.stopPropagation();
+    const scroll0 = tracksRef.current?.scrollLeft ?? 0;
+    const base = doc, key = blobKey, from = String(base.events?.[index]?.obj), snapDefault = snapOn, save = edit;
+    let last: { x: number; y: number; alt: boolean } | undefined;
+    const g: Drag = { index, edge, x: e.clientX, y: e.clientY, pointerId: e.pointerId, live: false, raf: 0, label: edgeLabel(edge), stop: () => undefined };
+    const compute = (x: number, y: number, alt: boolean) => {
+      last = { x, y, alt };
+      const opts = retimeOpts(index, snapDefault !== alt, base);
+      const dx = (x - g.x + (tracksRef.current?.scrollLeft ?? 0) - scroll0) / pps;
+      const r = retimeSceneEvent(base, index, edge, dx, opts);
+      let target: string | undefined, problem: string | undefined;
+      if (edge === "move" && Math.abs(y - g.y) > LANE / 2) { const t = trackAt(y); if (t !== undefined && t !== from) { target = t; problem = moveEventProblem(r.doc, index, t); } }
+      const to = target && !problem ? target : undefined;
+      g.apply = (d) => { const x2 = retimeSceneEvent(d, index, edge, dx, opts).doc; return to ? moveSceneEventTo(x2, index, to).doc : x2; };
+      g.label = to ? `move event to ${to}` : edgeLabel(edge);
+      const shown = to ? moveSceneEventTo(r.doc, index, to).doc : r.doc;
+      setDraft({ doc: r.doc, index, edge, at: r.at, dur: r.dur, snappedTo: r.snappedTo, target, problem });
+      cancelAnimationFrame(g.raf);
+      g.raf = requestAnimationFrame(() => preview.current?.(key, shown));
+    };
+    const move = (ev: PointerEvent) => {
+      if (ev.pointerId !== g.pointerId) return;
+      if (!g.live) {
+        if (Math.hypot(ev.clientX - g.x, ev.clientY - g.y) < 4) return;
+        g.live = true;
+        setSel({ kind: "event", index });
+      }
+      ev.preventDefault();
+      // Near an edge of the tracks the view scrolls along (as far as the pointer moves), once the pointer has really
+      // gone that way: a sideways drag along the bottom row must not scroll to (and drop on) another track.
+      const box = tracksRef.current, r = box?.getBoundingClientRect();
+      if (box && r && r.height) {
+        const goneY = Math.abs(ev.clientY - g.y) > LANE / 2, goneX = Math.abs(ev.clientX - g.x) > LANE / 2;
+        const edgeY = !goneY ? 0 : ev.clientY > r.bottom - 28 ? 1 : ev.clientY < r.top + 72 && box.scrollTop > 0 ? -1 : 0;
+        const edgeX = !goneX ? 0 : ev.clientX > r.right - 28 ? 1 : ev.clientX < r.left + LABEL_W(mobile) + 16 && box.scrollLeft > 0 ? -1 : 0;
+        if (edgeY) box.scrollTop += edgeY * 16;
+        if (edgeX) box.scrollLeft += edgeX * 16;
+      }
+      compute(ev.clientX, ev.clientY, ev.altKey);
+    };
+    const up = (ev: PointerEvent) => { if (ev.pointerId === g.pointerId) g.stop(g.live); };
+    const cancel = (ev: PointerEvent) => { if (ev.pointerId === g.pointerId) g.stop(false); };
+    const keys = (ev: KeyboardEvent) => {
+      if (ev.key === "Escape") { ev.preventDefault(); ev.stopPropagation(); g.stop(false); }
+      else if (ev.key === "Alt" && g.live && last) compute(last.x, last.y, ev.type === "keydown");
+    };
+    g.stop = (commit) => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", cancel);
+      window.removeEventListener("keydown", keys, true);
+      window.removeEventListener("keyup", keys, true);
+      cancelAnimationFrame(g.raf);
+      if (drag.current === g) drag.current = undefined;
+      const apply = g.apply;
+      const done = () => { preview.current?.(key, undefined); setDraft(undefined); };
+      if (commit && apply) void save(g.label, (d) => apply(d)).finally(done);
+      else done();
+    };
+    drag.current = g;
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", cancel);
+    window.addEventListener("keydown", keys, true);
+    window.addEventListener("keyup", keys, true);
+  };
+
+  /** P77: arrow keys on a block (move) or a handle (one edge): one frame, ten with Shift; one undo step each. */
+  const nudge = (e: React.KeyboardEvent, index: number, edge: RetimeEdge) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    e.preventDefault(); e.stopPropagation();
+    const n = (e.key === "ArrowLeft" ? -1 : 1) * (e.shiftKey ? 10 : 1);
+    setSel({ kind: "event", index });
+    void edit(edgeLabel(edge), (d) => {
+      const ev = d.events?.[index];
+      if (!ev) return d;
+      // To the n-th whole frame from the edge (an edge between frames first goes to the next one).
+      const from = edge === "end" ? ev.at + (ev.dur ?? 0) : ev.at;
+      const f = from * fps, to = (n > 0 ? Math.floor(f + 1e-6) + n : Math.ceil(f - 1e-6) + n) / fps;
+      return retimeSceneEvent(d, index, edge, to - from, { min: 0, max: outSec, fps, snap: [] }).doc;
+    });
+  };
+
+  /** Scrub the playhead along the ruler (scene time); the main player follows. */
+  const scrub = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    const el = e.currentTarget, id = e.pointerId;
+    const to = (x: number) => { const r = el.getBoundingClientRect(); seekLocal((x - r.left) / pps); };
+    to(e.clientX);
+    const mv = (ev: PointerEvent) => { if (ev.pointerId === id) to(ev.clientX); };
+    const end = (ev: PointerEvent) => {
+      if (ev.pointerId !== id) return;
+      window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", end); window.removeEventListener("pointercancel", end);
+    };
+    window.addEventListener("pointermove", mv); window.addEventListener("pointerup", end); window.addEventListener("pointercancel", end);
+  };
+
+  const span = sceneSpan(viewDoc ?? doc, outSec) + 1;
   const width = Math.ceil(span * pps);
   const ticks: number[] = [];
   const step = pps >= 80 ? 0.5 : pps >= 40 ? 1 : 2;
@@ -170,45 +310,57 @@ export function SceneEditor(props: SceneEditorProps) {
   };
 
   const tracksEl = (
-    <div className="v2-sed-tracks" role="group" aria-label="Scene tracks">
+    <div ref={tracksRef} className={`v2-sed-tracks ${draft ? "is-dragging" : ""}`} role="group" aria-label="Scene tracks">
       <div className="v2-sed-grid" style={{ width: width + LABEL_W(mobile) }}>
         <div className="v2-sed-ruler">
           <div className="v2-sed-corner" style={{ width: LABEL_W(mobile) }}>
             <button type="button" className="v2-icon" aria-label="Zoom out" title="Zoom out" onClick={() => setPps((x) => Math.max(24, Math.round(x / 1.5)))}><Ic g="zoom-out" size={16} /></button>
             <button type="button" className="v2-icon" aria-label="Zoom in" title="Zoom in" onClick={() => setPps((x) => Math.min(400, Math.round(x * 1.5)))}><Ic g="zoom-in" size={16} /></button>
           </div>
-          <div className="v2-sed-scale" style={{ width }} onPointerDown={(e) => { const r = e.currentTarget.getBoundingClientRect(); seekLocal((e.clientX - r.left) / pps); }} title="Tap to move the playhead (scene time)">
+          <div className="v2-sed-scale" data-testid="scene-ruler" style={{ width }} onPointerDown={scrub} title="Tap or drag to move the playhead (scene time)">
             <span className="v2-sed-out" style={{ left: 0, width: Math.max(0, inSec * pps) }} />
             <span className="v2-sed-out" style={{ left: outSec * pps, width: Math.max(0, width - outSec * pps) }} />
             {ticks.map((s) => <span key={s} className={`v2-sed-tick ${Math.abs(s - Math.round(s)) < 1e-9 ? "is-major" : ""}`} style={{ left: s * pps }}>{Math.abs(s - Math.round(s)) < 1e-9 ? `${s}s` : ""}</span>)}
+            <span className="v2-sed-knob" style={{ left: localSec * pps }} aria-hidden />
           </div>
         </div>
         {tracks.map((t) => {
           const on = (sel.kind === "object" && sel.id === t.id) || (sel.kind === "scene" && t.kind === "camera");
-          return <div key={t.id || "missing"} className={`v2-sed-track kind-${t.kind} ${on ? "is-sel" : ""}`} style={{ height: t.rows * LANE + 4 }}>
+          const drop = draft?.target === t.id && t.id ? (draft.problem ? "is-nodrop" : "is-drop") : "";
+          return <div key={t.id || "missing"} className={`v2-sed-track kind-${t.kind} ${on ? "is-sel" : ""} ${drop}`} style={{ height: t.rows * LANE + 4 }}>
             <div className="v2-sed-thead" style={{ width: LABEL_W(mobile) }}>
               <button type="button" className="v2-sed-tname" aria-pressed={on} title={`${t.label} · ${t.detail}`} onClick={() => pickTrack(t)}>
                 <Ic g={t.kind === "camera" ? "camera" : t.kind === "missing" ? "⚠" : "scene"} size={16} /><span>{t.label}</span>
               </button>
               {t.kind !== "missing" && <button type="button" className="v2-icon v2-sed-tadd" aria-label={`Add event to ${t.label}`} title={`Add an event to ${t.label} at the playhead`} onClick={() => addEventOn(t)}><Ic g="＋" size={16} /></button>}
             </div>
-            <div className="v2-sed-lane" style={{ width }}>
+            <div className="v2-sed-lane" data-track={t.id} style={{ width }}>
               <span className="v2-sed-out" style={{ left: 0, width: Math.max(0, inSec * pps) }} />
               <span className="v2-sed-out" style={{ left: outSec * pps, width: Math.max(0, width - outSec * pps) }} />
               {t.blocks.map((b) => {
                 const isSel = sel.kind === "event" && sel.index === b.index;
                 const bad = issues.some((i) => i.level === "error" && (i.path === `events[${b.index}]` || i.path.startsWith(`events[${b.index}].`)));
-                return <button key={b.index} type="button" className={`v2-sed-block ${b.dur ? "has-dur" : "is-instant"} ${isSel ? "is-sel" : ""} ${bad ? "is-bad" : ""}`}
-                  style={{ left: b.at * pps, width: Math.max(b.dur * pps, 44), top: b.row * LANE + 2 }}
-                  aria-pressed={isSel} aria-label={`${t.label}.${b.call} at ${b.at}s${b.dur ? ` for ${b.dur}s` : ""}`} title={`${b.call} · ${b.at}s${b.dur ? ` → ${+(b.end).toFixed(3)}s` : ""}`}
+                const w = Math.max(b.dur * pps, 44), top = b.row * LANE + 2;
+                const inside = w >= HANDLES_INSIDE;
+                const name = `${t.label}.${b.call}`;
+                const handle = (edge: "start" | "end") => <span key={edge} role="slider" tabIndex={0} className={`v2-sed-handle is-${edge} ${inside ? "is-inside" : ""}`}
+                  aria-label={`${edge === "start" ? "Start" : "End"} of ${name}`} aria-valuemin={0} aria-valuemax={+outSec.toFixed(3)} aria-valuenow={edge === "start" ? b.at : +b.end.toFixed(3)} aria-valuetext={`${edge === "start" ? b.at : +b.end.toFixed(3)}s`}
+                  title={edge === "start" ? "Drag to change when it starts (the end stays)" : "Drag to change how long it lasts"}
+                  style={{ left: edge === "start" ? b.at * pps - (inside ? 0 : 44) : b.at * pps + w - (inside ? 44 : 0), top }}
+                  onPointerDown={(e) => startDrag(e, b.index, edge)} onKeyDown={(e) => nudge(e, b.index, edge)} />;
+                return [<button key={b.index} type="button" className={`v2-sed-block ${b.dur ? "has-dur" : "is-instant"} ${isSel ? "is-sel" : ""} ${bad ? "is-bad" : ""} ${draft?.index === b.index ? "is-drag" : ""}`}
+                  style={{ left: b.at * pps, width: w, top }}
+                  aria-pressed={isSel} aria-label={`${name} at ${b.at}s${b.dur ? ` for ${b.dur}s` : ""}`} title={`${b.call} · ${b.at}s${b.dur ? ` → ${+(b.end).toFixed(3)}s` : ""} · drag to move${isSel ? "" : " (on touch: tap first)"}`}
+                  onPointerDown={(e) => startDrag(e, b.index, "move")} onKeyDown={(e) => nudge(e, b.index, "move")}
                   onClick={() => setSel({ kind: "event", index: b.index })}>
                   <span>{b.call}</span>
-                </button>;
+                </button>, ...(isSel && b.dur > 0 ? [handle("start"), handle("end")] : [])];
               })}
             </div>
           </div>;
         })}
         <div className="v2-sed-playhead" style={{ left: LABEL_W(mobile) + localSec * pps }} aria-hidden />
+        {draft?.snappedTo !== undefined && <div className="v2-sed-guide" data-testid="scene-snap-guide" style={{ left: LABEL_W(mobile) + draft.snappedTo * pps }} aria-hidden />}
       </div>
     </div>
   );
@@ -226,6 +378,9 @@ export function SceneEditor(props: SceneEditorProps) {
     <div className="v2-sed-bar">
       <button type="button" className="v2-icon v2-sed-play" aria-label={playing ? "Pause" : "Play"} title={playing ? "Pause" : "Play"} onClick={onTogglePlay}><Ic g={playing ? "❚❚" : "▶"} size={18} /></button>
       <span className="v2-sed-time" title="Scene time at the playhead">{localSec.toFixed(2)}s</span>
+      <button type="button" className={`v2-icon v2-sed-snap ${snapOn ? "is-on" : ""}`} aria-pressed={snapOn} aria-label="Snap" title={`Snapping ${snapOn ? "on" : "off"}: edges land on the playhead, other events and whole frames (hold Alt while dragging to flip)`} onClick={() => setSnapOn((x) => !x)}><Ic g="🧲" size={18} /></button>
+      {draft && <span className={`v2-sed-drag ${draft.problem ? "is-bad" : ""}`} role="status" data-testid="scene-drag-status">{draft.problem
+        ?? `${draft.at}s${draft.dur ? ` → ${+(draft.at + draft.dur).toFixed(3)}s` : ""}${draft.snappedTo !== undefined ? " · snapped" : ""}${draft.target ? ` · to ${draft.target}` : ""}`}</span>}
       <span className="v2-spacer" />
       {errors > 0 && <span className="v2-sed-errs" title="Problems in the scene (select an item to see its own)"><Ic g="⚠" size={14} /> {errors}</span>}
       <div className="v2-sed-addwrap">
@@ -242,10 +397,11 @@ export function SceneEditor(props: SceneEditorProps) {
   return (
     <div className={`v2-scene-editor ${mobile ? "is-phone" : "is-desk"}`} role="dialog" aria-label="Scene editor" data-testid="scene-editor" onKeyDown={(e) => {
       // Inside the editor the app's shortcuts are off (it is a dialog); these few work here, never in a field.
+      // Esc: a field with typed changes reverts them first (it stops the key); otherwise it closes the editor.
+      if (e.key === "Escape") { if (!drag.current) { e.preventDefault(); onClose(); } return; }
       if ((e.target as HTMLElement).closest?.("input,select,textarea")) return;
       const mod = e.metaKey || e.ctrlKey, k = e.key.toLowerCase();
-      if (e.key === "Escape") { e.preventDefault(); onClose(); }
-      else if (mod && (k === "z" || k === "y")) { e.preventDefault(); if (k === "y" || e.shiftKey) engine.redo(); else engine.undo(); }
+      if (mod && (k === "z" || k === "y")) { e.preventDefault(); if (k === "y" || e.shiftKey) engine.redo(); else engine.undo(); }
       else if (e.key === " " && !mod) { e.preventDefault(); onTogglePlay(); }
       else if ((e.key === "Delete" || e.key === "Backspace") && sel.kind === "event") { e.preventDefault(); const i = sel.index; void edit("delete event", (d) => removeSceneEvent(d, i)); setSel({ kind: "scene" }); }
     }}>
@@ -427,7 +583,7 @@ function NumField({ label, value, onCommit, min, max, step, optional }: { label:
     setText(fmt(n));
     if (n !== value) onCommit(n);
   };
-  return <Field label={label}><input type="number" inputMode="decimal" value={text} step={step} min={min} max={max} placeholder={optional ? "—" : undefined} onChange={(e) => setText(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") { setText(value === undefined ? "" : fmt(value)); e.stopPropagation(); } }} /></Field>;
+  return <Field label={label}><input type="number" inputMode="decimal" value={text} step={step} min={min} max={max} placeholder={optional ? "—" : undefined} onChange={(e) => setText(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape" && text !== (value === undefined ? "" : fmt(value))) { setText(value === undefined ? "" : fmt(value)); e.stopPropagation(); } }} /></Field>;
 }
 
 function Vec3Field({ label, value, onCommit }: { label: string; value: Vec3; onCommit: (v: Vec3) => void }) {
@@ -451,13 +607,13 @@ function ListField({ label, value, hint, onCommit }: { label: string; value: num
     const v = parts.length === 1 ? parts[0] : parts;
     if (JSON.stringify(v) !== JSON.stringify(value)) onCommit(v);
   };
-  return <Field label={label} error={err}><input type="text" inputMode="decimal" value={text} placeholder={hint} onChange={(e) => setText(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} /></Field>;
+  return <Field label={label} error={err}><input type="text" inputMode="decimal" value={text} placeholder={hint} onChange={(e) => setText(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape" && text !== show(value)) { setText(show(value)); setErr(undefined); e.stopPropagation(); } }} /></Field>;
 }
 
 function TextField({ label, value, onCommit, error }: { label: string; value: string; onCommit: (v: string) => void; error?: string }) {
   const [text, setText] = useState(value);
   useEffect(() => setText(value), [value]);
-  return <Field label={label} error={error}><input type="text" value={text} onChange={(e) => setText(e.target.value)} onBlur={() => { if (text.trim() !== value) onCommit(text.trim()); }} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} /></Field>;
+  return <Field label={label} error={error}><input type="text" value={text} onChange={(e) => setText(e.target.value)} onBlur={() => { if (text.trim() !== value) onCommit(text.trim()); }} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape" && text !== value) { setText(value); e.stopPropagation(); } }} /></Field>;
 }
 
 function SelectField({ label, value, options, labels, onCommit }: { label: string; value: string; options: string[]; labels?: Record<string, string>; onCommit: (v: string) => void }) {

@@ -55,6 +55,8 @@ import { stickerFile, stickers } from "./libraryItems";
 import { newCodeClipHtml } from "./codeSamples";
 import { ScenePanel } from "./ScenePanel";
 import { SceneEditor } from "./SceneEditor";
+/** P77: the desktop scene editor gets at least this much height (the timeline splitter's own size is kept). */
+const SCENE_EDITOR_MIN_H = 440;
 import { sceneAsset } from "./sceneAsset";
 import { CleanupDialog } from "./CleanupDialog";
 import { TrackSheet } from "./TrackSheet";
@@ -1344,7 +1346,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const sceneEditPl = sceneEdit ? findPlacement(comp, sceneEdit)?.placement : undefined;
   const sceneEditor = sceneEditPl && sceneEditPl.clipType === "scene" ? (
     <SceneEditor key={sceneEditPl.id} engine={engine} project={project} placement={sceneEditPl} blobs={storage.blobs} mobile={mobile} time={time} playing={playing}
-      onSeek={seek} onTogglePlay={togglePlay} onClose={() => setSceneEdit(undefined)} onPrime={(k, d) => player.primeSceneDoc(k, d)} mirror={mobile ? () => canvasRef.current : undefined} />
+      onSeek={seek} onTogglePlay={togglePlay} onClose={() => setSceneEdit(undefined)} onPrime={(k, d) => player.primeSceneDoc(k, d)} onPreview={(k, d) => player.previewSceneDoc(k, d)} mirror={mobile ? () => canvasRef.current : undefined} />
   ) : undefined;
   const preview = (
     <section className="v2-preview" aria-label="Preview" style={mobile ? { height: `${previewVh}dvh` } : undefined}>
@@ -1522,7 +1524,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           {animOpen && !textOpen && selected && isText && <Sheet label="Animation" className="v2-msheet-insp v2-anim-sheet" snapTo={animLoop ? 0 : undefined} extra={scopeChip || undefined} onClose={closeAnim}><AnimationPicker engine={engine} placement={selected.placement} onPicked={() => setAnimLoop(true)} /></Sheet>}
         </>
       ) : (
-        <div className="v2-dshell" style={{ gridTemplateColumns: `${lay.leftOpen ? lay.left : 0}px ${lay.leftOpen ? 5 : 0}px minmax(0,1fr) ${lay.rightOpen ? 5 : 0}px ${lay.rightOpen ? lay.right : 0}px`, gridTemplateRows: `minmax(0,1fr) 5px ${lay.timeline}px` }}>
+        <div className="v2-dshell" style={{ gridTemplateColumns: `${lay.leftOpen ? lay.left : 0}px ${lay.leftOpen ? 5 : 0}px minmax(0,1fr) ${lay.rightOpen ? 5 : 0}px ${lay.rightOpen ? lay.right : 0}px`, gridTemplateRows: `minmax(0,1fr) 5px ${sceneEditor ? Math.max(lay.timeline, SCENE_EDITOR_MIN_H) : lay.timeline}px` }}>
           {lay.leftOpen && <div className="v2-dpane v2-dpane-left">{assetBrowser}</div>}
           {pickerEl}
           {lay.leftOpen && <Splitter label="Resize asset panel" value={lay.left} dir="right" min={LIMITS.left[0]} max={LIMITS.left[1]} onChange={(v) => resize({ left: v })} onCommit={commitSizes} onReset={() => { resize({ left: DEFAULT_SIZES.left }); commitSizes(); }} />}
