@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import {
   addSceneEvent, addSceneLight, moveEventProblem, moveSceneEventTo, retimeSceneEvent, sceneSnapTargets, addSceneModel, addSceneObject, callTweens, clipVersion, duplicateSceneEvent, isVec3, modelAnimations, modelNodes,
+  applyGizmo, gizmoModeOfProp, gizmoPropOfCall, gizmoTargetLabel, gizmoViewTime, stateAt, type GizmoValue, type SceneState,
   objectIdProblem, parseScene, removeSceneEvent, removeSceneLight, removeSceneObject, renameSceneObject, roundSec, SCENE_CAMERA, SCENE_EASES,
   SCENE_LIGHTS, SCENE_LOOPS, SCENE_SHAPES, sceneCallArgs, sceneCalls, sceneCameraBase, sceneLights, sceneSpan, sceneTracks, setSceneEventArg,
   setSceneEventCall, sourceAt, ticksToSeconds, TICKS_PER_SECOND, updateSceneEvent, updateSceneLight, updateSceneObject, updateSceneWorld,
@@ -13,6 +15,7 @@ import { readAttachedFiles } from "./CodeEditor";
 import { Ic } from "./Icon";
 import { cachedSceneDoc, rememberSceneDoc, sceneVersion } from "./sceneAsset";
 import { sceneDraftKey, sceneDrafts, type SceneDraft, type SceneDraftStore } from "./sceneDrafts";
+import { SceneEditView, type EditDragPhase, type EditViewApi, type EditViewOpts } from "./SceneEditView";
 import { Sheet } from "./Sheet";
 import { ConfirmDialog } from "./Timeline";
 
@@ -41,6 +44,8 @@ export interface SceneEditorProps {
   initialSel?: SceneSel;
   /** P80: where unsaved drafts are kept (default: this device's IndexedDB). */
   drafts?: SceneDraftStore;
+  /** P81a (desktop): the program preview's box; the Edit view is drawn over it (else inside the editor). */
+  viewHost?: () => HTMLElement | null | undefined;
 }
 
 const LANE = 48;
@@ -58,10 +63,14 @@ interface Draft { doc: SceneDoc; index: number; edge: RetimeEdge; at: number; du
  * header) edits it in the side panel: event time, length, ease and arguments; object base properties; world, camera
  * and lights. Objects and events can be added and deleted.
  *
- * Every committed edit (a field on blur / Enter / change, a button) is one gesture: the edited scene is stored as a
- * scene version and dispatched as ONE undo step, so the preview shows it at once. Saving follows the version-save
- * rules: "New version" makes one new version on the first edit of this editing session and the later edits of the
- * session update that version; "Replace current" overwrites the version the clip shows.
+ * Every committed edit (a field on blur / Enter / change, a button, a drag) is one step of the editor's own undo; the
+ * preview shows the unsaved scene at once and Save stores it (P80: Replace current or Save as new version, ONE
+ * project undo step), with device drafts, Cancel and the phone context toolbar.
+ *
+ * P81a: the preview has a Camera view (the clip as it renders) and an Edit view (SceneEditView: the same scene page in
+ * editor mode with an orbit camera, a grid and move / rotate / scale gizmos). A gizmo drag writes the selected event's
+ * end value, or with Auto-key a key ending at the playhead, or the object's start value (domain/sceneGizmo.ts), as ONE
+ * step of the editor's undo.
  *
  * P77 (step 2.4): blocks are dragged to retime them (mouse, pen and touch; on touch the block is selected first, so a
  * swipe over the tracks still scrolls), and the selected block's edge handles change its start or length. A drag
@@ -88,6 +97,14 @@ export function SceneEditor(props: SceneEditorProps) {
   const [dialog, setDialog] = useState<"save" | "discard" | { restore: SceneDraft }>();
   /** P80 (phone): the form section open in the bottom sheet. */
   const [part, setPart] = useState<Part>();
+  /** P81a: the preview mode, the gizmo settings, and the values of a gizmo drag in progress. */
+  const [view, setView] = useState<"camera" | "edit">("camera");
+  const [gz, setGz] = useState<EditViewOpts & { autoKey: boolean }>({ mode: "translate", axis: "free", snap: false, autoKey: false });
+  const gzOpts = useMemo<EditViewOpts>(() => ({ mode: gz.mode, axis: gz.axis, snap: gz.snap }), [gz.mode, gz.axis, gz.snap]);
+  const [gzLive, setGzLive] = useState<{ id: string; value: GizmoValue }>();
+  const viewApi = useRef<EditViewApi | null>(null);
+  const gzMoved = useRef(false);
+  const viewState = useRef<{ doc: SceneDoc; at: number; s: SceneState }>();
   const fileInput = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const selKey = sel.kind === "event" ? `e${sel.index}` : sel.kind === "object" ? `o${sel.id}` : "s";
@@ -146,6 +163,13 @@ export function SceneEditor(props: SceneEditorProps) {
 
   const doc = work?.doc;
   const dirty = !!work && work.doc !== work.saved;
+  // P81a: selecting a move / rotate / scale event picks the matching gizmo.
+  useEffect(() => {
+    if (sel.kind !== "event") return;
+    const e = workRef.current?.doc.events?.[sel.index];
+    const p = e ? gizmoPropOfCall(e.call) : undefined;
+    if (p) setGz((g) => (g.mode === gizmoModeOfProp[p] ? g : { ...g, mode: gizmoModeOfProp[p] }));
+  }, [selKey]); // eslint-disable-line react-hooks/exhaustive-deps
   /** Save can't overwrite: the draft was made from another version, or the scene changed outside the editor. */
   const newOnly = !!work && (work.outside || work.restoredFrom !== undefined);
   const issues = useMemo(() => (doc ? validateScene(doc) : []), [doc]);
@@ -503,6 +527,10 @@ export function SceneEditor(props: SceneEditorProps) {
       <button type="button" className={`v2-icon v2-sed-snap ${snapOn ? "is-on" : ""}`} aria-pressed={snapOn} aria-label="Snap" title={`Snapping ${snapOn ? "on" : "off"}: edges land on the playhead, other events and whole frames (hold Alt while dragging to flip)`} onClick={() => setSnapOn((x) => !x)}><Ic g="🧲" size={18} /></button>
       {draft && <span className={`v2-sed-drag ${draft.problem ? "is-bad" : ""}`} role="status" data-testid="scene-drag-status">{draft.problem
         ?? `${draft.at}s${draft.dur ? ` → ${+(draft.at + draft.dur).toFixed(3)}s` : ""}${draft.snappedTo !== undefined ? " · snapped" : ""}${draft.target ? ` · to ${draft.target}` : ""}`}</span>}
+      <div className="v2-sed-viewtoggle" role="group" aria-label="Preview">
+        <button type="button" aria-pressed={view === "camera"} aria-label="Camera view" title="Camera view: the shot as the clip renders it" onClick={() => setView("camera")}><Ic g="camera" size={18} /><span>{mobile ? "Shot" : "Camera view"}</span></button>
+        <button type="button" aria-pressed={view === "edit"} aria-label="Edit view" title="Edit view: orbit around the scene, pick objects and move, rotate or scale them" onClick={() => setView("edit")}><Ic g="move3d" size={18} /><span>{mobile ? "Edit" : "Edit view"}</span></button>
+      </div>
       <span className="v2-spacer" />
       {errors > 0 && <span className="v2-sed-errs" title="Problems in the scene (select an item to see its own)"><Ic g="⚠" size={14} /> {errors}</span>}
       {!mobile && <div className="v2-sed-addwrap">
@@ -512,6 +540,56 @@ export function SceneEditor(props: SceneEditorProps) {
       <input ref={fileInput} type="file" accept=".glb,model/gltf-binary" hidden data-testid="scene-editor-model-input" onChange={(e) => void addModel(e.currentTarget.files)} />
     </div>
   );
+
+  // P81a: the Edit view with its floating chip bar (gizmo mode, axis, snap, Auto-key, reset view).
+  const gzObjId = sel.kind === "object" ? sel.id : sel.kind === "event" ? selEventNow?.obj : undefined;
+  const gzSel = gzObjId && gzObjId !== SCENE_CAMERA && doc.objects.some((o) => o.id === gzObjId) ? gzObjId : undefined;
+  const gzO = { selEvent: sel.kind === "event" ? sel.index : undefined, autoKey: gz.autoKey, at: atNow };
+  const editDoc = draft?.doc ?? doc;
+  const viewAt = gizmoViewTime(editDoc, gzSel, gz.mode, gzO);
+  if (!viewState.current || viewState.current.doc !== editDoc || viewState.current.at !== viewAt) viewState.current = { doc: editDoc, at: viewAt, s: stateAt(editDoc, viewAt) };
+  const onGizmo = (phase: EditDragPhase, id: string, value: GizmoValue) => {
+    if (phase === "start" || phase === "move") { gzMoved.current = phase === "move"; setGzLive({ id, value }); return; }
+    setGzLive(undefined);
+    if (phase === "cancel") { setNote("Drag cancelled."); return; }
+    // A press on a handle that never moved (a tap on the gizmo) changes nothing: no undo step, no "edited".
+    if (!gzMoved.current) return;
+    gzMoved.current = false;
+    const mode = gz.mode, o = gzO;
+    void edit(`${mode === "translate" ? "move" : mode} ${id}`, (d) => { const r = applyGizmo(d, id, mode, value, o); return { doc: r.doc, note: r.note }; });
+  };
+  const onPick = (id: string | null) => {
+    if (!id) { setSel({ kind: "scene" }); return; }
+    if (gzSel !== id || sel.kind !== "event") setSel({ kind: "object", id });
+  };
+  const gzChip = (label: string, icon: string, on: boolean, run: () => void, title = label, text = !mobile) =>
+    <button type="button" className={`v2-sed-chip${on ? " is-on" : ""}`} aria-pressed={on} aria-label={label} title={title} onClick={run}><Ic g={icon} size={18} />{text && <span>{label}</span>}</button>;
+  const fmtV = (v: Vec3) => v.map((x) => +x.toFixed(2)).join(", ");
+  const gzInfo = gzLive
+    ? `${gz.mode === "translate" ? "Position" : gz.mode === "rotate" ? "Rotation°" : "Scale"} ${fmtV(gzLive.value[gz.mode === "translate" ? "position" : gz.mode === "rotate" ? "rotation" : "scale"])}`
+    : gzSel ? `Drag writes ${gizmoTargetLabel(doc, gzSel, gz.mode, gzO)}${viewAt !== atNow ? ` · showing ${viewAt}s` : ""}`
+      : mobile ? "Tap an object to select it · one finger orbits · two fingers pan and zoom" : "Click an object to select it · drag to orbit · right-drag to pan · wheel to zoom";
+  const editView = view === "edit" && (
+    <div className="v2-sed-editview" data-testid="scene-edit-view">
+      <SceneEditView doc={editDoc} state={viewState.current.s} sel={gzSel} opts={gzOpts} touch={mobile} onPick={onPick} onDrag={onGizmo} api={viewApi} />
+      <div className="v2-sed-chips is-modes" role="toolbar" aria-label="Gizmo">
+        {gzChip("Move", "move3d", gz.mode === "translate", () => setGz((g) => ({ ...g, mode: "translate" })), "Move (W)", false)}
+        {gzChip("Rotate", "rotate3d", gz.mode === "rotate", () => setGz((g) => ({ ...g, mode: "rotate" })), "Rotate (E)", false)}
+        {gzChip("Scale", "scale3d", gz.mode === "scale", () => setGz((g) => ({ ...g, mode: "scale" })), "Scale (R)", false)}
+      </div>
+      <div className="v2-sed-chips is-opts" role="toolbar" aria-label="Gizmo options">
+        <div className="v2-sed-axes" role="group" aria-label="Axis">
+          {(["x", "y", "z", "free"] as const).map((a) => <button key={a} type="button" className={`v2-sed-chip is-axis is-${a}${gz.axis === a ? " is-on" : ""}`} aria-pressed={gz.axis === a}
+            aria-label={a === "free" ? "Free (all axes)" : `${a.toUpperCase()} axis only`} title={a === "free" ? "All axes" : `Only the ${a.toUpperCase()} axis`} onClick={() => setGz((g) => ({ ...g, axis: a }))}>{a === "free" ? "Free" : a.toUpperCase()}</button>)}
+        </div>
+        {gzChip("Snap", "🧲", gz.snap, () => setGz((g) => ({ ...g, snap: !g.snap })), "Snap: 0.25 units, 15°, 0.1 scale steps")}
+        {gzChip("Auto-key", "key", gz.autoKey, () => setGz((g) => ({ ...g, autoKey: !g.autoKey })), "Auto-key: a drag adds or updates an event that ends at the playhead (else it changes the start value)")}
+        {gzChip("Reset view", "focus", false, () => viewApi.current?.home(), "Back to the scene camera's view")}
+      </div>
+      <p className="v2-sed-gzinfo" role="status" data-testid="scene-gizmo-info">{gzInfo}</p>
+    </div>
+  );
+  const viewHost = !mobile && editView ? props.viewHost?.() : undefined;
 
   // P80 (phone): context actions for the selection, like the main timeline's bottom toolbar; a section opens in a sheet.
   const ctxTool = (icon: string, label: string, run: () => void, opts: { on?: boolean; danger?: boolean; title?: string } = {}) =>
@@ -568,17 +646,20 @@ export function SceneEditor(props: SceneEditorProps) {
       // Esc: a field with typed changes reverts them first (it stops the key); otherwise it closes the editor (asking
       // first when there are unsaved changes).
       if (dialog) return;
+      if (e.key === "Escape" && gzLive) { e.preventDefault(); viewApi.current?.cancel(); return; }
       if (e.key === "Escape") { if (!drag.current) { e.preventDefault(); if (part) setPart(undefined); else requestClose(); } return; }
       const mod = e.metaKey || e.ctrlKey, k = e.key.toLowerCase();
       if (mod && k === "s") { e.preventDefault(); if (dirty) setDialog("save"); return; }
       if ((e.target as HTMLElement).closest?.("input,select,textarea")) return;
       if (mod && (k === "z" || k === "y")) { e.preventDefault(); if (k === "y" || e.shiftKey) redo(); else undo(); }
       else if (e.key === " " && !mod) { e.preventDefault(); onTogglePlay(); }
+      else if (view === "edit" && !mod && (k === "w" || k === "e" || k === "r")) { e.preventDefault(); const mode = k === "w" ? "translate" : k === "e" ? "rotate" : "scale"; setGz((g) => ({ ...g, mode })); }
       else if ((e.key === "Delete" || e.key === "Backspace") && sel.kind === "event") { e.preventDefault(); const i = sel.index; void edit("delete event", (d) => removeSceneEvent(d, i)); setSel({ kind: "scene" }); }
     }}>
       {header}
       {banner}
-      {mobile && mirror && <Mirror source={mirror} />}
+      {mobile && (editView || (mirror && <Mirror source={mirror} />))}
+      {!mobile && editView && (viewHost ? createPortal(editView, viewHost) : editView)}
       {toolbar}
       {mobile ? <>
         <div className="v2-sed-body">{tracksEl}</div>

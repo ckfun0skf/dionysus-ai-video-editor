@@ -1346,7 +1346,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const sceneEditPl = sceneEdit ? findPlacement(comp, sceneEdit)?.placement : undefined;
   const sceneEditor = sceneEditPl && sceneEditPl.clipType === "scene" ? (
     <SceneEditor key={sceneEditPl.id} engine={engine} project={project} placement={sceneEditPl} blobs={storage.blobs} mobile={mobile} time={time} playing={playing}
-      onSeek={seek} onTogglePlay={togglePlay} onClose={() => setSceneEdit(undefined)} onPrime={(k, d) => player.primeSceneDoc(k, d)} onPreview={(k, d) => player.previewSceneDoc(k, d)} mirror={mobile ? () => canvasRef.current : undefined} />
+      onSeek={seek} onTogglePlay={togglePlay} onClose={() => setSceneEdit(undefined)} onPrime={(k, d) => player.primeSceneDoc(k, d)} onPreview={(k, d) => player.previewSceneDoc(k, d)} mirror={mobile ? () => canvasRef.current : undefined} viewHost={() => canvasRef.current?.parentElement} />
   ) : undefined;
   const preview = (
     <section className="v2-preview" aria-label="Preview" style={mobile ? { height: `${previewVh}dvh` } : undefined}>

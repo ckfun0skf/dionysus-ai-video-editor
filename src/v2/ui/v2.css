@@ -1836,3 +1836,24 @@ select.v2-tp-field { -webkit-appearance: none; appearance: none; padding-right: 
 .v2-sed-ctx .v2-tool-back { min-width: 44px; }
 .v2-sed-sheet .v2-sed-addmenu { position: static; min-width: 0; border: none; padding: 0; background: none; box-shadow: none; }
 .v2-sed-sheet .v2-sed-form { padding: 0 4px 12px; }
+
+/* P81a: the scene editor's Camera view / Edit view toggle and the Edit view with its floating chip bar. */
+.v2-sed-viewtoggle { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; flex: none; }
+.v2-sed-viewtoggle button { min-height: 44px; min-width: 44px; padding: 0 10px; display: inline-flex; gap: 6px; align-items: center; justify-content: center; background: none; border: none; color: var(--muted); font: 13px/1 system-ui; }
+.v2-sed-viewtoggle button[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--text); }
+.v2-sed-editview { position: relative; background: #000; overflow: hidden; }
+.v2-canvas-wrap > .v2-sed-editview { position: absolute; inset: 0; z-index: 6; }
+.v2-scene-editor.is-desk > .v2-sed-editview { flex: none; height: 320px; }
+.v2-scene-editor.is-phone > .v2-sed-editview { flex: none; height: 40dvh; }
+.v2-sed-editframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; }
+.v2-sed-chips { position: absolute; z-index: 1; display: flex; gap: 6px; pointer-events: none; }
+.v2-sed-chips > *, .v2-sed-axes > * { pointer-events: auto; }
+.v2-sed-chips.is-modes { left: 8px; top: 8px; flex-direction: column; }
+.v2-sed-chips.is-opts { left: 8px; right: 8px; bottom: 8px; flex-wrap: wrap; justify-content: center; }
+.v2-sed-axes { display: inline-flex; gap: 2px; }
+.v2-sed-chip { min-width: 44px; min-height: 44px; padding: 0 12px; border-radius: 22px; border: 1px solid rgba(255,255,255,.08); background: rgba(18,18,22,.84); color: var(--text); display: inline-flex; align-items: center; justify-content: center; gap: 6px; font: 13px/1 system-ui; backdrop-filter: blur(6px); }
+.v2-sed-chips.is-modes .v2-sed-chip { padding: 0; }
+.v2-sed-chip.is-on { background: color-mix(in srgb, var(--accent) 38%, rgba(18,18,22,.9)); border-color: color-mix(in srgb, var(--accent) 60%, transparent); }
+.v2-sed-chip.is-axis { padding: 0 8px; font-weight: 600; }
+.v2-sed-chip.is-x { color: #ff8080; } .v2-sed-chip.is-y { color: #86e386; } .v2-sed-chip.is-z { color: #86afff; }
+.v2-sed-gzinfo { position: absolute; z-index: 1; top: 10px; left: 64px; right: 10px; margin: 0; text-align: right; pointer-events: none; font: 12px/1.35 system-ui; color: #e6e6ea; text-shadow: 0 1px 2px #000, 0 0 6px #000; }

@@ -6,6 +6,8 @@ export * from "./export/plan"; export { exportProject, mixAudio, formatLabel, fo
 export * from "./htmlClip";
 export { boxDistance, hitCandidates, hitTest, inBox, isBackdrop, pickAt } from "./hit";
 export * from "./htmlLibs";
+export { sceneEditPage, SCENE_EDIT_JS } from "./sceneEditPage";
+export { scenePage, scenePageKey } from "./scenePage";
 export { effectFrameAt, applyEffectFrame } from "./effects";
 export { drawWithLook, isPlainLook } from "./transitionDraw";
 export { blendOp, withBlend } from "./blend";
