@@ -8,6 +8,33 @@ export const SCHEMA = "dionysus/3.1" as const;
 
 /** `html`: a sandboxed HTML page (libraries opt-in via render/htmlLibs) rendered per frame from clip time (see render/htmlClip). */
 export type MediaKind = "video" | "image" | "audio" | "html" | "text" | "effect" | "scene";
+/**
+ * P84 (decision 3 of docs/v2/CLIP_PLUGIN_ARCHITECTURE.md): the `clipType` of a third-party plugin clip. Plugin ids
+ * always start with `x-` (decision 13), so they can never collide with a built-in `MediaKind`.
+ */
+export type PluginClipType = `x-${string}`;
+/** A stored `clipType`: a built-in kind or a plugin id. */
+export type ClipTypeId = MediaKind | PluginClipType;
+/** Is this stored `clipType` a plugin id? */
+export const isPluginClipType = (t: string): t is PluginClipType => t.startsWith("x-");
+
+/**
+ * P84: a plugin a project uses (the lock, `Project.plugins[id]`): exactly which package (content hash) and where the
+ * project keeps it (one zip blob in the project's blob store, carried by project export). docs/v2/PLUGIN_PACKAGE.md §1.
+ */
+export interface PluginLock {
+  version: string;
+  /** `sha256-<hex>` of the canonical package bytes. */
+  hash: string;
+  name: string;
+  publisher?: string;
+  blobKey: string;
+}
+/** P84: a plugin clip's own data (`Placement.plugin`): per-use param values, and the plugin version they were written for. */
+export interface PluginClipData {
+  data?: { params?: Record<string, number | string | boolean> };
+  v?: string;
+}
 /** `effect` tracks hold effect clips (V2-101): time ranges that apply a registry preset to the main-track render. */
 export type TrackKind = "video" | "audio" | "text" | "effect";
 
@@ -50,7 +77,7 @@ export interface Placement {
   durationTicks: number;
   sourceInTicks: number;
   source: SourceRef;
-  clipType: MediaKind;
+  clipType: ClipTypeId;
   volume?: number;
   /**
    * Owned child: the embedded source audio of a video placement. It is part of the placement, so it
@@ -162,6 +189,8 @@ export interface Placement {
    * follow `asset.selectedVersionId`. A pin to a version that no longer exists falls back to the current version.
    */
   versionId?: string;
+  /** P84: a plugin clip's params (`clipType` is the plugin id, `x-…`); kept as is when the plugin is missing. */
+  plugin?: PluginClipData;
 }
 
 /** Placeholder source of text clips: they reference no asset. */
@@ -302,6 +331,8 @@ export interface Project {
   storyboard?: Storyboard;
   /** P5: the Series this project is an episode of (Series live in local storage, see domain/series.ts). */
   seriesId?: string;
+  /** P84: third-party clip type plugins this project uses, by plugin id (optional within 3.1; older builds ignore it). */
+  plugins?: Record<string, PluginLock>;
 }
 
 /** Default still-image duration when placed on the timeline. */
@@ -338,7 +369,7 @@ export function createProject(name = "Untitled project", now = new Date().toISOS
 }
 
 /** The track kind that holds a clip type (P66: the registry's `trackKind`; unknown types go on video tracks). */
-export function trackKindFor(kind: MediaKind): TrackKind {
+export function trackKindFor(kind: ClipTypeId): TrackKind {
   return coreOf(kind).trackKind;
 }
 

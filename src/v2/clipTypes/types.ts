@@ -61,6 +61,8 @@ export interface ClipTypeCore {
   story?: ClipStory;
   /** P72: what the type adds to the agent surface (WebMCP tools, AI guide rules, get_timeline fields) and which host tools and properties are its own. */
   agent?: ClipAgent;
+  /** P84: set on cores built at runtime from a third-party plugin manifest (clipTypes/plugin.ts); built-ins never set it. */
+  plugin?: import("./plugin").ClipPluginMeta;
 }
 
 /** P72: a WebMCP tool a clip type contributes (registered after the built-in tools and listed by gen:ai). */

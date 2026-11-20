@@ -19,6 +19,7 @@ import type { TrackSignal } from "../domain/tracking";
 import type { SceneDoc } from "../domain/scene";
 import { CLIP_TYPES, UNKNOWN_CLIP_TYPE, isPlaceholder, variantOf } from "../clipTypes";
 import { PLACEHOLDER_RENDERER } from "./placeholderSlate";
+import { PLUGIN_SLATE_RENDERER } from "./pluginSlate";
 import type { ActiveLayer, Placed } from "./frame";
 import type { ClipLoad } from "./stability";
 import type { HtmlClipHost } from "./htmlClip";
@@ -160,5 +161,7 @@ if (CLIP_RENDERER_PROBLEMS.length) console.error(`[clipRenderers] ${CLIP_RENDERE
 export const clipRendererFor = (p: Placement): ClipRenderer | undefined => {
   if (isPlaceholder(p)) return PLACEHOLDER_RENDERER;
   const id = variantOf(p);
-  return CLIP_RENDERERS.get(id) ?? (CLIP_TYPES.core(id) ? undefined : CLIP_RENDERERS.get(UNKNOWN_CLIP_TYPE));
+  const core = CLIP_TYPES.core(id);
+  if (core?.plugin) return PLUGIN_SLATE_RENDERER; // P84: registered plugin type (its sandboxed renderer comes in P85)
+  return CLIP_RENDERERS.get(id) ?? (core ? undefined : CLIP_RENDERERS.get(UNKNOWN_CLIP_TYPE));
 };

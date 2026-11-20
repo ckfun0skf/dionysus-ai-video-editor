@@ -46,18 +46,60 @@ export interface ClipTypeRegistry {
   list(): ClipTypeCore[];
   /** Validates and adds a type; throws on an invalid definition or a duplicate id. */
   register(core: ClipTypeCore): void;
+  /**
+   * P84: replace the runtime (third-party plugin) types with `cores` in one step: ids must start with `x-` and may not
+   * shadow a built-in; unchanged entries (same object) are kept. Subscribers are told once if anything changed.
+   */
+  setRuntime(cores: readonly ClipTypeCore[]): boolean;
+  /** P84: the runtime types now registered. */
+  runtime(): ClipTypeCore[];
+  /** P84: called after the runtime types change. Returns the unsubscribe function. */
+  subscribe(fn: () => void): () => void;
+  /** P84: increases on every change (for caches and `useSyncExternalStore`). */
+  revision(): number;
+  /** P84: tell subscribers something about the runtime types changed without changing the list (plugin issues). */
+  notify(): void;
 }
+
+/** P84: runtime (plugin) type ids start with `x-` (decision 13); built-ins never do. */
+export const RUNTIME_CLIP_TYPE_ID = /^x-[a-z0-9][a-z0-9-]*$/;
 
 export function createClipTypeRegistry(): ClipTypeRegistry {
   const byId = new Map<string, ClipTypeCore>();
+  const runtime = new Map<string, ClipTypeCore>();
+  const subs = new Set<() => void>();
+  let rev = 0;
   return {
-    core: (id) => byId.get(id),
-    list: () => [...byId.values()],
+    core: (id) => byId.get(id) ?? runtime.get(id),
+    list: () => [...byId.values(), ...runtime.values()],
     register(core) {
       const problems = checkClipType(core);
       if (problems.length) throw new Error(`clip type ${JSON.stringify(core?.id)}: ${problems.join("; ")}`);
-      if (byId.has(core.id)) throw new Error(`clip type "${core.id}" is already registered`);
+      if (byId.has(core.id) || runtime.has(core.id)) throw new Error(`clip type "${core.id}" is already registered`);
       byId.set(core.id, core);
+      rev += 1;
     },
+    setRuntime(cores) {
+      const next = new Map<string, ClipTypeCore>();
+      for (const c of cores) {
+        const problems = checkClipType(c);
+        if (!RUNTIME_CLIP_TYPE_ID.test(c?.id ?? "")) problems.push(`runtime clip type ids start with "x-" (got ${JSON.stringify(c?.id)})`);
+        if (problems.length) throw new Error(`clip type ${JSON.stringify(c?.id)}: ${problems.join("; ")}`);
+        if (byId.has(c.id)) throw new Error(`clip type "${c.id}" is built in`);
+        if (next.has(c.id)) throw new Error(`clip type "${c.id}" is listed twice`);
+        next.set(c.id, c);
+      }
+      const same = next.size === runtime.size && [...next].every(([id, c]) => runtime.get(id) === c);
+      if (same) return false;
+      runtime.clear();
+      for (const [id, c] of next) runtime.set(id, c);
+      rev += 1;
+      for (const fn of [...subs]) fn();
+      return true;
+    },
+    runtime: () => [...runtime.values()],
+    subscribe(fn) { subs.add(fn); return () => { subs.delete(fn); }; },
+    revision: () => rev,
+    notify() { rev += 1; for (const fn of [...subs]) fn(); },
   };
 }

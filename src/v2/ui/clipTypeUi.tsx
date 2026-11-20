@@ -14,19 +14,19 @@
  */
 import type { CSSProperties, ReactNode } from "react";
 import type { MediaKind, Placement, Project } from "../domain";
-import { CLIP_TYPES, coreOf, isKnownClipType, isPlaceholder, variantOf } from "../clipTypes";
+import { CLIP_TYPES, coreOf, isKnownClipType, isPlaceholder, pluginIssueOf, pluginMetaOf, unknownSlateText, variantOf } from "../clipTypes";
 import { Ic } from "./Icon";
 
 export type WaveKind = "audio" | "video";
 
 /** Inspector tabs the host can show (P70). Optional ones appear only when they apply: `speed` (speed, time tools or
  * in point available), `transition` (the clip starts a cut). `label` renames a tab (text shows Basic as "Transform"). */
-export type InspectorTabId = "basic" | "speed" | "audio" | "chroma" | "transition" | "text" | "effect" | "params" | "colour" | "unknown" | "scene";
+export type InspectorTabId = "basic" | "speed" | "audio" | "chroma" | "transition" | "text" | "effect" | "params" | "colour" | "unknown" | "scene" | "plugin";
 export type InspectorTabRef = InspectorTabId | { id: InspectorTabId; label: string };
 /** Buttons in the desktop inspector header (P70); `edit-all` only for a clip on a styled text layer. */
 export type InspectorActionId = "edit-all" | "caption-style" | "subtitles" | "edit-code";
 /** Primary tools on the mobile clip toolbar (P70); a nested list is "the first of these that applies". */
-export type ToolId = "adjust" | "audio" | "speed" | "link" | "to-main" | "colour" | "fx" | "style" | "anim" | "subs" | "params" | "code" | "edit-audio" | "scene";
+export type ToolId = "adjust" | "audio" | "speed" | "link" | "to-main" | "colour" | "fx" | "style" | "anim" | "subs" | "params" | "code" | "edit-audio" | "scene" | "plugin";
 export type ToolRef = ToolId | ToolId[];
 
 export interface ClipTypeUi {
@@ -186,13 +186,13 @@ export const UNKNOWN_CLIP_UI: ResolvedClipTypeUi = {
   ...DEFAULT_CLIP_UI,
   id: "unknown",
   kindClass: "is-unknown",
-  name: (p) => `Unknown type “${p.clipType}”`,
+  name: (p) => (p.clipType.startsWith("x-") ? unknownSlateText(p.clipType)[0] : `Unknown type “${p.clipType}”`),
   thumbBackground: false,
   waveform: () => undefined,
   assetThumb: "none",
   assetPreviews: { peaks: false, filmstrip: false },
   inspectorIcon: "⚠",
-  inspectorTitle: (p) => `Unknown clip type “${p.clipType}”`,
+  inspectorTitle: (p) => (p.clipType.startsWith("x-") ? unknownSlateText(p.clipType)[0] : `Unknown clip type “${p.clipType}”`),
   inspectorTabs: ["unknown"],
   toolbar: ["link", "to-main"],
   toolbarMain: [],
@@ -200,7 +200,35 @@ export const UNKNOWN_CLIP_UI: ResolvedClipTypeUi = {
   volume: false,
   body: (p) => (
     <span className="v2-clip-name v2-ph v2-unknown" title={`This clip's type “${p.clipType}” is not in this version of the editor. Its data is kept as is; it shows as a slate and exports as a black frame.`}>
-      <Ic g="⚠" size={12} /><span className="v2-ph-label">{p.clipType}</span><span className="v2-ph-state">Unknown type</span>
+      <Ic g="⚠" size={12} /><span className="v2-ph-label">{pluginIssueOf(p.clipType)?.name ?? p.clipType}</span><span className="v2-ph-state">{p.clipType.startsWith("x-") ? (pluginIssueOf(p.clipType)?.state === "missing" || !pluginIssueOf(p.clipType) ? "Plugin missing" : "Plugin error") : "Unknown type"}</span>
+    </span>
+  ),
+};
+
+/**
+ * P84: a clip of a registered third-party plugin type (Phase 3): a neutral card with the plugin's name and "Not
+ * enabled", the Plugin inspector tab (details and settings, read-only for now) and transitions; move, trim, split,
+ * delete, link and undo work. Its sandboxed renderer comes in P85, so it draws the slate until then.
+ */
+export const PLUGIN_CLIP_UI: ResolvedClipTypeUi = {
+  ...DEFAULT_CLIP_UI,
+  id: "plugin",
+  kindClass: "is-plugin",
+  name: (p) => pluginMetaOf(p.clipType)?.name ?? p.clipType,
+  thumbBackground: false,
+  waveform: () => undefined,
+  assetThumb: "none",
+  assetPreviews: { peaks: false, filmstrip: false },
+  inspectorIcon: "puzzle",
+  inspectorTitle: (p) => `Plugin “${pluginMetaOf(p.clipType)?.name ?? p.clipType}”`,
+  inspectorTabs: ["plugin", "transition"],
+  toolbar: ["plugin", "link", "to-main"],
+  toolbarMain: ["plugin"],
+  speed: false,
+  volume: false,
+  body: (p) => (
+    <span className="v2-clip-name v2-ph" title={`Plugin “${pluginMetaOf(p.clipType)?.name ?? p.clipType}” is not enabled. Its settings are kept; it shows as a slate and exports as a black frame.`}>
+      <Ic g="puzzle" size={12} /><span className="v2-ph-label">{pluginMetaOf(p.clipType)?.name ?? p.clipType}</span><span className="v2-ph-state">Not enabled</span>
     </span>
   ),
 };
@@ -208,6 +236,7 @@ export const UNKNOWN_CLIP_UI: ResolvedClipTypeUi = {
 /** The timeline UI for a placement: a placeholder first (any type), then its variant or type; unknown types get UNKNOWN_CLIP_UI. */
 export const clipUi = (p: Placement): ResolvedClipTypeUi => {
   if (isPlaceholder(p)) return placeholderUi(p.clipType);
+  if (pluginMetaOf(p.clipType)) return PLUGIN_CLIP_UI;
   const id = variantOf(p);
   return CLIP_TYPE_UIS.get(id) ?? (isKnownClipType(id) ? DEFAULT_CLIP_UI : UNKNOWN_CLIP_UI);
 };

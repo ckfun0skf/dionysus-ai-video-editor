@@ -3396,6 +3396,12 @@
           "title": "Phase 3 step 3.1, third-party clip type plugins: design and package format (owner accepted decisions 10-17 on 2026-11-19, docs/v2/CLIP_PLUGIN_ARCHITECTURE.md §0 and §7 Phase 3): plugins render in a terminable worker on an OffscreenCanvas behind a sandboxed opaque-origin bootstrap (no DOM, no network), packages are embedded in the project plus a device library with a Project.plugins lock (id, version, content hash) within dionysus/3.1, trust is per project, hash and device, sources are a zip or an https URL with ids starting x-, plugins give agents structured hints only, v1 is visual only, storyboard plugin shots later, generic host agent tools only. Adds the author guide docs/v2/PLUGIN_PACKAGE.md (dionysus.cliptype/1, host API 1), the pure validator src/v2/domain/pluginManifest.ts (JSON-path errors and warnings, package file check, safe paths, semver order) with tests, and the sample package public/plugins/samples/x-dionysus-stripes/. No editor behaviour change; loading plugins starts in P84.",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P84-PLUGIN-STORE",
+          "title": "Phase 3 step 3.2, third-party clip type plugins: packages are stored, carried and loaded (docs/v2/CLIP_PLUGIN_ARCHITECTURE.md §7 Phase 3, docs/v2/PLUGIN_PACKAGE.md). Optional fields within dionysus/3.1: Project.plugins locks each plugin (version, sha256 content hash, name, publisher, blob key) and Placement.plugin holds a plugin clip's params; plugin clip types are x-… ids (PluginClipType). persistence/plugins.ts reads a package from a zip (root or one folder) or an https URL with the size caps, computes the content hash, stores it in the project as one zip blob (same id and version with other contents is refused), verifies and registers the open project's plugins as runtime clip types built from their manifests (registry setRuntime with a change signal; no plugin code runs), and keeps a device library and per-project, per-hash trust store in IndexedDB. Project archives carry the packages and re-point locks on import; blob GC keeps them. In the editor a plugin clip shows by name with Not enabled (timeline card, slate, black in export, export warning, inspector Plugin tab, phone Plugin sheet); a locked plugin that can't load says why (missing, damaged, needs a newer version) on the unknown-type slate. Running plugins comes in P85.",
+          "status": "done",
+          "progress": 100
         }
       ]
     }

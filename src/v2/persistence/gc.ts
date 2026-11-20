@@ -1,4 +1,5 @@
 import type { Storage } from "../ports/storage";
+import { pluginBlobKeys } from "../domain/pluginLocks";
 
 /** Orphan marks live in the blob store itself so they survive reloads; never collected. */
 export const GC_MARKS_KEY = "__gc/marks";
@@ -42,6 +43,7 @@ async function run(storage: Storage, { graceMs = GC_GRACE_MS, now = Date.now, on
       const p = await storage.projects.load(s.id);
       if (!p) { complete = false; continue; }
       for (const a of Object.values(p.assets ?? {})) for (const v of a.versions) { used.add(v.media.blobKey); if (v.media.thumbKey) used.add(v.media.thumbKey); if (v.media.specKey) used.add(v.media.specKey); }
+      for (const k of pluginBlobKeys(p)) used.add(k); // P84: a locked plugin package is kept like media
     } catch (e) { complete = false; onError?.(e); }
   }
   const marks = await readMarks(storage);

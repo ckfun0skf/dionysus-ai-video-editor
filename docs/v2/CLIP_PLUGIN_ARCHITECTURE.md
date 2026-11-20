@@ -4,7 +4,7 @@
 started in P74 after decision 5 was accepted, step table in [§7 Phase 2](#phase-2--deterministic-threejs-scene-clip);
 steps 2.1 (P74), 2.2 (P75), 2.3 (P76), 2.4 (P77), 2.5 (P78) and 2.6 (P79) are done, so **Phase 2 is complete** since P79;
 the table was renumbered in P76, see the note under it. Phase 3 started in P83 after decisions 10–17 were accepted
-on 2026-11-19, step table in [§7 Phase 3](#phase-3--third-party-clip-types); step 3.1 (P83) is done).
+on 2026-11-19, step table in [§7 Phase 3](#phase-3--third-party-clip-types); steps 3.1 (P83) and 3.2 (P84) are done).
 Written against `main` at `36c37b14` (after P63). Decisions: see [§0](#0-decisions). Progress: see
 [§7 Phase 1](#phase-1--registry-with-zero-behaviour-change).
 
@@ -566,13 +566,39 @@ Export package); the inspector gets a **Plugin** tab with the declarative form, 
 state. Phone 390: a **Plugins** tab in the Add media sheet, a **Params** tool on the clip toolbar opening a sheet, and
 Project → **Plugins** to manage. 44 px targets, monochrome line icons, badges "Unverified", "Not enabled", "Update".
 
+**Done in P84 (step 3.2).**
+
+- `domain/model.ts`: `PluginClipType` (`` `x-${string}` ``), `ClipTypeId` (`Placement.clipType` is `MediaKind |
+  PluginClipType`), `isPluginClipType`, `PluginLock`, `PluginClipData`, `Placement.plugin`, `Project.plugins`.
+  `domain/pluginLocks.ts`: `isPluginLock`, `pluginLocks` (well-formed `x-` entries only; malformed ones are kept in the
+  file and ignored), `pluginBlobKeys`, `setPluginLock`, `removePluginLock`, `pluginClips`.
+- `clipTypes/registry.ts`: runtime types (`setRuntime(cores)` replaces them in one step, ids must start with `x-` and
+  may not shadow a built-in; `runtime()`, `subscribe`, `revision`, `notify`); `variantOf`'s cache follows the revision.
+  `clipTypes/plugin.ts`: `pluginCoreOf(manifest, lock)` (the caps above, `plugin` meta with the manifest, `agent.describe`
+  adding `plugin { name, version }` and the resolved `params` to `get_timeline`), `pluginMetaOf`, `pluginParamsOf`,
+  per-project `setPluginIssues` / `pluginIssueOf` (`missing`, `damaged`, `newer`, `conflict`) and `unknownSlateText`.
+- `persistence/plugins.ts`: `readPluginZip` (root or one top folder; declared sizes checked before unpacking),
+  `fetchPluginPackage` (manifest URL with relative files, or a `.zip` URL; `credentials: "omit"`; https, or http on
+  localhost), `pluginContentHash`, `pluginZipBlob` (the canonical stored zip), `addPluginToProject` (blob
+  `plugin/<hex>` + lock; same id and version with another hash is a `PluginConflictError`), `loadProjectPlugins` /
+  `syncProjectPlugins` (verify each locked package against its hash and id, fall back to the device library by hash,
+  register the cores, report the rest), and the device library `createIndexedDbPluginLibrary` (`dionysus-plugins`:
+  `packages` by hash, `trust` by project + hash) / `createMemoryPluginLibrary`. Project archives list plugin blobs as
+  media (`application/zip`) and re-point locks on import; the blob GC keeps locked packages.
+- Editor: `ui/pluginRuntime.ts` syncs the project's plugins before the first render (`useEditorBoot`) and whenever
+  `project.plugins` changes, and re-renders and redraws on the registry signal. A registered plugin clip draws the
+  slate "Plugin “Name”" / NOT ENABLED (`render/pluginSlate.ts`, black in export), uses `PLUGIN_CLIP_UI` (a neutral
+  card with "Not enabled", the inspector's Plugin tab with details and read-only settings, a Plugin tool and sheet on
+  phones) and is named in the export warning. Locked plugins that can't load and unlocked `x-` ids keep the unknown
+  path with plugin-specific text. No plugin code runs yet; trust is stored but not asked for (P86).
+
 Steps (one PR each, merged on green CI):
 
 | Step | PR | What | Status |
 |---|---|---|---|
 | 3.1 | P83 | Decisions, this design, [PLUGIN_PACKAGE.md](PLUGIN_PACKAGE.md), the pure manifest validator `domain/pluginManifest.ts` (JSON-path errors, package file check, semver order) and the sample `public/plugins/samples/x-dionysus-stripes/` | **done** |
-| 3.2 | P84 | Domain and persistence: `Placement.plugin`, `PluginClipType`, the `Project.plugins` lock, the package store and content hash, packages in project export / import, runtime registration of cores built from manifests, the not-enabled slate | next |
-| 3.3 | P85 | Sandbox renderer: bootstrap iframe, worker, OffscreenCanvas, watchdog and restarts, `pluginHost` in the Player and export; Chrome determinism and export checks | |
+| 3.2 | P84 | Domain and persistence: `Placement.plugin`, `PluginClipType`, the `Project.plugins` lock, the package store and content hash, packages in project export / import, runtime registration of cores built from manifests, the not-enabled slate | **done** |
+| 3.3 | P85 | Sandbox renderer: bootstrap iframe, worker, OffscreenCanvas, watchdog and restarts, `pluginHost` in the Player and export; Chrome determinism and export checks | next |
 | 3.4 | P86 | Install and trust UX: file / URL install, install dialog, per-project review banner, the Plugins library at 1440 and 390, remove | |
 | 3.5 | P87 | Clip editing UX: the inspector Plugin tab and phone Params sheet from the declarative form, timeline icon and name, updates with param migration | |
 | 3.6 | P88 | Agent tools and the host AI rule, `gen:ai`, WEB_MCP docs | |

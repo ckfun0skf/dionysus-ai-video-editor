@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { Box, Camera, ChevronDown, Focus, KeyRound, Lightbulb, Move3d, Palette, Rotate3d, Scale3d } from "lucide-react";
+import { Box, Camera, ChevronDown, Focus, KeyRound, Lightbulb, Move3d, Palette, Puzzle, Rotate3d, Scale3d } from "lucide-react";
 import { ChevronLeft, ChevronRight, MoveHorizontal, Replace, ArrowRightToLine, Library, Unlink, Bot, AudioWaveform, Headphones, Pipette, ScanSearch, Crosshair, Spline } from "lucide-react";
 import {
   Clapperboard, Ellipsis, FileJson, Link2, CircleCheck, CircleAlert, ListTodo, ImageUp, RefreshCw,
@@ -23,6 +23,7 @@ export const ICONS: Record<string, LucideIcon> = {
   palette: Palette, "▾": ChevronDown, "⇔": MoveHorizontal, "⇄": Replace, "🔗": Link2, "to-main": ArrowDownToLine,
   scene: Box, camera: Camera, light: Lightbulb,
   move3d: Move3d, rotate3d: Rotate3d, scale3d: Scale3d, key: KeyRound, focus: Focus,
+  puzzle: Puzzle,
 };
 
 /**

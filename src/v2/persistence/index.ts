@@ -10,3 +10,8 @@ export {
   type SeriesArchiveManifest, type SeriesArchivePreview, type ArchiveManifest, type ArchivePreview, type ArchiveProgress, type ImportMode,
 } from "./archive/projectArchive";
 export { readBlobBytes, readZipIndex, zipEntryBlob, ZipError, ZipWriter, type ZipEntry, type ZipSink } from "./archive/zip";
+export {
+  PLUGIN_BLOB_PREFIX, PLUGIN_DB_NAME, PluginConflictError, PluginPackageError, addPluginToProject, createIndexedDbPluginLibrary, createMemoryPluginLibrary,
+  fetchPluginPackage, loadProjectPlugins, pluginBlobKey, pluginContentHash, pluginPackageFrom, pluginUrlProblem, pluginZipBlob, readPluginZip, syncProjectPlugins,
+  type PluginLibrary, type PluginLibraryEntry, type PluginLoadResult, type PluginPackage, type PluginReadOptions,
+} from "./plugins";

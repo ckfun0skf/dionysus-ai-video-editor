@@ -23,8 +23,8 @@ export const UNKNOWN_CLIP_TYPE = "unknown";
 let variants: ClipTypeCore[] = [];
 let variantsFor = -1;
 function variantList(): ClipTypeCore[] {
-  const all = CLIP_TYPES.list();
-  if (all.length !== variantsFor) { variants = all.filter((c) => c.variant).sort((a, b) => (b.variant!.priority ?? 0) - (a.variant!.priority ?? 0)); variantsFor = all.length; }
+  const rev = CLIP_TYPES.revision();
+  if (rev !== variantsFor) { variants = CLIP_TYPES.list().filter((c) => c.variant).sort((a, b) => (b.variant!.priority ?? 0) - (a.variant!.priority ?? 0)); variantsFor = rev; }
   return variants;
 }
 
@@ -54,7 +54,8 @@ export function clipTypeOf(p: Pick<Placement, "clipType"> & Partial<Placement>):
 export const isKnownClipType = (clipType: string): boolean => !!CLIP_TYPES.core(clipType) && clipType !== UNKNOWN_CLIP_TYPE;
 
 export { defineClipType } from "./define";
-export { checkClipType, createClipTypeRegistry, type ClipTypeRegistry } from "./registry";
+export { RUNTIME_CLIP_TYPE_ID, checkClipType, createClipTypeRegistry, type ClipTypeRegistry } from "./registry";
+export { PLUGIN_CLIP_VERSION, pluginCoreOf, pluginIssueOf, pluginMetaOf, pluginParamsOf, setPluginIssues, unknownSlateText, type ClipPluginMeta, type PluginIssueState } from "./plugin";
 export type { ClipAccepts, ClipAgent, ClipAgentApi, ClipAgentResult, ClipAgentToolDef, ClipCaps, ClipStory, ClipTypeCore, ClipTypeDef, ClipVariant } from "./types";
 export { DEFAULT_CLIP_STORY, kindForFile, kindForSlotType, mimeForFile, storyOf } from "./story";
 export { PLACEHOLDER_STATE, isPlaceholder, placeholderAccepts, placeholderCaps, placeholderCore } from "./state";
