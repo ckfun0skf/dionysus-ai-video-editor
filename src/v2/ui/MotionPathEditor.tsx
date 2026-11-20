@@ -4,13 +4,18 @@
  * - `MotionPathOverlay` draws the path of the selected clip over the preview (always while it is selected; existing
  *   x / y keyframes, e.g. from tracking Follow, show dashed) and, in the Motion path mode, edits it: click / tap to add
  *   a point (drag while adding pulls Bezier handles), drag points and handles, click a segment to insert a point,
- *   double-click a point for smooth / corner. Two fingers or the wheel zoom the preview while editing.
+ *   double-click a point for smooth / corner.
+ * - P90 view: zoom and pan are one view transform (`View`: zoom about a point, pan, clamped so the frame always
+ *   covers its box). The frame element gets it as a CSS transform; the overlay is drawn in screen space from the same
+ *   mapping, so points and handles keep 44 px targets at any zoom. Pinch / ⌘-Ctrl+wheel / − + / the % field zoom;
+ *   two fingers, a drag on an empty area (Add point off), Space + drag, the middle button or the wheel pan;
+ *   double-tap / double-click an empty area or Fit (0) resets.
  * - The mode is a draft session (`useMotionSession`): ✕ / Esc discards it, ✓ / Enter commits it as ONE undo step.
  *   Inside the mode every gesture is one step of the session's own undo (⌘/Ctrl+Z).
  * - `MotionPathBar` (desktop toolbar + timing strip), `MotionPathPhoneBar` (phone bottom context toolbar and number
  *   sheets) and `MotionPathSection` (desktop inspector) all edit the same draft.
  */
-import { useEffect, useMemo, useRef, useState, type PointerEvent as RPE, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as RPE, type ReactNode } from "react";
 import { cmd, type Engine } from "../engine";
 import { motion, storyPaths, transformOf, ticksToSeconds, secondsToTicks, type MotionEase, type MotionPath, type Placement } from "../domain";
 import { Ic } from "./Icon";
@@ -39,8 +44,35 @@ export interface MotionSession {
   id: string; draft: MotionPath; sel?: string; add: boolean;
   past: MotionPath[]; future: MotionPath[];
   /** The preview zoom while editing (1 = fit). */
-  view: { z: number; tx: number; ty: number };
+  view: View;
+  /** P90: Space is held (the hand: a drag pans). */
+  hand?: boolean;
 }
+
+/** P90: the editing view. z = zoom (1 = fit), tx / ty = pan of the frame centre from its fitted place (CSS px). */
+export interface View { z: number; tx: number; ty: number }
+export const FIT: View = { z: 1, tx: 0, ty: 0 };
+export const MAX_ZOOM = 8;
+/** A box in the wrapper's CSS px. */
+export interface Box { left: number; top: number; width: number; height: number }
+/** Where the frame is drawn under `v` (its fitted box `base` scaled about its centre, then panned). */
+export function viewBox(base: Box, v: View): Box {
+  const w = base.width * v.z, h = base.height * v.z;
+  return { left: base.left + base.width / 2 + v.tx - w / 2, top: base.top + base.height / 2 + v.ty - h / 2, width: w, height: h };
+}
+/** Keep the zoom in 1–MAX_ZOOM and the zoomed frame covering its fitted box (no empty margin can be panned in). */
+export function clampView(v: View, base: Pick<Box, "width" | "height">): View {
+  if (!(v.z > 1.001)) return FIT;
+  const z = Math.min(MAX_ZOOM, v.z), mx = ((z - 1) * base.width) / 2, my = ((z - 1) * base.height) / 2;
+  return { z, tx: Math.max(-mx, Math.min(mx, v.tx)), ty: Math.max(-my, Math.min(my, v.ty)) };
+}
+/** Zoom to `z` keeping the wrapper point (px, py) where it is. */
+export function zoomAt(v: View, base: Box, z: number, px: number, py: number): View {
+  const cx = base.left + base.width / 2, cy = base.top + base.height / 2, k = z / v.z;
+  return clampView({ z, tx: px - cx - (px - cx - v.tx) * k, ty: py - cy - (py - cy - v.ty) * k }, base);
+}
+export const panBy = (v: View, base: Box, dx: number, dy: number): View => clampView({ ...v, tx: v.tx + dx, ty: v.ty + dy }, base);
+const sameView = (a: View, b: View) => Math.abs(a.z - b.z) < 1e-6 && Math.abs(a.tx - b.tx) < 0.01 && Math.abs(a.ty - b.ty) < 0.01;
 
 /** The Motion path draft session (one per app). `onPreview` shows a draft on the preview (null = stop). */
 export function useMotionSession(engine: Engine, onPreview: (s: { id: string; path: MotionPath | null } | null) => void, onToast: (m: string) => void) {
@@ -49,10 +81,12 @@ export function useMotionSession(engine: Engine, onPreview: (s: { id: string; pa
   const preview = useRef(onPreview); preview.current = onPreview;
   /** P89b: a session started for something that is not a clip (a storyboard path) commits through this instead. */
   const commitTo = useRef<(path: MotionPath | null) => void>();
+  /** P90: whether the view moved while Space was held (a Space tap without a pan plays / pauses). */
+  const handUsed = useRef(false);
   useEffect(() => { preview.current(s ? { id: s.id, path: s.draft.nodes.length ? s.draft : null } : null); }, [s?.id, s?.draft]); // eslint-disable-line react-hooks/exhaustive-deps
   const api = {
     session: s,
-    start(pl: Placement, opts: { draft?: MotionPath; onCommit?: (path: MotionPath | null) => void } = {}) { commitTo.current = opts.onCommit; const draft = opts.draft ? structuredClone(opts.draft) : initialDraft(pl); setS({ id: pl.id, draft, add: draft.nodes.length < 2, past: [], future: [], sel: undefined, view: { z: 1, tx: 0, ty: 0 } }); },
+    start(pl: Placement, opts: { draft?: MotionPath; onCommit?: (path: MotionPath | null) => void } = {}) { commitTo.current = opts.onCommit; const draft = opts.draft ? structuredClone(opts.draft) : initialDraft(pl); setS({ id: pl.id, draft, add: draft.nodes.length < 2, past: [], future: [], sel: undefined, view: FIT }); },
     /** Close without changing the project. */
     cancel() { commitTo.current = undefined; setS(undefined); },
     /** One undo step with the draft (nothing when unchanged). */
@@ -72,11 +106,18 @@ export function useMotionSession(engine: Engine, onPreview: (s: { id: string; pa
     change(draft: MotionPath, sel?: string | null) { setS((c) => c && { ...c, draft, ...(sel === undefined ? {} : { sel: sel ?? undefined }) }); },
     /** A one-shot edit: its own undo step. */
     edit(fn: (d: MotionPath) => MotionPath, sel?: string | null) { setS((c) => { if (!c) return c; const d = fn(c.draft); return d === c.draft ? c : { ...c, draft: d, past: [...c.past.slice(-99), c.draft], future: [], ...(sel === undefined ? {} : { sel: sel ?? undefined }) }; }); },
+    /** P90: drop the gesture in progress (back to the draft before `begin`, no redo step). */
+    dropStep() { setS((c) => (c && c.past.length ? { ...c, draft: c.past[c.past.length - 1], past: c.past.slice(0, -1), sel: c.past[c.past.length - 1].nodes.some((n) => n.id === c.sel) ? c.sel : undefined } : c)); },
     undo() { setS((c) => (c && c.past.length ? { ...c, draft: c.past[c.past.length - 1], past: c.past.slice(0, -1), future: [c.draft, ...c.future], sel: c.past[c.past.length - 1].nodes.some((n) => n.id === c.sel) ? c.sel : undefined } : c)); },
     redo() { setS((c) => (c && c.future.length ? { ...c, draft: c.future[0], future: c.future.slice(1), past: [...c.past, c.draft] } : c)); },
     select(id?: string) { setS((c) => c && { ...c, sel: id }); },
     setAdd(add: boolean) { setS((c) => c && { ...c, add }); },
-    setView(view: MotionSession["view"]) { setS((c) => c && { ...c, view }); },
+    setView(view: View) { if (ref.current?.hand) handUsed.current = true; setS((c) => (c && !sameView(c.view, view) ? { ...c, view } : c)); },
+    /** P90: zoom by `k` about the frame centre (keys, − / +); the overlay clamps the pan. */
+    zoomBy(k: number) { setS((c) => { if (!c) return c; const z = Math.max(1, Math.min(MAX_ZOOM, c.view.z * k)); const f = z / c.view.z; return { ...c, view: z <= 1.001 ? FIT : { z, tx: c.view.tx * f, ty: c.view.ty * f } }; }); },
+    fit() { setS((c) => (c && !sameView(c.view, FIT) ? { ...c, view: FIT } : c)); },
+    /** P90: Space down / up. Returns, on up, whether the view was panned during the hold. */
+    setHand(on: boolean): boolean { const used = handUsed.current; if (on) handUsed.current = false; setS((c) => (c && !!c.hand !== on ? { ...c, hand: on || undefined } : c)); return used; },
   };
   return api;
 }
@@ -98,15 +139,26 @@ export function addEnd(mp: MotionPath, x: number, y: number, dur: number, at: nu
   return motion.appendPoint({ ...mp, nodes: mp.nodes.map((m) => ({ ...m, t: Math.round(m.t * k) })) }, x, y, dur);
 }
 
-/** Frame ↔ CSS px mapping for the preview canvas inside its wrapper. */
-function frameMap(canvas: HTMLElement) {
-  const r = canvas.getBoundingClientRect(), w = canvas.parentElement!.getBoundingClientRect();
+/**
+ * Frame ↔ CSS px mapping for the frame element inside its wrapper under the view `v`. `applied` is the view whose CSS
+ * transform the element has now (its rect is measured through it), so the fitted box is recovered exactly and the
+ * mapping is right even before the new transform is applied.
+ */
+function frameMap(canvas: HTMLElement, v: View, applied: View) {
+  const cr = canvas.getBoundingClientRect(), w = canvas.parentElement!.getBoundingClientRect();
+  const bw = cr.width / applied.z, bh = cr.height / applied.z;
+  const base: Box = { left: cr.left - w.left + cr.width / 2 - applied.tx - bw / 2, top: cr.top - w.top + cr.height / 2 - applied.ty - bh / 2, width: bw, height: bh };
+  const b = viewBox(base, v);
+  // r: the drawn frame in client px (for hit tests against pointer events).
+  const r = { left: w.left + b.left, top: w.top + b.top, width: b.width, height: b.height };
   return {
-    r, w,
-    px: (x: number) => r.left - w.left + (x + 0.5) * r.width,
-    py: (y: number) => r.top - w.top + (y + 0.5) * r.height,
+    r, w, base,
+    px: (x: number) => b.left + (x + 0.5) * b.width,
+    py: (y: number) => b.top + (y + 0.5) * b.height,
     fx: (cx: number) => (cx - r.left) / Math.max(1, r.width) - 0.5,
     fy: (cy: number) => (cy - r.top) / Math.max(1, r.height) - 0.5,
+    /** Client px → wrapper px. */
+    wx: (cx: number) => cx - w.left, wy: (cy: number) => cy - w.top,
     kx: r.width, ky: r.height,
   };
 }
@@ -115,10 +167,12 @@ function frameMap(canvas: HTMLElement) {
  * The path over the preview. Display only (pointer-events none) unless `api` is given (the mode).
  * `offset` = playhead ticks from the clip start (the dot shows where the clip is now).
  */
-export function MotionPathOverlay({ canvas, placement, path, fromKeys, offset, aspect, api, onSeekOffset }: {
+export function MotionPathOverlay({ canvas, placement, path, fromKeys, offset, aspect, api, onSeekOffset, zoomUi = true }: {
   /** The frame element (the preview canvas, or a reference image / video) inside a positioned wrapper. */
   canvas: HTMLElement; placement: Placement; path: MotionPath; fromKeys?: boolean; offset: number; aspect: number;
   api?: MotionApi; onSeekOffset?: (ticks: number) => void;
+  /** P90: draw the zoom control over the frame's corner (false: the host places `ZoomControl` itself). */
+  zoomUi?: boolean;
 }) {
   const [, force] = useState(0);
   // Follow the canvas size (window resize, panel drag).
@@ -128,18 +182,28 @@ export function MotionPathOverlay({ canvas, placement, path, fromKeys, offset, a
     return () => ro?.disconnect();
   }, [canvas]);
   const s = api?.session;
-  const view = s?.view ?? { z: 1, tx: 0, ty: 0 };
-  // The zoom is a CSS transform on the canvas (the overlay maps through the transformed rect).
-  useEffect(() => {
-    canvas.style.transform = view.z === 1 && !view.tx && !view.ty ? "" : `translate(${view.tx}px, ${view.ty}px) scale(${view.z})`;
-    force((n) => n + 1);
-  }, [canvas, view.z, view.tx, view.ty]);
-  useEffect(() => () => { canvas.style.transform = ""; }, [canvas]);
-  const m = frameMap(canvas);
+  const view = s?.view ?? FIT;
+  // P90: the frame element shows the view as a CSS transform (about its centre); `applied` is what it has now.
+  const applied = useRef<View>(FIT);
+  const m = frameMap(canvas, view, applied.current);
+  useLayoutEffect(() => {
+    const fit = sameView(view, FIT);
+    canvas.style.transformOrigin = fit ? "" : "50% 50%";
+    canvas.style.transform = fit ? "" : `translate(${view.tx}px, ${view.ty}px) scale(${view.z})`;
+    canvas.parentElement?.classList.toggle("is-mp-zoomed", !fit);
+    applied.current = view;
+    // Keys and − / + zoom about the centre: keep the pan inside the frame.
+    const c = clampView(view, m.base);
+    if (api && !sameView(c, view)) api.setView(c);
+  }, [canvas, view.z, view.tx, view.ty]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => { canvas.style.transform = ""; canvas.style.transformOrigin = ""; canvas.parentElement?.classList.remove("is-mp-zoomed"); applied.current = FIT; }, [canvas]);
   const nodes = path.nodes;
   const dur = placement.durationTicks;
   const ptrs = useRef(new Map<number, { x: number; y: number }>());
-  const pinch = useRef<{ d: number; z: number; mx: number; my: number; tx: number; ty: number }>();
+  const pinch = useRef<{ d: number; v: View; mx: number; my: number }>();
+  /** P90: a pan in progress (hand, middle button, or a drag on an empty area when Add point is off). */
+  const pan = useRef<{ x: number; y: number; v: View; moved: boolean; tap: boolean }>();
+  const lastEmptyTap = useRef(0);
   const drag = useRef<{ kind: "node" | "in" | "out" | "pull"; id: string; x0: number; y0: number; start: MotionPath; moved: boolean; node0: { x: number; y: number } }>();
   const lastTap = useRef<{ id: string; at: number }>();
 
@@ -166,14 +230,17 @@ export function MotionPathOverlay({ canvas, placement, path, fromKeys, offset, a
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic */ }
     ptrs.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (ptrs.current.size === 2) {
-      // A second finger: zoom; a point drag that had started is undone so a zoom never moves a point.
-      if (drag.current?.moved) api.change(drag.current.start);
-      drag.current = undefined;
+      // A second finger: zoom; the one-finger gesture that had started (a point added, inserted or moved) is dropped,
+      // so a pinch never leaves a stray point (P90 fix: it used to keep a point the first finger had added).
+      if (drag.current) api.dropStep();
+      drag.current = undefined; pan.current = undefined;
       const [a, b] = [...ptrs.current.values()];
-      pinch.current = { d: Math.hypot(a.x - b.x, a.y - b.y), z: view.z, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2, tx: view.tx, ty: view.ty };
+      pinch.current = { d: Math.hypot(a.x - b.x, a.y - b.y), v: view, mx: m.wx((a.x + b.x) / 2), my: m.wy((a.y + b.y) / 2) };
       return;
     }
     if (ptrs.current.size > 2) return;
+    // P90: the hand (Space held) or the middle button pans from anywhere.
+    if (s.hand || e.button === 1) { pan.current = { x: e.clientX, y: e.clientY, v: view, moved: false, tap: false }; return; }
     const hit = (e.target as Element).closest?.("[data-mp]") as HTMLElement | SVGElement | null;
     const kind = hit?.getAttribute("data-mp"), id = hit?.getAttribute("data-id") ?? "";
     const p = local(e);
@@ -200,15 +267,25 @@ export function MotionPathOverlay({ canvas, placement, path, fromKeys, offset, a
       drag.current = { kind: "pull", id: r.id, x0: p.x, y0: p.y, start: r.path, moved: true, node0: { x: p.x, y: p.y } };
       return;
     }
-    api.select(undefined);
+    // P90: an empty area with Add point off: a drag pans (when zoomed), a tap deselects, a double tap fits / zooms in.
+    pan.current = { x: e.clientX, y: e.clientY, v: view, moved: false, tap: true };
   };
   const move = (e: RPE<SVGSVGElement>) => {
     if (!api || !ptrs.current.has(e.pointerId)) return;
     ptrs.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pinch.current && ptrs.current.size === 2) {
+      // Two fingers: zoom about where they started and pan with their midpoint.
       const [a, b] = [...ptrs.current.values()], pc = pinch.current;
-      const z = Math.max(1, Math.min(6, pc.z * Math.hypot(a.x - b.x, a.y - b.y) / Math.max(1, pc.d)));
-      api.setView(clampView({ z, tx: pc.tx + (a.x + b.x) / 2 - pc.mx, ty: pc.ty + (a.y + b.y) / 2 - pc.my }, m.w));
+      const z = Math.max(1, Math.min(MAX_ZOOM, pc.v.z * Math.hypot(a.x - b.x, a.y - b.y) / Math.max(1, pc.d)));
+      api.setView(panBy(zoomAt(pc.v, m.base, z, pc.mx, pc.my), m.base, m.wx((a.x + b.x) / 2) - pc.mx, m.wy((a.y + b.y) / 2) - pc.my));
+      return;
+    }
+    const pn = pan.current;
+    if (pn) {
+      const dx = e.clientX - pn.x, dy = e.clientY - pn.y;
+      if (!pn.moved && Math.hypot(dx, dy) < 4) return;
+      pn.moved = true;
+      if (pn.v.z > 1) api.setView(panBy(pn.v, m.base, dx, dy));
       return;
     }
     const dr = drag.current;
@@ -223,6 +300,16 @@ export function MotionPathOverlay({ canvas, placement, path, fromKeys, offset, a
   const up = (e: RPE<SVGSVGElement>) => {
     ptrs.current.delete(e.pointerId);
     if (ptrs.current.size < 2) pinch.current = undefined;
+    const pn = pan.current;
+    pan.current = undefined;
+    if (api && pn?.tap && !pn.moved && e.type === "pointerup") {
+      api.select(undefined);
+      const t = Date.now();
+      if (t - lastEmptyTap.current < 350) {
+        lastEmptyTap.current = 0;
+        if (view.z > 1.001) api.fit(); else api.setView(zoomAt(view, m.base, 2.5, m.wx(e.clientX), m.wy(e.clientY)));
+      } else lastEmptyTap.current = t;
+    }
     const dr = drag.current;
     drag.current = undefined;
     if (!api || !dr) return;
@@ -236,13 +323,30 @@ export function MotionPathOverlay({ canvas, placement, path, fromKeys, offset, a
       api.select(dr.id);
     }
   };
-  const wheel = (e: React.WheelEvent<SVGSVGElement>) => {
+  // P90: ⌘/Ctrl + wheel (and a trackpad pinch) zooms about the pointer; the plain wheel pans once zoomed (⇧ = sideways)
+  // and zooms in at fit, where there is nothing to pan.
+  const wheel = (e: WheelEvent) => {
     if (!api) return;
-    const z = Math.max(1, Math.min(6, view.z * (e.deltaY < 0 ? 1.15 : 1 / 1.15)));
-    const cx = e.clientX - m.w.left - m.w.width / 2, cy = e.clientY - m.w.top - m.w.height / 2, k = z / view.z;
-    api.setView(clampView({ z, tx: cx - (cx - view.tx) * k, ty: cy - (cy - view.ty) * k }, m.w));
+    e.preventDefault(); // ⌘/Ctrl + wheel would zoom the page
+    const px = m.wx(e.clientX), py = m.wy(e.clientY);
+    const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
+    const dx = e.deltaX * unit, dy = e.deltaY * unit;
+    if (e.ctrlKey || e.metaKey || view.z <= 1.001) {
+      const z = Math.max(1, Math.min(MAX_ZOOM, view.z * Math.exp(-dy * (e.ctrlKey && !e.metaKey && Math.abs(dy) < 50 ? 0.01 : 0.0015))));
+      api.setView(zoomAt(view, m.base, z, px, py));
+    } else api.setView(panBy(view, m.base, -(e.shiftKey ? dy : dx), -(e.shiftKey ? 0 : dy)));
   };
   const editing = !!api;
+  // A native non-passive listener: React's wheel listener is passive, so it could not stop the page zoom.
+  const svgRef = useRef<SVGSVGElement>(null);
+  const onWheel = useRef(wheel); onWheel.current = wheel;
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el || !editing) return;
+    const h = (e: WheelEvent) => onWheel.current(e);
+    el.addEventListener("wheel", h, { passive: false });
+    return () => el.removeEventListener("wheel", h);
+  }, [editing]);
   const handle = (n: MotionPath["nodes"][number], which: "in" | "out") => {
     const h = n[which];
     if (!h) return null;
@@ -253,10 +357,10 @@ export function MotionPathOverlay({ canvas, placement, path, fromKeys, offset, a
       <circle cx={hx} cy={hy} r={HIT - 4} className="v2-mp-hit" data-mp={which} data-id={n.id} role="slider" aria-label={`Point ${nodes.indexOf(n) + 1} ${which === "in" ? "in" : "out"} handle`} aria-valuetext={`${round2(h.x)}, ${round2(h.y)}`} />
     </g>;
   };
-  return (
-    <svg className={`v2-mp-overlay${editing ? " is-editing" : ""}${fromKeys ? " is-keys" : ""}`} data-testid={editing ? "motion-path-editor" : "motion-path-shown"} width={m.w.width} height={m.w.height}
+  return (<>
+    <svg className={`v2-mp-overlay${editing ? " is-editing" : ""}${fromKeys ? " is-keys" : ""}${s?.hand ? " is-hand" : ""}${pan.current?.moved ? " is-panning" : ""}`} data-testid={editing ? "motion-path-editor" : "motion-path-shown"} width={m.w.width} height={m.w.height}
       role={editing ? "application" : undefined} aria-label={editing ? "Motion path: click to add points, drag points and handles, click a segment to insert a point" : undefined}
-      onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onWheel={wheel}>
+      ref={svgRef} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
       {d && <path d={d} className="v2-mp-line-under" />}
       {d && <path d={d} className="v2-mp-line" />}
       {editing && sel && <>{handle(sel, "in")}{handle(sel, "out")}</>}
@@ -270,18 +374,33 @@ export function MotionPathOverlay({ canvas, placement, path, fromKeys, offset, a
       })}
       {now && <circle cx={m.px(now.x)} cy={m.py(now.y)} r={7} className="v2-mp-now" />}
     </svg>
+    {api && s && zoomUi && <ZoomControl api={api} view={view} />}
+  </>);
+}
+
+/** P90: − / exact % / + / Fit for the editing view (top right of the frame). */
+export function ZoomControl({ api, view, inline }: { api: MotionApi; view: View; /** Laid out in the flow (outside the frame). */ inline?: boolean }) {
+  const pct = Math.round(view.z * 100);
+  const [text, setText] = useState(String(pct));
+  useEffect(() => setText(String(pct)), [pct]);
+  const apply = () => { const v = Number(text.replace(/[^0-9.]/g, "")); if (v > 0) api.zoomBy(Math.max(100, Math.min(MAX_ZOOM * 100, v)) / 100 / view.z); else setText(String(pct)); };
+  return (
+    <div className={`v2-mp-zoom${inline ? " is-inline" : ""}`} role="group" aria-label="Zoom" data-testid="mp-zoom" onPointerDown={(e) => e.stopPropagation()}>
+      <button type="button" className="v2-mp-zbtn" aria-label="Zoom out" title="Zoom out (−)" disabled={view.z <= 1.001} onClick={() => api.zoomBy(1 / 1.25)}><Ic g="zoom-out" size={16} /></button>
+      <label className="v2-mp-zfield" title="Zoom in percent (100 = fit). Scroll pans, ⌘/Ctrl + scroll or pinch zooms, Space + drag pans">
+        <input aria-label="Zoom percent" inputMode="numeric" value={text} onChange={(e) => setText(e.target.value)} onBlur={apply} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); apply(); (e.target as HTMLInputElement).blur(); } }} /><span aria-hidden>%</span>
+      </label>
+      <button type="button" className="v2-mp-zbtn" aria-label="Zoom in" title="Zoom in (+)" disabled={view.z >= MAX_ZOOM - 1e-6} onClick={() => api.zoomBy(1.25)}><Ic g="zoom-in" size={16} /></button>
+      <button type="button" className="v2-mp-zbtn v2-mp-zfit" aria-label="Fit" title="Fit the frame (0, or double-tap an empty area)" disabled={view.z <= 1.001} onClick={() => api.fit()}><Ic g="fit" size={16} /> <span>Fit</span></button>
+    </div>
   );
 }
 const round = (v: number) => Math.round(v * 1e4) / 1e4;
 const round2 = (v: number) => Math.round(v * 100) / 100;
-function clampView(v: { z: number; tx: number; ty: number }, w: DOMRect) {
-  if (v.z <= 1.001) return { z: 1, tx: 0, ty: 0 };
-  const mx = ((v.z - 1) * w.width) / 2, my = ((v.z - 1) * w.height) / 2;
-  return { z: v.z, tx: Math.max(-mx, Math.min(mx, v.tx)), ty: Math.max(-my, Math.min(my, v.ty)) };
-}
 
 /** Keys while the mode is open: Esc cancel, Enter done, Delete the point, ⌘/Ctrl+Z / ⇧Z the session's undo / redo. */
-export function useMotionKeys(api: MotionApi) {
+export function useMotionKeys(api: MotionApi, opts: { /** P90: Space pressed and released without panning (play / pause). */ onSpaceTap?: () => void } = {}) {
+  const tap = useRef(opts.onSpaceTap); tap.current = opts.onSpaceTap;
   const ref = useRef(api); ref.current = api;
   const on = !!api.session;
   useEffect(() => {
@@ -300,11 +419,25 @@ export function useMotionKeys(api: MotionApi) {
       else if (mod && k === "z" && !inField) { if (e.shiftKey) a.redo(); else a.undo(); }
       else if (mod && k === "y" && !inField) a.redo();
       else if (k === "p" && !mod && !inField) a.setAdd(!s.add);
+      // P90: Space held = the hand (drag pans); a tap still plays / pauses. 0 fits, + / − zoom.
+      else if (e.key === " " && !inField && !(e.target as HTMLElement)?.closest?.("button")) { if (!e.repeat && !s.hand) a.setHand(true); }
+      else if (k === "0" && !mod && !inField) a.fit();
+      else if ((k === "=" || k === "+") && !mod && !inField) a.zoomBy(1.25);
+      else if ((k === "-" || k === "_") && !mod && !inField) a.zoomBy(1 / 1.25);
       else handled = false;
       if (handled) { e.preventDefault(); e.stopImmediatePropagation(); }
     };
+    const onUp = (e: KeyboardEvent) => {
+      const a = ref.current;
+      if (e.key !== " " || !a.session?.hand) return;
+      e.preventDefault(); e.stopImmediatePropagation();
+      if (!a.setHand(false)) tap.current?.();
+    };
+    const onBlur = () => { if (ref.current.session?.hand) ref.current.setHand(false); };
     window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
+    window.addEventListener("keyup", onUp, true);
+    window.addEventListener("blur", onBlur);
+    return () => { window.removeEventListener("keydown", onKey, true); window.removeEventListener("keyup", onUp, true); window.removeEventListener("blur", onBlur); };
   }, [on]);
 }
 

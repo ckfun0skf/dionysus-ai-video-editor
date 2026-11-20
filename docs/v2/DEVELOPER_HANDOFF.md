@@ -561,6 +561,17 @@ inlines it. Shot editor layer *Path* picker (`ShotPatch.newPaths`). Editor: `Nam
 input type `path` (`path:<id>`, `path:saved/<id>`). WebMCP `set_story_path`, `remove_story_path`,
 `list_motion_paths`, `save_motion_path`, `set_clip_motion_path { ref | saved }`; AI rule **82**.
 
+**P90 (done): path gaps** (MOTION_PATH.md §5 "View", §7, §9; `tasks.json` latest is `P90-PATH-GAPS`). Path steps can
+be skipped (`StoryPath.skipped`, JSON `"skipped": true`, `set_story_path { skipped }`, step state `skipped`; planned
+points stay final; Reopen; tracking or drawing clears it). The Motion path editing view is one view transform
+(`View`, `viewBox` / `clampView` / `zoomAt` / `panBy` in `ui/MotionPathEditor.tsx`): the frame element gets it as a CSS
+transform, the overlay is drawn in screen space (44 px targets at any zoom), pinch / ⌘-Ctrl+wheel / − + % field zoom,
+two fingers / empty-area drag / Space + drag / middle button / wheel pan, double-tap / Fit / 0 resets; a pinch drops
+the one-finger gesture it interrupts (no stray point). Path steps: an image (or code clip) reference hides Track with
+the reason and is drawn over its picture; a reference with several versions gets a version picker for Track and
+Draw. Phone: the timeline's time opens *Go to time* (`ui/GoToTime.tsx`, `parseTimecode`), used for the 390 preview
+vs export check. AI rule 82 mentions skipping (no renumbering).
+
 **Backlog and known limits after Phase 2** (still open after Phase 3; candidates for small PRs):
 
 - Scene clips on overlay tracks are not synced to the storyboard (a storyboard has no scene layer type); a scene

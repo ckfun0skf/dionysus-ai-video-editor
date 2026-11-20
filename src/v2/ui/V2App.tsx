@@ -73,6 +73,7 @@ import { EffectPicker } from "./EffectPicker";
 import { SyncSheet } from "./SyncSheet";
 import { ProjectSettings as MobileProjectSettings } from "./desktop/ProjectSettings";
 import { HtmlParamsPanel } from "./HtmlParamsPanel";
+import { GoToTimeSheet } from "./GoToTime";
 import { TransitionPicker, cutOf } from "./TransitionPicker";
 import { loadPreviewVh, PanelGrabber, Sheet, SheetDone } from "./Sheet";
 import { ActionGrid } from "./ActionGrid";
@@ -227,6 +228,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const [maskOpen, setMaskOpen] = useState(false);
   /** V2-HTML-PARAMS: the mobile sheet with the selected HTML clip's param values. */
   const [paramsOpen, setParamsOpen] = useState(false);
+  /** P90: the phone's Go to time sheet (tap the timeline's time). */
+  const [gotoOpen, setGotoOpen] = useState(false);
   /** P84: the phone sheet with a plugin clip's details (the inspector's Plugin tab on desktop). */
   const [pluginInfo, setPluginInfo] = useState(false);
   const [pluginParams, setPluginParams] = useState(false);
@@ -371,7 +374,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   useEffect(() => { setGizmoScope(undefined); }, [selectedId]);
   // P89: Motion path mode (a draft session; ✓ commits one undo step, ✕ / Esc discards it).
   const mpApi = useMotionSession(engine, (s) => { player.motionPreview = s; player.draw(); }, setToast);
-  useMotionKeys(mpApi);
+  useMotionKeys(mpApi, { onSpaceTap: () => playPause() });
   const mpSession = mpApi.session;
   const mpClip = mpSession ? findPlacement(comp, mpSession.id)?.placement : undefined;
   const aspectNow = project.settings.width / project.settings.height;
@@ -1527,7 +1530,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           <PanelGrabber vh={previewVh} onChange={setPreviewVh} target={() => document.querySelector<HTMLElement>(".v2-app.is-mobile .v2-preview")} />
           <Timeline onOpenTrack={openTrack} onTrackRange={(c) => void trackRange(c)} focus={focusGroup} engine={engine} project={project} time={time} playing={playing} onSeek={seek} selectedId={selectedId} selectedIds={sel} onToggleSelect={toggleClip} multiMode={multiMode} onSelect={selectClip} peaks={peaks} strips={strips} loads={clipLoads} pps={pps} onZoom={(z) => setPps(clampPps(z))} centered onPlayback={(p) => { stopAt.current = undefined; if (p) player.play(); else player.pause(); }} topLane={topLane} ripple={ripple} onTransition={onTransition} onEditSubs={openSubs} onEditLayer={editLayer} onEditCaption={editCaption} onMergeDraft={setMergeDraft} onMergePlay={mergePlay} expanded={expanded} onExpand={onExpand}
             thumbs={thumbs} onAddMedia={() => setPicker("main")}
-            timeLabel={<><b>{formatTimecode(time, project.settings.fps).slice(0, 5)}</b> / {formatTimecode(duration, project.settings.fps).slice(0, 5)}</>}
+            timeLabel={<button type="button" className="v2-time-go" aria-label={`Go to time (now ${formatTimecode(time, project.settings.fps)})`} title="Go to an exact time" data-testid="time-go" onClick={() => setGotoOpen(true)}><b>{formatTimecode(time, project.settings.fps).slice(0, 5)}</b> / {formatTimecode(duration, project.settings.fps).slice(0, 5)}</button>}
             sideColumn={<>
               {firstVideoTrack && <button className="v2-side-btn" onClick={() => engine.dispatch(cmd.toggleTrackMute(firstVideoTrack.id))}><b aria-hidden><Ic g={firstVideoTrack.muted ? "🔇" : "🔊"} /></b><span>{firstVideoTrack.muted ? "Unmute clip audio" : "Mute clip audio"}</span></button>}
               <button className="v2-side-btn v2-cover" onClick={() => seek(0)} style={firstClip && thumbs[firstClip.source.assetId] ? { backgroundImage: `url(${thumbs[firstClip.source.assetId]})` } : undefined}><span>Cover</span></button>
@@ -1571,6 +1574,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           {transFor && cutOf(comp, transFor) && <Sheet label="Transitions" head={false} dim={false} className="v2-trans-sheet" onClose={() => setTransFor(undefined)}><TransitionPicker key={transFor} engine={engine} comp={comp} placementId={transFor} thumbs={thumbs} onPreview={previewCut} onToast={setToast} onNewCode={() => createCodeRole("transition")} onDone={() => setTransFor(undefined)} /></Sheet>}
           {fxOpen && <Sheet label="Effects" className="v2-msheet-insp" onClose={() => setFxOpen(false)}><EffectPicker engine={engine} at={time} placement={isEffect ? selected!.placement : undefined} onAdded={(id) => setSel([id])} onClose={() => setFxOpen(false)} onNewCode={() => createCodeRole("effect")} onEditCode={(id) => void editCodeAsset(id)} /></Sheet>}
           {sceneEditor}
+          {gotoOpen && <GoToTimeSheet time={time} duration={duration} fps={project.settings.fps} onSeek={seek} onClose={() => setGotoOpen(false)} />}
           {paramsOpen && selected && isHtml && <Sheet label="Clip params" className="v2-msheet-insp" onClose={() => setParamsOpen(false)}><HtmlParamsPanel engine={engine} project={project} placement={selected.placement} blobs={storage.blobs} onEditCode={() => { setParamsOpen(false); void openCode(); }} /></Sheet>}
           {pluginInfo && selected && pluginMetaOf(selected.placement.clipType) && <Sheet label="Plugin" className="v2-msheet-insp" onClose={() => setPluginInfo(false)}><PluginClipPanel project={project} placement={selected.placement} part="details" onRetry={retryPlugin} onReview={(id) => { setPluginInfo(false); plugins.review(id); }} updateTo={pluginUpdateOf(selected.placement.clipType)} onUpdate={(id) => { setPluginInfo(false); plugins.update(id); }} /></Sheet>}
           {pluginParams && selected && pluginMetaOf(selected.placement.clipType) && <Sheet label={`${pluginMetaOf(selected.placement.clipType)!.name} settings`} className="v2-msheet-insp v2-pl-params-sheet" snaps={[0.5, 0.9]} initial={0} dim={false} onClose={() => setPluginParams(false)}><PluginClipPanel project={project} placement={selected.placement} engine={engine} part="params" onRetry={retryPlugin} onReview={(id) => { setPluginParams(false); plugins.review(id); }} /></Sheet>}

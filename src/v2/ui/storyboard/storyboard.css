@@ -537,6 +537,10 @@ button.v2-sb-conn:focus-visible { outline: 2px solid var(--accent); outline-offs
 .v2-pathstep-state { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--muted); }
 .v2-pathstep-state.is-made { color: var(--text); }
 .v2-pathstep-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.v2-pathstep-ver { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+.v2-pathstep-ver select { min-height: 44px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: #1d1d22; color: var(--text); font: inherit; font-size: 14px; }
+.v2-pathstep-why { display: flex; gap: 6px; align-items: flex-start; margin: 0; }
+.v2-pathstep-why svg { flex: none; margin-top: 2px; }
 .v2-pathstep-users { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
 .v2-pathstep-users .v2-linkbtn { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; color: var(--text); text-decoration: none; }
 .v2-pathprev { position: relative; width: 100%; background: #0b0b0d; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
@@ -556,6 +560,8 @@ button.v2-sb-conn:focus-visible { outline: 2px solid var(--accent); outline-offs
 .v2-pathdraw-stagebox { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
 .v2-pathdraw-stage { position: relative; flex: none; background: #000; overflow: hidden; border-radius: 6px; }
 .v2-pathdraw-frame { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; }
+/* P90: the reference is dimmed a little so the white path and points read over a bright picture */
+img.v2-pathdraw-frame, video.v2-pathdraw-frame { filter: brightness(.78); }
 .v2-pathdraw-tip { margin: 0; text-align: center; }
 .v2-pathdraw-side { flex: none; width: 300px; overflow-y: auto; display: grid; gap: 12px; align-content: start; }
 .v2-pathdraw.is-mobile .v2-pathdraw-body { padding: 8px; }

@@ -32,6 +32,11 @@ export interface StoryPath {
   motionPath?: MotionPath;
   /** Set once the path was made from its reference or drawn (the guide step is then done). */
   createdBy?: PathCreatedBy;
+  /**
+   * P90: the guide step was skipped. The planned points (if any) are final and keep moving the layers; with no points
+   * the layers stay where their box puts them. Reopen = remove the flag. Tracking or drawing the path clears it.
+   */
+  skipped?: true;
 }
 
 /** A layer's (or clip's) link to a named path. `stretch`: fit the path's times to the layer; `offset`: move it. */
@@ -101,9 +106,10 @@ export function unresolvePath(ref: StoryPathRef, clip: MotionPath, srcLastTicks:
 }
 
 /** Where a path stands in production. "planned" = points from the plan, nothing to make. */
-export type PathStepState = "todo" | "waiting" | "planned" | "done";
+export type PathStepState = "todo" | "waiting" | "planned" | "done" | "skipped";
 export function pathStepState(p: StoryPath, refHasVersion: (slotId: string) => boolean): PathStepState {
   if (p.createdBy) return "done";
+  if (p.skipped) return "skipped";
   if (p.from) return refHasVersion(p.from) ? "todo" : "waiting";
   return hasPoints(p) ? "planned" : "todo";
 }
@@ -155,7 +161,7 @@ export function pathSignal(mp: MotionPath | undefined, offset: number, aspect: n
 
 const ID_RE = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,47}$/;
 type Issue = (path: string, message: string) => void;
-const PATH_KEYS = ["id", "name", "description", "from", "track", "durationSec", "motionPath", "createdBy"];
+const PATH_KEYS = ["id", "name", "description", "from", "track", "durationSec", "motionPath", "createdBy", "skipped"];
 
 /**
  * Root `paths` (parse step; errors only for what makes the list unusable: a bad id, a duplicate). A bad path's points
@@ -196,8 +202,10 @@ export function parseStoryPaths(raw: unknown, o: { aspect: number; ticksPerSecon
         if (parsed.path) p.motionPath = parsed.path;
       }
     }
+    if (v.skipped !== undefined) { if (v.skipped === true) p.skipped = true; else if (v.skipped !== false) o.warn(`${at}.skipped`, '"skipped" is true (the guide step was skipped: the planned points are final) or false.'); }
+    if (p.createdBy && p.skipped) delete p.skipped; // a made path is done, not skipped
     if (p.createdBy && !p.motionPath) { o.warn(`${at}.createdBy`, "createdBy without points is ignored (the path still has to be made)."); delete p.createdBy; }
-    if (!p.motionPath && !p.from) o.warn(at, `Path "${id}" has no points and nothing to make it from: the guide asks to draw it.`);
+    if (!p.motionPath && !p.from && !p.skipped) o.warn(at, `Path "${id}" has no points and nothing to make it from: the guide asks to draw it.`);
     out.push(p);
   });
   return out;
@@ -225,6 +233,7 @@ export function storyPathToJson(p: StoryPath, ticksPerSecond: number): Record<st
     id: p.id, ...(p.name ? { name: p.name } : {}), ...(p.description ? { description: p.description } : {}),
     ...(p.from ? { from: p.from } : {}), ...(p.track ? { track: p.track } : {}), ...(p.durationSec ? { durationSec: p.durationSec } : {}),
     ...(p.motionPath ? { motionPath: motionPathToJson(p.motionPath, ticksPerSecond, true) } : {}), ...(p.createdBy ? { createdBy: p.createdBy } : {}),
+    ...(p.skipped ? { skipped: true } : {}),
   };
 }
 
@@ -241,6 +250,14 @@ export function withPath<B extends BoardLike>(b: B, id: string, next: StoryPath 
     (out as BoardLike).shots = shots as BoardLike["shots"];
   }
   return out;
+}
+
+/** P90: skip (keep the planned points as final) or reopen a path's guide step. */
+export function withPathSkipped(p: StoryPath, skipped: boolean): StoryPath {
+  if (!!p.skipped === skipped || (skipped && p.createdBy)) return p;
+  if (skipped) return { ...p, skipped: true };
+  const { skipped: _s, ...rest } = p;
+  return rest;
 }
 
 /** A fresh path id from a name ("Bee flight" → "bee-flight", "bee-flight-2" …). */
