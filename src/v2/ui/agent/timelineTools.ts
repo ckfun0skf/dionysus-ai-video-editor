@@ -35,7 +35,8 @@ function rangeOfArgs(a: Record<string, unknown>, pl: Placement, def?: { start: n
   return { from: Math.max(pl.startTicks, from), to: Math.min(pl.startTicks + pl.durationTicks, to) };
 }
 import { cmd, type Command, type Engine } from "../../engine";
-import { agentToolOwner, clipPropFits, clipToolFits, clipTypeOf } from "../../clipTypes";
+import { agentToolOwner, clipPropFits, clipToolFits, clipTypeOf, PLUGIN_HOST_TOOL_NAMES } from "../../clipTypes";
+import { runPluginTool } from "./pluginTools";
 import { runAttachTool, runImportStoryboard, type MediaIO } from "./mediaTools";
 import type { BlobStore } from "../../ports";
 import { ExportVideoFrames, Player, audioPlan, exportDuration, mixAudio } from "../../render";
@@ -735,6 +736,8 @@ export async function runTimelineTool(engine: Engine, source: FrameSource | unde
       return { ok: true, changed, text: JSON.stringify({ trackId, cues: matched.updates.map((u) => ({ id: u.id, words: u.words.length })) }, null, 1) };
     }
   }
+  // P88: the plugin host's generic tools (no core owns them; they need the device library and the plugin dialog).
+  if (PLUGIN_HOST_TOOL_NAMES.has(name)) return (await runPluginTool(engine, name, a))!;
   // P72: a tool contributed by a clip type core runs through its `agent.run` (one undo step per edit).
   const owner = agentToolOwner(name);
   if (owner?.agent?.run) return owner.agent.run(name, a, { project, edit: (label, apply) => engine.dispatch({ label, apply }, name), ...(blobs ? { blobs } : {}) });

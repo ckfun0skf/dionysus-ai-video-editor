@@ -7,13 +7,14 @@
  */
 import { CLIP_TYPES, clipTypeOf } from "./index";
 import type { ClipAgentToolDef, ClipTypeCore } from "./types";
+import { PLUGIN_HOST_RULES, PLUGIN_HOST_TOOLS } from "./pluginAgentDefs";
 import type { Placement, Project } from "../domain/model";
 
-/** Tools contributed by clip types, in registry order. */
-export const clipTypeAgentTools = (): ClipAgentToolDef[] => CLIP_TYPES.list().flatMap((c) => c.agent?.tools ?? []);
+/** Tools contributed by clip types, in registry order, then (P88) the plugin host's generic tools. */
+export const clipTypeAgentTools = (): ClipAgentToolDef[] => [...CLIP_TYPES.list().flatMap((c) => c.agent?.tools ?? []), ...PLUGIN_HOST_TOOLS];
 
-/** AI guide rules contributed by clip types, in registry order (appended after RULE_LIST's built-ins). */
-export const clipTypeAgentRules = (): { key: string; text: string }[] => CLIP_TYPES.list().flatMap((c) => c.agent?.rules ?? []);
+/** AI guide rules contributed by clip types, in registry order (appended after RULE_LIST's built-ins), then (P88) the plugin host's one rule. */
+export const clipTypeAgentRules = (): { key: string; text: string }[] => [...CLIP_TYPES.list().flatMap((c) => c.agent?.rules ?? []), ...PLUGIN_HOST_RULES];
 
 /** The clip type that contributes tool `name`, if any. */
 export const agentToolOwner = (name: string): ClipTypeCore | undefined => CLIP_TYPES.list().find((c) => c.agent?.tools?.some((t) => t.name === name));

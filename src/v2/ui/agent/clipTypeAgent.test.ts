@@ -9,11 +9,14 @@ import { runTimelineTool } from "./timelineTools";
 const pl = (extra: Partial<Placement>): Placement => ({ id: "p", startTicks: 0, durationTicks: 120_000, sourceInTicks: 0, source: { kind: "assetVersion", assetId: "a", versionId: "v" }, clipType: "video", ...extra });
 
 describe("P72 clip type agent surface", () => {
-  it("only the scene type contributes tools and a rule (P78), after the built-ins; clip tools are existing timeline tools", () => {
-    expect(clipTypeAgentTools().map((t) => t.name)).toEqual(["create_scene_clip", "get_scene", "list_scene_objects", "add_scene_object", "set_scene_object", "remove_scene_object", "add_scene_event", "update_scene_event", "retime_scene_event", "remove_scene_event", "set_scene_world", "set_scene_light", "set_scene_script", "apply_scene_edits"]);
-    for (const t of clipTypeAgentTools()) expect(agentToolOwner(t.name)?.id).toBe("scene");
-    expect(clipTypeAgentRules().map((r) => r.key)).toEqual(["scene-clips"]);
-    expect(RULE_LIST.at(-1)!.key).toBe("scene-clips");
+  it("only the scene type contributes tools and a rule (P78), after the built-ins, then the plugin host's (P88); clip tools are existing timeline tools", () => {
+    expect(clipTypeAgentTools().map((t) => t.name).slice(0, -4)).toEqual(["create_scene_clip", "get_scene", "list_scene_objects", "add_scene_object", "set_scene_object", "remove_scene_object", "add_scene_event", "update_scene_event", "retime_scene_event", "remove_scene_event", "set_scene_world", "set_scene_light", "set_scene_script", "apply_scene_edits"]);
+    expect(clipTypeAgentTools().map((t) => t.name).slice(-4)).toEqual(["list_clip_plugins", "add_plugin_clip", "set_plugin_clip_params", "request_plugin_install"]);
+    for (const t of clipTypeAgentTools().slice(0, -4)) expect(agentToolOwner(t.name)?.id).toBe("scene");
+    for (const t of clipTypeAgentTools().slice(-4)) expect(agentToolOwner(t.name)).toBeUndefined();
+    expect(clipTypeAgentRules().map((r) => r.key)).toEqual(["scene-clips", "plugin-clips"]);
+    expect(RULE_LIST.at(-2)!.key).toBe("scene-clips");
+    expect(RULE_LIST.at(-1)!.key).toBe("plugin-clips");
     for (const t of clipTypeAgentTools()) expect(timelineReview.TIMELINE_TOOL_NAMES.has(t.name), t.name).toBe(true);
     for (const c of CLIP_TYPES.list()) for (const t of c.agent?.clipTools ?? []) expect(timelineReview.TIMELINE_TOOL_NAMES.has(t), `${c.id} ${t}`).toBe(true);
     expect(new Set(RULE_LIST.map((r) => r.key)).size).toBe(RULE_LIST.length);

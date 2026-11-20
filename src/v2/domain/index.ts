@@ -69,3 +69,4 @@ export * from "./sceneScriptCode";
 export * from "./sceneScript";
 export * from "./pluginManifest";
 export * from "./pluginLocks";
+export * from "./pluginAgent";

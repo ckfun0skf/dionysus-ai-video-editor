@@ -60,3 +60,4 @@ export type { ClipAccepts, ClipAgent, ClipAgentApi, ClipAgentResult, ClipAgentTo
 export { DEFAULT_CLIP_STORY, kindForFile, kindForSlotType, mimeForFile, storyOf } from "./story";
 export { PLACEHOLDER_STATE, isPlaceholder, placeholderAccepts, placeholderCaps, placeholderCore } from "./state";
 export { agentToolOwner, clipPropFits, clipToolFits, clipTypeAgentRules, clipTypeAgentTools, clipTypeDescribe } from "./agent";
+export { PLUGIN_HOST_RULES, PLUGIN_HOST_TOOL_NAMES, PLUGIN_HOST_TOOLS } from "./pluginAgentDefs";
