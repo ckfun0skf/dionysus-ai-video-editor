@@ -92,9 +92,9 @@ required checks.
 1. `git fetch` and branch from the latest `origin/main` (e.g. `p66-short-name`).
 2. Implement with tests. Keep PRs small (MODULE_DESIGN §14 targets < 400 changed lines; feature PRs here are often
    larger, but split refactors).
-3. **`public/doc/tasks.json`:** add one entry per PR with the next free P-number: `{ "id": "P83-SHORT-NAME", "title":
+3. **`public/doc/tasks.json`:** add one entry per PR with the next free P-number: `{ "id": "P84-SHORT-NAME", "title":
    "<what and why, one paragraph>", "status": "done", "progress": 100 }` appended after the latest entry (the latest is
-   `P82-SCENE-SCRIPT-OBJECTS`; the next is **P83**). Bump `updatedAt`. Edit the file surgically (insert text); do not
+   `P83-PLUGIN-MANIFEST`; the next is **P84**). Bump `updatedAt`. Edit the file surgically (insert text); do not
    re-serialise the whole JSON. `scripts/check-tasks-updated.mjs` fails a PR that changes `src/` without it. If an id
    is already taken, use the next number and say so in the PR.
 4. **AI guide rule:** append to `RULE_LIST` in `src/v2/domain/storyPrompt.ts` (append-only; numbers are positions;
@@ -113,7 +113,7 @@ required checks.
 6. Run `npm run gen:ai` after changing rules, tools or presets, and commit the regenerated files (tests fail if they are
    stale).
 7. `npx tsc -b && npx vitest run && npx vite build`.
-8. Commit in English; PR title `P83: …`; body says what, why, tests, and `Fixes #N` (or `Refs #N` if partial), plus
+8. Commit in English; PR title `P84: …`; body says what, why, tests, and `Fixes #N` (or `Refs #N` if partial), plus
    what was not verified. Push, open the PR, wait for `build` on the head SHA. Do not merge.
 
 ## 7. UI conventions
@@ -454,11 +454,29 @@ storyboard to 2.6 (design doc §7, the note under the table, and decision 6).
   updated (no new rule). Tests: `domain/sceneScript.test.ts`, `ui/sceneEditor.test.tsx`, `ui/sceneEditView.test.tsx`,
   `ui/sceneClip.test.tsx` (the page's only timers are the check's, outside the frame code).
 
-**Next phase: Phase 3, third-party clip types** (design doc §7 Phase 3): a plugin package (`dionysus.cliptype/1`
-manifest + sandboxed renderer page speaking the HTML clip frame protocol), host-validated tool calls forwarded to the
-sandbox, per-project loading with consent and a lock (id, version, content hash), projects that keep working without
-the plugin. Start with a design PR for the manifest and the loader before code, like Phase 1 and 2. New clip types
-follow `docs/v2/ADDING_CLIP_TYPES.md`; the scene format is `docs/v2/SCENE_FORMAT.md`.
+**Phase 3, third-party clip types, started in P83.** The owner accepted the plan on 2026-11-19 (decisions 10–17 in
+`CLIP_PLUGIN_ARCHITECTURE.md` §0): plugins render in a **worker on an `OffscreenCanvas`** behind a host-written
+bootstrap in the sandboxed opaque-origin iframe (no DOM, terminable, no network); packages are **embedded in the
+project plus a device library**, referenced by an optional `Project.plugins` lock (id, version, content hash) within
+`dionysus/3.1`; **trust is per project, per hash, per device**; sources are **a zip file or an https URL**, no signing,
+**ids start with `x-`**; plugins give agents **structured hints only** (`agent.description`, `agent.examples`; no
+rule text); **v1 is visual only** (no sound, no project media inputs); **storyboard plugin shots later**; agents use
+**generic host tools only**. Missing or not-enabled plugins use the P73 unknown-type slate.
+
+**P83 (step 3.1, done):** the Phase 3 design and step table (`CLIP_PLUGIN_ARCHITECTURE.md` §7 Phase 3), the author
+guide `docs/v2/PLUGIN_PACKAGE.md` (`dionysus.cliptype/1`, host API 1: manifest fields and limits, the render contract
+`dionysus.clip({ init?, render(t, ctx) })` with `ctx.canvas` an OffscreenCanvas, determinism, CSP, time limits, the
+content hash, updates), the pure validator `src/v2/domain/pluginManifest.ts` (`validatePluginManifest` and
+`parsePluginManifest` with JSON-path issues, `checkPluginFiles`, `isPluginFilePath`, `comparePluginVersions`; the
+allowed library ids are passed in, because `domain` can't import `render/htmlLibs.ts`) and the sample package
+`public/plugins/samples/x-dionysus-stripes/` (manifest + 2D `render.js`). Tests: `domain/pluginManifest.test.ts`
+(also loads the sample's `render.js` the way the host will and checks it draws the same calls for the same `t`). No
+editor behaviour changed; the editor doesn't load plugins yet.
+
+**Next: P84 (step 3.2),** domain and persistence: `Placement.plugin`, `PluginClipType`, the `Project.plugins` lock, the
+package store and content hash, packages in project export / import, runtime registration of cores built from
+manifests, and the not-enabled slate. Then P85 sandbox renderer, P86 install and trust UX, P87 clip editing UX, P88
+agent tools (see the step table). New built-in clip types still follow `docs/v2/ADDING_CLIP_TYPES.md`.
 
 **Backlog and known limits after Phase 2** (candidates for small PRs before or during Phase 3):
 

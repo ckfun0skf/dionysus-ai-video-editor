@@ -1,0 +1,39 @@
+{
+  "format": "dionysus.cliptype/1",
+  "api": 1,
+  "id": "x-dionysus-stripes",
+  "name": "Moving stripes",
+  "version": "1.0.0",
+  "publisher": "Dionysus samples",
+  "description": "Diagonal stripes that slide across the frame, with an optional title band.",
+  "icon": "waves",
+  "trackKind": "video",
+  "caps": { "visual": true, "keyable": true },
+  "durationSec": 5,
+  "render": { "entry": "render.js" },
+  "params": {
+    "colorA": { "type": "color", "default": "#111111", "label": "Colour 1" },
+    "colorB": { "type": "color", "default": "#f5c400", "label": "Colour 2" },
+    "count": { "type": "number", "default": 8, "min": 2, "max": 40, "step": 1, "label": "Stripes" },
+    "angle": { "type": "number", "default": 30, "min": -80, "max": 80, "step": 1, "label": "Angle (°)" },
+    "speed": { "type": "number", "default": 0.5, "min": 0, "max": 4, "step": 0.1, "label": "Speed", "description": "Stripe widths per second." },
+    "direction": { "type": "select", "default": "left", "options": ["left", "right"], "label": "Direction" },
+    "title": { "type": "text", "default": "", "label": "Title", "description": "Shown on a band across the middle; empty = no band." },
+    "band": { "type": "boolean", "default": true, "label": "Title band" }
+  },
+  "editor": {
+    "groups": [
+      { "label": "Stripes", "fields": ["colorA", "colorB", "count", "angle"] },
+      { "label": "Motion", "fields": ["speed", "direction"] },
+      { "label": "Title", "fields": ["title", "band"] }
+    ]
+  },
+  "agent": {
+    "description": "A full-frame background of sliding diagonal stripes in two colours, optionally with a title on a band. Good for intros, warnings and lower-energy breaks between shots.",
+    "examples": [
+      { "description": "Yellow and black hazard stripes with the title \"Under construction\".", "params": { "colorA": "#111111", "colorB": "#f5c400", "title": "Under construction" } },
+      { "description": "Slow, calm pastel stripes with no title.", "params": { "colorA": "#cfe8ff", "colorB": "#ffe1ec", "count": 6, "speed": 0.2, "band": false } }
+    ]
+  },
+  "files": ["render.js"]
+}

@@ -3390,6 +3390,12 @@
           "title": "Scene Script objects (owner follow-up, last of four; docs/v2/SCENE_FORMAT.md Script objects): an object with script { file, params } in dionysus.scene/1 is drawn by raw three.js code kept in the scene's files (build(THREE, params, ctx) returns an Object3D; update(obj, t, params, ctx) sets it from scene time alone; ctx.random is seeded so preview, export and any seek order match). Four templates to start from (particles, procedural shape, text, empty). The code is checked statically (size, no imports, a build export, syntax) and the page runs each script first in a check worker with a 3 s limit, so an endless loop never freezes the page or an export; a failing script draws its fallback shape and is reported to the player and the editor. The scene editor gets Script objects in Add object (two columns), a Script section (params, a code box with live checks, Apply as one undo step, Revert, templates, Turn into a plain shape) and a Script tool on the phone; agents get set_scene_script and each Script object's code in list_scene_objects (rule 79 text updated). Also fixes the phone Edit view's 'Drag writes…' hint covering handles: it is now a strip under the view (a small pill on desktop).",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P83-PLUGIN-MANIFEST",
+          "title": "Phase 3 step 3.1, third-party clip type plugins: design and package format (owner accepted decisions 10-17 on 2026-11-19, docs/v2/CLIP_PLUGIN_ARCHITECTURE.md §0 and §7 Phase 3): plugins render in a terminable worker on an OffscreenCanvas behind a sandboxed opaque-origin bootstrap (no DOM, no network), packages are embedded in the project plus a device library with a Project.plugins lock (id, version, content hash) within dionysus/3.1, trust is per project, hash and device, sources are a zip or an https URL with ids starting x-, plugins give agents structured hints only, v1 is visual only, storyboard plugin shots later, generic host agent tools only. Adds the author guide docs/v2/PLUGIN_PACKAGE.md (dionysus.cliptype/1, host API 1), the pure validator src/v2/domain/pluginManifest.ts (JSON-path errors and warnings, package file check, safe paths, semver order) with tests, and the sample package public/plugins/samples/x-dionysus-stripes/. No editor behaviour change; loading plugins starts in P84.",
+          "status": "done",
+          "progress": 100
         }
       ]
     }

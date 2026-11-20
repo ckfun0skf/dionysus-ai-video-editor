@@ -5,6 +5,8 @@ folder, `src/v2/clipTypes/<id>/`, with up to three files. The editor finds them 
 list to edit for the registry, the renderer table or the UI table. Design and decisions:
 [`CLIP_PLUGIN_ARCHITECTURE.md`](CLIP_PLUGIN_ARCHITECTURE.md) (Phase 1, done in P65–P73). A real type built this way:
 `clipTypes/scene/` (P74, Phase 2), with its data format in [`SCENE_FORMAT.md`](SCENE_FORMAT.md).
+This guide is for **built-in** types in this repo; third-party plugins (Phase 3) are packages described in
+[`PLUGIN_PACKAGE.md`](PLUGIN_PACKAGE.md).
 
 | File | Layer | What it is | Who reads it |
 |---|---|---|---|
