@@ -171,6 +171,11 @@ export interface Placement {
    */
   motionPath?: MotionPath;
   /**
+   * P89b: the storyboard path this clip's motionPath was resolved from (Send / Update / Re-lay set it; Sync writes an
+   * edited path back through it). Cleared with the path.
+   */
+  pathRef?: { ref: string; stretch?: true; offset?: { x: number; y: number } };
+  /**
    * Storyboard linked item (V2-SB-113): a layer, caption or effect clip sent with a shot. It follows the shot clip
    * `anchor` on version swaps (see domain/storyLinks). `want` remembers the offset/length before a clamp.
    */
@@ -231,7 +236,7 @@ export const canChromaKey = (p: Pick<Placement, "clipType">) => clipTypeOf(p).ca
  * live preview both use this, so a draft looks exactly like the committed path.
  */
 export function withMotionPath(p: Placement, path: MotionPath | null): Placement {
-  if (!path) { if (!p.motionPath) return p; const { motionPath: _m, ...rest } = p; return rest; }
+  if (!path) { if (!p.motionPath && !p.pathRef) return p; const { motionPath: _m, pathRef: _r, ...rest } = p; return rest; }
   const keys = { ...p.keyframes };
   delete keys.x; delete keys.y;
   if (path.orient) delete keys.rotation;
@@ -368,7 +373,12 @@ export interface Project {
   seriesId?: string;
   /** P84: third-party clip type plugins this project uses, by plugin id (optional within 3.1; older builds ignore it). */
   plugins?: Record<string, PluginLock>;
+  /** P89b: named motion paths saved in the editor for reuse on other clips (optional within 3.1). */
+  motionPaths?: SavedMotionPath[];
 }
+
+/** P89b: a motion path saved under a name (centre offsets, ticks from its start; see docs/v2/MOTION_PATH.md). */
+export interface SavedMotionPath { id: string; name: string; path: MotionPath }
 
 /** Default still-image duration when placed on the timeline. */
 export const DEFAULT_IMAGE_TICKS = 3 * 120_000;

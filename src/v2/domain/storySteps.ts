@@ -28,8 +28,12 @@ export function stepDeps(b: Storyboard): Map<StepKey, StepKey[]> {
   }
   for (const s of Object.values(b.shots)) {
     // A shot needs its references (assets and media-layer assets) and, for html/still shots, its clip slot.
-    deps.set(shotKey(s.id), shotNeeds(b, s).map(slotKey));
+    // P89b: and the named paths its layers move along.
+    const paths = [...new Set((s.layers ?? []).flatMap((l) => (l.pathRef && b.paths?.some((x) => x.id === l.pathRef!.ref) ? [`path:${l.pathRef.ref}`] : [])))];
+    deps.set(shotKey(s.id), [...shotNeeds(b, s).map(slotKey), ...paths]);
   }
+  // P89b: a path needs the reference it is made from.
+  for (const pa of b.paths ?? []) deps.set(`path:${pa.id}`, pa.from && b.slots[pa.from] ? [slotKey(pa.from)] : []);
   return deps;
 }
 

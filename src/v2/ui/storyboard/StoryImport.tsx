@@ -183,7 +183,7 @@ function removedText(d: StoryDiff): string {
   const parts = [d.shots.removed.length && plural(d.shots.removed.length, "shot"), d.assets.removed.length && plural(d.assets.removed.length, "asset")].filter(Boolean);
   return parts.join(" and ");
 }
-const FIELD_NAMES: Record<string, string> = { meta: "title and settings", order: "shot order", connections: "connections", audio: "audio cues" };
+const FIELD_NAMES: Record<string, string> = { meta: "title and settings", order: "shot order", connections: "connections", audio: "audio cues", paths: "named paths" };
 
 /** P2A: what a re-import adds, changes and removes, by id (the confirm step before Apply). */
 export function MergePreview({ diff }: { diff: StoryDiff }) {

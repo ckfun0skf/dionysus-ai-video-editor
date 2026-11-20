@@ -26,7 +26,7 @@ The first element of `<head>`:
 | `format` | `"dionysus.htmlclip/1"` | Required for a conforming package. Missing = a legacy clip (accepted with a warning). |
 | `name` | string | Display and file name. |
 | `description` | string | Optional. |
-| `inputs` | object | Live signals the clip reads as `ctx.inputs[name]` (§3.3): name → `{ "type": "graphic" \| "audio" \| "tracker", "label"?, "description"? }` (P43; the older `"scene"`, `"beat"`, `"track"` mean the same). |
+| `inputs` | object | Live signals the clip reads as `ctx.inputs[name]` (§3.3): name → `{ "type": "graphic" \| "audio" \| "tracker" \| "path", "label"?, "description"? }` (P43, `path` P89b; the older `"scene"`, `"beat"`, `"track"` mean the same). |
 | `role` | string | `"clip"` (default), `"effect"` or `"transition"` (§3.2). Where a package is used must match its role. |
 | `durationSec` | number (0–600] | Intended length. On the timeline the clip's own length wins (`ctx.duration`). |
 | `width`, `height` | integer px (16–8192) | Intended frame size. The clip renders at the output size (`ctx.width`, `ctx.height`). |
@@ -77,15 +77,16 @@ A package's manifest `role` says how it is used:
 
 Using a package in the wrong place is an error (`role-mismatch`): an effect or transition can't be added to a track, and a clip can't be picked as an effect or transition. An effect that never reads `ctx.source`, or a transition that doesn't read both `ctx.from` and `ctx.to`, gets a warning. These pictures run through the sandbox every frame, so preview may lag a frame and export is slower. Clips get only these pictures; there is no pixel-reading API.
 
-### 3.3 References: graphic, audio and tracker (P38–P43)
+### 3.3 References: graphic, audio, tracker and path (P38–P43, P89b)
 
-A clip can react to the edit around it through **three reference types**. Declare them in the manifest (`inputs`), e.g. `"inputs": { "under": { "type": "graphic" }, "music": { "type": "audio", "label": "Music" }, "target": { "type": "tracker", "label": "Follow" } }` — or in the code editor's **Params** tab with **+ Graphic**, **+ Audio** and **+ Tracker** under *References* — and read `ctx.inputs.<name>` in `render`. The clip gets **numbers only**, computed by the editor (no raw audio, pixel or frame API). The P38/P39 names `"scene"`, `"beat"` and `"track"` are still accepted and mean graphic, audio and tracker.
+A clip can react to the edit around it through **four reference types**. Declare them in the manifest (`inputs`), e.g. `"inputs": { "under": { "type": "graphic" }, "music": { "type": "audio", "label": "Music" }, "target": { "type": "tracker", "label": "Follow" } }` — or in the code editor's **Params** tab with **+ Graphic**, **+ Audio** and **+ Tracker** under *References* — and read `ctx.inputs.<name>` in `render`. The clip gets **numbers only**, computed by the editor (no raw audio, pixel or frame API). The P38/P39 names `"scene"`, `"beat"` and `"track"` are still accepted and mean graphic, audio and tracker.
 
 | Type | `ctx.inputs[name]` | Picker (per use: Params → Inputs) | Default |
 |---|---|---|---|
 | **graphic** | `{ luma, avgColor: [r, g, b], motion, histogram }` (16 luma bins, from a small thumbnail) | **Program**, the main and overlay video tracks and their clips | Program (the picture under the clip) |
 | **audio** | `{ rms, peak, bands, onset, envelope }` (8 bands, sub-bass to air; analysed once at 60 values/s, so preview and export match) | **Mix**, tracks with sound (audio tracks, video tracks) and their audio / video clips | Mix (everything you hear) |
 | **tracker** | `{ x, y, width, height, scale, rotation, found }` (0–1 of the frame; x/y = box centre; scale vs the first box) | every tracker on a main or overlay clip (Tracks lane), shown as "clip · tracker name" | None (`found: false`) |
+| **path** (P89b) | `{ x, y, angle, progress, found }` (x/y 0–1 of the frame; `angle` = direction of travel in degrees; `progress` 0–1 along the path) at the clip's own time | the storyboard's named paths ("Storyboard · name", "(not made yet)" until tracked or drawn) and the project's saved paths ("Saved · name"); bindings `path:<id>` / `path:saved/<id>` | None (`found: false`, centre) |
 
 Each picker lists only valid targets. Tracks can be renamed there (or by double-clicking a layer name on desktop); bindings store ids (`track:<id>`, `clip:<id>`, `clip:<id>#<trackId>`), so a rename never breaks them. A layer drawn above the clip is read from its previous frame.
 
@@ -203,7 +204,7 @@ The prompt is built from the same source as §6.1: the change request, the curre
 REVISE
 - Keep what already works. Change only what the change request asks for.
 - Keep every param key, type and default unless the change request adds, removes or changes one. The timeline stores values by those keys.
-- Keep bindings and inputs unless the change request changes them. Input types are graphic, audio and tracker; the legacy names scene, beat and track mean graphic, audio and tracker.
+- Keep bindings and inputs unless the change request changes them. Input types are graphic, audio, tracker and path (P89b); the legacy names scene, beat and track mean graphic, audio and tracker.
 - Reply with a complete dionysus.htmlclip/1 package, not a diff, patch or snippet.
 - The user imports the .zip or .html (or pastes the reply) in Dionysus (Code Editor → Revise with AI → Import), which checks it against the package standard and opens it in the Code Editor. Saving there makes a new version.
 ```

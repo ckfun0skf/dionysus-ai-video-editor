@@ -69,8 +69,8 @@ export function HtmlParamsPanel({ engine, project, placement, blobs, onEditCode 
  * P38: the clip's inputs (manifest `inputs`) and where each reads from. A tap on the source opens the Reference list:
  * Mix / Program, each track (renameable here, the binding keeps the track id) and its clips. One undo step per change.
  */
-const REF_LABEL: Record<RefType, string> = { graphic: "Graphic reference · luma, colour, motion", audio: "Audio reference · rms, bands, onset", tracker: "Tracker reference · x, y, size, found" };
-const REF_ICON: Record<RefType, string> = { graphic: "eye", audio: "♫", tracker: "track" };
+const REF_LABEL: Record<RefType, string> = { graphic: "Graphic reference · luma, colour, motion", audio: "Audio reference · rms, bands, onset", tracker: "Tracker reference · x, y, size, found", path: "Path reference · x, y, angle, progress" };
+const REF_ICON: Record<RefType, string> = { graphic: "eye", audio: "♫", tracker: "track", path: "motion-path" };
 
 function ClipInputs({ engine, project, placement, inputs }: { engine: Engine; project: Project; placement: Placement; inputs: [string, HtmlClipInput][] }) {
   const [open, setOpen] = useState<string>();
@@ -113,7 +113,7 @@ function ClipInputs({ engine, project, placement, inputs }: { engine: Engine; pr
           </div>
         );
       })}
-      <p className="v2-hint">The clip gets numbers only (no audio or pixels): graphic = luma, average colour, motion, histogram; audio = rms, peak, 8 bands, onset, envelope; tracker = the box (x, y, size, found).</p>
+      <p className="v2-hint">The clip gets numbers only (no audio or pixels): graphic = luma, average colour, motion, histogram; audio = rms, peak, 8 bands, onset, envelope; tracker = the box (x, y, size, found); path = the point on the path (x, y, angle, progress).</p>
     </section>
   );
 }

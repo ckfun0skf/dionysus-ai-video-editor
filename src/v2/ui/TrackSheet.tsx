@@ -22,10 +22,15 @@ export function followCandidates(project: Project, target: Placement): { id: str
     .map((p) => ({ id: p.id, kind: p.clipType, label: p.clipType === "text" ? `“${(p.text?.text ?? "Text").slice(0, 28)}”` : (project.assets[p.source.assetId]?.name ?? p.id).replace(/\.[a-z0-9]+$/i, "") }));
 }
 
-export function TrackSheet({ engine, project, placement, trackId, time, loadBlob, analyse, onClose, onDone }: {
+export function TrackSheet({ engine, project, placement, trackId, time, loadBlob, analyse, onClose, onDone, onCommitTrack, label }: {
   engine: Engine; project: Project; placement: Placement; /** Existing tracker to review; undefined = add a new one. */ trackId?: string; time: number;
   loadBlob: (assetId: string) => Promise<Blob | undefined>; analyse?: TrackAnalyse;
   onClose: () => void; onDone: (msg: string) => void;
+  /**
+   * P89b: track a storyboard reference video to make a path. ✓ hands the track to this (no clip changes, no followers,
+   * no mask) and `placement` is a stand-in for the reference's selected version.
+   */
+  onCommitTrack?: (t: NamedTrack) => void; label?: string;
 }) {
   const ticks = useMemo(() => trackTicks(project, placement), [project, placement]);
   const prev = useMemo(() => tracking.tracksOf(placement).find((t) => t.id === trackId), [placement, trackId]);
@@ -197,13 +202,14 @@ export function TrackSheet({ engine, project, placement, trackId, time, loadBlob
     setPlaying(false);
     if (!track) { if (removing && prev) { engine.dispatch(cmd.commitTrack(placement.id, undefined, [], 0, { removeId: prev.id })); onDone(`${prev.name} removed (Undo to restore)`); } else onClose(); return; }
     let t: NamedTrack = { ...track, name: name.trim() || track.name };
-    if (mask) t.mask = mask; else delete t.mask;
+    if (mask && !onCommitTrack) t.mask = mask; else delete t.mask;
     if (tracking.missingRanges(t, range[0], range[1]).length) {
       // The range grew: analyse only the new part before committing.
       signal.current = { cancelled: false }; setPhase("busy"); setDone(0);
       try { t = await rangeTrack(run, project, placement, t, range[0], range[1], (d, n) => { setDone(d); setTotal(n); }, signal.current); } catch (e) { setError((e as Error).message); setPhase("review"); return; }
       if (signal.current.cancelled) return;
     } else t = tracking.withRange(t, range[0], range[1]);
+    if (onCommitTrack) { onCommitTrack(t); return; }
     if (engine.dispatch(cmd.commitTrack(placement.id, t, [...follow], time, { scale }))) onDone(`${t.name}: ${t.samples.length} frames${follow.size ? ` · ${follow.size} following` : ""}${mask ? ` · mask ${mask}` : ""}`);
   };
   const strip = useMemo(() => {
@@ -229,15 +235,15 @@ export function TrackSheet({ engine, project, placement, trackId, time, loadBlob
   }, [view, showPath, phase, ticks, range]);
   const pointDown = (e: RPointerEvent, i: number, x: number, y: number) => { e.stopPropagation(); if (pinchStart(e)) return; setPlaying(false); setIdx(i); (e.target as Element).setPointerCapture?.(e.pointerId); drag.current = { ...at(e), x0: at(e).x, y0: at(e).y, move: { bx: x, by: y, i } }; };
   const badCount = view ? view.samples.filter((q) => q.conf < tracking.UNSTABLE_CONF).length : 0, lostCount = view ? view.samples.filter((q) => q.lost).length : 0;
-  const okLabel = phase === "review" ? `Apply ${name || "track"}${follow.size ? ` and ${follow.size} follower${follow.size === 1 ? "" : "s"}` : ""}` : removing ? "Remove tracker" : "Done";
+  const okLabel = onCommitTrack ? (phase === "review" ? "Make the path" : "Done") : phase === "review" ? `Apply ${name || "track"}${follow.size ? ` and ${follow.size} follower${follow.size === 1 ? "" : "s"}` : ""}` : removing ? "Remove tracker" : "Done";
   const sec = (t: number) => `${(Math.max(0, t - ticks[0]) / TICKS_PER_SECOND).toFixed(2)}s`;
   const lo = (range[0] - ticks[0]) / Math.max(1, ticks[ticks.length - 1] + 1 - ticks[0]), hi = (range[1] - ticks[0]) / Math.max(1, ticks[ticks.length - 1] + 1 - ticks[0]);
 
   return (
-    <div className="v2-track" role="dialog" aria-label="Track" onKeyDown={(e) => { if (e.key === "Escape") cancel(); }}>
+    <div className="v2-track" role="dialog" aria-label={label ?? "Track"} onKeyDown={(e) => { if (e.key === "Escape") cancel(); }}>
       <header className="v2-subimport-head">
         <button className="v2-icon-btn" aria-label="Cancel" title="Cancel: no change (Esc)" onClick={cancel}><Ic g="✕" /></button>
-        <input className="v2-track-name" aria-label="Tracker name" value={name} maxLength={40} onChange={(e) => setName(e.target.value)} />
+        {onCommitTrack ? <b className="v2-track-name v2-track-title">{label ?? "Track"}</b> : <input className="v2-track-name" aria-label="Tracker name" value={name} maxLength={40} onChange={(e) => setName(e.target.value)} />}
         <button className="v2-icon-btn" aria-label={okLabel} title={okLabel + " (one undo step)"} disabled={phase === "busy" || (phase === "draw" && !removing)} onClick={() => void commit()}><Ic g="✓" /></button>
       </header>
       <div ref={stage} className={`v2-track-stage is-${phase}${mask && phase === "review" ? ` mask-${mask}` : ""}`} style={{ aspectRatio: `${aspect}`, width: `min(100%, calc(48dvh * ${aspect}))` }} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
@@ -279,7 +285,13 @@ export function TrackSheet({ engine, project, placement, trackId, time, loadBlob
       {phase === "busy" && (
         <div className="v2-match-busy" role="status" aria-live="polite"><progress max={total} value={done} aria-label="Tracking" /> Tracking… {Math.round((done / Math.max(1, total)) * 100)}%</div>
       )}
-      {phase === "review" && track && (
+      {phase === "review" && track && onCommitTrack && (
+        <div className="v2-track-out" data-testid="track-path-note">
+          <p className="v2-hint">✓ turns the box centre into the path's points (unstable and lost frames are skipped). Its times start at In {sec(range[0])}.</p>
+          <div className="v2-track-row"><button type="button" className="v2-btn" onClick={redraw}><Ic g="↶" size={16} /> Redraw box</button></div>
+        </div>
+      )}
+      {phase === "review" && track && !onCommitTrack && (
         <div className="v2-track-out">
           <h4>Follow</h4>
           {!cands.length ? <p className="v2-muted">Add a text, photo, overlay or code clip over this clip to make it follow the box.</p> : cands.map((c) => (

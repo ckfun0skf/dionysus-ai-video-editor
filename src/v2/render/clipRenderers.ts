@@ -16,6 +16,7 @@
 import type { AssetVersion, Placement, Project, Track } from "../domain/model";
 import type { HtmlClipInput, HtmlClipManifest } from "../domain/htmlClipPackage";
 import type { TrackSignal } from "../domain/tracking";
+import type { PathSignal } from "../domain/storyPaths";
 import type { SceneDoc } from "../domain/scene";
 import { CLIP_TYPES, UNKNOWN_CLIP_TYPE, isPlaceholder, isPluginEnabled, variantOf } from "../clipTypes";
 import { PLACEHOLDER_RENDERER } from "./placeholderSlate";
@@ -113,7 +114,7 @@ export interface ClipMediaHost {
   /** P74: the parsed scene document of a version blob: undefined while it loads, null when it can't be read. */
   sceneDoc(blobKey: string): SceneDoc | null | undefined;
   setHtmlOverride(placementId: string, params: Placement["htmlParams"]): void;
-  inputsFor(p: Placement, decls: Record<string, HtmlClipInput>, canvas: HTMLCanvasElement): Record<string, BeatSignal | SceneSignal | TrackSignal> | undefined;
+  inputsFor(p: Placement, decls: Record<string, HtmlClipInput>, canvas: HTMLCanvasElement): Record<string, BeatSignal | SceneSignal | TrackSignal | PathSignal> | undefined;
   /** Last ctx.inputs signature per html placement. */
   inputSig: Map<string, string>;
 }

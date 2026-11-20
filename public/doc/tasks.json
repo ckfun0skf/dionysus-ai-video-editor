@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "project": "Dionysus",
-  "updatedAt": "2026-11-19",
+  "updatedAt": "2026-11-20",
   "sourceOfTruth": "public/doc/tasks.json on main (see docs/v2/MODULE_DESIGN.md §14)",
   "statusDefinitions": {
     "done": "Implementation exists and has evidence; release/browser validation may still be pending.",
@@ -3430,6 +3430,12 @@
         {
           "id": "P89-MOTION-PATH",
           "title": "Motion path, After Effects style (P89a of the P89 split; docs/v2/MOTION_PATH.md): html, image, video, text and other overlay clips can move along a drawn Bezier path. Data: optional dionysus/3.1 Placement.motionPath (nodes with stable ids, times, in/out handles, per-segment ease, constantSpeed, orient + offset), evaluated inside transformAt with the frame aspect so preview and export match pixel for pixel; setMotionPath is one undo step and replaces x/y keys, tracking Follow replaces a path, trim/split keep it on the same frames. Editor: the path is drawn whenever the clip is selected (x/y keys dashed, editable as a path); a Motion path mode with click/tap to add, drag points and handles, insert on a segment, smooth/corner, delete, time markers and numeric fields, ease per segment, even speed, orient; Esc/✕ discards, ✓/Enter commits one undo step; desktop toolbar + inspector section, phone bottom context bar + sheets with 44px targets and pinch zoom. AI: storyboard layer motionPath (frame points, Send/Sync/export), WebMCP set_clip_motion_path / clear_clip_motion_path, get_timeline lists the path, AI rule 81. Named reusable storyboard paths and their guide step follow in P89b.",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "P89b-STORYBOARD-PATHS",
+          "title": "Named storyboard paths (P89b of the P89 split; docs/v2/MOTION_PATH.md section 7): a storyboard can plan a motion before any video exists. Root paths[] (planned points, from = a video/image reference, track, durationSec, createdBy track/draw) and layer \"motionPath\": { ref, stretch?, offset? } on text, image and html layers. The production guide gets the step 'Create path <name> from <reference>' (or 'Draw path <name>') after its reference: it waits for the reference, then the user tracks it with the Track sheet (the box centre becomes the points, no clip changes) or draws it with the Motion path tools over the reference frame (the reference video follows the timing strip); Clear resets it; each is one undo step. Send / Update / Re-lay resolve the path onto each layer clip (fitted with stretch, plus offset) and keep it linked (Placement.pathRef), so editing the path refreshes the clips on Update; Sync writes an edited path back into the named path when only that layer uses it, else gives the layer its own motionPath. Shot editor layer Path picker (link, new path, Fit to layer). Code clips get a path input type (x, y, angle, progress, found) bound to a storyboard or saved path. Editor: named paths in the Motion path section (desktop and the phone Adjust sheet): link a storyboard path, use a saved path, save as named path, unlink (Project.motionPaths). WebMCP set_story_path, remove_story_path, list_motion_paths, save_motion_path, set_clip_motion_path ref/saved; AI rule 82 (story-paths) appended after 81. Docs: MOTION_PATH.md, STORYBOARD_FORMAT.md, HTML_CLIP_PACKAGE.md, DEVELOPER_HANDOFF.md, gen:ai. Checked in Chrome at 1440 and 390.",
           "status": "done",
           "progress": 100
         }

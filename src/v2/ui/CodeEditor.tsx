@@ -307,9 +307,9 @@ function ParamCard({ row, index, count, issues, open, onToggle, onChange, onMove
   );
 }
 
-const REF_LABEL: Record<RefType, string> = { graphic: "Graphic", audio: "Audio", tracker: "Tracker" };
-const REF_HINT: Record<RefType, string> = { graphic: "luma, avgColor, motion, histogram", audio: "rms, peak, bands, onset, envelope", tracker: "x, y, width, height, scale, rotation, found" };
-const REF_KEY: Record<RefType, string> = { graphic: "picture", audio: "sound", tracker: "target" };
+const REF_LABEL: Record<RefType, string> = { graphic: "Graphic", audio: "Audio", tracker: "Tracker", path: "Path" };
+const REF_HINT: Record<RefType, string> = { graphic: "luma, avgColor, motion, histogram", audio: "rms, peak, bands, onset, envelope", tracker: "x, y, width, height, scale, rotation, found", path: "x, y, angle, progress, found" };
+const REF_KEY: Record<RefType, string> = { graphic: "picture", audio: "sound", tracker: "target", path: "route" };
 
 /**
  * P43: references (manifest `inputs`) — Graphic, Audio and Tracker. Each use picks what it reads in the clip's
@@ -330,7 +330,7 @@ function RefsSection({ inputs, setInputs, taken }: { inputs: Record<string, Html
   return (
     <section className="v2-ce-refs" aria-label="References">
       <h4 className="v2-ce-refs-head">References</h4>
-      <p className="v2-ce-hint">A reference reads part of the edit each frame — a picture, a sound or a tracker. Where it reads from is picked where the clip is used (Params → Inputs). The script gets numbers only: <code>ctx.inputs.&lt;name&gt;</code>.</p>
+      <p className="v2-ce-hint">A reference reads part of the edit each frame — a picture, a sound, a tracker or a named path. Where it reads from is picked where the clip is used (Params → Inputs). The script gets numbers only: <code>ctx.inputs.&lt;name&gt;</code>.</p>
       {names.length > 0 && <ul className="v2-ce-params">{names.map((k) => {
         const t = refType(inputs[k].type);
         return (
@@ -338,7 +338,7 @@ function RefsSection({ inputs, setInputs, taken }: { inputs: Record<string, Html
             <div className="v2-ce-paramhead">
               <input className="v2-ce-refname" aria-label={`Name of ${REF_LABEL[t]} reference ${k}`} defaultValue={k} spellCheck={false} autoCapitalize="off" autoCorrect="off"
                 onBlur={(e) => rename(k, e.target.value.trim())} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
-              <span className="v2-ce-chip"><Icon g={t === "graphic" ? "eye" : t === "audio" ? "♫" : "track"} /> {REF_LABEL[t]}</span>
+              <span className="v2-ce-chip"><Icon g={t === "graphic" ? "eye" : t === "audio" ? "♫" : t === "path" ? "motion-path" : "track"} /> {REF_LABEL[t]}</span>
               <button type="button" className="v2-btn v2-ce-icon" aria-label={`Remove ${k}`} onClick={() => remove(k)}><Icon g="🗑" /></button>
             </div>
             <div className="v2-ce-snippet"><code>{`ctx.inputs.${k} // ${REF_HINT[t]}`}</code><Copy text={`ctx.inputs.${k}`} /></div>

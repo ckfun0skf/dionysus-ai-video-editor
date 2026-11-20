@@ -35,7 +35,7 @@ export interface CodeReviseRequest {
 export const CODE_REVISE_GUIDE = `REVISE
 - Keep what already works. Change only what the change request asks for.
 - Keep every param key, type and default unless the change request adds, removes or changes one. The timeline stores values by those keys.
-- Keep bindings and inputs unless the change request changes them. Input types are graphic, audio and tracker; the legacy names scene, beat and track mean graphic, audio and tracker.
+- Keep bindings and inputs unless the change request changes them. Input types are graphic, audio, tracker and path (P89b); the legacy names scene, beat and track mean graphic, audio and tracker.
 - Reply with a complete ${HTML_CLIP_FORMAT} package, not a diff, patch or snippet.
 - The user imports the .zip or .html (or pastes the reply) in Dionysus (Code Editor → Revise with AI → Import), which checks it against the package standard and opens it in the Code Editor. Saving there makes a new version.`;
 

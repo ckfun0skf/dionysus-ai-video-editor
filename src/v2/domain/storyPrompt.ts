@@ -215,6 +215,12 @@ export const FORMAT_SECTION = () => `{
       "position"?: { "azimuth": number, "distance": number, "width"?: number },  // where the sound sits: azimuth degrees 0 front, -90 left, 90 right, ±180 behind; distance 0 (at the ear) to 1 (about 20 m); width 0-1, default 1 = keep a stereo file's own left/right image
       "pan"?: number,            // shorthand -1 (left) to 1 (right) = azimuth pan × 90, distance 0; "position" wins if both are given
       "positionKeys"?: [ { "t": number, "azimuth": number, "distance": number } ]   // moving sound: t = seconds from the cue start; linear, the shorter way round
+  } ],
+  "paths"?: [ {                  // RULE 82: named motion paths layers move along ("motionPath": { "ref": "<path id>" })
+      "id": string, "name"?: string, "description"?: string,
+      "motionPath"?: MotionPath, // planned points (t = seconds from the path start); no video needed
+      "from"?: "<video or image asset id>", "track"?: string,   // make it from a reference: the guide step "Create path <name> from <reference>"
+      "durationSec"?: number
   } ]
 }
 
@@ -226,7 +232,7 @@ Layer (times in seconds from the shot start, 0 <= startSec < endSec <= durationS
            "style"?: TextStyle,                // overrides the text style
            "anim"?: { "in"?: "<id>", "out"?: "<id>", "loop"?: "<id>", "durationSec"?: number },
            "blend"?: "<blend id>", "opacity"?: number (0-1, default 1),
-           "motionPath"?: MotionPath,         // RULE 81: moves the text centre along a path (replaces "follow")
+           "motionPath"?: MotionPath | PathRef,   // RULE 81 / 82: moves the text centre along a path (replaces "follow")
            "follow"?: "frame" | "shot" }      // default "frame" (fixed); "shot" = moves with the shot's zoom/pan effects
   Media: { "id": string, "type": "html" | "image" | "video", "asset": "<asset id>", "startSec": number, "endSec": number,
            "box": { "x", "y", "width", "height" }, "blend"?: "<blend id>", "opacity"?: number (0-1), "follow"?: "frame" | "shot",
@@ -234,10 +240,11 @@ Layer (times in seconds from the shot start, 0 <= startSec < endSec <= durationS
            "inSec"?: number,                   // video only: seconds into the asset's clip where the layer starts (default: the upload's trim, else 0)
            "chromaKey"?: { "color": "#rrggbb", "range"?: number, "spill"?: number },  // green screen: removes "color" (range 0-1 tolerance, default 0.4; spill 0-1 edge clean-up, default 0.5)
            "mask"?: Mask,        // RULE 71: hide part of this picture. Not for text. Not an effect limit.
-           "motionPath"?: MotionPath }   // RULE 81: moves the layer centre along a path (replaces "follow")
+           "motionPath"?: MotionPath | PathRef }   // RULE 81 / 82: moves the layer centre along a path (replaces "follow")
 MotionPath (P89, points are the layer CENTRE as 0-1 fractions of the frame from the top-left; t = seconds from the layer start):
   { "nodes": [ { "id"?: string, "t"?: number, "x": number, "y": number, "in"?: { "x", "y" }, "out"?: { "x", "y" }, "ease"?: "linear" | "in" | "out" | "inOut" } ],
     "constantSpeed"?: boolean, "orient"?: true | { "offset": number } }   // t on every point or none (none = spread by distance, even speed)
+PathRef (P89b): { "ref": "<id in paths>", "stretch"?: boolean, "offset"?: { "x", "y" } }   // stretch = fit the path's times to the layer; offset moves the whole path (frame fractions)
 Mask (P49, coordinates are fractions of the SOURCE picture from the top-left, not of the frame):
   { "shape": "rect" | "ellipse" | "linear" | "band" | "path",
     "x"?: number, "y"?: number, "w"?: number, "h"?: number, "rotation"?: number, "radius"?: number,
@@ -383,6 +390,7 @@ export const RULE_LIST: readonly { key: string; text: string }[] = [
   ...clipTypeAgentRules(),
   // Built-in rules added after P88 go here, after the clip type rules (numbers are positions, so only ever append).
   { key: "motion-path", text: "Motion path (P89, After Effects style): to move an overlay along a drawn route instead of keyframing x / y, give a layer (text, image, video or html; not the shot's main picture) \"motionPath\": { \"nodes\": [{ \"id\"?, \"t\"?, \"x\", \"y\", \"in\"?: { \"x\", \"y\" }, \"out\"?: { \"x\", \"y\" }, \"ease\"? }], \"constantSpeed\"?, \"orient\"? }. In the storyboard x / y are where the layer's CENTRE is, as 0-1 fractions of the frame from the top-left (like a text \"position\"); \"t\" is seconds from the layer start, on every point or on none (none = the points are spread along the layer by distance, at one even speed). \"in\" / \"out\" are Bezier handle offsets from the point (frame fractions; leave both out for a sharp corner and straight lines; give \"out\" = minus \"in\" for a smooth curve). \"ease\" (\"linear\" default, \"in\", \"out\", \"inOut\") shapes the segment that starts at that point. \"constantSpeed\": true keeps one even speed over the whole path. \"orient\": true (or { \"offset\": degrees }) turns the layer along its direction of travel, replacing its rotation. While a path is set it alone gives the layer's position: \"follow\": \"shot\" is ignored, and the layer's box / position is only its size and starting look. A bad path is dropped with a warning (the rest imports). Example: \"motionPath\": { \"nodes\": [{ \"x\": 0.15, \"y\": 0.7 }, { \"x\": 0.5, \"y\": 0.35, \"in\": { \"x\": -0.15, \"y\": 0 }, \"out\": { \"x\": 0.15, \"y\": 0 } }, { \"x\": 0.85, \"y\": 0.7 }], \"orient\": true }. On the timeline (WebMCP) coordinates are the clip transform's (offsets of the centre from the frame centre: 0,0 = centred, \u00b10.5 = the edges) and t is seconds from the clip start: set_clip_motion_path { clipId, path } replaces the clip's x / y keyframes (and rotation keys when orient) in one undo step, clear_clip_motion_path { clipId } removes it, and get_timeline lists motionPath on the clip. Tracking Follow (attach_track) replaces a path with keyframes; the editor's Motion path mode turns keyframes back into an editable path." },
+  { key: "story-paths", text: "Named paths (P89b): when a motion is planned before any video exists, or several layers share one route, put it in the root \"paths\" list and point layers at it: \"motionPath\": { \"ref\": \"<path id>\", \"stretch\"?: true (fit the path's times to the layer), \"offset\"?: { \"x\", \"y\" } }. A path is { \"id\", \"name\", \"description\"?, \"motionPath\"? (planned points, same MotionPath as RULE 81, t = seconds from the path start), \"from\"? (a video or image asset to make it from), \"track\"? (what to follow in it, e.g. \"the bee\"), \"durationSec\"? }. With \"from\" the production guide gets the step \"Create path <name> from <reference>\": the user tracks it in the reference with the Track sheet or draws it over the reference; give planned points too so the layer moves until then. With neither points nor \"from\" the guide asks the user to draw it. Send, Update timeline and Re-lay put the path on each layer clip (times from the layer start, fitted to it with stretch; the clip is linked to the shot's clip, so it moves with it; an edited named path refreshes its layers on Update); Sync to Storyboard writes an edited path back into the named path when only that layer uses it, else gives the layer its own \"motionPath\". A code clip (html layer) can read a named path as an input: manifest \"inputs\": { \"route\": { \"type\": \"path\" } } and in the layer's \"params\": { \"route\": { \"type\": \"path\", \"path\": \"<path id>\" } } → ctx.inputs.route = { x, y (0-1 of the frame), angle (degrees), progress (0-1), found } at the clip's own time. WebMCP: set_story_path / remove_story_path edit the list; list_motion_paths, set_clip_motion_path { ref | saved } and save_motion_path work on the timeline." },
 ];
 export const RULES: readonly string[] = RULE_LIST.map((r) => r.text);
 /** 1-based public number of a rule, by key. */

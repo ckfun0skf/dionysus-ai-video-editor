@@ -8,12 +8,33 @@
  * clip. Bindings store ids ("track:<id>", "clip:<id>"); names are only shown and used to resolve what an AI asks for.
  */
 import type { Composition, Placement, Project, Track } from "./model";
+import type { MotionPath } from "./motionPath";
+import { pathName } from "./storyPaths";
 import { refType, type InputType, type RefType } from "./htmlClipPackage";
 import { parseTrackSource, trackedClips, tracksOf } from "./tracking";
 
-const DEFAULTS: Record<RefType, string> = { audio: "mix", graphic: "program", tracker: "none" };
+const DEFAULTS: Record<RefType, string> = { audio: "mix", graphic: "program", tracker: "none", path: "none" };
 export const DEFAULT_SOURCE: Record<InputType, string> = { ...DEFAULTS, beat: "mix", scene: "program", track: "none" };
-export interface SourceChoice { source: string; label: string; kind: "mix" | "program" | "none" | "track" | "clip"; trackId?: string }
+export interface SourceChoice { source: string; label: string; kind: "mix" | "program" | "none" | "track" | "clip" | "path"; trackId?: string }
+
+/**
+ * P89b: the named paths a "path" input can read: "path:<id>" = a storyboard path (with points), "path:saved/<id>" = a
+ * path saved in the editor. Display order: storyboard paths, then saved ones.
+ */
+export function pathChoices(p: Project): { source: string; label: string; path: MotionPath }[] {
+  const out: { source: string; label: string; path: MotionPath }[] = [];
+  for (const x of p.storyboard?.paths ?? []) if (x.motionPath?.nodes.length) out.push({ source: `path:${x.id}`, label: `Storyboard · ${pathName(x)}`, path: x.motionPath });
+  for (const x of p.motionPaths ?? []) if (x.path.nodes.length) out.push({ source: `path:saved/${x.id}`, label: `Saved · ${x.name}`, path: x.path });
+  return out;
+}
+/** The path a "path" input source points at now (undefined = none, or a storyboard path with no points yet). */
+export function pathOfSource(p: Project, source: string): MotionPath | undefined {
+  if (!source.startsWith("path:")) return undefined;
+  const id = source.slice(5);
+  if (id.startsWith("saved/")) return p.motionPaths?.find((x) => x.id === id.slice(6))?.path;
+  const sp = p.storyboard?.paths?.find((x) => x.id === id);
+  return sp?.motionPath?.nodes.length ? sp.motionPath : undefined;
+}
 
 const root = (p: Project): Composition => p.compositions[p.rootCompositionId];
 const hearable = (t: Track) => t.kind === "audio" || t.kind === "video";
@@ -24,6 +45,8 @@ const clipName = (p: Project, pl: Placement) => p.assets[pl.source.assetId]?.nam
 export function inputSourceOf(p: Project, pl: Placement, name: string, type: InputType): string {
   const s = pl.htmlInputs?.[name];
   if (s && refType(type) === "tracker" && pendingTracker(s)) return namedTracker(p, s) ?? DEFAULT_SOURCE[type];
+  // P89b: a storyboard path that has no points yet stays bound (it reads "not found" until the path is made).
+  if (s && refType(type) === "path" && s.startsWith("path:") && !s.startsWith("path:saved/") && p.storyboard?.paths?.some((x) => `path:${x.id}` === s)) return s;
   return s && sourceIssue(p, s, type) === undefined ? s : DEFAULT_SOURCE[type];
 }
 
@@ -50,6 +73,7 @@ export function missingTrackers(p: Project): { clipId: string; input: string; ta
 /** Everything a beat or scene input can read, in display order: the default, then each track and its clips. */
 export function sourceChoices(p: Project, input: InputType, self?: string): SourceChoice[] {
   const type = refType(input);
+  if (type === "path") return [{ source: "none", label: "None", kind: "none" }, ...pathChoices(p).map((c) => ({ source: c.source, label: c.label, kind: "path" as const }))];
   if (type === "tracker") return [{ source: "none", label: "None", kind: "none" }, ...trackedClips(p).filter((c) => c.id !== self).flatMap((c) => tracksOf(c).map((tr) => ({ source: `clip:${c.id}#${tr.id}`, label: `${clipName(p, c)} · ${tr.name}`, kind: "clip" as const, trackId: root(p).tracks.find((t) => t.placements.includes(c))?.id })))];
   const out: SourceChoice[] = [{ source: DEFAULTS[type], label: type === "audio" ? "Mix" : "Program", kind: type === "audio" ? "mix" : "program" }];
   for (const t of root(p).tracks) {
@@ -71,6 +95,11 @@ export function sourceLabel(p: Project, source: string): string {
   if (source === "program") return "Program";
   if (source === "none") return "None";
   const [k, id] = [source.slice(0, source.indexOf(":")), source.slice(source.indexOf(":") + 1)];
+  if (k === "path") {
+    if (id.startsWith("saved/")) { const x = p.motionPaths?.find((y) => y.id === id.slice(6)); return x ? `Saved · ${x.name}` : "Missing path"; }
+    const x = p.storyboard?.paths?.find((y) => y.id === id);
+    return x ? `Storyboard · ${pathName(x)}${x.motionPath?.nodes.length ? "" : " (not made yet)"}` : "Missing path";
+  }
   const c = root(p);
   if (k === "track") return c.tracks.find((t) => t.id === id)?.name ?? "Missing track";
   const pend = pendingTracker(source);
@@ -85,7 +114,13 @@ export function sourceLabel(p: Project, source: string): string {
 export function sourceIssue(p: Project, source: string, input: InputType): string | undefined {
   const type = refType(input);
   if (source === DEFAULTS[type]) return undefined;
-  if (source === "none" || source === "mix" || source === "program") return `"${source}" is for ${source === "mix" ? "audio" : source === "none" ? "tracker" : "graphic"} references.`;
+  if (source === "none" || source === "mix" || source === "program") return `"${source}" is for ${source === "mix" ? "audio" : source === "none" ? "tracker or path" : "graphic"} references.`;
+  if (type === "path") {
+    if (!source.startsWith("path:")) return `A path input reads "path:<storyboard path id>" or "path:saved/<saved path id>".`;
+    const id = source.slice(5);
+    if (id.startsWith("saved/") ? p.motionPaths?.some((x) => x.id === id.slice(6)) : p.storyboard?.paths?.some((x) => x.id === id)) return undefined;
+    return `No path "${source}".`;
+  }
   if (type === "tracker" && pendingTracker(source)) return root(p).tracks.some((t) => t.placements.some((x) => x.id === pendingTracker(source)!.clipId)) ? undefined : `No clip "${pendingTracker(source)!.clipId}".`;
   return sourceChoices(p, type).some((c) => c.source === source) ? undefined : `No ${what(type)} "${source}".`;
 }
@@ -104,6 +139,13 @@ export function resolveSource(p: Project, raw: string, input: InputType): { sour
   const named = choices.filter((c) => c.kind === "track" && c.label.toLowerCase() === low);
   if (named.length === 1) return { source: named[0].source };
   if (named.length > 1) return { error: `Several tracks are named "${v}"; pass "track:<id>" (get_timeline lists track ids) or rename one with rename_track.` };
+  if (type === "path") {
+    const want = v.startsWith("path:") ? v : `path:${v}`;
+    if (!sourceIssue(p, want, type)) return { source: want };
+    const byName = [...(p.storyboard?.paths ?? []).filter((x) => pathName(x).toLowerCase() === low).map((x) => `path:${x.id}`), ...(p.motionPaths ?? []).filter((x) => x.name.toLowerCase() === low).map((x) => `path:saved/${x.id}`)];
+    if (byName.length === 1) return { source: byName[0] };
+    return { error: `No path matches "${v}". Use "none", "path:<storyboard path id>" or "path:saved/<saved path id>" (list_motion_paths lists them).` };
+  }
   if (type === "tracker") {
     if (pendingTracker(v)) { const e = sourceIssue(p, v, type); return e ? { error: e } : { source: namedTracker(p, v) ?? v }; }
     const ref = parseTrackSource(v.startsWith("clip:") ? v : `clip:${v}`), pl = ref && root(p).tracks.flatMap((t) => t.placements).find((x) => x.id === ref.clipId);
@@ -116,4 +158,4 @@ export function resolveSource(p: Project, raw: string, input: InputType): { sour
   return { error: `No ${what(type)} matches "${v}". Use "${DEFAULTS[type]}", a track name, "track:<id>" or "clip:<id>".` };
 }
 
-const what = (type: RefType) => (type === "audio" ? "track or clip with sound" : type === "tracker" ? "tracker" : "video track or clip");
+const what = (type: RefType) => (type === "audio" ? "track or clip with sound" : type === "tracker" ? "tracker" : type === "path" ? "path" : "video track or clip");

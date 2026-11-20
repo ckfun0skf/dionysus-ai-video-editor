@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { board, storySteps, type Project, type ProductionStep, type StepState } from "../../domain";
+import { board, storyPaths, storySteps, type Project, type ProductionStep, type StepState } from "../../domain";
 import { cmd, type Engine } from "../../engine";
 import type { BlobStore } from "../../ports";
 import { Ic } from "../Icon";
@@ -9,6 +9,7 @@ import { haptic } from "../gestures";
 import { type BoardTarget, shotIcon, Thumb, TYPE_ICON } from "./BoardView";
 import { ActionSheet } from "./ShotEditor";
 import { StoryDetail } from "./StoryDetail";
+import { PathStepDetail } from "./PathStep";
 import { useDragReorder } from "./useDragReorder";
 
 const LABEL: Record<StepState, string> = { todo: "To do", blocked: "Waiting", check: "Check it", stale: "May not match", done: "Done", skipped: "Skipped" };
@@ -34,7 +35,9 @@ export function ProductionView({ project, thumbs, engine, blobs, player, mobile,
     for (const c of Object.values(info)) if (c.slotId && !out[c.slotId]) out[c.slotId] = c.label;
     return out;
   }, [project]);
-  const name = (s: ProductionStep) => ("slot" in s.target ? (clipLabels[s.target.slot] ? `${clipLabels[s.target.slot]} · ` : "") + b.slots[s.target.slot].name : `Shot ${b.order.indexOf(s.target.shot) + 1} · ${b.shots[s.target.shot].title}`);
+  // P89b: a path step is named after the path and the reference it is made from.
+  const pathOf = (s: ProductionStep) => ("path" in s.target ? storyPaths.findPath(b, s.target.path) : undefined);
+  const name = (s: ProductionStep) => ("path" in s.target ? (() => { const pa = pathOf(s); return pa ? storyPaths.pathStepTitle(pa, pa.from ? b.slots[pa.from]?.name : undefined) : s.target.path; })() : "slot" in s.target ? (clipLabels[s.target.slot] ? `${clipLabels[s.target.slot]} · ` : "") + b.slots[s.target.slot].name : `Shot ${b.order.indexOf(s.target.shot) + 1} · ${b.shots[s.target.shot].title}`);
   const status = board.storyStatus(project);
   const what = (s: ProductionStep) => {
     if (s.state === "stale") { // V2-SB-R08: say what to redo and why, not the original instruction
@@ -47,6 +50,12 @@ export function ProductionView({ project, thumbs, engine, blobs, player, mobile,
     if (s.state === "blocked" && s.blockedBy) return "slot" in s.target && b.slots[s.target.slot]?.source.type === "frameOf" ? `Generate Shot ${b.order.indexOf(s.blockedBy) + 1} first, then pick the frame` : `After shot ${b.order.indexOf(s.blockedBy) + 1} has a clip`;
     if (s.state === "blocked" && s.waitsFor) return `After “${b.slots[s.waitsFor]?.name ?? s.waitsFor}” is added`;
     if (s.state === "check") return `Checks ${s.qaDone}/${s.qaTotal}`;
+    if ("path" in s.target) {
+      const pa = pathOf(s), n = pa?.motionPath?.nodes.length ?? 0;
+      if (pa?.createdBy) return `${pa.createdBy === "track" ? "Tracked" : "Drawn"} · ${n} points`;
+      if (n) return pa?.from ? `Planned · ${n} points · track or draw to make it` : `Planned · ${n} points · edit them any time`;
+      return pa?.from ? "Track it in the reference, or draw it" : "Draw it on the frame";
+    }
     if ("slot" in s.target) { const sl = b.slots[s.target.slot]; return sl.source.type === "frameOf" ? `Pick frame from Shot ${b.order.indexOf(sl.source.shotId) + 1} (required before shot ${b.order.findIndex((id) => b.shots[id].slotIds.includes(sl.id)) + 1})` : sl.source.type === "lastFrame" ? `Last frame of shot ${b.order.indexOf(sl.source.shotId) + 1}` : sl.source.type === "upload" ? "Upload your file" : sl.source.type === "json" ? "Paste the audio JSON from your AI" : sl.type === "html" ? "Make the HTML and upload it" : `Generate ${sl.type}`; }
     const sh = b.shots[s.target.shot];
     if (sh.render === "html") return "Check the HTML clip";
@@ -55,6 +64,11 @@ export function ProductionView({ project, thumbs, engine, blobs, player, mobile,
     return "Generate the clip";
   };
   const open = (t: BoardTarget) => setCur("slot" in t ? `slot:${t.slot}` : `shot:${t.shot}`);
+  const thumbOf = (s: ProductionStep) => {
+    if ("path" in s.target) { const pa = pathOf(s), ref = pa?.from ? b.slots[pa.from] : undefined; const v = ref && board.selectedOf(project, ref); return v && thumbs[v]; }
+    const v = board.selectedOf(project, "slot" in s.target ? b.slots[s.target.slot] : b.shots[s.target.shot]);
+    return v && thumbs[v];
+  };
   const nextOpen = steps.find((s, j) => j > i && !finished(s)) ?? steps.find((s) => !finished(s) && s.key !== cur);
   const pct = steps.length ? Math.round((done / steps.length) * 100) : 0;
 
@@ -62,7 +76,7 @@ export function ProductionView({ project, thumbs, engine, blobs, player, mobile,
   const keys = steps.map((s) => s.key);
   const [menu, setMenu] = useState<{ key: string; at?: { x: number; y: number } }>();
   const stepName = (k: string) => { const s = steps.find((x) => x.key === k); return s ? name(s) : k; };
-  const short = (k: string) => (k.startsWith("slot:") ? `“${b.slots[k.slice(5)]?.name ?? k}”` : `shot ${b.order.indexOf(k.slice(5)) + 1}`);
+  const short = (k: string) => (k.startsWith("slot:") ? `“${b.slots[k.slice(5)]?.name ?? k}”` : k.startsWith("path:") ? `path “${storyPaths.pathName(storyPaths.findPath(b, k.slice(5)) ?? { id: k.slice(5) })}”` : `shot ${b.order.indexOf(k.slice(5)) + 1}`);
   const focusStep = (k: string) => requestAnimationFrame(() => [...document.querySelectorAll<HTMLElement>("[data-step]")].find((x) => x.dataset.step === k)?.querySelector<HTMLElement>(".v2-prod-step")?.focus());
   const move = (k: string, to: number) => {
     const from = keys.indexOf(k);
@@ -111,8 +125,6 @@ export function ProductionView({ project, thumbs, engine, blobs, player, mobile,
       </div>
       <ol>
         {steps.map((s, j) => {
-          const owner = "slot" in s.target ? b.slots[s.target.slot] : b.shots[s.target.shot];
-          const v = board.selectedOf(project, owner);
           return (
             <li key={s.key} data-reorder="" data-step={s.key} className="v2-prod-item">
               {!mobile && <span className="v2-sb-grip v2-prod-grip" aria-hidden title="Drag to reorder" onPointerDown={(e) => { e.stopPropagation(); drag.start(e, j, true); }}><Ic g="grip-v" size={16} /></span>}
@@ -121,7 +133,7 @@ export function ProductionView({ project, thumbs, engine, blobs, player, mobile,
                 onContextMenu={mobile ? (e) => e.preventDefault() : (e) => { e.preventDefault(); setMenu({ key: s.key, at: { x: e.clientX, y: e.clientY } }); }}
                 title={`${LABEL[s.state]} · ${mobile ? "long-press to move" : "drag to reorder · right-click for more · Alt+↑/↓ moves"}`} aria-keyshortcuts={mobile ? undefined : "Alt+ArrowUp Alt+ArrowDown"}>
                 <span className="v2-prod-n">{j + 1}</span>
-                <Thumb src={v && thumbs[v]} icon={"slot" in s.target ? TYPE_ICON[b.slots[s.target.slot].type] ?? "image" : shotIcon(b.shots[s.target.shot])} count={0} />
+                <Thumb src={thumbOf(s)} icon={"path" in s.target ? "motion-path" : "slot" in s.target ? TYPE_ICON[b.slots[s.target.slot].type] ?? "image" : shotIcon(b.shots[s.target.shot])} count={0} />
                 <span className="v2-prod-text"><b>{name(s)}</b><em>{what(s)}</em>{mobile && <span className={`v2-prod-state-m ${s.state}`}><Ic g={ICON[s.state]} size={12} />{LABEL[s.state]}</span>}</span>
                 {!mobile && <span className={`v2-prod-state ${s.state}`}><Ic g={ICON[s.state]} size={14} /><span>{LABEL[s.state]}</span></span>}
               </button>
@@ -148,7 +160,8 @@ export function ProductionView({ project, thumbs, engine, blobs, player, mobile,
       {menu && keys.includes(menu.key) && (menu.at
         ? <ContextMenu x={menu.at.x} y={menu.at.y} label={`Step ${keys.indexOf(menu.key) + 1} actions`} onClose={() => setMenu(undefined)} items={actions(menu.key).flatMap((a, n) => (n === 1 || n === 5 ? ["sep" as const, a] : [a]))} />
         : <ActionSheet title={`Step ${keys.indexOf(menu.key) + 1} · ${stepName(menu.key)}`} actions={actions(menu.key)} onClose={() => setMenu(undefined)} />)}
-      {step && <StoryDetail key={step.key} inline head={nav} project={project} target={step.target} thumbs={thumbs} engine={engine} blobs={blobs} player={player} mobile={mobile} onClose={() => setCur(undefined)} onOpen={open} />}
+      {step && "path" in step.target && <PathStepDetail key={step.key} head={nav} project={project} pathId={step.target.path} thumbs={thumbs} engine={engine} blobs={blobs} mobile={mobile} onOpen={open} onNote={(t) => onNote?.(t)} />}
+      {step && !("path" in step.target) && <StoryDetail key={step.key} inline head={nav} project={project} target={step.target} thumbs={thumbs} engine={engine} blobs={blobs} player={player} mobile={mobile} onClose={() => setCur(undefined)} onOpen={open} />}
     </div>
   );
 }

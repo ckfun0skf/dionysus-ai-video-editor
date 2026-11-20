@@ -100,8 +100,9 @@ required checks.
 4. **AI guide rule:** append to `RULE_LIST` in `src/v2/domain/storyPrompt.ts` (append-only; numbers are positions).
    Built-ins 1–78 come first, then the clip type rules (`core.agent.rules`, P72: **79** `scene-clips`) and the plugin
    host's **80** `plugin-clips` (P88). **Since P89 a new built-in rule is appended at the very end** (after
-   `...clipTypeAgentRules()`; **81** `motion-path` is the latest), so published numbers never move. A rule about one
-   clip type belongs in that type's `core.agent.rules` (that would renumber 81+; say so in the PR). Then:
+   `...clipTypeAgentRules()`; **81** `motion-path`, then **82** `story-paths` (P89b) is the latest), so published
+   numbers never move. A rule about one clip type belongs in that type's `core.agent.rules` (that would renumber 81+;
+   say so in the PR). Then:
    - add the same text as `N. …` after the last rule in `docs/v2/STORYBOARD_FORMAT.md` (the test checks it verbatim);
    - update `src/v2/domain/aiGuide.test.ts`: rule count, the `slice(-10)` and `slice(30)` key lists, `ruleNumber(…)`
      and a few key phrases; `ui/agent/clipTypeAgent.test.ts` checks the clip type rules' positions.
@@ -138,7 +139,7 @@ required checks.
 | `docs/v2/AUDIO_CLIP_FORMAT.md` | `dionysus.audioclip/1` (Audio editor) |
 | `docs/v2/ADDING_EFFECTS.md` | adding presets (effects, transitions, text animations, …) |
 | `docs/v2/MASKING.md`, `docs/v2/TRACKING.md` | clip masks (P49), motion tracking (P39/P40) |
-| `docs/v2/MOTION_PATH.md` | motion paths (P89): data, evaluator, editor mode, storyboard field, tools |
+| `docs/v2/MOTION_PATH.md` | motion paths (P89): data, evaluator, editor mode, storyboard field, tools; named storyboard paths, the path guide step, saved paths and the code clip path input (P89b, §7) |
 | `docs/v2/DEPLOYMENT.md` | hosting, `DIONYSUS_SITE_URL`, base path |
 | `docs/v2/CLIP_PLUGIN_ARCHITECTURE.md` | clip type plugins: accepted design, decisions, Phase 1 (done) and the Phase 2 step table |
 | `docs/v2/ADDING_CLIP_TYPES.md` | adding a clip type step by step, with a worked example (P73) |
@@ -546,8 +547,19 @@ nodes with ids, times, Bezier handles and per-segment ease; constant speed; orie
 x / y keys; Follow replaces a path; the gizmo / X / Y fields edit the point at the playhead. Editor:
 `ui/MotionPathEditor.tsx` (preview overlay, draft session ✕ / ✓, desktop toolbar + timing strip + inspector section,
 phone bottom context bar + sheets, pinch zoom). Storyboard layer `motionPath` (frame points), Send / Sync / export.
-WebMCP `set_clip_motion_path`, `clear_clip_motion_path`; `get_timeline` lists it; AI rule **81**. The named, reusable
-storyboard paths and their guide step are the next PR (P89b).
+WebMCP `set_clip_motion_path`, `clear_clip_motion_path`; `get_timeline` lists it; AI rule **81**.
+
+**P89b (done): named storyboard paths** (MOTION_PATH.md §7; `tasks.json` latest is `P89b-STORYBOARD-PATHS`).
+`domain/storyPaths.ts`: root `paths[]` (planned points, `from` reference, `createdBy` track / draw), layer
+`"motionPath": { ref, stretch?, offset? }` (`layer.pathRef`), `resolvePathRef` / `unresolvePath`, `pathFromTrack`,
+`pathSignal`. Production steps gain `path:<id>` (`StepTarget = Target | { path }`), "Create path <name> from
+<reference>" after its reference; `ui/storyboard/PathStep.tsx` makes it (Track sheet `onCommitTrack`, or the Motion
+path tools on a stand-in clip via `useMotionSession(...).start(pl, { draft, onCommit })`). Send / Update / Re-lay put
+the resolved path and `Placement.pathRef` on layer clips; Sync writes an edited path back to a single-user path, else
+inlines it. Shot editor layer *Path* picker (`ShotPatch.newPaths`). Editor: `NamedPaths` in the Motion path section
+(link / use / save as / unlink; `Project.motionPaths`, `cmd.saveMotionPath`, `cmd.removeSavedMotionPath`). Code clip
+input type `path` (`path:<id>`, `path:saved/<id>`). WebMCP `set_story_path`, `remove_story_path`,
+`list_motion_paths`, `save_motion_path`, `set_clip_motion_path { ref | saved }`; AI rule **82**.
 
 **Backlog and known limits after Phase 2** (still open after Phase 3; candidates for small PRs):
 

@@ -32,6 +32,8 @@ export * as storyRefs from "./storyRefs";
 export * as clipSource from "./clipSource";
 export * as fromVideo from "./audioFromVideo";
 export * as storySteps from "./storySteps";
+export * as storyPaths from "./storyPaths";
+export type { StoryPath, StoryPathRef } from "./storyPaths";
 export type { Storyboard, AssetSlot, Shot, VersionInfo, QaCheck, QaResult, Staleness, StoryStatus, ProductionStep, StepState, SendState } from "./storyboard";
 export * from "./htmlClipPackage";
 export * from "./codeRoles";

@@ -12,6 +12,7 @@ import { positionErrors } from "./spatial";
 import { normalizeSchema, toSchema31 } from "./storySchema";
 import { parseMask, type ClipMask } from "./mask";
 import { parseMotionPath, type MotionPath } from "./motionPath";
+import { parsePathRef, parseStoryPaths, type StoryPath, type StoryPathRef } from "./storyPaths";
 import { TICKS_PER_SECOND } from "./time";
 import { SCENE_FORMAT, validateScene, type SceneDoc } from "./scene";
 
@@ -173,6 +174,8 @@ interface StoryLayerBase {
    * start, like Placement.motionPath; in the JSON: frame points (0–1 from the top-left, the layer centre) and seconds.
    */
   motionPath?: MotionPath;
+  /** P89b: the layer moves along a named path from the root `paths` (JSON: `"motionPath": { "ref", "stretch"?, "offset"? }`). */
+  pathRef?: StoryPathRef;
 }
 export interface StoryTextLayer extends StoryLayerBase {
   type: "text"; text: string; position?: StoryPoint; box?: StoryBox;
@@ -185,7 +188,7 @@ export interface StoryTextLayer extends StoryLayerBase {
  * P43: a code-clip reference in a storyboard. `clip` is "main" (the shot's main clip) or the id of a video layer of
  * the same shot; omitted = Program (graphic) / Mix (audio). A tracker names a tracker planned in the shot's `trackers`.
  */
-export type StoryRef = { type: "graphic" | "audio"; clip?: string } | { type: "tracker"; clip: string; track: string };
+export type StoryRef = { type: "graphic" | "audio"; clip?: string } | { type: "tracker"; clip: string; track: string } | { type: "path"; path: string };
 /** P43: a tracker the user has to set before the shot's code can follow it (what to box, on which clip, its name). */
 export interface StoryTrackerPlan { name: string; clip: string; target: string }
 export interface StoryMediaLayer extends StoryLayerBase {
@@ -408,7 +411,7 @@ export interface StoryAudio {
   description?: string;
   removedFromTimeline?: true;
 }
-export interface StoryDoc { format: typeof STORYBOARD_FORMAT; meta: StoryMeta; assets: StoryAsset[]; shots: StoryShot[]; connections: StoryConnection[]; audio?: StoryAudio[]; /** P60: Caption style for the shared Subtitles track (Send copies it onto the track). */ captionStyle?: import("./captionStyle").CaptionStyle }
+export interface StoryDoc { format: typeof STORYBOARD_FORMAT; meta: StoryMeta; assets: StoryAsset[]; shots: StoryShot[]; connections: StoryConnection[]; audio?: StoryAudio[]; /** P89b: named motion paths layers refer to. */ paths?: StoryPath[]; /** P60: Caption style for the shared Subtitles track (Send copies it onto the track). */ captionStyle?: import("./captionStyle").CaptionStyle }
 
 /** `at`: character offset in the extracted JSON, for syntax errors that have no path. */
 export interface StoryIssue { path: string; message: string; at?: number }
@@ -941,6 +944,9 @@ export function validateStoryboard(raw: unknown, opts: StoryValidateOptions = {}
   const refCycle = findCycle(new Map(allAssets.map((a) => [a.id, a.references.map(assetRefId)])));
   if (refCycle) err("assets", `Assets reference each other in a loop: ${refCycle.join(" → ")}.`);
   const assetById = new Map(allAssets.map((a) => [a.id, a as StoryAsset]));
+  // P89b: named paths (before the shots, so layers can refer to them).
+  const paths = parseStoryPaths(raw.paths, { aspect: aspectRatio(aspect), ticksPerSecond: TICKS_PER_SECOND, assetType: (id) => assetById.get(id)?.type, err, warn });
+  const pathIds = new Set(paths.map((x) => x.id));
   const lfProblem = (id: string) => { const sid = lastFrameShotOf(id); return sid && !assetIds.has(id) ? `"${id}" names the last frame of shot "${sid}", but there is no such shot.` : undefined; };
   const unknownAsset = (id: string) => kfRefProblem(id) ?? stateRefProblem(id) ?? lfProblem(id) ?? `Unknown asset "${id}"${assetIds.size ? ` (assets: ${list([...assetIds], 8)})` : ""}.`;
   /** The asset type of a reference: a keyframe reference is a "frame" (V2-SB-135). */
@@ -986,10 +992,17 @@ export function validateStoryboard(raw: unknown, opts: StoryValidateOptions = {}
         const kp = `${path}.${k}`;
         if (!isHtml) { warn(kp, "Only html layers take references; it is ignored."); continue; }
         const t = r.type === "scene" ? "graphic" : r.type === "beat" ? "audio" : r.type === "track" ? "tracker" : r.type;
+        // P89b: a path input reads a named path from the root "paths".
+        if (t === "path") {
+          const pid = str(r.path) ?? "";
+          if (!pathIds.has(pid)) { warn(`${kp}.path`, `Path reference "${k}" needs "path": the id of a path in "paths"${pathIds.size ? ` (${[...pathIds].join(", ")})` : ""}; it is ignored.`); continue; }
+          out[k] = { type: "path", path: pid };
+          continue;
+        }
         const clip = r.clip === undefined ? undefined : str(r.clip) ?? "";
         if (clip !== undefined && clip !== "main" && !shotVideoLayers.has(clip)) { warn(`${kp}.clip`, `Reference "${k}": "clip" must be "main" (the shot's clip) or the id of a video layer of this shot; it is ignored.`); continue; }
         if (t === "graphic" || t === "audio") { out[k] = { type: t, ...(clip ? { clip } : {}) }; continue; }
-        if (t !== "tracker") { warn(`${kp}.type`, `Reference "${k}" has unknown type ${JSON.stringify(r.type)}; use "graphic", "audio" or "tracker".`); continue; }
+        if (t !== "tracker") { warn(`${kp}.type`, `Reference "${k}" has unknown type ${JSON.stringify(r.type)}; use "graphic", "audio", "tracker" or "path".`); continue; }
         const track = str(r.track)?.trim();
         if (!track || !clip) { warn(kp, `Tracker reference "${k}" needs "clip" ("main" or a video layer id) and "track" (the tracker's name, planned in the shot's "trackers").`); continue; }
         if (!planned.some((pl) => pl.name.toLowerCase() === track.toLowerCase() && pl.clip === clip)) warn(`${kp}.track`, `Tracker "${track}" on "${clip}" isn't planned in this shot's "trackers"; add { "name": "${track}", "clip": "${clip}", "target": "<what to draw a box around>" } so the user knows what to track.`);
@@ -1082,9 +1095,12 @@ export function validateStoryboard(raw: unknown, opts: StoryValidateOptions = {}
         if (l.follow === "shot") follow = "shot";
         else warn(`${lp}.follow`, `follow ${JSON.stringify(l.follow)} is ignored: use "frame" (stays put, the default) or "shot" (moves with the shot's zoom and pan).`);
       }
-      const motionPath = motionPathOf(l.motionPath, `${lp}.motionPath`, endSec - startSec);
-      if (motionPath && follow) { warn(`${lp}.follow`, '"follow": "shot" is ignored: the layer moves along its motionPath.'); follow = undefined; }
+      const isRef = isObj(l.motionPath) && "ref" in l.motionPath;
+      const pathRef = isRef ? parsePathRef(l.motionPath as Record<string, unknown>, `${lp}.motionPath`, pathIds, warn) : undefined;
+      const motionPath = isRef ? undefined : motionPathOf(l.motionPath, `${lp}.motionPath`, endSec - startSec);
+      if ((motionPath || pathRef) && follow) { warn(`${lp}.follow`, '"follow": "shot" is ignored: the layer moves along its motionPath.'); follow = undefined; }
       if (motionPath) Object.assign(look, { motionPath });
+      if (pathRef) Object.assign(look, { pathRef });
       if (type === "text" && l.chromaKey !== undefined) warn(`${lp}.chromaKey`, "Only image, video and html layers can be chroma keyed; it is ignored on a text layer.");
       if (type === "text" && l.mask !== undefined) warn(`${lp}.mask`, "A mask hides part of a picture. Text layers cannot be masked; it is ignored.");
       if (type === "text") {
@@ -1601,7 +1617,7 @@ export function validateStoryboard(raw: unknown, opts: StoryValidateOptions = {}
     audio.push(cue);
   });
 
-  const usedBy = (id: string) => audio.some((c) => c.asset === id || c.source?.fromVideo === id) || shots.some((s) => s.assets.includes(id) || s.keyframe?.references.some((r) => assetRefId(r) === id) || s.clip === id || s.layers?.some((l) => l.type !== "text" && l.asset === id));
+  const usedBy = (id: string) => paths.some((x) => x.from === id) || audio.some((c) => c.asset === id || c.source?.fromVideo === id) || shots.some((s) => s.assets.includes(id) || s.keyframe?.references.some((r) => assetRefId(r) === id) || s.clip === id || s.layers?.some((l) => l.type !== "text" && l.asset === id));
   allAssets.forEach((a, i) => { if (!usedBy(a.id) && !allAssets.some((b) => b.references.some((r) => assetRefId(r) === a.id))) warn(assetPaths[i], a.stateOf ? `State "${a.id}" isn't used by any shot.` : `Asset "${a.id}" isn't used by any shot.`); });
 
   let connections: StoryConnection[] = [];
@@ -1643,7 +1659,7 @@ export function validateStoryboard(raw: unknown, opts: StoryValidateOptions = {}
     else captionStyle = parsed.value;
   }
 
-  const extras = { ...(audio.length ? { audio } : {}), ...(captionStyle ? { captionStyle } : {}) };
+  const extras = { ...(audio.length ? { audio } : {}), ...(captionStyle ? { captionStyle } : {}), ...(paths.length ? { paths } : {}) };
   const built: StoryDoc = { format: STORYBOARD_FORMAT, meta, assets, shots, connections, ...extras };
   if (errors.length) return { ok: false, errors, warnings, partial: built };
   return { ok: true, doc: { format: STORYBOARD_FORMAT, meta, assets, shots, connections, ...extras }, warnings };

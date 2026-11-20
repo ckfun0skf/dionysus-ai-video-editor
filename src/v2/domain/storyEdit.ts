@@ -11,6 +11,7 @@
  */
 import type { HtmlParamValues } from "./htmlClipPackage";
 import type { Project } from "./model";
+import type { StoryPath } from "./storyPaths";
 import type { AssetSlot, QaCheck, Shot, Storyboard } from "./storyboard";
 import { setClipSource, type ClipSource } from "./clipSource";
 import { addSlot, withRefs, type SlotPatch } from "./storyRefs";
@@ -87,6 +88,8 @@ export interface ShotPatch {
    */
   dialogue?: string; captions?: boolean;
   qa?: QaCheck[]; layers?: StoryLayer[]; effects?: StoryEffect[];
+  /** P89b: storyboard paths made in the shot editor ("New path"); only those a layer of `layers` uses are added. */
+  newPaths?: StoryPath[];
   render?: "ai" | "html" | "still" | "scene"; clipSlot?: string;
   /**
    * P2B (item 20): render "still": show this colour / gradient instead of an image asset (kept in the implicit slot
@@ -135,6 +138,11 @@ export function updateShot(p: Project, id: string, patch: ShotPatch): Project {
   if (!p.storyboard?.shots[id]) return p;
   if (patch.clipSource) p = setClipSource(p, id, patch.clipSource);
   for (const ns of patch.newSlots ?? []) p = addSlot(p, ns.id, ns.patch);
+  if (patch.newPaths?.length && patch.layers) {
+    const b0 = p.storyboard!, have = new Set((b0.paths ?? []).map((x) => x.id)), used = new Set(patch.layers.map((l) => l.pathRef?.ref));
+    const add = patch.newPaths.filter((x) => !have.has(x.id) && used.has(x.id));
+    if (add.length) p = { ...p, storyboard: { ...b0, paths: [...(b0.paths ?? []), ...structuredClone(add)] } };
+  }
   const b = p.storyboard!, s = b.shots[id];
   let n: Shot = patch.slotIds ? withRefs(b, s, patch.slotIds) : { ...s };
   const text = (k: "title" | "description" | "prompt") => { if (patch[k] !== undefined) n[k] = k === "title" ? patch[k]!.trim() || s.title : patch[k]!; };

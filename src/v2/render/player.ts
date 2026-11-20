@@ -8,6 +8,8 @@ import { TICKS_PER_SECOND, ticksToSeconds } from "../domain/time";
 import { paintClip } from "./clipMask";
 import type { ClipMask } from "../domain/mask";
 import { trackSignal, type TrackSignal } from "../domain/tracking";
+import { pathSignal, type PathSignal } from "../domain/storyPaths";
+import { pathOfSource } from "../domain/codeInputs";
 import { audioFxData, buildFxChain, fxKey, type FxChain } from "./audioFx";
 import { buildSpatial, type SpatialStage } from "./spatial";
 import type { AudioEnvironment, AudioOutputMode } from "../domain/spatial";
@@ -740,12 +742,14 @@ export class Player {
   }
 
   /** ctx.inputs for one html clip at the current time: numbers only (BeatSignal / SceneSignal per input). */
-  private inputsFor(p: Placement, decls: Record<string, HtmlClipInput>, canvas: HTMLCanvasElement): Record<string, BeatSignal | SceneSignal | TrackSignal> | undefined {
-    const out: Record<string, BeatSignal | SceneSignal | TrackSignal> = {};
+  private inputsFor(p: Placement, decls: Record<string, HtmlClipInput>, canvas: HTMLCanvasElement): Record<string, BeatSignal | SceneSignal | TrackSignal | PathSignal> | undefined {
+    const out: Record<string, BeatSignal | SceneSignal | TrackSignal | PathSignal> = {};
     for (const [name, d] of Object.entries(decls)) {
       if (!d || !(INPUT_TYPES as readonly string[]).includes(d.type)) continue;
       const k = refType(d.type);
       if (k === "tracker") out[name] = trackSignal(this.project, inputSourceOf(this.project, p, name, k), this.time);
+      // P89b: a named path at the clip's own time (seconds from the clip start), on the project frame.
+      else if (k === "path") out[name] = pathSignal(pathOfSource(this.project, inputSourceOf(this.project, p, name, k)), this.time - p.startTicks, this.project.settings.width / this.project.settings.height);
       else if (k === "audio") out[name] = this.beatFor(inputSourceOf(this.project, p, name, k));
       else {
         const s = inputSourceOf(this.project, p, name, k);

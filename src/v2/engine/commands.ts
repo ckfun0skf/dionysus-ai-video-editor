@@ -23,6 +23,8 @@ import * as clipVersion from "../domain/clipVersion";
 import * as tracking from "../domain/tracking";
 import { canMask, maskErrors, type ClipMask } from "../domain/mask";
 import { motionPathErrors, type MotionPath } from "../domain/motionPath";
+import * as storyPaths from "../domain/storyPaths";
+import type { StoryPath } from "../domain/storyPaths";
 /** P38: throw when a "code:<assetId>" preset/kind names an asset of another role. */
 const needRole = (p: Project, preset: string | undefined, want: "effect" | "transition") => { const a = codeAssetOf(preset); const e = a ? codeRoleIssue(p, a, want) : undefined; if (e) throw new Error(e); };
 import type { ChromaKey, Keyframe, Subtitle } from "../domain/model";
@@ -790,7 +792,7 @@ export const attachTrack = (followerId: string, targetId: string, at: number, op
     const keys = tracking.followKeys(p, target, tr, f, at, opts);
     // Re-attaching replaces earlier follow keys (position, scale, rotation) instead of mixing two tracks.
     // P89: following a tracker replaces a motion path (the tracker's x / y keys move the clip; "Edit as path" turns them back into one).
-    return editPlacement(p, followerId, (pl) => { const { x: _x, y: _y, scale: _s, rotation: _r, ...rest } = pl.keyframes ?? {}; const { motionPath: _m, ...pl2 } = pl; return { ...pl2, keyframes: { ...rest, ...keys } }; });
+    return editPlacement(p, followerId, (pl) => { const { x: _x, y: _y, scale: _s, rotation: _r, ...rest } = pl.keyframes ?? {}; const { motionPath: _m, pathRef: _pr, ...pl2 } = pl; return { ...pl2, keyframes: { ...rest, ...keys } }; });
   },
 });
 /**
@@ -798,7 +800,7 @@ export const attachTrack = (followerId: string, targetId: string, at: number, op
  * a path that orients the clip also removes its rotation keyframes. `null` removes the path (the clip keeps its static
  * position). Throws on an invalid path. One undo step (with `coalesceKey`, one per gesture).
  */
-export const setMotionPath = (id: string, path: MotionPath | null, label = path ? "Motion path" : "Remove motion path"): Command => ({
+export const setMotionPath = (id: string, path: MotionPath | null, label = path ? "Motion path" : "Remove motion path", opts: { pathRef?: NonNullable<Placement["pathRef"]> | null } = {}): Command => ({
   label, coalesceKey: `mp:${id}`,
   apply: (p) => {
     const problems = motionPathErrors(path ?? undefined);
@@ -809,7 +811,10 @@ export const setMotionPath = (id: string, path: MotionPath | null, label = path 
     let changed = false;
     const tracks = comp.tracks.map((t) => ({ ...t, placements: t.placements.map((pl) => {
       if (pl.id !== id) return pl;
-      const next = withMotionPath(pl, path);
+      let next = withMotionPath(pl, path);
+      // P89b: link to (or unlink from) a named storyboard path; without `pathRef` the link stays as it is.
+      if (path && opts.pathRef) next = { ...next, pathRef: structuredClone(opts.pathRef) };
+      else if (path && opts.pathRef === null && next.pathRef) { const { pathRef: _r, ...rest } = next; next = rest; }
       if (next === pl || JSON.stringify(next) === JSON.stringify(pl)) return pl;
       changed = true;
       return next;
@@ -817,6 +822,49 @@ export const setMotionPath = (id: string, path: MotionPath | null, label = path 
     return changed ? { ...p, compositions: { ...p.compositions, [cid]: { ...comp, tracks } } } : p;
   },
 });
+/**
+ * P89b: add, change or (null) remove a named path on the storyboard. Removing one unlinks the layers that used it
+ * (they keep their place). One undo step.
+ */
+export const setStoryPath = (id: string, next: StoryPath | null, label = next ? "Storyboard path" : "Remove storyboard path"): Command => ({
+  label,
+  apply: (p) => {
+    const b = p.storyboard;
+    if (!b) throw new Error("no storyboard");
+    if (next && next.id !== id) throw new Error("a path id can't change");
+    if (next?.motionPath) { const problems = motionPathErrors(next.motionPath); if (problems.length) throw new Error(problems.join(" ")); }
+    if (!next && !b.paths?.some((x) => x.id === id)) return p;
+    return { ...p, storyboard: storyPaths.withPath(b, id, next ? structuredClone(next) : null) };
+  },
+});
+
+/** P89b: save a path under a name in the project's path library (same name = replace it). One undo step. */
+export const saveMotionPath = (name: string, path: MotionPath): Command => ({
+  label: `Save path “${name}”`,
+  apply: (p) => {
+    const problems = motionPathErrors(path);
+    if (problems.length || !path.nodes.length) throw new Error(problems.join(" ") || "an empty path can't be saved");
+    const nm = name.trim().slice(0, 60);
+    if (!nm) throw new Error("a saved path needs a name");
+    const list = p.motionPaths ?? [];
+    const same = list.find((x) => x.name.toLowerCase() === nm.toLowerCase());
+    const t0 = path.nodes[0].t, clean: MotionPath = { ...structuredClone(path), nodes: path.nodes.map((n) => ({ ...n, t: n.t - t0 })) };
+    if (same) return { ...p, motionPaths: list.map((x) => (x === same ? { ...x, name: nm, path: clean } : x)) };
+    let n = list.length + 1; while (list.some((x) => x.id === `path${n}`)) n += 1;
+    return { ...p, motionPaths: [...list, { id: `path${n}`, name: nm, path: clean }] };
+  },
+});
+export const removeSavedMotionPath = (id: string): Command => ({
+  label: "Remove saved path",
+  apply: (p) => {
+    const list = (p.motionPaths ?? []).filter((x) => x.id !== id);
+    if (list.length === (p.motionPaths ?? []).length) return p;
+    if (list.length) return { ...p, motionPaths: list };
+    const { motionPaths: _m, ...rest } = p;
+    return rest;
+  },
+});
+
 /** P49: set or clear a clip visibility mask. One undo step. `null` removes it. */
 export const setClipMask = (id: string, mask: ClipMask | null): Command => ({
   label: mask ? "Mask" : "Remove mask",

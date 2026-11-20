@@ -15,9 +15,10 @@ describe("P72 clip type agent surface", () => {
     for (const t of clipTypeAgentTools().slice(0, -4)) expect(agentToolOwner(t.name)?.id).toBe("scene");
     for (const t of clipTypeAgentTools().slice(-4)) expect(agentToolOwner(t.name)).toBeUndefined();
     expect(clipTypeAgentRules().map((r) => r.key)).toEqual(["scene-clips", "plugin-clips"]);
-    expect(RULE_LIST.at(-3)!.key).toBe("scene-clips");
-    expect(RULE_LIST.at(-2)!.key).toBe("plugin-clips"); // P89: built-in rules added later follow the clip type rules
-    expect(RULE_LIST.at(-1)!.key).toBe("motion-path");
+    expect(RULE_LIST.at(-4)!.key).toBe("scene-clips");
+    expect(RULE_LIST.at(-3)!.key).toBe("plugin-clips"); // P89: built-in rules added later follow the clip type rules
+    expect(RULE_LIST.at(-2)!.key).toBe("motion-path");
+    expect(RULE_LIST.at(-1)!.key).toBe("story-paths");
     for (const t of clipTypeAgentTools()) expect(timelineReview.TIMELINE_TOOL_NAMES.has(t.name), t.name).toBe(true);
     for (const c of CLIP_TYPES.list()) for (const t of c.agent?.clipTools ?? []) expect(timelineReview.TIMELINE_TOOL_NAMES.has(t), `${c.id} ${t}`).toBe(true);
     expect(new Set(RULE_LIST.map((r) => r.key)).size).toBe(RULE_LIST.length);

@@ -12,7 +12,7 @@
  */
 import { useEffect, useMemo, useRef, useState, type PointerEvent as RPE, type ReactNode } from "react";
 import { cmd, type Engine } from "../engine";
-import { motion, transformOf, ticksToSeconds, secondsToTicks, type MotionEase, type MotionPath, type Placement } from "../domain";
+import { motion, storyPaths, transformOf, ticksToSeconds, secondsToTicks, type MotionEase, type MotionPath, type Placement } from "../domain";
 import { Ic } from "./Icon";
 import { Sheet } from "./Sheet";
 import { SliderField } from "./SliderField";
@@ -47,18 +47,22 @@ export function useMotionSession(engine: Engine, onPreview: (s: { id: string; pa
   const [s, setS] = useState<MotionSession>();
   const ref = useRef(s); ref.current = s;
   const preview = useRef(onPreview); preview.current = onPreview;
+  /** P89b: a session started for something that is not a clip (a storyboard path) commits through this instead. */
+  const commitTo = useRef<(path: MotionPath | null) => void>();
   useEffect(() => { preview.current(s ? { id: s.id, path: s.draft.nodes.length ? s.draft : null } : null); }, [s?.id, s?.draft]); // eslint-disable-line react-hooks/exhaustive-deps
   const api = {
     session: s,
-    start(pl: Placement) { const draft = initialDraft(pl); setS({ id: pl.id, draft, add: draft.nodes.length < 2, past: [], future: [], sel: undefined, view: { z: 1, tx: 0, ty: 0 } }); },
+    start(pl: Placement, opts: { draft?: MotionPath; onCommit?: (path: MotionPath | null) => void } = {}) { commitTo.current = opts.onCommit; const draft = opts.draft ? structuredClone(opts.draft) : initialDraft(pl); setS({ id: pl.id, draft, add: draft.nodes.length < 2, past: [], future: [], sel: undefined, view: { z: 1, tx: 0, ty: 0 } }); },
     /** Close without changing the project. */
-    cancel() { setS(undefined); },
+    cancel() { commitTo.current = undefined; setS(undefined); },
     /** One undo step with the draft (nothing when unchanged). */
     commit() {
       const cur = ref.current;
       if (!cur) return;
       setS(undefined);
       if (!cur.past.length) return;
+      const to = commitTo.current;
+      if (to) { commitTo.current = undefined; to(cur.draft.nodes.length ? cur.draft : null); return; }
       const ok = engine.dispatch(cmd.setMotionPath(cur.id, cur.draft.nodes.length ? cur.draft : null), cur.draft.nodes.length ? "Motion path" : "Remove motion path");
       onToast(ok ? (cur.draft.nodes.length ? `Motion path saved (${cur.draft.nodes.length} point${cur.draft.nodes.length === 1 ? "" : "s"})` : "Motion path removed") : "Motion path unchanged");
     },
@@ -95,7 +99,7 @@ export function addEnd(mp: MotionPath, x: number, y: number, dur: number, at: nu
 }
 
 /** Frame ↔ CSS px mapping for the preview canvas inside its wrapper. */
-function frameMap(canvas: HTMLCanvasElement) {
+function frameMap(canvas: HTMLElement) {
   const r = canvas.getBoundingClientRect(), w = canvas.parentElement!.getBoundingClientRect();
   return {
     r, w,
@@ -112,7 +116,8 @@ function frameMap(canvas: HTMLCanvasElement) {
  * `offset` = playhead ticks from the clip start (the dot shows where the clip is now).
  */
 export function MotionPathOverlay({ canvas, placement, path, fromKeys, offset, aspect, api, onSeekOffset }: {
-  canvas: HTMLCanvasElement; placement: Placement; path: MotionPath; fromKeys?: boolean; offset: number; aspect: number;
+  /** The frame element (the preview canvas, or a reference image / video) inside a positioned wrapper. */
+  canvas: HTMLElement; placement: Placement; path: MotionPath; fromKeys?: boolean; offset: number; aspect: number;
   api?: MotionApi; onSeekOffset?: (ticks: number) => void;
 }) {
   const [, force] = useState(0);
@@ -388,11 +393,11 @@ function pointTools(api: MotionApi, aspect: number) {
 }
 
 /** Desktop: the mode's toolbar under the preview (point tools, timing strip, ✕ / ✓). */
-export function MotionPathBar({ api, placement, aspect, offset, onSeekOffset, name }: { api: MotionApi; placement: Placement; aspect: number; offset: number; onSeekOffset: (t: number) => void; name: string }) {
+export function MotionPathBar({ api, placement, aspect, offset, onSeekOffset, name, title = "Motion path" }: { api: MotionApi; placement: Placement; aspect: number; offset: number; onSeekOffset: (t: number) => void; name: string; title?: string }) {
   const s = api.session!, t = pointTools(api, aspect);
   return <div className="v2-mp-bar" role="toolbar" aria-label="Motion path tools" data-testid="motion-path-bar">
     <div className="v2-mp-bar-row">
-      <span className="v2-mp-title" title={`Motion path of ${name}`}><Ic g="motion-path" size={16} /> <b>Motion path</b> <span className="v2-mp-sub" data-testid="mp-count">{s.draft.nodes.length} pt{s.draft.nodes.length === 1 ? "" : "s"}</span></span>
+      <span className="v2-mp-title" title={`${title} of ${name}`}><Ic g="motion-path" size={16} /> <b>{title}</b> <span className="v2-mp-sub" data-testid="mp-count">{s.draft.nodes.length} pt{s.draft.nodes.length === 1 ? "" : "s"}</span></span>
       {t.add}{t.del}{t.smooth}
       <span className="v2-dsep" aria-hidden />
       {tool("↶", "Undo", () => api.undo(), { disabled: !s.past.length, title: "Undo the last path edit (⌘/Ctrl+Z)" })}
@@ -459,5 +464,66 @@ export function MotionPathSection({ engine, placement, api, aspect, onStart }: {
       {mp.orient && <SliderField className="v2-insp-sf" label="Orient offset" value={mp.orient.offset} min={-180} max={180} step={1} unit="°" onBegin={() => engine.beginGesture()} onEnd={() => engine.endGesture()} onChange={(v) => set(motion.setOrient(mp, { offset: v }), "Orient offset")} />}
       <button type="button" className={`v2-btn v2-mp-toggle${mp.constantSpeed ? " is-active" : ""}`} role="switch" aria-checked={!!mp.constantSpeed} title="One even speed over the whole path" onClick={() => set(motion.setConstantSpeed(mp, !mp.constantSpeed, aspect), "Even speed")}><Ic g="mp-even" size={16} /> Even speed<span className="v2-mp-state">{mp.constantSpeed ? "On" : "Off"}</span></button>
     </>}
+    <NamedPaths engine={engine} placement={placement} />
   </section>;
+}
+
+/**
+ * P89b named paths: link the clip to a storyboard path (Send / Update keep it fitted to the clip), copy a saved path
+ * onto it, save its path under a name for other clips, unlink. Each is one undo step.
+ */
+export function NamedPaths({ engine, placement }: { engine: Engine; placement: Placement }) {
+  const project = engine.getState().project;
+  const b = project.storyboard;
+  const board = (b?.paths ?? []).filter((x) => x.motionPath?.nodes.length);
+  const saved = project.motionPaths ?? [];
+  const mp = placement.motionPath, ref = placement.pathRef;
+  const linked = ref ? storyPaths.findPath(b, ref.ref) : undefined;
+  const [naming, setNaming] = useState<string>();
+  const [note, setNote] = useState<string>();
+  useEffect(() => { if (!note) return; const t = setTimeout(() => setNote(undefined), 5000); return () => clearTimeout(t); }, [note]);
+  const link = (id: string) => {
+    const sp = storyPaths.findPath(b, id);
+    if (!sp) return;
+    const r: storyPaths.StoryPathRef = { ref: sp.id, stretch: true };
+    const path = storyPaths.resolvePathRef(b, r, placement.durationTicks);
+    if (path && engine.dispatch(cmd.setMotionPath(placement.id, path, `Path “${storyPaths.pathName(sp)}”`, { pathRef: r }))) setNote(`Linked to “${storyPaths.pathName(sp)}”, fitted to the clip`);
+  };
+  const use = (id: string) => {
+    const sv = saved.find((x) => x.id === id);
+    const path = sv && storyPaths.resolvePathRef({ paths: [{ id: "s", motionPath: sv.path }] }, { ref: "s", stretch: true }, placement.durationTicks);
+    if (path && engine.dispatch(cmd.setMotionPath(placement.id, path, `Path “${sv!.name}”`, { pathRef: null }))) setNote(`“${sv!.name}” copied onto the clip, fitted to its length`);
+  };
+  const save = () => {
+    const name = (naming ?? "").trim();
+    if (!name || !mp) return;
+    if (engine.dispatch(cmd.saveMotionPath(name, mp), `Save path “${name}”`)) { setNote(`Saved as “${name}”: use it on any clip`); setNaming(undefined); }
+  };
+  if (!board.length && !saved.length && !mp && !ref) return null;
+  return <div className="v2-mp-named" data-testid="named-paths">
+    {ref && <p className="v2-mp-link" role="note"><Ic g="link" size={14} /> <span>From storyboard path <b>“{linked ? storyPaths.pathName(linked) : ref.ref}”</b>{ref.stretch ? ", fitted to the clip" : ""}. Update keeps it in step with the board.</span>
+      <button type="button" className="v2-btn v2-mp-mini" data-testid="mp-unlink" title="Keep the points as the clip's own path; changes on the board no longer move it" onClick={() => { if (mp && engine.dispatch(cmd.setMotionPath(placement.id, mp, "Unlink path", { pathRef: null }))) setNote("Unlinked: the path is the clip's own now"); }}><Ic g="unlink" size={16} /> Unlink</button></p>}
+    {(board.length > 0 || saved.length > 0) && <>
+      <h5 className="v2-mp-subhead">Named paths</h5>
+      <ul className="v2-mp-list" aria-label="Named paths">
+        {board.map((x) => <li key={`b:${x.id}`}>
+          <span className="v2-mp-list-name"><Ic g="board" size={14} /> {storyPaths.pathName(x)}<em>{x.motionPath!.nodes.length} pts · storyboard</em></span>
+          <button type="button" className="v2-btn v2-mp-mini" disabled={ref?.ref === x.id} aria-label={`Link to storyboard path ${storyPaths.pathName(x)}`} title="Move along this storyboard path, fitted to the clip (stays linked)" onClick={() => link(x.id)}><Ic g="link" size={16} /> {ref?.ref === x.id ? "Linked" : "Link"}</button>
+        </li>)}
+        {saved.map((x) => <li key={`s:${x.id}`}>
+          <span className="v2-mp-list-name"><Ic g="bookmark" size={14} /> {x.name}<em>{x.path.nodes.length} pts · saved</em></span>
+          <button type="button" className="v2-btn v2-mp-mini" aria-label={`Use saved path ${x.name}`} title="Copy this path onto the clip, fitted to its length" onClick={() => use(x.id)}><Ic g="motion-path" size={16} /> Use</button>
+          <button type="button" className="v2-icon v2-mp-mini" aria-label={`Delete saved path ${x.name}`} title="Remove it from the saved paths (clips keep their copies)" onClick={() => { if (engine.dispatch(cmd.removeSavedMotionPath(x.id), `Delete saved path “${x.name}”`)) setNote(`“${x.name}” removed from saved paths (Undo restores it)`); }}><Ic g="🗑" size={16} /></button>
+        </li>)}
+      </ul>
+    </>}
+    {mp && (naming === undefined
+      ? <button type="button" className="v2-btn v2-mp-mini" data-testid="mp-save-as" title="Save this path under a name to use it on other clips" onClick={() => setNaming(`Path ${saved.length + 1}`)}><Ic g="bookmark" size={16} /> Save as named path</button>
+      : <form className="v2-mp-saveform" onSubmit={(e) => { e.preventDefault(); save(); }}>
+          <input aria-label="Path name" value={naming} maxLength={40} autoFocus onChange={(e) => setNaming(e.target.value)} onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); setNaming(undefined); } }} />
+          <button type="submit" className="v2-btn primary v2-mp-mini" disabled={!naming.trim()}><Ic g="✓" size={16} /> Save</button>
+          <button type="button" className="v2-icon v2-mp-mini" aria-label="Cancel saving" onClick={() => setNaming(undefined)}><Ic g="✕" size={16} /></button>
+        </form>)}
+    {note && <p className="v2-hint" role="status">{note}</p>}
+  </div>;
 }

@@ -1,8 +1,9 @@
-# Motion paths (P89)
+# Motion paths (P89, P89b)
 
 An After Effects style motion path moves a clip along a drawn route instead of separate X / Y keyframes. This page
-covers the data, the evaluator, the editor and the AI surface. P89 is the editor part (P89a in the plan); named,
-reusable storyboard paths and their guide step follow in P89b.
+covers the data, the evaluator, the editor and the AI surface. P89 (P89a in the plan) is the editor part; P89b adds
+named, reusable storyboard paths, their production guide step, saved paths in the editor and a path input for code
+clips (§7).
 
 ## 1. Which clips
 
@@ -111,7 +112,58 @@ icons (lucide: Route, PenTool, Spline, Pentagon, Navigation2, ChartSpline, Timer
 - **AI rule 81** (`motion-path`). It is the first built-in rule appended after the clip type rules (79 `scene-clips`,
   80 `plugin-clips`), so no published number moved.
 
-## 7. Tests
+## 7. Storyboard paths and saved paths (P89b)
+
+A motion can be planned on the storyboard before any video exists, made later from a reference, and shared by
+several layers.
+
+- **Data.** The board's root `paths[]` holds named paths: `{ id, name?, description?, motionPath? (planned points),
+  from? (a video or image asset to make it from), track? (what to follow in it), durationSec?, createdBy? ("track" |
+  "draw", written by the app) }`. A text, image or html layer points at one with `"motionPath": { "ref", "stretch"?:
+  true, "offset"?: { x, y } }` (in memory `layer.pathRef`). In the JSON, points are frame points (0–1 from the
+  top-left) and seconds from the path start, like a layer path. STORYBOARD_FORMAT §2.1 and §2.5 "Named paths".
+- **Guide step.** Each path is a production step after the reference it is made from:
+  "Create path <name> from <reference>" (without one: "Draw path <name>", or "Path <name>" once it has points). It
+  waits until the reference has a version, is to do until the path is made, and is done once it is tracked or drawn. A planned path with points and
+  no reference counts as done (the plan is the path). Steps reorder like the others (a path never moves above its
+  reference, a shot never above the paths its layers use).
+- **Make it.** The step shows the path over the reference thumbnail, what it is for, and the layers that move along
+  it (each opens its shot).
+  - *Track in reference* (video references) opens the Track sheet on the reference's selected version. Draw a box,
+    Track, review, ✓ "Make the path": the box centre on each steady frame (lost and unstable frames are skipped)
+    becomes the points (contain-fit into the project frame, times from the tracker's In, simplified to at most 12
+    points with smooth inner points). No clip changes; no followers or mask.
+  - *Draw over reference* / *Draw path* opens the Motion path tools (the same overlay, toolbar, timing strip, point
+    fields and phone bar as the editor) on the reference frame, or an empty frame with a grid. The reference video
+    follows the timing strip, so a point's time is the frame under it. ✓ is one undo step; ✕ / Esc changes nothing.
+  - *Clear* removes the points (the step is to do again). Each is one undo step.
+- **Layers.** In the shot editor a layer's *Path* picker links it to a named path, makes a new one (a "Draw path"
+  step; saved with the shot only when a layer uses it) or removes the link; *Fit to layer* sets `stretch`. The shot
+  details list "moves along path “…”".
+- **Send / Update / Re-lay.** Each layer clip gets the named path resolved for it (`resolvePathRef`: stretched to the
+  layer length when `stretch`, plus the offset; times from the layer start) and keeps `pathRef`, so it stays linked:
+  editing or making the path on the board makes Update refresh every linked clip. Layer clips stay linked to the
+  shot's clip as before, so they move with it. The shot signature includes the paths it uses only when it has any,
+  so boards sent before P89b do not look changed.
+- **Sync to Storyboard.** A linked clip whose path still equals the resolved path keeps its link. An edited path is
+  written back into the named path when this layer is its only user ("Path … updated from layer …"); with several
+  users that layer gets its own `motionPath` and the link is dropped, so the other layers do not move.
+- **Code clips.** A manifest input `{ "type": "path" }` (Code Editor → Params → + Path, `ctx.inputs.route`) binds
+  to a storyboard path (`path:<id>`) or a saved path (`path:saved/<id>`), picked in the clip's inputs. Each frame it
+  reads `{ x, y (0–1 of the frame), angle (degrees), progress (0–1), found }` at the clip's own time; unbound or
+  unmade = `found: false` at the centre. Preview and export use the same evaluator.
+- **Saved paths (editor).** The inspector's Motion path section (desktop, and the phone's Adjust sheet) lists
+  *Named paths*: storyboard paths with points (*Link*: the clip moves along it, fitted, and stays linked) and saved
+  paths (*Use*: a copy fitted to the clip). *Save as named path* stores the clip's path in the project library
+  (`project.motionPaths`, same name replaces; times rebased to 0); a linked clip shows "From storyboard path “…”"
+  with *Unlink* (keeps the points as its own). All one undo step; 44 px targets; monochrome line icons.
+- **WebMCP.** Story: `set_story_path { path }` (add or replace by id; points made in the app are kept when only the
+  plan changes), `remove_story_path { id }` (layers lose the link). Timeline: `set_clip_motion_path` takes exactly one
+  of `path`, `ref` (+ `stretch`, `offset`; linked) or `saved` (a copy); `list_motion_paths` (storyboard paths with
+  made / usedBy / clips, saved paths); `save_motion_path { clipId, name }`. `get_timeline` shows `pathRef`.
+- **AI rule 82** (`story-paths`), appended after 81, so no published number moved.
+
+## 8. Tests
 
 `domain/motionPath.test.ts` (evaluator golden snapshot, eases, even speed, orient and aspect, edits, keys → path,
 JSON parse and errors, undo, split / trim), `domain/storyMotionPath.test.ts` (storyboard parse, Send, Sync, export /
@@ -119,11 +171,16 @@ JSON parse and errors, undo, split / trim), `domain/storyMotionPath.test.ts` (st
 `ui/motionPathEditor.test.tsx` (mode: add, ✓ one step, ✕ / Esc, session undo, insert, smooth, keys → path, inspector,
 gizmo routing). Chrome at 390 and 1440 with a preview vs export pixel check.
 
-## 8. Limits and next steps
+P89b: `domain/storyPaths.test.ts` (parse and warnings, export round trip, guide steps, track → path, Send, Update,
+Re-lay, Sync with one and two users, code input), `ui/agent/storyPathTools.test.ts` (story and timeline path tools),
+`ui/storyboard/pathStep.test.tsx` (step list and detail, draw sheet ✓ / ✕, Clear, Track sheet → path, layer path
+picker, named paths in the inspector). Chrome at 390 and 1440.
 
-- P89b: named, reusable storyboard paths (`paths[]`, `motionPath: { ref, … }`), the "Create path from reference"
-  guide step through the Track sheet or manual drawing, Send / Update / Re-lay resolution, Sync back, code clip input
-  of a path, and saved paths in the editor.
+## 9. Limits and next steps
+
+- Path steps cannot be skipped (make or clear the path instead); a reference image cannot be tracked, only drawn on.
+- Tracking a reference uses the region tracker (not AI subject detection); a path made from a short or unsteady
+  track can be redrawn or edited.
 - A path is per clip; split halves get shifted copies.
 - Only x / y (and rotation with orient) follow the path; scale along the path is keyframed as before.
 - Pinch zoom is a CSS zoom of the preview while editing (no pan without zoom; the view resets when the mode closes).
