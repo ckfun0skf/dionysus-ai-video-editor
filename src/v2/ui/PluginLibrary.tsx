@@ -16,6 +16,7 @@ import type { PluginPackage } from "../persistence";
 import { Ic, pluginIconKey } from "./Icon";
 import { Sheet } from "./Sheet";
 import { setDragItem } from "./desktop/dnd";
+import { setPluginInstallRequester, type PluginInstallAnswer, type PluginInstallRequest } from "./agent/pluginTools";
 import {
   PLUGIN_SAMPLES, addPluginClipAt, deleteFromDevice, installPlugin, libraryPluginPackage, pluginErrorText, pluginFacts, pluginRows, pluginSampleUrl, pluginSize,
   pluginSourceText, pluginSwitchPreview, pluginsToReview, projectPluginPackage, readPluginFrom, removePluginFromProject, shortPluginHash, usePluginLibraryItems,
@@ -26,9 +27,9 @@ type Where = "main" | "overlay" | { trackId: string };
 type ClipAt = { at: number; where?: Where };
 /** `back`: where Cancel / Esc go; `done`: where the dialog goes after it did its job (undefined = closed). */
 type Switch = NonNullable<ReturnType<typeof pluginSwitchPreview>>;
-type Consent = { facts: PluginFacts; pkg: PluginPackage; source: string; mode: "install" | "add" | "allow" | "switch"; sw?: Switch; clipAt?: ClipAt; back?: Dialog; done?: Dialog; busy?: boolean; error?: string };
+type Consent = { facts: PluginFacts; pkg: PluginPackage; source: string; mode: "install" | "add" | "allow" | "switch"; sw?: Switch; clipAt?: ClipAt; back?: Dialog; done?: Dialog; busy?: boolean; error?: string; /** P88: opened for an AI agent's request_plugin_install. */ asked?: boolean };
 type Dialog =
-  | { kind: "add"; busy?: string; error?: string; back?: Dialog; clipAt?: ClipAt }
+  | { kind: "add"; busy?: string; error?: string; back?: Dialog; clipAt?: ClipAt; asked?: boolean }
   | { kind: "consent"; c: Consent }
   | { kind: "manage" }
   | { kind: "remove"; row: PluginRow; back?: Dialog }
@@ -65,11 +66,11 @@ export function usePluginCenter(o: PluginCenterOptions) {
   const close = () => setDialog(undefined);
   const back = (to?: Dialog) => setDialog(to);
 
-  const openConsent = async (row: PluginRow, clipAt?: ClipAt, from?: Dialog) => {
+  const openConsent = async (row: PluginRow, clipAt?: ClipAt, from?: Dialog, asked?: boolean) => {
     try {
       const pkg = row.inProject ? await projectPluginPackage(o.engine.getState().project, row.id, o.blobs) : await libraryPluginPackage(row.hash);
       const source = row.inProject ? "project" : library.find((e) => e.hash === row.hash)?.source ?? "project";
-      setDialog({ kind: "consent", c: { facts: pluginFacts(pkg, source), pkg, source, mode: row.inProject ? "allow" : "add", clipAt, back: from, done: from } });
+      setDialog({ kind: "consent", c: { facts: pluginFacts(pkg, source), pkg, source, mode: row.inProject ? "allow" : "add", clipAt, back: from, done: from, ...(asked ? { asked } : {}) } });
     } catch (e) { o.onToast(pluginErrorText(e)); }
   };
 
@@ -95,13 +96,13 @@ export function usePluginCenter(o: PluginCenterOptions) {
     void openConsent(row, clipAt);
   };
 
-  const pickSource = async (from: { file: File } | { url: string }, back?: Dialog, clipAt?: ClipAt) => {
-    setDialog({ kind: "add", busy: "file" in from ? `Reading ${from.file.name}…` : "Downloading…", back, clipAt });
+  const pickSource = async (from: { file: File } | { url: string }, back?: Dialog, clipAt?: ClipAt, asked?: boolean) => {
+    setDialog({ kind: "add", busy: "file" in from ? `Reading ${from.file.name}…` : "Downloading…", back, clipAt, ...(asked ? { asked } : {}) });
     try {
       const { pkg, source } = await readPluginFrom(from);
       const sw = pluginSwitchPreview(o.engine.getState().project, pkg);
-      setDialog({ kind: "consent", c: { facts: pluginFacts(pkg, source), pkg, source, mode: sw ? "switch" : "install", sw, clipAt, back: { kind: "add", back, clipAt }, done: back } });
-    } catch (e) { setDialog({ kind: "add", error: pluginErrorText(e), back, clipAt }); }
+      setDialog({ kind: "consent", c: { facts: pluginFacts(pkg, source), pkg, source, mode: sw ? "switch" : "install", sw, clipAt, back: { kind: "add", back, clipAt }, done: back, ...(asked ? { asked } : {}) } });
+    } catch (e) { setDialog({ kind: "add", error: `${asked ? "Your AI agent asked for a plugin from a web address. " : ""}${pluginErrorText(e)}`, back, clipAt }); }
   };
 
   const confirm = async (c: Consent) => {
@@ -122,6 +123,20 @@ export function usePluginCenter(o: PluginCenterOptions) {
     setDialog(from);
   };
   const askRemove = (row: PluginRow, from?: Dialog) => (row.clips ? setDialog({ kind: "remove", row, back: from }) : remove(row, false, from));
+
+  // P88: request_plugin_install opens these dialogs for the user (never installs by itself): a package URL goes through
+  // "Add plugin" (download, then the consent dialog); a plugin on the device or not yet allowed opens its consent dialog.
+  const agentAsk = useRef<(req: PluginInstallRequest) => PluginInstallAnswer>(() => "busy");
+  agentAsk.current = (req) => {
+    if ((dialog?.kind === "consent" && dialog.c.busy) || (dialog?.kind === "add" && dialog.busy)) return "busy";
+    if ("url" in req) { void pickSource({ url: req.url }, dialog, undefined, true); return "opened"; }
+    const row = rows.find((r) => r.id === req.type);
+    if (!row) return "unknown";
+    if (row.inProject && row.state === "enabled") return "enabled";
+    void openConsent(row, undefined, dialog, true);
+    return "opened";
+  };
+  useEffect(() => setPluginInstallRequester((req) => agentAsk.current(req)), []);
 
   // Esc closes (or goes back from) the open dialog, wherever the focus is.
   useEffect(() => {
@@ -369,6 +384,7 @@ function PluginConsent({ c, onCancel, onConfirm }: { c: Consent; onCancel: () =>
   const verb = c.mode === "switch" ? `${c.sw?.kind === "update" ? "Update" : "Switch"} to ${f.version}` : c.mode === "install" ? "Install" : c.mode === "add" ? "Add to project" : "Allow";
   return (
     <div className="v2-pl-body v2-pl-consent" data-testid="plugin-consent">
+      {c.asked && <p className="v2-pl-asked" data-testid="plugin-agent-ask"><Ic g="agent" size={18} /><span>Your AI agent asked for this plugin. Nothing changes unless you choose {verb}.</span></p>}
       <div className="v2-pl-who">
         <span className="v2-pl-ic is-big" aria-hidden><Ic g={pluginIconKey(f.icon)} size={28} /></span>
         <span><b className="v2-pl-name">{f.name}</b><span className="v2-pl-sub">Version {f.version} · {f.publisher ? <>by {f.publisher} <span className="v2-plugin-unverified">unverified</span></> : <>no publisher <span className="v2-plugin-unverified">unverified</span></>}</span></span>

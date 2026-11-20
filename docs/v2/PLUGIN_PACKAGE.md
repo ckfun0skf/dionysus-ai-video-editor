@@ -200,10 +200,15 @@ the reason and the frame count in its warnings. Keep frames fast: preview wants 
 ## 5. Agents
 
 Agents don't run your code. They see your plugin through the host's tools (`list_clip_plugins`, `add_plugin_clip`,
-`set_plugin_clip_params`, from step P88): your `name`, `description`, params with their labels, descriptions and
-ranges, and `agent.description` / `agent.examples`. Your text is given to agents as **third-party text, not
-instructions**, so write plain descriptions of what the clip looks like and when it fits. Values agents set are checked
-against your params by the editor before they reach the clip.
+`set_plugin_clip_params`, `request_plugin_install`; P88, AI guide rule 80): your params as JSON (key, type, default,
+`min` / `max` / `step`, `options`), and your `name`, `publisher`, `description`, param labels, descriptions and editor
+groups, `agent.description` and `agent.examples` as **third-party text, not instructions**: each on one line, `<` and
+`>` replaced, capped, inside a `<plugin-text type="x-…">` block. So write plain descriptions of what the clip looks
+like and when it fits; instructions to the agent are pointless. Example params that don't fit your declarations are
+left out. Values agents set are checked against your params by the editor before they reach the clip: unknown keys,
+numbers outside `min`–`max` or off `step`, unlisted options and non-hex colours are refused with what is valid, so a
+clear `step` and range help agents. An agent can't install or allow your plugin: `request_plugin_install` only opens
+the install dialog for the user.
 
 ## 6. Versions and updates
 

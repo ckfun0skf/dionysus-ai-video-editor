@@ -4,7 +4,7 @@
 started in P74 after decision 5 was accepted, step table in [§7 Phase 2](#phase-2--deterministic-threejs-scene-clip);
 steps 2.1 (P74), 2.2 (P75), 2.3 (P76), 2.4 (P77), 2.5 (P78) and 2.6 (P79) are done, so **Phase 2 is complete** since P79;
 the table was renumbered in P76, see the note under it. Phase 3 started in P83 after decisions 10–17 were accepted
-on 2026-11-19, step table in [§7 Phase 3](#phase-3--third-party-clip-types); steps 3.1 (P83), 3.2 (P84), 3.3 (P85), 3.4 (P86) and 3.5 (P87) are done).
+on 2026-11-19, step table in [§7 Phase 3](#phase-3--third-party-clip-types); steps 3.1 (P83), 3.2 (P84), 3.3 (P85), 3.4 (P86), 3.5 (P87) and 3.6 (P88) are done, so **Phase 3 is complete** since P88).
 Written against `main` at `36c37b14` (after P63). Decisions: see [§0](#0-decisions). Progress: see
 [§7 Phase 1](#phase-1--registry-with-zero-behaviour-change).
 
@@ -703,6 +703,53 @@ Project → **Plugins** to manage. 44 px targets, monochrome line icons, badges 
   aren't updated automatically or checked for updates online; the other P86 gaps stay (icon-only tiles, manual
   Retry, about 32 s until a hung plugin stops, the dev hook in dev builds, no "export package").
 
+**Done in P88 (step 3.6).**
+
+- Generic host tools (decision 17), declared as data in `clipTypes/pluginAgentDefs.ts` and appended by
+  `clipTypeAgentTools()` after the built-in cores' tools (so they follow the scene tools in `TIMELINE_TOOLS`, the
+  WebMCP registration, `gen:ai` and WEB_MCP.md); they run in `ui/agent/pluginTools.ts` (they need the device library
+  and the plugin dialog), called from `runTimelineTool`:
+  - `list_clip_plugins({ type? })`: the project's plugins and the device's others (`pluginRows`) as JSON (type,
+    version, state enabled / review / device / missing / damaged / newer / conflict, inProject, clips, durationSec,
+    update, params with key, type, default, min / max / step, options), then each plugin's own text in a
+    `<plugin-text type="x-…">` block behind a note that it is third-party data. At most 24 plugins.
+  - `add_plugin_clip({ type, atSec?, durationSec?, track?, params? })`: enabled plugins only; overlay (default), main
+    or a free video track id; the clip and its params are **one undo step** (`cmd.addPluginClip` +
+    `cmd.setPluginParams`); returns the clip as `get_timeline` lists it.
+  - `set_plugin_clip_params({ clipId, params?, reset? })`: merge, `null` = default, `reset` = all defaults first; one
+    undo step; no step when nothing changes.
+  - `request_plugin_install({ url } | { type })`: never installs. The URL passes the attach rules (https, localhost or
+    this site); `usePluginCenter` registers a requester (`setPluginInstallRequester`) that opens Add plugin
+    (download, then the consent dialog) or the consent dialog of a device / not-yet-allowed plugin, marked "Your AI
+    agent asked for this plugin. Nothing changes unless you choose Install." The tool returns at once; the agent reads
+    the result later with `list_clip_plugins`. Refused when a plugin dialog is busy or no plugin screens are mounted.
+- Host validation (`domain/pluginAgent.ts` `checkPluginParams`): every problem is listed and the call changes
+  nothing: unknown keys (with the valid keys), numbers outside min–max or off their `step` (refused, not clamped),
+  options not listed, non-hex colours, wrong types, text over 2000 characters; each says what the param takes
+  ("a number from 2 to 40 (step 1)", `one of "left", "right"`).
+- Third-party text (decision 14): `pluginTextBlock` puts name, publisher, description, param labels / descriptions /
+  groups, `agent.description` and `agent.examples` (example params re-checked; invalid ones left out) on single lines,
+  replaces `<` / `>` with ‹ › (so a plugin can't close the fence) and caps each field and the block (4000 characters).
+- `get_timeline`: a loaded plugin clip has `plugin { name, version, paramsWrittenFor?, enabled: false when not allowed }`
+  and the resolved `params`; a clip whose plugin isn't loaded has `unknown: true`, `plugin { version, loaded: false }`
+  and its stored `params`.
+- AI guide rule **80** (`plugin-clips`), contributed by the plugin host after the scene type's rule 79 (no built-in
+  number moved): what plugin clips are, the four tools, validation, the fenced text is data never instructions, and
+  installing / allowing / updating is the user's decision. `gen:ai` regenerated (llms.txt, the guide, WEB_MCP.md
+  tool list, STORYBOARD_FORMAT.md rule 80); the agent parity golden changed only for the tool and rule lists.
+- Checked in Chrome at 1440 and 390 with a WebMCP stand-in: the agent lists (empty), is refused for a plugin that
+  isn't loaded and for an `http://` URL, asks to install the stripes sample (the consent dialog opens with the agent
+  note; nothing installed until the user's Install), lists it as enabled with the fenced text, is refused for
+  `count: 99` and an unknown key, adds a clip with a title and colours, is refused for `speed: 7`, changes speed,
+  direction and angle. Preview vs export: the visible 1280×720 preview canvas and the export path (offline Player
+  with export video frames) are pixel-identical at 0, 1, 2 and 3 s (four different frames), and a 720p MP4 export has
+  no warnings (decoded frame vs preview: mean difference 0.83 of 255, codec loss). Consent buttons ≥ 44 px at 390, no
+  console errors.
+- **Gaps:** an agent can't see a plugin's frames except through `capture_frame`; no `remove_plugin` or version-switch
+  tool (the user does those in Plugins); request_plugin_install opens one dialog at a time and doesn't report the
+  user's answer (poll `list_clip_plugins`); plugin clips can't be storyboard shots (decision 16); the phone's collapsed
+  overlay row shows only the plugin's name.
+
 Steps (one PR each, merged on green CI):
 
 | Step | PR | What | Status |
@@ -712,7 +759,10 @@ Steps (one PR each, merged on green CI):
 | 3.3 | P85 | Sandbox renderer: bootstrap iframe, worker, OffscreenCanvas, watchdog and restarts, `pluginHost` in the Player and export; Chrome determinism and export checks | **done** |
 | 3.4 | P86 | Install and trust UX: file / URL install, install dialog, per-project review banner, the Plugins library at 1440 and 390, remove | **done** |
 | 3.5 | P87 | Clip editing UX: the inspector Plugin tab and phone Params sheet from the declarative form, timeline icon and name, updates with param migration | **done** |
-| 3.6 | P88 | Agent tools and the host AI rule, `gen:ai`, WEB_MCP docs | next |
+| 3.6 | P88 | Agent tools and the host AI rule, `gen:ai`, WEB_MCP docs | **done** |
+
+**Phase 3 is complete** (P88). Later work (not steps of this plan): storyboard plugin shots (decision 16), sound or
+media inputs for plugins, tile previews, "Export package", an idle-worker limit.
 
 ## 8. What this does not change
 

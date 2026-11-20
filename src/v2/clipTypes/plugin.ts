@@ -61,7 +61,7 @@ export function pluginCoreOf(m: PluginManifest, lock: Pick<PluginLock, "hash">, 
     caps: { sourceTime: false, still: false, sound: false, visual: true, keyable: m.caps?.keyable !== false, thumb: false, asset: "none" },
     plugin: meta,
     agent: {
-      describe: (p) => ({ plugin: { name: m.name, version: m.version, ...(p.plugin?.v && p.plugin.v !== m.version ? { paramsWrittenFor: p.plugin.v } : {}) }, params: pluginParamsOf(meta, p) }),
+      describe: (p) => ({ plugin: { name: m.name, version: m.version, ...(p.plugin?.v && p.plugin.v !== m.version ? { paramsWrittenFor: p.plugin.v } : {}), ...(isPluginEnabled(m.id) ? {} : { enabled: false }) }, params: pluginParamsOf(meta, p) }),
     },
   };
 }

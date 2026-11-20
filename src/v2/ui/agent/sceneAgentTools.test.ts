@@ -56,7 +56,7 @@ describe("P78 scene agent tools through WebMCP", () => {
   it("registers the contributed scene tools after the built-ins, with schemas and read-only hints; unregisters them", () => {
     const e = setup(), { defs, off } = host(e, memBlobs());
     const names = ALL_AGENT_TOOLS.map((t) => t.name);
-    expect(names.slice(-SCENE_TOOLS.length)).toEqual(SCENE_TOOLS);
+    expect(names.slice(-SCENE_TOOLS.length - 4, -4)).toEqual(SCENE_TOOLS); // P88: the plugin host's four tools come last
     for (const n of SCENE_TOOLS) {
       expect(defs.has(n), n).toBe(true);
       expect(defs.get(n)!.annotations?.readOnlyHint, n).toBe(READ_ONLY.has(n));

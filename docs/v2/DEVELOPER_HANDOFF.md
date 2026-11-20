@@ -92,9 +92,9 @@ required checks.
 1. `git fetch` and branch from the latest `origin/main` (e.g. `p66-short-name`).
 2. Implement with tests. Keep PRs small (MODULE_DESIGN §14 targets < 400 changed lines; feature PRs here are often
    larger, but split refactors).
-3. **`public/doc/tasks.json`:** add one entry per PR with the next free P-number: `{ "id": "P88-SHORT-NAME", "title":
+3. **`public/doc/tasks.json`:** add one entry per PR with the next free P-number: `{ "id": "P89-SHORT-NAME", "title":
    "<what and why, one paragraph>", "status": "done", "progress": 100 }` appended after the latest entry (the latest is
-   `P87-PLUGIN-PARAMS`; the next is **P88**). Bump `updatedAt`. Edit the file surgically (insert text); do not
+   `P88-PLUGIN-AGENT-TOOLS`; the next is **P89**). Bump `updatedAt`. Edit the file surgically (insert text); do not
    re-serialise the whole JSON. `scripts/check-tasks-updated.mjs` fails a PR that changes `src/` without it. If an id
    is already taken, use the next number and say so in the PR.
 4. **AI guide rule:** append to `RULE_LIST` in `src/v2/domain/storyPrompt.ts` (append-only; numbers are positions;
@@ -113,7 +113,7 @@ required checks.
 6. Run `npm run gen:ai` after changing rules, tools or presets, and commit the regenerated files (tests fail if they are
    stale).
 7. `npx tsc -b && npx vitest run && npx vite build`.
-8. Commit in English; PR title `P88: …`; body says what, why, tests, and `Fixes #N` (or `Refs #N` if partial), plus
+8. Commit in English; PR title `P89: …`; body says what, why, tests, and `Fixes #N` (or `Refs #N` if partial), plus
    what was not verified. Push, open the PR, wait for `build` on the head SHA. Do not merge.
 
 ## 7. UI conventions
@@ -519,12 +519,27 @@ project plugin is an update or downgrade that migrates every clip in one undo st
 `versions`, shown as Update available / Update / Versions (`ui/PluginLibrary.tsx`). A higher `api` says "needs a newer
 Dionysus". Tests: `ui/pluginParams.test.tsx`. Chrome checks and gaps: CLIP_PLUGIN_ARCHITECTURE "Done in P87".
 
-**Next: P88 (step 3.6),** agent tools and the host AI rule: `list_clip_plugins`, `add_plugin_clip`,
-`set_plugin_clip_params` (values checked with `checkParamValue`), `request_plugin_install(url)` (only opens the install
-dialog), one host rule after the scene type's, `gen:ai`, WEB_MCP docs. That completes Phase 3.
+**P88 (step 3.6, done):** agents and plugins. Generic host tools only (no plugin declares tools or rules):
+`list_clip_plugins`, `add_plugin_clip`, `set_plugin_clip_params` and `request_plugin_install` (declared in
+`clipTypes/pluginAgentDefs.ts`, appended after the built-in cores' tools; run in `ui/agent/pluginTools.ts`).
+`domain/pluginAgent.ts` checks values against the manifest (`checkPluginParams`: every problem, with what is valid;
+out-of-range or off-step numbers are refused) and fences the plugin's own text in `<plugin-text>` blocks
+(`pluginTextBlock`: one line per item, `<` `>` replaced, capped). `request_plugin_install` only opens the consent
+dialog (`usePluginCenter` registers `setPluginInstallRequester`; the dialog says the agent asked); the user decides.
+`get_timeline` shows `plugin` and `params` (stored values when the plugin isn't loaded). AI guide rule **80**
+(`plugin-clips`) comes from the plugin host after the scene rule; `gen:ai` regenerated and the agent parity golden
+updated for the tool and rule lists only. Tests: `ui/agent/pluginTools.test.tsx`. Chrome checks (agent demo, preview
+and export pixel-identical) and gaps: CLIP_PLUGIN_ARCHITECTURE "Done in P88".
+
+**Phase 3 is complete** (P83–P88): third-party clip type plugins can be written (PLUGIN_PACKAGE.md), installed and
+allowed per project, run sandboxed and deterministic in preview and export, edited from their declarative form,
+updated with param migration, and used by agents through the host tools. Next work is open: storyboard plugin shots
+(decision 16, deferred), the Phase 3 gaps listed in "Done in P84"–"Done in P88" (icon-only tiles, manual Retry, about
+32 s until a hung plugin stops, the dev hook in dev builds, no "Export package", no param renames on update), or the
+backlog below.
 New built-in clip types still follow `docs/v2/ADDING_CLIP_TYPES.md`.
 
-**Backlog and known limits after Phase 2** (candidates for small PRs before or during Phase 3):
+**Backlog and known limits after Phase 2** (still open after Phase 3; candidates for small PRs):
 
 - Scene clips on overlay tracks are not synced to the storyboard (a storyboard has no scene layer type); a scene
   layer type would need `LAYER_TYPES` and Send / Sync support.

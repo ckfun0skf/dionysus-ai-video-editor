@@ -2006,3 +2006,6 @@ select.v2-tp-field { -webkit-appearance: none; appearance: none; padding-right: 
 .v2-pl-row { flex-wrap: wrap; }
 .v2-pl-row .v2-pl-main { flex: 1 1 150px; }
 .v2-pl-row .v2-pl-rowacts { margin-left: auto; }
+/* P88: a consent dialog opened for an AI agent's request says so. */
+.v2-pl-asked{display:flex;gap:8px;align-items:flex-start;margin:0 0 12px;padding:10px 12px;border:1px solid var(--line,#3a3a40);border-radius:10px;font-size:13px;line-height:1.4;color:inherit}
+.v2-pl-asked .v2-ic{flex:none;margin-top:1px}
