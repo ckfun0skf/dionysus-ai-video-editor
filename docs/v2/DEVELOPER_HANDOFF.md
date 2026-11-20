@@ -92,9 +92,9 @@ required checks.
 1. `git fetch` and branch from the latest `origin/main` (e.g. `p66-short-name`).
 2. Implement with tests. Keep PRs small (MODULE_DESIGN §14 targets < 400 changed lines; feature PRs here are often
    larger, but split refactors).
-3. **`public/doc/tasks.json`:** add one entry per PR with the next free P-number: `{ "id": "P85-SHORT-NAME", "title":
+3. **`public/doc/tasks.json`:** add one entry per PR with the next free P-number: `{ "id": "P86-SHORT-NAME", "title":
    "<what and why, one paragraph>", "status": "done", "progress": 100 }` appended after the latest entry (the latest is
-   `P84-PLUGIN-STORE`; the next is **P85**). Bump `updatedAt`. Edit the file surgically (insert text); do not
+   `P85-PLUGIN-RENDERER`; the next is **P86**). Bump `updatedAt`. Edit the file surgically (insert text); do not
    re-serialise the whole JSON. `scripts/check-tasks-updated.mjs` fails a PR that changes `src/` without it. If an id
    is already taken, use the next number and say so in the PR.
 4. **AI guide rule:** append to `RULE_LIST` in `src/v2/domain/storyPrompt.ts` (append-only; numbers are positions;
@@ -484,11 +484,25 @@ export warning, inspector Plugin tab, phone Plugin sheet); a locked plugin that 
 slate. Tests: `persistence/plugins.test.ts`, `ui/pluginClip.test.tsx`. Not yet: running plugin code (P85), install and
 trust screens (P86), editing settings (P87), agent tools (P88).
 
-**Next: P85 (step 3.3),** the sandbox renderer: a host-written bootstrap in the sandboxed opaque-origin iframe starts a
-classic worker per placement that draws on an `OffscreenCanvas` (the clip CSP, the determinism shim, `init` 15 s and
-frame 4 s limits, restarts), `host.media.pluginHost` in the Player and export, and the renderer replacing the
-not-enabled slate for trusted plugins (`PluginLibrary.isTrusted`). The pinned three.js is an ES module, so the worker
-needs the host to provide it (decide in P85). Then P86 install and trust UX, P87 clip editing UX, P88 agent tools.
+**P85 (step 3.3, done):** enabled plugins run. `render/pluginHost.ts` writes the bootstrap page (its CSP: no
+network, no `eval`) for one `sandbox="allow-scripts"` iframe per package per Player; it starts a classic `blob:`
+worker per placement with the determinism shim (virtual time, `Math.random` reset to the seed before every frame)
+that draws on an `OffscreenCanvas` and returns `ImageBitmap`s. `PluginClipHost` is the watchdog (init 15 s, frame 4 s,
+two timeouts or a failed init restart the worker, three restarts stop the clip). `render/pluginLibs.ts` provides the
+pinned libraries checked against their SRI hash, with ES modules such as three.js turned into the classic global
+`THREE`. `render/pluginClip.ts` draws the frames like HTML clips, and the slate "Plugin “Name” stopped" for a stopped
+clip (black in export, with a warning). The Player gives renderers `host.plugins`, prunes hosts and awaits them on
+export. A plugin is enabled when the device trusts its exact hash for the project (`syncProjectPlugins({ trusted })`,
+`isPluginEnabled`); enabled cards are solid and the inspector says **Enabled**. There is no trust UI yet: in dev builds
+only, `window.__dionysusDev.trustPlugin(id)` enables a plugin the open project uses. New three.js sample
+`public/plugins/samples/x-dionysus-orbit/`. Tests: `render/pluginHost.test.ts` (CSP, routing, the worker in a VM,
+watchdog), `render/pluginLibs.test.ts`, `ui/pluginRun.test.tsx`; Chrome checks are listed in
+CLIP_PLUGIN_ARCHITECTURE "Done in P85" with the gaps (a stopped plugin stays stopped until reopen, no idle worker
+limit, a hung plugin adds about 32 s to an export, WebGL identical per device only, no plugin thumbnails).
+
+**Next: P86 (step 3.4),** install and trust UX: install from a file or URL with the install dialog, the per-project
+review banner and sheet (calling `PluginLibrary.trust` and then `syncPlugins`), the Plugins library at 1440 and 390,
+and remove. Then P87 clip editing UX, P88 agent tools.
 New built-in clip types still follow `docs/v2/ADDING_CLIP_TYPES.md`.
 
 **Backlog and known limits after Phase 2** (candidates for small PRs before or during Phase 3):

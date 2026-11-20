@@ -1,8 +1,9 @@
 # Clip type plugins: package format and author guide
 
 **Format:** `dionysus.cliptype/1`, host API **1**. **Status:** the format and its validator are done (P83); a project
-stores, carries and loads its plugin packages since P84 (their clips show by name with "Not enabled"); plugins run
-from P85, and the install and trust screens come in P86 (see
+stores, carries and loads its plugin packages since P84 (their clips show by name with "Not enabled"); since P85 an
+enabled plugin draws in the sandbox described in §3, in preview and export; the install and trust screens that enable
+it come in P86 (until then only a development hook enables one, see §7) (see
 [CLIP_PLUGIN_ARCHITECTURE.md §7 Phase 3](CLIP_PLUGIN_ARCHITECTURE.md#phase-3--third-party-clip-types) for the steps).
 Design and decisions: [CLIP_PLUGIN_ARCHITECTURE.md](CLIP_PLUGIN_ARCHITECTURE.md) §0, decisions 10–17.
 
@@ -141,22 +142,30 @@ user scrubs back and forth, and export draws every frame, maybe on another day. 
 
 - Compute everything from `t` and `ctx.params`. Don't keep state that depends on which frames were drawn before (a
   particle system must be a function of `t`, e.g. by simulating from 0 with a fixed step, or by closed-form motion).
-- `Math.random()` is seeded the same way on every load; `Date.now()`, `performance.now()` and
-  `requestAnimationFrame` follow the clip time, never the wall clock. Don't use `setTimeout` / `setInterval` to
+- `Math.random()` is seeded the same way on every load, and the seed is reset before `init` and before **every
+  frame**, so frame `t` gets the same random numbers whatever was drawn before (build random tables in `init`, or draw
+  them per frame in a fixed order). `Date.now()`, `performance.now()` and `requestAnimationFrame` follow the clip time,
+  never the wall clock (`Date.now()` is 2026-01-01T00:00:00Z plus `t`). Don't use `setTimeout` / `setInterval` to
   animate.
+- WebGL output is the same on one device; GPUs and drivers may differ by a few pixel values between devices.
 - Fonts: bundle them and load them in `init`; system fonts differ between devices.
 
 **Libraries:** `render.libs` lists pinned libraries from the editor's registry (the same list as HTML clips, e.g.
-`three` for three.js 0.160.0). They are provided by the host, never fetched from a CDN.
+`three` for three.js 0.160.0). They are provided by the host, never fetched from a CDN: the host checks each file
+against its pinned integrity hash and loads it into your worker before your entry, as a classic script. Module
+libraries become the global **`THREE`** (`THREE.WebGLRenderer`, `THREE.Scene`, …); `three-gltf` adds
+`THREE.GLTFLoader`. Write `const { Scene, PerspectiveCamera } = THREE;` instead of `import`.
 
 **No network.** The worker runs with a content security policy that allows only `blob:` and `data:` URLs and the
 pinned libraries: `fetch` of anything else, `WebSocket`, `EventSource` and `importScripts` of remote URLs fail. There is
-no DOM, no `document`, no storage, no cookies, and no access to the editor.
+no DOM, no `document`, no storage, no cookies, no `eval` / `new Function`, and no access to the editor. The worker
+lives in an iframe with an opaque origin (`sandbox="allow-scripts"`), so it can't reach the editor's origin either.
 
-**Time limits.** `init` has 15 seconds. Each frame has 4 seconds in export (preview drops a late frame after about
-1 second and shows the last one). After two timeouts in a row the editor stops the worker and starts a new one; after
-three restarts the clip shows "Plugin stopped" and export reports the frames. Keep frames fast: preview wants about
-30 per second.
+**Time limits.** `init` has 15 seconds. Each frame has 4 seconds. Preview never waits: it shows the last frame your
+clip drew until the next one arrives. A frame that throws counts as a failure; after two frame timeouts in a row (or a
+failed `init`) the editor stops the worker and starts a new one; after three restarts the clip shows the slate
+"Plugin “Name” stopped" until the project is opened again, and export draws those frames black and names the clip,
+the reason and the frame count in its warnings. Keep frames fast: preview wants about 30 per second.
 
 ## 4. What users see
 
@@ -204,4 +213,11 @@ against your params by the editor before they reach the clip.
 A complete sample is in [`public/plugins/samples/x-dionysus-stripes/`](../../public/plugins/samples/x-dionysus-stripes/)
 (`manifest.json` and `render.js`: sliding stripes with an optional title band, 2D canvas). Its manifest is checked by
 `src/v2/domain/pluginManifest.test.ts`, which also loads `render.js` the way the editor will and checks that it draws
-the same frame for the same `t`.
+the same frame for the same `t`. A three.js sample is in
+[`public/plugins/samples/x-dionysus-orbit/`](../../public/plugins/samples/x-dionysus-orbit/) ("3D knot": a lit torus
+knot with orbiting dots, `libs: ["three"]`, WebGL, a seeded dot table built in `init`).
+
+**Trying a plugin before P86.** The install and trust screens come in P86. In a development build (`npm run dev`)
+the browser console has `__dionysusDev.trustPlugin("x-…")`, which allows a plugin that the open project already uses,
+for that project on this device, and `__dionysusDev.untrustPlugin("x-…")`. The hook does not exist in production
+builds.

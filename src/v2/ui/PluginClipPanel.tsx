@@ -1,5 +1,5 @@
 import type { Placement, Project } from "../domain";
-import { pluginMetaOf, pluginParamsOf, pluginIssueOf } from "../clipTypes";
+import { isPluginEnabled, pluginMetaOf, pluginParamsOf, pluginIssueOf } from "../clipTypes";
 import { Ic } from "./Icon";
 
 const shortHash = (h: string) => `${h.replace(/^sha256-/, "").slice(0, 12)}…`;
@@ -21,7 +21,9 @@ export function PluginClipPanel({ project, placement }: { project: Project; plac
     <div className="v2-psettings v2-plugin-panel" data-testid="plugin-clip">
       <section aria-label="Plugin">
         <h4><Ic g="puzzle" size={14} /> {meta.name}</h4>
-        <p className="v2-plugin-state" role="status"><span className="v2-ph-state">Not enabled</span> This plugin hasn&apos;t been allowed to run in this project on this device, so the clip shows a slate and exports as a black frame. Its settings are kept.</p>
+        {isPluginEnabled(placement.clipType)
+          ? <p className="v2-plugin-state" role="status"><span className="v2-ph-state is-on">Enabled</span> Allowed in this project on this device. It draws in a sandbox from its settings and can&apos;t use the network or read your projects or files.</p>
+          : <p className="v2-plugin-state" role="status"><span className="v2-ph-state">Not enabled</span> This plugin hasn&apos;t been allowed to run in this project on this device, so the clip shows a slate and exports as a black frame. Its settings are kept.</p>}
         {meta.description && <p className="v2-abnote">{meta.description}</p>}
         <dl className="v2-plugin-facts">
           <div><dt>Version</dt><dd>{meta.version}</dd></div>

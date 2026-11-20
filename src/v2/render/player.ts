@@ -15,7 +15,9 @@ import { compositionDuration, fadeAt, findPlacement, versionOfPlacement, type Pl
 import type { BlobStore } from "../ports/storage";
 import { subtitleAt } from "../domain/subtitles";
 import { loadBundledFonts } from "./fonts";
-import { clipRendererFor, type ClipDrawHost, type ClipFrameState, type ClipMediaHost } from "./clipRenderers";
+import { clipRendererFor, type ClipDrawHost, type ClipFrameState, type ClipMediaHost, type PluginFrames } from "./clipRenderers";
+import { PluginClipHost, PluginSandbox, pluginInitFor } from "./pluginHost";
+import { isPluginEnabled, pluginMetaOf } from "../clipTypes";
 import { effectivePlacement } from "../domain/layerStyle";
 import { applyEffectFrame, codeEffectsAt, effectFrameAt } from "./effects";
 import { trackTransitions } from "../domain/transitions";
@@ -40,7 +42,7 @@ const PRELOAD_TICKS = 2 * TICKS_PER_SECOND;
 
 type MediaEl = HTMLVideoElement | HTMLAudioElement | HTMLImageElement;
 /** Frame problems found while rendering offline: HTML clip timeouts/invalid frames, attached-file failures, video frames with no picture. */
-export type RenderIssue = FrameIssue | "blank" | "asset";
+export type RenderIssue = FrameIssue | "blank" | "asset" | "stopped";
 type RVFCVideo = HTMLVideoElement & { requestVideoFrameCallback?: (cb: () => void) => number; cancelVideoFrameCallback?: (id: number) => void };
 
 export class Player {
@@ -63,6 +65,9 @@ export class Player {
   private pendingFrame = new Map<HTMLVideoElement, Promise<void>>();
   private probe?: CanvasRenderingContext2D | null;
   private html = new Map<string, { key: string; host: HtmlClipHost }>();
+  /** P85: plugin clip workers by placement (keyed by package hash and output size) and their bootstrap iframes by hash. */
+  private pluginHosts = new Map<string, { key: string; hash: string; host: PluginClipHost }>();
+  private sandboxes = new Map<string, PluginSandbox>();
   /** P59: local fullscreen mute (does not edit the project). */
   previewMute = false;
   /** Manifest per HTML blob, read when its clip first loads (blobs are immutable). */
@@ -404,6 +409,34 @@ export class Player {
     }
   }
 
+  /** P85: the worker of an enabled plugin clip at this output size (a new package or size starts a new one). */
+  private pluginHost(placementId: string, clipType: string, w: number, h: number): PluginClipHost | undefined {
+    const meta = pluginMetaOf(clipType);
+    if (!meta || !isPluginEnabled(clipType)) return undefined;
+    const key = `${meta.hash}@${w}x${h}`;
+    const hit = this.pluginHosts.get(placementId);
+    if (hit?.key === key) return hit.host;
+    hit?.host.dispose();
+    let sb = this.sandboxes.get(meta.hash);
+    if (!sb) { sb = new PluginSandbox(); this.sandboxes.set(meta.hash, sb); }
+    const host = new PluginClipHost(sb, (params, duration) => pluginInitFor(meta, w, h, params, duration), () => { if (!this.playing) this.draw(); });
+    this.pluginHosts.set(placementId, { key, hash: meta.hash, host });
+    return host;
+  }
+  private pluginFrames?: PluginFrames;
+  private plugins(): PluginFrames {
+    return (this.pluginFrames ??= { host: (id, type, w, h) => this.pluginHost(id, type, w, h), keyOf: (p) => this.keyOf(p) });
+  }
+  /** Drop workers of clips that are gone or whose plugin is no longer enabled, and bootstrap iframes nobody uses. */
+  private prunePlugins() {
+    for (const [id, e] of this.pluginHosts) {
+      const p = placementIn(this.project, id);
+      if (!p || !isPluginEnabled(p.clipType) || pluginMetaOf(p.clipType)?.hash !== e.hash) { e.host.dispose(); this.pluginHosts.delete(id); }
+    }
+    const used = new Set([...this.pluginHosts.values()].map((e) => e.hash));
+    for (const [hash, sb] of this.sandboxes) if (!used.has(hash)) { sb.dispose(); this.sandboxes.delete(hash); }
+  }
+
   /** P68: the pools and services the stateful clip renderers (html, video, image, audio) use. */
   private media?: ClipMediaHost;
   private mediaHost(): ClipMediaHost {
@@ -516,6 +549,7 @@ export class Player {
             setBox: (r) => { this.boxes.set(placement.id, r); },
             paint,
             blit: (g, srcW, srcH, r, fn) => this.blit(g, placement, srcW, srcH, r, sourceTicks, fn),
+            plugins: this.plugins(),
           };
           renderer.draw(host);
         }
@@ -572,6 +606,7 @@ export class Player {
     }
     for (const id of [...this.pool.keys()]) if (!findAny(this.project, id)) this.release(id);
     for (const [id, h] of this.html) if (!findAny(this.project, id.split("#")[0]) || (id.includes("#") && !live.has(id))) { h.host.dispose(); this.html.delete(id); }
+    if (this.pluginHosts.size || this.sandboxes.size) this.prunePlugins();
     this.onTime?.(this.time, this.playing);
   }
 
@@ -658,6 +693,7 @@ export class Player {
     await Promise.all([...this.pendingFrame.values()]);
     if (this.sceneDocs.size) await Promise.all([...this.sceneDocs.values()].map((e) => e.ready));
     await Promise.all([...this.html.values()].map((h) => h.host.settle()));
+    await Promise.all([...this.pluginHosts.values()].map((h) => h.host.settle()));
     if (this.analyses.size) { await Promise.all(this.analyses.values()); this.draw(); await Promise.all([...this.html.values()].map((h) => h.host.settle())); }
   }
 
@@ -803,6 +839,12 @@ export class Player {
         this.frameIssues.push({ placementId: id, t: this.time, issue: "asset", detail: [...new Set(h.host.assetErrors)].join(" ") });
       }
     }
+    // P85: plugin clips: a late or bad frame, or a stopped plugin (its frames are black).
+    for (const [id, h] of this.pluginHosts) {
+      if (!live.has(id)) continue;
+      const issue = h.host.stopped ? "stopped" : !h.host.settled() ? "timeout" : h.host.issue;
+      if (issue) this.frameIssues.push({ placementId: id, t: this.time, issue, ...(h.host.errors.length ? { detail: h.host.errors.at(-1) } : {}) });
+    }
   }
 
   /** Element-path video clips: make sure each drew a real picture; nudge (muted play/pause + reseek) once, then record. */
@@ -840,6 +882,8 @@ export class Player {
     this.pause();
     for (const id of [...this.pool.keys()]) this.release(id);
     this.html.forEach((h) => h.host.dispose()); this.html.clear();
+    this.pluginHosts.forEach((h) => h.host.dispose()); this.pluginHosts.clear();
+    this.sandboxes.forEach((s) => s.dispose()); this.sandboxes.clear();
     this.resolvedUrls.forEach((u) => URL.revokeObjectURL(u));
     this.exportVideo?.dispose();
     this.host?.remove();
@@ -858,6 +902,11 @@ function settle(el: MediaEl, ms = 4000): Promise<void> {
     const to = setTimeout(done, ms);
     ["seeked", "loadeddata", "load", "error"].forEach((e) => el.addEventListener(e, check));
   });
+}
+
+function placementIn(p: Project, placementId: string) {
+  for (const t of p.compositions[p.rootCompositionId].tracks) for (const pl of t.placements) if (pl.id === placementId) return pl;
+  return undefined;
 }
 
 function findAny(p: Project, placementId: string) {

@@ -31,6 +31,8 @@ export interface ClipPluginMeta {
   agent?: PluginManifest["agent"];
   /** The validated manifest, for the renderer (P85) and the plugin panels. */
   manifest: PluginManifest;
+  /** P85: the package's listed files (verified against the lock's hash), handed to the sandboxed worker. */
+  files?: ReadonlyMap<string, Uint8Array>;
 }
 
 /** A plugin's params as a clip sees them: declared defaults with the clip's stored values of the same type on top. */
@@ -46,10 +48,10 @@ export function pluginParamsOf(meta: Pick<ClipPluginMeta, "params">, p: Pick<Pla
 }
 
 /** Build the core for a validated manifest and the lock that pins it. */
-export function pluginCoreOf(m: PluginManifest, lock: Pick<PluginLock, "hash">): ClipTypeCore {
+export function pluginCoreOf(m: PluginManifest, lock: Pick<PluginLock, "hash">, files?: ReadonlyMap<string, Uint8Array>): ClipTypeCore {
   const meta: ClipPluginMeta = {
     name: m.name, version: m.version, hash: lock.hash, publisher: m.publisher, description: m.description, icon: m.icon,
-    durationSec: m.durationSec ?? 5, params: m.params ?? {}, editor: m.editor, agent: m.agent, manifest: m,
+    durationSec: m.durationSec ?? 5, params: m.params ?? {}, editor: m.editor, agent: m.agent, manifest: m, ...(files ? { files } : {}),
   };
   return {
     id: m.id,
@@ -79,6 +81,26 @@ export function setPluginIssues(next: Iterable<[string, { state: PluginIssueStat
 }
 /** The reason plugin `id` is locked by the open project but not registered, if any. */
 export const pluginIssueOf = (id: string) => issues.get(id);
+
+/**
+ * P85: registered plugins allowed to run in the open project on this device (decision 12: trust per project, per
+ * package hash, per device). Only these get the sandboxed renderer; the others draw the "not enabled" slate. Set by
+ * the loader from the device's trust store (the trust screens come in P86). Keyed `id` → hash, so a changed package
+ * is never enabled by an old entry.
+ */
+const enabled = new Map<string, string>();
+/** Replace the open project's enabled plugins. Returns whether anything changed (the caller notifies the registry). */
+export function setPluginsEnabled(next: Iterable<[id: string, hash: string]>): boolean {
+  const before = JSON.stringify([...enabled]);
+  enabled.clear();
+  for (const [id, hash] of next) enabled.set(id, hash);
+  return JSON.stringify([...enabled]) !== before;
+}
+/** Whether plugin clip type `id` is registered and allowed to run (with the hash it was allowed for). */
+export const isPluginEnabled = (id: string): boolean => {
+  const h = enabled.get(id);
+  return !!h && pluginMetaOf(id)?.hash === h;
+};
 
 /**
  * The unknown-type slate's two lines for a stored clipType (P73; P84 names a missing plugin and why): a built-in id

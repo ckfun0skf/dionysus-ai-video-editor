@@ -2,7 +2,7 @@
 import { versionOf, compositionDuration, type Composition, type Placement, type Project, type Track } from "../../domain/model";
 import { spatialAt, spatialOf, type PositionKey, type SpatialPos } from "../../domain/spatial";
 import { TICKS_PER_SECOND } from "../../domain/time";
-import { clipTypeOf, isKnownClipType, pluginIssueOf, pluginMetaOf } from "../../clipTypes";
+import { clipTypeOf, isKnownClipType, isPluginEnabled, pluginIssueOf, pluginMetaOf } from "../../clipTypes";
 
 export const RESOLUTIONS = { "720p": 720, "1080p": 1080, "2K": 1440, "4K": 2160 } as const;
 export type Resolution = keyof typeof RESOLUTIONS;
@@ -181,11 +181,11 @@ export function exportPlaceholderWarning(project: Project): { title: string; bod
 /**
  * P73 (§6 of docs/v2/CLIP_PLUGIN_ARCHITECTURE.md): clips of a type this build does not register, on visible tracks.
  * P84: also clips of a registered plugin type, which draw the "not enabled" slate (black in export) until the plugin
- * runs (P85, with the user's trust).
+ * runs. P85: plugins enabled for this project on this device draw in their sandbox and are not listed.
  */
 export function unknownTypeClips(project: Project): Placement[] {
   const comp = project.compositions[project.rootCompositionId];
-  return comp?.tracks.filter((t) => !t.hidden).flatMap((t) => t.placements.filter((pl) => !isKnownClipType(pl.clipType) || !!pluginMetaOf(pl.clipType))) ?? [];
+  return comp?.tracks.filter((t) => !t.hidden).flatMap((t) => t.placements.filter((pl) => !isKnownClipType(pl.clipType) || (!!pluginMetaOf(pl.clipType) && !isPluginEnabled(pl.clipType)))) ?? [];
 }
 
 /** Export-dialog copy when the timeline has clips of an unknown type: they export as black frames and silence. */

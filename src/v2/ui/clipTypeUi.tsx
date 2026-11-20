@@ -14,7 +14,7 @@
  */
 import type { CSSProperties, ReactNode } from "react";
 import type { MediaKind, Placement, Project } from "../domain";
-import { CLIP_TYPES, coreOf, isKnownClipType, isPlaceholder, pluginIssueOf, pluginMetaOf, unknownSlateText, variantOf } from "../clipTypes";
+import { CLIP_TYPES, coreOf, isKnownClipType, isPlaceholder, isPluginEnabled, pluginIssueOf, pluginMetaOf, unknownSlateText, variantOf } from "../clipTypes";
 import { Ic } from "./Icon";
 
 export type WaveKind = "audio" | "video";
@@ -226,17 +226,25 @@ export const PLUGIN_CLIP_UI: ResolvedClipTypeUi = {
   toolbarMain: ["plugin"],
   speed: false,
   volume: false,
-  body: (p) => (
-    <span className="v2-clip-name v2-ph" title={`Plugin “${pluginMetaOf(p.clipType)?.name ?? p.clipType}” is not enabled. Its settings are kept; it shows as a slate and exports as a black frame.`}>
-      <Ic g="puzzle" size={12} /><span className="v2-ph-label">{pluginMetaOf(p.clipType)?.name ?? p.clipType}</span><span className="v2-ph-state">Not enabled</span>
-    </span>
-  ),
+  body: (p) => {
+    const name = pluginMetaOf(p.clipType)?.name ?? p.clipType;
+    // P85: an enabled plugin draws in its sandbox, so its card is a plain named card.
+    if (isPluginEnabled(p.clipType)) return <span className="v2-clip-name" title={`Plugin “${name}”`}><Ic g="puzzle" size={12} /> {name}</span>;
+    return (
+      <span className="v2-clip-name v2-ph" title={`Plugin “${name}” is not enabled. Its settings are kept; it shows as a slate and exports as a black frame.`}>
+        <Ic g="puzzle" size={12} /><span className="v2-ph-label">{name}</span><span className="v2-ph-state">Not enabled</span>
+      </span>
+    );
+  },
 };
+
+/** P85: an enabled plugin's card: solid (it draws in its sandbox), not the hatched "not enabled" look. */
+export const PLUGIN_ENABLED_CLIP_UI: ResolvedClipTypeUi = { ...PLUGIN_CLIP_UI, kindClass: "is-plugin is-on" };
 
 /** The timeline UI for a placement: a placeholder first (any type), then its variant or type; unknown types get UNKNOWN_CLIP_UI. */
 export const clipUi = (p: Placement): ResolvedClipTypeUi => {
   if (isPlaceholder(p)) return placeholderUi(p.clipType);
-  if (pluginMetaOf(p.clipType)) return PLUGIN_CLIP_UI;
+  if (pluginMetaOf(p.clipType)) return isPluginEnabled(p.clipType) ? PLUGIN_ENABLED_CLIP_UI : PLUGIN_CLIP_UI;
   const id = variantOf(p);
   return CLIP_TYPE_UIS.get(id) ?? (isKnownClipType(id) ? DEFAULT_CLIP_UI : UNKNOWN_CLIP_UI);
 };

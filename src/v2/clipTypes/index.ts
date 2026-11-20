@@ -55,7 +55,7 @@ export const isKnownClipType = (clipType: string): boolean => !!CLIP_TYPES.core(
 
 export { defineClipType } from "./define";
 export { RUNTIME_CLIP_TYPE_ID, checkClipType, createClipTypeRegistry, type ClipTypeRegistry } from "./registry";
-export { PLUGIN_CLIP_VERSION, pluginCoreOf, pluginIssueOf, pluginMetaOf, pluginParamsOf, setPluginIssues, unknownSlateText, type ClipPluginMeta, type PluginIssueState } from "./plugin";
+export { PLUGIN_CLIP_VERSION, pluginCoreOf, pluginIssueOf, pluginMetaOf, pluginParamsOf, setPluginIssues, setPluginsEnabled, isPluginEnabled, unknownSlateText, type ClipPluginMeta, type PluginIssueState } from "./plugin";
 export type { ClipAccepts, ClipAgent, ClipAgentApi, ClipAgentResult, ClipAgentToolDef, ClipCaps, ClipStory, ClipTypeCore, ClipTypeDef, ClipVariant } from "./types";
 export { DEFAULT_CLIP_STORY, kindForFile, kindForSlotType, mimeForFile, storyOf } from "./story";
 export { PLACEHOLDER_STATE, isPlaceholder, placeholderAccepts, placeholderCaps, placeholderCore } from "./state";
