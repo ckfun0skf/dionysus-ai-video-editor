@@ -36,7 +36,7 @@ describe("V2-106 desktop shell", () => {
   it("lays out asset browser, preview, inspector and timeline", async () => {
     const { q, el } = await boot();
     expect(q(".v2-dshell")).toBeTruthy();
-    expect(Array.from(el.querySelectorAll(".v2-abtab")).map((t) => t.textContent)).toEqual(["Video", "Photo", "Code", "Stickers", "Audio", "Text", "Effects"]);
+    expect(Array.from(el.querySelectorAll(".v2-abtab")).map((t) => t.textContent)).toEqual(["Video", "Photo", "Code", "Stickers", "Audio", "Text", "Effects", "Plugins"]);
     expect(q('[aria-label="Inspector"]').textContent).toContain("Project");
     expect(el.querySelectorAll('[role="separator"]').length).toBe(3);
     expect(q(".v2-dropzone").textContent).toContain("Drop videos here");

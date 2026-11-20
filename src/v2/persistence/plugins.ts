@@ -183,9 +183,29 @@ export async function addPluginToProject(project: Project, pkg: PluginPackage, b
   if (old && old.version === pkg.manifest.version && old.hash !== pkg.hash) {
     throw new PluginConflictError(`This project already uses “${old.name}” ${old.version} with different contents. A changed plugin needs a new version number.`);
   }
-  const lock: PluginLock = { version: pkg.manifest.version, hash: pkg.hash, name: pkg.manifest.name, blobKey: pluginBlobKey(pkg.hash), ...(pkg.manifest.publisher ? { publisher: pkg.manifest.publisher } : {}) };
+  return setPluginLock(project, id, await storePluginPackage(pkg, blobs));
+}
+
+/** P86: the lock that pins a package in a project. */
+export const pluginLockOf = (pkg: Pick<PluginPackage, "manifest" | "hash">): PluginLock =>
+  ({ version: pkg.manifest.version, hash: pkg.hash, name: pkg.manifest.name, blobKey: pluginBlobKey(pkg.hash), ...(pkg.manifest.publisher ? { publisher: pkg.manifest.publisher } : {}) });
+
+/** P86: store a package's blob in the project's store (if not there yet) and return its lock; the caller dispatches the lock. */
+export async function storePluginPackage(pkg: PluginPackage, blobs: BlobStore): Promise<PluginLock> {
+  const lock = pluginLockOf(pkg);
   if (!(await blobs.get(lock.blobKey))) await blobs.put(lock.blobKey, await pluginZipBlob(pkg));
-  return setPluginLock(project, id, lock);
+  return lock;
+}
+
+/**
+ * P86: why a package can't be added to this project as is, if it can't: the same id is already locked at another
+ * version (updating a project's plugin comes in P87), or at the same version with other contents (a conflict).
+ */
+export function pluginProjectProblem(project: Pick<Project, "plugins">, pkg: Pick<PluginPackage, "manifest" | "hash">): string | undefined {
+  const old = project.plugins?.[pkg.manifest.id];
+  if (!old || old.hash === pkg.hash) return undefined;
+  if (old.version === pkg.manifest.version) return `This project already uses “${old.name}” ${old.version} with different contents. A changed plugin needs a new version number.`;
+  return `This project uses “${old.name}” ${old.version}. Switching a project to another version of a plugin isn't available yet.`;
 }
 
 // ---------------------------------------------------------------- loading the open project's plugins

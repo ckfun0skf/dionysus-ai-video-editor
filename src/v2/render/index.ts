@@ -17,3 +17,4 @@ export { ExportVideoFrames } from "./export/videoFrames";
 export { buildSpatial, reverbBus, type SpatialStage } from "./spatial";
 export type { ClipLoad } from "./stability";
 export { grey, trackFrames, type Grey } from "./tracker";
+export { pluginStatus, retryPluginClip, type PluginStop } from "./pluginStatus";

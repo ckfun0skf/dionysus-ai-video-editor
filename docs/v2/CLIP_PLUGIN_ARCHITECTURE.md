@@ -4,7 +4,7 @@
 started in P74 after decision 5 was accepted, step table in [§7 Phase 2](#phase-2--deterministic-threejs-scene-clip);
 steps 2.1 (P74), 2.2 (P75), 2.3 (P76), 2.4 (P77), 2.5 (P78) and 2.6 (P79) are done, so **Phase 2 is complete** since P79;
 the table was renumbered in P76, see the note under it. Phase 3 started in P83 after decisions 10–17 were accepted
-on 2026-11-19, step table in [§7 Phase 3](#phase-3--third-party-clip-types); steps 3.1 (P83), 3.2 (P84) and 3.3 (P85) are done).
+on 2026-11-19, step table in [§7 Phase 3](#phase-3--third-party-clip-types); steps 3.1 (P83), 3.2 (P84), 3.3 (P85) and 3.4 (P86) are done).
 Written against `main` at `36c37b14` (after P63). Decisions: see [§0](#0-decisions). Progress: see
 [§7 Phase 1](#phase-1--registry-with-zero-behaviour-change).
 
@@ -630,6 +630,38 @@ Project → **Plugins** to manage. 44 px targets, monochrome line icons, badges 
   clip is removed (no idle limit yet); a hung plugin adds about 32 s to an export before it is stopped; WebGL output
   is identical per device only; clip thumbnails don't show plugin frames.
 
+**Done in P86 (step 3.4).**
+
+- Install: `ui/pluginManager.ts` reads a package from a file (`.dionysus-cliptype.zip`) or an https manifest URL (the
+  P84 readers) and shows the **consent dialog** (`ui/PluginLibrary.tsx`): name, version, publisher marked
+  *unverified*, size, a 12-character content hash, where it came from, the libraries and the settings it has, and the
+  plain promise "It draws frames from its settings. It can't use the network or read your projects, files or
+  accounts."; Install / Cancel. Install (`installPlugin`) adds it to the device library, stores the blob in the
+  project, trusts this hash for this project on this device (decision 12), and locks it in the project (with a first
+  clip when it was started from Add media or a drop) as **one undo step**. A package with another version of a
+  plugin the project uses is refused ("Switching a project to another version of a plugin isn't available yet.",
+  P87). The two samples can be installed from the dialog (URLs relative to the app's base).
+- Engine commands (`engine/commands.ts`): `lockPlugin`, `removePlugin(id, withClips)` and `addPluginClip(at, …,
+  "main" | "overlay" | { trackId })` (first overlay layer with room, else a new one above).
+- Per project review: a project whose plugins this device hasn't allowed shows the banner "This project uses N
+  plugins that aren't enabled on this device · Review" (one plugin opens its dialog with **Allow**, more open the
+  list); it can be hidden for the session. The inspector / phone Plugin sheet of such a clip has **Review and allow**.
+- The Plugins library: a **Plugins** tab in the desktop left rail (tiles; click adds a clip at the playhead, drag
+  onto the timeline adds one there) and in the phone's Add media (tap adds at the playhead); **Project → Plugins**
+  (desktop Project settings, phone Project sheet) lists the project's plugins (Enabled / Not enabled / Missing / …,
+  clip count, Review, Remove) and the device's others (Add to project, Delete from this device with a confirm).
+  Removing a plugin that has clips asks whether to keep them (they keep their settings and show the slate) or
+  remove them too; both are one undo step with Undo in the toast.
+- Stopped clips: `render/pluginStatus.ts` records which clips the preview stopped and why; the inspector / phone sheet
+  shows **Stopped** with the last problem and **Retry** (a new retry generation makes the Player start a new worker),
+  and the timeline card a "Stopped" pill.
+- The phone tap reported in P85 (tapping one plugin clip showed another in the Plugin sheet) did not reproduce: with
+  two and three overlapping plugin clips, every tap selected the tapped clip and the sheet showed it (Chrome, 390 px,
+  touch); the sheet always follows the selection.
+- **Gaps:** no update or version switch yet (P87); tiles show the plugin's icon, not a preview frame; a stopped clip
+  needs Retry (no automatic retry); a hung plugin still takes about 32 s to be stopped; the development hook
+  `__dionysusDev` is still there in development builds; no "export package" from the library.
+
 Steps (one PR each, merged on green CI):
 
 | Step | PR | What | Status |
@@ -637,8 +669,8 @@ Steps (one PR each, merged on green CI):
 | 3.1 | P83 | Decisions, this design, [PLUGIN_PACKAGE.md](PLUGIN_PACKAGE.md), the pure manifest validator `domain/pluginManifest.ts` (JSON-path errors, package file check, semver order) and the sample `public/plugins/samples/x-dionysus-stripes/` | **done** |
 | 3.2 | P84 | Domain and persistence: `Placement.plugin`, `PluginClipType`, the `Project.plugins` lock, the package store and content hash, packages in project export / import, runtime registration of cores built from manifests, the not-enabled slate | **done** |
 | 3.3 | P85 | Sandbox renderer: bootstrap iframe, worker, OffscreenCanvas, watchdog and restarts, `pluginHost` in the Player and export; Chrome determinism and export checks | **done** |
-| 3.4 | P86 | Install and trust UX: file / URL install, install dialog, per-project review banner, the Plugins library at 1440 and 390, remove | next |
-| 3.5 | P87 | Clip editing UX: the inspector Plugin tab and phone Params sheet from the declarative form, timeline icon and name, updates with param migration | |
+| 3.4 | P86 | Install and trust UX: file / URL install, install dialog, per-project review banner, the Plugins library at 1440 and 390, remove | **done** |
+| 3.5 | P87 | Clip editing UX: the inspector Plugin tab and phone Params sheet from the declarative form, timeline icon and name, updates with param migration | next |
 | 3.6 | P88 | Agent tools and the host AI rule, `gen:ai`, WEB_MCP docs | |
 
 ## 8. What this does not change
